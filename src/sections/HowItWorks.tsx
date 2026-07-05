@@ -1,4 +1,5 @@
 import SectionHeading from '../components/SectionHeading'
+import useReveal from '../hooks/useReveal'
 
 const steps = [
   {
@@ -20,13 +21,23 @@ const steps = [
 ]
 
 export default function HowItWorks() {
+  const reveal = useReveal()
+
   return (
     <section
       id="how-it-works"
+      aria-labelledby="how-it-works-heading"
       className="border-y border-bap-line bg-bap-plum/30"
     >
-      <div className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
-        <SectionHeading eyebrow="ZERO FRICTION" title="HOW MODDING WORKS" />
+      <div
+        ref={reveal.ref}
+        className={`mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28 ${reveal.className}`}
+      >
+        <SectionHeading
+          id="how-it-works-heading"
+          eyebrow="ZERO FRICTION"
+          title="HOW MODDING WORKS"
+        />
 
         <ol className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, index) => (

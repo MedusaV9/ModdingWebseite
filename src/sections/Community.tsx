@@ -1,5 +1,6 @@
 import GradientButton from '../components/GradientButton'
 import Marquee from '../components/Marquee'
+import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 
 const credits = [
@@ -14,12 +15,24 @@ const externalLinks = [
 ]
 
 export default function Community() {
+  const reveal = useReveal()
+
   return (
-    <section id="community" className="bg-bap-night">
-      <div className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
+    <section
+      id="community"
+      aria-labelledby="community-heading"
+      className="bg-bap-night"
+    >
+      <div
+        ref={reveal.ref}
+        className={`mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28 ${reveal.className}`}
+      >
         {/* Banner */}
         <div className="flex flex-col items-center gap-6 bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] px-6 py-16 text-center md:px-12">
-          <h2 className="font-display uppercase text-4xl text-white md:text-5xl">
+          <h2
+            id="community-heading"
+            className="font-display uppercase text-4xl text-white md:text-5xl"
+          >
             JOIN THE BAPBAP MODDING COMMUNITY
           </h2>
           <p className="font-teko uppercase text-2xl leading-none text-white/90">

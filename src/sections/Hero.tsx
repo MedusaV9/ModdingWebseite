@@ -1,5 +1,6 @@
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
+import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 
 const stats = [
@@ -11,23 +12,35 @@ const stats = [
 ]
 
 export default function Hero() {
+  const reveal = useReveal()
+
   return (
-    <section id="top" className="relative flex min-h-[90vh] flex-col bg-bap-night">
+    <section
+      id="top"
+      aria-labelledby="hero-heading"
+      className="relative flex min-h-[90vh] flex-col bg-bap-night"
+    >
       {/* Decorative background: glows + grid */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-bap-pink/15 blur-[120px]" />
-        <div className="absolute top-1/3 -left-40 h-[28rem] w-[28rem] rounded-full bg-bap-red/10 blur-[110px]" />
-        <div className="absolute bottom-0 -right-40 h-[26rem] w-[26rem] rounded-full bg-bap-pink/10 blur-[110px]" />
+        <div className="absolute -top-40 left-[calc(50%-17rem)] h-[34rem] w-[34rem] rounded-full bg-bap-pink/15 blur-[120px] [animation:float_6s_ease-in-out_infinite_alternate]" />
+        <div className="absolute top-1/3 -left-40 h-[28rem] w-[28rem] rounded-full bg-bap-red/10 blur-[110px] [animation:float_6s_ease-in-out_-2s_infinite_alternate]" />
+        <div className="absolute bottom-0 -right-40 h-[26rem] w-[26rem] rounded-full bg-bap-pink/10 blur-[110px] [animation:float_6s_ease-in-out_-4s_infinite_alternate]" />
         <div className="absolute inset-0 bg-[repeating-linear-gradient(to_right,rgba(255,42,109,0.05)_0,rgba(255,42,109,0.05)_1px,transparent_1px,transparent_64px),repeating-linear-gradient(to_bottom,rgba(255,42,109,0.05)_0,rgba(255,42,109,0.05)_1px,transparent_1px,transparent_64px)]" />
       </div>
 
       <div className="relative flex flex-1 items-center justify-center px-4 py-20 md:px-6">
-        <div className="flex max-w-4xl flex-col items-center gap-6 text-center">
+        <div
+          ref={reveal.ref}
+          className={`flex max-w-4xl flex-col items-center gap-6 text-center ${reveal.className}`}
+        >
           <Badge tone="amber">
             COMMUNITY PROJECT — NOT AFFILIATED WITH BAPBAP HQ
           </Badge>
 
-          <h1 className="font-display uppercase leading-none text-6xl sm:text-7xl md:text-8xl lg:text-9xl">
+          <h1
+            id="hero-heading"
+            className="font-display uppercase leading-none text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
+          >
             <span className="block text-white">BAPBAP</span>
             <span className="block bg-gradient-to-r from-[#eb204f] to-[#ff2a6d] bg-clip-text text-transparent">
               MODDING
@@ -48,7 +61,7 @@ export default function Hero() {
             </GradientButton>
           </div>
 
-          <p className="font-teko uppercase text-white/50 leading-none tracking-wide">
+          <p className="font-teko uppercase text-white/60 leading-none tracking-wide">
             FOR BAPBAP — THE ROGUELIKE PARTY GAME ON STEAM
           </p>
         </div>

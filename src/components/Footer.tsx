@@ -42,7 +42,7 @@ export default function Footer() {
           </ul>
         </div>
 
-        <p className="text-white/40 text-sm">
+        <p className="text-white/60 text-sm">
           BAPBAP Modding is a community project and is not affiliated with or
           endorsed by BAPBAP HQ. BAPBAP and all related assets are property of
           their respective owners.
@@ -50,7 +50,7 @@ export default function Footer() {
       </div>
 
       <div className="border-t border-bap-line">
-        <p className="mx-auto max-w-7xl px-4 py-4 text-center text-white/40 text-sm md:px-6">
+        <p className="mx-auto max-w-7xl px-4 py-4 text-center text-white/60 text-sm md:px-6">
           Built by the BAPBAP modding community
         </p>
       </div>

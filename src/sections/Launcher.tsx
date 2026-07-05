@@ -1,14 +1,28 @@
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
+import useReveal from '../hooks/useReveal'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
 
 export default function Launcher() {
+  const reveal = useReveal()
+
   return (
-    <section id="launcher" className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
+    <section
+      id="launcher"
+      aria-labelledby="launcher-heading"
+      className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
+    >
+      <div
+        ref={reveal.ref}
+        className={`grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16 ${reveal.className}`}
+      >
         <div className="flex flex-col gap-8">
-          <SectionHeading eyebrow="BAPBAP NEXUS" title="ONE LAUNCHER. EVERYTHING." />
+          <SectionHeading
+            id="launcher-heading"
+            eyebrow="BAPBAP NEXUS"
+            title="ONE LAUNCHER. EVERYTHING."
+          />
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {LAUNCHER.features.map((feature) => (
@@ -42,7 +56,7 @@ export default function Launcher() {
             </GradientButton>
           </div>
 
-          <p className="text-white/40 text-sm">
+          <p className="text-white/60 text-sm">
             Windows x64 · Free · Auto-updates · Installs MelonLoader for you
           </p>
         </div>

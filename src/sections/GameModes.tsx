@@ -1,5 +1,6 @@
 import Badge from '../components/Badge'
 import SectionHeading from '../components/SectionHeading'
+import useReveal from '../hooks/useReveal'
 import { MODES } from '../data/modes'
 
 const headerArt: Record<string, string> = {
@@ -11,10 +12,23 @@ const headerArt: Record<string, string> = {
 }
 
 export default function GameModes() {
+  const reveal = useReveal()
+
   return (
-    <section id="modes" className="border-y border-bap-line bg-bap-plum/30">
-      <div className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
-        <SectionHeading eyebrow="MORE WAYS TO PLAY" title="GAME MODES & TRACKS" />
+    <section
+      id="modes"
+      aria-labelledby="modes-heading"
+      className="border-y border-bap-line bg-bap-plum/30"
+    >
+      <div
+        ref={reveal.ref}
+        className={`mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28 ${reveal.className}`}
+      >
+        <SectionHeading
+          id="modes-heading"
+          eyebrow="MORE WAYS TO PLAY"
+          title="GAME MODES & TRACKS"
+        />
 
         <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
           {MODES.map((mode) => (
