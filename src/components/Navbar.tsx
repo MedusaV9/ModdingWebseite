@@ -1,13 +1,16 @@
 import { useState } from 'react'
+import { Link, NavLink } from 'react-router-dom'
 import GradientButton from './GradientButton'
 import { LINKS } from '../data/links'
 
 const links = [
-  { label: 'Mods', href: '#mods' },
-  { label: 'Game Modes', href: '#modes' },
-  { label: 'Launcher', href: '#launcher' },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Community', href: '#community' },
+  { label: 'Mods', to: '/mods' },
+  { label: 'Modes', to: '/modes' },
+  { label: 'Launcher', to: '/launcher' },
+  { label: 'Radio', to: '/radio' },
+  { label: 'Guide', to: '/guide' },
+  { label: 'Modders', to: '/modders' },
+  { label: 'Community', to: '/community' },
 ]
 
 export default function Navbar() {
@@ -19,20 +22,26 @@ export default function Navbar() {
         aria-label="Main navigation"
         className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3 md:px-6"
       >
-        <a href="#top" className="font-display text-lg uppercase leading-none">
+        <Link to="/" className="font-display text-lg uppercase leading-none">
           <span className="text-white">BAPBAP</span>
           <span className="text-bap-pink">·MODS</span>
-        </a>
+        </Link>
 
         <ul className="hidden items-center gap-6 md:flex">
           {links.map((link) => (
-            <li key={link.href}>
-              <a
-                href={link.href}
-                className="font-teko uppercase text-lg leading-none text-white/80 transition-colors hover:text-bap-pink"
+            <li key={link.to}>
+              <NavLink
+                to={link.to}
+                className={({ isActive }) =>
+                  `font-teko uppercase text-lg leading-none transition-colors ${
+                    isActive
+                      ? 'text-bap-pink'
+                      : 'text-white/80 hover:text-bap-pink'
+                  }`
+                }
               >
                 {link.label}
-              </a>
+              </NavLink>
             </li>
           ))}
         </ul>
@@ -81,14 +90,20 @@ export default function Navbar() {
         >
           <ul className="flex flex-col px-4 py-2">
             {links.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
+              <li key={link.to}>
+                <NavLink
+                  to={link.to}
                   onClick={() => setOpen(false)}
-                  className="block border-b border-bap-line/50 py-3 font-teko uppercase text-2xl leading-none text-white/80 transition-colors hover:text-bap-pink"
+                  className={({ isActive }) =>
+                    `block border-b border-bap-line/50 py-3 font-teko uppercase text-2xl leading-none transition-colors ${
+                      isActive
+                        ? 'text-bap-pink'
+                        : 'text-white/80 hover:text-bap-pink'
+                    }`
+                  }
                 >
                   {link.label}
-                </a>
+                </NavLink>
               </li>
             ))}
             <li>

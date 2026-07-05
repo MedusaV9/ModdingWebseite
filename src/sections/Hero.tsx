@@ -6,7 +6,7 @@ import { LINKS } from '../data/links'
 const stats = [
   { value: '12', label: 'MODS & TOOLS' },
   { value: '3', label: 'GAME TRACKS' },
-  { value: '16', label: 'RADIO TRACKS' },
+  { value: '15', label: 'RADIO TRACKS' },
   { value: '0.7.2', label: 'MELONLOADER' },
   { value: 'v4.0.4', label: 'NEXUS' },
 ]
@@ -16,7 +16,6 @@ export default function Hero() {
 
   return (
     <section
-      id="top"
       aria-labelledby="hero-heading"
       className="relative flex min-h-[90vh] flex-col bg-bap-night"
     >
@@ -56,7 +55,7 @@ export default function Hero() {
             <GradientButton href={LINKS.discord} target="_blank" rel="noreferrer">
               JOIN THE DISCORD
             </GradientButton>
-            <GradientButton variant="outline" href="#launcher">
+            <GradientButton variant="outline" to="/launcher">
               GET THE LAUNCHER
             </GradientButton>
           </div>

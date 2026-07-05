@@ -1,27 +1,36 @@
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
-import Marquee from './components/Marquee'
-import Hero from './sections/Hero'
-import Mods from './sections/Mods'
-import GameModes from './sections/GameModes'
-import Launcher from './sections/Launcher'
-import HowItWorks from './sections/HowItWorks'
-import Community from './sections/Community'
+import { HashRouter, Route, Routes } from 'react-router-dom'
+import Layout from './Layout'
+import Home from './pages/Home'
+import ModsPage from './pages/ModsPage'
+import ModDetailPage from './pages/ModDetailPage'
+import ModesPage from './pages/ModesPage'
+import LauncherPage from './pages/LauncherPage'
+import RadioPage from './pages/RadioPage'
+import GuidePage from './pages/GuidePage'
+import ModdersPage from './pages/ModdersPage'
+import CommunityPage from './pages/CommunityPage'
+import NotFound from './pages/NotFound'
 
+// HashRouter is deliberate: the site is deployed as static files (vite
+// preview / static hosting) with no SPA fallback, so BrowserRouter deep
+// links would 404 on refresh.
 export default function App() {
   return (
-    <>
-      <Navbar />
-      <Marquee text="READY TO MOD?" />
-      <main>
-        <Hero />
-        <Mods />
-        <GameModes />
-        <Launcher />
-        <HowItWorks />
-        <Community />
-      </main>
-      <Footer />
-    </>
+    <HashRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/mods" element={<ModsPage />} />
+          <Route path="/mods/:id" element={<ModDetailPage />} />
+          <Route path="/modes" element={<ModesPage />} />
+          <Route path="/launcher" element={<LauncherPage />} />
+          <Route path="/radio" element={<RadioPage />} />
+          <Route path="/guide" element={<GuidePage />} />
+          <Route path="/modders" element={<ModdersPage />} />
+          <Route path="/community" element={<CommunityPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   )
 }

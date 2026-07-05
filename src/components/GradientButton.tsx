@@ -1,15 +1,19 @@
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
 type GradientButtonProps = {
   children: ReactNode
   variant?: 'solid' | 'outline'
   className?: string
+  /** Internal route path — renders a react-router <Link> instead of an <a>. */
+  to?: string
 } & AnchorHTMLAttributes<HTMLAnchorElement>
 
 export default function GradientButton({
   children,
   variant = 'solid',
   className = '',
+  to,
   ...rest
 }: GradientButtonProps) {
   const base =
@@ -21,11 +25,18 @@ export default function GradientButton({
   const outline =
     'text-bap-pink bg-transparent border-2 border-bap-pink hover:bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] hover:text-white hover:border-transparent'
 
+  const classes = `${base} ${variant === 'outline' ? outline : solid} ${className}`
+
+  if (to) {
+    return (
+      <Link to={to} className={classes} {...rest}>
+        {children}
+      </Link>
+    )
+  }
+
   return (
-    <a
-      className={`${base} ${variant === 'outline' ? outline : solid} ${className}`}
-      {...rest}
-    >
+    <a className={classes} {...rest}>
       {children}
     </a>
   )

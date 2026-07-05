@@ -21,7 +21,7 @@ export const LAUNCHER = {
     },
     {
       title: "BAPBAP Radio",
-      text: "An offline soundtrack station with 16 official tracks — from Rigtown to Dimension Atlantis.",
+      text: "An offline soundtrack station with 15 official tracks — from Rigtown to Dimension Atlantis.",
     },
     {
       title: "Custom Instances & Settings",

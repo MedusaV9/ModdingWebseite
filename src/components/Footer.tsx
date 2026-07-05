@@ -1,3 +1,15 @@
+import { Link } from 'react-router-dom'
+
+const siteLinks = [
+  { label: 'Mods', to: '/mods' },
+  { label: 'Modes', to: '/modes' },
+  { label: 'Launcher', to: '/launcher' },
+  { label: 'Radio', to: '/radio' },
+  { label: 'Guide', to: '/guide' },
+  { label: 'For Modders', to: '/modders' },
+  { label: 'Community', to: '/community' },
+]
+
 const footerLinks = [
   { label: 'Discord', href: 'https://discord.gg/BAPBAPMods' },
   { label: 'GitHub', href: 'https://github.com/Sonic0810/bapbaplauncher' },
@@ -11,7 +23,7 @@ const footerLinks = [
 export default function Footer() {
   return (
     <footer className="border-t border-bap-line bg-bap-black">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 py-12 md:grid-cols-3 md:px-6">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 py-12 sm:grid-cols-2 md:px-6 lg:grid-cols-4">
         <div className="flex flex-col gap-3">
           <span className="font-display text-lg uppercase leading-none">
             <span className="text-white">BAPBAP</span>
@@ -20,6 +32,24 @@ export default function Footer() {
           <p className="text-white/60 text-sm">
             A fan-made modding community for BAPBAP, the roguelike party game.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="font-teko uppercase tracking-widest text-bap-pink text-lg leading-none">
+            Site
+          </span>
+          <ul className="flex flex-col gap-1">
+            {siteLinks.map((link) => (
+              <li key={link.to}>
+                <Link
+                  to={link.to}
+                  className="text-white/80 transition-colors hover:text-bap-pink"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="flex flex-col gap-2">
