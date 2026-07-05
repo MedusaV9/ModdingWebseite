@@ -10,7 +10,16 @@ export type Mod = {
   ribbon?: "host-only" | "new";
   track?: "boss-rush";
   thumb: string;
+  added: string;
+  updated: string;
+  requires: string;
+  authorUrl?: string;
+  versions: { version: string; changelog: string }[];
+  longDescription?: string;
 };
+
+const REQUIRES = "MelonLoader 0.7.2-ci.2388";
+const SONIC_URL = "https://github.com/Sonic0810";
 
 const T =
   "https://raw.githubusercontent.com/Sonic0810/BAPBAPLauncher/main/manifest/assets/packages/";
@@ -28,6 +37,13 @@ export const MODS: Mod[] = [
     tags: ["dev", "arguments", "arena"],
     ribbon: "host-only",
     thumb: T + "devarg.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
+    longDescription:
+      "This Mod gives you way more Arguments (and sometimes broken stuff).",
   },
   {
     id: "sonic.bapbap.pool-randomizer",
@@ -41,6 +57,11 @@ export const MODS: Mod[] = [
     tags: ["randomizer", "pool", "qol"],
     ribbon: "host-only",
     thumb: T + "refresh.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
   },
   {
     id: "jackmygoodman.bapbap.boss-rush-qol",
@@ -54,6 +75,15 @@ export const MODS: Mod[] = [
     tags: ["boss-rush", "qol", "rerolls"],
     track: "boss-rush",
     thumb: T + "bossrush.jpg",
+    added: "2026-03-18",
+    updated: "2026-03-22",
+    requires: REQUIRES,
+    versions: [
+      { version: "1.0.1", changelog: "Updated Boss Rush QoL build" },
+      { version: "1.0.0", changelog: "Initial launcher release" },
+    ],
+    longDescription:
+      "A QoL mod for the boss rush gamemode which gives you unlimited rerolls and allows you to choose between 5 cards instead of 3 at once. Note: it might look buggy sometimes but works as intended",
   },
   {
     id: "jackmygoodman.bapbap.boss-rush-speedrun-timer",
@@ -68,6 +98,10 @@ export const MODS: Mod[] = [
     ribbon: "new",
     track: "boss-rush",
     thumb: T + "boss-rush-speedrun-timer.png",
+    added: "2026-04-10",
+    updated: "2026-04-10",
+    requires: REQUIRES,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
   },
   {
     id: "jackmygoodman.bapbap.boss-rush-0-augs",
@@ -82,6 +116,10 @@ export const MODS: Mod[] = [
     ribbon: "new",
     track: "boss-rush",
     thumb: T + "boss-rush-0-augs.png",
+    added: "2026-04-10",
+    updated: "2026-04-10",
+    requires: REQUIRES,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
   },
   {
     id: "jackmygoodman.bapbap.boss-rush-5-augs",
@@ -96,6 +134,10 @@ export const MODS: Mod[] = [
     ribbon: "new",
     track: "boss-rush",
     thumb: T + "boss-rush-5-augs.png",
+    added: "2026-04-10",
+    updated: "2026-04-10",
+    requires: REQUIRES,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
   },
   {
     id: "sonic.bapbap.hp-numbers",
@@ -108,6 +150,17 @@ export const MODS: Mod[] = [
     author: "Sonic0810",
     tags: ["ui", "hp", "qol"],
     thumb: T + "hpnumber.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [
+      {
+        version: "1.0.1",
+        changelog: "Fix HP text visibility and safe prop handling",
+      },
+      { version: "1.0.0", changelog: "Initial launcher release" },
+    ],
   },
   {
     id: "sonic.bapbap.arena-random-chars",
@@ -121,6 +174,13 @@ export const MODS: Mod[] = [
     tags: ["arena", "characters", "random"],
     ribbon: "host-only",
     thumb: T + "randomchar.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
+    longDescription:
+      "Everybody gets a new character after each round. Host only.",
   },
   {
     id: "sonic.bapbap.br-ui-old-but-gold",
@@ -132,6 +192,11 @@ export const MODS: Mod[] = [
     author: "Sonic0810",
     tags: ["ui", "battle-royale", "legacy"],
     thumb: T + "oldgold.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
   },
   {
     id: "sonic.bapbap.fps-camera",
@@ -144,6 +209,11 @@ export const MODS: Mod[] = [
     author: "Sonic0810",
     tags: ["camera", "first-person", "third-person"],
     thumb: T + "fps.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "0.2.0", changelog: "Initial launcher release" }],
   },
   {
     id: "sonic.bapbap.asset-dumper",
@@ -156,6 +226,13 @@ export const MODS: Mod[] = [
     author: "Sonic0810",
     tags: ["tool", "asset-dump", "modding", "audio"],
     thumb: T + "assetdumper.png",
+    added: "2026-03-02",
+    updated: "2026-03-02",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "1.0.0", changelog: "Initial launcher release" }],
+    longDescription:
+      "If you want all assets, icons and sounds inside of the game, use this tool/mod to dump them into a folder so you can reuse them. Ingame press F8 to open the UI. The mod creates a dump folder inside your BAPBAP game folder. Audio files are exported as .banks and can be converted with FMOD Bank Tools: https://github.com/Wouldubeinta/Fmod-Bank-Tools/releases",
   },
   {
     id: "sonic.bapbap.more-custom-settings",
@@ -167,5 +244,10 @@ export const MODS: Mod[] = [
     author: "Sonic0810",
     tags: ["arena", "bots", "settings"],
     thumb: T + "more-custom-settings.png",
+    added: "2026-04-16",
+    updated: "2026-04-16",
+    requires: REQUIRES,
+    authorUrl: SONIC_URL,
+    versions: [{ version: "0.1.0", changelog: "Initial launcher release" }],
   },
 ];
