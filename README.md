@@ -1,10 +1,32 @@
 # BAPBAP Modding
 
-Single-page marketing site for **BAPBAP Modding** — a community modding project
+Multi-page fan site (v1.0) for **BAPBAP Modding** — a community modding project
 for the Steam game BAPBAP. It showcases the BAPHub mod catalog, community game
-modes (Boss Rush, Battle Royale Playtest, Version Time Machine) and the BAPBAP
-Nexus launcher. Built with Vite, React 19, TypeScript, and Tailwind CSS v4 in a
-dark gaming aesthetic (pink/red gradient accents, Archivo Black / Teko / Inter).
+modes (Boss Rush, Battle Royale Playtest, Version Time Machine), the BAPBAP
+Nexus launcher, the in-launcher radio, a getting-started guide and modder
+publishing docs. Built with Vite, React 19, TypeScript, and Tailwind CSS v4 in
+a dark gaming aesthetic (pink/red gradient accents, Archivo Black / Teko /
+Inter).
+
+## Routes
+
+Routing uses react-router-dom v7 with **HashRouter** — the site is deployed as
+static files with no SPA fallback, so hash URLs are the only way deep links
+like `/#/mods/<id>` survive a refresh (a `BrowserRouter` deep link would 404).
+Routes are declared in `src/App.tsx`:
+
+| Route         | Page                                                    |
+| ------------- | ------------------------------------------------------- |
+| `/`           | Home (hero, featured mods, modes/launcher teasers)      |
+| `/mods`       | Full BAPHub catalog with search, filters and sorting    |
+| `/mods/:id`   | Mod detail (meta, version history, related mods)        |
+| `/modes`      | Game modes & tracks, Boss Rush, BR bundle, Time Machine |
+| `/launcher`   | BAPBAP Nexus download, requirements, full changelog     |
+| `/radio`      | The 15-track in-launcher soundtrack station             |
+| `/guide`      | Getting started: 6-step install walkthrough + FAQ       |
+| `/modders`    | BAPHub publishing guide (manifest format, visuals)      |
+| `/community`  | Discord banner, trailer, credits, disclaimer            |
+| anything else | 404                                                     |
 
 ## Quickstart
 
@@ -24,10 +46,12 @@ npm run dev     # dev server on http://localhost:5173
 
 ## Project structure
 
-- `src/components/` — reusable UI (Navbar, Footer, Marquee, GradientButton, SectionHeading, Badge, ModCard)
-- `src/sections/` — page sections (Hero, Mods, GameModes, Launcher, HowItWorks, Community)
-- `src/hooks/` — `useReveal` scroll-reveal hook (IntersectionObserver, respects `prefers-reduced-motion`)
-- `src/data/` — **all site content lives here**: `mods.ts` (BAPHub catalog), `modes.ts` (game modes/tracks), `launcher.ts` (Nexus features + changelog), `links.ts` (external URLs). Edit these files to change what the page shows — no component changes needed.
+- `src/App.tsx` — HashRouter route table; `src/Layout.tsx` — shared Navbar/Footer shell
+- `src/pages/` — one component per route (Home, ModsPage, ModDetailPage, ModesPage, LauncherPage, RadioPage, GuidePage, ModdersPage, CommunityPage, NotFound)
+- `src/components/` — reusable UI (Navbar, Footer, Marquee, GradientButton, SectionHeading, Badge, ModCard, ModImage, ScrollToTop)
+- `src/sections/` — home-page sections (Hero, HowItWorks, plus legacy single-page sections)
+- `src/hooks/` — `useReveal` scroll-reveal hook (IntersectionObserver, respects `prefers-reduced-motion`), `usePageTitle`
+- `src/data/` — **all site content lives here**: `mods.ts` (BAPHub catalog), `modes.ts` (game modes/tracks), `launcher.ts` (Nexus features + changelog), `radio.ts` (soundtrack station), `versions.ts` (archived builds), `bundles.ts` (game-mode bundles), `links.ts` (external URLs). Edit these files to change what the pages show — no component changes needed.
 
 ## Asset drop-in convention
 
