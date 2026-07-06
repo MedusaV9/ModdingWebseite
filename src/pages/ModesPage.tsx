@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
+import ModeArt from '../components/ModeArt'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
@@ -8,14 +9,7 @@ import { BUNDLES } from '../data/bundles'
 import { MODES } from '../data/modes'
 import { MODS } from '../data/mods'
 import { VERSIONS } from '../data/versions'
-
-const headerArt: Record<string, string> = {
-  'boss-rush':
-    'bg-[repeating-linear-gradient(135deg,#eb204f_0,#eb204f_14px,#ff2a6d_14px,#ff2a6d_28px)]',
-  'battle-royale': 'bg-gradient-to-br from-bap-amber to-bap-amber2',
-  'time-machine':
-    'bg-bap-plum bg-[repeating-linear-gradient(to_bottom,rgba(255,42,109,0.3)_0,rgba(255,42,109,0.3)_1px,transparent_1px,transparent_7px)]',
-}
+import type { ModeArtId } from '../components/ModeArt'
 
 const bossRushBuild = VERSIONS.builds.find((build) => build.id === 'boss-rush')
 const bossRushMods = MODS.filter((mod) => mod.track === 'boss-rush')
@@ -58,7 +52,7 @@ export default function ModesPage() {
                 key={mode.id}
                 className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink"
               >
-                <div className={`h-24 ${headerArt[mode.id] ?? ''}`} />
+                <ModeArt mode={mode.id as ModeArtId} className="h-24" />
                 <div className="flex flex-1 flex-col gap-4 p-6">
                   <div className="flex flex-col gap-1">
                     <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">

@@ -3,7 +3,10 @@ import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import Marquee from '../components/Marquee'
 import ModCard from '../components/ModCard'
+import ModeArt from '../components/ModeArt'
 import SectionHeading from '../components/SectionHeading'
+import Icon from '../components/brand/Icon'
+import type { IconName } from '../components/brand/Icon'
 import Hero from '../sections/Hero'
 import HowItWorks from '../sections/HowItWorks'
 import usePageMeta from '../hooks/usePageMeta'
@@ -12,14 +15,9 @@ import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
 import { MODES } from '../data/modes'
 import { MODS } from '../data/mods'
+import type { ModeArtId } from '../components/ModeArt'
 
-const modeHeaderArt: Record<string, string> = {
-  'boss-rush':
-    'bg-[repeating-linear-gradient(135deg,#eb204f_0,#eb204f_14px,#ff2a6d_14px,#ff2a6d_28px)]',
-  'battle-royale': 'bg-gradient-to-br from-bap-amber to-bap-amber2',
-  'time-machine':
-    'bg-bap-plum bg-[repeating-linear-gradient(to_bottom,rgba(255,42,109,0.3)_0,rgba(255,42,109,0.3)_1px,transparent_1px,transparent_7px)]',
-}
+const launcherFeatureIcons: IconName[] = ['wrench', 'shield', 'clock']
 
 export default function Home() {
   usePageMeta(
@@ -27,15 +25,13 @@ export default function Home() {
     'Community mods, custom game modes and the BAPBAP Nexus launcher for BAPBAP — the roguelike party game. Join the modding community on Discord.',
   )
 
-  const revealMods = useReveal()
+  const revealMods = useReveal({ stagger: true })
   const revealModes = useReveal()
   const revealLauncher = useReveal()
   const revealCommunity = useReveal()
 
   return (
     <>
-      <Marquee text="READY TO MOD?" />
-
       <Hero />
 
       {/* Featured mods */}
@@ -43,21 +39,32 @@ export default function Home() {
         aria-labelledby="featured-mods-heading"
         className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
-        <div ref={revealMods.ref} className={revealMods.className}>
-          <SectionHeading
-            id="featured-mods-heading"
-            eyebrow="BAPHUB CATALOG"
-            title="FEATURED MODS"
-            subtitle="Real community mods, installable in one click through the BAPBAP Nexus launcher."
-          />
+        <div ref={revealMods.ref}>
+          <div className={revealMods.className}>
+            <SectionHeading
+              id="featured-mods-heading"
+              eyebrow="BAPHUB CATALOG"
+              title="FEATURED MODS"
+              subtitle="Real community mods, installable in one click through the BAPBAP Nexus launcher."
+            />
+          </div>
 
           <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {MODS.slice(0, 6).map((mod) => (
-              <ModCard key={mod.id} mod={mod} />
+            {MODS.slice(0, 6).map((mod, index) => (
+              <div
+                key={mod.id}
+                className={revealMods.className}
+                style={revealMods.childStyle(index)}
+              >
+                <ModCard mod={mod} />
+              </div>
             ))}
           </div>
 
-          <div className="mt-12 flex justify-center">
+          <div
+            className={`mt-12 flex justify-center ${revealMods.className}`}
+            style={revealMods.childStyle(5)}
+          >
             <GradientButton to="/mods">
               BROWSE ALL {MODS.length} MODS
             </GradientButton>
@@ -86,7 +93,7 @@ export default function Home() {
                 key={mode.id}
                 className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink"
               >
-                <div className={`h-24 ${modeHeaderArt[mode.id] ?? ''}`} />
+                <ModeArt mode={mode.id as ModeArtId} className="h-24" />
                 <div className="flex flex-1 flex-col gap-4 p-6">
                   <div className="flex flex-col gap-1">
                     <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">
@@ -151,10 +158,13 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col justify-center gap-6">
-            {LAUNCHER.features.slice(0, 3).map((feature) => (
+            {LAUNCHER.features.slice(0, 3).map((feature, index) => (
               <div key={feature.title} className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 bg-bap-pink" />
+                  <Icon
+                    name={launcherFeatureIcons[index]}
+                    className="h-5 w-5 shrink-0 text-bap-pink"
+                  />
                   <h3 className="font-teko uppercase text-xl leading-none text-white">
                     {feature.title}
                   </h3>
@@ -174,6 +184,12 @@ export default function Home() {
           ref={revealCommunity.ref}
           className={`mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28 ${revealCommunity.className}`}
         >
+          <Marquee
+            variant="solid"
+            direction="right"
+            speed={26}
+            text="JOIN THE DISCORD"
+          />
           <div className="flex flex-col items-center gap-6 bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] px-6 py-16 text-center md:px-12">
             <h2
               id="community-cta-heading"

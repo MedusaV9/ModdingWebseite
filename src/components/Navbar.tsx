@@ -21,13 +21,13 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 bg-bap-plum/80 backdrop-blur border-b border-bap-line">
       <nav
         aria-label="Main navigation"
-        className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3 md:px-6"
+        className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6 lg:gap-6"
       >
         <Link to="/" className="inline-flex">
           <BrandMark />
         </Link>
 
-        <ul className="hidden items-center gap-6 md:flex">
+        <ul className="hidden items-center gap-4 md:flex lg:gap-6">
           {links.map((link) => (
             <li key={link.to}>
               <NavLink
