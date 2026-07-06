@@ -56,6 +56,62 @@
   }
 }
 
+/* Text gradient sweep — elements using it need background-size: 200% auto. */
+@keyframes gradient-pan {
+  from {
+    background-position: 0% center;
+  }
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes equalizer {
+  from {
+    transform: scaleY(0.3);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+/* Short, subtle 2-step clip-path displacement. */
+@keyframes glitch {
+  0%,
+  100% {
+    clip-path: none;
+    transform: none;
+  }
+  20% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translateX(-3px);
+  }
+  40% {
+    clip-path: inset(60% 0 10% 0);
+    transform: translateX(3px);
+  }
+}
+
+@keyframes marquee-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* v2 signature: hard offset shadows, never blurred. */
+.shadow-hard {
+  box-shadow: 6px 6px 0 0 rgba(255, 42, 109, 0.35);
+}
+
+.shadow-hard-amber {
+  box-shadow: 6px 6px 0 0 rgba(248, 157, 55, 0.35);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

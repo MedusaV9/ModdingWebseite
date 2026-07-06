@@ -1,12 +1,15 @@
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
 
 export default function LauncherPage() {
-  usePageTitle('Launcher')
+  usePageMeta(
+    'Launcher',
+    'Download BAPBAP Nexus v4.0.4 for Windows — one-click mod installs, MelonLoader built in, archived builds and BAPBAP Radio.',
+  )
 
   const revealHeader = useReveal()
   const revealDetails = useReveal()

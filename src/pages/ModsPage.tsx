@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
 import ModCard from '../components/ModCard'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
 
@@ -40,7 +40,10 @@ const tabClasses = (active: boolean) =>
   }`
 
 export default function ModsPage() {
-  usePageTitle('Mods')
+  usePageMeta(
+    'Mods',
+    'Browse all 12 community mods & tools for BAPBAP — searchable, filterable and one-click installable via the BAPBAP Nexus launcher.',
+  )
 
   const [searchParams, setSearchParams] = useSearchParams()
 

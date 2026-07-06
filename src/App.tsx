@@ -1,15 +1,19 @@
+import { lazy } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import Layout from './Layout'
-import Home from './pages/Home'
-import ModsPage from './pages/ModsPage'
-import ModDetailPage from './pages/ModDetailPage'
-import ModesPage from './pages/ModesPage'
-import LauncherPage from './pages/LauncherPage'
-import RadioPage from './pages/RadioPage'
-import GuidePage from './pages/GuidePage'
-import ModdersPage from './pages/ModdersPage'
-import CommunityPage from './pages/CommunityPage'
-import NotFound from './pages/NotFound'
+
+// Route-level code-splitting: each page becomes its own chunk. Layout stays
+// eager so Navbar/Footer render immediately and never unmount.
+const Home = lazy(() => import('./pages/Home'))
+const ModsPage = lazy(() => import('./pages/ModsPage'))
+const ModDetailPage = lazy(() => import('./pages/ModDetailPage'))
+const ModesPage = lazy(() => import('./pages/ModesPage'))
+const LauncherPage = lazy(() => import('./pages/LauncherPage'))
+const RadioPage = lazy(() => import('./pages/RadioPage'))
+const GuidePage = lazy(() => import('./pages/GuidePage'))
+const ModdersPage = lazy(() => import('./pages/ModdersPage'))
+const CommunityPage = lazy(() => import('./pages/CommunityPage'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 // HashRouter is deliberate: the site is deployed as static files (vite
 // preview / static hosting) with no SPA fallback, so BrowserRouter deep

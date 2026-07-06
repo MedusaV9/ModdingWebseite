@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import GradientButton from '../components/GradientButton'
 import Marquee from '../components/Marquee'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 
@@ -24,7 +24,10 @@ const externalLinks = [
 ]
 
 export default function CommunityPage() {
-  usePageTitle('Community')
+  usePageMeta(
+    'Community',
+    'Join the BAPBAP modding community on Discord — mod drops, playtests, speedruns and dev talk.',
+  )
 
   const revealBanner = useReveal()
   const revealTrailer = useReveal()

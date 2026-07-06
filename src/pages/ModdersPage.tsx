@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 
@@ -158,7 +158,10 @@ function TerminalCard({
 }
 
 export default function ModdersPage() {
-  usePageTitle('For Modders')
+  usePageMeta(
+    'For Modders',
+    'Publish your own BAPBAP mod on BAPHub — manifest format, SHA-256 hashing, card visuals and secret drops explained.',
+  )
 
   const revealSteps = useReveal()
   const revealFiles = useReveal()

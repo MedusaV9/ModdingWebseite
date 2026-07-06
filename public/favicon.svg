@@ -1,18 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="g" x1="1" y1="0" x2="0" y2="0">
       <stop offset="0" stop-color="#eb204f" />
       <stop offset="1" stop-color="#ff2a6d" />
     </linearGradient>
   </defs>
-  <rect x="2" y="2" width="60" height="60" rx="12" fill="url(#g)" />
-  <text
-    x="32"
-    y="45"
-    text-anchor="middle"
-    font-family="Arial Black, sans-serif"
-    font-weight="900"
-    font-size="34"
-    fill="#ffffff"
-  >B!</text>
+  <rect x="0" y="0" width="64" height="64" fill="#0b0508" />
+  <g transform="translate(4 4) scale(0.5833)">
+    <polygon points="48,2 56.8,15.16 71,8.16 72.04,23.96 87.84,25 80.84,39.2 94,48 80.84,56.8 87.84,71 72.04,72.04 71,87.84 56.8,80.84 48,94 39.2,80.84 25,87.84 23.96,72.04 8.16,71 15.16,56.8 2,48 15.16,39.2 8.16,25 23.96,23.96 25,8.16 39.2,15.16" fill="#f89d37" transform="translate(4 4)" />
+    <polygon points="48,2 56.8,15.16 71,8.16 72.04,23.96 87.84,25 80.84,39.2 94,48 80.84,56.8 87.84,71 72.04,72.04 71,87.84 56.8,80.84 48,94 39.2,80.84 25,87.84 23.96,72.04 8.16,71 15.16,56.8 2,48 15.16,39.2 8.16,25 23.96,23.96 25,8.16 39.2,15.16" fill="url(#g)" />
+    <g fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="square" stroke-linejoin="miter">
+      <g transform="rotate(45 48 48)">
+        <path d="M40 26v8l8 8 8-8v-8" />
+        <path d="M48 42v28" />
+      </g>
+      <path transform="rotate(-45 48 48)" d="M52 24 44 46h8L44 68" />
+    </g>
+  </g>
 </svg>

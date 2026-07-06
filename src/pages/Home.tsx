@@ -6,7 +6,7 @@ import ModCard from '../components/ModCard'
 import SectionHeading from '../components/SectionHeading'
 import Hero from '../sections/Hero'
 import HowItWorks from '../sections/HowItWorks'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
@@ -22,7 +22,10 @@ const modeHeaderArt: Record<string, string> = {
 }
 
 export default function Home() {
-  usePageTitle('')
+  usePageMeta(
+    '',
+    'Community mods, custom game modes and the BAPBAP Nexus launcher for BAPBAP — the roguelike party game. Join the modding community on Discord.',
+  )
 
   const revealMods = useReveal()
   const revealModes = useReveal()

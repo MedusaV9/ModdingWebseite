@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import ModCard from '../components/ModCard'
 import ModImage from '../components/ModImage'
-import usePageTitle from '../hooks/usePageTitle'
+import useClipboard from '../hooks/useClipboard'
+import usePageMeta from '../hooks/usePageMeta'
 import { LINKS } from '../data/links'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
@@ -31,29 +32,21 @@ function linkify(text: string) {
 }
 
 function CopyIdRow({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useClipboard()
   const codeRef = useRef<HTMLElement>(null)
-  const timeoutRef = useRef<number | undefined>(undefined)
 
-  useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
+  async function handleCopy() {
+    if (await copy(id)) return
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(id)
-      setCopied(true)
-      window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard API unavailable (permissions / insecure context):
-      // select the id text so the user can copy it manually.
-      const node = codeRef.current
-      const selection = window.getSelection()
-      if (node && selection) {
-        const range = document.createRange()
-        range.selectNodeContents(node)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
+    // Clipboard API unavailable (permissions / insecure context):
+    // select the id text so the user can copy it manually.
+    const node = codeRef.current
+    const selection = window.getSelection()
+    if (node && selection) {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      selection.removeAllRanges()
+      selection.addRange(range)
     }
   }
 
@@ -67,7 +60,7 @@ function CopyIdRow({ id }: { id: string }) {
       </code>
       <button
         type="button"
-        onClick={copy}
+        onClick={handleCopy}
         className="ml-auto font-teko uppercase text-lg leading-none pt-[7px] px-3 pb-1 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
       >
         COPY
@@ -80,7 +73,7 @@ function CopyIdRow({ id }: { id: string }) {
 }
 
 function ModDetail({ mod }: { mod: Mod }) {
-  usePageTitle(mod.name)
+  usePageMeta(mod.name, `${mod.name} — ${mod.summary}`)
 
   const related = MODS.filter((other) => other.id !== mod.id)
     .map((other) => ({

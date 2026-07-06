@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { BUNDLES } from '../data/bundles'
 import { MODES } from '../data/modes'
@@ -27,7 +27,10 @@ function formatDate(utc: string) {
 }
 
 export default function ModesPage() {
-  usePageTitle('Game Modes')
+  usePageMeta(
+    'Game Modes',
+    'Boss Rush, the Battle Royale Playtest and the Version Time Machine — every extra way to play BAPBAP, kept alive by the launcher.',
+  )
 
   const revealModes = useReveal()
   const revealBossRush = useReveal()

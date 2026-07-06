@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 
@@ -123,7 +123,10 @@ const faqs: { question: string; answer: string }[] = [
 ]
 
 export default function GuidePage() {
-  usePageTitle('Getting Started')
+  usePageMeta(
+    'Getting Started',
+    'From vanilla BAPBAP to fully modded in about five minutes — step-by-step install guide and FAQ.',
+  )
 
   const revealSteps = useReveal()
   const revealFaq = useReveal()

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import BrandMark from './brand/BrandMark'
 
 const siteLinks = [
   { label: 'Mods', to: '/mods' },
@@ -25,10 +26,7 @@ export default function Footer() {
     <footer className="border-t border-bap-line bg-bap-black">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 py-12 sm:grid-cols-2 md:px-6 lg:grid-cols-4">
         <div className="flex flex-col gap-3">
-          <span className="font-display text-lg uppercase leading-none">
-            <span className="text-white">BAPBAP</span>
-            <span className="text-bap-pink">·MODS</span>
-          </span>
+          <BrandMark />
           <p className="text-white/60 text-sm">
             A fan-made modding community for BAPBAP, the roguelike party game.
           </p>

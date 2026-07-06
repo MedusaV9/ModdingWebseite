@@ -1,7 +1,7 @@
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 import { RADIO, type RadioTrack } from '../data/radio'
@@ -56,7 +56,10 @@ function TrackRow({ track, number }: { track: RadioTrack; number: number }) {
 }
 
 export default function RadioPage() {
-  usePageTitle('Radio')
+  usePageMeta(
+    'Radio',
+    'The 15-track official BAPBAP soundtrack station — preview the tracklist here, listen offline in the BAPBAP Nexus launcher.',
+  )
 
   const revealHeader = useReveal()
   const revealTracks = useReveal()

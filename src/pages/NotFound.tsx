@@ -1,8 +1,8 @@
 import GradientButton from '../components/GradientButton'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 
 export default function NotFound() {
-  usePageTitle('404')
+  usePageMeta('404', 'This page got BAPPED — back to the mods.')
 
   return (
     <section

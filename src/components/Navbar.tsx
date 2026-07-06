@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import BrandMark from './brand/BrandMark'
 import GradientButton from './GradientButton'
 import { LINKS } from '../data/links'
 
@@ -22,9 +23,8 @@ export default function Navbar() {
         aria-label="Main navigation"
         className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3 md:px-6"
       >
-        <Link to="/" className="font-display text-lg uppercase leading-none">
-          <span className="text-white">BAPBAP</span>
-          <span className="text-bap-pink">·MODS</span>
+        <Link to="/" className="inline-flex">
+          <BrandMark />
         </Link>
 
         <ul className="hidden items-center gap-6 md:flex">
