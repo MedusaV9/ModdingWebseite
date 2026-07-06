@@ -137,7 +137,7 @@ export default function GuidePage() {
       {/* Numbered steps */}
       <section
         aria-labelledby="guide-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div ref={revealSteps.ref} className={revealSteps.className}>
           <SectionHeading
@@ -182,7 +182,7 @@ export default function GuidePage() {
             title="FAQ"
           />
 
-          <div className="mt-10 flex flex-col divide-y divide-bap-line border border-bap-line bg-bap-night">
+          <div className="mt-10 flex flex-col divide-y divide-bap-line border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]">
             {faqs.map((faq) => (
               <details key={faq.question} className="group">
                 <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 font-teko uppercase text-xl leading-none text-white transition-colors hover:text-bap-pink">

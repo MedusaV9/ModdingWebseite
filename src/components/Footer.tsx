@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import BrandMark from './brand/BrandMark'
+import Marquee from './Marquee'
 
 const siteLinks = [
   { label: 'Mods', to: '/mods' },
@@ -23,65 +24,76 @@ const footerLinks = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-bap-line bg-bap-black">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 py-12 sm:grid-cols-2 md:px-6 lg:grid-cols-4">
-        <div className="flex flex-col gap-3">
-          <BrandMark />
+    <>
+      <Marquee variant="outline" speed={34} text="BAPBAP MODDING" />
+      <footer className="border-t border-bap-line bg-bap-black">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 py-12 sm:grid-cols-2 md:px-6 lg:grid-cols-4">
+          <div className="flex flex-col gap-3">
+            <BrandMark />
+            <p className="text-white/60 text-sm">
+              A fan-made modding community for BAPBAP, the roguelike party
+              game.
+            </p>
+            <p className="text-white/40 text-sm">
+              QUICK KEYS:{' '}
+              <kbd className="border border-bap-line bg-bap-plum px-1.5 py-0.5 font-teko text-white/70">
+                /
+              </kbd>{' '}
+              search
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="font-teko uppercase tracking-widest text-bap-pink text-lg leading-none">
+              Site
+            </span>
+            <ul className="flex flex-col gap-1">
+              {siteLinks.map((link) => (
+                <li key={link.to}>
+                  <Link
+                    to={link.to}
+                    className="text-white/80 transition-colors hover:text-bap-pink"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="font-teko uppercase tracking-widest text-bap-pink text-lg leading-none">
+              Links
+            </span>
+            <ul className="flex flex-col gap-1">
+              {footerLinks.map((link) => (
+                <li key={link.href}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-white/80 transition-colors hover:text-bap-pink"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <p className="text-white/60 text-sm">
-            A fan-made modding community for BAPBAP, the roguelike party game.
+            BAPBAP Modding is a community project and is not affiliated with or
+            endorsed by BAPBAP HQ. BAPBAP and all related assets are property of
+            their respective owners.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <span className="font-teko uppercase tracking-widest text-bap-pink text-lg leading-none">
-            Site
-          </span>
-          <ul className="flex flex-col gap-1">
-            {siteLinks.map((link) => (
-              <li key={link.to}>
-                <Link
-                  to={link.to}
-                  className="text-white/80 transition-colors hover:text-bap-pink"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
+        <div className="border-t border-bap-line">
+          <p className="mx-auto max-w-7xl px-4 py-4 text-center text-white/60 text-sm md:px-6">
+            Built by the BAPBAP modding community
+          </p>
         </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="font-teko uppercase tracking-widest text-bap-pink text-lg leading-none">
-            Links
-          </span>
-          <ul className="flex flex-col gap-1">
-            {footerLinks.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-white/80 transition-colors hover:text-bap-pink"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="text-white/60 text-sm">
-          BAPBAP Modding is a community project and is not affiliated with or
-          endorsed by BAPBAP HQ. BAPBAP and all related assets are property of
-          their respective owners.
-        </p>
-      </div>
-
-      <div className="border-t border-bap-line">
-        <p className="mx-auto max-w-7xl px-4 py-4 text-center text-white/60 text-sm md:px-6">
-          Built by the BAPBAP modding community
-        </p>
-      </div>
-    </footer>
+      </footer>
+    </>
   )
 }

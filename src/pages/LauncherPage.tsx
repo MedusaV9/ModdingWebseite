@@ -1,4 +1,5 @@
 import Icon from '../components/brand/Icon'
+import type { IconName } from '../components/brand/Icon'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
 import useClipboard from '../hooks/useClipboard'
@@ -6,6 +7,17 @@ import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
+
+// One glyph per LAUNCHER.features entry (same order); the first three match
+// the Home launcher teaser.
+const featureIcons: IconName[] = [
+  'wrench',
+  'shield',
+  'clock',
+  'gamepad',
+  'radio',
+  'bolt',
+]
 
 export default function LauncherPage() {
   usePageMeta(
@@ -23,7 +35,7 @@ export default function LauncherPage() {
       {/* Header + feature grid */}
       <section
         aria-labelledby="launcher-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div
           ref={revealHeader.ref}
@@ -59,10 +71,13 @@ export default function LauncherPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {LAUNCHER.features.map((feature) => (
+            {LAUNCHER.features.map((feature, index) => (
               <div key={feature.title} className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 bg-bap-pink" />
+                  <Icon
+                    name={featureIcons[index]}
+                    className="h-5 w-5 shrink-0 text-bap-pink"
+                  />
                   <h3 className="font-teko uppercase text-xl leading-none text-white">
                     {feature.title}
                   </h3>
@@ -83,7 +98,7 @@ export default function LauncherPage() {
           ref={revealDetails.ref}
           className={`mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-16 md:px-6 lg:grid-cols-2 ${revealDetails.className}`}
         >
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               REQUIREMENTS
             </h2>
@@ -126,7 +141,7 @@ export default function LauncherPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               WHAT IS MELONLOADER?
             </h2>

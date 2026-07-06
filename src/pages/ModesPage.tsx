@@ -36,7 +36,7 @@ export default function ModesPage() {
       {/* Mode cards */}
       <section
         aria-labelledby="modes-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div ref={revealModes.ref} className={revealModes.className}>
           <SectionHeading
@@ -50,7 +50,7 @@ export default function ModesPage() {
             {MODES.map((mode) => (
               <article
                 key={mode.id}
-                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink"
+                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
               >
                 <ModeArt mode={mode.id as ModeArtId} className="h-24" />
                 <div className="flex flex-1 flex-col gap-4 p-6">
@@ -164,7 +164,7 @@ export default function ModesPage() {
       >
         <div
           ref={revealBundle.ref}
-          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink md:p-10 ${revealBundle.className}`}
+          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-10 ${revealBundle.className}`}
         >
           <div className="flex flex-col gap-2">
             <span className="font-teko uppercase text-bap-pink tracking-widest text-lg leading-none">

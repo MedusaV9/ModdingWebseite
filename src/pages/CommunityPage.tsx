@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import GradientButton from '../components/GradientButton'
-import Marquee from '../components/Marquee'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
@@ -38,7 +37,7 @@ export default function CommunityPage() {
       {/* Discord banner */}
       <section
         aria-labelledby="community-heading"
-        className="mx-auto max-w-7xl px-4 pt-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 pt-20 md:px-6 md:pt-28"
       >
         <div ref={revealBanner.ref} className={revealBanner.className}>
           <div className="flex flex-col items-center gap-6 bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] px-6 py-16 text-center md:px-12">
@@ -137,7 +136,7 @@ export default function CommunityPage() {
             {credits.map((credit) => (
               <div
                 key={credit.name}
-                className="flex items-center gap-4 border border-bap-line bg-bap-plum p-4 transition duration-150 hover:border-bap-pink"
+                className="flex items-center gap-4 border border-bap-line bg-bap-plum p-4 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
               >
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] font-display text-2xl uppercase text-white">
                   {credit.name.charAt(0)}
@@ -178,8 +177,6 @@ export default function CommunityPage() {
           </p>
         </div>
       </section>
-
-      <Marquee text="READY TO MOD?" />
     </>
   )
 }

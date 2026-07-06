@@ -91,7 +91,7 @@ export default function Home() {
             {MODES.map((mode) => (
               <article
                 key={mode.id}
-                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink"
+                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
               >
                 <ModeArt mode={mode.id as ModeArtId} className="h-24" />
                 <div className="flex flex-1 flex-col gap-4 p-6">

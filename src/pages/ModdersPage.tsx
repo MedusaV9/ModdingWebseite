@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Badge from '../components/Badge'
+import Icon from '../components/brand/Icon'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
@@ -141,7 +142,7 @@ function TerminalCard({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col border border-bap-line bg-bap-black">
+    <div className="flex flex-col border border-bap-line bg-bap-black transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]">
       <div className="flex items-center justify-between border-b border-bap-line px-5 py-3">
         <span className="font-teko uppercase text-xl leading-none tracking-widest text-white">
           {title}
@@ -173,7 +174,7 @@ export default function ModdersPage() {
       {/* Publish flow */}
       <section
         aria-labelledby="modders-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div ref={revealSteps.ref} className={revealSteps.className}>
           <SectionHeading
@@ -245,7 +246,7 @@ export default function ModdersPage() {
           ref={revealCards.ref}
           className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${revealCards.className}`}
         >
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               TARGETING TRACKS
             </h2>
@@ -269,7 +270,7 @@ export default function ModdersPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               SECRET &amp; TIMED DROPS
             </h2>
@@ -292,7 +293,7 @@ export default function ModdersPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               CARD VISUALS
             </h2>
@@ -342,14 +343,17 @@ export default function ModdersPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
               VALIDATION CHECKLIST
             </h2>
             <ul className="flex flex-col gap-3">
               {validationChecklist.map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 bg-bap-pink" />
+                  <Icon
+                    name="shield"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-bap-pink"
+                  />
                   <span className="text-white/70 text-sm">{item}</span>
                 </li>
               ))}

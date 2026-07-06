@@ -107,7 +107,7 @@ export default function RadioPage() {
       {/* Header + stats strip */}
       <section
         aria-labelledby="radio-heading"
-        className="mx-auto max-w-7xl px-4 pt-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 pt-20 md:px-6 md:pt-28"
       >
         <div ref={revealHeader.ref} className={revealHeader.className}>
           <SectionHeading
@@ -197,7 +197,7 @@ export default function RadioPage() {
       >
         <div
           ref={revealNote.ref}
-          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink md:p-10 ${revealNote.className}`}
+          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-10 ${revealNote.className}`}
         >
           <div className="flex flex-col gap-2">
             <h2

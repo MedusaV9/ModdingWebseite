@@ -32,7 +32,7 @@
     color: #fff;
   }
 
-  :where(a, button):focus-visible {
+  :where(a, button, input, select, summary, [role="option"]):focus-visible {
     outline: 2px solid var(--color-bap-pink);
     outline-offset: 2px;
   }
