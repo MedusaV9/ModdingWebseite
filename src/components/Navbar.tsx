@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import BrandMark from './brand/BrandMark'
+import Icon from './brand/Icon'
 import GradientButton from './GradientButton'
 import { LINKS } from '../data/links'
 
@@ -14,7 +15,7 @@ const links = [
   { label: 'Community', to: '/community' },
 ]
 
-export default function Navbar() {
+export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -45,6 +46,18 @@ export default function Navbar() {
             </li>
           ))}
         </ul>
+
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label="Search (press /)"
+          className="flex h-10 items-center gap-2 border border-bap-line px-2.5 text-white/60 transition-colors hover:border-bap-pink hover:text-bap-pink cursor-pointer"
+        >
+          <Icon name="search" className="h-4 w-4" />
+          <kbd className="hidden font-teko text-lg leading-none pt-[3px] md:block">
+            /
+          </kbd>
+        </button>
 
         <div className="hidden md:block">
           <GradientButton

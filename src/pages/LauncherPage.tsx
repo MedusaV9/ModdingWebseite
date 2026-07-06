@@ -1,5 +1,7 @@
+import Icon from '../components/brand/Icon'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
+import useClipboard from '../hooks/useClipboard'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LAUNCHER } from '../data/launcher'
@@ -14,6 +16,7 @@ export default function LauncherPage() {
   const revealHeader = useReveal()
   const revealDetails = useReveal()
   const revealChangelog = useReveal()
+  const { copied, copy } = useClipboard()
 
   return (
     <>
@@ -101,8 +104,24 @@ export default function LauncherPage() {
               <span className="break-all text-sm text-white/80">
                 {LAUNCHER.installer.fileName}
               </span>
-              <span className="break-all text-xs text-white/40">
-                SHA-256: {LAUNCHER.installer.sha256}
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="break-all text-xs text-white/40">
+                  SHA-256: {LAUNCHER.installer.sha256}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Copy installer SHA-256"
+                  onClick={() => void copy(LAUNCHER.installer.sha256)}
+                  className="shrink-0 border border-bap-line p-1.5 text-white/60 transition-colors hover:border-bap-pink hover:text-bap-pink cursor-pointer"
+                >
+                  <Icon name={copied ? 'check' : 'copy'} className="h-3.5 w-3.5" />
+                </button>
+                <span
+                  aria-live="polite"
+                  className="font-teko uppercase text-lg leading-none text-bap-pink"
+                >
+                  {copied ? 'COPIED!' : ''}
+                </span>
               </span>
             </div>
           </div>

@@ -1,9 +1,12 @@
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import Icon from '../components/brand/Icon'
 import ModCard from '../components/ModCard'
 import SectionHeading from '../components/SectionHeading'
+import useClipboard from '../hooks/useClipboard'
 import usePageMeta from '../hooks/usePageMeta'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
+import { randomModId } from '../lib/randomMod'
 
 type TypeFilter = 'all' | 'mods' | 'tools' | 'boss-rush'
 type Sort = 'name' | 'newest' | 'updated'
@@ -46,6 +49,8 @@ export default function ModsPage() {
   )
 
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { copied, copy } = useClipboard()
 
   const q = searchParams.get('q') ?? ''
   const typeParam = searchParams.get('type')
@@ -221,6 +226,31 @@ export default function ModsPage() {
               CLEAR FILTERS
             </button>
           )}
+          <button
+            type="button"
+            aria-label="Open a random mod"
+            onClick={() => navigate(`/mods/${randomModId()}`)}
+            className="inline-flex items-center gap-2 font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
+          >
+            <Icon name="shuffle" className="h-4 w-4 -mt-[3px]" />
+            SURPRISE ME
+          </button>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => void copy(window.location.href)}
+              className="inline-flex items-center gap-2 font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
+            >
+              <Icon
+                name={copied ? 'check' : 'copy'}
+                className="h-4 w-4 -mt-[3px]"
+              />
+              {copied ? 'COPIED!' : 'COPY FILTER LINK'}
+            </button>
+          )}
+          <span aria-live="polite" className="sr-only">
+            {copied ? 'Filter link copied to clipboard' : ''}
+          </span>
         </div>
       </div>
 

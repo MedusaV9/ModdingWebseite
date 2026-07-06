@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
+import RadioPlayer, { EqualizerBars } from '../components/RadioPlayer'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { LINKS } from '../data/links'
 import { RADIO, type RadioTrack } from '../data/radio'
+import { formatDuration } from '../lib/formatDuration'
 
 const GROUP_ORDER = [
   'Lobby',
@@ -15,13 +18,6 @@ const GROUP_ORDER = [
   'Tutorial',
   'Misc',
 ]
-
-function formatDuration(ms: number) {
-  const totalSeconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
 
 const totalMs = RADIO.tracks.reduce((sum, track) => sum + track.durationMs, 0)
 
@@ -38,19 +34,52 @@ const grouped = GROUP_ORDER.map((group) => ({
     .filter(({ track }) => track.group === group),
 })).filter(({ tracks }) => tracks.length > 0)
 
-function TrackRow({ track, number }: { track: RadioTrack; number: number }) {
+function TrackRow({
+  track,
+  number,
+  active,
+  playing,
+  onSelect,
+}: {
+  track: RadioTrack
+  number: number
+  active: boolean
+  playing: boolean
+  onSelect: () => void
+}) {
   return (
-    <li className="flex items-center gap-3 px-5 py-3 sm:gap-4">
-      <span className="w-7 shrink-0 font-teko text-lg leading-none text-white/40">
-        {String(number).padStart(2, '0')}
-      </span>
-      <span className="min-w-0 flex-1 truncate font-teko uppercase text-xl leading-none text-white">
-        {track.title}
-      </span>
-      <Badge className="hidden sm:inline-flex">{track.group}</Badge>
-      <span className="shrink-0 text-right font-teko text-lg leading-none text-white/60 tabular-nums">
-        {formatDuration(track.durationMs)}
-      </span>
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={active ? 'true' : undefined}
+        aria-label={`Play ${track.title}, ${formatDuration(track.durationMs)}`}
+        className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-bap-pink/5 cursor-pointer sm:gap-4"
+      >
+        <span className="w-7 shrink-0 font-teko text-lg leading-none text-white/40">
+          {active ? (
+            <EqualizerBars
+              playing={playing}
+              heights={[10, 14, 7]}
+              barClassName="w-1"
+              className="h-3.5"
+            />
+          ) : (
+            String(number).padStart(2, '0')
+          )}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate font-teko uppercase text-xl leading-none ${
+            active ? 'text-bap-pink' : 'text-white'
+          }`}
+        >
+          {track.title}
+        </span>
+        <Badge className="hidden sm:inline-flex">{track.group}</Badge>
+        <span className="shrink-0 text-right font-teko text-lg leading-none text-white/60 tabular-nums">
+          {formatDuration(track.durationMs)}
+        </span>
+      </button>
     </li>
   )
 }
@@ -64,6 +93,14 @@ export default function RadioPage() {
   const revealHeader = useReveal()
   const revealTracks = useReveal()
   const revealNote = useReveal()
+
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [playing, setPlaying] = useState(false)
+
+  function playTrack(index: number) {
+    setCurrentIndex(index)
+    setPlaying(true)
+  }
 
   return (
     <>
@@ -98,6 +135,16 @@ export default function RadioPage() {
             </dl>
           </div>
         </div>
+
+        {/* Visualizer deck — no <audio>: the site ships no audio files. */}
+        <div className="mt-12">
+          <RadioPlayer
+            currentIndex={currentIndex}
+            playing={playing}
+            onPlayingChange={setPlaying}
+            onTrackChange={setCurrentIndex}
+          />
+        </div>
       </section>
 
       {/* Track list grouped by scene */}
@@ -127,7 +174,14 @@ export default function RadioPage() {
                 </div>
                 <ul className="flex flex-col divide-y divide-bap-line">
                   {tracks.map(({ track, number }) => (
-                    <TrackRow key={track.id} track={track} number={number} />
+                    <TrackRow
+                      key={track.id}
+                      track={track}
+                      number={number}
+                      active={currentIndex === number - 1}
+                      playing={playing}
+                      onSelect={() => playTrack(number - 1)}
+                    />
                   ))}
                 </ul>
               </div>
