@@ -5,8 +5,10 @@ import Footer from './components/Footer'
 import Navbar from './components/Navbar'
 import PageLoader from './components/PageLoader'
 import ScrollToTop from './components/ScrollToTop'
+import { useI18n } from './i18n/context'
 
 export default function Layout() {
+  const { t } = useI18n()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const openPalette = useCallback(() => setPaletteOpen(true), [])
   const closePalette = useCallback(() => setPaletteOpen(false), [])
@@ -25,7 +27,7 @@ export default function Layout() {
         }}
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:bg-bap-pink focus:text-white focus:px-4 focus:py-2 font-teko uppercase"
       >
-        SKIP TO CONTENT
+        {t.common.skipToContent}
       </a>
       <ScrollToTop />
       <Navbar onOpenSearch={openPalette} />

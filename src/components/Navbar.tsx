@@ -1,20 +1,23 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import BrandMark from './brand/BrandMark'
 import Emblem from './brand/Emblem'
 import Icon from './brand/Icon'
 import GradientButton from './GradientButton'
+import LanguageSwitcher from './LanguageSwitcher'
 import { LINKS } from '../data/links'
+import { useI18n } from '../i18n/context'
 
-const links = [
-  { label: 'Mods', to: '/mods' },
-  { label: 'Modes', to: '/modes' },
-  { label: 'Launcher', to: '/launcher' },
-  { label: 'Radio', to: '/radio' },
-  { label: 'Guide', to: '/guide' },
-  { label: 'Modders', to: '/modders' },
-  { label: 'Community', to: '/community' },
-]
+// Route paths stay module-scope; labels come from the active dict in-component.
+const routes = [
+  { key: 'mods', to: '/mods' },
+  { key: 'modes', to: '/modes' },
+  { key: 'launcher', to: '/launcher' },
+  { key: 'radio', to: '/radio' },
+  { key: 'guide', to: '/guide' },
+  { key: 'modders', to: '/modders' },
+  { key: 'community', to: '/community' },
+] as const
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -23,6 +26,12 @@ const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
+  const { t } = useI18n()
+  const links = useMemo(
+    () => routes.map(({ key, to }) => ({ label: t.nav[key], to })),
+    [t],
+  )
+
   const [open, setOpen] = useState(false)
   // entered drives the staggered slide-in; instant zeroes the per-link delays
   // (the global reduced-motion CSS kills durations but not transition-delay).
@@ -151,7 +160,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
           </div>
 
           <nav
-            aria-label="Mobile navigation"
+            aria-label={t.nav.mobileNavLabel}
             className="relative flex min-h-full flex-1 flex-col px-6 pt-24 pb-10"
           >
             <ul className="flex flex-col gap-6">
@@ -175,6 +184,9 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
             </ul>
 
             <div className={`mt-auto pt-10 ${linkEnter(links.length).className}`} style={linkEnter(links.length).style}>
+              <div className="mb-6">
+                <LanguageSwitcher className="w-fit" />
+              </div>
               <GradientButton
                 href={LINKS.discord}
                 target="_blank"
@@ -182,7 +194,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
                 onClick={() => setOpen(false)}
                 className="shadow-hard"
               >
-                Join Discord
+                {t.nav.joinDiscord}
               </GradientButton>
             </div>
           </nav>
@@ -194,7 +206,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
           the fixed overlay above. */}
       <div className="relative z-50 border-b border-bap-line bg-bap-plum/80 backdrop-blur">
         <nav
-          aria-label="Main navigation"
+          aria-label={t.nav.mainNavLabel}
           className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6 lg:gap-6"
         >
           <Link to="/" className="inline-flex">
@@ -226,7 +238,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
               setOpen(false)
               onOpenSearch()
             }}
-            aria-label="Search (press /)"
+            aria-label={t.nav.searchLabel}
             className="flex h-10 items-center gap-2 border border-bap-line px-2.5 text-white/60 transition-colors hover:border-bap-pink hover:text-bap-pink cursor-pointer"
           >
             <Icon name="search" className="h-4 w-4" />
@@ -234,6 +246,10 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
               /
             </kbd>
           </button>
+
+          <div className="hidden md:block">
+            <LanguageSwitcher />
+          </div>
 
           {/* lg (not md): at exactly 768px the row with 7 links + search + CTA
               is wider than the viewport and causes horizontal overflow. */}
@@ -244,7 +260,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
               rel="noreferrer"
               className="text-[1rem] pt-[10px] px-4 pb-1.5"
             >
-              Join Discord
+              {t.nav.joinDiscordShort}
             </GradientButton>
           </div>
 
@@ -252,7 +268,7 @@ export default function Navbar({ onOpenSearch }: { onOpenSearch: () => void }) {
             ref={burgerRef}
             type="button"
             onClick={() => setOpen((value) => !value)}
-            aria-label={open ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-label={open ? t.nav.closeMenu : t.nav.openMenu}
             aria-expanded={open}
             aria-controls="mobile-menu"
             className="flex h-10 w-10 flex-col items-center justify-center gap-[5px] border border-bap-line text-white transition-colors hover:border-bap-pink md:hidden"

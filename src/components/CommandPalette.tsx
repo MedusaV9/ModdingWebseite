@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import useClipboard from '../hooks/useClipboard'
 import { LINKS } from '../data/links'
 import { MODS } from '../data/mods'
+import { useI18n } from '../i18n/context'
+import type { Dict } from '../i18n/context'
 import { randomModId } from '../lib/randomMod'
 import Icon from './brand/Icon'
 
@@ -31,42 +33,48 @@ const MOD_ITEMS: PaletteItem[] = MODS.map((mod) => ({
   action: { kind: 'navigate', to: `/mods/${mod.id}` },
 }))
 
-const PAGE_ITEMS: PaletteItem[] = [
-  { label: 'Home', to: '/' },
-  { label: 'Mods', to: '/mods' },
-  { label: 'Game Modes', to: '/modes' },
-  { label: 'Launcher', to: '/launcher' },
-  { label: 'Radio', to: '/radio' },
-  { label: 'Guide', to: '/guide' },
-  { label: 'For Modders', to: '/modders' },
-  { label: 'Community', to: '/community' },
-].map(({ label, to }) => ({
-  id: `page-${to}`,
-  label,
-  sub: to,
-  action: { kind: 'navigate', to },
-}))
+// Page/action labels live in the dict, so these are builders of the active
+// dict instead of module-scope constants (mod data stays English).
+function buildPageItems(t: Dict): PaletteItem[] {
+  return [
+    { label: t.palette.pages.home, to: '/' },
+    { label: t.palette.pages.mods, to: '/mods' },
+    { label: t.palette.pages.modes, to: '/modes' },
+    { label: t.palette.pages.launcher, to: '/launcher' },
+    { label: t.palette.pages.radio, to: '/radio' },
+    { label: t.palette.pages.guide, to: '/guide' },
+    { label: t.palette.pages.modders, to: '/modders' },
+    { label: t.palette.pages.community, to: '/community' },
+  ].map(({ label, to }) => ({
+    id: `page-${to}`,
+    label,
+    sub: to,
+    action: { kind: 'navigate', to },
+  }))
+}
 
-const ACTION_ITEMS: PaletteItem[] = [
-  {
-    id: 'action-surprise',
-    label: 'Surprise me — random mod',
-    sub: 'Open a random mod from the catalog',
-    action: { kind: 'surprise' },
-  },
-  {
-    id: 'action-copy-discord',
-    label: 'Copy Discord invite',
-    sub: LINKS.discord,
-    action: { kind: 'copy-discord' },
-  },
-  {
-    id: 'action-download',
-    label: 'Download launcher',
-    sub: 'BAPBAP Nexus for Windows',
-    action: { kind: 'download' },
-  },
-]
+function buildActionItems(t: Dict): PaletteItem[] {
+  return [
+    {
+      id: 'action-surprise',
+      label: t.palette.actions.surprise,
+      sub: t.palette.actions.surpriseSub,
+      action: { kind: 'surprise' },
+    },
+    {
+      id: 'action-copy-discord',
+      label: t.palette.actions.copyDiscord,
+      sub: LINKS.discord,
+      action: { kind: 'copy-discord' },
+    },
+    {
+      id: 'action-download',
+      label: t.palette.actions.download,
+      sub: t.palette.actions.downloadSub,
+      action: { kind: 'download' },
+    },
+  ]
+}
 
 /* Empty query shows PAGES + ACTIONS (11 items) — "~10" cap set to fit them. */
 const MAX_RESULTS = 11
@@ -94,6 +102,10 @@ export default function CommandPalette({
 }: CommandPaletteProps) {
   const navigate = useNavigate()
   const { copied, copy } = useClipboard()
+  const { t } = useI18n()
+
+  const pageItems = useMemo(() => buildPageItems(t), [t])
+  const actionItems = useMemo(() => buildActionItems(t), [t])
 
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -152,13 +164,13 @@ export default function CommandPalette({
   const groups = useMemo<PaletteGroup[]>(() => {
     const source: PaletteGroup[] = trimmed
       ? [
-          { heading: 'MODS', items: MOD_ITEMS.filter((i) => matches(i, trimmed)) },
-          { heading: 'PAGES', items: PAGE_ITEMS.filter((i) => matches(i, trimmed)) },
-          { heading: 'ACTIONS', items: ACTION_ITEMS.filter((i) => matches(i, trimmed)) },
+          { heading: t.palette.groups.mods, items: MOD_ITEMS.filter((i) => matches(i, trimmed)) },
+          { heading: t.palette.groups.pages, items: pageItems.filter((i) => matches(i, trimmed)) },
+          { heading: t.palette.groups.actions, items: actionItems.filter((i) => matches(i, trimmed)) },
         ]
       : [
-          { heading: 'PAGES', items: PAGE_ITEMS },
-          { heading: 'ACTIONS', items: ACTION_ITEMS },
+          { heading: t.palette.groups.pages, items: pageItems },
+          { heading: t.palette.groups.actions, items: actionItems },
         ]
     const capped: PaletteGroup[] = []
     let count = 0
@@ -171,7 +183,7 @@ export default function CommandPalette({
       }
     }
     return capped
-  }, [trimmed])
+  }, [trimmed, t, pageItems, actionItems])
 
   const flat = useMemo(() => groups.flatMap((group) => group.items), [groups])
 
@@ -261,7 +273,7 @@ export default function CommandPalette({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Site search"
+        aria-label={t.palette.dialogLabel}
         onKeyDown={onPanelKeyDown}
         className="shadow-hard mt-[15vh] w-full max-w-xl border-2 border-bap-pink bg-bap-night"
       >
@@ -279,7 +291,7 @@ export default function CommandPalette({
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search mods, pages, actions…"
+            placeholder={t.palette.placeholder}
             className="w-full bg-transparent py-3.5 text-white placeholder-white/40 focus:outline-none"
           />
         </div>
@@ -287,12 +299,12 @@ export default function CommandPalette({
         <div
           role="listbox"
           id="palette-list"
-          aria-label="Search results"
+          aria-label={t.palette.resultsLabel}
           className="max-h-[min(50vh,26rem)] overflow-y-auto py-1"
         >
           {flat.length === 0 && (
             <p className="px-4 py-6 text-sm text-white/50">
-              NO RESULTS — try different keywords.
+              {t.palette.noResults}
             </p>
           )}
           {groups.map((group) => (
@@ -332,7 +344,7 @@ export default function CommandPalette({
                         showCopied ? 'text-bap-pink' : 'text-white'
                       }`}
                     >
-                      {showCopied ? 'COPIED!' : item.label}
+                      {showCopied ? t.palette.copied : item.label}
                     </span>
                     {item.sub && (
                       <span className="truncate text-xs text-white/50">
@@ -347,7 +359,7 @@ export default function CommandPalette({
         </div>
 
         <div className="border-t border-bap-line px-4 py-2.5 font-teko text-white/40 uppercase text-sm tracking-wide">
-          ↑↓ NAVIGATE · ↵ OPEN · ESC CLOSE
+          {t.palette.footerHint}
         </div>
       </div>
     </div>

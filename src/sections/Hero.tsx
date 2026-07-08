@@ -13,6 +13,7 @@ import {
 } from '../components/brand/Sticker'
 import useCountUp from '../hooks/useCountUp'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
 import { MODES } from '../data/modes'
@@ -20,12 +21,13 @@ import { MODS } from '../data/mods'
 import { RADIO } from '../data/radio'
 
 // Numeric values are counted up on scroll; version strings stay static.
-const stats: { value: number | string; label: string }[] = [
-  { value: MODS.length, label: 'MODS & TOOLS' },
-  { value: MODES.length, label: 'GAME TRACKS' },
-  { value: RADIO.tracks.length, label: 'RADIO TRACKS' },
-  { value: '0.7.2', label: 'MELONLOADER' },
-  { value: `v${LAUNCHER.version}`, label: 'NEXUS' },
+// Labels come from the dict (t.hero.stats, same order) inside the component.
+const statValues: (number | string)[] = [
+  MODS.length,
+  MODES.length,
+  RADIO.tracks.length,
+  '0.7.2',
+  `v${LAUNCHER.version}`,
 ]
 
 function CountUpValue({ target }: { target: number }) {
@@ -38,7 +40,13 @@ function CountUpValue({ target }: { target: number }) {
 }
 
 export default function Hero() {
+  const { t } = useI18n()
   const reveal = useReveal()
+
+  const stats = t.hero.stats.map((label, index) => ({
+    label,
+    value: statValues[index],
+  }))
 
   // Pointer parallax: only active on fine pointers with reduced motion off.
   // When gated off no pointer listeners are attached at all.
@@ -131,9 +139,7 @@ export default function Hero() {
           ref={reveal.ref}
           className={`relative flex max-w-4xl flex-col items-center gap-6 text-center ${reveal.className}`}
         >
-          <Badge tone="amber">
-            COMMUNITY PROJECT — NOT AFFILIATED WITH BAPBAP HQ
-          </Badge>
+          <Badge tone="amber">{t.hero.badge}</Badge>
 
           <h1
             id="hero-heading"
@@ -147,8 +153,9 @@ export default function Hero() {
           </h1>
 
           <p className="font-teko uppercase text-2xl leading-none text-white/80">
-            COMMUNITY MODS <span className="text-bap-pink">✕</span> CUSTOM
-            MODES <span className="text-bap-pink">✕</span> ONE LAUNCHER
+            {t.hero.tagline[0]} <span className="text-bap-pink">✕</span>{' '}
+            {t.hero.tagline[1]} <span className="text-bap-pink">✕</span>{' '}
+            {t.hero.tagline[2]}
           </p>
 
           <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
@@ -160,15 +167,15 @@ export default function Hero() {
               target="_blank"
               rel="noreferrer"
             >
-              JOIN THE DISCORD
+              {t.hero.joinDiscord}
             </GradientButton>
             <GradientButton variant="outline" to="/launcher">
-              GET THE LAUNCHER
+              {t.hero.getLauncher}
             </GradientButton>
           </div>
 
           <p className="font-teko uppercase text-white/60 leading-none tracking-wide">
-            FOR BAPBAP — THE ROGUELIKE PARTY GAME ON STEAM
+            {t.hero.subline}
           </p>
         </div>
       </div>

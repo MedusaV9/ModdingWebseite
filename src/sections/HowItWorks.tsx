@@ -1,26 +1,10 @@
 import SectionHeading from '../components/SectionHeading'
 import useReveal from '../hooks/useReveal'
-
-const steps = [
-  {
-    title: 'Install BAPBAP Nexus',
-    text: 'Grab the launcher. It handles MelonLoader and updates for you.',
-  },
-  {
-    title: 'Pick your track',
-    text: 'Latest build, Boss Rush, Battle Royale — or any archived version.',
-  },
-  {
-    title: 'One-click install mods',
-    text: 'Browse BAPHub and install verified mods instantly.',
-  },
-  {
-    title: 'BAP away',
-    text: 'Jump into the party. Your setup stays clean and switchable.',
-  },
-]
+import { useI18n } from '../i18n/context'
 
 export default function HowItWorks() {
+  const { t } = useI18n()
+  const steps = t.howItWorks.steps
   const reveal = useReveal({ stagger: true })
 
   return (
@@ -36,8 +20,8 @@ export default function HowItWorks() {
         <div className={reveal.className}>
           <SectionHeading
             id="how-it-works-heading"
-            eyebrow="ZERO FRICTION"
-            title="HOW MODDING WORKS"
+            eyebrow={t.howItWorks.eyebrow}
+            title={t.howItWorks.title}
           />
         </div>
 

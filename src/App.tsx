@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import Layout from './Layout'
+import LanguageProvider from './i18n/LanguageProvider'
 
 // Route-level code-splitting: each page becomes its own chunk. Layout stays
 // eager so Navbar/Footer render immediately and never unmount.
@@ -20,21 +21,23 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 // links would 404 on refresh.
 export default function App() {
   return (
-    <HashRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/mods" element={<ModsPage />} />
-          <Route path="/mods/:id" element={<ModDetailPage />} />
-          <Route path="/modes" element={<ModesPage />} />
-          <Route path="/launcher" element={<LauncherPage />} />
-          <Route path="/radio" element={<RadioPage />} />
-          <Route path="/guide" element={<GuidePage />} />
-          <Route path="/modders" element={<ModdersPage />} />
-          <Route path="/community" element={<CommunityPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </HashRouter>
+    <LanguageProvider>
+      <HashRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/mods" element={<ModsPage />} />
+            <Route path="/mods/:id" element={<ModDetailPage />} />
+            <Route path="/modes" element={<ModesPage />} />
+            <Route path="/launcher" element={<LauncherPage />} />
+            <Route path="/radio" element={<RadioPage />} />
+            <Route path="/guide" element={<GuidePage />} />
+            <Route path="/modders" element={<ModdersPage />} />
+            <Route path="/community" element={<CommunityPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </HashRouter>
+    </LanguageProvider>
   )
 }
