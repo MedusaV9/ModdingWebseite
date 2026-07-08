@@ -12,7 +12,7 @@ filenames (no code changes needed):
 | `icon-512.png` | PWA icon, 512×512 (`any` + `maskable` in the manifest) |
 | `icon-192.png` | PWA icon, 192×192 |
 | `apple-touch-icon.png` | iOS home-screen icon, 180×180 |
-| `mods/<mod-id>.png` | Per-mod card image overrides (e.g. `mods/nexus-hud.png`) |
+| `mods/<mod-id>.png` | Per-mod card image overrides (e.g. `mods/sonic.bapbap.hp-numbers.png`) |
 
 ## og-image.png
 

@@ -36,14 +36,15 @@ export default function Footer() {
           <div className="flex flex-col gap-3">
             <BrandMark />
             <p className="text-white/60 text-sm">{t.footer.tagline}</p>
-            <p className="text-white/40 text-sm">
+            <p className="text-white/50 text-sm">
               {t.footer.quickKeys}{' '}
               <kbd className="border border-bap-line bg-bap-plum px-1.5 py-0.5 font-teko text-white/70">
                 /
               </kbd>{' '}
               {t.footer.quickKeysSearch}
             </p>
-            <p className="text-white/40 text-sm">{t.footer.pwaNote}</p>
+            {/* white/50 (not /40) — keeps the new line at ≥4.5:1 AA contrast. */}
+            <p className="text-white/50 text-sm">{t.footer.pwaNote}</p>
           </div>
 
           <div className="flex flex-col gap-2">
