@@ -153,6 +153,13 @@ function ModDetail({ mod }: { mod: Mod }) {
             ))}
           </dl>
 
+          <Link
+            to={`/mods?author=${encodeURIComponent(mod.author)}`}
+            className="self-start font-teko uppercase text-lg leading-none tracking-wide text-white/60 hover:text-bap-pink transition"
+          >
+            {t.modDetail.moreBy(mod.author)}
+          </Link>
+
           <CopyIdRow id={mod.id} />
         </div>
 

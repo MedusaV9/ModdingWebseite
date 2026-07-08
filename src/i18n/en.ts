@@ -1,3 +1,5 @@
+import type { PresetId } from '../data/presets'
+
 // English dictionary — the source of truth for the Dict shape (see context.ts).
 // Site data (mods, modes, launcher, radio…) stays English and is NOT in here.
 export const en = {
@@ -156,6 +158,7 @@ export const en = {
     },
     filterByType: 'Filter by type',
     filterByTag: 'Filter by tag',
+    filterByCreator: 'Filter by creator',
     showing: (x: number, y: number) => `Showing ${x} of ${y}`,
     clearFilters: 'CLEAR FILTERS',
     surpriseMe: 'SURPRISE ME',
@@ -186,6 +189,7 @@ export const en = {
     installViaLauncher: 'INSTALL VIA LAUNCHER',
     getHelpOnDiscord: 'GET HELP ON DISCORD',
     moreMods: 'MORE MODS',
+    moreBy: (author: string) => `MORE BY ${author} →`,
   },
   modes: {
     eyebrow: 'MORE WAYS TO PLAY',
@@ -528,6 +532,54 @@ export const en = {
         'Extra shots only — not used as the card image.',
       ],
     },
+    gallery: {
+      eyebrow: 'VISUAL.PRESET — LIVE',
+      title: 'CARD VISUALS GALLERY',
+      subtitle:
+        'The launcher supports 28 card presets via visual.preset — this is all of them, rendered live in pure CSS. Pick a swatch to preview it on the test card.',
+      tryAll: 'TRY ALL 28 LIVE IN THE GALLERY ↓',
+      chooseLabel: 'Choose a preset',
+      testCardTitle: 'EFFECT TEST CARD',
+      testCardSummary:
+        'A fake mod card — this is how your BAPHub card ships with the selected preset.',
+      // Neutral chips on the effect test card (fake metadata).
+      testCardBadges: ['PREVIEW', 'QOL', 'V1.0.0'],
+      copy: 'COPY',
+      copied: 'COPIED!',
+      hiddenNote:
+        'Every effect token also has a hidden_<token> variant that applies the effect without the visible tag chip.',
+      // One-liners per preset, keyed by PresetId (see src/data/presets.ts).
+      descriptions: {
+        default: 'Plain standard card, no extras.',
+        featured: 'Amber highlight with a slow glow pulse.',
+        shiny: 'Clean diagonal shimmer — subtle specular gloss.',
+        holo: 'Holographic rainbow shimmer, subtle.',
+        neon: 'Pink neon glow, bold and loud.',
+        frost: 'Pale ice gradient with a frosted top edge.',
+        ember: 'Rising embers — warm flicker from below.',
+        prism: 'Rainbow facets, slowly drifting.',
+        glitch: 'RGB split and jitter, digital error style.',
+        aurora: 'Soft green/teal/purple northern lights.',
+        frozen: 'Strong ice look, cold and crystalline.',
+        plasma: 'Violet and electric, high energy.',
+        toxic: 'Green/acid, radioactive style.',
+        cosmic: 'Deep space look with wide color nebulas.',
+        vapor: 'Pink/cyan retro wave.',
+        storm: 'Dark electro-storm look.',
+        inferno: 'Hot red/orange flare.',
+        velvet: 'Dark violet soft glow.',
+        matrix: 'Digital green with scanline character.',
+        ghost: 'Pale, translucent and quiet.',
+        crystal: 'Cyan-blue, clean crystal shine.',
+        chrome: 'Metallic/silver.',
+        noir: 'Dark low-gloss look.',
+        sunset: 'Orange/pink evening gradient.',
+        void: 'Dark deep-space style.',
+        candy: 'Colorful sweet-pop look.',
+        dev: 'Dashed terminal look for dev builds.',
+        event: 'Party stripes and confetti for events.',
+      } satisfies Record<PresetId, string>,
+    },
     validation: {
       title: 'VALIDATION CHECKLIST',
       items: [
@@ -548,6 +600,8 @@ export const en = {
     title: 'JOIN THE BAPBAP MODDING COMMUNITY',
     sub: 'MOD DROPS ✕ PLAYTESTS ✕ SPEEDRUNS ✕ DEV TALK',
     discordCta: 'DISCORD.GG/BAPBAPMODS',
+    modCount: (n: number) => `${n} mods on BAPHub`,
+    allTheirMods: 'ALL THEIR MODS →',
     trailer: {
       eyebrow: 'SEE IT IN MOTION',
       title: 'THE GAME',

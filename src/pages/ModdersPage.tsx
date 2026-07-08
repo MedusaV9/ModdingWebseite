@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Badge from '../components/Badge'
 import Icon from '../components/brand/Icon'
 import GradientButton from '../components/GradientButton'
+import PresetShowcase from '../components/PresetShowcase'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
@@ -43,37 +44,6 @@ const powershellHash = `$h = Get-FileHash -Algorithm SHA256 .\\BAPBAPHpNumbers.d
 $h.Hash.ToLower()`
 
 const supportedTracks = ['bapbap', 'latest', 'boss-rush', 'battle-royale']
-
-const visualPresets = [
-  'default',
-  'featured',
-  'shiny',
-  'holo',
-  'neon',
-  'frost',
-  'ember',
-  'prism',
-  'glitch',
-  'aurora',
-  'frozen',
-  'plasma',
-  'toxic',
-  'cosmic',
-  'vapor',
-  'storm',
-  'inferno',
-  'velvet',
-  'matrix',
-  'ghost',
-  'crystal',
-  'chrome',
-  'noir',
-  'sunset',
-  'void',
-  'candy',
-  'dev',
-  'event',
-]
 
 const ribbonTags = [
   'host-only',
@@ -257,11 +227,20 @@ export default function ModdersPage() {
               <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
                 {t.modders.visuals.presetsLabel}
               </span>
-              <div className="flex flex-wrap gap-1.5">
-                {visualPresets.map((preset) => (
-                  <Badge key={preset}>{preset}</Badge>
-                ))}
-              </div>
+              {/* In-page jump: HashRouter would treat href="#preset-gallery"
+                  as a route change, so scroll + focus manually instead
+                  (same pattern as the Layout.tsx skip link). */}
+              <button
+                type="button"
+                onClick={() => {
+                  const gallery = document.getElementById('preset-gallery')
+                  gallery?.focus({ preventScroll: true })
+                  gallery?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="self-start font-teko uppercase text-lg leading-none tracking-wide text-bap-pink hover:text-white transition cursor-pointer"
+              >
+                {t.modders.gallery.tryAll}
+              </button>
               <p className="text-white/60 text-sm">
                 {t.modders.visuals.presetsText}
               </p>
@@ -314,6 +293,9 @@ export default function ModdersPage() {
           </div>
         </div>
       </section>
+
+      {/* Live visual.preset gallery */}
+      <PresetShowcase />
 
       {/* CTA row */}
       <section

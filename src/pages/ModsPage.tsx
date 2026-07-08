@@ -7,6 +7,7 @@ import usePageMeta from '../hooks/usePageMeta'
 import { useI18n } from '../i18n/context'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
+import { AUTHORS } from '../lib/authors'
 import { randomModId } from '../lib/randomMod'
 
 type TypeFilter = 'all' | 'mods' | 'tools' | 'boss-rush'
@@ -60,9 +61,15 @@ export default function ModsPage() {
   const sort: Sort = sortIds.some((id) => id === sortParam)
     ? (sortParam as Sort)
     : 'name'
+  // Exact-name match against the derived author list — anything else
+  // (typos, hand-edited URLs) is silently ignored.
+  const authorParam = searchParams.get('author')
+  const author = AUTHORS.some((entry) => entry.name === authorParam)
+    ? authorParam
+    : null
 
   function updateParams(
-    updates: Partial<Record<'q' | 'type' | 'tags' | 'sort', string>>,
+    updates: Partial<Record<'q' | 'type' | 'tags' | 'sort' | 'author', string>>,
     replace = false,
   ) {
     const next = new URLSearchParams(searchParams)
@@ -85,10 +92,10 @@ export default function ModsPage() {
     updateParams({ tags: next.join(',') })
   }
 
-  const hasFilters = q !== '' || type !== 'all' || tags.length > 0
+  const hasFilters = q !== '' || type !== 'all' || tags.length > 0 || author !== null
 
   function clearFilters() {
-    updateParams({ q: '', type: '', tags: '' })
+    updateParams({ q: '', type: '', tags: '', author: '' })
   }
 
   const activeTab = typeTabs.find((tab) => tab.id === type) ?? typeTabs[0]
@@ -96,6 +103,7 @@ export default function ModsPage() {
 
   const visible = MODS.filter((mod) => {
     if (!activeTab.match(mod)) return false
+    if (author && mod.author !== author) return false
     if (!tags.every((tag) => mod.tags.includes(tag))) return false
     if (query) {
       const haystack = [mod.name, mod.summary, mod.author, mod.id, ...mod.tags]
@@ -182,6 +190,33 @@ export default function ModsPage() {
               {t.mods.typeTabs[tab.id]}
             </button>
           ))}
+        </div>
+
+        <div
+          role="group"
+          aria-label={t.mods.filterByCreator}
+          className="flex flex-wrap gap-1.5"
+        >
+          {AUTHORS.map((entry) => {
+            const active = author === entry.name
+            return (
+              <button
+                key={entry.name}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  updateParams({ author: active ? '' : entry.name })
+                }
+                className={`inline-flex items-center border font-teko uppercase tracking-wider text-sm leading-none pt-[5px] px-2 pb-[2px] transition cursor-pointer ${
+                  active
+                    ? 'text-bap-pink border-bap-pink/50 bg-bap-pink/10'
+                    : 'text-white/70 border-bap-line bg-white/5 hover:text-bap-pink'
+                }`}
+              >
+                {entry.name} ({entry.modCount})
+              </button>
+            )
+          })}
         </div>
 
         <div

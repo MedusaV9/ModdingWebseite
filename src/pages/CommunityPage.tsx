@@ -5,6 +5,7 @@ import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
 import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
+import { AUTHORS } from '../lib/authors'
 
 const TRAILER_THUMB = 'https://img.youtube.com/vi/Y4p8UyaPmDM/0.jpg'
 
@@ -138,35 +139,52 @@ export default function CommunityPage() {
           />
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {credits.map((credit) => (
-              <div
-                key={credit.name}
-                className="flex items-center gap-4 border border-bap-line bg-bap-plum p-4 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
-              >
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] font-display text-2xl uppercase text-white">
-                  {credit.name.charAt(0)}
-                </span>
-                <div className="flex flex-col gap-0.5">
-                  {credit.url ? (
-                    <a
-                      href={credit.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-display uppercase text-sm text-white hover:text-bap-pink transition-colors"
-                    >
-                      {credit.name}
-                    </a>
-                  ) : (
-                    <span className="font-display uppercase text-sm text-white">
-                      {credit.name}
+            {credits.map((credit) => {
+              const modCount =
+                AUTHORS.find((entry) => entry.name === credit.name)
+                  ?.modCount ?? 0
+              return (
+                <div
+                  key={credit.name}
+                  className="flex flex-col gap-4 border border-bap-line bg-bap-plum p-4 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] font-display text-2xl uppercase text-white">
+                      {credit.name.charAt(0)}
                     </span>
-                  )}
-                  <span className="text-white/60 text-sm">
-                    {t.community.credits.roles[credit.roleKey]}
-                  </span>
+                    <div className="flex flex-col gap-0.5">
+                      {credit.url ? (
+                        <a
+                          href={credit.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-display uppercase text-sm text-white hover:text-bap-pink transition-colors"
+                        >
+                          {credit.name}
+                        </a>
+                      ) : (
+                        <span className="font-display uppercase text-sm text-white">
+                          {credit.name}
+                        </span>
+                      )}
+                      <span className="text-white/60 text-sm">
+                        {t.community.credits.roles[credit.roleKey]}
+                      </span>
+                      <span className="font-teko uppercase text-lg leading-none tracking-wide text-bap-pink">
+                        {t.community.modCount(modCount)}
+                      </span>
+                    </div>
+                  </div>
+                  <GradientButton
+                    variant="outline"
+                    to={`/mods?author=${encodeURIComponent(credit.name)}`}
+                    className="self-start"
+                  >
+                    {t.community.allTheirMods}
+                  </GradientButton>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <p className="text-white/60 text-sm">
