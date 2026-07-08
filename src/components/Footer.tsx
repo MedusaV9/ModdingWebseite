@@ -43,6 +43,7 @@ export default function Footer() {
               </kbd>{' '}
               {t.footer.quickKeysSearch}
             </p>
+            <p className="text-white/40 text-sm">{t.footer.pwaNote}</p>
           </div>
 
           <div className="flex flex-col gap-2">

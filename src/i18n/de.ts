@@ -31,6 +31,7 @@ export const de = {
       'Eine von Fans gemachte Modding-Community für BAPBAP, das Roguelike-Partyspiel.',
     quickKeys: 'SCHNELLTASTEN:',
     quickKeysSearch: 'Suche',
+    pwaNote: 'Als App installierbar — funktioniert offline.',
     siteHeading: 'Seite',
     linksHeading: 'Links',
     links: {

@@ -29,6 +29,7 @@ export const en = {
       'A fan-made modding community for BAPBAP, the roguelike party game.',
     quickKeys: 'QUICK KEYS:',
     quickKeysSearch: 'search',
+    pwaNote: 'Installable as an app — works offline.',
     siteHeading: 'Site',
     linksHeading: 'Links',
     links: {
