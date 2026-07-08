@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import Badge from './Badge'
 import Icon from './brand/Icon'
+import { useI18n } from '../i18n/context'
 import { RADIO } from '../data/radio'
 import { formatDuration } from '../lib/formatDuration'
 
@@ -55,6 +56,7 @@ export default function RadioPlayer({
   onPlayingChange,
   onTrackChange,
 }: RadioPlayerProps) {
+  const { t } = useI18n()
   const tracks = RADIO.tracks
   const track = tracks[currentIndex]
   const [positionMs, setPositionMs] = useState(0)
@@ -87,12 +89,15 @@ export default function RadioPlayer({
 
   const shownMs = Math.min(positionMs, track.durationMs)
   const fillPercent = (shownMs / track.durationMs) * 100
-  const timeText = `${formatDuration(shownMs)} of ${formatDuration(track.durationMs)}`
+  const timeText = t.radioPlayer.position(
+    formatDuration(shownMs),
+    formatDuration(track.durationMs),
+  )
 
   return (
     <div className="shadow-hard relative border-2 border-bap-pink bg-bap-black p-6">
       <Badge tone="amber" className="absolute -top-3 right-4">
-        VISUALIZER — FULL AUDIO SHIPS IN THE LAUNCHER
+        {t.radioPlayer.visualizerBadge}
       </Badge>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
@@ -117,7 +122,7 @@ export default function RadioPlayer({
         <div className="flex shrink-0 items-center gap-3">
           <button
             type="button"
-            aria-label="Previous track"
+            aria-label={t.radioPlayer.prevTrack}
             onClick={() =>
               onTrackChange((currentIndex - 1 + tracks.length) % tracks.length)
             }
@@ -127,7 +132,7 @@ export default function RadioPlayer({
           </button>
           <button
             type="button"
-            aria-label={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? t.radioPlayer.pause : t.radioPlayer.play}
             onClick={() => onPlayingChange(!playing)}
             className="flex h-14 w-14 items-center justify-center bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] text-white transition duration-150 hover:brightness-110 cursor-pointer"
           >
@@ -135,7 +140,7 @@ export default function RadioPlayer({
           </button>
           <button
             type="button"
-            aria-label="Next track"
+            aria-label={t.radioPlayer.nextTrack}
             onClick={() => onTrackChange((currentIndex + 1) % tracks.length)}
             className="flex h-10 w-10 items-center justify-center border border-bap-line text-white/80 transition-colors hover:border-bap-pink hover:text-bap-pink cursor-pointer"
           >
@@ -151,7 +156,7 @@ export default function RadioPlayer({
         step={1000}
         value={shownMs}
         onChange={(event) => setPositionMs(Number(event.target.value))}
-        aria-label="Seek position"
+        aria-label={t.radioPlayer.seek}
         aria-valuetext={timeText}
         className="radio-scrubber mt-6"
         style={{ '--scrub-fill': `${fillPercent}%` } as CSSProperties}

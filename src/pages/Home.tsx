@@ -87,32 +87,35 @@ export default function Home() {
           />
 
           <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {MODES.map((mode) => (
-              <article
-                key={mode.id}
-                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
-              >
-                <ModeArt mode={mode.id as ModeArtId} className="h-24" />
-                <div className="flex flex-1 flex-col gap-4 p-6">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">
-                      {mode.tagline}
-                    </span>
-                    <h3 className="font-display uppercase text-2xl text-white">
-                      {mode.name}
-                    </h3>
+            {MODES.map((mode) => {
+              const card = t.modes.cards[mode.id as ModeArtId]
+              return (
+                <article
+                  key={mode.id}
+                  className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
+                >
+                  <ModeArt mode={mode.id as ModeArtId} className="h-24" />
+                  <div className="flex flex-1 flex-col gap-4 p-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">
+                        {card.tagline}
+                      </span>
+                      <h3 className="font-display uppercase text-2xl text-white">
+                        {mode.name}
+                      </h3>
+                    </div>
+                    <p className="text-white/70 text-sm leading-relaxed">
+                      {card.description}
+                    </p>
+                    <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                      {card.highlights.map((highlight) => (
+                        <Badge key={highlight}>{highlight}</Badge>
+                      ))}
+                    </div>
                   </div>
-                  <p className="text-white/70 text-sm leading-relaxed">
-                    {mode.description}
-                  </p>
-                  <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-                    {mode.highlights.map((highlight) => (
-                      <Badge key={highlight}>{highlight}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
 
           <div className="mt-12 flex justify-center">
@@ -155,7 +158,7 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col justify-center gap-6">
-            {LAUNCHER.features.slice(0, 3).map((feature, index) => (
+            {t.launcher.features.slice(0, 3).map((feature, index) => (
               <div key={feature.title} className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <Icon

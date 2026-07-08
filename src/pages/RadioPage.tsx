@@ -5,6 +5,7 @@ import RadioPlayer, { EqualizerBars } from '../components/RadioPlayer'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
 import { RADIO, type RadioTrack } from '../data/radio'
 import { formatDuration } from '../lib/formatDuration'
@@ -21,10 +22,11 @@ const GROUP_ORDER = [
 
 const totalMs = RADIO.tracks.reduce((sum, track) => sum + track.durationMs, 0)
 
-const stats = [
-  { value: String(RADIO.tracks.length), label: 'TRACKS' },
-  { value: String(GROUP_ORDER.length), label: 'SCENES' },
-  { value: formatDuration(totalMs), label: 'RUNTIME' },
+// Labels come from the dict (t.radio.stats, same order) inside the component.
+const statValues = [
+  String(RADIO.tracks.length),
+  String(GROUP_ORDER.length),
+  formatDuration(totalMs),
 ]
 
 const grouped = GROUP_ORDER.map((group) => ({
@@ -47,13 +49,17 @@ function TrackRow({
   playing: boolean
   onSelect: () => void
 }) {
+  const { t } = useI18n()
   return (
     <li>
       <button
         type="button"
         onClick={onSelect}
         aria-current={active ? 'true' : undefined}
-        aria-label={`Play ${track.title}, ${formatDuration(track.durationMs)}`}
+        aria-label={t.radio.playTrack(
+          track.title,
+          formatDuration(track.durationMs),
+        )}
         className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-bap-pink/5 cursor-pointer sm:gap-4"
       >
         <span className="w-7 shrink-0 font-teko text-lg leading-none text-white/40">
@@ -85,10 +91,13 @@ function TrackRow({
 }
 
 export default function RadioPage() {
-  usePageMeta(
-    'Radio',
-    'The 15-track official BAPBAP soundtrack station — preview the tracklist here, listen offline in the BAPBAP Nexus launcher.',
-  )
+  const { t } = useI18n()
+  usePageMeta(t.meta.radio.title, t.meta.radio.description)
+
+  const stats = t.radio.stats.map((label, index) => ({
+    label,
+    value: statValues[index],
+  }))
 
   const revealHeader = useReveal()
   const revealTracks = useReveal()
@@ -112,9 +121,9 @@ export default function RadioPage() {
         <div ref={revealHeader.ref} className={revealHeader.className}>
           <SectionHeading
             id="radio-heading"
-            eyebrow="OFFLINE SOUNDTRACK STATION"
-            title="BAPBAP RADIO"
-            subtitle="The 15 official BAPBAP soundtrack pieces bundled with the BAPBAP Nexus launcher radio — from the chill lobby loops to the Dimension combat themes."
+            eyebrow={t.radio.eyebrow}
+            title={t.radio.title}
+            subtitle={t.radio.subtitle}
           />
 
           <div className="mt-10 border-y border-bap-line bg-bap-plum/50">
@@ -149,7 +158,7 @@ export default function RadioPage() {
 
       {/* Track list grouped by scene */}
       <section
-        aria-label="Radio track list"
+        aria-label={t.radio.trackListLabel}
         className="mx-auto max-w-7xl px-4 py-16 md:px-6"
       >
         <div
@@ -164,7 +173,7 @@ export default function RadioPage() {
               <div className="flex flex-col border border-bap-line bg-bap-black">
                 <div className="flex items-center justify-between border-b border-bap-line px-5 py-3">
                   <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                    {tracks.length} TRACK{tracks.length === 1 ? '' : 'S'}
+                    {t.radio.trackCount(tracks.length)}
                   </span>
                   <span className="flex gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-bap-red" />
@@ -204,23 +213,21 @@ export default function RadioPage() {
               id="radio-listen-heading"
               className="font-display uppercase text-2xl text-white md:text-3xl"
             >
-              LISTEN IN THE LAUNCHER
+              {t.radio.listen.title}
             </h2>
-            <p className="max-w-2xl text-white/60">
-              This site doesn&apos;t ship the audio files — the full station
-              plays offline inside the BAPBAP Nexus launcher. The track list
-              lives in the open launcher manifest on GitHub.
-            </p>
+            <p className="max-w-2xl text-white/60">{t.radio.listen.text}</p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <GradientButton to="/launcher">GET THE LAUNCHER</GradientButton>
+            <GradientButton to="/launcher">
+              {t.radio.listen.getLauncher}
+            </GradientButton>
             <GradientButton
               variant="outline"
               href={LINKS.github}
               target="_blank"
               rel="noreferrer"
             >
-              OPEN MANIFEST ON GITHUB
+              {t.radio.listen.openManifest}
             </GradientButton>
           </div>
         </div>

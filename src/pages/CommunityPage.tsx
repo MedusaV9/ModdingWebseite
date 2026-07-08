@@ -3,30 +3,35 @@ import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
 
 const TRAILER_THUMB = 'https://img.youtube.com/vi/Y4p8UyaPmDM/0.jpg'
 
-const credits: { name: string; role: string; url?: string }[] = [
+// Names/urls stay module-scope; role labels come from the active dict
+// (t.community.credits.roles) in-component.
+const credits: {
+  name: string
+  roleKey: 'launcher' | 'bossRush'
+  url?: string
+}[] = [
   {
     name: 'Sonic0810',
-    role: 'Launcher & core mods',
+    roleKey: 'launcher',
     url: 'https://github.com/Sonic0810',
   },
-  { name: 'jackmygoodman', role: 'Boss Rush mods' },
+  { name: 'jackmygoodman', roleKey: 'bossRush' },
 ]
 
 const externalLinks = [
-  { label: 'OFFICIAL SITE', href: LINKS.officialSite },
-  { label: 'STEAM PAGE', href: LINKS.steam },
-  { label: 'GITHUB / BAPHUB SOURCE', href: LINKS.github },
-]
+  { key: 'official', href: LINKS.officialSite },
+  { key: 'steam', href: LINKS.steam },
+  { key: 'github', href: LINKS.github },
+] as const
 
 export default function CommunityPage() {
-  usePageMeta(
-    'Community',
-    'Join the BAPBAP modding community on Discord — mod drops, playtests, speedruns and dev talk.',
-  )
+  const { t } = useI18n()
+  usePageMeta(t.meta.community.title, t.meta.community.description)
 
   const revealBanner = useReveal()
   const revealTrailer = useReveal()
@@ -45,10 +50,10 @@ export default function CommunityPage() {
               id="community-heading"
               className="font-display uppercase text-4xl text-white md:text-5xl"
             >
-              JOIN THE BAPBAP MODDING COMMUNITY
+              {t.community.title}
             </h1>
             <p className="font-teko uppercase text-2xl leading-none text-white/90">
-              MOD DROPS ✕ PLAYTESTS ✕ SPEEDRUNS ✕ DEV TALK
+              {t.community.sub}
             </p>
             <a
               href={LINKS.discord}
@@ -56,7 +61,7 @@ export default function CommunityPage() {
               rel="noreferrer"
               className="inline-block bg-white text-bap-red font-teko font-bold text-[1.2rem] uppercase leading-none tracking-wide pt-[13px] px-5 pb-2 transition duration-100 hover:brightness-90 hover:-translate-y-0.5 cursor-pointer select-none"
             >
-              DISCORD.GG/BAPBAPMODS
+              {t.community.discordCta}
             </a>
           </div>
         </div>
@@ -74,9 +79,9 @@ export default function CommunityPage() {
           <div className="flex flex-col gap-6">
             <SectionHeading
               id="trailer-heading"
-              eyebrow="SEE IT IN MOTION"
-              title="THE GAME"
-              subtitle="BAPBAP is a free-to-play roguelike party brawler on Steam — watch the trailer, then mod it."
+              eyebrow={t.community.trailer.eyebrow}
+              title={t.community.trailer.title}
+              subtitle={t.community.trailer.subtitle}
             />
             <div className="flex flex-wrap gap-4">
               {externalLinks.map((link) => (
@@ -87,7 +92,7 @@ export default function CommunityPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {link.label}
+                  {t.community.trailer.links[link.key]}
                 </GradientButton>
               ))}
             </div>
@@ -101,7 +106,7 @@ export default function CommunityPage() {
           >
             <img
               src={TRAILER_THUMB}
-              alt="BAPBAP trailer"
+              alt={t.community.trailer.thumbAlt}
               loading="lazy"
               onError={(event) => {
                 event.currentTarget.style.display = 'none'
@@ -110,7 +115,7 @@ export default function CommunityPage() {
             />
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="bg-bap-black/70 px-5 pt-[13px] pb-2 font-teko font-bold uppercase text-2xl leading-none tracking-wide text-white transition duration-150 group-hover:bg-[linear-gradient(to_left,#eb204f,#ff2a6d)]">
-                WATCH THE TRAILER ▶
+                {t.community.trailer.watch}
               </span>
             </span>
           </a>
@@ -128,8 +133,8 @@ export default function CommunityPage() {
         >
           <SectionHeading
             id="credits-heading"
-            eyebrow="THE PEOPLE"
-            title="CREDITS"
+            eyebrow={t.community.credits.eyebrow}
+            title={t.community.credits.title}
           />
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -156,24 +161,24 @@ export default function CommunityPage() {
                       {credit.name}
                     </span>
                   )}
-                  <span className="text-white/60 text-sm">{credit.role}</span>
+                  <span className="text-white/60 text-sm">
+                    {t.community.credits.roles[credit.roleKey]}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
 
           <p className="text-white/60 text-sm">
-            Building something of your own? New modders are always welcome —{' '}
+            {t.community.credits.welcomeBefore}
             <Link to="/modders" className="text-bap-pink hover:underline">
-              publish your first mod on BAPHub
+              {t.community.credits.welcomeLink}
             </Link>
-            .
+            {t.community.credits.welcomeAfter}
           </p>
 
           <p className="border border-bap-line bg-bap-night p-4 text-white/60 text-sm">
-            BAPBAP Modding is a community project and is not affiliated with or
-            endorsed by BAPBAP HQ. BAPBAP and all related assets are property
-            of their respective owners.
+            {t.community.credits.disclaimer}
           </p>
         </div>
       </section>

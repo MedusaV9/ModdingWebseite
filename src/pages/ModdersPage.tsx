@@ -5,43 +5,13 @@ import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
 import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
 
 const TEMPLATES_URL =
   'https://github.com/Sonic0810/bapbaplauncher/tree/main/templates'
 const AUTHORING_DOC_URL =
   'https://github.com/Sonic0810/bapbaplauncher/blob/main/docs/BAPHub-Content-Authoring-DE.md'
-
-const publishSteps = [
-  {
-    title: 'Add your files',
-    text: 'Put your mod files under manifest/channels/release/<package-id>/versions/<version>/files/.',
-  },
-  {
-    title: 'Hash every file',
-    text: 'Compute a SHA-256 hash per file (lowercase hex) — the launcher refuses anything unverified.',
-  },
-  {
-    title: 'Create version.json',
-    text: 'Describe the release: every file gets sourcePath, targetPath and its sha256.',
-  },
-  {
-    title: 'Update package.json',
-    text: 'Update <package-id>/package.json with the new version, metadata, links and visuals.',
-  },
-  {
-    title: 'Register in packages.json',
-    text: 'Add or update your package entry in the channel-wide packages.json registry.',
-  },
-  {
-    title: 'Add your images',
-    text: 'Drop thumbnails, hero shots and gallery images under manifest/assets/packages/.',
-  },
-  {
-    title: 'Push to main',
-    text: 'Push (or open a PR) to main and reload the launcher — your mod is live on BAPHub.',
-  },
-]
 
 const repoTree = `manifest/
 ├─ index.json                     ← global config, secretUnlocks[]
@@ -117,22 +87,9 @@ const ribbonTags = [
   'sneakpeek',
 ]
 
-const imageRoles = [
-  {
-    name: 'thumbnailPath',
-    text: 'Grid tile — square, ~512×512 recommended.',
-  },
-  { name: 'imagePath', text: 'Card image and general fallback.' },
-  { name: 'heroImagePath', text: 'Wide hero on the detail page.' },
-  { name: 'gallery[]', text: 'Extra shots only — not used as the card image.' },
-]
-
-const validationChecklist = [
-  'HTTPS-only download URLs — plain http is rejected.',
-  'Every file entry needs a sha256 (lowercase hex).',
-  'No unsafe target paths: no ".." and no absolute paths.',
-  'Use "Test Connection" (and the effect test card) in the launcher Settings to verify.',
-]
+// Technical identifiers only — descriptions come from t.modders.visuals
+// .imageRoles in the same order.
+const imageRoleNames = ['thumbnailPath', 'imagePath', 'heroImagePath', 'gallery[]']
 
 function TerminalCard({
   title,
@@ -159,10 +116,8 @@ function TerminalCard({
 }
 
 export default function ModdersPage() {
-  usePageMeta(
-    'For Modders',
-    'Publish your own BAPBAP mod on BAPHub — manifest format, SHA-256 hashing, card visuals and secret drops explained.',
-  )
+  const { t } = useI18n()
+  usePageMeta(t.meta.modders.title, t.meta.modders.description)
 
   const revealSteps = useReveal()
   const revealFiles = useReveal()
@@ -179,13 +134,13 @@ export default function ModdersPage() {
         <div ref={revealSteps.ref} className={revealSteps.className}>
           <SectionHeading
             id="modders-heading"
-            eyebrow="BAPHUB"
-            title="PUBLISH YOUR MOD"
-            subtitle="BAPHub is a git-backed mod registry — publishing is a pull request."
+            eyebrow={t.modders.eyebrow}
+            title={t.modders.title}
+            subtitle={t.modders.subtitle}
           />
 
           <ol className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
-            {publishSteps.map((step, index) => (
+            {t.modders.steps.map((step, index) => (
               <li key={step.title} className="flex flex-col gap-3">
                 <span
                   aria-hidden
@@ -206,27 +161,27 @@ export default function ModdersPage() {
 
       {/* Repo structure + version.json */}
       <section
-        aria-label="Repository structure and version.json example"
+        aria-label={t.modders.filesLabel}
         className="border-y border-bap-line bg-bap-plum/30"
       >
         <div
           ref={revealFiles.ref}
           className={`mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-16 md:px-6 lg:grid-cols-2 ${revealFiles.className}`}
         >
-          <TerminalCard title="REPO STRUCTURE">
+          <TerminalCard title={t.modders.repoStructure}>
             <pre className="bg-bap-black p-4 text-sm text-white/80 overflow-x-auto">
               {repoTree}
             </pre>
           </TerminalCard>
 
-          <TerminalCard title="VERSION.JSON">
+          <TerminalCard title={t.modders.versionJson}>
             <div className="flex flex-col divide-y divide-bap-line">
               <pre className="bg-bap-black p-4 text-sm text-white/80 overflow-x-auto">
                 <code>{versionJsonExample}</code>
               </pre>
               <div className="flex flex-col gap-2 p-4">
                 <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                  HASH IT (POWERSHELL)
+                  {t.modders.hashIt}
                 </span>
                 <pre className="text-sm text-bap-amber overflow-x-auto">
                   <code>{powershellHash}</code>
@@ -239,7 +194,7 @@ export default function ModdersPage() {
 
       {/* Detail cards */}
       <section
-        aria-label="Publishing details"
+        aria-label={t.modders.detailsLabel}
         className="mx-auto max-w-7xl px-4 py-16 md:px-6"
       >
         <div
@@ -248,12 +203,12 @@ export default function ModdersPage() {
         >
           <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              TARGETING TRACKS
+              {t.modders.targeting.title}
             </h2>
             <p className="text-white/60 text-sm">
-              Set <code className="text-white/80">supportedTracks</code> to
-              control where your mod shows up. Omit it and the mod is visible
-              for all tracks.
+              {t.modders.targeting.p1Before}
+              <code className="text-white/80">supportedTracks</code>
+              {t.modders.targeting.p1After}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {supportedTracks.map((track) => (
@@ -263,43 +218,44 @@ export default function ModdersPage() {
               ))}
             </div>
             <p className="text-white/60 text-sm">
-              Optional <code className="text-white/80">compatibility</code>{' '}
-              narrows things further: tracks[], environments[] and platforms[]
-              (e.g. windows-x64). Add <code className="text-white/80">links[]</code>{' '}
-              entries ({'{'}label, url, kind{'}'}) for source, docs or donations.
+              {t.modders.targeting.p2Before}
+              <code className="text-white/80">compatibility</code>
+              {t.modders.targeting.p2Middle}
+              <code className="text-white/80">links[]</code>
+              {t.modders.targeting.p2After}
             </p>
           </div>
 
           <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              SECRET &amp; TIMED DROPS
+              {t.modders.secret.title}
             </h2>
             <p className="text-white/60 text-sm">
-              Set <code className="text-white/80">visibility: "secret"</code>{' '}
-              (plus an optional{' '}
-              <code className="text-white/80">secretUnlockId</code>) to
-              password-gate a mod. Passwords are stored as SHA-256 hashes in{' '}
+              {t.modders.secret.p1a}
+              <code className="text-white/80">visibility: "secret"</code>
+              {t.modders.secret.p1b}
+              <code className="text-white/80">secretUnlockId</code>
+              {t.modders.secret.p1c}
               <code className="text-white/80">
                 manifest/index.json → secretUnlocks[]
-              </code>{' '}
-              — the launcher never sees plaintext.
+              </code>
+              {t.modders.secret.p1d}
             </p>
             <p className="text-white/60 text-sm">
-              <code className="text-white/80">unlockAtUtc</code> seals a package
-              until trusted network time: the launcher reads the HTTP Date
-              header from timeSourceUrl, not the local clock. Real example: the
-              three April boss-rush mods unlocked at{' '}
-              <span className="text-bap-amber">2026-04-10T22:50:00Z</span>.
+              <code className="text-white/80">unlockAtUtc</code>
+              {t.modders.secret.p2a}
+              <span className="text-bap-amber">2026-04-10T22:50:00Z</span>
+              {t.modders.secret.p2b}
             </p>
           </div>
 
           <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              CARD VISUALS
+              {t.modders.visuals.title}
             </h2>
             <div className="flex flex-col gap-2">
               <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                VISUAL.PRESET — 28 PRESETS
+                {t.modders.visuals.presetsLabel}
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {visualPresets.map((preset) => (
@@ -307,14 +263,12 @@ export default function ModdersPage() {
                 ))}
               </div>
               <p className="text-white/60 text-sm">
-                Plus badges[], ribbon, frame (border/glow/pulse) and overlay.
-                hidden_&lt;token&gt; variants apply the effect without showing
-                the tag chip.
+                {t.modders.visuals.presetsText}
               </p>
             </div>
             <div className="flex flex-col gap-2 border-t border-bap-line pt-4">
               <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                RIBBON TAGS
+                {t.modders.visuals.ribbonLabel}
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {ribbonTags.map((tag) => (
@@ -324,19 +278,18 @@ export default function ModdersPage() {
                 ))}
               </div>
               <p className="text-white/60 text-sm">
-                Only one primary ribbon shows, and UPDATE outranks HOST ONLY.
-                &quot;update-available&quot; is dynamic — never set it manually.
+                {t.modders.visuals.ribbonText}
               </p>
             </div>
             <div className="flex flex-col gap-2 border-t border-bap-line pt-4">
               <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                IMAGE ROLES
+                {t.modders.visuals.imageRolesLabel}
               </span>
               <ul className="flex flex-col gap-1.5">
-                {imageRoles.map((role) => (
-                  <li key={role.name} className="text-sm text-white/60">
-                    <code className="text-white/80">{role.name}</code> —{' '}
-                    {role.text}
+                {imageRoleNames.map((name, index) => (
+                  <li key={name} className="text-sm text-white/60">
+                    <code className="text-white/80">{name}</code> —{' '}
+                    {t.modders.visuals.imageRoles[index]}
                   </li>
                 ))}
               </ul>
@@ -345,10 +298,10 @@ export default function ModdersPage() {
 
           <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              VALIDATION CHECKLIST
+              {t.modders.validation.title}
             </h2>
             <ul className="flex flex-col gap-3">
-              {validationChecklist.map((item) => (
+              {t.modders.validation.items.map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <Icon
                     name="shield"
@@ -364,7 +317,7 @@ export default function ModdersPage() {
 
       {/* CTA row */}
       <section
-        aria-label="Modder resources"
+        aria-label={t.modders.resourcesLabel}
         className="mx-auto max-w-7xl px-4 pb-20 md:px-6"
       >
         <div
@@ -372,7 +325,7 @@ export default function ModdersPage() {
           className={`flex flex-col items-center gap-6 border border-bap-line bg-bap-plum px-6 py-12 text-center md:px-12 ${revealCta.className}`}
         >
           <p className="font-display uppercase text-2xl text-white md:text-3xl">
-            EVERYTHING YOU NEED TO SHIP
+            {t.modders.ctaTitle}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <GradientButton
@@ -381,7 +334,7 @@ export default function ModdersPage() {
               target="_blank"
               rel="noreferrer"
             >
-              STARTER TEMPLATES
+              {t.modders.starterTemplates}
             </GradientButton>
             <GradientButton
               variant="outline"
@@ -389,7 +342,7 @@ export default function ModdersPage() {
               target="_blank"
               rel="noreferrer"
             >
-              FULL AUTHORING DOC (DE)
+              {t.modders.authoringDoc}
             </GradientButton>
             <GradientButton
               variant="outline"
@@ -397,14 +350,14 @@ export default function ModdersPage() {
               target="_blank"
               rel="noreferrer"
             >
-              OPEN THE MANIFEST
+              {t.modders.openManifest}
             </GradientButton>
             <GradientButton
               href={LINKS.discord}
               target="_blank"
               rel="noreferrer"
             >
-              GET HELP PUBLISHING
+              {t.modders.getHelpPublishing}
             </GradientButton>
           </div>
         </div>
