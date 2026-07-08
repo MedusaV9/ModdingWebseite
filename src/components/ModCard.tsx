@@ -7,7 +7,7 @@ export default function ModCard({ mod }: { mod: Mod }) {
   return (
     <Link
       to={`/mods/${mod.id}`}
-      className="group relative flex flex-col bg-bap-plum border border-bap-line transition duration-150 hover:border-bap-pink hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bap-pink"
+      className="group relative flex h-full flex-col bg-bap-plum border border-bap-line transition duration-150 hover:border-bap-pink hover:-translate-y-1 hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bap-pink"
     >
       <article className="flex flex-1 flex-col">
         <div className="relative">

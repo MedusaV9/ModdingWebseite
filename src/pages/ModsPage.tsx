@@ -1,29 +1,31 @@
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import Icon from '../components/brand/Icon'
 import ModCard from '../components/ModCard'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import useClipboard from '../hooks/useClipboard'
+import usePageMeta from '../hooks/usePageMeta'
+import { useI18n } from '../i18n/context'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
+import { AUTHORS } from '../lib/authors'
+import { randomModId } from '../lib/randomMod'
 
 type TypeFilter = 'all' | 'mods' | 'tools' | 'boss-rush'
 type Sort = 'name' | 'newest' | 'updated'
 
-const typeTabs: { id: TypeFilter; label: string; match: (mod: Mod) => boolean }[] = [
-  { id: 'all', label: 'ALL', match: () => true },
-  { id: 'mods', label: 'MODS', match: (mod) => mod.type === 'mod' },
-  { id: 'tools', label: 'TOOLS', match: (mod) => mod.type === 'tool' },
+// Ids double as the URL param VALUES (type=…, sort=…) and never change;
+// labels come from the active dict in-component (t.mods.typeTabs/sortOptions).
+const typeTabs: { id: TypeFilter; match: (mod: Mod) => boolean }[] = [
+  { id: 'all', match: () => true },
+  { id: 'mods', match: (mod) => mod.type === 'mod' },
+  { id: 'tools', match: (mod) => mod.type === 'tool' },
   {
     id: 'boss-rush',
-    label: 'BOSS RUSH',
     match: (mod) => mod.track === 'boss-rush',
   },
 ]
 
-const sortOptions: { id: Sort; label: string }[] = [
-  { id: 'name', label: 'NAME A–Z' },
-  { id: 'newest', label: 'NEWEST' },
-  { id: 'updated', label: 'RECENTLY UPDATED' },
-]
+const sortIds: Sort[] = ['name', 'newest', 'updated']
 
 const ALL_TAGS = [...new Set(MODS.flatMap((mod) => mod.tags))].sort((a, b) =>
   a.localeCompare(b),
@@ -40,9 +42,12 @@ const tabClasses = (active: boolean) =>
   }`
 
 export default function ModsPage() {
-  usePageTitle('Mods')
+  const { t } = useI18n()
+  usePageMeta(t.meta.mods.title, t.meta.mods.description)
 
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { copied, copy } = useClipboard()
 
   const q = searchParams.get('q') ?? ''
   const typeParam = searchParams.get('type')
@@ -53,12 +58,18 @@ export default function ModsPage() {
     .split(',')
     .filter((tag) => ALL_TAGS.includes(tag))
   const sortParam = searchParams.get('sort')
-  const sort: Sort = sortOptions.some((option) => option.id === sortParam)
+  const sort: Sort = sortIds.some((id) => id === sortParam)
     ? (sortParam as Sort)
     : 'name'
+  // Exact-name match against the derived author list — anything else
+  // (typos, hand-edited URLs) is silently ignored.
+  const authorParam = searchParams.get('author')
+  const author = AUTHORS.some((entry) => entry.name === authorParam)
+    ? authorParam
+    : null
 
   function updateParams(
-    updates: Partial<Record<'q' | 'type' | 'tags' | 'sort', string>>,
+    updates: Partial<Record<'q' | 'type' | 'tags' | 'sort' | 'author', string>>,
     replace = false,
   ) {
     const next = new URLSearchParams(searchParams)
@@ -81,10 +92,10 @@ export default function ModsPage() {
     updateParams({ tags: next.join(',') })
   }
 
-  const hasFilters = q !== '' || type !== 'all' || tags.length > 0
+  const hasFilters = q !== '' || type !== 'all' || tags.length > 0 || author !== null
 
   function clearFilters() {
-    updateParams({ q: '', type: '', tags: '' })
+    updateParams({ q: '', type: '', tags: '', author: '' })
   }
 
   const activeTab = typeTabs.find((tab) => tab.id === type) ?? typeTabs[0]
@@ -92,6 +103,7 @@ export default function ModsPage() {
 
   const visible = MODS.filter((mod) => {
     if (!activeTab.match(mod)) return false
+    if (author && mod.author !== author) return false
     if (!tags.every((tag) => mod.tags.includes(tag))) return false
     if (query) {
       const haystack = [mod.name, mod.summary, mod.author, mod.id, ...mod.tags]
@@ -117,9 +129,9 @@ export default function ModsPage() {
     >
       <SectionHeading
         id="mods-heading"
-        eyebrow="BAPHUB CATALOG"
-        title="ALL MODS & TOOLS"
-        subtitle="The full BAPHub catalog — every mod and tool installs in one click through the BAPBAP Nexus launcher."
+        eyebrow={t.mods.eyebrow}
+        title={t.mods.title}
+        subtitle={t.mods.subtitle}
       />
 
       <div className="mt-10 flex flex-col gap-6">
@@ -129,14 +141,14 @@ export default function ModsPage() {
               htmlFor="mod-search"
               className="font-teko uppercase text-lg leading-none tracking-wide text-white/60"
             >
-              SEARCH
+              {t.mods.searchLabel}
             </label>
             <input
               id="mod-search"
               type="search"
               value={q}
               onChange={(event) => updateParams({ q: event.target.value }, true)}
-              placeholder="Search mods, tags, authors…"
+              placeholder={t.mods.searchPlaceholder}
               className={`w-full ${inputClasses}`}
             />
           </div>
@@ -145,7 +157,7 @@ export default function ModsPage() {
               htmlFor="mod-sort"
               className="font-teko uppercase text-lg leading-none tracking-wide text-white/60"
             >
-              SORT BY
+              {t.mods.sortLabel}
             </label>
             <select
               id="mod-sort"
@@ -153,9 +165,9 @@ export default function ModsPage() {
               onChange={(event) => updateParams({ sort: event.target.value })}
               className={`cursor-pointer ${inputClasses}`}
             >
-              {sortOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
+              {sortIds.map((id) => (
+                <option key={id} value={id}>
+                  {t.mods.sortOptions[id]}
                 </option>
               ))}
             </select>
@@ -164,7 +176,7 @@ export default function ModsPage() {
 
         <div
           role="group"
-          aria-label="Filter by type"
+          aria-label={t.mods.filterByType}
           className="flex flex-wrap gap-3"
         >
           {typeTabs.map((tab) => (
@@ -175,14 +187,41 @@ export default function ModsPage() {
               onClick={() => updateParams({ type: tab.id })}
               className={tabClasses(type === tab.id)}
             >
-              {tab.label}
+              {t.mods.typeTabs[tab.id]}
             </button>
           ))}
         </div>
 
         <div
           role="group"
-          aria-label="Filter by tag"
+          aria-label={t.mods.filterByCreator}
+          className="flex flex-wrap gap-1.5"
+        >
+          {AUTHORS.map((entry) => {
+            const active = author === entry.name
+            return (
+              <button
+                key={entry.name}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  updateParams({ author: active ? '' : entry.name })
+                }
+                className={`inline-flex items-center border font-teko uppercase tracking-wider text-sm leading-none pt-[5px] px-2 pb-[2px] transition cursor-pointer ${
+                  active
+                    ? 'text-bap-pink border-bap-pink/50 bg-bap-pink/10'
+                    : 'text-white/70 border-bap-line bg-white/5 hover:text-bap-pink'
+                }`}
+              >
+                {entry.name} ({entry.modCount})
+              </button>
+            )
+          })}
+        </div>
+
+        <div
+          role="group"
+          aria-label={t.mods.filterByTag}
           className="flex flex-wrap gap-1.5"
         >
           {ALL_TAGS.map((tag) => {
@@ -207,7 +246,7 @@ export default function ModsPage() {
 
         <div className="flex flex-wrap items-center gap-4">
           <p aria-live="polite" className="text-white/60 text-sm">
-            Showing {visible.length} of {MODS.length}
+            {t.mods.showing(visible.length, MODS.length)}
           </p>
           {hasFilters && (
             <button
@@ -215,9 +254,34 @@ export default function ModsPage() {
               onClick={clearFilters}
               className="font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
             >
-              CLEAR FILTERS
+              {t.mods.clearFilters}
             </button>
           )}
+          <button
+            type="button"
+            aria-label={t.mods.surpriseMeLabel}
+            onClick={() => navigate(`/mods/${randomModId()}`)}
+            className="inline-flex items-center gap-2 font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
+          >
+            <Icon name="shuffle" className="h-4 w-4 -mt-[3px]" />
+            {t.mods.surpriseMe}
+          </button>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={() => void copy(window.location.href)}
+              className="inline-flex items-center gap-2 font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
+            >
+              <Icon
+                name={copied ? 'check' : 'copy'}
+                className="h-4 w-4 -mt-[3px]"
+              />
+              {copied ? t.mods.copied : t.mods.copyFilterLink}
+            </button>
+          )}
+          <span aria-live="polite" className="sr-only">
+            {copied ? t.mods.copiedAnnouncement : ''}
+          </span>
         </div>
       </div>
 
@@ -230,17 +294,15 @@ export default function ModsPage() {
       ) : (
         <div className="mt-10 flex flex-col items-center gap-4 border border-bap-line bg-bap-plum px-6 py-16 text-center">
           <p className="font-display uppercase text-2xl text-white md:text-3xl">
-            NO MODS MATCH
+            {t.mods.emptyTitle}
           </p>
-          <p className="text-white/60 text-sm">
-            Try different keywords or drop a filter.
-          </p>
+          <p className="text-white/60 text-sm">{t.mods.emptyText}</p>
           <button
             type="button"
             onClick={clearFilters}
             className="font-teko uppercase text-lg leading-none pt-[11px] px-4 pb-1.5 text-white bg-[linear-gradient(to_left,#eb204f,#ff2a6d)] transition cursor-pointer hover:brightness-110"
           >
-            CLEAR FILTERS
+            {t.mods.clearFilters}
           </button>
         </div>
       )}

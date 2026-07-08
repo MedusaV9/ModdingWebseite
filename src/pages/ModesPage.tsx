@@ -1,21 +1,16 @@
 import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
+import ModeArt from '../components/ModeArt'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { BUNDLES } from '../data/bundles'
 import { MODES } from '../data/modes'
 import { MODS } from '../data/mods'
 import { VERSIONS } from '../data/versions'
-
-const headerArt: Record<string, string> = {
-  'boss-rush':
-    'bg-[repeating-linear-gradient(135deg,#eb204f_0,#eb204f_14px,#ff2a6d_14px,#ff2a6d_28px)]',
-  'battle-royale': 'bg-gradient-to-br from-bap-amber to-bap-amber2',
-  'time-machine':
-    'bg-bap-plum bg-[repeating-linear-gradient(to_bottom,rgba(255,42,109,0.3)_0,rgba(255,42,109,0.3)_1px,transparent_1px,transparent_7px)]',
-}
+import type { ModeArtId } from '../components/ModeArt'
 
 const bossRushBuild = VERSIONS.builds.find((build) => build.id === 'boss-rush')
 const bossRushMods = MODS.filter((mod) => mod.track === 'boss-rush')
@@ -27,7 +22,8 @@ function formatDate(utc: string) {
 }
 
 export default function ModesPage() {
-  usePageTitle('Game Modes')
+  const { t } = useI18n()
+  usePageMeta(t.meta.modes.title, t.meta.modes.description)
 
   const revealModes = useReveal()
   const revealBossRush = useReveal()
@@ -39,43 +35,46 @@ export default function ModesPage() {
       {/* Mode cards */}
       <section
         aria-labelledby="modes-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div ref={revealModes.ref} className={revealModes.className}>
           <SectionHeading
             id="modes-heading"
-            eyebrow="MORE WAYS TO PLAY"
-            title="GAME MODES & TRACKS"
-            subtitle="Beyond the standard game, the launcher keeps whole game modes and archived builds alive — all installable in one click."
+            eyebrow={t.modes.eyebrow}
+            title={t.modes.title}
+            subtitle={t.modes.subtitle}
           />
 
           <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {MODES.map((mode) => (
-              <article
-                key={mode.id}
-                className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink"
-              >
-                <div className={`h-24 ${headerArt[mode.id] ?? ''}`} />
-                <div className="flex flex-1 flex-col gap-4 p-6">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">
-                      {mode.tagline}
-                    </span>
-                    <h3 className="font-display uppercase text-2xl text-white">
-                      {mode.name}
-                    </h3>
+            {MODES.map((mode) => {
+              const card = t.modes.cards[mode.id as ModeArtId]
+              return (
+                <article
+                  key={mode.id}
+                  className="flex flex-col border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]"
+                >
+                  <ModeArt mode={mode.id as ModeArtId} className="h-24" />
+                  <div className="flex flex-1 flex-col gap-4 p-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-teko uppercase text-bap-pink leading-none tracking-widest">
+                        {card.tagline}
+                      </span>
+                      <h3 className="font-display uppercase text-2xl text-white">
+                        {mode.name}
+                      </h3>
+                    </div>
+                    <p className="text-white/70 text-sm leading-relaxed">
+                      {card.description}
+                    </p>
+                    <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                      {card.highlights.map((highlight) => (
+                        <Badge key={highlight}>{highlight}</Badge>
+                      ))}
+                    </div>
                   </div>
-                  <p className="text-white/70 text-sm leading-relaxed">
-                    {mode.description}
-                  </p>
-                  <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-                    {mode.highlights.map((highlight) => (
-                      <Badge key={highlight}>{highlight}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -93,14 +92,14 @@ export default function ModesPage() {
             <div className="flex flex-col gap-6">
               <SectionHeading
                 id="boss-rush-heading"
-                eyebrow="DEDICATED GAME TRACK"
-                title="BOSS RUSH"
-                subtitle="Boss Rush isn't a mod — it's a dedicated branch of the game, preserved as its own track in the launcher."
+                eyebrow={t.modes.bossRush.eyebrow}
+                title={t.modes.bossRush.title}
+                subtitle={t.modes.bossRush.subtitle}
               />
               <dl className="flex flex-col gap-3 border border-bap-line bg-bap-night p-6 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <dt className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                    BRANCH SNAPSHOT
+                    {t.modes.bossRush.branchSnapshot}
                   </dt>
                   <dd className="font-teko uppercase text-lg leading-none text-white">
                     {bossRushBuild ? formatDate(bossRushBuild.releaseDateUtc) : ''}
@@ -108,7 +107,7 @@ export default function ModesPage() {
                 </div>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <dt className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                    STEAM MANIFEST
+                    {t.modes.bossRush.steamManifest}
                   </dt>
                   <dd className="break-all text-white/40">
                     {bossRushBuild?.steamManifestId}
@@ -116,10 +115,10 @@ export default function ModesPage() {
                 </div>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <dt className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                    DOWNLOAD
+                    {t.modes.bossRush.download}
                   </dt>
                   <dd>
-                    <Badge>DIRECT ZIP AVAILABLE</Badge>
+                    <Badge>{t.modes.bossRush.directZipAvailable}</Badge>
                   </dd>
                 </div>
               </dl>
@@ -127,7 +126,7 @@ export default function ModesPage() {
 
             <div className="flex flex-col gap-4">
               <h3 className="font-teko uppercase text-2xl leading-none tracking-widest text-bap-pink">
-                4 DEDICATED MODS
+                {t.modes.bossRush.dedicatedMods}
               </h3>
               <ul className="flex flex-col divide-y divide-bap-line border border-bap-line bg-bap-night">
                 {bossRushMods.map((mod) => (
@@ -167,11 +166,11 @@ export default function ModesPage() {
       >
         <div
           ref={revealBundle.ref}
-          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink md:p-10 ${revealBundle.className}`}
+          className={`flex flex-col gap-6 border border-bap-line bg-bap-plum p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-10 ${revealBundle.className}`}
         >
           <div className="flex flex-col gap-2">
             <span className="font-teko uppercase text-bap-pink tracking-widest text-lg leading-none">
-              GAME MODE BUNDLE
+              {t.modes.bundle.eyebrow}
             </span>
             <h2
               id="battle-royale-heading"
@@ -186,21 +185,20 @@ export default function ModesPage() {
 
           <div className="flex flex-wrap gap-1.5">
             <Badge tone="pink">v{brBundle.version}</Badge>
-            <Badge>PUBLISHED {brBundle.published}</Badge>
+            <Badge>{t.modes.bundle.published(brBundle.published)}</Badge>
             <Badge>{brBundle.sizeDisplay}</Badge>
             <Badge tone="amber">
-              REQUIRES LAUNCHER ≥ {brBundle.minLauncherVersion}
+              {t.modes.bundle.requiresLauncher(brBundle.minLauncherVersion)}
             </Badge>
           </div>
 
           <p className="max-w-2xl text-white/60 text-sm">
-            One click in the launcher restores the whole Battle Royale mode.
-            Pair it with the classic BR UI mod for the full nostalgia hit.
+            {t.modes.bundle.text}
           </p>
 
           <div className="flex flex-wrap items-center gap-4">
             <GradientButton variant="outline" to={`/mods/${BR_UI_MOD_ID}`}>
-              PAIR WITH: BR UI (OLD BUT GOLD)
+              {t.modes.bundle.pairWith}
             </GradientButton>
           </div>
         </div>
@@ -217,9 +215,9 @@ export default function ModesPage() {
         >
           <SectionHeading
             id="time-machine-heading"
-            eyebrow="PLAY ANY BUILD"
-            title="VERSION TIME MACHINE"
-            subtitle="Every archived official build the launcher can install — hop back in time for legacy strats, comparisons and preservation."
+            eyebrow={t.modes.timeMachine.eyebrow}
+            title={t.modes.timeMachine.title}
+            subtitle={t.modes.timeMachine.subtitle}
           />
 
           {/* `relative` keeps sr-only (absolutely positioned) table descendants
@@ -227,25 +225,26 @@ export default function ModesPage() {
           <div className="relative mt-10 overflow-x-auto border border-bap-line bg-bap-black">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">
-                Archived BAPBAP builds available in the launcher Version Time
-                Machine
+                {t.modes.timeMachine.tableCaption}
               </caption>
               <thead>
                 <tr className="border-b border-bap-line font-teko uppercase text-lg leading-none tracking-widest text-white/60">
                   <th scope="col" className="px-5 py-3 font-normal">
-                    BUILD
+                    {t.modes.timeMachine.buildHeader}
                   </th>
                   <th scope="col" className="px-5 py-3 font-normal">
-                    TRACK
+                    {t.modes.timeMachine.trackHeader}
                   </th>
                   <th scope="col" className="px-5 py-3 font-normal">
-                    RELEASED
+                    {t.modes.timeMachine.releasedHeader}
                   </th>
                   <th scope="col" className="px-5 py-3 font-normal">
-                    STEAM MANIFEST
+                    {t.modes.timeMachine.steamManifestHeader}
                   </th>
                   <th scope="col" className="px-5 py-3 font-normal">
-                    <span className="sr-only">Badges</span>
+                    <span className="sr-only">
+                      {t.modes.timeMachine.badgesHeader}
+                    </span>
                   </th>
                 </tr>
               </thead>
@@ -274,9 +273,13 @@ export default function ModesPage() {
                     <td className="px-5 py-3">
                       <span className="flex flex-wrap gap-1.5">
                         {build.recommended && (
-                          <Badge tone="amber">RECOMMENDED</Badge>
+                          <Badge tone="amber">
+                            {t.modes.timeMachine.recommended}
+                          </Badge>
                         )}
-                        {build.directDownload && <Badge>DIRECT ZIP</Badge>}
+                        {build.directDownload && (
+                          <Badge>{t.modes.timeMachine.directZip}</Badge>
+                        )}
                       </span>
                     </td>
                   </tr>
@@ -286,13 +289,15 @@ export default function ModesPage() {
           </div>
 
           <p className="mt-4 text-sm text-white/40">
-            Steam App ID {VERSIONS.steamAppId} · Depot {VERSIONS.steamDepotId} ·
-            downloads are SHA-256 verified.
+            {t.modes.timeMachine.footer(
+              VERSIONS.steamAppId,
+              VERSIONS.steamDepotId,
+            )}
           </p>
 
           <div className="mt-10 flex justify-center">
             <GradientButton to="/launcher">
-              GET THE LAUNCHER TO SWITCH BUILDS
+              {t.modes.timeMachine.cta}
             </GradientButton>
           </div>
         </div>

@@ -1,23 +1,40 @@
+import Icon from '../components/brand/Icon'
+import type { IconName } from '../components/brand/Icon'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import useClipboard from '../hooks/useClipboard'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LAUNCHER } from '../data/launcher'
 import { LINKS } from '../data/links'
 
+// One glyph per t.launcher.features entry (same order); the first three match
+// the Home launcher teaser.
+const featureIcons: IconName[] = [
+  'wrench',
+  'shield',
+  'clock',
+  'gamepad',
+  'radio',
+  'bolt',
+]
+
 export default function LauncherPage() {
-  usePageTitle('Launcher')
+  const { t } = useI18n()
+  usePageMeta(t.meta.launcher.title, t.meta.launcher.description)
 
   const revealHeader = useReveal()
   const revealDetails = useReveal()
   const revealChangelog = useReveal()
+  const { copied, copy } = useClipboard()
 
   return (
     <>
       {/* Header + feature grid */}
       <section
         aria-labelledby="launcher-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div
           ref={revealHeader.ref}
@@ -26,12 +43,12 @@ export default function LauncherPage() {
           <div className="flex flex-col gap-6">
             <SectionHeading
               id="launcher-heading"
-              eyebrow="BAPBAP NEXUS"
-              title="ONE LAUNCHER. EVERYTHING."
-              subtitle="Mods, game modes, archived builds and the radio — the whole BAPBAP modding scene runs through one free launcher."
+              eyebrow={t.launcher.eyebrow}
+              title={t.launcher.title}
+              subtitle={t.launcher.subtitle}
             />
             <p className="font-teko uppercase text-xl leading-none text-white/60">
-              v{LAUNCHER.version} · {LAUNCHER.platform} · FREE · AUTO-UPDATES
+              {t.launcher.versionLine(LAUNCHER.version, LAUNCHER.platform)}
             </p>
             <div className="flex flex-wrap items-center gap-4">
               <GradientButton
@@ -39,7 +56,7 @@ export default function LauncherPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                DOWNLOAD FOR WINDOWS (v{LAUNCHER.version})
+                {t.launcher.downloadCta(LAUNCHER.version)}
               </GradientButton>
               <GradientButton
                 variant="outline"
@@ -47,16 +64,19 @@ export default function LauncherPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                VIEW ON GITHUB
+                {t.launcher.githubCta}
               </GradientButton>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {LAUNCHER.features.map((feature) => (
+            {t.launcher.features.map((feature, index) => (
               <div key={feature.title} className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 bg-bap-pink" />
+                  <Icon
+                    name={featureIcons[index]}
+                    className="h-5 w-5 shrink-0 text-bap-pink"
+                  />
                   <h3 className="font-teko uppercase text-xl leading-none text-white">
                     {feature.title}
                   </h3>
@@ -70,19 +90,19 @@ export default function LauncherPage() {
 
       {/* Requirements + MelonLoader explainer */}
       <section
-        aria-label="Requirements and MelonLoader"
+        aria-label={t.launcher.detailsLabel}
         className="border-y border-bap-line bg-bap-plum/30"
       >
         <div
           ref={revealDetails.ref}
           className={`mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-16 md:px-6 lg:grid-cols-2 ${revealDetails.className}`}
         >
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              REQUIREMENTS
+              {t.launcher.requirementsTitle}
             </h2>
             <ul className="flex flex-col gap-2">
-              {LAUNCHER.requirements.map((requirement) => (
+              {t.launcher.requirements.map((requirement) => (
                 <li key={requirement} className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 shrink-0 bg-bap-pink" />
                   <span className="font-teko uppercase text-lg leading-none text-white/80">
@@ -93,37 +113,50 @@ export default function LauncherPage() {
             </ul>
             <div className="mt-auto flex flex-col gap-1 border-t border-bap-line pt-4">
               <span className="font-teko uppercase text-lg leading-none tracking-widest text-white/60">
-                INSTALLER
+                {t.launcher.installer}
               </span>
               <span className="break-all text-sm text-white/80">
                 {LAUNCHER.installer.fileName}
               </span>
-              <span className="break-all text-xs text-white/40">
-                SHA-256: {LAUNCHER.installer.sha256}
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="break-all text-xs text-white/40">
+                  SHA-256: {LAUNCHER.installer.sha256}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t.launcher.copyShaLabel}
+                  onClick={() => void copy(LAUNCHER.installer.sha256)}
+                  className="shrink-0 border border-bap-line p-1.5 text-white/60 transition-colors hover:border-bap-pink hover:text-bap-pink cursor-pointer"
+                >
+                  <Icon name={copied ? 'check' : 'copy'} className="h-3.5 w-3.5" />
+                </button>
+                <span
+                  aria-live="polite"
+                  className="font-teko uppercase text-lg leading-none text-bap-pink"
+                >
+                  {copied ? t.launcher.copied : ''}
+                </span>
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink md:p-8">
+          <div className="flex flex-col gap-4 border border-bap-line bg-bap-night p-6 transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)] md:p-8">
             <h2 className="font-display uppercase text-2xl text-white">
-              WHAT IS MELONLOADER?
+              {t.launcher.melonLoader.title}
             </h2>
             <p className="text-white/60 text-sm leading-relaxed">
-              MelonLoader is the Unity mod loader that BAPBAP mods run on. The
-              launcher auto-installs the pinned version{' '}
+              {t.launcher.melonLoader.p1Before}
               <span className="text-white/80">
                 {LAUNCHER.melonLoader.version}
-              </span>{' '}
-              — both x64 and x86 builds are hash-verified from the BAPHub repo.
-              Mods themselves are .dll files placed in the game&apos;s Mods/
-              folder; the launcher handles all of that for you.
+              </span>
+              {t.launcher.melonLoader.p1After}
             </p>
             <p className="text-white/60 text-sm">
-              {LAUNCHER.melonLoader.note}
+              {t.launcher.melonLoader.p2}
             </p>
             <div className="mt-auto pt-2">
               <GradientButton variant="outline" to="/guide">
-                READ THE INSTALL GUIDE
+                {t.launcher.readGuideCta}
               </GradientButton>
             </div>
           </div>
@@ -139,17 +172,25 @@ export default function LauncherPage() {
           ref={revealChangelog.ref}
           className={`flex flex-col gap-10 ${revealChangelog.className}`}
         >
-          <SectionHeading
-            id="changelog-heading"
-            eyebrow="EVERY RELEASE"
-            title="FULL CHANGELOG"
-            subtitle="All 10 stable releases — from the very first Launcher V2 build to today's BAPBAP Nexus."
-          />
+          <div className="flex flex-col gap-2">
+            <SectionHeading
+              id="changelog-heading"
+              eyebrow={t.launcher.changelog.eyebrow}
+              title={t.launcher.changelog.title}
+              subtitle={t.launcher.changelog.subtitle}
+            />
+            {/* Changelog notes are data (English) — DE flags that here. */}
+            {t.launcher.changelog.englishNote && (
+              <p className="text-sm text-white/40">
+                {t.launcher.changelog.englishNote}
+              </p>
+            )}
+          </div>
 
           <div className="flex flex-col border border-bap-line bg-bap-black">
             <div className="flex items-center justify-between border-b border-bap-line px-5 py-3">
               <span className="font-teko uppercase text-xl leading-none tracking-widest text-white">
-                PATCH NOTES
+                {t.launcher.changelog.patchNotes}
               </span>
               <span className="flex gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-bap-red" />
@@ -174,10 +215,10 @@ export default function LauncherPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <GradientButton variant="outline" to="/modes">
-              VERSION TIME MACHINE
+              {t.launcher.timeMachineCta}
             </GradientButton>
             <GradientButton variant="outline" to="/radio">
-              BAPBAP RADIO SHIPS IN THE LAUNCHER
+              {t.launcher.radioCta}
             </GradientButton>
           </div>
         </div>

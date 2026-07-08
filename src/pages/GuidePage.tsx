@@ -1,129 +1,53 @@
-import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import GradientButton from '../components/GradientButton'
 import SectionHeading from '../components/SectionHeading'
-import usePageTitle from '../hooks/usePageTitle'
+import usePageMeta from '../hooks/usePageMeta'
 import useReveal from '../hooks/useReveal'
+import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
 
 const linkClasses = 'text-bap-pink hover:underline'
 
-const steps: { title: string; text: ReactNode }[] = [
-  {
-    title: 'Own BAPBAP on Steam',
-    text: (
-      <>
-        The base game comes first — grab{' '}
-        <a
-          href={LINKS.steam}
-          target="_blank"
-          rel="noreferrer"
-          className={linkClasses}
-        >
-          BAPBAP on Steam
-        </a>{' '}
-        (App ID 2226280). The launcher works with your existing Steam install.
-      </>
-    ),
-  },
-  {
-    title: 'Download BAPBAP Nexus v4.0.4',
-    text: (
-      <>
-        <a
-          href={LINKS.launcherDownload}
-          target="_blank"
-          rel="noreferrer"
-          className={linkClasses}
-        >
-          Download the installer
-        </a>{' '}
-        (BAPBAP.Nexus.Setup.4.0.4.exe, Windows x64) and run it. Free, with
-        auto-updates.
-      </>
-    ),
-  },
-  {
-    title: 'MelonLoader installs itself',
-    text: (
-      <>
-        The launcher auto-installs MelonLoader{' '}
-        <span className="text-white/80">0.7.2-ci.2388</span>, the Unity mod
-        loader BAPBAP mods run on. No manual setup, ever.
-      </>
-    ),
-  },
-  {
-    title: 'Pick your track',
-    text: (
-      <>
-        Latest official build-2025-08-19, an{' '}
-        <Link to="/modes" className={linkClasses}>
-          archived snapshot
-        </Link>{' '}
-        back to 2025-04-22, the Boss Rush branch, or the ≈565 MB Battle Royale
-        Playtest bundle.
-      </>
-    ),
-  },
-  {
-    title: 'One-click install mods',
-    text: (
-      <>
-        <Link to="/mods" className={linkClasses}>
-          Browse BAPHub
-        </Link>{' '}
-        and hit install — SHA-256-verified .dll files land in the game&apos;s
-        Mods/ folder automatically.
-      </>
-    ),
-  },
-  {
-    title: 'BAP away',
-    text: (
-      <>
-        Launch the game straight from the launcher. Your modded setup stays
-        clean and switchable per track.
-      </>
-    ),
-  },
+// Step copy lives in the dict as plain {before, linkLabel, after} strings;
+// only the link targets stay here (same order as t.guide.steps). 'version'
+// renders the highlighted MelonLoader version span, null = no inline link.
+const stepLinks: (
+  | { kind: 'external'; href: string }
+  | { kind: 'internal'; to: string }
+  | { kind: 'version' }
+  | null
+)[] = [
+  { kind: 'external', href: LINKS.steam },
+  { kind: 'external', href: LINKS.launcherDownload },
+  { kind: 'version' },
+  { kind: 'internal', to: '/modes' },
+  { kind: 'internal', to: '/mods' },
+  null,
 ]
 
-const faqs: { question: string; answer: string }[] = [
-  {
-    question: 'What is MelonLoader?',
-    answer:
-      'MelonLoader is the Unity mod loader that BAPBAP mods run on. The launcher pins a known-good version (0.7.2-ci.2388) and manages it automatically — you never install or update it by hand.',
-  },
-  {
-    question: 'Is this safe?',
-    answer:
-      'The whole mod manifest is open on GitHub, every download is verified against a SHA-256 hash before it touches your install, and downloads are HTTPS-only. Nothing is installed that you can’t inspect.',
-  },
-  {
-    question: 'What does HOST-ONLY mean?',
-    answer:
-      'Host-only mods only need to be installed by the player hosting the match — everyone else in the lobby gets the effect without installing anything.',
-  },
-  {
-    question: 'Where do mods live?',
-    answer:
-      'Mods are .dll files in the Mods/ folder inside the game install. The launcher manages them for you per track and per instance, so you never dig through folders yourself.',
-  },
-  {
-    question: 'How do I uninstall?',
-    answer:
-      'Toggle or remove any mod from the launcher, or switch back to the vanilla track at any time. No manual cleanup needed.',
-  },
-  {
-    question: 'Does this affect the normal game?',
-    answer:
-      'No — tracks and instances keep your vanilla install clean. Switch back to the unmodded game whenever you want.',
-  },
-]
+function StepLink({ index, label }: { index: number; label: string }) {
+  const link = stepLinks[index]
+  if (!link || !label) return null
+  if (link.kind === 'external') {
+    return (
+      <a href={link.href} target="_blank" rel="noreferrer" className={linkClasses}>
+        {label}
+      </a>
+    )
+  }
+  if (link.kind === 'internal') {
+    return (
+      <Link to={link.to} className={linkClasses}>
+        {label}
+      </Link>
+    )
+  }
+  return <span className="text-white/80">{label}</span>
+}
 
 export default function GuidePage() {
-  usePageTitle('Getting Started')
+  const { t } = useI18n()
+  usePageMeta(t.meta.guide.title, t.meta.guide.description)
 
   const revealSteps = useReveal()
   const revealFaq = useReveal()
@@ -134,18 +58,18 @@ export default function GuidePage() {
       {/* Numbered steps */}
       <section
         aria-labelledby="guide-heading"
-        className="mx-auto max-w-7xl px-4 py-20 md:px-6"
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
         <div ref={revealSteps.ref} className={revealSteps.className}>
           <SectionHeading
             id="guide-heading"
-            eyebrow="ZERO FRICTION"
-            title="GETTING STARTED"
-            subtitle="From vanilla BAPBAP to fully modded in about five minutes."
+            eyebrow={t.guide.eyebrow}
+            title={t.guide.title}
+            subtitle={t.guide.subtitle}
           />
 
           <ol className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
-            {steps.map((step, index) => (
+            {t.guide.steps.map((step, index) => (
               <li key={step.title} className="flex flex-col gap-3">
                 <span
                   aria-hidden
@@ -157,7 +81,11 @@ export default function GuidePage() {
                 <h2 className="font-teko uppercase text-2xl leading-none text-white">
                   {step.title}
                 </h2>
-                <p className="text-white/60 text-sm">{step.text}</p>
+                <p className="text-white/60 text-sm">
+                  {step.before}
+                  <StepLink index={index} label={step.linkLabel} />
+                  {step.after}
+                </p>
               </li>
             ))}
           </ol>
@@ -175,12 +103,12 @@ export default function GuidePage() {
         >
           <SectionHeading
             id="faq-heading"
-            eyebrow="GOOD TO KNOW"
-            title="FAQ"
+            eyebrow={t.guide.faqEyebrow}
+            title={t.guide.faqTitle}
           />
 
-          <div className="mt-10 flex flex-col divide-y divide-bap-line border border-bap-line bg-bap-night">
-            {faqs.map((faq) => (
+          <div className="mt-10 flex flex-col divide-y divide-bap-line border border-bap-line bg-bap-night transition duration-150 hover:border-bap-pink hover:shadow-[6px_6px_0_0_rgba(255,42,109,0.35)]">
+            {t.guide.faqs.map((faq) => (
               <details key={faq.question} className="group">
                 <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 font-teko uppercase text-xl leading-none text-white transition-colors hover:text-bap-pink">
                   {faq.question}
@@ -202,7 +130,7 @@ export default function GuidePage() {
 
       {/* CTA band */}
       <section
-        aria-label="Next steps"
+        aria-label={t.guide.nextStepsLabel}
         className="mx-auto max-w-7xl px-4 py-16 pb-20 md:px-6"
       >
         <div
@@ -210,17 +138,17 @@ export default function GuidePage() {
           className={`flex flex-col items-center gap-6 border border-bap-line bg-bap-plum px-6 py-12 text-center md:px-12 ${revealCta.className}`}
         >
           <p className="font-display uppercase text-2xl text-white md:text-3xl">
-            SET UP? TIME TO PICK YOUR MODS.
+            {t.guide.ctaTitle}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <GradientButton to="/mods">BROWSE MODS</GradientButton>
+            <GradientButton to="/mods">{t.guide.browseMods}</GradientButton>
             <GradientButton
               variant="outline"
               href={LINKS.discord}
               target="_blank"
               rel="noreferrer"
             >
-              ASK ON DISCORD
+              {t.guide.askOnDiscord}
             </GradientButton>
           </div>
         </div>

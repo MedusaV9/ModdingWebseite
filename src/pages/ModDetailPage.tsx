@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Badge from '../components/Badge'
 import GradientButton from '../components/GradientButton'
 import ModCard from '../components/ModCard'
 import ModImage from '../components/ModImage'
-import usePageTitle from '../hooks/usePageTitle'
+import useClipboard from '../hooks/useClipboard'
+import usePageMeta from '../hooks/usePageMeta'
+import { useI18n } from '../i18n/context'
 import { LINKS } from '../data/links'
 import { MODS } from '../data/mods'
 import type { Mod } from '../data/mods'
@@ -31,56 +33,51 @@ function linkify(text: string) {
 }
 
 function CopyIdRow({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false)
+  const { t } = useI18n()
+  const { copied, copy } = useClipboard()
   const codeRef = useRef<HTMLElement>(null)
-  const timeoutRef = useRef<number | undefined>(undefined)
 
-  useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
+  async function handleCopy() {
+    if (await copy(id)) return
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(id)
-      setCopied(true)
-      window.clearTimeout(timeoutRef.current)
-      timeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard API unavailable (permissions / insecure context):
-      // select the id text so the user can copy it manually.
-      const node = codeRef.current
-      const selection = window.getSelection()
-      if (node && selection) {
-        const range = document.createRange()
-        range.selectNodeContents(node)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
+    // Clipboard API unavailable (permissions / insecure context):
+    // select the id text so the user can copy it manually.
+    const node = codeRef.current
+    const selection = window.getSelection()
+    if (node && selection) {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      selection.removeAllRanges()
+      selection.addRange(range)
     }
   }
 
   return (
     <div className="flex flex-wrap items-center gap-3 border border-bap-line bg-bap-plum px-4 py-3">
       <span className="font-teko uppercase text-lg leading-none tracking-wide text-white/40">
-        MOD ID
+        {t.modDetail.modId}
       </span>
       <code ref={codeRef} className="font-mono text-sm text-white/80 break-all">
         {id}
       </code>
       <button
         type="button"
-        onClick={copy}
+        onClick={handleCopy}
         className="ml-auto font-teko uppercase text-lg leading-none pt-[7px] px-3 pb-1 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
       >
-        COPY
+        {t.modDetail.copy}
       </button>
       <span aria-live="polite" className="font-teko uppercase text-lg leading-none text-bap-pink">
-        {copied ? 'COPIED!' : ''}
+        {copied ? t.modDetail.copied : ''}
       </span>
     </div>
   )
 }
 
 function ModDetail({ mod }: { mod: Mod }) {
-  usePageTitle(mod.name)
+  const { t } = useI18n()
+  // Mod name/summary are data and stay English in the meta, in both locales.
+  usePageMeta(mod.name, `${mod.name} — ${mod.summary}`)
 
   const related = MODS.filter((other) => other.id !== mod.id)
     .map((other) => ({
@@ -94,9 +91,9 @@ function ModDetail({ mod }: { mod: Mod }) {
     .map((entry) => entry.mod)
 
   const meta: { term: string; detail: ReactNode }[] = [
-    { term: 'VERSION', detail: `v${mod.version}` },
+    { term: t.modDetail.version, detail: `v${mod.version}` },
     {
-      term: 'AUTHOR',
+      term: t.modDetail.author,
       detail: mod.authorUrl ? (
         <a
           href={mod.authorUrl}
@@ -110,11 +107,14 @@ function ModDetail({ mod }: { mod: Mod }) {
         mod.author
       ),
     },
-    { term: 'ADDED', detail: mod.added },
-    { term: 'UPDATED', detail: mod.updated },
-    { term: 'REQUIRES', detail: mod.requires },
-    { term: 'TRACK', detail: mod.track === 'boss-rush' ? 'Boss Rush' : 'All tracks' },
-    { term: 'TYPE', detail: mod.type },
+    { term: t.modDetail.added, detail: mod.added },
+    { term: t.modDetail.updated, detail: mod.updated },
+    { term: t.modDetail.requires, detail: mod.requires },
+    {
+      term: t.modDetail.track,
+      detail: mod.track === 'boss-rush' ? 'Boss Rush' : t.modDetail.allTracks,
+    },
+    { term: t.modDetail.type, detail: mod.type },
   ]
 
   return (
@@ -123,7 +123,7 @@ function ModDetail({ mod }: { mod: Mod }) {
         to="/mods"
         className="inline-block font-teko uppercase text-lg leading-none tracking-wide text-white/60 hover:text-bap-pink transition"
       >
-        ← ALL MODS
+        {t.modDetail.allMods}
       </Link>
 
       <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
@@ -153,6 +153,13 @@ function ModDetail({ mod }: { mod: Mod }) {
             ))}
           </dl>
 
+          <Link
+            to={`/mods?author=${encodeURIComponent(mod.author)}`}
+            className="self-start font-teko uppercase text-lg leading-none tracking-wide text-white/60 hover:text-bap-pink transition"
+          >
+            {t.modDetail.moreBy(mod.author)}
+          </Link>
+
           <CopyIdRow id={mod.id} />
         </div>
 
@@ -160,6 +167,12 @@ function ModDetail({ mod }: { mod: Mod }) {
           <h1 className="font-display uppercase text-3xl text-white md:text-4xl">
             {mod.name}
           </h1>
+          {/* Mod descriptions are data (English) — DE flags that with a badge. */}
+          {t.modDetail.englishNote && (
+            <Badge tone="neutral" className="self-start">
+              {t.modDetail.englishNote}
+            </Badge>
+          )}
           <p className="text-white/80">{mod.summary}</p>
           <p className="text-white/60 text-sm">{mod.description}</p>
           {mod.longDescription && (
@@ -175,7 +188,7 @@ function ModDetail({ mod }: { mod: Mod }) {
           <div className="flex flex-col border border-bap-line bg-bap-black">
             <div className="border-b border-bap-line px-5 py-3">
               <span className="font-teko uppercase text-xl leading-none tracking-widest text-white">
-                VERSION HISTORY
+                {t.modDetail.versionHistory}
               </span>
             </div>
             <ul className="flex flex-col divide-y divide-bap-line">
@@ -191,21 +204,25 @@ function ModDetail({ mod }: { mod: Mod }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            <GradientButton to="/launcher">INSTALL VIA LAUNCHER</GradientButton>
+            <GradientButton to="/launcher">
+              {t.modDetail.installViaLauncher}
+            </GradientButton>
             <GradientButton
               variant="outline"
               href={LINKS.discord}
               target="_blank"
               rel="noreferrer"
             >
-              GET HELP ON DISCORD
+              {t.modDetail.getHelpOnDiscord}
             </GradientButton>
           </div>
         </div>
       </div>
 
       <div className="mt-20 flex flex-col gap-6">
-        <h2 className="font-display uppercase text-2xl text-white">MORE MODS</h2>
+        <h2 className="font-display uppercase text-2xl text-white">
+          {t.modDetail.moreMods}
+        </h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {related.map((other) => (
             <ModCard key={other.id} mod={other} />

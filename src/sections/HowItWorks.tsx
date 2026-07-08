@@ -1,27 +1,11 @@
 import SectionHeading from '../components/SectionHeading'
 import useReveal from '../hooks/useReveal'
-
-const steps = [
-  {
-    title: 'Install BAPBAP Nexus',
-    text: 'Grab the launcher. It handles MelonLoader and updates for you.',
-  },
-  {
-    title: 'Pick your track',
-    text: 'Latest build, Boss Rush, Battle Royale — or any archived version.',
-  },
-  {
-    title: 'One-click install mods',
-    text: 'Browse BAPHub and install verified mods instantly.',
-  },
-  {
-    title: 'BAP away',
-    text: 'Jump into the party. Your setup stays clean and switchable.',
-  },
-]
+import { useI18n } from '../i18n/context'
 
 export default function HowItWorks() {
-  const reveal = useReveal()
+  const { t } = useI18n()
+  const steps = t.howItWorks.steps
+  const reveal = useReveal({ stagger: true })
 
   return (
     <section
@@ -31,23 +15,37 @@ export default function HowItWorks() {
     >
       <div
         ref={reveal.ref}
-        className={`mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28 ${reveal.className}`}
+        className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28"
       >
-        <SectionHeading
-          id="how-it-works-heading"
-          eyebrow="ZERO FRICTION"
-          title="HOW MODDING WORKS"
-        />
+        <div className={reveal.className}>
+          <SectionHeading
+            id="how-it-works-heading"
+            eyebrow={t.howItWorks.eyebrow}
+            title={t.howItWorks.title}
+          />
+        </div>
 
         <ol className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, index) => (
-            <li key={step.title} className="flex flex-col gap-3">
+            <li
+              key={step.title}
+              className={`group flex flex-col gap-3 ${reveal.className}`}
+              style={reveal.childStyle(index)}
+            >
+              {/* Outlined numeral cross-fades to solid pink on hover */}
               <span
                 aria-hidden
-                className="font-display text-7xl leading-none text-transparent"
-                style={{ WebkitTextStroke: '2px rgba(255,42,109,0.6)' }}
+                className="relative font-display text-7xl leading-none"
               >
-                {index + 1}
+                <span
+                  className="text-transparent transition-opacity duration-150 group-hover:opacity-0"
+                  style={{ WebkitTextStroke: '2px rgba(255,42,109,0.6)' }}
+                >
+                  {index + 1}
+                </span>
+                <span className="absolute inset-0 text-bap-pink opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  {index + 1}
+                </span>
               </span>
               <h3 className="font-teko uppercase text-2xl leading-none text-white">
                 {step.title}

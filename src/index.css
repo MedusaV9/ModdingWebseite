@@ -32,7 +32,7 @@
     color: #fff;
   }
 
-  :where(a, button):focus-visible {
+  :where(a, button, input, select, summary, [role="option"]):focus-visible {
     outline: 2px solid var(--color-bap-pink);
     outline-offset: 2px;
   }
@@ -56,6 +56,110 @@
   }
 }
 
+/* Text gradient sweep — elements using it need background-size: 200% auto. */
+@keyframes gradient-pan {
+  from {
+    background-position: 0% center;
+  }
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes equalizer {
+  from {
+    transform: scaleY(0.3);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+/* Short, subtle 2-step clip-path displacement. */
+@keyframes glitch {
+  0%,
+  100% {
+    clip-path: none;
+    transform: none;
+  }
+  20% {
+    clip-path: inset(20% 0 60% 0);
+    transform: translateX(-3px);
+  }
+  40% {
+    clip-path: inset(60% 0 10% 0);
+    transform: translateX(3px);
+  }
+}
+
+@keyframes marquee-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* v2 signature: hard offset shadows, never blurred. */
+.shadow-hard {
+  box-shadow: 6px 6px 0 0 rgba(255, 42, 109, 0.35);
+}
+
+.shadow-hard-amber {
+  box-shadow: 6px 6px 0 0 rgba(248, 157, 55, 0.35);
+}
+
+/* Radio deck scrubber: 4px track (pink fill via --scrub-fill), square thumb. */
+.radio-scrubber {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.radio-scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--color-bap-pink) var(--scrub-fill, 0%),
+    var(--color-bap-line) var(--scrub-fill, 0%)
+  );
+}
+
+.radio-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  margin-top: -6px;
+  height: 16px;
+  width: 16px;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bap-pink);
+}
+
+.radio-scrubber::-moz-range-track {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--color-bap-pink) var(--scrub-fill, 0%),
+    var(--color-bap-line) var(--scrub-fill, 0%)
+  );
+}
+
+.radio-scrubber::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border: none;
+  border-radius: 0;
+  background: var(--color-bap-pink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -68,4 +172,706 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================================
+   visual.preset gallery — .fx-<id> card effects (28 presets).
+
+   Architecture: each .fx-<id> class goes on a positioned card
+   container (relative + overflow-hidden via Tailwind) and defines
+   the STATIC layer: border-color + background, always visible so
+   every preset stays distinguishable with animations frozen
+   (reduced motion). The component renders a `.fx-layer` overlay
+   child for the MOTION layer; animations run ONLY while the card
+   is :hover / :focus-visible / .fx-active (the selected demo card)
+   — mirrors the launcher's "effects only on active cards" rule.
+   Only cheap properties animate: background-position, transform,
+   opacity, filter. `.fx-title` marks the card title for presets
+   that style text (neon, glitch, matrix, dev).
+   ============================================================ */
+
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Diagonal specular sweep — layers using it set background-size ≥ 250%. */
+@keyframes fx-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* Percent-based drift for oversized gradients (aurora, prism). */
+@keyframes fx-pan {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+/* Vertical px pan — tile heights must divide 200 to loop seamlessly. */
+@keyframes fx-pan-y {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 200px;
+  }
+}
+
+@keyframes fx-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+@keyframes fx-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.45;
+  }
+  35% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  65% {
+    opacity: 0.95;
+  }
+  80% {
+    opacity: 0.5;
+  }
+}
+
+/* Lightning: dark most of the cycle, then a stuttered double flash. */
+@keyframes fx-flash {
+  0%,
+  86%,
+  96%,
+  100% {
+    opacity: 0;
+  }
+  88% {
+    opacity: 0.85;
+  }
+  91% {
+    opacity: 0.15;
+  }
+  93% {
+    opacity: 0.6;
+  }
+}
+
+/* Soft glow breathing — always used with alternate. */
+@keyframes fx-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- default: plain bap-plum card, bap-line border ------------------- */
+.fx-default {
+  border-color: var(--color-bap-line);
+  background: var(--color-bap-plum);
+}
+
+/* --- featured: amber border + glow + slow pulse ---------------------- */
+.fx-featured {
+  border-color: var(--color-bap-amber);
+  background: var(--color-bap-plum);
+  box-shadow: 6px 6px 0 0 rgba(248, 157, 55, 0.35);
+}
+.fx-featured .fx-layer {
+  box-shadow: inset 0 0 26px rgba(248, 157, 55, 0.3);
+  opacity: 0.7;
+}
+.fx-featured:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 2.4s ease-in-out infinite alternate;
+}
+
+/* --- shiny: diagonal white specular sweep ---------------------------- */
+.fx-shiny {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, #2a1520, var(--color-bap-plum));
+}
+.fx-shiny .fx-layer {
+  background: linear-gradient(
+    120deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-position: 65% 0;
+}
+.fx-shiny:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 2.4s linear infinite;
+}
+
+/* --- holo: rainbow overlay at low opacity + hue-rotate cycle --------- */
+.fx-holo {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--color-bap-plum);
+}
+.fx-holo .fx-layer {
+  background: linear-gradient(
+    120deg,
+    #ff2a6d,
+    #f89d37 25%,
+    #7cffb2 50%,
+    #4dd7ff 70%,
+    #b58cff 90%,
+    #ff2a6d
+  );
+  opacity: 0.22;
+}
+.fx-holo:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-hue 6s linear infinite;
+}
+
+/* --- neon: pink border, inner+outer glow, glowing title --------------- */
+.fx-neon {
+  border-color: var(--color-bap-pink);
+  background: var(--color-bap-night);
+  box-shadow:
+    0 0 14px rgba(255, 42, 109, 0.5),
+    inset 0 0 18px rgba(255, 42, 109, 0.25);
+}
+.fx-neon .fx-title {
+  color: #fff;
+  text-shadow:
+    0 0 6px rgba(255, 42, 109, 0.9),
+    0 0 18px rgba(255, 42, 109, 0.6);
+}
+.fx-neon .fx-layer {
+  box-shadow: inset 0 0 28px rgba(255, 42, 109, 0.35);
+  opacity: 0.6;
+}
+.fx-neon:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 1.6s ease-in-out infinite alternate;
+}
+
+/* --- frost: pale cyan gradient + iced top edge ------------------------ */
+.fx-frost {
+  border-color: rgba(191, 242, 255, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(160, 225, 255, 0.16),
+    var(--color-bap-plum) 60%
+  );
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.55);
+}
+.fx-frost .fx-layer {
+  background: linear-gradient(
+    120deg,
+    transparent 40%,
+    rgba(210, 245, 255, 0.28) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-position: 70% 0;
+}
+.fx-frost:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 3.2s linear infinite;
+}
+
+/* --- ember: rising orange-red bottom glow + flicker ------------------- */
+.fx-ember {
+  border-color: rgba(248, 157, 55, 0.55);
+  background: linear-gradient(
+    0deg,
+    rgba(235, 32, 79, 0.3),
+    var(--color-bap-plum) 65%
+  );
+}
+.fx-ember .fx-layer {
+  background: radial-gradient(
+    80% 60% at 50% 110%,
+    rgba(248, 157, 55, 0.5),
+    rgba(235, 32, 79, 0.25) 55%,
+    transparent 78%
+  );
+}
+.fx-ember:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-flicker 1.4s steps(6) infinite;
+}
+
+/* --- prism: conic rainbow facets, slow drift via background-position -- */
+.fx-prism {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--color-bap-plum);
+}
+.fx-prism .fx-layer {
+  background: conic-gradient(
+    from 45deg,
+    rgba(255, 42, 109, 0.6),
+    rgba(248, 157, 55, 0.6),
+    rgba(124, 255, 178, 0.6),
+    rgba(77, 215, 255, 0.6),
+    rgba(181, 140, 255, 0.6),
+    rgba(255, 42, 109, 0.6)
+  );
+  background-size: 200% 200%;
+  opacity: 0.2;
+}
+.fx-prism:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan 7s linear infinite alternate;
+}
+
+/* --- glitch: rgb-split title + existing glitch keyframes -------------- */
+.fx-glitch {
+  border-color: var(--color-bap-line);
+  background: var(--color-bap-plum);
+}
+.fx-glitch .fx-title {
+  text-shadow:
+    2px 0 0 rgba(255, 42, 109, 0.8),
+    -2px 0 0 rgba(77, 215, 255, 0.8);
+}
+.fx-glitch:is(:hover, :focus-visible, .fx-active) .fx-title {
+  animation: glitch 1.6s steps(1) infinite;
+}
+.fx-glitch .fx-layer {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    rgba(255, 255, 255, 0.04) 3px 4px
+  );
+}
+
+/* --- aurora: soft green/teal/purple gradient pan ---------------------- */
+.fx-aurora {
+  border-color: rgba(124, 255, 178, 0.4);
+  background: var(--color-bap-plum);
+}
+.fx-aurora .fx-layer {
+  background: linear-gradient(
+    115deg,
+    rgba(64, 224, 160, 0.35),
+    rgba(45, 190, 200, 0.3) 35%,
+    rgba(140, 90, 255, 0.35) 70%,
+    rgba(64, 224, 160, 0.35)
+  );
+  background-size: 300% 300%;
+  opacity: 0.5;
+}
+.fx-aurora:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan 8s ease-in-out infinite alternate;
+}
+
+/* --- frozen: stronger ice — cyan gradient + white streaks ------------- */
+.fx-frozen {
+  border-color: rgba(150, 230, 255, 0.7);
+  background: linear-gradient(
+    160deg,
+    rgba(120, 210, 250, 0.3),
+    var(--color-bap-plum) 70%
+  );
+  box-shadow: inset 0 0 22px rgba(150, 230, 255, 0.25);
+}
+.fx-frozen .fx-layer {
+  background:
+    linear-gradient(
+      115deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.5) 46%,
+      transparent 50%
+    ),
+    linear-gradient(
+      115deg,
+      transparent 60%,
+      rgba(220, 245, 255, 0.35) 63%,
+      transparent 66%
+    );
+  background-size: 250% 100%;
+  background-position: 60% 0;
+}
+.fx-frozen:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 3s linear infinite;
+}
+
+/* --- plasma: violet/electric radial pulse ----------------------------- */
+.fx-plasma {
+  border-color: rgba(181, 140, 255, 0.6);
+  background: radial-gradient(
+    120% 90% at 50% 50%,
+    rgba(130, 60, 255, 0.3),
+    var(--color-bap-plum) 75%
+  );
+}
+.fx-plasma .fx-layer {
+  background: radial-gradient(
+    60% 60% at 50% 50%,
+    rgba(190, 120, 255, 0.45),
+    transparent 70%
+  );
+  opacity: 0.6;
+}
+.fx-plasma:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 1.2s ease-in-out infinite alternate;
+}
+
+/* --- toxic: acid-green gradient + dripping columns/bubbles ------------ */
+.fx-toxic {
+  border-color: rgba(140, 255, 60, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(110, 220, 40, 0.25),
+    var(--color-bap-plum) 70%
+  );
+}
+.fx-toxic .fx-layer {
+  /* Vertical drip columns are y-shift-invariant; the 40px bubble tile
+     pans downward on active (200px loop = 5 tiles). */
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 16px,
+      rgba(140, 255, 60, 0.25) 16px 20px
+    ),
+    radial-gradient(circle 3px at 10px 10px, rgba(180, 255, 90, 0.5), transparent);
+  background-size:
+    auto,
+    40px 40px;
+  mask-image: linear-gradient(180deg, #000, transparent 80%);
+}
+.fx-toxic:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan-y 2.6s linear infinite;
+}
+
+/* --- cosmic: deep blue/purple + star specks --------------------------- */
+.fx-cosmic {
+  border-color: rgba(120, 140, 255, 0.5);
+  background: linear-gradient(150deg, #101038, #251043 60%, var(--color-bap-plum));
+}
+.fx-cosmic .fx-layer {
+  background:
+    radial-gradient(circle 1.5px at 20% 30%, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(circle 1px at 70% 20%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(circle 1.5px at 45% 70%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(circle 1px at 85% 60%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(circle 1px at 10% 80%, rgba(255, 255, 255, 0.7), transparent);
+}
+.fx-cosmic:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 2.8s ease-in-out infinite alternate;
+}
+
+/* --- vapor: pink/cyan retro-wave + horizontal grid lines --------------- */
+.fx-vapor {
+  border-color: rgba(77, 215, 255, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 42, 109, 0.28),
+    var(--color-bap-plum) 55%,
+    rgba(77, 215, 255, 0.22)
+  );
+}
+.fx-vapor .fx-layer {
+  /* 20px line cycle → 200px pan loops seamlessly. */
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 19px,
+    rgba(77, 215, 255, 0.25) 19px 20px
+  );
+  mask-image: linear-gradient(180deg, transparent 40%, #000);
+}
+.fx-vapor:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan-y 3s linear infinite;
+}
+
+/* --- storm: dark blue-gray + periodic white lightning flash ------------ */
+.fx-storm {
+  border-color: rgba(150, 170, 200, 0.45);
+  background: linear-gradient(160deg, #1a2130, #141821 60%, var(--color-bap-plum));
+}
+.fx-storm .fx-layer {
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(220, 235, 255, 0.8) 45%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 62%
+  );
+  opacity: 0.12;
+}
+.fx-storm:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-flash 2.6s steps(1) infinite;
+}
+
+/* --- inferno: intense red/orange flame gradient, faster flicker -------- */
+.fx-inferno {
+  border-color: rgba(255, 90, 40, 0.7);
+  background: linear-gradient(
+    0deg,
+    rgba(235, 32, 79, 0.55),
+    rgba(248, 157, 55, 0.25) 45%,
+    var(--color-bap-plum) 75%
+  );
+}
+.fx-inferno .fx-layer {
+  background: radial-gradient(
+    90% 70% at 50% 115%,
+    rgba(255, 120, 30, 0.65),
+    rgba(235, 32, 79, 0.35) 55%,
+    transparent 78%
+  );
+}
+.fx-inferno:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-flicker 0.7s steps(5) infinite;
+}
+
+/* --- velvet: deep violet soft inner glow ------------------------------- */
+.fx-velvet {
+  border-color: rgba(140, 80, 180, 0.5);
+  background: radial-gradient(
+    120% 100% at 50% 0%,
+    rgba(90, 40, 120, 0.45),
+    var(--color-bap-plum) 75%
+  );
+  box-shadow: inset 0 0 30px rgba(120, 60, 160, 0.35);
+}
+.fx-velvet .fx-layer {
+  box-shadow: inset 0 0 40px rgba(150, 80, 200, 0.4);
+  opacity: 0.5;
+}
+.fx-velvet:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 3s ease-in-out infinite alternate;
+}
+
+/* --- matrix: green scanlines + vertical pan + green title -------------- */
+.fx-matrix {
+  border-color: rgba(60, 255, 130, 0.5);
+  background: linear-gradient(180deg, #06140b, #0a1f10);
+}
+.fx-matrix .fx-title {
+  color: #6dffa0;
+  text-shadow: 0 0 8px rgba(60, 255, 130, 0.5);
+}
+.fx-matrix .fx-layer {
+  /* 4px scanline cycle → 200px pan loops seamlessly. */
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(60, 255, 130, 0.16) 0 1px,
+    transparent 1px 4px
+  );
+}
+.fx-matrix:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan-y 4s linear infinite;
+}
+
+/* --- ghost: translucent pale card, low-opacity content ----------------- */
+.fx-ghost {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+}
+.fx-ghost > :not(.fx-layer) {
+  opacity: 0.55;
+}
+.fx-ghost .fx-layer {
+  background: linear-gradient(
+    120deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-position: 60% 0;
+}
+.fx-ghost:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 3.6s linear infinite;
+}
+
+/* --- crystal: cyan-blue facet highlights -------------------------------- */
+.fx-crystal {
+  border-color: rgba(120, 220, 255, 0.55);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(80, 180, 255, 0.18) 0 30%,
+      transparent 30% 55%,
+      rgba(120, 220, 255, 0.14) 55% 75%,
+      transparent 75%
+    ),
+    var(--color-bap-plum);
+}
+.fx-crystal .fx-layer {
+  background: linear-gradient(
+    120deg,
+    transparent 40%,
+    rgba(180, 240, 255, 0.4) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-position: 70% 0;
+}
+.fx-crystal:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 2.8s linear infinite;
+}
+
+/* --- chrome: metallic silver horizontal sheen sweep --------------------- */
+.fx-chrome {
+  border-color: rgba(200, 205, 215, 0.6);
+  background: linear-gradient(180deg, #3a3f4a, #23272e 45%, #3a3f4a 55%, #191c22);
+}
+.fx-chrome .fx-layer {
+  background: linear-gradient(
+    90deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-position: 60% 0;
+}
+.fx-chrome:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 2.2s linear infinite;
+}
+
+/* --- noir: grayscale, white/black, low gloss ----------------------------- */
+.fx-noir {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(180deg, #17181a, #0a0a0c);
+}
+.fx-noir .fx-layer {
+  background: linear-gradient(
+    120deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 58%
+  );
+  background-size: 250% 100%;
+  background-position: 65% 0;
+}
+.fx-noir:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-sweep 4s linear infinite;
+}
+
+/* --- sunset: orange→pink vertical gradient ------------------------------- */
+.fx-sunset {
+  border-color: rgba(248, 157, 55, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(248, 157, 55, 0.5),
+    rgba(255, 42, 109, 0.45) 60%,
+    var(--color-bap-plum)
+  );
+}
+.fx-sunset .fx-layer {
+  background: linear-gradient(180deg, rgba(240, 170, 89, 0.35), transparent 60%);
+  opacity: 0.6;
+}
+.fx-sunset:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 3.4s ease-in-out infinite alternate;
+}
+
+/* --- void: near-black + deep purple vignette ------------------------------ */
+.fx-void {
+  border-color: rgba(90, 50, 130, 0.6);
+  background: radial-gradient(
+    120% 100% at 50% 50%,
+    var(--color-bap-black) 45%,
+    rgba(60, 20, 90, 0.5)
+  );
+}
+.fx-void .fx-layer {
+  box-shadow: inset 0 0 46px rgba(80, 30, 130, 0.55);
+  opacity: 0.7;
+}
+.fx-void:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pulse 3.2s ease-in-out infinite alternate;
+}
+
+/* --- candy: bright multicolor stripes ------------------------------------- */
+.fx-candy {
+  border-color: rgba(255, 120, 190, 0.7);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 42, 109, 0.28) 0 12px,
+      rgba(248, 157, 55, 0.28) 12px 24px,
+      rgba(77, 215, 255, 0.28) 24px 36px,
+      rgba(124, 255, 178, 0.28) 36px 48px
+    ),
+    var(--color-bap-plum);
+}
+.fx-candy .fx-layer {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255, 42, 109, 0.22) 0 12px,
+    rgba(248, 157, 55, 0.22) 12px 24px,
+    rgba(77, 215, 255, 0.22) 24px 36px,
+    rgba(124, 255, 178, 0.22) 36px 48px
+  );
+}
+.fx-candy:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-hue 4s linear infinite;
+}
+
+/* --- dev: dashed bap-amber border + terminal vibe -------------------------- */
+.fx-dev {
+  border-style: dashed;
+  border-color: var(--color-bap-amber);
+  background: var(--color-bap-black);
+}
+.fx-dev .fx-title {
+  color: var(--color-bap-amber);
+}
+.fx-dev .fx-layer {
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(248, 157, 55, 0.08) 0 2px,
+    transparent 2px 4px
+  );
+}
+.fx-dev:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-flicker 2s steps(8) infinite;
+}
+
+/* --- event: pink/amber party stripes + falling confetti dots --------------- */
+.fx-event {
+  border-color: var(--color-bap-pink);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 42, 109, 0.25) 0 14px,
+      rgba(248, 157, 55, 0.25) 14px 28px
+    ),
+    var(--color-bap-plum);
+}
+.fx-event .fx-layer {
+  /* 100px confetti tile → 200px pan loops seamlessly. */
+  background:
+    radial-gradient(circle 2px at 15% 25%, var(--color-bap-amber), transparent),
+    radial-gradient(circle 2px at 80% 20%, var(--color-bap-pink), transparent),
+    radial-gradient(circle 2px at 60% 65%, #4dd7ff, transparent),
+    radial-gradient(circle 2px at 30% 80%, #7cffb2, transparent),
+    radial-gradient(circle 2px at 90% 75%, var(--color-bap-amber), transparent);
+  background-size: 100px 100px;
+}
+.fx-event:is(:hover, :focus-visible, .fx-active) .fx-layer {
+  animation: fx-pan-y 3.2s linear infinite;
+}
+
+/* Selected gallery swatch: pink border + hard shadow. Declared AFTER all
+   .fx-* rules so it beats their border-color at equal specificity. */
+.fx-selected {
+  border-color: var(--color-bap-pink);
+  box-shadow: 4px 4px 0 0 rgba(255, 42, 109, 0.5);
 }
