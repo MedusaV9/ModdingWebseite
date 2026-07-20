@@ -377,6 +377,9 @@ function stationQueue() {
   const q = buildQueue(tracks, {
     level: playerLevel(),
     trims: trims(),
+    // V4/POLISH-H: Recap-category songs join the queue only after a recap
+    // actually played them (persisted radio.recapHeard — see the logic gate).
+    recapHeard: radioSlice().recapHeard,
     shuffle,
     seed: saveSeed(),
     stationId: row.id,

@@ -6,6 +6,9 @@
 // Rules implemented here (all binding):
 //   · level locks — tracks with unlockLevel > player level never enter the
 //     queue (owner folders Radio/Level N + Radio/LockedbyLevel/Level N)
+//   · recap-heard gate (V4/POLISH-H) — Recap-category tracks join the queue
+//     only after a recap actually played them (radio.recapHeard); the gate
+//     engages when the caller passes opts.recapHeard (the engine always does)
 //   · per-track enable — trims[id].on === false skips a track (§C-SYS1.5)
 //   · all-disabled fallback (§C-SYS1.5): a station whose level-eligible
 //     tracks are ALL disabled plays them anyway (flagged for G52's one-time
@@ -68,18 +71,73 @@ export function effectiveGain(track, trims) {
   return trim * (trimFor(trims, track?.id).vol / 100);
 }
 
+// ── V4/POLISH-H: recap-heard gate ────────────────────────────────────────────
+
+/**
+ * Normalize the persisted radio.recapHeard slice (open trackId → epoch-ms
+ * map; Sets/arrays accepted for callers that already hold an id list) into
+ * a Set of heard track ids. Junk containers → empty set.
+ * @param {*} heard
+ * @returns {Set<string>}
+ */
+export function recapHeardSet(heard) {
+  if (heard instanceof Set) return heard;
+  if (Array.isArray(heard)) return new Set(heard.map(String));
+  if (heard != null && typeof heard === 'object') return new Set(Object.keys(heard));
+  return new Set();
+}
+
+/**
+ * True when `track` is a Recap-category song the player has NOT heard in a
+ * recap yet (case-insensitive — the registry says 'Recap', the UI's
+ * normalizeTrack lowercases). Non-recap tracks are never gated.
+ * @param {{id?: string, category?: string}} track
+ * @param {Set<string>} heardSet recapHeardSet() output
+ * @returns {boolean}
+ */
+export function isRecapGated(track, heardSet) {
+  if (String(track?.category ?? '').toLowerCase() !== 'recap') return false;
+  return !heardSet.has(String(track?.id ?? ''));
+}
+
+/**
+ * Writer half of the gate (the recap overlay's §B5.2 completion write):
+ * returns a NEW map with `track.id` marked heard at `atMs`. Returns the
+ * INPUT unchanged when the track is not a Recap-category song or is already
+ * marked — callers can use identity to skip a no-op store write.
+ * @param {*} heard the persisted radio.recapHeard map (junk tolerated)
+ * @param {{id?: string, category?: string}|null} track manifest row
+ * @param {number} [atMs]
+ * @returns {object} trackId → epoch-ms map
+ */
+export function markRecapHeard(heard, track, atMs = Date.now()) {
+  const id = String(track?.id ?? '');
+  if (!id || String(track?.category ?? '').toLowerCase() !== 'recap') return heard;
+  const map = heard != null && typeof heard === 'object' && !Array.isArray(heard) ? heard : {};
+  if (map[id] != null) return heard;
+  const n = Number(atMs);
+  return { ...map, [id]: Number.isFinite(n) && n > 0 ? n : 1 };
+}
+
+// ── end V4/POLISH-H ──────────────────────────────────────────────────────────
+
 /**
  * Level + enable filter for one station's tracks, with the §C-SYS1.5
- * all-disabled fallback.
+ * all-disabled fallback. V4/POLISH-H: when opts.recapHeard is supplied,
+ * Recap-category tracks are additionally gated on membership in that heard
+ * set (pure callers without the option keep the legacy unconditional
+ * membership).
  * @param {ReadonlyArray<{id: string, unlockLevel?: number}>} tracks the
  *   station's member tracks (registry order)
- * @param {{level?: number, trims?: object}} [opts]
+ * @param {{level?: number, trims?: object, recapHeard?: object|Set<string>|string[]}} [opts]
  * @returns {{tracks: Array<object>, allDisabled: boolean}}
  */
 export function eligibleTracks(tracks, opts = {}) {
   const level = Math.max(1, Math.trunc(Number(opts.level) || 1));
+  const heard = opts.recapHeard === undefined ? null : recapHeardSet(opts.recapHeard);
   const unlocked = (Array.isArray(tracks) ? tracks : [])
-    .filter((t) => Math.max(1, Math.trunc(Number(t?.unlockLevel) || 1)) <= level);
+    .filter((t) => Math.max(1, Math.trunc(Number(t?.unlockLevel) || 1)) <= level
+      && (heard == null || !isRecapGated(t, heard)));
   const enabled = unlocked.filter((t) => trimFor(opts.trims, t.id).on);
   if (enabled.length === 0 && unlocked.length > 0) {
     return { tracks: unlocked, allDisabled: true }; // silence is never persisted
@@ -109,8 +167,8 @@ export function queueOrder(ids, opts = {}) {
 /**
  * Build the playable queue of a station in one step.
  * @param {ReadonlyArray<object>} stationTracks member tracks of the station
- * @param {{level?: number, trims?: object, shuffle?: boolean, seed?: number,
- *   stationId?: string}} [opts]
+ * @param {{level?: number, trims?: object, recapHeard?: object|Set<string>|string[],
+ *   shuffle?: boolean, seed?: number, stationId?: string}} [opts]
  * @returns {{ids: string[], allDisabled: boolean}}
  */
 export function buildQueue(stationTracks, opts = {}) {
@@ -139,5 +197,6 @@ export function nextTrackId(queue, currentId, dir = 1) {
 
 export default {
   TRIM_DEFAULT, TRIM_VOL_MAX, mulberry32, hashStr, trimFor, effectiveGain,
+  recapHeardSet, isRecapGated, markRecapHeard, // V4/POLISH-H
   eligibleTracks, queueOrder, buildQueue, nextTrackId,
 };

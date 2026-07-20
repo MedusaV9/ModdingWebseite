@@ -23,7 +23,9 @@ import assert from 'node:assert/strict';
 import {
   TRIM_DEFAULT, TRIM_VOL_MAX, mulberry32, hashStr, trimFor, effectiveGain,
   eligibleTracks, queueOrder, buildQueue, nextTrackId,
+  recapHeardSet, isRecapGated, markRecapHeard, // V4/POLISH-H
 } from '../src/systems/radioQueue.logic.js';
+import { completeRecap } from '../src/systems/recap.js'; // V4/POLISH-H
 import radio, { DEFAULT_STATION, FADE_SEC, trackUrl } from '../src/audio/radioPlayer.js';
 import radioAlias from '../src/audio/radio.js';
 import musicDirector from '../src/audio/musicDirector.js';
@@ -66,6 +68,57 @@ test('eligibleTracks: level locks + per-track enable + all-disabled fallback', (
   assert.deepEqual(allOff.tracks.map((t) => t.id), ['a', 'b']);
   assert.equal(allOff.allDisabled, true);
   assert.deepEqual(eligibleTracks([], {}), { tracks: [], allDisabled: false });
+});
+
+// ------------------------------------------- V4/POLISH-H recap-heard gate
+
+test('POLISH-H eligibleTracks: recap tracks gate on the heard set; option absent = legacy', () => {
+  const tracks = [
+    { id: 'song', unlockLevel: 1 },
+    { id: 'epic', unlockLevel: 1, category: 'Recap' },
+    { id: 'epic2', unlockLevel: 1, category: 'Recap' },
+  ];
+  // option absent → legacy unconditional membership (pure callers unchanged)
+  assert.deepEqual(
+    eligibleTracks(tracks, { level: 1 }).tracks.map((t) => t.id),
+    ['song', 'epic', 'epic2']);
+  // empty heard set → UNHEARD recap tracks excluded, non-recap unaffected
+  assert.deepEqual(
+    eligibleTracks(tracks, { level: 1, recapHeard: {} }).tracks.map((t) => t.id),
+    ['song']);
+  // heard → included again; map / array / Set spellings all accepted
+  for (const heard of [{ epic: 1784281000000 }, ['epic'], new Set(['epic'])]) {
+    assert.deepEqual(
+      eligibleTracks(tracks, { level: 1, recapHeard: heard }).tracks.map((t) => t.id),
+      ['song', 'epic'], `heard as ${heard.constructor.name}`);
+  }
+  // lowercase category (the UI normalizeTrack spelling) gates too
+  assert.deepEqual(
+    eligibleTracks([{ id: 'x', category: 'recap' }], { level: 1, recapHeard: {} }).tracks, []);
+  // the §C-SYS1.5 all-disabled fallback only spans HEARD recap tracks
+  const allOff = eligibleTracks(tracks, {
+    level: 1, recapHeard: { epic: 1 }, trims: { song: { on: false }, epic: { on: false } },
+  });
+  assert.deepEqual(allOff.tracks.map((t) => t.id), ['song', 'epic'], 'unheard epic2 stays out');
+  assert.equal(allOff.allDisabled, true);
+});
+
+test('POLISH-H markRecapHeard/recapHeardSet/isRecapGated: the writer half of the gate', () => {
+  const epic = { id: 'epic', category: 'Recap' };
+  const marked = markRecapHeard({}, epic, 1784281000000);
+  assert.deepEqual(marked, { epic: 1784281000000 }, 'recap completion writes the trackId');
+  assert.equal(markRecapHeard(marked, epic, 999), marked, 'already heard → SAME map (no-op write skippable)');
+  const base = { epic: 1 };
+  assert.equal(markRecapHeard(base, { id: 'song', category: 'Radio' }), base, 'non-recap → input unchanged');
+  assert.equal(markRecapHeard(base, null), base, 'null track → input unchanged');
+  assert.deepEqual(markRecapHeard('junk', epic, 5), { epic: 5 }, 'junk container → fresh map');
+  assert.deepEqual(markRecapHeard({}, epic, 'junk'), { epic: 1 }, 'junk stamp → truthy 1');
+  assert.deepEqual([...recapHeardSet({ a: 1, b: 2 })].sort(), ['a', 'b']);
+  assert.deepEqual([...recapHeardSet(['a'])], ['a']);
+  assert.equal(recapHeardSet(null).size, 0);
+  assert.equal(isRecapGated(epic, recapHeardSet({})), true, 'unheard recap song is gated');
+  assert.equal(isRecapGated(epic, recapHeardSet({ epic: 1 })), false, 'heard recap song is playable');
+  assert.equal(isRecapGated({ id: 'song', category: 'Radio' }, recapHeardSet({})), false);
 });
 
 test('queueOrder: seeded shuffle is stable per (seed, station), differs across stations', () => {
@@ -508,4 +561,31 @@ test('playTrack while muted: wish + queue position move, ZERO nodes (§C2.3)', a
   radio.setEnabled(true);
   assert.equal(el.paused, false, 'wish resumes on re-enable');
   assert.equal(radio.getStats().playing, true);
+});
+
+// ------------------------------------------- V4/POLISH-H recap-heard engine gate
+
+test('POLISH-H: recap-fm queue stays empty until the recap completion marks a song heard', async () => {
+  radio.setStation('recap-fm');
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().station, 'recap-fm');
+  assert.ok(stationTrackIds('recap-fm').length >= 3, 'the station LISTS its recap tracks');
+  assert.equal(radio.getStats().queue, 0, 'fresh save: no recap song heard → empty queue');
+  assert.deepEqual(store.get('radio.recapHeard'), {}, 'schema default is the empty map');
+  // the recap overlay's §B5.2 completion write: completeRecap + markRecapHeard
+  // in ONE store.update (the exact recapOverlay.js finishRecap recipe)
+  const heardId = stationTrackIds('recap-fm')[0];
+  store.update((state) => {
+    const res = completeRecap(state, Date.now(), []);
+    state.recap = res.recap;
+    const heard = markRecapHeard(state.radio.recapHeard, trackById(heardId), Date.now());
+    if (heard !== state.radio.recapHeard) state.radio = { ...state.radio, recapHeard: heard };
+  });
+  assert.deepEqual(Object.keys(store.get('radio.recapHeard')), [heardId],
+    'recap completion persisted the played trackId');
+  assert.equal(radio.getStats().queue, 1, 'exactly the heard song joined the queue');
+  radio.skip(1);
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().trackId, heardId, 'the heard recap song now plays');
+  assert.equal(radio.getStats().elementState, 'playing');
 });

@@ -32,6 +32,8 @@ import {
   slug, sanitizeBasename, parseName, classifyOwnerPath, gainTrimFor,
   buildManifest, serializeManifest, TRIM_CLAMP,
 } from '../scripts/gen-music-manifest.mjs';
+// POLISH-H: the queue-side recap-heard gate, exercised over real registry rows.
+import { eligibleTracks } from '../src/systems/radioQueue.logic.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ASSETS = path.join(ROOT, 'public', 'assets');
@@ -150,6 +152,22 @@ test('stations: membership rule table (trackBelongsTo)', () => {
   assert.ok(trackBelongsTo(recap, 'recap-fm') && !trackBelongsTo(recap, 'bordmusik'),
     'builtin recap joins recap-fm, NOT bordmusik');
   assert.ok(!trackBelongsTo(radio, 'nope'));
+});
+
+test('POLISH-H: recap-fm MEMBERSHIP stays unconditional — the heard gate lives in the queue', () => {
+  // Station lists keep every Recap track (the UI lock-badges them); only the
+  // radioQueue.logic eligibleTracks gate filters unheard ones out of playback.
+  const recapTracks = getTracks().filter((t) => t.category === 'Recap' && !isStinger(t));
+  assert.ok(recapTracks.length >= 3, 'manifest ships ≥ 3 recap tracks');
+  const listed = stationTrackIds('recap-fm');
+  for (const t of recapTracks) assert.ok(listed.includes(t.id), `${t.id} must stay listed`);
+  // …and over the REAL registry rows the queue gate excludes all unheard
+  // recap tracks, then admits exactly the heard one.
+  const none = eligibleTracks(recapTracks, { level: 40, recapHeard: {} });
+  assert.deepEqual(none.tracks, [], 'empty heard set → no recap track eligible');
+  const heardId = recapTracks[0].id;
+  const one = eligibleTracks(recapTracks, { level: 40, recapHeard: { [heardId]: 1784281000000 } });
+  assert.deepEqual(one.tracks.map((t) => t.id), [heardId], 'heard track becomes eligible');
 });
 
 test('getStations(tracks) drops zero-track stations (empty-folder grace)', () => {

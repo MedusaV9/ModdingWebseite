@@ -36,6 +36,7 @@ import { nextUnlock } from '../systems/leveling.js';
 import { burstConfettiDom } from '../gfx/particles.js';
 import { t, getLang } from '../data/strings.js';
 import { now } from '../core/clock.js';
+import { markRecapHeard } from '../systems/radioQueue.logic.js'; // POLISH-H
 import {
   OVERLAY, biomeBackdrop, recapSeed, chooseRecapTrack, elementVolume,
   advanceClock, barIndexAt, beatIndexAt, createCueScheduler, cutSpans, spanAt,
@@ -664,6 +665,14 @@ async function finishRecap() {
     store.update((state) => {
       const res = completeRecap(state, now(), s.lines);
       state.recap = res.recap;
+      // POLISH-H: persist the recap's PLAYED song as heard — the radio only
+      // unlocks Recap-category tracks after a real recap featured them.
+      const played = s.trackId ? trackById(s.trackId) : null;
+      if (played) {
+        const r = state.radio && typeof state.radio === 'object' ? state.radio : {};
+        const heard = markRecapHeard(r.recapHeard, played, now());
+        if (heard !== r.recapHeard) state.radio = { ...r, recapHeard: heard };
+      }
       payload = { pendingLevel: 0, lastRecapLevel: res.recap.lastRecapLevel };
     });
     if (payload) store.emit('recapChanged', payload);

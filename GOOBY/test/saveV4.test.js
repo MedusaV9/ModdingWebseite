@@ -63,6 +63,7 @@ const B1_V4_SLICE_DEFAULTS = () => ({
   radio: {
     station: 'bordmusik', playing: false, shuffle: true,
     replaceContext: true, lastTrack: '', trims: {},
+    recapHeard: {}, // POLISH-H: trackId → epoch-ms of the recap that played it
   },
   codes: { redeemed: {}, lockUntil: 0, buffs: { doubleCoinsUntil: 0 } },
   modifiers: {
@@ -400,6 +401,54 @@ test('radio.station coerces to bordmusik on junk; booleans/trims normalize (§B1
   });
 });
 
+// ------------------------------------------ radio.recapHeard (V4/POLISH-H)
+
+test('POLISH-H: recapHeard defaults to {} on migrated v3 saves AND pre-H v4 saves', () => {
+  // migrated v3 save → empty default (covered field-exactly here)
+  const { state: fromV3 } = loadRaw(fixture('v3-midgame.json'));
+  assert.deepEqual(fromV3.radio.recapHeard, {});
+  // an EXISTING v4 save written before POLISH-H (no recapHeard key at all)
+  // gains the empty default losslessly — no recovery, every other radio
+  // leaf verbatim.
+  const s = defaultState();
+  s.radio = {
+    station: 'gooby-fm', playing: true, shuffle: false, replaceContext: false,
+    lastTrack: 'bordmusik-ragnar', trims: { 'bordmusik-ragnar': { vol: 55, on: false } },
+  };
+  const { state, recovered } = loadRaw(s);
+  assert.equal(recovered, false);
+  assert.deepEqual(state.radio.recapHeard, {}, 'missing field → empty default');
+  assert.equal(state.radio.station, 'gooby-fm');
+  assert.deepEqual(state.radio.trims, s.radio.trims);
+});
+
+test('POLISH-H: recapHeard entries survive persist → load; junk stamps collapse to 1', () => {
+  const s = defaultState();
+  s.radio.recapHeard = {
+    'recap-bonus-stage-blitz': 1784281000000, // valid stamp verbatim
+    'recap-recap-song-2-moreepic-victory': 'yesterday', // junk → 1 (stays heard)
+    'recap-abenteuer': -5, // junk → 1
+  };
+  const { state, recovered } = loadRaw(s);
+  assert.equal(recovered, false);
+  assert.deepEqual(state.radio.recapHeard, {
+    'recap-bonus-stage-blitz': 1784281000000,
+    'recap-recap-song-2-moreepic-victory': 1,
+    'recap-abenteuer': 1,
+  });
+  for (const v of Object.values(state.radio.recapHeard)) assert.ok(v, 'every entry truthy');
+  // roundtrip: a validated state persists + reloads byte-stably
+  persist(state);
+  assert.deepEqual(load().state.radio.recapHeard, state.radio.recapHeard);
+});
+
+test('POLISH-H: wrong-typed recapHeard container is corruption → recovery', () => {
+  const raw = JSON.stringify({ ...defaultState(), radio: { ...defaultState().radio, recapHeard: 'all of them' } });
+  const result = loadRaw(raw);
+  assert.equal(result.recovered, true);
+  assert.deepEqual(result.state.radio.recapHeard, {});
+});
+
 test('codes.redeemed junk entries collapse to a TRUTHY 1 — single-use holds (§B1 #5)', () => {
   const s = defaultState();
   s.codes.redeemed = { updateLiebe: 'yesterday', herzGooby: -3, other: 1784281000000 };
@@ -562,6 +611,8 @@ const JUNK = [
 const FUZZ_PATHS_V4 = [
   'radio', 'radio.station', 'radio.playing', 'radio.shuffle', 'radio.trims',
   'radio.trims.bordmusik-ragnar', 'radio.lastTrack', 'radio.replaceContext',
+  'radio.recapHeard', 'radio.recapHeard.recap-bonus-stage-blitz', // POLISH-H
+
   'codes', 'codes.redeemed', 'codes.redeemed.updateLiebe', 'codes.lockUntil',
   'codes.buffs', 'codes.buffs.doubleCoinsUntil',
   'modifiers', 'modifiers.nextAt', 'modifiers.seed', 'modifiers.current',

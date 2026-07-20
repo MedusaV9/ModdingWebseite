@@ -241,6 +241,10 @@ function v4SliceDefaults() {
       replaceContext: true, // radio replaces medley context music everywhere
       lastTrack: '', // resume point ('' = station start)
       trims: {}, // trackId → { vol: 100, on: true } — ONLY non-default entries (open map)
+      // V4/POLISH-H: trackId → epoch-ms of the recap that played it (open map).
+      // Recap-category tracks join the radio ONLY once listed here; existing
+      // saves get the empty default via validate()'s defaults-first merge.
+      recapHeard: {},
     },
     codes: {
       redeemed: {}, // codeId → epoch-ms
@@ -775,6 +779,15 @@ function validate(state) {
         };
       }
       s.radio.trims = trims;
+    }
+    // V4/POLISH-H: radio.recapHeard is an open trackId → epoch-ms map (same
+    // rule class as codes.redeemed): entries normalize to a TRUTHY finite
+    // epoch-ms (junk collapses to 1, not 0 — a heard song must stay heard).
+    // Wrong-typed CONTAINERS throw in mergeDefaults (F2); a missing slice
+    // gets the {} default, so pre-H saves gain the field losslessly.
+    for (const [id, at] of Object.entries(s.radio.recapHeard ?? {})) {
+      const n = Number(at);
+      s.radio.recapHeard[id] = Number.isFinite(n) && n > 0 ? n : 1;
     }
     // codes: lockUntil/doubleCoinsUntil are §B1 #5 clamped stamps; redeemed
     // entries normalize to a TRUTHY finite epoch-ms (junk collapses to 1, not

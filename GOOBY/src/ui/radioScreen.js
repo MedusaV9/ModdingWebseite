@@ -10,6 +10,9 @@ import { EN as RADIO_EN, DE as RADIO_DE } from '../data/strings/v4-radio.js';
 // V4/POLISH-A: transport strings (prev/seek) — strings.js is frozen, so the
 // new module rides the same tx() fallback as v4-radio.js did pre-G53.
 import { EN as RADIO2_EN, DE as RADIO2_DE } from '../data/strings/v4-radio2.js';
+// POLISH-H: recap-heard lock badge (strings + the pure gate helpers).
+import { EN as RADIO3_EN, DE as RADIO3_DE } from '../data/strings/v4-radio3.js';
+import { recapHeardSet, isRecapGated } from '../systems/radioQueue.logic.js';
 import {
   RADIO_UI,
   normalizeTrack,
@@ -50,11 +53,14 @@ let catalogPromise = null;
 let furnitureWired = false;
 
 /** Same-wave i18n fallback until G53 spreads v4-radio.js into strings.js.
- * V4/POLISH-A: also consults v4-radio2.js (frozen strings.js never will). */
+ * V4/POLISH-A: also consults v4-radio2.js (frozen strings.js never will).
+ * POLISH-H: also consults v4-radio3.js (recap-heard lock badge). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  const table = getLang() === 'de' ? { ...RADIO_DE, ...RADIO2_DE } : { ...RADIO_EN, ...RADIO2_EN };
+  const table = getLang() === 'de'
+    ? { ...RADIO_DE, ...RADIO2_DE, ...RADIO3_DE }
+    : { ...RADIO_EN, ...RADIO2_EN, ...RADIO3_EN };
   let text = table[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
@@ -434,7 +440,9 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         <div class="g52-track-list">
           ${shown.map((track) => {
             const pref = trimFor(state.trims, track.id);
-            const locked = track.unlockLevel > level;
+            // POLISH-H: unheard recap songs stay lock-badged until a recap plays them.
+            const recapLocked = isRecapGated(track, recapHeardSet(state.recapHeard));
+            const locked = track.unlockLevel > level || recapLocked;
             return `
               <article class="g52-track ${pref.on ? '' : 'g52-track-off'} ${locked ? 'g52-track-locked' : ''}"
                 data-track-row="${esc(track.id)}">
@@ -442,7 +450,9 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
                 <div class="g52-track-copy">
                   <strong title="${esc(track.title)}">${esc(track.title)}</strong>
                   <small>${locked
-                    ? `🔒 ${esc(tx('radio.levelBadge', { level: track.unlockLevel }))}`
+                    ? `🔒 ${esc(recapLocked
+                      ? tx('radio.recapLocked')
+                      : tx('radio.levelBadge', { level: track.unlockLevel }))}`
                     : `${formatTime(track.durationSec)} · ${Math.round(track.gainTrim * 100)}%`}</small>
                 </div>
                 <button class="g52-track-toggle ${pref.on ? 'g52-on' : ''}" data-track-toggle="${esc(track.id)}"
@@ -617,6 +627,9 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
       button.addEventListener('click', async () => {
         const track = tracks.find((row) => row.id === button.dataset.trackPreview);
         if (!track) return;
+        // POLISH-H: never start an unheard recap song (the ▶ is disabled, but
+        // a stale render must not slip one through to playTrack).
+        if (isRecapGated(track, recapHeardSet(store.get('radio')?.recapHeard))) return;
         audio?.play?.('ui.tap');
         const target = api ?? audio?.radio ?? audio?.radioPlayer ?? await loadRadioApi();
         if (target) api = target;
