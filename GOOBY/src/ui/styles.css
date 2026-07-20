@@ -3871,6 +3871,10 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 
 .g64-pop {
   max-width: 92%;
+  padding: 0.375rem 1.125rem;
+  border-radius: 999px;
+  /* POLISH-J: soft scrim plate keeps the line readable over bright biomes */
+  background: rgba(40, 20, 60, 0.16);
   font-size: clamp(1.375rem, 7vw, 2.5rem);
   font-weight: 900;
   line-height: 1.15;
@@ -3880,13 +3884,22 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   animation: g64pop 1200ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 
+/* POLISH-J: pop rises in on the beat (fade + scale, matching the POLISH-D
+   transition language); duration stays JS-owned (popBeats on the grid) */
 @keyframes g64pop {
-  0% { opacity: 0; transform: scale(0.8); }
-  55% { opacity: 1; transform: scale(1.05); }
-  100% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: translateY(0.875rem) scale(0.8); }
+  55% { opacity: 1; transform: translateY(0) scale(1.05); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.g64-pop-out { transition: opacity 300ms ease; opacity: 0 !important; }
+/* POLISH-J: exit drifts up + fades (animation dropped so the transition owns
+   the properties from the settled keyframe state) */
+.g64-pop-out {
+  animation: none;
+  transition: opacity 300ms ease, transform 300ms ease;
+  opacity: 0 !important;
+  transform: translateY(-0.625rem) scale(1.04);
+}
 
 /* §C-SYS2.2 skip affordance: 13px→0.8125rem, 40 % opacity, no chrome,
    bottom-right, 1 s fade-in from t = 10 s; padded to the 44 px tap floor. */
@@ -4011,6 +4024,178 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   font-weight: 700;
   color: var(--brown);
   opacity: 0.55;
+}
+
+/* ── POLISH-J — richer recap presentation (VISUALS only) ────────────────────
+   Letterbox bars, per-cut biome chip and the redesigned end card. All motion
+   here is decorative: cue TIMING stays owned by recapOverlay.js / G55's
+   director (±80 ms §A2 contract untouched). Tokens from POLISH-F. */
+
+/* cinematic letterbox — slides in with the first cut (.g64-cine), back out
+   for the end card; soft gradients so the 3D framing breathes underneath */
+.g64-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6.5vh;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 600ms ease, transform 700ms cubic-bezier(0.25, 1, 0.4, 1);
+}
+
+.g64-bar-top {
+  top: 0;
+  background: linear-gradient(180deg, rgba(30, 16, 44, 0.5), rgba(30, 16, 44, 0));
+  transform: translateY(-100%);
+}
+
+.g64-bar-bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(30, 16, 44, 0.5), rgba(30, 16, 44, 0));
+  transform: translateY(100%);
+}
+
+.g64-root.g64-cine .g64-bar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* per-cut biome-name chip (labels ride G55's cut cues — showBiomeChip) */
+.g64-biome {
+  position: absolute;
+  left: 50%;
+  bottom: max(3.25rem, calc(var(--safe-bottom) + 2.5rem));
+  padding: 0.375rem 1rem;
+  border-radius: 999px;
+  background: var(--frost);
+  color: var(--brown);
+  font-size: 0.8125rem;
+  font-weight: 900;
+  letter-spacing: 0.0313rem;
+  box-shadow: 0 4px 14px rgba(40, 20, 60, 0.25);
+  pointer-events: none;
+  animation: g64biome 3200ms ease both;
+}
+
+@keyframes g64biome {
+  0% { opacity: 0; transform: translate(-50%, 0.625rem) scale(0.9); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -0.375rem) scale(0.96); }
+}
+
+/* end card: warm glow crown behind the ring + completion pulse */
+.g64-endcard::before {
+  content: '';
+  position: absolute;
+  top: -2.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11rem;
+  height: 7rem;
+  background: radial-gradient(closest-side, rgba(255, 211, 77, 0.45), rgba(255, 211, 77, 0));
+  pointer-events: none;
+}
+
+.g64-ring::after {
+  content: '';
+  position: absolute;
+  inset: -0.625rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 211, 77, 0.55), rgba(255, 211, 77, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+  /* delay ≈ the ring stroke's 1400 ms fill — the "ding" as it completes */
+  animation: g64ringglow 1100ms 1350ms ease-out both;
+}
+
+@keyframes g64ringglow {
+  0% { opacity: 0; transform: scale(0.6); }
+  45% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* coin recap as a gold pill (tween.js roll-up fills the number) */
+.g64-end-coins {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  background: rgba(255, 211, 77, 0.25);
+  border: 1px solid rgba(224, 176, 74, 0.45);
+  color: var(--brown);
+  font-size: clamp(0.8125rem, 4vw, 1rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* top-3 highlight chips (endCardHighlights) — staggered pop-in */
+.g64-hl-title {
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.0938rem;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.g64-hl {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.g64-hl-chip {
+  flex: 1 1 0;
+  max-width: 6.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.0625rem;
+  padding: 0.5rem 0.25rem 0.4375rem;
+  border-radius: var(--radius-row);
+  background: var(--track-soft);
+  animation: g64chip 500ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes g64chip {
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+
+.g64-hl-icon {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.g64-hl-n {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: var(--brown);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.g64-hl-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.625rem;
+  font-weight: 800;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.0313rem;
+}
+
+/* played-song credit (the track the recap made "heard" — POLISH-H) */
+.g64-end-song {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-faint);
 }
 
 /* =============================== end V4/G64 =============================== */

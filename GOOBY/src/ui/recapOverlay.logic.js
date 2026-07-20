@@ -8,7 +8,7 @@
 // every timing decision that the ±80 ms §A2 budget depends on lives here so
 // the eval agents can pin it headlessly.
 
-import { RECAP, highestMilestone } from '../systems/recap.js';
+import { RECAP, STAT_CATALOG, highestMilestone } from '../systems/recap.js';
 import { pickTrack } from '../systems/recapDirector.js';
 import { XP } from '../data/constants.js';
 
@@ -440,6 +440,61 @@ export function agoLabel(atMs, nowMs) {
   if (days <= 0) return { key: 'recap.ago.today' };
   if (days === 1) return { key: 'recap.ago.yesterday' };
   return { key: 'recap.ago.days', vars: { n: days } };
+}
+
+// ---------------------------------------------------------------------------
+// POLISH-J — end-card highlight chips (top stat lines, display only)
+// ---------------------------------------------------------------------------
+
+/**
+ * POLISH-J: display icon per STAT_CATALOG id (end-card highlight chips).
+ * @type {Readonly<Record<string, string>>}
+ */
+export const HIGHLIGHT_ICONS = Object.freeze({
+  days: '📅',
+  games: '🎮',
+  coinsEarned: '💰',
+  tickles: '💞',
+  feeds: '🍎',
+  harvests: '🌻',
+  stickers: '⭐',
+  quests: '📜',
+  washes: '🫧',
+  sleeps: '😴',
+  trips: '🚗',
+  distance: '🛣️',
+  photos: '📸',
+  deliveries: '📦',
+  cures: '💊',
+  cakes: '🎂',
+  nougat: '🍫',
+  coinsSpent: '🛍️',
+});
+
+/**
+ * POLISH-J: the end card's highlight chips — the top `max` PLAYED stat lines
+ * by catalog weight (then value, then id — deterministic), excluding the
+ * intro `days` line and zero values. Display only: the played lines are
+ * passed through unchanged (§B5.2 completion still persists s.lines).
+ * @param {Array<{id: string, value: number}>} lines the session's stat lines
+ * @param {number} [max]
+ * @returns {Array<{id: string, value: number, weight: number, icon: string}>}
+ */
+export function endCardHighlights(lines, max = 3) {
+  const weights = new Map(STAT_CATALOG.map((r) => [r.id, r.weight]));
+  const n = Math.max(0, Math.floor(num(max)));
+  return (Array.isArray(lines) ? lines : [])
+    .filter((l) => l && typeof l === 'object' && typeof l.id === 'string'
+      && l.id !== 'days' && weights.has(l.id) && num(l.value) > 0)
+    .map((l) => ({
+      id: l.id,
+      value: Math.round(num(l.value)),
+      weight: weights.get(l.id) ?? 0,
+      icon: HIGHLIGHT_ICONS[l.id] ?? '⭐',
+    }))
+    .sort((a, b) => b.weight - a.weight || b.value - a.value
+      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .slice(0, n);
 }
 
 // ---------------------------------------------------------------------------

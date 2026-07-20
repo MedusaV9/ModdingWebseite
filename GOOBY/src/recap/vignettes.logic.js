@@ -267,3 +267,171 @@ export function goobyPose(id, p) {
   const yaw = dx * dx + dz * dz > 1e-10 ? Math.atan2(dx, dz) : 0;
   return { position: pos, yaw };
 }
+
+// ---------------------------------------------------------------------------
+// POLISH-J — per-biome motion accents (pure data + samplers). Small ambient
+// performers that make each vignette read alive and DISTINCT: fluttering
+// wildlife (butterflies/gulls/bats), rising drifts (steam/wisps/dust motes)
+// and timed streaks (shooting stars). vignettes.js builds ONE sprite per row
+// (buildAccents) and drives it every frame from these pure samplers — purely
+// decorative, riding the existing cue timeline (no timing contract impact).
+// Node-tested in test/recapVignettes.test.js.
+// ---------------------------------------------------------------------------
+
+/**
+ * POLISH-J accent rows per biome. Row shapes:
+ *   flutters: { tex, scale, color, center:[x,y,z], radius, bob, speed (orbits
+ *     per sec), flapHz, phase } — elliptical orbit + wing-flap squeeze.
+ *   drifts:   { tex, scale, color, opacity, origin:[x,y,z], rise, sway,
+ *     speed (loops per sec), phase } — looping rise with sway + end fades.
+ *   streaks:  { tex, scale, rotation, from:[x,y,z], to:[x,y,z], period,
+ *     delay, durFrac } — periodic shooting-star sweep (inactive between).
+ * @type {Readonly<Record<string, {flutters: ReadonlyArray<object>, drifts: ReadonlyArray<object>, streaks: ReadonlyArray<object>}>>}
+ */
+export const VIGNETTE_ACCENTS = Object.freeze({
+  // #1 meadow — three pastel butterflies working the flower path
+  meadow: Object.freeze({
+    flutters: Object.freeze([
+      Object.freeze({ tex: 'butterfly', scale: 0.34, color: '#ffd166', center: [1.9, 1.5, 3.4], radius: 1.5, bob: 0.5, speed: 0.16, flapHz: 8, phase: 0 }),
+      Object.freeze({ tex: 'butterfly', scale: 0.3, color: '#ff7ba9', center: [-2.2, 1.2, 2.0], radius: 1.2, bob: 0.4, speed: 0.13, flapHz: 9, phase: 2.1 }),
+      Object.freeze({ tex: 'butterfly', scale: 0.27, color: '#9b8cff', center: [0.6, 1.9, -1.6], radius: 1.8, bob: 0.6, speed: 0.11, flapHz: 10, phase: 4.2 }),
+    ]),
+    drifts: Object.freeze([]),
+    streaks: Object.freeze([]),
+  }),
+  // #2 city — two pigeons circling between the building rows
+  city: Object.freeze({
+    flutters: Object.freeze([
+      Object.freeze({ tex: 'bird', scale: 0.5, color: '#c9ced8', center: [-2.5, 4.8, -2.5], radius: 3.4, bob: 0.7, speed: 0.09, flapHz: 5, phase: 0.7 }),
+      Object.freeze({ tex: 'bird', scale: 0.42, color: '#aeb6c4', center: [3.5, 5.6, -3.5], radius: 2.8, bob: 0.5, speed: 0.12, flapHz: 6, phase: 3.4 }),
+    ]),
+    drifts: Object.freeze([]),
+    streaks: Object.freeze([]),
+  }),
+  // #3 harbor — golden-hour gulls wheeling over the boat
+  harbor: Object.freeze({
+    flutters: Object.freeze([
+      Object.freeze({ tex: 'bird', scale: 0.6, color: '#fff4e0', center: [0.5, 4.4, 0.5], radius: 4.2, bob: 0.8, speed: 0.08, flapHz: 4, phase: 1.2 }),
+      Object.freeze({ tex: 'bird', scale: 0.48, color: '#ffe7c8', center: [-2, 5.4, 1], radius: 3.2, bob: 0.6, speed: 0.11, flapHz: 5, phase: 4.4 }),
+    ]),
+    drifts: Object.freeze([]),
+    streaks: Object.freeze([]),
+  }),
+  // #4 space — meteor-shower streaks crossing behind the speeder
+  space: Object.freeze({
+    flutters: Object.freeze([]),
+    drifts: Object.freeze([]),
+    streaks: Object.freeze([
+      Object.freeze({ tex: 'streak', scale: 2.6, rotation: -0.45, from: [-9, 9, -7], to: [-2.5, 5.9, -7], period: 4.7, delay: 0.8, durFrac: 0.16 }),
+      Object.freeze({ tex: 'streak', scale: 2.1, rotation: 0.5, from: [8.5, 11, -9], to: [2.5, 7.7, -9], period: 6.3, delay: 3.1, durFrac: 0.14 }),
+    ]),
+  }),
+  // #5 spookGarden — cold ghost wisps rising off the graves + one fast bat
+  spookGarden: Object.freeze({
+    flutters: Object.freeze([
+      Object.freeze({ tex: 'bird', scale: 0.44, color: '#241a3c', center: [0, 3.4, -2], radius: 3.6, bob: 0.9, speed: 0.2, flapHz: 11, phase: 0.3 }),
+    ]),
+    drifts: Object.freeze([
+      Object.freeze({ tex: 'fog', scale: 1.1, color: '#bcd0ff', opacity: 0.4, origin: [-3.0, 0.5, -1.6], rise: 1.5, sway: 0.5, speed: 0.14, phase: 0 }),
+      Object.freeze({ tex: 'fog', scale: 0.9, color: '#cdd8ff', opacity: 0.34, origin: [2.7, 0.4, -2.4], rise: 1.3, sway: 0.45, speed: 0.11, phase: 0.45 }),
+      Object.freeze({ tex: 'fog', scale: 1.3, color: '#b2c2f2', opacity: 0.3, origin: [0.1, 0.6, -6.2], rise: 1.8, sway: 0.6, speed: 0.09, phase: 0.8 }),
+    ]),
+    streaks: Object.freeze([]),
+  }),
+  // #6 bakery — fresh-bake steam curling off the oven + counters
+  bakery: Object.freeze({
+    flutters: Object.freeze([]),
+    drifts: Object.freeze([
+      Object.freeze({ tex: 'fog', scale: 0.85, color: '#fff4e6', opacity: 0.5, origin: [3.6, 1.5, -1.0], rise: 1.5, sway: 0.3, speed: 0.18, phase: 0 }),
+      Object.freeze({ tex: 'fog', scale: 0.65, color: '#ffeede', opacity: 0.42, origin: [-2.4, 1.2, -0.9], rise: 1.2, sway: 0.25, speed: 0.15, phase: 0.5 }),
+      Object.freeze({ tex: 'fog', scale: 0.7, color: '#fff7ec', opacity: 0.38, origin: [0.6, 1.15, -1.0], rise: 1.3, sway: 0.28, speed: 0.13, phase: 0.25 }),
+    ]),
+    streaks: Object.freeze([]),
+  }),
+  // #7 nightSky — wishing-star streaks among the twinkles
+  nightSky: Object.freeze({
+    flutters: Object.freeze([]),
+    drifts: Object.freeze([]),
+    streaks: Object.freeze([
+      Object.freeze({ tex: 'streak', scale: 3.2, rotation: -0.5, from: [-8.5, 14, -9], to: [-2, 10.2, -9], period: 5.6, delay: 1.4, durFrac: 0.18 }),
+      Object.freeze({ tex: 'streak', scale: 2.6, rotation: 0.55, from: [7.5, 16, -10], to: [1.5, 11.9, -10], period: 7.4, delay: 4.0, durFrac: 0.15 }),
+    ]),
+  }),
+  // #8 toyRoom — warm dust motes floating in the lamplight
+  toyRoom: Object.freeze({
+    flutters: Object.freeze([]),
+    drifts: Object.freeze([
+      Object.freeze({ tex: 'starDot', scale: 0.14, color: '#ffd166', opacity: 0.55, origin: [-6.2, 0.9, -3.0], rise: 2.0, sway: 0.35, speed: 0.12, phase: 0 }),
+      Object.freeze({ tex: 'starDot', scale: 0.1, color: '#ffe6ae', opacity: 0.45, origin: [-5.7, 0.7, -2.6], rise: 1.7, sway: 0.3, speed: 0.16, phase: 0.55 }),
+      Object.freeze({ tex: 'starDot', scale: 0.12, color: '#ffdf98', opacity: 0.5, origin: [-6.7, 1.1, -3.5], rise: 1.9, sway: 0.4, speed: 0.1, phase: 0.3 }),
+    ]),
+    streaks: Object.freeze([]),
+  }),
+});
+
+/**
+ * POLISH-J flutter sampler: elliptical orbit around row.center with a bob
+ * and a wing-flap phase. Pure — same (row, t) → same pose.
+ * @param {{center: number[], radius: number, bob: number, speed: number,
+ *   flapHz: number, phase: number}} row
+ * @param {number} t seconds
+ * @returns {{position: number[], flap: number, yaw: number}} flap 0..1
+ */
+export function flutterPose(row, t) {
+  const tt = Math.max(0, Number(t) || 0);
+  const a = row.phase + tt * row.speed * Math.PI * 2;
+  const position = [
+    row.center[0] + Math.cos(a) * row.radius,
+    row.center[1] + Math.sin(a * 2.3 + row.phase) * row.bob,
+    row.center[2] + Math.sin(a) * row.radius * 0.7,
+  ];
+  const flap = 0.5 + 0.5 * Math.sin(tt * row.flapHz * Math.PI * 2 + row.phase);
+  // travel direction around the ellipse (three.js yaw convention, cf. goobyPose)
+  const yaw = Math.atan2(-Math.sin(a) * row.radius, Math.cos(a) * row.radius * 0.7);
+  return { position, flap, yaw };
+}
+
+/**
+ * POLISH-J drift sampler: looping rise from row.origin with sinusoidal sway;
+ * opacity fades in/out at the loop ends, scale grows as it rises.
+ * @param {{origin: number[], rise: number, sway: number, speed: number,
+ *   phase: number, opacity: number}} row
+ * @param {number} t seconds
+ * @returns {{position: number[], opacity: number, grow: number}}
+ */
+export function driftPose(row, t) {
+  const tt = Math.max(0, Number(t) || 0);
+  const u = ((tt * row.speed + row.phase) % 1 + 1) % 1;
+  const position = [
+    row.origin[0] + Math.sin(u * Math.PI * 3 + row.phase * 7) * row.sway,
+    row.origin[1] + u * row.rise,
+    row.origin[2],
+  ];
+  return {
+    position,
+    opacity: row.opacity * Math.sin(u * Math.PI),
+    grow: 1 + u * 0.6,
+  };
+}
+
+/**
+ * POLISH-J streak sampler: after row.delay, one from→to sweep per
+ * row.period lasting durFrac of it; inactive (alpha 0) otherwise.
+ * @param {{from: number[], to: number[], period: number, delay: number,
+ *   durFrac: number}} row
+ * @param {number} t seconds
+ * @returns {{active: boolean, position: number[], alpha: number}}
+ */
+export function streakPose(row, t) {
+  const lt = (Number(t) || 0) - row.delay;
+  if (lt < 0) return { active: false, position: [...row.from], alpha: 0 };
+  const u = (lt % row.period) / row.period;
+  if (u >= row.durFrac) return { active: false, position: [...row.to], alpha: 0 };
+  const k = u / row.durFrac;
+  const position = [
+    row.from[0] + (row.to[0] - row.from[0]) * k,
+    row.from[1] + (row.to[1] - row.from[1]) * k,
+    row.from[2] + (row.to[2] - row.from[2]) * k,
+  ];
+  return { active: true, position, alpha: Math.sin(k * Math.PI) };
+}

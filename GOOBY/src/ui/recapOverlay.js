@@ -34,14 +34,18 @@ import radioPlayer, { trackUrl } from '../audio/radioPlayer.js';
 import musicDirector from '../audio/musicDirector.js';
 import { nextUnlock } from '../systems/leveling.js';
 import { burstConfettiDom } from '../gfx/particles.js';
+import { tween, easings } from '../gfx/tween.js'; // POLISH-J: coin roll-up
 import { t, getLang } from '../data/strings.js';
 import { now } from '../core/clock.js';
 import { markRecapHeard } from '../systems/radioQueue.logic.js'; // POLISH-H
+// POLISH-J: end-card polish strings (local tx() fallback — G52 pattern)
+import { EN as R2_EN, DE as R2_DE } from '../data/strings/v4-recap2.js';
 import {
   OVERLAY, biomeBackdrop, recapSeed, chooseRecapTrack, elementVolume,
   advanceClock, barIndexAt, beatIndexAt, createCueScheduler, cutSpans, spanAt,
   nextSpanAt, popDurations, skipAllowed, displayMilestone, rewardCoins,
   replayRewardFrom, canAutoStart, createOffsetRecorder,
+  endCardHighlights, // POLISH-J
 } from './recapOverlay.logic.js';
 
 const DEV = !!import.meta.env?.DEV;
@@ -231,6 +235,20 @@ function lineText(cue, n) {
   return getLang() === 'de' ? cue.textDe : cue.textEn;
 }
 
+// POLISH-J: same-wave i18n fallback for strings/v4-recap2.js (the G52 tx
+// pattern — strings.js is frozen) until a later sweep spreads the keys.
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? R2_DE : R2_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
 /** Fade a fullscreen white layer to `target` opacity over `ms`. */
 function fadeWhite(el, target, ms) {
   return new Promise((resolve) => {
@@ -306,6 +324,10 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
   const root = div('g64-root g64-boot');
   const bgA = div('g64-bg', root);
   const bgB = div('g64-bg', root);
+  // POLISH-J: cinematic letterbox bars — slide in with the first cut
+  // (.g64-cine on the root), slide back out for the end card.
+  div('g64-bar g64-bar-top', root);
+  div('g64-bar g64-bar-bottom', root);
   const stage = div('g64-stage', root);
   const intro = div('g64-intro', stage);
   intro.innerHTML = `
@@ -468,7 +490,10 @@ function fireCue(cue) {
   if (!s) return;
   s.recorder.record(cue.kind, cue.bar, cue.t, s.clock.t);
   if (cue.kind === 'cut') {
-    if (cue.vignette === 0) s.dom.intro.classList.add('g64-gone');
+    if (cue.vignette === 0) {
+      s.dom.intro.classList.add('g64-gone');
+      s.dom.root.classList.add('g64-cine'); // POLISH-J: letterbox in
+    }
     s.liveSpan = {
       vignette: cue.vignette,
       id: cue.biome?.id ?? '',
@@ -476,6 +501,7 @@ function fireCue(cue) {
       progress: 0,
     };
     clearPop();
+    showBiomeChip(cue.biome); // POLISH-J: biome name rides the cut cue
     if (!s.sceneMode) crossfadeBackdrop(cue.biome?.id ?? '');
   } else if (cue.kind === 'text') {
     spawnPop(cue);
@@ -502,6 +528,23 @@ function crossfadeBackdrop(biomeId) {
   }
   showEl.style.opacity = '1';
   hideEl.style.opacity = '0';
+}
+
+/** POLISH-J: per-cut biome-name chip (the §C-SYS2.3 labels G55's cut cues
+ * already carry — purely visual, self-removing; timing untouched). */
+function showBiomeChip(biome) {
+  const s = sess;
+  const label = getLang() === 'de' ? biome?.labelDe : biome?.labelEn;
+  if (!s || !label) return;
+  s.dom.biomeEl?.remove();
+  const el = div('g64-biome', s.dom.root);
+  el.textContent = label;
+  s.dom.biomeEl = el;
+  // matches the g64biome keyframes' 3.2 s fade-in/hold/fade-out
+  setTimeout(() => {
+    if (s.dom.biomeEl === el) s.dom.biomeEl = null;
+    el.remove();
+  }, 3300);
 }
 
 /** @param {object} cue text cue → beat-synced pop with counter roll-up */
@@ -570,7 +613,10 @@ function doSkip() {
   for (const cue of s.scheduler.advance(endT)) fireCue(cue); // fires 'end'
 }
 
-/** §C-SYS2.7 end card: headline ring, coin recap, next unlock, confetti. */
+/** §C-SYS2.7 end card: headline ring, coin recap, next unlock, confetti.
+ * POLISH-J visual upgrade: highlight chips (top played stat lines), a coin
+ * roll-up (gfx/tween.js), the played-song credit and a staged second
+ * confetti wave — completion logic and the track-pick contract untouched. */
 function showEndCard() {
   const s = sess;
   if (!s || s.ended) return;
@@ -579,6 +625,9 @@ function showEndCard() {
   clearPop();
   s.dom.intro.classList.add('g64-gone');
   s.dom.skipEl.classList.remove('g64-skip-in');
+  s.dom.root.classList.remove('g64-cine'); // POLISH-J: letterbox out
+  s.dom.biomeEl?.remove();
+  s.dom.biomeEl = null;
 
   const coins = rewardCoins(s.level, s.fromLevel);
   const playerLevel = s.commit
@@ -592,6 +641,16 @@ function showEndCard() {
       ? t('recap.endcard.next', { name, n: next.level })
       : '';
   }
+  // POLISH-J: top-3 played stat lines as highlight chips + song credit
+  const highlights = endCardHighlights(s.lines, 3);
+  const chips = highlights.map((h, i) => `
+      <div class="g64-hl-chip" style="animation-delay: ${420 + i * 150}ms">
+        <span class="g64-hl-icon">${h.icon}</span>
+        <span class="g64-hl-n">${h.value}</span>
+        <span class="g64-hl-label">${tx(`recap2.stat.${h.id}`)}</span>
+      </div>`).join('');
+  const played = s.trackId ? trackById(s.trackId) : null;
+  const songLine = played?.title ? tx('recap2.endcard.song', { name: played.title }) : '';
   const R = 26;
   const C = (2 * Math.PI * R).toFixed(2);
   const card = div('g64-endcard', s.dom.root);
@@ -605,18 +664,34 @@ function showEndCard() {
       <span class="g64-ring-n">${s.level}</span>
     </div>
     <div class="g64-end-title">${t('recap.title', { n: s.level })}</div>
-    ${coins > 0 ? `<div class="g64-end-line">💰 ${t('recap.endcard.rewards', { n: coins })}</div>` : ''}
+    ${coins > 0 ? `<div class="g64-end-coins">💰 <span data-coins>${t('recap.endcard.rewards', { n: 0 })}</span></div>` : ''}
+    ${chips ? `<div class="g64-hl-title">${tx('recap2.endcard.highlights')}</div><div class="g64-hl">${chips}</div>` : ''}
     ${nextLine ? `<div class="g64-end-line g64-end-next">${nextLine}</div>` : ''}
+    ${songLine ? `<div class="g64-end-song">${songLine}</div>` : ''}
     <button class="btn btn-pink g64-continue">${t('recap.continue')}</button>`;
   requestAnimationFrame(() => {
     const fg = card.querySelector('.g64-ring-fg');
     if (fg) fg.style.strokeDashoffset = '0';
   });
+  // POLISH-J: coin roll-up — display only, eased on gfx/tween.js
+  const coinEl = card.querySelector('[data-coins]');
+  if (coinEl && coins > 0) {
+    s.coinTween = tween({
+      from: 0, to: coins, duration: 1.1, delay: 0.35, ease: easings.easeOutCubic,
+      onUpdate: (v) => {
+        coinEl.textContent = t('recap.endcard.rewards', { n: Math.round(v) });
+      },
+    });
+  }
   card.querySelector('.g64-continue')?.addEventListener('click', (ev) => {
     ev.stopPropagation();
     finishRecap();
   });
   burstConfettiDom(s.dom.root, { count: 56 });
+  // POLISH-J: second, lighter wave as the ring completes
+  setTimeout(() => {
+    if (sess === s && !s.finishing) burstConfettiDom(s.dom.root, { count: 30 });
+  }, 900);
   deps.audio.play('jingle.levelUp');
   if (DEV) console.log(`[recap] end card: L${s.level} coins=${coins} next=${next?.nameKey ?? 'all'} summary=${JSON.stringify(s.recorder.summary())}`);
 }
@@ -648,6 +723,7 @@ async function finishRecap() {
   const s = sess;
   if (!s || s.finishing) return;
   s.finishing = true;
+  s.coinTween?.cancel(); // POLISH-J: stop the roll-up before teardown
   const { store, audio, sceneManager } = deps;
   audio.play('ui.confirmBig');
   lastSummary = {

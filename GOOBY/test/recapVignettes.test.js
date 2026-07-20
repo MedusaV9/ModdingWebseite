@@ -17,6 +17,11 @@ import {
   dollyPose,
   goobyPose,
   clamp,
+  // POLISH-J motion accents (pure samplers + per-biome rows)
+  VIGNETTE_ACCENTS,
+  flutterPose,
+  driftPose,
+  streakPose,
 } from '../src/recap/vignettes.logic.js';
 import {
   RECAP_BACKDROP_FILES,
@@ -253,6 +258,96 @@ test('vignettes.js exports the stable G64 registry API surface', () => {
   assert.match(vignettesSrc, /export \{ VIGNETTE_IDS, VIGNETTE_SPECS, DRAW_CALL_BUDGET \};/);
   // VIGNETTES registry is generated from VIGNETTE_IDS (no hand-typed drift)
   assert.match(vignettesSrc, /VIGNETTE_IDS\.map\(\(id\) => \[/);
+});
+
+// ---------------------------------------------------------------------------
+// POLISH-J — per-biome motion accents (pure rows + samplers). Decorative
+// only: they ride the existing timeline and never touch cue timing.
+// ---------------------------------------------------------------------------
+
+test('POLISH-J accents: every biome defines ≥ 1 motion accent row', () => {
+  assert.deepEqual(Object.keys(VIGNETTE_ACCENTS), [...VIGNETTE_IDS]);
+  for (const id of VIGNETTE_IDS) {
+    const a = VIGNETTE_ACCENTS[id];
+    const n = a.flutters.length + a.drifts.length + a.streaks.length;
+    assert.ok(n >= 1, `${id} has ${n} accent rows`);
+  }
+});
+
+test('POLISH-J accents: sampled poses stay inside the backdrop, values sane', () => {
+  for (const id of VIGNETTE_IDS) {
+    const { flutters, drifts, streaks } = VIGNETTE_ACCENTS[id];
+    for (const row of flutters) {
+      for (const t of [0, 1.7, 5.3, 11.9]) {
+        const pose = flutterPose(row, t);
+        assert.ok(Math.hypot(pose.position[0], pose.position[2]) < BACKDROP.RADIUS,
+          `${id} flutter inside backdrop at t=${t}`);
+        assert.ok(pose.flap >= 0 && pose.flap <= 1, `${id} flap 0..1`);
+      }
+    }
+    for (const row of drifts) {
+      for (const t of [0, 2.2, 7.9]) {
+        const pose = driftPose(row, t);
+        assert.ok(Math.hypot(pose.position[0], pose.position[2]) < BACKDROP.RADIUS,
+          `${id} drift inside backdrop at t=${t}`);
+        assert.ok(pose.opacity >= 0 && pose.opacity <= row.opacity + 1e-9, `${id} drift opacity`);
+        assert.ok(pose.grow >= 1, `${id} drift grows`);
+      }
+    }
+    for (const row of streaks) {
+      assert.ok(row.durFrac > 0 && row.durFrac < 1, `${id} streak durFrac`);
+      for (const p of [row.from, row.to]) {
+        assert.ok(Math.hypot(p[0], p[2]) < BACKDROP.RADIUS, `${id} streak inside backdrop`);
+      }
+    }
+  }
+});
+
+test('POLISH-J flutterPose: deterministic orbit bounded by the row radius/bob', () => {
+  const row = VIGNETTE_ACCENTS.meadow.flutters[0];
+  assert.deepEqual(flutterPose(row, 1.25), flutterPose(row, 1.25));
+  for (const t of [0.3, 0.8, 4.6]) {
+    const pose = flutterPose(row, t);
+    const dx = pose.position[0] - row.center[0];
+    const dz = pose.position[2] - row.center[2];
+    assert.ok(Math.hypot(dx, dz) <= row.radius + 1e-9, 'within orbit radius');
+    assert.ok(Math.abs(pose.position[1] - row.center[1]) <= row.bob + 1e-9, 'bob bounded');
+  }
+});
+
+test('POLISH-J driftPose: rises from origin, fades in from 0, peaks mid-loop', () => {
+  const row = VIGNETTE_ACCENTS.bakery.drifts[0]; // phase 0 row
+  const start = driftPose(row, 0);
+  assert.ok(Math.abs(start.position[1] - row.origin[1]) < 1e-9, 'starts at origin height');
+  assert.ok(start.opacity < 1e-9, 'fades in from 0');
+  const mid = driftPose(row, 0.5 / row.speed);
+  assert.ok(mid.position[1] > row.origin[1] + row.rise * 0.4, 'risen at mid-loop');
+  assert.ok(Math.abs(mid.opacity - row.opacity) < 1e-6, 'peak opacity at mid-loop');
+});
+
+test('POLISH-J streakPose: inactive before delay, sweeps from→to in-window', () => {
+  const row = VIGNETTE_ACCENTS.nightSky.streaks[0];
+  assert.equal(streakPose(row, row.delay - 0.1).active, false);
+  const winStart = streakPose(row, row.delay + 1e-6);
+  assert.equal(winStart.active, true);
+  for (let k = 0; k < 3; k++) {
+    assert.ok(Math.abs(winStart.position[k] - row.from[k]) < 0.02, 'starts at from');
+  }
+  const mid = streakPose(row, row.delay + row.period * row.durFrac * 0.5);
+  assert.equal(mid.active, true);
+  assert.ok(mid.alpha > 0.9, 'bright mid-sweep');
+  const after = streakPose(row, row.delay + row.period * row.durFrac + 0.05);
+  assert.equal(after.active, false);
+  assert.equal(after.alpha, 0);
+});
+
+test('POLISH-J wiring: vignettes.js builds + ticks the accent/particle layer', () => {
+  assert.match(vignettesSrc, /function buildAccents\(stage\)/);
+  assert.match(vignettesSrc, /const accents = buildAccents\(stage\)/);
+  assert.match(vignettesSrc, /accents\.tick\(step\)/);
+  assert.match(vignettesSrc, /stage\.tickParticles\(step\)/);
+  // pooled accents come from the shared juice module (§G3), never a new dep
+  assert.match(vignettesSrc, /import \{ createParticles \} from '\.\.\/gfx\/particles\.js'/);
 });
 
 test('dev harness surface: ?recappreview= param wired + documented', () => {

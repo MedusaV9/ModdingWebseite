@@ -9,6 +9,14 @@
 // space-kit speeder (space), floating on a cloud (nightSky), lapping the
 // toy-car-kit track in a toy kart (toyRoom).
 //
+// POLISH-J layers per-biome ambient motion on top (all decorative, riding the
+// existing cue timeline): VIGNETTE_ACCENTS sprite performers (butterflies/
+// gulls/bats, steam/wisps/dust, shooting stars — pure samplers in
+// vignettes.logic.js), prop motion (flower sway, oncoming traffic, bobbing
+// buoys, spinning item boxes), candle/oven light flicker, and small pooled
+// gfx/particles.js accents (joy sparkles, sun glints, stardust, finish-line
+// confetti) — every vignette stays within DRAW_CALL_BUDGET.
+//
 // ── Vignette contract (binding for G64's cinematic player) ───────────────────
 //   import { VIGNETTES, VIGNETTE_IDS, buildVignette } from '../recap/vignettes.js';
 //
@@ -47,10 +55,13 @@ import * as THREE from 'three';
 import {
   VIGNETTE_IDS, VIGNETTE_SPECS, BACKDROP, DRAW_CALL_BUDGET,
   dollyPose as dollyPoseOf, goobyPose, clamp,
+  // POLISH-J: pure per-biome motion accents (flutter/drift/streak rows)
+  VIGNETTE_ACCENTS, flutterPose, driftPose, streakPose,
 } from './vignettes.logic.js';
 import { RECAP_BACKDROP_FILES, recapBackdropUrl } from './recapAssets.js';
 import { createGooby } from '../character/gooby.js';
 import { applyOutfits, applyEquippedOutfits } from '../character/outfitAttach.js';
+import { createParticles } from '../gfx/particles.js'; // POLISH-J: pooled accents
 
 export { VIGNETTE_IDS, VIGNETTE_SPECS, DRAW_CALL_BUDGET };
 
@@ -189,6 +200,47 @@ function proceduralTexture(name) {
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = grad;
     g.fillRect(0, 0, size, size);
+  } else if (name === 'butterfly') {
+    // POLISH-J: two round white wings + dark body — tinted per accent row
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.ellipse(size * 0.32, size * 0.38, size * 0.2, size * 0.26, -0.5, 0, Math.PI * 2);
+    g.ellipse(size * 0.68, size * 0.38, size * 0.2, size * 0.26, 0.5, 0, Math.PI * 2);
+    g.ellipse(size * 0.36, size * 0.66, size * 0.13, size * 0.17, -0.7, 0, Math.PI * 2);
+    g.ellipse(size * 0.64, size * 0.66, size * 0.13, size * 0.17, 0.7, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(60,45,40,0.85)';
+    g.beginPath();
+    g.ellipse(size * 0.5, size * 0.5, size * 0.05, size * 0.2, 0, 0, Math.PI * 2);
+    g.fill();
+  } else if (name === 'bird') {
+    // POLISH-J: distant-bird chevron (gull/pigeon/bat via tint + scale)
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = size * 0.09;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(size * 0.1, size * 0.42);
+    g.quadraticCurveTo(size * 0.32, size * 0.62, size * 0.5, size * 0.5);
+    g.quadraticCurveTo(size * 0.68, size * 0.62, size * 0.9, size * 0.42);
+    g.stroke();
+  } else if (name === 'streak') {
+    // POLISH-J: shooting-star streak — gradient tail + bright head (right)
+    const grad = g.createLinearGradient(0, 0, size, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.75, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(1, 'rgba(255,255,255,0.95)');
+    g.strokeStyle = grad;
+    g.lineWidth = size * 0.045;
+    g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(size * 0.04, size * 0.5);
+    g.lineTo(size * 0.9, size * 0.5);
+    g.stroke();
+    const head = g.createRadialGradient(size * 0.9, size * 0.5, 1, size * 0.9, size * 0.5, size * 0.09);
+    head.addColorStop(0, 'rgba(255,255,255,1)');
+    head.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = head;
+    g.fillRect(size * 0.78, size * 0.38, size * 0.22, size * 0.24);
   } else if (name === 'glowWarm' || name === 'glowCool' || name === 'moon' || name === 'fog') {
     const grad = g.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size / 2);
     const inner = name === 'glowWarm' ? 'rgba(255,190,110,0.95)'
@@ -251,6 +303,8 @@ function createStage(id, scene, assets) {
   const ownedGeos = [];
   const ownedMats = [];
   const disposers = [];
+  /** POLISH-J: lazily-created pooled particle system (stage.particles()) */
+  let particleSys = null;
 
   const stage = {
     id,
@@ -358,6 +412,21 @@ function createStage(id, scene, assets) {
       });
       return gooby;
     },
+    /** POLISH-J: lazy pooled particle system (gfx/particles.js) for sparkle/
+     * confetti accents — small pool, ticked centrally by buildVignette. */
+    particles(poolSize = 28) {
+      if (!particleSys) {
+        particleSys = createParticles(group, { poolSize });
+        disposers.push(() => {
+          particleSys.dispose();
+          particleSys = null;
+        });
+      }
+      return particleSys;
+    },
+    tickParticles(dt) {
+      particleSys?.update(dt);
+    },
     dispose() {
       for (const fn of disposers) fn();
       for (const geo of ownedGeos) geo.dispose();
@@ -367,6 +436,75 @@ function createStage(id, scene, assets) {
     },
   };
   return stage;
+}
+
+// ── POLISH-J: generic motion-accent layer (VIGNETTE_ACCENTS rows) ───────────
+
+/**
+ * Build one sprite per accent row of stage's biome and return a ticker that
+ * drives them from the pure samplers (flutterPose/driftPose/streakPose).
+ * Purely decorative — runs on its own accumulated clock, never on cue time.
+ * @param {ReturnType<typeof createStage>} stage
+ * @returns {{tick: (dt: number) => void}}
+ */
+function buildAccents(stage) {
+  const rows = VIGNETTE_ACCENTS[stage.id] ?? {};
+  const performers = [];
+  const sprite = (row, { additive = false, opacity = 1 } = {}) => {
+    const mat = new THREE.SpriteMaterial({
+      map: proceduralTexture(row.tex),
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      ...(additive ? { blending: THREE.AdditiveBlending } : {}),
+    });
+    if (row.color) mat.color.set(row.color);
+    if (row.rotation) mat.rotation = row.rotation;
+    const s = new THREE.Sprite(mat);
+    stage.own(s);
+    s.scale.set(row.scale, row.scale, 1);
+    stage.group.add(s);
+    return s;
+  };
+  for (const row of rows.flutters ?? []) {
+    performers.push({ kind: 'flutter', row, sprite: sprite(row) });
+  }
+  for (const row of rows.drifts ?? []) {
+    performers.push({ kind: 'drift', row, sprite: sprite(row, { opacity: 0 }) });
+  }
+  for (const row of rows.streaks ?? []) {
+    const s = sprite(row, { additive: true, opacity: 0 });
+    s.scale.set(row.scale, row.scale * 0.5, 1);
+    performers.push({ kind: 'streak', row, sprite: s });
+  }
+  let t = 0;
+  return {
+    tick(dt) {
+      if (performers.length === 0) return;
+      t += dt;
+      for (const p of performers) {
+        const { row, sprite: s } = p;
+        if (p.kind === 'flutter') {
+          const pose = flutterPose(row, t);
+          s.position.set(pose.position[0], pose.position[1], pose.position[2]);
+          // wing-flap: squeeze the sprite's width against a steady height
+          s.scale.set(row.scale * (0.35 + 0.65 * pose.flap), row.scale, 1);
+        } else if (p.kind === 'drift') {
+          const pose = driftPose(row, t);
+          s.position.set(pose.position[0], pose.position[1], pose.position[2]);
+          s.material.opacity = pose.opacity;
+          s.scale.set(row.scale * pose.grow, row.scale * pose.grow, 1);
+        } else {
+          const pose = streakPose(row, t);
+          s.visible = pose.active;
+          if (pose.active) {
+            s.position.set(pose.position[0], pose.position[1], pose.position[2]);
+            s.material.opacity = pose.alpha;
+          }
+        }
+      }
+    },
+  };
 }
 
 // ── per-biome builders (each returns { tick(dt, progress) }) ────────────────
@@ -391,17 +529,18 @@ function buildMeadow(stage) {
   ];
   for (const [key, size, x, z] of trees) stage.prop(key, size, { x, z });
   const flowers = ['flower_redA', 'flower_purpleA', 'flower_yellowA'];
+  const swayers = []; // POLISH-J: flowers sway in the breeze
   for (let i = 0; i < 12; i++) {
     const side = i % 2 === 0 ? -1 : 1;
     const z = 6.5 - i * 1.05;
-    stage.prop(`nature-kit/${flowers[i % 3]}`, 0.5, {
+    swayers.push(stage.prop(`nature-kit/${flowers[i % 3]}`, 0.5, {
       x: side * (1.7 + (i % 3) * 0.5), z, rotY: i * 1.3,
-    });
+    }));
   }
   for (let i = 0; i < 8; i++) {
-    stage.prop('nature-kit/grass_large', 0.45, {
+    swayers.push(stage.prop('nature-kit/grass_large', 0.45, {
       x: (i % 2 === 0 ? 1 : -1) * (1.6 + (i % 3) * 0.9), z: 5 - i * 1.4, rotY: i,
-    });
+    }));
   }
   stage.prop('nature-kit/plant_bush', 0.9, { x: -2.6, z: 5.5 });
   stage.prop('nature-kit/plant_bush', 0.8, { x: 2.8, z: -4.2 });
@@ -415,11 +554,26 @@ function buildMeadow(stage) {
   stage.prop('nature-kit/fence_gate', 1.15, { x: 0.3, z: -9.5 });
 
   const gooby = stage.gooby({ clipSpeed: 1.5 });
+  const particles = stage.particles(); // POLISH-J: joy-sparkle trail
+  let t = 0;
+  let emitT = 0;
   return {
     tick(dt, p) {
+      t += dt;
       const pose = goobyPose('meadow', p);
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
       gooby.group.rotation.y = pose.yaw;
+      // POLISH-J: breeze — flowers/grass sway; sparkles pop along the path
+      for (let i = 0; i < swayers.length; i++) {
+        swayers[i].rotation.z = Math.sin(t * 1.7 + i * 1.3) * 0.06;
+      }
+      emitT += dt;
+      if (emitT >= 1.3) {
+        emitT = 0;
+        particles.emit('sparkles', {
+          x: pose.position[0], y: pose.position[1] + 0.35, z: pose.position[2] + 0.3,
+        }, { count: 3 });
+      }
       gooby.update(dt);
     },
   };
@@ -484,12 +638,32 @@ function buildCity(stage) {
   car.add(gooby.group);
   stage.group.add(car);
 
+  // POLISH-J: oncoming traffic — a second sedan cruises the far lane so the
+  // street reads alive (spawn/despawn far outside the dolly's framing)
+  const rival = new THREE.Group();
+  rival.add(ground(fitModel(stage.assets.getModel('car-kit/sedan'), 1.9)));
+  const rivalWheels = [];
+  for (const [x, z] of [[wx * 0.9, wz * 0.9], [-wx * 0.9, wz * 0.9], [wx * 0.9, -wz * 0.9], [-wx * 0.9, -wz * 0.9]]) {
+    const wheel = fitModel(stage.assets.getModel('car-kit/wheel-default'), 0.36);
+    wheel.position.set(x, 0.18, z);
+    rival.add(wheel);
+    rivalWheels.push(wheel);
+  }
+  rival.rotation.y = -Math.PI / 2; // facing −x (oncoming)
+  rival.position.set(14, 0, 0.7);
+  stage.group.add(rival);
+
+  let t = 0;
   return {
     tick(dt, p) {
+      t += dt;
       const pose = goobyPose('city', p);
       car.position.set(pose.position[0], pose.position[1], pose.position[2]);
       car.rotation.y = pose.yaw;
       for (const w of wheels) w.rotation.x += dt * 7;
+      // POLISH-J: rival loops right→left every ~7 s with a wrap far offscreen
+      rival.position.x = 14 - ((t * 4.2) % 30);
+      for (const w of rivalWheels) w.rotation.x += dt * 7;
       gooby.update(dt);
     },
   };
@@ -532,8 +706,9 @@ function buildHarbor(stage) {
   stage.prop('kaykit-restaurant/crate', 0.55, { x: 3.1, y: 0.61, z: -1.1, rotY: 0.3, rest: false });
   stage.prop('kaykit-restaurant/crate', 0.55, { x: 3.7, y: 0.61, z: -0.5, rotY: -0.2, rest: false });
   stage.prop('kaykit-restaurant/crate', 0.5, { x: 3.35, y: 1.14, z: -0.85, rotY: 0.8, rest: false });
-  stage.prop('watercraft-kit/buoy', 0.55, { x: -3.4, y: 0.15, z: 3.2, rest: false });
-  stage.prop('watercraft-kit/buoy-flag', 0.75, { x: 4.6, y: 0.2, z: 3.8, rest: false });
+  // POLISH-J: keep the buoy handles — they bob on the same swell as the boat
+  const buoyA = stage.prop('watercraft-kit/buoy', 0.55, { x: -3.4, y: 0.15, z: 3.2, rest: false });
+  const buoyB = stage.prop('watercraft-kit/buoy-flag', 0.75, { x: 4.6, y: 0.2, z: 3.8, rest: false });
   stage.prop('watercraft-kit/boat-sail-a', 2.8, { x: -7, y: 0.4, z: -8.5, rotY: 0.9, rest: false });
   stage.prop('nature-kit/rock_largeA', 1.6, { x: -8.5, y: -0.1, z: 2.5, rest: false });
 
@@ -548,7 +723,9 @@ function buildHarbor(stage) {
   boat.rotation.y = 0.5;
   stage.group.add(boat);
 
+  const particles = stage.particles(); // POLISH-J: sun glints on the water
   let t = 0;
+  let glintT = 0;
   return {
     tick(dt, p) {
       t += dt;
@@ -558,6 +735,18 @@ function buildHarbor(stage) {
       boat.rotation.z = Math.sin(t * 0.7 + 1) * 0.045;
       waterTex.offset.x += dt * 0.008;
       waterTex.offset.y += dt * 0.014;
+      // POLISH-J: buoys ride the same swell; golden glints twinkle around
+      buoyA.position.y = 0.15 + Math.sin(t * 1.2 + 0.8) * 0.06;
+      buoyA.rotation.z = Math.sin(t * 0.8 + 2) * 0.08;
+      buoyB.position.y = 0.2 + Math.sin(t * 1.05 + 2.4) * 0.07;
+      buoyB.rotation.z = Math.sin(t * 0.9) * 0.07;
+      glintT += dt;
+      if (glintT >= 1.1) {
+        glintT = 0;
+        particles.emit('sparkles', {
+          x: Math.sin(t * 0.7) * 3.4, y: 0.08, z: 2.2 + Math.sin(t * 1.9) * 1.6,
+        }, { count: 2 });
+      }
       gooby.update(dt);
     },
   };
@@ -623,7 +812,9 @@ function buildSpace(stage) {
   stage.group.add(craft);
   stage.accentLight('#9fc4ff', 5, 7, [0, 3, 0]);
 
+  const particles = stage.particles(); // POLISH-J: stardust exhaust trail
   let t = 0;
+  let trailT = 0;
   return {
     tick(dt, p) {
       t += dt;
@@ -637,6 +828,15 @@ function buildSpace(stage) {
       }
       layers[0].opacity = 0.75 + Math.sin(t * 2.1) * 0.15;
       layers[1].opacity = 0.85 + Math.sin(t * 1.4 + 2) * 0.15;
+      // POLISH-J: engine pulse + a stardust puff trailing the speeder
+      glow.scale.setScalar(1.1 * (0.85 + 0.15 * Math.sin(t * 9)));
+      trailT += dt;
+      if (trailT >= 0.55) {
+        trailT = 0;
+        particles.emit('sparkles', {
+          x: craft.position.x, y: craft.position.y + 0.15, z: craft.position.z + 1.0,
+        }, { count: 2 });
+      }
       gooby.update(dt);
     },
   };
@@ -653,8 +853,9 @@ function buildSpookGarden(stage) {
     hemiSky: '#9a8fc0', hemiGround: '#2a2338', hemiI: 0.7,
     dirColor: '#c4b4e8', dirI: 0.55, dirPos: [-3, 7, 5],
   });
-  stage.accentLight('#ffb573', 11, 8, [1.7, 1.2, 2.1]);
-  stage.accentLight('#ff9a4d', 7, 6, [-1.4, 0.6, -0.9]);
+  // POLISH-J: keep the lantern-light handles — they flicker like candles
+  const lanternA = stage.accentLight('#ffb573', 11, 8, [1.7, 1.2, 2.1]);
+  const lanternB = stage.accentLight('#ff9a4d', 7, 6, [-1.4, 0.6, -0.9]);
 
   // upright stones hug the creep aisle; the flat grave slabs (raised dirt
   // boxes — they read as crates right next to the low dolly) stay in the
@@ -682,8 +883,8 @@ function buildSpookGarden(stage) {
   stage.prop('kaykit-halloween/fence_gate', 1.2, { x: 0.2, z: 6.9 });
   stage.prop('kaykit-halloween/lantern_standing', 1.0, { x: 1.7, z: 2.0 });
   stage.prop('kaykit-halloween/lantern_standing', 0.9, { x: -2.1, z: -3.4 });
-  stage.glowSprite('glowWarm', 1.5, [1.25, 0.35, 2.45], 0.7);
-  stage.glowSprite('glowWarm', 1.1, [-1.13, 0.28, -1.05], 0.6);
+  const glowA = stage.glowSprite('glowWarm', 1.5, [1.25, 0.35, 2.45], 0.7);
+  const glowB = stage.glowSprite('glowWarm', 1.1, [-1.13, 0.28, -1.05], 0.6);
 
   // two drifting low fog planes (§C-SYS2.3 „low fog plane")
   const fogMat = new THREE.MeshBasicMaterial({
@@ -711,6 +912,13 @@ function buildSpookGarden(stage) {
       gooby.group.rotation.y = pose.yaw;
       fogs[0].position.x = Math.sin(t * 0.15) * 1.6;
       fogs[1].position.x = Math.sin(t * 0.11 + 2) * -1.4;
+      // POLISH-J: candle flicker — two mixed sines never settle into a loop
+      const flickA = 0.82 + 0.12 * Math.sin(t * 7.3) + 0.06 * Math.sin(t * 13.1 + 1);
+      const flickB = 0.8 + 0.13 * Math.sin(t * 6.1 + 2.4) + 0.07 * Math.sin(t * 11.7);
+      lanternA.intensity = 11 * flickA;
+      lanternB.intensity = 7 * flickB;
+      glowA.material.opacity = 0.7 * flickA;
+      glowB.material.opacity = 0.6 * flickB;
       gooby.update(dt);
     },
   };
@@ -731,7 +939,7 @@ function buildBakery(stage) {
     hemiSky: '#fff3e0', hemiGround: '#caa987', hemiI: 1.05,
     dirColor: '#ffe4b8', dirI: 1.0, dirPos: [3, 6, 5],
   });
-  stage.accentLight('#ff9a5a', 6, 5, [3.3, 1.1, -1.3]);
+  const ovenLight = stage.accentLight('#ff9a5a', 6, 5, [3.3, 1.1, -1.3]); // POLISH-J
 
   const counters = [
     ['kaykit-restaurant/kitchencounter_straight', -4.2], ['bakery-interior/display_case_long', -2.4],
@@ -741,7 +949,7 @@ function buildBakery(stage) {
   for (const [key, x] of counters) stage.prop(key, 1.5, { x, z: -1.2, rotY: 0 });
   stage.prop('kaykit-restaurant/oven', 1.6, { x: 3.6, z: -1.35, rotY: 0 });
   stage.prop('kaykit-restaurant/fridge_A', 1.95, { x: 5.0, z: -1.5, rotY: 0 });
-  stage.glowSprite('glowWarm', 1.0, [3.6, 0.75, -0.9], 0.55);
+  const ovenGlow = stage.glowSprite('glowWarm', 1.0, [3.6, 0.75, -0.9], 0.55);
 
   // counter-top dressing (tiny-treats + restaurant bits, oversized for read)
   stage.prop('bakery-interior/cash_register', 0.5, { x: -0.9, y: 0.98, z: -1.15, rotY: 0.15, rest: false });
@@ -765,12 +973,18 @@ function buildBakery(stage) {
   // giant hero croissant on the short case — the vignette's smile beat
   stage.prop('baked-goods/croissant', 0.8, { x: 5.9, z: 0.3, rotY: -0.9 });
 
-  const gooby = stage.gooby({ clipSpeed: 1.4 });
+  const gooby = stage.gooby({ clipSpeed: 1.4, emotion: 'ecstatic' });
+  let t = 0;
   return {
     tick(dt, p) {
+      t += dt;
       const pose = goobyPose('bakery', p);
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
       gooby.group.rotation.y = pose.yaw;
+      // POLISH-J: the oven glow breathes warm while the steam drifts curl
+      const breathe = 0.85 + 0.15 * Math.sin(t * 2.2);
+      ovenLight.intensity = 6 * breathe;
+      ovenGlow.material.opacity = 0.55 * breathe;
       gooby.update(dt);
     },
   };
@@ -845,7 +1059,9 @@ function buildNightSky(stage) {
   stage.onDispose(() => beam.dispose());
   stage.group.add(rider);
 
+  const particles = stage.particles(); // POLISH-J: stardust behind the cloud
   let t = 0;
+  let dustT = 0;
   return {
     tick(dt, p) {
       t += dt;
@@ -859,6 +1075,14 @@ function buildNightSky(stage) {
       }
       starMats[0].opacity = 0.8 + Math.sin(t * 1.8) * 0.15;
       starMats[1].opacity = 0.85 + Math.sin(t * 1.2 + 1) * 0.15;
+      // POLISH-J: a stardust puff drifts off the cloud as it climbs
+      dustT += dt;
+      if (dustT >= 0.9) {
+        dustT = 0;
+        particles.emit('sparkles', {
+          x: rider.position.x - 0.5, y: rider.position.y - 0.3, z: rider.position.z,
+        }, { count: 3 });
+      }
       gooby.update(dt);
     },
   };
@@ -887,8 +1111,11 @@ function buildToyRoom(stage) {
   }
   stage.prop('toy-car-kit/gate-finish', 1.3, { x: 1.2, y: 0.03, z: 0, rotY: Math.PI / 2 });
   stage.prop('toy-car-kit/gate', 1.2, { x: -4.4, y: 0.03, z: -0.1, rotY: Math.PI / 2 });
-  stage.prop('toy-car-kit/item-box', 0.35, { x: -1.4, y: 0.03, z: 0.9, rotY: 0.5 });
-  stage.prop('toy-car-kit/item-box', 0.32, { x: 2.6, y: 0.03, z: -1.2, rotY: 1.2 });
+  // POLISH-J: kart-game item boxes spin + bob (handles kept for the tick)
+  const itemBoxes = [
+    stage.prop('toy-car-kit/item-box', 0.35, { x: -1.4, y: 0.03, z: 0.9, rotY: 0.5 }),
+    stage.prop('toy-car-kit/item-box', 0.32, { x: 2.6, y: 0.03, z: -1.2, rotY: 1.2 }),
+  ].map((holder) => ({ holder, baseY: holder.position.y }));
   stage.prop('toy-car-kit/item-cone', 0.3, { x: 0.2, y: 0.03, z: 1.1 });
   stage.prop('toy-car-kit/item-cone', 0.3, { x: 3.8, y: 0.03, z: 0.8 });
   stage.prop('toy-car-kit/item-banana', 0.32, { x: -2.8, y: 0.03, z: -1.3, rotY: 2 });
@@ -914,17 +1141,33 @@ function buildToyRoom(stage) {
     kart.add(wheel);
     wheels.push(wheel);
   }
-  const gooby = stage.gooby({ clip: 'sitDrive' });
+  const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
   gooby.group.position.set(0, 0.3, -0.02);
   kart.add(gooby.group);
   stage.group.add(kart);
 
+  const particles = stage.particles(); // POLISH-J: finish-line confetti
+  const FINISH_X = 1.2; // the gate-finish prop's x
+  let t = 0;
+  let lastX = -Infinity;
   return {
     tick(dt, p) {
+      t += dt;
       const pose = goobyPose('toyRoom', p);
       kart.position.set(pose.position[0], pose.position[1], pose.position[2]);
       kart.rotation.y = pose.yaw;
       for (const w of wheels) w.rotation.x += dt * 10;
+      // POLISH-J: item boxes spin + bob; confetti pops as the kart takes the
+      // finish gate (edge-triggered on the x crossing, once per pass)
+      for (let i = 0; i < itemBoxes.length; i++) {
+        const b = itemBoxes[i];
+        b.holder.rotation.y += dt * (1.6 + i * 0.5);
+        b.holder.position.y = b.baseY + Math.abs(Math.sin(t * 2.4 + i * 1.7)) * 0.06;
+      }
+      if (lastX < FINISH_X && pose.position[0] >= FINISH_X && Number.isFinite(lastX)) {
+        particles.emit('confetti', { x: FINISH_X, y: 0.9, z: 0 }, { count: 12 });
+      }
+      lastX = pose.position[0];
       gooby.update(dt);
     },
   };
@@ -964,6 +1207,7 @@ export function buildVignette(id, scene, assets, opts = {}) {
   const stage = createStage(id, scene, assets);
   stage.backdrop();
   const body = builder(stage);
+  const accents = buildAccents(stage); // POLISH-J: per-biome ambient motion
   const camera = opts.camera ?? null;
   let disposed = false;
   let loopT = 0;
@@ -983,6 +1227,8 @@ export function buildVignette(id, scene, assets, opts = {}) {
         p = clamp(Number(progress) || 0, 0, 1);
       }
       body.tick(step, p);
+      accents.tick(step); // POLISH-J: flutter/drift/streak performers
+      stage.tickParticles(step); // POLISH-J: pooled sparkle/confetti accents
       if (camera) {
         const pose = dollyPoseOf(id, p);
         _pos.set(pose.position[0], pose.position[1], pose.position[2]);

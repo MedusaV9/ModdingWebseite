@@ -17,10 +17,12 @@ import {
   beatIndexAt, advanceClock, createCueScheduler, cutSpans, spanAt, nextSpanAt,
   popDurations, skipAllowed, displayMilestone, rewardCoins, replayRewardFrom,
   historyRows, agoLabel, canAutoStart, createOffsetRecorder,
+  endCardHighlights, HIGHLIGHT_ICONS, // POLISH-J
 } from '../src/ui/recapOverlay.logic.js';
 import { RECAP, STAT_CATALOG, beatGrid } from '../src/systems/recap.js';
 import { DEFAULT_BIOMES, buildTimeline } from '../src/systems/recapDirector.js';
 import { EN, DE } from '../src/data/strings/v4-recap.js';
+import { EN as R2_EN, DE as R2_DE } from '../src/data/strings/v4-recap2.js'; // POLISH-J
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(readFileSync(join(ROOT, 'src/data/musicManifest.json'), 'utf8'));
@@ -327,6 +329,57 @@ test('agoLabel: today / yesterday / n days ago buckets', () => {
   assert.deepEqual(agoLabel(nowMs - 3600_000, nowMs), { key: 'recap.ago.today' });
   assert.deepEqual(agoLabel(nowMs - DAY, nowMs), { key: 'recap.ago.yesterday' });
   assert.deepEqual(agoLabel(nowMs - 3 * DAY, nowMs), { key: 'recap.ago.days', vars: { n: 3 } });
+});
+
+// ── POLISH-J: end-card highlights + v4-recap2 strings ───────────────────────
+
+test('v4-recap2 strings: EN/DE parity + a short chip label per catalog id', () => {
+  assert.deepEqual(Object.keys(R2_EN).sort(), Object.keys(R2_DE).sort());
+  for (const row of STAT_CATALOG) {
+    assert.equal(typeof R2_EN[`recap2.stat.${row.id}`], 'string', `EN label '${row.id}'`);
+    assert.equal(typeof R2_DE[`recap2.stat.${row.id}`], 'string', `DE label '${row.id}'`);
+  }
+  assert.match(R2_EN['recap2.endcard.song'], /\{name\}/);
+  assert.match(R2_DE['recap2.endcard.song'], /\{name\}/);
+  assert.equal(typeof R2_EN['recap2.endcard.highlights'], 'string');
+  assert.equal(typeof R2_DE['recap2.endcard.highlights'], 'string');
+});
+
+test('HIGHLIGHT_ICONS: an icon for every STAT_CATALOG id', () => {
+  for (const row of STAT_CATALOG) {
+    assert.ok(HIGHLIGHT_ICONS[row.id], `icon for '${row.id}'`);
+  }
+});
+
+test('endCardHighlights: top-3 by weight then value; days/zeros excluded', () => {
+  const lines = [
+    { id: 'days', value: 3 }, { id: 'games', value: 12 },
+    { id: 'coinsEarned', value: 420 }, { id: 'tickles', value: 27 },
+    { id: 'feeds', value: 0 }, { id: 'washes', value: 6 },
+  ];
+  const hl = endCardHighlights(lines, 3);
+  // games (w10) first; coinsEarned vs tickles are both w9 → value decides
+  assert.deepEqual(hl.map((h) => h.id), ['games', 'coinsEarned', 'tickles']);
+  assert.equal(hl[0].value, 12);
+  assert.ok(hl.every((h) => typeof h.icon === 'string' && h.icon.length > 0));
+  assert.deepEqual(endCardHighlights(lines, 3), hl, 'deterministic');
+  assert.equal(endCardHighlights(lines, 2).length, 2);
+  assert.deepEqual(endCardHighlights([{ id: 'days', value: 9 }]), []);
+  assert.deepEqual(endCardHighlights([{ id: 'games', value: 0 }]), []);
+  assert.deepEqual(endCardHighlights(undefined), []);
+});
+
+test('POLISH-J marker pins: overlay chips/letterbox/biome chip + CSS ship', () => {
+  const overlay = readFileSync(join(ROOT, 'src/ui/recapOverlay.js'), 'utf8');
+  assert.match(overlay, /endCardHighlights\(s\.lines, 3\)/);
+  assert.match(overlay, /showBiomeChip\(cue\.biome\)/);
+  assert.match(overlay, /g64-cine/);
+  assert.match(overlay, /markRecapHeard/); // POLISH-H completion write intact
+  const css = readFileSync(join(ROOT, 'src/ui/styles.css'), 'utf8');
+  assert.match(css, /\.g64-biome/);
+  assert.match(css, /\.g64-hl-chip/);
+  assert.match(css, /\.g64-bar-top/);
+  assert.match(css, /\.g64-end-coins/);
 });
 
 // ── trigger guard (§C-SYS2.1: never mid-gameplay) ───────────────────────────
