@@ -9,6 +9,11 @@
 // wallpapers +3 floors (§C8.2), pack-qualified asset keys, garden proc
 // builders, per-frame update hooks.
 //
+// V4/POLISH-I: home-shell polish — 512 px wallpaper/floor/grass painters,
+// merged baseboard+crown trim per indoor room (exactly 1 draw call), framed
+// shell prints for the kitchen/bathroom walls. Every anchor/tap-target id and
+// the outdoor-garden handling are unchanged.
+//
 // ── Integration surface (G5 care / G6 sleep / G11 decor / V2 G19-G26) ──────
 //   rm.on('tap:fridge'|'tap:tv'|'tap:frontDoor'|'tap:toilet'|'tap:lampSwitch'
 //         |'tap:wardrobe'|'tap:bathtub'|'tap:bed'|'tap:gooby'
@@ -39,6 +44,7 @@
 // Room defs are PURE data (importable without three.js — test/rooms.test.js).
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'; // V4/POLISH-I: 1-draw-call shell trim
 import { ROOMS, UI_COLORS, UNLOCKS } from '../data/constants.js'; // V2/G19: + UNLOCKS (§B6 garden gate)
 import { now } from '../core/clock.js';
 import { standardMat, disposeIfOwned } from '../gfx/materials.js';
@@ -188,7 +194,9 @@ function makeTexture(kind, id, cfg) {
   const key = `${kind}:${id}`;
   if (textureCache.has(key)) return textureCache.get(key);
 
-  const S = 256;
+  // V4/POLISH-I: painters render at 512 px (2× the v1 resolution) with richer
+  // motifs — still one paint per id for the app's lifetime (permanent cache).
+  const S = 512;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = S;
   const g = canvas.getContext('2d');
@@ -198,37 +206,47 @@ function makeTexture(kind, id, cfg) {
   g.strokeStyle = cfg.motif;
 
   switch (cfg.style) {
-    case 'dots': // subtle offset polka dots
+    case 'dots': // offset polka dots, two sizes for a woven wallpaper feel
       for (let row = 0; row < 8; row += 1) {
         for (let col = 0; col < 8; col += 1) {
-          const x = col * 32 + (row % 2 === 0 ? 8 : 24);
-          const y = row * 32 + 12;
+          const x = col * 64 + (row % 2 === 0 ? 16 : 48);
+          const y = row * 64 + 24;
           g.beginPath();
-          g.arc(x, y, 4.5, 0, Math.PI * 2);
+          g.arc(x, y, 9, 0, Math.PI * 2);
           g.fill();
+          g.globalAlpha = 0.45;
+          g.beginPath();
+          g.arc((x + 32) % S, (y + 32) % S, 3.5, 0, Math.PI * 2);
+          g.fill();
+          g.globalAlpha = 1;
         }
       }
       break;
-    case 'clouds': // puffy 3-lobe clouds on the sky colorway
-      for (const [cx, cy, s] of [[50, 60, 1], [180, 40, 0.8], [120, 150, 1.1], [220, 190, 0.9], [30, 210, 0.85]]) {
+    case 'clouds': // puffy 3-lobe clouds + faint distant wisps
+      for (const [cx, cy, s, a] of [
+        [100, 120, 2, 1], [360, 80, 1.6, 1], [240, 300, 2.2, 1], [440, 380, 1.8, 1],
+        [60, 420, 1.7, 1], [300, 180, 1, 0.5], [140, 260, 0.9, 0.5], [430, 240, 0.8, 0.5],
+      ]) {
+        g.globalAlpha = a;
         for (const [dx, dy, r] of [[-14, 0, 13], [0, -7, 16], [15, 0, 12]]) {
           g.beginPath();
           g.arc(cx + dx * s, cy + dy * s, r * s, 0, Math.PI * 2);
           g.fill();
         }
       }
+      g.globalAlpha = 1;
       break;
-    case 'stars': { // dots + tiny 4-point stars on twilight blue (§D3)
-      for (let i = 0; i < 40; i += 1) {
-        const x = (i * 97 + 31) % S;
-        const y = (i * 53 + 17) % S;
-        g.globalAlpha = 0.35 + ((i * 29) % 60) / 100;
+    case 'stars': { // speckles + 4-point stars on twilight blue (§D3)
+      for (let i = 0; i < 90; i += 1) {
+        const x = (i * 193 + 61) % S;
+        const y = (i * 107 + 35) % S;
+        g.globalAlpha = 0.3 + ((i * 29) % 60) / 100;
         g.beginPath();
-        g.arc(x, y, 1.6, 0, Math.PI * 2);
+        g.arc(x, y, 2.2, 0, Math.PI * 2);
         g.fill();
       }
       g.globalAlpha = 1;
-      for (const [x, y, r] of [[48, 52, 7], [190, 90, 9], [110, 190, 8], [230, 210, 6]]) {
+      for (const [x, y, r] of [[96, 104, 14], [380, 180, 18], [220, 380, 16], [460, 420, 12], [60, 300, 10]]) {
         g.beginPath();
         for (let p = 0; p < 8; p += 1) {
           const ang = (p / 8) * Math.PI * 2 - Math.PI / 2;
@@ -240,57 +258,93 @@ function makeTexture(kind, id, cfg) {
       }
       break;
     }
-    case 'planks': { // horizontal wood planks with staggered joints + grain
-      const plank = 32;
-      g.lineWidth = 2;
+    case 'planks': { // wood planks: staggered joints, per-plank tone, bevels
+      const plank = 64;
+      g.lineWidth = 3;
       for (let y = 0; y < S; y += plank) {
-        g.strokeRect(-2, y, S + 4, plank);
-        const off = (y / plank) % 2 === 0 ? 64 : 0;
-        for (let x = off; x < S; x += 128) {
+        const row = y / plank;
+        // subtle per-plank tone variation keeps wide floors from banding
+        g.globalAlpha = 0.1 + ((row * 37) % 5) * 0.022;
+        g.fillRect(0, y, S, plank);
+        g.globalAlpha = 1;
+        g.strokeRect(-3, y, S + 6, plank);
+        const off = row % 2 === 0 ? 128 : 32;
+        for (let x = off; x < S; x += 256) {
           g.beginPath();
           g.moveTo(x, y);
           g.lineTo(x, y + plank);
           g.stroke();
         }
+        // light bevel along the top edge of each plank
+        g.globalAlpha = 0.15;
+        g.fillStyle = '#FFFFFF';
+        g.fillRect(0, y + 2, S, 2.5);
+        g.fillStyle = cfg.motif;
+        g.globalAlpha = 1;
       }
-      g.globalAlpha = 0.25;
-      for (let i = 0; i < 26; i += 1) {
-        const x = (i * 41) % S;
-        const y = (i * 89 + 9) % S;
-        g.fillRect(x, y, 14 + (i % 3) * 8, 1.5);
+      g.globalAlpha = 0.28;
+      for (let i = 0; i < 60; i += 1) {
+        const x = (i * 83) % S;
+        const y = (i * 179 + 19) % S;
+        g.fillRect(x, y, 22 + (i % 4) * 10, 2);
       }
       g.globalAlpha = 1;
       break;
     }
-    case 'tiles': // square tiles with grout lines
-      g.lineWidth = 3;
+    case 'tiles': // square tiles: grout lines + per-tile tone and sheen
+      for (let row = 0; row < 4; row += 1) {
+        for (let col = 0; col < 4; col += 1) {
+          const x = col * 128;
+          const y = row * 128;
+          g.globalAlpha = 0.08 + ((row * 5 + col * 3) % 4) * 0.03;
+          g.fillRect(x, y, 128, 128);
+          g.globalAlpha = 0.14;
+          g.fillStyle = '#FFFFFF';
+          g.fillRect(x + 10, y + 10, 108, 14);
+          g.fillStyle = cfg.motif;
+          g.globalAlpha = 1;
+        }
+      }
+      g.lineWidth = 6;
       for (let i = 0; i <= 4; i += 1) {
         g.beginPath();
-        g.moveTo(i * 64, 0);
-        g.lineTo(i * 64, S);
-        g.moveTo(0, i * 64);
-        g.lineTo(S, i * 64);
+        g.moveTo(i * 128, 0);
+        g.lineTo(i * 128, S);
+        g.moveTo(0, i * 128);
+        g.lineTo(S, i * 128);
         g.stroke();
       }
       break;
-    case 'stipple': // soft carpet noise
-      for (let i = 0; i < 500; i += 1) {
+    case 'stipple': // soft carpet: faint weave + dense speck noise
+      g.globalAlpha = 0.06;
+      for (let y = 0; y < S; y += 12) g.fillRect(0, y, S, 5);
+      for (let x = 0; x < S; x += 12) g.fillRect(x, 0, 5, S);
+      g.globalAlpha = 1;
+      for (let i = 0; i < 1600; i += 1) {
         const x = (i * 37 + 11) % S;
         const y = (i * 71 + 5) % S;
-        g.globalAlpha = 0.18 + ((i * 13) % 40) / 100;
-        g.fillRect(x, y, 2, 2);
+        g.globalAlpha = 0.15 + ((i * 13) % 40) / 100;
+        g.fillRect(x, y, 2.5, 2.5);
       }
       g.globalAlpha = 1;
       break;
-    case 'checker': // alternating pastel tiles
+    case 'checker': // alternating pastel tiles with a soft inner sheen
       for (let row = 0; row < 4; row += 1) {
         for (let col = 0; col < 4; col += 1) {
-          if ((row + col) % 2 === 0) g.fillRect(col * 64, row * 64, 64, 64);
+          if ((row + col) % 2 !== 0) continue;
+          const x = col * 128;
+          const y = row * 128;
+          g.fillRect(x, y, 128, 128);
+          g.globalAlpha = 0.18;
+          g.fillStyle = '#FFFFFF';
+          g.fillRect(x + 8, y + 8, 112, 16);
+          g.fillStyle = cfg.motif;
+          g.globalAlpha = 1;
         }
       }
       break;
     // ---- V2/G19 (§C8.2 painter additions + §C2.1 grass) ----
-    case 'sunset': { // warm vertical gradient + sun disc
+    case 'sunset': { // warm vertical gradient + haloed sun + cloud streaks
       const grad = g.createLinearGradient(0, 0, 0, S);
       grad.addColorStop(0, '#FFD9A0');
       grad.addColorStop(0.55, cfg.base);
@@ -299,85 +353,131 @@ function makeTexture(kind, id, cfg) {
       g.fillRect(0, 0, S, S);
       g.fillStyle = cfg.motif;
       g.beginPath();
-      g.arc(S * 0.62, S * 0.34, 30, 0, Math.PI * 2);
+      g.arc(S * 0.62, S * 0.34, 60, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 0.35;
       g.beginPath();
-      g.arc(S * 0.62, S * 0.34, 42, 0, Math.PI * 2);
+      g.arc(S * 0.62, S * 0.34, 84, 0, Math.PI * 2);
       g.fill();
+      g.globalAlpha = 0.16;
+      g.beginPath();
+      g.arc(S * 0.62, S * 0.34, 112, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 0.3;
+      g.fillStyle = '#FFF4E0';
+      for (const [x, y, w] of [[60, 120, 150], [270, 200, 190], [110, 300, 130]]) {
+        g.beginPath();
+        g.ellipse(x + w / 2, y, w / 2, 9, 0, 0, Math.PI * 2);
+        g.fill();
+      }
       g.globalAlpha = 1;
       break;
     }
-    case 'leaves': // leafy meadow motif — staggered two-lobe leaves
+    case 'leaves': // leafy meadow motif — staggered two-lobe leaves + stems
       for (let row = 0; row < 6; row += 1) {
         for (let col = 0; col < 6; col += 1) {
-          const x = col * 44 + (row % 2 === 0 ? 12 : 34);
-          const y = row * 44 + 16;
+          const x = col * 88 + (row % 2 === 0 ? 24 : 68);
+          const y = row * 88 + 32;
           g.save();
           g.translate(x, y);
           g.rotate(((row * 7 + col * 13) % 8) * 0.35 - 1.2);
           g.beginPath();
-          g.ellipse(0, 0, 11, 4.5, 0, 0, Math.PI * 2);
+          g.ellipse(0, 0, 22, 9, 0, 0, Math.PI * 2);
           g.fill();
           g.beginPath();
-          g.ellipse(9, -5, 8, 3.5, 0.7, 0, Math.PI * 2);
+          g.ellipse(18, -10, 16, 7, 0.7, 0, Math.PI * 2);
           g.fill();
+          g.lineWidth = 2.5;
+          g.beginPath();
+          g.moveTo(-20, 4);
+          g.quadraticCurveTo(4, -2, 30, -14);
+          g.stroke();
           g.restore();
         }
       }
       break;
-    case 'stripes': // candy pastel vertical stripes
-      for (let x = 0; x < S; x += 42) g.fillRect(x, 0, 21, S);
+    case 'stripes': // candy stripes: wide pastel bands + gloss highlight
+      for (let x = 0; x < S; x += 84) g.fillRect(x, 0, 42, S);
       g.globalAlpha = 0.4;
       g.fillStyle = '#FFFFFF';
-      for (let x = 16; x < S; x += 42) g.fillRect(x, 0, 5, S);
+      for (let x = 32; x < S; x += 84) g.fillRect(x, 0, 10, S);
+      g.globalAlpha = 0.12;
+      for (let x = 4; x < S; x += 84) g.fillRect(x, 0, 4, S);
       g.globalAlpha = 1;
       break;
     case 'waves': // ocean wave curls in offset rows
-      g.lineWidth = 3.5;
+      g.lineWidth = 7;
       for (let row = 0; row < 6; row += 1) {
-        const y = row * 44 + 22;
-        const off = row % 2 === 0 ? 0 : 32;
-        for (let x = -16; x < S + 16; x += 64) {
+        const y = row * 88 + 44;
+        const off = row % 2 === 0 ? 0 : 64;
+        for (let x = -32; x < S + 32; x += 128) {
           g.beginPath();
-          g.arc(x + off, y, 14, Math.PI, Math.PI * 1.85);
+          g.arc(x + off, y, 28, Math.PI, Math.PI * 1.85);
           g.stroke();
           g.beginPath();
-          g.arc(x + off + 20, y + 4, 8, Math.PI, Math.PI * 1.75);
+          g.arc(x + off + 40, y + 8, 16, Math.PI, Math.PI * 1.75);
           g.stroke();
         }
       }
       break;
-    case 'marble': // pale slab + wandering veins
-      g.lineWidth = 1.6;
-      g.globalAlpha = 0.55;
-      for (let v = 0; v < 7; v += 1) {
-        let x = (v * 53 + 17) % S;
+    case 'marble': // pale slab + primary/secondary wandering veins
+      g.lineWidth = 2.4;
+      g.globalAlpha = 0.5;
+      for (let v = 0; v < 9; v += 1) {
+        let x = (v * 106 + 34) % S;
         let y = 0;
         g.beginPath();
         g.moveTo(x, y);
         while (y < S) {
-          x += Math.sin(v * 3 + y * 0.06) * 9 + ((v * 31 + y) % 7) - 3;
-          y += 16 + ((v * 13 + y) % 9);
+          x += Math.sin(v * 3 + y * 0.03) * 18 + ((v * 31 + y) % 14) - 6;
+          y += 26 + ((v * 13 + y) % 15);
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+      g.lineWidth = 1.2;
+      g.globalAlpha = 0.22;
+      for (let v = 0; v < 6; v += 1) {
+        let x = (v * 87 + 61) % S;
+        let y = 0;
+        g.beginPath();
+        g.moveTo(x, y);
+        while (y < S) {
+          x += Math.cos(v * 2 + y * 0.05) * 12;
+          y += 34 + ((v * 17 + y) % 11);
           g.lineTo(x, y);
         }
         g.stroke();
       }
       g.globalAlpha = 1;
       break;
-    case 'grass': // §C2.1 garden ground — mottled green + blade stipple
-      for (let i = 0; i < 700; i += 1) {
+    case 'grass': // §C2.1 garden ground — mow bands, blades, meadow specks
+      g.globalAlpha = 0.05;
+      g.fillStyle = '#FFFFFF';
+      for (let y = 0; y < S; y += 128) g.fillRect(0, y, S, 64);
+      g.fillStyle = cfg.motif;
+      g.globalAlpha = 1;
+      for (let i = 0; i < 2400; i += 1) {
         const x = (i * 37 + 11) % S;
         const y = (i * 71 + 5) % S;
-        g.globalAlpha = 0.25 + ((i * 13) % 45) / 100;
-        g.fillRect(x, y, 2, 3 + (i % 3));
+        g.globalAlpha = 0.22 + ((i * 13) % 45) / 100;
+        g.fillRect(x, y, 2, 5 + (i % 4));
       }
       g.globalAlpha = 0.3;
       g.fillStyle = '#A8D98A';
-      for (let i = 0; i < 240; i += 1) {
+      for (let i = 0; i < 700; i += 1) {
         const x = (i * 97 + 31) % S;
         const y = (i * 53 + 17) % S;
-        g.fillRect(x, y, 1.5, 3);
+        g.fillRect(x, y, 2, 5);
+      }
+      g.globalAlpha = 0.5;
+      for (let i = 0; i < 26; i += 1) {
+        const x = (i * 151 + 43) % S;
+        const y = (i * 211 + 89) % S;
+        g.fillStyle = i % 3 === 0 ? '#FFF6D8' : '#F6C6D8';
+        g.beginPath();
+        g.arc(x, y, 2.5, 0, Math.PI * 2);
+        g.fill();
       }
       g.globalAlpha = 1;
       break;
@@ -388,6 +488,84 @@ function makeTexture(kind, id, cfg) {
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  textureCache.set(key, tex);
+  return tex;
+}
+
+// ---------------------------------------------------------------------------
+// V4/POLISH-I: shell wall prints — small framed CanvasTexture artworks for the
+// rooms whose walls don't get pictures from the G79 dressing tables (kitchen /
+// bathroom). Cached forever alongside the wallpaper/floor painters.
+// ---------------------------------------------------------------------------
+
+/** Framed shell prints: roomId → { id, at, w, h } (room-local meters). */
+const SHELL_ART = Object.freeze({
+  kitchen: Object.freeze({ id: 'veggies', at: Object.freeze([1.52, 1.86, -1.485]), w: 0.5, h: 0.42 }),
+  bathroom: Object.freeze({ id: 'bubbles', at: Object.freeze([-0.45, 1.9, -1.485]), w: 0.5, h: 0.42 }),
+});
+
+function makeArtTexture(id) {
+  const key = `art:${id}`;
+  if (textureCache.has(key)) return textureCache.get(key);
+  const S = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  const g = canvas.getContext('2d');
+  if (id === 'veggies') {
+    // kitchen print: three cheerful carrots on cream (echoes the food theme)
+    g.fillStyle = '#FFF6E8';
+    g.fillRect(0, 0, S, S);
+    for (const [cx, tilt] of [[70, -0.16], [128, 0.05], [186, 0.2]]) {
+      g.save();
+      g.translate(cx, 150);
+      g.rotate(tilt);
+      g.fillStyle = '#FF9F5A';
+      g.beginPath();
+      g.moveTo(-16, -46);
+      g.quadraticCurveTo(24, -10, 0, 66);
+      g.quadraticCurveTo(-24, -10, 16, -46);
+      g.fill();
+      g.fillStyle = '#59C9B9';
+      for (const a of [-0.55, 0, 0.55]) {
+        g.beginPath();
+        g.ellipse(a * 14, -60, 7, 20, a * 0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
+    }
+    g.strokeStyle = '#E8D5C0';
+    g.lineWidth = 10;
+    g.strokeRect(5, 5, S - 10, S - 10);
+  } else {
+    // bathroom print: rising suds over soft blue
+    const grad = g.createLinearGradient(0, 0, 0, S);
+    grad.addColorStop(0, '#DBEEF9');
+    grad.addColorStop(1, '#BFE2F2');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 14; i += 1) {
+      const x = ((i * 89 + 40) % (S - 40)) + 20;
+      const y = ((i * 53 + 30) % (S - 40)) + 20;
+      const r = 8 + ((i * 7) % 18);
+      g.strokeStyle = '#FFFFFF';
+      g.globalAlpha = 0.75;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.stroke();
+      g.globalAlpha = 0.55;
+      g.fillStyle = '#FFFFFF';
+      g.beginPath();
+      g.arc(x - r * 0.35, y - r * 0.35, r * 0.22, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 1;
+    }
+    g.strokeStyle = '#D9E8E4';
+    g.lineWidth = 10;
+    g.strokeRect(5, 5, S - 10, S - 10);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   textureCache.set(key, tex);
   return tex;
@@ -699,13 +877,49 @@ export function createRoomManager({ scene, camera, assets, store }) {
         group.add(side);
       }
 
-      // baseboard strip for a finished look
-      const base = new THREE.Mesh(
-        track.geo(new THREE.BoxGeometry(SHELL.WIDTH, 0.09, 0.05)),
-        standardMat('#FFFDF4', { roughness: 0.85 })
-      );
-      base.position.set(0, 0.045, -SHELL.DEPTH / 2 + 0.03);
-      group.add(base);
+      // V4/POLISH-I: finished shell trim — baseboards along all three walls +
+      // crown molding at the ceiling line, in ONE cream color shared by every
+      // room (the "one home" palette). All pieces merge to a single mesh, so
+      // the polish costs exactly 1 draw call per room (§E10 budget).
+      const trimParts = [];
+      const trimBox = (w, h, d, x, y, z) => {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        geo.translate(x, y, z);
+        trimParts.push(geo);
+      };
+      const sideZ = -SHELL.DEPTH / 2 + SHELL.SIDE_DEPTH / 2;
+      trimBox(SHELL.WIDTH, 0.1, 0.05, 0, 0.05, -SHELL.DEPTH / 2 + 0.03);
+      trimBox(SHELL.WIDTH, 0.09, 0.07, 0, SHELL.HEIGHT - 0.045, -SHELL.DEPTH / 2 + 0.04);
+      for (const sx of [-1, 1]) {
+        trimBox(0.05, 0.1, SHELL.SIDE_DEPTH, sx * (SHELL.WIDTH / 2 - 0.028), 0.05, sideZ);
+        trimBox(0.07, 0.09, SHELL.SIDE_DEPTH, sx * (SHELL.WIDTH / 2 - 0.04), SHELL.HEIGHT - 0.045, sideZ);
+      }
+      const trimGeo = track.geo(mergeGeometries(trimParts, false));
+      for (const part of trimParts) part.dispose();
+      const trim = new THREE.Mesh(trimGeo, standardMat('#FFF8EA', { roughness: 0.85 }));
+      trim.name = 'shellTrim';
+      trim.receiveShadow = true;
+      group.add(trim);
+
+      // V4/POLISH-I: a small framed print on the rooms whose walls have no
+      // G79 dressing picture (living/bedroom already hang theirs) — 2 calls.
+      const art = SHELL_ART[def.id];
+      if (art) {
+        const frame = new THREE.Mesh(
+          track.geo(new THREE.BoxGeometry(art.w + 0.1, art.h + 0.1, 0.035)),
+          standardMat('#A9805A', { roughness: 0.8 })
+        );
+        frame.name = 'shellArtFrame';
+        frame.position.set(art.at[0], art.at[1], art.at[2]);
+        group.add(frame);
+        const print = new THREE.Mesh(
+          track.geo(new THREE.PlaneGeometry(art.w, art.h)),
+          track.mat(new THREE.MeshBasicMaterial({ map: makeArtTexture(art.id), toneMapped: false }))
+        );
+        print.name = 'shellArtPrint';
+        print.position.set(art.at[0], art.at[1], art.at[2] + 0.022);
+        group.add(print);
+      }
     }
 
     const record = {

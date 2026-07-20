@@ -54,8 +54,11 @@ export const ROOM = Object.freeze({
   // ---- end V4/G79 ----------------------------------------------------------
 
   furniture: Object.freeze([
-    // rug under the seating area (decor slot)
-    Object.freeze({ slot: 'rug', item: 'rugRounded', at: Object.freeze([-0.2, 0, 0.3]), rotY: 0, noShadow: true }),
+    // V4/POLISH-I: layered rugs — a big neutral base rug under the whole
+    // seating group, with the swappable accent rug (decor slot) lifted 1.5 cm
+    // on top so the two never z-fight. Centered on the sofa/coffee-table axis.
+    Object.freeze({ item: 'rugSquare', at: Object.freeze([-0.55, 0, 0.2]), rotY: 0, scale: 1.3, noShadow: true }),
+    Object.freeze({ slot: 'rug', item: 'rugRounded', at: Object.freeze([-0.55, 0.015, 0.25]), rotY: 0, noShadow: true }),
     // sofa against the back wall, facing the camera (decor slot)
     Object.freeze({
       slot: 'sofa', item: 'loungeSofa', at: Object.freeze([-0.9, 0, -1.05]),
@@ -99,6 +102,9 @@ export const ROOM = Object.freeze({
     Object.freeze({ slot: 'plant', item: 'pottedPlant', at: Object.freeze([0.98, 0.49, -1.2]), rotY: 0, scale: 0.75 }),
     // wall-art slot anchor above the sofa (empty until bought — §C5.2)
     Object.freeze({ slot: 'wallArt', at: Object.freeze([-0.85, 1.9, -1.47]), rotY: 0 }),
+    // V4/POLISH-I: media-corner speaker angled toward the sofa (clear of the
+    // front-door hitbox at x ≥ 1.075/z ≤ −1.22 and of the ballSpawn anchor)
+    Object.freeze({ item: 'speaker', at: Object.freeze([1.28, 0, -1.08]), rotY: -25, scale: 0.85 }),
     // ---- V3/G46 (§C11.1): committed furniture-kit room dressing ----------
     // The authored ceiling lamp grounds at its shade; lifting its base to
     // y=2.70 hangs its chain flush with the 3.2 m ceiling.

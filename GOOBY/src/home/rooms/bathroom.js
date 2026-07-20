@@ -77,6 +77,14 @@ export const ROOM = Object.freeze({
     }),
     // little plant on the sink top (plant decor slot)
     Object.freeze({ slot: 'plant', item: 'plantSmall2', at: Object.freeze([0.58, 0.88, -1.2]), rotY: 0 }),
+    // ---- V4/POLISH-I: tidy set dressing ------------------------------------
+    // step-out mat squared up in front of the sink (the tub keeps its own rug
+    // slot), a floor plant softening the bare back-left corner behind the tub,
+    // and a small bin by the toilet — all clear of the tub/toilet/washer zones
+    Object.freeze({ item: 'rugDoormat', at: Object.freeze([0.45, 0, -0.55]), rotY: 0, noShadow: true }),
+    Object.freeze({ item: 'plantSmall3', at: Object.freeze([-1.72, 0, -1.25]), rotY: 25 }),
+    Object.freeze({ item: 'trashcan', at: Object.freeze([1.7, 0, -0.45]), rotY: 0, scale: 0.75 }),
+    // ---- end V4/POLISH-I ----------------------------------------------------
     // ---- V3/G46 (§C11.1): committed furniture-kit room dressing ----------
     // A real ceiling fixture adds a focal point without touching tub/sink
     // interactions or the saved decor slots.

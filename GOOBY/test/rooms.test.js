@@ -358,6 +358,37 @@ test('the six garden plots form the §C2.1 2×3 grid with tap hitboxes', () => {
   }
 });
 
+test('V4/POLISH-I: garden plots keep the 0.85 m pitch (PLOT_RADIUS contract)', () => {
+  // gardenInteractions.js resolves drag targets by nearest plot within
+  // PLOT_RADIUS 0.42, tuned for the 0.85 m grid pitch — the room rebuild must
+  // not drift the grid.
+  const plots = GARDEN.furniture.filter((e) => /^plot[0-5]$/.test(e.interact ?? ''));
+  const cols = [...new Set(plots.map((e) => e.at[0]))].sort((a, b) => a - b);
+  const rows = [...new Set(plots.map((e) => e.at[2]))].sort((a, b) => a - b);
+  for (let i = 1; i < cols.length; i += 1) {
+    assert.ok(Math.abs(cols[i] - cols[i - 1] - 0.85) < 1e-9, 'garden: column pitch drifted from 0.85 m');
+  }
+  assert.ok(Math.abs(rows[1] - rows[0] - 0.85) < 1e-9, 'garden: row pitch drifted from 0.85 m');
+});
+
+test('V4/POLISH-I: every fixed interactable keeps a 3-component tap hitSize', () => {
+  // the POLISH-I room rebuild repositions furniture — the care/garden flows in
+  // interactions.js + gardenInteractions.js need every tap target to keep an
+  // explicit raycast box.
+  for (const [name, roomId] of Object.entries(REQUIRED_INTERACTS)) {
+    const entry = byId[roomId].furniture.find((e) => e.interact === name);
+    assert.equal(entry?.hitSize?.length, 3, `${roomId}.${name}: missing hitSize`);
+  }
+});
+
+test('V4/POLISH-I: the living-room layered rugs stack without z-fighting', () => {
+  const under = byId.living.furniture.find((e) => e.item === 'rugSquare' && !e.slot);
+  const slotRug = byId.living.furniture.find((e) => e.slot === 'rug');
+  assert.ok(under, 'living: base rug of the layered pair missing');
+  assert.ok(under.noShadow, 'living: base rug must skip shadow casting');
+  assert.ok(slotRug.at[1] >= 0.01, 'living: accent rug must be lifted above the base rug');
+});
+
 test('§C8.2 painter id sets are complete (10 wallpapers / 7 floors)', () => {
   assert.deepEqual(
     [...WALLPAPER_IDS].sort(),

@@ -51,8 +51,12 @@ export const ROOM = Object.freeze({
       rotY: 0, interact: 'bed', anchor: 'bed', hitSize: Object.freeze([1.0, 0.7, 1.9]),
     }),
     Object.freeze({ item: 'pillow', at: Object.freeze([-1.2, 0.3, -1.12]), rotY: 0, scale: 1.2 }),
+    // V4/POLISH-I: second accent pillow — the bed reads as freshly made
+    Object.freeze({ item: 'pillowBlue', at: Object.freeze([-1.04, 0.3, -0.98]), rotY: -14, scale: 0.95 }),
     // nightstand: side table (composition) + lamp on top (nightstand decor slot)
+    // V4/POLISH-I: + a bedtime-reading stack on the table's left end
     Object.freeze({ item: 'sideTable', at: Object.freeze([-0.25, 0, -1.28]), rotY: 0 }),
+    Object.freeze({ item: 'books', at: Object.freeze([-0.43, 0.59, -1.22]), rotY: 35, scale: 0.8 }),
     Object.freeze({
       slot: 'nightstand', item: 'lampSquareTable', at: Object.freeze([-0.25, 0.59, -1.28]),
       rotY: 0, anchor: 'lamp',

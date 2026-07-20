@@ -60,18 +60,27 @@ export const ROOM = Object.freeze({
 
   furniture: Object.freeze([
     // fridge — fixed interactable + decor slot (model swap kitchenFridgeLarge)
+    // V4/POLISH-I: flush with the counter line (z −1.12) for one tidy galley run
     Object.freeze({
-      slot: 'fridge', item: 'kitchenFridge', at: Object.freeze([-1.28, 0, -1.06]),
+      slot: 'fridge', item: 'kitchenFridge', at: Object.freeze([-1.28, 0, -1.12]),
       rotY: 0, interact: 'fridge', anchor: 'fridge', hitSize: Object.freeze([0.8, 1.5, 0.7]),
     }),
-    // counter run along the back wall: drawers · sink · stove (flush 0.67 m pieces)
+    // counter run along the back wall: drawers · sink · stove (flush 0.67 m
+    // pieces). V4/POLISH-I: + a base cabinet right of the stove so the run
+    // reaches the right corner (continuous worktop under the Nougatschleuse).
     Object.freeze({ item: 'kitchenCabinetDrawer', at: Object.freeze([-0.62, 0, -1.12]), rotY: 0 }),
     Object.freeze({ item: 'kitchenSink', at: Object.freeze([0.05, 0, -1.12]), rotY: 0, anchor: 'counter' }),
     Object.freeze({ item: 'kitchenStove', at: Object.freeze([0.72, 0, -1.12]), rotY: 0 }),
-    // wall shelf above the counter (decor slot)
+    Object.freeze({ item: 'kitchenCabinet', at: Object.freeze([1.39, 0, -1.12]), rotY: 0 }),
+    // wall shelf above the counter (decor slot) + V4/POLISH-I: a matching
+    // fixed upper over the drawer unit so the wall reads as one fitted kitchen
     Object.freeze({ slot: 'wallShelf', item: 'kitchenCabinetUpper', at: Object.freeze([0.05, 1.5, -1.3]), rotY: 0 }),
+    Object.freeze({ item: 'kitchenCabinetUpper', at: Object.freeze([-0.62, 1.5, -1.3]), rotY: 0 }),
     // small appliance on the counter top (decor slot)
     Object.freeze({ slot: 'appliance', item: 'toaster', at: Object.freeze([-0.62, 0.71, -1.05]), rotY: 0 }),
+    // V4/POLISH-I: dining rug under the table set anchors the eating corner
+    // (layered look — the set's legs stand on it)
+    Object.freeze({ item: 'rugRectangle', at: Object.freeze([0.82, 0, 0.22]), rotY: 0, scale: 0.9, noShadow: true }),
     // table set (decor slot): table + 2 chairs across it (variant: tableCloth +
     // chairCushion). Chairs sit front/back so the set reads well in portrait.
     Object.freeze({
@@ -89,8 +98,9 @@ export const ROOM = Object.freeze({
         ]),
       }),
     }),
-    // set dressing
-    Object.freeze({ item: 'trashcan', at: Object.freeze([1.42, 0, -1.22]), rotY: 0 }),
+    // set dressing — V4/POLISH-I: the bin tucks beside the fridge (its old
+    // corner spot now holds the counter run's right cabinet)
+    Object.freeze({ item: 'trashcan', at: Object.freeze([-1.78, 0, -0.6]), rotY: 0 }),
     // ---- V3/G46 (§C11.1): committed furniture-kit room dressing ----------
     // Real coffee machine fills the last clear counter patch; the appliance
     // slot and all of its saved variants remain untouched.

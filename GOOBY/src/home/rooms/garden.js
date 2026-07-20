@@ -94,6 +94,15 @@ export const ROOM = Object.freeze({
       ]),
     }),
     Object.freeze({ slot: 'gardenPath', proc: 'dirtPath', at: Object.freeze([0.15, 0, 1.3]), rotY: -12, noShadow: true }),
+
+    // ---- V4/POLISH-I: edge dressing — a grass tuft/flower pair softening the
+    // bare front-left corner, a flat stone by the birdbath spot and one cheeky
+    // toadstool front-right; all outside every plot/tool tap line ----------
+    Object.freeze({ item: 'nature-kit/grass_large', at: Object.freeze([-1.95, 0, 0.5]), rotY: 20, scale: 0.5, noShadow: true }),
+    Object.freeze({ item: 'nature-kit/flower_yellowA', at: Object.freeze([-1.7, 0, 0.85]), rotY: 60, scale: 0.5 }),
+    Object.freeze({ item: 'nature-kit/rock_smallFlatA', at: Object.freeze([-1.9, 0, -0.5]), rotY: -35, scale: 0.55 }),
+    Object.freeze({ item: 'nature-kit/mushroom_red', at: Object.freeze([1.8, 0, 1.25]), rotY: -30, scale: 0.45 }),
+    // ---- end V4/POLISH-I ----------------------------------------------------
   ]),
 
   anchors: Object.freeze({
