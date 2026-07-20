@@ -641,9 +641,10 @@ const SYNTH_RECIPES = {
     tone(dest, { type: 'triangle', f0: 110, f1: 300, dur: 0.34, vol: vol * 0.7 });
     tone(dest, { type: 'sine', f0: 70, f1: 130, dur: 0.3, vol: vol * 0.4 });
   },
+  // V4/POLISH-L1 (comfy sweep): the 900/1300 Hz tone pings were removed — the
+  // sweeping noise body alone reads as the splash without the beepy edge.
   splash(dest, vol) {
     noise(dest, { type: 'lowpass', f0: 2600, f1: 500, q: 0.8, dur: 0.4, vol: vol * 0.7 });
-    [900, 1300].forEach((f, i) => tone(dest, { f0: f, f1: f * 1.4, dur: 0.08, vol: vol * 0.2, at: 0.12 + i * 0.08 }));
   },
   flush(dest, vol) {
     noise(dest, { f0: 1500, f1: 250, q: 2.2, dur: 1.1, vol: vol * 0.6 });
@@ -800,15 +801,13 @@ const SYNTH_RECIPES = {
     tone(dest, { type: 'sine', f0: 1568, dur: 0.26, vol: vol * 0.42, at: 0.12 });
   },
 
-  /** Watering-can trickle (§C2.2): overlapping burbles + two high droplets. */
+  /** Watering-can trickle (§C2.2): overlapping burbles. V4/POLISH-L1 (comfy
+   *  sweep): the 2.2–3.1 kHz droplet tone layer was removed — the bandpassed
+   *  burbles carry the water read without the shrill pings. */
   trickle(dest, vol, o = {}) {
     const p = o.pitch ?? 1;
     [1500, 1150, 900].forEach((f, i) =>
       noise(dest, { type: 'bandpass', f0: f * p, f1: f * 0.7 * p, q: 2.4, dur: 0.28, vol: vol * 0.35, at: i * 0.14 }));
-    for (let i = 0; i < 2; i += 1) {
-      const f = (2200 + Math.random() * 900) * p;
-      tone(dest, { f0: f, f1: f * 1.35, dur: 0.05, vol: vol * 0.18, at: 0.12 + i * 0.19 });
-    }
   },
 
   /** Fertilizer (§C2.2): two dust-bag puffs + a growth sparkle tail. */
@@ -967,6 +966,9 @@ const LOOP_RECIPES = {
    * motifs — rising chirps (the original), a fast two-note trill, or a
    * falling slur pair — and ~40% of bursts get a quieter "answer bird" at a
    * lower pitch, so the dawn garden sounds like a conversation.
+   * V4/POLISH-L1 (comfy sweep): the chirp band dropped from 2100–3800 Hz to
+   * 1400–2400 Hz and every chirp plays ~20% quieter — mellow dawn cooing
+   * instead of piercing whistles (recipe/id contract unchanged).
    */
   birdsong(dest, vol) {
     const g = ctx.createGain();
@@ -1009,10 +1011,11 @@ const LOOP_RECIPES = {
       }
     };
     const burst = () => {
-      const f0 = 2100 + Math.random() * 1700;
-      motif(f0, 1, 0);
+      // V4/POLISH-L1: 1400–2400 Hz band (was 2100–3800), chirps at 80% level
+      const f0 = 1400 + Math.random() * 1000;
+      motif(f0, 0.8, 0);
       // V2/G29: occasional answer bird, lower and further away
-      if (Math.random() < 0.4) motif(f0 * 0.8, 0.55, 0.5 + Math.random() * 0.3);
+      if (Math.random() < 0.4) motif(f0 * 0.8, 0.44, 0.5 + Math.random() * 0.3);
       timer = setTimeout(burst, 900 + Math.random() * 2600);
     };
     timer = setTimeout(burst, 250);

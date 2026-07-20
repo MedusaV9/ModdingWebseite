@@ -125,7 +125,7 @@ test('2.0 feature ids preserve only the V4 exact exemptions; replacements use re
     'garden.harvest': 'impactGeneric_light',
     'sticker.get': 'itch-sfx/confirm_style_4',
     'album.claim': 'jingles_HIT13',
-    'photo.shutter': 'mouseclick1',
+    'photo.shutter': 'click1', // V4/POLISH-L1: ui-audio/click1 (was mouseclick1)
     'hop.bell': 'impactBell_heavy',
     'golf.sink': 'chip-lay-',
     'chop.slice': 'impactPlank_medium',

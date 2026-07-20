@@ -39,6 +39,17 @@
 // jingle.levelUp/daily 0.65, golf.ace 0.6, delivery.drop 0.6, tramp.butt
 // 0.55, dance.fever 0.55, ui.go 0.6).
 //
+// V4/POLISH-L1 comfy audio sweep: the thin/high-pitched UI + feedback cues
+// (open/close ~11.8 kHz, ticks ~8.6 kHz, shutter/confirm ~8 kHz effective
+// spectral centroid) were remapped to WARM committed recordings — paper card
+// slides, itch back/confirm sets, wood/carpet footsteps, the muted bong —
+// and the chiptune NES jingles moved to the acoustic PIZZI/STEEL/SAX/HIT
+// families. Remaining bright swooshes/taps got a pitch-down `rate`. Every
+// converted UI cue now sits ≤ ~4 kHz effective centroid. Volumes for the new
+// keys were recomputed with the same §B2.5 min(hand-intent, trim-to-target)
+// rule; the re-pinned §C3.5 values are jingle.levelUp/daily 0.75 (PIZZI04/08
+// trims) and golf.ace 0.73 (HIT05 trim); photo.shutter keeps its 0.7 pin.
+//
 // Coverage contract: EVERY id passed to audio.play() anywhere in src/ MUST be
 // mapped here — test/onboarding.test.js scans the source tree and fails on
 // unmapped ids; audio.js also console.warns in dev builds.
@@ -93,38 +104,43 @@ const ITCH = 'itch-sfx'; // V4/G78 (§C-SYS1.9): ObsydianX CC0 flat OGG root
  * @type {Record<string, SfxDef>}
  */
 export const SFX_MAP = Object.freeze({
-  // --- UI / framework ---
-  'ui.tap': sample(seq(`${UI}/click`, 5), { volume: 0.5, haptic: 'light' }),
-  'ui.open': sample(seq(`${UI}/open`, 4), { volume: 0.55 }),
-  'ui.close': sample(seq(`${UI}/close`, 4), { volume: 0.55 }),
+  // --- UI / framework (V4/POLISH-L1: warm comfy set — see header note) ---
+  'ui.tap': sample(seq(`${UI}/click`, 5), { volume: 0.5, rate: 0.85, haptic: 'light' }), // POLISH-L1: pitched down
+  'ui.open': sample(seqN(`${CAS}/card-slide-`, 3), { volume: 0.7, rate: 0.85 }), // POLISH-L1: paper page-turn (was open_* ~11.7 kHz)
+  'ui.close': sample(seq(`${ITCH}/back_style_2`, 3), { volume: 0.65 }), // POLISH-L1: warm descending (was close_* ~11.8 kHz)
   'ui.pick': sample(seq(`${UI}/select`, 5), { volume: 0.55, haptic: 'light' }),
-  'ui.error': sample(seq(`${UI}/error`, 4), { volume: 0.45 }),
-  'ui.count': sample([`${UI}/tick_001`, `${UI}/tick_002`, `${UI}/tick_004`], { volume: 0.7 }),
+  'ui.error': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.45, rate: 0.9 }), // POLISH-L1: warm "uh-oh" (was error_*)
+  'ui.count': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`], { volume: 0.7, rate: 0.75 }), // POLISH-L1: soft low click (was tick_* ~8.6 kHz)
   'ui.go': sample(seq(`${UI}/confirmation`, 4), { volume: 0.6, haptic: 'light' }), // §C3.5: 0.75→0.6 (GO louder than 3-2-1)
   'ui.win': sample([`${JIN}/jingles_HIT16`], { volume: 0.7 }), // V3/G32 §C3.1: was synth winArp
   // V3/G32 §D3.5 NEW ids (G33's settings rows + shared UI chrome call these):
-  'ui.toggleOn': sample([`${UIA}/switch1`], { volume: 0.8, haptic: 'light' }),
-  'ui.toggleOff': sample([`${UIA}/switch2`], { volume: 0.8, haptic: 'light' }),
-  'ui.slider': sample(seqN(`${UIA}/rollover`, 3), { volume: 0.7, throttleMs: 80 }),
-  'ui.tabSwitch': sample([`${UIP}/tap-a`, `${UIP}/tap-b`], { volume: 0.7, haptic: 'light' }),
-  // V3/FIX-B (E19 P2): 0.9→0.75 — click-a peaked −5.9 dBFS at default sliders,
-  // breaching the §C3.5 −6 dBFS acceptance bar by one frame.
-  'ui.confirmBig': sample([`${UIP}/click-a`], { volume: 0.75, haptic: 'light' }),
+  'ui.toggleOn': sample([`${UI}/switch_002`], { volume: 0.8, rate: 1.15, haptic: 'light' }), // POLISH-L1: mechanical thock up
+  'ui.toggleOff': sample([`${UI}/switch_002`], { volume: 0.8, rate: 0.85, haptic: 'light' }), // POLISH-L1: mechanical thock down
+  'ui.slider': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.7, rate: 1.4, throttleMs: 80 }), // POLISH-L1: soft fabric tick
+  'ui.tabSwitch': sample([`${UIP}/tap-a`, `${UIP}/tap-b`], { volume: 0.7, rate: 0.9, haptic: 'light' }), // POLISH-L1: pitched down
+  // V3/FIX-B (E19 P2) + V4/POLISH-L1: the CTA moved to the warm itch confirm
+  // set (~542 Hz fundamental); its worst committed peak is −1.9 dBFS raw, so
+  // the restored 0.9 hand intent lands ≈ −8.5 dBFS at default sliders — still
+  // under the §C3.5 −6 dBFS bar (E19's click-a breached it at 0.9).
+  'ui.confirmBig': sample(seq(`${ITCH}/confirm_style_5`, 3), { volume: 0.9, haptic: 'light' }),
 
   // --- coins / economy (V3/G32 §C3.1: real casino chips) ---
   'coin.get': sample(seqN(`${CAS}/chip-lay-`, 3), { volume: 0.9, haptic: 'light' }), // was synth coin
   'coin.fly': sample(seqN(`${CAS}/chips-collide-`, 4), { volume: 0.7 }), // was synth coin
   'coin.spend': sample(seq(`${UI}/drop`, 4), { volume: 0.6 }),
 
-  // --- jingles (music-jingles NES set — level-up/achievement/daily §D6; the
-  // NES mappings stay per §C3.3, volumes renormalized to the −18 dBFS jingle
-  // target per §B2.5 loudness.json trims + §C3.5 pins) ---
-  'jingle.levelUp': sample([`${JIN}/jingles_NES03`], { volume: 0.65 }), // §C3.5: 0.75→0.65
-  'jingle.achievement': sample([`${JIN}/jingles_NES05`], { volume: 0.68 }),
-  'jingle.daily': sample([`${JIN}/jingles_NES09`], { volume: 0.65 }), // §C3.5: 0.75→0.65
-  'jingle.arrival': sample([`${JIN}/jingles_NES04`], { volume: 0.62 }),
-  'jingle.outfit': sample([`${JIN}/jingles_NES07`], { volume: 0.62 }),
-  'jingle.short': sample([`${JIN}/jingles_NES11`], { volume: 0.6 }),
+  // --- jingles (V4/POLISH-L1: the chiptune NES set moved to the warm
+  // acoustic PIZZI/STEEL/SAX/HIT families — Animal-Crossing-cozy, not beepy;
+  // volumes recomputed at the −18 dBFS jingle target per §B2.5 trims:
+  // PIZZI04 −16.3 → trim 0.82, PIZZI08 −16.6 → 0.85 (both capped by the 0.75
+  // hand intent), STEEL03 −14.5 → 0.67, HIT03 −15.9 → 0.79 cap 0.6 intent,
+  // SAX04/STEEL07 are quiet → hand intents 0.62 stand) ---
+  'jingle.levelUp': sample([`${JIN}/jingles_PIZZI04`], { volume: 0.75 }), // §C3.5 re-pin (was NES03 0.65)
+  'jingle.achievement': sample([`${JIN}/jingles_STEEL03`], { volume: 0.67 }),
+  'jingle.daily': sample([`${JIN}/jingles_PIZZI08`], { volume: 0.75 }), // §C3.5 re-pin (was NES09 0.65)
+  'jingle.arrival': sample([`${JIN}/jingles_SAX04`], { volume: 0.62 }),
+  'jingle.outfit': sample([`${JIN}/jingles_STEEL07`], { volume: 0.62 }),
+  'jingle.short': sample([`${JIN}/jingles_HIT03`], { volume: 0.6 }),
   // V3/G32 §C3.3: context-aware results stingers (framework picks by outcome;
   // 'jingle.results' stays mapped as a legacy alias of the normal stinger).
   'jingle.resultsBest': sample([`${JIN}/jingles_HIT15`], { volume: 0.75 }),
@@ -169,7 +185,7 @@ export const SFX_MAP = Object.freeze({
   // V3/G32 §C3.1 pop family → real impacts (impactSoft_* not committed —
   // impactGeneric_light_* is the same-pack substitute, see header note)
   'catch.good': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.65, haptic: 'light' }),
-  'catch.bad': sample(seq(`${UI}/error`, 4, 5), { volume: 0.5, haptic: 'medium' }),
+  'catch.bad': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.5, rate: 0.85, haptic: 'medium' }), // POLISH-L1: warm uh-oh
 
   // --- bunnyHop ---
   'hop.flap': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.5 }),
@@ -180,13 +196,13 @@ export const SFX_MAP = Object.freeze({
   'mole.bonk': sample(seq(`${IMP}/impactPunch_heavy`, 5, 0), { volume: 0.6, haptic: 'light' }), // §C3.5: 0.8→0.6
   'mole.pop': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.5 }), // V3/G32 §C3.1 pop family
   'mole.whiff': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.3, rate: 1.3 }),
-  'mole.steal': sample(seq(`${UI}/minimize`, 3), { volume: 0.5 }), // V3/G32 sweep: descending UI slide
+  'mole.steal': sample(seq(`${UI}/minimize`, 3), { volume: 0.5, rate: 0.8 }), // V3/G32 sweep: descending UI slide (POLISH-L1: softened)
   'mole.combo': sample(seq(`${UI}/glass`, 6), { volume: 0.6 }),
 
   // --- memoryMatch (V3/G32 §D3.5: real card sounds) ---
   'card.flip': sample(seqN(`${CAS}/card-slide-`, 3), { volume: 0.8 }),
   'card.match': sample(seqN(`${CAS}/card-place-`, 2), { volume: 0.8 }),
-  'card.nomatch': sample(seq(`${UI}/error`, 4), { volume: 0.35 }),
+  'card.nomatch': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.35, rate: 0.95 }), // POLISH-L1: warm uh-oh
 
   // --- basketBounce ---
   'throw.whoosh': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.55, rate: 1.1 }),
@@ -196,34 +212,34 @@ export const SFX_MAP = Object.freeze({
   'basket.swish': sample(seq(`${ITCH}/confirm_style_1`, 3), { volume: 0.7, haptic: 'light' }),
 
   // --- pancakeTower ---
-  'pancake.drop': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5 }),
+  'pancake.drop': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5, rate: 0.8 }), // POLISH-L1: softened swoosh
   'pancake.land': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.7, haptic: 'light' }),
   'pancake.slice': sample(seq(`${UI}/scratch`, 5), { volume: 0.6, rate: 1.3 }),
   'pancake.perfect': sample(seq(`${UI}/glass`, 6), { volume: 0.7, haptic: 'light' }),
   'pancake.topping': sample(seq(`${UI}/glass`, 6), { volume: 0.6 }),
-  'pancake.miss': sample(seq(`${UI}/error`, 4), { volume: 0.4 }),
+  'pancake.miss': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.4, rate: 0.9 }), // POLISH-L1: warm uh-oh
 
   // --- danceParty (real hit samples over the unchanged 100 BPM synth TRACK) ---
   'dance.perfect': sample([`${ITCH}/cursor_style_2`], { volume: 0.6, rate: 1.2, haptic: 'light' }),
   'dance.good': sample([`${ITCH}/cursor_style_2`], { volume: 0.5, rate: 1 }),
   'dance.miss': sample(seq(`${ITCH}/back_style_2`, 3), { volume: 0.35 }),
   'dance.tapEmpty': sample(seq(`${UI}/click`, 5), { volume: 0.25 }), // §C3.1: stays sample
-  'dance.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55 }),
+  'dance.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
   'dance.tierUpAccent': sample([`${JIN}/jingles_HIT00`], { volume: 0.6 }), // V3/G32 §C3.4: HIT00 accent (sfx bus)
-  'dance.fever': sample(seq(`${UI}/maximize`, 4), { volume: 0.55, haptic: 'medium' }),
+  'dance.fever': sample(seq(`${UI}/maximize`, 4), { volume: 0.55, rate: 0.8, haptic: 'medium' }), // POLISH-L1: softened swoosh (§C3.5 0.55 pin kept)
 
   // --- fishingPond ---
   'fish.cast': sample(seq(`${UI}/drop`, 4), { volume: 0.6, rate: 0.8 }),
   'fish.hook': sample([`${UI}/pluck_001`, `${UI}/pluck_002`], { volume: 0.7, haptic: 'light' }),
-  'fish.reelTap': sample([`${UI}/tick_001`, `${UI}/tick_002`, `${UI}/tick_004`], { volume: 0.5 }),
+  'fish.reelTap': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`], { volume: 0.5, rate: 0.75 }), // POLISH-L1: soft low click
   'fish.catch': sample(seq(`${UI}/confirmation`, 4), { volume: 0.7, haptic: 'light' }),
   'fish.bigOne': sample(seq(`${UI}/question`, 4), { volume: 0.53 }), // §B2.5 trim: question set is hot (−10.4 dBFS)
   'fish.boot': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.55 }), // V3/G32 sweep: real boot thunk
-  'fish.escape': sample(seq(`${UI}/minimize`, 9), { volume: 0.5 }),
+  'fish.escape': sample(seq(`${UI}/minimize`, 9), { volume: 0.5, rate: 0.8 }), // POLISH-L1: softened swoosh
 
   // --- bubblePop ---
   'bubble.pop': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.55, haptic: 'light' }), // V3/G32 §C3.1 pop family
-  'bubble.wrong': sample(seq(`${UI}/error`, 4), { volume: 0.4 }),
+  'bubble.wrong': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.4, rate: 1 }), // POLISH-L1: warm uh-oh
   'bubble.spiky': sample(seq(`${UI}/glitch`, 4), { volume: 0.45 }),
   'bubble.newTarget': sample(seq(`${UI}/question`, 4), { volume: 0.53 }),
 
@@ -234,13 +250,13 @@ export const SFX_MAP = Object.freeze({
   // pitched 1.1× so it reads bigger than tierUp's full set.
   'tramp.bounce': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.6, rate: 0.9, haptic: 'light' }),
   'tramp.boost': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.65, rate: 1.1, haptic: 'light' }),
-  'tramp.armed': sample([`${UI}/tick_001`, `${UI}/tick_002`, `${UI}/tick_004`], { volume: 0.4 }),
+  'tramp.armed': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`], { volume: 0.4, rate: 0.75 }), // POLISH-L1: soft low click
   'tramp.trick': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // V3/G32 sweep: sparkle ding
-  'tramp.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55 }),
+  'tramp.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
   'tramp.butt': sample(seq(`${IMP}/impactPunch_medium`, 5, 0), { volume: 0.55, haptic: 'medium' }), // §C3.5: 0.65→0.55
 
   // --- polish (G14) ---
-  'hud.lowTick': sample([`${UIA}/rollover4`], { volume: 0.5 }), // V3/G32 sweep: soft real UI tick
+  'hud.lowTick': sample([`${UI}/bong_001`], { volume: 0.5 }), // POLISH-L1: soft muted bong (was rollover4)
 
   // --- V2/G20: sickness & care (§C3.3/§C3.4) ---
   'health.sneeze': voice('sneeze', { volume: 0.9 }), // V2/G29: real sneeze (windup+achoo+sniffle tail)
@@ -264,7 +280,7 @@ export const SFX_MAP = Object.freeze({
   'quest.claim': sample([`${JIN}/jingles_HIT02`], { volume: 0.7, haptic: 'light' }), // V3/G32 sweep: real triumph
   'sticker.get': sample(seq(`${ITCH}/confirm_style_4`, 3), { volume: 0.7, haptic: 'light' }),
   'album.claim': sample([`${JIN}/jingles_HIT13`], { volume: 0.75, haptic: 'light' }),
-  'photo.shutter': sample([`${UIA}/mouseclick1`], { volume: 0.7, rate: 0.9, haptic: 'medium' }),
+  'photo.shutter': sample([`${UIA}/click1`], { volume: 0.7, rate: 0.85, haptic: 'medium' }), // POLISH-L1: warm shutter clunk (§C3.5 0.7 pin kept)
 
   // --- V2/G24: goobySays pads — ONE real sample, playbackRate-pitched C-D-E-G ---
   'says.pad1': sample([`${ITCH}/cursor_style_4`], { volume: 0.7, rate: 1, haptic: 'light' }), // C5
@@ -279,9 +295,9 @@ export const SFX_MAP = Object.freeze({
   'hopper.gold': sample(seq(`${UI}/glass`, 6), { volume: 0.7, rate: 1.3, haptic: 'light' }),
   'hopper.shield': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.6, haptic: 'light' }),
   'hopper.shieldPop': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'medium' }), // V3/G32 §C3.1 pop family
-  'hopper.warning': sample(seq(`${UI}/error`, 4), { volume: 0.4 }),
+  'hopper.warning': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.4, rate: 1.1 }), // POLISH-L1: warm uh-oh (urgent)
   'hopper.crash': sample(seq(`${IMP}/impactPunch_heavy`, 5, 0), { volume: 0.6, haptic: 'medium' }), // §C3.5: 0.75→0.6
-  'pipe.rotate': sample(seq(`${UI}/scroll`, 5), { volume: 0.5, haptic: 'light' }),
+  'pipe.rotate': sample(seq(`${IMP}/footstep_wood`, 5, 0), { volume: 0.5, rate: 1.35, haptic: 'light' }), // POLISH-L1: wooden clunk (was scroll_*)
   'pipe.connect': sample(seq(`${ITCH}/confirm_style_5`, 3), { volume: 0.7, haptic: 'light' }),
   'pipe.fill': synth('trickle', { volume: 0.4, pitch: 0.8 }), // V2/G29: water fill (no CC0 fit)
   // --- end V2/G25 ---
@@ -299,12 +315,12 @@ export const SFX_MAP = Object.freeze({
   'chop.slice': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.7, rate: 1.25, haptic: 'light' }),
   'chop.combo': sample(seq(`${UI}/glass`, 6), { volume: 0.6, haptic: 'light' }),
   'chop.junk': sample(seq(`${IMP}/footstep_grass`, 5, 0), { volume: 0.65, rate: 0.55, haptic: 'medium' }),
-  'chop.miss': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5 }), // V3/G32 sweep
+  'chop.miss': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5, rate: 0.8 }), // V3/G32 sweep (POLISH-L1: softened)
   'goalie.dive': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.6, rate: 0.7 }),
   'goalie.kick': sample(seq(`${IMP}/impactPunch_medium`, 5, 0), { volume: 0.55 }),
   'goalie.save': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'light' }),
   'goalie.super': sample(seq(`${UI}/maximize`, 4), { volume: 0.7, haptic: 'medium' }),
-  'goalie.goal': sample(seq(`${UI}/minimize`, 3, 7), { volume: 0.55 }), // V3/G32 sweep: crowd deflates
+  'goalie.goal': sample(seq(`${UI}/minimize`, 3, 7), { volume: 0.55, rate: 0.8 }), // V3/G32 sweep: crowd deflates (POLISH-L1: softened)
   // V4/POLISH-K: bunnyCheer synth → real HIT11 triumph stinger (~1 s, unused
   // elsewhere) — the crowd-cheers celebration beat on save streaks/shootout.
   'goalie.cheer': sample([`${JIN}/jingles_HIT11`], { volume: 0.7, haptic: 'light' }),
@@ -324,7 +340,7 @@ export const SFX_MAP = Object.freeze({
   // --- end V2/G29 ---
 
   // --- V2/G28: miniGolf extras (§C1.2 #6) ---
-  'golf.ace': sample([`${JIN}/jingles_NES11`], { volume: 0.6, haptic: 'medium' }), // §C3.5: 0.75→0.6 (NES11 is hot)
+  'golf.ace': sample([`${JIN}/jingles_HIT05`], { volume: 0.73, haptic: 'medium' }), // §C3.5 re-pin: HIT05 −15.3 → 0.73 trim (POLISH-L1, was NES11 0.6)
   'golf.bank': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.4 }),
   'golf.bump': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.5, rate: 1.35, haptic: 'light' }),
   // --- end V2/G28 ---
@@ -334,7 +350,7 @@ export const SFX_MAP = Object.freeze({
   'cake.ovenDing': sample(seq(`${IMP}/impactBell_heavy`, 5, 0), { volume: 0.5 }), // oven release ding (real bell)
   'cake.splat': sample(seq(`${IMP}/footstep_grass`, 5, 0), { volume: 0.65, rate: 0.55, haptic: 'medium' }),
   'cake.serve': sample(seqN(`${CAS}/chips-stack-`, 2), { volume: 0.8, haptic: 'light' }), // accepted serve cash-in
-  'cake.candle': sample([`${UI}/tick_001`, `${UI}/tick_002`, `${UI}/tick_004`], { volume: 0.55 }), // candle dropper tick
+  'cake.candle': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`], { volume: 0.55, rate: 0.75 }), // candle dropper tick (POLISH-L1: soft low click)
   'cake.order': sample(seq(`${UI}/question`, 4), { volume: 0.5 }), // new customer order chime
   // --- end V3/G36 ---
 
@@ -344,7 +360,7 @@ export const SFX_MAP = Object.freeze({
   'racer.boost': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.6, haptic: 'light' }),
   'racer.item': sample(seqN(`${CAS}/card-slide-`, 3), { volume: 0.7, haptic: 'light' }), // item-box roulette
   'racer.shield': sample(seq(`${UI}/glass`, 6), { volume: 0.6 }),
-  'racer.block': sample(seq(`${UI}/minimize`, 3), { volume: 0.55 }),
+  'racer.block': sample(seq(`${UI}/minimize`, 3), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
   'racer.blockHit': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.65, haptic: 'medium' }), // kart bonks a block
   'racer.lap': sample(seq(`${UI}/confirmation`, 4), { volume: 0.6 }),
   'racer.overtake': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }),
@@ -352,8 +368,8 @@ export const SFX_MAP = Object.freeze({
   'hunt.spawn': sample(seq(`${UI}/open`, 4), { volume: 0.3 }), // ghost peeks up
   'hunt.catch': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'light' }), // §C3.1 pop family
   'hunt.chain': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // chain-link ding
-  'hunt.decoy': sample(seq(`${UI}/error`, 4), { volume: 0.45, haptic: 'medium' }), // decoy penalty
-  'hunt.gone': sample(seq(`${UI}/minimize`, 3), { volume: 0.28 }), // missed peek sinks away
+  'hunt.decoy': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.45, rate: 0.8, haptic: 'medium' }), // decoy penalty (POLISH-L1: warm uh-oh, dark)
+  'hunt.gone': sample(seq(`${UI}/minimize`, 3), { volume: 0.28, rate: 0.8 }), // missed peek sinks away (POLISH-L1: softened)
   'hunt.boo': sample(seq(`${UI}/maximize`, 4), { volume: 0.5, rate: 0.8 }),
   'hunt.booBonus': sample(seqN(`${CAS}/chips-stack-`, 2), { volume: 0.8, haptic: 'light' }), // ≥4-catch payout
   'hunt.powerup': sample(seq(`${ITCH}/confirm_style_1`, 3, 4), { volume: 0.7, haptic: 'light' }),
@@ -370,8 +386,8 @@ export const SFX_MAP = Object.freeze({
   'rocket.pickup': sample(seq(`${ITCH}/confirm_style_4`, 3), { volume: 0.8, rate: 1.25, haptic: 'light' }),
   'rocket.rescue': sample(seq(`${UI}/confirmation`, 4), { volume: 0.65, haptic: 'light' }), // pad delivery chime
   'rocket.fuel': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // canister clink
-  'rocket.fuelLow': sample(seq(`${UI}/error`, 4), { volume: 0.4 }), // ≤20 fuel warning
-  'rocket.tow': sample(seq(`${UI}/minimize`, 3), { volume: 0.4 }), // fuel-out power-down → tow
+  'rocket.fuelLow': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.4, rate: 1.05 }), // ≤20 fuel warning (POLISH-L1: warm uh-oh)
+  'rocket.tow': sample(seq(`${UI}/minimize`, 3), { volume: 0.4, rate: 0.8 }), // fuel-out power-down → tow (POLISH-L1: softened)
   'rocket.wind': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.6, rate: 0.85 }),
   'harbor.crate': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.55, haptic: 'light' }), // wooden crate on deck
   'harbor.ring': sample(seq(`${UI}/select`, 8), { volume: 0.5 }), // net ring chime
@@ -389,10 +405,10 @@ export const SFX_MAP = Object.freeze({
   // the SAME real samples as its §D3.5 canonical id (see the UI-INTERACTION
   // SOUND CONTRACT on UI_INTERACTION_SOUNDS below), so a play() call in
   // either spelling fires the identical cue and never warns UNMAPPED ---
-  'ui.tab': sample([`${UIP}/tap-a`, `${UIP}/tap-b`], { volume: 0.7, haptic: 'light' }), // = ui.tabSwitch
-  'ui.confirm': sample([`${UIP}/click-a`], { volume: 0.75, haptic: 'light' }), // = ui.confirmBig (E19 P2 trim)
-  'ui.back': sample(seq(`${UI}/close`, 4), { volume: 0.55 }), // = ui.close (§D3.5: close/back share one cue)
-  'ui.toggle': sample([`${UIA}/switch1`], { volume: 0.8, haptic: 'light' }), // = ui.toggleOn — prefer the on/off pair
+  'ui.tab': sample([`${UIP}/tap-a`, `${UIP}/tap-b`], { volume: 0.7, rate: 0.9, haptic: 'light' }), // = ui.tabSwitch
+  'ui.confirm': sample(seq(`${ITCH}/confirm_style_5`, 3), { volume: 0.9, haptic: 'light' }), // = ui.confirmBig (POLISH-L1 warm CTA)
+  'ui.back': sample(seq(`${ITCH}/back_style_2`, 3), { volume: 0.65 }), // = ui.close (§D3.5: close/back share one cue)
+  'ui.toggle': sample([`${UI}/switch_002`], { volume: 0.8, rate: 1.15, haptic: 'light' }), // = ui.toggleOn — prefer the on/off pair
   'ui.buy': sample(seq(`${UI}/drop`, 4), { volume: 0.6 }), // = coin.spend — buy taps outside economy.js
   'ui.claim': sample([`${JIN}/jingles_HIT02`], { volume: 0.7, haptic: 'light' }), // = quest.claim stinger
   // --- end V3/FIX-B ---

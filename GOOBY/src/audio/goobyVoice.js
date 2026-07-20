@@ -10,15 +10,23 @@
 // wobble), contentSigh/brrr/delightedGasp (idle & weather flavor) — and gives
 // yawn 3 contour variants for the §C10.3 night yawns.
 // Every call randomizes pitch ±10% (§D6) so it never repeats exactly.
+// V4/POLISH-L1 (comfy sweep): VOICE_WARMTH folds a global ~15% pitch-down
+// into jitter(), and squeakSyllable layers a sub-octave sine for body — the
+// same recipes, ids and exports, just warmer and rounder.
 //
 // Recipes receive (ctx, dest, opts) — an AudioContext and the destination bus
 // (audio.js's voice gain). Loop recipes return { stop() }; one-shots return
 // nothing. Pure functions of the audio graph: no DOM/three imports, and no
 // AudioContext is created here (audio.js owns the context + gesture unlock).
 
-/** ±10% random pitch multiplier (§D6). */
+/** V4/POLISH-L1 (comfy sweep): global voice warmth — every jittered pitch is
+ * folded down ~15%, so the whole squeak family sits lower and rounder
+ * (Animal-Crossing-cozy) without touching any recipe contour or contract. */
+const VOICE_WARMTH = 0.85;
+
+/** ±10% random pitch multiplier (§D6), warmed by VOICE_WARMTH (POLISH-L1). */
 function jitter() {
-  return 0.9 + Math.random() * 0.2;
+  return VOICE_WARMTH * (0.9 + Math.random() * 0.2);
 }
 
 /** Shared 1 s white-noise buffer per context (cached on the ctx object). */
@@ -62,6 +70,21 @@ function squeakSyllable(ctx, dest, o = {}) {
   osc.stop(at + dur + 0.02);
   vib.start(at);
   vib.stop(at + dur + 0.02);
+  // V4/POLISH-L1 (comfy sweep): sub-octave body — a quiet sine tracking the
+  // same pitch contour one octave down, on the same envelope at ~40% level,
+  // rounds the squeak out so it reads soft instead of thin.
+  const sub = ctx.createOscillator();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime((o.f0 ?? 620) / 2, at);
+  sub.frequency.exponentialRampToValueAtTime((o.f1 ?? 880) / 2, at + dur * 0.35);
+  sub.frequency.exponentialRampToValueAtTime((o.f2 ?? 700) / 2, at + dur);
+  const subG = ctx.createGain();
+  subG.gain.setValueAtTime(0.0001, at);
+  subG.gain.exponentialRampToValueAtTime(vol * 0.4, at + 0.015);
+  subG.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  sub.connect(subG).connect(dest);
+  sub.start(at);
+  sub.stop(at + dur + 0.02);
 }
 
 /** Poke squeak: single bright syllable, 600–900 Hz band (§D6). */

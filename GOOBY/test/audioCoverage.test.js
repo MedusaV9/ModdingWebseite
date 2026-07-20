@@ -164,11 +164,14 @@ test('§C3.5: per-id volumes are normalized multipliers in (0, 1]', () => {
     if (def.volume == null) continue;
     assert.ok(def.volume > 0 && def.volume <= 1, `${id}: volume ${def.volume} out of range`);
   }
-  // the §C3.5 offender pins (final effective volumes, verbatim)
+  // the §C3.5 offender pins (final effective volumes, verbatim).
+  // V4/POLISH-L1 re-pins: the comfy sweep moved jingle.levelUp/daily to the
+  // warm PIZZI04/PIZZI08 files (−16.3/−16.6 dBFS → −18 dBFS trims 0.82/0.85,
+  // capped at the 0.75 hand intent) and golf.ace to HIT05 (−15.3 → 0.73).
   const pins = {
     'eat.chomp': 0.5, 'crash': 0.6, 'mole.bonk': 0.6, 'photo.shutter': 0.7,
-    'gooby.snore': 0.55, 'hopper.crash': 0.6, 'jingle.levelUp': 0.65,
-    'jingle.daily': 0.65, 'golf.ace': 0.6, 'delivery.drop': 0.6,
+    'gooby.snore': 0.55, 'hopper.crash': 0.6, 'jingle.levelUp': 0.75,
+    'jingle.daily': 0.75, 'golf.ace': 0.73, 'delivery.drop': 0.6,
     'tramp.butt': 0.55, 'dance.fever': 0.55, 'ui.go': 0.6,
   };
   for (const [id, vol] of Object.entries(pins)) {
@@ -245,9 +248,12 @@ test('V3/FIX-B (E19): vocabulary aliases fire the SAME samples as their canonica
   }
 });
 
-test('V3/FIX-B (E19 P2): ui.confirmBig trimmed under the −6 dBFS peak bar', () => {
-  // E19 measured click-a peaks of −5.9 dBFS at volume 0.9 (default sliders) —
-  // 0.75 lands the worst frame ≈ −7.5 dBFS with margin.
-  assert.equal(SFX_MAP['ui.confirmBig'].volume, 0.75);
-  assert.equal(SFX_MAP['ui.confirm'].volume, 0.75);
+test('V3/FIX-B (E19 P2): ui.confirmBig sits under the −6 dBFS peak bar', () => {
+  // E19 measured click-a peaks of −5.9 dBFS at volume 0.9 (default sliders),
+  // so it was trimmed to 0.75. V4/POLISH-L1 moved the CTA to the warm
+  // itch-sfx confirm_style_5 set whose worst committed peak is −1.9 dBFS raw
+  // — at the restored 0.9 hand intent × default sliders (master 0.9×0.64)
+  // the worst frame lands ≈ −8.5 dBFS, ~2.5 dB of margin under the bar.
+  assert.equal(SFX_MAP['ui.confirmBig'].volume, 0.9);
+  assert.equal(SFX_MAP['ui.confirm'].volume, 0.9);
 });
