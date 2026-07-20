@@ -497,18 +497,31 @@ export default {
     this.floats.update(dt);
   },
 
-  /** Camera on the spline (tangent frame, world up) + Gooby 2.2 m ahead at
-   *  the eased offset with a gentle ±0.06 m 0.4 Hz bob (§G6.3). */
+  /** Chase camera (V4/POLISH-B framing) + Gooby 2.2 m ahead at the eased
+   *  offset with a gentle ±0.06 m 0.4 Hz bob (§G6.3). The camera used to sit
+   *  ON the spline looking along the tangent — at 2.2 m in portrait the
+   *  frustum is only ~0.56 m wide vs the ±2.5 m steer window, so Gooby left
+   *  the frame (and filled it when centered). Now it pulls CAMERA_BACK_M
+   *  behind the spline point, rises CAMERA_UP_M, shifts CAMERA_FOLLOW_FRAC
+   *  of the steer offset (gentle parallax without detaching from the path)
+   *  and lookAt()s Gooby's world position — he stays framed at every offset.
+   *  Camera-only change: collisions/pickups still test goobyWorldPos. */
   syncPose(dt) {
     const run = this.run;
     const cam = this.ctx.camera;
-    const { pos, fwd } = run.track.frameAt(run.s);
-    cam.position.set(pos[0], pos[1], pos[2]);
+    const { pos, fwd, right, up } = run.track.frameAt(run.s);
+    const g = goobyWorldPos(run);
+    const fx = run.offset.x * WELT.CAMERA_FOLLOW_FRAC;
+    const fy = run.offset.y * WELT.CAMERA_FOLLOW_FRAC + WELT.CAMERA_UP_M;
+    cam.position.set(
+      pos[0] - fwd[0] * WELT.CAMERA_BACK_M + right[0] * fx + up[0] * fy,
+      pos[1] - fwd[1] * WELT.CAMERA_BACK_M + right[1] * fx + up[1] * fy,
+      pos[2] - fwd[2] * WELT.CAMERA_BACK_M + right[2] * fx + up[2] * fy
+    );
     cam.up.set(0, 1, 0);
-    cam.lookAt(pos[0] + fwd[0], pos[1] + fwd[1], pos[2] + fwd[2]);
+    cam.lookAt(g[0], g[1], g[2]); // un-bobbed anchor — no 0.4 Hz camera nod
 
     const bob = Math.sin(this.elapsed * Math.PI * 2 * WELT.BOB_HZ) * WELT.BOB_AMP_M;
-    const g = goobyWorldPos(run);
     this.gooby.group.position.set(g[0], g[1] + bob, g[2]);
     const gFwd = run.track.tangentAt(goobyArcPos(run));
     this.gooby.group.rotation.y = Math.atan2(gFwd[0], gFwd[2]);

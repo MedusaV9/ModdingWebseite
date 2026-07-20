@@ -366,6 +366,15 @@ test('§G6.4 scoring identity: 28·2 + 6·5 + 3·10 + 10 = 126 = MAX_SCORE', () 
   assert.equal(WELT.MAX_SCORE, 126);
   assert.equal(WELT.SPEED_M_S, 1.6);
   assert.equal(WELT.CAMERA_FOV, 58);
+  // V4/POLISH-B framing consts: syncPose pulls the camera CAMERA_BACK_M
+  // behind the spline, rises CAMERA_UP_M, follows CAMERA_FOLLOW_FRAC of the
+  // steer offset and lookAt()s Gooby (camera-only — collision anchor
+  // goobyWorldPos is untouched, see the pickup tests above).
+  assert.equal(WELT.CAMERA_BACK_M, 2.2);
+  assert.equal(WELT.CAMERA_UP_M, 0.5);
+  assert.equal(WELT.CAMERA_FOLLOW_FRAC, 0.6);
+  assert.ok(WELT.CAMERA_FOLLOW_FRAC > 0 && WELT.CAMERA_FOLLOW_FRAC < 1,
+    'camera follows a FRACTION of the offset — parallax without detaching');
 });
 
 test('run helpers: hudTimeLeft ≈ 110 s at spawn, Gooby leads by 2.2 m, meta shape', () => {
@@ -451,4 +460,8 @@ test('scene-module pins: G68 SCENES export, §G6.6 dispose/context-loss guards',
   assert.match(gameSource, /playContext\?\.\('game:goobyWelt'\)/, '„Splat-Wunderwelt" game context');
   assert.match(gameSource, /import\.meta\.glob\('\.\.\/\.\.\/welt\/splatViewer\.js'\)/,
     'viewer feature-detected, never a static import (§E0.1-11)');
+  // V4/POLISH-B: the chase camera must aim at Gooby's WORLD position (not
+  // just along the spline tangent) so he stays framed at steer extremes.
+  assert.match(gameSource, /cam\.lookAt\(g\[0\], g\[1\], g\[2\]\)/,
+    'syncPose lookAt()s Gooby, not the tangent');
 });

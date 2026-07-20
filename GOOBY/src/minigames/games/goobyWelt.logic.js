@@ -38,6 +38,20 @@ export const WELT = Object.freeze({
   BOB_AMP_M: 0.06,
   BOB_HZ: 0.4,
   CAMERA_FOV: 58,
+  /**
+   * V4/POLISH-B camera framing (consumed render-side by syncPose). The old
+   * pose sat ON the spline: portrait 58° vertical FOV at 2.2 m gives only a
+   * ~0.56 m horizontal half-view while the steer window is ±2.5 m — Gooby
+   * left the frustum (and filled half the frame even when centered). The
+   * camera now flies CAMERA_BACK_M behind the spline point along −forward,
+   * raised CAMERA_UP_M, follows CAMERA_FOLLOW_FRAC of the eased steer
+   * offset, and lookAt()s Gooby's world position so he stays framed across
+   * the whole ±2.5 m / −1.0…+1.8 m offset window. Camera-only: pickups and
+   * collisions keep anchoring on goobyWorldPos, never the camera.
+   */
+  CAMERA_BACK_M: 2.2,
+  CAMERA_UP_M: 0.5,
+  CAMERA_FOLLOW_FRAC: 0.6,
   /** Camera far plane per quality (§G6.6: low = 60 vs 90). */
   CAMERA_FAR_HIGH: 90,
   CAMERA_FAR_LOW: 60,
