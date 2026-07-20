@@ -97,12 +97,12 @@ test('says.pad1–4: one real sample, 4 rising pentatonic rates (§C1.2 #1)', ()
 // ------------------------------------------------------- 2.0 bespoke remaps
 
 test('2.0 feature ids preserve only the V4 exact exemptions; replacements use real files', () => {
-  // V4/G78 (PLAN4 §C-SYS1.9): only identity voice/water/crowd exemptions stay.
+  // V4/G78 (PLAN4 §C-SYS1.9): only identity voice/water exemptions stay
+  // (V4/POLISH-K: the bunnyCheer crowd ids flipped to real samples too).
   /** id → [kind, recipe name] */
   const expected = {
     'health.sneeze': ['voice', 'sneeze'],
     'garden.water': ['synth', 'trickle'],
-    'goalie.cheer': ['synth', 'bunnyCheer'],
     'pipe.fill': ['synth', 'trickle'],
   };
   for (const [id, [kind, name]] of Object.entries(expected)) {
@@ -111,10 +111,15 @@ test('2.0 feature ids preserve only the V4 exact exemptions; replacements use re
     assert.equal(def.kind, kind, `'${id}' kind`);
     assert.equal(def.name, name, `'${id}' recipe`);
   }
-  // V3/G32 + V4/G78: these v2 bespoke-synth ids flipped to REAL files.
+  // V3/G32 + V4/G78 (+ V4/POLISH-K): these bespoke-synth ids flipped to REAL files.
   /** id → a key fragment every mapped sample key must contain */
   const flipped = {
     'vet.cure': 'itch-sfx/confirm_style_6',
+    'goalie.cheer': 'jingles_HIT11',
+    'rocket.pickup': 'itch-sfx/confirm_style_4',
+    'harbor.horn': 'impactBell_heavy',
+    'tramp.bounce': 'footstep_carpet',
+    'tramp.boost': 'maximize_',
     'garden.plant': 'footstep_grass',
     'garden.fertilize': 'footstep_snow',
     'garden.harvest': 'impactGeneric_light',

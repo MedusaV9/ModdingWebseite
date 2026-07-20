@@ -19,8 +19,10 @@
 //
 // V4/G78 sample sweep (PLAN4 §C-SYS1.9): all 46 formerly synthesized
 // non-voice one-shots in the binding replacement table are real-file backed.
-// The exact remaining synth set is pinned by test/audioCoverage.test.js:
-// 9 impossible-to-source one-shots plus the 3 seamless loop recipes. Gooby
+// V4/POLISH-K converted the cheer/horn/pickup/boing family to committed
+// samples too, so the exact remaining synth set pinned by
+// test/audioCoverage.test.js is down to the 4 water one-shots (no committed
+// pack has a water recording) plus the 3 seamless loop recipes. Gooby
 // voice ids remain in goobyVoice.js; danceParty's synth TRACK stays separate
 // under its BPM/PATTERN_SEED contract, but its hit blips are samples now.
 // NOTE (§C3.1 substitution): the pop family is speced to
@@ -226,8 +228,12 @@ export const SFX_MAP = Object.freeze({
   'bubble.newTarget': sample(seq(`${UI}/question`, 4), { volume: 0.53 }),
 
   // --- trampoline ---
-  'tramp.bounce': synth('boing', { volume: 0.6, haptic: 'light' }), // §C3.1 whitelist: boing*
-  'tramp.boost': synth('boingBig', { volume: 0.7, haptic: 'light' }),
+  // V4/POLISH-K: boing/boingBig oscillators → real recordings. The bounce is
+  // the soft mat thud (carpet footsteps pitched down a touch); the boost is
+  // the ascending maximize swoosh family racer.boost already established,
+  // pitched 1.1× so it reads bigger than tierUp's full set.
+  'tramp.bounce': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.6, rate: 0.9, haptic: 'light' }),
+  'tramp.boost': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.65, rate: 1.1, haptic: 'light' }),
   'tramp.armed': sample([`${UI}/tick_001`, `${UI}/tick_002`, `${UI}/tick_004`], { volume: 0.4 }),
   'tramp.trick': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // V3/G32 sweep: sparkle ding
   'tramp.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55 }),
@@ -288,7 +294,7 @@ export const SFX_MAP = Object.freeze({
   'ambience.birdsong': synth('birdsong', { loop: true, volume: 0.8, bus: 'ambience' }),
   // --- end V2/G26 ---
 
-  // --- V2/G27: veggieChop + goalieGooby (§C1.2 #4/#7; only cheer stays synth) ---
+  // --- V2/G27: veggieChop + goalieGooby (§C1.2 #4/#7; all real samples after V4/POLISH-K) ---
   'chop.lob': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.3, rate: 1.2 }),
   'chop.slice': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.7, rate: 1.25, haptic: 'light' }),
   'chop.combo': sample(seq(`${UI}/glass`, 6), { volume: 0.6, haptic: 'light' }),
@@ -299,7 +305,9 @@ export const SFX_MAP = Object.freeze({
   'goalie.save': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'light' }),
   'goalie.super': sample(seq(`${UI}/maximize`, 4), { volume: 0.7, haptic: 'medium' }),
   'goalie.goal': sample(seq(`${UI}/minimize`, 3, 7), { volume: 0.55 }), // V3/G32 sweep: crowd deflates
-  'goalie.cheer': synth('bunnyCheer', { volume: 0.7, haptic: 'light' }), // V2/G29: bunny crowd (no CC0 fit)
+  // V4/POLISH-K: bunnyCheer synth → real HIT11 triumph stinger (~1 s, unused
+  // elsewhere) — the crowd-cheers celebration beat on save streaks/shootout.
+  'goalie.cheer': sample([`${JIN}/jingles_HIT11`], { volume: 0.7, haptic: 'light' }),
   // --- end V2/G27 ---
 
   // --- V2/G29: audio & reactions 2.0 ids (voice set + real object samples) ---
@@ -352,12 +360,14 @@ export const SFX_MAP = Object.freeze({
   'hunt.token': sample([`${UI}/pluck_001`, `${UI}/pluck_002`], { volume: 0.55 }), // token appears
   // --- end V3/G41 ---
 
-  // --- V3/G42: rocketRescue + harborHopper (PLAN3 §C10.1 #3/#4; only the
-  // seamless thrust loop, bunny pickup voice-crowd and ship horn stay synth) ---
+  // --- V3/G42: rocketRescue + harborHopper (PLAN3 §C10.1 #3/#4; after
+  // V4/POLISH-K only the seamless thrust loop stays synth) ---
   'rocket.thrust': synth('rainLoop', { loop: true, volume: 0.45 }), // brown-noise rumble reads as engine thrust (existing loop recipe; sfx bus — not ambience.*)
   'rocket.land.soft': sample(seq(`${UI}/drop`, 4), { volume: 0.55, haptic: 'light' }), // skids touch down
   'rocket.land.hard': sample(seq(`${IMP}/impactMetal_heavy`, 5, 0), { volume: 0.5, haptic: 'medium' }), // hull clang + bounce
-  'rocket.pickup': synth('bunnyCheer', { volume: 0.8, haptic: 'light' }), // bunny squeak aboard (existing recipe)
+  // V4/POLISH-K: bunnyCheer synth → real bright pickup chime (sticker.get's
+  // committed itch set pitched 1.25× so "bunny aboard!" chirps distinctly).
+  'rocket.pickup': sample(seq(`${ITCH}/confirm_style_4`, 3), { volume: 0.8, rate: 1.25, haptic: 'light' }),
   'rocket.rescue': sample(seq(`${UI}/confirmation`, 4), { volume: 0.65, haptic: 'light' }), // pad delivery chime
   'rocket.fuel': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // canister clink
   'rocket.fuelLow': sample(seq(`${UI}/error`, 4), { volume: 0.4 }), // ≤20 fuel warning
@@ -367,7 +377,9 @@ export const SFX_MAP = Object.freeze({
   'harbor.ring': sample(seq(`${UI}/select`, 8), { volume: 0.5 }), // net ring chime
   'harbor.bump': sample(seq(`${IMP}/impactMetal_light`, 5, 0), { volume: 0.6, haptic: 'medium' }), // buoy/pier clonk
   'harbor.boost': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.6, rate: 0.7 }),
-  'harbor.horn': synth('doorbell', { pitch: 0.3, volume: 0.9, haptic: 'medium' }), // Fischkutter-Horn: low two-tone blast (pitched existing recipe)
+  // V4/POLISH-K: pitched-doorbell synth → real recorded heavy bell at half
+  // rate: a deep resonant ship's bell — the authentic Fischkutter signal.
+  'harbor.horn': sample(seq(`${IMP}/impactBell_heavy`, 5, 0), { volume: 0.9, rate: 0.5, haptic: 'medium' }),
   'harbor.hornEmpty': sample(seq(`${UI}/back`, 4), { volume: 0.4 }), // out of charges
   'harbor.gullWarn': sample(seq(`${UI}/question`, 4), { volume: 0.6 }), // honk warning chirp
   'harbor.gullSteal': sample(seq(`${UI}/scratch`, 5), { volume: 0.5 }), // crate snatched

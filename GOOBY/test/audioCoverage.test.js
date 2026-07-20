@@ -1,5 +1,7 @@
 // Audio coverage — V4/G78 (PLAN4 §C-SYS1.9 exact-set contract):
-//   • exactly the 9 frozen non-loop ids may remain synth-backed.
+//   • exactly the 4 frozen non-loop ids may remain synth-backed (V4/POLISH-K
+//     converted cheer/horn/pickup/boing to committed samples; only the water
+//     recipes remain — no committed pack has a water recording).
 //   • exactly the 3 seamless loop ids may remain synth-backed; Gooby's 15
 //     identity-voice ids remain in goobyVoice.js.
 //   • every other id is sample-backed (including all 46 replacement-table ids).
@@ -37,13 +39,8 @@ const oggPath = (key) => {
 
 const FROZEN_NON_LOOP_SYNTH_IDS = Object.freeze([
   'garden.water',
-  'goalie.cheer',
-  'harbor.horn',
   'pipe.fill',
-  'rocket.pickup',
   'toilet.flush',
-  'tramp.boost',
-  'tramp.bounce',
   'wash.splash',
 ].sort());
 
@@ -104,7 +101,7 @@ function collectUsedSfxIds() {
 
 // ----------------------------------------------- §C-SYS1.9 exact-set gates
 
-test('§C-SYS1.9: EXACTLY the 9 frozen non-loop ids remain synthesized', () => {
+test('§C-SYS1.9: EXACTLY the 4 frozen non-loop ids remain synthesized', () => {
   const actual = Object.entries(SFX_MAP)
     .filter(([, def]) => def.kind === 'synth' && !def.loop)
     .map(([id]) => id)
