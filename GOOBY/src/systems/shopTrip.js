@@ -329,6 +329,19 @@ export function initShopTrip({
   if (wired) return null;
   wired = true;
 
+  // V4/AC-3: cozy loading veil over the trip return teleports — LAZY-loaded
+  // like every browser-only dependency of this module (no static ../ui/
+  // imports here; same guarded pattern as the destination screens below).
+  // While unresolved (or on failure) trips fall back to the bare fade.
+  /** @type {{show: Function, progress: Function, hide: Function}|null} */
+  let tripVeil = null;
+  import('../ui/loadingVeil.js').then((mod) => {
+    mod.initLoadingVeil({ sceneManager });
+    tripVeil = mod.veil;
+  }).catch((err) => {
+    console.warn('[shopTrip] loading veil unavailable:', err);
+  });
+
   const machine = createTripMachine((state, event) => {
     if (isDev) console.info(`[shopTrip] ${event} → ${state}`);
   });
@@ -491,9 +504,13 @@ export function initShopTrip({
   function goHome() {
     machine.goHome();
     ui.closeAll();
-    sceneManager
-      .switchTo('home', { room: 'living' })
+    // V4/AC-3: travel curtain over the return teleport — up BEFORE the
+    // switch, revealed only after the home scene's enter() resolved (+ two
+    // settle frames + minShown) so the room never pops in over black.
+    Promise.resolve(tripVeil?.show({ mode: 'trip' }))
+      .then(() => sceneManager.switchTo('home', { room: 'living' }))
       .catch((err) => console.error('[shopTrip] return home failed:', err));
+    tripVeil?.hide();
   }
 
   /** Opens the shop over the parked-at-the-shop backdrop (state 'shop'). */
@@ -564,9 +581,11 @@ export function initShopTrip({
     else {
       machine.cancel();
       ui.closeAll();
-      sceneManager
-        .switchTo('home', { room: 'living' })
+      // V4/AC-3: cancelled trip rides the same travel curtain home
+      Promise.resolve(tripVeil?.show({ mode: 'trip' }))
+        .then(() => sceneManager.switchTo('home', { room: 'living' }))
         .catch((err) => console.error('[shopTrip] exit home failed:', err));
+      tripVeil?.hide();
     }
   }
 

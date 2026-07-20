@@ -83,6 +83,11 @@ import { EN as UI2_EN, DE as UI2_DE } from '../data/strings/v4-ui2.js';
 // pattern as v4-ui2.js until a later sweep spreads it into strings.js. ──
 import { EN as ARC2_EN, DE as ARC2_DE } from '../data/strings/v4-arcade2.js';
 // ── end POLISH-E imports ──
+// ── V4/AC-3 import: the reusable loading veil (cream curtain + iris wipe +
+// anti-pop-in reveal timing for IN and OUT transitions). The POLISH-D card
+// below is ADOPTED into it — its markup stays in this module. ──
+import { initLoadingVeil, veil } from '../ui/loadingVeil.js';
+// ── end V4/AC-3 import ──
 
 const awardMinigame = economy.awardMinigame; // V4/G56: unchanged call sites below
 
@@ -247,6 +252,9 @@ export function clampFloatTextToView(pos, camera, { halfW = 0.8, halfH = 0.3, pa
  *   isActive: () => boolean}}
  */
 export function createMinigameFramework({ sceneManager, store, ui, audio }) {
+  // V4/AC-3: hand the loading veil its sceneManager (idempotent — the veil
+  // times its reveal off the additive afterEnter() hook).
+  initLoadingVeil({ sceneManager });
   /** Result of the last finished round, consumed by the results screen. */
   let lastResult = null;
   /** V4/G76: interval handle of the results Glücksrolle animation. */
@@ -402,7 +410,13 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     if (typeof launchParams?.onExit === 'function') {
       launchParams.onExit();
     } else {
-      sceneManager.switchTo('home').catch((err) => console.error('[minigames] exit failed:', err));
+      // V4/AC-3: cozy OUT veil — curtain up BEFORE the switch, reveal only
+      // after the home scene's enter() resolved (+ settle frames + minShown)
+      // so the room never pops in over a bare black fade.
+      Promise.resolve(veil.show({ mode: 'home' }))
+        .then(() => sceneManager.switchTo('home'))
+        .catch((err) => console.error('[minigames] exit failed:', err));
+      veil.hide();
     }
   }
 
@@ -773,27 +787,27 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       loadingEl.querySelector('.mg-loading-title').textContent = t(meta.titleKey);
       const tipN = 1 + Math.floor(Math.random() * LOADING_TIP_COUNT);
       loadingEl.querySelector('.mg-loading-tip').textContent = txD(`ui2.loading.tip${tipN}`);
-      document.body.appendChild(loadingEl);
-      // Progress: poll the running init's loadPct (0–100). Games without one
-      // keep the intentional indeterminate sweep — never a frozen empty bar.
-      const bar = loadingEl.querySelector('.mg-loading-bar');
-      const fill = loadingEl.querySelector('.mg-loading-bar-fill');
-      const pctEl = loadingEl.querySelector('[data-pct]');
+      // V4/AC-3: ADOPT the card into the loading veil — the cream curtain,
+      // iris wipe and anti-pop-in reveal timing live in ui/loadingVeil.js.
+      // The veil is usually already covering (launch() raised it before the
+      // scene switch); adoption swaps its placeholder for this card in place.
+      veil.show({ mode: 'game', content: loadingEl });
+      // Progress: poll the running init's loadPct (0–100) into the veil's
+      // bar. Games without one keep the intentional indeterminate sweep —
+      // never a frozen empty bar (veil.progress ignores non-finite/≤0).
       loadingPollTimer = setInterval(() => {
-        const pct = Number(game?.loadPct);
-        if (!Number.isFinite(pct) || pct <= 0) return;
-        const clamped = Math.min(100, pct);
-        bar.classList.remove('mg-loading-bar-indet');
-        bar.setAttribute('aria-valuenow', String(Math.round(clamped)));
-        fill.style.width = `${clamped}%`;
-        pctEl.textContent = `${Math.round(clamped)}%`;
+        veil.progress(Number(game?.loadPct));
       }, 100);
     }
+    /** @returns {Promise<void>} resolves once the veil fully revealed (AC-3) */
     function hideLoading() {
       clearInterval(loadingPollTimer);
       loadingPollTimer = 0;
-      loadingEl?.remove();
       loadingEl = null;
+      // V4/AC-3: the veil owns the card now — it reveals only after the
+      // scene's enter() resolved + 2 settle frames + minShown (hard-timeout
+      // capped, so a stuck scene never traps the player behind it).
+      return veil.hide();
     }
     // ── end V4/G56 + POLISH-D loading card ──
 
@@ -1167,12 +1181,17 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
           }
           if (exited) return; // exit() already hid the card
         }
-        hideLoading();
+        const revealed = hideLoading();
         // ── end V4/G56 + POLISH-D async init ──
         document.addEventListener('visibilitychange', onHidden);
         // The countdown runs AFTER enter resolves so the scene fade lifts
         // first and 3-2-1 plays over the visible stage (not behind black).
         (async () => {
+          // V4/AC-3: wait until the veil actually revealed the stage (enter
+          // + 2 settle frames + minShown; hard-timeout capped — never a
+          // deadlock) so the gate/countdown play over the visible scene.
+          await revealed;
+          if (exited) return;
           // POLISH-E: landscape games gate on a portrait viewport BEFORE the
           // countdown — rotate / tap / auto-continue all pass the gate.
           await rotateGate();
@@ -1414,6 +1433,14 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     }
     // ── end V4/G56 launch plumbing ──
     ui.closeAll();
+    // ── V4/AC-3: curtain up BEFORE the scene switch — the cover-art veil
+    // wipes over the current screen (arcade, results, home) so a launch
+    // never black-flashes; the minigame enter() then adopts its POLISH-D
+    // card into the same veil. Awaited: the switch starts behind cover. ──
+    await veil.show({
+      mode: 'game',
+      meta: { cover: coverUrl(meta.id), gradient: fallbackGradient(meta.id), title: t(meta.titleKey) },
+    });
     const deadline = Date.now() + LAUNCH_RETRY_MAX_MS;
     const settled = () =>
       sceneManager.currentId?.() === 'minigame' && sceneManager.isSwitching?.() !== true;
@@ -1428,7 +1455,13 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       if (sceneManager.isSwitching?.() === true) continue; // still fading
       await sceneManager.switchTo('minigame', { gameId: id, params: launchParams });
     }
-    return settled();
+    const landed = settled();
+    // V4/AC-3: a launch that never reached the minigame scene must not
+    // strand the curtain over the app. A SLOW launch (minigame switch still
+    // entering — goobyWelt's splat load can outlast the retry budget) keeps
+    // its veil: the enter-side hideLoading() owns that reveal.
+    if (!landed && sceneManager.currentId?.() !== 'minigame') veil.hide({ minShownMs: 0 });
+    return landed;
   }
 
   // ══════════════════════════════════════════════════════════════ V4/G56 ═══

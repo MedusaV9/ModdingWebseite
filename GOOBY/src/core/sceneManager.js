@@ -32,6 +32,8 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
   /** @type {{id: string, instance: SceneLifecycle, scopedInput: {removeAll: () => void}}|null} */
   let current = null;
   let switching = false;
+  /** V4/AC-3: one-shot listeners fired right after the next enter() resolves. */
+  const afterEnterCbs = [];
 
   // --- fade overlay (150 ms, §E1). Stepped with timers (not CSS transitions /
   // RAF) so headless virtual-time screenshots and throttled tabs always see a
@@ -124,6 +126,16 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
       return switching;
     },
 
+    /**
+     * V4/AC-3 (additive): register a ONE-SHOT callback fired right after the
+     * NEXT scene enter() resolves (before the fade lifts). The loading veil
+     * (ui/loadingVeil.js) times its anti-pop-in reveal off this.
+     * @param {(id: string) => void} cb
+     */
+    afterEnter(cb) {
+      afterEnterCbs.push(cb);
+    },
+
     // ── V2/G23: photo-mode capture (§C12.2) ─────────────────────────────────
     /**
      * Render the current scene once and read the canvas back as a PNG blob.
@@ -196,6 +208,14 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
           console.warn('[sceneManager] asset preload failed:', err);
         }
         await instance.enter?.(params);
+        // V4/AC-3: flush the one-shot afterEnter listeners (loading veil)
+        for (const cb of afterEnterCbs.splice(0)) {
+          try {
+            cb(id);
+          } catch (err) {
+            console.error('[sceneManager] afterEnter callback error:', err);
+          }
+        }
         await fadeTo(0);
       } finally {
         switching = false;
