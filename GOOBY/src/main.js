@@ -378,6 +378,20 @@ async function boot() {
   }
   // ---- end V4/G64 block ----
 
+  // ---- V4/AC-9: interaction juice (single marked block) ----
+  // Press squash + tap pops + coin-fly + springy toasts (ui/juice.js): one
+  // delegated listener set on the #ui root, pooled DOM effects, fully gated
+  // by prefers-reduced-motion. Adds NO sounds to existing call sites; exposes
+  // window.__goobyJuice.flyCoins for later feature-detected wiring. Lazy
+  // import + guard: a broken juice chunk never kills boot.
+  try {
+    const { initJuice } = await import('./ui/juice.js');
+    initJuice({ ui, audio });
+  } catch (err) {
+    console.warn('[boot] V4/AC-9 interaction juice unavailable:', err);
+  }
+  // ---- end V4/AC-9 block ----
+
   // First-gesture audio unlock (iOS requirement §D6).
   const unlock = () => {
     audio.init();

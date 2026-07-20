@@ -29,9 +29,15 @@ const TOAST_FLUSH_STAGGER_MS = 400;
 const EXIT_ANIM_MS = 200; // keep in sync with the POLISH-D block in styles.css
 const EXIT_TIMEOUT_PAD_MS = 100;
 
-/** @returns {boolean} true when the OS asks for reduced motion */
-function prefersReducedMotion() {
-  return typeof window.matchMedia === 'function'
+/**
+ * @returns {boolean} true when the OS asks for reduced motion
+ * V4/AC-9: exported — ui/juice.js reuses THIS predicate for every effect
+ * gate instead of duplicating it; the typeof-window guard keeps the module
+ * importable under node:test.
+ */
+export function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
@@ -96,7 +102,10 @@ export function createUi() {
    */
   function spawnToast(text, options) {
     const el = document.createElement('div');
-    el.className = 'toast';
+    // V4/AC-9: .juice-toast opts into the springy enter/exit pair injected by
+    // ui/juice.js (inert until initJuice runs — AC-1's toast-in then applies).
+    // Queue/hold/flush/dedupe logic below is UNCHANGED.
+    el.className = 'toast juice-toast';
     el.textContent = text;
     root.appendChild(el);
     liveToasts.add(el);
