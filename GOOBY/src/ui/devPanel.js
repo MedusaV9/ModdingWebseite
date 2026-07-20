@@ -489,7 +489,7 @@ export function mountDevPanel(el, deps) {
           <div class="g33-dev-line">
             <button class="btn btn-ghost g33-dev-btn" data-act="saveExport">${tx('dev.save.export')}</button>
             <button class="btn btn-ghost g33-dev-btn" data-act="saveImport">${tx('dev.save.import')}</button>
-            <button class="btn g33-dev-btn" style="background:#e0655f;border-bottom-color:#b84943" data-act="saveReset">
+            <button class="btn g33-dev-btn" style="background:var(--danger);border-bottom-color:#b84943" data-act="saveReset">
               ${resetStep === 0 ? tx('dev.save.reset') : resetStep === 1 ? t('settings.reset.confirm1') : t('settings.reset.confirm2')}
             </button>
           </div>

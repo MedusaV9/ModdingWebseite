@@ -19,7 +19,7 @@ const ACH_CSS = `
 .g12-ach-title{flex:1;min-width:0;margin:0;font-size:clamp(1.0625rem,6vw,1.875rem);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .g12-ach-count{flex:none;background:var(--white);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:var(--shadow-soft);}
 .g12-ach-list{width:100%;max-width:27.5rem;display:flex;flex-direction:column;gap:0.5rem;padding-bottom:1.125rem;flex:none;}
-.g12-ach-tile{display:flex;align-items:center;gap:0.75rem;background:var(--white);border-radius:1.125rem;box-shadow:var(--shadow-soft);padding:0.625rem 0.875rem;}
+.g12-ach-tile{display:flex;align-items:center;gap:0.75rem;background:var(--white);border-radius:var(--btn-radius);box-shadow:var(--shadow-soft);padding:0.625rem 0.875rem;}
 .g12-ach-tile.g12-locked{opacity:.92;}
 .g12-ach-medal{flex:none;width:2.875rem;height:2.875rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(74,59,54,.08);color:rgba(74,59,54,.35);}
 .g12-ach-tile.g12-done .g12-ach-medal{background:var(--yellow);color:#fff;}

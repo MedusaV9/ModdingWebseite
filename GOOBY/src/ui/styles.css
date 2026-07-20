@@ -37,6 +37,49 @@
   --ink-faint: rgba(74, 59, 54, 0.55);
   --track-soft: rgba(74, 59, 54, 0.1);
   --shadow-soft: 0 6px 24px rgba(74, 59, 54, 0.14);
+  /* POLISH-F consistency tokens: the remaining de-facto repeated values.
+     --gold is the modifier/coin gold accent (was 8+ hardcoded copies),
+     --danger the destructive-action red (settings reset, dev save-reset),
+     --frost the frosted white chip/pill surface floating over the 3D scene
+     (drifted 0.88–0.96 across HUD pills, station cards, transport buttons),
+     --veil the modal scrim behind sheets/panels. */
+  --gold: #ffd34d;
+  --danger: #e0655f;
+  --frost: rgba(255, 255, 255, 0.92);
+  --veil: rgba(74, 59, 54, 0.35);
+  /* POLISH-F z-index ladder — the documented stacking order for TOP-LEVEL
+     layers (children of #ui / document.body). Values keep the audited
+     pre-POLISH-F order; offsets (+5 …) are documented at their use sites.
+     Component-LOCAL stacking inside a .screen/.panel/card stacking context
+     (ribbons, lock overlays: z 2–5) intentionally stays literal.
+       --z-hud        40    home + in-room HUD chrome (room-nav dots +5)
+       --z-mg-hud     50    minigame framework HUD (pause/score pills)
+       --z-float      60    floating chips/overlays (sleep chip, countdown)
+       --z-media      80    photo-mode layer (radio now-chip +5)
+       --z-screen    100    full screens (§E6)
+       --z-panel     200    sheet backdrop + bottom sheets
+       --z-onboarding 300   tutorial overlay
+       --z-toast     500    toasts (radio local toast +50)
+       --z-debug     600    dev/FPS overlay (XP floaters +20)
+       --z-drag      900    care-mode drag layer: +1 floaters, ghost +50,
+                            soap sprite +60, pet-debug chip +90
+       --z-system   9000    rotate gate; teleport veil = --z-loading - 2;
+                            the sceneManager fade sits at 9999 (JS, body)
+       --z-loading 10000    async-init loading card (above the scene fade)
+       --z-recap   10010    recap cinematic — topmost */
+  --z-hud: 40;
+  --z-mg-hud: 50;
+  --z-float: 60;
+  --z-media: 80;
+  --z-screen: 100;
+  --z-panel: 200;
+  --z-onboarding: 300;
+  --z-toast: 500;
+  --z-debug: 600;
+  --z-drag: 900;
+  --z-system: 9000;
+  --z-loading: 10000;
+  --z-recap: 10010;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -173,18 +216,18 @@
   /* V3/G33 (§C1.4): full-bleed backdrop, content clears the insets —
      padding-bottom: max(16px, calc(var(--safe-bottom) + 4px)) rule shape. */
   padding: max(1rem, calc(var(--safe-top) + 0.25rem)) max(1rem, var(--safe-right)) max(1rem, calc(var(--safe-bottom) + 0.25rem)) max(1rem, var(--safe-left));
-  z-index: 100;
+  z-index: var(--z-screen);
 }
 
 .panel-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: auto;
-  background: rgba(74, 59, 54, 0.35);
+  background: var(--veil);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 200;
+  z-index: var(--z-panel);
 }
 /* V3/G47 (§C11.2): bottom sheets get the same button_square_border frame on
    the top + side edges (the bottom edge runs off-screen); padding compensated
@@ -222,7 +265,7 @@
   border-radius: 999px;
   box-shadow: var(--shadow-soft);
   pointer-events: none;
-  z-index: 500;
+  z-index: var(--z-toast);
   animation: toast-in 180ms ease-out;
   max-width: 86vw;
   text-align: center;
@@ -272,7 +315,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 50;
+  z-index: var(--z-mg-hud);
 }
 .mg-hud .mg-top {
   position: absolute;
@@ -289,7 +332,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--frost);
   border-radius: 999px;
   padding: 0.625rem 1.125rem;
   font-size: 1.125rem;
@@ -333,7 +376,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: auto; /* swallow taps during countdown */
-  z-index: 60;
+  z-index: var(--z-float);
 }
 .mg-countdown .mg-count {
   font-size: 7.5rem;
@@ -412,7 +455,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--frost);
   border-radius: 999px;
   padding: 0.375rem 0.625rem;
   box-shadow: var(--shadow-soft);
@@ -421,7 +464,7 @@
   width: 3.375rem;
   height: 0.625rem;
   border-radius: 999px;
-  background: rgba(74, 59, 54, 0.12);
+  background: var(--track-soft);
   overflow: hidden;
 }
 .stat-pill .stat-fill {
@@ -452,7 +495,7 @@
   align-items: center;
   gap: 0.5rem;
   background: rgba(38, 42, 66, 0.88);
-  color: #fff;
+  color: var(--white);
   font-size: 1rem;
   font-weight: 800;
   border-radius: 999px;
@@ -461,7 +504,7 @@
   box-shadow: var(--shadow-soft);
   pointer-events: auto;
   cursor: pointer;
-  z-index: 60;
+  z-index: var(--z-float);
   animation: toast-in 180ms ease-out;
 }
 .sleep-chip .sleep-chip-zzz {
@@ -581,7 +624,7 @@
   justify-content: center;
 }
 .settings-danger .btn {
-  background: #e0655f;
+  background: var(--danger);
   /* V3/G47 (§D4): red state-accent frame for the destructive action. The red
      pack ships no _flat rectangle, so pressed keeps the red frame (translate
      only via the base .btn:active rule). */
@@ -698,12 +741,16 @@
   display: flex;
   gap: 0.375rem;
   flex: none;
+  /* POLISH-F: 6 category labels never fit one row on phone widths (EN
+     "Furniture"/"Outfits" broke MID-WORD even at 390 px @ 100 %) — the 30 %
+     flex basis below wraps them into a steady 2×3 grid at every size. */
+  flex-wrap: wrap;
 }
 .shop-tab {
   min-width: 0; /* F3: tabs shrink evenly, labels wrap instead of clipping */
 }
 .shop-tab {
-  flex: 1;
+  flex: 1 1 30%;
   border: none;
   min-height: max(44px, 2.875rem);
   padding: 0.375rem 0.25rem;
@@ -811,7 +858,7 @@
   align-items: center;
   gap: 0.5rem 0.625rem;
   background: var(--white);
-  border-radius: 1.125rem;
+  border-radius: var(--btn-radius);
   box-shadow: var(--shadow-soft);
   padding: 0.625rem 0.75rem;
   margin-bottom: 0.25rem;
@@ -1084,7 +1131,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 300;
+  z-index: var(--z-onboarding);
 }
 .g14-ob.g14-ob-hidden {
   display: none;
@@ -1423,9 +1470,9 @@
   position: relative;
   width: 100%;
   height: 12.5rem;
-  border-radius: 1.25rem;
+  border-radius: var(--card-radius);
   overflow: hidden;
-  background: linear-gradient(#dff3f0, #fff6ec);
+  background: linear-gradient(#dff3f0, var(--bg-cream));
   box-shadow: var(--shadow-soft);
   margin: 0.25rem 0 0.75rem;
 }
@@ -1438,7 +1485,7 @@
   position: absolute;
   top: 0.625rem;
   left: 0.75rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--frost);
   border-radius: 999px;
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
@@ -1491,7 +1538,7 @@
   margin: 0.25rem 0 0.625rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
 }
 .g19-price {
   margin: 0.125rem 0 0.625rem;
@@ -1575,7 +1622,7 @@
 .g19-sub {
   font-size: 0.75rem;
   font-weight: 600;
-  color: rgba(74, 59, 54, 0.6);
+  color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1585,7 +1632,7 @@
   font-size: 0.8125rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: rgba(74, 59, 54, 0.7);
+  color: var(--ink-soft);
 }
 /* compact in-row buttons — ≥44px targets (§D5/F3). V2 fix (E16): they share
    the .g19-actions line equally and can never wrap under the next row. */
@@ -1619,12 +1666,12 @@
   min-height: max(44px, 2.75rem); /* §D5 touch target */
   min-width: max(44px, 2.75rem);
   border: none;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--frost);
   border-radius: 999px;
   padding: 0.5rem 0.75rem;
   box-shadow: var(--shadow-soft);
   cursor: pointer;
-  z-index: 40;
+  z-index: var(--z-hud);
   font-family: inherit;
 }
 .g19-chip:active {
@@ -1637,7 +1684,7 @@
 .g19-chip-arrow {
   font-size: 0.875rem;
   font-weight: 800;
-  color: rgba(74, 59, 54, 0.5);
+  color: var(--ink-faint);
 }
 .g19-chip-next {
   opacity: 0.75;
@@ -1915,7 +1962,7 @@
   position: absolute;
   top: max(0.5rem, var(--safe-top));
   left: max(0.5rem, var(--safe-left));
-  z-index: 600;
+  z-index: var(--z-debug);
   pointer-events: none;
   background: rgba(20, 16, 14, 0.78);
   color: #aef7c1;
@@ -1941,7 +1988,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-  z-index: 40;
+  z-index: var(--z-hud);
   pointer-events: none;
 }
 .g36-ticket {
@@ -1990,7 +2037,7 @@
   justify-content: center;
   /* G33 §C1.2 min() compress: tight gaps on 320 px × 130 % */
   gap: min(0.3125rem, 1vw);
-  z-index: 40;
+  z-index: var(--z-hud);
   pointer-events: none;
 }
 .g36-group {
@@ -2098,8 +2145,8 @@
   gap: 0.5rem;
 }
 .g41-pill {
-  background: rgba(255, 255, 255, 0.88);
-  color: #4a3b36;
+  background: var(--frost);
+  color: var(--brown);
   font-weight: 800;
   font-size: 0.8125rem;
   line-height: 1;
@@ -2135,7 +2182,7 @@
   border-radius: 1rem;
   font-size: 1.375rem;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--frost);
   box-shadow: var(--shadow-soft);
   cursor: pointer;
 }
@@ -2155,7 +2202,7 @@
 }
 .g41-hunt-hud .g41-pill {
   background: rgba(42, 30, 66, 0.78);
-  color: #fff6ec;
+  color: var(--bg-cream);
 }
 /* ---------- end V3/G41 ---------- */
 
@@ -2365,7 +2412,7 @@
 
 .g52-radio-head p {
   margin: 0.1875rem 0 0;
-  color: rgba(74, 59, 54, 0.68);
+  color: var(--ink-soft);
   font-size: 0.75rem;
   line-height: 1.2;
 }
@@ -2391,13 +2438,13 @@
   min-width: 0;
   background:
     radial-gradient(circle at 90% 12%, rgba(255, 209, 102, 0.45), transparent 42%),
-    linear-gradient(135deg, #fff, #fff1f7);
+    linear-gradient(135deg, var(--white), #fff1f7);
 }
 
 .g52-now-card > img {
   width: 5rem;
   height: 5rem;
-  border-radius: 0.875rem;
+  border-radius: var(--radius-row);
   object-fit: cover;
   box-shadow: 0 5px 16px rgba(74, 59, 54, 0.18);
 }
@@ -2429,7 +2476,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: rgba(74, 59, 54, 0.68);
+  color: var(--ink-soft);
   font-size: 0.6875rem;
 }
 
@@ -2446,7 +2493,7 @@
   height: max(44px, 3rem);
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--frost);
   color: var(--brown);
   font: 900 1.125rem/1 system-ui, sans-serif;
   box-shadow: var(--shadow-soft);
@@ -2478,7 +2525,7 @@
   font-weight: 900;
   letter-spacing: 0.05rem;
   text-transform: uppercase;
-  color: rgba(74, 59, 54, 0.7);
+  color: var(--ink-soft);
 }
 
 .g52-stations {
@@ -2508,7 +2555,7 @@
   padding: 0.375rem;
   border: 0.1875rem solid transparent;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--frost);
   color: var(--brown);
   box-shadow: 0 4px 14px rgba(74, 59, 54, 0.11);
   font-family: inherit;
@@ -2545,7 +2592,7 @@
 }
 
 .g52-station > small {
-  color: rgba(74, 59, 54, 0.68);
+  color: var(--ink-soft);
   font-size: 0.5625rem;
   font-weight: 800;
 }
@@ -2634,7 +2681,7 @@
 }
 
 .g52-track-settings-link small {
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
   font-size: 0.6875rem;
 }
 
@@ -2661,9 +2708,9 @@
   gap: 0.375rem 0.5rem;
   min-width: 0;
   padding: 0.5rem;
-  border: 1px solid rgba(74, 59, 54, 0.1);
-  border-radius: 0.875rem;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--track-soft);
+  border-radius: var(--radius-row);
+  background: var(--frost);
   box-shadow: 0 3px 10px rgba(74, 59, 54, 0.08);
 }
 
@@ -2701,7 +2748,7 @@
 }
 
 .g52-track-copy small {
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
   font-size: 0.625rem;
 }
 
@@ -2754,7 +2801,7 @@
   position: fixed;
   left: 50%;
   bottom: max(5rem, calc(var(--safe-bottom) + 4.25rem));
-  z-index: 550;
+  z-index: calc(var(--z-toast) + 50); /* above the shared .toast */
   max-width: calc(100vw - max(2rem, calc(var(--safe-left) + var(--safe-right))));
   padding: 0.625rem 1rem;
   border-radius: 999px;
@@ -2773,7 +2820,7 @@
   position: fixed;
   left: 50%;
   bottom: max(12rem, calc(var(--safe-bottom) + 11.5rem));
-  z-index: 85;
+  z-index: calc(var(--z-media) + 5); /* above the photo-mode layer */
   width: min(18rem, calc(100vw - max(1rem, calc(var(--safe-left) + var(--safe-right)))));
   min-height: 3.5rem;
   display: grid;
@@ -2783,7 +2830,7 @@
   padding: 0.5rem 0.625rem;
   border: 1px solid rgba(74, 59, 54, 0.12);
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--frost);
   color: var(--brown);
   font-family: inherit;
   text-align: left;
@@ -2825,7 +2872,7 @@
 }
 
 .g52-chip-copy small {
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
   font-size: 0.625rem;
 }
 
@@ -2962,7 +3009,7 @@
 .g58-subline {
   font-size: 0.71875rem;
   font-weight: 600;
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
 }
 
 .g58-gyro-row {
@@ -2973,7 +3020,7 @@
   margin: 0.25rem 0.25rem 0;
   font-size: 0.71875rem;
   font-weight: 600;
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
 }
 
 /* ---- codes subscreen (§C-SYS5.1/5.3) ---- */
@@ -3027,7 +3074,7 @@
 .g58-codes-empty {
   margin: 0.25rem;
   font-size: 0.8125rem;
-  color: rgba(74, 59, 54, 0.62);
+  color: var(--ink-soft);
 }
 
 .g58-codes-row {
@@ -3126,7 +3173,7 @@
 
 .g58-dev-secret {
   font: 600 0.6875rem/1 ui-monospace, 'Cascadia Mono', Menlo, monospace;
-  color: rgba(74, 59, 54, 0.6);
+  color: var(--ink-soft);
   background: rgba(74, 59, 54, 0.07);
   padding: 0.125rem 0.3125rem;
   border-radius: 0.375rem;
@@ -3198,13 +3245,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-loading);
   pointer-events: none;
 }
 
 .mg-loading-card {
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 1.25rem;
+  background: var(--frost);
+  border-radius: var(--card-radius);
   box-shadow: var(--shadow-soft);
   padding: 1.25rem 1.75rem;
   text-align: center;
@@ -3279,7 +3326,7 @@
 }
 
 .g68-cover-fallback {
-  color: #fff;
+  color: var(--white);
   opacity: 0.92;
   filter: drop-shadow(0 2px 4px rgba(74, 59, 54, 0.28));
 }
@@ -3308,7 +3355,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
-  color: #fff;
+  color: var(--white);
   font-size: 0.75rem;
   font-weight: 800;
   backdrop-filter: blur(1px);
@@ -3333,7 +3380,7 @@
   padding: 0.1875rem 0.4375rem;
   border-radius: 999px;
   background: linear-gradient(120deg, #f7b84b, #e8b23a);
-  color: #fff;
+  color: var(--white);
   font-size: 0.625rem;
   font-weight: 900;
   line-height: 1.2;
@@ -3358,7 +3405,7 @@
 
 .g68-modified,
 .g68-pre-banner {
-  --modifier-color: #ffd34d;
+  --modifier-color: var(--gold);
 
   animation: g68pulse 2s ease infinite;
 }
@@ -3387,7 +3434,7 @@
 }
 
 .g68-mod-plays {
-  background: var(--modifier-color, #ffd34d);
+  background: var(--modifier-color, var(--gold));
   color: var(--brown);
   border-radius: 999px;
   padding: 0.1875rem 0.4375rem;
@@ -3399,7 +3446,7 @@
 
 .g68-mod-count {
   background: rgba(74, 59, 54, 0.7);
-  color: #fff;
+  color: var(--white);
   border-radius: 999px;
   padding: 0.0625rem 0.375rem;
   font-size: 0.5625rem;
@@ -3418,8 +3465,8 @@
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 999px;
-  background: var(--modifier-color, #ffd34d);
-  color: #fff;
+  background: var(--modifier-color, var(--gold));
+  color: var(--white);
   box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.2);
   pointer-events: none;
 }
@@ -3457,7 +3504,7 @@
   position: relative;
   width: min(86vw, 22rem);
   aspect-ratio: 4 / 3;
-  border-radius: 1.25rem;
+  border-radius: var(--card-radius);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
   flex: none;
@@ -3549,7 +3596,7 @@
 
 .g68-pill-on {
   background: var(--teal);
-  color: #fff;
+  color: var(--white);
   box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.14);
 }
 
@@ -3617,8 +3664,8 @@
   width: 2rem;
   height: 2rem;
   border-radius: 999px;
-  background: var(--modifier-color, #ffd34d);
-  color: #fff;
+  background: var(--modifier-color, var(--gold));
+  color: var(--white);
 }
 
 .g68-banner-icon b {
@@ -3664,7 +3711,7 @@
 .g68-banner-plays {
   font-size: 0.6875rem;
   font-weight: 900;
-  background: var(--modifier-color, #ffd34d);
+  background: var(--modifier-color, var(--gold));
   color: var(--brown);
   border-radius: 999px;
   padding: 0.125rem 0.5rem;
@@ -3719,7 +3766,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 40;
+  z-index: var(--z-hud);
   opacity: 0;
   background:
     radial-gradient(ellipse at center, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0.9) 100%),
@@ -3744,7 +3791,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .g64-root {
   position: fixed;
   inset: 0;
-  z-index: 10010;
+  z-index: var(--z-recap);
   pointer-events: auto; /* input limited to the overlay (§C-SYS2.1) */
   overflow: hidden;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -3791,7 +3838,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .g64-title {
   font-size: clamp(2.25rem, 13vw, 4.5rem);
   font-weight: 900;
-  color: #fff;
+  color: var(--white);
   text-shadow: 0 4px 22px rgba(40, 20, 60, 0.45), 0 2px 4px rgba(40, 20, 60, 0.5);
   letter-spacing: 0.0313rem;
   animation: g64intro 900ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
@@ -3827,7 +3874,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   font-size: clamp(1.375rem, 7vw, 2.5rem);
   font-weight: 900;
   line-height: 1.15;
-  color: #fff;
+  color: var(--white);
   text-shadow: 0 4px 18px rgba(40, 20, 60, 0.5), 0 2px 3px rgba(40, 20, 60, 0.55);
   font-variant-numeric: tabular-nums;
   animation: g64pop 1200ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
@@ -3855,7 +3902,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   padding: 0.625rem 0.875rem;
   font-size: 0.8125rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--white);
   text-shadow: 0 1px 6px rgba(40, 20, 60, 0.6);
   opacity: 0;
   pointer-events: none;
@@ -3879,8 +3926,8 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   flex-direction: column;
   align-items: center;
   gap: 0.625rem;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 1.375rem;
+  background: var(--frost);
+  border-radius: var(--card-radius);
   box-shadow: 0 12px 40px rgba(40, 20, 60, 0.35);
   padding: 1.25rem 1rem 1.125rem;
   text-align: center;
@@ -3893,7 +3940,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 .g64-ring { position: relative; width: 4.5rem; height: 4.5rem; }
-.g64-ring-bg { fill: #fff; stroke: rgba(74, 59, 54, 0.12); stroke-width: 6; }
+.g64-ring-bg { fill: var(--white); stroke: var(--track-soft); stroke-width: 6; }
 .g64-ring-fg {
   fill: none;
   stroke: var(--teal);
@@ -3953,7 +4000,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .g64-white {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: var(--white);
   pointer-events: none;
 }
 
@@ -4144,7 +4191,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   min-height: 0;
   padding: 0;
   border: none;
-  border-radius: 0.875rem;
+  border-radius: var(--radius-row);
   background: var(--g62-face, rgba(255, 246, 236, 0.96));
   box-shadow: 0 3px 0 rgba(74, 59, 54, 0.4), var(--shadow-soft);
   pointer-events: auto;
@@ -4257,7 +4304,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 .g76-hud-mod {
-  --modifier-color: #ffd34d;
+  --modifier-color: var(--gold);
 
   pointer-events: auto;
   display: inline-flex;
@@ -4267,7 +4314,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   border: 0;
   border-radius: 999px;
   padding: 0.3125rem 0.75rem;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--frost);
   color: var(--brown);
   font: 800 0.6875rem/1 system-ui, sans-serif;
   cursor: pointer;
@@ -4315,7 +4362,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 
 /* arcade nav badge dot (§C-SYS4.6 „the arcade nav badge dots") */
 .g76-dot {
-  --modifier-color: #ffd34d;
+  --modifier-color: var(--gold);
 
   position: absolute;
   top: -0.1875rem;
@@ -4342,7 +4389,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 
 /* results breakdown rows: type-tinted dot before the „{name} aktiv" chip */
 .g76-mod-row {
-  --modifier-color: #ffd34d;
+  --modifier-color: var(--gold);
 }
 
 .g76-mod-row > span:first-child::before {
@@ -4454,7 +4501,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   min-width: 0;
   margin: 0;
   padding: 0.5625rem 0.125rem;
-  border-bottom: 0.0625rem solid rgba(74, 59, 54, 0.1);
+  border-bottom: 0.0625rem solid var(--track-soft);
   color: var(--brown);
   font-size: 0.75rem;
   line-height: 1.45;
@@ -4529,7 +4576,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   }
 
   to {
-    background-color: rgba(74, 59, 54, 0.35);
+    background-color: var(--veil);
   }
 }
 
@@ -4540,7 +4587,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 
 @keyframes polishd-backdrop-out {
   from {
-    background-color: rgba(74, 59, 54, 0.35);
+    background-color: var(--veil);
   }
 
   to {
@@ -4583,7 +4630,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   width: min(20rem, 86vw);
   padding: 0;
   overflow: hidden;
-  border-radius: 1.25rem;
+  border-radius: var(--card-radius);
   animation: polishd-loading-in 220ms ease-out;
 }
 
@@ -4670,7 +4717,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   height: 0.625rem;
   margin-top: 0.625rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--teal) 18%, #fff6ec);
+  background: color-mix(in srgb, var(--teal) 18%, var(--bg-cream));
   overflow: hidden;
 }
 
@@ -4749,7 +4796,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   opacity: 0;
   transition: opacity 450ms ease;
   pointer-events: none;
-  z-index: 9998;
+  z-index: calc(var(--z-loading) - 2); /* under the loading card AND the 9999 scene fade */
 }
 
 .mg-teleport-veil-on {
@@ -4764,14 +4811,14 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   align-items: center;
   justify-content: center;
   background: rgba(74, 59, 54, 0.72);
-  z-index: 9000;
+  z-index: var(--z-system);
   cursor: pointer;
   pointer-events: auto;
 }
 
 .mg-rotate-card {
   background: rgba(255, 251, 244, 0.97);
-  border-radius: 1.25rem;
+  border-radius: var(--card-radius);
   box-shadow: var(--shadow-soft);
   padding: 1.5rem 2rem;
   text-align: center;

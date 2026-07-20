@@ -20,7 +20,7 @@ import audio from '../audio/audio.js'; // V3/FIX-D (E19): arrow/dot tap cues
 const NAV_CSS = `
 .room-nav{position:absolute;inset:0;pointer-events:none;font-family:system-ui,sans-serif;}
 .rn-arrow{pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);width:max(44px, 3rem);height:max(44px, 3.75rem);
-  border:none;border-radius:1rem;background:rgba(255,255,255,.82);color:#4A3B36;font-size:1.5rem;font-weight:800;
+  border:none;border-radius:1rem;background:rgba(255,255,255,.82);color:var(--brown);font-size:1.5rem;font-weight:800;
   box-shadow:0 3px 10px rgba(74,59,54,.16);border-bottom:0.25rem solid rgba(235,217,200,.9);cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
 .rn-arrow:active{transform:translateY(-50%) scale(.94);}
@@ -32,7 +32,7 @@ const NAV_CSS = `
   background:rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 8px rgba(74,59,54,.14);
   /* F6 (RE3): above the HUD (z 40) so the g5-hud-btns row can't shave the top
      of the dot halos to <44px; the 54px buttons keep ≥48px effective (§D5). */
-  z-index:45;}
+  z-index:calc(var(--z-hud) + 5);}
 .rn-dot{position:relative;width:0.75rem;height:0.75rem;border-radius:50%;border:none;padding:0;background:transparent;cursor:pointer;}
 /* F3 (§D5 44px targets): 32px dot pitch leaves room for tangent, non-overlapping
    44x44 invisible hit areas per dot (12px dot + 16px halo each side). */
@@ -42,7 +42,7 @@ const NAV_CSS = `
    shrinking their effective targets to ~38px). */
 .rn-dot::before{content:'';position:absolute;inset:0;border-radius:50%;background:#E3D3C2;
   transition:background .2s,transform .2s;}
-.rn-dot.on::before{background:#FF7BA9;transform:scale(1.25);}
+.rn-dot.on::before{background:var(--pink);transform:scale(1.25);}
 /* V2/G19 (§B6): padlocked garden dot — lock glyph riding the dot, greyed */
 .rn-dot.rn-locked::before{background:#D5CBBE;}
 .rn-lock{position:absolute;left:50%;top:50%;transform:translate(-50%,-54%);

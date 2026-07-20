@@ -38,7 +38,7 @@ const STAT_COLORS = {
 // 2rem))`; the 4 stat pills WRAP 2×2 below ~4.5rem/pill instead of clipping
 // (§C1.2 — worst case 320px × 130 %).
 const HUD_CSS = `
-.g5-hud{position:absolute;inset:0;pointer-events:none;z-index:40;}
+.g5-hud{position:absolute;inset:0;pointer-events:none;z-index:var(--z-hud);}
 .g5-hud.g5-hud-hidden{display:none;}
 .g5-hud-top{position:absolute;top:max(0.625rem, var(--safe-top));left:max(0.625rem, var(--safe-left));right:max(0.625rem, var(--safe-right));display:flex;flex-direction:column;gap:0.5rem;}
 .g5-hud-row{display:flex;gap:0.375rem;justify-content:space-between;align-items:center;flex-wrap:wrap;}
@@ -47,21 +47,21 @@ const HUD_CSS = `
 .g5-hud .stat-track{flex:1;min-width:1.5rem;width:auto;display:block;}
 .g5-hud .stat-fill{display:block;}
 .g5-hud-meta{display:flex;gap:0.5rem;align-items:center;justify-content:space-between;}
-.g5-coins{display:inline-flex;align-items:center;gap:0.375rem;background:rgba(255,255,255,.92);border-radius:999px;padding:0.5rem 0.875rem;font-size:1.0625rem;font-weight:800;color:var(--brown);box-shadow:var(--shadow-soft);}
+.g5-coins{display:inline-flex;align-items:center;gap:0.375rem;background:var(--frost);border-radius:999px;padding:0.5rem 0.875rem;font-size:1.0625rem;font-weight:800;color:var(--brown);box-shadow:var(--shadow-soft);}
 .g5-coins svg{color:var(--yellow);}
 .g5-ring{position:relative;width:3.25rem;height:3.25rem;flex:none;}
 .g5-ring svg{transform:rotate(-90deg);width:100%;height:100%;}
-.g5-ring .g5-ring-bg{fill:rgba(255,255,255,.92);stroke:rgba(74,59,54,.12);stroke-width:5;}
+.g5-ring .g5-ring-bg{fill:var(--frost);stroke:var(--track-soft);stroke-width:5;}
 .g5-ring .g5-ring-fg{fill:none;stroke:var(--teal);stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset 300ms ease;}
 .g5-ring .g5-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;}
 .g5-ring .g5-ring-lvl{font-size:1rem;font-weight:800;color:var(--brown);}
 .g5-ring .g5-ring-cap{font-size:0.5rem;font-weight:800;color:var(--brown);opacity:.5;text-transform:uppercase;letter-spacing:0.0313rem;}
 .g5-hud-btns{position:absolute;bottom:max(2.75rem, calc(var(--safe-bottom) + 2rem));left:max(0.5rem, var(--safe-left));right:max(0.5rem, var(--safe-right));display:flex;gap:0.375rem;justify-content:center;flex-wrap:wrap;}
-.g5-hud-btn{pointer-events:auto;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:0.125rem;width:max(44px, 3.375rem);height:max(44px, 3.375rem);border:none;border-radius:1.125rem;background:rgba(255,255,255,.92);border-bottom:4px solid rgba(74,59,54,.14);color:var(--brown);font-family:inherit;font-size:0.5625rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;transition:transform 90ms ease;}
+.g5-hud-btn{pointer-events:auto;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:0.125rem;width:max(44px, 3.375rem);height:max(44px, 3.375rem);border:none;border-radius:var(--btn-radius);background:var(--frost);border-bottom:4px solid rgba(74,59,54,.14);color:var(--brown);font-family:inherit;font-size:0.5625rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;transition:transform 90ms ease;}
 .g5-hud-btn:active{transform:scale(.94);}
 .g5-hud-btn svg{color:var(--pink);}
 .g5-hud-btn.g5-btn-teal svg{color:var(--teal);}
-.g5-hud-btn.g5-btn-yellow svg{color:#E0A93E;}
+.g5-hud-btn.g5-btn-yellow svg{color:var(--yellow-dark);}
 .g5-hud-btn.g5-muted svg{color:rgba(74,59,54,.35);}
 .g5-hud-btn .g5-btn-label{max-width:3.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* V3/FIX-D (E18 P1 — §C12.2): at 130 % the 3.375rem (70 px) buttons wrap to
@@ -69,7 +69,7 @@ const HUD_CSS = `
    Gooby's belly (touches near (188,553) opened Wardrobe instead of petting).
    Cap the buttons to 2.5rem (52 px at 130 % — still over the real-px 44 px
    floor) so all 9 fit in two rows and the block stays clear of the pet zone. */
-:root[data-ui-scale="130"] .g5-hud-btn{width:max(44px, 2.5rem);height:max(44px, 2.5rem);border-radius:0.875rem;}
+:root[data-ui-scale="130"] .g5-hud-btn{width:max(44px, 2.5rem);height:max(44px, 2.5rem);border-radius:var(--radius-row);}
 :root[data-ui-scale="130"] .g5-hud-btn .g5-btn-label{max-width:2.25rem;}
 `;
 
@@ -149,7 +149,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     xpHelpStyle.dataset.owner = 'v4-g69-hud-xp';
     xpHelpStyle.textContent = `
 .g69-hud-xp-help{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;width:max(44px,1.75rem);height:max(44px,1.75rem);padding:0;border:0;background:transparent;color:var(--teal-dark);cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.g69-hud-xp-help-mark{display:inline-flex;align-items:center;justify-content:center;width:1.375rem;height:1.375rem;border-radius:50%;background:rgba(255,255,255,.94);box-shadow:var(--shadow-soft);font:900 .75rem/1 system-ui,sans-serif;}
+.g69-hud-xp-help-mark{display:inline-flex;align-items:center;justify-content:center;width:1.375rem;height:1.375rem;border-radius:50%;background:var(--frost);box-shadow:var(--shadow-soft);font:900 .75rem/1 system-ui,sans-serif;}
 .g69-hud-xp-help:active .g69-hud-xp-help-mark{transform:scale(.9);}
 `;
     document.head.appendChild(xpHelpStyle);
@@ -169,7 +169,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     const radioStyle = document.createElement('style');
     radioStyle.dataset.owner = 'v4-g52-hud-radio';
     radioStyle.textContent = `
-.g52-hud-radio{display:none;pointer-events:auto;align-items:center;gap:.3125rem;min-width:max(44px,2.75rem);min-height:max(44px,2.75rem);padding:.375rem .625rem;border:0;border-radius:999px;background:rgba(255,255,255,.94);color:var(--pink-dark);font:800 .6875rem/1 system-ui,sans-serif;box-shadow:var(--shadow-soft);cursor:pointer;}
+.g52-hud-radio{display:none;pointer-events:auto;align-items:center;gap:.3125rem;min-width:max(44px,2.75rem);min-height:max(44px,2.75rem);padding:.375rem .625rem;border:0;border-radius:999px;background:var(--frost);color:var(--pink-dark);font:800 .6875rem/1 system-ui,sans-serif;box-shadow:var(--shadow-soft);cursor:pointer;}
 .g52-hud-radio.g52-show{display:inline-flex;}
 .g52-hud-radio-note{font-size:1.125rem;animation:g52hudnote 1s ease-in-out infinite;}
 @keyframes g52hudnote{50%{transform:translateY(-.1875rem) rotate(-8deg);}}`;
@@ -408,7 +408,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     const g56Style = document.createElement('style');
     g56Style.dataset.owner = 'g56-hud-xp';
     g56Style.textContent = `
-.g56-xp-layer{position:absolute;top:calc(max(0.625rem, var(--safe-top)) + 3.1rem);right:max(0.875rem, var(--safe-right));width:0;height:0;pointer-events:none;z-index:620;}
+.g56-xp-layer{position:absolute;top:calc(max(0.625rem, var(--safe-top)) + 3.1rem);right:max(0.875rem, var(--safe-right));width:0;height:0;pointer-events:none;z-index:calc(var(--z-debug) + 20);}
 .g56-xp-floater{position:absolute;right:0;bottom:0;font-size:0.875rem;font-weight:800;color:var(--teal);text-shadow:0 0.0625rem 0 rgba(255,255,255,.85);white-space:nowrap;pointer-events:none;animation:g56xpfloat 900ms ease-out forwards;}
 @keyframes g56xpfloat{0%{opacity:0;transform:translateY(0);}15%{opacity:1;}100%{opacity:0;transform:translateY(-2.5rem);}}`;
     document.head.appendChild(g56Style);

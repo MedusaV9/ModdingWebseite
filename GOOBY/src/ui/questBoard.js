@@ -20,7 +20,7 @@ const QB_CSS = `
 .g23-qb-head{width:100%;max-width:27.5rem;display:flex;align-items:center;gap:0.625rem;margin:0.375rem 0 0.375rem;flex:none;}
 .g23-qb-title{flex:1;min-width:0;margin:0;font-size:clamp(1.0625rem,6vw,1.875rem);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .g23-qb-list{width:100%;max-width:27.5rem;display:flex;flex-direction:column;gap:0.625rem;flex:none;}
-.g23-qb-card{display:flex;flex-direction:column;gap:0.5rem;background:var(--white);border-radius:1.125rem;box-shadow:var(--shadow-soft);padding:0.75rem 0.875rem;}
+.g23-qb-card{display:flex;flex-direction:column;gap:0.5rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.75rem 0.875rem;}
 .g23-qb-card.g23-claimed{opacity:.72;}
 .g23-qb-row{display:flex;align-items:flex-start;gap:0.625rem;}
 .g23-qb-body{flex:1;min-width:0;}
@@ -42,7 +42,7 @@ const QB_CSS = `
 .g23-qb-midnight{flex:1;min-width:9.375rem;font-size:0.75rem;font-weight:700;color:var(--brown);opacity:.55;}
 .g23-qb-reroll{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:0.375rem;border:none;border-radius:999px;min-height:max(44px, 2.75rem);min-width:max(44px, 2.75rem);padding:0.5625rem 1rem;font-family:inherit;font-size:0.8125rem;font-weight:800;cursor:pointer;background:var(--white);color:var(--teal-dark);box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;} /* V2 fix (E16): >=44px hit target */
 .g23-qb-reroll[disabled]{color:rgba(74,59,54,.35);cursor:default;}
-.g23-qb-locked{width:100%;max-width:27.5rem;display:flex;flex-direction:column;align-items:center;gap:0.625rem;background:var(--white);border-radius:1.125rem;box-shadow:var(--shadow-soft);padding:1.75rem 1.125rem;text-align:center;flex:none;}
+.g23-qb-locked{width:100%;max-width:27.5rem;display:flex;flex-direction:column;align-items:center;gap:0.625rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:1.75rem 1.125rem;text-align:center;flex:none;}
 .g23-qb-locked svg{color:rgba(74,59,54,.3);}
 .g23-qb-locked-title{font-size:1.0625rem;font-weight:800;color:var(--brown);}
 .g23-qb-locked-teaser{font-size:0.8125rem;font-weight:700;opacity:.72;max-width:17.5rem;} /* V4/G-UI: .6→.72 — body-text contrast */

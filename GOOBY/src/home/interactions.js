@@ -521,10 +521,10 @@ const FOOD_EMOJI = {
 const BELLY_BAND_COLOR = { ok: '#8BC98A', warn: '#F2C14E', high: '#F28C4E' };
 
 const CARE_CSS = `
-.g5-float{position:fixed;transform:translate(-50%,-50%);font-size:30px;font-weight:800;color:#59C9B9;text-shadow:0 2px 0 #fff,0 4px 14px rgba(74,59,54,.3);pointer-events:none;z-index:900;animation:g5-float-up 1.1s ease-out forwards;}
+.g5-float{position:fixed;transform:translate(-50%,-50%);font-size:30px;font-weight:800;color:#59C9B9;text-shadow:0 2px 0 #fff,0 4px 14px rgba(74,59,54,.3);pointer-events:none;z-index:var(--z-drag);animation:g5-float-up 1.1s ease-out forwards;}
 .g5-float.g5-bad{color:#FF7BA9;}
 @keyframes g5-float-up{0%{opacity:0;margin-top:0}12%{opacity:1}100%{opacity:0;margin-top:-70px}}
-.g5-ghost{position:fixed;transform:translate(-50%,-50%);font-size:52px;filter:drop-shadow(0 6px 8px rgba(74,59,54,.35));pointer-events:none;z-index:950;transition:font-size 120ms ease;}
+.g5-ghost{position:fixed;transform:translate(-50%,-50%);font-size:52px;filter:drop-shadow(0 6px 8px rgba(74,59,54,.35));pointer-events:none;z-index:calc(var(--z-drag) + 50);transition:font-size 120ms ease;}
 .g5-ghost.g5-near{font-size:64px;}
 .tray-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-height:38vh;overflow-y:auto;margin-top:10px;}
 .tray-item{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--bg-cream,#FFF6EC);border-radius:16px;padding:10px 4px 8px;border:none;font-family:inherit;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;}
@@ -540,12 +540,12 @@ const CARE_CSS = `
 .g79-food-chip{display:inline-flex;align-items:center;gap:.0625rem;white-space:nowrap;}
 .g79-food-chip svg{width:.75rem;height:.75rem;}
 /* ── end V4/G79 food-value chips. */
-.g5-wash{position:absolute;inset:0;pointer-events:none;z-index:60;}
+.g5-wash{position:absolute;inset:0;pointer-events:none;z-index:var(--z-float);}
 .g5-wash-meter{position:absolute;top:calc(76px + var(--safe-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.94);border-radius:999px;padding:8px 16px;font-weight:800;font-size:15px;color:var(--brown,#4A3B36);box-shadow:0 6px 24px rgba(74,59,54,.14);}
 .g5-wash-track{display:inline-block;width:90px;height:12px;border-radius:999px;background:rgba(74,59,54,.12);overflow:hidden;}
 .g5-wash-fill{display:block;height:100%;border-radius:999px;background:var(--stat-hygiene,#6EC6FF);width:0%;transition:width 150ms ease;}
 .g5-wash-hint{position:absolute;top:calc(122px + var(--safe-top,0px));left:0;right:0;text-align:center;font-size:14px;font-weight:700;color:var(--brown,#4A3B36);opacity:.65;text-shadow:0 1px 0 #fff;}
-.g5-soap{position:fixed;transform:translate(-50%,-50%);width:74px;height:52px;pointer-events:auto;cursor:grab;touch-action:none;z-index:960;filter:drop-shadow(0 6px 8px rgba(74,59,54,.3));}
+.g5-soap{position:fixed;transform:translate(-50%,-50%);width:74px;height:52px;pointer-events:auto;cursor:grab;touch-action:none;z-index:calc(var(--z-drag) + 60);filter:drop-shadow(0 6px 8px rgba(74,59,54,.3));}
 .g5-shower-btn{position:absolute;pointer-events:auto;display:inline-flex;align-items:center;gap:8px;right:14px;top:calc(76px + var(--safe-top,0px));}
 .g5-wash-close{position:absolute;pointer-events:auto;left:14px;top:calc(76px + var(--safe-top,0px));}
 /* V2/G20: junk badge + belly band + Care row (§C7/§C3.5) */
@@ -1092,7 +1092,7 @@ function petdebugSample(s, events) {
     const el = document.createElement('div');
     el.className = 'g35-petdebug';
     el.style.cssText =
-      'position:fixed;left:8px;top:calc(140px + var(--safe-top,0px));z-index:990;' +
+      'position:fixed;left:8px;top:calc(140px + var(--safe-top,0px));z-index:calc(var(--z-drag) + 90);' +
       'background:rgba(30,24,22,.82);color:#9fe8d9;font:11px/1.5 monospace;' +
       'padding:6px 9px;border-radius:8px;pointer-events:none;white-space:pre;';
     document.body.appendChild(el);

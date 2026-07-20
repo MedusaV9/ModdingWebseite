@@ -141,7 +141,7 @@ export async function composePhoto(sceneBlob, frameId, caption) {
 const PHOTO_CSS = `
 body.g23-photo .g5-hud{display:none!important;}
 body.g23-photo .g23-sick-chip{display:none!important;}
-.g23-ph-layer{position:fixed;inset:0;z-index:80;pointer-events:auto;display:flex;flex-direction:column;justify-content:flex-end;}
+.g23-ph-layer{position:fixed;inset:0;z-index:var(--z-media);pointer-events:auto;display:flex;flex-direction:column;justify-content:flex-end;}
 .g23-ph-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity 90ms ease;}
 .g23-ph-flash.g23-on{opacity:.92;}
 .g23-ph-bar{position:relative;display:flex;align-items:center;gap:0.375rem;padding:0.5rem calc(0.5rem + var(--safe-right)) calc(0.5rem + var(--safe-bottom)) calc(0.5rem + var(--safe-left));background:rgba(42,26,60,.78);backdrop-filter:blur(6px);}
@@ -158,7 +158,7 @@ body.g23-photo .g23-sick-chip{display:none!important;}
 .g23-ph-shutter:active{transform:scale(.92);}
 .g23-ph-shutter[disabled]{opacity:.5;}
 /* V4/G59 (§C-SYS9.3-4): transient „Im Album ansehen" chip after a capture */
-.g59-ph-albumlink{position:absolute;left:50%;bottom:calc(5.5rem + var(--safe-bottom));transform:translateX(-50%);display:inline-flex;align-items:center;gap:0.375rem;border:none;border-radius:999px;min-height:max(44px,2.75rem);padding:0.5625rem 1rem;font-family:inherit;font-size:0.8125rem;font-weight:800;background:rgba(255,255,255,.92);color:var(--brown);box-shadow:var(--shadow-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.g59-ph-albumlink{position:absolute;left:50%;bottom:calc(5.5rem + var(--safe-bottom));transform:translateX(-50%);display:inline-flex;align-items:center;gap:0.375rem;border:none;border-radius:999px;min-height:max(44px,2.75rem);padding:0.5625rem 1rem;font-family:inherit;font-size:0.8125rem;font-weight:800;background:var(--frost);color:var(--brown);box-shadow:var(--shadow-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;}
 `;
 
 /**

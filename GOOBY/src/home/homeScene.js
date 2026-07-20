@@ -475,8 +475,12 @@ export function createHomeScene(ctx) {
       // dev-only corner draw-call readout (§E10: home budget ≤ 120)
       if (import.meta.env?.DEV) {
         debugEl = document.createElement('div');
+        // POLISH-F: var(--safe-top) (not raw env()) so the §B9 fake-notch
+        // reaches it, and z below --z-hud (40) so it never paints over the
+        // stat pills it used to cover at 320-375px widths.
         debugEl.style.cssText =
-          'position:absolute;left:8px;top:calc(8px + env(safe-area-inset-top));z-index:50;' +
+          'position:absolute;left:8px;top:calc(8px + var(--safe-top,0px));' +
+          'z-index:calc(var(--z-hud) - 10);' +
           'font:700 11px system-ui;color:#4A3B36;background:rgba(255,255,255,.6);' +
           'padding:2px 7px;border-radius:8px;pointer-events:none;';
         ui.el.appendChild(debugEl);

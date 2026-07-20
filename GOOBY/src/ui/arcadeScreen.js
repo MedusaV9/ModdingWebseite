@@ -118,7 +118,7 @@ const ARCADE_CSS = `
 .g5-arcade-head{width:100%;max-width:27.5rem;display:flex;align-items:center;gap:0.625rem;margin:0.375rem 0 0.875rem;flex:none;}
 .g5-arcade-title{flex:1;min-width:0;margin:0;font-size:1.875rem;font-weight:800;color:var(--brown);}
 .g5-arcade-grid{width:100%;max-width:27.5rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;padding-bottom:1rem;flex:none;}
-.g68-card{position:relative;display:flex;flex-direction:column;align-items:stretch;min-width:0;border:none;border-radius:1.25rem;background:var(--white);border-bottom:0.25rem solid rgba(74,59,54,.12);box-shadow:var(--shadow-soft);font-family:inherit;color:var(--brown);cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;transition:transform 90ms ease;text-align:left;}
+.g68-card{position:relative;display:flex;flex-direction:column;align-items:stretch;min-width:0;border:none;border-radius:var(--card-radius);background:var(--white);border-bottom:0.25rem solid rgba(74,59,54,.12);box-shadow:var(--shadow-soft);font-family:inherit;color:var(--brown);cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;transition:transform 90ms ease;text-align:left;}
 .g68-card:active{transform:scale(.96);}
 .g68-cover{position:relative;width:100%;aspect-ratio:4/3;border-radius:1rem 1rem 0 0;overflow:hidden;flex:none;}
 .g68-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:0.375rem 0.625rem 0;font-size:0.8125rem;font-weight:800;line-height:1.2;min-height:1.25rem;overflow-wrap:anywhere;}
