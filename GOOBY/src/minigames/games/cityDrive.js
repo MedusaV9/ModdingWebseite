@@ -318,7 +318,12 @@ export default {
   /** @param {object} ctx §E8 game context */
   init(ctx) {
     this.ctx = ctx;
-    ctx.audio.music('city'); // V3/G32: Sax medley context while driving (§B2.4/§C3.3)
+    ctx.audio.music('city'); // V3/G32: Sax medley WISH — now the fallback (§B2.4/§C3.3)
+    // V4/POLISH-G: the REAL city track (location:city) via the radio chain —
+    // a base scene token, so the home remount re-asserts the room afterwards.
+    try {
+      ctx.audio.radio?.playContext?.('location:city');
+    } catch { /* no radio engine in this context */ }
     // V2/G21 (§C9.2): three modes — 'shopTrip' | 'vetTrip' (guided trips
     // sharing the machinery) | 'arcade' (§C4.7 free coin-run).
     const reqMode = isTripMode(ctx.params.mode) ? ctx.params.mode : devParam('mode');

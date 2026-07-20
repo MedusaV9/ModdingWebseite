@@ -324,6 +324,16 @@ test('airtight mute: element paused + ZERO node creation while music off (§C2.3
 });
 
 test('playContext: room/game playback via trackFor, looped; bedroom variants', async () => {
+  // V4/POLISH-G ownership: the user radio wish is still ON from the mute test
+  // — scene playContext is REFUSED (remembered only) while the station owns
+  // the element; turning the radio off hands the element to the scene wish.
+  assert.equal(store.get('radio.playing'), true, 'user radio wish is ON');
+  const refused = radio.playContext('room:kitchen');
+  assert.equal(refused.context, 'room:kitchen', 'the track is still resolved+returned');
+  assert.notEqual(radio.getStats().trackId, refused.id, 'station keeps the element');
+  assert.equal(radio.getStats().sceneContext, 'room:kitchen', 'scene wish remembered');
+  radio.stop(); // user radio OFF → the remembered scene wish takes the element
+  await wait(TRANSITION_MS);
   const kitchen = radio.playContext('room:kitchen');
   assert.equal(kitchen.context, 'room:kitchen');
   await wait(TRANSITION_MS);
@@ -346,21 +356,32 @@ test('playContext: room/game playback via trackFor, looped; bedroom variants', a
   assert.equal(radio.getStats().trackId, game.id, 'context playback never queue-advances');
 });
 
-test('stop: fades out, pauses, persists playing=false; start resumes lastTrack', async () => {
+test('stop: persists playing=false, hands the element to the scene wish; start resumes lastTrack', async () => {
   radio.start('bordmusik');
   await wait(TRANSITION_MS);
   const last = radio.getStats().trackId;
   radio.stop();
-  assert.equal(radio.getStats().playing, false);
-  assert.equal(store.get('radio.playing'), false);
-  assert.equal(musicDirector.getStats().radioActive, false, 'medley resumes when the radio stops');
+  assert.equal(store.get('radio.playing'), false, 'the OFF wish persists');
+  // V4/POLISH-G: the scene's remembered real track takes the element back
+  // (the bedroom wish from the playContext test) — no silence, no medley.
+  assert.equal(radio.getStats().sceneContext, 'room:bedroom', 'scene wish survived');
   await wait(TRANSITION_MS);
-  assert.equal(el.paused, true, 'paused after the fade');
-  radio.toggle(); // toggle = start
+  assert.equal(radio.getStats().context, 'room:bedroom', 'scene track resumed');
+  assert.equal(radio.getStats().trackId, trackFor('room:bedroom').id);
+  assert.equal(el.paused, false, 'the element keeps streaming the scene loop');
+  assert.notEqual(store.get('radio.lastTrack'), radio.getStats().trackId,
+    'context loops never move the persisted §C-SYS1.3 queue position');
+  radio.toggle(); // toggle = start (flips the persisted USER wish, not the flag)
+  await wait(TRANSITION_MS);
   assert.equal(radio.getStats().trackId, last, '§C-SYS1.3: lastTrack continues the queue');
   assert.equal(radio.getStats().playing, true);
-  radio.toggle(); // and back off
-  assert.equal(radio.getStats().playing, false);
+  assert.equal(store.get('radio.playing'), true);
+  radio.toggle(); // and back off → the scene wish resumes again
+  assert.equal(store.get('radio.playing'), false);
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().context, 'room:bedroom', 'scene loop back after ⏯ off');
+  assert.equal(musicDirector.getStats().radioActive, true,
+    'the director stays gated — a real scene track streams, the medley is silent');
 });
 
 test('radioChanged event: §B10 {playing, station, trackId} payload', () => {
@@ -393,7 +414,10 @@ test('getStations day-one sanity for the engine (§C-SYS1.2)', () => {
 // -------------------------------------------- V4/POLISH-A transport additions
 
 test('playTrack: starts a stopped radio on the exact tapped track', async () => {
-  assert.equal(radio.getStats().playing, false, 'radio is off after the stop test');
+  // V4/POLISH-G: the USER radio is off after the stop test (the element now
+  // streams the remembered scene loop instead of sitting paused).
+  assert.equal(store.get('radio.playing'), false, 'user radio is off after the stop test');
+  assert.equal(radio.getStats().context, 'room:bedroom', 'scene loop holds the element');
   const ids = stationTrackIds('bordmusik').filter((id) => trackById(id).unlockLevel <= 1);
   const target = ids.find((id) => id !== radio.getStats().trackId) ?? ids[0];
   const played = radio.playTrack(target);

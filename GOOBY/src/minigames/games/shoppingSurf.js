@@ -36,6 +36,7 @@ import {
   createGhostTrail,
 } from '../../gfx/speedLines.js';
 import { getSfxDef } from '../../audio/sfxMap.js'; // V4/G67 §G4.5 wind-loop probe
+import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
 import { clampFloatTextToView } from '../framework.js';
 import {
   SURF,
@@ -208,7 +209,14 @@ export default {
     ctx.camera.position.set(...CAM_OFFSET);
     ctx.camera.lookAt(0, 1.0, CAM_LOOK_AHEAD);
     ctx.camera.updateProjectionMatrix();
-    ctx.audio.music('city'); // street bustle context (existing id — §C3.3)
+    ctx.audio.music('city'); // street bustle WISH — now the fallback (§C3.3)
+    // §C-SYS1 music (V4/POLISH-G): the real 'game:shoppingSurf' track via the
+    // radio chain (loops, gates the medley); dispose restores the persisted
+    // radio wish (purblePlace convention).
+    this.musicContextOn = false;
+    try {
+      this.musicContextOn = !!ctx.audio.radio?.playContext?.('game:shoppingSurf');
+    } catch { /* no radio engine in this context */ }
 
     // travel mode: G38 launches {mode:'surfTravel'} ('travel' canonical);
     // dev runs force it via ?mode=travel (reflected back like cityDrive so
@@ -1106,6 +1114,17 @@ export default {
   dispose() {
     const S = this.S;
     if (!S) return;
+    // V4/POLISH-G: restore the persisted radio wish (purblePlace convention —
+    // stop() hands the element back to the underlying scene's real track).
+    if (this.musicContextOn) {
+      try {
+        const radio = S.ctx?.audio?.radio;
+        const wish = getStore()?.get?.('radio');
+        if (wish?.playing === true) radio?.start?.();
+        else radio?.stop?.();
+      } catch { /* headless/no-store contexts */ }
+      this.musicContextOn = false;
+    }
     S.offSwipe?.();
     // V4/G67: juice teardown — streak pool, ghosts, vignette, wind loop
     S.speedLines?.dispose();

@@ -22,6 +22,7 @@ import { createParticles } from '../../gfx/particles.js';
 // exists). Shared helpers in gfx/speedLines.js.
 import { RACER_FX, fovLerp, createSpeedLines } from '../../gfx/speedLines.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
+import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
 import { clampFloatTextToView } from '../framework.js';
 import {
   RACER,
@@ -176,6 +177,13 @@ export default {
   /** @param {object} ctx §E8 game context */
   init(ctx) {
     this.ctx = ctx;
+    // §C-SYS1 music (V4/POLISH-G): the real 'game:toyRacer' track via the
+    // radio chain (loops, gates the medley); dispose restores the persisted
+    // radio wish (purblePlace convention).
+    this.musicContextOn = false;
+    try {
+      this.musicContextOn = !!ctx.audio.radio?.playContext?.('game:toyRacer');
+    } catch { /* no radio engine in this context */ }
     this.autoplay =
       import.meta.env?.DEV && new URLSearchParams(location.search).get('autoplay') === '1';
     const seed = Number.isFinite(ctx.params?.seed) ? ctx.params.seed : Math.floor(ctx.rng() * 2 ** 31);
@@ -743,6 +751,17 @@ export default {
   },
 
   dispose() {
+    // V4/POLISH-G: restore the persisted radio wish (purblePlace convention —
+    // stop() hands the element back to the underlying scene's real track).
+    if (this.musicContextOn) {
+      try {
+        const radio = this.ctx?.audio?.radio;
+        const wish = getStore()?.get?.('radio');
+        if (wish?.playing === true) radio?.start?.();
+        else radio?.stop?.();
+      } catch { /* headless/no-store contexts */ }
+      this.musicContextOn = false;
+    }
     this.offDrag?.();
     this.offTap?.();
     const el = this.ctx?.renderer?.domElement;

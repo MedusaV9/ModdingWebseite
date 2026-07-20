@@ -53,7 +53,7 @@
 
 import { getStore } from '../core/store.js';
 import {
-  getStations, trackById, trackFor, coverFor, STATION_IDS,
+  getStations, trackById, trackFor, coverFor, STATION_IDS, CONTEXT_ALIASES,
 } from '../systems/musicRegistry.js';
 import {
   buildQueue, nextTrackId, effectiveGain, trimFor, hashStr,
@@ -92,6 +92,15 @@ let replaceContext = true;
 let current = null;
 /** Non-null while playContext() playback owns the element (context token). */
 let contextToken = null;
+// ── V4/POLISH-G (§B2.4): scene-music wish ────────────────────────────────────
+/** @type {string|null} the remembered SCENE context wish (rooms/locations/
+ * 'arcade' — `game:` contexts are round-scoped and never remembered). stop()
+ * hands the element back to it and attach() replays a pre-init wish, so the
+ * real recorded scene tracks survive radio sessions and the boot gesture. */
+let sceneContext = null;
+/** Live sleep-state mirror — re-picks the bedroom Awake/Sleeping variant. */
+let lastSleeping = false;
+// ── end V4/POLISH-G ──────────────────────────────────────────────────────────
 /** §C-SYS1.5 flag of the LAST queue build (G52's one-time toast). */
 let allDisabled = false;
 /** Monotonic transition token — a newer transition cancels older timers. */
@@ -166,6 +175,14 @@ function playerLevel() {
 /** Radio wants sound AND nothing blocks it (mute/duck). */
 function isAudible() {
   return playing && enabled && duckers.size === 0 && deps != null;
+}
+
+/** V4/POLISH-G (§B2.4 ownership): the USER's persisted radio wish. While it
+ * is ON the station owns the element — scene playContext() must not steal
+ * (playContext never persists radio.playing, so this cleanly separates the
+ * user's radio session from scene-track playback). */
+function userRadioOn() {
+  return radioSlice().playing === true;
 }
 
 /** §B2.4: the musicDirector gate — radio audible + replaceContext. */
@@ -314,7 +331,10 @@ function playTrackNow(track, opts = {}) {
     });
     fadeRadio('in');
     rstats.started += 1;
-    persist({ lastTrack: track.id });
+    // V4/POLISH-G: only STATION playback moves the persisted queue position —
+    // context loops (loop=true: rooms/games/locations) must not wipe the
+    // user's §C-SYS1.3 lastTrack resume point.
+    if (!opts.loop) persist({ lastTrack: track.id });
     emitTrackChanged(track);
     emitChanged();
     applyDirectorGate();
@@ -384,6 +404,9 @@ export function start(id) {
       stationId = id;
     }
   }
+  // V4/POLISH-G: a context loop's track never enters the station queue math —
+  // resume from the LIVE station track only when a station really was live.
+  const wasContext = contextToken != null;
   playing = true;
   contextToken = null;
   persist({ playing: true, station: stationId });
@@ -398,13 +421,21 @@ export function start(id) {
     emitChanged();
     return;
   }
-  const last = current?.id ?? String(radioSlice().lastTrack ?? '');
+  const last = !wasContext && current ? current.id : String(radioSlice().lastTrack ?? '');
   const nextId = queue.includes(last) ? last : queue[0];
+  // V4/POLISH-G: the station track is already audibly rolling (e.g. a
+  // dispose-restore while the user radio never stopped) — don't restart it.
+  if (!wasContext && current?.id === nextId && el?.paused === false) {
+    emitChanged();
+    applyDirectorGate();
+    return;
+  }
   playTrackNow(trackById(nextId));
 }
 
 /** Turn the radio off (fade out + pause; the wish persists as false). */
 export function stop() {
+  const stoppedToken = contextToken; // V4/POLISH-G: which playback is ending
   playing = false;
   contextToken = null;
   persist({ playing: false });
@@ -422,11 +453,21 @@ export function stop() {
   applyDirectorGate();
   emitChanged();
   syncMinuteTimer();
+  // V4/POLISH-G (§B2.4): turning the radio off hands the element back to the
+  // SCENE's real track (the room/location/arcade wish) — this also covers a
+  // game's dispose-restore (its `game:` token resumes the underlying scene).
+  // Stopping the scene track ITSELF (stoppedToken === sceneContext, e.g. a
+  // second ⏯ press) stays a full stop — the user asked for silence.
+  if (sceneContext != null && stoppedToken !== sceneContext) playContext(sceneContext);
 }
 
-/** Play/pause toggle (the panel's ⏯). */
+/** Play/pause toggle (the panel's ⏯). V4/POLISH-G: flips the USER's
+ * persisted radio wish — scene-context playback keeps the module `playing`
+ * flag busy, so the flag alone can no longer tell a station session apart
+ * (no-store contexts keep the old flag behavior). */
 export function toggle() {
-  if (playing) stop();
+  const wish = store() ? userRadioOn() : playing;
+  if (wish) stop();
   else start();
 }
 
@@ -438,15 +479,20 @@ export function toggle() {
  *   (V4/POLISH-A additive — lets the UI skip its engine-less fallback)
  */
 export function skip(dir = 1) {
-  contextToken = null;
+  // V4/POLISH-G: ⏭ is a STATION control. While a scene/game loop owns the
+  // element and the user radio is OFF, only the queue position moves — the
+  // loop keeps playing (pre-G the flag alone could not tell them apart).
+  const stationLive = store() ? userRadioOn() : playing;
+  const fromId = contextToken == null && current ? current.id : String(radioSlice().lastTrack ?? '');
   const queue = stationQueue();
   if (queue.length === 0) return null;
-  const nextId = nextTrackId(queue, current?.id ?? radioSlice().lastTrack, dir);
+  const nextId = nextTrackId(queue, fromId, dir);
   if (!nextId) return null;
-  if (isAudible() && playing) {
+  if (isAudible() && stationLive) {
+    contextToken = null;
     playTrackNow(trackById(nextId));
   } else {
-    current = trackById(nextId);
+    if (contextToken == null) current = trackById(nextId);
     persist({ lastTrack: nextId });
     emitChanged();
   }
@@ -541,7 +587,9 @@ export function setStation(id) {
   if (id === stationId) return;
   stationId = id;
   persist({ station: id });
-  if (playing && isAudible()) {
+  // V4/POLISH-G: only a live USER radio session restarts on the new station —
+  // browsing stations while a scene loop plays (radio off) must not hijack.
+  if ((store() ? userRadioOn() : playing) && isAudible()) {
     contextToken = null;
     const queue = stationQueue();
     if (queue.length > 0) playTrackNow(trackById(queue[0]));
@@ -603,17 +651,29 @@ export function duck(on, reason = 'duck') {
   if (was && !isAudible()) {
     el?.pause?.();
   } else if (!was && isAudible() && playing) {
-    if (current && el?.src) {
-      const p = el.play?.();
-      p?.catch?.(() => {});
-      fadeRadio('in');
-    } else {
-      start();
-    }
+    resumePlayback();
   }
   applyDirectorGate();
   emitChanged();
   syncMinuteTimer();
+}
+
+/** V4/POLISH-G: resume the blocked wish (unmute/unduck). Context playback is
+ * re-driven through playContext — it re-resolves the track (a nap may have
+ * flipped the bedroom variant) and restarts the loop; station playback
+ * resumes the live element (or restarts the queue when none exists). */
+function resumePlayback() {
+  if (contextToken != null) {
+    playContext(contextToken);
+    return;
+  }
+  if (current && el?.src) {
+    const p = el.play?.();
+    p?.catch?.(() => {});
+    fadeRadio('in');
+  } else {
+    start();
+  }
 }
 
 /**
@@ -631,8 +691,24 @@ export function playContext(context, opts = {}) {
   const sleeping = opts.sleeping ?? store()?.get?.('sleep')?.sleeping === true;
   const track = trackFor(context, { sleeping });
   if (!track) return null;
+  // Canonical token (aliases fold: 'home'→'room:living', …) so resume
+  // comparisons never mismatch two spellings of the same wish.
+  const token = CONTEXT_ALIASES[String(context)] ?? String(context);
+  // V4/POLISH-G: remember the BASE scene wish — the room under the player's
+  // feet (or the city drive scene). stop() hands the element back to it and
+  // attach() replays it after the boot gesture. Overlay contexts (arcade/
+  // shop/vet screens) and round-scoped `game:` tokens play WITHOUT taking
+  // the memory slot: their close hooks restore, and the underlying room
+  // wish must survive them.
+  if (token.startsWith('room:') || token === 'location:city') sceneContext = token;
+  // V4/POLISH-G ownership (§B2.4): while the USER's persisted radio wish is
+  // ON the station owns the element — the SCENE wish above is remembered but
+  // never steals; it resumes when the user turns the radio off (stop()).
+  // `game:` tokens keep the shipped purblePlace semantics: the round's track
+  // takes the element and dispose restores the persisted wish (start()).
+  if (userRadioOn() && contextToken == null && !token.startsWith('game:')) return track;
   playing = true;
-  contextToken = String(context);
+  contextToken = token;
   if (!isAudible()) {
     emitChanged();
     return track;
@@ -681,6 +757,7 @@ export function getStats() {
     enabled,
     ducked: [...duckers],
     context: contextToken,
+    sceneContext, // V4/POLISH-G: the remembered scene wish (resume target)
     queue: stationQueue().length,
     allDisabled,
     ...rstats,
@@ -704,26 +781,43 @@ export function attach(d) {
   stationId = STATION_IDS.includes(slice.station) ? slice.station : DEFAULT_STATION;
   shuffle = slice.shuffle !== false;
   replaceContext = slice.replaceContext !== false;
+  // V4/POLISH-G: a pre-init playContext wish (scene hooks fire before the
+  // first gesture unlocks audio) — replayed below unless the user radio wins.
+  const preInitContext = contextToken;
+  contextToken = null;
   playing = slice.playing === true;
+  lastSleeping = store()?.get?.('sleep')?.sleeping === true;
   if (!storeWired) {
     const s = store();
     if (s?.on) {
       storeWired = true;
       s.on('change', (state) => {
         const r = state?.radio;
-        if (!r || typeof r !== 'object') return;
-        // Live-follow the toggles G52's panel writes straight to the store.
-        const rc = r.replaceContext !== false;
-        if (rc !== replaceContext) {
-          replaceContext = rc;
-          applyDirectorGate();
+        if (r && typeof r === 'object') {
+          // Live-follow the toggles G52's panel writes straight to the store.
+          const rc = r.replaceContext !== false;
+          if (rc !== replaceContext) {
+            replaceContext = rc;
+            applyDirectorGate();
+          }
+          shuffle = r.shuffle !== false;
+          applyTrackGain(); // §C-SYS1.5 trim slider drags apply live
         }
-        shuffle = r.shuffle !== false;
-        applyTrackGain(); // §C-SYS1.5 trim slider drags apply live
+        // V4/POLISH-G: sleep flips re-pick the bedroom Awake/Sleeping variant
+        // (playContext re-resolves; same track id → no restart).
+        const sleeping = state?.sleep?.sleeping === true;
+        if (sleeping !== lastSleeping) {
+          lastSleeping = sleeping;
+          if (contextToken === 'room:bedroom') playContext(contextToken, { sleeping });
+        }
       });
     }
   }
+  // The persisted USER radio wish outranks the scene wish (§B2.4 ownership);
+  // otherwise replay the pre-init scene context so the room's real track
+  // starts with the first gesture.
   if (playing && isAudible()) start();
+  else if (preInitContext != null || sceneContext != null) playContext(preInitContext ?? sceneContext);
   else applyDirectorGate();
 }
 
@@ -736,13 +830,7 @@ export function setEnabled(on) {
   if (was && !isAudible()) {
     el?.pause?.(); // paused element streams nothing; ZERO nodes created
   } else if (!was && isAudible() && playing) {
-    if (current && el?.src) {
-      const p = el.play?.();
-      p?.catch?.(() => {});
-      fadeRadio('in');
-    } else {
-      start();
-    }
+    resumePlayback(); // V4/POLISH-G: context loops re-resolve, stations resume
   }
   applyDirectorGate();
   syncMinuteTimer();
@@ -755,6 +843,8 @@ export function reset() {
   playing = false;
   current = null;
   contextToken = null;
+  sceneContext = null; // V4/POLISH-G: forget the scene wish
+  lastSleeping = false;
   duckers.clear();
   stationId = DEFAULT_STATION;
   shuffle = true;

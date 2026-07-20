@@ -23,6 +23,7 @@ import {
 } from '../../gfx/speedLines.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
+import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
 import { clampFloatTextToView } from '../framework.js';
 import {
   HOPPER,
@@ -184,6 +185,13 @@ export default {
   /** @param {object} ctx §E8 game context */
   init(ctx) {
     this.ctx = ctx;
+    // §C-SYS1 music (V4/POLISH-G): the real 'game:starHopper' track via the
+    // radio chain (loops, gates the medley); dispose restores the persisted
+    // radio wish (purblePlace convention).
+    this.musicContextOn = false;
+    try {
+      this.musicContextOn = !!ctx.audio.radio?.playContext?.('game:starHopper');
+    } catch { /* no radio engine in this context */ }
     const modifier = ctx.params?.modifier ?? {};
     this.tune = withHopperRuntime(
       applyDifficulty(HOPPER, ctx.params?.difficulty ?? 'normal'),
@@ -913,6 +921,17 @@ export default {
   },
 
   dispose() {
+    // V4/POLISH-G: restore the persisted radio wish (purblePlace convention —
+    // stop() hands the element back to the underlying scene's real track).
+    if (this.musicContextOn) {
+      try {
+        const radio = this.ctx?.audio?.radio;
+        const wish = getStore()?.get?.('radio');
+        if (wish?.playing === true) radio?.start?.();
+        else radio?.stop?.();
+      } catch { /* headless/no-store contexts */ }
+      this.musicContextOn = false;
+    }
     this.offSwipe?.();
     this.offTap?.();
     this.speedLines?.dispose(); // V4/G67 §G4.8 juice teardown

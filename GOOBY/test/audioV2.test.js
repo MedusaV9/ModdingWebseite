@@ -33,8 +33,11 @@ import audio, {
 import { createStore } from '../src/core/store.js';
 import { defaultState } from '../src/core/save.js';
 // V3/G32 (§B2.4): the medley director's pure schedule math + tables
+// V4/POLISH-G: + setTrackResolver — the medley is FALLBACK-ONLY now (a
+// context with a real manifest track never starts it), so the machinery
+// tests below force the fallback path with a null resolver.
 import {
-  MEDLEY, MEDLEY_CONTEXTS, phraseBars,
+  MEDLEY, MEDLEY_CONTEXTS, phraseBars, setTrackResolver,
   BAR_SEC, PHRASE_BARS, XFADE_SEC, CONTEXT_FADE_SEC, BED_LEVEL, NO_REPEAT_BARS,
 } from '../src/audio/musicDirector.js';
 
@@ -329,6 +332,9 @@ let e15Store = null;
 test('E15: settings.music=false creates ZERO music nodes; re-enable resumes', async () => {
   e15Store = createStore(defaultState(), { autosave: false });
   globalThis.AudioContext = FakeAudioContext;
+  // V4/POLISH-G: force the medley FALLBACK path (in normal play every context
+  // resolves a real track and the medley machinery under test never starts).
+  setTrackResolver(() => null);
   try {
     audio.init(); // follows the store settings live from here on
     const fake = FakeAudioContext.last;
@@ -510,6 +516,7 @@ test('§B2.3: preloadSamples decodes into the cache; LRU evicts beyond 6 MB', as
 // ------------------------------------------ §B2.4 music() context delegation
 
 test("§B2.4: music() accepts every medley context; unknown ids fall back to 'home'", async () => {
+  setTrackResolver(() => null); // V4/POLISH-G: exercise the medley (fallback path)
   for (const ctxId of MEDLEY_CONTEXTS) {
     audio.music(ctxId);
     assert.equal(audio.getStats().track, `medley:${ctxId}`, `music('${ctxId}')`);
@@ -603,6 +610,7 @@ async function creep(fake, steps, dt = 0.2) {
 test('V3/FIX-B (E5 P1): stall recovery skips missed bars — never retro-schedules', async () => {
   const fake = FakeAudioContext.last;
   assert.ok(fake, 'E15 singleton fake ctx present');
+  setTrackResolver(() => null); // V4/POLISH-G: exercise the medley (fallback path)
   audio.music('home');
   await creep(fake, 16); // ~3.2 s: bars 0+1 land on the normal look-ahead path
   const before = audio.getStats().medley;
@@ -647,6 +655,7 @@ test('V3/FIX-B (E5 P2): live-medley jingles are pinned against LRU floods; batch
   let decodedLen = 1000; // ~4 KB decoded per buffer
   fake.decodeAudioData = () => Promise.resolve({ length: decodedLen, numberOfChannels: 1, duration: 1 });
   globalThis.fetch = async () => ({ arrayBuffer: async () => new ArrayBuffer(8) });
+  setTrackResolver(() => null); // V4/POLISH-G: exercise the medley (fallback path)
   try {
     // 1) a live medley warms + pins its 10 jingles
     audio.music('home');
@@ -677,6 +686,44 @@ test('V3/FIX-B (E5 P2): live-medley jingles are pinned against LRU floods; batch
   } finally {
     fake.decodeAudioData = origDecode;
     globalThis.fetch = origFetch;
+    audio.music(null);
+  }
+});
+
+// =================== V4/POLISH-G (§B2.4): fallback-only medley gate ==========
+// The synth glue-bed medley may only start when musicRegistry.trackFor()
+// resolves NO real recorded track for the context. In normal play every §C3.3
+// context has one (the scene hooks stream it via radioPlayer.playContext), so
+// the medley — and its glue-bed oscillator — stays silent.
+
+test('V4/POLISH-G: a context with a real track never starts the medley (glue bed silent)', async () => {
+  const fake = FakeAudioContext.last;
+  assert.ok(fake, 'E15 singleton fake ctx present');
+  setTrackResolver(null); // the REAL registry resolver (production default)
+  try {
+    audio.music('home'); // trackFor('home') → room:living (a real Treblo track)
+    const stats = audio.getStats();
+    assert.equal(stats.track, null, 'no medley player — the real track owns the context');
+    assert.equal(stats.medley.wantContext, 'home', 'the context WISH is kept (fallback contract)');
+    assert.equal(stats.medley.realTrack, true, 'stats report the gating real track');
+    const nodes = stats.nodesCreated;
+    for (let i = 0; i < 4; i += 1) {
+      fake.currentTime += 4;
+      await sleep(120);
+    }
+    assert.equal(
+      audio.getStats().nodesCreated,
+      nodes,
+      'ZERO source/glue-bed nodes while a real track backs the context'
+    );
+    // …and a context whose track VANISHES (modded manifest) falls back live.
+    setTrackResolver(() => null);
+    assert.equal(audio.getStats().track, 'medley:home', 'missing track → medley fallback');
+    assert.equal(audio.getStats().medley.realTrack, false);
+    setTrackResolver(null); // restore: the medley tears down again
+    assert.equal(audio.getStats().track, null, 'real track re-gates the medley');
+  } finally {
+    setTrackResolver(null);
     audio.music(null);
   }
 });

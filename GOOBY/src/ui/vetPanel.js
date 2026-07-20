@@ -209,6 +209,9 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
   ui.registerScreen('vetPanel', {
     /** @param {HTMLElement} el */
     mount(el) {
+      try {
+        audio.radio?.playContext?.('location:vet'); // V4/POLISH-G: real clinic track (§B2.4)
+      } catch { /* no radio engine in this context */ }
       wrapEl = document.createElement('div');
       wrapEl.className = 'vet-wrap';
       el.appendChild(wrapEl);
@@ -223,6 +226,16 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
       audio.play('vet.doorbell');
     },
     unmount() {
+      // V4/POLISH-G: hand the element back — only when the clinic track
+      // still owns it. stop() resumes the remembered room wish; a persisted
+      // user radio session re-asserts.
+      try {
+        const radio = audio.radio;
+        if (radio?.getStats?.().context === 'location:vet') {
+          if (store.get('radio')?.playing === true) radio.start?.();
+          else radio.stop?.();
+        }
+      } catch { /* no radio engine in this context */ }
       for (const off of subs) off?.();
       subs = [];
       wrapEl = null;

@@ -17,6 +17,7 @@
 // synchronous arcade↔pregame screen swap never restarts the medley.
 
 import { getMinigame, MINIGAMES } from '../data/minigames.js';
+import { getStore } from '../core/store.js'; // V4/POLISH-G: radio-wish restore (release)
 import { t } from '../data/strings.js';
 import { icon } from './icons.js';
 import { isMinigameUnlocked } from '../systems/leveling.js';
@@ -41,21 +42,47 @@ import {
 // the pop is DEFERRED one macrotask, so unmount(arcade) → mount(mgPregame)
 // (both synchronous inside ui.showScreen) hands the context over seamlessly
 // instead of pop+push restarting the medley. Balanced per §B2.4.
+// V4/POLISH-G: the REAL ArcadeUI track streams via radio.playContext while
+// the screens are open (the director keeps only the fallback wish); the
+// final release hands the element back to the room — except through a game
+// launch, where the arcade loop rides into the round (trackless games stay
+// on the ArcadeUI context; tracked games replace it via 'game:<id>').
 // ---------------------------------------------------------------------------
 
 let musicHold = 0;
+/** True from the PLAY tap until the launch settles (or fails) — see above. */
+let gameLaunching = false;
 
-/** Hold the arcade medley context (screen mount). */
+/** Hold the arcade music context (screen mount). */
 export function acquireArcadeMusic() {
   musicHold += 1;
-  if (musicHold === 1) musicDirector.pushContext('arcade');
+  if (musicHold === 1) {
+    gameLaunching = false; // a fresh arcade visit clears any stale launch mark
+    musicDirector.pushContext('arcade');
+    try {
+      audio.radio?.playContext?.('arcade'); // real ArcadeUI track (§B2.4)
+    } catch { /* no radio engine in this context */ }
+  }
 }
 
 /** Release the hold (screen unmount) — pops one tick later when unheld. */
 export function releaseArcadeMusic() {
   setTimeout(() => {
     musicHold = Math.max(0, musicHold - 1);
-    if (musicHold === 0) musicDirector.popContext('arcade');
+    if (musicHold === 0) {
+      musicDirector.popContext('arcade');
+      // V4/POLISH-G: hand the element back to the scene — ONLY when the
+      // arcade context still owns it (a user station was never displaced;
+      // a launched game keeps the loop until its own context lands) and no
+      // launch is in flight. stop() resumes the remembered room wish.
+      if (gameLaunching) return;
+      try {
+        const radio = audio.radio;
+        if (radio?.getStats?.().context !== 'arcade') return;
+        if (getStore()?.get?.('radio')?.playing === true) radio.start?.();
+        else radio.stop?.();
+      } catch { /* no radio engine / headless */ }
+    }
   }, 0);
 }
 
@@ -361,9 +388,19 @@ export function registerPregameScreen({ store, ui, framework }) {
           audio.play('ui.confirmBig');
           const launchParams = diff?.enabled ? { difficulty: selected } : {};
           if (weltScene != null) launchParams.scene = weltScene; // Team WELT pick
+          // V4/POLISH-G: mark the launch so the deferred music release keeps
+          // the ArcadeUI loop rolling into the game (cleared on a failed
+          // launch — the gate toasts and this screen stays open).
+          gameLaunching = true;
           framework
             .launch(meta.id, launchParams)
-            .catch((err) => console.error('[mgPregame] launch failed:', err));
+            .then((ok) => {
+              if (ok !== true) gameLaunching = false;
+            })
+            .catch((err) => {
+              gameLaunching = false;
+              console.error('[mgPregame] launch failed:', err);
+            });
         });
         playRow.appendChild(play);
       }

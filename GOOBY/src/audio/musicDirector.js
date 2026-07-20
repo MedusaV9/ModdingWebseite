@@ -1,5 +1,11 @@
 // Music director — V3/G32 (PLAN3 §B2.4/§C3.3): file-based jingle MEDLEYS as
-// the per-context background music. Kenney's 85 music-jingles are 0.3–1.8 s
+// the per-context FALLBACK background music. V4/POLISH-G: the medley (and its
+// synth glue bed) is FALLBACK-ONLY — a context whose REAL recorded track
+// exists in the music manifest (musicRegistry.trackFor, incl. the context
+// aliases) never starts the medley; the scene hooks stream that file through
+// radioPlayer.playContext instead. In normal play every §C3.3 context resolves
+// to a real Treblo track, so the glue-bed oscillator stays silent.
+// Kenney's 85 music-jingles are 0.3–1.8 s
 // one-shot phrases (not loopable tracks), so each context plays a sparse
 // "music-box medley": a fixed 3.2 s bar grid where every bar either plays ONE
 // jingle (AudioBufferSourceNode with 150 ms equal-power edge fades) or rests;
@@ -24,7 +30,10 @@
 // the music bus in audio.js; this module never touches bus gains.
 //
 // No imports from audio.js (deps injected) — pure enough for node:test to
-// drive the schedule math and the composition tables headlessly.
+// drive the schedule math and the composition tables headlessly. The only
+// runtime import is the pure data registry (V4/POLISH-G fallback gate).
+
+import { trackFor } from '../systems/musicRegistry.js';
 
 const DEV = !!import.meta.env?.DEV;
 
@@ -283,6 +292,33 @@ function effectiveContext() {
   return want && MEDLEY[want] ? want : null;
 }
 
+// ── V4/POLISH-G (§B2.4): the fallback-only gate ──────────────────────────────
+/** Resolves a context to its REAL recorded track (musicRegistry.trackFor —
+ * the aliases map 'home'→room:living, 'shop'→location:shop, …). The medley
+ * may only start when this returns null: in normal play every §C3.3 context
+ * has a real Treblo track and the synth glue bed never sounds — the scene
+ * hooks stream the file via radioPlayer.playContext instead. */
+let resolveRealTrack = trackFor;
+
+/**
+ * Test seam: override the real-track resolver (e.g. `() => null` re-enables
+ * the medley machinery so its schedule math can be exercised — the fallback
+ * path when a modded/missing manifest carries no track for a context).
+ * Pass null/undefined to restore the registry default.
+ * @param {((context: string) => object|null)|null} [fn]
+ */
+export function setTrackResolver(fn) {
+  resolveRealTrack = typeof fn === 'function' ? fn : trackFor;
+  apply(0.05);
+}
+
+/** @returns {boolean} the effective context resolves to a real recorded track */
+function realTrackGated() {
+  const want = effectiveContext();
+  return want != null && resolveRealTrack(want) != null;
+}
+// ── end V4/POLISH-G ──────────────────────────────────────────────────────────
+
 /** family gain for a jingle key (see FAMILY_GAIN). */
 function familyGain(key) {
   const m = /jingles_([A-Z]+)\d+$/.exec(key);
@@ -428,7 +464,12 @@ function stopPlayer(fadeSec = CONTEXT_FADE_SEC) {
 function apply(fadeSec = CONTEXT_FADE_SEC) {
   // V4/G51 (§B2.4): radioActive joins the gate chain — while the radio owns
   // the music bus the medley is silent (and creates zero nodes).
-  const want = !deps || !enabled || suppressed || radioActive ? null : effectiveContext();
+  const wish = !deps || !enabled || suppressed || radioActive ? null : effectiveContext();
+  // V4/POLISH-G (§B2.4): FALLBACK-ONLY — a context whose real recorded track
+  // exists (trackFor) never starts the synth glue-bed medley; radioPlayer
+  // streams the file. The context WISH is kept, so a missing track (modded
+  // manifest) still falls back to the medley.
+  const want = wish != null && resolveRealTrack(wish) != null ? null : wish;
   if (player?.context === want) return;
   if (player) stopPlayer(fadeSec);
   if (want) startPlayer(want);
@@ -530,6 +571,7 @@ export function getStats() {
     enabled,
     suppressed,
     radioActive, // V4/G51 (§B2.4)
+    realTrack: realTrackGated(), // V4/POLISH-G: medley gated behind a real track
     bar: player?.bar ?? 0,
     phrase: player?.phrase ?? 0,
     sourcesLive: player?.sources.size ?? 0,
@@ -581,4 +623,5 @@ export function reset() {
 export default {
   attach, setEnabled, setSuppressed, setRadioActive, setContext, pushContext,
   popContext, activeContext, getTime, getStats, previewJingle, reset,
+  setTrackResolver, // V4/POLISH-G test seam (fallback-only gate)
 };

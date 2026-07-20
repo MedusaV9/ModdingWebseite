@@ -1002,7 +1002,10 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
      * @param {{mode?: 'trip'|'browse', tab?: string}} [params]
      */
     mount(el, params = {}) {
-      musicDirector.pushContext('shop'); // V3/G32: shop medley overlay (§B2.4)
+      musicDirector.pushContext('shop'); // V3/G32: shop medley overlay (§B2.4 — now the fallback wish)
+      try {
+        audio.radio?.playContext?.('location:shop'); // V4/POLISH-G: real IKEA track
+      } catch { /* no radio engine in this context */ }
       mode = params.mode === 'trip' ? 'trip' : 'browse';
       const requestedTab = TABS.some(([id]) => id === params.tab) ? params.tab : 'food';
       sickFocus = sickShopFocus(
@@ -1079,7 +1082,17 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     },
 
     unmount() {
-      musicDirector.popContext('shop'); // V3/G32: back to the scene medley (§B2.4)
+      musicDirector.popContext('shop'); // V3/G32: back to the scene wish (§B2.4)
+      // V4/POLISH-G: hand the element back — only when the shop track still
+      // owns it (a user station was never displaced). stop() resumes the
+      // remembered room wish; a persisted user radio session re-asserts.
+      try {
+        const radio = audio.radio;
+        if (radio?.getStats?.().context === 'location:shop') {
+          if (store.get('radio')?.playing === true) radio.start?.();
+          else radio.stop?.();
+        }
+      } catch { /* no radio engine in this context */ }
       for (const off of subs) off?.();
       subs = [];
       bodyEl = null;
