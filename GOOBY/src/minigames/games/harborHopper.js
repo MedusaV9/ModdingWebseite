@@ -547,6 +547,7 @@ export default {
     } else if (ev.type === 'bump') {
       ctx.audio.play('harbor.bump');
       ctx.hud.banner(t('mg.harbor.bump'));
+      ctx.onStrike?.(); // POLISH-E: 3rd buoy/boat bump → shared teleport-to-loading
       this.floats.spawn('−3', boatPos.clone().add(new THREE.Vector3(0, 1, 0)), '#FF6B6B');
       this.particles.emit('bubbles', boatPos.clone().add(new THREE.Vector3(0, 0.3, 0)), { count: 8 });
       this.particles.emit('dizzyStars', boatPos.clone().add(new THREE.Vector3(0, 1.1, 0)));
@@ -834,3 +835,4 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: true }); // V4/G57 (§G2.1 rule 4, §G3.3): global „Steuerung invertieren“ applies (G56 proxy / carController invertSteer param)
+export const orientation = 'landscape'; // POLISH-E: the harbor scrolls toward the horizon — wide aspect fits; rotate gate on portrait viewports

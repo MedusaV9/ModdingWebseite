@@ -498,6 +498,7 @@ export default {
         if (e.kart === 0) {
           audio.play('racer.blockHit');
           hud.banner(t('mg.racer.blockHit'));
+          this.ctx.onStrike?.(); // POLISH-E: 3rd toy-block crash → shared teleport-to-loading (the kart-scale tow rule)
           this.gooby?.play('dizzy', { speed: 2.2 });
           this.particles.emit('dizzyStars', this.kartGroups[0].position.clone().add(new THREE.Vector3(0, 0.8, 0)));
         } else {
@@ -789,3 +790,4 @@ function mulberryLike(seed) {
   };
 }
 export const controls = Object.freeze({ invertible: true }); // V4/G57 (§G2.1 rule 4, §G3.3): global „Steuerung invertieren“ applies (G56 proxy / carController invertSteer param)
+export const orientation = 'landscape'; // POLISH-E: kart racing frames wide — framework shows the rotate gate on portrait viewports

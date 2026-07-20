@@ -51,6 +51,11 @@ import {
   normalizeDifficulty,
   difficultyEnabled,
   difficultySliceOf,
+  // POLISH-E: shared 3-strikes + landscape rotate-gate pure helpers
+  STRIKES_FOR_TELEPORT,
+  applyStrike,
+  normalizeOrientation,
+  needsRotateGate,
 } from './framework.logic.js';
 import { wrapInvertInput } from '../core/inputInvert.js';
 import { EN as DIFF_EN, DE as DIFF_DE } from '../data/strings/v4-difficulty.js';
@@ -73,6 +78,11 @@ import { countOf as stickerCountOf } from '../systems/collections.js';
 import { coverUrl, fallbackGradient } from '../ui/arcadeUi.logic.js';
 import { EN as UI2_EN, DE as UI2_DE } from '../data/strings/v4-ui2.js';
 // ── end POLISH-D imports ──
+// ── POLISH-E imports (shared 3-strikes → teleport-to-loading + landscape
+// rotate gate): strings/v4-arcade2.js rides the same G52 tx-fallback
+// pattern as v4-ui2.js until a later sweep spreads it into strings.js. ──
+import { EN as ARC2_EN, DE as ARC2_DE } from '../data/strings/v4-arcade2.js';
+// ── end POLISH-E imports ──
 
 const awardMinigame = economy.awardMinigame; // V4/G56: unchanged call sites below
 
@@ -132,6 +142,50 @@ async function controlsOf(gameId) {
     return undefined;
   }
 }
+
+// ══════════════════════════════════════════════════════════════ POLISH-E ═══
+// Shared 3-strikes → teleport-to-loading + landscape mode. The pure decision
+// helpers (applyStrike / needsRotateGate / normalizeOrientation) live in
+// framework.logic.js; this module owns the DOM side (veil + re-shown loading
+// card, rotate overlay) and the §E8 ctx surface (onStrike / getStrikes).
+
+/**
+ * POLISH-E: read a game's module-level `export const orientation` through
+ * the SAME namespace glob as controlsOf (registry.js stays frozen §E0.1-19).
+ * Absent/unknown values mean portrait — see normalizeOrientation.
+ * @param {string} gameId @returns {Promise<string|undefined>}
+ */
+async function orientationOf(gameId) {
+  try {
+    const ns = await gameNamespaces[`./games/${gameId}.js`]?.();
+    return ns?.orientation;
+  } catch {
+    return undefined;
+  }
+}
+
+// POLISH-E: same-wave i18n fallback for strings/v4-arcade2.js (the G52 tx
+// pattern — strings.js stays frozen per §E0.1-8).
+/** @param {string} key @param {Record<string, string|number>} [vars] */
+function txE(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? ARC2_DE : ARC2_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+// POLISH-E tuning (frozen consts in the owning module — §E0.1-2 rule; the
+// strike LIMIT itself is framework.logic.js' STRIKES_FOR_TELEPORT):
+/** Teleport cutscene beats: veil fade-to-black, then the loading card holds. */
+const STRIKE_TELEPORT = Object.freeze({ FADE_MS: 450, HOLD_MS: 1400 });
+/** Rotate gate never deadlocks: auto-continue on rotate-less environments. */
+const ROTATE_GATE = Object.freeze({ AUTO_CONTINUE_MS: 12000 });
+// ══════════════════════════════════════════════════════════ end POLISH-E ═══
 
 // V4/G56 (§E0.1-2/§E0.1-11): does economy.awardMinigame already implement
 // G54's v4 payout (difficulty/modifier options, per-mode board writes)?
@@ -500,6 +554,17 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     let ended = false;
     let elapsed = 0;
     let score = 0;
+    // ── POLISH-E state (fresh per run — the factory runs per switchTo) ──
+    let strikes = 0; //           shared ctx.onStrike counter
+    let teleporting = false; //   3rd-strike cutscene in progress
+    let teleportTimer = 0;
+    /** @type {HTMLElement|null} */
+    let teleportVeilEl = null;
+    /** @type {'portrait'|'landscape'} */
+    let gameOrientation = 'portrait';
+    /** @type {(() => void)|null} resolves a pending rotate gate on exit */
+    let rotateGateCleanup = null;
+    // ── end POLISH-E state ──
 
     /** @type {HTMLElement|null} */
     let hudEl = null;
@@ -606,7 +671,7 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     }
 
     function pause() {
-      if (!running || paused || ended) return;
+      if (!running || paused || ended || teleporting) return; // POLISH-E: + teleporting
       paused = true;
       // F6 (RE5): optional §E8 game hook — games with real-time clocks
       // (danceParty) freeze/rebase them across the paused span.
@@ -752,6 +817,126 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       score += points;
       hud.setScore(score);
     }
+
+    // ══════════════════════════════════════════════════════════ POLISH-E ═══
+    // Shared 3-strikes → teleport-to-loading. Games opt in by calling
+    // ctx.onStrike() at their existing fail/crash points; the 3rd strike
+    // (framework.logic.js STRIKES_FOR_TELEPORT, mirroring cityDrive's
+    // DRIVE.CRASHES_FOR_TOW tow rule) freezes the game, fades a veil to
+    // black, briefly re-shows POLISH-D's themed loading card („teleported
+    // back to loading") and then ends through the NORMAL onEnd path — the
+    // current framework score rides the existing results/payout flow.
+
+    /** §E8 ctx.onStrike — count a fail; 3rd strike teleports. @returns {number} */
+    function onStrike() {
+      if (ended || teleporting) return strikes;
+      const result = applyStrike(strikes);
+      strikes = result.strikes;
+      if (result.teleport) {
+        startStrikeTeleport();
+      } else {
+        hud.banner(txE('arcade2.strike', { n: strikes, max: STRIKES_FOR_TELEPORT }));
+      }
+      return strikes;
+    }
+
+    /** The 3rd-strike cutscene: freeze → veil → loading card → onEnd. */
+    function startStrikeTeleport() {
+      if (ended || teleporting) return;
+      teleporting = true; // gates update()/pause() — freeze-frame under the veil
+      audio.play('tow'); // cityDrive's tow sting — the same „teleported" beat
+      hud.banner(txE('arcade2.strikes.teleport'));
+      teleportVeilEl = document.createElement('div');
+      teleportVeilEl.className = 'mg-teleport-veil';
+      document.body.appendChild(teleportVeilEl);
+      requestAnimationFrame(() => teleportVeilEl?.classList.add('mg-teleport-veil-on'));
+      teleportTimer = setTimeout(() => {
+        showLoading(); // POLISH-D's themed card sells the „back to loading" idea
+        teleportTimer = setTimeout(() => {
+          if (exited) return;
+          onEnd({}); // no override: the accumulated ctx.onScore total pays out
+          hideLoading();
+          removeTeleportVeil();
+        }, STRIKE_TELEPORT.HOLD_MS);
+      }, STRIKE_TELEPORT.FADE_MS);
+    }
+
+    /** Fade the teleport veil back out (results screen appears beneath). */
+    function removeTeleportVeil() {
+      const veil = teleportVeilEl;
+      teleportVeilEl = null;
+      if (!veil) return;
+      veil.classList.remove('mg-teleport-veil-on');
+      setTimeout(() => veil.remove(), STRIKE_TELEPORT.FADE_MS + 50);
+    }
+
+    // Landscape rotate gate: a landscape-flagged game launching on a
+    // portrait viewport holds BEFORE the countdown with a „Bitte dreh dein
+    // Handy" overlay. Rotating to landscape (matchMedia change / resize),
+    // tapping the overlay, or the AUTO_CONTINUE_MS fallback all continue —
+    // rotate-less environments can never deadlock. Dev ?rotategate=1 forces
+    // the overlay for previews (same self-read pattern as ?autoplay=1).
+
+    /** @returns {boolean} dev-harness rotate-gate override */
+    function rotateGateForced() {
+      return import.meta.env?.DEV === true
+        && new URLSearchParams(location.search).get('rotategate') === '1';
+    }
+
+    /** @returns {Promise<void>} resolves when the gate is passed/skipped */
+    function rotateGate() {
+      if (!needsRotateGate(gameOrientation, innerWidth, innerHeight, rotateGateForced())) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'mg-rotate';
+        overlay.innerHTML = `
+          <div class="mg-rotate-card">
+            <img class="mg-rotate-icon" alt="" decoding="async">
+            <div class="mg-rotate-glyph" hidden><span class="mg-rotate-phone"></span></div>
+            <div class="mg-rotate-title">${txE('arcade2.rotate.title')}</div>
+            <div class="mg-rotate-hint">${txE('arcade2.rotate.hint')}</div>
+            <div class="mg-rotate-continue">${txE('arcade2.rotate.continue')}</div>
+          </div>`;
+        // Pictogram with a pure-CSS phone glyph fallback (§G7.1 rule:
+        // onerror swap, never a broken image).
+        const iconEl = overlay.querySelector('.mg-rotate-icon');
+        iconEl.addEventListener('error', () => {
+          iconEl.remove();
+          overlay.querySelector('.mg-rotate-glyph').hidden = false;
+        });
+        iconEl.src = 'assets/ui/rotate_device.png';
+        let settled = false;
+        let autoTimer = 0;
+        const mql = typeof window.matchMedia === 'function'
+          ? window.matchMedia('(orientation: landscape)')
+          : null;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(autoTimer);
+          mql?.removeEventListener?.('change', onViewportChange);
+          window.removeEventListener('resize', onViewportChange);
+          overlay.remove();
+          rotateGateCleanup = null;
+          resolve();
+        };
+        const onViewportChange = () => {
+          if (innerWidth > innerHeight) finish();
+        };
+        overlay.addEventListener('click', () => {
+          audio.play('ui.tap');
+          finish();
+        });
+        mql?.addEventListener?.('change', onViewportChange);
+        window.addEventListener('resize', onViewportChange);
+        autoTimer = setTimeout(finish, ROTATE_GATE.AUTO_CONTINUE_MS);
+        rotateGateCleanup = finish; // exit() resolves a pending gate
+        ui.el.appendChild(overlay);
+      });
+    }
+    // ══════════════════════════════════════════════════════ end POLISH-E ═══
 
     /** §E8 ctx.onEnd — rewards, persistence, results screen. */
     function onEnd({ score: finalScore, coins: coinsOverride, meta: gameMeta } = {}) { // V2/G23: + §B3 meta
@@ -904,6 +1089,9 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         // the branded card instead of a bare black screen.
         showLoading();
         const mod = await loadGame(params.gameId);
+        // POLISH-E: per-game orientation opt-in (module-level export, read
+        // like G57's controls — the registry row stays frozen §E0.1-19).
+        gameOrientation = normalizeOrientation(await orientationOf(params.gameId));
         buildHud();
         try {
           await ctx.assets?.preload?.(mod.assetKeys ?? []);
@@ -952,6 +1140,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
             params: launchParams,
             onScore,
             onEnd,
+            // POLISH-E (§E8): shared 3-strikes API — games call onStrike()
+            // at their fail points; the 3rd strike teleports to loading.
+            onStrike,
+            getStrikes: () => strikes,
           });
         } catch (err) {
           initResult = Promise.reject(err);
@@ -981,6 +1173,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         // The countdown runs AFTER enter resolves so the scene fade lifts
         // first and 3-2-1 plays over the visible stage (not behind black).
         (async () => {
+          // POLISH-E: landscape games gate on a portrait viewport BEFORE the
+          // countdown — rotate / tap / auto-continue all pass the gate.
+          await rotateGate();
+          if (exited) return;
           await countdown();
           if (exited) return;
           // Energy cost is charged when the round actually starts (§C6).
@@ -999,7 +1195,8 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         })();
       },
       update(dt) {
-        if (!running || paused || ended || !game) return;
+        // POLISH-E: + teleporting — freeze-frame while the cutscene runs
+        if (!running || paused || ended || teleporting || !game) return;
         elapsed += dt;
         try {
           game.update?.(dt, elapsed);
@@ -1014,6 +1211,14 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         removePauseOverlay();
         clearBanners();
         hideLoading(); // V4/G56 (§G6.6): quit while an async init is pending
+        // ── POLISH-E cleanup: quit during the rotate gate or the teleport
+        // cutscene — resolve the pending gate, stop the cutscene timers and
+        // drop the veil immediately (no fade — the scene is going away). ──
+        rotateGateCleanup?.();
+        clearTimeout(teleportTimer);
+        teleportVeilEl?.remove();
+        teleportVeilEl = null;
+        // ── end POLISH-E cleanup ──
         // ── V4/G56 (§C-SYS4.4): leaving BEFORE the countdown finished
         // refunds the consumed modifier play — max ONCE per event (G54's
         // engine enforces via the snapshot's refundUsed flag). ──

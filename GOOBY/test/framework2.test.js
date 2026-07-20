@@ -31,13 +31,19 @@ import {
   difficultySliceOf,
   endlessUnlocked,
   bestForMode,
+  // POLISH-E: shared 3-strikes + landscape rotate-gate pure helpers
+  STRIKES_FOR_TELEPORT,
+  applyStrike,
+  normalizeOrientation,
+  needsRotateGate,
 } from '../src/minigames/framework.logic.js';
 import { computeCoins, getMinigame } from '../src/data/minigames.js';
 import { applyXp, nextUnlock } from '../src/systems/leveling.js';
 import { createStore } from '../src/core/store.js';
 import { defaultState } from '../src/core/save.js';
-import { UNLOCKS, LEVELING, MINIGAME } from '../src/data/constants.js';
+import { UNLOCKS, LEVELING, MINIGAME, DRIVE } from '../src/data/constants.js'; // POLISH-E: + DRIVE (tow-rule mirror)
 import { EN as DIFF_EN, DE as DIFF_DE } from '../src/data/strings/v4-difficulty.js';
+import { EN as ARC2_EN, DE as ARC2_DE } from '../src/data/strings/v4-arcade2.js'; // POLISH-E
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -449,3 +455,95 @@ test('§G6.6 async lifecycle guards are in place (source contract)', () => {
   assert.match(frameworkSrc, /return disposeResult/); // …and RETURNED for switchTo's await
   assert.match(frameworkSrc, /allowsWhileSick\(params\.mode\)/); // §C-SYS7.1 gate line
 });
+
+// ══════════════════════════════════════════════════════════════ POLISH-E ═══
+// Shared 3-strikes → teleport-to-loading + landscape rotate gate: the pure
+// decision helpers, the cityDrive tow-rule mirror, the game wiring source
+// pins and the v4-arcade2.js EN/DE parity.
+
+test('POLISH-E applyStrike: increments and teleports exactly ON the 3rd strike', () => {
+  assert.equal(STRIKES_FOR_TELEPORT, 3);
+  // the shared rule MIRRORS cityDrive's §C4.5 tow: 3 crashes → towed
+  assert.equal(STRIKES_FOR_TELEPORT, DRIVE.CRASHES_FOR_TOW);
+  let state = applyStrike(0);
+  assert.deepEqual(state, { strikes: 1, teleport: false });
+  state = applyStrike(state.strikes);
+  assert.deepEqual(state, { strikes: 2, teleport: false });
+  state = applyStrike(state.strikes);
+  assert.deepEqual(state, { strikes: 3, teleport: true });
+});
+
+test('POLISH-E applyStrike: defensive against hostile counters, sticky past the limit', () => {
+  // non-numeric / negative counters are treated as 0 (first strike)
+  assert.deepEqual(applyStrike(undefined), { strikes: 1, teleport: false });
+  assert.deepEqual(applyStrike(NaN), { strikes: 1, teleport: false });
+  assert.deepEqual(applyStrike('junk'), { strikes: 1, teleport: false });
+  assert.deepEqual(applyStrike(-7), { strikes: 1, teleport: false });
+  assert.deepEqual(applyStrike(1.9), { strikes: 2, teleport: false }); // floors
+  // past the limit teleport STAYS true (framework guards re-entry itself)
+  assert.deepEqual(applyStrike(3), { strikes: 4, teleport: true });
+  assert.deepEqual(applyStrike(99), { strikes: 100, teleport: true });
+});
+
+test('POLISH-E normalizeOrientation: only the literal landscape opts in', () => {
+  assert.equal(normalizeOrientation('landscape'), 'landscape');
+  for (const junk of [undefined, null, 'portrait', 'LANDSCAPE', 'wide', 1, true, {}]) {
+    assert.equal(normalizeOrientation(junk), 'portrait', String(junk));
+  }
+});
+
+test('POLISH-E needsRotateGate: landscape games gate on portrait viewports only', () => {
+  // portrait phone viewport (the CSS baseline 390×844) → gate
+  assert.equal(needsRotateGate('landscape', 390, 844), true);
+  // already-landscape viewport → no gate (VM/desktop proceeds directly)
+  assert.equal(needsRotateGate('landscape', 844, 390), false);
+  // square counts as portrait (the game wants WIDTH)
+  assert.equal(needsRotateGate('landscape', 500, 500), true);
+  // portrait games never gate, whatever the viewport
+  assert.equal(needsRotateGate('portrait', 390, 844), false);
+  assert.equal(needsRotateGate('portrait', 844, 390), false);
+  // dev ?rotategate=1 forces the overlay even on landscape viewports…
+  assert.equal(needsRotateGate('landscape', 844, 390, true), true);
+  // …but never for portrait games
+  assert.equal(needsRotateGate('portrait', 844, 390, true), false);
+  // hostile viewport numbers fall back to the portrait (gated) branch
+  assert.equal(needsRotateGate('landscape', NaN, NaN), true);
+});
+
+test('POLISH-E wiring: framework exposes onStrike/getStrikes and the rotate gate (source contract)', () => {
+  // framework.js can't run under node (three + import.meta.glob) — pin the
+  // §E8 ctx surface + the enter-flow order at source level; runtime proof is
+  // the POLISH-E CDP evidence (strikes teleport + rotate overlay).
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
+  assert.match(src, /onStrike,\s*\r?\n\s*getStrikes: \(\) => strikes/); // ctx surface
+  assert.match(src, /applyStrike\(strikes\)/); // the PURE decision is the one used
+  assert.match(src, /needsRotateGate\(gameOrientation, innerWidth, innerHeight/);
+  assert.match(src, /await rotateGate\(\);[\s\S]*?await countdown\(\)/); // gate BEFORE countdown
+  assert.match(src, /normalizeOrientation\(await orientationOf\(params\.gameId\)\)/);
+  // the cutscene ends through the NORMAL results/payout path — never around it
+  assert.match(src, /onEnd\(\{\}\); \/\/ no override/);
+});
+
+test('POLISH-E wiring: opted-in games call ctx.onStrike / export orientation (source pins)', () => {
+  const gameSrc = (id) => fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'games', `${id}.js`), 'utf8');
+  // strikes: harborHopper (buoy/boat bumps) + toyRacer (player toy-block hits)
+  assert.match(gameSrc('harborHopper'), /ctx\.onStrike\?\.\(\)/);
+  assert.match(gameSrc('toyRacer'), /this\.ctx\.onStrike\?\.\(\)/);
+  // landscape flag: runner, toyRacer, harborHopper (recon-picked wide layouts)
+  for (const id of ['runner', 'toyRacer', 'harborHopper']) {
+    assert.match(gameSrc(id), /export const orientation = 'landscape';/, id);
+  }
+});
+
+test('strings/v4-arcade2.js: EN and DE key sets are identical', () => {
+  assert.deepEqual(Object.keys(ARC2_EN).sort(), Object.keys(ARC2_DE).sort());
+  for (const key of ['arcade2.strike', 'arcade2.strikes.teleport',
+    'arcade2.rotate.title', 'arcade2.rotate.hint', 'arcade2.rotate.continue']) {
+    assert.ok(ARC2_EN[key], `EN missing ${key}`);
+    assert.ok(ARC2_DE[key], `DE missing ${key}`);
+  }
+  // the rotate headline is the user-specified copy pair
+  assert.equal(ARC2_DE['arcade2.rotate.title'], 'Bitte dreh dein Handy');
+  assert.equal(ARC2_EN['arcade2.rotate.title'], 'Please rotate your phone');
+});
+// ══════════════════════════════════════════════════════════ end POLISH-E ═══

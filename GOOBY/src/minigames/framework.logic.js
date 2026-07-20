@@ -154,3 +154,64 @@ export function bestForMode(state, gameId, mode) {
   }
   return slice.best;
 }
+
+// ════════════════════════════════════════════════════════════════ POLISH-E ═
+// Shared 3-strikes → teleport-to-loading + landscape-mode helpers. PURE
+// (node-tested in test/framework2.test.js); the DOM/cutscene side lives in
+// framework.js. Frozen consts stay here per the §E0.1-2 owning-module rule.
+
+/**
+ * POLISH-E: strikes before the framework teleports the player out — mirrors
+ * cityDrive's `DRIVE.CRASHES_FOR_TOW: 3` (the „towed after 3 crashes" rule
+ * the shared API generalizes; framework2.test.js pins the mirror).
+ */
+export const STRIKES_FOR_TELEPORT = 3;
+
+/**
+ * POLISH-E: the pure strike decision — increment the per-run counter and
+ * answer „does THIS strike trigger the teleport?". Defensive against
+ * hostile counters (non-numeric/negative → treated as 0). `teleport` turns
+ * true ON the strike that reaches the limit and stays true past it —
+ * framework.js guards re-entry while the cutscene runs, so the cutscene
+ * still starts exactly once.
+ * @param {number} strikes strikes recorded so far this run
+ * @returns {{strikes: number, teleport: boolean}} the updated counter +
+ *   whether the teleport cutscene starts now
+ */
+export function applyStrike(strikes) {
+  const n = Math.max(0, Math.floor(Number(strikes) || 0)) + 1;
+  return { strikes: n, teleport: n >= STRIKES_FOR_TELEPORT };
+}
+
+/**
+ * POLISH-E: normalize a game module's optional `export const orientation`
+ * (read via the framework's namespace glob, like G57's `controls`) to a
+ * known value. Anything but the literal 'landscape' means portrait — the
+ * CSS baseline (390×844) every game was built against.
+ * @param {*} value the module-level export (usually undefined)
+ * @returns {'portrait'|'landscape'}
+ */
+export function normalizeOrientation(value) {
+  return value === 'landscape' ? 'landscape' : 'portrait';
+}
+
+/**
+ * POLISH-E: should the „Bitte dreh dein Handy" gate show before the
+ * countdown? Only landscape-flagged games gate, and only while the viewport
+ * is still portrait (a square viewport counts as portrait — the game wants
+ * width). `forced` (dev `?rotategate=1`) shows it regardless so the overlay
+ * can be previewed on landscape-locked environments (VM/desktop).
+ * @param {'portrait'|'landscape'} orientation the game's declared orientation
+ * @param {number} viewportW css px
+ * @param {number} viewportH css px
+ * @param {boolean} [forced] dev-harness override
+ * @returns {boolean}
+ */
+export function needsRotateGate(orientation, viewportW, viewportH, forced = false) {
+  if (orientation !== 'landscape') return false;
+  if (forced) return true;
+  const w = Number(viewportW) || 0;
+  const h = Number(viewportH) || 0;
+  return w <= h;
+}
+// ════════════════════════════════════════════════════════════ end POLISH-E ═

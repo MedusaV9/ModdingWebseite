@@ -4733,3 +4733,161 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 /* ============================== end POLISH-D ============================== */
+
+/* ================================ POLISH-E ================================
+   Shared 3-strikes teleport veil + landscape „rotate your phone" gate
+   (framework.js startStrikeTeleport / rotateGate). POLISH-D's loading-card
+   styles above stay untouched — the teleport cutscene only RE-USES the card
+   via showLoading(). rem-only in the px-audit-gated properties (§B3). */
+
+/* POLISH-E: teleport fade veil — below the loading card (10000), above HUD
+   and pause overlay; the -on modifier drives the CSS transition both ways. */
+.mg-teleport-veil {
+  position: fixed;
+  inset: 0;
+  background: #1c1310;
+  opacity: 0;
+  transition: opacity 450ms ease;
+  pointer-events: none;
+  z-index: 9998;
+}
+
+.mg-teleport-veil-on {
+  opacity: 1;
+}
+
+/* POLISH-E: rotate gate overlay — tap anywhere continues */
+.mg-rotate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 59, 54, 0.72);
+  z-index: 9000;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mg-rotate-card {
+  background: rgba(255, 251, 244, 0.97);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-soft);
+  padding: 1.5rem 2rem;
+  text-align: center;
+  max-width: 80vw;
+  animation: polishe-rotate-in 220ms ease-out;
+}
+
+@keyframes polishe-rotate-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* the quantized pictogram (assets/ui/rotate_device.png) gently rocks; its
+   own artwork already shows the portrait→landscape turn + arrows */
+.mg-rotate-icon {
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: 1rem;
+  animation: polishe-rotate-swing 2.4s ease-in-out infinite;
+}
+
+/* pure-CSS phone glyph fallback (shown only when the PNG fails to load):
+   a rounded phone outline doing the full quarter turn */
+.mg-rotate-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 7.5rem;
+}
+
+.mg-rotate-glyph[hidden] {
+  display: none;
+}
+
+.mg-rotate-phone {
+  display: block;
+  width: 3rem;
+  height: 5.25rem;
+  border: 0.375rem solid var(--brown, #4a3b36);
+  border-radius: 0.75rem;
+  animation: polishe-rotate-quarter 2.4s ease-in-out infinite;
+}
+
+@keyframes polishe-rotate-swing {
+  0%,
+  55%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  20%,
+  35% {
+    transform: rotate(-12deg);
+  }
+}
+
+@keyframes polishe-rotate-quarter {
+  0%,
+  15% {
+    transform: rotate(0deg);
+  }
+
+  45%,
+  70% {
+    transform: rotate(-90deg);
+  }
+
+  95%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.mg-rotate-title {
+  margin-top: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--brown);
+}
+
+.mg-rotate-hint {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.mg-rotate-continue {
+  margin-top: 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+/* POLISH-E: reduced motion — static pictogram, instant veil/card */
+@media (prefers-reduced-motion: reduce) {
+  .mg-rotate-icon,
+  .mg-rotate-phone {
+    animation: none;
+  }
+
+  .mg-rotate-card {
+    animation-duration: 1ms;
+  }
+
+  .mg-teleport-veil {
+    transition-duration: 1ms;
+  }
+}
+
+/* ============================== end POLISH-E ============================== */

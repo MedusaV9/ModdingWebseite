@@ -91,6 +91,7 @@ export const HARNESS_PARAM_GROUPS = Object.freeze([
       Object.freeze({ param: 'difficulty', example: '?minigame=carrotCatch&difficulty=hard', en: 'launch difficulty easy|normal|hard|endless (G56)', de: 'Start-Schwierigkeit easy|normal|hard|endless (G56)' }),
       Object.freeze({ param: 'invertx', example: '?invertx=1', en: 'invert controls left/right (G56 proxy)', de: 'Steuerung links/rechts invertieren (G56-Proxy)' }),
       Object.freeze({ param: 'inverty', example: '?inverty=1', en: 'invert controls up/down (G56 proxy)', de: 'Steuerung hoch/runter invertieren (G56-Proxy)' }),
+      Object.freeze({ param: 'rotategate', example: '?minigame=runner&rotategate=1', en: 'force the rotate-your-phone overlay of landscape games (POLISH-E)', de: 'Handy-drehen-Overlay der Querformat-Spiele erzwingen (POLISH-E)' }), // POLISH-E one-liner
     ]),
   }),
 ]);
