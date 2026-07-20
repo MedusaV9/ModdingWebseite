@@ -104,6 +104,55 @@
   --g47-knob: url('/assets/ui/grey/slide_hangle.png');
   --g47-star: url('/assets/ui/grey/star.png');
   --g47-star-off: url('/assets/ui/grey/star_outline.png');
+  /* V4/AC-1 (Animal-Crossing design system foundation) — cozy tokens. The
+     --g47-* sprite tokens above stay DECLARED so any component-injected CSS
+     block that still references them keeps painting, but styles.css itself no
+     longer uses them: base components moved to the pure-CSS soft-squircle
+     language below. INTERFACE-FREEZE for later per-screen agents: every token
+     in this block (plus the .ac-* opt-in classes at the end of this file and
+     the ui/icons.js icon names) is a stable contract — extend, don't rename.
+       --paper / --paper-shade     warm card face + shaded well/inset surface
+       --outline-soft              hairline ring (use inside box-shadow lists)
+       --shadow-pop / --shadow-press  floating vs pressed elevation
+       --leaf / --leaf-dark        the AC leaf-green accent (CTA, active tab)
+       --sky-soft                  soft sky-blue accent wash
+       --card-radius-lg            big cozy squircle radius (cards, sheets)
+       --dur-pop / --dur-sheet     pop-in / sheet-slide durations
+       --ease-spring               springy overshoot curve for presses/pops
+       --font-round                rounded display stack (bundled Baloo 2 →
+                                   iOS ui-rounded/SF Pro Rounded → system)
+       --pattern-leaf / --pattern-dots  seamless acui/ background tiles
+       --acui-wordmark / --acui-coin    cookie GOOBY wordmark + carrot coin
+                                   (project-original art, public/assets/acui/) */
+  --paper: #fffaf2;
+  --paper-shade: #f6ead8;
+  --outline-soft: rgba(74, 59, 54, 0.08);
+  --shadow-pop: 0 10px 30px rgba(74, 59, 54, 0.18);
+  --shadow-press: 0 2px 6px rgba(74, 59, 54, 0.16);
+  --leaf: #8fd06c;
+  --leaf-dark: #6db54e;
+  --sky-soft: #cfe9f5;
+  --card-radius-lg: 1.75rem;
+  --dur-pop: 180ms;
+  --dur-sheet: 240ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --font-round: 'Baloo 2', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --pattern-leaf: url('/assets/acui/pattern_leaves.png');
+  --pattern-dots: url('/assets/acui/pattern_dots.png');
+  --acui-wordmark: url('/assets/acui/wordmark_gooby.png');
+  --acui-coin: url('/assets/acui/coin.png');
+}
+
+/* V4/AC-1: bundled rounded face — Baloo 2 variable (400–800), latin subset
+   (covers EN + DE incl. umlauts/„quotes"), SIL OFL 1.1 (license text at
+   public/assets/fonts/OFL.txt, credit row in src/data/credits.js). Preloaded
+   from index.html; font-display: swap keeps first paint on the system stack. */
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/assets/fonts/baloo2-latin-var.woff2') format('woff2');
 }
 
 /* F3: predictable sizing everywhere — padding/borders stay inside declared
@@ -115,17 +164,17 @@
 }
 
 #ui {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-round); /* V4/AC-1: cozy rounded type everywhere */
   color: var(--brown);
 }
 
 /* ---------- buttons (§D5: chunky, pressable) ---------- */
 
-/* V3/G47 (§C11.2): primary buttons wear button_rectangle_depth_flat as a
-   9-slice frame (structure only — the identity background-color fills the
-   face); pressed = _flat swap + 2px translate. Border replaces the old
-   border-bottom depth lip; paddings are compensated so the total content
-   inset stays what it was pre-reskin. */
+/* V4/AC-1: cozy pill buttons — flat identity fill + a darker bottom-edge lip
+   (inset shadow, tint-agnostic) instead of the V3/G47 9-slice sprite frame.
+   Pressed = springy squash (scale + 2px sink) with --shadow-press. The old
+   frame-compensated paddings on descendant .btn rules still apply and stay
+   harmless (min-height/min-width keep every target ≥44px). */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -133,54 +182,52 @@
   gap: 0.5rem;
   min-height: max(44px, 3rem);
   min-width: max(44px, 3rem);
-  padding: 0.25rem 1rem 0.125rem;
-  border: solid transparent;
-  border-width: 0.375rem 0.375rem 0.5rem;
-  border-image: var(--g47-btn) 8 8 10 8 / 0.375rem 0.375rem 0.5rem stretch;
-  border-radius: 0.625rem;
+  padding: 0.375rem 1.25rem 0.5rem;
+  border: none;
+  border-radius: 999px;
   background: var(--pink);
   color: var(--white);
   font-size: 1.125rem;
-  font-weight: 800;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 90ms ease;
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.18), 0 3px 10px rgba(74, 59, 54, 0.12);
+  transition: transform var(--dur-pop) var(--ease-spring), box-shadow var(--dur-pop) ease;
 }
 .btn:active {
-  border-image-source: var(--g47-btn-flat);
-  transform: translateY(2px); /* §C11.2 pressed state (motion offset stays px) */
+  transform: scale(0.96) translateY(2px); /* springy press (offset stays px) */
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.16), var(--shadow-press);
 }
 .btn.btn-teal {
   background: var(--teal);
-  border-bottom-color: var(--teal-dark);
 }
 .btn.btn-yellow {
   background: var(--yellow);
-  border-bottom-color: var(--yellow-dark);
   color: var(--brown);
 }
 .btn.btn-ghost {
-  background: rgba(255, 255, 255, 0.85);
-  border-bottom-color: rgba(74, 59, 54, 0.15);
+  background: var(--paper);
   color: var(--brown);
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.1), 0 0 0 1px var(--outline-soft), 0 3px 10px rgba(74, 59, 54, 0.08);
+}
+.btn.btn-ghost:active {
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.08), 0 0 0 1px var(--outline-soft), var(--shadow-press);
+}
+/* V4/AC-1: leaf-green primary CTA (opt-in for later per-screen agents) */
+.btn.btn-leaf {
+  background: var(--leaf);
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.14), inset 0 -0.25rem 0 var(--leaf-dark), 0 3px 10px rgba(109, 181, 78, 0.35);
 }
 .btn.btn-round {
   border-radius: 50%;
   width: 3.25rem;
   height: 3.25rem;
   padding: 0;
-  /* V3/G47: a circle cannot 9-slice — round buttons wear the round check
-     sprite as a whole-image face multiplied over their background-color. */
-  border: none;
-  border-image: none;
-  background-image: var(--g47-round);
-  background-size: 100% 100%;
-  background-blend-mode: multiply;
 }
 .btn.btn-round:active {
-  transform: translateY(2px);
+  transform: scale(0.96) translateY(2px);
 }
 .btn svg {
   display: block;
@@ -188,18 +235,18 @@
 
 /* ---------- cards / sheets ---------- */
 
-/* V3/G47 (§C11.2): .card wears button_square_border as a 9-slice frame
-   (BINDING: 24px slices). background-clip: padding-box keeps the white face
-   inside the frame so the sprite's rounded corners paint cleanly; padding is
-   compensated (0.625rem border + 0.625rem padding = the old 1.25rem inset). */
+/* V4/AC-1: cards are soft paper squircles (the V3/G47 sprite frame is gone;
+   total content inset stays the pre-reskin 1.25rem). Optional .card-outline
+   adds a hairline ring for cards floating on same-hue backgrounds. */
 .card {
-  background: var(--white);
-  background-clip: padding-box;
-  border: 0.625rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.625rem stretch;
-  border-radius: 0.375rem;
+  background: var(--paper);
+  border: none;
+  border-radius: var(--card-radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 0.625rem;
+  padding: 1.25rem;
+}
+.card.card-outline {
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
 }
 
 /* ---------- full screens & panels (§E6) ---------- */
@@ -218,6 +265,21 @@
   padding: max(1rem, calc(var(--safe-top) + 0.25rem)) max(1rem, var(--safe-right)) max(1rem, calc(var(--safe-bottom) + 0.25rem)) max(1rem, var(--safe-left));
   z-index: var(--z-screen);
 }
+/* V4/AC-1: subtle leaf/paw pattern wash on every full screen. The pseudo is
+   position:absolute + z-index:-1 inside the .screen stacking context, so it
+   paints between the cream backdrop and ALL content and never catches input.
+   The acui tile is itself low-contrast; 0.45 lands at ~5 % effective glyph
+   contrast. (On screens that scroll the .screen element itself the wash
+   covers the first viewport and fades out — acceptable at this subtlety.) */
+.screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--pattern-leaf) left top / 24rem 24rem repeat;
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 .panel-backdrop {
   position: absolute;
@@ -229,21 +291,32 @@
   justify-content: center;
   z-index: var(--z-panel);
 }
-/* V3/G47 (§C11.2): bottom sheets get the same button_square_border frame on
-   the top + side edges (the bottom edge runs off-screen); padding compensated
-   like .card so sheet content keeps its pre-reskin inset. */
+/* V4/AC-1: bottom sheets are paper squircles with big rounded top corners
+   and a CSS grabber pill (no sprite frame; side/bottom insets stay the
+   pre-reskin 1.25rem, top gains room for the grabber). The open animation
+   rides --ease-spring; POLISH-D still owns the 200ms EXIT path unchanged. */
 .panel {
+  position: relative;
   width: 100%;
   max-width: 30rem;
-  background: var(--white);
-  background-clip: padding-box;
-  border: solid transparent;
-  border-width: 0.625rem 0.625rem 0;
-  border-image: var(--g47-card) 24 / 0.625rem 0.625rem 0 stretch;
-  border-radius: 0.375rem 0.375rem 0 0;
-  box-shadow: var(--shadow-soft);
-  padding: 0.625rem 0.625rem max(1.25rem, calc(var(--safe-bottom) + 0.25rem)); /* V3/G33 §C1.4 sheet rule */
-  animation: panel-up 180ms ease-out;
+  background: var(--paper);
+  border: none;
+  border-radius: var(--card-radius-lg) var(--card-radius-lg) 0 0;
+  box-shadow: 0 -8px 30px rgba(74, 59, 54, 0.18);
+  padding: 1.5rem 1.25rem max(1.25rem, calc(var(--safe-bottom) + 0.25rem)); /* V3/G33 §C1.4 sheet rule */
+  animation: panel-up var(--dur-sheet) var(--ease-spring);
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.75rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.16);
+  pointer-events: none;
 }
 @keyframes panel-up {
   from { transform: translateY(40px); opacity: 0; }
@@ -252,32 +325,46 @@
 
 /* ---------- toast ---------- */
 
+/* V4/AC-1: toasts are cream dialog bubbles (brown ink, leaf accent) instead
+   of the old dark pill; enter/exit spring gently. ui.js timing contract
+   untouched (toast-out still settles well inside its 300ms removal window). */
 .toast {
   position: absolute;
   left: 50%;
   bottom: calc(4.75rem + var(--safe-bottom));
   transform: translateX(-50%);
-  background: var(--brown);
-  color: var(--white);
+  background: var(--paper);
+  color: var(--brown);
   font-size: 1rem;
   font-weight: 700;
-  padding: 0.75rem 1.375rem;
-  border-radius: 999px;
-  box-shadow: var(--shadow-soft);
+  padding: 0.75rem 1.375rem 0.75rem 1.125rem;
+  border-radius: 1.375rem;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
   pointer-events: none;
   z-index: var(--z-toast);
-  animation: toast-in 180ms ease-out;
+  animation: toast-in var(--dur-pop) var(--ease-spring);
   max-width: 86vw;
   text-align: center;
 }
+.toast::before {
+  /* little leaf accent: a green droplet rotated into a leaf silhouette */
+  content: '';
+  display: inline-block;
+  width: 0.6875rem;
+  height: 0.6875rem;
+  margin-right: 0.5rem;
+  background: linear-gradient(135deg, var(--leaf), var(--leaf-dark));
+  border-radius: 999px 0.125rem;
+  transform: rotate(45deg);
+}
 @keyframes toast-in {
-  from { transform: translate(-50%, 12px); opacity: 0; }
-  to { transform: translate(-50%, 0); opacity: 1; }
+  from { transform: translate(-50%, 12px) scale(0.9); opacity: 0; }
+  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
 }
 .toast.toast-out {
   transition: opacity 250ms ease, transform 250ms ease;
   opacity: 0;
-  transform: translate(-50%, 8px);
+  transform: translate(-50%, 8px) scale(0.96);
 }
 
 /* ---------- placeholder home title (W1; G4 replaces the scene) ---------- */
@@ -289,7 +376,7 @@
   right: 0;
   text-align: center;
   font-size: 4rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.375rem;
   color: var(--pink);
   text-shadow: 0 4px 0 rgba(224, 95, 141, 0.35), 0 10px 30px rgba(255, 123, 169, 0.35);
@@ -332,12 +419,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--frost);
+  background: var(--paper); /* V4/AC-1: cozy paper pill over the 3D stage */
   border-radius: 999px;
   padding: 0.625rem 1.125rem;
   font-size: 1.125rem;
-  font-weight: 800;
-  box-shadow: var(--shadow-soft);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
   min-height: 1.75rem;
 }
 .mg-pill .mg-label {
@@ -357,7 +444,7 @@
   right: 0;
   text-align: center;
   font-size: 2rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--white);
   text-shadow: 0 3px 12px rgba(74, 59, 54, 0.45);
   pointer-events: none;
@@ -380,9 +467,10 @@
 }
 .mg-countdown .mg-count {
   font-size: 7.5rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--white);
-  text-shadow: 0 6px 0 rgba(224, 95, 141, 0.5), 0 16px 40px rgba(74, 59, 54, 0.35);
+  /* V4/AC-1: leaf-green drop edge under the numerals (was hot pink) */
+  text-shadow: 0 6px 0 rgba(109, 181, 78, 0.55), 0 16px 40px rgba(74, 59, 54, 0.35);
   animation: count-pop 900ms ease-out;
 }
 @keyframes count-pop {
@@ -395,7 +483,7 @@
 /* pause + results */
 .mg-overlay-title {
   font-size: 2.125rem;
-  font-weight: 800;
+  font-weight: 700;
   margin: 0 0 0.375rem;
   text-align: center;
 }
@@ -410,14 +498,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--bg-cream);
+  background: var(--paper-shade); /* V4/AC-1: shaded paper wells */
   border-radius: var(--radius-row);
   padding: 0.75rem 1rem;
   font-size: 1.125rem;
   font-weight: 700;
 }
 .mg-results-row .mg-value {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.375rem;
   display: inline-flex;
   align-items: center;
@@ -433,7 +521,7 @@
   background: var(--yellow);
   color: var(--brown);
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   border-radius: 999px;
   padding: 0.25rem 0.625rem;
   margin-left: 0.5rem;
@@ -497,7 +585,7 @@
   background: rgba(38, 42, 66, 0.88);
   color: var(--white);
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   border-radius: 999px;
   padding: 0.625rem 1.125rem;
   min-height: max(44px, 3rem);
@@ -534,7 +622,7 @@
 }
 .perm-title {
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 700;
   margin: 0 0 0.5rem;
 }
 .perm-body {
@@ -575,7 +663,7 @@
 .settings-title {
   /* V3/G33 §C1.2: compress via min() at 320px × 115/130 % („Einstellungen") */
   font-size: min(1.875rem, 8vw);
-  font-weight: 800;
+  font-weight: 700;
   margin: 0;
   display: inline-flex;
   align-items: center;
@@ -600,7 +688,7 @@
 }
 .settings-label {
   font-size: 1.0625rem;
-  font-weight: 800;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -624,14 +712,9 @@
   justify-content: center;
 }
 .settings-danger .btn {
+  /* V4/AC-1: destructive action keeps its red identity on the cozy pill —
+     the shared .btn bottom-edge inset shadow darkens the red on its own. */
   background: var(--danger);
-  /* V3/G47 (§D4): red state-accent frame for the destructive action. The red
-     pack ships no _flat rectangle, so pressed keeps the red frame (translate
-     only via the base .btn:active rule). */
-  border-image-source: var(--g47-btn-red);
-}
-.settings-danger .btn:active {
-  border-image-source: var(--g47-btn-red);
 }
 .settings-footer {
   text-align: center;
@@ -639,17 +722,16 @@
   font-weight: 700;
   opacity: 0.45;
 }
-/* V3/G47 (§C11.2): segmented controls get a button_square_flat 9-slice rim
-   (structure); the selected pill inside stays pure CSS (identity accent). */
+/* V4/AC-1: segmented controls sit in a soft shaded well (sprite rim gone);
+   the selected pill inside stays pure CSS (identity accent). */
 .seg {
   display: inline-flex;
-  background: rgba(74, 59, 54, 0.08);
-  background-clip: padding-box;
-  border: 0.25rem solid transparent;
-  border-image: var(--g47-flat) 10 / 0.25rem stretch;
-  border-radius: 0.25rem;
-  padding: 0.125rem;
+  background: var(--paper-shade);
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem;
   gap: 0.1875rem;
+  box-shadow: inset 0 1px 3px rgba(74, 59, 54, 0.08);
   /* V3/G33 §C1.2: segments wrap instead of clipping (320px × 115/130 %) */
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -661,11 +743,11 @@
   color: var(--brown);
   font-family: inherit;
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
   min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
   min-width: max(44px, 3.25rem);
   padding: 0.375rem 0.75rem;
-  border-radius: 0.6875rem;
+  border-radius: 999px;
   cursor: pointer;
 }
 .seg-btn.seg-on {
@@ -698,7 +780,7 @@
 }
 .shop-title {
   font-size: clamp(1.3125rem, 7vw, 1.75rem); /* F3: shrink before the pill/button do */
-  font-weight: 800;
+  font-weight: 700;
   margin: 0;
   flex: 1;
   min-width: 0;
@@ -714,7 +796,7 @@
   border-radius: 999px;
   padding: 0.5rem 0.875rem;
   font-size: 1.0625rem;
-  font-weight: 800;
+  font-weight: 700;
   box-shadow: var(--shadow-soft);
   flex: none; /* F3: the coins pill never squishes */
 }
@@ -759,7 +841,7 @@
   color: var(--brown);
   font-family: inherit;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -776,7 +858,7 @@
 }
 .shop-section {
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
   opacity: 0.6;
   margin: 0.875rem 0.125rem 0.5rem;
 }
@@ -827,14 +909,14 @@
   align-items: center;
   gap: 0.1875rem;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .shop-card .shop-price svg {
   color: var(--yellow-dark);
 }
 .shop-card .shop-state {
   font-size: 0.6875rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--teal-dark);
   /* F6 (RE3): decor slot cards render item names here too — same wrap rule */
   max-width: 100%;
@@ -847,7 +929,7 @@
   background: var(--teal);
   color: var(--white);
   font-size: 0.6875rem;
-  font-weight: 800;
+  font-weight: 700;
   border-radius: 999px;
   padding: 1px 0.4375rem;
 }
@@ -875,7 +957,7 @@
 }
 .shop-buybar .shop-buybar-name {
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -902,7 +984,7 @@
   background: var(--bg-cream);
   color: var(--brown);
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
 }
@@ -910,7 +992,7 @@
   min-width: 1.625rem;
   text-align: center;
   font-size: 1.0625rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .shop-buybar .btn {
   min-height: max(44px, 2.75rem);
@@ -939,7 +1021,7 @@
 }
 .shop-banner .shop-banner-title {
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .shop-banner .shop-banner-body {
   font-size: 0.7813rem;
@@ -997,7 +1079,7 @@
 }
 .swatch .swatch-name {
   font-size: 0.6875rem;
-  font-weight: 800;
+  font-weight: 700;
   opacity: 0.75;
 }
 .swatch .swatch-price {
@@ -1005,7 +1087,7 @@
   align-items: center;
   gap: 0.1875rem;
   font-size: 0.7188rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .swatch .swatch-price svg {
   color: var(--yellow-dark);
@@ -1026,7 +1108,7 @@
   color: var(--brown);
   font-family: inherit;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 .room-chip.room-chip-on {
@@ -1042,7 +1124,7 @@
 }
 .decor-title {
   font-size: 1.375rem;
-  font-weight: 800;
+  font-weight: 700;
   margin: 0;
   flex: 1;
 }
@@ -1095,27 +1177,26 @@
   transition: background 160ms ease;
   flex: none;
 }
-/* V3/G47 (§C11.2): toggle knobs wear the check_round_* sprites — plain ring
-   when off, ringed dot when on; the pill track keeps its CSS teal accent.
-   The knob spans the full pill height (1.875rem), so the on-travel stays the
-   G33 1.375rem and the ≥44px halo below is untouched. */
+/* V4/AC-1: toggle knob is a plain white disc floating on --shadow-pop (the
+   G47 check_round_* sprites are gone); the pill track keeps its CSS teal
+   accent. Knob is inset 0.1875rem inside the 1.875rem pill, so the G33
+   1.375rem on-travel and the ≥44px halo below are untouched. */
 .g14-toggle .g14-knob {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 1.875rem;
-  height: 1.875rem;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
-  background: var(--g47-round) center / 100% 100% no-repeat;
-  filter: drop-shadow(0 2px 3px rgba(74, 59, 54, 0.25));
-  transition: transform 160ms ease;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.25);
+  transition: transform 160ms var(--ease-spring);
 }
 .g14-toggle.g14-on {
   background: var(--teal);
 }
 .g14-toggle.g14-on .g14-knob {
   transform: translateX(1.375rem); /* V3/G33 §B3: knob travel scales with the pill */
-  background-image: var(--g47-round-dot);
 }
 /* F3: invisible hit-area expansion — visual 52×30 stays, taps get ≥44px.
    V3/G33 §B3: the halo now GUARANTEES a ≥44 real-px hit box at every uiScale
@@ -1156,7 +1237,7 @@
 }
 .g14-ob-step {
   font-size: 0.6875rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   opacity: 0.45;
   letter-spacing: 0.0313rem;
@@ -1237,7 +1318,7 @@
 }
 .vet-title {
   font-size: clamp(1.3125rem, 7vw, 1.75rem);
-  font-weight: 800;
+  font-weight: 700;
   margin: 0;
   flex: 1;
   /* min-width stays auto: „Tierarztpraxis" must not shrink below its own
@@ -1300,7 +1381,7 @@
   min-width: 0;
 }
 .vet-doc-name {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1rem;
 }
 .vet-doc-line {
@@ -1342,7 +1423,7 @@
   gap: 0.5rem;
 }
 .vet-action-name {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1rem;
 }
 .vet-action .shop-price {
@@ -1350,7 +1431,7 @@
   align-items: center;
   gap: 0.1875rem;
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   flex: none;
 }
 .vet-action .shop-price svg {
@@ -1373,7 +1454,7 @@
   padding: 0.875rem 0.9375rem;
 }
 .vet-report-title {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1rem;
 }
 .vet-report-row {
@@ -1389,7 +1470,7 @@
   flex: none;
 }
 .vet-report-row > span:last-child {
-  font-weight: 800;
+  font-weight: 700;
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -1432,7 +1513,7 @@
   min-width: 0;
 }
 .dest-name {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1rem;
 }
 .dest-sub {
@@ -1489,7 +1570,7 @@
   border-radius: 999px;
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--pink-dark);
   box-shadow: var(--shadow-soft);
 }
@@ -1532,7 +1613,7 @@
 .g19-title {
   margin: 0 0 0.25rem;
   font-size: 1.3125rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .g19-hint {
   margin: 0.25rem 0 0.625rem;
@@ -1543,7 +1624,7 @@
 .g19-price {
   margin: 0.125rem 0 0.625rem;
   font-size: 1.0625rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .g19-lockmsg {
   margin: 0 0 0.625rem;
@@ -1614,7 +1695,7 @@
 }
 .g19-name {
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1630,7 +1711,7 @@
 .g19-count {
   flex: 0 0 auto;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
 }
@@ -1683,7 +1764,7 @@
 }
 .g19-chip-arrow {
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ink-faint);
 }
 .g19-chip-next {
@@ -1748,7 +1829,7 @@
 /* --- settings 3.0 (§C2.1): section labels + 5 volume slider rows --- */
 .settings-section {
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
   opacity: 0.45;
@@ -1781,67 +1862,50 @@
   background: transparent;
   cursor: pointer;
 }
-/* V3/G47 (§C11.2/§C2.1): sliders get the Kenney rail/fill/knob treatment —
-   slide_horizontal_grey 9-slice rail (end caps in the side slices),
-   slide_horizontal_color_section as the fill bar (multiplied over the teal
-   accent so the sprite bevel stays crisp), slide_hangle as the knob
-   (multiplied over the pink accent). The fill width rides the --g47-fill
-   custom property (set by settingsScreen's marked hook; defaults to 0%
-   elsewhere, e.g. the dev-panel sliders). */
+/* V4/AC-1: pure-CSS cozy sliders (the Kenney rail/fill/knob sprites are
+   gone) — a soft --track-soft bed, a teal accent-gradient fill and a round
+   white knob on --shadow-pop. The fill width still rides the --g47-fill
+   custom property (set by settingsScreen's + radioScreen's marked hooks;
+   defaults to 0% elsewhere, e.g. the dev-panel sliders). */
 .g33-vol-slider::-webkit-slider-runnable-track {
   height: 0.875rem;
-  border: solid transparent;
-  border-width: 0.3125rem 0.4375rem;
-  border-image: var(--g47-rail) 6 8 stretch;
-  background:
-    var(--g47-rail-fill) no-repeat left center / var(--g47-fill, 0%) 100%,
-    linear-gradient(var(--teal), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%;
-  background-blend-mode: multiply, normal;
-  background-clip: content-box, content-box;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal-dark), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%, var(--track-soft);
 }
 .g33-vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 1.5rem;
-  height: 2rem;
-  margin-top: -0.5625rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: -0.4375rem;
   border: none;
-  background-color: var(--pink);
-  background-image: var(--g47-knob);
-  background-size: 100% 100%;
-  background-blend-mode: multiply;
-  -webkit-mask: var(--g47-knob) center / 100% 100% no-repeat;
-  mask: var(--g47-knob) center / 100% 100% no-repeat;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
 }
 .g33-vol-slider::-moz-range-track {
   height: 0.875rem;
-  border: solid transparent;
-  border-width: 0.3125rem 0.4375rem;
-  border-image: var(--g47-rail) 6 8 stretch;
-  background:
-    var(--g47-rail-fill) no-repeat left center / var(--g47-fill, 0%) 100%,
-    linear-gradient(var(--teal), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%;
-  background-blend-mode: multiply, normal;
-  background-clip: content-box, content-box;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal-dark), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%, var(--track-soft);
 }
 .g33-vol-slider::-moz-range-thumb {
-  width: 1.5rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   border: none;
-  background-color: var(--pink);
-  background-image: var(--g47-knob);
-  background-size: 100% 100%;
-  background-blend-mode: multiply;
-  mask: var(--g47-knob) center / 100% 100% no-repeat;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
 }
 .g33-vol-slider:disabled::-webkit-slider-thumb {
-  background-color: rgba(74, 59, 54, 0.25);
+  background: rgba(74, 59, 54, 0.25);
 }
 .g33-vol-readout {
   flex: none;
   min-width: 2.9em;
   text-align: right;
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
@@ -1853,7 +1917,7 @@
 /* --- UI-Größe row (§C1.1): 4-stop segment + live „Aa" preview glyph --- */
 .g33-scale-aa {
   font-size: 1.375rem; /* rem → previews the live scale */
-  font-weight: 800;
+  font-weight: 700;
   color: var(--pink-dark);
   flex: none;
 }
@@ -1897,7 +1961,7 @@
 }
 .g33-dev-card-title {
   font-size: 0.9375rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .g33-dev-card-desc {
   font-size: 0.8125rem;
@@ -1927,7 +1991,7 @@
   min-width: 2.9em;
   text-align: right;
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .g33-dev-label {
@@ -2059,7 +2123,7 @@
 }
 .g36-group-label {
   font-size: 0.5625rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--brown);
@@ -2096,7 +2160,7 @@
 }
 .g36-shape-glyph {
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 700;
   color: #7a5b40;
   line-height: 1;
 }
@@ -2147,7 +2211,7 @@
 .g41-pill {
   background: var(--frost);
   color: var(--brown);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.8125rem;
   line-height: 1;
   border-radius: 999px;
@@ -2206,101 +2270,103 @@
 }
 /* ---------- end V3/G41 ---------- */
 
-/* =============== V3/G47 — UI reskin: Kenney ui-pack 9-slice (§C11.2) ====== */
-/* Screen-specific frames for surfaces whose base styles live in component-
-   injected CSS (arcade/quest/album/wardrobe/HUD). Selectors are one level
-   deeper than the injected rules so these reskin declarations win the cascade
-   regardless of <style> injection order. Toasts + HUD pills deliberately KEEP
-   their current CSS (§C11.2 keep-list); tab strips stay CSS-only. */
+/* =============== V3/G47 — UI reskin block, re-themed by V4/AC-1 =========== */
+/* V4/AC-1: the Kenney 9-slice frames this block used to add are replaced by
+   the cozy soft-squircle language (paper faces, hairline rings, springy
+   presses). Selectors stay one level deeper than the injected base rules so
+   these declarations still win the cascade regardless of <style> injection
+   order; paddings return to their pre-G47 values (no frame to compensate). */
 
-/* --- arcade tiles: button_square_gloss frame over the white tile face --- */
+/* --- arcade tiles: soft squircle + springy press (legacy .g5-tile shape) -- */
 .screen-arcade .g5-tile {
-  border: solid transparent;
-  border-width: 0.3125rem 0.3125rem 0.4375rem;
-  border-image: var(--g47-gloss) 8 8 12 8 / 0.3125rem 0.3125rem 0.4375rem stretch;
-  border-radius: 0.5rem;
+  border: none;
+  border-radius: var(--card-radius);
   background-clip: padding-box;
-}
-.screen-arcade .g5-tile.g48-flagship {
-  background-clip: padding-box; /* the flagship gradient stays inside the frame */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
 }
 .screen-arcade .g5-tile:active {
-  transform: translateY(2px); /* pressed = 2px translate (§C11.2) */
+  transform: scale(0.97) translateY(2px); /* springy press (offset stays px) */
 }
 .screen-arcade .g5-tile-lock {
-  border-radius: 0.25rem; /* lock overlay follows the sprite frame corners */
+  border-radius: var(--card-radius); /* lock overlay follows the tile corners */
 }
 
-/* --- HUD action buttons: button_square_gloss frame (pills/toasts keep CSS) */
+/* --- HUD action buttons: paper face + bottom lip (pills/toasts keep CSS) -- */
 .g5-hud .g5-hud-btn {
-  border: solid transparent;
-  border-width: 0.3125rem 0.3125rem 0.4375rem;
-  border-image: var(--g47-gloss) 8 8 12 8 / 0.3125rem 0.3125rem 0.4375rem stretch;
-  border-radius: 0.5rem;
+  border: none;
+  border-radius: var(--btn-radius);
   background-clip: padding-box;
+  box-shadow: inset 0 -0.1875rem 0 rgba(74, 59, 54, 0.12), 0 0 0 1px var(--outline-soft), var(--shadow-soft);
 }
 .g5-hud .g5-hud-btn:active {
-  transform: translateY(2px);
+  transform: scale(0.94) translateY(2px);
+  box-shadow: inset 0 -0.0625rem 0 rgba(74, 59, 54, 0.1), 0 0 0 1px var(--outline-soft), var(--shadow-press);
 }
 
 /* --- shop: item cards + buy bar (care cards keep their dashed teal look) -- */
 .screen-shop .shop-card:not(.g22-care-card) {
-  border: 0.3125rem solid transparent;
-  border-image: var(--g47-flat) 12 / 0.3125rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.4375rem 0.125rem 0.3125rem; /* compensates the frame border */
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 3px 12px rgba(74, 59, 54, 0.08);
+  padding: 0.75rem 0.375rem 0.625rem;
 }
 .screen-shop .shop-buybar {
-  border: 0.375rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.375rem stretch;
-  border-radius: 0.25rem;
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.25rem 0.375rem; /* compensates the frame border */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+  padding: 0.625rem 0.75rem;
 }
 
-/* --- wardrobe: outfit/fur item cards --- */
+/* --- wardrobe: outfit/fur item cards (base 0.1875rem border carries the
+   equipped/try-on accent colors again — the sprite frame hid them) --- */
 .screen-wardrobe .g12-wr-item {
-  border: 0.3125rem solid transparent;
-  border-image: var(--g47-flat) 12 / 0.3125rem stretch;
-  border-radius: 0.375rem;
+  border: 0.1875rem solid transparent;
+  border-image: none;
+  border-radius: var(--card-radius);
   background-clip: padding-box;
 }
 
 /* --- quest board: quest cards + locked teaser card --- */
 .screen-questBoard .g23-qb-card,
 .screen-questBoard .g23-qb-locked {
-  border: 0.5rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.5rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
   background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
 }
 .screen-questBoard .g23-qb-card {
-  padding: 0.25rem 0.375rem; /* compensates the frame border */
+  padding: 0.875rem 1rem;
 }
 .screen-questBoard .g23-qb-locked {
-  padding: 1.25rem 0.625rem;
+  padding: 1.5rem 0.875rem;
 }
 
 /* --- album: collection page + sticker-book pages --- */
 .screen-album .g23-al-page,
 .screen-album .g34-sb-page {
-  border: 0.5rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.5rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
   background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
 }
 .screen-album .g23-al-page {
-  padding: 0.375rem; /* compensates the frame border (was 14px) */
+  padding: 1rem;
 }
 .screen-album .g34-sb-page {
-  padding: 0.375rem; /* compensates the frame border (was 0.875rem) */
+  padding: 1rem;
 }
 .screen-album .g34-sb-pager {
-  border-radius: 0.375rem; /* scroll-snap viewport follows the frame corners */
+  border-radius: var(--card-radius-lg); /* scroll-snap viewport follows the page corners */
 }
 
-/* --- results: star sprites flank the title (§C11.2 star/star_outline) ---- */
+/* --- results: rounded CSS stars flank the title (sprite mask → inline SVG,
+   yellow via background-color under the mask) ---- */
 /* §C1.3 hardening: the results card shrink-wraps inside the flex-centered
    .screen — cap it at the screen's content box, let the title stars shrink,
    and let a long value+badge (DE „Tagesbonus ×2!" at 320px/130%) wrap inside
@@ -2326,13 +2392,10 @@
   content: '';
   flex: 0 1 1.75rem; /* may shrink when the title is tight (320px @ 130%) */
   min-width: 0;
-  aspect-ratio: 64 / 60; /* star.png aspect survives flex shrink */
+  aspect-ratio: 1 / 1;
   background-color: var(--yellow);
-  background-image: var(--g47-star);
-  background-size: 100% 100%;
-  background-blend-mode: multiply;
-  -webkit-mask: var(--g47-star) center / 100% 100% no-repeat;
-  mask: var(--g47-star) center / 100% 100% no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' stroke='%23fff' stroke-width='3' stroke-linejoin='round' d='M12 3.5l2.6 5.9 6.4.6-4.8 4.2 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.2 6.4-.6z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' stroke='%23fff' stroke-width='3' stroke-linejoin='round' d='M12 3.5l2.6 5.9 6.4.6-4.8 4.2 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.2 6.4-.6z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
 
 /* ---------- end V3/G47 ---------- */
@@ -2495,7 +2558,7 @@
   border-radius: 999px;
   background: var(--frost);
   color: var(--brown);
-  font: 900 1.125rem/1 system-ui, sans-serif;
+  font: 700 1.125rem/1 var(--font-round);
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   transition: transform 90ms ease, background 180ms ease;
@@ -2594,7 +2657,7 @@
 .g52-station > small {
   color: var(--ink-soft);
   font-size: 0.5625rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .g52-replace {
@@ -2606,7 +2669,7 @@
   gap: 0.75rem;
   flex: none;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .g52-toggle,
@@ -2618,7 +2681,7 @@
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: #d8d1ce;
+  background: rgba(74, 59, 54, 0.16); /* V4/AC-1: warm off-track (was #d8d1ce) */
   cursor: pointer;
 }
 
@@ -2781,7 +2844,7 @@
   border-radius: 999px;
   background: #fff0c6;
   color: #8a6425;
-  font: 900 0.875rem/1 system-ui, sans-serif;
+  font: 700 0.875rem/1 var(--font-round);
   cursor: pointer;
 }
 
@@ -2808,7 +2871,7 @@
   background: var(--brown);
   color: var(--white);
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   text-align: center;
   transform: translateX(-50%);
   box-shadow: var(--shadow-soft);
@@ -3046,7 +3109,7 @@
   border-radius: var(--btn-radius);
   background: var(--white);
   color: var(--brown);
-  font: 700 1rem/1.2 system-ui, sans-serif;
+  font: 700 1rem/1.2 var(--font-round);
 }
 
 .g58-codes-input:focus {
@@ -3082,7 +3145,7 @@
 }
 
 .g58-codes-name {
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   min-width: 0;
   overflow-wrap: anywhere;
@@ -3119,7 +3182,7 @@
   border-radius: 999px;
   background: rgba(255, 209, 102, 0.92);
   color: var(--brown);
-  font: 800 0.6875rem/1 system-ui, sans-serif;
+  font: 700 0.6875rem/1 var(--font-round);
   box-shadow: var(--shadow-soft);
   pointer-events: none; /* display chip only — no tap target */
 }
@@ -3199,7 +3262,7 @@
 
 .g58-cheat-group {
   margin-top: 0.5rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .g58-cheat-row {
@@ -3250,9 +3313,9 @@
 }
 
 .mg-loading-card {
-  background: var(--frost);
-  border-radius: var(--card-radius);
-  box-shadow: var(--shadow-soft);
+  background: var(--paper); /* V4/AC-1: cozy paper loading card */
+  border-radius: var(--card-radius-lg);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
   padding: 1.25rem 1.75rem;
   text-align: center;
   max-width: 86vw;
@@ -3260,7 +3323,7 @@
 
 .mg-loading-title {
   font-size: 1.125rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
 }
 
@@ -3357,7 +3420,7 @@
   gap: 0.25rem;
   color: var(--white);
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   backdrop-filter: blur(1px);
   z-index: 2;
 }
@@ -3450,7 +3513,7 @@
   border-radius: 999px;
   padding: 0.0625rem 0.375rem;
   font-size: 0.5625rem;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3513,7 +3576,7 @@
 .g68-pre-name {
   margin: 0.75rem 0 0;
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   text-align: center;
   max-width: min(86vw, 22rem);
@@ -3550,7 +3613,7 @@
   border-radius: 999px;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   box-shadow: var(--shadow-soft);
 }
@@ -3581,7 +3644,7 @@
   font-family: inherit;
   /* vw cap: 4 pills must fit 320 px even at uiScale 130 % (rem grows, vw doesn't) */
   font-size: min(0.6875rem, 3.1vw);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   display: flex;
   align-items: center;
@@ -3632,7 +3695,7 @@
 
 .g68-welt-label {
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   opacity: 0.7;
   text-align: center;
@@ -3720,7 +3783,7 @@
 
 .g68-banner-count {
   font-size: 0.625rem;
-  font-weight: 800;
+  font-weight: 700;
   opacity: 0.65;
   font-variant-numeric: tabular-nums;
 }
@@ -3736,7 +3799,7 @@
   width: 100%;
   min-height: 3.5rem;
   font-size: 1.125rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .g68-play-locked {
@@ -3747,7 +3810,7 @@
   background: rgba(74, 59, 54, 0.12);
   border-radius: 1rem;
   font-size: 0.875rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   opacity: 0.75;
   text-align: center;
@@ -3794,7 +3857,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   z-index: var(--z-recap);
   pointer-events: auto; /* input limited to the overlay (§C-SYS2.1) */
   overflow: hidden;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-round);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -3847,7 +3910,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .g64-subtitle {
   margin-top: 0.5rem;
   font-size: clamp(0.9375rem, 4.5vw, 1.375rem);
-  font-weight: 800;
+  font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 2px 10px rgba(40, 20, 60, 0.5);
   animation: g64intro 900ms 150ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
@@ -3914,7 +3977,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   justify-content: flex-end;
   padding: 0.625rem 0.875rem;
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--white);
   text-shadow: 0 1px 6px rgba(40, 20, 60, 0.6);
   opacity: 0;
@@ -3984,7 +4047,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 
 .g64-end-line {
   font-size: clamp(0.8125rem, 4vw, 1rem);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
   opacity: 0.85;
   font-variant-numeric: tabular-nums;
@@ -4185,7 +4248,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.625rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.0313rem;
@@ -4419,7 +4482,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .g62-ship {
   background: var(--pink);
   color: var(--white);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.8125rem;
   line-height: 1.1;
 }
@@ -4433,44 +4496,46 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 /* =============================== end V4/G62 =============================== */
 
 /* ================= V4/G-UI: style audit & polish (§C11.2 parity) ==========
-   The G47 reskin framed quest cards, album pages, shop cards and wardrobe
-   items — but their sibling surfaces (achievement tiles, profile cards, vet
-   clinic cards) kept the plain pre-reskin rounded-rect look. Same pattern,
-   same sprites, padding compensated exactly like the G47 blocks above. */
+   V4/AC-1 re-theme: the sibling surfaces (achievement tiles, profile cards,
+   vet clinic cards) follow the quest/album cards onto the cozy paper
+   squircles; paddings return to their pre-G47 values. */
 
 /* --- achievements: tiles match the quest cards (same list-row family) ----- */
 .screen-achievements .g12-ach-tile {
-  border: 0.5rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.5rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.125rem 0.375rem; /* compensates the frame border (was 0.625rem 0.875rem) */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.625rem 0.875rem;
 }
 
-/* --- profile: stat/summary cards match the album/quest card frames ------- */
+/* --- profile: stat/summary cards match the album/quest card faces -------- */
 .screen-profile .g23-pr-card {
-  border: 0.5rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.5rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.25rem 0.375rem; /* compensates the frame border (was 0.75rem 0.875rem) */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
 }
 
-/* --- vet clinic: doctor card = card frame; action cards = the flat frame
-   the shop's buyable item cards wear (both are tappable commerce rows) ----- */
+/* --- vet clinic: doctor + action cards join the same paper family -------- */
 .vet-doc {
-  border: 0.5rem solid transparent;
-  border-image: var(--g47-card) 24 / 0.5rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.25rem 0.375rem; /* compensates the frame border (was 0.75rem 0.875rem) */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
 }
 .vet-action {
-  border: 0.3125rem solid transparent;
-  border-image: var(--g47-flat) 12 / 0.3125rem stretch;
-  border-radius: 0.375rem;
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
   background-clip: padding-box;
-  padding: 0.5rem 0.625rem; /* compensates the frame border (was 0.8125rem 0.9375rem) */
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.8125rem 0.9375rem;
 }
 /* ============================== end V4/G-UI =============================== */
 
@@ -4501,7 +4566,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   padding: 0.3125rem 0.75rem;
   background: var(--frost);
   color: var(--brown);
-  font: 800 0.6875rem/1 system-ui, sans-serif;
+  font: 700 0.6875rem/1 var(--font-round);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   animation: g76chipglow 1.6s ease-in-out infinite;
@@ -4815,7 +4880,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   width: min(20rem, 86vw);
   padding: 0;
   overflow: hidden;
-  border-radius: var(--card-radius);
+  border-radius: var(--card-radius-lg); /* V4/AC-1: cozy squircle */
   animation: polishd-loading-in 220ms ease-out;
 }
 
@@ -4859,7 +4924,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   bottom: 0.625rem;
   color: var(--white);
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 700;
   text-shadow: 0 1px 4px rgba(74, 59, 54, 0.6);
 }
 
@@ -5087,7 +5152,7 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 .mg-rotate-title {
   margin-top: 0.75rem;
   font-size: 1.25rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brown);
 }
 
@@ -5123,3 +5188,151 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 /* ============================== end POLISH-E ============================== */
+
+/* ========================================================================== */
+/* V4/AC-1: shared opt-in Animal-Crossing components (.ac-*)                  */
+/* OPT-IN contract for later per-screen agents: nothing in the current DOM   */
+/* uses these yet. Class names + the modifier hooks below are frozen —       */
+/* extend, don't rename.                                                     */
+/*   .ac-tabbar > .ac-tab            icon tab bar; active tab = leaf circle  */
+/*     (mark active with .ac-tab-active OR aria-selected="true")             */
+/*   .ac-chip / .ac-chip-leaf/-sky   unified pill chip (coin/stat/radio/frost)*/
+/*   .ac-stamp                       rotated dashed "approval stamp" badge   */
+/*   .ac-ribbon                      leaf banner ribbon for headers/callouts */
+/*   .ac-emptystate                  dashed cozy placeholder block           */
+/* ========================================================================== */
+
+/* --- tab bar: rounded pastel rail of icon tabs -------------------------- */
+.ac-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 3px 10px rgba(74, 59, 54, 0.1);
+}
+
+.ac-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max(44px, 2.75rem);
+  min-height: max(44px, 2.75rem);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-pop) var(--ease-spring), background var(--dur-pop) ease, color var(--dur-pop) ease;
+}
+
+.ac-tab:active {
+  transform: scale(0.92);
+}
+
+/* active tab: filled leaf circle with white glyph */
+.ac-tab.ac-tab-active,
+.ac-tab[aria-selected='true'] {
+  background: var(--leaf);
+  color: var(--white);
+  box-shadow: inset 0 -0.1875rem 0 var(--leaf-dark), 0 2px 8px rgba(109, 181, 78, 0.4);
+}
+
+.ac-tab svg {
+  display: block;
+}
+
+/* --- chip: one pill language for coin/stat/frost/radio chips ------------ */
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--brown);
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.1);
+}
+
+.ac-chip svg,
+.ac-chip img {
+  display: block;
+}
+
+.ac-chip.ac-chip-leaf {
+  background: var(--leaf);
+  color: var(--white);
+  box-shadow: inset 0 -0.125rem 0 var(--leaf-dark), 0 2px 6px rgba(109, 181, 78, 0.35);
+}
+
+.ac-chip.ac-chip-sky {
+  background: var(--sky-soft);
+  color: var(--brown);
+}
+
+/* --- stamp: rotated dashed approval badge (AC "task done" energy) ------- */
+.ac-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.875rem;
+  border: 0.1875rem dashed var(--leaf-dark);
+  border-radius: 999px;
+  color: var(--leaf-dark);
+  background: rgba(143, 208, 108, 0.14);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  pointer-events: none;
+}
+
+/* --- ribbon: little leaf banner for section headers / callouts ---------- */
+.ac-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 1.125rem 0.375rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--leaf), var(--leaf-dark));
+  color: var(--white);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.14), 0 3px 8px rgba(109, 181, 78, 0.35);
+  text-shadow: 0 1px 0 rgba(74, 59, 54, 0.18);
+}
+
+/* --- empty state: cozy dashed placeholder -------------------------------- */
+.ac-emptystate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.25rem;
+  border: 0.125rem dashed rgba(74, 59, 54, 0.18);
+  border-radius: var(--card-radius-lg);
+  background: var(--paper-shade);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ac-emptystate svg {
+  display: block;
+  opacity: 0.55;
+}
+
+/* ========================== end V4/AC-1 .ac-* ============================ */

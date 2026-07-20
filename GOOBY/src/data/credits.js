@@ -37,6 +37,9 @@ export const CREDITS = Object.freeze({
   /** Section 1 — GOOBY. */
   gooby: Object.freeze([
     Object.freeze({ text: 'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht. 💛' }),
+    // V4/AC-1: cozy-UI art (assets/acui/ — Wortmarke, Muster-Kacheln, Münze)
+    // ist projekt-eigene, generierte Grafik — wie die Sticker-Kunst.
+    Object.freeze({ text: 'Cozy-UI-Grafik (Wortmarke, Muster, Münze): projekt-eigene GOOBY-Kunst. 🍃' }),
   ]),
 
   /** Section 2 — 3D-Welten (CC BY 4.0 — attribution REQUIRED, exact rows binding). */
@@ -93,5 +96,8 @@ export const CREDITS = Object.freeze({
   /** Section 5 — Technik (MIT/BSD notice line). */
   technik: Object.freeze([
     Object.freeze({ text: 'three.js · Vite · Capacitor (MIT/BSD)' }),
+    // V4/AC-1: bundled UI face — SIL OFL 1.1 obligation; license text ships at
+    // public/assets/fonts/OFL.txt (renders as inert text like every row here).
+    Object.freeze({ text: 'Schrift „Baloo 2" von Ek Type (SIL OFL 1.1 — assets/fonts/OFL.txt)' }),
   ]),
 });

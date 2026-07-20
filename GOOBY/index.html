@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>Gooby</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Ctext%20x='0'%20y='13'%20font-size='13'%3E%F0%9F%90%B0%3C/text%3E%3C/svg%3E" />
+    <!-- V4/AC-1: bundled rounded UI face (Baloo 2 variable, latin subset, OFL) —
+         preload so the cozy type lands before first meaningful paint; styles.css
+         declares the @font-face with font-display: swap. -->
+    <link rel="preload" href="/assets/fonts/baloo2-latin-var.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       /* V3/G33 (§B9): safe-area insets as root vars — the dev-panel fake-notch
          toggle / ?notch=1 override them inline on <html> (59/34px, §C1.4). */

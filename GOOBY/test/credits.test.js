@@ -18,8 +18,10 @@ const ASSETS = path.join(ROOT, 'public', 'assets');
 const source = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 /** All top-level asset roots must be classified so a new pack cannot hide. */
-const FIRST_PARTY_ROOTS = Object.freeze(['GoobyMusic', 'covers', 'recap', 'stickers']);
-const SPECIAL_CREDIT_ROOTS = Object.freeze(['music', 'splats']);
+const FIRST_PARTY_ROOTS = Object.freeze(['GoobyMusic', 'acui', 'covers', 'recap', 'stickers']);
+// 'fonts' = bundled Baloo 2 (SIL OFL 1.1) — credited via its section-5 text
+// row in credits.js + committed OFL.txt, not a section-4 CC0 pack row (V4/AC-1).
+const SPECIAL_CREDIT_ROOTS = Object.freeze(['music', 'splats', 'fonts']);
 const PACK_ROOT_ALIASES = Object.freeze({
   kenney: 'kenney',
   kaykit: 'kaykit',

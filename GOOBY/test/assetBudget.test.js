@@ -47,6 +47,10 @@ const FEATURE_CAPS_MB = {
   music: 30,
   itch: 12,
   covers: 3,
+  // V4/AC-1 (Animal-Crossing design system): quantized acui/ art + bundled
+  // Baloo 2 woff2 (latin subset, OFL)
+  acui: 2.5,
+  fonts: 0.3,
 };
 
 function dirBytes(dir) {
@@ -90,7 +94,7 @@ test('§A2 v4: total committed assets stay under the 1536 MB hard cap (warn > 28
   );
 });
 
-test('§D7/§E-G50 per-feature caps — characters ≤ 11, stickers ≤ 4.2, ui ≤ 0.5, splats ≤ 33, music ≤ 30, itch ≤ 12, covers ≤ 3 MB', () => {
+test('§D7/§E-G50 per-feature caps — characters ≤ 11, stickers ≤ 4.2, ui ≤ 0.5, splats ≤ 33, music ≤ 30, itch ≤ 12, covers ≤ 3, acui ≤ 2.5, fonts ≤ 0.3 MB', () => {
   for (const [rel, capMb] of Object.entries(FEATURE_CAPS_MB)) {
     const dir = path.join(ASSETS, ...rel.split('/'));
     assert.ok(fs.existsSync(dir), `expected asset dir missing: ${rel}`);
