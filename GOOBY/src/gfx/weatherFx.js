@@ -7,7 +7,9 @@
 //       Fades in/out over ~1 s; mesh.visible false when fully faded (zero
 //       draw calls while it isn't raining).
 //   mountGardenClouds(group) → soft cloud sprites drifting across the garden
-//       dome while the weather is 'cloudy' (ONE InstancedMesh draw call).
+//       dome while the weather is 'cloudy' (ONE InstancedMesh draw call;
+//       V4/POLISH-C: 4-variant hi-res atlas, per-instance scale/opacity/roll,
+//       camera-facing billboards composed into the instance matrices).
 //   windowRainTexture(band)  → shared ANIMATED CanvasTexture for the indoor
 //       window panes during rain: streak trails + occasional droplet runs
 //       painted over the static sky base (zero extra draw calls — it swaps
@@ -21,7 +23,7 @@
 // Band/weather decisions live with the callers (homeScene subscribes to
 // G20's 'dayBandChanged'/'weatherChanged' ticker events); this module only
 // renders. All geometry is procedural — no assets, no textures beyond two
-// tiny CanvasTextures.
+// procedural CanvasTextures (the cloud atlas + the window-rain overlay).
 
 import * as THREE from 'three';
 import { WEATHER } from '../data/constants.js';
@@ -39,8 +41,8 @@ export const WEATHER_FX = Object.freeze({
   AREA_X: 2.45,
   AREA_Z: 1.95,
   TOP_Y: 4.6,
-  /** Drifting cloud sprite count (cloudy — §C11.2). */
-  CLOUD_COUNT: 8,
+  /** Drifting cloud sprite count (cloudy — §C11.2; V4/POLISH-C: 8 → 10). */
+  CLOUD_COUNT: 10,
   /** Pond ripple ring instances (fishingPond §C11.2). */
   POND_RINGS: 26,
   /** Window rain canvas size / repaint interval (s). */
@@ -232,45 +234,165 @@ export function mountGardenRain(group) {
 // Drifting clouds (cloudy — §C11.2)
 // ---------------------------------------------------------------------------
 
-/** @type {THREE.CanvasTexture|null} shared puffy-cloud sprite texture */
+/**
+ * V4/POLISH-C cloud-sprite tuning (§C11.2 "soft cloud sprites drift"): a
+ * 4-variant edge-safe soft-alpha atlas + per-instance scale/opacity/roll
+ * variation, spherically billboarded toward the camera each frame — still
+ * ONE InstancedMesh (§A2.3: only the instance matrices change; 1 draw call).
+ */
+const CLOUD_FX = Object.freeze({
+  /** Atlas canvas size (pow-2; 2×2 cells of 512×256 → hi-res sprites). */
+  ATLAS_W: 1024,
+  ATLAS_H: 512,
+  /** Atlas grid: COLS×ROWS = 4 distinct cloud shape variants. */
+  COLS: 2,
+  ROWS: 2,
+  /** Cell-edge padding fraction — puff extents never reach the cell edge. */
+  PAD: 0.1,
+  /** Per-instance width range (m); height ≈ width × H_FACTOR ± H_JITTER. */
+  W_MIN: 2.1,
+  W_RANGE: 2.3,
+  H_FACTOR: 0.5,
+  H_JITTER: 0.24,
+  /** Per-instance opacity range (multiplied by the global fade). */
+  ALPHA_MIN: 0.52,
+  ALPHA_RANGE: 0.36,
+  /** Max per-instance roll (rad) so the billboards don't look stamped. */
+  ROLL_MAX: 0.09,
+  /** Drift volume (room-local): x wrap extent, y band, z depth band. */
+  X_WRAP: 9.5,
+  Y_MIN: 2.9,
+  Y_RANGE: 2.3,
+  Z_MIN: -8.6,
+  Z_RANGE: 3.0,
+  /** Drift speed range (m/s) — larger clouds get the slower end. */
+  SPEED_MIN: 0.1,
+  SPEED_RANGE: 0.16,
+  /** Gentle vertical bob amplitude (m) / angular frequency (rad/s). */
+  BOB_AMP: 0.06,
+  BOB_FREQ: 0.35,
+});
+
+/** deterministic decorrelated hash → [0,1) (same recipe as gfx/sky.js) */
+const cloudHash = (i, salt) => {
+  const s = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+/** @type {THREE.CanvasTexture|null} shared 4-variant cloud atlas texture */
 let cloudTex = null;
+
+/**
+ * The shared cloud sprite atlas (V4/POLISH-C): CLOUD_FX.COLS×ROWS soft cloud
+ * variants on one pow-2 canvas. Every puff keeps center ± radius inside its
+ * padded cell so no sprite ever clips flat at an edge (the old 128×64 canvas
+ * cut its puffs at v = 0/1), and the radial falloff reaches alpha 0 well
+ * before the rim. A source-atop blue-grey base shade gives the puffs depth.
+ * Deterministic (hash-seeded) — no Math.random.
+ * @returns {THREE.CanvasTexture}
+ */
 function getCloudTexture() {
   if (cloudTex) return cloudTex;
-  const W = 128;
-  const H = 64;
   const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = CLOUD_FX.ATLAS_W;
+  canvas.height = CLOUD_FX.ATLAS_H;
   const g = canvas.getContext('2d');
-  // 4 overlapping radial puffs → one soft cloud
-  for (const [cx, cy, r] of [[38, 40, 24], [62, 30, 28], [88, 40, 24], [60, 46, 30]]) {
-    const grad = g.createRadialGradient(cx, cy, 2, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.85)');
-    grad.addColorStop(0.7, 'rgba(255,255,255,0.45)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, W, H);
+  const cw = CLOUD_FX.ATLAS_W / CLOUD_FX.COLS;
+  const ch = CLOUD_FX.ATLAS_H / CLOUD_FX.ROWS;
+  for (let v = 0; v < CLOUD_FX.COLS * CLOUD_FX.ROWS; v += 1) {
+    const x0 = (v % CLOUD_FX.COLS) * cw;
+    const y0 = Math.floor(v / CLOUD_FX.COLS) * ch;
+    const padX = cw * CLOUD_FX.PAD;
+    const padY = ch * CLOUD_FX.PAD;
+    // large base puffs along an arced center line + smaller top bumps
+    const puffs = 8 + (v % 3) * 2;
+    for (let k = 0; k < puffs; k += 1) {
+      const t = k / (puffs - 1);
+      const mid = 1 - Math.abs(t - 0.5) * 2; // 0 at the ends, 1 in the middle
+      const top = k % 2 === 1;
+      const r = ch * (0.15 + 0.17 * mid) * (0.75 + cloudHash(k, v * 7 + 1) * 0.5) * (top ? 0.7 : 1);
+      // clamp centers so cx ± r / cy ± r stay inside the padded cell
+      const spanX = Math.max(0, cw - 2 * padX - 2 * r);
+      const tx = Math.min(1, Math.max(0, t + (cloudHash(k, v * 7 + 2) - 0.5) * 0.12));
+      const cx = x0 + padX + r + spanX * tx;
+      const rawY = y0 + ch * (top ? 0.42 : 0.6) + (cloudHash(k, v * 7 + 3) - 0.5) * ch * 0.12;
+      const cy = Math.min(y0 + ch - padY - r, Math.max(y0 + padY + r, rawY));
+      const grad = g.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+      grad.addColorStop(0, 'rgba(255,255,255,0.92)');
+      grad.addColorStop(0.55, 'rgba(255,255,255,0.5)');
+      grad.addColorStop(0.85, 'rgba(255,255,255,0.14)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(x0, y0, cw, ch);
+    }
+    // subtle blue-grey base shading (alpha-preserving) for a rounded read
+    const shade = g.createLinearGradient(0, y0 + ch * 0.35, 0, y0 + ch);
+    shade.addColorStop(0, 'rgba(178,196,222,0)');
+    shade.addColorStop(1, 'rgba(178,196,222,0.4)');
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = shade;
+    g.fillRect(x0, y0, cw, ch);
+    g.globalCompositeOperation = 'source-over';
   }
   cloudTex = new THREE.CanvasTexture(canvas);
   cloudTex.colorSpace = THREE.SRGBColorSpace;
   return cloudTex;
 }
 
+// Cloud shader: instanceMatrix billboard transform + per-instance atlas cell
+// and opacity — MeshBasicMaterial can't vary UV/alpha per instance, so this
+// tiny ShaderMaterial keeps the variation inside the ONE draw call (§A2.3).
+const CLOUD_VERT = /* glsl */ `
+  attribute vec2 aCell;   // atlas cell UV origin (bottom-left)
+  attribute float aAlpha; // per-instance opacity
+  uniform vec2 uCellSize; // atlas cell UV extent
+  varying vec2 vUv;
+  varying float vAlpha;
+  void main() {
+    vUv = aCell + uv * uCellSize;
+    vAlpha = aAlpha;
+    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  }
+`;
+
+const CLOUD_FRAG = /* glsl */ `
+  uniform sampler2D uMap;
+  uniform float uOpacity;
+  varying vec2 vUv;
+  varying float vAlpha;
+  void main() {
+    vec4 c = texture2D(uMap, vUv);
+    float a = c.a * vAlpha * uOpacity;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(c.rgb, a);
+  }
+`;
+
 /**
  * Soft cloud sprites drifting across the garden dome while cloudy (§C11.2).
- * ONE InstancedMesh = one draw call; matrices update on the CPU (8 clouds).
+ * ONE InstancedMesh = one draw call. V4/POLISH-C: each instance picks one of
+ * 4 atlas variants with its own scale/opacity/roll, and every frame the
+ * camera-facing rotation is composed into the instance matrices
+ * (onBeforeRender receives the rendering camera — no API change), so the
+ * sprites read as soft volumes instead of parallel cardboard cutouts.
  * @param {THREE.Group} group the garden room group
  * @returns {WeatherFxHandle}
  */
 export function mountGardenClouds(group) {
   const N = WEATHER_FX.CLOUD_COUNT;
   const geo = new THREE.PlaneGeometry(1, 1);
-  const mat = new THREE.MeshBasicMaterial({
-    map: getCloudTexture(),
+  const cells = new Float32Array(N * 2);
+  const alphas = new Float32Array(N);
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: CLOUD_VERT,
+    fragmentShader: CLOUD_FRAG,
+    uniforms: {
+      uMap: { value: getCloudTexture() },
+      uCellSize: { value: new THREE.Vector2(1 / CLOUD_FX.COLS, 1 / CLOUD_FX.ROWS) },
+      uOpacity: { value: 0 },
+    },
     transparent: true,
-    opacity: 0.9,
     depthWrite: false,
-    fog: false,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.name = 'gardenClouds';
@@ -282,27 +404,57 @@ export function mountGardenClouds(group) {
   // seeded drift lanes across the visible dome half (camera looks toward −z)
   const clouds = [];
   for (let i = 0; i < N; i += 1) {
-    const j = (n) => (((i * 73 + n * 37) % 89) / 89);
+    const sizeT = cloudHash(i, 4);
+    const w = CLOUD_FX.W_MIN + CLOUD_FX.W_RANGE * sizeT;
+    const variant = i % (CLOUD_FX.COLS * CLOUD_FX.ROWS);
+    // atlas cell origin in UV space (canvas top row → v = 1 - 1/ROWS)
+    cells[i * 2] = (variant % CLOUD_FX.COLS) / CLOUD_FX.COLS;
+    cells[i * 2 + 1] = 1 - (Math.floor(variant / CLOUD_FX.COLS) + 1) / CLOUD_FX.ROWS;
+    alphas[i] = CLOUD_FX.ALPHA_MIN + cloudHash(i, 6) * CLOUD_FX.ALPHA_RANGE;
     clouds.push({
-      x: -9 + j(1) * 18,
-      y: 3.0 + j(2) * 2.6,
-      z: -8.2 + j(3) * 2.4,
-      w: 2.4 + j(4) * 1.6,
-      h: 1.1 + j(5) * 0.7,
-      speed: 0.14 + j(6) * 0.18, // m/s drift (§C11.2 "soft ... drift")
+      x: -CLOUD_FX.X_WRAP + cloudHash(i, 1) * 2 * CLOUD_FX.X_WRAP,
+      y: CLOUD_FX.Y_MIN + cloudHash(i, 2) * CLOUD_FX.Y_RANGE,
+      z: CLOUD_FX.Z_MIN + cloudHash(i, 3) * CLOUD_FX.Z_RANGE,
+      w,
+      h: w * CLOUD_FX.H_FACTOR * (1 - CLOUD_FX.H_JITTER / 2 + cloudHash(i, 5) * CLOUD_FX.H_JITTER),
+      // §C11.2 "soft ... drift"; bigger clouds drift on the slower end
+      speed: (CLOUD_FX.SPEED_MIN + CLOUD_FX.SPEED_RANGE * cloudHash(i, 7)) * (1.15 - 0.5 * sizeT),
+      roll: (cloudHash(i, 8) - 0.5) * 2 * CLOUD_FX.ROLL_MAX,
+      bobPhase: cloudHash(i, 10) * Math.PI * 2,
     });
   }
+  geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(cells, 2));
+  geo.setAttribute('aAlpha', new THREE.InstancedBufferAttribute(alphas, 1));
+
   const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
   const q = new THREE.Quaternion();
-  const write = () => {
+  const camQ = new THREE.Quaternion();
+  const meshQ = new THREE.Quaternion();
+  const rollQ = new THREE.Quaternion();
+  const Z_AXIS = new THREE.Vector3(0, 0, 1);
+  let bob = 0; // shared bob clock (per-cloud phase offsets)
+
+  // Billboard pass: rotation = meshWorldRot⁻¹ · camWorldRot · per-cloud roll,
+  // composed into every instance matrix right before the mesh renders —
+  // onBeforeRender hands us the actual rendering camera without widening the
+  // updateWeatherFx(dt) contract, and the mesh stays ONE draw call (§A2.3).
+  mesh.onBeforeRender = (renderer, scene, camera) => {
+    camera.getWorldQuaternion(camQ);
+    mesh.getWorldQuaternion(meshQ).invert();
+    camQ.premultiply(meshQ);
     for (let i = 0; i < N; i += 1) {
       const c = clouds[i];
-      m.compose(new THREE.Vector3(c.x, c.y, c.z), q, new THREE.Vector3(c.w, c.h, 1));
+      rollQ.setFromAxisAngle(Z_AXIS, c.roll);
+      q.copy(camQ).multiply(rollQ);
+      pos.set(c.x, c.y + Math.sin(bob * CLOUD_FX.BOB_FREQ + c.bobPhase) * CLOUD_FX.BOB_AMP, c.z);
+      scl.set(c.w, c.h, 1);
+      m.compose(pos, q, scl);
       mesh.setMatrixAt(i, m);
     }
     mesh.instanceMatrix.needsUpdate = true;
   };
-  write();
 
   let target = 0;
   let cur = 0;
@@ -315,20 +467,21 @@ export function mountGardenClouds(group) {
     isActive: () => target > 0,
     update(dt) {
       if (!mesh.visible) return;
+      bob += dt;
       for (const c of clouds) {
         c.x += c.speed * dt;
-        if (c.x > 9.5) c.x = -9.5; // wrap across the dome
+        if (c.x > CLOUD_FX.X_WRAP) c.x = -CLOUD_FX.X_WRAP; // wrap across the dome
       }
-      write();
       if (cur !== target) {
         cur += Math.sign(target - cur) * Math.min(Math.abs(target - cur), dt / WEATHER_FX.FADE_SEC);
-        mat.opacity = 0.9 * cur;
+        mat.uniforms.uOpacity.value = cur;
         if (cur <= 0.004 && target === 0) mesh.visible = false;
       }
     },
     dispose() {
       liveHandles.delete(handle);
       group.remove(mesh);
+      mesh.dispose(); // frees the instance buffers
       geo.dispose();
       mat.dispose(); // cloudTex stays cached
     },
