@@ -4487,3 +4487,249 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 /* =============================== end V4/G81 =============================== */
+
+/* ================================ POLISH-D ================================
+   UI transition polish + themed game-loading card.
+
+   Transitions (ui.js contract): screens keep their g14 fade/scale ENTER and
+   gain a fade/scale EXIT (.screen-out); bottom sheets keep panel-up on open,
+   gain a backdrop fade-in, and close by sliding down while the backdrop
+   fades (.panel-backdrop-out). ui.js adds the exit class, then removes the
+   element on animationend (matched 200ms timeout fallback) — keep every
+   POLISH-D duration at 200ms, matching EXIT_ANIM_MS in ui.js. Under
+   prefers-reduced-motion ui.js removes immediately and the media block at
+   the end collapses the enter animations. */
+
+/* POLISH-D: screen exit — soft fade + shrink (mirrors g14-screen-in) */
+.screen.screen-out {
+  animation: polishd-screen-out 200ms ease-in forwards;
+}
+
+@keyframes polishd-screen-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+/* POLISH-D: sheet backdrop fades in on open (the sheet itself rides the
+   existing panel-up slide) */
+.panel-backdrop {
+  animation: polishd-backdrop-in 200ms ease-out;
+}
+
+@keyframes polishd-backdrop-in {
+  from {
+    background-color: rgba(74, 59, 54, 0);
+  }
+
+  to {
+    background-color: rgba(74, 59, 54, 0.35);
+  }
+}
+
+/* POLISH-D: sheet close — backdrop fades out, sheet slides down */
+.panel-backdrop.panel-backdrop-out {
+  animation: polishd-backdrop-out 200ms ease-in forwards;
+}
+
+@keyframes polishd-backdrop-out {
+  from {
+    background-color: rgba(74, 59, 54, 0.35);
+  }
+
+  to {
+    background-color: rgba(74, 59, 54, 0);
+  }
+}
+
+.panel-backdrop.panel-backdrop-out .panel {
+  animation: polishd-panel-down 200ms ease-in forwards;
+}
+
+@keyframes polishd-panel-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(100%);
+    opacity: 0.4;
+  }
+}
+
+/* POLISH-D: a leaving screen/sheet must never swallow taps — ui.js disables
+   pointer events on the root; this covers children that re-enable them. */
+.screen.screen-out,
+.screen.screen-out *,
+.panel-backdrop.panel-backdrop-out,
+.panel-backdrop.panel-backdrop-out * {
+  pointer-events: none !important;
+}
+
+/* POLISH-D: themed game-loading card (framework.js showLoading builds
+   .mg-loading.mg-loading-themed — cover art + progress bar + Gooby motif).
+   weltPreview.js still builds the PLAIN .mg-loading-card, so the V4/G56
+   base blocks above stay untouched; everything here hangs off the
+   .mg-loading-themed modifier or new mg-loading-* child classes. */
+.mg-loading-themed .mg-loading-card {
+  position: relative;
+  width: min(20rem, 86vw);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  animation: polishd-loading-in 220ms ease-out;
+}
+
+@keyframes polishd-loading-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* cover backdrop: accent gradient (inline style) under the cover <img>,
+   with a readability shade + the "Get ready!" line at the bottom */
+.mg-loading-cover {
+  position: relative;
+  height: 9.5rem;
+  overflow: hidden;
+}
+
+.mg-loading-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mg-loading-cover-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(74, 59, 54, 0) 40%, rgba(74, 59, 54, 0.55) 100%);
+}
+
+.mg-loading-ready {
+  position: absolute;
+  left: 1rem;
+  bottom: 0.625rem;
+  color: var(--white);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-shadow: 0 1px 4px rgba(74, 59, 54, 0.6);
+}
+
+/* the cute motif: round white-rimmed sticker overlapping the cover edge,
+   gently bobbing (paused under reduced motion) */
+.mg-loading-motif {
+  position: absolute;
+  right: 0.875rem;
+  bottom: -0.75rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 0.1875rem solid var(--white);
+  box-shadow: var(--shadow-soft);
+  background: #fdf6e3;
+  animation: polishd-motif-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes polishd-motif-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(-0.3125rem) rotate(2deg);
+  }
+}
+
+.mg-loading-body {
+  padding: 1rem 1.25rem 1.125rem;
+  text-align: left;
+}
+
+/* progress bar: determinate fill when the game reports loadPct (goobyWelt),
+   intentional indeterminate sweep otherwise */
+.mg-loading-bar {
+  position: relative;
+  height: 0.625rem;
+  margin-top: 0.625rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 18%, #fff6ec);
+  overflow: hidden;
+}
+
+.mg-loading-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), #7fd4ff);
+  transition: width 150ms ease-out;
+}
+
+.mg-loading-bar-indet .mg-loading-bar-fill {
+  width: 45%;
+  transition: none;
+  animation: polishd-bar-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes polishd-bar-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(320%);
+  }
+}
+
+.mg-loading-themed .mg-loading-text {
+  margin-top: 0.5rem;
+}
+
+.mg-loading-tip {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* POLISH-D: reduced motion — collapse enter/exit transitions to a single
+   frame (ui.js also skips the exit delay) and pause the decorative loops */
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .screen.screen-out,
+  .panel,
+  .panel-backdrop,
+  .panel-backdrop.panel-backdrop-out,
+  .panel-backdrop.panel-backdrop-out .panel,
+  .mg-loading-themed .mg-loading-card {
+    animation-duration: 1ms;
+  }
+
+  .mg-loading-motif,
+  .mg-loading-bar-indet .mg-loading-bar-fill {
+    animation: none;
+  }
+}
+
+/* ============================== end POLISH-D ============================== */

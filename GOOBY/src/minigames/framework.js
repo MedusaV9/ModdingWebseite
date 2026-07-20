@@ -68,6 +68,11 @@ import {
 import { getCollectionSet } from '../data/collections.js';
 import { countOf as stickerCountOf } from '../systems/collections.js';
 // ── end V4/G76 imports ──
+// ── POLISH-D imports (themed loading card: per-game cover art §G7.1 +
+// v4-ui2 loading strings; both pure modules) ──
+import { coverUrl, fallbackGradient } from '../ui/arcadeUi.logic.js';
+import { EN as UI2_EN, DE as UI2_DE } from '../data/strings/v4-ui2.js';
+// ── end POLISH-D imports ──
 
 const awardMinigame = economy.awardMinigame; // V4/G56: unchanged call sites below
 
@@ -640,28 +645,92 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       pauseOverlayEl = null;
     }
 
-    // ── V4/G56 (§G6.6): loading card while a Promise-returning init resolves
-    // (goobyWelt splat load, 2–9 s). Appended to document.body ABOVE the
-    // sceneManager fade overlay (z 9999 → card z 10000 in styles.css), since
-    // enter() runs while the stage is still faded to black. ──
+    // ── V4/G56 (§G6.6) + POLISH-D: themed loading card for the whole launch
+    // (asset preload + a Promise-returning init — goobyWelt splat load,
+    // 2–9 s). Appended to document.body ABOVE the sceneManager fade overlay
+    // (z 9999 → card z 10000 in styles.css), since enter() runs while the
+    // stage is still faded to black. POLISH-D: the card wears the game's own
+    // cover art over its accent gradient (§G7.1 helpers), shows a progress
+    // bar (determinate when the running init exposes `loadPct` — goobyWelt
+    // wires splatViewer's onProgress into it; indeterminate sweep otherwise),
+    // the bouncing Gooby motif and a rotating tip. weltPreview.js builds the
+    // PLAIN .mg-loading-card — base styles stay untouched (mg-loading-themed
+    // modifier). ──
+
+    // POLISH-D: same-wave i18n fallback for strings/v4-ui2.js (the G52 tx
+    // pattern — strings.js stays frozen per §E0.1-8; falls back to the
+    // module dictionaries until a later sweep spreads them in).
+    /** @param {string} key @returns {string} */
+    function txD(key) {
+      const global = t(key);
+      if (global !== key) return global;
+      return (getLang() === 'de' ? UI2_DE : UI2_EN)[key] ?? key;
+    }
+    const LOADING_TIP_COUNT = 3; // ui2.loading.tip1..tip3 (v4-ui2.js)
+
     /** @type {HTMLElement|null} */
     let loadingEl = null;
+    /** POLISH-D: interval polling game.loadPct into the determinate bar. */
+    let loadingPollTimer = 0;
     function showLoading() {
+      if (loadingEl) return;
       loadingEl = document.createElement('div');
-      loadingEl.className = 'mg-loading';
+      loadingEl.className = 'mg-loading mg-loading-themed';
       loadingEl.innerHTML = `
         <div class="mg-loading-card">
-          <div class="mg-loading-title">${t(meta.titleKey)}</div>
-          <div class="mg-loading-text">${tx('mg.loading')}</div>
-          <div class="mg-loading-dots"><span></span><span></span><span></span></div>
+          <div class="mg-loading-cover">
+            <img class="mg-loading-cover-img" alt="" decoding="async">
+            <div class="mg-loading-cover-shade"></div>
+            <div class="mg-loading-ready"></div>
+            <img class="mg-loading-motif" alt="" decoding="async">
+          </div>
+          <div class="mg-loading-body">
+            <div class="mg-loading-title"></div>
+            <div class="mg-loading-bar mg-loading-bar-indet"
+              role="progressbar" aria-valuemin="0" aria-valuemax="100">
+              <div class="mg-loading-bar-fill"></div>
+            </div>
+            <div class="mg-loading-text">${tx('mg.loading')} <span data-pct></span></div>
+            <div class="mg-loading-tip"></div>
+          </div>
         </div>`;
+      // Cover backdrop: the game's cover art over its accent gradient — a
+      // missing/unloadable cover falls back to the gradient (§G7.1 rule:
+      // onerror swap, never a broken image). Same for the decorative motif.
+      loadingEl.querySelector('.mg-loading-cover').style.background = fallbackGradient(meta.id);
+      const coverImg = loadingEl.querySelector('.mg-loading-cover-img');
+      coverImg.addEventListener('error', () => coverImg.remove());
+      coverImg.src = coverUrl(meta.id);
+      const motif = loadingEl.querySelector('.mg-loading-motif');
+      motif.addEventListener('error', () => motif.remove());
+      motif.src = 'assets/ui/gooby_loading_motif.png';
+      loadingEl.querySelector('.mg-loading-ready').textContent = txD('ui2.loading.getReady');
+      loadingEl.querySelector('.mg-loading-title').textContent = t(meta.titleKey);
+      const tipN = 1 + Math.floor(Math.random() * LOADING_TIP_COUNT);
+      loadingEl.querySelector('.mg-loading-tip').textContent = txD(`ui2.loading.tip${tipN}`);
       document.body.appendChild(loadingEl);
+      // Progress: poll the running init's loadPct (0–100). Games without one
+      // keep the intentional indeterminate sweep — never a frozen empty bar.
+      const bar = loadingEl.querySelector('.mg-loading-bar');
+      const fill = loadingEl.querySelector('.mg-loading-bar-fill');
+      const pctEl = loadingEl.querySelector('[data-pct]');
+      loadingPollTimer = setInterval(() => {
+        const pct = Number(game?.loadPct);
+        if (!Number.isFinite(pct) || pct <= 0) return;
+        const clamped = Math.min(100, pct);
+        bar.classList.remove('mg-loading-bar-indet');
+        bar.setAttribute('aria-valuenow', String(Math.round(clamped)));
+        fill.style.width = `${clamped}%`;
+        pctEl.textContent = `${Math.round(clamped)}%`;
+      }, 100);
     }
     function hideLoading() {
+      clearInterval(loadingPollTimer);
+      loadingPollTimer = 0;
       loadingEl?.remove();
       loadingEl = null;
     }
-    // ── end V4/G56 loading card ──
+    // ── end V4/G56 + POLISH-D loading card ──
 
     function resume() {
       removePauseOverlay();
@@ -829,6 +898,11 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         minigameActive = true; // F4 for F2
         meta = getMinigame(params.gameId);
         launchParams = params.params ?? {};
+        // POLISH-D: the themed loading card covers the WHOLE launch (module
+        // load + asset preload + async init), not just a thenable init — the
+        // stage is faded to black for all of it, so even a short preload gets
+        // the branded card instead of a bare black screen.
+        showLoading();
         const mod = await loadGame(params.gameId);
         buildHud();
         try {
@@ -857,11 +931,13 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
             y: store.get('settings.controls.invertY') === true,
           }))
           : ctx.input;
-        // ── V4/G56 (§G6.6): awaited async init. Sync games return undefined
-        // (no card, no behavior change); a thenable shows the loading card and
-        // holds the countdown until init resolves. Rejection exits to home
-        // (deferred until the in-flight switch settles — switchTo is a no-op
-        // while switching). ──
+        // ── V4/G56 (§G6.6) + POLISH-D: awaited async init. The loading card
+        // is already up (shown at the top of enter); a thenable init keeps it
+        // up and holds the countdown until init resolves (goobyWelt drives
+        // the determinate bar via loadPct). Rejection exits to home (deferred
+        // until the in-flight switch settles — switchTo is a no-op while
+        // switching). The card hides right before enter() resolves so the
+        // 3-2-1 countdown plays over the visible stage. ──
         let initResult;
         try {
           initResult = game.init({
@@ -881,7 +957,6 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
           initResult = Promise.reject(err);
         }
         if (initResult && typeof initResult.then === 'function') {
-          showLoading();
           try {
             await initResult;
           } catch (err) {
@@ -898,10 +973,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
             setTimeout(backToHome, 120);
             return;
           }
-          hideLoading();
-          if (exited) return;
+          if (exited) return; // exit() already hid the card
         }
-        // ── end V4/G56 async init ──
+        hideLoading();
+        // ── end V4/G56 + POLISH-D async init ──
         document.addEventListener('visibilitychange', onHidden);
         // The countdown runs AFTER enter resolves so the scene fade lifts
         // first and 3-2-1 plays over the visible stage (not behind black).

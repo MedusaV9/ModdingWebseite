@@ -19,6 +19,54 @@ const TOAST_MS = 2500;
 // in via ui.holdToasts()/ui.releaseToasts() from their mount/unmount hooks.
 const TOAST_FLUSH_STAGGER_MS = 400;
 
+// ---- POLISH-D: screen/panel EXIT animations (§E6 polish) ----
+// Modules still unmount() synchronously (state/listener cleanup semantics are
+// unchanged); only the ELEMENT lingers with an exit class and is removed when
+// its exit animation ends. A matched timeout guarantees removal even when
+// animationend never fires (hidden tab, interrupted animation), and both the
+// listener and the timeout clean each other up — no leaks either way.
+// prefers-reduced-motion skips the animation and removes immediately.
+const EXIT_ANIM_MS = 200; // keep in sync with the POLISH-D block in styles.css
+const EXIT_TIMEOUT_PAD_MS = 100;
+
+/** @returns {boolean} true when the OS asks for reduced motion */
+function prefersReducedMotion() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Add `exitClass` to `el`, then remove the element once its exit animation
+ * ends (or after the matched timeout). Pointer events are disabled up front
+ * so a leaving screen/panel can never swallow taps meant for what's below.
+ * @param {HTMLElement} el
+ * @param {string} exitClass
+ */
+function animateOut(el, exitClass) {
+  if (!el.isConnected) return;
+  if (prefersReducedMotion()) {
+    el.remove();
+    return;
+  }
+  el.style.pointerEvents = 'none';
+  el.classList.add(exitClass);
+  let timer = 0;
+  const finish = () => {
+    clearTimeout(timer);
+    el.removeEventListener('animationend', onEnd);
+    el.remove();
+  };
+  const onEnd = (event) => {
+    // Only the element's OWN exit animation counts — finite child animations
+    // bubbling up must not cut the exit short.
+    if (event.target !== el) return;
+    finish();
+  };
+  el.addEventListener('animationend', onEnd);
+  timer = setTimeout(finish, EXIT_ANIM_MS + EXIT_TIMEOUT_PAD_MS);
+}
+// ---- end POLISH-D exit helper ----
+
 export function createUi() {
   const root = document.getElementById('ui');
 
@@ -181,7 +229,8 @@ export function createUi() {
       } catch (err) {
         console.error('[ui] panel unmount error:', err);
       }
-      el.remove();
+      // POLISH-D: sheet slides down + backdrop fades before the element goes
+      animateOut(el, 'panel-backdrop-out');
     },
 
     /** Close the active screen and every panel. */
@@ -193,7 +242,9 @@ export function createUi() {
         } catch (err) {
           console.error('[ui] screen unmount error:', err);
         }
-        activeScreen.el.remove();
+        // POLISH-D: fade/scale the leaving screen out (a replacement screen
+        // mounted right after paints ABOVE it — later sibling, same z-index).
+        animateOut(activeScreen.el, 'screen-out');
         activeScreen = null;
       }
     },
