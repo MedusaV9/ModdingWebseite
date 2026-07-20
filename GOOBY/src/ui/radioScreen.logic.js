@@ -218,3 +218,23 @@ export function formatTime(seconds) {
   const sec = Math.max(0, Math.floor(finite(seconds, 0)));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
+
+/**
+ * V4/POLISH-A: pure view state for the transport scrub bar. Position clamps
+ * into [0, duration]; unknown/zero durations disable the bar (fallback
+ * catalog rows carry durationSec 0).
+ * @param {*} t current playback position (s)
+ * @param {*} duration track length (s)
+ * @returns {{max: number, value: number, fill: number, enabled: boolean}}
+ */
+export function seekState(t, duration) {
+  const dur = Math.max(0, finite(duration, 0));
+  const max = Math.max(1, Math.round(dur));
+  const value = Math.round(Math.max(0, Math.min(finite(t, 0), dur)));
+  return {
+    max,
+    value,
+    fill: Math.max(0, Math.min(100, (value / max) * 100)),
+    enabled: dur > 0,
+  };
+}

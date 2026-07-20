@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { EN, DE } from '../src/data/strings/v4-radio.js';
+import { EN as EN2, DE as DE2 } from '../src/data/strings/v4-radio2.js';
 import { FURNITURE_BY_ID } from '../src/data/furniture.js';
 import {
   RADIO_UI,
@@ -23,6 +24,7 @@ import {
   sparseTrimUpdate,
   trimFor,
   formatTime,
+  seekState,
 } from '../src/ui/radioScreen.logic.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -179,6 +181,53 @@ test('now-playing chip listens to track events, auto-hides at 4 s and reuses one
   assert.match(js, /CHIP_VISIBLE_MS/);
   assert.match(js, /activeChip\?\.dispose/);
   assert.equal(RADIO_UI.CHIP_VISIBLE_MS, 4000);
+});
+
+// -------------------------------------------- V4/POLISH-A transport additions
+
+test('seekState: pure scrub-bar view state (clamp, fill %, zero-duration disable)', () => {
+  assert.deepEqual(seekState(30, 120), { max: 120, value: 30, fill: 25, enabled: true });
+  assert.equal(seekState(-5, 120).value, 0, 'clamps below 0');
+  assert.equal(seekState(999, 120).value, 120, 'clamps to duration');
+  assert.equal(seekState(999, 120).fill, 100);
+  assert.deepEqual(seekState(10, 0), { max: 1, value: 0, fill: 0, enabled: false },
+    'fallback rows with durationSec 0 disable the bar');
+  assert.deepEqual(seekState(NaN, NaN), { max: 1, value: 0, fill: 0, enabled: false });
+  assert.equal(seekState(52.4, 104.7).max, 105, 'max rounds to whole seconds');
+});
+
+test('v4-radio2 strings: same EN/DE key set, non-empty, no v4-radio shadowing', () => {
+  assert.deepEqual(Object.keys(EN2).sort(), Object.keys(DE2).sort());
+  assert.ok(Object.keys(EN2).length >= 2);
+  for (const key of Object.keys(EN2)) {
+    assert.ok(EN2[key].trim(), `empty EN ${key}`);
+    assert.ok(DE2[key].trim(), `empty DE ${key}`);
+    assert.ok(!(key in EN), `v4-radio2 must not shadow the frozen v4-radio key ${key}`);
+  }
+  assert.ok('radio.prev' in EN2);
+  assert.ok('radio.seek' in EN2);
+});
+
+test('transport wires prev/seek/tap-to-play and the radio-motor toast is dead', () => {
+  const js = source('src/ui/radioScreen.js');
+  assert.match(js, /g52-prev/, 'previous button rendered');
+  assert.match(js, /data-radio-seek/, 'scrub bar rendered');
+  assert.match(js, /callApi\('seek'/, 'scrubbing calls the engine seek');
+  assert.match(js, /playTrack/, 'per-track ▶ prefers the engine playTrack');
+  assert.match(js, /v4-radio2\.js/, 'tx() fallback consults the POLISH-A module');
+  assert.ok(!js.includes('radio.previewUnavailable'),
+    'the pre-engine radio-motor toast path is gone');
+});
+
+test('engine transport API: playTrack/prev/seek/preview ship in both module names', () => {
+  for (const rel of ['src/audio/radioPlayer.js']) {
+    const js = source(rel);
+    for (const fn of ['playTrack', 'prev', 'seek', 'preview']) {
+      assert.match(js, new RegExp(`export function ${fn}\\(`), `${rel} exports ${fn}`);
+    }
+  }
+  assert.match(source('src/audio/radio.js'), /export \* from '\.\/radioPlayer\.js'/,
+    'the radio.js alias re-exports the transport additions');
 });
 
 test('room manager fixture emits tap:radio semantics, pulses at 0.5 Hz and pools notes', () => {

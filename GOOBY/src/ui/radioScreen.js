@@ -7,6 +7,9 @@ import { t, getLang } from '../data/strings.js';
 import { icon } from './icons.js';
 import { getGooby, getRoomManager } from '../home/homeScene.js';
 import { EN as RADIO_EN, DE as RADIO_DE } from '../data/strings/v4-radio.js';
+// V4/POLISH-A: transport strings (prev/seek) — strings.js is frozen, so the
+// new module rides the same tx() fallback as v4-radio.js did pre-G53.
+import { EN as RADIO2_EN, DE as RADIO2_DE } from '../data/strings/v4-radio2.js';
 import {
   RADIO_UI,
   normalizeTrack,
@@ -17,6 +20,7 @@ import {
   trimFor,
   formatTime,
   coverUrl,
+  seekState,
 } from './radioScreen.logic.js';
 
 const RADIO_LOADERS = import.meta.glob(['../audio/radio.js', '../audio/radioPlayer.js']);
@@ -45,11 +49,13 @@ let radioModulePromise = null;
 let catalogPromise = null;
 let furnitureWired = false;
 
-/** Same-wave i18n fallback until G53 spreads v4-radio.js into strings.js. */
+/** Same-wave i18n fallback until G53 spreads v4-radio.js into strings.js.
+ * V4/POLISH-A: also consults v4-radio2.js (frozen strings.js never will). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  let text = (getLang() === 'de' ? RADIO_DE : RADIO_EN)[key] ?? key;
+  const table = getLang() === 'de' ? { ...RADIO_DE, ...RADIO2_DE } : { ...RADIO_EN, ...RADIO2_EN };
+  let text = table[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
@@ -57,6 +63,15 @@ function tx(key, vars) {
   }
   return text;
 }
+
+/* V4/POLISH-A: scoped seek-row styles — styles.css is owned by the G52 wave,
+   so the scrub bar ships its own tiny injected block (the px-audit gate scans
+   this template literal; rem-only, the slider itself reuses .g33-vol-slider's
+   Kenney rail/fill/knob treatment incl. its max(44px, 2.75rem) tap floor). */
+const SEEK_CSS = `
+  .g52-seek { display: flex; align-items: center; flex: none; min-width: 0; }
+  .g52-seek input { flex: 1; min-width: 0; width: auto; }
+`;
 
 /** @param {*} value */
 const esc = (value) =>
@@ -220,6 +235,8 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
   let nowState = null;
   let clockTimer = null;
   let offEvents = [];
+  /** V4/POLISH-A: true while the user drags the scrub bar (poll hands off). */
+  let seekDragging = false;
   const allOffToasted = new Set();
 
   const currentStation = () =>
@@ -291,6 +308,15 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         cover.src = src;
       }
     }
+    // V4/POLISH-A: follow playback on the scrub bar (hands off mid-drag).
+    const seekBar = /** @type {HTMLInputElement|null} */ (root.querySelector('[data-radio-seek]'));
+    if (seekBar && !seekDragging) {
+      const view = seekState(next?.t, next?.duration);
+      seekBar.max = String(view.max);
+      seekBar.value = String(view.value);
+      seekBar.disabled = !view.enabled;
+      seekBar.style.setProperty('--g47-fill', `${view.fill}%`);
+    }
   }
 
   function renderLoading() {
@@ -323,6 +349,8 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
     const nowTrack = tracks.find((track) => track.id === (nowState?.trackId ?? state.lastTrack)) ?? shown[0];
     const nowCover = coverUrl(nowState?.cover ?? nowTrack?.cover);
     const nowTitle = nowState?.title ?? nowTrack?.title ?? tx('radio.unknownTrack');
+    // V4/POLISH-A: initial scrub-bar state (the 500 ms poll keeps it moving).
+    const seekView = seekState(nowState?.t, nowState?.duration ?? nowTrack?.durationSec);
     const stationCards = stations.map((row) => {
       const locked = isStationLocked(row, level);
       return `<button class="g52-station ${row.id === selectedId ? 'g52-active' : ''} ${locked ? 'g52-locked' : ''}"
@@ -348,6 +376,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         </div>
 
         ${options.tracksOnly ? '' : `
+        <style>${SEEK_CSS}</style>
         <section class="g52-now-card card" aria-label="${esc(tx('radio.nowPlaying'))}">
           <img data-radio-now-cover src="${esc(nowCover)}" alt="">
           <div class="g52-now-copy">
@@ -358,10 +387,18 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
           </div>
         </section>
 
+        <div class="g52-seek">
+          <input type="range" class="g33-vol-slider" data-radio-seek min="0" step="1"
+            max="${seekView.max}" value="${seekView.value}" ${seekView.enabled ? '' : 'disabled'}
+            style="--g47-fill:${seekView.fill}%"
+            aria-label="${esc(tx('radio.seek'))}">
+        </div>
+
         <div class="g52-transport">
           <button class="g52-transport-btn g52-shuffle ${shuffle ? 'g52-on' : ''}"
             aria-label="${esc(shuffle ? tx('radio.shuffleOn') : tx('radio.shuffleOff'))}"
             aria-pressed="${shuffle}">🔀</button>
+          <button class="g52-transport-btn g52-prev" aria-label="${esc(tx('radio.prev'))}">⏮</button>
           <button class="g52-transport-btn g52-play" aria-label="${esc(playing ? tx('radio.pause') : tx('radio.play'))}">
             ${playing ? '⏸' : '▶'}
           </button>
@@ -460,6 +497,44 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
       refreshNow(result);
     });
 
+    // V4/POLISH-A ⏮ — mirror of the next button (engine prev()/skip(-1)).
+    root.querySelector('.g52-prev')?.addEventListener('click', async () => {
+      audio?.play?.('ui.tap');
+      const target = api ?? audio?.radio ?? audio?.radioPlayer ?? await loadRadioApi();
+      if (target) api = target;
+      const result = typeof target?.prev === 'function'
+        ? await callApi('prev')
+        : await callApi('skip', -1);
+      if (result == null) {
+        const listNow = selectedTracks();
+        const at = Math.max(0, listNow.findIndex((track) => track.id === store.get('radio.lastTrack')));
+        emitFallbackTrack(listNow[(at - 1 + listNow.length) % Math.max(1, listNow.length)]);
+      }
+      refreshNow(result);
+    });
+
+    // V4/POLISH-A scrub bar — drag freely, apply on release (api.seek).
+    const seekBar = /** @type {HTMLInputElement|null} */ (root.querySelector('[data-radio-seek]'));
+    if (seekBar) {
+      seekBar.addEventListener('pointerdown', () => { seekDragging = true; });
+      seekBar.addEventListener('input', () => {
+        seekDragging = true;
+        const max = Number(seekBar.max) || 1;
+        seekBar.style.setProperty('--g47-fill', `${(Number(seekBar.value) / max) * 100}%`);
+        const time = root.querySelector('[data-radio-now-time]');
+        if (time) time.textContent = `${formatTime(seekBar.value)} / ${formatTime(nowState?.duration)}`;
+      });
+      const endDrag = () => { seekDragging = false; };
+      seekBar.addEventListener('pointerup', endDrag);
+      seekBar.addEventListener('pointercancel', endDrag);
+      seekBar.addEventListener('change', async () => {
+        seekDragging = false;
+        audio?.play?.('ui.slider');
+        await callApi('seek', Number(seekBar.value));
+        refreshNow();
+      });
+    }
+
     root.querySelector('.g52-shuffle')?.addEventListener('click', async () => {
       audio?.play?.('ui.tap');
       const next = store.get('radio.shuffle') === false;
@@ -535,27 +610,32 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
       slider.addEventListener('change', () => audio?.play?.('ui.slider'));
     }
 
+    // V4/POLISH-A tap-to-play: the per-track ▶ really plays the track via the
+    // engine's playTrack (older preview spellings kept as fallbacks) — the
+    // radio-motor toast path is gone.
     for (const button of root.querySelectorAll('[data-track-preview]')) {
       button.addEventListener('click', async () => {
         const track = tracks.find((row) => row.id === button.dataset.trackPreview);
         if (!track) return;
         audio?.play?.('ui.tap');
         const target = api ?? audio?.radio ?? audio?.radioPlayer ?? await loadRadioApi();
-        const preview = target?.preview ?? target?.previewTrack ?? audio?.previewRadioTrack;
-        if (typeof preview === 'function') {
-          await preview.call(target, track.id, 5);
+        if (target) api = target;
+        const play = target?.playTrack ?? target?.preview ?? target?.previewTrack ??
+          audio?.previewRadioTrack;
+        let played = null;
+        if (typeof play === 'function') {
+          played = await play.call(target, track.id, 5);
         } else {
-          store.emit?.('radioTrackChanged', {
-            trackId: track.id,
-            title: track.title,
-            cover: track.cover,
-            station: selectedId,
-            t: 0,
-            duration: track.durationSec,
-            preview: true,
-          });
-          showLocalToast(root, tx('radio.previewUnavailable'));
+          emitFallbackTrack(track); // engine-less dev stubs still update the chip
         }
+        if (played != null || typeof play !== 'function') {
+          const playBtn = root.querySelector('.g52-play');
+          if (playBtn) {
+            playBtn.textContent = '⏸';
+            playBtn.setAttribute('aria-label', tx('radio.pause'));
+          }
+        }
+        refreshNow(played);
       });
     }
 

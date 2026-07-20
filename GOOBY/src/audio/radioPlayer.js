@@ -21,6 +21,11 @@
 //   playContext(context, opts) (registry trackFor() playback — rooms/games/
 //   locations; bedroom picks the Awake/Sleeping variant from sleep state) ·
 //   attach(deps) / setEnabled(on) (audio.js only)
+// V4/POLISH-A transport additions (additive — same singleton):
+//   playTrack(id) (tap-to-play: jump the queue to a specific track) ·
+//   prev() (= skip(-1)) · seek(seconds) (scrub the live element, clamped to
+//   [0, duration]) · preview(id) (per-track ▶ alias of playTrack — the
+//   pre-G51 "radio-motor" UI fallback path is dead)
 //
 // Ownership & mute rules (§B2.4 — all binding):
 //   · settings.music === false → element pause() + ZERO node creation (the
@@ -429,13 +434,15 @@ export function toggle() {
  * Step the station queue (⏭). dir −1 steps back. While blocked (muted/
  * ducked) only the queue position moves.
  * @param {1|-1} [dir]
+ * @returns {object|null} the manifest track now at the queue position
+ *   (V4/POLISH-A additive — lets the UI skip its engine-less fallback)
  */
 export function skip(dir = 1) {
   contextToken = null;
   const queue = stationQueue();
-  if (queue.length === 0) return;
+  if (queue.length === 0) return null;
   const nextId = nextTrackId(queue, current?.id ?? radioSlice().lastTrack, dir);
-  if (!nextId) return;
+  if (!nextId) return null;
   if (isAudible() && playing) {
     playTrackNow(trackById(nextId));
   } else {
@@ -443,6 +450,82 @@ export function skip(dir = 1) {
     persist({ lastTrack: nextId });
     emitChanged();
   }
+  return trackById(nextId);
+}
+
+/** V4/POLISH-A ⏮ convenience — steps the station queue backward. */
+export function prev() {
+  return skip(-1);
+}
+
+/**
+ * V4/POLISH-A tap-to-play (the per-track ▶ in G52's list): jump the queue
+ * to a specific track and play it immediately. Stays on the current station
+ * when the track is a member; otherwise switches to the first §C-SYS1.2
+ * station that carries it. Unknown ids and level-locked tracks are a no-op
+ * (locks stay authoritative — §C-SYS1). While blocked (muted/ducked) the
+ * wish + queue position move and playback starts when unblocked — the same
+ * rules as start()/skip().
+ * @param {string} id manifest track id
+ * @returns {object|null} the manifest track now current (null = no-op)
+ */
+export function playTrack(id) {
+  const track = trackById(id);
+  if (!track) return null;
+  if (Math.max(1, Math.trunc(Number(track.unlockLevel) || 1)) > playerLevel()) return null;
+  contextToken = null;
+  const row = stationRow();
+  if (!row?.trackIds?.includes(track.id)) {
+    const host = getStations().find((s) => s.trackIds.includes(track.id));
+    if (!host) return null; // stingers never join a station (§C-SYS1.2)
+    stationId = host.id;
+  }
+  playing = true;
+  persist({ playing: true, station: stationId, lastTrack: track.id });
+  if (isAudible()) {
+    playTrackNow(track);
+  } else {
+    current = track;
+    emitChanged();
+    applyDirectorGate();
+  }
+  return track;
+}
+
+/**
+ * V4/POLISH-A per-track preview — plays the REAL track through the normal
+ * queue (playTrack), reusing existing playback (no new synth). Extra args
+ * from older preview(id, sec) callers are accepted and ignored.
+ * @param {string} id manifest track id
+ * @returns {object|null} the manifest track now current (null = no-op)
+ */
+export function preview(id) {
+  return playTrack(id);
+}
+
+/**
+ * V4/POLISH-A scrub (the G52 seek bar): set the live element's currentTime,
+ * clamped to [0, duration]. Duration prefers the element's decoded length
+ * and falls back to the manifest durationSec. now().t / getStats().t follow
+ * the element, so they update immediately. No element or no current track →
+ * no-op.
+ * @param {number} seconds
+ * @returns {number|null} the applied position (null = no-op)
+ */
+export function seek(seconds) {
+  if (!el || !current) return null;
+  const n = Number(seconds);
+  if (!Number.isFinite(n)) return null;
+  const max = Number.isFinite(el.duration) && el.duration > 0
+    ? el.duration
+    : (Number(current.durationSec) > 0 ? Number(current.durationSec) : Infinity);
+  const t = Math.max(0, Math.min(n, max));
+  try {
+    el.currentTime = t;
+  } catch {
+    return null; // pre-metadata seeks may throw on some engines
+  }
+  return t;
 }
 
 /**
@@ -686,7 +769,8 @@ export function reset() {
 
 export default {
   FADE_SEC, DEFAULT_STATION,
-  start, stop, toggle, skip, setStation, setShuffle, setTrim,
+  start, stop, toggle, skip, prev, playTrack, preview, seek,
+  setStation, setShuffle, setTrim,
   setReplaceContext, duck, playContext, now, getTime, getStats,
   attach, setEnabled, reset, trackUrl,
 };

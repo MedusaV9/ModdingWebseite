@@ -389,3 +389,99 @@ test('getStations day-one sanity for the engine (§C-SYS1.2)', () => {
   assert.ok(byId.has(DEFAULT_STATION));
   assert.ok(byId.get(DEFAULT_STATION).count >= 13);
 });
+
+// -------------------------------------------- V4/POLISH-A transport additions
+
+test('playTrack: starts a stopped radio on the exact tapped track', async () => {
+  assert.equal(radio.getStats().playing, false, 'radio is off after the stop test');
+  const ids = stationTrackIds('bordmusik').filter((id) => trackById(id).unlockLevel <= 1);
+  const target = ids.find((id) => id !== radio.getStats().trackId) ?? ids[0];
+  const played = radio.playTrack(target);
+  assert.equal(played?.id, target, 'returns the manifest row');
+  await wait(TRANSITION_MS);
+  const stats = radio.getStats();
+  assert.equal(stats.playing, true, 'tap-to-play turns the radio on');
+  assert.equal(stats.trackId, target, 'plays exactly the tapped track');
+  assert.equal(stats.station, 'bordmusik', 'member track keeps the station');
+  assert.equal(stats.elementState, 'playing');
+  assert.equal(store.get('radio.lastTrack'), target, 'queue position persisted');
+  assert.equal(store.get('radio.playing'), true);
+});
+
+test('playTrack: switches to the hosting station; unknown/locked ids no-op', async () => {
+  const bord = new Set(stationTrackIds('bordmusik'));
+  const foreign = stationTrackIds('gooby-fm')
+    .find((id) => trackById(id).unlockLevel <= 1 && !bord.has(id));
+  assert.ok(foreign, 'gooby-fm has a level-1 non-bordmusik track');
+  const played = radio.playTrack(foreign);
+  assert.equal(played?.id, foreign);
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().station, 'gooby-fm', 'switched to the hosting station');
+  assert.equal(radio.getStats().trackId, foreign);
+  assert.equal(store.get('radio.station'), 'gooby-fm', 'station switch persisted');
+  assert.equal(radio.playTrack('does-not-exist'), null, 'unknown id → no-op');
+  const locked = stationTrackIds('gooby-fm').find((id) => trackById(id).unlockLevel > 1);
+  assert.ok(locked, 'gooby-fm has a level-locked track');
+  assert.equal(radio.playTrack(locked), null, 'level locks stay authoritative');
+  assert.equal(radio.getStats().trackId, foreign, 'no-ops keep current playback');
+});
+
+test('prev: skip(-1) convenience steps the queue backward with wrap (§B2.4)', async () => {
+  radio.setStation('bordmusik'); // playing → starts the station immediately
+  await wait(TRANSITION_MS);
+  const queueIds = buildQueue(
+    stationTrackIds('bordmusik').map(trackById),
+    { level: 1, trims: store.get('radio.trims'), shuffle: false, stationId: 'bordmusik' }
+  ).ids;
+  const before = radio.getStats().trackId;
+  const expected = nextTrackId(queueIds, before, -1);
+  const stepped = radio.prev();
+  assert.equal(stepped?.id, expected, 'prev returns the stepped-to track (like skip)');
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().trackId, expected);
+  assert.equal(radio.getStats().elementState, 'playing');
+  assert.equal(store.get('radio.lastTrack'), expected);
+});
+
+test('seek: clamps to [0, duration] and drives now().t / getStats().t', () => {
+  const dur = trackById(radio.getStats().trackId).durationSec;
+  assert.ok(dur > 0, 'manifest track has a real duration');
+  assert.equal(radio.seek(5), 5, 'returns the applied position');
+  assert.equal(el.currentTime, 5, 'element scrubbed');
+  assert.equal(radio.now().t, 5, 'now() follows the element');
+  assert.equal(radio.getStats().t, 5, 'stats follow the element');
+  assert.equal(radio.seek(-3), 0, 'clamps below 0');
+  assert.equal(radio.seek(dur + 999), dur, 'clamps to the manifest duration');
+  assert.equal(radio.getStats().t, Math.round(dur * 10) / 10);
+  assert.equal(radio.seek('junk'), null, 'non-finite → no-op');
+  assert.equal(radio.seek(Number.NaN), null);
+});
+
+test('preview: alias of playTrack — the per-track ▶ contract (extra args ignored)', async () => {
+  const ids = stationTrackIds('bordmusik').filter((id) => trackById(id).unlockLevel <= 1);
+  const target = ids.find((id) => id !== radio.getStats().trackId) ?? ids[0];
+  const played = radio.preview(target, 5);
+  assert.equal(played?.id, target);
+  await wait(TRANSITION_MS);
+  assert.equal(radio.getStats().trackId, target, 'preview really plays the track');
+  assert.equal(radio.getStats().elementState, 'playing');
+});
+
+test('playTrack while muted: wish + queue position move, ZERO nodes (§C2.3)', async () => {
+  radio.stop();
+  await wait(TRANSITION_MS);
+  radio.setEnabled(false);
+  const nodes = ctx.created;
+  const ids = stationTrackIds('bordmusik').filter((id) => trackById(id).unlockLevel <= 1);
+  const target = ids.find((id) => id !== radio.getStats().trackId) ?? ids[0];
+  const wished = radio.playTrack(target);
+  assert.equal(wished?.id, target, 'the wish is accepted while muted');
+  assert.equal(ctx.created, nodes, 'zero nodes while muted');
+  assert.equal(el.paused, true, 'element stays paused');
+  assert.equal(radio.getStats().trackId, target, 'queue position moved');
+  assert.equal(store.get('radio.lastTrack'), target);
+  assert.equal(store.get('radio.playing'), true, 'the ON wish persists');
+  radio.setEnabled(true);
+  assert.equal(el.paused, false, 'wish resumes on re-enable');
+  assert.equal(radio.getStats().playing, true);
+});
