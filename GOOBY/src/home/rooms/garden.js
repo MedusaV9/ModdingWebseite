@@ -50,9 +50,13 @@ export const ROOM = Object.freeze({
     // back hedge (§C2.1: plant_bushLarge ×3)
     Object.freeze({ item: 'nature-kit/plant_bushLarge', at: Object.freeze([-2.05, 0, -1.62]), rotY: 15, scale: 0.5 }),
     Object.freeze({ item: 'nature-kit/plant_bushLarge', at: Object.freeze([-0.8, 0, -1.7]), rotY: -30, scale: 0.42 }),
-    Object.freeze({ item: 'nature-kit/plant_bushLarge', at: Object.freeze([1.05, 0, -1.68]), rotY: 60, scale: 0.44 }),
+    // V4/AC-3D: x 0.97 (was 1.05) — the old spot ran this bush 9 cm through
+    // the right fence segment (fence starts at x 1.10)
+    Object.freeze({ item: 'nature-kit/plant_bushLarge', at: Object.freeze([0.97, 0, -1.68]), rotY: 60, scale: 0.44 }),
     // tree (gardenTree decor slot — free default nature tree, §C8.3)
-    Object.freeze({ slot: 'gardenTree', item: 'nature-kit/tree_default', at: Object.freeze([1.9, 0, -1.5]), rotY: 0, scale: 0.62 }),
+    // V4/AC-3D: z −1.45 (was −1.5) lifts the trunk-side canopy off the fence
+    // line (fence front face z −1.76; the old bbox crossed it by 6 cm)
+    Object.freeze({ slot: 'gardenTree', item: 'nature-kit/tree_default', at: Object.freeze([1.9, 0, -1.45]), rotY: 0, scale: 0.62 }),
 
     // 6 crop plots — 2×3 grid (§C2.1), anchors/interacts plot0…plot5
     // (0.85 m pitch; gardenInteractions.PLOT_RADIUS matches)
@@ -70,7 +74,9 @@ export const ROOM = Object.freeze({
     Object.freeze({ proc: 'compostBin', at: Object.freeze([1.5, 0, -1.15]), rotY: -15, interact: 'compost', anchor: 'compost', hitSize: Object.freeze([0.75, 0.85, 0.75]) }),
     // watering can on a stump (§C2.1 — the drag tool)
     Object.freeze({ item: 'nature-kit/stump_round', at: Object.freeze([1.35, 0, 0.75]), rotY: 0, scale: 0.5 }),
-    Object.freeze({ proc: 'wateringCan', at: Object.freeze([1.35, 0.22, 0.75]), rotY: 25, interact: 'wateringCan', anchor: 'wateringCan', hitSize: Object.freeze([0.6, 0.7, 0.6]) }),
+    // V4/AC-3D: y 0.16 (was 0.22) sets the can flush on the stump top
+    // (stump bbox tops out at y 0.157 — the old lift left a 6 cm air gap)
+    Object.freeze({ proc: 'wateringCan', at: Object.freeze([1.35, 0.16, 0.75]), rotY: 25, interact: 'wateringCan', anchor: 'wateringCan', hitSize: Object.freeze([0.6, 0.7, 0.6]) }),
     // fertilizer bag (§C2.2 — drag onto a growing plot; buy via sheet)
     Object.freeze({ proc: 'fertilizerBag', at: Object.freeze([1.1, 0, 1.35]), rotY: 10, interact: 'fertilizer', anchor: 'fertilizer', hitSize: Object.freeze([0.5, 0.6, 0.5]) }),
 
@@ -78,9 +84,13 @@ export const ROOM = Object.freeze({
     // V3/G46 (§C11.1): nature-kit/bench is intentionally the pack's rustic
     // log substitute. The catalog/save id stays proc:benchWood; decor.js uses
     // this same real model when swapping back from the pastel variant.
+    // V4/AC-3D: the old angled spot (−1.5, −1.25, rotY 30) jammed the bench
+    // through the left fence segment AND both left hedge bushes (up to 0.19 m
+    // deep) — it now sits square to the camera in front of the hedge, left of
+    // the plot grid, with flush ≤3 cm hedge contact only.
     Object.freeze({
       slot: 'gardenBench', item: 'nature-kit/bench',
-      at: Object.freeze([-1.5, 0, -1.25]), rotY: 30, scale: 0.76,
+      at: Object.freeze([-1.62, 0, -1.16]), rotY: 0, scale: 0.76,
       dressing: 'v3-real-asset',
     }),
     Object.freeze({ slot: 'gardenGnome', at: Object.freeze([0.45, 0, -1.4]) }),

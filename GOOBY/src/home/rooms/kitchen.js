@@ -60,9 +60,11 @@ export const ROOM = Object.freeze({
 
   furniture: Object.freeze([
     // fridge — fixed interactable + decor slot (model swap kitchenFridgeLarge)
-    // V4/POLISH-I: flush with the counter line (z −1.12) for one tidy galley run
+    // V4/AC-3D: the fridge GLB is shallower than the counter units, so the
+    // old center-aligned z −1.12 left its back 15 cm off the wall (roomAudit
+    // 'facing' wall-backed check). z −1.27 puts the back flush with the wall.
     Object.freeze({
-      slot: 'fridge', item: 'kitchenFridge', at: Object.freeze([-1.28, 0, -1.12]),
+      slot: 'fridge', item: 'kitchenFridge', at: Object.freeze([-1.28, 0, -1.27]),
       rotY: 0, interact: 'fridge', anchor: 'fridge', hitSize: Object.freeze([0.8, 1.5, 0.7]),
     }),
     // counter run along the back wall: drawers · sink · stove (flush 0.67 m

@@ -30,9 +30,12 @@ export const ROOM = Object.freeze({
       id: 'towelRail', kind: 'towelRail', batch: 'color',
       at: Object.freeze([-1.35, 1.62, -1.43]),
     }),
+    // V4/AC-3D: lifted from (y 1.65, z −1.23) where the pot poked 8 cm through
+    // the wall cabinet's front — it now stands ON the cabinet top (y 1.90,
+    // recentered over its z −1.34 midline).
     Object.freeze({
       id: 'alineCactus', kind: 'asset', batch: 'color',
-      key: 'aline-furniture/cactus', at: Object.freeze([1.1, 1.65, -1.23]), scale: 0.62, rotY: -12,
+      key: 'aline-furniture/cactus', at: Object.freeze([1.1, 1.9, -1.34]), scale: 0.62, rotY: -12,
     }),
   ]),
   // ---- end V4/G79 ----------------------------------------------------------

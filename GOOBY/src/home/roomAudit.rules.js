@@ -1,0 +1,140 @@
+// V4/AC-3D: per-room placement expectations for src/home/roomAudit.js — PURE
+// data (no three.js/DOM). These rules encode the DELIBERATE composition of
+// the 5 home rooms so the audit can flag everything else:
+//   facing      — which pieces must face the camera (+z), a target point, or
+//                 a fixed direction, and which must keep their back on a wall
+//   clipAllow   — item pairs allowed to interpenetrate (pillows ON the bed
+//                 mattress sit below the headboard's AABB top; the garden
+//                 tree's AABB includes its canopy, which shades the compost)
+//   wallMounted — pieces mounted ON a wall (may embed up to its thickness)
+//   elevated    — pieces legitimately above the floor with no supporter box
+//                 (wall/ceiling mounts — anything else above floatMax must
+//                 physically rest on another piece)
+//   edgeAllow   — garden perimeter dressing that may straddle the ground edge
+//   tiltAllow   — dressing keys whose authored rotX/rotZ is intentional
+//   extras      — pinned cross-file fixtures replayed into the audit (the
+//                 V4/G52 living radio: roomManager places it at the media
+//                 cabinet's left end — keep in sync with roomManager.js)
+//
+// test/roomAudit.test.js runs auditRoom(def, fixture, AUDIT_RULES) for all 5
+// ROOM_DEFS and requires ZERO warnings — tightening a rule (or removing an
+// allowance) must come with a room fix that keeps the suite green.
+
+/** @type {{global: object, rooms: Record<string, object>}} */
+export const AUDIT_RULES = Object.freeze({
+  /** tolerance overrides (see roomAudit.DEFAULT_TOLERANCES) — defaults hold */
+  global: Object.freeze({}),
+
+  rooms: Object.freeze({
+    kitchen: Object.freeze({
+      facing: Object.freeze({
+        'furniture-kit/kitchenFridge': { mode: 'camera', wallBacked: true },
+        'furniture-kit/kitchenCabinetDrawer': { mode: 'camera', wallBacked: true },
+        'furniture-kit/kitchenSink': { mode: 'camera', wallBacked: true },
+        'furniture-kit/kitchenStove': { mode: 'camera', wallBacked: true },
+        'furniture-kit/kitchenCabinet': { mode: 'camera', wallBacked: true },
+        'furniture-kit/kitchenCabinetUpper': { mode: 'camera' },
+        'furniture-kit/toaster': { mode: 'camera' },
+        'furniture-kit/kitchenCoffeeMachine': { mode: 'camera' },
+        // both dining chairs must face the table top
+        'furniture-kit/chair': { mode: 'target', at: [0.82, 0.18] },
+        // bakery corner (dressing): the case front + mixer face the camera
+        // (pack faces +x natively — the -90° rotY is what the audit verifies)
+        'bakery-interior/display_case_short': { mode: 'camera' },
+        'bakery-interior/stand_mixer': { mode: 'camera' },
+      }),
+      wallMounted: Object.freeze(['furniture-kit/kitchenCabinetUpper']),
+      elevated: Object.freeze(['furniture-kit/kitchenCabinetUpper']),
+    }),
+
+    living: Object.freeze({
+      facing: Object.freeze({
+        'furniture-kit/loungeSofa': { mode: 'camera', wallBacked: true },
+        'furniture-kit/cabinetTelevision': { mode: 'camera', wallBacked: true },
+        'furniture-kit/televisionVintage': { mode: 'camera' },
+        'proc:door': { mode: 'camera', wallBacked: true },
+        // bookcase backs onto the left wall and opens into the room (+x)
+        'furniture-kit/bookcaseOpen': { mode: 'vector', dir: [1, 0], wallBacked: true },
+        // media speaker angles toward the seating group
+        'furniture-kit/speaker': { mode: 'target', at: [-0.85, 0.3] },
+        // Aline bookshelf backs onto the right wall, opens into the room (−x)
+        'aline-furniture/bookshelf': { mode: 'vector', dir: [-1, 0], wallBacked: true },
+        'pleasant-picnic/radio': { mode: 'camera' },
+      }),
+      wallMounted: Object.freeze(['proc:door']),
+      elevated: Object.freeze(['furniture-kit/lampSquareCeiling']),
+      extras: Object.freeze([
+        // V4/G52 pinned radio fixture (roomManager.js places it — scale 0.5,
+        // groundAndCenter, then position; keep values in sync)
+        Object.freeze({
+          id: 'radioFixture', key: 'pleasant-picnic/radio',
+          at: Object.freeze([-0.15, 0.52, -1.2]), scale: 0.5,
+        }),
+      ]),
+    }),
+
+    bathroom: Object.freeze({
+      facing: Object.freeze({
+        'furniture-kit/bathtub': { mode: 'camera' },
+        'furniture-kit/toilet': { mode: 'camera', wallBacked: true },
+        'furniture-kit/bathroomSink': { mode: 'camera', wallBacked: true },
+        'furniture-kit/bathroomMirror': { mode: 'camera' },
+        'furniture-kit/bathroomCabinet': { mode: 'camera' },
+      }),
+      wallMounted: Object.freeze([
+        'furniture-kit/bathroomMirror',
+        'furniture-kit/bathroomCabinet',
+        'furniture-kit/bathroomSink',
+      ]),
+      elevated: Object.freeze([
+        'furniture-kit/bathroomMirror',
+        'furniture-kit/bathroomCabinet',
+        'furniture-kit/lampSquareCeiling',
+      ]),
+    }),
+
+    bedroom: Object.freeze({
+      facing: Object.freeze({
+        'furniture-kit/bedSingle': { mode: 'camera', wallBacked: true },
+        'furniture-kit/sideTable': { mode: 'camera', wallBacked: true },
+        'furniture-kit/bookcaseClosedWide': { mode: 'camera', wallBacked: true },
+        'proc:window': { mode: 'camera' },
+        'proc:lampSwitch': { mode: 'camera' },
+      }),
+      wallMounted: Object.freeze(['proc:window', 'proc:lampSwitch']),
+      elevated: Object.freeze(['proc:window', 'proc:lampSwitch', 'furniture-kit/lampSquareCeiling']),
+      clipAllow: Object.freeze([
+        // pillows + plushie rest ON the mattress, below the headboard's AABB
+        ['furniture-kit/pillow', 'furniture-kit/bedSingle'],
+        ['furniture-kit/pillowBlue', 'furniture-kit/bedSingle'],
+        ['furniture-kit/bear', 'furniture-kit/bedSingle'],
+        // the two throw pillows overlap each other deliberately (cozy stack)
+        ['furniture-kit/pillow', 'furniture-kit/pillowBlue'],
+      ]),
+      // the Aline round rug is authored as a vertical disc — decor.js lays it
+      // flat with rotX −90 and grounds it afterwards
+      tiltAllow: Object.freeze(['aline-furniture/rug']),
+    }),
+
+    garden: Object.freeze({
+      facing: Object.freeze({
+        'nature-kit/bench': { mode: 'camera' },
+        'nature-kit/fence_gate': { mode: 'camera' },
+        'proc:fertilizerBag': { mode: 'camera' },
+      }),
+      clipAllow: Object.freeze([
+        // the tree's AABB includes its canopy — the compost bin deliberately
+        // sits in its shade (§C11.2 canopySit is right there)
+        ['nature-kit/tree_default', 'proc:compostBin'],
+      ]),
+      edgeAllow: Object.freeze([
+        // §C2.1 back fence/hedge line straddles the ground edge (outdoor
+        // composition — same allowance as test/rooms.test.js)
+        'city-kit-suburban/fence-1x4',
+        'nature-kit/fence_gate',
+        'nature-kit/plant_bushLarge',
+        'nature-kit/tree_default',
+      ]),
+    }),
+  }),
+});

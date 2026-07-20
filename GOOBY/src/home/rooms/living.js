@@ -34,9 +34,13 @@ export const ROOM = Object.freeze({
   // is one textured plane, for exactly 3 added calls. Placements avoid the TV,
   // front-door hitbox, ballSpawn and the player-owned wallArt slot.
   dressing: Object.freeze([
+    // V4/AC-3D: moved from the back wall (x −0.08, z −1.13) where it sat
+    // INSIDE the sofa arm, the TV cabinet and the pinned V4/G52 radio fixture
+    // (three simultaneous clips) — it now backs onto the right wall and opens
+    // into the room (rotY −90: the pack faces +z natively).
     Object.freeze({
       id: 'alineBookshelf', kind: 'asset', batch: 'color',
-      key: 'aline-furniture/bookshelf', at: Object.freeze([-0.08, 0, -1.13]), scale: 0.68,
+      key: 'aline-furniture/bookshelf', at: Object.freeze([1.77, 0, -0.5]), scale: 0.68, rotY: -90,
     }),
     Object.freeze({
       id: 'pictureFirstNom', kind: 'picture', batch: 'picture-firstNom',
@@ -60,8 +64,11 @@ export const ROOM = Object.freeze({
     Object.freeze({ item: 'rugSquare', at: Object.freeze([-0.55, 0, 0.2]), rotY: 0, scale: 1.3, noShadow: true }),
     Object.freeze({ slot: 'rug', item: 'rugRounded', at: Object.freeze([-0.55, 0.015, 0.25]), rotY: 0, noShadow: true }),
     // sofa against the back wall, facing the camera (decor slot)
+    // V4/AC-3D: x −1.2 (was −0.9) clears the pinned V4/G52 radio fixture
+    // (roomManager places it at x −0.43…0.13 on the cabinet's left end — the
+    // old spot ran the sofa arm 0.19 m through it)
     Object.freeze({
-      slot: 'sofa', item: 'loungeSofa', at: Object.freeze([-0.9, 0, -1.05]),
+      slot: 'sofa', item: 'loungeSofa', at: Object.freeze([-1.2, 0, -1.05]),
       rotY: 0, anchor: 'sofa', hitSize: Object.freeze([1.5, 0.8, 0.7]),
       // §C5.2 variant layouts: the corner sofa is a 1.5×1.5 m L-shape — its
       // footprint center sits 0.38 m deeper than the straight sofas, so
@@ -76,15 +83,20 @@ export const ROOM = Object.freeze({
     Object.freeze({ item: 'tableCoffee', at: Object.freeze([-0.85, 0, 0.3]), rotY: 0 }),
     Object.freeze({ item: 'books', at: Object.freeze([-0.9, 0.37, 0.3]), rotY: 20 }),
     // TV on its cabinet (tv = decor slot; cabinet is set dressing)
-    Object.freeze({ item: 'cabinetTelevision', at: Object.freeze([0.5, 0, -1.24]), rotY: 0 }),
+    // V4/AC-3D: cabinet x 0.2 (was 0.5) slides its top under the pinned radio
+    // fixture (center x −0.15) so the radio rests ON the cabinet's left end
+    // instead of hovering past its edge; the TV follows to x 0.45 so it clears
+    // the radio's right side (radio bbox ends at x 0.13) while staying on top.
+    Object.freeze({ item: 'cabinetTelevision', at: Object.freeze([0.2, 0, -1.24]), rotY: 0 }),
     Object.freeze({
-      slot: 'tv', item: 'televisionVintage', at: Object.freeze([0.5, 0.49, -1.24]),
+      slot: 'tv', item: 'televisionVintage', at: Object.freeze([0.46, 0.49, -1.24]),
       rotY: 0, interact: 'tv', anchor: 'tv', hitSize: Object.freeze([0.75, 0.85, 0.6]),
-      // the modern flat-screen is 1.06 m wide — full size it overlaps the
-      // potted plant on the cabinet (x 0.86+), so nudge left + scale down
+      // the modern flat-screen is 1.06 m wide — full size it would run through
+      // the pinned radio fixture on the cabinet's left end (radio bbox ends at
+      // x 0.13), so nudge right + scale down to keep both on the cabinet top
       piecesByItem: Object.freeze({
         televisionModern: Object.freeze([
-          Object.freeze({ item: 'televisionModern', at: Object.freeze([-0.1, 0, 0]), rotY: 0, scale: 0.85 }),
+          Object.freeze({ item: 'televisionModern', at: Object.freeze([0.05, 0, 0]), rotY: 0, scale: 0.7 }),
         ]),
       }),
     }),
@@ -95,11 +107,16 @@ export const ROOM = Object.freeze({
     }),
     // bookcase against the left half side-wall (decor slot)
     Object.freeze({ slot: 'bookcase', item: 'bookcaseOpen', at: Object.freeze([-1.76, 0, -0.1]), rotY: 90 }),
-    // floor lamp tucked in the back-left corner (decor slot)
-    Object.freeze({ slot: 'lamp', item: 'lampRoundFloor', at: Object.freeze([-1.82, 0, -1.36]), rotY: 0 }),
-    // potted plant on the TV cabinet right of the TV (decor slot — floor spots
-    // at x≈±1.7 fall outside the portrait frame)
-    Object.freeze({ slot: 'plant', item: 'pottedPlant', at: Object.freeze([0.98, 0.49, -1.2]), rotY: 0, scale: 0.75 }),
+    // floor lamp on the left wall between sofa and bookcase (decor slot).
+    // V4/AC-3D: the sofa's move to x −1.2 claimed the old back-left corner
+    // (z −1.36) — the lamp pole ran through the sofa arm — so it slides to
+    // the z −0.57 gap between the sofa front and the bookcase.
+    Object.freeze({ slot: 'lamp', item: 'lampRoundFloor', at: Object.freeze([-1.82, 0, -0.57]), rotY: 0 }),
+    // potted plant on the floor right of the TV cabinet (decor slot).
+    // V4/AC-3D: the cabinet's move to x 0.2 (radio support) left the old
+    // cabinet-top spot (x 0.98) hanging past the cabinet edge in mid-air —
+    // the floor gap between cabinet and front door fits it at x 0.95.
+    Object.freeze({ slot: 'plant', item: 'pottedPlant', at: Object.freeze([0.96, 0, -1.22]), rotY: 0, scale: 0.75 }),
     // wall-art slot anchor above the sofa (empty until bought — §C5.2)
     Object.freeze({ slot: 'wallArt', at: Object.freeze([-0.85, 1.9, -1.47]), rotY: 0 }),
     // V4/POLISH-I: media-corner speaker angled toward the sofa (clear of the

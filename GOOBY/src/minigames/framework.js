@@ -556,6 +556,9 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
   // ---------------------------------------------------------------- minigame scene
   sceneManager.register('minigame', (ctx) => {
     const scene = new THREE.Scene();
+    // V4/AC-3D dev seam: expose the live minigame scene so the roomAudit-style
+    // clip/orientation tooling can traverse minigame graphs too (dev only)
+    if (import.meta.env.DEV) window.__goobyMinigameScene = scene;
     const camera = new THREE.PerspectiveCamera(ROOMS.CAMERA_FOV, innerWidth / innerHeight, 0.1, 200);
     camera.position.set(0, 0, 10);
 
