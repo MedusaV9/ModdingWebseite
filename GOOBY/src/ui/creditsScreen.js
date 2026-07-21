@@ -8,13 +8,13 @@ import { EN as CREDIT_EN, DE as CREDIT_DE } from '../data/strings/v4-credits.js'
 import audio from '../audio/audio.js';
 import { icon } from './icons.js';
 
-/** §C-SYS12.4 section order is binding. */
+/** §C-SYS12.4 section order is binding. Glyphs are icons.js names (V4/FIX-EMOJI). */
 const SECTIONS = Object.freeze([
-  Object.freeze({ id: 'gooby', key: 'credits.section.gooby', glyph: '🐰' }),
-  Object.freeze({ id: 'welten', key: 'credits.section.worlds', glyph: '🌍' }),
-  Object.freeze({ id: 'musik', key: 'credits.section.music', glyph: '🎵' }),
-  Object.freeze({ id: 'soundsGrafik', key: 'credits.section.sounds', glyph: '✨' }),
-  Object.freeze({ id: 'technik', key: 'credits.section.technology', glyph: '🛠️' }),
+  Object.freeze({ id: 'gooby', key: 'credits.section.gooby', glyph: 'rabbit' }),
+  Object.freeze({ id: 'welten', key: 'credits.section.worlds', glyph: 'globe' }),
+  Object.freeze({ id: 'musik', key: 'credits.section.music', glyph: 'music' }),
+  Object.freeze({ id: 'soundsGrafik', key: 'credits.section.sounds', glyph: 'sparkle' }),
+  Object.freeze({ id: 'technik', key: 'credits.section.technology', glyph: 'wrench' }),
 ]);
 
 /**
@@ -84,7 +84,7 @@ export function createCreditsScreen({ ui, audio: sound = audio }) {
           <div class="g81-credits-scroll" data-credits-scroll>
             ${SECTIONS.map((section) => `
               <section class="card g81-credit-section" data-credit-section="${section.id}">
-                <h2><span aria-hidden="true">${section.glyph}</span> ${tx(section.key)}</h2>
+                <h2><span aria-hidden="true" style="vertical-align:-0.125rem">${icon(section.glyph, 15)}</span> ${tx(section.key)}</h2>
                 <div class="g81-credit-rows">
                   ${CREDITS[section.id].map(renderCreditRow).join('')}
                 </div>

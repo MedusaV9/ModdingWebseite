@@ -224,9 +224,9 @@ export function registerPregameScreen({ store, ui, framework }) {
           if (p.selected) pill.classList.add('g68-pill-on');
           if (p.locked) pill.classList.add('g68-pill-locked');
           pill.dataset.mode = p.mode;
-          // locked pill drops the ∞ suffix so 🔒+label fits 320 px @130 % scale
+          // locked pill drops the ∞ suffix so lock+label fits 320 px @130 % scale
           const label = p.locked ? t(`mg.diff.${p.mode}`).replace(/\s*∞\s*$/, '') : t(`mg.diff.${p.mode}`);
-          pill.innerHTML = `${p.beaten ? `<span class="g68-pill-tick">${icon('check', 11)}</span>` : ''}${p.locked ? '🔒 ' : ''}${label}`;
+          pill.innerHTML = `${p.beaten ? `<span class="g68-pill-tick">${icon('check', 11)}</span>` : ''}${p.locked ? `<span class="g68-pill-tick">${icon('lock', 11)}</span>` : ''}${label}`;
           pill.addEventListener('click', () => {
             if (p.locked) {
               // §G5.5 lock: surface the unlock hint (line below shows it too)
@@ -302,7 +302,7 @@ export function registerPregameScreen({ store, ui, framework }) {
               b.className = 'g68-pill';
               if (sc.id === weltScene) b.classList.add('g68-pill-on');
               const best = Math.floor(Number(store.get(`minigames.weltBest.${sc.id}`)) || 0);
-              b.innerHTML = `${sc.nameKey ? t(sc.nameKey) : sc.name ?? sc.id}${best > 0 ? ` <span class="g68-pill-tick">★${best}</span>` : ''}`;
+              b.innerHTML = `${sc.nameKey ? t(sc.nameKey) : sc.name ?? sc.id}${best > 0 ? ` <span class="g68-pill-tick">${icon('star', 11)}${best}</span>` : ''}`;
               b.addEventListener('click', () => {
                 audio.play('ui.pick');
                 weltScene = sc.id;

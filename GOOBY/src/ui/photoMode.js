@@ -261,7 +261,8 @@ export function initPhotoMode({ ui, audio, sceneManager }) {
     if (!albumLink) {
       albumLink = document.createElement('button');
       albumLink.className = 'g59-ph-albumlink';
-      albumLink.textContent = `📖 ${tG('gallery.viewInAlbum')}`;
+      // V4/FIX-EMOJI: authored book glyph (icons.js) instead of the raw 📖.
+      albumLink.innerHTML = `<span style="display:inline-flex;align-items:center;gap:0.375rem">${icon('book', 15)} ${tG('gallery.viewInAlbum')}</span>`;
       albumLink.addEventListener('click', () => {
         audio.play('ui.tap');
         exit();

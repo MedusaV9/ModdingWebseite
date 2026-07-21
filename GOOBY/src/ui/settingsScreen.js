@@ -289,7 +289,7 @@ export function createDisplayPanel({ store, ui }) {
             </span>
           </div>
           <div class="settings-row g58-gyro-row">
-            <span class="settings-label g58-two-line">📱 ${tx('settings.gyro')}
+            <span class="settings-label g58-two-line"><span style="display:inline-flex;align-items:center;gap:0.375rem">${icon('gear', 18)} ${tx('settings.gyro')}</span>
               <small class="g58-subline">${tx('settings.gyro.sub')}</small></span>
             <button class="g14-toggle ${gyroOn ? 'g14-on' : ''}" data-act="gyro" role="switch"
               aria-checked="${gyroOn}" aria-label="${tx('settings.gyro')}"><span class="g14-knob"></span></button>
@@ -420,11 +420,11 @@ export function createAudioPanel({ store, ui }) {
               aria-label="${t('settings.haptics')}"><span class="g14-knob"></span></button>
           </div>
           <div class="settings-row g58-nav-row" data-nav="tracks" role="button" tabindex="0">
-            <span class="settings-label">🎵 ${tx('settings.tracks.link')}</span>
+            <span class="settings-label">${icon('music', 18)} ${tx('settings.tracks.link')}</span>
             <span class="g58-chevron">${icon('arrowRight', 18)}</span>
           </div>
         </div>
-        <div class="settings-section">🎮 ${tx('settings.controls.title')}</div>
+        <div class="settings-section">${icon('gamepad', 16)} ${tx('settings.controls.title')}</div>
         <div class="card settings-card">
           <div class="settings-row">
             <span class="settings-label">${tx('settings.controls.invertX')}</span>
@@ -591,8 +591,8 @@ export function createSettingsScreen({ store, ui }) {
           </div>`,
       display: navRow('display', `<span class="g33-scale-aa">Aa</span> ${tx('settings.row.display')}`),
       audio: navRow('audio', `${icon('music', 18)} ${tx('settings.row.audio')}`),
-      radio: navRow('radio', `📻 ${tx('settings.row.radio')}`),
-      codes: navRow('codes', `🔑 ${tx('settings.row.codes')}`),
+      radio: navRow('radio', `${icon('radio', 18)} ${tx('settings.row.radio')}`),
+      codes: navRow('codes', `${icon('key', 18)} ${tx('settings.row.codes')}`),
       credits: navRow('credits', `${icon('heart', 18)} ${tx('settings.row.credits')}`),
       dev: `
           <div class="settings-row g33-dev-row g58-nav-row" data-nav="dev" role="button" tabindex="0">
@@ -609,7 +609,7 @@ export function createSettingsScreen({ store, ui }) {
         </div>
         ${showHint ? `
         <div class="g58-hint-chip" role="status">
-          <span>✨ ${tx('settings.hint.v4')}</span>
+          <span>${icon('sparkle', 14)} ${tx('settings.hint.v4')}</span>
           <button class="g58-hint-close" aria-label="${t('ui.back')}">${icon('close', 14)}</button>
         </div>` : ''}
         <div class="card settings-card g58-main-card">

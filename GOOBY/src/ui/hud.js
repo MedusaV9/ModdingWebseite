@@ -160,7 +160,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     xpHelpStyle.dataset.owner = 'v4-g69-hud-xp';
     xpHelpStyle.textContent = `
 .g69-hud-xp-help{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;width:max(44px,1.75rem);height:max(44px,1.75rem);padding:0;border:0;background:transparent;color:var(--teal-dark);cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.g69-hud-xp-help-mark{display:inline-flex;align-items:center;justify-content:center;width:1.375rem;height:1.375rem;border-radius:50%;background:var(--frost);box-shadow:var(--shadow-soft);font:900 .75rem/1 system-ui,sans-serif;}
+.g69-hud-xp-help-mark{display:inline-flex;align-items:center;justify-content:center;width:1.375rem;height:1.375rem;border-radius:50%;background:var(--frost);box-shadow:var(--shadow-soft);font:900 .75rem/1 var(--font-round);}
 .g69-hud-xp-help:active .g69-hud-xp-help-mark{transform:scale(.9);}
 `;
     document.head.appendChild(xpHelpStyle);
@@ -180,7 +180,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     const radioStyle = document.createElement('style');
     radioStyle.dataset.owner = 'v4-g52-hud-radio';
     radioStyle.textContent = `
-.g52-hud-radio{display:none;pointer-events:auto;align-items:center;gap:.3125rem;min-width:max(44px,2.75rem);min-height:max(44px,2.75rem);padding:.375rem .625rem;border:0;border-radius:999px;background:var(--frost);color:var(--pink-dark);font:800 .6875rem/1 system-ui,sans-serif;box-shadow:var(--shadow-soft);cursor:pointer;}
+.g52-hud-radio{display:none;pointer-events:auto;align-items:center;gap:.3125rem;min-width:max(44px,2.75rem);min-height:max(44px,2.75rem);padding:.375rem .625rem;border:0;border-radius:999px;background:var(--frost);color:var(--pink-dark);font:800 .6875rem/1 var(--font-round);box-shadow:var(--shadow-soft);cursor:pointer;}
 .g52-hud-radio.g52-show{display:inline-flex;}
 .g52-hud-radio-note{font-size:1.125rem;animation:g52hudnote 1s ease-in-out infinite;}
 @keyframes g52hudnote{50%{transform:translateY(-.1875rem) rotate(-8deg);}}`;
@@ -189,7 +189,8 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
   const radioChip = document.createElement('button');
   radioChip.className = 'g52-hud-radio';
   radioChip.dataset.hud = 'radio';
-  radioChip.innerHTML = '<span class="g52-hud-radio-note" aria-hidden="true">♫</span><span></span>';
+  // V4/FIX-EMOJI: authored music glyph (icons.js) instead of the ♫ text note.
+  radioChip.innerHTML = `<span class="g52-hud-radio-note" aria-hidden="true">${icon('music', 16)}</span><span></span>`;
   const radioChipText = radioChip.querySelector('span:last-child');
   const syncRadioChip = () => {
     let label = t('radio.hud');
@@ -361,7 +362,8 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
   // careSheet panel (degrades to the care sheet's own toast when unregistered).
   const sickChip = document.createElement('button');
   sickChip.className = 'g23-sick-chip';
-  sickChip.innerHTML = `<span>🤒 ${t('hud.sickChip')}</span>`;
+  // V4/FIX-EMOJI: authored sick-face glyph (icons.js) instead of the raw 🤒.
+  sickChip.innerHTML = `${icon('faceSick', 16)}<span>${t('hud.sickChip')}</span>`;
   sickChip.addEventListener('click', () => {
     audio.play('ui.tap');
     ui.openPanel('careSheet');
@@ -369,7 +371,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
   el.appendChild(sickChip);
   function syncSickChip() {
     sickChip.classList.toggle('g23-show', store.get('health')?.state === 'sick');
-    sickChip.querySelector('span').textContent = `🤒 ${t('hud.sickChip')}`;
+    sickChip.querySelector('span').textContent = t('hud.sickChip');
   }
   const offsG23 = [
     store.on('healthChanged', syncSickChip), // G20's §B3 event
@@ -542,7 +544,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     const buffChip = document.createElement('div');
     buffChip.className = 'g58-hud-buff';
     buffChip.dataset.hud = 'coinBuff';
-    buffChip.innerHTML = '<span aria-hidden="true">×2 💰</span><span class="g58-hud-buff-t"></span>';
+    buffChip.innerHTML = `<span aria-hidden="true" style="display:inline-flex;align-items:center;gap:0.1875rem">×2 ${icon('coin', 12)}</span><span class="g58-hud-buff-t"></span>`;
     const buffT = buffChip.querySelector('.g58-hud-buff-t');
     coins.after(buffChip); // meta row is safe-area aware (§C1.4)
     const syncBuff = () => {
@@ -571,7 +573,7 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     const modChip = document.createElement('button');
     modChip.className = 'g76-hud-mod';
     modChip.dataset.hud = 'modifier';
-    modChip.innerHTML = '<span class="g76-hud-mod-icon" aria-hidden="true">✨</span><span class="g76-hud-mod-name"></span><span class="g76-hud-mod-t"></span>';
+    modChip.innerHTML = `<span class="g76-hud-mod-icon" aria-hidden="true">${icon('sparkle', 14)}</span><span class="g76-hud-mod-name"></span><span class="g76-hud-mod-t"></span>`;
     modRow.appendChild(modChip);
     top.appendChild(modRow);
     const modName = modChip.querySelector('.g76-hud-mod-name');

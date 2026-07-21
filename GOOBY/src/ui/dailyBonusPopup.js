@@ -94,7 +94,7 @@ export function initDailyBonus({ store, ui, audio, sceneManager }) {
         slot.innerHTML = `
           <span class="g12-daily-slot-day">${i < slotIdx ? icon('check', 11) : t('daily.day', { n: i + 1 })}</span>
           <span class="g12-daily-slot-coins">${icon('coin', 11)}${ECONOMY.DAILY_BONUS[i]}</span>
-          ${isLast ? '<span class="g12-daily-slot-food">🥕</span>' : ''}`;
+          ${isLast ? `<span class="g12-daily-slot-food">${icon('carrot', 13)}</span>` : ''}`;
         cal.appendChild(slot);
       }
 

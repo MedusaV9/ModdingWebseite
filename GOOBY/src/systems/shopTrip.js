@@ -52,6 +52,15 @@ import { t } from '../data/strings.js';
 import { award as awardSticker } from './collections.js'; // V2/G21 (§C9.3)
 import { onDistance } from './profileStats.js'; // V2/G21 (§C12.1)
 
+// V4/FIX-EMOJI: authored destination-picker glyphs. Lazily loaded (dynamic
+// import, shopScreen.js pattern below) so this module's static graph stays
+// ui-free per §B / the miscQuality headless contract; it resolves within a
+// microtask of module load — long before any confirm/picker panel can mount.
+let icon = () => '';
+import('../ui/icons.js')
+  .then((mod) => { icon = mod.icon; })
+  .catch(() => { /* headless boot without the ui bundle — glyphless fallback */ });
+
 // ---------------------------------------------------------------------------
 // Pure state machine (§C4: home → driveOut → shop → home)
 // ---------------------------------------------------------------------------
@@ -372,14 +381,14 @@ export function initShopTrip({
         <div class="dest-pick">
           <h2 class="perm-title">${t('travel.title')}</h2>
           <button class="dest-option travel-opt-drive">
-            <span class="dest-emoji" aria-hidden="true">🚗</span>
+            <span class="dest-emoji" aria-hidden="true">${icon('car', 30)}</span>
             <span class="dest-text">
               <span class="dest-name">${t('travel.drive')}</span>
               <span class="dest-sub">${t('travel.driveSub', { energy: MINIGAME.DRIVE_ENERGY_COST })}</span>
             </span>
           </button>
           <button class="dest-option travel-opt-run">
-            <span class="dest-emoji" aria-hidden="true">🏃</span>
+            <span class="dest-emoji" aria-hidden="true">${icon('run', 30)}</span>
             <span class="dest-text">
               <span class="dest-name">${t('travel.run')}</span>
               <span class="dest-sub">${t('travel.runSub', { energy: SURF_TRAVEL.ENERGY })}</span>
@@ -439,14 +448,14 @@ export function initShopTrip({
         <div class="dest-pick">
           <h2 class="perm-title">${t('city.dest.title')}</h2>
           <button class="dest-option dest-opt-shop">
-            <span class="dest-emoji" aria-hidden="true">🛒</span>
+            <span class="dest-emoji" aria-hidden="true">${icon('cart', 30)}</span>
             <span class="dest-text">
               <span class="dest-name">${t('city.dest.shop')}</span>
               <span class="dest-sub">${t('city.dest.shopSub', { energy: MINIGAME.DRIVE_ENERGY_COST })}</span>
             </span>
           </button>
           <button class="dest-option dest-opt-vet">
-            <span class="dest-emoji" aria-hidden="true">🩺</span>
+            <span class="dest-emoji" aria-hidden="true">${icon('stethoscope', 30)}</span>
             <span class="dest-text">
               <span class="dest-name">${t('city.dest.vet')}</span>
               <span class="dest-sub">${t('city.dest.vetSub', { cure: VET.CURE_PRICE, checkup: VET.CHECKUP_PRICE })}</span>

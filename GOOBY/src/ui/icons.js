@@ -116,6 +116,27 @@ const PATHS = {
     '<path d="M10.2 12 4 8.4c-.9-.5-2 .1-2 1.2v4.8c0 1.1 1.1 1.7 2 1.2l6.2-3.6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.8 12 20 8.4c.9-.5 2 .1 2 1.2v4.8c0 1.1-1.1 1.7-2 1.2L13.8 12z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.5"/>',
   vetRabbit:
     '<path d="M9 3c1.5 0 2.5 2 2.5 4.5h1C12.5 5 13.5 3 15 3s2 2.5.8 5c1.5 1 2.7 2.7 2.7 5A6.5 6.5 0 0 1 12 19.5 6.5 6.5 0 0 1 5.5 13c0-2.3 1.2-4 2.7-5C7 5.5 7.5 3 9 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9.6" cy="13" r="2" fill="none" stroke="#fff" stroke-width="1.3"/><circle cx="14.4" cy="13" r="2" fill="none" stroke="#fff" stroke-width="1.3"/><path d="M11.6 13h.8" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>',
+  // ── V4/FIX-EMOJI: final authored-icon sweep — glyphs so careSheet/HUD/
+  // radio/shopTrip/credits/garden chrome drops its last raw emoji (same
+  // plumping language: fat 24×24 shapes, round joins, white accents).
+  shuffle:
+    '<path d="M3.4 7.5h3c1.7 0 3.3.9 4.2 2.3l2.8 4.4a5 5 0 0 0 4.2 2.3h1.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M3.4 16.5h3c1.4 0 2.7-.6 3.6-1.6M13.9 9.1a5 5 0 0 1 3.7-1.6h1.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M17.1 4.7l3.2 2.8-3.2 2.8M17.1 13.7l3.2 2.8-3.2 2.8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+  prev: '<rect x="3.8" y="4.6" width="3.2" height="14.8" rx="1.6"/><path d="M20 5.9v12.2c0 1-1.1 1.6-1.9 1L9.4 13a1.2 1.2 0 0 1 0-2l8.7-6.1c.8-.6 1.9 0 1.9 1z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  next: '<rect x="17" y="4.6" width="3.2" height="14.8" rx="1.6"/><path d="M4 5.9v12.2c0 1 1.1 1.6 1.9 1l8.7-6.1a1.2 1.2 0 0 0 0-2L5.9 4.9c-.8-.6-1.9 0-1.9 1z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  faceHappy:
+    '<circle cx="12" cy="12" r="9.4" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="9.8" r="1.5" fill="#fff"/><circle cx="15.5" cy="9.8" r="1.5" fill="#fff"/><path d="M7.9 14a4.7 4.7 0 0 0 8.2 0" stroke="#fff" stroke-width="2.1" stroke-linecap="round" fill="none"/>',
+  faceQueasy:
+    '<circle cx="12" cy="12" r="9.4" stroke="currentColor" stroke-width="1.8"/><path d="M6.8 9.2l3.2 1.2M17.2 9.2 14 10.4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M7.5 15.5c.75-1 2.25-1 3 0s2.25 1 3 0 2.25-1 3 0" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>',
+  faceSick:
+    '<circle cx="12" cy="12" r="9.4" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="9.8" r="1.5" fill="#fff"/><circle cx="15.5" cy="9.8" r="1.5" fill="#fff"/><path d="M8.3 16.4a4.7 4.7 0 0 1 7.4-.1" stroke="#fff" stroke-width="2.1" stroke-linecap="round" fill="none"/><path d="M17.2 13.6c1 1.5 1.5 2.5 1.5 3.3a1.7 1.7 0 0 1-3.4 0c0-.8.6-1.8 1.9-3.3z" fill="#fff" opacity="0.85"/>',
+  snowflake:
+    '<path d="M12 2.8v18.4M4 7.4l16 9.2M20 7.4 4 16.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="12" r="1" fill="#fff" opacity="0.6"/>',
+  globe:
+    '<circle cx="12" cy="12" r="9.4" stroke="currentColor" stroke-width="1.8"/><path d="M2.9 12h18.2M12 2.9a14.4 14.4 0 0 1 0 18.2M12 2.9a14.4 14.4 0 0 0 0 18.2" stroke="#fff" stroke-width="1.7" stroke-linecap="round" fill="none" opacity="0.7"/><path d="M4.6 7.4a15.8 15.8 0 0 0 14.8 0M4.6 16.6a15.8 15.8 0 0 1 14.8 0" stroke="#fff" stroke-width="1.7" stroke-linecap="round" fill="none" opacity="0.45"/>',
+  wrench:
+    '<path d="M21.6 6.6a5.4 5.4 0 0 1-7.3 6.5L7.4 20a2.3 2.3 0 0 1-3.3-3.3l6.9-6.9a5.4 5.4 0 0 1 6.5-7.3L14 6l.7 3.3L18 10l3.6-3.4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  radish:
+    '<path d="M12 8.8c3.8 0 6.6 2.5 6.6 5.6 0 3.4-3.1 5.6-5.6 6.9a2.1 2.1 0 0 1-2 0c-2.5-1.3-5.6-3.5-5.6-6.9 0-3.1 2.8-5.6 6.6-5.6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 8.8C12 5.4 9.6 3.2 6.4 3c.3 3.3 2.5 5.4 5.6 5.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 8.8c0-3.4 2.4-5.6 5.6-5.8-.3 3.3-2.5 5.4-5.6 5.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 16.6v2.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>',
 };
 
 /**

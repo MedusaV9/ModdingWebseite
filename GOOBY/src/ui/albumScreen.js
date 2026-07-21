@@ -729,7 +729,9 @@ export function registerAlbumScreen({ store, ui, audio }) {
       // V4/G59 (§C-SYS5.4): header stays n/28 — counts run over the REGULAR
       // 28 only; the unlocked secret sticker adds a small „+💗" suffix.
       const counts = stickerCounts(state, REGULAR_STICKERS);
-      count.textContent = `${counts.unlocked}/${REGULAR_STICKERS.length}${unlockedMap.herzGooby ? ' +💗' : ''}`;
+      // V4/FIX-EMOJI: the secret-sticker suffix uses the authored heart glyph.
+      count.innerHTML = `${counts.unlocked}/${REGULAR_STICKERS.length}${unlockedMap.herzGooby
+        ? ` <span style="display:inline-flex;align-items:center;vertical-align:-0.125rem">+${icon('heart', 13)}</span>` : ''}`;
 
       // Live locked→unlocked transitions while the book is open → confetti.
       const freshIds = new Set();

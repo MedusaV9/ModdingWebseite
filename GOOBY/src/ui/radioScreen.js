@@ -79,6 +79,24 @@ const SEEK_CSS = `
   .g52-seek input { flex: 1; min-width: 0; width: auto; }
 `;
 
+// V4/FIX-EMOJI: the transport/preview/lock glyphs are authored icon() SVGs
+// now (no more raw 🔀⏮▶⏸⏭/🔒 text) — center them inside the round buttons
+// and give the inline lock badges a small baseline nudge. Injected once
+// (careSheet ensureStyles pattern); styles.css stays foundation-owned.
+const ICON_CSS = `
+  .g52-transport-btn, .g52-preview { display: inline-flex; align-items: center; justify-content: center; }
+  .g52-station small svg, .g52-track-copy small svg { vertical-align: -0.125rem; }
+`;
+let iconStylesInjected = false;
+function ensureIconStyles() {
+  if (iconStylesInjected || typeof document === 'undefined') return;
+  iconStylesInjected = true;
+  const el = document.createElement('style');
+  el.dataset.owner = 'fix-emoji-radio';
+  el.textContent = ICON_CSS;
+  document.head.appendChild(el);
+}
+
 /** @param {*} value */
 const esc = (value) =>
   String(value ?? '')
@@ -335,7 +353,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
           </button>
           <div><h1>${esc(tx('radio.title'))}</h1><p>${esc(tx('radio.subtitle'))}</p></div>
         </div>
-        <div class="g52-radio-loading" aria-busy="true">📻</div>
+        <div class="g52-radio-loading" aria-busy="true">${icon('radio', 64)}</div>
       </div>`;
     root.querySelector('.g52-radio-close')?.addEventListener('click', close);
   }
@@ -364,7 +382,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         <img src="${esc(row.cover)}" alt="">
         <span>${esc(stationLabel(row))}</span>
         <small>${locked
-          ? `🔒 ${esc(tx('radio.levelBadge', { level: row.unlockLevel }))}`
+          ? `${icon('lock', 12)} ${esc(tx('radio.levelBadge', { level: row.unlockLevel }))}`
           : `${row.count} ${esc(tx('radio.tracks'))}`}</small>
       </button>`;
     }).join('');
@@ -403,12 +421,12 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         <div class="g52-transport">
           <button class="g52-transport-btn g52-shuffle ${shuffle ? 'g52-on' : ''}"
             aria-label="${esc(shuffle ? tx('radio.shuffleOn') : tx('radio.shuffleOff'))}"
-            aria-pressed="${shuffle}">🔀</button>
-          <button class="g52-transport-btn g52-prev" aria-label="${esc(tx('radio.prev'))}">⏮</button>
+            aria-pressed="${shuffle}">${icon('shuffle', 20)}</button>
+          <button class="g52-transport-btn g52-prev" aria-label="${esc(tx('radio.prev'))}">${icon('prev', 20)}</button>
           <button class="g52-transport-btn g52-play" aria-label="${esc(playing ? tx('radio.pause') : tx('radio.play'))}">
-            ${playing ? '⏸' : '▶'}
+            ${icon(playing ? 'pause' : 'play', 26)}
           </button>
-          <button class="g52-transport-btn g52-skip" aria-label="${esc(tx('radio.skip'))}">⏭</button>
+          <button class="g52-transport-btn g52-skip" aria-label="${esc(tx('radio.skip'))}">${icon('next', 20)}</button>
         </div>
 
         <div class="g52-section-title">${esc(tx('radio.stations'))}</div>
@@ -450,7 +468,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
                 <div class="g52-track-copy">
                   <strong title="${esc(track.title)}">${esc(track.title)}</strong>
                   <small>${locked
-                    ? `🔒 ${esc(recapLocked
+                    ? `${icon('lock', 12)} ${esc(recapLocked
                       ? tx('radio.recapLocked')
                       : tx('radio.levelBadge', { level: track.unlockLevel }))}`
                     : `${formatTime(track.durationSec)} · ${Math.round(track.gainTrim * 100)}%`}</small>
@@ -465,7 +483,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
                     aria-label="${esc(tx('radio.volume', { title: track.title }))}">
                   <output>${pref.vol}%</output>
                   <button class="g52-preview" data-track-preview="${esc(track.id)}" ${locked ? 'disabled' : ''}
-                    aria-label="${esc(tx('radio.preview', { title: track.title }))}">▶</button>
+                    aria-label="${esc(tx('radio.preview', { title: track.title }))}">${icon('play', 16)}</button>
                 </div>
               </article>`;
           }).join('')}
@@ -644,7 +662,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
         if (played != null || typeof play !== 'function') {
           const playBtn = root.querySelector('.g52-play');
           if (playBtn) {
-            playBtn.textContent = '⏸';
+            playBtn.innerHTML = icon('pause', 26);
             playBtn.setAttribute('aria-label', tx('radio.pause'));
           }
         }
@@ -668,6 +686,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
     /** @param {HTMLElement} el */
     mount(el) {
       root = el;
+      ensureIconStyles(); // V4/FIX-EMOJI: authored transport/lock glyph alignment
       renderLoading();
       Promise.all([loadRadioCatalog(), loadRadioApi()]).then(([catalog, loadedApi]) => {
         if (!root) return;

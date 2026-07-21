@@ -27,6 +27,7 @@ import {
   sleepRemainingMs,
 } from '../systems/sleep.js';
 import { maybeSoftAsk } from './permissionPrompt.js';
+import { icon } from './icons.js'; // V4/FIX-EMOJI: authored chip glyphs
 
 /** Chip refresh cadence (real ms — content shows game-time remaining). */
 const CHIP_TICK_MS = 500;
@@ -75,7 +76,7 @@ export function initSleepFlow({ store, ui, roomManager, homeScene, gooby }) {
     if (!chipEl) return;
     const state = store.get();
     chipEl.querySelector('.sleep-chip-time').textContent = fmtMmSs(sleepRemainingMs(state, now()));
-    chipEl.querySelector('.sleep-chip-energy').textContent = `⚡ ${Math.round(state.stats.energy)}%`;
+    chipEl.querySelector('.sleep-chip-energy-n').textContent = `${Math.round(state.stats.energy)}%`;
   }
 
   function showChip() {
@@ -84,8 +85,11 @@ export function initSleepFlow({ store, ui, roomManager, homeScene, gooby }) {
     chipEl.className = 'sleep-chip';
     chipEl.setAttribute('role', 'status');
     chipEl.setAttribute('aria-label', t('toast.sleeping'));
+    // V4/FIX-EMOJI: authored moon/energy glyphs (icons.js) replace 💤/⚡;
+    // the energy pill keeps its class for styles.css, number lives in a sub-span.
     chipEl.innerHTML =
-      '<span class="sleep-chip-zzz">💤</span><span class="sleep-chip-time"></span><span class="sleep-chip-energy"></span>';
+      `<span class="sleep-chip-zzz">${icon('moon', 18)}</span><span class="sleep-chip-time"></span>` +
+      `<span class="sleep-chip-energy" style="display:inline-flex;align-items:center;gap:0.1875rem">${icon('energy', 13)}<span class="sleep-chip-energy-n"></span></span>`;
     chipEl.addEventListener('click', () => openWakeSheet());
     ui.el.appendChild(chipEl);
     updateChip();

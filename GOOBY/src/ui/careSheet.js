@@ -15,9 +15,10 @@
 
 import { t } from '../data/strings.js';
 import { tierOf } from '../systems/weight.js';
+import { icon } from './icons.js'; // V4/FIX-EMOJI: authored glyphs for UI chrome
 
-/** Health state → status face for the sheet header. */
-const STATUS_FACE = { healthy: '💚', queasy: '🤢', sick: '🤒' };
+/** Health state → authored status-face glyph for the sheet header (V4/FIX-EMOJI). */
+const STATUS_FACE = { healthy: 'faceHappy', queasy: 'faceQueasy', sick: 'faceSick' };
 
 // V3/G33 (§B3): mechanical px→rem sweep (÷16) of this injected CSS string —
 // exemptions (1px hairlines/999px pills/shadows/@media px) per PLAN3 §B3.
@@ -32,6 +33,7 @@ const CSS = `
 .g20-care-weight small{display:block;font-size:0.6875rem;font-weight:600;opacity:.8;margin-top:0.125rem;}
 .g20-care-actions{display:flex;flex-direction:column;gap:0.625rem;}
 .g20-care .btn{width:100%;min-height:max(44px, 3.25rem);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.g20-care-btn-label{display:inline-flex;align-items:center;gap:0.375rem;} /* V4/FIX-EMOJI: icon()+label share one flex line inside the column button */
 .g20-care-sub{font-size:0.6875rem;font-weight:700;opacity:.85;}
 .g20-care .btn:disabled{opacity:.55;}
 /* V4/G70b: this is the tallest bottom sheet at maximum UI scale. Keep the
@@ -98,20 +100,24 @@ export function createCareSheetPanel({ store, ui, audio, useMedicine }) {
         <h2 class="g20-care-title">${t('care.title')}</h2>
         <p class="g20-care-hint">${t('care.hintShop')}</p>
         <div class="g20-care-status">
-          <span class="g20-care-face">${STATUS_FACE[health] ?? STATUS_FACE.healthy}</span>
+          <span class="g20-care-face">${icon(STATUS_FACE[health] ?? STATUS_FACE.healthy, 34)}</span>
           <span class="g20-care-text">${t(`care.status.${health}`)}</span>
         </div>
         <div class="g20-care-weight">${t('care.weightTier', { tier: t(`weight.tier.${tier}`) })}
           <small>${t('care.weightNote')}</small></div>
         <div class="g20-care-actions">
           ${medicineAction === 'medicine'
-            ? `<button class="btn btn-teal g20-care-med" data-care-action="medicine">💊 ${t('care.medicineUse')}
+            ? `<button class="btn btn-teal g20-care-med" data-care-action="medicine">
+                <span class="g20-care-btn-label">${icon('medicine', 16)} ${t('care.medicineUse')}</span>
                 <span class="g20-care-sub">${medsLine}</span></button>`
-            : `<button class="btn btn-teal g70-care-fridge" data-care-action="fridge">🧊 ${t('care.fridgeMedicine')}
+            : `<button class="btn btn-teal g70-care-fridge" data-care-action="fridge">
+                <span class="g20-care-btn-label">${icon('snowflake', 16)} ${t('care.fridgeMedicine')}</span>
                 <span class="g20-care-sub">${t('care.fridgeMedicine.sub')}</span></button>`}
-          <button class="btn g70-care-shop" data-care-action="shopTrip">🛒 ${t('care.shopTrip')}
+          <button class="btn g70-care-shop" data-care-action="shopTrip">
+            <span class="g20-care-btn-label">${icon('cart', 16)} ${t('care.shopTrip')}</span>
             <span class="g20-care-sub">${t('care.shopTrip.sub')}</span></button>
-          <button class="btn g20-care-vet" data-care-action="vet">🏥 ${t('care.vet')}
+          <button class="btn g20-care-vet" data-care-action="vet">
+            <span class="g20-care-btn-label">${icon('stethoscope', 16)} ${t('care.vet')}</span>
             <span class="g20-care-sub">${t('care.vetPrice')}</span></button>
         </div>
         <button class="btn btn-ghost g20-care-close">${t('care.close')}</button>

@@ -24,11 +24,25 @@ import { forecast } from '../systems/weather.js';
 import audio from '../audio/audio.js';
 import { icon } from './icons.js'; // V4/UI-DEEP: authored glyphs for UI chrome
 
-/** crop id → emoji (mirrors the fridge tray's food emojis — §C2.2 toasts). */
+/** crop id → emoji (mirrors the fridge tray's food emojis — §C2.2 toasts).
+ * CONTENT contract: gardenInteractions.js interpolates these into the
+ * 'garden.harvested' toast copy, so the values stay text emoji. */
 export const CROP_EMOJI = Object.freeze({
   radish: '🍠', carrot: '🥕', salad: '🥗', tomato: '🍅',
   corn: '🌽', eggplant: '🍆', pumpkin: '🎃', watermelon: '🍉',
 });
+
+/** V4/FIX-EMOJI: crop id → authored icons.js glyph for the panel ROW chrome
+ * (fixes the wrong 🍠 sweet-potato standing in for the radish/turnip crop —
+ * Unicode has no radish; crops without an authored glyph keep their content
+ * food emoji so the rows still mirror the fridge tray). */
+const CROP_ICON = Object.freeze({ radish: 'radish', carrot: 'carrot' });
+
+/** @param {string} cropId @param {number} [size] @returns {string} row glyph HTML */
+function cropGlyph(cropId, size = 26) {
+  const name = CROP_ICON[cropId];
+  return name ? icon(name, size) : (CROP_EMOJI[cropId] ?? icon('sprout', size));
+}
 
 /** ☀️/☁️/🌧 procedural SVG icons (§C11.3) — stroke-free flat shapes. */
 export function weatherIcon(state, size = 18) {
@@ -118,7 +132,7 @@ function createSeedPanel({ store, ui }) {
           // background at narrow widths (unreachable via elementFromPoint).
           row.innerHTML = `
             <div class="g19-row-main">
-              <span class="g19-emoji">${CROP_EMOJI[crop.id] ?? '🌱'}</span>
+              <span class="g19-emoji">${cropGlyph(crop.id)}</span>
               <span class="g19-info">
                 <span class="g19-name">${t(crop.nameKey)}</span>
                 <span class="g19-sub">${locked
@@ -229,7 +243,7 @@ function createSellPanel({ store, ui }) {
           // V2 fix (E16): buttons on their own flex line — see seed panel note.
           row.innerHTML = `
             <div class="g19-row-main">
-              <span class="g19-emoji">${CROP_EMOJI[crop.id] ?? '🌱'}</span>
+              <span class="g19-emoji">${cropGlyph(crop.id)}</span>
               <span class="g19-info">
                 <span class="g19-name">${t(crop.nameKey)}</span>
                 <span class="g19-sub">${t('garden.sell.price', { price: crop.sellPrice })}</span>
