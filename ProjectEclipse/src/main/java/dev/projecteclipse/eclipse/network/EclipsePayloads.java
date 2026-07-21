@@ -33,6 +33,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
+        registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
     }
 
     /**
@@ -74,6 +75,13 @@ public final class EclipsePayloads {
     private static void handleOpenArtifactRequest(C2SOpenArtifactPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             sendArtifactState(player, true);
+        }
+    }
+
+    /** Anti-cheat modlist report; the check logic lives in {@code admin.AntiCheatCheck}. */
+    private static void handleModlist(C2SModlistPayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.admin.AntiCheatCheck.handleModlist(payload, player);
         }
     }
 
