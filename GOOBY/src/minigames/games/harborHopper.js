@@ -317,8 +317,9 @@ export default {
 
     // --- player boat (watercraft-kit fishing boat) + Gooby ------------------
     this.boat = new THREE.Group();
+    // V4/FIX-3D: NO y-flip — the native hull bow already points +z (stern
+    // transom at −z) and travel is +z, so any rotY 180 drives it stern-first
     const hull = fitModel(ctx.assets.getModel('watercraft-kit/boat-fishing-small'), 2.1);
-    hull.rotation.y = Math.PI; // bow forward (+z)
     hull.position.y = 0.32;
     this.boat.add(hull);
     this.gooby = createGooby({ particles: this.particles });
@@ -327,7 +328,8 @@ export default {
     // (RENDER_SCALE_MULT = 1 in every other mode — bit-identical).
     this.gooby.group.scale.setScalar(0.5 * this.tune.RENDER_SCALE_MULT);
     this.gooby.group.position.set(0, 0.55, -0.35);
-    this.gooby.group.rotation.y = Math.PI; // face down-channel with the bow
+    // V4/FIX-3D: rotY 0 — Gooby's native front is +z, so no flip means he
+    // faces down-channel with the bow (back to the chase camera)
     this.gooby.play('sitDrive');
     this.gooby.setEmotion('happy');
     this.boat.add(this.gooby.group);

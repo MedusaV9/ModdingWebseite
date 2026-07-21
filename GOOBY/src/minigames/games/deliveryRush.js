@@ -33,7 +33,7 @@ import {
   landmarksInRange,
 } from '../../city/cityBuilder.js';
 import { createCarController, wrapAngle, ensureWheels } from '../../city/carController.js';
-import { createTraffic, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
+import { createTraffic, separateFromHit, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
 import { buildVetClinic, buildLandmarkDressing, VET_CLINIC_ASSET_KEYS } from '../../city/vetClinic.js';
 import { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows } from './cityDrive.js';
 import { createGooby } from '../../character/gooby.js';
@@ -161,7 +161,11 @@ export default {
     this.gooby = createGooby();
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(1.15);
-    this.gooby.group.position.set(0, 2.15, 0.15); // van cab sits taller than the sedan
+    // V4/FIX-3D: seat 2.6 / z 0.55 — the delivery cab roof tops out ≈ 2.88
+    // car-local (1.6 native × CAR_SCALE 1.8), so the old 2.15 buried him with
+    // only ear tips clipping through; 2.6 pokes head + ears out like the
+    // sedan's 2.05-under-2.34 seat, centered on the cab (z ≈ 0..1.1)
+    this.gooby.group.position.set(0, 2.6, 0.55);
     this.car.group.add(this.gooby.group);
     this.gooby.setEmotion('happy');
     this.gooby.play('sitDrive');
@@ -171,7 +175,10 @@ export default {
     for (let i = 0; i < DELIVERY.PARCELS; i += 1) {
       const box = ctx.assets.getModel('car-kit/box');
       box.scale.setScalar(1.1);
-      box.position.set((i - 1) * 0.62, 2.45, -0.75);
+      // V4/FIX-3D: y 2.98 (was 2.45) — the cargo roof tops out at 2.97
+      // car-local (1.65 native × CAR_SCALE 1.8) and the box origin is its
+      // bottom face, so 2.45 sank the parcels ~2/3 into the van
+      box.position.set((i - 1) * 0.62, 2.98, -0.75);
       box.rotation.y = (i - 1) * 0.35;
       this.car.group.add(box);
       this.parcels.push(box);
@@ -546,8 +553,13 @@ export default {
     if (bestD < T.OFF_ROUTE_M) this.progress = bestS;
 
     // traffic crashes (§C4.5 rules, forgiving 70% AABBs — no tow here)
-    if (this.invuln <= 0 && this.traffic.checkHit(this.car.aabb(T.TRAFFIC_HITBOX_SCALE))) {
-      this.crash();
+    if (this.invuln <= 0) {
+      const hit = this.traffic.checkHit(this.car.aabb(T.TRAFFIC_HITBOX_SCALE));
+      if (hit) {
+        // V4/FIX-3D: same body-overlap resolve as cityDrive (positional only)
+        separateFromHit(this.car.position, this.car.aabb(), hit);
+        this.crash();
+      }
     }
 
     // landmark stickers + odometer (§C9.3/§C12.1 — same bridge as cityDrive)

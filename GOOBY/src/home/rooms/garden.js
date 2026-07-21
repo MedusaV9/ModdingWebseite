@@ -56,7 +56,11 @@ export const ROOM = Object.freeze({
     // tree (gardenTree decor slot — free default nature tree, §C8.3)
     // V4/AC-3D: z −1.45 (was −1.5) lifts the trunk-side canopy off the fence
     // line (fence front face z −1.76; the old bbox crossed it by 6 cm)
-    Object.freeze({ slot: 'gardenTree', item: 'nature-kit/tree_default', at: Object.freeze([1.9, 0, -1.45]), rotY: 0, scale: 0.62 }),
+    // V4/FIX-3D: x 2.12 (was 1.9) — the old spot ran the canopy 0.32×0.73×
+    // 0.38 m through the compost bin (hidden by the audit's unbounded
+    // tree∩compost clipAllow, now removed); the tree bbox (1.76..2.48) stays
+    // fully on the 5 m ground with 1.2 cm daylight to the bin
+    Object.freeze({ slot: 'gardenTree', item: 'nature-kit/tree_default', at: Object.freeze([2.12, 0, -1.45]), rotY: 0, scale: 0.62 }),
 
     // 6 crop plots — 2×3 grid (§C2.1), anchors/interacts plot0…plot5
     // (0.85 m pitch; gardenInteractions.PLOT_RADIUS matches)
@@ -71,7 +75,10 @@ export const ROOM = Object.freeze({
     // between the plot rows and the hedge so it projects on-screen at 390 px
     // and its tap ray clears the plot/tool boxes — nearest-center pick in
     // roomManager.handleTap resolves any residual overlap)
-    Object.freeze({ proc: 'compostBin', at: Object.freeze([1.5, 0, -1.15]), rotY: -15, interact: 'compost', anchor: 'compost', hitSize: Object.freeze([0.75, 0.85, 0.75]) }),
+    // V4/FIX-3D: x 1.45/rotY 0 (was 1.5/−15) — square to the camera the bin's
+    // AABB ends at x 1.745, clear of the moved tree (min 1.757) AND fully
+    // inside the 390 px portrait frustum (edge ≈ ±1.82 at z −1.15)
+    Object.freeze({ proc: 'compostBin', at: Object.freeze([1.45, 0, -1.15]), rotY: 0, interact: 'compost', anchor: 'compost', hitSize: Object.freeze([0.75, 0.85, 0.75]) }),
     // watering can on a stump (§C2.1 — the drag tool)
     Object.freeze({ item: 'nature-kit/stump_round', at: Object.freeze([1.35, 0, 0.75]), rotY: 0, scale: 0.5 }),
     // V4/AC-3D: y 0.16 (was 0.22) sets the can flush on the stump top
@@ -116,9 +123,17 @@ export const ROOM = Object.freeze({
   ]),
 
   anchors: Object.freeze({
-    // front-left corner — clear of every plot/tool tap line (see header note)
-    goobyIdle: Object.freeze([-1.5, 0, 1.25]),
-    // G26 (§C11.2): Gooby contently sits under the tree canopy during rain
-    canopySit: Object.freeze([1.5, 0, -1.05]),
+    // front of the garden at the dirt-path mouth. V4/FIX-3D: pulled in from
+    // the old [−1.5, 1.25] — the 390 px portrait frustum only reaches
+    // |x| ≈ 1.37 at that depth, so Gooby idled half off the LEFT screen
+    // edge. Here he projects to NDC x −0.65..−0.04 (fully framed) and
+    // handleTap probes on all 9 garden interactables still return their own
+    // ids (Gooby's always-wins body shadows none of them).
+    goobyIdle: Object.freeze([-0.45, 0, 1.45]),
+    // G26 (§C11.2): Gooby contently shelters at the tree corner during rain.
+    // V4/FIX-3D: the old [1.5, −1.05] sat him INSIDE the compost bin's box;
+    // this spot keeps the canopy overhead but clears the bin (front face
+    // z −0.855) and the stump/tool cluster.
+    canopySit: Object.freeze([1.55, 0, -0.5]),
   }),
 });

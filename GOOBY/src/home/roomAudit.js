@@ -58,6 +58,15 @@ export const GARDEN_DIMS = Object.freeze({ width: 5, depth: 4 });
 export const DEFAULT_TOLERANCES = Object.freeze({
   /** AABB interpenetration beyond this is a clip (flush fits stay legal). */
   clipTol: 0.035,
+  /**
+   * V4/FIX-3D: clipAllow pairs are BOUNDED — an allowance forgives at most
+   * this much penetration (a pair entry may carry its own tighter cap as a
+   * third element). 0.30 m clears the deepest deliberate composition in the
+   * house (the bedroom bear ON the mattress, 0.271 m inside the bed's AABB)
+   * while still flagging the 0.32 m garden tree∩compost clip that slipped
+   * through when allowances were unlimited.
+   */
+  clipAllowMax: 0.3,
   /** how deep a non-wall-mounted box may cross a wall's inner face */
   wallTol: 0.02,
   /** wall-mounted pieces may embed up to the wall thickness, never beyond */
@@ -66,6 +75,12 @@ export const DEFAULT_TOLERANCES = Object.freeze({
   stackGap: 0.05,
   /** boxes at most this tall are 'flat' (rugs/paths) — may lie under anything */
   flatMax: 0.09,
+  /**
+   * V4/FIX-3D: two overlapping FLATS whose top surfaces sit closer than this
+   * are flagged as z-fighting (coplanar rugs shimmer); deliberately layered
+   * rugs keep ≥ this much top-surface separation and stay legal.
+   */
+  flatFightGap: 0.005,
   /** floor items whose bottom is above this must be supported or mounted */
   floatMax: 0.08,
   /** bottoms below this are sunk into the floor */
@@ -285,11 +300,19 @@ export function computePlacedBoxes(roomDef, assetBounds, opts = {}) {
 const overlap1D = (a, b, axis) =>
   Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]);
 
-function pairAllowed(allowList, a, b) {
-  for (const [ka, kb] of allowList ?? []) {
-    if ((a.key === ka && b.key === kb) || (a.key === kb && b.key === ka)) return true;
+/**
+ * V4/FIX-3D: clipAllow lookup — allowances are BOUNDED. Returns the pair's
+ * penetration cap (an optional third tuple element, else the global
+ * clipAllowMax) or null when the pair is not allowed at all. An unlimited
+ * whitelist is how the 0.32 m garden tree∩compost clip shipped unseen.
+ */
+function pairAllowedCap(allowList, a, b, defaultMax) {
+  for (const [ka, kb, cap] of allowList ?? []) {
+    if ((a.key === ka && b.key === kb) || (a.key === kb && b.key === ka)) {
+      return cap ?? defaultMax;
+    }
   }
-  return false;
+  return null;
 }
 
 /** b rests on some other box: horizontal overlap + top near/above its bottom. */
@@ -360,14 +383,34 @@ export function auditRoom(roomDef, assetBounds, rules = {}, opts = {}) {
       const oy = overlap1D(a, b, 1);
       const oz = overlap1D(a, b, 2);
       if (ox <= 0 || oy <= 0 || oz <= 0) continue;
+      // V4/FIX-3D: the old skip ignored ANY pair with a flat in it, so two
+      // coplanar rugs/paths could ship z-fighting unseen. Now only the
+      // one-flat-under-a-solid case is skipped; two overlapping flats are
+      // checked for near-coincident TOP surfaces (that's what shimmers —
+      // deliberately layered rugs keep their tops ≥ flatFightGap apart).
+      if (a.flat && b.flat) {
+        const horiz = Math.min(ox, oz);
+        const topGap = Math.abs(a.max[1] - b.max[1]);
+        if (horiz > tol.clipTol && topGap < tol.flatFightGap
+          && pairAllowedCap(roomRules.clipAllow, a, b, tol.clipAllowMax) == null) {
+          warn('clip', a,
+            `${a.label} z-fights ${b.label} (flat tops ${(topGap * 1000).toFixed(1)} mm apart over a ${horiz.toFixed(3)} m overlap)`,
+            { b: b.label, amount: +horiz.toFixed(4) });
+        }
+        continue;
+      }
       const pen = Math.min(ox, oy, oz);
       if (pen <= tol.clipTol) continue; // flush composition
-      if (a.flat || b.flat) continue; // rugs/paths under anything
+      if (a.flat || b.flat) continue; // ONE flat under a solid piece (rug under bed)
       const hi = a.min[1] >= b.min[1] ? a : b;
       const lo = hi === a ? b : a;
       if (hi.min[1] >= lo.max[1] - tol.stackGap) continue; // deliberate y-stack
-      if (pairAllowed(roomRules.clipAllow, a, b)) continue;
-      warn('clip', a, `${a.label} clips ${b.label} by ${pen.toFixed(3)} m`, {
+      // V4/FIX-3D: allowances are BOUNDED — an allowed pair forgives at most
+      // clipAllowMax (or the pair's own cap), never unlimited penetration
+      const cap = pairAllowedCap(roomRules.clipAllow, a, b, tol.clipAllowMax);
+      if (cap != null && pen <= cap) continue;
+      const capNote = cap != null ? ` (beyond the ${cap.toFixed(2)} m clipAllow cap)` : '';
+      warn('clip', a, `${a.label} clips ${b.label} by ${pen.toFixed(3)} m${capNote}`, {
         b: b.label, amount: +pen.toFixed(4),
       });
     }

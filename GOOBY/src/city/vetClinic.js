@@ -247,7 +247,9 @@ export function buildLandmarkDressing(scene, assets, layout) {
     for (const [dx, dz] of [[2.5, -6], [3.5, 6.5]]) {
       const tree = assets.getModel('nature-kit/tree_default');
       tree.scale.setScalar(T.TREE_SCALE * 0.9);
-      tree.position.set(gz.x + dx, 0, gz.z + dz);
+      // V4/FIX-3D: y = ROAD_Y — the gazebo plaza deck sits at ROAD_Y (0.4)
+      // like every other landmark piece here, so y 0 sank the trunks ~0.4 m
+      tree.position.set(gz.x + dx, T.ROAD_Y, gz.z + dz);
       group.add(tree);
     }
   }

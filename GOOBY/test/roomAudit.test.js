@@ -105,6 +105,85 @@ test('detector: rug under furniture and deliberate y-stacks are whitelisted, not
     assert.deepEqual(warnings, []);
 });
 
+// ---------------------------------------------------------------------------
+// V4/FIX-3D hardening regressions — the garden tree∩compost class of bug
+// (a LARGE overlap shipping unseen because its pair was whitelisted, plus
+// coplanar-flat z-fighting hiding behind the blanket flat skip).
+// ---------------------------------------------------------------------------
+
+test('V4/FIX-3D regression: clipAllow is BOUNDED — a large allowed-pair overlap is still flagged', () => {
+  // the exact bug class of the original garden layout: tree∩compost was on
+  // the clipAllow list, so its 0.32 m canopy-through-bin clip never warned.
+  const allowRules = { rooms: { synthetic: { clipAllow: [['syn/box', 'syn/sofa']] } } };
+  // 0.5 m interpenetration — way past the 0.30 m clipAllowMax cap
+  const deep = synAudit(synRoom([
+    { item: 'syn/box', at: [0, 0, 0], rotY: 0 },
+    { item: 'syn/sofa', at: [0.75, 0, 0], rotY: 0 },
+  ]), allowRules);
+  assert.equal(deep.length, 1, JSON.stringify(deep));
+  assert.equal(deep[0].type, 'clip');
+  assert.ok(/clipAllow cap/.test(deep[0].msg), deep[0].msg);
+  // a shallow 0.2 m overlap stays forgiven by the same allowance
+  const shallow = synAudit(synRoom([
+    { item: 'syn/box', at: [0, 0, 0], rotY: 0 },
+    { item: 'syn/sofa', at: [1.05, 0, 0], rotY: 0 },
+  ]), allowRules);
+  assert.deepEqual(shallow, []);
+  // a pair may carry its OWN tighter cap as a third tuple element
+  const tight = { rooms: { synthetic: { clipAllow: [['syn/box', 'syn/sofa', 0.1]] } } };
+  const overTightCap = synAudit(synRoom([
+    { item: 'syn/box', at: [0, 0, 0], rotY: 0 },
+    { item: 'syn/sofa', at: [1.05, 0, 0], rotY: 0 }, // same 0.2 m overlap
+  ]), tight);
+  assert.equal(overTightCap.length, 1, JSON.stringify(overTightCap));
+  assert.ok(/0.10 m clipAllow cap/.test(overTightCap[0].msg), overTightCap[0].msg);
+});
+
+test('V4/FIX-3D regression: the PRE-FIX garden layout is flagged even with the old allowance', () => {
+  // rebuild the shipped-buggy garden: tree at x 1.9 + compost at 1.5/rotY −15
+  // (the V4/FIX-3D commit moved both), and put the OLD unlimited-looking
+  // tree∩compost allowance back — the bounded cap must flag it anyway.
+  const preFurniture = GARDEN.furniture.map((e) => {
+    if (e.slot === 'gardenTree') return { ...e, at: [1.9, 0, -1.45] };
+    if (e.proc === 'compostBin') return { ...e, at: [1.5, 0, -1.15], rotY: -15 };
+    return e;
+  });
+  const preGarden = { ...GARDEN, furniture: preFurniture };
+  const oldRules = {
+    rooms: {
+      ...AUDIT_RULES.rooms,
+      garden: {
+        ...AUDIT_RULES.rooms.garden,
+        clipAllow: [['nature-kit/tree_default', 'proc:compostBin']],
+      },
+    },
+  };
+  const warnings = auditRoom(preGarden, FIXTURE, oldRules);
+  const clip = warnings.filter((w) => w.type === 'clip'
+    && /tree_default/.test(w.msg) && /compostBin/.test(w.msg));
+  assert.equal(clip.length, 1, JSON.stringify(warnings));
+  assert.ok(clip[0].amount > 0.3, `expected the ~0.32 m overlap, got ${clip[0].amount}`);
+  // and the SHIPPED layout is genuinely clean under the same hardened rules
+  assert.deepEqual(auditRoom(GARDEN, FIXTURE, AUDIT_RULES), []);
+});
+
+test('V4/FIX-3D regression: coplanar flats z-fight; deliberately layered flats stay legal', () => {
+  // two rugs at the SAME height — top surfaces coincide → shimmering
+  const coplanar = synAudit(synRoom([
+    { item: 'syn/rug', at: [0, 0, 0], rotY: 0 },
+    { item: 'syn/rug', at: [0.3, 0, 0], rotY: 0 },
+  ]));
+  assert.equal(coplanar.length, 1, JSON.stringify(coplanar));
+  assert.equal(coplanar[0].type, 'clip');
+  assert.ok(/z-fights/.test(coplanar[0].msg), coplanar[0].msg);
+  // layered composition: tops ≥ flatFightGap apart reads as a deliberate stack
+  const layered = synAudit(synRoom([
+    { item: 'syn/rug', at: [0, 0, 0], rotY: 0 },
+    { item: 'syn/rug', at: [0.3, 0.01, 0], rotY: 0 },
+  ]));
+  assert.deepEqual(layered, []);
+});
+
 test('detector: sofa turned to face the back wall → facing (both cone and wall-back)', () => {
   const rules = {
     rooms: {
@@ -265,4 +344,9 @@ test('tolerances stay honest: the clip threshold cannot silently balloon', () =>
   // interpenetration ship; anything tighter flags deliberate flush fits.
   assert.equal(DEFAULT_TOLERANCES.clipTol, 0.035);
   assert.equal(AUDIT_RULES.global.clipTol ?? DEFAULT_TOLERANCES.clipTol, 0.035);
+  // V4/FIX-3D: allowances stay BOUNDED — 0.30 m clears the deepest deliberate
+  // composition (the bedroom bear, 0.271 m inside the bed's canopy-style AABB)
+  // while flagging the 0.32 m garden clip class. Looser and that bug ships again.
+  assert.equal(DEFAULT_TOLERANCES.clipAllowMax, 0.3);
+  assert.equal(AUDIT_RULES.global.clipAllowMax ?? DEFAULT_TOLERANCES.clipAllowMax, 0.3);
 });

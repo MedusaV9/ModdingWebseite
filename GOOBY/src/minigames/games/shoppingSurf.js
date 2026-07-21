@@ -321,7 +321,15 @@ export default {
         const name = BUILDINGS[(i * 2 + (side > 0 ? 1 : 0)) % BUILDINGS.length];
         const b = ground(fitWidth(ctx.assets.getModel(`kaykit-city/${name}_withoutBase`), 9));
         b.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-        addScenery(b, side * 9.4, i * 11 + 3);
+        // V4/FIX-3D: facade-align — center-placing at x ±9.4 let deep models
+        // (building_A: 10.8 m rotated depth) bulge their street face to
+        // x ≈ ±3.4 and swallow the x ±4.1 sidewalk props. Measure the
+        // ROTATED bbox and offset so every facade plane sits at a constant
+        // |x| = 5.6, just past the walk's outer edge (5.5) — props stay
+        // visible in front of every shop front.
+        const bb = new THREE.Box3().setFromObject(b);
+        const near = side > 0 ? bb.min.x : bb.max.x; // street-facing face
+        addScenery(b, side * 5.6 - near, i * 11 + 3);
         // pastel shop awning canopy over the walk — the „shopping street" read
         const canopy = new THREE.Mesh(canopyGeo, canopyMats[(i * 2 + (side > 0 ? 1 : 0)) % canopyMats.length]);
         canopy.rotation.z = side * 0.12;

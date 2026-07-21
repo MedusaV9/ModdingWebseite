@@ -36,7 +36,7 @@ import {
   landmarksInRange, // V2/G21 (§C9.3)
 } from '../../city/cityBuilder.js';
 import { createCarController, wrapAngle } from '../../city/carController.js';
-import { createTraffic, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
+import { createTraffic, separateFromHit, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
 import { driveRewards, isTripMode } from '../../systems/shopTrip.js'; // V2/G21: + isTripMode
 // V2/G21 (§C9.1/§C9.3): vet clinic + landmark dressing builders
 import { buildVetClinic, buildLandmarkDressing, VET_CLINIC_ASSET_KEYS } from '../../city/vetClinic.js';
@@ -816,7 +816,13 @@ export default {
     // traffic collision (§C4.5) — forgiving 70% AABBs
     if (this.phase === 'drive' && this.invuln <= 0) {
       const hit = this.traffic.checkHit(this.car.aabb(T.TRAFFIC_HITBOX_SCALE));
-      if (hit) this.crash();
+      if (hit) {
+        // V4/FIX-3D: resolve the body overlap on the crash frame so the two
+        // cars never render inside each other (positional only — the crash
+        // beat below is unchanged)
+        separateFromHit(this.car.position, this.car.aabb(), hit);
+        this.crash();
+      }
     }
 
     // ── V2/G21: landmark triggers + odometer (§C9.3/§C12.1, ANY city mode) ──

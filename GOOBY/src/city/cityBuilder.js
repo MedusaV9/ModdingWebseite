@@ -290,6 +290,53 @@ function expandLoop(corners) {
   return tiles;
 }
 
+/**
+ * V4/FIX-3D: slide a point out of the ±`band` m lateral corridor around every
+ * closed traffic-lane polyline (AI cars sweep those lanes and drive straight
+ * through props). The point moves along the away-from-lane direction only —
+ * points already clear never move. Two passes cover the "pushed off lane A
+ * onto lane B" case (parallel lanes sit 2 × LANE_OFFSET_M apart).
+ * @param {{x: number, z: number}} p candidate prop position
+ * @param {Array<Array<{x: number, z: number}>>} lanePolys closed lane loops
+ * @param {number} band required clearance from any lane centerline (m)
+ * @returns {{x: number, z: number}}
+ */
+export function pushOutOfLaneBand(p, lanePolys, band) {
+  let out = { x: p.x, z: p.z };
+  for (let pass = 0; pass < 2; pass++) {
+    let best = null;
+    for (const pts of lanePolys) {
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        const abx = b.x - a.x;
+        const abz = b.z - a.z;
+        const len2 = abx * abx + abz * abz || 1;
+        const t = Math.max(0, Math.min(1, ((out.x - a.x) * abx + (out.z - a.z) * abz) / len2));
+        const qx = a.x + abx * t;
+        const qz = a.z + abz * t;
+        const d = Math.hypot(out.x - qx, out.z - qz);
+        if (!best || d < best.d) best = { d, qx, qz, abx, abz };
+      }
+    }
+    if (!best || best.d >= band) break;
+    let nx = out.x - best.qx;
+    let nz = out.z - best.qz;
+    const n = Math.hypot(nx, nz);
+    if (n < 1e-6) {
+      // exactly on the lane: fall back to the segment's left normal
+      const l = Math.hypot(best.abx, best.abz) || 1;
+      nx = -best.abz / l;
+      nz = best.abx / l;
+    } else {
+      nx /= n;
+      nz /= n;
+    }
+    out = { x: best.qx + nx * band, z: best.qz + nz * band };
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Model catalogs (asset keys + authored footprints, from the committed GLBs)
 // ---------------------------------------------------------------------------
@@ -773,6 +820,15 @@ export function generateCityLayout(seed) {
   // ── end V3/G46 ------------------------------------------------------------
 
   // --- props: cones / boxes / barriers near the route (§C6.1 obstacles) ----
+  // V4/FIX-3D: AI traffic follows the ±LANE_OFFSET_M loop lanes and never
+  // reacts to props, so any knockable inside a traffic lane gets driven
+  // through (cars sweep ±1.35 m around each lane polyline). Precompute the
+  // world lane polylines and clamp every cone/box OUT of the ±2.5 m band
+  // around them (corner miters + the diagonal parking approach made the old
+  // fixed ±1.6 lateral offset land inside a lane).
+  const trafficLoops = TRAFFIC_LOOP_CORNERS.map(expandLoop);
+  const trafficLanePolys = trafficLoops.map((tiles) =>
+    laneOffsetPolyline(tiles.map(([r, c]) => tileToWorld(r, c)), LANE_OFFSET_M, true));
   const props = [];
   const propSpots = 8;
   for (let i = 0; i < propSpots; i++) {
@@ -789,7 +845,11 @@ export function generateCityLayout(seed) {
     const rx = -p.dz * side;
     const rz = p.dx * side;
     const key = kind === 'barrier' ? 'city-kit-roads/construction-barrier' : `car-kit/${kind}`;
-    props.push({ key, kind, x: p.x + rx, z: p.z + rz, rotY: rng() * Math.PI * 2 });
+    let at = { x: p.x + rx, z: p.z + rz };
+    if (kind !== 'barrier') {
+      at = pushOutOfLaneBand(at, trafficLanePolys, LANE_OFFSET_M);
+    }
+    props.push({ key, kind, x: at.x, z: at.z, rotY: rng() * Math.PI * 2 });
   }
 
   // --- real streetlights at road nodes --------------------------------------
@@ -843,7 +903,7 @@ export function generateCityLayout(seed) {
     vetPickups,
     landmarks,
     pickups,
-    trafficLoops: TRAFFIC_LOOP_CORNERS.map(expandLoop),
+    trafficLoops, // V4/FIX-3D: same expandLoop result the prop clamp used
     buildings,
     nature,
     props,

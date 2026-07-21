@@ -3,9 +3,11 @@
 // the 5 home rooms so the audit can flag everything else:
 //   facing      — which pieces must face the camera (+z), a target point, or
 //                 a fixed direction, and which must keep their back on a wall
-//   clipAllow   — item pairs allowed to interpenetrate (pillows ON the bed
-//                 mattress sit below the headboard's AABB top; the garden
-//                 tree's AABB includes its canopy, which shades the compost)
+//   clipAllow   — item pairs allowed to interpenetrate, BOUNDED (V4/FIX-3D):
+//                 an allowance forgives at most clipAllowMax (0.30 m, or a
+//                 tighter per-pair cap as an optional third tuple element) —
+//                 never unlimited. The old unlimited whitelist let a 0.32 m
+//                 garden tree∩compost clip ship unseen.
 //   wallMounted — pieces mounted ON a wall (may embed up to its thickness)
 //   elevated    — pieces legitimately above the floor with no supporter box
 //                 (wall/ceiling mounts — anything else above floatMax must
@@ -122,11 +124,9 @@ export const AUDIT_RULES = Object.freeze({
         'nature-kit/fence_gate': { mode: 'camera' },
         'proc:fertilizerBag': { mode: 'camera' },
       }),
-      clipAllow: Object.freeze([
-        // the tree's AABB includes its canopy — the compost bin deliberately
-        // sits in its shade (§C11.2 canopySit is right there)
-        ['nature-kit/tree_default', 'proc:compostBin'],
-      ]),
+      // V4/FIX-3D: the old unlimited tree∩compost clipAllow is GONE — it hid
+      // a 0.32×0.73×0.38 m canopy-through-bin clip. The garden layout now
+      // keeps the pair fully separated, so no allowance is needed at all.
       edgeAllow: Object.freeze([
         // §C2.1 back fence/hedge line straddles the ground edge (outdoor
         // composition — same allowance as test/rooms.test.js)

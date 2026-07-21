@@ -38,6 +38,10 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 
+// V4/FIX-3D: the audit rules are pure data — imported here so the generator
+// can sanity-check every facing-rule key against the forwards it emits.
+import { AUDIT_RULES } from '../src/home/roomAudit.rules.js';
+
 const URL_BASE = process.env.GOOBY_URL ?? 'http://localhost:5174';
 const CDP_BASE = process.env.GOOBY_CDP ?? 'http://localhost:9222';
 const OUT = resolve(process.argv[2] ?? 'test/fixtures/asset-bounds.json');
@@ -111,6 +115,60 @@ function forwardFor(key) {
   if (key in FORWARD_OVERRIDES) return FORWARD_OVERRIDES[key];
   const pack = key.split('/')[0];
   return FORWARD_BY_PACK[pack] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// V4/FIX-3D: geometry-asymmetry sanity check. Every asset key that carries a
+// facing rule in AUDIT_RULES must emit a USABLE canonical forward — a null
+// forward silently blinds the audit's facing check for that piece, and a
+// forward whose bbox is symmetric along the facing axis means the geometry
+// alone cannot confirm the convention (front and back look identical to the
+// box math — the human-set pack convention is all we have). Both cases are
+// loudly warned so a bad/missing convention can't slip into the fixture
+// unnoticed. Warnings are non-fatal: symmetric-but-correct fronts exist.
+// ---------------------------------------------------------------------------
+function forwardSanityWarnings(assets) {
+  /** @type {Map<string, string[]>} facing-rule key → rooms that key it */
+  const facingKeys = new Map();
+  for (const [roomId, roomRules] of Object.entries(AUDIT_RULES.rooms)) {
+    for (const key of Object.keys(roomRules.facing ?? {})) {
+      if (!facingKeys.has(key)) facingKeys.set(key, []);
+      facingKeys.get(key).push(roomId);
+    }
+  }
+  const warnings = [];
+  for (const [key, rooms] of facingKeys) {
+    const where = `'${key}' (facing rule in ${rooms.join(', ')})`;
+    const rec = assets[key];
+    if (!rec) {
+      warnings.push(`${where}: no fixture entry at all — the rule can never fire`);
+      continue;
+    }
+    if (!rec.forward) {
+      warnings.push(`${where}: canonical forward is NULL — the audit's facing check is `
+        + 'blind for this piece. Add a FORWARD_OVERRIDES/PROC_FORWARD entry.');
+      continue;
+    }
+    const [fx, , fz] = rec.forward;
+    if (Math.abs(Math.abs(fx) - Math.abs(fz)) < 0.5 && fx !== 0 && fz !== 0) {
+      warnings.push(`${where}: forward [${rec.forward}] is diagonal/ambiguous — pick a `
+        + 'dominant axis so the facing cone has a stable reference.');
+      continue;
+    }
+    const axis = Math.abs(fx) >= Math.abs(fz) ? 0 : 2;
+    const extent = rec.max[axis] - rec.min[axis];
+    if (!(extent > 1e-6)) {
+      warnings.push(`${where}: zero extent along its forward axis — degenerate bbox.`);
+      continue;
+    }
+    const asym = Math.abs(rec.max[axis] + rec.min[axis]) / extent;
+    if (asym < 0.005) {
+      warnings.push(`${where}: bbox is symmetric along the forward axis `
+        + `(asym ${(asym * 100).toFixed(2)} %) — geometry cannot confirm the front; `
+        + 're-verify the pack convention if this model was re-exported.');
+    }
+  }
+  return warnings;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +383,11 @@ try {
   }
   for (const [key, box] of Object.entries(data.procBoxes)) {
     assets[key] = { min: box.min, max: box.max, forward: PROC_FORWARD[key.slice(5)] ?? null };
+  }
+
+  // V4/FIX-3D: non-fatal facing-forward sanity report (see forwardSanityWarnings)
+  for (const w of forwardSanityWarnings(assets)) {
+    console.warn(`gen-asset-bounds: FORWARD WARNING — ${w}`);
   }
 
   const fixture = {

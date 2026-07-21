@@ -30,6 +30,31 @@ export const TRAFFIC_ASSET_KEYS = Object.freeze([
 ]);
 
 /**
+ * V4/FIX-3D: minimal positional separation after a checkHit — the forgiving
+ * 70% hit test fires while the FULL car bodies already interpenetrate, so
+ * push the player's position out of the hit car's full box along the
+ * smaller-penetration axis. Positional resolve only; crash/scoring beats in
+ * the callers are untouched.
+ * @param {import('three').Vector3} playerPos live player position (mutated)
+ * @param {{minX: number, maxX: number, minZ: number, maxZ: number}} playerAabb
+ *   FULL-size player box (car.aabb() with no scale)
+ * @param {{x: number, z: number, hx: number, hz: number}} hit checkHit result
+ */
+export function separateFromHit(playerPos, playerAabb, hit) {
+  const overlapX = Math.min(playerAabb.maxX, hit.x + hit.hx)
+    - Math.max(playerAabb.minX, hit.x - hit.hx);
+  const overlapZ = Math.min(playerAabb.maxZ, hit.z + hit.hz)
+    - Math.max(playerAabb.minZ, hit.z - hit.hz);
+  if (overlapX <= 0 || overlapZ <= 0) return; // bodies already clear
+  const pad = 0.05; // small daylight so the boxes end just touching
+  if (overlapX <= overlapZ) {
+    playerPos.x += (playerPos.x >= hit.x ? 1 : -1) * (overlapX + pad);
+  } else {
+    playerPos.z += (playerPos.z >= hit.z ? 1 : -1) * (overlapZ + pad);
+  }
+}
+
+/**
  * @param {{
  *   scene: import('three').Scene,
  *   assets: {getModel: (key: string) => import('three').Object3D},
@@ -39,7 +64,7 @@ export const TRAFFIC_ASSET_KEYS = Object.freeze([
  * @returns {{
  *   update: (dt: number) => void,
  *   checkHit: (playerAabb: {minX: number, maxX: number, minZ: number, maxZ: number}) =>
- *     ({x: number, z: number}|null),
+ *     ({x: number, z: number, hx: number, hz: number}|null),
  *   dispose: () => void,
  * }}
  */
@@ -98,8 +123,10 @@ export function createTraffic({ scene, assets, layout, rng }) {
 
     /**
      * Forgiving collision (§C6.1): both boxes pre-scaled to 70%. Returns the
-     * hit car's position (for the push-back) or null. A short per-car
-     * cooldown avoids double-counting one bump.
+     * hit car's position + FULL-size rotation-aware half extents (V4/FIX-3D:
+     * the caller separates the bodies so they never interpenetrate on the
+     * crash frame) or null. A short per-car cooldown avoids double-counting
+     * one bump.
      * @param {{minX: number, maxX: number, minZ: number, maxZ: number}} playerAabb
      */
     checkHit(playerAabb) {
@@ -107,14 +134,16 @@ export function createTraffic({ scene, assets, layout, rng }) {
         if (car.hitCooldown > 0) continue;
         const p = car.model.position;
         const rotated = Math.abs(Math.sin(car.model.rotation.y)) > 0.5;
-        const hx = (rotated ? hl : hw) * T.TRAFFIC_HITBOX_SCALE;
-        const hz = (rotated ? hw : hl) * T.TRAFFIC_HITBOX_SCALE;
+        const fx = rotated ? hl : hw;
+        const fz = rotated ? hw : hl;
+        const hx = fx * T.TRAFFIC_HITBOX_SCALE;
+        const hz = fz * T.TRAFFIC_HITBOX_SCALE;
         if (
           playerAabb.minX < p.x + hx && playerAabb.maxX > p.x - hx &&
           playerAabb.minZ < p.z + hz && playerAabb.maxZ > p.z - hz
         ) {
           car.hitCooldown = 2.5;
-          return { x: p.x, z: p.z };
+          return { x: p.x, z: p.z, hx: fx, hz: fz };
         }
       }
       return null;
