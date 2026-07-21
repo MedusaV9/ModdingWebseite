@@ -315,25 +315,13 @@ export default {
   tryTrick(kind) {
     const tti = this.airborne ? timeToImpact(this.h, this.vy) : 0;
     if (!canTrick(this.airborne, tti, this.tricking, this.tune)) return;
+    // V4/FIX-GB (atomic trick scoring): the height multiplier is locked at
+    // the swipe, but score/combo/quest credit land ONLY when the rotation
+    // tween COMPLETES. Mat contact cancels the tween (resolveContact), so a
+    // trick started inside the last ~0.45 s of air (past the 0.35 s canTrick
+    // gate) no longer farms points off an animation it never finished.
     const mult = heightMultiplier(apexFor(this.launchVy));
-    const pts = trickPoints(kind, mult);
-    this.score += pts;
-    this.tricksDone += 1; // V2/G27: meta.tricks (§B3 — every landed trick counts)
-    this.ctx.onScore(pts);
-    const combo = recordTrick(this.airTrickChain, kind);
-    if (combo.triggered) {
-      this.score += combo.bonus;
-      this.ctx.onScore(combo.bonus);
-      this.ctx.hud.banner(t('v3.depth.tramp.combo', { n: combo.bonus }));
-      this.particles.emit('confetti', this.trickGrp.position.clone().add(new THREE.Vector3(0, 0.8, 0)), { count: 16 });
-    }
     this.ctx.audio.play('tramp.trick');
-    const key = kind === 'flip' ? 'mg.tramp.flip' : kind === 'spin' ? 'mg.tramp.spin' : 'mg.tramp.twist';
-    this.floats.spawn(
-      `${t(key, { pts })}${mult > 1 ? ` ×${mult}` : ''}`,
-      this.trickGrp.position.clone().add(new THREE.Vector3(0, 0.9, 0)),
-      mult >= 3 ? '#D6428A' : mult === 2 ? '#2E8B57' : '#4A3B36'
-    );
     this.tricking = true;
     const grp = this.trickGrp;
     const startZ = grp.rotation.z;
@@ -351,9 +339,33 @@ export default {
         grp.rotation.y = 0;
         this.tricking = false;
         this.trickTween = null;
+        this.awardTrick(kind, mult);
       },
     });
     this.particles.emit('sparkles', this.trickGrp.position, { count: 5 });
+  },
+
+  /** Credit a COMPLETED trick (V4/FIX-GB): §C6.1 points × the multiplier
+   * locked at the swipe, §C10.2 combo chain, and the §B3 quest counter. */
+  awardTrick(kind, mult) {
+    if (this.phase !== 'play') return; // buzzer beat the landing — no credit
+    const pts = trickPoints(kind, mult);
+    this.score += pts;
+    this.tricksDone += 1; // V2/G27: meta.tricks (§B3 — every LANDED trick counts)
+    this.ctx.onScore(pts);
+    const combo = recordTrick(this.airTrickChain, kind);
+    if (combo.triggered) {
+      this.score += combo.bonus;
+      this.ctx.onScore(combo.bonus);
+      this.ctx.hud.banner(t('v3.depth.tramp.combo', { n: combo.bonus }));
+      this.particles.emit('confetti', this.trickGrp.position.clone().add(new THREE.Vector3(0, 0.8, 0)), { count: 16 });
+    }
+    const key = kind === 'flip' ? 'mg.tramp.flip' : kind === 'spin' ? 'mg.tramp.spin' : 'mg.tramp.twist';
+    this.floats.spawn(
+      `${t(key, { pts })}${mult > 1 ? ` ×${mult}` : ''}`,
+      this.trickGrp.position.clone().add(new THREE.Vector3(0, 0.9, 0)),
+      mult >= 3 ? '#D6428A' : mult === 2 ? '#2E8B57' : '#4A3B36'
+    );
   },
 
   /** Contact with the mat — resolve the bounce (§C6.1 rules). */

@@ -110,24 +110,24 @@ export const NOZZLES = Object.freeze([
 ]);
 
 /**
- * §G1.6 difficulty rows (Leicht/Mittel/Schwer + §G5.4 endless). Scene-owned
- * copy so meter zones/dock hints render right for BOTH engine kinds.
+ * §G1.6 difficulty rows (Leicht/Mittel/Schwer + §G5.4 endless), DERIVED from
+ * G61's `applyDifficulty(CAKE, mode)` so the ONE §G1.6 table drives both the
+ * engine judge and everything the scene renders off it (spawn-cap greying,
+ * bake-meter green window, dock catch-window hints). V4/FIX-GB: the previous
+ * hand-copied endless row had drifted from the engine (patMult/catchHalf/
+ * singeAt/capDiv said 1/0.24/3.6/3 while the engine judged 0.8/0.19/3.2/2).
  * @param {'easy'|'normal'|'hard'|'endless'} difficulty
  */
 export function diffParams(difficulty) {
-  if (difficulty === 'easy') {
-    return { patMult: 1.3, intervalFloor: 18, catchHalf: 0.3, singeAt: 4.2, capDiv: 3, endless: false };
-  }
-  if (difficulty === 'hard') {
-    return { patMult: 0.8, intervalFloor: 12, catchHalf: 0.19, singeAt: 3.2, capDiv: 2, endless: false };
-  }
-  if (difficulty === 'endless') {
-    return {
-      patMult: 1, intervalFloor: G62.ENDLESS_INTERVAL_FLOOR, catchHalf: 0.24, singeAt: 3.6,
-      capDiv: 3, endless: true,
-    };
-  }
-  return { patMult: 1, intervalFloor: 14, catchHalf: 0.24, singeAt: 3.6, capDiv: 3, endless: false };
+  const tune = cakeLogic.applyDifficulty(cakeLogic.CAKE, difficulty);
+  return {
+    patMult: tune.PATIENCE_MULT,
+    intervalFloor: tune.ORDER_INTERVAL_MIN_SEC,
+    catchHalf: tune.CATCH_HALF_M,
+    singeAt: tune.SINGE_SEC,
+    capDiv: tune.PAN_CAP_EVERY_SERVES,
+    endless: !!tune.ENDLESS,
+  };
 }
 
 /** §G1.6 pan cap: min(3, 1 + floor(serves / capDiv)) — Schwer reaches 3 @ serve 4. */
@@ -813,10 +813,14 @@ export default {
     // the old spot wedged Gooby between the counter face and the customer
     // walk lane (AABB audit: he clipped the counter AND every passing NPC).
     // At the belt's left end he supervises pan spawns with clear space.
-    podium.position.set(-3.35, 0.21, -0.92);
+    // V4/FIX-GB: pulled in from x −3.35 — the §G1.4 camera window (camX
+    // clamped ±1.4, ≥3.2 m wide) never reaches past ≈ ±3.2 at this depth, so
+    // he was invisible. x −2.95 keeps 0.4 m clearance to the NPC lane corner
+    // and seat-0 approach (x −2.55) while sitting inside the leftmost frame.
+    podium.position.set(-2.95, 0.21, -1.0);
     scene.add(podium);
     this.gooby.group.scale.setScalar(0.8);
-    this.gooby.group.position.set(-3.35, 0.42, -0.92);
+    this.gooby.group.position.set(-2.95, 0.42, -1.0);
     this.gooby.group.rotation.y = 0.5; // angled toward the belt line
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
@@ -1255,7 +1259,13 @@ export default {
     stack.position.set(G62.SPAWN_S - 3.0, G62.BELT_Y, -0.55);
     scene.add(stack);
 
-    // shipping box at the far right (§G1.5 versand) — pink ribbon
+    // shipping box at the ship end (§G1.5 versand) — pink ribbon. V4/FIX-GB:
+    // moved off the belt axis (x 3.35 sat past the §G1.4 camera window's
+    // ±3.0 reach, so the serve-hop target was never on screen) onto the floor
+    // in FRONT of the belt's right end — fully visible at camX +1.4 in the
+    // narrowest (3.2 m) window, below the belt line (no pan occlusion), and
+    // clear of the belt frame (back edge z 0.46 > frame front 0.34) and the
+    // NPC door corridor.
     const boxMat = new THREE.MeshStandardMaterial({ color: '#C99B66', roughness: 0.85 });
     const ribbonMat = new THREE.MeshStandardMaterial({ color: '#FF7BA9', roughness: 0.5 });
     this.ownedMats.push(boxMat, ribbonMat);
@@ -1278,7 +1288,7 @@ export default {
     this.ownedGeos.push(ribbon.geometry);
     ribbon.position.set(0, 0.17, 0);
     shipBox.add(bf, w1, w2, w3, w4, ribbon);
-    shipBox.position.set(3.35, G62.BELT_Y - 0.06, 0.05);
+    shipBox.position.set(2.5, 0, 0.75);
     scene.add(shipBox);
     this.shipBoxGroup = shipBox;
 

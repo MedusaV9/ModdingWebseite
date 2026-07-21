@@ -314,12 +314,24 @@ export default {
     this.floats = createFloatTexts(scene, camera);
     this.craft = new THREE.Group();
     const speeder = fitModel(ctx.assets.getModel('space-kit/craft_speederA'), 1.3);
-    speeder.rotation.set(Math.PI / 2, 0, Math.PI); // nose up-screen, top to camera
+    // V4/FIX-GB: nose up-screen AND top to camera — verified live (geometry
+    // probe: the model's pointy nose tip + gap prong sit at −z, the wide
+    // wings/engine blocks at +z). The old euler (+π/2, 0, π) mapped nose→+y
+    // (travel ✓) but top→−z, so the player stared at the craft's BELLY the
+    // whole round; (+π/2, 0, 0) keeps nose→+y and turns top→+z (camera),
+    // with the engine glow (y −0.75) still at the actual engine end.
+    speeder.rotation.set(Math.PI / 2, 0, 0);
     this.craft.add(speeder);
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.42 * this.tune.GOOBY_SCALE);
-    this.gooby.group.position.set(0, -0.05, 0.45);
+    // V4/FIX-GB: rider faces along travel (was facing the camera, 90° off
+    // the nose — read as riding backward). Euler (−π/2, 0, π) pitches his
+    // front (+z) up-screen with the back of his head to the camera — the
+    // top-down "leaning over the handlebars" read (harborHopper's FIX-3D
+    // bow-forward precedent); seated on the rear saddle ahead of the fin.
+    this.gooby.group.rotation.set(-Math.PI / 2, 0, Math.PI);
+    this.gooby.group.position.set(0, -0.22, 0.4);
     this.gooby.play('sitDrive');
     this.gooby.setEmotion('happy');
     this.craft.add(this.gooby.group);
