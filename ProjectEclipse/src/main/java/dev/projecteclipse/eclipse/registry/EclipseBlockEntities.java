@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lives.GraveBlockEntity;
+import dev.projecteclipse.eclipse.ritual.AltarBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -16,6 +17,9 @@ public final class EclipseBlockEntities {
 
     public static final Supplier<BlockEntityType<GraveBlockEntity>> GRAVE = BLOCK_ENTITIES.register("grave",
             () -> BlockEntityType.Builder.of(GraveBlockEntity::new, EclipseBlocks.GRAVE.get()).build(null));
+
+    public static final Supplier<BlockEntityType<AltarBlockEntity>> ALTAR = BLOCK_ENTITIES.register("altar",
+            () -> BlockEntityType.Builder.of(AltarBlockEntity::new, EclipseBlocks.ALTAR.get()).build(null));
 
     private EclipseBlockEntities() {}
 

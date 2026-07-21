@@ -1,6 +1,22 @@
 {
   "block.eclipse.grave": "Here a soul ended",
   "block.eclipse.grave.locked": "This grave is still sealed.",
+  "block.eclipse.altar": "Altar",
+  "item.eclipse.heart_fragment": "Heart Fragment",
+  "item.eclipse.revive_sigil": "Revive Sigil",
   "message.eclipse.voice_sealed": "Voice sealed",
-  "message.eclipse.voice_sealed_remaining": "Voice sealed for %s"
+  "message.eclipse.voice_sealed_remaining": "Voice sealed for %s",
+  "ritual.eclipse.altar.complete": "The altar is fully charged.",
+  "ritual.eclipse.altar.status": "Altar level %1$s — next offering: %2$s/%3$s × %4$s",
+  "ritual.eclipse.altar.progress": "Offering accepted: %1$s/%2$s × %3$s",
+  "ritual.eclipse.altar.wrong_item": "The altar does not desire this.",
+  "ritual.eclipse.heart.confirm": "Sneak-use again within 5s to sacrifice a life.",
+  "ritual.eclipse.heart.blocked": "You cannot sacrifice your last life.",
+  "ritual.eclipse.heart.done": "A life was sacrificed.",
+  "ritual.eclipse.revive.selected": "Chosen soul: %s",
+  "ritual.eclipse.revive.none_banned": "No souls to revive.",
+  "ritual.eclipse.revive.no_selection": "Choose a soul first (use the sigil without sneaking).",
+  "ritual.eclipse.revive.started": "The ritual has begun.",
+  "ritual.eclipse.revive.already_running": "A ritual is already in progress here.",
+  "ritual.eclipse.revive.bossbar": "A ritual has begun"
 }

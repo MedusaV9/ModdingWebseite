@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "eclipse:block/altar_top",
+    "side": "eclipse:block/altar_side",
+    "bottom": "eclipse:block/altar_bottom"
+  }
+}

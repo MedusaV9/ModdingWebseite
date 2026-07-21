@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lives.GraveBlock;
+import dev.projecteclipse.eclipse.ritual.AltarBlock;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -21,6 +22,14 @@ public final class EclipseBlocks {
             () -> new GraveBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.STONE)
                     .strength(1.5F, 6.0F)
+                    .noLootTable()));
+
+    /** Ritual altar (milestones, heart sacrifice, revive ritual). Obsidian-like, never drops itself. */
+    public static final Supplier<AltarBlock> ALTAR = BLOCKS.register("altar",
+            () -> new AltarBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_BLACK)
+                    .strength(50.0F, 1200.0F)
+                    .requiresCorrectToolForDrops()
                     .noLootTable()));
 
     private EclipseBlocks() {}

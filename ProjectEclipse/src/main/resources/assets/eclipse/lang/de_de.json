@@ -1,6 +1,22 @@
 {
   "block.eclipse.grave": "Hier endete eine Seele",
   "block.eclipse.grave.locked": "Dieses Grab ist noch versiegelt.",
+  "block.eclipse.altar": "Altar",
+  "item.eclipse.heart_fragment": "Herzfragment",
+  "item.eclipse.revive_sigil": "Wiederbelebungssiegel",
   "message.eclipse.voice_sealed": "Stimme versiegelt",
-  "message.eclipse.voice_sealed_remaining": "Stimme versiegelt noch %s"
+  "message.eclipse.voice_sealed_remaining": "Stimme versiegelt noch %s",
+  "ritual.eclipse.altar.complete": "Der Altar ist vollständig aufgeladen.",
+  "ritual.eclipse.altar.status": "Altarstufe %1$s — nächste Opfergabe: %2$s/%3$s × %4$s",
+  "ritual.eclipse.altar.progress": "Opfergabe angenommen: %1$s/%2$s × %3$s",
+  "ritual.eclipse.altar.wrong_item": "Der Altar verlangt dies nicht.",
+  "ritual.eclipse.heart.confirm": "Innerhalb von 5s erneut schleichend nutzen, um ein Leben zu opfern.",
+  "ritual.eclipse.heart.blocked": "Dein letztes Leben kannst du nicht opfern.",
+  "ritual.eclipse.heart.done": "Ein Leben wurde geopfert.",
+  "ritual.eclipse.revive.selected": "Erwählte Seele: %s",
+  "ritual.eclipse.revive.none_banned": "Keine Seelen zum Wiederbeleben.",
+  "ritual.eclipse.revive.no_selection": "Wähle zuerst eine Seele (Siegel ohne Schleichen benutzen).",
+  "ritual.eclipse.revive.started": "Das Ritual hat begonnen.",
+  "ritual.eclipse.revive.already_running": "Hier läuft bereits ein Ritual.",
+  "ritual.eclipse.revive.bossbar": "Ein Ritual hat begonnen"
 }
