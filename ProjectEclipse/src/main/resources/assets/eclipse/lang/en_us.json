@@ -7,6 +7,8 @@
   "item.eclipse.arm_artifact": "Arm Artifact",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Open Eclipse Menu",
+  "gui.eclipse.title.tagline": "Project: Eclipse",
+  "gui.eclipse.options.accent": "\u2726 Project Eclipse \u2726",
   "gui.eclipse.artifact.title": "Project Eclipse",
   "gui.eclipse.artifact.day": "Day %s",
   "gui.eclipse.artifact.goals": "Today's Goals",
