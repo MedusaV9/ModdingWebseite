@@ -21,12 +21,15 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
- * Loads the three Eclipse config files from {@code <config>/eclipse/}:
- * {@code days.json}, {@code milestones.json} and {@code modgate.json}.
+ * Loads the four Eclipse config files from {@code <config>/eclipse/}:
+ * {@code general.json}, {@code days.json}, {@code milestones.json} and {@code modgate.json}.
  * Missing files are created with sensible defaults on first run. Parse or IO
  * failures are logged and the built-in defaults are used in memory instead.
  */
 public final class EclipseConfig {
+    /** General tunables: grave grace period in minutes (non-owners may loot after 1x, graves scatter after 3x). */
+    public record General(int graveGraceMinutes) {}
+
     /** Per-day plan: three goals, progression unlock keys, and the world border size for that day. */
     public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
 
@@ -41,12 +44,24 @@ public final class EclipseConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
+    private static volatile General general = defaultGeneral();
     private static volatile List<DayPlan> days = List.of();
     private static volatile List<Milestone> milestones = List.of();
     private static volatile ModGate modGate = defaultModGate();
     private static volatile boolean loaded = false;
 
     private EclipseConfig() {}
+
+    /** The general configuration section ({@code general.json}). */
+    public static General general() {
+        ensureLoaded();
+        return general;
+    }
+
+    /** Grave grace period in minutes (default 30). Non-owners may loot after 1x; the grave scatters after 3x. */
+    public static int graveGraceMinutes() {
+        return general().graveGraceMinutes();
+    }
 
     /** All 14 day plans, ordered by day. */
     public static List<DayPlan> days() {
@@ -99,6 +114,8 @@ public final class EclipseConfig {
             EclipseMod.LOGGER.error("Failed to create config directory {}", dir, e);
         }
 
+        general = loadOrCreate(dir.resolve("general.json"),
+                EclipseConfig::defaultGeneral, EclipseConfig::generalToJson, EclipseConfig::generalFromJson);
         days = List.copyOf(loadOrCreate(dir.resolve("days.json"),
                 EclipseConfig::defaultDays, EclipseConfig::daysToJson, EclipseConfig::daysFromJson));
         milestones = List.copyOf(loadOrCreate(dir.resolve("milestones.json"),
@@ -106,8 +123,8 @@ public final class EclipseConfig {
         modGate = loadOrCreate(dir.resolve("modgate.json"),
                 EclipseConfig::defaultModGate, EclipseConfig::modGateToJson, EclipseConfig::modGateFromJson);
         loaded = true;
-        EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces",
-                days.size(), milestones.size(), modGate.gatedNamespaces().size());
+        EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces, grave grace {} min",
+                days.size(), milestones.size(), modGate.gatedNamespaces().size(), general.graveGraceMinutes());
     }
 
     private static void ensureLoaded() {
@@ -141,6 +158,24 @@ public final class EclipseConfig {
             EclipseMod.LOGGER.error("Failed to read config {}; using built-in defaults", file, e);
             return defaults.get();
         }
+    }
+
+    // --- general.json ---
+
+    private static General defaultGeneral() {
+        return new General(30);
+    }
+
+    private static JsonElement generalToJson(General general) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("graveGraceMinutes", general.graveGraceMinutes());
+        return obj;
+    }
+
+    private static General generalFromJson(JsonElement json) {
+        JsonObject obj = json.getAsJsonObject();
+        int graveGraceMinutes = obj.has("graveGraceMinutes") ? obj.get("graveGraceMinutes").getAsInt() : 30;
+        return new General(Math.max(0, graveGraceMinutes));
     }
 
     // --- days.json ---

@@ -95,15 +95,18 @@ public static boolean restore(ServerPlayer player, Path snapshotFile); // clears
 
 ### Config — `dev.projecteclipse.eclipse.core.config.EclipseConfig`
 
-Loads `config/eclipse/{days,milestones,modgate}.json`; missing files are created with defaults on first run
+Loads `config/eclipse/{general,days,milestones,modgate}.json`; missing files are created with defaults on first run
 (triggered from `FMLCommonSetupEvent`). Getters lazy-load if needed. Parse/IO failures fall back to built-in defaults in memory.
 
 ```java
+public record General(int graveGraceMinutes) {}   // general.json; default 30
 public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
 public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
 
+public static General general();
+public static int graveGraceMinutes();       // non-owners may loot a grave after 1x; it scatters after 3x
 public static List<DayPlan> days();          // 14 entries by default, ordered by day
 public static DayPlan day(int day);          // out-of-range days clamp to first/last plan
 public static List<Milestone> milestones();  // ordered by level
@@ -133,12 +136,52 @@ public final class EclipsePayloads {
 }
 ```
 
+### Death economy — `dev.projecteclipse.eclipse.lives`
+
+`LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
+-1 life (PvE: victim -1 only), a global thunder cue plays to every online player at their own position
+(no chat — `showDeathMessages` is forced to `false` on `ServerStartedEvent`), player drops are diverted into a
+`eclipse:grave` block, and at 0 lives the victim is banned. `PlayerRespawnEvent` re-applies the limbo ghost state
+for banned players (a corpse cannot be teleported at death time).
+
+```java
+public final class BanService {
+    public static final String GHOST_TEAM_NAME = "eclipse_ghosts";
+    public static void ban(ServerPlayer player);            // attachment+world state, snapshot "ban", inheritance, ghost state
+    public static void unban(ServerPlayer player);          // reverses ban, LivesApi.set(player, 1), overworld spawn
+    public static void applyLimboState(ServerPlayer player); // adventure, ghost team, glowing+slow falling, tp eclipse:limbo (fallback overworld spawn)
+    public static boolean isBanned(ServerPlayer player);
+}
+
+public final class InheritanceService {
+    public static void inherit(ServerPlayer player);                          // empty ender chest -> spawn chests
+    public static void depositAtSpawn(ServerLevel level, List<ItemStack> stacks); // 9x9 chest search, places chests, drops leftovers
+}
+
+public class GraveBlockEntity extends BlockEntity {          // type eclipse:grave (block in EclipseBlocks.GRAVE)
+    public void initialize(UUID ownerUuid, long createdGameTime, List<ItemStack> drops);
+    public UUID getOwnerUuid();       public long getCreatedGameTime();
+    public List<ItemStack> getStoredItems();                 // unmodifiable view
+    public boolean isOwner(Player player);                   // ownerless graves are open to everyone
+    public boolean isGraceElapsed();  public boolean canOpen(Player player);
+    public List<ItemStack> removeAllItems();                 // drains the BE, leaves the block
+    public void giveTo(ServerPlayer player);                 // hand over contents + remove block
+    public void scatter();                                   // drop contents into the world + remove block
+    public static void serverTick(Level level, BlockPos pos, BlockState state, GraveBlockEntity grave);
+}
+```
+
+`dev.projecteclipse.eclipse.limbo.LimboDimension.LIMBO` is the `ResourceKey<Level>` for `eclipse:limbo`
+(dimension JSON owned by another worker; `server.getLevel(LIMBO)` may be `null` until it lands).
+Grave textures are 16x16 placeholders at `assets/eclipse/textures/block/grave{,_side}.png`.
+
 ## Layout
 
 - `dev.projecteclipse.eclipse.EclipseMod` — mod entry point (`@Mod("eclipse")`); wires all deferred registers.
 - `dev.projecteclipse.eclipse.registry` — `EclipseItems`, `EclipseBlocks`, `EclipseBlockEntities`, `EclipseSounds`, `EclipseParticles`, `EclipseAttachments` (NeoForge attachment types), `EclipseMenus`. Each exposes a `DeferredRegister` and a static `register(IEventBus)`.
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
-- Placeholder packages for later work: `lives`, `ritual`, `limbo`, `progression`, `anonymity`, `voice`, `artifact`, `admin`.
+- `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`); `limbo.LimboDimension` — dimension key constant.
+- Placeholder packages for later work: `ritual`, `progression`, `anonymity`, `voice`, `artifact`, `admin`.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `src/main/resources/META-INF/accesstransformer.cfg` — empty (comment-only) AT file; `validateAccessTransformers = true` is enabled in `build.gradle`.
