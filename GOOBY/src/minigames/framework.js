@@ -56,6 +56,8 @@ import {
   applyStrike,
   normalizeOrientation,
   needsRotateGate,
+  // V4/ORIENT: rotation only during landscape games — pure lock-target helper
+  orientationLockFor,
 } from './framework.logic.js';
 import { wrapInvertInput } from '../core/inputInvert.js';
 import { EN as DIFF_EN, DE as DIFF_DE } from '../data/strings/v4-difficulty.js';
@@ -191,6 +193,34 @@ const STRIKE_TELEPORT = Object.freeze({ FADE_MS: 450, HOLD_MS: 1400 });
 /** Rotate gate never deadlocks: auto-continue on rotate-less environments. */
 const ROTATE_GATE = Object.freeze({ AUTO_CONTINUE_MS: 12000 });
 // ══════════════════════════════════════════════════════════ end POLISH-E ═══
+
+// ══════════════════════════════════════════════════════════════ V4/ORIENT ═══
+// Rotation is allowed ONLY while a LANDSCAPE-flagged game is active: the whole
+// non-game app (home, menus, portrait games) behaves as PORTRAIT. iOS'
+// Info.plist keeps landscapeLeft/Right ONLY so a landscape game's viewport can
+// rotate mid-round; WKWebView does not implement screen.orientation.lock, so
+// there the portrait-first CSS baseline + the rotate gate's viewport listeners
+// carry the policy. Where the Screen Orientation API IS supported (Android
+// PWA/fullscreen), this helper enforces it for real.
+
+/**
+ * V4/ORIENT: best-effort Screen-Orientation apply — never throws, never
+ * rejects. `unlock` frees rotation for a landscape round; `portrait` restores
+ * the app baseline (enter() of portrait games, and ALWAYS on exit()).
+ * @param {'portrait'|'unlock'} mode from orientationLockFor()
+ */
+function applyOrientationLock(mode) {
+  try {
+    const so = typeof window !== 'undefined' ? window.screen?.orientation : null;
+    if (!so) return;
+    if (mode === 'unlock') so.unlock?.();
+    else Promise.resolve(so.lock?.('portrait')).catch(() => {});
+  } catch {
+    // unsupported host (iOS WKWebView / desktop) — the viewport-driven rotate
+    // gate and portrait CSS baseline handle the policy instead
+  }
+}
+// ══════════════════════════════════════════════════════════ end V4/ORIENT ═══
 
 // V4/G56 (§E0.1-2/§E0.1-11): does economy.awardMinigame already implement
 // G54's v4 payout (difficulty/modifier options, per-mode board writes)?
@@ -1116,6 +1146,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         // POLISH-E: per-game orientation opt-in (module-level export, read
         // like G57's controls — the registry row stays frozen §E0.1-19).
         gameOrientation = normalizeOrientation(await orientationOf(params.gameId));
+        // V4/ORIENT: rotation is OFFERED only while a landscape game is
+        // active — a landscape run unlocks it, a portrait run (re-)asserts
+        // the app-wide portrait baseline (no-op on unsupported hosts).
+        applyOrientationLock(orientationLockFor(gameOrientation));
         buildHud();
         try {
           await ctx.assets?.preload?.(mod.assetKeys ?? []);
@@ -1248,6 +1282,13 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         teleportVeilEl?.remove();
         teleportVeilEl = null;
         // ── end POLISH-E cleanup ──
+        // ── V4/ORIENT teardown: EVERY way out of a game (results→home,
+        // pause-quit, teleport, failed init, scene switch) funnels through
+        // exit() — re-lock portrait where supported and reset the per-run
+        // orientation flag so no landscape state outlives the run. ──
+        applyOrientationLock('portrait');
+        gameOrientation = 'portrait';
+        // ── end V4/ORIENT teardown ──
         // ── V4/G56 (§C-SYS4.4): leaving BEFORE the countdown finished
         // refunds the consumed modifier play — max ONCE per event (G54's
         // engine enforces via the snapshot's refundUsed flag). ──

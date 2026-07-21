@@ -212,6 +212,51 @@ export function needsRotateGate(orientation, viewportW, viewportH, forced = fals
   if (forced) return true;
   const w = Number(viewportW) || 0;
   const h = Number(viewportH) || 0;
-  return w <= h;
+  return shouldShowRotateGate(orientation, w > h);
 }
 // ════════════════════════════════════════════════════════════ end POLISH-E ═
+
+// ═══════════════════════════════════════════════════════════════ V4/ORIENT ═
+// Rotation is allowed ONLY while a LANDSCAPE-flagged minigame is active. The
+// app-wide baseline is PORTRAIT (home, menus, every screen, portrait games) —
+// iOS' Info.plist lists landscapeLeft/Right solely so a landscape game's
+// viewport CAN rotate mid-round. These pure helpers make the policy testable;
+// framework.js owns the DOM side (rotate overlay + best-effort lock/unlock).
+
+/**
+ * V4/ORIENT: a game module's effective orientation — its module-level
+ * `export const orientation` normalized. Absent/unknown exports (the vast
+ * majority of games) mean portrait, the CSS baseline every game targets.
+ * @param {{orientation?: *}|null|undefined} gameModule module namespace object
+ * @returns {'portrait'|'landscape'}
+ */
+export function orientationForGame(gameModule) {
+  return normalizeOrientation(gameModule?.orientation);
+}
+
+/**
+ * V4/ORIENT: THE gate decision (needsRotateGate's viewport branch delegates
+ * here so the two can never drift): show the „Bitte dreh dein Handy" overlay
+ * ONLY for a landscape-flagged game while the viewport is NOT yet landscape.
+ * Portrait games NEVER gate — whatever the viewport reports.
+ * @param {*} orientationFlag the game's declared orientation export
+ * @param {boolean} viewportIsLandscape `w > h` (square counts as portrait)
+ * @returns {boolean}
+ */
+export function shouldShowRotateGate(orientationFlag, viewportIsLandscape) {
+  if (normalizeOrientation(orientationFlag) !== 'landscape') return false;
+  return viewportIsLandscape !== true;
+}
+
+/**
+ * V4/ORIENT: which Screen-Orientation state the framework applies for a run.
+ * Landscape games UNLOCK rotation for their round (the OS may rotate; the
+ * gate prompts for it) — everything else (re-)locks portrait. exit() always
+ * returns 'portrait': quitting/results/teleport restore the app baseline.
+ * @param {*} gameOrientation the game's declared orientation
+ * @returns {'portrait'|'unlock'}
+ */
+export function orientationLockFor(gameOrientation) {
+  return normalizeOrientation(gameOrientation) === 'landscape' ? 'unlock' : 'portrait';
+}
+// ═══════════════════════════════════════════════════════════ end V4/ORIENT ═
