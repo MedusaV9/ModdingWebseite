@@ -4,7 +4,11 @@
 
 import './ui/styles.css';
 import { XP } from './data/constants.js';
-import { setLang } from './data/strings.js';
+import { setLang, EN as STRINGS_EN, DE as STRINGS_DE } from './data/strings.js'; // V4/FIX-JUICE: + runtime dicts for the loading-keys merge block
+// V4/FIX-JUICE: loading-veil/loading-card dictionaries for the marked merge
+// block below (owned modules — strings.js itself stays frozen §E0.1-8).
+import { EN as ACUI_LOADING_EN, DE as ACUI_LOADING_DE } from './data/strings/v4-acui-loading.js';
+import { EN as UI2_LOADING_EN, DE as UI2_LOADING_DE } from './data/strings/v4-ui2.js';
 import * as save from './core/save.js';
 import { now } from './core/clock.js';
 import { createStore } from './core/store.js';
@@ -99,6 +103,25 @@ async function boot() {
   const loaded = save.load();
   const store = createStore(loaded.state);
   setLang(store.get('settings.lang'));
+
+  // ---- V4/FIX-JUICE: loading i18n keys → runtime dicts (single marked block) ----
+  // The AC-3 veil + POLISH-D loading card resolve their strings through local
+  // tx() fallbacks (G52 pattern; strings.js stays frozen §E0.1-8), but every
+  // t() miss first logs '[strings] missing key: acui.loading.* / ui2.loading.*'
+  // to the console. Spread the two owned loading dictionaries into the RUNTIME
+  // dicts additively (existing global keys always win) so t() resolves them
+  // silently; the module tx() fallbacks stay as the node-safe second line.
+  for (const [globalDict, moduleDicts] of [
+    [STRINGS_EN, [ACUI_LOADING_EN, UI2_LOADING_EN]],
+    [STRINGS_DE, [ACUI_LOADING_DE, UI2_LOADING_DE]],
+  ]) {
+    for (const dict of moduleDicts) {
+      for (const [key, value] of Object.entries(dict)) {
+        if (!(key in globalDict)) globalDict[key] = value;
+      }
+    }
+  }
+  // ---- end V4/FIX-JUICE merge block ----
 
   // Apply the validated UI scale before the first rendered scene.
   // Root font-size + data-ui-scale from settings.uiScale BEFORE the first
@@ -402,7 +425,28 @@ async function boot() {
   const routed = harness
     ? await harness.postBoot({ store, ui, sceneManager, framework, assets })
     : false;
+  // ---- V4/FIX-JUICE: cold-boot cozy veil (single marked block) ----
+  // The first switchTo('home') used to run behind only the bare §E1 black
+  // fade — the room popped in on cold boot. Cover boot with the AC-3 home
+  // veil and reveal after the home enter() resolved (the veil's own settle
+  // frames + minShown + HARD_TIMEOUT/watchdog ceilings mean boot can never
+  // deadlock behind the curtain). Feature-detected lazy import + guard: a
+  // broken veil chunk never blocks boot. Harness-routed boots (?minigame=…)
+  // keep their own transitions.
+  let bootVeil = null;
+  if (!routed) {
+    try {
+      const veilMod = await import('./ui/loadingVeil.js');
+      veilMod.initLoadingVeil({ sceneManager });
+      veilMod.veil.show({ mode: 'home' });
+      bootVeil = veilMod.veil;
+    } catch (err) {
+      console.warn('[boot] V4/FIX-JUICE cold-boot veil unavailable:', err);
+    }
+  }
   if (!routed) await sceneManager.switchTo('home');
+  bootVeil?.hide();
+  // ---- end V4/FIX-JUICE cold-boot veil block ----
 
   // ---- G14: first-run onboarding (§C8.1 — no-op for returning users) ----
   initOnboarding({ store, ui, audio, sceneManager, framework });

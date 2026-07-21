@@ -37,7 +37,7 @@ import { now } from '../core/clock.js';
 import { isSurfTravel, clampSurfTravelCoins } from '../systems/shopTrip.js';
 import { hasGame, loadGame } from './registry.js';
 import { icon } from '../ui/icons.js';
-import { burstConfettiDom, flyCoinsDom } from '../gfx/particles.js'; // G14: results polish
+import { burstConfettiDom } from '../gfx/particles.js'; // G14: results polish (V4/FIX-JUICE: coin-fly now rides AC-9's pooled flyCoins)
 // ── V4/G56 imports (framework 2.0) ──
 import {
   DIFFICULTY_MODES,
@@ -366,9 +366,16 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       });
       btnRow.append(againBtn, homeBtn);
       el.appendChild(card);
-      burstConfettiDom(el); // G14: results confetti (§G14 polish)
-      // G14: coins fly from the results row to the HUD counter corner
-      flyCoinsDom({ fromEl: card.querySelector('.mg-results-row:last-child .mg-value'), count: Math.min(10, Math.max(3, Math.round(r.coins / 3))), onArrive: () => audio.play('coin.fly') });
+      burstConfettiDom(el); // G14: results confetti (§G14 polish; reduced-motion gated in particles.js)
+      // V4/FIX-JUICE: the payout beat rides AC-9's pooled coin-fly (arc to
+      // the HUD coin chip + chip bounce + ONE 'coin.fly' on arrival — the
+      // legacy flyCoinsDom fired the cue per coin) — feature-detected so a
+      // missing juice layer (broken chunk) simply skips the flight, and
+      // reduced motion no-ops inside flyCoins itself.
+      window.__goobyJuice?.flyCoins(
+        card.querySelector('.mg-results-row:last-child .mg-value'),
+        Math.round(r.coins / 3)
+      );
       // ── V4/G76 (§C-SYS4.2): glueckspilz 900 ms slot-roll — the reel
       // cycles seeded 10–60 display values every tick, then LANDS on the
       // bonus onEnd already paid (0 → the „Tagesbonus erreicht" note). ──

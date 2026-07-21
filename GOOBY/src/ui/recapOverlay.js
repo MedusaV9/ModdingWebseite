@@ -38,6 +38,9 @@ import { tween, easings } from '../gfx/tween.js'; // POLISH-J: coin roll-up
 import { t, getLang } from '../data/strings.js';
 import { now } from '../core/clock.js';
 import { markRecapHeard } from '../systems/radioQueue.logic.js'; // POLISH-H
+// V4/FIX-JUICE: the return-to-home leg rides the AC-3 cozy veil (mode 'home')
+// instead of dropping the white fade straight onto a still-settling room.
+import { initLoadingVeil, veil } from './loadingVeil.js';
 // POLISH-J: end-card polish strings (local tx() fallback — G52 pattern)
 import { EN as R2_EN, DE as R2_DE } from '../data/strings/v4-recap2.js';
 import {
@@ -755,8 +758,9 @@ async function finishRecap() {
     store.flush();
   }
 
-  // §C-SYS2.1 exit: end card → 500 ms fade home (white — covers the scene
-  // switch), audio fades like the radio's §B2.3 transitions.
+  // §C-SYS2.1 exit: end card → 500 ms white fade, then the AC-3 home veil
+  // covers the scene switch (V4/FIX-JUICE — no more white-drop pop-in);
+  // audio fades like the radio's §B2.3 transitions.
   cancelAnimationFrame(s.raf);
   if (s.tick != null) clearInterval(s.tick);
   if (s.el) {
@@ -774,7 +778,22 @@ async function finishRecap() {
     }, OVERLAY.AUDIO_FADE_MS + 50);
   }
   await fadeWhite(s.dom.white, 1, OVERLAY.EXIT_FADE_MS);
+  // V4/FIX-JUICE: when a real scene switch is involved, raise the AC-3 home
+  // veil UNDER the white takeover (veil z-loading 10000 < recap z 10010) so
+  // dropping the overlay reveals the cozy curtain, and the veil's own timing
+  // (afterEnter + settle frames + hard timeout) reveals the room only when
+  // it is really ready — no pop-in, and a stuck scene can never trap the
+  // player (HARD_TIMEOUT_MS/watchdog). The white ENTRY fade and every cue
+  // timing above are untouched (beat-sync contract). Any veil failure falls
+  // back to the old white fade-out.
+  let veilCovered = null;
   if (s.sceneMode && s.returnScene) {
+    try {
+      initLoadingVeil({ sceneManager }); // idempotent (framework wired it at boot)
+      veilCovered = veil.show({ mode: 'home' }); // BEFORE the switch — arms afterEnter
+    } catch (err) {
+      console.warn('[recap] home veil unavailable — white-fade fallback:', err);
+    }
     try {
       await sceneManager.switchTo(s.returnScene);
     } catch (err) {
@@ -785,9 +804,16 @@ async function finishRecap() {
   radioPlayer.duck(false, 'recap');
   musicDirector.setSuppressed(false);
   document.body.classList.remove('g64-recap');
-  await fadeWhite(s.dom.white, 0, OVERLAY.WHITE_FADE_MS);
-  s.dom.root.remove();
-  if (sess === s) sess = null;
+  if (veilCovered && veil.isShown()) {
+    await veilCovered; // curtain fully covers before the takeover drops
+    s.dom.root.remove();
+    if (sess === s) sess = null;
+    await veil.hide();
+  } else {
+    await fadeWhite(s.dom.white, 0, OVERLAY.WHITE_FADE_MS);
+    s.dom.root.remove();
+    if (sess === s) sess = null;
+  }
 }
 
 // ---------------------------------------------------------------------------

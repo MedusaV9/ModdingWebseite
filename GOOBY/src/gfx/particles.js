@@ -25,6 +25,10 @@
 //                (level-up, results, celebrations)
 
 import * as THREE from 'three';
+// V4/FIX-JUICE: the legacy DOM effects below (burstConfettiDom/flyCoinsDom)
+// must honor the OS reduced-motion setting like every AC-9 juice effect —
+// reuse ui.js' single predicate instead of duplicating the matchMedia probe.
+import { prefersReducedMotion } from '../ui/ui.js';
 
 const POOL_SIZE = 96;
 const TEX_SIZE = 64;
@@ -465,6 +469,7 @@ export function createParticles(parent, opts = {}) {
  * @param {{count?: number}} [opts]
  */
 export function burstConfettiDom(container, opts = {}) {
+  if (prefersReducedMotion()) return; // V4/FIX-JUICE: reduced-motion gate
   const count = opts.count ?? 36;
   const W = container.clientWidth || innerWidth;
   const H = container.clientHeight || innerHeight;
@@ -500,6 +505,10 @@ export function burstConfettiDom(container, opts = {}) {
  * }} opts
  */
 export function flyCoinsDom(opts = {}) {
+  // V4/FIX-JUICE: reduced-motion gate — the un-pooled legacy flight (kept
+  // for API compat; production EARN beats now use AC-9's pooled flyCoins)
+  // must no-op exactly like the juice layer does.
+  if (prefersReducedMotion()) return;
   const center = (el) => {
     const r = el?.getBoundingClientRect?.();
     return r && (r.width > 0 || r.height > 0) ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;

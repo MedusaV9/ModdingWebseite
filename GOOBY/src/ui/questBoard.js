@@ -138,9 +138,19 @@ export function registerQuestBoard({ store, ui, audio }) {
         const claimBtn = card.querySelector('.g23-qb-claim');
         if (done) {
           claimBtn.addEventListener('click', () => {
+            // V4/FIX-JUICE: snapshot the button center BEFORE claim() — the
+            // store change re-renders the board and detaches this node.
+            const rect = claimBtn.getBoundingClientRect();
             const reward = getAchievementsEngine()?.quests?.claim?.(entry.id);
             if (reward) {
               audio.play('quest.claim');
+              // V4/FIX-JUICE: AC-9 coin-fly on the EARN beat — feature-
+              // detected one-liner (no-ops when juice is uninitialized or
+              // reduced motion is on).
+              window.__goobyJuice?.flyCoins(
+                { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+                Math.round(reward.coins / 10)
+              );
               ui.toast('toast.questClaimed', { coins: reward.coins, xp: reward.xp });
             }
           });

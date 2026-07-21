@@ -123,6 +123,10 @@ export function initDailyBonus({ store, ui, audio, sceneManager }) {
         }
         store.update((state) => Object.assign(state, result.state));
         audio.play('jingle.daily');
+        // V4/FIX-JUICE: AC-9 coin-fly on the EARN beat — coins arc from the
+        // claim button to the HUD coin chip (feature-detected one-liner;
+        // no-ops when juice is uninitialized or reduced motion is on).
+        window.__goobyJuice?.flyCoins(btn, Math.round(result.reward.coins / 10));
         const food = result.reward.foodId ? getFood(result.reward.foodId) : null;
         rewardEl.innerHTML =
           `${icon('coin', 20)}+${result.reward.coins}` +
