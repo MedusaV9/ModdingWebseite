@@ -260,3 +260,14 @@ export function simulateTrampolineAutoplay(seed, mode = 'normal') {
   }
   return { score, failures, tune };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const TRAMP_JUICE = Object.freeze({
+  /** Boost shockwave ring tween length (s) + end scale. */
+  SHOCKWAVE_SEC: 0.45,
+  SHOCKWAVE_SCALE: 2.6,
+});

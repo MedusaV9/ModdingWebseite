@@ -16,9 +16,12 @@ import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
+// GP3: reduced-motion gate for the NEW boost shockwave (§AC-9 predicate).
+import { prefersReducedMotion } from '../../ui/ui.js';
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import {
   TRAMP,
+  TRAMP_JUICE, // GP3 juice knobs (boost shockwave)
   applyDifficulty,
   withTrampolineHitbox,
   createTrampolineEndlessState,
@@ -128,6 +131,8 @@ export default {
     this.endlessState = createTrampolineEndlessState(this.tune.ENDLESS_FAILURE_LIMIT);
     this.autoplay =
       import.meta.env?.DEV && new URLSearchParams(location.search).get('autoplay') === '1';
+    // GP3 dev-only CDP probe (§E9 harness pattern — __runner/__hopper precedent)
+    if (import.meta.env?.DEV) window.__tramp = this;
 
     this.phase = 'play'; // 'play' | 'ending' | 'done'
     this.score = 0;
@@ -244,6 +249,22 @@ export default {
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.position.y = MAT_Y + 0.03;
     scene.add(this.ring);
+
+    // GP3 juice: boost shockwave ring (expands + fades on a nailed window).
+    // Camera-facing XY ring at the launch point — a flat mat-plane ring reads
+    // as a sliver from this side-on camera.
+    this.reduceMotion = prefersReducedMotion();
+    this.juiceTweens = [];
+    const shockGeo = new THREE.RingGeometry(0.55, 0.68, 36);
+    this.ownedGeos.push(shockGeo);
+    this.shockMat = new THREE.MeshBasicMaterial({
+      color: 0x8ae8da, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+    });
+    this.ownedMats.push(this.shockMat);
+    this.shock = new THREE.Mesh(shockGeo, this.shockMat);
+    this.shock.position.set(0, MAT_Y + 0.55, 0.6);
+    this.shock.visible = false;
+    scene.add(this.shock);
 
     // --- Gooby on a trick wrapper (rotation pivot at his belly) ---
     this.particles = createParticles(scene);
@@ -388,6 +409,25 @@ export default {
       this.ctx.audio.play('tramp.boost');
       this.floats.spawn(t('mg.tramp.boost'), new THREE.Vector3(0.7, MAT_Y + 0.9, 0.5), '#59C9B9');
       this.particles.emit('sparkles', new THREE.Vector3(0, MAT_Y + 0.25, 0.4), { count: 8 });
+      // GP3 juice: shockwave ring blooms out of the mat on a nailed window
+      if (!this.reduceMotion) {
+        const shock = this.shock;
+        const shockMat = this.shockMat;
+        shock.visible = true;
+        this.juiceTweens.push(tween({
+          from: 0, to: 1, duration: TRAMP_JUICE.SHOCKWAVE_SEC, ease: easings.easeOutCubic,
+          onUpdate: (v) => {
+            const s = 1 + v * (TRAMP_JUICE.SHOCKWAVE_SCALE - 1);
+            shock.scale.set(s, s, 1);
+            shockMat.opacity = 0.85 * (1 - v);
+          },
+          onComplete: () => {
+            shock.visible = false;
+            shock.scale.set(1, 1, 1);
+            shockMat.opacity = 0;
+          },
+        }));
+      }
       const mult = heightMultiplier(apexFor(vy));
       if (mult > heightMultiplier(apexFor(this.prevVy ?? 0))) {
         this.floats.spawn(`×${mult}`, new THREE.Vector3(-0.8, MAT_Y + 1.2, 0.5), '#D6428A');
@@ -552,9 +592,14 @@ export default {
   },
 
   dispose() {
+    if (import.meta.env?.DEV && window.__tramp === this) delete window.__tramp; // GP3 probe
     this.ctx?.renderer?.domElement?.removeEventListener('pointerdown', this.onPointerDown);
     this.offSwipe?.();
     this.trickTween?.cancel();
+    for (const tw of this.juiceTweens ?? []) tw.cancel(); // GP3 shockwave tweens
+    this.juiceTweens = [];
+    this.shock = null;
+    this.shockMat = null;
     this.floats?.dispose();
     this.particles?.dispose();
     this.gooby?.dispose();

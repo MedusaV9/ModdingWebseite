@@ -9,10 +9,16 @@
 // Dev-only ?autoplay=1: random-ish competent play for headless verification.
 
 import * as THREE from 'three';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { createParticles } from '../../gfx/particles.js';
+// GP3: reduced-motion gate for the NEW decorative beats + the camera jitter
+// (§AC-9 accessibility rule — one shared predicate, ui.js owns the probe).
+import { prefersReducedMotion } from '../../ui/ui.js';
+// GP3: same-wave i18n fallback (v4-ui2/v4-arcade2 precedent) until a later
+// sweep spreads strings/v4-gpgroup3.js into the frozen strings.js.
+import { EN as GP3_EN, DE as GP3_DE } from '../../data/strings/v4-gpgroup3.js';
 // V4/G67 (PLAN4-GAMES §G4.8 runner row): reduced-dose speed juice — FOV 60
 // base + 8 kick over the 6→13 m/s ramp, 16-streak pool, 0.03 top shake,
 // banners at the ramp thirds. Shared helpers in gfx/speedLines.js.
@@ -28,6 +34,8 @@ import {
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import {
   RUNNER,
+  RUNNER_JUICE, // GP3 juice knobs (milestone cadence, landing puff)
+  crossedRunnerMilestone, // GP3 pure milestone beat
   speedAt,
   coinLineCount,
   comboMultiplier,
@@ -44,11 +52,25 @@ import {
   finalRunnerScore,
 } from './runner.logic.js';
 
+/** GP3 local i18n: strings.js first, v4-gpgroup3.js fallback (G52 pattern). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP3_DE : GP3_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
 const CORRIDOR_LEN = 104; //  scenery conveyor loop length (m)
 const SPAWN_Z = -88; //       obstacle rows appear here
 const DESPAWN_Z = 9; //       and are recycled here
 const SKY = 0xbfe3ff;
 const BUILDINGS = ['building-a', 'building-b', 'building-c', 'building-d', 'building-e', 'building-f'];
+const CAR_NAMES = ['car-kit/taxi', 'car-kit/sedan', 'car-kit/van'];
 
 /** Fit a GLB clone so its bounding box matches targetW on x (uniform). */
 function fitWidth(model, targetW) {
@@ -71,18 +93,22 @@ function floatTexture(text, color) {
   const key = `${text}|${color}`;
   if (floatTexCache.has(key)) return floatTexCache.get(key);
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 64;
   const g = canvas.getContext('2d');
+  // GP3: width follows the text so longer milestone labels ("300 m!") don't
+  // clip at the frozen 128 px — the sprite rescales by aspect in floatText.
   g.font = '900 40px system-ui, sans-serif';
+  canvas.width = Math.max(128, Math.ceil(g.measureText(text).width) + 24);
+  canvas.height = 64;
+  g.font = '900 40px system-ui, sans-serif'; // width change reset the ctx
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 8;
   g.strokeStyle = 'rgba(74,59,54,0.85)';
-  g.strokeText(text, 64, 34);
+  g.strokeText(text, canvas.width / 2, 34);
   g.fillStyle = color;
-  g.fillText(text, 64, 34);
+  g.fillText(text, canvas.width / 2, 34);
   const tex = new THREE.CanvasTexture(canvas);
+  tex.userData.aspect = canvas.width / canvas.height;
   floatTexCache.set(key, tex);
   return tex;
 }
@@ -148,7 +174,9 @@ export default {
       // world
       scenery: [], //     {obj, z0} conveyor items
       obstacles: [], //   {kind, lane, z, obj, rowId}
+      obstaclePool: new Map(), // GP3 perf: retired obstacle objects per kind/model
       coinsArr: [], //    {lane, z, y, obj, taken}
+      coinPool: [], //    GP3 perf: retired coin meshes
       mysteryArr: [], //  {lane,z,obj}
       nextMysteryAt: tune.MYSTERY_FIRST_M,
       knocked: [], //     {obj, vel, spin, t} stumble debris
@@ -163,6 +191,8 @@ export default {
         typeof location !== 'undefined' &&
         new URLSearchParams(location.search).get('autoplay') === '1',
       auto: { handledRow: -1, action: null, actionAtZ: 0, targetLane: 1 },
+      // GP3: reduced-motion snapshot (per round) gates jitter + dust beats
+      reduceMotion: prefersReducedMotion(),
     };
     this.S = S;
 
@@ -270,7 +300,7 @@ export default {
       else if (p.dir === 'down') this.slide();
     });
 
-    if (import.meta.env?.DEV) window.__runner = { S }; // V4/G67 CDP probe (dev-only)
+    if (import.meta.env?.DEV) window.__runner = { S, game: this }; // V4/G67 CDP probe (dev-only; GP3: + game for eval-forced rows)
   },
 
   // ------------------------------------------------------------- actions
@@ -299,27 +329,31 @@ export default {
   },
 
   // ------------------------------------------------------------- spawning
-  spawnRow(row) {
+  /**
+   * GP3 perf: obstacle objects are pooled per kind (cars per model) — mid-run
+   * rows reuse retired GLB clones instead of re-cloning every spawn, which
+   * removes the recurring clone/traverse allocation spike at row cadence.
+   */
+  takeObstacle(kind) {
     const S = this.S;
-    const { ctx } = S;
-    S.rowId += 1;
-    const carNames = ['car-kit/taxi', 'car-kit/sedan', 'car-kit/van'];
-    row.lanes.forEach((kind, lane) => {
-      if (!kind) return;
-      let obj;
+    const key = kind === 'car'
+      ? CAR_NAMES[Math.floor(S.ctx.rng() * CAR_NAMES.length)]
+      : kind;
+    const pool = S.obstaclePool.get(key);
+    let obj = pool && pool.length > 0 ? pool.pop() : null;
+    if (!obj) {
       if (kind === 'cone') {
-        obj = ground(fitWidth(ctx.assets.getModel('city-kit-roads/construction-cone'), 0.55));
+        obj = ground(fitWidth(S.ctx.assets.getModel('city-kit-roads/construction-cone'), 0.55));
       } else if (kind === 'box') {
-        obj = ground(fitWidth(ctx.assets.getModel('car-kit/box'), 0.72));
+        obj = ground(fitWidth(S.ctx.assets.getModel('car-kit/box'), 0.72));
       } else if (kind === 'barrier') {
-        obj = ground(fitWidth(ctx.assets.getModel('city-kit-roads/construction-barrier'), 1.05));
+        obj = ground(fitWidth(S.ctx.assets.getModel('city-kit-roads/construction-barrier'), 1.05));
       } else if (kind === 'car') {
-        obj = ground(fitWidth(ctx.assets.getModel(carNames[Math.floor(S.ctx.rng() * carNames.length)]), 1.15));
-        obj.rotation.y = Math.PI / 2 + (S.ctx.rng() - 0.5) * 0.15;
+        obj = ground(fitWidth(S.ctx.assets.getModel(key), 1.15));
       } else {
         // overhead: barrier raised on two posts — slide under it
         obj = new THREE.Group();
-        const bar = ground(fitWidth(ctx.assets.getModel('city-kit-roads/construction-barrier'), 1.3));
+        const bar = ground(fitWidth(S.ctx.assets.getModel('city-kit-roads/construction-barrier'), 1.3));
         bar.position.y = S.tune.OBSTACLES.overhead.gapY;
         obj.add(bar);
         for (const px of [-0.55, 0.55]) {
@@ -328,6 +362,36 @@ export default {
           obj.add(post);
         }
       }
+      obj.userData.poolKey = key;
+      obj.userData.baseY = obj.position.y; // ground() offset to restore
+    }
+    // reset whatever a knocked-debris flight scrambled before reuse
+    obj.position.y = obj.userData.baseY;
+    obj.rotation.set(0, 0, 0);
+    if (kind === 'car') {
+      // GP3 3D-correctness: parked cars face ALONG the corridor (the travel
+      // axis) like curb parking — the old broadside pose clipped ~0.4 m into
+      // both neighbour lanes AND mismatched the 0.95 m collision half-depth.
+      obj.rotation.y = (S.ctx.rng() < 0.5 ? 0 : Math.PI) + (S.ctx.rng() - 0.5) * 0.12;
+    }
+    return obj;
+  },
+
+  /** Return an obstacle object to its pool (GP3 perf). */
+  releaseObstacle(obj) {
+    const S = this.S;
+    S.ctx.scene.remove(obj);
+    const key = obj.userData.poolKey;
+    if (!S.obstaclePool.has(key)) S.obstaclePool.set(key, []);
+    S.obstaclePool.get(key).push(obj);
+  },
+
+  spawnRow(row) {
+    const S = this.S;
+    S.rowId += 1;
+    row.lanes.forEach((kind, lane) => {
+      if (!kind) return;
+      const obj = this.takeObstacle(kind);
       obj.position.x = S.tune.LANE_X[lane];
       obj.position.z = SPAWN_Z;
       S.ctx.scene.add(obj);
@@ -352,14 +416,22 @@ export default {
           const y = overJump
             ? 0.55 + S.tune.JUMP_HEIGHT * 0.8 * Math.cos((zOff / 2.2) * Math.PI * 0.5) ** 2
             : 0.55;
-          const coin = new THREE.Mesh(S.coinGeo, S.coinMat);
-          coin.rotation.z = Math.PI / 2;
+          // GP3 perf: coin meshes are pooled too (shared geo/mat as before)
+          const coin = S.coinPool.pop() ?? new THREE.Mesh(S.coinGeo, S.coinMat);
+          coin.rotation.set(0, 0, Math.PI / 2);
           coin.position.set(S.tune.LANE_X[opt.lane], y, SPAWN_Z + zOff);
           S.ctx.scene.add(coin);
           S.coinsArr.push({ lane: opt.lane, z: SPAWN_Z + zOff, y, obj: coin, taken: false });
         }
       }
     }
+  },
+
+  /** Return a coin mesh to the pool (GP3 perf). */
+  releaseCoin(coin) {
+    const S = this.S;
+    S.ctx.scene.remove(coin);
+    S.coinPool.push(coin);
   },
 
   spawnMysteryBox() {
@@ -383,11 +455,14 @@ export default {
   /** Floating "+N" text at a world position (dt-driven, pause-safe). */
   floatText(text, color, pos) {
     const S = this.S;
-    const mat = new THREE.SpriteMaterial({ map: floatTexture(text, color), transparent: true, depthWrite: false });
+    const map = floatTexture(text, color);
+    const mat = new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false });
     const sprite = new THREE.Sprite(mat);
+    // GP3: sprite width tracks the texture aspect (milestone labels are wider)
+    const aspect = map.userData.aspect ?? 2;
     // F4 P2-3: outer-lane coin popups must not clip past the screen edges
-    sprite.position.copy(clampFloatTextToView(pos.clone(), S.ctx.camera, { halfW: 0.45, halfH: 0.23 }));
-    sprite.scale.set(0.9, 0.45, 1);
+    sprite.position.copy(clampFloatTextToView(pos.clone(), S.ctx.camera, { halfW: 0.225 * aspect, halfH: 0.23 }));
+    sprite.scale.set(0.45 * aspect, 0.45, 1);
     S.ctx.scene.add(sprite);
     S.floaters.push({ sprite, t: 0, life: 0.8 });
   },
@@ -497,7 +572,18 @@ export default {
     S.started = true;
     S.elapsed = elapsed;
     const speed = S.ending ? 0 : speedAt(elapsed, S.tune);
+    const prevMeters = S.meters;
     S.meters += speed * dt;
+    // GP3 juice: 100 m milestone — chime + floater over Gooby's head
+    const milestone = S.ending ? 0 : crossedRunnerMilestone(prevMeters, S.meters);
+    if (milestone > 0) {
+      S.ctx.audio.play('combo.up');
+      this.floatText(tx('gp3.runner.milestone', { m: milestone }), '#59C9B9',
+        new THREE.Vector3(S.laneX, 1.9, 0));
+      if (!S.reduceMotion) {
+        S.particles.emit('sparkles', new THREE.Vector3(S.laneX, 1.2, 0), { count: 6 });
+      }
+    }
     S.ctx.hud.setTime(elapsed);
     S.pu.magnetT = Math.max(0, S.pu.magnetT - dt);
     S.pu.x2T = Math.max(0, S.pu.x2T - dt);
@@ -546,6 +632,11 @@ export default {
       if (S.jumpT >= S.tune.JUMP_SEC) {
         S.jumpT = -1;
         S.gooby.play('happyBounce', { loop: true, speed: 1.7 });
+        // GP3 juice: landing dust puff at the feet (reduced-motion gated)
+        if (!S.reduceMotion) {
+          S.particles.emit('crumbs', new THREE.Vector3(S.laneX, 0.08, 0),
+            { count: RUNNER_JUICE.LANDING_PUFF_COUNT });
+        }
       } else {
         y = S.tune.JUMP_HEIGHT * Math.sin((S.jumpT / S.tune.JUMP_SEC) * Math.PI);
       }
@@ -597,7 +688,7 @@ export default {
       ob.z += dz;
       ob.obj.position.z = ob.z;
       if (ob.z > DESPAWN_Z) {
-        S.ctx.scene.remove(ob.obj);
+        this.releaseObstacle(ob.obj); // GP3 perf: back to the pool
         S.obstacles.splice(i, 1);
         continue;
       }
@@ -614,7 +705,7 @@ export default {
       c.obj.position.z = c.z;
       c.obj.rotation.y += dt * 4;
       if (c.z > DESPAWN_Z) {
-        S.ctx.scene.remove(c.obj);
+        this.releaseCoin(c.obj); // GP3 perf: back to the pool
         S.coinsArr.splice(i, 1);
         continue;
       }
@@ -628,7 +719,7 @@ export default {
           (magnet || (Math.abs(c.z) < 0.55 && c.lane === laneNow &&
             Math.abs(y + 0.55 - c.y) < 0.8))) {
         c.taken = true;
-        S.ctx.scene.remove(c.obj);
+        this.releaseCoin(c.obj); // GP3 perf: back to the pool
         S.coinsArr.splice(i, 1);
         S.coins += 1;
         const prevMult = comboMultiplier(S.coinStreak, S.tune);
@@ -680,7 +771,7 @@ export default {
       kn.obj.rotation.z += kn.spin * 0.6 * dt;
       // gone after a bounce-length, or before it can smear across the camera
       if (kn.t > 1.2 || kn.obj.position.z > 4) {
-        S.ctx.scene.remove(kn.obj);
+        this.releaseObstacle(kn.obj); // GP3 perf: transform resets on reuse
         S.knocked.splice(i, 1);
       }
     }
@@ -704,7 +795,8 @@ export default {
     if (S.shakeT <= 0) S.shakeAmp = 0;
     // V4/G67 §G4.8: 0.03 top-speed jitter (fades in 12.4→13 m/s), ADDED to
     // the crash-shake term — crash shake still dominates at 0.16/0.3.
-    const jitter = shake +
+    // GP3: the whole jitter term honors the OS reduced-motion setting.
+    const jitter = S.reduceMotion ? 0 : shake +
       topSpeedShake(speed, RUNNER_FX.SHAKE_FROM, RUNNER_FX.SHAKE_TO, RUNNER_FX.SHAKE_AMP);
     S.ctx.camera.position.set(
       S.laneX * 0.35 + (Math.random() - 0.5) * jitter,

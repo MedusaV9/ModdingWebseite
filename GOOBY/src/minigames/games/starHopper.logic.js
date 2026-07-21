@@ -524,3 +524,16 @@ export function simulateHopperAutoplay(seed, mode = 'normal', runtime = {}) {
   }
   return { score: hopperScore(distance, pickups, tune), distance, pickups, tune };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const HOPPER_JUICE = Object.freeze({
+  /** Golden-carrot barrel-roll tween length (s). */
+  BARREL_ROLL_SEC: 0.55,
+  /** Star-pickup craft scale-pop tween length (s) + peak scale. */
+  POP_SEC: 0.28,
+  POP_SCALE: 1.13,
+});

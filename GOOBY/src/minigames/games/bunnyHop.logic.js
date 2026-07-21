@@ -254,3 +254,29 @@ export function simulateHopAutoplay(mode = 'normal', seed = 1) {
   }
   return { score: finalHopScore(score, tune), gates };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs + pure beat helpers
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const HOP_JUICE = Object.freeze({
+  /** Air-puff size on each hop (pooled sparkles). */
+  HOP_PUFF_COUNT: 2,
+  /** Coin glint wobble amplitude (rad) + rate (Hz-ish). */
+  COIN_WOBBLE_RAD: 0.55,
+  COIN_WOBBLE_HZ: 2.2,
+});
+
+/**
+ * True exactly when passing gate `gatesPassed` narrowed the NEXT pillars'
+ * gap (§C6.1: gap narrows every 10 gates) — false again once GAP_MIN holds,
+ * so the warning banner never lies. Pure (GP3 banner beat).
+ * @param {number} gatesPassed total gates passed AFTER this gate
+ * @param {object} [tune]
+ * @returns {boolean}
+ */
+export function gapNarrowsAtGate(gatesPassed, tune = HOP) {
+  if (gatesPassed <= 0 || gatesPassed % tune.GAP_NARROW_EVERY_GATES !== 0) return false;
+  return gapAtGate(gatesPassed, tune) < gapAtGate(gatesPassed - 1, tune);
+}

@@ -405,3 +405,29 @@ export function simulateBasketAutoplay(mode = 'normal', seed = 1) {
   }
   return { score, elapsed, missStreak, baskets };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs + pure beat helpers
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const BASKET_JUICE = Object.freeze({
+  /** Consecutive swishes that light the on-fire banner beat. */
+  ON_FIRE_FROM: 3,
+  /** Net swish-pulse + rim wobble tween lengths (s). */
+  NET_PULSE_SEC: 0.45,
+  RIM_WOBBLE_SEC: 0.35,
+  /** Ball flight sparkle-trail emit chance per second (rng-gated). */
+  TRAIL_PER_SEC: 7,
+});
+
+/**
+ * On-fire beat: at least ON_FIRE_FROM consecutive swishes (GP3 banner —
+ * visual only, the §C6.1 #7 scoring in scoreShot is untouched).
+ * @param {number} swishStreak consecutive swishes INCLUDING this shot
+ * @param {object} [juice]
+ * @returns {boolean}
+ */
+export function isOnFire(swishStreak, juice = BASKET_JUICE) {
+  return swishStreak >= juice.ON_FIRE_FROM;
+}

@@ -8,13 +8,21 @@
 // Dev-only ?autoplay=1: random-ish competent play for headless verification.
 
 import * as THREE from 'three';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { createParticles } from '../../gfx/particles.js';
+import { tween, easings } from '../../gfx/tween.js'; // GP3 net-pulse/rim-wobble juice
+// GP3: reduced-motion gate for the NEW celebration tweens (§AC-9 predicate).
+import { prefersReducedMotion } from '../../ui/ui.js';
+// GP3 strings live in the NEW v4-gpgroup3.js module until a later strings
+// sweep spreads them into the frozen strings.js.
+import { EN as GP3_EN, DE as GP3_DE } from '../../data/strings/v4-gpgroup3.js';
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import {
   BASKET,
+  BASKET_JUICE, // GP3 juice knobs (on-fire, net pulse, rim wobble, trail)
+  isOnFire,
   hoopSlideX,
   hoopDistance,
   flickToVelocity,
@@ -26,6 +34,19 @@ import {
   applyDifficulty,
   isBasketRoundOver,
 } from './basketBounce.logic.js';
+
+/** GP3 local i18n: strings.js first, v4-gpgroup3.js fallback (G52 pattern). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP3_DE : GP3_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
 
 const SKY = 0xcfe8ff;
 const COURT = 0xd9a066;
@@ -90,6 +111,9 @@ export default {
       shakeT: 0,
       cheerT: 0,
       done: false,
+      // GP3: reduced-motion snapshot + cancellable celebration tweens
+      reduceMotion: prefersReducedMotion(),
+      juiceTweens: [],
       autoplay:
         import.meta.env.DEV &&
         typeof location !== 'undefined' &&
@@ -97,6 +121,8 @@ export default {
       autoT: 1.2,
     };
     this.S = S;
+    // GP3 dev-only CDP probe (§E9 harness pattern — __runner/__hopper precedent)
+    if (import.meta.env?.DEV) window.__basket = this;
 
     // --- court floor + line ---
     const floor = new THREE.Mesh(
@@ -134,12 +160,14 @@ export default {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = BASKET.RIM_Y;
     hoopGrp.add(rim);
+    S.rim = rim; // GP3: rim-wobble tween target
     const net = new THREE.Mesh(
       new THREE.CylinderGeometry(BASKET.RIM_R * 0.96, BASKET.RIM_R * 0.55, 0.5, 12, 3, true),
       new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.7 })
     );
     net.position.y = BASKET.RIM_Y - 0.27;
     hoopGrp.add(net);
+    S.net = net; // GP3: swish net-pulse tween target
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.06, BASKET.BOARD_BOTTOM_Y + BASKET.BOARD_H),
       new THREE.MeshStandardMaterial({ color: 0x888a8f, roughness: 0.5 })
@@ -234,10 +262,27 @@ export default {
       S.ctx.audio.play(shot.swish ? 'basket.swish' : 'basket.score');
       S.particles.emit('confetti', rimPos, { count: 10 });
       this.floatText(`+${points}`, '#59C9B9', rimPos);
+      // GP3 on-fire beat: 3+ consecutive swishes upgrade the plain swish
+      // banner + shower extra sparkles (visual only — scoring untouched)
+      const onFire = shot.swish && isOnFire(S.swishStreak);
+      if (onFire) S.particles.emit('sparkles', rimPos, { count: 12 });
       if (shot.bank) S.ctx.hud.banner(t('mg.basket.bank'));
       else if (moving && shot.swish) S.ctx.hud.banner(t('mg.basket.movingSwish'));
+      else if (onFire) S.ctx.hud.banner(tx('gp3.basket.onFire'));
       else if (shot.swish && points > S.tune.POINTS_BASKET) S.ctx.hud.banner(t('mg.basket.swish'));
       if (S.baskets === S.tune.SLIDE_AFTER_BASKETS) S.ctx.hud.banner(t('mg.basket.hoopMoves'));
+      // GP3 juice: the net bulges as the ball drops through (scale pulse)
+      if (!S.reduceMotion) {
+        const net = S.net;
+        S.juiceTweens.push(tween({
+          from: 0, to: 1, duration: BASKET_JUICE.NET_PULSE_SEC, ease: easings.easeOutQuad,
+          onUpdate: (v) => {
+            const bulge = Math.sin(v * Math.PI);
+            net.scale.set(1 + bulge * 0.22, 1 - bulge * 0.16, 1 + bulge * 0.22);
+          },
+          onComplete: () => net.scale.set(1, 1, 1),
+        }));
+      }
       // Gooby cheers
       S.cheerT = 1.2;
       S.gooby.setEmotion('ecstatic');
@@ -277,6 +322,15 @@ export default {
       if (ev.rim) {
         S.ctx.audio.play('basket.rim');
         S.shakeT = Math.max(S.shakeT, 0.25);
+        // GP3 juice: the rim shudders on contact (damped wobble tween)
+        if (!S.reduceMotion) {
+          const rim = S.rim;
+          S.juiceTweens.push(tween({
+            from: 0, to: 1, duration: BASKET_JUICE.RIM_WOBBLE_SEC, ease: easings.linear,
+            onUpdate: (v) => { rim.rotation.z = Math.sin(v * Math.PI * 4) * 0.06 * (1 - v); },
+            onComplete: () => { rim.rotation.z = 0; },
+          }));
+        }
       }
       if (ev.board) S.ctx.audio.play('basket.board');
       if (ev.basket) {
@@ -288,6 +342,10 @@ export default {
         S.ballGrp.position.set(S.ball.pos.x, S.ball.pos.y, S.ball.pos.z);
         S.ballGrp.rotation.x -= dt * 7;
         S.gooby.lookAt(S.ballGrp.position);
+        // GP3 juice: faint sparkle trail while the ball flies (rng-gated)
+        if (!S.reduceMotion && S.ctx.rng() < dt * BASKET_JUICE.TRAIL_PER_SEC) {
+          S.particles.emit('sparkles', S.ballGrp.position, { count: 1 });
+        }
       }
     } else if (S.resetT >= 0) {
       // --- respawn: ball floats back to the spawn point ---
@@ -380,10 +438,13 @@ export default {
   },
 
   dispose() {
+    if (import.meta.env?.DEV && window.__basket === this) delete window.__basket; // GP3 probe
     const S = this.S;
     if (!S) return;
     S.offSwipe?.();
     S.offDragEnd?.();
+    for (const tw of S.juiceTweens ?? []) tw.cancel(); // GP3 celebration tweens
+    S.juiceTweens = [];
     S.gooby?.dispose();
     S.particles?.dispose();
     for (const f of S.floaters) f.sprite.material.dispose();

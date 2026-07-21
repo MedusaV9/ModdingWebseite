@@ -24,9 +24,12 @@ import {
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
+// GP3: reduced-motion gate for the NEW celebration tweens (§AC-9 predicate).
+import { prefersReducedMotion } from '../../ui/ui.js';
 import { clampFloatTextToView } from '../framework.js';
 import {
   HOPPER,
+  HOPPER_JUICE, // GP3 juice knobs (barrel roll, scale pop)
   applyDifficulty,
   withHopperRuntime,
   speedAt,
@@ -220,6 +223,9 @@ export default {
     this.botT = 0;
     this.swipeTapSuppressT = 0;
     this.wormhole = { spawned: false, active: false, t: 0, stars: 0, gate: null };
+    // GP3: reduced-motion snapshot + cancellable celebration tweens
+    this.reduceMotion = prefersReducedMotion();
+    this.juiceTweens = [];
     // shower state machine: 'idle' | 'telegraph' | 'active'
     this.shower = { state: 'idle', t: 0, lanes: null, dropT: 0, nextAt: this.tune.SHOWER_EVERY_SEC };
     this.lastRowM = 26; // first row spawns a friendly bit ahead
@@ -882,6 +888,27 @@ export default {
           this.floats.spawn(`+${p.points}`, pos, p.kind === 'gold' ? '#FFC93C' : '#FFE066');
           this.particles.emit('sparkles', pos, { count: p.kind === 'gold' ? 10 : 5 });
           if (p.kind === 'gold') this.gooby.play('happyBounce');
+          // GP3 juice: golden carrot = full barrel roll, star = scale pop
+          // (reduced-motion gated; craft.rotation.y/scale are otherwise idle)
+          if (!this.reduceMotion) {
+            if (p.kind === 'gold') {
+              this.juiceTweens.push(tween({
+                from: 0, to: 1, duration: HOPPER_JUICE.BARREL_ROLL_SEC, ease: easings.easeInOutQuad,
+                onUpdate: (v) => { if (this.craft) this.craft.rotation.y = v * Math.PI * 2; },
+                onComplete: () => { if (this.craft) this.craft.rotation.y = 0; },
+              }));
+            } else {
+              this.juiceTweens.push(tween({
+                from: 0, to: 1, duration: HOPPER_JUICE.POP_SEC, ease: easings.easeOutQuad,
+                onUpdate: (v) => {
+                  if (this.craft) {
+                    this.craft.scale.setScalar(1 + Math.sin(v * Math.PI) * (HOPPER_JUICE.POP_SCALE - 1));
+                  }
+                },
+                onComplete: () => { if (this.craft) this.craft.scale.setScalar(1); },
+              }));
+            }
+          }
         }
         continue;
       }
@@ -934,6 +961,8 @@ export default {
     }
     this.offSwipe?.();
     this.offTap?.();
+    for (const tw of this.juiceTweens ?? []) tw.cancel(); // GP3 celebration tweens
+    this.juiceTweens = [];
     this.speedLines?.dispose(); // V4/G67 §G4.8 juice teardown
     if (import.meta.env?.DEV && window.__hopper?.game === this) delete window.__hopper; // V4/G67
     this.floats?.dispose();

@@ -804,3 +804,13 @@ export function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const HARBOR_JUICE = Object.freeze({
+  /** Deck-crate pop tween length (s) when cargo comes aboard. */
+  CRATE_POP_SEC: 0.35,
+});

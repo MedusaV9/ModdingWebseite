@@ -7,14 +7,21 @@
 
 import * as THREE from 'three';
 import { UI_COLORS } from '../../data/constants.js';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
+// GP3: reduced-motion gate for the NEW decorative beats (§AC-9 predicate).
+import { prefersReducedMotion } from '../../ui/ui.js';
+// GP3: same-wave i18n fallback (v4-ui2/v4-arcade2 precedent) until a later
+// sweep spreads strings/v4-gpgroup3.js into the frozen strings.js.
+import { EN as GP3_EN, DE as GP3_DE } from '../../data/strings/v4-gpgroup3.js';
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import {
   HOP,
+  HOP_JUICE, // GP3 juice knobs (hop puff, coin glint)
+  gapNarrowsAtGate, // GP3 pure gap-narrow banner beat
   speedAtGate,
   gapAtGate,
   stepPhysics,
@@ -28,6 +35,19 @@ import {
   coinSpawns,
   finalHopScore,
 } from './bunnyHop.logic.js';
+
+/** GP3 local i18n: strings.js first, v4-gpgroup3.js fallback (G52 pattern). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP3_DE : GP3_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
 
 const GOOBY_X = -0.85;
 const GOOBY_SCALE = 0.62;
@@ -102,6 +122,8 @@ export default {
     this.ctx = ctx;
     this.autoplay =
       import.meta.env?.DEV && new URLSearchParams(location.search).get('autoplay') === '1';
+    // GP3 dev-only CDP probe (§E9 harness pattern — __runner/__hopper precedent)
+    if (import.meta.env?.DEV) window.__hop = this;
     const difficulty = ctx.params?.difficulty ?? 'normal';
     this.tune = applyModifier(applyDifficulty(HOP, difficulty), ctx.params?.modifier);
 
@@ -120,6 +142,8 @@ export default {
     this.gusts = 0;
     this.lastGustCue = '';
     this.celebrated = false;
+    // GP3: reduced-motion snapshot (per round) gates the decorative beats
+    this.reduceMotion = prefersReducedMotion();
 
     const camera = ctx.camera;
     camera.position.set(0, 0, 10);
@@ -252,6 +276,15 @@ export default {
     this.started = true;
     this.vy = this.tune.HOP_VY;
     this.ctx.audio.play('hop.flap');
+    // GP3 juice: tiny air puff under the feet on every flap (reduced-motion
+    // gated — pooled sparkles, zero allocation)
+    if (!this.reduceMotion) {
+      this.particles.emit(
+        'sparkles',
+        this.gooby.group.position.clone().add(new THREE.Vector3(-0.15, -0.1, 0)),
+        { count: HOP_JUICE.HOP_PUFF_COUNT }
+      );
+    }
     // squash & stretch (§C6.1: squash+stretch on hop)
     const grp = this.gooby.group;
     tween({
@@ -463,6 +496,11 @@ export default {
     for (const p of this.pillars) {
       p.x -= speed * dt;
       p.group.position.x = p.x;
+      // GP3 juice: uncollected gap coins glint (slow tilt wobble)
+      if (p.coin && !p.coinTaken) {
+        p.coin.rotation.y =
+          Math.sin(elapsed * HOP_JUICE.COIN_WOBBLE_HZ + p.x) * HOP_JUICE.COIN_WOBBLE_RAD;
+      }
     }
     for (const prop of this.props) {
       prop.position.x -= speed * dt * 0.85; // slight parallax
@@ -497,6 +535,12 @@ export default {
         ctx.audio.play('hop.gate');
         this.floats.spawn(`+${points}`, new THREE.Vector3(GOOBY_X + 0.5, this.y + 0.6, 0), '#2E8B57');
         this.particles.emit('sparkles', new THREE.Vector3(p.x, p.gapCenterY, 0), { count: 4 });
+        // GP3 juice: the §C6.1 every-10-gates gap narrowing is finally
+        // ANNOUNCED (warning tone + banner) instead of silently biting
+        if (gapNarrowsAtGate(this.gatesPassed, this.tune)) {
+          ctx.audio.play('hopper.warning');
+          ctx.hud.banner(tx('gp3.hop.gapNarrow'));
+        }
       }
       if (this.started && collides({ x: GOOBY_X, y: this.y }, p, this.tune)) {
         this.crash();
@@ -522,6 +566,7 @@ export default {
   },
 
   dispose() {
+    if (import.meta.env?.DEV && window.__hop === this) delete window.__hop; // GP3 probe
     this.offTap?.();
     this.floats?.dispose();
     this.particles?.dispose();

@@ -12,13 +12,17 @@
 import * as THREE from 'three';
 import { t } from '../../data/strings.js';
 import { createParticles } from '../../gfx/particles.js';
+import { tween, easings } from '../../gfx/tween.js'; // GP3 crate-pop juice
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
+// GP3: reduced-motion gate for the NEW celebration tweens (§AC-9 predicate).
+import { prefersReducedMotion } from '../../ui/ui.js';
 import { clampFloatTextToView } from '../framework.js';
 import {
   HARBOR,
+  HARBOR_JUICE, // GP3 juice knobs (crate pop)
   applyDifficulty, // V4/G74 §G5.3
   applyModifier, //   V4/G74 §C-SYS4.3
   createEngine,
@@ -219,6 +223,9 @@ export default {
     this.boosts = 0;
     this.dragX = null; // manual steering target (m), null = coast
     this.hornQueued = false;
+    // GP3: reduced-motion snapshot + cancellable celebration tweens
+    this.reduceMotion = prefersReducedMotion();
+    this.juiceTweens = [];
 
     const scene = ctx.scene;
     scene.background = new THREE.Color(SKY);
@@ -551,9 +558,22 @@ export default {
       ctx.audio.play('harbor.crate');
       this.floats.spawn('+4', boatPos.clone().add(new THREE.Vector3(0, 1, 0)), '#FFD166');
       this.particles.emit('sparkles', boatPos.clone().add(new THREE.Vector3(0, 0.6, 0)), { count: 5 });
+      // GP3 juice: the newly-boarded deck crate pops in (scale overshoot) —
+      // update() only drives .visible, so the scale tween owns this channel
+      const idx = Math.min(this.engine.state.crates, this.deckCrates.length) - 1;
+      if (!this.reduceMotion && idx >= 0) {
+        const crate = this.deckCrates[idx];
+        this.juiceTweens.push(tween({
+          from: 0, to: 1, duration: HARBOR_JUICE.CRATE_POP_SEC, ease: easings.easeOutBack,
+          onUpdate: (v) => crate.scale.setScalar(Math.max(0.01, v)),
+          onComplete: () => crate.scale.setScalar(1),
+        }));
+      }
     } else if (ev.type === 'ring') {
       ctx.audio.play('harbor.ring');
       this.floats.spawn('+2', boatPos.clone().add(new THREE.Vector3(0, 1, 0)), '#8AE0D2');
+      // GP3 juice: rings now sparkle too (they were the only silent pickup)
+      this.particles.emit('sparkles', boatPos.clone().add(new THREE.Vector3(0, 0.7, 0)), { count: 6 });
     } else if (ev.type === 'bump') {
       ctx.audio.play('harbor.bump');
       ctx.hud.banner(t('mg.harbor.bump'));
@@ -822,6 +842,8 @@ export default {
     this.offDrag?.();
     this.offDragEnd?.();
     this.offTap?.();
+    for (const tw of this.juiceTweens ?? []) tw.cancel(); // GP3 crate-pop tweens
+    this.juiceTweens = [];
     this.chip?.remove();
     this.chip = null;
     this.floats?.dispose();

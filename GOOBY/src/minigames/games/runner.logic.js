@@ -516,3 +516,29 @@ export function simulateRunnerAutoplay(mode = 'normal', seed = 1, maxSec = 180) 
     hits,
   };
 }
+
+// ---------------------------------------------------------------------------
+// GP3 (GAME-POLISH-3) juice knobs + pure beat helpers
+// ---------------------------------------------------------------------------
+
+/** GP3 juice tuning — visual/celebration beats only, never gameplay math. */
+export const RUNNER_JUICE = Object.freeze({
+  /** Distance milestone cadence (m) for the floater + chime beat. */
+  MILESTONE_EVERY_M: 100,
+  /** Dust puff size when a jump lands (pooled crumbs). */
+  LANDING_PUFF_COUNT: 5,
+});
+
+/**
+ * Distance milestone crossed by this frame's advance, or 0 when none.
+ * Pure so the celebration beat is unit-testable (GP3).
+ * @param {number} prevMeters meters BEFORE this frame's advance
+ * @param {number} meters meters AFTER this frame's advance
+ * @param {number} [everyM] milestone cadence (m)
+ * @returns {number} the milestone value crossed (e.g. 200), or 0
+ */
+export function crossedRunnerMilestone(prevMeters, meters, everyM = RUNNER_JUICE.MILESTONE_EVERY_M) {
+  const prev = Math.floor(Math.max(0, prevMeters) / everyM);
+  const now = Math.floor(Math.max(0, meters) / everyM);
+  return now > prev ? now * everyM : 0;
+}
