@@ -27,8 +27,13 @@ import net.neoforged.fml.loading.FMLPaths;
  * failures are logged and the built-in defaults are used in memory instead.
  */
 public final class EclipseConfig {
-    /** General tunables: grave grace period in minutes (non-owners may loot after 1x, graves scatter after 3x). */
-    public record General(int graveGraceMinutes) {}
+    /**
+     * General tunables: grave grace period in minutes (non-owners may loot after 1x, graves scatter
+     * after 3x), and the day auto-advance switch. {@code dayAutoAdvance} defaults to {@code false}
+     * (days only change via the admin command / {@code DayScheduler.setDay}); when enabled, the day
+     * advances once per real-world day at {@code dayAutoAdvanceTime} ({@code HH:mm}, server-local time).
+     */
+    public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime) {}
 
     /** Per-day plan: three goals, progression unlock keys, and the world border size for that day. */
     public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
@@ -61,6 +66,22 @@ public final class EclipseConfig {
     /** Grave grace period in minutes (default 30). Non-owners may loot after 1x; the grave scatters after 3x. */
     public static int graveGraceMinutes() {
         return general().graveGraceMinutes();
+    }
+
+    /** Whether the event day auto-advances once per real-world day (default {@code false}: manual only). */
+    public static boolean dayAutoAdvance() {
+        return general().dayAutoAdvance();
+    }
+
+    /** The server-local time of day at which the day auto-advances; unparseable values fall back to 08:00. */
+    public static java.time.LocalTime dayAutoAdvanceTime() {
+        try {
+            return java.time.LocalTime.parse(general().dayAutoAdvanceTime());
+        } catch (java.time.format.DateTimeParseException e) {
+            EclipseMod.LOGGER.warn("Invalid dayAutoAdvanceTime '{}' in general.json; using 08:00",
+                    general().dayAutoAdvanceTime());
+            return java.time.LocalTime.of(8, 0);
+        }
     }
 
     /** All 14 day plans, ordered by day. */
@@ -163,19 +184,23 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30);
+        return new General(30, false, "08:00");
     }
 
     private static JsonElement generalToJson(General general) {
         JsonObject obj = new JsonObject();
         obj.addProperty("graveGraceMinutes", general.graveGraceMinutes());
+        obj.addProperty("dayAutoAdvance", general.dayAutoAdvance());
+        obj.addProperty("dayAutoAdvanceTime", general.dayAutoAdvanceTime());
         return obj;
     }
 
     private static General generalFromJson(JsonElement json) {
         JsonObject obj = json.getAsJsonObject();
         int graveGraceMinutes = obj.has("graveGraceMinutes") ? obj.get("graveGraceMinutes").getAsInt() : 30;
-        return new General(Math.max(0, graveGraceMinutes));
+        boolean dayAutoAdvance = obj.has("dayAutoAdvance") && obj.get("dayAutoAdvance").getAsBoolean();
+        String dayAutoAdvanceTime = obj.has("dayAutoAdvanceTime") ? obj.get("dayAutoAdvanceTime").getAsString() : "08:00";
+        return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime);
     }
 
     // --- days.json ---

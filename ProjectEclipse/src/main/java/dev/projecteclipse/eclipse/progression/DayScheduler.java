@@ -1,0 +1,104 @@
+package dev.projecteclipse.eclipse.progression;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+/**
+ * Server-authoritative event-day clock. Days change only through {@link #setDay(MinecraftServer, int)}
+ * (wired to the admin command) unless {@code dayAutoAdvance} is enabled in {@code general.json}
+ * (default OFF), in which case the day advances once per real-world day at the configured
+ * server-local time. On a day change the new day is persisted, the day plan's border size is
+ * applied via {@link BorderController} (60 s lerp), the new state is broadcast to every client
+ * and a global bell rings for every online player.
+ */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID)
+public final class DayScheduler {
+    /** How long the border takes to move to a new day's size, in milliseconds. */
+    private static final long BORDER_LERP_MS = 60_000L;
+    /** Real-world clock is polled every 5 seconds; plenty for a once-per-day trigger. */
+    private static final int AUTO_ADVANCE_CHECK_TICKS = 100;
+    /**
+     * Reserved {@link EclipseWorldState} milestone-progress key holding the epoch day of the
+     * last automatic advance, so a restart never re-advances the same real-world day.
+     */
+    private static final String AUTO_ADVANCE_PROGRESS_KEY = "scheduler:last_auto_advance_epoch_day";
+
+    private DayScheduler() {}
+
+    /** The current event day (>= 1). */
+    public static int getDay(MinecraftServer server) {
+        return EclipseWorldState.get(server).getDay();
+    }
+
+    /**
+     * Sets the current event day (clamped to >= 1), persists it, applies the day plan's border
+     * size and broadcasts {@link S2CDayStatePayload} to all players. When the day actually
+     * changes, a global bell cue plays for every online player. Idempotent and reversible:
+     * unlocks are derived from the day in {@link UnlockState}, so lowering the day re-locks.
+     */
+    public static void setDay(MinecraftServer server, int day) {
+        int newDay = Math.max(1, day);
+        EclipseWorldState state = EclipseWorldState.get(server);
+        boolean changed = state.getDay() != newDay;
+        state.setDay(newDay);
+
+        EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
+        BorderController.setBorder(server, plan.borderSize(), changed ? BORDER_LERP_MS : 0L);
+
+        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(newDay, state.getAltarLevel()));
+        if (changed) {
+            for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                online.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.MASTER, 1.0F, 1.0F);
+            }
+        }
+        EclipseMod.LOGGER.info("Eclipse day set to {} (goals: {}; unlocked keys: {})",
+                newDay, plan.goals(), UnlockState.unlockedKeys(server));
+    }
+
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
+        EclipseWorldState state = EclipseWorldState.get(server);
+        // First boot with auto-advance on: stamp today so the first advance happens tomorrow.
+        if (EclipseConfig.dayAutoAdvance() && state.getMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY) == 0L) {
+            state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, LocalDate.now().toEpochDay());
+        }
+        EclipseConfig.DayPlan plan = EclipseConfig.day(state.getDay());
+        EclipseMod.LOGGER.info("Eclipse day plan loaded: day {}/{} (goals: {}; border: {}; unlocked keys: {}; autoAdvance: {})",
+                state.getDay(), EclipseConfig.days().size(), plan.goals(), plan.borderSize(),
+                UnlockState.unlockedKeys(server), EclipseConfig.dayAutoAdvance());
+    }
+
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        MinecraftServer server = event.getServer();
+        if (server.getTickCount() % AUTO_ADVANCE_CHECK_TICKS != 0 || !EclipseConfig.dayAutoAdvance()) {
+            return;
+        }
+        if (LocalTime.now().isBefore(EclipseConfig.dayAutoAdvanceTime())) {
+            return;
+        }
+        EclipseWorldState state = EclipseWorldState.get(server);
+        long todayEpochDay = LocalDate.now().toEpochDay();
+        if (todayEpochDay <= state.getMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY)) {
+            return;
+        }
+        state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, todayEpochDay);
+        EclipseMod.LOGGER.info("Eclipse day auto-advance triggered at {}", LocalTime.now());
+        setDay(server, getDay(server) + 1);
+    }
+}

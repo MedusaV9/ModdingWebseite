@@ -101,7 +101,8 @@ Loads `config/eclipse/{general,days,milestones,modgate}.json`; missing files are
 (triggered from `FMLCommonSetupEvent`). Getters lazy-load if needed. Parse/IO failures fall back to built-in defaults in memory.
 
 ```java
-public record General(int graveGraceMinutes) {}   // general.json; default 30
+public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime) {}
+// general.json; defaults: 30, false, "08:00"
 public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
@@ -109,6 +110,8 @@ public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKe
 
 public static General general();
 public static int graveGraceMinutes();       // non-owners may loot a grave after 1x; it scatters after 3x
+public static boolean dayAutoAdvance();      // default false: days advance only via DayScheduler.setDay
+public static LocalTime dayAutoAdvanceTime(); // parsed "HH:mm" (server-local); falls back to 08:00
 public static List<DayPlan> days();          // 14 entries by default, ordered by day
 public static DayPlan day(int day);          // out-of-range days clamp to first/last plan
 public static List<Milestone> milestones();  // ordered by level
@@ -205,6 +208,110 @@ Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, al
 `ambient_sound`) and `EVENT_SUBMERGE` (`eclipse:event.submerge`); both currently ship tiny silent
 placeholder OGGs under `assets/eclipse/sounds/`.
 
+## Progression & Mod Gating
+
+All progression enforcement lives in `dev.projecteclipse.eclipse.progression` and is fully
+server-authoritative. Everything is *derived* from `EclipseWorldState` (day/altar level) +
+`EclipseConfig`, so every lock is reversible: unlock a key and the enforcement simply stops;
+lower the day and it re-applies. Blocked actions show a brief action-bar hint — never chat.
+
+```java
+public final class DayScheduler {   // @EventBusSubscriber (game bus)
+    public static int getDay(MinecraftServer server);
+    public static void setDay(MinecraftServer server, int day); // clamps to >= 1; admin-command entry point
+}
+
+public final class UnlockState {
+    public static boolean isUnlocked(MinecraftServer server, String key);
+    public static Set<String> unlockedKeys(MinecraftServer server); // unmodifiable
+}
+
+public final class BorderController { // @EventBusSubscriber (game bus)
+    public static void setBorder(MinecraftServer server, double size, long ms); // lerp; ms <= 0 snaps
+}
+
+public final class ModGate {          // @EventBusSubscriber (game bus)
+    public static boolean isNamespaceLocked(MinecraftServer server, String namespace);
+    public static boolean isItemLocked(MinecraftServer server, ItemStack stack);
+    public static boolean isBlockLocked(MinecraftServer server, BlockState state);
+}
+```
+
+- **DayScheduler** — `setDay` persists the day in `EclipseWorldState`, applies the day plan's
+  `borderSize` via `BorderController` (60 s lerp), broadcasts `S2CDayStatePayload` to all players
+  and (on an actual change) plays a global bell (`block.bell.use`) to every online player. Days are
+  manual-only by default; set `dayAutoAdvance=true` + `dayAutoAdvanceTime="HH:mm"` in
+  `config/eclipse/general.json` to advance once per real-world day at that server-local time (the
+  last advance's epoch day is persisted under the reserved `EclipseWorldState` milestone-progress
+  key `scheduler:last_auto_advance_epoch_day`, so restarts never double-advance).
+- **UnlockState** — the unlocked-key set is the union of `unlocks[]` of all day plans `1..currentDay`
+  plus `rewards[]` of all altar milestones `1..altarLevel`; cached, auto-invalidates on day/altar
+  changes and config reloads.
+- **BorderController** — border is always centered on the shared world spawn; on `ServerStartedEvent`
+  the size stored in `EclipseWorldState.getBorderSize()` (default **1000**) is re-enforced, so manual
+  `/worldborder` edits do not survive a restart. `setBorder` persists the new size.
+- **PhaseInventoryLock** — SURVIVAL/ADVENTURE players only. Every 20 ticks: while `main_inventory`
+  is locked, stacks in slots 9–35 are moved to free hotbar slots (or dropped); while `armor` is
+  locked, armor slots 36–39 + offhand 40 are cleared the same way — except `eclipse:arm_artifact`
+  (resolved via `BuiltInRegistries.ITEM` by id, null-guarded; no compile-time reference).
+  Right-clicks are cancelled on: crafting table + anvils (`workbenches`), smithing table
+  (`smithing`), enchanting table (`enchanting`), brewing stand (`brewing`), ender chest
+  (`ender_chests`). `EntityTravelToDimensionEvent` is cancelled for players heading to the Nether
+  (`nether`) or the End (`end`) while locked.
+- **ModGate** — reads `EclipseConfig.modGate()` (`gatedNamespaces` + `unlockKeys`, namespace →
+  unlock key, defaulting to the namespace itself). While a namespace is locked, for any item/block
+  whose registry-id namespace matches: `RightClickBlock`, `RightClickItem`,
+  `BlockEvent.EntityPlaceEvent` and `ItemEntityPickupEvent.Pre` are cancelled, and
+  `PlayerEvent.ItemCraftedEvent` shrinks the crafted stack to 0. Every 100 ticks a sweep removes
+  gated stacks from online SURVIVAL/ADVENTURE inventories and deposits them at spawn via
+  `InheritanceService.depositAtSpawn` — items are never destroyed. Matching is **pure namespace
+  string comparison**: zero compile-time dependency on Create/Simulated/Aeronautics/Sable.
+
+## Server pack (external mods)
+
+The event server runs the following published mods **alongside** `eclipse` in the server's `mods/`
+folder (NOT jar-in-jar / bundled inside Eclipse-Core):
+
+| Mod | Version | Jar | Gated namespace |
+|---|---|---|---|
+| Create | 6.0.10 | `create-1.21.1-6.0.10-280.jar` | `create` |
+| Create: Aeronautics | 1.3.0 | bundled jar (includes Simulated) | `aeronautics`, `simulated` |
+| Sable | 2.0.3 | `sable-2.0.3.jar` | `sable` |
+| Simple Voice Chat | 2.6.16 | `voicechat-neoforge-1.21.1-2.6.16.jar` | — (not gated; used by the voice worker) |
+
+**Why not jar-in-jar?** Two reasons. First, licensing: the assets of these mods are
+All-Rights-Reserved, so redistributing them inside the Eclipse-Core jar is not permitted —
+installing the official jars alongside is. Second, mechanics: a jar-in-jar mod cannot be disabled
+at the loader level (FML offers no per-nested-jar toggle, and "unlocking on day N" would require
+swapping jars and restarting). Runtime gating by registry namespace is the correct mechanism: the
+mods are always *loaded*, but their content is unusable until the matching unlock key is granted
+by the day scheduler or an altar milestone. `neoforge.mods.toml` declares all four as
+`type="optional"`, `ordering="AFTER"` dependencies, so Eclipse-Core loads with or without them and
+after them when present.
+
+Default 14-day unlock schedule (`config/eclipse/days.json`; `modgate.json` maps each gated
+namespace to the key of the same name):
+
+| Day | Unlock keys | Border | Effect |
+|---|---|---|---|
+| 1 | — | 1000 | Hotbar-only inventory, no armor, no workstations, vanilla-only |
+| 2 | `main_inventory` | 1000 | Full 36-slot inventory usable |
+| 3 | `workbenches`, `create` | 1500 | Crafting tables + anvils; Create content usable |
+| 4 | `armor`, `simulated` | 1500 | Armor + offhand slots; Simulated content usable |
+| 5 | `aeronautics` | 2000 | Create: Aeronautics content usable |
+| 6 | `nether` | 2000 | Nether travel opens |
+| 7 | `enchanting` | 2000 | Enchanting tables |
+| 8 | `ender_chests` | 2500 | Ender chests |
+| 9 | `brewing` | 2500 | Brewing stands |
+| 10 | `smithing` | 2500 | Smithing tables |
+| 11 | — | 3000 | Final border expansion |
+| 12 | `end` | 3000 | End travel opens |
+| 13 | — | 3000 | — |
+| 14 | — | 3000 | Finale |
+
+(`sable` has no day entry by default — it unlocks via altar milestone level 4; milestones can also
+grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
+
 ## Layout
 
 - `dev.projecteclipse.eclipse.EclipseMod` — mod entry point (`@Mod("eclipse")`); wires all deferred registers.
@@ -213,6 +320,7 @@ placeholder OGGs under `assets/eclipse/sounds/`.
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
-- Placeholder packages for later work: `ritual`, `progression`, `anonymity`, `voice`, `artifact`, `admin`.
+- `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
+- Placeholder packages for later work: `ritual`, `anonymity`, `voice`, `artifact`, `admin`.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.
