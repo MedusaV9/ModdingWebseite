@@ -7,6 +7,66 @@
 import * as THREE from 'three';
 import { ENGINE } from '../data/constants.js';
 
+// ── V4/PERF: retina-aware pixel-ratio cap (§E0.1-2 module-local tuning) ─────
+// `ENGINE.MAX_PIXEL_RATIO` (2, frozen constants.js) stays the SAFE baseline:
+// it is what software rasterizers (SwiftShader/llvmpipe VMs) keep. On real
+// hardware GL the cap rises to 3 so DPR-3 phones (iPhone Pro class) render at
+// native resolution instead of a blurry 2/3-width upscale. Only devices whose
+// DPR actually exceeds 2 are affected — desktop DPR-1/2 output is unchanged.
+export const RENDER_SCALE = Object.freeze({
+  /** Pixel-ratio cap on hardware WebGL — full retina sharpness. */
+  MAX_PIXEL_RATIO_HW: 3,
+});
+
+/**
+ * Whether a WebGL renderer string names a software rasterizer (SwiftShader,
+ * llvmpipe, softpipe, Microsoft Basic Render, "software renderer" ANGLE
+ * spellings). Pure — same detection family as goobyWelt's splat guard, kept
+ * module-local because core/ must not import game modules. Unknown/empty
+ * strings return false (treat as hardware — the baseline cap still bounds it).
+ * @param {string|null|undefined} rendererString GL renderer string
+ * @returns {boolean}
+ */
+export function isSoftwareGl(rendererString) {
+  if (typeof rendererString !== 'string' || rendererString === '') return false;
+  return /swiftshader|llvmpipe|softpipe|software\s*(rasterizer|renderer|adapter)|microsoft basic render/i
+    .test(rendererString);
+}
+
+/**
+ * Effective renderer pixel ratio (pure decision, unit-tested): clamp the
+ * device pixel ratio to `ENGINE.MAX_PIXEL_RATIO` on software GL (every extra
+ * pixel is pure CPU cost there) and to `RENDER_SCALE.MAX_PIXEL_RATIO_HW` on
+ * hardware GL. Non-finite/non-positive DPR inputs fall back to 1.
+ * @param {number} dpr window.devicePixelRatio (may be undefined/garbage)
+ * @param {boolean} softwareGl from isSoftwareGl(<GL renderer string>)
+ * @returns {number}
+ */
+export function computePixelRatio(dpr, softwareGl) {
+  const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  const cap = softwareGl ? ENGINE.MAX_PIXEL_RATIO : RENDER_SCALE.MAX_PIXEL_RATIO_HW;
+  return Math.min(d, cap);
+}
+
+/**
+ * Read the unmasked GL renderer string off a live WebGLRenderer ('' when the
+ * probe is unavailable — fails toward the hardware path, whose cap only
+ * matters above DPR 2 anyway).
+ * @param {import('three').WebGLRenderer} renderer
+ * @returns {string}
+ */
+function glRendererString(renderer) {
+  try {
+    const gl = renderer?.getContext?.();
+    if (!gl) return '';
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+  } catch {
+    return '';
+  }
+}
+// ── end V4/PERF ──────────────────────────────────────────────────────────────
+
 /**
  * @typedef {Object} SceneLifecycle
  * @property {import('three').Scene} scene
@@ -24,7 +84,10 @@ import { ENGINE } from '../data/constants.js';
  */
 export function createSceneManager({ canvas, assets, input, audio, store, ui }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, ENGINE.MAX_PIXEL_RATIO));
+  // V4/PERF: retina-aware cap — hardware GL may go to 3 (native DPR-3 phones),
+  // software GL (SwiftShader/llvmpipe) keeps the ENGINE.MAX_PIXEL_RATIO
+  // baseline of 2, i.e. exactly the pre-V4 behavior on the headless VM.
+  renderer.setPixelRatio(computePixelRatio(devicePixelRatio, isSoftwareGl(glRendererString(renderer))));
   renderer.setSize(innerWidth, innerHeight);
 
   /** @type {Map<string, {factory: (ctx: object) => SceneLifecycle, assetKeys: string[]}>} */
@@ -191,8 +254,36 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
           } catch (err) {
             console.error('[sceneManager] error disposing scene:', err);
           }
+          // V4/PERF: safety sweep AFTER the scene's own dispose — frees
+          // geometries/materials the departing scene missed (measured: +12
+          // geometries per home↔minigame cycle before this). Mirrors the
+          // minigame framework's V2/FIX-F P2-3 sweep exactly: permanent-cache
+          // masters (assets.isCachedResource) and userData.shared resources
+          // are SKIPPED, and re-disposing already-freed resources is a no-op,
+          // so scenes that clean up fully are unaffected.
+          try {
+            const isShared = (res) =>
+              assets?.isCachedResource?.(res) === true || res?.userData?.shared === true;
+            current.instance.scene?.traverse?.((obj) => {
+              if (obj.geometry && !isShared(obj.geometry)) obj.geometry.dispose?.();
+              if (obj.material) {
+                for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+                  if (!isShared(m)) m.dispose?.();
+                }
+              }
+            });
+          } catch (err) {
+            console.error('[sceneManager] dispose sweep error:', err);
+          }
           current.scopedInput.removeAll();
           current = null;
+          // V4/PERF: promptly drop the old scene's render lists. They are
+          // WeakMap-keyed (GC-safe either way), but releasing them here frees
+          // the sorted draw arrays before the next scene builds instead of
+          // waiting for a collection; the new scene's lists rebuild on its
+          // first render. Shared cached assets are untouched — this releases
+          // renderer-internal bookkeeping only, never geometry/materials.
+          renderer.renderLists?.dispose?.();
         }
         const scopedInput = input.scoped();
         const ctx = { renderer, assets, input: scopedInput, audio, store, ui };

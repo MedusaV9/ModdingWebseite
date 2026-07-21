@@ -288,9 +288,13 @@ function loadModel(key) {
       (gltf) => {
         normalizeLoadedScene(gltf.scene); // V2/FIX-F P1-2 + P2-3
         // V3/G31 (§B6): keep the AnimationClips — masters cache both.
+        // V4/PERF: the SkinnedMesh probe is computed ONCE here — getModel
+        // used to re-traverse the whole master hierarchy on EVERY clone
+        // (every room prop/food placement) just to emit the §B6 warning.
         modelCache.set(key, {
           scene: gltf.scene,
           animations: gltf.animations ?? [],
+          skinned: hasSkinnedMesh(gltf.scene),
         });
         return gltf.scene;
       },
@@ -374,18 +378,20 @@ function makePlaceholder(key) {
  * @returns {import('three').Group}
  */
 export function getModel(key) {
-  const master = modelCache.get(key)?.scene;
-  if (master) {
+  const cached = modelCache.get(key);
+  if (cached) {
     // V3/G31 (§B6): plain Object3D.clone() breaks skeleton bindings — the
     // KayKit characters (or any skinned model) must go through
     // getSkinnedModel. Warn loudly instead of handing out a broken rig.
-    if (hasSkinnedMesh(master)) {
+    // V4/PERF: `skinned` was computed once at load time — cache hits no
+    // longer re-traverse the master hierarchy per placement.
+    if (cached.skinned) {
       console.warn(
         `assets: '${key}' contains SkinnedMesh — use getSkinnedModel(key), ` +
           'plain clones break skeleton bindings (PLAN3 §B6)'
       );
     }
-    const clone = master.clone(true);
+    const clone = cached.scene.clone(true);
     clone.name = key;
     return clone;
   }
