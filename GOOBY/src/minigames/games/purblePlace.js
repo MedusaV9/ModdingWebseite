@@ -697,11 +697,16 @@ const TREATS_KEYS = [
 const GOODS_KEYS = ['croissant', 'cupcake', 'cinnamon-roll'].map((k) => `baked-goods/${k}`);
 const FOOD_KEYS = ['food-kit/strawberry'];
 
-/** NPC choreography (§C9.1 kept): door back-right → order-window seats back-left. */
+/** NPC choreography (§C9.1 kept): door back-right → order-window seats back-left.
+ * V4/GAME-POLISH-2: DOOR moved into the actual doorway opening (the old
+ * (2.4,-1.7) spawned customers inside the counter/crate AABBs) and walks now
+ * route through LANE_Z — a clear strip between belt and stool row — so NPCs
+ * stop phasing through stools/counters on the way to a far seat. */
 const NPC = Object.freeze({
   SCALE: 0.45,
   WALK_SPEED: 1.15,
-  DOOR: Object.freeze({ x: 2.4, z: -1.7 }),
+  DOOR: Object.freeze({ x: 2.6, z: -1.9 }),
+  LANE_Z: -0.75,
   SEATS: Object.freeze([
     Object.freeze({ x: -2.55, z: -1.42 }),
     Object.freeze({ x: -1.95, z: -1.52 }),
@@ -801,13 +806,18 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     const podium = this.own(new THREE.Mesh(
-      new THREE.BoxGeometry(0.6, 0.42, 0.5),
+      new THREE.BoxGeometry(0.6, 0.42, 0.4),
       new THREE.MeshStandardMaterial({ color: '#A9744B', roughness: 0.85 })
     ));
-    podium.position.set(0.55, 0.21, -0.95);
+    // V4/GAME-POLISH-2: moved from mid-belt (0.55,-0.95) to the spawn end —
+    // the old spot wedged Gooby between the counter face and the customer
+    // walk lane (AABB audit: he clipped the counter AND every passing NPC).
+    // At the belt's left end he supervises pan spawns with clear space.
+    podium.position.set(-3.35, 0.21, -0.92);
     scene.add(podium);
     this.gooby.group.scale.setScalar(0.8);
-    this.gooby.group.position.set(0.55, 0.42, -0.95);
+    this.gooby.group.position.set(-3.35, 0.42, -0.92);
+    this.gooby.group.rotation.y = 0.5; // angled toward the belt line
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
 
@@ -921,7 +931,9 @@ export default {
     this.place(scene, 'kaykit-restaurant/wall_orderwindow', -2.2, -2.3, 0, 2.1);
     this.place(scene, 'kaykit-restaurant/wall_orderwindow', 0.15, -2.3, 0, 2.1);
     this.place(scene, 'kaykit-restaurant/wall_doorway', 2.45, -2.3, 0, 2.1);
-    this.place(scene, 'kaykit-restaurant/menu', 0.15, -2.24, 0, 0.9).position.y = 1.35;
+    // V4/GAME-POLISH-2: menu lowered 1.35 → 1.15 — its top edge clipped into
+    // the pink trim band + awning slats (AABB audit)
+    this.place(scene, 'kaykit-restaurant/menu', 0.15, -2.24, 0, 0.9).position.y = 1.15;
 
     // upper wall band + striped awning + pennant bunting: the portrait frame
     // shows a lot of air above the 2.1 m wall row — fill it so the side view
@@ -978,9 +990,19 @@ export default {
     scene.add(flags);
 
     // back counter row + Tiny Treats bakery dressing (§G1.4 list)
-    this.place(scene, 'kaykit-restaurant/kitchencounter_straight', -0.6, -1.85, 0, 0.95);
-    this.place(scene, 'kaykit-restaurant/kitchencounter_sink', 0.55, -1.85, 0, 0.95);
-    this.place(scene, 'kaykit-restaurant/kitchencounter_straight', 1.7, -1.85, 0, 0.95);
+    // V4/GAME-POLISH-2: the KayKit counters are square-footprint blocks — at
+    // h 0.95 their ~1.9 m depth poked through the order-window wall AND into
+    // the stool/oven lane (AABB audit). Squash the measured depth to a real
+    // counter profile and sit the back edge flush with the wall face (-2.06).
+    const backCounter = (key, x) => {
+      const c = this.place(scene, key, x, -1.66, 0, 0.95);
+      const cb = new THREE.Box3().setFromObject(c);
+      c.scale.z *= 0.8 / Math.max(0.01, cb.max.z - cb.min.z);
+      return c;
+    };
+    backCounter('kaykit-restaurant/kitchencounter_straight', -0.6);
+    backCounter('kaykit-restaurant/kitchencounter_sink', 0.55);
+    backCounter('kaykit-restaurant/kitchencounter_straight', 1.45); // ends at x≈2.4, clear of the doorway corridor
     const dress = (key, x, z, s, rotY = 0) => {
       const m = this.ctx.assets.getModel(key);
       const box = new THREE.Box3().setFromObject(m);
@@ -1001,7 +1023,11 @@ export default {
     dress('bakery-interior/macaron_yellow', 1.9, -1.78, 0.12);
     this.place(scene, 'kaykit-restaurant/jar_A_medium', 0.35, -1.8, 0, 0.34).position.y = 0.97;
     this.place(scene, 'kaykit-restaurant/jar_C_small', 0.15, -1.84, 0, 0.26).position.y = 0.97;
-    this.place(scene, 'kaykit-restaurant/crate_buns', 2.15, -1.95, 0.3, 0.42);
+    // V4/GAME-POLISH-2: crate shrunk + tucked right of the door opening —
+    // it used to sit ON the NPC entry spot (AABB audit)
+    const crate = this.place(scene, 'kaykit-restaurant/crate_buns', 3.15, -1.8, 0.3, 0.42);
+    crate.scale.x *= 0.6;
+    crate.scale.z *= 0.6;
 
     // Tiny Treats display case + register front-right (shop corner)
     const caseM = this.ctx.assets.getModel('bakery-interior/display_case_long');
@@ -1037,7 +1063,9 @@ export default {
       const sb = new THREE.Box3().setFromObject(stool);
       this.stoolTopY = Math.max(0.3, sb.max.y);
     }
-    this.place(scene, 'kaykit-restaurant/plate', -1.95, -1.15, 0, 0.05).position.y = 0.0;
+    // V4/GAME-POLISH-2: the plate lay on the FLOOR in the walk lane — now it
+    // sits on the left counter top like bakery dressing
+    this.place(scene, 'kaykit-restaurant/plate', -1.2, -1.7, 0, 0.05).position.y = 0.96;
   },
 
   buildBelt(scene) {
@@ -1180,8 +1208,13 @@ export default {
     this.ownedGeos.push(glow.geometry);
     this.ownedMats.push(glowMat);
     scene.add(glow);
-    // the KayKit oven sits behind as dressing
-    this.place(scene, 'kaykit-restaurant/oven', cx, -1.05, 0, 1.2);
+    // the KayKit oven — bakery equipment dressing at the far-left spawn end,
+    // BEHIND the belt. V4/GAME-POLISH-2: it used to sit at (cx, -1.05) where
+    // it interpenetrated the back counters by 0.8 m and straddled the NPC
+    // walk lane (AABB audit); depth-squashed like the counters.
+    const dressOven = this.place(scene, 'kaykit-restaurant/oven', -3.6, -1.6, 0, 1.2);
+    const dressOvenBox = new THREE.Box3().setFromObject(dressOven);
+    dressOven.scale.z *= 0.8 / Math.max(0.01, dressOvenBox.max.z - dressOvenBox.min.z);
 
     // vertical bake meter on the tunnel face (§G1.5: green zone marked)
     const meter = new THREE.Group();
@@ -1885,6 +1918,27 @@ export default {
     return npc;
   },
 
+  /** V4/GAME-POLISH-2: reverse lane route back out through the doorway. */
+  npcExitPath(npc) {
+    const p = npc.model.position;
+    return [
+      { x: p.x, z: NPC.LANE_Z },
+      { x: NPC.DOOR.x, z: NPC.LANE_Z },
+      { x: NPC.DOOR.x, z: NPC.DOOR.z },
+    ];
+  },
+
+  /** Walk npc along its waypoint path; true when the last point is reached. */
+  npcWalkPath(npc, dt) {
+    const path = npc.path ?? [];
+    while (path.length > 0) {
+      if (!this.npcWalkTowards(npc, path[0].x, path[0].z, dt)) return false;
+      path.shift();
+      if (path.length > 0) return false; // turn the corner next frame
+    }
+    return true;
+  },
+
   /** Move npc toward (x, z); returns true when arrived. Faces the direction. */
   npcWalkTowards(npc, x, z, dt) {
     const p = npc.model.position;
@@ -1939,11 +1993,18 @@ export default {
         case 'waitEnter':
           if (this.requestAnim(npc)) {
             npc.state = 'enter';
+            // V4/GAME-POLISH-2: two-leg route — out of the doorway into the
+            // clear lane, along it, then step in to the stool (no clipping)
+            npc.path = [
+              { x: NPC.DOOR.x, z: NPC.LANE_Z },
+              { x: seat.x, z: NPC.LANE_Z },
+              { x: seat.x, z: seat.z },
+            ];
             this.npcPlay(npc, 'walk');
           }
           break;
         case 'enter':
-          if (this.npcWalkTowards(npc, seat.x, seat.z, dt)) {
+          if (this.npcWalkPath(npc, dt)) {
             npc.state = 'seated';
             npc.model.rotation.y = 0; // face the belt (+z)
             npc.model.position.y = Math.max(0, this.stoolTopY - 0.3);
@@ -1959,6 +2020,8 @@ export default {
             npc.state = 'cheer';
             npc.t = 0;
             this.npcPlay(npc, 'cheer', { loop: false });
+            // V4/GAME-POLISH-2 juice: hearts over the happy customer
+            this.particles.emit('hearts', new THREE.Vector3(seat.x, this.stoolTopY + 0.9, seat.z), { count: 3 });
           }
           break;
         case 'cheer':
@@ -1966,6 +2029,7 @@ export default {
           if (npc.t >= NPC.CHEER_SEC) {
             npc.state = 'exit';
             npc.model.position.y = 0;
+            npc.path = this.npcExitPath(npc);
             this.npcPlay(npc, 'walk');
           }
           break;
@@ -1973,11 +2037,12 @@ export default {
           if (this.requestAnim(npc)) {
             npc.state = 'exit';
             npc.model.position.y = 0;
+            npc.path = this.npcExitPath(npc);
             this.npcPlay(npc, 'walk', { timeScale: 0.75 }); // sad trudge out
           }
           break;
         case 'exit':
-          if (this.npcWalkTowards(npc, NPC.DOOR.x, NPC.DOOR.z, dt)) {
+          if (this.npcWalkPath(npc, dt)) {
             this.removeNpc(npc);
           }
           break;

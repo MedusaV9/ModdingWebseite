@@ -11,7 +11,8 @@
 // its arc apex and ignores junk (§C1.2), with a human-ish skip/aim error.
 
 import * as THREE from 'three';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
+import { EN as GP2_EN, DE as GP2_DE } from '../../data/strings/v4-gpgroup2.js';
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
@@ -37,6 +38,19 @@ import {
   endlessShouldEnd,
   segmentHitsMovingCircle,
 } from './veggieChop.logic.js';
+
+/** GP2 local i18n: strings.js first, v4-gpgroup2.js fallback (G52 pattern). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP2_DE : GP2_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
 
 const ITEM_SIZE = 0.62;
 const HALF_SIZE = 0.5;
@@ -287,20 +301,24 @@ export default {
     ));
     counter.position.set(0, -this.halfH + 0.9, -2.6);
     scene.add(counter);
-    // the arena: a giant cutting board facing the camera (§C1.3)
+    // the arena: a giant cutting board leaning against the backsplash (§C1.3)
     // V3/G45 §C11.1: the one-mesh Restaurant-Bits board replaces the
     // food-kit stand-in; gameplay arcs/hit radii remain data-driven.
+    // V4/GAME-POLISH-2: the old mount stood the board portrait at z -1.6 —
+    // a full-screen brown wall that hid the counter/backsplash (CDP shot).
+    // Now it leans landscape against the wall like a real board: local X
+    // (long edge) → screen X, local Y (board normal) → camera + easel tilt.
     this.board = fitModel(ctx.assets.getModel('kaykit-restaurant/cuttingboard'), 5.6);
-    // Local X (long edge) → screen Y, local Z → screen X, local Y → camera.
-    this.board.rotation.set(0, Math.PI / 2, Math.PI / 2);
-    this.board.position.set(0, -0.7, -1.6);
+    this.board.rotation.set(Math.PI / 2 - 0.16, Math.PI, 0); // Ry(π): handle notch up
+    this.board.position.set(0, -1.35, -2.2);
     scene.add(this.board);
-    // counter props: frying pan + mug tucked into the corners
+    // counter props: frying pan bottom-right (Gooby moved to bottom-left so
+    // the HUD pause button no longer covers him), mug beside Gooby
     const pan = fitModel(ctx.assets.getModel('food-kit/frying-pan'), 1.15);
-    pan.position.set(-this.halfW + 0.75, -this.halfH + 0.75, -1.2);
+    pan.position.set(this.halfW - 0.9, -this.halfH + 0.75, -1.2);
     scene.add(pan);
     const mug = fitModel(ctx.assets.getModel('food-kit/mug'), 0.6);
-    mug.position.set(this.halfW - 0.55, -this.halfH + 1.6, -1.4);
+    mug.position.set(-this.halfW + 1.7, -this.halfH + 0.72, -1.2);
     scene.add(mug);
 
     // --- miss pips: 3 little tomatoes, greyed as veggies drop (§C1.2) ---
@@ -323,7 +341,9 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.62);
-    this.gooby.group.position.set(this.halfW - 0.85, -this.halfH + 0.55, 0.4);
+    // V4/GAME-POLISH-2: bottom-LEFT corner — the framework pause button sits
+    // bottom-right and used to cover chef Gooby entirely (CDP shot)
+    this.gooby.group.position.set(-this.halfW + 0.85, -this.halfH + 0.55, 0.4);
     this.gooby.setEmotion('happy');
     this.gooby.lookAt(new THREE.Vector3(0, 0.5, 5));
     scene.add(this.gooby.group);
@@ -462,6 +482,9 @@ export default {
     }
     this.ctx.audio.play('combo.up');
     this.gooby.play('happyBounce');
+    // V4/GAME-POLISH-2 juice: Gooby rides the frenzy hype
+    this.gooby.setEmotion('ecstatic');
+    this.emotionT = CHOP.FRENZY_DURATION_SEC;
   },
 
   /** Add a point to the swipe-trail ribbon. */
@@ -543,6 +566,15 @@ export default {
       this.ctx.audio.play('chop.combo');
       this.ctx.hud.banner(t('mg.chop.combo'));
       this.gooby.play('happyBounce');
+    } else if (this.swipeChops === 3) {
+      // V4/GAME-POLISH-2 juice: 3 in one stroke — banner + sparkles + ecstatic
+      this.ctx.audio.play('combo.up');
+      this.ctx.hud.banner(tx('gp2.chop.triple'));
+      this.particles.emit('sparkles', pos, { count: 5 });
+      this.gooby.setEmotion('ecstatic');
+      this.emotionT = 1.1;
+    } else if (this.swipeChops > 3) {
+      this.particles.emit('sparkles', pos, { count: 5 });
     }
     // the two halves tumble apart under gravity
     const { rng } = this.ctx;

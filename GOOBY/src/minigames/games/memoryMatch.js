@@ -254,6 +254,14 @@ export default {
         this.resolveMatch(a, b);
       } else {
         this.revealT = this.tune.REVEAL_SEC; // flip back after the reveal delay (dt-driven)
+        // V4/GAME-POLISH-2 juice: "nope" wiggle on both revealed cards
+        for (const i of [a, b]) {
+          const grp = this.cards[i].group;
+          tween({
+            from: 1, to: 0, duration: 0.45,
+            onUpdate: (v) => { grp.rotation.z = Math.sin(v * 22) * 0.09 * v; },
+          });
+        }
       }
     }
   },
@@ -481,6 +489,9 @@ export default {
         ctx.hud.setScore(this.totalScore);
         ctx.hud.banner(t('mg.memory.cleared'));
         ctx.audio.play('card.match');
+        // V4/GAME-POLISH-2 juice: celebrate every endless board clear
+        this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 10 });
+        this.gooby.play('happyBounce');
         this.resetEndlessBoard(elapsed);
         return;
       }

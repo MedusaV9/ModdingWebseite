@@ -275,6 +275,8 @@ export default {
           t: 0,
         });
         S.ctx.audio.play('pancake.slice');
+        // V4/GAME-POLISH-2 juice: crumb spray at the slice edge
+        S.particles.emit('crumbs', new THREE.Vector3(info.cut.center, S.stackTopY + 0.1, 0.2), { count: 4 });
       }
       S.stack = { center: localCenter, width: info.width };
       S.stackTopY += S.tune.LAYER_HEIGHT;
@@ -285,6 +287,13 @@ export default {
 
     S.layers += 1;
     S.bonusPoints += info.points;
+    // V4/GAME-POLISH-2 juice: every-10-layers milestone beat (numeral only —
+    // language-neutral, no new strings needed)
+    if (S.layers > 0 && S.layers % 10 === 0) {
+      S.ctx.audio.play('combo.up');
+      this.floatText(`${S.layers}!`, '#FFD166', new THREE.Vector3(S.stack.center, S.stackTopY + 0.8, 0));
+      S.particles.emit('confetti', new THREE.Vector3(S.stack.center, S.stackTopY + 0.4, 0), { count: 8 });
+    }
     if (info.perfect) {
       S.wobble = dampWobble(S.wobble, S.tune, S.layers);
       S.stackGroup.rotation.z = S.wobble.angle;

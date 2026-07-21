@@ -141,12 +141,22 @@ export default {
     this.stageGroup.add(rim);
 
     // --- disco-lite dressing: mirror ball + soft beams ---
+    // V4/GAME-POLISH-2: lowered from 4.15 — the ball was half-cropped by the
+    // top screen edge (CDP shot); a thin hanger rod sells "hanging", not
+    // "floating rock", and runs up out of frame.
     this.ball = own(new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.42, 1),
       new THREE.MeshStandardMaterial({ color: '#DFE3F2', metalness: 0.3, roughness: 0.3, flatShading: true })
     ));
-    this.ball.position.set(0, 4.15, -0.4);
+    this.ball.position.set(0, 3.45, -0.4);
     this.stageGroup.add(this.ball);
+    this.ballSpin = 0; // round-won celebration spin boost (decays via tween)
+    const hanger = own(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 2.8, 6),
+      new THREE.MeshStandardMaterial({ color: '#B9AECF', roughness: 0.7 })
+    ));
+    hanger.position.set(0, 4.85, -0.4);
+    this.stageGroup.add(hanger);
     /** @type {THREE.Mesh[]} */
     this.beams = [];
     for (let i = 0; i < 3; i += 1) {
@@ -308,6 +318,17 @@ export default {
       this.ctx.audio.play('combo.up');
       this.gooby.play('happyBounce');
       this.particles.emit('sparkles', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.4, 0)), { count: 8 });
+      // V4/GAME-POLISH-2 juice: confetti pop + mirror-ball scale punch & spin
+      this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 2.0, 0)), { count: 8 });
+      const ball = this.ball;
+      tween({
+        from: 1.45, to: 1, duration: 0.5, ease: easings.easeOutBack,
+        onUpdate: (v) => ball.scale.setScalar(v),
+      });
+      tween({
+        from: 7, to: 0, duration: 1.2, ease: easings.easeOutQuad,
+        onUpdate: (v) => { this.ballSpin = v; },
+      });
       this.phase = 'roundWon';
       this.stepT = 0.9;
     }
@@ -335,10 +356,12 @@ export default {
     this.gooby.update(dt);
     this.particles.update(dt);
     ctx.hud.setTime(elapsed);
-    this.ball.rotation.y += dt * 0.9;
+    this.ball.rotation.y += dt * (0.9 + (this.ballSpin ?? 0));
     this.beams.forEach((beam, i) => {
       beam.rotation.z = Math.sin(elapsed * 0.7 + i * 2.1) * 0.28;
-      beam.material.opacity = 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(elapsed * 1.3 + i));
+      // V4/GAME-POLISH-2: slightly stronger beam presence — the old 0.07–0.12
+      // band washed out to near-invisible over the pastel stage (CDP shot)
+      beam.material.opacity = 0.1 + 0.08 * (0.5 + 0.5 * Math.sin(elapsed * 1.3 + i));
     });
 
     if (this.phase === 'idle') {

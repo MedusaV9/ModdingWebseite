@@ -871,10 +871,13 @@ test('V3/G45 prop swaps use one-mesh committed Restaurant-Bits assets', () => {
   assert.doesNotMatch(burgerSrc, /new THREE\.BoxGeometry\(this\.halfW \* 2 \+ 2, 0\.42, 1\.4\)/);
   assert.match(chopSrc, /kaykit-restaurant\/cuttingboard/);
   assert.doesNotMatch(chopSrc, /food-kit\/cutting-board/);
+  // V4/GAME-POLISH-2: the board now leans landscape against the backsplash
+  // (long edge horizontal, normal toward the camera with an easel tilt) —
+  // the old portrait mount read as a full-screen brown wall (CDP shot).
   assert.match(
     chopSrc,
-    /this\.board\.rotation\.set\(0, Math\.PI \/ 2, Math\.PI \/ 2\)/,
-    'Restaurant-Bits board must face the camera with its long edge vertical'
+    /this\.board\.rotation\.set\(Math\.PI \/ 2 - 0\.16, Math\.PI, 0\)/,
+    'Restaurant-Bits board must lean against the backsplash, long edge horizontal'
   );
 });
 

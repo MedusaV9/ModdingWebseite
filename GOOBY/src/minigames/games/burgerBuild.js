@@ -151,6 +151,7 @@ export default {
     this.orderT = orderTimerSec(this.rush, this.tune);
     this.ticketSecond = -1;
     this.propLogged = false;
+    this.sadT = 0; // V4/GAME-POLISH-2: wrong-catch sad beat countdown
 
     const camera = ctx.camera;
     camera.position.set(0, 0, 10);
@@ -199,13 +200,21 @@ export default {
     scene.add(stripe);
     // V3/G45 §C11.1: one-mesh Restaurant-Bits counter replaces the primitive
     // box without changing the data-driven catch plane or draw-call count.
+    // V4/GAME-POLISH-2: the raw GLB is a full-height square cabinet — the old
+    // ratio squash left a 2.5 m block that swallowed the plate, Gooby and the
+    // checker floor (AABB audit). Fit width first, then squash the MEASURED
+    // box to an exact low worktop: top flush under the plate, front edge just
+    // ahead of the fall columns so missed items drop out of sight behind it.
     this.counter = fitModel(
       ctx.assets.getModel('kaykit-restaurant/kitchencounter_straight'),
       this.halfW * 2 + 1.8
     );
-    this.counter.scale.z *= 0.36;
-    this.counter.scale.y *= 0.72;
-    this.counter.position.set(0, this.plateY - 0.55, -0.4);
+    const counterBox = new THREE.Box3().setFromObject(this.counter);
+    const counterSize = counterBox.getSize(new THREE.Vector3());
+    const counterH = 1.5;
+    this.counter.scale.y *= counterH / (counterSize.y || 1);
+    this.counter.scale.z *= 1.3 / (counterSize.z || 1);
+    this.counter.position.set(0, this.plateY - 0.05 - counterH / 2, -0.05);
     scene.add(this.counter);
 
     // --- ticket (canvas sprite, top-left under the HUD) ---
@@ -227,7 +236,9 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.72);
-    this.gooby.group.position.set(0, -this.halfH + 0.95, -1.3); // peeks over the counter
+    // V4/GAME-POLISH-2: raised so head+eyes clear the (now correctly low)
+    // counter top instead of being buried inside the cabinet mesh
+    this.gooby.group.position.set(0, -this.halfH + 1.18, -1.3); // peeks over the counter
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
 
@@ -376,6 +387,9 @@ export default {
       this.addCatchPoints(true);
       this.floats.spawn(`+${orderPoints(BURGER.CATCH_PTS, this.rush)}`, pos, this.rush ? '#D99A18' : '#2E8B57');
       this.ctx.audio.play('catch.good');
+      // V4/GAME-POLISH-2 juice: sparkle pop at the catch point + ticket punch
+      this.particles.emit('sparkles', pos, { count: 3 });
+      this.punchTicket();
       this.stackLayer(item.id);
       this.placed += 1;
       if (isComplete(this.ticket, this.placed)) this.completeBurger();
@@ -385,7 +399,24 @@ export default {
       this.floats.spawn(t('mg.burger.wrong'), pos, '#D64570');
       this.ctx.audio.play('catch.bad');
       this.particles.emit('crumbs', this.plate.position.clone().add(new THREE.Vector3(0, 0.4, 0)), { count: 6 });
+      // V4/GAME-POLISH-2 juice: plate wobble + a sad beat from Gooby
+      const plate = this.plate;
+      tween({
+        from: 1, to: 0, duration: 0.4,
+        onUpdate: (v) => { plate.rotation.z = Math.sin(v * 26) * 0.14 * v; },
+      });
+      this.gooby.setEmotion('sad');
+      this.sadT = 0.9;
     }
+  },
+
+  /** V4/GAME-POLISH-2 juice: quick easeOutBack punch on the order ticket. */
+  punchTicket() {
+    const tk = this.ticketSprite;
+    tween({
+      from: 1.18, to: 1, duration: 0.28, ease: easings.easeOutBack,
+      onUpdate: (v) => tk.scale.set(1.7 * v, 2.24 * v, 1),
+    });
   },
 
   /** Snap a caught layer onto the plate stack with a squish (§C1.2). */
@@ -430,6 +461,9 @@ export default {
     this.ctx.audio.play('eat.chomp');
     this.particles.emit('crumbs', this.plate.position.clone().add(new THREE.Vector3(0, this.stackTopY, 0)), { count: 8 });
     this.particles.emit('hearts', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.6, 0)), { count: 4 });
+    // V4/GAME-POLISH-2 juice: confetti pop over the finished burger
+    this.particles.emit('confetti', this.plate.position.clone().add(new THREE.Vector3(0, this.stackTopY + 0.5, 0)), { count: 10 });
+    this.punchTicket();
     if (this.rush) {
       this.ctx.hud.banner(t('mg.burger.rushBonus', { n: completePoints }));
       this.ctx.audio.play('combo.up');
@@ -532,6 +566,12 @@ export default {
     if (this.autoplay && !this.propLogged && elapsed > 0.5) {
       this.propLogged = true;
       console.log(`[burgerBuild] prop kaykit-restaurant/kitchencounter_straight — drawCalls ${ctx.renderer.info.render.calls}`);
+    }
+
+    // V4/GAME-POLISH-2: sad beat recovers to happy on its own
+    if (this.sadT > 0) {
+      this.sadT -= dt;
+      if (this.sadT <= 0 && this.phase === 'play') this.gooby.setEmotion('happy');
     }
 
     if (this.phase === 'bite') {
