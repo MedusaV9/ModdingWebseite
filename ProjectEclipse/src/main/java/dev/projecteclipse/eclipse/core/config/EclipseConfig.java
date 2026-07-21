@@ -21,10 +21,10 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
- * Loads the four Eclipse config files from {@code <config>/eclipse/}:
- * {@code general.json}, {@code days.json}, {@code milestones.json} and {@code modgate.json}.
- * Missing files are created with sensible defaults on first run. Parse or IO
- * failures are logged and the built-in defaults are used in memory instead.
+ * Loads the five Eclipse config files from {@code <config>/eclipse/}:
+ * {@code general.json}, {@code days.json}, {@code milestones.json}, {@code modgate.json}
+ * and {@code anticheat.json}. Missing files are created with sensible defaults on first
+ * run. Parse or IO failures are logged and the built-in defaults are used in memory instead.
  */
 public final class EclipseConfig {
     /**
@@ -47,12 +47,16 @@ public final class EclipseConfig {
     /** Mod gating: namespaces whose content is locked until the mapped unlock key is granted. */
     public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
 
+    /** Anti-cheat: mod-id substrings that are rejected on clients ({@code anticheat.json}). */
+    public record AntiCheat(List<String> blockedModIdSubstrings) {}
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     private static volatile General general = defaultGeneral();
     private static volatile List<DayPlan> days = List.of();
     private static volatile List<Milestone> milestones = List.of();
     private static volatile ModGate modGate = defaultModGate();
+    private static volatile AntiCheat antiCheat = defaultAntiCheat();
     private static volatile boolean loaded = false;
 
     private EclipseConfig() {}
@@ -126,7 +130,44 @@ public final class EclipseConfig {
         return modGate;
     }
 
-    /** Re-reads all three config files from disk, creating any missing ones with defaults. */
+    /** The anti-cheat configuration ({@code anticheat.json}). */
+    public static AntiCheat antiCheat() {
+        ensureLoaded();
+        return antiCheat;
+    }
+
+    /**
+     * Adds ({@code gated=true}) or removes ({@code gated=false}) a namespace from the gated
+     * list and persists {@code modgate.json}. When adding, the unlock key defaults to the
+     * namespace itself unless one is already mapped. Returns whether anything changed.
+     * Backs the {@code /eclipse modgate lock|unlock} admin command.
+     */
+    public static synchronized boolean setNamespaceGated(String namespace, boolean gated) {
+        ensureLoaded();
+        List<String> namespaces = new ArrayList<>(modGate.gatedNamespaces());
+        boolean changed = gated
+                ? !namespaces.contains(namespace) && namespaces.add(namespace)
+                : namespaces.remove(namespace);
+        if (!changed) {
+            return false;
+        }
+        Map<String, String> unlockKeys = new LinkedHashMap<>(modGate.unlockKeys());
+        if (gated) {
+            unlockKeys.putIfAbsent(namespace, namespace);
+        }
+        modGate = new ModGate(List.copyOf(namespaces), Collections.unmodifiableMap(unlockKeys));
+        Path file = FMLPaths.CONFIGDIR.get().resolve("eclipse").resolve("modgate.json");
+        try {
+            Files.writeString(file, GSON.toJson(modGateToJson(modGate)), StandardCharsets.UTF_8);
+            EclipseMod.LOGGER.info("Persisted modgate.json: namespace '{}' is now {}", namespace,
+                    gated ? "gated" : "ungated");
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to persist {}; the change applies in memory only", file, e);
+        }
+        return true;
+    }
+
+    /** Re-reads all five config files from disk, creating any missing ones with defaults. */
     public static synchronized void reload() {
         Path dir = FMLPaths.CONFIGDIR.get().resolve("eclipse");
         try {
@@ -143,9 +184,13 @@ public final class EclipseConfig {
                 EclipseConfig::defaultMilestones, EclipseConfig::milestonesToJson, EclipseConfig::milestonesFromJson));
         modGate = loadOrCreate(dir.resolve("modgate.json"),
                 EclipseConfig::defaultModGate, EclipseConfig::modGateToJson, EclipseConfig::modGateFromJson);
+        antiCheat = loadOrCreate(dir.resolve("anticheat.json"),
+                EclipseConfig::defaultAntiCheat, EclipseConfig::antiCheatToJson, EclipseConfig::antiCheatFromJson);
         loaded = true;
-        EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces, grave grace {} min",
-                days.size(), milestones.size(), modGate.gatedNamespaces().size(), general.graveGraceMinutes());
+        EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces, "
+                        + "{} anti-cheat entries, grave grace {} min",
+                days.size(), milestones.size(), modGate.gatedNamespaces().size(),
+                antiCheat.blockedModIdSubstrings().size(), general.graveGraceMinutes());
     }
 
     private static void ensureLoaded() {
@@ -329,6 +374,27 @@ public final class EclipseConfig {
             unlockKeys.put(entry.getKey(), entry.getValue().getAsString());
         }
         return new ModGate(gatedNamespaces, Collections.unmodifiableMap(unlockKeys));
+    }
+
+    // --- anticheat.json ---
+
+    private static AntiCheat defaultAntiCheat() {
+        return new AntiCheat(List.of("xray", "advancedxray", "freecam", "freelook", "replaymod", "litematica"));
+    }
+
+    private static JsonElement antiCheatToJson(AntiCheat antiCheat) {
+        JsonObject obj = new JsonObject();
+        // JSON has no comments; this property documents the file in place.
+        obj.addProperty("_comment", "Config-maintained anti-cheat blocklist: any loaded mod whose id "
+                + "contains one of these substrings (case-insensitive) is rejected on clients. "
+                + "Edit this list and run /eclipse reload to apply.");
+        obj.add("blockedModIdSubstrings", stringArray(antiCheat.blockedModIdSubstrings()));
+        return obj;
+    }
+
+    private static AntiCheat antiCheatFromJson(JsonElement json) {
+        JsonObject obj = json.getAsJsonObject();
+        return new AntiCheat(stringList(obj.getAsJsonArray("blockedModIdSubstrings")));
     }
 
     // --- helpers ---

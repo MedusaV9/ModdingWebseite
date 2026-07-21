@@ -59,17 +59,21 @@ public final class StartEventCutscene {
 
     private StartEventCutscene() {}
 
-    /** Starts the cutscene timeline on the next server tick. No-op while a run is already in progress. */
-    public static void begin(MinecraftServer server) {
+    /**
+     * Starts the cutscene timeline on the next server tick. No-op while a run is already in
+     * progress; returns whether a new run actually started.
+     */
+    public static boolean begin(MinecraftServer server) {
         if (running) {
             EclipseMod.LOGGER.warn("start_event cutscene already running; ignoring begin()");
-            return;
+            return false;
         }
         running = true;
         ticks = 0;
         carvedBlocks.clear();
         teleportedPlayers.clear();
         EclipseMod.LOGGER.info("start_event cutscene beginning");
+        return true;
     }
 
     @SubscribeEvent
