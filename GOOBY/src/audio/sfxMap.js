@@ -50,6 +50,18 @@
 // rule; the re-pinned §C3.5 values are jingle.levelUp/daily 0.75 (PIZZI04/08
 // trims) and golf.ace 0.73 (HIT05 trim); photo.shutter keeps its 0.7 pin.
 //
+// V4/FIX-AUDIO finish pass: POLISH-L1's rate:0.8 pitch-down left the
+// minimize/maximize swoosh family above the cozy bar (their bright members
+// measure ~5.4–10 kHz raw, so the pools still hit ~5.3–8.5 kHz effective).
+// The pools now keep ONLY the two warm swooshes (minimize/maximize_001+002,
+// ≤ ~5.8 kHz raw) at 0.7–0.8 rates, the two falling cues (pancake.drop /
+// chop.miss) moved to the established footstep_snow air-whoosh language, and
+// ui.tap dropped the bright click_004 (~9.9 kHz raw) from its pool. Every
+// remapped id now sits ≤ ~4.5 kHz mean / ≤ ~5 kHz worst-file effective
+// centroid (goalie.goal's minimize_007–009 set was already warm and stays).
+// Volumes are unchanged: each surviving pool key was already in the old pool,
+// so the §B2.5 trims still hold (dance.fever keeps its §C3.5 0.55 pin).
+//
 // Coverage contract: EVERY id passed to audio.play() anywhere in src/ MUST be
 // mapped here — test/onboarding.test.js scans the source tree and fails on
 // unmapped ids; audio.js also console.warns in dev builds.
@@ -105,7 +117,7 @@ const ITCH = 'itch-sfx'; // V4/G78 (§C-SYS1.9): ObsydianX CC0 flat OGG root
  */
 export const SFX_MAP = Object.freeze({
   // --- UI / framework (V4/POLISH-L1: warm comfy set — see header note) ---
-  'ui.tap': sample(seq(`${UI}/click`, 5), { volume: 0.5, rate: 0.85, haptic: 'light' }), // POLISH-L1: pitched down
+  'ui.tap': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`, `${UI}/click_005`], { volume: 0.5, rate: 0.85, haptic: 'light' }), // POLISH-L1: pitched down; FIX-AUDIO: bright click_004 dropped
   'ui.open': sample(seqN(`${CAS}/card-slide-`, 3), { volume: 0.7, rate: 0.85 }), // POLISH-L1: paper page-turn (was open_* ~11.7 kHz)
   'ui.close': sample(seq(`${ITCH}/back_style_2`, 3), { volume: 0.65 }), // POLISH-L1: warm descending (was close_* ~11.8 kHz)
   'ui.pick': sample(seq(`${UI}/select`, 5), { volume: 0.55, haptic: 'light' }),
@@ -196,7 +208,7 @@ export const SFX_MAP = Object.freeze({
   'mole.bonk': sample(seq(`${IMP}/impactPunch_heavy`, 5, 0), { volume: 0.6, haptic: 'light' }), // §C3.5: 0.8→0.6
   'mole.pop': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.5 }), // V3/G32 §C3.1 pop family
   'mole.whiff': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.3, rate: 1.3 }),
-  'mole.steal': sample(seq(`${UI}/minimize`, 3), { volume: 0.5, rate: 0.8 }), // V3/G32 sweep: descending UI slide (POLISH-L1: softened)
+  'mole.steal': sample(seq(`${UI}/minimize`, 2), { volume: 0.5, rate: 0.75 }), // V3/G32 sweep: descending UI slide (FIX-AUDIO: warm pair only)
   'mole.combo': sample(seq(`${UI}/glass`, 6), { volume: 0.6 }),
 
   // --- memoryMatch (V3/G32 §D3.5: real card sounds) ---
@@ -212,7 +224,7 @@ export const SFX_MAP = Object.freeze({
   'basket.swish': sample(seq(`${ITCH}/confirm_style_1`, 3), { volume: 0.7, haptic: 'light' }),
 
   // --- pancakeTower ---
-  'pancake.drop': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5, rate: 0.8 }), // POLISH-L1: softened swoosh
+  'pancake.drop': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.5, rate: 0.85 }), // FIX-AUDIO: falling air-whoosh (minimize_004/005 were ~9.9/9.3 kHz raw)
   'pancake.land': sample(seq(`${IMP}/footstep_carpet`, 5, 0), { volume: 0.7, haptic: 'light' }),
   'pancake.slice': sample(seq(`${UI}/scratch`, 5), { volume: 0.6, rate: 1.3 }),
   'pancake.perfect': sample(seq(`${UI}/glass`, 6), { volume: 0.7, haptic: 'light' }),
@@ -224,9 +236,9 @@ export const SFX_MAP = Object.freeze({
   'dance.good': sample([`${ITCH}/cursor_style_2`], { volume: 0.5, rate: 1 }),
   'dance.miss': sample(seq(`${ITCH}/back_style_2`, 3), { volume: 0.35 }),
   'dance.tapEmpty': sample(seq(`${UI}/click`, 5), { volume: 0.25 }), // §C3.1: stays sample
-  'dance.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
+  'dance.tierUp': sample(seq(`${UI}/maximize`, 2), { volume: 0.55, rate: 0.7 }), // FIX-AUDIO: warm rising pair, deeper than fever's 0.8
   'dance.tierUpAccent': sample([`${JIN}/jingles_HIT00`], { volume: 0.6 }), // V3/G32 §C3.4: HIT00 accent (sfx bus)
-  'dance.fever': sample(seq(`${UI}/maximize`, 4), { volume: 0.55, rate: 0.8, haptic: 'medium' }), // POLISH-L1: softened swoosh (§C3.5 0.55 pin kept)
+  'dance.fever': sample(seq(`${UI}/maximize`, 2), { volume: 0.55, rate: 0.8, haptic: 'medium' }), // FIX-AUDIO: warm rising pair (§C3.5 0.55 pin kept)
 
   // --- fishingPond ---
   'fish.cast': sample(seq(`${UI}/drop`, 4), { volume: 0.6, rate: 0.8 }),
@@ -235,7 +247,7 @@ export const SFX_MAP = Object.freeze({
   'fish.catch': sample(seq(`${UI}/confirmation`, 4), { volume: 0.7, haptic: 'light' }),
   'fish.bigOne': sample(seq(`${UI}/question`, 4), { volume: 0.53 }), // §B2.5 trim: question set is hot (−10.4 dBFS)
   'fish.boot': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.55 }), // V3/G32 sweep: real boot thunk
-  'fish.escape': sample(seq(`${UI}/minimize`, 9), { volume: 0.5, rate: 0.8 }), // POLISH-L1: softened swoosh
+  'fish.escape': sample(seq(`${UI}/minimize`, 2), { volume: 0.5, rate: 0.7 }), // FIX-AUDIO: warm descending pair — the fish slips away
 
   // --- bubblePop ---
   'bubble.pop': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.55, haptic: 'light' }), // V3/G32 §C3.1 pop family
@@ -252,7 +264,7 @@ export const SFX_MAP = Object.freeze({
   'tramp.boost': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.65, rate: 1.1, haptic: 'light' }),
   'tramp.armed': sample([`${UI}/click_001`, `${UI}/click_002`, `${UI}/click_003`], { volume: 0.4, rate: 0.75 }), // POLISH-L1: soft low click
   'tramp.trick': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // V3/G32 sweep: sparkle ding
-  'tramp.tierUp': sample(seq(`${UI}/maximize`, 9), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
+  'tramp.tierUp': sample(seq(`${UI}/maximize`, 2), { volume: 0.55, rate: 0.7 }), // FIX-AUDIO: warm rising pair (= dance.tierUp)
   'tramp.butt': sample(seq(`${IMP}/impactPunch_medium`, 5, 0), { volume: 0.55, haptic: 'medium' }), // §C3.5: 0.65→0.55
 
   // --- polish (G14) ---
@@ -315,7 +327,7 @@ export const SFX_MAP = Object.freeze({
   'chop.slice': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.7, rate: 1.25, haptic: 'light' }),
   'chop.combo': sample(seq(`${UI}/glass`, 6), { volume: 0.6, haptic: 'light' }),
   'chop.junk': sample(seq(`${IMP}/footstep_grass`, 5, 0), { volume: 0.65, rate: 0.55, haptic: 'medium' }),
-  'chop.miss': sample(seq(`${UI}/minimize`, 3, 4), { volume: 0.5, rate: 0.8 }), // V3/G32 sweep (POLISH-L1: softened)
+  'chop.miss': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.5, rate: 0.95 }), // FIX-AUDIO: blade-through-air whoosh (minimize_004/005 were bright)
   'goalie.dive': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.6, rate: 0.7 }),
   'goalie.kick': sample(seq(`${IMP}/impactPunch_medium`, 5, 0), { volume: 0.55 }),
   'goalie.save': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'light' }),
@@ -360,7 +372,7 @@ export const SFX_MAP = Object.freeze({
   'racer.boost': sample(seq(`${UI}/maximize`, 4, 5), { volume: 0.6, haptic: 'light' }),
   'racer.item': sample(seqN(`${CAS}/card-slide-`, 3), { volume: 0.7, haptic: 'light' }), // item-box roulette
   'racer.shield': sample(seq(`${UI}/glass`, 6), { volume: 0.6 }),
-  'racer.block': sample(seq(`${UI}/minimize`, 3), { volume: 0.55, rate: 0.8 }), // POLISH-L1: softened swoosh
+  'racer.block': sample(seq(`${UI}/minimize`, 2), { volume: 0.55, rate: 0.75 }), // FIX-AUDIO: warm descending pair
   'racer.blockHit': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.65, haptic: 'medium' }), // kart bonks a block
   'racer.lap': sample(seq(`${UI}/confirmation`, 4), { volume: 0.6 }),
   'racer.overtake': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }),
@@ -369,7 +381,7 @@ export const SFX_MAP = Object.freeze({
   'hunt.catch': sample(seq(`${IMP}/impactGeneric_light`, 5, 0), { volume: 0.7, haptic: 'light' }), // §C3.1 pop family
   'hunt.chain': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // chain-link ding
   'hunt.decoy': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.45, rate: 0.8, haptic: 'medium' }), // decoy penalty (POLISH-L1: warm uh-oh, dark)
-  'hunt.gone': sample(seq(`${UI}/minimize`, 3), { volume: 0.28, rate: 0.8 }), // missed peek sinks away (POLISH-L1: softened)
+  'hunt.gone': sample(seq(`${UI}/minimize`, 2), { volume: 0.28, rate: 0.75 }), // missed peek sinks away (FIX-AUDIO: warm pair only)
   'hunt.boo': sample(seq(`${UI}/maximize`, 4), { volume: 0.5, rate: 0.8 }),
   'hunt.booBonus': sample(seqN(`${CAS}/chips-stack-`, 2), { volume: 0.8, haptic: 'light' }), // ≥4-catch payout
   'hunt.powerup': sample(seq(`${ITCH}/confirm_style_1`, 3, 4), { volume: 0.7, haptic: 'light' }),
@@ -387,7 +399,7 @@ export const SFX_MAP = Object.freeze({
   'rocket.rescue': sample(seq(`${UI}/confirmation`, 4), { volume: 0.65, haptic: 'light' }), // pad delivery chime
   'rocket.fuel': sample(seq(`${UI}/glass`, 6), { volume: 0.55 }), // canister clink
   'rocket.fuelLow': sample(seq(`${ITCH}/back_style_3`, 3), { volume: 0.4, rate: 1.05 }), // ≤20 fuel warning (POLISH-L1: warm uh-oh)
-  'rocket.tow': sample(seq(`${UI}/minimize`, 3), { volume: 0.4, rate: 0.8 }), // fuel-out power-down → tow (POLISH-L1: softened)
+  'rocket.tow': sample(seq(`${UI}/minimize`, 2), { volume: 0.4, rate: 0.75 }), // fuel-out power-down → tow (FIX-AUDIO: warm pair only)
   'rocket.wind': sample(seq(`${IMP}/footstep_snow`, 5, 0), { volume: 0.6, rate: 0.85 }),
   'harbor.crate': sample(seq(`${IMP}/impactPlank_medium`, 5, 0), { volume: 0.55, haptic: 'light' }), // wooden crate on deck
   'harbor.ring': sample(seq(`${UI}/select`, 8), { volume: 0.5 }), // net ring chime

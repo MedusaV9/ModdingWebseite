@@ -248,6 +248,58 @@ test('V3/FIX-B (E19): vocabulary aliases fire the SAME samples as their canonica
   }
 });
 
+// ------------------------------- V4/FIX-AUDIO: cozy ≤5 kHz swoosh/tap bar
+
+test('V4/FIX-AUDIO: the last bright swoosh/tap cues sit on warm keys + rates', () => {
+  // POLISH-L1's rate:0.8 pitch-down left the minimize/maximize pools above
+  // the cozy bar (bright members are ~5.4–10 kHz raw → ~5.3–8.5 kHz
+  // effective). The fix keeps only the two warm swooshes per pool (the
+  // _001/_002 files, ≤ ~5.8 kHz raw), moves the two falling cues to the
+  // footstep_snow air-whoosh language, and drops the ~9.9 kHz click_004 from
+  // ui.tap. Every pinned id measures ≤ ~4.5 kHz mean / ≤ ~5 kHz worst-file
+  // EFFECTIVE centroid (sample centroid × rate).
+  const MIN2 = ['interface-sounds/minimize_001', 'interface-sounds/minimize_002'];
+  const MAX2 = ['interface-sounds/maximize_001', 'interface-sounds/maximize_002'];
+  const SNOW = [
+    'impact-sounds/footstep_snow_000', 'impact-sounds/footstep_snow_001',
+    'impact-sounds/footstep_snow_002', 'impact-sounds/footstep_snow_003',
+    'impact-sounds/footstep_snow_004',
+  ];
+  /** id → [keys, rate] (the FIX-AUDIO remap table, pinned verbatim) */
+  const pins = {
+    'dance.tierUp': [MAX2, 0.7],
+    'tramp.tierUp': [MAX2, 0.7],
+    'dance.fever': [MAX2, 0.8],
+    'fish.escape': [MIN2, 0.7],
+    'mole.steal': [MIN2, 0.75],
+    'racer.block': [MIN2, 0.75],
+    'hunt.gone': [MIN2, 0.75],
+    'rocket.tow': [MIN2, 0.75],
+    'pancake.drop': [SNOW, 0.85],
+    'chop.miss': [SNOW, 0.95],
+  };
+  for (const [id, [keys, rate]] of Object.entries(pins)) {
+    const def = getSfxDef(id);
+    assert.equal(def?.kind, 'sample', `${id} stays sample-backed`);
+    assert.deepEqual(def.keys, keys, `${id} keys`);
+    assert.equal(def.rate, rate, `${id} rate`);
+  }
+  // goalie.goal's minimize_007–009 set was already warm (~1.3 kHz mean) — kept.
+  assert.deepEqual(getSfxDef('goalie.goal').keys, [
+    'interface-sounds/minimize_007', 'interface-sounds/minimize_008',
+    'interface-sounds/minimize_009',
+  ]);
+  // ui.tap: no pool member may exceed ~5 kHz effective — the bright click_004
+  // (~9.9 kHz raw → ~8.4 kHz at rate 0.85) is banned from the pool.
+  const tap = getSfxDef('ui.tap');
+  assert.equal(tap.rate, 0.85, 'ui.tap keeps the POLISH-L1 pitch-down');
+  assert.ok(!tap.keys.includes('interface-sounds/click_004'), 'bright click_004 stays out of ui.tap');
+  assert.deepEqual(tap.keys, [
+    'interface-sounds/click_001', 'interface-sounds/click_002',
+    'interface-sounds/click_003', 'interface-sounds/click_005',
+  ]);
+});
+
 test('V3/FIX-B (E19 P2): ui.confirmBig sits under the −6 dBFS peak bar', () => {
   // E19 measured click-a peaks of −5.9 dBFS at volume 0.9 (default sliders),
   // so it was trimmed to 0.75. V4/POLISH-L1 moved the CTA to the warm
