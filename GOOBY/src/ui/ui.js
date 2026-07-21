@@ -7,6 +7,7 @@
 
 import { t } from '../data/strings.js';
 import { registerCreditsScreen } from './creditsScreen.js'; // V4/G81: §C-SYS12.4 feature-detected settings row
+import { attachBackdropDismiss } from './backdropDismiss.js'; // V5/FIX-UI: armed click-outside (no click-through)
 
 /** @typedef {{mount: (el: HTMLElement, params?: object) => void, unmount: () => void}} UiModule */
 /** @typedef {{onTap?: () => void}} ToastOptions */
@@ -219,9 +220,14 @@ export function createUi() {
       el.className = `panel panel-${id}`;
       backdrop.appendChild(el);
       root.appendChild(backdrop);
-      backdrop.addEventListener('pointerdown', (e) => {
-        if (e.target === backdrop) ui.closePanel(id);
-      });
+      // V5/FIX-UI: dismiss on the gesture-completing CLICK, not on
+      // pointerdown. Closing on pointerdown flipped the backdrop to
+      // pointer-events:none (animateOut) BEFORE the browser dispatched the
+      // synthetic click, so that click re-targeted the UI underneath the
+      // scrim (click-through). Now: arm on backdrop-target pointerdown,
+      // disarm on pointercancel, close only when the click also lands on
+      // the backdrop itself — see src/ui/backdropDismiss.js.
+      attachBackdropDismiss(backdrop, () => ui.closePanel(id));
       activePanels.push({ id, el: backdrop, mod });
       mod.mount(el, params);
       return true;

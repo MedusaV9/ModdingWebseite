@@ -35,6 +35,7 @@ import { getStickerBook, stickerCounts } from '../systems/stickerBook.js';
 import { burstConfettiDom } from '../gfx/particles.js';
 import { t, getLang } from '../data/strings.js';
 import { icon } from './icons.js';
+import { attachBackdropDismiss } from './backdropDismiss.js'; // V5/FIX-UI: armed click-outside (no click-through)
 // V4/G59: gallery store + pure decisions + §E0.1-11 string seam (PLAN4 §C-SYS9)
 import * as photoStore from '../core/photoStore.js';
 import { GALLERY, sortNewestFirst, markGallerySeen, mirrorSlice, tG } from '../systems/gallery.logic.js';
@@ -330,11 +331,12 @@ export function registerAlbumScreen({ store, ui, audio }) {
           : `<p class="g34-sb-card-hintlabel">${t('stickerbook.hintLabel')}</p>
              <p class="g34-sb-card-flavor">${t(def.hintKey)}</p>`}`;
       sheetEl.appendChild(card);
-      sheetEl.addEventListener('pointerdown', (e) => {
-        if (e.target === sheetEl) {
-          audio.play('ui.close');
-          closeSheet();
-        }
+      // V5/FIX-UI: dismiss on completed click, not pointerdown (removing the
+      // sheet mid-gesture let the synthetic click fall through to the slot
+      // grid underneath) — see src/ui/backdropDismiss.js.
+      attachBackdropDismiss(sheetEl, () => {
+        audio.play('ui.close');
+        closeSheet();
       });
       card.querySelector('.g34-sb-close').addEventListener('click', () => {
         audio.play('ui.close');
@@ -378,11 +380,10 @@ export function registerAlbumScreen({ store, ui, audio }) {
           : `<p class="g34-sb-card-hintlabel">${t('stickerbook.hintLabel')}</p>
              <p class="g34-sb-card-flavor">${tG('stickerbook.secretHint')}</p>`}`;
       sheetEl.appendChild(card);
-      sheetEl.addEventListener('pointerdown', (e) => {
-        if (e.target === sheetEl) {
-          audio.play('ui.close');
-          closeSheet();
-        }
+      // V5/FIX-UI: armed click-outside (same rationale as the regular sheet).
+      attachBackdropDismiss(sheetEl, () => {
+        audio.play('ui.close');
+        closeSheet();
       });
       card.querySelector('.g34-sb-close').addEventListener('click', () => {
         audio.play('ui.close');
@@ -473,9 +474,9 @@ export function registerAlbumScreen({ store, ui, audio }) {
             <button class="g59-vw-btn g59-confirm-del">${g59Icon('trash', 14)}<span>${tG('gallery.delete')}</span></button>
           </div>
         </div>`;
-      c.addEventListener('pointerdown', (e) => {
-        if (e.target === c) c.remove();
-      });
+      // V5/FIX-UI: armed click-outside — a pointerdown-remove here let the
+      // synthetic click land on the viewer buttons below the confirm scrim.
+      attachBackdropDismiss(c, () => c.remove());
       c.querySelector('.g59-cancel').addEventListener('click', () => {
         audio.play('ui.close');
         c.remove();
