@@ -34,6 +34,9 @@ import {
   chainNeighborIndices,
   touchRadiusFor,
   matchStreakMilestone,
+  BANNER_FIT,
+  fitBannerFontPx,
+  bannerCenterY,
 } from './bubblePop.logic.js';
 
 const BUBBLE_R = 0.42;
@@ -192,13 +195,16 @@ export default {
     this.targets = targetOrder(ctx.rng, targetSlots);
     this.targetIdx = -1;
     this.bannerCanvas = document.createElement('canvas');
-    this.bannerCanvas.width = 512;
-    this.bannerCanvas.height = 112;
+    this.bannerCanvas.width = BANNER_FIT.CANVAS_W;
+    this.bannerCanvas.height = BANNER_FIT.CANVAS_H;
     this.bannerTex = new THREE.CanvasTexture(this.bannerCanvas);
     const bannerMat = new THREE.SpriteMaterial({ map: this.bannerTex, transparent: true, depthWrite: false });
     this.ownedMats.push(bannerMat);
     this.banner = new THREE.Sprite(bannerMat);
-    this.banner.position.set(0, this.halfH - 0.62, 1);
+    // V4/FIX-GA: sit BELOW the SCORE/TIME HUD chip row (the old fixed
+    // halfH − 0.62 slid the pill under the chips on short viewports).
+    this.bannerY = bannerCenterY(this.halfH, innerHeight);
+    this.banner.position.set(0, this.bannerY, 1);
     this.banner.scale.set(2.6, 0.57, 1);
     scene.add(this.banner);
     /** target preview: the food mini floating beside the banner text */
@@ -272,19 +278,26 @@ export default {
     const food = this.target();
     const style = BUBBLE_STYLES[food];
     const g = this.bannerCanvas.getContext('2d');
-    g.clearRect(0, 0, 512, 112);
+    g.clearRect(0, 0, BANNER_FIT.CANVAS_W, BANNER_FIT.CANVAS_H);
     g.fillStyle = 'rgba(255,255,255,0.92)';
     g.beginPath();
-    g.roundRect(6, 6, 500, 100, 50);
+    g.roundRect(6, 6, BANNER_FIT.CANVAS_W - 12, BANNER_FIT.CANVAS_H - 12, 50);
     g.fill();
     g.strokeStyle = style.color;
     g.lineWidth = 7;
     g.stroke();
-    g.font = '900 52px system-ui, sans-serif';
+    // V4/FIX-GA: fit-to-width — long food names ("Zerplatze: Streusel-Donut")
+    // overflowed the fixed 52 px font and clipped the core instruction.
+    const label = `${style.symbol} ${t('mg.bubble.target', { food: t(`food.${food}`) })}`;
+    const fontPx = fitBannerFontPx((px) => {
+      g.font = `900 ${px}px system-ui, sans-serif`;
+      return g.measureText(label).width;
+    });
+    g.font = `900 ${fontPx}px system-ui, sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = '#4A3B36';
-    g.fillText(`${style.symbol} ${t('mg.bubble.target', { food: t(`food.${food}`) })}`, 256, 58);
+    g.fillText(label, BANNER_FIT.CANVAS_W / 2, BANNER_FIT.CANVAS_H / 2 + 2);
     this.bannerTex.needsUpdate = true;
     // swap the floating preview mini next to the banner
     if (this.bannerFood) {
@@ -293,7 +306,7 @@ export default {
     }
     this.bannerFood = this.takeFood(food);
     this.bannerFoodKey = food;
-    this.bannerFood.position.set(0, this.halfH - 1.25, 1);
+    this.bannerFood.position.set(0, this.bannerY - 0.63, 1); // keeps its gap below the moved pill
     this.bannerFood.scale.setScalar(1);
     this.ctx.scene.add(this.bannerFood);
     const banner = this.banner;

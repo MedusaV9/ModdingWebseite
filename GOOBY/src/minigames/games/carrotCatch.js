@@ -494,7 +494,9 @@ export default {
       this.itemsDirty = false;
     }
 
-    if (isCatchRoundOver({ elapsed, missedCarrots: this.missedCarrots }, this.tune)) {
+    // V4/FIX-GA: pass this.durationSec so the 30 s tutorial round actually
+    // ends when its HUD timer hits 0 (defaults to the tune's DURATION_SEC).
+    if (isCatchRoundOver({ elapsed, missedCarrots: this.missedCarrots }, this.tune, this.durationSec)) {
       this.phase = 'ending';
       this.shakeT = 0;
       ctx.camera.position.set(0, 0, 10); // never end mid-shake

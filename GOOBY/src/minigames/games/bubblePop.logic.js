@@ -224,6 +224,60 @@ export function touchRadiusFor(kind) {
   return kind === 'spiky' ? BUBBLE.SPIKY_TOUCH_RADIUS : BUBBLE.FOOD_TOUCH_RADIUS;
 }
 
+/**
+ * V4/FIX-GA: target-banner fit + placement. The banner canvas is a fixed
+ * 512×112 board, but "{symbol} Zerplatze: Streusel-Donut" at the old
+ * hardcoded 52 px overflowed it and the core instruction got clipped —
+ * worse in DE where food names run long. The font now shrinks to fit
+ * MAX_TEXT_W, and the sprite is placed below the SCORE/TIME HUD chip row
+ * instead of sliding under it.
+ */
+export const BANNER_FIT = Object.freeze({
+  /** Banner canvas dimensions (px) — sprite aspect 2.6:0.57 matches. */
+  CANVAS_W: 512,
+  CANVAS_H: 112,
+  /** Max text width inside the pill (canvas px; leaves the rounded caps). */
+  MAX_TEXT_W: 460,
+  /** Preferred font size, and the readability floor it may shrink to. */
+  BASE_FONT_PX: 52,
+  MIN_FONT_PX: 24,
+  /** DOM px the mg-hud SCORE/TIME pill row occupies from the screen top. */
+  HUD_CLEAR_PX: 76,
+  /** Banner sprite world half-height (scale.y 0.57 / 2). */
+  SPRITE_HALF_H: 0.285,
+});
+
+/**
+ * Largest font size (px) at which the banner label fits MAX_TEXT_W. Pure:
+ * the caller supplies `measureAt(fontPx) → text width in canvas px` (canvas
+ * measureText in the game, a synthetic width model in tests). One linear
+ * estimate plus a refine loop handles non-linear font hinting.
+ * @param {(fontPx: number) => number} measureAt
+ * @returns {number} font px in [MIN_FONT_PX, BASE_FONT_PX]
+ */
+export function fitBannerFontPx(measureAt, fit = BANNER_FIT) {
+  let px = fit.BASE_FONT_PX;
+  const w = measureAt(px);
+  if (w > fit.MAX_TEXT_W && w > 0) {
+    px = Math.max(fit.MIN_FONT_PX, Math.floor((px * fit.MAX_TEXT_W) / w));
+  }
+  while (px > fit.MIN_FONT_PX && measureAt(px) > fit.MAX_TEXT_W) px -= 1;
+  return px;
+}
+
+/**
+ * Banner sprite center Y (world units) that clears the HUD chip row: the
+ * top HUD_CLEAR_PX of the viewport map to world via the camera frustum, so
+ * the pill starts below the SCORE/TIME chips on every portrait viewport.
+ * @param {number} halfH camera frustum half-height at the play plane (wu)
+ * @param {number} viewportHpx viewport height in px (innerHeight)
+ * @returns {number} world-space Y for banner.position.y
+ */
+export function bannerCenterY(halfH, viewportHpx, fit = BANNER_FIT) {
+  const clearWu = (fit.HUD_CLEAR_PX / Math.max(1, viewportHpx)) * halfH * 2;
+  return halfH - clearWu - fit.SPRITE_HALF_H;
+}
+
 /** V4/GAME-POLISH-1: consecutive-match celebration cadence (juice only). */
 export const MATCH_STREAK_EVERY = 5;
 

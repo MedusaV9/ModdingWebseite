@@ -203,6 +203,55 @@ export function acceptsTapAfter(sinceLastSec, cooldownSec = GUARD.TAP_DEBOUNCE_S
     (Number.isFinite(sinceLastSec) && sinceLastSec >= cooldownSec);
 }
 
+/**
+ * V4/FIX-GA: mallet swing geometry/timing. The old swing parked the pivot at
+ * (mole.x + 0.3) and animated −1.4 → 0 rad, so the head's ground moment sat
+ * ~1.2 wu RIGHT of the bonked mole and the "slam" read ~0.35 s after the
+ * squash/sfx already fired. These numbers make the head land ON the tapped
+ * mole at down-swing completion, where the game now fires the impact
+ * feedback (squash, stars, bonk sfx).
+ */
+export const MALLET = Object.freeze({
+  /** Head-center height in the mallet group (matches the built meshes). */
+  HEAD_Y: 0.9,
+  /** Wind-up pose: head raised up-left of the mole. */
+  RAISED_ANGLE: 0.55,
+  /** Down-swing end: the head lands centered on the tapped mole. */
+  IMPACT_ANGLE: -1.1,
+  /** Pivot base height and the toward-camera nudge so the head reads. */
+  PIVOT_Y: 0.05,
+  PIVOT_DZ: 0.18,
+  /** Swing timing: fast slam, brief contact hold, relaxed lift-off. */
+  DOWN_SEC: 0.12,
+  HOLD_SEC: 0.08,
+  UP_SEC: 0.22,
+});
+
+/**
+ * Mallet pivot for a tap at (x, z) such that the head lands ON the mole at
+ * IMPACT_ANGLE (head local (0, HEAD_Y) rotates about z by the swing angle).
+ * @param {number} x mole world x
+ * @param {number} z mole world z
+ * @returns {{x: number, y: number, z: number}}
+ */
+export function malletPivotFor(x, z, m = MALLET) {
+  return { x: x + m.HEAD_Y * Math.sin(m.IMPACT_ANGLE), y: m.PIVOT_Y, z: z + m.PIVOT_DZ };
+}
+
+/**
+ * Head-center world position (xy-plane) at a swing angle — pure audit
+ * surface for the on-target impact invariant.
+ * @param {{x: number, y: number}} pivot
+ * @param {number} angle swing rotation about z (radians)
+ * @returns {{x: number, y: number}}
+ */
+export function malletHeadAt(pivot, angle, m = MALLET) {
+  return {
+    x: pivot.x - m.HEAD_Y * Math.sin(angle),
+    y: pivot.y + m.HEAD_Y * Math.cos(angle),
+  };
+}
+
 /** Deterministic certification model for the live reaction bot. */
 export function simulateGuardAutoplay(mode = 'normal', seed = 1) {
   const tune = applyDifficulty(GUARD, mode);

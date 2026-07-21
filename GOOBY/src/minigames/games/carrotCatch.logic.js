@@ -255,11 +255,21 @@ export function applyCatchState(state, item) {
   };
 }
 
-/** §G5.4: Endlos stops after three catchable carrots hit the ground. */
-export function isCatchRoundOver({ elapsed, missedCarrots }, tune = CATCH) {
+/**
+ * §G5.4: Endlos stops after three catchable carrots hit the ground. Timed
+ * rounds end at `durationSec` — callers with a per-run override (the G14
+ * 30 s onboarding tutorial) pass theirs; everyone else gets the tune's
+ * DURATION_SEC (V4/FIX-GA: the tutorial used to run the full 60 s while its
+ * HUD timer hit 0 at 30 s).
+ * @param {{elapsed: number, missedCarrots: number}} state
+ * @param {object} [tune]
+ * @param {number} [durationSec] timed-round length override (seconds)
+ * @returns {boolean}
+ */
+export function isCatchRoundOver({ elapsed, missedCarrots }, tune = CATCH, durationSec = tune.DURATION_SEC) {
   return tune.ENDLESS
     ? missedCarrots >= tune.ENDLESS_MISSED_CARROTS
-    : elapsed >= tune.DURATION_SEC;
+    : elapsed >= durationSec;
 }
 
 /** Turbo's score multiplier is rounded once, at the end (§C-SYS4.2). */

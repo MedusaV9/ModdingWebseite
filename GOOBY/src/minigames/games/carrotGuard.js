@@ -15,6 +15,8 @@ import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   GUARD,
+  MALLET,
+  malletPivotFor,
   upTimeAt,
   spawnIntervalAt,
   doubleChanceAt,
@@ -29,6 +31,11 @@ import {
 } from './carrotGuard.logic.js';
 
 const GRID_SPACING = 1.5;
+/** V4/FIX-GA: 5 segments × 1.32 wu span exactly ±3.3 — the runs now meet the
+ * perpendicular fence lines at the corners (1.2 wu spacing left 0.3 wu holes). */
+const FENCE_SEG = 1.32;
+/** Accelerating slam for the mallet down-swing (tween.js only ships outs). */
+const easeInQuad = (t) => t * t;
 
 /** Tiny floating score text (canvas-texture sprites, self-disposing). */
 function createFloatTexts(scene, camera) {
@@ -113,6 +120,9 @@ export default {
     this.lastWhiffAt = -Infinity;
     // GAME-POLISH-1 juice state: camera micro-shake + whiff ground raycast
     this.shakeT = 0;
+    // V4/FIX-GA: mallet swing bookkeeping (plugin object is reused per run)
+    this.malletTween = null;
+    this.malletImpact = null;
     this.raycaster = new THREE.Raycaster();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.tapNdc = new THREE.Vector2();
@@ -146,7 +156,7 @@ export default {
     const fenceMaster = ctx.assets.getModel('nature-kit/fence_simple');
     const fbox = new THREE.Box3().setFromObject(fenceMaster);
     const fsize = fbox.getSize(new THREE.Vector3());
-    const fenceScale = 1.2 / (Math.max(fsize.x, fsize.z) || 1);
+    const fenceScale = FENCE_SEG / (Math.max(fsize.x, fsize.z) || 1);
     // GAME-POLISH-1 3D fix: the fence GLB's plank sits ~0.56 off its origin
     // in local z, so the old rotated side runs both drifted 0.56 toward −x
     // (right fence INSIDE the yard at x≈2.44, left fence outside at −3.56).
@@ -164,9 +174,9 @@ export default {
       scene.add(holder);
     };
     for (let i = -2; i <= 2; i += 1) {
-      fenceAt(i * 1.2, -3.3, 0); // back (behind Gooby's cameo spot)
-      fenceAt(-3.3, i * 1.2, Math.PI / 2);
-      fenceAt(3.3, i * 1.2, Math.PI / 2);
+      fenceAt(i * FENCE_SEG, -3.3, 0); // back (behind Gooby's cameo spot)
+      fenceAt(-3.3, i * FENCE_SEG, Math.PI / 2);
+      fenceAt(3.3, i * FENCE_SEG, Math.PI / 2);
     }
     for (const [x, z] of [[-2.6, -2.6], [2.6, -2.6]]) {
       const flower = ctx.assets.getModel(x < 0 ? 'nature-kit/flower_yellowA' : 'nature-kit/flower_redA');
@@ -324,19 +334,35 @@ export default {
     ctx.hud.setTime(this.tune.ENDLESS ? 0 : this.tune.DURATION_SEC);
   },
 
-  /** Swing the mallet down over a world position. */
-  swingMallet(pos) {
+  /**
+   * V4/FIX-GA: slam the mallet DOWN onto a world position — the pivot is
+   * placed so the head lands ON the tapped spot at IMPACT_ANGLE (the old
+   * +0.3 pivot with a −1.4→0 sweep grounded the head ~1.2 wu to the right).
+   * `onImpact` fires at down-swing completion so squash/stars/sfx coincide
+   * with the visible hit instead of leading it by the whole swing.
+   */
+  swingMallet(pos, onImpact) {
     const mallet = this.mallet;
+    this.malletTween?.cancel();
+    // A superseded down-swing still pays its impact feedback immediately.
+    const pending = this.malletImpact;
+    this.malletImpact = null;
+    pending?.();
     mallet.visible = true;
-    mallet.position.set(pos.x + 0.3, 0.15, pos.z + 0.25);
-    tween({
-      from: -1.4, to: 0, duration: 0.12, ease: easings.easeOutQuad,
+    const pivot = malletPivotFor(pos.x, pos.z);
+    mallet.position.set(pivot.x, pivot.y, pivot.z);
+    mallet.rotation.z = MALLET.RAISED_ANGLE;
+    this.malletImpact = onImpact ?? null;
+    this.malletTween = tween({
+      from: MALLET.RAISED_ANGLE, to: MALLET.IMPACT_ANGLE, duration: MALLET.DOWN_SEC, ease: easeInQuad,
       onUpdate: (v) => {
         mallet.rotation.z = v;
       },
       onComplete: () => {
-        tween({
-          from: 0, to: -1.4, duration: 0.22, delay: 0.1, ease: easings.easeOutQuad,
+        this.malletImpact = null;
+        onImpact?.();
+        this.malletTween = tween({
+          from: MALLET.IMPACT_ANGLE, to: MALLET.RAISED_ANGLE, duration: MALLET.UP_SEC, delay: MALLET.HOLD_SEC, ease: easings.easeOutQuad,
           onUpdate: (v) => {
             mallet.rotation.z = v;
           },
@@ -358,15 +384,19 @@ export default {
         hp: hole.hp,
       });
       hole.hp = res.hp;
-      this.swingMallet(hole.mole.position);
-      this.ctx.audio.play('mole.bonk');
+      const kingPos = hole.mole.position;
       if (!res.complete) {
-        this.floats.spawn(
-          `${res.hp}×`,
-          hole.mole.position.clone().add(new THREE.Vector3(0, 1.1, 0)),
-          '#C98A00'
-        );
-        this.particles.emit('dizzyStars', hole.mole.position.clone().add(new THREE.Vector3(0, 0.8, 0)));
+        // V4/FIX-GA: hp pips/stars/sfx fire when the head actually lands
+        this.swingMallet(kingPos, () => {
+          if (!this.ctx) return;
+          this.ctx.audio.play('mole.bonk');
+          this.floats.spawn(
+            `${res.hp}×`,
+            kingPos.clone().add(new THREE.Vector3(0, 1.1, 0)),
+            '#C98A00'
+          );
+          this.particles.emit('dizzyStars', kingPos.clone().add(new THREE.Vector3(0, 0.8, 0)));
+        });
         return;
       }
       hole.hit = true;
@@ -374,45 +404,54 @@ export default {
       this.combo = res.combo;
       this.kingsDefeated += 1;
       this.ctx.onScore(res.gained);
-      this.ctx.hud.banner(t('mg.guard.kingDefeated'));
-      this.floats.spawn(
-        `+${res.gained}`,
-        hole.mole.position.clone().add(new THREE.Vector3(0, 1.1, 0)),
-        '#C98A00'
-      );
-      this.particles.emit('confetti', hole.mole.position.clone().add(new THREE.Vector3(0, 1, 0)), { count: 16 });
-      this.gooby.play('happyBounce');
-      if (!prefersReducedMotion()) this.shakeT = 0.24; // king KO thump
-      hole.timer = 0.35;
+      hole.timer = 0.35 + MALLET.DOWN_SEC; // KO pause now counts from the visible hit
+      this.swingMallet(kingPos, () => {
+        if (!this.ctx) return;
+        this.ctx.audio.play('mole.bonk');
+        this.ctx.hud.banner(t('mg.guard.kingDefeated'));
+        this.floats.spawn(
+          `+${res.gained}`,
+          kingPos.clone().add(new THREE.Vector3(0, 1.1, 0)),
+          '#C98A00'
+        );
+        this.particles.emit('confetti', kingPos.clone().add(new THREE.Vector3(0, 1, 0)), { count: 16 });
+        this.gooby.play('happyBounce');
+        if (!prefersReducedMotion()) this.shakeT = 0.24; // king KO thump
+      });
       return;
     }
     hole.hit = true;
     const pos = hole.mole.position;
-    this.swingMallet(pos);
     const res = applyBonk({ score: this.score, combo: this.combo });
     const gained = res.score - this.score;
     this.score = res.score;
     this.combo = res.combo;
     this.bonks += 1;
     this.ctx.onScore(gained);
-    this.ctx.audio.play('mole.bonk');
-    this.floats.spawn(res.bonus > 0 ? `+1 +${res.bonus}!` : '+1', pos.clone().add(new THREE.Vector3(0, 0.9, 0)), '#2E8B57');
-    if (res.bonus > 0) {
-      this.ctx.hud.banner(t('mg.guard.combo'));
-      this.ctx.audio.play('mole.combo');
-      this.particles.emit('confetti', pos.clone().add(new THREE.Vector3(0, 1, 0)), { count: 10 });
-      this.gooby.play('happyBounce');
-    }
-    this.particles.emit('dizzyStars', pos.clone().add(new THREE.Vector3(0, 0.7, 0)));
-    // squash flat, then duck
+    // brief flat pause after the impact-synced squash, then hide in update()
+    hole.timer = 0.28 + MALLET.DOWN_SEC;
     const mole = hole.mole;
-    tween({
-      from: 1, to: 0.18, duration: 0.12, ease: easings.easeOutQuad,
-      onUpdate: (v) => {
-        mole.scale.y = v;
-      },
+    // V4/FIX-GA: squash/stars/sfx used to fire at tap time, ~0.35 s before
+    // the mallet's ground frame — they now ride the down-swing completion.
+    this.swingMallet(pos, () => {
+      if (!this.ctx) return;
+      this.ctx.audio.play('mole.bonk');
+      this.floats.spawn(res.bonus > 0 ? `+1 +${res.bonus}!` : '+1', pos.clone().add(new THREE.Vector3(0, 0.9, 0)), '#2E8B57');
+      if (res.bonus > 0) {
+        this.ctx.hud.banner(t('mg.guard.combo'));
+        this.ctx.audio.play('mole.combo');
+        this.particles.emit('confetti', pos.clone().add(new THREE.Vector3(0, 1, 0)), { count: 10 });
+        this.gooby.play('happyBounce');
+      }
+      this.particles.emit('dizzyStars', pos.clone().add(new THREE.Vector3(0, 0.7, 0)));
+      // squash flat exactly on impact, then duck
+      tween({
+        from: 1, to: 0.18, duration: 0.12, ease: easings.easeOutQuad,
+        onUpdate: (v) => {
+          mole.scale.y = v;
+        },
+      });
     });
-    hole.timer = 0.28; // brief flat pause, then hide in update()
   },
 
   whiff(p) {
@@ -420,14 +459,21 @@ export default {
     this.lastWhiffAt = this.tapClock;
     const before = this.combo;
     this.combo = applyWhiff({ combo: this.combo }).combo;
-    this.ctx.audio.play('mole.whiff');
     // GAME-POLISH-1: the mallet always answers a tap — swat the empty spot
     // with a dust puff so whiffs feel responsive instead of dead.
+    // V4/FIX-GA: puff/sfx ride the down-swing completion like real bonks.
     this.raycaster.setFromCamera(this.tapNdc.set(p.nx, p.ny), this.ctx.camera);
     if (this.raycaster.ray.intersectPlane(this.groundPlane, this.tapPoint)) {
-      this.swingMallet(this.tapPoint);
-      this.particles.emit('crumbs', this.tapPoint.clone().add(new THREE.Vector3(0, 0.12, 0)), { count: 3 });
+      const at = this.tapPoint.clone(); // tapPoint is reused — snapshot it
+      this.swingMallet(at, () => {
+        if (!this.ctx) return;
+        this.ctx.audio.play('mole.whiff');
+        this.particles.emit('crumbs', at.clone().add(new THREE.Vector3(0, 0.12, 0)), { count: 3 });
+        if (before >= 2) this.floats.spawn('×', new THREE.Vector3(0, 0.6, 1.6), '#D64570');
+      });
+      return;
     }
+    this.ctx.audio.play('mole.whiff');
     if (before >= 2) this.floats.spawn('×', new THREE.Vector3(0, 0.6, 1.6), '#D64570');
   },
 
@@ -591,6 +637,9 @@ export default {
 
   dispose() {
     this.offTap?.();
+    this.malletTween?.cancel(); // V4/FIX-GA: no impact callbacks after teardown
+    this.malletTween = null;
+    this.malletImpact = null;
     this.floats?.dispose();
     this.particles?.dispose();
     this.gooby?.dispose();
