@@ -9,12 +9,14 @@ import { ENGINE } from '../data/constants.js';
 
 // ── V4/PERF: retina-aware pixel-ratio cap (§E0.1-2 module-local tuning) ─────
 // `ENGINE.MAX_PIXEL_RATIO` (2, frozen constants.js) stays the SAFE baseline:
-// it is what software rasterizers (SwiftShader/llvmpipe VMs) keep. On real
-// hardware GL the cap rises to 3 so DPR-3 phones (iPhone Pro class) render at
-// native resolution instead of a blurry 2/3-width upscale. Only devices whose
-// DPR actually exceeds 2 are affected — desktop DPR-1/2 output is unchanged.
+// it is what software rasterizers (SwiftShader/llvmpipe VMs) keep. Only an
+// EXPLICITLY recognized hardware GPU raises the cap to 3 so DPR-3 phones
+// (iPhone Pro class) render at native resolution instead of a blurry
+// 2/3-width upscale; unknown/ambiguous renderer strings keep the baseline
+// (V4/FIX-SM defect 4 — fail CLOSED, never open). Only devices whose DPR
+// actually exceeds 2 are affected — desktop DPR-1/2 output is unchanged.
 export const RENDER_SCALE = Object.freeze({
-  /** Pixel-ratio cap on hardware WebGL — full retina sharpness. */
+  /** Pixel-ratio cap on explicitly recognized hardware WebGL — full retina sharpness. */
   MAX_PIXEL_RATIO_HW: 3,
 });
 
@@ -23,7 +25,8 @@ export const RENDER_SCALE = Object.freeze({
  * llvmpipe, softpipe, Microsoft Basic Render, "software renderer" ANGLE
  * spellings). Pure — same detection family as goobyWelt's splat guard, kept
  * module-local because core/ must not import game modules. Unknown/empty
- * strings return false (treat as hardware — the baseline cap still bounds it).
+ * strings return false (not software) — classifyGlRenderer maps those to
+ * 'unknown', which keeps the conservative baseline cap (V4/FIX-SM).
  * @param {string|null|undefined} rendererString GL renderer string
  * @returns {boolean}
  */
@@ -34,24 +37,46 @@ export function isSoftwareGl(rendererString) {
 }
 
 /**
- * Effective renderer pixel ratio (pure decision, unit-tested): clamp the
- * device pixel ratio to `ENGINE.MAX_PIXEL_RATIO` on software GL (every extra
- * pixel is pure CPU cost there) and to `RENDER_SCALE.MAX_PIXEL_RATIO_HW` on
- * hardware GL. Non-finite/non-positive DPR inputs fall back to 1.
+ * V4/FIX-SM (defect 4): three-way GL classification for the pixel-ratio cap.
+ * 'software' → known software rasterizer; 'hardware' → a KNOWN hardware GPU
+ * family (Apple / Adreno / Mali / Immortalis / Xclipse / PowerVR / NVIDIA /
+ * GeForce / RTX / GTX / Quadro / AMD / Radeon / Intel / Iris); 'unknown' →
+ * empty or unrecognized strings. Unknown is deliberately CONSERVATIVE: it
+ * keeps the frozen `ENGINE.MAX_PIXEL_RATIO` baseline of 2 instead of failing
+ * open to the DPR-3 hardware cap (2.25× the pixels). Pure — unit-tested.
+ * @param {string|null|undefined} rendererString GL renderer string
+ * @returns {'software'|'hardware'|'unknown'}
+ */
+export function classifyGlRenderer(rendererString) {
+  if (isSoftwareGl(rendererString)) return 'software';
+  if (typeof rendererString !== 'string' || rendererString.trim() === '') return 'unknown';
+  return /\bapple\b|adreno|\bmali\b|immortalis|xclipse|powervr|nvidia|geforce|\brtx\b|\bgtx\b|quadro|\bamd\b|radeon|\bintel\b|\biris\b/i
+    .test(rendererString)
+    ? 'hardware'
+    : 'unknown';
+}
+
+/**
+ * Effective renderer pixel ratio (pure decision, unit-tested): only an
+ * EXPLICIT 'hardware' classification raises the cap to
+ * `RENDER_SCALE.MAX_PIXEL_RATIO_HW`; 'software', 'unknown' and any garbage
+ * classification keep the frozen `ENGINE.MAX_PIXEL_RATIO` baseline — the
+ * decision fails CLOSED (V4/FIX-SM defect 4). Non-finite/non-positive DPR
+ * inputs fall back to 1.
  * @param {number} dpr window.devicePixelRatio (may be undefined/garbage)
- * @param {boolean} softwareGl from isSoftwareGl(<GL renderer string>)
+ * @param {'software'|'hardware'|'unknown'} glClass from classifyGlRenderer()
  * @returns {number}
  */
-export function computePixelRatio(dpr, softwareGl) {
+export function computePixelRatio(dpr, glClass) {
   const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
-  const cap = softwareGl ? ENGINE.MAX_PIXEL_RATIO : RENDER_SCALE.MAX_PIXEL_RATIO_HW;
+  const cap = glClass === 'hardware' ? RENDER_SCALE.MAX_PIXEL_RATIO_HW : ENGINE.MAX_PIXEL_RATIO;
   return Math.min(d, cap);
 }
 
 /**
  * Read the unmasked GL renderer string off a live WebGLRenderer ('' when the
- * probe is unavailable — fails toward the hardware path, whose cap only
- * matters above DPR 2 anyway).
+ * probe is unavailable — classifyGlRenderer maps that to 'unknown', which
+ * keeps the conservative baseline cap).
  * @param {import('three').WebGLRenderer} renderer
  * @returns {string}
  */
@@ -66,6 +91,77 @@ function glRendererString(renderer) {
   }
 }
 // ── end V4/PERF ──────────────────────────────────────────────────────────────
+
+// ── V4/FIX-SM: crash-proof frame loop + failed-switch teardown (pure) ────────
+
+/** Frame-time clamp (s) — one hitched frame never advances a scene > 100 ms. */
+const MAX_FRAME_DT_SEC = 0.1;
+
+/**
+ * Build the RAF frame callback (pure factory, unit-tested). Crash-proof
+ * ordering (V4/FIX-SM defect 1): the NEXT frame is scheduled FIRST, and
+ * update() and render() are try/caught INDEPENDENTLY, so a throwing scene —
+ * or a renderer throw during e.g. GPU context loss — can never kill the loop.
+ * Before this, `renderer.render` ran unguarded and the reschedule came last:
+ * one render throw froze the whole game permanently.
+ * @param {{
+ *   schedule: (cb: (t: number) => void) => void,
+ *   getInstance: () => ({update?: (dt: number) => void, scene?: object, camera?: object}|null|undefined),
+ *   render: (scene: object, camera: object) => void,
+ *   initialT?: number,
+ * }} deps schedule = requestAnimationFrame in production
+ * @returns {(t: number) => void} the frame callback to schedule once
+ */
+export function createFrameRunner({ schedule, getInstance, render, initialT = 0 }) {
+  let lastT = initialT;
+  return function frame(t) {
+    // Reschedule BEFORE any scene work — the loop survives anything below.
+    schedule(frame);
+    const dt = Math.min((t - lastT) / 1000, MAX_FRAME_DT_SEC);
+    lastT = t;
+    const inst = getInstance();
+    if (!inst) return;
+    try {
+      inst.update?.(dt);
+    } catch (err) {
+      console.error('[sceneManager] scene update error:', err);
+    }
+    try {
+      if (inst.scene && inst.camera) render(inst.scene, inst.camera);
+    } catch (err) {
+      console.error('[sceneManager] scene render error:', err);
+    }
+  };
+}
+
+/**
+ * Best-effort teardown of a partially-built scene instance after a failed
+ * switchTo (V4/FIX-SM defect 2). Every step is guarded independently and the
+ * function NEVER throws — the caller must still be able to lift the black
+ * fade overlay afterwards. A Promise-returning dispose (V4/G56 async splat
+ * release) is awaited so GPU resources are actually gone.
+ * @param {SceneLifecycle|null|undefined} instance possibly-partial instance
+ * @param {{removeAll: () => void}|null|undefined} scopedInput its input scope
+ * @returns {Promise<void>}
+ */
+export async function disposeFailedSwitch(instance, scopedInput) {
+  try {
+    instance?.exit?.();
+  } catch (err) {
+    console.error('[sceneManager] failed-switch exit error:', err);
+  }
+  try {
+    await instance?.dispose?.();
+  } catch (err) {
+    console.error('[sceneManager] failed-switch dispose error:', err);
+  }
+  try {
+    scopedInput?.removeAll?.();
+  } catch (err) {
+    console.error('[sceneManager] failed-switch input release error:', err);
+  }
+}
+// ── end V4/FIX-SM ────────────────────────────────────────────────────────────
 
 /**
  * @typedef {Object} SceneLifecycle
@@ -84,10 +180,13 @@ function glRendererString(renderer) {
  */
 export function createSceneManager({ canvas, assets, input, audio, store, ui }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // V4/PERF: retina-aware cap — hardware GL may go to 3 (native DPR-3 phones),
-  // software GL (SwiftShader/llvmpipe) keeps the ENGINE.MAX_PIXEL_RATIO
-  // baseline of 2, i.e. exactly the pre-V4 behavior on the headless VM.
-  renderer.setPixelRatio(computePixelRatio(devicePixelRatio, isSoftwareGl(glRendererString(renderer))));
+  // V4/PERF + V4/FIX-SM defect 4: retina-aware cap — only an explicitly
+  // recognized hardware GPU goes to 3 (native DPR-3 phones); software GL
+  // (SwiftShader/llvmpipe) AND unknown/ambiguous renderer strings keep the
+  // ENGINE.MAX_PIXEL_RATIO baseline of 2 (conservative default), i.e. exactly
+  // the pre-V4 behavior on the headless VM and on unidentifiable GPUs.
+  const glClass = classifyGlRenderer(glRendererString(renderer));
+  renderer.setPixelRatio(computePixelRatio(devicePixelRatio, glClass));
   renderer.setSize(innerWidth, innerHeight);
 
   /** @type {Map<string, {factory: (ctx: object) => SceneLifecycle, assetKeys: string[]}>} */
@@ -127,6 +226,11 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
 
   // --- resize ---
   function onResize() {
+    // V4/FIX-SM defect 4 hardening: DPR can change at runtime (browser zoom,
+    // window moved across displays) — recompute the capped pixel ratio from
+    // the live devicePixelRatio on every resize. The GL class is fixed for
+    // the context's lifetime, so it is classified once above.
+    renderer.setPixelRatio(computePixelRatio(devicePixelRatio, glClass));
     renderer.setSize(innerWidth, innerHeight);
     const cam = current?.instance?.camera;
     if (cam && cam.isPerspectiveCamera) {
@@ -136,22 +240,39 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
   }
   window.addEventListener('resize', onResize);
 
-  // --- RAF loop ---
-  let lastT = performance.now();
-  function frame(t) {
-    const dt = Math.min((t - lastT) / 1000, 0.1);
-    lastT = t;
-    const inst = current?.instance;
-    if (inst) {
-      try {
-        inst.update?.(dt);
-      } catch (err) {
-        console.error('[sceneManager] scene update error:', err);
-      }
-      if (inst.scene && inst.camera) renderer.render(inst.scene, inst.camera);
-    }
-    requestAnimationFrame(frame);
+  // ── V4/FIX-SM defect 3: manager-level WebGL context-loss recovery ─────────
+  // Only goobyWelt/splatViewer handled 'webglcontextlost' before — home and
+  // every other game froze for good if iOS reclaimed the GPU. preventDefault
+  // on 'lost' tells the browser the context is restorable; on 'restored',
+  // three re-initializes its GL state internally, so the manager re-applies
+  // pixel ratio + size and re-renders the current scene immediately instead
+  // of waiting for the next RAF (which may be throttled in a background tab).
+  function onContextLost(e) {
+    e?.preventDefault?.();
+    console.warn('[sceneManager] WebGL context lost — preventDefault, awaiting restore');
   }
+  function onContextRestored() {
+    console.warn('[sceneManager] WebGL context restored — refreshing renderer');
+    try {
+      renderer.setPixelRatio(computePixelRatio(devicePixelRatio, glClass));
+      renderer.setSize(innerWidth, innerHeight);
+      const inst = current?.instance;
+      if (inst?.scene && inst?.camera) renderer.render(inst.scene, inst.camera);
+    } catch (err) {
+      console.error('[sceneManager] context-restore re-render failed:', err);
+    }
+  }
+  canvas.addEventListener('webglcontextlost', onContextLost);
+  canvas.addEventListener('webglcontextrestored', onContextRestored);
+  // ── end V4/FIX-SM defect 3 ─────────────────────────────────────────────────
+
+  // --- RAF loop (V4/FIX-SM defect 1: crash-proof — see createFrameRunner) ---
+  const frame = createFrameRunner({
+    schedule: (cb) => requestAnimationFrame(cb),
+    getInstance: () => current?.instance,
+    render: (scene, camera) => renderer.render(scene, camera),
+    initialT: performance.now(),
+  });
   requestAnimationFrame(frame);
 
   const manager = {
@@ -241,6 +362,10 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
         return;
       }
       switching = true;
+      /** @type {SceneLifecycle|null} */
+      let instance = null;
+      /** @type {{removeAll: () => void}|null} */
+      let scopedInput = null;
       try {
         await fadeTo(1);
         if (current) {
@@ -285,9 +410,9 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
           // renderer-internal bookkeeping only, never geometry/materials.
           renderer.renderLists?.dispose?.();
         }
-        const scopedInput = input.scoped();
+        scopedInput = input.scoped();
         const ctx = { renderer, assets, input: scopedInput, audio, store, ui };
-        const instance = entry.factory(ctx);
+        instance = entry.factory(ctx);
         current = { id, instance, scopedInput };
         if (instance.camera?.isPerspectiveCamera) {
           instance.camera.aspect = innerWidth / innerHeight;
@@ -308,6 +433,20 @@ export function createSceneManager({ canvas, assets, input, audio, store, ui }) 
           }
         }
         await fadeTo(0);
+      } catch (err) {
+        // V4/FIX-SM defect 2: a throwing factory()/enter() used to strand the
+        // 150 ms black fade at opacity 1 forever — the old scene was already
+        // disposed and fadeTo(0) never ran, trapping the player behind a
+        // permanent black overlay. Dispose whatever partial instance exists,
+        // LIFT the fade, then rethrow so callers still see the failure. When
+        // the throw happened before the old scene was torn down (current
+        // still points at it), the old scene is left in place so it keeps
+        // rendering after the fade lifts.
+        console.error(`[sceneManager] switchTo('${id}') failed — recovering:`, err);
+        if (current && current.instance === instance) current = null;
+        await disposeFailedSwitch(instance, scopedInput);
+        await fadeTo(0);
+        throw err;
       } finally {
         switching = false;
       }
