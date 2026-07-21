@@ -1,8 +1,9 @@
 // V3/G34 — sticker catalog integrity (PLAN3 §C5.1/§C5.2, binding). THE WAVE
 // GATE: catalog ↔ committed PNG 1:1 (fails on missing OR extra files), every
-// art 512×512 ≤ 150 KB (§C5.2/§D6), the 28 frozen ids in §C5.1 table order,
-// every condition row verbatim against an independent spec copy, EN/DE
-// title/flavor/hint parity, and — via the pure engine — all 28 unlockable
+// art 512×512 ≤ 150 KB (§C5.2/§D6), the frozen ids in table order (28 §C5.1
+// originals + 20 V5/STICKERS wave-1 appends + the secret slot last), every
+// condition row verbatim against an independent spec copy, EN/DE
+// title/flavor/hint parity, and — via the pure engine — all 48 unlockable
 // through their real condition shapes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,25 +52,52 @@ const SPEC_CONDS = [
   ['cakeBoss', { counter: 'perfectCakes', target: 1 }],
   ['surfStar', { counter: 'surfRuns', target: 1 }],
   ['albumMaster', { special: 'setsClaimed', target: 4 }],
-  // V4/G53 (PLAN4 §C-SYS5.4/§B6): the secret BONUS sticker #29 — outside the
-  // 28 (secret: true), unlocked only via the 'herzGooby' code word.
+  // V5/STICKERS wave 1: 20 new regular rows — EXISTING counter/gameBest
+  // condition plumbing only (no new specials/hooks), appended after the 28
+  // frozen §C5.1 rows and before the secret slot.
+  ['snackStack', { counter: 'feeds', target: 50 }],
+  ['cleanMachine', { counter: 'washes', target: 25 }],
+  ['bellyLaugh', { counter: 'tickles', target: 50 }],
+  ['dreamTeam', { counter: 'sleeps', target: 25 }],
+  ['gardenBasket', { counter: 'harvests', target: 25 }],
+  ['greenThumb', { counter: 'waterings', target: 50 }],
+  ['seedStarter', { counter: 'plantings', target: 10 }],
+  ['photoWall', { counter: 'photosTaken', target: 10 }],
+  ['roadRegular', { counter: 'trips', target: 10 }],
+  ['ballStorm', { counter: 'balls', target: 50 }],
+  ['safeDriver', { counter: 'cleanTrips', target: 5 }],
+  ['deliveryAce', { counter: 'deliveries', target: 50 }],
+  ['modifierMischief', { counter: 'modifierPlays', target: 5 }],
+  ['carrotChampion', { special: 'gameBest', game: 'carrotCatch', target: 60 }],
+  ['memoryMaster', { special: 'gameBest', game: 'memoryMatch', target: 40 }],
+  ['saysSuperstar', { special: 'gameBest', game: 'goobySays', target: 100 }],
+  ['questScout', { counter: 'questsDone', target: 10 }],
+  ['getWellSoon', { counter: 'cures', target: 3 }],
+  ['radioBunny', { counter: 'radioMinutes', target: 30 }],
+  ['codeWhisperer', { counter: 'codesRedeemed', target: 1 }],
+  // V4/G53 (PLAN4 §C-SYS5.4/§B6): the secret BONUS sticker — outside the
+  // regular count (secret: true), unlocked only via the 'herzGooby' code
+  // word, LAST in table order.
   ['herzGooby', { code: 'herzGooby' }],
 ];
 
 // ------------------------------------------------------------------ catalog
 
-test('28 stickers, §C5.1 ids in frozen table order, unique', () => {
-  // V4/G53 (§C-SYS5.4): catalog now carries 28 regular + the secret #29;
-  // the BOOK total (header n/28, stickerBookFull target) stays 28.
-  assert.equal(STICKERS.length, 29);
-  assert.equal(TOTAL_BOOK_STICKERS, 28);
+test('48 regular stickers + secret, ids in frozen table order, unique', () => {
+  // V5/STICKERS: 28 §C5.1 originals + 20 wave-1 appends = 48 regular; the
+  // secret herzGooby stays outside the count and LAST in table order.
+  assert.equal(STICKERS.length, 49);
+  assert.equal(TOTAL_BOOK_STICKERS, 48);
   assert.deepEqual(STICKERS.map((s) => s.id), SPEC_CONDS.map(([id]) => id));
-  assert.equal(new Set(STICKERS.map((s) => s.id)).size, 29);
+  assert.equal(new Set(STICKERS.map((s) => s.id)).size, 49);
   assert.equal(getSticker('firstNom'), STICKERS[0]);
   assert.equal(getSticker('bogus'), undefined);
   // the ONE secret def is herzGooby, flagged + last in table order
   assert.deepEqual(STICKERS.filter((s) => s.secret).map((s) => s.id), ['herzGooby']);
-  assert.equal(STICKERS[28].id, 'herzGooby');
+  assert.equal(STICKERS[48].id, 'herzGooby');
+  // the 28 §C5.1 originals stay FROZEN in their exact positions
+  assert.equal(STICKERS[27].id, 'albumMaster');
+  assert.equal(STICKERS[28].id, 'snackStack');
 });
 
 test('every condition row matches §C5.1 verbatim', () => {
@@ -89,12 +117,12 @@ test('defs carry nameKey/flavorKey/hintKey/art in the §B5 shapes', () => {
   }
 });
 
-test('§C5.3 page layout: 5 pages of 6/6/6/6/4, table order preserved', () => {
-  assert.deepEqual([...STICKER_PAGE_SIZES], [6, 6, 6, 6, 4]);
+test('page layout: 8 pages of 6 (V5), table order preserved', () => {
+  assert.deepEqual([...STICKER_PAGE_SIZES], [6, 6, 6, 6, 6, 6, 6, 6]);
   const pages = stickerPages();
-  assert.deepEqual(pages.map((p) => p.length), [6, 6, 6, 6, 4]);
-  // V4/G53 (§C-SYS5.4): pages carry the 28 REGULAR defs only — the secret
-  // #29 slot is appended to page 5 by ui/albumScreen.js, outside the paging.
+  assert.deepEqual(pages.map((p) => p.length), [6, 6, 6, 6, 6, 6, 6, 6]);
+  // V4/G53 (§C-SYS5.4): pages carry the 48 REGULAR defs only — the secret
+  // slot is appended to the LAST page by ui/albumScreen.js, outside paging.
   assert.deepEqual(
     pages.flat().map((s) => s.id),
     STICKERS.filter((s) => !s.secret).map((s) => s.id)
@@ -156,24 +184,34 @@ function maxedState() {
   s.level = 40;
   s.weight.value = 86;
   Object.assign(s.achievements.counters, {
-    feeds: 1, washes: 1, balls: 10, sleeps: 10, sickEver: 1, vetTrips: 1,
-    harvests: 1, photosTaken: 1, trips: 1, holeInOnes: 1, deliveries: 10,
+    // originals raised where a V5 sticker shares the counter (higher target
+    // still satisfies the lower original — e.g. feeds 50 covers firstNom 1)
+    feeds: 50, washes: 25, balls: 50, sleeps: 25, sickEver: 1, vetTrips: 1,
+    harvests: 25, photosTaken: 10, trips: 10, holeInOnes: 1, deliveries: 50,
     nougatGlobs: 1, perfectCakes: 1, surfRuns: 1,
+    // V5/STICKERS wave-1 counters (all existing §B1/§B2 keys)
+    tickles: 50, waterings: 50, plantings: 10, cleanTrips: 5,
+    modifierPlays: 5, questsDone: 10, cures: 3, radioMinutes: 30,
+    codesRedeemed: 1,
   });
   s.minigames.best.danceParty = 100;
+  // V5/STICKERS gameBest rows
+  s.minigames.best.carrotCatch = 60;
+  s.minigames.best.memoryMatch = 40;
+  s.minigames.best.goobySays = 100;
   s.collections.entries['fish.goldenFish'] = 1;
   s.collections.claimedSets = { veggies: 1, fish: 1, landmarks: 1, treats: 1 };
   s.skins.owned = ['cream', 'snow'];
   s.outfits.equipped = { hat: 'crown', glasses: 'starGlasses', neck: 'scarfRed', back: null };
-  s.codes.redeemed.herzGooby = 777; // V4/G53: #29 unlocks via its code latch
+  s.codes.redeemed.herzGooby = 777; // V4/G53: secret unlocks via its code latch
   return s;
 }
 
-test('all 24 counter/special stickers unlock through applyStickerUnlocks', () => {
+test('all 44 counter/special stickers unlock through applyStickerUnlocks', () => {
   const eventIds = SPEC_CONDS.filter(([, c]) => c.event).map(([id]) => id);
   assert.deepEqual(eventIds, ['grumpMorning', 'rainyDay', 'starGazer', 'towTrouble']);
   const { state, unlocked } = applyStickerUnlocks(maxedState(), 777);
-  // V4/G53: 24 counter/special + the code-latched #29 = 25 non-event defs
+  // 44 counter/special (24 original + 20 V5) + the code-latched secret = 45
   assert.equal(unlocked.length, SPEC_CONDS.length - eventIds.length);
   for (const [id, cond] of SPEC_CONDS) {
     if (cond.event) {

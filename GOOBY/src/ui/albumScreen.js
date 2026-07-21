@@ -3,14 +3,15 @@
 //
 // 3.0 layout (§B5/§C5.3): a TOP-LEVEL tab strip splits the screen into
 //   „Sticker"     the v2 collections album (4 sets, claim rewards) — UNCHANGED
-//   „Stickerbuch" the §C5 28-sticker book: 5 pages (6/6/6/6/4 slots, 2×3
-//                 grid), horizontal swipe + page dots, „Seite 1–5" titles.
-//                 Locked = greyscale silhouette (no padlock — mystery, not
-//                 denial); unlocked = full AI art with a 300 ms pop-in +
-//                 confetti on first view. Tap any slot → detail sheet (art
-//                 large, title, flavor; locked shows the hint line instead).
-//                 „NEU" pink dot until seen (stickers.seen via the engine).
-//                 Header shows n/28 on the book tab.
+//   „Stickerbuch" the §C5 sticker book (V5: 48 regular): 8 pages (6 slots
+//                 each, 2×3 grid), horizontal swipe + page dots, page titles.
+//                 Locked = mystery „?" placeholder (V5/STICKERS: the art img
+//                 is NEVER rendered/fetched while locked — no padlock and no
+//                 grey-filter reveal); unlocked = full AI art with a 300 ms
+//                 pop-in + confetti on first view. Tap any slot → detail
+//                 sheet (art large, title, flavor; locked shows the mystery
+//                 box + hint line instead). „NEU" pink dot until seen
+//                 (stickers.seen via the engine). Header shows n/48.
 // Book styles are component-injected module CSS (G33 owns styles.css this
 // wave); new 3.0 rules are rem-based so the §B3 uiScale mechanism scales them.
 //
@@ -45,8 +46,8 @@ import { now } from '../core/clock.js';
 /** Set id → tab icon (icons.js names — reuse per §E0.2). */
 const SET_ICONS = { fish: 'fish', veggies: 'carrot', landmarks: 'home', treats: 'hunger' };
 
-// ── V4/G59 (§C-SYS5.4): the 29th sticker is a BONUS outside the 28 ──────────
-// The book header stays „n/28": counts run over the REGULAR defs only (G53's
+// ── V4/G59 (§C-SYS5.4): the secret sticker is a BONUS outside the count ─────
+// The book header counts the REGULAR defs only — n/48 since V5 (G53's
 // herzGooby catalog append must not shift the target), and the secret slot is
 // rendered explicitly on page 5. Until G53's data/stickers.js append lands
 // (wave-1b concurrency, §E0.1-11) a placeholder def keeps the render whole —
@@ -150,7 +151,10 @@ const ALBUM_CSS = `
 .g34-sb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0.625rem;}
 .g34-sb-slot{position:relative;display:flex;flex-direction:column;align-items:center;gap:0.25rem;border:none;background:rgba(255,246,236,.75);border-radius:1rem;padding:0.5rem 0.25rem 0.375rem;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:max(44px,2.75rem);}
 .g34-sb-art{width:100%;max-width:7rem;aspect-ratio:1;border-radius:0.75rem;object-fit:contain;display:block;}
-.g34-sb-slot.g34-locked .g34-sb-art{filter:grayscale(1) brightness(0.35) opacity(0.45);} /* §C5.3 silhouette — no padlock */
+/* V5/STICKERS: locked = mystery „?" placeholder (secret-slot style for EVERY
+   locked slot). The art <img> is never rendered while locked, so no src is
+   fetched and no grey-filter reveal is possible (was: grayscale silhouette). */
+.g34-sb-mystery{display:flex;align-items:center;justify-content:center;background:var(--track-soft);color:rgba(74,59,54,.38);font-size:2.5rem;font-weight:800;user-select:none;}
 .g34-sb-name{max-width:100%;font-size:0.6875rem;font-weight:800;color:var(--brown);text-align:center;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .g34-sb-slot.g34-locked .g34-sb-name{opacity:.4;}
 .g34-sb-newdot{background:var(--pink);color:#fff;border-radius:999px;font-size:0.5625rem;font-weight:800;padding:0.125rem 0.375rem;letter-spacing:.04em;}
@@ -166,7 +170,7 @@ const ALBUM_CSS = `
 .g34-sb-sheet{position:fixed;inset:0;z-index:var(--z-float);display:flex;align-items:center;justify-content:center;background:var(--veil);padding:1rem;} /* V4/UI-DEEP: token scrim + z-ladder (was literal plum) */
 .g34-sb-card{position:relative;width:100%;max-width:20rem;background:var(--white);border-radius:1.375rem;box-shadow:var(--shadow-pop);padding:1.25rem 1rem 1.125rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;text-align:center;}
 .g34-sb-card-art{width:min(60vw,13rem);aspect-ratio:1;object-fit:contain;}
-.g34-sb-card.g34-locked .g34-sb-card-art{filter:grayscale(1) brightness(0.35) opacity(0.45);}
+.g34-sb-card-art.g34-sb-mystery{font-size:4.5rem;border-radius:1rem;} /* V5/STICKERS mystery detail sheet */
 .g34-sb-card-title{margin:0;font-size:1.125rem;font-weight:800;color:var(--brown);}
 .g34-sb-card-flavor{margin:0;font-size:0.8125rem;font-weight:700;color:var(--brown);opacity:.7;line-height:1.35;}
 .g34-sb-card-hintlabel{margin:0.25rem 0 0;font-size:0.625rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-dark);opacity:.8;}
@@ -201,7 +205,9 @@ const ALBUM_CSS = `
 .g59-vw-confirm-row .g59-cancel{background:rgba(74,59,54,.08);color:var(--brown);box-shadow:none;}
 .g59-vw-confirm-row .g59-confirm-del{background:var(--pink);}
 .g59-secret .g59-secret-badge{position:absolute;top:0.375rem;left:0.375rem;display:inline-flex;align-items:center;justify-content:center;color:var(--pink);opacity:.9;}
-.g59-secret.g34-locked .g59-secret-q{position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);font-size:2rem;font-weight:800;color:rgba(255,255,255,.92);text-shadow:0 2px 6px rgba(42,26,60,.5);pointer-events:none;}
+/* V5/STICKERS: the locked secret slot rides the shared .g34-sb-mystery box
+   (the old absolutely-positioned .g59-secret-q overlay is gone with the
+   grey-filter render). */
 /* ── end V4/G59 ── */
 `;
 
@@ -322,9 +328,13 @@ export function registerAlbumScreen({ store, ui, audio }) {
       sheetEl.className = 'g34-sb-sheet';
       const card = document.createElement('div');
       card.className = `g34-sb-card${unlocked ? '' : ' g34-locked'}`;
+      // V5/STICKERS: locked sheets render the mystery „?" box — NEVER an
+      // <img src> (no art fetch, no grey-filter reveal).
       card.innerHTML = `
         <button class="g34-sb-close" aria-label="${t('ui.close')}">${icon('close', 18)}</button>
-        <img class="g34-sb-card-art${firstView ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" draggable="false"/>
+        ${unlocked
+          ? `<img class="g34-sb-card-art${firstView ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" draggable="false"/>`
+          : '<span class="g34-sb-card-art g34-sb-mystery" aria-hidden="true">?</span>'}
         <h2 class="g34-sb-card-title">${unlocked ? t(def.nameKey) : t('stickerbook.unknown')}</h2>
         ${unlocked
           ? `<p class="g34-sb-card-flavor">${t(def.flavorKey)}</p>`
@@ -371,9 +381,12 @@ export function registerAlbumScreen({ store, ui, audio }) {
       sheetEl.className = 'g34-sb-sheet';
       const card = document.createElement('div');
       card.className = `g34-sb-card${unlocked ? '' : ' g34-locked'}`;
+      // V5/STICKERS: locked secret sheet = mystery „?" box, no art fetch.
       card.innerHTML = `
         <button class="g34-sb-close" aria-label="${t('ui.close')}">${icon('close', 18)}</button>
-        <img class="g34-sb-card-art${firstView ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" draggable="false"/>
+        ${unlocked
+          ? `<img class="g34-sb-card-art${firstView ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" draggable="false"/>`
+          : '<span class="g34-sb-card-art g34-sb-mystery" aria-hidden="true">?</span>'}
         <h2 class="g34-sb-card-title">${unlocked ? t(def.nameKey) : tG('stickerbook.secret')}</h2>
         ${unlocked
           ? `<p class="g34-sb-card-flavor">${t(def.flavorKey)}</p>`
@@ -407,9 +420,11 @@ export function registerAlbumScreen({ store, ui, audio }) {
       if (pop) poppedIdsSet.add('herzGooby');
       const slot = document.createElement('button');
       slot.className = `g34-sb-slot g59-secret ${unlocked ? 'g34-unlocked' : 'g34-locked'}`;
+      // V5/STICKERS: locked = shared mystery „?" box (no <img src>, no fetch).
       slot.innerHTML = `
-        <img class="g34-sb-art${pop ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" loading="lazy" draggable="false"/>
-        ${unlocked ? '' : '<span class="g59-secret-q">?</span>'}
+        ${unlocked
+          ? `<img class="g34-sb-art${pop ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" loading="lazy" draggable="false"/>`
+          : '<span class="g34-sb-art g34-sb-mystery" aria-hidden="true">?</span>'}
         <span class="g59-secret-badge">${icon('heart', 14)}</span>
         <span class="g34-sb-name">${unlocked ? t(def.nameKey) : tG('stickerbook.secret')}</span>
         ${isNew ? `<span class="g34-sb-newdot">${t('stickerbook.new')}</span>` : ''}`;
@@ -727,8 +742,8 @@ export function registerAlbumScreen({ store, ui, audio }) {
       const state = store.get();
       const unlockedMap = state?.stickers?.unlocked ?? {};
       const seenMap = state?.stickers?.seen ?? {};
-      // V4/G59 (§C-SYS5.4): header stays n/28 — counts run over the REGULAR
-      // 28 only; the unlocked secret sticker adds a small „+💗" suffix.
+      // V4/G59 (§C-SYS5.4): the header counts the REGULAR defs only (n/48
+      // since V5); the unlocked secret sticker adds a small „+💗" suffix.
       const counts = stickerCounts(state, REGULAR_STICKERS);
       // V4/FIX-EMOJI: the secret-sticker suffix uses the authored heart glyph.
       count.innerHTML = `${counts.unlocked}/${REGULAR_STICKERS.length}${unlockedMap.herzGooby
@@ -760,7 +775,7 @@ export function registerAlbumScreen({ store, ui, audio }) {
         const grid = document.createElement('div');
         grid.className = 'g34-sb-grid';
         // V4/G59 (§C-SYS5.4): the regular pages never include herzGooby
-        // (stickerPages slices the first 28), but filter defensively.
+        // (stickerPages filters non-secret defs), but filter defensively.
         for (const def of defs.filter((d) => d.id !== 'herzGooby')) {
           const unlocked = !!unlockedMap[def.id];
           const isNew = unlocked && seenMap[def.id] !== true;
@@ -768,8 +783,13 @@ export function registerAlbumScreen({ store, ui, audio }) {
           if (pop) poppedIds.add(def.id);
           const slot = document.createElement('button');
           slot.className = `g34-sb-slot ${unlocked ? 'g34-unlocked' : 'g34-locked'}`;
+          // V5/STICKERS: locked slots render the mystery „?" placeholder —
+          // no <img src> means the art is never fetched, so it can't be
+          // grey-filter revealed (matches the secret-slot style).
           slot.innerHTML = `
-            <img class="g34-sb-art${pop ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" loading="lazy" draggable="false"/>
+            ${unlocked
+              ? `<img class="g34-sb-art${pop ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" loading="lazy" draggable="false"/>`
+              : '<span class="g34-sb-art g34-sb-mystery" aria-hidden="true">?</span>'}
             <span class="g34-sb-name">${unlocked ? t(def.nameKey) : t('stickerbook.unknown')}</span>
             ${isNew ? `<span class="g34-sb-newdot">${t('stickerbook.new')}</span>` : ''}`;
           slot.addEventListener('click', () => {
@@ -780,8 +800,8 @@ export function registerAlbumScreen({ store, ui, audio }) {
           if (freshIds.has(def.id)) confettiSlots.push(slot);
           grid.appendChild(slot);
         }
-        // V4/G59 (§C-SYS5.4): page 5 renders 2×3 with 5 slots — the 4
-        // regular defs + the secret „Geheim" slot (28 + 1 outside the count).
+        // V4/G59 (§C-SYS5.4): the LAST page gains the secret „Geheim" slot
+        // appended after its regular defs (48 + 1 outside the count).
         if (pageIdx === pages.length - 1) {
           const secret = buildSecretSlot(unlockedMap, seenMap, freshIds, poppedIds);
           if (freshIds.has('herzGooby')) confettiSlots.push(secret);

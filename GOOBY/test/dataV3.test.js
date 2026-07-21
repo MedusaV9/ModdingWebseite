@@ -14,6 +14,8 @@ import { STICKERS } from '../src/data/stickers.js';
 import { EN, DE } from '../src/data/strings.js';
 import { EN as V3_CORE_EN, DE as V3_CORE_DE } from '../src/data/strings/v3-core.js';
 import { EN as V3_STICKERS_EN, DE as V3_STICKERS_DE } from '../src/data/strings/v3-stickers.js';
+// V5/STICKERS wave 1: the 20 new sticker keys live in their own module
+import { EN as V5_STICKERS_EN, DE as V5_STICKERS_DE } from '../src/data/strings/v5-stickers.js';
 
 /** Both dictionaries must carry a non-empty string for the key. */
 function assertKey(key, label = key) {
@@ -136,10 +138,13 @@ test('v3-stickers: EN/DE key parity; every catalog key + book chrome present', (
   assert.deepEqual(Object.keys(V3_STICKERS_EN).sort(), Object.keys(V3_STICKERS_DE).sort());
   for (const key of Object.keys(V3_STICKERS_EN)) assertKey(key, `v3-stickers ${key}`);
   for (const s of STICKERS) {
-    // V4/G53: the secret herzGooby row (#29) is keyed in strings/v4-core.js
+    // V4/G53: the secret herzGooby row is keyed in strings/v4-core.js
     if (s.secret) continue;
     for (const key of [s.nameKey, s.flavorKey, s.hintKey]) {
-      assert.equal(typeof V3_STICKERS_EN[key], 'string', `v3-stickers owns ${key}`);
+      // V5/STICKERS wave 1: the 20 new ids own their keys in v5-stickers.js;
+      // the 28 §C5.1 originals stay in v3-stickers.js (frozen ownership).
+      const owner = V5_STICKERS_EN[s.nameKey] != null ? V5_STICKERS_EN : V3_STICKERS_EN;
+      assert.equal(typeof owner[key], 'string', `v3/v5-stickers owns ${key}`);
     }
   }
   for (const key of [
@@ -148,6 +153,27 @@ test('v3-stickers: EN/DE key parity; every catalog key + book chrome present', (
     'stickerbook.unlockToast',
   ]) {
     assertKey(key, `book chrome ${key}`);
+  }
+});
+
+test('v5-stickers: EN/DE parity; exactly the 20 wave-1 ids × 3 keys, merged', () => {
+  assert.deepEqual(Object.keys(V5_STICKERS_EN).sort(), Object.keys(V5_STICKERS_DE).sort());
+  for (const key of Object.keys(V5_STICKERS_EN)) assertKey(key, `v5-stickers ${key}`);
+  assert.equal(Object.keys(V5_STICKERS_EN).length, 20 * 3);
+  // v5-stickers must never shadow a v3-stickers key (spread-order safety)
+  for (const key of Object.keys(V5_STICKERS_EN)) {
+    assert.equal(V3_STICKERS_EN[key], undefined, `${key} also in v3-stickers`);
+  }
+  // the wave-1 ids are exactly the catalog rows 29–48 (after the §C5.1 28)
+  const waveIds = STICKERS.filter((s) => !s.secret).slice(28).map((s) => s.id);
+  assert.equal(waveIds.length, 20);
+  for (const id of waveIds) {
+    for (const suffix of ['name', 'flavor', 'hint']) {
+      assert.equal(
+        typeof V5_STICKERS_EN[`stickerbook.${id}.${suffix}`], 'string',
+        `v5-stickers owns stickerbook.${id}.${suffix}`
+      );
+    }
   }
 });
 

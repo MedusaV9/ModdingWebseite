@@ -168,8 +168,10 @@ function applyFireStickerRecipe(state, def) {
   return state;
 }
 
-test('FIX-D E14 P1-3: the fire recipe unlocks each of the 28 sticker defs', () => {
-  assert.equal(STICKERS.length, 29); // V4/G53: 28 + the secret herzGooby (#29)
+test('FIX-D E14 P1-3: the fire recipe unlocks each of the sticker defs', () => {
+  // V5/STICKERS: 48 regular (28 §C5.1 + 20 wave-1) + the secret herzGooby.
+  // The recipe stays generic over counter/gameBest, so the new defs ride it.
+  assert.equal(STICKERS.length, 49);
   for (const def of STICKERS) {
     const state = applyFireStickerRecipe(defaultState(), def);
     if (def.cond.event) {

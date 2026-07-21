@@ -1,9 +1,10 @@
 // Gooby sticker-book catalog (PLAN3 §C5.1, binding — agent V3/G34). The 28
-// ids are FROZEN in table order; art PNGs are committed 1:1 at
-// public/assets/stickers/<id>.png (512×512, ≤ 150 KB — §C5.2/§D6, verified by
-// test/stickers.test.js). Pure data: no three.js/DOM imports (§B rule).
-// Condition evaluation lives in systems/stickerBook.js; this file only
-// describes WHAT to check.
+// original ids are FROZEN in table order; V5/STICKERS wave 1 appends 20 more
+// regular stickers AFTER them (before the secret #29 slot, which stays last).
+// Art PNGs are committed 1:1 at public/assets/stickers/<id>.png (512×512,
+// ≤ 150 KB — §C5.2/§D6, verified by test/stickers.test.js). Pure data: no
+// three.js/DOM imports (§B rule). Condition evaluation lives in
+// systems/stickerBook.js; this file only describes WHAT to check.
 //
 // Condition spec shapes (§B5 — reuse the achievements shapes + one new):
 //   { counter: '<id>', target: N }   achievements.counters[id] ≥ N
@@ -33,7 +34,7 @@
  *   target?: number, game?: string, set?: string, entry?: string}} cond
  */
 
-/** @type {StickerDef[]} all 28, §C5.1 table order (pages 6/6/6/6/4 — §C5.3). */
+/** @type {StickerDef[]} 48 regular (28 §C5.1 + 20 V5) + secret #29 last. */
 export const STICKERS = Object.freeze(
   [
     { id: 'firstNom', cond: { counter: 'feeds', target: 1 } },
@@ -76,10 +77,43 @@ export const STICKERS = Object.freeze(
     // shoppingSurf run completed (BOTH modes bump surfRuns — §C8.6)
     { id: 'surfStar', cond: { counter: 'surfRuns', target: 1 } },
     { id: 'albumMaster', cond: { special: 'setsClaimed', target: 4 } },
-    // V4/G53 (PLAN4 §C-SYS5.4, binding): sticker #29 herzGooby is a BONUS
-    // sticker OUTSIDE the 28 — secret: true keeps it out of TOTAL_BOOK_STICKERS
-    // (header stays „n/28", stickerBookFull stays 28); it unlocks ONLY via the
-    // 'herzGooby' code word (cond.code reads codes.redeemed — §B6/§C-SYS5.2).
+    // ── V5/STICKERS wave 1: +20 regular stickers (ids appended AFTER the 28
+    // frozen §C5.1 rows, BEFORE the secret slot). RULE: only EXISTING
+    // counter/gameBest condition plumbing — no new specials, no new hooks.
+    // Counters are all §B1/§B2 save-schema keys already bumped by their
+    // owning systems (see systems/stickerBook.js wiring map + save.js
+    // V2/V3/V4_COUNTER_DEFAULTS); gameBest reads minigames.best[game].
+    { id: 'snackStack', cond: { counter: 'feeds', target: 50 } },
+    { id: 'cleanMachine', cond: { counter: 'washes', target: 25 } },
+    { id: 'bellyLaugh', cond: { counter: 'tickles', target: 50 } },
+    { id: 'dreamTeam', cond: { counter: 'sleeps', target: 25 } },
+    { id: 'gardenBasket', cond: { counter: 'harvests', target: 25 } },
+    { id: 'greenThumb', cond: { counter: 'waterings', target: 50 } },
+    { id: 'seedStarter', cond: { counter: 'plantings', target: 10 } },
+    { id: 'photoWall', cond: { counter: 'photosTaken', target: 10 } },
+    { id: 'roadRegular', cond: { counter: 'trips', target: 10 } },
+    { id: 'ballStorm', cond: { counter: 'balls', target: 50 } },
+    // cleanTrips: achievementsEngine's shop-trip interception (0-crash trips)
+    { id: 'safeDriver', cond: { counter: 'cleanTrips', target: 5 } },
+    { id: 'deliveryAce', cond: { counter: 'deliveries', target: 50 } },
+    // modifierPlays: §B1 v4 counter bumped by economy's modifier payout path
+    { id: 'modifierMischief', cond: { counter: 'modifierPlays', target: 5 } },
+    // gameBest thresholds sit at "strong run" level per each game's score
+    // scale (carrotCatch typical ≈ 45; memoryMatch max 48; goobySays ≈ 88)
+    { id: 'carrotChampion', cond: { special: 'gameBest', game: 'carrotCatch', target: 60 } },
+    { id: 'memoryMaster', cond: { special: 'gameBest', game: 'memoryMatch', target: 40 } },
+    { id: 'saysSuperstar', cond: { special: 'gameBest', game: 'goobySays', target: 100 } },
+    { id: 'questScout', cond: { counter: 'questsDone', target: 10 } },
+    { id: 'getWellSoon', cond: { counter: 'cures', target: 3 } },
+    // radioMinutes: §C-SYS1.7 accrual (1/min while the radio plays)
+    { id: 'radioBunny', cond: { counter: 'radioMinutes', target: 30 } },
+    { id: 'codeWhisperer', cond: { counter: 'codesRedeemed', target: 1 } },
+    // ── end V5/STICKERS wave 1 ──
+    // V4/G53 (PLAN4 §C-SYS5.4, binding): sticker herzGooby is a BONUS
+    // sticker OUTSIDE the regular count — secret: true keeps it out of
+    // TOTAL_BOOK_STICKERS (header shows n/48 since V5; stickerBookFull stays
+    // target 28); it unlocks ONLY via the 'herzGooby' code word (cond.code
+    // reads codes.redeemed — §B6/§C-SYS5.2). Stays LAST in table order.
     { id: 'herzGooby', secret: true, cond: { code: 'herzGooby' } },
   ].map((s) =>
     Object.freeze({
@@ -107,26 +141,26 @@ export function getSticker(id) {
 }
 
 /**
- * Total book stickers (§C5: 28 — header shows n/28). V4/G53 (§C-SYS5.4): the
- * secret herzGooby bonus sticker is OUTSIDE the 28 — the header gains a
+ * Total book stickers (V5: 48 — header shows n/48). V4/G53 (§C-SYS5.4): the
+ * secret herzGooby bonus sticker is OUTSIDE the count — the header gains a
  * „+💗" suffix once unlocked, stickerBookFull keeps target 28.
  */
 export const TOTAL_BOOK_STICKERS = STICKERS.filter((s) => !s.secret).length;
 
 /**
- * §C5.3 page layout: 5 pages in a 2×3 grid — the 28 REGULAR stickers only.
- * V4/G53 (§C-SYS5.4): the secret #29 slot is NOT paged here; ui/albumScreen.js
- * appends it explicitly to page 5 (rendering 6/6/6/6/4+1 slots) as a
- * „?"-silhouette with „Geheim" styling while locked.
+ * §C5.3 page layout in a 2×3 grid — the 48 REGULAR stickers only.
+ * V5/STICKERS: 8 full pages of 6 (was 6/6/6/6/4). V4/G53 (§C-SYS5.4): the
+ * secret slot is NOT paged here; ui/albumScreen.js appends it explicitly to
+ * the LAST page as a mystery „?" slot with „Geheim" styling while locked.
  */
-export const STICKER_PAGE_SIZES = Object.freeze([6, 6, 6, 6, 4]);
+export const STICKER_PAGE_SIZES = Object.freeze([6, 6, 6, 6, 6, 6, 6, 6]);
 
 /**
  * The catalog split into the §C5.3 pages (table order, non-secret only).
- * @returns {StickerDef[][]} 5 arrays of 6/6/6/6/4 defs
+ * @returns {StickerDef[][]} 8 arrays of 6 defs
  */
 export function stickerPages() {
-  const regular = STICKERS.filter((s) => !s.secret); // V4/G53: #29 excluded
+  const regular = STICKERS.filter((s) => !s.secret); // secret slot excluded
   const pages = [];
   let at = 0;
   for (const size of STICKER_PAGE_SIZES) {

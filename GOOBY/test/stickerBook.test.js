@@ -98,6 +98,23 @@ test('special shapes: skinsOwned / gameBest / collectionEntry', () => {
   assert.equal(isStickerSatisfied(STICKERS_BY_ID.goldenCatch, state), true);
 });
 
+test('V5/STICKERS: new defs ride the existing counter/gameBest shapes', () => {
+  const state = defaultState();
+  // counter shape (existing plumbing — no new specials/hooks)
+  const scout = STICKERS_BY_ID.questScout; // questsDone ≥ 10
+  assert.deepEqual(stickerProgress(scout, state), { current: 0, target: 10 });
+  state.achievements.counters.questsDone = 9;
+  assert.equal(isStickerSatisfied(scout, state), false);
+  state.achievements.counters.questsDone = 10;
+  assert.equal(isStickerSatisfied(scout, state), true);
+  // gameBest shape against a v1 game id
+  const champ = STICKERS_BY_ID.carrotChampion; // best.carrotCatch ≥ 60
+  state.minigames.best.carrotCatch = 59;
+  assert.equal(isStickerSatisfied(champ, state), false);
+  state.minigames.best.carrotCatch = 60;
+  assert.equal(isStickerSatisfied(champ, state), true);
+});
+
 test('event shape: no progress from state, 1/1 only once latched', () => {
   const def = STICKERS_BY_ID.grumpMorning;
   const state = defaultState();
@@ -147,12 +164,13 @@ test('applyStickerUnlocks never unlocks event stickers (hook-only path)', () => 
   assert.deepEqual(unlocked.filter((d) => d.cond.event), []);
 });
 
-test('stickerCounts: unlocked/total/unseen drive the n/28 header + NEU dot', () => {
+test('stickerCounts: unlocked/total/unseen drive the n/48 header + NEU dot', () => {
   const state = defaultState();
-  assert.deepEqual(stickerCounts(state), { unlocked: 0, total: 28, unseen: 0 });
+  // V5/STICKERS: 48 regular defs (28 §C5.1 + 20 wave-1); secret excluded
+  assert.deepEqual(stickerCounts(state), { unlocked: 0, total: 48, unseen: 0 });
   state.stickers.unlocked = { firstNom: 1, sleepyhead: 2, bigTen: 3 };
   state.stickers.seen = { firstNom: true };
-  assert.deepEqual(stickerCounts(state), { unlocked: 3, total: 28, unseen: 2 });
+  assert.deepEqual(stickerCounts(state), { unlocked: 3, total: 48, unseen: 2 });
 });
 
 // ------------------------------------------------------- live store wiring
@@ -225,10 +243,10 @@ test('markSeen: sets seen once, only for unlocked; counts() reflects NEU', () =>
   store.emit('stickerHook', { id: 'towed' });
   assert.equal(engine.isUnlocked('towTrouble'), true);
   assert.equal(engine.isSeen('towTrouble'), false);
-  assert.deepEqual(engine.counts(), { unlocked: 1, total: 28, unseen: 1 });
+  assert.deepEqual(engine.counts(), { unlocked: 1, total: 48, unseen: 1 });
   engine.markSeen('towTrouble');
   assert.equal(engine.isSeen('towTrouble'), true);
-  assert.deepEqual(engine.counts(), { unlocked: 1, total: 28, unseen: 0 });
+  assert.deepEqual(engine.counts(), { unlocked: 1, total: 48, unseen: 0 });
   resetStickerBookForTests();
 });
 
