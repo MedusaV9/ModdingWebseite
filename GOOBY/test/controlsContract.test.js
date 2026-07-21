@@ -63,10 +63,14 @@ const EXPECTED_INVERTIBLE = {
   // V4/G53 registry row (PLAN4 §E0.1): §G3.3 „drag steer … screen-true by
   // spec" → invertible per §G2.1 rule 4. Module lands wave 2 (G65/G66).
   goobyWelt: true,
+  // V5/G06 (PLAN5 §V5): hold/release timing + positional tap — inverting is
+  // nonsense per §G2.1 rule 3 exemptions.
+  teaParty: false,
+  hideSeek: false,
 };
 
-test('V4/G57 §G3.2: all 28 games declare controls.invertible (§G3.3 values)', () => {
-  assert.equal(MINIGAME_IDS.length, 28);
+test('V4/G57 §G3.2: all 30 games declare controls.invertible (§G3.3 values)', () => {
+  assert.equal(MINIGAME_IDS.length, 30);
   assert.deepEqual([...MINIGAME_IDS].sort(), Object.keys(EXPECTED_INVERTIBLE).sort());
   for (const id of MINIGAME_IDS) {
     // §E0.1-11: wave-2 modules (goobyWelt) may not be built yet — skip the

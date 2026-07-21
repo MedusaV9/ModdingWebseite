@@ -107,8 +107,16 @@ test('V2/G16: unlock queries cover the 9 new §B6 games', () => {
   assert.equal(unlockedMinigames(10).length, atOldMax);
   // V3/G34: catalog is 27 now; the last gate is harborHopper at L20 (§E0.1-3)
   // V4/G53: +goobyWelt at L12 (PLAN4 §B10) → 28
-  assert.equal(unlockedMinigames(20).length, 28);
-  assert.equal(unlockedMinigames(40).length, 28);
+  // V5/G06: +hideSeek at L2, +teaParty at L3 (PLAN5 §V5) → 30
+  assert.equal(unlockedMinigames(20).length, 30);
+  assert.equal(unlockedMinigames(40).length, 30);
+});
+
+test('V5/G06: unlock queries cover the two new §V5 gates', () => {
+  assert.equal(isMinigameUnlocked('hideSeek', 1), false);
+  assert.equal(isMinigameUnlocked('hideSeek', 2), true);
+  assert.equal(isMinigameUnlocked('teaParty', 2), false);
+  assert.equal(isMinigameUnlocked('teaParty', 3), true);
 });
 
 test('V3/G34: unlock queries cover the 6 new §E0.1-3 gates', () => {

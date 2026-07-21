@@ -163,6 +163,9 @@ export const COIN_TABLE = Object.freeze({
   harborHopper: Object.freeze({ divisor: 5, min: 4, max: 30 }),
   // V4/G53: the ONE new 4.0 coin row (PLAN4 §E0.1-7 / PLAN4-GAMES §G6.4)
   goobyWelt: Object.freeze({ divisor: 6, min: 4, max: 20 }),
+  // V5/G06: the TWO new 5.0 coin rows (PLAN5 §V5.1/§V5.2 verbatim)
+  teaParty: Object.freeze({ divisor: 4, min: 4, max: 26 }),
+  hideSeek: Object.freeze({ divisor: 5, min: 4, max: 20 }),
 });
 
 /** Minigame unlock schedule (§C6.3): level → new game. */
@@ -538,6 +541,9 @@ export const UNLOCKS = Object.freeze({
     harborHopper: 20,
     // V4/G53: the ONE new 4.0 game gate (PLAN4 §E0.1-7 / PLAN4-GAMES §G6.4)
     goobyWelt: 12,
+    // V5/G06: the TWO new 5.0 game gates (PLAN5 §V5.1/§V5.2)
+    hideSeek: 2,
+    teaParty: 3,
   }),
   /** Crop unlock levels (§B6/§C2.3). */
   CROPS: Object.freeze({
@@ -785,3 +791,15 @@ export const MODIFIER = Object.freeze({
 });
 
 // ============================================================== end V4/G53 ==
+
+// ============================================================================
+// V5/G06: GOOBY 5.0 data spine (PLAN5 §V5 — the SINGLE 5.0 re-opening of this
+// file): the TWO new COIN_TABLE rows + UNLOCKS.MINIGAMES gates (teaParty §V5.1,
+// hideSeek §V5.2) — marked inline at their tables above, because the frozen
+// objects cannot be extended after definition. Every other 5.0 number (per-game
+// tunes, difficulty families, bot knobs) lives as exported frozen consts inside
+// the owning games/*.logic.js (§E0.1-2 pattern). constants.js is FROZEN again
+// after this edit — no other 5.0 agent may touch it.
+// ============================================================================
+
+// ============================================================== end V5/G06 ==

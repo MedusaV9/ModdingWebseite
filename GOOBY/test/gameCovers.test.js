@@ -33,6 +33,7 @@ const EXPECTED_IDS = Object.freeze([
   'goobySays',
   'goobyWelt',
   'harborHopper',
+  'hideSeek',
   'memoryMatch',
   'miniGolf',
   'pancakeTower',
@@ -42,6 +43,7 @@ const EXPECTED_IDS = Object.freeze([
   'runner',
   'shoppingSurf',
   'starHopper',
+  'teaParty',
   'toyRacer',
   'trampoline',
   'veggieChop',
@@ -49,8 +51,8 @@ const EXPECTED_IDS = Object.freeze([
 
 const sorted = (values) => [...values].sort((a, b) => a.localeCompare(b, 'en'));
 
-test('§G7.1: exactly 28 cover PNGs match the visible arcade game ids', () => {
-  assert.equal(EXPECTED_IDS.length, 28);
+test('§G7.1: exactly 30 cover PNGs match the visible arcade game ids', () => {
+  assert.equal(EXPECTED_IDS.length, 30);
   assert.deepEqual(sorted(ARCADE_GAME_IDS), sorted(EXPECTED_IDS));
 
   const files = fs.readdirSync(COVERS_DIR)

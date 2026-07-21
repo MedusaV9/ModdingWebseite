@@ -235,8 +235,8 @@ test('play12: each of the 12 games played ≥ 1 (plays map)', () => {
   const state = freshState();
   // V2/G16: play12 needs ANY 12 distinct catalog games played; play21 (21 of
   // the now-27 ids — §C5.3) is the 2.0 tier. V3/G34: catalog is 27 (§E0.1-9).
-  // V4/G53: +goobyWelt (PLAN4 §E0.1) → 28.
-  assert.equal(MINIGAME_IDS.length, 28);
+  // V4/G53: +goobyWelt (PLAN4 §E0.1) → 28. V5/G06: +teaParty/hideSeek → 30.
+  assert.equal(MINIGAME_IDS.length, 30);
   for (const id of MINIGAME_IDS.slice(0, 11)) state.minigames.plays[id] = 2;
   state.minigames.plays._smoke = 99; // dev game never counts
   assert.equal(isSatisfied(def, state), false);

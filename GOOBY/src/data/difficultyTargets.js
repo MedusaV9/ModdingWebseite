@@ -51,6 +51,9 @@ export const TARGETS = Object.freeze({
   ghostHunt: Object.freeze({ capScore: 112, target: 90, endless: '3 escaped Boo-waves (< 4 catches)' }),
   rocketRescue: Object.freeze({ capScore: 140, target: 115, endless: 'fuel runs out (fuel pickups thin out -10%/platform)' }),
   harborHopper: Object.freeze({ capScore: 150, target: 110, endless: '3 bumps (buoy/pier hits)' }),
+  // V5/G06 (PLAN5 §V5.1/§V5.2): the two 5.0 rows — same ≈80 %-of-cap rule.
+  teaParty: Object.freeze({ capScore: 104, target: 85, endless: '3 spilled/missed cups' }),
+  hideSeek: Object.freeze({ capScore: 100, target: 80, endless: '3 expired (uncleared) waves' }),
 });
 
 /**

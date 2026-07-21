@@ -17,12 +17,12 @@ import { COIN_TABLE, UNLOCK_LEVELS, UNLOCKS, MINIGAME } from './constants.js'; /
  */
 
 /**
- * The 28 shipping games (§C6 + PLAN2 §C1 + PLAN3 §C8–§C10 + PLAN4-GAMES §G6),
- * in unlock order (§B6/§B8 merged with v1 §C6.3; earlier-generation-first
- * within a level). V2/G16: 9 new 2.0 ids added. V3/G34 (§E0.1-9): 6 new 3.0
- * ids added. V4/G53 (§E0.1-19): goobyWelt added — its module lands in wave 2
- * (metadata-only entries render "coming soon", §E8), its coin row/gate are
- * live in COIN_TABLE/UNLOCKS (§E0.1-7), energy 8 = the §C6 default.
+ * The 30 shipping games (§C6 + PLAN2 §C1 + PLAN3 §C8–§C10 + PLAN4-GAMES §G6 +
+ * PLAN5 §V5), in unlock order (§B6/§B8 merged with v1 §C6.3;
+ * earlier-generation-first within a level). V2/G16: 9 new 2.0 ids added.
+ * V3/G34 (§E0.1-9): 6 new 3.0 ids added. V4/G53 (§E0.1-19): goobyWelt added.
+ * V5/G06 (PLAN5 §V5.1/§V5.2): teaParty + hideSeek added — coin rows/gates are
+ * live in COIN_TABLE/UNLOCKS, energy 8 = the §C6 default.
  */
 export const MINIGAME_IDS = Object.freeze([
   'carrotCatch', //  L1
@@ -30,7 +30,9 @@ export const MINIGAME_IDS = Object.freeze([
   'cityDrive', //    L1
   'carrotGuard', //  L2
   'goobySays', //    L2  (2.0)
+  'hideSeek', //     L2  (5.0 — V5/G06 §V5.2)
   'memoryMatch', //  L3
+  'teaParty', //     L3  (5.0 — V5/G06 §V5.1)
   'basketBounce', // L4
   'gardenRush', //   L4  (2.0)
   'pancakeTower', // L5
@@ -90,6 +92,9 @@ const ICONS = {
   // V4/G53 (§E0.1-19): the ONE new 4.0 tile — reuses an existing icon name;
   // the Gooby-Welt agents (G65/G66, wave 2) may swap in a bespoke icon.
   goobyWelt: 'sparkle',
+  // V5/G06: 5.0 tiles reuse existing icon names (ui/icons.js stays frozen).
+  teaParty: 'candy',
+  hideSeek: 'sprout',
 };
 
 /** V2/G16: car games cost 6 energy (§C1 shared rules — cityDrive + deliveryRush). */

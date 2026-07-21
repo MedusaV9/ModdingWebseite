@@ -64,6 +64,10 @@ import { EN as V4_FOODS_EN, DE as V4_FOODS_DE } from './strings/v4-foods.js';
 import { EN as V4_CREDITS_EN, DE as V4_CREDITS_DE } from './strings/v4-credits.js';
 import { EN as V4_SHIP_EN, DE as V4_SHIP_DE } from './strings/v4-ship.js';
 // end V4/G53 imports
+// V5/G06 (PLAN5 §V5 — the SINGLE 5.0 edit of this file): the 5.0 minigame
+// strings module — spread below AFTER all v4 spreads, always EN + DE.
+import { EN as V5_GAMES_EN, DE as V5_GAMES_DE } from './strings/v5-games.js';
+// end V5/G06 imports
 
 /** @type {Record<string, string>} */
 export const EN = {
@@ -589,6 +593,8 @@ export const EN = {
   ...V4_FOODS_EN,
   ...V4_CREDITS_EN,
   ...V4_SHIP_EN,
+  // V5/G06 spreads (PLAN5 §V5)
+  ...V5_GAMES_EN,
 };
 
 /** @type {Record<string, string>} */
@@ -1115,6 +1121,8 @@ export const DE = {
   ...V4_FOODS_DE,
   ...V4_CREDITS_DE,
   ...V4_SHIP_DE,
+  // V5/G06 spreads (PLAN5 §V5)
+  ...V5_GAMES_DE,
 };
 
 const DICTS = { en: EN, de: DE };

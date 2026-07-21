@@ -65,6 +65,9 @@ const ADAPTERS = Object.freeze({
   ghostHunt: ['simulateHuntAutoplay', 'ms'],
   rocketRescue: ['simulateRocketAutoplay', 'ms'],
   harborHopper: ['simulateHarborAutoplay', 'ms'],
+  // V5/G06 (PLAN5 §V5): the two 5.0 certification sims.
+  teaParty: ['simulateTeaAutoplay', 'ms'],
+  hideSeek: ['simulateSeekAutoplay', 'ms'],
 });
 
 // ---------------------------------------------------------------------------

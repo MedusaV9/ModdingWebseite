@@ -96,8 +96,8 @@ test('coverUrl: §G7.1 root + <gameId>.png', () => {
   assert.equal(coverUrl('goobyWelt'), 'assets/covers/goobyWelt.png');
 });
 
-test('ARCADE_GAME_IDS: the 28 §G7.2 grid entries (27 games + goobyWelt, no _smoke)', () => {
-  assert.equal(ARCADE_GAME_IDS.length, 28);
+test('ARCADE_GAME_IDS: the 30 §G7.2 grid entries (29 games + goobyWelt, no _smoke)', () => {
+  assert.equal(ARCADE_GAME_IDS.length, 30);
   assert.ok(ARCADE_GAME_IDS.includes('goobyWelt'));
   assert.ok(!ARCADE_GAME_IDS.includes('_smoke'));
 });
