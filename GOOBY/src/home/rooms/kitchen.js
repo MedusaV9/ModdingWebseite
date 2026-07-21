@@ -55,6 +55,24 @@ export const ROOM = Object.freeze({
       id: 'hangingUtensils', kind: 'hangingUtensils', batch: 'color',
       at: Object.freeze([0.72, 1.72, -1.43]),
     }),
+    // ---- V5/ASSETS: Tiny Treats counter dressing (charming-kitchen pack) ---
+    // Kettle + mugs on the right cabinet top (y 0.698 counter surface), pot and
+    // pan on the stove, dish rack left of the drawer unit's toaster, and a
+    // potted pothos filling the front-left floor corner. One extra merged
+    // atlas batch ('kitchenware') — same shared tiny_treats_texture_1 atlas.
+    Object.freeze({
+      id: 'kitchenware', kind: 'assetCluster', batch: 'kitchenware',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'charming-kitchen/kettle', at: Object.freeze([1.3, 0.698, -1.15]), scale: 0.32, rotY: 15 }),
+        Object.freeze({ key: 'charming-kitchen/mug_blue', at: Object.freeze([1.58, 0.698, -1.1]), scale: 0.32, rotY: -25 }),
+        Object.freeze({ key: 'charming-kitchen/mug_red', at: Object.freeze([1.52, 0.698, -1.28]), scale: 0.32, rotY: 140 }),
+        Object.freeze({ key: 'charming-kitchen/pot', at: Object.freeze([0.68, 0.698, -1.18]), scale: 0.34 }),
+        Object.freeze({ key: 'charming-kitchen/pan', at: Object.freeze([0.95, 0.698, -1.14]), scale: 0.3 }),
+        Object.freeze({ key: 'charming-kitchen/dishrack_plates', at: Object.freeze([-0.76, 0.698, -1.28]), scale: 0.36 }),
+        Object.freeze({ key: 'house-plants/pothos_plant_large_potted', at: Object.freeze([-1.55, 0, 1.05]), scale: 0.24, rotY: 30 }),
+      ]),
+    }),
+    // ---- end V5/ASSETS -------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 

@@ -1070,6 +1070,97 @@
         0
       ]
     },
+    "charming-kitchen/kettle": {
+      "min": [
+        -0.43366,
+        0,
+        -0.3
+      ],
+      "max": [
+        0.37896,
+        0.59521,
+        0.3
+      ],
+      "forward": null
+    },
+    "charming-kitchen/mug_blue": {
+      "min": [
+        -0.18628,
+        0,
+        -0.1875
+      ],
+      "max": [
+        0.32562,
+        0.35,
+        0.1875
+      ],
+      "forward": null
+    },
+    "charming-kitchen/mug_red": {
+      "min": [
+        -0.18628,
+        0,
+        -0.1875
+      ],
+      "max": [
+        0.32562,
+        0.35,
+        0.1875
+      ],
+      "forward": null
+    },
+    "charming-kitchen/pot": {
+      "min": [
+        -0.5,
+        0,
+        -0.35
+      ],
+      "max": [
+        0.5,
+        0.4,
+        0.35
+      ],
+      "forward": null
+    },
+    "charming-kitchen/pan": {
+      "min": [
+        -0.35,
+        0,
+        -0.34844
+      ],
+      "max": [
+        0.35,
+        0.2,
+        0.65156
+      ],
+      "forward": null
+    },
+    "charming-kitchen/dishrack_plates": {
+      "min": [
+        -0.375,
+        0,
+        -0.4
+      ],
+      "max": [
+        0.375,
+        0.78406,
+        0.4
+      ],
+      "forward": null
+    },
+    "house-plants/pothos_plant_large_potted": {
+      "min": [
+        -1.35712,
+        -0.34664,
+        -1.19708
+      ],
+      "max": [
+        1.17247,
+        2.05031,
+        1.2087
+      ],
+      "forward": null
+    },
     "aline-furniture/bookshelf": {
       "min": [
         -0.46156,
@@ -1110,6 +1201,97 @@
         0.12545,
         0.23806,
         0.12545
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/soap_dish_pink": {
+      "min": [
+        -0.25,
+        0,
+        -0.15
+      ],
+      "max": [
+        0.25,
+        0.20452,
+        0.15
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/toothbrush_cup_decorated": {
+      "min": [
+        -0.14573,
+        0,
+        -0.14536
+      ],
+      "max": [
+        0.144,
+        0.70157,
+        0.19716
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/ducky": {
+      "min": [
+        -0.14916,
+        -0.01,
+        -0.16998
+      ],
+      "max": [
+        0.14916,
+        0.39299,
+        0.2509
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/towel_stacked": {
+      "min": [
+        -0.40102,
+        0,
+        -0.40102
+      ],
+      "max": [
+        0.40102,
+        0.6,
+        0.40102
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/toilet_roll_stack": {
+      "min": [
+        -0.3,
+        0,
+        -0.15
+      ],
+      "max": [
+        0.3,
+        0.6,
+        0.15
+      ],
+      "forward": null
+    },
+    "bubbly-bathroom/toilet_roll_holder": {
+      "min": [
+        -0.11258,
+        -0.27893,
+        0
+      ],
+      "max": [
+        0.49288,
+        0.14949,
+        0.4
+      ],
+      "forward": null
+    },
+    "house-plants/monstera_plant_large_potted": {
+      "min": [
+        -1.3974,
+        0,
+        -1.47948
+      ],
+      "max": [
+        1.19495,
+        3.68025,
+        1.31073
       ],
       "forward": null
     },

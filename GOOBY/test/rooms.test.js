@@ -270,9 +270,11 @@ test('V3/G46 garden uses real additions but keeps the compost identity item proc
 
 test('V4/G79 indoor dressing is complete, asset-backed, and budgeted at ≤4 calls per room', () => {
   const expected = {
-    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils'],
+    // V5/ASSETS: + kitchenware/bathware Tiny Treats clusters (one extra
+    // merged atlas batch each — still within the four-call budget below)
+    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware'],
     living: ['alineBookshelf', 'pictureFirstNom', 'pictureBallBuddy', 'alinePlant'],
-    bathroom: ['wallTrim', 'towelRail', 'alineCactus'],
+    bathroom: ['wallTrim', 'towelRail', 'alineCactus', 'bathware'],
     bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead'],
   };
   const itchKeys = new Set(

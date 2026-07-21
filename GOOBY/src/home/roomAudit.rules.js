@@ -87,11 +87,15 @@ export const AUDIT_RULES = Object.freeze({
         'furniture-kit/bathroomMirror',
         'furniture-kit/bathroomCabinet',
         'furniture-kit/bathroomSink',
+        // V5/ASSETS: Tiny Treats roll holder mounts on the right wall
+        'bubbly-bathroom/toilet_roll_holder',
       ]),
       elevated: Object.freeze([
         'furniture-kit/bathroomMirror',
         'furniture-kit/bathroomCabinet',
         'furniture-kit/lampSquareCeiling',
+        // V5/ASSETS: the wall-mounted roll holder floats by design
+        'bubbly-bathroom/toilet_roll_holder',
       ]),
     }),
 

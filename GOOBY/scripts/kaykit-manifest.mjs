@@ -92,6 +92,20 @@ export const KAYKIT_PACKS = [
       lantern_hanging fence_gate fence_seperate tree_dead_large
       tree_pine_orange_small floor_dirt_grave`),
   },
+  {
+    // V5/ASSETS — Furniture Bits dressing stock (5 models + shared atlas):
+    // picture frames, book set, standing lamp, armchair. Nothing places
+    // these yet — they are committed stock for later room/dressing waves.
+    // Staged from github.com/KayKit-Game-Assets by scripts/stage-assets.mjs.
+    slug: 'kaykit-furniture',
+    source:
+      'KayKit-Furniture-Bits-1.0/addons/kaykit_furniture_bits/Assets/gltf',
+    license:
+      'KayKit-Furniture-Bits-1.0/addons/kaykit_furniture_bits/Assets/LICENSE.txt',
+    ext: 'gltf',
+    files: split(`pictureframe_medium pictureframe_standing_A book_set
+      lamp_standing armchair`),
+  },
 ];
 
 /** Normalize a files entry to { key, file } (file includes the extension). */

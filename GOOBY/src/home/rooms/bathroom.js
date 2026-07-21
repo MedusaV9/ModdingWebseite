@@ -37,6 +37,25 @@ export const ROOM = Object.freeze({
       id: 'alineCactus', kind: 'asset', batch: 'color',
       key: 'aline-furniture/cactus', at: Object.freeze([1.1, 1.9, -1.34]), scale: 0.62, rotY: -12,
     }),
+    // ---- V5/ASSETS: Tiny Treats bath dressing (bubbly-bathroom pack) -------
+    // Soap dish + toothbrush cup on the sink top (y 0.868 basin ledge), ducky
+    // waiting in front of the tub, towel stack by the left wall, spare-roll
+    // stack next to the toilet, roll holder mounted on the right wall (rules:
+    // wallMounted + elevated), and a potted monstera in the front-right
+    // corner. One extra merged atlas batch ('bathware').
+    Object.freeze({
+      id: 'bathware', kind: 'assetCluster', batch: 'bathware',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'bubbly-bathroom/soap_dish_pink', at: Object.freeze([0.3, 0.868, -1.3]), scale: 0.38, rotY: 8 }),
+        Object.freeze({ key: 'bubbly-bathroom/toothbrush_cup_decorated', at: Object.freeze([0.28, 0.868, -1.16]), scale: 0.34, rotY: -20 }),
+        Object.freeze({ key: 'bubbly-bathroom/ducky', at: Object.freeze([0.3, 0, -0.52]), scale: 0.5, rotY: -30 }),
+        Object.freeze({ key: 'bubbly-bathroom/towel_stacked', at: Object.freeze([-1.62, 0, 0.55]), scale: 0.42, rotY: 12 }),
+        Object.freeze({ key: 'bubbly-bathroom/toilet_roll_stack', at: Object.freeze([0.86, 0, -1.32]), scale: 0.4 }),
+        Object.freeze({ key: 'bubbly-bathroom/toilet_roll_holder', at: Object.freeze([1.83, 0.62, -0.75]), scale: 0.45, rotY: -90 }),
+        Object.freeze({ key: 'house-plants/monstera_plant_large_potted', at: Object.freeze([1.53, 0, 0.95]), scale: 0.22, rotY: -35 }),
+      ]),
+    }),
+    // ---- end V5/ASSETS -------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 

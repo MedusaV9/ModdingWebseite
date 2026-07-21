@@ -74,6 +74,8 @@ export const PACK_FORMATS = Object.freeze({
   'kaykit-restaurant': Object.freeze({ root: 'kaykit', ext: 'gltf' }),
   'kaykit-city': Object.freeze({ root: 'kaykit', ext: 'gltf' }),
   'kaykit-halloween': Object.freeze({ root: 'kaykit', ext: 'gltf' }),
+  // V5/ASSETS: Furniture Bits dressing stock (scripts/kaykit-manifest.mjs).
+  'kaykit-furniture': Object.freeze({ root: 'kaykit', ext: 'gltf' }),
   // V4/G50 (PLAN4 §B3 + §E block G50): third committed root
   // `public/assets/itch/` (see scripts/fetch-itch.mjs). Keys stay
   // `'<pack>/<name>'` — e.g. `'pleasant-picnic/radio'` (§C-SYS1.4),
@@ -84,6 +86,12 @@ export const PACK_FORMATS = Object.freeze({
   'bakery-interior': Object.freeze({ root: 'itch', ext: 'gltf' }),
   'pleasant-picnic': Object.freeze({ root: 'itch', ext: 'gltf' }),
   'aline-furniture': Object.freeze({ root: 'itch', ext: 'glb' }),
+  // V5/ASSETS: Tiny Treats kitchen/bathroom dressing + plant/park stock
+  // (same shared-atlas .gltf form as bakery-interior/pleasant-picnic).
+  'charming-kitchen': Object.freeze({ root: 'itch', ext: 'gltf' }),
+  'bubbly-bathroom': Object.freeze({ root: 'itch', ext: 'gltf' }),
+  'house-plants': Object.freeze({ root: 'itch', ext: 'gltf' }),
+  'pretty-park': Object.freeze({ root: 'itch', ext: 'gltf' }),
 });
 
 /** Default format for every slug not in PACK_FORMATS (v1/v2 behavior). */

@@ -4,10 +4,15 @@
  *
  * 4.0 counterpart of fetch-kenney/fetch-kaykit: copies ONLY the whitelisted
  * files below from the local staging libraries into the repo. There is NO
- * network path — itch.io downloads are not scriptable; the staging libraries
- * (D1/D2 scout output) are the single source:
+ * network path here; the staging libraries are the single source:
  *   /workspace/asset-staging/itchio/   (override: --staging <path>)
  *   /workspace/asset-staging/splats/   (override: --splats <path>)
+ *
+ * V5/ASSETS: the MODEL-pack zips can be re-downloaded from their public
+ * itch.io pages by scripts/stage-assets.mjs (csrf download_url flow). The
+ * music/sfx/vfx zips and the decimated splat PLYs remain D1/D2 scout output
+ * and are NOT re-derivable — run `--only models` when only the model staging
+ * exists (sections: music,sfx,vfx,models,splats — comma list).
  *
  * Committed layout (consumed by src/core/assets.js — see AUDIO_PACK_ROOTS +
  * PACK_FORMATS there):
@@ -210,6 +215,72 @@ export const MODEL_PACKS = [
     ],
     packLicense: 'furniture_pack_update_2.0/license.txt',
     noteDir: 'aline-furniture-asset-pack',
+  },
+  // ---- V5/ASSETS: Tiny Treats kitchen/bathroom dressing + plants/park -----
+  {
+    // Kitchen counter dressing (rooms/kitchen.js `kitchenware` cluster):
+    // tea kettle + mugs on the right cabinet top, pot/pan on the stove,
+    // dish rack beside the appliance slot. CC0, same shared atlas form as
+    // bakery-interior (tiny_treats_texture_1.png).
+    slug: 'charming-kitchen',
+    zip: 'tiny-treats-charming-kitchen/free-v1.1.zip',
+    srcDir: 'Tiny_Treats_Charming_Kitchen_1.1_FREE/Assets/gltf',
+    form: 'gltf',
+    maxBytes: 256 * KB,
+    texture: 'tiny_treats_texture_1.png',
+    files: [
+      'kettle', 'pot', 'pan', 'mug_blue', 'mug_red', 'dishrack_plates',
+    ].map((key) => ({ key, file: `${key}.gltf` })),
+    packLicense: 'Tiny_Treats_Charming_Kitchen_1.1_FREE/License.txt',
+    noteDir: 'tiny-treats-charming-kitchen',
+  },
+  {
+    // Bathroom dressing (rooms/bathroom.js `bath` cluster): sink-top set,
+    // rubber ducky, towel/roll stacks + the wall-mounted roll holder.
+    slug: 'bubbly-bathroom',
+    zip: 'tiny-treats-bubbly-bathroom/free-v1.1.zip',
+    srcDir: 'Tiny_Treats_Bubbly_Bathroom_1.1_FREE/Assets/gltf',
+    form: 'gltf',
+    maxBytes: 256 * KB,
+    texture: 'tiny_treats_texture_1.png',
+    files: [
+      'ducky', 'towel_stacked', 'toilet_roll_stack', 'soap_dish_pink',
+      'toothbrush_cup_decorated', 'toilet_roll_holder',
+    ].map((key) => ({ key, file: `${key}.gltf` })),
+    packLicense: 'Tiny_Treats_Bubbly_Bathroom_1.1_FREE/License.txt',
+    noteDir: 'tiny-treats-bubbly-bathroom',
+  },
+  {
+    // Potted house plants — the kitchen/bathroom clusters place one each
+    // (pothos + monstera); the rest are dressing stock for later waves.
+    slug: 'house-plants',
+    zip: 'tiny-treats-house-plants/free.zip',
+    srcDir: 'Tiny_Treats_House_Plants_1.0_FREE/Assets/gltf',
+    form: 'gltf',
+    maxBytes: 256 * KB,
+    texture: 'tiny_treats_texture_1.png',
+    files: [
+      'monstera_plant_large_potted', 'pothos_plant_large_potted',
+      'sansevieria_plant_small_potted',
+    ].map((key) => ({ key, file: `${key}.gltf` })),
+    packLicense: 'Tiny_Treats_House_Plants_1.0_FREE/License.txt',
+    noteDir: 'tiny-treats-house-plants',
+  },
+  {
+    // Park props — outdoor dressing stock (garden/city waves pick from
+    // these; nothing placed yet). All reference tiny_treats_texture_1.png
+    // only (the grass-texture floor slices are NOT taken).
+    slug: 'pretty-park',
+    zip: 'tiny-treats-pretty-park/free.zip',
+    srcDir: 'Tiny_Treats_Pretty_Park_1.0_FREE/Assets/gltf',
+    form: 'gltf',
+    maxBytes: 256 * KB,
+    texture: 'tiny_treats_texture_1.png',
+    files: [
+      'bench', 'fountain', 'flower_A', 'flower_B', 'bird', 'street_lantern',
+    ].map((key) => ({ key, file: `${key}.gltf` })),
+    packLicense: 'Tiny_Treats_Pretty_Park_1.0_FREE/License.txt',
+    noteDir: 'tiny-treats-pretty-park',
   },
 ];
 
@@ -483,14 +554,30 @@ function dirBytes(dir) {
 }
 
 function main() {
+  // V5/ASSETS: `--only music,sfx,vfx,models,splats` runs a subset of the
+  // sections — scripts/stage-assets.mjs can only rebuild the MODEL staging
+  // (see header), so a models-only pass must not demand the scout-only
+  // music/sfx/vfx zips or the splat PLYs.
+  const only = argAfter('--only');
+  const sections = only ? new Set(only.split(',')) : null;
+  const known = ['music', 'sfx', 'vfx', 'models', 'splats'];
+  if (sections) {
+    for (const s of sections) {
+      if (!known.includes(s)) throw new Error(`--only: unknown section '${s}' (${known.join(',')})`);
+    }
+  }
+  const run = (name) => !sections || sections.has(name);
+
   mustExist(ITCH_STAGING, 'itch staging root (see PLAN4 §B3 / --staging)');
-  mustExist(SPLAT_STAGING, 'splat staging root (see PLAN4-GAMES §G6.2 / --splats)');
+  if (run('splats')) {
+    mustExist(SPLAT_STAGING, 'splat staging root (see PLAN4-GAMES §G6.2 / --splats)');
+  }
   try {
-    doMusic();
-    doSfx();
-    doVfx();
-    doModels();
-    doSplats();
+    if (run('music')) doMusic();
+    if (run('sfx')) doSfx();
+    if (run('vfx')) doVfx();
+    if (run('models')) doModels();
+    if (run('splats')) doSplats();
   } finally {
     if (tmpRoot) fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

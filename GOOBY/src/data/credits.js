@@ -79,6 +79,12 @@ export const CREDITS = Object.freeze({
     Object.freeze({ title: 'Tiny Treats — Baked Goods', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/baked-goods' }),
     Object.freeze({ title: 'Tiny Treats — Bakery Interior', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/bakery-interior' }),
     Object.freeze({ title: 'Tiny Treats — Pleasant Picnic', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/pleasant-picnic' }),
+    // V5/ASSETS: the four new Tiny Treats packs (kitchen/bath dressing +
+    // plant/park stock — all CC0, staged by scripts/stage-assets.mjs).
+    Object.freeze({ title: 'Tiny Treats — Charming Kitchen', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/charming-kitchen' }),
+    Object.freeze({ title: 'Tiny Treats — Bubbly Bathroom', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/bubbly-bathroom' }),
+    Object.freeze({ title: 'Tiny Treats — House Plants', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/house-plants' }),
+    Object.freeze({ title: 'Tiny Treats — Pretty Park', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/pretty-park' }),
     Object.freeze({ title: 'Interface SFX Pack 1', by: 'ObsydianX', license: 'CC0', packDir: 'itch/itch-sfx' }),
     Object.freeze({
       title: "Brackeys' VFX Bundle",
