@@ -51,6 +51,7 @@ import { DRIVE, COIN_TABLE, MINIGAME, VET } from '../data/constants.js'; // V2/G
 import { t } from '../data/strings.js';
 import { award as awardSticker } from './collections.js'; // V2/G21 (§C9.3)
 import { onDistance } from './profileStats.js'; // V2/G21 (§C12.1)
+import { isAway as vacationIsAway } from './vacation.js'; // V5/VACATION (pure gate)
 
 // V4/FIX-EMOJI: authored destination-picker glyphs. Lazily loaded (dynamic
 // import, shopScreen.js pattern below) so this module's static graph stays
@@ -201,11 +202,14 @@ export function isVetDiscovered(state) {
  * the framework already refuses the drive cleanly, but the sheet shouldn't
  * even offer (toast 'toast.sleeping' instead). V3/G38: method-agnostic by
  * design — the sleeping gate covers BOTH travel methods (§C8.6).
+ * V5/VACATION: a Gooby who is away on vacation can't be taken on a trip
+ * either (reason 'vacation' → 'vacation.blocked' toast at the call sites).
  * @param {object} state §B2 save-state root (store.get())
- * @returns {{ok: boolean, reason?: 'sleeping'}}
+ * @returns {{ok: boolean, reason?: 'sleeping'|'vacation'}}
  */
 export function canRequestTrip(state) {
   if (state?.sleep?.sleeping) return { ok: false, reason: 'sleeping' };
+  if (vacationIsAway(state)) return { ok: false, reason: 'vacation' }; // V5/VACATION
   return { ok: true };
 }
 
@@ -394,6 +398,13 @@ export function initShopTrip({
               <span class="dest-sub">${t('travel.runSub', { energy: SURF_TRAVEL.ENERGY })}</span>
             </span>
           </button>
+          <button class="dest-option travel-opt-airport">
+            <span class="dest-emoji" aria-hidden="true">${icon('globe', 30)}</span>
+            <span class="dest-text">
+              <span class="dest-name">${t('city.dest.airport')}</span>
+              <span class="dest-sub">${t('city.dest.airportSub')}</span>
+            </span>
+          </button>
           <button class="btn btn-ghost travel-later">${t('ui.later')}</button>
         </div>`;
       el.querySelector('.travel-opt-drive').addEventListener('click', () => {
@@ -405,6 +416,15 @@ export function initShopTrip({
         audio.play('ui.pick');
         ui.closePanel('shopTripConfirm');
         startTrip('shopTrip', 'surf');
+      });
+      // V5/VACATION: airport row — pre-vet-discovery players reach the
+      // vacation booking through the travel chooser (the destination picker
+      // below only opens once the vet is discovered). Opens the airport
+      // panel (ui/airportScreen.js) instead of starting a trip.
+      el.querySelector('.travel-opt-airport').addEventListener('click', () => {
+        audio.play('ui.pick');
+        ui.closePanel('shopTripConfirm');
+        ui.openPanel('airport');
       });
       el.querySelector('.travel-later').addEventListener('click', () => ui.closePanel('shopTripConfirm'));
     },
@@ -461,6 +481,13 @@ export function initShopTrip({
               <span class="dest-sub">${t('city.dest.vetSub', { cure: VET.CURE_PRICE, checkup: VET.CHECKUP_PRICE })}</span>
             </span>
           </button>
+          <button class="dest-option dest-opt-airport">
+            <span class="dest-emoji" aria-hidden="true">${icon('globe', 30)}</span>
+            <span class="dest-text">
+              <span class="dest-name">${t('city.dest.airport')}</span>
+              <span class="dest-sub">${t('city.dest.airportSub')}</span>
+            </span>
+          </button>
           <button class="btn btn-ghost dest-later">${t('ui.later')}</button>
         </div>`;
       el.querySelector('.dest-opt-shop').addEventListener('click', () => {
@@ -472,6 +499,13 @@ export function initShopTrip({
         audio.play('ui.pick');
         ui.closePanel('cityDestinations');
         ui.openPanel('vetTripConfirm');
+      });
+      // V5/VACATION: airport row → the booking/pickup panel
+      // (ui/airportScreen.js — registered from the hud.js vacation block).
+      el.querySelector('.dest-opt-airport').addEventListener('click', () => {
+        audio.play('ui.pick');
+        ui.closePanel('cityDestinations');
+        ui.openPanel('airport');
       });
       el.querySelector('.dest-later').addEventListener('click', () => ui.closePanel('cityDestinations'));
     },
@@ -635,7 +669,8 @@ export function initShopTrip({
   function requestShopTrip() {
     if (machine.state() !== TRIP_STATE.HOME) return; // already out
     if (sceneManager.currentId?.() === 'minigame') return;
-    if (!canRequestTrip(store.get()).ok) return ui.toast('toast.sleeping'); // V2/FIX-C P2-7
+    const req = canRequestTrip(store.get()); // V2/FIX-C P2-7 + V5/VACATION
+    if (!req.ok) return ui.toast(req.reason === 'vacation' ? 'vacation.blocked' : 'toast.sleeping');
     if (isVetDiscovered(store.get())) ui.openPanel('cityDestinations'); // V2/G21
     else ui.openPanel('shopTripConfirm');
   }
@@ -645,7 +680,8 @@ export function initShopTrip({
   function requestVetTrip() {
     if (machine.state() !== TRIP_STATE.HOME) return; // already out
     if (sceneManager.currentId?.() === 'minigame') return;
-    if (!canRequestTrip(store.get()).ok) return ui.toast('toast.sleeping'); // V2/FIX-C P2-7
+    const req = canRequestTrip(store.get()); // V2/FIX-C P2-7 + V5/VACATION
+    if (!req.ok) return ui.toast(req.reason === 'vacation' ? 'vacation.blocked' : 'toast.sleeping');
     ui.openPanel('vetTripConfirm');
   }
 

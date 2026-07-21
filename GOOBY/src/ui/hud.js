@@ -20,6 +20,13 @@ import * as g58Clock from '../core/clock.js';
 import { getActiveFor } from '../systems/modifierEngine.js';
 import { eventSignature } from './modifierSurface.logic.js';
 import { getMinigame } from '../data/minigames.js';
+// V5/VACATION: HUD countdown chip + event toasts (pure engine reads)
+import {
+  VACATION_PHASE,
+  sliceOf as vacationSliceOf,
+  remainingMs as vacationRemainingMs,
+  formatCountdown as vacationCountdown,
+} from '../systems/vacation.js';
 
 const RING_R = 20;
 const RING_C = 2 * Math.PI * RING_R;
@@ -626,6 +633,75 @@ export function createHud({ store, ui, audio, framework, sceneManager }) {
     syncModChip();
   }
   // ══════════════════════════════════════════════════════ end V4/G76 ═══
+
+  // ═══════════════════════════════════════════════════════ V5/VACATION ═══
+  // Vacation chip + wiring: a pulsing pill below the sick chip while a
+  // vacation is active — away: „Im Urlaub · 2d 5h" countdown; returnReady:
+  // „Gooby abholen! · 23:41" (time left in the pickup window); overdue:
+  // „Gooby braucht ein Taxi!". Tap → the airport panel (booking cards /
+  // pickup sheet — ui/airportScreen.js, registered from here via the same
+  // dynamic-import pattern as the G7 shopTrip hook). The block also turns
+  // the timeEngine's runtime 'vacationEvent' stream into toasts (postcards,
+  // landing, taxi). Cleanup rides the existing `offs` list.
+  {
+    if (!document.querySelector('style[data-owner="v5-vacation-hud"]')) {
+      const vacStyle = document.createElement('style');
+      vacStyle.dataset.owner = 'v5-vacation-hud';
+      // Mirrors .g23-sick-chip (both can show together — a sick Gooby still
+      // waits at the airport), offset one chip-height lower.
+      vacStyle.textContent = `
+.v5-vac-chip{position:absolute;top:calc(13.9rem + var(--safe-top));left:50%;transform:translateX(-50%);display:none;align-items:center;justify-content:center;gap:0.4375rem;max-width:86vw;min-height:max(44px, 2.75rem);pointer-events:auto;border:none;border-radius:999px;padding:0.5625rem 0.875rem;background:var(--white);color:var(--brown);font-family:inherit;font-size:0.75rem;font-weight:800;box-shadow:var(--shadow-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;animation:g23chip 1.6s ease-in-out infinite;}
+.v5-vac-chip.v5-show{display:inline-flex;}
+.v5-vac-chip svg{color:var(--teal);flex:none;}
+.v5-vac-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums;}`;
+      document.head.appendChild(vacStyle);
+    }
+    const vacChip = document.createElement('button');
+    vacChip.className = 'v5-vac-chip';
+    vacChip.dataset.hud = 'vacation';
+    vacChip.innerHTML = `${icon('globe', 16)}<span></span>`;
+    const vacText = vacChip.querySelector('span');
+    vacChip.addEventListener('click', () => {
+      audio.play('ui.tap');
+      ui.openPanel('airport');
+    });
+    el.appendChild(vacChip);
+    const syncVacChip = () => {
+      const state = store.get();
+      const v = vacationSliceOf(state);
+      const active = v.phase !== VACATION_PHASE.NONE;
+      vacChip.classList.toggle('v5-show', active);
+      if (!active) return;
+      const remain = vacationCountdown(vacationRemainingMs(state, g58Clock.now()));
+      vacText.textContent =
+        v.phase === VACATION_PHASE.AWAY ? t('vacation.chip.away', { t: remain })
+          : v.phase === VACATION_PHASE.RETURN_READY ? t('vacation.chip.return', { t: remain })
+            : t('vacation.chip.overdue');
+    };
+    const vacTimer = setInterval(syncVacChip, 1000);
+    offs.push(store.on('vacationChanged', syncVacChip), () => clearInterval(vacTimer));
+    syncVacChip();
+    // timeEngine 'vacationEvent' stream → toasts (postcard/landing/taxi)
+    offs.push(store.on('vacationEvent', (ev) => {
+      if (!ev?.type) return;
+      if (ev.type === 'postcard') {
+        ui.toast('vacation.postcard', { text: t(`vacation.postcard.${ev.destId}`) });
+        audio.play('jingle.short');
+      } else if (ev.type === 'returnReady') {
+        ui.toast('vacation.returnReady');
+        audio.play('jingle.arrival');
+      } else if (ev.type === 'overdue') {
+        ui.toast('vacation.overdueToast');
+        audio.play('ui.error');
+      }
+    }));
+    // Airport panel registration + dev ?vacation= harness (idempotent —
+    // same guarded dynamic-import style as the G7 shopTrip hook above).
+    import('./airportScreen.js')
+      .then((mod) => mod.registerAirport({ store, ui, audio }))
+      .catch((err) => console.error('[hud] airport wiring failed:', err));
+  }
+  // ═══════════════════════════════════════════════════ end V5/VACATION ═══
 
   return {
     el,

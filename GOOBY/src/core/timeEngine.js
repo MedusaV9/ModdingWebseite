@@ -46,6 +46,8 @@ import { weatherAt } from '../systems/weather.js';
 import { CROPS_BY_ID } from '../data/crops.js';
 // V4/G54 (PLAN4 §B4): modifier event scheduler rides the same 1 s tick
 import * as modifierEngine from '../systems/modifierEngine.js';
+// V5/VACATION: vacation phase machine rides the same 1 s tick (pure)
+import * as vacationEngine from '../systems/vacation.js';
 
 /** V2/G20: ambience ticker interval (§B4: 60 s). */
 export const AMBIENCE_TICK_MS = 60000;
@@ -72,6 +74,17 @@ export function createTimeEngine(store) {
         state.lastTickAt = nowMs;
         return;
       }
+      // ── V5/VACATION: while Gooby is away (resort OR airport wait) his
+      // stats/health/weight are FROZEN — the resort takes care of him. The
+      // real-time engines (garden/playtime/modifiers) and the vacation phase
+      // machine itself keep ticking through v2Tick with awakeMin = 0; the
+      // reunion (economy.pickupVacation/payTaxiReturn) refills the stats.
+      if (vacationEngine.isAway(state)) {
+        state.lastTickAt = nowMs;
+        v2Tick(state, last, 0, nowMs);
+        return;
+      }
+      // ── end V5/VACATION ──
       // V2/G20: minutes of this tick that decay at AWAKE rules (health/weight
       // follow the stats pattern — asleep time never ticks them, §E4).
       let awakeMin = dtMin;
@@ -155,6 +168,23 @@ export function createTimeEngine(store) {
       }
     }
     // ── end V4/G54 ──
+    // ── V5/VACATION: phase machine (away → returnReady → overdue) +
+    // postcards — real-time like the garden (systems/vacation.js is pure;
+    // this block assigns the fresh slice and announces the store events:
+    // 'vacationChanged' {phase, destId} on slice changes, one
+    // 'vacationEvent' per tick event — the HUD chip/toasts ride them).
+    {
+      const r = vacationEngine.tick(state, endMs);
+      if (r.changes) {
+        state.vacation = r.changes;
+        store.emit?.('vacationChanged', {
+          phase: r.changes.phase,
+          destId: r.changes.destId,
+        });
+      }
+      for (const ev of r.events) store.emit?.('vacationEvent', ev);
+    }
+    // ── end V5/VACATION ──
     if (awakeMin > 0) {
       const wasQueasy = state.health?.state === 'queasy';
       const lowStatCount = STATS.KEYS.filter(

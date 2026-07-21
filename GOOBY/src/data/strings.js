@@ -67,7 +67,10 @@ import { EN as V4_SHIP_EN, DE as V4_SHIP_DE } from './strings/v4-ship.js';
 // V5/G06 (PLAN5 §V5 — the SINGLE 5.0 edit of this file): the 5.0 minigame
 // strings module — spread below AFTER all v4 spreads, always EN + DE.
 import { EN as V5_GAMES_EN, DE as V5_GAMES_DE } from './strings/v5-games.js';
-// end V5/G06 imports
+// V5/VACATION: the vacation/airport strings — same versioned-module
+// pattern, spread below AFTER v5-games, always EN + DE.
+import { EN as V5_VACATION_EN, DE as V5_VACATION_DE } from './strings/v5-vacation.js';
+// end V5 imports
 
 /** @type {Record<string, string>} */
 export const EN = {
@@ -595,6 +598,7 @@ export const EN = {
   ...V4_SHIP_EN,
   // V5/G06 spreads (PLAN5 §V5)
   ...V5_GAMES_EN,
+  ...V5_VACATION_EN, // V5/VACATION
 };
 
 /** @type {Record<string, string>} */
@@ -1123,6 +1127,7 @@ export const DE = {
   ...V4_SHIP_DE,
   // V5/G06 spreads (PLAN5 §V5)
   ...V5_GAMES_DE,
+  ...V5_VACATION_DE, // V5/VACATION
 };
 
 const DICTS = { en: EN, de: DE };

@@ -58,6 +58,17 @@ import { localDay, now } from '../core/clock.js'; // V2/G16: + now (health calls
 import { MODIFIER_CAPS, defaultSlice as modifierDefaultSlice } from './modifierEngine.js';
 import { getTarget } from '../data/difficultyTargets.js';
 import { isDoubleCoinsActive } from './codesEngine.js'; // V4/G53 (§B6: code buff — pure)
+// V5/VACATION: airport booking/pickup money paths (engine + catalog — pure,
+// cycle-free: systems/vacation.js imports only data/vacations.js)
+import {
+  VACATION,
+  VACATION_PHASE,
+  sliceOf as vacationSliceOf,
+  isAway as vacationIsAway,
+  bookSlice as vacationBookSlice,
+  pickupSlice as vacationPickupSlice,
+} from './vacation.js';
+import { getVacation } from '../data/vacations.js';
 
 /**
  * @typedef {import('../core/store.js').createStore} _store
@@ -744,4 +755,87 @@ export function buyPlot(store, index) {
     state.garden.plotsOwned = idx + 1;
   });
   return { ok: true, total: def.price };
+}
+
+// ============================================================================
+// V5/VACATION: vacation money paths (all additive — same contract as every
+// v2 API above: pure store-in, {ok:boolean, reason?, …} out, atomic, coins
+// only ever move through award/spend). The slice math is systems/vacation.js;
+// this module owns the payments + the reunion side effects (stat fill +
+// coin souvenir). Slice writers emit 'vacationChanged' {phase, destId}.
+// ============================================================================
+
+/**
+ * V5/VACATION: book an airport vacation (data/vacations.js catalog). Refuses
+ * while Gooby is already away or asleep; atomic on the price.
+ * @param {Store} store
+ * @param {string} destId catalog id ('beach' | 'meadowTrip' | 'bigCity' | 'space')
+ * @returns {{ok: boolean, reason?: 'unknown'|'away'|'sleeping'|'coins', total?: number}}
+ */
+export function bookVacation(store, destId) {
+  const dest = getVacation(destId);
+  if (!dest) return { ok: false, reason: 'unknown' };
+  if (vacationIsAway(store.get())) return { ok: false, reason: 'away' };
+  if (store.get('sleep.sleeping')) return { ok: false, reason: 'sleeping' };
+  if (!spend(store, dest.price, 'vacation')) return { ok: false, reason: 'coins' };
+  store.update((state) => {
+    state.vacation = vacationBookSlice(state.vacation, destId, now());
+  });
+  store.emit?.('vacationChanged', { phase: VACATION_PHASE.AWAY, destId });
+  return { ok: true, total: dest.price };
+}
+
+/**
+ * V5/VACATION: shared reunion tail for pickup/taxi — fills all four stats to
+ * VACATION.PICKUP_STAT_FILL, clears the slice (trips + 1), pays the coin
+ * souvenir. The caller already validated the phase (and paid any fee).
+ * @param {Store} store
+ * @returns {{ok: true, destId: string, souvenir: number}}
+ */
+function completeVacationPickup(store) {
+  const v = vacationSliceOf(store.get());
+  const dest = getVacation(v.destId);
+  store.update((state) => {
+    for (const k of Object.keys(state.stats)) {
+      state.stats[k] = clampStat(VACATION.PICKUP_STAT_FILL);
+    }
+    state.vacation = vacationPickupSlice(state.vacation);
+  });
+  const souvenir = dest ? award(store, dest.souvenirCoins, 'souvenir') : 0;
+  store.emit?.('vacationChanged', { phase: VACATION_PHASE.NONE, destId: v.destId });
+  return { ok: true, destId: v.destId, souvenir };
+}
+
+/**
+ * V5/VACATION: free pickup inside the 24 h window (phase 'returnReady').
+ * While still away → 'away'; after the window → 'overdue' (use
+ * payTaxiReturn); nothing booked → 'none'.
+ * @param {Store} store
+ * @returns {{ok: boolean, reason?: 'none'|'away'|'overdue',
+ *   destId?: string, souvenir?: number}}
+ */
+export function pickupVacation(store) {
+  const v = vacationSliceOf(store.get());
+  if (v.phase === VACATION_PHASE.NONE) return { ok: false, reason: 'none' };
+  if (v.phase === VACATION_PHASE.AWAY) return { ok: false, reason: 'away' };
+  if (v.phase === VACATION_PHASE.OVERDUE) return { ok: false, reason: 'overdue' };
+  return completeVacationPickup(store);
+}
+
+/**
+ * V5/VACATION: taxi home for an OVERDUE pickup — pays VACATION.TAXI_FEE and
+ * then the same reunion as pickupVacation. The fee is capped at the current
+ * balance ("the driver takes what's there") so a broke player can NEVER
+ * soft-lock: arcade + care are vacation-gated, which cuts off the normal
+ * coin taps while Gooby is stranded.
+ * @param {Store} store
+ * @returns {{ok: boolean, reason?: 'none',
+ *   destId?: string, souvenir?: number, total?: number}}
+ */
+export function payTaxiReturn(store) {
+  const v = vacationSliceOf(store.get());
+  if (v.phase !== VACATION_PHASE.OVERDUE) return { ok: false, reason: 'none' };
+  const fee = Math.min(VACATION.TAXI_FEE, Math.max(0, store.get('coins') ?? 0));
+  if (fee > 0) spend(store, fee, 'vacation:taxi');
+  return { ...completeVacationPickup(store), total: fee };
 }

@@ -39,6 +39,8 @@ import {
   releaseArcadeMusic,
 } from './pregameScreen.js';
 // ── end V4/G68 imports ──
+// V5/VACATION: arcade gate while Gooby is away (pure predicate)
+import { isAway as vacationIsAway } from '../systems/vacation.js';
 
 // ---- V3/G48: GOOBY 3.0 arcade ribbons (PLAN3 §C10.3) ----------------------
 
@@ -154,10 +156,25 @@ export function createArcadeScreen({ store, ui, framework }) {
   let badgeTimer = 0;
   /** @type {() => void} */
   let offModifier = () => {};
+  // V5/VACATION: mount refused because Gooby is away — unmount must skip the
+  // paired teardown (the music hold was never acquired).
+  let vacationBlocked = false;
 
   return {
     /** @param {HTMLElement} el */
     mount(el) {
+      // ── V5/VACATION: no arcade while Gooby is away — every entry point
+      // (HUD button, TV tap, modifier chip) funnels through this mount, so
+      // the gate lives here. Toast + deferred close (closeAll after the
+      // showScreen call settles).
+      if (vacationIsAway(store.get())) {
+        vacationBlocked = true;
+        ui.toast('vacation.blocked');
+        setTimeout(() => ui.closeAll(), 0);
+        return;
+      }
+      vacationBlocked = false;
+      // ── end V5/VACATION ──
       acquireArcadeMusic(); // V3/G32 medley via the V4/G68 shared holder (§G7.3)
       if (!document.querySelector('style[data-owner="g5-arcade"]')) {
         const style = document.createElement('style');
@@ -322,6 +339,11 @@ export function createArcadeScreen({ store, ui, framework }) {
       // ── end V4/G68 modifier glow ──
     },
     unmount() {
+      if (vacationBlocked) {
+        // V5/VACATION: the gated mount above acquired nothing to release
+        vacationBlocked = false;
+        return;
+      }
       clearInterval(badgeTimer);
       badgeTimer = 0;
       offModifier();

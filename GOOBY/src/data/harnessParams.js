@@ -94,6 +94,15 @@ export const HARNESS_PARAM_GROUPS = Object.freeze([
       Object.freeze({ param: 'rotategate', example: '?minigame=runner&rotategate=1', en: 'force the rotate-your-phone overlay of landscape games (POLISH-E)', de: 'Handy-drehen-Overlay der Querformat-Spiele erzwingen (POLISH-E)' }), // POLISH-E one-liner
     ]),
   }),
+  // V5/VACATION: 5.0 rows (same wave-may-lead rule as the header note)
+  Object.freeze({
+    id: 'v5',
+    en: '5.0',
+    de: '5.0',
+    rows: Object.freeze([
+      Object.freeze({ param: 'vacation', example: '?vacation=return', en: 'seed a vacation state away|return|overdue (open just opens the airport) — V5/VACATION', de: 'Urlaubszustand seeden away|return|overdue (open öffnet nur den Flughafen) — V5/VACATION' }),
+    ]),
+  }),
 ]);
 
 /** Flat row list (tests + simple consumers). @returns {HarnessParamRow[]} */

@@ -38,6 +38,8 @@ import { award as collectionsAward } from '../systems/collections.js';
 import { useMedicine as economyUseMedicine, buyItem as economyBuyItem } from '../systems/economy.js';
 // V3/G35: Nougatschleuse pure logic (§B7/§C6.4 — cooldown/effects/refusals)
 import { canGlob as nougatCanGlob, applyGlob as nougatApplyGlob, NOUGAT } from '../systems/nougat.logic.js';
+// V5/VACATION: away gate + Gooby home-visibility sync (pure predicate)
+import { isAway as vacationIsAway } from '../systems/vacation.js';
 
 // ===========================================================================
 // 1. PURE LOGIC (unit-tested — no three.js/DOM imports above this line either)
@@ -755,21 +757,24 @@ export function initInteractions(bag = {}) {
   }
 
   // --- room interactable events (G4 contract: roomManager.on('tap:…')) ---
+  // V5/VACATION: every care surface also refuses while Gooby is away
+  // (blockedByVacation — 'vacation.blocked' toast; same shape as the
+  // blockedBySleep gate).
   subscribeRoom(state, 'tap:fridge', () => {
-    if (blockedBySleep(state)) return;
+    if (blockedBySleep(state) || blockedByVacation(state)) return;
     audio.play('ui.open');
     ui.openPanel('foodTray');
   });
   subscribeRoom(state, 'tap:bathtub', () => {
-    if (blockedBySleep(state)) return;
+    if (blockedBySleep(state) || blockedByVacation(state)) return;
     startWash(state);
   });
   subscribeRoom(state, 'tap:toilet', () => {
-    if (blockedBySleep(state)) return;
+    if (blockedBySleep(state) || blockedByVacation(state)) return;
     useToilet(state);
   });
   subscribeRoom(state, 'tap:tv', () => {
-    if (blockedBySleep(state)) return;
+    if (blockedBySleep(state) || blockedByVacation(state)) return;
     ui.showScreen('arcade');
   });
 
@@ -809,6 +814,16 @@ export function initInteractions(bag = {}) {
     gooby.setHealth?.(store.get('health.state'));
     state.subs.push(store.on('weightChanged', (w) => gooby.setWeightTier?.(tierOf(w?.value))));
     state.subs.push(store.on('healthChanged', (h) => gooby.setHealth?.(h?.state)));
+    // ── V5/VACATION: Gooby is literally NOT home while away — hide the rig
+    // (booking/pickup happen through economy.js which emits 'vacationChanged';
+    // the coalesced 'change' fallback covers offline catch-up on boot).
+    const syncVacationVisible = () => {
+      gooby.group.visible = !vacationIsAway(store.get());
+    };
+    state.subs.push(store.on('vacationChanged', syncVacationVisible));
+    state.subs.push(store.on('change', syncVacationVisible));
+    syncVacationVisible();
+    // ── end V5/VACATION ──
     // §C3.3/§C3.4 sneeze squeak: the rig fires onSneeze at the "choo!" snap.
     gooby.onSneeze = () => {
       if (!state.disposed) audio.play('health.sneeze');
@@ -861,6 +876,20 @@ export function teardown() {
 function blockedBySleep(s) {
   if (s.store.get('sleep.sleeping')) {
     s.ui.toast('toast.sleeping');
+    return true;
+  }
+  return false;
+}
+
+/**
+ * V5/VACATION: care/arcade gate while Gooby is away — mirrors blockedBySleep
+ * ('vacation.blocked' toast so the refusal is always explained).
+ * @param {object} s wiring state
+ * @returns {boolean}
+ */
+function blockedByVacation(s) {
+  if (vacationIsAway(s.store.get())) {
+    s.ui.toast('vacation.blocked');
     return true;
   }
   return false;
@@ -997,12 +1026,14 @@ function wireGestures(s) {
 
   const onDragStart = (p) => {
     if (!inHome() || s.washing || s.feeding) return;
+    if (vacationIsAway(store.get())) return; // V5/VACATION: no petting an empty room
     const hit = pickGooby(s, p.x, p.y);
     s.gestures.dragStart({ t: performance.now(), x: p.x, y: p.y, region: hit?.region ?? null });
   };
 
   const onDrag = (p) => {
     if (!inHome() || s.washing || s.feeding) return;
+    if (vacationIsAway(store.get())) return; // V5/VACATION
     const hit = pickGooby(s, p.x, p.y);
     const events = s.gestures.dragMove({
       t: performance.now(), x: p.x, y: p.y, region: hit?.region ?? null,
@@ -1041,6 +1072,7 @@ function wireGestures(s) {
     // (ui/sleepFlow.js 'tap:gooby' route) — suppress the poke squeak/wobble
     // so care taps stay quiet during the nap.
     if (store.get('sleep.sleeping')) return;
+    if (vacationIsAway(store.get())) return; // V5/VACATION: rig is hidden
     const hit = pickGooby(s, p.x, p.y);
     if (!hit) return;
     const res = s.gestures.tap({ t: performance.now(), region: hit.region });

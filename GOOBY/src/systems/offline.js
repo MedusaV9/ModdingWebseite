@@ -37,6 +37,8 @@ import * as weight from './weight.js';
 import * as garden from './garden.js';
 import { weatherAt } from './weather.js';
 import { CROPS_BY_ID } from '../data/crops.js';
+// V5/VACATION: vacation phase catch-up (pure — same import rules)
+import * as vacationEngine from './vacation.js';
 
 /**
  * Simulate the time the app was closed. Pure — returns a NEW state (input is
@@ -58,7 +60,16 @@ export function simulateOffline(state, nowMs) {
   let s = { ...state };
   let awakeMs = elapsedMs;
 
-  if (isSleeping(s)) {
+  // ── V5/VACATION: while Gooby was away the whole absence, his stats/
+  // health/weight are FROZEN (mirrors the marked block in core/timeEngine.js
+  // — the resort cares for him; the reunion refills stats anyway). Garden
+  // stays real-time below, and the vacation phase machine catches up at the
+  // end of the sim. A sleeping Gooby can never be away (booking is gated).
+  const vacAway = vacationEngine.isAway(s);
+  if (vacAway) awakeMs = 0;
+  // ── end V5/VACATION ──
+
+  if (!vacAway && isSleeping(s)) {
     // F2 (E4): this branch is also the recovery path for a sleep that
     // completed while the app was hidden and then KILLED — the time engine
     // holds a finished sleep at the wakeAt boundary while hidden (store
@@ -135,6 +146,22 @@ export function simulateOffline(state, nowMs) {
     if (gardenEvents.some((e) => e.type === 'ready')) events.push('cropsReady');
   }
 
+  // ── V5/VACATION: phase catch-up — one pure tick at the boot clock walks
+  // every stage the absence crossed (postcards, returnReady, overdue) and
+  // appends the string events the welcome-back summary reads (one
+  // 'vacationPostcard' per postcard, then 'vacationReturnReady' /
+  // 'vacationOverdue' in transition order).
+  {
+    const r = vacationEngine.tick(s, nowMs);
+    if (r.changes) s = { ...s, vacation: r.changes };
+    for (const ev of r.events) {
+      if (ev.type === 'postcard') events.push('vacationPostcard');
+      else if (ev.type === 'returnReady') events.push('vacationReturnReady');
+      else if (ev.type === 'overdue') events.push('vacationOverdue');
+    }
+  }
+  // ── end V5/VACATION ──
+
   return { state: s, events };
 }
 
@@ -152,6 +179,12 @@ export function offlineToastVars(beforeStats, sim) {
   // V2/G20: welcome-back parts for crops that ripened / sickness that struck
   if (sim.events.includes('cropsReady')) parts.push(t('offline.cropsReady'));
   if (sim.events.includes('becameSick')) parts.push(t('offline.becameSick'));
+  // V5/VACATION: vacation milestones crossed while away (overdue wins the
+  // headline over returnReady; postcards get one summary part regardless
+  // of count — the airport panel shows the details).
+  if (sim.events.includes('vacationOverdue')) parts.push(t('vacation.offline.overdue'));
+  else if (sim.events.includes('vacationReturnReady')) parts.push(t('vacation.offline.returnReady'));
+  if (sim.events.includes('vacationPostcard')) parts.push(t('vacation.offline.postcard'));
   for (const k of STATS.KEYS) {
     const delta = Math.round(sim.state.stats[k] - beforeStats[k]);
     if (delta !== 0) {

@@ -1127,6 +1127,8 @@ test('V4/G54 §B11: every src award() call site carries a whitelisted reason tag
     'code', 'modifier', 'glueckspilz', 'endless',
     // established award tags (v1–v3 + internal payout rows)
     'minigame', 'levelUp', 'daily', 'quests', 'sellHarvest', 'devGrant',
+    // V5/VACATION: pickup coin souvenir (economy.js reunion tail)
+    'souvenir',
   ]);
   const srcRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
   const files = [];
