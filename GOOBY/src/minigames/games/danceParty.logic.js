@@ -67,6 +67,24 @@ export const DANCE_TUNING = Object.freeze({
 });
 
 /**
+ * V4/GAME-POLISH-4: presentation/juice tuning for danceParty.js — STRICTLY
+ * visual (hit-burst rings, mirror-ball energy). The §D6/G14 contract surface
+ * (DANCE.PATTERN_SEED / BPM / windows / DANCE_TUNING) is untouched: nothing
+ * here feeds timing, judgment, or the pattern generator.
+ */
+export const DANCE_JUICE = Object.freeze({
+  /** Pooled hit-burst ring: life (s) + end scale for perfect vs. good. */
+  BURST_LIFE_SEC: 0.32,
+  BURST_SCALE_PERFECT: 2.7,
+  BURST_SCALE_GOOD: 1.9,
+  /** Mirror ball: base spin (rad/s) + extra per combo tier, fever pop. */
+  BALL_SPIN_BASE: 0.9,
+  BALL_SPIN_PER_TIER: 0.35,
+  BALL_POP_SCALE: 1.4,
+  BALL_POP_SEC: 0.5,
+});
+
+/**
  * §G5 sequence/puzzle difficulty. The PATTERN_SEED and BPM are deliberately
  * absent: difficulty may change chart density/preview speed/judgment windows,
  * never the synth-track contract.

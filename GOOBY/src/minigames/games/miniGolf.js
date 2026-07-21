@@ -17,11 +17,13 @@ import * as THREE from 'three';
 import { t } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new flash FX
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { buildNougatschleuse } from '../../home/nougatMesh.js';
 import {
   GOLF,
+  GOLF_JUICE, // V4/GAME-POLISH-4: cup-ring/flag-pop/putt-squash tuning
   applyDifficulty,
   createGolfEndlessState,
   recordGolfHole,
@@ -223,6 +225,24 @@ export default {
       dot.visible = false;
       scene.add(dot);
       this.dots.push(dot);
+    }
+
+    // --- V4/GAME-POLISH-4: pooled cup-impact rings (flat on the green) -------
+    this.ringGeo = new THREE.RingGeometry(0.09, 0.13, 26);
+    this.ringGeo.rotateX(-Math.PI / 2);
+    this.ownedGeos.push(this.ringGeo);
+    /** @type {Array<{mesh: THREE.Mesh, mat: THREE.MeshBasicMaterial, tween: object|null}>} */
+    this.cupRings = [];
+    for (let i = 0; i < 2; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#FFD166', transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(this.ringGeo, mat);
+      mesh.visible = false;
+      this.ownedMats.push(mat);
+      scene.add(mesh);
+      this.cupRings.push({ mesh, mat, tween: null });
     }
 
     // --- Gooby the caddy -----------------------------------------------------
@@ -494,6 +514,33 @@ export default {
     for (const dot of this.dots) dot.visible = false;
   },
 
+  /**
+   * V4/GAME-POLISH-4: pooled ring pulse at the cup on a sink (gold) or ace
+   * (bigger, pink). Skipped under OS reduced-motion — confetti/banner carry it.
+   * @param {THREE.Vector3} pos world position (cup)
+   * @param {boolean} ace hole-in-one
+   */
+  flashCupRing(pos, ace) {
+    if (prefersReducedMotion()) return;
+    const ring = this.cupRings.find((r) => !r.mesh.visible) ?? this.cupRings[0];
+    ring.tween?.cancel();
+    ring.mat.color.set(ace ? '#FF7BA9' : '#FFD166');
+    ring.mesh.position.set(pos.x, 0.02 + heightAt(this.hole(), this.hole().hole.x, this.hole().hole.z), pos.z);
+    ring.mesh.visible = true;
+    const to = ace ? GOLF_JUICE.RING_SCALE_ACE : GOLF_JUICE.RING_SCALE_SINK;
+    ring.tween = tween({
+      from: 0, to: 1, duration: GOLF_JUICE.RING_LIFE_SEC, ease: easings.easeOutCubic,
+      onUpdate: (v) => {
+        ring.mesh.scale.setScalar(1 + (to - 1) * v);
+        ring.mat.opacity = 0.9 * (1 - v);
+      },
+      onComplete: () => {
+        ring.mesh.visible = false;
+        ring.tween = null;
+      },
+    });
+  },
+
   /** Fire a putt (§C1.2 #6): stroke count + roll state. */
   putt(dx, dz, power) {
     this.strokes += 1;
@@ -503,6 +550,17 @@ export default {
     this.state = 'rolling';
     this.stateT = 0;
     this.ctx.audio.play('golf.putt');
+    // V4/GAME-POLISH-4: contact squash sells the strike (recovers to 1)
+    if (!prefersReducedMotion()) {
+      tween({
+        from: GOLF_JUICE.PUTT_SQUASH, to: 1, duration: GOLF_JUICE.PUTT_SQUASH_SEC,
+        ease: easings.easeOutQuad,
+        onUpdate: (s) => {
+          if (this.ballMesh) this.ballMesh.scale.set(2 - s, s, 2 - s);
+        },
+        onComplete: () => this.ballMesh?.scale.setScalar(1),
+      });
+    }
     this.updateChip();
   },
 
@@ -522,6 +580,17 @@ export default {
       this.ballMesh.visible = false;
       this.ctx.audio.play(ace ? 'golf.ace' : 'golf.sink');
       this.particles.emit?.('confetti', cupPos, { count: ace ? 24 : 10 });
+      // V4/GAME-POLISH-4: cup ring pulse + flag pop (ace showers sparkles too)
+      this.flashCupRing(cupPos, ace);
+      const flag = this.holeViews[this.holeIdx]?.flag;
+      if (flag && !prefersReducedMotion()) {
+        tween({
+          from: GOLF_JUICE.FLAG_POP_SCALE, to: 1, duration: GOLF_JUICE.FLAG_POP_SEC,
+          ease: easings.easeOutBack,
+          onUpdate: (s) => flag.scale.set(1, s, 1),
+        });
+      }
+      if (ace) this.particles.emit?.('sparkles', cupPos, { count: GOLF_JUICE.ACE_SPARKLES });
       if (ace) {
         this.ctx.hud.banner(t('mg.golf.ace'));
         this.gooby.setEmotion('ecstatic');
@@ -684,6 +753,8 @@ export default {
         if ((ev === 'bank' || ev === 'windmill' || ev === 'bump' || ev === 'nougat') && this.bankSoundT <= 0) {
           this.bankSoundT = 0.15;
           ctx.audio.play(ev === 'bump' ? 'golf.bump' : 'golf.bank');
+          // V4/GAME-POLISH-4: tiny sparkle ping so banks read visually too
+          this.particles.emit?.('sparkles', this.ballMesh.position, { count: GOLF_JUICE.BANK_SPARKLES });
         }
       }
       this.syncBall();
@@ -726,6 +797,9 @@ export default {
     this.ownedTexs = [];
     this.holeViews = [];
     this.dots = [];
+    for (const ring of this.cupRings ?? []) ring.tween?.cancel(); // V4/GAME-POLISH-4
+    this.cupRings = [];
+    this.ringGeo = null;
     this.clouds = [];
     this.course = null;
     this.holeResults = [];
@@ -740,3 +814,6 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: false }); // V4/G57 (§G2.1 rule 4, §G3.3): positional/tap/semantic input — inverting is nonsense here
+// V4/GAME-POLISH-4 orientation note: deliberately NO landscape export — the
+// generated holes run away from the camera (long z-axis), so the portrait
+// default frames the full course; landscape would crop the fairway.

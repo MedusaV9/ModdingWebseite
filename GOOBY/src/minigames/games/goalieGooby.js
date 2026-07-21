@@ -14,11 +14,13 @@ import * as THREE from 'three';
 import { t } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new flash FX
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { clampFloatTextToView } from '../framework.js';
 import {
   GOALIE,
+  GOALIE_JUICE,
   applyDifficulty,
   applyRiesenGooby,
   telegraphSecAt,
@@ -189,13 +191,22 @@ export default {
       botAt: -1, botLane: 2, botV: 'mid', shootout: false,
     };
 
+    // V4/GAME-POLISH-4: landscape-first framing (orientation export below) —
+    // wide viewports pull the camera in and spread the 5 lanes across the
+    // extra width; the portrait numbers stay the legacy framing (rotate-gate
+    // "continue anyway" path still plays fine).
     const camera = ctx.camera;
-    camera.position.set(0, 0.6, 10);
+    const aspect = innerWidth / Math.max(1, innerHeight);
+    const camZ = aspect > 1 ? GOALIE_JUICE.CAM_Z_LANDSCAPE : GOALIE_JUICE.CAM_Z_PORTRAIT;
+    camera.position.set(0, 0.6, camZ);
     camera.lookAt(0, -0.4, 0);
-    this.halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 10;
-    this.halfW = this.halfH * (innerWidth / innerHeight);
+    this.halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camZ;
+    this.halfW = this.halfH * aspect;
     // lane centers on the goal plane (z = GOAL_Z is farther → wider view)
-    const goalHalfW = Math.min(2.4, this.halfW * 1.16);
+    const goalHalfW = Math.min(
+      aspect > 1 ? GOALIE_JUICE.GOAL_HALF_W_LANDSCAPE : GOALIE_JUICE.GOAL_HALF_W_PORTRAIT,
+      this.halfW * 1.16
+    );
     this.laneXs = [];
     for (let i = 0; i < GOALIE.LANES; i += 1) {
       this.laneXs.push(((i / (GOALIE.LANES - 1)) * 2 - 1) * (goalHalfW - 0.25));
@@ -248,7 +259,10 @@ export default {
       ['nature-kit/plant_bush', -this.halfW + 1.0, 0.55],
     ]) {
       const deco = fitModel(ctx.assets.getModel(key), s);
-      deco.position.set(x, GROUND_Y + s * 0.4, -0.6);
+      // V4/GAME-POLISH-4 (3D audit): plant the deco exactly on the grass —
+      // the old `+ s * 0.4` heuristic left the bush hovering ~0.05 wu.
+      const bb = new THREE.Box3().setFromObject(deco);
+      deco.position.set(x, GROUND_Y - bb.min.y, -0.6);
       scene.add(deco);
     }
     /** @type {THREE.Sprite[]} */
@@ -307,6 +321,8 @@ export default {
     this.ballTex = ballTex;
     /** @type {THREE.MeshBasicMaterial[]} */
     this.goalPipMats = [];
+    /** @type {THREE.Mesh[]} V4/GAME-POLISH-4: kept for the pip pop tween */
+    this.goalPips = [];
     for (let i = 0; i < GOALIE.MAX_GOALS; i += 1) {
       const mat = new THREE.MeshBasicMaterial({ map: ballTex });
       const pip = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), mat);
@@ -314,7 +330,25 @@ export default {
       this.ownedGeos.push(pip.geometry);
       this.ownedMats.push(mat);
       this.goalPipMats.push(mat);
+      this.goalPips.push(pip);
       scene.add(pip);
+    }
+
+    // --- V4/GAME-POLISH-4: pooled save-impact rings (reduced-motion gated) ---
+    this.ringGeo = new THREE.RingGeometry(0.26, 0.36, 28);
+    this.ownedGeos.push(this.ringGeo);
+    /** @type {Array<{mesh: THREE.Mesh, mat: THREE.MeshBasicMaterial, tween: object|null}>} */
+    this.impactRings = [];
+    for (let i = 0; i < 3; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#FFFFFF', transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(this.ringGeo, mat);
+      mesh.visible = false;
+      this.ownedMats.push(mat);
+      scene.add(mesh);
+      this.impactRings.push({ mesh, mat, tween: null });
     }
 
     // --- Gooby the goalie, with oversized gloves ---
@@ -420,11 +454,45 @@ export default {
     return { group };
   },
 
+  /**
+   * V4/GAME-POLISH-4: pooled expanding impact ring (save/super-save beat).
+   * Skipped entirely under OS reduced-motion — the particles/floats already
+   * carry the information.
+   */
+  flashImpact(pos, color, strong) {
+    if (prefersReducedMotion()) return;
+    const ring = this.impactRings.find((r) => !r.mesh.visible) ?? this.impactRings[0];
+    ring.tween?.cancel();
+    ring.mat.color.set(color);
+    ring.mesh.position.copy(pos);
+    ring.mesh.position.z += 0.15;
+    ring.mesh.visible = true;
+    const to = strong ? GOALIE_JUICE.RING_SCALE_SUPER : GOALIE_JUICE.RING_SCALE_SAVE;
+    ring.tween = tween({
+      from: 0, to: 1, duration: GOALIE_JUICE.RING_LIFE_SEC, ease: easings.easeOutCubic,
+      onUpdate: (v) => {
+        ring.mesh.scale.setScalar(0.4 + (to - 0.4) * v);
+        ring.mat.opacity = 0.85 * (1 - v);
+      },
+      onComplete: () => {
+        ring.mesh.visible = false;
+        ring.tween = null;
+      },
+    });
+  },
+
   /** Player/bot dive: commit gloves toward a lane with a vertical intent. */
   doDive(lane, v) {
     if (this.phase !== 'play') return;
     this.dive = { lane, v, t: this.now };
     this.ctx.audio.play('goalie.dive');
+    // V4/GAME-POLISH-4: glove punch-pop sells the commit
+    for (const glove of this.gloves) {
+      tween({
+        from: GOALIE_JUICE.GLOVE_PUNCH_SCALE, to: 1, duration: 0.24, ease: easings.easeOutQuad,
+        onUpdate: (s) => glove.scale.setScalar(s),
+      });
+    }
     const grp = this.gooby.group;
     const targetX = this.laneXs[lane] * 0.92;
     const targetY = GROUND_Y + (v === 'up' ? 0.5 : v === 'down' ? -0.18 : 0.02);
@@ -534,10 +602,13 @@ export default {
       this.ctx.audio.play(superSave ? 'goalie.super' : 'goalie.save');
       const at = this.ball.position.clone();
       this.floats.spawn(`+${pts}`, at, superSave ? '#D6428A' : '#2E8B57');
-      this.particles.emit('sparkles', at, { count: superSave ? 10 : 5 });
+      this.particles.emit('sparkles', at, { count: superSave ? 12 : 5 });
+      // V4/GAME-POLISH-4: glove-impact ring — pink + confetti on a super save
+      this.flashImpact(at, superSave ? '#FF7BA9' : '#FFFFFF', superSave);
       if (superSave) {
         this.slowmoT = SLOWMO_SEC;
         this.ctx.hud.banner(t('mg.goalie.super'));
+        this.particles.emit('confetti', at, { count: 10 });
       }
       // punched away: free deflection flight
       const { rng } = this.ctx;
@@ -570,7 +641,17 @@ export default {
         this.goalPipMats[this.goals - 1].map = null;
         this.goalPipMats[this.goals - 1].color.set('#8E8E8E');
         this.goalPipMats[this.goals - 1].needsUpdate = true;
+        // V4/GAME-POLISH-4: the spent pip pops so the "life lost" reads
+        const pip = this.goalPips?.[this.goals - 1];
+        if (pip && !prefersReducedMotion()) {
+          tween({
+            from: GOALIE_JUICE.PIP_POP_SCALE, to: 1, duration: 0.4, ease: easings.easeOutBack,
+            onUpdate: (s) => pip.scale.setScalar(s),
+          });
+        }
       }
+      // V4/GAME-POLISH-4: dazed goalie beat on a conceded goal
+      this.particles.emit('dizzyStars', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.4, 0)));
       // net bulge
       const net = this.net;
       tween({
@@ -737,12 +818,16 @@ export default {
     for (const tex of this.ownedTexs ?? []) tex.dispose();
     // GLB clones share cached geometries/materials — the framework scene
     // sweep handles GPU frees; drop references only.
+    for (const ring of this.impactRings ?? []) ring.tween?.cancel();
+    this.impactRings = [];
+    this.ringGeo = null;
     this.miniShared = null;
     this.crowd = [];
     this.kicker = null;
     this.gloves = [];
     this.laneMats = [];
     this.goalPipMats = [];
+    this.goalPips = [];
     this.clouds = [];
     this.ball = null;
     this.ballMat = null;
@@ -764,3 +849,4 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: true }); // V4/G57 (§G2.1 rule 4, §G3.3): global „Steuerung invertieren“ applies (G56 proxy / carController invertSteer param)
+export const orientation = 'landscape'; // V4/GAME-POLISH-4: 5-lane goal mouth is a wide field — landscape framing (GOALIE_JUICE) fills it; rotate gate on portrait viewports

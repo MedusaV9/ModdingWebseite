@@ -62,6 +62,28 @@ export const GOLF = Object.freeze({
   ENDLESS_OVER_PAR_LIMIT: 3,
 });
 
+/**
+ * V4/GAME-POLISH-4: presentation/juice tuning for miniGolf.js (cup ring,
+ * flag pop, putt squash, bank sparkles). Pure numbers only — gameplay
+ * physics stays in GOLF above; keeping these here keeps the game file free
+ * of magic numbers (frozen-constants rule).
+ */
+export const GOLF_JUICE = Object.freeze({
+  /** Cup impact ring life (s) + end scale for sink / hole-in-one. */
+  RING_LIFE_SEC: 0.55,
+  RING_SCALE_SINK: 3.2,
+  RING_SCALE_ACE: 5.0,
+  /** Flag pop tween: start scale + duration (easeOutBack settles to 1). */
+  FLAG_POP_SCALE: 1.45,
+  FLAG_POP_SEC: 0.5,
+  /** Putt squash: ball y-scale at impact + recovery time (s). */
+  PUTT_SQUASH: 0.62,
+  PUTT_SQUASH_SEC: 0.22,
+  /** Sparkle counts: wall/bump bank ping vs. hole-in-one shower. */
+  BANK_SPARKLES: 3,
+  ACE_SPARKLES: 14,
+});
+
 /** §G5 physics/skill difficulty; hard tolerances stay above 55% of Mittel. */
 export function applyDifficulty(tune = GOLF, mode = 'normal') {
   if (mode === 'normal' || !['easy', 'hard', 'endless'].includes(mode)) return tune;

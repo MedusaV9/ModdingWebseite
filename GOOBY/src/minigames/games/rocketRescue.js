@@ -9,14 +9,20 @@
 // Dev-only ?autoplay=1: PD-controller bot (altitude/velocity per platform).
 
 import * as THREE from 'three';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
+import { tween, easings } from '../../gfx/tween.js'; // V4/GAME-POLISH-4: touchdown/beacon pops
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new scale FX
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { clampFloatTextToView } from '../framework.js';
+// V4/GAME-POLISH-4: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
+// ride the versioned module through the local tx() fallback below.
+import { EN as GP4_EN, DE as GP4_DE } from '../../data/strings/v4-gpgroup4.js';
 import {
   ROCKET,
+  ROCKET_JUICE, // V4/GAME-POLISH-4: touchdown/beacon juice tuning
   applyDifficulty, // V4/G74 §G5.3
   applyModifier, //   V4/G74 §C-SYS4.3
   createEngine,
@@ -24,6 +30,19 @@ import {
   roundScore,
   tiltCommandFor,
 } from './rocketRescue.logic.js';
+
+/** V4/GAME-POLISH-4: t() first, then the v4-gpgroup4 EN/DE fallback. */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP4_DE : GP4_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
 
 /** Camera distance (wu) — halfH/halfW derive from it in init. */
 const CAM_Z = 13;
@@ -101,22 +120,29 @@ function createFloatTexts(scene, camera) {
   return {
     spawn(text, pos, color = '#FFFFFF') {
       const canvas = document.createElement('canvas');
-      canvas.width = 200;
+      const font = '900 40px system-ui, sans-serif';
+      // V4/GAME-POLISH-4: size the canvas to the text — long labels
+      // ("Butter landing!") used to clip at the fixed 200 px width.
+      const probe = canvas.getContext('2d');
+      probe.font = font;
+      const w = Math.max(200, Math.ceil(probe.measureText(text).width) + 28);
+      canvas.width = w;
       canvas.height = 80;
       const g = canvas.getContext('2d');
-      g.font = '900 40px system-ui, sans-serif';
+      g.font = font; // canvas resize reset the context state
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.lineWidth = 8;
       g.strokeStyle = 'rgba(8,10,26,0.9)';
-      g.strokeText(text, 100, 40);
+      g.strokeText(text, w / 2, 40);
       g.fillStyle = color;
-      g.fillText(text, 100, 40);
+      g.fillText(text, w / 2, 40);
       const tex = new THREE.CanvasTexture(canvas);
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.7, halfH: 0.3 }));
-      sprite.scale.set(1.5, 0.6, 1);
+      // clamp margin scales with the sprite so wide labels stay fully on-screen
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.7 * (w / 200), halfH: 0.3 }));
+      sprite.scale.set(1.5 * (w / 200), 0.6, 1);
       scene.add(sprite);
       active.add({ sprite, mat, tex, age: 0, life: 0.9 });
     },
@@ -507,6 +533,23 @@ export default {
     return ROCKET.RESCUE_POINTS * s.rescued + ROCKET.SOFT_LANDING_BONUS * s.softLandings;
   },
 
+  /**
+   * V4/GAME-POLISH-4: touchdown squash-and-recover on the craft (reduced-
+   * motion gated). Pose code overwrites position/rotation only, so a scale
+   * tween composes safely with the per-frame update.
+   */
+  squashCraft() {
+    if (prefersReducedMotion() || !this.craft) return;
+    tween({
+      from: ROCKET_JUICE.TOUCH_SQUASH, to: 1, duration: ROCKET_JUICE.TOUCH_SQUASH_SEC,
+      ease: easings.easeOutQuad,
+      onUpdate: (s) => {
+        if (this.craft) this.craft.scale.set(2 - s, s, 1);
+      },
+      onComplete: () => this.craft?.scale.setScalar(1),
+    });
+  },
+
   /** Start/stop the thrust rumble loop (paused-safe — see onPause). */
   setThrustAudio(on) {
     if (on === this.thrustAudioOn) return;
@@ -528,11 +571,15 @@ export default {
       if (ev.kind === 'soft' && ev.bonusEligible) {
         ctx.audio.play('rocket.land.soft');
         this.floats.spawn('+5', craftPos.clone(), '#7ED957');
-        this.particles.emit('sparkles', craftPos.clone(), { count: 6 });
+        // V4/GAME-POLISH-4: name the moment — the bonus label rides the +5
+        this.floats.spawn(tx('gp4.rocket.soft'), craftPos.clone().add(new THREE.Vector3(0, 0.55, 0)), '#BFE8FF');
+        this.particles.emit('sparkles', craftPos.clone(), { count: ROCKET_JUICE.SOFT_SPARKLES });
       } else {
         ctx.audio.play('rocket.land.soft');
       }
+      this.squashCraft(); // V4/GAME-POLISH-4: every touchdown lands with weight
     } else if (ev.type === 'hardLanding') {
+      this.squashCraft(); // V4/GAME-POLISH-4
       ctx.audio.play('rocket.land.hard');
       ctx.hud.banner(t('mg.rocket.hard'));
       this.floats.spawn('−10⛽', craftPos.clone(), '#FF6B6B');
@@ -557,6 +604,17 @@ export default {
       this.cargoBunny.visible = false;
       this.floats.spawn('+30', craftPos.clone(), '#FFD166');
       this.particles.emit('confetti', this.padGrp.position.clone().add(new THREE.Vector3(0, 0.6, 0)), { count: 12 });
+      // V4/GAME-POLISH-4: pad beacons pop + hearts — the drop-off is the win beat
+      this.particles.emit('hearts', this.padGrp.position.clone().add(new THREE.Vector3(0, 0.5, 0.2)), { count: ROCKET_JUICE.RESCUE_HEARTS });
+      if (!prefersReducedMotion()) {
+        for (const b of this.beacons) {
+          tween({
+            from: ROCKET_JUICE.BEACON_POP_SCALE, to: 1, duration: ROCKET_JUICE.BEACON_POP_SEC,
+            ease: easings.easeOutBack,
+            onUpdate: (s) => b.scale.set(0.5 * s, 0.5 * s, 1),
+          });
+        }
+      }
       // the rescued bunny joins the pad-side welcome party
       const safe = this.makeBunny();
       safe.scale.setScalar(0.85);
@@ -618,6 +676,15 @@ export default {
       this.ctx.hud.banner(t('mg.rocket.complete'));
       this.gooby.setEmotion('ecstatic');
       this.particles.emit('confetti', this.craft.position.clone().add(new THREE.Vector3(0, 1, 0)), { count: 16 });
+      // V4/GAME-POLISH-4: second delayed burst over the pad — a proper finale
+      tween({
+        from: 0, to: 1, duration: 0.01, delay: 0.4,
+        onComplete: () => {
+          if (this.particles && this.padGrp) {
+            this.particles.emit('confetti', this.padGrp.position.clone().add(new THREE.Vector3(0, 0.8, 0)), { count: ROCKET_JUICE.COMPLETE_CONFETTI_2ND });
+          }
+        },
+      });
     } else if (reason === 'fuel') {
       this.gooby.setEmotion('sad');
     }
@@ -820,3 +887,6 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: true }); // V4/G57 (§G2.1 rule 4, §G3.3): global „Steuerung invertieren“ applies (G56 proxy / carController invertSteer param)
+// V4/GAME-POLISH-4 orientation note: deliberately NO landscape export — the
+// lander field is sized off the full view HEIGHT (wu derives from CEILING_Y),
+// so portrait maximizes vertical flight room; landscape would flatten it.

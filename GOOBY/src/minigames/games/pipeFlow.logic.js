@@ -42,6 +42,22 @@ export const PIPE = Object.freeze({
   ENDLESS_FAILURE_LIMIT: 3,
 });
 
+/**
+ * V4/GAME-POLISH-4: presentation/juice tuning for pipeFlow.js (tap-handle
+ * spin, fill-wave tile pops, sprinkler celebration). Pure numbers only —
+ * the §C1.2 #9 board/score rules above stay frozen.
+ */
+export const PIPE_JUICE = Object.freeze({
+  /** Brass tap handle spins when the water connects: turns + duration (s). */
+  HANDLE_SPIN_TURNS: 1.5,
+  HANDLE_SPIN_SEC: 0.8,
+  /** Newly-watered tile pop: start scale + settle (s). */
+  TILE_POP_SCALE: 1.14,
+  TILE_POP_SEC: 0.22,
+  /** Sprinkler celebration confetti (rides the existing bubbles/sparkles). */
+  SPRAY_CONFETTI: 6,
+});
+
 /** §G5 sequence/puzzle difficulty; normal returns PIPE unchanged. */
 export function applyDifficulty(tune = PIPE, mode = 'normal') {
   if (mode === 'normal' || !['easy', 'hard', 'endless'].includes(mode)) return tune;

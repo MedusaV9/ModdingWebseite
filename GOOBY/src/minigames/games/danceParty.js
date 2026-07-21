@@ -18,11 +18,13 @@ import { DANCE, UI_COLORS } from '../../data/constants.js';
 import { t } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new flash FX
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
 import {
   DANCE_TUNING,
+  DANCE_JUICE, // V4/GAME-POLISH-4: strictly-visual burst/mirror-ball tuning
   applyDifficulty,
   withDanceHitbox,
   createDanceEndlessState,
@@ -126,6 +128,7 @@ export default {
     this.endT = 0;
     this.grumpyT = 0;
     this.tier = 0;
+    this.ballPop = 1; // V4/GAME-POLISH-4: fever mirror-ball pop multiplier
     this.beatSec = 60 / DANCE.BPM;
     this.lastBeat = -1;
 
@@ -256,6 +259,24 @@ export default {
       this.rings.push(ring);
     }
 
+    // V4/GAME-POLISH-4: pooled hit-burst rings (visual only — §D6 contract
+    // surface untouched). One expanding additive ring sells perfect/good hits.
+    this.burstGeo = new THREE.RingGeometry(0.3, 0.38, 28);
+    this.ownedGeos.push(this.burstGeo);
+    /** @type {Array<{mesh: THREE.Mesh, mat: THREE.MeshBasicMaterial, tween: object|null}>} */
+    this.bursts = [];
+    for (let i = 0; i < 4; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#FFFFFF', transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(this.burstGeo, mat);
+      mesh.visible = false;
+      this.ownedMats.push(mat);
+      scene.add(mesh);
+      this.bursts.push({ mesh, mat, tween: null });
+    }
+
     // note mesh pool: disc + rim per lane color
     this.noteGeo = new THREE.CircleGeometry(0.3, 24);
     this.rimGeo = new THREE.RingGeometry(0.3, 0.36, 24);
@@ -361,6 +382,31 @@ export default {
     });
   },
 
+  /**
+   * V4/GAME-POLISH-4: pooled expanding burst on a judged hit (visual only).
+   * Skipped under OS reduced-motion — ring flash + float text still land.
+   */
+  flashBurst(lane, perfect) {
+    if (prefersReducedMotion()) return;
+    const burst = this.bursts.find((b) => !b.mesh.visible) ?? this.bursts[0];
+    burst.tween?.cancel();
+    burst.mat.color.set(perfect ? '#FFE08A' : LANE_COLORS[lane]);
+    burst.mesh.position.set(LANE_X[lane], HIT_Y, 0.45);
+    burst.mesh.visible = true;
+    const to = perfect ? DANCE_JUICE.BURST_SCALE_PERFECT : DANCE_JUICE.BURST_SCALE_GOOD;
+    burst.tween = tween({
+      from: 0, to: 1, duration: DANCE_JUICE.BURST_LIFE_SEC, ease: easings.easeOutCubic,
+      onUpdate: (v) => {
+        burst.mesh.scale.setScalar(1 + (to - 1) * v);
+        burst.mat.opacity = 0.85 * (1 - v);
+      },
+      onComplete: () => {
+        burst.mesh.visible = false;
+        burst.tween = null;
+      },
+    });
+  },
+
   /** Judge a tap in a lane at the current song time. */
   tapLane(lane) {
     const idx = judgeTap(this.notes, lane, this.songTime, this.tune);
@@ -395,6 +441,7 @@ export default {
       this.particles.emit('sparkles', new THREE.Vector3(LANE_X[lane], HIT_Y, 0.4), { count: 3 });
     }
     this.flashRing(lane, kind === 'perfect');
+    this.flashBurst(lane, kind === 'perfect'); // V4/GAME-POLISH-4
     if (this.tally.combo > 0 && this.tally.combo % 8 === 0) {
       this.ctx.hud.banner(t('mg.dance.combo', { n: this.tally.combo }));
     }
@@ -429,6 +476,17 @@ export default {
       this.ctx.hud.banner(t('mg.dance.fever'));
       this.ctx.audio.play('dance.fever');
       this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { count: 14 });
+      // V4/GAME-POLISH-4: mirror ball pops on fever (visual only — update()
+      // owns scale each frame, so the pop rides a multiplier, not the scale)
+      if (!prefersReducedMotion()) {
+        tween({
+          from: DANCE_JUICE.BALL_POP_SCALE, to: 1, duration: DANCE_JUICE.BALL_POP_SEC,
+          ease: easings.easeOutBack,
+          onUpdate: (s) => {
+            this.ballPop = s;
+          },
+        });
+      }
     } else if (up) {
       this.ctx.audio.play('dance.tierUp');
       this.ctx.audio.play('dance.tierUpAccent'); // V3/G32 (§C3.4): jingles_HIT00 accent on the sfx bus — synth track untouched
@@ -487,8 +545,10 @@ export default {
       tl.base.setHex(TILE_COLORS[(tl.idx + beatIdx) % TILE_COLORS.length]);
       tl.mat.color.copy(tl.base).multiplyScalar(0.45 + 0.55 * pulse);
     }
-    this.mirrorBall.rotation.y += dt * 0.9;
-    this.mirrorBall.scale.setScalar(1 + 0.05 * pulse);
+    // V4/GAME-POLISH-4: ball spin rises with dance energy; fever pop rides
+    // a multiplier (this.ballPop) so this per-frame write can't stomp it
+    this.mirrorBall.rotation.y += dt * (DANCE_JUICE.BALL_SPIN_BASE + this.tier * DANCE_JUICE.BALL_SPIN_PER_TIER);
+    this.mirrorBall.scale.setScalar((1 + 0.05 * pulse) * (this.ballPop ?? 1));
     this.sparkleT -= dt;
     if (this.sparkleT <= 0) {
       this.sparkleT = 0.5;
@@ -623,6 +683,9 @@ export default {
     this.notePool = null;
     this.tiles = [];
     this.rings = [];
+    for (const burst of this.bursts ?? []) burst.tween?.cancel(); // V4/GAME-POLISH-4
+    this.bursts = [];
+    this.burstGeo = null;
     this.spots = [];
     this.plan = null;
     this.songClock = null;
@@ -639,3 +702,6 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: false }); // V4/G57 (§G2.1 rule 4, §G3.3): positional/tap/semantic input — inverting is nonsense here
+// V4/GAME-POLISH-4 orientation note: deliberately NO landscape export — the
+// three note lanes fall vertically toward the hit line; portrait maximizes
+// note travel (read time) and thumb reach across the three lanes.

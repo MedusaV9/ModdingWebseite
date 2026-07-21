@@ -8,13 +8,19 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'; // V2/FIX-F P1-1
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new scale FX
+// V4/GAME-POLISH-4: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
+// ride the versioned module through the local tx() fallback below.
+import { EN as GP4_EN, DE as GP4_DE } from '../../data/strings/v4-gpgroup4.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import {
   PIPE,
+  PIPE_JUICE, // V4/GAME-POLISH-4: handle-spin/fill-pop tuning
+  tapEfficiencyBonus, // V4/GAME-POLISH-4: end-of-round bonus reveal
   applyDifficulty,
   createPipeEndlessState,
   recordPipeFailure,
@@ -46,6 +52,19 @@ const COLORS = Object.freeze({
   WATER: '#4FD8F7',
   BRASS: '#F2C14E',
 });
+
+/** V4/GAME-POLISH-4: t() first, then the v4-gpgroup4 EN/DE fallback. */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP4_DE : GP4_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
 
 /** Blueprint-sheet texture: grid lines, dashed garden beds, compass doodles. */
 function makeBlueprintTexture() {
@@ -264,7 +283,9 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.6);
-    this.gooby.group.position.set(this.halfW - 0.75, -this.halfH + 0.35, 0.5);
+    // V4/GAME-POLISH-4: bottom-LEFT corner — the old bottom-right spot put
+    // the foreman directly behind the HUD pause button.
+    this.gooby.group.position.set(-this.halfW + 0.75, -this.halfH + 0.35, 0.5);
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
 
@@ -378,6 +399,7 @@ export default {
     handle.rotation.z = Math.PI / 2;
     handle.position.y = 0.3;
     tap.add(handle);
+    this.tapHandle = handle; // V4/GAME-POLISH-4: spun open when water connects
     tap.position.set(origin + srcCol * CELL, topY, 0);
     this.fixtures.add(tap);
 
@@ -434,6 +456,17 @@ export default {
     this.ctx.hud.banner(t('mg.pipe.solved'));
     this.gooby.play('happyBounce');
     this.gooby.setEmotion('ecstatic');
+    // V4/GAME-POLISH-4: the brass tap handle spins open with the flow
+    if (this.tapHandle && !prefersReducedMotion()) {
+      const from = this.tapHandle.rotation.z;
+      tween({
+        from, to: from + Math.PI * 2 * PIPE_JUICE.HANDLE_SPIN_TURNS,
+        duration: PIPE_JUICE.HANDLE_SPIN_SEC, ease: easings.easeOutCubic,
+        onUpdate: (v) => {
+          if (this.tapHandle) this.tapHandle.rotation.z = v;
+        },
+      });
+    }
     const { depths } = waterReach(this.board);
     this.fillDepths = depths;
     this.fillMax = Math.max(...depths.values()) + 1;
@@ -450,9 +483,19 @@ export default {
     const depthNow = Math.floor(this.fillT / this.tune.FILL_STEP_SEC);
     if (depthNow > this.filledDepth) {
       this.filledDepth = depthNow;
+      const pop = !prefersReducedMotion();
       for (const [idx, depth] of this.fillDepths) {
         if (depth === depthNow) {
           for (const mat of this.tileViews[idx].mats) mat.color.set(COLORS.WATER);
+          // V4/GAME-POLISH-4: each tile pops as the wave reaches it
+          if (pop) {
+            const grp = this.tileViews[idx].group;
+            tween({
+              from: PIPE_JUICE.TILE_POP_SCALE, to: 1, duration: PIPE_JUICE.TILE_POP_SEC,
+              ease: easings.easeOutQuad,
+              onUpdate: (s) => grp.scale.setScalar(s),
+            });
+          }
         }
       }
       if (depthNow <= this.fillMax) this.ctx.audio.play('pipe.fill');
@@ -461,6 +504,8 @@ export default {
       this.sprayed = true;
       this.particles.emit('bubbles', this.sprinklerPos, { count: 14 });
       this.particles.emit('sparkles', this.sprinklerPos, { count: 8 });
+      // V4/GAME-POLISH-4: a few confetti squares crown the sprinkler burst
+      this.particles.emit('confetti', this.sprinklerPos, { count: PIPE_JUICE.SPRAY_CONFETTI });
     }
     if (this.fillT >= this.fillMax * this.tune.FILL_STEP_SEC + this.tune.FILL_END_DELAY_SEC) {
       this.sprayed = false;
@@ -549,6 +594,7 @@ export default {
       this.gooby.setEmotion(this.solved > 0 ? 'ecstatic' : 'sad');
       if (this.solved > 0) this.gooby.play('happyBounce');
       this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1, 0)), { count: 14 });
+      this.revealBonus(); // V4/GAME-POLISH-4
       if (this.autoplay) {
         console.log(
           `[pipeFlow] autoplay run ended — solved ${this.solved}, ` +
@@ -564,6 +610,18 @@ export default {
     this.endT = 0;
     this.ctx.audio.play('ui.win');
     this.gooby.setEmotion(this.solved > 0 ? 'ecstatic' : 'sad');
+    this.revealBonus(); // V4/GAME-POLISH-4
+  },
+
+  /**
+   * V4/GAME-POLISH-4: name the tap-efficiency bonus when it lands — the +n
+   * used to appear silently in the final score delta. Banner only (no score
+   * change here; pipeScore stays the single §C1.2 #9 source of truth).
+   */
+  revealBonus() {
+    if (this.solved <= 0) return;
+    const bonus = tapEfficiencyBonus(this.totalTaps, this.totalOptimal, this.tune);
+    if (bonus > 0) this.ctx.hud.banner(tx('gp4.pipe.bonus', { n: bonus }));
   },
 
   dispose() {
@@ -580,6 +638,7 @@ export default {
     for (const mat of this.dealMats ?? []) mat.dispose();
     this.tileViews = [];
     this.dealMats = [];
+    this.tapHandle = null; // V4/GAME-POLISH-4
     this.fixtures = null;
     this.boardGroup = null;
     this.board = null;
@@ -594,3 +653,6 @@ export default {
   },
 };
 export const controls = Object.freeze({ invertible: false }); // V4/G57 (§G2.1 rule 4, §G3.3): positional/tap/semantic input — inverting is nonsense here
+// V4/GAME-POLISH-4 orientation note: deliberately NO landscape export — the
+// 5×5 board + tap above + sprinkler below stack vertically; portrait frames
+// the whole plumbing run with Gooby in the footer.

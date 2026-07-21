@@ -117,6 +117,24 @@ export const ROCKET = Object.freeze({
 });
 
 /**
+ * V4/GAME-POLISH-4: presentation/juice tuning for rocketRescue.js (touchdown
+ * squash, pad-beacon flash on rescue, soft-landing shout). Pure numbers only —
+ * flight physics/scoring stays in ROCKET above (frozen-constants rule).
+ */
+export const ROCKET_JUICE = Object.freeze({
+  /** Craft touchdown squash: y-scale at contact + recovery (s). */
+  TOUCH_SQUASH: 0.82,
+  TOUCH_SQUASH_SEC: 0.28,
+  /** Pad beacon pop on a rescue drop-off: start scale + settle (s). */
+  BEACON_POP_SCALE: 2.1,
+  BEACON_POP_SEC: 0.55,
+  /** Extra celebration bursts. */
+  RESCUE_HEARTS: 5,
+  SOFT_SPARKLES: 6,
+  COMPLETE_CONFETTI_2ND: 14,
+});
+
+/**
  * V4/G74 §G5.3 physics/skill rows: Leicht = tolerances ×1.25 (landing-v
  * bands + platform width), Schwer = ×0.8 (all ≥ 0.55× Mittel — guardrail).
  * Endlos (§G5.4): Schwer tolerances, no round timer, bunnies re-arm after

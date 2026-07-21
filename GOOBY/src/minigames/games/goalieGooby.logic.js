@@ -98,6 +98,29 @@ export function applyRiesenGooby(tune, { scale = 1, hitboxMult = 1 } = {}) {
   });
 }
 
+/**
+ * V4/GAME-POLISH-4 presentation tuning (§E0.1-2: per-game numbers live in
+ * the owning .logic.js). Pure data — the view (goalieGooby.js) reads it for
+ * the landscape camera framing and the save/goal juice beats; nothing here
+ * touches the frozen §C1.2 gameplay numbers above.
+ */
+export const GOALIE_JUICE = Object.freeze({
+  /** Camera distance (wu): pulled in on wide viewports so the goal fills the frame. */
+  CAM_Z_PORTRAIT: 10,
+  CAM_Z_LANDSCAPE: 7.4,
+  /** Goal half-width cap (wu) per aspect (landscape spreads the 5 lanes wider). */
+  GOAL_HALF_W_PORTRAIT: 2.4,
+  GOAL_HALF_W_LANDSCAPE: 3.1,
+  /** Save impact ring: start scale → end scale over LIFE seconds. */
+  RING_LIFE_SEC: 0.38,
+  RING_SCALE_SAVE: 3.2,
+  RING_SCALE_SUPER: 5.2,
+  /** Glove punch-pop scale on a dive. */
+  GLOVE_PUNCH_SCALE: 1.5,
+  /** Conceded pip pop scale. */
+  PIP_POP_SCALE: 1.7,
+});
+
 /** @typedef {'straight'|'lob'|'roller'} KickKind */
 /** @typedef {{lane: number, kind: KickKind}} Kick */
 /** @typedef {{lane: number, v: 'up'|'mid'|'down', t: number}} Dive */
