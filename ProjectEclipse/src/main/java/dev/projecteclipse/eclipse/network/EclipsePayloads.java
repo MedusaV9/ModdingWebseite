@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.network;
 
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,6 +31,25 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CLivesPayload.TYPE, S2CLivesPayload.STREAM_CODEC, EclipsePayloads::handleLives);
         registrar.playToClient(S2CDayStatePayload.TYPE, S2CDayStatePayload.STREAM_CODEC, EclipsePayloads::handleDayState);
         registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
+        registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
+        registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
+    }
+
+    /**
+     * Sends the player a fresh {@link S2CLivesPayload} + {@link S2CDayStatePayload}, and — when
+     * {@code openMenu} — a trailing {@link S2COpenArtifactPayload}. Payload order on one
+     * connection is guaranteed, so the client cache is always fresh before the screen opens.
+     * Used by the login sync, the arm artifact's right-click and the C2S menu request.
+     */
+    public static void sendArtifactState(ServerPlayer player, boolean openMenu) {
+        EclipseWorldState state = EclipseWorldState.get(player.server);
+        int day = state.getDay();
+        PacketDistributor.sendToPlayer(player,
+                new S2CLivesPayload(LivesApi.get(player)),
+                new S2CDayStatePayload(day, state.getAltarLevel(), EclipseConfig.day(day).goals()));
+        if (openMenu) {
+            PacketDistributor.sendToPlayer(player, new S2COpenArtifactPayload());
+        }
     }
 
     private static void handleLives(S2CLivesPayload payload, IPayloadContext context) {
@@ -39,18 +59,27 @@ public final class EclipsePayloads {
     private static void handleDayState(S2CDayStatePayload payload, IPayloadContext context) {
         ClientStateCache.day = payload.day();
         ClientStateCache.altarLevel = payload.altarLevel();
+        ClientStateCache.goals = payload.goals();
     }
 
     private static void handleCutscene(S2CCutscenePayload payload, IPayloadContext context) {
         ClientStateCache.cutscenePhase = payload.phase();
     }
 
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleOpenArtifact(S2COpenArtifactPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.ArtifactScreenOpener.open();
+    }
+
+    private static void handleOpenArtifactRequest(C2SOpenArtifactPayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            sendArtifactState(player, true);
+        }
+    }
+
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            EclipseWorldState state = EclipseWorldState.get(player.server);
-            PacketDistributor.sendToPlayer(player,
-                    new S2CLivesPayload(LivesApi.get(player)),
-                    new S2CDayStatePayload(state.getDay(), state.getAltarLevel()));
+            sendArtifactState(player, false);
         }
     }
 }

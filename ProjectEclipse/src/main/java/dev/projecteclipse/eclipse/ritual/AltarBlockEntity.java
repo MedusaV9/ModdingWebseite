@@ -134,7 +134,8 @@ public class AltarBlockEntity extends BlockEntity {
 
     private void completeMilestone(ServerLevel serverLevel, EclipseWorldState state, EclipseConfig.Milestone milestone) {
         state.setAltarLevel(milestone.level());
-        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel()));
+        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
+                EclipseConfig.day(state.getDay()).goals()));
         // Subtle global cue: end-portal sound for everyone, portal particles at the altar. No text.
         for (ServerPlayer online : serverLevel.getServer().getPlayerList().getPlayers()) {
             online.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER, 0.4F, 1.3F);

@@ -59,7 +59,7 @@ public final class DayScheduler {
         EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
         BorderController.setBorder(server, plan.borderSize(), changed ? BORDER_LERP_MS : 0L);
 
-        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(newDay, state.getAltarLevel()));
+        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(newDay, state.getAltarLevel(), plan.goals()));
         if (changed) {
             for (ServerPlayer online : server.getPlayerList().getPlayers()) {
                 online.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.MASTER, 1.0F, 1.0F);

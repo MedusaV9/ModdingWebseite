@@ -3,11 +3,13 @@ package dev.projecteclipse.eclipse.registry;
 import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.artifact.ArmArtifactItem;
 import dev.projecteclipse.eclipse.ritual.ReviveSigilItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -33,6 +35,18 @@ public final class EclipseItems {
     /** Admin/debug item for the altar block; not craftable (admins place the altar manually). */
     public static final Supplier<BlockItem> ALTAR = ITEMS.register("altar",
             () -> new BlockItem(EclipseBlocks.ALTAR.get(), new Item.Properties()));
+
+    /**
+     * The permanent in-game interface artifact, slot-locked to hotbar slot 8 by
+     * {@code artifact.ArtifactSlotLock}. Id must stay exactly {@code eclipse:arm_artifact}
+     * — other systems (e.g. {@code progression.PhaseInventoryLock}) resolve it by that id.
+     */
+    public static final Supplier<ArmArtifactItem> ARM_ARTIFACT = ITEMS.register("arm_artifact",
+            () -> new ArmArtifactItem(new Item.Properties()
+                    .stacksTo(1)
+                    .fireResistant()
+                    .rarity(Rarity.EPIC)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
     private EclipseItems() {}
 
