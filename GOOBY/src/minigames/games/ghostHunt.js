@@ -22,6 +22,7 @@ import { createParticles } from '../../gfx/particles.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
 import { clampFloatTextToView } from '../framework.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   HUNT,
   SPOTS,
@@ -246,6 +247,7 @@ export default {
     this.endT = 0;
     this.shownScore = 0;
     this.grumpyT = 0;
+    this.shakeT = 0; // GAME-POLISH-1: decoy-tap micro-shake
 
     /** @type {THREE.BufferGeometry[]} */
     this.ownedGeos = [];
@@ -322,7 +324,10 @@ export default {
           size: 0.85,
           rotY: Math.PI + (graveIdx % 2 ? 0.12 : -0.1),
         });
-        if (graveIdx % 2 === 0) place('floor_dirt_grave', spot.x, spot.z + 0.55, { size: 0.9 });
+        // GAME-POLISH-1 3D fix: the dirt GLB's origin sits at its TOP (bbox
+        // −0.34..0.01 at y 0), so the mounds were buried invisibly under the
+        // ground plane — y 0.32 seats them ON the grass as proper dirt beds.
+        if (graveIdx % 2 === 0) place('floor_dirt_grave', spot.x, spot.z + 0.55, { size: 0.9, y: 0.32 });
         graveIdx += 1;
       } else if (spot.kind === 'pumpkin') {
         place('pumpkin_orange', spot.x, spot.z + 0.14, { size: 0.55 });
@@ -555,7 +560,12 @@ export default {
       if (res.chain >= 2) this.ctx.audio.play('hunt.chain');
       if (pos) {
         this.floats.spawn(`+${res.points}`, pos, res.chain >= 2 ? '#C9B6FF' : '#B8F0C0');
-        this.particles.emit('sparkles', pos.clone().add(new THREE.Vector3(0, -0.5, 0)), { count: 8 });
+        // GAME-POLISH-1: sparkle burst grows with the chain; every ×5 chain
+        // link gets a confetti pop so long chains feel escalating.
+        this.particles.emit('sparkles', pos.clone().add(new THREE.Vector3(0, -0.5, 0)), {
+          count: Math.min(14, 6 + res.chain * 2),
+        });
+        if (res.chain > 0 && res.chain % 5 === 0) this.particles.emit('confetti', pos, { count: 10 });
       }
       if (res.chain >= 4) this.gooby?.play('happyBounce');
     } else if (res.kind === 'decoy') {
@@ -565,6 +575,7 @@ export default {
         this.floats.spawn('−2', pos, '#FF9DB0');
         this.particles.emit('dizzyStars', pos);
       }
+      if (!prefersReducedMotion()) this.shakeT = 0.2; // GAME-POLISH-1 sting
       this.gooby?.setEmotion('grumpy');
       this.grumpyT = 1.3;
     } else if (res.kind === 'token' && pos) {
@@ -617,6 +628,14 @@ export default {
     this.particles.update(dt);
     this.floats.update(dt);
     this.gooby?.update(dt);
+
+    // GAME-POLISH-1: decoy micro-shake (reduced-motion never sets shakeT)
+    if (this.shakeT > 0) {
+      this.shakeT -= dt;
+      const k = Math.max(0, this.shakeT / 0.2) * 0.08;
+      ctx.camera.position.set((ctx.rng() - 0.5) * k, 7.9 + (ctx.rng() - 0.5) * k, 3.2);
+      if (this.shakeT <= 0) ctx.camera.position.set(0, 7.9, 3.2);
+    }
 
     if (this.phase === 'done') return;
     if (this.phase === 'ending') {
@@ -714,6 +733,8 @@ export default {
     if (state.ended && this.phase === 'play') {
       this.phase = 'ending';
       this.endT = 0;
+      this.shakeT = 0;
+      ctx.camera.position.set(0, 7.9, 3.2); // never end mid-shake
       ctx.audio.play('ui.win');
       this.gooby?.setEmotion('ecstatic');
       this.gooby?.play('happyBounce');

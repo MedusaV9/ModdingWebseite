@@ -162,6 +162,7 @@ export default {
     this.sprinklerSpawned = false;
     this.sprinklerUsed = false;
     this.sprinklerAutoT = 0;
+    this.dropT = 0; // GAME-POLISH-1: watering droplet cadence
     /** @type {{pot: object, fillT: number}|null} active watering hold */
     this.hold = null;
 
@@ -216,7 +217,9 @@ export default {
     scene.add(soil);
     for (let i = 0; i < 3; i += 1) {
       const fence = this.matte(fitModel(ctx.assets.getModel('nature-kit/fence_simple'), 1.55));
-      fence.position.set(-1.5 + i * 1.5, 0.35, -2.75);
+      // GAME-POLISH-1 3D fix: fitModel centers the 0.54-high fence, so y 0.35
+      // left it hovering 0.08 above the grass — 0.27 grounds the posts.
+      fence.position.set(-1.5 + i * 1.5, 0.27, -2.75);
       scene.add(fence);
     }
     for (const [key, x, z] of [['flower_redA', -1.8, -2.1], ['flower_yellowA', 1.8, -2.1]]) {
@@ -332,7 +335,10 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.62);
-    this.gooby.group.position.set(0.05, 0, 3.9);
+    // GAME-POLISH-1 3D fix: z 3.9 cropped him to a floating head at the
+    // bottom edge — 3.62 keeps his whole body in the portrait frame (still
+    // clear of the sprinkler token at z 3.05).
+    this.gooby.group.position.set(0.05, 0, 3.62);
     this.gooby.group.rotation.y = Math.PI; // faces the pots, back to the player
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
@@ -432,6 +438,8 @@ export default {
       this.addPoints(this.tune.WEED_PTS);
       this.floats.spawn(t('mg.rush.weed'), popPos, '#D64570');
       this.ctx.audio.play('bubble.wrong');
+      // GAME-POLISH-1: dizzy stars sell the "oops, that was a weed" gag
+      this.particles.emit('dizzyStars', pot.pos.clone().add(new THREE.Vector3(0, 1.15, 0)));
       const weedHolder = pot.sprout;
       if (weedHolder) {
         tween({
@@ -455,6 +463,14 @@ export default {
       pot.sprout = this.matte(fitModel(this.ctx.assets.getModel('nature-kit/crops_leafsStageB'), SPROUT_SIZE * 1.1));
       pot.sprout.position.set(0, POT_SIZE * 0.78, 0);
       pot.group.add(pot.sprout);
+      // GAME-POLISH-1: the grown crop pops in with a scale punch (+ confetti
+      // on a perfect release) so good watering lands with real fanfare.
+      const grown = pot.sprout;
+      tween({
+        from: 0.55, to: 1, duration: 0.32, ease: easings.easeOutBack,
+        onUpdate: (v) => grown.scale.setScalar(v),
+      });
+      if (perfect) this.particles.emit('confetti', pot.pos.clone().add(new THREE.Vector3(0, 1.35, 0)), { count: 8 });
     }
     pot.state = 'watered';
     pot.ring.visible = false;
@@ -670,7 +686,11 @@ export default {
       const frac = Math.min(1, this.hold.fillT / this.tune.FILL_SEC);
       this.drawFillRing(frac);
       this.can.rotation.z = -0.5 - frac * 0.45;
-      if (Math.floor(elapsed * 10) % 2 === 0) {
+      // GAME-POLISH-1 perf: steady droplet cadence (the old frame-parity gate
+      // emitted up to once per frame at 60 fps, starving the sprite pool)
+      this.dropT -= dt;
+      if (this.dropT <= 0) {
+        this.dropT = 0.12;
         this.particles.emit('bubbles', this.hold.pot.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), { count: 1 });
       }
       // bot early-release lapse (set in autoplayTick)

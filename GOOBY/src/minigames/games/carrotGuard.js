@@ -12,6 +12,7 @@ import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
+import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   GUARD,
   upTimeAt,
@@ -110,6 +111,12 @@ export default {
     this.autoT = 0;
     this.tapClock = 0;
     this.lastWhiffAt = -Infinity;
+    // GAME-POLISH-1 juice state: camera micro-shake + whiff ground raycast
+    this.shakeT = 0;
+    this.raycaster = new THREE.Raycaster();
+    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    this.tapNdc = new THREE.Vector2();
+    this.tapPoint = new THREE.Vector3();
 
     // Portrait framing: vFOV 45 on a phone leaves a narrow ~22° horizontal
     // FOV, so the camera sits high and far to fit the 3-mound width.
@@ -140,17 +147,26 @@ export default {
     const fbox = new THREE.Box3().setFromObject(fenceMaster);
     const fsize = fbox.getSize(new THREE.Vector3());
     const fenceScale = 1.2 / (Math.max(fsize.x, fsize.z) || 1);
+    // GAME-POLISH-1 3D fix: the fence GLB's plank sits ~0.56 off its origin
+    // in local z, so the old rotated side runs both drifted 0.56 toward −x
+    // (right fence INSIDE the yard at x≈2.44, left fence outside at −3.56).
+    // Recenter the model in a holder so all four runs place symmetrically.
     const fenceAt = (x, z, rotY) => {
       const f = ctx.assets.getModel('nature-kit/fence_simple');
       f.scale.setScalar(fenceScale);
-      f.position.set(x, 0, z);
-      f.rotation.y = rotY;
-      scene.add(f);
+      const box = new THREE.Box3().setFromObject(f);
+      const center = box.getCenter(new THREE.Vector3());
+      f.position.set(-center.x, 0, -center.z);
+      const holder = new THREE.Group();
+      holder.add(f);
+      holder.position.set(x, 0, z);
+      holder.rotation.y = rotY;
+      scene.add(holder);
     };
     for (let i = -2; i <= 2; i += 1) {
-      fenceAt(i * 1.2, -3.0, 0); // back
-      fenceAt(-3.0, i * 1.2, Math.PI / 2);
-      fenceAt(3.0, i * 1.2, Math.PI / 2);
+      fenceAt(i * 1.2, -3.3, 0); // back (behind Gooby's cameo spot)
+      fenceAt(-3.3, i * 1.2, Math.PI / 2);
+      fenceAt(3.3, i * 1.2, Math.PI / 2);
     }
     for (const [x, z] of [[-2.6, -2.6], [2.6, -2.6]]) {
       const flower = ctx.assets.getModel(x < 0 ? 'nature-kit/flower_yellowA' : 'nature-kit/flower_redA');
@@ -366,6 +382,7 @@ export default {
       );
       this.particles.emit('confetti', hole.mole.position.clone().add(new THREE.Vector3(0, 1, 0)), { count: 16 });
       this.gooby.play('happyBounce');
+      if (!prefersReducedMotion()) this.shakeT = 0.24; // king KO thump
       hole.timer = 0.35;
       return;
     }
@@ -404,6 +421,13 @@ export default {
     const before = this.combo;
     this.combo = applyWhiff({ combo: this.combo }).combo;
     this.ctx.audio.play('mole.whiff');
+    // GAME-POLISH-1: the mallet always answers a tap — swat the empty spot
+    // with a dust puff so whiffs feel responsive instead of dead.
+    this.raycaster.setFromCamera(this.tapNdc.set(p.nx, p.ny), this.ctx.camera);
+    if (this.raycaster.ray.intersectPlane(this.groundPlane, this.tapPoint)) {
+      this.swingMallet(this.tapPoint);
+      this.particles.emit('crumbs', this.tapPoint.clone().add(new THREE.Vector3(0, 0.12, 0)), { count: 3 });
+    }
     if (before >= 2) this.floats.spawn('×', new THREE.Vector3(0, 0.6, 1.6), '#D64570');
   },
 
@@ -429,6 +453,8 @@ export default {
     hole.mole.visible = true;
     hole.mole.scale.y = 0.01;
     this.ctx.audio.play('mole.pop');
+    // GAME-POLISH-1: little dirt kick as the mole burrows up
+    this.particles.emit('crumbs', hole.mole.position.clone().add(new THREE.Vector3(0, 0.18, 0)), { count: 2 });
     if (king) this.ctx.hud.banner(t('mg.guard.king'));
     const mole = hole.mole;
     tween({
@@ -449,6 +475,9 @@ export default {
     this.combo = res.combo;
     this.ctx.audio.play('mole.steal');
     this.ctx.hud.banner(t('mg.guard.steal'));
+    // GAME-POLISH-1: dirt poof + tiny sting shake as the thief ducks away
+    this.particles.emit('crumbs', hole.mole.position.clone().add(new THREE.Vector3(0, 0.25, 0)), { count: 4 });
+    if (!prefersReducedMotion()) this.shakeT = 0.16;
     const taken = this.stockCarrots[this.carrots];
     if (taken) taken.visible = false;
     this.floats.spawn('-1', hole.mole.position.clone().add(new THREE.Vector3(0, 0.8, 0)), '#D64570');
@@ -480,6 +509,14 @@ export default {
     this.particles.update(dt);
     this.floats.update(dt);
     this.tapClock += dt;
+
+    // GAME-POLISH-1: micro-shake (reduced-motion never sets shakeT)
+    if (this.shakeT > 0) {
+      this.shakeT -= dt;
+      const k = Math.max(0, this.shakeT / 0.24) * 0.09;
+      ctx.camera.position.set((ctx.rng() - 0.5) * k, 10.5 + (ctx.rng() - 0.5) * k, 8.6);
+      if (this.shakeT <= 0) ctx.camera.position.set(0, 10.5, 8.6);
+    }
 
     if (this.phase === 'ending') {
       this.endT += dt;
@@ -536,6 +573,8 @@ export default {
     if (isRoundOver({ elapsed, carrots: this.carrots }, this.tune.DURATION_SEC, this.tune)) {
       this.phase = 'ending';
       this.endT = 0;
+      this.shakeT = 0;
+      ctx.camera.position.set(0, 10.5, 8.6); // never end mid-shake
       if (this.carrots <= 0) ctx.hud.banner(t('mg.guard.empty'));
       ctx.audio.play('ui.win');
       this.gooby.setEmotion('ecstatic');
@@ -560,6 +599,10 @@ export default {
     this.holes = [];
     this.stockCarrots = [];
     this.mallet = null;
+    this.raycaster = null;
+    this.groundPlane = null;
+    this.tapNdc = null;
+    this.tapPoint = null;
     this.ctx = null;
     this.gooby = null;
     this.particles = null;

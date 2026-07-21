@@ -15,6 +15,7 @@ import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
+import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   BUBBLE,
   applyDifficulty,
@@ -32,6 +33,7 @@ import {
   recordPopChain,
   chainNeighborIndices,
   touchRadiusFor,
+  matchStreakMilestone,
 } from './bubblePop.logic.js';
 
 const BUBBLE_R = 0.42;
@@ -123,6 +125,7 @@ export default {
     this.shakeT = 0;
     this.elapsed = 0;
     this.popChain = createPopChain();
+    this.matchStreak = 0; // GAME-POLISH-1: consecutive-match juice streak
 
     const camera = ctx.camera;
     camera.position.set(0, 0, 10);
@@ -468,6 +471,14 @@ export default {
       this.floats.spawn(`+${BUBBLE.MATCH_PTS}`, pos, '#2E8B57');
       this.despawnBubble(bubble);
       this.reactGooby('ecstatic', 'happyBounce', pos);
+      // GAME-POLISH-1: every ×5 clean-match streak gets its own celebration
+      // beat — purely visual, matchStreakMilestone never touches the score.
+      this.matchStreak += 1;
+      if (matchStreakMilestone(this.matchStreak)) {
+        this.ctx.audio.play('combo.up');
+        this.floats.spawn(`×${this.matchStreak}!`, pos.clone().add(new THREE.Vector3(0, 0.55, 0)), '#C98A00');
+        this.particles.emit('confetti', pos, { count: 8 });
+      }
       if (chain.triggered) {
         const candidates = this.bubbles.map((b) => ({
           active: b.active && b.kind === 'food',
@@ -496,15 +507,18 @@ export default {
     } else if (res.result === 'wrong') {
       this.ctx.audio.play('bubble.wrong');
       this.stunT = res.stunSec;
+      this.matchStreak = 0;
       this.particles.emit('bubbles', pos, { count: 4 });
       this.floats.spawn(t('mg.bubble.wrong'), pos, '#D64570');
       this.despawnBubble(bubble);
-      this.shakeT = 0.25;
+      // GAME-POLISH-1: shake honors the OS reduced-motion setting
+      if (!prefersReducedMotion()) this.shakeT = 0.25;
       this.reactGooby('dizzy', 'dizzy', pos);
       this.particles.emit('dizzyStars', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
     } else {
       // spiky: never pops — it wobbles and pokes back (−1)
       this.ctx.audio.play('bubble.spiky');
+      this.matchStreak = 0;
       this.floats.spawn(t('mg.bubble.spiky'), pos, '#8A7FA8');
       bubble.wobT = 0.5;
       this.particles.emit('dizzyStars', pos, { count: 3 });
@@ -519,9 +533,14 @@ export default {
     if (this.phase !== 'play') return;
     this.phase = 'ending';
     this.endT = 0;
+    this.shakeT = 0;
     this.ctx.camera.position.set(0, 0, 10);
     this.ctx.audio.play('ui.win');
+    // GAME-POLISH-1: the endless finish now celebrates exactly like the
+    // timed finish (bounce + confetti) instead of ending flat.
     this.gooby.setEmotion('ecstatic');
+    this.gooby.play('happyBounce');
+    this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { count: 16 });
   },
 
   /** Brief Gooby reaction toward a pop position. */
@@ -633,12 +652,7 @@ export default {
     }
 
     if (!this.tune.ENDLESS && remaining <= 0) {
-      this.phase = 'ending';
-      ctx.camera.position.set(0, 0, 10);
-      ctx.audio.play('ui.win');
-      this.gooby.setEmotion('ecstatic');
-      this.gooby.play('happyBounce');
-      this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { count: 16 });
+      this.finishRound(); // GAME-POLISH-1: one celebratory end path
       if (this.autoplay) {
         console.log(`[bubblePop] autoplay run ended — score ${this.score}, chains ${this.popChain.chains}`);
       }

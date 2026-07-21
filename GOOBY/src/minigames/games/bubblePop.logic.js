@@ -224,6 +224,20 @@ export function touchRadiusFor(kind) {
   return kind === 'spiky' ? BUBBLE.SPIKY_TOUCH_RADIUS : BUBBLE.FOOD_TOUCH_RADIUS;
 }
 
+/** V4/GAME-POLISH-1: consecutive-match celebration cadence (juice only). */
+export const MATCH_STREAK_EVERY = 5;
+
+/**
+ * True when a consecutive-match streak (across target rotations, reset by
+ * wrong/spiky taps) hits a ×5 milestone. Purely an audiovisual celebration
+ * cue — the §C6.1 pop scoring table is untouched.
+ * @param {number} streak matches in a row AFTER the current pop
+ * @returns {boolean}
+ */
+export function matchStreakMilestone(streak) {
+  return streak > 0 && streak % MATCH_STREAK_EVERY === 0;
+}
+
 /** Deterministic certification bot using the derived spawn cadence. */
 export function simulateBubbleAutoplay(seed, mode = 'normal') {
   const tune = applyDifficulty(BUBBLE, mode);

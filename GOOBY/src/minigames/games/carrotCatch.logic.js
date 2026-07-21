@@ -267,6 +267,20 @@ export function finalCatchScore(score, tune = CATCH) {
   return Math.max(0, Math.round(score * (tune.SCORE_MULT ?? 1)));
 }
 
+/** V4/GAME-POLISH-1: clean-catch streak celebration cadence (juice only). */
+export const COMBO_MILESTONE_EVERY = 5;
+
+/**
+ * True when a clean-catch streak hits a ×5 milestone (5, 10, 15, …). Purely
+ * an audiovisual celebration cue — the §C6.1 scoring table is untouched
+ * (compare carrotGuard's comboBonus, which DOES pay points).
+ * @param {number} combo streak length AFTER the current catch
+ * @returns {boolean}
+ */
+export function comboMilestone(combo) {
+  return combo > 0 && combo % COMBO_MILESTONE_EVERY === 0;
+}
+
 /** Deterministic pure certification model for the live autoplay policy. */
 export function simulateCatchAutoplay(mode = 'normal', seed = 1) {
   const tune = applyDifficulty(CATCH, mode);

@@ -14,6 +14,7 @@ import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { getMinigame, computeCoins } from '../../data/minigames.js'; // G14: tutorial coin floor (§C8.1)
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
+import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   CATCH,
   GOOD_FOODS,
@@ -29,6 +30,7 @@ import {
   applyModifier,
   isCatchRoundOver,
   finalCatchScore,
+  comboMilestone,
 } from './carrotCatch.logic.js';
 
 /** Basket catch geometry (world units at the z=0 play plane). */
@@ -134,6 +136,11 @@ export default {
     this.endT = 0;
     this.autoT = 0;
     this.autoTargetX = 0;
+    // GAME-POLISH-1 juice state: junk-catch micro-shake, golden sparkle
+    // trail cadence, and lazy item-array compaction (no per-frame filter).
+    this.shakeT = 0;
+    this.goldenTrailT = 0;
+    this.itemsDirty = false;
 
     const camera = ctx.camera;
     camera.position.set(0, 0, 10);
@@ -188,7 +195,10 @@ export default {
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby); // G14: cameo wears the equipped outfits
     this.gooby.group.scale.setScalar(0.85);
-    this.gooby.group.position.set(0, -this.halfH + 0.32, 0.2);
+    // GAME-POLISH-1 3D fix: +0.3 closes the air gap between Gooby's head and
+    // the basket bottom (BASKET_Y −2.55 vs old head top ≈ −2.94) so he
+    // actually holds the basket instead of it hovering above him.
+    this.gooby.group.position.set(0, -this.halfH + 0.62, 0.2);
     this.gooby.setEmotion('happy');
     scene.add(this.gooby.group);
 
@@ -290,6 +300,7 @@ export default {
   despawnItem(item) {
     item.active = false;
     item.holder.visible = false;
+    this.itemsDirty = true; // compact this.items lazily in update()
     this.ctx.scene.remove(item.holder);
     if (item.special) {
       item.holder.traverse((obj) => {
@@ -329,18 +340,28 @@ export default {
         this.ctx.hud.banner(t('mg.catch.golden'));
         this.particles.emit('confetti', pos, { count: 12 });
       }
+      // GAME-POLISH-1: every ×5 clean-catch streak gets its own celebration
+      // beat (louder ding, ×N popup, confetti, bigger basket punch) — purely
+      // visual, comboMilestone never touches the §C6.1 score.
+      const milestone = comboMilestone(this.combo);
+      if (milestone) {
+        this.ctx.audio.play('combo.up');
+        this.floats.spawn(`×${this.combo}!`, pos.clone().add(new THREE.Vector3(0, 0.6, 0)), '#C98A00');
+        this.particles.emit('confetti', pos, { count: 10 });
+      }
       const basket = this.basket;
       tween({
-        from: 1.25, to: 1, duration: 0.22, ease: easings.easeOutBack,
+        from: milestone ? 1.45 : 1.25, to: 1, duration: milestone ? 0.3 : 0.22, ease: easings.easeOutBack,
         onUpdate: (v) => basket.scale.set(v, 2 - v, v),
       });
-      if (item.value >= 3) {
+      if (item.value >= 3 || milestone) {
         this.gooby.play('happyBounce');
         this.particles.emit('hearts', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1, 0)), { count: 3 });
       }
     } else {
       this.ctx.audio.play('catch.bad');
       this.dizzyT = CATCH.DIZZY_SEC;
+      if (!prefersReducedMotion()) this.shakeT = 0.22; // GAME-POLISH-1 micro-shake
       if (item.kind === 'rotten') {
         this.rottenCaught += 1;
         this.ctx.hud.banner(t('mg.catch.rotten'));
@@ -382,6 +403,14 @@ export default {
     this.gooby.update(dt);
     this.particles.update(dt);
     this.floats.update(dt);
+
+    // GAME-POLISH-1: junk-catch micro-shake (reduced-motion never sets shakeT)
+    if (this.shakeT > 0) {
+      this.shakeT -= dt;
+      const k = Math.max(0, this.shakeT / 0.22) * 0.09;
+      ctx.camera.position.set((ctx.rng() - 0.5) * k, (ctx.rng() - 0.5) * k, 10);
+      if (this.shakeT <= 0) ctx.camera.position.set(0, 0, 10);
+    }
 
     if (this.phase === 'ending') {
       this.endT += dt;
@@ -425,6 +454,7 @@ export default {
     }
 
     // falling items: gentle spin + §C6.1 speed ramp; catch at the basket band
+    this.goldenTrailT -= dt;
     for (const item of this.items) {
       if (!item.active) continue;
       const h = item.holder;
@@ -432,6 +462,12 @@ export default {
       h.position.y -= itemFallSpeed(elapsed, item.kind, this.tune) * dt;
       h.rotation.x += item.spinX * dt;
       h.rotation.z += item.spinZ * dt;
+      // GAME-POLISH-1: the one golden carrot leaves a sparkle trail so the
+      // +10 moment is impossible to miss (throttled — 1 sprite / 0.12 s).
+      if (item.kind === 'golden' && this.goldenTrailT <= 0) {
+        this.goldenTrailT = 0.12;
+        this.particles.emit('sparkles', h.position, { count: 1 });
+      }
       if (
         prevY > BASKET_Y + 0.15 &&
         h.position.y <= BASKET_Y + 0.15 &&
@@ -451,14 +487,22 @@ export default {
         this.despawnItem(item);
       }
     }
-    this.items = this.items.filter((i) => i.active);
+    if (this.itemsDirty) {
+      // GAME-POLISH-1 perf: compact only after a despawn instead of
+      // allocating a fresh array every frame.
+      this.items = this.items.filter((i) => i.active);
+      this.itemsDirty = false;
+    }
 
     if (isCatchRoundOver({ elapsed, missedCarrots: this.missedCarrots }, this.tune)) {
       this.phase = 'ending';
+      this.shakeT = 0;
+      ctx.camera.position.set(0, 0, 10); // never end mid-shake
       ctx.audio.play('ui.win');
       this.gooby.setEmotion('ecstatic');
       this.gooby.play('happyBounce');
-      this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.4, 0)), { count: 16 });
+      this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.4, 0)), { count: 20 });
+      this.particles.emit('hearts', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { count: 4 });
       if (this.autoplay) {
         console.log(
           `[carrotCatch] autoplay run ended — score ${this.score} ` +

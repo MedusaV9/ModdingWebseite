@@ -12,10 +12,12 @@
 
 import * as THREE from 'three';
 import { t } from '../../data/strings.js';
+import { tween, easings } from '../../gfx/tween.js'; // GAME-POLISH-1: reel-tap bobber punch
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { clampFloatTextToView } from '../framework.js'; // F4 P2-3
+import { prefersReducedMotion } from '../../ui/ui.js'; // GAME-POLISH-1: shake gate
 import {
   FISHING,
   applyDifficulty,
@@ -153,6 +155,9 @@ export default {
     this.bootRollT = 0;
     this.emotionT = 0;
     this.fireflyT = 1.5;
+    // GAME-POLISH-1 juice state: dive/resurface splash edge + big-one shake
+    this.prevDepth = 0;
+    this.shakeT = 0;
     // ── V2/G23: §C6 species meta ──
     // V2/G26 fix: bandAt returns {band, tInBand, blend} — the string compare
     // left the §C10.3 nightEel gate permanently closed.
@@ -473,6 +478,13 @@ export default {
       this.reel.taps += 1;
       this.ctx.audio.play('fish.reelTap');
       this.particles.emit('bubbles', this.bobber.position, { count: 2 });
+      // GAME-POLISH-1: every reel tap thumps the bobber so the wiggle
+      // fight reads tap-by-tap
+      const bobber = this.bobber;
+      tween({
+        from: 1.35, to: 1, duration: 0.16, ease: easings.easeOutQuad,
+        onUpdate: (v) => bobber.scale.setScalar(v),
+      });
       return;
     }
     this.held = true;
@@ -507,6 +519,7 @@ export default {
       item.active = false;
       this.ctx.hud.banner(t('mg.fish.reel'));
       this.ctx.audio.play('fish.bigOne');
+      if (!prefersReducedMotion()) this.shakeT = 0.28; // the big one hits!
       return;
     }
     this.hookItem(item);
@@ -608,6 +621,8 @@ export default {
     if (this.phase !== 'play') return;
     this.phase = 'ending';
     this.endT = 0;
+    this.shakeT = 0;
+    this.ctx.camera.position.set(0, 0, 10); // never end mid-shake
     this.ctx.audio.play('ui.win');
     this.gooby.setEmotion('ecstatic');
     this.gooby.play('happyBounce');
@@ -686,6 +701,14 @@ export default {
     this.particles.update(dt);
     this.floats.update(dt);
     this.rainRipples?.update(dt); // V2/G26 (§C11.2)
+
+    // GAME-POLISH-1: big-one hook micro-shake (reduced-motion never sets it)
+    if (this.shakeT > 0) {
+      this.shakeT -= dt;
+      const k = Math.max(0, this.shakeT / 0.28) * 0.07;
+      ctx.camera.position.set((ctx.rng() - 0.5) * k, (ctx.rng() - 0.5) * k, 10);
+      if (this.shakeT <= 0) ctx.camera.position.set(0, 0, 10);
+    }
 
     // ripple: gentle sine on the surface strip
     const rp = this.ripple.geometry.attributes.position;
@@ -807,6 +830,12 @@ export default {
       }
     }
 
+    // GAME-POLISH-1: splash rings whenever the bobber dives or resurfaces
+    if ((this.prevDepth <= 0.02) !== (this.hookDepth <= 0.02)) {
+      this.particles.emit('bubbles', this.bobber.position, { count: 4 });
+    }
+    this.prevDepth = this.hookDepth;
+
     // bobber + line + hooked item follow the hook depth
     const bobY = depthToY(this.hookDepth) + (this.hookDepth <= 0 ? Math.sin(elapsed * 2.2) * 0.03 : 0);
     this.bobber.position.set(FISHING.HOOK_X, bobY, SWIM_Z);
@@ -820,6 +849,8 @@ export default {
 
     if (!this.tune.ENDLESS && remaining <= 0) {
       this.phase = 'ending';
+      this.shakeT = 0;
+      ctx.camera.position.set(0, 0, 10); // never end mid-shake
       ctx.audio.play('ui.win');
       this.gooby.setEmotion('ecstatic');
       this.gooby.play('happyBounce');
