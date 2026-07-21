@@ -35,6 +35,20 @@ const ACH_CSS = `
 .g12-ach-reward svg{color:var(--yellow);}
 .g12-ach-tile.g12-done .g12-ach-reward{background:var(--yellow);color:#fff;}
 .g12-ach-tile.g12-done .g12-ach-reward svg{color:#fff;}
+/* ── V4/FIX-UI: narrow breakpoint — at the 320px squeeze the side column
+   crushed the description to ~one word per line. The progress/reward column
+   drops to a full-width bottom ROW (progress left, reward right) so the
+   description keeps a readable measure. 400px block = scaled squeeze. ── */
+@media (max-width:340px){
+  .g12-ach-tile{flex-wrap:wrap;}
+  .g12-ach-side{flex:1 1 100%;flex-direction:row;align-items:center;justify-content:space-between;}
+}
+@media (max-width:400px){
+  :root[data-ui-scale="115"] .g12-ach-tile,
+  :root[data-ui-scale="130"] .g12-ach-tile{flex-wrap:wrap;}
+  :root[data-ui-scale="115"] .g12-ach-side,
+  :root[data-ui-scale="130"] .g12-ach-side{flex:1 1 100%;flex-direction:row;align-items:center;justify-content:space-between;}
+}
 `;
 
 /**

@@ -478,6 +478,10 @@ export function createHomeScene(ctx) {
         // POLISH-F: var(--safe-top) (not raw env()) so the §B9 fake-notch
         // reaches it, and z below --z-hud (40) so it never paints over the
         // stat pills it used to cover at 320-375px widths.
+        // V4/FIX-UI: z-below alone still BLED THROUGH the translucent --frost
+        // stat pill at 320px — the throttled update() block below additionally
+        // re-anchors the chip under the measured HUD top block, so it never
+        // sits behind any stat/coin chrome at any scale/viewport.
         debugEl.style.cssText =
           'position:absolute;left:8px;top:calc(8px + var(--safe-top,0px));' +
           'z-index:calc(var(--z-hud) - 10);' +
@@ -539,6 +543,18 @@ export function createHomeScene(ctx) {
         if (debugTimer <= 0 && renderer.info.render.calls > 0) {
           debugTimer = 0.5;
           debugEl.textContent = `${renderer.info.render.calls} calls · ${Math.round(renderer.info.render.triangles / 1000)}k tris`;
+          // V4/FIX-UI: anchor the chip just BELOW the HUD stat/coin chrome
+          // (the coins+ring meta row — the last full-width top-block row) so
+          // it can never bleed through the translucent pills — measured on
+          // the same 0.5 s throttle, robust across uiScale/viewport/notch/
+          // pill-wrap combinations. The centered g76 modifier row below it
+          // starts well right of this left-edge chip, and the left room-nav
+          // arrow (mid-screen) stays clear too.
+          const hudMeta = ui.el.querySelector('.g5-hud:not(.g5-hud-hidden) .g5-hud-meta');
+          if (hudMeta) {
+            const uiTop = ui.el.getBoundingClientRect().top;
+            debugEl.style.top = `${Math.round(hudMeta.getBoundingClientRect().bottom - uiTop) + 4}px`;
+          }
           if (!debugLogged && renderer.info.render.calls > 0) {
             debugLogged = true;
             console.log(`[home] draw calls: ${renderer.info.render.calls}, triangles: ${renderer.info.render.triangles} (budget: 120 calls / 150k tris, §E10) @ ${new Date(now()).toISOString()}`);

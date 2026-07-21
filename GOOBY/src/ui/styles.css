@@ -290,6 +290,11 @@
   align-items: flex-end;
   justify-content: center;
   z-index: var(--z-panel);
+  /* V4/FIX-UI (§C1.4): reserve the notch inset at the TOP of every sheet —
+     full-height panels (careSheet, whatsNew, …) size against the backdrop's
+     content box (max-height:100%), so this single rule keeps every sheet
+     title below the safe area instead of clipping behind the notch. */
+  padding-top: max(0.625rem, var(--safe-top));
 }
 /* V4/AC-1: bottom sheets are paper squircles with big rounded top corners
    and a CSS grabber pill (no sprite frame; side/bottom insets stay the
@@ -343,8 +348,19 @@
   pointer-events: none;
   z-index: var(--z-toast);
   animation: toast-in var(--dur-pop) var(--ease-spring);
-  max-width: 86vw;
+  /* V4/FIX-UI: cap the bubble so it never spans the whole pet zone */
+  max-width: min(86vw, 22rem);
   text-align: center;
+}
+/* V4/FIX-UI: while the home HUD action dock is visible (home scene, no sheet
+   up) lift toasts fully ABOVE the dock rows so they never sit on the buttons.
+   Offsets = dock bottom inset + two button rows + gap (hud.js HUD_CSS);
+   the 130 % variant tracks that scale's shorter 44px-floor buttons. */
+#ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)) .toast {
+  bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 7.625rem);
+}
+:root[data-ui-scale='130'] #ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)) .toast {
+  bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 5rem);
 }
 .toast::before {
   /* little leaf accent: a green droplet rotated into a leaf silhouette */
@@ -1300,6 +1316,13 @@
 /* ---------- V2/G21: vet clinic + destination picker (PLAN2 §C9) ---------- */
 
 /* vet arrival panel (screen id 'vetPanel', ui/vetPanel.js) */
+/* V4/FIX-UI: the clinic content reads top-down like the sibling screens —
+   .screen's default centering left a big dead band above the header. */
+.screen-vetPanel {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .vet-wrap {
   width: min(30rem, 100%);
   max-height: 100%;
@@ -1413,8 +1436,18 @@
   min-height: max(44px, 2.75rem); /* F3: touch target */
 }
 .vet-action:disabled {
-  opacity: 0.55;
+  /* V4/FIX-UI: whole-card opacity .55 pushed the desc (own .75) to an
+     illegible ~.41 — pin disabled ink at the shared .72 body-text contrast
+     (≈4.7:1 on paper, V4/G-UI convention) instead of fading the card. */
+  opacity: 1;
+  color: rgba(74, 59, 54, 0.72);
   cursor: default;
+}
+.vet-action:disabled .vet-action-desc {
+  opacity: 1;
+}
+.vet-action:disabled .shop-price svg {
+  opacity: 0.72;
 }
 .vet-action-head {
   display: flex;
@@ -2527,20 +2560,43 @@
   text-transform: uppercase;
 }
 
+/* V4/FIX-UI: titles/meta WRAP inside the card at 320 px instead of running
+   offscreen — 2-line clamps keep the card height bounded. */
 .g52-now-copy strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-size: 1.125rem;
   line-height: 1.15;
 }
 
 .g52-now-copy small {
+  /* V4/FIX-UI: station · time wraps to extra lines at 320 px (no offscreen run) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--ink-soft);
   font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+/* V4/FIX-UI: at the scaled squeeze the 5rem cover left the copy column too
+   narrow for „station · m:ss / m:ss" — trade cover size for text room. */
+@media (max-width: 340px) {
+  .g52-now-card { grid-template-columns: 3.75rem minmax(0, 1fr); }
+  .g52-now-card > img { width: 3.75rem; height: 3.75rem; }
+}
+@media (max-width: 400px) {
+  :root[data-ui-scale='115'] .g52-now-card,
+  :root[data-ui-scale='130'] .g52-now-card { grid-template-columns: 3.75rem minmax(0, 1fr); }
+  :root[data-ui-scale='115'] .g52-now-card > img,
+  :root[data-ui-scale='130'] .g52-now-card > img { width: 3.75rem; height: 3.75rem; }
 }
 
 .g52-transport {
@@ -3115,6 +3171,23 @@
 .g58-codes-input:focus {
   outline: none;
   border-color: var(--pink);
+}
+
+/* V4/FIX-UI: at narrow scaled widths the side-by-side row squeezed the input
+   to ~2 visible characters — stack the field ABOVE the redeem button so the
+   code stays readable while typing. */
+@media (max-width: 340px) {
+  .g58-codes-inputrow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 400px) {
+  :root[data-ui-scale='115'] .g58-codes-inputrow,
+  :root[data-ui-scale='130'] .g58-codes-inputrow {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .g58-codes-redeem {

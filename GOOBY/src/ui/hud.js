@@ -56,7 +56,11 @@ const HUD_CSS = `
 .g5-ring .g5-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;}
 .g5-ring .g5-ring-lvl{font-size:1rem;font-weight:800;color:var(--brown);}
 .g5-ring .g5-ring-cap{font-size:0.5rem;font-weight:800;color:var(--brown);opacity:.5;text-transform:uppercase;letter-spacing:0.0313rem;}
-.g5-hud-btns{position:absolute;bottom:max(2.75rem, calc(var(--safe-bottom) + 2rem));left:max(0.5rem, var(--safe-left));right:max(0.5rem, var(--safe-right));display:flex;gap:0.375rem;justify-content:center;flex-wrap:wrap;}
+/* V4/FIX-UI: cap the dock rail to exactly FIVE base buttons per row
+   (5×3.375rem + 4×0.375rem = 18.375rem) so the 9 actions always wrap into a
+   balanced 5+4 grid — wide phones at 85 % used to fit 8 in row one and
+   orphan „Profil" alone on row two. */
+.g5-hud-btns{position:absolute;bottom:max(2.75rem, calc(var(--safe-bottom) + 2rem));left:max(0.5rem, var(--safe-left));right:max(0.5rem, var(--safe-right));max-width:18.5rem;margin:0 auto;display:flex;gap:0.375rem;justify-content:center;flex-wrap:wrap;}
 .g5-hud-btn{pointer-events:auto;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:0.125rem;width:max(44px, 3.375rem);height:max(44px, 3.375rem);border:none;border-radius:var(--btn-radius);background:var(--frost);border-bottom:4px solid rgba(74,59,54,.14);color:var(--brown);font-family:inherit;font-size:0.5625rem;font-weight:800;cursor:pointer;box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;transition:transform 90ms ease;}
 .g5-hud-btn:active{transform:scale(.94);}
 .g5-hud-btn svg{color:var(--pink);}
@@ -68,9 +72,16 @@ const HUD_CSS = `
    THREE rows on a 390-wide portrait and the top row's hit areas overlay
    Gooby's belly (touches near (188,553) opened Wardrobe instead of petting).
    Cap the buttons to 2.5rem (52 px at 130 % — still over the real-px 44 px
-   floor) so all 9 fit in two rows and the block stays clear of the pet zone. */
-:root[data-ui-scale="130"] .g5-hud-btn{width:max(44px, 2.5rem);height:max(44px, 2.5rem);border-radius:var(--radius-row);}
-:root[data-ui-scale="130"] .g5-hud-btn .g5-btn-label{max-width:2.25rem;}
+   floor) so all 9 fit in two rows and the block stays clear of the pet zone.
+   V4/FIX-UI refinements at 130 %: (a) HEIGHT drops to the 44 px real floor
+   (2.125rem ≈ 44.2 px) so the two dock rows sit ~18 px lower and clear
+   Gooby's belly at 320×568; (b) the rail caps at five 2.5rem buttons
+   (5×2.5rem + 4×0.375rem = 14rem) so wide phones keep the 5+4 grid; (c) the
+   label rides the full 2.5rem width at 0.5rem so „Garderobe"/„Wardrobe"
+   render unclipped. */
+:root[data-ui-scale="130"] .g5-hud-btn{width:max(44px, 2.5rem);height:max(44px, 2.125rem);border-radius:var(--radius-row);}
+:root[data-ui-scale="130"] .g5-hud-btn .g5-btn-label{max-width:2.5rem;font-size:0.5rem;}
+:root[data-ui-scale="130"] .g5-hud-btns{max-width:14.5rem;gap:0.25rem 0.375rem;}
 `;
 
 /**

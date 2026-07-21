@@ -92,7 +92,7 @@ function tintOf(setId, entryId) {
 const ALBUM_CSS = `
 .screen-album{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .g23-al-head{width:100%;max-width:27.5rem;display:flex;align-items:center;gap:0.625rem;margin:0.375rem 0 0.375rem;flex:none;}
-.g23-al-title{flex:1;min-width:0;margin:0;font-size:clamp(0.9375rem,5.5vw,1.875rem);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} /* V3/FIX-C: 6vw→5.5vw — "Sticker Album" beside the n/28 pill at 320px @ 130% */
+.g23-al-title{flex:1;min-width:0;margin:0;font-size:clamp(0.9375rem,5.5vw,1.875rem);font-weight:800;color:var(--brown);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;line-height:1.1;} /* V3/FIX-C: 6vw→5.5vw. V4/FIX-UI: wrap to 2 hyphenated lines instead of „Stickeralb…" at the 320px squeeze */
 .g23-al-count{flex:none;background:var(--white);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:var(--shadow-soft);font-variant-numeric:tabular-nums;}
 /* V3/FIX-C (E9/E13 P1): a single 4-tab row can never hold the DE set names
    („Stadt-Sehenswürdigkeiten") at 320px — the strip wraps into a 2×2 grid and
@@ -125,8 +125,20 @@ const ALBUM_CSS = `
    absolutely-positioned badge used to sit ON the tab text at 320px @ 130% DE. */
 .g34-al-toptab{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;border-radius:var(--radius-row);min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:min(0.8125rem,4vw);font-weight:800;cursor:pointer;background:rgba(255,255,255,.6);color:var(--brown);box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;position:relative;}
 .g34-al-toptab.g34-active{background:var(--pink);color:#fff;}
-.g34-al-toptab>span:not(.g34-sb-newdot){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.g34-al-toptab>span:not(.g34-sb-newdot){min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;text-align:center;line-height:1.15;} /* V4/FIX-UI: „Stickerbuch" wraps instead of „Stic…" at 320px @ 130% */
 .g34-al-toptab .g34-sb-newdot{position:static;flex:none;}
+/* V4/FIX-UI: a single 3-tab row can never hold „Sticker Book" + NEU badge at
+   the 320px squeeze — wrap the strip 2+1 (the V3/FIX-C 2×2 set-tab pattern). */
+@media (max-width:340px){
+  .g34-al-toptabs{flex-wrap:wrap;}
+  .g34-al-toptab{flex:1 1 40%;}
+}
+@media (max-width:400px){
+  :root[data-ui-scale="115"] .g34-al-toptabs,
+  :root[data-ui-scale="130"] .g34-al-toptabs{flex-wrap:wrap;}
+  :root[data-ui-scale="115"] .g34-al-toptab,
+  :root[data-ui-scale="130"] .g34-al-toptab{flex:1 1 40%;}
+}
 .g34-sb-pager{width:100%;max-width:27.5rem;flex:none;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-radius:var(--card-radius);}
 .g34-sb-pager::-webkit-scrollbar{display:none;}
 .g34-sb-page{flex:0 0 100%;min-width:100%;scroll-snap-align:center;scroll-snap-stop:always;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.875rem;box-sizing:border-box;}
@@ -267,6 +279,11 @@ export function registerAlbumScreen({ store, ui, audio }) {
     });
     const title = document.createElement('h1');
     title.className = 'g23-al-title';
+    // V4/FIX-UI: lang attr feeds hyphens:auto so the 2-line title clamp can
+    // break „Stickeralbum" (dictionary break: „Sticker-album") instead of
+    // ellipsizing at the 320px squeeze. No hy() here — its fixed 6-char soft
+    // hyphens would force the uglier „Sticke-ralbum" split on this word.
+    title.setAttribute('lang', getLang());
     title.textContent = t('album.title');
     const count = document.createElement('div');
     count.className = 'g23-al-count';
@@ -838,7 +855,8 @@ export function registerAlbumScreen({ store, ui, audio }) {
         const tab = document.createElement('button');
         tab.className = `g34-al-toptab${activeTab === tabId ? ' g34-active' : ''}`;
         const tabIcon = tabId === 'photos' ? g59Icon('camera', 14) : icon(tabId === 'book' ? 'star' : 'cards', 14);
-        tab.innerHTML = `${tabIcon}<span>${tabId === 'photos' ? tG(labelKey) : t(labelKey)}</span>
+        // V4/FIX-UI: lang + hy() feed the 2-line label clamp (no more „Stic…")
+        tab.innerHTML = `${tabIcon}<span lang="${getLang()}">${hy(tabId === 'photos' ? tG(labelKey) : t(labelKey))}</span>
           ${tabId === 'book' && unseen > 0 ? `<span class="g34-sb-newdot">${unseen}</span>` : ''}`;
         tab.addEventListener('click', () => {
           if (activeTab === tabId) return;

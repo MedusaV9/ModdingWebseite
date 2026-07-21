@@ -459,7 +459,7 @@ export function createRadioScreen({ store, ui, audio }, options = {}) {
                   role="switch" aria-checked="${pref.on}" ${locked ? 'disabled' : ''}
                   aria-label="${esc(pref.on ? tx('radio.trackEnabled') : tx('radio.trackDisabled'))}"><span></span></button>
                 <div class="g52-track-volume">
-                  <input type="range" min="0" max="150" step="5" value="${pref.vol}"
+                  <input type="range" class="g33-vol-slider" min="0" max="150" step="5" value="${pref.vol}"
                     style="--g47-fill:${(pref.vol / 150) * 100}%"
                     data-track-volume="${esc(track.id)}" ${locked ? 'disabled' : ''}
                     aria-label="${esc(tx('radio.volume', { title: track.title }))}">

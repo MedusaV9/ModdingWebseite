@@ -98,6 +98,23 @@ const PROFILE_CSS = `
 .g69-pr-xp-stat-k{font-weight:800;opacity:.55;}
 .g69-pr-xp-stat-v{min-width:0;font-weight:800;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
 /* ── end V4/G69 ── */
+/* ── V4/FIX-UI: narrow breakpoint — at the 320px squeeze the identity row's
+   three columns crushed the name/joined text into a sliver. Wrap instead:
+   portrait + level ring share the first line, the text block takes a full
+   line below. The 400px block covers the scaled squeeze (115/130 %). ── */
+@media (max-width:340px){
+  .g23-pr-id{flex-wrap:wrap;}
+  .g23-pr-id .g23-pr-idbody{order:3;flex:1 1 100%;}
+  .g23-pr-id .g23-pr-ring{margin-left:auto;}
+}
+@media (max-width:400px){
+  :root[data-ui-scale="115"] .g23-pr-id,
+  :root[data-ui-scale="130"] .g23-pr-id{flex-wrap:wrap;}
+  :root[data-ui-scale="115"] .g23-pr-id .g23-pr-idbody,
+  :root[data-ui-scale="130"] .g23-pr-id .g23-pr-idbody{order:3;flex:1 1 100%;}
+  :root[data-ui-scale="115"] .g23-pr-id .g23-pr-ring,
+  :root[data-ui-scale="130"] .g23-pr-id .g23-pr-ring{margin-left:auto;}
+}
 `;
 
 /** V3/FIX-C: make long DE compounds line-breakable. Chrome's hyphens:auto

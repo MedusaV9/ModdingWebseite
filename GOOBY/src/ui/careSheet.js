@@ -35,7 +35,10 @@ const CSS = `
 .g20-care-sub{font-size:0.6875rem;font-weight:700;opacity:.85;}
 .g20-care .btn:disabled{opacity:.55;}
 /* V4/G70b: this is the tallest bottom sheet at maximum UI scale. Keep the
-   frame inside the viewport and retain touch scrolling for shorter devices. */
+   frame inside the viewport and retain touch scrolling for shorter devices.
+   V4/FIX-UI (§C1.4): max-height:100% resolves against the .panel-backdrop
+   content box, which now reserves max(0.625rem, var(--safe-top)) at the top
+   (styles.css base rule) — so the title stays below the notch. */
 .panel-careSheet{max-height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 @media (max-width:340px){
   :root[data-ui-scale="130"] .g20-care{gap:0.5rem;}

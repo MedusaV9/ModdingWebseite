@@ -108,6 +108,11 @@ const WN_CSS = `
 .g30-wn[data-version="3"] .g30-wn-list{gap:0.375rem;max-height:min(54vh,27rem);}
 .g30-wn[data-version="3"] .g30-wn-item{padding:0.4375rem 0.625rem;}
 .g30-wn[data-version="3"] .g30-wn-txt{font-size:0.7813rem;}
+/* V4/FIX-UI (§C1.4): the tour sheet can outgrow a short notched viewport —
+   cap it to the backdrop's safe-area content box (the .panel-backdrop base
+   rule reserves --safe-top) and scroll internally, so the title can never
+   start above/behind the notch. */
+.panel-backdrop-whatsNew .panel{max-height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 @media (max-width:359px) and (max-height:600px){
   .panel-backdrop-whatsNew .panel{padding:0.75rem 0.875rem max(0.75rem,calc(var(--safe-bottom) + 0.25rem));}
   .g30-wn[data-version="3"] .g30-wn-title{font-size:1.25rem;}
