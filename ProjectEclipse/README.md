@@ -56,6 +56,8 @@ public int getDay();                          public void setDay(int day);      
 public int getAltarLevel();                   public void setAltarLevel(int altarLevel);      // default 0
 public double getBorderSize();                public void setBorderSize(double borderSize);   // default 1000.0
 public boolean isStartEventDone();            public void setStartEventDone(boolean done);    // default false
+public boolean isGhostShipBuilt();            public void setGhostShipBuilt(boolean built);   // default false
+public List<UUID> getOarEntities();           public void setOarEntities(List<UUID> ids);     // ghost ship oar displays
 
 public Set<UUID> getBanned();                 public boolean isBanned(UUID playerId);
 public void addBanned(UUID playerId);         public void removeBanned(UUID playerId);
@@ -128,8 +130,11 @@ and are sent automatically on `PlayerLoggedInEvent`. Client handlers write to
 ```java
 public record S2CLivesPayload(int lives) implements CustomPacketPayload;        // id "eclipse:lives"
 public record S2CDayStatePayload(int day, int altarLevel) implements CustomPacketPayload; // id "eclipse:day_state"
-// both expose: public static final CustomPacketPayload.Type<...> TYPE;
-//              public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
+public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload;   // id "eclipse:cutscene"
+// S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE }; client handler writes
+// ClientStateCache.cutscenePhase (volatile, null until the start event runs).
+// all expose: public static final CustomPacketPayload.Type<...> TYPE;
+//             public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
 
 public final class EclipsePayloads {
     public static void register(IEventBus modEventBus); // wires mod-bus payload registration + game-bus login sync
@@ -171,9 +176,34 @@ public class GraveBlockEntity extends BlockEntity {          // type eclipse:gra
 }
 ```
 
-`dev.projecteclipse.eclipse.limbo.LimboDimension.LIMBO` is the `ResourceKey<Level>` for `eclipse:limbo`
-(dimension JSON owned by another worker; `server.getLevel(LIMBO)` may be `null` until it lands).
-Grave textures are 16x16 placeholders at `assets/eclipse/textures/block/grave{,_side}.png`.
+`dev.projecteclipse.eclipse.limbo.LimboDimension.LIMBO` is the `ResourceKey<Level>` for `eclipse:limbo`.
+The dimension is defined by datapack JSON in the jar (`data/eclipse/dimension{,_type}/limbo.json`,
+`data/eclipse/worldgen/biome/limbo.json`): a flat barrier-floored ocean (top water block y=48),
+fixed twilight time, purple/dark fog. Grave textures are 16x16 placeholders at
+`assets/eclipse/textures/block/grave{,_side}.png`.
+
+### Limbo & start event — `dev.projecteclipse.eclipse.limbo`
+
+`GhostShipBuilder` builds the dark-oak ghost ship (~39x9, deck y=51) + spawn platform procedurally on
+`ServerStartedEvent`, once (guarded by `EclipseWorldState.isGhostShipBuilt()`). `OarAnimator` owns the
+eight `minecraft:block_display` oars (stripped dark oak logs): spawned once, UUIDs persisted via
+`EclipseWorldState.getOarEntities()` and re-attached by UUID on restart; a `LevelTickEvent.Post` loop
+re-poses them every 30 ticks (±25° about Z, mirrored per side) with client-side interpolation. The
+`Display` transformation setters are opened in `META-INF/accesstransformer.cfg`.
+
+```java
+public final class StartEventCutscene {
+    public static void begin(MinecraftServer server); // /start_event server flow; command wiring is the admin worker's job
+}
+```
+
+Timeline (server tick counter): t=0 TILT payload + oar keel-over + `eclipse:event.submerge` to all;
+t=100 SUBMERGE + WAVES; t=140 players in Limbo rise out of carved pockets at overworld spawn;
+t=150 pockets refill; t=160 EMERGE, `startEventDone=true`, `first_overworld_join` stamped if unset.
+
+Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, also the limbo biome's
+`ambient_sound`) and `EVENT_SUBMERGE` (`eclipse:event.submerge`); both currently ship tiny silent
+placeholder OGGs under `assets/eclipse/sounds/`.
 
 ## Layout
 
@@ -181,7 +211,8 @@ Grave textures are 16x16 placeholders at `assets/eclipse/textures/block/grave{,_
 - `dev.projecteclipse.eclipse.registry` — `EclipseItems`, `EclipseBlocks`, `EclipseBlockEntities`, `EclipseSounds`, `EclipseParticles`, `EclipseAttachments` (NeoForge attachment types), `EclipseMenus`. Each exposes a `DeferredRegister` and a static `register(IEventBus)`.
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
-- `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`); `limbo.LimboDimension` — dimension key constant.
+- `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
+- `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
 - Placeholder packages for later work: `ritual`, `progression`, `anonymity`, `voice`, `artifact`, `admin`.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
-- `src/main/resources/META-INF/accesstransformer.cfg` — empty (comment-only) AT file; `validateAccessTransformers = true` is enabled in `build.gradle`.
+- `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.

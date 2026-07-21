@@ -29,6 +29,7 @@ public final class EclipsePayloads {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToClient(S2CLivesPayload.TYPE, S2CLivesPayload.STREAM_CODEC, EclipsePayloads::handleLives);
         registrar.playToClient(S2CDayStatePayload.TYPE, S2CDayStatePayload.STREAM_CODEC, EclipsePayloads::handleDayState);
+        registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
     }
 
     private static void handleLives(S2CLivesPayload payload, IPayloadContext context) {
@@ -38,6 +39,10 @@ public final class EclipsePayloads {
     private static void handleDayState(S2CDayStatePayload payload, IPayloadContext context) {
         ClientStateCache.day = payload.day();
         ClientStateCache.altarLevel = payload.altarLevel();
+    }
+
+    private static void handleCutscene(S2CCutscenePayload payload, IPayloadContext context) {
+        ClientStateCache.cutscenePhase = payload.phase();
     }
 
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {

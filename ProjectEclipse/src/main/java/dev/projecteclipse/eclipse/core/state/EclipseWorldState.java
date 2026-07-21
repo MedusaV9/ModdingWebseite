@@ -1,8 +1,10 @@
 package dev.projecteclipse.eclipse.core.state;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -27,17 +29,21 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_ALTAR_LEVEL = "altarLevel";
     private static final String TAG_BORDER_SIZE = "borderSize";
     private static final String TAG_START_EVENT_DONE = "startEventDone";
+    private static final String TAG_GHOST_SHIP_BUILT = "ghostShipBuilt";
     private static final String TAG_BANNED = "banned";
     private static final String TAG_MILESTONE_PROGRESS = "milestoneProgress";
     private static final String TAG_FORCE_VOICE_MUTED = "forceVoiceMuted";
+    private static final String TAG_OAR_ENTITIES = "oarEntities";
 
     private int day = 1;
     private int altarLevel = 0;
     private double borderSize = 1000.0D;
     private boolean startEventDone = false;
+    private boolean ghostShipBuilt = false;
     private final Set<UUID> banned = new HashSet<>();
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
+    private final List<UUID> oarEntities = new ArrayList<>();
 
     public EclipseWorldState() {}
 
@@ -53,6 +59,10 @@ public final class EclipseWorldState extends SavedData {
         state.altarLevel = tag.getInt(TAG_ALTAR_LEVEL);
         state.borderSize = tag.contains(TAG_BORDER_SIZE) ? tag.getDouble(TAG_BORDER_SIZE) : 1000.0D;
         state.startEventDone = tag.getBoolean(TAG_START_EVENT_DONE);
+        state.ghostShipBuilt = tag.getBoolean(TAG_GHOST_SHIP_BUILT);
+        for (Tag entry : tag.getList(TAG_OAR_ENTITIES, Tag.TAG_INT_ARRAY)) {
+            state.oarEntities.add(NbtUtils.loadUUID(entry));
+        }
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
         }
@@ -72,6 +82,13 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_ALTAR_LEVEL, this.altarLevel);
         tag.putDouble(TAG_BORDER_SIZE, this.borderSize);
         tag.putBoolean(TAG_START_EVENT_DONE, this.startEventDone);
+        tag.putBoolean(TAG_GHOST_SHIP_BUILT, this.ghostShipBuilt);
+
+        ListTag oarList = new ListTag();
+        for (UUID uuid : this.oarEntities) {
+            oarList.add(NbtUtils.createUUID(uuid));
+        }
+        tag.put(TAG_OAR_ENTITIES, oarList);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -134,6 +151,29 @@ public final class EclipseWorldState extends SavedData {
 
     public void setStartEventDone(boolean startEventDone) {
         this.startEventDone = startEventDone;
+        setDirty();
+    }
+
+    // --- ghost ship (limbo) ---
+
+    /** Whether the procedural ghost ship has already been built in the Limbo dimension. */
+    public boolean isGhostShipBuilt() {
+        return this.ghostShipBuilt;
+    }
+
+    public void setGhostShipBuilt(boolean ghostShipBuilt) {
+        this.ghostShipBuilt = ghostShipBuilt;
+        setDirty();
+    }
+
+    /** UUIDs of the persistent block-display oar entities on the ghost ship (ordered: port bow → stern, then starboard). */
+    public List<UUID> getOarEntities() {
+        return Collections.unmodifiableList(this.oarEntities);
+    }
+
+    public void setOarEntities(List<UUID> oarEntityIds) {
+        this.oarEntities.clear();
+        this.oarEntities.addAll(oarEntityIds);
         setDirty();
     }
 

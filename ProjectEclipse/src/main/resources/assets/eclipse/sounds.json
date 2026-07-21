@@ -1,0 +1,15 @@
+{
+  "ambient.limbo_loop": {
+    "sounds": [
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "stream": true
+      }
+    ]
+  },
+  "event.submerge": {
+    "sounds": [
+      "eclipse:event/submerge"
+    ]
+  }
+}
