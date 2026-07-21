@@ -260,3 +260,29 @@ export function orientationLockFor(gameOrientation) {
   return normalizeOrientation(gameOrientation) === 'landscape' ? 'unlock' : 'portrait';
 }
 // ═══════════════════════════════════════════════════════════ end V4/ORIENT ═
+
+// ═══════════════════════════════════════════════════════════════ V4/FIX-FW ═
+// Failed-launch cleanup decision. framework.js consumes a modifier play
+// BEFORE the scene switch (§C-SYS4.4 consume-on-launch); when the launch
+// never lands on the minigame scene the reservation must be released right
+// there — otherwise the armed refund latch goes stale: the consumed play is
+// silently lost and a LATER unrelated quit-before-countdown refunds the
+// wrong (stale) snapshot. Pure so node:test can pin the decision matrix.
+
+/**
+ * V4/FIX-FW: should a finished launch attempt release (refund + disarm) the
+ * modifier play consumed at launch? Only when the launch truly FAILED — it
+ * never settled on the minigame scene AND the minigame scene is not current
+ * either. A SLOW launch that outlasts the retry budget while the minigame
+ * scene is still entering keeps its reservation: the scene's own countdown
+ * (disarm) / exit() (refund) owns the latch from there. Mirrors launchInner's
+ * stranded-veil drop condition so the two cleanups can never drift.
+ * @param {boolean} landed whether the launch settled on the minigame scene
+ *   within the retry budget
+ * @param {string|null|undefined} currentSceneId sceneManager.currentId()
+ * @returns {boolean} true → release the reservation now
+ */
+export function shouldReleaseFailedLaunch(landed, currentSceneId) {
+  return landed !== true && currentSceneId !== 'minigame';
+}
+// ═══════════════════════════════════════════════════════════ end V4/FIX-FW ═

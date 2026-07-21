@@ -136,6 +136,19 @@ test('V4/ORIENT wiring: enter applies the lock target, exit restores portrait', 
   assert.match(src, /Promise\.resolve\(so\.lock\?\.\('portrait'\)\)\.catch\(\(\) => \{\}\)/);
 });
 
+test('V4/ORIENT wiring: a landscape run re-locks portrait BEFORE results mount (V4/FIX-FW)', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
+  // onEnd(): portrait re-locked + the per-run flag reset, THEN the results
+  // screen mounts — exit()'s re-lock alone only fired when the scene later
+  // left, so a landscape game's results rendered sideways until "Home".
+  assert.match(src, /applyOrientationLock\('portrait'\);\s*\r?\n\s*gameOrientation = 'portrait';[\s\S]{0,700}?ui\.showScreen\('mgResults'\)/);
+  // landscape is re-allowed only on the NEXT landscape game's enter()
+  assert.match(src, /applyOrientationLock\(orientationLockFor\(gameOrientation\)\)/);
+  // exit() keeps its own re-lock as the safety net for non-results exits
+  // (pause-quit, failed init, direct scene switches)
+  assert.match(src, /exit\(\) \{[\s\S]*?applyOrientationLock\('portrait'\);\s*\r?\n\s*gameOrientation = 'portrait';/);
+});
+
 test('V4/ORIENT wiring: the rotate gate cleans up listeners and never deadlocks', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
   // single-settle finish(): timer cleared, BOTH viewport listeners removed,

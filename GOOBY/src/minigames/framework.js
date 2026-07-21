@@ -58,6 +58,8 @@ import {
   needsRotateGate,
   // V4/ORIENT: rotation only during landscape games — pure lock-target helper
   orientationLockFor,
+  // V4/FIX-FW: failed-launch reservation-release decision (pure)
+  shouldReleaseFailedLaunch,
 } from './framework.logic.js';
 import { wrapInvertInput } from '../core/inputInvert.js';
 import { EN as DIFF_EN, DE as DIFF_DE } from '../data/strings/v4-difficulty.js';
@@ -302,6 +304,34 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
   /** @type {object|null} the pre-decrement event snapshot consume() returned */
   let modifierRefundSnapshot = null;
 
+  /**
+   * V4/FIX-FW: THE reservation-cleanup seam (§C-SYS4.4). Refunds the play
+   * consumed at launch and disarms the ≤1-refund latch — called from BOTH
+   * early-out paths: the scene's exit() before the countdown finished AND a
+   * launch that never landed on the minigame scene (retry budget expired /
+   * switch swallowed — launchInner). Idempotent: a disarmed latch is a
+   * no-op, so the two paths can never double-refund (G54's engine caps per
+   * event via the snapshot's refundUsed flag on top).
+   */
+  function refundModifierReservation() {
+    if (!modifierRefundArmed) return;
+    modifierRefundArmed = false;
+    const snapshot = modifierRefundSnapshot;
+    modifierRefundSnapshot = null;
+    try {
+      if (snapshot && typeof modifierApi?.refund === 'function') {
+        store.update((state) => modifierApi.refund(state, snapshot, now()));
+        // V4/G76 (§B10): announce the refunded slice like consume does
+        store.emit?.('modifierChanged', {
+          current: store.get('modifiers')?.current ?? null,
+          nextAt: Number(store.get('modifiers')?.nextAt) || 0,
+        });
+      }
+    } catch (err) {
+      console.warn('[minigames] modifier refund failed:', err);
+    }
+  }
+
   // ---------------------------------------------------------------- results screen
   ui.registerScreen('mgResults', {
     /** @param {HTMLElement} el */
@@ -450,10 +480,19 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       // V4/AC-3: cozy OUT veil — curtain up BEFORE the switch, reveal only
       // after the home scene's enter() resolved (+ settle frames + minShown)
       // so the room never pops in over a bare black fade.
+      // V4/FIX-FW: hide() is chained INSIDE the .then, only AFTER the switch
+      // is ISSUED — switchTo flips isSwitching synchronously, so the veil's
+      // reveal loop waits for home's enter(). The old synchronous hide() ran
+      // while show().then(...) was still pending: isSwitching was false, the
+      // wait loop broke early, and slow devices could see the raw stage
+      // before home began entering.
       Promise.resolve(veil.show({ mode: 'home' }))
-        .then(() => sceneManager.switchTo('home'))
+        .then(() => {
+          const switching = sceneManager.switchTo('home');
+          veil.hide();
+          return switching;
+        })
         .catch((err) => console.error('[minigames] exit failed:', err));
-      veil.hide();
     }
   }
 
@@ -619,6 +658,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     /** @type {(() => void)|null} resolves a pending rotate gate on exit */
     let rotateGateCleanup = null;
     // ── end POLISH-E state ──
+    /** @type {(() => void)|null} V4/FIX-FW: tears down a mid-flight 3-2-1
+     *  countdown (overlay + pending tick) on exit — the setTimeout chain
+     *  otherwise outlived the scene by up to ~3 s. */
+    let countdownCleanup = null;
 
     /** @type {HTMLElement|null} */
     let hudEl = null;
@@ -709,16 +752,28 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         overlay.className = 'mg-countdown';
         ui.el.appendChild(overlay);
         let n = MINIGAME.COUNTDOWN_FROM;
+        let timer = 0;
+        // V4/FIX-FW: single-settle teardown — the natural end AND an exit()
+        // mid-countdown both clear the pending tick and drop the overlay, so
+        // a quit can never leave the 3-2-1 (or its count sfx) lingering ~3 s
+        // over the next scene. resolve() is safe on the exit path: the
+        // awaiting enter-flow rechecks `exited` right after.
+        const finish = () => {
+          clearTimeout(timer);
+          overlay.remove();
+          countdownCleanup = null;
+          resolve();
+        };
+        countdownCleanup = finish;
         const show = () => {
           if (n < 0) {
-            overlay.remove();
-            resolve();
+            finish();
             return;
           }
           overlay.innerHTML = `<div class="mg-count">${n > 0 ? n : t('mg.countdown.go')}</div>`;
           audio.play(n > 0 ? 'ui.count' : 'ui.go');
           n -= 1;
-          setTimeout(show, n < 0 ? 600 : 900);
+          timer = setTimeout(show, n < 0 ? 600 : 900);
         };
         show();
       });
@@ -1117,6 +1172,16 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         glueckspilzBonus,
         glueckspilzSeed,
       };
+      // ── V4/FIX-FW (V4/ORIENT): the results screen is a PORTRAIT surface —
+      // re-lock portrait BEFORE it mounts so a landscape run's results never
+      // render sideways (exit()'s re-lock only fired when the scene later
+      // left, so results stayed landscape until "Home"). Best-effort seam:
+      // iOS WKWebView has no screen.orientation.lock — there the portrait
+      // CSS baseline carries the policy; the per-run flag still resets so no
+      // landscape state outlives the round. The NEXT landscape game's
+      // enter() re-unlocks via orientationLockFor. ──
+      applyOrientationLock('portrait');
+      gameOrientation = 'portrait';
       // V3/G32 (§C3.3): context-aware results stingers replace the blind
       // 'jingle.results' pick — best (HIT15) / normal (HIT10) / zero (HIT08).
       // V4/G56: compared against the MODE board (identical for Mittel).
@@ -1278,6 +1343,7 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         // cutscene — resolve the pending gate, stop the cutscene timers and
         // drop the veil immediately (no fade — the scene is going away). ──
         rotateGateCleanup?.();
+        countdownCleanup?.(); // V4/FIX-FW: a mid-flight 3-2-1 must not outlive the scene
         clearTimeout(teleportTimer);
         teleportVeilEl?.remove();
         teleportVeilEl = null;
@@ -1291,24 +1357,10 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         // ── end V4/ORIENT teardown ──
         // ── V4/G56 (§C-SYS4.4): leaving BEFORE the countdown finished
         // refunds the consumed modifier play — max ONCE per event (G54's
-        // engine enforces via the snapshot's refundUsed flag). ──
-        if (modifierRefundArmed) {
-          modifierRefundArmed = false;
-          const snapshot = modifierRefundSnapshot;
-          modifierRefundSnapshot = null;
-          try {
-            if (snapshot && typeof modifierApi?.refund === 'function') {
-              store.update((state) => modifierApi.refund(state, snapshot, now()));
-              // V4/G76 (§B10): announce the refunded slice like consume does
-              store.emit?.('modifierChanged', {
-                current: store.get('modifiers')?.current ?? null,
-                nextAt: Number(store.get('modifiers')?.nextAt) || 0,
-              });
-            }
-          } catch (err) {
-            console.warn('[minigames] modifier refund failed:', err);
-          }
-        }
+        // engine enforces via the snapshot's refundUsed flag). V4/FIX-FW:
+        // centralized in refundModifierReservation, shared with the
+        // failed-launch path in launchInner. ──
+        refundModifierReservation();
         // ── end V4/G56 ──
         hudEl?.remove();
         hudEl = null;
@@ -1507,6 +1559,16 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       await sceneManager.switchTo('minigame', { gameId: id, params: launchParams });
     }
     const landed = settled();
+    // ── V4/FIX-FW (§C-SYS4.4): a launch that never landed must not strand
+    // the modifier play consumed above — release the reservation (refund +
+    // disarm) right here. A stale latch used to lose the play silently AND
+    // let a LATER unrelated quit-before-countdown refund the wrong snapshot.
+    // A SLOW launch that DID reach the minigame scene keeps its reservation:
+    // the scene's own countdown (disarm) / exit() (refund) owns the latch.
+    // Same pure decision as the stranded-veil drop below — never drifts. ──
+    if (shouldReleaseFailedLaunch(landed, sceneManager.currentId?.())) {
+      refundModifierReservation();
+    }
     // V4/AC-3: a launch that never reached the minigame scene must not
     // strand the curtain over the app. A SLOW launch (minigame switch still
     // entering — goobyWelt's splat load can outlast the retry budget) keeps

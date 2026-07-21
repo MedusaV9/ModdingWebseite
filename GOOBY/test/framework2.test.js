@@ -36,6 +36,8 @@ import {
   applyStrike,
   normalizeOrientation,
   needsRotateGate,
+  // V4/FIX-FW: failed-launch reservation-release decision
+  shouldReleaseFailedLaunch,
 } from '../src/minigames/framework.logic.js';
 import { computeCoins, getMinigame } from '../src/data/minigames.js';
 import { applyXp, nextUnlock } from '../src/systems/leveling.js';
@@ -547,3 +549,66 @@ test('strings/v4-arcade2.js: EN and DE key sets are identical', () => {
   assert.equal(ARC2_EN['arcade2.rotate.title'], 'Please rotate your phone');
 });
 // ══════════════════════════════════════════════════════════ end POLISH-E ═══
+
+// ══════════════════════════════════════════════════════════════ V4/FIX-FW ═══
+// Launch-flow hardening: the §C-SYS4.4 modifier play consumed at launch is
+// RELEASED when the launch never lands (pure decision + centralized seam),
+// exitToHome's veil hide is chained after the switch is issued, and exit()
+// tears down a mid-flight 3-2-1 countdown. framework.js can't run under node
+// (three + import.meta.glob) — the pure decision is tested directly and the
+// wiring is pinned at source level, like the POLISH-E/AC-3 pins above.
+
+test('V4/FIX-FW shouldReleaseFailedLaunch: refund exactly when the launch truly never landed', () => {
+  // landed → the scene owns the latch (countdown disarms / exit() refunds)
+  assert.equal(shouldReleaseFailedLaunch(true, 'minigame'), false);
+  assert.equal(shouldReleaseFailedLaunch(true, 'home'), false); // landed wins
+  // never landed + the minigame scene is NOT current → failed for good: release
+  assert.equal(shouldReleaseFailedLaunch(false, 'home'), true);
+  assert.equal(shouldReleaseFailedLaunch(false, 'arcade'), true);
+  assert.equal(shouldReleaseFailedLaunch(false, null), true);
+  assert.equal(shouldReleaseFailedLaunch(false, undefined), true); // no currentId?.()
+  // never landed but the minigame scene IS current (slow enter outlasting the
+  // retry budget — goobyWelt splat load) → KEEP the reservation: the scene's
+  // own countdown/exit() owns the latch from here
+  assert.equal(shouldReleaseFailedLaunch(false, 'minigame'), false);
+  // hostile `landed` values fall into the not-landed branch (never a stale latch)
+  assert.equal(shouldReleaseFailedLaunch(undefined, 'home'), true);
+  assert.equal(shouldReleaseFailedLaunch(0, 'home'), true);
+});
+
+test('V4/FIX-FW wiring: ONE reservation-cleanup seam, used by exit() AND the failed-launch path', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
+  // the centralized seam exists and disarms the latch ATOMICALLY up front —
+  // a re-entrant/second call can never refund a stale snapshot
+  assert.match(src, /function refundModifierReservation\(\) \{\s*\r?\n\s*if \(!modifierRefundArmed\) return;\s*\r?\n\s*modifierRefundArmed = false;/);
+  // exactly TWO call sites: exit() (early quit) + launchInner (failed launch)
+  const calls = src.match(/^\s*refundModifierReservation\(\);/gm) ?? [];
+  assert.equal(calls.length, 2, 'exit() and the failed-launch path both release through the seam');
+  // the failed-launch path decides via the PURE helper on the live scene id
+  assert.match(src, /if \(shouldReleaseFailedLaunch\(landed, sceneManager\.currentId\?\.\(\)\)\) \{\s*\r?\n\s*refundModifierReservation\(\);\s*\r?\n\s*\}/);
+  // the refund itself still rides G54's engine + announces the slice change
+  assert.match(src, /store\.update\(\(state\) => modifierApi\.refund\(state, snapshot, now\(\)\)\)/);
+  assert.match(src, /'modifierChanged'/);
+});
+
+test('V4/FIX-FW wiring: exitToHome hides the veil only AFTER the home switch is issued', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
+  // hide() is chained INSIDE the .then, right after switchTo('home') was
+  // issued (isSwitching flips synchronously → the reveal waits for enter())
+  assert.match(src, /\.then\(\(\) => \{\s*\r?\n\s*const switching = sceneManager\.switchTo\('home'\);\s*\r?\n\s*veil\.hide\(\);\s*\r?\n\s*return switching;\s*\r?\n\s*\}\)/);
+  // the racy shape (hide scheduled while the show/switch chain is pending)
+  // must never come back
+  assert.doesNotMatch(src, /\.then\(\(\) => sceneManager\.switchTo\('home'\)\)/);
+});
+
+test('V4/FIX-FW wiring: exit() tears down a mid-flight countdown (overlay + timer)', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'minigames', 'framework.js'), 'utf8');
+  // the countdown's pending tick is TRACKED (clearable), not a bare setTimeout
+  assert.match(src, /timer = setTimeout\(show, n < 0 \? 600 : 900\);/);
+  // single-settle finish(): timer cleared, overlay dropped, slot nulled, resolved
+  assert.match(src, /const finish = \(\) => \{\s*\r?\n\s*clearTimeout\(timer\);\s*\r?\n\s*overlay\.remove\(\);\s*\r?\n\s*countdownCleanup = null;\s*\r?\n\s*resolve\(\);/);
+  // natural end and exit() share the SAME teardown
+  assert.match(src, /countdownCleanup = finish;/);
+  assert.match(src, /rotateGateCleanup\?\.\(\);\s*\r?\n\s*countdownCleanup\?\.\(\);/);
+});
+// ══════════════════════════════════════════════════════════ end V4/FIX-FW ═══
