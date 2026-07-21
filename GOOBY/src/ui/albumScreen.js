@@ -100,6 +100,7 @@ const ALBUM_CSS = `
    V4/UI-DEEP: visuals moved to the shared .ac-tabbar/.ac-tab kit (active =
    leaf fill via aria-selected) — only layout stays in these rules. */
 .g23-al-tabs{width:100%;max-width:27.5rem;display:flex;flex-wrap:wrap;flex:none;margin-bottom:0.5rem;}
+.g23-al-tabs .g23-al-tab.ac-tab-label{flex:1 1 40%;} /* V4/UI-DEEP: outweigh the kit's flex:1 1 0 — keep the V3 2×2 wrap at 320px */
 .g23-al-tab{flex:1 1 40%;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:0.75rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;} /* V2 fix (E16): >=44px hit target */
 .g23-al-tab span{min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;text-align:center;line-height:1.15;}
 .g23-al-page{width:100%;max-width:27.5rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.875rem;flex:none;margin-bottom:1.125rem;}
