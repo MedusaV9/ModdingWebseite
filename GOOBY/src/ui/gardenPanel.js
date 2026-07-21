@@ -22,6 +22,7 @@ import * as economy from '../systems/economy.js';
 import { now } from '../core/clock.js';
 import { forecast } from '../systems/weather.js';
 import audio from '../audio/audio.js';
+import { icon } from './icons.js'; // V4/UI-DEEP: authored glyphs for UI chrome
 
 /** crop id → emoji (mirrors the fridge tray's food emojis — §C2.2 toasts). */
 export const CROP_EMOJI = Object.freeze({
@@ -122,7 +123,7 @@ function createSeedPanel({ store, ui }) {
                 <span class="g19-name">${t(crop.nameKey)}</span>
                 <span class="g19-sub">${locked
                   ? t('garden.seeds.locked', { level: crop.unlock })
-                  : `${t('garden.seeds.growTime', { min: crop.growthMin })} · 💧×${crop.waterings}`}</span>
+                  : `${t('garden.seeds.growTime', { min: crop.growthMin })} · ${icon('hygiene', 11)}×${crop.waterings}`}</span>
               </span>
               <span class="g19-count">${t('garden.seeds.owned', { n: owned })}</span>
             </div>`;
@@ -217,7 +218,8 @@ function createSellPanel({ store, ui }) {
         const state = store.get();
         const sellable = CROPS.filter((c) => economy.sellableHarvest(state, c.foodId) > 0);
         if (sellable.length === 0) {
-          rows.innerHTML = `<div class="g19-empty">${t('garden.sell.empty')}</div>`;
+          // V4/UI-DEEP: cozy dashed .ac-emptystate placeholder (shared kit)
+          rows.innerHTML = `<div class="g19-empty ac-emptystate">${icon('sprout', 28)}${t('garden.sell.empty')}</div>`;
           return;
         }
         for (const crop of sellable) {
@@ -296,8 +298,8 @@ function createBuyPlotPanel({ store, ui }) {
       el.innerHTML = `
         <h2 class="g19-title">${t('garden.plot.title')}</h2>
         <p class="g19-hint">${t('garden.plot.body')}</p>
-        <p class="g19-price">🪙 ${t('garden.plot.price', { price: gate.price })}</p>
-        ${levelLocked ? `<p class="g19-lockmsg">🔒 ${t('garden.plot.locked', { level: def.level })}</p>` : ''}
+        <p class="g19-price">${icon('coin', 15)} ${t('garden.plot.price', { price: gate.price })}</p>
+        ${levelLocked ? `<p class="g19-lockmsg">${icon('lock', 13)} ${t('garden.plot.locked', { level: def.level })}</p>` : ''}
         <div class="g19-btnrow"></div>`;
       const btnRow = el.querySelector('.g19-btnrow');
       const buyBtn = document.createElement('button');
@@ -337,7 +339,7 @@ function createFertilizerPanel({ store, ui }) {
       const render = () => {
         const owned = store.get('items.fertilizer') ?? 0;
         el.innerHTML = `
-          <h2 class="g19-title">✨ ${t('garden.fert.title')}</h2>
+          <h2 class="g19-title">${icon('sparkle', 18)} ${t('garden.fert.title')}</h2>
           <p class="g19-hint">${t('garden.fert.body')}</p>
           <p class="g19-price">${t('garden.fert.owned', { n: owned })}</p>
           <p class="g19-hint">${t('garden.fert.hint')}</p>
@@ -435,7 +437,7 @@ function createForecastPanel({ ui }) {
         ${line(t('garden.forecast.now'), cur)}
         ${line(t('garden.forecast.next'), next)}
         ${cur.state === 'rain' || next.state === 'rain'
-          ? `<p class="g19-hint">☔ ${t('garden.forecast.rainTip')}</p>` : ''}`;
+          ? `<p class="g19-hint">${weatherIcon('rain', 15)} ${t('garden.forecast.rainTip')}</p>` : ''}`;
     },
     unmount() {
       offRoom?.(); // V2 fix (E20)

@@ -47,6 +47,9 @@
   --danger: #e0655f;
   --frost: rgba(255, 255, 255, 0.92);
   --veil: rgba(74, 59, 54, 0.35);
+  /* V4/UI-DEEP: near-opaque warm-brown scrim for immersive media viewers
+     (photo viewer/sticker sheet) — replaces the off-token plum scrims. */
+  --veil-deep: rgba(46, 36, 32, 0.92);
   /* POLISH-F z-index ladder — the documented stacking order for TOP-LEVEL
      layers (children of #ui / document.body). Values keep the audited
      pre-POLISH-F order; offsets (+5 …) are documented at their use sites.
@@ -920,15 +923,21 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+/* V4/UI-DEEP: leaf price tag — shelf-tile prices ride the AC leaf accent. */
 .shop-card .shop-price {
   display: inline-flex;
   align-items: center;
   gap: 0.1875rem;
   font-size: 0.8125rem;
   font-weight: 700;
+  background: var(--leaf);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.0625rem 0.5rem;
+  box-shadow: inset 0 -0.0938rem 0 var(--leaf-dark);
 }
 .shop-card .shop-price svg {
-  color: var(--yellow-dark);
+  color: var(--yellow);
 }
 .shop-card .shop-state {
   font-size: 0.6875rem;
@@ -1114,22 +1123,26 @@
   margin: 0.25rem 0 0.625rem;
   flex-wrap: wrap;
 }
+/* V4/UI-DEEP: filter chips speak the .ac-chip pill language (paper face +
+   hairline ring; active = leaf fill like the active .ac-tab). */
 .room-chip {
   border: none;
   border-radius: 999px;
   min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
   min-width: max(44px, 2.75rem); /* V3/G33 §B3: short labels stay ≥44px wide */
   padding: 0.375rem 0.875rem;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--paper);
   color: var(--brown);
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.1);
 }
 .room-chip.room-chip-on {
-  background: var(--teal);
+  background: var(--leaf);
   color: var(--white);
+  box-shadow: inset 0 -0.125rem 0 var(--leaf-dark), 0 2px 6px rgba(109, 181, 78, 0.35);
 }
 /* decorate-mode slot picker (panel) */
 .decor-head {
@@ -1390,6 +1403,8 @@
   line-height: 1;
   flex: none;
 }
+/* V4/UI-DEEP: the doctor avatar is the icons.js vetRabbit glyph now (glasses
+   baked into the SVG) — the old emoji-overlay rule keeps legacy markup sane. */
 .vet-avatar-glasses {
   position: absolute;
   left: 50%;
@@ -1459,6 +1474,7 @@
   font-weight: 700;
   font-size: 1rem;
 }
+/* V4/UI-DEEP: vet prices wear the same leaf price tag as the shop cards. */
 .vet-action .shop-price {
   display: inline-flex;
   align-items: center;
@@ -1466,9 +1482,14 @@
   font-size: 0.875rem;
   font-weight: 700;
   flex: none;
+  background: var(--leaf);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.0625rem 0.5625rem;
+  box-shadow: inset 0 -0.0938rem 0 var(--leaf-dark);
 }
 .vet-action .shop-price svg {
-  color: var(--yellow-dark);
+  color: var(--yellow);
 }
 .vet-action-desc {
   font-size: 0.8125rem;
@@ -5323,6 +5344,43 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   display: block;
 }
 
+/* V4/UI-DEEP: labeled-tab + wrapping-rail variants — the shop/album/wardrobe
+   text tab strips ride the same kit (active still = leaf fill). A wrapped
+   rail keeps a soft squircle radius instead of the one-row stadium. */
+.ac-tabbar.ac-tabbar-wrap {
+  flex-wrap: wrap;
+  border-radius: 1.375rem;
+}
+
+.ac-tab.ac-tab-label {
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 0.3125rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--brown);
+}
+
+.ac-tab.ac-tab-label > span[lang] {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  text-align: center;
+}
+
+.ac-tab.ac-tab-label.ac-tab-active,
+.ac-tab.ac-tab-label[aria-selected='true'] {
+  color: var(--white);
+}
+
 /* --- chip: one pill language for coin/stat/frost/radio chips ------------ */
 .ac-chip {
   display: inline-flex;
@@ -5409,3 +5467,58 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 /* ========================== end V4/AC-1 .ac-* ============================ */
+
+/* ========================================================================== */
+/* V4/UI-DEEP: emoji → icons.js swap support — inline-SVG alignment + accent  */
+/* colors for the text rows that dropped their raw-emoji chrome.              */
+/* ========================================================================== */
+.shop-hint svg,
+.vet-hint svg,
+.shop-state svg,
+.g19-price svg,
+.g19-lockmsg svg,
+.g19-title svg,
+.g19-sub svg,
+.g19-hint svg,
+.g58-codes-name svg,
+.g58-codes-effect svg {
+  vertical-align: -0.125rem;
+}
+.g22-junk {
+  color: var(--pink-dark);
+}
+.g22-care-card .shop-emoji svg {
+  display: block;
+  color: var(--teal-dark);
+}
+.shop-banner-ico {
+  flex: none;
+  display: inline-flex;
+  color: var(--teal-dark);
+}
+.vet-avatar svg {
+  display: block;
+  color: var(--brown);
+}
+.g19-price svg {
+  color: var(--yellow);
+}
+.g19-title svg {
+  color: var(--yellow-dark);
+}
+.g19-sub svg {
+  color: var(--stat-hygiene, #6ec6ff);
+}
+.g58-codes-name svg {
+  color: var(--teal-dark);
+}
+/* the vet report header wears the .ac-ribbon leaf banner — keep it hugging
+   its content inside the column-flex report card */
+.vet-report-title.ac-ribbon {
+  align-self: flex-start;
+}
+.vet-bandage-badge svg {
+  vertical-align: -0.1875rem;
+  color: var(--pink-dark);
+}
+/* ======================== end V4/UI-DEEP swap support ==================== */

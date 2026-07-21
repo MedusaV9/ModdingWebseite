@@ -159,7 +159,7 @@ let skinRenderer = null;
 const SHOP_FIX_CSS = `
 .swatch .swatch-name{max-width:100%;text-align:center;line-height:1.2;overflow-wrap:anywhere;}
 .swatch .swatch-price{max-width:100%;flex-wrap:wrap;justify-content:center;text-align:center;}
-.shop-tabs .shop-tab{min-width:0;min-height:max(44px, 2.875rem);overflow:hidden;overflow-wrap:break-word;hyphens:auto;font-size:clamp(0.6875rem,3.4vw,0.8125rem);line-height:1.2;padding:0.375rem 0.1875rem;} /* V4/G-UI: anywhere→break-word+hyphens — EN "Furniture" broke mid-word with no hyphen (album-tab convention) */
+.shop-tabs .shop-tab{flex:1 1 30%;min-width:0;min-height:max(44px, 2.875rem);overflow:hidden;overflow-wrap:break-word;hyphens:auto;font-size:clamp(0.6875rem,3.4vw,0.8125rem);line-height:1.2;padding:0.375rem 0.1875rem;} /* V4/G-UI: anywhere→break-word+hyphens — EN "Furniture" broke mid-word with no hyphen (album-tab convention). V4/UI-DEEP: explicit 30% basis (the .ac-tab-label kit defaults to flex:1 1 0) keeps the steady 2×3 grid. */
 /* V3/G40 (§C13.3): compact arcade-style lock rows in the shop's outfit tab. */
 .g40-shop-outfit-locks{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.375rem;margin-top:0.75rem;}
 .g40-shop-outfit-lock{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:0.25rem;padding:0.375rem 0.5rem;border-radius:0.75rem;background:rgba(74,59,54,.08);font-size:0.6875rem;font-weight:800;}
@@ -271,7 +271,8 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
   const foodUnit = (food) => (atTrip() ? food.price : quickPrice(food.price));
 
   function coinsPill() {
-    return `<span class="shop-coins">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
+    // V4/UI-DEEP: rides the shared .ac-chip pill (paper face + hairline ring)
+    return `<span class="shop-coins ac-chip">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
   }
 
   function priceTag(price) {
@@ -330,7 +331,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       card.innerHTML = `
         ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
         ${owned > 0 ? `<span class="shop-count">×${owned}</span>` : ''}
-        ${food.junk ? '<span class="g22-junk" aria-hidden="true">🍬</span>' : ''}
+        ${food.junk ? `<span class="g22-junk" aria-hidden="true">${icon('candy', 14)}</span>` : ''}
         <span class="shop-emoji">${FOOD_EMOJI[food.id] ?? '🍽️'}</span>
         <span class="shop-name">${t(food.nameKey)}</span>
         ${priceTag(foodUnit(food))}
@@ -365,7 +366,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       const gate = canBuyQuickDelivery(store);
       const canOffer = atTrip() && level >= ECONOMY.QUICK_DELIVERY_LEVEL;
       banner.innerHTML = `
-        <span style="font-size:30px">🛵</span>
+        <span class="shop-banner-ico">${icon('scooter', 32)}</span>
         <span class="shop-banner-text">
           <span class="shop-banner-title">${t('shop.qd.title')}</span><br>
           <span class="shop-banner-body">${t('shop.qd.pitch')}</span>
@@ -472,7 +473,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         ${count > 0 ? `<span class="shop-count">×${count}</span>` : ''}
         <span class="shop-emoji">${emoji}</span>
         <span class="shop-name">${name}</span>
-        ${locked ? `<span class="shop-state">🔒 ${t('shop.lvl', { level: lockLevel })}</span>` : priceTag(price)}`;
+        ${locked ? `<span class="shop-state">${icon('lock', 11)} ${t('shop.lvl', { level: lockLevel })}</span>` : priceTag(price)}`;
       card.addEventListener('click', () => {
         audio.play('ui.tap');
         if (locked) {
@@ -499,7 +500,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
 
     row.appendChild(careCard({
       itemId: 'medicine',
-      emoji: '💊',
+      emoji: icon('medicine', 30), // V4/UI-DEEP: authored glyphs, not emoji
       name: t('shop.item.medicine'),
       price: ITEM_PRICES.medicine,
       count: store.get('items.medicine') ?? 0,
@@ -507,7 +508,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     }));
     row.appendChild(careCard({
       itemId: 'fertilizer',
-      emoji: '🌱',
+      emoji: icon('sprout', 30),
       name: t('shop.item.fertilizer'),
       price: ITEM_PRICES.fertilizer,
       count: store.get('items.fertilizer') ?? 0,
@@ -516,7 +517,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     for (const crop of CROPS) {
       row.appendChild(careCard({
         itemId: `seed:${crop.id}`,
-        emoji: '🌾',
+        emoji: icon('seeds', 30),
         name: t('shop.seedName', { name: t(crop.nameKey) }),
         price: crop.seedPrice,
         count: store.get(`items.seed:${crop.id}`) ?? 0,
@@ -585,9 +586,9 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     card.className = `shop-card${locked && !installed ? ' g22-locked' : ''}${isNewContent ? ' g48-new-content' : ''}`;
     card.dataset.contentId = 'nougatschleuse';
     const state = installed
-      ? `<span class="shop-state">✓ ${t('shop.owned')}</span>`
+      ? `<span class="shop-state">${icon('check', 11)} ${t('shop.owned')}</span>`
       : locked
-        ? `<span class="shop-state">🔒 ${t('shop.lvl', { level: NOUGAT.UNLOCK_LEVEL })}</span>`
+        ? `<span class="shop-state">${icon('lock', 11)} ${t('shop.lvl', { level: NOUGAT.UNLOCK_LEVEL })}</span>`
         : priceTag(NOUGAT.PRICE);
     card.innerHTML = `
       ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
@@ -635,7 +636,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     const card = document.createElement('button');
     card.className = 'shop-card';
     const state = placed
-      ? `<span class="shop-state">✓ ${t('shop.placed')}</span>`
+      ? `<span class="shop-state">${icon('check', 11)} ${t('shop.placed')}</span>`
       : owned
         ? `<span class="shop-state">${entry.default ? t('shop.free') : t('shop.owned')} · ${t('shop.placeNow')}</span>`
         : priceTag(entry.price);
@@ -709,7 +710,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       <span class="swatch-chip" style="${swatchStyle(entry)}"></span>
       <span class="swatch-name">${t(entry.nameKey)}</span>
       ${applied
-        ? `<span class="swatch-price">✓ ${t('shop.applied')}</span>`
+        ? `<span class="swatch-price">${icon('check', 11)} ${t('shop.applied')}</span>`
         : owned
           ? `<span class="swatch-price">${t('shop.apply')}</span>`
           : `<span class="swatch-price">${icon('coin', 12)}${entry.price}</span>`}`;
@@ -749,7 +750,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     const card = document.createElement('div');
     card.className = 'card shop-outfits-card';
     card.innerHTML = `
-      <span class="shop-outfits-emoji">🎩</span>
+      <span class="shop-outfits-emoji">${icon('hat', 40)}</span>
       <div>${t('shop.outfitsPitch')}</div>
       <button class="btn btn-teal outfits-open">${icon('shirt', 20)} ${t('shop.outfitsOpen')}</button>
       ${atTrip() ? '' : `<div class="shop-banner-body">${t('wardrobe.shopOnly')}</div>`}
@@ -884,7 +885,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       const banner = document.createElement('div');
       banner.className = 'shop-banner';
       banner.innerHTML = `
-        <span style="font-size:30px">🔒</span>
+        <span class="shop-banner-ico">${icon('lock', 32)}</span>
         <span class="shop-banner-text">
           <span class="shop-banner-title">${t('shop.tab.skins')}</span><br>
           <span class="shop-banner-body">${t('shop.skins.needLevel', { level: UNLOCKS.SKINS })}</span>
@@ -917,7 +918,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         `shop-card g22-skin-card${equipped ? ' shop-card-sel' : ''}` +
         `${selSkin === def.id ? ' g22-skin-tryon' : ''}${locked ? ' g22-locked' : ''}`;
       const state = equipped
-        ? `<span class="shop-state">✓ ${t('wardrobe.equipped')}</span>`
+        ? `<span class="shop-state">${icon('check', 11)} ${t('wardrobe.equipped')}</span>`
         : owned
           ? `<span class="shop-state">${t('shop.owned')} · ${t('shop.apply')}</span>`
           : priceTag(def.price);
@@ -1026,18 +1027,20 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       wrap.innerHTML = `
         <div class="shop-head">
           ${atTrip() ? '' : `<button class="btn btn-ghost btn-round shop-close" aria-label="${t('ui.close')}">${icon('close', 20)}</button>`}
-          <h1 class="shop-title">🛒 ${t('shop.title')}</h1>
+          <h1 class="shop-title">${icon('cart', 26)} ${t('shop.title')}</h1>
           ${coinsPill()}
           ${atTrip() ? `<button class="btn btn-teal shop-home">${icon('home', 18)} ${t('trip.goHome')}</button>` : ''}
         </div>
-        ${arrival ? `<div class="shop-hint">🎉 ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
-        ${atTrip() ? '' : `<div class="shop-hint">🚗 ${t('shop.browseHint')}</div>`}
-        <div class="shop-tabs"></div>
+        ${arrival ? `<div class="shop-hint">${icon('sparkle', 15)} ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
+        ${atTrip() ? '' : `<div class="shop-hint">${icon('car', 15)} ${t('shop.browseHint')}</div>`}
+        <div class="shop-tabs ac-tabbar ac-tabbar-wrap"></div>
         <div class="shop-body"></div>`;
       const tabsEl = wrap.querySelector('.shop-tabs');
       for (const [id, key] of TABS) {
         const b = document.createElement('button');
-        b.className = `shop-tab${tab === id ? ' shop-tab-on' : ''}`;
+        // V4/UI-DEEP: shop tabs ride the shared .ac-tab kit (active = leaf)
+        b.className = `shop-tab ac-tab ac-tab-label${tab === id ? ' shop-tab-on' : ''}`;
+        b.setAttribute('aria-selected', tab === id ? 'true' : 'false');
         b.dataset.tab = id;
         b.lang = getLang(); // V4/G-UI: language-correct hyphenation (wardrobe precedent)
         b.textContent = hyTab(t(key));
@@ -1047,6 +1050,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
           selFood = null;
           for (const other of tabsEl.children) {
             other.classList.toggle('shop-tab-on', other === b);
+            other.setAttribute('aria-selected', other === b ? 'true' : 'false');
           }
           renderBody();
         });

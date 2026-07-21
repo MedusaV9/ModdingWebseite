@@ -520,52 +520,55 @@ const FOOD_EMOJI = {
 /** V2/G20: junkScore band → belly icon fill (§C7 green/yellow/orange). */
 const BELLY_BAND_COLOR = { ok: '#8BC98A', warn: '#F2C14E', high: '#F28C4E' };
 
+// V4/UI-DEEP (§B3): px → rem sweep (÷16) so the care tray/wash overlay honor
+// settings.uiScale like the px-audited src/ui blocks; the 44px tap floors stay
+// real-px inside max(44px, …), shadows/filters keep px per the §B3 exemptions.
 const CARE_CSS = `
-.g5-float{position:fixed;transform:translate(-50%,-50%);font-size:30px;font-weight:800;color:#59C9B9;text-shadow:0 2px 0 #fff,0 4px 14px rgba(74,59,54,.3);pointer-events:none;z-index:var(--z-drag);animation:g5-float-up 1.1s ease-out forwards;}
+.g5-float{position:fixed;transform:translate(-50%,-50%);font-size:1.875rem;font-weight:800;color:#59C9B9;text-shadow:0 2px 0 #fff,0 4px 14px rgba(74,59,54,.3);pointer-events:none;z-index:var(--z-drag);animation:g5-float-up 1.1s ease-out forwards;}
 .g5-float.g5-bad{color:#FF7BA9;}
-@keyframes g5-float-up{0%{opacity:0;margin-top:0}12%{opacity:1}100%{opacity:0;margin-top:-70px}}
-.g5-ghost{position:fixed;transform:translate(-50%,-50%);font-size:52px;filter:drop-shadow(0 6px 8px rgba(74,59,54,.35));pointer-events:none;z-index:calc(var(--z-drag) + 50);transition:font-size 120ms ease;}
-.g5-ghost.g5-near{font-size:64px;}
-.tray-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-height:38vh;overflow-y:auto;margin-top:10px;}
-.tray-item{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--bg-cream,#FFF6EC);border-radius:16px;padding:10px 4px 8px;border:none;font-family:inherit;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;}
+@keyframes g5-float-up{0%{opacity:0;margin-top:0}12%{opacity:1}100%{opacity:0;margin-top:-4.375rem}}
+.g5-ghost{position:fixed;transform:translate(-50%,-50%);font-size:3.25rem;filter:drop-shadow(0 6px 8px rgba(74,59,54,.35));pointer-events:none;z-index:calc(var(--z-drag) + 50);transition:font-size 120ms ease;}
+.g5-ghost.g5-near{font-size:4rem;}
+.tray-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.625rem;max-height:38vh;overflow-y:auto;margin-top:0.625rem;}
+.tray-item{display:flex;flex-direction:column;align-items:center;gap:0.125rem;background:var(--bg-cream,#FFF6EC);border-radius:1rem;padding:0.625rem 0.25rem 0.5rem;border:none;font-family:inherit;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;}
 .tray-item:active{transform:scale(.95);}
-.tray-emoji{font-size:34px;line-height:1;pointer-events:none;}
-.tray-name{font-size:11px;font-weight:700;color:var(--brown,#4A3B36);opacity:.75;pointer-events:none;}
-.tray-count{position:absolute;top:4px;right:6px;background:var(--pink,#FF7BA9);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:1px 7px;pointer-events:none;}
-.tray-title{margin:0;font-size:22px;font-weight:800;color:var(--brown,#4A3B36);}
-.tray-hint{font-size:13px;font-weight:700;opacity:.55;margin-top:2px;}
-.tray-empty{padding:24px 8px;text-align:center;font-weight:700;opacity:.6;}
+.tray-emoji{font-size:2.125rem;line-height:1;pointer-events:none;}
+.tray-name{font-size:0.6875rem;font-weight:700;color:var(--brown,#4A3B36);opacity:.75;pointer-events:none;}
+.tray-count{position:absolute;top:0.25rem;right:0.375rem;background:var(--pink,#FF7BA9);color:#fff;font-size:0.6875rem;font-weight:800;border-radius:999px;padding:0.0625rem 0.4375rem;pointer-events:none;}
+.tray-title{margin:0;font-size:1.375rem;font-weight:800;color:var(--brown,#4A3B36);}
+.tray-hint{font-size:0.8125rem;font-weight:700;opacity:.55;margin-top:0.125rem;}
+.tray-empty{padding:1.5rem 0.5rem;text-align:center;font-weight:700;opacity:.6;}
 /* ── V4/G79 food-value chips (§G9.2): 0.625rem, brown 70%, max two. */
 .g79-food-values{display:flex;align-items:center;justify-content:center;gap:.25rem;min-height:.75rem;color:var(--brown,#4A3B36);font-size:.625rem;font-weight:800;line-height:1;opacity:.7;pointer-events:none;}
 .g79-food-chip{display:inline-flex;align-items:center;gap:.0625rem;white-space:nowrap;}
 .g79-food-chip svg{width:.75rem;height:.75rem;}
 /* ── end V4/G79 food-value chips. */
 .g5-wash{position:absolute;inset:0;pointer-events:none;z-index:var(--z-float);}
-.g5-wash-meter{position:absolute;top:calc(76px + var(--safe-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.94);border-radius:999px;padding:8px 16px;font-weight:800;font-size:15px;color:var(--brown,#4A3B36);box-shadow:0 6px 24px rgba(74,59,54,.14);}
-.g5-wash-track{display:inline-block;width:90px;height:12px;border-radius:999px;background:rgba(74,59,54,.12);overflow:hidden;}
+.g5-wash-meter{position:absolute;top:calc(4.75rem + var(--safe-top,0px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:0.5rem;background:rgba(255,255,255,.94);border-radius:999px;padding:0.5rem 1rem;font-weight:800;font-size:0.9375rem;color:var(--brown,#4A3B36);box-shadow:0 6px 24px rgba(74,59,54,.14);}
+.g5-wash-track{display:inline-block;width:5.625rem;height:0.75rem;border-radius:999px;background:rgba(74,59,54,.12);overflow:hidden;}
 .g5-wash-fill{display:block;height:100%;border-radius:999px;background:var(--stat-hygiene,#6EC6FF);width:0%;transition:width 150ms ease;}
-.g5-wash-hint{position:absolute;top:calc(122px + var(--safe-top,0px));left:0;right:0;text-align:center;font-size:14px;font-weight:700;color:var(--brown,#4A3B36);opacity:.65;text-shadow:0 1px 0 #fff;}
-.g5-soap{position:fixed;transform:translate(-50%,-50%);width:74px;height:52px;pointer-events:auto;cursor:grab;touch-action:none;z-index:calc(var(--z-drag) + 60);filter:drop-shadow(0 6px 8px rgba(74,59,54,.3));}
-.g5-shower-btn{position:absolute;pointer-events:auto;display:inline-flex;align-items:center;gap:8px;right:14px;top:calc(76px + var(--safe-top,0px));}
-.g5-wash-close{position:absolute;pointer-events:auto;left:14px;top:calc(76px + var(--safe-top,0px));}
+.g5-wash-hint{position:absolute;top:calc(7.625rem + var(--safe-top,0px));left:0;right:0;text-align:center;font-size:0.875rem;font-weight:700;color:var(--brown,#4A3B36);opacity:.65;text-shadow:0 1px 0 #fff;}
+.g5-soap{position:fixed;transform:translate(-50%,-50%);width:4.625rem;height:3.25rem;pointer-events:auto;cursor:grab;touch-action:none;z-index:calc(var(--z-drag) + 60);filter:drop-shadow(0 6px 8px rgba(74,59,54,.3));}
+.g5-shower-btn{position:absolute;pointer-events:auto;display:inline-flex;align-items:center;gap:0.5rem;right:0.875rem;top:calc(4.75rem + var(--safe-top,0px));}
+.g5-wash-close{position:absolute;pointer-events:auto;left:0.875rem;top:calc(4.75rem + var(--safe-top,0px));}
 /* V2/G20: junk badge + belly band + Care row (§C7/§C3.5) */
-.tray-junk{position:absolute;top:4px;left:6px;font-size:13px;pointer-events:none;}
-.tray-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.g20-belly{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--brown,#4A3B36);opacity:.8;}
+.tray-junk{position:absolute;top:0.25rem;left:0.375rem;font-size:0.8125rem;pointer-events:none;}
+.tray-head{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;}
+.g20-belly{display:inline-flex;align-items:center;gap:0.375rem;font-size:0.75rem;font-weight:700;color:var(--brown,#4A3B36);opacity:.8;}
 .g20-belly svg{display:block;}
-.tray-care-title{margin:14px 0 0;font-size:15px;font-weight:800;color:var(--brown,#4A3B36);opacity:.8;}
-.tray-care-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px;}
-.tray-care-item{display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--bg-cream,#FFF6EC);border-radius:16px;padding:10px 4px 8px;border:2px dashed rgba(74,59,54,.18);font-family:inherit;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;}
+.tray-care-title{margin:0.875rem 0 0;font-size:0.9375rem;font-weight:800;color:var(--brown,#4A3B36);opacity:.8;}
+.tray-care-row{display:grid;grid-template-columns:repeat(2,1fr);gap:0.625rem;margin-top:0.5rem;}
+.tray-care-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;background:var(--bg-cream,#FFF6EC);border-radius:1rem;padding:0.625rem 0.25rem 0.5rem;border:0.125rem dashed rgba(74,59,54,.18);font-family:inherit;user-select:none;-webkit-user-select:none;touch-action:none;position:relative;}
 .tray-care-item.g20-drag{cursor:grab;}
 .tray-care-item:active{transform:scale(.97);}
-.tray-care-buy{font-size:11px;font-weight:800;border:none;border-radius:999px;padding:3px 10px;background:var(--teal,#59C9B9);color:#fff;font-family:inherit;cursor:pointer;position:relative;}
+.tray-care-buy{font-size:0.6875rem;font-weight:800;border:none;border-radius:999px;padding:0.1875rem 0.625rem;background:var(--teal,#59C9B9);color:#fff;font-family:inherit;cursor:pointer;position:relative;}
 /* V2/FIX-C P2-6: invisible ::before halo gives the compact chip a >=44px
    effective hit area (the only purchase affordance in the tray). Pointer
    events on the halo target the button itself; the medicine-drag handler
    already ignores events from .tray-care-buy. */
-.tray-care-buy::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,64px);height:44px;border-radius:999px;}
+.tray-care-buy::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,4rem);height:max(44px,2.75rem);border-radius:999px;}
 .tray-care-buy:disabled{opacity:.45;}
-.tray-care-hint{font-size:10px;font-weight:700;opacity:.55;}
+.tray-care-hint{font-size:0.625rem;font-weight:700;opacity:.55;}
 /* ── V4/G70 sick discoverability block (owned): subtle medicine pulse only. */
 .tray-care-item.g70-sick-medicine{outline:0.1875rem solid rgba(255,123,169,.72);outline-offset:0.125rem;animation:g70-medicine-pulse 1.8s ease-in-out infinite;}
 @keyframes g70-medicine-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,123,169,0)}50%{box-shadow:0 0 0 .4375rem rgba(255,123,169,.18)}}

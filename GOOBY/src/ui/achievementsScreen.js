@@ -17,12 +17,15 @@ const ACH_CSS = `
 /* F3: title shrinks/ellipsizes at narrow widths — never the count pill
    (6vw keeps "Achievements" un-ellipsized beside the pill at 320px) */
 .g12-ach-title{flex:1;min-width:0;margin:0;font-size:clamp(1.0625rem,6vw,1.875rem);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.g12-ach-count{flex:none;background:var(--white);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:var(--shadow-soft);}
+.g12-ach-count{flex:none;background:var(--paper);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:0 0 0 1px var(--outline-soft),0 2px 6px rgba(74,59,54,.1);} /* V4/UI-DEEP: .ac-chip pill language */
 .g12-ach-list{width:100%;max-width:27.5rem;display:flex;flex-direction:column;gap:0.5rem;padding-bottom:1.125rem;flex:none;}
 .g12-ach-tile{display:flex;align-items:center;gap:0.75rem;background:var(--white);border-radius:var(--btn-radius);box-shadow:var(--shadow-soft);padding:0.625rem 0.875rem;}
 .g12-ach-tile.g12-locked{opacity:.92;}
 .g12-ach-medal{flex:none;width:2.875rem;height:2.875rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(74,59,54,.08);color:rgba(74,59,54,.35);}
-.g12-ach-tile.g12-done .g12-ach-medal{background:var(--yellow);color:#fff;}
+/* V4/UI-DEEP: badge-medallion treatment — unlocked tiles get a warm paper
+   face + the medal becomes a gold coin-medallion with a pressed rim. */
+.g12-ach-tile.g12-done{background:linear-gradient(180deg,var(--paper),var(--white));box-shadow:0 0 0 1px var(--outline-soft),var(--shadow-soft);}
+.g12-ach-tile.g12-done .g12-ach-medal{background:var(--yellow);color:#fff;box-shadow:inset 0 -0.1875rem 0 var(--yellow-dark),0 2px 6px rgba(255,209,102,.5);}
 .g12-ach-body{flex:1;min-width:0;}
 .g12-ach-name{font-size:0.9375rem;font-weight:800;color:var(--brown);}
 .g12-ach-desc{font-size:0.75rem;font-weight:700;opacity:.72;margin-top:1px;} /* V4/G-UI: .55→.72 — body-text contrast ≈4.7:1 (WCAG-ish) */

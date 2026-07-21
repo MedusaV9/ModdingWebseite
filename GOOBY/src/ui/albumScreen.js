@@ -93,14 +93,15 @@ const ALBUM_CSS = `
 .screen-album{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .g23-al-head{width:100%;max-width:27.5rem;display:flex;align-items:center;gap:0.625rem;margin:0.375rem 0 0.375rem;flex:none;}
 .g23-al-title{flex:1;min-width:0;margin:0;font-size:clamp(0.9375rem,5.5vw,1.875rem);font-weight:800;color:var(--brown);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;line-height:1.1;} /* V3/FIX-C: 6vw→5.5vw. V4/FIX-UI: wrap to 2 hyphenated lines instead of „Stickeralb…" at the 320px squeeze */
-.g23-al-count{flex:none;background:var(--white);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:var(--shadow-soft);font-variant-numeric:tabular-nums;}
+.g23-al-count{flex:none;background:var(--paper);border-radius:999px;padding:0.5rem 0.75rem;font-size:0.9375rem;font-weight:800;color:var(--teal-dark);box-shadow:0 0 0 1px var(--outline-soft),0 2px 6px rgba(74,59,54,.1);font-variant-numeric:tabular-nums;} /* V4/UI-DEEP: .ac-chip pill language */
 /* V3/FIX-C (E9/E13 P1): a single 4-tab row can never hold the DE set names
    („Stadt-Sehenswürdigkeiten") at 320px — the strip wraps into a 2×2 grid and
-   labels wrap to 2 hyphenated lines instead of ellipsizing („Stadt-…"). */
-.g23-al-tabs{width:100%;max-width:27.5rem;display:flex;flex-wrap:wrap;gap:0.375rem;flex:none;margin-bottom:0.5rem;}
-.g23-al-tab{flex:1 1 40%;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;border-radius:var(--radius-row);min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:0.75rem;font-weight:800;cursor:pointer;background:rgba(255,255,255,.6);color:var(--brown);box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;} /* V2 fix (E16): >=44px hit target */
+   labels wrap to 2 hyphenated lines instead of ellipsizing („Stadt-…").
+   V4/UI-DEEP: visuals moved to the shared .ac-tabbar/.ac-tab kit (active =
+   leaf fill via aria-selected) — only layout stays in these rules. */
+.g23-al-tabs{width:100%;max-width:27.5rem;display:flex;flex-wrap:wrap;flex:none;margin-bottom:0.5rem;}
+.g23-al-tab{flex:1 1 40%;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:0.75rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;} /* V2 fix (E16): >=44px hit target */
 .g23-al-tab span{min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;text-align:center;line-height:1.15;}
-.g23-al-tab.g23-active{background:var(--teal);color:#fff;}
 .g23-al-page{width:100%;max-width:27.5rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.875rem;flex:none;margin-bottom:1.125rem;}
 .g23-al-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(4.75rem,1fr));gap:0.625rem;}
 .g23-al-slot{position:relative;display:flex;flex-direction:column;align-items:center;gap:0.25rem;border:none;background:none;padding:0;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -120,11 +121,12 @@ const ALBUM_CSS = `
 .g23-al-claim.g23-claimed-btn{color:var(--teal-dark);}
 
 /* ── V3/G34: top-level album tabs + Stickerbuch (§C5.3 — rem-based) ─────── */
-.g34-al-toptabs{width:100%;max-width:27.5rem;display:flex;gap:0.375rem;flex:none;margin-bottom:0.5rem;}
+/* V4/UI-DEEP: toptabs ride the shared .ac-tabbar/.ac-tab kit too (active =
+   leaf via aria-selected) — layout-only rules remain here. */
+.g34-al-toptabs{width:100%;max-width:27.5rem;display:flex;flex:none;margin-bottom:0.5rem;}
 /* V3/FIX-C (E8 P2): vw-capped font + inline (non-absolute) count badge — the
    absolutely-positioned badge used to sit ON the tab text at 320px @ 130% DE. */
-.g34-al-toptab{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;border-radius:var(--radius-row);min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:min(0.8125rem,4vw);font-weight:800;cursor:pointer;background:rgba(255,255,255,.6);color:var(--brown);box-shadow:var(--shadow-soft);-webkit-tap-highlight-color:transparent;position:relative;}
-.g34-al-toptab.g34-active{background:var(--pink);color:#fff;}
+.g34-al-toptab{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:0.3125rem;border:none;min-height:max(44px,2.75rem);padding:0.5625rem 0.25rem;font-family:inherit;font-size:min(0.8125rem,4vw);font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative;}
 .g34-al-toptab>span:not(.g34-sb-newdot){min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:break-word;hyphens:auto;text-align:center;line-height:1.15;} /* V4/FIX-UI: „Stickerbuch" wraps instead of „Stic…" at 320px @ 130% */
 .g34-al-toptab .g34-sb-newdot{position:static;flex:none;}
 /* V4/FIX-UI: a single 3-tab row can never hold „Sticker Book" + NEU badge at
@@ -159,8 +161,8 @@ const ALBUM_CSS = `
 .g34-sb-dot{border:none;background:none;padding:0;width:max(44px,2.75rem);height:max(44px,2.75rem);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .g34-sb-dot::after{content:'';width:0.5rem;height:0.5rem;border-radius:999px;background:rgba(74,59,54,.22);transition:background 150ms ease,transform 150ms ease;}
 .g34-sb-dot.g34-active::after{background:var(--pink);transform:scale(1.35);}
-.g34-sb-sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(42,26,60,.45);padding:1rem;}
-.g34-sb-card{position:relative;width:100%;max-width:20rem;background:var(--white);border-radius:1.375rem;box-shadow:0 12px 40px rgba(42,26,60,.35);padding:1.25rem 1rem 1.125rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;text-align:center;}
+.g34-sb-sheet{position:fixed;inset:0;z-index:var(--z-float);display:flex;align-items:center;justify-content:center;background:var(--veil);padding:1rem;} /* V4/UI-DEEP: token scrim + z-ladder (was literal plum) */
+.g34-sb-card{position:relative;width:100%;max-width:20rem;background:var(--white);border-radius:1.375rem;box-shadow:var(--shadow-pop);padding:1.25rem 1rem 1.125rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;text-align:center;}
 .g34-sb-card-art{width:min(60vw,13rem);aspect-ratio:1;object-fit:contain;}
 .g34-sb-card.g34-locked .g34-sb-card-art{filter:grayscale(1) brightness(0.35) opacity(0.45);}
 .g34-sb-card-title{margin:0;font-size:1.125rem;font-weight:800;color:var(--brown);}
@@ -180,7 +182,7 @@ const ALBUM_CSS = `
 .g59-ph-empty-art .g59-ph-cam{position:absolute;right:0.125rem;bottom:0.25rem;width:2.375rem;height:2.375rem;border-radius:50%;background:var(--white);box-shadow:var(--shadow-soft);display:flex;align-items:center;justify-content:center;color:var(--teal-dark);}
 .g59-ph-empty-txt{margin:0;font-size:0.9375rem;font-weight:800;color:var(--brown);}
 .g59-ph-cta{display:inline-flex;align-items:center;gap:0.375rem;border:none;border-radius:999px;min-height:max(44px,2.75rem);padding:0.5625rem 1rem;font-family:inherit;font-size:0.8125rem;font-weight:800;background:var(--pink);color:#fff;box-shadow:var(--shadow-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.g59-vw{position:fixed;inset:0;z-index:70;background:rgba(24,14,34,.92);display:flex;flex-direction:column;}
+.g59-vw{position:fixed;inset:0;z-index:var(--z-media);background:var(--veil-deep);display:flex;flex-direction:column;} /* V4/UI-DEEP: warm --veil-deep + media z-rung (was literal plum/70) */
 .g59-vw-top{flex:none;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:max(0.5rem,var(--safe-top)) max(0.5rem,var(--safe-right)) 0.25rem max(0.5rem,var(--safe-left));}
 .g59-vw-date{min-width:0;font-size:0.75rem;font-weight:700;color:#fff;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .g59-vw-close{flex:none;border:none;border-radius:50%;width:max(44px,2.75rem);height:max(44px,2.75rem);background:rgba(255,255,255,.14);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -292,7 +294,7 @@ export function registerAlbumScreen({ store, ui, audio }) {
 
     // --- V3/G34: top-level tab strip „Sticker" | „Stickerbuch" (§B5) ---
     const topTabs = document.createElement('div');
-    topTabs.className = 'g34-al-toptabs';
+    topTabs.className = 'g34-al-toptabs ac-tabbar ac-tabbar-wrap'; // V4/UI-DEEP
     el.appendChild(topTabs);
 
     const body = document.createElement('div');
@@ -643,11 +645,12 @@ export function registerAlbumScreen({ store, ui, audio }) {
       count.textContent = `${totalOwned}/${totalAll}`;
 
       const tabs = document.createElement('div');
-      tabs.className = 'g23-al-tabs';
+      tabs.className = 'g23-al-tabs ac-tabbar ac-tabbar-wrap'; // V4/UI-DEEP: shared kit
       body.appendChild(tabs);
       for (const set of COLLECTION_SETS) {
         const tab = document.createElement('button');
-        tab.className = `g23-al-tab${set.id === activeSet ? ' g23-active' : ''}`;
+        tab.className = `g23-al-tab ac-tab ac-tab-label${set.id === activeSet ? ' g23-active' : ''}`;
+        tab.setAttribute('aria-selected', set.id === activeSet ? 'true' : 'false');
         // V3/FIX-C: lang attr drives hyphens:auto for the wrapped DE names
         tab.innerHTML = `${icon(SET_ICONS[set.id] ?? 'star', 14)}<span lang="${getLang()}">${hy(t(set.nameKey))}</span>`;
         tab.addEventListener('click', () => {
@@ -853,7 +856,8 @@ export function registerAlbumScreen({ store, ui, audio }) {
         ['photos', 'album.tab.photos'], // V4/G59 (§C-SYS9.2)
       ]) {
         const tab = document.createElement('button');
-        tab.className = `g34-al-toptab${activeTab === tabId ? ' g34-active' : ''}`;
+        tab.className = `g34-al-toptab ac-tab ac-tab-label${activeTab === tabId ? ' g34-active' : ''}`;
+        tab.setAttribute('aria-selected', activeTab === tabId ? 'true' : 'false');
         const tabIcon = tabId === 'photos' ? g59Icon('camera', 14) : icon(tabId === 'book' ? 'star' : 'cards', 14);
         // V4/FIX-UI: lang + hy() feed the 2-line label clamp (no more „Stic…")
         tab.innerHTML = `${tabIcon}<span lang="${getLang()}">${hy(tabId === 'photos' ? tG(labelKey) : t(labelKey))}</span>

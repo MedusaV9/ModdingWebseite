@@ -20,8 +20,10 @@ const QB_CSS = `
 .g23-qb-head{width:100%;max-width:27.5rem;display:flex;align-items:center;gap:0.625rem;margin:0.375rem 0 0.375rem;flex:none;}
 .g23-qb-title{flex:1;min-width:0;margin:0;font-size:clamp(1.0625rem,6vw,1.875rem);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .g23-qb-list{width:100%;max-width:27.5rem;display:flex;flex-direction:column;gap:0.625rem;flex:none;}
-.g23-qb-card{display:flex;flex-direction:column;gap:0.5rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.75rem 0.875rem;}
+.g23-qb-card{position:relative;display:flex;flex-direction:column;gap:0.5rem;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:0.75rem 0.875rem;} /* V4/UI-DEEP: relative anchors the claim stamp */
 .g23-qb-card.g23-claimed{opacity:.72;}
+/* V4/UI-DEEP: AC "approval stamp" over claimed quest cards (.ac-stamp kit) */
+.g23-qb-stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-8deg);background:rgba(255,250,242,.85);}
 .g23-qb-row{display:flex;align-items:flex-start;gap:0.625rem;}
 .g23-qb-body{flex:1;min-width:0;}
 .g23-qb-name{font-size:0.9375rem;font-weight:800;color:var(--brown);}
@@ -120,6 +122,7 @@ export function registerQuestBoard({ store, ui, audio }) {
           (Math.min(def.target, entry.progress) / def.target) * 100
         );
         card.innerHTML = `
+          ${entry.claimed ? `<span class="ac-stamp g23-qb-stamp">${t('quests.claimed')}</span>` : ''}
           <div class="g23-qb-row">
             <span class="g23-qb-body">
               <div class="g23-qb-name">${t(def.titleKey ?? `quest.${entry.id.slice(2)}.title`)}</div>

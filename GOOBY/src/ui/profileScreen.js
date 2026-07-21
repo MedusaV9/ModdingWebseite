@@ -91,7 +91,7 @@ const PROFILE_CSS = `
 /* ── V4/G69 (§C-SYS3.2): XP guide entry + compact source stats ─────────── */
 .g23-pr-ring[role="button"]{border:0;padding:0;background:transparent;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .g69-pr-xp{display:flex;flex-direction:column;gap:.375rem;}
-.g69-pr-xp-open{display:flex;align-items:center;gap:.5rem;width:100%;min-height:max(44px,2.75rem);padding:.4375rem .625rem;border:0;border-radius:var(--radius-row);background:rgba(89,201,185,.12);color:var(--brown);font:800 .8125rem/1.2 system-ui;text-align:left;cursor:pointer;}
+.g69-pr-xp-open{display:flex;align-items:center;gap:.5rem;width:100%;min-height:max(44px,2.75rem);padding:.4375rem .625rem;border:0;border-radius:var(--radius-row);background:rgba(89,201,185,.12);color:var(--brown);font:800 .8125rem/1.2 var(--font-round);text-align:left;cursor:pointer;} /* V4/UI-DEEP: --font-round, not system-ui */
 .g69-pr-xp-open svg{flex:none;color:var(--teal-dark);}
 .g69-pr-xp-open span{flex:1;min-width:0;}
 .g69-pr-xp-stat{display:grid;grid-template-columns:minmax(5.5rem,.38fr) 1fr;gap:.5rem;align-items:baseline;font-size:.6875rem;line-height:1.25;}

@@ -13,15 +13,19 @@ import { ROOMS, UNLOCKS } from '../data/constants.js'; // V2/G19: + UNLOCKS
 import { NAV_ORDER } from '../home/roomManager.js'; // V2/G19: 5-room order (§B3)
 import { getStore } from '../core/store.js'; // V2/G19: live level for the padlock
 import audio from '../audio/audio.js'; // V3/FIX-D (E19): arrow/dot tap cues
+import { icon } from './icons.js'; // V4/UI-DEEP: padlock uses the authored glyph
 
 // V3/G33 (§B3 rem sweep + §C1.4): px → rem ÷16; safe-area offsets moved from
 // raw env() onto the §B9 root vars (--safe-*) so the dev-panel fake-notch
 // toggle reaches them; dots pinned per §C1.4 `max(12px, var(--safe-bottom))`.
+// V4/UI-DEEP: cozy-token pass — --font-round instead of system-ui, the arrow
+// pills swap the last old cream bevel for the paper face + hairline ring, and
+// the dot rail rides the --frost floating-chip surface.
 const NAV_CSS = `
-.room-nav{position:absolute;inset:0;pointer-events:none;font-family:system-ui,sans-serif;}
+.room-nav{position:absolute;inset:0;pointer-events:none;font-family:var(--font-round);}
 .rn-arrow{pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);width:max(44px, 3rem);height:max(44px, 3.75rem);
-  border:none;border-radius:1rem;background:rgba(255,255,255,.82);color:var(--brown);font-size:1.5rem;font-weight:800;
-  box-shadow:0 3px 10px rgba(74,59,54,.16);border-bottom:0.25rem solid rgba(235,217,200,.9);cursor:pointer;
+  border:none;border-radius:1rem;background:var(--frost);color:var(--brown);font-size:1.5rem;font-weight:800;
+  box-shadow:0 0 0 1px var(--outline-soft),0 3px 10px rgba(74,59,54,.16);cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
 .rn-arrow:active{transform:translateY(-50%) scale(.94);}
 .rn-arrow[disabled]{opacity:0;pointer-events:none;}
@@ -29,7 +33,7 @@ const NAV_CSS = `
 .rn-right{right:max(0.5rem, var(--safe-right));}
 .rn-dots{pointer-events:auto;position:absolute;left:50%;transform:translateX(-50%);
   bottom:max(0.875rem, calc(var(--safe-bottom) + 0.125rem));display:flex;gap:max(2rem, calc(44px - 0.75rem));padding:0.5rem 1rem;
-  background:rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 8px rgba(74,59,54,.14);
+  background:var(--frost);border-radius:999px;box-shadow:0 0 0 1px var(--outline-soft),0 2px 8px rgba(74,59,54,.14);
   /* F6 (RE3): above the HUD (z 40) so the g5-hud-btns row can't shave the top
      of the dot halos to <44px; the 54px buttons keep ≥48px effective (§D5). */
   z-index:calc(var(--z-hud) + 5);}
@@ -40,13 +44,14 @@ const NAV_CSS = `
 /* F6 (RE3): the VISUAL dot lives on ::before so the active scale(1.25) never
    scales the 44px ::after hit halo (a scaled halo hit-tested over neighbours,
    shrinking their effective targets to ~38px). */
-.rn-dot::before{content:'';position:absolute;inset:0;border-radius:50%;background:#E3D3C2;
+.rn-dot::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--paper-shade);
   transition:background .2s,transform .2s;}
 .rn-dot.on::before{background:var(--pink);transform:scale(1.25);}
 /* V2/G19 (§B6): padlocked garden dot — lock glyph riding the dot, greyed */
 .rn-dot.rn-locked::before{background:#D5CBBE;}
 .rn-lock{position:absolute;left:50%;top:50%;transform:translate(-50%,-54%);
-  font-size:0.6875rem;line-height:1;pointer-events:none;filter:grayscale(1);opacity:.85;}
+  line-height:0;pointer-events:none;color:var(--brown);opacity:.8;}
+.rn-lock svg{display:block;}
 .rn-dot:not(.rn-locked) .rn-lock{display:none;}
 `;
 
@@ -146,7 +151,7 @@ export function createRoomNav({ onNavigate }) {
         if (roomId === 'garden') {
           const lock = document.createElement('span');
           lock.className = 'rn-lock';
-          lock.textContent = '🔒';
+          lock.innerHTML = icon('lock', 11); // V4/UI-DEEP: authored glyph
           dot.appendChild(lock);
         }
         dotsEl.appendChild(dot);

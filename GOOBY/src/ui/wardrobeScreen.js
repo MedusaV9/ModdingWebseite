@@ -52,14 +52,15 @@ const WARDROBE_CSS = `
    V3/FIX-C (E9/E13 P1): vw-compressed title + coins pill so „Garderobe" stays
    readable beside the pill at 320px × 115/130 % (was „Garder…"/„W…"). */
 .g12-wr-title{flex:1;min-width:0;margin:0;font-size:min(1.875rem,6.5vw);font-weight:800;color:var(--brown);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.g12-wr-coins{flex:none;display:inline-flex;align-items:center;gap:0.375rem;background:var(--white);border-radius:999px;padding:0.5rem min(0.875rem,2.5vw);font-size:min(1rem,4.5vw);font-weight:800;color:var(--brown);box-shadow:var(--shadow-soft);}
+.g12-wr-coins{flex:none;display:inline-flex;align-items:center;gap:0.375rem;background:var(--paper);border-radius:999px;padding:0.5rem min(0.875rem,2.5vw);font-size:min(1rem,4.5vw);font-weight:800;color:var(--brown);box-shadow:0 0 0 1px var(--outline-soft),0 2px 6px rgba(74,59,54,.1);} /* V4/UI-DEEP: .ac-chip pill language */
 .g12-wr-coins svg{color:var(--yellow);}
 .g12-wr-stage{position:relative;width:100%;max-width:27.5rem;height:${PREVIEW_H}px;border-radius:1.5rem;overflow:hidden;background:linear-gradient(#DFF3F0,var(--bg-cream));box-shadow:var(--shadow-soft);flex:none;}
 .g12-wr-stage canvas{display:block;width:100%;height:100%;}
 .g12-wr-tryon{position:absolute;top:0.625rem;left:0.75rem;background:var(--frost);border-radius:999px;padding:0.375rem 0.75rem;font-size:0.8125rem;font-weight:800;color:var(--pink-dark);box-shadow:var(--shadow-soft);}
-.g12-wr-tabs{width:100%;max-width:27.5rem;display:flex;gap:0.375rem;margin:0.75rem 0 0.625rem;flex:none;}
-.g12-wr-tabs .g12-wr-tab{flex:1;min-width:0;border:none;border-radius:1rem;background:rgba(255,255,255,.75);border-bottom:0.25rem solid rgba(74,59,54,.12);color:var(--brown);font-family:inherit;font-size:min(0.75rem,max(3.25vw,0.5rem));font-weight:800;line-height:1.05;white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:break-word;hyphens:auto;min-height:max(44px, 2.875rem);padding:0.25rem 0.0625rem;cursor:pointer;-webkit-tap-highlight-color:transparent;} /* V3/FIX-C: hyphenate DE tab labels; vw-capped font so „schmuck" fits at 320@130 */
-.g12-wr-tab.g12-on{background:var(--pink);border-bottom-color:var(--pink-dark);color:#fff;}
+/* V4/UI-DEEP: wardrobe tabs ride the shared .ac-tabbar/.ac-tab kit (active =
+   leaf via aria-selected) — only layout/label-fitting rules stay here. */
+.g12-wr-tabs{width:100%;max-width:27.5rem;display:flex;margin:0.75rem 0 0.625rem;flex:none;}
+.g12-wr-tabs .g12-wr-tab{flex:1;min-width:0;border:none;font-family:inherit;font-size:min(0.75rem,max(3.25vw,0.5rem));font-weight:800;line-height:1.05;white-space:normal;overflow:hidden;text-overflow:clip;overflow-wrap:break-word;hyphens:auto;min-height:max(44px, 2.875rem);padding:0.25rem 0.0625rem;cursor:pointer;-webkit-tap-highlight-color:transparent;} /* V3/FIX-C: hyphenate DE tab labels; vw-capped font so „schmuck" fits at 320@130 */
 /* V3/FIX-C (E9 P1-2): auto-fit columns — cards keep a readable min width, so
    320px @ 115/130 % drops to 2 columns instead of clipping item names. */
 .g12-wr-grid{width:100%;max-width:27.5rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(6.25rem,27vw),1fr));gap:0.625rem;padding-bottom:1.125rem;flex:none;}
@@ -280,7 +281,7 @@ export function registerWardrobe({ store, ui, audio }) {
 
     // ---------- tabs + grid ----------
     const tabs = document.createElement('div');
-    tabs.className = 'g12-wr-tabs';
+    tabs.className = 'g12-wr-tabs ac-tabbar ac-tabbar-wrap'; // V4/UI-DEEP: shared kit
     body.appendChild(tabs);
     const grid = document.createElement('div');
     grid.className = 'g12-wr-grid';
@@ -322,7 +323,8 @@ export function registerWardrobe({ store, ui, audio }) {
       tabs.innerHTML = '';
       for (const slot of WR_TABS) {
         const b = document.createElement('button');
-        b.className = `g12-wr-tab${slot === tab ? ' g12-on' : ''}`;
+        b.className = `g12-wr-tab ac-tab ac-tab-label${slot === tab ? ' g12-on' : ''}`;
+        b.setAttribute('aria-selected', slot === tab ? 'true' : 'false');
         b.lang = getLang(); // V3/FIX-C: language-correct hyphenation
         b.textContent = t(`wardrobe.slot.${slot}`);
         b.addEventListener('click', () => {

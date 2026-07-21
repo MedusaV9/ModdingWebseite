@@ -217,7 +217,7 @@ function effectLine(effect) {
   const parts = [];
   if (effect?.sticker) parts.push(tx('codes.effect.sticker'));
   if (Number(effect?.coins) > 0) parts.push(tx('codes.effect.coins', { c: Number(effect.coins) }));
-  return parts.join(' · ') || '✨';
+  return parts.join(' · ') || icon('sparkle', 12);
 }
 
 /** Pretty display name for a code id ('updateLiebe' → 'UpdateLiebe'). */
@@ -255,7 +255,7 @@ export function createCodesPanel({ store, ui }) {
       <div class="g58-sub" data-sub="codes">
         <div class="g58-sub-head">
           <button class="btn btn-ghost btn-round g58-sub-back" aria-label="${t('ui.back')}">${icon('arrowLeft', 22)}</button>
-          <h2 class="g58-sub-title">🔑 ${tx('codes.title')}</h2>
+          <h2 class="g58-sub-title">${icon('key', 20)} ${tx('codes.title')}</h2>
         </div>
         <p class="g58-codes-sub">${tx('codes.sub')}</p>
         <div class="card settings-card g58-codes-card">
@@ -272,10 +272,10 @@ export function createCodesPanel({ store, ui }) {
         <div class="card settings-card g58-codes-list">
           ${engineMissing ? `<p class="g58-codes-empty">${tx('codes.unavailable')}</p>` : ''}
           ${rows.length === 0 && !engineMissing
-            ? `<p class="g58-codes-empty">${tx('codes.redeemed.empty')}</p>`
+            ? `<p class="g58-codes-empty ac-emptystate">${icon('gift', 26)}${tx('codes.redeemed.empty')}</p>`
             : rows.map((r) => `
           <div class="settings-row g58-codes-row">
-            <span class="g58-codes-name">✅ ${codeName(r.id)}</span>
+            <span class="g58-codes-name">${icon('check', 14)} ${codeName(r.id)}</span>
             <span class="g58-codes-meta">
               <span class="g58-codes-date">${new Date(r.at).toLocaleDateString(getLang() === 'de' ? 'de-DE' : 'en-US')}</span>
               <span class="g58-codes-effect">${effectLine(r.effect)}</span>

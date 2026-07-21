@@ -74,6 +74,48 @@ const PATHS = {
   // fill bar + cream lid band (fixed fills; the jar outline stays currentColor)
   nutellaJar:
     '<rect x="6" y="3" width="12" height="3.4" rx="1.7"/><rect x="7.2" y="6.4" width="9.6" height="1.6" rx="0.8" fill="#FFF6EC"/><path d="M6.5 8h11a1.5 1.5 0 0 1 1.5 1.5V19a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 19V9.5A1.5 1.5 0 0 1 6.5 8z"/><path d="M6.5 12.5h11V19a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 6.5 19v-6.5z" fill="#5C3A21"/>',
+  // ── V4/UI-DEEP: new rounded glyphs so shop/vet/garden/codes/whatsNew drop
+  // their raw-emoji chrome (same plumping language: round joins, soft fills).
+  medicine:
+    '<g transform="rotate(-45 12 12)"><rect x="3.6" y="8.4" width="16.8" height="7.2" rx="3.6" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 8.4h4.8a3.6 3.6 0 0 1 0 7.2H12v-7.2z" fill="#fff" opacity="0.4"/></g>',
+  stethoscope:
+    '<path d="M6.2 3.2v4.8a5 5 0 0 0 10 0V3.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M11.2 12.8v2.6a4.3 4.3 0 0 0 8.6 0v-1.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="19.8" cy="11.4" r="2.5"/><circle cx="19.8" cy="11.4" r="0.9" fill="#fff" opacity="0.55"/>',
+  clipboard:
+    '<rect x="4.6" y="4.4" width="14.8" height="17" rx="2.8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="8.4" y="2.4" width="7.2" height="4" rx="1.8"/><path d="M8.2 11.2h7.6M8.2 15.2h5.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>',
+  sprout:
+    '<path d="M12 21.2v-8.4" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" fill="none"/><path d="M12 13C12 8.6 8.8 5.8 4.4 5.8c0 4.4 3.2 7.2 7.6 7.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 13c0-4.4 3.2-7.2 7.6-7.2 0 4.4-3.2 7.2-7.6 7.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  seeds:
+    '<path d="M6 3.4h12a1.6 1.6 0 0 1 1.6 1.6v14a1.6 1.6 0 0 1-1.6 1.6H6A1.6 1.6 0 0 1 4.4 19V5A1.6 1.6 0 0 1 6 3.4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4.4 7.6h15.2" stroke="#fff" stroke-width="1.6" opacity="0.6"/><ellipse cx="9.4" cy="12.8" rx="1.6" ry="2.2" fill="#fff" opacity="0.8"/><ellipse cx="14.6" cy="12.8" rx="1.6" ry="2.2" fill="#fff" opacity="0.8"/><ellipse cx="12" cy="17" rx="1.6" ry="2.2" fill="#fff" opacity="0.8"/>',
+  key:
+    '<circle cx="7" cy="12" r="4.6" stroke="currentColor" stroke-width="2.2" fill="none"/><path d="M11.6 12h9.6M17.2 12v3.4M20.6 12v3.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><circle cx="7" cy="12" r="1.4"/>',
+  gift:
+    '<rect x="4" y="10.8" width="16" height="9.8" rx="2.2"/><rect x="3" y="6.9" width="18" height="4.6" rx="1.9"/><path d="M12 7v13.6" stroke="#fff" stroke-width="2" opacity="0.7"/><path d="M12 6.4C9.8 6.4 7.6 5.4 7.6 3.9 7.6 2.6 9 2.2 10 2.9c.9.6 1.6 2 2 3.5.4-1.5 1.1-2.9 2-3.5 1-.7 2.4-.3 2.4 1 0 1.5-2.2 2.5-4.4 2.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  bulb:
+    '<path d="M12 2.8a6.6 6.6 0 0 0-3.6 12.1c.7.5 1.1 1.2 1.1 2v.7h5v-.7c0-.8.4-1.5 1.1-2A6.6 6.6 0 0 0 12 2.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.8 20.4h4.4M10.6 22.4h2.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>',
+  bandage:
+    '<g transform="rotate(-45 12 12)"><rect x="2.6" y="8.2" width="18.8" height="7.6" rx="3.8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="8.9" y="8.2" width="6.2" height="7.6" fill="#fff" opacity="0.45"/><circle cx="12" cy="10.6" r="0.8" fill="#fff"/><circle cx="10.6" cy="12" r="0.8" fill="#fff"/><circle cx="13.4" cy="12" r="0.8" fill="#fff"/><circle cx="12" cy="13.4" r="0.8" fill="#fff"/></g>',
+  candy:
+    '<circle cx="12" cy="12" r="5.6" stroke="currentColor" stroke-width="1.8"/><path d="M7 10 2.6 7.4v9.2L7 14z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 10l4.4-2.6v9.2L17 14z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.6 9.6l4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/>',
+  scooter:
+    '<circle cx="5.4" cy="18" r="2.5"/><circle cx="18.6" cy="18" r="2.5"/><path d="M5.4 18h6.8l4-9.6h3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M16.4 4.6h3.4M18.6 18l-1.6-6.4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/>',
+  hat:
+    '<path d="M7 4.6h10a1.2 1.2 0 0 1 1.2 1.2V15H5.8V5.8A1.2 1.2 0 0 1 7 4.6z"/><rect x="2.8" y="14.6" width="18.4" height="4.8" rx="2.4"/><rect x="5.8" y="11" width="12.4" height="2.6" fill="#fff" opacity="0.4"/>',
+  moon:
+    '<path d="M20.4 14.4A8.8 8.8 0 0 1 9.6 3.6a8.8 8.8 0 1 0 10.8 10.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="17.6" cy="6" r="1.6"/><circle cx="20.8" cy="9.6" r="1"/>',
+  book:
+    '<path d="M6.8 2.6H18a1.6 1.6 0 0 1 1.6 1.6v15.6a1.6 1.6 0 0 1-1.6 1.6H6.8A2.4 2.4 0 0 1 4.4 19V5a2.4 2.4 0 0 1 2.4-2.4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.2 2.6v18.8" stroke="#fff" stroke-width="1.6" opacity="0.55"/><path d="M11.4 7.4h5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>',
+  radio:
+    '<rect x="3" y="7.4" width="18" height="13" rx="2.8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 7 16.6 2.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><circle cx="16.2" cy="13.9" r="3" fill="#fff" opacity="0.75"/><path d="M6.4 11.4h5M6.4 14h5M6.4 16.6h5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>',
+  camera:
+    '<path d="M4 7h3l1.6-2.4A1.5 1.5 0 0 1 9.9 4h4.2a1.5 1.5 0 0 1 1.3.6L17 7h3a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 19V8.5A1.5 1.5 0 0 1 4 7z"/><circle cx="12" cy="13.5" r="4" fill="#fff" opacity="0.55"/><circle cx="12" cy="13.5" r="2.1"/>',
+  gamepad:
+    '<path d="M7.4 5.6h9.2a5.8 5.8 0 0 1 5.7 7l-.7 3.5a3.4 3.4 0 0 1-5.9 1.6L14 15.9h-4l-1.7 1.8a3.4 3.4 0 0 1-5.9-1.6l-.7-3.5a5.8 5.8 0 0 1 5.7-7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7.6 8.8v4.4M5.4 11h4.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.8"/><circle cx="15.6" cy="12.4" r="1.1" fill="#fff" opacity="0.8"/><circle cx="18.2" cy="9.8" r="1.1" fill="#fff" opacity="0.8"/>',
+  backpack:
+    '<path d="M8.6 6a3.4 3.4 0 0 1 6.8 0" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M7.4 6.4h9.2A3.4 3.4 0 0 1 20 9.8v8.6a2.6 2.6 0 0 1-2.6 2.6H6.6A2.6 2.6 0 0 1 4 18.4V9.8a3.4 3.4 0 0 1 3.4-3.4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7.8" y="13.2" width="8.4" height="4.6" rx="1.8" fill="#fff" opacity="0.5"/>',
+  bow:
+    '<path d="M10.2 12 4 8.4c-.9-.5-2 .1-2 1.2v4.8c0 1.1 1.1 1.7 2 1.2l6.2-3.6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.8 12 20 8.4c.9-.5 2 .1 2 1.2v4.8c0 1.1-1.1 1.7-2 1.2L13.8 12z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.5"/>',
+  vetRabbit:
+    '<path d="M9 3c1.5 0 2.5 2 2.5 4.5h1C12.5 5 13.5 3 15 3s2 2.5.8 5c1.5 1 2.7 2.7 2.7 5A6.5 6.5 0 0 1 12 19.5 6.5 6.5 0 0 1 5.5 13c0-2.3 1.2-4 2.7-5C7 5.5 7.5 3 9 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9.6" cy="13" r="2" fill="none" stroke="#fff" stroke-width="1.3"/><circle cx="14.4" cy="13" r="2" fill="none" stroke="#fff" stroke-width="1.3"/><path d="M11.6 13h.8" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>',
 };
 
 /**

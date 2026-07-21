@@ -79,7 +79,8 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
   };
 
   function coinsPill() {
-    return `<span class="shop-coins">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
+    // V4/UI-DEEP: rides the shared .ac-chip pill (paper face + hairline ring)
+    return `<span class="shop-coins ac-chip">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
   }
 
   function render() {
@@ -92,23 +93,23 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
 
     wrapEl.innerHTML = `
       <div class="vet-head">
-        <h1 class="vet-title">🩺 ${t('vet.title')}</h1>
+        <h1 class="vet-title">${icon('stethoscope', 26)} ${t('vet.title')}</h1>
         ${coinsPill()}
         <button class="btn btn-teal vet-home">${icon('home', 18)} ${t('trip.goHome')}</button>
       </div>
-      ${arrival ? `<div class="vet-hint">🎉 ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
+      ${arrival ? `<div class="vet-hint">${icon('sparkle', 15)} ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
       <div class="vet-body">
         <div class="vet-doc">
-          <span class="vet-avatar" aria-hidden="true">🐰<span class="vet-avatar-glasses">👓</span></span>
+          <span class="vet-avatar" aria-hidden="true">${icon('vetRabbit', 44)}</span>
           <span class="vet-doc-text">
-            <span class="vet-doc-name">${t('vet.doctor')}${bandaged ? ` <span class="vet-bandage-badge">🩹</span>` : ''}</span>
+            <span class="vet-doc-name">${t('vet.doctor')}${bandaged ? ` <span class="vet-bandage-badge">${icon('bandage', 15)}</span>` : ''}</span>
             <span class="vet-doc-line">${t(`vet.greet.${state}`)}</span>
           </span>
         </div>
         <div class="vet-actions">
           <button class="vet-action vet-act-cure" ${unwell ? '' : 'disabled'}>
             <span class="vet-action-head">
-              <span class="vet-action-name">💊 ${t('vet.cure')}</span>
+              <span class="vet-action-name">${icon('medicine', 17)} ${t('vet.cure')}</span>
               <span class="shop-price">${icon('coin', 13)}${VET.CURE_PRICE}</span>
             </span>
             <span class="vet-action-desc">${unwell
@@ -116,11 +117,11 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
               : t('vet.cureNotNeeded')}</span>
           </button>
           ${unwell && !canAfford(store, VET.CURE_PRICE)
-            ? `<div class="vet-hint vet-hint-soft">💡 ${t('vet.hintMedicine', { price: ITEM_PRICES.medicine })}</div>`
+            ? `<div class="vet-hint vet-hint-soft">${icon('bulb', 15)} ${t('vet.hintMedicine', { price: ITEM_PRICES.medicine })}</div>`
             : ''}
           <button class="vet-action vet-act-checkup">
             <span class="vet-action-head">
-              <span class="vet-action-name">📋 ${t('vet.checkup')}</span>
+              <span class="vet-action-name">${icon('clipboard', 17)} ${t('vet.checkup')}</span>
               <span class="shop-price">${icon('coin', 13)}${VET.CHECKUP_PRICE}</span>
             </span>
             <span class="vet-action-desc">${t('vet.checkupDesc')}</span>
@@ -151,7 +152,7 @@ export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetAr
     const neglectMin = Math.round(reportNeglect);
     return `
       <div class="vet-report">
-        <div class="vet-report-title">📋 ${t('vet.report.title')}</div>
+        <div class="vet-report-title ac-ribbon">${icon('clipboard', 15)} ${t('vet.report.title')}</div>
         <div class="vet-report-row"><span>${t('vet.report.state')}</span><span>${t(`vet.state.${state}`)}</span></div>
         <div class="vet-report-row"><span>${t('vet.report.junk')}</span><span class="vet-band vet-band-${band}">${t(`vet.junk.${band}`)}</span></div>
         <div class="vet-report-row"><span>${t('vet.report.neglect')}</span><span>${neglectMin > 0
@@ -272,6 +273,6 @@ function installResultsHook({ ui, isVetArrival }) {
     for (let i = 0; i < rows.length - 1; i++) rows[i].remove(); // keep the coins row
     const btns = screen.querySelectorAll('.mg-btn-row .btn');
     const exitBtn = btns[btns.length - 1];
-    if (exitBtn) exitBtn.innerHTML = `🩺 ${t('vet.title')}`;
+    if (exitBtn) exitBtn.innerHTML = `${icon('stethoscope', 18)} ${t('vet.title')}`;
   }
 }

@@ -15,6 +15,7 @@
 //     tutorial first; the panel waits for `onboarding.done`.
 
 import { t } from '../data/strings.js';
+import { icon } from './icons.js'; // V4/UI-DEEP: bullets use authored glyphs
 
 // ---------------------------------------------------------------------------
 // Pure logic (§A3 checklist 12 — covered by test/onboarding.test.js)
@@ -23,32 +24,34 @@ import { t } from '../data/strings.js';
 /**
  * The friendly 6-bullet tour of the 8 §A pillars (icon + strings key; every
  * key has EN+DE entries in data/strings/v2-polish.js).
+ * V4/UI-DEEP: `icon` is an icons.js glyph NAME now (was a raw emoji) — the
+ * mount below renders it via icon(); the field stays a plain string.
  */
 export const WHATSNEW_BULLETS = Object.freeze([
-  Object.freeze({ icon: '🕹️', key: 'whatsnew.b1' }), // ① minigame explosion 12 → 21
-  Object.freeze({ icon: '🌱', key: 'whatsnew.b2' }), // ② garden / 5th space
-  Object.freeze({ icon: '🤒', key: 'whatsnew.b3' }), // ③ pet sim + ⑥ vet destination
-  Object.freeze({ icon: '📋', key: 'whatsnew.b4' }), // ④ quests / album / achievements / L40
-  Object.freeze({ icon: '🎀', key: 'whatsnew.b5' }), // ⑤ content explosion + skins
-  Object.freeze({ icon: '🌙', key: 'whatsnew.b6' }), // ⑦ day/night + weather, ⑧ stats + photo
+  Object.freeze({ icon: 'gamepad', key: 'whatsnew.b1' }), // ① minigame explosion 12 → 21
+  Object.freeze({ icon: 'sprout', key: 'whatsnew.b2' }), // ② garden / 5th space
+  Object.freeze({ icon: 'stethoscope', key: 'whatsnew.b3' }), // ③ pet sim + ⑥ vet destination
+  Object.freeze({ icon: 'clipboard', key: 'whatsnew.b4' }), // ④ quests / album / achievements / L40
+  Object.freeze({ icon: 'bow', key: 'whatsnew.b5' }), // ⑤ content explosion + skins
+  Object.freeze({ icon: 'moon', key: 'whatsnew.b6' }), // ⑦ day/night + weather, ⑧ stats + photo
 ]);
 
 /** V3/G48: the 7-bullet GOOBY 3.0 tour (PLAN3 §E6/G48). */
 export const WHATSNEW3_BULLETS = Object.freeze([
-  Object.freeze({ icon: '🕹️', key: 'whatsnew3.b1' }), // 27 games + both flagships
-  Object.freeze({ icon: '🏃', key: 'whatsnew3.b2' }), // surf travel + polished driving
-  Object.freeze({ icon: '📕', key: 'whatsnew3.b3' }), // 28-picture Stickerbuch
-  Object.freeze({ icon: '🍫', key: 'whatsnew3.b4' }), // Nutella + Nougatschleuse
-  Object.freeze({ icon: '⚙️', key: 'whatsnew3.b5' }), // UI scale + five volume buses
-  Object.freeze({ icon: '🎒', key: 'whatsnew3.b6' }), // 42 outfits + back slot
-  Object.freeze({ icon: '🎵', key: 'whatsnew3.b7' }), // sampled audio + medleys
+  Object.freeze({ icon: 'gamepad', key: 'whatsnew3.b1' }), // 27 games + both flagships
+  Object.freeze({ icon: 'run', key: 'whatsnew3.b2' }), // surf travel + polished driving
+  Object.freeze({ icon: 'book', key: 'whatsnew3.b3' }), // 28-picture Stickerbuch
+  Object.freeze({ icon: 'nutellaJar', key: 'whatsnew3.b4' }), // Nutella + Nougatschleuse
+  Object.freeze({ icon: 'gear', key: 'whatsnew3.b5' }), // UI scale + five volume buses
+  Object.freeze({ icon: 'backpack', key: 'whatsnew3.b6' }), // 42 outfits + back slot
+  Object.freeze({ icon: 'music', key: 'whatsnew3.b7' }), // sampled audio + medleys
 ]);
 
 /** V4/G82: the three §B1 headline highlights for migrated 4.0 veterans. */
 export const WHATSNEW4_BULLETS = Object.freeze([
-  Object.freeze({ icon: '📻', key: 'whatsnew4.b1' }), // real-music radio + track controls
-  Object.freeze({ icon: '🔐', key: 'whatsnew4.b2' }), // secret codes + herzGooby
-  Object.freeze({ icon: '📸', key: 'whatsnew4.b3' }), // persistent gallery + export
+  Object.freeze({ icon: 'radio', key: 'whatsnew4.b1' }), // real-music radio + track controls
+  Object.freeze({ icon: 'key', key: 'whatsnew4.b2' }), // secret codes + herzGooby
+  Object.freeze({ icon: 'camera', key: 'whatsnew4.b3' }), // persistent gallery + export
 ]);
 
 /**
@@ -102,7 +105,8 @@ const WN_CSS = `
 .g30-wn-sub{margin:0 0 0.75rem;font-size:0.8438rem;font-weight:700;opacity:.72;text-align:center;line-height:1.35;} /* V4/G-UI: .6→.72 — body-text contrast ≈4.7:1 (WCAG-ish) */
 .g30-wn-list{display:flex;flex-direction:column;gap:0.5rem;margin:0 0 0.875rem;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .g30-wn-item{display:flex;align-items:flex-start;gap:0.625rem;background:rgba(74,59,54,.05);border-radius:var(--radius-row);padding:0.5625rem 0.75rem;}
-.g30-wn-ico{flex:none;font-size:1.125rem;line-height:1.3;}
+.g30-wn-ico{flex:none;font-size:1.125rem;line-height:1.3;color:var(--teal-dark);} /* V4/UI-DEEP: authored SVG glyphs */
+.g30-wn-ico svg{display:block;margin-top:0.0938rem;}
 .g30-wn-txt{flex:1;min-width:0;font-size:0.8125rem;font-weight:700;color:var(--brown);line-height:1.35;overflow-wrap:break-word;}
 /* V3/G48: slightly denser seven-row tour at 320px/130 %, still ≥44px CTA. */
 .g30-wn[data-version="3"] .g30-wn-list{gap:0.375rem;max-height:min(54vh,27rem);}
@@ -192,7 +196,8 @@ export function initWhatsNew({ store, ui, audio, sceneManager }) {
       for (const bullet of bullets) {
         const item = document.createElement('div');
         item.className = 'g30-wn-item';
-        item.innerHTML = `<span class="g30-wn-ico">${bullet.icon}</span><span class="g30-wn-txt"></span>`;
+        // V4/UI-DEEP: bullet.icon is an icons.js glyph name (authored SVG)
+        item.innerHTML = `<span class="g30-wn-ico">${icon(bullet.icon, 18)}</span><span class="g30-wn-txt"></span>`;
         item.querySelector('.g30-wn-txt').textContent = t(bullet.key);
         list.appendChild(item);
       }
