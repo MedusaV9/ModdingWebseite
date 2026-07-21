@@ -25,6 +25,22 @@ For `runServer`, accept the EULA first: create `run/eula.txt` containing `eula=t
 Note: if you pipe `runServer` output through another process (e.g. `| tee log`), console
 input such as `stop` is not forwarded to the server; stop it with Ctrl-C instead.
 
+## Anonymity — what is blocked and how
+
+Eclipse-Core is **required on every client as well as the server**. The server enforces all
+text-input restrictions, while mandatory client-side handlers remove identity-bearing visuals.
+
+| Surface | Enforcement |
+|---|---|
+| Player chat | `ServerChatEvent` is cancelled before broadcast. |
+| Join/leave announcements | A focused `PlayerList#broadcastSystemMessage` mixin drops only `multiplayer.player.joined`, `multiplayer.player.joined.renamed`, and `multiplayer.player.left`. |
+| Tab list | The client cancels the `VanillaGuiLayers.TAB_LIST` GUI layer. Player-info packets are deliberately retained so remote players still render. |
+| Player name tags | The client forces `RenderNameTagEvent` to `TriState.FALSE` for every player. |
+| Player skins | A client mixin makes every `AbstractClientPlayer`, including the local player in third person, use `assets/eclipse/textures/entity/uniform_skin.png` with the wide model and no cape or elytra. |
+| Anvil names | Non-empty names that differ from the left input's current name are cancelled; repairs that keep the current name remain available. |
+| Signs | Placing any sign and interacting with an existing sign are cancelled on the server. |
+| Books | Server use of writable and written books is cancelled. |
+
 ## Core APIs
 
 Stable public surface of the persistent data core. Later workers should depend on exactly these signatures.

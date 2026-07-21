@@ -50,9 +50,13 @@ Project: Eclipse - the core server-event mod for the Eclipse event.
 Provides lives, rituals, limbo, progression, anonymity, voice, and artifact systems.
 '''
 
-# The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
-#[[mixins]]
-#config="${mod_id}.mixins.json"
+# Load the two minimal anonymity mixins. Separate package roots keep Mixin from
+# claiming non-mixin mod classes while the skin mixin remains client-only.
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+[[mixins]]
+config="${mod_id}.client.mixins.json"
 
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
