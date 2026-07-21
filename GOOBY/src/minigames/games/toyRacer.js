@@ -17,6 +17,7 @@ import { t } from '../../data/strings.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-5: drift-spark gate
 // V4/G67 (PLAN4-GAMES §G4.8 toyRacer row): +6 FOV during drift-boost only,
 // 10/s streaks for the boost duration, NO continuous shake (kart bob
 // exists). Shared helpers in gfx/speedLines.js.
@@ -42,6 +43,9 @@ const S = RACER.WORLD_SCALE; // logic track units → world meters
 const WALL = '#F7E3C8'; //      warm bedroom wall (distinct-look rule §C10.1)
 const KART_MODELS = ['race', 'taxi', 'police', 'hatchback-sports'];
 const BLOCK_COLORS = [0xf27979, 0x7cc15e, 0x6fb7e8, 0xf2c14e, 0xc79be0, 0xf29e4c];
+
+/** V4/GAME-POLISH-5: hoisted drift-spark scratch (no per-frame allocs). */
+const _sparkPos = new THREE.Vector3();
 
 /** dir index (0=+z · 1=−x · 2=−z · 3=+x) → piece rotY (models travel +z). */
 const DIR_ROT_Y = [0, -Math.PI / 2, Math.PI, Math.PI / 2];
@@ -198,6 +202,8 @@ export default {
     this.endT = 0;
     this.score = 0;
     this.putterT = 0;
+    this.sparkT = 0; // V4/GAME-POLISH-5: drift-spark emit throttle
+    this.reduceMotion = prefersReducedMotion(); // V4/GAME-POLISH-5
 
     /** @type {THREE.BufferGeometry[]} */
     this.ownedGeos = [];
@@ -522,6 +528,8 @@ export default {
         audio.play('racer.overtake');
         this.addScore(RACER.OVERTAKE_POINTS);
         this.floats.spawn(t('mg.racer.overtake'), this.kartGroups[0].position.clone().add(new THREE.Vector3(0, 1, 0)), '#2E8B57');
+        // V4/GAME-POLISH-5: a small confetti puff sells the pass (pooled)
+        this.particles.emit('confetti', this.kartGroups[0].position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 8 });
       } else if (e.type === 'lap') {
         audio.play('racer.lap');
         hud.banner(e.final ? t('mg.racer.finalLap') : t('mg.racer.lap', { n: e.lap }));
@@ -628,7 +636,18 @@ export default {
       ctx.audio.play('racer.putter');
       this.putterT = 0.34;
     }
-    if (race.karts[0].drifting && race.karts[0].driftCharge > 0.05) ctx.audio.play('racer.drift');
+    if (race.karts[0].drifting && race.karts[0].driftCharge > 0.05) {
+      ctx.audio.play('racer.drift');
+      // V4/GAME-POLISH-5: drift sparks at the rear of the kart while the
+      // charge builds (pooled sparkles, throttled, reduced-motion gated)
+      this.sparkT = (this.sparkT ?? 0) - dt;
+      if (!this.reduceMotion && this.sparkT <= 0) {
+        this.sparkT = 0.07;
+        const pk = this.kartGroups[0];
+        _sparkPos.set(0, 0.12, -0.5).applyQuaternion(pk.quaternion).add(pk.position);
+        this.particles.emit('sparkles', _sparkPos, { count: 2 });
+      }
+    }
 
     // --- item boxes: hide while respawning, gentle spin ---
     for (const entry of this.boxMeshes) {

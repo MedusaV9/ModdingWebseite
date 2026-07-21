@@ -19,7 +19,10 @@
 
 import * as THREE from 'three';
 import { DRIVE_TUNING, DAYNIGHT } from '../../data/constants.js';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js'; // V4/GAME-POLISH-5: + getLang (tx fallback)
+// V4/GAME-POLISH-5: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
+// ride the versioned module through the local tx() fallback below.
+import { EN as GP5_EN, DE as GP5_DE } from '../../data/strings/v4-gpgroup5.js';
 import {
   generateCityLayout,
   layoutColliders,
@@ -39,8 +42,14 @@ import { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows } from './cit
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { createParticles } from '../../gfx/particles.js';
+// V4/GAME-POLISH-5: pooled streaks, parcel-pop tween + reduced-motion gate
+import { streakRate, createSpeedLines } from '../../gfx/speedLines.js';
+import { tween, easings } from '../../gfx/tween.js';
+import { prefersReducedMotion } from '../../ui/ui.js';
 import {
   DELIVERY,
+  DELIVERY_FX, // V4/GAME-POLISH-5
+  parcelArcPos, // V4/GAME-POLISH-5
   applyDifficulty,
   withDeliveryCoinRate,
   createDeliveryEndlessState,
@@ -60,6 +69,26 @@ import {
 } from './deliveryRush.logic.js';
 
 const T = DRIVE_TUNING;
+
+/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback. */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP5_DE : GP5_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+// V4/GAME-POLISH-5: hoisted per-frame scratch (guidance/juice below)
+const _Y_AXIS = new THREE.Vector3(0, 1, 0);
+const _guideDir = new THREE.Vector3();
+const _dustPos = new THREE.Vector3();
+const _nearPos = new THREE.Vector3();
+const _popFrom = new THREE.Vector3();
 
 /** @type {object} §E8 plugin */
 export default {
@@ -83,6 +112,9 @@ export default {
     this.endlessState = createDeliveryEndlessState(this.tune.ENDLESS_EXPIRED_LIMIT);
     this.autoplay =
       import.meta.env?.DEV && new URLSearchParams(location.search).get('autoplay') === '1';
+    // V4/GAME-POLISH-5: §E9 test surface (cityDrive __drive convention) —
+    // lets CDP proofs read run/juice state without scraping the HUD.
+    if (import.meta.env?.DEV) window.__delivery = { game: this };
 
     this.layout = generateCityLayout(T.CITY_SEED);
     const layout = this.layout;
@@ -201,6 +233,26 @@ export default {
     }
 
     this.traffic = createTraffic({ scene, assets: ctx.assets, layout, rng: ctx.rng });
+
+    // ── V4/GAME-POLISH-5: speed-feel + close-call juice state ───────────────
+    // Camera-local streak ring (cityDrive/toyRacer recipe — the chase cam
+    // roams the whole city). scene.add(camera) so its children render.
+    scene.add(camera);
+    this.speedLines = createSpeedLines(camera, {
+      pool: DELIVERY_FX.STREAK_POOL,
+      radius: DELIVERY_FX.STREAK_RADIUS,
+      ahead: DELIVERY_FX.STREAK_AHEAD,
+      size: DELIVERY_FX.STREAK_SIZE,
+      forwardZ: -1, // camera space: ahead = −z
+      rng: ctx.rng,
+    });
+    this.prevHeading = this.car.heading();
+    this.dustT = 0;
+    this.nearBannerT = 0;
+    this.reduceMotion = prefersReducedMotion();
+    /** @type {Array<{cancel: () => void, restore: () => void}>} live parcel pops */
+    this.popAnims = [];
+    // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
 
     // --- delivery ticket chip (📦 n/3 → next stop) ---------------------------
     this.chip = document.createElement('div');
@@ -351,7 +403,7 @@ export default {
     this.gooby.setEmotion('ecstatic');
     this.emotionT = 1.6;
     const parcel = this.parcels[DELIVERY.PARCELS - this.drops];
-    if (parcel) parcel.visible = false;
+    if (parcel) this.popParcel(parcel, dest); // V4/GAME-POLISH-5: visible hop-off arc
     if (this.drops < DELIVERY.PARCELS) {
       if (fragileBonus === 0) this.ctx.hud.banner(t('mg.delivery.delivered'));
       this.buildLeg();
@@ -381,6 +433,56 @@ export default {
     }
   },
 
+  // ── V4/GAME-POLISH-5: parcel pop — the roof box visibly hops off in an
+  // arc to the drop ring (spin + apex lift from parcelArcPos), then hides
+  // and re-attaches with its original local transform so the batch resets
+  // cleanly. Reduced motion keeps the old instant hide. Cosmetic only.
+  popParcel(parcel, dest) {
+    if (this.reduceMotion) {
+      parcel.visible = false;
+      return;
+    }
+    const scene = this.ctx.scene;
+    const origPos = parcel.position.clone();
+    const origQuat = parcel.quaternion.clone();
+    const origParent = parcel.parent;
+    parcel.getWorldPosition(_popFrom);
+    const from = { x: _popFrom.x, y: _popFrom.y, z: _popFrom.z };
+    const to = { x: dest.x, y: T.ROAD_Y + 0.3, z: dest.z };
+    scene.attach(parcel); // keep the world transform, leave the van
+    const spin0 = parcel.rotation.y;
+    let done = false;
+    const restore = () => {
+      if (done) return;
+      done = true;
+      parcel.visible = false;
+      origParent?.add(parcel);
+      parcel.position.copy(origPos);
+      parcel.quaternion.copy(origQuat);
+    };
+    const anim = tween({
+      duration: DELIVERY_FX.POP_SEC,
+      ease: easings.linear, // the sin() lift already shapes the arc
+      onUpdate: (v) => {
+        const p = parcelArcPos(from, to, v);
+        parcel.position.set(p.x, p.y, p.z);
+        parcel.rotation.y = spin0 + v * DELIVERY_FX.POP_SPIN_RAD;
+      },
+      onComplete: restore,
+    });
+    this.popAnims.push({ cancel: anim.cancel, restore });
+  },
+
+  /** Settle any in-flight parcel pops NOW (batch reset / dispose). */
+  finishPops() {
+    for (const pop of this.popAnims ?? []) {
+      pop.cancel();
+      pop.restore();
+    }
+    this.popAnims = [];
+  },
+  // ── end V4/GAME-POLISH-5 ────────────────────────────────────────────────
+
   /** Endlos chains delivery batches; regular arcade still ends after parcel 3. */
   resetDeliveryBatch() {
     this.deliveries = pickDeliveries(this.ctx.rng, this.layout.landmarks.map((l) => l.id));
@@ -388,6 +490,7 @@ export default {
     this.batchElapsed = 0;
     this.fragileParcel = pickFragileParcel(this.ctx.rng);
     this.fragileDamaged = false;
+    this.finishPops(); // V4/GAME-POLISH-5: settle in-flight pops BEFORE the re-show
     for (const parcel of this.parcels) parcel.visible = true;
     this.car.setFrozen(false);
     this.phase = 'drive';
@@ -472,6 +575,20 @@ export default {
     const { ctx } = this;
     this.invuln = Math.max(0, this.invuln - dt);
     this.shake = Math.max(0, this.shake - dt * 2.2);
+
+    // V4/GAME-POLISH-5: streaks tick every frame (leftovers decay through
+    // rescue/fanfare); spawning only while actually driving fast.
+    if (this.speedLines) {
+      const vanSpeed = this.car.speed();
+      this.speedLines.update(dt, {
+        speed: vanSpeed,
+        rate: this.phase === 'drive' && !this.reduceMotion
+          ? streakRate(vanSpeed, DELIVERY_FX.STREAK_RATE)
+          : 0,
+        originX: 0, // camera-local ring: centred on the view axis
+        originY: 0,
+      });
+    }
 
     this.gooby.update(dt);
     if (this.emotionT > 0) {
@@ -562,6 +679,36 @@ export default {
       }
     }
 
+    // ── V4/GAME-POLISH-5: cosmetic close-call sparkle + drift dust ──────────
+    // Runs AFTER checkHit so a real crash this frame voids the pass. Score/
+    // crash/fragile beats above are untouched (§C1.2 #5 certification).
+    {
+      const speed = this.car.speed();
+      this.nearBannerT = Math.max(0, this.nearBannerT - dt);
+      const nm = this.traffic.checkNearMiss?.(this.car.aabb(), speed);
+      if (nm) {
+        ctx.audio.play('combo.up');
+        _nearPos.set((p.x + nm.x) / 2, T.ROAD_Y + 1.6, (p.z + nm.z) / 2);
+        this.particles.emit?.('sparkles', _nearPos, { count: 8 });
+        if (this.nearBannerT <= 0) {
+          this.nearBannerT = DELIVERY_FX.NEAR_BANNER_COOLDOWN_SEC;
+          ctx.hud.banner(tx('gp5.drive.nearMiss'));
+        }
+      }
+      // drift dust at the rear bumper while the tires visibly work
+      const h = this.car.heading();
+      const yawRate = Math.abs(wrapAngle(h - this.prevHeading)) / Math.max(1e-4, dt);
+      this.prevHeading = h;
+      this.dustT -= dt;
+      if (!this.reduceMotion && speed > DELIVERY_FX.DUST_MIN_SPEED
+        && yawRate > DELIVERY_FX.DUST_MIN_YAW_RATE && this.dustT <= 0) {
+        this.dustT = DELIVERY_FX.DUST_INTERVAL_SEC;
+        _dustPos.set(p.x - Math.sin(h) * 1.7, T.ROAD_Y + 0.18, p.z - Math.cos(h) * 1.7);
+        this.particles.emit?.('crumbs', _dustPos, { count: 2 });
+      }
+    }
+    // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
+
     // landmark stickers + odometer (§C9.3/§C12.1 — same bridge as cityDrive)
     const step = Math.hypot(p.x - this.lastPos.x, p.z - this.lastPos.z);
     if (step < 15) this.distanceM += step;
@@ -610,9 +757,9 @@ export default {
       this.guides.guide.visible = offRoute;
       if (offRoute) {
         const target = pointAtLength(leg.lane, this.progress + 8);
-        const dirTo = new THREE.Vector3(target.x - p.x, 0, target.z - p.z).normalize();
+        _guideDir.set(target.x - p.x, 0, target.z - p.z).normalize(); // V4/GAME-POLISH-5: hoisted
         this.guides.guide.position.set(p.x, T.ROAD_Y + 5.4, p.z);
-        this.guides.guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirTo);
+        this.guides.guide.quaternion.setFromUnitVectors(_Y_AXIS, _guideDir);
       }
     }
 
@@ -656,6 +803,9 @@ export default {
 
   dispose() {
     this.sendDistance(); // quit-from-pause still books the odometer
+    this.finishPops(); // V4/GAME-POLISH-5: cancel in-flight parcel arcs
+    this.speedLines?.dispose(); // V4/GAME-POLISH-5
+    this.speedLines = null;
     this.disposeGuides();
     for (const geo of this.fragileStrapGeos ?? []) geo.dispose();
     this.fragileStrapMat?.dispose();

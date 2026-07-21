@@ -130,18 +130,24 @@ function floatTexture(text, color) {
   const key = `${text}|${color}`;
   if (floatTexCache.has(key)) return floatTexCache.get(key);
   const canvas = document.createElement('canvas');
-  canvas.width = 192;
-  canvas.height = 64;
   const g = canvas.getContext('2d');
+  // V4/GAME-POLISH-5: size the canvas to the text — „+2 Knapp!" and the
+  // finish-arch line overflowed the old fixed 192 px and rendered clipped.
+  // Callers read tex.userData.aspect to keep the sprite aspect true.
+  g.font = '900 38px system-ui, sans-serif';
+  const w = Math.max(192, Math.ceil(g.measureText(text).width) + 28);
+  canvas.width = w; // resets context state — font is re-set below
+  canvas.height = 64;
   g.font = '900 38px system-ui, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 8;
   g.strokeStyle = 'rgba(74,59,54,0.85)';
-  g.strokeText(text, 96, 34);
+  g.strokeText(text, w / 2, 34);
   g.fillStyle = color;
-  g.fillText(text, 96, 34);
+  g.fillText(text, w / 2, 34);
   const tex = new THREE.CanvasTexture(canvas);
+  tex.userData.aspect = w / 64;
   floatTexCache.set(key, tex);
   return tex;
 }
@@ -452,7 +458,10 @@ export default {
         depthWrite: false,
       })));
       sign.position.y = 4.1;
-      sign.scale.set(3.4, 1.15, 1);
+      // V4/GAME-POLISH-5: width follows the measured texture aspect so the
+      // full „Beim Laden angekommen!" line reads unsquashed (capped sanely)
+      const signAspect = sign.material.map.userData.aspect ?? 3;
+      sign.scale.set(Math.min(7.4, 1.15 * signAspect), 1.15, 1);
       arch.add(sign);
       arch.visible = false;
       scene.add(arch);
@@ -668,7 +677,10 @@ export default {
     const mat = new THREE.SpriteMaterial({ map: floatTexture(text, color), transparent: true, depthWrite: false });
     const sprite = new THREE.Sprite(mat);
     sprite.position.copy(clampFloatTextToView(pos.clone(), S.ctx.camera, { halfW: 0.55, halfH: 0.23 }));
-    sprite.scale.set(1.15, 0.42, 1);
+    // V4/GAME-POLISH-5: x follows the measured texture aspect (192/64 = 3
+    // reproduces the old 1.15 exactly; longer texts widen instead of clip)
+    const aspect = mat.map.userData.aspect ?? 3;
+    sprite.scale.set((1.15 / 3) * aspect, 0.42, 1);
     S.ctx.scene.add(sprite);
     S.floaters.push({ sprite, mat, t: 0, life: 0.85 });
   },
@@ -733,6 +745,9 @@ export default {
         S.vignette?.classList.add('g67-flash');
         const pos = S.gooby.group.position.clone().add(new THREE.Vector3(0, 1.7, 0.6));
         this.floatText(`+2 ${t('mg.surf.nearMiss')}`, '#FFD166', pos);
+        // V4/GAME-POLISH-5: a sparkle graze at Gooby's shoulder sells the
+        // close call alongside the slow-mo (pooled)
+        S.particles.emit('sparkles', S.gooby.group.position.clone().setY(1.2), { count: 6 });
         if (ev.streak > 0 && ev.streak % 3 === 0) {
           ctx.hud.banner(t('mg.surf.nearStreak', { n: ev.streak }));
         }
@@ -773,6 +788,8 @@ export default {
         ctx.hud.banner(t('mg.surf.wipeout'));
         S.gooby.setEmotion('dizzy');
         S.gooby.play('dizzy');
+        // V4/GAME-POLISH-5: the classic dizzy-star ring over the head (pooled)
+        S.particles.emit('dizzyStars', S.gooby.group.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
         S.phase = 'wipeout';
         S.phaseT = 1.3;
         break;

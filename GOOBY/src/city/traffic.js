@@ -29,6 +29,54 @@ export const TRAFFIC_ASSET_KEYS = Object.freeze([
   'car-kit/wheel-default',
 ]);
 
+// ── V4/GAME-POLISH-5: near-miss detection (cosmetic juice only) ─────────────
+// A "near miss" = the player's FULL box swept through a traffic car's
+// margin-expanded FULL box at speed and left it again without checkHit ever
+// firing. Purely additive: collision/crash scoring paths are untouched —
+// callers use the fire signal for sfx/sparkles/banner only.
+/** Frozen near-miss tuning (V4/GAME-POLISH-5, module-local per §E0.1-3). */
+export const NEAR_MISS = Object.freeze({
+  /** Margin (m) around the FULL car box that counts as "close". */
+  MARGIN_M: 1.05,
+  /** Player must be at/above this speed (m/s) for the whole pass. */
+  MIN_SPEED_MS: 7.5,
+  /** Per-car re-fire cooldown (s) so one slalom can't farm a single car. */
+  COOLDOWN_SEC: 1.5,
+});
+
+/**
+ * Pure per-car near-miss tracker step (unit-tested headlessly). Call once
+ * per frame per car; returns true exactly when a clean fast pass COMPLETES
+ * (the overlap window ends with no collision and no slow frame inside it).
+ * @param {{inside: boolean, dirty: boolean}} state per-car tracker (mutated)
+ * @param {boolean} overlapped player box overlaps the margin-expanded box
+ * @param {boolean} collided a real checkHit fired on this car (cooldown up)
+ * @param {boolean} speedOk player speed ≥ NEAR_MISS.MIN_SPEED_MS this frame
+ * @returns {boolean} fire the near-miss juice now
+ */
+export function stepNearMiss(state, overlapped, collided, speedOk) {
+  if (collided) {
+    // a touch anywhere voids the pass (and any window already in progress)
+    state.inside = false;
+    state.dirty = false;
+    return false;
+  }
+  if (overlapped) {
+    if (!state.inside) {
+      state.inside = true;
+      state.dirty = !speedOk;
+    } else if (!speedOk) {
+      state.dirty = true;
+    }
+    return false;
+  }
+  const fire = state.inside && !state.dirty;
+  state.inside = false;
+  state.dirty = false;
+  return fire;
+}
+// ── end V4/GAME-POLISH-5 ────────────────────────────────────────────────────
+
 /**
  * V4/FIX-3D: minimal positional separation after a checkHit — the forgiving
  * 70% hit test fires while the FULL car bodies already interpenetrate, so
@@ -96,6 +144,9 @@ export function createTraffic({ scene, assets, layout, rng }) {
       // spread cars around their loop (rng jitter keeps rounds varied)
       s: ((Math.floor(i / lanes.length) + 1) / (Math.ceil(T.TRAFFIC_COUNT / lanes.length) + 1) + rng() * 0.1) * lane.length,
       hitCooldown: 0,
+      // V4/GAME-POLISH-5: per-car near-miss tracker + re-fire cooldown
+      near: { inside: false, dirty: false },
+      nearCooldown: 0,
     });
   }
 
@@ -116,9 +167,39 @@ export function createTraffic({ scene, assets, layout, rng }) {
       for (const car of cars) {
         car.s = (car.s + T.TRAFFIC_SPEED * dt) % car.lane.length;
         car.hitCooldown = Math.max(0, car.hitCooldown - dt);
+        car.nearCooldown = Math.max(0, car.nearCooldown - dt); // V4/GAME-POLISH-5
         place(car);
         for (const w of car.wheels) w.rotation.x += wheelOmega;
       }
+    },
+
+    /**
+     * V4/GAME-POLISH-5: cosmetic near-miss probe — call once per frame with
+     * the FULL player box + current speed. Returns the passed car's position
+     * when a clean fast pass just completed (see stepNearMiss), else null.
+     * Never touches the crash path: checkHit's own cooldown doubles as the
+     * "this pass touched" signal.
+     * @param {{minX: number, maxX: number, minZ: number, maxZ: number}} playerAabb
+     * @param {number} speed player speed (m/s)
+     */
+    checkNearMiss(playerAabb, speed) {
+      const speedOk = speed >= NEAR_MISS.MIN_SPEED_MS;
+      let firedAt = null;
+      for (const car of cars) {
+        const p = car.model.position;
+        const rotated = Math.abs(Math.sin(car.model.rotation.y)) > 0.5;
+        const hx = (rotated ? hl : hw) + NEAR_MISS.MARGIN_M;
+        const hz = (rotated ? hw : hl) + NEAR_MISS.MARGIN_M;
+        const overlapped =
+          playerAabb.minX < p.x + hx && playerAabb.maxX > p.x - hx &&
+          playerAabb.minZ < p.z + hz && playerAabb.maxZ > p.z - hz;
+        const fire = stepNearMiss(car.near, overlapped, car.hitCooldown > 0, speedOk);
+        if (fire && car.nearCooldown <= 0 && !firedAt) {
+          car.nearCooldown = NEAR_MISS.COOLDOWN_SEC;
+          firedAt = { x: p.x, z: p.z };
+        }
+      }
+      return firedAt;
     },
 
     /**

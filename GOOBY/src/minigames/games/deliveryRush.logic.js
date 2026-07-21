@@ -36,6 +36,49 @@ export const DELIVERY = Object.freeze({
   ENDLESS_EXPIRED_LIMIT: 3,
 });
 
+// ── V4/GAME-POLISH-5: delivery juice tuning (frozen) + parcel-pop arc ───────
+// Cosmetic layer only — nothing here feeds score/crash/timing math above.
+export const DELIVERY_FX = Object.freeze({
+  /** streakRate() segments — the van tops out at 13 m/s (§C4 ramp). */
+  STREAK_RATE: Object.freeze([[10.5, 0], [11.8, 4], [13, 9]]),
+  STREAK_POOL: 12,
+  STREAK_RADIUS: Object.freeze([1.9, 2.7]),
+  STREAK_AHEAD: Object.freeze([3, 7]),
+  STREAK_SIZE: Object.freeze([0.05, 1.2]),
+  /** Drift dust thresholds (speed m/s, |yawRate| rad/s, emit cadence s). */
+  DUST_MIN_SPEED: 6.5,
+  DUST_MIN_YAW_RATE: 0.55,
+  DUST_INTERVAL_SEC: 0.09,
+  /** Near-miss banner cooldown (sfx/sparkles still fire per event). */
+  NEAR_BANNER_COOLDOWN_SEC: 2.5,
+  /** Parcel pop: flight time (s), apex lift (m), spin over the flight (rad). */
+  POP_SEC: 0.7,
+  POP_LIFT_M: 2.6,
+  POP_SPIN_RAD: 5,
+});
+
+/**
+ * Parcel-pop arc sample: linear lerp from→to plus a sin() lift that is 0 at
+ * both endpoints and `lift` at the apex (t = 0.5). Pure — unit-tested.
+ * @param {{x: number, y: number, z: number}} from world start (roof)
+ * @param {{x: number, y: number, z: number}} to world end (drop ring)
+ * @param {number} t 0..1 flight progress (clamped)
+ * @param {number} [lift] apex height boost (m)
+ * @returns {{x: number, y: number, z: number}}
+ */
+export function parcelArcPos(from, to, t, lift = DELIVERY_FX.POP_LIFT_M) {
+  const k = Math.min(1, Math.max(0, t));
+  // exact endpoints (sin(π) carries float noise the restore path must not see)
+  if (k === 0) return { x: from.x, y: from.y, z: from.z };
+  if (k === 1) return { x: to.x, y: to.y, z: to.z };
+  return {
+    x: from.x + (to.x - from.x) * k,
+    y: from.y + (to.y - from.y) * k + Math.sin(Math.PI * k) * lift,
+    z: from.z + (to.z - from.z) * k,
+  };
+}
+// ── end V4/GAME-POLISH-5 ────────────────────────────────────────────────────
+
 /** §G5 runner/steer difficulty. Normal preserves the arcade's v3 semantics. */
 export function applyDifficulty(tune = DELIVERY, mode = 'normal') {
   if (mode === 'normal' || !['easy', 'hard', 'endless'].includes(mode)) return tune;

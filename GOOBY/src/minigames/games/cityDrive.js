@@ -25,7 +25,10 @@
 
 import * as THREE from 'three';
 import { DRIVE, DRIVE_TUNING, UI_COLORS, DAYNIGHT } from '../../data/constants.js'; // V2/G26: + DAYNIGHT (§C10.2)
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js'; // V4/GAME-POLISH-5: + getLang (tx fallback)
+// V4/GAME-POLISH-5: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
+// ride the versioned module through the local tx() fallback below.
+import { EN as GP5_EN, DE as GP5_DE } from '../../data/strings/v4-gpgroup5.js';
 import {
   generateCityLayout,
   layoutColliders,
@@ -43,6 +46,9 @@ import { buildVetClinic, buildLandmarkDressing, VET_CLINIC_ASSET_KEYS } from '..
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
 import { createParticles } from '../../gfx/particles.js';
+// V4/GAME-POLISH-5: pooled 1-draw-call streaks + reduced-motion gate (§G4)
+import { streakRate, createSpeedLines } from '../../gfx/speedLines.js';
+import { prefersReducedMotion } from '../../ui/ui.js';
 // V2/G26 (§C10.2): the city drives under the real day/night band
 import { bandAt } from '../../systems/dayNight.js';
 import { now } from '../../core/clock.js';
@@ -56,6 +62,52 @@ const SKY = '#cfe8ff'; // §D4: city fog color
 // speedProfile. Frozen module-local per §E0.1-3 (constants.js is read-only).
 export const ARCADE_SPEED = Object.freeze({ MAX_SPEED_MS: 15, RAMP_DELAY_SEC: 20 });
 // ── end V3/G39 ──────────────────────────────────────────────────────────────
+
+// ── V4/GAME-POLISH-5: drive juice tuning (frozen module-local, §E0.1-3).
+// Speed lines ride the arcade 11→15 m/s band (trips top out at 13 so they
+// only whisper there); drift dust kicks when the yaw-rate×speed product says
+// the tires are working. All effects are cosmetic + reduced-motion gated.
+export const DRIVE_FX = Object.freeze({
+  /** streakRate() segments: 0/s below 11 → 4/s at 13 → 10/s at 15 m/s. */
+  STREAK_RATE: Object.freeze([[11, 0], [13, 4], [15, 10]]),
+  STREAK_POOL: 12,
+  STREAK_RADIUS: Object.freeze([1.9, 2.7]), // camera-local ring (m)
+  STREAK_AHEAD: Object.freeze([3, 7]),
+  STREAK_SIZE: Object.freeze([0.05, 1.2]),
+  /** Drift dust: min speed (m/s) and min |yawRate| (rad/s) to kick puffs. */
+  DUST_MIN_SPEED: 7,
+  DUST_MIN_YAW_RATE: 0.55,
+  DUST_INTERVAL_SEC: 0.09,
+  /** Near-miss banner cooldown (sfx/sparkles still fire per event). */
+  NEAR_BANNER_COOLDOWN_SEC: 2.5,
+});
+
+/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback. */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? GP5_DE : GP5_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+// V4/GAME-POLISH-5: hoisted per-frame scratch (coin spin + guidance below
+// allocated ~6 objects every frame — reuse module-level temps instead).
+const _coinM4 = new THREE.Matrix4();
+const _coinQ = new THREE.Quaternion();
+const _coinPos = new THREE.Vector3();
+const _COIN_SCALE = new THREE.Vector3(1, 1, 1);
+const _COIN_ZERO = new THREE.Vector3(0, 0, 0);
+const _COIN_HIDDEN = new THREE.Vector3(0.0001, 0.0001, 0.0001);
+const _Y_AXIS = new THREE.Vector3(0, 1, 0);
+const _guideDir = new THREE.Vector3();
+const _HIDDEN_M4 = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+const _dustPos = new THREE.Vector3();
+const _nearPos = new THREE.Vector3();
 
 // --- V2/G26 (§C10.2): city band dressing ------------------------------------
 // V2/G28 reuses: deliveryRush inherits this tint via the shared city setup —
@@ -286,7 +338,7 @@ function buildRouteGuides(scene, layout) {
 function hideNearbyArrows(guides, px, pz) {
   const { arrows, arrowSpots } = guides;
   const hideR2 = 13 * 13;
-  const hidden = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+  const hidden = _HIDDEN_M4; // V4/GAME-POLISH-5: hoisted (was a per-call alloc)
   let dirty = false;
   for (let i = 0; i < arrowSpots.length; i++) {
     const a = arrowSpots[i];
@@ -477,6 +529,28 @@ export default {
     this.gooby.play('sitDrive');
 
     this.traffic = createTraffic({ scene, assets: ctx.assets, layout, rng: ctx.rng });
+
+    // ── V4/GAME-POLISH-5: speed-feel + close-call juice state ───────────────
+    // Camera-local streak ring (toyRacer's G67 recipe — the chase cam roams
+    // the whole city, so world-fixed spawning can't work). scene.add(camera)
+    // so its children render; the per-launch minigame scene makes this safe.
+    this.speedLines = null;
+    if (!this.topcam) {
+      scene.add(camera);
+      this.speedLines = createSpeedLines(camera, {
+        pool: DRIVE_FX.STREAK_POOL,
+        radius: DRIVE_FX.STREAK_RADIUS,
+        ahead: DRIVE_FX.STREAK_AHEAD,
+        size: DRIVE_FX.STREAK_SIZE,
+        forwardZ: -1, // camera space: ahead = −z
+        rng: ctx.rng,
+      });
+    }
+    this.prevHeading = this.car.heading();
+    this.dustT = 0;
+    this.nearBannerT = 0;
+    this.reduceMotion = prefersReducedMotion();
+    // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
 
     // --- coin pickups (instanced; §C4.3 route coins / arcade scatter) -------
     this.coinGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.16, 14);
@@ -706,6 +780,20 @@ export default {
     this.invuln = Math.max(0, this.invuln - dt);
     this.shake = Math.max(0, this.shake - dt * 2.2);
 
+    // V4/GAME-POLISH-5: streaks tick every frame (leftovers decay through
+    // tow/rescue/fanfare); spawning only while actually driving fast.
+    if (this.speedLines) {
+      const carSpeed = this.car.speed();
+      this.speedLines.update(dt, {
+        speed: carSpeed,
+        rate: this.phase === 'drive' && !this.reduceMotion
+          ? streakRate(carSpeed, DRIVE_FX.STREAK_RATE)
+          : 0,
+        originX: 0, // camera-local ring: centred on the view axis
+        originY: 0,
+      });
+    }
+
     // Gooby is the soul — keep him alive even in the car
     this.gooby.update(dt);
     if (this.emotionT > 0) {
@@ -825,6 +913,36 @@ export default {
       }
     }
 
+    // ── V4/GAME-POLISH-5: cosmetic close-call sparkle + drift dust ──────────
+    // Runs AFTER checkHit so a real crash this frame voids the pass (the
+    // tracker reads the hit car's fresh cooldown). Scoring untouched.
+    if (this.phase === 'drive') {
+      const speed = this.car.speed();
+      this.nearBannerT = Math.max(0, this.nearBannerT - dt);
+      const nm = this.traffic.checkNearMiss?.(this.car.aabb(), speed);
+      if (nm) {
+        ctx.audio.play('combo.up');
+        _nearPos.set((p.x + nm.x) / 2, T.ROAD_Y + 1.6, (p.z + nm.z) / 2);
+        this.particles.emit?.('sparkles', _nearPos, { count: 8 });
+        if (this.nearBannerT <= 0) {
+          this.nearBannerT = DRIVE_FX.NEAR_BANNER_COOLDOWN_SEC;
+          ctx.hud.banner(tx('gp5.drive.nearMiss'));
+        }
+      }
+      // drift dust at the rear bumper while the tires visibly work
+      const h = this.car.heading();
+      const yawRate = Math.abs(wrapAngle(h - this.prevHeading)) / Math.max(1e-4, dt);
+      this.prevHeading = h;
+      this.dustT -= dt;
+      if (!this.reduceMotion && speed > DRIVE_FX.DUST_MIN_SPEED
+        && yawRate > DRIVE_FX.DUST_MIN_YAW_RATE && this.dustT <= 0) {
+        this.dustT = DRIVE_FX.DUST_INTERVAL_SEC;
+        _dustPos.set(p.x - Math.sin(h) * 1.6, T.ROAD_Y + 0.18, p.z - Math.cos(h) * 1.6);
+        this.particles.emit?.('crumbs', _dustPos, { count: 2 });
+      }
+    }
+    // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
+
     // ── V2/G21: landmark triggers + odometer (§C9.3/§C12.1, ANY city mode) ──
     if (this.phase === 'drive') {
       const step = Math.hypot(p.x - this.lastPos.x, p.z - this.lastPos.z);
@@ -878,22 +996,19 @@ export default {
         if (this.mode === 'arcade') Object.assign(coin, this.scatterCoins(1)[0]);
       }
     }
-    // spin + draw active coins
-    const cm = new THREE.Matrix4();
-    const cq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), elapsed * 2.4);
-    const cs = new THREE.Vector3(1, 1, 1);
-    const zero = new THREE.Vector3(0, 0, 0);
-    const zeroS = new THREE.Vector3(0.0001, 0.0001, 0.0001);
+    // spin + draw active coins (V4/GAME-POLISH-5: module temps — this block
+    // used to allocate 5 objects + a Vector3 per active coin every frame)
+    _coinQ.setFromAxisAngle(_Y_AXIS, elapsed * 2.4);
     let ci = 0;
     for (const coin of this.coins) {
       if (ci >= this.coinMesh.count) break;
       const bob = Math.sin(elapsed * 3 + coin.x * 0.1) * 0.15;
-      cm.compose(
-        coin.active ? new THREE.Vector3(coin.x, T.ROAD_Y + 1.15 + bob, coin.z) : zero,
-        cq,
-        coin.active ? cs : zeroS
+      _coinM4.compose(
+        coin.active ? _coinPos.set(coin.x, T.ROAD_Y + 1.15 + bob, coin.z) : _COIN_ZERO,
+        _coinQ,
+        coin.active ? _COIN_SCALE : _COIN_HIDDEN
       );
-      this.coinMesh.setMatrixAt(ci++, cm);
+      this.coinMesh.setMatrixAt(ci++, _coinM4);
     }
     this.coinMesh.instanceMatrix.needsUpdate = true;
 
@@ -906,9 +1021,9 @@ export default {
     this.guides.guide.visible = isTripMode(this.mode) && offRoute && this.phase === 'drive'; // V2/G21
     if (this.guides.guide.visible) {
       const target = pointAtLength(layout.lane, this.progress + 8);
-      const dir = new THREE.Vector3(target.x - p.x, 0, target.z - p.z).normalize();
+      _guideDir.set(target.x - p.x, 0, target.z - p.z).normalize(); // V4/GAME-POLISH-5: hoisted
       this.guides.guide.position.set(p.x, T.ROAD_Y + 5.4, p.z);
-      this.guides.guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      this.guides.guide.quaternion.setFromUnitVectors(_Y_AXIS, _guideDir);
     }
 
     // --- mode goals ----------------------------------------------------------
@@ -1015,6 +1130,8 @@ export default {
   dispose() {
     if (import.meta.env?.DEV && window.__drive?.game === this) delete window.__drive; // V4/G77
     this.sendDistance(); // V2/G21: quit-from-pause still books the odometer
+    this.speedLines?.dispose(); // V4/GAME-POLISH-5
+    this.speedLines = null;
     this.car?.dispose();
     this.traffic?.dispose();
     this.gooby?.dispose();

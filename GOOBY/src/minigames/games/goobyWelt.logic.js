@@ -688,3 +688,22 @@ export function validateScene(sceneData) {
   }
   return issues;
 }
+
+// ── V4/GAME-POLISH-5: software-GL detection (pure, unit-tested) ─────────────
+/**
+ * True when a WebGL UNMASKED_RENDERER string names a software rasterizer
+ * (SwiftShader / llvmpipe / softpipe / Microsoft Basic Render). Those can't
+ * sort/draw millions of Gaussian splats — observed as a frozen loading veil
+ * and eventual context loss — so the scene module skips straight to the
+ * low-poly fallback stage and stays well under 30 s to playable (§G6.6).
+ * Real GPUs (incl. ANGLE-over-D3D/Metal/Vulkan hardware strings) return
+ * false, keeping the splat path untouched on devices.
+ * @param {string} rendererString gl.getParameter(UNMASKED_RENDERER_WEBGL)
+ * @returns {boolean}
+ */
+export function isSoftwareRenderer(rendererString) {
+  if (typeof rendererString !== 'string' || rendererString === '') return false;
+  return /swiftshader|llvmpipe|softpipe|software\s*(rasterizer|renderer|adapter)|microsoft basic render/i
+    .test(rendererString);
+}
+// ── end V4/GAME-POLISH-5 ────────────────────────────────────────────────────

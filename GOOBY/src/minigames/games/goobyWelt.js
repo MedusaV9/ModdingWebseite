@@ -47,9 +47,11 @@ import { getStore } from '../../core/store.js'; // quality read + weltBest/radio
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { createParticles } from '../../gfx/particles.js';
+import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-5: mote gate
 import { clampFloatTextToView } from '../framework.js';
 import {
   WELT,
+  isSoftwareRenderer, // V4/GAME-POLISH-5: proactive splat skip on software GL
   createRun,
   stepRun,
   applyDrag,
@@ -68,6 +70,9 @@ import { WELT_SCENES, WELT_SCENE_IDS, weltScene } from './goobyWelt.paths.js';
 // until src/welt/splatViewer.js lands. Never converted to a static import.
 const splatViewerModules = import.meta.glob('../../welt/splatViewer.js');
 
+/** V4/GAME-POLISH-5: hoisted wonder-mote scratch (no per-frame allocs). */
+const _motePos = new THREE.Vector3();
+
 /** End-of-run banner hold before the results screen (s). */
 const END_HOLD_SEC = 1.5;
 /** Foto-spot flash overlay lifetime (ms). */
@@ -75,6 +80,28 @@ const FLASH_MS = 650;
 /** Fallback-stage tree ring (§G6.6: 12-tree Kenney nature arrangement). */
 const FALLBACK_TREES = 12;
 const TREE_MODELS = ['nature-kit/tree_default', 'nature-kit/tree_pineTallA', 'nature-kit/tree_fat'];
+
+/** V4/GAME-POLISH-5: ambient "wonder mote" cadence (s) + biome loop gain. */
+const MOTE_INTERVAL_SEC = 1.3;
+const AMBIENCE_ID = 'ambience.birdsong';
+const AMBIENCE_GAIN = 0.32;
+
+/**
+ * V4/GAME-POLISH-5: read the unmasked WebGL renderer string ('' when the
+ * probe is unavailable) — feeds the pure isSoftwareRenderer() check.
+ * @param {import('three').WebGLRenderer|null|undefined} renderer
+ * @returns {string}
+ */
+function glRendererString(renderer) {
+  try {
+    const gl = renderer?.getContext?.();
+    if (!gl) return '';
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+  } catch {
+    return '';
+  }
+}
 
 /** Soft radial glow sprite texture (star halos / foto shimmer). */
 function makeGlowTexture(color) {
@@ -263,7 +290,16 @@ export default {
     this.viewerMount = null;
     this.fallback = false;
     this.loadPct = 0;
+    // V4/GAME-POLISH-5: SwiftShader-class software rasterizers can't sort/
+    // draw millions of splats (observed: frozen loading veil ≥ 60 s, then
+    // context loss). Detect them BEFORE the download starts and take the
+    // low-poly fallback stage instead — playable in seconds, honoring the
+    // §G6.6 well-under-30-s-to-playable bar. Hardware GPUs are unaffected.
+    this.softwareGl = isSoftwareRenderer(glRendererString(ctx.renderer));
     try {
+      if (this.softwareGl) {
+        throw new Error('software WebGL (SwiftShader-class) — splats skipped');
+      }
       const loader = splatViewerModules['../../welt/splatViewer.js'];
       if (!loader) throw new Error('splatViewer.js not built yet (G65 — §E0.1-11)');
       const mod = await loader();
@@ -323,6 +359,21 @@ export default {
     // dispose restores the PERSISTED radio wish (purblePlace convention).
     this.radio = ctx.audio?.radio ?? null;
     this.radioTrack = this.radio?.playContext?.('game:goobyWelt') ?? null;
+
+    // ── V4/GAME-POLISH-5: biome ambience + wonder motes ─────────────────────
+    // A low-gain birdsong loop (existing mapped ambience id, AMBIENCE bus —
+    // the settings.music toggle parks it) under every outdoor splat scene;
+    // stopped in dispose. Motes: soft pooled sparkles drifting through the
+    // corridor for a touch of life — off on 'low' quality + reduced motion.
+    this.ambienceOn = false;
+    if (!this.flycamMode) {
+      ctx.audio.play(AMBIENCE_ID);
+      ctx.audio.setLoopGain?.(AMBIENCE_ID, AMBIENCE_GAIN);
+      this.ambienceOn = true;
+    }
+    this.moteT = MOTE_INTERVAL_SEC;
+    this.motesOn = this.quality !== 'low' && !prefersReducedMotion();
+    // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
 
     // HUD baseline + fallback notice (games have no ui.toast — banner §E8)
     ctx.hud.setScore(0);
@@ -493,6 +544,24 @@ export default {
 
     this.syncPose(dt);
     this.animatePickups(dt);
+
+    // V4/GAME-POLISH-5: wonder motes — a soft sparkle drifting through the
+    // corridor ahead of Gooby every MOTE_INTERVAL_SEC (pooled, 1–2 sprites)
+    if (this.motesOn && this.phase === 'play') {
+      this.moteT -= dt;
+      if (this.moteT <= 0) {
+        this.moteT = MOTE_INTERVAL_SEC;
+        const run = this.run;
+        const ahead = Math.min(run.track.length, run.s + 4 + Math.random() * 5);
+        const mote = offsetWorldPos(run.track, ahead, {
+          x: (Math.random() * 2 - 1) * 2.2,
+          y: Math.random() * 1.6 - 0.3,
+        });
+        _motePos.set(mote[0], mote[1], mote[2]);
+        this.particles.emit('sparkles', _motePos, { count: 1 });
+      }
+    }
+
     this.particles.update(dt);
     this.floats.update(dt);
   },
@@ -540,9 +609,16 @@ export default {
       if (!m.visible) continue;
       m.rotation.y = spin + i * 0.7;
       m.position.y += Math.sin(this.elapsed * 2.2 + i) * 0.0016;
+      // V4/GAME-POLISH-5: gentle halo pulse — the glow sprite breathes so
+      // pickups read alive against the static photogrammetry (high only)
+      const glow = m.children[1];
+      if (glow) glow.scale.setScalar(1.1 + Math.sin(this.elapsed * 2.6 + i * 1.3) * 0.16);
     }
     for (const m of this.carrotMeshes) {
-      if (m.visible) m.rotation.y = spin * 0.8;
+      if (!m.visible) continue;
+      m.rotation.y = spin * 0.8;
+      const glow = m.children[1]; // V4/GAME-POLISH-5: same breath on carrots
+      if (glow) glow.scale.setScalar(0.9 + Math.sin(this.elapsed * 2.9 + m.position.x) * 0.13);
     }
     for (let i = 0; i < this.fotoMeshes.length; i += 1) {
       const m = this.fotoMeshes[i];
@@ -783,6 +859,14 @@ export default {
     }
     this.radio = null;
     this.radioTrack = null;
+
+    // V4/GAME-POLISH-5: stop the biome ambience loop with the scene
+    if (this.ambienceOn) {
+      try {
+        this.ctx?.audio?.stop?.(AMBIENCE_ID);
+      } catch { /* headless contexts */ }
+      this.ambienceOn = false;
+    }
 
     this.floats?.dispose();
     this.particles?.dispose();
