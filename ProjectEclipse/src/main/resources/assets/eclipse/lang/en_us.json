@@ -1,4 +1,6 @@
 {
   "block.eclipse.grave": "Here a soul ended",
-  "block.eclipse.grave.locked": "This grave is still sealed."
+  "block.eclipse.grave.locked": "This grave is still sealed.",
+  "message.eclipse.voice_sealed": "Voice sealed",
+  "message.eclipse.voice_sealed_remaining": "Voice sealed for %s"
 }

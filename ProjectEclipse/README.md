@@ -25,6 +25,10 @@ For `runServer`, accept the EULA first: create `run/eula.txt` containing `eula=t
 Note: if you pipe `runServer` output through another process (e.g. `| tee log`), console
 input such as `stop` is not forwarded to the server; stop it with Ctrl-C instead.
 
+To test the optional Simple Voice Chat integration, drop
+`voicechat-neoforge-1.21.1-2.6.16.jar` into `run/mods/` before starting `./gradlew runServer`.
+The Voice Chat API is compile-only; Eclipse still builds and runs when that mod is absent.
+
 ## Anonymity — what is blocked and how
 
 Eclipse-Core is **required on every client as well as the server**. The server enforces all
@@ -85,6 +89,17 @@ public long addMilestoneProgress(String key, long delta);     // returns new val
 
 public Set<UUID> getForceVoiceMuted();        public boolean isForceVoiceMuted(UUID playerId); // for the voice worker
 public void addForceVoiceMuted(UUID playerId); public void removeForceVoiceMuted(UUID playerId);
+```
+
+### Voice mute — `dev.projecteclipse.eclipse.voice.VoiceMuteApi`
+
+Server-side entry points for the ten-minute first-Overworld-entry mute and the persistent
+administrative force-mute:
+
+```java
+public static boolean isEntryMuted(ServerPlayer player);
+public static void setForceMuted(MinecraftServer server, UUID playerId, boolean muted);
+public static boolean isMuted(MinecraftServer server, ServerPlayer player);
 ```
 
 ### Lives — `dev.projecteclipse.eclipse.core.state.LivesApi`
@@ -337,6 +352,6 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
-- Placeholder packages for later work: `ritual`, `anonymity`, `voice`, `artifact`, `admin`.
+- Placeholder packages for later work: `ritual`, `artifact`, `admin`.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.

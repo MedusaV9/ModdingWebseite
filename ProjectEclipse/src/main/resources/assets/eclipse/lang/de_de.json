@@ -1,4 +1,6 @@
 {
   "block.eclipse.grave": "Hier endete eine Seele",
-  "block.eclipse.grave.locked": "Dieses Grab ist noch versiegelt."
+  "block.eclipse.grave.locked": "Dieses Grab ist noch versiegelt.",
+  "message.eclipse.voice_sealed": "Stimme versiegelt",
+  "message.eclipse.voice_sealed_remaining": "Stimme versiegelt noch %s"
 }

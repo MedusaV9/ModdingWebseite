@@ -93,6 +93,13 @@ file="META-INF/accesstransformer.cfg"
     ordering="NONE"
     side="BOTH"
 
+[[dependencies.${mod_id}]]
+    modId="voicechat"
+    type="optional"
+    versionRange="[0,)"
+    ordering="AFTER"
+    side="BOTH"
+
 # Gated server-pack mods. All four are OPTIONAL: Eclipse-Core has zero compile-time dependency on
 # them (gating matches registry-id namespaces as plain strings at runtime), but when present they
 # must load before us so their content is registered by the time our gate sweeps run.
