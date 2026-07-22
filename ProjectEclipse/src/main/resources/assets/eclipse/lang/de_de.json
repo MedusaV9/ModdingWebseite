@@ -38,6 +38,7 @@
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Eclipse-Menü öffnen",
   "gui.eclipse.title.tagline": "Project: Eclipse",
+  "gui.eclipse.title.disclaimer": "Inoffizieller Community-Event-Mod · Nicht mit Mojang verbunden",
   "gui.eclipse.options.accent": "\u2726 Project Eclipse \u2726",
   "gui.eclipse.artifact.title": "Project Eclipse",
   "gui.eclipse.artifact.day": "Tag %s",
