@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -34,12 +35,22 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_MILESTONE_PROGRESS = "milestoneProgress";
     private static final String TAG_FORCE_VOICE_MUTED = "forceVoiceMuted";
     private static final String TAG_OAR_ENTITIES = "oarEntities";
+    private static final String TAG_WORLD_STAGE_OVERWORLD = "worldStageOverworld";
+    private static final String TAG_WORLD_STAGE_NETHER = "worldStageNether";
+    private static final String TAG_GROWTH_DIMENSION = "growthDimension";
+    private static final String TAG_GROWTH_FROM_STAGE = "growthFromStage";
+    private static final String TAG_GROWTH_CURSOR = "growthCursor";
 
     private int day = 1;
     private int altarLevel = 0;
     private double borderSize = 1000.0D;
     private boolean startEventDone = false;
     private boolean ghostShipBuilt = false;
+    private int worldStageOverworld = 0;
+    private int worldStageNether = 0;
+    private String growthDimension = "";
+    private int growthFromStage = 0;
+    private long growthCursor = 0L;
     private final Set<UUID> banned = new HashSet<>();
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
@@ -60,6 +71,12 @@ public final class EclipseWorldState extends SavedData {
         state.borderSize = tag.contains(TAG_BORDER_SIZE) ? tag.getDouble(TAG_BORDER_SIZE) : 1000.0D;
         state.startEventDone = tag.getBoolean(TAG_START_EVENT_DONE);
         state.ghostShipBuilt = tag.getBoolean(TAG_GHOST_SHIP_BUILT);
+        // World stage fields default to 0 / "no cursor" so pre-v2 saves keep loading.
+        state.worldStageOverworld = tag.getInt(TAG_WORLD_STAGE_OVERWORLD);
+        state.worldStageNether = tag.getInt(TAG_WORLD_STAGE_NETHER);
+        state.growthDimension = tag.getString(TAG_GROWTH_DIMENSION);
+        state.growthFromStage = tag.getInt(TAG_GROWTH_FROM_STAGE);
+        state.growthCursor = tag.getLong(TAG_GROWTH_CURSOR);
         for (Tag entry : tag.getList(TAG_OAR_ENTITIES, Tag.TAG_INT_ARRAY)) {
             state.oarEntities.add(NbtUtils.loadUUID(entry));
         }
@@ -83,6 +100,11 @@ public final class EclipseWorldState extends SavedData {
         tag.putDouble(TAG_BORDER_SIZE, this.borderSize);
         tag.putBoolean(TAG_START_EVENT_DONE, this.startEventDone);
         tag.putBoolean(TAG_GHOST_SHIP_BUILT, this.ghostShipBuilt);
+        tag.putInt(TAG_WORLD_STAGE_OVERWORLD, this.worldStageOverworld);
+        tag.putInt(TAG_WORLD_STAGE_NETHER, this.worldStageNether);
+        tag.putString(TAG_GROWTH_DIMENSION, this.growthDimension);
+        tag.putInt(TAG_GROWTH_FROM_STAGE, this.growthFromStage);
+        tag.putLong(TAG_GROWTH_CURSOR, this.growthCursor);
 
         ListTag oarList = new ListTag();
         for (UUID uuid : this.oarEntities) {
@@ -140,6 +162,66 @@ public final class EclipseWorldState extends SavedData {
 
     public void setBorderSize(double borderSize) {
         this.borderSize = borderSize;
+        setDirty();
+    }
+
+    // --- world stage ---
+
+    /** Committed world stage of the given disc dimension (default 0 = pre-intro geometry). */
+    public int getWorldStage(DiscProfile profile) {
+        return profile == DiscProfile.NETHER ? this.worldStageNether : this.worldStageOverworld;
+    }
+
+    /**
+     * Persists a committed world stage. Only {@code WorldStageService.setStage} should call
+     * this — it also has to publish the stage into the {@code WorldStageAccess} chunkgen seam
+     * and kick the terrain sweep.
+     */
+    public void setWorldStage(DiscProfile profile, int stage) {
+        int clamped = Math.max(0, stage);
+        if (profile == DiscProfile.NETHER) {
+            this.worldStageNether = clamped;
+        } else {
+            this.worldStageOverworld = clamped;
+        }
+        setDirty();
+    }
+
+    // --- ring growth cursor (restart-resume of a mid-animation sweep) ---
+
+    /** Whether a ring-growth sweep was mid-flight when the world last saved. */
+    public boolean hasGrowthCursor() {
+        return !this.growthDimension.isEmpty();
+    }
+
+    /** Disc profile name ({@code "overworld"} / {@code "nether"}) of the interrupted sweep, or {@code ""}. */
+    public String getGrowthDimension() {
+        return this.growthDimension;
+    }
+
+    /** Stage the interrupted sweep started from (its target is the committed world stage). */
+    public int getGrowthFromStage() {
+        return this.growthFromStage;
+    }
+
+    /** Index of the next unwritten column in the sweep's deterministic column ordering. */
+    public long getGrowthCursor() {
+        return this.growthCursor;
+    }
+
+    /** Saves the sweep position; {@code RingGrowthService} calls this every ~100 columns. */
+    public void setGrowthCursor(String dimensionName, int fromStage, long columnIndex) {
+        this.growthDimension = dimensionName;
+        this.growthFromStage = fromStage;
+        this.growthCursor = columnIndex;
+        setDirty();
+    }
+
+    /** Clears the cursor once a sweep completes (or is cancelled by a newer stage commit). */
+    public void clearGrowthCursor() {
+        this.growthDimension = "";
+        this.growthFromStage = 0;
+        this.growthCursor = 0L;
         setDirty();
     }
 

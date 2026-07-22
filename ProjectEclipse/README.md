@@ -84,6 +84,15 @@ public boolean isStartEventDone();            public void setStartEventDone(bool
 public boolean isGhostShipBuilt();            public void setGhostShipBuilt(boolean built);   // default false
 public List<UUID> getOarEntities();           public void setOarEntities(List<UUID> ids);     // ghost ship oar displays
 
+public int getWorldStage(DiscProfile profile);                 // committed world stage, default 0
+public void setWorldStage(DiscProfile profile, int stage);     // ONLY WorldStageService.setStage may call this
+public boolean hasGrowthCursor();                              // a ring sweep was mid-flight at last save
+public String getGrowthDimension();                            // "overworld"/"nether", "" = none
+public int getGrowthFromStage();                               // stage the interrupted sweep started from
+public long getGrowthCursor();                                 // next column index of the sweep ordering
+public void setGrowthCursor(String dim, int fromStage, long columnIndex);
+public void clearGrowthCursor();
+
 public Set<UUID> getBanned();                 public boolean isBanned(UUID playerId);
 public void addBanned(UUID playerId);         public void removeBanned(UUID playerId);
 
@@ -165,30 +174,37 @@ public static boolean reducedFx();       // default false — reduce shake/parti
 
 ### Config — `dev.projecteclipse.eclipse.core.config.EclipseConfig`
 
-Loads `config/eclipse/{general,days,milestones,modgate,anticheat}.json`; missing files are created with defaults on first run
+Loads `config/eclipse/{general,days,milestones,modgate,anticheat,stages}.json`; missing files are created with defaults on first run
 (triggered from `FMLCommonSetupEvent`). Getters lazy-load if needed. Parse/IO failures fall back to built-in defaults in memory.
 
 ```java
-public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime) {}
-// general.json; defaults: 30, false, "08:00"
+public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
+        int ringBlocksBudgetMs) {}
+// general.json; defaults: 30, false, "08:00", 2
 public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
 public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
 public record AntiCheat(List<String> blockedModIdSubstrings) {}
+public record StageEntry(int stage, int radius, String trigger, List<String> structures,
+        Map<String, Integer> oreBudget) {}
+// stages.json; per-dimension world stage timeline, see "World stages"
 
 public static General general();
 public static int graveGraceMinutes();       // non-owners may loot a grave after 1x; it scatters after 3x
 public static boolean dayAutoAdvance();      // default false: days advance only via DayScheduler.setDay
 public static LocalTime dayAutoAdvanceTime(); // parsed "HH:mm" (server-local); falls back to 08:00
+public static int ringBlocksBudgetMs();      // per-tick nanoTime budget of the ring-growth sweep (default 2, min 1)
 public static List<DayPlan> days();          // 14 entries by default, ordered by day
 public static DayPlan day(int day);          // out-of-range days clamp to first/last plan
 public static List<Milestone> milestones();  // ordered by level
 public static Milestone milestone(int level); // null if not configured
 public static ModGate modGate();
 public static AntiCheat antiCheat();         // anticheat.json blocklist, see "Anti-cheat"
+public static List<StageEntry> stages(String dim); // "overworld"/"nether", ordered by stage (stage 0 implicit)
+public static StageEntry stage(String dim, int stage); // null if not configured
 public static synchronized boolean setNamespaceGated(String namespace, boolean gated); // mutates + persists modgate.json
-public static synchronized void reload();
+public static synchronized void reload();    // also re-publishes stages.json radii into StageRadii
 ```
 
 Default unlock keys per day: 1 `[]`, 2 `[main_inventory]`, 3 `[workbenches, create]` (border 1500),
@@ -214,6 +230,10 @@ public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements 
 // veilfx.QuasarSpawner.spawnOrFallback (vanilla END_ROD/PORTAL burst if Quasar fails).
 // Well-known emitter id constants live on the payload class: ALTAR_BEAM, ARM_WISPS,
 // MAP_EXPAND_MATERIALIZE, BORDER_GLITCH, BOSS_SLAM, HEART_BURST, LIMBO_MOTES, CUTSCENE_VEIL.
+public record S2CStagePayload(String dim, int stage, int radius, boolean animating) implements CustomPacketPayload; // id "eclipse:stage"
+// Committed world stage of one disc dimension ("overworld"/"nether"); sent per-dimension on
+// login and broadcast on every stage commit / sweep completion. Client handler writes
+// ClientStateCache.stage*/stageRadius*/stageAnimating* (volatile).
 // all expose: public static final CustomPacketPayload.Type<...> TYPE;
 //             public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
 
@@ -311,9 +331,9 @@ public static final int   DiscTerrainFunction.RIM_REWRITE_MARGIN; // ring sweep 
 
 public static BlockPos DiscGeometry.playerDiscCenter(int index);  // 8 player discs r=24 on ring r=170
 public static int      DiscGeometry.mainDiscRadius(int stage);    // 96 / 225 / 300 / 360 / 420 / 480
-public static int      StageRadii.radius(DiscProfile p, int stage); // W4 overrides via StageRadii.set
+public static int      StageRadii.radius(DiscProfile p, int stage); // stages.json overrides via EclipseConfig
 public static int      WorldStageAccess.stage(DiscProfile p);     // committed stage seam, default 0;
-public static void     WorldStageAccess.setStage(DiscProfile p, int stage); // W4 drives this
+public static void     WorldStageAccess.setStage(DiscProfile p, int stage); // WorldStageService drives this
 ```
 
 Stage radii: overworld stage 0 = main disc r=96 + eight player discs r=24 on ring r=170, stages
@@ -334,6 +354,53 @@ Spawn: `DiscSpawnPlacement` pins the overworld spawn to `(0, surfaceY(0,0)+1, 0)
 the terrain carves at the origin for the altar + sanctum — on every server start (HIGH priority,
 before `BorderController` centers the border on spawn). The v1 start-event flow is unchanged:
 `StartEventCutscene` still teleports players from limbo to the shared spawn.
+
+### World stages — `dev.projecteclipse.eclipse.worldgen.stage`
+
+The disc grows ring-by-ring at runtime. `WorldStageService.setStage` is the ONLY way a stage
+commits; order of operations: persist in `EclipseWorldState` → publish into the
+`WorldStageAccess` chunkgen seam → broadcast `S2CStagePayload` → kick the `RingGrowthService`
+sweep. Radii/triggers/structures come from `config/eclipse/stages.json` (defaults: overworld
+stages 1–5 = r 225/300/360/420/480 triggered by intro_fusion / milestone:2..4 / final_day;
+nether stages 1–3 = r 80/120/160 on day:2/10/12); `EclipseConfig` pushes the radii into
+`StageRadii` on every (re)load.
+
+```java
+public final class WorldStageService { // @EventBusSubscriber (game bus)
+    @FunctionalInterface public interface StageListener {
+        void onStageTerrainComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage);
+    }
+    public static void addListener(StageListener listener); // W5 structure stamping subscribes here
+    public static boolean setStage(MinecraftServer server, ResourceKey<Level> dim, int stage, boolean animate);
+    public static boolean rebuildStage(MinecraftServer server, ResourceKey<Level> dim, int stage); // repair re-stamp
+    public static int stage(MinecraftServer server, DiscProfile profile);   // committed stage
+    public static int maxStage(DiscProfile profile);                        // highest configured stage
+    public static DiscProfile profileOf(ResourceKey<Level> dim);            // null for non-disc dims
+    public static ResourceKey<Level> dimensionOf(DiscProfile profile);
+    public static void syncStagesTo(ServerPlayer player);                   // login payload sync
+}
+
+public final class RingGrowthService { // @EventBusSubscriber (game bus)
+    public static boolean isRunning(DiscProfile profile);
+    public static String progressLine(DiscProfile profile); // null when idle
+}
+```
+
+The sweep rewrites every column of the annulus `min(r0,r1) − RIM_REWRITE_MARGIN … max(r0,r1) +
+RIM_NOISE_AMP` with `DiscTerrainFunction` output at the committed stage (byte-identical to
+chunkgen; transitions touching overworld stage 0 automatically span the void gap and the eight
+player discs). GROW orders columns radius-then-angle (an angular wave), ERASE outer-radius-first
+(the disc crumbles inward); lowering a stage is the same sweep — the terrain function simply
+returns air beyond the smaller radius. Writes go straight into chunk sections (no neighbor
+updates); a finished chunk gets heightmaps re-primed, light fully rebuilt through the
+`ThreadedLevelLightEngine` task queue (≤ 4 chunk relights/tick) and a
+`ClientboundLevelChunkWithLightPacket` resend. Loaded chunks are rewritten live,
+generated-but-unloaded chunks (found via async region reads) are ticket-loaded and rewritten,
+never-generated chunks are skipped (chunkgen covers them at the committed stage). Animated
+sweeps drain a `ringBlocksBudgetMs` (2 ms) nanoTime budget per tick and skip ticks while
+MSPT > 40; instant mode uses a 25 ms budget. The growth cursor persists every ~100 columns, so
+a restart resumes mid-animation (`ServerStartedEvent`). The persisted stages are re-published
+into the chunkgen seam on `LevelEvent.Load` of the overworld — before any spawn chunk generates.
 
 ## Progression & Mod Gating
 
@@ -414,9 +481,12 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse restore <player> <index>` | `SnapshotService.restore` of the listed 1-based index (inventory + ender chest). |
 | `/eclipse border set <size> [seconds]` | `BorderController.setBorder`; omitted seconds = instant snap. |
 | `/eclipse modgate lock\|unlock <namespace>` | `EclipseConfig.setNamespaceGated`: mutates + persists `modgate.json`. |
+| `/eclipse stage get` | Committed stage + radius of both disc dimensions, plus live sweep progress. |
+| `/eclipse stage set <overworld\|nether> <n> [instant\|animate]` | `WorldStageService.setStage` (default animate); lowering runs the erase sweep. |
+| `/eclipse stage rebuild <overworld\|nether> <n>` | Re-stamps stage `n`'s annulus with the committed terrain (repair). |
 | `/eclipse voicemute <player> on\|off` | `VoiceMuteApi.setForceMuted` (persistent administrative mute). |
 | `/eclipse tp_limbo [player]` | Teleports you (or the target) to the Limbo ghost-ship platform. |
-| `/eclipse reload` | `EclipseConfig.reload()` of all five JSON configs. |
+| `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii). |
 | `/eclipse status` | Dumps day / altar level / border / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`

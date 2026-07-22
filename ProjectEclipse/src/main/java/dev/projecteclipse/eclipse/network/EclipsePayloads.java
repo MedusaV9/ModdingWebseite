@@ -33,6 +33,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
         registrar.playToClient(S2CHeartBurstPayload.TYPE, S2CHeartBurstPayload.STREAM_CODEC, EclipsePayloads::handleHeartBurst);
         registrar.playToClient(S2CQuasarPayload.TYPE, S2CQuasarPayload.STREAM_CODEC, EclipsePayloads::handleQuasar);
+        registrar.playToClient(S2CStagePayload.TYPE, S2CStagePayload.STREAM_CODEC, EclipsePayloads::handleStage);
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
@@ -69,6 +70,18 @@ public final class EclipsePayloads {
         ClientStateCache.cutscenePhase = payload.phase();
     }
 
+    private static void handleStage(S2CStagePayload payload, IPayloadContext context) {
+        if ("nether".equals(payload.dim())) {
+            ClientStateCache.stageNether = payload.stage();
+            ClientStateCache.stageRadiusNether = payload.radius();
+            ClientStateCache.stageAnimatingNether = payload.animating();
+        } else {
+            ClientStateCache.stageOverworld = payload.stage();
+            ClientStateCache.stageRadiusOverworld = payload.radius();
+            ClientStateCache.stageAnimatingOverworld = payload.animating();
+        }
+    }
+
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleHeartBurst(S2CHeartBurstPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay.trigger(payload.heartIndex());
@@ -100,6 +113,7 @@ public final class EclipsePayloads {
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
+            dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
         }
     }
 }

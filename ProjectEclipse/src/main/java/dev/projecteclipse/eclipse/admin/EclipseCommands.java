@@ -33,6 +33,10 @@ import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.ModGate;
 import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
+import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.StageRadii;
+import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
+import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.EclipseMod;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -62,6 +66,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse restore &lt;player&gt; [index]          (no index = list snapshots)
  * /eclipse border set &lt;size&gt; [seconds]
  * /eclipse modgate lock|unlock &lt;namespace&gt;
+ * /eclipse stage get | set &lt;overworld|nether&gt; &lt;n&gt; [instant|animate] | rebuild &lt;dim&gt; &lt;n&gt;
  * /eclipse voicemute &lt;player&gt; on|off
  * /eclipse tp_limbo [player]
  * /eclipse reload
@@ -135,6 +140,25 @@ public final class EclipseCommands {
                                         .executes(context -> voicemute(context, true)))
                                 .then(Commands.literal("off")
                                         .executes(context -> voicemute(context, false)))))
+                .then(Commands.literal("stage")
+                        .then(Commands.literal("get")
+                                .executes(EclipseCommands::stageGet))
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("dimension", StringArgumentType.word())
+                                        .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider
+                                                .suggest(new String[] {"overworld", "nether"}, builder))
+                                        .then(Commands.argument("stage", IntegerArgumentType.integer(0))
+                                                .executes(context -> stageSet(context, true))
+                                                .then(Commands.literal("animate")
+                                                        .executes(context -> stageSet(context, true)))
+                                                .then(Commands.literal("instant")
+                                                        .executes(context -> stageSet(context, false))))))
+                        .then(Commands.literal("rebuild")
+                                .then(Commands.argument("dimension", StringArgumentType.word())
+                                        .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider
+                                                .suggest(new String[] {"overworld", "nether"}, builder))
+                                        .then(Commands.argument("stage", IntegerArgumentType.integer(0))
+                                                .executes(EclipseCommands::stageRebuild)))))
                 .then(Commands.literal("tp_limbo")
                         .executes(context -> tpLimbo(context.getSource(), context.getSource().getPlayerOrException()))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -350,6 +374,74 @@ public final class EclipseCommands {
         VoiceMuteApi.setForceMuted(source.getServer(), player.getUUID(), muted);
         source.sendSuccess(() -> Component.literal(player.getScoreboardName()
                 + (muted ? " is now force voice-muted" : " is no longer force voice-muted")), false);
+        return 1;
+    }
+
+    // --- stage ---
+
+    /** {@code "overworld"} / {@code "nether"} → the disc profile, or {@code null}. */
+    private static DiscProfile discProfileArg(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "dimension").toLowerCase(Locale.ROOT);
+        return switch (name) {
+            case "overworld" -> DiscProfile.OVERWORLD;
+            case "nether" -> DiscProfile.NETHER;
+            default -> null;
+        };
+    }
+
+    private static int stageGet(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        for (DiscProfile profile : new DiscProfile[] {DiscProfile.OVERWORLD, DiscProfile.NETHER}) {
+            int stage = WorldStageService.stage(server, profile);
+            String progress = RingGrowthService.progressLine(profile);
+            String line = profile.name() + ": stage " + stage + "/" + WorldStageService.maxStage(profile)
+                    + " (radius " + StageRadii.radius(profile, stage) + ")"
+                    + (progress != null ? " — sweeping: " + progress : "");
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return WorldStageService.stage(server, DiscProfile.OVERWORLD);
+    }
+
+    private static int stageSet(CommandContext<CommandSourceStack> context, boolean animate) {
+        CommandSourceStack source = context.getSource();
+        DiscProfile profile = discProfileArg(context);
+        if (profile == null) {
+            source.sendFailure(Component.literal("Unknown disc dimension (use overworld|nether)"));
+            return 0;
+        }
+        int stage = IntegerArgumentType.getInteger(context, "stage");
+        if (stage > WorldStageService.maxStage(profile)) {
+            source.sendFailure(Component.literal("Stage out of range: " + profile.name()
+                    + " is configured for stages 0-" + WorldStageService.maxStage(profile)));
+            return 0;
+        }
+        if (!WorldStageService.setStage(source.getServer(), WorldStageService.dimensionOf(profile),
+                stage, animate)) {
+            source.sendFailure(Component.literal(profile.name() + " is already at stage " + stage));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("World stage " + profile.name() + " set to " + stage
+                + " (radius " + StageRadii.radius(profile, stage) + ", "
+                + (animate ? "animated sweep" : "instant stamp") + " running — watch the log)"), false);
+        return stage;
+    }
+
+    private static int stageRebuild(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        DiscProfile profile = discProfileArg(context);
+        if (profile == null) {
+            source.sendFailure(Component.literal("Unknown disc dimension (use overworld|nether)"));
+            return 0;
+        }
+        int stage = IntegerArgumentType.getInteger(context, "stage");
+        if (!WorldStageService.rebuildStage(source.getServer(), WorldStageService.dimensionOf(profile), stage)) {
+            source.sendFailure(Component.literal("Cannot rebuild " + profile.name() + " stage " + stage
+                    + " (out of range, or a sweep is already running)"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Re-stamping " + profile.name() + " stage " + stage
+                + " annulus with the committed terrain (instant sweep)"), false);
         return 1;
     }
 

@@ -18,22 +18,38 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
+import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
- * Loads the five Eclipse config files from {@code <config>/eclipse/}:
- * {@code general.json}, {@code days.json}, {@code milestones.json}, {@code modgate.json}
- * and {@code anticheat.json}. Missing files are created with sensible defaults on first
- * run. Parse or IO failures are logged and the built-in defaults are used in memory instead.
+ * Loads the six Eclipse config files from {@code <config>/eclipse/}:
+ * {@code general.json}, {@code days.json}, {@code milestones.json}, {@code modgate.json},
+ * {@code anticheat.json} and {@code stages.json}. Missing files are created with sensible
+ * defaults on first run. Parse or IO failures are logged and the built-in defaults are used
+ * in memory instead.
  */
 public final class EclipseConfig {
     /**
      * General tunables: grave grace period in minutes (non-owners may loot after 1x, graves scatter
-     * after 3x), and the day auto-advance switch. {@code dayAutoAdvance} defaults to {@code false}
+     * after 3x), the day auto-advance switch, and the per-tick nanoTime budget (in ms) of the
+     * runtime ring-growth terrain sweep. {@code dayAutoAdvance} defaults to {@code false}
      * (days only change via the admin command / {@code DayScheduler.setDay}); when enabled, the day
      * advances once per real-world day at {@code dayAutoAdvanceTime} ({@code HH:mm}, server-local time).
      */
-    public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime) {}
+    public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
+            int ringBlocksBudgetMs) {}
+
+    /**
+     * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
+     * at that stage, what triggers it ({@code "intro_fusion"}, {@code "milestone:N"},
+     * {@code "day:N"} or {@code "final_day"}), the structure ids worker 5's stamper places when
+     * the stage's terrain sweep completes, and an informational per-annulus ore budget (the
+     * actual vein shaping lives in {@code DiscTerrainFunction}'s band factors).
+     */
+    public record StageEntry(int stage, int radius, String trigger, List<String> structures,
+            Map<String, Integer> oreBudget) {}
 
     /** Per-day plan: three goals, progression unlock keys, and the world border size for that day. */
     public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
@@ -57,6 +73,7 @@ public final class EclipseConfig {
     private static volatile List<Milestone> milestones = List.of();
     private static volatile ModGate modGate = defaultModGate();
     private static volatile AntiCheat antiCheat = defaultAntiCheat();
+    private static volatile Map<String, List<StageEntry>> stages = defaultStages();
     private static volatile boolean loaded = false;
 
     private EclipseConfig() {}
@@ -86,6 +103,31 @@ public final class EclipseConfig {
                     general().dayAutoAdvanceTime());
             return java.time.LocalTime.of(8, 0);
         }
+    }
+
+    /** Per-tick nanoTime budget (ms) of the runtime ring-growth sweep (default 2, clamped >= 1). */
+    public static int ringBlocksBudgetMs() {
+        return Math.max(1, general().ringBlocksBudgetMs());
+    }
+
+    /**
+     * The stage timeline of the given disc dimension ({@code "overworld"} / {@code "nether"}),
+     * ordered by stage, from {@code stages.json}. Stage 0 is implicit (pre-intro geometry) and
+     * never listed.
+     */
+    public static List<StageEntry> stages(String dimensionName) {
+        ensureLoaded();
+        return stages.getOrDefault(dimensionName, List.of());
+    }
+
+    /** The {@code stages.json} entry for the given dimension and stage, or {@code null}. */
+    public static StageEntry stage(String dimensionName, int stage) {
+        for (StageEntry entry : stages(dimensionName)) {
+            if (entry.stage() == stage) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     /** All 14 day plans, ordered by day. */
@@ -186,11 +228,49 @@ public final class EclipseConfig {
                 EclipseConfig::defaultModGate, EclipseConfig::modGateToJson, EclipseConfig::modGateFromJson);
         antiCheat = loadOrCreate(dir.resolve("anticheat.json"),
                 EclipseConfig::defaultAntiCheat, EclipseConfig::antiCheatToJson, EclipseConfig::antiCheatFromJson);
+        stages = loadOrCreate(dir.resolve("stages.json"),
+                EclipseConfig::defaultStages, EclipseConfig::stagesToJson, EclipseConfig::stagesFromJson);
+        applyStageRadii();
         loaded = true;
         EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces, "
-                        + "{} anti-cheat entries, grave grace {} min",
+                        + "{} anti-cheat entries, grave grace {} min, {} overworld + {} nether stages, "
+                        + "ring budget {} ms",
                 days.size(), milestones.size(), modGate.gatedNamespaces().size(),
-                antiCheat.blockedModIdSubstrings().size(), general.graveGraceMinutes());
+                antiCheat.blockedModIdSubstrings().size(), general.graveGraceMinutes(),
+                stages.getOrDefault("overworld", List.of()).size(),
+                stages.getOrDefault("nether", List.of()).size(), general.ringBlocksBudgetMs());
+    }
+
+    /**
+     * Publishes the configured stage radii into the {@link StageRadii} seam consumed by the
+     * chunk generator and the ring-growth sweep. Index 0 keeps the built-in stage-0 value
+     * (96 overworld main disc / 0 nether); indexes above the highest configured stage are
+     * clamped by {@code StageRadii.radius}. Runs on every (re)load so {@code /eclipse reload}
+     * applies radius edits immediately.
+     */
+    private static void applyStageRadii() {
+        for (DiscProfile profile : new DiscProfile[] {DiscProfile.OVERWORLD, DiscProfile.NETHER}) {
+            List<StageEntry> entries = stages.getOrDefault(profile.name(), List.of());
+            int maxStage = 0;
+            for (StageEntry entry : entries) {
+                maxStage = Math.max(maxStage, entry.stage());
+            }
+            int[] radii = new int[maxStage + 1];
+            radii[0] = profile == DiscProfile.NETHER ? 0 : DiscGeometry.MAIN_DISC_RADIUS;
+            int previous = radii[0];
+            for (int stage = 1; stage <= maxStage; stage++) {
+                StageEntry entry = null;
+                for (StageEntry candidate : entries) {
+                    if (candidate.stage() == stage) {
+                        entry = candidate;
+                        break;
+                    }
+                }
+                previous = entry != null ? entry.radius() : previous;
+                radii[stage] = previous;
+            }
+            StageRadii.set(profile, radii);
+        }
     }
 
     private static void ensureLoaded() {
@@ -229,7 +309,7 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30, false, "08:00");
+        return new General(30, false, "08:00", 2);
     }
 
     private static JsonElement generalToJson(General general) {
@@ -237,6 +317,7 @@ public final class EclipseConfig {
         obj.addProperty("graveGraceMinutes", general.graveGraceMinutes());
         obj.addProperty("dayAutoAdvance", general.dayAutoAdvance());
         obj.addProperty("dayAutoAdvanceTime", general.dayAutoAdvanceTime());
+        obj.addProperty("ringBlocksBudgetMs", general.ringBlocksBudgetMs());
         return obj;
     }
 
@@ -245,7 +326,9 @@ public final class EclipseConfig {
         int graveGraceMinutes = obj.has("graveGraceMinutes") ? obj.get("graveGraceMinutes").getAsInt() : 30;
         boolean dayAutoAdvance = obj.has("dayAutoAdvance") && obj.get("dayAutoAdvance").getAsBoolean();
         String dayAutoAdvanceTime = obj.has("dayAutoAdvanceTime") ? obj.get("dayAutoAdvanceTime").getAsString() : "08:00";
-        return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime);
+        int ringBlocksBudgetMs = obj.has("ringBlocksBudgetMs") ? obj.get("ringBlocksBudgetMs").getAsInt() : 2;
+        return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
+                Math.max(1, ringBlocksBudgetMs));
     }
 
     // --- days.json ---
@@ -395,6 +478,91 @@ public final class EclipseConfig {
     private static AntiCheat antiCheatFromJson(JsonElement json) {
         JsonObject obj = json.getAsJsonObject();
         return new AntiCheat(stringList(obj.getAsJsonArray("blockedModIdSubstrings")));
+    }
+
+    // --- stages.json ---
+
+    /**
+     * Defaults from {@code docs/ideas/01_world_terrain.md} §C/§D: overworld stages 1..5
+     * (r 225/300/360/420/480; intro fusion, altar milestones 2..4, final day) and nether
+     * stages 1..3 (r 80/120/160 on days 2/10/12). Structure ids match the
+     * {@code disc_map.json} landmark list worker 5 stamps from.
+     */
+    private static Map<String, List<StageEntry>> defaultStages() {
+        Map<String, List<StageEntry>> defaults = new LinkedHashMap<>();
+        defaults.put("overworld", List.of(
+                new StageEntry(1, 225, "intro_fusion", List.of(), Map.of()),
+                new StageEntry(2, 300, "milestone:2", List.of("eclipse:desert_temple"),
+                        Map.of("iron", 400, "gold", 90, "diamond", 40)),
+                new StageEntry(3, 360, "milestone:3", List.of("eclipse:jungle_temple"),
+                        Map.of("iron", 300, "gold", 80, "diamond", 25)),
+                new StageEntry(4, 420, "milestone:4", List.of("eclipse:village_plains"),
+                        Map.of("iron", 250, "gold", 70, "diamond", 15)),
+                new StageEntry(5, 480, "final_day", List.of("eclipse:stronghold_emergence"),
+                        Map.of("iron", 200, "gold", 60, "diamond", 10))));
+        defaults.put("nether", List.of(
+                new StageEntry(1, 80, "day:2", List.of("eclipse:fortress_core"),
+                        Map.of("quartz", 300, "ancient_debris", 12)),
+                new StageEntry(2, 120, "day:10", List.of(), Map.of("quartz", 200, "ancient_debris", 10)),
+                new StageEntry(3, 160, "day:12", List.of(), Map.of("quartz", 150, "ancient_debris", 8))));
+        return Collections.unmodifiableMap(defaults);
+    }
+
+    private static JsonElement stagesToJson(Map<String, List<StageEntry>> stages) {
+        JsonObject root = new JsonObject();
+        root.addProperty("_comment", "Per-dimension world stage timeline (separate from days.json). "
+                + "radius = fused disc radius in blocks; trigger = intro_fusion | milestone:N (altar level) "
+                + "| day:N | final_day; structures = ids stamped by the structure worker when the stage's "
+                + "terrain sweep completes; oreBudget documents the intended per-annulus vein budget. "
+                + "Edit and run /eclipse reload to apply radii; already-committed stages are not re-swept.");
+        for (Map.Entry<String, List<StageEntry>> dimension : stages.entrySet()) {
+            JsonArray array = new JsonArray(dimension.getValue().size());
+            for (StageEntry entry : dimension.getValue()) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("stage", entry.stage());
+                obj.addProperty("radius", entry.radius());
+                obj.addProperty("trigger", entry.trigger());
+                obj.add("structures", stringArray(entry.structures()));
+                JsonObject budget = new JsonObject();
+                for (Map.Entry<String, Integer> ore : entry.oreBudget().entrySet()) {
+                    budget.addProperty(ore.getKey(), ore.getValue());
+                }
+                obj.add("oreBudget", budget);
+                array.add(obj);
+            }
+            root.add(dimension.getKey(), array);
+        }
+        return root;
+    }
+
+    private static Map<String, List<StageEntry>> stagesFromJson(JsonElement json) {
+        JsonObject root = json.getAsJsonObject();
+        Map<String, List<StageEntry>> parsed = new LinkedHashMap<>();
+        for (String dimension : List.of("overworld", "nether")) {
+            if (!root.has(dimension)) {
+                parsed.put(dimension, defaultStages().get(dimension));
+                continue;
+            }
+            List<StageEntry> entries = new ArrayList<>();
+            for (JsonElement element : root.getAsJsonArray(dimension)) {
+                JsonObject obj = element.getAsJsonObject();
+                Map<String, Integer> oreBudget = new LinkedHashMap<>();
+                if (obj.has("oreBudget")) {
+                    for (Map.Entry<String, JsonElement> ore : obj.getAsJsonObject("oreBudget").entrySet()) {
+                        oreBudget.put(ore.getKey(), ore.getValue().getAsInt());
+                    }
+                }
+                entries.add(new StageEntry(
+                        obj.get("stage").getAsInt(),
+                        obj.get("radius").getAsInt(),
+                        obj.has("trigger") ? obj.get("trigger").getAsString() : "manual",
+                        obj.has("structures") ? stringList(obj.getAsJsonArray("structures")) : List.of(),
+                        Collections.unmodifiableMap(oreBudget)));
+            }
+            entries.sort(java.util.Comparator.comparingInt(StageEntry::stage));
+            parsed.put(dimension, List.copyOf(entries));
+        }
+        return Collections.unmodifiableMap(parsed);
     }
 
     // --- helpers ---
