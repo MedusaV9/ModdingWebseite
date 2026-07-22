@@ -63,6 +63,9 @@ public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS;
 public static final Supplier<AttachmentType<Integer>> LIVES;               // permanent hearts; "eclipse:lives", default 5, Codec.INT
 public static final Supplier<AttachmentType<Long>>    FIRST_OVERWORLD_JOIN; // "eclipse:first_overworld_join", default 0L (= never), Codec.LONG
 public static final Supplier<AttachmentType<Boolean>> BANNED;              // "eclipse:banned", default false, Codec.BOOL
+public static final Supplier<AttachmentType<Integer>> SHARDS;              // "eclipse:shards" — personal umbral-shard bank (W13), default 0
+public static final Supplier<AttachmentType<Integer>> GOAL_PROGRESS;       // "eclipse:goal_progress" — (day << 8) | goal bitmask (W13);
+                                                                           // ONLY progression.GoalTracker writes it (stale days read as 0)
 public static final Supplier<AttachmentType<CutsceneLock>> CUTSCENE_LOCK;  // "eclipse:cutscene_lock" — TRANSIENT (not serialized,
                                                                            // no copyOnDeath): restart/relog/death always unfreezes.
                                                                            // Only cutscene.FreezeService touches it.
@@ -120,6 +123,13 @@ public Map<String, Long> getMilestoneProgress();
 public long getMilestoneProgress(String key);                 // 0 if absent
 public void setMilestoneProgress(String key, long value);
 public long addMilestoneProgress(String key, long delta);     // returns new value
+
+public int getShardPool();                    // W13 team umbral-shard pool (pooled shop purchases)
+public int addShardPool(int delta);           // clamped at >= 0; returns the new value
+public void setShardPool(int value);
+public List<GlobalPos> getGravePositions(UUID owner);         // W13: the owner's live graves (unmodifiable)
+public void addGravePosition(UUID owner, GlobalPos pos);      // called where LifecycleEvents places a grave
+public void removeGravePosition(UUID owner, GlobalPos pos);   // called from GraveBlock.onRemove (loot/scatter/break)
 
 public Set<UUID> getForceVoiceMuted();        public boolean isForceVoiceMuted(UUID playerId); // for the voice worker
 public void addForceVoiceMuted(UUID playerId); public void removeForceVoiceMuted(UUID playerId);
@@ -235,9 +245,13 @@ public static synchronized boolean setNamespaceGated(String namespace, boolean g
 public static synchronized void reload();    // also re-publishes stages.json radii into StageRadii
 ```
 
-Default unlock keys per day: 1 `[]`, 2 `[main_inventory]`, 3 `[workbenches, create]` (border 1500),
-4 `[armor, simulated]`, 5 `[aeronautics]` (border 2000), 6 `[nether]`, 7 `[enchanting]`,
-8 `[ender_chests]` (border 2500), 9 `[brewing]`, 10 `[smithing]`, 11 `[]` (border 3000), 12 `[end]`, 13 `[]`, 14 `[]`.
+Default unlock keys per day (v2 arc since W13): 1 `[]`, 2 `[nether, main_inventory]`,
+3 `[workbenches, create]`, 4 `[armor, farmersdelight, simulated]`, 5 `[aeronautics, supplementaries]`,
+6 `[]`, 7 `[enchanting]` (boss-locked — see below), 8 `[ender_chests, sophisticatedbackpacks, sable]`,
+9 `[brewing, createaddition]`, 10 `[smithing]`, 11 `[]`, 12 `[end]`, 13 `[]`, 14 `[]`.
+Default milestone costs: L1 16 iron, L2 16 gold, L3 8 diamonds, **L4 1 `eclipse:herald_core` +
+16 ender pearls**, L5 2 netherite ingots. NOTE: defaults only apply to configs written fresh —
+a pre-W13 `config/eclipse/{days,milestones,modgate}.json` keeps the v1 arc until deleted.
 
 ### Networking — `dev.projecteclipse.eclipse.network`
 
@@ -284,9 +298,10 @@ public record S2CBossbarStylePayload(UUID id, String theme) implements CustomPac
 // a themed ServerBossEvent AND to late joiners that get addPlayer'd onto a running bar (see
 // ritual.ReviveRitual for the pattern). W11/W12 boss bars + W14's schedule countdown reuse this.
 public record S2CGoalProgressPayload(List<String> goalLines, List<Boolean> done) implements CustomPacketPayload; // id "eclipse:goal_progress"
-// The receiving player's personal goal tick list (sidebar rows). Sent at login and on day
-// changes. TODO(W13): the currentFor(server) factory sends all-false flags until real goal
-// ticking exists — W13 replaces that factory body and re-broadcasts on every tick change.
+// The receiving player's personal goal tick list (sidebar rows). Since W13 the flags are
+// REAL: currentFor(ServerPlayer) reads the player's eclipse:goal_progress bitmask via
+// progression.GoalTracker.mask. Sent at login, re-sent to the player on every tick
+// (GoalTracker.complete) and rebroadcast to everyone when the event day changes.
 public record S2CAnnouncePayload(String titleKey, String subtitleKey, String style) implements CustomPacketPayload; // id "eclipse:announce"
 // One announcement (STYLE_DAY/STYLE_UNLOCK/STYLE_GOAL/STYLE_BOSS constants): the client
 // plays a typewriter line above the hotbar (then posts it to chat once) + a client-local
@@ -554,8 +569,9 @@ inner eye + telegraph-glowing corona shards via the Gazer skipDraw pattern in
 - **Arena lock**: r=15 around the altar; participants (anyone who enters) are pushed back
   in with the SoftBorder impulse formula + a reverse-portal particle wall. No players
   within 40 blocks for 60 s → full heal + despawn (re-summon with another lure).
-- **Drops**: 1 `eclipse:herald_core` (REQUIRED for altar L4 — W13 wires the milestone
-  cost) at the corpse + 3 umbral shards at EACH participant's feet. On first kill:
+- **Drops**: 1 `eclipse:herald_core` (REQUIRED for altar L4 — the default `milestones.json`
+  L4 cost is 1 core + 16 ender pearls since W13) at the corpse + 3 umbral shards at EACH
+  participant's feet. On first kill:
   `EclipseWorldState.setHeraldDefeated(true)` (→ derived unlock key `herald_slain`) + a
   boss-styled announce.
 
@@ -586,13 +602,57 @@ naturally.
   layer per 30 s (air-only `setBlock`, tracked + drained on any fight end; pace halves at
   ≤3 living), sweeps alternate with the **Lantern Gaze**: lowest-health fighter gets a
   private purple vignette (`S2CShakePayload.mark`) + private bell and is hunted 15 s.
-- **Endings**: death drops 1 `eclipse:ferryman_toll` (W13 decides its economy uses), sets
+- **Endings**: death drops 1 `eclipse:ferryman_toll` (deliberately OUTSIDE the W13 shard
+  shop — it stays a one-of-a-kind victory trophy; nothing consumes it), sets
   `ferrymanDefeated`, restores the ship and starts `FinaleRitual.beginVictory`: "THE
   CROSSING ENDS" announce, every banned player revived via `BanService.unban` staggered
   10t apart (offline ghosts cleared for revive-on-login), then everyone still in limbo is
   teleported home and `finale_return` plays for all online players. A wipe (every
   participant dead/banned) is the Eclipse's victory: announce, ship restored, everyone
   stays a ghost. Abandoned for 60 s → silent reset (full heal + despawn + restore).
+
+### Shard economy & rewards — `dev.projecteclipse.eclipse.economy` (W13)
+
+The umbral-shard reward economy (spec `docs/ideas/04_content.md` §4). All feedback is
+action-bar + sounds — never chat.
+
+- **Shard shop UX** (`ShardEconomy`, at the sanctum altar): (1) **bank** — sneak-right-click
+  the altar with umbral shards (`UmbralShardItem#useOn`); the WHOLE stack is deposited,
+  crediting the player's persisted `eclipse:shards` attachment AND the team pool
+  (`EclipseWorldState.shardPool`) simultaneously. (2) **browse** — sneak while *looking at*
+  the altar (6-block `Level.clip` ray) and the offer list cycles on the action bar every
+  20t. (3) **buy** — sneak-punch (left-click) the altar to buy the offer currently shown;
+  the event is cancelled so the altar never takes damage. Personal rewards deduct only the
+  personal balance; the pooled Supply Beacon deducts only the pool. Right-clicking the
+  altar with shards while NOT a milestone cost shows a "sneak to bank" hint instead of
+  "wrong item". Offers: Grave Dowser 4 · Compass of the Watcher 8 · Vitae Shard 12 ·
+  Umbral Pick 12 · Umbral Blade 16 · Team Supply Beacon 24 (pooled).
+- **`compass_of_watcher`** — `inventoryTick` (every 40t, server side) writes the nearest
+  OTHER non-spectator player's `GlobalPos` into the vanilla `minecraft:lodestone_tracker`
+  component (`tracked=false` so it never breaks when the "lodestone" is missing). Never
+  reveals WHO it points at. Same-dimension targets only; no target = component cleared
+  (needle wobbles).
+- **`grave_dowser`** — same component trick pointed at the holder's nearest OWN grave from
+  `EclipseWorldState.gravePositions` (appended where `LifecycleEvents` places a grave,
+  removed in `GraveBlock.onRemove` — loot/scatter/break all pass through it).
+- **Both compasses** render through 32 generated needle frames (`angle` predicate item
+  models, `CompassItemPropertyFunction` registered per item in `client/EclipseClient` —
+  separate instances so the wobble states don't interfere).
+- **`vitae_shard`** — consumable, 32t use (TOOT_HORN pose), TOTEM_USE sound + totem
+  particles, `LivesApi.add(player, +1)` capped at `HeartsService.MAX_HEARTS` (7); refuses
+  to start when already at cap.
+- **Umbral tools** (`UmbralTier`: diamond-grade, 2500 durability, NOT repairable —
+  empty repair ingredient): `umbral_pick` gets +50% break speed under open night sky
+  (`PlayerEvent.BreakSpeed`); `umbral_blade` drinks +1 heart on player kill on top of the
+  regular PvP heart transfer, still capped at 7 (`lives.LifecycleEvents` kill path).
+- **Team Supply Beacon** (`SupplyBeacon.drop`) — spends 24 pooled shards: a barrel
+  `FallingBlockEntity` (with `blockData` carrying the `eclipse:supply_crate` loot table)
+  falls from the sky 50–100 blocks from the altar at a random angle; an END_ROD particle
+  column + `ALTAR_BEAM` Quasar burst marks the site for ~2 min. Coordinates are NEVER
+  announced — the beam is the only hint. Loot: `data/eclipse/loot_table/supply_crate.json`
+  (iron/gold/bread/arrows/obsidian/pearls/XP bottles + 1–3 bonus shards).
+- **Placeholder art**: `scripts/placeholder_gen/EconomyIconPlaceholder.java` regenerates
+  all 16×16 icons + the 2×32 compass needle frames + the frame model JSONs.
 
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
@@ -884,7 +944,20 @@ public final class ModGate {          // @EventBusSubscriber (game bus)
   restarts never double-advance).
 - **UnlockState** — the unlocked-key set is the union of `unlocks[]` of all day plans `1..currentDay`
   plus `rewards[]` of all altar milestones `1..altarLevel`; cached, auto-invalidates on day/altar
-  changes and config reloads.
+  changes and config reloads. **Boss gate (W13)**: the `enchanting` key from a day plan is unioned
+  only while `EclipseWorldState.isHeraldDefeated()` — day 7 lists it, but it activates only once
+  the Herald falls. Milestone `rewards[]` are NOT filtered (an admin milestone can still grant it).
+- **GoalTracker (W13)** — per-player daily goal ticking behind `S2CGoalProgressPayload`.
+  `complete(player, index)` stamps bit `index` of the `eclipse:goal_progress` attachment
+  (`(day << 8) | mask` — a stored day mismatch reads as 0, so day changes self-reset), re-sends
+  the player's sidebar payload, and fires the global `GOAL COMPLETE` announce the first time each
+  (day, goal) pair is completed by anyone (deduped via the reserved milestone-progress key
+  `goal_announced:<day>:<index>`; the raw goal line is passed as the subtitle "key" — unknown keys
+  render literally). Auto-detected on the default arc: day 1 goal 3 (altar 4-block proximity poll),
+  day 2 goal 1 (nether dimension change), day 7 goal 2 (herald flag, credited to all online),
+  day 9 goal 3 (shard pool ≥ 24), day 11 goal 1 (all online players ≥ 4 hearts). Everything else
+  is admin-marked: `/eclipse goals tick <player> <index>`. Detectors match by (day, index), so a
+  rewritten `days.json` degrades them to manual goals — never a crash.
 - **SoftBorder + BorderController (since W7)** — the playable boundary is a CIRCULAR soft border
   (`border.SoftBorder`), one ring per disc dimension, centered on the world spawn (disc origin)
   and following the committed world stage: `ring = stageOuterRadius + borderOffset` (general.json,
@@ -947,6 +1020,10 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse start_event` | Runs `StartEventCutscene.begin` (fails if a run is already in progress). |
 | `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, applies the plan border, syncs clients. |
 | `/eclipse day goals` | Prints the current day's configured goals. |
+| `/eclipse goals tick <player> <1-8>` | `GoalTracker.complete` (1-based index, matching the sidebar): ticks the goal for that player, announces the first completion. |
+| `/eclipse shards set <player> <n>` \| `add <player> <n>` | Personal shard balance dev tool (`ShardEconomy.setShards`/`addShards`; add may be negative, clamped ≥ 0). |
+| `/eclipse shards pool set <n>` | Sets the team shard pool (`EclipseWorldState.setShardPool`). |
+| `/eclipse supply drop` | Fires `SupplyBeacon.drop` immediately (free — no pool deduction; the paid path is the shop). |
 | `/eclipse event set <pale\|umbral\|none>` | Overrides the active night event (`EclipseWorldState.setActiveNightEvent`); pale/umbral also fire the announcement sweep. |
 | `/eclipse boss herald summon` | Summons the Herald over the sanctum altar (or the source position if no sanctum) with the full arrival sequence + scaling. |
 | `/eclipse boss herald kill` | Kills every live Herald through the regular death path (drops + `heraldDefeated` flag + announce). |
@@ -981,7 +1058,7 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse cutscene export <id>` | Prints the path's pretty JSON to the source (copy-paste for assets). |
 | `/eclipse cutscene reloadpaths` | Re-reads `config/eclipse/cutscenes/` only + re-syncs all clients. |
 | `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii) + cutscene path library re-read/re-sync. |
-| `/eclipse status` | Dumps day / altar level / night event / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
+| `/eclipse status` | Dumps day / altar level / night event / team shard pool + threshold / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`
 
@@ -1023,6 +1100,12 @@ server's `mods/` folder (NOT jar-in-jar / bundled inside Eclipse-Core):
 | Sable | 2.0.3 | `sable-2.0.3.jar` | `sable` |
 | Simple Voice Chat | 2.6.16 | `voicechat-neoforge-1.21.1-2.6.16.jar` | — (not gated; used by the voice worker) |
 
+Planned v2 additions (`modgate.json` already gates the namespaces since W13; W16 downloads +
+gate-tests the jars, spec §5): Farmer's Delight 1.21.1-1.3.2 (`farmersdelight`), Supplementaries
+3.8.3 (`supplementaries`, + Moonlight Lib NOT gated), Sophisticated Backpacks 3.25.71
+(`sophisticatedbackpacks`, + Sophisticated Core NOT gated), Create: Crafts & Additions 1.6.0
+(`createaddition`).
+
 Recommended client-side additions (performance/shaders; smoke-tested with Eclipse-Core):
 
 | Mod | Version | Jar |
@@ -1040,31 +1123,34 @@ by the day scheduler or an altar milestone. `neoforge.mods.toml` declares all fo
 `type="optional"`, `ordering="AFTER"` dependencies, so Eclipse-Core loads with or without them and
 after them when present.
 
-Default 14-day unlock schedule (`config/eclipse/days.json`; `modgate.json` maps each gated
-namespace to the key of the same name):
+Default 14-day unlock schedule (`config/eclipse/days.json`, the v2 arc since W13;
+`modgate.json` maps each gated namespace to the key of the same name). The legacy `days.json`
+`borderSize` is still written (1000–3000) but DEPRECATED and ignored since W7 — the circular
+soft border follows the world-stage timeline (`stages.json`) instead.
 
-The "Border" column is the legacy `days.json` `borderSize`, DEPRECATED and ignored since W7 —
-the circular soft border follows the world-stage timeline (`stages.json`) instead.
-
-| Day | Unlock keys | Border | Effect |
+| Day | Theme | Unlock keys | Effect |
 |---|---|---|---|
-| 1 | — | 1000 | Hotbar-only inventory, no armor, no workstations, vanilla-only |
-| 2 | `main_inventory` | 1000 | Full 36-slot inventory usable |
-| 3 | `workbenches`, `create` | 1500 | Crafting tables + anvils; Create content usable |
-| 4 | `armor`, `simulated` | 1500 | Armor + offhand slots; Simulated content usable |
-| 5 | `aeronautics` | 2000 | Create: Aeronautics content usable |
-| 6 | `nether` | 2000 | Nether travel opens |
-| 7 | `enchanting` | 2000 | Enchanting tables |
-| 8 | `ender_chests` | 2500 | Ender chests |
-| 9 | `brewing` | 2500 | Brewing stands |
-| 10 | `smithing` | 2500 | Smithing tables |
-| 11 | — | 3000 | Final border expansion |
-| 12 | `end` | 3000 | End travel opens |
-| 13 | — | 3000 | — |
-| 14 | — | 3000 | Finale |
+| 1 | First Light | — | Hotbar-only inventory, no armor, no workstations, vanilla-only |
+| 2 | The Burning Door | `nether`, `main_inventory` | Nether travel opens EARLY + full 36-slot inventory |
+| 3 | Machines in the Dark | `workbenches`, `create` | Crafting tables + anvils; Create content usable |
+| 4 | The Feast | `armor`, `farmersdelight`, `simulated` | Armor + offhand slots; Farmer's Delight + Simulated usable |
+| 5 | Skyward | `aeronautics`, `supplementaries` | Create: Aeronautics + Supplementaries usable |
+| 6 | Fortress | — | Herald prep day (fortress, blaze rods, lure) |
+| 7 | BOSS: The Herald | `enchanting` (boss-locked) | Enchanting activates only once the Herald falls (`UnlockState` gate) |
+| 8 | The Hoard | `ender_chests`, `sophisticatedbackpacks`, `sable` | Ender chests + backpacks; Sable also via milestone L4 |
+| 9 | Alchemy & Voltage | `brewing`, `createaddition` | Brewing stands; Create electricity tier |
+| 10 | Deep Ruin | `smithing` | Smithing tables |
+| 11 | The Weakest Link | — | Economy/revive day |
+| 12 | Stronghold | `end` | End travel opens; final expansion + stronghold emergence |
+| 13 | The Dragon | — | Dragon day; egg = finale catalyst |
+| 14 | BOSS: The Ferryman | — | Finale |
 
-(`sable` has no day entry by default — it unlocks via altar milestone level 4; milestones can also
-grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
+(`sable` also unlocks via altar milestone level 4; milestones can grant
+`create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`. Milestone costs since W13:
+L1 16 iron, L2 16 gold, L3 8 diamonds, L4 1 `eclipse:herald_core` + 16 ender pearls, L5 2
+netherite ingots. The gated-namespace list in `modgate.json` additionally carries
+`farmersdelight`, `supplementaries`, `sophisticatedbackpacks` and `createaddition` — their
+LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 downloads the jars.)
 
 ## Layout
 
@@ -1077,7 +1163,8 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
-- `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController` (vanilla failsafe owner), `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
+- `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `GoalTracker` (W13 per-player goal ticking), `BorderController` (vanilla failsafe owner), `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
+- `dev.projecteclipse.eclipse.economy` — W13 umbral-shard economy: `ShardEconomy` (altar shard shop), `WatcherCompassItem`, `GraveDowserItem`, `VitaeShardItem`, `UmbralShardItem` (sneak-deposit hook), `UmbralTier`, `SupplyBeacon` (see "Shard economy & rewards").
 - `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps); `border.client.BorderFxRenderer` (glitch strip geometry, Quasar arcs, Veil post proximity feed); the vanilla border visual is cancelled by `client.mixin.LevelRendererMixin`.
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
 - `dev.projecteclipse.eclipse.entity` / `client.entity` — W10 custom mobs (`EclipseEntities` registry, the five mob classes, `EclipseSpawner` day/event spawner + night events) and their hand-coded models/renderers (`EclipseEntityRenderers`), see "Custom mobs & spawner".

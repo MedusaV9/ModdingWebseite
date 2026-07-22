@@ -47,6 +47,7 @@ import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.network.S2CMilestonesPayload;
 import dev.projecteclipse.eclipse.progression.BorderController;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.progression.GoalTracker;
 import dev.projecteclipse.eclipse.progression.ModGate;
 import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
@@ -290,6 +291,11 @@ public final class EclipseCommands {
                                                 .then(Commands.literal("fov")
                                                         .then(Commands.argument("value", FloatArgumentType.floatArg(10.0F, 140.0F))
                                                                 .executes(context -> cutsceneSetLastKeyframe(context, "fov"))))))))
+                .then(Commands.literal("goals")
+                        .then(Commands.literal("tick")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("index", IntegerArgumentType.integer(1, 8))
+                                                .executes(EclipseCommands::goalsTick)))))
                 .then(Commands.literal("shards")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -998,6 +1004,29 @@ public final class EclipseCommands {
     }
 
     // --- reload ---
+
+    // --- goal ticking (W13; non-auto-detectable goals are admin-marked) ---
+
+    /** {@code /eclipse goals tick <player> <index>} — index is 1-based (matches the sidebar order). */
+    private static int goalsTick(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = EntityArgument.getPlayer(context, "player");
+        int index = IntegerArgumentType.getInteger(context, "index") - 1;
+        CommandSourceStack source = context.getSource();
+        int day = EclipseWorldState.get(source.getServer()).getDay();
+        List<String> goals = EclipseConfig.day(day).goals();
+        if (index >= goals.size()) {
+            source.sendFailure(Component.literal("Day " + day + " only has " + goals.size() + " goals"));
+            return 0;
+        }
+        if (!GoalTracker.complete(player, index)) {
+            source.sendFailure(Component.literal(player.getScoreboardName()
+                    + " already completed goal " + (index + 1) + " ('" + goals.get(index) + "')"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Ticked goal " + (index + 1) + " ('" + goals.get(index)
+                + "') for " + player.getScoreboardName()), true);
+        return 1;
+    }
 
     // --- shard economy (W13 dev tools) ---
 

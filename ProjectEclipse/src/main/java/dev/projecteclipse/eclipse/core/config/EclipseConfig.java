@@ -368,22 +368,29 @@ public final class EclipseConfig {
 
     // --- days.json ---
 
+    /**
+     * The v2 14-day arc (spec {@code docs/ideas/04_content.md} §6). Nether opens on day 2
+     * ("The Burning Door"); day 7/14 are the boss days. Day 7's {@code enchanting} key is
+     * SPECIAL: {@code progression.UnlockState} unions it only once the Herald has fallen.
+     * {@code borderSize} is deprecated since W7 (soft border follows {@code stages.json})
+     * but still written for backward compat.
+     */
     private static List<DayPlan> defaultDays() {
         List<DayPlan> plans = new ArrayList<>(14);
-        plans.add(new DayPlan(1, List.of("Survive the first night", "Gather basic resources", "Build a shelter near spawn"), List.of(), 1000.0D));
-        plans.add(new DayPlan(2, List.of("Unlock your main inventory", "Collect 32 logs", "Craft a full set of stone tools"), List.of("main_inventory"), 1000.0D));
-        plans.add(new DayPlan(3, List.of("Set up a crafting area", "Build your first Create contraption", "Scout the expanded border"), List.of("workbenches", "create"), 1500.0D));
-        plans.add(new DayPlan(4, List.of("Craft a full set of armor", "Establish a reliable food farm", "Locate a village"), List.of("armor", "simulated"), 1500.0D));
-        plans.add(new DayPlan(5, List.of("Take to the skies", "Smelt 16 iron ingots", "Expand your base"), List.of("aeronautics"), 2000.0D));
-        plans.add(new DayPlan(6, List.of("Enter the Nether", "Find a nether fortress", "Collect 4 blaze rods"), List.of("nether"), 2000.0D));
-        plans.add(new DayPlan(7, List.of("Build an enchanting setup", "Reach experience level 30", "Enchant a tool or weapon"), List.of("enchanting"), 2000.0D));
-        plans.add(new DayPlan(8, List.of("Craft an ender chest", "Hunt endermen for pearls", "Stock your ender chest with valuables"), List.of("ender_chests"), 2500.0D));
-        plans.add(new DayPlan(9, List.of("Brew your first potion", "Gather nether wart", "Brew a potion of strength"), List.of("brewing"), 2500.0D));
-        plans.add(new DayPlan(10, List.of("Find a smithing template", "Upgrade a piece of gear to netherite", "Fortify your base"), List.of("smithing"), 2500.0D));
-        plans.add(new DayPlan(11, List.of("Prepare supplies for the End", "Complete outstanding altar milestones", "Explore the final border expansion"), List.of(), 3000.0D));
-        plans.add(new DayPlan(12, List.of("Locate the stronghold", "Open the end portal", "Enter the End"), List.of("end"), 3000.0D));
-        plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "Return home safely"), List.of(), 3000.0D));
-        plans.add(new DayPlan(14, List.of("Gather everyone for the finale", "Charge the altar one last time", "Face the Eclipse"), List.of(), 3000.0D));
+        plans.add(new DayPlan(1, List.of("Survive the first night", "Bank 16 logs and a set of stone tools", "Everyone touches the altar"), List.of(), 1000.0D));
+        plans.add(new DayPlan(2, List.of("Enter the Nether", "Smelt 8 gold ingots", "Raise the altar to level 1"), List.of("nether", "main_inventory"), 1000.0D));
+        plans.add(new DayPlan(3, List.of("Build your first Create contraption", "Forge a full iron toolset", "Scout the new village ring"), List.of("workbenches", "create"), 1500.0D));
+        plans.add(new DayPlan(4, List.of("Cook three Farmer's Delight meals", "Establish a reliable food farm", "Wear full iron armor"), List.of("armor", "farmersdelight", "simulated"), 1500.0D));
+        plans.add(new DayPlan(5, List.of("Take to the skies", "Bank 24 iron ingots", "Rig something with Supplementaries"), List.of("aeronautics", "supplementaries"), 2000.0D));
+        plans.add(new DayPlan(6, List.of("Find the nether fortress", "Collect 6 blaze rods", "Craft the Herald's Lure"), List.of(), 2000.0D));
+        plans.add(new DayPlan(7, List.of("Summon the Herald at dusk", "Defeat the Herald", "Deposit the Herald Core at the altar"), List.of("enchanting"), 2000.0D));
+        plans.add(new DayPlan(8, List.of("Fill a team ender chest", "Bank 16 ender pearls", "Raise the altar to level 4"), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 2500.0D));
+        plans.add(new DayPlan(9, List.of("Brew strength and fire resistance", "Electrify a Create machine", "Pool 24 umbral shards"), List.of("brewing", "createaddition"), 2500.0D));
+        plans.add(new DayPlan(10, List.of("Find a smithing template", "Upgrade a tool to netherite", "Fortify your base"), List.of("smithing"), 2500.0D));
+        plans.add(new DayPlan(11, List.of("Everyone reaches 4+ hearts", "Revive a banned player", "Assemble an End raid kit"), List.of(), 3000.0D));
+        plans.add(new DayPlan(12, List.of("Locate the stronghold", "Breach the portal room", "Hold the portal room overnight"), List.of("end"), 3000.0D));
+        plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 3000.0D));
+        plans.add(new DayPlan(14, List.of("Offer the egg at dusk", "Survive the crossing", "Defeat the Ferryman before the ship sinks"), List.of(), 3000.0D));
         return plans;
     }
 
@@ -419,12 +426,16 @@ public final class EclipseConfig {
 
     // --- milestones.json ---
 
+    /**
+     * The v2 milestone costs (spec §6): L4 is the boss lock — it demands the Herald Core
+     * (day-7 guaranteed drop) on top of the pearls, so the altar cannot out-pace the arc.
+     */
     private static List<Milestone> defaultMilestones() {
         return List.of(
                 new Milestone(1, List.of(new ItemCost("minecraft:iron_ingot", 16)), List.of("create")),
                 new Milestone(2, List.of(new ItemCost("minecraft:gold_ingot", 16)), List.of("simulated")),
                 new Milestone(3, List.of(new ItemCost("minecraft:diamond", 8)), List.of("aeronautics")),
-                new Milestone(4, List.of(new ItemCost("minecraft:ender_pearl", 16)), List.of("sable")),
+                new Milestone(4, List.of(new ItemCost("eclipse:herald_core", 1), new ItemCost("minecraft:ender_pearl", 16)), List.of("sable")),
                 new Milestone(5, List.of(new ItemCost("minecraft:netherite_ingot", 2)), List.of("end")));
     }
 
@@ -464,13 +475,20 @@ public final class EclipseConfig {
 
     // --- modgate.json ---
 
+    /**
+     * v2 gated namespaces (spec §5): the four v1 mods plus Farmer's Delight (day 4),
+     * Supplementaries (day 5), Sophisticated Backpacks (day 8) and Create: Crafts &
+     * Additions (day 9). Their LIBRARIES ({@code sophisticatedcore}, {@code moonlight})
+     * are deliberately NOT gated — gating a library would brick its dependents entirely.
+     */
     private static ModGate defaultModGate() {
+        List<String> namespaces = List.of("create", "simulated", "aeronautics", "sable",
+                "farmersdelight", "supplementaries", "sophisticatedbackpacks", "createaddition");
         Map<String, String> unlockKeys = new LinkedHashMap<>();
-        unlockKeys.put("create", "create");
-        unlockKeys.put("simulated", "simulated");
-        unlockKeys.put("aeronautics", "aeronautics");
-        unlockKeys.put("sable", "sable");
-        return new ModGate(List.of("create", "simulated", "aeronautics", "sable"), Collections.unmodifiableMap(unlockKeys));
+        for (String namespace : namespaces) {
+            unlockKeys.put(namespace, namespace);
+        }
+        return new ModGate(namespaces, Collections.unmodifiableMap(unlockKeys));
     }
 
     private static JsonElement modGateToJson(ModGate modGate) {

@@ -23,6 +23,13 @@ public final class UnlockState {
     /** Derived unlock key present while {@link EclipseWorldState#isHeraldDefeated()}. */
     public static final String KEY_HERALD_SLAIN = "herald_slain";
 
+    /**
+     * W13 boss gate (spec §6 day 7): the day-plan {@code enchanting} key is unioned only
+     * once the Herald has fallen, regardless of which day lists it. Milestone rewards are
+     * NOT filtered — an admin can still grant enchanting early via a milestone if desired.
+     */
+    public static final String KEY_ENCHANTING = "enchanting";
+
     /** Cache of the last derivation; the key fields detect day/altar changes and config reloads. */
     private record Snapshot(int day, int altarLevel, boolean heraldDefeated,
                             List<EclipseConfig.DayPlan> days,
@@ -57,7 +64,12 @@ public final class UnlockState {
         Set<String> keys = new LinkedHashSet<>();
         for (EclipseConfig.DayPlan plan : days) {
             if (plan.day() <= day) {
-                keys.addAll(plan.unlocks());
+                for (String key : plan.unlocks()) {
+                    if (KEY_ENCHANTING.equals(key) && !heraldDefeated) {
+                        continue; // boss-locked until the day-7 Herald falls (see KEY_ENCHANTING)
+                    }
+                    keys.add(key);
+                }
             }
         }
         for (EclipseConfig.Milestone milestone : milestones) {

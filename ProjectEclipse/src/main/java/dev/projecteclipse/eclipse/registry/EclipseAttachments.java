@@ -50,6 +50,16 @@ public final class EclipseAttachments {
             "shards",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).copyOnDeath().build());
 
+    /**
+     * Per-player daily goal completion (W13): {@code (day << 8) | bitmask}, bit i = goal
+     * line i of that day ticked. Encoding the day makes stale progress self-invalidating —
+     * {@code progression.GoalTracker} reads the mask as 0 whenever the stored day differs
+     * from the current event day. Only {@code GoalTracker} should write it.
+     */
+    public static final Supplier<AttachmentType<Integer>> GOAL_PROGRESS = ATTACHMENTS.register(
+            "goal_progress",
+            () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).copyOnDeath().build());
+
     private EclipseAttachments() {}
 
     public static void register(IEventBus modEventBus) {

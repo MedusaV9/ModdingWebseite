@@ -196,7 +196,7 @@ public final class EclipsePayloads {
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
-            PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player.server));
+            PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player));
             PacketDistributor.sendToPlayer(player, S2CMilestonesPayload.current());
             dev.projecteclipse.eclipse.timeline.TimelineService.syncTo(player);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
