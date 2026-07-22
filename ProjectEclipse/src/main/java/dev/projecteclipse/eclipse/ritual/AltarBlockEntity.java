@@ -69,6 +69,13 @@ public class AltarBlockEntity extends BlockEntity {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
+        // W11: the Herald's Lure is a ritual item, not a milestone cost — hint at the
+        // sneak-deposit (HeraldsLureItem#useOn) instead of barking "wrong item".
+        if (stack.is(EclipseItems.HERALDS_LURE.get())) {
+            actionBar(player, Component.translatable("ritual.eclipse.lure.sneak_hint"));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
+            return;
+        }
         MinecraftServer server = player.server;
         EclipseWorldState state = EclipseWorldState.get(server);
         EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);

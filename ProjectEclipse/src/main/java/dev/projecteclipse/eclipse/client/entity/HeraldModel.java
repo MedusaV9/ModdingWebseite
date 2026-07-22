@@ -48,9 +48,11 @@ public class HeraldModel extends HierarchicalModel<HeraldEntity> {
 
     public HeraldModel(ModelPart root) {
         this.root = root;
-        this.core = root.getChild("core");
+        // bakeLayer() hands over the layer root, whose single child is the herald_root bone.
+        ModelPart bone = root.getChild("herald_root");
+        this.core = bone.getChild("core");
         this.innerEye = this.core.getChild("inner_eye");
-        this.ring = root.getChild("ring");
+        this.ring = bone.getChild("ring");
         for (int i = 0; i < shards.length; i++) {
             this.shards[i] = this.ring.getChild("shard" + i);
         }

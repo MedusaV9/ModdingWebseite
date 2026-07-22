@@ -36,7 +36,8 @@ public class DeckhandModel extends HierarchicalModel<DeckhandEntity> {
 
     public DeckhandModel(ModelPart root) {
         this.root = root;
-        this.torso = root.getChild("torso");
+        // bakeLayer() hands over the layer root, whose single child is the deckhand_root bone.
+        this.torso = root.getChild("deckhand_root").getChild("torso");
         this.head = this.torso.getChild("head");
         this.armLeft = this.torso.getChild("arm_left");
         this.armRight = this.torso.getChild("arm_right");

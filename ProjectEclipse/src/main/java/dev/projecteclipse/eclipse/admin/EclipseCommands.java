@@ -33,7 +33,9 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.EclipseSpawner;
+import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
@@ -49,6 +51,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
+import dev.projecteclipse.eclipse.worldgen.structure.AltarSanctumBuilder;
 import dev.projecteclipse.eclipse.EclipseMod;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -129,6 +132,12 @@ public final class EclipseCommands {
                                 .then(Commands.argument("event", StringArgumentType.word())
                                         .suggests(NIGHT_EVENTS)
                                         .executes(EclipseCommands::eventSet))))
+                .then(Commands.literal("boss")
+                        .then(Commands.literal("herald")
+                                .then(Commands.literal("summon")
+                                        .executes(EclipseCommands::heraldSummon))
+                                .then(Commands.literal("kill")
+                                        .executes(EclipseCommands::heraldKill))))
                 .then(Commands.literal("lives")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -329,6 +338,51 @@ public final class EclipseCommands {
         source.sendSuccess(() -> Component.literal("Night event set to '" + event
                 + "' (day stamp " + state.getNightEventDay() + ")"), false);
         return 1;
+    }
+
+    // --- boss (W11 herald test hooks) ---
+
+    /**
+     * Summons the Herald over the sanctum altar (full arrival sequence + scaling), or over
+     * the command source's position when the sanctum has not been built.
+     */
+    private static int heraldSummon(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel overworld = source.getServer().overworld();
+        EclipseWorldState state = EclipseWorldState.get(source.getServer());
+        BlockPos altarPos = state.getSanctumAltarPos();
+        int groundY;
+        if (altarPos != null) {
+            groundY = altarPos.getY() - AltarSanctumBuilder.ALTAR_ABOVE_GROUND;
+        } else {
+            altarPos = BlockPos.containing(source.getPosition());
+            groundY = altarPos.getY() - 1;
+        }
+        HeraldEntity herald = HeraldEntity.summon(overworld, altarPos, groundY);
+        final BlockPos at = altarPos;
+        source.sendSuccess(() -> Component.literal("Herald summoned above " + at.toShortString()
+                + " with " + herald.getMaxHealth() + " HP"), true);
+        return 1;
+    }
+
+    /** Kills every live Herald (regular death path: drops + defeated flag + announce). */
+    private static int heraldKill(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int killed = 0;
+        for (ServerLevel level : source.getServer().getAllLevels()) {
+            for (HeraldEntity herald : level.getEntities(EclipseEntities.HERALD.get(),
+                    herald -> herald.isAlive())) {
+                herald.kill();
+                killed++;
+            }
+        }
+        if (killed == 0) {
+            source.sendFailure(Component.literal("No live Herald found"));
+            return 0;
+        }
+        final int count = killed;
+        source.sendSuccess(() -> Component.literal("Killed " + count + " Herald(s) — drops + defeat flag fired"), true);
+        return killed;
     }
 
     // --- lives ---

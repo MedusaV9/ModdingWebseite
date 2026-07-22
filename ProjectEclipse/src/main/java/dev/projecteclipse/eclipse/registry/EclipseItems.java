@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.artifact.ArmArtifactItem;
+import dev.projecteclipse.eclipse.ritual.HeraldsLureItem;
 import dev.projecteclipse.eclipse.ritual.ReviveSigilItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -37,6 +38,24 @@ public final class EclipseItems {
     /** Consumed at the altar to start the revive ritual for a banned player. */
     public static final Supplier<ReviveSigilItem> REVIVE_SIGIL = ITEMS.register("revive_sigil",
             () -> new ReviveSigilItem(new Item.Properties()
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /**
+     * Herald summon item (W11, spec §2.1): 4 umbral shards + 1 heart fragment. Sneak-use
+     * on the altar after dusk to call the day-7 boss down onto the sanctum.
+     */
+    public static final Supplier<HeraldsLureItem> HERALDS_LURE = ITEMS.register("heralds_lure",
+            () -> new HeraldsLureItem(new Item.Properties()
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /**
+     * Guaranteed Herald drop; REQUIRED for altar milestone L4 (W13 wires the L4 cost:
+     * herald_core ×1 + ender_pearl ×16).
+     */
+    public static final Supplier<Item> HERALD_CORE = ITEMS.register("herald_core",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.EPIC)
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
     /** Admin/debug item for the altar block; not craftable (admins place the altar manually). */

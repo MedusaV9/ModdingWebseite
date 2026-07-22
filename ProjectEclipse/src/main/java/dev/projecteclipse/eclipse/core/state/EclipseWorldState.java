@@ -62,6 +62,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_SOFT_BORDER_RADIUS_OVERWORLD = "softBorderRadiusOverworld";
     private static final String TAG_SOFT_BORDER_RADIUS_NETHER = "softBorderRadiusNether";
     private static final String TAG_BORDER_FX_RANGE = "borderFxRange";
+    private static final String TAG_HERALD_DEFEATED = "heraldDefeated";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -88,6 +89,7 @@ public final class EclipseWorldState extends SavedData {
     private String activeNightEvent = NIGHT_EVENT_NONE;
     private int nightEventDay = 0;
     private boolean firstPaleNightDone = false;
+    private boolean heraldDefeated = false;
     private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
@@ -133,6 +135,8 @@ public final class EclipseWorldState extends SavedData {
         state.activeNightEvent = normalizeNightEvent(tag.getString(TAG_NIGHT_EVENT));
         state.nightEventDay = tag.getInt(TAG_NIGHT_EVENT_DAY);
         state.firstPaleNightDone = tag.getBoolean(TAG_FIRST_PALE_NIGHT_DONE);
+        // Defaults to false so pre-W11 saves keep loading (boss not fought yet).
+        state.heraldDefeated = tag.getBoolean(TAG_HERALD_DEFEATED);
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
         }
@@ -184,6 +188,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putString(TAG_NIGHT_EVENT, this.activeNightEvent);
         tag.putInt(TAG_NIGHT_EVENT_DAY, this.nightEventDay);
         tag.putBoolean(TAG_FIRST_PALE_NIGHT_DONE, this.firstPaleNightDone);
+        tag.putBoolean(TAG_HERALD_DEFEATED, this.heraldDefeated);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -458,6 +463,22 @@ public final class EclipseWorldState extends SavedData {
     private static String normalizeNightEvent(String event) {
         return NIGHT_EVENT_PALE.equals(event) || NIGHT_EVENT_UMBRAL.equals(event)
                 ? event : NIGHT_EVENT_NONE;
+    }
+
+    // --- herald boss (W11) ---
+
+    /**
+     * Whether the day-7 Herald has been defeated. {@code UnlockState} unions in the
+     * derived key {@code herald_slain} while this is set (the boss's on-kill unlock arc;
+     * W13 finalizes which config unlock is gated behind it).
+     */
+    public boolean isHeraldDefeated() {
+        return this.heraldDefeated;
+    }
+
+    public void setHeraldDefeated(boolean defeated) {
+        this.heraldDefeated = defeated;
+        setDirty();
     }
 
     // --- banned ---

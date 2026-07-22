@@ -26,7 +26,8 @@ public class SunmoteModel extends HierarchicalModel<SunmoteEntity> {
 
     public SunmoteModel(ModelPart root) {
         this.root = root;
-        this.halo = root.getChild("halo");
+        // bakeLayer() hands over the layer root, whose single child is the sunmote_root bone.
+        this.halo = root.getChild("sunmote_root").getChild("halo");
     }
 
     public static LayerDefinition createBodyLayer() {

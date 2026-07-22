@@ -35,11 +35,13 @@ public class UmbralStalkerModel extends HierarchicalModel<UmbralStalkerEntity> {
 
     public UmbralStalkerModel(ModelPart root) {
         this.root = root;
-        this.body = root.getChild("body");
-        this.head = root.getChild("head");
+        // bakeLayer() hands over the layer root, whose single child is the stalker_root bone.
+        ModelPart bone = root.getChild("stalker_root");
+        this.body = bone.getChild("body");
+        this.head = bone.getChild("head");
         this.legs = new ModelPart[] {
-                root.getChild("leg_front_left"), root.getChild("leg_front_right"),
-                root.getChild("leg_hind_left"), root.getChild("leg_hind_right")};
+                bone.getChild("leg_front_left"), bone.getChild("leg_front_right"),
+                bone.getChild("leg_hind_left"), bone.getChild("leg_hind_right")};
         this.spines = new ModelPart[] {
                 this.body.getChild("spine_front"), this.body.getChild("spine_mid"),
                 this.body.getChild("spine_back")};

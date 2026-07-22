@@ -101,6 +101,8 @@ public int getNightEventDay();                // eclipse-day stamp of the curren
 public void setActiveNightEvent(String event, int dayStamp);
 public boolean isFirstPaleNightDone();        public void setFirstPaleNightDone(boolean done); // day-4 guarantee latch
 
+public boolean isHeraldDefeated();            public void setHeraldDefeated(boolean defeated); // W11 day-7 boss kill flag; UnlockState unions key "herald_slain" while set
+
 public int getWorldStage(DiscProfile profile);                 // committed world stage, default 0
 public void setWorldStage(DiscProfile profile, int stage);     // ONLY WorldStageService.setStage may call this
 public boolean hasGrowthCursor();                              // a ring sweep was mid-flight at last save
@@ -521,6 +523,41 @@ at dawn. Override live with `/eclipse event set <pale|umbral|none>`.
 Sanctum note: `worldgen.structure.SanctumProtection` suppresses non-`eclipse`-namespace
 hostile spawns near the altar — all of these mobs are exempt by namespace.
 
+### Herald boss — `dev.projecteclipse.eclipse.entity.boss` (W11)
+
+The day-7 boss (`eclipse:herald`, spec `docs/ideas/04_content.md` §2.1): a 26-cube floating
+godhead (`client/entity/HeraldModel`, 128×128 skin, UV in `docs/uv/herald.md`; emissive
+inner eye + telegraph-glowing corona shards via the Gazer skipDraw pattern in
+`HeraldRenderer`). Never spawns naturally.
+
+- **Summon**: craft a **Herald's Lure** (`eclipse:heralds_lure`, 4 umbral shards around
+  1 heart fragment, `data/eclipse/recipe/heralds_lure.json`) and **sneak-use it on the
+  altar after dusk** (`ritual/HeraldsLureItem`; non-sneak deposits hint at the sneak).
+  Spawns 12 above the altar with an altar-beam arrival. Admin path:
+  `/eclipse boss herald summon` (plain `/summon eclipse:herald` also works — the arena
+  auto-pins to the spawn point).
+- **Bossbar**: PURPLE `NOTCHED_6` `ServerBossEvent` named "☀ The Herald"
+  (`entity.eclipse.herald.bossbar`), themed `boss` via `S2CBossbarStylePayload` in
+  `startSeenByPlayer` (late joiners included).
+- **Fight** (300 HP base; HP ×(1+0.35·(n−1)) for n players within 48 at summon; phase
+  breaks at exactly 2/3 and 1/3 = bar notches): **P1 Volley** — hovers 8–12 over the dais
+  on a strafe orbit; every 60t a telegraph (shards glow + `boss.herald_telegraph` +
+  BEACON_POWER_SELECT, 20t −2t/extra player, floor 12) then 3 homing
+  `eclipse:herald_shard` projectiles (4 dmg, `isPickable` — shoot or swat them down);
+  every 200t summons 2 Umbral Stalkers (cap 2+n). **P2 Gaze** (≤66%) — volley slows to
+  90t; locks one player (ONLY they hear WARDEN_HEARTBEAT), 40t charge with an end-rod
+  wisp beam, then 8 dmg + Darkness 5 s **unless a sanctum pillar breaks line of sight at
+  the fire moment**. **P3 Collapse** (≤33%) — descends to +3, pulls players 0.08/t inward,
+  expanding SOUL_FIRE_FLAME damage rings every 80t (+0.4/t, 6 dmg, jump over them); corona
+  shards detach as HP drops and crash as `boss_slam` Quasar AoE (6 dmg, r 2.5).
+- **Arena lock**: r=15 around the altar; participants (anyone who enters) are pushed back
+  in with the SoftBorder impulse formula + a reverse-portal particle wall. No players
+  within 40 blocks for 60 s → full heal + despawn (re-summon with another lure).
+- **Drops**: 1 `eclipse:herald_core` (REQUIRED for altar L4 — W13 wires the milestone
+  cost) at the corpse + 3 umbral shards at EACH participant's feet. On first kill:
+  `EclipseWorldState.setHeraldDefeated(true)` (→ derived unlock key `herald_slain`) + a
+  boss-styled announce.
+
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
 `LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
@@ -875,6 +912,8 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, applies the plan border, syncs clients. |
 | `/eclipse day goals` | Prints the current day's configured goals. |
 | `/eclipse event set <pale\|umbral\|none>` | Overrides the active night event (`EclipseWorldState.setActiveNightEvent`); pale/umbral also fire the announcement sweep. |
+| `/eclipse boss herald summon` | Summons the Herald over the sanctum altar (or the source position if no sanctum) with the full arrival sequence + scaling. |
+| `/eclipse boss herald kill` | Kills every live Herald through the regular death path (drops + `heraldDefeated` flag + announce). |
 | `/eclipse lives set <player> <n>` | `LivesApi.set` (n ≥ 0, clamped; synced to the client). |
 | `/eclipse lives add <player> <n>` | `LivesApi.add` (n may be negative). |
 | `/eclipse altar set <level>` | Sets `EclipseWorldState.altarLevel` (≥ 0) + re-syncs day state to all clients. |

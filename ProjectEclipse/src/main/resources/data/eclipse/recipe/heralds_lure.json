@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " U ",
+    "UHU",
+    " U "
+  ],
+  "key": {
+    "U": {
+      "item": "eclipse:umbral_shard"
+    },
+    "H": {
+      "item": "eclipse:heart_fragment"
+    }
+  },
+  "result": {
+    "id": "eclipse:heralds_lure",
+    "count": 1
+  }
+}

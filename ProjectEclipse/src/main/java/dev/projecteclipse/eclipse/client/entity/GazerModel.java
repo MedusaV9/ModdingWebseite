@@ -37,9 +37,11 @@ public class GazerModel extends HierarchicalModel<GazerEntity> {
 
     public GazerModel(ModelPart root) {
         this.root = root;
-        this.cloak = root.getChild("cloak");
-        this.mantle = root.getChild("mantle");
-        this.hood = root.getChild("hood");
+        // bakeLayer() hands over the layer root, whose single child is the gazer_root bone.
+        ModelPart bone = root.getChild("gazer_root");
+        this.cloak = bone.getChild("cloak");
+        this.mantle = bone.getChild("mantle");
+        this.hood = bone.getChild("hood");
         this.face = this.hood.getChild("face");
         this.tatterLeft = this.cloak.getChild("tatter_left");
         this.tatterRight = this.cloak.getChild("tatter_right");
