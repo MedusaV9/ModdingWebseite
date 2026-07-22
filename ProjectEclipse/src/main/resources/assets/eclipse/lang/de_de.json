@@ -26,6 +26,7 @@
   "gui.eclipse.artifact.rules.line8": "8. Das Armartefakt ist an dich gebunden: Es kann nicht fallengelassen, gelagert oder aus dem rechten Hotbar-Slot bewegt werden. Rechtsklicke es (oder drücke J), um dieses Menü zu öffnen.",
   "gui.eclipse.artifact.rules.line9": "9. Teams, Allianzen und Verrat sind erlaubt — Spawn-Griefing und das Ausnutzen von Bugs nicht.",
   "gui.eclipse.artifact.rules.line10": "10. Admin-Entscheidungen sind endgültig. Melde Probleme im Event-Discord, statt im Spiel zu diskutieren.",
+  "message.eclipse.sanctum_protected": "Das Sanktum der Verfinsterten Sonne weist deine Hand zurück.",
   "message.eclipse.voice_sealed": "Stimme versiegelt",
   "message.eclipse.voice_sealed_remaining": "Stimme versiegelt noch %s",
   "ritual.eclipse.altar.complete": "Der Altar ist vollständig aufgeladen.",

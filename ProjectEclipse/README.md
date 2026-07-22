@@ -454,6 +454,28 @@ portal frame. `/locate structure` (and eyes of ender) resolve through
 once the landmark's stage is committed — the vanilla placement-driven lookup can never hit
 because `createStructures` is disabled.
 
+`AltarSanctumBuilder` builds the "Sanctum of the Occluded Sun" once per world on
+`ServerStartedEvent` (guard: `EclipseWorldState.isSanctumBuilt()`), centering on a
+pre-existing v1 altar block if an admin already placed one near spawn (never overwritten);
+otherwise `EclipseBlocks.ALTAR` is placed at (0, ground+4, 0). The world spawn is re-pinned
+onto the south approach path every start (the pad center is the dais). `SanctumProtection`
+(game bus) cancels block break/place, strips explosion block damage and suppresses
+non-eclipse hostile spawns within r=16 of the altar; ops (permission ≥ 3) are exempt.
+
+```java
+public final class AltarSanctumBuilder { // W11: pillars are Herald LOS cover
+    public static final int PILLAR_RING_RADIUS = 9;        // 8 pillars, every 45° from +X
+    public static final int[] PILLAR_SHAFT_HEIGHTS = {4, 6, 7, 5, 6, 4, 7, 5};
+    public static BlockPos pillarBaseCorner(BlockPos altarPos, int index); // NW corner of 2×2 base
+    public static List<BlockPos> pillarBases(BlockPos altarPos);           // all 8, index order
+    public static int pillarTopY(BlockPos altarPos, int index);            // highest shaft block
+}
+public final class SanctumProtection {
+    public static boolean isProtected(Level level, BlockPos pos); // r=16 around the altar
+}
+// EclipseWorldState: isSanctumBuilt(), getSanctumAltarPos() (null until built), setSanctumBuilt(pos)
+```
+
 ## Progression & Mod Gating
 
 All progression enforcement lives in `dev.projecteclipse.eclipse.progression` and is fully

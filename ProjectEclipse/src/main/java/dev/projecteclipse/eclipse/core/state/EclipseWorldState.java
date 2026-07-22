@@ -9,7 +9,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -40,6 +43,8 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_GROWTH_DIMENSION = "growthDimension";
     private static final String TAG_GROWTH_FROM_STAGE = "growthFromStage";
     private static final String TAG_GROWTH_CURSOR = "growthCursor";
+    private static final String TAG_SANCTUM_BUILT = "sanctumBuilt";
+    private static final String TAG_SANCTUM_ALTAR_POS = "sanctumAltarPos";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -51,6 +56,8 @@ public final class EclipseWorldState extends SavedData {
     private String growthDimension = "";
     private int growthFromStage = 0;
     private long growthCursor = 0L;
+    private boolean sanctumBuilt = false;
+    private long sanctumAltarPos = 0L;
     private final Set<UUID> banned = new HashSet<>();
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
@@ -77,6 +84,10 @@ public final class EclipseWorldState extends SavedData {
         state.growthDimension = tag.getString(TAG_GROWTH_DIMENSION);
         state.growthFromStage = tag.getInt(TAG_GROWTH_FROM_STAGE);
         state.growthCursor = tag.getLong(TAG_GROWTH_CURSOR);
+        // Sanctum fields default to "not built" so pre-W5 saves keep loading (the
+        // sanctum then builds on their next start).
+        state.sanctumBuilt = tag.getBoolean(TAG_SANCTUM_BUILT);
+        state.sanctumAltarPos = tag.getLong(TAG_SANCTUM_ALTAR_POS);
         for (Tag entry : tag.getList(TAG_OAR_ENTITIES, Tag.TAG_INT_ARRAY)) {
             state.oarEntities.add(NbtUtils.loadUUID(entry));
         }
@@ -105,6 +116,8 @@ public final class EclipseWorldState extends SavedData {
         tag.putString(TAG_GROWTH_DIMENSION, this.growthDimension);
         tag.putInt(TAG_GROWTH_FROM_STAGE, this.growthFromStage);
         tag.putLong(TAG_GROWTH_CURSOR, this.growthCursor);
+        tag.putBoolean(TAG_SANCTUM_BUILT, this.sanctumBuilt);
+        tag.putLong(TAG_SANCTUM_ALTAR_POS, this.sanctumAltarPos);
 
         ListTag oarList = new ListTag();
         for (UUID uuid : this.oarEntities) {
@@ -222,6 +235,30 @@ public final class EclipseWorldState extends SavedData {
         this.growthDimension = "";
         this.growthFromStage = 0;
         this.growthCursor = 0L;
+        setDirty();
+    }
+
+    // --- altar sanctum (worker 5) ---
+
+    /** Whether the altar sanctum has been built at spawn (build-once guard). */
+    public boolean isSanctumBuilt() {
+        return this.sanctumBuilt;
+    }
+
+    /**
+     * The altar block position the sanctum was centered on, or {@code null} while the
+     * sanctum has not been built yet. Protection and the sundial derive their geometry
+     * from this position.
+     */
+    @Nullable
+    public BlockPos getSanctumAltarPos() {
+        return this.sanctumBuilt ? BlockPos.of(this.sanctumAltarPos) : null;
+    }
+
+    /** Marks the sanctum built around the given altar position. */
+    public void setSanctumBuilt(BlockPos altarPos) {
+        this.sanctumBuilt = true;
+        this.sanctumAltarPos = altarPos.asLong();
         setDirty();
     }
 

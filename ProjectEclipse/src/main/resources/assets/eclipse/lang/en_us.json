@@ -26,6 +26,7 @@
   "gui.eclipse.artifact.rules.line8": "8. The arm artifact is bound to you: it cannot be dropped, stored or moved from the rightmost hotbar slot. Right-click it (or press J) to open this menu.",
   "gui.eclipse.artifact.rules.line9": "9. Teaming, alliances and betrayal are allowed — griefing spawn and exploiting bugs are not.",
   "gui.eclipse.artifact.rules.line10": "10. Admin decisions are final. Report issues on the event Discord instead of arguing in game.",
+  "message.eclipse.sanctum_protected": "The Sanctum of the Occluded Sun rejects your touch.",
   "message.eclipse.voice_sealed": "Voice sealed",
   "message.eclipse.voice_sealed_remaining": "Voice sealed for %s",
   "ritual.eclipse.altar.complete": "The altar is fully charged.",
