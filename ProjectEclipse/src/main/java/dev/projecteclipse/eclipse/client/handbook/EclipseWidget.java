@@ -9,10 +9,12 @@ import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Base widget of the Eclipse UI suite ({@code docs/ideas/03_ui_ux.md} §A/§B): hover
- * edge-detect ({@code wasHovered} → {@link #onHoverStart()}) plus a 2px purple glow border
- * that fades in over ~4 ticks. Subclasses draw their face in {@link #renderContent} and get
- * the animated glow + hover bookkeeping for free. Shared with later UI workers (W15 menu /
- * settings screens) — keep it free of handbook-specific state.
+ * edge-detect ({@code wasHovered} flip → one {@link UiSounds#hover()} blip), a 2px purple
+ * glow border that fades in over ~4 ticks, and a {@link CursorManager#requestPointer()}
+ * per hovered frame (the owning screen applies it via {@code CursorManager.endFrame()}).
+ * Subclasses draw their face in {@link #renderContent} and get the hover suite for free.
+ * Shared with later UI workers (W15 menu / settings screens) — keep it free of
+ * handbook-specific state.
  */
 @OnlyIn(Dist.CLIENT)
 public abstract class EclipseWidget extends AbstractWidget {
@@ -49,11 +51,15 @@ public abstract class EclipseWidget extends AbstractWidget {
     /** The widget's face; the glow border is drawn on top by the base class. */
     protected abstract void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick);
 
-    /** Hover edge (false → true). Phase hook for sound; default no-op. */
-    protected void onHoverStart() {}
+    /** Hover edge (false → true): one hover blip. Override to silence or extend. */
+    protected void onHoverStart() {
+        UiSounds.hover();
+    }
 
-    /** Called every rendered frame while hovered. Phase hook for cursor requests; default no-op. */
-    protected void whileHovered() {}
+    /** Every rendered frame while hovered: ask for the pointing-hand cursor. */
+    protected void whileHovered() {
+        CursorManager.requestPointer();
+    }
 
     /** 2px glow rectangle around the widget bounds, alpha scaled by {@code strength}. */
     protected void renderGlowBorder(GuiGraphics guiGraphics, float strength) {

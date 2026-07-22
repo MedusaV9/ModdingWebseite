@@ -54,6 +54,33 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.typewriter")));
 
+    // W9 UI suite — played via client.handbook.UiSounds (SimpleSoundInstance.forUI,
+    // gated by the uiSounds client config).
+
+    /** Soft blip when an interactive UI element becomes hovered (edge-detected). */
+    public static final Supplier<SoundEvent> UI_HOVER = SOUNDS.register(
+            "ui.hover",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.hover")));
+
+    /** Paper whoosh of the handbook page-turn animation. */
+    public static final Supplier<SoundEvent> UI_PAGE_TURN = SOUNDS.register(
+            "ui.page_turn",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.page_turn")));
+
+    /** Short two-tone click when a handbook tab tongue is pressed. */
+    public static final Supplier<SoundEvent> UI_TAB = SOUNDS.register(
+            "ui.tab",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.tab")));
+
+    /** Rising chime sting for UI-visible unlocks (altar ring level-up pulse). */
+    public static final Supplier<SoundEvent> UI_UNLOCK_STING = SOUNDS.register(
+            "ui.unlock_sting",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.unlock_sting")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

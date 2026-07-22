@@ -158,5 +158,7 @@
   "announce.eclipse.stage.nether": "The nether disc swells beneath the crust.",
   "subtitles.eclipse.ui.heart_shatter": "A heart shatters",
   "subtitles.eclipse.event.border_glitch": "Reality glitches",
-  "subtitles.eclipse.ui.typewriter": "Typewriter clicks"
+  "subtitles.eclipse.ui.typewriter": "Typewriter clicks",
+  "subtitles.eclipse.ui.page_turn": "Page turns",
+  "subtitles.eclipse.ui.unlock_sting": "Something unlocks"
 }

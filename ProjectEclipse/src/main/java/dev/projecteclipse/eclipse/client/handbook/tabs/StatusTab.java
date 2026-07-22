@@ -5,6 +5,7 @@ import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -62,8 +63,11 @@ public class StatusTab extends HandbookTab {
         if (pulseTicks > 0) {
             pulseTicks--;
         }
-        if (lastAltarLevel >= 0 && ClientStateCache.altarLevel > lastAltarLevel && !EclipseClientConfig.reducedFx()) {
-            pulseTicks = 14;
+        if (lastAltarLevel >= 0 && ClientStateCache.altarLevel > lastAltarLevel) {
+            UiSounds.unlockSting();
+            if (!EclipseClientConfig.reducedFx()) {
+                pulseTicks = 14;
+            }
         }
         lastAltarLevel = ClientStateCache.altarLevel;
     }

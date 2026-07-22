@@ -427,8 +427,10 @@ keybind (J, `ArtifactKeyHandler`) and the artifact right-click / `S2COpenArtifac
   (active tongue slides out 6px + glows), left page = ledger/tab title + divider + hero
   art, right page = the active tab, bottom = page dots + key hint. Keys: 1–6 jump to a
   tab, arrows/PgUp/PgDn turn pages, J or ESC closes. Renders live from `ClientStateCache`.
-  Opening plays a book-unfold (scaleY 0.9→1 + fade, 8t ease-out cubic; skipped by
-  `reducedFx`).
+  Opening plays a book-unfold (scaleY 0.9→1 + fade, 8t ease-out cubic); tab switches play
+  a 6t page-turn (old page shears + x-compresses into the spine hinge, new page unfolds
+  back out, `ui.page_turn` sound); the backdrop parchment texture parallax-drifts 8px
+  opposite the mouse and the hero art 4px (scissored). All skipped by `reducedFx`.
 - **Tabs** (`handbook.tabs`, one class each, base `HandbookTab`): **Status** (big day
   counter, heart row, altar progress ring — 256x256 `icons/altar_ring.png` + code-drawn
   arc, pulses on level-up —, goal list with animated tick draw-in, online count from the
@@ -447,8 +449,24 @@ keybind (J, `ArtifactKeyHandler`) and the artifact right-click / `S2COpenArtifac
   glitch text and never leak the intro day. Keep intro days in sync with spawn rules.
 - **`GlitchText`** — redacted text helper: chars re-rolled every 3 ticks (150 ms wall-clock
   buckets, per-slot salt); static `?`s under `reducedFx`.
-- **`EclipseWidget`** — shared base widget: hover edge-detect + 2px purple glow border
-  fading in over ~4t; W15's menu/settings widgets should extend it.
+- **`EclipseWidget`** — shared base widget: hover edge-detect (one `UiSounds.hover()`
+  blip on the false→true flip, never per-frame) + 2px purple glow border fading in over
+  ~4t + a `CursorManager.requestPointer()` per hovered frame; W15's menu/settings widgets
+  should extend it.
+- **`UiSounds`** — `SimpleSoundInstance.forUI` helpers over the four W9 sound events
+  (`ui.hover`, `ui.page_turn`, `ui.tab`, `ui.unlock_sting` in `EclipseSounds` +
+  `sounds.json`; only the latter two have subtitles to avoid caption spam), all gated by
+  the `uiSounds` client config. The unlock sting fires from the Status tab on an altar
+  level-up while the book is open.
+- **`CursorManager`** — GLFW cursor lifecycle (risk R12): themed 32x32 PNGs
+  (`textures/gui/cursor/{arrow,hand,grab}.png`, hotspots (0,0)/(8,0)/(16,16)) via
+  `glfwCreateCursor`, guarded `glfwCreateStandardCursor` fallback (0 → system cursor
+  stays). Widgets/tabs `requestPointer()`/`requestGrab()` during render; the screen calls
+  `endFrame()` once per frame (strongest request wins, swap only on change) and MUST call
+  `reset()` from `removed()`. Pointers are cached and destroyed + lazily recreated on
+  resource reload (F3+T); everything no-ops off the render thread and behind the
+  `customCursor` client config. W15 screens follow the same request/endFrame/reset
+  pattern.
 
 ### Timeline + announcements (server) — `dev.projecteclipse.eclipse.timeline`
 

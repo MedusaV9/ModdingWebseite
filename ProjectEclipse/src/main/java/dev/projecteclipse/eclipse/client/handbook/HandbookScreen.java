@@ -19,6 +19,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -31,7 +32,13 @@ import org.lwjgl.glfw.GLFW;
  * ({@code ArtifactKeyHandler}) or the artifact right-click ({@code S2COpenArtifactPayload}
  * → {@code ArtifactScreenOpener}); every value renders live from
  * {@code client.ClientStateCache}. The book unfolds over {@value #UNFOLD_TICKS} ticks
- * (ease-out cubic scale + fade, skipped with {@code reducedFx}).
+ * (ease-out cubic scale + fade); tab switches play a {@value #TURN_TICKS}-tick page-turn
+ * (old page skews + compresses toward the spine hinge, new page unfolds back out, with the
+ * {@code ui.page_turn} sound); the backdrop parallax layer shifts up to 8px opposite the
+ * mouse and the hero art (mid layer) 4px. All animation honors {@code reducedFx}. Cursors:
+ * interactive widgets request the pointing hand ({@link EclipseWidget}), timeline dragging
+ * requests the grab fist, and {@link CursorManager#endFrame()} applies exactly one cursor
+ * per frame — {@code removed()} ALWAYS resets to the system cursor.
  */
 @OnlyIn(Dist.CLIENT)
 public class HandbookScreen extends Screen {
@@ -39,10 +46,16 @@ public class HandbookScreen extends Screen {
             EclipseMod.MOD_ID, "textures/gui/handbook/book_spread.png");
     protected static final ResourceLocation DIVIDER = ResourceLocation.fromNamespaceAndPath(
             EclipseMod.MOD_ID, "textures/gui/handbook/divider.png");
+    protected static final ResourceLocation PARCHMENT_TILE = ResourceLocation.fromNamespaceAndPath(
+            EclipseMod.MOD_ID, "textures/gui/handbook/parchment_tile.png");
 
     private static final float BOOK_WIDTH_PCT = 0.90F;
     private static final float BOOK_HEIGHT_PCT = 0.85F;
     private static final int UNFOLD_TICKS = 8;
+    private static final int TURN_TICKS = 6;
+    /** Parallax shift in px: background (backdrop) layer and mid (hero art) layer. */
+    private static final float PARALLAX_BG = 8.0F;
+    private static final float PARALLAX_MID = 4.0F;
     private static final int TEXT_COLOR = 0xE8E0F5;
     private static final int ACCENT_COLOR = 0xB98CFF;
     private static final int DIM_COLOR = 0x9A8FB8;
@@ -52,6 +65,12 @@ public class HandbookScreen extends Screen {
     private final TabButton[] tabButtons = new TabButton[tabs.size()];
     private int activeTab;
     private int openTicks;
+    /** Page-turn animation: the tab being turned away from; -1 = no turn running. */
+    private int turnFrom = -1;
+    private int turnTicks;
+    /** Parallax mouse offset, normalized -1..1 (0 with {@code reducedFx}). */
+    private float parallaxX;
+    private float parallaxY;
 
     // Book geometry, recomputed in init() (open + resize).
     private int bookX;
@@ -106,6 +125,9 @@ public class HandbookScreen extends Screen {
         if (openTicks < UNFOLD_TICKS) {
             openTicks++;
         }
+        if (turnFrom >= 0 && ++turnTicks >= TURN_TICKS) {
+            turnFrom = -1;
+        }
         tabs.get(activeTab).tick();
     }
 
@@ -117,8 +139,25 @@ public class HandbookScreen extends Screen {
         return Mth.clamp((openTicks + partialTick) / UNFOLD_TICKS, 0.0F, 1.0F);
     }
 
+    /** Turn progress 0..1 (1 = finished / not turning). */
+    private float turnProgress(float partialTick) {
+        if (turnFrom < 0 || EclipseClientConfig.reducedFx()) {
+            return 1.0F;
+        }
+        return Mth.clamp((turnTicks + partialTick) / TURN_TICKS, 0.0F, 1.0F);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // Parallax offset, normalized -1..1 from the screen center (frozen with reducedFx).
+        if (!EclipseClientConfig.reducedFx()) {
+            parallaxX = Mth.clamp(mouseX / Math.max(1.0F, this.width) * 2.0F - 1.0F, -1.0F, 1.0F);
+            parallaxY = Mth.clamp(mouseY / Math.max(1.0F, this.height) * 2.0F - 1.0F, -1.0F, 1.0F);
+        } else {
+            parallaxX = 0.0F;
+            parallaxY = 0.0F;
+        }
+
         renderVignette(guiGraphics);
 
         float progress = openProgress(partialTick);
@@ -143,11 +182,26 @@ public class HandbookScreen extends Screen {
         guiGraphics.pose().popPose();
 
         renderHint(guiGraphics, alpha);
+
+        // One cursor per frame: grab while the tab drags, pointer if a widget asked, arrow else.
+        if (currentTab().dragging()) {
+            CursorManager.requestGrab();
+        }
+        CursorManager.endFrame();
     }
 
-    /** Full-bleed dark vignette over the world (edges darker than the center). */
+    /**
+     * Full-bleed dark vignette over the world (edges darker than the center) with a faint
+     * parchment texture as the {@value #PARALLAX_BG}px parallax background layer.
+     */
     private void renderVignette(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0xA8060310);
+        // Backdrop texture drifts opposite the mouse (u/v shift; the tile wraps).
+        int shiftU = Math.round(parallaxX * PARALLAX_BG);
+        int shiftV = Math.round(parallaxY * PARALLAX_BG);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 0.07F);
+        guiGraphics.blit(PARCHMENT_TILE, 0, 0, shiftU, shiftV, this.width, this.height, 256, 256);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         int edge = Math.max(24, this.height / 8);
         guiGraphics.fillGradient(0, 0, this.width, edge, 0xB0000000, 0x00000000);
         guiGraphics.fillGradient(0, this.height - edge, this.width, this.height, 0x00000000, 0xB0000000);
@@ -196,16 +250,58 @@ public class HandbookScreen extends Screen {
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    /** Hero art blit (parallax offset added in the animation pass). */
+    /**
+     * Hero art, the {@value #PARALLAX_MID}px parallax mid layer: blitted slightly oversized
+     * and shifted opposite the mouse, scissored to the frame so the edges never show.
+     */
     protected void renderHero(GuiGraphics guiGraphics, HandbookTab tab, int heroX, int heroY,
             int heroW, int heroH, int mouseX, int mouseY, float alpha) {
-        guiGraphics.blit(tab.hero(), heroX, heroY, 0, 0, heroW, heroH, heroW, heroH);
+        int pad = Math.round(PARALLAX_MID);
+        int shiftX = Math.round(-parallaxX * PARALLAX_MID);
+        int shiftY = Math.round(-parallaxY * PARALLAX_MID);
+        guiGraphics.enableScissor(heroX, heroY, heroX + heroW, heroY + heroH);
+        guiGraphics.blit(tab.hero(), heroX - pad + shiftX, heroY - pad + shiftY, 0, 0,
+                heroW + pad * 2, heroH + pad * 2, heroW + pad * 2, heroH + pad * 2);
+        guiGraphics.disableScissor();
     }
 
+    /**
+     * Right page content; during a tab switch the old page skews + compresses into the
+     * spine hinge over the first half of the turn, the new page unfolds back out over the
+     * second half ({@code ui.page_turn} plays from {@link #switchTab}).
+     */
     private void renderRightPage(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, float alpha) {
         guiGraphics.enableScissor(contentX - 2, contentY - 2, contentX + contentW + 2, contentY + contentH + 2);
-        tabs.get(activeTab).render(guiGraphics, mouseX, mouseY, partialTick, alpha);
+        float turn = turnProgress(partialTick);
+        if (turn >= 1.0F) {
+            tabs.get(activeTab).render(guiGraphics, mouseX, mouseY, partialTick, alpha);
+        } else if (turn < 0.5F) {
+            float fold = turn * 2.0F; // 0 = flat, 1 = folded into the spine
+            renderTurningPage(guiGraphics, tabs.get(turnFrom), 1.0F - fold, alpha * (1.0F - fold),
+                    mouseX, mouseY, partialTick);
+        } else {
+            float unfold = (turn - 0.5F) * 2.0F;
+            renderTurningPage(guiGraphics, tabs.get(activeTab), unfold, alpha * unfold,
+                    mouseX, mouseY, partialTick);
+        }
         guiGraphics.disableScissor();
+    }
+
+    /** One half of the page-turn: page sheared + x-compressed toward the spine hinge. */
+    private void renderTurningPage(GuiGraphics guiGraphics, HandbookTab tab, float open, float alpha,
+            int mouseX, int mouseY, float partialTick) {
+        float hingeX = contentX; // spine edge of the right page
+        float centerY = contentY + contentH / 2.0F;
+        float folded = 1.0F - open;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(hingeX, centerY, 0);
+        Matrix4f shear = new Matrix4f();
+        shear.m10(-0.18F * folded); // x' = x - k*y: the page top leans into the spine
+        guiGraphics.pose().mulPose(shear);
+        guiGraphics.pose().scale(Math.max(0.02F, open), 1.0F - 0.06F * folded, 1.0F);
+        guiGraphics.pose().translate(-hingeX, -centerY, 0);
+        tab.render(guiGraphics, mouseX, mouseY, partialTick, alpha);
+        guiGraphics.pose().popPose();
     }
 
     private void renderTabTongues(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, float alpha) {
@@ -239,11 +335,16 @@ public class HandbookScreen extends Screen {
                 Math.min(this.height - 10, bookY + bookH + 3), color(DIM_COLOR, alpha * 0.9F));
     }
 
-    /** Switches the active tab. */
+    /** Switches the active tab with the page-turn animation + sound. */
     protected void switchTab(int index) {
         if (index == activeTab || index < 0 || index >= tabs.size()) {
             return;
         }
+        if (!EclipseClientConfig.reducedFx()) {
+            turnFrom = activeTab;
+            turnTicks = 0;
+        }
+        UiSounds.pageTurn();
         activeTab = index;
         tabs.get(index).onShown();
     }
@@ -315,6 +416,13 @@ public class HandbookScreen extends Screen {
         return false;
     }
 
+    /** ALWAYS hand the system cursor back, whatever screen comes next (risk R12). */
+    @Override
+    public void removed() {
+        CursorManager.reset();
+        super.removed();
+    }
+
     protected static int color(int rgb, float alpha) {
         int a = Math.max(4, (int) (alpha * 255.0F));
         return (a << 24) | (rgb & 0xFFFFFF);
@@ -335,6 +443,12 @@ public class HandbookScreen extends Screen {
         @Override
         public void onClick(double mouseX, double mouseY) {
             switchTab(index);
+        }
+
+        /** Replace the vanilla button click with the ui.tab tongue press. */
+        @Override
+        public void playDownSound(net.minecraft.client.sounds.SoundManager handler) {
+            UiSounds.tab();
         }
 
         /** Rendered from the screen inside the book transform (widget is input-only). */

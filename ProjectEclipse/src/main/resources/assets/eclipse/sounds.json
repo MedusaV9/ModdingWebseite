@@ -44,5 +44,33 @@
         "pitch": 1.5
       }
     ]
+  },
+  "ui.hover": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/hover",
+        "volume": 0.5
+      }
+    ]
+  },
+  "ui.page_turn": {
+    "subtitle": "subtitles.eclipse.ui.page_turn",
+    "sounds": [
+      "eclipse:ui/page_turn"
+    ]
+  },
+  "ui.tab": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/tab",
+        "volume": 0.7
+      }
+    ]
+  },
+  "ui.unlock_sting": {
+    "subtitle": "subtitles.eclipse.ui.unlock_sting",
+    "sounds": [
+      "eclipse:ui/unlock_sting"
+    ]
   }
 }

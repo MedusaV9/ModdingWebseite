@@ -158,5 +158,7 @@
   "announce.eclipse.stage.nether": "Die Netherscheibe schwillt unter der Kruste an.",
   "subtitles.eclipse.ui.heart_shatter": "Ein Herz zerspringt",
   "subtitles.eclipse.event.border_glitch": "Die Realität flimmert",
-  "subtitles.eclipse.ui.typewriter": "Schreibmaschine klackert"
+  "subtitles.eclipse.ui.typewriter": "Schreibmaschine klackert",
+  "subtitles.eclipse.ui.page_turn": "Seite blättert um",
+  "subtitles.eclipse.ui.unlock_sting": "Etwas wird freigeschaltet"
 }
