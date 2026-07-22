@@ -38,6 +38,7 @@ import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
+import dev.projecteclipse.eclipse.network.S2CMilestonesPayload;
 import dev.projecteclipse.eclipse.progression.BorderController;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.ModGate;
@@ -827,6 +828,8 @@ public final class EclipseCommands {
         EclipseWorldState state = EclipseWorldState.get(server);
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
                 EclipseConfig.day(state.getDay()).goals()));
+        // Edited milestones.json feeds the handbook Rewards tab live.
+        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current());
         // Same for the cutscene path library (edited JSONs apply immediately).
         CutsceneService.syncLibraryToAll(server);
         source.sendSuccess(() -> Component.literal("Eclipse config reloaded: "

@@ -285,6 +285,12 @@ public record S2CTimelinePayload(List<TimelineEntry> entries) implements CustomP
 // hidden, reached) — hidden/future entries carry empty titleKey + TimelineEntry.NO_ICON, so
 // upcoming content cannot be datamined. Sent at login + day/altar changes by
 // timeline.TimelineService; cached in ClientStateCache.timeline (W9 handbook reads it).
+public record S2CMilestonesPayload(List<Entry> entries) implements CustomPacketPayload; // id "eclipse:milestones"
+// S2CMilestonesPayload.Entry(int level, List<Cost> costs, List<String> rewards),
+// Cost(String item, int count): the altar milestone ladder from milestones.json. Sent at
+// login and re-broadcast by /eclipse reload; cached in ClientStateCache.milestones. The
+// handbook Rewards tab renders costs as item icons; Status derives the ring max level.
+// NOT anonymized (milestone announcements already name them). Factory: current().
 public record C2SCutsceneStatePayload(String id, State state) implements CustomPacketPayload; // id "eclipse:cutscene_state"
 // C2SCutsceneStatePayload.State: enum { STARTED, FINISHED, SKIP_REQUEST, SKIPPED } — playback
 // ACKs + skip requests, validated/handled by cutscene.CutsceneService.handleClientState.
@@ -406,6 +412,43 @@ Worker 8's client HUD layer (all classes `Dist.CLIENT`, driven by payloads + `Cl
   showing the title, fades 20t; stacks below real bars via `nextFreeBarY()`). Styles map
   `day`→day, `boss`→boss, `goal`/`unlock`→goal skins. Announcements queue (cap 8) so unlock
   bursts play sequentially. No `BossEvent` is created — the sweep is pure overlay.
+
+### Handbook 2.0 — `dev.projecteclipse.eclipse.client.handbook`
+
+"The Ledger of the Drowned" (`docs/ideas/03_ui_ux.md` §B) replaced the v1 176x166 artifact
+popup. Both v1 open paths are preserved and now open the handbook: the `key.eclipse.menu`
+keybind (J, `ArtifactKeyHandler`) and the artifact right-click / `S2COpenArtifactPayload`
+(`ArtifactScreenOpener`). `client.ArtifactScreen` remains as a deprecated thin alias
+(`extends HandbookScreen`); the v1 `client.RulesScreen` was DELETED — its content (the
+`gui.eclipse.artifact.rules.line1..10` lang keys, kept verbatim) became the Rules tab.
+
+- **`HandbookScreen`** — percentage-derived layout (book spread 90%w x 85%h over a
+  full-bleed vignette, no fixed-size box): parchment tab tongues on the far-left spine
+  (active tongue slides out 6px + glows), left page = ledger/tab title + divider + hero
+  art, right page = the active tab, bottom = page dots + key hint. Keys: 1–6 jump to a
+  tab, arrows/PgUp/PgDn turn pages, J or ESC closes. Renders live from `ClientStateCache`.
+  Opening plays a book-unfold (scaleY 0.9→1 + fade, 8t ease-out cubic; skipped by
+  `reducedFx`).
+- **Tabs** (`handbook.tabs`, one class each, base `HandbookTab`): **Status** (big day
+  counter, heart row, altar progress ring — 256x256 `icons/altar_ring.png` + code-drawn
+  arc, pulses on level-up —, goal list with animated tick draw-in, online count from the
+  client tab-list info), **Timeline** (horizontal drag spine of
+  `ClientStateCache.timeline`; inertial scroll, current node pulses, hidden entries =
+  locked node + `GlitchText` "???"), **Rules** (scrollable parchment), **Rewards**
+  (milestone ladder from `ClientStateCache.milestones`, costs via
+  `guiGraphics.renderItem`), **Bestiary** (six creature cards, client-side data table —
+  see below), **Map** (concentric ring diagram from `worldgen.StageRadii` +
+  `DiscGeometry`, current stage highlighted, animated soft-border circle, stage-gated
+  landmark markers).
+- **Bestiary data contract (W10–W12)**: `BestiaryTab.CREATURES` hardcodes id + intro day
+  (deckhand 1, gazer 3, the_other 4, umbral_stalker 5, herald 7, ferryman 14; lang keys
+  `bestiary.eclipse.<id>.name/.lore`). Cards unlock client-side once
+  `ClientStateCache.day >= introDay`; locked cards render a code-drawn silhouette +
+  glitch text and never leak the intro day. Keep intro days in sync with spawn rules.
+- **`GlitchText`** — redacted text helper: chars re-rolled every 3 ticks (150 ms wall-clock
+  buckets, per-slot salt); static `?`s under `reducedFx`.
+- **`EclipseWidget`** — shared base widget: hover edge-detect + 2px purple glow border
+  fading in over ~4t; W15's menu/settings widgets should extend it.
 
 ### Timeline + announcements (server) — `dev.projecteclipse.eclipse.timeline`
 
@@ -896,6 +939,7 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.registry` — `EclipseItems`, `EclipseBlocks`, `EclipseBlockEntities`, `EclipseSounds`, `EclipseParticles`, `EclipseAttachments` (NeoForge attachment types), `EclipseMenus`, `EclipseWorldgen` (disc chunk generator + biome source codecs). Each exposes a `DeferredRegister` and a static `register(IEventBus)`.
 - `dev.projecteclipse.eclipse.worldgen` — deterministic disc world core: `DiscTerrainFunction`, `DiscMapData`, `DiscProfile`, `DiscGeometry`, `StageRadii`, `WorldStageAccess`, `DiscChunkGenerator`, `DiscBiomeSource`, `DiscSpawnPlacement` (see "Disc worldgen").
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
+- `dev.projecteclipse.eclipse.client.handbook` — Handbook 2.0 ("Ledger of the Drowned", see "Handbook 2.0"): `HandbookScreen` + `tabs/*`, `GlitchText`, `EclipseWidget`; opened via J / artifact right-click.
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.

@@ -42,6 +42,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CGoalProgressPayload.TYPE, S2CGoalProgressPayload.STREAM_CODEC, EclipsePayloads::handleGoalProgress);
         registrar.playToClient(S2CAnnouncePayload.TYPE, S2CAnnouncePayload.STREAM_CODEC, EclipsePayloads::handleAnnounce);
         registrar.playToClient(S2CTimelinePayload.TYPE, S2CTimelinePayload.STREAM_CODEC, EclipsePayloads::handleTimeline);
+        registrar.playToClient(S2CMilestonesPayload.TYPE, S2CMilestonesPayload.STREAM_CODEC, EclipsePayloads::handleMilestones);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
@@ -159,6 +160,10 @@ public final class EclipsePayloads {
         ClientStateCache.timeline = payload.entries();
     }
 
+    private static void handleMilestones(S2CMilestonesPayload payload, IPayloadContext context) {
+        ClientStateCache.milestones = payload.entries();
+    }
+
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCutsceneLibrary(S2CCutsceneLibraryPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.replace(payload.pathsJson());
@@ -180,6 +185,7 @@ public final class EclipsePayloads {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
             PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player.server));
+            PacketDistributor.sendToPlayer(player, S2CMilestonesPayload.current());
             dev.projecteclipse.eclipse.timeline.TimelineService.syncTo(player);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
             dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);

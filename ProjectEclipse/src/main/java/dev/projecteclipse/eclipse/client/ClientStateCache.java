@@ -25,6 +25,13 @@ public final class ClientStateCache {
     public static volatile java.util.List<dev.projecteclipse.eclipse.timeline.TimelineEntry> timeline =
             java.util.List.of();
 
+    /**
+     * Altar milestone ladder (S2CMilestonesPayload; sent at login + on /eclipse reload).
+     * The handbook Rewards tab renders it; Status derives the ring max level from it.
+     */
+    public static volatile java.util.List<dev.projecteclipse.eclipse.network.S2CMilestonesPayload.Entry> milestones =
+            java.util.List.of();
+
     /** Last start-event cutscene phase received from the server; {@code null} until the event runs. */
     public static volatile dev.projecteclipse.eclipse.network.S2CCutscenePayload.Phase cutscenePhase = null;
 
