@@ -48,7 +48,7 @@ public class MapTab extends HandbookTab {
         if (alpha < 0.1F) {
             return;
         }
-        int legendHeight = 34;
+        int legendHeight = legendRows() * 12 + 4;
         int diagramHeight = height - legendHeight;
         int centerX = x + width / 2;
         int centerY = y + diagramHeight / 2 + 4;
@@ -116,27 +116,50 @@ public class MapTab extends HandbookTab {
         }
         guiGraphics.disableScissor();
 
-        renderLegend(guiGraphics, y + height - legendHeight + 6, alpha);
+        renderLegend(guiGraphics, y + height - legendHeight + 4, alpha);
     }
 
+    private static final int[] LEGEND_COLORS = {RING_COLOR_UNLOCKED, RING_COLOR_FUTURE, BORDER_COLOR, 0xFFFFFF};
+    private static final String[] LEGEND_KEYS = {
+            "gui.eclipse.handbook.map.legend.unlocked",
+            "gui.eclipse.handbook.map.legend.sealed",
+            "gui.eclipse.handbook.map.legend.border",
+            "gui.eclipse.handbook.map.legend.spawn"};
+
+    private int legendEntryWidth(int index) {
+        return 9 + font.width(Component.translatable(LEGEND_KEYS[index])) + 10;
+    }
+
+    /** Rows the flow-wrapped legend needs at the current page width (localization-safe). */
+    private int legendRows() {
+        int rows = 1;
+        int lineX = 0;
+        for (int i = 0; i < LEGEND_KEYS.length; i++) {
+            int entryWidth = legendEntryWidth(i);
+            if (lineX > 0 && lineX + entryWidth > width) {
+                rows++;
+                lineX = 0;
+            }
+            lineX += entryWidth;
+        }
+        return rows;
+    }
+
+    /** Legend entries flow left-to-right and wrap so they never clip at the page edge. */
     private void renderLegend(GuiGraphics guiGraphics, int legendY, float alpha) {
         int lineX = x;
-        lineX = legendEntry(guiGraphics, lineX, legendY, RING_COLOR_UNLOCKED,
-                "gui.eclipse.handbook.map.legend.unlocked", alpha);
-        lineX = legendEntry(guiGraphics, lineX, legendY, RING_COLOR_FUTURE,
-                "gui.eclipse.handbook.map.legend.sealed", alpha);
-        int secondY = legendY + 12;
-        lineX = x;
-        lineX = legendEntry(guiGraphics, lineX, secondY, BORDER_COLOR,
-                "gui.eclipse.handbook.map.legend.border", alpha);
-        legendEntry(guiGraphics, lineX, secondY, 0xFFFFFF, "gui.eclipse.handbook.map.legend.spawn", alpha);
-    }
-
-    private int legendEntry(GuiGraphics guiGraphics, int entryX, int entryY, int color, String key, float alpha) {
-        guiGraphics.fill(entryX, entryY + 2, entryX + 6, entryY + 8, withAlpha(color, alpha));
-        Component label = Component.translatable(key);
-        guiGraphics.drawString(font, label, entryX + 9, entryY, withAlpha(DIM_COLOR, alpha));
-        return entryX + 9 + font.width(label) + 10;
+        int lineY = legendY;
+        for (int i = 0; i < LEGEND_KEYS.length; i++) {
+            int entryWidth = legendEntryWidth(i);
+            if (lineX > x && lineX + entryWidth > x + width) {
+                lineX = x;
+                lineY += 12;
+            }
+            guiGraphics.fill(lineX, lineY + 2, lineX + 6, lineY + 8, withAlpha(LEGEND_COLORS[i], alpha));
+            guiGraphics.drawString(font, Component.translatable(LEGEND_KEYS[i]), lineX + 9, lineY,
+                    withAlpha(DIM_COLOR, alpha));
+            lineX += entryWidth;
+        }
     }
 
     /** Dotted circle outline; {@code dashed} skips every other segment (soft border style). */

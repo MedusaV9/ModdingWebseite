@@ -162,7 +162,9 @@ public class StatusTab extends HandbookTab {
         guiGraphics.drawCenteredString(font, label, (int) cx, (int) cy - 4, withAlpha(TEXT_COLOR, alpha));
         guiGraphics.pose().popPose();
 
-        guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.artifact.altar", level),
+        // Short sidebar label — the v1 "Altar Progress: Level %s" is too wide for the
+        // ring column and would overlap the goal list.
+        guiGraphics.drawCenteredString(font, Component.translatable("sidebar.eclipse.altar", level),
                 (int) cx, ringY + RING_SIZE + 4, withAlpha(DIM_COLOR, alpha));
     }
 

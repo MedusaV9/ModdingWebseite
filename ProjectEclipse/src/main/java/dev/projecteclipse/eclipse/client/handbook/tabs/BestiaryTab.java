@@ -35,8 +35,9 @@ public class BestiaryTab extends HandbookTab {
             new Creature("herald", 7),
             new Creature("ferryman", 14));
 
-    private static final int COLUMNS = 2;
     private static final int CARD_GAP = 4;
+    /** Two card columns need at least this much content width; below it, one column. */
+    private static final int TWO_COLUMN_MIN_WIDTH = 310;
 
     private double scrollAmount;
 
@@ -45,20 +46,30 @@ public class BestiaryTab extends HandbookTab {
         return "bestiary";
     }
 
+    /** One column on narrow pages so name/lore text has room; two on wide screens. */
+    private int columns() {
+        return width < TWO_COLUMN_MIN_WIDTH ? 1 : 2;
+    }
+
+    private int cardHeight() {
+        return Math.max(52, (height - 2 * CARD_GAP) / 3);
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, float alpha) {
         if (alpha < 0.1F) {
             return;
         }
         int day = ClientStateCache.day;
-        int cardWidth = (width - CARD_GAP) / COLUMNS;
-        int cardHeight = Math.max(52, (height - 2 * CARD_GAP) / 3);
+        int columns = columns();
+        int cardWidth = (width - (columns - 1) * CARD_GAP) / columns;
+        int cardHeight = cardHeight();
 
         guiGraphics.enableScissor(x, y, x + width, y + height);
         for (int i = 0; i < CREATURES.size(); i++) {
             Creature creature = CREATURES.get(i);
-            int cardX = x + (i % COLUMNS) * (cardWidth + CARD_GAP);
-            int cardY = y + (i / COLUMNS) * (cardHeight + CARD_GAP) - (int) scrollAmount;
+            int cardX = x + (i % columns) * (cardWidth + CARD_GAP);
+            int cardY = y + (i / columns) * (cardHeight + CARD_GAP) - (int) scrollAmount;
             if (cardY > y - cardHeight && cardY < y + height) {
                 renderCard(guiGraphics, creature, i, day >= creature.introDay(), cardX, cardY,
                         cardWidth, cardHeight, alpha);
@@ -83,6 +94,8 @@ public class BestiaryTab extends HandbookTab {
         int textX = cardX + silhouetteSize + 10;
         int textWidth = cardX + cardWidth - textX - 4;
         int textY = cardY + 4;
+        // Hard-clip to the card so long names/labels never bleed into the neighbor.
+        guiGraphics.enableScissor(cardX + 1, cardY + 1, cardX + cardWidth - 1, cardY + cardHeight - 1);
         if (unlocked) {
             guiGraphics.drawString(font, Component.translatable("bestiary.eclipse." + creature.id() + ".name"),
                     textX, textY, withAlpha(ACCENT_COLOR, alpha));
@@ -113,6 +126,7 @@ public class BestiaryTab extends HandbookTab {
                 textY += 9;
             }
         }
+        guiGraphics.disableScissor();
     }
 
     /**
@@ -200,9 +214,9 @@ public class BestiaryTab extends HandbookTab {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollXDelta, double scrollYDelta) {
         if (inRect(mouseX, mouseY)) {
-            int rows = (CREATURES.size() + COLUMNS - 1) / COLUMNS;
-            int cardHeight = Math.max(52, (height - 2 * CARD_GAP) / 3);
-            double max = Math.max(0, rows * (cardHeight + CARD_GAP) - height);
+            int columns = columns();
+            int rows = (CREATURES.size() + columns - 1) / columns;
+            double max = Math.max(0, rows * (cardHeight() + CARD_GAP) - height);
             scrollAmount = Mth.clamp(scrollAmount - scrollYDelta * 16.0D, 0.0D, max);
             return true;
         }
