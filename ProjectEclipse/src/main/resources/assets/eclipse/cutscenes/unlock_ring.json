@@ -1,0 +1,24 @@
+{
+  "id": "unlock_ring",
+  "enabled": true,
+  "allowSkip": true,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 200,
+  "keyframes": [
+    { "t": 0.0, "pos": [-44.0, 26.0, 0.0], "yaw": -90, "pitch": 28, "roll": 0, "fov": 66, "easing": "easeInOutSine" },
+    { "t": 0.35, "pos": [0.0, 30.0, 46.0], "yaw": 180, "pitch": 30, "roll": 2, "fov": 60, "easing": "easeInOutSine" },
+    { "t": 0.7, "pos": [44.0, 26.0, 0.0], "yaw": 90, "pitch": 28, "roll": -2, "fov": 60, "easing": "easeInOutSine" },
+    { "t": 1.0, "pos": [10.0, 42.0, -40.0], "yaw": 12, "pitch": 44, "roll": 0, "fov": 70, "easing": "easeOutCubic" }
+  ],
+  "events": [
+    { "t": 0.05, "type": "sound", "id": "minecraft:block.beacon.activate" }
+  ],
+  "params": {
+    "_comment": "Orbital template for stage-growth unlocks; the play payload supplies the anchor position (nearest new ring edge). Keyframe positions are offsets from that anchor.",
+    "orbitRadius": 45
+  }
+}

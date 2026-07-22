@@ -26,6 +26,16 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.submerge")));
 
+    /**
+     * One-shot cue at the end of the intro rise / finale return camera paths (referenced by
+     * the default cutscene JSONs). Mapped in {@code sounds.json} to the submerge recording at
+     * a higher pitch until dedicated audio is dropped in.
+     */
+    public static final Supplier<SoundEvent> EVENT_EMERGE = SOUNDS.register(
+            "event.emerge",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.emerge")));
+
     /** Glass-crack cue played locally when a permanent heart shatters after respawn. */
     public static final Supplier<SoundEvent> UI_HEART_SHATTER = SOUNDS.register(
             "ui.heart_shatter",

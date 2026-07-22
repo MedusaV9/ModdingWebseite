@@ -17,6 +17,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -45,6 +46,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_GROWTH_CURSOR = "growthCursor";
     private static final String TAG_SANCTUM_BUILT = "sanctumBuilt";
     private static final String TAG_SANCTUM_ALTAR_POS = "sanctumAltarPos";
+    private static final String TAG_DISABLED_CUTSCENES = "disabledCutscenes";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -62,6 +64,7 @@ public final class EclipseWorldState extends SavedData {
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
     private final List<UUID> oarEntities = new ArrayList<>();
+    private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
 
@@ -100,6 +103,9 @@ public final class EclipseWorldState extends SavedData {
         }
         for (Tag entry : tag.getList(TAG_FORCE_VOICE_MUTED, Tag.TAG_INT_ARRAY)) {
             state.forceVoiceMuted.add(NbtUtils.loadUUID(entry));
+        }
+        for (Tag entry : tag.getList(TAG_DISABLED_CUTSCENES, Tag.TAG_STRING)) {
+            state.disabledCutscenes.add(entry.getAsString());
         }
         return state;
     }
@@ -142,6 +148,12 @@ public final class EclipseWorldState extends SavedData {
             mutedList.add(NbtUtils.createUUID(uuid));
         }
         tag.put(TAG_FORCE_VOICE_MUTED, mutedList);
+
+        ListTag disabledCutsceneList = new ListTag();
+        for (String id : this.disabledCutscenes) {
+            disabledCutsceneList.add(StringTag.valueOf(id));
+        }
+        tag.put(TAG_DISABLED_CUTSCENES, disabledCutsceneList);
         return tag;
     }
 
@@ -339,6 +351,26 @@ public final class EclipseWorldState extends SavedData {
         this.milestoneProgress.put(key, updated);
         setDirty();
         return updated;
+    }
+
+    // --- disabled cutscenes (runtime toggle behind /eclipse cutscene enable|disable) ---
+
+    /** Path ids whose playback is disabled in this world (they complete instantly instead). */
+    public Set<String> getDisabledCutscenes() {
+        return Collections.unmodifiableSet(this.disabledCutscenes);
+    }
+
+    public boolean isCutsceneDisabled(String pathId) {
+        return this.disabledCutscenes.contains(pathId);
+    }
+
+    /** Adds/removes a path id from the disabled set; returns whether anything changed. */
+    public boolean setCutsceneDisabled(String pathId, boolean disabled) {
+        boolean changed = disabled ? this.disabledCutscenes.add(pathId) : this.disabledCutscenes.remove(pathId);
+        if (changed) {
+            setDirty();
+        }
+        return changed;
     }
 
     // --- force voice muted (used by the voice worker) ---

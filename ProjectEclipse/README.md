@@ -56,13 +56,16 @@ Stable public surface of the persistent data core. Later workers should depend o
 
 ### Attachments — `dev.projecteclipse.eclipse.registry.EclipseAttachments`
 
-Player data attachments (all persisted, all `copyOnDeath()`):
+Player data attachments (persisted + `copyOnDeath()` unless noted):
 
 ```java
 public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS;
 public static final Supplier<AttachmentType<Integer>> LIVES;               // permanent hearts; "eclipse:lives", default 5, Codec.INT
 public static final Supplier<AttachmentType<Long>>    FIRST_OVERWORLD_JOIN; // "eclipse:first_overworld_join", default 0L (= never), Codec.LONG
 public static final Supplier<AttachmentType<Boolean>> BANNED;              // "eclipse:banned", default false, Codec.BOOL
+public static final Supplier<AttachmentType<CutsceneLock>> CUTSCENE_LOCK;  // "eclipse:cutscene_lock" — TRANSIENT (not serialized,
+                                                                           // no copyOnDeath): restart/relog/death always unfreezes.
+                                                                           // Only cutscene.FreezeService touches it.
 public static void register(IEventBus modEventBus);
 ```
 
@@ -103,6 +106,9 @@ public long addMilestoneProgress(String key, long delta);     // returns new val
 
 public Set<UUID> getForceVoiceMuted();        public boolean isForceVoiceMuted(UUID playerId); // for the voice worker
 public void addForceVoiceMuted(UUID playerId); public void removeForceVoiceMuted(UUID playerId);
+
+public Set<String> getDisabledCutscenes();    public boolean isCutsceneDisabled(String pathId); // runtime cutscene toggle
+public boolean setCutsceneDisabled(String pathId, boolean disabled);   // behind /eclipse cutscene enable|disable
 ```
 
 ### Voice mute — `dev.projecteclipse.eclipse.voice.VoiceMuteApi`
@@ -236,6 +242,15 @@ public record S2CStagePayload(String dim, int stage, int radius, boolean animati
 // Committed world stage of one disc dimension ("overworld"/"nether"); sent per-dimension on
 // login and broadcast on every stage commit / sweep completion. Client handler writes
 // ClientStateCache.stage*/stageRadius*/stageAnimating* (volatile).
+public record S2CCutsceneLibraryPayload(Map<String, String> pathsJson) implements CustomPacketPayload; // id "eclipse:cutscene_library"
+// Full camera-path library as raw JSON keyed by path id; sent at login and after
+// reloadpaths/editor writes. Client re-parses via cutscene.CutscenePath.parse.
+public record S2CCutscenePlayPayload(String id, boolean allowSkip, Optional<Vec3> anchor) implements CustomPacketPayload; // id "eclipse:cutscene_play"
+// Start playing a synced path; empty id = STOP sentinel (abort / granted skip). anchor
+// overrides the world-anchor origin (e.g. unlock_ring's ring edge).
+public record C2SCutsceneStatePayload(String id, State state) implements CustomPacketPayload; // id "eclipse:cutscene_state"
+// C2SCutsceneStatePayload.State: enum { STARTED, FINISHED, SKIP_REQUEST, SKIPPED } — playback
+// ACKs + skip requests, validated/handled by cutscene.CutsceneService.handleClientState.
 // all expose: public static final CustomPacketPayload.Type<...> TYPE;
 //             public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
 
@@ -243,6 +258,63 @@ public final class EclipsePayloads {
     public static void register(IEventBus modEventBus); // wires mod-bus payload registration + game-bus login sync
 }
 ```
+
+### Cutscene engine — `dev.projecteclipse.eclipse.cutscene`
+
+Server-authoritative camera cutscenes (`docs/ideas/05_systems.md` §1): the server owns who is
+watching what plus the freeze; the client owns the camera flight and ACKs
+`STARTED/FINISHED/SKIPPED` back. Camera paths live in `config/eclipse/cutscenes/<id>.json`
+(schema: `id, enabled, allowSkip, interpolation catmullrom|bezier, anchor world|player,
+dimension, letterbox, hideHud, durationTicks, keyframes[t,pos,yaw,pitch,roll,fov,easing],
+events[t,type,id], params`). Four bundled defaults are copied out of the jar on first run:
+`intro_submerge` (limbo flyaround), `intro_rise` (overworld, anchor `player`), `unlock_ring`
+(orbital template, anchor `world`, per-play anchor = ring edge), `finale_return` (reverse
+intro, W12).
+
+```java
+public final class CutscenePaths {                       // path library (server)
+    public static void reload();                         // re-scan config dir, copy bundled defaults first
+    @Nullable public static CutscenePath get(String id);
+    public static Collection<CutscenePath> all();        // file order
+    public static Map<String, String> rawJsonById();     // library-sync payload body
+    public static boolean save(CutscenePath path);       // editor writes; caller re-syncs clients
+}
+
+public final class CutsceneService {                     // orchestration (server, game bus)
+    public static final int WATCHDOG_MARGIN_TICKS = 100; // freeze TTL & session deadline = durationTicks + 100
+    public static int play(String id, Collection<ServerPlayer> players);
+    public static int play(String id, Collection<ServerPlayer> players, @Nullable Vec3 anchor,
+            @Nullable Runnable onAllFinished);           // callback runs once all watchers ACK/watchdog/logout;
+                                                         // missing/disabled path or zero players -> runs instantly
+    public static boolean preview(String id, ServerPlayer player); // play payload only, NO freeze
+    public static int abort(Collection<ServerPlayer> players);     // unfreeze + client STOP sentinel
+    @Nullable public static String activePathId(ServerPlayer player);
+    public static boolean isEnabled(MinecraftServer server, CutscenePath path); // JSON flag && !world disabled set
+    public static void syncLibraryTo(ServerPlayer player);         // sent automatically at login
+    public static void syncLibraryToAll(MinecraftServer server);
+    public static void handleClientState(C2SCutsceneStatePayload payload, ServerPlayer player);
+}
+
+public final class FreezeService {                       // server-authoritative freeze + invuln (game bus)
+    public static void freeze(ServerPlayer player, int ttlTicks);  // W7 border physics + W14 commands call these
+    public static void freeze(ServerPlayer player, int ttlTicks, boolean survivesDimensionChange, int graceTicks);
+    public static void unfreeze(ServerPlayer player);
+    public static boolean isFrozen(ServerPlayer player);
+    public static void reanchorWithGrace(ServerPlayer player, int graceTicks); // after scripted teleports/launches
+    public static List<String> recentWatchdogEvents();   // ring buffer of forced releases (W14 inspector)
+}
+```
+
+Freeze mechanics: transient `CUTSCENE_LOCK` attachment; `PlayerTickEvent.Pre` rubber-bands to
+the anchor (`connection.teleport` beyond 0.1 blocks) and zeroes `setDeltaMovement`; all
+cancellable `PlayerInteractEvent`s are cancelled; invulnerability = cancelling
+`LivingIncomingDamageEvent` + `LivingKnockBackEvent` (never `abilities.invulnerable`).
+Watchdog: mandatory TTL per lock; released at TTL, death, dimension change (kept for
+`intro_*` paths — the anchor then re-follows the player for a grace window), logout; stale
+locks cleared at login. `SKIP_REQUEST` is granted only if the path's `allowSkip` is true and
+the path is not disabled; disabled paths (JSON `enabled:false` or the persisted
+`disabledCutscenes` world-state set) complete instantly server-side so timelines never
+softlock.
 
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
@@ -307,9 +379,10 @@ t=100 SUBMERGE + WAVES; t=140 players in Limbo rise out of carved pockets at ove
 t=150 pockets refill; t=160 EMERGE, `startEventDone=true`, `first_overworld_join` stamped if unset.
 
 Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, also the limbo biome's
-`ambient_sound`), `EVENT_SUBMERGE` (`eclipse:event.submerge`), and the heart HUD's
-`UI_HEART_SHATTER` (`eclipse:ui.heart_shatter`); all currently ship tiny silent placeholder OGGs
-under `assets/eclipse/sounds/`.
+`ambient_sound`), `EVENT_SUBMERGE` (`eclipse:event.submerge`), `EVENT_EMERGE`
+(`eclipse:event.emerge`, cutscene-path end cue — currently the submerge OGG re-pitched in
+`sounds.json`), and the heart HUD's `UI_HEART_SHATTER` (`eclipse:ui.heart_shatter`); all
+currently ship tiny silent placeholder OGGs under `assets/eclipse/sounds/`.
 
 ### Disc worldgen — `dev.projecteclipse.eclipse.worldgen`
 

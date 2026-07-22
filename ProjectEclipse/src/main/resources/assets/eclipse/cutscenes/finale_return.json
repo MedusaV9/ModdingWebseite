@@ -1,0 +1,20 @@
+{
+  "id": "finale_return",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "player",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 200,
+  "keyframes": [
+    { "t": 0.0, "pos": [0.0, 26.0, -18.0], "yaw": 0, "pitch": 48, "roll": 0, "fov": 66, "easing": "easeOutCubic" },
+    { "t": 0.45, "pos": [12.0, 12.0, -12.0], "yaw": -30, "pitch": 24, "roll": 3, "fov": 62, "easing": "easeInOutCubic" },
+    { "t": 0.75, "pos": [-5.0, 5.0, -7.0], "yaw": 22, "pitch": 10, "roll": -1, "fov": 66, "easing": "easeInOutCubic" },
+    { "t": 1.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "easeInCubic" }
+  ],
+  "events": [
+    { "t": 0.85, "type": "sound", "id": "eclipse:event.emerge" }
+  ]
+}

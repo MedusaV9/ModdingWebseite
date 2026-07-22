@@ -35,8 +35,11 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CQuasarPayload.TYPE, S2CQuasarPayload.STREAM_CODEC, EclipsePayloads::handleQuasar);
         registrar.playToClient(S2CStagePayload.TYPE, S2CStagePayload.STREAM_CODEC, EclipsePayloads::handleStage);
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
+        registrar.playToClient(S2CCutsceneLibraryPayload.TYPE, S2CCutsceneLibraryPayload.STREAM_CODEC, EclipsePayloads::handleCutsceneLibrary);
+        registrar.playToClient(S2CCutscenePlayPayload.TYPE, S2CCutscenePlayPayload.STREAM_CODEC, EclipsePayloads::handleCutscenePlay);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
+        registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
     }
 
     /**
@@ -110,10 +113,28 @@ public final class EclipsePayloads {
         }
     }
 
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleCutsceneLibrary(S2CCutsceneLibraryPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.replace(payload.pathsJson());
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleCutscenePlay(S2CCutscenePlayPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.handlePlay(payload);
+    }
+
+    /** Cutscene ACKs / skip requests; validation lives in {@code cutscene.CutsceneService}. */
+    private static void handleCutsceneState(C2SCutsceneStatePayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.cutscene.CutsceneService.handleClientState(payload, player);
+        }
+    }
+
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
+            dev.projecteclipse.eclipse.cutscene.CutsceneService.syncLibraryTo(player);
         }
     }
 }

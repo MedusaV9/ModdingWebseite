@@ -12,6 +12,14 @@
       "eclipse:event/submerge"
     ]
   },
+  "event.emerge": {
+    "sounds": [
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 1.4
+      }
+    ]
+  },
   "ui.heart_shatter": {
     "subtitle": "subtitles.eclipse.ui.heart_shatter",
     "sounds": [

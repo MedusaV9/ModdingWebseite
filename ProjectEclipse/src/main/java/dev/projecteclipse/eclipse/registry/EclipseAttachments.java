@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.mojang.serialization.Codec;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.cutscene.CutsceneLock;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -29,6 +30,15 @@ public final class EclipseAttachments {
     public static final Supplier<AttachmentType<Boolean>> BANNED = ATTACHMENTS.register(
             "banned",
             () -> AttachmentType.builder(() -> false).serialize(Codec.BOOL).copyOnDeath().build());
+
+    /**
+     * Cutscene/unlock freeze lock — deliberately TRANSIENT: no {@code serialize}, no
+     * {@code copyOnDeath}, so a restart, relog or death can never leave a player frozen.
+     * Only {@code cutscene.FreezeService} reads or writes it.
+     */
+    public static final Supplier<AttachmentType<CutsceneLock>> CUTSCENE_LOCK = ATTACHMENTS.register(
+            "cutscene_lock",
+            () -> AttachmentType.builder(CutsceneLock::new).build());
 
     private EclipseAttachments() {}
 
