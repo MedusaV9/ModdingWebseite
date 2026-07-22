@@ -71,6 +71,10 @@ public final class EclipsePayloads {
 
     private static void handleCutscene(S2CCutscenePayload payload, IPayloadContext context) {
         ClientStateCache.cutscenePhase = payload.phase();
+        if (payload.phase() == S2CCutscenePayload.Phase.SHAKE) {
+            // W4 contract: each SHAKE receipt is one ~2 s camera-shake impulse (fusion rumble).
+            dev.projecteclipse.eclipse.cutscene.client.CameraDirector.addShakeImpulse();
+        }
     }
 
     private static void handleStage(S2CStagePayload payload, IPayloadContext context) {
@@ -120,7 +124,7 @@ public final class EclipsePayloads {
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCutscenePlay(S2CCutscenePlayPayload payload, IPayloadContext context) {
-        dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.handlePlay(payload);
+        dev.projecteclipse.eclipse.cutscene.client.CameraDirector.handlePlay(payload);
     }
 
     /** Cutscene ACKs / skip requests; validation lives in {@code cutscene.CutsceneService}. */

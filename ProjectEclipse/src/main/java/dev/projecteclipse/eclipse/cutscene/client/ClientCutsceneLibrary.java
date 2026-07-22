@@ -8,9 +8,6 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
-import dev.projecteclipse.eclipse.network.C2SCutsceneStatePayload;
-import dev.projecteclipse.eclipse.network.S2CCutscenePlayPayload;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Client-side cache of the server-synced cutscene path library
@@ -42,19 +39,5 @@ public final class ClientCutsceneLibrary {
     @Nullable
     public static CutscenePath get(String id) {
         return paths.get(id);
-    }
-
-    /**
-     * {@code S2CCutscenePlayPayload} entry point. Until the camera director lands this ACKs
-     * {@code FINISHED} instantly (same degradation as a missing path), so the server-side
-     * freeze always releases and timelines never wait on a client that cannot render the shot.
-     */
-    public static void handlePlay(S2CCutscenePlayPayload payload) {
-        if (payload.isStop()) {
-            return;
-        }
-        EclipseMod.LOGGER.info("Cutscene '{}' requested; no camera director active — ACK FINISHED", payload.id());
-        PacketDistributor.sendToServer(
-                new C2SCutsceneStatePayload(payload.id(), C2SCutsceneStatePayload.State.FINISHED));
     }
 }

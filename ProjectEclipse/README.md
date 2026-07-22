@@ -316,6 +316,24 @@ the path is not disabled; disabled paths (JSON `enabled:false` or the persisted
 `disabledCutscenes` world-state set) complete instantly server-side so timelines never
 softlock.
 
+Client side (`cutscene.client`, all `Dist.CLIENT`): `ClientCutsceneLibrary` caches the synced
+path JSON; `CameraDirector` evaluates the active path per render frame — position via
+Catmull-Rom (default) or damped-tangent cubic Hermite (`"bezier"`), orientation via
+quaternion slerp of yaw/pitch/roll, per-keyframe Veil `Easing`, FOV via
+`ViewportEvent.ComputeFov` — and overrides the camera through `client.mixin.CameraMixin`
+(`@Inject` at `Camera#setup` TAIL calling the AT-widened `setPosition(Vec3)` /
+`setRotation(yaw, pitch, roll)`; `ViewportEvent.ComputeCameraAngles` re-applies
+yaw/pitch/roll as fallback). During a flight the camera type switches to
+`THIRD_PERSON_BACK` (own body in frame) and is restored after. `LetterboxLayer` (GUI layer
+above all) eases cinematic bars in/out, shows the SPACE skip hint when allowed, and cancels
+all non-whitelisted HUD layers via `RenderGuiLayerEvent.Pre` while `hideHud` is active
+(whitelist: letterbox, heart burst, wave overlay — wired in `EclipseGuiLayers`).
+`CutsceneInput` zeroes movement (`MovementInputUpdateEvent`), cancels clicks/interactions,
+and turns ESC (pause-screen suppression) / Space into `SKIP_REQUEST`s. Paths targeting a
+different dimension than the client's ACK `FINISHED` instantly. `CameraDirector.addShakeImpulse()`
+is the W4 `SHAKE` contract: one ~2 s decaying position+roll noise impulse per receipt,
+applied during flights and over the normal gameplay camera alike.
+
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
 `LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
@@ -374,9 +392,14 @@ public final class StartEventCutscene {
 }
 ```
 
-Timeline (server tick counter): t=0 TILT payload + oar keel-over + `eclipse:event.submerge` to all;
-t=100 SUBMERGE + WAVES; t=140 players in Limbo rise out of carved pockets at overworld spawn;
-t=150 pockets refill; t=160 EMERGE, `startEventDone=true`, `first_overworld_join` stamped if unset.
+Timeline (server tick counter): t=0 TILT payload + oar keel-over + `eclipse:event.submerge` to all
++ `CutsceneService.play("intro_submerge", all)` (camera flight + freeze; limbo-scoped);
+t=100 SUBMERGE + WAVES; t=140 players in Limbo rise out of carved pockets at overworld spawn,
+then `intro_rise` (anchor `player`) chains for exactly those players with a freeze grace
+re-anchor covering the launch; t=150 pockets refill; t=160 EMERGE, `startEventDone=true`,
+`first_overworld_join` stamped if unset, intro fusion starts (the `intro_rise` flight keeps
+running into the fusion rumble). The v1 wave overlay renders through the flights (whitelisted
+from HUD suppression).
 
 Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, also the limbo biome's
 `ambient_sound`), `EVENT_SUBMERGE` (`eclipse:event.submerge`), `EVENT_EMERGE`
@@ -732,7 +755,8 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
-- `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.
+- `dev.projecteclipse.eclipse.cutscene` / `cutscene.client` — the cutscene engine (see "Cutscene engine"): server path library + orchestration + freeze, and the client camera director/letterbox/input swallow.
+- `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`, plus `Camera.setPosition(Vec3)`/`Camera.setRotation(yaw, pitch, roll)` for the cutscene `CameraDirector`; `validateAccessTransformers = true` is enabled in `build.gradle`.
 
 ## Known limitations
 

@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.network.S2CCutscenePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -32,19 +34,30 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p>Tick timeline (driven by a {@link ServerTickEvent.Post} counter, no threads):</p>
  * <ul>
  *   <li>t=0 — broadcast {@code TILT}, keel the ghost ship's oars over (interpolated), play
- *       {@code eclipse:event.submerge} to every online player.</li>
+ *       {@code eclipse:event.submerge} to every online player, and start the
+ *       {@code intro_submerge} camera path for everyone via
+ *       {@link CutsceneService#play} (freeze + client flight; players outside limbo
+ *       ACK-finish instantly because the path is limbo-scoped).</li>
  *   <li>t=100 — broadcast {@code SUBMERGE} then {@code WAVES}, plus one
  *       {@code eclipse:cutscene_veil} Quasar burst per limbo player (sent to limbo).</li>
  *   <li>t=140 — teleport every player currently in Limbo to the overworld shared spawn,
  *       each into a temporary carved 1x2 air pocket ~2 blocks under the surface, with
- *       upward velocity so they visually rise out of the ground.</li>
+ *       upward velocity so they visually rise out of the ground; chain the
+ *       {@code intro_rise} camera path (anchor {@code player}) for exactly those players
+ *       and re-anchor their freeze with a grace window so the rubber band follows the
+ *       launch instead of fighting it.</li>
  *   <li>t=150 — refill the carved pockets with their previous blocks.</li>
  *   <li>t=160 — broadcast {@code EMERGE}, set {@code startEventDone}, stamp each teleported
  *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset,
  *       broadcast one {@code eclipse:cutscene_veil} Quasar burst per emerged player, and
  *       start the intro fusion ({@link FusionSequence#maybeStartIntroFusion} — overworld
- *       stage 0 → 1, guarded to run once per world).</li>
+ *       stage 0 → 1, guarded to run once per world). The {@code intro_rise} flight keeps
+ *       running into the fusion rumble and releases on its own FINISHED ACK/watchdog.</li>
  * </ul>
+ *
+ * <p>The v1 {@code S2CCutscenePayload} phases and the client {@code WaveOverlay} are kept
+ * untouched (regression path); the camera flights are layered on top by the cutscene
+ * engine, so vanilla-client spectators still see the wave wash and the world.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class StartEventCutscene {
@@ -55,6 +68,11 @@ public final class StartEventCutscene {
     private static final int EMERGE_TICK = 160;
 
     private static final double RISE_VELOCITY = 1.2D;
+    /**
+     * Freeze-anchor grace after the rise launch: the rubber band follows the player while
+     * they shoot up and land (~2.5 s) before locking position for the rest of the flight.
+     */
+    private static final int RISE_FREEZE_GRACE_TICKS = 50;
 
     private record CarvedBlock(ServerLevel level, BlockPos pos, BlockState previous) {}
 
@@ -111,6 +129,9 @@ public final class StartEventCutscene {
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.playNotifySound(EclipseSounds.EVENT_SUBMERGE.get(), SoundSource.MASTER, 1.0F, 1.0F);
         }
+        // Camera flight on top of the v1 overlay phases. Limbo-scoped: players elsewhere
+        // ACK-finish instantly and lose their freeze right away (see CameraDirector).
+        CutsceneService.play("intro_submerge", List.copyOf(server.getPlayerList().getPlayers()));
     }
 
     /**
@@ -144,6 +165,13 @@ public final class StartEventCutscene {
             BlockPos column = spawn.offset(columnOffsetX(i), 0, columnOffsetZ(i));
             risePlayerAt(player, overworld, column);
             teleportedPlayers.add(player.getUUID());
+        }
+        // Chain the rise shot for exactly the players who crossed dimensions. play()
+        // re-freezes at their new position; the grace re-anchor then lets the rubber band
+        // follow the upward launch until they land instead of yanking them back down.
+        CutsceneService.play("intro_rise", inLimbo);
+        for (ServerPlayer player : inLimbo) {
+            FreezeService.reanchorWithGrace(player, RISE_FREEZE_GRACE_TICKS);
         }
         EclipseMod.LOGGER.info("start_event: teleported {} players from limbo to overworld spawn", inLimbo.size());
     }
