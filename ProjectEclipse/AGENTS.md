@@ -1,0 +1,15 @@
+# ProjectEclipse — Cursor Cloud dev notes
+
+**PROJECT: ECLIPSE** is a Minecraft **1.21.1 / NeoForge 21.1.238** server-event mod ("Eclipse-Core", mod id `eclipse`), an anonymous hardcore-survival psychothriller. This Gradle project lives in the `ProjectEclipse/` subdirectory of the repo (the repo root also contains an unrelated website — do not mix them). See `README.md` here for the full architecture, command list, 14-day plan, config files, and server-pack list.
+
+## Cursor Cloud specific instructions
+
+- **Java**: build/run with **Java 21** (installed system-wide). There is no system Gradle — always use the wrapper `./gradlew` from inside `ProjectEclipse/`.
+- **Build / run** (standard, documented in `README.md`): `./gradlew build`, `./gradlew runServer` (auto `--nogui`; write `run/eula.txt` `eula=true` first), `./gradlew runClient`. The **first** `./gradlew build` downloads NeoForge + the MC toolchain and can take 10–30 minutes — allow very long timeouts and do not abort it. Subsequent builds are seconds.
+- **Client runs on the VM desktop**: `runClient` opens a real Minecraft window that can be driven/inspected via the desktop (computerUse). OpenAL audio has no device here (harmless warning). This is how the title screen, purple sky, artifact menu, etc. are visually verified.
+- **Sodium + Iris (client target)**: the intended client runtime is `sodium-neoforge mc1.21.1-0.6.13` + `iris-neoforge 1.8.12+mc1.21.1`. Drop those jars into the `runClient` mods folder (`run/mods/`) to test the real shader-compatible setup. The custom purple-sun sky self-disables (returns to Iris) when a shaderpack is active via reflection (`IrisCompat`); without a shaderpack the full custom sky renders.
+- **Voice chat / gated mods are soft/optional deps** (see README "Server pack"): Simple Voice Chat, Create 6.0.10, Create: Aeronautics 1.3.0 (+ Sable 2.0.3) are installed alongside Eclipse-Core, NOT jar-in-jar (their assets are All-Rights-Reserved, and jar-in-jar mods cannot be disabled at the loader level). Progression gating is server-authoritative by namespace (`ModGate`), so the build has ZERO compile-time dependency on them.
+- **Stopping lingering game instances**: `runServer`/`runClient` leave a `net.minecraft...devlaunch.Main` JVM running that holds the world lock / GL context and RAM (~1–3 GB each). Stop them by **specific PID** (`ps -eo pid,args | grep devlaunch.Main`, then `kill <pid>`) — never blanket-kill. Gradle daemons are reusable and can stay.
+- **All UI text is de_de + en_us** in `assets/eclipse/lang/`. The mod is intended to be MANDATORY on clients (anonymity + anti-cheat rely on it).
+- **Textures**: the large "hero" assets (title background/logo/panorama, purple sun, eclipse disc, artifact menu panel) are final art; the small pixel-art item/block icons are simple programmer-art placeholders at documented paths under `src/main/resources/assets/eclipse/textures/` — drop-in replaceable byte-for-byte.
+- **No text-based tests**: verification is `./gradlew build` (compiles, strict) + `runServer` clean boot + `runClient` manual/visual checks. There is no unit-test suite.
