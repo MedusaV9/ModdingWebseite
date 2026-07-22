@@ -59,13 +59,30 @@ public final class WorldStageService {
         void onStageTerrainComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage);
     }
 
+    /**
+     * Fired on the server thread when a stage commit kicks its terrain sweep (right before
+     * {@link RingGrowthService#start}). The cutscene engine's unlock cinematics subscribe
+     * here to freeze players and play the {@code unlock_ring} shot during ANIMATED growth.
+     */
+    @FunctionalInterface
+    public interface GrowthStartListener {
+        void onStageGrowthStart(ServerLevel level, DiscProfile profile, int fromStage, int toStage,
+                boolean animate);
+    }
+
     private static final List<StageListener> LISTENERS = new CopyOnWriteArrayList<>();
+    private static final List<GrowthStartListener> GROWTH_START_LISTENERS = new CopyOnWriteArrayList<>();
 
     private WorldStageService() {}
 
     /** Registers a stage-completion listener (worker 5 structure stamping, W5 watcher statues, …). */
     public static void addListener(StageListener listener) {
         LISTENERS.add(listener);
+    }
+
+    /** Registers a growth-start listener (W6 unlock cinematics + freeze). */
+    public static void addGrowthStartListener(GrowthStartListener listener) {
+        GROWTH_START_LISTENERS.add(listener);
     }
 
     /** The disc profile driven by the given dimension, or {@code null} for non-disc dimensions. */
@@ -143,6 +160,9 @@ public final class WorldStageService {
             BorderController.setBorder(server, borderSize, animate ? 60_000L : 0L);
         }
 
+        for (GrowthStartListener listener : GROWTH_START_LISTENERS) {
+            listener.onStageGrowthStart(level, profile, fromStage, stage, animate);
+        }
         RingGrowthService.start(level, profile, fromStage, stage, animate, 0L);
         return true;
     }

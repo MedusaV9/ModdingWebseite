@@ -37,9 +37,12 @@ public final class EclipseConfig {
      * runtime ring-growth terrain sweep. {@code dayAutoAdvance} defaults to {@code false}
      * (days only change via the admin command / {@code DayScheduler.setDay}); when enabled, the day
      * advances once per real-world day at {@code dayAutoAdvanceTime} ({@code HH:mm}, server-local time).
+     * {@code cutscenesFreezeDuringUnlocks} (JSON: nested {@code "cutscenes":{"freezeDuringUnlocks"}},
+     * default true) is the dev toggle for the freeze + {@code unlock_ring} cinematic during
+     * animated ring-growth unlocks.
      */
     public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
-            int ringBlocksBudgetMs) {}
+            int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks) {}
 
     /**
      * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
@@ -108,6 +111,11 @@ public final class EclipseConfig {
     /** Per-tick nanoTime budget (ms) of the runtime ring-growth sweep (default 2, clamped >= 1). */
     public static int ringBlocksBudgetMs() {
         return Math.max(1, general().ringBlocksBudgetMs());
+    }
+
+    /** Whether animated ring-growth unlocks freeze players + play {@code unlock_ring} (default true). */
+    public static boolean freezeDuringUnlocks() {
+        return general().cutscenesFreezeDuringUnlocks();
     }
 
     /**
@@ -309,7 +317,7 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30, false, "08:00", 2);
+        return new General(30, false, "08:00", 2, true);
     }
 
     private static JsonElement generalToJson(General general) {
@@ -318,6 +326,9 @@ public final class EclipseConfig {
         obj.addProperty("dayAutoAdvance", general.dayAutoAdvance());
         obj.addProperty("dayAutoAdvanceTime", general.dayAutoAdvanceTime());
         obj.addProperty("ringBlocksBudgetMs", general.ringBlocksBudgetMs());
+        JsonObject cutscenes = new JsonObject();
+        cutscenes.addProperty("freezeDuringUnlocks", general.cutscenesFreezeDuringUnlocks());
+        obj.add("cutscenes", cutscenes);
         return obj;
     }
 
@@ -327,8 +338,12 @@ public final class EclipseConfig {
         boolean dayAutoAdvance = obj.has("dayAutoAdvance") && obj.get("dayAutoAdvance").getAsBoolean();
         String dayAutoAdvanceTime = obj.has("dayAutoAdvanceTime") ? obj.get("dayAutoAdvanceTime").getAsString() : "08:00";
         int ringBlocksBudgetMs = obj.has("ringBlocksBudgetMs") ? obj.get("ringBlocksBudgetMs").getAsInt() : 2;
+        // Pre-W6 general.json files have no "cutscenes" object — the toggle defaults to true.
+        boolean freezeDuringUnlocks = !obj.has("cutscenes")
+                || !obj.getAsJsonObject("cutscenes").has("freezeDuringUnlocks")
+                || obj.getAsJsonObject("cutscenes").get("freezeDuringUnlocks").getAsBoolean();
         return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
-                Math.max(1, ringBlocksBudgetMs));
+                Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks);
     }
 
     // --- days.json ---

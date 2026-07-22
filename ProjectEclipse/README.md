@@ -185,8 +185,8 @@ Loads `config/eclipse/{general,days,milestones,modgate,anticheat,stages}.json`; 
 
 ```java
 public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
-        int ringBlocksBudgetMs) {}
-// general.json; defaults: 30, false, "08:00", 2
+        int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks) {}
+// general.json; defaults: 30, false, "08:00", 2, true (JSON: "cutscenes":{"freezeDuringUnlocks"})
 public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
@@ -201,6 +201,7 @@ public static int graveGraceMinutes();       // non-owners may loot a grave afte
 public static boolean dayAutoAdvance();      // default false: days advance only via DayScheduler.setDay
 public static LocalTime dayAutoAdvanceTime(); // parsed "HH:mm" (server-local); falls back to 08:00
 public static int ringBlocksBudgetMs();      // per-tick nanoTime budget of the ring-growth sweep (default 2, min 1)
+public static boolean freezeDuringUnlocks(); // animated ring growth freezes players + plays unlock_ring (default true)
 public static List<DayPlan> days();          // 14 entries by default, ordered by day
 public static DayPlan day(int day);          // out-of-range days clamp to first/last plan
 public static List<Milestone> milestones();  // ordered by level
@@ -333,6 +334,13 @@ and turns ESC (pause-screen suppression) / Space into `SKIP_REQUEST`s. Paths tar
 different dimension than the client's ACK `FINISHED` instantly. `CameraDirector.addShakeImpulse()`
 is the W4 `SHAKE` contract: one ~2 s decaying position+roll noise impulse per receipt,
 applied during flights and over the normal gameplay camera alike.
+
+`UnlockCinematics` wires the engine into ring growth: on every ANIMATED stage raise
+(`WorldStageService.addGrowthStartListener`) each player in the growing dimension is frozen
+and shown `unlock_ring`, per-player anchored at the old ring-edge point nearest to them; the
+`StageListener` completion callback aborts flights that outlive the sweep. Skipped for
+instant stamps, erases, the `intro_fusion` stage (the start event owns that shot), and when
+`cutscenes.freezeDuringUnlocks` in `general.json` is `false`.
 
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
@@ -656,7 +664,18 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse stage rebuild <overworld\|nether> <n>` | Re-stamps stage `n`'s annulus with the committed terrain (repair). |
 | `/eclipse voicemute <player> on\|off` | `VoiceMuteApi.setForceMuted` (persistent administrative mute). |
 | `/eclipse tp_limbo [player]` | Teleports you (or the target) to the Limbo ghost-ship platform. |
-| `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii). |
+| `/eclipse cutscene play <id> [players]` | `CutsceneService.play` for the targets (default: everyone online). |
+| `/eclipse cutscene abort [players]` | Aborts active sessions + unfreezes (default: everyone online). |
+| `/eclipse cutscene list` | Every loaded path: duration, keyframes, anchor, interpolation, skip/disable flags. |
+| `/eclipse cutscene enable\|disable <id>` | `EclipseWorldState.setCutsceneDisabled` (disabled plays complete instantly). |
+| `/eclipse cutscene skip allow\|deny <id>` | Persists `allowSkip` into the path JSON + re-syncs the library. |
+| `/eclipse cutscene preview <id>` | Plays the shot for YOU only — no freeze, Space skips (editor loop). |
+| `/eclipse cutscene edit <id> addkeyframe [t]` | Appends your eye pos/yaw/pitch as a keyframe (auto `t` = last + 0.1). |
+| `/eclipse cutscene edit <id> removekeyframe <i>` | Deletes keyframe `i` (a path keeps ≥ 2 keyframes). |
+| `/eclipse cutscene edit <id> set roll\|fov <v>` | Mutates the LAST keyframe's roll (±180°) or fov (10–140). |
+| `/eclipse cutscene export <id>` | Prints the path's pretty JSON to the source (copy-paste for assets). |
+| `/eclipse cutscene reloadpaths` | Re-reads `config/eclipse/cutscenes/` only + re-syncs all clients. |
+| `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii) + cutscene path library re-read/re-sync. |
 | `/eclipse status` | Dumps day / altar level / border / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`

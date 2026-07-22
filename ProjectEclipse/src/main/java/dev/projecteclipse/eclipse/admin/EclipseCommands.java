@@ -6,23 +6,33 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+
+import javax.annotation.Nullable;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.snapshot.SnapshotService;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.cutscene.CutscenePath;
+import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
+import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
@@ -69,6 +79,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse stage get | set &lt;overworld|nether&gt; &lt;n&gt; [instant|animate] | rebuild &lt;dim&gt; &lt;n&gt;
  * /eclipse voicemute &lt;player&gt; on|off
  * /eclipse tp_limbo [player]
+ * /eclipse cutscene play &lt;id&gt; [players] | abort [players] | list | enable|disable &lt;id&gt;
+ *   | skip allow|deny &lt;id&gt; | preview &lt;id&gt; | reloadpaths | export &lt;id&gt;
+ *   | edit &lt;id&gt; addkeyframe [t] | edit &lt;id&gt; set roll|fov &lt;v&gt; | edit &lt;id&gt; removekeyframe &lt;i&gt;
  * /eclipse reload
  * /eclipse status
  * </pre>
@@ -77,6 +90,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class EclipseCommands {
     private static final DateTimeFormatter SNAPSHOT_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
+
+    /** Tab completion with the loaded cutscene path ids. */
+    private static final SuggestionProvider<CommandSourceStack> CUTSCENE_IDS =
+            (context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                    CutscenePaths.all().stream().map(CutscenePath::id), builder);
 
     private EclipseCommands() {}
 
@@ -164,6 +182,66 @@ public final class EclipseCommands {
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(context -> tpLimbo(context.getSource(),
                                         EntityArgument.getPlayer(context, "player")))))
+                .then(Commands.literal("cutscene")
+                        .then(Commands.literal("play")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .executes(context -> cutscenePlay(context, null))
+                                        .then(Commands.argument("players", EntityArgument.players())
+                                                .executes(context -> cutscenePlay(context,
+                                                        EntityArgument.getPlayers(context, "players"))))))
+                        .then(Commands.literal("abort")
+                                .executes(context -> cutsceneAbort(context, null))
+                                .then(Commands.argument("players", EntityArgument.players())
+                                        .executes(context -> cutsceneAbort(context,
+                                                EntityArgument.getPlayers(context, "players")))))
+                        .then(Commands.literal("list")
+                                .executes(EclipseCommands::cutsceneList))
+                        .then(Commands.literal("enable")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .executes(context -> cutsceneSetDisabled(context, false))))
+                        .then(Commands.literal("disable")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .executes(context -> cutsceneSetDisabled(context, true))))
+                        .then(Commands.literal("skip")
+                                .then(Commands.literal("allow")
+                                        .then(Commands.argument("id", StringArgumentType.word())
+                                                .suggests(CUTSCENE_IDS)
+                                                .executes(context -> cutsceneSkipPolicy(context, true))))
+                                .then(Commands.literal("deny")
+                                        .then(Commands.argument("id", StringArgumentType.word())
+                                                .suggests(CUTSCENE_IDS)
+                                                .executes(context -> cutsceneSkipPolicy(context, false)))))
+                        .then(Commands.literal("preview")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .executes(EclipseCommands::cutscenePreview)))
+                        .then(Commands.literal("reloadpaths")
+                                .executes(EclipseCommands::cutsceneReloadPaths))
+                        .then(Commands.literal("export")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .executes(EclipseCommands::cutsceneExport)))
+                        .then(Commands.literal("edit")
+                                .then(Commands.argument("id", StringArgumentType.word())
+                                        .suggests(CUTSCENE_IDS)
+                                        .then(Commands.literal("addkeyframe")
+                                                .executes(context -> cutsceneAddKeyframe(context, -1.0D))
+                                                .then(Commands.argument("t", DoubleArgumentType.doubleArg(0.0D, 1.0D))
+                                                        .executes(context -> cutsceneAddKeyframe(context,
+                                                                DoubleArgumentType.getDouble(context, "t")))))
+                                        .then(Commands.literal("removekeyframe")
+                                                .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                                        .executes(EclipseCommands::cutsceneRemoveKeyframe)))
+                                        .then(Commands.literal("set")
+                                                .then(Commands.literal("roll")
+                                                        .then(Commands.argument("value", FloatArgumentType.floatArg(-180.0F, 180.0F))
+                                                                .executes(context -> cutsceneSetLastKeyframe(context, "roll"))))
+                                                .then(Commands.literal("fov")
+                                                        .then(Commands.argument("value", FloatArgumentType.floatArg(10.0F, 140.0F))
+                                                                .executes(context -> cutsceneSetLastKeyframe(context, "fov"))))))))
                 .then(Commands.literal("reload")
                         .executes(EclipseCommands::reload))
                 .then(Commands.literal("status")
@@ -462,20 +540,265 @@ public final class EclipseCommands {
         return 1;
     }
 
+    // --- cutscene ---
+
+    /** {@code [players]} defaults to everyone online when the selector is omitted. */
+    private static Collection<ServerPlayer> cutsceneTargets(CommandSourceStack source,
+            @Nullable Collection<ServerPlayer> selected) {
+        return selected != null ? selected : List.copyOf(source.getServer().getPlayerList().getPlayers());
+    }
+
+    private static int cutscenePlay(CommandContext<CommandSourceStack> context,
+            @Nullable Collection<ServerPlayer> selected) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id
+                    + "' (see /eclipse cutscene list)"));
+            return 0;
+        }
+        if (!CutsceneService.isEnabled(source.getServer(), path)) {
+            source.sendFailure(Component.literal("Cutscene '" + id
+                    + "' is disabled — /eclipse cutscene enable " + id + " first"));
+            return 0;
+        }
+        Collection<ServerPlayer> targets = cutsceneTargets(source, selected);
+        if (targets.isEmpty()) {
+            source.sendFailure(Component.literal("No players online to play '" + id + "' for"));
+            return 0;
+        }
+        int started = CutsceneService.play(id, targets);
+        source.sendSuccess(() -> Component.literal("Playing cutscene '" + id + "' for " + started
+                + " player(s): " + path.durationTicks() + " ticks + "
+                + CutsceneService.WATCHDOG_MARGIN_TICKS + " watchdog"), false);
+        return started;
+    }
+
+    private static int cutsceneAbort(CommandContext<CommandSourceStack> context,
+            @Nullable Collection<ServerPlayer> selected) {
+        CommandSourceStack source = context.getSource();
+        int aborted = CutsceneService.abort(cutsceneTargets(source, selected));
+        if (aborted == 0) {
+            source.sendFailure(Component.literal("No active cutscene sessions among the targeted players"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Aborted " + aborted
+                + " cutscene session(s); players unfrozen"), false);
+        return aborted;
+    }
+
+    private static int cutsceneList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        Collection<CutscenePath> paths = CutscenePaths.all();
+        if (paths.isEmpty()) {
+            source.sendFailure(Component.literal("No cutscene paths loaded (config/eclipse/cutscenes/)"));
+            return 0;
+        }
+        EclipseWorldState state = EclipseWorldState.get(source.getServer());
+        source.sendSuccess(() -> Component.literal(paths.size()
+                + " cutscene path(s) in config/eclipse/cutscenes:"), false);
+        for (CutscenePath path : paths) {
+            String line = " - " + path.id() + ": " + path.durationTicks() + " ticks, "
+                    + path.keyframes().size() + " keyframes, anchor " + path.anchor()
+                    + ", " + path.interpolation() + ", " + path.dimension()
+                    + (path.allowSkip() ? ", skippable" : "")
+                    + (!path.enabled() ? " [DISABLED in json]" : "")
+                    + (state.isCutsceneDisabled(path.id()) ? " [DISABLED in world]" : "");
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return paths.size();
+    }
+
+    private static int cutsceneSetDisabled(CommandContext<CommandSourceStack> context, boolean disabled) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        if (CutscenePaths.get(id) == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        boolean changed = EclipseWorldState.get(source.getServer()).setCutsceneDisabled(id, disabled);
+        source.sendSuccess(() -> Component.literal("Cutscene '" + id + "' is now "
+                + (disabled ? "DISABLED for this world (plays complete instantly)" : "enabled for this world")
+                + (changed ? "" : " (unchanged)")), false);
+        return changed ? 1 : 0;
+    }
+
+    private static int cutsceneSkipPolicy(CommandContext<CommandSourceStack> context, boolean allow) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        if (!CutscenePaths.save(path.withAllowSkip(allow))) {
+            source.sendFailure(Component.literal("Failed to save '" + id + "' — see the server log"));
+            return 0;
+        }
+        CutsceneService.syncLibraryToAll(source.getServer());
+        source.sendSuccess(() -> Component.literal("Cutscene '" + id + "' skipping is now "
+                + (allow ? "ALLOWED" : "DENIED") + " (saved + library re-synced)"), false);
+        return 1;
+    }
+
+    private static int cutscenePreview(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        String id = StringArgumentType.getString(context, "id");
+        if (!CutsceneService.preview(id, player)) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Previewing '" + id
+                + "' (no freeze; Space requests a skip)"), false);
+        return 1;
+    }
+
+    private static int cutsceneReloadPaths(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        CutscenePaths.reload();
+        CutsceneService.syncLibraryToAll(source.getServer());
+        int count = CutscenePaths.all().size();
+        source.sendSuccess(() -> Component.literal("Cutscene path library reloaded: " + count
+                + " path(s), re-synced to all clients"), false);
+        return count;
+    }
+
+    private static int cutsceneExport(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("config/eclipse/cutscenes/" + id + ".json:"), false);
+        for (String line : path.toJsonString().split("\n")) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
+    /** Captures the operator's eye position/yaw/pitch; {@code tArg < 0} = auto (last t + 0.1). */
+    private static int cutsceneAddKeyframe(CommandContext<CommandSourceStack> context, double tArg)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        String id = StringArgumentType.getString(context, "id");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        List<CutscenePath.Keyframe> keyframes = new ArrayList<>(path.keyframes());
+        double t = tArg >= 0.0D ? tArg
+                : keyframes.isEmpty() ? 0.0D
+                        : Math.min(1.0D, keyframes.get(keyframes.size() - 1).t() + 0.1D);
+        CutscenePath.Keyframe keyframe = new CutscenePath.Keyframe(t,
+                player.getX(), player.getEyeY(), player.getZ(),
+                player.getYRot(), player.getXRot(), 0.0F, 70.0F, "easeInOutCubic");
+        keyframes.add(keyframe);
+        keyframes.sort(Comparator.comparingDouble(CutscenePath.Keyframe::t));
+        if (!CutscenePaths.save(path.withKeyframes(keyframes))) {
+            source.sendFailure(Component.literal("Failed to save '" + id + "' — see the server log"));
+            return 0;
+        }
+        CutsceneService.syncLibraryToAll(source.getServer());
+        String line = String.format(Locale.ROOT,
+                "Added keyframe #%d to '%s': t=%.2f pos %.1f %.1f %.1f yaw %.1f pitch %.1f%s",
+                keyframes.indexOf(keyframe), id, t, player.getX(), player.getEyeY(), player.getZ(),
+                player.getYRot(), player.getXRot(),
+                path.isPlayerAnchored()
+                        ? " — NOTE: player-anchored path, playback treats these as offsets"
+                        : "");
+        source.sendSuccess(() -> Component.literal(line), false);
+        return keyframes.size();
+    }
+
+    private static int cutsceneRemoveKeyframe(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        int index = IntegerArgumentType.getInteger(context, "index");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        if (index >= path.keyframes().size()) {
+            source.sendFailure(Component.literal("Keyframe index " + index + " out of range (0-"
+                    + (path.keyframes().size() - 1) + ")"));
+            return 0;
+        }
+        if (path.keyframes().size() <= 2) {
+            source.sendFailure(Component.literal("A path needs at least 2 keyframes — edit "
+                    + "config/eclipse/cutscenes/" + id + ".json directly to rebuild it"));
+            return 0;
+        }
+        List<CutscenePath.Keyframe> keyframes = new ArrayList<>(path.keyframes());
+        CutscenePath.Keyframe removed = keyframes.remove(index);
+        if (!CutscenePaths.save(path.withKeyframes(keyframes))) {
+            source.sendFailure(Component.literal("Failed to save '" + id + "' — see the server log"));
+            return 0;
+        }
+        CutsceneService.syncLibraryToAll(source.getServer());
+        String line = String.format(Locale.ROOT, "Removed keyframe #%d (t=%.2f) from '%s' (%d left)",
+                index, removed.t(), id, keyframes.size());
+        source.sendSuccess(() -> Component.literal(line), false);
+        return keyframes.size();
+    }
+
+    /** {@code edit <id> set roll|fov <v>} applies to the LAST keyframe (idea doc §3). */
+    private static int cutsceneSetLastKeyframe(CommandContext<CommandSourceStack> context, String field) {
+        CommandSourceStack source = context.getSource();
+        String id = StringArgumentType.getString(context, "id");
+        float value = FloatArgumentType.getFloat(context, "value");
+        CutscenePath path = CutscenePaths.get(id);
+        if (path == null) {
+            source.sendFailure(Component.literal("Unknown cutscene path '" + id + "'"));
+            return 0;
+        }
+        if (path.keyframes().isEmpty()) {
+            source.sendFailure(Component.literal("'" + id + "' has no keyframes to edit"));
+            return 0;
+        }
+        List<CutscenePath.Keyframe> keyframes = new ArrayList<>(path.keyframes());
+        CutscenePath.Keyframe last = keyframes.get(keyframes.size() - 1);
+        CutscenePath.Keyframe updated = "roll".equals(field)
+                ? new CutscenePath.Keyframe(last.t(), last.x(), last.y(), last.z(),
+                        last.yaw(), last.pitch(), value, last.fov(), last.easing())
+                : new CutscenePath.Keyframe(last.t(), last.x(), last.y(), last.z(),
+                        last.yaw(), last.pitch(), last.roll(), value, last.easing());
+        keyframes.set(keyframes.size() - 1, updated);
+        if (!CutscenePaths.save(path.withKeyframes(keyframes))) {
+            source.sendFailure(Component.literal("Failed to save '" + id + "' — see the server log"));
+            return 0;
+        }
+        CutsceneService.syncLibraryToAll(source.getServer());
+        String line = String.format(Locale.ROOT, "Set %s=%.1f on the last keyframe (t=%.2f) of '%s'",
+                field, value, last.t(), id);
+        source.sendSuccess(() -> Component.literal(line), false);
+        return 1;
+    }
+
     // --- reload ---
 
     private static int reload(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();
         EclipseConfig.reload();
+        CutscenePaths.reload();
         // Goals/unlocks may have changed; push the fresh day state to every client.
         EclipseWorldState state = EclipseWorldState.get(server);
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
                 EclipseConfig.day(state.getDay()).goals()));
+        // Same for the cutscene path library (edited JSONs apply immediately).
+        CutsceneService.syncLibraryToAll(server);
         source.sendSuccess(() -> Component.literal("Eclipse config reloaded: "
                 + EclipseConfig.days().size() + " days, " + EclipseConfig.milestones().size() + " milestones, "
                 + EclipseConfig.modGate().gatedNamespaces().size() + " gated namespaces, "
-                + EclipseConfig.antiCheat().blockedModIdSubstrings().size() + " anti-cheat entries"), false);
+                + EclipseConfig.antiCheat().blockedModIdSubstrings().size() + " anti-cheat entries, "
+                + CutscenePaths.all().size() + " cutscene paths"), false);
         return 1;
     }
 
