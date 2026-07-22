@@ -1,31 +1,25 @@
 package dev.projecteclipse.eclipse.ritual;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.joml.Vector3f;
-
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Sends the revive ritual's vertical beam — end-rod plus purple dust particle
- * columns from the altar up to the world's max build height (~y 320) — to every
- * player within {@value #VIEW_RANGE} blocks. Uses per-player
- * {@link ServerLevel#sendParticles(ServerPlayer, net.minecraft.core.particles.ParticleOptions, boolean, double, double, double, int, double, double, double, double)}
- * (packet-based, so Iris/Sodium-safe: no custom rendering involved).
+ * Sends the revive ritual's vertical beam to every player within {@value #VIEW_RANGE} blocks.
+ *
+ * <p>v2: one {@link S2CQuasarPayload} per receiver per burst spawns the
+ * {@code eclipse:altar_beam} Quasar emitter (violet additive column shooting upward from the
+ * altar) instead of the v1 END_ROD/dust {@code sendParticles} column — far fewer packets
+ * (1 instead of ~160 per receiver per burst). The client handler
+ * ({@code veilfx.QuasarSpawner#spawnOrFallback}) falls back to a small vanilla END_ROD/PORTAL
+ * burst if Quasar is unavailable, so the ritual cue is never lost.</p>
  */
 public final class BeamEmitter {
     /** Players within this many blocks of the altar receive the beam packets. */
     public static final double VIEW_RANGE = 512.0D;
-    /** Vertical spacing between particle bursts in the column. */
-    private static final int COLUMN_STEP = 4;
-
-    private static final DustParticleOptions PURPLE_DUST =
-            new DustParticleOptions(new Vector3f(0.55F, 0.15F, 0.85F), 1.6F);
 
     private BeamEmitter() {}
 
@@ -36,22 +30,10 @@ public final class BeamEmitter {
         double z = altarPos.getZ() + 0.5D;
         double rangeSqr = VIEW_RANGE * VIEW_RANGE;
 
-        List<ServerPlayer> receivers = new ArrayList<>();
+        S2CQuasarPayload payload = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM, new Vec3(x, y0 + 1.0D, z));
         for (ServerPlayer player : level.players()) {
             if (player.position().distanceToSqr(x, y0, z) <= rangeSqr) {
-                receivers.add(player);
-            }
-        }
-        if (receivers.isEmpty()) {
-            return;
-        }
-        int top = level.getMaxBuildHeight();
-        for (int y = altarPos.getY() + 1; y <= top; y += COLUMN_STEP) {
-            for (ServerPlayer player : receivers) {
-                level.sendParticles(player, ParticleTypes.END_ROD, true,
-                        x, y, z, 2, 0.12D, 1.5D, 0.12D, 0.01D);
-                level.sendParticles(player, PURPLE_DUST, true,
-                        x, y + 2.0D, z, 2, 0.25D, 1.5D, 0.25D, 0.0D);
+                PacketDistributor.sendToPlayer(player, payload);
             }
         }
     }

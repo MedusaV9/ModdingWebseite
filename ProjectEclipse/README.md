@@ -177,9 +177,9 @@ Default unlock keys per day: 1 `[]`, 2 `[main_inventory]`, 3 `[workbenches, crea
 
 ### Networking — `dev.projecteclipse.eclipse.network`
 
-Registrar version `"1"`, registered via `RegisterPayloadHandlersEvent` (mod bus). Both payloads are `playToClient`
-and are sent automatically on `PlayerLoggedInEvent`. Client handlers write to
-`dev.projecteclipse.eclipse.client.ClientStateCache` (`public static volatile int lives / day / altarLevel`).
+Registrar version `"2"` (v2: added `S2CQuasarPayload`), registered via `RegisterPayloadHandlersEvent`
+(mod bus). Lives/day-state payloads are sent automatically on `PlayerLoggedInEvent`. Client handlers
+write to `dev.projecteclipse.eclipse.client.ClientStateCache` (`public static volatile int lives / day / altarLevel`).
 
 ```java
 public record S2CLivesPayload(int lives) implements CustomPacketPayload;        // id "eclipse:lives"
@@ -187,6 +187,11 @@ public record S2CDayStatePayload(int day, int altarLevel) implements CustomPacke
 public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload;   // id "eclipse:cutscene"
 // S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE }; client handler writes
 // ClientStateCache.cutscenePhase (volatile, null until the start event runs).
+public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements CustomPacketPayload; // id "eclipse:quasar"
+// S2CQuasarPayload: spawns a one-shot Quasar particle emitter client-side via
+// veilfx.QuasarSpawner.spawnOrFallback (vanilla END_ROD/PORTAL burst if Quasar fails).
+// Well-known emitter id constants live on the payload class: ALTAR_BEAM, ARM_WISPS,
+// MAP_EXPAND_MATERIALIZE, BORDER_GLITCH, BOSS_SLAM, HEART_BURST, LIMBO_MOTES, CUTSCENE_VEIL.
 // all expose: public static final CustomPacketPayload.Type<...> TYPE;
 //             public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
 
@@ -434,6 +439,7 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
+- `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.
@@ -443,7 +449,9 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - **Iris + shaderpacks override the custom sky.** The purple-tinted overworld sky (eclipse sun)
   is rendered by a vanilla-pipeline sky hook; when an Iris shaderpack is active it replaces the
   sky rendering, so only the fog/sky *tint* fallback survives. Running Iris with **no shaderpack
-  enabled** keeps the full effect (this is the smoke-tested configuration).
+  enabled** keeps the full effect (this is the smoke-tested configuration). The v2 Veil post
+  pipelines (limbo grade, sun halo) are likewise hard-gated off while a shaderpack is active
+  (Veil post FX bypass the Iris pipeline and break under a pack); Quasar particles stay on.
 - **EMI/recipe viewers show gated recipes.** ModGate blocks crafting/placement/pickup at runtime
   but does not hide recipes from EMI/JEI-style viewers — there is no runtime recipe-hiding hook
   for "unlocks on day N" semantics. Players can *see* Create recipes on day 1; they still cannot

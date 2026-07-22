@@ -1,8 +1,10 @@
 package dev.projecteclipse.eclipse.client;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseParticles;
+import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.util.Mth;
@@ -14,8 +16,11 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Spawns 1-2 {@code eclipse:purple_wisp} particles near the right arm of every visible player
- * that carries the arm artifact, every {@value #SPAWN_INTERVAL_TICKS} client ticks.
+ * Puts a looping, entity-attached {@code eclipse:arm_wisps} Quasar emitter (trail + vortex,
+ * additive) on every visible player that carries the arm artifact, checked every
+ * {@value #SPAWN_INTERVAL_TICKS} client ticks. The emitter is removed as soon as the artifact
+ * is gone or the player turns invisible; if the Quasar spawn fails, the v1 vanilla
+ * {@code eclipse:purple_wisp} particles are spawned instead ({@link #spawnWisps}).
  *
  * <p>Remote players' full inventories are not synced to this client, so for them the check
  * falls back to the visible held items (main/off hand); the local player is checked against
@@ -38,7 +43,11 @@ public final class ArmParticles {
         }
         for (Player player : level.players()) {
             if (!player.isInvisible() && hasArtifact(minecraft, player)) {
-                spawnWisps(level, player);
+                if (!QuasarSpawner.ensureAttached(S2CQuasarPayload.ARM_WISPS, player)) {
+                    spawnWisps(level, player); // v1 vanilla fallback
+                }
+            } else {
+                QuasarSpawner.removeAttached(S2CQuasarPayload.ARM_WISPS, player);
             }
         }
     }

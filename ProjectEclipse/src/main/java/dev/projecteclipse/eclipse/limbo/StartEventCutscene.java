@@ -7,6 +7,7 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CCutscenePayload;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.BlockPos;
@@ -31,13 +32,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <ul>
  *   <li>t=0 — broadcast {@code TILT}, keel the ghost ship's oars over (interpolated), play
  *       {@code eclipse:event.submerge} to every online player.</li>
- *   <li>t=100 — broadcast {@code SUBMERGE} then {@code WAVES}.</li>
+ *   <li>t=100 — broadcast {@code SUBMERGE} then {@code WAVES}, plus one
+ *       {@code eclipse:cutscene_veil} Quasar burst per limbo player (sent to limbo).</li>
  *   <li>t=140 — teleport every player currently in Limbo to the overworld shared spawn,
  *       each into a temporary carved 1x2 air pocket ~2 blocks under the surface, with
  *       upward velocity so they visually rise out of the ground.</li>
  *   <li>t=150 — refill the carved pockets with their previous blocks.</li>
  *   <li>t=160 — broadcast {@code EMERGE}, set {@code startEventDone}, stamp each teleported
- *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset.</li>
+ *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset, and
+ *       broadcast one {@code eclipse:cutscene_veil} Quasar burst per emerged player.</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -85,10 +88,7 @@ public final class StartEventCutscene {
         int t = ticks++;
         switch (t) {
             case TILT_TICK -> tilt(server);
-            case SUBMERGE_TICK -> {
-                PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.SUBMERGE));
-                PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.WAVES));
-            }
+            case SUBMERGE_TICK -> submerge(server);
             case TELEPORT_TICK -> teleportLimboPlayersToOverworld(server);
             case REFILL_TICK -> refillPockets();
             case EMERGE_TICK -> emerge(server);
@@ -107,6 +107,23 @@ public final class StartEventCutscene {
         }
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.playNotifySound(EclipseSounds.EVENT_SUBMERGE.get(), SoundSource.MASTER, 1.0F, 1.0F);
+        }
+    }
+
+    /**
+     * SUBMERGE + WAVES phase broadcast, plus one {@code eclipse:cutscene_veil} Quasar burst
+     * (additive violet streaks) at every limbo player's position, sent to everyone in limbo.
+     * The client falls back to vanilla particles if the Quasar spawn fails.
+     */
+    private static void submerge(MinecraftServer server) {
+        PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.SUBMERGE));
+        PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.WAVES));
+        ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
+        if (limbo != null) {
+            for (ServerPlayer player : limbo.players()) {
+                PacketDistributor.sendToPlayersInDimension(limbo,
+                        new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
+            }
         }
     }
 
@@ -167,6 +184,11 @@ public final class StartEventCutscene {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player != null && player.getData(EclipseAttachments.FIRST_OVERWORLD_JOIN) == 0L) {
                 player.setData(EclipseAttachments.FIRST_OVERWORLD_JOIN, now);
+            }
+            if (player != null) {
+                // Everyone is gathered at overworld spawn at this point, so broadcast is cheap.
+                PacketDistributor.sendToAllPlayers(
+                        new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
             }
         }
         teleportedPlayers.clear();

@@ -1,0 +1,60 @@
+{
+  "max_lifetime": 8,
+  "loop": false,
+  "rate": 2,
+  "count": 12,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:hemisphere",
+      "dimensions": [1.5, 1.5, 1.5],
+      "rotation": [0.0, 0.0, 0.0],
+      "from_surface": true
+    },
+    "particle_settings": {
+      "particle_speed": 0.9,
+      "random_speed": 0.3,
+      "base_particle_size": 0.12,
+      "particle_size_variation": 0.05,
+      "particle_lifetime": 20,
+      "particle_lifetime_variation": 6,
+      "initial_direction": [0.0, 1.0, 0.0],
+      "random_initial_direction": true,
+      "random_initial_rotation": false
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": true,
+    "should_collide": false,
+    "face_velocity": true,
+    "velocity_stretch_factor": 1.2,
+    "sprite_data": {
+      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": false
+    },
+    "modules": [
+      {
+        "module": "veil:drag",
+        "strength": 0.92
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            { "percent": 0.0, "color": "#8AE9FF" },
+            { "percent": 0.45, "color": "#B65CFF" },
+            { "percent": 1.0, "color": "#5B1E99" }
+          ],
+          "alpha_points": [
+            { "percent": 0.0, "alpha": 0.95 },
+            { "percent": 0.6, "alpha": 0.55 },
+            { "percent": 1.0, "alpha": 0.0 }
+          ]
+        }
+      }
+    ]
+  }
+}

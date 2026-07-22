@@ -1,0 +1,59 @@
+{
+  "max_lifetime": 2,
+  "loop": false,
+  "rate": 1,
+  "count": 6,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:sphere",
+      "dimensions": [0.25, 0.25, 0.25],
+      "rotation": [0.0, 0.0, 0.0],
+      "from_surface": false
+    },
+    "particle_settings": {
+      "particle_speed": 0.3,
+      "random_speed": 0.12,
+      "base_particle_size": 0.14,
+      "particle_size_variation": 0.05,
+      "particle_lifetime": 18,
+      "particle_lifetime_variation": 4,
+      "initial_direction": [0.0, 1.0, 0.0],
+      "random_initial_direction": true,
+      "random_initial_rotation": false
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": false,
+    "should_collide": false,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.0,
+    "sprite_data": {
+      "sprite": "eclipse:textures/gui/heart_full.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": true
+    },
+    "modules": [
+      {
+        "module": "veil:gravity",
+        "strength": 0.25
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            { "percent": 0.0, "color": "#FFFFFF" },
+            { "percent": 1.0, "color": "#C77DFF" }
+          ],
+          "alpha_points": [
+            { "percent": 0.0, "alpha": 1.0 },
+            { "percent": 0.75, "alpha": 0.9 },
+            { "percent": 1.0, "alpha": 0.0 }
+          ]
+        }
+      }
+    ]
+  }
+}

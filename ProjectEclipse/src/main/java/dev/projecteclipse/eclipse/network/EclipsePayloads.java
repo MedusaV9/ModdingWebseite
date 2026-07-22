@@ -14,8 +14,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * Networking base for Project: Eclipse. Registers all custom payloads (registrar version "1")
- * and syncs lives + day state to a player when they log in.
+ * Networking base for Project: Eclipse. Registers all custom payloads (registrar version "2":
+ * added {@link S2CQuasarPayload}) and syncs lives + day state to a player when they log in.
  */
 public final class EclipsePayloads {
     private EclipsePayloads() {}
@@ -27,10 +27,11 @@ public final class EclipsePayloads {
     }
 
     private static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1");
+        PayloadRegistrar registrar = event.registrar("2");
         registrar.playToClient(S2CLivesPayload.TYPE, S2CLivesPayload.STREAM_CODEC, EclipsePayloads::handleLives);
         registrar.playToClient(S2CDayStatePayload.TYPE, S2CDayStatePayload.STREAM_CODEC, EclipsePayloads::handleDayState);
         registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
+        registrar.playToClient(S2CQuasarPayload.TYPE, S2CQuasarPayload.STREAM_CODEC, EclipsePayloads::handleQuasar);
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
@@ -65,6 +66,11 @@ public final class EclipsePayloads {
 
     private static void handleCutscene(S2CCutscenePayload payload, IPayloadContext context) {
         ClientStateCache.cutscenePhase = payload.phase();
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleQuasar(S2CQuasarPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawnOrFallback(payload.emitterId(), payload.pos());
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
