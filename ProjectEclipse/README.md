@@ -429,6 +429,31 @@ matching stages on any altar-level change (catches the altar ritual and `/eclips
 alike). All trigger sweeps are animated. Triggers never lower a stage — erasing terrain is
 always a manual `/eclipse stage set` decision.
 
+### Structures — `dev.projecteclipse.eclipse.worldgen.structure`
+
+`StructureStamper` registers a `WorldStageService.StageListener`: when a stage's terrain
+work completes (grown, never erased), the `structures[]` of every crossed stage are stamped
+at their `disc_map.json` landmark positions. Vanilla structures are generated
+programmatically like `/place structure` (`Structure.generate(...)` with the fixed
+`ECLIPSE_SEED`, then `StructureStart.placeInChunk` per chunk, then start + references booked
+into the chunk structure data): `eclipse:desert_temple` → `minecraft:desert_pyramid`,
+`eclipse:jungle_temple` → `minecraft:jungle_pyramid`, `eclipse:village_plains` →
+`minecraft:village_plains` (a coarse-dirt plaza is flattened first). If vanilla generation
+fails twice, a compact procedural `FallbackBuilders` stand-in is built instead — a listed
+structure never silently misses; the log states which path ran. `eclipse:fortress_core`
+(nether N1 keep + caged blaze spawner) and the §F flavor landmarks (watcher statues on
+stage-1 completion, sundial plaza whose basalt shadow line `DayScheduler.setDay` repositions)
+are always procedural. `eclipse:stronghold_emergence` (stage 5) runs the paced finale:
+global quake, a tick-budgeted fissure trench down the mountainside, an `eclipse:altar_beam`
+Quasar burst, then `minecraft:stronghold` with EVERY piece translated so the portal room
+sits centered in the sealed mountain-core cavity — end portal frames forced eye-less. A
+start-up self-check re-runs the emergence if stage 5 is committed but the cavity holds no
+portal frame. `/locate structure` (and eyes of ender) resolve through
+`DiscChunkGenerator.findNearestMapStructure`, which maps the vanilla ids (`desert_pyramid`,
+`jungle_pyramid`, `village_plains`, `stronghold`, `fortress`) to their fixed landmark sites
+once the landmark's stage is committed — the vanilla placement-driven lookup can never hit
+because `createStructures` is disabled.
+
 ## Progression & Mod Gating
 
 All progression enforcement lives in `dev.projecteclipse.eclipse.progression` and is fully

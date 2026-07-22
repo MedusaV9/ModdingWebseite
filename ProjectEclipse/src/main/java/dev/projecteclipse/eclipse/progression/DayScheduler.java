@@ -8,6 +8,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
+import dev.projecteclipse.eclipse.worldgen.structure.SundialPlaza;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -56,7 +57,8 @@ public final class DayScheduler {
     public static void setDay(MinecraftServer server, int day) {
         int newDay = Math.max(1, day);
         EclipseWorldState state = EclipseWorldState.get(server);
-        boolean changed = state.getDay() != newDay;
+        int previousDay = state.getDay();
+        boolean changed = previousDay != newDay;
         state.setDay(newDay);
 
         EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
@@ -74,6 +76,9 @@ public final class DayScheduler {
         // World-stage day triggers (stages.json "day:N" / "final_day") — e.g. the nether
         // gets its first disc on day 2, BEFORE the portal unlock can be used.
         WorldStageService.applyDayTriggers(server, newDay);
+
+        // W5 sundial plaza: reposition the basalt shadow line around the sanctum.
+        SundialPlaza.onDayChanged(server, previousDay, newDay);
     }
 
     @SubscribeEvent

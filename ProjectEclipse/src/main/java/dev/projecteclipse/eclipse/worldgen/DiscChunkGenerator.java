@@ -1,17 +1,25 @@
 package dev.projecteclipse.eclipse.worldgen;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import javax.annotation.Nullable;
+
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction.DiscColumn;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
+import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
@@ -29,6 +37,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
+import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /**
@@ -137,6 +146,59 @@ public final class DiscChunkGenerator extends ChunkGenerator {
     @Override
     public void createStructures(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState,
             StructureManager structureManager, ChunkAccess chunk, StructureTemplateManager structureTemplateManager) {
+    }
+
+    /**
+     * Vanilla structures worker 5 stamps at fixed {@link DiscMapData.Landmark} sites, keyed
+     * by vanilla registry id → landmark id. Because {@link #createStructures} is empty, the
+     * disc has no {@code StructurePlacement}s and vanilla's placement-driven
+     * {@code findNearestMapStructure} always misses — {@code /locate structure} (and eyes of
+     * ender) resolve through this table instead.
+     */
+    private static final Map<ResourceLocation, String> LOCATE_SITES = Map.of(
+            ResourceLocation.withDefaultNamespace("desert_pyramid"), "eclipse:desert_temple",
+            ResourceLocation.withDefaultNamespace("jungle_pyramid"), "eclipse:jungle_temple",
+            ResourceLocation.withDefaultNamespace("village_plains"), "eclipse:village_plains",
+            ResourceLocation.withDefaultNamespace("stronghold"), "eclipse:stronghold_emergence",
+            ResourceLocation.withDefaultNamespace("fortress"), "eclipse:fortress_core");
+
+    /**
+     * Resolves {@code /locate structure} against the deterministic landmark table instead of
+     * vanilla structure placements (there are none — {@link #createStructures} is disabled).
+     * A site only resolves once its landmark stage is committed, i.e. once worker 5's
+     * {@code StructureStamper} has actually stamped it. {@code skipKnownStructures} is
+     * ignored: sites are fixed, there is exactly one instance of each.
+     */
+    @Nullable
+    @Override
+    public Pair<BlockPos, Holder<Structure>> findNearestMapStructure(ServerLevel level,
+            HolderSet<Structure> structures, BlockPos pos, int searchRadius, boolean skipKnownStructures) {
+        int committedStage = WorldStageAccess.stage(this.profile);
+        Pair<BlockPos, Holder<Structure>> nearest = null;
+        double nearestDistSq = Double.MAX_VALUE;
+        for (Holder<Structure> holder : structures) {
+            ResourceLocation structureId = holder.unwrapKey().map(key -> key.location()).orElse(null);
+            if (structureId == null) {
+                continue;
+            }
+            String landmarkId = LOCATE_SITES.get(structureId);
+            if (landmarkId == null) {
+                continue;
+            }
+            for (DiscMapData.Landmark landmark : DiscMapData.get().landmarks(this.profile)) {
+                if (!landmark.id().equals(landmarkId) || landmark.stage() > committedStage) {
+                    continue;
+                }
+                BlockPos site = new BlockPos(landmark.x(),
+                        DiscTerrainFunction.surfaceY(this.profile, landmark.x(), landmark.z()), landmark.z());
+                double distSq = site.distSqr(pos);
+                if (distSq < nearestDistSq) {
+                    nearestDistSq = distSq;
+                    nearest = Pair.of(site, holder);
+                }
+            }
+        }
+        return nearest;
     }
 
     /** Carving is part of {@link DiscTerrainFunction} (deterministic Perlin-worm caves). */
