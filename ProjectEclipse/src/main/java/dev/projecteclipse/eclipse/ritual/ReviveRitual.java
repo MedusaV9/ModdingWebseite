@@ -8,6 +8,7 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lives.BanService;
+import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
@@ -89,6 +90,9 @@ public final class ReviveRitual {
         for (ServerPlayer online : level.getServer().getPlayerList().getPlayers()) {
             ritual.bossEvent.addPlayer(online);
         }
+        // W8 bossbar skin: tag the countdown bar with the "goal" theme on every client.
+        net.neoforged.neoforge.network.PacketDistributor.sendToAllPlayers(
+                new S2CBossbarStylePayload(ritual.bossEvent.getId(), S2CBossbarStylePayload.THEME_GOAL));
         ACTIVE.add(ritual);
         EclipseMod.LOGGER.info("Revive ritual started at {} by {} for {} ({})",
                 ritual.altarPos, confirmer.getScoreboardName(), targetName, targetId);
@@ -191,6 +195,9 @@ public final class ReviveRitual {
         }
         for (ReviveRitual ritual : ACTIVE) {
             ritual.bossEvent.addPlayer(player);
+            // Late joiners need the W8 skin tag too (the bar itself is re-sent by addPlayer).
+            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
+                    new S2CBossbarStylePayload(ritual.bossEvent.getId(), S2CBossbarStylePayload.THEME_GOAL));
         }
         if (player.getData(EclipseAttachments.BANNED)
                 && !EclipseWorldState.get(player.server).isBanned(player.getUUID())) {

@@ -265,6 +265,16 @@ public record S2CCutsceneLibraryPayload(Map<String, String> pathsJson) implement
 public record S2CCutscenePlayPayload(String id, boolean allowSkip, Optional<Vec3> anchor) implements CustomPacketPayload; // id "eclipse:cutscene_play"
 // Start playing a synced path; empty id = STOP sentinel (abort / granted skip). anchor
 // overrides the world-anchor origin (e.g. unlock_ring's ring edge).
+public record S2CBossbarStylePayload(UUID id, String theme) implements CustomPacketPayload;    // id "eclipse:bossbar_style"
+// Tags one server bossbar (its BossEvent UUID) with an Eclipse skin theme — THEME_DAY /
+// THEME_GOAL / THEME_BOSS constants on the payload class. client.hud.BossbarSkin cancels +
+// redraws exactly the tagged bars; every untagged bar renders vanilla. Send it when creating
+// a themed ServerBossEvent AND to late joiners that get addPlayer'd onto a running bar (see
+// ritual.ReviveRitual for the pattern). W11/W12 boss bars + W14's schedule countdown reuse this.
+public record S2CGoalProgressPayload(List<String> goalLines, List<Boolean> done) implements CustomPacketPayload; // id "eclipse:goal_progress"
+// The receiving player's personal goal tick list (sidebar rows). Sent at login and on day
+// changes. TODO(W13): the currentFor(server) factory sends all-false flags until real goal
+// ticking exists — W13 replaces that factory body and re-broadcasts on every tick change.
 public record C2SCutsceneStatePayload(String id, State state) implements CustomPacketPayload; // id "eclipse:cutscene_state"
 // C2SCutsceneStatePayload.State: enum { STARTED, FINISHED, SKIP_REQUEST, SKIPPED } — playback
 // ACKs + skip requests, validated/handled by cutscene.CutsceneService.handleClientState.
@@ -357,6 +367,28 @@ and shown `unlock_ring`, per-player anchored at the old ring-edge point nearest 
 `StageListener` completion callback aborts flights that outlive the sweep. Skipped for
 instant stamps, erases, the `intro_fusion` stage (the start event owns that shot), and when
 `cutscenes.freezeDuringUnlocks` in `general.json` is `false`.
+
+### HUD suite — `dev.projecteclipse.eclipse.client.hud`
+
+Worker 8's client HUD layer (all classes `Dist.CLIENT`, driven by payloads + `ClientStateCache`):
+
+- **`BossbarSkin`** — surgical skinning of OUR bossbars via the cancellable per-bar
+  `CustomizeGuiOverlayEvent.BossEventProgress`. A bar is "ours" when its UUID was tagged by
+  `S2CBossbarStylePayload` (themes `day`/`goal`/`boss`), with a translation-key safety net for
+  `ritual.eclipse.*` names (revive countdown). Tagged bars get a themed 512x64 frame
+  (192x15 logical over a 182x7 fill window), a lerped fill (0.05/frame), a scrolling energy
+  overlay and a leading-edge glow that flashes on progress change; `setIncrement(+10)`
+  reserves the taller frame. `showBossbarSkin=false` degrades to a minimal 4px strip — a
+  revive countdown is never fully hidden. Untagged (foreign) bars render 100% vanilla.
+  `BossbarSkin.drawThemedBar(...)` is the shared renderer; `nextFreeBarY()` reports the next
+  free bar slot so client-local temp bars can stack below real ones.
+- **`SidebarPanel`** — right-anchored 110px status panel (hearts, day, altar level, online
+  count, personal goal ticks from `S2CGoalProgressPayload`) rendered purely from
+  `ClientStateCache` — vanilla scoreboard DATA is untouched and stays free for ops; only the
+  `SCOREBOARD_SIDEBAR` layer render is cancelled while the panel is on. 60% black nine-slice
+  backdrop (`textures/gui/sidebar/panel.png` + five 24x24 icons), re-slides in from the right
+  on any content change (skipped under `reducedFx`), honors `showSidebar` live (off = vanilla
+  sidebar returns). Hidden during cutscene HUD suppression by design (not whitelisted).
 
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 

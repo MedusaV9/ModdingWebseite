@@ -38,6 +38,8 @@ public final class EclipsePayloads {
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
         registrar.playToClient(S2CCutsceneLibraryPayload.TYPE, S2CCutsceneLibraryPayload.STREAM_CODEC, EclipsePayloads::handleCutsceneLibrary);
         registrar.playToClient(S2CCutscenePlayPayload.TYPE, S2CCutscenePlayPayload.STREAM_CODEC, EclipsePayloads::handleCutscenePlay);
+        registrar.playToClient(S2CBossbarStylePayload.TYPE, S2CBossbarStylePayload.STREAM_CODEC, EclipsePayloads::handleBossbarStyle);
+        registrar.playToClient(S2CGoalProgressPayload.TYPE, S2CGoalProgressPayload.STREAM_CODEC, EclipsePayloads::handleGoalProgress);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
@@ -137,6 +139,16 @@ public final class EclipsePayloads {
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleBossbarStyle(S2CBossbarStylePayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.hud.BossbarSkin.setTheme(payload.id(), payload.theme());
+    }
+
+    private static void handleGoalProgress(S2CGoalProgressPayload payload, IPayloadContext context) {
+        ClientStateCache.goalLines = payload.goalLines();
+        ClientStateCache.goalDone = payload.done();
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCutsceneLibrary(S2CCutsceneLibraryPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.replace(payload.pathsJson());
     }
@@ -156,6 +168,7 @@ public final class EclipsePayloads {
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
+            PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player.server));
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
             dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);
             dev.projecteclipse.eclipse.cutscene.CutsceneService.syncLibraryTo(player);

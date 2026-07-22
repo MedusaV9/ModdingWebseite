@@ -12,6 +12,11 @@ public final class ClientStateCache {
     /** The current day's goal lines, as sent by the server; empty until the first day-state sync. */
     public static volatile java.util.List<String> goals = java.util.List.of();
 
+    // Personal goal progress (S2CGoalProgressPayload; sent at login and on day changes).
+    // goalLines mirrors the day's goals; goalDone is all-false until W13 wires real ticking.
+    public static volatile java.util.List<String> goalLines = java.util.List.of();
+    public static volatile java.util.List<Boolean> goalDone = java.util.List.of();
+
     /** Last start-event cutscene phase received from the server; {@code null} until the event runs. */
     public static volatile dev.projecteclipse.eclipse.network.S2CCutscenePayload.Phase cutscenePhase = null;
 
