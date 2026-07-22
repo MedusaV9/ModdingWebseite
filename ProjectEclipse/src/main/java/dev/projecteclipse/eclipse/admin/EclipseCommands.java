@@ -33,6 +33,8 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.devtools.PristineSnapshots;
+import dev.projecteclipse.eclipse.devtools.StageIO;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.economy.SupplyBeacon;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
@@ -90,6 +92,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse border ring set &lt;radius&gt; [seconds] | border fx range &lt;blocks&gt;
  * /eclipse modgate lock|unlock &lt;namespace&gt;
  * /eclipse stage get | set &lt;overworld|nether&gt; &lt;n&gt; [instant|animate] | rebuild &lt;dim&gt; &lt;n&gt;
+ * /eclipse stage save &lt;n&gt; | load &lt;n&gt; | revert | status      (annulus snapshots, source dim)
+ * /eclipse stage snapshot save|restore &lt;name&gt;                (pristine region backups)
  * /eclipse voicemute &lt;player&gt; on|off
  * /eclipse tp_limbo [player]
  * /eclipse cutscene play &lt;id&gt; [players] | abort [players] | list | enable|disable &lt;id&gt;
@@ -225,7 +229,24 @@ public final class EclipseCommands {
                                         .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider
                                                 .suggest(new String[] {"overworld", "nether"}, builder))
                                         .then(Commands.argument("stage", IntegerArgumentType.integer(0))
-                                                .executes(EclipseCommands::stageRebuild)))))
+                                                .executes(EclipseCommands::stageRebuild))))
+                        .then(Commands.literal("save")
+                                .then(Commands.argument("stage", IntegerArgumentType.integer(1))
+                                        .executes(EclipseCommands::stageSnapshotSave)))
+                        .then(Commands.literal("load")
+                                .then(Commands.argument("stage", IntegerArgumentType.integer(1))
+                                        .executes(EclipseCommands::stageSnapshotLoad)))
+                        .then(Commands.literal("revert")
+                                .executes(EclipseCommands::stageSnapshotRevert))
+                        .then(Commands.literal("status")
+                                .executes(EclipseCommands::stageStatus))
+                        .then(Commands.literal("snapshot")
+                                .then(Commands.literal("save")
+                                        .then(Commands.argument("name", StringArgumentType.word())
+                                                .executes(EclipseCommands::pristineSnapshotSave)))
+                                .then(Commands.literal("restore")
+                                        .then(Commands.argument("name", StringArgumentType.word())
+                                                .executes(EclipseCommands::pristineSnapshotRestore)))))
                 .then(Commands.literal("tp_limbo")
                         .executes(context -> tpLimbo(context.getSource(), context.getSource().getPlayerOrException()))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -743,6 +764,70 @@ public final class EclipseCommands {
         source.sendSuccess(() -> Component.literal("Re-stamping " + profile.name() + " stage " + stage
                 + " annulus with the committed terrain (instant sweep)"), false);
         return 1;
+    }
+
+    // --- stage snapshots (W14 devtools) ---
+
+    /**
+     * The disc profile of the command source's dimension ({@code /execute in ... run}
+     * targets the nether); non-disc dimensions default to the overworld.
+     */
+    private static DiscProfile discProfileOfSource(CommandSourceStack source) {
+        DiscProfile profile = WorldStageService.profileOf(source.getLevel().dimension());
+        return profile != null ? profile : DiscProfile.OVERWORLD;
+    }
+
+    /** Sends a {@code devtools} result line: {@code "ERROR: "}-prefixed strings become failures. */
+    private static int sendResult(CommandSourceStack source, String result) {
+        if (result.startsWith("ERROR: ")) {
+            source.sendFailure(Component.literal(result.substring("ERROR: ".length())));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(result), false);
+        return 1;
+    }
+
+    private static int stageSnapshotSave(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        DiscProfile profile = discProfileOfSource(source);
+        ServerLevel level = source.getServer().getLevel(WorldStageService.dimensionOf(profile));
+        return sendResult(source, StageIO.save(level, profile,
+                IntegerArgumentType.getInteger(context, "stage")));
+    }
+
+    private static int stageSnapshotLoad(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        DiscProfile profile = discProfileOfSource(source);
+        ServerLevel level = source.getServer().getLevel(WorldStageService.dimensionOf(profile));
+        return sendResult(source, StageIO.load(level, profile,
+                IntegerArgumentType.getInteger(context, "stage")));
+    }
+
+    private static int stageSnapshotRevert(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        DiscProfile profile = discProfileOfSource(source);
+        ServerLevel level = source.getServer().getLevel(WorldStageService.dimensionOf(profile));
+        return sendResult(source, StageIO.revert(level, profile));
+    }
+
+    private static int stageStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        for (String line : StageIO.statusLines(source.getServer())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
+    private static int pristineSnapshotSave(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        return sendResult(source, PristineSnapshots.save(source.getServer(),
+                StringArgumentType.getString(context, "name")));
+    }
+
+    private static int pristineSnapshotRestore(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        return sendResult(source, PristineSnapshots.requestRestore(source.getServer(),
+                StringArgumentType.getString(context, "name")));
     }
 
     // --- tp_limbo ---

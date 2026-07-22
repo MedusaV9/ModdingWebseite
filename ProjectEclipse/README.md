@@ -836,6 +836,19 @@ towards ~1500 ticks). While it runs, all players get a low-pitched thunder rumbl
 `S2CCutscenePayload(SHAKE)` impulse every 2 s. It is triggered automatically when the
 start-event cutscene completes, guarded to run once (committed stage must still be 0).
 
+**Stage snapshots (W14 dev tooling — `dev.projecteclipse.eclipse.devtools.StageIO`)**: a
+"stage" can also be SAVED as a snapshot of the ring annulus between stage N−1 and N radii
+(band `radius(N−1) − RIM_REWRITE_MARGIN .. radius(N) + RIM_NOISE_AMP`, the exact band a
+sweep rewrites). `/eclipse stage save <n>` writes `<world>/eclipse/stages/<n>.bin` —
+gzip NBT holding, per intersecting chunk, the raw section palettes (`PalettedContainer.codecRW`,
+identical to vanilla region NBT, lifted verbatim for unloaded chunks) plus the chunk's block
+entity NBT list. `load <n>` re-applies it with a tick-budgeted writer that reuses the sweep's
+relight/resend machinery (extracted into `worldgen.stage.BudgetedBlockWriter`); `revert`
+re-applies the last-loaded snapshot (persisted per dimension). Workflow: `load N` →
+hand-edit terrain → `save N` → later `load N+1`. Additionally
+`devtools.PristineSnapshots` backs up whole region dirs (`/eclipse stage snapshot`,
+restore-on-restart via marker file).
+
 **Triggers** (`stages.json` `trigger` field, evaluated per dimension, raise-only):
 `intro_fusion` — fired by the cutscene hook above; `day:N` — evaluated by
 `DayScheduler.setDay` after each day change (cumulative, so day jumps catch up; nether gets
@@ -1044,6 +1057,11 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse stage get` | Committed stage + radius of both disc dimensions, plus live sweep progress. |
 | `/eclipse stage set <overworld\|nether> <n> [instant\|animate]` | `WorldStageService.setStage` (default animate); lowering runs the erase sweep. |
 | `/eclipse stage rebuild <overworld\|nether> <n>` | Re-stamps stage `n`'s annulus with the committed terrain (repair). |
+| `/eclipse stage save <n>` | `devtools.StageIO`: serializes the stage-`n` annulus (all intersecting chunks — live sections or region NBT; never-generated skipped) to `<world>/eclipse/stages/<n>.bin` (`nether_<n>.bin` when run from the nether). Synchronous. |
+| `/eclipse stage load <n>` | Applies a saved `.bin` back onto the world via a tick-budgeted writer (25 ms/tick, ≤4 chunks/tick, relight + resend per chunk); persists `lastLoadedStage` for revert. Committed stage is NOT touched. |
+| `/eclipse stage revert` | Re-applies the source dimension's last-loaded snapshot (`EclipseWorldState.lastLoadedStage`). |
+| `/eclipse stage status` | Committed stage + last-loaded snapshot + in-flight snapshot/sweep jobs + saved `.bin` files, per disc dimension. |
+| `/eclipse stage snapshot save\|restore <name>` | `devtools.PristineSnapshots`: flushes all chunks and copies `region/ entities/ poi/` (+ nether `DIM-1/…`) to `<world>/eclipse/stage_snapshots/<name>/`; `restore` stages a marker consumed at the next boot's `ServerAboutToStartEvent` — requires a restart. |
 | `/eclipse voicemute <player> on\|off` | `VoiceMuteApi.setForceMuted` (persistent administrative mute). |
 | `/eclipse tp_limbo [player]` | Teleports you (or the target) to the Limbo ghost-ship platform. |
 | `/eclipse cutscene play <id> [players]` | `CutsceneService.play` for the targets (default: everyone online). |
@@ -1171,6 +1189,7 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
+- `dev.projecteclipse.eclipse.devtools` — W14 operator tooling: `StageIO` (stage annulus snapshots, `<world>/eclipse/stages/<n>.bin`), `PristineSnapshots` (whole-region backups + restore-on-restart marker).
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `dev.projecteclipse.eclipse.cutscene` / `cutscene.client` — the cutscene engine (see "Cutscene engine"): server path library + orchestration + freeze, and the client camera director/letterbox/input swallow.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`, plus `Camera.setPosition(Vec3)`/`Camera.setRotation(yaw, pitch, roll)` for the cutscene `CameraDirector`; `validateAccessTransformers = true` is enabled in `build.gradle`.

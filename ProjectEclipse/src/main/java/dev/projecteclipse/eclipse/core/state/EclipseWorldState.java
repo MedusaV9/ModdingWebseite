@@ -70,6 +70,8 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_FERRYMAN_DEFEATED = "ferrymanDefeated";
     private static final String TAG_SHARD_POOL = "shardPool";
     private static final String TAG_GRAVE_POSITIONS = "gravePositions";
+    private static final String TAG_LAST_LOADED_STAGE_OVERWORLD = "lastLoadedStageOverworld";
+    private static final String TAG_LAST_LOADED_STAGE_NETHER = "lastLoadedStageNether";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -99,6 +101,8 @@ public final class EclipseWorldState extends SavedData {
     private boolean heraldDefeated = false;
     private boolean ferrymanDefeated = false;
     private int shardPool = 0;
+    private int lastLoadedStageOverworld = -1;
+    private int lastLoadedStageNether = -1;
     private final Map<UUID, List<GlobalPos>> gravePositions = new HashMap<>();
     private final Set<String> disabledCutscenes = new HashSet<>();
 
@@ -151,6 +155,11 @@ public final class EclipseWorldState extends SavedData {
         state.ferrymanDefeated = tag.getBoolean(TAG_FERRYMAN_DEFEATED);
         // W13 economy fields default to 0/empty so pre-W13 saves keep loading.
         state.shardPool = tag.getInt(TAG_SHARD_POOL);
+        // W14 stage-snapshot fields default to -1 ("nothing loaded yet") on pre-W14 saves.
+        state.lastLoadedStageOverworld = tag.contains(TAG_LAST_LOADED_STAGE_OVERWORLD)
+                ? tag.getInt(TAG_LAST_LOADED_STAGE_OVERWORLD) : -1;
+        state.lastLoadedStageNether = tag.contains(TAG_LAST_LOADED_STAGE_NETHER)
+                ? tag.getInt(TAG_LAST_LOADED_STAGE_NETHER) : -1;
         for (Tag entry : tag.getList(TAG_GRAVE_POSITIONS, Tag.TAG_COMPOUND)) {
             CompoundTag grave = (CompoundTag) entry;
             if (!grave.hasUUID("owner")) {
@@ -215,6 +224,8 @@ public final class EclipseWorldState extends SavedData {
         tag.putBoolean(TAG_HERALD_DEFEATED, this.heraldDefeated);
         tag.putBoolean(TAG_FERRYMAN_DEFEATED, this.ferrymanDefeated);
         tag.putInt(TAG_SHARD_POOL, this.shardPool);
+        tag.putInt(TAG_LAST_LOADED_STAGE_OVERWORLD, this.lastLoadedStageOverworld);
+        tag.putInt(TAG_LAST_LOADED_STAGE_NETHER, this.lastLoadedStageNether);
 
         ListTag graveList = new ListTag();
         for (Map.Entry<UUID, List<GlobalPos>> entry : this.gravePositions.entrySet()) {
@@ -394,6 +405,26 @@ public final class EclipseWorldState extends SavedData {
         this.growthDimension = "";
         this.growthFromStage = 0;
         this.growthCursor = 0L;
+        setDirty();
+    }
+
+    // --- stage snapshots (W14 devtools) ---
+
+    /**
+     * The stage number whose annulus snapshot ({@code <world>/eclipse/stages/<n>.bin}) was
+     * last applied to the dimension by {@code devtools.StageIO}, or {@code -1} when no
+     * snapshot has been loaded yet. {@code /eclipse stage revert} re-applies this snapshot.
+     */
+    public int getLastLoadedStage(DiscProfile profile) {
+        return profile == DiscProfile.NETHER ? this.lastLoadedStageNether : this.lastLoadedStageOverworld;
+    }
+
+    public void setLastLoadedStage(DiscProfile profile, int stage) {
+        if (profile == DiscProfile.NETHER) {
+            this.lastLoadedStageNether = stage;
+        } else {
+            this.lastLoadedStageOverworld = stage;
+        }
         setDirty();
     }
 

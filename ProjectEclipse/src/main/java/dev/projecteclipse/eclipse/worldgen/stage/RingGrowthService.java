@@ -3,7 +3,6 @@ package dev.projecteclipse.eclipse.worldgen.stage;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -25,13 +24,8 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.ThreadedLevelLightEngine;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -67,10 +61,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * chunks (resolved via async region reads at job start) are loaded with a short-lived
  * ticket and rewritten; never-generated chunks are skipped — chunkgen covers them at the
  * committed stage. Writes go straight into {@link LevelChunkSection#setBlockState} (no
- * neighbor reactions); when a chunk's last column is written its heightmaps are re-primed,
- * its light is fully rebuilt through the {@link ThreadedLevelLightEngine} task queue
- * (clear + re-init + propagate — 1.21.1 has no {@code relight} helper), and it is resent
- * to watching clients via {@link ClientboundLevelChunkWithLightPacket}. At most
+ * neighbor reactions); when a chunk's last column is written its heightmaps are re-primed
+ * and it goes through {@link BudgetedBlockWriter#relightAndResend} (full light rebuild via
+ * the task queue + resend to watching clients). At most
  * {@value #MAX_CHUNK_FINISHES_PER_TICK} chunks finish per tick.</p>
  *
  * <p><b>Budget</b>: {@code ringBlocksBudgetMs} (general.json, default 2 ms) of nanoTime per
@@ -81,10 +74,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class RingGrowthService {
-    /** Keeps freshly loaded annulus chunks around long enough to rewrite + relight + resend. */
-    private static final TicketType<ChunkPos> RING_GROWTH_TICKET =
-            TicketType.create("eclipse_ring_growth", Comparator.comparingLong(ChunkPos::toLong), 200);
-
     private static final int MAX_CHUNK_FINISHES_PER_TICK = 4;
     private static final int CURSOR_PERSIST_INTERVAL = 100;
     private static final int INSTANT_BUDGET_MS = 25;
@@ -473,9 +462,7 @@ public final class RingGrowthService {
                 if (!mayLoad) {
                     return null;
                 }
-                ChunkPos pos = new ChunkPos(cx, cz);
-                this.level.getChunkSource().addRegionTicket(RING_GROWTH_TICKET, pos, 1, pos);
-                chunk = this.level.getChunk(cx, cz);
+                chunk = BudgetedBlockWriter.loadWithTicket(this.level, cx, cz);
                 this.chunksLoadedFromDisk++;
                 this.lastChunkCallLoaded = true;
             }
@@ -525,17 +512,11 @@ public final class RingGrowthService {
 
         /**
          * A chunk's last band column was written: drop orphaned block entities, re-prime the
-         * heightmaps and rebuild the chunk's light through the light-engine task queue —
-         * clear (mirrors vanilla {@code updateChunkStatus}) then re-init + propagate (mirrors
-         * {@code initializeLight} + {@code lightChunk}) — and resend the chunk once the light
-         * tasks drain.
+         * heightmaps, and hand the chunk to {@link BudgetedBlockWriter#relightAndResend}
+         * (full light rebuild through the task queue + resend to watching clients).
          */
         private void finishChunk(long chunkKey) {
-            int cx = ChunkPos.getX(chunkKey);
-            int cz = ChunkPos.getZ(chunkKey);
             LevelChunk chunk = chunkFor(chunkKey, true);
-            ChunkPos pos = chunk.getPos();
-            this.level.getChunkSource().addRegionTicket(RING_GROWTH_TICKET, pos, 1, pos);
 
             long innerSq = (long) this.innerRadius * this.innerRadius;
             long outerSq = (long) this.outerRadius * this.outerRadius;
@@ -547,39 +528,7 @@ public final class RingGrowthService {
             }
 
             Heightmap.primeHeightmaps(chunk, HEIGHTMAPS_TO_PRIME);
-            chunk.initializeLightSources();
-            chunk.setUnsaved(true);
-            chunk.setLightCorrect(false);
-
-            ThreadedLevelLightEngine light = this.level.getChunkSource().getLightEngine();
-            light.retainData(pos, false);
-            light.setLightEnabled(pos, false);
-            for (int section = light.getMinLightSection(); section < light.getMaxLightSection(); section++) {
-                light.queueSectionData(LightLayer.BLOCK, SectionPos.of(pos, section), null);
-                light.queueSectionData(LightLayer.SKY, SectionPos.of(pos, section), null);
-            }
-            for (int section = this.level.getMinSection(); section < this.level.getMaxSection(); section++) {
-                light.updateSectionStatus(SectionPos.of(pos, section), true);
-            }
-            for (int index = 0; index < chunk.getSectionsCount(); index++) {
-                if (!chunk.getSection(index).hasOnlyAir()) {
-                    light.updateSectionStatus(
-                            SectionPos.of(pos, this.level.getSectionYFromSectionIndex(index)), false);
-                }
-            }
-            light.propagateLightSources(pos);
-            light.waitForPendingTasks(cx, cz).thenRunAsync(() -> {
-                LevelChunk lit = this.level.getChunkSource().getChunkNow(cx, cz);
-                if (lit == null) {
-                    return;
-                }
-                lit.setLightCorrect(true);
-                ClientboundLevelChunkWithLightPacket packet = new ClientboundLevelChunkWithLightPacket(
-                        lit, this.level.getChunkSource().getLightEngine(), null, null);
-                for (ServerPlayer player : this.level.getChunkSource().chunkMap.getPlayers(pos, false)) {
-                    player.connection.send(packet);
-                }
-            }, this.level.getServer());
+            BudgetedBlockWriter.relightAndResend(this.level, chunk);
             this.chunksRewritten++;
         }
 
