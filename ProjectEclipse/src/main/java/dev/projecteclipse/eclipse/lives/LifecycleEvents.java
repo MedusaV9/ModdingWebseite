@@ -1,11 +1,16 @@
 package dev.projecteclipse.eclipse.lives;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.snapshot.SnapshotService;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseBlocks;
 import net.minecraft.core.BlockPos;
@@ -25,6 +30,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The death economy: on a player death we snapshot first, then move a life from
@@ -35,6 +41,11 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class LifecycleEvents {
+    /** Server-session handoff from the death event to that player's next respawn event. */
+    private static final Map<UUID, PendingHeartLoss> PENDING_HEART_LOSSES = new HashMap<>();
+
+    private record PendingHeartLoss(int previousHearts, int heartIndex) {}
+
     private LifecycleEvents() {}
 
     @SubscribeEvent
@@ -54,7 +65,12 @@ public final class LifecycleEvents {
         if (event.getSource().getEntity() instanceof ServerPlayer killer && killer != victim) {
             LivesApi.add(killer, +1);
         }
-        LivesApi.add(victim, -1);
+        int previousHearts = LivesApi.get(victim);
+        int remainingHearts = LivesApi.add(victim, -1);
+        if (remainingHearts < previousHearts) {
+            // The first now-missing zero-based heart is exactly the new count.
+            PENDING_HEART_LOSSES.put(victim.getUUID(), new PendingHeartLoss(previousHearts, remainingHearts));
+        }
 
         playDeathCue(victim.server);
 
@@ -102,11 +118,27 @@ public final class LifecycleEvents {
         }
     }
 
-    /** Re-applies the limbo ghost state after a banned player respawns (death-time bans cannot teleport a corpse). */
+    /**
+     * Re-applies the limbo ghost state after a banned player respawns (death-time
+     * bans cannot teleport a corpse), then emits the deferred shatter cues for
+     * a heart actually lost by that death.
+     */
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && player.getData(EclipseAttachments.BANNED)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (player.getData(EclipseAttachments.BANNED)) {
             BanService.applyLimboState(player);
+        }
+
+        PendingHeartLoss loss = PENDING_HEART_LOSSES.remove(player.getUUID());
+        if (loss != null && LivesApi.get(player) < loss.previousHearts()) {
+            PacketDistributor.sendToPlayer(player,
+                    new S2CHeartBurstPayload(loss.heartIndex()),
+                    new S2CQuasarPayload(
+                            S2CQuasarPayload.HEART_BURST,
+                            player.position().add(0.0D, 1.0D, 0.0D)));
         }
     }
 

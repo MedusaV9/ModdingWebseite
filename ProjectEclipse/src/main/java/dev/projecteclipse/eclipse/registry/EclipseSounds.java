@@ -26,6 +26,12 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.submerge")));
 
+    /** Glass-crack cue played locally when a permanent heart shatters after respawn. */
+    public static final Supplier<SoundEvent> UI_HEART_SHATTER = SOUNDS.register(
+            "ui.heart_shatter",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.heart_shatter")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

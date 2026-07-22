@@ -40,5 +40,6 @@
   "ritual.eclipse.revive.no_selection": "Choose a soul first (use the sigil without sneaking).",
   "ritual.eclipse.revive.started": "The ritual has begun.",
   "ritual.eclipse.revive.already_running": "A ritual is already in progress here.",
-  "ritual.eclipse.revive.bossbar": "A ritual has begun"
+  "ritual.eclipse.revive.bossbar": "A ritual has begun",
+  "subtitles.eclipse.ui.heart_shatter": "A heart shatters"
 }

@@ -11,5 +11,11 @@
     "sounds": [
       "eclipse:event/submerge"
     ]
+  },
+  "ui.heart_shatter": {
+    "subtitle": "subtitles.eclipse.ui.heart_shatter",
+    "sounds": [
+      "eclipse:ui/heart_shatter"
+    ]
   }
 }

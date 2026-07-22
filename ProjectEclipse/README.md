@@ -56,7 +56,7 @@ Player data attachments (all persisted, all `copyOnDeath()`):
 
 ```java
 public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS;
-public static final Supplier<AttachmentType<Integer>> LIVES;               // "eclipse:lives", default 5, Codec.INT
+public static final Supplier<AttachmentType<Integer>> LIVES;               // permanent hearts; "eclipse:lives", default 5, Codec.INT
 public static final Supplier<AttachmentType<Long>>    FIRST_OVERWORLD_JOIN; // "eclipse:first_overworld_join", default 0L (= never), Codec.LONG
 public static final Supplier<AttachmentType<Boolean>> BANNED;              // "eclipse:banned", default false, Codec.BOOL
 public static void register(IEventBus modEventBus);
@@ -105,12 +105,28 @@ public static boolean isMuted(MinecraftServer server, ServerPlayer player);
 
 ### Lives — `dev.projecteclipse.eclipse.core.state.LivesApi`
 
-Server-side only. Values are clamped to `>= 0`; `set`/`add` sync the new value to the owning client via `S2CLivesPayload`.
+Server-side only. The legacy `eclipse:lives` name/signatures are stable, but the value now means
+the player's permanent **heart count**. Values are clamped to `>= 0`; `set`/`add` immediately call
+`HeartsService.apply`, then sync the new value to the owning client via `S2CLivesPayload`.
 
 ```java
 public static int get(ServerPlayer player);
 public static int set(ServerPlayer player, int lives);   // returns the applied (clamped) value
 public static int add(ServerPlayer player, int delta);   // delta may be negative; returns the new value
+```
+
+### Hearts — `dev.projecteclipse.eclipse.hearts.HeartsService`
+
+`apply(ServerPlayer)` is the single projection from `LivesApi` to real max health. It installs an
+`eclipse:hearts` **transient** `Attributes.MAX_HEALTH` `ADD_VALUE` modifier worth
+`hearts * 2 - 20`, clamps current health to the new maximum (minimum 1 HP while alive), and is
+reapplied on login, clone and respawn. Five starting hearts therefore mean 10 HP. The modifier is
+never serialized, so relogs and respawns cannot double-apply it.
+
+```java
+public static final int MIN_HEARTS = 0;
+public static final int MAX_HEARTS = 7; // permanent-upgrade cap; W13 Vitae Shard consumes this
+public static void apply(ServerPlayer player);
 ```
 
 ### Snapshots — `dev.projecteclipse.eclipse.core.snapshot.SnapshotService`
@@ -177,7 +193,7 @@ Default unlock keys per day: 1 `[]`, 2 `[main_inventory]`, 3 `[workbenches, crea
 
 ### Networking — `dev.projecteclipse.eclipse.network`
 
-Registrar version `"2"` (v2: added `S2CQuasarPayload`), registered via `RegisterPayloadHandlersEvent`
+Registrar version `"2"` (v2 payload family), registered via `RegisterPayloadHandlersEvent`
 (mod bus). Lives/day-state payloads are sent automatically on `PlayerLoggedInEvent`. Client handlers
 write to `dev.projecteclipse.eclipse.client.ClientStateCache` (`public static volatile int lives / day / altarLevel`).
 
@@ -187,6 +203,8 @@ public record S2CDayStatePayload(int day, int altarLevel) implements CustomPacke
 public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload;   // id "eclipse:cutscene"
 // S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE }; client handler writes
 // ClientStateCache.cutscenePhase (volatile, null until the start event runs).
+public record S2CHeartBurstPayload(int heartIndex) implements CustomPacketPayload; // id "eclipse:heart_burst"
+// Sent after a death-loss respawn; heartIndex is the first now-missing zero-based heart.
 public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements CustomPacketPayload; // id "eclipse:quasar"
 // S2CQuasarPayload: spawns a one-shot Quasar particle emitter client-side via
 // veilfx.QuasarSpawner.spawnOrFallback (vanilla END_ROD/PORTAL burst if Quasar fails).
@@ -203,10 +221,12 @@ public final class EclipsePayloads {
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
 `LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
--1 life (PvE: victim -1 only), a global thunder cue plays to every online player at their own position
+-1 heart (PvE: victim -1 only), a global thunder cue plays to every online player at their own position
 (no chat — `showDeathMessages` is forced to `false` on `ServerStartedEvent`), player drops are diverted into a
-`eclipse:grave` block, and at 0 lives the victim is banned. `PlayerRespawnEvent` re-applies the limbo ghost state
-for banned players (a corpse cannot be teleported at death time).
+`eclipse:grave` block, and at 0 hearts the victim is banned. `PlayerRespawnEvent` re-applies the limbo ghost state
+for banned players (a corpse cannot be teleported at death time), sends `S2CHeartBurstPayload`, and triggers the
+`eclipse:heart_burst` Quasar emitter at the respawned player. The client shatter layer is registered above (not
+instead of) vanilla `PLAYER_HEALTH`; low-health heartbeat/vignette effects honor `reducedFx`.
 
 ```java
 public final class BanService {
@@ -261,8 +281,9 @@ t=100 SUBMERGE + WAVES; t=140 players in Limbo rise out of carved pockets at ove
 t=150 pockets refill; t=160 EMERGE, `startEventDone=true`, `first_overworld_join` stamped if unset.
 
 Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, also the limbo biome's
-`ambient_sound`) and `EVENT_SUBMERGE` (`eclipse:event.submerge`); both currently ship tiny silent
-placeholder OGGs under `assets/eclipse/sounds/`.
+`ambient_sound`), `EVENT_SUBMERGE` (`eclipse:event.submerge`), and the heart HUD's
+`UI_HEART_SHATTER` (`eclipse:ui.heart_shatter`); all currently ship tiny silent placeholder OGGs
+under `assets/eclipse/sounds/`.
 
 ## Progression & Mod Gating
 
@@ -435,6 +456,7 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
+- `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
