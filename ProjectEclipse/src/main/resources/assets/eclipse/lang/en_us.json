@@ -11,6 +11,8 @@
   "entity.eclipse.umbral_stalker": "Umbral Stalker",
   "entity.eclipse.deckhand": "Deckhand",
   "entity.eclipse.sunmote": "Sunmote",
+  "entity.eclipse.herald": "The Herald of the Eclipse",
+  "entity.eclipse.herald_shard": "Corona Shard",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Open Eclipse Menu",
   "gui.eclipse.title.tagline": "Project: Eclipse",
@@ -171,5 +173,7 @@
   "subtitles.eclipse.ui.typewriter": "Typewriter clicks",
   "subtitles.eclipse.ui.page_turn": "Page turns",
   "subtitles.eclipse.ui.unlock_sting": "Something unlocks",
-  "subtitles.eclipse.ambient.gazer_whisper": "Whispers coil"
+  "subtitles.eclipse.ambient.gazer_whisper": "Whispers coil",
+  "subtitles.eclipse.boss.herald_ambient": "The Herald drones",
+  "subtitles.eclipse.boss.herald_telegraph": "Corona shards flare"
 }

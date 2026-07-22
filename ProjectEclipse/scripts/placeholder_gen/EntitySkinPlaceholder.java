@@ -28,7 +28,8 @@ public class EntitySkinPlaceholder {
         writeUmbralStalker();
         writeDeckhand();
         writeSunmote();
-        System.out.println("Generated 5 entity skins in " + DIR);
+        writeHerald();
+        System.out.println("Generated 6 entity skins in " + DIR);
     }
 
     // --- the other (64x64, vanilla player-skin layout, derived from uniform_skin.png) ---
@@ -169,5 +170,37 @@ public class EntitySkinPlaceholder {
         cube(img, 0, 0, 2, 2, 2, core);         // core
         cube(img, 0, 4, 4, 1, 4, halo);         // halo plate
         ImageIO.write(img, "png", DIR.resolve("sunmote.png").toFile());
+    }
+
+    // --- herald (128x128, W11 boss — docs/uv/herald.md) ---
+
+    private static void writeHerald() throws IOException {
+        BufferedImage img = canvas(128);
+        Color core = new Color(0x18, 0x12, 0x24);       // black glass
+        Color eye = new Color(0xFF, 0xD8, 0x6A);        // blazing gold (emissive pass)
+        Color shard = new Color(0xC8, 0x8A, 0xFF);      // corona violet (glows on telegraph)
+        Color tentacle = new Color(0x24, 0x1C, 0x36);   // dark umbral chain
+        cube(img, 0, 0, 12, 12, 12, core);              // core
+        cube(img, 48, 0, 6, 6, 6, eye);                 // inner_eye
+        for (int i = 0; i < 8; i++) {
+            cube(img, i * 8, 32, 2, 6, 2, shard);       // shard0..7
+        }
+        for (int s = 0; s < 16; s++) {
+            cube(img, s * 8, 44, 2, 6, 2, tentacle);    // tentacle{t}_seg{k}, t*4+k = s
+        }
+        // Gold crack veins radiating on the core's front face (u 12..23, v 12..23).
+        int vein = new Color(0xE8, 0xA8, 0x3A).getRGB() | 0xFF000000;
+        int[][] veins = {{17, 13}, {17, 14}, {16, 15}, {18, 15}, {15, 16}, {19, 16},
+                {14, 18}, {20, 18}, {13, 20}, {21, 20}, {17, 21}, {17, 22}};
+        for (int[] p : veins) {
+            img.setRGB(p[0], p[1], vein);
+        }
+        // Dark pupil slit on the eye front (u 54..59, v 6..11): 2x2 void center.
+        int pupil = 0xFF100A18;
+        for (int y = 8; y <= 9; y++) {
+            img.setRGB(56, y, pupil);
+            img.setRGB(57, y, pupil);
+        }
+        ImageIO.write(img, "png", DIR.resolve("herald.png").toFile());
     }
 }

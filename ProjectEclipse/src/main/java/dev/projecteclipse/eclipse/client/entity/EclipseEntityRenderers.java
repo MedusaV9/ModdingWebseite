@@ -6,6 +6,7 @@ import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.builders.CubeDeformation;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
+import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -27,6 +28,7 @@ public final class EclipseEntityRenderers {
     public static final ModelLayerLocation UMBRAL_STALKER_LAYER = layer("umbral_stalker");
     public static final ModelLayerLocation DECKHAND_LAYER = layer("deckhand");
     public static final ModelLayerLocation SUNMOTE_LAYER = layer("sunmote");
+    public static final ModelLayerLocation HERALD_LAYER = layer("herald");
 
     private EclipseEntityRenderers() {}
 
@@ -44,6 +46,7 @@ public final class EclipseEntityRenderers {
         event.registerLayerDefinition(UMBRAL_STALKER_LAYER, UmbralStalkerModel::createBodyLayer);
         event.registerLayerDefinition(DECKHAND_LAYER, DeckhandModel::createBodyLayer);
         event.registerLayerDefinition(SUNMOTE_LAYER, SunmoteModel::createBodyLayer);
+        event.registerLayerDefinition(HERALD_LAYER, HeraldModel::createBodyLayer);
     }
 
     @SubscribeEvent
@@ -53,5 +56,10 @@ public final class EclipseEntityRenderers {
         event.registerEntityRenderer(EclipseEntities.UMBRAL_STALKER.get(), UmbralStalkerRenderer::new);
         event.registerEntityRenderer(EclipseEntities.DECKHAND.get(), DeckhandRenderer::new);
         event.registerEntityRenderer(EclipseEntities.SUNMOTE.get(), SunmoteRenderer::new);
+        event.registerEntityRenderer(EclipseEntities.HERALD.get(), HeraldRenderer::new);
+        // The corona shard renders as the umbral-shard item sprite (ItemSupplier), scaled
+        // up and fullbright so it reads as a glowing ember in the night fight.
+        event.registerEntityRenderer(EclipseEntities.HERALD_SHARD.get(),
+                context -> new ThrownItemRenderer<>(context, 1.5F, true));
     }
 }

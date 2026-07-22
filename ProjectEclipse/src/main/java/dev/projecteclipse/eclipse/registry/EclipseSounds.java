@@ -88,6 +88,20 @@ public final class EclipseSounds {
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.gazer_whisper"),
                     12.0F));
 
+    // W11 Herald boss suite.
+
+    /** Low glassy drone of the Herald (its mob ambient sound during the fight). */
+    public static final Supplier<SoundEvent> BOSS_HERALD_AMBIENT = SOUNDS.register(
+            "boss.herald_ambient",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_ambient")));
+
+    /** Rising chime cue at the start of every volley telegraph (the "shoot me now" tell). */
+    public static final Supplier<SoundEvent> BOSS_HERALD_TELEGRAPH = SOUNDS.register(
+            "boss.herald_telegraph",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_telegraph")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

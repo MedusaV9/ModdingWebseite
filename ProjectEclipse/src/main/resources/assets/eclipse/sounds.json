@@ -81,5 +81,23 @@
         "volume": 0.6
       }
     ]
+  },
+  "boss.herald_ambient": {
+    "subtitle": "subtitles.eclipse.boss.herald_ambient",
+    "sounds": [
+      {
+        "name": "eclipse:boss/herald_ambient",
+        "volume": 0.8
+      }
+    ]
+  },
+  "boss.herald_telegraph": {
+    "subtitle": "subtitles.eclipse.boss.herald_telegraph",
+    "sounds": [
+      {
+        "name": "eclipse:boss/herald_telegraph",
+        "volume": 0.9
+      }
+    ]
   }
 }

@@ -3,6 +3,8 @@ package dev.projecteclipse.eclipse.entity;
 import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
+import dev.projecteclipse.eclipse.entity.boss.HeraldShardProjectile;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -69,6 +71,28 @@ public final class EclipseEntities {
                     .fireImmune()
                     .build("sunmote"));
 
+    /**
+     * Day-7 boss (W11, spec §2.1). Summoned only by the Herald's Lure ritual or
+     * {@code /eclipse boss herald summon} — never spawned naturally. The hitbox spans the
+     * floating core (center 2.5 blocks above feet) down through the tentacle chains.
+     */
+    public static final Supplier<EntityType<HeraldEntity>> HERALD = ENTITIES.register("herald",
+            () -> EntityType.Builder.of(HeraldEntity::new, MobCategory.MONSTER)
+                    .sized(2.2F, 3.2F)
+                    .eyeHeight(2.5F)
+                    .clientTrackingRange(10)
+                    .fireImmune()
+                    .build("herald"));
+
+    /** Homing corona shard fired by the Herald's volley; shootable down mid-air. */
+    public static final Supplier<EntityType<HeraldShardProjectile>> HERALD_SHARD = ENTITIES.register("herald_shard",
+            () -> EntityType.Builder.<HeraldShardProjectile>of(HeraldShardProjectile::new, MobCategory.MISC)
+                    .sized(0.4F, 0.4F)
+                    .clientTrackingRange(8)
+                    .updateInterval(10)
+                    .fireImmune()
+                    .build("herald_shard"));
+
     private EclipseEntities() {}
 
     public static void register(IEventBus modEventBus) {
@@ -106,6 +130,16 @@ public final class EclipseEntities {
                 .add(Attributes.MAX_HEALTH, 2.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.0D)
                 .add(Attributes.FOLLOW_RANGE, 16.0D)
+                .build());
+        // Spec §2.1: 300 HP base (player-count scaling adjusts MAX_HEALTH at summon time),
+        // gaze deals 8 via ATTACK_DAMAGE, immovable (knockback() is a no-op too).
+        event.put(HERALD.get(), Monster.createMonsterAttributes()
+                .add(Attributes.MAX_HEALTH, HeraldEntity.BASE_MAX_HEALTH)
+                .add(Attributes.ATTACK_DAMAGE, 8.0D)
+                .add(Attributes.MOVEMENT_SPEED, 0.3D)
+                .add(Attributes.FOLLOW_RANGE, 64.0D)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D)
+                .add(Attributes.ARMOR, 4.0D)
                 .build());
     }
 }
