@@ -27,6 +27,13 @@ public final class EclipseItems {
             () -> new Item(new Item.Properties()
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
+    /**
+     * Night-mob drop (The Other, Umbral Stalker). Crafting currency for boss summon items
+     * and W13 economy recipes.
+     */
+    public static final Supplier<Item> UMBRAL_SHARD = ITEMS.register("umbral_shard",
+            () -> new Item(new Item.Properties()));
+
     /** Consumed at the altar to start the revive ritual for a banned player. */
     public static final Supplier<ReviveSigilItem> REVIVE_SIGIL = ITEMS.register("revive_sigil",
             () -> new ReviveSigilItem(new Item.Properties()

@@ -81,6 +81,13 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.unlock_sting")));
 
+    /** Whisper loop of the Gazer (W10) — audible only within ~12 blocks (ambient sound). */
+    public static final Supplier<SoundEvent> AMBIENT_GAZER_WHISPER = SOUNDS.register(
+            "ambient.gazer_whisper",
+            () -> SoundEvent.createFixedRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.gazer_whisper"),
+                    12.0F));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

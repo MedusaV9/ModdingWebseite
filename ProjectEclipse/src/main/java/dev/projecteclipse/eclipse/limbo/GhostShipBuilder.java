@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.limbo;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
@@ -46,6 +47,7 @@ public final class GhostShipBuilder {
         }
         buildIfNeeded(limbo);
         OarAnimator.ensureOars(limbo);
+        DeckhandEntity.ensureCrew(limbo);
     }
 
     /** Column sampled for the water surface; far away from every block the builder places. */

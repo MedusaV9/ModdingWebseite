@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.network.EclipsePayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseBlockEntities;
@@ -37,6 +38,7 @@ public final class EclipseMod {
         EclipseAttachments.register(modEventBus);
         EclipseMenus.register(modEventBus);
         EclipseWorldgen.register(modEventBus);
+        EclipseEntities.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

@@ -39,6 +39,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_MILESTONE_PROGRESS = "milestoneProgress";
     private static final String TAG_FORCE_VOICE_MUTED = "forceVoiceMuted";
     private static final String TAG_OAR_ENTITIES = "oarEntities";
+    private static final String TAG_DECKHAND_ENTITIES = "deckhandEntities";
     private static final String TAG_WORLD_STAGE_OVERWORLD = "worldStageOverworld";
     private static final String TAG_WORLD_STAGE_NETHER = "worldStageNether";
     private static final String TAG_GROWTH_DIMENSION = "growthDimension";
@@ -74,6 +75,7 @@ public final class EclipseWorldState extends SavedData {
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
     private final List<UUID> oarEntities = new ArrayList<>();
+    private final List<UUID> deckhandEntities = new ArrayList<>();
     private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
@@ -112,6 +114,9 @@ public final class EclipseWorldState extends SavedData {
         state.borderFxRange = tag.contains(TAG_BORDER_FX_RANGE) ? tag.getDouble(TAG_BORDER_FX_RANGE) : -1.0D;
         for (Tag entry : tag.getList(TAG_OAR_ENTITIES, Tag.TAG_INT_ARRAY)) {
             state.oarEntities.add(NbtUtils.loadUUID(entry));
+        }
+        for (Tag entry : tag.getList(TAG_DECKHAND_ENTITIES, Tag.TAG_INT_ARRAY)) {
+            state.deckhandEntities.add(NbtUtils.loadUUID(entry));
         }
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
@@ -154,6 +159,12 @@ public final class EclipseWorldState extends SavedData {
             oarList.add(NbtUtils.createUUID(uuid));
         }
         tag.put(TAG_OAR_ENTITIES, oarList);
+
+        ListTag deckhandList = new ListTag();
+        for (UUID uuid : this.deckhandEntities) {
+            deckhandList.add(NbtUtils.createUUID(uuid));
+        }
+        tag.put(TAG_DECKHAND_ENTITIES, deckhandList);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -379,6 +390,17 @@ public final class EclipseWorldState extends SavedData {
     public void setOarEntities(List<UUID> oarEntityIds) {
         this.oarEntities.clear();
         this.oarEntities.addAll(oarEntityIds);
+        setDirty();
+    }
+
+    /** UUIDs of the persistent Deckhand crew mobs seated at the ghost-ship oar benches (W10). */
+    public List<UUID> getDeckhandEntities() {
+        return Collections.unmodifiableList(this.deckhandEntities);
+    }
+
+    public void setDeckhandEntities(List<UUID> deckhandEntityIds) {
+        this.deckhandEntities.clear();
+        this.deckhandEntities.addAll(deckhandEntityIds);
         setDirty();
     }
 

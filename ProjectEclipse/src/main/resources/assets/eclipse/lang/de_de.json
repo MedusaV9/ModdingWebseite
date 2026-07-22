@@ -3,8 +3,14 @@
   "block.eclipse.grave.locked": "Dieses Grab ist noch versiegelt.",
   "block.eclipse.altar": "Altar",
   "item.eclipse.heart_fragment": "Herzfragment",
+  "item.eclipse.umbral_shard": "Umbrasplitter",
   "item.eclipse.revive_sigil": "Wiederbelebungssiegel",
   "item.eclipse.arm_artifact": "Armartefakt",
+  "entity.eclipse.the_other": "Das Andere",
+  "entity.eclipse.gazer": "Starrer",
+  "entity.eclipse.umbral_stalker": "Umbra-Pirscher",
+  "entity.eclipse.deckhand": "Decksmann",
+  "entity.eclipse.sunmote": "Sonnenfunke",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Eclipse-Menü öffnen",
   "gui.eclipse.title.tagline": "Project: Eclipse",
@@ -160,5 +166,6 @@
   "subtitles.eclipse.event.border_glitch": "Die Realität flimmert",
   "subtitles.eclipse.ui.typewriter": "Schreibmaschine klackert",
   "subtitles.eclipse.ui.page_turn": "Seite blättert um",
-  "subtitles.eclipse.ui.unlock_sting": "Etwas wird freigeschaltet"
+  "subtitles.eclipse.ui.unlock_sting": "Etwas wird freigeschaltet",
+  "subtitles.eclipse.ambient.gazer_whisper": "Flüstern windet sich"
 }

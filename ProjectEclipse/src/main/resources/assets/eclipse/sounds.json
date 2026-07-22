@@ -72,5 +72,14 @@
     "sounds": [
       "eclipse:ui/unlock_sting"
     ]
+  },
+  "ambient.gazer_whisper": {
+    "subtitle": "subtitles.eclipse.ambient.gazer_whisper",
+    "sounds": [
+      {
+        "name": "eclipse:ambient/gazer_whisper",
+        "volume": 0.6
+      }
+    ]
   }
 }

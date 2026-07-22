@@ -3,8 +3,14 @@
   "block.eclipse.grave.locked": "This grave is still sealed.",
   "block.eclipse.altar": "Altar",
   "item.eclipse.heart_fragment": "Heart Fragment",
+  "item.eclipse.umbral_shard": "Umbral Shard",
   "item.eclipse.revive_sigil": "Revive Sigil",
   "item.eclipse.arm_artifact": "Arm Artifact",
+  "entity.eclipse.the_other": "The Other",
+  "entity.eclipse.gazer": "Gazer",
+  "entity.eclipse.umbral_stalker": "Umbral Stalker",
+  "entity.eclipse.deckhand": "Deckhand",
+  "entity.eclipse.sunmote": "Sunmote",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Open Eclipse Menu",
   "gui.eclipse.title.tagline": "Project: Eclipse",
@@ -160,5 +166,6 @@
   "subtitles.eclipse.event.border_glitch": "Reality glitches",
   "subtitles.eclipse.ui.typewriter": "Typewriter clicks",
   "subtitles.eclipse.ui.page_turn": "Page turns",
-  "subtitles.eclipse.ui.unlock_sting": "Something unlocks"
+  "subtitles.eclipse.ui.unlock_sting": "Something unlocks",
+  "subtitles.eclipse.ambient.gazer_whisper": "Whispers coil"
 }
