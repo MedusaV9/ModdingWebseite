@@ -321,6 +321,13 @@ public record S2CMilestonesPayload(List<Entry> entries) implements CustomPacketP
 public record C2SCutsceneStatePayload(String id, State state) implements CustomPacketPayload; // id "eclipse:cutscene_state"
 // C2SCutsceneStatePayload.State: enum { STARTED, FINISHED, SKIP_REQUEST, SKIPPED } — playback
 // ACKs + skip requests, validated/handled by cutscene.CutsceneService.handleClientState.
+public record S2COpenGoalEditorPayload(String daysJson) implements CustomPacketPayload; // id "eclipse:open_goal_editor"
+// Opens the W14 goal editor GUI (devtools.client.GoalEditorScreen) with the server's CURRENT
+// days.json as raw JSON. Sent by /eclipse goals edit via devtools.ConfigEditor.openFor.
+public record C2SConfigEditPayload(String fileName, String json) implements CustomPacketPayload; // id "eclipse:config_edit"
+// UNTRUSTED goal-editor write-back. devtools.ConfigEditor.handleEdit requires
+// hasPermissions(3), allowlists days.json|milestones.json, rejects > MAX_JSON_BYTES (64 KB)
+// and re-validates + normalizes against the EclipseConfig schema before writing + reload.
 // all expose: public static final CustomPacketPayload.Type<...> TYPE;
 //             public static final StreamCodec<ByteBuf, ...> STREAM_CODEC;
 
@@ -954,7 +961,9 @@ public final class ModGate {          // @EventBusSubscriber (game bus)
   `dayAutoAdvanceTime="HH:mm"` in `config/eclipse/general.json` to advance once per real-world
   day at that server-local time (the last advance's epoch day is persisted under the reserved
   `EclipseWorldState` milestone-progress key `scheduler:last_auto_advance_epoch_day`, so
-  restarts never double-advance).
+  restarts never double-advance). A W14 `devtools.PhaseScheduler` schedule
+  (`/eclipse schedule next …`, persisted as `nextPhaseEpochMillis`) SUPERSEDES auto-advance
+  while set — the guard in `DayScheduler.onServerTick` skips it with a one-time warning.
 - **UnlockState** — the unlocked-key set is the union of `unlocks[]` of all day plans `1..currentDay`
   plus `rewards[]` of all altar milestones `1..altarLevel`; cached, auto-invalidates on day/altar
   changes and config reloads. **Boss gate (W13)**: the `enchanting` key from a day plan is unioned
@@ -1062,6 +1071,13 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse stage revert` | Re-applies the source dimension's last-loaded snapshot (`EclipseWorldState.lastLoadedStage`). |
 | `/eclipse stage status` | Committed stage + last-loaded snapshot + in-flight snapshot/sweep jobs + saved `.bin` files, per disc dimension. |
 | `/eclipse stage snapshot save\|restore <name>` | `devtools.PristineSnapshots`: flushes all chunks and copies `region/ entities/ poi/` (+ nether `DIM-1/…`) to `<world>/eclipse/stage_snapshots/<name>/`; `restore` stages a marker consumed at the next boot's `ServerAboutToStartEvent` — requires a restart. |
+| `/eclipse schedule next <ISO8601\|+NhNNm>` | `devtools.PhaseScheduler`: schedules the next day advance at an absolute wall-clock instant (persisted, restart-safe). Accepts `+2h30m`/`+45m`/`+90s` or server-local `2026-08-01T18:00`. Shows the purple "Next phase: …" countdown bossbar (W8 `day` skin); supersedes `dayAutoAdvance` while set. |
+| `/eclipse schedule list` | Prints the schedule target + remaining (and whether it supersedes `dayAutoAdvance`). |
+| `/eclipse schedule clear` | Cancels the schedule and removes the countdown bar. |
+| `/eclipse freeze <players> on [seconds]\|off` | `FreezeService.freeze/unfreeze`: full movement lock + invulnerability (rubber-band), watchdog TTL default 300 s. |
+| `/eclipse invuln <players> on [seconds]\|off` | `FreezeService.setInvulnerable/clearInvulnerable`: damage + knockback immunity WITHOUT the movement lock (never flips `abilities.invulnerable`), TTL default 300 s. |
+| `/eclipse timeline` | `devtools.TimelineInspector`: source-only dump — day/altar, phase schedule, per-dim stage/ring/border/sweep, night event + boss flags, per-player freeze/invuln/cutscene-ACK, `FreezeService` watchdog ring buffer. |
+| `/eclipse goals edit` | `devtools.ConfigEditor.openFor`: opens the client goal editor GUI (`S2COpenGoalEditorPayload` with the current `days.json`); Save sends `C2SConfigEditPayload` — perm-3-checked, schema-validated write + `EclipseConfig.reload()` + day-state/milestone/goal re-sync. |
 | `/eclipse voicemute <player> on\|off` | `VoiceMuteApi.setForceMuted` (persistent administrative mute). |
 | `/eclipse tp_limbo [player]` | Teleports you (or the target) to the Limbo ghost-ship platform. |
 | `/eclipse cutscene play <id> [players]` | `CutsceneService.play` for the targets (default: everyone online). |
@@ -1189,7 +1205,7 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
-- `dev.projecteclipse.eclipse.devtools` — W14 operator tooling: `StageIO` (stage annulus snapshots, `<world>/eclipse/stages/<n>.bin`), `PristineSnapshots` (whole-region backups + restore-on-restart marker).
+- `dev.projecteclipse.eclipse.devtools` — W14 operator tooling: `StageIO` (stage annulus snapshots, `<world>/eclipse/stages/<n>.bin`), `PristineSnapshots` (whole-region backups + restore-on-restart marker), `PhaseScheduler` (wall-clock day advance + countdown bossbar), `TimelineInspector` (`/eclipse timeline`), `ConfigEditor` (perm-checked goal-editor writes); `devtools.client.GoalEditorScreen` is the client GUI.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `dev.projecteclipse.eclipse.cutscene` / `cutscene.client` — the cutscene engine (see "Cutscene engine"): server path library + orchestration + freeze, and the client camera director/letterbox/input swallow.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`, plus `Camera.setPosition(Vec3)`/`Camera.setRotation(yaw, pitch, roll)` for the cutscene `CameraDirector`; `validateAccessTransformers = true` is enabled in `build.gradle`.

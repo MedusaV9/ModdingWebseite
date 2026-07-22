@@ -72,6 +72,8 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_GRAVE_POSITIONS = "gravePositions";
     private static final String TAG_LAST_LOADED_STAGE_OVERWORLD = "lastLoadedStageOverworld";
     private static final String TAG_LAST_LOADED_STAGE_NETHER = "lastLoadedStageNether";
+    private static final String TAG_NEXT_PHASE_EPOCH_MILLIS = "nextPhaseEpochMillis";
+    private static final String TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS = "phaseScheduledAtEpochMillis";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -103,6 +105,8 @@ public final class EclipseWorldState extends SavedData {
     private int shardPool = 0;
     private int lastLoadedStageOverworld = -1;
     private int lastLoadedStageNether = -1;
+    private long nextPhaseEpochMillis = 0L;
+    private long phaseScheduledAtEpochMillis = 0L;
     private final Map<UUID, List<GlobalPos>> gravePositions = new HashMap<>();
     private final Set<String> disabledCutscenes = new HashSet<>();
 
@@ -160,6 +164,9 @@ public final class EclipseWorldState extends SavedData {
                 ? tag.getInt(TAG_LAST_LOADED_STAGE_OVERWORLD) : -1;
         state.lastLoadedStageNether = tag.contains(TAG_LAST_LOADED_STAGE_NETHER)
                 ? tag.getInt(TAG_LAST_LOADED_STAGE_NETHER) : -1;
+        // W14 phase scheduler: 0 = no schedule (pre-W14 saves keep loading).
+        state.nextPhaseEpochMillis = tag.getLong(TAG_NEXT_PHASE_EPOCH_MILLIS);
+        state.phaseScheduledAtEpochMillis = tag.getLong(TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS);
         for (Tag entry : tag.getList(TAG_GRAVE_POSITIONS, Tag.TAG_COMPOUND)) {
             CompoundTag grave = (CompoundTag) entry;
             if (!grave.hasUUID("owner")) {
@@ -226,6 +233,8 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_SHARD_POOL, this.shardPool);
         tag.putInt(TAG_LAST_LOADED_STAGE_OVERWORLD, this.lastLoadedStageOverworld);
         tag.putInt(TAG_LAST_LOADED_STAGE_NETHER, this.lastLoadedStageNether);
+        tag.putLong(TAG_NEXT_PHASE_EPOCH_MILLIS, this.nextPhaseEpochMillis);
+        tag.putLong(TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS, this.phaseScheduledAtEpochMillis);
 
         ListTag graveList = new ListTag();
         for (Map.Entry<UUID, List<GlobalPos>> entry : this.gravePositions.entrySet()) {
@@ -425,6 +434,28 @@ public final class EclipseWorldState extends SavedData {
         } else {
             this.lastLoadedStageOverworld = stage;
         }
+        setDirty();
+    }
+
+    // --- phase scheduler (W14 devtools) ---
+
+    /**
+     * Absolute epoch millis at which {@code devtools.PhaseScheduler} advances the event day,
+     * or {@code 0} when no phase is scheduled. Survives restarts (wall-clock time).
+     */
+    public long getNextPhaseEpochMillis() {
+        return this.nextPhaseEpochMillis;
+    }
+
+    /** When the current schedule was set (epoch millis) — the countdown bar's progress origin. */
+    public long getPhaseScheduledAtEpochMillis() {
+        return this.phaseScheduledAtEpochMillis;
+    }
+
+    /** Sets (or clears with {@code 0, 0}) the phase schedule. Only {@code PhaseScheduler} calls this. */
+    public void setPhaseSchedule(long targetEpochMillis, long scheduledAtEpochMillis) {
+        this.nextPhaseEpochMillis = targetEpochMillis;
+        this.phaseScheduledAtEpochMillis = scheduledAtEpochMillis;
         setDirty();
     }
 

@@ -32,6 +32,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p>Since worker 7 the playable boundary is the circular {@code border.SoftBorder}, which
  * follows the world STAGE — the legacy {@code days.json} {@code borderSize} field is still
  * parsed but no longer drives anything (a one-time deprecation warning is logged).</p>
+ *
+ * <p>Since W14, {@code devtools.PhaseScheduler} can schedule the next advance at an absolute
+ * wall-clock instant; while such a schedule is set it supersedes {@code dayAutoAdvance}
+ * (guard + warning in {@link #onServerTick}).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DayScheduler {
@@ -39,6 +43,8 @@ public final class DayScheduler {
     private static final int AUTO_ADVANCE_CHECK_TICKS = 100;
     /** One-time deprecation warning guard for the legacy {@code days.json} borderSize field. */
     private static boolean warnedBorderSizeDeprecated = false;
+    /** One warning per overlap of {@code dayAutoAdvance} with a W14 phase schedule. */
+    private static boolean warnedSchedulerSupersedes = false;
     /**
      * Reserved {@link EclipseWorldState} milestone-progress key holding the epoch day of the
      * last automatic advance, so a restart never re-advances the same real-world day.
@@ -115,6 +121,18 @@ public final class DayScheduler {
         if (server.getTickCount() % AUTO_ADVANCE_CHECK_TICKS != 0 || !EclipseConfig.dayAutoAdvance()) {
             return;
         }
+        // W14: an explicit phase schedule supersedes the daily auto-advance until it fires
+        // or is cleared (devtools.PhaseScheduler drives the day then).
+        if (dev.projecteclipse.eclipse.devtools.PhaseScheduler.isScheduled(server)) {
+            if (!warnedSchedulerSupersedes) {
+                warnedSchedulerSupersedes = true;
+                EclipseMod.LOGGER.warn("dayAutoAdvance is enabled but a phase schedule is set — "
+                        + "the scheduler supersedes auto-advance until it fires or is cleared "
+                        + "(/eclipse schedule clear).");
+            }
+            return;
+        }
+        warnedSchedulerSupersedes = false;
         if (LocalTime.now().isBefore(EclipseConfig.dayAutoAdvanceTime())) {
             return;
         }

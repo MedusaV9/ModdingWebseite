@@ -1,7 +1,10 @@
 package dev.projecteclipse.eclipse.cutscene;
 
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -39,6 +42,10 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
  * anchor re-follows the player for a short grace window instead), and on logout; stale locks
  * are cleared at login. Because the attachment is transient, a server restart always
  * unfreezes. Recent forced releases are kept in a small ring buffer for the W14 inspector.</p>
+ *
+ * <p><b>Invuln-only mode</b> (W14): {@link #setInvulnerable} cancels damage/knockback WITHOUT
+ * the movement lock or the interaction cancels — a transient TTL'd map (never an attachment,
+ * never {@code abilities.invulnerable}), so it too can never survive a restart.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FreezeService {
@@ -50,6 +57,12 @@ public final class FreezeService {
 
     /** Ring buffer of recent watchdog/forced releases (newest last); W14's inspector prints it. */
     private static final ArrayDeque<String> WATCHDOG_EVENTS = new ArrayDeque<>();
+
+    /**
+     * Invuln-only TTLs by player UUID (remaining ticks), decremented in the player tick.
+     * Server-thread only; transient by design (a restart always clears it).
+     */
+    private static final Map<UUID, Integer> INVULN_TTL = new HashMap<>();
 
     private FreezeService() {}
 
@@ -108,6 +121,36 @@ public final class FreezeService {
         return List.copyOf(WATCHDOG_EVENTS);
     }
 
+    // --- invuln-only mode (W14 /eclipse invuln) ---
+
+    /**
+     * Makes a player invulnerable (damage + knockback cancelled) for at most {@code ttlTicks}
+     * WITHOUT the movement lock — movement, interaction and combat stay free. Replaces any
+     * previous invuln TTL. Never flips {@code abilities.invulnerable}.
+     */
+    public static void setInvulnerable(ServerPlayer player, int ttlTicks) {
+        INVULN_TTL.put(player.getUUID(), Math.max(1, ttlTicks));
+        EclipseMod.LOGGER.info("FreezeService: {} is now invulnerable (no movement lock) for {} ticks",
+                player.getScoreboardName(), Math.max(1, ttlTicks));
+    }
+
+    /** Clears a player's invuln-only mode immediately. Safe to call when not invulnerable. */
+    public static void clearInvulnerable(ServerPlayer player) {
+        if (INVULN_TTL.remove(player.getUUID()) != null) {
+            EclipseMod.LOGGER.info("FreezeService: {} is no longer invulnerable", player.getScoreboardName());
+        }
+    }
+
+    /** Whether the player is in invuln-only mode (freeze locks imply invulnerability separately). */
+    public static boolean isInvulnerableOnly(ServerPlayer player) {
+        return INVULN_TTL.containsKey(player.getUUID());
+    }
+
+    /** Remaining invuln-only ticks (0 when not invulnerable) — W14 inspector display. */
+    public static int invulnTicksRemaining(ServerPlayer player) {
+        return INVULN_TTL.getOrDefault(player.getUUID(), 0);
+    }
+
     // --- lock enforcement ---
 
     private static void anchor(CutsceneLock lock, Vec3 pos) {
@@ -134,8 +177,19 @@ public final class FreezeService {
 
     @SubscribeEvent
     static void onPlayerTickPre(PlayerTickEvent.Pre event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)
-                || !player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        // Invuln-only watchdog: same mandatory-TTL contract as the full lock.
+        Integer invulnTicks = INVULN_TTL.get(player.getUUID());
+        if (invulnTicks != null && invulnTicks - 1 <= 0) {
+            INVULN_TTL.remove(player.getUUID());
+            recordWatchdogEvent(player.getScoreboardName() + ": invuln TTL expired");
+            EclipseMod.LOGGER.info("FreezeService: invuln TTL expired for {}", player.getScoreboardName());
+        } else if (invulnTicks != null) {
+            INVULN_TTL.put(player.getUUID(), invulnTicks - 1);
+        }
+        if (!player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
             return;
         }
         CutsceneLock lock = player.getData(EclipseAttachments.CUTSCENE_LOCK);
@@ -203,14 +257,16 @@ public final class FreezeService {
 
     @SubscribeEvent
     static void onIncomingDamage(LivingIncomingDamageEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && isFrozen(player)) {
+        if (event.getEntity() instanceof ServerPlayer player
+                && (isFrozen(player) || isInvulnerableOnly(player))) {
             event.setCanceled(true);
         }
     }
 
     @SubscribeEvent
     static void onKnockBack(LivingKnockBackEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && isFrozen(player)) {
+        if (event.getEntity() instanceof ServerPlayer player
+                && (isFrozen(player) || isInvulnerableOnly(player))) {
             event.setCanceled(true);
         }
     }
@@ -221,6 +277,9 @@ public final class FreezeService {
     static void onDeath(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             release(player, "death");
+            // Cancelled damage means a death normally can't happen while invulnerable, but a
+            // mod could kill outright — never let invuln leak across a respawn.
+            INVULN_TTL.remove(player.getUUID());
         }
     }
 
@@ -243,15 +302,21 @@ public final class FreezeService {
     static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             release(player, "logout");
+            INVULN_TTL.remove(player.getUUID());
         }
     }
 
     /** Transient attachments cannot survive a relog, but clear defensively anyway. */
     @SubscribeEvent
     static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player
-                && player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
             release(player, "stale lock at login");
+        }
+        if (INVULN_TTL.remove(player.getUUID()) != null) {
+            recordWatchdogEvent(player.getScoreboardName() + ": stale invuln at login");
         }
     }
 }

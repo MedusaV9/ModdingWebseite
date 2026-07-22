@@ -33,8 +33,12 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.cutscene.FreezeService;
+import dev.projecteclipse.eclipse.devtools.ConfigEditor;
+import dev.projecteclipse.eclipse.devtools.PhaseScheduler;
 import dev.projecteclipse.eclipse.devtools.PristineSnapshots;
 import dev.projecteclipse.eclipse.devtools.StageIO;
+import dev.projecteclipse.eclipse.devtools.TimelineInspector;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.economy.SupplyBeacon;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
@@ -94,6 +98,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse stage get | set &lt;overworld|nether&gt; &lt;n&gt; [instant|animate] | rebuild &lt;dim&gt; &lt;n&gt;
  * /eclipse stage save &lt;n&gt; | load &lt;n&gt; | revert | status      (annulus snapshots, source dim)
  * /eclipse stage snapshot save|restore &lt;name&gt;                (pristine region backups)
+ * /eclipse schedule next &lt;ISO8601|+NhNNm&gt; | list | clear      (phase scheduler + countdown bar)
+ * /eclipse freeze &lt;players&gt; on [seconds]|off                  (movement lock + invuln)
+ * /eclipse invuln &lt;players&gt; on [seconds]|off                  (damage/knockback immunity only)
+ * /eclipse timeline                                           (full state dump, source only)
+ * /eclipse goals edit                                         (opens the client goal editor GUI)
  * /eclipse voicemute &lt;player&gt; on|off
  * /eclipse tp_limbo [player]
  * /eclipse cutscene play &lt;id&gt; [players] | abort [players] | list | enable|disable &lt;id&gt;
@@ -247,6 +256,32 @@ public final class EclipseCommands {
                                 .then(Commands.literal("restore")
                                         .then(Commands.argument("name", StringArgumentType.word())
                                                 .executes(EclipseCommands::pristineSnapshotRestore)))))
+                .then(Commands.literal("schedule")
+                        .then(Commands.literal("next")
+                                .then(Commands.argument("spec", StringArgumentType.greedyString())
+                                        .executes(EclipseCommands::scheduleNext)))
+                        .then(Commands.literal("list")
+                                .executes(EclipseCommands::scheduleList))
+                        .then(Commands.literal("clear")
+                                .executes(EclipseCommands::scheduleClear)))
+                .then(Commands.literal("freeze")
+                        .then(Commands.argument("players", EntityArgument.players())
+                                .then(Commands.literal("on")
+                                        .executes(context -> freezeSet(context, true, false))
+                                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                                                .executes(context -> freezeSet(context, true, true))))
+                                .then(Commands.literal("off")
+                                        .executes(context -> freezeSet(context, false, false)))))
+                .then(Commands.literal("invuln")
+                        .then(Commands.argument("players", EntityArgument.players())
+                                .then(Commands.literal("on")
+                                        .executes(context -> invulnSet(context, true, false))
+                                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                                                .executes(context -> invulnSet(context, true, true))))
+                                .then(Commands.literal("off")
+                                        .executes(context -> invulnSet(context, false, false)))))
+                .then(Commands.literal("timeline")
+                        .executes(EclipseCommands::timeline))
                 .then(Commands.literal("tp_limbo")
                         .executes(context -> tpLimbo(context.getSource(), context.getSource().getPlayerOrException()))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -316,7 +351,9 @@ public final class EclipseCommands {
                         .then(Commands.literal("tick")
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("index", IntegerArgumentType.integer(1, 8))
-                                                .executes(EclipseCommands::goalsTick)))))
+                                                .executes(EclipseCommands::goalsTick))))
+                        .then(Commands.literal("edit")
+                                .executes(EclipseCommands::goalsEdit)))
                 .then(Commands.literal("shards")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -828,6 +865,114 @@ public final class EclipseCommands {
         CommandSourceStack source = context.getSource();
         return sendResult(source, PristineSnapshots.requestRestore(source.getServer(),
                 StringArgumentType.getString(context, "name")));
+    }
+
+    // --- phase scheduler (W14 devtools) ---
+
+    /** {@code /eclipse schedule next <ISO8601|+NhNNm>}: schedules the next day advance. */
+    private static int scheduleNext(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        try {
+            String line = PhaseScheduler.scheduleNext(source.getServer(),
+                    StringArgumentType.getString(context, "spec"));
+            source.sendSuccess(() -> Component.literal(line), true);
+            return 1;
+        } catch (IllegalArgumentException e) {
+            source.sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int scheduleList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        MinecraftServer server = source.getServer();
+        String schedule = PhaseScheduler.describe(server);
+        int day = DayScheduler.getDay(server);
+        source.sendSuccess(() -> Component.literal("Phase schedule: " + schedule
+                + ("none".equals(schedule) ? "" : " -> day " + (day + 1))
+                + (EclipseConfig.dayAutoAdvance()
+                        ? " | dayAutoAdvance is ON" + (PhaseScheduler.isScheduled(server)
+                                ? " (superseded while scheduled)" : "")
+                        : "")), false);
+        return PhaseScheduler.isScheduled(server) ? 1 : 0;
+    }
+
+    private static int scheduleClear(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String line = PhaseScheduler.clear(source.getServer());
+        if (line == null) {
+            source.sendFailure(Component.literal("No phase schedule is set"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(line), true);
+        return 1;
+    }
+
+    // --- freeze / invuln (W14 devtools; thin wrappers over FreezeService) ---
+
+    /** Default manual freeze/invuln watchdog TTL: 5 minutes (the service demands a finite TTL). */
+    private static final int MANUAL_LOCK_DEFAULT_SECONDS = 300;
+
+    /** {@code /eclipse freeze <players> on [seconds]|off}: full movement lock + invulnerability. */
+    private static int freezeSet(CommandContext<CommandSourceStack> context, boolean on,
+            boolean hasSeconds) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "players");
+        int seconds = hasSeconds ? IntegerArgumentType.getInteger(context, "seconds")
+                : MANUAL_LOCK_DEFAULT_SECONDS;
+        for (ServerPlayer player : players) {
+            if (on) {
+                FreezeService.freeze(player, seconds * 20);
+            } else {
+                FreezeService.unfreeze(player);
+            }
+        }
+        source.sendSuccess(() -> Component.literal((on
+                ? "Froze " + players.size() + " player(s) for " + seconds + "s (movement lock + invuln)"
+                : "Unfroze " + players.size() + " player(s)")), true);
+        return players.size();
+    }
+
+    /** {@code /eclipse invuln <players> on [seconds]|off}: damage/knockback immunity only. */
+    private static int invulnSet(CommandContext<CommandSourceStack> context, boolean on,
+            boolean hasSeconds) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "players");
+        int seconds = hasSeconds ? IntegerArgumentType.getInteger(context, "seconds")
+                : MANUAL_LOCK_DEFAULT_SECONDS;
+        for (ServerPlayer player : players) {
+            if (on) {
+                FreezeService.setInvulnerable(player, seconds * 20);
+            } else {
+                FreezeService.clearInvulnerable(player);
+            }
+        }
+        source.sendSuccess(() -> Component.literal((on
+                ? "Made " + players.size() + " player(s) invulnerable for " + seconds + "s (no movement lock)"
+                : "Cleared invulnerability of " + players.size() + " player(s)")), true);
+        return players.size();
+    }
+
+    // --- timeline inspector (W14 devtools) ---
+
+    private static int timeline(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        for (String line : TimelineInspector.lines(source.getServer())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
+    // --- goal editor (W14 devtools) ---
+
+    /** {@code /eclipse goals edit}: opens the client GUI via {@code S2COpenGoalEditorPayload}. */
+    private static int goalsEdit(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        ConfigEditor.openFor(player);
+        source.sendSuccess(() -> Component.literal(
+                "Goal editor opened (client screen; Save re-checks permission server-side)"), false);
+        return 1;
     }
 
     // --- tp_limbo ---

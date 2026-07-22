@@ -44,9 +44,11 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CTimelinePayload.TYPE, S2CTimelinePayload.STREAM_CODEC, EclipsePayloads::handleTimeline);
         registrar.playToClient(S2CMilestonesPayload.TYPE, S2CMilestonesPayload.STREAM_CODEC, EclipsePayloads::handleMilestones);
         registrar.playToClient(S2CShakePayload.TYPE, S2CShakePayload.STREAM_CODEC, EclipsePayloads::handleShake);
+        registrar.playToClient(S2COpenGoalEditorPayload.TYPE, S2COpenGoalEditorPayload.STREAM_CODEC, EclipsePayloads::handleOpenGoalEditor);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
+        registrar.playToServer(C2SConfigEditPayload.TYPE, C2SConfigEditPayload.STREAM_CODEC, EclipsePayloads::handleConfigEdit);
     }
 
     /**
@@ -190,6 +192,18 @@ public final class EclipsePayloads {
     private static void handleCutsceneState(C2SCutsceneStatePayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             dev.projecteclipse.eclipse.cutscene.CutsceneService.handleClientState(payload, player);
+        }
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleOpenGoalEditor(S2COpenGoalEditorPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.devtools.client.GoalEditorScreen.open(payload.daysJson());
+    }
+
+    /** W14 goal editor writes; perm check + validation live in {@code devtools.ConfigEditor}. */
+    private static void handleConfigEdit(C2SConfigEditPayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.devtools.ConfigEditor.handleEdit(payload, player);
         }
     }
 
