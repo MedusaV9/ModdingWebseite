@@ -4,6 +4,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.snapshot.SnapshotService;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import net.minecraft.ChatFormatting;
@@ -58,8 +59,11 @@ public final class BanService {
 
     /**
      * Applies the visible ghost state: adventure mode, ghost team, infinite glowing
-     * + slow falling, and teleports to the Limbo dimension (falls back to the
-     * overworld shared spawn with a warning if {@code eclipse:limbo} is not loaded).
+     * + slow falling, and teleports onto the ghost ship's spawn platform in the Limbo
+     * dimension (falls back to the overworld shared spawn with a warning if
+     * {@code eclipse:limbo} is not loaded). The shared world spawn is deliberately NOT
+     * used inside Limbo: its X/Z sit over open ocean far from the ship, where the
+     * ghost would drown.
      */
     public static void applyLimboState(ServerPlayer player) {
         if (player == null) {
@@ -72,7 +76,8 @@ public final class BanService {
 
         ServerLevel limbo = player.server.getLevel(LimboDimension.LIMBO);
         if (limbo != null) {
-            teleportToSharedSpawn(player, limbo);
+            BlockPos arrival = GhostShipBuilder.platformArrivalPos(limbo);
+            player.teleportTo(limbo, arrival.getX() + 0.5D, arrival.getY(), arrival.getZ() + 0.5D, 0.0F, 0.0F);
         } else {
             EclipseMod.LOGGER.warn("Limbo dimension {} is not loaded; sending banned player {} to overworld spawn instead",
                     LimboDimension.LIMBO.location(), player.getScoreboardName());

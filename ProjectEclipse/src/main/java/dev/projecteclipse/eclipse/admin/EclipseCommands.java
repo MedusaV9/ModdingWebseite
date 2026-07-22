@@ -23,6 +23,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.snapshot.SnapshotService;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
 import dev.projecteclipse.eclipse.lives.BanService;
@@ -361,11 +362,11 @@ public final class EclipseCommands {
                     + " is not loaded"));
             return 0;
         }
-        BlockPos spawn = limbo.getSharedSpawnPos();
-        player.teleportTo(limbo, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
-                limbo.getSharedSpawnAngle(), 0.0F);
+        // Land on the ghost ship's spawn platform — the shared world spawn X/Z sit over open ocean.
+        BlockPos arrival = GhostShipBuilder.platformArrivalPos(limbo);
+        player.teleportTo(limbo, arrival.getX() + 0.5D, arrival.getY(), arrival.getZ() + 0.5D, 0.0F, 0.0F);
         source.sendSuccess(() -> Component.literal("Teleported " + player.getScoreboardName()
-                + " to Limbo spawn"), false);
+                + " to the Limbo ghost ship platform"), false);
         return 1;
     }
 

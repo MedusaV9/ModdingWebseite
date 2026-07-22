@@ -145,6 +145,16 @@ public final class GhostShipBuilder {
         return waterline;
     }
 
+    /**
+     * Feet-level arrival position in the middle of the spawn platform (see {@link #build}),
+     * one block above the deck. Banned ghosts ({@code BanService}) and {@code /eclipse tp_limbo}
+     * land here — NOT at the shared world spawn, which sits far from the ship over open
+     * (drownable) ocean.
+     */
+    public static BlockPos platformArrivalPos(ServerLevel limbo) {
+        return new BlockPos(0, waterlineY(limbo) + 4, 12);
+    }
+
     /** Hull half width at the given X offset; tapers towards bow and stern. */
     public static int halfWidthAt(int dx) {
         int d = Math.abs(dx);

@@ -128,7 +128,7 @@ public static boolean restore(ServerPlayer player, Path snapshotFile); // clears
 
 ### Config — `dev.projecteclipse.eclipse.core.config.EclipseConfig`
 
-Loads `config/eclipse/{general,days,milestones,modgate}.json`; missing files are created with defaults on first run
+Loads `config/eclipse/{general,days,milestones,modgate,anticheat}.json`; missing files are created with defaults on first run
 (triggered from `FMLCommonSetupEvent`). Getters lazy-load if needed. Parse/IO failures fall back to built-in defaults in memory.
 
 ```java
@@ -138,6 +138,7 @@ public record DayPlan(int day, List<String> goals, List<String> unlocks, double 
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
 public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
+public record AntiCheat(List<String> blockedModIdSubstrings) {}
 
 public static General general();
 public static int graveGraceMinutes();       // non-owners may loot a grave after 1x; it scatters after 3x
@@ -148,6 +149,8 @@ public static DayPlan day(int day);          // out-of-range days clamp to first
 public static List<Milestone> milestones();  // ordered by level
 public static Milestone milestone(int level); // null if not configured
 public static ModGate modGate();
+public static AntiCheat antiCheat();         // anticheat.json blocklist, see "Anti-cheat"
+public static synchronized boolean setNamespaceGated(String namespace, boolean gated); // mutates + persists modgate.json
 public static synchronized void reload();
 ```
 
@@ -227,7 +230,7 @@ re-poses them every 30 ticks (±25° about Z, mirrored per side) with client-sid
 
 ```java
 public final class StartEventCutscene {
-    public static void begin(MinecraftServer server); // /start_event server flow; command wiring is the admin worker's job
+    public static boolean begin(MinecraftServer server); // /eclipse start_event server flow; false if already running
 }
 ```
 
@@ -298,6 +301,50 @@ public final class ModGate {          // @EventBusSubscriber (game bus)
   `InheritanceService.depositAtSpawn` — items are never destroyed. Matching is **pure namespace
   string comparison**: zero compile-time dependency on Create/Simulated/Aeronautics/Sable.
 
+## Admin commands — `/eclipse`
+
+Registered by `dev.projecteclipse.eclipse.admin.EclipseCommands` on `RegisterCommandsEvent`;
+the whole tree requires **permission level 3**. Every subcommand replies only to the command
+source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player chat.
+
+| Command | Effect |
+|---|---|
+| `/eclipse start_event` | Runs `StartEventCutscene.begin` (fails if a run is already in progress). |
+| `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, applies the plan border, syncs clients. |
+| `/eclipse day goals` | Prints the current day's configured goals. |
+| `/eclipse lives set <player> <n>` | `LivesApi.set` (n ≥ 0, clamped; synced to the client). |
+| `/eclipse lives add <player> <n>` | `LivesApi.add` (n may be negative). |
+| `/eclipse altar set <level>` | Sets `EclipseWorldState.altarLevel` (≥ 0) + re-syncs day state to all clients. |
+| `/eclipse ban <player>` | `BanService.ban`: event-ban to Limbo (snapshot `"ban"` + inheritance + ghost state). |
+| `/eclipse revive <player>` | `BanService.unban`: back to the overworld spawn with 1 life. |
+| `/eclipse restore <player>` | Lists that player's snapshots (index + timestamp + reason) to the source. |
+| `/eclipse restore <player> <index>` | `SnapshotService.restore` of the listed 1-based index (inventory + ender chest). |
+| `/eclipse border set <size> [seconds]` | `BorderController.setBorder`; omitted seconds = instant snap. |
+| `/eclipse modgate lock\|unlock <namespace>` | `EclipseConfig.setNamespaceGated`: mutates + persists `modgate.json`. |
+| `/eclipse voicemute <player> on\|off` | `VoiceMuteApi.setForceMuted` (persistent administrative mute). |
+| `/eclipse tp_limbo [player]` | Teleports you (or the target) to the Limbo ghost-ship platform. |
+| `/eclipse reload` | `EclipseConfig.reload()` of all five JSON configs. |
+| `/eclipse status` | Dumps day / altar level / border / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
+
+## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`
+
+`config/eclipse/anticheat.json` holds a config-maintained list of **mod-id substrings**
+(defaults: `xray`, `advancedxray`, `freecam`, `freelook`, `replaymod`, `litematica`; matching is
+case-insensitive substring against every loaded mod id).
+
+- **Local check** — on `FMLClientSetupEvent` the client scans its own `ModList`; any match throws
+  a `RuntimeException` during setup (forced crash — an honest-client deterrent).
+- **Network check** — on `ClientPlayerNetworkEvent.LoggingIn` the client sends its sorted mod-id
+  list as `C2SModlistPayload` (`eclipse:modlist`, `playToServer`). The server disconnects the
+  player if any reported id matches the blocklist, and a `ServerTickEvent.Post` watchdog
+  disconnects any player who has not delivered the payload within ~30 s of logging in
+  (mandatory-mod enforcement — vanilla clients without Eclipse-Core cannot stay connected).
+
+**Honesty caveat:** this only stops *honest* clients. A modified client can lie about its mod
+list, rename mod ids, or strip the check entirely. It is a deterrent, not a security boundary.
+A server-side anti-xray (engine-level ore obfuscation) is the recommended follow-up and is out
+of scope for v1.
+
 ## Server pack (external mods)
 
 The event server runs the following published mods **alongside** `eclipse` in the server's `mods/`
@@ -309,6 +356,13 @@ folder (NOT jar-in-jar / bundled inside Eclipse-Core):
 | Create: Aeronautics | 1.3.0 | bundled jar (includes Simulated) | `aeronautics`, `simulated` |
 | Sable | 2.0.3 | `sable-2.0.3.jar` | `sable` |
 | Simple Voice Chat | 2.6.16 | `voicechat-neoforge-1.21.1-2.6.16.jar` | — (not gated; used by the voice worker) |
+
+Recommended client-side additions (performance/shaders; smoke-tested with Eclipse-Core):
+
+| Mod | Version | Jar |
+|---|---|---|
+| Sodium | 0.6.13 | `sodium-neoforge-0.6.13+mc1.21.1.jar` |
+| Iris | 1.8.12 | `iris-neoforge-1.8.12+mc1.21.1.jar` |
 
 **Why not jar-in-jar?** Two reasons. First, licensing: the assets of these mods are
 All-Rights-Reserved, so redistributing them inside the Eclipse-Core jar is not permitted —
@@ -352,6 +406,25 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
-- Placeholder packages for later work: `ritual`, `artifact`, `admin`.
+- `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
+- `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
+- `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `src/main/resources/META-INF/accesstransformer.cfg` — opens the `Display` entity transformation setters (`setTransformation`, interpolation duration/delay, `BlockDisplay.setBlockState`) for `OarAnimator`; `validateAccessTransformers = true` is enabled in `build.gradle`.
+
+## Known limitations
+
+- **Iris + shaderpacks override the custom sky.** The purple-tinted overworld sky (eclipse sun)
+  is rendered by a vanilla-pipeline sky hook; when an Iris shaderpack is active it replaces the
+  sky rendering, so only the fog/sky *tint* fallback survives. Running Iris with **no shaderpack
+  enabled** keeps the full effect (this is the smoke-tested configuration).
+- **EMI/recipe viewers show gated recipes.** ModGate blocks crafting/placement/pickup at runtime
+  but does not hide recipes from EMI/JEI-style viewers — there is no runtime recipe-hiding hook
+  for "unlocks on day N" semantics. Players can *see* Create recipes on day 1; they still cannot
+  craft or use the results.
+- **Anti-cheat is an honest-client deterrent only** — see the honesty caveat under "Anti-cheat".
+  Server-side anti-xray is the recommended follow-up for v2.
+- **Create: Aeronautics is not jar-in-jar'd** (nor are Create/Sable/Voice Chat) — licensing forbids
+  redistribution and FML cannot toggle nested jars at runtime; see "Why not jar-in-jar?".
+- **Textures/sounds are placeholder programmer-art** — grave/altar/artifact textures, the uniform
+  skin, and the two OGG sound events are minimal placeholders pending final art.
