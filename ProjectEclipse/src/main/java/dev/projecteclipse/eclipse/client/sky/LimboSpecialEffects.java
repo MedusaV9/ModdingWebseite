@@ -52,7 +52,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     @Override
     public boolean renderSky(ClientLevel level, int ticks, float partialTick, Matrix4f modelViewMatrix,
             Camera camera, Matrix4f projectionMatrix, boolean isFoggy, Runnable setupFog) {
-        if (IrisCompat.shadersActive()) {
+        if (EclipseIrisState.shaderPackActive()) {
             return false; // shaderpack owns the sky
         }
         setupFog.run();

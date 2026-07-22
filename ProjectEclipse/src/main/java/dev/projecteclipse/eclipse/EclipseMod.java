@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 
 import org.slf4j.Logger;
 
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.network.EclipsePayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -36,6 +37,7 @@ public final class EclipseMod {
         EclipseMenus.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
+        EclipseClientConfig.register(modContainer);
         modEventBus.addListener(EclipseMod::onCommonSetup);
 
         LOGGER.info("Project: Eclipse core initialized");

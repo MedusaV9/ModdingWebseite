@@ -28,6 +28,8 @@ sourceSets.main.resources {
 
 repositories {
     maven { url = "https://maven.maxhenkel.de/repository/public" }
+    // Veil (foundry.veil) — see docs/ideas/02_veil_vfx.md §A
+    maven { url = "https://maven.blamejared.com" }
 }
 
 base {
@@ -119,6 +121,19 @@ configurations {
 
 dependencies {
     compileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.20"
+
+    // Veil 4.3.0 — REQUIRED runtime dependency (post pipelines, Quasar particles, easing).
+    // Embedded jar-in-jar with an open range so a newer Veil provided by another mod
+    // (e.g. Sable jarJars veil [4.1.4,)) deduplicates to the highest version.
+    // Excludes per docs/ideas/02_veil_vfx.md: modrinth-maven/fallenbreath dev-only artifacts.
+    jarJar(implementation("foundry.veil:veil-neoforge-${minecraft_version}")) {
+        version {
+            strictly "[${veil_version},)"
+            prefer "${veil_version}"
+        }
+        exclude group: "maven.modrinth"
+        exclude group: "me.fallenbreath"
+    }
 
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

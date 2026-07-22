@@ -6,6 +6,7 @@ A NeoForge server-event mod for Minecraft.
 - **Package root**: `dev.projecteclipse.eclipse`
 - **Minecraft**: 1.21.1
 - **NeoForge**: 21.1.238
+- **Veil**: 4.3.0 (REQUIRED runtime dependency; embedded jar-in-jar, repo `maven.blamejared.com`)
 - **ModDevGradle**: 2.0.142 (Gradle wrapper 9.2.1, Java 21, Mojmap + Parchment 2024.11.17)
 - **Template**: [NeoForgeMDKs/MDK-1.21.1-ModDevGradle](https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle)
 
@@ -124,6 +125,22 @@ public static void snapshot(ServerPlayer player, String reason);
 public static List<Path> list(UUID playerId);                        // uses ServerLifecycleHooks.getCurrentServer(); sorted oldest-first
 public static List<Path> list(MinecraftServer server, UUID playerId); // explicit-server overload, sorted oldest-first
 public static boolean restore(ServerPlayer player, Path snapshotFile); // clears + re-applies inventory & ender chest only
+```
+
+### Client config — `dev.projecteclipse.eclipse.core.config.EclipseClientConfig`
+
+Cosmetic client toggles in `eclipse-client.toml` (NeoForge `ModConfigSpec`, type CLIENT, registered
+in the `EclipseMod` constructor). All getters are static, safe on both dists and before config
+load (they fall back to the defaults):
+
+```java
+public static boolean customMenu();      // default true — custom Eclipse title screen
+public static boolean showBossbarSkin(); // default true — themed boss bar frames
+public static boolean showSidebar();     // default true — Eclipse sidebar panel
+public static boolean uiSounds();        // default true — UI hover/page sounds
+public static boolean customCursor();    // default true — themed GLFW cursors
+public static boolean veilPostFx();      // default true — Veil post pipelines (auto-off under a shaderpack)
+public static boolean reducedFx();       // default false — reduce shake/particles/pulses
 ```
 
 ### Config — `dev.projecteclipse.eclipse.core.config.EclipseConfig`
@@ -347,8 +364,17 @@ of scope for v1.
 
 ## Server pack (external mods)
 
-The event server runs the following published mods **alongside** `eclipse` in the server's `mods/`
-folder (NOT jar-in-jar / bundled inside Eclipse-Core):
+**Veil 4.3.0 is a REQUIRED dependency** (`neoforge.mods.toml`: modId `veil`, versionRange
+`[4.3.0,)`, ordering AFTER, side BOTH). It is LGPL-3.0 and embedded **jar-in-jar** from
+`foundry.veil:veil-neoforge-1.21.1:4.3.0` (repo `https://maven.blamejared.com`) with the open
+range `[4.3.0,)`, so a newer Veil supplied by another mod (Sable jar-in-jars Veil `[4.1.4,)`)
+deduplicates to the highest version. Veil powers the v2 post pipelines (limbo grade, sun halo),
+the Quasar particle systems and easing; the Iris "shaderpack active" gate uses Veil's first-party
+`foundry.veil.api.compat.IrisCompat` via the `client/sky/EclipseIrisState` wrapper (the v1
+reflection bridge is gone).
+
+The event server additionally runs the following published mods **alongside** `eclipse` in the
+server's `mods/` folder (NOT jar-in-jar / bundled inside Eclipse-Core):
 
 | Mod | Version | Jar | Gated namespace |
 |---|---|---|---|

@@ -33,9 +33,9 @@ import net.neoforged.api.distmarker.OnlyIn;
  * sky disc shifted toward purple during the day. Moon, sunrise band, stars and the below-horizon
  * dark disc are kept vanilla-like so nights stay intact.
  *
- * <p>Iris guard: while a shaderpack is active ({@link IrisCompat#shadersActive()}) this returns
- * {@code false} immediately so the shader pipeline owns the sky; the vanilla sun.png override and
- * the fog tint still apply in that case.</p>
+ * <p>Iris guard: while a shaderpack is active ({@link EclipseIrisState#shaderPackActive()}) this
+ * returns {@code false} immediately so the shader pipeline owns the sky; the vanilla sun.png
+ * override and the fog tint still apply in that case.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class OverworldPurpleEffects extends DimensionSpecialEffects {
@@ -73,7 +73,7 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
     @Override
     public boolean renderSky(ClientLevel level, int ticks, float partialTick, Matrix4f modelViewMatrix,
             Camera camera, Matrix4f projectionMatrix, boolean isFoggy, Runnable setupFog) {
-        if (IrisCompat.shadersActive()) {
+        if (EclipseIrisState.shaderPackActive()) {
             return false; // shaderpack owns the sky; sun.png override + fog tint still apply
         }
         setupFog.run();

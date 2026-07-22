@@ -93,6 +93,16 @@ file="META-INF/accesstransformer.cfg"
     ordering="NONE"
     side="BOTH"
 
+# Veil render library — REQUIRED. Powers the v2 post-processing pipelines (limbo grade,
+# sun halo), Quasar particle systems and easing utilities. Embedded jar-in-jar with an
+# open range so a newer Veil supplied by another mod (e.g. Sable) wins deduplication.
+[[dependencies.${mod_id}]]
+    modId="veil"
+    type="required"
+    versionRange="[4.3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
 [[dependencies.${mod_id}]]
     modId="voicechat"
     type="optional"
