@@ -2,13 +2,47 @@
 
 A NeoForge server-event mod for Minecraft.
 
-- **Mod id**: `eclipse` | **Display name**: Eclipse-Core
+- **Mod id**: `eclipse` | **Display name**: Eclipse-Core | **Version**: 2.0.0
 - **Package root**: `dev.projecteclipse.eclipse`
 - **Minecraft**: 1.21.1
 - **NeoForge**: 21.1.238
 - **Veil**: 4.3.0 (REQUIRED runtime dependency; embedded jar-in-jar, repo `maven.blamejared.com`)
 - **ModDevGradle**: 2.0.142 (Gradle wrapper 9.2.1, Java 21, Mojmap + Parchment 2024.11.17)
 - **Template**: [NeoForgeMDKs/MDK-1.21.1-ModDevGradle](https://github.com/NeoForgeMDKs/MDK-1.21.1-ModDevGradle)
+
+## v2 feature summary
+
+Everything v1 shipped (lifesteal/lives, limbo + ghost ship, day scheduler, mod gating,
+anonymity suite, SVC mute, artifact menu, altar + revive ritual, admin commands, custom
+title screen, purple sky) plus:
+
+- **Disc world** — deterministic floating-disc overworld/nether generation (`eclipse:disc`
+  chunk generator, fixed seed, authored `disc_map.json`), dimension height raised to
+  `min_y −176 / height 512`. See "Disc worldgen".
+- **World stages** — the disc grows ring-by-ring at runtime (`stages.json` timeline, animated
+  tick-budgeted sweeps, intro fusion, day/milestone triggers). See "World stages".
+- **Structures** — staged temples/village, altar sanctum + protection, paced stronghold
+  emergence. See "Structures".
+- **Cutscenes** — server-authoritative camera engine (Catmull-Rom/bezier paths, letterbox,
+  skip, freeze + watchdog) with an in-game keyframe editor. See "Cutscene engine".
+- **Soft border** — circular soft border with impulse physics, vehicle/elytra/pearl handling
+  and client glitch FX; vanilla border demoted to a hidden failsafe. See "Progression".
+- **Hearts** — LIVES now project to REAL max health (transient MAX_HEALTH modifier) with a
+  HUD shatter burst on loss. See "Hearts".
+- **Handbook 2.0** — six-tab "Ledger of the Drowned" (status/timeline/rules/rewards/bestiary/
+  map) with cursors, sounds and parallax. See "Handbook 2.0".
+- **HUD suite** — skinned bossbars (day/goal/boss themes), custom sidebar panel, typewriter +
+  bossbar-sweep announcements. See "HUD suite".
+- **Mobs & bosses** — five custom mobs + day/event spawner (Pale/Umbral Nights), the day-7
+  Herald and the day-14 Ferryman finale. See "Custom mobs & spawner" and the boss sections.
+- **Economy** — umbral-shard bank/shop at the altar, watcher compass, grave dowser, vitae
+  shard, umbral tools, team supply beacon. See "Shard economy & rewards".
+- **Dev tools** — stage annulus save/load/revert, pristine region snapshots, wall-clock phase
+  scheduler, timeline inspector, goal editor GUI. See the `/eclipse` command table.
+- **Menu v2 + settings** — animated title screen (drifting panorama, parallax, wisps, flare)
+  and a live settings screen for every client toggle. See "Main menu v2 + client settings".
+- **Veil VFX** — Veil 4.3.0 post pipelines (limbo grade, sun halo, border glitch) and Quasar
+  particle emitters, all hard-gated off while an Iris shaderpack is active.
 
 ## Build & run
 
@@ -34,6 +68,19 @@ To test the optional Simple Voice Chat integration, drop
 `voicechat-neoforge-1.21.1-2.6.16.jar` into `run/mods/` before starting `./gradlew runServer`.
 The Voice Chat API is compile-only; Eclipse still builds and runs when that mod is absent.
 
+Mods folder layout in this repo (all under `run/`, gitignored):
+
+- `run/mods/` — the full server-safe v2 matrix (see "Server pack"); loaded by BOTH `runServer`
+  and `runClient`.
+- `run/mods-client/` — Sodium + Iris (client-only; crash the dedicated server). Copy into
+  `run/mods/` for client runs, remove before server runs.
+- `run/mods-disabled/` — parked jars (the old Sodium 0.6.13 / Iris 1.8.12 pack, incompatible
+  with Veil 4.3.0).
+
+`run/server.properties` has RCON enabled for headless smoke-testing (`rcon.port=25575`,
+`rcon.password=eclipsedev`) — any RCON client (e.g. a small Python script) can drive
+`/eclipse ...` commands against a running dev server.
+
 ## Anonymity — what is blocked and how
 
 Eclipse-Core is **required on every client as well as the server**. The server enforces all
@@ -49,6 +96,7 @@ text-input restrictions, while mandatory client-side handlers remove identity-be
 | Anvil names | Non-empty names that differ from the left input's current name are cancelled; repairs that keep the current name remain available. |
 | Signs | Placing any sign and interacting with an existing sign are cancelled on the server. |
 | Books | Server use of writable and written books is cancelled. |
+| Supplementaries text blocks | Way signs, blackboards, notice boards, doormats and speaker blocks (whose edit GUIs do NOT subclass the vanilla sign screen) are blocked by registry-id namespace/path matching in `TextInputBlocker` — placement and interaction cancelled server-side, zero compile-time dependency. |
 
 ## Core APIs
 
@@ -1142,27 +1190,47 @@ the Quasar particle systems and easing; the Iris "shaderpack active" gate uses V
 reflection bridge is gone).
 
 The event server additionally runs the following published mods **alongside** `eclipse` in the
-server's `mods/` folder (NOT jar-in-jar / bundled inside Eclipse-Core):
+server's `mods/` folder (NOT jar-in-jar / bundled inside Eclipse-Core). This is the exact v2
+matrix integration-tested by W16 (dedicated-server boot to Done + RCON smoke + client boot,
+all zero mod-loading errors):
 
 | Mod | Version | Jar | Gated namespace |
 |---|---|---|---|
-| Create | 6.0.10 | `create-1.21.1-6.0.10-280.jar` | `create` |
-| Create: Aeronautics | 1.3.0 | bundled jar (includes Simulated) | `aeronautics`, `simulated` |
-| Sable | 2.0.3 | `sable-2.0.3.jar` | `sable` |
+| Create | 6.0.10 | `create-1.21.1-6.0.10.jar` | `create` |
+| Create: Aeronautics | 1.3.0 | `create-aeronautics-bundled-1.21.1-1.3.0.jar` (bundles Simulated + Create: Offroad) | `aeronautics`, `simulated`, `offroad` (→ `aeronautics` key) |
+| Sable | 2.0.3 | `sable-neoforge-1.21.1-2.0.3.jar` | `sable` |
 | Simple Voice Chat | 2.6.16 | `voicechat-neoforge-1.21.1-2.6.16.jar` | — (not gated; used by the voice worker) |
+| Farmer's Delight | 1.21.1-1.3.2 | `FarmersDelight-1.21.1-1.3.2.jar` | `farmersdelight` (day 4) |
+| Supplementaries | 1.21.1-3.8.3 | `supplementaries-neoforge-1.21.1-3.8.3.jar` | `supplementaries` (day 5) |
+| Moonlight Lib | 1.21.1-3.1.1 | `moonlight-neoforge-1.21.1-3.1.1.jar` | — (library, NOT gated) |
+| Sophisticated Backpacks | 1.21.1-3.25.71 | `sophisticatedbackpacks-1.21.1-3.25.71.1997.jar` | `sophisticatedbackpacks` (day 8) |
+| Sophisticated Core | 1.21.1-1.4.77 | `sophisticatedcore-1.21.1-1.4.77.2173.jar` | — (library, NOT gated) |
+| Create: Crafts & Additions | 1.6.0 | `createaddition-1.6.0.jar` | `createaddition` (day 9) |
 
-Planned v2 additions (`modgate.json` already gates the namespaces since W13; W16 downloads +
-gate-tests the jars, spec §5): Farmer's Delight 1.21.1-1.3.2 (`farmersdelight`), Supplementaries
-3.8.3 (`supplementaries`, + Moonlight Lib NOT gated), Sophisticated Backpacks 3.25.71
-(`sophisticatedbackpacks`, + Sophisticated Core NOT gated), Create: Crafts & Additions 1.6.0
-(`createaddition`).
+Version notes: Aeronautics 1.3.0 (the current 1.x line on Modrinth, project `oWaK0Q19`) pins
+Create `[6.0.9,)` — Create 6.0.10 satisfies it (the older 6.0.6 does NOT; do not downgrade).
+The Aeronautics "bundled" jar additionally ships **Create: Offroad** (namespace `offroad`),
+which `modgate.json` gates under the `aeronautics` unlock key so nothing in the bundle leaks
+past day 5. `neoforge.mods.toml` declares every gated mod (`create`, `simulated`,
+`aeronautics`, `sable`, `offroad`, `farmersdelight`, `supplementaries`,
+`sophisticatedbackpacks`, `createaddition`) as `type="optional"`, `ordering="AFTER"`, so
+Eclipse-Core loads with or without any of them.
 
-Recommended client-side additions (performance/shaders; smoke-tested with Eclipse-Core):
+Recommended client-side additions (performance/shaders; W16-smoke-tested with Eclipse-Core —
+clean boot to title, `Loaded 8 quasar particles`, and the Iris gate logged
+`Iris detected (via Veil IrisCompat)`):
 
-| Mod | Version | Jar |
-|---|---|---|
-| Sodium | 0.6.13 | `sodium-neoforge-0.6.13+mc1.21.1.jar` |
-| Iris | 1.8.12 | `iris-neoforge-1.8.12+mc1.21.1.jar` |
+| Mod | Version | Jar | Status |
+|---|---|---|---|
+| Sodium | 0.8.12 | `sodium-neoforge-0.8.12+mc1.21.1.jar` | TESTED — minimum allowed by Veil 4.3.0 (`[0.8.12-alpha.2+mc1.21.1,)`) |
+| Iris | 1.8.14-beta.1 | `iris-neoforge-1.8.14-beta.1+mc1.21.1.jar` | TESTED — first Iris line that accepts Sodium 0.8.x |
+
+The OLD v1 client pack (Sodium 0.6.13 + Iris 1.8.12, kept in `run/mods-disabled/`) **no longer
+boots**: Veil 4.3.0 hard-enforces Sodium `>= 0.8.12-alpha.2+mc1.21.1` (and is incompatible with
+Embeddium/Rubidium). Sodium/Iris are CLIENT-ONLY jars — they crash the dedicated server during
+early ModLauncher bootstrap (`NoClassDefFoundError: org/lwjgl/Version`), so in this repo they
+live in `run/mods-client/` and must be copied into `run/mods/` only for `runClient` sessions
+(and removed again before `runServer`).
 
 **Why not jar-in-jar?** Two reasons. First, licensing: the assets of these mods are
 All-Rights-Reserved, so redistributing them inside the Eclipse-Core jar is not permitted —
@@ -1245,5 +1313,17 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
   Server-side anti-xray is the recommended follow-up for v2.
 - **Create: Aeronautics is not jar-in-jar'd** (nor are Create/Sable/Voice Chat) — licensing forbids
   redistribution and FML cannot toggle nested jars at runtime; see "Why not jar-in-jar?".
+- **Sable sub-level airships vs the soft border** — a player standing inside a sub-level airship
+  that crosses the ring is not a vanilla vehicle passenger; the border reads them as an
+  un-mounted player and the generic `d > R+3` fallback teleports the PLAYER back inside while
+  the ship itself sails on un-pushed. See the border bullet under "Progression & Mod Gating".
+- **Sodium/Iris cannot sit in a dedicated server's `mods/` folder** — Sodium 0.8.x registers an
+  early ModLauncher bootstrap that touches LWJGL classes absent on the server
+  (`NoClassDefFoundError: org/lwjgl/Version` before mod side-checks run). Keep the client pack
+  in `run/mods-client/` and only copy it into `run/mods/` for `runClient`; the v1 pack
+  (Sodium 0.6.13 + Iris 1.8.12) is additionally rejected outright by Veil 4.3.0's Sodium range.
+- **v2 requires a fresh world** — the overworld dimension type changed to
+  `min_y −176 / height 512` for the disc world; v1 saves fail to load. Delete `run/world`
+  once after upgrading (see "Build & run").
 - **Textures/sounds are placeholder programmer-art** — grave/altar/artifact textures, the uniform
   skin, and the two OGG sound events are minimal placeholders pending final art.
