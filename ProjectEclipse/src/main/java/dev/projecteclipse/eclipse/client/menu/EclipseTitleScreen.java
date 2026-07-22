@@ -45,6 +45,7 @@ public class EclipseTitleScreen extends Screen {
     private static final ResourceLocation LOGO = titleTexture("logo.png");
     private static final ResourceLocation FLARE = titleTexture("flare_sweep.png");
     private static final ResourceLocation WISP = titleTexture("wisp.png");
+    private static final ResourceLocation GEAR = titleTexture("gear.png");
     private static final ResourceLocation FALLBACK_BACKGROUND = titleTexture("background.png");
     private static final ResourceLocation[] PARALLAX = {
             titleTexture("parallax_far.png"),
@@ -112,6 +113,12 @@ public class EclipseTitleScreen extends Screen {
                         button -> this.minecraft.setScreen(new OptionsScreen(this, this.minecraft.options)))
                 .bounds(x, y + BUTTON_SPACING * 2, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
+
+        addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.settings.title"),
+                        button -> this.minecraft.setScreen(new EclipseSettingsScreen(this)))
+                .bounds(x + BUTTON_WIDTH + 6, y + BUTTON_SPACING * 2, BUTTON_HEIGHT, BUTTON_HEIGHT)
+                .tooltip(Tooltip.create(Component.translatable("gui.eclipse.settings.open")))
+                .build(builder -> new EclipseMenuButton(builder, GEAR, 48, 48)));
 
         addRenderableWidget(Button.builder(Component.translatable("menu.quit"),
                         button -> this.minecraft.stop())

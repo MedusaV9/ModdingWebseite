@@ -205,6 +205,23 @@ public static boolean veilPostFx();      // default true — Veil post pipelines
 public static boolean reducedFx();       // default false — reduce shake/particles/pulses
 ```
 
+### Main menu v2 + client settings
+
+`client.menu.EclipseTitleScreen` keeps the v1 six-face panorama and vanilla menu flows, but
+turns the cube map at 18% of vanilla speed under three independently drifting transparent
+cloud layers (2/4/8px mouse parallax), capped purple screen-space wisps, a vignette and a
+12-second logo-flare cycle. All title widgets use the W9 hover sound/glow/cursor lifecycle.
+Batch-C art is drop-in at `textures/gui/title/{parallax_far,parallax_mid,parallax_near,wisp,
+flare_sweep,gear}.png`; exact dimensions are in `docs/ASSET_MANIFEST_V2.md` and the committed
+programmer art regenerates with `java scripts/placeholder_gen/TitleScreenPlaceholder.java`.
+
+`client.menu.EclipseSettingsScreen` edits and immediately saves all seven values above through
+their `ModConfigSpec.BooleanValue`s. It opens from the title-screen gear, the handbook Status
+footer, or the Eclipse entry in NeoForge's Mods list (`IConfigScreenFactory`). `customMenu=false`
+is read on every `ScreenEvent.Opening`: closing the gear screen returns directly to vanilla,
+and later title-screen opens stay vanilla without restarting the client. Re-enable it from the
+Mods-list config button.
+
 ### Config — `dev.projecteclipse.eclipse.core.config.EclipseConfig`
 
 Loads `config/eclipse/{general,days,milestones,modgate,anticheat,stages}.json`; missing files are created with defaults on first run
@@ -1193,6 +1210,7 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - `dev.projecteclipse.eclipse.worldgen` — deterministic disc world core: `DiscTerrainFunction`, `DiscMapData`, `DiscProfile`, `DiscGeometry`, `StageRadii`, `WorldStageAccess`, `DiscChunkGenerator`, `DiscBiomeSource`, `DiscSpawnPlacement` (see "Disc worldgen").
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
 - `dev.projecteclipse.eclipse.client.handbook` — Handbook 2.0 ("Ledger of the Drowned", see "Handbook 2.0"): `HandbookScreen` + `tabs/*`, `GlitchText`, `EclipseWidget`; opened via J / artifact right-click.
+- `dev.projecteclipse.eclipse.client.menu` — animated Eclipse title screen, themed widgets and the live `EclipseSettingsScreen`; config access from the title gear, handbook Status footer and Mods list.
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.

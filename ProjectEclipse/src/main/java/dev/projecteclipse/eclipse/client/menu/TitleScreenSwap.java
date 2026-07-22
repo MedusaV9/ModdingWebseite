@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client.menu;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.neoforged.api.distmarker.Dist;
@@ -21,6 +22,11 @@ public final class TitleScreenSwap {
 
     @SubscribeEvent
     static void onScreenOpening(ScreenEvent.Opening event) {
+        // Read at every opening: saving customMenu=false restores vanilla immediately,
+        // with no game restart or config-reload listener required.
+        if (!EclipseClientConfig.customMenu()) {
+            return;
+        }
         // Respect earlier handlers' replacements by checking the effective new screen.
         Screen opening = event.getNewScreen();
         if (opening instanceof EclipseTitleScreen) {

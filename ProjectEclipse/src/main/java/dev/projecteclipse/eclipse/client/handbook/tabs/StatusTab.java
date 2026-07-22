@@ -6,8 +6,11 @@ import java.util.List;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.menu.EclipseMenuButton;
+import dev.projecteclipse.eclipse.client.menu.EclipseSettingsScreen;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
@@ -43,10 +46,19 @@ public class StatusTab extends HandbookTab {
     private int pulseTicks;
     /** Displayed ring fraction eases toward the real fraction. */
     private float displayedRingFraction = -1.0F;
+    private EclipseMenuButton settingsButton;
 
     @Override
     public String id() {
         return "status";
+    }
+
+    @Override
+    protected void onInit() {
+        int buttonWidth = Math.min(96, Math.max(72, width / 3));
+        settingsButton = new EclipseMenuButton(Button.builder(Component.translatable("gui.eclipse.settings.open"),
+                        button -> minecraft.setScreen(new EclipseSettingsScreen(screen)))
+                .bounds(x + width - buttonWidth, y + height - 18, buttonWidth, 16));
     }
 
     @Override
@@ -103,6 +115,12 @@ public class StatusTab extends HandbookTab {
         int online = minecraft.getConnection() != null ? minecraft.getConnection().getOnlinePlayers().size() : 0;
         guiGraphics.drawString(font, Component.translatable("gui.eclipse.handbook.status.online", online),
                 x, y + height - 10, withAlpha(DIM_COLOR, alpha));
+        settingsButton.render(guiGraphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return settingsButton != null && settingsButton.mouseClicked(mouseX, mouseY, button);
     }
 
     /** Lives as heart icons: {@code lives} full, padded to at least {@value #MIN_HEART_ICONS} slots. */

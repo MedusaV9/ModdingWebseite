@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 
 import org.slf4j.Logger;
 
+import dev.projecteclipse.eclipse.client.menu.ClientMenuExtensions;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
@@ -16,10 +17,12 @@ import dev.projecteclipse.eclipse.registry.EclipseMenus;
 import dev.projecteclipse.eclipse.registry.EclipseParticles;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.registry.EclipseWorldgen;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
 
 /**
  * Main entry point for Project: Eclipse (mod id {@value #MOD_ID}).
@@ -42,6 +45,9 @@ public final class EclipseMod {
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            ClientMenuExtensions.register(modContainer);
+        }
         modEventBus.addListener(EclipseMod::onCommonSetup);
 
         LOGGER.info("Project: Eclipse core initialized");

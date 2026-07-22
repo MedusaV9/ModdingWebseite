@@ -1,6 +1,6 @@
 /**
- * Client-only main-menu theming: the custom {@code EclipseTitleScreen} (panorama, pulsing
- * logo, textured buttons), the {@code ScreenEvent.Opening} swap that replaces the vanilla
- * title screen, and the light-touch purple theming of the vanilla options screen.
+ * Client-only main-menu theming: the animated {@code EclipseTitleScreen}, live
+ * {@code EclipseSettingsScreen}, Mods-list config factory, guarded
+ * {@code ScreenEvent.Opening} swap and light-touch vanilla options-screen theme.
  */
 package dev.projecteclipse.eclipse.client.menu;
