@@ -39,10 +39,14 @@ public final class EclipseConfig {
      * advances once per real-world day at {@code dayAutoAdvanceTime} ({@code HH:mm}, server-local time).
      * {@code cutscenesFreezeDuringUnlocks} (JSON: nested {@code "cutscenes":{"freezeDuringUnlocks"}},
      * default true) is the dev toggle for the freeze + {@code unlock_ring} cinematic during
-     * animated ring-growth unlocks.
+     * animated ring-growth unlocks. {@code borderOffset} (default 12) is how far the W7 soft
+     * border ring sits outside the committed stage radius; {@code borderFxRange} (default 8)
+     * is the default client-FX visibility band in blocks (overridable per world via
+     * {@code /eclipse border fx range}).
      */
     public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
-            int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks) {}
+            int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks, int borderOffset,
+            int borderFxRange) {}
 
     /**
      * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
@@ -116,6 +120,16 @@ public final class EclipseConfig {
     /** Whether animated ring-growth unlocks freeze players + play {@code unlock_ring} (default true). */
     public static boolean freezeDuringUnlocks() {
         return general().cutscenesFreezeDuringUnlocks();
+    }
+
+    /** Soft-border ring offset outside the committed stage radius, in blocks (default 12). */
+    public static int borderOffset() {
+        return general().borderOffset();
+    }
+
+    /** Default soft-border FX visibility band in blocks (default 8, clamped >= 1). */
+    public static int borderFxRange() {
+        return Math.max(1, general().borderFxRange());
     }
 
     /**
@@ -317,7 +331,7 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30, false, "08:00", 2, true);
+        return new General(30, false, "08:00", 2, true, 12, 8);
     }
 
     private static JsonElement generalToJson(General general) {
@@ -326,6 +340,8 @@ public final class EclipseConfig {
         obj.addProperty("dayAutoAdvance", general.dayAutoAdvance());
         obj.addProperty("dayAutoAdvanceTime", general.dayAutoAdvanceTime());
         obj.addProperty("ringBlocksBudgetMs", general.ringBlocksBudgetMs());
+        obj.addProperty("borderOffset", general.borderOffset());
+        obj.addProperty("borderFxRange", general.borderFxRange());
         JsonObject cutscenes = new JsonObject();
         cutscenes.addProperty("freezeDuringUnlocks", general.cutscenesFreezeDuringUnlocks());
         obj.add("cutscenes", cutscenes);
@@ -342,8 +358,12 @@ public final class EclipseConfig {
         boolean freezeDuringUnlocks = !obj.has("cutscenes")
                 || !obj.getAsJsonObject("cutscenes").has("freezeDuringUnlocks")
                 || obj.getAsJsonObject("cutscenes").get("freezeDuringUnlocks").getAsBoolean();
+        // Pre-W7 general.json files have no border fields — soft-border defaults apply.
+        int borderOffset = obj.has("borderOffset") ? obj.get("borderOffset").getAsInt() : 12;
+        int borderFxRange = obj.has("borderFxRange") ? obj.get("borderFxRange").getAsInt() : 8;
         return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
-                Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks);
+                Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks, Math.max(0, borderOffset),
+                Math.max(1, borderFxRange));
     }
 
     // --- days.json ---

@@ -26,5 +26,42 @@ public final class ClientStateCache {
     public static volatile boolean stageAnimatingOverworld = false;
     public static volatile boolean stageAnimatingNether = false;
 
+    // Soft border sync (S2CBorderPayload; sent on login and on every ring/FX-range change).
+    // The ring radius animates client-side: from -> to over lerpTicks starting at the sync
+    // receipt millis. toRadius <= 0 = ring inactive; -1 = nothing received yet.
+    public static volatile double borderCenterX = 0.5D;
+    public static volatile double borderCenterZ = 0.5D;
+    /** Client FX visibility band in blocks (server-configurable). */
+    public static volatile float borderFxRange = 8.0F;
+    public static volatile float borderFromRadiusOverworld = -1.0F;
+    public static volatile float borderToRadiusOverworld = -1.0F;
+    public static volatile int borderLerpTicksOverworld = 0;
+    public static volatile long borderSyncMillisOverworld = 0L;
+    public static volatile float borderFromRadiusNether = -1.0F;
+    public static volatile float borderToRadiusNether = -1.0F;
+    public static volatile int borderLerpTicksNether = 0;
+    public static volatile long borderSyncMillisNether = 0L;
+
+    /**
+     * Current animated soft-ring radius for a dimension (area-proportional interpolation,
+     * mirroring the server's {@code SoftBorder}). {@code <= 0} = ring inactive / not synced.
+     */
+    public static double currentBorderRadius(boolean nether, long nowMillis) {
+        float from = nether ? borderFromRadiusNether : borderFromRadiusOverworld;
+        float to = nether ? borderToRadiusNether : borderToRadiusOverworld;
+        int lerpTicks = nether ? borderLerpTicksNether : borderLerpTicksOverworld;
+        long syncMillis = nether ? borderSyncMillisNether : borderSyncMillisOverworld;
+        if (to <= 0.0F) {
+            return to;
+        }
+        if (lerpTicks <= 0 || from <= 0.0F) {
+            return to;
+        }
+        double t = Math.min(1.0D, (nowMillis - syncMillis) / (lerpTicks * 50.0D));
+        double fromSq = (double) from * from;
+        double toSq = (double) to * to;
+        return Math.sqrt(fromSq + (toSq - fromSq) * t);
+    }
+
     private ClientStateCache() {}
 }

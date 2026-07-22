@@ -74,7 +74,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse altar set &lt;level&gt;
  * /eclipse ban &lt;player&gt; | revive &lt;player&gt;
  * /eclipse restore &lt;player&gt; [index]          (no index = list snapshots)
- * /eclipse border set &lt;size&gt; [seconds]
+ * /eclipse border set &lt;size&gt; [seconds]        (legacy: ring radius = size/2)
+ * /eclipse border ring set &lt;radius&gt; [seconds] | border fx range &lt;blocks&gt;
  * /eclipse modgate lock|unlock &lt;namespace&gt;
  * /eclipse stage get | set &lt;overworld|nether&gt; &lt;n&gt; [instant|animate] | rebuild &lt;dim&gt; &lt;n&gt;
  * /eclipse voicemute &lt;player&gt; on|off
@@ -144,7 +145,18 @@ public final class EclipseCommands {
                                         .executes(context -> borderSet(context, 0))
                                         .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
                                                 .executes(context -> borderSet(context,
-                                                        IntegerArgumentType.getInteger(context, "seconds")))))))
+                                                        IntegerArgumentType.getInteger(context, "seconds"))))))
+                        .then(Commands.literal("ring")
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D))
+                                                .executes(context -> borderRingSet(context, 0))
+                                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
+                                                        .executes(context -> borderRingSet(context,
+                                                                IntegerArgumentType.getInteger(context, "seconds")))))))
+                        .then(Commands.literal("fx")
+                                .then(Commands.literal("range")
+                                        .then(Commands.argument("blocks", DoubleArgumentType.doubleArg(1.0D))
+                                                .executes(EclipseCommands::borderFxRange)))))
                 .then(Commands.literal("modgate")
                         .then(Commands.literal("lock")
                                 .then(Commands.argument("namespace", StringArgumentType.word())
@@ -417,13 +429,36 @@ public final class EclipseCommands {
 
     // --- border ---
 
+    /** Legacy v1 command, repointed: a vanilla-style SIZE (diameter) becomes ring radius size/2. */
     private static int borderSet(CommandContext<CommandSourceStack> context, int seconds) {
         double size = DoubleArgumentType.getDouble(context, "size");
         CommandSourceStack source = context.getSource();
         BorderController.setBorder(source.getServer(), size, seconds * 1000L);
-        source.sendSuccess(() -> Component.literal("World border set to " + size + " blocks"
-                + (seconds > 0 ? " over " + seconds + " s" : " (instant)")), false);
+        source.sendSuccess(() -> Component.literal("Soft border ring set to radius " + (size / 2.0D)
+                + " (from legacy size " + size + ")"
+                + (seconds > 0 ? " over " + seconds + " s" : " (instant)")
+                + "; vanilla failsafe follows at +" + dev.projecteclipse.eclipse.border.SoftBorder.FAILSAFE_MARGIN), false);
         return (int) size;
+    }
+
+    private static int borderRingSet(CommandContext<CommandSourceStack> context, int seconds) {
+        double radius = DoubleArgumentType.getDouble(context, "radius");
+        CommandSourceStack source = context.getSource();
+        dev.projecteclipse.eclipse.border.SoftBorder.setRing(source.getServer(),
+                DiscProfile.OVERWORLD, radius, seconds * 1000L);
+        source.sendSuccess(() -> Component.literal("Soft border ring set to radius " + radius
+                + (seconds > 0 ? " over " + seconds + " s" : " (instant)")
+                + "; vanilla failsafe follows at +" + dev.projecteclipse.eclipse.border.SoftBorder.FAILSAFE_MARGIN), false);
+        return (int) radius;
+    }
+
+    private static int borderFxRange(CommandContext<CommandSourceStack> context) {
+        double blocks = DoubleArgumentType.getDouble(context, "blocks");
+        CommandSourceStack source = context.getSource();
+        dev.projecteclipse.eclipse.border.SoftBorder.setFxRange(source.getServer(), blocks);
+        source.sendSuccess(() -> Component.literal("Border FX visibility range set to " + blocks
+                + " blocks (synced to all clients)"), false);
+        return (int) blocks;
     }
 
     // --- modgate ---
@@ -812,8 +847,15 @@ public final class EclipseCommands {
         source.sendSuccess(() -> Component.literal("=== Eclipse status ==="), false);
         source.sendSuccess(() -> Component.literal("Day: " + state.getDay()
                 + " | Altar level: " + state.getAltarLevel()
-                + " | Border: " + state.getBorderSize() + " blocks"
                 + " | Start event done: " + state.isStartEventDone()), false);
+        source.sendSuccess(() -> Component.literal("Soft border: overworld ring r="
+                + String.format(Locale.ROOT, "%.1f", dev.projecteclipse.eclipse.border.SoftBorder
+                        .radius(server, DiscProfile.OVERWORLD))
+                + ", nether ring r=" + String.format(Locale.ROOT, "%.1f",
+                        dev.projecteclipse.eclipse.border.SoftBorder.radius(server, DiscProfile.NETHER))
+                + " (0 = inactive) | fx range "
+                + dev.projecteclipse.eclipse.border.SoftBorder.fxRange(server)
+                + " | vanilla failsafe " + state.getBorderSize() + " blocks"), false);
         source.sendSuccess(() -> Component.literal("Unlocked keys: "
                 + String.join(", ", UnlockState.unlockedKeys(server))), false);
 

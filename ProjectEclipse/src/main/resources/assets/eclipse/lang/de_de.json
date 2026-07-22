@@ -43,5 +43,6 @@
   "ritual.eclipse.revive.started": "Das Ritual hat begonnen.",
   "ritual.eclipse.revive.already_running": "Hier läuft bereits ein Ritual.",
   "ritual.eclipse.revive.bossbar": "Ein Ritual hat begonnen",
-  "subtitles.eclipse.ui.heart_shatter": "Ein Herz zerspringt"
+  "subtitles.eclipse.ui.heart_shatter": "Ein Herz zerspringt",
+  "subtitles.eclipse.event.border_glitch": "Die Realität flimmert"
 }

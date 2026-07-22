@@ -42,6 +42,12 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.heart_shatter")));
 
+    /** Digital-static burst played when the soft border pushes an entity back (W7). */
+    public static final Supplier<SoundEvent> EVENT_BORDER_GLITCH = SOUNDS.register(
+            "event.border_glitch",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.border_glitch")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

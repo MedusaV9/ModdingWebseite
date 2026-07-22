@@ -25,5 +25,14 @@
     "sounds": [
       "eclipse:ui/heart_shatter"
     ]
+  },
+  "event.border_glitch": {
+    "subtitle": "subtitles.eclipse.event.border_glitch",
+    "sounds": [
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 1.8
+      }
+    ]
   }
 }

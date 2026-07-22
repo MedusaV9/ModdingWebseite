@@ -47,6 +47,11 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_SANCTUM_BUILT = "sanctumBuilt";
     private static final String TAG_SANCTUM_ALTAR_POS = "sanctumAltarPos";
     private static final String TAG_DISABLED_CUTSCENES = "disabledCutscenes";
+    private static final String TAG_BORDER_CENTER_X = "borderCenterX";
+    private static final String TAG_BORDER_CENTER_Z = "borderCenterZ";
+    private static final String TAG_SOFT_BORDER_RADIUS_OVERWORLD = "softBorderRadiusOverworld";
+    private static final String TAG_SOFT_BORDER_RADIUS_NETHER = "softBorderRadiusNether";
+    private static final String TAG_BORDER_FX_RANGE = "borderFxRange";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -60,6 +65,11 @@ public final class EclipseWorldState extends SavedData {
     private long growthCursor = 0L;
     private boolean sanctumBuilt = false;
     private long sanctumAltarPos = 0L;
+    private double borderCenterX = 0.5D;
+    private double borderCenterZ = 0.5D;
+    private double softBorderRadiusOverworld = -1.0D;
+    private double softBorderRadiusNether = -1.0D;
+    private double borderFxRange = -1.0D;
     private final Set<UUID> banned = new HashSet<>();
     private final Map<String, Long> milestoneProgress = new HashMap<>();
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
@@ -91,6 +101,15 @@ public final class EclipseWorldState extends SavedData {
         // sanctum then builds on their next start).
         state.sanctumBuilt = tag.getBoolean(TAG_SANCTUM_BUILT);
         state.sanctumAltarPos = tag.getLong(TAG_SANCTUM_ALTAR_POS);
+        // Soft border fields default to "unset" (-1): SoftBorder derives the radius from the
+        // committed stage and re-pins the center to spawn on server start (pre-W7 saves).
+        state.borderCenterX = tag.contains(TAG_BORDER_CENTER_X) ? tag.getDouble(TAG_BORDER_CENTER_X) : 0.5D;
+        state.borderCenterZ = tag.contains(TAG_BORDER_CENTER_Z) ? tag.getDouble(TAG_BORDER_CENTER_Z) : 0.5D;
+        state.softBorderRadiusOverworld = tag.contains(TAG_SOFT_BORDER_RADIUS_OVERWORLD)
+                ? tag.getDouble(TAG_SOFT_BORDER_RADIUS_OVERWORLD) : -1.0D;
+        state.softBorderRadiusNether = tag.contains(TAG_SOFT_BORDER_RADIUS_NETHER)
+                ? tag.getDouble(TAG_SOFT_BORDER_RADIUS_NETHER) : -1.0D;
+        state.borderFxRange = tag.contains(TAG_BORDER_FX_RANGE) ? tag.getDouble(TAG_BORDER_FX_RANGE) : -1.0D;
         for (Tag entry : tag.getList(TAG_OAR_ENTITIES, Tag.TAG_INT_ARRAY)) {
             state.oarEntities.add(NbtUtils.loadUUID(entry));
         }
@@ -124,6 +143,11 @@ public final class EclipseWorldState extends SavedData {
         tag.putLong(TAG_GROWTH_CURSOR, this.growthCursor);
         tag.putBoolean(TAG_SANCTUM_BUILT, this.sanctumBuilt);
         tag.putLong(TAG_SANCTUM_ALTAR_POS, this.sanctumAltarPos);
+        tag.putDouble(TAG_BORDER_CENTER_X, this.borderCenterX);
+        tag.putDouble(TAG_BORDER_CENTER_Z, this.borderCenterZ);
+        tag.putDouble(TAG_SOFT_BORDER_RADIUS_OVERWORLD, this.softBorderRadiusOverworld);
+        tag.putDouble(TAG_SOFT_BORDER_RADIUS_NETHER, this.softBorderRadiusNether);
+        tag.putDouble(TAG_BORDER_FX_RANGE, this.borderFxRange);
 
         ListTag oarList = new ListTag();
         for (UUID uuid : this.oarEntities) {
@@ -181,12 +205,62 @@ public final class EclipseWorldState extends SavedData {
 
     // --- border ---
 
+    /**
+     * v1 field, since W7 repointed: the VANILLA FAILSAFE border diameter (soft ring + 48,
+     * doubled). Kept in sync by {@code BorderController.applyFailsafe}; the authoritative
+     * playable boundary is the soft ring ({@link #getSoftBorderRadius}).
+     */
     public double getBorderSize() {
         return this.borderSize;
     }
 
     public void setBorderSize(double borderSize) {
         this.borderSize = borderSize;
+        setDirty();
+    }
+
+    // --- soft border ring (worker 7) ---
+
+    /** Ring center X (the world spawn; re-pinned by {@code SoftBorder} every server start). */
+    public double getBorderCenterX() {
+        return this.borderCenterX;
+    }
+
+    /** Ring center Z (the world spawn; re-pinned by {@code SoftBorder} every server start). */
+    public double getBorderCenterZ() {
+        return this.borderCenterZ;
+    }
+
+    public void setBorderCenter(double x, double z) {
+        this.borderCenterX = x;
+        this.borderCenterZ = z;
+        setDirty();
+    }
+
+    /**
+     * Soft ring radius of a disc dimension. {@code -1} = unset (derive from the committed
+     * stage at startup); {@code 0} = ring inactive (nether before its first disc stage).
+     */
+    public double getSoftBorderRadius(DiscProfile profile) {
+        return profile == DiscProfile.NETHER ? this.softBorderRadiusNether : this.softBorderRadiusOverworld;
+    }
+
+    public void setSoftBorderRadius(DiscProfile profile, double radius) {
+        if (profile == DiscProfile.NETHER) {
+            this.softBorderRadiusNether = radius;
+        } else {
+            this.softBorderRadiusOverworld = radius;
+        }
+        setDirty();
+    }
+
+    /** Border FX visibility band override in blocks; {@code <= 0} = use general.json {@code borderFxRange}. */
+    public double getBorderFxRange() {
+        return this.borderFxRange;
+    }
+
+    public void setBorderFxRange(double blocks) {
+        this.borderFxRange = blocks;
         setDirty();
     }
 

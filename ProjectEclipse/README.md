@@ -82,7 +82,12 @@ public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries); // @
 
 public int getDay();                          public void setDay(int day);                    // default 1
 public int getAltarLevel();                   public void setAltarLevel(int altarLevel);      // default 0
-public double getBorderSize();                public void setBorderSize(double borderSize);   // default 1000.0
+public double getBorderSize();                public void setBorderSize(double borderSize);   // since W7: the vanilla FAILSAFE diameter (ring+48, doubled)
+public double getBorderCenterX();             public double getBorderCenterZ();               // soft ring center (world spawn; re-pinned each start)
+public void setBorderCenter(double x, double z);
+public double getSoftBorderRadius(DiscProfile profile);        // -1 = derive from stage at startup; 0 = ring inactive
+public void setSoftBorderRadius(DiscProfile profile, double radius);
+public double getBorderFxRange();             public void setBorderFxRange(double blocks);    // <= 0 = use general.json borderFxRange
 public boolean isStartEventDone();            public void setStartEventDone(boolean done);    // default false
 public boolean isGhostShipBuilt();            public void setGhostShipBuilt(boolean built);   // default false
 public List<UUID> getOarEntities();           public void setOarEntities(List<UUID> ids);     // ghost ship oar displays
@@ -185,9 +190,11 @@ Loads `config/eclipse/{general,days,milestones,modgate,anticheat,stages}.json`; 
 
 ```java
 public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
-        int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks) {}
-// general.json; defaults: 30, false, "08:00", 2, true (JSON: "cutscenes":{"freezeDuringUnlocks"})
+        int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks, int borderOffset, int borderFxRange) {}
+// general.json; defaults: 30, false, "08:00", 2, true, 12, 8 (JSON: "cutscenes":{"freezeDuringUnlocks"})
 public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
+// DayPlan.borderSize is DEPRECATED since W7 (still parsed; ignored with a one-time warning —
+// the soft border follows the world stage instead).
 public record ItemCost(String item, int count) {}
 public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
 public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
@@ -202,6 +209,8 @@ public static boolean dayAutoAdvance();      // default false: days advance only
 public static LocalTime dayAutoAdvanceTime(); // parsed "HH:mm" (server-local); falls back to 08:00
 public static int ringBlocksBudgetMs();      // per-tick nanoTime budget of the ring-growth sweep (default 2, min 1)
 public static boolean freezeDuringUnlocks(); // animated ring growth freezes players + plays unlock_ring (default true)
+public static int borderOffset();            // soft ring sits this far outside the stage radius (default 12)
+public static int borderFxRange();           // default border FX visibility band in blocks (default 8, min 1)
 public static List<DayPlan> days();          // 14 entries by default, ordered by day
 public static DayPlan day(int day);          // out-of-range days clamp to first/last plan
 public static List<Milestone> milestones();  // ordered by level
@@ -243,6 +252,13 @@ public record S2CStagePayload(String dim, int stage, int radius, boolean animati
 // Committed world stage of one disc dimension ("overworld"/"nether"); sent per-dimension on
 // login and broadcast on every stage commit / sweep completion. Client handler writes
 // ClientStateCache.stage*/stageRadius*/stageAnimating* (volatile).
+public record S2CBorderPayload(String dim, double centerX, double centerZ, float fromRadius,
+        float toRadius, int lerpTicks, float fxRange) implements CustomPacketPayload; // id "eclipse:border"
+// Soft-border ring of one disc dimension; sent per-dimension on login and broadcast on every
+// ring/FX-range change. The client animates fromRadius -> toRadius over lerpTicks locally
+// (one packet per change); toRadius <= 0 = ring inactive. Client handler writes
+// ClientStateCache.border* (volatile); ClientStateCache.currentBorderRadius derives the
+// animated radius.
 public record S2CCutsceneLibraryPayload(Map<String, String> pathsJson) implements CustomPacketPayload; // id "eclipse:cutscene_library"
 // Full camera-path library as raw JSON keyed by path id; sent at login and after
 // reloadpaths/editor writes. Client re-parses via cutscene.CutscenePath.parse.
@@ -458,7 +474,7 @@ holders, so blocks and biomes always agree.
 
 Spawn: `DiscSpawnPlacement` pins the overworld spawn to `(0, surfaceY(0,0)+1, 0)` — the flat pad
 the terrain carves at the origin for the altar + sanctum — on every server start (HIGH priority,
-before `BorderController` centers the border on spawn). The v1 start-event flow is unchanged:
+before `SoftBorder` pins the ring center to the spawn). The v1 start-event flow is unchanged:
 `StartEventCutscene` still teleports players from limbo to the shared spawn.
 
 ### World stages — `dev.projecteclipse.eclipse.worldgen.stage`
@@ -598,8 +614,20 @@ public final class UnlockState {
     public static Set<String> unlockedKeys(MinecraftServer server); // unmodifiable
 }
 
-public final class BorderController { // @EventBusSubscriber (game bus)
-    public static void setBorder(MinecraftServer server, double size, long ms); // lerp; ms <= 0 snaps
+public final class BorderController { // vanilla FAILSAFE border owner (since W7)
+    public static void setBorder(MinecraftServer server, double size, long ms); // legacy: ring radius = size/2
+    public static void applyFailsafe(MinecraftServer server, double ringRadius, long ms); // SoftBorder only
+}
+
+public final class SoftBorder {       // border.SoftBorder — @EventBusSubscriber (game bus)
+    public static double radius(MinecraftServer server, DiscProfile profile);  // animated; <= 0 = inactive
+    public static Vec3 center(MinecraftServer server);
+    public static double fxRange(MinecraftServer server);
+    public static void setRing(MinecraftServer server, DiscProfile profile, double radius, long ms);
+    public static void setFxRange(MinecraftServer server, double blocks);
+    public static void onStageCommit(MinecraftServer server, DiscProfile profile, int stage, boolean animate);
+    public static void syncTo(ServerPlayer player);                            // login S2CBorderPayload
+    public static int stageOuterRadius(DiscProfile profile, int stage);        // stage-0 overworld = player-disc ring
 }
 
 public final class ModGate {          // @EventBusSubscriber (game bus)
@@ -609,19 +637,38 @@ public final class ModGate {          // @EventBusSubscriber (game bus)
 }
 ```
 
-- **DayScheduler** — `setDay` persists the day in `EclipseWorldState`, applies the day plan's
-  `borderSize` via `BorderController` (60 s lerp), broadcasts `S2CDayStatePayload` to all players
-  and (on an actual change) plays a global bell (`block.bell.use`) to every online player. Days are
-  manual-only by default; set `dayAutoAdvance=true` + `dayAutoAdvanceTime="HH:mm"` in
-  `config/eclipse/general.json` to advance once per real-world day at that server-local time (the
-  last advance's epoch day is persisted under the reserved `EclipseWorldState` milestone-progress
-  key `scheduler:last_auto_advance_epoch_day`, so restarts never double-advance).
+- **DayScheduler** — `setDay` persists the day in `EclipseWorldState`, broadcasts
+  `S2CDayStatePayload` to all players and (on an actual change) plays a global bell
+  (`block.bell.use`) to every online player. Since W7 the day plan's `borderSize` is IGNORED
+  (one-time deprecation warning) — the soft border follows the world stage via the `day:N`
+  stage triggers instead. Days are manual-only by default; set `dayAutoAdvance=true` +
+  `dayAutoAdvanceTime="HH:mm"` in `config/eclipse/general.json` to advance once per real-world
+  day at that server-local time (the last advance's epoch day is persisted under the reserved
+  `EclipseWorldState` milestone-progress key `scheduler:last_auto_advance_epoch_day`, so
+  restarts never double-advance).
 - **UnlockState** — the unlocked-key set is the union of `unlocks[]` of all day plans `1..currentDay`
   plus `rewards[]` of all altar milestones `1..altarLevel`; cached, auto-invalidates on day/altar
   changes and config reloads.
-- **BorderController** — border is always centered on the shared world spawn; on `ServerStartedEvent`
-  the size stored in `EclipseWorldState.getBorderSize()` (default **1000**) is re-enforced, so manual
-  `/worldborder` edits do not survive a restart. `setBorder` persists the new size.
+- **SoftBorder + BorderController (since W7)** — the playable boundary is a CIRCULAR soft border
+  (`border.SoftBorder`), one ring per disc dimension, centered on the world spawn (disc origin)
+  and following the committed world stage: `ring = stageOuterRadius + borderOffset` (general.json,
+  default 12; overworld stage 0 uses the player-disc ring footprint r 194, nether stage 0 = ring
+  inactive). Animated stage commits tick-lerp the radius (area-proportional) alongside the
+  `RingGrowthService` sweep (~75 s pacing, snapping when the sweep finishes early). Physics
+  (server, d² checks; spectators/frozen players skipped): `d > R` applies the inward impulse
+  `normalize(center−pos)·min(1.2, 0.25·(d−R)+0.4)` + 0.3 Y (`hurtMarked` velocity sync, elytra
+  stopped first, glitch sound + `BORDER_GLITCH` Quasar burst); `d > R+3` teleports onto the
+  clamped point at `R−2` with an inward heightmap ground search. Ridden vehicles are impulsed as
+  a whole (`getRootVehicle`, scanned in `EntityTickEvent.Post` only when carrying players) and
+  eject their players after 3 violations in 40 ticks; ender pearls / chorus fruit / `/tp` targets
+  are clamped into `R−2` via `setTargetX/Z` (never cancelled; operators bypass the `/tp` clamp).
+  Repeat violators (>5 pushbacks/min) are logged on the anti-cheat channel. The VANILLA border is
+  only a hidden failsafe at `ring + 48` (warning 0, damage 0), re-enforced on `ServerStartedEvent`
+  by `SoftBorder` via `BorderController.applyFailsafe`, and hidden client-side by the
+  `LevelRendererMixin` cancel of `LevelRenderer#renderWorldBorder`. **Known limit (W16 /
+  Aeronautics & Sable)**: sub-level airships are not vanilla vehicles — a player standing inside
+  one that crosses the ring reads as an un-mounted player moving without ground and is caught by
+  the generic `d > R+3` teleport fallback (the ship itself is NOT pushed back).
 - **PhaseInventoryLock** — SURVIVAL/ADVENTURE players only. Every 20 ticks: while `main_inventory`
   is locked, stacks in slots 9–35 are moved to free hotbar slots (or dropped); while `armor` is
   locked, armor slots 36–39 + offhand 40 are cleared the same way — except `eclipse:arm_artifact`
@@ -657,7 +704,9 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse revive <player>` | `BanService.unban`: back to the overworld spawn with 1 life. |
 | `/eclipse restore <player>` | Lists that player's snapshots (index + timestamp + reason) to the source. |
 | `/eclipse restore <player> <index>` | `SnapshotService.restore` of the listed 1-based index (inventory + ender chest). |
-| `/eclipse border set <size> [seconds]` | `BorderController.setBorder`; omitted seconds = instant snap. |
+| `/eclipse border set <size> [seconds]` | Legacy, repointed: overworld ring radius = `size/2` via `SoftBorder.setRing`; omitted seconds = instant snap. |
+| `/eclipse border ring set <radius> [seconds]` | `SoftBorder.setRing` on the overworld ring (vanilla failsafe follows at +48). |
+| `/eclipse border fx range <blocks>` | `SoftBorder.setFxRange`: persists + re-syncs the client FX visibility band. |
 | `/eclipse modgate lock\|unlock <namespace>` | `EclipseConfig.setNamespaceGated`: mutates + persists `modgate.json`. |
 | `/eclipse stage get` | Committed stage + radius of both disc dimensions, plus live sweep progress. |
 | `/eclipse stage set <overworld\|nether> <n> [instant\|animate]` | `WorldStageService.setStage` (default animate); lowering runs the erase sweep. |
@@ -676,7 +725,7 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse cutscene export <id>` | Prints the path's pretty JSON to the source (copy-paste for assets). |
 | `/eclipse cutscene reloadpaths` | Re-reads `config/eclipse/cutscenes/` only + re-syncs all clients. |
 | `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii) + cutscene path library re-read/re-sync. |
-| `/eclipse status` | Dumps day / altar level / border / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
+| `/eclipse status` | Dumps day / altar level / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`
 
@@ -738,6 +787,9 @@ after them when present.
 Default 14-day unlock schedule (`config/eclipse/days.json`; `modgate.json` maps each gated
 namespace to the key of the same name):
 
+The "Border" column is the legacy `days.json` `borderSize`, DEPRECATED and ignored since W7 —
+the circular soft border follows the world-stage timeline (`stages.json`) instead.
+
 | Day | Unlock keys | Border | Effect |
 |---|---|---|---|
 | 1 | — | 1000 | Hotbar-only inventory, no armor, no workstations, vanilla-only |
@@ -768,7 +820,8 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
 - `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
-- `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController`, `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
+- `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController` (vanilla failsafe owner), `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
+- `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps).
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).

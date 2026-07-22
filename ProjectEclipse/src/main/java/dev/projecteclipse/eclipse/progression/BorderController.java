@@ -1,50 +1,60 @@
 package dev.projecteclipse.eclipse.progression;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.border.SoftBorder;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
-import net.minecraft.core.BlockPos;
+import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.border.WorldBorder;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 /**
- * Owns the overworld world border (vanilla mirrors it into the other dimensions).
- * The border is always centered on the shared world spawn; the authoritative size lives
- * in {@link EclipseWorldState#getBorderSize()} (default 1000) and is re-enforced on every
- * server start so manual {@code /worldborder} edits do not survive a restart.
+ * Owner of the VANILLA world border, which since worker 7 is only a hidden fail-safe: it
+ * always sits at {@code overworld soft ring + }{@value SoftBorder#FAILSAFE_MARGIN} blocks
+ * (warning 0, damage 0), centered on the ring center, and its visuals are cancelled
+ * client-side by {@code client.mixin.LevelRendererMixin}. The authoritative playable
+ * boundary is the circular {@link SoftBorder}.
+ *
+ * <p>The v1 {@link #setBorder} API keeps working for legacy callers but is repointed: the
+ * given vanilla-style SIZE (diameter) becomes an overworld ring radius of {@code size / 2}.
+ * Startup enforcement moved into {@code SoftBorder.onServerStarted}, which calls
+ * {@link #applyFailsafe} after deriving the ring radius.</p>
  */
-@EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class BorderController {
     private BorderController() {}
 
     /**
-     * Re-centers the border on the world spawn and moves it to {@code size} blocks over
-     * {@code ms} milliseconds ({@code ms <= 0} snaps instantly). The new size is persisted
-     * in {@link EclipseWorldState}.
+     * v1-compatible entry point, repointed to the ring API: sets the OVERWORLD soft ring to
+     * a radius of {@code size / 2} over {@code ms} milliseconds ({@code ms <= 0} snaps).
+     * {@code SoftBorder.setRing} moves the vanilla failsafe along and persists everything.
      */
     public static void setBorder(MinecraftServer server, double size, long ms) {
+        SoftBorder.setRing(server, DiscProfile.OVERWORLD, size / 2.0D, ms);
+    }
+
+    /**
+     * Places the vanilla failsafe border at {@code ringRadius + }{@value SoftBorder#FAILSAFE_MARGIN}
+     * (warning 0, damage 0), centered on the persisted ring center, moving over {@code ms}
+     * milliseconds ({@code <= 0} snaps). The failsafe diameter is persisted in the legacy
+     * {@link EclipseWorldState#setBorderSize} field for status displays. Called by
+     * {@link SoftBorder} only.
+     */
+    public static void applyFailsafe(MinecraftServer server, double ringRadius, long ms) {
         ServerLevel overworld = server.overworld();
         WorldBorder border = overworld.getWorldBorder();
-        BlockPos spawn = overworld.getSharedSpawnPos();
-        border.setCenter(spawn.getX() + 0.5D, spawn.getZ() + 0.5D);
+        EclipseWorldState state = EclipseWorldState.get(server);
+        border.setCenter(state.getBorderCenterX(), state.getBorderCenterZ());
+        double size = 2.0D * (Math.max(0.0D, ringRadius) + SoftBorder.FAILSAFE_MARGIN);
         if (ms <= 0L) {
             border.setSize(size);
         } else {
             border.lerpSizeBetween(border.getSize(), size, ms);
         }
-        EclipseWorldState.get(server).setBorderSize(size);
-        EclipseMod.LOGGER.info("Eclipse world border set to {} over {} ms, centered on spawn ({}, {})",
-                size, ms, spawn.getX(), spawn.getZ());
-    }
-
-    @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        MinecraftServer server = event.getServer();
-        double size = EclipseWorldState.get(server).getBorderSize();
-        setBorder(server, size, 0L);
-        EclipseMod.LOGGER.info("Eclipse world border enforced at startup: size {}", size);
+        border.setWarningBlocks(0);
+        border.setDamagePerBlock(0.0D);
+        state.setBorderSize(size);
+        EclipseMod.LOGGER.info("Vanilla failsafe border set to {} (ring {} + {}) over {} ms",
+                size, String.format(java.util.Locale.ROOT, "%.1f", ringRadius),
+                SoftBorder.FAILSAFE_MARGIN, ms);
     }
 }

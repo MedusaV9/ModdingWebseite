@@ -4,12 +4,11 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.border.SoftBorder;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CStagePayload;
-import dev.projecteclipse.eclipse.progression.BorderController;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
-import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.WorldStageAccess;
 import net.minecraft.resources.ResourceKey;
@@ -153,12 +152,9 @@ public final class WorldStageService {
                 StageRadii.radius(profile, stage), animate ? "animated sweep" : "instant stamp");
         broadcastStage(profile, stage, true);
 
-        if (profile == DiscProfile.OVERWORLD) {
-            // TODO(W7): SoftBorder replaces this — keep calling the same BorderController API
-            // so the playable map size keeps tracking the committed stage radius.
-            int borderSize = 2 * (StageRadii.radius(profile, stage) + DiscTerrainFunction.RIM_NOISE_AMP + 8);
-            BorderController.setBorder(server, borderSize, animate ? 60_000L : 0L);
-        }
+        // W7 soft border: retarget the dimension's ring to stageRadius + borderOffset; an
+        // animated commit lerps the ring alongside the sweep (snapping on early completion).
+        SoftBorder.onStageCommit(server, profile, stage, animate);
 
         for (GrowthStartListener listener : GROWTH_START_LISTENERS) {
             listener.onStageGrowthStart(level, profile, fromStage, stage, animate);

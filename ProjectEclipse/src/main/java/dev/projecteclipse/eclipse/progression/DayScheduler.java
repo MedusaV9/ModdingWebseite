@@ -23,18 +23,21 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Server-authoritative event-day clock. Days change only through {@link #setDay(MinecraftServer, int)}
  * (wired to the admin command) unless {@code dayAutoAdvance} is enabled in {@code general.json}
  * (default OFF), in which case the day advances once per real-world day at the configured
- * server-local time. On a day change the new day is persisted, the day plan's border size is
- * applied via {@link BorderController} (60 s lerp), the new state is broadcast to every client
- * and a global bell rings for every online player. Finally the world-stage day triggers
- * ({@code stages.json} {@code day:N} / {@code final_day}) are evaluated, so e.g. the nether
- * disc appears when day 2 fires.
+ * server-local time. On a day change the new day is persisted, the new state is broadcast to
+ * every client and a global bell rings for every online player. Finally the world-stage day
+ * triggers ({@code stages.json} {@code day:N} / {@code final_day}) are evaluated, so e.g. the
+ * nether disc appears when day 2 fires.
+ *
+ * <p>Since worker 7 the playable boundary is the circular {@code border.SoftBorder}, which
+ * follows the world STAGE — the legacy {@code days.json} {@code borderSize} field is still
+ * parsed but no longer drives anything (a one-time deprecation warning is logged).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DayScheduler {
-    /** How long the border takes to move to a new day's size, in milliseconds. */
-    private static final long BORDER_LERP_MS = 60_000L;
     /** Real-world clock is polled every 5 seconds; plenty for a once-per-day trigger. */
     private static final int AUTO_ADVANCE_CHECK_TICKS = 100;
+    /** One-time deprecation warning guard for the legacy {@code days.json} borderSize field. */
+    private static boolean warnedBorderSizeDeprecated = false;
     /**
      * Reserved {@link EclipseWorldState} milestone-progress key holding the epoch day of the
      * last automatic advance, so a restart never re-advances the same real-world day.
@@ -49,10 +52,12 @@ public final class DayScheduler {
     }
 
     /**
-     * Sets the current event day (clamped to >= 1), persists it, applies the day plan's border
-     * size and broadcasts {@link S2CDayStatePayload} to all players. When the day actually
-     * changes, a global bell cue plays for every online player. Idempotent and reversible:
-     * unlocks are derived from the day in {@link UnlockState}, so lowering the day re-locks.
+     * Sets the current event day (clamped to >= 1), persists it and broadcasts
+     * {@link S2CDayStatePayload} to all players. When the day actually changes, a global bell
+     * cue plays for every online player. Idempotent and reversible: unlocks are derived from
+     * the day in {@link UnlockState}, so lowering the day re-locks. The world border is NOT
+     * touched here anymore — the W7 soft ring follows the world stage (day triggers below may
+     * commit a stage, which moves the ring).
      */
     public static void setDay(MinecraftServer server, int day) {
         int newDay = Math.max(1, day);
@@ -62,7 +67,12 @@ public final class DayScheduler {
         state.setDay(newDay);
 
         EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
-        BorderController.setBorder(server, plan.borderSize(), changed ? BORDER_LERP_MS : 0L);
+        if (!warnedBorderSizeDeprecated) {
+            warnedBorderSizeDeprecated = true;
+            EclipseMod.LOGGER.warn("days.json 'borderSize' is deprecated and ignored since W7: the "
+                    + "circular soft border follows the world stage (stages.json radius + "
+                    + "general.json borderOffset). Use /eclipse border ring set for manual overrides.");
+        }
 
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(newDay, state.getAltarLevel(), plan.goals()));
         if (changed) {
@@ -90,8 +100,8 @@ public final class DayScheduler {
             state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, LocalDate.now().toEpochDay());
         }
         EclipseConfig.DayPlan plan = EclipseConfig.day(state.getDay());
-        EclipseMod.LOGGER.info("Eclipse day plan loaded: day {}/{} (goals: {}; border: {}; unlocked keys: {}; autoAdvance: {})",
-                state.getDay(), EclipseConfig.days().size(), plan.goals(), plan.borderSize(),
+        EclipseMod.LOGGER.info("Eclipse day plan loaded: day {}/{} (goals: {}; unlocked keys: {}; autoAdvance: {})",
+                state.getDay(), EclipseConfig.days().size(), plan.goals(),
                 UnlockState.unlockedKeys(server), EclipseConfig.dayAutoAdvance());
     }
 

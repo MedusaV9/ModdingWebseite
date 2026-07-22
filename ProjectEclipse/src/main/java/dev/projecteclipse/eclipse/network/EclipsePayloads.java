@@ -34,6 +34,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CHeartBurstPayload.TYPE, S2CHeartBurstPayload.STREAM_CODEC, EclipsePayloads::handleHeartBurst);
         registrar.playToClient(S2CQuasarPayload.TYPE, S2CQuasarPayload.STREAM_CODEC, EclipsePayloads::handleQuasar);
         registrar.playToClient(S2CStagePayload.TYPE, S2CStagePayload.STREAM_CODEC, EclipsePayloads::handleStage);
+        registrar.playToClient(S2CBorderPayload.TYPE, S2CBorderPayload.STREAM_CODEC, EclipsePayloads::handleBorder);
         registrar.playToClient(S2COpenArtifactPayload.TYPE, S2COpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifact);
         registrar.playToClient(S2CCutsceneLibraryPayload.TYPE, S2CCutsceneLibraryPayload.STREAM_CODEC, EclipsePayloads::handleCutsceneLibrary);
         registrar.playToClient(S2CCutscenePlayPayload.TYPE, S2CCutscenePlayPayload.STREAM_CODEC, EclipsePayloads::handleCutscenePlay);
@@ -89,6 +90,24 @@ public final class EclipsePayloads {
         }
     }
 
+    private static void handleBorder(S2CBorderPayload payload, IPayloadContext context) {
+        ClientStateCache.borderCenterX = payload.centerX();
+        ClientStateCache.borderCenterZ = payload.centerZ();
+        ClientStateCache.borderFxRange = payload.fxRange();
+        long now = System.currentTimeMillis();
+        if ("nether".equals(payload.dim())) {
+            ClientStateCache.borderFromRadiusNether = payload.fromRadius();
+            ClientStateCache.borderToRadiusNether = payload.toRadius();
+            ClientStateCache.borderLerpTicksNether = payload.lerpTicks();
+            ClientStateCache.borderSyncMillisNether = now;
+        } else {
+            ClientStateCache.borderFromRadiusOverworld = payload.fromRadius();
+            ClientStateCache.borderToRadiusOverworld = payload.toRadius();
+            ClientStateCache.borderLerpTicksOverworld = payload.lerpTicks();
+            ClientStateCache.borderSyncMillisOverworld = now;
+        }
+    }
+
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleHeartBurst(S2CHeartBurstPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay.trigger(payload.heartIndex());
@@ -138,6 +157,7 @@ public final class EclipsePayloads {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
+            dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);
             dev.projecteclipse.eclipse.cutscene.CutsceneService.syncLibraryTo(player);
         }
     }
