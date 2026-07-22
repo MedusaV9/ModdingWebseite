@@ -102,6 +102,7 @@ public void setActiveNightEvent(String event, int dayStamp);
 public boolean isFirstPaleNightDone();        public void setFirstPaleNightDone(boolean done); // day-4 guarantee latch
 
 public boolean isHeraldDefeated();            public void setHeraldDefeated(boolean defeated); // W11 day-7 boss kill flag; UnlockState unions key "herald_slain" while set
+public boolean isFerrymanDefeated();          public void setFerrymanDefeated(boolean defeated); // W12 day-14 finale kill flag (set before the mass-revive finale runs)
 
 public int getWorldStage(DiscProfile profile);                 // committed world stage, default 0
 public void setWorldStage(DiscProfile profile, int stage);     // ONLY WorldStageService.setStage may call this
@@ -558,6 +559,41 @@ inner eye + telegraph-glowing corona shards via the Gazer skipDraw pattern in
   `EclipseWorldState.setHeraldDefeated(true)` (→ derived unlock key `herald_slain`) + a
   boss-styled announce.
 
+### Ferryman finale boss — `dev.projecteclipse.eclipse.entity.boss` (W12)
+
+The day-14 finale (`eclipse:ferryman`, spec §2.2): an 18-cube floating robed skeleton
+(`client/entity/FerrymanModel`, 128×128 skin, UV in `docs/uv/ferryman.md`; emissive eye
+slit + lantern flame, lantern housing joins the glow only while the Gaze mark is live).
+Arena = the limbo ghost ship; refuses to exist outside `eclipse:limbo`. Never spawns
+naturally.
+
+- **Finale ritual** (`ritual/FinaleRitual`): sneak-use a **dragon egg** on the altar on
+  day 14+ after dusk (vanilla item → `RightClickBlock` hook, egg never places). Consumes
+  the egg, teleports every LIVING player onto the deck (ghost stragglers pulled aboard),
+  plays `intro_submerge` and summons the boss at the stern 100t later. Admin path:
+  `/eclipse boss ferryman summon` (direct, no cutscene).
+- **Bossbar**: "☠ The Ferryman", themed `boss`, color tracks the phase
+  WHITE → PURPLE → RED (breaks at exactly 2/3 and 1/3 HP; base 400, ×(1+0.4·(n−1))).
+- **Fight**: **P1 Oar** — deck stalker; telegraphed 180° oar sweep (25t raise +
+  TRIDENT_RIPTIDE_3, then 10 dmg + heavy knockback) and a periodic gunwale jump-slam
+  (landing AoE + `S2CShakePayload` camera tilt for everyone aboard). Limbo water deals a
+  void-cold DoT to living players all fight. **P2 Crew** (≤66%) — kneels invulnerable at
+  the stern; Deckhands rise hostile (`DeckhandEntity.riseHostile`), `min(4, ghosts+2)`
+  deck lanterns blow out (`limbo/ShipLanterns`, soul campfires; LIT is the lantern state).
+  LIVING players cut down the crew, GHOSTS re-light lanterns via a 3 s right-click channel
+  (living players are refused); all four burning ends the phase (no ghosts online + crew
+  slain force-ends it). **P3 The Toll** (≤33%) — plants the oar; the deck floods one water
+  layer per 30 s (air-only `setBlock`, tracked + drained on any fight end; pace halves at
+  ≤3 living), sweeps alternate with the **Lantern Gaze**: lowest-health fighter gets a
+  private purple vignette (`S2CShakePayload.mark`) + private bell and is hunted 15 s.
+- **Endings**: death drops 1 `eclipse:ferryman_toll` (W13 decides its economy uses), sets
+  `ferrymanDefeated`, restores the ship and starts `FinaleRitual.beginVictory`: "THE
+  CROSSING ENDS" announce, every banned player revived via `BanService.unban` staggered
+  10t apart (offline ghosts cleared for revive-on-login), then everyone still in limbo is
+  teleported home and `finale_return` plays for all online players. A wipe (every
+  participant dead/banned) is the Eclipse's victory: announce, ship restored, everyone
+  stays a ghost. Abandoned for 60 s → silent reset (full heal + despawn + restore).
+
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
 `LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
@@ -914,6 +950,9 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse event set <pale\|umbral\|none>` | Overrides the active night event (`EclipseWorldState.setActiveNightEvent`); pale/umbral also fire the announcement sweep. |
 | `/eclipse boss herald summon` | Summons the Herald over the sanctum altar (or the source position if no sanctum) with the full arrival sequence + scaling. |
 | `/eclipse boss herald kill` | Kills every live Herald through the regular death path (drops + `heraldDefeated` flag + announce). |
+| `/eclipse boss ferryman summon` | Summons the Ferryman at the limbo ghost ship's stern (scaling + arrival FX; no ritual cutscene). Fails if one is already afloat. |
+| `/eclipse boss ferryman kill` | Kills every live Ferryman through the regular death path (toll drop + `ferrymanDefeated` + mass-revive finale). |
+| `/eclipse boss ferryman phase <1-3>` | Snaps the live Ferryman's health into that phase's band; the regular transition (crew/sink/bar color) runs next tick. |
 | `/eclipse lives set <player> <n>` | `LivesApi.set` (n ≥ 0, clamped; synced to the client). |
 | `/eclipse lives add <player> <n>` | `LivesApi.add` (n may be negative). |
 | `/eclipse altar set <level>` | Sets `EclipseWorldState.altarLevel` (≥ 0) + re-syncs day state to all clients. |

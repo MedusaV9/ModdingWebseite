@@ -35,6 +35,7 @@ import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.EclipseSpawner;
+import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
@@ -76,6 +77,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse start_event
  * /eclipse day set &lt;1-14&gt; | day goals
  * /eclipse event set &lt;pale|umbral|none&gt;
+ * /eclipse boss herald summon|kill
+ * /eclipse boss ferryman summon|kill|phase &lt;1-3&gt;
  * /eclipse lives set|add &lt;player&gt; &lt;n&gt;
  * /eclipse altar set &lt;level&gt;
  * /eclipse ban &lt;player&gt; | revive &lt;player&gt;
@@ -137,7 +140,15 @@ public final class EclipseCommands {
                                 .then(Commands.literal("summon")
                                         .executes(EclipseCommands::heraldSummon))
                                 .then(Commands.literal("kill")
-                                        .executes(EclipseCommands::heraldKill))))
+                                        .executes(EclipseCommands::heraldKill)))
+                        .then(Commands.literal("ferryman")
+                                .then(Commands.literal("summon")
+                                        .executes(EclipseCommands::ferrymanSummon))
+                                .then(Commands.literal("kill")
+                                        .executes(EclipseCommands::ferrymanKill))
+                                .then(Commands.literal("phase")
+                                        .then(Commands.argument("phase", IntegerArgumentType.integer(1, 3))
+                                                .executes(EclipseCommands::ferrymanPhase)))))
                 .then(Commands.literal("lives")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -383,6 +394,67 @@ public final class EclipseCommands {
         final int count = killed;
         source.sendSuccess(() -> Component.literal("Killed " + count + " Herald(s) — drops + defeat flag fired"), true);
         return killed;
+    }
+
+    // --- boss (W12 ferryman test hooks) ---
+
+    /**
+     * Summons the Ferryman at the ghost ship's stern in limbo (direct spawn with scaling
+     * and arrival FX — no finale ritual/cutscene; use the dragon-egg altar path for that).
+     */
+    private static int ferrymanSummon(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel limbo = source.getServer().getLevel(LimboDimension.LIMBO);
+        if (limbo == null) {
+            source.sendFailure(Component.literal("Limbo dimension " + LimboDimension.LIMBO.location() + " is not loaded"));
+            return 0;
+        }
+        if (!limbo.getEntities(EclipseEntities.FERRYMAN.get(), FerrymanEntity::isAlive).isEmpty()) {
+            source.sendFailure(Component.literal("A Ferryman is already afloat — kill it first"));
+            return 0;
+        }
+        FerrymanEntity ferryman = FerrymanEntity.summon(limbo);
+        source.sendSuccess(() -> Component.literal("Ferryman summoned at the ghost ship's stern with "
+                + ferryman.getMaxHealth() + " HP"), true);
+        return 1;
+    }
+
+    /** Kills every live Ferryman (regular death path: toll drop + defeat flag + mass-revive finale). */
+    private static int ferrymanKill(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int killed = 0;
+        for (ServerLevel level : source.getServer().getAllLevels()) {
+            for (FerrymanEntity ferryman : level.getEntities(EclipseEntities.FERRYMAN.get(),
+                    FerrymanEntity::isAlive)) {
+                ferryman.kill();
+                killed++;
+            }
+        }
+        if (killed == 0) {
+            source.sendFailure(Component.literal("No live Ferryman found"));
+            return 0;
+        }
+        final int count = killed;
+        source.sendSuccess(() -> Component.literal("Killed " + count
+                + " Ferryman — toll drop + mass-revive finale fired"), true);
+        return killed;
+    }
+
+    /** Snaps the live Ferryman's health into the requested phase band (transition runs next tick). */
+    private static int ferrymanPhase(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int phase = IntegerArgumentType.getInteger(context, "phase");
+        for (ServerLevel level : source.getServer().getAllLevels()) {
+            for (FerrymanEntity ferryman : level.getEntities(EclipseEntities.FERRYMAN.get(),
+                    FerrymanEntity::isAlive)) {
+                ferryman.forcePhase(phase);
+                source.sendSuccess(() -> Component.literal("Ferryman health snapped toward phase " + phase
+                        + " (" + ferryman.getHealth() + "/" + ferryman.getMaxHealth() + " HP)"), true);
+                return phase;
+            }
+        }
+        source.sendFailure(Component.literal("No live Ferryman found"));
+        return 0;
     }
 
     // --- lives ---

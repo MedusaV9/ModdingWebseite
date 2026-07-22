@@ -20,7 +20,8 @@ public class ItemIconPlaceholder {
         Files.createDirectories(DIR);
         writeHeraldsLure();
         writeHeraldCore();
-        System.out.println("Generated 2 item icons in " + DIR);
+        writeFerrymanToll();
+        System.out.println("Generated 3 item icons in " + DIR);
     }
 
     // --- herald's lure: 4 violet shards fanned around a small red heart-fragment knot ---
@@ -84,5 +85,39 @@ public class ItemIconPlaceholder {
         img.setRGB(7, 8, glow);
         img.setRGB(8, 8, glow);
         ImageIO.write(img, "png", DIR.resolve("herald_core.png").toFile());
+    }
+
+    // --- ferryman toll: a drowned obolus — verdigris coin with a soul-teal skull stamp ---
+
+    private static void writeFerrymanToll() throws IOException {
+        BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        int coin = 0xFF4A6A5C;      // verdigris bronze (matches the Ferryman robe palette)
+        int coinEdge = 0xFF2C4238;
+        int stamp = 0xFF8FF2DE;     // soul-teal skull stamp (the boss's eye-slit color)
+        int socket = 0xFF14201B;
+        // Filled circle r=6 around (7.5,7.5) with a darker rim.
+        for (int y = 0; y < 16; y++) {
+            for (int x = 0; x < 16; x++) {
+                double d = Math.hypot(x - 7.5, y - 7.5);
+                if (d <= 6.0) {
+                    img.setRGB(x, y, d >= 5.0 ? coinEdge : coin);
+                }
+            }
+        }
+        // Skull stamp: 4x3 cranium + 2x1 jaw in soul teal, with two dark sockets.
+        for (int x = 6; x <= 9; x++) {
+            for (int y = 5; y <= 7; y++) {
+                img.setRGB(x, y, stamp);
+            }
+        }
+        img.setRGB(7, 8, stamp);
+        img.setRGB(8, 8, stamp);
+        img.setRGB(7, 9, stamp);
+        img.setRGB(8, 9, stamp);
+        img.setRGB(6, 6, socket);
+        img.setRGB(9, 6, socket);
+        // Wear notch on the rim (the toll has changed many cold hands).
+        img.setRGB(11, 4, 0x00000000);
+        ImageIO.write(img, "png", DIR.resolve("ferryman_toll.png").toFile());
     }
 }

@@ -63,6 +63,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_SOFT_BORDER_RADIUS_NETHER = "softBorderRadiusNether";
     private static final String TAG_BORDER_FX_RANGE = "borderFxRange";
     private static final String TAG_HERALD_DEFEATED = "heraldDefeated";
+    private static final String TAG_FERRYMAN_DEFEATED = "ferrymanDefeated";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -90,6 +91,7 @@ public final class EclipseWorldState extends SavedData {
     private int nightEventDay = 0;
     private boolean firstPaleNightDone = false;
     private boolean heraldDefeated = false;
+    private boolean ferrymanDefeated = false;
     private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
@@ -137,6 +139,8 @@ public final class EclipseWorldState extends SavedData {
         state.firstPaleNightDone = tag.getBoolean(TAG_FIRST_PALE_NIGHT_DONE);
         // Defaults to false so pre-W11 saves keep loading (boss not fought yet).
         state.heraldDefeated = tag.getBoolean(TAG_HERALD_DEFEATED);
+        // Defaults to false so pre-W12 saves keep loading (finale not fought yet).
+        state.ferrymanDefeated = tag.getBoolean(TAG_FERRYMAN_DEFEATED);
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
         }
@@ -189,6 +193,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_NIGHT_EVENT_DAY, this.nightEventDay);
         tag.putBoolean(TAG_FIRST_PALE_NIGHT_DONE, this.firstPaleNightDone);
         tag.putBoolean(TAG_HERALD_DEFEATED, this.heraldDefeated);
+        tag.putBoolean(TAG_FERRYMAN_DEFEATED, this.ferrymanDefeated);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -478,6 +483,21 @@ public final class EclipseWorldState extends SavedData {
 
     public void setHeraldDefeated(boolean defeated) {
         this.heraldDefeated = defeated;
+        setDirty();
+    }
+
+    // --- ferryman boss (W12) ---
+
+    /**
+     * Whether the day-14 Ferryman finale has been won. Set by the boss's death path right
+     * before the mass-revive ending fires; blocks the finale ritual from re-running.
+     */
+    public boolean isFerrymanDefeated() {
+        return this.ferrymanDefeated;
+    }
+
+    public void setFerrymanDefeated(boolean defeated) {
+        this.ferrymanDefeated = defeated;
         setDirty();
     }
 

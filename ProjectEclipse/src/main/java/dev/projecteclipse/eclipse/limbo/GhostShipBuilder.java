@@ -48,6 +48,9 @@ public final class GhostShipBuilder {
         buildIfNeeded(limbo);
         OarAnimator.ensureOars(limbo);
         DeckhandEntity.ensureCrew(limbo);
+        // W12: the four deck lanterns of the Ferryman fight. Placed every start (cheap,
+        // idempotent) so pre-W12 worlds with an already-built ship get them too.
+        ShipLanterns.ensurePlaced(limbo);
     }
 
     /** Column sampled for the water surface; far away from every block the builder places. */

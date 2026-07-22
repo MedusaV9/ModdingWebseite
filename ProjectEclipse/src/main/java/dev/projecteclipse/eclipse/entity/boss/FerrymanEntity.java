@@ -1,15 +1,37 @@
 package dev.projecteclipse.eclipse.entity.boss;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
+import dev.projecteclipse.eclipse.limbo.LimboDimension;
+import dev.projecteclipse.eclipse.limbo.ShipLanterns;
+import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.ritual.FinaleRitual;
+import dev.projecteclipse.eclipse.timeline.AnnouncementService;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -19,6 +41,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
@@ -26,36 +49,49 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The Ferryman — day-14 finale boss on the limbo ghost ship
  * ({@code docs/ideas/04_content.md} §2.2). Summoned by the finale ritual (dragon egg at the
- * altar after dusk on day 14) or {@code /eclipse boss ferryman summon}; never spawns
- * naturally, and it refuses to exist outside {@code eclipse:limbo}.
+ * altar after dusk on day 14, see {@code ritual/FinaleRitual}) or
+ * {@code /eclipse boss ferryman summon}; never spawns naturally, and it refuses to exist
+ * outside {@code eclipse:limbo}.
  *
- * <p><b>Fight</b> (server-scripted, no vanilla goals): 400 HP base scaled
- * ×(1+0.4·(n−1)) for n living players; bossbar WHITE → PURPLE → RED by phase:</p>
+ * <p><b>Fight</b> (server-scripted, no vanilla goals — {@link #tick()} drives everything):
+ * {@value #BASE_MAX_HEALTH} HP base scaled ×(1+0.4·(n−1)) for n living players; bossbar
+ * WHITE → PURPLE → RED by phase (breaks at exactly 2/3 and 1/3):</p>
  * <ul>
- *   <li><b>P1 Oar</b> (100–66%): melee stalker on the deck; telegraphed 180° oar sweeps
- *       (25t raise + TRIDENT_RIPTIDE_3, 10 dmg + heavy knockback) and periodic gunwale
- *       slams (jump + AoE + {@code S2CShakePayload} ship tilt). Overboard players take a
- *       void-cold water DoT until they climb back onto the deck.</li>
+ *   <li><b>P1 Oar</b> (100–66%): melee stalker on the deck. In range it telegraphs a 180°
+ *       oar sweep ({@value #SWEEP_TELEGRAPH_TICKS}t raise + TRIDENT_RIPTIDE_3, then
+ *       {@value #SWEEP_DAMAGE} dmg + heavy knockback to everyone in the front half-circle);
+ *       every {@value #SLAM_INTERVAL_TICKS}t it jumps into a gunwale slam (landing AoE +
+ *       an {@code S2CShakePayload} ship tilt for everyone aboard). All fight long, living
+ *       players in the limbo water take a void-cold DoT until they climb back out.</li>
  *   <li><b>P2 Crew</b> (≤66%): kneels invulnerable at the stern; the Deckhand crew rises
- *       hostile and the deck lanterns blow out. LIVING players kill Deckhands; GHOSTS
- *       (banned players) re-light lanterns via a 3 s right-click channel. All required
- *       lanterns lit ends the phase.</li>
- *   <li><b>P3 The Toll</b> (≤33%): plants the oar; the ship sinks one water layer per 30 s
- *       (soft enrage, paused while ≤3 players live) and sweeps alternate with the Lantern
- *       Gaze — the lowest-hearts player is marked (private vignette) and hunted 15 s.</li>
+ *       hostile ({@link DeckhandEntity#riseHostile}) and {@code min(4, ghosts+2)} deck
+ *       lanterns blow out ({@link ShipLanterns#extinguish}). LIVING players cut down the
+ *       crew; GHOSTS re-light lanterns via the 3 s channel. All four lanterns burning ends
+ *       the phase (fallback: no ghosts online AND the risen crew slain force-ends it, so a
+ *       ghost-less server can never softlock).</li>
+ *   <li><b>P3 The Toll</b> (≤33%): plants the oar; every {@value #SINK_INTERVAL_TICKS}t
+ *       (doubled while ≤3 players live — the spec's "sink slows") the water rises one layer
+ *       across the deck (air-only {@code setBlock}, tracked for restore). Sweeps keep
+ *       coming, alternating with the Lantern Gaze: the lowest-health fighter is marked
+ *       ({@code S2CShakePayload.mark} → private purple vignette + private bell) and hunted
+ *       for {@value #GAZE_MARK_TICKS}t.</li>
  * </ul>
  *
- * <p><b>Endings</b>: death drops {@code eclipse:ferryman_toll}, sets
- * {@code ferrymanDefeated}, restores the ship and hands off to the mass-revive finale
- * ({@code ritual/FinaleRitual}). A wipe (every living fighter dead) is the Eclipse's
- * victory: announce, everyone stays a ghost.</p>
+ * <p><b>Endings</b>: death drops {@code eclipse:ferryman_toll}, restores the ship (water
+ * drained, lanterns relit, crew calmed), sets {@code ferrymanDefeated} and hands off to the
+ * mass-revive finale ({@link FinaleRitual#beginVictory}). A wipe (every participant dead or
+ * banned) is the Eclipse's victory: announce, ship restored, everyone stays a ghost. If no
+ * living fighter boards for {@value #RESET_TICKS}t the fight resets the same way (minus the
+ * announcement).</p>
  */
 public class FerrymanEntity extends Monster {
     public static final float BASE_MAX_HEALTH = 400.0F;
@@ -63,6 +99,33 @@ public class FerrymanEntity extends Monster {
     public static final int STERN_X = -(GhostShipBuilder.HALF_LENGTH - 3);
 
     private static final double SCALING_RANGE = 64.0D;
+    private static final double FIGHT_RANGE = 64.0D;
+    private static final double PARTICIPANT_RANGE = 48.0D;
+
+    // P1 oar sweep + gunwale slam.
+    private static final int SWEEP_TELEGRAPH_TICKS = 25;
+    private static final int SWEEP_COOLDOWN_TICKS = 70;
+    private static final double SWEEP_TRIGGER_RANGE = 4.5D;
+    private static final double SWEEP_RANGE = 5.5D;
+    private static final float SWEEP_DAMAGE = 10.0F;
+    private static final double SWEEP_KNOCKBACK = 1.7D;
+    private static final int SLAM_INTERVAL_TICKS = 280;
+    private static final double SLAM_RADIUS = 5.5D;
+    private static final float SLAM_DAMAGE = 6.0F;
+    private static final int SLAM_MAX_AIR_TICKS = 60;
+    // Void-cold water DoT (all phases).
+    private static final int DOT_INTERVAL_TICKS = 20;
+    private static final float DOT_DAMAGE = 2.0F;
+    // P2 crew.
+    private static final int CREW_CHECK_TICKS = 20;
+    // P3 sink + gaze.
+    private static final int SINK_INTERVAL_TICKS = 600; // 30 s
+    private static final int MAX_SINK_LAYERS = 4;
+    private static final int GAZE_INTERVAL_TICKS = 400;
+    private static final int GAZE_MARK_TICKS = 300; // 15 s
+    // Reset / wipe.
+    private static final int RESET_TICKS = 1200; // 60 s without a living fighter aboard
+    private static final int WIPE_CHECK_TICKS = 20;
 
     /** Current phase 1..3 (synced; drives bossbar color + model poses). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -84,12 +147,30 @@ public class FerrymanEntity extends Monster {
             Component.translatable("entity.eclipse.ferryman.bossbar"),
             BossEvent.BossBarColor.WHITE, BossEvent.BossBarOverlay.PROGRESS);
 
-    // --- server fight state ---
+    // --- server fight state (geometry + participants + ship edits persisted in NBT) ---
     @Nullable
     private Vec3 shipCenter;
     private int deckY;
     private int scaledPlayers = 1;
     private int lastPhase = 1;
+    private final Set<UUID> participants = new HashSet<>();
+
+    private int sweepCooldown = SWEEP_COOLDOWN_TICKS / 2;
+    private int telegraphTimer = -1;
+    private int slamTimer = SLAM_INTERVAL_TICKS;
+    private boolean slamAirborne;
+    private int slamAirTicks;
+    private boolean crewActive;
+    private int requiredLanterns;
+    private boolean sinkSlowedLogged;
+    private int sinkTimer = SINK_INTERVAL_TICKS;
+    private int sinkLayers;
+    private final List<BlockPos> placedWater = new ArrayList<>();
+    private int gazeTimer = GAZE_INTERVAL_TICKS / 2;
+    private int gazeTicksLeft;
+    @Nullable
+    private UUID gazeTargetId;
+    private int noFighterTicks;
 
     // Client-side smooth animation clock + pose blend weights (raise/kneel/plant).
     private float animAge;
@@ -113,15 +194,17 @@ public class FerrymanEntity extends Monster {
 
     /**
      * Spawns the Ferryman at the ghost ship's stern (feet one block above the deck) with
-     * the arrival FX, and snapshots the living-player scaling. {@code limbo} must be the
-     * Limbo dimension — the ship geometry (deck height, bounds) is derived from
-     * {@link GhostShipBuilder}.
+     * the arrival FX, ensures the deck lanterns exist, and snapshots the living-player
+     * scaling. {@code limbo} must be the Limbo dimension — the ship geometry (deck height,
+     * bounds) is derived from {@link GhostShipBuilder}.
      */
     public static FerrymanEntity summon(ServerLevel limbo) {
         FerrymanEntity ferryman = dev.projecteclipse.eclipse.entity.EclipseEntities.FERRYMAN.get().create(limbo);
         if (ferryman == null) {
             throw new IllegalStateException("Ferryman entity type failed to instantiate");
         }
+        ShipLanterns.ensurePlaced(limbo);
+        DeckhandEntity.reseatFallen(limbo); // The crew returns for every crossing (P2 fodder).
         int deck = GhostShipBuilder.waterlineY(limbo) + 3;
         double x = STERN_X + 0.5D;
         double z = 0.5D;
@@ -145,7 +228,7 @@ public class FerrymanEntity extends Monster {
         this.deckY = deck;
         long living = limbo.getServer().getPlayerList().getPlayers().stream()
                 .filter(player -> !player.isSpectator() && player.isAlive())
-                .filter(player -> !dev.projecteclipse.eclipse.lives.BanService.isBanned(player))
+                .filter(player -> !BanService.isBanned(player))
                 .filter(player -> player.level() != limbo
                         || player.position().distanceTo(center) <= SCALING_RANGE)
                 .count();
@@ -216,10 +299,10 @@ public class FerrymanEntity extends Monster {
         if (this.level().isClientSide) {
             tickClientAnim();
         } else if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
-            if (!serverLevel.dimension().equals(dev.projecteclipse.eclipse.limbo.LimboDimension.LIMBO)) {
+            if (!serverLevel.dimension().equals(LimboDimension.LIMBO)) {
                 // The Ferryman exists only on the ghost ship.
                 EclipseMod.LOGGER.warn("Ferryman discarded: spawned outside {}",
-                        dev.projecteclipse.eclipse.limbo.LimboDimension.LIMBO.location());
+                        LimboDimension.LIMBO.location());
                 this.discard();
                 return;
             }
@@ -249,18 +332,533 @@ public class FerrymanEntity extends Monster {
         onPhaseChanged(level, previous, phase);
     }
 
-    /** Fight-side reaction to a phase break; the fight logic (crew, toll) hooks in here. */
+    /** Phase-break bookkeeping: crew start/stop, oar plant, sink/gaze timers. */
     protected void onPhaseChanged(ServerLevel level, int previousPhase, int newPhase) {
         setTelegraphing(false);
+        this.telegraphTimer = -1;
+        if (this.crewActive && newPhase != 2) {
+            endCrewPhase(level, "phase moved on");
+        }
+        if (newPhase == 2 && !this.crewActive) {
+            startCrewPhase(level);
+        }
+        setPlanted(newPhase >= 3);
+        if (newPhase == 3) {
+            this.sinkTimer = SINK_INTERVAL_TICKS;
+            this.gazeTimer = GAZE_INTERVAL_TICKS / 2;
+            level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
+                    SoundSource.HOSTILE, 1.2F, 0.8F);
+            EclipseMod.LOGGER.info("Ferryman P3 The Toll: oar planted — the ship begins to sink "
+                    + "(1 layer per {}t, doubled while <=3 players live)", SINK_INTERVAL_TICKS);
+        }
     }
 
-    /** Per-tick fight script; the chassis only holds position until the fight logic lands. */
+    /** Per-tick fight script (server side, limbo only, geometry pinned). */
     protected void tickFight(ServerLevel level) {
-        // Chassis: hover in place one block above the deck.
-        if (this.shipCenter != null) {
-            double targetY = this.deckY + 1.0D;
-            this.setDeltaMovement(new Vec3(0.0D, (targetY - this.getY()) * 0.1D, 0.0D));
+        List<ServerPlayer> fighters = livingFighters(level);
+        updateParticipants(fighters);
+        if (this.tickCount % WIPE_CHECK_TICKS == 0 && checkWipe(level)) {
+            return;
         }
+        if (tickReset(level, fighters)) {
+            return;
+        }
+        if (this.tickCount % DOT_INTERVAL_TICKS == 0) {
+            tickWaterDot(level, fighters);
+        }
+        if (this.crewActive) {
+            tickCrewPhase(level);
+            return; // Kneeling: no movement script, no attacks.
+        }
+        ServerPlayer target = currentTarget(level, fighters);
+        if (this.slamAirborne) {
+            tickSlamAirborne(level, fighters);
+        } else {
+            tickMovement(target);
+            tickSweep(level, fighters, target);
+            if (getPhase() == 1) {
+                tickSlamWindup(target);
+            }
+        }
+        if (getPhase() == 3) {
+            tickSink(level, fighters);
+            tickGaze(level, fighters);
+        }
+    }
+
+    // --- movement (gravity-free deck stalker) ---
+
+    private void tickMovement(@Nullable ServerPlayer target) {
+        double hoverY = this.deckY + 1.0D;
+        Vec3 velocity = new Vec3(0.0D, (hoverY - this.getY()) * 0.15D, 0.0D);
+        if (target != null && this.telegraphTimer < 0) {
+            Vec3 to = target.position().subtract(this.position());
+            double dist = Math.sqrt(to.x * to.x + to.z * to.z);
+            if (dist > 2.5D) {
+                double speed = getPhase() >= 3 ? 0.22D : 0.16D;
+                velocity = velocity.add(to.x / dist * speed, 0.0D, to.z / dist * speed);
+            }
+        }
+        this.setDeltaMovement(velocity);
+        if (target != null) {
+            faceTowards(target.position());
+        }
+    }
+
+    // --- P1/P3 oar sweep ---
+
+    private void tickSweep(ServerLevel level, List<ServerPlayer> fighters, @Nullable ServerPlayer target) {
+        if (this.telegraphTimer < 0) {
+            if (this.sweepCooldown > 0) {
+                this.sweepCooldown--;
+                return;
+            }
+            if (target == null || target.position().distanceTo(this.position()) > SWEEP_TRIGGER_RANGE) {
+                return;
+            }
+            this.telegraphTimer = SWEEP_TELEGRAPH_TICKS;
+            setTelegraphing(true);
+            level.playSound(null, this.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_3.value(),
+                    SoundSource.HOSTILE, 1.2F, 0.8F);
+            EclipseMod.LOGGER.info("Ferryman sweep telegraph: oar raised ({}t windup)", SWEEP_TELEGRAPH_TICKS);
+            return;
+        }
+        if (--this.telegraphTimer >= 0) {
+            return;
+        }
+        setTelegraphing(false);
+        this.sweepCooldown = SWEEP_COOLDOWN_TICKS;
+        doSweep(level, fighters);
+    }
+
+    /** 180° arc in front of the boss: {@value #SWEEP_DAMAGE} dmg + heavy outward knockback. */
+    private void doSweep(ServerLevel level, List<ServerPlayer> fighters) {
+        Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+        int hits = 0;
+        for (ServerPlayer player : fighters) {
+            Vec3 to = player.position().subtract(this.position());
+            double dist = to.length();
+            if (dist > SWEEP_RANGE || Math.abs(player.getY() - (this.deckY + 1.0D)) > 4.0D) {
+                continue;
+            }
+            Vec3 flat = new Vec3(to.x, 0.0D, to.z);
+            if (flat.lengthSqr() > 1.0E-4D && flat.normalize().dot(forward) < 0.0D) {
+                continue; // Behind the boss: the sweep is a front half-circle.
+            }
+            player.hurt(this.damageSources().mobAttack(this), SWEEP_DAMAGE);
+            Vec3 away = flat.lengthSqr() > 1.0E-4D ? flat.normalize() : forward;
+            player.setDeltaMovement(away.scale(SWEEP_KNOCKBACK).add(0.0D, 0.55D, 0.0D));
+            player.hurtMarked = true; // sync the launch to the client (SoftBorder pattern)
+            hits++;
+        }
+        level.playSound(null, this.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP,
+                SoundSource.HOSTILE, 1.4F, 0.6F);
+        Vec3 front = this.position().add(Vec3.directionFromRotation(0.0F, this.getYRot()).scale(2.5D));
+        level.sendParticles(ParticleTypes.SWEEP_ATTACK, front.x, this.deckY + 2.0D, front.z,
+                6, 1.2D, 0.4D, 1.2D, 0.0D);
+        EclipseMod.LOGGER.info("Ferryman oar sweep hit {} player(s) for {} + knockback", hits, SWEEP_DAMAGE);
+    }
+
+    // --- P1 gunwale slam ---
+
+    private void tickSlamWindup(@Nullable ServerPlayer target) {
+        if (--this.slamTimer > 0 || target == null
+                || target.position().distanceTo(this.position()) > 9.0D) {
+            return;
+        }
+        this.slamTimer = SLAM_INTERVAL_TICKS;
+        this.slamAirborne = true;
+        this.slamAirTicks = 0;
+        Vec3 to = target.position().subtract(this.position());
+        double dist = Math.max(1.0D, Math.sqrt(to.x * to.x + to.z * to.z));
+        this.setDeltaMovement(to.x / dist * 0.3D, 0.95D, to.z / dist * 0.3D);
+        this.level().playSound(null, this.blockPosition(), SoundEvents.TRIDENT_THROW.value(),
+                SoundSource.HOSTILE, 1.4F, 0.5F);
+        EclipseMod.LOGGER.info("Ferryman gunwale slam: airborne toward {}", target.getScoreboardName());
+    }
+
+    /** Manual gravity while airborne; landing = AoE + the S2CShakePayload ship tilt. */
+    private void tickSlamAirborne(ServerLevel level, List<ServerPlayer> fighters) {
+        this.slamAirTicks++;
+        this.setDeltaMovement(this.getDeltaMovement().add(0.0D, -0.08D, 0.0D));
+        boolean landed = this.slamAirTicks > 4
+                && (this.onGround() || this.getY() <= this.deckY + 1.05D);
+        if (!landed && this.slamAirTicks < SLAM_MAX_AIR_TICKS) {
+            return;
+        }
+        this.slamAirborne = false;
+        this.setDeltaMovement(Vec3.ZERO);
+        int hits = 0;
+        for (ServerPlayer player : fighters) {
+            Vec3 to = player.position().subtract(this.position());
+            if (Math.sqrt(to.x * to.x + to.z * to.z) <= SLAM_RADIUS
+                    && Math.abs(player.getY() - (this.deckY + 1.0D)) <= 4.0D) {
+                player.hurt(this.damageSources().mobAttack(this), SLAM_DAMAGE);
+                player.setDeltaMovement(player.getDeltaMovement().add(0.0D, 0.45D, 0.0D));
+                player.hurtMarked = true;
+                hits++;
+            }
+        }
+        // The whole ship tilts: every player aboard (ghosts included) gets the camera shake.
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
+                S2CShakePayload.shake(1.1F, 22));
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
+                new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
+        level.playSound(null, this.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(),
+                SoundSource.HOSTILE, 1.0F, 0.7F);
+        EclipseMod.LOGGER.info("Ferryman gunwale slam landed after {}t: {} player(s) hit, shake payload sent",
+                this.slamAirTicks, hits);
+    }
+
+    // --- void-cold water DoT (all phases) ---
+
+    private void tickWaterDot(ServerLevel level, List<ServerPlayer> fighters) {
+        for (ServerPlayer player : fighters) {
+            if (!player.isInWater()) {
+                continue;
+            }
+            player.hurt(this.damageSources().freeze(), DOT_DAMAGE);
+            level.sendParticles(ParticleTypes.SNOWFLAKE, player.getX(), player.getY() + 0.8D,
+                    player.getZ(), 6, 0.25D, 0.4D, 0.25D, 0.02D);
+            if (this.tickCount % 100 == 0) {
+                EclipseMod.LOGGER.info("Void-cold water: {} takes {} (overboard/flooded)",
+                        player.getScoreboardName(), DOT_DAMAGE);
+            }
+        }
+    }
+
+    // --- P2 crew phase ---
+
+    private void startCrewPhase(ServerLevel level) {
+        this.crewActive = true;
+        setKneeling(true);
+        int ghosts = ghostsOnline(level);
+        this.requiredLanterns = Math.min(4, ghosts + 2);
+        int darkened = ShipLanterns.extinguish(level, this.requiredLanterns);
+        int risen = DeckhandEntity.riseHostile(level);
+        EclipseMod.LOGGER.info("Ferryman P2 Crew: kneeling invulnerable at the stern — {} deckhand(s) risen, "
+                + "{} lantern(s) extinguished (required {}, {} ghost(s) online)",
+                risen, darkened, this.requiredLanterns, ghosts);
+    }
+
+    private void tickCrewPhase(ServerLevel level) {
+        // Drift home to the stern and hold there.
+        Vec3 anchor = new Vec3(STERN_X + 0.5D, this.deckY + 1.0D, 0.5D);
+        Vec3 toAnchor = anchor.subtract(this.position()).scale(0.08D);
+        if (toAnchor.length() > 0.3D) {
+            toAnchor = toAnchor.normalize().scale(0.3D);
+        }
+        this.setDeltaMovement(toAnchor);
+        faceTowards(new Vec3(this.shipCenter.x + GhostShipBuilder.HALF_LENGTH, this.deckY + 1.0D, 0.5D));
+        if (this.tickCount % CREW_CHECK_TICKS != 0) {
+            return;
+        }
+        if (ShipLanterns.allLit(level)) {
+            endCrewPhase(level, "all lanterns burn again");
+            return;
+        }
+        // Softlock guard: with no ghosts online nobody can re-light — the crew IS the phase.
+        if (ghostsOnline(level) == 0 && DeckhandEntity.countHostileAlive(level) == 0) {
+            ShipLanterns.relightAll(level);
+            endCrewPhase(level, "no ghosts online and the risen crew is slain — force-ended");
+        }
+    }
+
+    private void endCrewPhase(ServerLevel level, String reason) {
+        this.crewActive = false;
+        setKneeling(false);
+        DeckhandEntity.calmCrew(level);
+        level.playSound(null, this.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.HOSTILE, 1.0F, 0.9F);
+        EclipseMod.LOGGER.info("Ferryman P2 Crew ended ({}) — {} lantern(s) burning; the Ferryman rises",
+                reason, ShipLanterns.litCount(level));
+    }
+
+    /** Kneeling = mechanically invulnerable (the crew phase is the counter, not damage). */
+    @Override
+    public boolean isInvulnerableTo(DamageSource source) {
+        if (isKneeling() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+            return true;
+        }
+        return super.isInvulnerableTo(source);
+    }
+
+    // --- P3 sink ---
+
+    private void tickSink(ServerLevel level, List<ServerPlayer> fighters) {
+        boolean slowed = fighters.size() <= 3;
+        if (slowed != this.sinkSlowedLogged) {
+            this.sinkSlowedLogged = slowed;
+            EclipseMod.LOGGER.info("Ferryman sink pace {} ({} living fighter(s) aboard)",
+                    slowed ? "SLOWED x2" : "normal", fighters.size());
+        }
+        // Slowed = half pace: skip every other countdown tick.
+        if (slowed && this.tickCount % 2 == 0) {
+            return;
+        }
+        if (--this.sinkTimer > 0) {
+            return;
+        }
+        this.sinkTimer = SINK_INTERVAL_TICKS;
+        raiseWaterLayer(level);
+    }
+
+    /** One layer of black water across the deck footprint; air-only, tracked for restore. */
+    private void raiseWaterLayer(ServerLevel level) {
+        if (this.sinkLayers >= MAX_SINK_LAYERS) {
+            EclipseMod.LOGGER.info("Ferryman sink: deck already fully awash ({} layers)", this.sinkLayers);
+            return;
+        }
+        this.sinkLayers++;
+        int y = this.deckY + this.sinkLayers;
+        int placed = 0;
+        for (int dx = -GhostShipBuilder.HALF_LENGTH; dx <= GhostShipBuilder.HALF_LENGTH; dx++) {
+            int hw = GhostShipBuilder.halfWidthAt(dx);
+            for (int dz = -hw; dz <= hw; dz++) {
+                BlockPos pos = new BlockPos(dx, y, dz);
+                if (level.getBlockState(pos).isAir()) {
+                    level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
+                    this.placedWater.add(pos);
+                    placed++;
+                }
+            }
+        }
+        level.playSound(null, BlockPos.containing(this.shipCenter), SoundEvents.AMBIENT_UNDERWATER_ENTER,
+                SoundSource.HOSTILE, 2.0F, 0.6F);
+        EclipseMod.LOGGER.info("Ferryman sink: water layer {} of {} at y={} — {} block(s) placed ({} tracked total)",
+                this.sinkLayers, MAX_SINK_LAYERS, y, placed, this.placedWater.size());
+    }
+
+    // --- P3 Lantern Gaze ---
+
+    private void tickGaze(ServerLevel level, List<ServerPlayer> fighters) {
+        if (this.gazeTicksLeft > 0) {
+            ServerPlayer marked = this.gazeTargetId != null
+                    ? level.getServer().getPlayerList().getPlayer(this.gazeTargetId) : null;
+            if (marked == null || !marked.isAlive() || marked.level() != level || BanService.isBanned(marked)) {
+                clearGaze("marked player lost");
+                return;
+            }
+            if (--this.gazeTicksLeft <= 0) {
+                clearGaze("mark expired");
+            }
+            return;
+        }
+        if (--this.gazeTimer > 0 || fighters.isEmpty()) {
+            return;
+        }
+        this.gazeTimer = GAZE_INTERVAL_TICKS;
+        ServerPlayer weakest = fighters.get(0);
+        for (ServerPlayer player : fighters) {
+            if (player.getHealth() < weakest.getHealth()) {
+                weakest = player;
+            }
+        }
+        this.gazeTargetId = weakest.getUUID();
+        this.gazeTicksLeft = GAZE_MARK_TICKS;
+        setGazing(true);
+        // Only the marked player gets the vignette + the private bell.
+        PacketDistributor.sendToPlayer(weakest, S2CShakePayload.mark(GAZE_MARK_TICKS));
+        weakest.connection.send(new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(EclipseSounds.BOSS_FERRYMAN_BELL.get()),
+                SoundSource.HOSTILE, weakest.getX(), weakest.getY(), weakest.getZ(),
+                1.2F, 1.0F, this.random.nextLong()));
+        EclipseMod.LOGGER.info("Ferryman Lantern Gaze marks {} ({} HP, lowest aboard) — hunted for {}t",
+                weakest.getScoreboardName(),
+                String.format(java.util.Locale.ROOT, "%.1f", weakest.getHealth()), GAZE_MARK_TICKS);
+    }
+
+    private void clearGaze(String reason) {
+        EclipseMod.LOGGER.info("Ferryman Lantern Gaze ended: {}", reason);
+        this.gazeTargetId = null;
+        this.gazeTicksLeft = 0;
+        setGazing(false);
+    }
+
+    // --- participants / wipe / reset ---
+
+    private void updateParticipants(List<ServerPlayer> fighters) {
+        for (ServerPlayer player : fighters) {
+            if (player.position().distanceTo(this.shipCenter) <= PARTICIPANT_RANGE
+                    && this.participants.add(player.getUUID())) {
+                EclipseMod.LOGGER.info("Ferryman fight: {} boarded ({} participant(s))",
+                        player.getScoreboardName(), this.participants.size());
+            }
+        }
+    }
+
+    /**
+     * Wipe = the Eclipse's victory: every participant that is still online is dead or a
+     * ghost (banned). Announce, keep everyone ghosts, restore the ship and leave.
+     */
+    private boolean checkWipe(ServerLevel level) {
+        if (this.participants.isEmpty()) {
+            return false;
+        }
+        boolean anyOnline = false;
+        for (UUID id : this.participants) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+            if (player == null) {
+                continue;
+            }
+            anyOnline = true;
+            if (player.isAlive() && !player.isSpectator() && !BanService.isBanned(player)) {
+                return false; // Someone still stands.
+            }
+        }
+        if (!anyOnline) {
+            return false; // Mass logout is not a wipe; the reset timer handles it.
+        }
+        EclipseMod.LOGGER.info("Ferryman WIPE: all {} participant(s) dead or banned — Eclipse victory, "
+                + "everyone stays a ghost", this.participants.size());
+        AnnouncementService.announce(level.getServer(),
+                "announce.eclipse.ferryman.wipe.title", "announce.eclipse.ferryman.wipe.sub",
+                dev.projecteclipse.eclipse.network.S2CAnnouncePayload.STYLE_BOSS);
+        restoreShip(level, "wipe");
+        this.setHealth(this.getMaxHealth());
+        this.discard();
+        return true;
+    }
+
+    /** No living fighter aboard for 60 s after first contact: heal, restore and despawn. */
+    private boolean tickReset(ServerLevel level, List<ServerPlayer> fighters) {
+        if (this.participants.isEmpty() || !fighters.isEmpty()) {
+            this.noFighterTicks = 0;
+            return false;
+        }
+        if (++this.noFighterTicks < RESET_TICKS) {
+            return false;
+        }
+        EclipseMod.LOGGER.info("Ferryman reset: no living fighter aboard for {} ticks — restoring ship and despawning",
+                RESET_TICKS);
+        restoreShip(level, "abandoned");
+        this.setHealth(this.getMaxHealth());
+        this.discard();
+        return true;
+    }
+
+    /**
+     * Drains the sink water, relights the lanterns and calms the crew. The drain sweeps
+     * the ENTIRE above-deck footprint (deck+1 .. deck+{@value #MAX_SINK_LAYERS}) rather
+     * than just the tracked placements: adjacent placed sources breed new untracked
+     * sources (the vanilla infinite-water rule), which would re-flood the deck if only
+     * the tracked blocks were removed. Nothing legitimate above the deck is water, so a
+     * blanket water→air sweep is safe (waterlogged lanterns are restored by
+     * {@link ShipLanterns#relightAll}).
+     */
+    private void restoreShip(ServerLevel level, String reason) {
+        int drained = 0;
+        for (int layer = 1; layer <= MAX_SINK_LAYERS; layer++) {
+            int y = this.deckY + layer;
+            for (int dx = -GhostShipBuilder.HALF_LENGTH; dx <= GhostShipBuilder.HALF_LENGTH; dx++) {
+                int hw = GhostShipBuilder.halfWidthAt(dx);
+                for (int dz = -hw; dz <= hw; dz++) {
+                    BlockPos pos = new BlockPos(dx, y, dz);
+                    if (level.getBlockState(pos).is(Blocks.WATER)) { // source AND flowing
+                        level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+                        drained++;
+                    }
+                }
+            }
+        }
+        this.placedWater.clear();
+        this.sinkLayers = 0;
+        ShipLanterns.relightAll(level);
+        DeckhandEntity.calmCrew(level);
+        this.crewActive = false;
+        EclipseMod.LOGGER.info("Ferryman ship restored ({}): {} water block(s) drained, lanterns relit, crew calmed",
+                reason, drained);
+    }
+
+    // --- death / drops / finale handoff ---
+
+    @Override
+    protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
+        super.dropCustomDeathLoot(level, damageSource, recentlyHit);
+        this.spawnAtLocation(new ItemStack(EclipseItems.FERRYMAN_TOLL.get()));
+        EclipseMod.LOGGER.info("Ferryman drop: 1 ferryman_toll at the corpse");
+    }
+
+    @Override
+    public void die(DamageSource damageSource) {
+        super.die(damageSource);
+        if (this.level() instanceof ServerLevel serverLevel) {
+            restoreShip(serverLevel, "boss defeated");
+            EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
+            state.setFerrymanDefeated(true);
+            PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
+                    96.0D, new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
+            EclipseMod.LOGGER.info("Ferryman defeated (source: {}) — ferrymanDefeated set, mass-revive finale starting",
+                    damageSource.getMsgId());
+            FinaleRitual.beginVictory(serverLevel.getServer());
+        }
+    }
+
+    // --- test hooks ---
+
+    /**
+     * {@code /eclipse boss ferryman phase} support: snaps health into the requested phase's
+     * band; {@link #updatePhase} then runs the regular transition (crew, sink, bar color)
+     * on the next tick.
+     */
+    public void forcePhase(int phase) {
+        float fraction = switch (Mth.clamp(phase, 1, 3)) {
+            case 2 -> 0.60F;
+            case 3 -> 0.30F;
+            default -> 1.0F;
+        };
+        this.setHealth(Math.max(1.0F, this.getMaxHealth() * fraction));
+        EclipseMod.LOGGER.info("Ferryman phase forced toward {} (health snapped to {}/{})", phase,
+                String.format(java.util.Locale.ROOT, "%.1f", this.getHealth()),
+                String.format(java.util.Locale.ROOT, "%.1f", this.getMaxHealth()));
+    }
+
+    // --- target helpers ---
+
+    /** Living, non-banned, non-spectator players aboard (within 64 of the ship center). */
+    private List<ServerPlayer> livingFighters(ServerLevel level) {
+        List<ServerPlayer> fighters = new ArrayList<>();
+        if (this.shipCenter == null) {
+            return fighters;
+        }
+        for (ServerPlayer player : level.players()) {
+            if (player.isAlive() && !player.isSpectator() && !BanService.isBanned(player)
+                    && player.position().distanceTo(this.shipCenter) <= FIGHT_RANGE) {
+                fighters.add(player);
+            }
+        }
+        return fighters;
+    }
+
+    /** The Lantern Gaze mark while active, else the nearest living fighter. */
+    @Nullable
+    private ServerPlayer currentTarget(ServerLevel level, List<ServerPlayer> fighters) {
+        if (this.gazeTicksLeft > 0 && this.gazeTargetId != null) {
+            ServerPlayer marked = level.getServer().getPlayerList().getPlayer(this.gazeTargetId);
+            if (marked != null && marked.isAlive() && marked.level() == level && !BanService.isBanned(marked)) {
+                return marked;
+            }
+        }
+        ServerPlayer nearest = null;
+        double best = Double.MAX_VALUE;
+        for (ServerPlayer player : fighters) {
+            double dist = player.distanceToSqr(this);
+            if (dist < best) {
+                best = dist;
+                nearest = player;
+            }
+        }
+        return nearest;
+    }
+
+    /** Online ghosts = banned players (they participate by re-lighting lanterns). */
+    private static int ghostsOnline(ServerLevel level) {
+        int ghosts = 0;
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            if (BanService.isBanned(player)) {
+                ghosts++;
+            }
+        }
+        return ghosts;
     }
 
     /** WHITE (P1) → PURPLE (P2) → RED (P3) per spec §2.2. */
@@ -357,9 +955,12 @@ public class FerrymanEntity extends Monster {
         return false;
     }
 
+    // Air supply: the ferryman is tagged minecraft:can_breathe_under_water (data tag) so
+    // his own P3 sink water cannot drown him mid-fight.
+
     @Override
     public void checkDespawn() {
-        // Never despawns naturally; the fight's own reset handles abandonment.
+        // Never despawns naturally; tickReset() handles abandonment itself.
     }
 
     @Override
@@ -412,6 +1013,20 @@ public class FerrymanEntity extends Monster {
             compound.putDouble("ShipZ", this.shipCenter.z);
             compound.putInt("DeckY", this.deckY);
         }
+        compound.putBoolean("CrewActive", this.crewActive);
+        compound.putInt("RequiredLanterns", this.requiredLanterns);
+        compound.putInt("SinkLayers", this.sinkLayers);
+        compound.putInt("SinkTimer", this.sinkTimer);
+        ListTag waterList = new ListTag();
+        for (BlockPos pos : this.placedWater) {
+            waterList.add(LongTag.valueOf(pos.asLong()));
+        }
+        compound.put("PlacedWater", waterList);
+        ListTag participantList = new ListTag();
+        for (UUID id : this.participants) {
+            participantList.add(NbtUtils.createUUID(id));
+        }
+        compound.put("Participants", participantList);
     }
 
     @Override
@@ -425,34 +1040,31 @@ public class FerrymanEntity extends Monster {
                     compound.getDouble("ShipY"), compound.getDouble("ShipZ"));
             this.deckY = compound.getInt("DeckY");
         }
-        // Re-derive the phase so a reloaded fight resumes with the right bar color.
+        this.crewActive = compound.getBoolean("CrewActive");
+        this.requiredLanterns = compound.getInt("RequiredLanterns");
+        this.sinkLayers = compound.getInt("SinkLayers");
+        if (compound.contains("SinkTimer")) {
+            this.sinkTimer = Math.max(1, compound.getInt("SinkTimer"));
+        }
+        for (Tag entry : compound.getList("PlacedWater", Tag.TAG_LONG)) {
+            this.placedWater.add(BlockPos.of(((LongTag) entry).getAsLong()));
+        }
+        for (Tag entry : compound.getList("Participants", Tag.TAG_INT_ARRAY)) {
+            this.participants.add(NbtUtils.loadUUID(entry));
+        }
+        // Re-derive the phase + poses so a reloaded fight resumes cleanly.
         float fraction = this.getMaxHealth() > 0.0F ? this.getHealth() / this.getMaxHealth() : 1.0F;
         this.lastPhase = fraction > 2.0F / 3.0F ? 1 : fraction > 1.0F / 3.0F ? 2 : 3;
         setPhase(this.lastPhase);
         applyBossbarColor(this.lastPhase);
+        setKneeling(this.crewActive);
+        setPlanted(this.lastPhase >= 3);
         if (this.hasCustomName()) {
             this.bossEvent.setName(this.getDisplayName());
         }
     }
 
-    // --- shared helpers for the fight logic ---
-
-    @Nullable
-    protected Vec3 shipCenter() {
-        return this.shipCenter;
-    }
-
-    protected int deckY() {
-        return this.deckY;
-    }
-
-    protected int scaledPlayers() {
-        return this.scaledPlayers;
-    }
-
-    protected ServerBossEvent bossEvent() {
-        return this.bossEvent;
-    }
+    // --- shared helpers ---
 
     /** Look helper for the fight: turns body + head toward a target position. */
     protected void faceTowards(Vec3 pos) {

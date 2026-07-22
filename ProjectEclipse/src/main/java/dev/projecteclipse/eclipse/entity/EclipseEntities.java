@@ -136,9 +136,11 @@ public final class EclipseEntities {
                 .add(Attributes.MOVEMENT_SPEED, 0.32D)
                 .add(Attributes.FOLLOW_RANGE, 40.0D)
                 .build());
+        // ATTACK_DAMAGE base 0: only the W12 hostile mode raises it (MeleeAttackGoal needs it).
         event.put(DECKHAND.get(), Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.0D)
+                .add(Attributes.ATTACK_DAMAGE, 0.0D)
                 .add(Attributes.FOLLOW_RANGE, 48.0D)
                 .build());
         event.put(SUNMOTE.get(), Mob.createMobAttributes()

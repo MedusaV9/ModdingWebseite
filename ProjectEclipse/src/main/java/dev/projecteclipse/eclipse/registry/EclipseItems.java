@@ -58,6 +58,16 @@ public final class EclipseItems {
                     .rarity(Rarity.EPIC)
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
+    /**
+     * Guaranteed Ferryman drop (W12, spec §2.2): the day-14 finale trophy. W13 decides its
+     * economy uses (credits/epilogue); nothing consumes it yet.
+     */
+    public static final Supplier<Item> FERRYMAN_TOLL = ITEMS.register("ferryman_toll",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.EPIC)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
     /** Admin/debug item for the altar block; not craftable (admins place the altar manually). */
     public static final Supplier<BlockItem> ALTAR = ITEMS.register("altar",
             () -> new BlockItem(EclipseBlocks.ALTAR.get(), new Item.Properties()));
