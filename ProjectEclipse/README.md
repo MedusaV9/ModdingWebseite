@@ -669,6 +669,20 @@ public final class ModGate {          // @EventBusSubscriber (game bus)
   Aeronautics & Sable)**: sub-level airships are not vanilla vehicles — a player standing inside
   one that crosses the ring reads as an un-mounted player moving without ground and is caught by
   the generic `d > R+3` teleport fallback (the ship itself is NOT pushed back).
+- **Border client FX (`border.client.BorderFxRenderer`)** — the ring is INVISIBLE until the camera
+  is within `fxRange` (server-synced, default 8) of the circle; a single d² early-out per
+  frame/tick keeps it zero-cost while far. Three layers: (1) geometry —
+  `RenderLevelStageEvent` AFTER_PARTICLES draws a curved strip of quads over ±25° of arc nearest
+  the camera (tessellated every ~2 blocks, ±12 blocks around player Y, ≤200 quads — the arc
+  narrows on huge rings), textured with the scrolling procedural static
+  `textures/environment/border_glitch.png` (`scripts/placeholder_gen/BorderGlitchPlaceholder`),
+  additive blend, depth-write off, `alpha = (1 − dist/fxRange) · per-quad noise flicker`;
+  (2) particles — throttled `BORDER_GLITCH` Quasar bursts along the visible arc (≥3 ticks apart,
+  doubled under `reducedFx`, chance-scaled by proximity); (3) post — the per-tick proximity feeds
+  `VeilPostController.setBorderProximity`, driving the `eclipse:border_glitch` pipeline
+  (chromatic aberration + horizontal displacement bands + violet edge wash via `Proximity`/`Time`
+  uniforms; hard-gated like all Veil post FX). If depth-sorting artifacts appear under Sodium,
+  switch the render stage to AFTER_TRANSLUCENT_BLOCKS (comment in the renderer).
 - **PhaseInventoryLock** — SURVIVAL/ADVENTURE players only. Every 20 ticks: while `main_inventory`
   is locked, stacks in slots 9–35 are moved to free hotbar slots (or dropped); while `armor` is
   locked, armor slots 36–39 + offhand 40 are cleared the same way — except `eclipse:arm_artifact`
@@ -821,10 +835,10 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.hearts` — LIVES-to-transient-MAX_HEALTH projection and client heart-shatter/low-health HUD overlay.
 - `dev.projecteclipse.eclipse.limbo` — `LimboDimension` (dimension key constant), `GhostShipBuilder`, `OarAnimator`, `StartEventCutscene` (see "Limbo & start event").
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController` (vanilla failsafe owner), `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
-- `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps).
+- `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps); `border.client.BorderFxRenderer` (glitch strip geometry, Quasar arcs, Veil post proximity feed); the vanilla border visual is cancelled by `client.mixin.LevelRendererMixin`.
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
-- `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
+- `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.
 - `dev.projecteclipse.eclipse.cutscene` / `cutscene.client` — the cutscene engine (see "Cutscene engine"): server path library + orchestration + freeze, and the client camera director/letterbox/input swallow.
@@ -836,7 +850,8 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
   is rendered by a vanilla-pipeline sky hook; when an Iris shaderpack is active it replaces the
   sky rendering, so only the fog/sky *tint* fallback survives. Running Iris with **no shaderpack
   enabled** keeps the full effect (this is the smoke-tested configuration). The v2 Veil post
-  pipelines (limbo grade, sun halo) are likewise hard-gated off while a shaderpack is active
+  pipelines (limbo grade, sun halo, border glitch) are likewise hard-gated off while a shaderpack
+  is active
   (Veil post FX bypass the Iris pipeline and break under a pack); Quasar particles stay on.
 - **EMI/recipe viewers show gated recipes.** ModGate blocks crafting/placement/pickup at runtime
   but does not hide recipes from EMI/JEI-style viewers — there is no runtime recipe-hiding hook

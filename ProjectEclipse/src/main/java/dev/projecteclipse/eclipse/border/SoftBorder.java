@@ -118,7 +118,9 @@ public final class SoftBorder {
     /** Last glitch-sound game time per player (throttle). */
     private static final Map<UUID, Long> LAST_SOUND = new HashMap<>();
 
-    private record Lerp(double fromRadius, double toRadius, long startGameTime, int durationTicks) {}
+    /** {@code sweepCoupled}: stage-commit lerps snap early once the terrain sweep completes. */
+    private record Lerp(double fromRadius, double toRadius, long startGameTime, int durationTicks,
+            boolean sweepCoupled) {}
 
     private static final class ViolationLog {
         long windowStartGameTime;
@@ -196,7 +198,7 @@ public final class SoftBorder {
     public static void onStageCommit(MinecraftServer server, DiscProfile profile, int stage, boolean animate) {
         int outer = stageOuterRadius(profile, stage);
         double target = outer <= 0 ? 0.0D : outer + EclipseConfig.borderOffset();
-        setRing(server, profile, target, animate ? GROWTH_LERP_TICKS * 50L : 0L);
+        setRing(server, profile, target, animate ? GROWTH_LERP_TICKS * 50L : 0L, true);
     }
 
     /**
@@ -206,6 +208,12 @@ public final class SoftBorder {
      * (overworld only, same duration) and broadcasts {@link S2CBorderPayload}.
      */
     public static void setRing(MinecraftServer server, DiscProfile profile, double radius, long ms) {
+        setRing(server, profile, radius, ms, false);
+    }
+
+    /** {@code sweepCoupled} = stage-commit path: the lerp snaps once the terrain sweep ends. */
+    private static void setRing(MinecraftServer server, DiscProfile profile, double radius, long ms,
+            boolean sweepCoupled) {
         double target = Math.max(0.0D, radius);
         double from = radius(server, profile);
         EclipseWorldState state = EclipseWorldState.get(server);
@@ -213,7 +221,7 @@ public final class SoftBorder {
         int durationTicks = (int) Math.max(0L, ms / 50L);
         ServerLevel level = server.getLevel(WorldStageService.dimensionOf(profile));
         if (durationTicks > 0 && level != null && from > 0.0D && target > 0.0D) {
-            LERPS.put(profile, new Lerp(from, target, level.getGameTime(), durationTicks));
+            LERPS.put(profile, new Lerp(from, target, level.getGameTime(), durationTicks, sweepCoupled));
         } else {
             LERPS.remove(profile);
             durationTicks = 0;
@@ -316,7 +324,7 @@ public final class SoftBorder {
             }
             long now = level.getGameTime();
             boolean timeUp = now >= lerp.startGameTime() + lerp.durationTicks();
-            boolean sweepDone = !RingGrowthService.isRunning(profile);
+            boolean sweepDone = lerp.sweepCoupled() && !RingGrowthService.isRunning(profile);
             if (timeUp || sweepDone) {
                 LERPS.remove(profile);
                 double target = lerp.toRadius();

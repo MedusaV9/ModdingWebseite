@@ -33,6 +33,10 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *   <li>{@code eclipse:sun_halo} — depth-masked additive purple rim around the sun,
  *       auto-on in the overworld. The {@code SunDirection} uniform is fed per frame from
  *       {@code level.getSunAngle(partialTick)}.</li>
+ *   <li>{@code eclipse:border_glitch} — chromatic aberration + horizontal displacement
+ *       bands near the soft border (W7). Active while {@code border.client.BorderFxRenderer}
+ *       reports a border proximity &gt; 0 via {@link #setBorderProximity}; the
+ *       {@code Proximity} and {@code Time} uniforms are fed per frame.</li>
  * </ul>
  *
  * <p>HARD GATE: pipelines are only ever added while no Iris shaderpack is active
@@ -47,6 +51,8 @@ public final class VeilPostController {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo");
     public static final ResourceLocation SUN_HALO_POST =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "sun_halo");
+    public static final ResourceLocation BORDER_GLITCH_POST =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "border_glitch");
 
     /** Limbo grade fade-in length (~2 s). */
     private static final int LIMBO_FADE_TICKS = 40;
@@ -60,7 +66,15 @@ public final class VeilPostController {
     /** Epoch millis of entering limbo, or {@code -1} while not in limbo (drives the fade). */
     private static volatile long limboEnterMillis = -1L;
 
+    /** Soft-border proximity in [0,1], fed each tick by {@code BorderFxRenderer}. */
+    private static volatile float borderProximity = 0.0F;
+
     private VeilPostController() {}
+
+    /** W7 hook: 0 = far from the soft border (pipeline off), 1 = touching the ring. */
+    public static void setBorderProximity(float proximity) {
+        borderProximity = Mth.clamp(proximity, 0.0F, 1.0F);
+    }
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
@@ -78,6 +92,9 @@ public final class VeilPostController {
                             // Same celestial frame as the vanilla sky: RotY(-90°) * RotX(angle) * (0,100,0).
                             pipeline.getUniform("SunDirection").setFloats(-Mth.sin(angle), Mth.cos(angle), 0.0F);
                         }
+                    } else if (BORDER_GLITCH_POST.equals(name)) {
+                        pipeline.getUniform("Proximity").setFloat(borderProximity);
+                        pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 100_000L) / 1000.0F);
                     }
                 } catch (Throwable t) {
                     recordFailure(name, t);
@@ -87,6 +104,7 @@ public final class VeilPostController {
             EclipseMod.LOGGER.warn("Failed to register Veil post-processing uniform hook; Eclipse post FX disabled", t);
             DISABLED.add(LIMBO_POST);
             DISABLED.add(SUN_HALO_POST);
+            DISABLED.add(BORDER_GLITCH_POST);
         }
     }
 
@@ -106,6 +124,7 @@ public final class VeilPostController {
 
         setPipelineActive(LIMBO_POST, inLimbo);
         setPipelineActive(SUN_HALO_POST, inOverworld);
+        setPipelineActive(BORDER_GLITCH_POST, borderProximity > 0.01F);
     }
 
     /**
