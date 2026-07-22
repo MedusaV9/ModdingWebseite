@@ -17,6 +17,14 @@ public final class ClientStateCache {
     public static volatile java.util.List<String> goalLines = java.util.List.of();
     public static volatile java.util.List<Boolean> goalDone = java.util.List.of();
 
+    /**
+     * Anonymized event timeline (S2CTimelinePayload; sent at login + day/altar changes).
+     * Hidden (future) entries carry no title/icon — render them as "???" glitch nodes.
+     * W9's handbook timeline tab reads this list.
+     */
+    public static volatile java.util.List<dev.projecteclipse.eclipse.timeline.TimelineEntry> timeline =
+            java.util.List.of();
+
     /** Last start-event cutscene phase received from the server; {@code null} until the event runs. */
     public static volatile dev.projecteclipse.eclipse.network.S2CCutscenePayload.Phase cutscenePhase = null;
 

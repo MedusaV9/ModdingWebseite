@@ -34,5 +34,15 @@
         "pitch": 1.8
       }
     ]
+  },
+  "ui.typewriter": {
+    "subtitle": "subtitles.eclipse.ui.typewriter",
+    "sounds": [
+      {
+        "name": "eclipse:ui/typewriter",
+        "volume": 0.7,
+        "pitch": 1.5
+      }
+    ]
   }
 }

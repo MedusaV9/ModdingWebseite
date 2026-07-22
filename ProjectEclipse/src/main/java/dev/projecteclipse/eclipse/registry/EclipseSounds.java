@@ -48,6 +48,12 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.border_glitch")));
 
+    /** Single dry tick of the announcement typewriter line (W8; every 2nd revealed char). */
+    public static final Supplier<SoundEvent> UI_TYPEWRITER = SOUNDS.register(
+            "ui.typewriter",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.typewriter")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

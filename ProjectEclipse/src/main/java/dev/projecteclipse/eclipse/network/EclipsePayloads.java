@@ -40,6 +40,8 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CCutscenePlayPayload.TYPE, S2CCutscenePlayPayload.STREAM_CODEC, EclipsePayloads::handleCutscenePlay);
         registrar.playToClient(S2CBossbarStylePayload.TYPE, S2CBossbarStylePayload.STREAM_CODEC, EclipsePayloads::handleBossbarStyle);
         registrar.playToClient(S2CGoalProgressPayload.TYPE, S2CGoalProgressPayload.STREAM_CODEC, EclipsePayloads::handleGoalProgress);
+        registrar.playToClient(S2CAnnouncePayload.TYPE, S2CAnnouncePayload.STREAM_CODEC, EclipsePayloads::handleAnnounce);
+        registrar.playToClient(S2CTimelinePayload.TYPE, S2CTimelinePayload.STREAM_CODEC, EclipsePayloads::handleTimeline);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
@@ -149,6 +151,15 @@ public final class EclipsePayloads {
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleAnnounce(S2CAnnouncePayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay.handle(payload);
+    }
+
+    private static void handleTimeline(S2CTimelinePayload payload, IPayloadContext context) {
+        ClientStateCache.timeline = payload.entries();
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCutsceneLibrary(S2CCutsceneLibraryPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.replace(payload.pathsJson());
     }
@@ -169,6 +180,7 @@ public final class EclipsePayloads {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
             PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player.server));
+            dev.projecteclipse.eclipse.timeline.TimelineService.syncTo(player);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
             dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);
             dev.projecteclipse.eclipse.cutscene.CutsceneService.syncLibraryTo(player);

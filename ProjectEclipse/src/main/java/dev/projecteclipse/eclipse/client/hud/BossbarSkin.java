@@ -154,47 +154,53 @@ public final class BossbarSkin {
         float flash = state.flashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.flashStartMillis) / (float) FLASH_MILLIS, 0.0F, 1.0F);
         drawThemedBar(guiGraphics, event.getX(), event.getY(), state.theme, state.displayedProgress,
-                0.35F + 0.65F * flash, bar.getName());
+                0.35F + 0.65F * flash, bar.getName(), 1.0F);
         observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
     }
 
     /**
      * Shared skinned-bar body, also used by {@link AnnouncementOverlay}'s client-local sweep:
      * dark track, lerped fill, scrolling energy overlay, themed frame, leading-edge glow and
-     * (when given) the centered name line above the frame.
+     * (when given) the centered name line above the frame. {@code alpha} scales the whole
+     * bar (the announcement sweep's fade-out); real bars pass {@code 1}.
      */
     public static void drawThemedBar(GuiGraphics guiGraphics, int x, int y, String theme,
-            float progress, float glowAlpha, Component name) {
+            float progress, float glowAlpha, Component name, float alpha) {
+        alpha = Mth.clamp(alpha, 0.0F, 1.0F);
+        if (alpha < 0.02F) {
+            return;
+        }
         int fillY = y + FILL_OFFSET_Y;
         int fillWidth = Math.round(FILL_WIDTH * Mth.clamp(progress, 0.0F, 1.0F));
 
         RenderSystem.enableBlend();
         // Empty track: the fill strip darkened to a faint violet bed.
-        guiGraphics.setColor(0.28F, 0.22F, 0.36F, 0.85F);
+        guiGraphics.setColor(0.28F, 0.22F, 0.36F, 0.85F * alpha);
         guiGraphics.blit(FILL, x, fillY, FILL_WIDTH, FILL_HEIGHT, 0.0F, 0.0F, 512, 32, 512, 32);
         // Lerped fill.
         if (fillWidth > 0) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
             guiGraphics.blit(FILL, x, fillY, fillWidth, FILL_HEIGHT, 0.0F, 0.0F,
                     Math.round(512.0F * fillWidth / FILL_WIDTH), 32, 512, 32);
             drawScrollOverlay(guiGraphics, x, fillY, fillWidth);
         }
         // Themed frame on top of the fill.
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
         guiGraphics.blit(frameTexture(theme), x + FRAME_OFFSET_X, y + FRAME_OFFSET_Y,
                 FRAME_WIDTH, FRAME_HEIGHT, 0.0F, 0.0F, 512, 64, 512, 64);
         // Leading-edge glow (flashes via glowAlpha on progress changes).
         if (fillWidth > 0 && glowAlpha > 0.02F) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, Mth.clamp(glowAlpha, 0.0F, 1.0F));
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, Mth.clamp(glowAlpha, 0.0F, 1.0F) * alpha);
             guiGraphics.blit(GLOW, x + fillWidth - 7, fillY - 4, 14, 14, 0.0F, 0.0F, 64, 64, 64, 64);
         }
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
 
-        if (name != null) {
+        int alphaByte = (int) (alpha * 255.0F);
+        if (name != null && alphaByte >= 8) {
             Minecraft minecraft = Minecraft.getInstance();
             int textX = guiGraphics.guiWidth() / 2 - minecraft.font.width(name) / 2;
-            guiGraphics.drawString(minecraft.font, name, textX, y - 12, 0xFFFFFF);
+            guiGraphics.drawString(minecraft.font, name, textX, y - 12, (alphaByte << 24) | 0xFFFFFF);
         }
     }
 

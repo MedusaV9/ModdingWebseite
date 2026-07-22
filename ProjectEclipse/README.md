@@ -275,6 +275,16 @@ public record S2CGoalProgressPayload(List<String> goalLines, List<Boolean> done)
 // The receiving player's personal goal tick list (sidebar rows). Sent at login and on day
 // changes. TODO(W13): the currentFor(server) factory sends all-false flags until real goal
 // ticking exists — W13 replaces that factory body and re-broadcasts on every tick change.
+public record S2CAnnouncePayload(String titleKey, String subtitleKey, String style) implements CustomPacketPayload; // id "eclipse:announce"
+// One announcement (STYLE_DAY/STYLE_UNLOCK/STYLE_GOAL/STYLE_BOSS constants): the client
+// plays a typewriter line above the hotbar (then posts it to chat once) + a client-local
+// themed bossbar sweep showing the title. Both keys are lang keys (client-side i18n);
+// empty subtitleKey = type the title. Fired by timeline.AnnouncementService.
+public record S2CTimelinePayload(List<TimelineEntry> entries) implements CustomPacketPayload; // id "eclipse:timeline"
+// Full ANONYMIZED event timeline (timeline.TimelineEntry: id, unlockDay, titleKey, icon,
+// hidden, reached) — hidden/future entries carry empty titleKey + TimelineEntry.NO_ICON, so
+// upcoming content cannot be datamined. Sent at login + day/altar changes by
+// timeline.TimelineService; cached in ClientStateCache.timeline (W9 handbook reads it).
 public record C2SCutsceneStatePayload(String id, State state) implements CustomPacketPayload; // id "eclipse:cutscene_state"
 // C2SCutsceneStatePayload.State: enum { STARTED, FINISHED, SKIP_REQUEST, SKIPPED } — playback
 // ACKs + skip requests, validated/handled by cutscene.CutsceneService.handleClientState.
@@ -389,6 +399,30 @@ Worker 8's client HUD layer (all classes `Dist.CLIENT`, driven by payloads + `Cl
   backdrop (`textures/gui/sidebar/panel.png` + five 24x24 icons), re-slides in from the right
   on any content change (skipped under `reducedFx`), honors `showSidebar` live (off = vanilla
   sidebar returns). Hidden during cutscene HUD suppression by design (not whitelisted).
+- **`AnnouncementOverlay` + `TypewriterLine`** — client half of `S2CAnnouncePayload`: a
+  typewriter line above the hotbar (1 char/tick, `eclipse:ui.typewriter` tick every 2 chars,
+  finished line posted to chat once) plus a simultaneous client-local bossbar sweep reusing
+  `BossbarSkin.drawThemedBar` (fill 0→1 over 30t with a bright leading edge, holds 60t
+  showing the title, fades 20t; stacks below real bars via `nextFreeBarY()`). Styles map
+  `day`→day, `boss`→boss, `goal`/`unlock`→goal skins. Announcements queue (cap 8) so unlock
+  bursts play sequentially. No `BossEvent` is created — the sweep is pure overlay.
+
+### Timeline + announcements (server) — `dev.projecteclipse.eclipse.timeline`
+
+- **`TimelineService`** — builds the anonymized `TimelineEntry` list from `days.json` (one
+  node per day) + `milestones.json` (one node per altar milestone, ids 1001+, `unlockDay=0`):
+  reached entries carry a title lang key (`announce.eclipse.day.N.title` /
+  `announce.eclipse.milestone.N`) + icon; FUTURE entries are sent `hidden` with empty
+  titleKey + `TimelineEntry.NO_ICON` (server-side anonymization — no datamining). Synced via
+  `S2CTimelinePayload` at login (`EclipsePayloads`) and on day/altar changes; each send is
+  logged ("Timeline payload sent...").
+- **`AnnouncementService`** — fires `S2CAnnouncePayload` on: day advance
+  (`DayScheduler.setDay` calls `onDayChanged`, augmenting the bell), NEW unlock keys (the
+  `UnlockState.unlockedKeys` set is snapshotted + diffed after day/altar changes; per-key
+  lang line `announce.eclipse.unlock.key.<key>`), altar milestone level-ups (polled every
+  20t — catches both `AltarBlockEntity` and `/eclipse altar set`), and finished stage-GROW
+  sweeps (`WorldStageService` listener). Every send is logged ("Announce payload sent...").
+  Goal completion is NOT wired (v1 tracks no goals): W13 calls `announceGoalCompleted`.
 
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 

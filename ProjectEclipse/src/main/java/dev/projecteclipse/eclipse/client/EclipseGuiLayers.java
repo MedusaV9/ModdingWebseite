@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.client;
 import java.util.Set;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
 import dev.projecteclipse.eclipse.client.hud.SidebarPanel;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay;
@@ -26,6 +27,10 @@ public final class EclipseGuiLayers {
         // suppression is supposed to hide it.
         event.registerAbove(VanillaGuiLayers.SCOREBOARD_SIDEBAR,
                 SidebarPanel.LAYER_ID, SidebarPanel::render);
+        // W8 announcements: typewriter line + client-local bossbar sweep. Above the boss
+        // overlay so the sweep stacks with real bars; also NOT letterbox-whitelisted.
+        event.registerAbove(VanillaGuiLayers.BOSS_OVERLAY,
+                AnnouncementOverlay.LAYER_ID, AnnouncementOverlay::render);
         event.registerAboveAll(WaveOverlay.LAYER_ID, WaveOverlay::render);
         event.registerAboveAll(LetterboxLayer.LAYER_ID, LetterboxLayer::render);
         // Cutscene HUD suppression must never cancel these: the letterbox itself, W2's

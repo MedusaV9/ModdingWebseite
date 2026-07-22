@@ -15,7 +15,10 @@ import javax.imageio.ImageIO;
  * Programmer-art placeholders for the W8 skinned bossbars (docs/ASSET_MANIFEST_V2.md Batch B):
  * three 512x64 theme frames (day/goal/boss), the 512x32 fill strip, the 256x32 seamless-x
  * scrolling energy overlay and the 64x64 radial end-cap glow. Also installs the
- * eclipse:ui.typewriter placeholder OGG (copy of the known-good submerge sample).
+ * eclipse:ui.typewriter placeholder OGG if missing (fallback: copy of the submerge sample;
+ * the committed tick was generated with
+ * {@code ffmpeg -f lavfi -i "sine=frequency=2400:duration=0.05"
+ * -af "volume=0.6,afade=t=out:st=0.008:d=0.042" -ar 44100 -ac 1 -c:a libvorbis typewriter.ogg}).
  *
  * The frame's inner window matches BossbarSkin's logical layout: the frame is blitted at
  * 192x15 over a 182x7 fill area inset by (5,4) — i.e. the transparent window in the 512x64
@@ -47,7 +50,10 @@ public class BossbarSkinPlaceholder {
         Path sourceSound = Path.of("src/main/resources/assets/eclipse/sounds/event/submerge.ogg");
         Path targetSound = Path.of("src/main/resources/assets/eclipse/sounds/ui/typewriter.ogg");
         Files.createDirectories(targetSound.getParent());
-        Files.copy(sourceSound, targetSound, StandardCopyOption.REPLACE_EXISTING);
+        if (!Files.exists(targetSound)) {
+            // Fallback only — don't clobber the ffmpeg-generated dry tick (see class javadoc).
+            Files.copy(sourceSound, targetSound, StandardCopyOption.REPLACE_EXISTING);
+        }
 
         System.out.println("Generated bossbar placeholders in " + dir + " and " + targetSound);
     }

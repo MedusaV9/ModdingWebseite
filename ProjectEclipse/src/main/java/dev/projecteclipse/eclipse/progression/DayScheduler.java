@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
+import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.SundialPlaza;
 import net.minecraft.server.MinecraftServer;
@@ -79,6 +80,9 @@ public final class DayScheduler {
             for (ServerPlayer online : server.getPlayerList().getPlayers()) {
                 online.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.MASTER, 1.0F, 1.0F);
             }
+            // W8: the bell is augmented by a typewriter/sweep announcement + the day's new
+            // unlock announcements, and the anonymized timeline is rebroadcast.
+            AnnouncementService.onDayChanged(server, previousDay, newDay);
         }
         EclipseMod.LOGGER.info("Eclipse day set to {} (goals: {}; unlocked keys: {})",
                 newDay, plan.goals(), UnlockState.unlockedKeys(server));
