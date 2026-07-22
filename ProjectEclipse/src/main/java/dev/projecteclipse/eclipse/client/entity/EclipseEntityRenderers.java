@@ -29,6 +29,7 @@ public final class EclipseEntityRenderers {
     public static final ModelLayerLocation DECKHAND_LAYER = layer("deckhand");
     public static final ModelLayerLocation SUNMOTE_LAYER = layer("sunmote");
     public static final ModelLayerLocation HERALD_LAYER = layer("herald");
+    public static final ModelLayerLocation FERRYMAN_LAYER = layer("ferryman");
 
     private EclipseEntityRenderers() {}
 
@@ -47,6 +48,7 @@ public final class EclipseEntityRenderers {
         event.registerLayerDefinition(DECKHAND_LAYER, DeckhandModel::createBodyLayer);
         event.registerLayerDefinition(SUNMOTE_LAYER, SunmoteModel::createBodyLayer);
         event.registerLayerDefinition(HERALD_LAYER, HeraldModel::createBodyLayer);
+        event.registerLayerDefinition(FERRYMAN_LAYER, FerrymanModel::createBodyLayer);
     }
 
     @SubscribeEvent
@@ -57,6 +59,7 @@ public final class EclipseEntityRenderers {
         event.registerEntityRenderer(EclipseEntities.DECKHAND.get(), DeckhandRenderer::new);
         event.registerEntityRenderer(EclipseEntities.SUNMOTE.get(), SunmoteRenderer::new);
         event.registerEntityRenderer(EclipseEntities.HERALD.get(), HeraldRenderer::new);
+        event.registerEntityRenderer(EclipseEntities.FERRYMAN.get(), FerrymanRenderer::new);
         // The corona shard renders as the umbral-shard item sprite (ItemSupplier), scaled
         // up and fullbright so it reads as a glowing ember in the night fight.
         event.registerEntityRenderer(EclipseEntities.HERALD_SHARD.get(),

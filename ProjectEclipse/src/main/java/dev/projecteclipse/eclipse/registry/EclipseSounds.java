@@ -102,6 +102,21 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_telegraph")));
 
+    // W12 Ferryman boss suite (sounds.json maps both onto existing recordings at a
+    // deeper pitch until dedicated audio is dropped in — event.emerge pattern).
+
+    /** Drowned-bell drone of the Ferryman (its mob ambient sound during the fight). */
+    public static final Supplier<SoundEvent> BOSS_FERRYMAN_AMBIENT = SOUNDS.register(
+            "boss.ferryman_ambient",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.ferryman_ambient")));
+
+    /** Sunken bell toll: crew-phase entry and each lantern re-lit by a ghost. */
+    public static final Supplier<SoundEvent> BOSS_FERRYMAN_BELL = SOUNDS.register(
+            "boss.ferryman_bell",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.ferryman_bell")));
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

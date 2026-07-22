@@ -16,6 +16,8 @@
   "entity.eclipse.herald": "Der Herold der Eclipse",
   "entity.eclipse.herald.bossbar": "☀ Der Herold",
   "entity.eclipse.herald_shard": "Koronasplitter",
+  "entity.eclipse.ferryman": "Der Fährmann",
+  "entity.eclipse.ferryman.bossbar": "☠ Der Fährmann",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Eclipse-Menü öffnen",
   "gui.eclipse.title.tagline": "Project: Eclipse",
@@ -184,5 +186,7 @@
   "subtitles.eclipse.ui.unlock_sting": "Etwas wird freigeschaltet",
   "subtitles.eclipse.ambient.gazer_whisper": "Flüstern windet sich",
   "subtitles.eclipse.boss.herald_ambient": "Der Herold dröhnt",
-  "subtitles.eclipse.boss.herald_telegraph": "Koronasplitter flackern auf"
+  "subtitles.eclipse.boss.herald_telegraph": "Koronasplitter flackern auf",
+  "subtitles.eclipse.boss.ferryman_ambient": "Der Fährmann rudert",
+  "subtitles.eclipse.boss.ferryman_bell": "Eine ertrunkene Glocke schlägt"
 }

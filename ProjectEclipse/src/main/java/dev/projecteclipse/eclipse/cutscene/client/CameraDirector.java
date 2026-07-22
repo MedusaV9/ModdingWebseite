@@ -84,8 +84,11 @@ public final class CameraDirector {
     private static int firedEvents;
     @Nullable
     private static CameraType previousCameraType;
-    /** Start nanos of live shake impulses, oldest first. Main-thread only. */
-    private static final ArrayDeque<Long> SHAKE_IMPULSES = new ArrayDeque<>();
+    /** One live shake impulse: quadratic decay of {@code strength} over {@code durationNanos}. */
+    private record ShakeImpulse(long startNanos, float strength, long durationNanos) {}
+
+    /** Live shake impulses, oldest first (expired ones are pruned lazily). Main-thread only. */
+    private static final ArrayDeque<ShakeImpulse> SHAKE_IMPULSES = new ArrayDeque<>();
 
     private CameraDirector() {}
 
@@ -143,7 +146,17 @@ public final class CameraDirector {
 
     /** One decaying ~2 s shake impulse (W4's {@code SHAKE} phase pulses; path events later). */
     public static void addShakeImpulse() {
-        SHAKE_IMPULSES.addLast(System.nanoTime());
+        addShakeImpulse(1.0F, (int) (SHAKE_DURATION_NANOS / TICK_NANOS));
+    }
+
+    /**
+     * One decaying shake impulse of the given {@code strength} over {@code ticks} (W12's
+     * {@code S2CShakePayload} — the Ferryman's gunwale slam). Applied whether or not a
+     * cutscene flight is active.
+     */
+    public static void addShakeImpulse(float strength, int ticks) {
+        SHAKE_IMPULSES.addLast(new ShakeImpulse(System.nanoTime(),
+                Math.max(0.0F, strength), Math.max(1, ticks) * TICK_NANOS));
     }
 
     // --- state queries (input swallow + letterbox) ---
@@ -212,7 +225,8 @@ public final class CameraDirector {
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
         long now = System.nanoTime();
-        while (!SHAKE_IMPULSES.isEmpty() && now - SHAKE_IMPULSES.peekFirst() > SHAKE_DURATION_NANOS) {
+        while (!SHAKE_IMPULSES.isEmpty()
+                && now - SHAKE_IMPULSES.peekFirst().startNanos() >= SHAKE_IMPULSES.peekFirst().durationNanos()) {
             SHAKE_IMPULSES.removeFirst();
         }
         CutscenePath active = path;
@@ -395,11 +409,16 @@ public final class CameraDirector {
             return 0.0F;
         }
         long now = System.nanoTime();
+        // Prune fully decayed impulses from the front (oldest first ordering).
+        while (!SHAKE_IMPULSES.isEmpty()
+                && now - SHAKE_IMPULSES.peekFirst().startNanos() >= SHAKE_IMPULSES.peekFirst().durationNanos()) {
+            SHAKE_IMPULSES.removeFirst();
+        }
         float total = 0.0F;
-        for (long start : SHAKE_IMPULSES) {
-            float age = (now - start) / (float) SHAKE_DURATION_NANOS;
+        for (ShakeImpulse impulse : SHAKE_IMPULSES) {
+            float age = (now - impulse.startNanos()) / (float) impulse.durationNanos();
             if (age >= 0.0F && age < 1.0F) {
-                total += (1.0F - age) * (1.0F - age);
+                total += impulse.strength() * (1.0F - age) * (1.0F - age);
             }
         }
         return Math.min(1.5F, total);

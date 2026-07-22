@@ -29,7 +29,8 @@ public class EntitySkinPlaceholder {
         writeDeckhand();
         writeSunmote();
         writeHerald();
-        System.out.println("Generated 6 entity skins in " + DIR);
+        writeFerryman();
+        System.out.println("Generated 7 entity skins in " + DIR);
     }
 
     // --- the other (64x64, vanilla player-skin layout, derived from uniform_skin.png) ---
@@ -202,5 +203,66 @@ public class EntitySkinPlaceholder {
             img.setRGB(57, y, pupil);
         }
         ImageIO.write(img, "png", DIR.resolve("herald.png").toFile());
+    }
+
+    // --- ferryman (128x128, W12 finale boss — docs/uv/ferryman.md) ---
+
+    private static void writeFerryman() throws IOException {
+        BufferedImage img = canvas(128);
+        Color robe = new Color(0x20, 0x2C, 0x28);       // drowned green-black wool
+        Color strip = new Color(0x18, 0x22, 0x1E);      // ragged hem strips
+        Color hood = new Color(0x14, 0x1B, 0x18);       // deep hood shell
+        Color skull = new Color(0xD8, 0xD2, 0xBE);      // old bone
+        Color eyeSlit = new Color(0x8F, 0xF2, 0xDE);    // soul teal (emissive pass)
+        Color sleeve = new Color(0x26, 0x33, 0x2E);
+        Color oarWood = new Color(0x4A, 0x3A, 0x28);    // waterlogged shaft
+        Color oarBlade = new Color(0x3C, 0x2F, 0x20);
+        Color chain = new Color(0x62, 0x66, 0x70);      // wet iron links
+        Color lantern = new Color(0x3A, 0x3E, 0x46);    // lantern housing
+        Color flame = new Color(0xA8, 0xF7, 0xE6);      // soul flame (emissive pass)
+        cube(img, 0, 0, 10, 26, 8, robe);               // body (robe)
+        for (int i = 0; i < 4; i++) {
+            cube(img, 32 + i * 8, 36, 2, 6, 1, strip);  // strip0..3
+        }
+        cubeOpenNorth(img, 40, 0, 9, 9, 9, hood);       // hood (front face left transparent)
+        cube(img, 80, 0, 7, 7, 7, skull);               // head (skull)
+        cube(img, 108, 0, 5, 2, 1, eyeSlit);            // eyes
+        cube(img, 0, 36, 3, 20, 3, sleeve);             // arm_right
+        cube(img, 16, 36, 3, 20, 3, sleeve);            // arm_left
+        cube(img, 64, 36, 2, 36, 2, oarWood);           // oar shaft
+        cube(img, 76, 36, 1, 6, 5, oarBlade);           // blade
+        for (int k = 0; k < 3; k++) {
+            cube(img, 92 + k * 6, 36, 1, 4, 1, chain);  // chain0..2
+        }
+        cube(img, 92, 44, 4, 5, 4, lantern);            // lantern housing
+        cube(img, 110, 36, 2, 2, 2, flame);             // flame
+        // Hollow skull sockets + nasal pit on the head front (u 87..93, v 7..13 inner).
+        int socket = 0xFF0E1410;
+        for (int y = 9; y <= 10; y++) {
+            img.setRGB(88, y, socket);
+            img.setRGB(89, y, socket);
+            img.setRGB(91, y, socket);
+            img.setRGB(92, y, socket);
+        }
+        img.setRGB(90, 12, socket);
+        // Pale barnacle flecks down the robe front (u 8..17, v 8..33 inner).
+        int fleck = new Color(0x5E, 0x74, 0x66).getRGB() | 0xFF000000;
+        int[][] flecks = {{10, 12}, {15, 15}, {12, 19}, {16, 24}, {9, 27}, {13, 30}};
+        for (int[] p : flecks) {
+            img.setRGB(p[0], p[1], fleck);
+        }
+        ImageIO.write(img, "png", DIR.resolve("ferryman.png").toFile());
+    }
+
+    /**
+     * Box-UV cube whose NORTH (front) face stays fully transparent — the Ferryman's hood
+     * is an open cowl: the skull inside must show through the front.
+     */
+    private static void cubeOpenNorth(BufferedImage img, int u, int v, int w, int h, int d, Color base) {
+        face(img, u + d, v, w, d, shade(base, 1.15F));             // top
+        face(img, u + d + w, v, w, d, shade(base, 0.7F));          // bottom
+        face(img, u, v + d, d, h, shade(base, 0.85F));             // east (right)
+        face(img, u + d + w, v + d, d, h, shade(base, 0.85F));     // west (left)
+        face(img, u + d + w + d, v + d, w, h, shade(base, 0.75F)); // south (back)
     }
 }

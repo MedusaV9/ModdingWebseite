@@ -43,6 +43,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CAnnouncePayload.TYPE, S2CAnnouncePayload.STREAM_CODEC, EclipsePayloads::handleAnnounce);
         registrar.playToClient(S2CTimelinePayload.TYPE, S2CTimelinePayload.STREAM_CODEC, EclipsePayloads::handleTimeline);
         registrar.playToClient(S2CMilestonesPayload.TYPE, S2CMilestonesPayload.STREAM_CODEC, EclipsePayloads::handleMilestones);
+        registrar.playToClient(S2CShakePayload.TYPE, S2CShakePayload.STREAM_CODEC, EclipsePayloads::handleShake);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
@@ -162,6 +163,17 @@ public final class EclipsePayloads {
 
     private static void handleMilestones(S2CMilestonesPayload payload, IPayloadContext context) {
         ClientStateCache.milestones = payload.entries();
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleShake(S2CShakePayload payload, IPayloadContext context) {
+        if (payload.marked()) {
+            // Lantern Gaze mark: private purple hunt vignette for the receiving player.
+            dev.projecteclipse.eclipse.client.hud.MarkVignetteOverlay.trigger(payload.ticks());
+        } else {
+            dev.projecteclipse.eclipse.cutscene.client.CameraDirector
+                    .addShakeImpulse(payload.strength(), payload.ticks());
+        }
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */

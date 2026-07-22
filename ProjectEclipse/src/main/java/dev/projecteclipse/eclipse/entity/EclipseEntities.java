@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.entity;
 import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.entity.boss.HeraldShardProjectile;
 import net.minecraft.core.registries.Registries;
@@ -84,6 +85,20 @@ public final class EclipseEntities {
                     .fireImmune()
                     .build("herald"));
 
+    /**
+     * Day-14 finale boss (W12, spec §2.2). Summoned only by the finale ritual (dragon egg
+     * at the altar after dusk on day 14) or {@code /eclipse boss ferryman summon} — never
+     * spawned naturally, and only on the limbo ghost ship. Hitbox spans the 3.5-block
+     * floating robe + hood.
+     */
+    public static final Supplier<EntityType<FerrymanEntity>> FERRYMAN = ENTITIES.register("ferryman",
+            () -> EntityType.Builder.of(FerrymanEntity::new, MobCategory.MONSTER)
+                    .sized(1.4F, 3.5F)
+                    .eyeHeight(2.6F)
+                    .clientTrackingRange(10)
+                    .fireImmune()
+                    .build("ferryman"));
+
     /** Homing corona shard fired by the Herald's volley; shootable down mid-air. */
     public static final Supplier<EntityType<HeraldShardProjectile>> HERALD_SHARD = ENTITIES.register("herald_shard",
             () -> EntityType.Builder.<HeraldShardProjectile>of(HeraldShardProjectile::new, MobCategory.MISC)
@@ -140,6 +155,16 @@ public final class EclipseEntities {
                 .add(Attributes.FOLLOW_RANGE, 64.0D)
                 .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D)
                 .add(Attributes.ARMOR, 4.0D)
+                .build());
+        // Spec §2.2: 400 HP base (living-player scaling adjusts MAX_HEALTH at summon time);
+        // the oar sweep deals 10 via ATTACK_DAMAGE, immovable like the Herald.
+        event.put(FERRYMAN.get(), Monster.createMonsterAttributes()
+                .add(Attributes.MAX_HEALTH, FerrymanEntity.BASE_MAX_HEALTH)
+                .add(Attributes.ATTACK_DAMAGE, 10.0D)
+                .add(Attributes.MOVEMENT_SPEED, 0.3D)
+                .add(Attributes.FOLLOW_RANGE, 64.0D)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D)
+                .add(Attributes.ARMOR, 6.0D)
                 .build());
     }
 }

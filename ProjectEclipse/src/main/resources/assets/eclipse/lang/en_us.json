@@ -16,6 +16,8 @@
   "entity.eclipse.herald": "The Herald of the Eclipse",
   "entity.eclipse.herald.bossbar": "☀ The Herald",
   "entity.eclipse.herald_shard": "Corona Shard",
+  "entity.eclipse.ferryman": "The Ferryman",
+  "entity.eclipse.ferryman.bossbar": "☠ The Ferryman",
   "key.categories.eclipse": "Project Eclipse",
   "key.eclipse.menu": "Open Eclipse Menu",
   "gui.eclipse.title.tagline": "Project: Eclipse",
@@ -184,5 +186,7 @@
   "subtitles.eclipse.ui.unlock_sting": "Something unlocks",
   "subtitles.eclipse.ambient.gazer_whisper": "Whispers coil",
   "subtitles.eclipse.boss.herald_ambient": "The Herald drones",
-  "subtitles.eclipse.boss.herald_telegraph": "Corona shards flare"
+  "subtitles.eclipse.boss.herald_telegraph": "Corona shards flare",
+  "subtitles.eclipse.boss.ferryman_ambient": "The Ferryman rows",
+  "subtitles.eclipse.boss.ferryman_bell": "A drowned bell tolls"
 }

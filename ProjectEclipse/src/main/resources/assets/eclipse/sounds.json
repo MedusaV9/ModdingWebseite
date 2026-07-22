@@ -99,5 +99,25 @@
         "volume": 0.9
       }
     ]
+  },
+  "boss.ferryman_ambient": {
+    "subtitle": "subtitles.eclipse.boss.ferryman_ambient",
+    "sounds": [
+      {
+        "name": "eclipse:boss/herald_ambient",
+        "volume": 0.9,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "boss.ferryman_bell": {
+    "subtitle": "subtitles.eclipse.boss.ferryman_bell",
+    "sounds": [
+      {
+        "name": "eclipse:ui/unlock_sting",
+        "volume": 1.0,
+        "pitch": 0.45
+      }
+    ]
   }
 }
