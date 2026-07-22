@@ -6,20 +6,34 @@
   "emitter_settings": {
     "shape": {
       "shape": "veil:cube",
-      "dimensions": [1.5, 2.0, 1.5],
-      "rotation": [0.0, 0.0, 0.0],
+      "dimensions": [
+        1.5,
+        2.0,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "from_surface": false
     },
     "particle_settings": {
       "particle_speed": 0.04,
-      "random_speed": 0.02,
+      "random_speed": true,
       "base_particle_size": 0.18,
       "particle_size_variation": 0.06,
       "particle_lifetime": 16,
       "particle_lifetime_variation": 6,
-      "initial_direction": [0.0, 1.0, 0.0],
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
       "random_initial_direction": true,
-      "random_initial_rotation": true
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
     },
     "force_spawn": false
   },
@@ -35,7 +49,9 @@
       },
       {
         "module": "veil:light",
-        "gradient": { "color": "#9D4EDD" },
+        "gradient": {
+          "color": "#9D4EDD"
+        },
         "brightness": 0.6,
         "radius": 4.0
       }

@@ -478,16 +478,20 @@ public final class EclipseConfig {
     /**
      * v2 gated namespaces (spec §5): the four v1 mods plus Farmer's Delight (day 4),
      * Supplementaries (day 5), Sophisticated Backpacks (day 8) and Create: Crafts &
-     * Additions (day 9). Their LIBRARIES ({@code sophisticatedcore}, {@code moonlight})
+     * Additions (day 9). The Aeronautics bundle additionally ships Create: Offroad
+     * (namespace {@code offroad}) — gated with the {@code aeronautics} key so the whole
+     * suite unlocks together. Their LIBRARIES ({@code sophisticatedcore}, {@code moonlight})
      * are deliberately NOT gated — gating a library would brick its dependents entirely.
      */
     private static ModGate defaultModGate() {
         List<String> namespaces = List.of("create", "simulated", "aeronautics", "sable",
-                "farmersdelight", "supplementaries", "sophisticatedbackpacks", "createaddition");
+                "farmersdelight", "supplementaries", "sophisticatedbackpacks", "createaddition",
+                "offroad");
         Map<String, String> unlockKeys = new LinkedHashMap<>();
         for (String namespace : namespaces) {
             unlockKeys.put(namespace, namespace);
         }
+        unlockKeys.put("offroad", "aeronautics");
         return new ModGate(namespaces, Collections.unmodifiableMap(unlockKeys));
     }
 

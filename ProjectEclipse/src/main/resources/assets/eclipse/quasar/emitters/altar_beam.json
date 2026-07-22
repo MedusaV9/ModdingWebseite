@@ -6,20 +6,34 @@
   "emitter_settings": {
     "shape": {
       "shape": "veil:cylinder",
-      "dimensions": [0.45, 1.5, 0.45],
-      "rotation": [0.0, 0.0, 0.0],
+      "dimensions": [
+        0.45,
+        1.5,
+        0.45
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "from_surface": false
     },
     "particle_settings": {
       "particle_speed": 0.35,
-      "random_speed": 0.15,
+      "random_speed": true,
       "base_particle_size": 0.22,
       "particle_size_variation": 0.08,
       "particle_lifetime": 30,
       "particle_lifetime_variation": 8,
-      "initial_direction": [0.0, 1.0, 0.0],
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
       "random_initial_direction": false,
-      "random_initial_rotation": true
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
     },
     "force_spawn": false
   },
@@ -38,7 +52,11 @@
     "modules": [
       {
         "module": "veil:initial_velocity",
-        "direction": [0.0, 1.0, 0.0],
+        "direction": [
+          0.0,
+          1.0,
+          0.0
+        ],
         "strength": 8.0,
         "take_parent_rotation": false
       },
@@ -46,20 +64,41 @@
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
-            { "percent": 0.0, "color": "#D9A8FF" },
-            { "percent": 0.5, "color": "#B65CFF" },
-            { "percent": 1.0, "color": "#5B1E99" }
+            {
+              "percent": 0.0,
+              "color": "#D9A8FF"
+            },
+            {
+              "percent": 0.5,
+              "color": "#B65CFF"
+            },
+            {
+              "percent": 1.0,
+              "color": "#5B1E99"
+            }
           ],
           "alpha_points": [
-            { "percent": 0.0, "alpha": 0.95 },
-            { "percent": 0.7, "alpha": 0.6 },
-            { "percent": 1.0, "alpha": 0.0 }
+            {
+              "percent": 0.0,
+              "alpha": 0.95
+            },
+            {
+              "percent": 0.7,
+              "alpha": 0.6
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
           ]
-        }
+        },
+        "interpolant": "q.agePercent"
       },
       {
         "module": "veil:light",
-        "gradient": { "color": "#B65CFF" },
+        "gradient": {
+          "color": "#B65CFF"
+        },
         "brightness": 1.0,
         "radius": 8.0
       }

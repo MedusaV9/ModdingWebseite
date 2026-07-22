@@ -6,20 +6,34 @@
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",
-      "dimensions": [0.35, 0.5, 0.35],
-      "rotation": [0.0, 0.0, 0.0],
+      "dimensions": [
+        0.35,
+        0.5,
+        0.35
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "from_surface": false
     },
     "particle_settings": {
       "particle_speed": 0.06,
-      "random_speed": 0.04,
+      "random_speed": true,
       "base_particle_size": 0.09,
       "particle_size_variation": 0.04,
       "particle_lifetime": 24,
       "particle_lifetime_variation": 6,
-      "initial_direction": [0.0, 1.0, 0.0],
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
       "random_initial_direction": true,
-      "random_initial_rotation": true
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
     },
     "force_spawn": false
   },
@@ -42,17 +56,31 @@
           {
             "trailFrequency": 1,
             "trailLength": 10,
-            "trailColor": [0.71, 0.36, 1.0, 0.55],
+            "trailColor": [
+              0.71,
+              0.36,
+              1.0,
+              0.55
+            ],
             "trailWidthModifier": 0.05,
             "billboard": true,
-            "parentRotation": false
+            "parentRotation": false,
+            "trailPointModifier": 1.0
           }
         ]
       },
       {
         "module": "veil:vortex",
-        "vortex_axis": [0.0, 1.0, 0.0],
-        "vortex_center": [0.0, 1.0, 0.0],
+        "vortex_axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "vortex_center": [
+          0.0,
+          1.0,
+          0.0
+        ],
         "local_position": true,
         "range": 2.0,
         "strength": 0.9
@@ -61,14 +89,27 @@
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
-            { "percent": 0.0, "color": "#C77DFF" },
-            { "percent": 1.0, "color": "#7B2CBF" }
+            {
+              "percent": 0.0,
+              "color": "#C77DFF"
+            },
+            {
+              "percent": 1.0,
+              "color": "#7B2CBF"
+            }
           ],
           "alpha_points": [
-            { "percent": 0.0, "alpha": 0.85 },
-            { "percent": 1.0, "alpha": 0.0 }
+            {
+              "percent": 0.0,
+              "alpha": 0.85
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
           ]
-        }
+        },
+        "interpolant": "q.agePercent"
       }
     ]
   }

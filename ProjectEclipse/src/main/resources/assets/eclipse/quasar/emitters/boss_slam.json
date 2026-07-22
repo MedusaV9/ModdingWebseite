@@ -6,20 +6,34 @@
   "emitter_settings": {
     "shape": {
       "shape": "veil:hemisphere",
-      "dimensions": [0.8, 0.6, 0.8],
-      "rotation": [0.0, 0.0, 0.0],
+      "dimensions": [
+        0.8,
+        0.6,
+        0.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "from_surface": true
     },
     "particle_settings": {
       "particle_speed": 0.55,
-      "random_speed": 0.25,
+      "random_speed": true,
       "base_particle_size": 0.16,
       "particle_size_variation": 0.07,
       "particle_lifetime": 28,
       "particle_lifetime_variation": 8,
-      "initial_direction": [0.0, 1.0, 0.0],
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
       "random_initial_direction": true,
-      "random_initial_rotation": true
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
     },
     "force_spawn": false
   },
@@ -47,16 +61,35 @@
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
-            { "percent": 0.0, "color": "#E0AAFF" },
-            { "percent": 0.4, "color": "#9D4EDD" },
-            { "percent": 1.0, "color": "#4A0E80" }
+            {
+              "percent": 0.0,
+              "color": "#E0AAFF"
+            },
+            {
+              "percent": 0.4,
+              "color": "#9D4EDD"
+            },
+            {
+              "percent": 1.0,
+              "color": "#4A0E80"
+            }
           ],
           "alpha_points": [
-            { "percent": 0.0, "alpha": 1.0 },
-            { "percent": 0.8, "alpha": 0.7 },
-            { "percent": 1.0, "alpha": 0.0 }
+            {
+              "percent": 0.0,
+              "alpha": 1.0
+            },
+            {
+              "percent": 0.8,
+              "alpha": 0.7
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
           ]
-        }
+        },
+        "interpolant": "q.agePercent"
       }
     ]
   }
