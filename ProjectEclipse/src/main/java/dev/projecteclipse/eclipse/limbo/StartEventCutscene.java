@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.network.S2CCutscenePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.worldgen.stage.FusionSequence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -39,8 +40,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       upward velocity so they visually rise out of the ground.</li>
  *   <li>t=150 — refill the carved pockets with their previous blocks.</li>
  *   <li>t=160 — broadcast {@code EMERGE}, set {@code startEventDone}, stamp each teleported
- *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset, and
- *       broadcast one {@code eclipse:cutscene_veil} Quasar burst per emerged player.</li>
+ *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset,
+ *       broadcast one {@code eclipse:cutscene_veil} Quasar burst per emerged player, and
+ *       start the intro fusion ({@link FusionSequence#maybeStartIntroFusion} — overworld
+ *       stage 0 → 1, guarded to run once per world).</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -193,6 +196,8 @@ public final class StartEventCutscene {
         }
         teleportedPlayers.clear();
         EclipseMod.LOGGER.info("start_event cutscene finished; startEventDone=true");
+        // Players just emerged on their discs — fuse the world (no-op if already stage >= 1).
+        FusionSequence.maybeStartIntroFusion(server);
     }
 
     /** Deterministic per-player column spread around spawn so every player gets their own pocket. */

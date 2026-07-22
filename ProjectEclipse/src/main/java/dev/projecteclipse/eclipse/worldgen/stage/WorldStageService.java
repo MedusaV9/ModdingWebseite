@@ -21,6 +21,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -227,6 +228,89 @@ public final class WorldStageService {
                 profile.name(), state.getGrowthFromStage(), toStage, state.getGrowthCursor());
         RingGrowthService.start(level, profile, state.getGrowthFromStage(), toStage, true,
                 state.getGrowthCursor());
+    }
+
+    // --- stages.json triggers ---
+
+    /**
+     * First event day counting as "final" for {@code final_day} stage triggers
+     * ({@code docs/ideas/01_world_terrain.md} §C — the day-12 endgame window).
+     */
+    private static final int FINAL_DAY = 12;
+
+    /** Ticks between altar-level polls for {@code milestone:N} triggers. */
+    private static final int ALTAR_POLL_TICKS = 20;
+
+    /** Last altar level acted on ({@link Integer#MIN_VALUE} until the first poll). */
+    private static int lastSeenAltarLevel = Integer.MIN_VALUE;
+
+    /**
+     * Applies every {@code day:N} (N ≤ day) and {@code final_day} (day ≥ {@value #FINAL_DAY})
+     * stage trigger of both disc dimensions, raising each dimension to the highest matching
+     * stage with an animated sweep. Cumulative and idempotent: called by
+     * {@code DayScheduler.setDay} after a day is applied, so a day jump (or a missed
+     * real-world auto-advance) catches up in one call. Day triggers never LOWER a stage —
+     * reverting terrain stays a manual {@code /eclipse stage set} decision.
+     */
+    public static void applyDayTriggers(MinecraftServer server, int day) {
+        for (DiscProfile profile : new DiscProfile[] {DiscProfile.OVERWORLD, DiscProfile.NETHER}) {
+            int target = stage(server, profile);
+            for (EclipseConfig.StageEntry entry : stageEntries(profile)) {
+                if (entry.stage() > target && dayTriggerMatches(entry.trigger(), day)) {
+                    target = entry.stage();
+                }
+            }
+            if (target > stage(server, profile)) {
+                EclipseMod.LOGGER.info("Day {} stage trigger: {} -> stage {}", day, profile.name(), target);
+                setStage(server, dimensionOf(profile), target, true);
+            }
+        }
+    }
+
+    private static boolean dayTriggerMatches(String trigger, int day) {
+        if ("final_day".equals(trigger)) {
+            return day >= FINAL_DAY;
+        }
+        return trigger != null && trigger.startsWith("day:")
+                && day >= Integer.parseInt(trigger.substring("day:".length()));
+    }
+
+    /**
+     * {@code milestone:N} triggers: watches {@code EclipseWorldState.altarLevel} (polled
+     * every {@value #ALTAR_POLL_TICKS} ticks — catches every {@code setAltarLevel} caller,
+     * altar ritual and admin command alike) and raises each dimension to the highest stage
+     * whose milestone level is reached. Like day triggers this only ever raises.
+     */
+    @SubscribeEvent
+    public static void onAltarPollTick(ServerTickEvent.Post event) {
+        MinecraftServer server = event.getServer();
+        if (server.getTickCount() % ALTAR_POLL_TICKS != 0) {
+            return;
+        }
+        int altarLevel = EclipseWorldState.get(server).getAltarLevel();
+        if (altarLevel == lastSeenAltarLevel) {
+            return;
+        }
+        boolean firstPoll = lastSeenAltarLevel == Integer.MIN_VALUE;
+        lastSeenAltarLevel = altarLevel;
+        if (firstPoll || altarLevel <= 0) {
+            return; // never fire sweeps from the boot-up sample or a reset
+        }
+        for (DiscProfile profile : new DiscProfile[] {DiscProfile.OVERWORLD, DiscProfile.NETHER}) {
+            int target = stage(server, profile);
+            for (EclipseConfig.StageEntry entry : stageEntries(profile)) {
+                String trigger = entry.trigger();
+                if (entry.stage() > target && trigger != null && trigger.startsWith("milestone:")
+                        && altarLevel >= Integer.parseInt(trigger.substring("milestone:".length()))) {
+                    target = entry.stage();
+                }
+            }
+            if (target > stage(server, profile)) {
+                EclipseMod.LOGGER.info("Altar level {} stage trigger: {} -> stage {}",
+                        altarLevel, profile.name(), target);
+                setStage(server, dimensionOf(profile), target, true);
+            }
+        }
     }
 
     // --- config helpers shared by triggers and commands ---

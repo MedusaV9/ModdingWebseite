@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
+import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -23,7 +24,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * (default OFF), in which case the day advances once per real-world day at the configured
  * server-local time. On a day change the new day is persisted, the day plan's border size is
  * applied via {@link BorderController} (60 s lerp), the new state is broadcast to every client
- * and a global bell rings for every online player.
+ * and a global bell rings for every online player. Finally the world-stage day triggers
+ * ({@code stages.json} {@code day:N} / {@code final_day}) are evaluated, so e.g. the nether
+ * disc appears when day 2 fires.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DayScheduler {
@@ -67,6 +70,10 @@ public final class DayScheduler {
         }
         EclipseMod.LOGGER.info("Eclipse day set to {} (goals: {}; unlocked keys: {})",
                 newDay, plan.goals(), UnlockState.unlockedKeys(server));
+
+        // World-stage day triggers (stages.json "day:N" / "final_day") — e.g. the nether
+        // gets its first disc on day 2, BEFORE the portal unlock can be used.
+        WorldStageService.applyDayTriggers(server, newDay);
     }
 
     @SubscribeEvent

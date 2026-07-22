@@ -13,12 +13,19 @@ import net.minecraft.resources.ResourceLocation;
  * {@link dev.projecteclipse.eclipse.client.ClientStateCache#cutscenePhase}.
  */
 public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload {
-    /** Cutscene phases, broadcast in this order by {@code limbo.StartEventCutscene}. */
+    /** Cutscene phases; TILT…EMERGE broadcast in order by {@code limbo.StartEventCutscene}. */
     public enum Phase {
         TILT,
         SUBMERGE,
         WAVES,
-        EMERGE
+        EMERGE,
+        /**
+         * One camera-shake impulse (~2 s), pulsed repeatedly by
+         * {@code worldgen.stage.FusionSequence} while the intro fusion sweep runs.
+         * Unlike the ordered phases it can arrive many times; treat each receipt as a
+         * fresh impulse rather than a latched state.
+         */
+        SHAKE
     }
 
     public static final CustomPacketPayload.Type<S2CCutscenePayload> TYPE =

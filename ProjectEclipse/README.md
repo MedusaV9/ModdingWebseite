@@ -221,8 +221,10 @@ write to `dev.projecteclipse.eclipse.client.ClientStateCache` (`public static vo
 public record S2CLivesPayload(int lives) implements CustomPacketPayload;        // id "eclipse:lives"
 public record S2CDayStatePayload(int day, int altarLevel) implements CustomPacketPayload; // id "eclipse:day_state"
 public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload;   // id "eclipse:cutscene"
-// S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE }; client handler writes
-// ClientStateCache.cutscenePhase (volatile, null until the start event runs).
+// S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE, SHAKE }; client handler writes
+// ClientStateCache.cutscenePhase (volatile, null until the start event runs). SHAKE is pulsed
+// repeatedly by FusionSequence during the intro fusion — treat each receipt as one ~2 s
+// camera-shake impulse, not a latched phase.
 public record S2CHeartBurstPayload(int heartIndex) implements CustomPacketPayload; // id "eclipse:heart_burst"
 // Sent after a death-loss respawn; heartIndex is the first now-missing zero-based heart.
 public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements CustomPacketPayload; // id "eclipse:quasar"
@@ -382,7 +384,16 @@ public final class WorldStageService { // @EventBusSubscriber (game bus)
 
 public final class RingGrowthService { // @EventBusSubscriber (game bus)
     public static boolean isRunning(DiscProfile profile);
+    public static boolean isRunningIntroFusion(); // the animated overworld 0 -> 1 sweep
     public static String progressLine(DiscProfile profile); // null when idle
+}
+
+public final class FusionSequence { // @EventBusSubscriber (game bus)
+    // Starts the intro fusion (overworld 0 -> 1, animated) once per world; no-op when the
+    // stage is already >= 1 or stages.json changed stage 1's trigger. Called automatically
+    // when StartEventCutscene finishes (startEventDone flips true); W6 cinematics may call
+    // it directly instead — it is idempotent.
+    public static boolean maybeStartIntroFusion(MinecraftServer server);
 }
 ```
 
@@ -401,6 +412,22 @@ sweeps drain a `ringBlocksBudgetMs` (2 ms) nanoTime budget per tick and skip tic
 MSPT > 40; instant mode uses a 25 ms budget. The growth cursor persists every ~100 columns, so
 a restart resumes mid-animation (`ServerStartedEvent`). The persisted stages are re-published
 into the chunkgen seam on `LevelEvent.Load` of the overworld — before any spawn chunk generates.
+
+**Intro fusion** (`FusionSequence`): the overworld 0 → 1 sweep orders columns by distance to
+the nearest pre-existing disc edge (main r=96 rim or any player-disc rim) instead of by radius,
+so land bridges grow from every disc simultaneously and race toward each other (~60–90 s, paced
+towards ~1500 ticks). While it runs, all players get a low-pitched thunder rumble plus one
+`S2CCutscenePayload(SHAKE)` impulse every 2 s. It is triggered automatically when the
+start-event cutscene completes, guarded to run once (committed stage must still be 0).
+
+**Triggers** (`stages.json` `trigger` field, evaluated per dimension, raise-only):
+`intro_fusion` — fired by the cutscene hook above; `day:N` — evaluated by
+`DayScheduler.setDay` after each day change (cumulative, so day jumps catch up; nether gets
+its first disc at day 2, before the portal unlock); `final_day` — same evaluation, fires at
+day ≥ 12; `milestone:N` — `WorldStageService` polls the altar level every second and raises
+matching stages on any altar-level change (catches the altar ritual and `/eclipse altar set`
+alike). All trigger sweeps are animated. Triggers never lower a stage — erasing terrain is
+always a manual `/eclipse stage set` decision.
 
 ## Progression & Mod Gating
 

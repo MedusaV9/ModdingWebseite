@@ -57,9 +57,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Ordering</b>: GROW sweeps radius-then-angle (a wave racing around the
  * circumference, ring by ring outward); ERASE sweeps outer-radius-first (the disc crumbles
- * inward to the new rim). The ordering is deterministic, so the persisted growth cursor
- * (saved every {@value #CURSOR_PERSIST_INTERVAL} columns) resumes an interrupted sweep
- * after a restart.</p>
+ * inward to the new rim); the intro FUSION (overworld 0 → 1) sweeps by distance to the
+ * nearest pre-existing disc edge ({@link FusionSequence}) so bridges race toward each
+ * other. Every ordering is deterministic, so the persisted growth cursor (saved every
+ * {@value #CURSOR_PERSIST_INTERVAL} columns) resumes an interrupted sweep after a
+ * restart.</p>
  *
  * <p><b>Chunks</b>: already-loaded chunks are rewritten in place; generated-but-unloaded
  * chunks (resolved via async region reads at job start) are loaded with a short-lived
@@ -148,6 +150,13 @@ public final class RingGrowthService {
         return JOBS.containsKey(profile);
     }
 
+    /** Whether the currently running overworld sweep is the animated intro fusion (0 → 1). */
+    public static boolean isRunningIntroFusion() {
+        Job job = JOBS.get(DiscProfile.OVERWORLD);
+        return job != null && job.animate && !job.isRebuild
+                && FusionSequence.isIntroFusion(job.profile, job.fromStage, job.toStage);
+    }
+
     /** Human-readable one-line progress for {@code /eclipse stage get}, or {@code null}. */
     public static String progressLine(DiscProfile profile) {
         Job job = JOBS.get(profile);
@@ -181,6 +190,8 @@ public final class RingGrowthService {
         final int innerRadius;
         final int outerRadius;
 
+        /** Intro fusion uses distance-to-nearest-disc-edge ordering instead of ring order. */
+        final boolean fusionOrdered;
         /** Band columns as packed (x << 32 | z & 0xFFFFFFFF), in sweep order. */
         final long[] columns;
         /** Unprocessed band columns per chunk (key = ChunkPos.asLong). */
@@ -230,6 +241,7 @@ public final class RingGrowthService {
             this.outerRadius = rHigh + DiscTerrainFunction.RIM_NOISE_AMP;
 
             boolean erase = outerRadiusOf(toStage) < outerRadiusOf(fromStage);
+            this.fusionOrdered = !erase && FusionSequence.isIntroFusion(profile, fromStage, toStage);
             this.columns = buildOrderedColumns(erase);
             this.cursor = Math.min(Math.max(0L, resumeCursor), this.columns.length);
             this.columnsPerTickCap = animate
@@ -250,10 +262,11 @@ public final class RingGrowthService {
 
             resolveChunks();
             EclipseMod.LOGGER.info(
-                    "Ring growth started: {} stage {} -> {}{} ({} columns, band r {}..{}, {} chunks, {}{})",
+                    "Ring growth started: {} stage {} -> {}{} ({} columns, band r {}..{}, {} chunks, {}{}{})",
                     profile.name(), fromStage, toStage, isRebuild ? " [rebuild]" : "",
                     this.columns.length, this.innerRadius, this.outerRadius,
                     this.remainingPerChunk.size(), animate ? "animated" : "instant",
+                    this.fusionOrdered ? ", fusion ordering" : "",
                     this.cursor > 0 ? ", resumed at column " + this.cursor : "");
         }
 
@@ -316,11 +329,16 @@ public final class RingGrowthService {
             return ordered;
         }
 
-        /** Sort key of one column: primary radius ring (1-block bands), secondary angle. */
+        /**
+         * Sort key of one column: primary 1-block band (radius for GROW, inverted radius for
+         * ERASE, distance-to-nearest-disc-edge for the intro FUSION), secondary angle.
+         */
         long orderKey(long packed, boolean erase) {
             int x = unpackX(packed);
             int z = unpackZ(packed);
-            int ring = (int) Math.sqrt((double) x * x + (double) z * z);
+            int ring = this.fusionOrdered
+                    ? FusionSequence.distanceToNearestDiscEdge(x, z)
+                    : (int) Math.sqrt((double) x * x + (double) z * z);
             if (erase) {
                 ring = this.outerRadius - ring;
             }
