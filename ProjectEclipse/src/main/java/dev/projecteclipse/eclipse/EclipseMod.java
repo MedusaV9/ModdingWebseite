@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseMenus;
 import dev.projecteclipse.eclipse.registry.EclipseParticles;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.registry.EclipseWorldgen;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -35,6 +36,7 @@ public final class EclipseMod {
         EclipseParticles.register(modEventBus);
         EclipseAttachments.register(modEventBus);
         EclipseMenus.register(modEventBus);
+        EclipseWorldgen.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

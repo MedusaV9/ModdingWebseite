@@ -23,6 +23,10 @@ There is no system Gradle; always use the wrapper from this directory:
 
 For `runServer`, accept the EULA first: create `run/eula.txt` containing `eula=true`.
 
+v2 REQUIRES A FRESH WORLD: the overworld dimension type was raised to `min_y: -176, height: 512`
+for the floating-disc world, which makes v1 saves incompatible. Delete `run/world` before the
+first `runServer`/`runClient` after upgrading — this is expected, not a bug.
+
 Note: if you pipe `runServer` output through another process (e.g. `| tee log`), console
 input such as `stop` is not forwarded to the server; stop it with Ctrl-C instead.
 
@@ -285,6 +289,52 @@ Sounds (`EclipseSounds`): `AMBIENT_LIMBO_LOOP` (`eclipse:ambient.limbo_loop`, al
 `UI_HEART_SHATTER` (`eclipse:ui.heart_shatter`); all currently ship tiny silent placeholder OGGs
 under `assets/eclipse/sounds/`.
 
+### Disc worldgen — `dev.projecteclipse.eclipse.worldgen`
+
+v2 replaces vanilla overworld/nether generation with deterministic floating discs
+(`data/minecraft/dimension/{overworld,the_nether}.json` set `"generator": {"type": "eclipse:disc",
+"profile": "overworld"|"nether"}`; codecs registered in `registry/EclipseWorldgen` as
+`eclipse:disc` / `eclipse:disc_sectors`). The limbo dimension is untouched.
+
+One pure terrain function feeds everything — the chunk generator for never-generated chunks and
+(worker 4) the runtime ring-growth sweep for already-generated ones, so their output is
+byte-identical. ALL noise is seeded from `DiscMapData.ECLIPSE_SEED`, never the world seed.
+
+```java
+// THE terrain function. Pure in (profile, x, y, z, stage).
+public static BlockState DiscTerrainFunction.stateAt(DiscProfile profile, int x, int y, int z, int stage);
+// Hot-loop form (identical output): one column precompute + per-Y lookup.
+public static DiscColumn  DiscTerrainFunction.column(DiscProfile profile, int x, int z, int stage);
+public static BlockState  DiscTerrainFunction.stateInColumn(DiscColumn col, int y);
+public static int         DiscTerrainFunction.surfaceY(DiscProfile profile, int x, int z);
+public static final int   DiscTerrainFunction.RIM_REWRITE_MARGIN; // ring sweep rewrite band, see javadoc
+
+public static BlockPos DiscGeometry.playerDiscCenter(int index);  // 8 player discs r=24 on ring r=170
+public static int      DiscGeometry.mainDiscRadius(int stage);    // 96 / 225 / 300 / 360 / 420 / 480
+public static int      StageRadii.radius(DiscProfile p, int stage); // W4 overrides via StageRadii.set
+public static int      WorldStageAccess.stage(DiscProfile p);     // committed stage seam, default 0;
+public static void     WorldStageAccess.setStage(DiscProfile p, int stage); // W4 drives this
+```
+
+Stage radii: overworld stage 0 = main disc r=96 + eight player discs r=24 on ring r=170, stages
+1–5 = 225/300/360/420/480; nether stages 1–3 = 80/120/160 (stage 0 = no nether disc yet). The
+lens underside normalises against the FINAL radius so interior columns never change when a stage
+grows; only the rim taper band is stage-dependent. `fillFromNoise` reads the stage per chunk via
+`WorldStageAccess` (volatile static — safe on worldgen threads, no server lookup).
+
+Map control data is authored JSON, not painted PNGs: `config/eclipse/disc_map.json` (defaults
+written by code on first use, like `EclipseConfig`) holds the angular biome sector wedges, the
+mountain (center/peak/stronghold cavity), the nether lava moat, landmarks, rivers and whisper
+wells. An optional grayscale 1024x1024 PNG at `config/eclipse/disc_heightmap.png` overrides the
+procedural overworld surface (`surfaceY = 40 + red`, 1px = 1 block, centered on 0,0) via
+`DiscMapData.loadHeightmapOverride`. `DiscBiomeSource` resolves the same wedges to real biome
+holders, so blocks and biomes always agree.
+
+Spawn: `DiscSpawnPlacement` pins the overworld spawn to `(0, surfaceY(0,0)+1, 0)` — the flat pad
+the terrain carves at the origin for the altar + sanctum — on every server start (HIGH priority,
+before `BorderController` centers the border on spawn). The v1 start-event flow is unchanged:
+`StartEventCutscene` still teleports players from limbo to the shared spawn.
+
 ## Progression & Mod Gating
 
 All progression enforcement lives in `dev.projecteclipse.eclipse.progression` and is fully
@@ -452,7 +502,8 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 ## Layout
 
 - `dev.projecteclipse.eclipse.EclipseMod` — mod entry point (`@Mod("eclipse")`); wires all deferred registers.
-- `dev.projecteclipse.eclipse.registry` — `EclipseItems`, `EclipseBlocks`, `EclipseBlockEntities`, `EclipseSounds`, `EclipseParticles`, `EclipseAttachments` (NeoForge attachment types), `EclipseMenus`. Each exposes a `DeferredRegister` and a static `register(IEventBus)`.
+- `dev.projecteclipse.eclipse.registry` — `EclipseItems`, `EclipseBlocks`, `EclipseBlockEntities`, `EclipseSounds`, `EclipseParticles`, `EclipseAttachments` (NeoForge attachment types), `EclipseMenus`, `EclipseWorldgen` (disc chunk generator + biome source codecs). Each exposes a `DeferredRegister` and a static `register(IEventBus)`.
+- `dev.projecteclipse.eclipse.worldgen` — deterministic disc world core: `DiscTerrainFunction`, `DiscMapData`, `DiscProfile`, `DiscGeometry`, `StageRadii`, `WorldStageAccess`, `DiscChunkGenerator`, `DiscBiomeSource`, `DiscSpawnPlacement` (see "Disc worldgen").
 - `dev.projecteclipse.eclipse.client.EclipseClient` — client-only `@EventBusSubscriber(Dist.CLIENT)` shell; `client.ClientStateCache` — server-synced state cache (safe on both dists).
 - `dev.projecteclipse.eclipse.core.state` / `core.snapshot` / `core.config` / `network` — persistent data core, see "Core APIs".
 - `dev.projecteclipse.eclipse.lives` — death economy (`LifecycleEvents`, `BanService`, `InheritanceService`, `GraveBlock`, `GraveBlockEntity`).
