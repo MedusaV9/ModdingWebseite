@@ -13,6 +13,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseBlockEntities;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -98,6 +99,9 @@ public class AltarBlockEntity extends BlockEntity {
 
         actionBar(player, Component.translatable("ritual.eclipse.altar.progress", updated, match.count(), itemName));
         serverLevel.playSound(null, this.worldPosition, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 0.8F);
+
+        // W10: a sacrifice never goes unobserved — one gazer materializes at the treeline.
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
 
         if (isMilestoneComplete(state, milestone)) {
             completeMilestone(serverLevel, state, milestone);
@@ -195,6 +199,8 @@ public class AltarBlockEntity extends BlockEntity {
                 new ItemStack(EclipseItems.HEART_FRAGMENT.get()));
         serverLevel.playSound(null, this.worldPosition, SoundEvents.WARDEN_HEARTBEAT, SoundSource.BLOCKS, 1.0F, 0.8F);
         actionBar(player, Component.translatable("ritual.eclipse.heart.done"));
+        // W10: heart sacrifices draw a watcher too.
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
         EclipseMod.LOGGER.info("{} sacrificed a life at the altar {} ({} lives left)",
                 player.getScoreboardName(), this.worldPosition, LivesApi.get(player));
     }

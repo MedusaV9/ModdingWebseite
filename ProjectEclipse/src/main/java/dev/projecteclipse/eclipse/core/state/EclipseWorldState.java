@@ -30,6 +30,12 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class EclipseWorldState extends SavedData {
     public static final String DATA_NAME = "eclipse_world_state";
 
+    // Night-event identifiers (W10). Stored as plain strings so the state class stays
+    // decoupled from the spawner; anything else normalizes to NIGHT_EVENT_NONE on load.
+    public static final String NIGHT_EVENT_NONE = "none";
+    public static final String NIGHT_EVENT_PALE = "pale";
+    public static final String NIGHT_EVENT_UMBRAL = "umbral";
+
     private static final String TAG_DAY = "day";
     private static final String TAG_ALTAR_LEVEL = "altarLevel";
     private static final String TAG_BORDER_SIZE = "borderSize";
@@ -40,6 +46,9 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_FORCE_VOICE_MUTED = "forceVoiceMuted";
     private static final String TAG_OAR_ENTITIES = "oarEntities";
     private static final String TAG_DECKHAND_ENTITIES = "deckhandEntities";
+    private static final String TAG_NIGHT_EVENT = "activeNightEvent";
+    private static final String TAG_NIGHT_EVENT_DAY = "nightEventDay";
+    private static final String TAG_FIRST_PALE_NIGHT_DONE = "firstPaleNightDone";
     private static final String TAG_WORLD_STAGE_OVERWORLD = "worldStageOverworld";
     private static final String TAG_WORLD_STAGE_NETHER = "worldStageNether";
     private static final String TAG_GROWTH_DIMENSION = "growthDimension";
@@ -76,6 +85,9 @@ public final class EclipseWorldState extends SavedData {
     private final Set<UUID> forceVoiceMuted = new HashSet<>();
     private final List<UUID> oarEntities = new ArrayList<>();
     private final List<UUID> deckhandEntities = new ArrayList<>();
+    private String activeNightEvent = NIGHT_EVENT_NONE;
+    private int nightEventDay = 0;
+    private boolean firstPaleNightDone = false;
     private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
@@ -118,6 +130,9 @@ public final class EclipseWorldState extends SavedData {
         for (Tag entry : tag.getList(TAG_DECKHAND_ENTITIES, Tag.TAG_INT_ARRAY)) {
             state.deckhandEntities.add(NbtUtils.loadUUID(entry));
         }
+        state.activeNightEvent = normalizeNightEvent(tag.getString(TAG_NIGHT_EVENT));
+        state.nightEventDay = tag.getInt(TAG_NIGHT_EVENT_DAY);
+        state.firstPaleNightDone = tag.getBoolean(TAG_FIRST_PALE_NIGHT_DONE);
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
         }
@@ -165,6 +180,10 @@ public final class EclipseWorldState extends SavedData {
             deckhandList.add(NbtUtils.createUUID(uuid));
         }
         tag.put(TAG_DECKHAND_ENTITIES, deckhandList);
+
+        tag.putString(TAG_NIGHT_EVENT, this.activeNightEvent);
+        tag.putInt(TAG_NIGHT_EVENT_DAY, this.nightEventDay);
+        tag.putBoolean(TAG_FIRST_PALE_NIGHT_DONE, this.firstPaleNightDone);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -402,6 +421,43 @@ public final class EclipseWorldState extends SavedData {
         this.deckhandEntities.clear();
         this.deckhandEntities.addAll(deckhandEntityIds);
         setDirty();
+    }
+
+    // --- night events (W10) ---
+
+    /**
+     * The active night event: {@link #NIGHT_EVENT_NONE}, {@link #NIGHT_EVENT_PALE} or
+     * {@link #NIGHT_EVENT_UMBRAL}. Scheduled by {@code entity.EclipseSpawner} on nightfall,
+     * cleared at dawn; {@code /eclipse event set} overrides it for testing.
+     */
+    public String getActiveNightEvent() {
+        return this.activeNightEvent;
+    }
+
+    /** The eclipse day stamped when the current night event was scheduled (0 = never). */
+    public int getNightEventDay() {
+        return this.nightEventDay;
+    }
+
+    public void setActiveNightEvent(String event, int dayStamp) {
+        this.activeNightEvent = normalizeNightEvent(event);
+        this.nightEventDay = dayStamp;
+        setDirty();
+    }
+
+    /** Whether the guaranteed first Pale Night (day 4+) has already happened. */
+    public boolean isFirstPaleNightDone() {
+        return this.firstPaleNightDone;
+    }
+
+    public void setFirstPaleNightDone(boolean done) {
+        this.firstPaleNightDone = done;
+        setDirty();
+    }
+
+    private static String normalizeNightEvent(String event) {
+        return NIGHT_EVENT_PALE.equals(event) || NIGHT_EVENT_UMBRAL.equals(event)
+                ? event : NIGHT_EVENT_NONE;
     }
 
     // --- banned ---

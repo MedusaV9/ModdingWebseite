@@ -91,6 +91,15 @@ public double getBorderFxRange();             public void setBorderFxRange(doubl
 public boolean isStartEventDone();            public void setStartEventDone(boolean done);    // default false
 public boolean isGhostShipBuilt();            public void setGhostShipBuilt(boolean built);   // default false
 public List<UUID> getOarEntities();           public void setOarEntities(List<UUID> ids);     // ghost ship oar displays
+public List<UUID> getDeckhandEntities();      public void setDeckhandEntities(List<UUID> ids);// ghost ship rowing crew (W10)
+
+public static final String NIGHT_EVENT_NONE = "none";   // night events (W10) — see entity.EclipseSpawner
+public static final String NIGHT_EVENT_PALE = "pale";
+public static final String NIGHT_EVENT_UMBRAL = "umbral";
+public String getActiveNightEvent();          // "none"|"pale"|"umbral" (anything else loads as none)
+public int getNightEventDay();                // eclipse-day stamp of the current event, 0 = never
+public void setActiveNightEvent(String event, int dayStamp);
+public boolean isFirstPaleNightDone();        public void setFirstPaleNightDone(boolean done); // day-4 guarantee latch
 
 public int getWorldStage(DiscProfile profile);                 // committed world stage, default 0
 public void setWorldStage(DiscProfile profile, int stage);     // ONLY WorldStageService.setStage may call this
@@ -485,6 +494,33 @@ keybind (J, `ArtifactKeyHandler`) and the artifact right-click / `S2COpenArtifac
   sweeps (`WorldStageService` listener). Every send is logged ("Announce payload sent...").
   Goal completion is NOT wired (v1 tracks no goals): W13 calls `announceGoalCompleted`.
 
+### Custom mobs & spawner — `dev.projecteclipse.eclipse.entity` (W10)
+
+Five custom mobs with hand-coded cube models (`client/entity/*Model`, layer definitions
+registered by `client/entity/EclipseEntityRenderers`), procedural animations and
+programmer-art skins (regenerate: `java scripts/placeholder_gen/EntitySkinPlaceholder.java`;
+UV layouts documented per mob in `docs/uv/<mob>.md`). Registered in
+`entity.EclipseEntities` (`DeferredRegister<EntityType<?>>` + attributes).
+
+| Mob (`eclipse:` id) | Category | Behavior | Spawning | Drops |
+|---|---|---|---|---|
+| `the_other` | MONSTER | Doppelganger in the uniform skin (vanilla humanoid geometry). MimicWalk: paths to the nearest player, stops at 5 blocks and stares; attacks only at ≤3 blocks or on retaliation (180° head snap in 2t on aggro). Dawn: soul-escape + wisp burst, gone. | Pale Nights only, 2–3 per event, ≥24 blocks from every player, surface | 1–2 umbral shards |
+| `gazer` | CREATURE | Never moves or attacks. Vanishes when stared at dead-center for 40t (wisp puff + private cave-mood sting); teleports every 200–400t into the nearest player's peripheral FOV. Unkillable — damage = vanish. 12-block whisper loop. | Overworld nights day 3+, 1 per ~4 players; 1 guaranteed near the altar during sacrifices (`GazerEntity.watchSacrifice`, hooked from `AltarBlockEntity`) | — |
+| `umbral_stalker` | MONSTER | Wolf-like pack hunter: leap + melee(1.3, persistent), retaliation alerts the pack, hunts players on sight. Flees at dawn and dissolves after ~5 s. | Packs of 3–4 at night day 5+ (cap 4; **8 on Umbral Nights**), 24–56 blocks out | 0–2 umbral shards, 20% heart fragment |
+| `deckhand` | CREATURE | Mute rowing crew of the Limbo ghost ship; look-at goal only, invulnerable, unpushable, discards outside Limbo. Rowing anim synced to the 30t oar cadence. | 8 seated once at the oar benches by `GhostShipBuilder` → `DeckhandEntity.ensureCrew` (UUIDs persist in `EclipseWorldState.getDeckhandEntities()`) | — |
+| `sunmote` | CREATURE | Fullbright 2-cube wisp orbiting the sanctum altar (radius `6+altarLevel`, position-driven in `tick()`); chimes every ~200t. | Daylight upkeep by the spawner: one per altar level; killed motes respawn next dawn | 1 glowstone dust |
+
+**`entity.EclipseSpawner`** (game bus, `ServerTickEvent.Post`, one pass per 100t): applies
+the table above — overworld, surface, loaded chunks, per-pass caps (never spawn-loops).
+It also schedules the **night events**: on nightfall of day 4+ it rolls a **Pale Night**
+(25%; the first is guaranteed, as is day 12), and days 6/10 are fixed **Umbral Nights**;
+events persist in `EclipseWorldState.getActiveNightEvent()`, are announced via the W8
+typewriter/sweep (style `unlock`, lang keys `announce.eclipse.night.<event>.*`) and clear
+at dawn. Override live with `/eclipse event set <pale|umbral|none>`.
+
+Sanctum note: `worldgen.structure.SanctumProtection` suppresses non-`eclipse`-namespace
+hostile spawns near the altar — all of these mobs are exempt by namespace.
+
 ### Death economy — `dev.projecteclipse.eclipse.lives`
 
 `LifecycleEvents` (`@EventBusSubscriber`, game bus) drives deaths: snapshot `"death"` first, killer gets +1 / victim
@@ -838,6 +874,7 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse start_event` | Runs `StartEventCutscene.begin` (fails if a run is already in progress). |
 | `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, applies the plan border, syncs clients. |
 | `/eclipse day goals` | Prints the current day's configured goals. |
+| `/eclipse event set <pale\|umbral\|none>` | Overrides the active night event (`EclipseWorldState.setActiveNightEvent`); pale/umbral also fire the announcement sweep. |
 | `/eclipse lives set <player> <n>` | `LivesApi.set` (n ≥ 0, clamped; synced to the client). |
 | `/eclipse lives add <player> <n>` | `LivesApi.add` (n may be negative). |
 | `/eclipse altar set <level>` | Sets `EclipseWorldState.altarLevel` (≥ 0) + re-syncs day state to all clients. |
@@ -866,7 +903,7 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse cutscene export <id>` | Prints the path's pretty JSON to the source (copy-paste for assets). |
 | `/eclipse cutscene reloadpaths` | Re-reads `config/eclipse/cutscenes/` only + re-syncs all clients. |
 | `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii) + cutscene path library re-read/re-sync. |
-| `/eclipse status` | Dumps day / altar level / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
+| `/eclipse status` | Dumps day / altar level / night event / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`
 
@@ -965,6 +1002,7 @@ grant `create`/`simulated`/`aeronautics`/`end` early, see `milestones.json`.)
 - `dev.projecteclipse.eclipse.progression` — `DayScheduler`, `UnlockState`, `BorderController` (vanilla failsafe owner), `PhaseInventoryLock`, `ModGate` (see "Progression & Mod Gating").
 - `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps); `border.client.BorderFxRenderer` (glitch strip geometry, Quasar arcs, Veil post proximity feed); the vanilla border visual is cancelled by `client.mixin.LevelRendererMixin`.
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
+- `dev.projecteclipse.eclipse.entity` / `client.entity` — W10 custom mobs (`EclipseEntities` registry, the five mob classes, `EclipseSpawner` day/event spawner + night events) and their hand-coded models/renderers (`EclipseEntityRenderers`), see "Custom mobs & spawner".
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").

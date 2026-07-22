@@ -93,6 +93,41 @@ public class GazerEntity extends PathfinderMob {
         this.discard();
     }
 
+    /**
+     * Altar-watch hook (spec §1.2: "1 guaranteed near altar during sacrifices"): spawns one
+     * gazer on the surface 12–24 blocks from the altar, silently observing the ritual.
+     * Called from {@code ritual.AltarBlockEntity}'s deposit/sacrifice paths. No-op during
+     * the day (it would vanish instantly) or while another gazer already watches.
+     */
+    public static void watchSacrifice(ServerLevel level, BlockPos altarPos) {
+        if (level.isDay()) {
+            return;
+        }
+        boolean alreadyWatching = !level.getEntities(EclipseEntities.GAZER.get(),
+                gazer -> gazer.isAlive() && gazer.blockPosition().closerThan(altarPos, 48.0D)).isEmpty();
+        if (alreadyWatching) {
+            return;
+        }
+        for (int attempt = 0; attempt < 24; attempt++) {
+            double angle = level.getRandom().nextDouble() * Math.PI * 2.0D;
+            double distance = 12.0D + level.getRandom().nextDouble() * 12.0D;
+            int x = Mth.floor(altarPos.getX() + 0.5D + Math.cos(angle) * distance);
+            int z = Mth.floor(altarPos.getZ() + 0.5D + Math.sin(angle) * distance);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            if (y <= level.getMinBuildHeight()
+                    || !level.getBlockState(new BlockPos(x, y - 1, z)).isSolid()) {
+                continue;
+            }
+            GazerEntity gazer = EclipseEntities.GAZER.get().create(level);
+            if (gazer == null) {
+                return;
+            }
+            gazer.moveTo(x + 0.5D, y, z + 0.5D, 0.0F, 0.0F);
+            level.addFreshEntity(gazer);
+            return;
+        }
+    }
+
     @Override
     @Nullable
     protected SoundEvent getAmbientSound() {

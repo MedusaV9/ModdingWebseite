@@ -33,6 +33,7 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.entity.EclipseSpawner;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
@@ -71,6 +72,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <pre>
  * /eclipse start_event
  * /eclipse day set &lt;1-14&gt; | day goals
+ * /eclipse event set &lt;pale|umbral|none&gt;
  * /eclipse lives set|add &lt;player&gt; &lt;n&gt;
  * /eclipse altar set &lt;level&gt;
  * /eclipse ban &lt;player&gt; | revive &lt;player&gt;
@@ -98,6 +100,12 @@ public final class EclipseCommands {
             (context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
                     CutscenePaths.all().stream().map(CutscenePath::id), builder);
 
+    /** Tab completion for {@code /eclipse event set}. */
+    private static final SuggestionProvider<CommandSourceStack> NIGHT_EVENTS =
+            (context, builder) -> net.minecraft.commands.SharedSuggestionProvider.suggest(
+                    List.of(EclipseWorldState.NIGHT_EVENT_PALE, EclipseWorldState.NIGHT_EVENT_UMBRAL,
+                            EclipseWorldState.NIGHT_EVENT_NONE), builder);
+
     private EclipseCommands() {}
 
     @SubscribeEvent
@@ -116,6 +124,11 @@ public final class EclipseCommands {
                                         .executes(EclipseCommands::daySet)))
                         .then(Commands.literal("goals")
                                 .executes(EclipseCommands::dayGoals)))
+                .then(Commands.literal("event")
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("event", StringArgumentType.word())
+                                        .suggests(NIGHT_EVENTS)
+                                        .executes(EclipseCommands::eventSet))))
                 .then(Commands.literal("lives")
                         .then(Commands.literal("set")
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -293,6 +306,29 @@ public final class EclipseCommands {
             source.sendSuccess(() -> Component.literal(" - " + goal), false);
         }
         return day;
+    }
+
+    // --- night events (W10) ---
+
+    /** {@code /eclipse event set <pale|umbral|none>}: overrides the active night event live. */
+    private static int eventSet(CommandContext<CommandSourceStack> context) {
+        String event = StringArgumentType.getString(context, "event").toLowerCase(Locale.ROOT);
+        CommandSourceStack source = context.getSource();
+        if (!EclipseWorldState.NIGHT_EVENT_PALE.equals(event)
+                && !EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(event)
+                && !EclipseWorldState.NIGHT_EVENT_NONE.equals(event)) {
+            source.sendFailure(Component.literal("Unknown night event '" + event + "' (pale|umbral|none)"));
+            return 0;
+        }
+        MinecraftServer server = source.getServer();
+        EclipseWorldState state = EclipseWorldState.get(server);
+        state.setActiveNightEvent(event, state.getDay());
+        if (!EclipseWorldState.NIGHT_EVENT_NONE.equals(event)) {
+            EclipseSpawner.announceNightEvent(server, event);
+        }
+        source.sendSuccess(() -> Component.literal("Night event set to '" + event
+                + "' (day stamp " + state.getNightEventDay() + ")"), false);
+        return 1;
     }
 
     // --- lives ---
@@ -851,6 +887,10 @@ public final class EclipseCommands {
         source.sendSuccess(() -> Component.literal("Day: " + state.getDay()
                 + " | Altar level: " + state.getAltarLevel()
                 + " | Start event done: " + state.isStartEventDone()), false);
+        source.sendSuccess(() -> Component.literal("Night event: " + state.getActiveNightEvent()
+                + (EclipseWorldState.NIGHT_EVENT_NONE.equals(state.getActiveNightEvent())
+                        ? "" : " (day " + state.getNightEventDay() + ")")
+                + " | First pale night done: " + state.isFirstPaleNightDone()), false);
         source.sendSuccess(() -> Component.literal("Soft border: overworld ring r="
                 + String.format(Locale.ROOT, "%.1f", dev.projecteclipse.eclipse.border.SoftBorder
                         .radius(server, DiscProfile.OVERWORLD))
