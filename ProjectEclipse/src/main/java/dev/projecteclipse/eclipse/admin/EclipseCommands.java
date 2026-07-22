@@ -33,6 +33,8 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.economy.ShardEconomy;
+import dev.projecteclipse.eclipse.economy.SupplyBeacon;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.EclipseSpawner;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
@@ -288,6 +290,22 @@ public final class EclipseCommands {
                                                 .then(Commands.literal("fov")
                                                         .then(Commands.argument("value", FloatArgumentType.floatArg(10.0F, 140.0F))
                                                                 .executes(context -> cutsceneSetLastKeyframe(context, "fov"))))))))
+                .then(Commands.literal("shards")
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(EclipseCommands::shardsSet))))
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("delta", IntegerArgumentType.integer())
+                                                .executes(EclipseCommands::shardsAdd))))
+                        .then(Commands.literal("pool")
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(EclipseCommands::shardsPoolSet)))))
+                .then(Commands.literal("supply")
+                        .then(Commands.literal("drop")
+                                .executes(EclipseCommands::supplyDrop)))
                 .then(Commands.literal("reload")
                         .executes(EclipseCommands::reload))
                 .then(Commands.literal("status")
@@ -981,6 +999,41 @@ public final class EclipseCommands {
 
     // --- reload ---
 
+    // --- shard economy (W13 dev tools) ---
+
+    private static int shardsSet(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = EntityArgument.getPlayer(context, "player");
+        int amount = IntegerArgumentType.getInteger(context, "amount");
+        int applied = ShardEconomy.setShards(player, amount);
+        context.getSource().sendSuccess(() -> Component.literal(
+                player.getScoreboardName() + "'s shard balance set to " + applied), true);
+        return applied;
+    }
+
+    private static int shardsAdd(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = EntityArgument.getPlayer(context, "player");
+        int delta = IntegerArgumentType.getInteger(context, "delta");
+        int applied = ShardEconomy.addShards(player, delta);
+        context.getSource().sendSuccess(() -> Component.literal(
+                player.getScoreboardName() + "'s shard balance is now " + applied), true);
+        return applied;
+    }
+
+    private static int shardsPoolSet(CommandContext<CommandSourceStack> context) {
+        int amount = IntegerArgumentType.getInteger(context, "amount");
+        EclipseWorldState.get(context.getSource().getServer()).setShardPool(amount);
+        context.getSource().sendSuccess(() -> Component.literal("Team shard pool set to " + amount), true);
+        return amount;
+    }
+
+    /** Test hook for the pooled supply beacon; unlike a purchase it does not touch the pool. */
+    private static int supplyDrop(CommandContext<CommandSourceStack> context) {
+        BlockPos surface = SupplyBeacon.drop(context.getSource().getServer());
+        context.getSource().sendSuccess(() -> Component.literal(
+                "Supply crate dropped near " + surface.toShortString() + " (players are never told)"), false);
+        return 1;
+    }
+
     private static int reload(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();
@@ -1027,6 +1080,8 @@ public final class EclipseCommands {
                 + " | vanilla failsafe " + state.getBorderSize() + " blocks"), false);
         source.sendSuccess(() -> Component.literal("Unlocked keys: "
                 + String.join(", ", UnlockState.unlockedKeys(server))), false);
+        source.sendSuccess(() -> Component.literal("Team shard pool: " + state.getShardPool()
+                + " (supply beacon costs " + ShardEconomy.SUPPLY_BEACON_COST + ")"), false);
 
         List<UUID> banned = List.copyOf(state.getBanned());
         if (banned.isEmpty()) {

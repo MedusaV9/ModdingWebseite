@@ -40,6 +40,16 @@ public final class EclipseAttachments {
             "cutscene_lock",
             () -> AttachmentType.builder(CutsceneLock::new).build());
 
+    /**
+     * Personal umbral-shard balance banked at the altar shop (W13 economy). Credited by
+     * sneak-depositing umbral shards at the altar, spent on personal rewards; survives
+     * death so a kill can never rob the victim's bank. Only {@code economy.ShardEconomy}
+     * should write it (plus the {@code /eclipse shards} admin command).
+     */
+    public static final Supplier<AttachmentType<Integer>> SHARDS = ATTACHMENTS.register(
+            "shards",
+            () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).copyOnDeath().build());
+
     private EclipseAttachments() {}
 
     public static void register(IEventBus modEventBus) {

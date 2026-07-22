@@ -13,12 +13,16 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 
@@ -64,6 +68,8 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_BORDER_FX_RANGE = "borderFxRange";
     private static final String TAG_HERALD_DEFEATED = "heraldDefeated";
     private static final String TAG_FERRYMAN_DEFEATED = "ferrymanDefeated";
+    private static final String TAG_SHARD_POOL = "shardPool";
+    private static final String TAG_GRAVE_POSITIONS = "gravePositions";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -92,6 +98,8 @@ public final class EclipseWorldState extends SavedData {
     private boolean firstPaleNightDone = false;
     private boolean heraldDefeated = false;
     private boolean ferrymanDefeated = false;
+    private int shardPool = 0;
+    private final Map<UUID, List<GlobalPos>> gravePositions = new HashMap<>();
     private final Set<String> disabledCutscenes = new HashSet<>();
 
     public EclipseWorldState() {}
@@ -141,6 +149,18 @@ public final class EclipseWorldState extends SavedData {
         state.heraldDefeated = tag.getBoolean(TAG_HERALD_DEFEATED);
         // Defaults to false so pre-W12 saves keep loading (finale not fought yet).
         state.ferrymanDefeated = tag.getBoolean(TAG_FERRYMAN_DEFEATED);
+        // W13 economy fields default to 0/empty so pre-W13 saves keep loading.
+        state.shardPool = tag.getInt(TAG_SHARD_POOL);
+        for (Tag entry : tag.getList(TAG_GRAVE_POSITIONS, Tag.TAG_COMPOUND)) {
+            CompoundTag grave = (CompoundTag) entry;
+            if (!grave.hasUUID("owner")) {
+                continue;
+            }
+            GlobalPos pos = GlobalPos.of(
+                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(grave.getString("dim"))),
+                    BlockPos.of(grave.getLong("pos")));
+            state.gravePositions.computeIfAbsent(grave.getUUID("owner"), owner -> new ArrayList<>()).add(pos);
+        }
         for (Tag entry : tag.getList(TAG_BANNED, Tag.TAG_INT_ARRAY)) {
             state.banned.add(NbtUtils.loadUUID(entry));
         }
@@ -194,6 +214,19 @@ public final class EclipseWorldState extends SavedData {
         tag.putBoolean(TAG_FIRST_PALE_NIGHT_DONE, this.firstPaleNightDone);
         tag.putBoolean(TAG_HERALD_DEFEATED, this.heraldDefeated);
         tag.putBoolean(TAG_FERRYMAN_DEFEATED, this.ferrymanDefeated);
+        tag.putInt(TAG_SHARD_POOL, this.shardPool);
+
+        ListTag graveList = new ListTag();
+        for (Map.Entry<UUID, List<GlobalPos>> entry : this.gravePositions.entrySet()) {
+            for (GlobalPos pos : entry.getValue()) {
+                CompoundTag grave = new CompoundTag();
+                grave.putUUID("owner", entry.getKey());
+                grave.putString("dim", pos.dimension().location().toString());
+                grave.putLong("pos", pos.pos().asLong());
+                graveList.add(grave);
+            }
+        }
+        tag.put(TAG_GRAVE_POSITIONS, graveList);
 
         ListTag bannedList = new ListTag();
         for (UUID uuid : this.banned) {
@@ -499,6 +532,58 @@ public final class EclipseWorldState extends SavedData {
     public void setFerrymanDefeated(boolean defeated) {
         this.ferrymanDefeated = defeated;
         setDirty();
+    }
+
+    // --- umbral shard pool (W13 economy) ---
+
+    /**
+     * The TEAM shard pool: every umbral shard sneak-deposited at the altar also feeds this
+     * counter (in addition to the depositor's personal {@code eclipse:shards} balance).
+     * Pooled rewards such as the Supply Beacon draw from here ({@code economy.ShardEconomy}).
+     */
+    public int getShardPool() {
+        return this.shardPool;
+    }
+
+    /** Adds {@code delta} (may be negative) to the shard pool, clamped to {@code >= 0}; returns the new value. */
+    public int addShardPool(int delta) {
+        this.shardPool = Math.max(0, this.shardPool + delta);
+        setDirty();
+        return this.shardPool;
+    }
+
+    public void setShardPool(int value) {
+        this.shardPool = Math.max(0, value);
+        setDirty();
+    }
+
+    // --- grave positions (W13 economy: Grave Dowser) ---
+
+    /**
+     * All known grave positions of the given owner, newest last. Appended by
+     * {@code lives.LifecycleEvents} when a death grave is placed and pruned by
+     * {@code lives.GraveBlock#onRemove} on every removal path (looted, scattered, mined,
+     * exploded). Read by the Grave Dowser's {@code inventoryTick}.
+     */
+    public List<GlobalPos> getGravePositions(UUID owner) {
+        List<GlobalPos> graves = this.gravePositions.get(owner);
+        return graves == null ? List.of() : Collections.unmodifiableList(graves);
+    }
+
+    public void addGravePosition(UUID owner, GlobalPos pos) {
+        this.gravePositions.computeIfAbsent(owner, key -> new ArrayList<>()).add(pos);
+        setDirty();
+    }
+
+    /** Removes a tracked grave position; unknown positions are ignored (legacy graves predating W13). */
+    public void removeGravePosition(UUID owner, GlobalPos pos) {
+        List<GlobalPos> graves = this.gravePositions.get(owner);
+        if (graves != null && graves.remove(pos)) {
+            if (graves.isEmpty()) {
+                this.gravePositions.remove(owner);
+            }
+            setDirty();
+        }
     }
 
     // --- banned ---

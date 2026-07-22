@@ -8,12 +8,16 @@ import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.snapshot.SnapshotService;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseBlocks;
+import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -64,6 +68,14 @@ public final class LifecycleEvents {
 
         if (event.getSource().getEntity() instanceof ServerPlayer killer && killer != victim) {
             LivesApi.add(killer, +1);
+            // W13 umbral blade: one EXTRA heart of lifesteal on a blade kill, hard-capped
+            // at the vitae ceiling (the base kill-transfer heart above is uncapped v1 law).
+            if (killer.getMainHandItem().is(EclipseItems.UMBRAL_BLADE.get())
+                    && LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
+                LivesApi.add(killer, +1);
+                EclipseMod.LOGGER.info("{}'s umbral blade drank a heart from {} ({} hearts now)",
+                        killer.getScoreboardName(), victim.getScoreboardName(), LivesApi.get(killer));
+            }
         }
         int previousHearts = LivesApi.get(victim);
         int remainingHearts = LivesApi.add(victim, -1);
@@ -110,6 +122,9 @@ public final class LifecycleEvents {
         level.setBlockAndUpdate(gravePos, EclipseBlocks.GRAVE.get().defaultBlockState());
         if (level.getBlockEntity(gravePos) instanceof GraveBlockEntity grave) {
             grave.initialize(victim.getUUID(), level.getGameTime(), stacks);
+            // W13: track the grave for the Grave Dowser; GraveBlock#onRemove prunes it.
+            EclipseWorldState.get(level.getServer())
+                    .addGravePosition(victim.getUUID(), GlobalPos.of(level.dimension(), gravePos));
             event.setCanceled(true);
         } else {
             // Should never happen; keep vanilla drops rather than voiding items.

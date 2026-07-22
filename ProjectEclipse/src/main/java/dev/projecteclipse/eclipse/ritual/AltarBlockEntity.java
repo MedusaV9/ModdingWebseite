@@ -93,6 +93,13 @@ public class AltarBlockEntity extends BlockEntity {
             }
         }
         if (match == null) {
+            // W13: umbral shards are shop currency, not (usually) a milestone cost — hint
+            // at the sneak-deposit bank instead of barking "wrong item".
+            if (stack.is(EclipseItems.UMBRAL_SHARD.get())) {
+                actionBar(player, Component.translatable("shop.eclipse.deposit_hint"));
+                player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
+                return;
+            }
             actionBar(player, Component.translatable("ritual.eclipse.altar.wrong_item"));
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
             return;

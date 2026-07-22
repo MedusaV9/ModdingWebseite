@@ -4,13 +4,20 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.artifact.ArmArtifactItem;
+import dev.projecteclipse.eclipse.economy.GraveDowserItem;
+import dev.projecteclipse.eclipse.economy.UmbralShardItem;
+import dev.projecteclipse.eclipse.economy.UmbralTier;
+import dev.projecteclipse.eclipse.economy.VitaeShardItem;
+import dev.projecteclipse.eclipse.economy.WatcherCompassItem;
 import dev.projecteclipse.eclipse.ritual.HeraldsLureItem;
 import dev.projecteclipse.eclipse.ritual.ReviveSigilItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.PickaxeItem;
 import net.minecraft.world.item.Rarity;
+import net.minecraft.world.item.SwordItem;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -30,10 +37,38 @@ public final class EclipseItems {
 
     /**
      * Night-mob drop (The Other, Umbral Stalker). Crafting currency for boss summon items
-     * and W13 economy recipes.
+     * AND the altar shard shop's currency (W13): sneak-right-click the altar to bank a
+     * stack ({@code economy.UmbralShardItem#useOn} → {@code economy.ShardEconomy}).
      */
-    public static final Supplier<Item> UMBRAL_SHARD = ITEMS.register("umbral_shard",
-            () -> new Item(new Item.Properties()));
+    public static final Supplier<UmbralShardItem> UMBRAL_SHARD = ITEMS.register("umbral_shard",
+            () -> new UmbralShardItem(new Item.Properties()));
+
+    // --- W13 shard-shop rewards (spec §4; purchased at the altar via economy.ShardEconomy) ---
+
+    /** 8 shards: needle follows the nearest OTHER player (updated every 40t); never says who. */
+    public static final Supplier<WatcherCompassItem> COMPASS_OF_WATCHER = ITEMS.register("compass_of_watcher",
+            () -> new WatcherCompassItem(new Item.Properties().stacksTo(1)));
+
+    /** 4 shards: needle follows the holder's nearest own grave (EclipseWorldState.gravePositions). */
+    public static final Supplier<GraveDowserItem> GRAVE_DOWSER = ITEMS.register("grave_dowser",
+            () -> new GraveDowserItem(new Item.Properties().stacksTo(1)));
+
+    /** 12 shards: 32t-use consumable, +1 permanent heart capped at HeartsService.MAX_HEARTS. */
+    public static final Supplier<VitaeShardItem> VITAE_SHARD = ITEMS.register("vitae_shard",
+            () -> new VitaeShardItem(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.RARE)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /** 12 shards: diamond-class pick, +50% break speed under open night sky; unrepairable. */
+    public static final Supplier<PickaxeItem> UMBRAL_PICK = ITEMS.register("umbral_pick",
+            () -> new PickaxeItem(UmbralTier.INSTANCE, new Item.Properties()
+                    .attributes(PickaxeItem.createAttributes(UmbralTier.INSTANCE, 1.0F, -2.8F))));
+
+    /** 16 shards: diamond-class blade, +1 heart lifesteal on player kill (lives.LifecycleEvents); unrepairable. */
+    public static final Supplier<SwordItem> UMBRAL_BLADE = ITEMS.register("umbral_blade",
+            () -> new SwordItem(UmbralTier.INSTANCE, new Item.Properties()
+                    .attributes(SwordItem.createAttributes(UmbralTier.INSTANCE, 3, -2.4F))));
 
     /** Consumed at the altar to start the revive ritual for a banned player. */
     public static final Supplier<ReviveSigilItem> REVIVE_SIGIL = ITEMS.register("revive_sigil",

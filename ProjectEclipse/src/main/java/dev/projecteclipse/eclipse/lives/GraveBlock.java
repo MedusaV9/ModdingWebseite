@@ -2,8 +2,11 @@ package dev.projecteclipse.eclipse.lives;
 
 import com.mojang.serialization.MapCodec;
 
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
@@ -77,6 +80,12 @@ public class GraveBlock extends BaseEntityBlock {
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof GraveBlockEntity grave) {
             for (ItemStack stack : grave.removeAllItems()) {
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
+            }
+            // W13: every removal path (looted, scattered, mined, exploded) unregisters the
+            // grave from the Grave Dowser index.
+            if (level instanceof ServerLevel serverLevel && grave.getOwnerUuid() != null) {
+                EclipseWorldState.get(serverLevel.getServer())
+                        .removeGravePosition(grave.getOwnerUuid(), GlobalPos.of(serverLevel.dimension(), pos));
             }
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
