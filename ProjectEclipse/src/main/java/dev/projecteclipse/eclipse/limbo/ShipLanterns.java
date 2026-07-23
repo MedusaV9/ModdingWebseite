@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
+import dev.projecteclipse.eclipse.limbo.door.ShipVersionData;
 import dev.projecteclipse.eclipse.lives.BanService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -53,8 +54,20 @@ public final class ShipLanterns {
     /** Maximum distance the channeling ghost may drift from the lantern. */
     public static final double CHANNEL_RANGE = 3.0D;
 
-    /** Deck-plan lantern spots (x, z): two per rail, clear of masts, sails and benches. */
-    private static final int[][] LANTERN_XZ = {{-10, -3}, {-10, 3}, {10, -3}, {10, 3}};
+    /**
+     * v2 deck-plan lantern spots {x, z, yOffset above deck+1} (plans_v3 §2.5: "2 on
+     * masts, 1 forecastle, 1 quarterdeck"): the two mast-base lanterns flank the king
+     * plank on opposite rails, the forecastle lantern sits centered on the raised
+     * foredeck (+2 planks → campfire at deck+3), the quarterdeck lantern on the
+     * starboard sterncastle wing floor (+3 planks → campfire at deck+4). All four keep
+     * clear of benches, sails, braziers and the door alley, and every spot stays a
+     * P3-sink-proof island (campfires are solid, placed dry; {@link #ensurePlaced}
+     * re-dries them after floods).
+     */
+    private static final int[][] LANTERN_SPOTS = {{-8, -1, 0}, {8, 1, 0}, {16, 0, 2}, {-14, 3, 3}};
+
+    /** v1 spots (two per rail), still served while a deferred migration keeps the old ship. */
+    private static final int[][] LEGACY_LANTERN_SPOTS = {{-10, -3, 0}, {-10, 3, 0}, {10, -3, 0}, {10, 3, 0}};
 
     /** Active re-light channels by ghost UUID. Server-thread only. */
     private static final Map<UUID, Channel> CHANNELS = new HashMap<>();
@@ -63,12 +76,20 @@ public final class ShipLanterns {
 
     private ShipLanterns() {}
 
-    /** The four lantern block positions, derived from the ship's waterline anchor. */
+    /**
+     * The four lantern block positions, derived from the ship's waterline anchor.
+     * Version-aware: while a v1 ship persists (rebuild deferred because a Ferryman is
+     * alive — {@code GhostShipBuilder.buildIfNeeded}), the v1 spots stay authoritative
+     * so a persisted mid-fight lantern phase keeps its counters; v2 ships use the §2.5
+     * spots.
+     */
     public static List<BlockPos> positions(ServerLevel limbo) {
         int deckY = GhostShipBuilder.waterlineY(limbo) + 3;
-        List<BlockPos> positions = new ArrayList<>(LANTERN_XZ.length);
-        for (int[] xz : LANTERN_XZ) {
-            positions.add(new BlockPos(xz[0], deckY + 1, xz[1]));
+        int[][] spots = ShipVersionData.get(limbo).version() >= ShipVersionData.VERSION_V2
+                ? LANTERN_SPOTS : LEGACY_LANTERN_SPOTS;
+        List<BlockPos> positions = new ArrayList<>(spots.length);
+        for (int[] spot : spots) {
+            positions.add(new BlockPos(spot[0], deckY + 1 + spot[2], spot[1]));
         }
         return positions;
     }

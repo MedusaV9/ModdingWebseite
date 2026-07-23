@@ -155,16 +155,6 @@ public final class VeilPostController {
         }
     }
 
-    /**
-     * @deprecated moved to {@link EclipseFxState#setBorderProximity(float)} (P2 §3.1); this
-     *             delegating shim keeps pre-P2 callers compiling and will be dropped once
-     *             W4's border rewrite lands.
-     */
-    @Deprecated
-    public static void setBorderProximity(float proximity) {
-        EclipseFxState.setBorderProximity(proximity);
-    }
-
     // ------------------------------------------------------------------ built-in rows
 
     private static void registerBuiltins() {

@@ -11,10 +11,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mojang.blaze3d.systems.RenderSystem;
+
+import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.S2CCutscenePayload.Phase;
+import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
+import dev.projecteclipse.eclipse.veilfx.VeilPostController;
+import foundry.veil.api.client.render.post.PostPipeline;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -29,14 +33,28 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Client visuals + audio muffling for the start-event cutscene, driven by
- * {@link ClientStateCache#cutscenePhase} (written by the {@code S2CCutscenePayload} handler):
+ * WaveOverlay v2 (P2 R8, W5) — client visuals + audio muffling for the start-event cutscene,
+ * driven by {@link ClientStateCache#cutscenePhase} (written by the {@code S2CCutscenePayload}
+ * handler). The v1 flat tiled wave texture is gone; the submerge now reads as expanding
+ * <b>refractive shockwave rings</b> through the {@code eclipse:shockwave} Veil post pipeline
+ * (registered here, FEATURE priority, frozen uniforms {@code ShockCenter/ShockProgress/
+ * ShockStrength} — §3.3):
  * <ul>
- *   <li>{@code TILT} — subtle pulsing screen darkening.</li>
- *   <li>{@code SUBMERGE}/{@code WAVES} — scrolling, pulsing tiled wave texture at rising alpha;
- *       master/music/records/ambient volumes are temporarily scaled down (originals stored).</li>
- *   <li>{@code EMERGE} — waves fade out over ~{@value #FADE_TICKS} ticks, volumes restored.</li>
+ *   <li>{@code TILT} — subtle pulsing screen darkening (kept from v1).</li>
+ *   <li>{@code SUBMERGE}/{@code WAVES} — repeating refraction rings from screen center at
+ *       rising strength + a slim underwater tint fill (40% of the v1 wash alpha);
+ *       master/music/records/ambient volumes are temporarily scaled down (originals
+ *       stored).</li>
+ *   <li>{@code EMERGE} — rings and tint fade out over ~{@value #FADE_TICKS} ticks, volumes
+ *       restored.</li>
  * </ul>
+ *
+ * <p>The same pipeline renders <b>world-anchored</b> shockwaves: whenever
+ * {@link EclipseFxState#shockwaveParams} is live (fed by {@code eclipse:fx/shockwave} events —
+ * intro v3's storm burst, expansion slams), those params win over the submerge rings, with
+ * {@code ShockCenter} at the projected world origin. Under an Iris shaderpack or with
+ * {@code veilPostFx} off the pipeline is hard-gated away by {@link VeilPostController} and
+ * only the slim tint + audio muffle remain (§7 fallback).</p>
  *
  * <p>Relog-robust: state auto-clears (and volumes restore) {@value #AUTO_CLEAR_TICKS} ticks after
  * the last phase change, or immediately when the level goes away (disconnect) or the player logs
@@ -52,15 +70,22 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class WaveOverlay {
     static final ResourceLocation LAYER_ID = ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "wave_overlay");
-    private static final ResourceLocation WAVE_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/gui/wave_overlay.png");
-    private static final int TEXTURE_SIZE = 256;
+    /** {@code eclipse:shockwave} post pipeline (P2 §3.3, owned by W5). */
+    private static final ResourceLocation SHOCKWAVE_POST =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "shockwave");
 
     /** Ticks for the waves to ramp in (SUBMERGE) and fade out (EMERGE). */
     private static final int RAMP_TICKS = 40;
     private static final int FADE_TICKS = 40;
     /** Auto-clear after ~30s without a new phase packet (relog / lost EMERGE safety net). */
     private static final int AUTO_CLEAR_TICKS = 600;
+
+    /** One submerge ring cycle (rings re-fire from the center for the whole phase). */
+    private static final float WAVE_CYCLE_TICKS = 45.0F;
+    /** Peak ShockStrength of the submerge rings (world shockwave events carry their own). */
+    private static final float WAVE_BASE_STRENGTH = 0.55F;
+    /** Underwater tint at 40% of the v1 wash alpha (0.35) — the rings carry the effect now. */
+    private static final float TINT_ALPHA = 0.14F;
 
     private static final float MASTER_MUFFLE = 0.35F;
     private static final float SECONDARY_MUFFLE = 0.5F;
@@ -75,12 +100,22 @@ public final class WaveOverlay {
     private static Phase activePhase;
     /** Ticks spent in {@link #activePhase}. */
     private static int phaseTicks;
+    /** Ring clock — keeps counting across SUBMERGE→WAVES so the ring rhythm never stutters. */
+    private static int waveTicks;
     /** Ticks since the last observed phase change, for the auto-clear safety net. */
     private static int ticksSinceLastChange;
     /** Original sound-category volumes while muffled, or {@code null} when not muffled. */
     private static Map<SoundSource, Double> savedVolumes;
     /** One-shot flag: the crash-recovery marker check runs on the very first client tick. */
     private static boolean recoveryChecked;
+
+    static {
+        // Class-loads on the client during mod construction (@EventBusSubscriber scan), well
+        // before the first frame — the row is predicate-driven from then on.
+        VeilPostController.register(new VeilPostController.PipelineSpec(
+                SHOCKWAVE_POST, VeilPostController.PipelinePriority.FEATURE,
+                WaveOverlay::wantShockwave, WaveOverlay::feedShockwave));
+    }
 
     private WaveOverlay() {}
 
@@ -116,6 +151,9 @@ public final class WaveOverlay {
 
         phaseTicks++;
         ticksSinceLastChange++;
+        if (activePhase == Phase.SUBMERGE || activePhase == Phase.WAVES || activePhase == Phase.EMERGE) {
+            waveTicks++;
+        }
         if (ticksSinceLastChange > AUTO_CLEAR_TICKS || (activePhase == Phase.EMERGE && phaseTicks > FADE_TICKS)) {
             clear();
         }
@@ -134,6 +172,7 @@ public final class WaveOverlay {
         restoreAudio(Minecraft.getInstance());
         activePhase = null;
         phaseTicks = 0;
+        waveTicks = 0;
         ticksSinceLastChange = 0;
         ClientStateCache.cutscenePhase = null;
     }
@@ -225,6 +264,57 @@ public final class WaveOverlay {
         deleteRestoreMarker();
     }
 
+    // --- eclipse:shockwave pipeline feed (P2 R8) ---
+
+    /**
+     * Pipeline activation: any live world shockwave ({@code eclipse:fx/shockwave} →
+     * {@link EclipseFxState#startShockwave}) or the submerge/emerge ring phases.
+     */
+    private static boolean wantShockwave() {
+        float partialTick = partialTick();
+        return EclipseFxState.shockwaveParams(partialTick) != null || waveStrength(partialTick) > 0.01F;
+    }
+
+    /**
+     * Frozen uniforms (§3.3): {@code ShockCenter (vec2 NDC), ShockProgress, ShockStrength}.
+     * A live world shockwave wins (its origin re-projected every frame by
+     * {@code EclipseFxState}/{@code SunTracker}); otherwise the submerge rings pulse from the
+     * screen center for fullscreen immersion.
+     */
+    private static void feedShockwave(PostPipeline pipeline) {
+        float partialTick = partialTick();
+        Vector4f world = EclipseFxState.shockwaveParams(partialTick);
+        if (world != null) {
+            pipeline.getUniform("ShockCenter").setVector(world.x(), world.y());
+            pipeline.getUniform("ShockProgress").setFloat(world.z());
+            pipeline.getUniform("ShockStrength").setFloat(world.w());
+            return;
+        }
+        pipeline.getUniform("ShockCenter").setVector(0.0F, 0.0F);
+        pipeline.getUniform("ShockProgress").setFloat(((waveTicks + partialTick) % WAVE_CYCLE_TICKS) / WAVE_CYCLE_TICKS);
+        pipeline.getUniform("ShockStrength").setFloat(waveStrength(partialTick));
+    }
+
+    /** Submerge-ring strength envelope: ramp in (SUBMERGE/WAVES), hold, fade out (EMERGE). */
+    private static float waveStrength(float partialTick) {
+        Phase phase = activePhase;
+        if (phase == null || Minecraft.getInstance().level == null) {
+            return 0.0F;
+        }
+        float time = phaseTicks + partialTick;
+        return switch (phase) {
+            case SUBMERGE, WAVES -> Mth.clamp(time / RAMP_TICKS, 0.0F, 1.0F) * WAVE_BASE_STRENGTH;
+            case EMERGE -> Mth.clamp(1.0F - time / FADE_TICKS, 0.0F, 1.0F) * WAVE_BASE_STRENGTH;
+            default -> 0.0F;
+        };
+    }
+
+    private static float partialTick() {
+        return Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+    }
+
+    // --- GUI layer (slim tint only — the ring visual lives in the post pipeline) ---
+
     /** {@code LayeredDraw.Layer} body, wired above the HUD via {@link EclipseGuiLayers}. */
     static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Phase phase = activePhase;
@@ -243,34 +333,20 @@ public final class WaveOverlay {
             }
             case SUBMERGE, WAVES -> {
                 float ramp = Mth.clamp(time / RAMP_TICKS, 0.0F, 1.0F);
-                drawWaves(guiGraphics, width, height, time, ramp);
+                drawUnderwaterTint(guiGraphics, width, height, ramp);
             }
             case EMERGE -> {
                 float fade = Mth.clamp(1.0F - time / FADE_TICKS, 0.0F, 1.0F);
                 if (fade > 0.0F) {
-                    drawWaves(guiGraphics, width, height, time, fade);
+                    drawUnderwaterTint(guiGraphics, width, height, fade);
                 }
             }
         }
     }
 
-    /** Scrolling, sine-pulsing tiled wave texture over a dark blue "underwater" wash. */
-    private static void drawWaves(GuiGraphics guiGraphics, int width, int height, float time, float strength) {
-        float pulse = 0.72F + 0.12F * Mth.sin(time * 0.13F);
-        float alpha = strength * pulse;
-        guiGraphics.fill(0, 0, width, height, argb(strength * 0.35F, 0.02F, 0.08F, 0.16F));
-
-        int scrollX = Mth.floor(time * 1.7F) % TEXTURE_SIZE;
-        int scrollY = Mth.floor(time * 0.9F) % TEXTURE_SIZE;
-        RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        for (int x = -scrollX; x < width; x += TEXTURE_SIZE) {
-            for (int y = -scrollY; y < height; y += TEXTURE_SIZE) {
-                guiGraphics.blit(WAVE_TEXTURE, x, y, 0.0F, 0.0F, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE);
-            }
-        }
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        RenderSystem.disableBlend();
+    /** Slim dark-blue "underwater" wash (v1 kept the wash — at 40% alpha — and lost the tiles). */
+    private static void drawUnderwaterTint(GuiGraphics guiGraphics, int width, int height, float strength) {
+        guiGraphics.fill(0, 0, width, height, argb(strength * TINT_ALPHA, 0.02F, 0.08F, 0.16F));
     }
 
     private static int argb(float alpha, float red, float green, float blue) {

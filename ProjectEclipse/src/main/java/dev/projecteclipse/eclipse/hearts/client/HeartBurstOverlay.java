@@ -1,6 +1,8 @@
 package dev.projecteclipse.eclipse.hearts.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
@@ -20,8 +22,16 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Twelve-tick shatter animation rendered over the exact vanilla heart that was
- * lost. This layer augments, and never replaces, the vanilla health layer.
+ * Shatter animation rendered over the exact vanilla heart that was lost. This layer
+ * augments, and never replaces, the vanilla health layer.
+ *
+ * <p>v2 (P2 R18(a), W10): the flash/crack intro is unchanged, but the shatter now throws
+ * <b>14 fragments in two populations</b> — {@value #SHARD_COUNT} rotating glass shards on
+ * gravity+drag arcs lasting {@value #SHARD_FLIGHT_TICKS} ticks (600&nbsp;ms), plus
+ * {@value #SPARK_COUNT} short-lived spark pops that burst radially and die first. Shards
+ * reuse the burst-sheet fragment sprites (no new textures); sparks are plain quads so the
+ * sheet needs no new regions. All motion is a pure function of the animation time — no
+ * per-frame allocations, no per-shard state.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class HeartBurstOverlay {
@@ -33,13 +43,55 @@ public final class HeartBurstOverlay {
     private static final int FRAME_SIZE = 36;
     private static final int SHEET_WIDTH = FRAME_SIZE * 6;
     private static final int DRAW_SIZE = 9;
-    private static final int ANIMATION_TICKS = 12;
+
+    /** Flash + crack intro length (unchanged from v1). */
+    private static final int SHATTER_START_TICKS = 5;
+    /** R18(a): shard arcs play out over 600 ms = 12 ticks. */
+    private static final int SHARD_FLIGHT_TICKS = 12;
+    private static final int ANIMATION_TICKS = SHATTER_START_TICKS + SHARD_FLIGHT_TICKS;
+
     private static final RandomSource JITTER_RANDOM = RandomSource.create();
 
-    private static final float[][] SHARD_VELOCITIES = {
-            {-0.80F, -0.72F}, {-0.42F, -1.02F}, {0.18F, -1.12F},
-            {0.72F, -0.78F}, {-0.58F, -0.22F}, {0.62F, -0.18F}
+    private static final int SHARD_COUNT = 8;
+    private static final int SPARK_COUNT = 6;
+    /** Screen-px gravity per tick² pulling shard arcs back down. */
+    private static final float SHARD_GRAVITY = 0.10F;
+    /** Per-tick drag factor slope; clamped so shards never fully stall. */
+    private static final float SHARD_DRAG_PER_TICK = 0.028F;
+    private static final float SHARD_DRAG_FLOOR = 0.55F;
+
+    /**
+     * Glass shards, one row each: {vx px/t, vy px/t, spin °/t, start °, draw px}.
+     * Velocities fan upward-biased so gravity turns every path into a visible arc.
+     */
+    private static final float[][] SHARDS = {
+            {-1.05F, -0.55F, -14.0F,  35.0F, 3.0F},
+            {-0.65F, -1.00F,  11.0F, 190.0F, 2.0F},
+            {-0.30F, -1.25F,  -9.0F,  80.0F, 3.0F},
+            { 0.10F, -1.35F,  13.0F, 260.0F, 2.0F},
+            { 0.55F, -1.15F, -12.0F, 140.0F, 3.0F},
+            { 0.95F, -0.70F,   8.0F, 300.0F, 2.0F},
+            {-0.45F, -0.28F,  15.0F,  20.0F, 2.0F},
+            { 0.50F, -0.30F, -10.0F, 220.0F, 2.0F}
     };
+
+    /** Spark pops, one row each: {angle °, pop radius px, lifetime ticks}. */
+    private static final float[][] SPARKS = {
+            { 15.0F,  9.0F, 7.0F},
+            { 75.0F, 11.0F, 8.0F},
+            {135.0F,  8.0F, 6.0F},
+            {200.0F, 10.0F, 8.0F},
+            {275.0F,  9.0F, 7.0F},
+            {330.0F, 12.0F, 9.0F}
+    };
+
+    private static final int SPARK_WHITE_RED = 0xFF;
+    private static final int SPARK_WHITE_GREEN = 0xFF;
+    private static final int SPARK_WHITE_BLUE = 0xFF;
+    /** Violet tail, matching the heart_burst emitter gradient (#C77DFF). */
+    private static final int SPARK_VIOLET_RED = 0xC7;
+    private static final int SPARK_VIOLET_GREEN = 0x7D;
+    private static final int SPARK_VIOLET_BLUE = 0xFF;
 
     private static int heartIndex = -1;
     private static int animationTick = -1;
@@ -110,14 +162,18 @@ public final class HeartBurstOverlay {
         if (time < 2.0F) {
             drawFrame(guiGraphics, position.x(), position.y(), 0, 1.0F);
             drawRedVignette(guiGraphics, 0.30F * (1.0F - time / 2.0F));
-        } else if (time < 5.0F) {
+        } else if (time < SHATTER_START_TICKS) {
             int crackFrame = 1 + Math.min(2, Mth.floor(time - 2.0F));
             drawFrame(guiGraphics, position.x(), position.y(), crackFrame, 1.0F);
         } else {
-            float shatterTime = time - 5.0F;
-            float alpha = Mth.clamp(1.0F - shatterTime / 7.0F, 0.0F, 1.0F);
-            drawFrame(guiGraphics, position.x(), position.y(), shatterTime < 2.0F ? 4 : 5, alpha * 0.55F);
-            drawShards(guiGraphics, position.x(), position.y(), shatterTime, alpha);
+            float shatterTime = time - SHATTER_START_TICKS;
+            float burstAlpha = Mth.clamp(1.0F - shatterTime / SHARD_FLIGHT_TICKS, 0.0F, 1.0F);
+            drawFrame(guiGraphics, position.x(), position.y(),
+                    shatterTime < 2.0F ? 4 : 5, burstAlpha * 0.55F);
+            float centerX = position.x() + 4.5F;
+            float centerY = position.y() + 4.5F;
+            drawShards(guiGraphics, centerX, centerY, shatterTime, burstAlpha);
+            drawSparks(guiGraphics, centerX, centerY, shatterTime);
         }
     }
 
@@ -158,20 +214,65 @@ public final class HeartBurstOverlay {
         RenderSystem.disableBlend();
     }
 
-    private static void drawShards(GuiGraphics guiGraphics, int x, int y, float time, float alpha) {
+    /**
+     * Population 1: rotating glass shards on gravity+drag arcs. Position, spin and fade are
+     * pure functions of {@code time}, so the flight is deterministic and allocation-free.
+     * Sprites come from the sheet's existing 3×2 fragment grid at (180,12).
+     */
+    private static void drawShards(GuiGraphics guiGraphics, float centerX, float centerY,
+            float time, float alpha) {
         RenderSystem.enableBlend();
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        for (int i = 0; i < SHARD_VELOCITIES.length; i++) {
-            float vx = SHARD_VELOCITIES[i][0];
-            float vy = SHARD_VELOCITIES[i][1];
-            int shardX = Mth.floor(x + 4.0F + vx * time);
-            int shardY = Mth.floor(y + 4.0F + vy * time + 0.12F * time * time);
-            int sourceX = 180 + (i % 3) * 6;
-            int sourceY = 12 + (i / 3) * 6;
-            guiGraphics.blit(BURST_SHEET, shardX, shardY, 2, 2,
+        PoseStack pose = guiGraphics.pose();
+        float drag = Math.max(SHARD_DRAG_FLOOR, 1.0F - SHARD_DRAG_PER_TICK * time);
+        for (int i = 0; i < SHARD_COUNT; i++) {
+            float[] shard = SHARDS[i];
+            float shardX = centerX + shard[0] * time * drag;
+            float shardY = centerY + shard[1] * time * drag + SHARD_GRAVITY * time * time;
+            float angle = shard[3] + shard[2] * time;
+            int size = (int) shard[4];
+            int half = size / 2;
+            int cell = i % 6;
+            int sourceX = 180 + (cell % 3) * 6;
+            int sourceY = 12 + (cell / 3) * 6;
+
+            pose.pushPose();
+            pose.translate(shardX, shardY, 0.0F);
+            pose.mulPose(Axis.ZP.rotationDegrees(angle));
+            guiGraphics.blit(BURST_SHEET, -half, -half, size, size,
                     (float) sourceX, (float) sourceY, 6, 6, SHEET_WIDTH, FRAME_SIZE);
+            pose.popPose();
         }
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableBlend();
+    }
+
+    /**
+     * Population 2: spark pops — plain quads that shoot out on an ease-out radius, flash
+     * white, cool to violet and die within their own short lifetimes (all shorter than the
+     * shard flight, so sparks read as the "pop" and shards as the debris). Drawn with
+     * {@code fill} + ARGB alpha, deliberately outside any {@code setColor} tint.
+     */
+    private static void drawSparks(GuiGraphics guiGraphics, float centerX, float centerY, float time) {
+        RenderSystem.enableBlend();
+        for (int i = 0; i < SPARK_COUNT; i++) {
+            float[] spark = SPARKS[i];
+            float progress = time / spark[2];
+            if (progress >= 1.0F) {
+                continue;
+            }
+            float eased = 1.0F - (1.0F - progress) * (1.0F - progress);
+            float radians = spark[0] * Mth.DEG_TO_RAD;
+            int sparkX = Mth.floor(centerX + Mth.cos(radians) * spark[1] * eased);
+            int sparkY = Mth.floor(centerY + Mth.sin(radians) * spark[1] * eased);
+
+            boolean hot = progress < 0.35F;
+            int size = progress < 0.5F ? 2 : 1;
+            int color = hot
+                    ? argb(1.0F - progress * 0.5F, SPARK_WHITE_RED, SPARK_WHITE_GREEN, SPARK_WHITE_BLUE)
+                    : argb(1.0F - progress, SPARK_VIOLET_RED, SPARK_VIOLET_GREEN, SPARK_VIOLET_BLUE);
+            guiGraphics.fill(sparkX, sparkY, sparkX + size, sparkY + size, color);
+        }
         RenderSystem.disableBlend();
     }
 

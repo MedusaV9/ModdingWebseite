@@ -38,7 +38,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>Presentation</b>: while the fusion sweep runs, every {@value #RUMBLE_INTERVAL_TICKS}
  * ticks each player IN THE OVERWORLD gets a low-pitched thunder rumble and one
  * {@link S2CCutscenePayload} {@code SHAKE} pulse (clients treat every received SHAKE as a
- * ~2 s camera-shake impulse — W6 owns the visual).</p>
+ * ~2 s camera-shake impulse — W6 owns the visual). This sequence OWNS the fusion rumble:
+ * {@link RingGrowthService} suppresses its own {@code growth.shakeEveryRings} shake pulses
+ * for fusion-ordered sweeps so the two never stack. The sweep's per-pulse
+ * {@code S2CGrowthWavePayload} broadcasts (W1.5, design D11) still fire during fusion —
+ * with {@code waveR} carrying the distance-to-nearest-disc-edge the bridges have grown to
+ * (this ordering's band, NOT a radius) and the full {@code −π..π} angle span; P2's
+ * client-side rise/dissolve visual keys off that.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FusionSequence {

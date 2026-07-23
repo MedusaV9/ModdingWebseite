@@ -1,0 +1,17 @@
+{
+  "_comment": "W1.6 structure system v2. No UI of this package prints text yet — these are the reserved display names of the new sites for P2's rift HUD/toast (S2CStructureRiftPayload.structureId -> 'eclipse.structure.' + path) and P5 telemetry. Merge into src lang JSONs on orchestrator pass.",
+  "en_us": {
+    "eclipse.structure.collapsed_vault": "Collapsed Vault",
+    "eclipse.structure.umbral_warrens": "Umbral Warrens",
+    "eclipse.structure.stronghold_vault": "Collapsed Keep",
+    "eclipse.structure.monster_room": "Forgotten Cellar",
+    "eclipse.structure.mineshaft": "Abandoned Mineshaft"
+  },
+  "de_de": {
+    "eclipse.structure.collapsed_vault": "Eingestürztes Gewölbe",
+    "eclipse.structure.umbral_warrens": "Schattenbau",
+    "eclipse.structure.stronghold_vault": "Eingestürzte Festung",
+    "eclipse.structure.monster_room": "Vergessener Keller",
+    "eclipse.structure.mineshaft": "Verlassene Mine"
+  }
+}

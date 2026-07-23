@@ -202,7 +202,7 @@ public final class DiscMapData {
         return List.copyOf(rivers);
     }
 
-    /** The loaded map data (lazily reads {@code config/eclipse/disc_map.json} on first use). */
+    /** The loaded map data (frozen per-save when {@link FrozenParams} is active, else global config). */
     public static DiscMapData get() {
         DiscMapData loaded = instance;
         if (loaded == null) {
@@ -215,6 +215,41 @@ public final class DiscMapData {
             }
         }
         return loaded;
+    }
+
+    /** Installs a frozen per-save snapshot (D9). Called from {@link FrozenParams}. */
+    public static void install(DiscMapData data) {
+        instance = data;
+    }
+
+    /** Clears the JVM-global singleton on server stop so the next save reloads cleanly. */
+    public static synchronized void clearInstance() {
+        instance = null;
+    }
+
+    /** Loads global {@code disc_map.json} and returns the result without touching {@link #instance}. */
+    public static DiscMapData reloadForSnapshot() {
+        return load();
+    }
+
+    /** Serialises both profiles for embedding in {@code worldgen.json}. */
+    public static JsonObject toJsonRoot(DiscMapData data) {
+        JsonObject root = new JsonObject();
+        root.add("overworld", profileToJson(data.overworld));
+        root.add("nether", profileToJson(data.nether));
+        return root;
+    }
+
+    /**
+     * Parses a frozen {@code discMap} section. Missing keys fall back to built-in defaults
+     * (or {@link DiscMapDefaults} when W1.4 lands — until then, {@link #defaultOverworld()}).
+     */
+    public static DiscMapData fromJsonRoot(JsonObject root) {
+        MapProfile overworld = profileFromJson(root.getAsJsonObject("overworld"), defaultOverworld());
+        MapProfile nether = profileFromJson(root.getAsJsonObject("nether"), defaultNether());
+        Path dir = FMLPaths.CONFIGDIR.get().resolve("eclipse");
+        int[] heightmap = loadHeightmapOverride(dir.resolve("disc_heightmap.png"));
+        return new DiscMapData(overworld, nether, heightmap);
     }
 
     /** Re-reads {@code disc_map.json} (and the optional heightmap PNG) from disk. */
@@ -261,7 +296,8 @@ public final class DiscMapData {
         if (r < map.centerRadius()) {
             return map.centerBiome();
         }
-        return sectorBiomeAt(map, wobbledAngleDeg(map, x, z, r));
+        return DiscMapDefaults.ringBiome(profile,
+                sectorBiomeAt(map, wobbledAngleDeg(map, x, z, r)), x, z);
     }
 
     /** Wedge lookup for an already-wobbled angle; falls back to the center biome in gaps. */
@@ -454,61 +490,11 @@ public final class DiscMapData {
     }
 
     private static MapProfile defaultOverworld() {
-        List<Sector> sectors = List.of(
-                new Sector("minecraft:plains", 337.5D, 22.5D),
-                new Sector("minecraft:desert", 22.5D, 67.5D),
-                new Sector("minecraft:forest", 67.5D, 112.5D),
-                new Sector("minecraft:jungle", 112.5D, 157.5D),
-                new Sector("minecraft:savanna", 157.5D, 202.5D),
-                new Sector("minecraft:swamp", 202.5D, 247.5D),
-                new Sector("minecraft:snowy_slopes", 247.5D, 292.5D),
-                new Sector("minecraft:dark_forest", 292.5D, 337.5D));
-        // Peak in the snowy N sector, between the N and NE player discs, fully inside the
-        // stage-1 fused disc (r ≈ 140 + radius 75 < 225).
-        Mountain mountain = new Mountain(54, -129, 280, 75,
-                "minecraft:snowy_slopes", "minecraft:grove", 96, 20, 14);
-        List<Landmark> landmarks = List.of(
-                new Landmark("eclipse:desert_temple", 184, 184, 16, 2),
-                new Landmark("eclipse:jungle_temple", -233, 233, 16, 3),
-                new Landmark("eclipse:village_plains", 390, 0, 40, 4),
-                new Landmark("eclipse:stronghold_emergence", 54, -129, 24, 5));
-        // Painted rivers (polyline centerlines; the terrain function carves a ~8-wide
-        // channel and spills a static waterfall curtain where one crosses the disc rim).
-        // Endpoints deliberately overshoot the final r=480 rim so the notch always cuts
-        // the taper. All lines keep >18 blocks clear of the spawn pad, sanctum, sundial,
-        // whisper wells, watcher-statue disc centers and every landmark site.
-        List<List<Point>> rivers = List.of(
-                // Meltwater Run: mountain flank → meadow cap → east rim through the plains.
-                List.of(new Point(30, -80), new Point(8, -34), new Point(36, 8),
-                        new Point(110, 26), new Point(210, 48), new Point(330, 68),
-                        new Point(500, 95)),
-                // Mire Run: through the swamp wedge (NW) out over the northwest rim.
-                List.of(new Point(-98, -52), new Point(-150, -88), new Point(-225, -118),
-                        new Point(-310, -185), new Point(-425, -295)),
-                // Fern Cut: forest wedge (S) from mid-disc out over the south rim.
-                List.of(new Point(38, 115), new Point(62, 215), new Point(65, 320),
-                        new Point(100, 495)));
-        List<Point> wells = List.of(new Point(-60, 30), new Point(88, 40), new Point(-30, -70));
-        return new MapProfile("minecraft:meadow", 40, sectors, mountain, null,
-                landmarks, rivers, wells);
+        return DiscMapDefaults.overworldDefaults();
     }
 
     private static MapProfile defaultNether() {
-        List<Sector> sectors = List.of(
-                new Sector("minecraft:nether_wastes", 0.0D, 72.0D),
-                new Sector("minecraft:soul_sand_valley", 72.0D, 144.0D),
-                new Sector("minecraft:basalt_deltas", 144.0D, 216.0D),
-                new Sector("minecraft:crimson_forest", 216.0D, 288.0D),
-                new Sector("minecraft:warped_forest", 288.0D, 360.0D));
-        // Bridge causeways on the E/W cardinals (0°/180°) so they line up with the
-        // fortress core's cardinal bridge arms (FortressCoreBuilder extends the two
-        // aligned arms out to the moat's inner edge — the old 45°/225° defaults left
-        // the causeways unreachable from the keep).
-        Moat moat = new Moat(50, 4, List.of(0.0D, 180.0D), 6.0D);
-        List<Landmark> landmarks = List.of(
-                new Landmark("eclipse:fortress_core", 0, 0, 40, 1));
-        return new MapProfile("minecraft:nether_wastes", 30, sectors, null, moat,
-                landmarks, List.of(), List.of());
+        return DiscMapDefaults.netherDefaults();
     }
 
     // --- JSON ---

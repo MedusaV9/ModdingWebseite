@@ -38,7 +38,7 @@ public final class OreGateApi {
     /** Annulus band index at {@code pos} on the given disc profile (XZ distance from origin). */
     public static int bandAt(DiscProfile profile, BlockPos pos) {
         double r = Math.hypot(pos.getX(), pos.getZ());
-        return FrozenParams.annulusBand(r);
+        return FrozenParams.annulusBand(profile, r);
     }
 
     private static void collectUnlocked(List<OreConfig.ResolvedOre> ores, int band, List<OreId> out) {

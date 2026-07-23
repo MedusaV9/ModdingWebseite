@@ -24,9 +24,11 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
  * active path allows skipping. The bars deliberately stay up under F1 ({@code hideGui} —
  * they are cinematic framing, not HUD), but the skip-hint text is suppressed. While the active path requests {@code hideHud}, every other
  * GUI layer is cancelled via {@link RenderGuiLayerEvent.Pre} EXCEPT the id whitelist wired
- * by {@code EclipseGuiLayers} — the letterbox itself, W2's heart-burst overlay (a mid-death
- * burst must never be hidden) and the v1 wave overlay (the intro's water wash renders THROUGH
- * the cutscene by design).</p>
+ * by {@code EclipseGuiLayers} — the letterbox itself, the heart-burst overlay (a mid-death
+ * burst must never be hidden), the v1 wave overlay (the intro's water wash renders THROUGH
+ * the cutscene by design), the announcement overlay (the P2 §1.7 invisible-subtitle fix:
+ * suppression used to cancel the very layer delivering cutscene subtitles) and the caption
+ * layer ({@code CaptionRenderer} — cinematic captions are immune by construction).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class LetterboxLayer {
@@ -71,6 +73,15 @@ public final class LetterboxLayer {
         }
         float f = Mth.clamp((System.nanoTime() - toggleNanos) / (float) EASE_NANOS, 0.0F, 1.0F);
         return Mth.lerp(Easing.EASE_OUT_CUBIC.ease(f), fromProgress, target);
+    }
+
+    /**
+     * Current bar height in GUI pixels for a screen of {@code guiHeight} — caption hosting
+     * hook (P2 R12): {@code CaptionRenderer} rests subtitles just above the bottom bar and
+     * follows it while it eases in/out. 0 while no letterbox is deployed.
+     */
+    public static int barPx(int guiHeight) {
+        return Math.round(guiHeight * BAR_FRACTION * progress());
     }
 
     /** {@code LayeredDraw.Layer} body, registered above all by {@code EclipseGuiLayers}. */

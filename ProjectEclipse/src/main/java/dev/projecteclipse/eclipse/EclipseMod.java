@@ -44,6 +44,9 @@ public final class EclipseMod {
         EclipseEntities.register(modEventBus);
         dev.projecteclipse.eclipse.classicblocks.ClassicBlocksModule.register(modEventBus);
         dev.projecteclipse.eclipse.entity.ambient.AmbientEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.registry.PaleGardenBlocks.register(modEventBus);
+        dev.projecteclipse.eclipse.ghosts.GhostEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.limbo.door.DoorRegistry.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

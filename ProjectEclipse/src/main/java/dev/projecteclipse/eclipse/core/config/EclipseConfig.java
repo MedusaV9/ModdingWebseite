@@ -46,7 +46,7 @@ public final class EclipseConfig {
      */
     public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
             int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks, int borderOffset,
-            int borderFxRange) {}
+            int borderFxRange, boolean randomizeMapSeed) {}
 
     /**
      * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
@@ -134,6 +134,11 @@ public final class EclipseConfig {
     /** Soft-border ring offset outside the committed stage radius, in blocks (default 12). */
     public static int borderOffset() {
         return general().borderOffset();
+    }
+
+    /** Whether new saves randomize the Eclipse map seed on first boot (default {@code false}). */
+    public static boolean randomizeMapSeed() {
+        return general().randomizeMapSeed();
     }
 
     /** Default soft-border FX visibility band in blocks (default 8, clamped >= 1). */
@@ -355,7 +360,7 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30, false, "08:00", 2, true, 12, 8);
+        return new General(30, false, "08:00", 2, true, 12, 8, false);
     }
 
     private static JsonElement generalToJson(General general) {
@@ -366,6 +371,7 @@ public final class EclipseConfig {
         obj.addProperty("ringBlocksBudgetMs", general.ringBlocksBudgetMs());
         obj.addProperty("borderOffset", general.borderOffset());
         obj.addProperty("borderFxRange", general.borderFxRange());
+        obj.addProperty("randomizeMapSeed", general.randomizeMapSeed());
         JsonObject cutscenes = new JsonObject();
         cutscenes.addProperty("freezeDuringUnlocks", general.cutscenesFreezeDuringUnlocks());
         obj.add("cutscenes", cutscenes);
@@ -385,9 +391,10 @@ public final class EclipseConfig {
         // Pre-W7 general.json files have no border fields — soft-border defaults apply.
         int borderOffset = obj.has("borderOffset") ? obj.get("borderOffset").getAsInt() : 12;
         int borderFxRange = obj.has("borderFxRange") ? obj.get("borderFxRange").getAsInt() : 8;
+        boolean randomizeMapSeed = obj.has("randomizeMapSeed") && obj.get("randomizeMapSeed").getAsBoolean();
         return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
                 Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks, Math.max(0, borderOffset),
-                Math.max(1, borderFxRange));
+                Math.max(1, borderFxRange), randomizeMapSeed);
     }
 
     // --- days.json ---
@@ -598,15 +605,19 @@ public final class EclipseConfig {
     private static Map<String, List<StageEntry>> defaultStages() {
         Map<String, List<StageEntry>> defaults = new LinkedHashMap<>();
         defaults.put("overworld", List.of(
-                new StageEntry(1, 225, "intro_fusion", List.of(), Map.of()),
-                new StageEntry(2, 300, "milestone:2", List.of("eclipse:desert_temple"), Map.of()),
-                new StageEntry(3, 360, "milestone:3", List.of("eclipse:jungle_temple"), Map.of()),
-                new StageEntry(4, 420, "milestone:4", List.of("eclipse:village_plains"), Map.of()),
-                new StageEntry(5, 480, "final_day", List.of("eclipse:stronghold_emergence"), Map.of())));
+                new StageEntry(1, 150, "intro_fusion", List.of(), Map.of()),
+                new StageEntry(2, 210, "milestone:2",
+                        List.of("eclipse:desert_temple", "minecraft:pillager_outpost"), Map.of()),
+                new StageEntry(3, 280, "milestone:3",
+                        List.of("eclipse:jungle_temple", "minecraft:trial_chambers"), Map.of()),
+                new StageEntry(4, 360, "milestone:4",
+                        List.of("eclipse:village_plains", "minecraft:mansion", "minecraft:ancient_city"), Map.of()),
+                new StageEntry(5, 440, "final_day",
+                        List.of("eclipse:stronghold_emergence"), Map.of())));
         defaults.put("nether", List.of(
-                new StageEntry(1, 80, "day:2", List.of("eclipse:fortress_core"), Map.of()),
-                new StageEntry(2, 120, "day:10", List.of(), Map.of()),
-                new StageEntry(3, 160, "day:12", List.of(), Map.of())));
+                new StageEntry(1, 64, "day:2", List.of("eclipse:fortress_core"), Map.of()),
+                new StageEntry(2, 110, "day:10", List.of(), Map.of()),
+                new StageEntry(3, 150, "day:12", List.of(), Map.of())));
         return Collections.unmodifiableMap(defaults);
     }
 

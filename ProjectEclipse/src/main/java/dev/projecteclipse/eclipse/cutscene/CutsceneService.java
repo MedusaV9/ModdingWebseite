@@ -16,8 +16,21 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.C2SCutsceneStatePayload;
 import dev.projecteclipse.eclipse.network.S2CCutsceneLibraryPayload;
 import dev.projecteclipse.eclipse.network.S2CCutscenePlayPayload;
+import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -40,6 +53,22 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Sessions also complete at logout. Intro paths (id {@code intro_*}) freeze with the
  * survives-dimension-change flag so the scripted limbo → overworld teleport keeps the lock.</p>
  *
+ * <p><b>Global plays</b> (P2 R12): {@link #play(String, Collection, Vec3, Runnable, PlayOptions)}
+ * with {@link TeleportPolicy#GLOBAL_TELEPORT} gathers watchers who are far from the sequence
+ * area or in another dimension: each is snapshotted (position, dimension, rotation — vehicles
+ * are dismounted), sent a screen fade, and {@link FreezeService#transport}ed to a ring around
+ * the area before the freeze lands. With {@code returnAfter} the snapshot is restored exactly
+ * when the session ends — on ACK, skip, abort, or the watchdog; a player who logs out
+ * mid-cutscene is moved back before vanilla saves them (same dimension) or via the persisted
+ * {@link PendingReturns} data at their next login (cross-dimension), so nobody is ever
+ * stranded at a sequence area. {@code PlayOptions.viewDistance} additionally routes through
+ * {@link ViewDistanceService} (server bump + client push) for the duration of the group.</p>
+ *
+ * <p><b>Dynamic anchors</b> (P2 R12, W7's {@code "growth_front"}): when a path declares
+ * {@code params.dynamicAnchor} and the caller passes no explicit anchor, the resolver
+ * registered under that key ({@link #registerDynamicAnchor}) supplies the play anchor at play
+ * time.</p>
+ *
  * <p><b>Skip flow</b>: {@code SKIP_REQUEST} is validated against the path's {@code allowSkip}
  * and the per-world disabled set; a granted skip answers with the
  * {@link S2CCutscenePlayPayload#STOP} sentinel and completes the session server-side
@@ -57,6 +86,56 @@ public final class CutsceneService {
 
     /** Library sync budget: entries past this many UTF-8 payload bytes are dropped. */
     private static final int MAX_LIBRARY_SYNC_BYTES = 512 * 1024;
+
+    /** Players within this horizontal distance of the sequence area are not gathered. */
+    private static final double GLOBAL_GATHER_RADIUS = 128.0D;
+    /** Ring radius around the sequence area that gathered players are placed on. */
+    private static final double GATHER_RING_RADIUS = 6.0D;
+    /** Fade covering the outbound gather teleport (hold spans the chunk-load moment). */
+    private static final S2CScreenFadePayload GATHER_FADE = new S2CScreenFadePayload(8, 30, 18, 0xFF000000);
+    /** Fade covering the return teleport. */
+    private static final S2CScreenFadePayload RETURN_FADE = new S2CScreenFadePayload(8, 20, 16, 0xFF000000);
+
+    // --- play options (P2 R12, frozen for W6/W7) ---
+
+    /** Where the watchers physically are during the cutscene. */
+    public enum TeleportPolicy {
+        /** Players stay wherever they are (v1 behaviour). */
+        LOCAL_ONLY,
+        /** Far/other-dimension players are gathered to the sequence area behind a fade. */
+        GLOBAL_TELEPORT
+    }
+
+    /**
+     * Options for the full play form. {@code viewDistance} is the client-push chunk count
+     * routed through {@link ViewDistanceService} ({@code 0} skips the bump entirely);
+     * {@code returnAfter} restores gathered players to their snapshot when the session ends.
+     */
+    public record PlayOptions(TeleportPolicy teleportPolicy, int viewDistance, boolean returnAfter) {
+        /** v1 behaviour: nobody moves, no view-distance bump. */
+        public static final PlayOptions LOCAL = new PlayOptions(TeleportPolicy.LOCAL_ONLY, 0, false);
+
+        /** Gather far/other-dimension players, bump view distance, return everyone after. */
+        public static PlayOptions global(int viewDistanceChunks) {
+            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, true);
+        }
+
+        /** Gather without returning (the sequence itself repositions players afterwards). */
+        public static PlayOptions globalOneWay(int viewDistanceChunks) {
+            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, false);
+        }
+    }
+
+    /** Server-side anchor substitution hook for {@code params.dynamicAnchor} paths. */
+    @FunctionalInterface
+    public interface DynamicAnchorResolver {
+        /** Returns the play anchor, or {@code null} to fall back to the path's own frame. */
+        @Nullable
+        Vec3 resolve(MinecraftServer server, Collection<ServerPlayer> players);
+    }
+
+    /** Where a gathered player came from; restored when their session completes. */
+    private record ReturnSnapshot(ResourceKey<Level> dimension, Vec3 pos, float yRot, float xRot) {}
 
     /** Tracks one watcher group so a completion callback fires exactly once. */
     private static final class Group {
@@ -86,6 +165,16 @@ public final class CutsceneService {
 
     /** Active sessions by player UUID. Server-thread only (tick + main-thread payload handlers). */
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+
+    /**
+     * Pending return snapshots of gathered players by UUID. Server-thread only. The FIRST
+     * snapshot wins across chained global cutscenes — a supersede never re-snapshots, so the
+     * player always returns to their true origin after the last scene of a chain.
+     */
+    private static final Map<UUID, ReturnSnapshot> RETURNS = new HashMap<>();
+
+    /** Dynamic-anchor resolvers by {@code params.dynamicAnchor} key (W7 registers {@code growth_front}). */
+    private static final Map<String, DynamicAnchorResolver> DYNAMIC_ANCHOR_RESOLVERS = new HashMap<>();
 
     private CutsceneService() {}
 
@@ -130,6 +219,36 @@ public final class CutsceneService {
         return path.enabled() && !EclipseWorldState.get(server).isCutsceneDisabled(path.id());
     }
 
+    // --- dynamic anchors ---
+
+    /**
+     * Registers the resolver for one {@code params.dynamicAnchor} key. Call from static init
+     * or server setup (W7: {@code "growth_front"} → nearest point of the new ring band).
+     * Re-registration replaces.
+     */
+    public static void registerDynamicAnchor(String key, DynamicAnchorResolver resolver) {
+        DYNAMIC_ANCHOR_RESOLVERS.put(key, resolver);
+    }
+
+    @Nullable
+    private static Vec3 resolveDynamicAnchor(MinecraftServer server, CutscenePath path,
+            Collection<ServerPlayer> players) {
+        String key = path.dynamicAnchor();
+        if (key == null) {
+            return null;
+        }
+        DynamicAnchorResolver resolver = DYNAMIC_ANCHOR_RESOLVERS.get(key);
+        if (resolver == null) {
+            EclipseMod.LOGGER.warn("CutsceneService: path '{}' wants dynamicAnchor '{}' but no resolver is registered",
+                    path.id(), key);
+            return null;
+        }
+        Vec3 resolved = resolver.resolve(server, players);
+        EclipseMod.LOGGER.info("CutsceneService: dynamicAnchor '{}' of '{}' resolved to {}",
+                key, path.id(), resolved);
+        return resolved;
+    }
+
     // --- playback ---
 
     /** Plays a path for the given players (freeze + play payload). Returns watchers started. */
@@ -137,15 +256,23 @@ public final class CutsceneService {
         return play(id, players, null, null);
     }
 
-    /**
-     * Full play form: {@code anchor} overrides the world-anchor origin (e.g. the nearest new
-     * ring edge for {@code unlock_ring}); {@code onAllFinished} runs on the server thread once
-     * every watcher has ACKed, been watchdog-released, or logged out — and runs immediately
-     * when the path is missing/disabled or {@code players} is empty (never softlocks a
-     * caller's timeline).
-     */
+    /** v1 full form — local play, no view-distance bump (see the PlayOptions overload). */
     public static int play(String id, Collection<ServerPlayer> players, @Nullable Vec3 anchor,
             @Nullable Runnable onAllFinished) {
+        return play(id, players, anchor, onAllFinished, PlayOptions.LOCAL);
+    }
+
+    /**
+     * Full play form: {@code anchor} overrides the world-anchor origin (e.g. the nearest new
+     * ring edge for {@code unlock_ring}); when it is {@code null} a {@code dynamicAnchor}
+     * resolver may supply it. {@code onAllFinished} runs on the server thread once every
+     * watcher has ACKed, been watchdog-released, or logged out — and runs immediately when
+     * the path is missing/disabled or {@code players} is empty (never softlocks a caller's
+     * timeline). {@code options} adds the R12 global behaviours (gather teleport,
+     * view-distance bump, return-after).
+     */
+    public static int play(String id, Collection<ServerPlayer> players, @Nullable Vec3 anchor,
+            @Nullable Runnable onAllFinished, PlayOptions options) {
         CutscenePath path = CutscenePaths.get(id);
         if (path == null) {
             EclipseMod.LOGGER.warn("CutsceneService: unknown path '{}' — completing instantly", id);
@@ -170,22 +297,41 @@ public final class CutsceneService {
             return 0;
         }
 
+        Vec3 playAnchor = anchor != null ? anchor : resolveDynamicAnchor(server, path, players);
         int watchdogTicks = path.durationTicks() + WATCHDOG_MARGIN_TICKS;
         long deadline = server.getTickCount() + watchdogTicks;
         boolean intro = id.startsWith("intro_");
-        Group group = new Group(id, players.size(), onAllFinished);
+
+        Runnable groupCallback = onAllFinished;
+        if (options.viewDistance() > 0) {
+            ViewDistanceService.begin(server, players, options.viewDistance(), watchdogTicks);
+            Runnable original = onAllFinished;
+            groupCallback = () -> {
+                ViewDistanceService.end(server);
+                if (original != null) {
+                    original.run();
+                }
+            };
+        }
+        if (options.teleportPolicy() == TeleportPolicy.GLOBAL_TELEPORT) {
+            gatherPlayers(server, path, players, playAnchor, options.returnAfter());
+        }
+
+        Group group = new Group(id, players.size(), groupCallback);
         S2CCutscenePlayPayload payload =
-                new S2CCutscenePlayPayload(id, path.allowSkip(), Optional.ofNullable(anchor));
+                new S2CCutscenePlayPayload(id, path.allowSkip(), Optional.ofNullable(playAnchor));
         for (ServerPlayer player : players) {
-            // A newer cutscene supersedes any active session (its group completes as skipped).
+            // A newer cutscene supersedes any active session (its group completes as skipped);
+            // pending return snapshots survive the supersede so chains return to the origin.
             completeSession(player, "superseded by '" + id + "'");
             FreezeService.freeze(player, watchdogTicks, intro, 0);
             SESSIONS.put(player.getUUID(), new Session(id, deadline, false, group));
             PacketDistributor.sendToPlayer(player, payload);
         }
         EclipseMod.LOGGER.info("CutsceneService: playing '{}' for {} player(s) "
-                + "(duration {} ticks, watchdog {} ticks, allowSkip {}, anchor {})",
-                id, players.size(), path.durationTicks(), watchdogTicks, path.allowSkip(), anchor);
+                + "(duration {} ticks, watchdog {} ticks, allowSkip {}, anchor {}, policy {}, viewDist {}, return {})",
+                id, players.size(), path.durationTicks(), watchdogTicks, path.allowSkip(), playAnchor,
+                options.teleportPolicy(), options.viewDistance(), options.returnAfter());
         return players.size();
     }
 
@@ -209,13 +355,14 @@ public final class CutsceneService {
         return true;
     }
 
-    /** Aborts the given players' active cutscenes: unfreeze + client stop sentinel. */
+    /** Aborts the given players' active cutscenes: unfreeze + client stop sentinel + return. */
     public static int abort(Collection<ServerPlayer> players) {
         int aborted = 0;
         for (ServerPlayer player : players) {
             boolean hadSession = SESSIONS.containsKey(player.getUUID());
             completeSession(player, "aborted");
             FreezeService.unfreeze(player);
+            restoreReturn(player, "aborted");
             if (hadSession) {
                 PacketDistributor.sendToPlayer(player, S2CCutscenePlayPayload.STOP);
                 aborted++;
@@ -229,6 +376,135 @@ public final class CutsceneService {
     public static String activePathId(ServerPlayer player) {
         Session session = SESSIONS.get(player.getUUID());
         return session != null ? session.pathId() : null;
+    }
+
+    // --- global gather / return (P2 R12) ---
+
+    /**
+     * Teleports far/other-dimension watchers to a ring around the sequence area, behind a
+     * screen fade. The area is the play anchor when present, otherwise the centroid of the
+     * path's (world-anchored) keyframes; player-anchored paths have nothing to gather to.
+     */
+    private static void gatherPlayers(MinecraftServer server, CutscenePath path,
+            Collection<ServerPlayer> players, @Nullable Vec3 anchor, boolean recordReturns) {
+        if (path.isPlayerAnchored()) {
+            EclipseMod.LOGGER.warn("CutsceneService: GLOBAL_TELEPORT requested for player-anchored path '{}' — nothing to gather to",
+                    path.id());
+            return;
+        }
+        ServerLevel level = resolveLevel(server, path.dimension());
+        if (level == null) {
+            EclipseMod.LOGGER.warn("CutsceneService: unknown dimension '{}' of path '{}' — gather skipped",
+                    path.dimension(), path.id());
+            return;
+        }
+        Vec3 area = anchor != null ? anchor : keyframeCentroid(path);
+        if (area == null) {
+            EclipseMod.LOGGER.warn("CutsceneService: path '{}' has no keyframes — gather skipped", path.id());
+            return;
+        }
+        int index = 0;
+        int count = Math.max(1, players.size());
+        for (ServerPlayer player : players) {
+            index++;
+            boolean sameLevel = player.serverLevel() == level;
+            if (sameLevel && player.position().multiply(1.0D, 0.0D, 1.0D)
+                    .distanceTo(new Vec3(area.x, 0.0D, area.z)) <= GLOBAL_GATHER_RADIUS) {
+                continue; // Close enough — they watch from where they stand.
+            }
+            if (recordReturns) {
+                // putIfAbsent: across chained global scenes the FIRST origin wins.
+                RETURNS.putIfAbsent(player.getUUID(), new ReturnSnapshot(
+                        player.level().dimension(), player.position(), player.getYRot(), player.getXRot()));
+            }
+            PacketDistributor.sendToPlayer(player, GATHER_FADE);
+            Vec3 spot = gatherSpot(level, area, index, count);
+            FreezeService.transport(player, level, spot, player.getYRot(), player.getXRot());
+            EclipseMod.LOGGER.info("CutsceneService: gathered {} to {} in {} for '{}'{}",
+                    player.getScoreboardName(), spot, level.dimension().location(), path.id(),
+                    recordReturns ? " (return pending)" : "");
+        }
+    }
+
+    /** A spot on the gather ring, snapped to the surface when the heightmap knows better. */
+    private static Vec3 gatherSpot(ServerLevel level, Vec3 area, int index, int count) {
+        double angle = (Math.PI * 2.0D * index) / count;
+        double x = area.x + Math.cos(angle) * GATHER_RING_RADIUS;
+        double z = area.z + Math.sin(angle) * GATHER_RING_RADIUS;
+        BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                BlockPos.containing(x, area.y, z));
+        double y = top.getY() > level.getMinBuildHeight() ? top.getY() : area.y;
+        return new Vec3(x, y, z);
+    }
+
+    @Nullable
+    private static ServerLevel resolveLevel(MinecraftServer server, String dimensionId) {
+        try {
+            return server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimensionId)));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Centroid of the path's keyframe positions (world-anchored paths only). */
+    @Nullable
+    private static Vec3 keyframeCentroid(CutscenePath path) {
+        if (path.keyframes().isEmpty()) {
+            return null;
+        }
+        double x = 0.0D;
+        double y = 0.0D;
+        double z = 0.0D;
+        for (CutscenePath.Keyframe kf : path.keyframes()) {
+            x += kf.x();
+            y += kf.y();
+            z += kf.z();
+        }
+        int n = path.keyframes().size();
+        return new Vec3(x / n, y / n, z / n);
+    }
+
+    /** Restores a gathered player to their snapshot (fade + transport). No-op without one. */
+    private static void restoreReturn(ServerPlayer player, String reason) {
+        ReturnSnapshot snapshot = RETURNS.remove(player.getUUID());
+        if (snapshot == null) {
+            return;
+        }
+        ServerLevel level = player.server.getLevel(snapshot.dimension());
+        if (level == null) {
+            EclipseMod.LOGGER.warn("CutsceneService: return dimension {} of {} is gone — not restoring",
+                    snapshot.dimension().location(), player.getScoreboardName());
+            return;
+        }
+        PacketDistributor.sendToPlayer(player, RETURN_FADE);
+        FreezeService.transport(player, level, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
+        EclipseMod.LOGGER.info("CutsceneService: returned {} to {} in {} ({})",
+                player.getScoreboardName(), snapshot.pos(), snapshot.dimension().location(), reason);
+    }
+
+    /**
+     * Logout with a pending return: same-dimension snapshots are applied directly to the
+     * entity — {@code PlayerLoggedOutEvent} fires before vanilla saves the player, so the
+     * restored position is what hits the disk. Cross-dimension snapshots persist in
+     * {@link PendingReturns} and apply at the next login (a mid-logout dimension hop is not
+     * safe). Either way the player never stays stranded at the sequence area.
+     */
+    private static void stashReturnOnLogout(ServerPlayer player) {
+        ReturnSnapshot snapshot = RETURNS.remove(player.getUUID());
+        if (snapshot == null) {
+            return;
+        }
+        if (player.level().dimension() == snapshot.dimension()) {
+            player.moveTo(snapshot.pos().x, snapshot.pos().y, snapshot.pos().z,
+                    snapshot.yRot(), snapshot.xRot());
+            player.setDeltaMovement(Vec3.ZERO);
+            EclipseMod.LOGGER.info("CutsceneService: {} logged out mid-cutscene — saved back at {}",
+                    player.getScoreboardName(), snapshot.pos());
+        } else {
+            PendingReturns.get(player.server).put(player.getUUID(), snapshot);
+            EclipseMod.LOGGER.info("CutsceneService: {} logged out mid-cutscene in another dimension — return to {} {} pending next login",
+                    player.getScoreboardName(), snapshot.dimension().location(), snapshot.pos());
+        }
     }
 
     // --- client ACKs ---
@@ -249,6 +525,7 @@ public final class CutsceneService {
                 if (!session.preview()) {
                     FreezeService.unfreeze(player);
                 }
+                restoreReturn(player, "client ACK " + payload.state());
             }
             case SKIP_REQUEST -> handleSkipRequest(payload.id(), player, session);
         }
@@ -273,6 +550,7 @@ public final class CutsceneService {
         if (!session.preview()) {
             FreezeService.unfreeze(player);
         }
+        restoreReturn(player, "skip granted");
         PacketDistributor.sendToPlayer(player, S2CCutscenePlayPayload.STOP);
     }
 
@@ -311,6 +589,9 @@ public final class CutsceneService {
             if (player != null && !session.preview()) {
                 FreezeService.unfreeze(player);
             }
+            if (player != null) {
+                restoreReturn(player, "watchdog");
+            }
             session.group().playerDone();
         }
     }
@@ -320,6 +601,98 @@ public final class CutsceneService {
     static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             completeSession(player, "logout");
+            stashReturnOnLogout(player);
+        }
+    }
+
+    /** Login applies any cross-dimension return that was pending from a mid-cutscene logout. */
+    @SubscribeEvent
+    static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        ReturnSnapshot snapshot = PendingReturns.get(player.server).take(player.getUUID());
+        if (snapshot == null) {
+            return;
+        }
+        ServerLevel level = player.server.getLevel(snapshot.dimension());
+        if (level == null) {
+            EclipseMod.LOGGER.warn("CutsceneService: pending return dimension {} of {} is gone — dropping",
+                    snapshot.dimension().location(), player.getScoreboardName());
+            return;
+        }
+        PacketDistributor.sendToPlayer(player, RETURN_FADE);
+        FreezeService.transport(player, level, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
+        EclipseMod.LOGGER.info("CutsceneService: applied pending cutscene return of {} to {} in {}",
+                player.getScoreboardName(), snapshot.pos(), snapshot.dimension().location());
+    }
+
+    // --- persisted cross-dimension returns ---
+
+    /**
+     * Cross-dimension return snapshots that could not be applied during logout, persisted in
+     * the overworld's data storage ({@code data/eclipse_pending_returns.dat}) so a server
+     * restart between logout and re-login still returns the player exactly.
+     */
+    public static final class PendingReturns extends SavedData {
+        static final String DATA_NAME = "eclipse_pending_returns";
+        private static final String TAG_RETURNS = "returns";
+
+        private final Map<UUID, ReturnSnapshot> pending = new HashMap<>();
+
+        public PendingReturns() {}
+
+        static PendingReturns get(MinecraftServer server) {
+            return server.overworld().getDataStorage().computeIfAbsent(
+                    new SavedData.Factory<>(PendingReturns::new, PendingReturns::load), DATA_NAME);
+        }
+
+        static PendingReturns load(CompoundTag tag, HolderLookup.Provider registries) {
+            PendingReturns data = new PendingReturns();
+            for (Tag entry : tag.getList(TAG_RETURNS, Tag.TAG_COMPOUND)) {
+                CompoundTag ret = (CompoundTag) entry;
+                try {
+                    data.pending.put(ret.getUUID("player"), new ReturnSnapshot(
+                            ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(ret.getString("dim"))),
+                            new Vec3(ret.getDouble("x"), ret.getDouble("y"), ret.getDouble("z")),
+                            ret.getFloat("yRot"), ret.getFloat("xRot")));
+                } catch (RuntimeException e) {
+                    EclipseMod.LOGGER.warn("Dropping malformed pending cutscene return entry", e);
+                }
+            }
+            return data;
+        }
+
+        @Override
+        public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+            ListTag list = new ListTag();
+            for (Map.Entry<UUID, ReturnSnapshot> entry : this.pending.entrySet()) {
+                CompoundTag ret = new CompoundTag();
+                ret.putUUID("player", entry.getKey());
+                ret.putString("dim", entry.getValue().dimension().location().toString());
+                ret.putDouble("x", entry.getValue().pos().x);
+                ret.putDouble("y", entry.getValue().pos().y);
+                ret.putDouble("z", entry.getValue().pos().z);
+                ret.putFloat("yRot", entry.getValue().yRot());
+                ret.putFloat("xRot", entry.getValue().xRot());
+                list.add(ret);
+            }
+            tag.put(TAG_RETURNS, list);
+            return tag;
+        }
+
+        void put(UUID player, ReturnSnapshot snapshot) {
+            this.pending.put(player, snapshot);
+            setDirty();
+        }
+
+        @Nullable
+        ReturnSnapshot take(UUID player) {
+            ReturnSnapshot snapshot = this.pending.remove(player);
+            if (snapshot != null) {
+                setDirty();
+            }
+            return snapshot;
         }
     }
 }

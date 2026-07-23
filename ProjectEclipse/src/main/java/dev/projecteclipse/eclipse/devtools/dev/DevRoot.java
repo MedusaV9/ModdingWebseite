@@ -80,7 +80,7 @@ public final class DevRoot {
                         .executes(ctx -> DevReload.execute(ctx.getSource()))));
     }
 
-    private static int openHandbookOrHelp(CommandContext<CommandSourceStack> context) {
+    private static int openHandbookOrHelp(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         if (source.getEntity() instanceof ServerPlayer player) {
             List<DevCommandDoc> visible = DevCommandRegistry.visibleTo(player);

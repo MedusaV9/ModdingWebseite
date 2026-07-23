@@ -55,6 +55,8 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CSidebarStatePayload.TYPE, S2CSidebarStatePayload.STREAM_CODEC, EclipsePayloads::handleSidebarState);
         registrar.playToClient(S2CGhostRevealPayload.TYPE, S2CGhostRevealPayload.STREAM_CODEC, EclipsePayloads::handleGhostReveal);
         registrar.playToClient(S2CSkillTreePayload.TYPE, S2CSkillTreePayload.STREAM_CODEC, EclipsePayloads::handleSkillTree);
+        registrar.playToClient(S2CFogStormPayload.TYPE, S2CFogStormPayload.STREAM_CODEC, EclipsePayloads::handleFogStorm);
+        registrar.playToClient(S2CStructureRiftPayload.TYPE, S2CStructureRiftPayload.STREAM_CODEC, EclipsePayloads::handleStructureRift);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SSkillNodeBuyPayload.TYPE, C2SSkillNodeBuyPayload.STREAM_CODEC, EclipsePayloads::handleSkillNodeBuy);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
@@ -295,9 +297,27 @@ public final class EclipsePayloads {
         ClientStateCache.skillTreeJson = payload.json();
     }
 
-    /** Stub until P4-B4 wires {@code skills.SkillService#buyNode}. */
     private static void handleSkillNodeBuy(C2SSkillNodeBuyPayload payload, IPayloadContext context) {
-        // no-op foundation stub
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.skills.SkillService.handleNodeBuy(payload, player);
+        }
+    }
+
+    /**
+     * Fog-storm sites are consumed server-side by {@code stormfx.StormRegistry}; the client
+     * handler is deliberately a no-op (a visual-spawning handler would double storms).
+     */
+    private static void handleFogStorm(S2CFogStormPayload payload, IPayloadContext context) {
+        // no-op by design (see stormfx.StormRegistry)
+    }
+
+    /** Structure-rift cue; P2-W7's expansion sequence installs the visual consumer. */
+    private static void handleStructureRift(S2CStructureRiftPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.veilfx.rift.RiftFx.openRift(
+                new net.minecraft.world.phys.Vec3(payload.anchor().getX() + 0.5, payload.anchor().getY() + 1.0,
+                        payload.anchor().getZ() + 0.5),
+                new net.minecraft.world.phys.Vec3(0, 1, 0),
+                Math.max(4.0F, Math.min(24.0F, payload.footprint() * 0.5F)), 200, 0);
     }
 
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {

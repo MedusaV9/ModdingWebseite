@@ -1,0 +1,103 @@
+{
+  "max_lifetime": 20,
+  "loop": true,
+  "rate": 4,
+  "count": 2,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:cube",
+      "dimensions": [
+        7.0,
+        2.0,
+        7.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "from_surface": false
+    },
+    "particle_settings": {
+      "particle_speed": 0.15,
+      "random_speed": true,
+      "base_particle_size": 0.55,
+      "particle_size_variation": 0.25,
+      "particle_lifetime": 14,
+      "particle_lifetime_variation": 4,
+      "initial_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "random_initial_direction": false,
+      "random_initial_rotation": false,
+      "random_size": true,
+      "random_lifetime": true
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": true,
+    "should_collide": false,
+    "face_velocity": false,
+    "velocity_stretch_factor": 1.6,
+    "sprite_data": {
+      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": false
+    },
+    "modules": [
+      {
+        "module": "veil:initial_velocity",
+        "direction": [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        "strength": 10.0,
+        "take_parent_rotation": false
+      },
+      {
+        "module": "veil:gravity",
+        "strength": 0.5
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            {
+              "percent": 0.0,
+              "color": "#8B95C4"
+            },
+            {
+              "percent": 1.0,
+              "color": "#5A5E8F"
+            }
+          ],
+          "alpha_points": [
+            {
+              "percent": 0.0,
+              "alpha": 0.0
+            },
+            {
+              "percent": 0.15,
+              "alpha": 0.28
+            },
+            {
+              "percent": 0.8,
+              "alpha": 0.22
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
+          ]
+        },
+        "interpolant": "q.agePercent"
+      }
+    ]
+  }
+}

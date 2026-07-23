@@ -49,6 +49,27 @@ public final class BudgetedBlockWriter {
     }
 
     /**
+     * Sync-loads (or generates) every not-currently-loaded neighbour of {@code center}
+     * under short-lived {@link #WRITER_TICKET}s — the caller-side 3×3 neighbourhood
+     * guarantee of the {@code DiscGenPipeline.runOnLiveChunk} contract (W1.5): decoration
+     * reads the neighbourhood's biomes and cross-border features write into ±1 chunks
+     * through {@code ServerLevel}, which would sync-load them MID-FEATURE otherwise
+     * (legal, but recursive loads inside feature placement make replay cost spiky and
+     * unmeasurable). Neighbours past the disc rim resolve to void chunks — generating
+     * one is cheap, every pipeline phase early-outs on no-solid-sections.
+     */
+    public static void ensureNeighborsLoaded(ServerLevel level, ChunkPos center) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if ((dx != 0 || dz != 0)
+                        && level.getChunkSource().getChunkNow(center.x + dx, center.z + dz) == null) {
+                    loadWithTicket(level, center.x + dx, center.z + dz);
+                }
+            }
+        }
+    }
+
+    /**
      * Rebuilds a bulk-rewritten chunk's light through the light-engine task queue —
      * clear (mirrors vanilla {@code updateChunkStatus}) then re-init + propagate (mirrors
      * {@code initializeLight} + {@code lightChunk}; 1.21.1 has no {@code relight} helper)

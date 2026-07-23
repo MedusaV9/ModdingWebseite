@@ -6,6 +6,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
 import dev.projecteclipse.eclipse.client.hud.MarkVignetteOverlay;
 import dev.projecteclipse.eclipse.client.hud.SidebarPanel;
+import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay;
 import net.neoforged.api.distmarker.Dist;
@@ -14,7 +15,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
-/** Registers Eclipse GUI layers on the client mod bus. */
+/**
+ * Registers Eclipse GUI layers on the client mod bus. This file also owns the cutscene
+ * HUD-suppression whitelist (P2 §6.2): sibling planners must NOT add their own whitelist
+ * edits elsewhere — new overlays that have to stay visible during {@code hideHud} cutscenes
+ * are added to the single {@code setHudWhitelist} call below.
+ */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class EclipseGuiLayers {
     private EclipseGuiLayers() {}
@@ -29,7 +35,7 @@ public final class EclipseGuiLayers {
         event.registerAbove(VanillaGuiLayers.SCOREBOARD_SIDEBAR,
                 SidebarPanel.LAYER_ID, SidebarPanel::render);
         // W8 announcements: typewriter line + client-local bossbar sweep. Above the boss
-        // overlay so the sweep stacks with real bars; also NOT letterbox-whitelisted.
+        // overlay so the sweep stacks with real bars. Whitelisted below (P2 §1.7 fix).
         event.registerAbove(VanillaGuiLayers.BOSS_OVERLAY,
                 AnnouncementOverlay.LAYER_ID, AnnouncementOverlay::render);
         // W12 Lantern Gaze mark: purple hunt vignette under the crosshair-level HUD,
@@ -38,9 +44,16 @@ public final class EclipseGuiLayers {
                 MarkVignetteOverlay.LAYER_ID, MarkVignetteOverlay::render);
         event.registerAboveAll(WaveOverlay.LAYER_ID, WaveOverlay::render);
         event.registerAboveAll(LetterboxLayer.LAYER_ID, LetterboxLayer::render);
-        // Cutscene HUD suppression must never cancel these: the letterbox itself, W2's
-        // mid-death heart burst, and the v1 wave overlay (renders through the intro flight).
+        // P2-W2 cinematic captions + screen fades: registered AFTER the letterbox so text
+        // draws on top of the bars (subtitles rest just above the bottom bar).
+        event.registerAboveAll(CaptionRenderer.LAYER_ID, CaptionRenderer::render);
+        // Cutscene HUD suppression must never cancel these: the letterbox itself, the
+        // mid-death heart burst, the v1 wave overlay (renders through the intro flight),
+        // the announcement overlay (P2 §1.7 — cutscene subtitles were delivered as
+        // announcements and suppression cancelled the layer, so the text never drew) and
+        // the P2-W2 caption layer (cinematic captions immune by construction).
         LetterboxLayer.setHudWhitelist(Set.of(
-                LetterboxLayer.LAYER_ID, HeartBurstOverlay.LAYER_ID, WaveOverlay.LAYER_ID));
+                LetterboxLayer.LAYER_ID, HeartBurstOverlay.LAYER_ID, WaveOverlay.LAYER_ID,
+                AnnouncementOverlay.LAYER_ID, CaptionRenderer.LAYER_ID));
     }
 }

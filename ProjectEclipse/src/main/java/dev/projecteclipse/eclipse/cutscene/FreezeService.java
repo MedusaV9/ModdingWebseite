@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.entity.Entity;
@@ -132,6 +133,46 @@ public final class FreezeService {
     /** Recent watchdog/forced releases, oldest first (ring buffer of {@value #WATCHDOG_BUFFER_SIZE}). */
     public static synchronized List<String> recentWatchdogEvents() {
         return List.copyOf(WATCHDOG_EVENTS);
+    }
+
+    // --- transport helpers (P2 R12 global cutscenes) ---
+
+    /**
+     * Cross-dimension-safe scripted transport that never loses an active freeze
+     * ({@code CutsceneService} uses it for the GLOBAL_TELEPORT gather and return trips):
+     * dismounts (parking the vehicle), teleports — including across dimensions — and
+     * re-anchors any active lock AT the destination, so the rubber-band never fights the
+     * move and the dimension-change release never fires for this scripted hop.
+     */
+    public static void transport(ServerPlayer player, ServerLevel level, Vec3 pos,
+            float yRot, float xRot) {
+        if (player.isPassenger()) {
+            Entity vehicle = player.getVehicle();
+            player.stopRiding();
+            if (vehicle != null) {
+                vehicle.setDeltaMovement(Vec3.ZERO);
+            }
+        }
+        CutsceneLock lock = player.hasData(EclipseAttachments.CUTSCENE_LOCK)
+                ? player.getData(EclipseAttachments.CUTSCENE_LOCK)
+                : null;
+        boolean survivedBefore = lock != null && lock.survivesDimensionChange;
+        if (lock != null) {
+            // This hop is scripted: never let onChangedDimension release the lock for it.
+            lock.survivesDimensionChange = true;
+        }
+        if (player.serverLevel() == level) {
+            player.connection.teleport(pos.x, pos.y, pos.z, yRot, xRot);
+        } else {
+            player.teleportTo(level, pos.x, pos.y, pos.z, yRot, xRot);
+        }
+        player.setDeltaMovement(Vec3.ZERO);
+        if (lock != null && player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
+            CutsceneLock moved = player.getData(EclipseAttachments.CUTSCENE_LOCK);
+            moved.survivesDimensionChange = survivedBefore;
+            moved.graceTicks = 0;
+            anchor(moved, player.position());
+        }
     }
 
     // --- invuln-only mode (W14 /eclipse invuln) ---

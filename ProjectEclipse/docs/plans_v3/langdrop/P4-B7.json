@@ -1,0 +1,16 @@
+{
+  "en": {
+    "message.eclipse.recipe.locked": "That craft is sealed until a later day.",
+    "message.eclipse.protection.pvp": "The sanctum grounds forbid fighting here.",
+    "message.eclipse.protection.fluid": "You cannot place fluids in the sanctum.",
+    "message.eclipse.protection.vehicle": "You cannot place vehicles or explosives in the sanctum.",
+    "message.eclipse.containment.bounce": "The void beneath the disc rejects you."
+  },
+  "de": {
+    "message.eclipse.recipe.locked": "Diese Herstellung ist bis zu einem späteren Tag versiegelt.",
+    "message.eclipse.protection.pvp": "Auf dem Heiligtum ist kein Kampf erlaubt.",
+    "message.eclipse.protection.fluid": "Flüssigkeiten kannst du im Heiligtum nicht platzieren.",
+    "message.eclipse.protection.vehicle": "Fahrzeuge oder Sprengstoff kannst du im Heiligtum nicht platzieren.",
+    "message.eclipse.containment.bounce": "Die Leere unter der Scheibe stößt dich zurück."
+  }
+}

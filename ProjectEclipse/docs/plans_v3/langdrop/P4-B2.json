@@ -1,0 +1,34 @@
+{
+  "en": {
+    "quest.eclipse.assigned": "New personal quests assigned — check your quest list",
+    "quest.eclipse.done.main": "Main goal complete: %s",
+    "quest.eclipse.done.side": "Side quest complete: %s",
+    "quest.eclipse.done.personal": "Personal quest complete: %s",
+    "quest.eclipse.done.team_part": "Your part is done: %s — waiting for the rest of the team",
+    "command.eclipse.quests.unknown": "Unknown quest id '%s'",
+    "command.eclipse.quests.already_done": "Quest '%s' is already complete",
+    "command.eclipse.quests.ticked": "Completed quest '%s' for %s",
+    "command.eclipse.quests.nothing_to_revoke": "Nothing to revoke for quest '%s'",
+    "command.eclipse.quests.revoked": "Revoked quest '%s' for %s",
+    "command.eclipse.quests.rerolled": "Rerolled personal quests for %s: %s",
+    "command.eclipse.quests.list.header": "Day %s quests for %s (%s):",
+    "command.eclipse.quests.list.entry": "%s %s [%s/%s] %s/%s — %s",
+    "command.eclipse.quests.reloaded": "Quest config reloaded (%s personal quests in the pool)"
+  },
+  "de": {
+    "quest.eclipse.assigned": "Neue persönliche Quests zugewiesen — sieh in deine Questliste",
+    "quest.eclipse.done.main": "Hauptziel geschafft: %s",
+    "quest.eclipse.done.side": "Nebenquest geschafft: %s",
+    "quest.eclipse.done.personal": "Persönliche Quest geschafft: %s",
+    "quest.eclipse.done.team_part": "Dein Teil ist geschafft: %s — der Rest des Teams fehlt noch",
+    "command.eclipse.quests.unknown": "Unbekannte Quest-ID '%s'",
+    "command.eclipse.quests.already_done": "Quest '%s' ist bereits abgeschlossen",
+    "command.eclipse.quests.ticked": "Quest '%s' für %s abgeschlossen",
+    "command.eclipse.quests.nothing_to_revoke": "Für Quest '%s' gibt es nichts zurückzunehmen",
+    "command.eclipse.quests.revoked": "Quest '%s' für %s zurückgenommen",
+    "command.eclipse.quests.rerolled": "Persönliche Quests für %s neu ausgelost: %s",
+    "command.eclipse.quests.list.header": "Tag-%s-Quests für %s (%s):",
+    "command.eclipse.quests.list.entry": "%s %s [%s/%s] %s/%s — %s",
+    "command.eclipse.quests.reloaded": "Quest-Konfiguration neu geladen (%s persönliche Quests im Pool)"
+  }
+}

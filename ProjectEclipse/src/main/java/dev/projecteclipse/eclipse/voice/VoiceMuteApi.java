@@ -8,7 +8,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Server-side API for the temporary entry mute and persistent administrative voice mute.
+ * Server-side API for the temporary entry mute, persistent administrative voice mute,
+ * and global voice mute (R15).
  */
 public final class VoiceMuteApi {
     static final long ENTRY_MUTE_DURATION_MILLIS = 10L * 60L * 1000L;
@@ -32,9 +33,24 @@ public final class VoiceMuteApi {
         }
     }
 
-    /** Returns whether either the entry mute or administrative mute is active. */
+    /** Sets or clears the server-wide voice mute (SavedData {@code eclipse_voice}). */
+    public static void setGlobalMuted(MinecraftServer server, boolean muted) {
+        VoiceState.get(server).setGlobalMuted(muted);
+    }
+
+    /** Returns whether global voice mute is active. */
+    public static boolean isGlobalMuted(MinecraftServer server) {
+        return VoiceState.get(server).isGlobalMuted();
+    }
+
+    /**
+     * Returns whether entry mute, per-player force mute, or global mute is active.
+     * {@link dev.projecteclipse.eclipse.voice.EclipseVoicePlugin} funnels microphone packets through this.
+     */
     public static boolean isMuted(MinecraftServer server, ServerPlayer player) {
-        return isEntryMuted(player) || EclipseWorldState.get(server).isForceVoiceMuted(player.getUUID());
+        return isEntryMuted(player)
+                || EclipseWorldState.get(server).isForceVoiceMuted(player.getUUID())
+                || isGlobalMuted(server);
     }
 
     static long entryMuteRemainingMillis(ServerPlayer player) {

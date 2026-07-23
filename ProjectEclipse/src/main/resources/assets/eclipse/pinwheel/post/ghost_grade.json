@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:ghost_grade",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}

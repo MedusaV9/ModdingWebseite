@@ -11,10 +11,22 @@ package dev.projecteclipse.eclipse.worldgen;
  * <p>Reads are volatile-safe for worldgen threads; writes happen on the server thread.</p>
  */
 public final class StageRadii {
-    private static volatile int[] overworld = {96, 225, 300, 360, 420, 480};
-    private static volatile int[] nether = {0, 80, 120, 160};
+    private static volatile int[] overworld = FrozenParams.DEFAULT_OVERWORLD_RADII.clone();
+    private static volatile int[] nether = FrozenParams.DEFAULT_NETHER_RADII.clone();
 
     private StageRadii() {}
+
+    /** Installs frozen per-save radii (called from {@link FrozenParams} on server start). */
+    public static void installFromFreeze(int[] overworldRadii, int[] netherRadii) {
+        overworld = overworldRadii.clone();
+        nether = netherRadii.clone();
+    }
+
+    /** Resets to D8 defaults when the server session ends. */
+    public static void resetDefaults() {
+        overworld = FrozenParams.DEFAULT_OVERWORLD_RADII.clone();
+        nether = FrozenParams.DEFAULT_NETHER_RADII.clone();
+    }
 
     /** Disc radius for the given stage, clamped to the configured stage range. */
     public static int radius(DiscProfile profile, int stage) {

@@ -26,7 +26,6 @@ public final class EclipseEntityRenderers {
     public static final ModelLayerLocation THE_OTHER_LAYER = layer("the_other");
     public static final ModelLayerLocation GAZER_LAYER = layer("gazer");
     public static final ModelLayerLocation UMBRAL_STALKER_LAYER = layer("umbral_stalker");
-    public static final ModelLayerLocation DECKHAND_LAYER = layer("deckhand");
     public static final ModelLayerLocation SUNMOTE_LAYER = layer("sunmote");
     public static final ModelLayerLocation HERALD_LAYER = layer("herald");
     public static final ModelLayerLocation FERRYMAN_LAYER = layer("ferryman");
@@ -45,7 +44,6 @@ public final class EclipseEntityRenderers {
                 () -> LayerDefinition.create(HumanoidModel.createMesh(CubeDeformation.NONE, 0.0F), 64, 64));
         event.registerLayerDefinition(GAZER_LAYER, GazerModel::createBodyLayer);
         event.registerLayerDefinition(UMBRAL_STALKER_LAYER, UmbralStalkerModel::createBodyLayer);
-        event.registerLayerDefinition(DECKHAND_LAYER, DeckhandModel::createBodyLayer);
         event.registerLayerDefinition(SUNMOTE_LAYER, SunmoteModel::createBodyLayer);
         event.registerLayerDefinition(HERALD_LAYER, HeraldModel::createBodyLayer);
         event.registerLayerDefinition(FERRYMAN_LAYER, FerrymanModel::createBodyLayer);
@@ -56,7 +54,7 @@ public final class EclipseEntityRenderers {
         event.registerEntityRenderer(EclipseEntities.THE_OTHER.get(), TheOtherRenderer::new);
         event.registerEntityRenderer(EclipseEntities.GAZER.get(), GazerRenderer::new);
         event.registerEntityRenderer(EclipseEntities.UMBRAL_STALKER.get(), UmbralStalkerRenderer::new);
-        event.registerEntityRenderer(EclipseEntities.DECKHAND.get(), DeckhandRenderer::new);
+        // Deckhand: GeckoLib renderer self-registers in DeckhandRenderer.Registration (P6-W2).
         event.registerEntityRenderer(EclipseEntities.SUNMOTE.get(), SunmoteRenderer::new);
         event.registerEntityRenderer(EclipseEntities.HERALD.get(), HeraldRenderer::new);
         event.registerEntityRenderer(EclipseEntities.FERRYMAN.get(), FerrymanRenderer::new);

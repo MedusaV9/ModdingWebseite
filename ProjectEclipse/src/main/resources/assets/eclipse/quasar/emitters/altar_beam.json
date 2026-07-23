@@ -93,14 +93,6 @@
           ]
         },
         "interpolant": "q.agePercent"
-      },
-      {
-        "module": "veil:light",
-        "gradient": {
-          "color": "#B65CFF"
-        },
-        "brightness": 1.0,
-        "radius": 8.0
       }
     ]
   }

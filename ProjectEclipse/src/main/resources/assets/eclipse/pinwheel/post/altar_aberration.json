@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:altar_aberration",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}

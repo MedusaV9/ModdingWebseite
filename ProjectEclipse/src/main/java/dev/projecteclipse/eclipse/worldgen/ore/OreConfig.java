@@ -251,6 +251,11 @@ public final class OreConfig {
     // --- default ores.json (day-gating: coal/copper stage-1, iron/gold/quartz stage-2,
     // diamond/netherite stage-3+, mod ores gated by requiredMod) ---
 
+    /** Default {@code ores.json} root for freeze snapshots and first-run file creation. */
+    public static JsonObject defaultRootJson() {
+        return defaultRoot();
+    }
+
     private static JsonObject defaultRoot() {
         JsonObject root = new JsonObject();
         root.add("overworld", defaultOverworld());

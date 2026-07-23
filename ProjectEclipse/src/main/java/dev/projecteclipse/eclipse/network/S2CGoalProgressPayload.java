@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.core.config.EclipseConfig;
-import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
-import dev.projecteclipse.eclipse.progression.GoalTracker;
+import dev.projecteclipse.eclipse.lang.LangService;
+import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
+import dev.projecteclipse.eclipse.progression.goals.QuestEngine;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -18,10 +18,15 @@ import net.minecraft.server.level.ServerPlayer;
  * Server → client: the receiving player's personal goal lines for the current day plus one
  * completion flag per line, rendered as tick boxes by {@code client.hud.SidebarPanel}.
  *
- * <p>Since W13 the flags are real: {@link #currentFor} reads the player's
- * {@code eclipse:goal_progress} bitmask via {@link GoalTracker#mask}, and
- * {@code GoalTracker.complete} re-sends this payload on every tick change (plus a
- * rebroadcast to everyone when the event day changes).</p>
+ * <p>Since P4-B2 the payload is re-sourced from the quest engine (wire shape UNCHANGED —
+ * plan §2.2 "Legacy bridge"): {@link #currentFor} renders TODAY'S MAIN goals from
+ * {@code progression/goals/QuestEngine} — lines are the specs' {@code Localized} text
+ * picked per receiver via {@code LangService}, flags are the engine's main done flags
+ * (team scopes read the team flag). When a day has no goals.json entry the engine's
+ * config fallback renders the legacy days.json strings as manual mains, so this payload
+ * keeps working on unmigrated content. The engine re-sends on every progress change; the
+ * richer {@code S2CQuestStatePayload} (mains + sides + personals with counters) ships
+ * alongside for P3's new HUD.</p>
  */
 public record S2CGoalProgressPayload(List<String> goalLines, List<Boolean> done) implements CustomPacketPayload {
     public S2CGoalProgressPayload {
@@ -37,16 +42,14 @@ public record S2CGoalProgressPayload(List<String> goalLines, List<Boolean> done)
             ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), S2CGoalProgressPayload::done,
             S2CGoalProgressPayload::new);
 
-    /** The current day's goals with the receiving player's REAL completion flags (W13). */
+    /** Today's main goals (engine-sourced, receiver-localized) with real completion flags. */
     public static S2CGoalProgressPayload currentFor(ServerPlayer player) {
-        int day = EclipseWorldState.get(player.server).getDay();
-        List<String> goals = EclipseConfig.day(day).goals();
-        int mask = GoalTracker.mask(player, day);
-        List<Boolean> done = new ArrayList<>(goals.size());
-        for (int i = 0; i < goals.size(); i++) {
-            done.add((mask & (1 << i)) != 0);
+        List<GoalSpec> mains = QuestEngine.currentMains(player.server);
+        List<String> lines = new ArrayList<>(mains.size());
+        for (GoalSpec spec : mains) {
+            lines.add(LangService.pick(spec.text(), player));
         }
-        return new S2CGoalProgressPayload(goals, done);
+        return new S2CGoalProgressPayload(lines, QuestEngine.mainDoneFlags(player.server, player));
     }
 
     @Override

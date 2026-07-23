@@ -41,7 +41,7 @@ public final class OreField {
         int cz = z >> 4;
         int cy = Math.floorDiv(y, 16);
         double cellR = Math.hypot(cx * 16 + 8, cz * 16 + 8);
-        int band = FrozenParams.annulusBand(cellR);
+        int band = FrozenParams.annulusBand(profile, cellR);
         if (band < ore.unlockStage()) {
             return null;
         }

@@ -2,14 +2,14 @@
   "max_lifetime": 2,
   "loop": false,
   "rate": 1,
-  "count": 6,
+  "count": 7,
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",
       "dimensions": [
-        0.25,
-        0.25,
-        0.25
+        0.3,
+        0.3,
+        0.3
       ],
       "rotation": [
         0.0,
@@ -19,19 +19,19 @@
       "from_surface": false
     },
     "particle_settings": {
-      "particle_speed": 0.3,
+      "particle_speed": 0.5,
       "random_speed": true,
-      "base_particle_size": 0.14,
-      "particle_size_variation": 0.05,
-      "particle_lifetime": 18,
-      "particle_lifetime_variation": 4,
+      "base_particle_size": 0.13,
+      "particle_size_variation": 0.06,
+      "particle_lifetime": 16,
+      "particle_lifetime_variation": 6,
       "initial_direction": [
         0.0,
         1.0,
         0.0
       ],
       "random_initial_direction": true,
-      "random_initial_rotation": false,
+      "random_initial_rotation": true,
       "random_size": true,
       "random_lifetime": true
     },
@@ -52,7 +52,11 @@
     "modules": [
       {
         "module": "veil:gravity",
-        "strength": 0.25
+        "strength": 0.34
+      },
+      {
+        "module": "veil:drag",
+        "strength": 0.06
       },
       {
         "module": "veil:color",
@@ -61,6 +65,10 @@
             {
               "percent": 0.0,
               "color": "#FFFFFF"
+            },
+            {
+              "percent": 0.25,
+              "color": "#E8B7FF"
             },
             {
               "percent": 1.0,
@@ -73,7 +81,7 @@
               "alpha": 1.0
             },
             {
-              "percent": 0.75,
+              "percent": 0.7,
               "alpha": 0.9
             },
             {

@@ -1,0 +1,28 @@
+{
+  "en_us": {
+    "bossbar.eclipse.schedule.paused": "Next phase (paused): %s",
+    "command.eclipse.rt.armed": "Real-time day engine armed — next boundary %s (in %s)",
+    "command.eclipse.rt.disarmed": "Real-time day engine disarmed — days no longer advance automatically",
+    "command.eclipse.rt.pause.ok": "Day clock paused — %s frozen on the clock",
+    "command.eclipse.rt.pause.failed": "Cannot pause: the engine is not armed (or is already paused)",
+    "command.eclipse.rt.resume.ok": "Day clock resumed — next boundary %s",
+    "command.eclipse.rt.resume.failed": "Cannot resume: the day clock is not paused",
+    "command.eclipse.rt.add.ok": "Boundary shifted by %s — now firing in %s",
+    "command.eclipse.rt.add.failed": "Cannot shift the boundary: the engine is not armed",
+    "command.eclipse.rt.set.ok": "One-shot boundary set to %s (in %s)",
+    "command.eclipse.rt.status": "Real-time day engine: %s"
+  },
+  "de_de": {
+    "bossbar.eclipse.schedule.paused": "Nächste Phase (pausiert): %s",
+    "command.eclipse.rt.armed": "Echtzeit-Tag-Engine scharfgeschaltet — nächste Grenze %s (in %s)",
+    "command.eclipse.rt.disarmed": "Echtzeit-Tag-Engine deaktiviert — Tage schreiten nicht mehr automatisch voran",
+    "command.eclipse.rt.pause.ok": "Tagesuhr pausiert — %s auf der Uhr eingefroren",
+    "command.eclipse.rt.pause.failed": "Pausieren nicht möglich: Die Engine ist nicht scharfgeschaltet (oder bereits pausiert)",
+    "command.eclipse.rt.resume.ok": "Tagesuhr fortgesetzt — nächste Grenze %s",
+    "command.eclipse.rt.resume.failed": "Fortsetzen nicht möglich: Die Tagesuhr ist nicht pausiert",
+    "command.eclipse.rt.add.ok": "Grenze um %s verschoben — löst nun in %s aus",
+    "command.eclipse.rt.add.failed": "Verschieben nicht möglich: Die Engine ist nicht scharfgeschaltet",
+    "command.eclipse.rt.set.ok": "Einmalige Grenze auf %s gesetzt (in %s)",
+    "command.eclipse.rt.status": "Echtzeit-Tag-Engine: %s"
+  }
+}

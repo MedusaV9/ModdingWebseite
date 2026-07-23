@@ -1,6 +1,5 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
@@ -10,15 +9,16 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
+import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
+import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
+import dev.projecteclipse.eclipse.worldgen.structure.dungeon.CollapsedVaultBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -31,103 +31,279 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 
 /**
- * Worker 5's structure placement entry point. Subscribes to
- * {@link WorldStageService#addListener}: when a stage's terrain sweep completes (grown, not
- * erased), every {@code structures[]} id listed in {@code stages.json} for the crossed
- * stages {@code fromStage+1..toStage} is stamped at its {@link DiscMapData.Landmark}
- * position — deterministic, so a stage revert + regrow (or {@code /eclipse stage rebuild})
- * reproduces identical structures.
+ * Structure system v2 entry point (design D7): the stage listener no longer places
+ * blocks — it <b>enqueues</b> every structure site of the crossed stages into the
+ * two-phase {@link StructurePendingRegistry} (PENDING → rift payload → P2
+ * {@code trigger} / auto-delay → PLACED), and this class registers the
+ * {@link StructurePendingRegistry.SitePlacer placers} that actually build when a site
+ * fires:
  *
- * <p>Two mechanisms (docs/ideas/01_world_terrain.md §E):</p>
- * <ol>
- *   <li><b>Programmatic vanilla generation</b> ({@link #generateVanilla}/{@link #placeStart}):
- *       replicates {@code /place structure} internals — resolve the {@link Structure} from
- *       {@code Registries.STRUCTURE}, {@code Structure.generate(...)} with the fixed
- *       {@link DiscMapData#ECLIPSE_SEED}, then place the {@link StructureStart} pieces chunk
- *       by chunk. Used for {@code minecraft:desert_pyramid}, {@code minecraft:jungle_pyramid},
- *       {@code minecraft:village_plains} and {@code minecraft:stronghold}.</li>
- *   <li><b>Procedural set-piece builders</b> (GhostShipBuilder pattern) for custom landmarks
- *       ({@link FortressCoreBuilder}, {@link WatcherStatues}, {@link AltarSanctumBuilder})
- *       and as the guaranteed {@link FallbackBuilders fallback} whenever a vanilla structure
- *       refuses to generate in the disc context after 2 attempts — a listed structure NEVER
- *       silently misses.</li>
- * </ol>
+ * <ul>
+ *   <li><b>Vanilla starts with terraforming</b> — temples, village, mansion, pillager
+ *       outpost (plateau mode) and trial chambers, ancient city (cavity mode) all run
+ *       through {@link VanillaLandmarks#placeVanilla} → SitePrep → {@link #placeStart},
+ *       which fixes the "structures spawn weirdly on trees" bug: vegetation is cleared
+ *       and the ground is terraformed BEFORE pieces snap to the re-primed heightmaps.</li>
+ *   <li><b>Procedural set pieces</b> — fortress core, watcher statues (stage-1 flavor,
+ *       placed directly), the {@link FallbackBuilders} fallbacks whenever a vanilla
+ *       start refuses to generate (a listed structure never silently misses), and the
+ *       stage-5 <b>stronghold surface vault</b>: a collapsed-keep ruin at the
+ *       {@code eclipse:stronghold_emergence} rim landmark whose gauntlet descends to the
+ *       portal room's doorstep in the mountain cavity
+ *       ({@link CollapsedVaultBuilder#buildStrongholdGauntlet}).</li>
+ *   <li><b>Underground tables</b> — {@link UndergroundSites} rows (mineshafts, monster
+ *       rooms, both custom dungeons) enqueued alongside the stage's configured
+ *       {@code structures[]}.</li>
+ * </ul>
+ *
+ * <p>{@code stages.json} may list both {@code eclipse:*} landmark ids and
+ * {@code minecraft:*} structure ids ({@code minecraft:mansion}…); the latter resolve
+ * their landmark through {@link VanillaLandmarks#landmarkIdFor}. Erase sweeps clear the
+ * registry's rows above the kept stage so a regrow re-enqueues deterministically.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class StructureStamper {
     /** How often a vanilla {@code Structure.generate} is retried before falling back. */
     static final int VANILLA_ATTEMPTS = 2;
 
+    /** Anchor depth of the trial chambers (D6: y ≈ −20 under the badlands ring). */
+    private static final int TRIAL_CHAMBERS_Y = -20;
+    /** Anchor depth of the ancient city (D6: y ≈ −40 inside the mountain). */
+    private static final int ANCIENT_CITY_Y = -40;
+    /** Implicit stage-5 companion site of the stronghold emergence (D8 table). */
+    private static final String STRONGHOLD_VAULT_ID = "eclipse:stronghold_vault";
+    /** Overworld stage that triggers the finale pair (emergence + surface vault). */
+    private static final int FINALE_STAGE = 5;
+
     private static final AtomicBoolean LISTENER_REGISTERED = new AtomicBoolean();
 
     private StructureStamper() {}
 
-    /** Registers the stage listener once per JVM ({@code LISTENERS} is a static list). */
+    /**
+     * Registers the stage listener once per JVM ({@code LISTENERS} is a static list) and
+     * the site placers (idempotent map, safe to re-run) — placers must exist before
+     * {@code ServerStartedEvent} resumes persisted pending sites.
+     */
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         if (LISTENER_REGISTERED.compareAndSet(false, true)) {
             WorldStageService.addListener(StructureStamper::onStageTerrainComplete);
             EclipseMod.LOGGER.info("StructureStamper registered as world-stage listener");
         }
+        registerPlacers();
     }
 
+    // --- phase 1: terrain done -> enqueue ---
+
     /**
-     * Stage listener: stamps the {@code structures[]} of every newly reached stage. Erase
-     * sweeps ({@code toStage <= fromStage}) place nothing — the terrain function already
-     * removed the annulus (and any structure in it); regrowing re-stamps deterministically.
+     * Stage listener: enqueues the sites of every newly reached stage. Erase sweeps
+     * ({@code toStage <= fromStage}) enqueue nothing and instead clear the registry's
+     * records above the kept stage — the terrain function already removed the annulus
+     * (and any structure in it); regrowing re-enqueues deterministically.
      */
     private static void onStageTerrainComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage) {
         if (toStage <= fromStage) {
+            StructurePendingRegistry.clearPlacedAbove(profile.name(), toStage);
             return;
         }
+        long gameTime = level.getGameTime();
         for (int stage = fromStage + 1; stage <= toStage; stage++) {
             if (profile == DiscProfile.OVERWORLD && stage == 1) {
-                // §F flavor landmark: watcher statues appear at the former team-disc
-                // centers once the intro fusion (stage 1) swallows the player discs.
-                runSafely("eclipse:watcher_statues", () -> WatcherStatues.placeAll(level));
+                // §F flavor landmark, placed directly (tiny scenery, no rift moment):
+                // watcher statues at the former team-disc centers once the intro fusion
+                // swallows the player discs.
+                try {
+                    WatcherStatues.placeAll(level);
+                } catch (Exception e) {
+                    EclipseMod.LOGGER.error("Structure placement of eclipse:watcher_statues failed", e);
+                }
             }
             EclipseConfig.StageEntry entry = EclipseConfig.stage(profile.name(), stage);
-            if (entry == null) {
-                continue;
+            if (entry != null) {
+                for (String structureId : entry.structures()) {
+                    enqueueConfigured(profile, stage, structureId, gameTime);
+                }
             }
-            for (String structureId : entry.structures()) {
-                final int stageFinal = stage;
-                runSafely(structureId, () -> place(level, profile, stageFinal, structureId));
+            if (profile == DiscProfile.OVERWORLD && stage == FINALE_STAGE) {
+                enqueueStrongholdVault(stage, gameTime);
+            }
+            for (PendingSite site : UndergroundSites.sitesFor(profile, stage, gameTime)) {
+                StructurePendingRegistry.enqueue(site);
             }
         }
     }
 
-    /** One structure must never break the others (or the sweep-completion path). */
-    private static void runSafely(String what, Runnable placement) {
-        try {
-            placement.run();
-        } catch (Exception e) {
-            EclipseMod.LOGGER.error("Structure placement of {} failed", what, e);
+    /** Builds + enqueues the pending row of one {@code stages.json} structure id. */
+    private static void enqueueConfigured(DiscProfile profile, int stage, String structureId, long gameTime) {
+        String landmarkId = structureId;
+        if (structureId.startsWith("minecraft:")) {
+            String mapped = VanillaLandmarks.landmarkIdFor(ResourceLocation.parse(structureId));
+            if (mapped == null) {
+                EclipseMod.LOGGER.warn("Structure id {} (stage {} of {}) has no landmark mapping; skipping",
+                        structureId, stage, profile.name());
+                return;
+            }
+            landmarkId = mapped;
         }
-    }
-
-    /** Dispatches one {@code stages.json} structure id to its placement mechanism. */
-    private static void place(ServerLevel level, DiscProfile profile, int stage, String structureId) {
-        DiscMapData.Landmark landmark = findLandmark(profile, structureId);
+        DiscMapData.Landmark landmark = findLandmark(profile, landmarkId);
         if (landmark == null) {
-            EclipseMod.LOGGER.warn("No disc_map.json landmark for structure {} (stage {} of {}); skipping",
-                    structureId, stage, profile.name());
+            EclipseMod.LOGGER.warn("No disc_map.json landmark {} for structure {} (stage {} of {}); skipping",
+                    landmarkId, structureId, stage, profile.name());
             return;
         }
-        switch (structureId) {
-            case "eclipse:desert_temple" -> stampPyramid(level, profile, landmark,
-                    ResourceLocation.withDefaultNamespace("desert_pyramid"),
-                    () -> FallbackBuilders.desertTemple(level, surfaceAnchor(profile, landmark)));
-            case "eclipse:jungle_temple" -> stampPyramid(level, profile, landmark,
-                    ResourceLocation.withDefaultNamespace("jungle_pyramid"),
-                    () -> FallbackBuilders.jungleTemple(level, surfaceAnchor(profile, landmark)));
-            case "eclipse:village_plains" -> stampVillage(level, profile, landmark);
-            case "eclipse:stronghold_emergence" -> StrongholdEmergence.begin(level);
-            case "eclipse:fortress_core" -> FortressCoreBuilder.build(level, landmark);
-            default -> EclipseMod.LOGGER.warn("Unknown structure id {} in stages.json (stage {} of {})",
-                    structureId, stage, profile.name());
+        BlockPos anchor = switch (structureId) {
+            case "minecraft:trial_chambers" ->
+                    new BlockPos(landmark.x(), TRIAL_CHAMBERS_Y, landmark.z());
+            case "minecraft:ancient_city" ->
+                    new BlockPos(landmark.x(), ANCIENT_CITY_Y, landmark.z());
+            default -> surfaceAnchor(profile, landmark);
+        };
+        StructurePendingRegistry.enqueue(new PendingSite(landmarkId, structureId, profile.name(),
+                anchor, stage, footprintOf(structureId, landmark), gameTime));
+    }
+
+    /** The finale's companion surface site at the stronghold rim landmark (D6/D8). */
+    private static void enqueueStrongholdVault(int stage, long gameTime) {
+        DiscMapData.Landmark landmark = findLandmark(DiscProfile.OVERWORLD, "eclipse:stronghold_emergence");
+        if (landmark == null) {
+            EclipseMod.LOGGER.warn("No eclipse:stronghold_emergence landmark; skipping the surface vault");
+            return;
+        }
+        StructurePendingRegistry.enqueue(new PendingSite(STRONGHOLD_VAULT_ID, STRONGHOLD_VAULT_ID,
+                DiscProfile.OVERWORLD.name(), surfaceAnchor(DiscProfile.OVERWORLD, landmark),
+                stage, 44, gameTime));
+    }
+
+    /** Expected XZ extent of a structure (P2 rift sizing): measured minimums per id. */
+    private static int footprintOf(String structureId, DiscMapData.Landmark landmark) {
+        int fromRadius = landmark.radius() * 2;
+        return switch (structureId) {
+            case "eclipse:village_plains" -> Math.max(fromRadius, 120);
+            case "minecraft:mansion" -> Math.max(fromRadius, 80);
+            case "minecraft:ancient_city" -> Math.max(fromRadius, 110);
+            case "minecraft:trial_chambers" -> Math.max(fromRadius, 80);
+            case "minecraft:pillager_outpost" -> Math.max(fromRadius, 48);
+            default -> Math.max(fromRadius, 24);
+        };
+    }
+
+    // --- phase 2: the placers ---
+
+    /** Registers every placer this package owns (first registration wins — idempotent). */
+    private static void registerPlacers() {
+        StructurePendingRegistry.registerPlacer("eclipse:desert_temple", (level, site) ->
+                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("desert_pyramid"),
+                        anchor -> FallbackBuilders.desertTemple(level, anchor)));
+        StructurePendingRegistry.registerPlacer("eclipse:jungle_temple", (level, site) ->
+                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("jungle_pyramid"),
+                        anchor -> FallbackBuilders.jungleTemple(level, anchor)));
+        StructurePendingRegistry.registerPlacer("eclipse:village_plains", (level, site) ->
+                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("village_plains"),
+                        anchor -> FallbackBuilders.village(level, anchor)));
+        StructurePendingRegistry.registerPlacer("minecraft:pillager_outpost", (level, site) ->
+                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("pillager_outpost"), null));
+        StructurePendingRegistry.registerPlacer("minecraft:mansion", (level, site) ->
+                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("mansion"), null));
+        StructurePendingRegistry.registerPlacer("minecraft:trial_chambers", (level, site) ->
+                placeCavity(level, site, ResourceLocation.withDefaultNamespace("trial_chambers")));
+        StructurePendingRegistry.registerPlacer("minecraft:ancient_city", (level, site) ->
+                placeCavity(level, site, ResourceLocation.withDefaultNamespace("ancient_city")));
+        // The emergence runs its own quake/fissure/beam sequence — the rift phase of the
+        // registry is its announcement; the sequence itself starts on trigger.
+        StructurePendingRegistry.registerPlacer("eclipse:stronghold_emergence",
+                (level, site) -> StrongholdEmergence.begin(level));
+        StructurePendingRegistry.registerPlacer("eclipse:fortress_core", (level, site) -> {
+            DiscMapData.Landmark landmark = findLandmark(DiscProfile.NETHER, "eclipse:fortress_core");
+            if (landmark != null) {
+                FortressCoreBuilder.build(level, landmark);
+            }
+        });
+        StructurePendingRegistry.registerPlacer(STRONGHOLD_VAULT_ID, StructureStamper::placeStrongholdVault);
+        UndergroundSites.registerPlacers();
+    }
+
+    /**
+     * Plateau-mode vanilla placement via {@link VanillaLandmarks#placeVanilla} (SitePrep
+     * terraform + heightmap re-prime + relight). When vanilla refuses after
+     * {@value #VANILLA_ATTEMPTS} attempts, the procedural fallback builds on a SitePrep'd
+     * pad instead — never on raw (tree-covered) ground; sites without a fallback builder
+     * (mansion, outpost) log and consume the site.
+     */
+    private static void placeWithFallback(ServerLevel level, PendingSite site,
+            ResourceLocation vanillaId, @Nullable FallbackBuild fallback) {
+        BoundingBox placed = VanillaLandmarks.placeVanilla(level, vanillaId, site.anchor(), SitePrep.Mode.PLATEAU);
+        if (placed != null) {
+            return;
+        }
+        if (fallback == null) {
+            EclipseMod.LOGGER.error("{} failed to generate at {} and has no procedural fallback; "
+                    + "site {} consumed", vanillaId, site.anchor().toShortString(), site.siteId());
+            return;
+        }
+        EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: {} failed to generate at {}; building the fallback piece",
+                vanillaId, site.anchor().toShortString());
+        DiscProfile profile = WorldStageService.profileOf(level.dimension());
+        int pad = Math.max(12, site.footprint() / 4);
+        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
+                profile != null ? profile : DiscProfile.OVERWORLD,
+                site.anchor().getX() - pad, site.anchor().getZ() - pad,
+                site.anchor().getX() + pad, site.anchor().getZ() + pad, site.anchor());
+        fallback.build(new BlockPos(site.anchor().getX(), prepared.plateauY(), site.anchor().getZ()));
+        SitePrep.finish(level, prepared);
+    }
+
+    /** Cavity-mode vanilla placement (underground envelope + entrance shaft). */
+    private static void placeCavity(ServerLevel level, PendingSite site, ResourceLocation vanillaId) {
+        BoundingBox placed = VanillaLandmarks.placeVanilla(level, vanillaId, site.anchor(), SitePrep.Mode.CAVITY);
+        if (placed == null) {
+            EclipseMod.LOGGER.error("{} failed to generate at {} — underground site {} consumed "
+                    + "(no procedural equivalent exists)", vanillaId, site.anchor().toShortString(), site.siteId());
         }
     }
+
+    /**
+     * The stage-5 stronghold surface vault: collapsed-keep ruin on a SitePrep plateau at
+     * the rim landmark + the Collapsed Vault gauntlet descending to the portal-room
+     * doorstep — the cavity edge nearest the ruin, at portal-room floor height
+     * ({@code StrongholdEmergence} stamps the stronghold centered in the mountain-core
+     * cavity). Without a mountain the gauntlet dead-drops 40 blocks below the ruin into
+     * a sealed antechamber (flavor only; the emergence fallback already placed a portal).
+     */
+    private static void placeStrongholdVault(ServerLevel level, PendingSite site) {
+        BlockPos anchor = site.anchor();
+        DiscProfile profile = WorldStageService.profileOf(level.dimension());
+        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
+                profile != null ? profile : DiscProfile.OVERWORLD,
+                anchor.getX() - 12, anchor.getZ() - 12, anchor.getX() + 12, anchor.getZ() + 12, anchor);
+        BlockPos surface = new BlockPos(anchor.getX(), prepared.plateauY(), anchor.getZ());
+
+        DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
+        BlockPos target;
+        if (mountain == null) {
+            target = surface.below(40).offset(24, 0, 0);
+            EclipseMod.LOGGER.warn("No mountain in disc_map.json; stronghold gauntlet ends in a sealed antechamber");
+        } else {
+            double dx = surface.getX() - mountain.x();
+            double dz = surface.getZ() - mountain.z();
+            double len = Math.max(1.0D, Math.sqrt(dx * dx + dz * dz));
+            int doorstepR = mountain.caveRadiusXz() + 5;
+            target = new BlockPos(mountain.x() + (int) Math.round(dx / len * doorstepR),
+                    mountain.caveY() - mountain.caveRadiusY() + 2,
+                    mountain.z() + (int) Math.round(dz / len * doorstepR));
+        }
+        BoundingBox bounds = CollapsedVaultBuilder.buildStrongholdGauntlet(level, surface, target);
+        SitePrep.finish(level, prepared);
+        SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
+    }
+
+    /** Procedural fallback builder taking the prepared plateau anchor. */
+    @FunctionalInterface
+    private interface FallbackBuild {
+        void build(BlockPos anchor);
+    }
+
+    // --- shared landmark / vanilla-generate helpers (used by VanillaLandmarks,
+    // StrongholdEmergence and UndergroundSites) ---
 
     /** The landmark entry for a structure id, or {@code null} when the map has none. */
     @Nullable
@@ -146,58 +322,10 @@ public final class StructureStamper {
                 DiscTerrainFunction.surfaceY(profile, landmark.x(), landmark.z()), landmark.z());
     }
 
-    // --- vanilla-generate structures ---
-
     /**
-     * Desert/jungle pyramid: vanilla {@code Structure.generate} at the landmark chunk. The
-     * pyramid pieces self-anchor to the real ground at placement time
-     * ({@code ScatteredFeaturePiece} samples MOTION_BLOCKING_NO_LEAVES), so no piece moves
-     * are needed. Falls back to a compact procedural temple after {@value #VANILLA_ATTEMPTS}
-     * failed attempts.
-     */
-    private static void stampPyramid(ServerLevel level, DiscProfile profile,
-            DiscMapData.Landmark landmark, ResourceLocation vanillaId, Runnable fallback) {
-        BlockPos anchor = surfaceAnchor(profile, landmark);
-        StructureStart start = generateVanilla(level, vanillaId, anchor);
-        if (start == null) {
-            EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: {} failed to generate at {}; building fallback temple",
-                    vanillaId, anchor.toShortString());
-            fallback.run();
-            return;
-        }
-        BoundingBox placed = placeStart(level, start, placementRandom(anchor));
-        registerStart(level, start, placed);
-        EclipseMod.LOGGER.info("VANILLA GENERATE: placed {} for {} at {} (bounds {})",
-                vanillaId, landmark.id(), anchor.toShortString(), placed);
-    }
-
-    /**
-     * Village: flatten a coarse-dirt plaza around the landmark first (§E — vanilla village
-     * start expects workable flat ground), then vanilla-generate
-     * {@code minecraft:village_plains}. Outer street/house pieces terrain-match against the
-     * real (procedural) plains surface at placement time.
-     */
-    private static void stampVillage(ServerLevel level, DiscProfile profile, DiscMapData.Landmark landmark) {
-        BlockPos anchor = surfaceAnchor(profile, landmark);
-        flattenPlaza(level, profile, landmark.x(), landmark.z(), 12);
-        StructureStart start = generateVanilla(level,
-                ResourceLocation.withDefaultNamespace("village_plains"), anchor);
-        if (start == null) {
-            EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: minecraft:village_plains failed at {}; building fallback hamlet",
-                    anchor.toShortString());
-            FallbackBuilders.village(level, anchor);
-            return;
-        }
-        BoundingBox placed = placeStart(level, start, placementRandom(anchor));
-        registerStart(level, start, placed);
-        EclipseMod.LOGGER.info("VANILLA GENERATE: placed minecraft:village_plains for {} at {} (bounds {})",
-                landmark.id(), anchor.toShortString(), placed);
-    }
-
-    /**
-     * Replicates the {@code /place structure} generate step with the fixed
-     * {@link DiscMapData#ECLIPSE_SEED} (attempt index nudges the seed). Returns {@code null}
-     * after {@value #VANILLA_ATTEMPTS} invalid/failed attempts — callers must fall back.
+     * Replicates the {@code /place structure} generate step under the frozen map seed
+     * (attempt index nudges the seed). Returns {@code null} after
+     * {@value #VANILLA_ATTEMPTS} invalid/failed attempts — callers must fall back.
      */
     @Nullable
     static StructureStart generateVanilla(ServerLevel level, ResourceLocation structureId, BlockPos anchor) {
@@ -211,7 +339,7 @@ public final class StructureStamper {
             try {
                 StructureStart start = structure.generate(level.registryAccess(), generator,
                         generator.getBiomeSource(), level.getChunkSource().randomState(),
-                        level.getStructureManager(), DiscMapData.ECLIPSE_SEED + attempt,
+                        level.getStructureManager(), FrozenParams.mapSeed() + attempt,
                         new ChunkPos(anchor), 0, level, biome -> true);
                 if (start != null && start.isValid()) {
                     return start;
@@ -274,56 +402,6 @@ public final class StructureStamper {
 
     /** Deterministic placement random (chest loot, decoration rolls) per landmark. */
     static RandomSource placementRandom(BlockPos anchor) {
-        return RandomSource.create(DiscMapData.ECLIPSE_SEED ^ anchor.asLong());
-    }
-
-    /**
-     * Flattens a circular coarse-dirt plaza to the landmark's deterministic surface height:
-     * vegetation and terrain above are cleared, dips are filled, and the top layer becomes a
-     * hashed grass/coarse-dirt/path mix.
-     */
-    static void flattenPlaza(ServerLevel level, DiscProfile profile, int centerX, int centerZ, int radius) {
-        int plazaY = DiscTerrainFunction.surfaceY(profile, centerX, centerZ);
-        BlockState dirt = Blocks.DIRT.defaultBlockState();
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                if (dx * dx + dz * dz > radius * radius) {
-                    continue;
-                }
-                int x = centerX + dx;
-                int z = centerZ + dz;
-                level.getChunk(x >> 4, z >> 4);
-                for (int y = plazaY + 1; y <= plazaY + 24; y++) {
-                    cursor.set(x, y, z);
-                    if (!level.getBlockState(cursor).isAir()) {
-                        level.setBlock(cursor, Blocks.AIR.defaultBlockState(), 2);
-                    }
-                }
-                for (int y = plazaY - 3; y < plazaY; y++) {
-                    cursor.set(x, y, z);
-                    if (!level.getBlockState(cursor).isSolidRender(level, cursor)) {
-                        level.setBlock(cursor, dirt, 2);
-                    }
-                }
-                cursor.set(x, plazaY, z);
-                level.setBlock(cursor, plazaTopBlock(x, z), 2);
-            }
-        }
-        EclipseMod.LOGGER.info("Flattened village plaza r={} at ({}, {}, {})", radius, centerX, plazaY, centerZ);
-    }
-
-    /** Hashed plaza surface mix: mostly grass with coarse-dirt patches and dirt-path scars. */
-    private static BlockState plazaTopBlock(int x, int z) {
-        long h = (x * 341873128712L + z * 132897987541L) ^ DiscMapData.ECLIPSE_SEED;
-        h = (h ^ (h >>> 27)) * 0x94D049BB133111EBL;
-        double roll = ((h >>> 11) & 0xFFFFF) / (double) 0x100000;
-        if (roll < 0.25D) {
-            return Blocks.COARSE_DIRT.defaultBlockState();
-        }
-        if (roll < 0.32D) {
-            return Blocks.DIRT_PATH.defaultBlockState();
-        }
-        return Blocks.GRASS_BLOCK.defaultBlockState();
+        return RandomSource.create(FrozenParams.mapSeed() ^ anchor.asLong());
     }
 }

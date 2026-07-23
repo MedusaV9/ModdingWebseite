@@ -1,0 +1,14 @@
+{
+  "en_us": {
+    "block.eclipse.respawn_door": "Respawn Door",
+    "block.eclipse.respawn_door_filler": "Respawn Door (segment)",
+    "message.eclipse.door.locked": "The door strains, but will not yield to the dead.",
+    "message.eclipse.door.closed": "Barred from beyond - no hand opens this door."
+  },
+  "de_de": {
+    "block.eclipse.respawn_door": "Tor der Wiederkehr",
+    "block.eclipse.respawn_door_filler": "Tor der Wiederkehr (Segment)",
+    "message.eclipse.door.locked": "Das Tor ächzt, doch den Toten gibt es nicht nach.",
+    "message.eclipse.door.closed": "Von jenseits verriegelt - keine Hand öffnet dieses Tor."
+  }
+}

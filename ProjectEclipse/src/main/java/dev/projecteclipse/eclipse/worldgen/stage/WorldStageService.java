@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.border.SoftBorder;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.devtools.StageIO;
 import dev.projecteclipse.eclipse.network.S2CStagePayload;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -204,6 +205,12 @@ public final class WorldStageService {
     /** Called by {@link RingGrowthService} on the server thread when a sweep completes. */
     static void onSweepComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage) {
         EclipseWorldState.get(level.getServer()).clearGrowthCursor();
+        // W1.5 new-ring registry (design D11): record the grown annulus for the P4/P6
+        // glitched-mob spawn rules BEFORE the stage listeners run, so a listener placing
+        // structures/spawners already sees the fresh-ring rows. Rebuild sweeps never call
+        // onSweepComplete; erase/downgrade transitions are filtered by the registry's
+        // toStage > fromStage guard.
+        NewRingRegistry.onRingCommitted(level, profile, fromStage, toStage);
         broadcastStage(level.getServer(), profile, toStage, false);
         for (StageListener listener : LISTENERS) {
             listener.onStageTerrainComplete(level, profile, fromStage, toStage);
@@ -244,6 +251,11 @@ public final class WorldStageService {
         EclipseWorldState state = EclipseWorldState.get(level.getServer());
         WorldStageAccess.setStage(DiscProfile.OVERWORLD, state.getWorldStage(DiscProfile.OVERWORLD));
         WorldStageAccess.setStage(DiscProfile.NETHER, state.getWorldStage(DiscProfile.NETHER));
+        // W1.5/D9: hydrate the worldgen-overhaul SavedData at the same moment — its
+        // load() mirrors the breach/end materialization flags into FrozenParams, which
+        // worldgen worker threads read per column, so the mirror must be set before
+        // prepareLevels generates the first spawn chunk (same reason as the stage seam).
+        EclipseWorldgenState.get(level.getServer());
         EclipseMod.LOGGER.info("World stages published to chunkgen seam: overworld {}, nether {}",
                 state.getWorldStage(DiscProfile.OVERWORLD), state.getWorldStage(DiscProfile.NETHER));
     }

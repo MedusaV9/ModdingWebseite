@@ -12,6 +12,11 @@ package dev.projecteclipse.eclipse.worldgen;
  * {@code EclipseWorldState}: call {@link #setStage} once on server start (with the
  * persisted stage) and again on every stage commit, from the server thread, BEFORE any
  * new chunk of the grown annulus can generate.</p>
+ *
+ * <p>Stage <em>radii</em> come from the per-save freeze ({@link FrozenParams} →
+ * {@link StageRadii}) on {@link net.neoforged.neoforge.event.server.ServerAboutToStartEvent};
+ * {@link net.neoforged.neoforge.event.server.ServerStoppedEvent} resets both this class and
+ * {@link StageRadii} to defaults (W1.9 / D9).</p>
  */
 public final class WorldStageAccess {
     private static volatile int overworldStage = 0;
