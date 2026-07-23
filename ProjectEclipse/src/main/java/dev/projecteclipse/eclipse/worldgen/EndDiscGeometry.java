@@ -19,7 +19,7 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * the outer third. Requires the raised overworld build height (−176…464).
  *
  * <p>Everything is a pure function of block coordinates and
- * {@link DiscMapData#ECLIPSE_SEED} (hash salt 15, noise salt 25). The terrain function
+ * {@link FrozenParams#mapSeed()} (hash salt 15, noise salt 25). The terrain function
  * consults this class only while {@code FrozenParams.endDiscMaterialized()} is set;
  * W1.8's {@code EndDiscService} materializes the same columns on live chunks via the
  * budgeted writer, and chunks generated afterwards include the disc automatically.
@@ -63,7 +63,11 @@ public final class EndDiscGeometry {
     private static final double EDGE_WOBBLE_AMP = 6.0D;
 
     private static final int H_END = 15;
-    private static final SimplexNoise END_NOISE = DiscTerrainFunction.noise(25);
+
+    private record EndLayout(long seed, SimplexNoise noise, int[] pillarTop,
+            boolean[] pillarCaged) {}
+
+    private static volatile EndLayout endLayout;
 
     private static final BlockState END_STONE = Blocks.END_STONE.defaultBlockState();
     private static final BlockState OBSIDIAN = Blocks.OBSIDIAN.defaultBlockState();
@@ -78,45 +82,62 @@ public final class EndDiscGeometry {
 
     private static final int[] PILLAR_X = new int[PILLAR_COUNT];
     private static final int[] PILLAR_Z = new int[PILLAR_COUNT];
-    private static final int[] PILLAR_TOP = new int[PILLAR_COUNT];
-    private static final boolean[] PILLAR_CAGED = new boolean[PILLAR_COUNT];
-    /** Highest Y any End-disc block can occupy (tallest cage roof). */
-    public static final int MAX_Y;
+    /** Highest possible Y any End-disc block can occupy (maximum-height cage roof). */
+    public static final int MAX_Y =
+            DiscProfile.END_DISC_SURFACE_Y + 44 + CAGE_HEIGHT + 1;
 
     static {
-        int max = DiscProfile.END_DISC_SURFACE_Y + 2;
         for (int i = 0; i < PILLAR_COUNT; i++) {
             double angle = Math.toRadians(i * (360.0D / PILLAR_COUNT) + 22.5D);
             PILLAR_X[i] = DiscProfile.END_DISC_CENTER_X
                     + (int) Math.round(Math.cos(angle) * PILLAR_RING_RADIUS);
             PILLAR_Z[i] = DiscProfile.END_DISC_CENTER_Z
                     + (int) Math.round(Math.sin(angle) * PILLAR_RING_RADIUS);
-            long h = DiscTerrainFunction.hash(H_END, i, 77);
-            int height = 24 + (int) (DiscTerrainFunction.to01(h) * 21.0D); // 24..44
-            PILLAR_TOP[i] = DiscProfile.END_DISC_SURFACE_Y + height;
         }
-        // Iron-bar cages on the two tallest pillars (matches vanilla's caged crystals).
-        int tallest = 0;
-        for (int i = 1; i < PILLAR_COUNT; i++) {
-            if (PILLAR_TOP[i] > PILLAR_TOP[tallest]) {
-                tallest = i;
-            }
-        }
-        int second = tallest == 0 ? 1 : 0;
-        for (int i = 0; i < PILLAR_COUNT; i++) {
-            if (i != tallest && PILLAR_TOP[i] > PILLAR_TOP[second]) {
-                second = i;
-            }
-        }
-        PILLAR_CAGED[tallest] = true;
-        PILLAR_CAGED[second] = true;
-        for (int i = 0; i < PILLAR_COUNT; i++) {
-            max = Math.max(max, PILLAR_TOP[i] + (PILLAR_CAGED[i] ? CAGE_HEIGHT + 1 : 0));
-        }
-        MAX_Y = max;
     }
 
     private EndDiscGeometry() {}
+
+    /**
+     * Returns the noise and pillar layout for the active frozen map seed. The immutable
+     * snapshot is rebuilt atomically when another save activates in the same JVM.
+     */
+    private static EndLayout endLayout() {
+        long seed = FrozenParams.mapSeed();
+        EndLayout cached = endLayout;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (EndDiscGeometry.class) {
+                cached = endLayout;
+                if (cached == null || cached.seed() != seed) {
+                    int[] tops = new int[PILLAR_COUNT];
+                    boolean[] cages = new boolean[PILLAR_COUNT];
+                    for (int i = 0; i < PILLAR_COUNT; i++) {
+                        long h = DiscTerrainFunction.hash(H_END, i, 77);
+                        tops[i] = DiscProfile.END_DISC_SURFACE_Y
+                                + 24 + (int) (DiscTerrainFunction.to01(h) * 21.0D);
+                    }
+                    // Iron-bar cages on the two tallest pillars (matches vanilla's caged crystals).
+                    int tallest = 0;
+                    for (int i = 1; i < PILLAR_COUNT; i++) {
+                        if (tops[i] > tops[tallest]) {
+                            tallest = i;
+                        }
+                    }
+                    int second = tallest == 0 ? 1 : 0;
+                    for (int i = 0; i < PILLAR_COUNT; i++) {
+                        if (i != tallest && tops[i] > tops[second]) {
+                            second = i;
+                        }
+                    }
+                    cages[tallest] = true;
+                    cages[second] = true;
+                    cached = new EndLayout(seed, DiscTerrainFunction.noise(25), tops, cages);
+                    endLayout = cached;
+                }
+            }
+        }
+        return cached;
+    }
 
     /** Whether column (x, z) can carry End-disc blocks (radius + wobble margin). */
     public static boolean footprintContains(int x, int z) {
@@ -134,7 +155,7 @@ public final class EndDiscGeometry {
     /** Lens ground surface Y of column (x, z) (undulates ±2 around the profile constant). */
     public static int surfaceYAt(int x, int z) {
         return DiscProfile.END_DISC_SURFACE_Y
-                + (int) Math.round(END_NOISE.getValue(x / 40.0D, z / 40.0D) * 2.0D);
+                + (int) Math.round(endLayout().noise().getValue(x / 40.0D, z / 40.0D) * 2.0D);
     }
 
     /** Crystal perch position provider for W1.8 ({@code EndSpires}). */
@@ -147,11 +168,11 @@ public final class EndDiscGeometry {
     }
 
     public static int pillarTopY(int index) {
-        return PILLAR_TOP[index];
+        return endLayout().pillarTop()[index];
     }
 
     public static boolean pillarCaged(int index) {
-        return PILLAR_CAGED[index];
+        return endLayout().pillarCaged()[index];
     }
 
     /**
@@ -174,7 +195,7 @@ public final class EndDiscGeometry {
             double dx = x - PILLAR_X[i];
             double dz = z - PILLAR_Z[i];
             if (dx * dx + dz * dz <= (CAGE_OUTER_RADIUS + 0.2D) * (CAGE_OUTER_RADIUS + 0.2D)) {
-                top = Math.max(top, PILLAR_TOP[i] + (PILLAR_CAGED[i] ? CAGE_HEIGHT + 1 : 0));
+                top = Math.max(top, pillarTopY(i) + (pillarCaged(i) ? CAGE_HEIGHT + 1 : 0));
             }
         }
         ChorusStalk stalk = chorusAt(x, z);
@@ -229,10 +250,10 @@ public final class EndDiscGeometry {
                 if (pillarDistSq > (CAGE_OUTER_RADIUS + 0.2D) * (CAGE_OUTER_RADIUS + 0.2D)) {
                     continue;
                 }
-                if (pillarDistSq <= PILLAR_RADIUS * PILLAR_RADIUS && y <= PILLAR_TOP[i]) {
+                if (pillarDistSq <= PILLAR_RADIUS * PILLAR_RADIUS && y <= pillarTopY(i)) {
                     return OBSIDIAN;
                 }
-                if (PILLAR_CAGED[i]) {
+                if (pillarCaged(i)) {
                     BlockState cage = cageState(x, y, z, i, pillarDistSq);
                     if (cage != null) {
                         return cage;
@@ -255,7 +276,8 @@ public final class EndDiscGeometry {
         // Lens body: thickness tapers from the center constant to ~4 at the wobbled rim.
         double angle = Math.atan2(cdz, cdx);
         double rimRadius = DiscProfile.END_DISC_RADIUS
-                + END_NOISE.getValue(Math.cos(angle) * 5.0D, Math.sin(angle) * 5.0D) * EDGE_WOBBLE_AMP;
+                + endLayout().noise().getValue(Math.cos(angle) * 5.0D, Math.sin(angle) * 5.0D)
+                        * EDGE_WOBBLE_AMP;
         if (dist > rimRadius) {
             return null;
         }
@@ -271,7 +293,7 @@ public final class EndDiscGeometry {
     /** Iron-bar cage cell of pillar {@code i}, with ring-neighbour connections set. */
     @Nullable
     private static BlockState cageState(int x, int y, int z, int i, double pillarDistSq) {
-        int top = PILLAR_TOP[i];
+        int top = pillarTopY(i);
         boolean ring = y > top && y <= top + CAGE_HEIGHT
                 && pillarDistSq > CAGE_INNER_RADIUS * CAGE_INNER_RADIUS
                 && pillarDistSq <= CAGE_OUTER_RADIUS * CAGE_OUTER_RADIUS;

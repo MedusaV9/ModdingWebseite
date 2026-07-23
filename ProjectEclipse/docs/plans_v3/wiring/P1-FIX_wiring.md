@@ -264,6 +264,10 @@ Then apply these exact remaining hunks:
 `MAX_Y` intentionally becomes the maximum possible upper bound; the materializer may scan a
 few null blocks but remains correct.
 
+**Applied in P1-FIX follow-up:** both lifecycle patches now live in `BreachGeometry` and
+`EndDiscGeometry`. The W1.8 consumer API is unchanged; `MAX_Y` is the conservative constant
+upper bound `408`, so `EndDiscService` remains correct without consumer-site changes.
+
 ## In-game verification
 
 1. Fresh freeze:

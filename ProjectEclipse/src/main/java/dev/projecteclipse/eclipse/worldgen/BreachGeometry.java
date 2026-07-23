@@ -19,7 +19,7 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  *
  * <p>Anchored on the {@code eclipse:nether_breach} landmark of {@code disc_map.json}
  * (default: x 92, z 92 — r ≈ 130 on the desert wedge mid-angle). All shapes derive from
- * {@link DiscMapData#ECLIPSE_SEED} (hash salt 14, noise salt 26); results are pure per
+ * {@link FrozenParams#mapSeed()} (hash salt 14, noise salt 26); results are pure per
  * map snapshot. The terrain function only consults this class when
  * {@code FrozenParams.breachOpen()} is set, which flips once per save — new chunk
  * generation and W1.7's live materialization sweep therefore always agree.</p>
@@ -52,7 +52,10 @@ public final class BreachGeometry {
     private static final double LIP_NOTCH = 1.6D;
 
     private static final int H_BREACH = 14;
-    private static final SimplexNoise WOBBLE = DiscTerrainFunction.noise(26);
+
+    private record SeededNoise(long seed, SimplexNoise noise) {}
+
+    private static volatile SeededNoise wobble;
 
     private static final int DEFAULT_X = 92;
     private static final int DEFAULT_Z = 92;
@@ -72,6 +75,21 @@ public final class BreachGeometry {
     private static volatile Site site;
 
     private BreachGeometry() {}
+
+    private static SimplexNoise wobble() {
+        long seed = FrozenParams.mapSeed();
+        SeededNoise cached = wobble;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (BreachGeometry.class) {
+                cached = wobble;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new SeededNoise(seed, DiscTerrainFunction.noise(26));
+                    wobble = cached;
+                }
+            }
+        }
+        return cached.noise();
+    }
 
     private static Site site() {
         DiscMapData map = DiscMapData.get();
@@ -159,11 +177,12 @@ public final class BreachGeometry {
         }
         double dist = Math.sqrt(distSq);
         double angle = Math.atan2(dz, dx);
-        double wobble = WOBBLE.getValue(Math.cos(angle) * 3.0D, Math.sin(angle) * 3.0D, y / 40.0D)
+        SimplexNoise wobbleNoise = wobble();
+        double wobble = wobbleNoise.getValue(Math.cos(angle) * 3.0D, Math.sin(angle) * 3.0D, y / 40.0D)
                 * WOBBLE_AMP;
         double radius = radiusAt(y, s) + wobble;
         double lipNotchRadius = radiusAt(s.lipY(), s)
-                + WOBBLE.getValue(Math.cos(angle) * 3.0D, Math.sin(angle) * 3.0D, s.lipY() / 40.0D)
+                + wobbleNoise.getValue(Math.cos(angle) * 3.0D, Math.sin(angle) * 3.0D, s.lipY() / 40.0D)
                         * WOBBLE_AMP
                 - LIP_NOTCH;
         if (y == s.lipY()) {
