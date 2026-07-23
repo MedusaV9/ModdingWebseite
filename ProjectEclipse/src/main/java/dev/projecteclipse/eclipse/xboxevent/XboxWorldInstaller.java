@@ -140,14 +140,18 @@ public final class XboxWorldInstaller {
     /** Extracts only the frozen {@code region/*.mca} + {@code entities/*.mca} payload. */
     private static int extract(byte[] zipBytes, Path targetDir) throws IOException {
         int count = 0;
+        // Normalize the base first: in dev the server root is "." so an un-normalized
+        // targetDir (e.g. ./world/dimensions/...) never prefix-matches its normalized
+        // children and the zip-slip guard rejects every entry.
+        Path base = targetDir.toAbsolutePath().normalize();
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry zipEntry;
             while ((zipEntry = zip.getNextEntry()) != null) {
                 if (zipEntry.isDirectory() || !isWantedEntry(zipEntry.getName())) {
                     continue;
                 }
-                Path target = targetDir.resolve(zipEntry.getName()).normalize();
-                if (!target.startsWith(targetDir)) { // zip-slip guard
+                Path target = base.resolve(zipEntry.getName()).normalize();
+                if (!target.startsWith(base)) { // zip-slip guard
                     throw new IOException("Illegal zip entry path: " + zipEntry.getName());
                 }
                 Files.createDirectories(target.getParent());

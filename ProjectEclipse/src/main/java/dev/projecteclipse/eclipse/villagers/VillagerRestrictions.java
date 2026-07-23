@@ -9,7 +9,7 @@ import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerData;
@@ -99,10 +99,9 @@ public final class VillagerRestrictions {
             return;
         }
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            AABB worldBox = new AABB(
-                -3.0E7D, level.getMinBuildHeight(), -3.0E7D,
-                3.0E7D, level.getMaxBuildHeight(), 3.0E7D);
-        for (Villager villager : level.getEntitiesOfClass(Villager.class, worldBox)) {
+            // Entity-list iteration, NOT an AABB query: a world-sized AABB walks the whole
+            // section grid (and trips Sable's abnormal-AABB guard every sweep).
+            for (Villager villager : level.getEntities(EntityType.VILLAGER, v -> v.isAlive())) {
                 if (rules.blockEnchantedBookTrades()) {
                     filterMerchantOffers(villager.getOffers());
                 }
@@ -161,8 +160,20 @@ public final class VillagerRestrictions {
     }
 
     private static boolean listingInvolvesEnchantedBook(VillagerTrades.ItemListing listing) {
-        MerchantOffer offer = listing.getOffer(null, net.minecraft.util.RandomSource.create());
-        return offer != null && offerIsEnchantedBook(offer);
+        // The canonical enchanted-book listing can be identified without instantiating an
+        // offer (instantiating requires a live trader entity for several vanilla listings).
+        if (listing instanceof VillagerTrades.EnchantBookForEmeralds) {
+            return true;
+        }
+        try {
+            MerchantOffer offer = listing.getOffer(null, net.minecraft.util.RandomSource.create());
+            return offer != null && offerIsEnchantedBook(offer);
+        } catch (RuntimeException e) {
+            // Listing needs a live trader to build its sample offer (e.g. treasure maps).
+            // It cannot be classified statically; the runtime offer filter
+            // (filterMerchantOffers) still strips any enchanted book it might produce.
+            return false;
+        }
     }
 
     public static void filterMerchantOffers(MerchantOffers offers) {

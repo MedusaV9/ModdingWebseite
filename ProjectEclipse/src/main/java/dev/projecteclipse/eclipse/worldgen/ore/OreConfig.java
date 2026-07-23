@@ -100,15 +100,15 @@ public final class OreConfig {
             root = defaultRoot();
             try {
                 Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
-                EclipseMod.LOGGER.info(Component.translatable("config.eclipse.ores.created", file).getString());
+                EclipseMod.LOGGER.info(Component.translatable("config.eclipse.ores.created", file.toString()).getString());
             } catch (IOException e) {
-                EclipseMod.LOGGER.error(Component.translatable("config.eclipse.ores.write_failed", file).getString(), e);
+                EclipseMod.LOGGER.error(Component.translatable("config.eclipse.ores.write_failed", file.toString()).getString(), e);
             }
         } else {
             try {
                 root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
             } catch (IOException | RuntimeException e) {
-                EclipseMod.LOGGER.error(Component.translatable("config.eclipse.ores.read_failed", file).getString(), e);
+                EclipseMod.LOGGER.error(Component.translatable("config.eclipse.ores.read_failed", file.toString()).getString(), e);
                 root = defaultRoot();
             }
         }
