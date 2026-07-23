@@ -37,6 +37,13 @@ public final class AwardCommands {
                         .then(Commands.argument("day", IntegerArgumentType.integer(1))
                                 .executes(context -> resolve(context.getSource(),
                                         IntegerArgumentType.getInteger(context, "day")))))
+                .then(Commands.literal("send")
+                        .executes(context -> {
+                            AwardService.sendRevealNow(context.getSource().getServer());
+                            context.getSource().sendSuccess(() -> net.minecraft.network.chat.Component
+                                    .translatable("command.eclipse.awards.sent"), true);
+                            return 1;
+                        }))
                 .then(Commands.literal("reroll")
                         .executes(context -> reroll(context.getSource(),
                                 DayScheduler.getDay(context.getSource().getServer())))

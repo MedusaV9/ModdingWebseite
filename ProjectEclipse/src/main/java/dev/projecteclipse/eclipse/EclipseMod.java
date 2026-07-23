@@ -53,7 +53,9 @@ public final class EclipseMod {
         dev.projecteclipse.eclipse.entity.pale.PaleEntities.register(modEventBus);
         dev.projecteclipse.eclipse.entity.dungeon.DungeonEntities.register(modEventBus);
         dev.projecteclipse.eclipse.entity.boss.rift.RiftEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.boss.fog.FogBossEntities.register(modEventBus);
         dev.projecteclipse.eclipse.devtools.display.DevToolItems.register(modEventBus);
+        dev.projecteclipse.eclipse.music.EclipseMusicSounds.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

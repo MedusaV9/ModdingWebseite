@@ -237,6 +237,9 @@ public final class FinaleRitual {
 
         AnnouncementService.announce(server, "announce.eclipse.ferryman.victory.title",
                 "announce.eclipse.ferryman.victory.sub", S2CAnnouncePayload.STYLE_BOSS);
+        for (net.minecraft.server.level.ServerPlayer player : server.getPlayerList().getPlayers()) {
+            dev.projecteclipse.eclipse.music.MusicPayloads.sendPlay(player, "victory_theme");
+        }
         List<UUID> banned = new ArrayList<>(EclipseWorldState.get(server).getBanned());
         int offline = 0;
         for (UUID id : banned) {

@@ -195,8 +195,21 @@ public final class FogStormSites {
             EclipseWorldgenState.get(level.getServer()).setFogSiteState(site.id(), chests, true, true);
             broadcast(level, site, center, true);
             EclipseMod.LOGGER.info("FogStormSites: materialized {} at {}", site.id(), center);
+            markTyrantLairIfStrongest(level, site, center);
             onComplete.run();
         }, onFailure);
+    }
+
+    /**
+     * P6-W11 seam: the strongest (largest-radius) storm hosts the Fog Tyrant lair.
+     * {@code markLair} is idempotent and deliberately not persisted — it re-arms on
+     * restore, matching the storm-wall re-announce lifecycle.
+     */
+    private static void markTyrantLairIfStrongest(ServerLevel level, Site site, BlockPos center) {
+        int maxRadius = sites.stream().mapToInt(Site::radius).max().orElse(0);
+        if (site.radius() >= maxRadius) {
+            dev.projecteclipse.eclipse.entity.boss.fog.FogBankMarker.markLair(level, center);
+        }
     }
 
     private static BlockPos surfaceCenter(ServerLevel level, int x, int z) {
@@ -312,6 +325,12 @@ public final class FogStormSites {
         long active = sites.stream().filter(Site::active).count();
         if (active > 0) {
             EclipseMod.LOGGER.info("FogStormSites: restored {} active storm wall(s) from SavedData", active);
+            // Re-arm the tyrant lair on the strongest restored storm (marker is not persisted).
+            ServerLevel overworld = server.overworld();
+            sites.stream().filter(Site::active)
+                    .max(java.util.Comparator.comparingInt(Site::radius))
+                    .ifPresent(site -> markTyrantLairIfStrongest(overworld, site,
+                            surfaceCenter(overworld, site.x(), site.z())));
         }
     }
 }

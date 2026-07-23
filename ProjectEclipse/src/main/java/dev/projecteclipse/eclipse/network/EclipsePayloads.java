@@ -99,6 +99,11 @@ public final class EclipsePayloads {
             dev.projecteclipse.eclipse.cutscene.client.CameraDirector.addShakeImpulse();
             return;
         }
+        if (payload.phase() == S2CCutscenePayload.Phase.TILT) {
+            dev.projecteclipse.eclipse.music.MusicCues.play("intro_storm");
+        } else if (payload.phase() == S2CCutscenePayload.Phase.EMERGE) {
+            dev.projecteclipse.eclipse.music.MusicCues.stop();
+        }
         ClientStateCache.cutscenePhase = payload.phase();
     }
 

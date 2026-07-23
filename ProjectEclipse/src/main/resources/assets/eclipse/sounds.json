@@ -1,344 +1,408 @@
 {
   "ambient.gazer_whisper": {
-    "subtitle": "subtitles.eclipse.ambient.gazer_whisper",
     "sounds": [
       {
         "name": "eclipse:ambient/gazer_whisper",
         "volume": 0.6
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ambient.gazer_whisper"
   },
   "ambient.limbo_loop": {
-    "subtitle": "subtitles.eclipse.ambient.limbo_loop",
     "sounds": [
       {
         "name": "eclipse:ambient/limbo_loop",
         "stream": true
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ambient.limbo_loop"
   },
   "award.sting": {
-    "subtitle": "subtitles.eclipse.award.sting",
     "sounds": [
       "eclipse:award/sting"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.award.sting"
   },
   "boss.ferryman_ambient": {
-    "subtitle": "subtitles.eclipse.boss.ferryman_ambient",
     "sounds": [
       {
         "name": "eclipse:boss/ferryman_ambient",
         "volume": 0.9
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.boss.ferryman_ambient"
   },
   "boss.ferryman_bell": {
-    "subtitle": "subtitles.eclipse.boss.ferryman_bell",
     "sounds": [
       {
-        "name": "eclipse:boss/ferryman_bell",
-        "attenuation_distance": 48
+        "attenuation_distance": 48,
+        "name": "eclipse:boss/ferryman_bell"
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.boss.ferryman_bell"
   },
   "boss.herald_ambient": {
-    "subtitle": "subtitles.eclipse.boss.herald_ambient",
     "sounds": [
       {
         "name": "eclipse:boss/herald_ambient",
         "volume": 0.8
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.boss.herald_ambient"
   },
   "boss.herald_telegraph": {
-    "subtitle": "subtitles.eclipse.boss.herald_telegraph",
     "sounds": [
       {
         "name": "eclipse:boss/herald_telegraph",
         "volume": 0.9
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.boss.herald_telegraph"
   },
   "event.beam_hum": {
-    "subtitle": "subtitles.eclipse.event.beam_hum",
     "sounds": [
       {
         "name": "eclipse:ambient/gazer_whisper",
-        "volume": 0.65,
-        "pitch": 1.2
+        "pitch": 1.2,
+        "volume": 0.65
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.beam_hum"
   },
   "event.border_glitch": {
-    "subtitle": "subtitles.eclipse.event.border_glitch",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
         "pitch": 1.8
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.border_glitch"
   },
   "event.eclipse_drone": {
-    "subtitle": "subtitles.eclipse.event.eclipse_drone",
     "sounds": [
       {
         "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.6,
         "stream": true,
-        "volume": 0.7,
-        "pitch": 0.6
+        "volume": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.eclipse_drone"
   },
   "event.emerge": {
-    "subtitle": "subtitles.eclipse.event.emerge",
     "sounds": [
       {
-        "name": "eclipse:event/emerge",
-        "attenuation_distance": 64
+        "attenuation_distance": 64,
+        "name": "eclipse:event/emerge"
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.emerge"
   },
   "event.lightning_close": {
-    "subtitle": "subtitles.eclipse.event.lightning_close",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
-        "volume": 1.0,
-        "pitch": 0.55
+        "pitch": 0.55,
+        "volume": 1.0
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.lightning_close"
   },
   "event.lightning_far": {
-    "subtitle": "subtitles.eclipse.event.lightning_far",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
-        "volume": 0.6,
-        "pitch": 0.35
+        "pitch": 0.35,
+        "volume": 0.6
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.lightning_far"
   },
   "event.rift_open": {
-    "subtitle": "subtitles.eclipse.event.rift_open",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
-        "volume": 0.9,
-        "pitch": 1.25
+        "pitch": 1.25,
+        "volume": 0.9
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_open"
   },
   "event.rift_slam": {
-    "subtitle": "subtitles.eclipse.event.rift_slam",
     "sounds": [
       {
         "name": "eclipse:ui/heart_shatter",
-        "volume": 1.0,
-        "pitch": 0.5
+        "pitch": 0.5,
+        "volume": 1.0
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_slam"
   },
   "event.storm_burst": {
-    "subtitle": "subtitles.eclipse.event.storm_burst",
     "sounds": [
       {
         "name": "eclipse:event/submerge",
         "pitch": 0.8
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_burst"
   },
   "event.storm_loop": {
-    "subtitle": "subtitles.eclipse.event.storm_loop",
     "sounds": [
       {
         "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.8,
         "stream": true,
-        "volume": 0.9,
-        "pitch": 0.8
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_loop"
+  },
+  "event.submerge": {
+    "sounds": [
+      "eclipse:event/submerge"
+    ],
+    "subtitle": "subtitles.eclipse.event.submerge"
+  },
+  "music.boss_ferryman": {
+    "sounds": [
+      {
+        "name": "eclipse:music/boss_ferryman",
+        "stream": true
       }
     ]
   },
-  "event.submerge": {
-    "subtitle": "subtitles.eclipse.event.submerge",
+  "music.boss_herald": {
     "sounds": [
-      "eclipse:event/submerge"
+      {
+        "name": "eclipse:music/boss_herald",
+        "stream": true
+      }
+    ]
+  },
+  "music.expansion_theme": {
+    "sounds": [
+      {
+        "name": "eclipse:music/expansion_theme",
+        "stream": true
+      }
+    ]
+  },
+  "music.intro_storm": {
+    "sounds": [
+      {
+        "name": "eclipse:music/intro_storm",
+        "stream": true
+      }
+    ]
+  },
+  "music.limbo_ambience": {
+    "sounds": [
+      {
+        "name": "eclipse:music/limbo_ambience",
+        "stream": true
+      }
+    ]
+  },
+  "music.title_theme": {
+    "sounds": [
+      {
+        "name": "eclipse:music/title_theme",
+        "stream": true
+      }
+    ]
+  },
+  "music.victory_theme": {
+    "sounds": [
+      {
+        "name": "eclipse:music/victory_theme",
+        "stream": true
+      }
+    ]
+  },
+  "music.xbox_nostalgia": {
+    "sounds": [
+      {
+        "name": "eclipse:music/xbox_nostalgia",
+        "stream": true
+      }
     ]
   },
   "offering.accept": {
-    "subtitle": "subtitles.eclipse.offering.accept",
     "sounds": [
       {
         "name": "eclipse:offering/accept",
         "volume": 0.9
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.offering.accept"
   },
   "ritual.extract": {
-    "subtitle": "subtitles.eclipse.ritual.extract",
     "sounds": [
       "eclipse:ritual/extract"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ritual.extract"
   },
   "skill.levelup": {
-    "subtitle": "subtitles.eclipse.skill.levelup",
     "sounds": [
       "eclipse:skill/levelup"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.skill.levelup"
   },
   "skill.proc": {
-    "subtitle": "subtitles.eclipse.skill.proc",
     "sounds": [
       {
         "name": "eclipse:skill/proc",
         "volume": 0.8
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.skill.proc"
   },
   "ui.caption_tick": {
-    "subtitle": "subtitles.eclipse.ui.caption_tick",
     "sounds": [
       {
         "name": "eclipse:ui/typewriter",
-        "volume": 0.7,
-        "pitch": 1.5
+        "pitch": 1.5,
+        "volume": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.caption_tick"
   },
   "ui.click": {
-    "subtitle": "subtitles.eclipse.ui.click",
     "sounds": [
       {
         "name": "eclipse:ui/tab",
         "pitch": 1.25,
         "volume": 0.8
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.click"
   },
   "ui.error_glitch": {
-    "subtitle": "subtitles.eclipse.ui.error_glitch",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
         "pitch": 1.5,
         "volume": 0.6
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.error_glitch"
   },
   "ui.ghost_burst": {
-    "subtitle": "subtitles.eclipse.ui.ghost_burst",
     "sounds": [
       {
         "name": "eclipse:ui/unlock_sting",
         "pitch": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.ghost_burst"
   },
   "ui.heart_shatter": {
-    "subtitle": "subtitles.eclipse.ui.heart_shatter",
     "sounds": [
       "eclipse:ui/heart_shatter"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.heart_shatter"
   },
   "ui.hover": {
-    "subtitle": "subtitles.eclipse.ui.hover",
     "sounds": [
       {
         "name": "eclipse:ui/hover",
         "volume": 0.5
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.hover"
   },
   "ui.level_up": {
-    "subtitle": "subtitles.eclipse.ui.level_up",
     "sounds": [
       {
         "name": "eclipse:ui/unlock_sting",
         "pitch": 1.15
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.level_up"
   },
   "ui.page_turn": {
-    "subtitle": "subtitles.eclipse.ui.page_turn",
     "sounds": [
       "eclipse:ui/page_turn"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.page_turn"
   },
   "ui.roulette_tick": {
-    "subtitle": "subtitles.eclipse.ui.roulette_tick",
     "sounds": [
       {
         "name": "eclipse:ui/typewriter",
         "pitch": 1.1,
         "volume": 0.6
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.roulette_tick"
   },
   "ui.roulette_win": {
-    "subtitle": "subtitles.eclipse.ui.roulette_win",
     "sounds": [
       "eclipse:ui/unlock_sting"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.roulette_win"
   },
   "ui.skill_buy": {
-    "subtitle": "subtitles.eclipse.ui.skill_buy",
     "sounds": [
       {
         "name": "eclipse:ui/unlock_sting",
         "pitch": 0.9
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.skill_buy"
   },
   "ui.slider": {
-    "subtitle": "subtitles.eclipse.ui.slider",
     "sounds": [
       {
         "name": "eclipse:ui/hover",
         "pitch": 1.35,
         "volume": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.slider"
   },
   "ui.tab": {
-    "subtitle": "subtitles.eclipse.ui.tab",
     "sounds": [
       {
         "name": "eclipse:ui/tab",
         "volume": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.tab"
   },
   "ui.timer_zero": {
-    "subtitle": "subtitles.eclipse.ui.timer_zero",
     "sounds": [
       {
         "name": "eclipse:event/border_glitch",
         "pitch": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.timer_zero"
   },
   "ui.toggle": {
-    "subtitle": "subtitles.eclipse.ui.toggle",
     "sounds": [
       {
         "name": "eclipse:ui/tab",
         "pitch": 0.85
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.toggle"
   },
   "ui.typewriter": {
-    "subtitle": "subtitles.eclipse.ui.typewriter",
     "sounds": [
       {
         "name": "eclipse:ui/typewriter",
-        "volume": 0.7,
-        "pitch": 1.5
+        "pitch": 1.5,
+        "volume": 0.7
       }
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.typewriter"
   },
   "ui.unlock_sting": {
-    "subtitle": "subtitles.eclipse.ui.unlock_sting",
     "sounds": [
       "eclipse:ui/unlock_sting"
-    ]
+    ],
+    "subtitle": "subtitles.eclipse.ui.unlock_sting"
   }
 }

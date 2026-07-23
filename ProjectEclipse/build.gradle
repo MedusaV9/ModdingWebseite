@@ -228,6 +228,12 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
 // Include the output of "generateModMetadata" as an input directory for the build
 // this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata
+
+// Embed the jarJar payload (Veil, GeckoLib, EMI, Mouse Tweaks) into the distributed jar.
+// Without this wiring the META-INF/jarjar directory is generated but never shipped.
+tasks.named('jar', Jar).configure {
+    from(tasks.named('jarJar'))
+}
 // To avoid having to run "generateModMetadata" manually, make it run on every project reload
 neoForge.ideSyncTask generateModMetadata
 

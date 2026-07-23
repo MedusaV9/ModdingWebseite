@@ -169,6 +169,12 @@ public class EclipseTitleScreen extends Screen {
                 .build(builder -> new EclipseMenuButton(builder, GEAR, 48, 48)));
         y += BUTTON_SPACING;
 
+        addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.credits.title"),
+                        button -> this.minecraft.setScreen(new CreditsScreen(this)))
+                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build(EclipseMenuButton::new));
+        y += BUTTON_SPACING;
+
         addRenderableWidget(Button.builder(Component.translatable("menu.quit"),
                         button -> this.minecraft.stop())
                 .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
