@@ -1,0 +1,16 @@
+{
+  "en_us": {
+    "gui.eclipse.awards.header": "Daily Honours · Day %s",
+    "gui.eclipse.awards.summary": "Honours of Day %s",
+    "gui.eclipse.awards.you": "YOU",
+    "gui.eclipse.awards.shared": "shared (%s)",
+    "gui.eclipse.awards.skip_hint": "Sneak: next · ESC: summary"
+  },
+  "de_de": {
+    "gui.eclipse.awards.header": "Tages-Ehrungen · Tag %s",
+    "gui.eclipse.awards.summary": "Ehrungen von Tag %s",
+    "gui.eclipse.awards.you": "DU",
+    "gui.eclipse.awards.shared": "geteilt (%s)",
+    "gui.eclipse.awards.skip_hint": "Schleichen: weiter · ESC: Übersicht"
+  }
+}
