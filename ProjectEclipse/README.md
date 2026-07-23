@@ -2,7 +2,7 @@
 
 A NeoForge server-event mod for Minecraft.
 
-- **Mod id**: `eclipse` | **Display name**: Eclipse-Core | **Version**: 2.0.0
+- **Mod id**: `eclipse` | **Display name**: Eclipse-Core | **Version**: 2.1.0
 - **Package root**: `dev.projecteclipse.eclipse`
 - **Minecraft**: 1.21.1
 - **NeoForge**: 21.1.238
