@@ -30,6 +30,18 @@ repositories {
     maven { url = "https://maven.maxhenkel.de/repository/public" }
     // Veil (foundry.veil) — see docs/ideas/02_veil_vfx.md §A
     maven { url = "https://maven.blamejared.com" }
+    // EMI's official Maven. The requested 1.1.18 NeoForge artifact is not mirrored by BlameJared.
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/releases/'
+        content { includeGroup 'dev.emi' }
+    }
+    // Permissively licensed QoL mods distributed through Modrinth's official Maven endpoint.
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
     // GeckoLib (software.bernie.geckolib) — see docs/plans_v3/P6_mobs_models_builds.md §2.1
     maven {
         name = 'GeckoLib'
@@ -127,6 +139,24 @@ configurations {
 
 dependencies {
     compileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.20"
+
+    // EMI 1.1.18 — MIT, client recipe-viewer API used by the optional Eclipse EMI plugin.
+    // Keep the small API classifier compile-only and embed the exact runtime artifact.
+    compileOnly "dev.emi:emi-neoforge:1.1.18+1.21.1:api"
+    jarJar(implementation("dev.emi:emi-neoforge:1.1.18+1.21.1")) {
+        version {
+            strictly "1.1.18+1.21.1"
+            prefer "1.1.18+1.21.1"
+        }
+    }
+
+    // Mouse Tweaks 2.26.1 — BSD-3-Clause and purely client-side. It is not on the compile classpath.
+    jarJar(runtimeOnly("maven.modrinth:mouse-tweaks:1.21-2.26.1-neoforge")) {
+        version {
+            strictly "1.21-2.26.1-neoforge"
+            prefer "1.21-2.26.1-neoforge"
+        }
+    }
 
     // Veil 4.3.0 — REQUIRED runtime dependency (post pipelines, Quasar particles, easing).
     // Embedded jar-in-jar with an open range so a newer Veil provided by another mod
