@@ -460,17 +460,20 @@ that understands display entities can manipulate them.
 
 ### 2.8 Render-distance control (A8)
 
-Server-side push of a per-player render distance (W4, coordinated with P2 §4.2 so the two
-planners don't ship two competing settings pushers):
+**Transport is P2's** (their plan is committed-first here): P2-W2 ships
+`S2CViewDistancePayload(int chunks, 0 = restore)`, the client applier
+`cutscene/client/ViewDistanceClient` (with crash-restore marker file) and the client
+opt-out toggle (P2's `cinematicViewDistance`, default ON — P2 confirms it also guards
+persistent pushes or adds a sibling `acceptServerViewDistance` key; §4.2). P5-W4 adds ONLY
+what P2's session-scoped service doesn't do — **persistence**:
 
-- `S2CViewDistancePayload{chunks:int, reset:boolean}` (W4-owned registrar). Client handler:
-  if the client config flag `acceptServerViewDistance` (default **true**, in P5's client
-  config section, opt-out per user req) is set, store the vanilla option's original value
-  once, apply the pushed value, restore on `reset`/disconnect.
-- `/dev viewdistance set <2..32>` pushes to all (and to late-joiners via
-  `PlayerLoggedInEvent` re-push while active — persisted in `general.json`-adjacent runtime
-  state, W4-owned SavedData `eclipse_client_push`); `reset` clears; `status` lists per-player
-  ack state (client replies `C2SViewDistanceAckPayload{applied:int}`).
+- `/dev viewdistance set <2..32>` stores the pin in W4-owned SavedData
+  `eclipse_client_push`, sends P2's payload to all, and re-pushes on
+  `PlayerLoggedInEvent` while pinned; `reset` sends `0` and clears the pin; `status`
+  prints pin + per-player opt-out state (client ack piggybacks P2's handler ask, §4.2).
+- Precedence rule (documented in both plans): a P2 cutscene session temporarily overrides
+  the pin; session end restores the PIN (not vanilla default) — P5 re-push on the
+  session-end callback.
 - Server floor: warn the operator when the dedicated server's own `view-distance` <
   pushed value ("Server view-distance is 10 — clients cannot see farther than the server
   sends. Raise server.properties view-distance.").
@@ -501,18 +504,21 @@ grave/altar-adjacent rules — coordination checkpoint in §4.4 to keep the two 
 Existing: full editor/recorder under `/eclipse cutscene …` (§1.1) — already documented in
 the handbook by W1's registry import of *existing* commands (the registry also lists legacy
 `/eclipse` entries, flagged `legacy:true`, so the Dev Handbook covers the WHOLE admin
-surface per req A1). New (W6, `devtools/ReplayService.java`):
+surface per req A1).
 
-- `/dev replay intro` — snapshots the relevant `EclipseWorldState` flags (cutscene-played /
-  milestone-seen flags via existing public setters ONLY — no new fields), resets them,
-  re-fires the intro sequence through `CutsceneService`/`UnlockCinematics` public entry
-  points; on completion offers a clickable "revert flags" (restores the snapshot) so
-  testing never permanently mutates progression.
-- `/dev replay expansion <stage>` — re-fires the growth cinematic + `S2CQuasarPayload`
-  hooks for the given stage WITHOUT moving terrain (dry-visual mode: calls the cinematic
-  path, not `WorldStageService.setStage`); the message clarifies "visuals only — terrain
-  unchanged (use /eclipse stage set for terrain)". P2's VFX replay hooks: §4.2.
-- `/dev replay finale`, `/dev replay list` (available sequence ids from `CutscenePaths`).
+**Replay engine is P2's** (`P2_vfx_cutscenes.md` W2): every sequence implements
+`SequenceReplayable.replay(server, phaseId, players)` in **FX-only mode** (no world
+mutations, no state commits — which is exactly the safe "revert" semantics req A11 wants),
+with P2's own testing root `/eclipsefx sequence intro <phase>|expansion <phase>` etc. P2
+§6.4 rule: "P5's dev tree may alias these; P5 must NOT re-implement." So W6 ships thin
+aliases only:
+
+- `/dev replay intro`, `/dev replay expansion <stage>`, `/dev replay finale` → call the
+  `SequenceReplayable` entry points directly (same code path as `/eclipsefx sequence …`);
+  feedback clarifies "FX-only — no terrain/progression changes (use /eclipse stage set for
+  terrain)". `/dev replay list` enumerates registered replayables.
+- The Dev Handbook additionally documents P2's whole `/eclipsefx` root (perm 3) as legacy
+  entries so operators discover both surfaces.
 
 ### 2.12 `/dev reload` (A13)
 
@@ -621,17 +627,22 @@ plus decorative `block_display` frame pieces (reuses W6's DisplayPlacerService A
 tagged `eclipse_xbox_portal`. Default placement: first valid 5×5 flat spot ring-scanned
 8–24 blocks from world spawn (outside the sanctum radius, §2.10); override `/dev xboxevent
 portal here`; `portal remove` despawns. Collision: service tick checks player AABB
-intersects the interaction box → entry sequence. VFX: fires `XboxRiftHooks.onPortalSpawned
-(level, pos)` / `onPortalRemoved` — P2 subscribes (rift shader/particles, §4.2); base
-fallback = reverse-portal particles + ambient sound loop so the feature works without P2.
+intersects the interaction box → entry sequence.
 
-Entry sequence (per player): capture return anchor → send P3's
-`S2CPortalFxPayload{style:"eclipse:xbox_glitch", holdTicks:30}` (P3-W11's
-`PortalTransitionController` renders glitch→fade-black→fade-in and suppresses the vanilla
-dim-change screen; contract §4.3) → teleport to manifest spawn (yaw from manifest) →
-`participants.add` → title "Tutorial World (TU12) — 2012" + nostalgic music cue (§2.20).
-Players who are `lockedOut` with the current `instanceId` bounce with an explanatory
-message instead.
+VFX uses **P2's frozen contracts** (P2 R17 owns the xbox-portal VFX; no P5-invented hook
+interface): portal spawn → send P2's `S2CFxEventPayload` id `eclipse:fx/rift_open`
+(pos = portal, `a` = width, `b` = 1 "portal style"); despawn → `eclipse:fx/rift_close`.
+Base fallback when P2's renderer isn't present: reverse-portal particles + ambient loop
+(W9-owned, always spawned server-side, cheap).
+
+Entry sequence (per player) — matches P2 R13's frozen flow verbatim ("entity contact (P5)
+→ `TransitionFx.playPortalEnter(18)` → dimension change behind black → P3's screen →
+`playPortalExit(24)`"): capture return anchor → send P3's `S2CPortalFxPayload
+{style:"eclipse:xbox_glitch", holdTicks:30}` (P3-W11's `PortalTransitionController`
+drives P2's `TransitionFx` client API and suppresses the vanilla dim-change screen; §4.3)
+→ teleport to manifest spawn (yaw from manifest) → `participants.add` → title "Tutorial
+World (TU12) — 2012" + nostalgic music cue (§2.20). Players `lockedOut` with the current
+`instanceId` bounce with an explanatory message instead.
 
 #### 2.13.5 Timer overlay (30:00)
 
@@ -942,7 +953,9 @@ Conventions (ALL workers):
 
 **Goal**: §2.1 + §2.12 complete; `/dev`, `/dev help`, `/dev reload`, `/dev docs export`
 working; registry pre-seeded with docs for the ENTIRE existing `/eclipse` tree (legacy
-entries, §1.1 table) so the handbook is complete from day one.
+entries, §1.1 table) plus the other planners' reference roots as they land
+(`/eclipsefx` (P2), `/eclipse-rt`, `/eclipse-buffs`, `/eclipse-quests` (P4),
+`/eclipse-worldgen` (P1)) so the handbook covers the WHOLE admin surface from day one.
 **Files (new)**: `devtools/dev/DevCommandRegistry.java`, `DevCommandDoc.java`,
 `DevCategory.java`, `DevRoot.java`, `DevReload.java`, `DevReloadRegistry.java`,
 `DevDocsExporter.java`, `devtools/dev/LegacyCommandDocs.java`; langdrop `P5-W1.json`;
@@ -986,8 +999,9 @@ spool animates — log assert); INFO audit line per mutation.
 extension + view-distance push.
 **Files (new)**: `devtools/dev/DevBuffCommands.java`, `DevQuestCommands.java`,
 `DevPlayerCommands.java` (xp/multiplier/skill/voice/locale/deathflow),
-`DevStatsCommands.java`, `DevViewDistance.java` (+payload registrar, SavedData
-`eclipse_client_push`); **edits**: `devtools/ConfigEditor.java`,
+`DevStatsCommands.java`, `DevViewDistance.java` (pin SavedData `eclipse_client_push` +
+login re-push; sends P2's `S2CViewDistancePayload` — no own payload, §2.8); **edits**:
+`devtools/ConfigEditor.java`,
 `devtools/GoalEditorScreen.java`, `network/C2SConfigEditPayload.java` (file-allowlist +
 validate hook — assigned to P5 by P4 §4); langdrop `P5-W4.json`; wiring `P5-W4.md`.
 **Outline**: per §2.4/2.5 syntax; suggestion providers (buff ids, unlock keys, metrics);
@@ -1020,16 +1034,17 @@ succeeds (was BUG-A).
 **Goal**: §2.7, §2.10, §2.11.
 **Files (new)**: `devtools/display/DisplayPlacerService.java`, `DisplayAnimator.java`,
 `DevToolItems.java`, `DevDisplayCommands.java`, `C2SDisplayEditPayload.java` (+registrar),
-`devtools/dev/DevSpawnCommands.java`, `devtools/ReplayService.java`,
-`DevReplayCommands.java`, SavedData `eclipse_spawn_tuning`; **edits**:
+`devtools/dev/DevSpawnCommands.java`, `DevReplayCommands.java` (thin aliases over P2's
+`SequenceReplayable` — §2.11; sequenced after P2-W2 or compiled against the interface),
+SavedData `eclipse_spawn_tuning`; **edits**:
 `worldgen/structure/SanctumProtection.java` (dynamic radius §2.10); langdrop `P5-W6.json`;
 wiring `P5-W6.md` (DevToolItems register + emi_hidden additions for the wand).
 **Outline**: per §2.7/2.10/2.11.
 **Acceptance**: placed display survives restart and keeps spinning/bobbing; wand edits
 round-trip through server validation; `/dev spawn radius 24` immediately blocks a non-op
-break at r=20 (gametest); preview ring particles visible to ops only; `/dev replay intro`
-re-plays and the revert click restores flags (state diff asserted); everything documented
-in the registry.
+break at r=20 (gametest); preview ring particles visible to ops only; `/dev replay
+expansion 3` triggers P2's FX-only replay and provably mutates NO terrain/state (before/
+after snapshot assert); everything documented in the registry.
 
 ### P5-W7 — Xbox world pipeline: fetch, upgrade, trim, bake, manifests (FABLE, L)
 
@@ -1079,7 +1094,8 @@ bossbar-fallback timer and base portal FX.
 **Files (new)**: `xboxevent/XboxEventService.java`, `XboxEventState.java`,
 `XboxWorldInstaller.java`, `XboxPortal.java`, `XboxEventConfig.java`,
 `XboxEventApi.java` (`isProtectedDeath` etc.), `XboxPayloads.java`
-(`S2CXboxTimerPayload`, `C2SXboxAckPayload`), `XboxRiftHooks.java` (P2 hook interface),
+(`S2CXboxTimerPayload`, `C2SXboxAckPayload`; portal FX sent via P2's frozen
+`S2CFxEventPayload` ids — no new FX payload),
 `devtools/dev/DevXboxCommands.java`, `XboxLeaveCommand.java`,
 `data/eclipse/dimension/xbox_tu{1,12,14}.json`,
 `data/eclipse/dimension_type/xbox_classic.json`; langdrop `P5-W9.json`; wiring `P5-W9.md`.
@@ -1177,31 +1193,39 @@ W12. Sizes: S=W3; M=W1, W2, W5, W6, W12; L=W4, W7, W8, W9, W10, W11.
 
 ### 4.1 P1 (core/config, worldgen)
 
-- **NEEDS from P1 (BUG-B fix, §1.2)**: per-save config layering — `<world>/eclipse/config/
-  *.json` overlay over global `config/eclipse/`; `EclipseConfig.reload(MinecraftServer)`
-  re-resolved on `ServerAboutToStartEvent`; editors (`ConfigEditor`,
-  `setNamespaceGated`, cutscene saves) write the WORLD layer; static caches (incl.
-  StageRadii-derived values) reset on server stop. Path helper API P5 consumes:
-  `EclipseConfigPaths.worldConfigDir(server)`. P5 fallback if P1 slips: W5's backups still
-  fix BUG-A; the leak remains documented in DEV_COMMANDS ("config edits are currently
-  GLOBAL across saves — pending P1 layering") + `/dev reload` feedback flags the layer.
+- **BUG-B fix (§1.2) — P1's D9 already covers the worldgen half**: `P1_worldgen.md` D9
+  ships `FrozenParams` (`world/<save>/eclipse/worldgen.json`, frozen at
+  `ServerAboutToStartEvent`; stage radii/disc map/ores read only through it; statics audit
+  incl. the `DiscMapData.instance` leak; dev command `/eclipse-worldgen refreeze` is
+  explicitly P5-facing → W1 seeds its handbook doc). **Remaining P5 ask**: the same
+  per-save treatment for the *gameplay* configs the editors write (`days.json`,
+  `milestones.json`, `goals/quests.json`, `modgate.json`) — either a P1 layering API
+  (`EclipseConfigPaths.worldConfigDir(server)` overlay + `reload(server)`) or P1's
+  explicit decision that these stay global templates (then `ConfigEditor` saves must warn
+  "applies to ALL saves"). Until decided, W4's ConfigEditor extension writes global (as
+  today) and shows that warning; W5's backups fix BUG-A regardless; `/dev reload` output
+  labels each file's layer.
 - `general.json` key addition `stageBackupRetention` (W5 default 10 in code meanwhile).
 - Confirm `FLUID_SOLID` classic-water decision (§2.14) doesn't fight disc worldgen
   assumptions (xbox dims are outside P1's disc pipeline — expected no-op).
 
-### 4.2 P2 (VFX/shaders)
+### 4.2 P2 (VFX/shaders) — aligned to committed `P2_vfx_cutscenes.md`
 
-- **Portal rift**: implement against `XboxRiftHooks.onPortalSpawned/Removed(level, pos)`
-  (W9 ships interface + no-op base FX). Suggested asset id `eclipse:xbox_rift`.
-- **Transition glitch**: P3's `PortalTransitionController` consumes the Veil post id
-  (`eclipse:portal_glitch` already in P3's ledger to P2); P5 just sends style
-  `eclipse:xbox_glitch` — P2/P3 map style→post pipeline; fallback GlitchText overlay is
-  P3's (already planned).
-- **Render distance**: P5-W4 owns the `S2CViewDistancePayload` push (§2.8) — P2 must NOT
-  ship a second render-distance pusher; if P2 needs settings pushes for shader toggles,
-  reuse W4's `eclipse_client_push` channel (extension point documented in the class).
-- **Replay hooks**: `/dev replay expansion <stage>` re-fires the growth cinematic path —
-  P2's expansion VFX must be re-triggerable without terrain change (idempotent trigger).
+- **Portal rift**: P5-W9 sends P2's frozen `S2CFxEventPayload` ids
+  `eclipse:fx/rift_open` (style `b=1` portal) / `eclipse:fx/rift_close` at portal
+  spawn/despawn (§2.13.4); P2-W8 owns the renderer (their R17 "Xbox-360 tutorial-world
+  event portal VFX — event/dimension by P5"). W9 keeps only the cheap particle fallback.
+- **Transition**: chain frozen by P2 R13(d): P5 entity contact → P3
+  `S2CPortalFxPayload{style:"eclipse:xbox_glitch"}` → P3 controller → P2
+  `TransitionFx.playPortalEnter(18)` / `playPortalExit(24)` — P5 writes NO client
+  transition code.
+- **Render distance**: transport (`S2CViewDistancePayload`, `ViewDistanceClient`,
+  opt-out toggle) is P2-W2's; P5-W4 adds the persistent pin + login re-push + command
+  (§2.8). Ask to P2: (a) confirm the opt-out toggle also guards persistent pushes (or add
+  `acceptServerViewDistance`), (b) session-end restores to P5's pin when set (callback or
+  ordered restore), (c) optional client ack for `/dev viewdistance status`.
+- **Replay**: P2 §6.4 rule honored — `/dev replay …` are thin aliases over
+  `SequenceReplayable` (§2.11); P2's `/eclipsefx` root gets legacy handbook entries.
 - **Photon**: confirm identity/license (§2.15); if shaderpack → P2 documents distribution
   (shaderpacks folder), P5 adds nothing to the jar.
 
