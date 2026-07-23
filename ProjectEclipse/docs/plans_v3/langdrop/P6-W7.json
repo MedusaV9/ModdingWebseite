@@ -1,0 +1,10 @@
+{
+	"en_us": {
+		"entity.eclipse.fog_revenant": "Fog Revenant",
+		"entity.eclipse.storm_hound": "Storm Hound"
+	},
+	"de_de": {
+		"entity.eclipse.fog_revenant": "Nebel-Wiedergänger",
+		"entity.eclipse.storm_hound": "Sturmhund"
+	}
+}
