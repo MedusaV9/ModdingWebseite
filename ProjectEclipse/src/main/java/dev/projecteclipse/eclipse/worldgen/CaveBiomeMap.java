@@ -10,13 +10,13 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * splits the underground into {@code minecraft:dripstone_caves} / {@code
  * minecraft:lush_caves} regions (the rest keeps the surface biome, vanilla-style), and
  * everything below y {@value #DEEP_DARK_MAX_Y} within {@value #DEEP_DARK_RADIUS} blocks
- * of the mountain center is {@code minecraft:deep_dark} — tying into the Ancient City
- * stamped inside the mountain (D6). Cave features (pointed dripstone, moss/glow berries,
+ * of the mountain center is {@code minecraft:deep_dark}. The ceiling includes the
+ * authored Ancient City anchor at y −40 (D6/D7). Cave features (pointed dripstone, moss/glow berries,
  * sculk) then arrive from the real biome generation settings via the W1.1 pipeline.
  *
  * <p>All lookups are pure functions of position + frozen map data (no stage, no world
  * seed) — chunks generated before a ring grows must already carry the same biomes the
- * grown terrain will expose. Noise salt 29 of the {@code ECLIPSE_SEED} family lives
+ * grown terrain will expose. Noise salt 29 of the frozen map-seed family lives
  * here (registry: {@code docs/plans_v3/wiring/P1-W1.2_wiring.md}).</p>
  */
 public final class CaveBiomeMap {
@@ -25,8 +25,8 @@ public final class CaveBiomeMap {
      * cave biomes start 14 blocks under the surface, like vanilla's depth threshold).
      */
     public static final int SURFACE_MARGIN = 14;
-    /** Deep dark only below this Y (exclusive)… */
-    public static final int DEEP_DARK_MAX_Y = -96;
+    /** Deep dark below this Y (exclusive), including the Ancient City centered at y −40. */
+    public static final int DEEP_DARK_MAX_Y = -32;
     /** …and only within this many blocks of the mountain center (Ancient City tie-in). */
     public static final int DEEP_DARK_RADIUS = 120;
 
@@ -35,8 +35,10 @@ public final class CaveBiomeMap {
     /** |noise| above this splits a region off the neutral band (~⅓ of area total). */
     private static final double REGION_THRESHOLD = 0.34D;
 
-    /** Fixed-seed region field (salt 29 of the ECLIPSE_SEED noise family). */
-    private static final SimplexNoise REGION_NOISE = DiscTerrainFunction.noise(29);
+    /** Lifecycle-keyed region field (salt 29 of the frozen map-seed family). */
+    private static volatile SeededNoise regionNoise;
+
+    private record SeededNoise(long seed, SimplexNoise noise) {}
 
     private static final ResourceLocation DRIPSTONE_CAVES =
             ResourceLocation.withDefaultNamespace("dripstone_caves");
@@ -82,11 +84,26 @@ public final class CaveBiomeMap {
      */
     @Nullable
     public static String regionAt(int x, int z) {
-        double v = REGION_NOISE.getValue(x / REGION_SCALE, z / REGION_SCALE);
+        double v = regionNoise().getValue(x / REGION_SCALE, z / REGION_SCALE);
         if (v > REGION_THRESHOLD) {
             return DRIPSTONE_CAVES_ID;
         }
         return v < -REGION_THRESHOLD ? LUSH_CAVES_ID : null;
+    }
+
+    private static SimplexNoise regionNoise() {
+        long seed = FrozenParams.mapSeed();
+        SeededNoise cached = regionNoise;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (CaveBiomeMap.class) {
+                cached = regionNoise;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new SeededNoise(seed, DiscTerrainFunction.noise(29));
+                    regionNoise = cached;
+                }
+            }
+        }
+        return cached.noise();
     }
 
     /**

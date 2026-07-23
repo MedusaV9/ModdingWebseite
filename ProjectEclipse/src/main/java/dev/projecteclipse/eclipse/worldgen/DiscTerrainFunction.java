@@ -26,7 +26,7 @@ import dev.projecteclipse.eclipse.worldgen.ore.OreField;
  * and amethyst crystal crust on the ring-scar welds.
  *
  * <p>{@link #stateAt(DiscProfile, int, int, int, int)} is a PURE function of
- * (profile, x, y, z, stage): every input comes from {@link DiscMapData#ECLIPSE_SEED},
+ * (profile, x, y, z, stage): every input comes from {@link FrozenParams#mapSeed()},
  * {@code disc_map.json}, the per-save frozen params ({@code FrozenParams} — stage radii
  * for scars/annuli, breach/End materialization flags) and the stage radius — never from
  * the world seed or any live world state. The chunk generator (never-generated chunks)
@@ -84,20 +84,15 @@ public final class DiscTerrainFunction {
      */
     private static final double SCAR_HALF_WIDTH = 1.5D;
 
-    // Fixed-seed noise fields (never the world seed). Salt registry of the
-    // ECLIPSE_SEED noise family: 1-5 + 9 live here, 6/7/10 in CaveDensity, 8 in
+    // Save-frozen noise fields (never the world seed). Salt registry of the
+    // map-seed noise family: 1-5 + 9 live here, 6/7/10 in CaveDensity, 8 in
     // DiscMapData's sector-seam wobble, 24/27 here (dunes / red-sand patches),
     // 25 in EndDiscGeometry, 26 in BreachGeometry. Next free (noise or hash): 29+.
-    private static final SimplexNoise RIM_NOISE = noise(1);
-    private static final SimplexNoise SURFACE_LARGE = noise(2);
-    private static final SimplexNoise SURFACE_MEDIUM = noise(3);
-    private static final SimplexNoise SURFACE_DETAIL = noise(4);
-    private static final SimplexNoise FRINGE_NOISE = noise(5);
-    private static final SimplexNoise RIDGE_NOISE = noise(9);
-    /** Directional dune ridge field of the desert sector (D2). */
-    private static final SimplexNoise DUNE_NOISE = noise(24);
-    /** Sparse red-sand transition patches towards the badlands ring (D2). */
-    private static final SimplexNoise SAND_PATCH_NOISE = noise(27);
+    private static volatile TerrainNoises terrainNoises;
+
+    private record TerrainNoises(long seed, SimplexNoise rim, SimplexNoise surfaceLarge,
+            SimplexNoise surfaceMedium, SimplexNoise surfaceDetail, SimplexNoise fringe,
+            SimplexNoise ridge, SimplexNoise dune, SimplexNoise sandPatch) {}
 
     // Hash salts. 13 (CaveEntrances), 14 (BreachGeometry) and 15 (EndDiscGeometry) are
     // owned by the sibling geometry modules; 17 + ore.salt() belongs to W1.3's OreField
@@ -296,11 +291,12 @@ public final class DiscTerrainFunction {
         // them — the strongest spikes reach 12-24 blocks.
         int groundBottomY = undersideY;
         if (edge > 0.75D) {
-            double fringe = FRINGE_NOISE.getValue(x / 22.0D, z / 22.0D);
+            SimplexNoise fringeNoise = terrainNoises().fringe();
+            double fringe = fringeNoise.getValue(x / 22.0D, z / 22.0D);
             if (fringe > 0.0D) {
                 double f2 = fringe * fringe;
                 double needle = f2 * f2 * 18.0D;
-                double hf = FRINGE_NOISE.getValue(x / 6.0D + 512.0D, z / 6.0D - 512.0D);
+                double hf = fringeNoise.getValue(x / 6.0D + 512.0D, z / 6.0D - 512.0D);
                 if (hf > 0.0D) {
                     needle += hf * hf * fringe * 10.0D;
                 }
@@ -385,7 +381,8 @@ public final class DiscTerrainFunction {
                     // from the ±π seam. The wedge half-width wiggles slightly with the
                     // radial distance so the cascade meanders like a frozen flow.
                     double deltaNorth = Math.abs(Math.atan2(mdz, mdx) + Math.PI / 2.0D);
-                    double halfWidth = 0.055D + 0.025D * RIDGE_NOISE.getValue(dist / 20.0D, 333.3D);
+                    double halfWidth = 0.055D
+                            + 0.025D * terrainNoises().ridge().getValue(dist / 20.0D, 333.3D);
                     iceCascade = deltaNorth < halfWidth;
                 }
             }
@@ -595,7 +592,7 @@ public final class DiscTerrainFunction {
         }
         double dist = Math.sqrt(distSq);
         double angle = Math.atan2(dz, dx);
-        double n = RIM_NOISE.getValue(Math.cos(angle) * 6.0D + noiseIndex * 19.17D,
+        double n = terrainNoises().rim().getValue(Math.cos(angle) * 6.0D + noiseIndex * 19.17D,
                 Math.sin(angle) * 6.0D - noiseIndex * 7.31D);
         double t = (radius + n * RIM_NOISE_AMP - dist) / RIM_WIDTH;
         if (t <= 0.0D) {
@@ -621,10 +618,11 @@ public final class DiscTerrainFunction {
             SectorStyle style) {
         if (profile == DiscProfile.NETHER) {
             double[] relief = blendedRelief(map, profile, x, z, style);
-            double n = SURFACE_LARGE.getValue(x / 140.0D, z / 140.0D) * 5.0D
-                    + SURFACE_MEDIUM.getValue(x / 50.0D, z / 50.0D) * 3.0D;
+            TerrainNoises noises = terrainNoises();
+            double n = noises.surfaceLarge().getValue(x / 140.0D, z / 140.0D) * 5.0D
+                    + noises.surfaceMedium().getValue(x / 50.0D, z / 50.0D) * 3.0D;
             double s = 138.0D + n * relief[0] + relief[1]
-                    + SURFACE_DETAIL.getValue(x / 12.0D, z / 12.0D) * 2.0D;
+                    + noises.surfaceDetail().getValue(x / 12.0D, z / 12.0D) * 2.0D;
             double r0 = Math.sqrt((double) x * x + (double) z * z);
             if (r0 < 20.0D) {
                 double t = smoothstep(r0 / 20.0D);
@@ -637,8 +635,9 @@ public final class DiscTerrainFunction {
             return painted;
         }
         double[] relief = blendedRelief(map, profile, x, z, style);
-        double n = SURFACE_LARGE.getValue(x / 180.0D, z / 180.0D) * 9.0D
-                + SURFACE_MEDIUM.getValue(x / 60.0D, z / 60.0D) * 4.5D;
+        TerrainNoises noises = terrainNoises();
+        double n = noises.surfaceLarge().getValue(x / 180.0D, z / 180.0D) * 9.0D
+                + noises.surfaceMedium().getValue(x / 60.0D, z / 60.0D) * 4.5D;
         double s = profile.surfaceBaseY() + relief[1] + n * relief[0];
         double detailAmp = 2.5D;
         if (style == SectorStyle.DESERT) {
@@ -647,7 +646,7 @@ public final class DiscTerrainFunction {
             s += duneRidge(map, x, z) * relief[2];
             detailAmp = 0.6D; // dunes suppress the small-scale jitter
         }
-        s += SURFACE_DETAIL.getValue(x / 12.0D, z / 12.0D) * detailAmp;
+        s += noises.surfaceDetail().getValue(x / 12.0D, z / 12.0D) * detailAmp;
         DiscMapData.Mountain mountain = map.profile(profile).mountain();
         if (mountain != null) {
             double dx = x - mountain.x();
@@ -662,7 +661,7 @@ public final class DiscTerrainFunction {
                 // on a circle for seam-free wrap, drifting slowly with distance) makes
                 // 5-7 alternating crests and gullies down the cone, strongest mid-flank.
                 double ma = Math.atan2(dz, dx);
-                double ridge = RIDGE_NOISE.getValue(Math.cos(ma) * 1.6D, Math.sin(ma) * 1.6D,
+                double ridge = noises.ridge().getValue(Math.cos(ma) * 1.6D, Math.sin(ma) * 1.6D,
                         dist / 90.0D);
                 s += ridge * 15.0D * 4.0D * t * (1.0D - t);
                 // Slight summit crater: a shallow bowl within ~6 blocks of the peak.
@@ -735,7 +734,7 @@ public final class DiscTerrainFunction {
         double sin = Math.sin(theta);
         double u = x * cos + z * sin;   // along-wind axis (ridge-normal)
         double v = -x * sin + z * cos;  // crest axis
-        double ridge = 1.0D - Math.abs(DUNE_NOISE.getValue(u / 48.0D, v / 170.0D));
+        double ridge = 1.0D - Math.abs(terrainNoises().dune().getValue(u / 48.0D, v / 170.0D));
         return ridge * 6.0D - 2.0D;
     }
 
@@ -893,7 +892,7 @@ public final class DiscTerrainFunction {
 
     /** Sparse red-sand repaint field of the desert (transition towards badlands). */
     private static boolean redSandPatch(int x, int z) {
-        return SAND_PATCH_NOISE.getValue(x / 33.0D, z / 33.0D) > 0.62D;
+        return terrainNoises().sandPatch().getValue(x / 33.0D, z / 33.0D) > 0.62D;
     }
 
     // --- sector styles ---
@@ -1006,11 +1005,36 @@ public final class DiscTerrainFunction {
     // --- noise / hashing (package-private: shared with the W1.2 geometry modules) ---
 
     /**
-     * A fixed-seed simplex field of the ECLIPSE_SEED noise family. Salt registry in the
-     * field comments up top — keep new salts unique across the whole family.
+     * A save-frozen simplex field of the map-seed noise family. This factory is intended
+     * for lifecycle-keyed caches; callers must not retain its return value across saves.
      */
     static SimplexNoise noise(int salt) {
-        return new SimplexNoise(new XoroshiroRandomSource(DiscMapData.ECLIPSE_SEED + salt * 0x9E3779B97F4A7C15L));
+        return noise(FrozenParams.mapSeed(), salt);
+    }
+
+    private static SimplexNoise noise(long seed, int salt) {
+        return new SimplexNoise(new XoroshiroRandomSource(seed + salt * 0x9E3779B97F4A7C15L));
+    }
+
+    /**
+     * Returns all terrain fields for the active frozen seed. A same-JVM save switch
+     * rebuilds the set atomically before any caller observes it.
+     */
+    private static TerrainNoises terrainNoises() {
+        long seed = FrozenParams.mapSeed();
+        TerrainNoises cached = terrainNoises;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (DiscTerrainFunction.class) {
+                cached = terrainNoises;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new TerrainNoises(seed, noise(seed, 1), noise(seed, 2), noise(seed, 3),
+                            noise(seed, 4), noise(seed, 5), noise(seed, 9), noise(seed, 24),
+                            noise(seed, 27));
+                    terrainNoises = cached;
+                }
+            }
+        }
+        return cached;
     }
 
     private static long mix(long z) {
@@ -1020,13 +1044,13 @@ public final class DiscTerrainFunction {
     }
 
     static long hash(int salt, int a, int b) {
-        long h = DiscMapData.ECLIPSE_SEED + salt * 0x9E3779B97F4A7C15L;
+        long h = FrozenParams.mapSeed() + salt * 0x9E3779B97F4A7C15L;
         h = mix(h ^ (a & 0xFFFFFFFFL));
         return mix(h ^ (b & 0xFFFFFFFFL));
     }
 
     static long hash3(int salt, int a, int b, int c) {
-        long h = DiscMapData.ECLIPSE_SEED + salt * 0x9E3779B97F4A7C15L;
+        long h = FrozenParams.mapSeed() + salt * 0x9E3779B97F4A7C15L;
         h = mix(h ^ (a & 0xFFFFFFFFL));
         h = mix(h ^ (b & 0xFFFFFFFFL));
         return mix(h ^ (c & 0xFFFFFFFFL));

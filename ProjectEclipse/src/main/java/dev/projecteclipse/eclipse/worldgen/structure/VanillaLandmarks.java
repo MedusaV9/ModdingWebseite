@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
 
@@ -75,19 +76,34 @@ public final class VanillaLandmarks {
      *       center lands exactly on the anchor (vanilla picked its own Y);
      *       {@link SitePrep.Mode#PLATEAU} pieces keep their generated position — they
      *       ground-snap against the heightmaps SitePrep just re-primed;</li>
-     *   <li>{@link SitePrep} terraforms (plateau skirt or carved envelope + entrance
-     *       shaft);</li>
-     *   <li>pieces place chunk-by-chunk, the start is registered for {@code /locate},
-     *       and {@link SitePrep#finish} relights/resends.</li>
+     *   <li>{@link SitePrep} queues its resumable plateau/cavity worker;</li>
+     *   <li>once prep completes, pieces place chunk-by-chunk, the start is registered
+     *       for {@code /locate}, and {@link SitePrep#finish} relights/resends.</li>
      * </ol>
      *
-     * @return the placed piece bounds, or {@code null} when vanilla generation refused
-     *         after {@value StructureStamper#VANILLA_ATTEMPTS} attempts (caller decides
-     *         on fallbacks; nothing was modified in that case)
+     * @return generated piece bounds whose placement is now queued, or {@code null} when
+     *         vanilla generation refused after all attempts
      */
     @Nullable
     public static BoundingBox placeVanilla(ServerLevel level, ResourceLocation structureId,
             BlockPos anchor, SitePrep.Mode mode) {
+        return placeVanillaAsync(level, structureId, anchor, mode, ignored -> {},
+                error -> EclipseMod.LOGGER.error("Queued placement of {} at {} failed",
+                        structureId, anchor.toShortString(), error));
+    }
+
+    /**
+     * Callback-aware variant for {@link StructurePendingRegistry.AsyncSitePlacer}. The
+     * success callback fires only after SitePrep, piece placement, structure bookkeeping
+     * and relight scheduling all complete; failure leaves error handling to the registry.
+     *
+     * @return generated piece bounds whose prep is queued, or {@code null} if generation
+     *         produced no valid start
+     */
+    @Nullable
+    public static BoundingBox placeVanillaAsync(ServerLevel level, ResourceLocation structureId,
+            BlockPos anchor, SitePrep.Mode mode, Consumer<BoundingBox> onComplete,
+            Consumer<Throwable> onFailure) {
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         if (profile == null) {
             EclipseMod.LOGGER.warn("placeVanilla({}) called for non-disc dimension {}; skipping",
@@ -117,14 +133,16 @@ public final class VanillaLandmarks {
                         bounds.maxX(), bounds.maxY(), bounds.maxZ(), anchor)
                 : SitePrep.preparePlateau(level, profile, bounds.minX(), bounds.minZ(),
                         bounds.maxX(), bounds.maxZ(), anchor);
-
-        BoundingBox placed = StructureStamper.placeStart(level, start,
-                StructureStamper.placementRandom(anchor));
-        StructureStamper.registerStart(level, start, placed);
-        SitePrep.touchBounds(prepared, placed.minX(), placed.minZ(), placed.maxX(), placed.maxZ());
-        SitePrep.finish(level, prepared);
-        EclipseMod.LOGGER.info("VANILLA GENERATE: placed {} ({} mode) at {} (bounds {})",
-                structureId, mode, anchor.toShortString(), placed);
-        return placed;
+        prepared.whenReady(() -> {
+            BoundingBox placed = StructureStamper.placeStart(level, start,
+                    StructureStamper.placementRandom(anchor));
+            StructureStamper.registerStart(level, start, placed);
+            SitePrep.touchBounds(prepared, placed.minX(), placed.minZ(), placed.maxX(), placed.maxZ());
+            SitePrep.finish(level, prepared);
+            EclipseMod.LOGGER.info("VANILLA GENERATE: placed {} ({} mode) at {} (bounds {})",
+                    structureId, mode, anchor.toShortString(), placed);
+            onComplete.accept(placed);
+        }, onFailure);
+        return bounds;
     }
 }

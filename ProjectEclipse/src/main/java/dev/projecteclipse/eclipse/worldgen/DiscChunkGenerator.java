@@ -11,6 +11,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction.DiscColumn;
+import dev.projecteclipse.eclipse.worldgen.structure.UndergroundSites;
 import dev.projecteclipse.eclipse.worldgen.structure.VanillaLandmarks;
 import dev.projecteclipse.eclipse.worldgen.vanilla.BiomeFeatureFilter;
 import dev.projecteclipse.eclipse.worldgen.vanilla.DiscGenPipeline;
@@ -186,6 +187,18 @@ public final class DiscChunkGenerator extends ChunkGenerator {
             }
             String landmarkId = locateSites.get(structureId);
             if (landmarkId == null) {
+                continue;
+            }
+            if (this.profile == DiscProfile.OVERWORLD
+                    && UndergroundSites.MINESHAFT_ID.equals(landmarkId)) {
+                for (var siteRow : UndergroundSites.mineshaftsThroughStage(committedStage)) {
+                    BlockPos site = siteRow.anchor();
+                    double distSq = site.distSqr(pos);
+                    if (distSq < nearestDistSq) {
+                        nearestDistSq = distSq;
+                        nearest = Pair.of(site, holder);
+                    }
+                }
                 continue;
             }
             for (DiscMapData.Landmark landmark : DiscMapData.get().landmarks(this.profile)) {

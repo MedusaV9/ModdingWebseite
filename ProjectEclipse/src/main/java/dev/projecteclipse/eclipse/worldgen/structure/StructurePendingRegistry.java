@@ -6,30 +6,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CStructureRiftPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.dungeon.DungeonSpawners;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -58,14 +57,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       with many sites (mansion + ancient city + mineshafts) staggers its paste cost.</li>
  * </ol>
  *
- * <p><b>Persistence / restart resume</b>: pending rows and placed-site records are written
- * to {@code world/<save>/eclipse/pending_structures.json} on every mutation and reloaded
- * on server start — a restart mid-pending resumes the auto-delay clock (game time is
- * per-save, so aged rows place right away, still interval-spaced).
- * <b>W1.5 seam note</b>: the plan stores these rows in {@code EclipseWorldgenState}
- * (SavedData); that class has not landed in this wave, so storage is isolated behind
- * {@link #persist()}/{@link #loadFromDisk} — migrating is a two-method swap (see
- * {@code docs/plans_v3/wiring/P1-W1.6_wiring.md}).</p>
+ * <p><b>Persistence / restart resume</b>: pending rows and placed-site records live in
+ * {@link EclipseWorldgenState} SavedData. A one-time reader imports the legacy
+ * {@code eclipse/pending_structures.json}, persists it to SavedData and removes the JSON.
+ * A restart mid-pending resumes the auto-delay clock (game time is per-save, so aged rows
+ * place right away, still interval-spaced).</p>
  *
  * <p><b>Placement dispatch</b>: sites carry only ids + anchor; the actual build runs
  * through the {@link SitePlacer} registered for the site's {@code structureId}
@@ -102,12 +98,24 @@ public final class StructurePendingRegistry {
         void place(ServerLevel level, PendingSite site);
     }
 
+    /**
+     * Tick-budgeted placer contract. The pending row remains persisted until exactly one
+     * completion callback fires, so a shutdown mid-preparation safely retries next boot.
+     */
+    @FunctionalInterface
+    public interface AsyncSitePlacer {
+        void place(ServerLevel level, PendingSite site, Runnable onComplete,
+                Consumer<Throwable> onFailure);
+    }
+
     /** Ticks between auto-delay scans (placement spacing itself is config-driven). */
     private static final int SCAN_INTERVAL_TICKS = 10;
     private static final String FILE_NAME = "pending_structures.json";
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_PLACED = "PLACED";
 
     private static final Map<String, SitePlacer> PLACERS = new ConcurrentHashMap<>();
+    private static final Map<String, AsyncSitePlacer> ASYNC_PLACERS = new ConcurrentHashMap<>();
     private static final List<SiteListener> LISTENERS = new CopyOnWriteArrayList<>();
     private static final Set<String> WARNED_NO_PLACER = Collections.synchronizedSet(new HashSet<>());
 
@@ -117,6 +125,8 @@ public final class StructurePendingRegistry {
     private static final Map<String, PlacedRecord> PLACED = new ConcurrentHashMap<>();
     /** Sites explicitly triggered (placed on the next scan even before their delay). */
     private static final Set<String> TRIGGERED = Collections.synchronizedSet(new HashSet<>());
+    /** Pending ids whose async SitePrep cursor is currently running. */
+    private static final Set<String> IN_FLIGHT = Collections.synchronizedSet(new HashSet<>());
 
     private record PlacedRecord(String dimension, int stage) {}
 
@@ -133,7 +143,18 @@ public final class StructurePendingRegistry {
      * server-start time, before any site of that id can become due.
      */
     public static void registerPlacer(String structureId, SitePlacer placer) {
-        PLACERS.putIfAbsent(structureId, placer);
+        if (!ASYNC_PLACERS.containsKey(structureId)) {
+            PLACERS.putIfAbsent(structureId, placer);
+        }
+    }
+
+    /**
+     * Registers a tick-budgeted placer. Async registration supersedes a same-id sync
+     * registration and keeps the SavedData row pending until its completion callback.
+     */
+    public static void registerAsyncPlacer(String structureId, AsyncSitePlacer placer) {
+        ASYNC_PLACERS.putIfAbsent(structureId, placer);
+        PLACERS.remove(structureId);
     }
 
     /** Registers a phase observer (P2 rift sequences hook here server-side). */
@@ -179,9 +200,10 @@ public final class StructurePendingRegistry {
     }
 
     /**
-     * Places a pending site NOW (P2 calls this when its rift animation lands; also the
-     * {@code /eclipse-worldgen structures trigger <siteId>} dev path). Synchronous on the
-     * server thread. Returns {@code false} when no such pending site exists.
+     * Triggers a pending site NOW (P2 calls this when its rift animation lands; also the
+     * {@code /eclipse-worldgen structures place <siteId>} operator path). Synchronous
+     * placers finish before return; async SitePrep placers are queued before return and
+     * retain their SavedData row until completion.
      */
     public static boolean trigger(String siteId) {
         MinecraftServer server = activeServer;
@@ -211,6 +233,11 @@ public final class StructurePendingRegistry {
         return PLACED.containsKey(siteId);
     }
 
+    /** Immutable sorted snapshot of placed site ids for operator diagnostics. */
+    public static List<String> placedSiteIds() {
+        return PLACED.keySet().stream().sorted().toList();
+    }
+
     /**
      * Stage-erase bookkeeping (called by {@link StructureStamper} when an erase sweep
      * completes): forgets pending rows and placed records of the dimension above
@@ -221,6 +248,7 @@ public final class StructurePendingRegistry {
     public static void clearPlacedAbove(String dimension, int keepThroughStage) {
         boolean changed = PENDING.removeIf(site ->
                 site.dimension().equals(dimension) && site.stage() > keepThroughStage);
+        IN_FLIGHT.removeIf(siteId -> PENDING.stream().noneMatch(site -> site.siteId().equals(siteId)));
         int before = PLACED.size();
         PLACED.entrySet().removeIf(entry -> entry.getValue().dimension().equals(dimension)
                 && entry.getValue().stage() > keepThroughStage);
@@ -238,7 +266,7 @@ public final class StructurePendingRegistry {
         activeServer = event.getServer();
         lastPlaceGameTime = Long.MIN_VALUE;
         DungeonSpawners.ensureLoaded();
-        loadFromDisk();
+        loadFromState();
         if (!PENDING.isEmpty()) {
             EclipseMod.LOGGER.info("StructurePendingRegistry: resumed {} pending site(s) from save",
                     PENDING.size());
@@ -251,6 +279,7 @@ public final class StructurePendingRegistry {
         PENDING.clear();
         PLACED.clear();
         TRIGGERED.clear();
+        IN_FLIGHT.clear();
         WARNED_NO_PLACER.clear();
         lastPlaceGameTime = Long.MIN_VALUE;
     }
@@ -273,6 +302,9 @@ public final class StructurePendingRegistry {
         }
         int autoDelay = DungeonSpawners.autoDelayTicks();
         for (PendingSite site : PENDING) {
+            if (IN_FLIGHT.contains(site.siteId())) {
+                continue;
+            }
             boolean due = TRIGGERED.contains(site.siteId())
                     || gameTime - site.enqueuedGameTime() >= autoDelay
                     || gameTime < site.enqueuedGameTime(); // clock went backwards: treat as due
@@ -284,8 +316,32 @@ public final class StructurePendingRegistry {
 
     // --- placement ---
 
-    /** Runs the site's placer; true when the site left the pending list (placed or failed hard). */
+    /** Runs or starts the site's placer; false only when no implementation is registered. */
     private static boolean place(MinecraftServer server, PendingSite site) {
+        AsyncSitePlacer asyncPlacer = ASYNC_PLACERS.get(site.structureId());
+        if (asyncPlacer != null) {
+            if (!IN_FLIGHT.add(site.siteId())) {
+                return true;
+            }
+            ServerLevel level = levelOf(server, site);
+            if (level == null) {
+                IN_FLIGHT.remove(site.siteId());
+                EclipseMod.LOGGER.error("Dimension {} of pending site {} is missing; dropping site",
+                        site.dimension(), site.siteId());
+                removeAndRecord(site, false);
+                return true;
+            }
+            try {
+                asyncPlacer.place(level, site,
+                        () -> completeAsync(server, level, site, null),
+                        error -> completeAsync(server, level, site, error));
+                lastPlaceGameTime = level.getGameTime();
+                return true;
+            } catch (Throwable error) {
+                completeAsync(server, level, site, error);
+                return true;
+            }
+        }
         SitePlacer placer = PLACERS.get(site.structureId());
         if (placer == null) {
             if (WARNED_NO_PLACER.add(site.structureId())) {
@@ -318,6 +374,23 @@ public final class StructurePendingRegistry {
         return true;
     }
 
+    private static void completeAsync(MinecraftServer server, ServerLevel level, PendingSite site,
+            @Nullable Throwable error) {
+        if (activeServer != server || !IN_FLIGHT.remove(site.siteId())) {
+            return;
+        }
+        if (error != null) {
+            EclipseMod.LOGGER.error("Async structure placement of {} ({}) failed",
+                    site.siteId(), site.structureId(), error);
+        }
+        removeAndRecord(site, true);
+        lastPlaceGameTime = level.getGameTime();
+        fire(level, site, Phase.PLACED);
+        EclipseMod.LOGGER.info("Structure site PLACED: {} ({}) at {}{}",
+                site.siteId(), site.structureId(), site.anchor().toShortString(),
+                error == null ? "" : " (placer failed; row consumed)");
+    }
+
     private static void removeAndRecord(PendingSite site, boolean recordPlaced) {
         PENDING.removeIf(row -> row.siteId().equals(site.siteId()));
         TRIGGERED.remove(site.siteId());
@@ -343,55 +416,91 @@ public final class StructurePendingRegistry {
         return server.getLevel(WorldStageService.dimensionOf(profile));
     }
 
-    // --- persistence (isolated: swap these two methods for EclipseWorldgenState when W1.5 lands) ---
+    // --- SavedData persistence + one-time legacy JSON migration ---
 
     private static synchronized void persist() {
-        Path dir = FrozenParams.saveEclipseDir();
-        if (dir == null) {
-            return; // no save session (should not happen on the server thread mid-session)
+        MinecraftServer server = activeServer;
+        if (server == null) {
+            return;
         }
-        JsonObject root = new JsonObject();
-        root.addProperty("_comment", "Two-phase structure registry (W1.6). Pending rows place on "
-                + "P2 trigger or after structure_phase.auto_delay_ticks; placed records dedupe "
-                + "re-commits and are cleared per dimension by erase sweeps.");
-        JsonArray pending = new JsonArray();
+        List<CompoundTag> rows = new ArrayList<>(PENDING.size() + PLACED.size());
         for (PendingSite site : PENDING) {
-            JsonObject row = new JsonObject();
-            row.addProperty("siteId", site.siteId());
-            row.addProperty("structureId", site.structureId());
-            row.addProperty("dimension", site.dimension());
-            row.addProperty("x", site.anchor().getX());
-            row.addProperty("y", site.anchor().getY());
-            row.addProperty("z", site.anchor().getZ());
-            row.addProperty("stage", site.stage());
-            row.addProperty("footprint", site.footprint());
-            row.addProperty("enqueuedGameTime", site.enqueuedGameTime());
-            pending.add(row);
+            CompoundTag row = siteToTag(site);
+            row.putString("status", STATUS_PENDING);
+            rows.add(row);
         }
-        root.add("pending", pending);
-        JsonArray placed = new JsonArray();
         for (Map.Entry<String, PlacedRecord> entry : PLACED.entrySet()) {
-            JsonObject row = new JsonObject();
-            row.addProperty("siteId", entry.getKey());
-            row.addProperty("dimension", entry.getValue().dimension());
-            row.addProperty("stage", entry.getValue().stage());
-            placed.add(row);
+            CompoundTag row = new CompoundTag();
+            row.putString("status", STATUS_PLACED);
+            row.putString("siteId", entry.getKey());
+            row.putString("dimension", entry.getValue().dimension());
+            row.putInt("stage", entry.getValue().stage());
+            rows.add(row);
         }
-        root.add("placed", placed);
-        try {
-            Files.writeString(dir.resolve(FILE_NAME), GSON.toJson(root), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            EclipseMod.LOGGER.error("Failed to persist pending structure registry", e);
-        }
+        EclipseWorldgenState.get(server).setPendingStructures(rows);
     }
 
-    private static void loadFromDisk() {
+    private static void loadFromState() {
         PENDING.clear();
         PLACED.clear();
         TRIGGERED.clear();
+        MinecraftServer server = activeServer;
+        if (server == null) {
+            return;
+        }
+        List<CompoundTag> rows = EclipseWorldgenState.get(server).pendingStructures();
+        if (rows.isEmpty() && migrateLegacyJson()) {
+            persist();
+            deleteLegacyJson();
+            return;
+        }
+        for (CompoundTag row : rows) {
+            String status = row.getString("status");
+            if (STATUS_PLACED.equals(status)) {
+                PLACED.put(row.getString("siteId"), new PlacedRecord(
+                        row.getString("dimension"), row.getInt("stage")));
+            } else {
+                PendingSite site = siteFromTag(row);
+                if (site != null) {
+                    PENDING.add(site);
+                }
+            }
+        }
+    }
+
+    private static CompoundTag siteToTag(PendingSite site) {
+        CompoundTag row = new CompoundTag();
+        row.putString("siteId", site.siteId());
+        row.putString("structureId", site.structureId());
+        row.putString("dimension", site.dimension());
+        row.putLong("anchor", site.anchor().asLong());
+        row.putInt("stage", site.stage());
+        row.putInt("footprint", site.footprint());
+        row.putLong("enqueuedGameTime", site.enqueuedGameTime());
+        return row;
+    }
+
+    @Nullable
+    private static PendingSite siteFromTag(CompoundTag row) {
+        String siteId = row.getString("siteId");
+        String structureId = row.getString("structureId");
+        if (siteId.isEmpty() || structureId.isEmpty()) {
+            EclipseMod.LOGGER.warn("Ignoring malformed pending-structure SavedData row");
+            return null;
+        }
+        return new PendingSite(siteId, structureId, row.getString("dimension"),
+                BlockPos.of(row.getLong("anchor")), row.getInt("stage"), row.getInt("footprint"),
+                row.getLong("enqueuedGameTime"));
+    }
+
+    /**
+     * Imports the pre-SavedData JSON schema into the in-memory tables. Returns true only
+     * after a complete successful parse; the caller then persists and deletes the source.
+     */
+    private static boolean migrateLegacyJson() {
         Path dir = FrozenParams.saveEclipseDir();
         if (dir == null || !Files.isRegularFile(dir.resolve(FILE_NAME))) {
-            return;
+            return false;
         }
         try {
             JsonObject root = JsonParser.parseString(
@@ -417,8 +526,25 @@ public final class StructurePendingRegistry {
                             row.get("dimension").getAsString(), row.get("stage").getAsInt()));
                 }
             }
+            EclipseMod.LOGGER.info("Migrated legacy {} into {}", FILE_NAME, EclipseWorldgenState.DATA_NAME);
+            return true;
         } catch (IOException | RuntimeException e) {
-            EclipseMod.LOGGER.error("Failed to read pending structure registry; starting empty", e);
+            EclipseMod.LOGGER.error("Failed to migrate legacy pending structure registry; source retained", e);
+            PENDING.clear();
+            PLACED.clear();
+            return false;
+        }
+    }
+
+    private static void deleteLegacyJson() {
+        Path dir = FrozenParams.saveEclipseDir();
+        if (dir == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(dir.resolve(FILE_NAME));
+        } catch (IOException e) {
+            EclipseMod.LOGGER.warn("Migrated {}, but could not remove the legacy file", FILE_NAME, e);
         }
     }
 }

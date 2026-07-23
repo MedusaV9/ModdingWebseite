@@ -32,8 +32,9 @@ import net.neoforged.fml.loading.FMLPaths;
  * ({@link #loadHeightmapOverride(Path)}, {@code config/eclipse/disc_heightmap.png})
  * lets humans replace the procedural surface later without code changes.
  *
- * <p>All disc noise is seeded exclusively from {@link #ECLIPSE_SEED}; the vanilla world
- * seed is never consulted, so the map is identical in every world.</p>
+ * <p>All disc noise is seeded exclusively from {@link FrozenParams#mapSeed()}; the
+ * vanilla world seed is never consulted. The default remains {@link #ECLIPSE_SEED},
+ * while saves created with map-seed randomization receive a distinct deterministic map.</p>
  */
 public final class DiscMapData {
     /** The fixed seed of the hand-prepared map. NEVER replace with the world seed. */
@@ -55,12 +56,10 @@ public final class DiscMapData {
     /** Columns farther than this from every river bounding box short-circuit to "no river". */
     private static final double RIVER_QUERY_MARGIN = 16.0D;
 
-    /**
-     * Fixed-seed seam wobble field (salt 8 of the ECLIPSE_SEED noise family — salts 1..7
-     * live in {@code DiscTerrainFunction}, 9+ are free). Never reseed from the world.
-     */
-    private static final SimplexNoise SECTOR_WOBBLE_NOISE =
-            new SimplexNoise(new XoroshiroRandomSource(ECLIPSE_SEED + 8L * 0x9E3779B97F4A7C15L));
+    /** Lifecycle-keyed sector-wobble field (salt 8 of the frozen map-seed family). */
+    private static volatile SeededNoise sectorWobbleNoise;
+
+    private record SeededNoise(long seed, SimplexNoise noise) {}
 
     /** One angular biome wedge; degrees measured from +X towards +Z, wrap-around allowed. */
     public record Sector(String biome, double startDeg, double endDeg) {
@@ -241,13 +240,15 @@ public final class DiscMapData {
     }
 
     /**
-     * Parses a frozen {@code discMap} section. Missing keys fall back to built-in defaults
-     * (or {@link DiscMapDefaults} when W1.4 lands — until then, {@link #defaultOverworld()}).
+     * Parses a frozen {@code discMap} section and its save-local painted heightmap.
+     * Missing map keys fall back to built-in defaults. When no freeze is active this
+     * method retains the global-config fallback used by authoring tools.
      */
     public static DiscMapData fromJsonRoot(JsonObject root) {
         MapProfile overworld = profileFromJson(root.getAsJsonObject("overworld"), defaultOverworld());
         MapProfile nether = profileFromJson(root.getAsJsonObject("nether"), defaultNether());
-        Path dir = FMLPaths.CONFIGDIR.get().resolve("eclipse");
+        Path frozenDir = FrozenParams.saveEclipseDir();
+        Path dir = frozenDir != null ? frozenDir : FMLPaths.CONFIGDIR.get().resolve("eclipse");
         int[] heightmap = loadHeightmapOverride(dir.resolve("disc_heightmap.png"));
         return new DiscMapData(overworld, nether, heightmap);
     }
@@ -272,7 +273,7 @@ public final class DiscMapData {
      * {@link DiscBiomeSource} and the terrain palette so blocks always match the biome.
      *
      * <p>The wedge lookup angle is perturbed by a fixed-seed simplex wobble of up to
-     * ±{@value #SECTOR_WOBBLE_DEG}° ({@link #SECTOR_WOBBLE_NOISE}) so the radial seams
+     * ±{@value #SECTOR_WOBBLE_DEG}° (frozen-seed simplex) so the radial seams
      * meander organically instead of being razor straight. The amplitude tapers to 0
      * towards the center cap (where a degree is only a fraction of a block anyway) and
      * every consumer goes through this method, so biomes, palettes and vegetation stay
@@ -319,11 +320,31 @@ public final class DiscMapData {
         double angle = Math.toDegrees(Math.atan2(z, x));
         double taper = Math.min(1.0D, Math.max(0.0D, (r - map.centerRadius()) / SECTOR_WOBBLE_TAPER));
         if (taper > 0.0D) {
-            angle += SECTOR_WOBBLE_NOISE.getValue(x / SECTOR_WOBBLE_SCALE, z / SECTOR_WOBBLE_SCALE)
+            angle += sectorWobbleNoise().getValue(x / SECTOR_WOBBLE_SCALE, z / SECTOR_WOBBLE_SCALE)
                     * SECTOR_WOBBLE_DEG * taper;
         }
         angle %= 360.0D;
         return angle < 0.0D ? angle + 360.0D : angle;
+    }
+
+    /**
+     * Returns the sector-wobble field for the active frozen seed. The object is rebuilt
+     * when a different save activates in the same JVM; equal seeds reuse equal fields.
+     */
+    private static SimplexNoise sectorWobbleNoise() {
+        long seed = FrozenParams.mapSeed();
+        SeededNoise cached = sectorWobbleNoise;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (DiscMapData.class) {
+                cached = sectorWobbleNoise;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new SeededNoise(seed, new SimplexNoise(
+                            new XoroshiroRandomSource(seed + 8L * 0x9E3779B97F4A7C15L)));
+                    sectorWobbleNoise = cached;
+                }
+            }
+        }
+        return cached.noise();
     }
 
     /**
@@ -465,7 +486,7 @@ public final class DiscMapData {
                 JsonObject root = new JsonObject();
                 root.addProperty("_comment", "Authored control data of the Eclipse disc map "
                         + "(biome sector wedges, landmarks, mountain, rivers, whisper wells). "
-                        + "The terrain itself is procedural from the fixed ECLIPSE_SEED; drop a "
+                        + "The terrain itself is procedural from the save-frozen map seed; drop a "
                         + HEIGHTMAP_SIZE + "x" + HEIGHTMAP_SIZE + " disc_heightmap.png next to this "
                         + "file (surfaceY = red + " + HEIGHTMAP_Y_OFFSET + ") to paint surface heights.");
                 root.add("overworld", profileToJson(overworld));

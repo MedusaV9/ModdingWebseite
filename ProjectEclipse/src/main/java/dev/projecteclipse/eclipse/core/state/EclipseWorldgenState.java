@@ -44,6 +44,7 @@ public final class EclipseWorldgenState extends SavedData {
     private static final String TAG_BREACH_OPEN = "breachOpen";
     private static final String TAG_END_DISC_MATERIALIZED = "endDiscMaterialized";
     private static final String TAG_FOG_CHESTS = "fogChests";
+    private static final String TAG_FOG_SITE_STATES = "fogSiteStates";
 
     /**
      * One freshly-grown annulus (design D11): {@code dim} is the disc profile name
@@ -71,11 +72,21 @@ public final class EclipseWorldgenState extends SavedData {
 
     private final List<CompoundTag> pendingStructures = new ArrayList<>();
     private final List<NewRing> newRings = new ArrayList<>();
-    private final Map<String, List<BlockPos>> fogChests = new LinkedHashMap<>();
+    private final Map<String, FogSiteState> fogSiteStates = new LinkedHashMap<>();
     private boolean breachOpen = false;
     private boolean endDiscMaterialized = false;
 
     public EclipseWorldgenState() {}
+
+    /**
+     * Persisted lifecycle of one fog site. {@code placed} records that terrain/chests
+     * exist; {@code active} records that its standing storm wall should be restored.
+     */
+    public record FogSiteState(List<BlockPos> chests, boolean placed, boolean active) {
+        public FogSiteState {
+            chests = List.copyOf(chests);
+        }
+    }
 
     public static EclipseWorldgenState get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(
@@ -99,7 +110,18 @@ public final class EclipseWorldgenState extends SavedData {
             for (long packed : chests.getLongArray(siteId)) {
                 positions.add(BlockPos.of(packed));
             }
-            state.fogChests.put(siteId, positions);
+            // Legacy chest-only rows represented materialized standing storms.
+            state.fogSiteStates.put(siteId, new FogSiteState(positions, true, true));
+        }
+        CompoundTag fogSites = tag.getCompound(TAG_FOG_SITE_STATES);
+        for (String siteId : fogSites.getAllKeys()) {
+            CompoundTag row = fogSites.getCompound(siteId);
+            List<BlockPos> positions = new ArrayList<>();
+            for (long packed : row.getLongArray("chests")) {
+                positions.add(BlockPos.of(packed));
+            }
+            state.fogSiteStates.put(siteId, new FogSiteState(positions,
+                    row.getBoolean("placed"), row.getBoolean("active")));
         }
         // Worker threads read the flags through the FrozenParams mirror (the volatile
         // context activates on ServerAboutToStartEvent, before any SavedData can load).
@@ -125,14 +147,21 @@ public final class EclipseWorldgenState extends SavedData {
         tag.putBoolean(TAG_END_DISC_MATERIALIZED, this.endDiscMaterialized);
 
         CompoundTag chests = new CompoundTag();
-        for (Map.Entry<String, List<BlockPos>> entry : this.fogChests.entrySet()) {
-            long[] packed = new long[entry.getValue().size()];
+        CompoundTag fogSites = new CompoundTag();
+        for (Map.Entry<String, FogSiteState> entry : this.fogSiteStates.entrySet()) {
+            long[] packed = new long[entry.getValue().chests().size()];
             for (int i = 0; i < packed.length; i++) {
-                packed[i] = entry.getValue().get(i).asLong();
+                packed[i] = entry.getValue().chests().get(i).asLong();
             }
             chests.putLongArray(entry.getKey(), packed);
+            CompoundTag row = new CompoundTag();
+            row.putLongArray("chests", packed);
+            row.putBoolean("placed", entry.getValue().placed());
+            row.putBoolean("active", entry.getValue().active());
+            fogSites.put(entry.getKey(), row);
         }
         tag.put(TAG_FOG_CHESTS, chests);
+        tag.put(TAG_FOG_SITE_STATES, fogSites);
         return tag;
     }
 
@@ -207,15 +236,33 @@ public final class EclipseWorldgenState extends SavedData {
     /** Unmodifiable view of the placed fog-storm chests per site id. */
     public Map<String, List<BlockPos>> fogChests() {
         Map<String, List<BlockPos>> copy = new LinkedHashMap<>();
-        for (Map.Entry<String, List<BlockPos>> entry : this.fogChests.entrySet()) {
-            copy.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+        for (Map.Entry<String, FogSiteState> entry : this.fogSiteStates.entrySet()) {
+            copy.put(entry.getKey(), entry.getValue().chests());
         }
         return Collections.unmodifiableMap(copy);
     }
 
     /** Records the placed chest positions of one fog-storm site (index order = chest idx). */
     public void setFogChests(String siteId, List<BlockPos> positions) {
-        this.fogChests.put(siteId, new ArrayList<>(positions));
+        FogSiteState old = this.fogSiteStates.get(siteId);
+        this.fogSiteStates.put(siteId, new FogSiteState(positions, true,
+                old == null || old.active()));
+        setDirty();
+    }
+
+    /** Snapshot of every persisted fog site's chest and lifecycle state. */
+    public Map<String, FogSiteState> fogSiteStates() {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(this.fogSiteStates));
+    }
+
+    /** Persisted fog-site state, or an empty inactive row when the id is unknown. */
+    public FogSiteState fogSiteState(String siteId) {
+        return this.fogSiteStates.getOrDefault(siteId, new FogSiteState(List.of(), false, false));
+    }
+
+    /** Atomically records chest positions plus placed/active lifecycle flags. */
+    public void setFogSiteState(String siteId, List<BlockPos> positions, boolean placed, boolean active) {
+        this.fogSiteStates.put(siteId, new FogSiteState(positions, placed, active));
         setDirty();
     }
 }

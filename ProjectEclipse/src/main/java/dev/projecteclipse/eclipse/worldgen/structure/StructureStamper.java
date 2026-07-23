@@ -191,23 +191,30 @@ public final class StructureStamper {
 
     /** Registers every placer this package owns (first registration wins — idempotent). */
     private static void registerPlacers() {
-        StructurePendingRegistry.registerPlacer("eclipse:desert_temple", (level, site) ->
+        StructurePendingRegistry.registerAsyncPlacer("eclipse:desert_temple",
+                (level, site, complete, failure) ->
                 placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("desert_pyramid"),
-                        anchor -> FallbackBuilders.desertTemple(level, anchor)));
-        StructurePendingRegistry.registerPlacer("eclipse:jungle_temple", (level, site) ->
+                        anchor -> FallbackBuilders.desertTemple(level, anchor), complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("eclipse:jungle_temple",
+                (level, site, complete, failure) ->
                 placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("jungle_pyramid"),
-                        anchor -> FallbackBuilders.jungleTemple(level, anchor)));
-        StructurePendingRegistry.registerPlacer("eclipse:village_plains", (level, site) ->
+                        anchor -> FallbackBuilders.jungleTemple(level, anchor), complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("eclipse:village_plains",
+                (level, site, complete, failure) ->
                 placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("village_plains"),
-                        anchor -> FallbackBuilders.village(level, anchor)));
-        StructurePendingRegistry.registerPlacer("minecraft:pillager_outpost", (level, site) ->
-                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("pillager_outpost"), null));
-        StructurePendingRegistry.registerPlacer("minecraft:mansion", (level, site) ->
-                placeWithFallback(level, site, ResourceLocation.withDefaultNamespace("mansion"), null));
-        StructurePendingRegistry.registerPlacer("minecraft:trial_chambers", (level, site) ->
-                placeCavity(level, site, ResourceLocation.withDefaultNamespace("trial_chambers")));
-        StructurePendingRegistry.registerPlacer("minecraft:ancient_city", (level, site) ->
-                placeCavity(level, site, ResourceLocation.withDefaultNamespace("ancient_city")));
+                        anchor -> FallbackBuilders.village(level, anchor), complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("minecraft:pillager_outpost",
+                (level, site, complete, failure) -> placeWithFallback(level, site,
+                        ResourceLocation.withDefaultNamespace("pillager_outpost"), null, complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("minecraft:mansion",
+                (level, site, complete, failure) -> placeWithFallback(level, site,
+                        ResourceLocation.withDefaultNamespace("mansion"), null, complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("minecraft:trial_chambers",
+                (level, site, complete, failure) -> placeCavity(level, site,
+                        ResourceLocation.withDefaultNamespace("trial_chambers"), complete, failure));
+        StructurePendingRegistry.registerAsyncPlacer("minecraft:ancient_city",
+                (level, site, complete, failure) -> placeCavity(level, site,
+                        ResourceLocation.withDefaultNamespace("ancient_city"), complete, failure));
         // The emergence runs its own quake/fissure/beam sequence — the rift phase of the
         // registry is its announcement; the sequence itself starts on trigger.
         StructurePendingRegistry.registerPlacer("eclipse:stronghold_emergence",
@@ -218,7 +225,8 @@ public final class StructureStamper {
                 FortressCoreBuilder.build(level, landmark);
             }
         });
-        StructurePendingRegistry.registerPlacer(STRONGHOLD_VAULT_ID, StructureStamper::placeStrongholdVault);
+        StructurePendingRegistry.registerAsyncPlacer(STRONGHOLD_VAULT_ID,
+                StructureStamper::placeStrongholdVault);
         UndergroundSites.registerPlacers();
     }
 
@@ -230,14 +238,16 @@ public final class StructureStamper {
      * (mansion, outpost) log and consume the site.
      */
     private static void placeWithFallback(ServerLevel level, PendingSite site,
-            ResourceLocation vanillaId, @Nullable FallbackBuild fallback) {
-        BoundingBox placed = VanillaLandmarks.placeVanilla(level, vanillaId, site.anchor(), SitePrep.Mode.PLATEAU);
-        if (placed != null) {
+            ResourceLocation vanillaId, @Nullable FallbackBuild fallback,
+            Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
+        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, site.anchor(),
+                SitePrep.Mode.PLATEAU, ignored -> onComplete.run(), onFailure);
+        if (queued != null) {
             return;
         }
         if (fallback == null) {
-            EclipseMod.LOGGER.error("{} failed to generate at {} and has no procedural fallback; "
-                    + "site {} consumed", vanillaId, site.anchor().toShortString(), site.siteId());
+            onFailure.accept(new IllegalStateException(vanillaId + " failed to generate at "
+                    + site.anchor().toShortString() + " and has no procedural fallback"));
             return;
         }
         EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: {} failed to generate at {}; building the fallback piece",
@@ -248,16 +258,21 @@ public final class StructureStamper {
                 profile != null ? profile : DiscProfile.OVERWORLD,
                 site.anchor().getX() - pad, site.anchor().getZ() - pad,
                 site.anchor().getX() + pad, site.anchor().getZ() + pad, site.anchor());
-        fallback.build(new BlockPos(site.anchor().getX(), prepared.plateauY(), site.anchor().getZ()));
-        SitePrep.finish(level, prepared);
+        prepared.whenReady(() -> {
+            fallback.build(new BlockPos(site.anchor().getX(), prepared.plateauY(), site.anchor().getZ()));
+            SitePrep.finish(level, prepared);
+            onComplete.run();
+        }, onFailure);
     }
 
     /** Cavity-mode vanilla placement (underground envelope + entrance shaft). */
-    private static void placeCavity(ServerLevel level, PendingSite site, ResourceLocation vanillaId) {
-        BoundingBox placed = VanillaLandmarks.placeVanilla(level, vanillaId, site.anchor(), SitePrep.Mode.CAVITY);
-        if (placed == null) {
-            EclipseMod.LOGGER.error("{} failed to generate at {} — underground site {} consumed "
-                    + "(no procedural equivalent exists)", vanillaId, site.anchor().toShortString(), site.siteId());
+    private static void placeCavity(ServerLevel level, PendingSite site, ResourceLocation vanillaId,
+            Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
+        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, site.anchor(),
+                SitePrep.Mode.CAVITY, ignored -> onComplete.run(), onFailure);
+        if (queued == null) {
+            onFailure.accept(new IllegalStateException(vanillaId + " failed to generate at "
+                    + site.anchor().toShortString() + " (no procedural equivalent)"));
         }
     }
 
@@ -269,31 +284,35 @@ public final class StructureStamper {
      * cavity). Without a mountain the gauntlet dead-drops 40 blocks below the ruin into
      * a sealed antechamber (flavor only; the emergence fallback already placed a portal).
      */
-    private static void placeStrongholdVault(ServerLevel level, PendingSite site) {
+    private static void placeStrongholdVault(ServerLevel level, PendingSite site,
+            Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
         BlockPos anchor = site.anchor();
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
                 profile != null ? profile : DiscProfile.OVERWORLD,
                 anchor.getX() - 12, anchor.getZ() - 12, anchor.getX() + 12, anchor.getZ() + 12, anchor);
-        BlockPos surface = new BlockPos(anchor.getX(), prepared.plateauY(), anchor.getZ());
-
-        DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
-        BlockPos target;
-        if (mountain == null) {
-            target = surface.below(40).offset(24, 0, 0);
-            EclipseMod.LOGGER.warn("No mountain in disc_map.json; stronghold gauntlet ends in a sealed antechamber");
-        } else {
-            double dx = surface.getX() - mountain.x();
-            double dz = surface.getZ() - mountain.z();
-            double len = Math.max(1.0D, Math.sqrt(dx * dx + dz * dz));
-            int doorstepR = mountain.caveRadiusXz() + 5;
-            target = new BlockPos(mountain.x() + (int) Math.round(dx / len * doorstepR),
-                    mountain.caveY() - mountain.caveRadiusY() + 2,
-                    mountain.z() + (int) Math.round(dz / len * doorstepR));
-        }
-        BoundingBox bounds = CollapsedVaultBuilder.buildStrongholdGauntlet(level, surface, target);
-        SitePrep.finish(level, prepared);
-        SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
+        prepared.whenReady(() -> {
+            BlockPos surface = new BlockPos(anchor.getX(), prepared.plateauY(), anchor.getZ());
+            DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
+            BlockPos target;
+            if (mountain == null) {
+                target = surface.below(40).offset(24, 0, 0);
+                EclipseMod.LOGGER.warn(
+                        "No mountain in disc_map.json; stronghold gauntlet ends in a sealed antechamber");
+            } else {
+                double dx = surface.getX() - mountain.x();
+                double dz = surface.getZ() - mountain.z();
+                double len = Math.max(1.0D, Math.sqrt(dx * dx + dz * dz));
+                int doorstepR = mountain.caveRadiusXz() + 5;
+                target = new BlockPos(mountain.x() + (int) Math.round(dx / len * doorstepR),
+                        mountain.caveY() - mountain.caveRadiusY() + 2,
+                        mountain.z() + (int) Math.round(dz / len * doorstepR));
+            }
+            BoundingBox bounds = CollapsedVaultBuilder.buildStrongholdGauntlet(level, surface, target);
+            SitePrep.finish(level, prepared);
+            SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
+            onComplete.run();
+        }, onFailure);
     }
 
     /** Procedural fallback builder taking the prepared plateau anchor. */

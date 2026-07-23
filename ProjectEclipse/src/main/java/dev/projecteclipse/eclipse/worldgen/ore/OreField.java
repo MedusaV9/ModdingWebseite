@@ -1,6 +1,5 @@
 package dev.projecteclipse.eclipse.worldgen.ore;
 
-import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import net.minecraft.world.level.block.state.BlockState;
@@ -79,7 +78,7 @@ public final class OreField {
     }
 
     private static long hash3(int salt, int a, int b, int c) {
-        long h = DiscMapData.ECLIPSE_SEED + salt * 0x9E3779B97F4A7C15L;
+        long h = FrozenParams.mapSeed() + salt * 0x9E3779B97F4A7C15L;
         h = mix(h ^ (a & 0xFFFFFFFFL));
         h = mix(h ^ (b & 0xFFFFFFFFL));
         return mix(h ^ (c & 0xFFFFFFFFL));

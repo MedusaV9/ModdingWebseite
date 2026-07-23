@@ -1,0 +1,30 @@
+{
+  "en_us": {
+    "command.eclipse.worldgen.no_freeze": "No per-save worldgen freeze is active.",
+    "command.eclipse.worldgen.reload": "Reloaded the frozen ore and fog configuration.",
+    "command.eclipse.worldgen.refreeze": "Refroze worldgen section: %s.",
+    "command.eclipse.worldgen.refreeze_failed": "Refreeze failed: %s",
+    "command.eclipse.worldgen.breach": "Nether breach open: %s.",
+    "command.eclipse.worldgen.end_materialized": "Marked the End disc as materialized.",
+    "command.eclipse.worldgen.structures_header": "Structures: %s pending, %s placed, %s queued prep jobs.",
+    "command.eclipse.worldgen.structure_pending": "[pending] %s (%s) at %s",
+    "command.eclipse.worldgen.structure_placed": "[placed] %s",
+    "command.eclipse.worldgen.structure_missing": "No pending structure site named %s.",
+    "command.eclipse.worldgen.structure_triggered": "Triggered structure site %s.",
+    "command.eclipse.worldgen.freeze_status": "Freeze seed=%s, overworld=%s, nether=%s, path=%s"
+  },
+  "de_de": {
+    "command.eclipse.worldgen.no_freeze": "Kein spielstandsgebundener Weltgenerierungs-Freeze ist aktiv.",
+    "command.eclipse.worldgen.reload": "Eingefrorene Erz- und Nebelkonfiguration neu geladen.",
+    "command.eclipse.worldgen.refreeze": "Weltgenerierungsabschnitt erneut eingefroren: %s.",
+    "command.eclipse.worldgen.refreeze_failed": "Erneutes Einfrieren fehlgeschlagen: %s",
+    "command.eclipse.worldgen.breach": "Netherbresche geöffnet: %s.",
+    "command.eclipse.worldgen.end_materialized": "Endscheibe als materialisiert markiert.",
+    "command.eclipse.worldgen.structures_header": "Strukturen: %s ausstehend, %s platziert, %s Vorbereitungsaufträge.",
+    "command.eclipse.worldgen.structure_pending": "[ausstehend] %s (%s) bei %s",
+    "command.eclipse.worldgen.structure_placed": "[platziert] %s",
+    "command.eclipse.worldgen.structure_missing": "Keine ausstehende Struktur namens %s.",
+    "command.eclipse.worldgen.structure_triggered": "Struktur %s ausgelöst.",
+    "command.eclipse.worldgen.freeze_status": "Freeze-Seed=%s, Oberwelt=%s, Nether=%s, Pfad=%s"
+  }
+}

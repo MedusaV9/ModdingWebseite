@@ -6,9 +6,8 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * Deterministic underground cave density of the disc (worker W1.2, plan v3 D4.1): the
  * widened Perlin-worm tunnels plus the new "cheese" room layer. Pure functions of block
  * coordinates and per-column context — seeded exclusively from
- * {@link DiscMapData#ECLIPSE_SEED} (noise salts 6/7 carried over from the original
- * in-terrain-function worms, salt 10 for the cheese field), never from the world seed,
- * so chunk generation and the ring-growth sweep always agree.
+ * {@link FrozenParams#mapSeed()} (noise salts 6/7 carried over from the original
+ * in-terrain-function worms, salt 10 for the cheese field), never from the world seed.
  *
  * <p>Layering contract with {@link DiscTerrainFunction}: the terrain function evaluates
  * {@link #carvedAt} only inside the column's cave band ({@code caveMinY..caveMaxY},
@@ -39,11 +38,10 @@ public final class CaveDensity {
     /** Threshold penalty at zero rim fade (fully closes rooms near the disc rim). */
     private static final double CHEESE_RIM_PENALTY = 0.6D;
 
-    // Fixed-seed fields. Salts 6/7 are the historical worm fields (moved here verbatim
-    // from DiscTerrainFunction so tunnel layout stays familiar); 10 is the cheese field.
-    private static final SimplexNoise CAVE_A = DiscTerrainFunction.noise(6);
-    private static final SimplexNoise CAVE_B = DiscTerrainFunction.noise(7);
-    private static final SimplexNoise CHEESE = DiscTerrainFunction.noise(10);
+    /** Lifecycle-keyed fields; rebuilt atomically when another frozen save activates. */
+    private static volatile CaveNoises caveNoises;
+
+    private record CaveNoises(long seed, SimplexNoise caveA, SimplexNoise caveB, SimplexNoise cheese) {}
 
     private CaveDensity() {}
 
@@ -62,11 +60,12 @@ public final class CaveDensity {
 
     /** The widened Perlin-worm tunnel test (two orthogonal band fields intersected). */
     public static boolean wormAt(int x, int y, int z) {
-        double a = CAVE_A.getValue(x / 44.0D, y / 30.0D, z / 44.0D);
+        CaveNoises noises = caveNoises();
+        double a = noises.caveA().getValue(x / 44.0D, y / 30.0D, z / 44.0D);
         if (Math.abs(a) >= WORM_THRESHOLD) {
             return false;
         }
-        double b = CAVE_B.getValue(x / 44.0D, y / 30.0D, z / 44.0D);
+        double b = noises.caveB().getValue(x / 44.0D, y / 30.0D, z / 44.0D);
         return Math.abs(b) < WORM_THRESHOLD;
     }
 
@@ -87,6 +86,22 @@ public final class CaveDensity {
         if (floorGuard > 0) {
             threshold += floorGuard * CHEESE_FLOOR_GUARD_PER_BLOCK;
         }
-        return CHEESE.getValue(x / 56.0D, y / 36.0D, z / 56.0D) > threshold;
+        return caveNoises().cheese().getValue(x / 56.0D, y / 36.0D, z / 56.0D) > threshold;
+    }
+
+    private static CaveNoises caveNoises() {
+        long seed = FrozenParams.mapSeed();
+        CaveNoises cached = caveNoises;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (CaveDensity.class) {
+                cached = caveNoises;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new CaveNoises(seed, DiscTerrainFunction.noise(6),
+                            DiscTerrainFunction.noise(7), DiscTerrainFunction.noise(10));
+                    caveNoises = cached;
+                }
+            }
+        }
+        return cached;
     }
 }

@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -163,18 +165,26 @@ public final class FrozenParams {
             return "ERROR: unreadable " + WORLDGEN_FILE;
         }
         Path globalDir = FMLPaths.CONFIGDIR.get().resolve("eclipse");
+        if ("stages".equals(key) || "all".equals(key)) {
+            // Refreeze is explicitly a disk-template refresh. Re-read stages.json first
+            // so an operator does not have to run a separate global reload command.
+            EclipseConfig.reload();
+        }
         switch (key) {
-            case "map" -> copyMapSection(globalDir, frozen);
+            case "map" -> copyMapSection(globalDir, eclipseDir, frozen);
             case "stages" -> copyStageRadiiSection(frozen);
-            case "ores" -> copyJsonFileSection(globalDir, frozen, "ores", "ores.json");
+            case "ores" -> copyJsonFileSection(globalDir, frozen, "ores", "ores.json",
+                    OreConfig::defaultRootJson);
             case "end" -> copyJsonFileSection(globalDir, frozen, "end", "end.json");
-            case "fogstorms" -> copyJsonFileSection(globalDir, frozen, "fogstorms", "fogstorms.json");
+            case "fogstorms" -> copyJsonFileSection(globalDir, frozen, "fogstorms", "fogstorms.json",
+                    () -> defaultFogstormsJson(frozen.getAsJsonObject("discMap")));
             case "all" -> {
-                copyMapSection(globalDir, frozen);
+                copyMapSection(globalDir, eclipseDir, frozen);
                 copyStageRadiiSection(frozen);
-                copyJsonFileSection(globalDir, frozen, "ores", "ores.json");
+                copyJsonFileSection(globalDir, frozen, "ores", "ores.json", OreConfig::defaultRootJson);
                 copyJsonFileSection(globalDir, frozen, "end", "end.json");
-                copyJsonFileSection(globalDir, frozen, "fogstorms", "fogstorms.json");
+                copyJsonFileSection(globalDir, frozen, "fogstorms", "fogstorms.json",
+                        () -> defaultFogstormsJson(frozen.getAsJsonObject("discMap")));
             }
             default -> {
                 return "ERROR: unknown refreeze section '" + section + "' (map|stages|ores|end|fogstorms|all)";
@@ -203,20 +213,25 @@ public final class FrozenParams {
         }
 
         JsonObject frozen;
+        boolean writeFreeze = false;
         if (!Files.isRegularFile(freezeFile)) {
             frozen = createInitialFreeze(server, eclipseDir);
-            try {
-                Files.writeString(freezeFile, GSON.toJson(frozen), StandardCharsets.UTF_8);
-                EclipseMod.LOGGER.info("FrozenParams: created per-save freeze at {}", freezeFile);
-            } catch (IOException e) {
-                EclipseMod.LOGGER.error("FrozenParams: failed to write initial {}", freezeFile, e);
-            }
+            writeFreeze = true;
         } else {
             try {
                 frozen = JsonParser.parseString(Files.readString(freezeFile, StandardCharsets.UTF_8)).getAsJsonObject();
             } catch (IOException | RuntimeException e) {
                 EclipseMod.LOGGER.error("FrozenParams: corrupt {}; rebuilding from global templates", freezeFile, e);
                 frozen = createInitialFreeze(server, eclipseDir);
+                writeFreeze = true;
+            }
+        }
+        if (writeFreeze) {
+            try {
+                Files.writeString(freezeFile, GSON.toJson(frozen), StandardCharsets.UTF_8);
+                EclipseMod.LOGGER.info("FrozenParams: wrote per-save freeze at {}", freezeFile);
+            } catch (IOException e) {
+                EclipseMod.LOGGER.error("FrozenParams: failed to write initial/rebuilt {}", freezeFile, e);
             }
         }
 
@@ -312,19 +327,48 @@ public final class FrozenParams {
             return DiscMapData.toJsonRoot(map);
         });
         root.add("discMap", discMap);
+        copyHeightmapSnapshot(globalDir, eclipseDir);
 
         root.add("ores", readJsonFileOrDefault(globalDir.resolve("ores.json"), OreConfig::defaultRootJson));
         root.add("end", readJsonFileOrDefault(globalDir.resolve("end.json"), FrozenParams::defaultEndJson));
         root.add("fogstorms", readJsonFileOrDefault(globalDir.resolve("fogstorms.json"),
-                () -> defaultFogstormsJson(mapSeed)));
+                () -> defaultFogstormsJson(discMap)));
 
         return root;
     }
 
     private static JsonObject buildStageRadiiJson() {
         JsonObject radii = new JsonObject();
-        radii.add("overworld", intArray(DEFAULT_OVERWORLD_RADII));
-        radii.add("nether", intArray(DEFAULT_NETHER_RADII));
+        radii.add("overworld", intArray(configuredRadii("overworld", DEFAULT_OVERWORLD_RADII)));
+        radii.add("nether", intArray(configuredRadii("nether", DEFAULT_NETHER_RADII)));
+        return radii;
+    }
+
+    /**
+     * Builds the complete stage-indexed radius array from the currently loaded global
+     * {@code stages.json}. Stage zero is implicit in that file, so it comes from the
+     * profile's built-in geometry default; a sparse stage inherits the preceding radius,
+     * exactly matching {@code EclipseConfig.applyStageRadii()}.
+     */
+    private static int[] configuredRadii(String dimension, int[] fallback) {
+        List<EclipseConfig.StageEntry> entries = EclipseConfig.stages(dimension);
+        int maxStage = entries.stream().mapToInt(EclipseConfig.StageEntry::stage)
+                .max().orElse(0);
+        if (maxStage <= 0) {
+            return new int[] {fallback[0]};
+        }
+        int[] radii = new int[maxStage + 1];
+        radii[0] = fallback[0];
+        int previous = radii[0];
+        for (int stage = 1; stage <= maxStage; stage++) {
+            for (EclipseConfig.StageEntry entry : entries) {
+                if (entry.stage() == stage) {
+                    previous = entry.radius();
+                    break;
+                }
+            }
+            radii[stage] = previous;
+        }
         return radii;
     }
 
@@ -336,12 +380,13 @@ public final class FrozenParams {
         return array;
     }
 
-    private static void copyMapSection(Path globalDir, JsonObject frozen) {
+    private static void copyMapSection(Path globalDir, Path eclipseDir, JsonObject frozen) {
         JsonObject discMap = readJsonFileOrDefault(globalDir.resolve("disc_map.json"), () -> {
             DiscMapData map = DiscMapData.reloadForSnapshot();
             return DiscMapData.toJsonRoot(map);
         });
         frozen.add("discMap", discMap);
+        copyHeightmapSnapshot(globalDir, eclipseDir);
     }
 
     private static void copyStageRadiiSection(JsonObject frozen) {
@@ -349,7 +394,31 @@ public final class FrozenParams {
     }
 
     private static void copyJsonFileSection(Path globalDir, JsonObject frozen, String key, String fileName) {
-        frozen.add(key, readJsonFileOrDefault(globalDir.resolve(fileName), JsonObject::new));
+        copyJsonFileSection(globalDir, frozen, key, fileName, JsonObject::new);
+    }
+
+    private static void copyJsonFileSection(Path globalDir, JsonObject frozen, String key, String fileName,
+            java.util.function.Supplier<JsonObject> fallback) {
+        frozen.add(key, readJsonFileOrDefault(globalDir.resolve(fileName), fallback));
+    }
+
+    /**
+     * Copies the optional painted heightmap byte-for-byte into the save-local freeze.
+     * Removing the global override before an explicit map refreeze removes the frozen
+     * override as well, so the JSON and PNG snapshots always describe one map revision.
+     */
+    private static void copyHeightmapSnapshot(Path globalDir, Path eclipseDir) {
+        Path source = globalDir.resolve("disc_heightmap.png");
+        Path target = eclipseDir.resolve("disc_heightmap.png");
+        try {
+            if (Files.isRegularFile(source)) {
+                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                Files.deleteIfExists(target);
+            }
+        } catch (IOException e) {
+            EclipseMod.LOGGER.warn("FrozenParams: failed to snapshot heightmap {} -> {}", source, target, e);
+        }
     }
 
     private static JsonObject readJsonFileOrDefault(Path file, java.util.function.Supplier<JsonObject> fallback) {
@@ -387,27 +456,31 @@ public final class FrozenParams {
         return end;
     }
 
-    /** Default fog-storm sites: two auto-picked stage-3 annulus positions with spacing. */
-    static JsonObject defaultFogstormsJson(long mapSeed) {
+    /**
+     * Default fog-storm sites, anchored to the two authored fog landmarks in the frozen
+     * disc map. The landmarks are the sole position authority, so structure protection,
+     * map editing and storm placement cannot drift apart.
+     */
+    static JsonObject defaultFogstormsJson(JsonObject discMap) {
         JsonObject root = new JsonObject();
         root.addProperty("_comment", "Fog storm sites (frozen per save). Sites materialize at overworld "
                 + "stage 3. mobSet entries are consumed by P6 storm spawners.");
         JsonArray sites = new JsonArray();
 
-        int innerR = DEFAULT_OVERWORLD_RADII[2];
-        int outerR = DEFAULT_OVERWORLD_RADII[3];
-        double midR = (innerR + outerR) * 0.5D;
-        double[] angles = pickStormAngles(mapSeed, 2, 72.0D);
-        for (int i = 0; i < angles.length; i++) {
-            double angle = Math.toRadians(angles[i]);
-            int x = (int) Math.round(midR * Math.cos(angle));
-            int z = (int) Math.round(midR * Math.sin(angle));
+        for (int i = 1; i <= 2; i++) {
+            String id = "eclipse:fog_storm_" + i;
+            JsonObject landmark = findLandmark(discMap, id);
+            if (landmark == null) {
+                EclipseMod.LOGGER.warn("FrozenParams: authored fog landmark {} is absent; no default site emitted",
+                        id);
+                continue;
+            }
             JsonObject site = new JsonObject();
-            site.addProperty("id", "eclipse:fog_storm_" + (i + 1));
-            site.addProperty("x", x);
-            site.addProperty("z", z);
+            site.addProperty("id", id);
+            site.addProperty("x", landmark.get("x").getAsInt());
+            site.addProperty("z", landmark.get("z").getAsInt());
             site.addProperty("radius", 28);
-            site.addProperty("stage", 3);
+            site.addProperty("stage", landmark.has("stage") ? landmark.get("stage").getAsInt() : 3);
             site.add("mobSet", new JsonArray());
             sites.add(site);
         }
@@ -415,35 +488,21 @@ public final class FrozenParams {
         return root;
     }
 
-    /** Deterministic storm headings with at least {@code minSepDeg} between picks. */
-    private static double[] pickStormAngles(long mapSeed, int count, double minSepDeg) {
-        double[] angles = new double[count];
-        int picked = 0;
-        for (int attempt = 0; attempt < 64 && picked < count; attempt++) {
-            long h = mix(mapSeed + 0xF065AAAL * attempt);
-            double candidate = ((h >>> 11) * 360.0D / (1L << 53));
-            boolean ok = true;
-            for (int j = 0; j < picked; j++) {
-                double delta = Math.abs(((candidate - angles[j]) % 360.0D + 540.0D) % 360.0D - 180.0D);
-                if (delta < minSepDeg) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (ok) {
-                angles[picked++] = candidate;
+    private static JsonObject findLandmark(JsonObject discMap, String id) {
+        if (discMap == null || !discMap.has("overworld")) {
+            return null;
+        }
+        JsonObject overworld = discMap.getAsJsonObject("overworld");
+        if (!overworld.has("landmarks")) {
+            return null;
+        }
+        for (JsonElement element : overworld.getAsJsonArray("landmarks")) {
+            JsonObject landmark = element.getAsJsonObject();
+            if (landmark.has("id") && id.equals(landmark.get("id").getAsString())) {
+                return landmark;
             }
         }
-        while (picked < count) {
-            angles[picked++] = picked * (360.0D / count);
-        }
-        return angles;
-    }
-
-    private static long mix(long z) {
-        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-        return z ^ (z >>> 31);
+        return null;
     }
 
     /** Mutable per-session context (volatile fields for worker-thread reads). */

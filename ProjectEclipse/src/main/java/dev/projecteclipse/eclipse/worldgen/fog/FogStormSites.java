@@ -5,10 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
@@ -19,23 +16,29 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CFogStormPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
+import dev.projecteclipse.eclipse.worldgen.structure.SitePrep;
+import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
+import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -43,19 +46,22 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Sites are frozen in {@code worldgen.json → fogstorms} and materialize when the stage-3 terrain
  * sweep completes. Visuals (fog walls, lightning) are P2; storm mobs are P6.
  *
- * <p>W1.6's {@code StructurePendingRegistry} two-phase hook: this class currently places on
- * {@link WorldStageService.StageListener} terrain completion; when W1.6 lands, enqueue via
- * {@code StructurePendingRegistry.enqueue} and move {@link #materializeSite} into the trigger
- * callback (see {@code docs/plans_v3/wiring/P1-W1.9_wiring.md}).</p>
+ * <p>Sites use W1.6's two-phase registry: stage completion only enqueues a pending row;
+ * the registered placer runs {@link SitePrep} and materializes the grove after a rift
+ * trigger/auto-delay. Chest positions and placed/active lifecycle flags persist in
+ * {@link EclipseWorldgenState}, so standing walls are re-announced after restart.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FogStormSites {
+    /** Shared pending-registry placer id for all configured fog sites. */
+    public static final String STRUCTURE_ID = "eclipse:fog_storm";
+
     /** One configured fog-storm site (frozen per save). */
     public record Site(String id, int x, int z, int radius, int stage, List<String> mobSet, boolean active) {}
 
     private static final AtomicBoolean LISTENER_REGISTERED = new AtomicBoolean();
     private static volatile List<Site> sites = List.of();
-    private static final Set<String> placed = Collections.synchronizedSet(new HashSet<>());
+    private static volatile MinecraftServer activeServer;
 
     private FogStormSites() {}
 
@@ -70,6 +76,28 @@ public final class FogStormSites {
             WorldStageService.addListener(FogStormSites::onStageTerrainComplete);
             EclipseMod.LOGGER.info("FogStormSites registered as world-stage listener");
         }
+        StructurePendingRegistry.registerAsyncPlacer(STRUCTURE_ID,
+                (level, pending, complete, failure) -> {
+            Site site = findSite(pending.siteId());
+            if (site == null) {
+                failure.accept(new IllegalStateException("Missing frozen fog site " + pending.siteId()));
+                return;
+            }
+            materializeSite(level, site, complete, failure);
+        });
+    }
+
+    /** Restores persisted placed/active flags before the storm registry's first poll. */
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        activeServer = event.getServer();
+        restoreFromState(activeServer);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        activeServer = null;
+        sites = List.of();
     }
 
     private static List<Site> loadSites(@Nullable Path saveEclipseDir) {
@@ -111,29 +139,64 @@ public final class FogStormSites {
     }
 
     private static void onStageTerrainComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage) {
-        if (profile != DiscProfile.OVERWORLD || toStage <= fromStage) {
+        if (profile != DiscProfile.OVERWORLD) {
+            return;
+        }
+        if (toStage <= fromStage) {
+            EclipseWorldgenState state = EclipseWorldgenState.get(level.getServer());
+            for (Site site : sites) {
+                if (site.stage() <= toStage) {
+                    continue;
+                }
+                EclipseWorldgenState.FogSiteState old = state.fogSiteState(site.id());
+                state.setFogSiteState(site.id(), List.of(), false, false);
+                if (old.active()) {
+                    broadcast(level, site, surfaceCenter(level, site.x(), site.z()), false);
+                }
+            }
             return;
         }
         for (Site site : sites) {
             if (site.stage() > toStage || site.stage() <= fromStage) {
                 continue;
             }
-            if (!placed.add(site.id())) {
-                continue;
-            }
-            materializeSite(level, site);
+            BlockPos center = surfaceCenter(level, site.x(), site.z());
+            StructurePendingRegistry.enqueue(new PendingSite(site.id(), STRUCTURE_ID,
+                    DiscProfile.OVERWORLD.name(), center, site.stage(), site.radius() * 2,
+                    level.getGameTime()));
         }
     }
 
-    /** Builds the storm-scarred grove and broadcasts {@link S2CFogStormPayload}. */
+    /**
+     * Builds one pending storm grove through SitePrep, persists its chests/lifecycle and
+     * broadcasts {@link S2CFogStormPayload}. Called by the pending-registry placer.
+     */
     public static void materializeSite(ServerLevel level, Site site) {
+        materializeSite(level, site, () -> {},
+                error -> EclipseMod.LOGGER.error("Fog storm placement of {} failed", site.id(), error));
+    }
+
+    /**
+     * Callback-aware materialization used by the pending registry. Completion fires only
+     * after SitePrep and all grove/chest writes finish.
+     */
+    public static void materializeSite(ServerLevel level, Site site, Runnable onComplete,
+            java.util.function.Consumer<Throwable> onFailure) {
         BlockPos center = surfaceCenter(level, site.x(), site.z());
         int surfaceY = center.getY();
-        carveGrove(level, center, site.radius(), surfaceY);
-        placeCamp(level, center, surfaceY);
-        placeChests(level, center, surfaceY, site.id());
-        broadcast(level, site, center, true);
-        EclipseMod.LOGGER.info("FogStormSites: materialized {} at {}", site.id(), center);
+        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level, DiscProfile.OVERWORLD,
+                site.x() - site.radius(), site.z() - site.radius(),
+                site.x() + site.radius(), site.z() + site.radius(), center);
+        prepared.whenReady(() -> {
+            carveGrove(level, center, site.radius(), surfaceY);
+            placeCamp(level, center, surfaceY);
+            List<BlockPos> chests = placeChests(level, center, surfaceY, site.id());
+            SitePrep.finish(level, prepared);
+            EclipseWorldgenState.get(level.getServer()).setFogSiteState(site.id(), chests, true, true);
+            broadcast(level, site, center, true);
+            EclipseMod.LOGGER.info("FogStormSites: materialized {} at {}", site.id(), center);
+            onComplete.run();
+        }, onFailure);
     }
 
     private static BlockPos surfaceCenter(ServerLevel level, int x, int z) {
@@ -158,10 +221,10 @@ public final class FogStormSites {
                 }
                 int x = cx + dx;
                 int z = cz + dz;
-                int colY = DiscTerrainFunction.surfaceY(DiscProfile.OVERWORLD, x, z);
-                if (colY <= level.getMinBuildHeight()) {
-                    colY = surfaceY;
-                }
+                // SitePrep flattened the whole grove footprint to the center height.
+                // Painting the pre-terraform procedural height would bury these blocks
+                // under the plateau (or suspend them above it on former slopes).
+                int colY = surfaceY;
                 double scar = 1.0D - dist / radius;
                 BlockState ground = scar > 0.55D ? Blocks.MUD.defaultBlockState()
                         : scar > 0.25D ? Blocks.PODZOL.defaultBlockState()
@@ -190,12 +253,13 @@ public final class FogStormSites {
         level.setBlock(center.offset(0, 1, 2), Blocks.CAMPFIRE.defaultBlockState(), 3);
     }
 
-    private static void placeChests(ServerLevel level, BlockPos center, int surfaceY, String siteId) {
+    private static List<BlockPos> placeChests(ServerLevel level, BlockPos center, int surfaceY, String siteId) {
         BlockPos[] chestPositions = {
                 center.offset(-4, 1, 3),
                 center.offset(4, 1, 2),
                 center.offset(0, 1, -4)
         };
+        List<BlockPos> placedChests = new ArrayList<>(chestPositions.length);
         for (int i = 0; i < chestPositions.length; i++) {
             BlockPos pos = chestPositions[i].below().getY() < surfaceY ? chestPositions[i].atY(surfaceY + 1) : chestPositions[i];
             level.setBlock(pos.below(), Blocks.STONE.defaultBlockState(), 3);
@@ -203,8 +267,9 @@ public final class FogStormSites {
             if (level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity chest) {
                 chest.setLootTable(StormLootData.chestTable(siteId, i), FrozenParams.mapSeed() + i);
             }
-            // Persist chest index seam: EclipseWorldgenState.fogChests() when W1.5 lands.
+            placedChests.add(pos.immutable());
         }
+        return List.copyOf(placedChests);
     }
 
     private static void broadcast(ServerLevel level, Site site, BlockPos center, boolean active) {
@@ -219,8 +284,34 @@ public final class FogStormSites {
 
     /** Re-reads site config from the save-local freeze extract (after {@code refreeze fogstorms}). */
     public static void reloadFromSave() {
-        placed.clear();
         sites = loadSites(FrozenParams.saveEclipseDir());
+        MinecraftServer server = activeServer;
+        if (server != null) {
+            restoreFromState(server);
+        }
         EclipseMod.LOGGER.info("FogStormSites: loaded {} site(s) from save freeze", sites.size());
+    }
+
+    @Nullable
+    private static Site findSite(String siteId) {
+        for (Site site : sites) {
+            if (site.id().equals(siteId)) {
+                return site;
+            }
+        }
+        return null;
+    }
+
+    private static void restoreFromState(MinecraftServer server) {
+        EclipseWorldgenState state = EclipseWorldgenState.get(server);
+        sites = sites.stream().map(site -> {
+            EclipseWorldgenState.FogSiteState saved = state.fogSiteState(site.id());
+            return new Site(site.id(), site.x(), site.z(), site.radius(), site.stage(),
+                    site.mobSet(), saved.placed() && saved.active());
+        }).toList();
+        long active = sites.stream().filter(Site::active).count();
+        if (active > 0) {
+            EclipseMod.LOGGER.info("FogStormSites: restored {} active storm wall(s) from SavedData", active);
+        }
     }
 }

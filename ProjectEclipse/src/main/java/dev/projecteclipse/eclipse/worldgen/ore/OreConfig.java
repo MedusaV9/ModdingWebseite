@@ -292,7 +292,7 @@ public final class OreConfig {
         array.add(ore("nether_gold", "minecraft:nether_gold_ore", "minecraft:nether_gold_ore",
                 34, 110, 0.14D, 2.6D, 2, FLAT_BANDS, false, null));
         array.add(ore("netherite", "minecraft:ancient_debris", "minecraft:ancient_debris",
-                34, 72, 0.022D, 1.6D, 3, FLAT_BANDS, true, null));
+                34, 72, 0.022D, 1.6D, 2, FLAT_BANDS, true, null));
         return array;
     }
 

@@ -11,7 +11,7 @@ import javax.annotation.Nullable;
  * the pre-v2 surface ore exposures as the intended "way down" (D5 moved all ores below
  * {@code min(surfaceY − 8, 52)}); glow-lichen rims arrive via vanilla decoration (W1.1).
  *
- * <p>Everything is a pure function of the fixed {@link DiscMapData#ECLIPSE_SEED} (hash
+ * <p>Everything is a pure function of the frozen {@link FrozenParams#mapSeed()} (hash
  * salt 13), the map snapshot and the per-save frozen final radius
  * ({@code FrozenParams.stageRadii} — stage-INDEPENDENT, so interior columns never change
  * when a stage grows). Anchors are margin-clamped so a mask never leaves its cell:

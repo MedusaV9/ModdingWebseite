@@ -36,7 +36,7 @@ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
  * {@link CaveEntrances} in the band, and — on stage {@value #DUNGEON_STAGE} — the two
  * custom dungeons: the standalone {@link CollapsedVaultBuilder Collapsed Vault} in the
  * annulus and the {@link UmbralWarrensBuilder Umbral Warrens} inside the deep-dark band
- * under the mountain flank ({@code CaveBiomeMap}: y &lt; −96, r ≤ 120 of the mountain).</p>
+ * under the mountain flank ({@code CaveBiomeMap}: y &lt; −32, r ≤ 120 of the mountain).</p>
  *
  * <p>Sites are two-phase: {@link StructureStamper} enqueues the rows returned by
  * {@link #sitesFor} into {@link StructurePendingRegistry} when their stage's terrain
@@ -146,9 +146,26 @@ public final class UndergroundSites {
     }
 
     /**
+     * Deterministic mineshaft rows from every annulus through {@code committedStage}.
+     * Used by the disc generator's dynamic {@code /locate structure mineshaft} path;
+     * no authored {@code disc_map.json} landmark is required.
+     */
+    public static List<PendingSite> mineshaftsThroughStage(int committedStage) {
+        List<PendingSite> result = new ArrayList<>();
+        for (int stage = 2; stage <= committedStage; stage++) {
+            for (PendingSite site : sitesFor(DiscProfile.OVERWORLD, stage, 0L)) {
+                if (MINESHAFT_ID.equals(site.structureId())) {
+                    result.add(site);
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
      * The Umbral Warrens anchor: hashed angle on a ring 112 blocks off the mountain
      * center (inside the deep-dark r=120 band, outside the Ancient City piece envelope),
-     * at y = −106 (below the deep-dark ceiling −96, above the hull floor). Falls back to
+     * at y = −106 (below the deep-dark ceiling −32, above the hull floor). Falls back to
      * a fixed offset from the map origin when the map has no mountain.
      */
     private static BlockPos warrensAnchor(DiscMapData map) {

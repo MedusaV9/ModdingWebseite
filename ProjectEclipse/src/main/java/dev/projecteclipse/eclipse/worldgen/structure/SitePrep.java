@@ -1,8 +1,11 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -90,6 +93,11 @@ public final class SitePrep {
         private final int maxZ;
         private final int plateauY;
         private final Set<Long> touched = new HashSet<>();
+        private final List<ReadyCallback> callbacks = new ArrayList<>();
+        private boolean ready;
+        private Throwable failure;
+
+        private record ReadyCallback(Runnable success, Consumer<Throwable> failure) {}
 
         private PreparedGround(ServerLevel level, DiscProfile profile, Mode mode,
                 int minX, int minZ, int maxX, int maxZ, int plateauY) {
@@ -126,6 +134,41 @@ public final class SitePrep {
         void touch(int blockX, int blockZ) {
             this.touched.add(ChunkPos.asLong(blockX >> 4, blockZ >> 4));
         }
+
+        /**
+         * Runs {@code success} once the tick-budgeted preparation is complete, or
+         * {@code onFailure} if its resumable worker failed. Callbacks run on the server
+         * thread and may safely place the structure.
+         */
+        public void whenReady(Runnable success, Consumer<Throwable> onFailure) {
+            if (this.ready) {
+                success.run();
+            } else if (this.failure != null) {
+                onFailure.accept(this.failure);
+            } else {
+                this.callbacks.add(new ReadyCallback(success, onFailure));
+            }
+        }
+
+        private void complete() {
+            this.ready = true;
+            for (ReadyCallback callback : List.copyOf(this.callbacks)) {
+                try {
+                    callback.success().run();
+                } catch (Throwable error) {
+                    callback.failure().accept(error);
+                }
+            }
+            this.callbacks.clear();
+        }
+
+        private void fail(Throwable error) {
+            this.failure = error;
+            for (ReadyCallback callback : List.copyOf(this.callbacks)) {
+                callback.failure().accept(error);
+            }
+            this.callbacks.clear();
+        }
     }
 
     // --- PLATEAU ---
@@ -133,8 +176,9 @@ public final class SitePrep {
     /**
      * Clears vegetation and terraforms a plateau for the given piece bounds (both expanded
      * by {@value #MARGIN} + {@value #SKIRT_WIDTH}), targeting {@code anchor.getY()} as the
-     * plateau height. Call BEFORE {@code placeStart}; heightmaps of every touched chunk
-     * are re-primed immediately so ground-snapping pieces read the prepared ground.
+     * plateau height. Work is queued in bounded resumable slices; register the placement
+     * continuation with {@link PreparedGround#whenReady}. Heightmaps are re-primed before
+     * that callback so ground-snapping pieces read the prepared ground.
      *
      * @param boundsMinX/... the XZ bounding box of the structure pieces (world coords)
      */
@@ -148,58 +192,118 @@ public final class SitePrep {
         int plateauY = anchor.getY();
         PreparedGround prepared = new PreparedGround(level, profile, Mode.PLATEAU,
                 minX, minZ, maxX, maxZ, plateauY);
+        BudgetedBlockWriter.enqueue(level,
+                new PlateauWork(level, profile, stage, prepared),
+                () -> {
+                    primeTouched(level, prepared);
+                    EclipseMod.LOGGER.info(
+                            "SitePrep: plateau y={} prepared for [{}..{} x {}..{}] (+skirt {}), {} chunk(s)",
+                            plateauY, minX, maxX, minZ, maxZ, SKIRT_WIDTH, prepared.touched.size());
+                    prepared.complete();
+                },
+                prepared::fail);
+        return prepared;
+    }
 
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int x = minX - SKIRT_WIDTH; x <= maxX + SKIRT_WIDTH; x++) {
-            for (int z = minZ - SKIRT_WIDTH; z <= maxZ + SKIRT_WIDTH; z++) {
-                DiscColumn column = DiscTerrainFunction.column(profile, x, z, stage);
-                if (!column.inside()) {
-                    continue; // never terraform beyond the disc silhouette
-                }
-                ensureChunk(level, prepared, x, z);
-                int target = targetY(profile, minX, minZ, maxX, maxZ, plateauY, x, z);
+    /** Resumable plateau cursor: one vertical block probe/write is one budget operation. */
+    private static final class PlateauWork implements BudgetedBlockWriter.BudgetedWork {
+        private final ServerLevel level;
+        private final DiscProfile profile;
+        private final int stage;
+        private final PreparedGround prepared;
+        private final int outerMinX;
+        private final int outerMinZ;
+        private final int outerMaxX;
+        private final int outerMaxZ;
+        private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        private int x;
+        private int z;
+        private int target;
+        private int y;
+        private int phase;
+        private DiscColumn column;
+        private BlockState top;
+        private BlockState filler;
 
-                // 1) Cut: everything above the target down to air. In the skirt the target
-                // blends to the natural surface, so out there this only removes vegetation.
-                int worldTop = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) + 1;
-                int clearTop = Math.max(worldTop, target + CANOPY_CLEAR);
-                for (int y = clearTop; y > target; y--) {
-                    cursor.set(x, y, z);
-                    BlockState state = level.getBlockState(cursor);
-                    if (state.isAir()) {
+        private PlateauWork(ServerLevel level, DiscProfile profile, int stage, PreparedGround prepared) {
+            this.level = level;
+            this.profile = profile;
+            this.stage = stage;
+            this.prepared = prepared;
+            this.outerMinX = prepared.minX - SKIRT_WIDTH;
+            this.outerMinZ = prepared.minZ - SKIRT_WIDTH;
+            this.outerMaxX = prepared.maxX + SKIRT_WIDTH;
+            this.outerMaxZ = prepared.maxZ + SKIRT_WIDTH;
+            this.x = this.outerMinX;
+            this.z = this.outerMinZ;
+        }
+
+        @Override
+        public boolean run(int operationBudget) {
+            int remaining = operationBudget;
+            while (remaining > 0 && this.x <= this.outerMaxX) {
+                if (this.phase == 0) {
+                    this.column = DiscTerrainFunction.column(this.profile, this.x, this.z, this.stage);
+                    if (!this.column.inside()) {
+                        advanceColumn();
                         continue;
                     }
-                    // Above the canopy band only vegetation is swept (overhanging leaves);
-                    // inside the cut band everything goes.
-                    if (y <= target + CANOPY_CLEAR || isVegetation(state)) {
-                        setSilent(level, cursor, Blocks.AIR.defaultBlockState());
-                    }
+                    ensureChunk(this.level, this.prepared, this.x, this.z);
+                    this.target = targetY(this.profile, this.prepared.minX, this.prepared.minZ,
+                            this.prepared.maxX, this.prepared.maxZ, this.prepared.plateauY,
+                            this.x, this.z);
+                    int worldTop = this.level.getHeight(Heightmap.Types.WORLD_SURFACE, this.x, this.z) + 1;
+                    this.y = Math.max(worldTop, this.target + CANOPY_CLEAR);
+                    this.phase = 1;
                 }
-
-                // 2) Fill: foundation below the target with the column's own strata so the
-                // plateau matches the sector palette (raise with sector filler).
-                BlockState top = surfaceBlockOf(column);
-                BlockState filler = fillerBlockOf(column);
-                for (int y = target; y >= target - FILL_DEPTH; y--) {
-                    cursor.set(x, y, z);
-                    BlockState state = level.getBlockState(cursor);
-                    boolean solid = state.isSolidRender(level, cursor);
-                    if (y == target) {
-                        if (!solid || !state.equals(top)) {
-                            setSilent(level, cursor, top);
-                        }
-                    } else if (!solid) {
-                        setSilent(level, cursor, filler);
-                    } else if (y < target - 1) {
-                        break; // reached undisturbed terrain
+                if (this.phase == 1) {
+                    if (this.y <= this.target) {
+                        this.top = surfaceBlockOf(this.column);
+                        this.filler = fillerBlockOf(this.column);
+                        this.y = this.target;
+                        this.phase = 2;
+                        continue;
                     }
+                    this.cursor.set(this.x, this.y, this.z);
+                    BlockState state = this.level.getBlockState(this.cursor);
+                    if (!state.isAir() && (this.y <= this.target + CANOPY_CLEAR || isVegetation(state))) {
+                        setSilent(this.level, this.cursor, Blocks.AIR.defaultBlockState());
+                    }
+                    this.y--;
+                    remaining--;
+                    continue;
+                }
+                this.cursor.set(this.x, this.y, this.z);
+                BlockState state = this.level.getBlockState(this.cursor);
+                boolean solid = state.isSolidRender(this.level, this.cursor);
+                if (this.y == this.target) {
+                    if (!solid || !state.equals(this.top)) {
+                        setSilent(this.level, this.cursor, this.top);
+                    }
+                } else if (!solid) {
+                    setSilent(this.level, this.cursor, this.filler);
+                } else if (this.y < this.target - 1) {
+                    advanceColumn();
+                    remaining--;
+                    continue;
+                }
+                this.y--;
+                remaining--;
+                if (this.y < this.target - FILL_DEPTH) {
+                    advanceColumn();
                 }
             }
+            return this.x > this.outerMaxX;
         }
-        primeTouched(level, prepared);
-        EclipseMod.LOGGER.info("SitePrep: plateau y={} prepared for [{}..{} x {}..{}] (+skirt {}), {} chunk(s)",
-                plateauY, minX, maxX, minZ, maxZ, SKIRT_WIDTH, prepared.touched.size());
-        return prepared;
+
+        private void advanceColumn() {
+            this.phase = 0;
+            this.column = null;
+            if (++this.z > this.outerMaxZ) {
+                this.z = this.outerMinZ;
+                this.x++;
+            }
+        }
     }
 
     // --- CAVITY ---
@@ -207,8 +311,9 @@ public final class SitePrep {
     /**
      * Carves a clean interior envelope ({@value #CAVITY_PAD}-block pad around the piece
      * bounds), lays a floor pad below it and raises a collared ladder shaft to the surface
-     * so the underground site (trial chambers, ancient city, vaults) is reachable. Call
-     * BEFORE {@code placeStart}.
+     * so the underground site (trial chambers, ancient city, vaults) is reachable. Work
+     * is queued in bounded resumable slices; place pieces from
+     * {@link PreparedGround#whenReady}.
      */
     public static PreparedGround prepareCavity(ServerLevel level, DiscProfile profile,
             int boundsMinX, int boundsMinY, int boundsMinZ,
@@ -223,80 +328,158 @@ public final class SitePrep {
         int maxY = Math.min(boundsMaxY + CAVITY_PAD, surfaceGuard);
         PreparedGround prepared = new PreparedGround(level, profile, Mode.CAVITY,
                 minX, minZ, maxX, maxZ, minY);
-
-        BlockState air = Blocks.CAVE_AIR.defaultBlockState();
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                DiscColumn column = DiscTerrainFunction.column(profile, x, z, stage);
-                if (!column.inside()) {
-                    continue;
-                }
-                ensureChunk(level, prepared, x, z);
-                BlockState pad = padBlockOf(column, minY);
-                cursor.set(x, minY - 1, z);
-                if (!level.getBlockState(cursor).isSolidRender(level, cursor)) {
-                    setSilent(level, cursor, pad);
-                }
-                for (int y = minY; y <= maxY; y++) {
-                    cursor.set(x, y, z);
-                    if (!level.getBlockState(cursor).isAir()) {
-                        setSilent(level, cursor, air);
-                    }
-                }
-            }
-        }
-        carveEntranceShaft(level, profile, stage, prepared, minX + 2, minZ + 2, minY, maxY);
-        primeTouched(level, prepared);
-        EclipseMod.LOGGER.info("SitePrep: cavity envelope carved [{}..{} x {}..{}] y {}..{} + entrance shaft, {} chunk(s)",
-                minX, maxX, minZ, maxZ, minY, maxY, prepared.touched.size());
+        BudgetedBlockWriter.enqueue(level,
+                new CavityWork(level, profile, stage, prepared, minY, maxY),
+                () -> {
+                    primeTouched(level, prepared);
+                    EclipseMod.LOGGER.info(
+                            "SitePrep: cavity envelope carved [{}..{} x {}..{}] y {}..{} + entrance shaft, {} chunk(s)",
+                            minX, maxX, minZ, maxZ, minY, maxY, prepared.touched.size());
+                    prepared.complete();
+                },
+                prepared::fail);
         return prepared;
     }
 
-    /**
-     * A 2×2 ladder shaft from the cavity corner to the surface with a broken cobble
-     * collar — the "entrance shaft" of design D7's cavity mode. Deliberately modest: cave
-     * networks and carvers usually intersect the envelope too; this guarantees one path.
-     */
-    private static void carveEntranceShaft(ServerLevel level, DiscProfile profile, int stage,
-            PreparedGround prepared, int shaftX, int shaftZ, int cavityFloorY, int cavityCeilY) {
-        int surface = DiscTerrainFunction.surfaceY(profile, shaftX, shaftZ);
-        if (surface <= cavityCeilY) {
-            return; // envelope already reaches the surface band; carvers expose it
+    /** Resumable cavity-envelope, entrance-shaft and collar cursor. */
+    private static final class CavityWork implements BudgetedBlockWriter.BudgetedWork {
+        private static final BlockState AIR = Blocks.CAVE_AIR.defaultBlockState();
+        private static final BlockState WALL = Blocks.COBBLESTONE.defaultBlockState();
+        private static final BlockState LADDER = Blocks.LADDER.defaultBlockState()
+                .setValue(LadderBlock.FACING, Direction.NORTH);
+
+        private final ServerLevel level;
+        private final DiscProfile profile;
+        private final int stage;
+        private final PreparedGround prepared;
+        private final int minY;
+        private final int maxY;
+        private final int shaftX;
+        private final int shaftZ;
+        private final int surface;
+        private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        private int x;
+        private int z;
+        private int y;
+        private int phase;
+        private int shaftStep;
+        private int collarIndex;
+        private DiscColumn column;
+
+        private CavityWork(ServerLevel level, DiscProfile profile, int stage,
+                PreparedGround prepared, int minY, int maxY) {
+            this.level = level;
+            this.profile = profile;
+            this.stage = stage;
+            this.prepared = prepared;
+            this.minY = minY;
+            this.maxY = maxY;
+            this.shaftX = prepared.minX + 2;
+            this.shaftZ = prepared.minZ + 2;
+            this.surface = DiscTerrainFunction.surfaceY(profile, this.shaftX, this.shaftZ);
+            this.x = prepared.minX;
+            this.z = prepared.minZ;
         }
-        BlockState air = Blocks.CAVE_AIR.defaultBlockState();
-        BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
-        BlockState wall = Blocks.COBBLESTONE.defaultBlockState();
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int y = cavityFloorY; y <= surface + 1; y++) {
-            for (int dx = 0; dx <= 1; dx++) {
-                for (int dz = 0; dz <= 1; dz++) {
-                    ensureChunk(level, prepared, shaftX + dx, shaftZ + dz);
-                    cursor.set(shaftX + dx, y, shaftZ + dz);
-                    setSilent(level, cursor, air);
-                }
-            }
-            // Ladder wall: a solid backing block south of the ladder column keeps it valid.
-            ensureChunk(level, prepared, shaftX, shaftZ + 2);
-            cursor.set(shaftX, y, shaftZ + 2);
-            if (!level.getBlockState(cursor).isSolidRender(level, cursor)) {
-                setSilent(level, cursor, wall);
-            }
-            cursor.set(shaftX, y, shaftZ + 1);
-            setSilent(level, cursor, ladder);
-        }
-        // Surface collar: a low broken cobble ring marking the shaft mouth.
-        for (int dx = -1; dx <= 2; dx++) {
-            for (int dz = -1; dz <= 2; dz++) {
-                boolean rim = dx == -1 || dx == 2 || dz == -1 || dz == 2;
-                if (!rim || FallbackBuilders.hash01(shaftX + dx, surface, shaftZ + dz) < 0.35D) {
+
+        @Override
+        public boolean run(int operationBudget) {
+            int remaining = operationBudget;
+            while (remaining > 0) {
+                if (this.phase == 0) {
+                    if (this.x > this.prepared.maxX) {
+                        this.phase = this.surface > this.maxY ? 2 : 4;
+                        this.y = this.minY;
+                        continue;
+                    }
+                    this.column = DiscTerrainFunction.column(this.profile, this.x, this.z, this.stage);
+                    if (!this.column.inside()) {
+                        advanceColumn();
+                        continue;
+                    }
+                    ensureChunk(this.level, this.prepared, this.x, this.z);
+                    this.cursor.set(this.x, this.minY - 1, this.z);
+                    if (!this.level.getBlockState(this.cursor).isSolidRender(this.level, this.cursor)) {
+                        setSilent(this.level, this.cursor, padBlockOf(this.column, this.minY));
+                    }
+                    this.y = this.minY;
+                    this.phase = 1;
+                    remaining--;
                     continue;
                 }
-                ensureChunk(level, prepared, shaftX + dx, shaftZ + dz);
-                cursor.set(shaftX + dx, surface + 1, shaftZ + dz);
-                if (level.getBlockState(cursor).isAir()) {
-                    setSilent(level, cursor, wall);
+                if (this.phase == 1) {
+                    if (this.y > this.maxY) {
+                        advanceColumn();
+                        continue;
+                    }
+                    this.cursor.set(this.x, this.y++, this.z);
+                    if (!this.level.getBlockState(this.cursor).isAir()) {
+                        setSilent(this.level, this.cursor, AIR);
+                    }
+                    remaining--;
+                    continue;
                 }
+                if (this.phase == 2) {
+                    if (this.y > this.surface + 1) {
+                        this.phase = 3;
+                        continue;
+                    }
+                    runShaftStep();
+                    remaining--;
+                    continue;
+                }
+                if (this.phase == 4) {
+                    return true;
+                }
+                if (this.collarIndex >= 16) {
+                    return true;
+                }
+                int dx = this.collarIndex / 4 - 1;
+                int dz = this.collarIndex % 4 - 1;
+                this.collarIndex++;
+                boolean rim = dx == -1 || dx == 2 || dz == -1 || dz == 2;
+                if (!rim || FallbackBuilders.hash01(
+                        this.shaftX + dx, this.surface, this.shaftZ + dz) < 0.35D) {
+                    continue;
+                }
+                ensureChunk(this.level, this.prepared, this.shaftX + dx, this.shaftZ + dz);
+                this.cursor.set(this.shaftX + dx, this.surface + 1, this.shaftZ + dz);
+                if (this.level.getBlockState(this.cursor).isAir()) {
+                    setSilent(this.level, this.cursor, WALL);
+                }
+                remaining--;
+            }
+            return false;
+        }
+
+        private void runShaftStep() {
+            if (this.shaftStep < 4) {
+                int dx = this.shaftStep / 2;
+                int dz = this.shaftStep % 2;
+                ensureChunk(this.level, this.prepared, this.shaftX + dx, this.shaftZ + dz);
+                this.cursor.set(this.shaftX + dx, this.y, this.shaftZ + dz);
+                setSilent(this.level, this.cursor, AIR);
+            } else if (this.shaftStep == 4) {
+                ensureChunk(this.level, this.prepared, this.shaftX, this.shaftZ + 2);
+                this.cursor.set(this.shaftX, this.y, this.shaftZ + 2);
+                if (!this.level.getBlockState(this.cursor).isSolidRender(this.level, this.cursor)) {
+                    setSilent(this.level, this.cursor, WALL);
+                }
+            } else {
+                this.cursor.set(this.shaftX, this.y, this.shaftZ + 1);
+                setSilent(this.level, this.cursor, LADDER);
+            }
+            if (++this.shaftStep >= 6) {
+                this.shaftStep = 0;
+                this.y++;
+            }
+        }
+
+        private void advanceColumn() {
+            this.phase = 0;
+            this.column = null;
+            if (++this.z > this.prepared.maxZ) {
+                this.z = this.prepared.minZ;
+                this.x++;
             }
         }
     }

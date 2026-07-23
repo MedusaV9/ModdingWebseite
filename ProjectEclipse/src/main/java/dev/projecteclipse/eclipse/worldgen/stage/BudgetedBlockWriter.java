@@ -1,8 +1,12 @@
 package dev.projecteclipse.eclipse.worldgen.stage;
 
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.function.Consumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ServerLevel;
@@ -12,6 +16,10 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
  * Shared machinery of the tick-budgeted bulk chunk writers (W14 refactor out of
@@ -22,6 +30,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
  * Callers own their budget loop; behavior of the extracted pieces is byte-identical to
  * the pre-refactor {@code RingGrowthService} code.
  */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class BudgetedBlockWriter {
     /** Keeps freshly loaded chunks around long enough to rewrite + relight + resend. */
     public static final TicketType<ChunkPos> WRITER_TICKET =
@@ -38,8 +47,71 @@ public final class BudgetedBlockWriter {
      */
     private static final TicketType<ChunkPos> RELIGHT_TICKET =
             TicketType.create("eclipse_relight", Comparator.comparingLong(ChunkPos::toLong), 600);
+    /** Maximum logical block operations handed to one resumable job at a time. */
+    private static final int JOB_SLICE_OPERATIONS = 1024;
+    private static final Deque<QueuedJob> JOBS = new ArrayDeque<>();
+
+    /**
+     * Resumable unit of bulk world work. Implementations retain their own cursor and
+     * process no more than {@code operationBudget} logical block operations per call.
+     *
+     * @return {@code true} once all work is complete
+     */
+    @FunctionalInterface
+    public interface BudgetedWork {
+        boolean run(int operationBudget);
+    }
+
+    private record QueuedJob(ServerLevel level, BudgetedWork work, Runnable onComplete,
+            Consumer<Throwable> onFailure) {}
 
     private BudgetedBlockWriter() {}
+
+    /**
+     * Enqueues resumable server-thread world work. Jobs share the configured ring-writer
+     * millisecond budget and are round-robin sliced, preventing a large structure prep
+     * from monopolizing one tick.
+     */
+    public static void enqueue(ServerLevel level, BudgetedWork work, Runnable onComplete,
+            Consumer<Throwable> onFailure) {
+        JOBS.addLast(new QueuedJob(level, work, onComplete, onFailure));
+    }
+
+    /** Number of queued bulk jobs, exposed for operator diagnostics. */
+    public static int queuedJobs() {
+        return JOBS.size();
+    }
+
+    /** Advances queued bulk jobs within the shared per-tick nanosecond budget. */
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        if (JOBS.isEmpty()) {
+            return;
+        }
+        long deadline = System.nanoTime() + EclipseConfig.ringBlocksBudgetMs() * 1_000_000L;
+        int slices = JOBS.size();
+        while (slices-- > 0 && !JOBS.isEmpty() && System.nanoTime() < deadline) {
+            QueuedJob job = JOBS.removeFirst();
+            if (job.level().getServer() != event.getServer()) {
+                continue;
+            }
+            try {
+                if (job.work().run(JOB_SLICE_OPERATIONS)) {
+                    job.onComplete().run();
+                } else {
+                    JOBS.addLast(job);
+                }
+            } catch (Throwable failure) {
+                job.onFailure().accept(failure);
+            }
+        }
+    }
+
+    /** Drops in-memory cursors on shutdown; owning SavedData rows remain pending for restart. */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        JOBS.removeIf(job -> job.level().getServer() == event.getServer());
+    }
 
     /** Sync-loads a chunk from disk (or generates it) under a short-lived {@link #WRITER_TICKET}. */
     public static LevelChunk loadWithTicket(ServerLevel level, int chunkX, int chunkZ) {

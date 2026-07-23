@@ -32,7 +32,7 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * </ul>
  *
  * <p>Noise salts 30 (ring-boundary wobble), 31 (ice-spikes patches) and 32 (flank-ring
- * split wobble) of the {@code ECLIPSE_SEED} family live here; 29 is
+ * split wobble) of the frozen map-seed family live here; 29 is
  * {@link CaveBiomeMap}. Salt registry: {@code docs/plans_v3/wiring/P1-W1.2_wiring.md}.</p>
  */
 public final class DiscMapDefaults {
@@ -49,10 +49,11 @@ public final class DiscMapDefaults {
     /** Feature scale (blocks) of the flank-split wobble noise. */
     private static final double FLANK_WOBBLE_SCALE = 40.0D;
 
-    /** Fixed-seed wobble fields (salts 30–32 of the ECLIPSE_SEED noise family). */
-    private static final SimplexNoise RING_WOBBLE_NOISE = DiscTerrainFunction.noise(30);
-    private static final SimplexNoise ICE_PATCH_NOISE = DiscTerrainFunction.noise(31);
-    private static final SimplexNoise FLANK_WOBBLE_NOISE = DiscTerrainFunction.noise(32);
+    /** Lifecycle-keyed wobble fields (salts 30–32 of the frozen map-seed family). */
+    private static volatile MapNoises mapNoises;
+
+    private record MapNoises(long seed, SimplexNoise ringWobble, SimplexNoise icePatch,
+            SimplexNoise flankWobble) {}
 
     /** One sub-ring of a wedge: applies while {@code r <= maxR} (wobbled); last ring is open-ended. */
     public record Ring(double maxR, String biome) {}
@@ -222,13 +223,14 @@ public final class DiscMapDefaults {
         if (rings == null) {
             return wedgeBiome;
         }
+        MapNoises noises = mapNoises();
         double r = Math.sqrt(x * x + z * z)
-                + RING_WOBBLE_NOISE.getValue(x / RING_WOBBLE_SCALE, z / RING_WOBBLE_SCALE)
+                + noises.ringWobble().getValue(x / RING_WOBBLE_SCALE, z / RING_WOBBLE_SCALE)
                         * RING_WOBBLE_BLOCKS;
         for (Ring ring : rings) {
             if (r <= ring.maxR()) {
                 if (SNOWY_OUTER_RING.equals(ring.biome()) && ring.maxR() == Double.MAX_VALUE
-                        && ICE_PATCH_NOISE.getValue(x / ICE_PATCH_SCALE, z / ICE_PATCH_SCALE)
+                        && noises.icePatch().getValue(x / ICE_PATCH_SCALE, z / ICE_PATCH_SCALE)
                                 > ICE_PATCH_THRESHOLD) {
                     return "minecraft:ice_spikes";
                 }
@@ -246,13 +248,29 @@ public final class DiscMapDefaults {
      */
     public static String flankBiome(DiscMapData.Mountain mountain, double x, double z) {
         double angle = Math.toDegrees(Math.atan2(z - mountain.z(), x - mountain.x()))
-                + FLANK_WOBBLE_NOISE.getValue(x / FLANK_WOBBLE_SCALE, z / FLANK_WOBBLE_SCALE)
+                + mapNoises().flankWobble().getValue(x / FLANK_WOBBLE_SCALE, z / FLANK_WOBBLE_SCALE)
                         * FLANK_WOBBLE_DEG;
         angle = ((angle % 360.0D) + 360.0D) % 360.0D;
         if (angle < 120.0D) {
             return mountain.flankBiome();
         }
         return angle < 240.0D ? "minecraft:cherry_grove" : "minecraft:meadow";
+    }
+
+    private static MapNoises mapNoises() {
+        long seed = FrozenParams.mapSeed();
+        MapNoises cached = mapNoises;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (DiscMapDefaults.class) {
+                cached = mapNoises;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new MapNoises(seed, DiscTerrainFunction.noise(30),
+                            DiscTerrainFunction.noise(31), DiscTerrainFunction.noise(32));
+                    mapNoises = cached;
+                }
+            }
+        }
+        return cached;
     }
 
     /**
