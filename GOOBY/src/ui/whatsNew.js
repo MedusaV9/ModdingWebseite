@@ -10,9 +10,12 @@
 //  2. Browser driver initWhatsNew() — registers the 'whatsNew' panel and
 //     polls for a quiet home scene (dailyBonusPopup.js pattern) before
 //     showing ONCE. The seen flag persists on mount (not on dismiss), so the
-//     panel can never nag twice, however it gets closed (CTA, backdrop tap,
-//     app kill mid-view). Veterans resuming an unfinished v1 tutorial see the
-//     tutorial first; the panel waits for `onboarding.done`.
+//     panel can never nag twice, however it gets closed (CTA, app kill
+//     mid-view). V6/UI-LAYERS: the one-time tour opens with
+//     {backdropDismiss: false} — button-only close, so an accidental scrim
+//     tap can no longer eat the once-ever panel. Veterans resuming an
+//     unfinished v1 tutorial see the tutorial first; the panel waits for
+//     `onboarding.done`.
 
 import { t } from '../data/strings.js';
 import { icon } from './icons.js'; // V4/UI-DEEP: bullets use authored glyphs
@@ -177,9 +180,10 @@ export function initWhatsNew({ store, ui, audio, sceneManager }) {
       // gate non-critical toasts while the panel is up; ui.releaseToasts()
       // in unmount() flushes them once the player closes the tour.
       ui.holdToasts?.();
-      // Persist SEEN on show (not on dismiss): once-only survives backdrop
-      // taps and app kills mid-view. flush() beats the autosave debounce so
-      // an immediate reload can't resurrect the panel.
+      // Persist SEEN on show (not on dismiss): once-only survives app kills
+      // mid-view (backdrop taps can't close the sheet anymore — the panel
+      // opens with backdropDismiss:false). flush() beats the autosave
+      // debounce so an immediate reload can't resurrect the panel.
       store.set(`onboarding.whatsNew${version}Seen`, true);
       store.flush?.();
 
@@ -243,6 +247,8 @@ export function initWhatsNew({ store, ui, audio, sceneManager }) {
     if (ui.activeScreenId?.()) return;
     if (document.querySelector('.panel-backdrop')) return; // another sheet is up
     audio.play('ui.open');
-    ui.openPanel('whatsNew', { version });
+    // V6/UI-LAYERS: one-time content must not die to an accidental scrim
+    // tap (A4) — button-only close via the CTA.
+    ui.openPanel('whatsNew', { version }, { backdropDismiss: false });
   }, POLL_MS);
 }

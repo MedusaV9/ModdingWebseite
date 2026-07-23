@@ -179,13 +179,52 @@ test('attach: consecutive taps each dismiss independently', () => {
   assert.equal(dismissed, 3);
 });
 
+// V6/UI-LAYERS (A4): lock the child drag/cancel non-dismissal explicitly —
+// panels host draggable content (sliders, scrollers); neither an escaped
+// child drag nor an OS-cancelled gesture may ever close the sheet.
+
+test('attach: child drag escaping onto the scrim never dismisses (either way)', () => {
+  const backdrop = fakeBackdrop();
+  const child = {};
+  let dismissed = 0;
+  attachBackdropDismiss(backdrop, () => { dismissed += 1; });
+  // drag starts on the sheet content, finger releases over the scrim
+  backdrop.dispatch('pointerdown', { target: child });
+  backdrop.dispatch('click', { target: backdrop });
+  // and the reverse: press on the scrim, release back over the content
+  backdrop.dispatch('pointerdown', { target: backdrop });
+  backdrop.dispatch('click', { target: child });
+  assert.equal(dismissed, 0);
+});
+
+test('attach: cancelled drag re-arms cleanly — a later full tap dismisses once', () => {
+  const backdrop = fakeBackdrop();
+  let dismissed = 0;
+  attachBackdropDismiss(backdrop, () => { dismissed += 1; });
+  // gesture begins on the scrim but the OS takes it over (scroll/system swipe)
+  backdrop.dispatch('pointerdown', { target: backdrop });
+  backdrop.dispatch('pointercancel', { target: backdrop });
+  backdrop.dispatch('click', { target: backdrop });
+  assert.equal(dismissed, 0, 'cancelled gesture must not dismiss');
+  backdrop.dispatch('pointerdown', { target: backdrop });
+  backdrop.dispatch('click', { target: backdrop });
+  assert.equal(dismissed, 1, 'the machine is not stuck after a cancel');
+});
+
 // ---------------------------------------------------------------------------
 // Source-scan invariants — the consumers actually use the pattern
 // ---------------------------------------------------------------------------
 
 test('ui.js: panel backdrop uses attachBackdropDismiss, not pointerdown-close', () => {
   const src = source('src/ui/ui.js');
-  assert.match(src, /attachBackdropDismiss\(backdrop, \(\) => ui\.closePanel\(id\)\)/);
+  // V6/UI-LAYERS: the confirmed click-outside now consults the pure layer
+  // policy (dismissable flag + top-of-stack) before ui.closePanel(id).
+  assert.match(src, /attachBackdropDismiss\(backdrop, \(\) => \{/);
+  assert.match(
+    src,
+    /shouldBackdropClose\(activePanels\.map\(\(p\) => p\.id\), id, dismissable\)/,
+    'the dismiss callback must consult the stack top + dismissable flag',
+  );
   assert.doesNotMatch(
     src,
     /backdrop\.addEventListener\(\s*['"]pointerdown['"]/,

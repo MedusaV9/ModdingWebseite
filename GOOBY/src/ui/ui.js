@@ -74,6 +74,58 @@ function animateOut(el, exitClass) {
 }
 // ---- end POLISH-D exit helper ----
 
+// ---- V6/UI-LAYERS: pure panel-layer policy (PLAN6 Wave A/A4) ----
+// The layering DECISIONS live outside createUi() so node:test can import them
+// headlessly (test/uiLayerPolicy.test.js): duplicate-open rejection, the
+// per-panel backdropDismiss opt-out, and the top-of-stack rule that lets a
+// confirmed backdrop tap close only the topmost sheet.
+
+/**
+ * Duplicate guard: a panel id may open only while NOT already in the stack.
+ * Without this, openPanel('x') twice mounted two identical sheets and
+ * closePanel('x') removed only the first match, orphaning the duplicate.
+ * Callers that want re-open-to-front must closePanel(id) explicitly first.
+ * @param {string[]} openIds panel ids currently open (bottom → top)
+ * @param {string} id candidate panel id
+ * @returns {boolean} true when opening is allowed
+ */
+export function canOpenPanel(openIds, id) {
+  return !openIds.includes(id);
+}
+
+/**
+ * Per-panel opt-out: openPanel(id, params, {backdropDismiss: false}) makes a
+ * sheet button-only — claim-gated popups (dailyBonus) and one-time tours
+ * (whatsNew) must never be lost to an accidental scrim tap. Default: true.
+ * @param {{backdropDismiss?: boolean}|null} [options] openPanel options bag
+ * @returns {boolean} true when a backdrop tap may close the panel
+ */
+export function isBackdropDismissable(options) {
+  return options?.backdropDismiss !== false;
+}
+
+/**
+ * @param {string[]} openIds panel ids currently open (bottom → top)
+ * @returns {string|null} id of the topmost open panel
+ */
+export function topPanelId(openIds) {
+  return openIds.length > 0 ? openIds[openIds.length - 1] : null;
+}
+
+/**
+ * Should a confirmed click-outside on THIS panel's backdrop close it? Only
+ * when the panel is dismissable AND still the top of the stack — a stale
+ * click on a lower sheet's backdrop must never close under the top one.
+ * @param {string[]} openIds panel ids currently open (bottom → top)
+ * @param {string} id the panel whose backdrop received the confirmed click
+ * @param {boolean} dismissable the panel's isBackdropDismissable() flag
+ * @returns {boolean} true → close the panel now
+ */
+export function shouldBackdropClose(openIds, id, dismissable) {
+  return dismissable === true && topPanelId(openIds) === id;
+}
+// ---- end V6/UI-LAYERS policy helpers ----
+
 export function createUi() {
   const root = document.getElementById('ui');
 
@@ -203,15 +255,23 @@ export function createUi() {
 
     /**
      * Open a bottom-sheet panel over the current view.
+     * V6/UI-LAYERS: re-opening an id already in the stack returns false (see
+     * canOpenPanel); `options.backdropDismiss: false` makes the sheet
+     * button-only, and a confirmed backdrop tap closes ONLY the top panel.
      * @param {string} id
      * @param {object} [params]
+     * @param {{backdropDismiss?: boolean}} [options]
      * @returns {boolean}
      */
-    openPanel(id, params = {}) {
+    openPanel(id, params = {}, options = {}) {
       const mod = panels.get(id);
       if (!mod) {
         console.warn(`[ui] unknown panel '${id}'`);
         ui.toast('toast.screenMissing');
+        return false;
+      }
+      if (!canOpenPanel(activePanels.map((p) => p.id), id)) {
+        console.warn(`[ui] panel '${id}' is already open`);
         return false;
       }
       const backdrop = document.createElement('div');
@@ -227,7 +287,14 @@ export function createUi() {
       // scrim (click-through). Now: arm on backdrop-target pointerdown,
       // disarm on pointercancel, close only when the click also lands on
       // the backdrop itself — see src/ui/backdropDismiss.js.
-      attachBackdropDismiss(backdrop, () => ui.closePanel(id));
+      // V6/UI-LAYERS: the confirmed click additionally consults the pure
+      // policy — close only a dismissable panel that is still stack-top.
+      const dismissable = isBackdropDismissable(options);
+      attachBackdropDismiss(backdrop, () => {
+        if (shouldBackdropClose(activePanels.map((p) => p.id), id, dismissable)) {
+          ui.closePanel(id);
+        }
+      });
       activePanels.push({ id, el: backdrop, mod });
       mod.mount(el, params);
       return true;

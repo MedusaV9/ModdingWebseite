@@ -1,9 +1,13 @@
 // Daily bonus popup (§C8.2, agent G12) — streak calendar (7 slots, the
 // claimable day highlighted), claim button with reward reveal (coins + the
-// random food item from day 7 on). Auto-shows on the first open per local day:
-// initDailyBonus (called from the marked G12 block in main.js) polls briefly
-// after boot and opens the popup once Gooby is home and no other screen/panel
-// is up — claiming is required (§C8.2), dismissing just waits for tomorrow.
+// random food item from day 7 on). Auto-shows while the day is claimable:
+// initDailyBonus (called from the marked G12 block in main.js) polls after
+// boot and opens the popup once Gooby is home and no other screen/panel is
+// up — claiming is required (§C8.2). V6/UI-LAYERS: the sheet is opened with
+// {backdropDismiss: false} (button-only) and there is NO pre-claim session
+// latch anymore — the only latch is the claim itself (daily.lastClaimDay →
+// isClaimable() false), so an unclaimed dismissal (ui.closeAll(), app kill)
+// re-offers the popup instead of losing the day's bonus.
 // The 24 h reminder (notification id 5) keys off daily.lastClaimDay, which
 // claim() updates (systems/notifyRules.js + the G6 reschedule hooks).
 
@@ -34,6 +38,26 @@ const DAILY_CSS = `
 .g12-daily-reward svg{color:var(--yellow);}
 .g12-daily-streak{font-size:0.7813rem;font-weight:800;color:var(--teal-dark);margin-bottom:0.75rem;}
 `;
+
+/**
+ * V6/UI-LAYERS: pure auto-show decision for the boot/rollover poll — headless
+ * (test/uiLayerPolicy.test.js). Deliberately has NO shownDay/session field:
+ * the claim is the only latch. `claimable` comes from isClaimable(), which
+ * flips false once daily.lastClaimDay records today's claim; while the popup
+ * itself is up, its own backdrop keeps `panelOpen` true. So an unclaimed
+ * dismissal re-offers on the next tick and a claimed day never re-offers.
+ * @param {{claimable: boolean, onboardingDone: boolean|undefined,
+ *   atHome: boolean, screenOpen: boolean, panelOpen: boolean}} s poll snapshot
+ * @returns {boolean} true → open the popup now
+ */
+export function shouldOfferDailyBonus({ claimable, onboardingDone, atHome, screenOpen, panelOpen }) {
+  if (onboardingDone === false) return false; // G14: tutorial first, popup after (§C8.1 #8)
+  if (claimable !== true) return false;
+  if (atHome !== true) return false;
+  if (screenOpen === true) return false;
+  if (panelOpen === true) return false; // another sheet is up (incl. this popup)
+  return true;
+}
 
 /**
  * Wire the daily bonus (§C8.2): registers the popup panel and auto-shows it
@@ -140,21 +164,26 @@ export function initDailyBonus({ store, ui, audio, sceneManager }) {
     unmount() {},
   });
 
-  // ---- auto-show on first open per local day (§C8.2) ----
+  // ---- auto-show while claimable (§C8.2) ----
   // Wait for the home scene with no screen/panel up (don't fight onboarding,
-  // the harness ?open= routing or a running minigame), show once per session.
-  let shownDay = '';
+  // the harness ?open= routing or a running minigame). V6/UI-LAYERS: the old
+  // `shownDay` session latch is gone — it latched BEFORE the claim, so any
+  // unclaimed dismissal lost the day's popup for the whole session. Now the
+  // pure decision re-offers until the claim itself flips isClaimable() off;
+  // the popup's own backdrop keeps the poll quiet while it is showing.
   const poll = setInterval(() => {
-    const today = localDay();
-    if (shownDay === today) return;
-    if (store.get('onboarding.done') === false) return; // G14: tutorial first, popup after (§C8.1 #8)
-    if (!isClaimable(store.get('daily'), today)) return;
-    if (sceneManager?.currentId?.() !== 'home') return;
-    if (ui.activeScreenId?.()) return;
-    if (document.querySelector('.panel-backdrop')) return; // another sheet is up
-    shownDay = today;
+    const offer = shouldOfferDailyBonus({
+      claimable: isClaimable(store.get('daily'), localDay()),
+      onboardingDone: store.get('onboarding.done'),
+      atHome: sceneManager?.currentId?.() === 'home',
+      screenOpen: !!ui.activeScreenId?.(),
+      panelOpen: !!document.querySelector('.panel-backdrop'),
+    });
+    if (!offer) return;
     audio.play('ui.open');
-    ui.openPanel('dailyBonus');
+    // Claim-gated content must not die to an accidental scrim tap (A4):
+    // button-only close — the claim button itself is the exit path.
+    ui.openPanel('dailyBonus', {}, { backdropDismiss: false });
   }, 800);
   // (interval kept for day rollovers while the app stays open)
   void poll;
