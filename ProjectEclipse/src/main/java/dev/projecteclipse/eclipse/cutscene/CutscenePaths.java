@@ -61,7 +61,8 @@ import net.neoforged.fml.loading.FMLPaths;
 public final class CutscenePaths {
     /** Bundled defaults copied to {@code config/eclipse/cutscenes/} on first run. */
     private static final List<String> DEFAULT_IDS =
-            List.of("intro_v3_ship", "intro_v3_flight", "intro_v3_reveal", "unlock_ring", "finale_return");
+            List.of("intro_v3_ship", "intro_v3_flight", "intro_v3_reveal", "unlock_ring",
+                    "expansion_skyward", "expansion_flyover", "finale_return");
     private static final String BUNDLED_RESOURCE_ROOT = "/assets/eclipse/cutscenes/";
     /** Sits in {@code config/eclipse/} (NOT in {@code cutscenes/} — the loader scans that). */
     private static final String MANIFEST_NAME = "cutscene_defaults_manifest.json";
@@ -77,6 +78,9 @@ public final class CutscenePaths {
      */
     private static final Map<String, List<String>> LEGACY_DEFAULT_HASHES = Map.of(
             "finale_return", List.of("6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43"),
+            // W7 reshot the unlock_ring orbit; the v2-era default hash stays on record so
+            // untouched config copies upgrade in place.
+            "unlock_ring", List.of("2d5f63f7cb778bd799f185e700549fcc1e213488229b63fff5a0a4cd457eaefa"),
             // W6 deleted the v1 intro pair from DEFAULT_IDS (superseded by the intro_v3_*
             // shots). Their shipped hashes stay on record so a future re-adoption of either
             // id can still tell "stale old default" from "operator edit"; stale config

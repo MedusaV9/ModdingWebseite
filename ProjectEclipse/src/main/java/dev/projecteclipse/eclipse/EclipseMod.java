@@ -47,6 +47,13 @@ public final class EclipseMod {
         dev.projecteclipse.eclipse.registry.PaleGardenBlocks.register(modEventBus);
         dev.projecteclipse.eclipse.ghosts.GhostEntities.register(modEventBus);
         dev.projecteclipse.eclipse.limbo.door.DoorRegistry.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.fog.FogEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.fog.FogEliteEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.glitch.GlitchEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.pale.PaleEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.dungeon.DungeonEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.boss.rift.RiftEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.devtools.display.DevToolItems.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

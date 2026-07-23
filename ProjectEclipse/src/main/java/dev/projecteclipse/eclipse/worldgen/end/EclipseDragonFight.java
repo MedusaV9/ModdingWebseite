@@ -65,7 +65,7 @@ public final class EclipseDragonFight {
         void onDragonVictory(MinecraftServer server, BlockPos center);
     }
 
-    private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
+    private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();
 
     @Nullable
     private static EnderDragon activeDragon;

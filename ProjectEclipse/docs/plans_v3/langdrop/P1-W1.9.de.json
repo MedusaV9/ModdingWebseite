@@ -1,0 +1,6 @@
+{
+  "command.eclipse.worldgen.refreeze.success": "Worldgen-Abschnitt '%s' wurde aus der globalen Konfiguration neu eingefroren.",
+  "command.eclipse.worldgen.refreeze.fail": "Neu-Einfrieren der Worldgen fehlgeschlagen: %s",
+  "config.eclipse.fogstorms.created": "Standard-Nebelsturm-Konfiguration erstellt unter %s",
+  "config.eclipse.worldgen.freeze_created": "Per-Save-Worldgen-Freeze erstellt unter %s"
+}

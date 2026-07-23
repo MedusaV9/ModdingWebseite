@@ -100,14 +100,22 @@ public final class EclipseWorldgenCommand {
     }
 
     private static int setBreach(CommandContext<CommandSourceStack> context, boolean open) {
-        EclipseWorldgenState.get(context.getSource().getServer()).setBreachOpen(open);
+        if (open) {
+            // openNow deliberately repairs/replays even when the flag is already set
+            // (W1.7 wiring); the stage listener path only fires while the flag is false.
+            dev.projecteclipse.eclipse.worldgen.nether.BreachBuilder.openNow(
+                    context.getSource().getServer().overworld());
+        } else {
+            EclipseWorldgenState.get(context.getSource().getServer()).setBreachOpen(false);
+        }
         context.getSource().sendSuccess(
                 () -> Component.translatable("command.eclipse.worldgen.breach", open), true);
         return 1;
     }
 
     private static int materializeEnd(CommandContext<CommandSourceStack> context) {
-        EclipseWorldgenState.get(context.getSource().getServer()).setEndDiscMaterialized(true);
+        dev.projecteclipse.eclipse.worldgen.end.EndDiscService.materialize(
+                context.getSource().getServer());
         context.getSource().sendSuccess(
                 () -> Component.translatable("command.eclipse.worldgen.end_materialized"), true);
         return 1;
