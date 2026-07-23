@@ -1421,6 +1421,25 @@ export function createRoomManager({ scene, camera, assets, store }) {
       return [...anchors.keys()];
     },
 
+    // ---- V6/A3 (ambient life): room-local anchor resolve ----
+    /**
+     * Like getAnchor() but in ROOM-LOCAL coordinates: children of
+     * getRoomGroup(roomId) live at the room origin (only group.position.x
+     * carries the room's world center), so home/ambientLife.js mounts its
+     * sprite batches against this instead of the world-space registry.
+     * @param {string} name anchor name
+     * @param {string} [roomId] defaults to the active room
+     * @returns {THREE.Vector3|null}
+     */
+    getAnchorLocal(name, roomId) {
+      const rid = roomId ?? activeId;
+      const world = manager.getAnchor(name, rid);
+      if (!world) return null;
+      world.x -= roomCenterX(rid);
+      return world;
+    },
+    // ---- end V6/A3 ----
+
     /**
      * Swap a room's wallpaper (§C5.2 ids: cream|mint|sky|peach|lavender|stars).
      * @param {string} roomId @param {string} id

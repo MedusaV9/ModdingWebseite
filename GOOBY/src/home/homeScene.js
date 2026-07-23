@@ -33,6 +33,7 @@ import { createRoomNav } from '../ui/roomNav.js';
 import { bandAt } from '../systems/dayNight.js';
 import { weatherAt } from '../systems/weather.js';
 import { mountGardenRain, mountGardenClouds, updateWeatherFx } from '../gfx/weatherFx.js';
+import { createAmbientLife } from './ambientLife.js'; // V6/A3: batched room ambient life
 import {
   disableGyro,
   isGyroEnabled,
@@ -153,6 +154,8 @@ export function createHomeScene(ctx) {
   let rainFx = null;
   /** @type {ReturnType<typeof mountGardenClouds>|null} */
   let cloudFx = null;
+  /** @type {ReturnType<typeof createAmbientLife>|null} V6/A3 ambient life */
+  let ambient = null;
   /** §C10.3 night yawn countdown (0 = timer off) */
   let yawnIn = 0;
   /** §C11.2: Gooby is parked under the garden tree canopy during rain */
@@ -197,6 +200,7 @@ export function createHomeScene(ctx) {
     // §C11.2 weather FX fade in/out with their state
     rainFx?.setActive(amb.weather === 'rain');
     cloudFx?.setActive(amb.weather === 'cloudy');
+    ambient?.setConditions(amb.band, amb.weather); // V6/A3: band/weather row swap
 
     refreshAmbientAudio();
 
@@ -405,6 +409,15 @@ export function createHomeScene(ctx) {
       }
       // --- end V2/G26 --------------------------------------------------------
 
+      // ---- V6/A3: batched ambient life (≤4 draw batches per room) ----------
+      // Mount/dispose per room rides rm's 'roomChanged' event internally;
+      // band/weather gating arrives via the applyAmbienceNow() hook below
+      // (first push happens at the instant applyAmbienceNow in this enter()).
+      // No-op under reduced motion; ticked from update(dt) so it pauses with
+      // the RAF loop.
+      ambient = createAmbientLife({ rm });
+      // ---- end V6/A3 ---------------------------------------------------------
+
       // --- emotion follows the store mood (§C1 bands via emotions.js) ---
       const machine = createEmotionMachine();
       machine.onChange((id) => gooby.setEmotion(id));
@@ -508,6 +521,7 @@ export function createHomeScene(ctx) {
       lights.update(dt);
       particles.update(dt);
       updateWeatherFx(dt); // V2/G26 (§C11.2): rain/clouds/window streaks
+      ambient?.update(dt); // V6/A3: ambient life (pauses with the RAF loop)
 
       if (gooby) {
         gooby.update(dt);
@@ -593,6 +607,10 @@ export function createHomeScene(ctx) {
       ambLamps.length = 0;
       ambMachine = null;
       // end V2/G26
+      // V6/A3: ambient life tears down before the room manager frees groups
+      ambient?.dispose();
+      ambient = null;
+      // end V6/A3
       gooby?.dispose();
       gooby = null;
       particles.dispose();
