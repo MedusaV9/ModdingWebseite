@@ -527,16 +527,27 @@ public final class EclipseConfig {
     // --- milestones.json ---
 
     /**
-     * The v2 milestone costs (spec §6): L4 is the boss lock — it demands the Herald Core
-     * (day-7 guaranteed drop) on top of the pearls, so the altar cannot out-pace the arc.
+     * The v3 event milestone costs (P4 §2.6): multi-item, pooled sinks sized for a 20–30
+     * player team. L4 remains boss-locked by the guaranteed Herald Core.
      */
     private static List<Milestone> defaultMilestones() {
         return List.of(
-                new Milestone(1, List.of(new ItemCost("minecraft:iron_ingot", 16)), List.of("create")),
-                new Milestone(2, List.of(new ItemCost("minecraft:gold_ingot", 16)), List.of("simulated")),
-                new Milestone(3, List.of(new ItemCost("minecraft:diamond", 8)), List.of("aeronautics")),
-                new Milestone(4, List.of(new ItemCost("eclipse:herald_core", 1), new ItemCost("minecraft:ender_pearl", 16)), List.of("sable")),
-                new Milestone(5, List.of(new ItemCost("minecraft:netherite_ingot", 2)), List.of("end")));
+                new Milestone(1, List.of(
+                        new ItemCost("minecraft:iron_ingot", 48),
+                        new ItemCost("minecraft:coal", 32)), List.of("create")),
+                new Milestone(2, List.of(
+                        new ItemCost("minecraft:gold_ingot", 32),
+                        new ItemCost("minecraft:amethyst_shard", 16)), List.of("simulated")),
+                new Milestone(3, List.of(
+                        new ItemCost("minecraft:diamond", 24),
+                        new ItemCost("minecraft:emerald_block", 8)), List.of("aeronautics")),
+                new Milestone(4, List.of(
+                        new ItemCost("eclipse:herald_core", 1),
+                        new ItemCost("minecraft:ender_pearl", 32),
+                        new ItemCost("minecraft:obsidian", 16)), List.of("sable")),
+                new Milestone(5, List.of(
+                        new ItemCost("minecraft:netherite_ingot", 4),
+                        new ItemCost("minecraft:quartz_block", 48)), List.of("end")));
     }
 
     private static JsonElement milestonesToJson(List<Milestone> milestones) {

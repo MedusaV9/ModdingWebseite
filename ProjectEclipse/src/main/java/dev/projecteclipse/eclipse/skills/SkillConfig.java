@@ -28,8 +28,8 @@ import net.neoforged.fml.loading.FMLPaths;
  * Loader for {@code config/eclipse/skills.json} (R3, plan §2.3): curve knobs, proc feedback,
  * the FULL per-action XP earn table and per-source daily soft caps. Defaults are written on
  * first run ({@code EclipseConfig.loadOrCreate} pattern); hot-reload rides
- * {@code ReloadHooks} (registered by {@link SkillService}). Authored event values live in
- * {@code run/config/eclipse/skills.json} (content worker P4-B3).
+ * {@code ReloadHooks} (registered by {@link SkillService}). A missing runtime file is generated
+ * from the fully authored event defaults below.
  *
  * <p>Value lookup order everywhere: exact id → first matching {@code #tag} in file order →
  * {@code default}. Fractional values are legal — {@link SkillService} carries a per-player
@@ -399,8 +399,24 @@ public final class SkillConfig {
 
         JsonObject advancements = new JsonObject();
         advancements.addProperty("default", 50);
+        advancements.addProperty("eclipse:root", 25);
+        advancements.addProperty("eclipse:first_shard", 50);
+        advancements.addProperty("eclipse:first_offering", 75);
+        advancements.addProperty("eclipse:heart_extractor", 75);
+        advancements.addProperty("eclipse:first_revive", 200);
+        advancements.addProperty("eclipse:nether_disc", 100);
+        advancements.addProperty("eclipse:survive_day_3", 125);
+        advancements.addProperty("eclipse:fog_storm_found", 125);
         advancements.addProperty("eclipse:herald_slain", 200);
+        advancements.addProperty("eclipse:tame_the_dark", 175);
+        advancements.addProperty("eclipse:classic_collector", 150);
+        advancements.addProperty("eclipse:glitch_hunter", 125);
+        advancements.addProperty("eclipse:deep_below", 100);
+        advancements.addProperty("eclipse:team_survives_day", 200);
+        advancements.addProperty("eclipse:skill_10", 100);
         advancements.addProperty("eclipse:skill_25", 150);
+        advancements.addProperty("eclipse:skill_40", 250);
+        advancements.addProperty("eclipse:ferryman_slain", 300);
         xp.add("advancements", advancements);
 
         root.add("xp", xp);

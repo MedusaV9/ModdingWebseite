@@ -145,36 +145,41 @@ public final class RecipeGateConfig {
         JsonObject root = new JsonObject();
         JsonArray tiers = new JsonArray();
 
-        JsonObject tier1 = new JsonObject();
-        tier1.addProperty("unlockDay", 1);
-        JsonObject locks1 = new JsonObject();
-        JsonArray items1 = new JsonArray();
-        items1.add("#eclipse:tier_diamond_gear");
-        items1.add("#eclipse:tier_netherite_gear");
-        items1.add("minecraft:enchanting_table");
-        items1.add("minecraft:anvil");
-        locks1.add("items", items1);
-        locks1.add("recipes", new JsonArray());
-        tier1.add("locks", locks1);
-        tiers.add(tier1);
-
         JsonObject tier2 = new JsonObject();
-        tier2.addProperty("unlockDay", 5);
+        tier2.addProperty("unlockDay", 2);
         JsonObject locks2 = new JsonObject();
         JsonArray items2 = new JsonArray();
-        items2.add("#eclipse:tier_diamond_gear");
+        items2.add("minecraft:anvil");
         locks2.add("items", items2);
         tier2.add("locks", locks2);
         tiers.add(tier2);
 
         JsonObject tier3 = new JsonObject();
-        tier3.addProperty("unlockDay", 10);
+        tier3.addProperty("unlockDay", 3);
         JsonObject locks3 = new JsonObject();
         JsonArray items3 = new JsonArray();
-        items3.add("#eclipse:tier_netherite_gear");
+        items3.add("minecraft:enchanting_table");
         locks3.add("items", items3);
         tier3.add("locks", locks3);
         tiers.add(tier3);
+
+        JsonObject tier4 = new JsonObject();
+        tier4.addProperty("unlockDay", 5);
+        JsonObject locks4 = new JsonObject();
+        JsonArray items4 = new JsonArray();
+        items4.add("#eclipse:tier_diamond_gear");
+        locks4.add("items", items4);
+        tier4.add("locks", locks4);
+        tiers.add(tier4);
+
+        JsonObject tier5 = new JsonObject();
+        tier5.addProperty("unlockDay", 10);
+        JsonObject locks5 = new JsonObject();
+        JsonArray items5 = new JsonArray();
+        items5.add("#eclipse:tier_netherite_gear");
+        locks5.add("items", items5);
+        tier5.add("locks", locks5);
+        tiers.add(tier5);
 
         root.add("tiers", tiers);
         return root;

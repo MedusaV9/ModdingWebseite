@@ -152,13 +152,16 @@ public final class OfferingConfig {
 
         Map<String, String> items = new LinkedHashMap<>();
         // Explicit junk: familiar throwaways must never win through a tag/datapack surprise.
-        put(items, "junk", "minecraft:cobblestone", "minecraft:stone", "minecraft:gravel",
+        put(items, "junk", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:rooted_dirt",
+                "minecraft:podzol", "minecraft:sand", "minecraft:red_sand",
+                "minecraft:cobblestone", "minecraft:stone", "minecraft:gravel",
                 "minecraft:netherrack", "minecraft:rotten_flesh", "minecraft:poisonous_potato",
                 "minecraft:spider_eye", "minecraft:bone", "minecraft:stick", "minecraft:bowl");
         put(items, "common", "minecraft:coal", "minecraft:charcoal", "minecraft:flint",
                 "minecraft:clay_ball", "minecraft:brick", "minecraft:glass", "minecraft:leather",
                 "minecraft:string", "minecraft:feather", "minecraft:paper", "minecraft:honeycomb",
-                "minecraft:ink_sac", "minecraft:glow_ink_sac", "minecraft:prismarine_shard");
+                "minecraft:ink_sac", "minecraft:glow_ink_sac", "minecraft:prismarine_shard",
+                "minecraft:wheat", "minecraft:gunpowder");
         put(items, "useful", "minecraft:iron_ingot", "minecraft:copper_ingot",
                 "minecraft:redstone", "minecraft:lapis_lazuli", "minecraft:quartz",
                 "minecraft:amethyst_shard", "minecraft:slime_ball", "minecraft:magma_cream",
@@ -167,18 +170,22 @@ public final class OfferingConfig {
                 "minecraft:golden_carrot", "minecraft:trial_key",
                 "eclipse:umbral_shard");
         put(items, "valuable", "minecraft:gold_ingot", "minecraft:gold_block",
-                "minecraft:diamond", "minecraft:emerald", "minecraft:ender_pearl",
+                "minecraft:emerald", "minecraft:ender_pearl",
                 "minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:ghast_tear",
                 "minecraft:golden_apple", "minecraft:shulker_shell", "minecraft:nautilus_shell",
                 "minecraft:prismarine_crystals", "minecraft:echo_shard", "minecraft:heart_of_the_sea",
-                "minecraft:wither_skeleton_skull", "eclipse:glitch_shard");
-        put(items, "rare", "minecraft:diamond_block", "minecraft:emerald_block",
+                "minecraft:wither_skeleton_skull", "minecraft:iron_block", "minecraft:ender_eye",
+                "eclipse:glitch_shard");
+        put(items, "rare", "minecraft:diamond", "minecraft:emerald_block",
                 "minecraft:netherite_scrap", "minecraft:netherite_ingot", "minecraft:trident",
                 "minecraft:elytra", "minecraft:conduit", "minecraft:nether_star",
-                "minecraft:heavy_core", "minecraft:ominous_trial_key");
-        put(items, "epic", "minecraft:netherite_block", "minecraft:enchanted_golden_apple",
+                "minecraft:heavy_core", "minecraft:ominous_trial_key", "minecraft:end_crystal",
+                "minecraft:dragon_breath");
+        put(items, "epic", "minecraft:diamond_block", "minecraft:netherite_block",
+                "minecraft:enchanted_golden_apple",
                 "minecraft:totem_of_undying", "minecraft:dragon_egg", "minecraft:beacon",
-                "minecraft:mace", "eclipse:heart_fragment", "eclipse:herald_core",
+                "minecraft:mace", "minecraft:dragon_head",
+                "eclipse:heart_fragment", "eclipse:herald_core",
                 "eclipse:revive_sigil");
 
         Set<String> junk = new LinkedHashSet<>();

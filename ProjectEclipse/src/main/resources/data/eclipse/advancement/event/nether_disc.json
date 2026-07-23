@@ -1,0 +1,27 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:netherrack"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.nether_disc.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.nether_disc.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "entered_nether": {
+      "trigger": "minecraft:changed_dimension",
+      "conditions": {
+        "to": "minecraft:the_nether"
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

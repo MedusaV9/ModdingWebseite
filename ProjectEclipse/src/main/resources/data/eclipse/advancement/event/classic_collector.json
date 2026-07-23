@@ -1,0 +1,40 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "eclipse:classic_grass_block"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.classic_collector.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.classic_collector.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "souvenirs": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "eclipse:classic_grass_block"
+          },
+          {
+            "items": "eclipse:classic_cobblestone"
+          },
+          {
+            "items": "eclipse:classic_oak_planks"
+          },
+          {
+            "items": "eclipse:classic_glass"
+          }
+        ]
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

@@ -22,8 +22,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 /**
- * Loads {@code config/eclipse/buffs.json} (R16/R17). Defaults mirror the P4 plan schema;
- * B3 may commit authored values under {@code run/config/eclipse/buffs.json}.
+ * Loads {@code config/eclipse/buffs.json} (R16/R17). Missing files are generated from the
+ * fully authored P4 event defaults below.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class BuffConfig {
@@ -111,6 +111,12 @@ public final class BuffConfig {
                 magnet(8.0F), 15, "extend"));
         buffs.add(def("glitch_surge", "Glitch Surge", "Glitch-Welle",
                 multiplier("glitch_spawn", 2.0F), 20, "extend"));
+        buffs.add(def("evening_focus", "Evening Focus", "Abendfokus",
+                multiplier("skill_xp", 1.15F), 15, "extend"));
+        buffs.add(def("steady_hands", "Steady Hands", "Ruhige Hände",
+                multiplier("ore_drops", 1.25F), 15, "extend"));
+        buffs.add(def("shard_echo", "Shard Echo", "Splitterecho",
+                multiplier("shard_drops", 1.5F), 20, "extend"));
 
         root.add("buffs", buffs);
         return root;

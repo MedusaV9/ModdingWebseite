@@ -65,12 +65,14 @@ public final class ModGate {
         if (stack.isEmpty()) {
             return false;
         }
-        return isNamespaceLocked(server, BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace());
+        var id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return isNamespaceLocked(server, id.getNamespace()) || ModGateIds.isLocked(server, id);
     }
 
     /** Whether the block state's block belongs to a currently-locked gated namespace. */
     public static boolean isBlockLocked(MinecraftServer server, BlockState state) {
-        return isNamespaceLocked(server, BuiltInRegistries.BLOCK.getKey(state.getBlock()).getNamespace());
+        var id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        return isNamespaceLocked(server, id.getNamespace()) || ModGateIds.isLocked(server, id);
     }
 
     // --- interaction gating ---
@@ -158,7 +160,7 @@ public final class ModGate {
                 break;
             }
         }
-        if (!anyLocked) {
+        if (!anyLocked && !ModGateIds.hasLockedEntries(server)) {
             return;
         }
         List<ItemStack> confiscated = new ArrayList<>();

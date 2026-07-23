@@ -1,0 +1,31 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "eclipse:umbral_shard"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.first_shard.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.first_shard.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "shard": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "eclipse:umbral_shard"
+          }
+        ]
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

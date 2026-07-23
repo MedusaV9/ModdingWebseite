@@ -20,8 +20,8 @@ import dev.projecteclipse.eclipse.core.config.Localized;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
- * Loader for {@code config/eclipse/skilltree.json} (R3, plan §2.3 node table): 21 nodes on a
- * 3-point spine plus three 6-node branches (hunt / delve / stride). Node effects are small,
+ * Loader for {@code config/eclipse/skilltree.json} (R3, plan §2.3 node table): 25 nodes on a
+ * 4-point spine plus three 7-node branches (hunt / delve / stride). Node effects are small,
  * incremental and never OP by design — every magnitude is a config value consumed by
  * {@link SkillPerks} / {@link SkillService}, so balance can be retuned live via
  * {@code /eclipse reload}. The canonical serialized tree (not secret) ships to clients as
@@ -211,8 +211,8 @@ public final class SkillTreeConfig {
                 + "(0.05 = 5%) except post_kill_absorption (hearts), no_fall_damage_below_blocks "
                 + "(blocks) and first_biome_bonus_xp (flat XP). All values are live-tunable; "
                 + "effect TYPE strings are code contracts (SkillPerks) - do not rename.");
-        doc.addProperty("balance", "Total cost 51 points = level 51 to complete everything "
-                + "(softcap 50). Perks are intentionally small utility boni, never OP.");
+        doc.addProperty("balance", "Total cost 66 points = level 66 to complete everything. "
+                + "The four capstones add only 2-4% each; full completion sits beyond softcap 50.");
         root.add("_doc", doc);
 
         JsonObject branches = new JsonObject();
@@ -235,6 +235,10 @@ public final class SkillTreeConfig {
                 "Eclipsed", "Verfinstert",
                 "+1% proc chance for all chance perks.", "+1 % Auslösechance für alle Zufalls-Perks.",
                 "proc_chance_add", 0.01F, 0, 0));
+        nodes.add(node("S4", "spine", 3, List.of("S3"),
+                "Resonant", "Nachhallend",
+                "+2% skill XP from all sources.", "+2 % Skill-EP aus allen Quellen.",
+                "skill_xp_pct", 0.02F, 0, 0));
 
         nodes.add(node("U1", "hunt", 1, List.of(),
                 "Night's Edge", "Klinge der Nacht",
@@ -262,6 +266,10 @@ public final class SkillTreeConfig {
                 "Umbral Pact", "Umbraler Pakt",
                 "+50% kill skill XP during night events.", "+50 % Kill-Skill-EP während Nachtereignissen.",
                 "night_event_kill_xp_pct", 0.50F, 0, 0));
+        nodes.add(node("U7", "hunt", 4, List.of("U6"),
+                "Quickened Edge", "Beschleunigte Klinge",
+                "+2% attack speed.", "+2 % Angriffsgeschwindigkeit.",
+                "attack_speed_pct", 0.02F, 0, 0));
 
         nodes.add(node("T1", "delve", 1, List.of(),
                 "Prospector", "Schürfer",
@@ -288,6 +296,10 @@ public final class SkillTreeConfig {
                 "1% chance for a bonus raw ore from natural ores.",
                 "1 % Chance auf ein Bonus-Roherz aus natürlichen Erzen.",
                 "bonus_raw_ore_chance", 0.01F, 0, 0));
+        nodes.add(node("T7", "delve", 4, List.of("T6"),
+                "Deep Rhythm", "Tiefer Rhythmus",
+                "+3% mining speed below Y=0.", "+3 % Abbautempo unter Y=0.",
+                "break_speed_below0_pct", 0.03F, 0, 0));
 
         nodes.add(node("V1", "stride", 1, List.of(),
                 "Islander", "Inselläufer",
@@ -314,6 +326,10 @@ public final class SkillTreeConfig {
                 "+100 bonus skill XP for each first biome visit.",
                 "+100 Bonus-Skill-EP für jeden Erstbesuch eines Bioms.",
                 "first_biome_bonus_xp", 100.0F, 0, 0));
+        nodes.add(node("V7", "stride", 4, List.of("V6"),
+                "Surefooted", "Trittsicher",
+                "-4% fall damage.", "−4 % Fallschaden.",
+                "fall_damage_reduce_pct", 0.04F, 0, 0));
 
         root.add("nodes", nodes);
         return root;

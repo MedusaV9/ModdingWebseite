@@ -1,0 +1,24 @@
+{
+  "parent": "eclipse:event/skill_25",
+  "display": {
+    "icon": {
+      "id": "eclipse:umbral_blade"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.skill_40.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.skill_40.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "level": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "sends_telemetry_event": false
+}
