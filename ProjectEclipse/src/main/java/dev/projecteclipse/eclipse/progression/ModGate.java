@@ -11,11 +11,15 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.MerchantResultSlot;
+import net.minecraft.world.inventory.ResultContainer;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.util.TriState;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -26,11 +30,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * Runtime gating of external content mods (Create, Simulated, Aeronautics, Sable, ...) purely by
  * registry-id <em>namespace string</em> — there is deliberately no compile-time dependency on any
  * of those mods. {@code modgate.json} maps each gated namespace to an {@link UnlockState} key; a
- * namespace is LOCKED while its key is not unlocked. While locked, using/placing/picking up
- * items and blocks from that namespace is cancelled, crafting results are shrunk to 0, and a
- * periodic sweep confiscates gated stacks from online SURVIVAL/ADVENTURE players' inventories,
- * depositing them into the spawn chests via {@link InheritanceService#depositAtSpawn} (items are
- * never destroyed). Everything reverses automatically once the key unlocks.
+ * namespace is LOCKED while its key is not unlocked. While locked, using/placing/attacking
+ * with/picking up items and blocks from that namespace is cancelled, crafting results are
+ * shrunk to 0, and a periodic sweep confiscates gated stacks from online SURVIVAL/ADVENTURE
+ * players' inventories AND from the container menu they have open (chest stashes don't
+ * survive), depositing them into the spawn chests via
+ * {@link InheritanceService#depositAtSpawn} (items are never destroyed). Everything reverses
+ * automatically once the key unlocks.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ModGate {
@@ -87,6 +93,18 @@ public final class ModGate {
             return;
         }
         if (isItemLocked(player.server, event.getItemStack())) {
+            event.setCanceled(true);
+            hint(player);
+        }
+    }
+
+    /** Melee with a gated weapon worked between sweeps — cancel the swing itself. */
+    @SubscribeEvent
+    public static void onAttackEntity(AttackEntityEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || !player.gameMode.isSurvival()) {
+            return;
+        }
+        if (isItemLocked(player.server, player.getMainHandItem())) {
             event.setCanceled(true);
             hint(player);
         }
@@ -154,6 +172,23 @@ public final class ModGate {
                 ItemStack stack = inventory.getItem(slot);
                 if (isItemLocked(server, stack)) {
                     inventory.setItem(slot, ItemStack.EMPTY);
+                    confiscated.add(stack);
+                    removed = true;
+                }
+            }
+            // The container menu the player has OPEN (chest, barrel, ...) is swept too, so a
+            // gated stack can't ride out the lock in a stash. Player-inventory rows mirror
+            // the slots above; result/trade-preview slots hold phantom items whose
+            // ingredients still exist — confiscating those would MINT items, so both skip.
+            for (Slot menuSlot : player.containerMenu.slots) {
+                if (menuSlot.container instanceof Inventory
+                        || menuSlot.container instanceof ResultContainer
+                        || menuSlot instanceof MerchantResultSlot) {
+                    continue;
+                }
+                ItemStack stack = menuSlot.getItem();
+                if (isItemLocked(server, stack)) {
+                    menuSlot.set(ItemStack.EMPTY);
                     confiscated.add(stack);
                     removed = true;
                 }

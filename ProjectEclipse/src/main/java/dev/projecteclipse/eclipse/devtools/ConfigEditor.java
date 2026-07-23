@@ -40,10 +40,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the file name ({@code days.json} / {@code milestones.json}), rejects &gt;
  * {@value C2SConfigEditPayload#MAX_JSON_BYTES}-byte payloads, and re-validates + NORMALIZES
  * the JSON against the {@code EclipseConfig} schema (day/goals bounds, ≤ 8 goals per day —
- * the {@code GoalTracker} bitmask limit — unique days, mandatory {@code borderSize}) so a
- * malformed edit can never leave a {@code days.json} on disk that {@code EclipseConfig.reload}
- * would refuse. On success: write, {@code EclipseConfig.reload()}, re-broadcast day state +
- * milestones + per-player goal progress (the same sync set as {@code /eclipse reload}).</p>
+ * the {@code GoalTracker} bitmask limit — unique days) so a malformed edit can never leave
+ * a {@code days.json} on disk that {@code EclipseConfig.reload} would refuse. The editor GUI
+ * does not edit the hand-written {@code title}/{@code subtitle} announcement lines, so
+ * normalization preserves the CURRENT config's lines whenever the payload omits them (a
+ * save must never strip them); the deprecated {@code borderSize} is neither sent nor
+ * written, matching {@code EclipseConfig.daysToJson}. On success: write,
+ * {@code EclipseConfig.reload()}, re-broadcast day state + milestones + per-player goal
+ * progress (the same sync set as {@code /eclipse reload}).</p>
  */
 public final class ConfigEditor {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -73,7 +77,15 @@ public final class ConfigEditor {
             JsonArray unlocks = new JsonArray();
             plan.unlocks().forEach(unlocks::add);
             obj.add("unlocks", unlocks);
-            obj.addProperty("borderSize", plan.borderSize());
+            // title/subtitle mirror EclipseConfig.daysToJson (written when non-empty) so a
+            // round-trip never loses the hand-written announcement lines; the deprecated
+            // borderSize is deliberately NOT written (daysToJson omits it too).
+            if (!plan.title().isEmpty()) {
+                obj.addProperty("title", plan.title());
+            }
+            if (!plan.subtitle().isEmpty()) {
+                obj.addProperty("subtitle", plan.subtitle());
+            }
             array.add(obj);
         }
         return GSON.toJson(array);
@@ -144,8 +156,12 @@ public final class ConfigEditor {
     // --- schema validation / normalization ---
 
     /**
-     * Validates a {@code days.json} candidate and returns a NORMALIZED array (sorted by day,
-     * all four fields present) that {@code EclipseConfig.daysFromJson} is guaranteed to load.
+     * Validates a {@code days.json} candidate and returns a NORMALIZED array (sorted by day)
+     * that {@code EclipseConfig.daysFromJson} is guaranteed to load. Payloads without
+     * {@code title}/{@code subtitle} (the goal-editor GUI never round-trips them) inherit
+     * the CURRENT config's lines for that day, so a goal edit can never strip the
+     * hand-written announcement lines. The deprecated {@code borderSize} is dropped
+     * (never written), matching {@code EclipseConfig.daysToJson}.
      *
      * @throws IllegalArgumentException with a human-readable reason
      */
@@ -174,13 +190,19 @@ public final class ConfigEditor {
                         + " goals (max " + MAX_GOALS_PER_DAY + " — GoalTracker bitmask)");
             }
             JsonArray unlocks = obj.has("unlocks") ? requireStringArray(obj, "unlocks", true) : new JsonArray();
-            double borderSize = obj.has("borderSize") ? requireDouble(obj, "borderSize") : fallbackBorder(day);
+            String title = obj.has("title") ? requireString(obj, "title") : fallbackTitle(day, true);
+            String subtitle = obj.has("subtitle") ? requireString(obj, "subtitle") : fallbackTitle(day, false);
 
             JsonObject normalized = new JsonObject();
             normalized.addProperty("day", day);
             normalized.add("goals", goals);
             normalized.add("unlocks", unlocks);
-            normalized.addProperty("borderSize", borderSize);
+            if (!title.isEmpty()) {
+                normalized.addProperty("title", title);
+            }
+            if (!subtitle.isEmpty()) {
+                normalized.addProperty("subtitle", subtitle);
+            }
             out.add(normalized);
         }
         return sortByIntKey(out, "day");
@@ -233,9 +255,18 @@ public final class ConfigEditor {
         return sortByIntKey(out, "level");
     }
 
-    /** The existing config's borderSize for that day (legacy field must stay parseable). */
-    private static double fallbackBorder(int day) {
-        return EclipseConfig.day(day).borderSize();
+    /**
+     * The CURRENT config's title/subtitle for EXACTLY that day ({@code ""} for new days) —
+     * {@code EclipseConfig.day} is not used directly because it falls back to a neighbor
+     * plan for unmatched days, which would copy another day's announcement lines.
+     */
+    private static String fallbackTitle(int day, boolean title) {
+        for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
+            if (plan.day() == day) {
+                return title ? plan.title() : plan.subtitle();
+            }
+        }
+        return "";
     }
 
     private static int requireInt(JsonObject obj, String key) {
@@ -243,13 +274,6 @@ public final class ConfigEditor {
             throw new IllegalArgumentException("missing/non-numeric '" + key + "'");
         }
         return obj.get(key).getAsInt();
-    }
-
-    private static double requireDouble(JsonObject obj, String key) {
-        if (!obj.has(key) || !obj.get(key).isJsonPrimitive() || !obj.getAsJsonPrimitive(key).isNumber()) {
-            throw new IllegalArgumentException("missing/non-numeric '" + key + "'");
-        }
-        return obj.get(key).getAsDouble();
     }
 
     private static String requireString(JsonObject obj, String key) {

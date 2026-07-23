@@ -10,6 +10,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
@@ -123,6 +124,13 @@ public class FerrymanEntity extends Monster {
     private static final float DOT_DAMAGE = 2.0F;
     // P2 crew.
     private static final int CREW_CHECK_TICKS = 20;
+    // P2 kneel stall guard: an online-but-AFK ghost blocks the no-ghosts fallback forever,
+    // so after 90 s with zero lantern progress one lantern force-relights every 20 s.
+    private static final int KNEEL_STALL_TICKS = 1800; // 90 s
+    private static final int KNEEL_FORCE_RELIGHT_TICKS = 400; // 20 s between forced relights
+    // Finale grace: summon fires at cutscene t=100 but players stay frozen+invulnerable
+    // for ~160t more — no attacks until they can actually be hit back.
+    private static final int SPAWN_GRACE_TICKS = 160;
     // P3 sink + gaze.
     private static final int SINK_INTERVAL_TICKS = 600; // 30 s
     private static final int MAX_SINK_LAYERS = 4;
@@ -173,6 +181,12 @@ public class FerrymanEntity extends Monster {
     private int slamAirTicks;
     private boolean crewActive;
     private int requiredLanterns;
+    /** Lit lanterns at the last crew check (progress tracking for the kneel stall guard). */
+    private int crewLitSeen;
+    /** Crew-phase ticks since the last ghost lantern progress (not persisted: a reload restarts the window). */
+    private int crewStallTicks;
+    /** Post-summon grace countdown (not persisted: only the scripted finale spawn needs it). */
+    private int spawnGraceTicks;
     private boolean sinkSlowedLogged;
     private int sinkTimer = SINK_INTERVAL_TICKS;
     private int sinkLayers;
@@ -224,6 +238,9 @@ public class FerrymanEntity extends Monster {
         double z = 0.5D;
         ferryman.moveTo(x, deck + 1, z, 90.0F, 0.0F); // faces the bow (+X)
         ferryman.initFight(limbo, new Vec3(0.5D, deck, 0.5D), deck);
+        // The finale summons him at cutscene t=100 while everyone is still frozen and
+        // invulnerable — hold the attacks until the players can actually be hit back.
+        ferryman.spawnGraceTicks = SPAWN_GRACE_TICKS;
         limbo.addFreshEntity(ferryman);
         PacketDistributor.sendToPlayersNear(limbo, null, x, deck + 1, z, 96.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, ferryman.position()));
@@ -369,6 +386,12 @@ public class FerrymanEntity extends Monster {
 
     /** Per-tick fight script (server side, limbo only, geometry pinned). */
     protected void tickFight(ServerLevel level) {
+        if (this.spawnGraceTicks > 0) {
+            // Post-summon grace: idle/ambient only while the finale cutscene + freeze
+            // still hold the players invulnerable (hurt() works normally throughout).
+            this.spawnGraceTicks--;
+            return;
+        }
         List<ServerPlayer> fighters = livingFighters(level);
         updateParticipants(fighters);
         if (this.tickCount % WIPE_CHECK_TICKS == 0 && checkWipe(level)) {
@@ -550,6 +573,8 @@ public class FerrymanEntity extends Monster {
         int ghosts = ghostsOnline(level);
         this.requiredLanterns = Math.min(4, ghosts + 2);
         int darkened = ShipLanterns.extinguish(level, this.requiredLanterns);
+        this.crewLitSeen = ShipLanterns.litCount(level);
+        this.crewStallTicks = 0;
         int risen = DeckhandEntity.riseHostile(level);
         EclipseMod.LOGGER.info("Ferryman P2 Crew: kneeling invulnerable at the stern — {} deckhand(s) risen, "
                 + "{} lantern(s) extinguished (required {}, {} ghost(s) online)",
@@ -568,6 +593,7 @@ public class FerrymanEntity extends Monster {
         if (this.tickCount % CREW_CHECK_TICKS != 0) {
             return;
         }
+        ShipLanterns.replaceMissing(level); // A mined/blasted lantern comes back — dark.
         if (ShipLanterns.allLit(level)) {
             endCrewPhase(level, "all lanterns burn again");
             return;
@@ -576,7 +602,41 @@ public class FerrymanEntity extends Monster {
         if (ghostsOnline(level) == 0 && DeckhandEntity.countHostileAlive(level) == 0) {
             ShipLanterns.relightAll(level);
             endCrewPhase(level, "no ghosts online and the risen crew is slain — force-ended");
+            return;
         }
+        tickKneelStall(level);
+    }
+
+    /**
+     * Kneel stall guard (softlock #2): the no-ghosts fallback never fires while a ghost is
+     * ONLINE but AFK — nobody lights lanterns, no hostile crew remains, and the kneel holds
+     * forever. After {@value #KNEEL_STALL_TICKS}t of crew phase with zero lantern progress
+     * the fight self-recovers: one lantern force-relights (bell + log) every further
+     * {@value #KNEEL_FORCE_RELIGHT_TICKS}t. Genuine ghost progress resets the full window,
+     * so active ghosts still own the phase.
+     */
+    private void tickKneelStall(ServerLevel level) {
+        int lit = ShipLanterns.litCount(level);
+        if (lit > this.crewLitSeen) {
+            this.crewStallTicks = 0; // Ghost progress: the crew keeps the full stall window.
+        }
+        this.crewLitSeen = lit;
+        this.crewStallTicks += CREW_CHECK_TICKS;
+        if (this.crewStallTicks < KNEEL_STALL_TICKS) {
+            return;
+        }
+        BlockPos relit = ShipLanterns.relightOne(level);
+        if (relit == null) {
+            return; // Everything burns already; allLit ends the phase on the next check.
+        }
+        // A forced relight is not "progress": the next one comes KNEEL_FORCE_RELIGHT_TICKS
+        // out instead of restarting the full stall window.
+        this.crewStallTicks = KNEEL_STALL_TICKS - KNEEL_FORCE_RELIGHT_TICKS;
+        this.crewLitSeen = ShipLanterns.litCount(level);
+        level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
+                SoundSource.HOSTILE, 1.0F, 0.7F);
+        EclipseMod.LOGGER.info("Ferryman P2 stalled {}t without lantern progress — lantern at {} force-relit ({} burning)",
+                KNEEL_STALL_TICKS, relit.toShortString(), this.crewLitSeen);
     }
 
     private void endCrewPhase(ServerLevel level, String reason) {
@@ -707,9 +767,14 @@ public class FerrymanEntity extends Monster {
             return;
         }
         this.gazeTimer = GAZE_INTERVAL_TICKS;
+        // Spec §2.2: the Gaze hunts the fewest PERMANENT hearts (LivesApi), not momentary
+        // HP — current health only breaks ties.
         ServerPlayer weakest = fighters.get(0);
         for (ServerPlayer player : fighters) {
-            if (player.getHealth() < weakest.getHealth()) {
+            int hearts = LivesApi.get(player);
+            int weakestHearts = LivesApi.get(weakest);
+            if (hearts < weakestHearts
+                    || (hearts == weakestHearts && player.getHealth() < weakest.getHealth())) {
                 weakest = player;
             }
         }
@@ -722,8 +787,8 @@ public class FerrymanEntity extends Monster {
                 BuiltInRegistries.SOUND_EVENT.wrapAsHolder(EclipseSounds.BOSS_FERRYMAN_BELL.get()),
                 SoundSource.HOSTILE, weakest.getX(), weakest.getY(), weakest.getZ(),
                 1.2F, 1.0F, this.random.nextLong()));
-        EclipseMod.LOGGER.info("Ferryman Lantern Gaze marks {} ({} HP, lowest aboard) — hunted for {}t",
-                weakest.getScoreboardName(),
+        EclipseMod.LOGGER.info("Ferryman Lantern Gaze marks {} ({} heart(s), {} HP — fewest permanent hearts aboard) — hunted for {}t",
+                weakest.getScoreboardName(), LivesApi.get(weakest),
                 String.format(java.util.Locale.ROOT, "%.1f", weakest.getHealth()), GAZE_MARK_TICKS);
     }
 
@@ -856,7 +921,7 @@ public class FerrymanEntity extends Monster {
             setGazing(false);
             setPlanted(true);
             this.noPhysics = true; // The deck no longer holds him: the body sinks through it.
-            this.bossEvent.setProgress(0.0F); // The fight tick no longer runs to update it.
+            this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             restoreShip(serverLevel, "boss defeated");
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             state.setFerrymanDefeated(true);

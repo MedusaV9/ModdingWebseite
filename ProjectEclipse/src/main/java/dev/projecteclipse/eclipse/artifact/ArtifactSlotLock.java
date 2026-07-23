@@ -5,6 +5,7 @@ import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -20,7 +21,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>Every {@value #SWEEP_INTERVAL_TICKS} ticks, every non-spectator player is checked:
  *       exactly one artifact must sit in hotbar slot {@value #ARTIFACT_SLOT} (rightmost).
  *       Missing → insert (moving whatever occupies the slot to a free slot, or dropping it);
- *       misplaced → relocated into the slot; duplicates → removed.</li>
+ *       misplaced → relocated into the slot; duplicates → removed. Copies stashed in the
+ *       player's OPEN container menu are purged first — otherwise stash + re-grant would
+ *       mint a second artifact every sweep.</li>
  *   <li>{@link PlayerEvent.PlayerLoggedInEvent} runs the same enforcement, so the artifact
  *       is granted on first join.</li>
  *   <li>{@link ItemTossEvent} is cancelled for the artifact and the stack is returned to
@@ -94,6 +97,17 @@ public final class ArtifactSlotLock {
         // fresh one now would duplicate it. Skip; the next sweep runs after the drag settles.
         if (player.containerMenu != null && player.containerMenu.getCarried().is(artifact)) {
             return;
+        }
+
+        // Copies stashed in the OPEN container menu (chest, barrel, ...) sit outside the
+        // inventory scan below — purge them, or the re-grant would mint a duplicate. The
+        // player-inventory rows mirror the slots handled below, so only foreign slots clear.
+        if (player.containerMenu != null) {
+            for (Slot menuSlot : player.containerMenu.slots) {
+                if (!(menuSlot.container instanceof Inventory) && menuSlot.getItem().is(artifact)) {
+                    menuSlot.set(ItemStack.EMPTY);
+                }
+            }
         }
 
         boolean inSlot = inventory.getItem(ARTIFACT_SLOT).is(artifact);

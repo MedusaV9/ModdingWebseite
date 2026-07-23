@@ -7,7 +7,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.EclipseEntities;
+import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
 import dev.projecteclipse.eclipse.lives.BanService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -24,6 +28,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
@@ -130,6 +135,48 @@ public final class ShipLanterns {
         }
     }
 
+    /**
+     * Force-relights ONE dark lantern ({@code FerrymanEntity}'s kneel stall recovery):
+     * same pristine lit state + completion FX as a finished ghost channel. Returns the
+     * relit position, or {@code null} when every lantern already burns.
+     */
+    @Nullable
+    public static BlockPos relightOne(ServerLevel limbo) {
+        for (BlockPos pos : positions(limbo)) {
+            BlockState state = limbo.getBlockState(pos);
+            if (state.is(Blocks.SOUL_CAMPFIRE) && !state.getValue(CampfireBlock.LIT)) {
+                limbo.setBlockAndUpdate(pos, litState());
+                limbo.playSound(null, pos, SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, 0.7F);
+                limbo.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, pos.getX() + 0.5D,
+                        pos.getY() + 0.7D, pos.getZ() + 0.5D, 16, 0.25D, 0.25D, 0.25D, 0.02D);
+                EclipseMod.LOGGER.info("Ship lantern at {} force-relit — {} lantern(s) now burning",
+                        pos.toShortString(), litCount(limbo));
+                return pos;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Re-places any missing lantern block as an UNLIT campfire ({@code FerrymanEntity}'s
+     * crew-check belt-and-braces): a mined lantern must come back dark — a lit replacement
+     * would hand the phase a free light. {@link #onBlockBreak} already cancels player
+     * breaks mid-fight; this catches pistons, explosions and anything else.
+     */
+    public static int replaceMissing(ServerLevel limbo) {
+        int replaced = 0;
+        for (BlockPos pos : positions(limbo)) {
+            if (!limbo.getBlockState(pos).is(Blocks.SOUL_CAMPFIRE)) {
+                limbo.setBlockAndUpdate(pos, litState().setValue(CampfireBlock.LIT, false));
+                replaced++;
+            }
+        }
+        if (replaced > 0) {
+            EclipseMod.LOGGER.info("Ship lanterns: {} missing lantern block(s) re-placed unlit", replaced);
+        }
+        return replaced;
+    }
+
     /** Whether every deck lantern currently burns (the P2 phase-end condition). */
     public static boolean allLit(ServerLevel limbo) {
         for (BlockPos pos : positions(limbo)) {
@@ -193,6 +240,34 @@ public final class ShipLanterns {
         level.playSound(null, event.getPos(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.BLOCKS, 1.0F, 1.4F);
         EclipseMod.LOGGER.info("Ghost {} started re-lighting the lantern at {} ({}t channel)",
                 player.getScoreboardName(), event.getPos().toShortString(), CHANNEL_TICKS);
+    }
+
+    /**
+     * Fight integrity: the four lanterns ARE the P2 counter — mining a dark one would make
+     * {@link #allLit} unreachable forever. While a Ferryman fight is live the lantern
+     * blocks cannot be broken (any player, any tool); outside the fight the deck stays
+     * editable as usual. {@link #replaceMissing} covers the non-player break paths.
+     */
+    @SubscribeEvent
+    static void onBlockBreak(BlockEvent.BreakEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level)
+                || !level.dimension().equals(LimboDimension.LIMBO)
+                || !isLanternPos(level, event.getPos())
+                || !ferrymanFightActive(level)) {
+            return;
+        }
+        event.setCanceled(true);
+        if (event.getPlayer() instanceof ServerPlayer player) {
+            // Same refusal cue the ghost-only check uses — the block simply will not budge.
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
+        }
+        EclipseMod.LOGGER.info("Ship lantern break at {} cancelled: a Ferryman fight is active",
+                event.getPos().toShortString());
+    }
+
+    /** Whether any Ferryman is alive in limbo (the P2 lantern counter must stay intact). */
+    private static boolean ferrymanFightActive(ServerLevel limbo) {
+        return !limbo.getEntities(EclipseEntities.FERRYMAN.get(), FerrymanEntity::isAlive).isEmpty();
     }
 
     /** Drives running channels: range/validity checks, progress feedback, completion. */

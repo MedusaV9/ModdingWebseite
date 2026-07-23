@@ -29,7 +29,9 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -292,7 +294,12 @@ public final class FinaleRitual {
                 EclipseMod.LOGGER.info("Finale mass-revive: {} revived ({} ghost(s) left in the queue)",
                         ghost.getScoreboardName(), reviveQueue.size());
             } else {
-                EclipseMod.LOGGER.info("Finale mass-revive: queued ghost {} logged out or already revived; skipped", next);
+                // Disconnected mid-queue (or already revived): clear the persistent ban like
+                // beginVictory's offline path, so ReviveRitual.onPlayerLoggedIn finishes the
+                // unban on their next login instead of leaving them a ghost after victory.
+                EclipseWorldState.get(server).removeBanned(next);
+                EclipseMod.LOGGER.info("Finale mass-revive: queued ghost {} logged out or already revived; "
+                        + "ban cleared for revive-on-login", next);
             }
             if (reviveQueue.isEmpty()) {
                 victoryCooldown = RETURN_DELAY_TICKS; // Beat of silence before the trip home.
@@ -336,5 +343,56 @@ public final class FinaleRitual {
         arrivalRunning = false;
         victoryRunning = false;
         reviveQueue.clear();
+    }
+
+    // --- restart recovery ---
+
+    /**
+     * Restart mid-victory: {@code ferrymanDefeated} IS persisted but the revive timeline is
+     * not — without this, ghosts banned at the moment of the kill would stay banned forever.
+     * Everyone is offline during server start, so {@link #beginVictory}'s offline path clears
+     * every remaining ghost for revive-on-login ({@link ReviveRitual#onPlayerLoggedIn}).
+     */
+    @SubscribeEvent
+    static void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
+        EclipseWorldState state = EclipseWorldState.get(server);
+        if (state.isFerrymanDefeated() && !state.getBanned().isEmpty() && !victoryRunning) {
+            EclipseMod.LOGGER.info("Finale victory resumed after restart: {} banned ghost(s) still pending revive",
+                    state.getBanned().size());
+            beginVictory(server);
+        }
+    }
+
+    /**
+     * Restart mid-arrival: the catalyst was consumed but the restart landed inside the
+     * {@value #SUMMON_TICK}t summon window, so the boss never rose and the crew is stranded
+     * on the deck. The player list is empty during {@link ServerStartedEvent}, so the
+     * "living players still in limbo" condition is evaluated as they log back in: finale
+     * day reached, crossing not yet won, a LIVING (non-banned) player in limbo, no Ferryman
+     * afloat → summon him directly (recovery path, no cinematic re-run).
+     */
+    @SubscribeEvent
+    static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || arrivalRunning
+                || player.isSpectator()
+                || BanService.isBanned(player)
+                || !player.level().dimension().equals(LimboDimension.LIMBO)) {
+            return;
+        }
+        MinecraftServer server = player.server;
+        if (EclipseWorldState.get(server).isFerrymanDefeated()
+                || DayScheduler.getDay(server) < FINALE_DAY) {
+            return;
+        }
+        ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
+        if (limbo == null || ferrymanAlive(limbo)) {
+            return;
+        }
+        EclipseMod.LOGGER.info("Finale arrival recovery: {} rejoined the deck mid-crossing (day {}, no boss "
+                + "afloat) — summoning the Ferryman directly", player.getScoreboardName(),
+                DayScheduler.getDay(server));
+        FerrymanEntity.summon(limbo);
     }
 }

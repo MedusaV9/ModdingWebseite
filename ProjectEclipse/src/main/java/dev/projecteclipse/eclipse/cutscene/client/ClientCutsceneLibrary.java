@@ -40,4 +40,12 @@ public final class ClientCutsceneLibrary {
     public static CutscenePath get(String id) {
         return paths.get(id);
     }
+
+    /** Drops the synced library (disconnect hook): the next server sends its own copy. */
+    public static void clear() {
+        if (!paths.isEmpty()) {
+            paths = Map.of();
+            EclipseMod.LOGGER.info("Client cutscene library cleared on disconnect");
+        }
+    }
 }

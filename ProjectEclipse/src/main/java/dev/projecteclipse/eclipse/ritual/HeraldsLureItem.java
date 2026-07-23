@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.ritual;
 
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
+import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.GoalTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -17,8 +18,9 @@ import net.minecraft.world.phys.AABB;
 /**
  * The Herald's Lure — summon item for the day-7 boss (spec §2.1; crafted from 4 umbral
  * shards + 1 heart fragment, {@code data/eclipse/recipe/heralds_lure.json}).
- * Sneak-right-clicking the altar with it after dusk consumes one lure and summons the
- * Herald {@value HeraldEntity#SUMMON_HEIGHT} blocks above the sanctum center.
+ * Sneak-right-clicking the altar with it on day {@value #HERALD_DAY}+ after dusk consumes
+ * one lure and summons the Herald {@value HeraldEntity#SUMMON_HEIGHT} blocks above the
+ * sanctum center.
  *
  * <p>Same routing trick as {@link ReviveSigilItem}: vanilla skips block interaction while
  * sneaking with an item in hand, so this {@link #useOn} IS the sneak path. Non-sneak
@@ -26,6 +28,9 @@ import net.minecraft.world.phys.AABB;
  * lure into an action-bar hint instead of "wrong item".</p>
  */
 public class HeraldsLureItem extends Item {
+    /** First day the altar accepts the lure (the Herald is the day-7 boss; mirrors {@link FinaleRitual#FINALE_DAY}). */
+    public static final int HERALD_DAY = 7;
+
     public HeraldsLureItem(Properties properties) {
         super(properties);
     }
@@ -45,6 +50,12 @@ public class HeraldsLureItem extends Item {
         if (!context.isSecondaryUseActive()) {
             // Unreachable through vanilla flow (AltarBlock consumes non-sneak clicks); kept for safety.
             actionBar(player, Component.translatable("ritual.eclipse.lure.sneak_hint"));
+            return InteractionResult.CONSUME;
+        }
+        if (DayScheduler.getDay(player.server) < HERALD_DAY) {
+            // An early summon would stamp heraldDefeated before day 7 and orphan the day-7 goal tick.
+            actionBar(player, Component.translatable("ritual.eclipse.lure.early"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
             return InteractionResult.CONSUME;
         }
         BlockPos altarPos = context.getClickedPos();

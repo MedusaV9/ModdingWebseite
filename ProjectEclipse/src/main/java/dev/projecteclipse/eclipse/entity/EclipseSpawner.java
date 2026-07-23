@@ -19,6 +19,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -26,6 +27,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
@@ -124,12 +126,26 @@ public final class EclipseSpawner {
         EclipseWorldState state = EclipseWorldState.get(server);
         int day = DayScheduler.getDay(server);
         if (night) {
+            if (overworld.getDifficulty() == Difficulty.PEACEFUL) {
+                // Peaceful despawns hostiles instantly — spawning would just churn
+                // (spawn → howl → vanish every pass). Night events still schedule/announce.
+                return;
+            }
             spawnGazers(overworld, day);
             spawnStalkerPack(overworld, state, day);
             spawnTheOther(overworld, state);
         } else {
             maintainSunmotes(overworld, state);
         }
+    }
+
+    /** World-scoped statics must not leak into the next world (singleplayer world switch). */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        wasNight = null;
+        theOtherBudget = 0;
+        theOtherSpawned = 0;
+        theOtherEventKey = "";
     }
 
     // --- night events ---

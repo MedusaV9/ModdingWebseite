@@ -45,9 +45,12 @@ public final class DayScheduler {
     private static boolean warnedBorderSizeDeprecated = false;
     /** One warning per overlap of {@code dayAutoAdvance} with a W14 phase schedule. */
     private static boolean warnedSchedulerSupersedes = false;
+    /** {@code dayAutoAdvance} as last observed; a false→true flip (config reload) re-stamps the key. */
+    private static boolean lastAutoAdvanceEnabled = false;
     /**
      * Reserved {@link EclipseWorldState} milestone-progress key holding the epoch day of the
-     * last automatic advance, so a restart never re-advances the same real-world day.
+     * last day advance (stamped by {@link #setDay} on every actual change), so neither a
+     * restart nor a scheduler/manual advance re-advances the same real-world day.
      */
     private static final String AUTO_ADVANCE_PROGRESS_KEY = "scheduler:last_auto_advance_epoch_day";
 
@@ -72,6 +75,12 @@ public final class DayScheduler {
         int previousDay = state.getDay();
         boolean changed = previousDay != newDay;
         state.setDay(newDay);
+        if (changed) {
+            // ANY day change counts as today's advance — a W14 scheduler fire or a manual
+            // /eclipse day set must not be followed by a second auto-advance the same
+            // real-world day.
+            state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, LocalDate.now().toEpochDay());
+        }
 
         EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
         if (!warnedBorderSizeDeprecated) {
@@ -109,6 +118,7 @@ public final class DayScheduler {
         if (EclipseConfig.dayAutoAdvance() && state.getMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY) == 0L) {
             state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, LocalDate.now().toEpochDay());
         }
+        lastAutoAdvanceEnabled = EclipseConfig.dayAutoAdvance();
         EclipseConfig.DayPlan plan = EclipseConfig.day(state.getDay());
         EclipseMod.LOGGER.info("Eclipse day plan loaded: day {}/{} (goals: {}; unlocked keys: {}; autoAdvance: {})",
                 state.getDay(), EclipseConfig.days().size(), plan.goals(),
@@ -118,7 +128,18 @@ public final class DayScheduler {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
-        if (server.getTickCount() % AUTO_ADVANCE_CHECK_TICKS != 0 || !EclipseConfig.dayAutoAdvance()) {
+        if (server.getTickCount() % AUTO_ADVANCE_CHECK_TICKS != 0) {
+            return;
+        }
+        boolean autoAdvance = EclipseConfig.dayAutoAdvance();
+        if (autoAdvance && !lastAutoAdvanceEnabled) {
+            // Auto-advance newly enabled mid-run (/eclipse reload): stamp today like the
+            // first-boot path so the first advance happens tomorrow, never instantly.
+            EclipseWorldState.get(server).setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY,
+                    LocalDate.now().toEpochDay());
+        }
+        lastAutoAdvanceEnabled = autoAdvance;
+        if (!autoAdvance) {
             return;
         }
         // W14: an explicit phase schedule supersedes the daily auto-advance until it fires
@@ -141,8 +162,11 @@ public final class DayScheduler {
         if (todayEpochDay <= state.getMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY)) {
             return;
         }
-        state.setMilestoneProgress(AUTO_ADVANCE_PROGRESS_KEY, todayEpochDay);
+        int day = getDay(server);
+        if (day >= EclipseConfig.maxDay()) {
+            return; // The arc is complete — never count past the last configured day.
+        }
         EclipseMod.LOGGER.info("Eclipse day auto-advance triggered at {}", LocalTime.now());
-        setDay(server, getDay(server) + 1);
+        setDay(server, day + 1); // setDay stamps AUTO_ADVANCE_PROGRESS_KEY itself
     }
 }

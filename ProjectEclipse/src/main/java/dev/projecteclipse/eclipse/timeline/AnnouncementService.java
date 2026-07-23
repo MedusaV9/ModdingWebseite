@@ -101,6 +101,10 @@ public final class AnnouncementService {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         initialized = false;
+        // Drop the baselines too: they pin the old world's key set until the next boot
+        // re-baselines, and stale values must never bleed into a new world.
+        lastAltarLevel = 0;
+        lastUnlockedKeys = Set.of();
     }
 
     /**

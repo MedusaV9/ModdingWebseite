@@ -47,10 +47,19 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class LifecycleEvents {
-    /** Server-session handoff from the death event to that player's next respawn event. */
+    /**
+     * Server-session handoff from the death event to that player's next respawn event.
+     * Deliberately NOT pruned on logout: a player who disconnects on the death screen
+     * respawns AFTER their next login, so the entry must survive the relog for the burst
+     * to replay. Stale entries (victim never respawned at all) are age-pruned instead,
+     * see {@link #PENDING_HEART_LOSS_TTL_MILLIS}.
+     */
     private static final Map<UUID, PendingHeartLoss> PENDING_HEART_LOSSES = new HashMap<>();
 
-    private record PendingHeartLoss(int previousHearts, int heartIndex) {}
+    /** Pending bursts older than this (~1 h) are dropped — the victim never came back to respawn. */
+    private static final long PENDING_HEART_LOSS_TTL_MILLIS = 60L * 60L * 1000L;
+
+    private record PendingHeartLoss(int previousHearts, int heartIndex, long diedAtMillis) {}
 
     private LifecycleEvents() {}
 
@@ -69,22 +78,32 @@ public final class LifecycleEvents {
         }
         SnapshotService.snapshot(victim, "death");
 
-        if (event.getSource().getEntity() instanceof ServerPlayer killer && killer != victim) {
-            LivesApi.add(killer, +1);
-            // W13 umbral blade: one EXTRA heart of lifesteal on a blade kill, hard-capped
-            // at the vitae ceiling (the base kill-transfer heart above is uncapped v1 law).
+        long now = System.currentTimeMillis();
+        PENDING_HEART_LOSSES.values().removeIf(loss -> now - loss.diedAtMillis() > PENDING_HEART_LOSS_TTL_MILLIS);
+
+        int previousHearts = LivesApi.get(victim);
+        int remainingHearts = LivesApi.add(victim, -1);
+        boolean heartLost = remainingHearts < previousHearts;
+        if (heartLost) {
+            // The first now-missing zero-based heart is exactly the new count.
+            PENDING_HEART_LOSSES.put(victim.getUUID(),
+                    new PendingHeartLoss(previousHearts, remainingHearts, now));
+        }
+
+        if (heartLost && event.getSource().getEntity() instanceof ServerPlayer killer && killer != victim) {
+            // Kill transfer: the killer gains a heart ONLY when the victim actually lost
+            // one (a 0-heart ghost death must never mint hearts), hard-capped at the vitae
+            // ceiling like the blade bonus (the v1 "uncapped" law is overruled).
+            if (LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
+                LivesApi.add(killer, +1);
+            }
+            // W13 umbral blade: one EXTRA heart of lifesteal on a blade kill, same cap.
             if (killer.getMainHandItem().is(EclipseItems.UMBRAL_BLADE.get())
                     && LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
                 LivesApi.add(killer, +1);
                 EclipseMod.LOGGER.info("{}'s umbral blade drank a heart from {} ({} hearts now)",
                         killer.getScoreboardName(), victim.getScoreboardName(), LivesApi.get(killer));
             }
-        }
-        int previousHearts = LivesApi.get(victim);
-        int remainingHearts = LivesApi.add(victim, -1);
-        if (remainingHearts < previousHearts) {
-            // The first now-missing zero-based heart is exactly the new count.
-            PENDING_HEART_LOSSES.put(victim.getUUID(), new PendingHeartLoss(previousHearts, remainingHearts));
         }
 
         playDeathCue(victim.server);

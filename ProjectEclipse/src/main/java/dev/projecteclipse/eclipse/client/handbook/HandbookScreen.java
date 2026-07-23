@@ -53,6 +53,9 @@ public class HandbookScreen extends Screen {
 
     private static final float BOOK_WIDTH_PCT = 0.90F;
     private static final float BOOK_HEIGHT_PCT = 0.85F;
+    /** Below these content dims the percentage layout collapses → compact fallbacks kick in. */
+    private static final int MIN_CONTENT_WIDTH = 96;
+    private static final int MIN_CONTENT_HEIGHT = 72;
     private static final int UNFOLD_TICKS = 8;
     private static final int TURN_TICKS = 6;
     /** Parallax shift in px: background (backdrop) layer and mid (hero art) layer. */
@@ -94,24 +97,50 @@ public class HandbookScreen extends Screen {
     protected void init() {
         bookW = Math.round(this.width * BOOK_WIDTH_PCT);
         bookH = Math.round(this.height * BOOK_HEIGHT_PCT);
+        int pageMargin = Math.round(bookW * 0.045F);
+        int spineHalf = Math.round(bookW * 0.045F);
+        int topBottomPad = Math.round(bookH * 0.06F);
+
+        // Small-window guards (320x240 @ guiScale >= 2 and worse): the pure percentage
+        // layout collapses the content below readability, so the book grows toward the
+        // full window and the decorative padding drops to fixed compact values. Sane
+        // sizes never trip these branches — the normal look is untouched.
+        if (bookW / 2 - pageMargin - spineHalf < MIN_CONTENT_WIDTH) {
+            bookW = this.width;
+            pageMargin = 4;
+            spineHalf = 4;
+        }
+        if (bookH - topBottomPad * 2 - 14 < MIN_CONTENT_HEIGHT) {
+            bookH = this.height;
+            topBottomPad = 4;
+        }
         bookX = (this.width - bookW) / 2;
         bookY = (this.height - bookH) / 2;
 
-        int pageMargin = Math.round(bookW * 0.045F);
-        int spineHalf = Math.round(bookW * 0.045F);
         leftPageX = bookX + pageMargin;
         leftPageW = bookW / 2 - pageMargin - spineHalf;
         contentX = bookX + bookW / 2 + spineHalf;
         contentW = leftPageW;
-        contentY = bookY + Math.round(bookH * 0.06F);
-        contentH = bookH - Math.round(bookH * 0.06F) * 2 - 14;
+        contentY = bookY + topBottomPad;
+        contentH = bookH - topBottomPad * 2 - 14;
 
-        // Spine tab tongues down the far-left edge.
-        int tabHeight = Mth.clamp(bookH / 9, 18, 30);
+        // Spine tab tongues down the far-left edge. At small book heights the default
+        // minimum (six 18px tongues + 4px gaps = 128px) overflows the book bottom, so
+        // the gap and then the tongue height shrink until all six fit (floor 10px);
+        // at tiny widths the tongues clamp to x=0 and overlap the book edge instead of
+        // leaving the screen.
         int tabWidth = 24;
         int tabsY = contentY + 4;
+        int tabGap = 4;
+        int tabHeight = Mth.clamp(bookH / 9, 18, 30);
+        int tabsAvailable = bookY + bookH - tabsY;
+        if (tabs.size() * (tabHeight + tabGap) - tabGap > tabsAvailable) {
+            tabGap = 2;
+            tabHeight = Math.max(10, (tabsAvailable - (tabs.size() - 1) * tabGap) / tabs.size());
+        }
+        int tabX = Math.max(0, bookX - tabWidth + 8);
         for (int i = 0; i < tabs.size(); i++) {
-            TabButton button = new TabButton(i, bookX - tabWidth + 8, tabsY + i * (tabHeight + 4),
+            TabButton button = new TabButton(i, tabX, tabsY + i * (tabHeight + tabGap),
                     tabWidth, tabHeight);
             tabButtons[i] = button;
             addWidget(button); // input only — rendered inside the book transform
@@ -460,10 +489,12 @@ public class HandbookScreen extends Screen {
             switchTab(index, true);
         }
 
-        /** Replace the vanilla button click with the ui.tab tongue press. */
+        /** Replace the vanilla button click with the ui.tab tongue press (no re-click plink). */
         @Override
         public void playDownSound(net.minecraft.client.sounds.SoundManager handler) {
-            UiSounds.tab();
+            if (index != activeTab()) {
+                UiSounds.tab(); // Clicking the already-open tab switches nothing — stay silent.
+            }
         }
 
         /** Rendered from the screen inside the book transform (widget is input-only). */

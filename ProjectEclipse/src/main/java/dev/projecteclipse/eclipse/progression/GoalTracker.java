@@ -37,7 +37,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@link S2CGoalProgressPayload} (sidebar tick boxes) and fires the global
  * {@code GOAL COMPLETE} announcement the FIRST time each (day, goal) pair is completed by
  * anyone (deduped via a reserved {@code goal_announced:<day>:<index>} milestone-progress
- * key — same reserved-key pattern as {@code DayScheduler}).</p>
+ * key — same reserved-key pattern as {@code DayScheduler}). The one-shot team hooks
+ * additionally persist {@code team_beat:} flags so {@link #onPlayerLoggedIn} can back-fill
+ * late joiners.</p>
  *
  * <p>Auto-detected goals of the DEFAULT v2 arc (world feats — boss beats, altar levels,
  * banked milestone counters — credit every online player at once):</p>
@@ -68,6 +70,15 @@ public final class GoalTracker {
     private static final int POLL_TICKS = 20;
     private static final double ALTAR_TOUCH_RANGE_SQ = 4.0D * 4.0D;
     private static final String ANNOUNCED_KEY_PREFIX = "goal_announced:";
+    /**
+     * Reserved milestone-progress key ({@code team_beat:<day>:<index>}) marking a one-shot
+     * team beat (Herald summon, finale begun) as fired — unlike {@code goal_announced:} it
+     * is stamped only by the EVENT hooks, never by an admin goal tick, so the login
+     * backfill can replay the credit for late joiners.
+     */
+    private static final String TEAM_BEAT_KEY_PREFIX = "team_beat:";
+    /** Reserved milestone-progress key ({@code shard_seed:<uuid>}) marking a player's day-1 seed as granted. */
+    private static final String SEED_GRANTED_KEY_PREFIX = "shard_seed:";
     /** The attachment encodes the mask in the low 8 bits (3 goals/day in practice). */
     private static final int MAX_GOALS = 8;
     /** Umbral shards seeded to everyone when the day-1 altar-touch goal first completes. */
@@ -136,18 +147,26 @@ public final class GoalTracker {
      * Day-1 shard seed (first completion of "Everyone touches the altar"): every online
      * player receives {@value #DAY1_SEED_SHARDS} umbral shards and the banking hint, so
      * the altar-shop loop is discoverable before the first night mobs ever drop shards.
+     * Late day-1 joiners are back-filled by {@link #onPlayerLoggedIn}.
      */
     private static void grantDay1ShardSeed(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            ItemStack shards = new ItemStack(EclipseItems.UMBRAL_SHARD.get(), DAY1_SEED_SHARDS);
-            if (!player.getInventory().add(shards)) {
-                player.drop(shards, false);
-            }
-            player.displayClientMessage(Component.translatable("shop.eclipse.shard_seed"), true);
-            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
+            grantShardSeed(player);
         }
         EclipseMod.LOGGER.info("Day-1 shard seed: {} umbral shard(s) granted to {} online player(s)",
                 DAY1_SEED_SHARDS, server.getPlayerList().getPlayerCount());
+    }
+
+    /** One player's shard seed + banking hint; stamps the persistent per-player marker. */
+    private static void grantShardSeed(ServerPlayer player) {
+        EclipseWorldState.get(player.server)
+                .setMilestoneProgress(SEED_GRANTED_KEY_PREFIX + player.getStringUUID(), 1L);
+        ItemStack shards = new ItemStack(EclipseItems.UMBRAL_SHARD.get(), DAY1_SEED_SHARDS);
+        if (!player.getInventory().add(shards)) {
+            player.drop(shards, false);
+        }
+        player.displayClientMessage(Component.translatable("shop.eclipse.shard_seed"), true);
+        player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
     }
 
     // --- auto-detectors ---
@@ -162,10 +181,13 @@ public final class GoalTracker {
     /**
      * {@code ritual.HeraldsLureItem} hook — a lure deposit successfully summoned the
      * Herald. Day-7 goal 0 ("Summon the Herald at dusk") is a team beat: one player
-     * deposits, everyone online gets the tick (same crediting as the kill).
+     * deposits, everyone online gets the tick (same crediting as the kill), and the
+     * persisted {@code team_beat:} flag back-fills late joiners at login.
      */
     public static void onHeraldSummoned(MinecraftServer server) {
-        if (EclipseWorldState.get(server).getDay() == 7) {
+        EclipseWorldState state = EclipseWorldState.get(server);
+        if (state.getDay() == 7) {
+            state.setMilestoneProgress(TEAM_BEAT_KEY_PREFIX + state.getDay() + ":0", 1L);
             completeForAllOnline(server, 0);
         }
     }
@@ -173,12 +195,39 @@ public final class GoalTracker {
     /**
      * {@code ritual.FinaleRitual#begin} hook — the finale catalyst was offered and the
      * crossing started. Day-14 goal 0 ("Offer the egg at dusk") is credited to everyone
-     * online (the whole team ships out together). Days past the configured plan clamp to
-     * the last plan, so {@code >= FINALE_DAY} still matches the goal.
+     * online (the whole team ships out together) and back-filled at login via the
+     * persisted {@code team_beat:} flag. Days past the configured plan floor to the last
+     * plan, so {@code >= FINALE_DAY} still matches the goal.
      */
     public static void onFinaleBegun(MinecraftServer server) {
-        if (EclipseWorldState.get(server).getDay() >= FinaleRitual.FINALE_DAY) {
+        EclipseWorldState state = EclipseWorldState.get(server);
+        if (state.getDay() >= FinaleRitual.FINALE_DAY) {
+            state.setMilestoneProgress(TEAM_BEAT_KEY_PREFIX + state.getDay() + ":0", 1L);
             completeForAllOnline(server, 0);
+        }
+    }
+
+    /**
+     * Login backfill of the one-shot team beats: the hooks credit only whoever is online
+     * when they fire, so a late joiner replays the current day's {@code team_beat:} flag
+     * here ({@link #complete}'s bitmask keeps the credit once per player). Day-1 joiners
+     * also receive the shard seed if it was already distributed and their persistent
+     * {@code shard_seed:} marker is still unset. The polled world feats (boss flags, altar
+     * levels, counters) need no backfill — the every-second poll re-credits them anyway.
+     */
+    @SubscribeEvent
+    static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        EclipseWorldState state = EclipseWorldState.get(player.server);
+        int day = state.getDay();
+        if (state.getMilestoneProgress(TEAM_BEAT_KEY_PREFIX + day + ":0") != 0L) {
+            complete(player, 0);
+        }
+        if (day == 1 && state.getMilestoneProgress(ANNOUNCED_KEY_PREFIX + "1:2") != 0L
+                && state.getMilestoneProgress(SEED_GRANTED_KEY_PREFIX + player.getStringUUID()) == 0L) {
+            grantShardSeed(player);
         }
     }
 

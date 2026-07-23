@@ -87,7 +87,20 @@ public class RewardsTab extends HandbookTab {
         guiGraphics.drawString(font, Component.translatable("gui.eclipse.handbook.rewards.cost"),
                 x + 6, rowY + 17, withAlpha(DIM_COLOR, alpha));
         int itemX = x + 6 + font.width(Component.translatable("gui.eclipse.handbook.rewards.cost")) + 4;
-        for (S2CMilestonesPayload.Cost cost : milestone.costs()) {
+        List<S2CMilestonesPayload.Cost> costs = milestone.costs();
+        int itemRight = x + width - 6;
+        for (int i = 0; i < costs.size(); i++) {
+            // Cap the row before an icon spills past the right edge: the first icon that no
+            // longer fits (or would leave no room for the marker of those after it) becomes
+            // a "+N" overflow marker instead of getting chopped by the scissor.
+            boolean more = i + 1 < costs.size();
+            if (itemX + 16 > itemRight
+                    || (more && itemX + 22 + font.width("+" + (costs.size() - i - 1)) > itemRight)) {
+                guiGraphics.drawString(font, "+" + (costs.size() - i), itemX, rowY + 17,
+                        withAlpha(DIM_COLOR, alpha));
+                break;
+            }
+            S2CMilestonesPayload.Cost cost = costs.get(i);
             ItemStack stack = new ItemStack(resolveItem(cost.item()), Math.max(1, cost.count()));
             guiGraphics.renderItem(stack, itemX, rowY + 13);
             guiGraphics.renderItemDecorations(font, stack, itemX, rowY + 13, String.valueOf(cost.count()));

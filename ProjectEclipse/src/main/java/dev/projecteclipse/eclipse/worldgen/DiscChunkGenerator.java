@@ -82,6 +82,9 @@ public final class DiscChunkGenerator extends ChunkGenerator {
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState randomState,
             StructureManager structureManager, ChunkAccess chunk) {
         int stage = WorldStageAccess.stage(this.profile);
+        // One map snapshot per chunk: a disc_map.json reload mid-generation must never
+        // mix old and new map data inside the same chunk (worker-thread volatile swap).
+        DiscMapData map = DiscMapData.get();
         ChunkPos pos = chunk.getPos();
         int minBuild = chunk.getMinBuildHeight();
         int maxY = chunk.getMaxBuildHeight() - 1;
@@ -92,7 +95,7 @@ public final class DiscChunkGenerator extends ChunkGenerator {
             int x = pos.getMinBlockX() + lx;
             for (int lz = 0; lz < 16; lz++) {
                 int z = pos.getMinBlockZ() + lz;
-                DiscColumn column = DiscTerrainFunction.column(this.profile, x, z, stage);
+                DiscColumn column = DiscTerrainFunction.column(this.profile, x, z, stage, map);
                 if (!column.inside()) {
                     continue;
                 }

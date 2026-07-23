@@ -52,6 +52,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -130,6 +131,8 @@ public class HeraldEntity extends Monster {
     private static final double RESET_RANGE = 40.0D;
     /** Outside-arena deflect cue throttle (~1/s, so bow spam stays a chime, not a rave). */
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
+    /** {@link #summon} dedup radius: a live Herald within this range blocks a second spawn. */
+    private static final double SUMMON_DEDUP_RANGE = 128.0D;
     /** Death collapse: one remaining corona shard tears loose every N ticks. */
     private static final int DEATH_SHARD_DETACH_INTERVAL = 5;
     // SoftBorder pushback formula (border/SoftBorder.impulseInward).
@@ -212,8 +215,18 @@ public class HeraldEntity extends Monster {
      * Spawns the Herald {@value #SUMMON_HEIGHT} blocks above the given altar with the full
      * arrival sequence (beam FX + global sound) and snapshots the player-count scaling.
      * {@code groundY} is the dais/arena floor the hover heights and P3 rings measure from.
+     * Dedup guard: the lure's proximity check is not atomic (two players can deposit in
+     * the same tick) and the admin command has none — a live Herald within
+     * {@value #SUMMON_DEDUP_RANGE} blocks is returned instead of stacking a second boss.
      */
     public static HeraldEntity summon(ServerLevel level, BlockPos altarPos, int groundY) {
+        List<HeraldEntity> existing = level.getEntitiesOfClass(HeraldEntity.class,
+                new AABB(altarPos).inflate(SUMMON_DEDUP_RANGE), HeraldEntity::isAlive);
+        if (!existing.isEmpty()) {
+            EclipseMod.LOGGER.info("Herald summon skipped: a live Herald already fights within {} blocks of {}",
+                    (int) SUMMON_DEDUP_RANGE, altarPos.toShortString());
+            return existing.get(0);
+        }
         HeraldEntity herald = EclipseEntities.HERALD.get().create(level);
         if (herald == null) {
             throw new IllegalStateException("Herald entity type failed to instantiate");
@@ -323,13 +336,20 @@ public class HeraldEntity extends Monster {
         }
     }
 
-    /** Phase = health fraction vs the NOTCHED_6 bar: breaks at exactly 2/3 and 1/3. */
-    private void updatePhase(ServerLevel level) {
+    /**
+     * Phase = health fraction vs the NOTCHED_6 bar: breaks at exactly 2/3 and 1/3.
+     * Processes ONE transition per call (a hit crossing both thresholds steps 1→2→3
+     * instead of jumping straight to 3 and skipping P2's opener); {@link #hurt} loops it
+     * until stable so multi-threshold crossings resolve within the damaging tick.
+     * Returns whether a transition happened.
+     */
+    private boolean updatePhase(ServerLevel level) {
         float fraction = this.getHealth() / this.getMaxHealth();
-        int phase = fraction > 2.0F / 3.0F ? 1 : fraction > 1.0F / 3.0F ? 2 : 3;
-        if (phase == this.lastPhase) {
-            return;
+        int target = fraction > 2.0F / 3.0F ? 1 : fraction > 1.0F / 3.0F ? 2 : 3;
+        if (target == this.lastPhase) {
+            return false;
         }
+        int phase = this.lastPhase + (target > this.lastPhase ? 1 : -1);
         EclipseMod.LOGGER.info("Herald phase {} -> {} at {}/{} HP", this.lastPhase, phase,
                 String.format(java.util.Locale.ROOT, "%.1f", this.getHealth()),
                 String.format(java.util.Locale.ROOT, "%.1f", this.getMaxHealth()));
@@ -347,6 +367,7 @@ public class HeraldEntity extends Monster {
                     new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
             this.ringTimer = RING_INTERVAL / 2;
         }
+        return true;
     }
 
     /** Everyone entering the r=15 ring joins the fight (and stays a participant for drops). */
@@ -796,23 +817,46 @@ public class HeraldEntity extends Monster {
     // --- arena integrity (outside-archer deflect) ---
 
     /**
-     * Deflects any damage whose attacking player stands outside the r={@value #ARENA_RADIUS}
-     * ring: {@link #updateParticipants} only enrolls players INSIDE the ring, so without
-     * this an archer parked beyond it could plink the boss down risk-free forever. The
-     * reverse-portal particle wall already marks the boundary; the deflect answers with an
-     * amethyst chime + a shard-spark burst at the boss (throttled to ~1/s). Damage that
-     * bypasses invulnerability ({@code /kill}) still lands.
+     * Deflects any damage originating outside the r={@value #ARENA_RADIUS} ring:
+     * {@link #updateParticipants} only enrolls players INSIDE the ring, so without this an
+     * archer (or TNT / a leashed mob / any indirect source) parked beyond it could plink
+     * the boss down risk-free forever. Both the causing AND the direct entity are checked
+     * horizontally. The reverse-portal particle wall already marks the boundary; player
+     * sources get the amethyst chime + shard-spark deflect cue (throttled to ~1/s). Damage
+     * that bypasses invulnerability ({@code /kill}) still lands.
+     *
+     * <p>After damage applies, the phase is recomputed immediately (one transition per
+     * {@link #updatePhase} call, looped until stable): a single hit crossing both HP
+     * thresholds still steps through P2, and a lethal burst can't leave a stale phase for
+     * the scripted death.</p>
      */
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (!this.level().isClientSide && this.isAlive() && this.arenaCenter != null
                 && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)
-                && source.getEntity() instanceof ServerPlayer attacker
-                && horizontalDistance(attacker.position()) > ARENA_RADIUS) {
-            playDeflectCue(attacker);
+                && isFromOutsideArena(source)) {
+            if (source.getEntity() instanceof ServerPlayer attacker) {
+                playDeflectCue(attacker);
+            }
             return false;
         }
-        return super.hurt(source, amount);
+        boolean hurt = super.hurt(source, amount);
+        if (hurt && !this.level().isClientSide && this.isAlive()
+                && this.level() instanceof ServerLevel serverLevel) {
+            while (updatePhase(serverLevel)) {
+                // One transition per call: loop until the phase matches the health fraction.
+            }
+        }
+        return hurt;
+    }
+
+    /** True when the causing or the direct entity sits outside the arena ring horizontally. */
+    private boolean isFromOutsideArena(DamageSource source) {
+        return isOutsideArena(source.getEntity()) || isOutsideArena(source.getDirectEntity());
+    }
+
+    private boolean isOutsideArena(@Nullable Entity entity) {
+        return entity != null && horizontalDistance(entity.position()) > ARENA_RADIUS;
     }
 
     /** Audible/visible "that did nothing" cue for a deflected outside-arena hit. */
@@ -863,7 +907,9 @@ public class HeraldEntity extends Monster {
         super.die(damageSource);
         if (this.level() instanceof ServerLevel serverLevel) {
             setTelegraphing(false); // No stuck glow pass on the wreck.
-            this.bossEvent.setProgress(0.0F); // tickFight no longer runs to update it.
+            this.lastPhase = 3;
+            setPhase(3); // Collapse pose: a lethal burst from P1/P2 HP must not keep the old anim set.
+            this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             if (!state.isHeraldDefeated()) {
                 state.setHeraldDefeated(true);
@@ -1111,6 +1157,8 @@ public class HeraldEntity extends Monster {
         float fraction = this.getMaxHealth() > 0.0F ? this.getHealth() / this.getMaxHealth() : 1.0F;
         this.lastPhase = fraction > 2.0F / 3.0F ? 1 : fraction > 1.0F / 3.0F ? 2 : 3;
         setPhase(this.lastPhase);
+        // telegraphTimer isn't saved, so a mid-volley glow would otherwise stick after reload.
+        setTelegraphing(false);
         if (this.hasCustomName()) {
             this.bossEvent.setName(this.getDisplayName());
         }

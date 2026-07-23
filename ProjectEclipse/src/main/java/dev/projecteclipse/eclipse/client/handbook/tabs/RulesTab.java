@@ -16,7 +16,8 @@ import net.neoforged.api.distmarker.OnlyIn;
  * {@code gui.eclipse.artifact.rules.line1..10}, kept verbatim so translations survive)
  * absorbed as a scrollable parchment panel. The standalone {@code RulesScreen} class was
  * deleted — its only opener was the v1 artifact popup this handbook replaced. Mouse wheel
- * or vertical drag scrolls; a slim scrollbar marks the position.
+ * or vertical drag scrolls (the screen shows the grab cursor while {@link #dragging()}); a
+ * slim scrollbar marks the position.
  */
 @OnlyIn(Dist.CLIENT)
 public class RulesTab extends HandbookTab {
@@ -43,6 +44,11 @@ public class RulesTab extends HandbookTab {
             lines.add(FormattedCharSequence.EMPTY);
         }
         scrollAmount = Mth.clamp(scrollAmount, 0.0D, maxScroll());
+    }
+
+    @Override
+    public void onShown() {
+        dragging = false;
     }
 
     @Override
@@ -118,5 +124,10 @@ public class RulesTab extends HandbookTab {
 
     private double maxScroll() {
         return Math.max(0, contentHeight() - height);
+    }
+
+    @Override
+    public boolean dragging() {
+        return dragging;
     }
 }

@@ -99,7 +99,7 @@ file="META-INF/accesstransformer.cfg"
 [[dependencies.${mod_id}]]
     modId="veil"
     type="required"
-    versionRange="[4.3.0,)"
+    versionRange="[${veil_version},)"
     ordering="AFTER"
     side="BOTH"
 

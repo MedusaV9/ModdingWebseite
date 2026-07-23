@@ -156,14 +156,32 @@ public final class ReviveRitual {
         EclipseMod.LOGGER.info("Revive ritual at {} for {} FAILED ({}); sigil dropped", this.altarPos, this.targetName, reason);
     }
 
-    /** Success: unban the target (deferred to next login if offline), global thunder, remove bossbar. */
+    /**
+     * Success: unban the target (deferred to next login if offline), global thunder, remove
+     * bossbar. If the target is no longer banned (revived mid-ritual by an admin or the
+     * finale), the ritual aborts gracefully instead — sigil refunded onto the altar plus an
+     * actionbar note to the ritualist, so the sigil is never consumed for nothing.
+     */
     private void succeed() {
         MinecraftServer server = this.level.getServer();
         ServerPlayer target = server.getPlayerList().getPlayer(this.targetId);
-        if (target != null) {
-            if (BanService.isBanned(target)) {
-                BanService.unban(target);
+        boolean stillBanned = target != null
+                ? BanService.isBanned(target)
+                : EclipseWorldState.get(server).isBanned(this.targetId);
+        if (!stillBanned) {
+            // Revived mid-ritual (admin /eclipse revive or the finale mass-revive): nothing
+            // left to undo — abort like a failure so the sigil drops back onto the altar,
+            // and tell the ritualist why the thunder never came.
+            ServerPlayer confirmer = server.getPlayerList().getPlayer(this.confirmerId);
+            if (confirmer != null) {
+                confirmer.displayClientMessage(
+                        Component.translatable("ritual.eclipse.revive.none_banned"), true);
             }
+            fail("target no longer banned");
+            return;
+        }
+        if (target != null) {
+            BanService.unban(target);
         } else {
             // Offline: clear the persistent ban now; the attachment-based ghost state is
             // reconciled (full unban) the moment the player logs back in, see onPlayerLoggedIn.

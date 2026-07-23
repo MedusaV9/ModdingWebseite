@@ -8,6 +8,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.timeline.TimelineEntry;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -207,7 +208,12 @@ public class TimelineTab extends HandbookTab {
         if (font.width(text) <= maxWidth) {
             return List.of(text);
         }
-        String first = font.getSplitter().splitLines(text, maxWidth, Style.EMPTY).get(0).getString();
+        List<FormattedText> split = font.getSplitter().splitLines(text, maxWidth, Style.EMPTY);
+        if (split.isEmpty()) {
+            // Whitespace-ish captions can overflow yet split to nothing — never index [0].
+            return List.of(ellipsize(font, text, maxWidth));
+        }
+        String first = split.get(0).getString();
         String remainder = text.substring(Math.min(first.length(), text.length())).strip();
         if (remainder.isEmpty()) {
             return List.of(first);

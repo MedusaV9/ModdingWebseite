@@ -9,6 +9,8 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -34,7 +36,8 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
  *   <li>every cancellable {@link PlayerInteractEvent} is cancelled;</li>
  *   <li>{@link LivingIncomingDamageEvent} and {@link LivingKnockBackEvent} are cancelled
  *       (invulnerability WITHOUT ever flipping {@code abilities.invulnerable}, which would
- *       leak on a crash).</li>
+ *       leak on a crash); sources tagged {@code BYPASSES_INVULNERABILITY} (e.g.
+ *       {@code /kill}) still pass, exactly like vanilla invulnerability.</li>
  * </ul>
  *
  * <p><b>Watchdog</b> (§5): every lock has a mandatory TTL and is force-released when it
@@ -80,6 +83,16 @@ public final class FreezeService {
      */
     public static void freeze(ServerPlayer player, int ttlTicks, boolean survivesDimensionChange,
             int graceTicks) {
+        if (player.isPassenger()) {
+            // A mounted rider would keep driving through the cutscene (the rubber-band only
+            // fights the RIDER's position, not the vehicle's). Dismount BEFORE anchoring so
+            // the anchor is the dismount spot, and park the vehicle where it stands.
+            Entity vehicle = player.getVehicle();
+            player.stopRiding();
+            if (vehicle != null) {
+                vehicle.setDeltaMovement(Vec3.ZERO);
+            }
+        }
         CutsceneLock lock = new CutsceneLock();
         lock.ttlTicks = Math.max(1, ttlTicks);
         lock.graceTicks = Math.max(0, graceTicks);
@@ -258,7 +271,9 @@ public final class FreezeService {
     @SubscribeEvent
     static void onIncomingDamage(LivingIncomingDamageEvent event) {
         if (event.getEntity() instanceof ServerPlayer player
-                && (isFrozen(player) || isInvulnerableOnly(player))) {
+                && (isFrozen(player) || isInvulnerableOnly(player))
+                // /kill and friends must still work — mirror vanilla invulnerability.
+                && !event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             event.setCanceled(true);
         }
     }

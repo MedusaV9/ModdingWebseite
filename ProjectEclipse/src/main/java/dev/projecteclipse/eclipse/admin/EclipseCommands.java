@@ -548,8 +548,10 @@ public final class EclipseCommands {
         ServerPlayer player = EntityArgument.getPlayer(context, "player");
         int lives = IntegerArgumentType.getInteger(context, "lives");
         int applied = LivesApi.set(player, lives);
+        boolean bannedNow = banIfOutOfLives(player, applied);
         context.getSource().sendSuccess(() -> Component.literal(
-                player.getScoreboardName() + " now has " + applied + " lives"), false);
+                player.getScoreboardName() + " now has " + applied + " lives"
+                        + (bannedNow ? " — event-banned and sent to Limbo" : "")), false);
         return applied;
     }
 
@@ -557,10 +559,21 @@ public final class EclipseCommands {
         ServerPlayer player = EntityArgument.getPlayer(context, "player");
         int delta = IntegerArgumentType.getInteger(context, "delta");
         int applied = LivesApi.add(player, delta);
+        boolean bannedNow = banIfOutOfLives(player, applied);
         context.getSource().sendSuccess(() -> Component.literal(
                 player.getScoreboardName() + " now has " + applied + " lives ("
-                        + (delta >= 0 ? "+" : "") + delta + ")"), false);
+                        + (delta >= 0 ? "+" : "") + delta + ")"
+                        + (bannedNow ? " — event-banned and sent to Limbo" : "")), false);
         return applied;
+    }
+
+    /** Zero lives always means the ban flow (same as running out by death) — never a 0-life player walking free. */
+    private static boolean banIfOutOfLives(ServerPlayer player, int lives) {
+        if (lives > 0 || BanService.isBanned(player)) {
+            return false;
+        }
+        BanService.ban(player);
+        return true;
     }
 
     // --- altar ---

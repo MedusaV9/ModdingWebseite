@@ -39,6 +39,8 @@ public final class CutscenePaths {
     private static final List<String> DEFAULT_IDS =
             List.of("intro_submerge", "intro_rise", "unlock_ring", "finale_return");
     private static final String BUNDLED_RESOURCE_ROOT = "/assets/eclipse/cutscenes/";
+    /** Operator files larger than this are skipped on load (keeps the client sync bounded). */
+    private static final long MAX_FILE_BYTES = 128 * 1024;
 
     private static volatile Map<String, CutscenePath> paths = Map.of();
     private static volatile Map<String, String> rawJson = Map.of();
@@ -84,6 +86,12 @@ public final class CutscenePaths {
                 String fileName = file.getFileName().toString();
                 String fallbackId = fileName.substring(0, fileName.length() - ".json".length());
                 try {
+                    long size = Files.size(file);
+                    if (size > MAX_FILE_BYTES) {
+                        EclipseMod.LOGGER.warn("Cutscene path {} is {} bytes (limit {}); skipping",
+                                fileName, size, MAX_FILE_BYTES);
+                        continue;
+                    }
                     String json = Files.readString(file, StandardCharsets.UTF_8);
                     CutscenePath path = CutscenePath.parse(fallbackId, json);
                     if (path.keyframes().size() < 2) {

@@ -71,6 +71,9 @@ public final class SidebarPanel {
     /** Hash of the last rendered content; any change restarts the slide-in. */
     private static int lastContentHash;
     private static long slideStartMillis;
+    /** Built-row cache (wrapping text every frame is wasted work); see {@link #buildRows}. */
+    private static int lastRowsHash;
+    private static List<Row> cachedRows;
 
     private SidebarPanel() {}
 
@@ -121,21 +124,15 @@ public final class SidebarPanel {
         int slideOffset = EclipseClientConfig.reducedFx() ? 0 : Math.round((1.0F - eased) * (PANEL_WIDTH + 8));
 
         Font font = minecraft.font;
-        int statTextWidth = PANEL_WIDTH - PADDING * 2 - ICON_TEXT_INDENT;
-        int goalTextWidth = PANEL_WIDTH - PADDING * 2 - GOAL_TEXT_INDENT;
-        List<Row> rows = new ArrayList<>();
-        rows.add(statRow(font, ICON_HEART, Component.literal("\u2764 " + lives), statTextWidth));
-        rows.add(statRow(font, ICON_DAY, Component.translatable("gui.eclipse.artifact.day", day), statTextWidth));
-        rows.add(statRow(font, ICON_ALTAR, Component.translatable("sidebar.eclipse.altar", altarLevel),
-                statTextWidth));
-        rows.add(statRow(font, ICON_PLAYERS, Component.translatable("sidebar.eclipse.online", online),
-                statTextWidth));
-        rows.add(statRow(font, ICON_GOAL, Component.translatable("sidebar.eclipse.goals", doneCount, goals.size()),
-                statTextWidth));
-        for (int i = 0; i < goals.size(); i++) {
-            boolean ticked = i < done.size() && Boolean.TRUE.equals(done.get(i));
-            rows.add(new Row(null, wrapGoal(font, goals.get(i), goalTextWidth), ticked));
+        // Row cache: wrapping/ellipsizing every frame is wasted work. The cache key adds
+        // the online count and the per-goal ticks on top of the slide hash — both must
+        // refresh the rows without re-triggering the slide.
+        int rowsHash = Objects.hash(contentHash, online, done);
+        if (cachedRows == null || rowsHash != lastRowsHash) {
+            lastRowsHash = rowsHash;
+            cachedRows = buildRows(font, lives, day, altarLevel, online, goals, done, doneCount);
         }
+        List<Row> rows = cachedRows;
 
         // Panel height sums per-row line counts (goal rows may wrap onto a second line).
         int panelHeight = PADDING * 2;
@@ -174,6 +171,27 @@ public final class SidebarPanel {
             }
             rowY += ROW_HEIGHT + (row.lines().size() - 1) * WRAP_LINE_HEIGHT;
         }
+    }
+
+    /** Builds the panel rows (stat lines + wrapped goal list); cached between content changes. */
+    private static List<Row> buildRows(Font font, int lives, int day, int altarLevel, int online,
+            List<String> goals, List<Boolean> done, int doneCount) {
+        int statTextWidth = PANEL_WIDTH - PADDING * 2 - ICON_TEXT_INDENT;
+        int goalTextWidth = PANEL_WIDTH - PADDING * 2 - GOAL_TEXT_INDENT;
+        List<Row> rows = new ArrayList<>();
+        rows.add(statRow(font, ICON_HEART, Component.literal("\u2764 " + lives), statTextWidth));
+        rows.add(statRow(font, ICON_DAY, Component.translatable("gui.eclipse.artifact.day", day), statTextWidth));
+        rows.add(statRow(font, ICON_ALTAR, Component.translatable("sidebar.eclipse.altar", altarLevel),
+                statTextWidth));
+        rows.add(statRow(font, ICON_PLAYERS, Component.translatable("sidebar.eclipse.online", online),
+                statTextWidth));
+        rows.add(statRow(font, ICON_GOAL, Component.translatable("sidebar.eclipse.goals", doneCount, goals.size()),
+                statTextWidth));
+        for (int i = 0; i < goals.size(); i++) {
+            boolean ticked = i < done.size() && Boolean.TRUE.equals(done.get(i));
+            rows.add(new Row(null, wrapGoal(font, goals.get(i), goalTextWidth), ticked));
+        }
+        return rows;
     }
 
     /** Stat rows stay single-line: overflow is {@link #ellipsize}d, never bare hard-chopped. */

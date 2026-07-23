@@ -6,7 +6,8 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.Style;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -104,13 +105,19 @@ public class BestiaryTab extends HandbookTab {
                     Component.translatable("gui.eclipse.handbook.bestiary.day", creature.introDay()),
                     textX, textY, withAlpha(DIM_COLOR, alpha));
             textY += 11;
-            List<FormattedCharSequence> lore = font.split(
-                    Component.translatable("bestiary.eclipse." + creature.id() + ".lore"), textWidth);
-            for (FormattedCharSequence line : lore) {
+            List<FormattedText> lore = font.getSplitter().splitLines(
+                    Component.translatable("bestiary.eclipse." + creature.id() + ".lore").getString(),
+                    textWidth, Style.EMPTY);
+            for (int line = 0; line < lore.size(); line++) {
                 if (textY > cardY + cardHeight - 9) {
                     break;
                 }
-                guiGraphics.drawString(font, line, textX, textY, withAlpha(TEXT_COLOR, alpha));
+                String text = lore.get(line).getString();
+                if (line + 1 < lore.size() && textY + 9 > cardY + cardHeight - 9) {
+                    // More lore exists but this is the last line that fits — mark the cut.
+                    text = ellipsize(font, text + "\u2026", textWidth);
+                }
+                guiGraphics.drawString(font, text, textX, textY, withAlpha(TEXT_COLOR, alpha));
                 textY += 9;
             }
         } else {

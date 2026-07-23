@@ -1,8 +1,10 @@
 package dev.projecteclipse.eclipse.cutscene;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,6 +55,9 @@ public final class CutsceneService {
     /** Watchdog slack on top of a path's {@code durationTicks} (freeze TTL and session deadline). */
     public static final int WATCHDOG_MARGIN_TICKS = 100;
 
+    /** Library sync budget: entries past this many UTF-8 payload bytes are dropped. */
+    private static final int MAX_LIBRARY_SYNC_BYTES = 512 * 1024;
+
     /** Tracks one watcher group so a completion callback fires exactly once. */
     private static final class Group {
         final String pathId;
@@ -88,12 +93,34 @@ public final class CutsceneService {
 
     /** Sends the full path library to one player (login sync; see {@code EclipsePayloads}). */
     public static void syncLibraryTo(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new S2CCutsceneLibraryPayload(CutscenePaths.rawJsonById()));
+        PacketDistributor.sendToPlayer(player, new S2CCutsceneLibraryPayload(cappedLibrary()));
     }
 
     /** Re-sends the full path library to everyone (after {@code reloadpaths} / editor writes). */
     public static void syncLibraryToAll(MinecraftServer server) {
-        PacketDistributor.sendToAllPlayers(new S2CCutsceneLibraryPayload(CutscenePaths.rawJsonById()));
+        PacketDistributor.sendToAllPlayers(new S2CCutsceneLibraryPayload(cappedLibrary()));
+    }
+
+    /**
+     * The raw-JSON library capped at {@value #MAX_LIBRARY_SYNC_BYTES} UTF-8 bytes (the payload
+     * writes each id + document via {@code writeUtf}): excess entries are dropped with a log
+     * so operator-grown files can never push the sync past the packet limit.
+     */
+    private static Map<String, String> cappedLibrary() {
+        Map<String, String> all = CutscenePaths.rawJsonById();
+        Map<String, String> capped = new LinkedHashMap<>();
+        long bytes = 0;
+        for (Map.Entry<String, String> entry : all.entrySet()) {
+            bytes += entry.getKey().getBytes(StandardCharsets.UTF_8).length
+                    + entry.getValue().getBytes(StandardCharsets.UTF_8).length;
+            if (bytes > MAX_LIBRARY_SYNC_BYTES) {
+                EclipseMod.LOGGER.warn("Cutscene library sync over {} bytes — dropping {} of {} paths (from '{}')",
+                        MAX_LIBRARY_SYNC_BYTES, all.size() - capped.size(), all.size(), entry.getKey());
+                break;
+            }
+            capped.put(entry.getKey(), entry.getValue());
+        }
+        return capped;
     }
 
     // --- enable / disable ---

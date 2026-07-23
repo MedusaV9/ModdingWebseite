@@ -1,12 +1,15 @@
 package dev.projecteclipse.eclipse.worldgen.stage;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.border.SoftBorder;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.devtools.StageIO;
 import dev.projecteclipse.eclipse.network.S2CStagePayload;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
@@ -20,6 +23,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -135,6 +139,14 @@ public final class WorldStageService {
                     stage, profile.name(), maxStage(profile));
             return false;
         }
+        // StageIO refuses to save/load during a sweep; the exclusion must hold in the
+        // other direction too, or the commit sweep would interleave with the chunks a
+        // half-applied snapshot is still rewriting.
+        if (StageIO.isApplying(profile)) {
+            EclipseMod.LOGGER.warn("Refusing stage set while a snapshot load is applying for {}",
+                    profile.name());
+            return false;
+        }
         EclipseWorldState state = EclipseWorldState.get(server);
         int committed = state.getWorldStage(profile);
         // A superseded sweep may have left terrain anywhere between its own fromStage and
@@ -177,6 +189,11 @@ public final class WorldStageService {
         }
         if (RingGrowthService.isRunning(profile)) {
             EclipseMod.LOGGER.warn("Refusing stage rebuild while a sweep is running for {}", profile.name());
+            return false;
+        }
+        if (StageIO.isApplying(profile)) {
+            EclipseMod.LOGGER.warn("Refusing stage rebuild while a snapshot load is applying for {}",
+                    profile.name());
             return false;
         }
         int committed = EclipseWorldState.get(server).getWorldStage(profile);
@@ -262,6 +279,19 @@ public final class WorldStageService {
         broadcastStage(server, profile, toStage, true);
     }
 
+    /**
+     * Statics must never leak into the next world (singleplayer re-opens reuse the JVM):
+     * the chunkgen seam goes back to its stage-0 default ({@link #onLevelLoad} republishes
+     * the next world's persisted stages before its first chunk generates) and the altar
+     * poll forgets its last sample so the next world's boot-up read is treated as such.
+     */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        WorldStageAccess.setStage(DiscProfile.OVERWORLD, 0);
+        WorldStageAccess.setStage(DiscProfile.NETHER, 0);
+        lastSeenAltarLevel = Integer.MIN_VALUE;
+    }
+
     // --- stages.json triggers ---
 
     /**
@@ -275,6 +305,9 @@ public final class WorldStageService {
 
     /** Last altar level acted on ({@link Integer#MIN_VALUE} until the first poll). */
     private static int lastSeenAltarLevel = Integer.MIN_VALUE;
+
+    /** Malformed {@code stages.json} trigger strings already warned about (log once each). */
+    private static final Set<String> WARNED_TRIGGERS = new HashSet<>();
 
     /**
      * Applies every {@code day:N} (N ≤ day) and {@code final_day} (day ≥ {@value #FINAL_DAY})
@@ -304,7 +337,23 @@ public final class WorldStageService {
             return day >= FINAL_DAY;
         }
         return trigger != null && trigger.startsWith("day:")
-                && day >= Integer.parseInt(trigger.substring("day:".length()));
+                && day >= triggerThreshold(trigger, "day:");
+    }
+
+    /**
+     * The integer argument of a {@code <prefix>N} trigger, or {@link Integer#MAX_VALUE}
+     * (matches nothing) when malformed — a {@code stages.json} typo like {@code day:foo}
+     * must never throw out of the day scheduler or the altar poll. Warned once per string.
+     */
+    private static int triggerThreshold(String trigger, String prefix) {
+        try {
+            return Integer.parseInt(trigger.substring(prefix.length()));
+        } catch (NumberFormatException e) {
+            if (WARNED_TRIGGERS.add(trigger)) {
+                EclipseMod.LOGGER.warn("Ignoring malformed stage trigger '{}' in stages.json", trigger);
+            }
+            return Integer.MAX_VALUE;
+        }
     }
 
     /**
@@ -333,7 +382,7 @@ public final class WorldStageService {
             for (EclipseConfig.StageEntry entry : stageEntries(profile)) {
                 String trigger = entry.trigger();
                 if (entry.stage() > target && trigger != null && trigger.startsWith("milestone:")
-                        && altarLevel >= Integer.parseInt(trigger.substring("milestone:".length()))) {
+                        && altarLevel >= triggerThreshold(trigger, "milestone:")) {
                     target = entry.stage();
                 }
             }

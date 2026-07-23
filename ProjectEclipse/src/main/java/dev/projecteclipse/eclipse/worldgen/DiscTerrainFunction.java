@@ -22,7 +22,12 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  *
  * <p>For hot loops use {@link #column(DiscProfile, int, int, int)} once per column and
  * {@link #stateInColumn(DiscColumn, int)} per Y — {@code stateAt} is exactly that
- * composition. Everything here is immutable/static, safe on worldgen worker threads.</p>
+ * composition. Everything here is immutable/static, safe on worldgen worker threads.
+ * Bulk consumers spanning many columns (chunkgen {@code fillFromNoise}, the ring sweep)
+ * must capture ONE {@link DiscMapData} snapshot per unit of work and use
+ * {@link #column(DiscProfile, int, int, int, DiscMapData)} — {@code DiscMapData.reload()}
+ * swaps the volatile instance mid-flight, and mixing old and new map data within one
+ * chunk or sweep would tear the terrain.</p>
  *
  * <p><b>Stage reproducibility contract (worker 4):</b> for columns strictly inside
  * {@code stageRadius(n) − }{@link #RIM_REWRITE_MARGIN} the output is independent of the
@@ -153,12 +158,12 @@ public final class DiscTerrainFunction {
     public static int surfaceY(DiscProfile profile, int x, int z) {
         DiscMapData map = DiscMapData.get();
         SectorStyle style = styleOf(profile, map.biomeAt(profile, x, z));
-        int surface = computeSurfaceY(profile, x, z, style);
+        int surface = computeSurfaceY(map, profile, x, z, style);
         double riverDist = map.riverDistance(profile, x, z);
         if (riverDist < RIVER_HALF_WIDTH) {
             surface -= riverDepth(riverDist);
         }
-        if (profile == DiscProfile.NETHER && inMoat(x, z)) {
+        if (profile == DiscProfile.NETHER && inMoat(map, x, z)) {
             surface -= 8;
         }
         return surface;
@@ -166,11 +171,22 @@ public final class DiscTerrainFunction {
 
     /** Precomputed data of one (x, z) column; feed to {@link #stateInColumn(DiscColumn, int)}. */
     public static DiscColumn column(DiscProfile profile, int x, int z, int stage) {
+        return column(profile, x, z, stage, DiscMapData.get());
+    }
+
+    /**
+     * {@link #column(DiscProfile, int, int, int)} evaluated against an explicit
+     * {@code map} snapshot: every map lookup of the column (biome, rivers, moat,
+     * mountain, tree anchors) reads the SAME instance, so a concurrent
+     * {@code DiscMapData.reload()} can never mix old and new map data inside one column
+     * — and callers that thread one snapshot through a whole chunk or sweep job get the
+     * same guarantee for their entire unit of work.
+     */
+    public static DiscColumn column(DiscProfile profile, int x, int z, int stage, DiscMapData map) {
         double edge = edgeFactor(profile, x, z, stage);
         if (edge <= 0.0D) {
             return DiscColumn.outside(profile, x, z, stage);
         }
-        DiscMapData map = DiscMapData.get();
         // Authored river channel (bbox-gated: MAX_VALUE almost everywhere). Channel
         // columns bypass the crumble holes so the notch stays carved through the taper.
         double riverDist = map.riverDistance(profile, x, z);
@@ -185,7 +201,7 @@ public final class DiscTerrainFunction {
         }
         String biomeId = map.biomeAt(profile, x, z);
         SectorStyle style = styleOf(profile, biomeId);
-        int surfaceY = computeSurfaceY(profile, x, z, style);
+        int surfaceY = computeSurfaceY(map, profile, x, z, style);
         double r = Math.sqrt((double) x * x + (double) z * z);
 
         // River carve: depress the bed 3-4 blocks and fill static water sources up to
@@ -335,14 +351,14 @@ public final class DiscTerrainFunction {
         boolean snowCap = false;
         if (profile == DiscProfile.OVERWORLD) {
             snowCap = surfaceY >= 210;
-            tree = treeAt(profile, x, z, stage);
+            tree = treeAt(map, profile, x, z, stage);
             boolean trunkHere = tree != null && tree.x() == x && tree.z() == z;
             boolean bareGround = riverBed || scar == 2 || iceCascade;
             if (!trunkHere && !bareGround) {
                 long coverHash = hash(H_COVER, x, z);
                 double cover01 = to01(coverHash);
                 if (style == SectorStyle.DESERT) {
-                    if (cover01 < 0.004D && isCactusSpot(profile, x, z, surfaceY)) {
+                    if (cover01 < 0.004D && isCactusSpot(map, profile, x, z, surfaceY)) {
                         pillarBlock = CACTUS;
                         pillarHeight = 1 + (int) ((coverHash >>> 8) & 3) % 3; // 1..3
                     } else if (cover01 < 0.016D) {
@@ -367,7 +383,7 @@ public final class DiscTerrainFunction {
             // Nether dressing: crimson/warped mini-fungi via the tree machinery, roots/
             // vines ground cover, basalt pillars (cactus column mechanic) and bone
             // clusters + soul fire in the soul sector.
-            tree = treeAt(profile, x, z, stage);
+            tree = treeAt(map, profile, x, z, stage);
             boolean trunkHere = tree != null && tree.x() == x && tree.z() == z;
             if (!trunkHere) {
                 long coverHash = hash(H_COVER, x, z);
@@ -442,7 +458,7 @@ public final class DiscTerrainFunction {
      */
     private static DiscColumn shardColumn(DiscProfile profile, int x, int z, int stage, DiscMapData map) {
         SectorStyle style = styleOf(profile, map.biomeAt(profile, x, z));
-        int rimSurface = computeSurfaceY(profile, x, z, style);
+        int rimSurface = computeSurfaceY(map, profile, x, z, style);
         long h = hash(H_SHARD, x, z);
         int top = rimSurface - 3 - (int) ((h >>> 16) & 3);      // 3..6 below rim height
         int thickness = 2 + (int) ((h >>> 24) & 0xFF) % 3;      // 2..4
@@ -595,8 +611,8 @@ public final class DiscTerrainFunction {
      * ±{@link DiscMapData#SECTOR_BLEND_DEG}° of the wobbled wedge boundaries), mountain
      * bump with radiating ridge spurs, terraced high flanks and a summit crater, ±3 detail.
      */
-    private static int computeSurfaceY(DiscProfile profile, int x, int z, SectorStyle style) {
-        DiscMapData map = DiscMapData.get();
+    private static int computeSurfaceY(DiscMapData map, DiscProfile profile, int x, int z,
+            SectorStyle style) {
         if (profile == DiscProfile.NETHER) {
             double[] relief = blendedRelief(map, profile, x, z, style);
             double n = SURFACE_LARGE.getValue(x / 140.0D, z / 140.0D) * 5.0D
@@ -678,8 +694,8 @@ public final class DiscTerrainFunction {
         return new double[] {amp, offset};
     }
 
-    private static boolean inMoat(int x, int z) {
-        DiscMapData.Moat moat = DiscMapData.get().profile(DiscProfile.NETHER).moat();
+    private static boolean inMoat(DiscMapData map, int x, int z) {
+        DiscMapData.Moat moat = map.profile(DiscProfile.NETHER).moat();
         if (moat == null) {
             return false;
         }
@@ -863,7 +879,7 @@ public final class DiscTerrainFunction {
      * anchor is margin-clamped so a canopy (radius ≤ 2) never leaves its cell —
      * per-column lookups stay cell-local.
      */
-    private static Tree treeAt(DiscProfile profile, int x, int z, int stage) {
+    private static Tree treeAt(DiscMapData map, DiscProfile profile, int x, int z, int stage) {
         int cellX = Math.floorDiv(x, 8);
         int cellZ = Math.floorDiv(z, 8);
         long h = hash(H_TREE, cellX, cellZ);
@@ -872,7 +888,6 @@ public final class DiscTerrainFunction {
         if (Math.abs(x - ax) > 2 || Math.abs(z - az) > 2) {
             return null;
         }
-        DiscMapData map = DiscMapData.get();
         String biomeId = map.biomeAt(profile, ax, az);
         SectorStyle style = styleOf(profile, biomeId);
         if (style.treeDensity <= 0.0D || to01(h) >= style.treeDensity) {
@@ -896,7 +911,7 @@ public final class DiscTerrainFunction {
         if (edgeFactor(profile, ax, az, stage) < 0.45D) {
             return null;
         }
-        int anchorSurface = computeSurfaceY(profile, ax, az, style);
+        int anchorSurface = computeSurfaceY(map, profile, ax, az, style);
         if (anchorSurface > 170) {
             return null; // no trees on the high mountain rock
         }
@@ -948,16 +963,16 @@ public final class DiscTerrainFunction {
     }
 
     /** Cacti only stand where the four neighbour columns are not higher (survival rule). */
-    private static boolean isCactusSpot(DiscProfile profile, int x, int z, int surfaceY) {
-        return neighbourSurface(profile, x + 1, z) <= surfaceY
-                && neighbourSurface(profile, x - 1, z) <= surfaceY
-                && neighbourSurface(profile, x, z + 1) <= surfaceY
-                && neighbourSurface(profile, x, z - 1) <= surfaceY;
+    private static boolean isCactusSpot(DiscMapData map, DiscProfile profile, int x, int z, int surfaceY) {
+        return neighbourSurface(map, profile, x + 1, z) <= surfaceY
+                && neighbourSurface(map, profile, x - 1, z) <= surfaceY
+                && neighbourSurface(map, profile, x, z + 1) <= surfaceY
+                && neighbourSurface(map, profile, x, z - 1) <= surfaceY;
     }
 
-    private static int neighbourSurface(DiscProfile profile, int x, int z) {
-        return computeSurfaceY(profile, x, z,
-                styleOf(profile, DiscMapData.get().biomeAt(profile, x, z)));
+    private static int neighbourSurface(DiscMapData map, DiscProfile profile, int x, int z) {
+        return computeSurfaceY(map, profile, x, z,
+                styleOf(profile, map.biomeAt(profile, x, z)));
     }
 
     private record Tree(int x, int z, int baseY, int height, TreeSpecies species) {}

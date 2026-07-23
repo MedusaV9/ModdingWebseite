@@ -59,6 +59,8 @@ public class MapTab extends HandbookTab {
 
         float worldRadius = StageRadii.radius(DiscProfile.OVERWORLD, maxStage) * 1.08F;
         worldRadius = Math.max(worldRadius, (float) borderRadius * 1.05F);
+        // A zeroed radius table (bad stage config) must not become scale=∞ → segment hang.
+        worldRadius = Math.max(1.0F, worldRadius);
         float scale = (Math.min(width, diagramHeight) / 2.0F - 6.0F) / worldRadius;
 
         guiGraphics.drawString(font, Component.translatable("gui.eclipse.handbook.map.stage", currentStage),
@@ -111,8 +113,11 @@ public class MapTab extends HandbookTab {
             int diamond = withAlpha(0xF2E2FF, alpha);
             guiGraphics.fill(markX - 1, markY - 3, markX + 1, markY + 3, diamond);
             guiGraphics.fill(markX - 3, markY - 1, markX + 3, markY + 1, diamond);
-            guiGraphics.drawCenteredString(font, Component.translatable(landmark.labelKey()),
-                    markX, markY + 5, withAlpha(TEXT_COLOR, alpha));
+            // Labels center on the marker: clamp to what fits inside the page both ways
+            // (the scissor would otherwise hard-chop long localizations mid-glyph).
+            int labelMax = Math.max(12, 2 * Math.min(markX - x, x + width - markX));
+            String label = ellipsize(font, Component.translatable(landmark.labelKey()).getString(), labelMax);
+            guiGraphics.drawCenteredString(font, label, markX, markY + 5, withAlpha(TEXT_COLOR, alpha));
         }
         guiGraphics.disableScissor();
 
@@ -168,7 +173,9 @@ public class MapTab extends HandbookTab {
         if (radius < 2.0F) {
             return;
         }
-        int segments = Math.max(24, (int) (radius * 3.0F));
+        // Segment count follows the radius but stays bounded: a runaway radius must never
+        // turn into a per-frame near-infinite fill loop (720 dots ring smoothly enough).
+        int segments = Mth.clamp((int) (radius * 3.0F), 24, 720);
         for (int i = 0; i < segments; i++) {
             if (dashed && i % 4 >= 2) {
                 continue;

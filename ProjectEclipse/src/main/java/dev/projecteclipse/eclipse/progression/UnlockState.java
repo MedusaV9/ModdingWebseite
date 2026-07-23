@@ -6,9 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 /**
  * Server-authoritative view of the currently-unlocked progression keys: the union of the
@@ -22,6 +26,7 @@ import net.minecraft.server.MinecraftServer;
  * + {@link EclipseConfig}, so lowering the day (or a config reload) reverses unlocks
  * automatically — nothing is stored separately.
  */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class UnlockState {
     /** Derived unlock key present while {@link EclipseWorldState#isHeraldDefeated()}. */
     public static final String KEY_HERALD_SLAIN = "herald_slain";
@@ -110,5 +115,11 @@ public final class UnlockState {
         Set<String> result = Collections.unmodifiableSet(keys);
         snapshot = new Snapshot(day, altarLevel, heraldDefeated, days, milestones, result);
         return result;
+    }
+
+    /** The cache pins the last world's config lists and key set — drop it with the server. */
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        snapshot = null;
     }
 }

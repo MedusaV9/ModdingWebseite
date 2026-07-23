@@ -30,6 +30,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -406,6 +407,19 @@ public final class SoftBorder {
         LAST_SOUND.remove(id);
     }
 
+    /**
+     * Dimension changes re-send both rings and both stages to the traveller: ring/stage
+     * broadcasts only go to players IN the affected dimension, so someone in the nether
+     * during an overworld commit would otherwise come back with stale border/stage state.
+     */
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            syncTo(player);
+            WorldStageService.syncStagesTo(player);
+        }
+    }
+
     /** Statics must never leak into the next world (singleplayer re-opens reuse the JVM). */
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
@@ -554,12 +568,21 @@ public final class SoftBorder {
     }
 
     /**
-     * Heightmap surface Y (first free block above the terrain) of a column, force-loading
-     * its chunk first; {@code <= getMinBuildHeight()} means the column is void.
+     * Heightmap surface Y (first free block above the terrain) of a column;
+     * {@code <= getMinBuildHeight()} means the column is void OR its chunk is not loaded.
+     * Only already-loaded chunks are consulted ({@code getChunkNow}) — the probe runs on
+     * the physics tick path and force-loading here meant up to ~50 sync chunk loads per
+     * violator per tick; an unloaded probe step just makes the search continue inward
+     * (the spawn-area fallback at the end is always loaded).
      */
     private static int groundSurfaceY(ServerLevel level, double x, double z) {
-        level.getChunk(Mth.floor(x) >> 4, Mth.floor(z) >> 4); // force-load before height lookup
-        return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
+        int blockX = Mth.floor(x);
+        int blockZ = Mth.floor(z);
+        LevelChunk chunk = level.getChunkSource().getChunkNow(blockX >> 4, blockZ >> 4);
+        if (chunk == null) {
+            return Integer.MIN_VALUE;
+        }
+        return chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, blockX & 15, blockZ & 15) + 1;
     }
 
     /** Glitch sound (throttled per player) + one BORDER_GLITCH Quasar burst at the player. */

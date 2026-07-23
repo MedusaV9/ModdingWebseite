@@ -1,9 +1,8 @@
 package dev.projecteclipse.eclipse.client.handbook;
 
-import java.util.Random;
-
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.Util;
+import net.minecraft.util.RandomSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -22,6 +21,8 @@ public final class GlitchText {
     private static final char[] GLYPHS =
             "?#%&$@*+xX/\\|=~^:;<>±§¤×÷".toCharArray();
     private static final long ROLL_MILLIS = 150L; // 3 ticks
+    /** Reused roll source, re-seeded per call (render thread only) — no per-call allocation. */
+    private static final RandomSource RANDOM = RandomSource.create();
 
     private GlitchText() {}
 
@@ -30,10 +31,10 @@ public final class GlitchText {
         if (EclipseClientConfig.reducedFx()) {
             return "?".repeat(Math.max(1, length));
         }
-        Random random = new Random(Util.getMillis() / ROLL_MILLIS * 31L + salt * 7919L);
+        RANDOM.setSeed(Util.getMillis() / ROLL_MILLIS * 31L + salt * 7919L);
         StringBuilder builder = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
-            builder.append(GLYPHS[random.nextInt(GLYPHS.length)]);
+            builder.append(GLYPHS[RANDOM.nextInt(GLYPHS.length)]);
         }
         return builder.toString();
     }
@@ -43,10 +44,10 @@ public final class GlitchText {
         if (EclipseClientConfig.reducedFx()) {
             return "???";
         }
-        Random random = new Random(Util.getMillis() / ROLL_MILLIS * 31L + salt * 7919L);
+        RANDOM.setSeed(Util.getMillis() / ROLL_MILLIS * 31L + salt * 7919L);
         StringBuilder builder = new StringBuilder(3);
         for (int i = 0; i < 3; i++) {
-            builder.append(random.nextInt(3) == 0 ? GLYPHS[random.nextInt(GLYPHS.length)] : '?');
+            builder.append(RANDOM.nextInt(3) == 0 ? GLYPHS[RANDOM.nextInt(GLYPHS.length)] : '?');
         }
         return builder.toString();
     }

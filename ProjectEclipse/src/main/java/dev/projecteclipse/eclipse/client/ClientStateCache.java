@@ -63,6 +63,58 @@ public final class ClientStateCache {
     public static volatile long borderSyncMillisNether = 0L;
 
     /**
+     * Snaps every synced field back to its pre-login default (disconnect hook): the cache
+     * outlives the connection, so without this the next server's HUD/handbook would show
+     * the previous session's day/lives/goals/timeline until its own payloads arrive.
+     */
+    public static void resetToDefaults() {
+        lives = 5;
+        day = 1;
+        altarLevel = 0;
+        goals = java.util.List.of();
+        goalLines = java.util.List.of();
+        goalDone = java.util.List.of();
+        timeline = java.util.List.of();
+        milestones = java.util.List.of();
+        cutscenePhase = null;
+        stageOverworld = 0;
+        stageNether = 0;
+        stageRadiusOverworld = 96;
+        stageRadiusNether = 0;
+        stageAnimatingOverworld = false;
+        stageAnimatingNether = false;
+        borderCenterX = 0.5D;
+        borderCenterZ = 0.5D;
+        borderFxRange = 8.0F;
+        borderFromRadiusOverworld = -1.0F;
+        borderToRadiusOverworld = -1.0F;
+        borderLerpTicksOverworld = 0;
+        borderSyncMillisOverworld = 0L;
+        borderFromRadiusNether = -1.0F;
+        borderToRadiusNether = -1.0F;
+        borderLerpTicksNether = 0;
+        borderSyncMillisNether = 0L;
+    }
+
+    /**
+     * Disconnect reset hook ({@code QuasarSpawner.DisconnectReset} pattern — nested so the
+     * outer class stays loadable on either dist; this class only exists on the client).
+     * Also clears the synced cutscene library: both caches would otherwise leak the last
+     * session's state into the next server join.
+     */
+    @net.neoforged.fml.common.EventBusSubscriber(modid = dev.projecteclipse.eclipse.EclipseMod.MOD_ID,
+            value = net.neoforged.api.distmarker.Dist.CLIENT)
+    static final class DisconnectReset {
+        private DisconnectReset() {}
+
+        @net.neoforged.bus.api.SubscribeEvent
+        static void onLoggingOut(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+            resetToDefaults();
+            dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.clear();
+        }
+    }
+
+    /**
      * Current animated soft-ring radius for a dimension (area-proportional interpolation,
      * mirroring the server's {@code SoftBorder}). {@code <= 0} = ring inactive / not synced.
      */

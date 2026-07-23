@@ -46,7 +46,8 @@ title screen, purple sky) plus:
 
 ## Build & run
 
-There is no system Gradle; always use the wrapper from this directory:
+Requires Java 21 (the Gradle toolchain targets it). There is no system Gradle; always use the
+wrapper from this directory:
 
 ```bash
 ./gradlew build        # compile + jar (output: build/libs/eclipse-<version>.jar)
@@ -57,12 +58,19 @@ There is no system Gradle; always use the wrapper from this directory:
 
 For `runServer`, accept the EULA first: create `run/eula.txt` containing `eula=true`.
 
+Before `runClient`, copy `run/mods-client/*.jar` into `run/mods/` (Sodium + Iris are
+client-only; remove them again before `runServer` — see the mods folder layout below).
+
 v2 REQUIRES A FRESH WORLD: the overworld dimension type was raised to `min_y: -176, height: 512`
 for the floating-disc world, which makes v1 saves incompatible. Delete `run/world` before the
 first `runServer`/`runClient` after upgrading — this is expected, not a bug.
 
 Note: if you pipe `runServer` output through another process (e.g. `| tee log`), console
 input such as `stop` is not forwarded to the server; stop it with Ctrl-C instead.
+
+First session as dev: op yourself from the server console (`op <name>`), then run
+`/eclipse start_event` to trigger the intro — the whole `/eclipse` tree requires
+permission level 3.
 
 To test the optional Simple Voice Chat integration, drop
 `voicechat-neoforge-1.21.1-2.6.16.jar` into `run/mods/` before starting `./gradlew runServer`.
@@ -279,7 +287,8 @@ Loads `config/eclipse/{general,days,milestones,modgate,anticheat,stages}.json`; 
 public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
         int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks, int borderOffset, int borderFxRange) {}
 // general.json; defaults: 30, false, "08:00", 2, true, 12, 8 (JSON: "cutscenes":{"freezeDuringUnlocks"})
-public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
+public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
+        String title, String subtitle) {}
 // DayPlan.borderSize is DEPRECATED since W7 (still parsed; ignored with a one-time warning —
 // the soft border follows the world stage instead).
 public record ItemCost(String item, int count) {}
@@ -326,7 +335,7 @@ write to `dev.projecteclipse.eclipse.client.ClientStateCache` (`public static vo
 
 ```java
 public record S2CLivesPayload(int lives) implements CustomPacketPayload;        // id "eclipse:lives"
-public record S2CDayStatePayload(int day, int altarLevel) implements CustomPacketPayload; // id "eclipse:day_state"
+public record S2CDayStatePayload(int day, int altarLevel, List<String> goals) implements CustomPacketPayload; // id "eclipse:day_state"
 public record S2CCutscenePayload(Phase phase) implements CustomPacketPayload;   // id "eclipse:cutscene"
 // S2CCutscenePayload.Phase: enum { TILT, SUBMERGE, WAVES, EMERGE, SHAKE }; client handler writes
 // ClientStateCache.cutscenePhase (volatile, null until the start event runs). SHAKE is pulsed
@@ -1105,7 +1114,7 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | Command | Effect |
 |---|---|
 | `/eclipse start_event` | Runs `StartEventCutscene.begin` (fails if a run is already in progress). |
-| `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, applies the plan border, syncs clients. |
+| `/eclipse day set <1-14>` | `DayScheduler.setDay`: persists the day, syncs clients; the border is untouched (the soft ring follows the world stage). |
 | `/eclipse day goals` | Prints the current day's configured goals. |
 | `/eclipse goals tick <player> <1-8>` | `GoalTracker.complete` (1-based index, matching the sidebar): ticks the goal for that player, announces the first completion. |
 | `/eclipse shards set <player> <n>` \| `add <player> <n>` | Personal shard balance dev tool (`ShardEconomy.setShards`/`addShards`; add may be negative, clamped ≥ 0). |
@@ -1238,14 +1247,15 @@ installing the official jars alongside is. Second, mechanics: a jar-in-jar mod c
 at the loader level (FML offers no per-nested-jar toggle, and "unlocking on day N" would require
 swapping jars and restarting). Runtime gating by registry namespace is the correct mechanism: the
 mods are always *loaded*, but their content is unusable until the matching unlock key is granted
-by the day scheduler or an altar milestone. `neoforge.mods.toml` declares all four as
-`type="optional"`, `ordering="AFTER"` dependencies, so Eclipse-Core loads with or without them and
-after them when present.
+by the day scheduler or an altar milestone. `neoforge.mods.toml` declares all nine gated mods
+(plus `voicechat`) as `type="optional"`, `ordering="AFTER"` dependencies, so Eclipse-Core loads
+with or without them and after them when present.
 
 Default 14-day unlock schedule (`config/eclipse/days.json`, the v2 arc since W13;
 `modgate.json` maps each gated namespace to the key of the same name). The legacy `days.json`
-`borderSize` is still written (1000–3000) but DEPRECATED and ignored since W7 — the circular
-soft border follows the world-stage timeline (`stages.json`) instead.
+`borderSize` is DEPRECATED since W7: it is still parsed for compatibility but deliberately no
+longer written back by `daysToJson`, and `DayScheduler` only logs a one-time warning — the
+circular soft border follows the world-stage timeline (`stages.json`) instead.
 
 | Day | Theme | Unlock keys | Effect |
 |---|---|---|---|
@@ -1289,7 +1299,7 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
 - `dev.projecteclipse.eclipse.entity` / `client.entity` — W10 custom mobs (`EclipseEntities` registry, the five mob classes, `EclipseSpawner` day/event spawner + night events) and their hand-coded models/renderers (`EclipseEntityRenderers`), see "Custom mobs & spawner".
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
-- `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (8 emitter JSONs).
+- `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (9 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
 - `dev.projecteclipse.eclipse.devtools` — W14 operator tooling: `StageIO` (stage annulus snapshots, `<world>/eclipse/stages/<n>.bin`), `PristineSnapshots` (whole-region backups + restore-on-restart marker), `PhaseScheduler` (wall-clock day advance + countdown bossbar), `TimelineInspector` (`/eclipse timeline`), `ConfigEditor` (perm-checked goal-editor writes); `devtools.client.GoalEditorScreen` is the client GUI.
 - `src/main/templates/META-INF/neoforge.mods.toml` — mod metadata template; `${...}` placeholders are expanded from `gradle.properties` by the `generateModMetadata` task.

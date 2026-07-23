@@ -98,6 +98,12 @@ public final class ShardEconomy {
      * {@link SupplyBeacon}'s marker list: a restart simply drops the remaining buff.
      */
     private static long favorExpiryDayTime = 0L;
+    /**
+     * Absolute overworld {@code gameTime} ceiling of the running favor (activation +
+     * {@value #DAY_LENGTH_TICKS}t): with {@code doDaylightCycle} off, {@code dayTime}
+     * never reaches the dawn anchor — the favor expires on whichever comes first.
+     */
+    private static long favorExpiryGameTime = 0L;
 
     private ShardEconomy() {}
 
@@ -251,20 +257,25 @@ public final class ShardEconomy {
 
     // --- Eclipse's Favor: pooled team buff until the next dawn ---
 
-    /** Whether an Eclipse's Favor activation is still running (overworld dawn not yet reached). */
+    /** Whether an Eclipse's Favor activation is still running (neither dawn nor the ceiling reached). */
     private static boolean isFavorActive(MinecraftServer server) {
-        return favorExpiryDayTime != 0L && server.overworld().getDayTime() < favorExpiryDayTime;
+        return favorExpiryDayTime != 0L
+                && server.overworld().getDayTime() < favorExpiryDayTime
+                && server.overworld().getGameTime() < favorExpiryGameTime;
     }
 
     /**
      * Activates one Eclipse's Favor purchase: everyone online gets the buff line + sound
      * and the first effect application; {@link #tickFavor} keeps re-applying (also to
      * late joiners) until the overworld crosses the next dawn. Expiry is anchored to
-     * {@code dayTime} rather than game time so sleeping through the night ends it too.
+     * {@code dayTime} rather than game time so sleeping through the night ends it too —
+     * plus a {@code gameTime} ceiling of one full day, so a {@code doDaylightCycle=off}
+     * world (frozen dayTime) still expires the favor.
      */
     private static void activateEclipsesFavor(MinecraftServer server, ServerPlayer buyer) {
         long dayTime = server.overworld().getDayTime();
         favorExpiryDayTime = (dayTime / DAY_LENGTH_TICKS + 1L) * DAY_LENGTH_TICKS;
+        favorExpiryGameTime = server.overworld().getGameTime() + DAY_LENGTH_TICKS;
         refreshFavorEffects(server);
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.displayClientMessage(Component.translatable("shop.eclipse.favor_granted"), true);
@@ -275,15 +286,18 @@ public final class ShardEconomy {
                 EclipseWorldState.get(server).getShardPool(), favorExpiryDayTime);
     }
 
-    /** Favor keeper (from {@link #onServerTick}): re-applies the effects until dawn cuts the loop. */
+    /** Favor keeper (from {@link #onServerTick}): re-applies the effects until dawn/ceiling cuts the loop. */
     private static void tickFavor(MinecraftServer server) {
         if (favorExpiryDayTime == 0L) {
             return;
         }
-        if (server.overworld().getDayTime() >= favorExpiryDayTime) {
-            // Dawn: stop refreshing; the short-lived effects lapse on their own within seconds.
+        if (server.overworld().getDayTime() >= favorExpiryDayTime
+                || server.overworld().getGameTime() >= favorExpiryGameTime) {
+            // Dawn or the one-day gameTime ceiling (doDaylightCycle off): stop refreshing;
+            // the short-lived effects lapse on their own within seconds.
             favorExpiryDayTime = 0L;
-            EclipseMod.LOGGER.info("Eclipse's Favor expired at dawn");
+            favorExpiryGameTime = 0L;
+            EclipseMod.LOGGER.info("Eclipse's Favor expired (dawn or one-day ceiling)");
             return;
         }
         if (server.getTickCount() % FAVOR_REFRESH_TICKS == 0) {
@@ -318,5 +332,6 @@ public final class ShardEconomy {
     static void onServerStopped(ServerStoppedEvent event) {
         BROWSE_INDEX.clear();
         favorExpiryDayTime = 0L;
+        favorExpiryGameTime = 0L;
     }
 }

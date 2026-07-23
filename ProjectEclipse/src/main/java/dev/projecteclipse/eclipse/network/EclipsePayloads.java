@@ -79,11 +79,14 @@ public final class EclipsePayloads {
     }
 
     private static void handleCutscene(S2CCutscenePayload payload, IPayloadContext context) {
-        ClientStateCache.cutscenePhase = payload.phase();
         if (payload.phase() == S2CCutscenePayload.Phase.SHAKE) {
-            // W4 contract: each SHAKE receipt is one ~2 s camera-shake impulse (fusion rumble).
+            // W4 contract: each SHAKE receipt is one ~2 s camera-shake impulse (fusion
+            // rumble) — NOT an overlay phase. Overwriting the cached phase here would cut
+            // a running EMERGE fade (or any other overlay state) short.
             dev.projecteclipse.eclipse.cutscene.client.CameraDirector.addShakeImpulse();
+            return;
         }
+        ClientStateCache.cutscenePhase = payload.phase();
     }
 
     private static void handleStage(S2CStagePayload payload, IPayloadContext context) {

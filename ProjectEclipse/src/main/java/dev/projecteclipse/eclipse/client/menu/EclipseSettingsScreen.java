@@ -204,8 +204,13 @@ public final class EclipseSettingsScreen extends Screen {
 
         @Override
         protected void applyValue() {
-            this.value = value >= 0.5D ? 1.0D : 0.0D;
-            EclipseSettingsScreen.write(option.key(), value >= 0.5D);
+            boolean enabled = value >= 0.5D;
+            this.value = enabled ? 1.0D : 0.0D;
+            // Drag events re-apply continuously — only touch (and save) the TOML when
+            // the boolean actually flips.
+            if (EclipseSettingsScreen.read(option.key()) != enabled) {
+                EclipseSettingsScreen.write(option.key(), enabled);
+            }
         }
 
         @Override

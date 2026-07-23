@@ -167,17 +167,31 @@ public final class EclipseConfig {
         return days;
     }
 
-    /** The plan for the given day; days outside the configured range are clamped to the first/last plan. */
+    /**
+     * The plan for the given day. Unmatched days fall back to the nearest LOWER configured
+     * day (so a gap in {@code days.json} keeps showing the preceding plan rather than
+     * jumping to the last one); days before the first plan clamp to the first.
+     */
     public static DayPlan day(int day) {
         ensureLoaded();
         List<DayPlan> plans = days;
-        DayPlan fallback = plans.get(plans.size() - 1);
-        for (DayPlan plan : plans) {
+        DayPlan floor = null;
+        for (DayPlan plan : plans) { // ordered by day (daysFromJson sorts)
             if (plan.day() == day) {
                 return plan;
             }
+            if (plan.day() < day) {
+                floor = plan;
+            }
         }
-        return day < plans.get(0).day() ? plans.get(0) : fallback;
+        return floor != null ? floor : plans.get(0);
+    }
+
+    /** The highest configured day in {@code days.json} — the auto-advance/scheduler ceiling. */
+    public static int maxDay() {
+        ensureLoaded();
+        List<DayPlan> plans = days;
+        return plans.get(plans.size() - 1).day();
     }
 
     /** All altar milestones, ordered by level. */

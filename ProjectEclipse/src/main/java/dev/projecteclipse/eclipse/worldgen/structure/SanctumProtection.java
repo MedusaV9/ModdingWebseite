@@ -22,6 +22,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.FinalizeSpawnEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 /**
  * Spawn protection around the sanctum altar (docs/ideas/04_content.md §3): within
@@ -54,6 +55,12 @@ public final class SanctumProtection {
             EclipseMod.LOGGER.info("Sanctum protection active: r={} around {} (break/place/explosions cancelled, hostile spawns suppressed, ops exempt)",
                     RADIUS, altarPos.toShortString());
         }
+    }
+
+    /** Statics must never leak into the next world (singleplayer re-opens reuse the JVM). */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        altarPos = null;
     }
 
     /** Whether a position lies inside the protected sanctum zone of the overworld. */

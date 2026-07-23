@@ -104,6 +104,17 @@ public final class StageIO {
 
     // --- public API (commands) ---
 
+    /**
+     * Whether a snapshot-apply job is currently running for the profile.
+     * {@code WorldStageService} refuses stage commits/rebuilds while this is true —
+     * this class already refuses to save/load during a sweep, and the exclusion must
+     * hold in both directions or a commit sweep would interleave with a half-applied
+     * snapshot.
+     */
+    public static boolean isApplying(DiscProfile profile) {
+        return LOAD_JOBS.containsKey(profile);
+    }
+
     /** The snapshot directory {@code <world>/eclipse/stages/}. */
     public static Path stagesDir(MinecraftServer server) {
         return server.getWorldPath(LevelResource.ROOT).resolve("eclipse").resolve("stages");

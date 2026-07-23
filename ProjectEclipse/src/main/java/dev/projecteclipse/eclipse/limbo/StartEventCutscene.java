@@ -24,6 +24,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -98,6 +99,23 @@ public final class StartEventCutscene {
         teleportedPlayers.clear();
         EclipseMod.LOGGER.info("start_event cutscene beginning");
         return true;
+    }
+
+    /**
+     * Restart hygiene: the timeline statics must never leak into the next world a
+     * singleplayer client opens — stopping mid-cutscene would otherwise keep dead
+     * {@code ServerLevel} references in {@code carvedBlocks} and resume the tick counter
+     * on a world that never played its intro (writing pocket refills into the old level
+     * and firing the intro fusion on the wrong world). The suspended oar tilt is released
+     * too, or the rowing loop would stay frozen forever after a stop mid-intro.
+     */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        running = false;
+        ticks = 0;
+        carvedBlocks.clear();
+        teleportedPlayers.clear();
+        OarAnimator.endTilt();
     }
 
     @SubscribeEvent

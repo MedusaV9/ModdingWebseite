@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.lives.BanService;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -238,7 +239,10 @@ public class DeckhandEntity extends PathfinderMob {
      * missing or dead — the living cut the crew down in P2, and the Ferryman simply calls
      * them back for the next crossing. Living crew is left untouched. Returns how many
      * rowers returned. (Startup {@link #ensureCrew} deliberately does NOT do this: at that
-     * point the persisted entities may simply not be loaded yet.)
+     * point the persisted entities may simply not be loaded yet.) Benches in unloaded
+     * chunks are skipped for the same reason — their rowers may well be alive, just not
+     * loaded (admin summon with nobody in limbo), and re-seating would orphan them into a
+     * second crew.
      */
     public static int reseatFallen(ServerLevel limbo) {
         EclipseWorldState state = EclipseWorldState.get(limbo.getServer());
@@ -250,6 +254,9 @@ public class DeckhandEntity extends PathfinderMob {
         List<int[]> benches = benches();
         int returned = 0;
         for (int i = 0; i < ids.size() && i < benches.size(); i++) {
+            if (!limbo.isLoaded(benchPos(limbo, benches.get(i)))) {
+                continue; // Unloaded bench: "missing" just means "not loaded" here.
+            }
             if (limbo.getEntity(ids.get(i)) instanceof DeckhandEntity existing && existing.isAlive()) {
                 continue;
             }
@@ -275,6 +282,13 @@ public class DeckhandEntity extends PathfinderMob {
             }
         }
         return benches;
+    }
+
+    /** The bench's block position, for the chunk-loaded guard (mirrors {@link #seatAt}). */
+    private static BlockPos benchPos(ServerLevel limbo, int[] bench) {
+        int deckY = GhostShipBuilder.waterlineY(limbo) + 3;
+        double benchZ = bench[1] * (GhostShipBuilder.halfWidthAt(bench[0]) - 1.0D);
+        return BlockPos.containing(bench[0] + 0.5D, deckY + 1.0D, benchZ + 0.5D);
     }
 
     /** Spawns one idle rower at the given {@code {x, side}} bench, facing outboard. */

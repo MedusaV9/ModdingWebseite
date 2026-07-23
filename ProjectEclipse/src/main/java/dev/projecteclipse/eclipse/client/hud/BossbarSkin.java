@@ -26,6 +26,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * Surgical bossbar skinning ({@code docs/ideas/03_ui_ux.md} §D): subscribes to the per-bar
@@ -82,6 +83,7 @@ public final class BossbarSkin {
 
     /** Geometry observed this frame, so the announcement sweep can stack below real bars. */
     private static long lastBarSeenMillis;
+    /** Reset to the vanilla anchor every frame ({@link #onRenderGuiPre}); bars re-stack it. */
     private static int observedBarsBottom = 12;
 
     private static final class BarState {
@@ -118,13 +120,21 @@ public final class BossbarSkin {
         return Util.getMillis() - lastBarSeenMillis < 250L ? observedBarsBottom : 12;
     }
 
+    /**
+     * Fresh stacking geometry at the top of every GUI frame: the old wall-clock reset
+     * (25 ms without a bar event) never fires above 40 fps, so {@code observedBarsBottom}
+     * stuck at its historical max until ALL bars vanished. The bar events below re-stack
+     * it each frame before the announcement layer reads it.
+     */
+    @SubscribeEvent
+    static void onRenderGuiPre(RenderGuiEvent.Pre event) {
+        observedBarsBottom = 12;
+    }
+
     @SubscribeEvent
     static void onBossEventProgress(CustomizeGuiOverlayEvent.BossEventProgress event) {
         long now = Util.getMillis();
         // Track stacking geometry for ALL bars (vanilla ones included) before any matching.
-        if (now - lastBarSeenMillis > 25L) {
-            observedBarsBottom = 12; // new frame
-        }
         lastBarSeenMillis = now;
 
         LerpingBossEvent bar = event.getBossEvent();

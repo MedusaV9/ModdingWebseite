@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
@@ -175,12 +176,17 @@ public final class PhaseScheduler {
         if (System.currentTimeMillis() < target) {
             return;
         }
-        int newDay = state.getDay() + 1;
+        int day = state.getDay();
         state.setPhaseSchedule(0L, 0L);
         removeBar();
+        if (day >= EclipseConfig.maxDay()) {
+            EclipseMod.LOGGER.warn("PhaseScheduler: scheduled phase reached but day {} is already the last "
+                    + "configured day — schedule cleared without advancing", day);
+            return;
+        }
         EclipseMod.LOGGER.info("PhaseScheduler: scheduled phase reached — advancing day {} -> {}",
-                state.getDay(), newDay);
-        DayScheduler.setDay(server, newDay);
+                day, day + 1);
+        DayScheduler.setDay(server, day + 1);
     }
 
     // --- bossbar lifecycle (ReviveRitual pattern) ---

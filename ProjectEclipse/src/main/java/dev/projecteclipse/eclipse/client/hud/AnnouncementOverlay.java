@@ -92,10 +92,16 @@ public final class AnnouncementOverlay {
 
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
-        if (Minecraft.getInstance().level == null) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null) {
             QUEUE.clear();
             typewriter = null;
             sweepTicks = -1;
+            return;
+        }
+        if (minecraft.isPaused()) {
+            // The client tick keeps firing while paused — announcements (typewriter
+            // advancement + its tick sounds included) freeze; the queue stays intact.
             return;
         }
         if (typewriter == null && sweepTicks < 0 && !QUEUE.isEmpty()) {

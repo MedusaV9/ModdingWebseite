@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
+import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction.DiscColumn;
@@ -33,10 +34,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -64,11 +67,28 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>Chunks</b>: already-loaded chunks are rewritten in place; generated-but-unloaded
  * chunks (resolved via async region reads at job start) are loaded with a short-lived
  * ticket and rewritten; never-generated chunks are skipped — chunkgen covers them at the
- * committed stage. Writes go straight into {@link LevelChunkSection#setBlockState} (no
- * neighbor reactions); when a chunk's last column is written its heightmaps are re-primed
- * and it goes through {@link BudgetedBlockWriter#relightAndResend} (full light rebuild via
- * the task queue + resend to watching clients). At most
- * {@value #MAX_CHUNK_FINISHES_PER_TICK} chunks finish per tick.</p>
+ * committed stage. A chunk still mid-generation on a worker thread at job start resolves
+ * as not-stamped even though it may have generated with the OLD stage: such chunks get a
+ * {@code getChunkNow} re-check when the sweep first reaches them and one more look in a
+ * retry pass at sweep end, which re-enqueues the band columns of any that finished
+ * generating in the meantime. Writes go straight into
+ * {@link LevelChunkSection#setBlockState} (no neighbor reactions), scheduling a fluid
+ * tick for every written fluid block so fresh river water and moat lava start flowing;
+ * when a chunk's last column is written its heightmaps are re-primed and it goes through
+ * {@link BudgetedBlockWriter#relightAndResend} (full light rebuild via the task queue +
+ * resend to watching clients). At most {@value #MAX_CHUNK_FINISHES_PER_TICK} chunks
+ * finish per tick.</p>
+ *
+ * <p><b>Structures</b>: growth sweeps must not bulldoze landmark set-pieces stamped at an
+ * earlier stage (the stage-4 village sprawls into the stage-5 band). No stamped-piece
+ * record is persisted, so protection derives from the authored landmark table
+ * ({@link DiscMapData#landmarks}): every landmark whose stage was already stamped when
+ * the sweep starts contributes an XZ no-write box of its measured piece extent (villages
+ * {@value #VILLAGE_PROTECTION_EXTENT}, temples {@value #TEMPLE_PROTECTION_EXTENT}, else
+ * the authored radius) padded by {@value #STRUCTURE_PROTECTION_MARGIN} blocks; band
+ * columns inside a box are skipped, their block entities kept. Erase/downgrade sweeps
+ * rewrite everything — lowering the stage is a dev tool that deliberately removes
+ * structures ({@code StructureStamper} re-stamps them when the stage grows back).</p>
  *
  * <p><b>Budget</b>: {@code ringBlocksBudgetMs} (general.json, default 2 ms) of nanoTime per
  * tick in animate mode, plus a pacing cap that stretches a sweep towards
@@ -93,6 +113,13 @@ public final class RingGrowthService {
     /** Leading-edge materialize FX throttle: one burst per 5 ticks ≈ 4/second. */
     private static final int FX_INTERVAL_TICKS = 5;
     private static final int STATS_LOG_INTERVAL_TICKS = 100;
+
+    /** Extra XZ pad (blocks) around a protected landmark's measured piece extent. */
+    private static final int STRUCTURE_PROTECTION_MARGIN = 8;
+    /** Measured half-extent of a stamped village (houses scatter far past the authored r=40). */
+    private static final int VILLAGE_PROTECTION_EXTENT = 64;
+    /** Measured half-extent of the stamped temples (slight overhang past the authored r=16). */
+    private static final int TEMPLE_PROTECTION_EXTENT = 24;
 
     /** Chunk NBT statuses BELOW {@code minecraft:noise}: no terrain stamped yet, chunkgen covers. */
     private static final Set<String> PRE_NOISE_STATUSES = Set.of(
@@ -190,14 +217,15 @@ public final class RingGrowthService {
     }
 
     /**
-     * Restart hygiene: persist each in-flight sweep's cursor one last time (the live
-     * persistence only lands every {@value #CURSOR_PERSIST_INTERVAL} columns) and drop the
-     * jobs — the static map must never leak stale {@code ServerLevel} references into the
-     * next world a singleplayer client opens. {@code WorldStageService.onServerStarted}
-     * resumes from the persisted cursor.
+     * Restart hygiene, part 1 — persist each in-flight sweep's cursor one last time (the
+     * live persistence only lands every {@value #CURSOR_PERSIST_INTERVAL} columns). This
+     * must happen on {@code ServerStoppingEvent}: it fires BEFORE the final world save,
+     * while {@code ServerStoppedEvent} fires after it, so anything written there would
+     * never reach disk. {@code WorldStageService.onServerStarted} resumes from the
+     * persisted cursor.
      */
     @SubscribeEvent
-    public static void onServerStopped(ServerStoppedEvent event) {
+    public static void onServerStopping(ServerStoppingEvent event) {
         for (Job job : JOBS.values()) {
             job.cancelled = true;
             if (!job.isRebuild) {
@@ -207,6 +235,15 @@ public final class RingGrowthService {
                         job.profile.name(), job.cursor, job.totalColumns());
             }
         }
+    }
+
+    /**
+     * Restart hygiene, part 2 — drop the jobs after the final save: the static map must
+     * never leak stale {@code ServerLevel} references into the next world a singleplayer
+     * client opens.
+     */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
         JOBS.clear();
     }
 
@@ -234,10 +271,24 @@ public final class RingGrowthService {
         final Long2IntOpenHashMap remainingPerChunk;
         /** Chunks that must be rewritten (loaded now, or on disk with terrain stamped). */
         final LongOpenHashSet rewriteChunks = new LongOpenHashSet();
+        /** Not-stamped chunks the sweep passed over; re-checked once by the end retry pass. */
+        final LongOpenHashSet skippedChunks = new LongOpenHashSet();
+        /** Chunks that actually had a column written — only these get finished (relight + resend). */
+        final LongOpenHashSet touchedChunks = new LongOpenHashSet();
         final ArrayDeque<Long> finishQueue = new ArrayDeque<>();
         final int columnsPerTickCap;
+        /**
+         * One {@link DiscMapData} snapshot for the whole job — a {@code disc_map.json}
+         * reload mid-sweep must never mix old and new map data between this job's columns.
+         */
+        final DiscMapData map;
+        /** XZ no-write boxes of landmarks already stamped when this sweep started (growth only). */
+        final List<ProtectedZone> protectedZones;
 
         long cursor;
+        /** Columns of late-generated chunks re-enqueued at sweep end; null until the retry pass ran. */
+        long[] retryColumns;
+        long retryCursor;
         int pendingChunkResolves;
         boolean resolving = true;
         boolean cancelled;
@@ -253,6 +304,7 @@ public final class RingGrowthService {
         final long startedAtNanos = System.nanoTime();
         long columnsWritten;
         long columnsSkipped;
+        long columnsProtected;
         int chunksRewritten;
         int chunksLoadedFromDisk;
         long lastFxGameTime = Long.MIN_VALUE;
@@ -278,6 +330,8 @@ public final class RingGrowthService {
 
             this.erase = outerRadiusOf(toStage) < outerRadiusOf(fromStage);
             this.fusionOrdered = !this.erase && FusionSequence.isIntroFusion(profile, fromStage, toStage);
+            this.map = DiscMapData.get();
+            this.protectedZones = buildProtectedZones();
             this.columns = buildOrderedColumns(this.erase);
             this.cursor = Math.min(Math.max(0L, resumeCursor), this.columns.length);
             this.columnsPerTickCap = animate
@@ -424,6 +478,65 @@ public final class RingGrowthService {
             return !status.isEmpty() && !PRE_NOISE_STATUSES.contains(status);
         }
 
+        /**
+         * No-write boxes of the landmark set-pieces already stamped when this sweep
+         * starts (see the class javadoc, <b>Structures</b>). "Already stamped" means
+         * stage &le; {@link #fromStage} for growth — landmarks of stages in
+         * {@code (from, to]} are stamped AFTER the sweep, onto fresh terrain — and
+         * stage &le; the committed stage ({@link #evalStage}) for rebuilds, which
+         * re-stamp nothing. Erase sweeps protect nothing: lowering the stage is a dev
+         * tool that deliberately removes structures.
+         */
+        private List<ProtectedZone> buildProtectedZones() {
+            if (this.erase) {
+                return List.of();
+            }
+            int stampedThrough = this.isRebuild ? this.evalStage : this.fromStage;
+            List<ProtectedZone> zones = new ArrayList<>();
+            for (DiscMapData.Landmark landmark : this.map.landmarks(this.profile)) {
+                if (landmark.stage() > stampedThrough) {
+                    continue;
+                }
+                int extent = protectionExtent(landmark) + STRUCTURE_PROTECTION_MARGIN;
+                zones.add(new ProtectedZone(landmark.x() - extent, landmark.z() - extent,
+                        landmark.x() + extent, landmark.z() + extent));
+            }
+            return List.copyOf(zones);
+        }
+
+        /**
+         * Measured footprint half-extent of a stamped landmark. The authored radius is
+         * an anchor hint, not a bound — stamped village houses scatter far past r=40
+         * and the temples overhang r=16 slightly; anything unrecognised falls back to
+         * its authored radius.
+         */
+        private static int protectionExtent(DiscMapData.Landmark landmark) {
+            if (landmark.id().contains("village")) {
+                return VILLAGE_PROTECTION_EXTENT;
+            }
+            if (landmark.id().contains("temple")) {
+                return TEMPLE_PROTECTION_EXTENT;
+            }
+            return landmark.radius();
+        }
+
+        /** Whether the column lies inside a stamped-structure no-write box (never on erase). */
+        private boolean isProtectedColumn(int x, int z) {
+            for (ProtectedZone zone : this.protectedZones) {
+                if (zone.contains(x, z)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Axis-aligned XZ no-write box around one already-stamped landmark. */
+        private record ProtectedZone(int minX, int minZ, int maxX, int maxZ) {
+            boolean contains(int x, int z) {
+                return x >= this.minX && x <= this.maxX && z >= this.minZ && z <= this.maxZ;
+            }
+        }
+
         void tick() {
             if (this.cancelled || this.done) {
                 return;
@@ -449,35 +562,58 @@ public final class RingGrowthService {
             int colsThisTick = 0;
             int loadsThisTick = 0;
             int maxLoads = this.animate ? 1 : 4;
+            // One player scan per tick, reused by every column written this tick.
+            List<ServerPlayer> rescueCandidates = this.erase ? List.of() : collectRescueCandidates();
 
-            while (this.cursor < this.columns.length && colsThisTick < this.columnsPerTickCap
-                    && System.nanoTime() - start < budgetNanos) {
-                long packed = this.columns[(int) this.cursor];
+            while (colsThisTick < this.columnsPerTickCap && System.nanoTime() - start < budgetNanos) {
+                boolean retryPhase = this.cursor >= this.columns.length;
+                if (retryPhase) {
+                    if (this.retryColumns == null) {
+                        resolveRetryColumns();
+                    }
+                    if (this.retryCursor >= this.retryColumns.length) {
+                        break;
+                    }
+                }
+                long packed = retryPhase
+                        ? this.retryColumns[(int) this.retryCursor]
+                        : this.columns[(int) this.cursor];
                 long chunkKey = chunkKeyOf(packed);
-                if (this.rewriteChunks.contains(chunkKey)) {
-                    LevelChunk chunk = chunkFor(chunkKey, loadsThisTick < maxLoads);
-                    if (chunk == null) {
-                        break; // unloaded on-disk chunk and no load budget left this tick
+                int x = unpackX(packed);
+                int z = unpackZ(packed);
+                if (this.rewriteChunks.contains(chunkKey) || lateGeneratedChunkCheck(chunkKey)) {
+                    if (isProtectedColumn(x, z)) {
+                        this.columnsProtected++;
+                    } else {
+                        LevelChunk chunk = chunkFor(chunkKey, loadsThisTick < maxLoads);
+                        if (chunk == null) {
+                            break; // unloaded on-disk chunk and no load budget left this tick
+                        }
+                        if (this.lastChunkCallLoaded) {
+                            this.lastChunkCallLoaded = false;
+                            loadsThisTick++;
+                        }
+                        writeColumn(chunk, x, z, gameTime, rescueCandidates);
+                        this.touchedChunks.add(chunkKey);
+                        this.columnsWritten++;
                     }
-                    if (this.lastChunkCallLoaded) {
-                        this.lastChunkCallLoaded = false;
-                        loadsThisTick++;
-                    }
-                    writeColumn(chunk, unpackX(packed), unpackZ(packed), gameTime);
-                    this.columnsWritten++;
                 } else {
                     this.columnsSkipped++;
                 }
                 if (this.remainingPerChunk.addTo(chunkKey, -1) == 1
-                        && this.rewriteChunks.contains(chunkKey)) {
+                        && this.touchedChunks.contains(chunkKey)) {
                     this.finishQueue.add(chunkKey);
                 }
-                this.cursor++;
-                colsThisTick++;
-                if (!this.isRebuild && this.cursor % CURSOR_PERSIST_INTERVAL == 0) {
-                    EclipseWorldState.get(this.level.getServer())
-                            .setGrowthCursor(this.profile.name(), this.fromStage, this.cursor);
+                if (retryPhase) {
+                    this.retryCursor++;
+                } else {
+                    this.cursor++;
+                    if (!this.isRebuild && this.cursor % CURSOR_PERSIST_INTERVAL == 0) {
+                        EclipseWorldState.get(this.level.getServer())
+                                .setGrowthCursor(this.profile.name(), this.fromStage, this.cursor);
+                    }
                 }
+                colsThisTick++;
             }
 
             int finishes = 0;
@@ -492,9 +628,68 @@ public final class RingGrowthService {
                 EclipseMod.LOGGER.info("Ring growth progress: {}", describeProgress());
             }
 
-            if (this.cursor >= this.columns.length && this.finishQueue.isEmpty()) {
+            if (this.cursor >= this.columns.length && this.retryColumns != null
+                    && this.retryCursor >= this.retryColumns.length && this.finishQueue.isEmpty()) {
                 complete();
             }
+        }
+
+        /**
+         * Late-generated chunk re-check, once per chunk the first time the sweep reaches
+         * it: {@link #resolveChunks} may have run while this chunk was still
+         * mid-generation on a worker thread, resolving it as "not stamped" even though
+         * its terrain (possibly generated against the OLD stage seam) lands moments
+         * later. Chunks that are fully loaded NOW are promoted into the rewrite set;
+         * the rest go to {@link #skippedChunks} for one more look in
+         * {@link #resolveRetryColumns}.
+         */
+        private boolean lateGeneratedChunkCheck(long chunkKey) {
+            if (this.skippedChunks.contains(chunkKey)) {
+                return false;
+            }
+            if (this.level.getChunkSource().getChunkNow(
+                    ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey)) != null) {
+                this.rewriteChunks.add(chunkKey);
+                return true;
+            }
+            this.skippedChunks.add(chunkKey);
+            return false;
+        }
+
+        /**
+         * End-of-sweep retry pass (runs once, when the main cursor is exhausted): every
+         * chunk skipped as "not stamped" gets one more {@code getChunkNow} look — any
+         * that finished generating mid-sweep are promoted into the rewrite set and their
+         * band columns re-enqueued, so a chunk that was mid-generation at job start is
+         * no longer skipped forever. Chunks that generated AND unloaded again during the
+         * sweep are still missed (rare; the next commit's band overlap self-heals them);
+         * never-generated chunks stay skipped — chunkgen covers them.
+         */
+        private void resolveRetryColumns() {
+            LongOpenHashSet lateChunks = new LongOpenHashSet();
+            for (long chunkKey : this.skippedChunks) {
+                if (this.level.getChunkSource().getChunkNow(
+                        ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey)) != null) {
+                    lateChunks.add(chunkKey);
+                }
+            }
+            LongArrayList retry = new LongArrayList();
+            if (!lateChunks.isEmpty()) {
+                for (long packed : this.columns) {
+                    long chunkKey = chunkKeyOf(packed);
+                    if (lateChunks.contains(chunkKey)) {
+                        retry.add(packed);
+                        this.remainingPerChunk.addTo(chunkKey, 1);
+                    }
+                }
+                this.rewriteChunks.addAll(lateChunks);
+                // Resumed sweeps may re-enqueue columns skipped before the restart.
+                this.columnsSkipped = Math.max(0L, this.columnsSkipped - retry.size());
+                EclipseMod.LOGGER.info(
+                        "Ring growth {}: {} band chunks finished generating mid-sweep — re-enqueueing {} columns",
+                        this.profile.name(), lateChunks.size(), retry.size());
+            }
+            this.retryColumns = retry.toLongArray();
         }
 
         /** The (cached) full chunk for a chunk key, sync-loading on-disk chunks when allowed. */
@@ -521,11 +716,15 @@ public final class RingGrowthService {
         /**
          * Rewrites one column with the terrain function's output at {@link #evalStage},
          * straight into the chunk sections (no block updates, no neighbor reactions —
-         * the flag 2|16 equivalent for bulk section writes). Fires the leading-edge
-         * materialize FX for columns that turn from void to solid.
+         * the flag 2|16 equivalent for bulk section writes). Every written fluid block
+         * gets a scheduled fluid tick: section writes fire no updates, so fresh river
+         * water and moat lava would otherwise sit frozen at channel/rim edges (the
+         * chunkgen counterpart marks generated fluid positions for postprocessing).
+         * Fires the leading-edge materialize FX for columns that turn from void to solid.
          */
-        private void writeColumn(LevelChunk chunk, int x, int z, long gameTime) {
-            DiscColumn column = DiscTerrainFunction.column(this.profile, x, z, this.evalStage);
+        private void writeColumn(LevelChunk chunk, int x, int z, long gameTime,
+                List<ServerPlayer> rescueCandidates) {
+            DiscColumn column = DiscTerrainFunction.column(this.profile, x, z, this.evalStage, this.map);
             int lx = x & 15;
             int lz = z & 15;
             boolean wasVoid = this.animate && column.inside()
@@ -541,11 +740,16 @@ public final class RingGrowthService {
                 for (int dy = 0; dy < 16; dy++) {
                     BlockState state = DiscTerrainFunction.stateInColumn(column, sectionMinY + dy);
                     section.setBlockState(lx, dy, lz, state, false);
+                    FluidState fluid = state.getFluidState();
+                    if (!fluid.isEmpty()) {
+                        this.level.scheduleTick(new BlockPos(x, sectionMinY + dy, z),
+                                fluid.getType(), fluid.getType().getTickDelay(this.level));
+                    }
                 }
             }
             chunk.setUnsaved(true);
             if (!this.erase && column.inside()) {
-                rescueEntombedPlayers(column);
+                rescueEntombedPlayers(column, rescueCandidates);
             }
             if (wasVoid && gameTime - this.lastFxGameTime >= FX_INTERVAL_TICKS) {
                 this.lastFxGameTime = gameTime;
@@ -559,6 +763,22 @@ public final class RingGrowthService {
         private static final int RESCUE_REANCHOR_GRACE_TICKS = 10;
 
         /**
+         * Survival/adventure players of this level — the rescue candidate list, collected
+         * ONCE per {@link #tick} and reused by every column written that tick (positions
+         * cannot change while the sweep loop runs inside one tick, and scanning the full
+         * player list per written column was measurable at instant-sweep column rates).
+         */
+        private List<ServerPlayer> collectRescueCandidates() {
+            List<ServerPlayer> candidates = new ArrayList<>();
+            for (ServerPlayer player : this.level.players()) {
+                if (!player.isSpectator() && !player.isCreative()) {
+                    candidates.add(player);
+                }
+            }
+            return candidates;
+        }
+
+        /**
          * Entombment protection (GROW sweeps only): a just-written column that intersects a
          * survival/adventure player would suffocate them inside solid terrain — permanent
          * heart loss. Pops any such player up onto the new surface ({@code surfaceY + 1};
@@ -567,17 +787,19 @@ public final class RingGrowthService {
          * cinematics freeze watchers during animated growth), re-anchors the lock at the
          * new position so the rubber band does not drag them back underground.
          */
-        private void rescueEntombedPlayers(DiscColumn column) {
-            for (ServerPlayer player : this.level.players()) {
-                if (Mth.floor(player.getX()) != column.x() || Mth.floor(player.getZ()) != column.z()
-                        || player.isSpectator() || player.isCreative()) {
+        private void rescueEntombedPlayers(DiscColumn column, List<ServerPlayer> candidates) {
+            for (ServerPlayer player : candidates) {
+                if (Mth.floor(player.getX()) != column.x() || Mth.floor(player.getZ()) != column.z()) {
                     continue;
                 }
                 double feetY = player.getY();
-                // The written solid band is bottomY..surfaceY; the player collider spans
-                // feet..feet+1.8, so anything below that band (or clear above it) is safe.
-                if (feetY < column.bottomY() - 2 || feetY >= column.surfaceY() + 1) {
+                // The written solid band is bottomY..surfaceY, but trunk/cactus/canopy and
+                // moat lava carry written blocks up to topY; the collider spans feet..feet+1.8.
+                if (feetY < column.bottomY() - 2 || feetY >= column.topY() + 1) {
                     continue;
+                }
+                if (Mth.floor(feetY) > column.surfaceY() && !intersectsWrittenBlocks(column, feetY)) {
+                    continue; // above the band in an air gap (e.g. under a canopy) — safe
                 }
                 int targetY = Math.max(column.surfaceY(), column.lavaTopY()) + 1;
                 while (targetY <= column.topY()
@@ -599,15 +821,34 @@ public final class RingGrowthService {
             }
         }
 
+        /**
+         * Whether the just-written column content actually threatens a collider whose
+         * feet sit at {@code feetY}: a motion-blocking block (trunk, canopy, cactus) or
+         * any fluid (fresh moat lava burns, channel water drowns) within feet..feet+1.8.
+         * Only consulted for players ABOVE the solid band — inside it, rescue is
+         * unconditional.
+         */
+        private static boolean intersectsWrittenBlocks(DiscColumn column, double feetY) {
+            for (int y = Mth.floor(feetY); y <= Mth.floor(feetY + 1.8D); y++) {
+                BlockState state = DiscTerrainFunction.stateInColumn(column, y);
+                if (state.blocksMotion() || !state.getFluidState().isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private int clampY(int y) {
             return Math.max(this.level.getMinBuildHeight(),
                     Math.min(this.level.getMaxBuildHeight() - 1, y));
         }
 
         /**
-         * A chunk's last band column was written: drop orphaned block entities, re-prime the
-         * heightmaps, and hand the chunk to {@link BudgetedBlockWriter#relightAndResend}
-         * (full light rebuild through the task queue + resend to watching clients).
+         * A chunk's last band column was written: drop orphaned block entities (except in
+         * protected structure columns, whose blocks were never rewritten — village chests
+         * must survive), re-prime the heightmaps, and hand the chunk to
+         * {@link BudgetedBlockWriter#relightAndResend} (full light rebuild through the
+         * task queue + resend to watching clients).
          */
         private void finishChunk(long chunkKey) {
             LevelChunk chunk = chunkFor(chunkKey, true);
@@ -616,7 +857,8 @@ public final class RingGrowthService {
             long outerSq = (long) this.outerRadius * this.outerRadius;
             for (BlockPos bePos : List.copyOf(chunk.getBlockEntitiesPos())) {
                 long distSq = (long) bePos.getX() * bePos.getX() + (long) bePos.getZ() * bePos.getZ();
-                if (distSq >= innerSq && distSq <= outerSq) {
+                if (distSq >= innerSq && distSq <= outerSq
+                        && !isProtectedColumn(bePos.getX(), bePos.getZ())) {
                     chunk.removeBlockEntity(bePos);
                 }
             }
@@ -631,10 +873,12 @@ public final class RingGrowthService {
             double seconds = (System.nanoTime() - this.startedAtNanos) / 1.0e9D;
             EclipseMod.LOGGER.info(
                     "Ring growth complete: {} stage {} -> {}{} in {} s — {} columns written, {} skipped "
-                            + "(never generated), {} chunks rewritten ({} loaded from disk), {} columns/s",
+                            + "(never generated), {} protected (stamped structures), {} chunks rewritten "
+                            + "({} loaded from disk), {} columns/s",
                     this.profile.name(), this.fromStage, this.toStage, this.isRebuild ? " [rebuild]" : "",
                     String.format(java.util.Locale.ROOT, "%.1f", seconds),
-                    this.columnsWritten, this.columnsSkipped, this.chunksRewritten, this.chunksLoadedFromDisk,
+                    this.columnsWritten, this.columnsSkipped, this.columnsProtected, this.chunksRewritten,
+                    this.chunksLoadedFromDisk,
                     String.format(java.util.Locale.ROOT, "%.0f", this.columns.length / Math.max(0.05D, seconds)));
             if (!this.isRebuild) {
                 WorldStageService.onSweepComplete(this.level, this.profile, this.fromStage, this.toStage);

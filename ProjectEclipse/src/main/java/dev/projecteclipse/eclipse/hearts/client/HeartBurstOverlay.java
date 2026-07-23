@@ -63,6 +63,11 @@ public final class HeartBurstOverlay {
             animationTick = -1;
             return;
         }
+        if (minecraft.isPaused()) {
+            // ClientTickEvent keeps firing while paused with tickCount frozen — without
+            // this the % 40 heartbeat gate can hold true and re-fire every client tick.
+            return;
+        }
 
         if (animationTick >= 0 && ++animationTick >= ANIMATION_TICKS) {
             heartIndex = -1;
@@ -76,8 +81,9 @@ public final class HeartBurstOverlay {
                 && lives >= 1 && lives <= 2
                 && minecraft.player.isAlive()
                 && minecraft.player.tickCount % 40 == 0) {
+            // Pitch 0.5 is the sound engine's clamp floor — the deepest dread available.
             minecraft.getSoundManager().play(
-                    SimpleSoundInstance.forUI(SoundEvents.WARDEN_HEARTBEAT, 0.62F, 0.16F));
+                    SimpleSoundInstance.forUI(SoundEvents.WARDEN_HEARTBEAT, 0.5F, 0.62F));
         }
     }
 
