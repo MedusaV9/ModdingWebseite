@@ -86,7 +86,7 @@ public final class XboxEventService {
     private XboxEventService() {}
 
     /** Exit paths — pick the right player-facing message. */
-    public enum ExitReason { DEATH, LEFT, TIME_UP, CLOSED }
+    public enum ExitReason { DEATH, DEATH_LOCKED, LEFT, LEFT_UNLOCKED, TIME_UP, CLOSED }
 
     /** Common-setup hookups (MOD bus): chest-loot provider + config bootstrap. */
     @EventBusSubscriber(modid = EclipseMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
@@ -501,7 +501,9 @@ public final class XboxEventService {
 
         String key = switch (reason) {
             case DEATH -> "eclipse.xbox.exit.death";
+            case DEATH_LOCKED -> "eclipse.xbox.exit.death_locked";
             case LEFT -> "eclipse.xbox.exit.left";
+            case LEFT_UNLOCKED -> "eclipse.xbox.exit.left_unlocked";
             case TIME_UP -> "eclipse.xbox.exit.timeup";
             case CLOSED -> "eclipse.xbox.exit.closed";
         };
@@ -529,9 +531,15 @@ public final class XboxEventService {
 
         MinecraftServer server = player.server;
         XboxEventState state = XboxEventState.get(server);
-        exitToAnchor(server, state, player, ExitReason.DEATH);
-        EclipseMod.LOGGER.info("Protected xbox death of {} ({}), returned to anchor",
-                player.getScoreboardName(), event.getSource().getMsgId());
+        boolean lockedOut = isActiveEventForPlayer(state, player)
+                && state.lockoutMode().locksDeath();
+        if (lockedOut) {
+            state.lockOut(player.getUUID());
+        }
+        exitToAnchor(server, state, player,
+                lockedOut ? ExitReason.DEATH_LOCKED : ExitReason.DEATH);
+        EclipseMod.LOGGER.info("Protected xbox death of {} ({}), returned to anchor (locked out: {})",
+                player.getScoreboardName(), event.getSource().getMsgId(), lockedOut);
     }
 
     // ================================================================== login/logout edges
@@ -580,16 +588,23 @@ public final class XboxEventService {
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
         }
+        XboxEventState state = XboxEventState.get(player.server);
+        boolean willLockOut = isActiveEventForPlayer(state, player)
+                && state.lockoutMode().locksVoluntaryExit();
         PENDING_LEAVE_CONFIRMS.put(player.getUUID(),
                 System.currentTimeMillis() + LEAVE_CONFIRM_WINDOW_MILLIS);
-        MutableComponent confirm = Component.translatable("eclipse.xbox.leave.confirm")
+        MutableComponent confirm = Component.translatable(willLockOut
+                ? "eclipse.xbox.leave.confirm"
+                : "eclipse.xbox.leave.confirm_unlocked")
                 .withStyle(ChatFormatting.YELLOW);
         confirm.append(Component.literal(" "));
         confirm.append(Component.translatable("eclipse.xbox.leave.confirmbutton")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true).withUnderlined(true)
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/xboxleave confirm"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("eclipse.xbox.leave.confirm.hover")))));
+                                Component.translatable(willLockOut
+                                        ? "eclipse.xbox.leave.confirm.hover"
+                                        : "eclipse.xbox.leave.confirm_unlocked.hover")))));
         player.displayClientMessage(confirm, false);
         return 1;
     }
@@ -607,14 +622,15 @@ public final class XboxEventService {
         }
         MinecraftServer server = player.server;
         XboxEventState state = XboxEventState.get(server);
-        boolean activeEvent = state.phase() == XboxEventState.Phase.OPEN
-                && state.worldId().equals(XboxDimensions.worldIdOf(player.level().dimension()));
-        if (activeEvent) {
+        boolean activeEvent = isActiveEventForPlayer(state, player);
+        boolean lockedOut = activeEvent && state.lockoutMode().locksVoluntaryExit();
+        if (lockedOut) {
             state.lockOut(player.getUUID());
         }
-        exitToAnchor(server, state, player, ExitReason.LEFT);
+        exitToAnchor(server, state, player,
+                lockedOut ? ExitReason.LEFT : ExitReason.LEFT_UNLOCKED);
         EclipseMod.LOGGER.info("{} voluntarily left the xbox event (locked out: {})",
-                player.getScoreboardName(), activeEvent);
+                player.getScoreboardName(), lockedOut);
         return 1;
     }
 
@@ -697,9 +713,9 @@ public final class XboxEventService {
 
     /**
      * {@code ClassicChestLoot} provider (installed in common setup, W8 wiring): recorded
-     * baked stacks for a classic chest position inside an Xbox dimension; empty elsewhere.
-     * Block items are classic-mapped at spill time; music discs and other non-block items
-     * stay vanilla (playable souvenirs, §2.14).
+     * baked stacks for a classic chest position inside an Xbox dimension, consumed exactly
+     * once per event instance; empty elsewhere. Block items are classic-mapped at spill
+     * time; music discs and other non-block items stay vanilla (playable souvenirs, §2.14).
      */
     public static List<ItemStack> lootFor(ServerLevel level, BlockPos pos) {
         String worldId = XboxDimensions.worldIdOf(level.dimension());
@@ -708,6 +724,10 @@ public final class XboxEventService {
         }
         List<ItemStack> recorded = XboxWorldsManifest.loot(level.getServer(), worldId).get(pos);
         if (recorded == null || recorded.isEmpty()) {
+            return List.of();
+        }
+        XboxEventState state = XboxEventState.get(level.getServer());
+        if (!state.consumeChestPosition(worldId, pos)) {
             return List.of();
         }
         List<ItemStack> spilled = new ArrayList<>(recorded.size());
@@ -740,6 +760,11 @@ public final class XboxEventService {
         }
         ServerLevel level = server.getLevel(dimension);
         return level == null ? List.of() : List.copyOf(level.players());
+    }
+
+    private static boolean isActiveEventForPlayer(XboxEventState state, ServerPlayer player) {
+        return state.phase() == XboxEventState.Phase.OPEN
+                && state.worldId().equals(XboxDimensions.worldIdOf(player.level().dimension()));
     }
 
     private static void broadcast(MinecraftServer server, Component message) {

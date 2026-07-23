@@ -36,6 +36,7 @@ public final class XboxEventConfig {
             int defaultMinutes,
             String rewardBuffId,
             int rewardMinutes,
+            boolean lockoutOnDeath,
             int portalSearchMinRadius,
             int portalSearchMaxRadius,
             boolean announceKeys,
@@ -70,8 +71,10 @@ public final class XboxEventConfig {
             String raw = Files.readString(file, StandardCharsets.UTF_8);
             Values parsed = parse(JsonParser.parseString(raw).getAsJsonObject());
             values = parsed;
-            EclipseMod.LOGGER.info("Loaded {} (defaultMinutes={}, reward={} {}min, worlds={})",
-                    file, parsed.defaultMinutes(), parsed.rewardBuffId(), parsed.rewardMinutes(), parsed.worlds());
+            EclipseMod.LOGGER.info(
+                    "Loaded {} (defaultMinutes={}, reward={} {}min, lockoutOnDeath={}, worlds={})",
+                    file, parsed.defaultMinutes(), parsed.rewardBuffId(), parsed.rewardMinutes(),
+                    parsed.lockoutOnDeath(), parsed.worlds());
         } catch (IOException | RuntimeException e) {
             EclipseMod.LOGGER.error("Failed to load {} — keeping previous values", file, e);
         }
@@ -82,7 +85,8 @@ public final class XboxEventConfig {
     }
 
     private static Values defaults() {
-        return new Values(30, "double_skill_xp", 60, 8, 24, true, List.of("tu1", "tu12", "tu14"));
+        return new Values(30, "double_skill_xp", 60, false,
+                8, 24, true, List.of("tu1", "tu12", "tu14"));
     }
 
     private static Values parse(JsonObject root) {
@@ -100,6 +104,8 @@ public final class XboxEventConfig {
                 rewardMinutes = reward.get("minutes").getAsInt();
             }
         }
+        boolean lockoutOnDeath = root.has("lockoutOnDeath")
+                && root.get("lockoutOnDeath").getAsBoolean();
 
         int searchMin = def.portalSearchMinRadius();
         int searchMax = def.portalSearchMaxRadius();
@@ -131,7 +137,8 @@ public final class XboxEventConfig {
         }
 
         return new Values(Math.max(1, defaultMinutes), rewardBuffId, Math.max(1, rewardMinutes),
-                Math.max(1, searchMin), Math.max(1, searchMax), announceKeys, List.copyOf(worlds));
+                lockoutOnDeath, Math.max(1, searchMin), Math.max(1, searchMax),
+                announceKeys, List.copyOf(worlds));
     }
 
     private static void writeDefaults(Path file) throws IOException {
@@ -142,6 +149,7 @@ public final class XboxEventConfig {
         reward.addProperty("buffId", def.rewardBuffId());
         reward.addProperty("minutes", def.rewardMinutes());
         root.add("reward", reward);
+        root.addProperty("lockoutOnDeath", def.lockoutOnDeath());
         JsonObject portal = new JsonObject();
         portal.addProperty("searchMinRadius", def.portalSearchMinRadius());
         portal.addProperty("searchMaxRadius", def.portalSearchMaxRadius());

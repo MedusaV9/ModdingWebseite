@@ -1,0 +1,24 @@
+{
+  "en_us": {
+    "eclipse.xbox.enter.locked": "You are locked out of this expedition until the next event.",
+    "eclipse.xbox.exit.death_locked": "The rift caught you! Nothing was lost and no life was spent, but you cannot re-enter this event.",
+    "eclipse.xbox.exit.left_unlocked": "You left the old world. You may re-enter while this event remains open.",
+    "eclipse.xbox.leave.confirm_unlocked": "Leave the old world now? You may return while this event remains open.",
+    "eclipse.xbox.leave.confirm_unlocked.hover": "Confirms leaving — inventory is kept and re-entry remains available.",
+    "dev.eclipse.xbox.lockout.mode": "Lockout mode set to %1$s for event instance #%2$s.",
+    "dev.eclipse.xbox.status.lockout_mode": "Lockout mode: %1$s",
+    "dev.eclipse.doc.xboxevent.lockout.clear": "Clears event lockouts for one player or all players in the current instance.",
+    "dev.eclipse.doc.xboxevent.lockout.mode": "Selects which exits lock re-entry for this instance: voluntary, death, or both."
+  },
+  "de_de": {
+    "eclipse.xbox.enter.locked": "Du bist bis zum nächsten Event von dieser Expedition ausgesperrt.",
+    "eclipse.xbox.exit.death_locked": "Der Riss hat dich erwischt! Nichts ging verloren und kein Leben wurde verbraucht, aber du kannst dieses Event nicht erneut betreten.",
+    "eclipse.xbox.exit.left_unlocked": "Du hast die alte Welt verlassen. Solange dieses Event offen ist, kannst du zurückkehren.",
+    "eclipse.xbox.leave.confirm_unlocked": "Die alte Welt jetzt verlassen? Solange dieses Event offen ist, kannst du zurückkehren.",
+    "eclipse.xbox.leave.confirm_unlocked.hover": "Bestätigt das Verlassen — Inventar bleibt und der Wiedereintritt ist weiterhin möglich.",
+    "dev.eclipse.xbox.lockout.mode": "Aussperrmodus für Event-Instanz #%2$s auf %1$s gesetzt.",
+    "dev.eclipse.xbox.status.lockout_mode": "Aussperrmodus: %1$s",
+    "dev.eclipse.doc.xboxevent.lockout.clear": "Hebt Event-Aussperrungen für einen Spieler oder alle Spieler der aktuellen Instanz auf.",
+    "dev.eclipse.doc.xboxevent.lockout.mode": "Legt fest, welche Austritte den Wiedereintritt für diese Instanz sperren: freiwillig, Tod oder beides."
+  }
+}

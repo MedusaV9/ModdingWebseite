@@ -48,9 +48,43 @@ public final class XboxEventState extends SavedData {
         }
     }
 
+    /** Exit reasons that lock re-entry for the current event instance. */
+    public enum LockoutMode {
+        VOLUNTARY(true, false),
+        DEATH(false, true),
+        BOTH(true, true);
+
+        private final boolean lockVoluntaryExit;
+        private final boolean lockDeath;
+
+        LockoutMode(boolean lockVoluntaryExit, boolean lockDeath) {
+            this.lockVoluntaryExit = lockVoluntaryExit;
+            this.lockDeath = lockDeath;
+        }
+
+        public boolean locksVoluntaryExit() {
+            return lockVoluntaryExit;
+        }
+
+        public boolean locksDeath() {
+            return lockDeath;
+        }
+
+        static LockoutMode byName(String name, LockoutMode fallback) {
+            for (LockoutMode mode : values()) {
+                if (mode.name().equalsIgnoreCase(name)) {
+                    return mode;
+                }
+            }
+            return fallback;
+        }
+    }
+
     /** Where a participant entered from — restored verbatim on any exit path. */
     public record ReturnAnchor(ResourceKey<Level> dimension, double x, double y, double z,
             float yaw, float pitch) {}
+
+    private record ConsumedChest(String worldId, long packedPos) {}
 
     private static final String TAG_PHASE = "phase";
     private static final String TAG_WORLD_ID = "worldId";
@@ -59,6 +93,8 @@ public final class XboxEventState extends SavedData {
     private static final String TAG_PORTAL = "portal";
     private static final String TAG_PARTICIPANTS = "participants";
     private static final String TAG_LOCKED_OUT = "lockedOut";
+    private static final String TAG_LOCKOUT_MODE = "lockoutMode";
+    private static final String TAG_CONSUMED_CHESTS = "consumedChests";
     private static final String TAG_ANCHORS = "returnAnchors";
     private static final String TAG_REWARD_BUFF = "rewardBuffId";
     private static final String TAG_REWARD_MINUTES = "rewardMinutes";
@@ -73,6 +109,8 @@ public final class XboxEventState extends SavedData {
     private BlockPos portalPos;
     private final Set<UUID> participants = new HashSet<>();
     private final Map<UUID, Integer> lockedOut = new HashMap<>();
+    private LockoutMode lockoutMode = LockoutMode.VOLUNTARY;
+    private final Set<ConsumedChest> consumedChests = new HashSet<>();
     private final Map<UUID, ReturnAnchor> returnAnchors = new HashMap<>();
     /** Empty string / {@code 0} = fall back to {@code xboxevent.json} values. */
     private String rewardBuffId = "";
@@ -118,7 +156,8 @@ public final class XboxEventState extends SavedData {
 
     /**
      * Starts a fresh event instance: bumps {@link #instanceId()}, clears participants and
-     * stale anchors, prunes lockouts from earlier instances, and records world + end time.
+     * stale anchors/consumed chest positions, prunes lockouts from earlier instances,
+     * resets the reward override, and records world + end time.
      */
     public void beginInstance(String newWorldId, long endsAt) {
         this.instanceId++;
@@ -126,6 +165,10 @@ public final class XboxEventState extends SavedData {
         this.endsAtEpochMillis = endsAt;
         this.participants.clear();
         this.returnAnchors.clear();
+        this.consumedChests.clear();
+        this.rewardBuffId = "";
+        this.rewardMinutes = 0;
+        this.lockoutMode = configuredDefaultLockoutMode();
         int current = this.instanceId;
         this.lockedOut.values().removeIf(instance -> instance != current);
         this.phase = Phase.ANNOUNCED;
@@ -170,7 +213,7 @@ public final class XboxEventState extends SavedData {
 
     // ------------------------------------------------------------------ lockouts
 
-    /** Locks {@code uuid} out of the CURRENT instance (voluntary exit, §2.13.6). */
+    /** Locks {@code uuid} out of the current instance after a configured exit reason. */
     public void lockOut(UUID uuid) {
         lockedOut.put(uuid, instanceId);
         setDirty();
@@ -203,6 +246,37 @@ public final class XboxEventState extends SavedData {
         return Collections.unmodifiableMap(new HashMap<>(lockedOut));
     }
 
+    /** Exit reasons that create a lockout for this event instance. */
+    public LockoutMode lockoutMode() {
+        return lockoutMode;
+    }
+
+    /** Runtime override used by {@code /dev xboxevent lockout mode}. */
+    public void setLockoutMode(LockoutMode mode) {
+        this.lockoutMode = mode == null ? configuredDefaultLockoutMode() : mode;
+        setDirty();
+    }
+
+    // ------------------------------------------------------------------ one-shot chest loot
+
+    /**
+     * Atomically marks a baked manifest chest as consumed for this instance.
+     *
+     * @return {@code true} only for the first lookup of this world/position pair
+     */
+    public boolean consumeChestPosition(String manifestWorldId, BlockPos pos) {
+        boolean added = consumedChests.add(new ConsumedChest(manifestWorldId, pos.asLong()));
+        if (added) {
+            setDirty();
+        }
+        return added;
+    }
+
+    /** Test/status hook for restart-safe one-shot loot accounting. */
+    public boolean isChestPositionConsumed(String manifestWorldId, BlockPos pos) {
+        return consumedChests.contains(new ConsumedChest(manifestWorldId, pos.asLong()));
+    }
+
     // ------------------------------------------------------------------ return anchors
 
     public void putReturnAnchor(UUID uuid, ReturnAnchor anchor) {
@@ -227,7 +301,7 @@ public final class XboxEventState extends SavedData {
 
     // ------------------------------------------------------------------ reward override
 
-    /** Persisted {@code /dev xboxevent reward set} override; empty = config default. */
+    /** Persisted within the current instance; empty = config default. */
     public String rewardBuffIdOverride() {
         return rewardBuffId;
     }
@@ -251,6 +325,10 @@ public final class XboxEventState extends SavedData {
         state.worldId = tag.getString(TAG_WORLD_ID);
         state.endsAtEpochMillis = tag.getLong(TAG_ENDS_AT);
         state.instanceId = tag.getInt(TAG_INSTANCE_ID);
+        LockoutMode configuredMode = configuredDefaultLockoutMode();
+        state.lockoutMode = tag.contains(TAG_LOCKOUT_MODE, Tag.TAG_STRING)
+                ? LockoutMode.byName(tag.getString(TAG_LOCKOUT_MODE), configuredMode)
+                : configuredMode;
 
         if (tag.contains(TAG_PORTAL, Tag.TAG_COMPOUND)) {
             CompoundTag portal = tag.getCompound(TAG_PORTAL);
@@ -268,6 +346,14 @@ public final class XboxEventState extends SavedData {
         for (Tag lockTag : tag.getList(TAG_LOCKED_OUT, Tag.TAG_COMPOUND)) {
             CompoundTag lock = (CompoundTag) lockTag;
             state.lockedOut.put(lock.getUUID("uuid"), lock.getInt("instance"));
+        }
+
+        for (Tag chestTag : tag.getList(TAG_CONSUMED_CHESTS, Tag.TAG_COMPOUND)) {
+            CompoundTag chest = (CompoundTag) chestTag;
+            String manifestWorldId = chest.getString("world");
+            if (!manifestWorldId.isBlank()) {
+                state.consumedChests.add(new ConsumedChest(manifestWorldId, chest.getLong("pos")));
+            }
         }
 
         for (Tag anchorTag : tag.getList(TAG_ANCHORS, Tag.TAG_COMPOUND)) {
@@ -317,6 +403,16 @@ public final class XboxEventState extends SavedData {
             lockedOutTag.add(lock);
         }
         tag.put(TAG_LOCKED_OUT, lockedOutTag);
+        tag.putString(TAG_LOCKOUT_MODE, lockoutMode.name().toLowerCase(Locale.ROOT));
+
+        ListTag consumedChestsTag = new ListTag();
+        for (ConsumedChest chest : consumedChests) {
+            CompoundTag chestTag = new CompoundTag();
+            chestTag.putString("world", chest.worldId());
+            chestTag.putLong("pos", chest.packedPos());
+            consumedChestsTag.add(chestTag);
+        }
+        tag.put(TAG_CONSUMED_CHESTS, consumedChestsTag);
 
         ListTag anchorsTag = new ListTag();
         for (Map.Entry<UUID, ReturnAnchor> entry : returnAnchors.entrySet()) {
@@ -336,6 +432,10 @@ public final class XboxEventState extends SavedData {
         tag.putString(TAG_REWARD_BUFF, rewardBuffId);
         tag.putInt(TAG_REWARD_MINUTES, rewardMinutes);
         return tag;
+    }
+
+    private static LockoutMode configuredDefaultLockoutMode() {
+        return XboxEventConfig.get().lockoutOnDeath() ? LockoutMode.BOTH : LockoutMode.VOLUNTARY;
     }
 
     /** Helper for gametests: list of member names for status dumps, sorted for determinism. */
