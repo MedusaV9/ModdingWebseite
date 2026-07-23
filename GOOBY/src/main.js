@@ -401,6 +401,21 @@ async function boot() {
   }
   // ---- end V4/G64 block ----
 
+  // ---- V6/A1: cutscene director (PLAN6 Wave A/A1, single marked block) ----
+  // Registers the cinematic view driver (ui/cutsceneView.js) — it binds the
+  // PURE sequencer (systems/cutscene.js) to the live home scene under a
+  // strict camera lease with finally-restores — and arms the dev-harness
+  // `?cutscene=<id>` kick (plays after the next home enter, so this block
+  // must precede the boot switchTo('home') below). Lazy import + guard: a
+  // broken cutscene chunk never kills boot.
+  try {
+    const { initCutsceneView } = await import('./ui/cutsceneView.js');
+    initCutsceneView({ store, ui, audio, sceneManager, assets });
+  } catch (err) {
+    console.warn('[boot] V6/A1 cutscene director unavailable:', err);
+  }
+  // ---- end V6/A1 block ----
+
   // ---- V4/AC-9: interaction juice (single marked block) ----
   // Press squash + tap pops + coin-fly + springy toasts (ui/juice.js): one
   // delegated listener set on the #ui root, pooled DOM effects, fully gated
