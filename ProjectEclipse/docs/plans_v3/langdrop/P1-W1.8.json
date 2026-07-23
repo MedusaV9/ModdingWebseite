@@ -1,0 +1,14 @@
+{
+  "en_us": {
+    "announce.eclipse.end.arrival": "The End has torn into the Overworld.",
+    "announce.eclipse.end.crystals_destroyed": "The last End Crystal shatters. The dragon can no longer heal.",
+    "announce.eclipse.end.victory": "The Ender Dragon has fallen. The way back to the Sanctum is open.",
+    "boss.eclipse.ender_dragon": "The Eclipse Dragon"
+  },
+  "de_de": {
+    "announce.eclipse.end.arrival": "Das Ende ist in die Oberwelt eingebrochen.",
+    "announce.eclipse.end.crystals_destroyed": "Der letzte Enderkristall zerbricht. Der Drache kann sich nicht länger heilen.",
+    "announce.eclipse.end.victory": "Der Enderdrache ist gefallen. Der Weg zurück zum Heiligtum ist offen.",
+    "boss.eclipse.ender_dragon": "Der Finsternisdrache"
+  }
+}
