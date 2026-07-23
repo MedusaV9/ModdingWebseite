@@ -1,0 +1,27 @@
+{
+  "id": "expansion_flyover",
+  "enabled": true,
+  "allowSkip": true,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 300,
+  "keyframes": [
+    { "t": 0.0, "pos": [-120.0, 70.0, -35.0], "yaw": 0, "pitch": 20, "roll": 0, "fov": 74, "easing": "easeInOutSine", "lookAt": [0.0, 6.0, 0.0] },
+    { "t": 0.25, "pos": [-60.0, 38.0, 20.0], "yaw": 0, "pitch": 18, "roll": 1, "fov": 68, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 5.0] },
+    { "t": 0.5, "pos": [-16.0, 20.0, 42.0], "yaw": 0, "pitch": 12, "roll": -1, "fov": 62, "easing": "easeInOutSine", "lookAt": [8.0, 3.0, 0.0] },
+    { "t": 0.75, "pos": [28.0, 24.0, 12.0], "yaw": 0, "pitch": 14, "roll": 1, "fov": 62, "easing": "easeInOutSine", "lookAt": [24.0, 2.0, -16.0] },
+    { "t": 1.0, "pos": [12.0, 48.0, -42.0], "yaw": 0, "pitch": 30, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [10.0, 2.0, 8.0] }
+  ],
+  "events": [
+    { "t": 0.02, "type": "sound", "id": "eclipse:event.eclipse_drone" },
+    { "t": 0.15, "type": "caption", "id": "eclipse.caption.expansion.growing", "data": "subtitle,90" },
+    { "t": 0.5, "type": "shake", "id": "", "data": "0.15,30" }
+  ],
+  "params": {
+    "_comment": "W7 expansion FLYOVER beat: world-anchored approach + sweep over the ring-growth wavefront. The play anchor is resolved per play via the growth_front dynamic anchor (ExpansionSequence feeds it from RingGrowthService.progressFraction), so keyframe positions are offsets from a point just inside the moving wave edge at terrain height. lookAt targets keep the camera trained on the front regardless of approach angle. Played as a GLOBAL_TELEPORT group show with returnAfter.",
+    "dynamicAnchor": "growth_front"
+  }
+}

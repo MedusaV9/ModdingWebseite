@@ -2,7 +2,7 @@
   "max_lifetime": 10,
   "loop": false,
   "rate": 1,
-  "count": 4,
+  "count": 6,
   "emitter_settings": {
     "shape": {
       "shape": "veil:cube",
@@ -21,7 +21,7 @@
     "particle_settings": {
       "particle_speed": 0.04,
       "random_speed": true,
-      "base_particle_size": 0.18,
+      "base_particle_size": 0.36,
       "particle_size_variation": 0.06,
       "particle_lifetime": 16,
       "particle_lifetime_variation": 6,
@@ -39,21 +39,13 @@
   },
   "particle_data": {
     "render_style": "veil:cube",
-    "additive": false,
+    "additive": true,
     "should_collide": false,
     "face_velocity": false,
     "velocity_stretch_factor": 0.0,
     "modules": [
       {
         "module": "veil:block"
-      },
-      {
-        "module": "veil:light",
-        "gradient": {
-          "color": "#9D4EDD"
-        },
-        "brightness": 0.6,
-        "radius": 4.0
       }
     ]
   }

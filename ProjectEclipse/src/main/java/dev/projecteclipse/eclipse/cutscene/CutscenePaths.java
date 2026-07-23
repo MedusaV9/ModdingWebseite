@@ -26,12 +26,17 @@ import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * The server-side camera-path library: loads/saves {@code config/eclipse/cutscenes/<id>.json}.
- * On first run the four bundled default paths (JSON assets under
+ * On first run the five bundled default paths (JSON assets under
  * {@code assets/eclipse/cutscenes/}) are copied into the config directory, so operators can
  * edit them like every other Eclipse config file:
  * <ul>
- *   <li>{@code intro_submerge} — limbo ghost-ship submerge flyaround (start event TILT).</li>
- *   <li>{@code intro_rise} — overworld rise-out-of-the-ground shot, anchor {@code player}.</li>
+ *   <li>{@code intro_v3_ship} — limbo ghost-ship deck flyaround (start event TILT and the
+ *       finale arrival), anchor {@code player}.</li>
+ *   <li>{@code intro_v3_flight} — intro v3 crane path over the fusing discs toward the
+ *       vortex, anchor {@code world} (play anchor = vortex center, supplied by
+ *       {@code sequence.IntroSequence}).</li>
+ *   <li>{@code intro_v3_reveal} — intro v3 orbit of the revealed floating altar island,
+ *       anchor {@code world} (play anchor = altar position).</li>
  *   <li>{@code unlock_ring} — orbital shot template at a ring edge, anchor {@code world}
  *       (per-play anchor position supplied by the unlock-growth integration).</li>
  *   <li>{@code finale_return} — reverse-intro descent used by the day-14 finale (W12).</li>
@@ -56,7 +61,7 @@ import net.neoforged.fml.loading.FMLPaths;
 public final class CutscenePaths {
     /** Bundled defaults copied to {@code config/eclipse/cutscenes/} on first run. */
     private static final List<String> DEFAULT_IDS =
-            List.of("intro_submerge", "intro_rise", "unlock_ring", "finale_return");
+            List.of("intro_v3_ship", "intro_v3_flight", "intro_v3_reveal", "unlock_ring", "finale_return");
     private static final String BUNDLED_RESOURCE_ROOT = "/assets/eclipse/cutscenes/";
     /** Sits in {@code config/eclipse/} (NOT in {@code cutscenes/} — the loader scans that). */
     private static final String MANIFEST_NAME = "cutscene_defaults_manifest.json";
@@ -71,7 +76,14 @@ public final class CutscenePaths {
      * version you replaced (W6/W7: intro/unlock shots).
      */
     private static final Map<String, List<String>> LEGACY_DEFAULT_HASHES = Map.of(
-            "finale_return", List.of("6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43"));
+            "finale_return", List.of("6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43"),
+            // W6 deleted the v1 intro pair from DEFAULT_IDS (superseded by the intro_v3_*
+            // shots). Their shipped hashes stay on record so a future re-adoption of either
+            // id can still tell "stale old default" from "operator edit"; stale config
+            // copies of deleted ids are left alone by design (see the W2 wiring doc — the
+            // manual cleanup is documented in P2-W6_wiring.md).
+            "intro_submerge", List.of("b3057c0891435933ac3782af052897657676ec2b529435ff67f75d0284a0ddb3"),
+            "intro_rise", List.of("69592d1efea3b0ed59c47ad1f8d346b0c59333113f462cc067beafbb65c74f0a"));
 
     private static volatile Map<String, CutscenePath> paths = Map.of();
     private static volatile Map<String, String> rawJson = Map.of();

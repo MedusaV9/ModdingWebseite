@@ -1,37 +1,37 @@
 {
-  "max_lifetime": 10,
+  "max_lifetime": 2,
   "loop": false,
-  "rate": 3,
-  "count": 20,
+  "rate": 1,
+  "count": 3,
   "emitter_settings": {
     "shape": {
-      "shape": "veil:hemisphere",
+      "shape": "veil:sphere",
       "dimensions": [
-        2.4,
-        2.2,
-        2.4
+        0.2,
+        0.2,
+        0.2
       ],
       "rotation": [
         0.0,
         0.0,
         0.0
       ],
-      "from_surface": true
+      "from_surface": false
     },
     "particle_settings": {
-      "particle_speed": 1.0,
-      "random_speed": true,
-      "base_particle_size": 0.16,
-      "particle_size_variation": 0.07,
-      "particle_lifetime": 26,
-      "particle_lifetime_variation": 8,
+      "particle_speed": 0.0,
+      "random_speed": false,
+      "base_particle_size": 3.6,
+      "particle_size_variation": 0.8,
+      "particle_lifetime": 5,
+      "particle_lifetime_variation": 2,
       "initial_direction": [
         0.0,
         1.0,
         0.0
       ],
-      "random_initial_direction": true,
-      "random_initial_rotation": false,
+      "random_initial_direction": false,
+      "random_initial_rotation": true,
       "random_size": true,
       "random_lifetime": true
     },
@@ -41,8 +41,8 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": true,
-    "velocity_stretch_factor": 1.2,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.0,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -51,34 +51,30 @@
     },
     "modules": [
       {
-        "module": "veil:drag",
-        "strength": 0.92
-      },
-      {
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#8AE9FF"
+              "color": "#FFFFFF"
             },
             {
-              "percent": 0.45,
-              "color": "#B65CFF"
+              "percent": 0.4,
+              "color": "#E8D4FF"
             },
             {
               "percent": 1.0,
-              "color": "#5B1E99"
+              "color": "#8A4DD8"
             }
           ],
           "alpha_points": [
             {
               "percent": 0.0,
-              "alpha": 0.95
+              "alpha": 0.9
             },
             {
-              "percent": 0.6,
-              "alpha": 0.55
+              "percent": 0.35,
+              "alpha": 0.5
             },
             {
               "percent": 1.0,

@@ -7,18 +7,20 @@
   "dimension": "minecraft:overworld",
   "letterbox": true,
   "hideHud": true,
-  "durationTicks": 200,
+  "durationTicks": 220,
   "keyframes": [
-    { "t": 0.0, "pos": [-44.0, 26.0, 0.0], "yaw": -90, "pitch": 28, "roll": 0, "fov": 66, "easing": "easeInOutSine" },
-    { "t": 0.35, "pos": [0.0, 30.0, 46.0], "yaw": 180, "pitch": 30, "roll": 2, "fov": 60, "easing": "easeInOutSine" },
-    { "t": 0.7, "pos": [44.0, 26.0, 0.0], "yaw": 90, "pitch": 28, "roll": -2, "fov": 60, "easing": "easeInOutSine" },
-    { "t": 1.0, "pos": [10.0, 42.0, -40.0], "yaw": 12, "pitch": 44, "roll": 0, "fov": 70, "easing": "easeOutCubic" }
+    { "t": 0.0, "pos": [-30.0, 10.0, -18.0], "yaw": 0, "pitch": 8, "roll": 0, "fov": 66, "easing": "easeInOutSine", "lookAt": [0.0, 4.0, 0.0] },
+    { "t": 0.3, "pos": [-38.0, 22.0, 22.0], "yaw": 0, "pitch": 16, "roll": 2, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
+    { "t": 0.6, "pos": [8.0, 30.0, 44.0], "yaw": 0, "pitch": 22, "roll": -2, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
+    { "t": 0.85, "pos": [40.0, 26.0, 4.0], "yaw": 0, "pitch": 20, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 4.0, 0.0] },
+    { "t": 1.0, "pos": [26.0, 48.0, -30.0], "yaw": 0, "pitch": 38, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [6.0, 0.0, 6.0] }
   ],
   "events": [
-    { "t": 0.05, "type": "sound", "id": "minecraft:block.beacon.activate" }
+    { "t": 0.05, "type": "sound", "id": "minecraft:block.beacon.activate" },
+    { "t": 0.5, "type": "shake", "id": "", "data": "0.1,20" }
   ],
   "params": {
-    "_comment": "Orbital template for stage-growth unlocks; the play payload supplies the anchor position (nearest new ring edge). Keyframe positions are offsets from that anchor.",
+    "_comment": "Orbital template for stage-growth unlocks (W7 reshoot: low dramatic pickup, rising lookAt-tracked orbit, high reveal at the end instead of the old fixed-yaw ring). The play payload supplies the anchor position (nearest old ring edge); keyframe positions are offsets from that anchor. Also the FLYOVER fallback when expansion_flyover is missing/disabled.",
     "orbitRadius": 45
   }
 }

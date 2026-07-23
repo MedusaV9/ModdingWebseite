@@ -1,0 +1,16 @@
+{
+  "en_us": {
+    "eclipse.caption.expansion.skyward": "The sky darkens...",
+    "eclipse.caption.expansion.growing": "The world is growing.",
+    "eclipse.caption.expansion.structures": "Something tears through.",
+    "eclipse.caption.expansion.done": "New lands await.",
+    "eclipse.caption.expansion.nether_return": "...you are returned."
+  },
+  "de_de": {
+    "eclipse.caption.expansion.skyward": "Der Himmel verdunkelt sich...",
+    "eclipse.caption.expansion.growing": "Die Welt wächst.",
+    "eclipse.caption.expansion.structures": "Etwas reißt sich hindurch.",
+    "eclipse.caption.expansion.done": "Neues Land wartet.",
+    "eclipse.caption.expansion.nether_return": "...du bist zurück."
+  }
+}

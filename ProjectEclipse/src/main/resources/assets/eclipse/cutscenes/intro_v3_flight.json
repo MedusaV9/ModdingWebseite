@@ -1,0 +1,28 @@
+{
+  "id": "intro_v3_flight",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 900,
+  "keyframes": [
+    { "t": 0.0, "pos": [232.0, 152.0, -78.0], "yaw": -160, "pitch": 34, "roll": 0, "fov": 70, "easing": "easeInOutSine", "lookAt": [0.0, 12.0, 0.0] },
+    { "t": 0.2, "pos": [172.0, 122.0, 118.0], "yaw": -125, "pitch": 32, "roll": -2, "fov": 66, "easing": "easeInOutSine", "lookAt": [0.0, 16.0, 0.0] },
+    { "t": 0.42, "pos": [4.0, 102.0, 192.0], "yaw": 180, "pitch": 28, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 18.0, 0.0] },
+    { "t": 0.64, "pos": [-152.0, 74.0, 92.0], "yaw": 120, "pitch": 22, "roll": 2, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, 22.0, 0.0] },
+    { "t": 0.84, "pos": [-114.0, 44.0, -34.0], "yaw": 72, "pitch": 14, "roll": 0, "fov": 58, "easing": "easeInOutCubic", "lookAt": [0.0, 26.0, 0.0] },
+    { "t": 1.0, "pos": [-54.0, 14.0, -26.0], "yaw": 65, "pitch": 4, "roll": 0, "fov": 55, "easing": "easeOutCubic", "lookAt": [0.0, 24.0, 0.0] }
+  ],
+  "events": [
+    { "t": 0.02, "type": "caption", "id": "eclipse.caption.intro.fuse", "data": "subtitle,110" },
+    { "t": 0.24, "type": "caption", "id": "eclipse.caption.intro.vortex", "data": "whisper,90" },
+    { "t": 0.25, "type": "sound", "id": "eclipse:event.storm_burst" },
+    { "t": 0.55, "type": "sound", "id": "minecraft:entity.lightning_bolt.thunder" },
+    { "t": 0.88, "type": "shake", "id": "vortex_close", "data": "0.12,30,2.0" },
+    { "t": 0.955, "type": "fade", "id": "intro_flight_out", "data": "20,15,25" },
+    { "t": 0.97, "type": "caption", "id": "eclipse.caption.intro.approach", "data": "subtitle,130" }
+  ]
+}

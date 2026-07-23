@@ -45,8 +45,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code Item#useOn} like the Herald's lure) on day {@value #FINALE_DAY}+ after dusk
  * consumes one egg and runs the arrival timeline: every LIVING player is teleported onto
  * the ghost-ship deck (ghost stragglers are pulled to the ship too), the
- * {@code intro_submerge} camera path introduces the ship, and at
- * t={@value #SUMMON_TICK} the {@link FerrymanEntity} rises at the stern.</p>
+ * {@code intro_v3_ship} camera path introduces the ship (W6's deck flyaround — it replaced
+ * the deleted v1 {@code intro_submerge}), and at t={@value #SUMMON_TICK} the
+ * {@link FerrymanEntity} rises at the stern.</p>
  *
  * <p><b>Victory</b> ({@link #beginVictory}, called by {@code FerrymanEntity.die()}): the
  * "THE CROSSING ENDS" boss announce, then every banned player is revived through the
@@ -155,7 +156,7 @@ public final class FinaleRitual {
     /**
      * Starts the arrival timeline (idempotent while one is running): teleports every
      * living player to the ghost-ship deck, pulls ghost stragglers aboard, plays the
-     * {@code intro_submerge} flight, then summons the Ferryman at t={@value #SUMMON_TICK}.
+     * {@code intro_v3_ship} flight, then summons the Ferryman at t={@value #SUMMON_TICK}.
      * Also the {@code /eclipse boss ferryman summon} path uses {@link FerrymanEntity#summon}
      * directly instead — this timeline is only for the ritual (with the cinematic).
      */
@@ -201,7 +202,9 @@ public final class FinaleRitual {
                     new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
         }
         // Limbo-scoped path: everyone is in limbo now, so the flight plays for all of them.
-        CutsceneService.play("intro_submerge", shipped);
+        // W6: v1 intro_submerge was deleted — the intro_v3_ship deck flyaround (player-
+        // anchored, 130t) is the compatible replacement for this arrival beat.
+        CutsceneService.play("intro_v3_ship", shipped);
         GoalTracker.onFinaleBegun(server); // day-14 "Offer the egg at dusk" auto-tick
         EclipseMod.LOGGER.info("Finale arrival: {} living player(s) shipped to the deck, {} ghost straggler(s) pulled "
                 + "aboard; Ferryman rises in {}t", living, ghostsPulled, SUMMON_TICK);

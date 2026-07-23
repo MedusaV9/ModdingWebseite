@@ -1,15 +1,15 @@
 {
-  "max_lifetime": 10,
+  "max_lifetime": 2,
   "loop": false,
-  "rate": 3,
-  "count": 20,
+  "rate": 1,
+  "count": 16,
   "emitter_settings": {
     "shape": {
       "shape": "veil:hemisphere",
       "dimensions": [
-        2.4,
-        2.2,
-        2.4
+        4.0,
+        1.0,
+        4.0
       ],
       "rotation": [
         0.0,
@@ -19,10 +19,10 @@
       "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 1.0,
+      "particle_speed": 0.45,
       "random_speed": true,
-      "base_particle_size": 0.16,
-      "particle_size_variation": 0.07,
+      "base_particle_size": 0.7,
+      "particle_size_variation": 0.3,
       "particle_lifetime": 26,
       "particle_lifetime_variation": 8,
       "initial_direction": [
@@ -31,7 +31,7 @@
         0.0
       ],
       "random_initial_direction": true,
-      "random_initial_rotation": false,
+      "random_initial_rotation": true,
       "random_size": true,
       "random_lifetime": true
     },
@@ -39,10 +39,10 @@
   },
   "particle_data": {
     "render_style": "veil:billboard",
-    "additive": true,
+    "additive": false,
     "should_collide": false,
-    "face_velocity": true,
-    "velocity_stretch_factor": 1.2,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.1,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -51,8 +51,12 @@
     },
     "modules": [
       {
+        "module": "veil:gravity",
+        "strength": 0.35
+      },
+      {
         "module": "veil:drag",
-        "strength": 0.92
+        "strength": 0.9
       },
       {
         "module": "veil:color",
@@ -60,25 +64,25 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#8AE9FF"
+              "color": "#8A7B6F"
             },
             {
-              "percent": 0.45,
-              "color": "#B65CFF"
+              "percent": 0.4,
+              "color": "#5A4E61"
             },
             {
               "percent": 1.0,
-              "color": "#5B1E99"
+              "color": "#2E2640"
             }
           ],
           "alpha_points": [
             {
               "percent": 0.0,
-              "alpha": 0.95
+              "alpha": 0.9
             },
             {
-              "percent": 0.6,
-              "alpha": 0.55
+              "percent": 0.55,
+              "alpha": 0.5
             },
             {
               "percent": 1.0,

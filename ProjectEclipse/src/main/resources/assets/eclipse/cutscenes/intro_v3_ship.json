@@ -1,0 +1,23 @@
+{
+  "id": "intro_v3_ship",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "player",
+  "dimension": "eclipse:limbo",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 130,
+  "keyframes": [
+    { "t": 0.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "easeInOutCubic" },
+    { "t": 0.2, "pos": [-7.0, 4.5, -10.0], "yaw": -30, "pitch": 14, "roll": -3, "fov": 64, "easing": "easeInOutCubic", "lookAt": "player" },
+    { "t": 0.5, "pos": [15.0, 10.0, -19.0], "yaw": 38, "pitch": 20, "roll": 3, "fov": 58, "easing": "easeInOutSine", "lookAt": "player" },
+    { "t": 0.78, "pos": [22.0, 15.0, 6.0], "yaw": 96, "pitch": 26, "roll": 1, "fov": 54, "easing": "easeInOutSine", "lookAt": "player" },
+    { "t": 1.0, "pos": [10.0, 22.0, 15.0], "yaw": 132, "pitch": 42, "roll": 0, "fov": 60, "easing": "easeInCubic", "lookAt": "player" }
+  ],
+  "events": [
+    { "t": 0.08, "type": "caption", "id": "eclipse.caption.intro.depart", "data": "whisper,70" },
+    { "t": 0.55, "type": "sound", "id": "minecraft:ambient.underwater.enter" },
+    { "t": 0.62, "type": "shake", "id": "ship_keel", "data": "0.22,30,2.5" }
+  ]
+}
