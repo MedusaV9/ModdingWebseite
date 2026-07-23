@@ -56,6 +56,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * logout hook + watchdog clean up). Timing is wall-clock ({@code System.nanoTime}), matching
  * the server watchdog's tick budget.</p>
  *
+ * <p><b>End-of-flight blend</b>: a NATURALLY completed flight (progress &ge; 1.0) does not
+ * hard-snap back to gameplay — the final evaluated shot eases into the live vanilla camera
+ * over ~{@value #END_BLEND_TICKS} ticks ({@link #beginEndBlend}). Purely cosmetic client
+ * state: the {@code FINISHED} ACK is still sent at progress 1.0 and all cutscene state
+ * (letterbox, HUD suppression, camera type) is already cleared when the blend starts.
+ * Skips, server {@code STOP}s and disconnects keep the instant snap.</p>
+ *
  * <p><b>Shake impulses</b> (W4 contract): each {@code S2CCutscenePayload(SHAKE)} receipt is
  * one ~2 s decaying camera-shake impulse ({@link #addShakeImpulse()}), applied as position +
  * roll noise both during cutscene flights and over the normal gameplay camera (intro fusion
@@ -89,6 +96,15 @@ public final class CameraDirector {
 
     /** Live shake impulses, oldest first (expired ones are pruned lazily). Main-thread only. */
     private static final ArrayDeque<ShakeImpulse> SHAKE_IMPULSES = new ArrayDeque<>();
+
+    /** End-of-flight blend length (~0.6 s) — natural completions only. */
+    private static final int END_BLEND_TICKS = 12;
+    private static final long END_BLEND_NANOS = END_BLEND_TICKS * TICK_NANOS;
+
+    /** Final evaluated shot of a naturally completed flight; {@code null} = no blend live. */
+    @Nullable
+    private static Shot endBlendFrom;
+    private static long endBlendStartNanos;
 
     private CameraDirector() {}
 
@@ -124,6 +140,7 @@ public final class CameraDirector {
             minecraft.options.setCameraType(CameraType.THIRD_PERSON_BACK);
         }
         path = requested;
+        endBlendFrom = null; // a new flight overrides any still-running end blend
         allowSkip = payload.allowSkip();
         startNanos = System.nanoTime();
         firedEvents = 0;
@@ -184,19 +201,42 @@ public final class CameraDirector {
 
     // --- camera override hooks ---
 
-    /** Called from {@code CameraMixin} at the TAIL of {@code Camera#setup} every frame. */
+    /**
+     * Called from {@code CameraMixin} at the TAIL of {@code Camera#setup} every frame.
+     * During an end blend the camera at TAIL is the fully set-up live vanilla camera —
+     * the blend target — so easing the stored final shot toward it converges onto the
+     * exact post-cutscene view with no snap.
+     */
     public static void onCameraSetup(Camera camera) {
         Shot shot = evaluate();
         Vec3 shake = shakeOffset();
         if (shot != null) {
             camera.setPosition(shot.pos().add(shake));
             camera.setRotation(shot.yaw(), shot.pitch(), shot.roll() + shakeRoll());
-        } else if (shake.lengthSqr() > 0.0D) {
+            return;
+        }
+        Shot from = endBlendFrom;
+        float blend = endBlendEased();
+        if (from != null && blend >= 0.0F) {
+            camera.setPosition(from.pos().lerp(camera.getPosition(), blend).add(shake));
+            camera.setRotation(
+                    Mth.rotLerp(blend, from.yaw(), camera.getYRot()),
+                    Mth.rotLerp(blend, from.pitch(), camera.getXRot()),
+                    Mth.rotLerp(blend, from.roll(), 0.0F) + shakeRoll());
+            return;
+        }
+        if (shake.lengthSqr() > 0.0D) {
             camera.setPosition(camera.getPosition().add(shake));
         }
     }
 
-    /** Roll + redundancy for yaw/pitch (fallback if another mixin wins the setup TAIL). */
+    /**
+     * Roll + redundancy for yaw/pitch (fallback if another mixin wins the setup TAIL).
+     * The end blend is deliberately NOT applied here: this event fires BEFORE the setup
+     * TAIL, so a blend applied in both places would feed the event's already-lerped angles
+     * into the mixin's lerp (double-eased rotation). Losing the cosmetic blend in the
+     * exotic another-mixin-wins case just means the old snap.
+     */
     @SubscribeEvent
     static void onComputeCameraAngles(ViewportEvent.ComputeCameraAngles event) {
         Shot shot = evaluate();
@@ -217,6 +257,12 @@ public final class CameraDirector {
         Shot shot = evaluate();
         if (shot != null) {
             event.setFOV(shot.fov());
+            return;
+        }
+        Shot from = endBlendFrom;
+        float blend = endBlendEased();
+        if (from != null && blend >= 0.0F) {
+            event.setFOV(Mth.lerp(blend, from.fov(), (float) event.getFOV()));
         }
     }
 
@@ -244,19 +290,57 @@ public final class CameraDirector {
         if (progress >= 1.0D) {
             EclipseMod.LOGGER.info("CameraDirector: '{}' finished — ACK FINISHED", active.id());
             ackFinished(active.id());
-            stop(minecraft);
+            beginEndBlend(minecraft);
         }
     }
 
-    /** Ends the flight WITHOUT acking (finish/skip/stop each ack — or not — themselves). */
+    /**
+     * Ends the flight WITHOUT acking (finish/skip/stop each ack — or not — themselves) and
+     * drops any live end blend: skips, server {@code STOP}s and disconnects hard-snap.
+     */
     private static void stop(Minecraft minecraft) {
         path = null;
+        endBlendFrom = null;
         pendingEvents = List.of();
         LetterboxLayer.setActive(false, false);
         if (previousCameraType != null) {
             minecraft.options.setCameraType(previousCameraType);
             previousCameraType = null;
         }
+    }
+
+    /**
+     * NATURAL-completion exit: captures the final evaluated shot, tears the flight down
+     * like {@link #stop} (letterbox away, camera type restored — restoring the type FIRST
+     * makes the live camera the blend eases toward the REAL post-cutscene view, so the
+     * handoff at blend end is seam-free for any previous camera type), then arms the
+     * ~{@value #END_BLEND_TICKS}-tick blend consumed by {@link #onCameraSetup}.
+     */
+    private static void beginEndBlend(Minecraft minecraft) {
+        Shot last = evaluate();
+        stop(minecraft);
+        if (last != null) {
+            endBlendFrom = last;
+            endBlendStartNanos = System.nanoTime();
+        }
+    }
+
+    /**
+     * Eased (ease-out cubic) end-blend progress in [0, 1], or {@code -1} when no blend is
+     * live. Prunes the blend state on expiry, so later hooks the same frame fall through
+     * to the untouched vanilla camera (which the blend has converged onto by then).
+     */
+    private static float endBlendEased() {
+        if (endBlendFrom == null) {
+            return -1.0F;
+        }
+        float t = (System.nanoTime() - endBlendStartNanos) / (float) END_BLEND_NANOS;
+        if (t >= 1.0F) {
+            endBlendFrom = null;
+            return -1.0F;
+        }
+        float inv = 1.0F - Math.max(0.0F, t);
+        return 1.0F - inv * inv * inv;
     }
 
     private static void ackFinished(String id) {

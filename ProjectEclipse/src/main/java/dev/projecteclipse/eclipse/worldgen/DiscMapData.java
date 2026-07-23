@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 
 import com.google.gson.Gson;
@@ -18,6 +19,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
+import net.minecraft.world.level.levelgen.synth.SimplexNoise;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
@@ -40,6 +43,24 @@ public final class DiscMapData {
     public static final int HEIGHTMAP_SIZE = 1024;
     /** Surface Y encoded by a PNG red value of 0 (surfaceY = red + this offset). */
     public static final int HEIGHTMAP_Y_OFFSET = 40;
+
+    /** Max angular wobble (degrees) applied to sector-wedge lookups so seams meander. */
+    public static final double SECTOR_WOBBLE_DEG = 5.0D;
+    /** Horizontal feature scale (blocks) of the seam wobble noise. */
+    private static final double SECTOR_WOBBLE_SCALE = 64.0D;
+    /** Blocks over which the wobble amplitude ramps from 0 (at the center cap) to full. */
+    private static final double SECTOR_WOBBLE_TAPER = 60.0D;
+    /** Angular half-width (degrees) of the relief blend band around each wedge boundary. */
+    public static final double SECTOR_BLEND_DEG = 8.0D;
+    /** Columns farther than this from every river bounding box short-circuit to "no river". */
+    private static final double RIVER_QUERY_MARGIN = 16.0D;
+
+    /**
+     * Fixed-seed seam wobble field (salt 8 of the ECLIPSE_SEED noise family — salts 1..7
+     * live in {@code DiscTerrainFunction}, 9+ are free). Never reseed from the world.
+     */
+    private static final SimplexNoise SECTOR_WOBBLE_NOISE =
+            new SimplexNoise(new XoroshiroRandomSource(ECLIPSE_SEED + 8L * 0x9E3779B97F4A7C15L));
 
     /** One angular biome wedge; degrees measured from +X towards +Z, wrap-around allowed. */
     public record Sector(String biome, double startDeg, double endDeg) {
@@ -73,13 +94,23 @@ public final class DiscMapData {
             if (Math.abs(r - this.radius) > this.halfWidth) {
                 return false;
             }
+            return !withinBridge(angleDeg, 0.0D);
+        }
+
+        /**
+         * Whether {@code angleDeg} lies within {@code extraDeg} beyond the half-width of any
+         * bridge causeway (wrap-safe). Consumers: the moat channel itself ({@code extra=0}),
+         * the magma lip that must not cross the causeways, and the fortress-core bridge arms
+         * that extend to the moat when they line up with a causeway.
+         */
+        public boolean withinBridge(double angleDeg, double extraDeg) {
             for (double bridge : this.bridgeDeg) {
                 double delta = Math.abs(((angleDeg - bridge) % 360.0D + 540.0D) % 360.0D - 180.0D);
-                if (delta <= this.bridgeHalfWidthDeg) {
-                    return false;
+                if (delta <= this.bridgeHalfWidthDeg + extraDeg) {
+                    return true;
                 }
             }
-            return true;
+            return false;
         }
     }
 
@@ -91,6 +122,58 @@ public final class DiscMapData {
             Mountain mountain, Moat moat, List<Landmark> landmarks, List<List<Point>> rivers,
             List<Point> whisperWells) {}
 
+    /**
+     * Relief blend towards the sector on the other side of the nearest (wobbled) wedge
+     * boundary: {@code t} is the neighbour's lerp weight — 0.5 exactly on the boundary
+     * (both sides meet at the average, so the surface is continuous), falling to 0 at
+     * {@value #SECTOR_BLEND_DEG}° away. See {@link #sectorBlendAt}.
+     */
+    public record SectorBlend(String neighborBiome, double t) {}
+
+    /**
+     * One authored river polyline with a cached bounding box so the per-column distance
+     * query ({@link #riverDistance}) can reject faraway columns with four comparisons.
+     */
+    private record River(int[] xs, int[] zs, int minX, int minZ, int maxX, int maxZ) {
+        static River of(List<Point> points) {
+            int[] xs = new int[points.size()];
+            int[] zs = new int[points.size()];
+            int minX = Integer.MAX_VALUE;
+            int minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE;
+            int maxZ = Integer.MIN_VALUE;
+            for (int i = 0; i < points.size(); i++) {
+                xs[i] = points.get(i).x();
+                zs[i] = points.get(i).z();
+                minX = Math.min(minX, xs[i]);
+                minZ = Math.min(minZ, zs[i]);
+                maxX = Math.max(maxX, xs[i]);
+                maxZ = Math.max(maxZ, zs[i]);
+            }
+            return new River(xs, zs, minX, minZ, maxX, maxZ);
+        }
+
+        /** Squared distance from (x, z) to the nearest point of any polyline segment. */
+        double distanceSq(double x, double z) {
+            double best = Double.MAX_VALUE;
+            for (int i = 0; i < this.xs.length - 1; i++) {
+                double ax = this.xs[i];
+                double az = this.zs[i];
+                double bx = this.xs[i + 1];
+                double bz = this.zs[i + 1];
+                double abx = bx - ax;
+                double abz = bz - az;
+                double lenSq = abx * abx + abz * abz;
+                double t = lenSq <= 0.0D ? 0.0D
+                        : Math.max(0.0D, Math.min(1.0D, ((x - ax) * abx + (z - az) * abz) / lenSq));
+                double dx = x - (ax + abx * t);
+                double dz = z - (az + abz * t);
+                best = Math.min(best, dx * dx + dz * dz);
+            }
+            return best;
+        }
+    }
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     private static volatile DiscMapData instance;
@@ -98,11 +181,25 @@ public final class DiscMapData {
     private final MapProfile overworld;
     private final MapProfile nether;
     private final int[] heightmapOverride; // null = procedural surface
+    private final List<River> overworldRivers;
+    private final List<River> netherRivers;
 
     private DiscMapData(MapProfile overworld, MapProfile nether, int[] heightmapOverride) {
         this.overworld = overworld;
         this.nether = nether;
         this.heightmapOverride = heightmapOverride;
+        this.overworldRivers = buildRivers(overworld);
+        this.netherRivers = buildRivers(nether);
+    }
+
+    private static List<River> buildRivers(MapProfile profile) {
+        List<River> rivers = new ArrayList<>();
+        for (List<Point> polyline : profile.rivers()) {
+            if (polyline.size() >= 2) {
+                rivers.add(River.of(polyline));
+            }
+        }
+        return List.copyOf(rivers);
     }
 
     /** The loaded map data (lazily reads {@code config/eclipse/disc_map.json} on first use). */
@@ -138,6 +235,13 @@ public final class DiscMapData {
      * Biome id (e.g. {@code minecraft:desert}) of the column (x, z): mountain core/flank
      * first, then the center cap, then the angular wedge. Shared by
      * {@link DiscBiomeSource} and the terrain palette so blocks always match the biome.
+     *
+     * <p>The wedge lookup angle is perturbed by a fixed-seed simplex wobble of up to
+     * ±{@value #SECTOR_WOBBLE_DEG}° ({@link #SECTOR_WOBBLE_NOISE}) so the radial seams
+     * meander organically instead of being razor straight. The amplitude tapers to 0
+     * towards the center cap (where a degree is only a fraction of a block anyway) and
+     * every consumer goes through this method, so biomes, palettes and vegetation stay
+     * consistent with each other.</p>
      */
     public String biomeAt(DiscProfile profile, double x, double z) {
         MapProfile map = profile(profile);
@@ -157,16 +261,106 @@ public final class DiscMapData {
         if (r < map.centerRadius()) {
             return map.centerBiome();
         }
-        double angle = Math.toDegrees(Math.atan2(z, x));
-        if (angle < 0.0D) {
-            angle += 360.0D;
-        }
+        return sectorBiomeAt(map, wobbledAngleDeg(map, x, z, r));
+    }
+
+    /** Wedge lookup for an already-wobbled angle; falls back to the center biome in gaps. */
+    private static String sectorBiomeAt(MapProfile map, double angleDeg) {
         for (Sector sector : map.sectors()) {
-            if (sector.contains(angle)) {
+            if (sector.contains(angleDeg)) {
                 return sector.biome();
             }
         }
         return map.centerBiome();
+    }
+
+    /**
+     * The seam-wobbled, normalised (0..360) lookup angle of (x, z): raw atan2 angle plus
+     * up to ±{@value #SECTOR_WOBBLE_DEG}° of fixed-seed simplex, tapered to 0 within
+     * {@value #SECTOR_WOBBLE_TAPER} blocks of the center cap.
+     */
+    private static double wobbledAngleDeg(MapProfile map, double x, double z, double r) {
+        double angle = Math.toDegrees(Math.atan2(z, x));
+        double taper = Math.min(1.0D, Math.max(0.0D, (r - map.centerRadius()) / SECTOR_WOBBLE_TAPER));
+        if (taper > 0.0D) {
+            angle += SECTOR_WOBBLE_NOISE.getValue(x / SECTOR_WOBBLE_SCALE, z / SECTOR_WOBBLE_SCALE)
+                    * SECTOR_WOBBLE_DEG * taper;
+        }
+        angle %= 360.0D;
+        return angle < 0.0D ? angle + 360.0D : angle;
+    }
+
+    /**
+     * Relief blend info of (x, z), or null when the column is not within
+     * ±{@value #SECTOR_BLEND_DEG}° of a (wobbled) sector boundary — or when the wedge
+     * lookup does not apply at all (mountain core/flank, center cap). The terrain
+     * function lerps {@code surfaceOffset}/{@code surfaceAmp} towards the neighbour so
+     * sector steps (e.g. swamp −5 → snowy +6) become slopes instead of instant cliffs.
+     * Block palettes deliberately stay crisp; only the relief is blended.
+     */
+    @Nullable
+    public SectorBlend sectorBlendAt(DiscProfile profile, double x, double z) {
+        MapProfile map = profile(profile);
+        Mountain mountain = map.mountain();
+        if (mountain != null) {
+            double mdx = x - mountain.x();
+            double mdz = z - mountain.z();
+            double flankR = mountain.radius() * 0.8D;
+            if (mdx * mdx + mdz * mdz < flankR * flankR) {
+                return null; // biomeAt bypasses the wedges here
+            }
+        }
+        double r = Math.sqrt(x * x + z * z);
+        if (r < map.centerRadius()) {
+            return null;
+        }
+        double angle = wobbledAngleDeg(map, x, z, r);
+        for (Sector sector : map.sectors()) {
+            if (!sector.contains(angle)) {
+                continue;
+            }
+            // Wrap-safe angular distances to the wedge's start/end boundary.
+            double toStart = ((angle - sector.startDeg()) % 360.0D + 360.0D) % 360.0D;
+            double toEnd = ((sector.endDeg() - angle) % 360.0D + 360.0D) % 360.0D;
+            double d;
+            double probeDeg;
+            if (toStart <= toEnd) {
+                d = toStart;
+                probeDeg = sector.startDeg() - 0.5D;
+            } else {
+                d = toEnd;
+                probeDeg = sector.endDeg() + 0.5D;
+            }
+            if (d >= SECTOR_BLEND_DEG) {
+                return null;
+            }
+            double normProbe = ((probeDeg % 360.0D) + 360.0D) % 360.0D;
+            String neighbor = sectorBiomeAt(map, normProbe);
+            if (neighbor.equals(sector.biome())) {
+                return null;
+            }
+            return new SectorBlend(neighbor, 0.5D * (1.0D - d / SECTOR_BLEND_DEG));
+        }
+        return null;
+    }
+
+    /**
+     * Distance in blocks from (x, z) to the nearest authored river centerline of the
+     * profile, or {@code Double.MAX_VALUE} when the column is farther than
+     * {@value #RIVER_QUERY_MARGIN} blocks from every river's bounding box (cheap
+     * early-out — callers only care about distances up to the channel + bank width).
+     */
+    public double riverDistance(DiscProfile profile, double x, double z) {
+        List<River> rivers = profile == DiscProfile.NETHER ? this.netherRivers : this.overworldRivers;
+        double best = Double.MAX_VALUE;
+        for (River river : rivers) {
+            if (x < river.minX() - RIVER_QUERY_MARGIN || x > river.maxX() + RIVER_QUERY_MARGIN
+                    || z < river.minZ() - RIVER_QUERY_MARGIN || z > river.maxZ() + RIVER_QUERY_MARGIN) {
+                continue;
+            }
+            best = Math.min(best, river.distanceSq(x, z));
+        }
+        return best == Double.MAX_VALUE ? best : Math.sqrt(best);
     }
 
     /**
@@ -278,9 +472,25 @@ public final class DiscMapData {
                 new Landmark("eclipse:jungle_temple", -233, 233, 16, 3),
                 new Landmark("eclipse:village_plains", 390, 0, 40, 4),
                 new Landmark("eclipse:stronghold_emergence", 54, -129, 24, 5));
+        // Painted rivers (polyline centerlines; the terrain function carves a ~8-wide
+        // channel and spills a static waterfall curtain where one crosses the disc rim).
+        // Endpoints deliberately overshoot the final r=480 rim so the notch always cuts
+        // the taper. All lines keep >18 blocks clear of the spawn pad, sanctum, sundial,
+        // whisper wells, watcher-statue disc centers and every landmark site.
+        List<List<Point>> rivers = List.of(
+                // Meltwater Run: mountain flank → meadow cap → east rim through the plains.
+                List.of(new Point(30, -80), new Point(8, -34), new Point(36, 8),
+                        new Point(110, 26), new Point(210, 48), new Point(330, 68),
+                        new Point(500, 95)),
+                // Mire Run: through the swamp wedge (NW) out over the northwest rim.
+                List.of(new Point(-98, -52), new Point(-150, -88), new Point(-225, -118),
+                        new Point(-310, -185), new Point(-425, -295)),
+                // Fern Cut: forest wedge (S) from mid-disc out over the south rim.
+                List.of(new Point(38, 115), new Point(62, 215), new Point(65, 320),
+                        new Point(100, 495)));
         List<Point> wells = List.of(new Point(-60, 30), new Point(88, 40), new Point(-30, -70));
         return new MapProfile("minecraft:meadow", 40, sectors, mountain, null,
-                landmarks, List.of(), wells);
+                landmarks, rivers, wells);
     }
 
     private static MapProfile defaultNether() {
@@ -290,7 +500,11 @@ public final class DiscMapData {
                 new Sector("minecraft:basalt_deltas", 144.0D, 216.0D),
                 new Sector("minecraft:crimson_forest", 216.0D, 288.0D),
                 new Sector("minecraft:warped_forest", 288.0D, 360.0D));
-        Moat moat = new Moat(50, 4, List.of(45.0D, 225.0D), 6.0D);
+        // Bridge causeways on the E/W cardinals (0°/180°) so they line up with the
+        // fortress core's cardinal bridge arms (FortressCoreBuilder extends the two
+        // aligned arms out to the moat's inner edge — the old 45°/225° defaults left
+        // the causeways unreachable from the keep).
+        Moat moat = new Moat(50, 4, List.of(0.0D, 180.0D), 6.0D);
         List<Landmark> landmarks = List.of(
                 new Landmark("eclipse:fortress_core", 0, 0, 40, 1));
         return new MapProfile("minecraft:nether_wastes", 30, sectors, null, moat,

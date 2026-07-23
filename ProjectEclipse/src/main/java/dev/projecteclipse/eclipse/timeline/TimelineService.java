@@ -22,12 +22,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p>{@link S2CTimelinePayload} goes out at login ({@code EclipsePayloads}) and on every
  * day change ({@code DayScheduler}) / altar level change ({@code AnnouncementService}).
- * Title keys are shared with the announcement lang entries
- * ({@code announce.eclipse.day.N.title} / {@code announce.eclipse.milestone.N}).</p>
+ * Day titles are the SERVER-SIDE literals from the {@code days.json} plan (shipping them
+ * as lang keys would let clients datamine the anonymized arc from the jar); the client
+ * renders unknown "keys" literally, so the string shows as-is. Milestone lines still use
+ * the {@code announce.eclipse.milestone.N} lang entries — they only mirror the already
+ * client-visible milestone list.</p>
  */
 public final class TimelineService {
-    /** Day title keys shipped in the lang files ({@code announce.eclipse.day.1..14.title}). */
-    private static final int SHIPPED_DAY_TITLES = 14;
     /** Milestone subtitle keys shipped in the lang files ({@code announce.eclipse.milestone.1..5}). */
     private static final int SHIPPED_MILESTONE_TITLES = 5;
     /** Milestone entries start above any realistic day id to keep ids stable and unique. */
@@ -40,10 +41,16 @@ public final class TimelineService {
 
     private TimelineService() {}
 
-    /** The lang key of a day's announcement/timeline title, with a generic fallback. */
+    /**
+     * The announcement/timeline title of a day: the {@code days.json} plan's literal
+     * {@code title} when one is configured, else the generic lang-key fallback.
+     * {@code EclipseConfig.day} clamps out-of-range days to the first/last plan, so the
+     * plan's day is re-checked — unplanned days always fall back to the generic line.
+     */
     public static String dayTitleKey(int day) {
-        return day >= 1 && day <= SHIPPED_DAY_TITLES
-                ? "announce.eclipse.day." + day + ".title"
+        EclipseConfig.DayPlan plan = EclipseConfig.day(day);
+        return plan.day() == day && !plan.title().isEmpty()
+                ? plan.title()
                 : "announce.eclipse.day.generic.title";
     }
 

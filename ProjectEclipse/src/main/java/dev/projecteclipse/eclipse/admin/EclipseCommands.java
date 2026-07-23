@@ -102,7 +102,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse freeze &lt;players&gt; on [seconds]|off                  (movement lock + invuln)
  * /eclipse invuln &lt;players&gt; on [seconds]|off                  (damage/knockback immunity only)
  * /eclipse timeline                                           (full state dump, source only)
+ * /eclipse goals tick &lt;player&gt; &lt;index&gt;              (admin-marks a goal; index is 1-based)
  * /eclipse goals edit                                         (opens the client goal editor GUI)
+ * /eclipse shards set|add &lt;player&gt; &lt;n&gt; | shards pool set &lt;n&gt;
+ * /eclipse supply drop                                        (test crate; pool untouched)
  * /eclipse voicemute &lt;player&gt; on|off
  * /eclipse tp_limbo [player]
  * /eclipse cutscene play &lt;id&gt; [players] | abort [players] | list | enable|disable &lt;id&gt;
@@ -454,7 +457,7 @@ public final class EclipseCommands {
         HeraldEntity herald = HeraldEntity.summon(overworld, altarPos, groundY);
         final BlockPos at = altarPos;
         source.sendSuccess(() -> Component.literal("Herald summoned above " + at.toShortString()
-                + " with " + herald.getMaxHealth() + " HP"), true);
+                + " with " + herald.getMaxHealth() + " HP"), false);
         return 1;
     }
 
@@ -474,7 +477,7 @@ public final class EclipseCommands {
             return 0;
         }
         final int count = killed;
-        source.sendSuccess(() -> Component.literal("Killed " + count + " Herald(s) — drops + defeat flag fired"), true);
+        source.sendSuccess(() -> Component.literal("Killed " + count + " Herald(s) — drops + defeat flag fired"), false);
         return killed;
     }
 
@@ -497,7 +500,7 @@ public final class EclipseCommands {
         }
         FerrymanEntity ferryman = FerrymanEntity.summon(limbo);
         source.sendSuccess(() -> Component.literal("Ferryman summoned at the ghost ship's stern with "
-                + ferryman.getMaxHealth() + " HP"), true);
+                + ferryman.getMaxHealth() + " HP"), false);
         return 1;
     }
 
@@ -518,7 +521,7 @@ public final class EclipseCommands {
         }
         final int count = killed;
         source.sendSuccess(() -> Component.literal("Killed " + count
-                + " Ferryman — toll drop + mass-revive finale fired"), true);
+                + " Ferryman — toll drop + mass-revive finale fired"), false);
         return killed;
     }
 
@@ -531,7 +534,7 @@ public final class EclipseCommands {
                     FerrymanEntity::isAlive)) {
                 ferryman.forcePhase(phase);
                 source.sendSuccess(() -> Component.literal("Ferryman health snapped toward phase " + phase
-                        + " (" + ferryman.getHealth() + "/" + ferryman.getMaxHealth() + " HP)"), true);
+                        + " (" + ferryman.getHealth() + "/" + ferryman.getMaxHealth() + " HP)"), false);
                 return phase;
             }
         }
@@ -875,7 +878,7 @@ public final class EclipseCommands {
         try {
             String line = PhaseScheduler.scheduleNext(source.getServer(),
                     StringArgumentType.getString(context, "spec"));
-            source.sendSuccess(() -> Component.literal(line), true);
+            source.sendSuccess(() -> Component.literal(line), false);
             return 1;
         } catch (IllegalArgumentException e) {
             source.sendFailure(Component.literal(e.getMessage()));
@@ -904,7 +907,7 @@ public final class EclipseCommands {
             source.sendFailure(Component.literal("No phase schedule is set"));
             return 0;
         }
-        source.sendSuccess(() -> Component.literal(line), true);
+        source.sendSuccess(() -> Component.literal(line), false);
         return 1;
     }
 
@@ -929,7 +932,7 @@ public final class EclipseCommands {
         }
         source.sendSuccess(() -> Component.literal((on
                 ? "Froze " + players.size() + " player(s) for " + seconds + "s (movement lock + invuln)"
-                : "Unfroze " + players.size() + " player(s)")), true);
+                : "Unfroze " + players.size() + " player(s)")), false);
         return players.size();
     }
 
@@ -949,7 +952,7 @@ public final class EclipseCommands {
         }
         source.sendSuccess(() -> Component.literal((on
                 ? "Made " + players.size() + " player(s) invulnerable for " + seconds + "s (no movement lock)"
-                : "Cleared invulnerability of " + players.size() + " player(s)")), true);
+                : "Cleared invulnerability of " + players.size() + " player(s)")), false);
         return players.size();
     }
 
@@ -1254,7 +1257,7 @@ public final class EclipseCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.literal("Ticked goal " + (index + 1) + " ('" + goals.get(index)
-                + "') for " + player.getScoreboardName()), true);
+                + "') for " + player.getScoreboardName()), false);
         return 1;
     }
 
@@ -1265,7 +1268,7 @@ public final class EclipseCommands {
         int amount = IntegerArgumentType.getInteger(context, "amount");
         int applied = ShardEconomy.setShards(player, amount);
         context.getSource().sendSuccess(() -> Component.literal(
-                player.getScoreboardName() + "'s shard balance set to " + applied), true);
+                player.getScoreboardName() + "'s shard balance set to " + applied), false);
         return applied;
     }
 
@@ -1274,14 +1277,14 @@ public final class EclipseCommands {
         int delta = IntegerArgumentType.getInteger(context, "delta");
         int applied = ShardEconomy.addShards(player, delta);
         context.getSource().sendSuccess(() -> Component.literal(
-                player.getScoreboardName() + "'s shard balance is now " + applied), true);
+                player.getScoreboardName() + "'s shard balance is now " + applied), false);
         return applied;
     }
 
     private static int shardsPoolSet(CommandContext<CommandSourceStack> context) {
         int amount = IntegerArgumentType.getInteger(context, "amount");
         EclipseWorldState.get(context.getSource().getServer()).setShardPool(amount);
-        context.getSource().sendSuccess(() -> Component.literal("Team shard pool set to " + amount), true);
+        context.getSource().sendSuccess(() -> Component.literal("Team shard pool set to " + amount), false);
         return amount;
     }
 

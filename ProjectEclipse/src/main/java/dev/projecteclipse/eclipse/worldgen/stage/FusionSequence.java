@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -35,7 +36,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * own the timing instead.</p>
  *
  * <p><b>Presentation</b>: while the fusion sweep runs, every {@value #RUMBLE_INTERVAL_TICKS}
- * ticks each online player gets a low-pitched thunder rumble and one
+ * ticks each player IN THE OVERWORLD gets a low-pitched thunder rumble and one
  * {@link S2CCutscenePayload} {@code SHAKE} pulse (clients treat every received SHAKE as a
  * ~2 s camera-shake impulse — W6 owns the visual).</p>
  */
@@ -93,7 +94,11 @@ public final class FusionSequence {
         return (int) best;
     }
 
-    /** Rumble + camera-shake pulses for as long as the fusion sweep is running. */
+    /**
+     * Rumble + camera-shake pulses for as long as the fusion sweep is running. The fusion
+     * is an overworld spectacle — players in other dimensions (nether scouts, limbo) get
+     * neither the shake nor the thunder.
+     */
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
@@ -101,8 +106,13 @@ public final class FusionSequence {
                 || !RingGrowthService.isRunningIntroFusion()) {
             return;
         }
-        PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.SHAKE));
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+        ServerLevel overworld = server.getLevel(Level.OVERWORLD);
+        if (overworld == null) {
+            return;
+        }
+        PacketDistributor.sendToPlayersInDimension(overworld,
+                new S2CCutscenePayload(S2CCutscenePayload.Phase.SHAKE));
+        for (ServerPlayer player : overworld.players()) {
             player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.AMBIENT, 0.6F, 0.5F);
         }
     }

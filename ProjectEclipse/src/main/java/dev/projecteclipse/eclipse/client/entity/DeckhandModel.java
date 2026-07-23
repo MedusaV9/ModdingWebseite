@@ -22,17 +22,26 @@ import net.neoforged.api.distmarker.OnlyIn;
  * <p>Anim (§1.4): rowing {@code arm.xRot = −1.2 + sin(age*0.08)*0.35} — the same slow pull
  * cadence the block-display oars follow — plus a small torso zRot sway on the same clock.
  * The head only moves when the occasional {@code LookAtPlayerGoal} tracks a ghost.</p>
+ *
+ * <p><b>Hostile pose</b> (Ferryman P2 "Crew", blended via {@code entity.hostileAmount}):
+ * the oar cube is hidden, the arms lerp up into a reaching claw, a limbSwing shamble sway
+ * rocks the torso while it chases, and {@code attackTime} drives a zombie-style lunge
+ * (arms sweep down, torso pitches in) so melee swings read. Calming blends straight back
+ * to the seated rowing pull.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class DeckhandModel extends HierarchicalModel<DeckhandEntity> {
     private static final float ARM_BASE_X_ROT = -1.2F;
     private static final float TORSO_HUNCH = 0.15F;
+    /** Hostile reach: arms up just past horizontal, clawing at chest height. */
+    private static final float ARM_REACH_X_ROT = -1.7F;
 
     private final ModelPart root;
     private final ModelPart torso;
     private final ModelPart head;
     private final ModelPart armLeft;
     private final ModelPart armRight;
+    private final ModelPart oar;
 
     public DeckhandModel(ModelPart root) {
         this.root = root;
@@ -41,6 +50,7 @@ public class DeckhandModel extends HierarchicalModel<DeckhandEntity> {
         this.head = this.torso.getChild("head");
         this.armLeft = this.torso.getChild("arm_left");
         this.armRight = this.torso.getChild("arm_right");
+        this.oar = this.armRight.getChild("oar");
     }
 
     public static LayerDefinition createBodyLayer() {
@@ -80,12 +90,31 @@ public class DeckhandModel extends HierarchicalModel<DeckhandEntity> {
     @Override
     public void setupAnim(DeckhandEntity entity, float limbSwing, float limbSwingAmount, float ageInTicks,
             float netHeadYaw, float headPitch) {
+        // ageInTicks = tickCount + partialTick; recover the fraction for the pose blend.
+        float partialTick = ageInTicks - entity.tickCount;
+        float hostile = entity.hostileAmount(partialTick);
+
+        // Seated rower (default): both arms on the slow oar pull, torso swaying with it.
         float pull = ARM_BASE_X_ROT + Mth.sin(ageInTicks * 0.08F) * 0.35F; // Spec formula.
-        this.armLeft.xRot = pull;
-        this.armRight.xRot = pull;
-        this.torso.zRot = Mth.sin(ageInTicks * 0.08F) * 0.05F;
-        this.torso.xRot = TORSO_HUNCH;
+        float rowSway = Mth.sin(ageInTicks * 0.08F) * 0.05F;
+
+        // Risen fighter: reaching claw + limbSwing shamble + attackTime lunge. The lunge
+        // sweeps the raised arms down onto the target (zombie-style two-beat swing).
+        float shamble = Mth.cos(limbSwing * 0.6F) * 0.25F * limbSwingAmount;
+        float lunge = Mth.sin(this.attackTime * Mth.PI);
+        float lungeEase = Mth.sin((1.0F - (1.0F - this.attackTime) * (1.0F - this.attackTime)) * Mth.PI);
+        float reach = ARM_REACH_X_ROT + lunge * 1.1F - lungeEase * 0.35F;
+
+        this.armRight.xRot = Mth.lerp(hostile, pull, reach + shamble);
+        this.armLeft.xRot = Mth.lerp(hostile, pull, reach - shamble);
+        // Claws spread slightly apart; the rowing pose keeps the arms parallel.
+        this.armRight.zRot = hostile * -0.12F;
+        this.armLeft.zRot = hostile * 0.12F;
+        this.torso.zRot = Mth.lerp(hostile, rowSway, shamble * 0.4F);
+        this.torso.xRot = TORSO_HUNCH + hostile * lunge * 0.25F; // Pitch into the swing.
         this.head.yRot = netHeadYaw * Mth.DEG_TO_RAD;
         this.head.xRot = headPitch * Mth.DEG_TO_RAD;
+        // A risen deckhand drops its oar at the bench; the cube pops back when it calms.
+        this.oar.visible = hostile < 0.5F;
     }
 }

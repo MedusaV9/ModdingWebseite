@@ -45,6 +45,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_BORDER_SIZE = "borderSize";
     private static final String TAG_START_EVENT_DONE = "startEventDone";
     private static final String TAG_GHOST_SHIP_BUILT = "ghostShipBuilt";
+    private static final String TAG_LIMBO_SEASCAPE_BUILT = "limboSeascapeBuilt";
     private static final String TAG_BANNED = "banned";
     private static final String TAG_MILESTONE_PROGRESS = "milestoneProgress";
     private static final String TAG_FORCE_VOICE_MUTED = "forceVoiceMuted";
@@ -80,6 +81,7 @@ public final class EclipseWorldState extends SavedData {
     private double borderSize = 1000.0D;
     private boolean startEventDone = false;
     private boolean ghostShipBuilt = false;
+    private boolean limboSeascapeBuilt = false;
     private int worldStageOverworld = 0;
     private int worldStageNether = 0;
     private String growthDimension = "";
@@ -125,6 +127,9 @@ public final class EclipseWorldState extends SavedData {
         state.borderSize = tag.contains(TAG_BORDER_SIZE) ? tag.getDouble(TAG_BORDER_SIZE) : 1000.0D;
         state.startEventDone = tag.getBoolean(TAG_START_EVENT_DONE);
         state.ghostShipBuilt = tag.getBoolean(TAG_GHOST_SHIP_BUILT);
+        // Defaults to false so pre-seascape saves keep loading (the wreck ring, spires
+        // and buoy lane then build on their next start).
+        state.limboSeascapeBuilt = tag.getBoolean(TAG_LIMBO_SEASCAPE_BUILT);
         // World stage fields default to 0 / "no cursor" so pre-v2 saves keep loading.
         state.worldStageOverworld = tag.getInt(TAG_WORLD_STAGE_OVERWORLD);
         state.worldStageNether = tag.getInt(TAG_WORLD_STAGE_NETHER);
@@ -200,6 +205,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putDouble(TAG_BORDER_SIZE, this.borderSize);
         tag.putBoolean(TAG_START_EVENT_DONE, this.startEventDone);
         tag.putBoolean(TAG_GHOST_SHIP_BUILT, this.ghostShipBuilt);
+        tag.putBoolean(TAG_LIMBO_SEASCAPE_BUILT, this.limboSeascapeBuilt);
         tag.putInt(TAG_WORLD_STAGE_OVERWORLD, this.worldStageOverworld);
         tag.putInt(TAG_WORLD_STAGE_NETHER, this.worldStageNether);
         tag.putString(TAG_GROWTH_DIMENSION, this.growthDimension);
@@ -503,6 +509,20 @@ public final class EclipseWorldState extends SavedData {
 
     public void setGhostShipBuilt(boolean ghostShipBuilt) {
         this.ghostShipBuilt = ghostShipBuilt;
+        setDirty();
+    }
+
+    /**
+     * Whether the procedural Limbo seascape (half-sunken wreck ring, soul-fire spires
+     * and the soul-lantern buoy lane — {@code limbo.LimboSeascape}) has been built.
+     * Build-once guard, same pattern as {@link #isGhostShipBuilt()}.
+     */
+    public boolean isLimboSeascapeBuilt() {
+        return this.limboSeascapeBuilt;
+    }
+
+    public void setLimboSeascapeBuilt(boolean limboSeascapeBuilt) {
+        this.limboSeascapeBuilt = limboSeascapeBuilt;
         setDirty();
     }
 

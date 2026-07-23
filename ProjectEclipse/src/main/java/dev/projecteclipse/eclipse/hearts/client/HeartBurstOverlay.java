@@ -69,8 +69,11 @@ public final class HeartBurstOverlay {
             animationTick = -1;
         }
 
+        // Only 1–2 remaining lives warrant the heartbeat: 0 lives is an event-banned
+        // ghost, who must not hear the death heartbeat forever.
+        int lives = ClientStateCache.lives;
         if (!EclipseClientConfig.reducedFx()
-                && ClientStateCache.lives <= 2
+                && lives >= 1 && lives <= 2
                 && minecraft.player.isAlive()
                 && minecraft.player.tickCount % 40 == 0) {
             minecraft.getSoundManager().play(
@@ -78,10 +81,14 @@ public final class HeartBurstOverlay {
         }
     }
 
-    /** GUI-layer body registered immediately above {@code PLAYER_HEALTH}. */
+    /**
+     * GUI-layer body registered immediately above {@code PLAYER_HEALTH}. Draws nothing
+     * under F1 ({@code hideGui}) — the tick driver keeps running so a mid-burst animation
+     * still expires on schedule.
+     */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
+        if (minecraft.player == null || minecraft.options.hideGui) {
             return;
         }
 
@@ -162,8 +169,10 @@ public final class HeartBurstOverlay {
         RenderSystem.disableBlend();
     }
 
+    /** Pulsing red edge wash while at 1–2 lives (0 = ghost: no pulse, matching the heartbeat). */
     private static void renderLowHeartPulse(GuiGraphics guiGraphics, Minecraft minecraft) {
-        if (EclipseClientConfig.reducedFx() || ClientStateCache.lives > 2 || !minecraft.player.isAlive()) {
+        int lives = ClientStateCache.lives;
+        if (EclipseClientConfig.reducedFx() || lives < 1 || lives > 2 || !minecraft.player.isAlive()) {
             return;
         }
         float pulse = 0.5F + 0.5F * Mth.sin(minecraft.gui.getGuiTicks() * Mth.PI / 20.0F);

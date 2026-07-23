@@ -1,5 +1,9 @@
 package dev.projecteclipse.eclipse.progression;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -17,6 +21,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -24,7 +29,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * Server-authoritative phase locks tied to {@link UnlockState} keys. All effects are purely
  * derived from the current unlock set, so everything reverses on its own the moment a key
  * becomes unlocked (or re-applies if the day is lowered). Only SURVIVAL/ADVENTURE players are
- * affected; blocked actions show a brief action-bar hint (never chat).
+ * affected; blocked actions show a brief accent-colored action-bar hint (translatable
+ * {@code message.eclipse.sealed.*}, never chat), rate-limited per player and hint key so the
+ * every-second inventory sweep cannot strobe the actionbar.
  *
  * <ul>
  *   <li>{@code main_inventory} — every second, stacks in main inventory slots 9–35 are moved
@@ -58,6 +65,14 @@ public final class PhaseInventoryLock {
     private static final ResourceLocation ARM_ARTIFACT_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "arm_artifact");
 
+    /** Eclipse accent (mirrors the client UI suite's 0xB98CFF) for the seal hints. */
+    private static final int HINT_COLOR = 0xB98CFF;
+    /** Minimum ticks between repeats of the SAME hint key for one player (anti-strobe). */
+    private static final int HINT_COOLDOWN_TICKS = 100;
+
+    /** Overworld game time each hint key was last shown, per player. Server thread only. */
+    private static final Map<UUID, Map<String, Long>> HINT_SHOWN_AT = new HashMap<>();
+
     private PhaseInventoryLock() {}
 
     // --- inventory / armor sweep ---
@@ -78,10 +93,10 @@ public final class PhaseInventoryLock {
                 continue;
             }
             if (mainLocked && sweepMainInventory(player)) {
-                hint(player, "Your main inventory is still sealed \u2014 hotbar only.");
+                hint(player, "message.eclipse.sealed.main_inventory");
             }
             if (armorLocked && sweepArmorAndOffhand(player)) {
-                hint(player, "Armor and offhand are still sealed.");
+                hint(player, "message.eclipse.sealed.armor");
             }
         }
     }
@@ -142,7 +157,7 @@ public final class PhaseInventoryLock {
             return;
         }
         event.setCanceled(true);
-        hint(player, "This block is still sealed.");
+        hint(player, "message.eclipse.sealed.block");
     }
 
     /** The unlock key guarding a workstation block, or {@code null} if the block is never gated. */
@@ -178,11 +193,31 @@ public final class PhaseInventoryLock {
             return;
         }
         event.setCanceled(true);
-        hint(player, "That dimension is still sealed.");
+        hint(player, "message.eclipse.sealed.dimension");
     }
 
-    /** Brief action-bar message (never chat). */
-    private static void hint(ServerPlayer player, String message) {
-        player.displayClientMessage(Component.literal(message), true);
+    /**
+     * Brief accent-colored action-bar hint (never chat), keyed by its {@code
+     * message.eclipse.sealed.*} lang key. Each key repeats at most once per
+     * {@value #HINT_COOLDOWN_TICKS} ticks per player — without the cooldown the
+     * every-second inventory sweep would strobe the actionbar for as long as a sealed
+     * inventory stays open. Overworld game time is the clock so a singleplayer relaunch
+     * (fresh tick counter) can't wedge the cooldown; a backwards jump just re-shows once.
+     */
+    private static void hint(ServerPlayer player, String key) {
+        long now = player.server.overworld().getGameTime();
+        Map<String, Long> shownAt = HINT_SHOWN_AT.computeIfAbsent(player.getUUID(), id -> new HashMap<>());
+        Long last = shownAt.get(key);
+        if (last != null && now >= last && now - last < HINT_COOLDOWN_TICKS) {
+            return;
+        }
+        shownAt.put(key, now);
+        player.displayClientMessage(Component.translatable(key).withColor(HINT_COLOR), true);
+    }
+
+    /** Drops the hint cooldowns of departing players so the map cannot grow unbounded. */
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        HINT_SHOWN_AT.remove(event.getEntity().getUUID());
     }
 }

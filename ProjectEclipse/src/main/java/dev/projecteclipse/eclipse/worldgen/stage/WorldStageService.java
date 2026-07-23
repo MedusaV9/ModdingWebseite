@@ -30,7 +30,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li>persist the stage in {@link EclipseWorldState},</li>
  *   <li>publish it into the {@link WorldStageAccess} chunkgen seam (worldgen threads see the
  *       new radius before any annulus chunk can generate),</li>
- *   <li>broadcast {@link S2CStagePayload} to all clients,</li>
+ *   <li>broadcast {@link S2CStagePayload} to the clients in the affected dimension (login
+ *       sync covers everyone else),</li>
  *   <li>kick {@link RingGrowthService} to rewrite the already-generated annulus (animated
  *       angular sweep, or instantly-paced when {@code animate=false}; lowering writes the
  *       terrain function's stage-{@code n} output, i.e. air/void beyond the new radius).</li>
@@ -141,7 +142,7 @@ public final class WorldStageService {
         Integer interruptedFrom = RingGrowthService.cancel(level, profile);
         int fromStage = interruptedFrom != null ? Math.min(interruptedFrom, committed) : committed;
         if (committed == stage && interruptedFrom == null) {
-            broadcastStage(profile, stage, false);
+            broadcastStage(server, profile, stage, false);
             return false;
         }
 
@@ -150,7 +151,7 @@ public final class WorldStageService {
         EclipseMod.LOGGER.info("World stage committed: {} {} -> {} (radius {} -> {}, {})",
                 profile.name(), committed, stage, StageRadii.radius(profile, committed),
                 StageRadii.radius(profile, stage), animate ? "animated sweep" : "instant stamp");
-        broadcastStage(profile, stage, true);
+        broadcastStage(server, profile, stage, true);
 
         // W7 soft border: retarget the dimension's ring to stageRadius + borderOffset; an
         // animated commit lerps the ring alongside the sweep (snapping on early completion).
@@ -186,7 +187,7 @@ public final class WorldStageService {
     /** Called by {@link RingGrowthService} on the server thread when a sweep completes. */
     static void onSweepComplete(ServerLevel level, DiscProfile profile, int fromStage, int toStage) {
         EclipseWorldState.get(level.getServer()).clearGrowthCursor();
-        broadcastStage(profile, toStage, false);
+        broadcastStage(level.getServer(), profile, toStage, false);
         for (StageListener listener : LISTENERS) {
             listener.onStageTerrainComplete(level, profile, fromStage, toStage);
         }
@@ -202,8 +203,14 @@ public final class WorldStageService {
         }
     }
 
-    private static void broadcastStage(DiscProfile profile, int stage, boolean animating) {
-        PacketDistributor.sendToAllPlayers(new S2CStagePayload(profile.name(), stage,
+    /** Stage changes only matter to players IN that dimension ({@link #syncStagesTo} covers logins). */
+    private static void broadcastStage(MinecraftServer server, DiscProfile profile, int stage,
+            boolean animating) {
+        ServerLevel level = server.getLevel(dimensionOf(profile));
+        if (level == null) {
+            return;
+        }
+        PacketDistributor.sendToPlayersInDimension(level, new S2CStagePayload(profile.name(), stage,
                 StageRadii.radius(profile, stage), animating));
     }
 
@@ -224,7 +231,13 @@ public final class WorldStageService {
                 state.getWorldStage(DiscProfile.OVERWORLD), state.getWorldStage(DiscProfile.NETHER));
     }
 
-    /** Resumes an interrupted ring-growth sweep from its persisted cursor. */
+    /**
+     * Resumes an interrupted ring-growth sweep from its persisted cursor. The soft border is
+     * re-derived at the sweep's actual progress ({@link SoftBorder#resumeGrowthLerp}) instead
+     * of snapping to the persisted final target, and the animating stage state is
+     * re-broadcast so already-connected clients (singleplayer host, fast rejoins) show the
+     * sweep FX again.
+     */
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
@@ -239,11 +252,14 @@ public final class WorldStageService {
             EclipseMod.LOGGER.warn("Cannot resume ring growth: dimension for {} missing", profile.name());
             return;
         }
+        int fromStage = state.getGrowthFromStage();
         int toStage = state.getWorldStage(profile);
         EclipseMod.LOGGER.info("Resuming interrupted ring growth: {} stage {} -> {} at column cursor {}",
-                profile.name(), state.getGrowthFromStage(), toStage, state.getGrowthCursor());
-        RingGrowthService.start(level, profile, state.getGrowthFromStage(), toStage, true,
-                state.getGrowthCursor());
+                profile.name(), fromStage, toStage, state.getGrowthCursor());
+        RingGrowthService.start(level, profile, fromStage, toStage, true, state.getGrowthCursor());
+        SoftBorder.resumeGrowthLerp(server, profile, fromStage, toStage,
+                RingGrowthService.progressFraction(profile));
+        broadcastStage(server, profile, toStage, true);
     }
 
     // --- stages.json triggers ---

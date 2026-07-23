@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.client.entity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
@@ -36,6 +37,21 @@ public class HeraldRenderer extends MobRenderer<HeraldEntity, HeraldModel> {
     @Override
     public ResourceLocation getTextureLocation(HeraldEntity entity) {
         return TEXTURE;
+    }
+
+    /**
+     * While the scripted death collapse runs ({@code deathTime > 0},
+     * {@code HeraldEntity.tickDeath}), the model poses the wreck itself — suppress the
+     * vanilla 20t sideways death flip and keep only the body yaw.
+     */
+    @Override
+    protected void setupRotations(HeraldEntity entity, PoseStack poseStack, float bob, float yBodyRot,
+            float partialTick, float scale) {
+        if (entity.deathTime > 0) {
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yBodyRot));
+            return;
+        }
+        super.setupRotations(entity, poseStack, bob, yBodyRot, partialTick, scale);
     }
 
     /** Emissive pass: inner eye always; corona shards only during a volley telegraph. */

@@ -37,6 +37,8 @@ public final class ModGate {
     private static final int SWEEP_INTERVAL_TICKS = 100;
     /** Offset so the sweep never lands on the same tick as the PhaseInventoryLock sweep. */
     private static final int SWEEP_PHASE = 50;
+    /** Eclipse accent (mirrors the client UI suite's 0xB98CFF) for the seal hint. */
+    private static final int HINT_COLOR = 0xB98CFF;
 
     private ModGate() {}
 
@@ -167,8 +169,9 @@ public final class ModGate {
         }
     }
 
-    /** Brief action-bar message (never chat). */
+    /** Brief accent-colored action-bar message (never chat). */
     private static void hint(ServerPlayer player) {
-        player.displayClientMessage(Component.literal("That is still sealed by the Eclipse."), true);
+        player.displayClientMessage(
+                Component.translatable("message.eclipse.sealed.mod").withColor(HINT_COLOR), true);
     }
 }

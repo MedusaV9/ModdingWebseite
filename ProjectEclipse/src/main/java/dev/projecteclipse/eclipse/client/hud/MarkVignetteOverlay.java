@@ -56,13 +56,13 @@ public final class MarkVignetteOverlay {
         }
     }
 
-    /** GUI-layer body registered above the vanilla camera overlays. */
+    /** GUI-layer body registered above the vanilla camera overlays; hidden under F1. */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (ticksLeft <= 0) {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
+        if (minecraft.player == null || minecraft.options.hideGui) {
             return;
         }
         float fadeIn = Mth.clamp((totalTicks - ticksLeft) / (float) FADE_IN_TICKS, 0.0F, 1.0F);

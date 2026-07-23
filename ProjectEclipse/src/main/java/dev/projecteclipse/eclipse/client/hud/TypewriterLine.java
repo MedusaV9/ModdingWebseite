@@ -1,17 +1,17 @@
 package dev.projecteclipse.eclipse.client.hud;
 
-import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
 /**
  * One typewriter announcement line ({@code docs/ideas/03_ui_ux.md} §E): reveals 1 character
- * per tick with an {@code eclipse:ui.typewriter} tick every 2 characters; the moment the
- * line completes, the full {@link Component} is posted to chat ONCE, then the overlay copy
- * holds briefly and fades. Owned and rendered by {@link AnnouncementOverlay}.
+ * per tick with an {@code eclipse:ui.typewriter} tick every 2 characters (played through
+ * the {@code uiSounds}-gated {@link UiSounds#typewriter}); the moment the line completes,
+ * the full {@link Component} is posted to chat ONCE, then the overlay copy holds briefly
+ * and fades. Owned and rendered by {@link AnnouncementOverlay}.
  */
 final class TypewriterLine {
     private static final int HOLD_TICKS = 50;
@@ -34,8 +34,7 @@ final class TypewriterLine {
         if (revealed < text.length()) {
             revealed++;
             if (revealed % 2 == 0 || revealed == text.length()) {
-                minecraft.getSoundManager().play(SimpleSoundInstance.forUI(
-                        EclipseSounds.UI_TYPEWRITER.get(), 0.9F + 0.2F * (float) Math.random(), 0.55F));
+                UiSounds.typewriter(0.9F + 0.2F * (float) Math.random());
             }
             return false;
         }

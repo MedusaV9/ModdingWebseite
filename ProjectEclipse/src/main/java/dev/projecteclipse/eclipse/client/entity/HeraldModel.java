@@ -139,6 +139,27 @@ public class HeraldModel extends HierarchicalModel<HeraldEntity> {
                 this.tentacles[t][k].xRot = Mth.sin(age * 0.09F + k * 0.6F) * 0.25F;
             }
         }
+
+        // Scripted death collapse (deathTime > 0; the renderer suppresses the vanilla
+        // sideways flip): the core keels forward and sinks toward the dais, the corona
+        // ring sags below it while the surviving shards tip outward, and the tentacle
+        // whip dies to a limp hang. The server detaches shards as it plays the crashes,
+        // so the synced shardsLeft already blanks them out one by one.
+        float death = entity.deathProgress(partialTick);
+        if (death > 0.0F) {
+            float sag = death * death; // Ease-in: the wreck accelerates as it gives up.
+            this.core.y += sag * 30.0F;
+            this.core.xRot += sag * 0.25F;
+            this.ring.y += sag * 34.0F;
+            for (ModelPart shard : shards) {
+                shard.zRot += sag * 0.8F;
+            }
+            for (int t = 0; t < 4; t++) {
+                for (int k = 0; k < 4; k++) {
+                    this.tentacles[t][k].xRot *= 1.0F - death;
+                }
+            }
+        }
     }
 
     /**

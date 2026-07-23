@@ -13,6 +13,7 @@ import dev.projecteclipse.eclipse.client.handbook.tabs.StatusTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.TimelineTab;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -33,8 +34,9 @@ import org.lwjgl.glfw.GLFW;
  * → {@code ArtifactScreenOpener}); every value renders live from
  * {@code client.ClientStateCache}. The book unfolds over {@value #UNFOLD_TICKS} ticks
  * (ease-out cubic scale + fade); tab switches play a {@value #TURN_TICKS}-tick page-turn
- * (old page skews + compresses toward the spine hinge, new page unfolds back out, with the
- * {@code ui.page_turn} sound); the backdrop parallax layer shifts up to 8px opposite the
+ * (old page skews + compresses toward the spine hinge, new page unfolds back out — with the
+ * {@code ui.page_turn} sound on keyboard switches, while tongue clicks sound their own
+ * {@code ui.tab} press only); the backdrop parallax layer shifts up to 8px opposite the
  * mouse and the hero art (mid layer) 4px. All animation honors {@code reducedFx}. Cursors:
  * interactive widgets request the pointing hand ({@link EclipseWidget}), timeline dragging
  * requests the grab fist, and {@link CursorManager#endFrame()} applies exactly one cursor
@@ -335,8 +337,17 @@ public class HandbookScreen extends Screen {
                 Math.min(this.height - 10, bookY + bookH + 3), color(DIM_COLOR, alpha * 0.9F));
     }
 
-    /** Switches the active tab with the page-turn animation + sound. */
+    /** Switches the active tab with the page-turn animation + sound (keyboard/programmatic path). */
     protected void switchTab(int index) {
+        switchTab(index, false);
+    }
+
+    /**
+     * Tab-switch core. Tongue clicks pass {@code fromTabButton=true} so only their
+     * {@code ui.tab} press sounds ({@link TabButton#playDownSound} already played it);
+     * keyboard/arrow/number-key switches keep the {@code ui.page_turn} whoosh.
+     */
+    private void switchTab(int index, boolean fromTabButton) {
         if (index == activeTab || index < 0 || index >= tabs.size()) {
             return;
         }
@@ -344,7 +355,9 @@ public class HandbookScreen extends Screen {
             turnFrom = activeTab;
             turnTicks = 0;
         }
-        UiSounds.pageTurn();
+        if (!fromTabButton) {
+            UiSounds.pageTurn();
+        }
         activeTab = index;
         tabs.get(index).onShown();
     }
@@ -438,11 +451,13 @@ public class HandbookScreen extends Screen {
             super(x, y, width, height, tabs.get(index).title());
             this.index = index;
             this.restX = x;
+            // The tongues are icon-only; hovering reveals the tab name as a tooltip.
+            setTooltip(Tooltip.create(getMessage()));
         }
 
         @Override
         public void onClick(double mouseX, double mouseY) {
-            switchTab(index);
+            switchTab(index, true);
         }
 
         /** Replace the vanilla button click with the ui.tab tongue press. */

@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.progression.GoalTracker;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -57,9 +58,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FinaleRitual {
     /**
-     * The finale catalyst. W13 note: if a configured catalyst is wanted, route this
-     * through {@code EclipseConfig} (e.g. {@code finaleCatalyst: "minecraft:dragon_egg"})
-     * and resolve it here — the check below is the only place that names the item.
+     * The finale catalyst — DELIBERATELY the hard-wired vanilla dragon egg rather than a
+     * config knob: the day-13 "Claim the dragon egg" goal feeds straight into this
+     * offering, and the egg's one-of-a-kind vanilla status IS the balance (config-routing
+     * was considered and rejected — a swapped catalyst would orphan the dragon arc).
+     * This constant is the only place that names the item.
      */
     public static final net.minecraft.world.item.Item CATALYST = Items.DRAGON_EGG;
     /** First day the altar accepts the catalyst. */
@@ -197,6 +200,7 @@ public final class FinaleRitual {
         }
         // Limbo-scoped path: everyone is in limbo now, so the flight plays for all of them.
         CutsceneService.play("intro_submerge", shipped);
+        GoalTracker.onFinaleBegun(server); // day-14 "Offer the egg at dusk" auto-tick
         EclipseMod.LOGGER.info("Finale arrival: {} living player(s) shipped to the deck, {} ghost straggler(s) pulled "
                 + "aboard; Ferryman rises in {}t", living, ghostsPulled, SUMMON_TICK);
         return true;

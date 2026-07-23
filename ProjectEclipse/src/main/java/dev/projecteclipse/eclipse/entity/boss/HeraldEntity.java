@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.UmbralStalkerEntity;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
@@ -35,11 +36,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
@@ -68,7 +71,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       BEACON_POWER_SELECT, 20t base) then 3 homing {@link HeraldShardProjectile}s;
  *       every {@value #STALKER_INTERVAL}t summons 2 Umbral Stalkers (cap 2+n).</li>
  *   <li><b>P2 Gaze</b> (66–33%): volley cadence slows to {@value #P2_VOLLEY_CADENCE}t;
- *       adds the guardian-style gaze — locks one player (ONLY they hear WARDEN_HEARTBEAT),
+ *       adds the guardian-style gaze — locks one player (ONLY they hear WARDEN_HEARTBEAT
+ *       and see the purple hunt vignette, {@code S2CShakePayload.mark}),
  *       {@value #GAZE_CHARGE_TICKS}t charge with a visible wisp beam, then 8 dmg +
  *       Darkness 5 s unless line of sight is broken behind a sanctum pillar at the moment
  *       of firing.</li>
@@ -85,10 +89,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Arena lock</b>: everyone inside r={@value #ARENA_RADIUS} becomes a participant;
  * leaving the ring triggers the SoftBorder inward-impulse formula plus a reverse-portal
- * particle wall. If no player stays within {@value #RESET_RANGE} blocks for
+ * particle wall, and damage dealt by players standing OUTSIDE the ring is deflected
+ * outright ({@link #hurt}: chime + shard sparks, no damage — no risk-free outside
+ * archery). If no player stays within {@value #RESET_RANGE} blocks for
  * {@value #RESET_TICKS}t, the Herald heals to full and despawns (summon item respawns it).
  * Drops: 1 herald core at the corpse + 3 umbral shards at EACH participant's feet; sets
- * {@link EclipseWorldState#setHeraldDefeated} and fires the boss-styled announce.</p>
+ * {@link EclipseWorldState#setHeraldDefeated} and fires the boss-styled announce. Death
+ * plays a {@value #DEATH_DURATION_TICKS}t scripted collapse ({@link #tickDeath}) before
+ * the body is removed.</p>
  */
 public class HeraldEntity extends Monster {
     public static final int CORONA_SHARDS = 8;
@@ -96,6 +104,8 @@ public class HeraldEntity extends Monster {
     public static final double ARENA_RADIUS = 15.0D;
     /** How high above the sanctum center the summon sequence drops the boss in. */
     public static final int SUMMON_HEIGHT = 12;
+    /** Scripted death collapse length (vanilla tips over after 20t; see {@link #tickDeath}). */
+    public static final int DEATH_DURATION_TICKS = 70;
 
     private static final double SCALING_RANGE = 48.0D;
     private static final int P1_VOLLEY_CADENCE = 60;
@@ -118,6 +128,10 @@ public class HeraldEntity extends Monster {
     private static final double CRASH_RADIUS = 2.5D;
     private static final int RESET_TICKS = 1200; // 60 s
     private static final double RESET_RANGE = 40.0D;
+    /** Outside-arena deflect cue throttle (~1/s, so bow spam stays a chime, not a rave). */
+    private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
+    /** Death collapse: one remaining corona shard tears loose every N ticks. */
+    private static final int DEATH_SHARD_DETACH_INTERVAL = 5;
     // SoftBorder pushback formula (border/SoftBorder.impulseInward).
     private static final double MAX_IMPULSE = 1.2D;
     private static final double IMPULSE_BASE = 0.4D;
@@ -174,6 +188,7 @@ public class HeraldEntity extends Monster {
     private final List<ShardCrash> crashes = new ArrayList<>();
     private int noPlayerTicks;
     private int lastPhase = 1;
+    private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
 
     // Client-side smooth animation clock: advances at the phase speed (x2 in P3) with an
     // eased ramp so the ring spin / bobs never snap on a phase change.
@@ -542,6 +557,9 @@ public class HeraldEntity extends Monster {
             this.gazeChargeTimer = GAZE_CHARGE_TICKS;
             this.gazeTimer = GAZE_INTERVAL;
             sendPrivateHeartbeat(target);
+            // Same visual language as the Ferryman's Lantern Gaze: the locked player's
+            // purple hunt vignette (MarkVignetteOverlay) pulses for the whole charge.
+            PacketDistributor.sendToPlayer(target, S2CShakePayload.mark(GAZE_CHARGE_TICKS));
             EclipseMod.LOGGER.info("Herald gaze locked onto {} ({}t charge)",
                     target.getScoreboardName(), GAZE_CHARGE_TICKS);
             return;
@@ -775,6 +793,44 @@ public class HeraldEntity extends Monster {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
+    // --- arena integrity (outside-archer deflect) ---
+
+    /**
+     * Deflects any damage whose attacking player stands outside the r={@value #ARENA_RADIUS}
+     * ring: {@link #updateParticipants} only enrolls players INSIDE the ring, so without
+     * this an archer parked beyond it could plink the boss down risk-free forever. The
+     * reverse-portal particle wall already marks the boundary; the deflect answers with an
+     * amethyst chime + a shard-spark burst at the boss (throttled to ~1/s). Damage that
+     * bypasses invulnerability ({@code /kill}) still lands.
+     */
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (!this.level().isClientSide && this.isAlive() && this.arenaCenter != null
+                && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)
+                && source.getEntity() instanceof ServerPlayer attacker
+                && horizontalDistance(attacker.position()) > ARENA_RADIUS) {
+            playDeflectCue(attacker);
+            return false;
+        }
+        return super.hurt(source, amount);
+    }
+
+    /** Audible/visible "that did nothing" cue for a deflected outside-arena hit. */
+    private void playDeflectCue(ServerPlayer attacker) {
+        if (this.tickCount - this.lastDeflectCueTick < DEFLECT_CUE_INTERVAL_TICKS
+                || !(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        this.lastDeflectCueTick = this.tickCount;
+        serverLevel.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE,
+                SoundSource.HOSTILE, 1.0F, 1.4F);
+        serverLevel.sendParticles(ParticleTypes.CRIT, this.getX(), this.getY() + 2.0D, this.getZ(),
+                10, 0.8D, 0.8D, 0.8D, 0.15D);
+        EclipseMod.LOGGER.info("Herald deflected outside-arena damage from {} ({} blocks out)",
+                attacker.getScoreboardName(),
+                String.format(java.util.Locale.ROOT, "%.1f", horizontalDistance(attacker.position())));
+    }
+
     // --- death / drops ---
 
     @Override
@@ -795,10 +851,19 @@ public class HeraldEntity extends Monster {
                 rewarded);
     }
 
+    /**
+     * Runs exactly once at the kill (vanilla guards on {@code !this.dead}): drops + XP
+     * already fired from {@code super.die()}'s {@code dropAllDeathLoot}, the defeat flag +
+     * announce fire here — the scripted {@link #tickDeath} collapse afterwards only delays
+     * the body's removal, so none of this can double-run. The BOSS_SLAM burst moved to the
+     * end of the collapse ({@code shatter}), where the core actually breaks apart.
+     */
     @Override
     public void die(DamageSource damageSource) {
         super.die(damageSource);
         if (this.level() instanceof ServerLevel serverLevel) {
+            setTelegraphing(false); // No stuck glow pass on the wreck.
+            this.bossEvent.setProgress(0.0F); // tickFight no longer runs to update it.
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             if (!state.isHeraldDefeated()) {
                 state.setHeraldDefeated(true);
@@ -806,11 +871,83 @@ public class HeraldEntity extends Monster {
                         "announce.eclipse.herald.title", "announce.eclipse.herald.sub",
                         dev.projecteclipse.eclipse.network.S2CAnnouncePayload.STYLE_BOSS);
             }
-            PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
-                    96.0D, new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
             EclipseMod.LOGGER.info("Herald defeated (source: {}) — heraldDefeated flag set, unlock key 'herald_slain' active",
                     damageSource.getMsgId());
         }
+    }
+
+    /**
+     * Scripted ~{@value #DEATH_DURATION_TICKS}t collapse replacing the vanilla 20t
+     * sideways tip-over ({@code HeraldRenderer} suppresses the death flip and
+     * {@code HeraldModel} poses the wreck off {@code deathTime}): the remaining corona
+     * shards tear loose one by one and crash down through the existing {@link ShardCrash}
+     * path while the core sinks toward the dais, then shatters — BOSS_SLAM burst, amethyst
+     * break chord, camera shake — and the vanilla removal path runs. Loot, XP and the
+     * announce all fired from {@link #die} at the kill, so the collapse delays ONLY the
+     * body removal.
+     */
+    @Override
+    protected void tickDeath() {
+        this.deathTime++;
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return; // Client: deathTime alone drives the model's collapse pose.
+        }
+        // Sink the wreck toward the dais center (travel() applies the velocity while dying).
+        if (this.arenaCenter != null) {
+            Vec3 rest = new Vec3(this.arenaCenter.x, this.groundY + 0.4D, this.arenaCenter.z);
+            Vec3 toRest = rest.subtract(this.position()).scale(0.06D);
+            if (toRest.length() > 0.35D) {
+                toRest = toRest.normalize().scale(0.35D);
+            }
+            this.setDeltaMovement(toRest);
+        }
+        // One remaining corona shard tears loose every few ticks and falls (reused P3 path:
+        // warning column, then a boss_slam AoE burst where it lands).
+        if (this.deathTime % DEATH_SHARD_DETACH_INTERVAL == 0 && getShardsLeft() > 0) {
+            setShardsLeft(getShardsLeft() - 1);
+            double angle = this.random.nextDouble() * Math.PI * 2.0D;
+            double radius = 2.0D + this.random.nextDouble() * 8.0D;
+            Vec3 impact = this.arenaCenter != null
+                    ? new Vec3(this.arenaCenter.x + Math.cos(angle) * radius, this.groundY,
+                            this.arenaCenter.z + Math.sin(angle) * radius)
+                    : this.position();
+            this.crashes.add(new ShardCrash(impact));
+            serverLevel.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_CLUSTER_BREAK,
+                    SoundSource.HOSTILE, 1.5F, 0.6F);
+        }
+        tickShardCrashes(serverLevel); // In-flight shards keep landing during the collapse.
+        if (this.deathTime == DEATH_DURATION_TICKS - 1) {
+            shatter(serverLevel);
+        }
+        if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
+            // Vanilla removal path (poof cloud + KILLED removal), just 50t later.
+            serverLevel.broadcastEntityEvent(this, (byte) 60);
+            this.remove(Entity.RemovalReason.KILLED);
+        }
+    }
+
+    /** The end of the collapse: the sunken core bursts apart on the dais. */
+    private void shatter(ServerLevel level) {
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
+                new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
+                S2CShakePayload.shake(0.9F, 18));
+        level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_BREAK,
+                SoundSource.HOSTILE, 1.5F, 0.6F);
+        level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_CLUSTER_BREAK,
+                SoundSource.HOSTILE, 1.5F, 0.9F);
+        level.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 1.0D, this.getZ(),
+                40, 1.0D, 1.0D, 1.0D, 0.15D);
+        EclipseMod.LOGGER.info("Herald death collapse complete after {}t: core shattered on the dais",
+                this.deathTime);
+    }
+
+    /** Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive). */
+    public float deathProgress(float partialTick) {
+        if (this.deathTime <= 0) {
+            return 0.0F;
+        }
+        return Mth.clamp((this.deathTime + partialTick - 1.0F) / (DEATH_DURATION_TICKS - 1.0F), 0.0F, 1.0F);
     }
 
     // --- bossbar (wither pattern + W8 skin payload for every viewer incl. late joiners) ---

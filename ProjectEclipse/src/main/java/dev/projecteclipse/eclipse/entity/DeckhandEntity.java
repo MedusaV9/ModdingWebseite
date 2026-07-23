@@ -21,6 +21,7 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -62,6 +63,10 @@ public class DeckhandEntity extends PathfinderMob {
     /** True while the crew has risen against the living (Ferryman P2). Synced for the model. */
     private static final EntityDataAccessor<Boolean> DATA_HOSTILE =
             SynchedEntityData.defineId(DeckhandEntity.class, EntityDataSerializers.BOOLEAN);
+
+    // Client-side smooth pose blend: 0 = seated rower, 1 = risen fighter (Ferryman pattern).
+    private float hostileLerp;
+    private float hostileLerpPrev;
 
     public DeckhandEntity(EntityType<? extends DeckhandEntity> entityType, Level level) {
         super(entityType, level);
@@ -129,10 +134,22 @@ public class DeckhandEntity extends PathfinderMob {
     @Override
     public void tick() {
         super.tick();
+        if (this.level().isClientSide) {
+            // Ease the pose blend so the crew visibly RISES from the bench (and sags back)
+            // instead of snapping between the rowing pull and the reaching claw pose.
+            this.hostileLerpPrev = this.hostileLerp;
+            this.hostileLerp += ((isHostile() ? 1.0F : 0.0F) - this.hostileLerp) * 0.1F;
+            return;
+        }
         // Limbo only: a deckhand outside the ghost ship's dimension simply is not.
-        if (!this.level().isClientSide && !this.level().dimension().equals(LimboDimension.LIMBO)) {
+        if (!this.level().dimension().equals(LimboDimension.LIMBO)) {
             this.discard();
         }
+    }
+
+    /** Client anim hook: 0..1 blend toward the risen-fighter pose ({@code DeckhandModel}). */
+    public float hostileAmount(float partialTick) {
+        return Mth.lerp(partialTick, this.hostileLerpPrev, this.hostileLerp);
     }
 
     @Override

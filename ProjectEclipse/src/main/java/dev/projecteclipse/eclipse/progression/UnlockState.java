@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.progression;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
@@ -15,9 +16,11 @@ import net.minecraft.server.MinecraftServer;
  * {@code rewards[]} of every altar milestone up to the current altar level, plus the
  * derived boss key {@link #KEY_HERALD_SLAIN} while the Herald-defeated flag is set (W11 —
  * lets W13's config gate an unlock, e.g. {@code enchanting}, behind the day-7 boss kill).
- * Everything is derived from {@link EclipseWorldState} + {@link EclipseConfig}, so lowering
- * the day (or a config reload) reverses unlocks automatically — nothing is stored
- * separately.
+ * Day-plan grants may additionally be held back by a gate ({@link #KEY_ENCHANTING} boss
+ * gate, {@link #DAY_GRANT_GATES} altar gates) so the altar stays meaningful even though
+ * the day plans list the same keys. Everything is derived from {@link EclipseWorldState}
+ * + {@link EclipseConfig}, so lowering the day (or a config reload) reverses unlocks
+ * automatically — nothing is stored separately.
  */
 public final class UnlockState {
     /** Derived unlock key present while {@link EclipseWorldState#isHeraldDefeated()}. */
@@ -29,6 +32,26 @@ public final class UnlockState {
      * NOT filtered — an admin can still grant enchanting early via a milestone if desired.
      */
     public static final String KEY_ENCHANTING = "enchanting";
+
+    /** Altar gate of a day-granted key: passes at altar level {@code minAltarLevel} OR day {@code fallbackDay}. */
+    private record AltarGate(int minAltarLevel, int fallbackDay) {
+        boolean passes(int altarLevel, int day) {
+            return altarLevel >= minAltarLevel || day >= fallbackDay;
+        }
+    }
+
+    /**
+     * Altar gates for day-plan grants (the {@link #KEY_ENCHANTING} boss-gate pattern,
+     * generalized): each mapped key is filtered from the DAY-GRANTED set until the altar
+     * milestone that also rewards it has been reached — or the fallback day passes, so a
+     * stalled altar can never dead-lock the arc. Milestone rewards are NOT filtered:
+     * paying the altar always unlocks immediately. {@code create}/{@code simulated}/
+     * {@code end} are deliberately ungated — the early keys stay day-driven and the End
+     * is already gated by its own day-12 arc.
+     */
+    private static final Map<String, AltarGate> DAY_GRANT_GATES = Map.of(
+            "aeronautics", new AltarGate(3, 6),
+            "sable", new AltarGate(4, 9));
 
     /** Cache of the last derivation; the key fields detect day/altar changes and config reloads. */
     private record Snapshot(int day, int altarLevel, boolean heraldDefeated,
@@ -67,6 +90,10 @@ public final class UnlockState {
                 for (String key : plan.unlocks()) {
                     if (KEY_ENCHANTING.equals(key) && !heraldDefeated) {
                         continue; // boss-locked until the day-7 Herald falls (see KEY_ENCHANTING)
+                    }
+                    AltarGate gate = DAY_GRANT_GATES.get(key);
+                    if (gate != null && !gate.passes(altarLevel, day)) {
+                        continue; // altar-locked until its milestone (or the fallback day) passes
                     }
                     keys.add(key);
                 }

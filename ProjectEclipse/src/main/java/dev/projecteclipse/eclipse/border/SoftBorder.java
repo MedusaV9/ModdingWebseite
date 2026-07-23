@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.progression.BorderController;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
@@ -25,15 +26,18 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityTeleportEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -46,19 +50,26 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * stage: {@code stageOuterRadius + borderOffset} (general.json, default 12); animated stage
  * growth tick-lerps the radius alongside the {@link RingGrowthService} sweep
  * (area-proportional, up to {@value #GROWTH_LERP_TICKS} ticks, snapping when the sweep
- * finishes early). State persists in {@link EclipseWorldState}; clients receive
- * {@link S2CBorderPayload} (center, from/to radius, lerp ticks, fx range) at login and on
- * every change and animate the remainder locally.
+ * finishes early; a sweep resumed after a restart re-derives the mid-lerp radius via
+ * {@link #resumeGrowthLerp}). State persists in {@link EclipseWorldState}; clients receive
+ * {@link S2CBorderPayload} (center, from/to radius, lerp ticks, fx range) at login (both
+ * rings) and on every change (players in the affected dimension) and animate the remainder
+ * locally.
  *
- * <p><b>Physics</b> (game bus, cheap d² checks; spectators + frozen players skipped):</p>
+ * <p><b>Physics</b> (game bus, cheap d² checks; spectators, frozen players and CREATIVE
+ * players skipped — creative flight ignores impulses client-side, so admins would only
+ * ever get dragged into the teleport fallback):</p>
  * <ul>
  *   <li>{@code d > R}: horizontal impulse {@code normalize(center−pos) ·
  *       min(1.2, 0.25·(d−R)+0.4)} + 0.3 Y with {@code hurtMarked = true} (the proven
  *       {@code StartEventCutscene.risePlayerAt} velocity-sync pattern); elytra flight is
  *       stopped first; a glitch sound + {@code BORDER_GLITCH} Quasar burst play at the
  *       player (throttled).</li>
- *   <li>{@code d > R+3}: teleport fallback onto the clamped point at {@code R−2}, with a
- *       heightmap ground raycast stepping inward until solid ground (covers players moving
+ *   <li>{@code d > R+3}: teleport fallback onto the clamped point at {@code R−2} — pulled
+ *       into the stage's full-thickness interior when the ring is stage-derived — with a
+ *       heightmap ground raycast stepping inward until SOLID ground (two consecutive
+ *       non-void steps, so a 1-block rim-crumble fragment is never a landing spot), a
+ *       {@code surfaceY} landing and a short Slow Falling grace (covers players moving
  *       "impossibly" — e.g. inside Aeronautics/Sable sub-level airships, which are not
  *       vanilla vehicles; see README known limits).</li>
  *   <li><b>Vehicles</b>: the impulse targets {@code getRootVehicle()}; ridden vehicles are
@@ -101,6 +112,11 @@ public final class SoftBorder {
     /** Ground raycast: max inward steps (of {@value #GROUND_SEARCH_STEP} blocks) hunting for terrain. */
     private static final int GROUND_SEARCH_STEPS = 24;
     private static final int GROUND_SEARCH_STEP = 4;
+    /**
+     * Slow Falling granted on every teleport fallback (~3 s): even a solid landing column
+     * can neighbor a crumble hole — a soft descent can never kill.
+     */
+    private static final int FALLBACK_SLOW_FALLING_TICKS = 60;
     private static final int SOUND_THROTTLE_TICKS = 15;
     private static final int VEHICLE_VIOLATION_WINDOW_TICKS = 40;
     private static final int VEHICLE_VIOLATIONS_TO_EJECT = 3;
@@ -236,6 +252,42 @@ public final class SoftBorder {
         broadcast(server, profile, from, target, durationTicks);
     }
 
+    /**
+     * Restart-resume hook ({@code WorldStageService.onServerStarted}): a sweep interrupted
+     * by a restart resumes from its persisted cursor, but the PERSISTED ring radius is the
+     * commit TARGET — without this the ring would snap to the final radius while the
+     * terrain is still mid-growth, leaving a walkable band of pure void inside the ring.
+     * Re-derives the mid-lerp radius from the sweep's column progress (the same
+     * area-proportional interpolation the live lerp uses), re-installs the sweep-coupled
+     * {@link Lerp} over the remaining duration and broadcasts the mid-lerp payload. The
+     * vanilla failsafe stays at the final target (it is an outer safety net, 48 beyond).
+     */
+    public static void resumeGrowthLerp(MinecraftServer server, DiscProfile profile,
+            int fromStage, int toStage, double progress) {
+        int fromOuter = stageOuterRadius(profile, fromStage);
+        int toOuter = stageOuterRadius(profile, toStage);
+        double from = fromOuter <= 0 ? 0.0D : fromOuter + EclipseConfig.borderOffset();
+        double target = toOuter <= 0 ? 0.0D : toOuter + EclipseConfig.borderOffset();
+        ServerLevel level = server.getLevel(WorldStageService.dimensionOf(profile));
+        if (level == null || from <= 0.0D || target <= 0.0D) {
+            return; // inactive ring on either end — the persisted snap target stands
+        }
+        double t = Mth.clamp(progress, 0.0D, 1.0D);
+        int remainingTicks = (int) Math.ceil(GROWTH_LERP_TICKS * (1.0D - t));
+        if (remainingTicks <= 0) {
+            return; // sweep effectively done — the tick handler snaps when it completes
+        }
+        double current = Math.sqrt(Mth.lerp(t, from * from, target * target));
+        EclipseWorldState.get(server).setSoftBorderRadius(profile, target);
+        LERPS.put(profile, new Lerp(current, target, level.getGameTime(), remainingTicks, true));
+        EclipseMod.LOGGER.info(
+                "SoftBorder: resumed {} growth lerp at radius {} ({}% swept) -> {} over {} ticks",
+                profile.name(), String.format(java.util.Locale.ROOT, "%.1f", current),
+                String.format(java.util.Locale.ROOT, "%.0f", t * 100.0D),
+                String.format(java.util.Locale.ROOT, "%.1f", target), remainingTicks);
+        broadcast(server, profile, current, target, remainingTicks);
+    }
+
     /** Persists a new FX visibility range (blocks) and re-syncs all clients. */
     public static void setFxRange(MinecraftServer server, double blocks) {
         EclipseWorldState.get(server).setBorderFxRange(Math.max(1.0D, blocks));
@@ -255,11 +307,16 @@ public final class SoftBorder {
         }
     }
 
+    /** Ring changes only matter to players IN that ring's dimension (login sync covers the rest). */
     private static void broadcast(MinecraftServer server, DiscProfile profile,
             double fromRadius, double toRadius, int lerpTicks) {
+        ServerLevel level = server.getLevel(WorldStageService.dimensionOf(profile));
+        if (level == null) {
+            return;
+        }
         Vec3 center = center(server);
-        PacketDistributor.sendToAllPlayers(new S2CBorderPayload(profile.name(), center.x, center.z,
-                (float) fromRadius, (float) toRadius, lerpTicks, (float) fxRange(server)));
+        PacketDistributor.sendToPlayersInDimension(level, new S2CBorderPayload(profile.name(),
+                center.x, center.z, (float) fromRadius, (float) toRadius, lerpTicks, (float) fxRange(server)));
     }
 
     /** Current-state payload for one profile: mid-lerp sends the remaining animation. */
@@ -341,6 +398,23 @@ public final class SoftBorder {
         }
     }
 
+    /** UUID-keyed throttle/anti-cheat maps must not grow with every player who ever joined. */
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        UUID id = event.getEntity().getUUID();
+        PUSHBACK_LOG.remove(id);
+        LAST_SOUND.remove(id);
+    }
+
+    /** Statics must never leak into the next world (singleplayer re-opens reuse the JVM). */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        LERPS.clear();
+        PUSHBACK_LOG.clear();
+        VEHICLE_LOG.clear();
+        LAST_SOUND.clear();
+    }
+
     // --- physics: players ---
 
     @SubscribeEvent
@@ -369,6 +443,15 @@ public final class SoftBorder {
             return;
         }
         double dist = Math.sqrt(distSq);
+        if (player.isCreative()) {
+            // Creative flight ignores impulses client-side, so physics would only ever
+            // drag admins into the teleport fallback — exempt them, but keep a trace.
+            EclipseMod.LOGGER.debug("SoftBorder: creative player {} is beyond the {} ring (d={}, R={}) — exempt",
+                    player.getScoreboardName(), profile.name(),
+                    String.format(java.util.Locale.ROOT, "%.1f", dist),
+                    String.format(java.util.Locale.ROOT, "%.1f", radius));
+            return;
+        }
         if (dist > radius + TELEPORT_BAND) {
             teleportInside(player, level, profile, dist, dx, dz);
         } else {
@@ -397,7 +480,18 @@ public final class SoftBorder {
                 String.format(java.util.Locale.ROOT, "%.2f", velocity.z));
     }
 
-    /** Zone 3 fallback: teleport onto the clamped ring point at R−2 with an inward ground search. */
+    /**
+     * Zone 3 fallback: teleport onto the clamped ring point with an inward ground search.
+     * The naive start would be {@code R − 2} — but {@code R = stageOuterRadius +
+     * borderOffset}, i.e. ~10 blocks BEYOND the outermost terrain, and the first non-void
+     * heightmap hit out there can be a 1-block rim-crumble fragment (a void-death drop).
+     * So for a stage-derived ring the search starts at
+     * {@code min(R − 2, stageOuterRadius − RIM_REWRITE_MARGIN)} (full-thickness interior,
+     * inside the rim taper/crumble band), requires TWO consecutive non-void heightmap
+     * steps (the landing column plus its inward neighbor — isolated fragments fail this),
+     * lands exactly at {@code surfaceY} (feet on the ground, no drop) and grants ~3 s of
+     * Slow Falling as a final safety net.
+     */
     private static void teleportInside(ServerPlayer player, ServerLevel level, DiscProfile profile,
             double dist, double dx, double dz) {
         MinecraftServer server = level.getServer();
@@ -406,35 +500,66 @@ public final class SoftBorder {
         double inv = 1.0D / dist;
         double dirX = dx * inv;
         double dirZ = dz * inv;
-        double targetR = Math.max(0.0D, radius - TELEPORT_INSET);
+        double startR = Math.max(0.0D, radius - TELEPORT_INSET);
+        int stageOuter = stageOuterRadius(profile, state.getWorldStage(profile));
+        if (stageOuter > 0) {
+            // Stage-derived ring: pull the start inside the rim rewrite margin, where the
+            // terrain function guarantees full-thickness interior columns.
+            startR = Math.min(startR,
+                    Math.max(0.0D, stageOuter - (double) DiscTerrainFunction.RIM_REWRITE_MARGIN));
+        }
         for (int step = 0; step <= GROUND_SEARCH_STEPS; step++) {
-            double r = Math.max(0.0D, targetR - (double) step * GROUND_SEARCH_STEP);
+            double r = Math.max(0.0D, startR - (double) step * GROUND_SEARCH_STEP);
             double tx = state.getBorderCenterX() + dirX * r;
             double tz = state.getBorderCenterZ() + dirZ * r;
-            level.getChunk(Mth.floor(tx) >> 4, Mth.floor(tz) >> 4); // force-load before height lookup
-            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Mth.floor(tx), Mth.floor(tz));
+            int surfaceY = groundSurfaceY(level, tx, tz);
             if (surfaceY <= level.getMinBuildHeight()) {
                 continue; // void column (rim taper / never-generated) — search further inward
             }
+            // Solid-ground requirement: the next step inward must be terrain too, so a
+            // lone rim-crumble fragment can never become the landing column.
+            double innerR = Math.max(0.0D, r - GROUND_SEARCH_STEP);
+            int innerSurfaceY = groundSurfaceY(level,
+                    state.getBorderCenterX() + dirX * innerR, state.getBorderCenterZ() + dirZ * innerR);
+            if (innerSurfaceY <= level.getMinBuildHeight()) {
+                continue;
+            }
             player.stopFallFlying();
-            player.teleportTo(level, tx, surfaceY + 1.0D, tz, player.getYRot(), player.getXRot());
+            player.teleportTo(level, tx, surfaceY, tz, player.getYRot(), player.getXRot());
             player.setDeltaMovement(Vec3.ZERO);
             player.hurtMarked = true;
+            player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                    FALLBACK_SLOW_FALLING_TICKS, 0, false, false));
             playGlitchFeedback(player, level);
             EclipseMod.LOGGER.debug("SoftBorder: teleport fallback for {} from d={} to r={} ({}, {}, {})",
                     player.getScoreboardName(), String.format(java.util.Locale.ROOT, "%.1f", dist),
                     String.format(java.util.Locale.ROOT, "%.1f", r),
-                    String.format(java.util.Locale.ROOT, "%.1f", tx), surfaceY + 1,
+                    String.format(java.util.Locale.ROOT, "%.1f", tx), surfaceY,
                     String.format(java.util.Locale.ROOT, "%.1f", tz));
             return;
         }
-        // No ground found along the ray (should not happen inside the disc) — spawn fallback.
+        // No ground found along the ray (should not happen inside the disc) — spawn fallback,
+        // onto the heightmap surface (a raw spawn.getY() can float above or sit inside terrain).
         BlockPos spawn = level.getSharedSpawnPos();
-        player.teleportTo(level, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
+        int spawnSurfaceY = groundSurfaceY(level, spawn.getX() + 0.5D, spawn.getZ() + 0.5D);
+        if (spawnSurfaceY <= level.getMinBuildHeight()) {
+            spawnSurfaceY = spawn.getY();
+        }
+        player.teleportTo(level, spawn.getX() + 0.5D, spawnSurfaceY, spawn.getZ() + 0.5D,
                 player.getYRot(), player.getXRot());
+        player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                FALLBACK_SLOW_FALLING_TICKS, 0, false, false));
         EclipseMod.LOGGER.warn("SoftBorder: no ground found for the {} teleport fallback; sent to spawn",
                 player.getScoreboardName());
+    }
+
+    /**
+     * Heightmap surface Y (first free block above the terrain) of a column, force-loading
+     * its chunk first; {@code <= getMinBuildHeight()} means the column is void.
+     */
+    private static int groundSurfaceY(ServerLevel level, double x, double z) {
+        level.getChunk(Mth.floor(x) >> 4, Mth.floor(z) >> 4); // force-load before height lookup
+        return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
     }
 
     /** Glitch sound (throttled per player) + one BORDER_GLITCH Quasar burst at the player. */
@@ -518,7 +643,7 @@ public final class SoftBorder {
             EclipseMod.LOGGER.debug("SoftBorder: vehicle {} re-violated {}x in {}t — ejecting players",
                     entity.getScoreboardName(), VEHICLE_VIOLATIONS_TO_EJECT, VEHICLE_VIOLATION_WINDOW_TICKS);
             for (Entity passenger : entity.getIndirectPassengers()) {
-                if (passenger instanceof ServerPlayer player) {
+                if (passenger instanceof ServerPlayer player && !player.isCreative()) {
                     player.stopRiding();
                     teleportInside(player, level, profile, dist, dx, dz);
                     logPushback(player, level, profile, dist, radius);
@@ -531,10 +656,14 @@ public final class SoftBorder {
         }
     }
 
+    /**
+     * First policed (non-creative, non-spectator) player passenger, or {@code null} — a
+     * vehicle crewed only by exempt players is itself exempt from the border physics.
+     */
     @Nullable
     private static ServerPlayer firstPlayerPassenger(Entity vehicle) {
         for (Entity passenger : vehicle.getIndirectPassengers()) {
-            if (passenger instanceof ServerPlayer player) {
+            if (passenger instanceof ServerPlayer player && !player.isCreative() && !player.isSpectator()) {
                 return player;
             }
         }

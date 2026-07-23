@@ -12,6 +12,7 @@ import java.util.Set;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -25,6 +26,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -33,6 +36,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -71,6 +75,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * ~{@value #ANIMATE_TARGET_TICKS} ticks; instant mode uses a {@value #INSTANT_BUDGET_MS} ms
  * budget and no pacing. Animated sweeps skip ticks entirely while the server is above
  * 40 ms/tick.</p>
+ *
+ * <p><b>Players</b>: GROW sweeps write full-thickness terrain straight through anyone
+ * standing in the rewrite band — a written column that intersects a survival player pops
+ * them up to the new surface (and re-anchors an active {@link FreezeService} lock there),
+ * because suffocating inside a fresh column costs permanent hearts. Erase sweeps are
+ * excluded: removing terrain never buries anyone.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class RingGrowthService {
@@ -152,6 +162,20 @@ public final class RingGrowthService {
         return job == null ? null : job.describeProgress();
     }
 
+    /**
+     * Fraction of the running sweep's columns already written, in [0, 1] — {@code 1} when
+     * no sweep is running. {@code SoftBorder.resumeGrowthLerp} uses this to re-derive the
+     * mid-lerp ring radius of a sweep resumed after a restart.
+     */
+    public static double progressFraction(DiscProfile profile) {
+        Job job = JOBS.get(profile);
+        if (job == null) {
+            return 1.0D;
+        }
+        long total = job.totalColumns();
+        return total <= 0 ? 1.0D : Math.min(1.0D, (double) job.cursor / total);
+    }
+
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         if (JOBS.isEmpty()) {
@@ -163,6 +187,27 @@ public final class RingGrowthService {
                 JOBS.remove(job.profile, job);
             }
         }
+    }
+
+    /**
+     * Restart hygiene: persist each in-flight sweep's cursor one last time (the live
+     * persistence only lands every {@value #CURSOR_PERSIST_INTERVAL} columns) and drop the
+     * jobs — the static map must never leak stale {@code ServerLevel} references into the
+     * next world a singleplayer client opens. {@code WorldStageService.onServerStarted}
+     * resumes from the persisted cursor.
+     */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        for (Job job : JOBS.values()) {
+            job.cancelled = true;
+            if (!job.isRebuild) {
+                EclipseWorldState.get(event.getServer())
+                        .setGrowthCursor(job.profile.name(), job.fromStage, job.cursor);
+                EclipseMod.LOGGER.info("Ring growth interrupted by server stop: {} at column {}/{}",
+                        job.profile.name(), job.cursor, job.totalColumns());
+            }
+        }
+        JOBS.clear();
     }
 
     // --- the job ---
@@ -179,6 +224,8 @@ public final class RingGrowthService {
         final int innerRadius;
         final int outerRadius;
 
+        /** Lowering sweep (terrain removal): outer-radius-first ordering, no entombment risk. */
+        final boolean erase;
         /** Intro fusion uses distance-to-nearest-disc-edge ordering instead of ring order. */
         final boolean fusionOrdered;
         /** Band columns as packed (x << 32 | z & 0xFFFFFFFF), in sweep order. */
@@ -229,9 +276,9 @@ public final class RingGrowthService {
                     ? 0 : Math.max(0, rLow - DiscTerrainFunction.RIM_REWRITE_MARGIN);
             this.outerRadius = rHigh + DiscTerrainFunction.RIM_NOISE_AMP;
 
-            boolean erase = outerRadiusOf(toStage) < outerRadiusOf(fromStage);
-            this.fusionOrdered = !erase && FusionSequence.isIntroFusion(profile, fromStage, toStage);
-            this.columns = buildOrderedColumns(erase);
+            this.erase = outerRadiusOf(toStage) < outerRadiusOf(fromStage);
+            this.fusionOrdered = !this.erase && FusionSequence.isIntroFusion(profile, fromStage, toStage);
+            this.columns = buildOrderedColumns(this.erase);
             this.cursor = Math.min(Math.max(0L, resumeCursor), this.columns.length);
             this.columnsPerTickCap = animate
                     ? Math.max(64, this.columns.length / ANIMATE_TARGET_TICKS)
@@ -497,11 +544,58 @@ public final class RingGrowthService {
                 }
             }
             chunk.setUnsaved(true);
+            if (!this.erase && column.inside()) {
+                rescueEntombedPlayers(column);
+            }
             if (wasVoid && gameTime - this.lastFxGameTime >= FX_INTERVAL_TICKS) {
                 this.lastFxGameTime = gameTime;
                 Vec3 pos = new Vec3(x + 0.5D, column.surfaceY() + 1.5D, z + 0.5D);
                 PacketDistributor.sendToPlayersNear(this.level, null, pos.x, pos.y, pos.z, 192.0D,
                         new S2CQuasarPayload(S2CQuasarPayload.MAP_EXPAND_MATERIALIZE, pos));
+            }
+        }
+
+        /** Grace window after an entombment rescue so a re-anchored freeze lets the player settle. */
+        private static final int RESCUE_REANCHOR_GRACE_TICKS = 10;
+
+        /**
+         * Entombment protection (GROW sweeps only): a just-written column that intersects a
+         * survival/adventure player would suffocate them inside solid terrain — permanent
+         * heart loss. Pops any such player up onto the new surface ({@code surfaceY + 1};
+         * climbing above lava/trunk/cactus columns via the pure column data, which matches
+         * the blocks just written) and, when {@link FreezeService} holds them (unlock
+         * cinematics freeze watchers during animated growth), re-anchors the lock at the
+         * new position so the rubber band does not drag them back underground.
+         */
+        private void rescueEntombedPlayers(DiscColumn column) {
+            for (ServerPlayer player : this.level.players()) {
+                if (Mth.floor(player.getX()) != column.x() || Mth.floor(player.getZ()) != column.z()
+                        || player.isSpectator() || player.isCreative()) {
+                    continue;
+                }
+                double feetY = player.getY();
+                // The written solid band is bottomY..surfaceY; the player collider spans
+                // feet..feet+1.8, so anything below that band (or clear above it) is safe.
+                if (feetY < column.bottomY() - 2 || feetY >= column.surfaceY() + 1) {
+                    continue;
+                }
+                int targetY = Math.max(column.surfaceY(), column.lavaTopY()) + 1;
+                while (targetY <= column.topY()
+                        && !(DiscTerrainFunction.stateInColumn(column, targetY).isAir()
+                                && DiscTerrainFunction.stateInColumn(column, targetY + 1).isAir())) {
+                    targetY++; // step above cover/trunk/canopy blocks in this column
+                }
+                player.teleportTo(this.level, player.getX(), targetY, player.getZ(),
+                        player.getYRot(), player.getXRot());
+                player.setDeltaMovement(Vec3.ZERO);
+                player.hurtMarked = true;
+                if (FreezeService.isFrozen(player)) {
+                    FreezeService.reanchorWithGrace(player, RESCUE_REANCHOR_GRACE_TICKS);
+                }
+                EclipseMod.LOGGER.info(
+                        "Ring growth: rescued {} from entombment at ({}, {}) -> y {} ({} sweep column)",
+                        player.getScoreboardName(), column.x(), column.z(), targetY,
+                        this.profile.name());
             }
         }
 

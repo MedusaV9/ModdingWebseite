@@ -21,7 +21,8 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
  *
  * <p>The layer itself (registered above all in {@code client.EclipseGuiLayers}) eases two
  * black bars in/out over ~{@value #EASE_NANOS} ns and shows a "space skips" hint when the
- * active path allows skipping. While the active path requests {@code hideHud}, every other
+ * active path allows skipping. The bars deliberately stay up under F1 ({@code hideGui} —
+ * they are cinematic framing, not HUD), but the skip-hint text is suppressed. While the active path requests {@code hideHud}, every other
  * GUI layer is cancelled via {@link RenderGuiLayerEvent.Pre} EXCEPT the id whitelist wired
  * by {@code EclipseGuiLayers} — the letterbox itself, W2's heart-burst overlay (a mid-death
  * burst must never be hidden) and the v1 wave overlay (the intro's water wash renders THROUGH
@@ -84,7 +85,7 @@ public final class LetterboxLayer {
         guiGraphics.fill(0, 0, width, bar, 0xFF000000);
         guiGraphics.fill(0, height - bar, width, height, 0xFF000000);
 
-        if (showSkipHint && p > 0.6F) {
+        if (showSkipHint && p > 0.6F && !Minecraft.getInstance().options.hideGui) {
             Font font = Minecraft.getInstance().font;
             Component hint = Component.translatable("gui.eclipse.cutscene.skip_hint");
             int alpha = (int) (Mth.clamp((p - 0.6F) / 0.4F, 0.0F, 1.0F) * 160.0F) + 40;

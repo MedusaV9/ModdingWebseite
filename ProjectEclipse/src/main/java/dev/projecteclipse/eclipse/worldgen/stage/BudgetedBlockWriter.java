@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.worldgen.stage;
 
 import java.util.Comparator;
 
+import dev.projecteclipse.eclipse.EclipseMod;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ServerLevel;
@@ -26,6 +27,18 @@ public final class BudgetedBlockWriter {
     public static final TicketType<ChunkPos> WRITER_TICKET =
             TicketType.create("eclipse_ring_growth", Comparator.comparingLong(ChunkPos::toLong), 200);
 
+    /**
+     * Keeps a bulk-rewritten chunk loaded until its async relight callback lands. A sweep
+     * can queue thousands of light rebuilds, so {@code waitForPendingTasks} may complete
+     * well after {@link #WRITER_TICKET}'s 200-tick TTL — an unloaded chunk at callback
+     * time silently leaves watching clients with stale lighting. Rather than tracking and
+     * refreshing tickets per pending relight, the TTL is raised to comfortably outlast a
+     * saturated light queue (600 ticks = 30 s; measured worst-case drain during a full
+     * stage sweep is far below that); the callback logs if a chunk still fell out.
+     */
+    private static final TicketType<ChunkPos> RELIGHT_TICKET =
+            TicketType.create("eclipse_relight", Comparator.comparingLong(ChunkPos::toLong), 600);
+
     private BudgetedBlockWriter() {}
 
     /** Sync-loads a chunk from disk (or generates it) under a short-lived {@link #WRITER_TICKET}. */
@@ -44,7 +57,7 @@ public final class BudgetedBlockWriter {
      */
     public static void relightAndResend(ServerLevel level, LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
-        level.getChunkSource().addRegionTicket(WRITER_TICKET, pos, 1, pos);
+        level.getChunkSource().addRegionTicket(RELIGHT_TICKET, pos, 1, pos);
         chunk.initializeLightSources();
         chunk.setUnsaved(true);
         chunk.setLightCorrect(false);
@@ -69,6 +82,12 @@ public final class BudgetedBlockWriter {
         light.waitForPendingTasks(pos.x, pos.z).thenRunAsync(() -> {
             LevelChunk lit = level.getChunkSource().getChunkNow(pos.x, pos.z);
             if (lit == null) {
+                // Should not happen under the 600-tick RELIGHT_TICKET; if it does, any
+                // client still watching this chunk keeps pre-rewrite lighting until the
+                // chunk reloads (light data was persisted, so this is display-only).
+                EclipseMod.LOGGER.warn(
+                        "Relight callback found chunk {} unloaded in {} — client lighting may be stale",
+                        pos, level.dimension().location());
                 return;
             }
             lit.setLightCorrect(true);

@@ -52,14 +52,23 @@ public final class EclipseConfig {
      * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
      * at that stage, what triggers it ({@code "intro_fusion"}, {@code "milestone:N"},
      * {@code "day:N"} or {@code "final_day"}), the structure ids worker 5's stamper places when
-     * the stage's terrain sweep completes, and an informational per-annulus ore budget (the
-     * actual vein shaping lives in {@code DiscTerrainFunction}'s band factors).
+     * the stage's terrain sweep completes, and a LEGACY per-annulus ore budget — ore
+     * distribution is actually fixed by the terrain generator ({@code DiscTerrainFunction}'s
+     * noise tables), so the field is parsed for backward compat only and no longer written.
      */
     public record StageEntry(int stage, int radius, String trigger, List<String> structures,
             Map<String, Integer> oreBudget) {}
 
-    /** Per-day plan: three goals, progression unlock keys, and the world border size for that day. */
-    public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize) {}
+    /**
+     * Per-day plan: three goals, progression unlock keys, and the optional announcement/
+     * timeline {@code title}/{@code subtitle} literals (empty = use the generic lang
+     * fallback). The per-day lines live SERVER-SIDE on purpose: shipping them as lang keys
+     * would let clients datamine the anonymized arc ("DAY 14 — THE FERRYMAN") straight out
+     * of the jar. {@code borderSize} is deprecated since W7 (the soft border follows
+     * {@code stages.json}) — parsed for backward compat, never written, {@code 0} when absent.
+     */
+    public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
+            String title, String subtitle) {}
 
     /** A single item cost entry, e.g. {@code minecraft:diamond} x 8. */
     public record ItemCost(String item, int count) {}
@@ -372,25 +381,41 @@ public final class EclipseConfig {
      * The v2 14-day arc (spec {@code docs/ideas/04_content.md} §6). Nether opens on day 2
      * ("The Burning Door"); day 7/14 are the boss days. Day 7's {@code enchanting} key is
      * SPECIAL: {@code progression.UnlockState} unions it only once the Herald has fallen.
-     * {@code borderSize} is deprecated since W7 (soft border follows {@code stages.json})
-     * but still written for backward compat.
+     * The {@code title}/{@code subtitle} literals are the former
+     * {@code announce.eclipse.day.N.title/.sub} lang lines, moved here verbatim so the
+     * anonymized arc cannot be datamined from the client jar (see {@link DayPlan}).
+     * The deprecated {@code borderSize} is no longer written (see {@link DayPlan}).
      */
     private static List<DayPlan> defaultDays() {
         List<DayPlan> plans = new ArrayList<>(14);
-        plans.add(new DayPlan(1, List.of("Survive the first night", "Bank 16 logs and a set of stone tools", "Everyone touches the altar"), List.of(), 1000.0D));
-        plans.add(new DayPlan(2, List.of("Enter the Nether", "Smelt 8 gold ingots", "Raise the altar to level 1"), List.of("nether", "main_inventory"), 1000.0D));
-        plans.add(new DayPlan(3, List.of("Build your first Create contraption", "Forge a full iron toolset", "Scout the new village ring"), List.of("workbenches", "create"), 1500.0D));
-        plans.add(new DayPlan(4, List.of("Cook three Farmer's Delight meals", "Establish a reliable food farm", "Wear full iron armor"), List.of("armor", "farmersdelight", "simulated"), 1500.0D));
-        plans.add(new DayPlan(5, List.of("Take to the skies", "Bank 24 iron ingots", "Rig something with Supplementaries"), List.of("aeronautics", "supplementaries"), 2000.0D));
-        plans.add(new DayPlan(6, List.of("Find the nether fortress", "Collect 6 blaze rods", "Craft the Herald's Lure"), List.of(), 2000.0D));
-        plans.add(new DayPlan(7, List.of("Summon the Herald at dusk", "Defeat the Herald", "Deposit the Herald Core at the altar"), List.of("enchanting"), 2000.0D));
-        plans.add(new DayPlan(8, List.of("Fill a team ender chest", "Bank 16 ender pearls", "Raise the altar to level 4"), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 2500.0D));
-        plans.add(new DayPlan(9, List.of("Brew strength and fire resistance", "Electrify a Create machine", "Pool 24 umbral shards"), List.of("brewing", "createaddition"), 2500.0D));
-        plans.add(new DayPlan(10, List.of("Find a smithing template", "Upgrade a tool to netherite", "Fortify your base"), List.of("smithing"), 2500.0D));
-        plans.add(new DayPlan(11, List.of("Everyone reaches 4+ hearts", "Revive a banned player", "Assemble an End raid kit"), List.of(), 3000.0D));
-        plans.add(new DayPlan(12, List.of("Locate the stronghold", "Breach the portal room", "Hold the portal room overnight"), List.of("end"), 3000.0D));
-        plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 3000.0D));
-        plans.add(new DayPlan(14, List.of("Offer the egg at dusk", "Survive the crossing", "Defeat the Ferryman before the ship sinks"), List.of(), 3000.0D));
+        plans.add(new DayPlan(1, List.of("Survive the first night", "Gather 16 logs and a set of stone tools as a team", "Everyone touches the altar"), List.of(), 0.0D,
+                "DAY 1 — FIRST LIGHT", "Day 1. Survive the night — the eclipse is watching."));
+        plans.add(new DayPlan(2, List.of("Enter the Nether", "Smelt 8 gold ingots", "Raise the altar to level 1"), List.of("nether", "main_inventory"), 0.0D,
+                "DAY 2 — THE BURNING DOOR", "Day 2. The nether gate groans open early — and your packs with it."));
+        plans.add(new DayPlan(3, List.of("Build your first Create contraption", "Forge a full iron toolset", "Scout the newly risen desert ring"), List.of("workbenches", "create"), 0.0D,
+                "DAY 3 — MACHINES IN THE DARK", "Day 3. Workstations hum; contraptions may turn."));
+        plans.add(new DayPlan(4, List.of("Cook three Farmer's Delight meals", "Establish a reliable food farm", "Wear full iron armor"), List.of("armor", "farmersdelight", "simulated"), 0.0D,
+                "DAY 4 — THE FEAST", "Day 4. Armor up and set the table — trust is cooked, not given."));
+        plans.add(new DayPlan(5, List.of("Take to the skies", "Gather 24 iron ingots as a team", "Rig something with Supplementaries"), List.of("aeronautics", "supplementaries"), 0.0D,
+                "DAY 5 — SKYWARD", "Day 5. The sky opens for the daring."));
+        plans.add(new DayPlan(6, List.of("Find the nether fortress", "Collect 6 blaze rods", "Craft the Herald's Lure"), List.of(), 0.0D,
+                "DAY 6 — FORTRESS", "Day 6. Find the fortress. Craft the lure. Dusk tomorrow decides."));
+        plans.add(new DayPlan(7, List.of("Summon the Herald at dusk", "Defeat the Herald", "Deposit the Herald Core at the altar"), List.of("enchanting"), 0.0D,
+                "DAY 7 — THE HERALD", "Day 7. At dusk it descends. Enchanting belongs to its killers."));
+        plans.add(new DayPlan(8, List.of("Fill a team ender chest", "Bank 16 ender pearls", "Raise the altar to level 4"), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 0.0D,
+                "DAY 8 — THE HOARD", "Day 8. Ender chests keep what you cannot."));
+        plans.add(new DayPlan(9, List.of("Brew strength and fire resistance", "Electrify a Create machine", "Pool 24 umbral shards"), List.of("brewing", "createaddition"), 0.0D,
+                "DAY 9 — ALCHEMY AND VOLTAGE", "Day 9. Cauldrons bubble; machines crackle awake."));
+        plans.add(new DayPlan(10, List.of("Find a smithing template", "Upgrade a tool to netherite", "Fortify your base"), List.of("smithing"), 0.0D,
+                "DAY 10 — DEEP RUIN", "Day 10. Netherite awaits the patient smith."));
+        plans.add(new DayPlan(11, List.of("Everyone reaches 4+ hearts", "Revive a banned player", "Assemble an End raid kit"), List.of(), 0.0D,
+                "DAY 11 — THE WEAKEST LINK", "Day 11. A chain is judged by its weakest link."));
+        plans.add(new DayPlan(12, List.of("Locate the stronghold", "Breach the portal room", "Hold the portal room overnight"), List.of("end"), 0.0D,
+                "DAY 12 — STRONGHOLD", "Day 12. The end portal hums beneath the stone."));
+        plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 0.0D,
+                "DAY 13 — THE DRAGON", "Day 13. Bring the dragon down and claim the egg."));
+        plans.add(new DayPlan(14, List.of("Offer the egg at dusk", "Survive the crossing", "Defeat the Ferryman before the ship sinks"), List.of(), 0.0D,
+                "DAY 14 — THE FERRYMAN", "Day 14. Gather. The ship sails at dusk."));
         return plans;
     }
 
@@ -401,7 +426,13 @@ public final class EclipseConfig {
             obj.addProperty("day", plan.day());
             obj.add("goals", stringArray(plan.goals()));
             obj.add("unlocks", stringArray(plan.unlocks()));
-            obj.addProperty("borderSize", plan.borderSize());
+            // The deprecated borderSize is deliberately NOT written (still parsed, see DayPlan).
+            if (!plan.title().isEmpty()) {
+                obj.addProperty("title", plan.title());
+            }
+            if (!plan.subtitle().isEmpty()) {
+                obj.addProperty("subtitle", plan.subtitle());
+            }
             array.add(obj);
         }
         return array;
@@ -415,7 +446,10 @@ public final class EclipseConfig {
                     obj.get("day").getAsInt(),
                     stringList(obj.getAsJsonArray("goals")),
                     stringList(obj.getAsJsonArray("unlocks")),
-                    obj.get("borderSize").getAsDouble()));
+                    // Legacy field: pre-W16 files (and ConfigEditor normalization) still carry it.
+                    obj.has("borderSize") ? obj.get("borderSize").getAsDouble() : 0.0D,
+                    obj.has("title") ? obj.get("title").getAsString() : "",
+                    obj.has("subtitle") ? obj.get("subtitle").getAsString() : ""));
         }
         if (plans.isEmpty()) {
             throw new IllegalStateException("days.json contains no day entries");
@@ -543,25 +577,21 @@ public final class EclipseConfig {
      * Defaults from {@code docs/ideas/01_world_terrain.md} §C/§D: overworld stages 1..5
      * (r 225/300/360/420/480; intro fusion, altar milestones 2..4, final day) and nether
      * stages 1..3 (r 80/120/160 on days 2/10/12). Structure ids match the
-     * {@code disc_map.json} landmark list worker 5 stamps from.
+     * {@code disc_map.json} landmark list worker 5 stamps from. No ore budgets: ore
+     * distribution is fixed by the terrain generator (see {@link StageEntry}).
      */
     private static Map<String, List<StageEntry>> defaultStages() {
         Map<String, List<StageEntry>> defaults = new LinkedHashMap<>();
         defaults.put("overworld", List.of(
                 new StageEntry(1, 225, "intro_fusion", List.of(), Map.of()),
-                new StageEntry(2, 300, "milestone:2", List.of("eclipse:desert_temple"),
-                        Map.of("iron", 400, "gold", 90, "diamond", 40)),
-                new StageEntry(3, 360, "milestone:3", List.of("eclipse:jungle_temple"),
-                        Map.of("iron", 300, "gold", 80, "diamond", 25)),
-                new StageEntry(4, 420, "milestone:4", List.of("eclipse:village_plains"),
-                        Map.of("iron", 250, "gold", 70, "diamond", 15)),
-                new StageEntry(5, 480, "final_day", List.of("eclipse:stronghold_emergence"),
-                        Map.of("iron", 200, "gold", 60, "diamond", 10))));
+                new StageEntry(2, 300, "milestone:2", List.of("eclipse:desert_temple"), Map.of()),
+                new StageEntry(3, 360, "milestone:3", List.of("eclipse:jungle_temple"), Map.of()),
+                new StageEntry(4, 420, "milestone:4", List.of("eclipse:village_plains"), Map.of()),
+                new StageEntry(5, 480, "final_day", List.of("eclipse:stronghold_emergence"), Map.of())));
         defaults.put("nether", List.of(
-                new StageEntry(1, 80, "day:2", List.of("eclipse:fortress_core"),
-                        Map.of("quartz", 300, "ancient_debris", 12)),
-                new StageEntry(2, 120, "day:10", List.of(), Map.of("quartz", 200, "ancient_debris", 10)),
-                new StageEntry(3, 160, "day:12", List.of(), Map.of("quartz", 150, "ancient_debris", 8))));
+                new StageEntry(1, 80, "day:2", List.of("eclipse:fortress_core"), Map.of()),
+                new StageEntry(2, 120, "day:10", List.of(), Map.of()),
+                new StageEntry(3, 160, "day:12", List.of(), Map.of())));
         return Collections.unmodifiableMap(defaults);
     }
 
@@ -570,7 +600,8 @@ public final class EclipseConfig {
         root.addProperty("_comment", "Per-dimension world stage timeline (separate from days.json). "
                 + "radius = fused disc radius in blocks; trigger = intro_fusion | milestone:N (altar level) "
                 + "| day:N | final_day; structures = ids stamped by the structure worker when the stage's "
-                + "terrain sweep completes; oreBudget documents the intended per-annulus vein budget. "
+                + "terrain sweep completes. Ore distribution is fixed by the terrain generator's noise "
+                + "tables and is not configurable (legacy oreBudget entries are parsed but ignored). "
                 + "Edit and run /eclipse reload to apply radii; already-committed stages are not re-swept.");
         for (Map.Entry<String, List<StageEntry>> dimension : stages.entrySet()) {
             JsonArray array = new JsonArray(dimension.getValue().size());
@@ -580,11 +611,7 @@ public final class EclipseConfig {
                 obj.addProperty("radius", entry.radius());
                 obj.addProperty("trigger", entry.trigger());
                 obj.add("structures", stringArray(entry.structures()));
-                JsonObject budget = new JsonObject();
-                for (Map.Entry<String, Integer> ore : entry.oreBudget().entrySet()) {
-                    budget.addProperty(ore.getKey(), ore.getValue());
-                }
-                obj.add("oreBudget", budget);
+                // The legacy oreBudget is deliberately NOT written (still parsed, see StageEntry).
                 array.add(obj);
             }
             root.add(dimension.getKey(), array);

@@ -23,7 +23,10 @@ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
  * <p>Layout: 21×21 nether-brick platform, four corner turrets, a central 11×11 keep with a
  * caged blaze spawner on a blackstone dais (docs/ideas/01_world_terrain.md §D — blazes
  * gated behind crossing the moat bridges), a nether_bridge loot chest, and four 3-wide
- * cardinal bridge arms reaching towards the lava moat.</p>
+ * cardinal bridge arms reaching towards the lava moat. Arms that line up with a moat
+ * bridge causeway (E/W with the default map's 0°/180° {@code bridgeDeg}) extend all the
+ * way to the moat's inner edge so keep → arm → causeway is one connected crossing; the
+ * other arms stay short overlook stubs.</p>
  */
 final class FortressCoreBuilder {
     private static final int PLATFORM_HALF = 10;
@@ -114,8 +117,16 @@ final class FortressCoreBuilder {
                 Direction.WEST, BuiltInLootTables.NETHER_BRIDGE);
 
         // Four 3-wide bridge arms towards the lava moat, low fence stubs on the edges.
+        // Arms aligned with a moat bridge causeway run on to the moat's inner edge so
+        // the crossing connects (the moat land bridges sit at the causeway angles and
+        // begin exactly there); misaligned arms keep the short overlook length.
+        DiscMapData.Moat moat = DiscMapData.get().profile(DiscProfile.NETHER).moat();
         for (Direction arm : Direction.Plane.HORIZONTAL) {
-            for (int d = PLATFORM_HALF + 1; d <= BRIDGE_END; d++) {
+            int armEnd = BRIDGE_END;
+            if (moat != null && moat.withinBridge(armAngleDeg(arm), 0.0D)) {
+                armEnd = Math.max(BRIDGE_END, moat.radius() - moat.halfWidth() + 2);
+            }
+            for (int d = PLATFORM_HALF + 1; d <= armEnd; d++) {
                 for (int w = -1; w <= 1; w++) {
                     BlockPos deck = new BlockPos(cx, padY, cz).relative(arm, d)
                             .relative(arm.getClockWise(), w);
@@ -132,6 +143,16 @@ final class FortressCoreBuilder {
         }
         EclipseMod.LOGGER.info("PROCEDURAL: fortress core built at ({}, {}, {}) — blaze spawner at {}",
                 cx, padY, cz, spawnerPos.toShortString());
+    }
+
+    /** Disc-map angle (degrees from +X towards +Z) a cardinal bridge arm points at. */
+    private static double armAngleDeg(Direction arm) {
+        return switch (arm) {
+            case EAST -> 0.0D;
+            case SOUTH -> 90.0D;
+            case WEST -> 180.0D;
+            default -> 270.0D; // NORTH
+        };
     }
 
     private static void set(ServerLevel level, int x, int y, int z, BlockState state) {

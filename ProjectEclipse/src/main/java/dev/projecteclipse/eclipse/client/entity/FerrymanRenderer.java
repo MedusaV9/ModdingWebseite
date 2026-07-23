@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.client.entity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
@@ -39,7 +40,25 @@ public class FerrymanRenderer extends MobRenderer<FerrymanEntity, FerrymanModel>
         return TEXTURE;
     }
 
-    /** Emissive pass: eye slit + lantern flame always; the lantern glows during the Gaze. */
+    /**
+     * While the scripted death collapse runs ({@code deathTime > 0},
+     * {@code FerrymanEntity.tickDeath}), the model sinks the body upright itself —
+     * suppress the vanilla 20t sideways death flip and keep only the body yaw.
+     */
+    @Override
+    protected void setupRotations(FerrymanEntity entity, PoseStack poseStack, float bob, float yBodyRot,
+            float partialTick, float scale) {
+        if (entity.deathTime > 0) {
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yBodyRot));
+            return;
+        }
+        super.setupRotations(entity, poseStack, bob, yBodyRot, partialTick, scale);
+    }
+
+    /**
+     * Emissive pass: eye slit always; the lantern flame until it gutters out during the
+     * death collapse; the whole lantern housing while the Gaze is marking.
+     */
     @OnlyIn(Dist.CLIENT)
     static class EmissiveLayer extends RenderLayer<FerrymanEntity, FerrymanModel> {
         private static final RenderType EYES = RenderType.eyes(TEXTURE);
@@ -54,7 +73,8 @@ public class FerrymanRenderer extends MobRenderer<FerrymanEntity, FerrymanModel>
                 float ageInTicks, float netHeadYaw, float headPitch) {
             VertexConsumer buffer = bufferSource.getBuffer(EYES);
             this.getParentModel().renderEmissive(poseStack, buffer,
-                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, entity.isGazing());
+                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
+                    entity.isGazing(), entity.isLanternFlameLit());
         }
     }
 }

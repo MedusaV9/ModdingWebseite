@@ -8,8 +8,8 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.timeline.TimelineEntry;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -17,11 +17,15 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * Timeline page: a horizontal drag-scrollable spine of {@code ClientStateCache.timeline}
  * nodes (W8's anonymized {@link TimelineEntry} list). Reached entries show the lit node +
- * icon + caption; the last reached entry of each section pulses as "current"; hidden/future
- * entries render the locked node with {@link GlitchText} "???" captions. Day entries come
- * first, then a divider, then altar-milestone entries ({@code unlockDay == 0}). Drag to
- * scroll with inertia (velocity decays 15%/tick); the screen shows the grab cursor while
- * {@link #dragging()}.
+ * icon + caption (clamped to two lines, the last one ellipsized); the last reached entry of
+ * each section pulses as "current"; hidden/future entries render the locked node with
+ * {@link GlitchText} "???" captions. Day entries come first, then a divider, then
+ * altar-milestone entries ({@code unlockDay == 0}). Drag to scroll with inertia (velocity
+ * decays 15%/tick); the screen shows the grab cursor while {@link #dragging()}. The bottom
+ * {@value #HINT_BAND_HEIGHT}px of the page is reserved for the drag hint — the node scissor
+ * stops above it so captions can never overlap — and the hint only shows while there is
+ * something to scroll, fading out for the session after the first successful drag/scroll
+ * (instantly hidden under {@code reducedFx}).
  */
 @OnlyIn(Dist.CLIENT)
 public class TimelineTab extends HandbookTab {
@@ -34,6 +38,15 @@ public class TimelineTab extends HandbookTab {
     private static final int NODE_SPACING = 58;
     /** Extra gap (with the divider art) between the day section and the milestone section. */
     private static final int SECTION_GAP = 64;
+    /** Bottom band reserved for the drag hint; node/caption rendering is scissored above it. */
+    private static final int HINT_BAND_HEIGHT = 14;
+    /** Hint fade-out speed once dismissed (~12 ticks to fully gone). */
+    private static final float HINT_FADE_PER_TICK = 0.08F;
+
+    /** The drag hint has served its purpose for this game session (survives reopening). */
+    private static boolean hintDismissed;
+    /** Remaining hint strength while fading after dismissal, 1..0. */
+    private static float hintAlpha = 1.0F;
 
     private float scrollX;
     private float velocity;
@@ -66,6 +79,9 @@ public class TimelineTab extends HandbookTab {
             scrollX = Mth.clamp(scrollX + velocity, 0.0F, maxScroll());
             velocity *= 0.85F;
         }
+        if (hintDismissed && hintAlpha > 0.0F) {
+            hintAlpha = Math.max(0.0F, hintAlpha - HINT_FADE_PER_TICK);
+        }
     }
 
     @Override
@@ -76,7 +92,8 @@ public class TimelineTab extends HandbookTab {
         List<TimelineEntry> timeline = ClientStateCache.timeline;
         int spineY = y + height / 2;
 
-        guiGraphics.enableScissor(x, y, x + width, y + height);
+        // The scissor stops above the reserved hint band: captions can never overlap it.
+        guiGraphics.enableScissor(x, y, x + width, y + height - HINT_BAND_HEIGHT);
         guiGraphics.fill(x, spineY - 1, x + width, spineY + 1, withAlpha(0x4A3C66, alpha));
 
         if (timeline.isEmpty()) {
@@ -114,8 +131,24 @@ public class TimelineTab extends HandbookTab {
         }
         guiGraphics.disableScissor();
 
+        renderDragHint(guiGraphics, timeline, alpha);
+    }
+
+    /**
+     * Drag hint in the reserved bottom band: only while there is actually something to
+     * scroll, and fading out for the rest of the session after the first successful
+     * drag/scroll ({@code reducedFx} skips the fade and hides it immediately).
+     */
+    private void renderDragHint(GuiGraphics guiGraphics, List<TimelineEntry> timeline, float alpha) {
+        if (timeline.isEmpty() || maxScroll() <= 0.0F) {
+            return;
+        }
+        float strength = hintDismissed ? (EclipseClientConfig.reducedFx() ? 0.0F : hintAlpha) : 1.0F;
+        if (strength <= 0.05F) {
+            return;
+        }
         guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.handbook.timeline.hint"),
-                x + width / 2, y + height - 10, withAlpha(DIM_COLOR, alpha));
+                x + width / 2, y + height - 10, withAlpha(DIM_COLOR, alpha * strength));
     }
 
     private void renderSectionDivider(GuiGraphics guiGraphics, int index, int spineY, float alpha) {
@@ -156,13 +189,30 @@ public class TimelineTab extends HandbookTab {
             guiGraphics.drawCenteredString(font, glitch, centerX, textY, withAlpha(DIM_COLOR, alpha));
             return;
         }
-        List<FormattedCharSequence> caption = font.split(Component.translatable(entry.titleKey()), NODE_SPACING + 24);
+        List<String> caption = clampCaption(Component.translatable(entry.titleKey()).getString(), NODE_SPACING + 24);
         int textY = below ? spineY + NODE_SIZE / 2 + 4 : spineY - NODE_SIZE / 2 - 4 - caption.size() * 9;
-        for (FormattedCharSequence line : caption) {
+        for (String line : caption) {
             guiGraphics.drawCenteredString(font, line, centerX, textY,
                     withAlpha(current ? ACCENT_COLOR : TEXT_COLOR, alpha));
             textY += 9;
         }
+    }
+
+    /**
+     * Word-wraps a node caption onto at most two lines; when the remainder after line one
+     * still overflows, it is {@link #ellipsize}d so a marathon title can't stack a third
+     * line into a neighboring caption (or the hint band).
+     */
+    private List<String> clampCaption(String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) {
+            return List.of(text);
+        }
+        String first = font.getSplitter().splitLines(text, maxWidth, Style.EMPTY).get(0).getString();
+        String remainder = text.substring(Math.min(first.length(), text.length())).strip();
+        if (remainder.isEmpty()) {
+            return List.of(first);
+        }
+        return List.of(first, ellipsize(font, remainder, maxWidth));
     }
 
     private int nodeCenterX(int index, boolean afterSectionGap) {
@@ -190,6 +240,9 @@ public class TimelineTab extends HandbookTab {
             scrollX = Mth.clamp(scrollX - (float) dragX, 0.0F, maxScroll());
             // Smooth the release velocity over recent drag deltas.
             velocity = velocity * 0.5F - (float) dragX * 0.5F;
+            if (dragX != 0.0D) {
+                hintDismissed = true; // the hint has taught its lesson for this session
+            }
             return true;
         }
         return false;
@@ -212,6 +265,9 @@ public class TimelineTab extends HandbookTab {
         if (inRect(mouseX, mouseY)) {
             scrollX = Mth.clamp(scrollX - (float) (scrollYDelta + scrollXDelta) * 24.0F, 0.0F, maxScroll());
             velocity = 0.0F;
+            if (scrollXDelta != 0.0D || scrollYDelta != 0.0D) {
+                hintDismissed = true;
+            }
             return true;
         }
         return false;

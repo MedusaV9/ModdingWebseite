@@ -11,9 +11,9 @@ import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.block.Blocks;
@@ -43,6 +43,9 @@ public final class SupplyBeacon {
     private static final long MARKER_LIFETIME_TICKS = 20L * 180L;
     private static final int MARKER_REFRESH_TICKS = 20;
     private static final int COLUMN_HEIGHT_BLOCKS = 48;
+
+    /** Marker particle receive radius — vanilla's long-distance particle cap. */
+    private static final double MARKER_VISIBLE_RANGE_BLOCKS = 512.0D;
 
     /** Active light columns; transient — a restart simply retires old markers (the crate persists). */
     private record Marker(BlockPos surfacePos, long expiryGameTime) {}
@@ -89,7 +92,17 @@ public final class SupplyBeacon {
         return surfacePos;
     }
 
-    /** Refreshes every active END_ROD column once a second; long-distance so it reads from up to 512 blocks. */
+    /**
+     * Refreshes every active END_ROD column once a second; long-distance so it reads from
+     * up to {@value #MARKER_VISIBLE_RANGE_BLOCKS} blocks. Each column batch is built as ONE
+     * {@link ClientboundLevelParticlesPacket} and fanned out through
+     * {@code PlayerList.broadcast} to the overworld players in range — O(markers) packet
+     * builds per refresh instead of the old per-player {@code sendParticles} loop
+     * (O(markers × players) packet builds). The level-wide
+     * {@code ServerLevel.sendParticles} overload is deliberately NOT used: it hard-codes
+     * {@code longDistance=false}, capping visibility at 32 blocks, which would defeat the
+     * marker.
+     */
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
@@ -105,14 +118,14 @@ public final class SupplyBeacon {
                 iterator.remove();
                 continue;
             }
-            for (ServerPlayer player : level.players()) {
-                for (int offset = 0; offset <= COLUMN_HEIGHT_BLOCKS; offset += 4) {
-                    level.sendParticles(player, ParticleTypes.END_ROD, true,
-                            marker.surfacePos().getX() + 0.5D,
-                            marker.surfacePos().getY() + 1.0D + offset,
-                            marker.surfacePos().getZ() + 0.5D,
-                            2, 0.15D, 1.2D, 0.15D, 0.0D);
-                }
+            double x = marker.surfacePos().getX() + 0.5D;
+            double z = marker.surfacePos().getZ() + 0.5D;
+            for (int offset = 0; offset <= COLUMN_HEIGHT_BLOCKS; offset += 4) {
+                double y = marker.surfacePos().getY() + 1.0D + offset;
+                ClientboundLevelParticlesPacket packet = new ClientboundLevelParticlesPacket(
+                        ParticleTypes.END_ROD, true, x, y, z, 0.15F, 1.2F, 0.15F, 0.0F, 2);
+                server.getPlayerList().broadcast(null, x, y, z, MARKER_VISIBLE_RANGE_BLOCKS,
+                        level.dimension(), packet);
             }
         }
     }

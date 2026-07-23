@@ -26,7 +26,10 @@ public final class EclipseClientConfig {
             .comment("Show the Eclipse sidebar status panel.")
             .define("showSidebar", true);
     private static final ModConfigSpec.BooleanValue UI_SOUNDS = BUILDER
-            .comment("Play Eclipse UI sounds (hover, page turn, ...).")
+            .comment("Play Eclipse UI sounds (hover blips, page turns, tab presses, unlock stings,",
+                    "announcement typewriter ticks). Gameplay-critical warning cues are deliberately",
+                    "NOT gated by this and always play: the heart-shatter crack (a life was lost)",
+                    "and the mark bell toll (you are being hunted).")
             .define("uiSounds", true);
     private static final ModConfigSpec.BooleanValue CUSTOM_CURSOR = BUILDER
             .comment("Use themed mouse cursors in Eclipse screens.")

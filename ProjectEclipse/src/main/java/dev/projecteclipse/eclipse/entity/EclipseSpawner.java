@@ -10,15 +10,20 @@ import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -45,7 +50,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       random player. (The guaranteed altar-watch gazer during sacrifices is spawned by
  *       {@link GazerEntity#watchSacrifice} from the altar deposit path.)</li>
  *   <li><b>Umbral Stalker</b> — nights from day 5: one pack of 3–4 when below the cap
- *       ({@value #STALKER_CAP}, doubled on Umbral Nights), 24–56 blocks out.</li>
+ *       ({@code max(}{@value #STALKER_CAP}{@code , online/}{@value #STALKER_PLAYERS_PER_CAP}{@code )},
+ *       doubled on Umbral Nights), 24–56 blocks out; every landed pack announces itself
+ *       with a distant low howl audible ~64 blocks around the pack center.</li>
  *   <li><b>The Other</b> — Pale Nights only: 2–3 per event (rolled per event), each
  *       ≥{@value #THE_OTHER_MIN_PLAYER_DISTANCE} blocks from every player.</li>
  *   <li><b>Sunmote</b> — daylight upkeep: one mote per altar level orbits the sanctum altar
@@ -68,10 +75,17 @@ public final class EclipseSpawner {
     public static final int GAZER_MIN_DAY = 3;
     public static final int GAZER_PLAYERS_PER_MOB = 4;
     public static final int STALKER_MIN_DAY = 5;
+    /** Stalker cap floor; the live cap scales with population: {@code max(4, online/3)}. */
     public static final int STALKER_CAP = 4;
+    /** One extra stalker of cap per this many online players (30 players → cap 10). */
+    public static final int STALKER_PLAYERS_PER_CAP = 3;
     public static final double THE_OTHER_MIN_PLAYER_DISTANCE = 24.0D;
 
     private static final int PLACEMENT_ATTEMPTS = 16;
+    // Pack-spawn howl: the fairness/dread cue everyone nearby hears when a pack lands.
+    private static final double HOWL_RANGE = 64.0D;
+    private static final float HOWL_VOLUME = 1.5F;
+    private static final float HOWL_PITCH = 0.5F;
 
     /** Nightfall/dawn edge detector; {@code null} until the first pass after boot. */
     @Nullable
@@ -188,7 +202,14 @@ public final class EclipseSpawner {
             return;
         }
         boolean umbral = EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(state.getActiveNightEvent());
-        int cap = umbral ? STALKER_CAP * 2 : STALKER_CAP;
+        // Population-scaled cap: a small server keeps the flat {@value #STALKER_CAP}, a
+        // 30-player server hunts against 10 — and Umbral Nights still double whatever the
+        // population allows.
+        int online = overworld.players().size();
+        int cap = Math.max(STALKER_CAP, online / STALKER_PLAYERS_PER_CAP);
+        if (umbral) {
+            cap *= 2;
+        }
         int existing = count(overworld, EclipseEntities.UMBRAL_STALKER.get());
         if (existing >= cap) {
             return;
@@ -211,8 +232,36 @@ public final class EclipseSpawner {
             }
         }
         if (spawned > 0) {
-            EclipseMod.LOGGER.info("Umbral stalker pack of {} spawned near {} (cap {}, umbral: {})",
-                    spawned, packCenter, cap, umbral);
+            howlAround(overworld, packCenter);
+            EclipseMod.LOGGER.info("Umbral stalker pack of {} spawned near {} (cap {} for {} player(s), umbral: {})",
+                    spawned, packCenter, cap, online, umbral);
+        }
+    }
+
+    /**
+     * The pack announces itself: one distant, low howl (WOLF_GROWL at pitch
+     * {@value #HOWL_PITCH} — the stalkers' own deep voice) for every player within
+     * {@value #HOWL_RANGE} blocks of the pack center, the fairness/dread cue that a fresh
+     * pack 24–56 blocks out is never a silent ambush. Vanilla distance attenuation would
+     * swallow a volume-{@value #HOWL_VOLUME} sound long before 64 blocks, so the packet
+     * goes to each player individually with the sound placed a few blocks toward the pack
+     * (the Herald's private-heartbeat trick): everyone hears it soft and from the right
+     * bearing.
+     */
+    private static void howlAround(ServerLevel level, BlockPos packCenter) {
+        Vec3 center = Vec3.atCenterOf(packCenter);
+        for (ServerPlayer player : level.players()) {
+            double dist = player.position().distanceTo(center);
+            if (dist > HOWL_RANGE) {
+                continue;
+            }
+            Vec3 toward = dist < 1.0E-4D ? Vec3.ZERO
+                    : center.subtract(player.position()).normalize().scale(Math.min(dist, 10.0D));
+            Vec3 at = player.position().add(toward);
+            player.connection.send(new ClientboundSoundPacket(
+                    BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WOLF_GROWL),
+                    SoundSource.HOSTILE, at.x, at.y, at.z, HOWL_VOLUME, HOWL_PITCH,
+                    level.getRandom().nextLong()));
         }
     }
 

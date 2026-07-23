@@ -17,6 +17,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -41,8 +43,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li><b>Browse:</b> sneak while looking at the altar — the offer list cycles on the
  *       action bar every {@value #CYCLE_INTERVAL_TICKS} ticks.</li>
  *   <li><b>Buy:</b> sneak-punch (left-click) the altar — buys the offer currently shown.
- *       Personal rewards deduct the personal balance; the pooled Supply Beacon deducts the
- *       team pool and fires {@link SupplyBeacon#drop} at secret coordinates.</li>
+ *       Personal rewards deduct the personal balance; the two POOLED offers deduct the
+ *       team pool: the Supply Beacon fires {@link SupplyBeacon#drop} at secret
+ *       coordinates, and Eclipse's Favor grants every online player Regeneration I +
+ *       Saturation I until the next dawn ({@link #activateEclipsesFavor}).</li>
  * </ol>
  *
  * <p>Also home of the umbral-pick perk: +50% break speed under open night sky
@@ -51,26 +55,49 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ShardEconomy {
-    /** One shop entry; {@code item} is {@code null} for the pooled supply beacon (not an item). */
+    /** One shop entry; {@code item} is {@code null} for the pooled team offers (not items). */
     public record Offer(String nameKey, Supplier<? extends Item> item, int cost, boolean pooled) {}
 
     public static final int SUPPLY_BEACON_COST = 24;
+    /** Pooled cost of the Eclipse's Favor team buff (regen + saturation until the next dawn). */
+    public static final int ECLIPSES_FAVOR_COST = 16;
 
-    /** Cheapest first; the pooled team reward closes the loop. */
+    /** The two pooled offers are identity-matched in {@link #buy} to pick their branch. */
+    private static final Offer ECLIPSES_FAVOR_OFFER =
+            new Offer("item.eclipse.eclipses_favor", null, ECLIPSES_FAVOR_COST, true);
+    private static final Offer SUPPLY_BEACON_OFFER =
+            new Offer("item.eclipse.supply_beacon", null, SUPPLY_BEACON_COST, true);
+
+    /** Cheapest first; the pooled team rewards close the loop. */
     private static final List<Offer> OFFERS = List.of(
             new Offer("item.eclipse.grave_dowser", EclipseItems.GRAVE_DOWSER, 4, false),
             new Offer("item.eclipse.compass_of_watcher", EclipseItems.COMPASS_OF_WATCHER, 8, false),
             new Offer("item.eclipse.vitae_shard", EclipseItems.VITAE_SHARD, 12, false),
             new Offer("item.eclipse.umbral_pick", EclipseItems.UMBRAL_PICK, 12, false),
             new Offer("item.eclipse.umbral_blade", EclipseItems.UMBRAL_BLADE, 16, false),
-            new Offer("item.eclipse.supply_beacon", null, SUPPLY_BEACON_COST, true));
+            ECLIPSES_FAVOR_OFFER,
+            SUPPLY_BEACON_OFFER);
 
     private static final int CYCLE_INTERVAL_TICKS = 20;
     private static final double BROWSE_REACH_BLOCKS = 6.0D;
     private static final float UMBRAL_PICK_NIGHT_SKY_BONUS = 1.5F;
 
+    /** Eclipse's Favor effect re-application period (a multiple of {@value #CYCLE_INTERVAL_TICKS}). */
+    private static final int FAVOR_REFRESH_TICKS = 60;
+    /** Per-refresh effect duration — outlives two refresh gaps, lapses ~7 s after dawn cuts the loop. */
+    private static final int FAVOR_EFFECT_TICKS = 140;
+    /** One in-game day; overworld dawn sits at every multiple of this in {@code dayTime}. */
+    private static final long DAY_LENGTH_TICKS = 24000L;
+
     /** Transient per-player browse cursor; present only while sneaking at the altar. */
     private static final Map<UUID, Integer> BROWSE_INDEX = new HashMap<>();
+
+    /**
+     * Absolute overworld {@code dayTime} at which the running Eclipse's Favor expires
+     * (the next dawn), or {@code 0} while inactive. Transient by design — mirrors
+     * {@link SupplyBeacon}'s marker list: a restart simply drops the remaining buff.
+     */
+    private static long favorExpiryDayTime = 0L;
 
     private ShardEconomy() {}
 
@@ -117,6 +144,7 @@ public final class ShardEconomy {
         if (server.getTickCount() % CYCLE_INTERVAL_TICKS != 0) {
             return;
         }
+        tickFavor(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (player.isShiftKeyDown() && isLookingAtAltar(player)) {
                 int index = BROWSE_INDEX.merge(player.getUUID(), 0,
@@ -177,6 +205,12 @@ public final class ShardEconomy {
         Component name = Component.translatable(offer.nameKey());
         if (offer.pooled()) {
             EclipseWorldState state = EclipseWorldState.get(server);
+            // One activation per purchase: refuse (free of charge) while the favor still runs.
+            if (offer == ECLIPSES_FAVOR_OFFER && isFavorActive(server)) {
+                player.displayClientMessage(Component.translatable("shop.eclipse.favor_already"), true);
+                player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+                return;
+            }
             if (state.getShardPool() < offer.cost()) {
                 player.displayClientMessage(Component.translatable("shop.eclipse.pool_need",
                         offer.cost(), state.getShardPool()), true);
@@ -184,6 +218,10 @@ public final class ShardEconomy {
                 return;
             }
             state.addShardPool(-offer.cost());
+            if (offer == ECLIPSES_FAVOR_OFFER) {
+                activateEclipsesFavor(server, player);
+                return;
+            }
             SupplyBeacon.drop(server);
             player.displayClientMessage(Component.translatable("shop.eclipse.bought_pooled", name), true);
             // Global cue, no coordinates: everyone hears the beacon charge (spec: coords stay secret).
@@ -211,6 +249,56 @@ public final class ShardEconomy {
                 player.getScoreboardName(), offer.nameKey(), offer.cost(), altarPos.toShortString(), getShards(player));
     }
 
+    // --- Eclipse's Favor: pooled team buff until the next dawn ---
+
+    /** Whether an Eclipse's Favor activation is still running (overworld dawn not yet reached). */
+    private static boolean isFavorActive(MinecraftServer server) {
+        return favorExpiryDayTime != 0L && server.overworld().getDayTime() < favorExpiryDayTime;
+    }
+
+    /**
+     * Activates one Eclipse's Favor purchase: everyone online gets the buff line + sound
+     * and the first effect application; {@link #tickFavor} keeps re-applying (also to
+     * late joiners) until the overworld crosses the next dawn. Expiry is anchored to
+     * {@code dayTime} rather than game time so sleeping through the night ends it too.
+     */
+    private static void activateEclipsesFavor(MinecraftServer server, ServerPlayer buyer) {
+        long dayTime = server.overworld().getDayTime();
+        favorExpiryDayTime = (dayTime / DAY_LENGTH_TICKS + 1L) * DAY_LENGTH_TICKS;
+        refreshFavorEffects(server);
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            online.displayClientMessage(Component.translatable("shop.eclipse.favor_granted"), true);
+            online.playNotifySound(SoundEvents.BEACON_POWER_SELECT, SoundSource.MASTER, 0.7F, 1.0F);
+        }
+        EclipseMod.LOGGER.info("{} spent {} pooled shards on Eclipse's Favor (pool now {}; runs until dayTime {})",
+                buyer.getScoreboardName(), ECLIPSES_FAVOR_COST,
+                EclipseWorldState.get(server).getShardPool(), favorExpiryDayTime);
+    }
+
+    /** Favor keeper (from {@link #onServerTick}): re-applies the effects until dawn cuts the loop. */
+    private static void tickFavor(MinecraftServer server) {
+        if (favorExpiryDayTime == 0L) {
+            return;
+        }
+        if (server.overworld().getDayTime() >= favorExpiryDayTime) {
+            // Dawn: stop refreshing; the short-lived effects lapse on their own within seconds.
+            favorExpiryDayTime = 0L;
+            EclipseMod.LOGGER.info("Eclipse's Favor expired at dawn");
+            return;
+        }
+        if (server.getTickCount() % FAVOR_REFRESH_TICKS == 0) {
+            refreshFavorEffects(server);
+        }
+    }
+
+    /** One favor application: ambient Regeneration I + Saturation I for every online player. */
+    private static void refreshFavorEffects(MinecraftServer server) {
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            online.addEffect(new MobEffectInstance(MobEffects.REGENERATION, FAVOR_EFFECT_TICKS, 0, true, true));
+            online.addEffect(new MobEffectInstance(MobEffects.SATURATION, FAVOR_EFFECT_TICKS, 0, true, true));
+        }
+    }
+
     // --- umbral pick: +50% break speed under open night sky ---
 
     @SubscribeEvent
@@ -229,5 +317,6 @@ public final class ShardEconomy {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         BROWSE_INDEX.clear();
+        favorExpiryDayTime = 0L;
     }
 }

@@ -202,6 +202,25 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         oarXRot = Mth.lerp(kneel, oarXRot, -1.45F);
         oarY = Mth.lerp(kneel, oarY, OAR_BONE_Y + 7.0F);
 
+        // Scripted death collapse (deathTime > 0; the renderer suppresses the vanilla
+        // sideways flip): he sinks upright with the oar planted — forced here off the
+        // death clock too, in case the synced plant flag was lost to a mid-death reload —
+        // while the skull bows onto the chest and the arms slip off the shaft.
+        float death = entity.deathProgress(partialTick);
+        if (death > 0.0F) {
+            float sag = death * death; // Ease-in: the body settles as the sea takes it.
+            float plantOut = Math.max(plant, death);
+            oarXRot = Mth.lerp(plantOut, oarXRot, 0.0F);
+            oarZRot = Mth.lerp(plantOut, oarZRot, 0.0F);
+            oarX = Mth.lerp(plantOut, oarX, 9.0F);
+            oarY = Mth.lerp(plantOut, oarY, 9.0F);
+            this.head.xRot += sag * 0.7F;
+            this.body.xRot += sag * 0.12F;
+            armRightXRot = Mth.lerp(sag, armRightXRot, 0.15F);
+            armLeftXRot = Mth.lerp(sag, armLeftXRot, 0.1F);
+            armZ = Mth.lerp(sag, armZ, -0.05F);
+        }
+
         this.oar.xRot = oarXRot;
         this.oar.zRot = oarZRot;
         this.oar.x = oarX;
@@ -215,16 +234,19 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
     /**
      * Renders ONLY the emissive parts (fullbright {@code RenderType.eyes}) while keeping
      * every ancestor transform: everything else gets {@code skipDraw} for one draw of the
-     * tree (Gazer/Herald pattern). The eye slit and the lantern flame always burn; the
-     * lantern housing joins the pass while the Lantern Gaze mark is active.
+     * tree (Gazer/Herald pattern). The eye slit always burns; the lantern flame burns
+     * while {@code flameLit} (it gutters out during the death collapse); the lantern
+     * housing joins the pass while the Lantern Gaze mark is active.
      */
     public void renderEmissive(PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay,
-            boolean includeLantern) {
+            boolean includeLantern, boolean flameLit) {
         for (ModelPart part : allParts) {
             part.skipDraw = true;
         }
         this.eyes.skipDraw = false;
-        this.flame.skipDraw = false;
+        if (flameLit) {
+            this.flame.skipDraw = false;
+        }
         if (includeLantern) {
             this.lantern.skipDraw = false;
         }

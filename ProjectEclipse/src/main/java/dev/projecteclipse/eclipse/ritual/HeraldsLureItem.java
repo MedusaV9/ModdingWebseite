@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.ritual;
 
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
+import dev.projecteclipse.eclipse.progression.GoalTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -64,6 +65,7 @@ public class HeraldsLureItem extends Item {
         int groundY = altarPos.getY()
                 - dev.projecteclipse.eclipse.worldgen.structure.AltarSanctumBuilder.ALTAR_ABOVE_GROUND;
         HeraldEntity.summon(serverLevel, altarPos, groundY);
+        GoalTracker.onHeraldSummoned(player.server); // day-7 "Summon the Herald at dusk" auto-tick
         actionBar(player, Component.translatable("ritual.eclipse.lure.summoned"));
         dev.projecteclipse.eclipse.EclipseMod.LOGGER.info("{} deposited a Herald's Lure at {} — Herald summoned",
                 player.getScoreboardName(), altarPos.toShortString());

@@ -111,9 +111,14 @@ public class StatusTab extends HandbookTab {
                 x, goalsY, withAlpha(ACCENT_COLOR, alpha));
         renderGoals(guiGraphics, x, goalsY + 12, partialTick, alpha);
 
-        // Online count pinned to the page bottom.
+        // Online count pinned to the page bottom, singular-aware ("1 soul awake"). It is
+        // width-clamped to the band left of the Settings button so the two never collide.
         int online = minecraft.getConnection() != null ? minecraft.getConnection().getOnlinePlayers().size() : 0;
-        guiGraphics.drawString(font, Component.translatable("gui.eclipse.handbook.status.online", online),
+        Component onlineText = online == 1
+                ? Component.translatable("gui.eclipse.handbook.status.online.one")
+                : Component.translatable("gui.eclipse.handbook.status.online.many", online);
+        int onlineMaxWidth = width - settingsButton.getWidth() - 10;
+        guiGraphics.drawString(font, ellipsize(font, onlineText.getString(), onlineMaxWidth),
                 x, y + height - 10, withAlpha(DIM_COLOR, alpha));
         settingsButton.render(guiGraphics, mouseX, mouseY, partialTick);
     }

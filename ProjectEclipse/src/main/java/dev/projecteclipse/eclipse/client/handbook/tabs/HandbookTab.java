@@ -105,6 +105,20 @@ public abstract class HandbookTab {
         return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/gui/handbook/" + name + ".png");
     }
 
+    /**
+     * Single-line clamp: text that overflows {@code maxWidth} is trimmed far enough to fit
+     * a trailing {@code \u2026} so the reader can tell something was cut (never a bare
+     * mid-word hard chop).
+     */
+    protected static String ellipsize(Font font, String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "\u2026";
+        return font.plainSubstrByWidth(text, Math.max(0, maxWidth - font.width(ellipsis))).stripTrailing()
+                + ellipsis;
+    }
+
     /** RGB color with the book-fade alpha applied (min 4/255 so 0 never flips to opaque). */
     protected static int withAlpha(int rgb, float alpha) {
         int a = Math.max(4, (int) (alpha * 255.0F));

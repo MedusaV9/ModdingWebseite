@@ -1,9 +1,12 @@
 package dev.projecteclipse.eclipse.worldgen;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.MultifaceBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.synth.SimplexNoise;
@@ -26,7 +29,13 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * stage, because the lens formula normalises against the FINAL radius
  * ({@link DiscProfile#lensNormRadius()}). Only the rim taper/crumble band changes when a
  * stage grows, so a ring sweep from stage n−1 to n must rewrite the annulus from
- * {@code radius(n−1) − RIM_REWRITE_MARGIN} out to {@code radius(n) + }{@link #RIM_NOISE_AMP}.</p>
+ * {@code radius(n−1) − RIM_REWRITE_MARGIN} out to {@code radius(n) + }{@link #RIM_NOISE_AMP}.
+ * Everything added on top of the base lens honours the same split: interior dressing
+ * (rivers, sector seam blending, mountain ridges/terraces/ice, ring scars, nether
+ * moat lip and vegetation) is keyed exclusively to fixed map data and FINAL radii,
+ * while every stage-dependent effect (rim spill curtains, crumble-shard promotion,
+ * hanging rim lichen/vines, the stalactite fringe) lives inside the rim band the ring
+ * sweep rewrites anyway.</p>
  */
 public final class DiscTerrainFunction {
     /** Width in blocks of the smoothstep rim taper. */
@@ -40,7 +49,24 @@ public final class DiscTerrainFunction {
      */
     public static final int RIM_REWRITE_MARGIN = RIM_WIDTH + RIM_NOISE_AMP + 4;
 
-    // Fixed-seed noise fields (never the world seed).
+    /** Half-width in blocks of an authored river channel (depressed bed + water fill). */
+    public static final double RIVER_HALF_WIDTH = 4.0D;
+    /** Extra sand/gravel bank margin around the channel (trees/cover suppressed too). */
+    public static final double RIVER_BANK_MARGIN = 2.0D;
+
+    /**
+     * FINAL-stage annulus boundaries that carry a "ring scar" weld seam (deepslate/tuff
+     * mix + sparse amethyst). Same fixed values as {@link #annulusBand} — NEVER derive
+     * these from the current stage or interior output would stop being stage-independent.
+     */
+    private static final double[] SCAR_RADII = {225.0D, 300.0D, 360.0D, 420.0D};
+    /** Radial half-width of a ring scar seam. */
+    private static final double SCAR_HALF_WIDTH = 1.5D;
+    /** The fainter stage-0 weld left where the main disc first fused into stage 1. */
+    private static final double SCAR_FAINT_RADIUS = 96.0D;
+
+    // Fixed-seed noise fields (never the world seed). Salt 8 belongs to DiscMapData's
+    // sector-seam wobble; keep the two families disjoint.
     private static final SimplexNoise RIM_NOISE = noise(1);
     private static final SimplexNoise SURFACE_LARGE = noise(2);
     private static final SimplexNoise SURFACE_MEDIUM = noise(3);
@@ -48,6 +74,7 @@ public final class DiscTerrainFunction {
     private static final SimplexNoise FRINGE_NOISE = noise(5);
     private static final SimplexNoise CAVE_A = noise(6);
     private static final SimplexNoise CAVE_B = noise(7);
+    private static final SimplexNoise RIDGE_NOISE = noise(9);
 
     // Hash salts.
     private static final int H_CRUMBLE = 11;
@@ -57,6 +84,12 @@ public final class DiscTerrainFunction {
     private static final int H_LEAF = 15;
     private static final int H_GLOW = 16;
     private static final int H_ORE = 17;
+    private static final int H_SHARD = 18;
+    private static final int H_HANG = 19;
+    private static final int H_SCAR = 20;
+    private static final int H_INCLUSION = 21;
+    private static final int H_STRIPE = 22;
+    private static final int H_RIVER_BED = 23;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private static final BlockState CAVE_AIR = Blocks.CAVE_AIR.defaultBlockState();
@@ -70,9 +103,34 @@ public final class DiscTerrainFunction {
     private static final BlockState DEAD_BUSH = Blocks.DEAD_BUSH.defaultBlockState();
     private static final BlockState CACTUS = Blocks.CACTUS.defaultBlockState();
     private static final BlockState LAVA = Blocks.LAVA.defaultBlockState();
+    private static final BlockState WATER = Blocks.WATER.defaultBlockState();
+    private static final BlockState SAND = Blocks.SAND.defaultBlockState();
+    private static final BlockState GRAVEL = Blocks.GRAVEL.defaultBlockState();
+    private static final BlockState TUFF = Blocks.TUFF.defaultBlockState();
+    private static final BlockState CALCITE = Blocks.CALCITE.defaultBlockState();
+    private static final BlockState PACKED_ICE = Blocks.PACKED_ICE.defaultBlockState();
+    private static final BlockState BLUE_ICE = Blocks.BLUE_ICE.defaultBlockState();
+    private static final BlockState AMETHYST_BLOCK = Blocks.AMETHYST_BLOCK.defaultBlockState();
+    private static final BlockState CRYING_OBSIDIAN = Blocks.CRYING_OBSIDIAN.defaultBlockState();
+    private static final BlockState AMETHYST_BUD = Blocks.SMALL_AMETHYST_BUD.defaultBlockState();
+    /** Glow lichen plastered on the disc underside, shining down into the void. */
+    private static final BlockState GLOW_LICHEN_CEILING = Blocks.GLOW_LICHEN.defaultBlockState()
+            .setValue(MultifaceBlock.getFaceProperty(Direction.UP), true);
+    /** Ceiling-attached vine (each strand block keeps UP so the chain stays supported). */
+    private static final BlockState VINE_CEILING = Blocks.VINE.defaultBlockState()
+            .setValue(VineBlock.UP, true);
     private static final BlockState BLACKSTONE = Blocks.BLACKSTONE.defaultBlockState();
     private static final BlockState NETHERRACK = Blocks.NETHERRACK.defaultBlockState();
     private static final BlockState GLOWSTONE = Blocks.GLOWSTONE.defaultBlockState();
+    private static final BlockState MAGMA_BLOCK = Blocks.MAGMA_BLOCK.defaultBlockState();
+    private static final BlockState BASALT = Blocks.BASALT.defaultBlockState();
+    private static final BlockState BONE_BLOCK = Blocks.BONE_BLOCK.defaultBlockState();
+    private static final BlockState SOUL_FIRE = Blocks.SOUL_FIRE.defaultBlockState();
+    private static final BlockState CRIMSON_ROOTS = Blocks.CRIMSON_ROOTS.defaultBlockState();
+    private static final BlockState WARPED_ROOTS = Blocks.WARPED_ROOTS.defaultBlockState();
+    private static final BlockState NETHER_SPROUTS = Blocks.NETHER_SPROUTS.defaultBlockState();
+    private static final BlockState TWISTING_VINES = Blocks.TWISTING_VINES.defaultBlockState();
+    private static final BlockState SHROOMLIGHT = Blocks.SHROOMLIGHT.defaultBlockState();
     private static final BlockState[] FLOWERS = {
             Blocks.POPPY.defaultBlockState(),
             Blocks.DANDELION.defaultBlockState(),
@@ -93,8 +151,13 @@ public final class DiscTerrainFunction {
 
     /** Ground surface Y at (x, z), ignoring whether the column is inside the disc. */
     public static int surfaceY(DiscProfile profile, int x, int z) {
-        SectorStyle style = styleOf(profile, DiscMapData.get().biomeAt(profile, x, z));
+        DiscMapData map = DiscMapData.get();
+        SectorStyle style = styleOf(profile, map.biomeAt(profile, x, z));
         int surface = computeSurfaceY(profile, x, z, style);
+        double riverDist = map.riverDistance(profile, x, z);
+        if (riverDist < RIVER_HALF_WIDTH) {
+            surface -= riverDepth(riverDist);
+        }
         if (profile == DiscProfile.NETHER && inMoat(x, z)) {
             surface -= 8;
         }
@@ -104,21 +167,60 @@ public final class DiscTerrainFunction {
     /** Precomputed data of one (x, z) column; feed to {@link #stateInColumn(DiscColumn, int)}. */
     public static DiscColumn column(DiscProfile profile, int x, int z, int stage) {
         double edge = edgeFactor(profile, x, z, stage);
-        if (edge <= 0.0D
-                || (edge < 0.35D && hash01(H_CRUMBLE, x, z) < (0.35D - edge) * 1.6D)) {
+        if (edge <= 0.0D) {
             return DiscColumn.outside(profile, x, z, stage);
         }
         DiscMapData map = DiscMapData.get();
+        // Authored river channel (bbox-gated: MAX_VALUE almost everywhere). Channel
+        // columns bypass the crumble holes so the notch stays carved through the taper.
+        double riverDist = map.riverDistance(profile, x, z);
+        boolean inChannel = riverDist < RIVER_HALF_WIDTH;
+        if (edge < 0.35D && !inChannel && hash01(H_CRUMBLE, x, z) < (0.35D - edge) * 1.6D) {
+            // ~10% of the crumble holes just outside the rim survive as small detached
+            // floating shards a few blocks below rim height; the rest stay void.
+            if (hash01(H_SHARD, x, z) < 0.10D) {
+                return shardColumn(profile, x, z, stage, map);
+            }
+            return DiscColumn.outside(profile, x, z, stage);
+        }
         String biomeId = map.biomeAt(profile, x, z);
         SectorStyle style = styleOf(profile, biomeId);
         int surfaceY = computeSurfaceY(profile, x, z, style);
         double r = Math.sqrt((double) x * x + (double) z * z);
 
-        // Nether lava moat: sunken channel, lava three blocks below the original surface.
+        // River carve: depress the bed 3-4 blocks and fill static water sources up to
+        // the original surface − 1. Where the channel crosses the rim taper the water
+        // is additionally painted a few blocks DOWN the rim face (spillway curtain into
+        // the void); chunk postprocessing turns the exposed sources into the waterfall.
+        int waterTopY = Integer.MIN_VALUE;
+        int waterBottomY = Integer.MAX_VALUE;
+        boolean riverBed = riverDist < RIVER_HALF_WIDTH + RIVER_BANK_MARGIN;
+        if (inChannel) {
+            waterTopY = surfaceY - 1;
+            surfaceY -= riverDepth(riverDist);
+            waterBottomY = edge < 0.35D ? surfaceY - 5 : surfaceY + 1;
+        }
+
+        // Nether lava moat: sunken channel, lava three blocks below the original
+        // surface, plus a 2-block magma lip ringing the channel (not the causeways).
         int lavaTopY = Integer.MIN_VALUE;
-        if (profile == DiscProfile.NETHER && inMoat(x, z)) {
-            surfaceY -= 8;
-            lavaTopY = surfaceY + 5;
+        boolean moatLip = false;
+        if (profile == DiscProfile.NETHER) {
+            DiscMapData.Moat moat = map.profile(DiscProfile.NETHER).moat();
+            if (moat != null) {
+                double moatDelta = Math.abs(r - moat.radius());
+                if (moatDelta <= moat.halfWidth() + 2.0D) {
+                    double angle = angleDeg(x, z);
+                    if (moatDelta <= moat.halfWidth()) {
+                        if (!moat.withinBridge(angle, 0.0D)) {
+                            surfaceY -= 8;
+                            lavaTopY = surfaceY + 5;
+                        }
+                    } else if (!moat.withinBridge(angle, 2.0D)) {
+                        moatLip = true;
+                    }
+                }
+            }
         }
 
         // Lens underside (normalised against the FINAL radius: stage-independent) with
@@ -128,24 +230,68 @@ public final class DiscTerrainFunction {
         int thickness = Math.max(2, (int) (fullThickness * (0.08D + 0.92D * edge)));
         int undersideY = surfaceY - thickness;
 
-        // Deepslate stalactite fringe hanging below the underside (interior only).
-        int bottomY = undersideY;
+        // Deepslate stalactite fringe hanging below the underside (interior only):
+        // fringe^4 sharpens the profile into needles, a high-frequency octave splinters
+        // them — the strongest spikes reach 12-24 blocks.
+        int groundBottomY = undersideY;
         if (edge > 0.75D) {
             double fringe = FRINGE_NOISE.getValue(x / 22.0D, z / 22.0D);
             if (fringe > 0.0D) {
-                bottomY -= (int) (fringe * fringe * 16.0D);
+                double f2 = fringe * fringe;
+                double needle = f2 * f2 * 18.0D;
+                double hf = FRINGE_NOISE.getValue(x / 6.0D + 512.0D, z / 6.0D - 512.0D);
+                if (hf > 0.0D) {
+                    needle += hf * hf * fringe * 10.0D;
+                }
+                groundBottomY -= Math.min(24, (int) needle);
             }
         }
+
+        // Hanging rim decor (overworld): glow lichen shining into the void + short vine
+        // strands under the tapered underside of the rim band. Stage-dependent by
+        // construction (edge), but the whole band lies inside RIM_REWRITE_MARGIN.
+        BlockState hangState = null;
+        int hangLength = 0;
+        if (profile == DiscProfile.OVERWORLD && edge > 0.35D && edge < 0.75D) {
+            long hangHash = hash(H_HANG, x, z);
+            double hang01 = to01(hangHash);
+            if (hang01 < 0.045D) {
+                hangState = GLOW_LICHEN_CEILING;
+                hangLength = 1;
+            } else if (hang01 < 0.11D) {
+                hangState = VINE_CEILING;
+                hangLength = 2 + (int) ((hangHash >>> 8) & 0xFF) % 3; // 2..4
+            }
+        }
+        int bottomY = groundBottomY - hangLength;
 
         int deepslateTopY = profile == DiscProfile.NETHER
                 ? 48 + (int) ((hash01(H_DEEPSLATE, x, z) - 0.5D) * 6.0D)
                 : (int) ((hash01(H_DEEPSLATE, x, z) - 0.5D) * 6.0D);
 
-        // Sealed mountain core cavity (future stronghold) + cave suppression shell.
+        // Ring scars: weld seams on the FINAL stage boundaries (stage-independent), plus
+        // the fainter r=96 line where the original main disc ended. 1 = faint, 2 = full.
+        int scar = 0;
+        if (profile == DiscProfile.OVERWORLD) {
+            if (Math.abs(r - SCAR_FAINT_RADIUS) < SCAR_HALF_WIDTH) {
+                scar = 1;
+            } else {
+                for (double boundary : SCAR_RADII) {
+                    if (Math.abs(r - boundary) < SCAR_HALF_WIDTH) {
+                        scar = 2;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Sealed mountain core cavity (future stronghold) + cave suppression shell +
+        // the narrow frozen cascade pouring down the mountain's north face.
         int cavityMinY = 1;
         int cavityMaxY = 0;
         int cavityLavaY = Integer.MIN_VALUE;
         boolean cavityShell = false;
+        boolean iceCascade = false;
         DiscMapData.Mountain mountain = map.profile(profile).mountain();
         if (mountain != null) {
             double mdx = x - mountain.x();
@@ -162,6 +308,18 @@ public final class DiscTerrainFunction {
                     cavityLavaY = mountain.caveY() - mountain.caveRadiusY() + 3;
                 }
             }
+            if (profile == DiscProfile.OVERWORLD && waterTopY == Integer.MIN_VALUE
+                    && surfaceY > 126 && surfaceY < 254) {
+                double dist = Math.sqrt(distSq);
+                if (dist > 14.0D && dist < 58.0D) {
+                    // North face = -Z = angle −π/2; no wrap handling needed that far
+                    // from the ±π seam. The wedge half-width wiggles slightly with the
+                    // radial distance so the cascade meanders like a frozen flow.
+                    double deltaNorth = Math.abs(Math.atan2(mdz, mdx) + Math.PI / 2.0D);
+                    double halfWidth = 0.055D + 0.025D * RIDGE_NOISE.getValue(dist / 20.0D, 333.3D);
+                    iceCascade = deltaNorth < halfWidth;
+                }
+            }
         }
 
         // Perlin-worm cave band: clamped >= 4 blocks above the underside, never
@@ -169,21 +327,24 @@ public final class DiscTerrainFunction {
         int caveMinY = undersideY + 4;
         int caveMaxY = edge > 0.5D && !cavityShell ? surfaceY - 7 : Integer.MIN_VALUE;
 
-        // Vegetation (overworld only).
+        // Vegetation & surface accents.
         Tree tree = null;
         BlockState cover = null;
-        int cactusHeight = 0;
+        BlockState pillarBlock = null;
+        int pillarHeight = 0;
         boolean snowCap = false;
         if (profile == DiscProfile.OVERWORLD) {
             snowCap = surfaceY >= 210;
             tree = treeAt(profile, x, z, stage);
             boolean trunkHere = tree != null && tree.x() == x && tree.z() == z;
-            if (!trunkHere) {
+            boolean bareGround = riverBed || scar == 2 || iceCascade;
+            if (!trunkHere && !bareGround) {
                 long coverHash = hash(H_COVER, x, z);
                 double cover01 = to01(coverHash);
                 if (style == SectorStyle.DESERT) {
                     if (cover01 < 0.004D && isCactusSpot(profile, x, z, surfaceY)) {
-                        cactusHeight = 1 + (int) ((coverHash >>> 8) & 3) % 3; // 1..3
+                        pillarBlock = CACTUS;
+                        pillarHeight = 1 + (int) ((coverHash >>> 8) & 3) % 3; // 1..3
                     } else if (cover01 < 0.016D) {
                         cover = DEAD_BUSH;
                     }
@@ -197,14 +358,60 @@ public final class DiscTerrainFunction {
                             : SHORT_GRASS;
                 }
             }
+            // Sparse crystal growth on the full weld seams (grass/flowers stay suppressed).
+            if (!trunkHere && scar == 2 && waterTopY == Integer.MIN_VALUE
+                    && hash01(H_SCAR, x, z) < 0.04D) {
+                cover = AMETHYST_BUD;
+            }
+        } else if (lavaTopY == Integer.MIN_VALUE && !moatLip) {
+            // Nether dressing: crimson/warped mini-fungi via the tree machinery, roots/
+            // vines ground cover, basalt pillars (cactus column mechanic) and bone
+            // clusters + soul fire in the soul sector.
+            tree = treeAt(profile, x, z, stage);
+            boolean trunkHere = tree != null && tree.x() == x && tree.z() == z;
+            if (!trunkHere) {
+                long coverHash = hash(H_COVER, x, z);
+                double cover01 = to01(coverHash);
+                switch (style) {
+                    case CRIMSON -> {
+                        if (cover01 < style.grassDensity) {
+                            cover = CRIMSON_ROOTS;
+                        }
+                    }
+                    case WARPED -> {
+                        if (cover01 < style.grassDensity) {
+                            cover = WARPED_ROOTS;
+                        } else if (cover01 < style.grassDensity + 0.04D) {
+                            cover = TWISTING_VINES;
+                        } else if (cover01 < style.grassDensity + 0.07D) {
+                            cover = NETHER_SPROUTS;
+                        }
+                    }
+                    case BASALT -> {
+                        if (cover01 < 0.012D) {
+                            pillarBlock = BASALT;
+                            pillarHeight = 2 + (int) ((coverHash >>> 8) & 0xFF) % 5; // 2..6
+                        }
+                    }
+                    case SOUL -> {
+                        if (cover01 < 0.03D && SURFACE_LARGE.getValue(x / 26.0D, z / 26.0D) > 0.35D) {
+                            pillarBlock = BONE_BLOCK;
+                            pillarHeight = 1 + (int) ((coverHash >>> 8) & 0xFF) % 3; // 1..3
+                        } else if (cover01 > 0.90D && cover01 < 0.915D) {
+                            cover = SOUL_FIRE;
+                        }
+                    }
+                    default -> {}
+                }
+            }
         }
 
         int topY = surfaceY;
         if (cover != null) {
             topY = surfaceY + 1;
         }
-        if (cactusHeight > 0) {
-            topY = surfaceY + cactusHeight;
+        if (pillarHeight > 0) {
+            topY = surfaceY + pillarHeight;
         }
         if (tree != null) {
             topY = Math.max(topY, tree.baseY() + tree.height() + 1);
@@ -212,10 +419,45 @@ public final class DiscTerrainFunction {
         if (lavaTopY > topY) {
             topY = lavaTopY;
         }
+        if (waterTopY > topY) {
+            topY = waterTopY;
+        }
 
-        return new DiscColumn(profile, x, z, stage, true, r, surfaceY, undersideY, bottomY, topY,
-                style, deepslateTopY, lavaTopY, cover, cactusHeight, tree, snowCap,
-                cavityMinY, cavityMaxY, cavityLavaY, cavityShell, caveMinY, caveMaxY);
+        return new DiscColumn(profile, x, z, stage, true, r, surfaceY, undersideY, bottomY,
+                groundBottomY, topY, style, deepslateTopY, lavaTopY, waterTopY, waterBottomY,
+                cover, pillarBlock, pillarHeight, tree, snowCap, riverBed, scar, moatLip,
+                iceCascade, false, hangState, cavityMinY, cavityMaxY, cavityLavaY, cavityShell,
+                caveMinY, caveMaxY);
+    }
+
+    /** Channel depth below the original surface: 4 near the centerline, 3 towards the edges. */
+    private static int riverDepth(double riverDist) {
+        return riverDist < 2.5D ? 4 : 3;
+    }
+
+    /**
+     * A small detached floating shard: a 2-4 thick crumb of surface strata hovering a
+     * few blocks below rim height where a crumble-hole column would otherwise be void.
+     * No bedrock seal, caves, ores or vegetation — just a drifting scrap of the rim.
+     */
+    private static DiscColumn shardColumn(DiscProfile profile, int x, int z, int stage, DiscMapData map) {
+        SectorStyle style = styleOf(profile, map.biomeAt(profile, x, z));
+        int rimSurface = computeSurfaceY(profile, x, z, style);
+        long h = hash(H_SHARD, x, z);
+        int top = rimSurface - 3 - (int) ((h >>> 16) & 3);      // 3..6 below rim height
+        int thickness = 2 + (int) ((h >>> 24) & 0xFF) % 3;      // 2..4
+        int bottom = top - thickness + 1;
+        double r = Math.sqrt((double) x * x + (double) z * z);
+        return new DiscColumn(profile, x, z, stage, true, r, top, bottom, bottom, bottom, top,
+                style, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE,
+                null, null, 0, null, false, false, 0, false, false, true, null,
+                1, 0, Integer.MIN_VALUE, false, 1, 0);
+    }
+
+    /** Normalised 0..360 disc-map angle (degrees from +X towards +Z) of the column. */
+    private static double angleDeg(int x, int z) {
+        double angle = Math.toDegrees(Math.atan2(z, x));
+        return angle < 0.0D ? angle + 360.0D : angle;
     }
 
     /** The block at height {@code y} of a precomputed column. */
@@ -229,6 +471,9 @@ public final class DiscTerrainFunction {
             if (y <= col.lavaTopY()) {
                 return LAVA;
             }
+            if (y <= col.waterTopY()) {
+                return WATER; // river channel fill up to the original surface − 1
+            }
             Tree tree = col.tree();
             if (tree != null) {
                 if (tree.x() == x && tree.z() == z && y <= tree.baseY() + tree.height()) {
@@ -239,17 +484,25 @@ public final class DiscTerrainFunction {
                     return leaves;
                 }
             }
-            if (col.cactusHeight() > 0 && y <= col.surfaceY() + col.cactusHeight()) {
-                return CACTUS;
+            if (col.pillarHeight() > 0 && y <= col.surfaceY() + col.pillarHeight()) {
+                return col.pillarBlock();
             }
             if (y == col.surfaceY() + 1 && col.cover() != null) {
                 return col.cover();
             }
             return AIR;
         }
-        // Ground. Bottom three layers of every column are bedrock (sealed underside).
-        if (y <= col.bottomY() + 2) {
+        // Hanging rim decor dangles below the lowest ground block (vines / glow lichen).
+        if (y < col.groundBottomY()) {
+            return col.hangState();
+        }
+        // Ground. Bottom three layers of every column are bedrock (sealed underside) —
+        // except detached floating shards, which are bare crumbs, not part of the hull.
+        if (!col.shard() && y <= col.groundBottomY() + 2) {
             return BEDROCK;
+        }
+        if (y >= col.waterBottomY()) {
+            return WATER; // spillway curtain painted into the rim face
         }
         if (y >= col.cavityMinY() && y <= col.cavityMaxY()) {
             return y <= col.cavityLavaY() ? LAVA : CAVE_AIR;
@@ -263,9 +516,11 @@ public final class DiscTerrainFunction {
                 }
             }
         }
-        BlockState ore = oreAt(col, y);
-        if (ore != null) {
-            return ore;
+        if (!col.shard()) {
+            BlockState ore = oreAt(col, y);
+            if (ore != null) {
+                return ore;
+            }
         }
         return strataBlock(col, y);
     }
@@ -335,13 +590,18 @@ public final class DiscTerrainFunction {
 
     // --- surface ---
 
-    /** Layered fixed-seed simplex surface: sector-aware amplitude, mountain bump, ±3 detail. */
+    /**
+     * Layered fixed-seed simplex surface: sector-aware amplitude (relief blended across
+     * ±{@link DiscMapData#SECTOR_BLEND_DEG}° of the wobbled wedge boundaries), mountain
+     * bump with radiating ridge spurs, terraced high flanks and a summit crater, ±3 detail.
+     */
     private static int computeSurfaceY(DiscProfile profile, int x, int z, SectorStyle style) {
         DiscMapData map = DiscMapData.get();
         if (profile == DiscProfile.NETHER) {
+            double[] relief = blendedRelief(map, profile, x, z, style);
             double n = SURFACE_LARGE.getValue(x / 140.0D, z / 140.0D) * 5.0D
                     + SURFACE_MEDIUM.getValue(x / 50.0D, z / 50.0D) * 3.0D;
-            double s = 138.0D + n * style.surfaceAmp + style.surfaceOffset
+            double s = 138.0D + n * relief[0] + relief[1]
                     + SURFACE_DETAIL.getValue(x / 12.0D, z / 12.0D) * 2.0D;
             double r0 = Math.sqrt((double) x * x + (double) z * z);
             if (r0 < 20.0D) {
@@ -354,9 +614,10 @@ public final class DiscTerrainFunction {
         if (painted != Integer.MIN_VALUE) {
             return painted;
         }
+        double[] relief = blendedRelief(map, profile, x, z, style);
         double n = SURFACE_LARGE.getValue(x / 180.0D, z / 180.0D) * 9.0D
                 + SURFACE_MEDIUM.getValue(x / 60.0D, z / 60.0D) * 4.5D;
-        double s = profile.surfaceBaseY() + style.surfaceOffset + n * style.surfaceAmp
+        double s = profile.surfaceBaseY() + relief[1] + n * relief[0]
                 + SURFACE_DETAIL.getValue(x / 12.0D, z / 12.0D) * 2.5D;
         DiscMapData.Mountain mountain = map.profile(profile).mountain();
         if (mountain != null) {
@@ -364,8 +625,30 @@ public final class DiscTerrainFunction {
             double dz = z - mountain.z();
             double dist = Math.sqrt(dx * dx + dz * dz);
             if (dist < mountain.radius()) {
-                double f = 1.0D - (dist / mountain.radius()) * (dist / mountain.radius());
-                s += (mountain.peakY() - profile.surfaceBaseY()) * f * f;
+                double peakAmp = mountain.peakY() - profile.surfaceBaseY();
+                double t = dist / mountain.radius();
+                double f = 1.0D - t * t;
+                s += peakAmp * f * f;
+                // Radiating ridge spurs / couloirs: angularly periodic simplex (sampled
+                // on a circle for seam-free wrap, drifting slowly with distance) makes
+                // 5-7 alternating crests and gullies down the cone, strongest mid-flank.
+                double ma = Math.atan2(dz, dx);
+                double ridge = RIDGE_NOISE.getValue(Math.cos(ma) * 1.6D, Math.sin(ma) * 1.6D,
+                        dist / 90.0D);
+                s += ridge * 15.0D * 4.0D * t * (1.0D - t);
+                // Slight summit crater: a shallow bowl within ~6 blocks of the peak.
+                if (dist < 6.0D) {
+                    s -= 5.0D * (1.0D - (dist / 6.0D) * (dist / 6.0D));
+                }
+                // Terrace quantization above ~y150: lerp towards floor(s/10)*10 by
+                // steepness (analytic cone slope) so steep flanks break into stepped
+                // cliff bands while flatter ground stays smooth.
+                if (s > 150.0D) {
+                    double slope = 4.0D * peakAmp * t * f / mountain.radius();
+                    double steep = Math.min(1.0D, Math.abs(slope) / 3.5D);
+                    double w = smoothstep(Math.min(1.0D, (s - 150.0D) / 14.0D)) * steep;
+                    s += (Math.floor(s / 10.0D) * 10.0D - s) * w;
+                }
             }
         }
         double r0 = Math.sqrt((double) x * x + (double) z * z);
@@ -374,6 +657,25 @@ public final class DiscTerrainFunction {
             s = 70.0D * (1.0D - t) + s * t; // flat spawn pad for altar + sanctum (W5)
         }
         return (int) Math.round(Math.max(64.0D, Math.min(300.0D, s)));
+    }
+
+    /**
+     * Effective {@code {surfaceAmp, surfaceOffset}} of the column: the style's own values,
+     * lerped towards the neighbouring sector's within ±{@link DiscMapData#SECTOR_BLEND_DEG}°
+     * of a (wobbled) wedge boundary — turning offset steps like SWAMP(−5)→SNOWY(+6) into
+     * slopes. Both sides converge to the average ON the boundary, so relief is continuous.
+     */
+    private static double[] blendedRelief(DiscMapData map, DiscProfile profile, int x, int z,
+            SectorStyle style) {
+        double amp = style.surfaceAmp;
+        double offset = style.surfaceOffset;
+        DiscMapData.SectorBlend blend = map.sectorBlendAt(profile, x, z);
+        if (blend != null) {
+            SectorStyle other = styleOf(profile, blend.neighborBiome());
+            amp += (other.surfaceAmp - amp) * blend.t();
+            offset += (other.surfaceOffset - offset) * blend.t();
+        }
+        return new double[] {amp, offset};
     }
 
     private static boolean inMoat(int x, int z) {
@@ -395,7 +697,7 @@ public final class DiscTerrainFunction {
         SectorStyle style = col.style();
         if (col.profile() == DiscProfile.NETHER) {
             if (y == col.surfaceY()) {
-                return style.top;
+                return col.moatLip() ? MAGMA_BLOCK : style.top;
             }
             if (y > col.surfaceY() - 3) {
                 return style.filler;
@@ -405,6 +707,25 @@ public final class DiscTerrainFunction {
             }
             return y < col.deepslateTopY() ? BLACKSTONE : NETHERRACK;
         }
+        // Frozen cascade down the mountain's north face: packed ice with blue-ice veins.
+        if (col.iceCascade() && y > col.surfaceY() - 2) {
+            return hash01x3(H_STRIPE, col.x(), y, col.z()) < 0.25D ? BLUE_ICE : PACKED_ICE;
+        }
+        // Ring scars: the weld line of a former rim — deepslate/tuff mix for the top and
+        // 3-4 blocks below (full seams), or a sparse top-block mix (the faint r=96 seam).
+        if (col.scar() > 0 && !col.riverBed()) {
+            long scarHash = hash(H_SCAR, col.x(), col.z());
+            if (col.scar() == 2 && y > col.surfaceY() - 4 - (int) (scarHash & 1L)) {
+                return hash01x3(H_SCAR, col.x(), y, col.z()) < 0.6D ? DEEPSLATE : TUFF;
+            }
+            if (col.scar() == 1 && y == col.surfaceY() && to01(scarHash) < 0.5D) {
+                return ((scarHash >>> 8) & 3L) == 0L ? TUFF : DEEPSLATE;
+            }
+        }
+        // River bed and banks: sand with gravel patches instead of the sector top.
+        if (col.riverBed() && y > col.surfaceY() - 2) {
+            return hash01x3(H_RIVER_BED, col.x(), y, col.z()) < 0.65D ? SAND : GRAVEL;
+        }
         boolean highRock = col.surfaceY() > 140;
         if (y == col.surfaceY()) {
             if (col.snowCap()) {
@@ -412,11 +733,40 @@ public final class DiscTerrainFunction {
             }
             return highRock ? STONE : style.top;
         }
+        if (highRock && y > col.surfaceY() - 14) {
+            // Banded tuff/calcite strata stripes in the high-rock shell: only sub-surface
+            // rows, so they read on steep faces and terrace walls, never on flat tops.
+            // The per-column jitter keeps the band edges ragged.
+            int band = Math.floorMod(y + (int) (hash01(H_STRIPE, col.x(), col.z()) * 7.0D), 19);
+            if (band < 2) {
+                return TUFF;
+            }
+            if (band == 9) {
+                return CALCITE;
+            }
+            return STONE;
+        }
         if (y > col.surfaceY() - style.fillerDepth) {
             return highRock ? STONE : style.filler;
         }
         if (style == SectorStyle.DESERT && y > col.surfaceY() - 7) {
             return SANDSTONE;
+        }
+        if (y < col.undersideY()) {
+            // Overworld stalactite fringe: deepslate needles seeded with glints —
+            // amethyst inclusions, crying obsidian (drips purple into the void for
+            // free) and thin tuff bands, mirroring the nether's glowstone trick.
+            double inclusion = hash01x3(H_INCLUSION, col.x(), y, col.z());
+            if (inclusion < 0.05D) {
+                return AMETHYST_BLOCK;
+            }
+            if (inclusion < 0.07D) {
+                return CRYING_OBSIDIAN;
+            }
+            if (Math.floorMod(y + (int) (hash01(H_INCLUSION, col.x(), col.z()) * 5.0D), 16) < 2) {
+                return TUFF;
+            }
+            return DEEPSLATE;
         }
         return y < col.deepslateTopY() ? DEEPSLATE : STONE;
     }
@@ -508,9 +858,10 @@ public final class DiscTerrainFunction {
     // --- vegetation ---
 
     /**
-     * Deterministic tree of the 8×8 grid cell containing (x, z), or null when the cell
-     * has no tree or its canopy cannot reach this column. The anchor is margin-clamped so
-     * a canopy (radius ≤ 2) never leaves its cell — per-column lookups stay cell-local.
+     * Deterministic tree (or nether mini-fungus) of the 8×8 grid cell containing (x, z),
+     * or null when the cell has no tree or its canopy cannot reach this column. The
+     * anchor is margin-clamped so a canopy (radius ≤ 2) never leaves its cell —
+     * per-column lookups stay cell-local.
      */
     private static Tree treeAt(DiscProfile profile, int x, int z, int stage) {
         int cellX = Math.floorDiv(x, 8);
@@ -521,10 +872,25 @@ public final class DiscTerrainFunction {
         if (Math.abs(x - ax) > 2 || Math.abs(z - az) > 2) {
             return null;
         }
-        String biomeId = DiscMapData.get().biomeAt(profile, ax, az);
+        DiscMapData map = DiscMapData.get();
+        String biomeId = map.biomeAt(profile, ax, az);
         SectorStyle style = styleOf(profile, biomeId);
         if (style.treeDensity <= 0.0D || to01(h) >= style.treeDensity) {
             return null;
+        }
+        // No trunks in a river channel or on its banks (keyed to the ANCHOR, so the
+        // whole canopy exists or not consistently for every column that samples it).
+        if (map.riverDistance(profile, ax, az) < RIVER_HALF_WIDTH + RIVER_BANK_MARGIN + 0.5D) {
+            return null;
+        }
+        // Keep nether fungi off the moat: channel, causeways and magma lip.
+        if (profile == DiscProfile.NETHER) {
+            DiscMapData.Moat moat = map.profile(DiscProfile.NETHER).moat();
+            if (moat != null
+                    && Math.abs(Math.sqrt((double) ax * ax + (double) az * az) - moat.radius())
+                            <= moat.halfWidth() + 3.0D) {
+                return null;
+            }
         }
         // Solid-ground anchors only (0.45 is above the crumble-hole threshold of 0.35).
         if (edgeFactor(profile, ax, az, stage) < 0.45D) {
@@ -557,6 +923,18 @@ public final class DiscTerrainFunction {
                 case 1 -> adx == 0 && adz == 0;
                 default -> false;
             };
+        } else if (tree.species().fungus) {
+            // Mini-fungus knob cap: a pruned 3×3 collar over the top two stem blocks
+            // with a plus-shaped crown, sprinkled with glowing shroomlight.
+            leaf = switch (dy) {
+                case -1, 0 -> adx <= 1 && adz <= 1
+                        && (!(adx == 1 && adz == 1) || hash01x3(H_LEAF, x, y, z) < 0.35D);
+                case 1 -> adx + adz <= 1;
+                default -> false;
+            };
+            if (leaf && hash01x3(H_GLOW, x, y, z) < 0.18D) {
+                return SHROOMLIGHT;
+            }
         } else {
             leaf = switch (dy) {
                 case -2, -1 -> adx <= 2 && adz <= 2
@@ -590,20 +968,29 @@ public final class DiscTerrainFunction {
         SPRUCE(Blocks.SPRUCE_LOG, Blocks.SPRUCE_LEAVES, 6, 3),
         JUNGLE(Blocks.JUNGLE_LOG, Blocks.JUNGLE_LEAVES, 6, 4),
         ACACIA(Blocks.ACACIA_LOG, Blocks.ACACIA_LEAVES, 5, 2),
-        DARK_OAK(Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES, 4, 3);
+        DARK_OAK(Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES, 4, 3),
+        // Nether mini-fungi: stem "log" + wart-block "canopy" (3-5 tall knob caps).
+        CRIMSON_FUNGUS(Blocks.CRIMSON_STEM, Blocks.NETHER_WART_BLOCK, 3, 3),
+        WARPED_FUNGUS(Blocks.WARPED_STEM, Blocks.WARPED_WART_BLOCK, 3, 3);
 
         final BlockState log;
         final BlockState leaves;
         final int baseHeight;
         final int heightVar;
+        final boolean fungus;
 
         TreeSpecies(Block log, Block leaves, int baseHeight, int heightVar) {
             this.log = log.defaultBlockState();
             // Persistent leaves: section writes never trigger distance updates, so
-            // non-persistent leaves would all decay on the first random tick.
-            this.leaves = leaves.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+            // non-persistent leaves would all decay on the first random tick. Wart-block
+            // fungus caps have no PERSISTENT property (and never decay) — leave them be.
+            BlockState canopy = leaves.defaultBlockState();
+            this.leaves = canopy.hasProperty(LeavesBlock.PERSISTENT)
+                    ? canopy.setValue(LeavesBlock.PERSISTENT, true)
+                    : canopy;
             this.baseHeight = baseHeight;
             this.heightVar = heightVar;
+            this.fungus = !(leaves instanceof LeavesBlock);
         }
     }
 
@@ -624,8 +1011,8 @@ public final class DiscTerrainFunction {
         NETHER_WASTES(Blocks.NETHERRACK, Blocks.NETHERRACK, 3, 1.0D, 0.0D, 0.0D, 0.0D),
         SOUL(Blocks.SOUL_SAND, Blocks.SOUL_SOIL, 3, 0.7D, -2.0D, 0.0D, 0.0D),
         BASALT(Blocks.BASALT, Blocks.BLACKSTONE, 3, 1.3D, 1.0D, 0.0D, 0.0D),
-        CRIMSON(Blocks.CRIMSON_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.0D, 0.0D),
-        WARPED(Blocks.WARPED_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.0D, 0.0D);
+        CRIMSON(Blocks.CRIMSON_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.30D, 0.10D),
+        WARPED(Blocks.WARPED_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.25D, 0.08D);
 
         final BlockState top;
         final BlockState filler;
@@ -654,6 +1041,8 @@ public final class DiscTerrainFunction {
                 case SNOWY, GROVE -> TreeSpecies.SPRUCE;
                 case DARK_FOREST -> TreeSpecies.DARK_OAK;
                 case PLAINS, SWAMP, MEADOW -> TreeSpecies.OAK;
+                case CRIMSON -> TreeSpecies.CRIMSON_FUNGUS;
+                case WARPED -> TreeSpecies.WARPED_FUNGUS;
                 default -> null;
             };
         }
@@ -687,17 +1076,29 @@ public final class DiscTerrainFunction {
      * Immutable per-column snapshot of everything {@link #stateInColumn} needs.
      * {@code inside=false} columns are void; {@code bottomY..topY} bounds the only Y
      * range that can contain non-air blocks (use it to bound generation loops).
+     *
+     * <p>Component notes: {@code groundBottomY} is the lowest SOLID block (the bedrock
+     * seal sits on it) while {@code bottomY} additionally spans the hanging rim decor
+     * ({@code hangState}: ceiling vines / glow lichen strands of length
+     * {@code groundBottomY − bottomY}). {@code waterTopY}/{@code waterBottomY} bound the
+     * river water fill ({@code MIN_VALUE}/{@code MAX_VALUE} = none); a
+     * {@code waterBottomY <= surfaceY} means the rim-face spillway curtain. {@code scar}
+     * is 0 = none, 1 = faint (r=96 weld), 2 = full ring scar. {@code shard=true} marks a
+     * detached floating rim shard (no bedrock seal, caves, ores or vegetation).</p>
      */
     public record DiscColumn(DiscProfile profile, int x, int z, int stage, boolean inside,
-            double radial, int surfaceY, int undersideY, int bottomY, int topY,
-            SectorStyle style, int deepslateTopY, int lavaTopY, BlockState cover,
-            int cactusHeight, Tree tree, boolean snowCap, int cavityMinY, int cavityMaxY,
-            int cavityLavaY, boolean cavityShell, int caveMinY, int caveMaxY) {
+            double radial, int surfaceY, int undersideY, int bottomY, int groundBottomY,
+            int topY, SectorStyle style, int deepslateTopY, int lavaTopY, int waterTopY,
+            int waterBottomY, BlockState cover, BlockState pillarBlock, int pillarHeight,
+            Tree tree, boolean snowCap, boolean riverBed, int scar, boolean moatLip,
+            boolean iceCascade, boolean shard, BlockState hangState, int cavityMinY,
+            int cavityMaxY, int cavityLavaY, boolean cavityShell, int caveMinY, int caveMaxY) {
 
         static DiscColumn outside(DiscProfile profile, int x, int z, int stage) {
-            return new DiscColumn(profile, x, z, stage, false, 0.0D, 0, 0, 0, -1,
-                    SectorStyle.PLAINS, 0, Integer.MIN_VALUE, null, 0, null, false,
-                    1, 0, Integer.MIN_VALUE, false, 1, 0);
+            return new DiscColumn(profile, x, z, stage, false, 0.0D, 0, 0, 0, 0, -1,
+                    SectorStyle.PLAINS, 0, Integer.MIN_VALUE, Integer.MIN_VALUE,
+                    Integer.MAX_VALUE, null, null, 0, null, false, false, 0, false,
+                    false, false, null, 1, 0, Integer.MIN_VALUE, false, 1, 0);
         }
     }
 

@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.progression.UnlockState;
@@ -35,9 +36,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       finished GROW sweeps (style {@code goal}); erase sweeps stay silent.</li>
  * </ul>
  *
- * <p>Goal completion: v1 does not track per-goal completion server-side (goals are plain
- * strings in {@code days.json}), so nothing fires automatically yet — W13 should call
- * {@link #announceGoalCompleted} when its goal tracker ticks a line.</p>
+ * <p>Goal completion: {@code progression.GoalTracker} calls {@link #announceGoalCompleted}
+ * the FIRST time each (day, goal) pair is ticked by anyone, passing the raw goal line as
+ * the subtitle (the overlay renders unknown keys literally).</p>
+ *
+ * <p>Day titles/subtitles are the SERVER-SIDE literals from the {@code days.json} plan
+ * (see {@link TimelineService#dayTitleKey}) — only the generic fallbacks remain lang keys,
+ * so the anonymized arc cannot be datamined from the client jar.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AnnouncementService {
@@ -72,8 +77,9 @@ public final class AnnouncementService {
     }
 
     /**
-     * W13 hook — call when a personal/server goal line is completed. v1 has no goal
-     * tracking, so this is never invoked automatically yet.
+     * Goal-completion announce, called by {@code progression.GoalTracker} once per
+     * (day, goal) pair. {@code subtitleKey} is usually the raw goal line rather than a
+     * lang key — the client overlay renders unknown keys literally.
      */
     public static void announceGoalCompleted(MinecraftServer server, String subtitleKey) {
         announce(server, "announce.eclipse.goal.title", subtitleKey, S2CAnnouncePayload.STYLE_GOAL);
@@ -149,10 +155,16 @@ public final class AnnouncementService {
                 "announce.eclipse.stage." + profile.name(), S2CAnnouncePayload.STYLE_GOAL);
     }
 
-    /** The lang key of a day's typewriter subtitle, matching {@link TimelineService#dayTitleKey}. */
+    /**
+     * The typewriter subtitle of a day, matching {@link TimelineService#dayTitleKey}: the
+     * {@code days.json} plan's literal {@code subtitle} when configured (the plan's day is
+     * re-checked because {@code EclipseConfig.day} clamps out-of-range days), else the
+     * generic lang-key fallback.
+     */
     private static String daySubtitleKey(int day) {
-        return day >= 1 && day <= 14
-                ? "announce.eclipse.day." + day + ".sub"
+        EclipseConfig.DayPlan plan = EclipseConfig.day(day);
+        return plan.day() == day && !plan.subtitle().isEmpty()
+                ? plan.subtitle()
                 : "announce.eclipse.day.generic.sub";
     }
 }

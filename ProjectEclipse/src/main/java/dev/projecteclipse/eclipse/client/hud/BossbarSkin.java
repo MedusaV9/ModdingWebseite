@@ -5,6 +5,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.annotation.Nullable;
+
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import dev.projecteclipse.eclipse.EclipseMod;
@@ -18,6 +20,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.BossEvent;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -39,6 +42,13 @@ import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
  * {@code setIncrement(getIncrement() + 10)} reserves the taller frame's space. With
  * {@code showBossbarSkin=false} a minimal 4px strip renders instead — a revive countdown is
  * NEVER fully hidden.</p>
+ *
+ * <p>Server-driven telegraphs survive the reskin: {@code boss}-themed bars tint their fill
+ * and leading-edge glow toward the vanilla {@link BossEvent.BossBarColor} (the
+ * Ferryman's WHITE/PURPLE/RED phase colors), a NOTCHED_6 overlay draws thin phase ticks at
+ * the 1/3 and 2/3 marks of the fill window (the Herald's phase breaks), and the minimal
+ * strip is colored by bar color too. Under F1 ({@code hideGui}) the handler keeps the
+ * {@link BarState} lerp warm but draws nothing and does not cancel the event.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class BossbarSkin {
@@ -141,11 +151,20 @@ public final class BossbarSkin {
             state.displayedProgress += Mth.clamp(actual - state.displayedProgress, -LERP_PER_FRAME, LERP_PER_FRAME);
         }
 
+        if (Minecraft.getInstance().options.hideGui) {
+            // F1: the BarState above stays warm so displayedProgress doesn't jump when the
+            // HUD returns, but nothing is drawn and the event is left alone — the vanilla
+            // bar is hidden anyway, so there is nothing to cancel.
+            observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
+            return;
+        }
+
         event.setCanceled(true);
         GuiGraphics guiGraphics = event.getGuiGraphics();
         if (!EclipseClientConfig.showBossbarSkin()) {
             // Minimal 4px strip: countdowns (revive ritual!) must never disappear entirely.
-            drawMinimalStrip(guiGraphics, event.getX(), event.getY(), state.theme, state.displayedProgress);
+            drawMinimalStrip(guiGraphics, event.getX(), event.getY(), state.theme, state.displayedProgress,
+                    bar.getColor());
             observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
             return;
         }
@@ -154,7 +173,7 @@ public final class BossbarSkin {
         float flash = state.flashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.flashStartMillis) / (float) FLASH_MILLIS, 0.0F, 1.0F);
         drawThemedBar(guiGraphics, event.getX(), event.getY(), state.theme, state.displayedProgress,
-                0.35F + 0.65F * flash, bar.getName(), 1.0F);
+                0.35F + 0.65F * flash, bar.getName(), 1.0F, bar.getColor(), bar.getOverlay());
         observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
     }
 
@@ -162,10 +181,24 @@ public final class BossbarSkin {
      * Shared skinned-bar body, also used by {@link AnnouncementOverlay}'s client-local sweep:
      * dark track, lerped fill, scrolling energy overlay, themed frame, leading-edge glow and
      * (when given) the centered name line above the frame. {@code alpha} scales the whole
-     * bar (the announcement sweep's fade-out); real bars pass {@code 1}.
+     * bar (the announcement sweep's fade-out); real bars pass {@code 1}. Sweeps have no
+     * backing {@code BossEvent}, so this variant carries no color/overlay telegraphs.
      */
     public static void drawThemedBar(GuiGraphics guiGraphics, int x, int y, String theme,
             float progress, float glowAlpha, Component name, float alpha) {
+        drawThemedBar(guiGraphics, x, y, theme, progress, glowAlpha, name, alpha, null, null);
+    }
+
+    /**
+     * Full skinned-bar body for real server bars: {@code barColor}/{@code overlay} restore
+     * the telegraphs the skin used to swallow. For the {@code boss} theme the fill and
+     * leading-edge glow tint toward the vanilla bar color (WHITE/PURPLE/RED phase swaps),
+     * and a NOTCHED_6 overlay draws thin phase ticks at the 1/3 and 2/3 marks of the fill
+     * window (the Herald's phase breaks). Both may be {@code null} (announcement sweeps).
+     */
+    public static void drawThemedBar(GuiGraphics guiGraphics, int x, int y, String theme,
+            float progress, float glowAlpha, Component name, float alpha,
+            @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay) {
         alpha = Mth.clamp(alpha, 0.0F, 1.0F);
         if (alpha < 0.02F) {
             return;
@@ -173,24 +206,40 @@ public final class BossbarSkin {
         int fillY = y + FILL_OFFSET_Y;
         int fillWidth = Math.round(FILL_WIDTH * Mth.clamp(progress, 0.0F, 1.0F));
 
+        // Phase-color tint: boss-themed bars follow the server's bar color (WHITE = no tint).
+        boolean bossTheme = S2CBossbarStylePayload.THEME_BOSS.equals(theme);
+        int tint = bossTheme && barColor != null ? barColorRgb(barColor) : 0xFFFFFF;
+        float tintRed = ((tint >> 16) & 0xFF) / 255.0F;
+        float tintGreen = ((tint >> 8) & 0xFF) / 255.0F;
+        float tintBlue = (tint & 0xFF) / 255.0F;
+
         RenderSystem.enableBlend();
         // Empty track: the fill strip darkened to a faint violet bed.
         guiGraphics.setColor(0.28F, 0.22F, 0.36F, 0.85F * alpha);
         guiGraphics.blit(FILL, x, fillY, FILL_WIDTH, FILL_HEIGHT, 0.0F, 0.0F, 512, 32, 512, 32);
-        // Lerped fill.
+        // Lerped fill (the scroll overlay inherits the tint for a coherent energy hue).
         if (fillWidth > 0) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+            guiGraphics.setColor(tintRed, tintGreen, tintBlue, alpha);
             guiGraphics.blit(FILL, x, fillY, fillWidth, FILL_HEIGHT, 0.0F, 0.0F,
                     Math.round(512.0F * fillWidth / FILL_WIDTH), 32, 512, 32);
             drawScrollOverlay(guiGraphics, x, fillY, fillWidth);
+        }
+        // Herald phase notches: thin dark ticks where the phases break (2/3 and 1/3 health).
+        if (bossTheme && overlay == BossEvent.BossBarOverlay.NOTCHED_6) {
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F); // fill() colors below carry their own alpha
+            int notchColor = ((int) (0.85F * alpha * 255.0F) << 24) | 0x140A24;
+            for (int third = 1; third <= 2; third++) {
+                int markX = x + Math.round(FILL_WIDTH * third / 3.0F);
+                guiGraphics.fill(markX, fillY, markX + 1, fillY + FILL_HEIGHT, notchColor);
+            }
         }
         // Themed frame on top of the fill.
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
         guiGraphics.blit(frameTexture(theme), x + FRAME_OFFSET_X, y + FRAME_OFFSET_Y,
                 FRAME_WIDTH, FRAME_HEIGHT, 0.0F, 0.0F, 512, 64, 512, 64);
-        // Leading-edge glow (flashes via glowAlpha on progress changes).
+        // Leading-edge glow (flashes via glowAlpha on progress changes), phase-tinted too.
         if (fillWidth > 0 && glowAlpha > 0.02F) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, Mth.clamp(glowAlpha, 0.0F, 1.0F) * alpha);
+            guiGraphics.setColor(tintRed, tintGreen, tintBlue, Mth.clamp(glowAlpha, 0.0F, 1.0F) * alpha);
             guiGraphics.blit(GLOW, x + fillWidth - 7, fillY - 4, 14, 14, 0.0F, 0.0F, 64, 64, 64, 64);
         }
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
@@ -218,9 +267,14 @@ public final class BossbarSkin {
         }
     }
 
-    /** The {@code showBossbarSkin=false} fallback: 4px track + themed progress strip, no text. */
-    private static void drawMinimalStrip(GuiGraphics guiGraphics, int x, int y, String theme, float progress) {
-        int accent = switch (theme) {
+    /**
+     * The {@code showBossbarSkin=false} fallback: 4px track + progress strip, no text. The
+     * strip takes the server bar's color when known (phase telegraphs must survive even the
+     * minimal look); the fixed theme accent is only the no-color fallback.
+     */
+    private static void drawMinimalStrip(GuiGraphics guiGraphics, int x, int y, String theme, float progress,
+            @Nullable BossEvent.BossBarColor barColor) {
+        int accent = barColor != null ? 0xFF000000 | barColorRgb(barColor) : switch (theme) {
             case S2CBossbarStylePayload.THEME_GOAL -> 0xFF9AF0E0;
             case S2CBossbarStylePayload.THEME_BOSS -> 0xFFE86078;
             default -> 0xFFC8B4E8;
@@ -230,6 +284,19 @@ public final class BossbarSkin {
         if (width > 0) {
             guiGraphics.fill(x, y, x + width, y + 4, accent);
         }
+    }
+
+    /** Vanilla bossbar palette → RGB, for the fill/glow tint and the minimal strip. */
+    private static int barColorRgb(BossEvent.BossBarColor color) {
+        return switch (color) {
+            case PINK -> 0xFF73A5;
+            case BLUE -> 0x4FC3FF;
+            case RED -> 0xFF4A4A;
+            case GREEN -> 0x58E877;
+            case YELLOW -> 0xFFD447;
+            case PURPLE -> 0xB44CFF;
+            case WHITE -> 0xFFFFFF;
+        };
     }
 
     /** Translation-key safety net for v1 bars that predate the style payload (revive ritual). */

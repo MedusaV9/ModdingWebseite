@@ -1,5 +1,8 @@
 package dev.projecteclipse.eclipse.client.entity;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+
 import dev.projecteclipse.eclipse.entity.UmbralStalkerEntity;
 import net.minecraft.client.model.HierarchicalModel;
 import net.minecraft.client.model.geom.ModelPart;
@@ -20,7 +23,12 @@ import net.neoforged.api.distmarker.OnlyIn;
  *
  * <p>Anim: quadruped legs {@code cos(limbSwing*0.66 + phase)*1.2*limbSwingAmount}
  * (diagonal pairs), spine shards pulse-breathe (lift + rock), head lowers 0.3 rad while
- * hunting ({@code entity.headLower}).</p>
+ * hunting ({@code entity.headLower}), and {@code attackTime} drives a head/neck bite lunge
+ * (the head snaps forward-and-down over the swing) so melee hits read.</p>
+ *
+ * <p>The head (violet eye pinpricks), jaw shards and spine shards are re-rendered
+ * fullbright by {@code UmbralStalkerRenderer.ShardEyesLayer} via {@link #renderEmissive}
+ * — the night hunter must stay readable at light 0.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class UmbralStalkerModel extends HierarchicalModel<UmbralStalkerEntity> {
@@ -96,14 +104,38 @@ public class UmbralStalkerModel extends HierarchicalModel<UmbralStalkerEntity> {
         for (int i = 0; i < 4; i++) {
             this.legs[i].xRot = Mth.cos(limbSwing * 0.66F + phases[i]) * 1.2F * limbSwingAmount;
         }
+        // Bite lunge off the melee swing clock: the neck shoots forward while the head
+        // snaps down onto the target, then eases back as attackTime runs 0 -> 1.
+        float lunge = Mth.sin(this.attackTime * Mth.PI);
         this.head.yRot = netHeadYaw * Mth.DEG_TO_RAD;
-        this.head.xRot = headPitch * Mth.DEG_TO_RAD + entity.headLower(0.0F);
-        this.body.xRot = BODY_X_ROT;
+        this.head.xRot = headPitch * Mth.DEG_TO_RAD + entity.headLower(0.0F) + lunge * 0.4F;
+        this.head.z = -8.0F - lunge * 3.0F;
+        this.body.xRot = BODY_X_ROT + lunge * 0.12F; // The whole body pitches into the bite.
         for (int i = 0; i < 3; i++) {
             float pulse = entity.shardPulse(ageInTicks, i);
             this.spines[i].y = -3.5F - (pulse * 0.5F + 0.5F) * 0.6F;
             float base = i == 1 ? -SPINE_Z_ROT : SPINE_Z_ROT;
             this.spines[i].zRot = base + pulse * 0.05F;
+        }
+    }
+
+    /**
+     * Renders ONLY the glow parts (fullbright, {@code RenderType.eyes}) while keeping every
+     * ancestor transform: body and legs get {@code skipDraw} for one draw of the tree
+     * (Gazer pattern). The head cube carries the violet eye pinpricks (the rest of its
+     * texture is near-black, so the additive eyes pass adds nothing there), the jaw shards
+     * hang off it, and the spine shards ride the (skipped) body — the existing
+     * {@code shardPulse} bob makes the glow breathe for free.
+     */
+    public void renderEmissive(PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay) {
+        this.body.skipDraw = true;
+        for (ModelPart leg : legs) {
+            leg.skipDraw = true;
+        }
+        this.root.render(poseStack, buffer, packedLight, packedOverlay);
+        this.body.skipDraw = false;
+        for (ModelPart leg : legs) {
+            leg.skipDraw = false;
         }
     }
 }

@@ -45,6 +45,7 @@ import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -88,15 +89,19 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Endings</b>: death drops {@code eclipse:ferryman_toll}, restores the ship (water
  * drained, lanterns relit, crew calmed), sets {@code ferrymanDefeated} and hands off to the
- * mass-revive finale ({@link FinaleRitual#beginVictory}). A wipe (every participant dead or
- * banned) is the Eclipse's victory: announce, ship restored, everyone stays a ghost. If no
- * living fighter boards for {@value #RESET_TICKS}t the fight resets the same way (minus the
- * announcement).</p>
+ * mass-revive finale ({@link FinaleRitual#beginVictory}) — all from {@link #die}, exactly
+ * once; the body then plays a {@value #DEATH_DURATION_TICKS}t scripted collapse
+ * ({@link #tickDeath}: oar planted, lantern guttering, upright sink, final toll) before
+ * removal. A wipe (every participant dead or banned) is the Eclipse's victory: announce,
+ * ship restored, everyone stays a ghost. If no living fighter boards for
+ * {@value #RESET_TICKS}t the fight resets the same way (minus the announcement).</p>
  */
 public class FerrymanEntity extends Monster {
     public static final float BASE_MAX_HEALTH = 400.0F;
     /** Deck X of the stern anchor (bow is +X): three blocks inboard of the stern cap. */
     public static final int STERN_X = -(GhostShipBuilder.HALF_LENGTH - 3);
+    /** Scripted death collapse length (vanilla tips over after 20t; see {@link #tickDeath}). */
+    public static final int DEATH_DURATION_TICKS = 70;
 
     private static final double SCALING_RANGE = 64.0D;
     private static final double FIGHT_RANGE = 64.0D;
@@ -126,6 +131,12 @@ public class FerrymanEntity extends Monster {
     // Reset / wipe.
     private static final int RESET_TICKS = 1200; // 60 s without a living fighter aboard
     private static final int WIPE_CHECK_TICKS = 20;
+    // P2 kneel: blocked-hit feedback throttle (~2/s).
+    private static final int KNEEL_CUE_INTERVAL_TICKS = 10;
+    // Death collapse: the lantern flame sputters out by this deathTime, the last bell
+    // tolls shortly before the body fades.
+    private static final int DEATH_FLAME_OUT_TICKS = 30;
+    private static final int DEATH_BELL_TICK = 55;
 
     /** Current phase 1..3 (synced; drives bossbar color + model poses). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -171,6 +182,9 @@ public class FerrymanEntity extends Monster {
     @Nullable
     private UUID gazeTargetId;
     private int noFighterTicks;
+    private int lastKneelCueTick = -KNEEL_CUE_INTERVAL_TICKS;
+    /** Players already shown the kneel actionbar hint this crew phase (first hit only). */
+    private final Set<UUID> kneelHintShown = new HashSet<>();
 
     // Client-side smooth animation clock + pose blend weights (raise/kneel/plant).
     private float animAge;
@@ -532,6 +546,7 @@ public class FerrymanEntity extends Monster {
     private void startCrewPhase(ServerLevel level) {
         this.crewActive = true;
         setKneeling(true);
+        this.kneelHintShown.clear(); // Each crew phase re-teaches the counter once per player.
         int ghosts = ghostsOnline(level);
         this.requiredLanterns = Math.min(4, ghosts + 2);
         int darkened = ShipLanterns.extinguish(level, this.requiredLanterns);
@@ -580,6 +595,51 @@ public class FerrymanEntity extends Monster {
             return true;
         }
         return super.isInvulnerableTo(source);
+    }
+
+    /**
+     * Blocked-hit feedback for the P2 kneel: {@link #isInvulnerableTo} makes the kneeling
+     * boss mechanically immune, but a silent no-op reads like a bug — so every blocked hit
+     * answers with a dull deflect toll + a soul puff at the impact point (throttled to
+     * ~2/s), and the FIRST blocked hit per player teaches the counter via the actionbar.
+     * {@code /kill} damage still bypasses and falls through to the vanilla path.
+     */
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        if (!this.level().isClientSide && isKneeling()
+                && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)
+                && this.level() instanceof ServerLevel serverLevel) {
+            onKneelBlockedHit(serverLevel, source);
+            return false; // Same outcome the invulnerability check would produce.
+        }
+        return super.hurt(source, amount);
+    }
+
+    private void onKneelBlockedHit(ServerLevel level, DamageSource source) {
+        if (source.getEntity() instanceof ServerPlayer attacker
+                && this.kneelHintShown.add(attacker.getUUID())) {
+            attacker.displayClientMessage(Component.translatable("message.eclipse.ferryman.kneel"), true);
+        }
+        if (this.tickCount - this.lastKneelCueTick < KNEEL_CUE_INTERVAL_TICKS) {
+            return;
+        }
+        this.lastKneelCueTick = this.tickCount;
+        level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
+                SoundSource.HOSTILE, 0.5F, 0.6F); // Dull, damped — not the full toll.
+        Vec3 impact = impactPoint(source);
+        level.sendParticles(ParticleTypes.SOUL, impact.x, impact.y, impact.z,
+                6, 0.15D, 0.15D, 0.15D, 0.02D);
+    }
+
+    /** Approximate impact point: the boss surface facing whatever dealt the blocked hit. */
+    private Vec3 impactPoint(DamageSource source) {
+        Vec3 center = this.position().add(0.0D, this.getBbHeight() * 0.55D, 0.0D);
+        Vec3 from = source.getSourcePosition();
+        if (from == null) {
+            return center;
+        }
+        Vec3 toward = from.subtract(center);
+        return toward.lengthSqr() < 1.0E-4D ? center : center.add(toward.normalize().scale(0.9D));
     }
 
     // --- P3 sink ---
@@ -778,10 +838,25 @@ public class FerrymanEntity extends Monster {
         EclipseMod.LOGGER.info("Ferryman drop: 1 ferryman_toll at the corpse");
     }
 
+    /**
+     * Runs exactly once at the kill (vanilla guards on {@code !this.dead}): drops + XP
+     * already fired from {@code super.die()}'s {@code dropAllDeathLoot}, and the ship
+     * restore, defeat flag and mass-revive finale ({@link FinaleRitual#beginVictory}) fire
+     * here — the scripted {@link #tickDeath} collapse afterwards only delays the body's
+     * removal, so none of this can double-run. It also snaps the synced pose flags into
+     * the death tableau: oar planted, kneel/telegraph/gaze cleared.
+     */
     @Override
     public void die(DamageSource damageSource) {
         super.die(damageSource);
         if (this.level() instanceof ServerLevel serverLevel) {
+            // Death tableau for the collapse: he plants the oar and stands for the last toll.
+            setTelegraphing(false);
+            setKneeling(false);
+            setGazing(false);
+            setPlanted(true);
+            this.noPhysics = true; // The deck no longer holds him: the body sinks through it.
+            this.bossEvent.setProgress(0.0F); // The fight tick no longer runs to update it.
             restoreShip(serverLevel, "boss defeated");
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             state.setFerrymanDefeated(true);
@@ -791,6 +866,68 @@ public class FerrymanEntity extends Monster {
                     damageSource.getMsgId());
             FinaleRitual.beginVictory(serverLevel.getServer());
         }
+    }
+
+    /**
+     * Scripted ~{@value #DEATH_DURATION_TICKS}t collapse replacing the vanilla 20t
+     * sideways tip-over ({@code FerrymanRenderer} suppresses the death flip and
+     * {@code FerrymanModel} poses the body off {@code deathTime}): the oar stays planted
+     * (synced in {@link #die}), the lantern flame gutters out over the first
+     * {@value #DEATH_FLAME_OUT_TICKS}t ({@link #isLanternFlameLit}), the body sinks
+     * upright through the deck trailing soul wisps, and one final bell toll + ship shudder
+     * land just before the vanilla removal path runs. The finale handoff already fired
+     * from {@link #die} — this only delays the body.
+     */
+    @Override
+    protected void tickDeath() {
+        this.deathTime++;
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return; // Client: deathTime alone drives the gutter + the model's bow.
+        }
+        // Upright sink: a slow, steady descent into the deck (noPhysics since die();
+        // re-asserted here because the field does not survive a mid-death reload).
+        this.noPhysics = true;
+        this.setDeltaMovement(0.0D, -0.028D, 0.0D);
+        if (this.deathTime % 5 == 0) {
+            serverLevel.sendParticles(ParticleTypes.SOUL, this.getX(), this.getY() + 1.5D, this.getZ(),
+                    4, 0.35D, 0.6D, 0.35D, 0.01D);
+        }
+        if (this.deathTime == DEATH_BELL_TICK) {
+            // The final toll: one deep bell + a shipwide shudder before the body fades.
+            serverLevel.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
+                    SoundSource.HOSTILE, 1.6F, 0.5F);
+            PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
+                    96.0D, S2CShakePayload.shake(0.8F, 20));
+            EclipseMod.LOGGER.info("Ferryman death collapse: final bell tolled at deathTime {}", this.deathTime);
+        }
+        if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
+            // Vanilla removal path (poof cloud + KILLED removal), just 50t later.
+            serverLevel.broadcastEntityEvent(this, (byte) 60);
+            this.remove(Entity.RemovalReason.KILLED);
+        }
+    }
+
+    /** Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive). */
+    public float deathProgress(float partialTick) {
+        if (this.deathTime <= 0) {
+            return 0.0F;
+        }
+        return Mth.clamp((this.deathTime + partialTick - 1.0F) / (DEATH_DURATION_TICKS - 1.0F), 0.0F, 1.0F);
+    }
+
+    /**
+     * Client render hook: whether the lantern flame still burns. During the death collapse
+     * it gutters — a 4t on/off sputter for the first {@value #DEATH_FLAME_OUT_TICKS}t, then
+     * dead for good ({@code FerrymanRenderer.EmissiveLayer} drops it from the glow pass).
+     */
+    public boolean isLanternFlameLit() {
+        if (this.deathTime <= 0) {
+            return true;
+        }
+        if (this.deathTime >= DEATH_FLAME_OUT_TICKS) {
+            return false;
+        }
+        return (this.deathTime / 4) % 2 == 0;
     }
 
     // --- test hooks ---

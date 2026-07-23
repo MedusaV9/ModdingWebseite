@@ -19,6 +19,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 
 /**
  * Client-only safe wrapper around Veil's Quasar particle system spawning:
@@ -131,6 +134,38 @@ public final class QuasarSpawner {
             } catch (Throwable t) {
                 fail(emitterId, t);
             }
+        }
+    }
+
+    /**
+     * Stops and forgets EVERY live entity-attached emitter — the disconnect/world-unload
+     * reset. The emitters themselves die with the level (Veil frees them on unload), but
+     * the map would otherwise keep stale {@link ParticleEmitter} references keyed by the
+     * OLD level's entity ids into the next session — entity ids restart on rejoin, so a
+     * recycled id could make {@link #ensureAttached} report a dead emitter as healthy.
+     */
+    public static void clearAttached() {
+        for (ParticleEmitter emitter : ATTACHED.values()) {
+            try {
+                if (!emitter.isRemoved()) {
+                    emitter.remove();
+                }
+            } catch (Throwable ignored) {
+                // Teardown-order safe: Veil may have freed its state already — dropping
+                // the reference is the part that matters.
+            }
+        }
+        ATTACHED.clear();
+    }
+
+    /** Disconnect reset hook (mirrors {@code client.WaveOverlay}'s clear-on-disconnect). */
+    @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
+    static final class DisconnectReset {
+        private DisconnectReset() {}
+
+        @SubscribeEvent
+        static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+            clearAttached();
         }
     }
 
