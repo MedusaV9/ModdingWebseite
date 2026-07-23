@@ -4,6 +4,7 @@ import java.util.Set;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
+import dev.projecteclipse.eclipse.client.hud.DayTimerLayer;
 import dev.projecteclipse.eclipse.client.hud.MarkVignetteOverlay;
 import dev.projecteclipse.eclipse.client.hud.SidebarPanel;
 import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
@@ -38,6 +39,12 @@ public final class EclipseGuiLayers {
         // overlay so the sweep stacks with real bars. Whitelisted below (P2 §1.7 fix).
         event.registerAbove(VanillaGuiLayers.BOSS_OVERLAY,
                 AnnouncementOverlay.LAYER_ID, AnnouncementOverlay::render);
+        // P3-W6 day timer: top-center countdown under the bossbar stack. MUST render below
+        // (= before) the announcement layer: the timer reserves its row via
+        // BossbarSkin.reserveOverlayRow so the announcement sweep stacks under it.
+        // Deliberately NOT letterbox-whitelisted (§3.6 — cutscene HUD suppression hides it).
+        event.registerBelow(AnnouncementOverlay.LAYER_ID,
+                DayTimerLayer.LAYER_ID, DayTimerLayer::render);
         // W12 Lantern Gaze mark: purple hunt vignette under the crosshair-level HUD,
         // deliberately NOT letterbox-whitelisted (cutscenes suppress it).
         event.registerBelow(VanillaGuiLayers.CROSSHAIR,

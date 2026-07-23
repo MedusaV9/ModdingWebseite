@@ -246,7 +246,7 @@ public final class StartEventCutscene {
         teleportedPlayers.clear();
         EclipseMod.LOGGER.info("start_event limbo half finished; startEventDone=true — handing over to IntroSequence");
         // R10 hand-off: eclipse ramp, fusion flight, vortex, lightning, reveal, sunrise.
-        IntroSequence.start(server, Map.copyOf(discCenters));
+        IntroSequence.start(server, dev.projecteclipse.eclipse.start.StartAssignmentService.assign(server, discCenters.keySet()));
         discCenters.clear();
     }
 

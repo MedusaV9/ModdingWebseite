@@ -1,21 +1,24 @@
 package dev.projecteclipse.eclipse.client.hud;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
 import net.minecraft.Util;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
@@ -25,237 +28,356 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
 /**
- * The Eclipse sidebar status panel ({@code docs/ideas/03_ui_ux.md} §D): a right-anchored
- * 110px panel rendered ENTIRELY from {@link ClientStateCache} — vanilla scoreboard data is
- * never touched, so ops keep the scoreboard free for their own use. Rows: hearts, day,
- * altar level, online count and the personal goal tick list
- * ({@code S2CGoalProgressPayload}; all-false until W13 wires real goal ticking).
+ * Quiet Eclipse sidebar v2. The panel consumes the server aggregate in
+ * {@link ClientStateCache#sidebarDay} and companion payload-fed quest/buff caches; it never
+ * computes or displays an online-player count.
  *
- * <p>While this panel is on, a server-set vanilla sidebar objective is suppressed by
- * cancelling {@link RenderGuiLayerEvent.Pre} for {@link VanillaGuiLayers#SCOREBOARD_SIDEBAR}
- * — with {@code showSidebar=false} (honored live) the panel disappears and the vanilla
- * sidebar renders again. On any content change the panel re-slides in from the right
- * (skipped under {@code reducedFx}); the online count is deliberately excluded from that
- * change hash so joins/leaves don't re-trigger the slide. Hidden entirely under F1
- * ({@code hideGui}), like the vanilla HUD. Cutscene HUD suppression hides this layer like
- * any other non-whitelisted layer — intended.</p>
+ * <p>LEFT/RIGHT anchoring, scale and overflow mode are live client settings. TAB (the
+ * configured player-list key) morphs the edge card toward screen center for expanded detail.
+ * Both vanilla sidebar and player-list layers stay suppressed while Eclipse's panel owns the
+ * surface. F1 and {@code showSidebar=false} hide this layer exactly like vanilla HUD.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class SidebarPanel {
     public static final ResourceLocation LAYER_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "sidebar_panel");
 
-    private static final ResourceLocation PANEL = texture("panel");
     private static final ResourceLocation ICON_HEART = texture("icon_heart");
     private static final ResourceLocation ICON_DAY = texture("icon_day");
     private static final ResourceLocation ICON_ALTAR = texture("icon_altar");
-    private static final ResourceLocation ICON_PLAYERS = texture("icon_players");
     private static final ResourceLocation ICON_GOAL = texture("icon_goal");
 
-    private static final int PANEL_WIDTH = 110;
+    private static final int PANEL_WIDTH = 118;
     private static final int ROW_HEIGHT = 12;
-    /** Continuation lines of a wrapped goal row sit slightly tighter than full rows. */
-    private static final int WRAP_LINE_HEIGHT = 10;
-    /** Text indent past the row start: 12x12 icon + gap, or the goal tick box + gap. */
-    private static final int ICON_TEXT_INDENT = 15;
+    private static final int PADDING = 5;
+    private static final int ICON_SIZE = 10;
+    private static final int ICON_TEXT_INDENT = 14;
     private static final int GOAL_TEXT_INDENT = 12;
-    private static final int PADDING = 4;
-    /** Nine-slice corner size of {@code panel.png} (64x64, 8px corners). */
-    private static final int SLICE = 8;
     private static final long SLIDE_MILLIS = 300L;
+    private static final long TICK_SWEEP_MILLIS = 6L * 50L;
 
-    private static final int TEXT_COLOR = 0xFFE8DEFF;
-    private static final int MUTED_COLOR = 0xFFB0A6C8;
-    private static final int DONE_COLOR = 0xFF9AF0B0;
-
-    /** Hash of the last rendered content; any change restarts the slide-in. */
-    private static int lastContentHash;
+    private static int lastSlideHash = Integer.MIN_VALUE;
     private static long slideStartMillis;
-    /** Built-row cache (wrapping text every frame is wasted work); see {@link #buildRows}. */
-    private static int lastRowsHash;
-    private static List<Row> cachedRows;
+    private static int lastRowsHash = Integer.MIN_VALUE;
+    private static List<Row> cachedRows = List.of();
+    private static final Map<String, Boolean> LAST_GOAL_DONE = new HashMap<>();
+    private static final Map<String, Long> GOAL_SWEEP_STARTED = new HashMap<>();
+    private static boolean hoveredLastFrame;
+    private static long hoverStartMillis;
 
     private SidebarPanel() {}
 
-    /** Whether the Eclipse panel is currently replacing the vanilla sidebar (F1 hides it). */
     private static boolean isActive() {
         Minecraft minecraft = Minecraft.getInstance();
-        return EclipseClientConfig.showSidebar() && minecraft.level != null && minecraft.player != null
+        return EclipseClientConfig.showSidebar()
+                && minecraft.level != null
+                && minecraft.player != null
                 && !minecraft.options.hideGui;
     }
 
-    /** Suppress a server-set vanilla sidebar objective while our panel is on. */
+    /**
+     * Suppresses both vanilla data surfaces while the Eclipse sidebar is active. The separate
+     * anonymity hider also cancels TAB_LIST globally; keeping this guard local makes the TAB
+     * expansion robust if that policy class changes later.
+     */
     @SubscribeEvent
     static void onRenderGuiLayerPre(RenderGuiLayerEvent.Pre event) {
-        if (event.getName().equals(VanillaGuiLayers.SCOREBOARD_SIDEBAR) && isActive()) {
+        if (!isActive()) {
+            return;
+        }
+        if (event.getName().equals(VanillaGuiLayers.SCOREBOARD_SIDEBAR)
+                || event.getName().equals(VanillaGuiLayers.TAB_LIST)) {
             event.setCanceled(true);
         }
     }
 
-    /** GUI-layer body, registered above {@code SCOREBOARD_SIDEBAR} by {@code EclipseGuiLayers}. */
+    /** Client-session hygiene: no row/animation state may leak into the next server join. */
+    @SubscribeEvent
+    static void onLoggingOut(
+            net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        lastSlideHash = Integer.MIN_VALUE;
+        slideStartMillis = 0L;
+        lastRowsHash = Integer.MIN_VALUE;
+        cachedRows = List.of();
+        LAST_GOAL_DONE.clear();
+        GOAL_SWEEP_STARTED.clear();
+        hoveredLastFrame = false;
+        hoverStartMillis = 0L;
+        SidebarExpanded.reset();
+    }
+
+    /** GUI-layer body registered by the existing GUI-layer hub. */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        Minecraft minecraft = Minecraft.getInstance();
+        long now = Util.getMillis();
         if (!isActive()) {
+            SidebarExpanded.update(false, EclipseClientConfig.reducedFx(), now);
+            hoveredLastFrame = false;
             return;
         }
-        Minecraft minecraft = Minecraft.getInstance();
 
-        int lives = ClientStateCache.lives;
-        int day = ClientStateCache.day;
-        int altarLevel = ClientStateCache.altarLevel;
-        int online = minecraft.getConnection() != null ? minecraft.getConnection().getOnlinePlayers().size() : 1;
-        List<String> goals = ClientStateCache.goalLines.isEmpty() ? ClientStateCache.goals : ClientStateCache.goalLines;
-        List<Boolean> done = ClientStateCache.goalDone;
-        int doneCount = 0;
-        for (int i = 0; i < goals.size(); i++) {
-            if (i < done.size() && Boolean.TRUE.equals(done.get(i))) {
-                doneCount++;
-            }
-        }
+        boolean expansionRequested = minecraft.screen == null
+                && minecraft.options.keyPlayerList.isDown();
+        float expansion = SidebarExpanded.update(expansionRequested,
+                EclipseClientConfig.reducedFx(), now);
+        Font font = minecraft.font;
+        float scale = (float) Mth.clamp(EclipseClientConfig.sidebarScale(), 0.6D, 1.4D);
+        boolean leftSide = EclipseClientConfig.sidebarSide() == EclipseClientConfig.SidebarSide.LEFT;
 
-        // The online count is deliberately NOT hashed: joins/leaves must not re-slide.
-        int contentHash = Objects.hash(lives, day, altarLevel, goals, doneCount);
-        long now = Util.getMillis();
-        if (contentHash != lastContentHash) {
-            lastContentHash = contentHash;
+        int slideHash = slideHash();
+        if (slideHash != lastSlideHash) {
+            lastSlideHash = slideHash;
             slideStartMillis = now;
         }
-        float slide = Mth.clamp((now - slideStartMillis) / (float) SLIDE_MILLIS, 0.0F, 1.0F);
-        float eased = 1.0F - (1.0F - slide) * (1.0F - slide) * (1.0F - slide); // ease-out cubic
-        int slideOffset = EclipseClientConfig.reducedFx() ? 0 : Math.round((1.0F - eased) * (PANEL_WIDTH + 8));
+        float slideT = Mth.clamp((now - slideStartMillis) / (float) SLIDE_MILLIS, 0.0F, 1.0F);
+        float slideEase = SidebarExpanded.easeOutCubic(slideT);
+        float slideOffset = EclipseClientConfig.reducedFx()
+                ? 0.0F : (1.0F - slideEase) * (PANEL_WIDTH + 8) * scale;
 
-        Font font = minecraft.font;
-        // Row cache: wrapping/ellipsizing every frame is wasted work. The cache key adds
-        // the online count and the per-goal ticks on top of the slide hash — both must
-        // refresh the rows without re-triggering the slide.
-        int rowsHash = Objects.hash(contentHash, online, done);
-        if (cachedRows == null || rowsHash != lastRowsHash) {
+        int rowsHash = rowsHash(now);
+        if (rowsHash != lastRowsHash) {
             lastRowsHash = rowsHash;
-            cachedRows = buildRows(font, lives, day, altarLevel, online, goals, done, doneCount);
+            cachedRows = buildRows(font, now);
         }
-        List<Row> rows = cachedRows;
+        updateGoalSweeps(now);
+        int normalHeight = PADDING * 2 + cachedRows.size() * ROW_HEIGHT;
 
-        // Panel height sums per-row line counts (goal rows may wrap onto a second line).
-        int panelHeight = PADDING * 2;
-        for (Row row : rows) {
-            panelHeight += ROW_HEIGHT + (row.lines().size() - 1) * WRAP_LINE_HEIGHT;
+        int maxExpandedHeight = Math.max(80,
+                (int) Math.floor((guiGraphics.guiHeight() - 8.0F) / scale));
+        int expandedHeight = Math.min(SidebarExpanded.preferredHeight(font), maxExpandedHeight);
+
+        float normalX = leftSide ? 3.0F
+                : guiGraphics.guiWidth() - 3.0F - PANEL_WIDTH * scale;
+        normalX += leftSide ? -slideOffset : slideOffset;
+        float normalY = (guiGraphics.guiHeight() - normalHeight * scale) * 0.5F;
+        float expandedX = (guiGraphics.guiWidth() - SidebarExpanded.WIDTH * scale) * 0.5F;
+        float expandedY = (guiGraphics.guiHeight() - expandedHeight * scale) * 0.5F;
+
+        float x = Mth.lerp(expansion, normalX, expandedX);
+        float y = Mth.lerp(expansion, normalY, expandedY);
+        int width = Math.round(Mth.lerp(expansion, PANEL_WIDTH, SidebarExpanded.WIDTH));
+        int height = Math.round(Mth.lerp(expansion, normalHeight, expandedHeight));
+
+        boolean hovered = mouseInside(minecraft, guiGraphics, x, y, width * scale, height * scale);
+        if (hovered && !hoveredLastFrame) {
+            hoverStartMillis = now;
         }
-        int x = guiGraphics.guiWidth() - PANEL_WIDTH - 2 + slideOffset;
-        int y = guiGraphics.guiHeight() / 2 - panelHeight / 2;
+        hoveredLastFrame = hovered;
+        boolean marqueeActive = hovered
+                && expansion < 0.01F
+                && EclipseClientConfig.sidebarOverflow() == EclipseClientConfig.SidebarOverflow.MARQUEE
+                && !EclipseClientConfig.reducedFx();
+        long marqueeMillis = marqueeActive ? Math.max(0L, now - hoverStartMillis) : 0L;
 
-        drawNineSlice(guiGraphics, x, y, PANEL_WIDTH, panelHeight);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        EclipseUiTheme.drawPanel(guiGraphics, 0, 0, width, height);
 
-        int rowY = y + PADDING + 2;
-        for (Row row : rows) {
-            int textX = x + PADDING;
+        float normalAlpha = 1.0F - smoothstep(0.16F, 0.58F, expansion);
+        float expandedAlpha = smoothstep(0.52F, 0.92F, expansion);
+        if (normalAlpha > 0.01F) {
+            int originX = leftSide ? 0 : width - PANEL_WIDTH;
+            renderCollapsed(guiGraphics, font, originX, normalHeight, normalAlpha, now,
+                    marqueeMillis, marqueeActive, x, y, scale);
+        }
+        if (expandedAlpha > 0.01F) {
+            SidebarExpanded.render(guiGraphics, font, width, height, expandedAlpha, now,
+                    x, y, scale);
+        }
+        guiGraphics.pose().popPose();
+    }
+
+    private static void renderCollapsed(GuiGraphics guiGraphics, Font font, int originX,
+            int normalHeight, float alpha, long now, long marqueeMillis, boolean marqueeActive,
+            float panelScreenX, float panelScreenY, float scale) {
+        int rowY = PADDING + 2;
+        for (int i = 0; i < cachedRows.size(); i++) {
+            Row row = cachedRows.get(i);
+            int localX = originX + PADDING;
             if (row.icon() != null) {
                 RenderSystem.enableBlend();
-                guiGraphics.blit(row.icon(), textX, rowY - 2, 12, 12, 0.0F, 0.0F, 24, 24, 24, 24);
+                guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+                guiGraphics.blit(row.icon(), localX, rowY - 1, ICON_SIZE, ICON_SIZE,
+                        0.0F, 0.0F, 24, 24, 24, 24);
+                guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
                 RenderSystem.disableBlend();
-                textX += ICON_TEXT_INDENT;
-            } else if (row.ticked() != null) {
-                // Goal row: 7x7 tick box in place of an icon.
-                int boxY = rowY - 1;
-                guiGraphics.fill(textX + 1, boxY, textX + 8, boxY + 7, 0xA0140A24);
-                if (row.ticked()) {
-                    guiGraphics.fill(textX + 3, boxY + 2, textX + 6, boxY + 5, DONE_COLOR);
-                }
-                guiGraphics.fill(textX + 1, boxY, textX + 8, boxY + 1, 0xFF6E4FA8);
-                guiGraphics.fill(textX + 1, boxY + 6, textX + 8, boxY + 7, 0xFF6E4FA8);
-                textX += GOAL_TEXT_INDENT;
+                localX += ICON_TEXT_INDENT;
+            } else {
+                drawGoalBox(guiGraphics, localX, rowY, row, now, alpha);
+                localX += GOAL_TEXT_INDENT;
             }
-            int color = row.ticked() == null ? TEXT_COLOR : (row.ticked() ? DONE_COLOR : MUTED_COLOR);
-            int lineY = rowY;
-            for (String line : row.lines()) {
-                guiGraphics.drawString(font, line, textX, lineY, color);
-                lineY += WRAP_LINE_HEIGHT;
+
+            int maxWidth = originX + PANEL_WIDTH - PADDING - localX;
+            int color = row.goalDone() == null
+                    ? EclipseUiTheme.TEXT
+                    : (row.goalDone() ? EclipseUiTheme.GOOD : EclipseUiTheme.DIM);
+            color = MarqueeText.faded(color, alpha);
+            if (EclipseClientConfig.sidebarOverflow() == EclipseClientConfig.SidebarOverflow.ELLIPSIS) {
+                guiGraphics.drawString(font, EclipseUiTheme.ellipsize(font, row.text(), maxWidth),
+                        localX, rowY, color);
+            } else {
+                MarqueeText.render(guiGraphics, font, row.text(), localX, rowY, maxWidth,
+                        color, marqueeMillis, row.phaseSalt(), marqueeActive,
+                        screenFloor(panelScreenX + localX * scale),
+                        screenFloor(panelScreenY + (rowY - 1) * scale),
+                        screenCeil(panelScreenX + (localX + maxWidth) * scale),
+                        screenCeil(panelScreenY + (rowY + font.lineHeight + 1) * scale));
             }
-            rowY += ROW_HEIGHT + (row.lines().size() - 1) * WRAP_LINE_HEIGHT;
+            rowY += ROW_HEIGHT;
+            if (rowY > normalHeight - PADDING) {
+                break;
+            }
         }
     }
 
-    /** Builds the panel rows (stat lines + wrapped goal list); cached between content changes. */
-    private static List<Row> buildRows(Font font, int lives, int day, int altarLevel, int online,
-            List<String> goals, List<Boolean> done, int doneCount) {
-        int statTextWidth = PANEL_WIDTH - PADDING * 2 - ICON_TEXT_INDENT;
-        int goalTextWidth = PANEL_WIDTH - PADDING * 2 - GOAL_TEXT_INDENT;
+    private static void drawGoalBox(GuiGraphics guiGraphics, int x, int y, Row row,
+            long now, float alpha) {
+        int boxColor = MarqueeText.faded(EclipseUiTheme.HAIRLINE, alpha);
+        guiGraphics.fill(x + 1, y, x + 8, y + 7, boxColor);
+        guiGraphics.fill(x + 2, y + 1, x + 7, y + 6,
+                MarqueeText.faded(EclipseUiTheme.PANEL_RAISED, alpha));
+        if (!Boolean.TRUE.equals(row.goalDone())) {
+            return;
+        }
+        long started = GOAL_SWEEP_STARTED.getOrDefault(row.id(), 0L);
+        float sweep = started == 0L ? 1.0F
+                : Mth.clamp((now - started) / (float) TICK_SWEEP_MILLIS, 0.0F, 1.0F);
+        int fillWidth = Math.max(1, Math.round(5.0F * SidebarExpanded.easeOutCubic(sweep)));
+        guiGraphics.fill(x + 2, y + 1, x + 2 + fillWidth, y + 6,
+                MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+    }
+
+    private static List<Row> buildRows(Font font, long nowMillis) {
         List<Row> rows = new ArrayList<>();
-        rows.add(statRow(font, ICON_HEART, Component.literal("\u2764 " + lives), statTextWidth));
-        rows.add(statRow(font, ICON_DAY, Component.translatable("gui.eclipse.artifact.day", day), statTextWidth));
-        rows.add(statRow(font, ICON_ALTAR, Component.translatable("sidebar.eclipse.altar", altarLevel),
-                statTextWidth));
-        rows.add(statRow(font, ICON_PLAYERS, Component.translatable("sidebar.eclipse.online", online),
-                statTextWidth));
-        rows.add(statRow(font, ICON_GOAL, Component.translatable("sidebar.eclipse.goals", doneCount, goals.size()),
-                statTextWidth));
-        for (int i = 0; i < goals.size(); i++) {
-            boolean ticked = i < done.size() && Boolean.TRUE.equals(done.get(i));
-            rows.add(new Row(null, wrapGoal(font, goals.get(i), goalTextWidth), ticked));
+        String timer = SidebarExpanded.formatRemaining(SidebarExpanded.remainingMillis(nowMillis));
+        rows.add(new Row("day", ICON_DAY,
+                EclipseLang.trString("sidebar.eclipse.day_timer",
+                        Math.max(1, ClientStateCache.sidebarDay), timer), null, 1));
+        rows.add(new Row("hearts", ICON_HEART,
+                EclipseLang.trString("sidebar.eclipse.hearts",
+                        Math.max(0, ClientStateCache.lives)), null, 2));
+        rows.add(new Row("altar", ICON_ALTAR,
+                EclipseLang.trString("sidebar.eclipse.altar",
+                        Math.max(0, ClientStateCache.sidebarAltarLevel)), null, 3));
+        rows.add(new Row("mains", ICON_GOAL,
+                EclipseLang.trString("sidebar.eclipse.goals",
+                        safeDone(ClientStateCache.sidebarMainsDone, ClientStateCache.sidebarMainsTotal),
+                        Math.max(0, ClientStateCache.sidebarMainsTotal)), null, 4));
+
+        if (ClientStateCache.sidebarSidesTotal > 0 || ClientStateCache.sidebarPersonalsTotal > 0) {
+            rows.add(new Row("optional", ICON_GOAL,
+                    EclipseLang.trString("sidebar.eclipse.optional",
+                            safeDone(ClientStateCache.sidebarSidesDone, ClientStateCache.sidebarSidesTotal),
+                            Math.max(0, ClientStateCache.sidebarSidesTotal),
+                            safeDone(ClientStateCache.sidebarPersonalsDone,
+                                    ClientStateCache.sidebarPersonalsTotal),
+                            Math.max(0, ClientStateCache.sidebarPersonalsTotal)), null, 5));
         }
-        return rows;
+        if (!ClientStateCache.sidebarBuffIds.isEmpty()) {
+            rows.add(new Row("buffs", ICON_GOAL,
+                    EclipseLang.trString("sidebar.eclipse.buffs",
+                            Math.min(32, ClientStateCache.sidebarBuffIds.size())), null, 6));
+        }
+
+        if (ClientStateCache.questDay == ClientStateCache.sidebarDay) {
+            int index = 0;
+            for (S2CQuestStatePayload.QuestEntry goal : ClientStateCache.questEntries) {
+                if (goal == null || goal.kind() != 0 || index >= 8) {
+                    continue;
+                }
+                String text = EclipseLang.locale().startsWith("de") && !goal.textDe().isBlank()
+                        ? goal.textDe() : goal.textEn();
+                rows.add(new Row(goal.id(), null, text, goal.done(), 10 + index));
+                index++;
+            }
+        }
+        return List.copyOf(rows);
     }
 
-    /** Stat rows stay single-line: overflow is {@link #ellipsize}d, never bare hard-chopped. */
-    private static Row statRow(Font font, ResourceLocation icon, Component text, int maxWidth) {
-        return new Row(icon, List.of(ellipsize(font, text.getString(), maxWidth)), null);
+    private static void updateGoalSweeps(long now) {
+        for (Row row : cachedRows) {
+            if (row.goalDone() == null) {
+                continue;
+            }
+            boolean previous = LAST_GOAL_DONE.getOrDefault(row.id(), false);
+            if (row.goalDone() && !previous) {
+                GOAL_SWEEP_STARTED.put(row.id(), now);
+            }
+            LAST_GOAL_DONE.put(row.id(), row.goalDone());
+        }
+        GOAL_SWEEP_STARTED.entrySet().removeIf(entry -> now - entry.getValue() > TICK_SWEEP_MILLIS);
     }
 
-    /**
-     * Single-line clamp: text that overflows {@code maxWidth} is trimmed far enough to fit
-     * a trailing {@code \u2026} so the reader can tell something was cut.
-     */
-    private static String ellipsize(Font font, String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) {
-            return text;
-        }
-        String ellipsis = "\u2026";
-        return font.plainSubstrByWidth(text, Math.max(0, maxWidth - font.width(ellipsis))).stripTrailing()
-                + ellipsis;
+    /** Major-content hash: progress/tick counters are deliberately excluded (B11). */
+    private static int slideHash() {
+        List<String> questIds = ClientStateCache.questDay == ClientStateCache.sidebarDay
+                ? ClientStateCache.questEntries.stream()
+                        .filter(Objects::nonNull)
+                        .map(S2CQuestStatePayload.QuestEntry::id)
+                        .toList()
+                : List.of();
+        return Objects.hash(ClientStateCache.sidebarDay,
+                ClientStateCache.sidebarAltarLevel,
+                ClientStateCache.sidebarSkillLevel,
+                questIds,
+                ClientStateCache.sidebarBuffIds,
+                EclipseClientConfig.sidebarSide());
     }
 
-    /**
-     * Word-wraps a goal line onto at most two lines (the vanilla {@code Font#split}
-     * word-wrapper picks the break); when the remainder after line one still overflows,
-     * it is {@link #ellipsize}d so long goals end in {@code \u2026} instead of vanishing.
-     */
-    private static List<String> wrapGoal(Font font, String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) {
-            return List.of(text);
-        }
-        String first = font.getSplitter().splitLines(text, maxWidth, Style.EMPTY).get(0).getString();
-        String remainder = text.substring(Math.min(first.length(), text.length())).strip();
-        if (remainder.isEmpty()) {
-            return List.of(first);
-        }
-        return List.of(first, ellipsize(font, remainder, maxWidth));
+    private static int rowsHash(long nowMillis) {
+        return Objects.hash(
+                ClientStateCache.sidebarDay,
+                ClientStateCache.sidebarPaused,
+                nowMillis / 1_000L,
+                ClientStateCache.lives,
+                ClientStateCache.sidebarAltarLevel,
+                ClientStateCache.sidebarMainsDone,
+                ClientStateCache.sidebarMainsTotal,
+                ClientStateCache.sidebarSidesDone,
+                ClientStateCache.sidebarSidesTotal,
+                ClientStateCache.sidebarPersonalsDone,
+                ClientStateCache.sidebarPersonalsTotal,
+                ClientStateCache.sidebarBuffIds,
+                ClientStateCache.questDay,
+                ClientStateCache.questEntries,
+                EclipseLang.generation());
     }
 
-    /** Manual nine-slice of the 64x64 panel texture ({@value #SLICE}px corners). */
-    private static void drawNineSlice(GuiGraphics guiGraphics, int x, int y, int width, int height) {
-        int tex = 64;
-        int edge = tex - SLICE;
-        RenderSystem.enableBlend();
-        // Corners.
-        guiGraphics.blit(PANEL, x, y, SLICE, SLICE, 0, 0, SLICE, SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x + width - SLICE, y, SLICE, SLICE, edge, 0, SLICE, SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x, y + height - SLICE, SLICE, SLICE, 0, edge, SLICE, SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x + width - SLICE, y + height - SLICE, SLICE, SLICE, edge, edge, SLICE, SLICE, tex, tex);
-        // Edges (stretched).
-        guiGraphics.blit(PANEL, x + SLICE, y, width - 2 * SLICE, SLICE, SLICE, 0, tex - 2 * SLICE, SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x + SLICE, y + height - SLICE, width - 2 * SLICE, SLICE,
-                SLICE, edge, tex - 2 * SLICE, SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x, y + SLICE, SLICE, height - 2 * SLICE, 0, SLICE, SLICE, tex - 2 * SLICE, tex, tex);
-        guiGraphics.blit(PANEL, x + width - SLICE, y + SLICE, SLICE, height - 2 * SLICE,
-                edge, SLICE, SLICE, tex - 2 * SLICE, tex, tex);
-        // Center (stretched).
-        guiGraphics.blit(PANEL, x + SLICE, y + SLICE, width - 2 * SLICE, height - 2 * SLICE,
-                SLICE, SLICE, tex - 2 * SLICE, tex - 2 * SLICE, tex, tex);
-        RenderSystem.disableBlend();
+    private static int safeDone(int done, int total) {
+        return Mth.clamp(done, 0, Math.max(0, total));
+    }
+
+    private static boolean mouseInside(Minecraft minecraft, GuiGraphics guiGraphics,
+            float x, float y, float width, float height) {
+        double mouseX = minecraft.mouseHandler.xpos()
+                * guiGraphics.guiWidth() / minecraft.getWindow().getScreenWidth();
+        double mouseY = minecraft.mouseHandler.ypos()
+                * guiGraphics.guiHeight() / minecraft.getWindow().getScreenHeight();
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+    }
+
+    private static float smoothstep(float from, float to, float value) {
+        if (to <= from) {
+            return value >= to ? 1.0F : 0.0F;
+        }
+        float t = Mth.clamp((value - from) / (to - from), 0.0F, 1.0F);
+        return t * t * (3.0F - 2.0F * t);
+    }
+
+    private static int screenFloor(float value) {
+        return (int) Math.floor(value);
+    }
+
+    private static int screenCeil(float value) {
+        return (int) Math.ceil(value);
     }
 
     private static ResourceLocation texture(String name) {
-        return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/gui/sidebar/" + name + ".png");
+        return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID,
+                "textures/gui/sidebar/" + name + ".png");
     }
 
-    /** One panel row: an optional 12x12 icon OR a goal tick box, plus 1..2 text lines. */
-    private record Row(ResourceLocation icon, List<String> lines, Boolean ticked) {}
+    private record Row(String id, ResourceLocation icon, String text, Boolean goalDone,
+            int phaseSalt) {}
 }
