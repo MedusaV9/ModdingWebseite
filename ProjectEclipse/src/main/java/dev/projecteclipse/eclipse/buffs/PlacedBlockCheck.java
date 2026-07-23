@@ -18,12 +18,19 @@ public final class PlacedBlockCheck {
         if (!(level.getChunkAt(pos) instanceof LevelChunk chunk)) {
             return false;
         }
-        PlacedBlockData data = chunk.getData(EclipseAttachments.PLACED_BLOCKS);
+        PlacedBlockData data = chunk.getExistingDataOrNull(EclipseAttachments.PLACED_BLOCKS.get());
         if (data == null) {
             return false;
         }
+        // V2 uses the same level-relative index on both sides. Legacy absolute-section keys
+        // are converted in place on first read and the chunk is dirtied so the format marker
+        // survives restart; PlacedBlockTracker's compatibility entry point translates all
+        // subsequent writes from its historical y>>4 call shape.
+        if (data.ensureLevelIndexed(level, pos.getY())) {
+            chunk.setUnsaved(true);
+        }
         int sectionIndex = level.getSectionIndex(pos.getY());
-        long[] bits = data.sectionBits(sectionIndex, false);
+        long[] bits = data.sectionBitsByLevelIndex(sectionIndex, false);
         if (bits == null) {
             return false;
         }

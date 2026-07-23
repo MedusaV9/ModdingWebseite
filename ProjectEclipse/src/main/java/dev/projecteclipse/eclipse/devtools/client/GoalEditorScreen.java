@@ -3,7 +3,6 @@ package dev.projecteclipse.eclipse.devtools.client;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import javax.annotation.Nullable;
 
@@ -18,9 +17,12 @@ import dev.projecteclipse.eclipse.client.handbook.EclipseWidget;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.network.C2SConfigEditPayload;
+import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
+import dev.projecteclipse.eclipse.progression.goals.TriggerType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -32,12 +34,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * The W14 goal/unlock editor ({@code docs/ideas/05_systems.md} §3): a client screen opened by
  * {@code /eclipse goals edit} (via {@code S2COpenGoalEditorPayload} carrying the server's
- * current {@code days.json}). Left: a day-selector grid (7 per column). Right: the selected
- * day's goal lines (up to {@value #MAX_GOALS} vanilla {@link EditBox}es — the GoalTracker
- * bitmask cap), the unlock keys as one comma-separated field, and the legacy border-size
- * field. Save re-serializes ALL days and sends {@code C2SConfigEditPayload("days.json", …)} —
- * the server re-checks permission level 3 and re-validates before writing (see
- * {@code devtools.ConfigEditor}). ESC / Cancel discards.
+ * current config envelope). Left: a day-selector grid. Right: one selected goal with EN/DE
+ * text plus a real trigger type, target id and count. Save writes both {@code goals.json}
+ * and the localized legacy fallback strings in {@code days.json}; the server re-validates
+ * both before writing. ESC / Cancel discards.
  *
  * <p>Since P3-W4 each goal, title and subtitle carries English and German boxes; serialization
  * uses {@link Localized#toJsonElement()} ({@code {"en","de"}} objects, legacy string when DE
@@ -45,37 +45,88 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 @OnlyIn(Dist.CLIENT)
 public final class GoalEditorScreen extends Screen {
-    /** {@code GoalTracker} tracks completion in one byte per day — hard UI cap. */
-    private static final int MAX_GOALS = 8;
+    /** GoalConfig permits 24 mains+sides per day; only the legacy days.json mirror is capped at 8 mains. */
+    private static final int MAX_GOALS = 24;
+    private static final int MAX_LEGACY_GOALS = 8;
     private static final int GOAL_MAX_CHARS = 80;
+    private static final int ID_MAX_CHARS = 96;
     private static final int UNLOCKS_MAX_CHARS = 200;
     private static final int TEXT_COLOR = 0xE8E0F5;
     private static final int ACCENT_COLOR = 0xB98CFF;
     private static final int DIM_COLOR = 0x9A8FB8;
     private static final int PANEL_COLOR = 0xF0140C24;
 
-    /** Mutable editing model of one {@code days.json} entry. */
+    /** Mutable trigger-typed goal model; fields not shown in v2 are preserved on round-trip. */
+    private static final class GoalEntry {
+        String id;
+        GoalSpec.Kind kind;
+        GoalSpec.Scope scope;
+        GoalSpec.Trigger trigger;
+        GoalSpec.Reward reward;
+        Localized text;
+        int weight;
+        int minDay;
+        int maxDay;
+
+        static GoalEntry fromJson(JsonObject object) {
+            GoalSpec spec = GoalSpec.fromJson(object, GoalSpec.Kind.MAIN);
+            GoalEntry entry = new GoalEntry();
+            entry.id = spec.id();
+            entry.kind = spec.goalKind();
+            entry.scope = spec.scope();
+            entry.trigger = spec.trigger();
+            entry.reward = spec.reward();
+            entry.text = spec.text();
+            entry.weight = spec.weight();
+            entry.minDay = spec.minDay();
+            entry.maxDay = spec.maxDay();
+            return entry;
+        }
+
+        static GoalEntry manual(int day, int index, Localized text) {
+            GoalEntry entry = new GoalEntry();
+            entry.id = "goal_d" + day + "_" + (index + 1);
+            entry.kind = GoalSpec.Kind.MAIN;
+            entry.scope = GoalSpec.Scope.EACH_PLAYER;
+            entry.trigger = GoalSpec.Trigger.manual();
+            entry.reward = GoalSpec.Reward.NONE;
+            entry.text = text;
+            entry.weight = 1;
+            return entry;
+        }
+
+        JsonObject toJson() {
+            return new GoalSpec(id, kind, scope, trigger, reward, text, weight, minDay, maxDay).toJson();
+        }
+    }
+
+    /** Mutable editing model of one day shared by days.json and goals.json. */
     private static final class DayEntry {
         int day;
-        final List<Localized> goals = new ArrayList<>();
+        final List<GoalEntry> goals = new ArrayList<>();
         Localized title = Localized.of("");
         Localized subtitle = Localized.of("");
         String unlocks = "";
-        String borderSize = "1000.0";
     }
 
-    /** Paired EN/DE widgets for one goal line. */
-    private static final class GoalFieldPair {
+    /** Widgets for the selected goal. */
+    private static final class GoalFields {
         EditBox en;
         EditBox de;
+        EditBox id;
+        EditBox target;
+        EditBox count;
+        CycleButton<String> triggerType;
     }
 
     private final List<DayEntry> days = new ArrayList<>();
     private int selected;
+    private int selectedGoal;
     @Nullable
     private Component error;
 
-    private final List<GoalFieldPair> goalFields = new ArrayList<>();
+    @Nullable
+    private GoalFields goalFields;
     @Nullable
     private EditBox titleEnBox;
     @Nullable
@@ -86,8 +137,6 @@ public final class GoalEditorScreen extends Screen {
     private EditBox subtitleDeBox;
     @Nullable
     private EditBox unlocksBox;
-    @Nullable
-    private EditBox borderBox;
     private int panelX;
     private int panelY;
     private int panelW;
@@ -108,17 +157,42 @@ public final class GoalEditorScreen extends Screen {
         }
     }
 
-    /** Fills the model from the server's JSON; a parse failure yields one empty day + error line. */
+    /** Fills the model from the v2 envelope; legacy raw days arrays remain accepted. */
     private void parse(String daysJson) {
         try {
-            for (JsonElement element : JsonParser.parseString(daysJson).getAsJsonArray()) {
+            JsonElement parsed = JsonParser.parseString(daysJson);
+            JsonArray dayConfig;
+            JsonObject goalsByDay = new JsonObject();
+            if (parsed.isJsonArray()) {
+                dayConfig = parsed.getAsJsonArray();
+            } else {
+                JsonObject envelope = parsed.getAsJsonObject();
+                dayConfig = envelope.getAsJsonArray("daysConfig");
+                if (envelope.has("goalsConfig")) {
+                    for (JsonElement dayElement : envelope.getAsJsonObject("goalsConfig").getAsJsonArray("days")) {
+                        JsonObject goalDay = dayElement.getAsJsonObject();
+                        goalsByDay.add(Integer.toString(goalDay.get("day").getAsInt()),
+                                goalDay.getAsJsonArray("goals"));
+                    }
+                }
+            }
+            for (JsonElement element : dayConfig) {
                 JsonObject obj = element.getAsJsonObject();
                 DayEntry entry = new DayEntry();
                 entry.day = obj.get("day").getAsInt();
-                if (obj.has("goals")) {
+                JsonArray realGoals = goalsByDay.has(Integer.toString(entry.day))
+                        ? goalsByDay.getAsJsonArray(Integer.toString(entry.day)) : null;
+                if (realGoals != null) {
+                    for (JsonElement goal : realGoals) {
+                        if (entry.goals.size() < MAX_GOALS) {
+                            entry.goals.add(GoalEntry.fromJson(goal.getAsJsonObject()));
+                        }
+                    }
+                } else if (obj.has("goals")) {
                     for (JsonElement goal : obj.getAsJsonArray("goals")) {
                         if (entry.goals.size() < MAX_GOALS) {
-                            entry.goals.add(Localized.parse(goal));
+                            entry.goals.add(GoalEntry.manual(entry.day, entry.goals.size(),
+                                    Localized.parse(goal)));
                         }
                     }
                 }
@@ -133,9 +207,6 @@ public final class GoalEditorScreen extends Screen {
                     obj.getAsJsonArray("unlocks").forEach(key -> keys.add(key.getAsString()));
                     entry.unlocks = String.join(", ", keys);
                 }
-                if (obj.has("borderSize")) {
-                    entry.borderSize = String.format(Locale.ROOT, "%.1f", obj.get("borderSize").getAsDouble());
-                }
                 days.add(entry);
             }
         } catch (RuntimeException e) {
@@ -146,20 +217,21 @@ public final class GoalEditorScreen extends Screen {
             DayEntry fallback = new DayEntry();
             fallback.day = 1;
             days.add(fallback);
-            error = Component.literal("Received days.json did not parse — editing a blank day 1.");
+            error = Component.translatable("gui.eclipse.goaleditor.parse_failed");
         }
         selected = Mth.clamp(selected, 0, days.size() - 1);
+        selectedGoal = 0;
     }
 
     @Override
     protected void init() {
         clearWidgets();
-        goalFields.clear();
+        goalFields = null;
         titleEnBox = titleDeBox = subtitleEnBox = subtitleDeBox = null;
-        unlocksBox = borderBox = null;
+        unlocksBox = null;
 
-        panelW = Mth.clamp(this.width - 24, 340, 520);
-        panelH = Mth.clamp(this.height - 24, 240, 340);
+        panelW = Mth.clamp(this.width - 24, 420, 700);
+        panelH = Mth.clamp(this.height - 24, 260, 360);
         panelX = (this.width - panelW) / 2;
         panelY = (this.height - panelH) / 2;
 
@@ -182,7 +254,8 @@ public final class GoalEditorScreen extends Screen {
         int boxH = 14;
         int halfW = (rightW - 4) / 2;
 
-        titleEnBox = addLangBox(rightX, y, halfW, boxH, "gui.eclipse.goaleditor.title_en", entry.title.en());
+        titleEnBox = addLangBox(rightX, y, halfW, boxH,
+                "gui.eclipse.goaleditor.title_en", entry.title.en());
         titleDeBox = addLangBox(rightX + halfW + 4, y, halfW, boxH, "gui.eclipse.goaleditor.title_de",
                 entry.title.de() != null ? entry.title.de() : entry.title.en());
         y += boxH + 3;
@@ -192,41 +265,61 @@ public final class GoalEditorScreen extends Screen {
                 entry.subtitle.de() != null ? entry.subtitle.de() : entry.subtitle.en());
         y += boxH + 8;
 
-        for (int i = 0; i < entry.goals.size(); i++) {
-            Localized goal = entry.goals.get(i);
-            GoalFieldPair pair = new GoalFieldPair();
-            pair.en = addLangBox(rightX, y, halfW, boxH, "gui.eclipse.goaleditor.goal_en", goal.en());
-            pair.de = addLangBox(rightX + halfW + 4, y, halfW, boxH, "gui.eclipse.goaleditor.goal_de",
-                    goal.de() != null ? goal.de() : goal.en());
-            goalFields.add(pair);
-            y += boxH + 3;
-        }
-
-        int controlsY = y + 1;
+        selectedGoal = entry.goals.isEmpty() ? 0 : Mth.clamp(selectedGoal, 0, entry.goals.size() - 1);
+        int navigationY = y;
+        addRenderableWidget(Button.builder(Component.literal("◀"), button -> selectGoal(-1))
+                .bounds(rightX, navigationY, 24, boxH).build()).active = selectedGoal > 0;
+        addRenderableWidget(Button.builder(Component.literal("▶"), button -> selectGoal(1))
+                .bounds(rightX + 28, navigationY, 24, boxH).build())
+                .active = selectedGoal + 1 < entry.goals.size();
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.goaleditor.add"),
                         button -> addGoal())
-                .bounds(rightX, controlsY, 52, 14).build())
+                .bounds(rightX + rightW - 108, navigationY, 52, boxH).build())
                 .active = entry.goals.size() < MAX_GOALS;
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.goaleditor.remove"),
                         button -> removeGoal())
-                .bounds(rightX + 56, controlsY, 52, 14).build())
+                .bounds(rightX + rightW - 52, navigationY, 52, boxH).build())
                 .active = !entry.goals.isEmpty();
+        y += boxH + 4;
+
+        if (!entry.goals.isEmpty()) {
+            GoalEntry goal = entry.goals.get(selectedGoal);
+            GoalFields fields = new GoalFields();
+            fields.en = addLangBox(rightX, y, halfW, boxH,
+                    "gui.eclipse.goaleditor.goal_en", goal.text.en());
+            fields.de = addLangBox(rightX + halfW + 4, y, halfW, boxH,
+                    "gui.eclipse.goaleditor.goal_de",
+                    goal.text.de() != null ? goal.text.de() : goal.text.en());
+            y += boxH + 3;
+
+            fields.id = addTextBox(rightX, y, rightW, boxH,
+                    "gui.eclipse.goaleditor.goal_id", goal.id, ID_MAX_CHARS);
+            y += boxH + 3;
+
+            fields.triggerType = CycleButton.<String>builder(Component::literal)
+                    .withValues(TriggerType.ids())
+                    .withInitialValue(goal.trigger.type().id())
+                    .create(rightX, y, halfW, boxH,
+                            Component.translatable("gui.eclipse.goaleditor.trigger_type"));
+            addRenderableWidget(fields.triggerType);
+            fields.target = addTextBox(rightX + halfW + 4, y, halfW, boxH,
+                    "gui.eclipse.goaleditor.trigger_target", editableTarget(goal.trigger), ID_MAX_CHARS);
+            y += boxH + 3;
+
+            fields.count = addTextBox(rightX, y, 90, boxH,
+                    "gui.eclipse.goaleditor.trigger_count",
+                    Long.toString(goal.trigger.count()), 12);
+            goalFields = fields;
+            y += boxH + 6;
+        }
 
         int fieldX = rightX + 52;
-        int fieldW = rightW - 52;
-        int unlocksY = controlsY + 20;
-        unlocksBox = new EditBox(this.font, fieldX, unlocksY, fieldW, boxH,
+        int fieldW = Math.max(40, rightW - 52);
+        unlocksBox = new EditBox(this.font, fieldX, y, fieldW, boxH,
                 Component.translatable("gui.eclipse.goaleditor.unlocks"));
         unlocksBox.setMaxLength(UNLOCKS_MAX_CHARS);
         unlocksBox.setValue(entry.unlocks);
         addRenderableWidget(unlocksBox);
-
-        int borderY = unlocksY + boxH + 4;
-        borderBox = new EditBox(this.font, fieldX, borderY, 70, boxH,
-                Component.translatable("gui.eclipse.goaleditor.border"));
-        borderBox.setMaxLength(16);
-        borderBox.setValue(entry.borderSize);
-        addRenderableWidget(borderBox);
 
         int actionY = panelY + panelH - 24;
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.goaleditor.save"),
@@ -241,15 +334,41 @@ public final class GoalEditorScreen extends Screen {
         EditBox box = new EditBox(this.font, x, y, width, height, Component.translatable(labelKey));
         box.setMaxLength(GOAL_MAX_CHARS);
         box.setValue(value);
+        box.setHint(Component.translatable(labelKey));
+        addRenderableWidget(box);
+        return box;
+    }
+
+    private EditBox addTextBox(int x, int y, int width, int height, String labelKey,
+            String value, int maxLength) {
+        EditBox box = new EditBox(this.font, x, y, width, height, Component.translatable(labelKey));
+        box.setMaxLength(maxLength);
+        box.setValue(value);
+        box.setHint(Component.translatable(labelKey));
         addRenderableWidget(box);
         return box;
     }
 
     private void commitFields() {
         DayEntry entry = days.get(selected);
-        for (int i = 0; i < goalFields.size() && i < entry.goals.size(); i++) {
-            GoalFieldPair pair = goalFields.get(i);
-            entry.goals.set(i, new Localized(pair.en.getValue(), emptyToNull(pair.de.getValue())));
+        if (goalFields != null && selectedGoal >= 0 && selectedGoal < entry.goals.size()) {
+            GoalEntry goal = entry.goals.get(selectedGoal);
+            goal.text = new Localized(goalFields.en.getValue(), emptyToNull(goalFields.de.getValue()));
+            String id = goalFields.id.getValue().trim().replaceAll("\\s+", "_");
+            goal.id = id.isEmpty() ? "goal_d" + entry.day + "_" + (selectedGoal + 1) : id;
+            TriggerType type = TriggerType.byId(goalFields.triggerType.getValue());
+            long count = parseCount(goalFields.count.getValue(), goal.trigger.count());
+            String parameter = goalFields.target.getValue().trim();
+            GoalSpec.Trigger old = goal.trigger;
+            String target = switch (type) {
+                case STAT_THRESHOLD, MANUAL -> old.target();
+                default -> parameter;
+            };
+            String statId = type == TriggerType.STAT_THRESHOLD ? parameter : old.statId();
+            String beatId = type == TriggerType.MANUAL ? parameter : old.beatId();
+            int radius = type == TriggerType.VISIT_LOCATION ? Math.max(1, old.radius()) : old.radius();
+            goal.trigger = new GoalSpec.Trigger(type, target, count, old.naturalOnly(),
+                    old.x(), old.z(), radius, old.y(), statId, beatId, old.purpose());
         }
         if (titleEnBox != null && titleDeBox != null) {
             entry.title = new Localized(titleEnBox.getValue(), emptyToNull(titleDeBox.getValue()));
@@ -260,8 +379,21 @@ public final class GoalEditorScreen extends Screen {
         if (unlocksBox != null) {
             entry.unlocks = unlocksBox.getValue();
         }
-        if (borderBox != null) {
-            entry.borderSize = borderBox.getValue();
+    }
+
+    private static String editableTarget(GoalSpec.Trigger trigger) {
+        return switch (trigger.type()) {
+            case STAT_THRESHOLD -> trigger.statId();
+            case MANUAL -> trigger.beatId();
+            default -> trigger.target();
+        };
+    }
+
+    private static long parseCount(String raw, long fallback) {
+        try {
+            return Math.max(1L, Long.parseLong(raw.trim()));
+        } catch (NumberFormatException e) {
+            return Math.max(1L, fallback);
         }
     }
 
@@ -281,15 +413,31 @@ public final class GoalEditorScreen extends Screen {
         }
         commitFields();
         selected = index;
+        selectedGoal = 0;
         UiSounds.tab();
         rebuildWidgets();
+    }
+
+    private void selectGoal(int delta) {
+        DayEntry entry = days.get(selected);
+        if (entry.goals.isEmpty()) {
+            return;
+        }
+        int next = Mth.clamp(selectedGoal + delta, 0, entry.goals.size() - 1);
+        if (next != selectedGoal) {
+            commitFields();
+            selectedGoal = next;
+            UiSounds.tab();
+            rebuildWidgets();
+        }
     }
 
     private void addGoal() {
         commitFields();
         DayEntry entry = days.get(selected);
         if (entry.goals.size() < MAX_GOALS) {
-            entry.goals.add(Localized.of(""));
+            entry.goals.add(GoalEntry.manual(entry.day, entry.goals.size(), Localized.of("")));
+            selectedGoal = entry.goals.size() - 1;
             rebuildWidgets();
         }
     }
@@ -298,24 +446,30 @@ public final class GoalEditorScreen extends Screen {
         commitFields();
         DayEntry entry = days.get(selected);
         if (!entry.goals.isEmpty()) {
-            entry.goals.remove(entry.goals.size() - 1);
+            entry.goals.remove(Mth.clamp(selectedGoal, 0, entry.goals.size() - 1));
+            selectedGoal = Math.max(0, Math.min(selectedGoal, entry.goals.size() - 1));
             rebuildWidgets();
         }
     }
 
     private void save() {
         commitFields();
-        JsonArray array = new JsonArray(days.size());
+        JsonArray dayArray = new JsonArray(days.size());
+        JsonArray goalDays = new JsonArray(days.size());
         for (DayEntry entry : days) {
             JsonObject obj = new JsonObject();
             obj.addProperty("day", entry.day);
-            JsonArray goals = new JsonArray();
-            for (Localized goal : entry.goals) {
-                if (!goal.isBlank() && goals.size() < MAX_GOALS) {
-                    goals.add(goal.toJsonElement());
+            JsonArray legacyGoals = new JsonArray();
+            JsonArray realGoals = new JsonArray();
+            for (GoalEntry goal : entry.goals) {
+                if (!goal.text.isBlank()) {
+                    realGoals.add(goal.toJson());
+                    if (goal.kind == GoalSpec.Kind.MAIN && legacyGoals.size() < MAX_LEGACY_GOALS) {
+                        legacyGoals.add(goal.text.toJsonElement());
+                    }
                 }
             }
-            obj.add("goals", goals);
+            obj.add("goals", legacyGoals);
             if (!entry.title.isBlank()) {
                 obj.add("title", entry.title.toJsonElement());
             }
@@ -329,21 +483,26 @@ public final class GoalEditorScreen extends Screen {
                 }
             }
             obj.add("unlocks", unlocks);
-            double borderSize;
-            try {
-                borderSize = Double.parseDouble(entry.borderSize.trim());
-            } catch (NumberFormatException e) {
-                borderSize = 1000.0D;
-            }
-            obj.addProperty("borderSize", borderSize);
-            array.add(obj);
+            dayArray.add(obj);
+
+            JsonObject goalDay = new JsonObject();
+            goalDay.addProperty("day", entry.day);
+            goalDay.add("goals", realGoals);
+            goalDays.add(goalDay);
         }
-        String json = array.toString();
-        if (json.getBytes(StandardCharsets.UTF_8).length > C2SConfigEditPayload.MAX_JSON_BYTES) {
+        JsonObject goalsRoot = new JsonObject();
+        goalsRoot.add("days", goalDays);
+        String daysJson = dayArray.toString();
+        String goalsJson = goalsRoot.toString();
+        if (daysJson.getBytes(StandardCharsets.UTF_8).length > C2SConfigEditPayload.MAX_JSON_BYTES
+                || goalsJson.getBytes(StandardCharsets.UTF_8).length
+                        > C2SConfigEditPayload.MAX_JSON_BYTES) {
             error = Component.translatable("gui.eclipse.goaleditor.too_large");
             return;
         }
-        PacketDistributor.sendToServer(new C2SConfigEditPayload("days.json", json));
+        // Same connection preserves packet order: real trigger config first, localized fallback second.
+        PacketDistributor.sendToServer(new C2SConfigEditPayload("goals.json", goalsJson));
+        PacketDistributor.sendToServer(new C2SConfigEditPayload("days.json", daysJson));
         onClose();
     }
 
@@ -372,9 +531,11 @@ public final class GoalEditorScreen extends Screen {
             guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.unlocks"),
                     rightX, unlocksBox.getY() + 3, DIM_COLOR);
         }
-        if (borderBox != null) {
-            guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.border"),
-                    rightX, borderBox.getY() + 3, DIM_COLOR);
+        DayEntry entry = days.get(selected);
+        if (!entry.goals.isEmpty() && goalFields != null) {
+            guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.goal_index",
+                    selectedGoal + 1, entry.goals.size(), entry.goals.get(selectedGoal).kind.id()),
+                    rightX + 58, goalFields.en.getY() - 18, DIM_COLOR);
         }
         if (error != null) {
             guiGraphics.drawString(this.font, error, panelX + 10, panelY + panelH - 38, 0xFF6B6B);

@@ -16,6 +16,7 @@ import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.network.C2SConfigEditPayload;
@@ -23,6 +24,9 @@ import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.network.S2CMilestonesPayload;
 import dev.projecteclipse.eclipse.network.S2COpenGoalEditorPayload;
+import dev.projecteclipse.eclipse.progression.goals.GoalConfig;
+import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
+import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,15 +41,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Trust boundary</b>: the payload is untrusted client input. {@link #handleEdit}
  * requires {@code hasPermissions(3)} (same level as the {@code /eclipse} tree), allowlists
- * the file name ({@code days.json} / {@code milestones.json}), rejects &gt;
+ * the file name ({@code days.json}, {@code milestones.json}, {@code goals.json} or
+ * {@code quests.json}), rejects &gt;
  * {@value C2SConfigEditPayload#MAX_JSON_BYTES}-byte payloads, and re-validates + NORMALIZES
  * the JSON against the {@code EclipseConfig} schema (day/goals bounds, ≤ 8 goals per day —
  * the {@code GoalTracker} bitmask limit — unique days) so a malformed edit can never leave
- * a {@code days.json} on disk that {@code EclipseConfig.reload} would refuse. The editor GUI
- * does not edit the hand-written {@code title}/{@code subtitle} announcement lines, so
- * normalization preserves the CURRENT config's lines whenever the payload omits them (a
- * save must never strip them); the deprecated {@code borderSize} is neither sent nor
- * written, matching {@code EclipseConfig.daysToJson}. On success: write,
+ * a {@code days.json} on disk that {@code EclipseConfig.reload} would refuse. Normalization
+ * preserves the CURRENT config's {@code title}/{@code subtitle} lines whenever a payload
+ * omits them (a partial edit must never strip them); the deprecated {@code borderSize} is
+ * neither sent nor written, matching {@code EclipseConfig.daysToJson}. On success: write,
  * {@code EclipseConfig.reload()}, re-broadcast day state + milestones + per-player goal
  * progress (the same sync set as {@code /eclipse reload}).</p>
  */
@@ -59,20 +63,24 @@ public final class ConfigEditor {
 
     // --- open (server -> client) ---
 
-    /** Sends the current day plans (as canonical {@code days.json} JSON) to open the editor. */
+    /**
+     * Sends a v2 envelope containing canonical {@code days.json} plus the trigger-typed
+     * {@code goals.json}. Keeping the existing payload shape avoids a second network registration.
+     */
     public static void openFor(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new S2COpenGoalEditorPayload(currentDaysJson()));
         EclipseMod.LOGGER.info("ConfigEditor: goal editor opened for {}", player.getScoreboardName());
     }
 
-    /** The in-memory day plans re-serialized in the exact {@code days.json} shape. */
+    /** The in-memory day plans and resolved quest specs serialized for the v2 editor. */
     private static String currentDaysJson() {
-        JsonArray array = new JsonArray();
+        JsonArray dayArray = new JsonArray();
+        JsonArray goalDays = new JsonArray();
         for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
             JsonObject obj = new JsonObject();
             obj.addProperty("day", plan.day());
             JsonArray goals = new JsonArray();
-            plan.goals().forEach(goals::add);
+            plan.localizedGoals().stream().map(Localized::toJsonElement).forEach(goals::add);
             obj.add("goals", goals);
             JsonArray unlocks = new JsonArray();
             plan.unlocks().forEach(unlocks::add);
@@ -80,15 +88,30 @@ public final class ConfigEditor {
             // title/subtitle mirror EclipseConfig.daysToJson (written when non-empty) so a
             // round-trip never loses the hand-written announcement lines; the deprecated
             // borderSize is deliberately NOT written (daysToJson omits it too).
-            if (!plan.title().isEmpty()) {
-                obj.addProperty("title", plan.title());
+            if (!plan.localizedTitle().isBlank()) {
+                obj.add("title", plan.localizedTitle().toJsonElement());
             }
-            if (!plan.subtitle().isEmpty()) {
-                obj.addProperty("subtitle", plan.subtitle());
+            if (!plan.localizedSubtitle().isBlank()) {
+                obj.add("subtitle", plan.localizedSubtitle().toJsonElement());
             }
-            array.add(obj);
+            dayArray.add(obj);
+
+            JsonObject goalDay = new JsonObject();
+            goalDay.addProperty("day", plan.day());
+            JsonArray specs = new JsonArray();
+            for (GoalSpec spec : GoalConfig.goalsForDay(plan.day())) {
+                specs.add(spec.toJson());
+            }
+            goalDay.add("goals", specs);
+            goalDays.add(goalDay);
         }
-        return GSON.toJson(array);
+        JsonObject goalsConfig = new JsonObject();
+        goalsConfig.add("days", goalDays);
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("version", 2);
+        envelope.add("daysConfig", dayArray);
+        envelope.add("goalsConfig", goalsConfig);
+        return GSON.toJson(envelope);
     }
 
     // --- edit (client -> server) ---
@@ -110,8 +133,11 @@ public final class ConfigEditor {
             normalized = switch (payload.fileName()) {
                 case "days.json" -> normalizeDays(JsonParser.parseString(payload.json()));
                 case "milestones.json" -> normalizeMilestones(JsonParser.parseString(payload.json()));
+                case "goals.json", "quests.json" ->
+                        GoalConfig.validateAndNormalize(JsonParser.parseString(payload.json()));
                 default -> throw new IllegalArgumentException(
-                        "file '" + payload.fileName() + "' is not editable (days.json|milestones.json)");
+                        "file '" + payload.fileName()
+                                + "' is not editable (days.json|milestones.json|goals.json|quests.json)");
             };
         } catch (RuntimeException e) {
             fail(player, payload.fileName(), e.getMessage());
@@ -129,6 +155,7 @@ public final class ConfigEditor {
         }
 
         EclipseConfig.reload();
+        QuestApi.resyncAll(player.server);
         broadcastConfigState(player.server);
         EclipseMod.LOGGER.info("ConfigEditor: {} wrote {} ({} bytes) — config reloaded and re-synced",
                 player.getScoreboardName(), file, payload.json().length());
@@ -158,8 +185,8 @@ public final class ConfigEditor {
     /**
      * Validates a {@code days.json} candidate and returns a NORMALIZED array (sorted by day)
      * that {@code EclipseConfig.daysFromJson} is guaranteed to load. Payloads without
-     * {@code title}/{@code subtitle} (the goal-editor GUI never round-trips them) inherit
-     * the CURRENT config's lines for that day, so a goal edit can never strip the
+     * {@code title}/{@code subtitle} inherit the CURRENT config's lines for that day, so a
+     * partial edit can never strip the
      * hand-written announcement lines. The deprecated {@code borderSize} is dropped
      * (never written), matching {@code EclipseConfig.daysToJson}.
      *
@@ -184,24 +211,28 @@ public final class ConfigEditor {
             if (day < 1 || !seenDays.add(day)) {
                 throw new IllegalArgumentException("day " + day + " is " + (day < 1 ? "< 1" : "duplicated"));
             }
-            JsonArray goals = requireStringArray(obj, "goals", true);
+            JsonArray goals = requireLocalizedArray(obj, "goals", true);
             if (goals.size() > MAX_GOALS_PER_DAY) {
                 throw new IllegalArgumentException("day " + day + " has " + goals.size()
                         + " goals (max " + MAX_GOALS_PER_DAY + " — GoalTracker bitmask)");
             }
             JsonArray unlocks = obj.has("unlocks") ? requireStringArray(obj, "unlocks", true) : new JsonArray();
-            String title = obj.has("title") ? requireString(obj, "title") : fallbackTitle(day, true);
-            String subtitle = obj.has("subtitle") ? requireString(obj, "subtitle") : fallbackTitle(day, false);
+            Localized title = obj.has("title")
+                    ? requireLocalized(obj.get("title"), "title")
+                    : fallbackTitle(day, true);
+            Localized subtitle = obj.has("subtitle")
+                    ? requireLocalized(obj.get("subtitle"), "subtitle")
+                    : fallbackTitle(day, false);
 
             JsonObject normalized = new JsonObject();
             normalized.addProperty("day", day);
             normalized.add("goals", goals);
             normalized.add("unlocks", unlocks);
-            if (!title.isEmpty()) {
-                normalized.addProperty("title", title);
+            if (!title.isBlank()) {
+                normalized.add("title", title.toJsonElement());
             }
-            if (!subtitle.isEmpty()) {
-                normalized.addProperty("subtitle", subtitle);
+            if (!subtitle.isBlank()) {
+                normalized.add("subtitle", subtitle.toJsonElement());
             }
             out.add(normalized);
         }
@@ -260,13 +291,13 @@ public final class ConfigEditor {
      * {@code EclipseConfig.day} is not used directly because it falls back to a neighbor
      * plan for unmatched days, which would copy another day's announcement lines.
      */
-    private static String fallbackTitle(int day, boolean title) {
+    private static Localized fallbackTitle(int day, boolean title) {
         for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
             if (plan.day() == day) {
-                return title ? plan.title() : plan.subtitle();
+                return title ? plan.localizedTitle() : plan.localizedSubtitle();
             }
         }
-        return "";
+        return Localized.of("");
     }
 
     private static int requireInt(JsonObject obj, String key) {
@@ -281,6 +312,51 @@ public final class ConfigEditor {
             throw new IllegalArgumentException("missing/non-string '" + key + "'");
         }
         return obj.get(key).getAsString();
+    }
+
+    /**
+     * Accepts both the legacy string and v2 {@code {"en","de"}} shapes. German is optional
+     * and falls back to English; other field types are rejected before anything reaches disk.
+     */
+    private static Localized requireLocalized(JsonElement element, String label) {
+        if (element == null || element.isJsonNull()) {
+            return Localized.of("");
+        }
+        if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+            return Localized.of(element.getAsString().trim());
+        }
+        if (!element.isJsonObject()) {
+            throw new IllegalArgumentException("'" + label + "' must be a string or {en,de} object");
+        }
+        JsonObject object = element.getAsJsonObject();
+        if (!object.has("en") || !object.get("en").isJsonPrimitive()
+                || !object.getAsJsonPrimitive("en").isString()) {
+            throw new IllegalArgumentException("'" + label + ".en' must be a string");
+        }
+        if (object.has("de") && (!object.get("de").isJsonPrimitive()
+                || !object.getAsJsonPrimitive("de").isString())) {
+            throw new IllegalArgumentException("'" + label + ".de' must be a string");
+        }
+        String english = object.get("en").getAsString().trim();
+        String german = object.has("de") ? object.get("de").getAsString().trim() : null;
+        return new Localized(english, german);
+    }
+
+    /** Requires an array of Localized string/object values. */
+    private static JsonArray requireLocalizedArray(JsonObject obj, String key, boolean stripBlank) {
+        if (!obj.has(key) || !obj.get(key).isJsonArray()) {
+            throw new IllegalArgumentException("missing/non-array '" + key + "'");
+        }
+        JsonArray result = new JsonArray();
+        int index = 0;
+        for (JsonElement element : obj.getAsJsonArray(key)) {
+            Localized value = requireLocalized(element, key + "[" + index + "]");
+            if (!stripBlank || !value.isBlank()) {
+                result.add(value.toJsonElement());
+            }
+            index++;
+        }
+        return result;
     }
 
     /** Requires an array of strings; {@code stripBlank} drops empty/whitespace-only lines. */

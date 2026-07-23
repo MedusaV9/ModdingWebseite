@@ -10,9 +10,12 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Client → server: a config-file edit from the W14 goal editor GUI. UNTRUSTED input —
  * {@code devtools.ConfigEditor.handleEdit} requires {@code hasPermissions(3)}, allowlists the
- * file name ({@code days.json} / {@code milestones.json}), rejects payloads over
+ * file name ({@code days.json}, {@code milestones.json}, {@code goals.json} or
+ * {@code quests.json}), rejects payloads over
  * {@value #MAX_JSON_BYTES} bytes and re-validates + normalizes the JSON against the
- * {@code EclipseConfig} schema before anything touches disk.
+ * {@code EclipseConfig}/{@code GoalConfig} schemas before anything touches disk. Goal editor
+ * v2 sends one ordered payload for {@code goals.json} and one for the localized
+ * {@code days.json} fallback; the wire shape itself remains stable.
  */
 public record C2SConfigEditPayload(String fileName, String json) implements CustomPacketPayload {
     /** Hard size limit (bytes of UTF-8 JSON) enforced on both sides. */
