@@ -12,6 +12,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.C2SSkillNodeBuyPayload;
 import dev.projecteclipse.eclipse.network.S2CSkillStatePayload;
 import dev.projecteclipse.eclipse.network.S2CSkillTreePayload;
+import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -19,9 +20,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -121,18 +120,20 @@ public final class SkillService {
             });
             EclipseSignals.onQuestCompleted((player, spec, scope) -> {
                 SkillConfig.Data cfg = SkillConfig.get();
-                float bonus = switch (spec.kind()) {
+                float xp = spec instanceof GoalSpec goal ? goal.reward().skillXp() : 0.0F;
+                xp += switch (spec.kind()) {
                     case 0 -> cfg.questMain();
                     case 1 -> cfg.questSide();
                     default -> cfg.questPersonal();
                 };
-                if (bonus > 0.0F) {
-                    // Per-spec reward.skillXp is granted by P4-B2's QuestEngine through
-                    // SkillsApi; this is the optional flat bonus on top (0 = disabled).
-                    addXp(player, SOURCE_QUEST, bonus);
+                if (xp > 0.0F) {
+                    addXp(player, SOURCE_QUEST, xp);
                 }
             });
-            EclipseMod.LOGGER.info("SkillService registered {} signal listeners", 9);
+            EclipseSignals.onTrade(player -> addXp(player, SOURCE_TRADE, SkillConfig.get().trade()));
+            EclipseSignals.onBreed((player, childOrParent) ->
+                    addXp(player, SOURCE_BREED, SkillConfig.get().breed()));
+            EclipseMod.LOGGER.info("SkillService registered {} signal listeners", 11);
         }
     }
 
@@ -157,27 +158,6 @@ public final class SkillService {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sendTree(player);
             syncTo(player);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Low-frequency vanilla events without an EclipseSignals lane (trade/breed).
-    // Analytics (B5) and goals (B2) own their own subscribers for counters; XP is
-    // granted here so the earn table's trade/breed values are actually earnable.
-    // Migrate to signals if A1 adds lanes in a later wave (wiring note).
-    // ------------------------------------------------------------------
-
-    @SubscribeEvent
-    static void onTrade(TradeWithVillagerEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            addXp(player, SOURCE_TRADE, SkillConfig.get().trade());
-        }
-    }
-
-    @SubscribeEvent
-    static void onBreed(BabyEntitySpawnEvent event) {
-        if (event.getCausedByPlayer() instanceof ServerPlayer player) {
-            addXp(player, SOURCE_BREED, SkillConfig.get().breed());
         }
     }
 

@@ -49,6 +49,10 @@ public final class QuestState extends SavedData {
         final Set<String> announced = new LinkedHashSet<>();
         final Set<String> beatsFired = new LinkedHashSet<>();
         final Map<UUID, PlayerDay> players = new HashMap<>();
+        boolean nightOpen;
+        long nightId = Long.MIN_VALUE;
+        final Set<UUID> nightEligible = new LinkedHashSet<>();
+        final Set<UUID> nightDamaged = new LinkedHashSet<>();
     }
 
     private final Map<Integer, DayData> days = new HashMap<>();
@@ -261,6 +265,73 @@ public final class QuestState extends SavedData {
         return data == null ? Set.of() : Collections.unmodifiableSet(data.players.keySet());
     }
 
+    // --- survive_night_no_damage window ---
+
+    /**
+     * Opens a Minecraft-night window. Re-entering the same persisted night after a restart
+     * is a no-op, so its damage flags cannot be reset by process lifecycle.
+     */
+    public void beginNight(int day, long nightId, java.util.Collection<UUID> onlineAtDusk) {
+        DayData data = day(day);
+        if (data.nightOpen && data.nightId == nightId) {
+            return;
+        }
+        data.nightOpen = true;
+        data.nightId = nightId;
+        data.nightEligible.clear();
+        data.nightEligible.addAll(onlineAtDusk);
+        data.nightDamaged.clear();
+        setDirty();
+    }
+
+    public boolean isNightOpen(int day) {
+        DayData data = days.get(day);
+        return data != null && data.nightOpen;
+    }
+
+    public void markNightDamaged(int day, UUID uuid) {
+        DayData data = days.get(day);
+        if (data != null && data.nightOpen && data.nightEligible.contains(uuid)
+                && data.nightDamaged.add(uuid)) {
+            setDirty();
+        }
+    }
+
+    public void forfeitNight(int day, UUID uuid) {
+        DayData data = days.get(day);
+        if (data != null && data.nightOpen && data.nightEligible.remove(uuid)) {
+            setDirty();
+        }
+    }
+
+    public boolean isNightEligible(int day, UUID uuid) {
+        DayData data = days.get(day);
+        return data != null && data.nightOpen && data.nightEligible.contains(uuid)
+                && !data.nightDamaged.contains(uuid);
+    }
+
+    public Set<UUID> nightSurvivors(int day) {
+        DayData data = days.get(day);
+        if (data == null || !data.nightOpen) {
+            return Set.of();
+        }
+        Set<UUID> survivors = new LinkedHashSet<>(data.nightEligible);
+        survivors.removeAll(data.nightDamaged);
+        return survivors;
+    }
+
+    public void endNight(int day) {
+        DayData data = days.get(day);
+        if (data == null || !data.nightOpen) {
+            return;
+        }
+        data.nightOpen = false;
+        data.nightId = Long.MIN_VALUE;
+        data.nightEligible.clear();
+        data.nightDamaged.clear();
+        setDirty();
+    }
+
     // --- internal ---
 
     private DayData day(int day) {
@@ -291,6 +362,11 @@ public final class QuestState extends SavedData {
             readStrings(dayTag.getList("teamDone", Tag.TAG_STRING), data.teamDone);
             readStrings(dayTag.getList("announced", Tag.TAG_STRING), data.announced);
             readStrings(dayTag.getList("beats", Tag.TAG_STRING), data.beatsFired);
+            data.nightOpen = dayTag.getBoolean("nightOpen");
+            data.nightId = dayTag.contains("nightId", Tag.TAG_LONG)
+                    ? dayTag.getLong("nightId") : Long.MIN_VALUE;
+            readUuids(dayTag.getList("nightEligible", Tag.TAG_STRING), data.nightEligible);
+            readUuids(dayTag.getList("nightDamaged", Tag.TAG_STRING), data.nightDamaged);
             ListTag playersTag = dayTag.getList("players", Tag.TAG_COMPOUND);
             for (int p = 0; p < playersTag.size(); p++) {
                 CompoundTag playerTag = playersTag.getCompound(p);
@@ -349,6 +425,12 @@ public final class QuestState extends SavedData {
             dayTag.put("teamDone", writeStrings(data.teamDone));
             dayTag.put("announced", writeStrings(data.announced));
             dayTag.put("beats", writeStrings(data.beatsFired));
+            if (data.nightOpen) {
+                dayTag.putBoolean("nightOpen", true);
+                dayTag.putLong("nightId", data.nightId);
+                dayTag.put("nightEligible", writeUuids(data.nightEligible));
+                dayTag.put("nightDamaged", writeUuids(data.nightDamaged));
+            }
             ListTag playersTag = new ListTag();
             for (Map.Entry<UUID, PlayerDay> playerEntry : data.players.entrySet()) {
                 PlayerDay player = playerEntry.getValue();
@@ -396,6 +478,24 @@ public final class QuestState extends SavedData {
         ListTag list = new ListTag();
         for (String value : values) {
             list.add(StringTag.valueOf(value));
+        }
+        return list;
+    }
+
+    private static void readUuids(ListTag list, java.util.Collection<UUID> into) {
+        for (int i = 0; i < list.size(); i++) {
+            try {
+                into.add(UUID.fromString(list.getString(i)));
+            } catch (IllegalArgumentException ignored) {
+                // Corrupt UUID entries are isolated to this night's eligibility state.
+            }
+        }
+    }
+
+    private static ListTag writeUuids(java.util.Collection<UUID> values) {
+        ListTag list = new ListTag();
+        for (UUID value : values) {
+            list.add(StringTag.valueOf(value.toString()));
         }
         return list;
     }

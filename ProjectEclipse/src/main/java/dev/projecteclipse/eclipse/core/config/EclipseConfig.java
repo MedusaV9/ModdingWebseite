@@ -67,8 +67,48 @@ public final class EclipseConfig {
      * of the jar. {@code borderSize} is deprecated since W7 (the soft border follows
      * {@code stages.json}) — parsed for backward compat, never written, {@code 0} when absent.
      */
-    public record DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
-            String title, String subtitle) {}
+    public record DayPlan(int day, List<Localized> localizedGoals, List<String> unlocks,
+            double borderSize, Localized localizedTitle, Localized localizedSubtitle) {
+        public DayPlan {
+            localizedGoals = List.copyOf(localizedGoals);
+            unlocks = List.copyOf(unlocks);
+            localizedTitle = localizedTitle == null ? Localized.of("") : localizedTitle;
+            localizedSubtitle = localizedSubtitle == null ? Localized.of("") : localizedSubtitle;
+        }
+
+        /** Backward-compatible constructor for the built-in English-only defaults. */
+        public DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
+                String title, String subtitle) {
+            this(day, localize(goals), unlocks, borderSize, Localized.of(title), Localized.of(subtitle));
+        }
+
+        /** Legacy English view used by old command/editor seams. */
+        public List<String> goals() {
+            List<String> english = new ArrayList<>(localizedGoals.size());
+            for (Localized goal : localizedGoals) {
+                english.add(goal.en());
+            }
+            return List.copyOf(english);
+        }
+
+        /** Legacy English view used by old timeline/editor seams. */
+        public String title() {
+            return localizedTitle.en();
+        }
+
+        /** Legacy English view used by old timeline/editor seams. */
+        public String subtitle() {
+            return localizedSubtitle.en();
+        }
+
+        private static List<Localized> localize(List<String> strings) {
+            List<Localized> localized = new ArrayList<>(strings.size());
+            for (String string : strings) {
+                localized.add(Localized.of(string));
+            }
+            return List.copyOf(localized);
+        }
+    }
 
     /** A single item cost entry, e.g. {@code minecraft:diamond} x 8. */
     public record ItemCost(String item, int count) {}
@@ -446,14 +486,18 @@ public final class EclipseConfig {
         for (DayPlan plan : plans) {
             JsonObject obj = new JsonObject();
             obj.addProperty("day", plan.day());
-            obj.add("goals", stringArray(plan.goals()));
+            JsonArray goals = new JsonArray(plan.localizedGoals().size());
+            for (Localized goal : plan.localizedGoals()) {
+                goals.add(goal.toJsonElement());
+            }
+            obj.add("goals", goals);
             obj.add("unlocks", stringArray(plan.unlocks()));
             // The deprecated borderSize is deliberately NOT written (still parsed, see DayPlan).
-            if (!plan.title().isEmpty()) {
-                obj.addProperty("title", plan.title());
+            if (!plan.localizedTitle().isBlank()) {
+                obj.add("title", plan.localizedTitle().toJsonElement());
             }
-            if (!plan.subtitle().isEmpty()) {
-                obj.addProperty("subtitle", plan.subtitle());
+            if (!plan.localizedSubtitle().isBlank()) {
+                obj.add("subtitle", plan.localizedSubtitle().toJsonElement());
             }
             array.add(obj);
         }
@@ -466,12 +510,12 @@ public final class EclipseConfig {
             JsonObject obj = element.getAsJsonObject();
             plans.add(new DayPlan(
                     obj.get("day").getAsInt(),
-                    stringList(obj.getAsJsonArray("goals")),
+                    localizedList(obj.getAsJsonArray("goals")),
                     stringList(obj.getAsJsonArray("unlocks")),
                     // Legacy field: pre-W16 files (and ConfigEditor normalization) still carry it.
                     obj.has("borderSize") ? obj.get("borderSize").getAsDouble() : 0.0D,
-                    obj.has("title") ? obj.get("title").getAsString() : "",
-                    obj.has("subtitle") ? obj.get("subtitle").getAsString() : ""));
+                    obj.has("title") ? Localized.fromJson(obj.get("title")) : Localized.of(""),
+                    obj.has("subtitle") ? Localized.fromJson(obj.get("subtitle")) : Localized.of("")));
         }
         if (plans.isEmpty()) {
             throw new IllegalStateException("days.json contains no day entries");
@@ -689,6 +733,15 @@ public final class EclipseConfig {
         }
         List<String> result = new ArrayList<>(array.size());
         array.forEach(element -> result.add(element.getAsString()));
+        return List.copyOf(result);
+    }
+
+    private static List<Localized> localizedList(JsonArray array) {
+        if (array == null) {
+            return List.of();
+        }
+        List<Localized> result = new ArrayList<>(array.size());
+        array.forEach(element -> result.add(Localized.fromJson(element)));
         return List.copyOf(result);
     }
 }

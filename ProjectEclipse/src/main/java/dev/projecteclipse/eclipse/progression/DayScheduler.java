@@ -125,7 +125,10 @@ public final class DayScheduler {
                     + "general.json borderOffset). Use /eclipse border ring set for manual overrides.");
         }
 
-        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(newDay, state.getAltarLevel(), plan.goals()));
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(online,
+                    S2CDayStatePayload.currentFor(online, newDay, state.getAltarLevel()));
+        }
         if (changed && !quiet) {
             for (ServerPlayer online : server.getPlayerList().getPlayers()) {
                 online.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.MASTER, 1.0F, 1.0F);

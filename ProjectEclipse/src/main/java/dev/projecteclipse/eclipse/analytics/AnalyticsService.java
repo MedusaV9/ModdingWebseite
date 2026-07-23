@@ -87,6 +87,8 @@ public final class AnalyticsService {
             EclipseSignals.onAltarDeposit(AnalyticsService::handleAltarDeposit);
             EclipseSignals.onQuestCompleted((player, spec, scope) -> handleQuestCompleted(player, spec.kind()));
             EclipseSignals.onDayRollover(AnalyticsService::handleDayRollover);
+            EclipseSignals.onTrade(AnalyticsService::handleTrade);
+            EclipseSignals.onBreed(AnalyticsService::handleBreed);
         }
         EclipseMod.LOGGER.info("Eclipse analytics active (day {}, {} retained days)",
                 currentDay(event.getServer()), AnalyticsState.get(event.getServer()).knownDays().size());
@@ -283,17 +285,30 @@ public final class AnalyticsService {
 
     @SubscribeEvent
     public static void onTradeWithVillager(TradeWithVillagerEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && isTracked(player)) {
-            AnalyticsState.get(player.server).add(currentDay(player.server), player.getUUID(),
-                    AnalyticsKeys.TRADE_TOTAL, 1L);
+        if (event.getEntity() instanceof ServerPlayer player) {
+            EclipseSignals.fireTrade(player);
         }
     }
 
     @SubscribeEvent(priority = EventPriority.LOW)
     public static void onBabySpawn(BabyEntitySpawnEvent event) {
-        // §2.2 assigns this event to the goal engine for its trigger; analytics only COUNTS
-        // here (no signal fan-out, so the single-fire discipline stays with B2's detector).
-        if (event.getCausedByPlayer() instanceof ServerPlayer player && isTracked(player)) {
+        if (event.getCausedByPlayer() instanceof ServerPlayer player) {
+            LivingEntity subject = event.getChild() != null ? event.getChild() : event.getParentA();
+            EclipseSignals.fireBreed(player, subject);
+        }
+    }
+
+    /** Shared trade-lane consumer; creative/spectator/fake-player filtering is analytics-only. */
+    public static void handleTrade(ServerPlayer player) {
+        if (isTracked(player)) {
+            AnalyticsState.get(player.server).add(currentDay(player.server), player.getUUID(),
+                    AnalyticsKeys.TRADE_TOTAL, 1L);
+        }
+    }
+
+    /** Shared breed-lane consumer; the child is carried for quest target filtering. */
+    public static void handleBreed(ServerPlayer player, LivingEntity childOrParent) {
+        if (isTracked(player)) {
             AnalyticsState.get(player.server).add(currentDay(player.server), player.getUUID(),
                     AnalyticsKeys.BREED_TOTAL, 1L);
         }

@@ -6,11 +6,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -70,8 +73,14 @@ public final class AnnouncementService {
      * added, then rebroadcasts the anonymized timeline.
      */
     public static void onDayChanged(MinecraftServer server, int previousDay, int newDay) {
-        announce(server, TimelineService.dayTitleKey(newDay),
-                daySubtitleKey(newDay), S2CAnnouncePayload.STYLE_DAY);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CAnnouncePayload(
+                    TimelineService.dayTitleKey(newDay, player),
+                    daySubtitleKey(newDay, player),
+                    S2CAnnouncePayload.STYLE_DAY));
+        }
+        EclipseMod.LOGGER.info("Localized day {} announcement sent to {} players",
+                newDay, server.getPlayerList().getPlayerCount());
         announceNewUnlocks(server);
         TimelineService.syncAll(server);
     }
@@ -83,6 +92,18 @@ public final class AnnouncementService {
      */
     public static void announceGoalCompleted(MinecraftServer server, String subtitleKey) {
         announce(server, "announce.eclipse.goal.title", subtitleKey, S2CAnnouncePayload.STYLE_GOAL);
+    }
+
+    /** Receiver-localized goal completion announcement for server-baked quest text. */
+    public static void announceGoalCompleted(MinecraftServer server, Localized subtitle) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CAnnouncePayload(
+                    "announce.eclipse.goal.title",
+                    LangService.pick(subtitle, player),
+                    S2CAnnouncePayload.STYLE_GOAL));
+        }
+        EclipseMod.LOGGER.info("Localized goal announcement sent to {} players",
+                server.getPlayerList().getPlayerCount());
     }
 
     /** Baseline the altar level + unlock keys at boot so nothing announces on startup. */
@@ -165,10 +186,10 @@ public final class AnnouncementService {
      * re-checked because {@code EclipseConfig.day} clamps out-of-range days), else the
      * generic lang-key fallback.
      */
-    private static String daySubtitleKey(int day) {
+    private static String daySubtitleKey(int day, ServerPlayer player) {
         EclipseConfig.DayPlan plan = EclipseConfig.day(day);
-        return plan.day() == day && !plan.subtitle().isEmpty()
-                ? plan.subtitle()
+        return plan.day() == day && !plan.localizedSubtitle().isBlank()
+                ? LangService.pick(plan.localizedSubtitle(), player)
                 : "announce.eclipse.day.generic.sub";
     }
 }

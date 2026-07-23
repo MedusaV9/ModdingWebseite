@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.Optional;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.LangService;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -17,6 +19,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -26,8 +29,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  * {@code tick <player> <id>}, {@code reroll <player>}, {@code list [player]},
  * {@code reload}, plus {@code revoke <player> <id>} as the reference caller for
  * {@link QuestApi#revoke} (P5-W4's {@code /dev quest revoke} bridges to the same call).
- * New root by design — the legacy {@code /eclipse goals tick} stays untouched and keeps
- * working through the {@code GoalTracker} adapter.
+ * The legacy {@code /eclipse goals tick} executor is re-registered after the old command
+ * tree so its range, feedback text and completion all resolve against today's quest mains.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class QuestCommands {
@@ -37,9 +40,10 @@ public final class QuestCommands {
 
     private QuestCommands() {}
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         register(event.getDispatcher());
+        registerLegacyBridge(event.getDispatcher());
     }
 
     private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -63,6 +67,42 @@ public final class QuestCommands {
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(ctx -> list(ctx, EntityArgument.getPlayer(ctx, "player")))))
                 .then(Commands.literal("reload").executes(QuestCommands::reload)));
+    }
+
+    /**
+     * Replaces only the legacy tick executor after the old command tree registers. Its
+     * validation, completion and feedback now all read the quest engine's ordered mains.
+     */
+    private static void registerLegacyBridge(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("eclipse")
+                .requires(source -> source.hasPermission(3))
+                .then(Commands.literal("goals")
+                        .then(Commands.literal("tick")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("index", IntegerArgumentType.integer(1, 8))
+                                                .executes(QuestCommands::legacyTick))))));
+    }
+
+    private static int legacyTick(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+        int index = IntegerArgumentType.getInteger(ctx, "index") - 1;
+        List<GoalSpec> mains = QuestApi.mains(ctx.getSource().getServer());
+        int day = QuestEngine.resolved(ctx.getSource().getServer()).day;
+        if (index >= mains.size()) {
+            ctx.getSource().sendFailure(Component.literal(
+                    "Day " + day + " only has " + mains.size() + " main goals"));
+            return 0;
+        }
+        GoalSpec spec = mains.get(index);
+        String text = LangService.pick(spec.text(), target);
+        if (!QuestApi.complete(ctx.getSource().getServer(), target, spec)) {
+            ctx.getSource().sendFailure(Component.literal(target.getScoreboardName()
+                    + " already completed goal " + (index + 1) + " ('" + text + "')"));
+            return 0;
+        }
+        ctx.getSource().sendSuccess(() -> Component.literal("Ticked goal " + (index + 1)
+                + " ('" + text + "') for " + target.getScoreboardName()), false);
+        return 1;
     }
 
     private static int tick(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

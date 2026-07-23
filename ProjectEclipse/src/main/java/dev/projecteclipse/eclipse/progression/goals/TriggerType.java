@@ -37,7 +37,7 @@ public enum TriggerType {
     REACH_DEPTH("reach_depth", true, "Descend to a Y level (trigger.y)"),
     /** 20t poll: vanilla movement stat sum delta from baseline; count in METERS. */
     TRAVEL_DISTANCE("travel_distance", true, "Travel a distance (count = meters)"),
-    /** {@code BabyEntitySpawnEvent} (the one NeoForge event the goal engine owns). */
+    /** Shared {@code breed} signal fired by analytics from {@code BabyEntitySpawnEvent}. */
     BREED_ANIMALS("breed_animals", false, "Breed animals (optional child entity target)"),
     /** 20t poll: generic vanilla stat delta from baseline; statId = "type_id/value_id". */
     STAT_THRESHOLD("stat_threshold", true, "Vanilla stat delta reaches count (trigger.statId)"),

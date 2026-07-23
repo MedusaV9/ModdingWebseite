@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.Localized;
-import dev.projecteclipse.eclipse.network.EclipsePayloads;
+import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.timeline.TimelineService;
 import net.minecraft.server.level.ServerPlayer;
@@ -61,7 +61,7 @@ public final class LangService {
 
     /** Re-broadcasts payloads whose baked strings depend on {@link #locale(ServerPlayer)}. */
     public static void resendLocaleSensitive(ServerPlayer player) {
-        EclipsePayloads.sendArtifactState(player, false);
+        PacketDistributor.sendToPlayer(player, S2CDayStatePayload.currentFor(player));
         PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player));
         TimelineService.syncTo(player);
     }
@@ -75,6 +75,8 @@ public final class LangService {
         if (!stored.isEmpty()) {
             EXPLICIT_OVERRIDES.put(player.getUUID(), stored);
         }
+        PacketDistributor.sendToPlayer(player, S2CDayStatePayload.currentFor(player));
+        TimelineService.syncTo(player);
     }
 
     @SubscribeEvent

@@ -20,10 +20,12 @@ import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.progression.goals.QuestDetectors;
 import dev.projecteclipse.eclipse.progression.goals.QuestEngine;
 import dev.projecteclipse.eclipse.progression.goals.QuestMath;
+import dev.projecteclipse.eclipse.progression.goals.QuestState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -370,16 +372,23 @@ public final class QuestEngineTest {
             mocks.add(wounded);
 
             QuestDetectors.forceNightStartForTest(List.of(survivor, wounded));
-            helper.assertTrue(QuestDetectors.isNightEligibleForTest(survivor.getUUID())
-                    && QuestDetectors.isNightEligibleForTest(wounded.getUUID()), "both armed at dusk");
+            helper.assertTrue(QuestDetectors.isNightEligibleForTest(server, survivor.getUUID())
+                    && QuestDetectors.isNightEligibleForTest(server, wounded.getUUID()), "both armed at dusk");
 
             // Damage flag: a post-damage event during the night forfeits the credit.
             NeoForge.EVENT_BUS.post(new LivingDamageEvent.Post(wounded,
                     new DamageContainer(helper.getLevel().damageSources().generic(), 2.0F)));
-            helper.assertTrue(!QuestDetectors.isNightEligibleForTest(wounded.getUUID()),
+            helper.assertTrue(!QuestDetectors.isNightEligibleForTest(server, wounded.getUUID()),
                     "damage drops eligibility");
-            helper.assertTrue(QuestDetectors.isNightEligibleForTest(survivor.getUUID()),
+            helper.assertTrue(QuestDetectors.isNightEligibleForTest(server, survivor.getUUID()),
                     "other player unaffected");
+
+            CompoundTag saved = QuestState.get(server).save(
+                    new CompoundTag(), helper.getLevel().registryAccess());
+            QuestState reloaded = QuestState.load(saved, helper.getLevel().registryAccess());
+            helper.assertTrue(reloaded.isNightEligible(6, survivor.getUUID())
+                    && !reloaded.isNightEligible(6, wounded.getUUID()),
+                    "night damage flags survive SavedData round-trip");
 
             QuestDetectors.forceDawnForTest(server);
             helper.assertTrue(QuestApi.isDone(server, survivor, spec(server, "t5_night")),

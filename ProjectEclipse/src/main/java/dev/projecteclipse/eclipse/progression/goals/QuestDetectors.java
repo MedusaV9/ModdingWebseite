@@ -1,12 +1,12 @@
 package dev.projecteclipse.eclipse.progression.goals;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -17,16 +17,14 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 /**
  * Signal-driven quest detectors (plans_v3 P4 §2.2 / §3.3 "detectors"). All progress arrives
  * either through {@code core/signal/EclipseSignals} fan-outs (registered once per server
- * start from {@link QuestEngine#onServerStarted}) or through the two NeoForge events this
- * class owns per the §2.2 event-ownership table: {@link BabyEntitySpawnEvent}
- * ({@code breed_animals} — analytics only counts, the trigger is B2's) and
+ * start from {@link QuestEngine#onServerStarted}) or through
  * {@link LivingDamageEvent.Post} (night-watcher damage flag only — analytics owns the
  * damage counters). Polled trigger types live in {@link QuestEngine#pollPlayer}; the
  * night-window state machine lives here but is stepped by the engine's shared 20t poll.
@@ -39,15 +37,14 @@ public final class QuestDetectors {
     /** Signals are cleared by A1 on ServerStopped, so registration re-arms per server start. */
     private static boolean signalsRegistered = false;
     // statics reset on ServerStopped
-    private static boolean nightActive = false;
-    /** Players online at nightfall who have neither taken damage nor logged out since. */
-    private static final Set<UUID> NIGHT_ELIGIBLE = new HashSet<>();
+    private static boolean serverStopping = false;
 
     private QuestDetectors() {}
 
     // --- lifecycle (driven by QuestEngine) ---
 
     static void registerSignalListeners(MinecraftServer server) {
+        serverStopping = false;
         if (signalsRegistered) {
             return;
         }
@@ -61,6 +58,7 @@ public final class QuestDetectors {
         EclipseSignals.onBiomeVisited(QuestDetectors::handleBiomeVisited);
         EclipseSignals.onAltarDeposit(QuestDetectors::handleAltarDeposit);
         EclipseSignals.onSkillLevelUp(QuestDetectors::handleSkillLevelUp);
+        EclipseSignals.onBreed(QuestDetectors::handleBreed);
         EclipseSignals.onDayRollover((srv, endedDay, newDay, phase) -> {
             if (phase == EclipseSignals.DayRolloverPhase.POST) {
                 // Assignment on POST rollover (§3.3): resolve + assign + flush in one pass.
@@ -72,20 +70,14 @@ public final class QuestDetectors {
 
     static void resetOnServerStopped() {
         signalsRegistered = false;
-        nightActive = false;
-        NIGHT_ELIGIBLE.clear();
+        serverStopping = false;
     }
 
     /**
-     * Gametest hook: {@code HarnessSmokeTest.signalsDispatchAndClear} wipes EVERY signal
-     * listener mid-run ({@code EclipseSignals.clearAllListeners()}) and nothing re-arms the
-     * service registrations afterwards. Signal-driven quest tests therefore start from a
-     * deterministic clean slate: clear all, then re-register just the quest detectors.
-     * Production never calls this — {@link QuestEngine#onServerStarted} is the real path.
+     * Gametest hook retained for existing tests. The shared signal bus stays intact; the
+     * harness now unregisters only its own temporary listener.
      */
     public static void rearmSignalListenersForTest(MinecraftServer server) {
-        EclipseSignals.clearAllListeners();
-        signalsRegistered = false;
         registerSignalListeners(server);
     }
 
@@ -198,41 +190,47 @@ public final class QuestDetectors {
         }
     }
 
-    // --- owned NeoForge events (§2.2 ownership table) ---
+    /** Assignment/login backfill for players who already reached the configured level. */
+    static void backfillSkillLevel(ServerPlayer player, GoalSpec spec) {
+        int currentLevel = SkillsApi.getLevel(player.server, player.getUUID());
+        QuestEngine.raiseTo(player.server, player, spec, Math.min(currentLevel, spec.target()));
+    }
 
-    @SubscribeEvent
-    static void onBabySpawn(BabyEntitySpawnEvent event) {
-        if (!(event.getCausedByPlayer() instanceof ServerPlayer player)
-                || player.level().isClientSide()) {
-            return;
-        }
+    private static void handleBreed(ServerPlayer player, LivingEntity childOrParent) {
         QuestEngine.ResolvedDay day = QuestEngine.resolved(player.server);
         for (GoalSpec spec : day.ofType(TriggerType.BREED_ANIMALS)) {
-            // Target filters on the child type; pre-spawn cancellation can null the child,
-            // then parent A stands in (same species for every vanilla breed pair).
-            LivingEntity subject = event.getChild() != null ? event.getChild() : event.getParentA();
-            if (QuestEngine.matchesEntity(subject, spec.trigger().target())) {
+            if (QuestEngine.matchesEntity(childOrParent, spec.trigger().target())) {
                 QuestEngine.increment(player.server, player, spec, 1L);
             }
         }
     }
 
+    // --- owned NeoForge event (§2.2 ownership table) ---
+
     @SubscribeEvent
     static void onLivingDamagePost(LivingDamageEvent.Post event) {
         // Cheap flag for survive_night_no_damage — no quest lookups on the damage hot path.
-        if (nightActive && event.getNewDamage() > 0.0F
+        if (event.getNewDamage() > 0.0F
                 && event.getEntity() instanceof ServerPlayer player
                 && !player.level().isClientSide()) {
-            NIGHT_ELIGIBLE.remove(player.getUUID());
+            int day = EclipseWorldState.get(player.server).getDay();
+            QuestState.get(player.server).markNightDamaged(day, player.getUUID());
         }
     }
 
     @SubscribeEvent
     static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         // "Online for the whole night": leaving mid-night forfeits tonight's credit.
-        if (nightActive && event.getEntity() instanceof ServerPlayer player) {
-            NIGHT_ELIGIBLE.remove(player.getUUID());
+        // Server shutdown is not a player choice; retain the persisted window across restart.
+        if (!serverStopping && event.getEntity() instanceof ServerPlayer player) {
+            int day = EclipseWorldState.get(player.server).getDay();
+            QuestState.get(player.server).forfeitNight(day, player.getUUID());
         }
+    }
+
+    @SubscribeEvent
+    static void onServerStopping(ServerStoppingEvent event) {
+        serverStopping = true;
     }
 
     // --- night watcher (stepped by QuestEngine's shared 20t poll) ---
@@ -244,53 +242,56 @@ public final class QuestDetectors {
      */
     static void pollNightWindow(MinecraftServer server, QuestEngine.ResolvedDay day) {
         List<GoalSpec> specs = day.ofType(TriggerType.SURVIVE_NIGHT_NO_DAMAGE);
+        QuestState state = QuestState.get(server);
         if (specs.isEmpty()) {
-            if (nightActive) {
-                nightActive = false;
-                NIGHT_ELIGIBLE.clear();
-            }
+            state.endNight(day.day);
             return;
         }
         boolean night = server.overworld().isNight();
-        if (night == nightActive) {
-            return;
-        }
-        nightActive = night;
         if (night) {
-            NIGHT_ELIGIBLE.clear();
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                NIGHT_ELIGIBLE.add(player.getUUID());
-            }
+            List<UUID> online = server.getPlayerList().getPlayers().stream()
+                    .map(ServerPlayer::getUUID)
+                    .toList();
+            long nightId = Math.floorDiv(server.overworld().getDayTime(), 24_000L);
+            state.beginNight(day.day, nightId, online);
             return;
         }
-        creditSurvivors(server, specs);
+        if (state.isNightOpen(day.day)) {
+            creditSurvivors(server, day.day, specs);
+        }
     }
 
     /** Dawn: credit the survivors that are still online and still eligible. */
-    private static void creditSurvivors(MinecraftServer server, List<GoalSpec> specs) {
+    private static void creditSurvivors(MinecraftServer server, int day, List<GoalSpec> specs) {
+        QuestState state = QuestState.get(server);
+        java.util.Set<UUID> survivors = state.nightSurvivors(day);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (!NIGHT_ELIGIBLE.contains(player.getUUID())) {
+            if (!survivors.contains(player.getUUID())) {
                 continue;
             }
             for (GoalSpec spec : specs) {
                 QuestEngine.increment(server, player, spec, 1L);
             }
         }
-        NIGHT_ELIGIBLE.clear();
+        state.endNight(day);
     }
 
     /** Gametest hook: pretends dusk fell right now with the given players online. */
     public static void forceNightStartForTest(List<ServerPlayer> online) {
-        nightActive = true;
-        NIGHT_ELIGIBLE.clear();
-        for (ServerPlayer player : online) {
-            NIGHT_ELIGIBLE.add(player.getUUID());
+        if (online.isEmpty()) {
+            throw new IllegalArgumentException("night test needs at least one player");
         }
+        MinecraftServer server = online.getFirst().server;
+        int day = QuestEngine.resolved(server).day;
+        QuestState.get(server).beginNight(day,
+                Math.floorDiv(server.overworld().getDayTime(), 24_000L),
+                online.stream().map(ServerPlayer::getUUID).toList());
     }
 
     /** Gametest hook: whether the player would currently be credited at dawn. */
-    public static boolean isNightEligibleForTest(UUID uuid) {
-        return nightActive && NIGHT_ELIGIBLE.contains(uuid);
+    public static boolean isNightEligibleForTest(MinecraftServer server, UUID uuid) {
+        int day = QuestEngine.resolved(server).day;
+        return QuestState.get(server).isNightEligible(day, uuid);
     }
 
     /**
@@ -298,7 +299,7 @@ public final class QuestDetectors {
      * current day's survive specs), bypassing the real overworld time check.
      */
     public static void forceDawnForTest(MinecraftServer server) {
-        nightActive = false;
-        creditSurvivors(server, QuestEngine.resolved(server).ofType(TriggerType.SURVIVE_NIGHT_NO_DAMAGE));
+        QuestEngine.ResolvedDay day = QuestEngine.resolved(server);
+        creditSurvivors(server, day.day, day.ofType(TriggerType.SURVIVE_NIGHT_NO_DAMAGE));
     }
 }

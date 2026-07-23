@@ -6,6 +6,7 @@ import java.util.List;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CTimelinePayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -54,6 +55,14 @@ public final class TimelineService {
                 : "announce.eclipse.day.generic.title";
     }
 
+    /** Receiver-localized form for server-baked day titles. */
+    public static String dayTitleKey(int day, ServerPlayer player) {
+        EclipseConfig.DayPlan plan = EclipseConfig.day(day);
+        return plan.day() == day && !plan.localizedTitle().isBlank()
+                ? LangService.pick(plan.localizedTitle(), player)
+                : "announce.eclipse.day.generic.title";
+    }
+
     /** The lang key of a milestone's announcement/timeline line, with a generic fallback. */
     public static String milestoneKey(int level) {
         return level >= 1 && level <= SHIPPED_MILESTONE_TITLES
@@ -63,6 +72,10 @@ public final class TimelineService {
 
     /** Builds the current anonymized timeline (already-reached and current entries only carry data). */
     public static List<TimelineEntry> buildEntries(MinecraftServer server) {
+        return buildEntries(server, null);
+    }
+
+    private static List<TimelineEntry> buildEntries(MinecraftServer server, ServerPlayer receiver) {
         EclipseWorldState state = EclipseWorldState.get(server);
         int day = state.getDay();
         int altarLevel = state.getAltarLevel();
@@ -70,8 +83,9 @@ public final class TimelineService {
         List<TimelineEntry> entries = new ArrayList<>();
         for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
             boolean reached = plan.day() <= day;
+            String title = receiver == null ? dayTitleKey(plan.day()) : dayTitleKey(plan.day(), receiver);
             entries.add(reached
-                    ? new TimelineEntry(plan.day(), plan.day(), dayTitleKey(plan.day()), DAY_ICON, false, true)
+                    ? new TimelineEntry(plan.day(), plan.day(), title, DAY_ICON, false, true)
                     : new TimelineEntry(plan.day(), plan.day(), "", TimelineEntry.NO_ICON, true, false));
         }
         for (EclipseConfig.Milestone milestone : EclipseConfig.milestones()) {
@@ -86,7 +100,7 @@ public final class TimelineService {
 
     /** Login sync: sends the timeline to one player. */
     public static void syncTo(ServerPlayer player) {
-        List<TimelineEntry> entries = buildEntries(player.server);
+        List<TimelineEntry> entries = buildEntries(player.server, player);
         PacketDistributor.sendToPlayer(player, new S2CTimelinePayload(entries));
         EclipseMod.LOGGER.info("Timeline payload sent to {} ({} entries, {} revealed)",
                 player.getScoreboardName(), entries.size(),
@@ -95,9 +109,15 @@ public final class TimelineService {
 
     /** Day/altar change sync: rebroadcasts the timeline to everyone online. */
     public static void syncAll(MinecraftServer server) {
-        List<TimelineEntry> entries = buildEntries(server);
-        PacketDistributor.sendToAllPlayers(new S2CTimelinePayload(entries));
-        EclipseMod.LOGGER.info("Timeline payload sent to all players ({} entries, {} revealed)",
-                entries.size(), entries.stream().filter(entry -> !entry.hidden()).count());
+        int entries = 0;
+        long revealed = 0L;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            List<TimelineEntry> localized = buildEntries(server, player);
+            PacketDistributor.sendToPlayer(player, new S2CTimelinePayload(localized));
+            entries = localized.size();
+            revealed = localized.stream().filter(entry -> !entry.hidden()).count();
+        }
+        EclipseMod.LOGGER.info("Localized timeline payload sent to all players ({} entries, {} revealed)",
+                entries, revealed);
     }
 }

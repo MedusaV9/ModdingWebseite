@@ -65,6 +65,8 @@ public final class EclipseSignals {
     private static final List<DayRolloverListener> DAY_ROLLOVER = new CopyOnWriteArrayList<>();
     private static final List<QuestCompletedListener> QUEST_COMPLETED = new CopyOnWriteArrayList<>();
     private static final List<SkillLevelUpListener> SKILL_LEVEL_UP = new CopyOnWriteArrayList<>();
+    private static final List<BreedListener> BREED = new CopyOnWriteArrayList<>();
+    private static final List<TradeListener> TRADE = new CopyOnWriteArrayList<>();
 
     @FunctionalInterface public interface NaturalBlockMinedListener {
         void onNaturalBlockMined(ServerPlayer player, BlockState state, BlockPos pos);
@@ -114,6 +116,14 @@ public final class EclipseSignals {
         void onSkillLevelUp(ServerPlayer player, int newLevel);
     }
 
+    @FunctionalInterface public interface BreedListener {
+        void onBreed(ServerPlayer player, LivingEntity childOrParent);
+    }
+
+    @FunctionalInterface public interface TradeListener {
+        void onTrade(ServerPlayer player);
+    }
+
     private EclipseSignals() {}
 
     // --- registration (call from ServerStartedEvent in each consumer package) ---
@@ -130,8 +140,9 @@ public final class EclipseSignals {
         MOB_KILLED.add(listener);
     }
 
-    public static void onPlayerDeath(PlayerDeathListener listener) {
+    public static Runnable onPlayerDeath(PlayerDeathListener listener) {
         PLAYER_DEATH.add(listener);
+        return () -> PLAYER_DEATH.remove(listener);
     }
 
     public static void onItemCrafted(ItemCraftedListener listener) {
@@ -164,6 +175,14 @@ public final class EclipseSignals {
 
     public static void onSkillLevelUp(SkillLevelUpListener listener) {
         SKILL_LEVEL_UP.add(listener);
+    }
+
+    public static void onBreed(BreedListener listener) {
+        BREED.add(listener);
+    }
+
+    public static void onTrade(TradeListener listener) {
+        TRADE.add(listener);
     }
 
     // --- fire helpers (called by the single owning subscriber per signal) ---
@@ -241,6 +260,18 @@ public final class EclipseSignals {
         }
     }
 
+    public static void fireBreed(ServerPlayer player, LivingEntity childOrParent) {
+        for (BreedListener listener : BREED) {
+            listener.onBreed(player, childOrParent);
+        }
+    }
+
+    public static void fireTrade(ServerPlayer player) {
+        for (TradeListener listener : TRADE) {
+            listener.onTrade(player);
+        }
+    }
+
     /** Drops every listener list. Invoked automatically on server stop. */
     public static void clearAllListeners() {
         NATURAL_BLOCK_MINED.clear();
@@ -255,6 +286,8 @@ public final class EclipseSignals {
         DAY_ROLLOVER.clear();
         QUEST_COMPLETED.clear();
         SKILL_LEVEL_UP.clear();
+        BREED.clear();
+        TRADE.clear();
     }
 
     @SubscribeEvent

@@ -95,11 +95,11 @@ public final class GoalConfig {
         if (authored != null && !authored.isEmpty()) {
             return authored;
         }
-        List<String> legacy = EclipseConfig.day(day).goals();
+        List<Localized> legacy = EclipseConfig.day(day).localizedGoals();
         List<GoalSpec> fallback = new ArrayList<>(legacy.size());
         for (int i = 0; i < Math.min(legacy.size(), MAX_MAINS_PER_DAY); i++) {
             fallback.add(new GoalSpec("legacy_d" + day + "_m" + i, Kind.MAIN, Scope.EACH_PLAYER,
-                    Trigger.manual(), Reward.NONE, Localized.of(legacy.get(i)), 1, 0, 0));
+                    Trigger.manual(), Reward.NONE, legacy.get(i), 1, 0, 0));
         }
         return List.copyOf(fallback);
     }

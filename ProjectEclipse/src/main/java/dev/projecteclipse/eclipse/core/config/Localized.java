@@ -26,7 +26,7 @@ public record Localized(String en, @Nullable String de) {
     }
 
     /** Parses a JSON string primitive or {@code {en,de}} object from {@code days.json}. */
-    public static Localized parse(JsonElement element) {
+    public static Localized fromJson(JsonElement element) {
         if (element == null || element.isJsonNull()) {
             return new Localized("", null);
         }
@@ -37,6 +37,11 @@ public record Localized(String en, @Nullable String de) {
         String english = obj.has("en") ? obj.get("en").getAsString() : "";
         String german = obj.has("de") ? obj.get("de").getAsString() : null;
         return new Localized(english, german);
+    }
+
+    /** Backward-compatible alias retained for existing config parsers. */
+    public static Localized parse(JsonElement element) {
+        return fromJson(element);
     }
 
     /** Writes legacy string when only English is set, otherwise the dual-language object form. */

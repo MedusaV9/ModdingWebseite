@@ -67,9 +67,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * online players → fire {@code questCompleted} (skills grants {@code reward.skillXp} from the
  * signal — B-wave workers must not call each other's classes) → resync
  * {@code S2CQuestStatePayload} + legacy {@code S2CGoalProgressPayload} → announce MAIN goals
- * globally via {@code AnnouncementService.announceGoalCompleted} (en literal — the overlay
- * renders literals; P3 may localize later); sides/personals stay action-bar-only for the
- * completing player (anonymity: no global chat).</p>
+ * globally via receiver-localized {@code AnnouncementService.announceGoalCompleted};
+ * sides/personals stay action-bar-only for the completing player (anonymity: no global chat).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class QuestEngine {
@@ -232,6 +231,9 @@ public final class QuestEngine {
 
         for (GoalSpec spec : specsFor(day, state, uuid)) {
             captureBaselines(state, day, player, spec, false);
+            if (spec.trigger().type() == TriggerType.SKILL_LEVEL) {
+                QuestDetectors.backfillSkillLevel(player, spec);
+            }
         }
 
         for (String beatId : state.beatsFired(day.day)) {
@@ -458,9 +460,7 @@ public final class QuestEngine {
 
     private static void announceIfMain(MinecraftServer server, QuestState state, int day, GoalSpec spec) {
         if (spec.goalKind() == Kind.MAIN && state.markAnnounced(day, spec.id())) {
-            // en literal on purpose: the announce overlay renders unknown "keys" literally
-            // (legacy GoalTracker seam, documented for P3 to localize later).
-            AnnouncementService.announceGoalCompleted(server, spec.text().en());
+            AnnouncementService.announceGoalCompleted(server, spec.text());
         }
     }
 

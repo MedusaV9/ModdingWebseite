@@ -27,11 +27,18 @@ public final class GameTestSupport {
 
     private GameTestSupport() {}
 
-    /** Spawns a survival mock player at the structure origin. */
-    public static ServerPlayer mockSurvivalPlayer(GameTestHelper helper) {
-        ServerPlayer player = (ServerPlayer) helper.makeMockPlayer(GameType.SURVIVAL);
-        helper.assertTrue(player != null, "mock player");
+    /** Spawns a real mock {@link ServerPlayer} at the structure origin in the requested mode. */
+    @SuppressWarnings("removal")
+    public static ServerPlayer mockServerPlayer(GameTestHelper helper, GameType gameType) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        helper.assertTrue(player != null, "mock server player");
+        player.setGameMode(gameType);
         return player;
+    }
+
+    /** Spawns a survival mock server player at the structure origin. */
+    public static ServerPlayer mockSurvivalPlayer(GameTestHelper helper) {
+        return mockServerPlayer(helper, GameType.SURVIVAL);
     }
 
     /**
@@ -78,9 +85,9 @@ public final class GameTestSupport {
         }
     }
 
-    /** Registers a one-shot listener that fires {@link EclipseSignals#firePlayerDeath}. */
-    public static void registerPlayerDeathCounter(java.util.concurrent.atomic.AtomicInteger counter) {
-        EclipseSignals.onPlayerDeath((victim, killer) -> counter.incrementAndGet());
+    /** Registers a temporary death listener and returns its idempotent removal handle. */
+    public static Runnable registerPlayerDeathCounter(java.util.concurrent.atomic.AtomicInteger counter) {
+        return EclipseSignals.onPlayerDeath((victim, killer) -> counter.incrementAndGet());
     }
 
     /** Stable UUID for gametest assertions. */

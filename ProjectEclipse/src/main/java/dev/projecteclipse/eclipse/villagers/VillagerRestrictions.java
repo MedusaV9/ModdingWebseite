@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -22,14 +24,17 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.GameRules;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.village.VillagerTradesEvent;
 import net.neoforged.neoforge.event.village.WandererTradesEvent;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
  * Villager and wandering-trader restrictions: no librarians, no enchanted-book trades,
@@ -38,17 +43,40 @@ import net.neoforged.neoforge.event.village.WandererTradesEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class VillagerRestrictions {
     private static final int SWEEP_INTERVAL_TICKS = 100;
+    // statics reset on ServerStopped
     private static final AtomicBoolean GAMERULE_APPLIED = new AtomicBoolean(false);
+    /** JVM-lifetime guard: ReloadHooks entries survive server restarts. */
+    private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean(false);
 
     private VillagerRestrictions() {}
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onServerStarted(ServerStartedEvent event) {
-        ProtectionConfig.VillagerRules rules = ProtectionConfig.current().villagers();
-        if (rules.disableWanderingTrader() && GAMERULE_APPLIED.compareAndSet(false, true)) {
-            event.getServer().getGameRules().getRule(GameRules.RULE_DO_TRADER_SPAWNING).set(false, event.getServer());
-            EclipseMod.LOGGER.info("Wandering trader spawning disabled (doTraderSpawning=false)");
+        if (RELOAD_HOOK_REGISTERED.compareAndSet(false, true)) {
+            ReloadHooks.register("villager_restrictions", VillagerRestrictions::onConfigReload);
         }
+        applyTraderGamerule(event.getServer());
+    }
+
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        GAMERULE_APPLIED.set(false);
+    }
+
+    private static void onConfigReload() {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) {
+            applyTraderGamerule(server);
+        }
+    }
+
+    private static void applyTraderGamerule(MinecraftServer server) {
+        boolean allowTraderSpawning = !ProtectionConfig.current().villagers().disableWanderingTrader();
+        server.getGameRules().getRule(GameRules.RULE_DO_TRADER_SPAWNING)
+                .set(allowTraderSpawning, server);
+        GAMERULE_APPLIED.set(true);
+        EclipseMod.LOGGER.info("Villager restrictions applied (doTraderSpawning={})",
+                allowTraderSpawning);
     }
 
     @SubscribeEvent

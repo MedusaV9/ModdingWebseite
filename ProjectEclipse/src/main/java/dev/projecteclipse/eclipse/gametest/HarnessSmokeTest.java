@@ -24,7 +24,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * P4-A1 harness smoke tests: mock player spawn, signal dispatch/clear, and payload codec
+ * P4-A1 harness smoke tests: mock player spawn, isolated signal dispatch, and payload codec
  * round-trips for every new P4 wire type.
  */
 @PrefixGameTestTemplate(false)
@@ -39,17 +39,20 @@ public final class HarnessSmokeTest {
     }
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
-    public static void signalsDispatchAndClear(GameTestHelper helper) {
+    public static void signalsDispatchAndUnregister(GameTestHelper helper) {
         AtomicInteger deaths = new AtomicInteger();
-        GameTestSupport.registerPlayerDeathCounter(deaths);
+        Runnable unregister = GameTestSupport.registerPlayerDeathCounter(deaths);
 
         var player = GameTestSupport.mockSurvivalPlayer(helper);
+        try {
+            EclipseSignals.firePlayerDeath(player, null);
+            helper.assertTrue(deaths.get() == 1, "playerDeath listener");
+        } finally {
+            // Remove only this test's listener; production service listeners stay intact.
+            unregister.run();
+        }
         EclipseSignals.firePlayerDeath(player, null);
-        helper.assertTrue(deaths.get() == 1, "playerDeath listener");
-
-        EclipseSignals.clearAllListeners();
-        EclipseSignals.firePlayerDeath(player, null);
-        helper.assertTrue(deaths.get() == 1, "listeners cleared");
+        helper.assertTrue(deaths.get() == 1, "test listener removed");
         helper.succeed();
     }
 

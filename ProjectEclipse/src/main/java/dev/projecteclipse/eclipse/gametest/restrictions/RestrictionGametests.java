@@ -144,7 +144,7 @@ public final class RestrictionGametests {
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void spawnProtectionCreativeExempt(GameTestHelper helper) {
-        ServerPlayer creative = (ServerPlayer) helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer creative = GameTestSupport.mockServerPlayer(helper, GameType.CREATIVE);
         helper.assertTrue(SpawnProtectionRules.isExempt(creative), "creative exempt");
         ServerPlayer survival = GameTestSupport.mockSurvivalPlayer(helper);
         helper.assertFalse(SpawnProtectionRules.isExempt(survival), "survival not exempt");
