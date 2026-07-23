@@ -49,7 +49,10 @@ import {
   nextSpanAt, popDurations, skipAllowed, displayMilestone, rewardCoins,
   replayRewardFrom, canAutoStart, createOffsetRecorder,
   endCardHighlights, // POLISH-J
+  rotatedFrame, shouldRotate, createRotationGuard, // V6/B1 landscape
 } from './recapOverlay.logic.js';
+// V6/B1: the same OS reduced-motion predicate every effect gate uses (AC-9)
+import { prefersReducedMotion } from './ui.js';
 
 const DEV = !!import.meta.env?.DEV;
 
@@ -85,6 +88,7 @@ function createRecapVignetteScene(ctx) {
   scene.background = new THREE.Color('#fff6ec');
   const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 120);
   camera.position.set(0, 1.5, 8);
+  recapCam = camera; // V6/B1: the landscape assert retargets THIS aspect
   /** @type {{group: object, dispose: Function, update: Function}|null} live */
   let handle = null;
   let liveIdx = -1;
@@ -200,6 +204,14 @@ function createRecapVignetteScene(ctx) {
       try {
         ctx.renderer?.setPixelRatio?.(basePR);
       } catch { /* noop */ }
+      // V6/B1: the scene leaving IS an exit path (any switch away from
+      // 'recap', including failed switches) — restore the portrait renderer
+      // size/aspect + classes here too. Idempotent: finishRecap's own restore
+      // (behind the exit white) already ran on the normal path.
+      if (recapCam === camera) {
+        if (sess) restoreLandscape(sess);
+        recapCam = null;
+      }
     },
   };
 }
@@ -264,6 +276,187 @@ function fadeWhite(el, target, ms) {
 }
 
 // ---------------------------------------------------------------------------
+// V6/B1 — landscape presentation (PLAN6 Wave B/B1): the cinematic plays as a
+// LANDSCAPE movie on the portrait-locked phone. Technique: rotate(90deg) on
+// the recap DOM layer AND the #scene canvas with JS-computed px sizes (the
+// pure math is recapOverlay.logic.js rotatedFrame — never 100vw/vh), plus
+// renderer.setSize(innerHeight, innerWidth) + camera-aspect swap INSIDE the
+// recap scene only. Everything happens behind the white entry/exit fades and
+// EVERY exit path restores through ONE idempotent guard (createRotationGuard):
+// finish, skip→finish, startCinematic error, scene dispose — with resize/
+// visibilitychange re-asserts while active so sceneManager's own onResize
+// (which re-applies portrait sizes) can never stick mid-recap.
+// ---------------------------------------------------------------------------
+
+// The landscape rules ship as an INJECTED sheet (the shop/profile/cutscene
+// pattern) so styles.css stays untouched this wave (B3 owns it). The rotated
+// layer is sized by --g64-rw/--g64-rh (JS px) and the PHYSICAL safe insets
+// arrive re-mapped as --rsafe-* (notch → rotated LEFT — the player holds the
+// phone turned counter-clockwise, home indicator right).
+const LANDSCAPE_CSS = `
+/* V6/B1 RECAP-LANDSCAPE (injected by recapOverlay.js) */
+.g64-root.g64-landscape {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: var(--g64-rw, 100vh);
+  height: var(--g64-rh, 100vw);
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+#scene.g64-landscape-canvas,
+canvas.g64-landscape-canvas {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+/* rotated-layer safe areas: vh/vw would still measure the PORTRAIT viewport
+   inside the rotated box, so every offset below is %/rem/--rsafe-* only. */
+.g64-root.g64-landscape .g64-stage {
+  padding: max(1.25rem, calc(var(--rsafe-top, 0px) + 0.75rem))
+    max(1rem, var(--rsafe-right, 0px)) 1rem max(1rem, var(--rsafe-left, 0px));
+}
+.g64-root.g64-landscape .g64-intro { margin-top: 6%; }
+.g64-root.g64-landscape .g64-pops {
+  top: 13%;
+  left: max(0.75rem, var(--rsafe-left, 0px));
+  right: max(0.75rem, var(--rsafe-right, 0px));
+}
+.g64-root.g64-landscape .g64-bar { height: 9%; }
+.g64-root.g64-landscape .g64-skip {
+  right: max(0.5rem, var(--rsafe-right, 0px));
+  bottom: max(0.75rem, var(--rsafe-bottom, 0px));
+}
+.g64-root.g64-landscape .g64-biome {
+  bottom: max(3.25rem, calc(var(--rsafe-bottom, 0px) + 2.5rem));
+}
+.g64-root.g64-landscape .g64-debug {
+  left: max(0.5rem, var(--rsafe-left, 0px));
+  bottom: max(0.5rem, var(--rsafe-bottom, 0px));
+}
+`;
+
+/** Inject the landscape stylesheet once (idempotent — loadingVeil pattern). */
+function ensureLandscapeStyles() {
+  if (document.querySelector('style[data-owner="v6-b1-recap-landscape"]')) return;
+  const style = document.createElement('style');
+  style.dataset.owner = 'v6-b1-recap-landscape';
+  style.textContent = LANDSCAPE_CSS;
+  document.head.appendChild(style);
+}
+
+/** The live recap scene camera (set by createRecapVignetteScene, cleared on
+ * its dispose) — the rotation assert retargets ITS aspect, never another
+ * scene's. @type {object|null} */
+let recapCam = null;
+
+/** Read the LIVE --safe-* px values off <html> (env() insets or the ?notch=1
+ * fake-notch inline override — both land in the computed style). */
+function readSafeInsets() {
+  try {
+    const cs = window.getComputedStyle(document.documentElement);
+    const px = (name) => parseFloat(cs.getPropertyValue(name)) || 0;
+    return {
+      top: px('--safe-top'),
+      right: px('--safe-right'),
+      bottom: px('--safe-bottom'),
+      left: px('--safe-left'),
+    };
+  } catch {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+}
+
+/**
+ * (Re-)assert the rotated frame from the LIVE viewport: rotated-layer px
+ * vars + mapped --rsafe-* insets on the recap root, the rotation classes,
+ * and — in scene mode — the swapped renderer size + recap camera aspect.
+ * Runs on apply and again on resize/visibilitychange while active, because
+ * sceneManager.onResize re-applies portrait sizes on every window resize.
+ * @param {object} s the live session
+ */
+function assertLandscapeFrame(s) {
+  if (!s.rotGuard?.active() || !s.dom.root) return;
+  const { rw, rh, rsafe } = rotatedFrame({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    insets: readSafeInsets(),
+  });
+  const st = s.dom.root.style;
+  st.setProperty('--g64-rw', `${rw}px`);
+  st.setProperty('--g64-rh', `${rh}px`);
+  st.setProperty('--rsafe-top', `${rsafe.top}px`);
+  st.setProperty('--rsafe-right', `${rsafe.right}px`);
+  st.setProperty('--rsafe-bottom', `${rsafe.bottom}px`);
+  st.setProperty('--rsafe-left', `${rsafe.left}px`);
+  s.dom.root.classList.add('g64-landscape');
+  if (!s.sceneMode) return;
+  const renderer = deps?.sceneManager?.renderer;
+  renderer?.domElement?.classList?.add('g64-landscape-canvas');
+  try {
+    renderer?.setSize?.(rw, rh); // the rotate(90deg) swap: rw = innerHeight
+  } catch { /* renderer without setSize — DOM layers still rotate */ }
+  if (recapCam?.isPerspectiveCamera) {
+    recapCam.aspect = rw / Math.max(1, rh);
+    recapCam.updateProjectionMatrix();
+  }
+}
+
+/**
+ * Apply the landscape presentation (idempotent via the session's guard).
+ * Called behind the entry white fade AFTER scene-mode resolution; no-op when
+ * the session decided not to rotate (reduced motion / already-landscape).
+ * @param {object} s the live session
+ */
+function applyLandscape(s) {
+  if (!s.rotate || !s.rotGuard.apply()) return;
+  ensureLandscapeStyles();
+  assertLandscapeFrame(s);
+  const reassert = () => assertLandscapeFrame(s);
+  window.addEventListener('resize', reassert);
+  document.addEventListener('visibilitychange', reassert);
+  s.rotOff = () => {
+    window.removeEventListener('resize', reassert);
+    document.removeEventListener('visibilitychange', reassert);
+  };
+}
+
+/**
+ * Restore the portrait presentation (idempotent via the guard) — remove the
+ * rotation classes/vars, unhook the re-asserts and hand the renderer/camera
+ * back their portrait size/aspect. EVERY teardown path routes through here:
+ * finishRecap (behind the exit white), the recap scene's dispose (any scene
+ * switch away — including failed switches) and startCinematic's error path.
+ * @param {object} s the session being torn down
+ */
+function restoreLandscape(s) {
+  if (!s?.rotGuard?.restore()) return;
+  s.rotOff?.();
+  s.rotOff = null;
+  if (s.dom.root) {
+    const st = s.dom.root.style;
+    for (const name of ['--g64-rw', '--g64-rh', '--rsafe-top', '--rsafe-right', '--rsafe-bottom', '--rsafe-left']) {
+      st.removeProperty(name);
+    }
+    s.dom.root.classList.remove('g64-landscape');
+  }
+  const renderer = deps?.sceneManager?.renderer;
+  renderer?.domElement?.classList?.remove('g64-landscape-canvas');
+  if (s.sceneMode) {
+    try {
+      renderer?.setSize?.(window.innerWidth, window.innerHeight);
+    } catch { /* noop */ }
+    if (recapCam?.isPerspectiveCamera) {
+      recapCam.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+      recapCam.updateProjectionMatrix();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Playback session
 // ---------------------------------------------------------------------------
 
@@ -312,6 +505,17 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
     finishing: false,
     beatDebug: false,
     startedAt: now(),
+    // V6/B1 landscape: decided ONCE at start — reduced motion keeps today's
+    // portrait letterboxed presentation, an already-landscape viewport
+    // (desktop/tablet) must never double-rotate.
+    rotate: shouldRotate({
+      reducedMotion: prefersReducedMotion(),
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }),
+    rotGuard: createRotationGuard(),
+    rotOff: null,
+    pinnedT: null, // dev __recap.pin() freeze-frame (capture evidence hook)
   };
   sess = s;
 
@@ -381,7 +585,23 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
   if (s.sceneMode) {
     try {
       s.returnScene = sceneManager.currentId() ?? 'home';
+      // V6/B1: switchTo is SWALLOWED (warn + resolve) while another switch
+      // is in flight — the framework's launch-retry pattern (§F6/RE5).
+      // sceneMode=true must never stand over a foreign live scene: the
+      // landscape swap below rotates the #scene canvas, so an ignored
+      // switch would rotate home/minigame. Re-issue until the recap scene
+      // truly settled, else fall through to the opaque DOM backdrops.
+      const settled = () =>
+        sceneManager.currentId() === 'recap' && sceneManager.isSwitching?.() !== true;
       await sceneManager.switchTo('recap');
+      const retryUntil = performance.now() + OVERLAY.SCENE_SETTLE_MAX_MS;
+      while (!settled() && performance.now() < retryUntil) {
+        await new Promise((r) => setTimeout(r, OVERLAY.SCENE_SETTLE_POLL_MS));
+        if (settled()) break;
+        if (sceneManager.isSwitching?.() === true) continue; // still fading
+        await sceneManager.switchTo('recap');
+      }
+      if (!settled()) throw new Error('recap switch swallowed (switch in flight)');
     } catch (err) {
       console.warn('[recap] scene switch failed — DOM fallback:', err);
       s.sceneMode = false;
@@ -397,92 +617,109 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
     bgA.style.opacity = '1';
   }
 
-  // Dedicated MediaElement (§C-SYS2.6): element volume replicates the §B2.2
-  // bus math; play() rejection (no gesture/VM) → wall-clock mode, same cues.
-  if (track) {
-    const el = new Audio(trackUrl(track.file));
-    el.preload = 'auto';
-    s.el = el;
-    const applyVolume = () => {
-      const st = store.get();
-      const vols = st?.settings?.volumes ?? {};
-      el.volume = elementVolume({
-        gainTrim: track.gainTrim,
-        trimVol: st?.radio?.trims?.[track.id]?.vol ?? 100,
-        master: vols.master ?? 80,
-        music: vols.music ?? 70,
-        musicEnabled: st?.settings?.music !== false,
-      });
-      // §B2.4 airtight music mute: pause the element (zero streaming), the
-      // grid continues on the wall clock; re-enable resumes at el time.
-      if (st?.settings?.music === false) {
-        if (!el.paused) el.pause();
-      } else if (el.paused && !el.ended && s.audioLive && !s.finishing) {
-        // never auto-restart a naturally-ENDED track (grid is done by then)
-        el.play().catch(() => {});
+  // V6/B1: turn the presentation landscape — AFTER scene-mode resolution
+  // (the renderer/camera swap only happens when the 3D scene is live) and
+  // BEHIND the still-opaque entry white, so the swap is never visible. The
+  // rest of the start sequence is guarded: any throw below restores the
+  // rotation before propagating (the 'error' exit path).
+  applyLandscape(s);
+  try {
+    // Dedicated MediaElement (§C-SYS2.6): element volume replicates the §B2.2
+    // bus math; play() rejection (no gesture/VM) → wall-clock mode, same cues.
+    if (track) {
+      const el = new Audio(trackUrl(track.file));
+      el.preload = 'auto';
+      s.el = el;
+      const applyVolume = () => {
+        const st = store.get();
+        const vols = st?.settings?.volumes ?? {};
+        el.volume = elementVolume({
+          gainTrim: track.gainTrim,
+          trimVol: st?.radio?.trims?.[track.id]?.vol ?? 100,
+          master: vols.master ?? 80,
+          music: vols.music ?? 70,
+          musicEnabled: st?.settings?.music !== false,
+        });
+        // §B2.4 airtight music mute: pause the element (zero streaming), the
+        // grid continues on the wall clock; re-enable resumes at el time.
+        if (st?.settings?.music === false) {
+          if (!el.paused) el.pause();
+        } else if (el.paused && !el.ended && s.audioLive && !s.finishing) {
+          // never auto-restart a naturally-ENDED track (grid is done by then)
+          el.play().catch(() => {});
+        }
+      };
+      applyVolume();
+      s.offs.push(store.on('change', applyVolume));
+      try {
+        await el.play();
+        s.audioLive = true;
+      } catch {
+        s.audioLive = false; // autoplay refused → wall clock (visuals identical)
       }
+    }
+
+    // Skip + Weiter input (§C-SYS2.2: overlay eats ALL taps; before t = 10 s
+    // they do nothing, after they cut to the end card).
+    root.addEventListener('click', (ev) => {
+      if (s.ended || s.finishing) return;
+      if (!s.skipVisible || !skipAllowed(s.clock.t, s.timeline.skipAfterSec)) return;
+      ev.stopPropagation();
+      doSkip();
+    });
+
+    if (DEV) console.log(`[recap] start L${level} track=${s.trackId} fallbackTrack=${pick.fallback} scene=${s.sceneMode} audio=${s.audioLive} landscape=${s.rotGuard.active()} bpm=${s.timeline.bpm} cues=${s.timeline.cues.length}`);
+
+    // Master loop: rAF for smooth visuals PLUS a 25 ms timer tick — rAF alone
+    // can gap 100–250 ms (throttled/hitchy frames, SwiftShader shader builds)
+    // which would fire cues late; the timer keeps the §A2 ±80 ms budget honest
+    // even when frames stall. step() is idempotent per timestamp.
+    s.lastFrame = performance.now();
+    const step = (nowMs) => {
+      if (sess !== s || s.finishing) return;
+      const dtSec = Math.min(0.25, Math.max(0, (nowMs - s.lastFrame) / 1000));
+      if (dtSec <= 0) return;
+      s.lastFrame = nowMs;
+      const elT = s.audioLive && s.el && !s.el.paused && Number.isFinite(s.el.currentTime)
+        ? s.el.currentTime : null;
+      // V6/B1 dev freeze-frame: __recap.pin() holds the master clock at a
+      // chosen biome/progress (audio paused) so CDP can capture deterministic
+      // framing evidence — per-frame dt still ticks the vignette's ambience.
+      s.clock = s.pinnedT != null
+        ? { t: s.pinnedT, anchorBar: barIndexAt(s.timeline, s.pinnedT) }
+        : advanceClock(s.clock, { dtSec, elT, grid: s.timeline });
+      // Re-assert the medley suppressor: any audio.music(id) call resets it
+      // (audio.js §C3.4 line) — scene hooks firing mid-cinematic must not
+      // resurrect the medley under the recap track.
+      if (musicDirector.getStats().suppressed !== true) musicDirector.setSuppressed(true);
+      if (!s.ended) {
+        for (const cue of s.scheduler.advance(s.clock.t)) fireCue(cue);
+        s.liveSpan = spanAt(s.spans, s.clock.t);
+        s.nextSpan = nextSpanAt(s.spans, s.clock.t);
+        updatePops();
+        updateSkip();
+      }
+      updateDebug();
     };
-    applyVolume();
-    s.offs.push(store.on('change', applyVolume));
-    try {
-      await el.play();
-      s.audioLive = true;
-    } catch {
-      s.audioLive = false; // autoplay refused → wall clock (visuals identical)
-    }
-  }
-
-  // Skip + Weiter input (§C-SYS2.2: overlay eats ALL taps; before t = 10 s
-  // they do nothing, after they cut to the end card).
-  root.addEventListener('click', (ev) => {
-    if (s.ended || s.finishing) return;
-    if (!s.skipVisible || !skipAllowed(s.clock.t, s.timeline.skipAfterSec)) return;
-    ev.stopPropagation();
-    doSkip();
-  });
-
-  if (DEV) console.log(`[recap] start L${level} track=${s.trackId} fallbackTrack=${pick.fallback} scene=${s.sceneMode} audio=${s.audioLive} bpm=${s.timeline.bpm} cues=${s.timeline.cues.length}`);
-
-  // Master loop: rAF for smooth visuals PLUS a 25 ms timer tick — rAF alone
-  // can gap 100–250 ms (throttled/hitchy frames, SwiftShader shader builds)
-  // which would fire cues late; the timer keeps the §A2 ±80 ms budget honest
-  // even when frames stall. step() is idempotent per timestamp.
-  s.lastFrame = performance.now();
-  const step = (nowMs) => {
-    if (sess !== s || s.finishing) return;
-    const dtSec = Math.min(0.25, Math.max(0, (nowMs - s.lastFrame) / 1000));
-    if (dtSec <= 0) return;
-    s.lastFrame = nowMs;
-    const elT = s.audioLive && s.el && !s.el.paused && Number.isFinite(s.el.currentTime)
-      ? s.el.currentTime : null;
-    s.clock = advanceClock(s.clock, { dtSec, elT, grid: s.timeline });
-    // Re-assert the medley suppressor: any audio.music(id) call resets it
-    // (audio.js §C3.4 line) — scene hooks firing mid-cinematic must not
-    // resurrect the medley under the recap track.
-    if (musicDirector.getStats().suppressed !== true) musicDirector.setSuppressed(true);
-    if (!s.ended) {
-      for (const cue of s.scheduler.advance(s.clock.t)) fireCue(cue);
-      s.liveSpan = spanAt(s.spans, s.clock.t);
-      s.nextSpan = nextSpanAt(s.spans, s.clock.t);
-      updatePops();
-      updateSkip();
-    }
-    updateDebug();
-  };
-  const frame = (nowMs) => {
-    if (sess !== s || s.finishing) return;
-    step(nowMs);
+    const frame = (nowMs) => {
+      if (sess !== s || s.finishing) return;
+      step(nowMs);
+      s.raf = requestAnimationFrame(frame);
+    };
     s.raf = requestAnimationFrame(frame);
-  };
-  s.raf = requestAnimationFrame(frame);
-  s.tick = setInterval(() => step(performance.now()), 25);
-  // The recap scene calls this BEFORE each render (§A2: sceneManager's rAF
-  // runs before this module's, so without it every cue pays the raster time).
-  s.step = step;
+    s.tick = setInterval(() => step(performance.now()), 25);
+    // The recap scene calls this BEFORE each render (§A2: sceneManager's rAF
+    // runs before this module's, so without it every cue pays the raster time).
+    s.step = step;
 
-  // Reveal (intro cue at t = 0 fired on the first frame above).
-  await fadeWhite(white, 0, OVERLAY.WHITE_FADE_MS);
-  return true;
+    // Reveal (intro cue at t = 0 fired on the first frame above).
+    await fadeWhite(white, 0, OVERLAY.WHITE_FADE_MS);
+    return true;
+  } catch (err) {
+    // V6/B1 'error' exit path: the rotation must never outlive a failed start.
+    restoreLandscape(s);
+    throw err;
+  }
 }
 
 // ── cue application ──────────────────────────────────────────────────────────
@@ -715,7 +952,11 @@ function updateDebug() {
     .map((r) => `${r.kind}@${r.bar} ${r.offsetMs >= 0 ? '+' : ''}${r.offsetMs}ms`)
     .join(' · ');
   const sum = s.recorder.summary();
-  el.textContent = `t ${s.clock.t.toFixed(2)}/${s.timeline.totalSec.toFixed(0)}s · bar ${bar} · beat ${beat} · bpm ${s.timeline.bpm}`
+  // V6/B1: live draw calls (previous frame's renderer.info) + rotation state
+  // — the landscape ≤150-per-vignette budget evidence rides this HUD.
+  const dc = s.sceneMode ? deps?.sceneManager?.renderer?.info?.render?.calls : null;
+  const extra = `${dc != null ? ` · dc ${dc}` : ''}${s.rotGuard?.active() ? ' · landscape' : ''}`;
+  el.textContent = `t ${s.clock.t.toFixed(2)}/${s.timeline.totalSec.toFixed(0)}s · bar ${bar} · beat ${beat} · bpm ${s.timeline.bpm}${extra}`
     + ` | ${rows || '—'} | max ${sum.maxAbsMs}ms mean ${sum.meanAbsMs}ms (${sum.within}/${sum.n} ≤ ${sum.budgetMs}ms)`;
 }
 
@@ -778,6 +1019,10 @@ async function finishRecap() {
     }, OVERLAY.AUDIO_FADE_MS + 50);
   }
   await fadeWhite(s.dom.white, 1, OVERLAY.EXIT_FADE_MS);
+  // V6/B1: un-rotate BEHIND the now-opaque exit white (the player never sees
+  // the swap) and BEFORE the return scene switch, so home builds against the
+  // restored portrait renderer size/aspect.
+  restoreLandscape(s);
   // V4/FIX-JUICE: when a real scene switch is involved, raise the AC-3 home
   // veil UNDER the white takeover (veil z-loading 10000 < recap z 10010) so
   // dropping the overlay reveals the cozy curtain, and the veil's own timing
@@ -878,6 +1123,39 @@ export function isPlaying() {
   return sess != null;
 }
 
+/**
+ * V6/B1 dev freeze-frame (CDP evidence hook, DEV probe only): hold the live
+ * cinematic at `biome` (span id or 0-based index) and `p` progress — the
+ * master clock pins, audio pauses, the vignette's ambience keeps ticking so
+ * captures stay alive. `pinRecap(null)` releases the pin (clock resumes on
+ * the wall clock; the paused element re-anchors it if it plays again).
+ * @param {string|number|null} biome span id ('city'…), index, or null=unpin
+ * @param {number} [p] progress 0..1 within the span
+ * @returns {{id: string, t: number}|null} the pinned span, null when unpinned
+ */
+function pinRecap(biome, p = 0.5) {
+  const s = sess;
+  if (!s || s.ended || s.finishing) return null;
+  if (biome == null) {
+    s.pinnedT = null;
+    return null;
+  }
+  const span = typeof biome === 'number'
+    ? s.spans[Math.floor(biome)]
+    : s.spans.find((x) => x.id === biome);
+  if (!span) return null;
+  const prog = Math.min(1, Math.max(0, Number(p) || 0));
+  const t = span.from + prog * Math.max(0, span.to - span.from);
+  s.scheduler.skipTo(t); // consume pending cues before the pin (no refire)
+  s.pinnedT = t;
+  s.clock = { t, anchorBar: barIndexAt(s.timeline, t) };
+  s.liveSpan = spanAt(s.spans, t);
+  if (s.el && !s.el.paused) {
+    try { s.el.pause(); } catch { /* wall clock is pinned anyway */ }
+  }
+  return { id: span.id, t };
+}
+
 /** Eval/CDP evidence surface: live session probe + last run's §A2 summary. */
 export function getRecapStats() {
   const s = sess;
@@ -896,6 +1174,12 @@ export function getRecapStats() {
     renderScale: s?.renderScale ?? null,
     ended: s?.ended ?? null,
     vignette: s?.liveSpan?.id ?? null,
+    // V6/B1 landscape evidence: live rotation state + apply/restore balance
+    // and the previous frame's draw calls (≤150-per-vignette budget).
+    landscape: s?.rotGuard?.active() ?? false,
+    rotationCounts: s?.rotGuard?.counts() ?? null,
+    drawCalls: s?.sceneMode ? deps?.sceneManager?.renderer?.info?.render?.calls ?? null : null,
+    pinnedT: s?.pinnedT ?? null,
     offsets: s ? s.recorder.rows() : [],
     summary: s ? s.recorder.summary() : null,
     lastSummary,
@@ -970,6 +1254,9 @@ export function initRecapOverlay(d) {
       replay: (row, o = {}) => replayRecap({ ...row, ...o }),
       skip: doSkip,
       finish: finishRecap,
+      // V6/B1 capture hooks: freeze-frame a biome + toggle the debug HUD
+      pin: pinRecap,
+      debug: (on) => { if (sess) sess.beatDebug = on !== false; },
     };
   }
 }

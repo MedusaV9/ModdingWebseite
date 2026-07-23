@@ -77,7 +77,9 @@ export const VIGNETTE_SPECS = Object.freeze({
     lookPath: Object.freeze([[-6, 1.1, -0.5], [-2, 1.0, -0.5], [2, 1.0, -0.5], [6, 1.1, -0.5]]),
     goobyPath: Object.freeze([[-9, 0, 1.4], [-4.5, 0, 1.4], [0, 0, 1.4], [4.5, 0, 1.4], [9, 0, 1.4]]),
     goobyScale: 0.55,
-    goobyLead: 0.03,
+    // V6/B1: lead zeroed — it pushed the sedan toward the crop edge at p→1
+    // (RC1 aggravator); the landscape frame keeps it centered without it.
+    goobyLead: 0,
     bg: '#aee0ff',
     fallback: Object.freeze(['#aee0ff', '#ffe9c9']),
   }),
@@ -111,8 +113,11 @@ export const VIGNETTE_SPECS = Object.freeze({
     goobyPath: Object.freeze([[-1.4, 1.4, 4], [-0.5, 1.7, 0], [0.7, 2.0, -4], [1.6, 2.5, -8.5]]),
     goobyScale: 0.42,
     goobyLead: 0,
-    bg: '#0a0d2a',
-    fallback: Object.freeze(['#0a0d2a', '#27164d']),
+    // V6/B1: the landscape frustum sees past the backdrop cylinder's arc —
+    // bg matches the painting's nebula edge tones (was #0a0d2a near-black,
+    // a hard seam against the pink/violet clouds).
+    bg: '#8a6cbd',
+    fallback: Object.freeze(['#8a6cbd', '#27164d']),
   }),
   // #5 Spukgarten — „creep-dolly between graves, low fog plane“; Gooby tiptoes
   // the grave aisle, jack-o'-lanterns glowing, fog hugging the dirt.
@@ -140,7 +145,7 @@ export const VIGNETTE_SPECS = Object.freeze({
     lookPath: Object.freeze([[-4.6, 0.7, -1.1], [-1.6, 0.7, -1.1], [1.5, 0.7, -1.1], [4.8, 0.7, -1.1]]),
     goobyPath: Object.freeze([[-5.2, 0, 0.3], [-2.4, 0, 0.2], [0.4, 0, 0.3], [2.8, 0, 0.2], [5.4, 0, 0.3]]),
     goobyScale: 0.8,
-    goobyLead: 0.02,
+    goobyLead: 0, // V6/B1: lead zeroed (RC1 crop-edge aggravator)
     // the painted bakery interior IS the back wall — pull the cylinder close
     backdropRadius: 14,
     backdropHeight: 22,
@@ -160,8 +165,10 @@ export const VIGNETTE_SPECS = Object.freeze({
     goobyPath: Object.freeze([[-2.4, 2.0, -2.2], [-0.9, 3.4, -2.7], [0.8, 5.4, -3.2], [2.1, 8.2, -3.7]]),
     goobyScale: 0.95,
     goobyLead: 0,
-    bg: '#0b1030',
-    fallback: Object.freeze(['#0b1030', '#27407a']),
+    // V6/B1: same landscape past-the-arc rule — match the painting's deep
+    // sky edges (was #0b1030, visibly darker than the starfield).
+    bg: '#22397f',
+    fallback: Object.freeze(['#22397f', '#27407a']),
   }),
   // #8 Spielzeugzimmer — „toy-height push past the racetrack“; mini Gooby laps
   // the toy-car-kit track in a toy kart, camera skims the rug beside it.
@@ -174,7 +181,7 @@ export const VIGNETTE_SPECS = Object.freeze({
     lookPath: Object.freeze([[-4.2, 0.25, -0.3], [-1.4, 0.22, -0.5], [1.4, 0.22, -0.3], [4.2, 0.25, -0.5]]),
     goobyPath: Object.freeze([[-5.6, 0.05, 0.2], [-2.8, 0.05, -0.5], [0, 0.05, 0.3], [2.8, 0.05, -0.4], [5.8, 0.05, 0.2]]),
     goobyScale: 0.34,
-    goobyLead: 0.02,
+    goobyLead: 0, // V6/B1: lead zeroed (RC1 crop-edge aggravator)
     bg: '#ffdfc2',
     fallback: Object.freeze(['#ffd9b8', '#ffefdb']),
   }),
@@ -266,6 +273,173 @@ export function goobyPose(id, p) {
   const dz = ahead[2] - behind[2];
   const yaw = dx * dx + dz * dz > 1e-10 ? Math.atan2(dx, dz) : 0;
   return { position: pos, yaw };
+}
+
+// ---------------------------------------------------------------------------
+// V6/B1 — landscape framing math (PLAN6 Wave B/B1). The recap now renders
+// into a ROTATED landscape frame (aspect ≈ 2.16 on a 390×844 phone — the
+// wide frame the dolly splines were authored for), so the framing contract
+// is verifiable HEADLESSLY: camera pose + fov + aspect fully determine where
+// Gooby projects. These helpers do that projection with pure math (no
+// three.js), pin the center-safe region, fix the RC1 aggravators (goobyLead
+// crop-push) and provide the RC2 seat + face-the-camera bias rules that
+// vignettes.js consumes.
+// ---------------------------------------------------------------------------
+
+/** The rotated-frame aspect the splines are verified against (844/390 —
+ * `renderer.setSize(innerHeight, innerWidth)` on the reference phone). */
+export const LANDSCAPE_ASPECT = 844 / 390;
+
+/** Center-safe NDC region (|x| ≤ X, |y| ≤ Y) Gooby's body center must stay
+ * inside across p ∈ {0.1…0.9} in every biome — pinned by the test suite. */
+export const CENTER_SAFE = Object.freeze({ X: 0.7, Y: 0.78 });
+
+/** V6/B1 face-the-camera bias (walk biomes): yaw blends toward the camera
+ * bearing once the path tangent points more than AWAY_START_RAD away from
+ * it, ramping to MAX_BIAS of the remaining angle when fully back-turned. */
+export const FACING = Object.freeze({
+  AWAY_START_RAD: (70 * Math.PI) / 180,
+  MAX_BIAS: 0.38,
+});
+
+/** V6/B1 RC2: rig-feet seat offset below a vehicle's hull-top plane (the
+ * sitDrive clip tucks the legs; a small sink keeps the rump ON the hull). */
+export const SEAT = Object.freeze({ SINK: 0.06 });
+
+/** @param {number} a rad @returns {number} wrapped to [−π, π) */
+export function wrapAngle(a) {
+  const v = Number(a) || 0;
+  return ((v + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+}
+
+/**
+ * V6/B1 RC2 seat rule: a vehicle rig's group.y comes from the hull's
+ * MEASURED Box3 top (vignettes.js computes it per build), never a constant —
+ * `fitModel` scales by the max dimension, so a hard-coded seat Y silently
+ * floats or sinks whenever the model's proportions differ.
+ * @param {number} hullTopY the hull Box3's max.y in vehicle-local space
+ * @param {number} [sink] how far the feet origin sinks below the top plane
+ *   (negatives clamp to 0 — a "lift" would reintroduce the RC2 hover)
+ * @returns {number} seat Y for the rig group
+ */
+export function seatY(hullTopY, sink = SEAT.SINK) {
+  const top = Number(hullTopY);
+  const s = Number.isFinite(Number(sink)) ? Math.max(0, Number(sink)) : SEAT.SINK;
+  return (Number.isFinite(top) ? top : 0) - s;
+}
+
+/**
+ * Orthonormal camera basis of a dolly pose (three.js lookAt convention:
+ * forward = look − position, up seeded (0,1,0), then rollDeg about the view
+ * axis exactly like the driver's camera.rotateZ).
+ * @param {{position: number[], look: number[], rollDeg?: number}} pose
+ * @returns {{right: number[], up: number[], forward: number[]}}
+ */
+export function cameraBasis(pose) {
+  const f = [
+    pose.look[0] - pose.position[0],
+    pose.look[1] - pose.position[1],
+    pose.look[2] - pose.position[2],
+  ];
+  const fl = Math.hypot(f[0], f[1], f[2]) || 1;
+  const forward = [f[0] / fl, f[1] / fl, f[2] / fl];
+  // right = forward × worldUp, re-orthogonalized up = right × forward
+  const r = [-forward[2], 0, forward[0]];
+  const rl = Math.hypot(r[0], r[1], r[2]) || 1;
+  let right = [r[0] / rl, r[1] / rl, r[2] / rl];
+  let up = [
+    right[1] * forward[2] - right[2] * forward[1],
+    right[2] * forward[0] - right[0] * forward[2],
+    right[0] * forward[1] - right[1] * forward[0],
+  ];
+  const roll = ((Number(pose.rollDeg) || 0) * Math.PI) / 180;
+  if (roll !== 0) {
+    const c = Math.cos(roll);
+    const s = Math.sin(roll);
+    const right2 = right.map((v, i) => v * c + up[i] * s);
+    up = up.map((v, i) => v * c - right[i] * s);
+    right = right2;
+  }
+  return { right, up, forward };
+}
+
+/**
+ * Project a world point through a dolly pose at the given aspect → NDC
+ * (x right, y up, both −1..1 inside the frame) + view depth. Pure mirror of
+ * PerspectiveCamera: fov is VERTICAL, tan(hFov/2) = tan(vFov/2) × aspect.
+ * @param {{position: number[], look: number[], fov: number, rollDeg?: number}} pose
+ * @param {number} aspect width / height of the frame
+ * @param {number[]} point [x, y, z] world position
+ * @returns {{x: number, y: number, depth: number}} depth > 0 = in front
+ */
+export function projectPoint(pose, aspect, point) {
+  const { right, up, forward } = cameraBasis(pose);
+  const d = [
+    point[0] - pose.position[0],
+    point[1] - pose.position[1],
+    point[2] - pose.position[2],
+  ];
+  const vx = d[0] * right[0] + d[1] * right[1] + d[2] * right[2];
+  const vy = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+  const depth = d[0] * forward[0] + d[1] * forward[1] + d[2] * forward[2];
+  const tv = Math.tan(((Number(pose.fov) || 50) * Math.PI) / 360);
+  const a = Math.max(1e-6, Number(aspect) || 1);
+  const z = Math.max(1e-6, depth);
+  return { x: vx / z / (tv * a), y: vy / z / tv, depth };
+}
+
+/**
+ * Where Gooby's BODY CENTER lands in the frame at progress p — the pose's
+ * path anchor is the feet/vehicle origin, so half the ~1.05-unit rig height
+ * (× goobyScale) approximates the visual center the framing tests pin.
+ * @param {string} id vignette id
+ * @param {number} p progress 0..1
+ * @param {number} [aspect] frame aspect (defaults to the landscape frame)
+ * @returns {{x: number, y: number, depth: number}|null} NDC + depth
+ */
+export function goobyFrameNdc(id, p, aspect = LANDSCAPE_ASPECT) {
+  const spec = VIGNETTE_SPECS[id];
+  const cam = dollyPose(id, p);
+  const g = goobyPose(id, p);
+  if (!spec || !cam || !g) return null;
+  const center = [
+    g.position[0],
+    g.position[1] + 0.55 * (spec.goobyScale ?? 1),
+    g.position[2],
+  ];
+  return projectPoint(cam, aspect, center);
+}
+
+/**
+ * V6/B1 face-the-camera bias (walk biomes — meadow/spookGarden/bakery):
+ * yaw comes from the path tangent, but once the tangent points away from
+ * the camera (the player would watch Gooby's back) it blends toward the
+ * camera bearing — never fully (he still travels the path), ramping to
+ * FACING.MAX_BIAS of the remaining angle when fully back-turned. Pure and
+ * continuous in p — vignettes.js applies the target directly every frame.
+ * @param {string} id vignette id
+ * @param {number} p progress 0..1
+ * @returns {{yaw: number, tangentYaw: number, toCam: number, bias: number}|null}
+ */
+export function goobyFacingYaw(id, p) {
+  const g = goobyPose(id, p);
+  const cam = dollyPose(id, p);
+  if (!g || !cam) return null;
+  const toCam = Math.atan2(
+    cam.position[0] - g.position[0],
+    cam.position[2] - g.position[2]
+  );
+  const diff = wrapAngle(toCam - g.yaw);
+  const away = Math.abs(diff);
+  const span = Math.PI - FACING.AWAY_START_RAD;
+  const w = clamp((away - FACING.AWAY_START_RAD) / Math.max(1e-6, span), 0, 1);
+  const bias = FACING.MAX_BIAS * w;
+  return {
+    yaw: wrapAngle(g.yaw + diff * bias),
+    tangentYaw: g.yaw,
+    toCam,
+    bias,
+  };
 }
 
 // ---------------------------------------------------------------------------

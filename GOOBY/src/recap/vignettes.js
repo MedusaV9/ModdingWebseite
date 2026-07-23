@@ -57,6 +57,8 @@ import {
   dollyPose as dollyPoseOf, goobyPose, clamp,
   // POLISH-J: pure per-biome motion accents (flutter/drift/streak rows)
   VIGNETTE_ACCENTS, flutterPose, driftPose, streakPose,
+  // V6/B1: measured-hull seat rule (RC2) + face-the-camera walk bias (RC1)
+  seatY, goobyFacingYaw,
 } from './vignettes.logic.js';
 import { RECAP_BACKDROP_FILES, recapBackdropUrl } from './recapAssets.js';
 import { createGooby } from '../character/gooby.js';
@@ -297,7 +299,14 @@ function createStage(id, scene, assets) {
   group.name = `recap-vignette-${id}`;
   scene.add(group);
   const prevBackground = scene.background;
-  scene.background = new THREE.Color(spec.bg);
+  // V6/B1: keep OUR instance so dispose() can tell whether the background is
+  // still ours. The player defers the outgoing vignette's dispose ~400 ms
+  // past the cut (raster-stall smoothing), by which time the INCOMING build
+  // has already set its own color — the old unconditional restore clobbered
+  // it one biome stale (invisible in portrait; the landscape frustum is wide
+  // enough to see past the backdrop cylinder where scene.background shows).
+  const myBackground = new THREE.Color(spec.bg);
+  scene.background = myBackground;
 
   /** resources THIS build created (kit clones share cached masters — skipped) */
   const ownedGeos = [];
@@ -432,7 +441,9 @@ function createStage(id, scene, assets) {
       for (const geo of ownedGeos) geo.dispose();
       for (const mat of ownedMats) mat.dispose();
       scene.remove(group);
-      scene.background = prevBackground;
+      // V6/B1: restore ONLY when the background is still ours — a deferred
+      // dispose must never clobber the next vignette's already-set color.
+      if (scene.background === myBackground) scene.background = prevBackground;
     },
   };
   return stage;
@@ -562,7 +573,8 @@ function buildMeadow(stage) {
       t += dt;
       const pose = goobyPose('meadow', p);
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
-      gooby.group.rotation.y = pose.yaw;
+      // V6/B1: face-the-camera bias — never fully back-to-camera on the walk
+      gooby.group.rotation.y = goobyFacingYaw('meadow', p)?.yaw ?? pose.yaw;
       // POLISH-J: breeze — flowers/grass sway; sparkles pop along the path
       for (let i = 0; i < swayers.length; i++) {
         swayers[i].rotation.z = Math.sin(t * 1.7 + i * 1.3) * 0.06;
@@ -632,9 +644,11 @@ function buildCity(stage) {
     wheels.push(wheel);
   }
   // seated high so THEIR Gooby pokes out of the cabin (sunroof style —
-  // wardrobe continuity must read at the dolly's distance)
+  // wardrobe continuity must read at the dolly's distance). V6/B1 RC2: the
+  // height comes from the sedan's MEASURED roof (Box3 top − 0.15 sink
+  // reproduces the tuned sunroof look), never a constant.
   const gooby = stage.gooby({ clip: 'sitDrive' });
-  gooby.group.position.set(0, 0.92, -0.12);
+  gooby.group.position.set(0, seatY(box.max.y, 0.15), -0.12);
   car.add(gooby.group);
   stage.group.add(car);
 
@@ -804,7 +818,11 @@ function buildSpace(stage) {
   speeder.rotation.y = Math.PI; // nose toward -z (travel direction)
   craft.add(speeder);
   const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
-  gooby.group.position.set(0, 0.42, 0.35);
+  // V6/B1 RC2: seat on the MEASURED hull top (fitModel centers the speeder, so
+  // any constant here silently floats Gooby mid-air whenever the model's
+  // proportions differ — the old hard-coded 0.42 sat ~0.2 above the hull).
+  const hullTop = new THREE.Box3().setFromObject(speeder).max.y;
+  gooby.group.position.set(0, seatY(hullTop), 0.35);
   craft.add(gooby.group);
   const glow = stage.glowSprite('glowCool', 1.1, [0, 0.1, 0.9]);
   craft.add(glow);
@@ -909,7 +927,8 @@ function buildSpookGarden(stage) {
       t += dt;
       const pose = goobyPose('spookGarden', p);
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
-      gooby.group.rotation.y = pose.yaw;
+      // V6/B1: face-the-camera bias — never fully back-to-camera on the walk
+      gooby.group.rotation.y = goobyFacingYaw('spookGarden', p)?.yaw ?? pose.yaw;
       fogs[0].position.x = Math.sin(t * 0.15) * 1.6;
       fogs[1].position.x = Math.sin(t * 0.11 + 2) * -1.4;
       // POLISH-J: candle flicker — two mixed sines never settle into a loop
@@ -980,7 +999,8 @@ function buildBakery(stage) {
       t += dt;
       const pose = goobyPose('bakery', p);
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
-      gooby.group.rotation.y = pose.yaw;
+      // V6/B1: face-the-camera bias — never fully back-to-camera on the walk
+      gooby.group.rotation.y = goobyFacingYaw('bakery', p)?.yaw ?? pose.yaw;
       // POLISH-J: the oven glow breathes warm while the steam drifts curl
       const breathe = 0.85 + 0.15 * Math.sin(t * 2.2);
       ovenLight.intensity = 6 * breathe;
@@ -1142,7 +1162,9 @@ function buildToyRoom(stage) {
     wheels.push(wheel);
   }
   const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
-  gooby.group.position.set(0, 0.3, -0.02);
+  // V6/B1 RC2: cockpit seat from the kart body's MEASURED Box3 top (the old
+  // constant 0.3 floated the rig ~3 cm above the grounded body's roof line).
+  gooby.group.position.set(0, seatY(box.max.y), -0.02);
   kart.add(gooby.group);
   stage.group.add(kart);
 

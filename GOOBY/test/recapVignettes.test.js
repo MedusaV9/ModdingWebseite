@@ -22,6 +22,17 @@ import {
   flutterPose,
   driftPose,
   streakPose,
+  // V6/B1 landscape framing contract (headless projection + seat/facing rules)
+  LANDSCAPE_ASPECT,
+  CENTER_SAFE,
+  FACING,
+  SEAT,
+  wrapAngle,
+  seatY,
+  cameraBasis,
+  projectPoint,
+  goobyFrameNdc,
+  goobyFacingYaw,
 } from '../src/recap/vignettes.logic.js';
 import {
   RECAP_BACKDROP_FILES,
@@ -360,4 +371,135 @@ test('dev harness surface: ?recappreview= param wired + documented', () => {
     fileURLToPath(new URL('../src/data/harnessParams.js', import.meta.url)), 'utf8'
   );
   assert.match(paramsSrc, /param: 'recappreview'/, 'dev-panel cheat sheet row present');
+});
+
+// ---------------------------------------------------------------------------
+// V6/B1 — landscape framing contract (PLAN6 Wave B/B1). The recap renders a
+// ROTATED landscape frame (LANDSCAPE_ASPECT ≈ 2.16 on the 390×844 reference
+// phone), and camera pose + fov + aspect fully determine where Gooby lands —
+// so the RC1 "Gooby out of frame" class of bug is pinned HEADLESSLY here.
+// ---------------------------------------------------------------------------
+
+test('V6/B1 projectPoint: pure PerspectiveCamera mirror (center/offsets/depth)', () => {
+  const pose = { position: [0, 0, 5], look: [0, 0, 0], fov: 50 };
+  const center = projectPoint(pose, LANDSCAPE_ASPECT, [0, 0, 0]);
+  assert.ok(Math.abs(center.x) < 1e-9 && Math.abs(center.y) < 1e-9, 'look point → frame center');
+  assert.ok(Math.abs(center.depth - 5) < 1e-9, 'view depth');
+  assert.ok(projectPoint(pose, LANDSCAPE_ASPECT, [1, 0, 0]).x > 0, '+x → right of frame');
+  assert.ok(projectPoint(pose, LANDSCAPE_ASPECT, [0, 1, 0]).y > 0, '+y → up in frame');
+  assert.ok(projectPoint(pose, LANDSCAPE_ASPECT, [0, 0, 10]).depth < 0, 'behind → depth < 0');
+  // wider aspect shrinks |x| for the same offset (horizontal fov grows)
+  const wide = projectPoint(pose, 2.16, [1, 0, 0]);
+  const narrow = projectPoint(pose, 0.46, [1, 0, 0]);
+  assert.ok(wide.x < narrow.x, 'aspect widens the horizontal frame');
+});
+
+test('V6/B1 cameraBasis: orthonormal, faces the look point, roll spins the frame', () => {
+  const pose = { position: [2, 1, 6], look: [-1, 2, -3], rollDeg: 0 };
+  const { right, up, forward } = cameraBasis(pose);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  for (const [name, v] of [['right', right], ['up', up], ['forward', forward]]) {
+    assert.ok(Math.abs(Math.hypot(...v) - 1) < 1e-9, `${name} unit length`);
+  }
+  assert.ok(Math.abs(dot(right, up)) < 1e-9 && Math.abs(dot(right, forward)) < 1e-9
+    && Math.abs(dot(up, forward)) < 1e-9, 'orthogonal basis');
+  const rolled = cameraBasis({ ...pose, rollDeg: 30 });
+  assert.ok(Math.abs(dot(rolled.forward, forward) - 1) < 1e-9, 'roll keeps the view axis');
+  assert.ok(Math.abs(dot(rolled.right, right) - Math.cos(Math.PI / 6)) < 1e-9, 'roll angle exact');
+});
+
+test('V6/B1 CENTER-SAFE: Gooby projects inside the safe region in ALL 8 biomes', () => {
+  // The binding B1 acceptance: across p ∈ {0.1,0.3,0.5,0.7,0.9} the body
+  // center stays inside |x| ≤ CENTER_SAFE.X, |y| ≤ CENTER_SAFE.Y at the
+  // landscape aspect — catches RC1 (city p→1 offscreen, bakery corner-clip,
+  // spookGarden edge-pin) and any future spline retune that re-breaks it.
+  for (const id of VIGNETTE_IDS) {
+    for (const p of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      const ndc = goobyFrameNdc(id, p);
+      assert.ok(ndc, `${id} projects at p=${p}`);
+      assert.ok(ndc.depth > 0.5, `${id} p=${p} Gooby in front of the camera (depth ${ndc.depth.toFixed(2)})`);
+      assert.ok(Math.abs(ndc.x) <= CENTER_SAFE.X, `${id} p=${p} x ${ndc.x.toFixed(2)} inside ±${CENTER_SAFE.X}`);
+      assert.ok(Math.abs(ndc.y) <= CENTER_SAFE.Y, `${id} p=${p} y ${ndc.y.toFixed(2)} inside ±${CENTER_SAFE.Y}`);
+    }
+  }
+  assert.equal(goobyFrameNdc('nope', 0.5), null);
+});
+
+test('V6/B1 RC1 fix pinned: crop-push goobyLead zeroed on city/bakery/toyRoom', () => {
+  assert.ok(Math.abs(LANDSCAPE_ASPECT - 844 / 390) < 1e-9, 'reference frame 844×390');
+  assert.equal(VIGNETTE_SPECS.city.goobyLead, 0);
+  assert.equal(VIGNETTE_SPECS.bakery.goobyLead, 0);
+  assert.equal(VIGNETTE_SPECS.toyRoom.goobyLead, 0);
+});
+
+test('V6/B1 seatY (RC2): measured hull top − sink; a "lift" can never hover', () => {
+  assert.ok(Math.abs(seatY(0.32) - (0.32 - SEAT.SINK)) < 1e-9);
+  assert.ok(Math.abs(seatY(0.32, 0.1) - 0.22) < 1e-9);
+  // negative sink clamps to 0 — seating ABOVE the measured top would
+  // reintroduce exactly the RC2 mid-air hover this rule exists to kill
+  assert.ok(Math.abs(seatY(0.2, -0.1) - 0.2) < 1e-9, 'negative sink clamps');
+  assert.ok(Math.abs(seatY(NaN) - -SEAT.SINK) < 1e-9, 'junk top folds to 0');
+  assert.ok(Math.abs(seatY(0.5, NaN) - (0.5 - SEAT.SINK)) < 1e-9, 'junk sink → default');
+});
+
+test('V6/B1 wrapAngle: wraps into [−π, π)', () => {
+  assert.ok(Math.abs(wrapAngle(3 * Math.PI) - -Math.PI) < 1e-9);
+  assert.ok(Math.abs(wrapAngle(2 * Math.PI)) < 1e-9);
+  assert.ok(Math.abs(wrapAngle(-Math.PI / 2) - -Math.PI / 2) < 1e-9);
+  assert.equal(wrapAngle(undefined), 0);
+});
+
+test('V6/B1 facing bias: walk-biome Gooby is never fully back-to-camera', () => {
+  // Invariant: the biased yaw never points farther from the camera than the
+  // raw tangent, and the residual away-angle is bounded by π·(1 − MAX_BIAS)
+  // (< AWAY_START poses pass through un-biased — bound holds trivially; the
+  // ramp's interior maximum sits ~5e-6 above the endpoint, hence the slack).
+  const bound = Math.PI * (1 - FACING.MAX_BIAS) + 1e-4;
+  let engaged = 0;
+  for (const id of ['meadow', 'spookGarden', 'bakery']) {
+    assert.equal(VIGNETTE_SPECS[id].travel, 'walk', `${id} is a walk biome`);
+    for (let i = 0; i <= 20; i++) {
+      const p = i / 20;
+      const f = goobyFacingYaw(id, p);
+      assert.ok(f, `${id} p=${p} resolves`);
+      const rawAway = Math.abs(wrapAngle(f.toCam - f.tangentYaw));
+      const biasedAway = Math.abs(wrapAngle(f.toCam - f.yaw));
+      assert.ok(biasedAway <= rawAway + 1e-9, `${id} p=${p} bias never turns him further away`);
+      assert.ok(biasedAway <= bound, `${id} p=${p} residual away ${biasedAway.toFixed(2)} ≤ ${bound.toFixed(2)}`);
+      assert.ok(f.bias >= 0 && f.bias <= FACING.MAX_BIAS + 1e-9, `${id} bias 0..MAX`);
+      if (rawAway < FACING.AWAY_START_RAD) {
+        assert.ok(Math.abs(wrapAngle(f.yaw - f.tangentYaw)) < 1e-9, `${id} p=${p} no bias while facing`);
+      } else if (f.bias > 1e-6) {
+        engaged += 1;
+      }
+    }
+  }
+  assert.ok(engaged > 0, 'the bias actually engages somewhere on the walk paths');
+  assert.equal(goobyFacingYaw('nope', 0.5), null);
+});
+
+test('V6/B1 wiring pins: measured seats + facing bias land in vignettes.js', () => {
+  // RC2 — the space seat comes from the speeder's MEASURED Box3 top; the
+  // old hard-coded hover constant must be gone.
+  assert.match(vignettesSrc, /new THREE\.Box3\(\)\.setFromObject\(speeder\)\.max\.y/);
+  assert.match(vignettesSrc, /gooby\.group\.position\.set\(0, seatY\(hullTop\), 0\.35\)/);
+  assert.doesNotMatch(vignettesSrc, /gooby\.group\.position\.set\(0, 0\.42/);
+  // city sunroof + toyRoom cockpit ride their existing wheel-placement Box3
+  assert.match(vignettesSrc, /seatY\(box\.max\.y, 0\.15\)/);
+  assert.match(vignettesSrc, /seatY\(box\.max\.y\), -0\.02/);
+  // RC1 — all three walk ticks apply the face-the-camera bias
+  for (const id of ['meadow', 'spookGarden', 'bakery']) {
+    assert.match(vignettesSrc, new RegExp(`goobyFacingYaw\\('${id}', p\\)`), `${id} tick biased`);
+  }
+  assert.match(vignettesSrc, /seatY, goobyFacingYaw,\r?\n\} from '\.\/vignettes\.logic\.js'/);
+  // Landscape-exposed bg-clobber guard: the player defers the outgoing
+  // vignette's dispose past the cut, so dispose may only restore
+  // scene.background while it is still ITS OWN instance — the wide landscape
+  // frustum sees past the backdrop cylinder where a stale color would show.
+  assert.match(vignettesSrc, /const myBackground = new THREE\.Color\(spec\.bg\)/);
+  assert.match(
+    vignettesSrc,
+    /if \(scene\.background === myBackground\) scene\.background = prevBackground;/,
+    'dispose restores the background only when still its own'
+  );
 });

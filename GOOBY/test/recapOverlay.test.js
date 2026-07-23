@@ -18,6 +18,7 @@ import {
   popDurations, skipAllowed, displayMilestone, rewardCoins, replayRewardFrom,
   historyRows, agoLabel, canAutoStart, createOffsetRecorder,
   endCardHighlights, HIGHLIGHT_ICONS, // POLISH-J
+  rotatedFrame, shouldRotate, createRotationGuard, // V6/B1 landscape
 } from '../src/ui/recapOverlay.logic.js';
 import { RECAP, STAT_CATALOG, beatGrid } from '../src/systems/recap.js';
 import { DEFAULT_BIOMES, buildTimeline } from '../src/systems/recapDirector.js';
@@ -430,4 +431,127 @@ test('OVERLAY constants: §C-SYS2 numbers pinned', () => {
   assert.equal(OVERLAY.SKIP_FADE_IN_MS, 1000);
   assert.equal(OVERLAY.SKIP_OPACITY, 0.4);
   assert.equal(OVERLAY.BEAT_BUDGET_MS, 80);
+});
+
+// ── V6/B1 — landscape presentation (PLAN6 Wave B/B1) ────────────────────────
+
+test('V6/B1 rotatedFrame: 390×844 phone → 844×390 layer, insets re-mapped', () => {
+  // player turns the phone counter-clockwise (home indicator right): the
+  // notch (physical top) becomes the rotated layer's LEFT edge, the home bar
+  // its RIGHT, physical right→top, physical left→bottom.
+  const f = rotatedFrame({
+    width: 390, height: 844,
+    insets: { top: 59, right: 0, bottom: 34, left: 0 },
+  });
+  assert.deepEqual(f, {
+    rw: 844, rh: 390,
+    rsafe: { left: 59, right: 34, top: 0, bottom: 0 },
+  });
+  const g = rotatedFrame({
+    width: 390, height: 844,
+    insets: { top: 1, right: 2, bottom: 3, left: 4 },
+  });
+  assert.deepEqual(g.rsafe, { left: 1, top: 2, right: 3, bottom: 4 });
+});
+
+test('V6/B1 rotatedFrame: integer px only, junk folds to 0', () => {
+  const f = rotatedFrame({
+    width: 390.6, height: 843.2,
+    insets: { top: 58.7, right: -3, bottom: 'x', left: undefined },
+  });
+  assert.deepEqual(f, {
+    rw: 843, rh: 391,
+    rsafe: { left: 59, right: 0, top: 0, bottom: 0 },
+  });
+  assert.deepEqual(rotatedFrame(), { rw: 0, rh: 0, rsafe: { left: 0, right: 0, top: 0, bottom: 0 } });
+  assert.deepEqual(rotatedFrame(undefined).rsafe, { left: 0, right: 0, top: 0, bottom: 0 });
+});
+
+test('V6/B1 shouldRotate: portrait-only; reduced motion keeps portrait', () => {
+  assert.equal(shouldRotate({ reducedMotion: false, width: 390, height: 844 }), true);
+  assert.equal(shouldRotate({ reducedMotion: true, width: 390, height: 844 }), false, 'reduced-motion fallback');
+  assert.equal(shouldRotate({ reducedMotion: false, width: 1280, height: 800 }), false, 'landscape window never double-rotates');
+  assert.equal(shouldRotate({ reducedMotion: false, width: 800, height: 800 }), false, 'square = not portrait');
+  assert.equal(shouldRotate({ reducedMotion: false, width: 0, height: 844 }), false, 'zero width');
+  assert.equal(shouldRotate(), false);
+});
+
+test('V6/B1 createRotationGuard: idempotent apply/restore pairs, balanced()', () => {
+  const g = createRotationGuard();
+  assert.equal(g.active(), false);
+  assert.equal(g.balanced(), true, 'fresh guard is balanced');
+  assert.equal(g.restore(), false, 'restore before apply is a no-op');
+  assert.equal(g.apply(), true);
+  assert.equal(g.apply(), false, 'double apply is a no-op');
+  assert.equal(g.active(), true);
+  assert.equal(g.balanced(), false, 'active ≠ balanced');
+  assert.equal(g.restore(), true);
+  assert.equal(g.restore(), false, 'double restore is a no-op (dispose + finish)');
+  assert.equal(g.active(), false);
+  assert.equal(g.balanced(), true, 'a restore for every apply');
+  assert.deepEqual(g.counts(), { applies: 1, restores: 1 });
+  // a second cinematic on the same guard keeps the invariant
+  g.apply();
+  g.restore();
+  assert.equal(g.balanced(), true);
+  assert.deepEqual(g.counts(), { applies: 2, restores: 2 });
+});
+
+test('V6/B1 restore-on-exit pins: every exit path un-rotates (source scan)', () => {
+  const overlay = readFileSync(join(ROOT, 'src/ui/recapOverlay.js'), 'utf8');
+  // apply happens once, behind the entry white, after scene-mode resolution
+  assert.match(overlay, /applyLandscape\(s\);\r?\n {2}try \{/);
+  // finish path: restore BEHIND the opaque exit white, before the home switch
+  assert.match(
+    overlay,
+    /await fadeWhite\(s\.dom\.white, 1, OVERLAY\.EXIT_FADE_MS\);[\s\S]{0,400}?restoreLandscape\(s\);/,
+    'finishRecap restores behind the exit white'
+  );
+  // error path: a failed start rethrows AFTER restoring
+  assert.match(overlay, /restoreLandscape\(s\);\r?\n {4}throw err;/, 'startCinematic error path restores');
+  // scene-dispose path: any switch away from the recap scene restores too
+  assert.match(overlay, /if \(sess\) restoreLandscape\(sess\);/, 'recap scene dispose restores');
+  // live re-asserts (sceneManager.onResize re-applies portrait sizes) hooked
+  // AND unhooked as a pair
+  assert.match(overlay, /window\.addEventListener\('resize', reassert\)/);
+  assert.match(overlay, /document\.addEventListener\('visibilitychange', reassert\)/);
+  assert.match(overlay, /window\.removeEventListener\('resize', reassert\)/);
+  assert.match(overlay, /document\.removeEventListener\('visibilitychange', reassert\)/);
+  // renderer swap + symmetric restore (JS px — never 100vw/vh)
+  assert.match(overlay, /renderer\?\.setSize\?\.\(rw, rh\)/, 'landscape renderer swap');
+  assert.match(overlay, /renderer\?\.setSize\?\.\(window\.innerWidth, window\.innerHeight\)/, 'portrait restore');
+  // reduced-motion gate + the portrait-only decision ride the session
+  assert.match(overlay, /reducedMotion: prefersReducedMotion\(\)/);
+  // injected sheet (styles.css untouched this wave): root + canvas both rotate
+  assert.match(overlay, /data-owner="v6-b1-recap-landscape"/);
+  assert.match(overlay, /\.g64-root\.g64-landscape \{[^}]*transform: rotate\(90deg\) translateY\(-100%\)/);
+  assert.match(overlay, /canvas\.g64-landscape-canvas \{[^}]*transform: rotate\(90deg\) translateY\(-100%\)/);
+  // rotated safe-area vars flow into the skip/caption/debug chrome
+  for (const cls of ['g64-stage', 'g64-pops', 'g64-skip', 'g64-biome', 'g64-debug']) {
+    assert.match(overlay, new RegExp(`\\.g64-root\\.g64-landscape \\.${cls}`), `${cls} landscape override`);
+  }
+  assert.match(overlay, /--rsafe-top/);
+});
+
+test('V6/B1 scene-settle pin: a swallowed switchTo never leaves sceneMode over a foreign scene', () => {
+  const overlay = readFileSync(join(ROOT, 'src/ui/recapOverlay.js'), 'utf8');
+  // switchTo resolves even when SWALLOWED (switch in flight) — the recap must
+  // verify it truly landed (framework launch-retry pattern) BEFORE the
+  // landscape swap can touch the renderer, else fall back to DOM backdrops.
+  assert.match(
+    overlay,
+    /sceneManager\.currentId\(\) === 'recap' && sceneManager\.isSwitching\?\.\(\) !== true/,
+    'settled() checks currentId + isSwitching'
+  );
+  assert.match(overlay, /OVERLAY\.SCENE_SETTLE_MAX_MS/, 'bounded retry deadline');
+  assert.match(overlay, /OVERLAY\.SCENE_SETTLE_POLL_MS/, 'retry poll cadence');
+  // the retry lives INSIDE the try — failure routes to the DOM fallback
+  assert.match(
+    overlay,
+    /if \(!settled\(\)\) throw new Error\([\s\S]{0,200}?catch \(err\) \{\r?\n {6}console\.warn\('\[recap\] scene switch failed — DOM fallback:', err\);/,
+    'unsettled switch falls back to DOM mode'
+  );
+  assert.equal(typeof OVERLAY.SCENE_SETTLE_POLL_MS, 'number');
+  assert.equal(typeof OVERLAY.SCENE_SETTLE_MAX_MS, 'number');
+  assert.ok(OVERLAY.SCENE_SETTLE_MAX_MS > OVERLAY.SCENE_SETTLE_POLL_MS);
 });

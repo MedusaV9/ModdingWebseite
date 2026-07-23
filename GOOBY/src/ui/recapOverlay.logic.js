@@ -42,6 +42,14 @@ export const OVERLAY = Object.freeze({
    * the overlay's dedicated MediaElement (audio.js's graph is not exposed —
    * the mute boolean and both sliders are still honored live). */
   MASTER_BASE: 0.9,
+  /** V6/B1: sceneManager.switchTo is SWALLOWED while another switch is in
+   * flight (warn + resolve). The recap re-issues its 'recap' switch on this
+   * cadence until it settles (framework launch-retry pattern) — sceneMode
+   * must never stand over a foreign scene, or the landscape swap would
+   * rotate home/minigame instead of the vignettes. */
+  SCENE_SETTLE_POLL_MS: 120,
+  /** …bounded: give up after this and fall back to the DOM backdrops. */
+  SCENE_SETTLE_MAX_MS: 6000,
 });
 
 /**
@@ -513,6 +521,100 @@ export function canAutoStart({ pendingLevel = 0, sceneId = null, switching = fal
     && switching !== true
     && activeScreenId == null
     && playing !== true;
+}
+
+// ---------------------------------------------------------------------------
+// V6/B1 — landscape rotation (PLAN6 Wave B/B1): the recap plays as a
+// LANDSCAPE movie on the portrait-locked phone via CSS rotate(90deg) on the
+// #scene canvas + the recap DOM layer. Everything here is the PURE half:
+// JS-px frame math (never 100vw/vh — the iOS dynamic-viewport trap), the
+// physical→rotated safe-inset mapping, the reduced-motion gate and the
+// apply/restore guard the driver threads through EVERY exit path.
+// ---------------------------------------------------------------------------
+
+/**
+ * V6/B1 rotated-frame numbers for a portrait viewport of `width`×`height`
+ * CSS px: the rotated layer is `rw`(=height) × `rh`(=width) px, transformed
+ * `rotate(90deg) translateY(-100%)` from the top-left. Content rotates 90°
+ * clockwise and the player turns the phone counter-clockwise (home indicator
+ * right — the standard video hold), so the PHYSICAL insets map into
+ * rotated-layer coordinates as:
+ *   rotated left   ← safe-top    (notch side)
+ *   rotated right  ← safe-bottom (home bar)
+ *   rotated top    ← safe-right
+ *   rotated bottom ← safe-left
+ * All outputs are integer px (fractional vars leave a 1-px seam on the
+ * rotated edge). Junk inputs fold to 0.
+ * @param {{width?: number, height?: number, insets?: {top?: number,
+ *   right?: number, bottom?: number, left?: number}}} [frame]
+ * @returns {{rw: number, rh: number,
+ *   rsafe: {top: number, right: number, bottom: number, left: number}}}
+ */
+export function rotatedFrame({ width = 0, height = 0, insets = {} } = {}) {
+  const px = (v) => Math.max(0, Math.round(num(v)));
+  return {
+    rw: px(height),
+    rh: px(width),
+    rsafe: {
+      left: px(insets.top),
+      right: px(insets.bottom),
+      top: px(insets.right),
+      bottom: px(insets.left),
+    },
+  };
+}
+
+/**
+ * V6/B1 rotation gate: rotate only when motion is allowed (reduced motion
+ * keeps today's portrait letterboxed presentation) and the viewport is
+ * actually PORTRAIT — an already-landscape window (desktop/tablet) renders
+ * the wide frame natively and must never be double-rotated.
+ * @param {{reducedMotion?: boolean, width?: number, height?: number}} [probe]
+ * @returns {boolean}
+ */
+export function shouldRotate({ reducedMotion = false, width = 0, height = 0 } = {}) {
+  return reducedMotion !== true && num(height) > num(width) && num(width) > 0;
+}
+
+/**
+ * V6/B1 apply/restore pair tracker: the driver routes EVERY teardown path
+ * (finish, skip→finish, startCinematic error, scene dispose, visibility
+ * re-assert) through ONE guard so the rotation classes / renderer size can
+ * never leak — apply() and restore() are idempotent, `balanced()` is the
+ * test-pinned invariant (a restore for every apply, nothing left active).
+ * @returns {{apply: () => boolean, restore: () => boolean,
+ *   active: () => boolean, balanced: () => boolean,
+ *   counts: () => {applies: number, restores: number}}}
+ */
+export function createRotationGuard() {
+  let active = false;
+  let applies = 0;
+  let restores = 0;
+  return {
+    /** @returns {boolean} true when this call actually applied */
+    apply() {
+      if (active) return false;
+      active = true;
+      applies += 1;
+      return true;
+    },
+    /** @returns {boolean} true when this call actually restored */
+    restore() {
+      if (!active) return false;
+      active = false;
+      restores += 1;
+      return true;
+    },
+    active() {
+      return active;
+    },
+    balanced() {
+      return !active && applies === restores;
+    },
+    counts() {
+      return { applies, restores };
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
