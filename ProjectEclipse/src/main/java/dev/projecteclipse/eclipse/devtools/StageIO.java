@@ -1,8 +1,10 @@
 package dev.projecteclipse.eclipse.devtools;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.annotation.Nullable;
 
@@ -74,11 +77,12 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * (the exact band a {@code RingGrowthService} sweep rewrites) is captured — loaded chunks
  * from the live sections, unloaded ones straight from region NBT; never-generated chunks
  * are skipped (chunkgen covers them deterministically). Whole chunks are captured, so
- * restoration is chunk-granular. <b>Load</b> applies via a tick-budgeted writer job
+ * restoration is chunk-granular. <b>Load</b> first captures the live annulus through
+ * {@link StageBackups}, then applies via a tick-budgeted writer job
  * ({@value #LOAD_BUDGET_MS} ms/tick, ≤{@value #MAX_CHUNKS_PER_TICK} chunks/tick with
- * {@link BudgetedBlockWriter#relightAndResend} per finished chunk). <b>Revert</b>
- * re-applies the last-loaded snapshot (persisted per dimension in
- * {@link EclipseWorldState#getLastLoadedStage}).</p>
+ * {@link BudgetedBlockWriter#relightAndResend} per finished chunk). <b>Revert</b> applies
+ * the newest timestamped pre-operation backup; the legacy last-loaded-stage field remains
+ * an audit/status value.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class StageIO {
@@ -101,6 +105,9 @@ public final class StageIO {
     private static final Map<DiscProfile, LoadJob> LOAD_JOBS = new HashMap<>();
 
     private StageIO() {}
+
+    /** Result of writing one live-terrain snapshot. */
+    public record SnapshotCapture(Path file, int chunks, int skipped, long sizeBytes, long savedAtEpochMillis) {}
 
     // --- public API (commands) ---
 
@@ -143,7 +150,31 @@ public final class StageIO {
         int innerRadius = innerBandRadius(profile, stage);
         int outerRadius = outerBandRadius(profile, stage);
         long startNanos = System.nanoTime();
+        Path file = stageFile(level.getServer(), profile, stage);
+        SnapshotCapture capture;
+        try {
+            capture = captureCurrent(level, profile, stage, innerRadius, outerRadius, file);
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("StageIO: failed to write {}", file, e);
+            return "ERROR: failed to write " + file + " — see the server log";
+        }
+        double seconds = (System.nanoTime() - startNanos) / 1.0e9D;
+        String result = String.format(Locale.ROOT,
+                "Saved %s stage %d annulus (r %d..%d): %d chunks (%d never-generated skipped) "
+                        + "-> %s (%d KB) in %.1f s",
+                profile.name(), stage, innerRadius, outerRadius, capture.chunks(), capture.skipped(),
+                file.getFileName(), capture.sizeBytes() / 1024, seconds);
+        EclipseMod.LOGGER.info("StageIO: {}", result);
+        return result;
+    }
 
+    /**
+     * Captures the current live terrain in an arbitrary annulus. The compressed NBT is
+     * written to a sibling temporary file and atomically renamed, so a crash can never
+     * leave a truncated snapshot at {@code file}.
+     */
+    public static SnapshotCapture captureCurrent(ServerLevel level, DiscProfile profile, int stage,
+            int innerRadius, int outerRadius, Path file) throws IOException {
         ListTag chunkList = new ListTag();
         int skipped = 0;
         for (ChunkPos pos : bandChunks(innerRadius, outerRadius)) {
@@ -155,6 +186,7 @@ public final class StageIO {
             }
         }
 
+        long savedAt = System.currentTimeMillis();
         CompoundTag root = new CompoundTag();
         root.putInt("formatVersion", FORMAT_VERSION);
         root.putString("profile", profile.name());
@@ -163,39 +195,63 @@ public final class StageIO {
         root.putInt("outerRadius", outerRadius);
         root.putInt("minSectionY", level.getMinSection());
         root.putInt("sectionCount", level.getSectionsCount());
-        root.putLong("savedAtEpochMillis", System.currentTimeMillis());
+        root.putLong("savedAtEpochMillis", savedAt);
         root.put("chunks", chunkList);
 
-        Path file = stageFile(level.getServer(), profile, stage);
-        try {
-            Files.createDirectories(file.getParent());
-            NbtIo.writeCompressed(root, file);
-        } catch (IOException e) {
-            EclipseMod.LOGGER.error("StageIO: failed to write {}", file, e);
-            return "ERROR: failed to write " + file + " — see the server log";
+        writeCompressedAtomic(root, file);
+        return new SnapshotCapture(file, chunkList.size(), skipped, Files.size(file), savedAt);
+    }
+
+    /** Exact chunk band used by a growth transition, including the special stage-0 player-disc ring. */
+    public static int[] growthBand(DiscProfile profile, int fromStage, int toStage) {
+        int inner = Math.min(growthInnerRadius(profile, fromStage), growthInnerRadius(profile, toStage));
+        int outer = Math.max(growthOuterRadius(profile, fromStage), growthOuterRadius(profile, toStage));
+        return new int[] {
+                Math.max(0, inner - DiscTerrainFunction.RIM_REWRITE_MARGIN),
+                outer + DiscTerrainFunction.RIM_NOISE_AMP
+        };
+    }
+
+    private static int growthInnerRadius(DiscProfile profile, int stage) {
+        if (stage <= 0 && profile == DiscProfile.OVERWORLD) {
+            return DiscGeometry.MAIN_DISC_RADIUS;
         }
-        long sizeKb;
-        try {
-            sizeKb = Files.size(file) / 1024;
-        } catch (IOException e) {
-            sizeKb = -1;
+        return StageRadii.radius(profile, stage);
+    }
+
+    private static int growthOuterRadius(DiscProfile profile, int stage) {
+        if (stage <= 0 && profile == DiscProfile.OVERWORLD) {
+            return DiscGeometry.PLAYER_DISC_RING_RADIUS + DiscGeometry.PLAYER_DISC_RADIUS;
         }
-        double seconds = (System.nanoTime() - startNanos) / 1.0e9D;
-        String result = String.format(Locale.ROOT,
-                "Saved %s stage %d annulus (r %d..%d): %d chunks (%d never-generated skipped) "
-                        + "-> %s (%d KB) in %.1f s",
-                profile.name(), stage, innerRadius, outerRadius, chunkList.size(), skipped,
-                file.getFileName(), sizeKb, seconds);
-        EclipseMod.LOGGER.info("StageIO: {}", result);
-        return result;
+        return StageRadii.radius(profile, stage);
+    }
+
+    private static void writeCompressedAtomic(CompoundTag root, Path file) throws IOException {
+        Files.createDirectories(file.getParent());
+        Path temporary = file.resolveSibling("." + file.getFileName() + "." + UUID.randomUUID() + ".tmp");
+        try {
+            NbtIo.writeCompressed(root, temporary);
+            try {
+                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     /**
      * Starts the tick-budgeted apply job for a saved stage snapshot. Returns a feedback
      * line or an {@code "ERROR: "}-prefixed failure (missing file, busy job). On completion
-     * the stage is persisted as the dimension's {@code lastLoadedStage} (revert target).
+     * the stage is persisted as the dimension's legacy {@code lastLoadedStage} audit value.
      */
     public static String load(ServerLevel level, DiscProfile profile, int stage) {
+        return load(level, profile, stage, "stage-load", "system");
+    }
+
+    /** Operator-aware overload used by the consolidated {@code /dev stage} surface. */
+    public static String load(ServerLevel level, DiscProfile profile, int stage, String source, String operator) {
         if (RingGrowthService.isRunning(profile) || LOAD_JOBS.containsKey(profile)) {
             return "ERROR: a terrain job is already running for " + profile.name()
                     + " — wait for it to finish (see /eclipse stage status)";
@@ -203,6 +259,22 @@ public final class StageIO {
         Path file = stageFile(level.getServer(), profile, stage);
         if (!Files.exists(file)) {
             return "ERROR: no snapshot " + file.getFileName() + " — /eclipse stage save " + stage + " first";
+        }
+        return loadSnapshotFile(level, profile, file, source, operator);
+    }
+
+    /**
+     * Applies any StageIO-format snapshot (curated snapshot or timestamped backup).
+     * A second live backup is completed before the apply job becomes visible.
+     */
+    public static String loadSnapshotFile(ServerLevel level, DiscProfile profile, Path file,
+            String source, String operator) {
+        if (RingGrowthService.isRunning(profile) || LOAD_JOBS.containsKey(profile)) {
+            return "ERROR: a terrain job is already running for " + profile.name()
+                    + " — wait for it to finish (see /eclipse stage status)";
+        }
+        if (!Files.isRegularFile(file)) {
+            return "ERROR: no snapshot " + file.getFileName();
         }
         CompoundTag root;
         try {
@@ -219,22 +291,25 @@ public final class StageIO {
             return "ERROR: " + file.getFileName() + " was saved for '" + root.getString("profile")
                     + "', not " + profile.name();
         }
+        int stage = root.getInt("stage");
+        StageBackups.BackupResult backup = StageBackups.beforeDestructiveLoad(
+                level, profile, stage, root.getInt("innerRadius"), root.getInt("outerRadius"),
+                source, operator);
+        if (!backup.success()) {
+            return "ERROR: pre-apply backup failed; terrain was NOT changed — " + backup.message();
+        }
         LoadJob job = new LoadJob(level, profile, stage, root.getList("chunks", Tag.TAG_COMPOUND));
         LOAD_JOBS.put(profile, job);
-        String result = "Applying " + profile.name() + " stage " + stage + " snapshot: "
+        String result = "Backup " + backup.info().id() + " captured; applying " + profile.name()
+                + " stage " + stage + " snapshot: "
                 + job.chunks.size() + " chunks, tick-budgeted (" + LOAD_BUDGET_MS + " ms/tick) — watch the log";
         EclipseMod.LOGGER.info("StageIO: {}", result);
         return result;
     }
 
-    /** Re-applies the profile's last-loaded snapshot, or explains why it cannot. */
+    /** Restores the newest live-terrain backup for the profile. */
     public static String revert(ServerLevel level, DiscProfile profile) {
-        int lastLoaded = EclipseWorldState.get(level.getServer()).getLastLoadedStage(profile);
-        if (lastLoaded < 0) {
-            return "ERROR: no snapshot has been loaded for " + profile.name()
-                    + " yet — nothing to revert to";
-        }
-        return load(level, profile, lastLoaded);
+        return StageBackups.restoreLatest(level, profile, "stage-revert", "system");
     }
 
     /** One status line per disc dimension: committed stage, last-loaded snapshot, in-flight jobs, files. */

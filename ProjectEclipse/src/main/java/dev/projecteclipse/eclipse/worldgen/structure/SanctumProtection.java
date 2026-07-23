@@ -4,6 +4,8 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.devtools.SpawnTuningData;
+import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -52,8 +54,6 @@ public final class SanctumProtection {
     /** Vanilla permission level that bypasses the protection (ops). */
     private static final int EXEMPT_PERMISSION = 3;
 
-    private static final int RADIUS_SQ = RADIUS * RADIUS;
-
     @Nullable
     private static BlockPos altarPos;
 
@@ -64,7 +64,7 @@ public final class SanctumProtection {
         altarPos = EclipseWorldState.get(server).getSanctumAltarPos();
         if (altarPos != null) {
             EclipseMod.LOGGER.info("Sanctum protection active: r={} x y[-{}..+{}] around {} (break/place/explosions cancelled, hostile spawns suppressed, ops exempt)",
-                    RADIUS, VERTICAL_BELOW, VERTICAL_ABOVE, altarPos.toShortString());
+                    radius(server), VERTICAL_BELOW, VERTICAL_ABOVE, center(server.overworld()).toShortString());
         }
     }
 
@@ -74,16 +74,66 @@ public final class SanctumProtection {
         altarPos = null;
     }
 
-    /** Whether a position lies inside the protected sanctum zone of the overworld. */
+    /**
+     * Center shared by the fixed sanctum build cylinder and configurable gameplay spawn
+     * zone. A {@code /dev spawn set} override wins; otherwise the authored altar remains
+     * the center.
+     */
+    @Nullable
+    public static BlockPos center(Level level) {
+        MinecraftServer server = level.getServer();
+        if (server != null) {
+            BlockPos override = SpawnTuningData.get(server).spawnOverride();
+            if (override != null) {
+                return override;
+            }
+        }
+        return altarPos;
+    }
+
+    /** Radius of the sanctum build cylinder: saved override, otherwise static r=18. */
+    public static int radius(MinecraftServer server) {
+        int override = SpawnTuningData.get(server).radiusOverride();
+        return override > 0 ? override : RADIUS;
+    }
+
+    /** Radius of the broad gameplay zone: saved override, otherwise protection.json (default r=96). */
+    public static int spawnRadius(MinecraftServer server) {
+        int override = SpawnTuningData.get(server).radiusOverride();
+        return override > 0 ? override : Math.max(1, ProtectionConfig.current().spawn().radius());
+    }
+
+    /** Whether a position lies inside the fixed-radius protected sanctum build cylinder. */
     public static boolean isProtected(Level level, BlockPos pos) {
-        BlockPos altar = altarPos;
-        if (altar == null || level.dimension() != Level.OVERWORLD) {
+        BlockPos center = center(level);
+        if (center == null || level.dimension() != Level.OVERWORLD) {
             return false;
         }
-        int dx = pos.getX() - altar.getX();
-        int dz = pos.getZ() - altar.getZ();
-        int dy = pos.getY() - altar.getY();
-        return dx * dx + dz * dz <= RADIUS_SQ && dy >= -VERTICAL_BELOW && dy <= VERTICAL_ABOVE;
+        int dx = pos.getX() - center.getX();
+        int dz = pos.getZ() - center.getZ();
+        int dy = pos.getY() - center.getY();
+        MinecraftServer server = level.getServer();
+        int activeRadius = server == null ? RADIUS : radius(server);
+        return (long) dx * dx + (long) dz * dz <= (long) activeRadius * activeRadius
+                && dy >= -VERTICAL_BELOW && dy <= VERTICAL_ABOVE;
+    }
+
+    /**
+     * Broad gameplay protection from {@code protection.json}: default r=96 with its own
+     * absolute vertical range. This is deliberately distinct from {@link #isProtected}.
+     */
+    public static boolean isSpawnProtected(Level level, BlockPos pos) {
+        MinecraftServer server = level.getServer();
+        BlockPos center = center(level);
+        if (server == null || center == null || level.dimension() != Level.OVERWORLD) {
+            return false;
+        }
+        ProtectionConfig.SpawnRules rules = ProtectionConfig.current().spawn();
+        int dx = pos.getX() - center.getX();
+        int dz = pos.getZ() - center.getZ();
+        int configuredRadius = spawnRadius(server);
+        return (long) dx * dx + (long) dz * dz <= (long) configuredRadius * configuredRadius
+                && pos.getY() >= rules.verticalFrom() && pos.getY() <= rules.verticalTo();
     }
 
     @SubscribeEvent

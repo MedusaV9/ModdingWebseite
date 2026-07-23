@@ -3,10 +3,10 @@ package dev.projecteclipse.eclipse.protection;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -43,19 +43,25 @@ public final class SpawnProtectionRules {
     private SpawnProtectionRules() {}
 
     public static boolean isInProtectionZone(Level level, BlockPos pos) {
-        return SanctumProtection.isProtected(level, pos);
+        return SanctumProtection.isSpawnProtected(level, pos);
     }
 
     public static boolean isInFallSafeZone(Level level, BlockPos pos) {
-        if (SanctumProtection.isProtected(level, pos)) {
+        if (isInProtectionZone(level, pos)) {
             return true;
         }
-        int extra = ProtectionConfig.current().spawn().edgeBandExtra();
+        ProtectionConfig.SpawnRules rules = ProtectionConfig.current().spawn();
+        int extra = rules.edgeBandExtra();
         if (extra <= 0) {
             return false;
         }
-        return isWithinExpandedCylinder(level, pos, SanctumProtection.RADIUS + extra,
-                SanctumProtection.VERTICAL_BELOW, SanctumProtection.VERTICAL_ABOVE);
+        MinecraftServer server = level.getServer();
+        if (server == null) {
+            return false;
+        }
+        return isWithinExpandedCylinder(level, pos,
+                SanctumProtection.spawnRadius(server) + extra,
+                rules.verticalFrom(), rules.verticalTo());
     }
 
     @SubscribeEvent
@@ -161,16 +167,16 @@ public final class SpawnProtectionRules {
         }
     }
 
-    private static boolean isWithinExpandedCylinder(Level level, BlockPos pos, int radius, int below, int above) {
-        BlockPos altar = EclipseWorldState.get(level.getServer()).getSanctumAltarPos();
-        if (altar == null || level.dimension() != Level.OVERWORLD) {
+    private static boolean isWithinExpandedCylinder(Level level, BlockPos pos, int radius,
+            int verticalFrom, int verticalTo) {
+        BlockPos center = SanctumProtection.center(level);
+        if (center == null || level.dimension() != Level.OVERWORLD) {
             return false;
         }
-        int dx = pos.getX() - altar.getX();
-        int dz = pos.getZ() - altar.getZ();
-        int dy = pos.getY() - altar.getY();
-        int radiusSq = radius * radius;
-        return dx * dx + dz * dz <= radiusSq && dy >= -below && dy <= above;
+        int dx = pos.getX() - center.getX();
+        int dz = pos.getZ() - center.getZ();
+        return (long) dx * dx + (long) dz * dz <= (long) radius * radius
+                && pos.getY() >= verticalFrom && pos.getY() <= verticalTo;
     }
 
     private static boolean isFluidPlacement(ItemStack stack) {
