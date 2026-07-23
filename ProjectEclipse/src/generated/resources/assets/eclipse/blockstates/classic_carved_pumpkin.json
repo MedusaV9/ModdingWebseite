@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=east": {
+      "model": "eclipse:block/classic/carved_pumpkin",
+      "y": 90
+    },
+    "facing=north": {
+      "model": "eclipse:block/classic/carved_pumpkin"
+    },
+    "facing=south": {
+      "model": "eclipse:block/classic/carved_pumpkin",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "eclipse:block/classic/carved_pumpkin",
+      "y": 270
+    }
+  }
+}

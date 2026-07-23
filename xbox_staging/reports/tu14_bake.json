@@ -1,0 +1,702 @@
+{
+  "worldId": "tu14",
+  "dataVersion": 3955,
+  "spawn": [
+    97,
+    72,
+    -106
+  ],
+  "spawnYaw": 0.0,
+  "spawnCheck": {
+    "recordedSpawn": [
+      97,
+      72,
+      -106
+    ],
+    "column": {
+      "70": "eclipse:classic_dirt",
+      "71": "eclipse:classic_grass_block",
+      "72": "eclipse:classic_poppy",
+      "73": "minecraft:air",
+      "74": "minecraft:air"
+    },
+    "recordedSpawnOk": true,
+    "adjusted": false
+  },
+  "bounds": {
+    "chunkMin": [
+      -27,
+      -27
+    ],
+    "chunkMax": [
+      26,
+      26
+    ],
+    "blockMin": [
+      -432,
+      0,
+      -432
+    ],
+    "blockMax": [
+      431,
+      255,
+      431
+    ]
+  },
+  "stats": {
+    "chunksIn": 2916,
+    "chunksKept": 2916,
+    "entityChunkDataVersion.3839": 14,
+    "fluidPaletteEntriesNormalized": 19798,
+    "lootContainers": 154,
+    "sectionsDroppedAirOutsideRange": 23328,
+    "sectionsRepacked": 7392,
+    "statusForcedFull": 2263
+  },
+  "blockEntityHistogram": {
+    "minecraft:bed": 30,
+    "minecraft:brewing_stand": 6,
+    "minecraft:chest": 153,
+    "minecraft:dispenser": 2,
+    "minecraft:enchanting_table": 2,
+    "minecraft:ender_chest": 2,
+    "minecraft:furnace": 4,
+    "minecraft:mob_spawner": 71,
+    "minecraft:skull": 5
+  },
+  "entitiesKept": {
+    "minecraft:item_frame": 28,
+    "minecraft:painting": 11
+  },
+  "entitiesDropped": {
+    "minecraft:bat": 17,
+    "minecraft:chicken": 8,
+    "minecraft:cow": 8,
+    "minecraft:creeper": 18,
+    "minecraft:glow_squid": 2,
+    "minecraft:item": 25,
+    "minecraft:minecart": 1,
+    "minecraft:ocelot": 2,
+    "minecraft:pig": 6,
+    "minecraft:sheep": 21,
+    "minecraft:skeleton": 26,
+    "minecraft:spider": 4,
+    "minecraft:squid": 9,
+    "minecraft:villager": 15,
+    "minecraft:witch": 2,
+    "minecraft:wolf": 2,
+    "minecraft:zombie": 17,
+    "minecraft:zombie_villager": 1
+  },
+  "nonAirSectionsDroppedOutsideRange": [],
+  "blockInventory": {
+    "minecraft:air": {
+      "classicId": "minecraft:air",
+      "count": 142727944
+    },
+    "minecraft:anvil": {
+      "classicId": "eclipse:classic_anvil",
+      "count": 2
+    },
+    "minecraft:attached_pumpkin_stem": {
+      "classicId": "eclipse:classic_attached_pumpkin_stem",
+      "count": 5
+    },
+    "minecraft:bedrock": {
+      "classicId": "eclipse:classic_bedrock",
+      "count": 1866726
+    },
+    "minecraft:birch_leaves": {
+      "classicId": "eclipse:classic_birch_leaves",
+      "count": 10155
+    },
+    "minecraft:birch_log": {
+      "classicId": "eclipse:classic_birch_log",
+      "count": 1166
+    },
+    "minecraft:birch_planks": {
+      "classicId": "eclipse:classic_birch_planks",
+      "count": 2
+    },
+    "minecraft:birch_stairs": {
+      "classicId": "eclipse:classic_birch_stairs",
+      "count": 31
+    },
+    "minecraft:black_wool": {
+      "classicId": "eclipse:classic_black_wool",
+      "count": 3008
+    },
+    "minecraft:blue_wool": {
+      "classicId": "eclipse:classic_blue_wool",
+      "count": 1
+    },
+    "minecraft:bookshelf": {
+      "classicId": "eclipse:classic_bookshelf",
+      "count": 578
+    },
+    "minecraft:brewing_stand": {
+      "classicId": "eclipse:classic_brewing_stand",
+      "count": 6
+    },
+    "minecraft:bricks": {
+      "classicId": "eclipse:classic_bricks",
+      "count": 59
+    },
+    "minecraft:brown_mushroom": {
+      "classicId": "eclipse:classic_brown_mushroom",
+      "count": 261
+    },
+    "minecraft:brown_mushroom_block": {
+      "classicId": "eclipse:classic_brown_mushroom_block",
+      "count": 256
+    },
+    "minecraft:cactus": {
+      "classicId": "eclipse:classic_cactus",
+      "count": 228
+    },
+    "minecraft:carrots": {
+      "classicId": "eclipse:classic_carrots",
+      "count": 154
+    },
+    "minecraft:carved_pumpkin": {
+      "classicId": "eclipse:classic_carved_pumpkin",
+      "count": 2
+    },
+    "minecraft:chest": {
+      "classicId": "eclipse:classic_chest",
+      "count": 153
+    },
+    "minecraft:chiseled_sandstone": {
+      "classicId": "eclipse:classic_chiseled_sandstone",
+      "count": 39
+    },
+    "minecraft:chiseled_stone_bricks": {
+      "classicId": "eclipse:classic_chiseled_stone_bricks",
+      "count": 183
+    },
+    "minecraft:clay": {
+      "classicId": "eclipse:classic_clay",
+      "count": 12488
+    },
+    "minecraft:coal_ore": {
+      "classicId": "eclipse:classic_coal_ore",
+      "count": 439262
+    },
+    "minecraft:cobblestone": {
+      "classicId": "eclipse:classic_cobblestone",
+      "count": 148723
+    },
+    "minecraft:cobblestone_slab": {
+      "classicId": "eclipse:classic_cobblestone_slab",
+      "count": 8
+    },
+    "minecraft:cobblestone_stairs": {
+      "classicId": "eclipse:classic_cobblestone_stairs",
+      "count": 357
+    },
+    "minecraft:cobblestone_wall": {
+      "classicId": "eclipse:classic_cobblestone_wall",
+      "count": 172
+    },
+    "minecraft:cobweb": {
+      "classicId": "eclipse:classic_cobweb",
+      "count": 1850
+    },
+    "minecraft:cocoa": {
+      "classicId": "eclipse:classic_cocoa",
+      "count": 173
+    },
+    "minecraft:cracked_stone_bricks": {
+      "classicId": "eclipse:classic_cracked_stone_bricks",
+      "count": 3587
+    },
+    "minecraft:crafting_table": {
+      "classicId": "eclipse:classic_crafting_table",
+      "count": 4
+    },
+    "minecraft:creeper_head": {
+      "classicId": "eclipse:classic_creeper_head",
+      "count": 1
+    },
+    "minecraft:cut_sandstone": {
+      "classicId": "eclipse:classic_cut_sandstone",
+      "count": 3992
+    },
+    "minecraft:dandelion": {
+      "classicId": "eclipse:classic_dandelion",
+      "count": 1684
+    },
+    "minecraft:dead_bush": {
+      "classicId": "eclipse:classic_dead_bush",
+      "count": 16
+    },
+    "minecraft:diamond_ore": {
+      "classicId": "eclipse:classic_diamond_ore",
+      "count": 9078
+    },
+    "minecraft:dirt": {
+      "classicId": "eclipse:classic_dirt",
+      "count": 4110521
+    },
+    "minecraft:dispenser": {
+      "classicId": "eclipse:classic_dispenser",
+      "count": 2
+    },
+    "minecraft:emerald_ore": {
+      "classicId": "eclipse:classic_emerald_ore",
+      "count": 1437
+    },
+    "minecraft:enchanting_table": {
+      "classicId": "eclipse:classic_enchanting_table",
+      "count": 2
+    },
+    "minecraft:end_portal_frame": {
+      "classicId": "eclipse:classic_end_portal_frame",
+      "count": 12
+    },
+    "minecraft:ender_chest": {
+      "classicId": "eclipse:classic_ender_chest",
+      "count": 2
+    },
+    "minecraft:farmland": {
+      "classicId": "eclipse:classic_farmland",
+      "count": 673
+    },
+    "minecraft:fern": {
+      "classicId": "eclipse:classic_fern",
+      "count": 1943
+    },
+    "minecraft:fire": {
+      "classicId": "eclipse:classic_fire",
+      "count": 51
+    },
+    "minecraft:furnace": {
+      "classicId": "eclipse:classic_furnace",
+      "count": 4
+    },
+    "minecraft:glass": {
+      "classicId": "eclipse:classic_glass",
+      "count": 465
+    },
+    "minecraft:glass_pane": {
+      "classicId": "eclipse:classic_glass_pane",
+      "count": 333
+    },
+    "minecraft:glowstone": {
+      "classicId": "eclipse:classic_glowstone",
+      "count": 9
+    },
+    "minecraft:gold_block": {
+      "classicId": "eclipse:classic_gold_block",
+      "count": 4
+    },
+    "minecraft:gold_ore": {
+      "classicId": "eclipse:classic_gold_ore",
+      "count": 23951
+    },
+    "minecraft:grass_block": {
+      "classicId": "eclipse:classic_grass_block",
+      "count": 364170
+    },
+    "minecraft:gravel": {
+      "classicId": "eclipse:classic_gravel",
+      "count": 1194845
+    },
+    "minecraft:gray_wool": {
+      "classicId": "eclipse:classic_gray_wool",
+      "count": 17
+    },
+    "minecraft:ice": {
+      "classicId": "eclipse:classic_ice",
+      "count": 2746
+    },
+    "minecraft:infested_cobblestone": {
+      "classicId": "eclipse:classic_infested_cobblestone",
+      "count": 7
+    },
+    "minecraft:infested_stone": {
+      "classicId": "eclipse:classic_infested_stone",
+      "count": 3
+    },
+    "minecraft:infested_stone_bricks": {
+      "classicId": "eclipse:classic_infested_stone_bricks",
+      "count": 869
+    },
+    "minecraft:iron_bars": {
+      "classicId": "eclipse:classic_iron_bars",
+      "count": 271
+    },
+    "minecraft:iron_block": {
+      "classicId": "eclipse:classic_iron_block",
+      "count": 8
+    },
+    "minecraft:iron_door": {
+      "classicId": "eclipse:classic_iron_door",
+      "count": 84
+    },
+    "minecraft:iron_ore": {
+      "classicId": "eclipse:classic_iron_ore",
+      "count": 242169
+    },
+    "minecraft:jungle_leaves": {
+      "classicId": "eclipse:classic_jungle_leaves",
+      "count": 64932
+    },
+    "minecraft:jungle_log": {
+      "classicId": "eclipse:classic_jungle_log",
+      "count": 18637
+    },
+    "minecraft:jungle_planks": {
+      "classicId": "eclipse:classic_jungle_planks",
+      "count": 546
+    },
+    "minecraft:ladder": {
+      "classicId": "eclipse:classic_ladder",
+      "count": 92
+    },
+    "minecraft:lapis_ore": {
+      "classicId": "eclipse:classic_lapis_ore",
+      "count": 9876
+    },
+    "minecraft:lava": {
+      "classicId": "eclipse:classic_lava",
+      "count": 382561
+    },
+    "minecraft:lever": {
+      "classicId": "eclipse:classic_lever",
+      "count": 10
+    },
+    "minecraft:light_gray_wool": {
+      "classicId": "eclipse:classic_light_gray_wool",
+      "count": 928
+    },
+    "minecraft:lily_pad": {
+      "classicId": "eclipse:classic_lily_pad",
+      "count": 372
+    },
+    "minecraft:lime_wool": {
+      "classicId": "eclipse:classic_lime_wool",
+      "count": 174
+    },
+    "minecraft:melon": {
+      "classicId": "eclipse:classic_melon",
+      "count": 5
+    },
+    "minecraft:melon_stem": {
+      "classicId": "eclipse:classic_melon_stem",
+      "count": 5
+    },
+    "minecraft:mossy_cobblestone": {
+      "classicId": "eclipse:classic_mossy_cobblestone",
+      "count": 3282
+    },
+    "minecraft:mossy_cobblestone_wall": {
+      "classicId": "eclipse:classic_mossy_cobblestone_wall",
+      "count": 3
+    },
+    "minecraft:mossy_stone_bricks": {
+      "classicId": "eclipse:classic_mossy_stone_bricks",
+      "count": 5635
+    },
+    "minecraft:mushroom_stem": {
+      "classicId": "eclipse:classic_mushroom_stem",
+      "count": 57
+    },
+    "minecraft:mycelium": {
+      "classicId": "eclipse:classic_mycelium",
+      "count": 726
+    },
+    "minecraft:nether_portal": {
+      "classicId": "eclipse:classic_nether_portal",
+      "count": 6
+    },
+    "minecraft:netherrack": {
+      "classicId": "eclipse:classic_netherrack",
+      "count": 2
+    },
+    "minecraft:oak_door": {
+      "classicId": "eclipse:classic_oak_door",
+      "count": 142
+    },
+    "minecraft:oak_fence": {
+      "classicId": "eclipse:classic_oak_fence",
+      "count": 7751
+    },
+    "minecraft:oak_fence_gate": {
+      "classicId": "eclipse:classic_oak_fence_gate",
+      "count": 7
+    },
+    "minecraft:oak_leaves": {
+      "classicId": "eclipse:classic_oak_leaves",
+      "count": 176536
+    },
+    "minecraft:oak_log": {
+      "classicId": "eclipse:classic_oak_log",
+      "count": 9764
+    },
+    "minecraft:oak_planks": {
+      "classicId": "eclipse:classic_oak_planks",
+      "count": 13915
+    },
+    "minecraft:oak_pressure_plate": {
+      "classicId": "eclipse:classic_oak_pressure_plate",
+      "count": 59
+    },
+    "minecraft:oak_stairs": {
+      "classicId": "eclipse:classic_oak_stairs",
+      "count": 1341
+    },
+    "minecraft:oak_trapdoor": {
+      "classicId": "eclipse:classic_oak_trapdoor",
+      "count": 1
+    },
+    "minecraft:obsidian": {
+      "classicId": "eclipse:classic_obsidian",
+      "count": 5923
+    },
+    "minecraft:orange_wool": {
+      "classicId": "eclipse:classic_orange_wool",
+      "count": 54
+    },
+    "minecraft:petrified_oak_slab": {
+      "classicId": "eclipse:classic_petrified_oak_slab",
+      "count": 586
+    },
+    "minecraft:piston_head": {
+      "classicId": "eclipse:classic_piston_head",
+      "count": 11
+    },
+    "minecraft:player_head": {
+      "classicId": "eclipse:classic_player_head",
+      "count": 1
+    },
+    "minecraft:poppy": {
+      "classicId": "eclipse:classic_poppy",
+      "count": 363
+    },
+    "minecraft:potatoes": {
+      "classicId": "eclipse:classic_potatoes",
+      "count": 131
+    },
+    "minecraft:potted_dandelion": {
+      "classicId": "eclipse:classic_potted_dandelion",
+      "count": 4
+    },
+    "minecraft:potted_oak_sapling": {
+      "classicId": "eclipse:classic_potted_oak_sapling",
+      "count": 2
+    },
+    "minecraft:potted_poppy": {
+      "classicId": "eclipse:classic_potted_poppy",
+      "count": 8
+    },
+    "minecraft:powered_rail": {
+      "classicId": "eclipse:classic_powered_rail",
+      "count": 3
+    },
+    "minecraft:pumpkin": {
+      "classicId": "eclipse:classic_pumpkin",
+      "count": 21
+    },
+    "minecraft:quartz_block": {
+      "classicId": "eclipse:classic_quartz_block",
+      "count": 70
+    },
+    "minecraft:quartz_pillar": {
+      "classicId": "eclipse:classic_quartz_pillar",
+      "count": 24
+    },
+    "minecraft:quartz_stairs": {
+      "classicId": "eclipse:classic_quartz_stairs",
+      "count": 46
+    },
+    "minecraft:rail": {
+      "classicId": "eclipse:classic_rail",
+      "count": 2110
+    },
+    "minecraft:red_bed": {
+      "classicId": "eclipse:classic_red_bed",
+      "count": 30
+    },
+    "minecraft:red_carpet": {
+      "classicId": "eclipse:classic_red_carpet",
+      "count": 102
+    },
+    "minecraft:red_mushroom": {
+      "classicId": "eclipse:classic_red_mushroom",
+      "count": 141
+    },
+    "minecraft:red_mushroom_block": {
+      "classicId": "eclipse:classic_red_mushroom_block",
+      "count": 225
+    },
+    "minecraft:red_wool": {
+      "classicId": "eclipse:classic_red_wool",
+      "count": 92
+    },
+    "minecraft:redstone_lamp": {
+      "classicId": "eclipse:classic_redstone_lamp",
+      "count": 20
+    },
+    "minecraft:redstone_ore": {
+      "classicId": "eclipse:classic_redstone_ore",
+      "count": 73452
+    },
+    "minecraft:redstone_torch": {
+      "classicId": "eclipse:classic_redstone_torch",
+      "count": 4
+    },
+    "minecraft:redstone_wall_torch": {
+      "classicId": "eclipse:classic_redstone_wall_torch",
+      "count": 12
+    },
+    "minecraft:redstone_wire": {
+      "classicId": "eclipse:classic_redstone_wire",
+      "count": 162
+    },
+    "minecraft:repeater": {
+      "classicId": "eclipse:classic_repeater",
+      "count": 15
+    },
+    "minecraft:sand": {
+      "classicId": "eclipse:classic_sand",
+      "count": 710051
+    },
+    "minecraft:sandstone": {
+      "classicId": "eclipse:classic_sandstone",
+      "count": 171324
+    },
+    "minecraft:sandstone_slab": {
+      "classicId": "eclipse:classic_sandstone_slab",
+      "count": 2
+    },
+    "minecraft:sandstone_stairs": {
+      "classicId": "eclipse:classic_sandstone_stairs",
+      "count": 565
+    },
+    "minecraft:short_grass": {
+      "classicId": "eclipse:classic_short_grass",
+      "count": 61330
+    },
+    "minecraft:skeleton_skull": {
+      "classicId": "eclipse:classic_skeleton_skull",
+      "count": 1
+    },
+    "minecraft:smooth_stone_slab": {
+      "classicId": "eclipse:classic_smooth_stone_slab",
+      "count": 17810
+    },
+    "minecraft:snow": {
+      "classicId": "eclipse:classic_snow",
+      "count": 45883
+    },
+    "minecraft:snow_block": {
+      "classicId": "eclipse:classic_snow_block",
+      "count": 104
+    },
+    "minecraft:spawner": {
+      "classicId": "eclipse:classic_spawner",
+      "count": 71
+    },
+    "minecraft:spruce_leaves": {
+      "classicId": "eclipse:classic_spruce_leaves",
+      "count": 47613
+    },
+    "minecraft:spruce_log": {
+      "classicId": "eclipse:classic_spruce_log",
+      "count": 6357
+    },
+    "minecraft:spruce_planks": {
+      "classicId": "eclipse:classic_spruce_planks",
+      "count": 911
+    },
+    "minecraft:spruce_stairs": {
+      "classicId": "eclipse:classic_spruce_stairs",
+      "count": 68
+    },
+    "minecraft:sticky_piston": {
+      "classicId": "eclipse:classic_sticky_piston",
+      "count": 20
+    },
+    "minecraft:stone": {
+      "classicId": "eclipse:classic_stone",
+      "count": 35512576
+    },
+    "minecraft:stone_brick_slab": {
+      "classicId": "eclipse:classic_stone_brick_slab",
+      "count": 115
+    },
+    "minecraft:stone_brick_stairs": {
+      "classicId": "eclipse:classic_stone_brick_stairs",
+      "count": 367
+    },
+    "minecraft:stone_bricks": {
+      "classicId": "eclipse:classic_stone_bricks",
+      "count": 13013
+    },
+    "minecraft:stone_button": {
+      "classicId": "eclipse:classic_stone_button",
+      "count": 59
+    },
+    "minecraft:stone_pressure_plate": {
+      "classicId": "eclipse:classic_stone_pressure_plate",
+      "count": 1
+    },
+    "minecraft:sugar_cane": {
+      "classicId": "eclipse:classic_sugar_cane",
+      "count": 160
+    },
+    "minecraft:tnt": {
+      "classicId": "eclipse:classic_tnt",
+      "count": 9
+    },
+    "minecraft:torch": {
+      "classicId": "eclipse:classic_torch",
+      "count": 411
+    },
+    "minecraft:tripwire": {
+      "classicId": "eclipse:classic_tripwire",
+      "count": 9
+    },
+    "minecraft:tripwire_hook": {
+      "classicId": "eclipse:classic_tripwire_hook",
+      "count": 6
+    },
+    "minecraft:vine": {
+      "classicId": "eclipse:classic_vine",
+      "count": 53128
+    },
+    "minecraft:wall_torch": {
+      "classicId": "eclipse:classic_wall_torch",
+      "count": 627
+    },
+    "minecraft:water": {
+      "classicId": "eclipse:classic_water",
+      "count": 2502016
+    },
+    "minecraft:water_cauldron": {
+      "classicId": "eclipse:classic_water_cauldron",
+      "count": 6
+    },
+    "minecraft:wheat": {
+      "classicId": "eclipse:classic_wheat",
+      "count": 366
+    },
+    "minecraft:wither_skeleton_skull": {
+      "classicId": "eclipse:classic_wither_skeleton_skull",
+      "count": 1
+    },
+    "minecraft:yellow_carpet": {
+      "classicId": "eclipse:classic_yellow_carpet",
+      "count": 55
+    },
+    "minecraft:yellow_wool": {
+      "classicId": "eclipse:classic_yellow_wool",
+      "count": 11
+    },
+    "minecraft:zombie_head": {
+      "classicId": "eclipse:classic_zombie_head",
+      "count": 1
+    }
+  }
+}

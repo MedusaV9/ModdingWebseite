@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "attached=false,facing=east,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 90
+    },
+    "attached=false,facing=east,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 90
+    },
+    "attached=false,facing=north,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook"
+    },
+    "attached=false,facing=north,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook"
+    },
+    "attached=false,facing=south,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 180
+    },
+    "attached=false,facing=south,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 180
+    },
+    "attached=false,facing=west,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 270
+    },
+    "attached=false,facing=west,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook",
+      "y": 270
+    },
+    "attached=true,facing=east,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 90
+    },
+    "attached=true,facing=east,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 90
+    },
+    "attached=true,facing=north,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook_attached"
+    },
+    "attached=true,facing=north,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook_attached"
+    },
+    "attached=true,facing=south,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 180
+    },
+    "attached=true,facing=south,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 180
+    },
+    "attached=true,facing=west,powered=false": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 270
+    },
+    "attached=true,facing=west,powered=true": {
+      "model": "eclipse:block/classic/tripwire_hook_attached",
+      "y": 270
+    }
+  }
+}

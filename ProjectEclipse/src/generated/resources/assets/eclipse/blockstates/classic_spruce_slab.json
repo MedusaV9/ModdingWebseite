@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "eclipse:block/classic/spruce_slab"
+    },
+    "type=double": {
+      "model": "eclipse:block/classic/spruce_planks"
+    },
+    "type=top": {
+      "model": "eclipse:block/classic/spruce_slab_top"
+    }
+  }
+}

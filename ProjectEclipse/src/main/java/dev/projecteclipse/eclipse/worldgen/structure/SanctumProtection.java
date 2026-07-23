@@ -26,18 +26,29 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 /**
  * Spawn protection around the sanctum altar (docs/ideas/04_content.md §3): within
- * {@value #RADIUS} blocks of the altar, block breaking and placing are cancelled
- * (ops with permission ≥ {@value #EXEMPT_PERMISSION} exempt), explosions lose every
- * affected block inside the zone, and non-eclipse hostile natural spawns are suppressed
- * ({@link FinalizeSpawnEvent}) — the grounds stay unnaturally calm. Blocked players get a
- * v1-style action-bar hint. The altar position is cached from
- * {@link EclipseWorldState#getSanctumAltarPos()} (refreshed on server start by
- * {@link AltarSanctumBuilder}).
+ * {@value #RADIUS} horizontal blocks of the altar column (and the vertical band
+ * {@value #VERTICAL_BELOW} below to {@value #VERTICAL_ABOVE} above the altar), block
+ * breaking and placing are cancelled (ops with permission ≥ {@value #EXEMPT_PERMISSION}
+ * exempt), explosions lose every affected block inside the zone, and non-eclipse hostile
+ * natural spawns are suppressed ({@link FinalizeSpawnEvent}) — the grounds stay
+ * unnaturally calm. Blocked players get a v1-style action-bar hint. The altar position is
+ * cached from {@link EclipseWorldState#getSanctumAltarPos()} (refreshed on server start
+ * by {@link AltarSanctumBuilder}).
+ *
+ * <p>P6-W4: the zone grew from a r=16 sphere to a r=18 cylinder slice so the whole v2
+ * floating sanctum stays grief-safe — island ellipse (r 16/14), rim ledges, switchback
+ * bridge (max r ≈ 17.5), crater bowl (floor at altar−22) and the W5 orbital rings.
+ * {@code isProtected(Level, BlockPos)} keeps its exact signature: it is the frozen
+ * block-side interface P4's edge/auto-glide safety rule and P2's FX queries consume.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class SanctumProtection {
-    /** Protection radius around the altar block. */
-    public static final int RADIUS = 16;
+    /** Horizontal protection radius around the altar column. */
+    public static final int RADIUS = 18;
+    /** Protected vertical band below the altar (crater floor is altar−22 on the island). */
+    public static final int VERTICAL_BELOW = 26;
+    /** Protected vertical band above the altar (halos +8, W5 orbital ring +7, pillars). */
+    public static final int VERTICAL_ABOVE = 24;
     /** Vanilla permission level that bypasses the protection (ops). */
     private static final int EXEMPT_PERMISSION = 3;
 
@@ -52,8 +63,8 @@ public final class SanctumProtection {
     public static void refresh(MinecraftServer server) {
         altarPos = EclipseWorldState.get(server).getSanctumAltarPos();
         if (altarPos != null) {
-            EclipseMod.LOGGER.info("Sanctum protection active: r={} around {} (break/place/explosions cancelled, hostile spawns suppressed, ops exempt)",
-                    RADIUS, altarPos.toShortString());
+            EclipseMod.LOGGER.info("Sanctum protection active: r={} x y[-{}..+{}] around {} (break/place/explosions cancelled, hostile spawns suppressed, ops exempt)",
+                    RADIUS, VERTICAL_BELOW, VERTICAL_ABOVE, altarPos.toShortString());
         }
     }
 
@@ -66,8 +77,13 @@ public final class SanctumProtection {
     /** Whether a position lies inside the protected sanctum zone of the overworld. */
     public static boolean isProtected(Level level, BlockPos pos) {
         BlockPos altar = altarPos;
-        return altar != null && level.dimension() == Level.OVERWORLD
-                && pos.distSqr(altar) <= RADIUS_SQ;
+        if (altar == null || level.dimension() != Level.OVERWORLD) {
+            return false;
+        }
+        int dx = pos.getX() - altar.getX();
+        int dz = pos.getZ() - altar.getZ();
+        int dy = pos.getY() - altar.getY();
+        return dx * dx + dz * dz <= RADIUS_SQ && dy >= -VERTICAL_BELOW && dy <= VERTICAL_ABOVE;
     }
 
     @SubscribeEvent

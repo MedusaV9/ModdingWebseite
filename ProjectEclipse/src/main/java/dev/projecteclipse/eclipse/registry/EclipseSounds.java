@@ -115,6 +115,126 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.ferryman_bell")));
 
+    // P4 gameplay feedback (R3/R5/R6/R8).
+
+    /** Short chime when a skill proc fires (double drop, etc.). */
+    public static final Supplier<SoundEvent> SKILL_PROC = SOUNDS.register(
+            "skill.proc",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "skill.proc")));
+
+    /** Level-up sting when skill XP crosses a level boundary. */
+    public static final Supplier<SoundEvent> SKILL_LEVELUP = SOUNDS.register(
+            "skill.levelup",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "skill.levelup")));
+
+    /** Daily award category reveal sting. */
+    public static final Supplier<SoundEvent> AWARD_STING = SOUNDS.register(
+            "award.sting",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "award.sting")));
+
+    /** Altar personal offering accepted. */
+    public static final Supplier<SoundEvent> OFFERING_ACCEPT = SOUNDS.register(
+            "offering.accept",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "offering.accept")));
+
+    /** Heart extractor use-finish cue (R8). */
+    public static final Supplier<SoundEvent> RITUAL_EXTRACT = SOUNDS.register(
+            "ritual.extract",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ritual.extract")));
+
+    // P2-W1 FX suite (§3.5) — every entry maps to an EXISTING ogg in sounds.json as a
+    // placeholder (P2 commits no new binary assets); consumers: W6 intro lightning, W9
+    // storms, W7/W8 rifts, W5 supply beam, W2 captions.
+
+    /** Violent close-range lightning crack (intro strikes within ~40 blocks). */
+    public static final Supplier<SoundEvent> EVENT_LIGHTNING_CLOSE = SOUNDS.register(
+            "event.lightning_close",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.lightning_close")));
+
+    /** Rolling far-off lightning rumble (storm shells, distant intro strikes). */
+    public static final Supplier<SoundEvent> EVENT_LIGHTNING_FAR = SOUNDS.register(
+            "event.lightning_far",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.lightning_far")));
+
+    /** Positional churn loop of a fog-storm wall/vortex (64-block falloff, W9). */
+    public static final Supplier<SoundEvent> EVENT_STORM_LOOP = SOUNDS.register(
+            "event.storm_loop",
+            () -> SoundEvent.createFixedRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_loop"),
+                    64.0F));
+
+    /** One-shot storm burst: vortex dissipate / giant-strike release (W6/W9). */
+    public static final Supplier<SoundEvent> EVENT_STORM_BURST = SOUNDS.register(
+            "event.storm_burst",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_burst")));
+
+    /** Rift tear-open crackle (structure drops, xbox portal — W7/W8). */
+    public static final Supplier<SoundEvent> EVENT_RIFT_OPEN = SOUNDS.register(
+            "event.rift_open",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_open")));
+
+    /** Structure slam when a rift drops its payload (W7). */
+    public static final Supplier<SoundEvent> EVENT_RIFT_SLAM = SOUNDS.register(
+            "event.rift_slam",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_slam")));
+
+    /** Low eclipse drone bed while the world grade is crushed (W6/W7 sequences). */
+    public static final Supplier<SoundEvent> EVENT_ECLIPSE_DRONE = SOUNDS.register(
+            "event.eclipse_drone",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.eclipse_drone")));
+
+    /** Supply-beam hum loop at the drop marker (W5, 48-block presence). */
+    public static final Supplier<SoundEvent> EVENT_BEAM_HUM = SOUNDS.register(
+            "event.beam_hum",
+            () -> SoundEvent.createFixedRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.beam_hum"),
+                    48.0F));
+
+    /** Caption typewriter tick (alias of {@code ui.typewriter}; W2 CaptionRenderer). */
+    public static final Supplier<SoundEvent> UI_CAPTION_TICK = SOUNDS.register(
+            "ui.caption_tick",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.caption_tick")));
+
+    // --- Quiet-Eclipse UI kit (P3-W1 ledger; UiSounds resolves these by id at runtime) ---
+
+    /** Generic widget press. */
+    public static final Supplier<SoundEvent> UI_CLICK = uiEvent("ui.click");
+    /** Toggle flip. */
+    public static final Supplier<SoundEvent> UI_TOGGLE = uiEvent("ui.toggle");
+    /** Slider drag notch. */
+    public static final Supplier<SoundEvent> UI_SLIDER = uiEvent("ui.slider");
+    /** Journey-gate / error glitch burst. */
+    public static final Supplier<SoundEvent> UI_ERROR_GLITCH = uiEvent("ui.error_glitch");
+    /** Skill level-up celebration. */
+    public static final Supplier<SoundEvent> UI_LEVEL_UP = uiEvent("ui.level_up");
+    /** Skill node purchase. */
+    public static final Supplier<SoundEvent> UI_SKILL_BUY = uiEvent("ui.skill_buy");
+    /** Award roulette tick. */
+    public static final Supplier<SoundEvent> UI_ROULETTE_TICK = uiEvent("ui.roulette_tick");
+    /** Award roulette winner sting. */
+    public static final Supplier<SoundEvent> UI_ROULETTE_WIN = uiEvent("ui.roulette_win");
+    /** Day timer reaching 00:00. */
+    public static final Supplier<SoundEvent> UI_TIMER_ZERO = uiEvent("ui.timer_zero");
+    /** Ghost-heart burst on revive. */
+    public static final Supplier<SoundEvent> UI_GHOST_BURST = uiEvent("ui.ghost_burst");
+
+    private static Supplier<SoundEvent> uiEvent(String id) {
+        return SOUNDS.register(id, () -> SoundEvent.createVariableRangeEvent(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, id)));
+    }
+
     private EclipseSounds() {}
 
     public static void register(IEventBus modEventBus) {

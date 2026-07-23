@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "eclipse:classic_iron_ore",
+    "eclipse:classic_lapis_ore",
+    "eclipse:classic_lapis_block",
+    "eclipse:classic_iron_block"
+  ]
+}

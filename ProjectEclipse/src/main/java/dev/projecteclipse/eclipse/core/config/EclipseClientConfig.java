@@ -41,6 +41,10 @@ public final class EclipseClientConfig {
     private static final ModConfigSpec.BooleanValue REDUCED_FX = BUILDER
             .comment("Reduce non-essential visual effects (screen shake, particles, pulsing overlays).")
             .define("reducedFx", false);
+    private static final ModConfigSpec.BooleanValue CINEMATIC_VIEW_DISTANCE = BUILDER
+            .comment("Allow Eclipse cinematics to temporarily raise your render distance for the",
+                    "duration of a cutscene (restored automatically afterwards, even after a crash).")
+            .define("cinematicViewDistance", true);
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
@@ -77,6 +81,11 @@ public final class EclipseClientConfig {
 
     public static boolean reducedFx() {
         return get(REDUCED_FX, false);
+    }
+
+    /** P2 R12: player toggle for the temporary cutscene render-distance bump (default ON). */
+    public static boolean cinematicViewDistance() {
+        return get(CINEMATIC_VIEW_DISTANCE, true);
     }
 
     private static boolean get(ModConfigSpec.BooleanValue value, boolean fallback) {

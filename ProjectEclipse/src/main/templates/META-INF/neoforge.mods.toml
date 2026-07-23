@@ -100,6 +100,16 @@ file="META-INF/accesstransformer.cfg"
     ordering="AFTER"
     side="BOTH"
 
+# GeckoLib animation library — REQUIRED. Powers the P6 mob/boss geo models, Blockbench-format
+# animations and emissive glowmasks. Embedded jar-in-jar with an open range so a newer GeckoLib
+# supplied by another mod wins deduplication (same policy as Veil). Client+server safe.
+[[dependencies.${mod_id}]]
+    modId="geckolib"
+    type="required"
+    versionRange="[${geckolib_version},)"
+    ordering="AFTER"
+    side="BOTH"
+
 [[dependencies.${mod_id}]]
     modId="voicechat"
     type="optional"

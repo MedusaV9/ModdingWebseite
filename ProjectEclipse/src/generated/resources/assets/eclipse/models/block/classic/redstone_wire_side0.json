@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/redstone_dust_side0",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "line": "eclipse:block/classic/redstone_dust_line0",
+    "overlay": "eclipse:block/classic/redstone_dust_overlay",
+    "particle": "eclipse:block/classic/redstone_dust_dot"
+  }
+}

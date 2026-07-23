@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/stairs",
+  "textures": {
+    "bottom": "eclipse:block/classic/spruce_planks",
+    "side": "eclipse:block/classic/spruce_planks",
+    "top": "eclipse:block/classic/spruce_planks"
+  }
+}

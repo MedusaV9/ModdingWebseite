@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "eclipse:block/classic/smooth_stone",
+    "side": "eclipse:block/classic/smooth_stone_slab_side"
+  }
+}

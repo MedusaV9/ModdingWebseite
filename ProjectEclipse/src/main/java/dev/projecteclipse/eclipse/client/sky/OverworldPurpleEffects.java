@@ -12,6 +12,8 @@ import com.mojang.math.Axis;
 
 import org.joml.Matrix4f;
 
+import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
+import dev.projecteclipse.eclipse.veilfx.SunTracker;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DimensionSpecialEffects;
@@ -33,9 +35,27 @@ import net.neoforged.api.distmarker.OnlyIn;
  * sky disc shifted toward purple during the day. Moon, sunrise band, stars and the below-horizon
  * dark disc are kept vanilla-like so nights stay intact.
  *
+ * <p>P2-W1 additions (R1/R2/R4/R10):</p>
+ * <ul>
+ *   <li><b>Sun truth</b>: the celestial rotation angle comes from
+ *       {@link dev.projecteclipse.eclipse.veilfx.SunTracker#sunAngleRadians} — the same number
+ *       {@code SunTracker} projects into the {@code SunScreen} uniform, so the sky-pass sun
+ *       and the {@code eclipse:sun_halo} post halo share one source of truth and can never
+ *       drift apart (the old bug: the post shader reconstructed rays from Veil's bobbing-free
+ *       camera block while this quad rendered with the bobbing modelview).</li>
+ *   <li><b>Eclipse scale-up</b>: the sun quad grows 38 → {@value #SUN_SIZE_ECLIPSE} units with
+ *       {@code EclipseFxState.eclipseAmount}, backed by three slowly counter-rotating additive
+ *       corona quads (90/140/200 units) — a screen-filling presence instead of a postage
+ *       stamp.</li>
+ *   <li><b>Permanent rim</b> (post-intro): a purple rim pass behind the sun disc whenever
+ *       {@code EclipseFxState.permanentSunRim()} is set.</li>
+ *   <li><b>No clouds</b>: cloud height {@code NaN} + {@link #renderClouds} handled-empty.</li>
+ * </ul>
+ *
  * <p>Iris guard: while a shaderpack is active ({@link EclipseIrisState#shaderPackActive()}) this
  * returns {@code false} immediately so the shader pipeline owns the sky; the vanilla sun.png
- * override and the fog tint still apply in that case.</p>
+ * override and the fog tint still apply in that case. The cloud kill applies either way
+ * (vanilla asks {@link #renderClouds} regardless of the sky owner).</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class OverworldPurpleEffects extends DimensionSpecialEffects {
@@ -50,13 +70,31 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
     private static final float PURPLE_B = 0.45F;
     private static final float SKY_BLEND = 0.35F;
 
+    /** Sun quad size: idle (v1 look) → full eclipse (R1: "30 → 90 units", ours idles at 38). */
+    private static final float SUN_SIZE_IDLE = 38.0F;
+    private static final float SUN_SIZE_ECLIPSE = 90.0F;
+    /** Soft halo quad size behind the sun (grows with the eclipse). */
+    private static final float HALO_SIZE_IDLE = 60.0F;
+    private static final float HALO_SIZE_ECLIPSE = 150.0F;
+    /** Corona layers: size in units / rotation °·s⁻¹ (≈0.05/0.03/0.02 °/frame at 60 fps) / alpha. */
+    private static final float[] CORONA_SIZES = {90.0F, 140.0F, 200.0F};
+    private static final float[] CORONA_DEG_PER_SEC = {3.0F, -1.8F, 1.2F};
+    private static final float[] CORONA_ALPHAS = {0.30F, 0.22F, 0.16F};
+
     /** Vanilla star field (seed/count as in {@code LevelRenderer#drawStars}). */
     private static final StarField STARS = new StarField(10842L, 1500, 0.15F);
 
     public OverworldPurpleEffects() {
-        // Overworld-like: cloudLevel 192, hasGround, NORMAL sky, no forced-bright lightmap,
-        // no constant ambient light.
-        super(192.0F, true, DimensionSpecialEffects.SkyType.NORMAL, false, false);
+        // Overworld-like: hasGround, NORMAL sky, no forced-bright lightmap, no constant
+        // ambient light. Cloud height NaN = "no cloud layer" (R4), belt to renderClouds' braces.
+        super(Float.NaN, true, DimensionSpecialEffects.SkyType.NORMAL, false, false);
+    }
+
+    /** R4: clouds are fully disabled — report handled so vanilla draws nothing. */
+    @Override
+    public boolean renderClouds(ClientLevel level, int ticks, float partialTick, PoseStack poseStack,
+            double camX, double camY, double camZ, Matrix4f modelViewMatrix, Matrix4f projectionMatrix) {
+        return true;
     }
 
     @Override
@@ -88,6 +126,8 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         PoseStack poseStack = new PoseStack();
         poseStack.mulPose(modelViewMatrix);
 
+        float eclipse = EclipseFxState.eclipseAmount(partialTick);
+
         // --- sky disc, blended toward purple during the day -------------------------------
         Vec3 skyColor = level.getSkyColor(camera.getPosition(), partialTick);
         float day = dayFactor(level, partialTick);
@@ -95,6 +135,14 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         float skyR = Mth.lerp(blend, (float) skyColor.x, PURPLE_R);
         float skyG = Mth.lerp(blend, (float) skyColor.y, PURPLE_G);
         float skyB = Mth.lerp(blend, (float) skyColor.z, PURPLE_B);
+        if (eclipse > 0.001F) {
+            // R16: the eclipse crushes the sky dome toward a near-black violet even at noon
+            // (the world-side crush is eclipse:world_grade's job; this keeps the dome in sync).
+            float crush = eclipse * 0.85F;
+            skyR = Mth.lerp(crush, skyR, 0.055F);
+            skyG = Mth.lerp(crush, skyG, 0.020F);
+            skyB = Mth.lerp(crush, skyB, 0.095F);
+        }
         FogRenderer.levelFogColor();
         RenderSystem.depthMask(false);
         RenderSystem.setShaderColor(skyR, skyG, skyB, 1.0F);
@@ -134,19 +182,44 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         poseStack.pushPose();
         float rainAlpha = 1.0F - level.getRainLevel(partialTick);
         poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
-        poseStack.mulPose(Axis.XP.rotationDegrees(level.getTimeOfDay(partialTick) * 360.0F));
+        // R2: same celestial angle SunTracker projects into SunScreen — one source of truth.
+        poseStack.mulPose(Axis.XP.rotationDegrees(
+                (float) Math.toDegrees(SunTracker.sunAngleRadians(level, partialTick))));
         Matrix4f celestialPose = poseStack.last().pose();
 
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.setShaderTexture(0, SUN_PURPLE);
+
+        // R1: three slowly rotating additive corona quads carry the eclipse's screen presence.
+        if (eclipse > 0.001F) {
+            float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
+            for (int i = 0; i < CORONA_SIZES.length; i++) {
+                poseStack.pushPose();
+                poseStack.mulPose(Axis.YP.rotationDegrees(seconds * CORONA_DEG_PER_SEC[i]));
+                RenderSystem.setShaderColor(
+                        0.75F - 0.12F * i, 0.40F - 0.09F * i, 1.00F - 0.05F * i,
+                        CORONA_ALPHAS[i] * eclipse * rainAlpha);
+                SkyRenderUtil.drawCelestialQuad(poseStack.last().pose(), CORONA_SIZES[i], 100.0F);
+                poseStack.popPose();
+            }
+        }
 
         // soft halo: the same texture drawn much larger at low alpha behind the sun
-        RenderSystem.setShaderColor(0.72F, 0.35F, 0.95F, 0.40F * rainAlpha);
-        RenderSystem.setShaderTexture(0, SUN_PURPLE);
-        SkyRenderUtil.drawCelestialQuad(celestialPose, 60.0F, 100.0F);
+        RenderSystem.setShaderColor(0.72F, 0.35F, 0.95F, (0.40F + 0.25F * eclipse) * rainAlpha);
+        SkyRenderUtil.drawCelestialQuad(celestialPose,
+                Mth.lerp(eclipse, HALO_SIZE_IDLE, HALO_SIZE_ECLIPSE), 100.0F);
 
-        // the purple sun itself, slightly larger than the vanilla 30f sun
+        float sunSize = Mth.lerp(eclipse, SUN_SIZE_IDLE, SUN_SIZE_ECLIPSE);
+
+        // R10 SUNRISE: permanent purple rim pass behind the sun disc after the intro.
+        if (EclipseFxState.permanentSunRim()) {
+            RenderSystem.setShaderColor(0.62F, 0.22F, 1.00F, 0.50F * rainAlpha);
+            SkyRenderUtil.drawCelestialQuad(celestialPose, sunSize * 1.35F, 100.0F);
+        }
+
+        // the purple sun itself, growing from its idle size to eclipse scale
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, rainAlpha);
-        SkyRenderUtil.drawCelestialQuad(celestialPose, 38.0F, 100.0F);
+        SkyRenderUtil.drawCelestialQuad(celestialPose, sunSize, 100.0F);
 
         // vanilla moon (phases from the shared moon sheet)
         RenderSystem.setShaderTexture(0, MOON_LOCATION);
@@ -165,8 +238,8 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         moon.addVertex(celestialPose, -moonSize, -100.0F, -moonSize).setUv(u1, v0);
         BufferUploader.drawWithShader(moon.buildOrThrow());
 
-        // stars, faintly purple-tinted
-        float starBrightness = level.getStarBrightness(partialTick) * rainAlpha;
+        // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon
+        float starBrightness = Math.max(level.getStarBrightness(partialTick), eclipse * 0.5F) * rainAlpha;
         if (starBrightness > 0.0F) {
             RenderSystem.setShaderColor(starBrightness * 0.9F, starBrightness * 0.8F, starBrightness, starBrightness);
             FogRenderer.setupNoFog();
@@ -195,8 +268,12 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         return true;
     }
 
-    /** 0 at night, 1 at midday — same cosine curve vanilla uses for sky brightness. */
-    static float dayFactor(ClientLevel level, float partialTick) {
+    /**
+     * 0 at night, 1 at midday — same cosine curve vanilla uses for sky brightness. Public:
+     * {@code veilfx.VeilPostController} derives the {@code eclipse:world_grade} NightAmount
+     * from it (R3).
+     */
+    public static float dayFactor(ClientLevel level, float partialTick) {
         float cos = Mth.cos(level.getTimeOfDay(partialTick) * ((float) Math.PI * 2.0F)) * 2.0F + 0.5F;
         return Mth.clamp(cos, 0.0F, 1.0F);
     }

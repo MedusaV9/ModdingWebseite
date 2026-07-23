@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/button_pressed",
+  "textures": {
+    "texture": "eclipse:block/classic/oak_planks"
+  }
+}

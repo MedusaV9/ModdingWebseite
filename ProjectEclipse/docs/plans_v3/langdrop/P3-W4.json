@@ -1,0 +1,36 @@
+{
+  "en_us": {
+    "announce.eclipse.unlock.key.generic": "Seal broken: %s",
+    "commands.eclipse.lang.status.auto": "Eclipse language: auto (follows game language)",
+    "commands.eclipse.lang.status.en": "Eclipse language: English",
+    "commands.eclipse.lang.status.de": "Eclipse language: German",
+    "commands.eclipse.lang.usage": "Usage: /lang en|de|auto  (alias: /sprache)",
+    "commands.eclipse.lang.set.auto": "Eclipse language set to auto.",
+    "commands.eclipse.lang.set.en": "Eclipse language set to English.",
+    "commands.eclipse.lang.set.de": "Eclipse language set to German.",
+    "gui.eclipse.goaleditor.title_row": "Title / Subtitle (EN | DE):",
+    "gui.eclipse.goaleditor.title_en": "Title (EN)",
+    "gui.eclipse.goaleditor.title_de": "Title (DE)",
+    "gui.eclipse.goaleditor.subtitle_en": "Subtitle (EN)",
+    "gui.eclipse.goaleditor.subtitle_de": "Subtitle (DE)",
+    "gui.eclipse.goaleditor.goal_en": "Goal (EN)",
+    "gui.eclipse.goaleditor.goal_de": "Goal (DE)"
+  },
+  "de_de": {
+    "announce.eclipse.unlock.key.generic": "Siegel gebrochen: %s",
+    "commands.eclipse.lang.status.auto": "Eclipse-Sprache: automatisch (folgt Spielsprache)",
+    "commands.eclipse.lang.status.en": "Eclipse-Sprache: Englisch",
+    "commands.eclipse.lang.status.de": "Eclipse-Sprache: Deutsch",
+    "commands.eclipse.lang.usage": "Verwendung: /sprache de|en|auto  (Alias: /lang)",
+    "commands.eclipse.lang.set.auto": "Eclipse-Sprache auf automatisch gesetzt.",
+    "commands.eclipse.lang.set.en": "Eclipse-Sprache auf Englisch gesetzt.",
+    "commands.eclipse.lang.set.de": "Eclipse-Sprache auf Deutsch gesetzt.",
+    "gui.eclipse.goaleditor.title_row": "Titel / Untertitel (EN | DE):",
+    "gui.eclipse.goaleditor.title_en": "Titel (EN)",
+    "gui.eclipse.goaleditor.title_de": "Titel (DE)",
+    "gui.eclipse.goaleditor.subtitle_en": "Untertitel (EN)",
+    "gui.eclipse.goaleditor.subtitle_de": "Untertitel (DE)",
+    "gui.eclipse.goaleditor.goal_en": "Ziel (EN)",
+    "gui.eclipse.goaleditor.goal_de": "Ziel (DE)"
+  }
+}

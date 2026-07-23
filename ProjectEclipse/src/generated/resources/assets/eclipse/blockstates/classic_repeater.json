@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "facing=east,powered=false": {
+      "model": "eclipse:block/classic/repeater",
+      "y": 270
+    },
+    "facing=east,powered=true": {
+      "model": "eclipse:block/classic/repeater_on",
+      "y": 270
+    },
+    "facing=north,powered=false": {
+      "model": "eclipse:block/classic/repeater",
+      "y": 180
+    },
+    "facing=north,powered=true": {
+      "model": "eclipse:block/classic/repeater_on",
+      "y": 180
+    },
+    "facing=south,powered=false": {
+      "model": "eclipse:block/classic/repeater"
+    },
+    "facing=south,powered=true": {
+      "model": "eclipse:block/classic/repeater_on"
+    },
+    "facing=west,powered=false": {
+      "model": "eclipse:block/classic/repeater",
+      "y": 90
+    },
+    "facing=west,powered=true": {
+      "model": "eclipse:block/classic/repeater_on",
+      "y": 90
+    }
+  }
+}

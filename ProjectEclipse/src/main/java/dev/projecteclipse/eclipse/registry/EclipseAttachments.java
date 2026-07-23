@@ -6,6 +6,7 @@ import com.mojang.serialization.Codec;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.CutsceneLock;
+import dev.projecteclipse.eclipse.analytics.PlacedBlockData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -59,6 +60,17 @@ public final class EclipseAttachments {
     public static final Supplier<AttachmentType<Integer>> GOAL_PROGRESS = ATTACHMENTS.register(
             "goal_progress",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).copyOnDeath().build());
+
+    /**
+     * Per-chunk player-placed block bitsets (P4 analytics). Used by {@code PlacedBlockTracker}
+     * to distinguish natural vs player-placed blocks for XP, goals, and awards. Not copied on
+     * death — chunk-scoped persistence only.
+     */
+    public static final Supplier<AttachmentType<PlacedBlockData>> PLACED_BLOCKS = ATTACHMENTS.register(
+            "placed_blocks",
+            () -> AttachmentType.builder(PlacedBlockData::empty)
+                    .serialize(PlacedBlockData.CODEC)
+                    .build());
 
     private EclipseAttachments() {}
 

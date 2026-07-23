@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/brewing_stand",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "base": "eclipse:block/classic/brewing_stand_base",
+    "particle": "eclipse:block/classic/brewing_stand",
+    "stand": "eclipse:block/classic/brewing_stand"
+  }
+}

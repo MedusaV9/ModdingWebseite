@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cocoa_stage1",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cocoa": "eclipse:block/classic/cocoa_stage1",
+    "particle": "eclipse:block/classic/cocoa_stage1"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "moisture=0": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=1": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=2": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=3": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=4": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=5": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=6": {
+      "model": "eclipse:block/classic/farmland"
+    },
+    "moisture=7": {
+      "model": "eclipse:block/classic/farmland_moist"
+    }
+  }
+}

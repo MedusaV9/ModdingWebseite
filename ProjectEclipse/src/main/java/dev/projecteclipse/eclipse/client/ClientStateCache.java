@@ -62,6 +62,76 @@ public final class ClientStateCache {
     public static volatile int borderLerpTicksNether = 0;
     public static volatile long borderSyncMillisNether = 0L;
 
+    // --- P4 gameplay payloads (stub cache fields; P3 replaces rendering) ---
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CDayClockPayload} */
+    public static volatile int dayClockDay = 1;
+    public static volatile long boundaryEpochMillis = 0L;
+    public static volatile long prevBoundaryEpochMillis = 0L;
+    public static volatile long serverNowEpochMillis = 0L;
+    public static volatile boolean dayClockPaused = false;
+    public static volatile long pauseRemainingMillis = 0L;
+    /** Local millis when the last day-clock payload arrived (client offset helper). */
+    public static volatile long clockSyncLocalMillis = 0L;
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CQuestStatePayload} */
+    public static volatile int questDay = 1;
+    public static volatile java.util.List<dev.projecteclipse.eclipse.network.S2CQuestStatePayload.QuestEntry> questEntries =
+            java.util.List.of();
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CSkillStatePayload} */
+    public static volatile int skillLevel = 0;
+    public static volatile long skillTotalXp = 0L;
+    public static volatile int skillXpIntoLevel = 0;
+    public static volatile int skillXpForLevel = 0;
+    public static volatile int skillPoints = 0;
+    public static volatile int skillUnspent = 0;
+    public static volatile java.util.List<String> skillOwnedNodes = java.util.List.of();
+    public static volatile boolean skillProcMsgEnabled = true;
+    public static volatile boolean skillSecretMultiplierActive = false;
+
+    /** Last {@link dev.projecteclipse.eclipse.network.S2CSkillProcPayload} */
+    public static volatile String lastSkillProcId = "";
+    public static volatile float lastSkillProcMagnitude = 0.0F;
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CAwardRevealPayload} */
+    public static volatile int awardRevealDay = 0;
+    public static volatile java.util.List<dev.projecteclipse.eclipse.network.S2CAwardRevealPayload.Category> awardCategories =
+            java.util.List.of();
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CBuffStatePayload} */
+    public static volatile java.util.List<dev.projecteclipse.eclipse.network.S2CBuffStatePayload.Buff> activeBuffs =
+            java.util.List.of();
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CRecipeLocksPayload} */
+    public static volatile java.util.List<String> lockedItemIds = java.util.List.of();
+    public static volatile java.util.List<String> lockedRecipeIds = java.util.List.of();
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CSidebarStatePayload} */
+    public static volatile int sidebarDay = 1;
+    public static volatile long sidebarBoundaryEpochMillis = 0L;
+    public static volatile boolean sidebarPaused = false;
+    public static volatile int sidebarSkillLevel = 0;
+    public static volatile int sidebarXpIntoLevel = 0;
+    public static volatile int sidebarXpForLevel = 0;
+    public static volatile int sidebarAltarLevel = 0;
+    public static volatile int sidebarMainsDone = 0;
+    public static volatile int sidebarMainsTotal = 0;
+    public static volatile int sidebarSidesDone = 0;
+    public static volatile int sidebarSidesTotal = 0;
+    public static volatile int sidebarPersonalsDone = 0;
+    public static volatile int sidebarPersonalsTotal = 0;
+    public static volatile java.util.List<String> sidebarBuffIds = java.util.List.of();
+    public static volatile int sidebarShards = 0;
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CGhostRevealPayload} */
+    public static volatile int ghostRevealEntityId = -1;
+    public static volatile String ghostRevealOwnerName = "";
+    public static volatile int ghostRevealTicks = 0;
+
+    /** {@link dev.projecteclipse.eclipse.network.S2CSkillTreePayload} raw JSON text */
+    public static volatile String skillTreeJson = "{}";
+
     /**
      * Snaps every synced field back to its pre-login default (disconnect hook): the cache
      * outlives the connection, so without this the next server's HUD/handbook would show
@@ -94,6 +164,50 @@ public final class ClientStateCache {
         borderToRadiusNether = -1.0F;
         borderLerpTicksNether = 0;
         borderSyncMillisNether = 0L;
+        dayClockDay = 1;
+        boundaryEpochMillis = 0L;
+        prevBoundaryEpochMillis = 0L;
+        serverNowEpochMillis = 0L;
+        dayClockPaused = false;
+        pauseRemainingMillis = 0L;
+        clockSyncLocalMillis = 0L;
+        questDay = 1;
+        questEntries = java.util.List.of();
+        skillLevel = 0;
+        skillTotalXp = 0L;
+        skillXpIntoLevel = 0;
+        skillXpForLevel = 0;
+        skillPoints = 0;
+        skillUnspent = 0;
+        skillOwnedNodes = java.util.List.of();
+        skillProcMsgEnabled = true;
+        skillSecretMultiplierActive = false;
+        lastSkillProcId = "";
+        lastSkillProcMagnitude = 0.0F;
+        awardRevealDay = 0;
+        awardCategories = java.util.List.of();
+        activeBuffs = java.util.List.of();
+        lockedItemIds = java.util.List.of();
+        lockedRecipeIds = java.util.List.of();
+        sidebarDay = 1;
+        sidebarBoundaryEpochMillis = 0L;
+        sidebarPaused = false;
+        sidebarSkillLevel = 0;
+        sidebarXpIntoLevel = 0;
+        sidebarXpForLevel = 0;
+        sidebarAltarLevel = 0;
+        sidebarMainsDone = 0;
+        sidebarMainsTotal = 0;
+        sidebarSidesDone = 0;
+        sidebarSidesTotal = 0;
+        sidebarPersonalsDone = 0;
+        sidebarPersonalsTotal = 0;
+        sidebarBuffIds = java.util.List.of();
+        sidebarShards = 0;
+        ghostRevealEntityId = -1;
+        ghostRevealOwnerName = "";
+        ghostRevealTicks = 0;
+        skillTreeJson = "{}";
     }
 
     /**

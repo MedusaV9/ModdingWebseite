@@ -1,0 +1,26 @@
+{
+  "variants": {
+    "facing=down": {
+      "model": "eclipse:block/classic/dispenser_vertical",
+      "x": 180
+    },
+    "facing=east": {
+      "model": "eclipse:block/classic/dispenser",
+      "y": 90
+    },
+    "facing=north": {
+      "model": "eclipse:block/classic/dispenser"
+    },
+    "facing=south": {
+      "model": "eclipse:block/classic/dispenser",
+      "y": 180
+    },
+    "facing=up": {
+      "model": "eclipse:block/classic/dispenser_vertical"
+    },
+    "facing=west": {
+      "model": "eclipse:block/classic/dispenser",
+      "y": 270
+    }
+  }
+}

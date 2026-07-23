@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.client.hud;
 import java.util.ArrayDeque;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
@@ -11,7 +12,6 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -116,7 +116,7 @@ public final class AnnouncementOverlay {
     }
 
     private static void start(S2CAnnouncePayload payload) {
-        Component title = Component.translatable(payload.titleKey());
+        Component title = EclipseLang.tr(payload.titleKey());
         Component subtitle = resolve(payload.subtitleKey());
         typewriter = new TypewriterLine(subtitle != null ? subtitle : title);
         sweepTitle = title;
@@ -137,11 +137,11 @@ public final class AnnouncementOverlay {
         if (key.isEmpty()) {
             return null;
         }
-        if (!I18n.exists(key) && key.startsWith(UNLOCK_KEY_PREFIX)) {
-            return Component.literal("Seal broken: "
-                    + key.substring(UNLOCK_KEY_PREFIX.length()).replace('_', ' '));
+        if (!EclipseLang.hasKey(key) && key.startsWith(UNLOCK_KEY_PREFIX)) {
+            return EclipseLang.tr("announce.eclipse.unlock.key.generic",
+                    key.substring(UNLOCK_KEY_PREFIX.length()).replace('_', ' '));
         }
-        return Component.translatable(key);
+        return EclipseLang.tr(key);
     }
 
     /** GUI layer body (registered above the boss overlay in {@code EclipseGuiLayers}). */

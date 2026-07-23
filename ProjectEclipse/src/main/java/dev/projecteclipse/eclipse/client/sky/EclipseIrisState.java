@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client.sky;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import foundry.veil.api.compat.IrisCompat;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -47,5 +48,17 @@ public final class EclipseIrisState {
             EclipseMod.LOGGER.warn("Veil IrisCompat threw; treating shaderpacks as inactive from now on", t);
             return false;
         }
+    }
+
+    /**
+     * The single combined gate for every Eclipse Veil post pipeline (P2 §3.4): post FX may
+     * run only while no Iris shaderpack is active AND the {@code veilPostFx} client config is
+     * enabled. The gate applies identically to every {@code VeilPostController} priority
+     * class (GRADE/FEATURE/TRANSITION) — priorities only decide eviction order among ALLOWED
+     * pipelines, never whether the gate opens. World-space FX (sky quads, storm shells,
+     * beams, rifts) ignore this gate by design: they are the Iris fallback (§7).
+     */
+    public static boolean postFxAllowed() {
+        return !shaderPackActive() && EclipseClientConfig.veilPostFx();
     }
 }

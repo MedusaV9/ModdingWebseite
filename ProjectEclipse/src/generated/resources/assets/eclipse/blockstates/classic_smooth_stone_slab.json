@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "eclipse:block/classic/smooth_stone_slab"
+    },
+    "type=double": {
+      "model": "eclipse:block/classic/smooth_stone_slab_double"
+    },
+    "type=top": {
+      "model": "eclipse:block/classic/smooth_stone_slab_top"
+    }
+  }
+}

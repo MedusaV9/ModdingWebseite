@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.CursorManager;
 import dev.projecteclipse.eclipse.client.handbook.EclipseWidget;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.network.C2SConfigEditPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -38,11 +39,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the server re-checks permission level 3 and re-validates before writing (see
  * {@code devtools.ConfigEditor}). ESC / Cancel discards.
  *
- * <p>UI conventions follow the W9 handbook suite: {@link EclipseWidget} day buttons (hover
- * glow + {@code ui.hover}), {@link UiSounds#tab()} on day switch, one
- * {@link CursorManager#endFrame()} per frame and a {@link CursorManager#reset()} in
- * {@link #removed()}. Buttons and text fields are VANILLA widgets, so focus order and
- * narration stay intact.</p>
+ * <p>Since P3-W4 each goal, title and subtitle carries English and German boxes; serialization
+ * uses {@link Localized#toJsonElement()} ({@code {"en","de"}} objects, legacy string when DE
+ * matches EN).</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class GoalEditorScreen extends Screen {
@@ -58,9 +57,17 @@ public final class GoalEditorScreen extends Screen {
     /** Mutable editing model of one {@code days.json} entry. */
     private static final class DayEntry {
         int day;
-        final List<String> goals = new ArrayList<>();
+        final List<Localized> goals = new ArrayList<>();
+        Localized title = Localized.of("");
+        Localized subtitle = Localized.of("");
         String unlocks = "";
         String borderSize = "1000.0";
+    }
+
+    /** Paired EN/DE widgets for one goal line. */
+    private static final class GoalFieldPair {
+        EditBox en;
+        EditBox de;
     }
 
     private final List<DayEntry> days = new ArrayList<>();
@@ -68,8 +75,15 @@ public final class GoalEditorScreen extends Screen {
     @Nullable
     private Component error;
 
-    // Rebuilt in init().
-    private final List<EditBox> goalBoxes = new ArrayList<>();
+    private final List<GoalFieldPair> goalFields = new ArrayList<>();
+    @Nullable
+    private EditBox titleEnBox;
+    @Nullable
+    private EditBox titleDeBox;
+    @Nullable
+    private EditBox subtitleEnBox;
+    @Nullable
+    private EditBox subtitleDeBox;
     @Nullable
     private EditBox unlocksBox;
     @Nullable
@@ -104,9 +118,15 @@ public final class GoalEditorScreen extends Screen {
                 if (obj.has("goals")) {
                     for (JsonElement goal : obj.getAsJsonArray("goals")) {
                         if (entry.goals.size() < MAX_GOALS) {
-                            entry.goals.add(goal.getAsString());
+                            entry.goals.add(Localized.parse(goal));
                         }
                     }
+                }
+                if (obj.has("title")) {
+                    entry.title = Localized.parse(obj.get("title"));
+                }
+                if (obj.has("subtitle")) {
+                    entry.subtitle = Localized.parse(obj.get("subtitle"));
                 }
                 if (obj.has("unlocks")) {
                     List<String> keys = new ArrayList<>();
@@ -131,17 +151,18 @@ public final class GoalEditorScreen extends Screen {
         selected = Mth.clamp(selected, 0, days.size() - 1);
     }
 
-    // --- layout ---
-
     @Override
     protected void init() {
-        goalBoxes.clear();
-        panelW = Mth.clamp(this.width - 24, 320, 460);
-        panelH = Mth.clamp(this.height - 24, 216, 300);
+        clearWidgets();
+        goalFields.clear();
+        titleEnBox = titleDeBox = subtitleEnBox = subtitleDeBox = null;
+        unlocksBox = borderBox = null;
+
+        panelW = Mth.clamp(this.width - 24, 340, 520);
+        panelH = Mth.clamp(this.height - 24, 240, 340);
         panelX = (this.width - panelW) / 2;
         panelY = (this.height - panelH) / 2;
 
-        // Left: day grid, 7 per column.
         int columns = Math.max(1, (days.size() + 6) / 7);
         int dayW = 22;
         int dayH = 16;
@@ -157,18 +178,30 @@ public final class GoalEditorScreen extends Screen {
         rightW = panelX + panelW - 10 - rightX;
         DayEntry entry = days.get(selected);
 
-        // Goal lines + add/remove.
-        int y = panelY + 32;
+        int y = panelY + 28;
         int boxH = 14;
+        int halfW = (rightW - 4) / 2;
+
+        titleEnBox = addLangBox(rightX, y, halfW, boxH, "gui.eclipse.goaleditor.title_en", entry.title.en());
+        titleDeBox = addLangBox(rightX + halfW + 4, y, halfW, boxH, "gui.eclipse.goaleditor.title_de",
+                entry.title.de() != null ? entry.title.de() : entry.title.en());
+        y += boxH + 3;
+
+        subtitleEnBox = addLangBox(rightX, y, halfW, boxH, "gui.eclipse.goaleditor.subtitle_en", entry.subtitle.en());
+        subtitleDeBox = addLangBox(rightX + halfW + 4, y, halfW, boxH, "gui.eclipse.goaleditor.subtitle_de",
+                entry.subtitle.de() != null ? entry.subtitle.de() : entry.subtitle.en());
+        y += boxH + 8;
+
         for (int i = 0; i < entry.goals.size(); i++) {
-            EditBox box = new EditBox(this.font, rightX, y, rightW, boxH,
-                    Component.translatable("gui.eclipse.goaleditor.goal", i + 1));
-            box.setMaxLength(GOAL_MAX_CHARS);
-            box.setValue(entry.goals.get(i));
-            addRenderableWidget(box);
-            goalBoxes.add(box);
+            Localized goal = entry.goals.get(i);
+            GoalFieldPair pair = new GoalFieldPair();
+            pair.en = addLangBox(rightX, y, halfW, boxH, "gui.eclipse.goaleditor.goal_en", goal.en());
+            pair.de = addLangBox(rightX + halfW + 4, y, halfW, boxH, "gui.eclipse.goaleditor.goal_de",
+                    goal.de() != null ? goal.de() : goal.en());
+            goalFields.add(pair);
             y += boxH + 3;
         }
+
         int controlsY = y + 1;
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.goaleditor.add"),
                         button -> addGoal())
@@ -179,7 +212,6 @@ public final class GoalEditorScreen extends Screen {
                 .bounds(rightX + 56, controlsY, 52, 14).build())
                 .active = !entry.goals.isEmpty();
 
-        // Unlock keys + legacy border, labels drawn left of the boxes in render().
         int fieldX = rightX + 52;
         int fieldW = rightW - 52;
         int unlocksY = controlsY + 20;
@@ -196,7 +228,6 @@ public final class GoalEditorScreen extends Screen {
         borderBox.setValue(entry.borderSize);
         addRenderableWidget(borderBox);
 
-        // Save / Cancel along the panel's bottom edge.
         int actionY = panelY + panelH - 24;
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.goaleditor.save"),
                         button -> save())
@@ -206,13 +237,25 @@ public final class GoalEditorScreen extends Screen {
                 .bounds(panelX + panelW - 84, actionY, 74, 18).build());
     }
 
-    // --- model <-> widgets ---
+    private EditBox addLangBox(int x, int y, int width, int height, String labelKey, String value) {
+        EditBox box = new EditBox(this.font, x, y, width, height, Component.translatable(labelKey));
+        box.setMaxLength(GOAL_MAX_CHARS);
+        box.setValue(value);
+        addRenderableWidget(box);
+        return box;
+    }
 
-    /** Copies the on-screen field values back into the selected day's model entry. */
     private void commitFields() {
         DayEntry entry = days.get(selected);
-        for (int i = 0; i < goalBoxes.size() && i < entry.goals.size(); i++) {
-            entry.goals.set(i, goalBoxes.get(i).getValue());
+        for (int i = 0; i < goalFields.size() && i < entry.goals.size(); i++) {
+            GoalFieldPair pair = goalFields.get(i);
+            entry.goals.set(i, new Localized(pair.en.getValue(), emptyToNull(pair.de.getValue())));
+        }
+        if (titleEnBox != null && titleDeBox != null) {
+            entry.title = new Localized(titleEnBox.getValue(), emptyToNull(titleDeBox.getValue()));
+        }
+        if (subtitleEnBox != null && subtitleDeBox != null) {
+            entry.subtitle = new Localized(subtitleEnBox.getValue(), emptyToNull(subtitleDeBox.getValue()));
         }
         if (unlocksBox != null) {
             entry.unlocks = unlocksBox.getValue();
@@ -220,6 +263,16 @@ public final class GoalEditorScreen extends Screen {
         if (borderBox != null) {
             entry.borderSize = borderBox.getValue();
         }
+    }
+
+    @Nullable
+    private static String emptyToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    @Override
+    protected void rebuildWidgets() {
+        init();
     }
 
     private void selectDay(int index) {
@@ -236,7 +289,7 @@ public final class GoalEditorScreen extends Screen {
         commitFields();
         DayEntry entry = days.get(selected);
         if (entry.goals.size() < MAX_GOALS) {
-            entry.goals.add("");
+            entry.goals.add(Localized.of(""));
             rebuildWidgets();
         }
     }
@@ -250,7 +303,6 @@ public final class GoalEditorScreen extends Screen {
         }
     }
 
-    /** Serializes ALL days back to the days.json shape and sends the edit to the server. */
     private void save() {
         commitFields();
         JsonArray array = new JsonArray(days.size());
@@ -258,12 +310,18 @@ public final class GoalEditorScreen extends Screen {
             JsonObject obj = new JsonObject();
             obj.addProperty("day", entry.day);
             JsonArray goals = new JsonArray();
-            for (String goal : entry.goals) {
+            for (Localized goal : entry.goals) {
                 if (!goal.isBlank() && goals.size() < MAX_GOALS) {
-                    goals.add(goal.trim());
+                    goals.add(goal.toJsonElement());
                 }
             }
             obj.add("goals", goals);
+            if (!entry.title.isBlank()) {
+                obj.add("title", entry.title.toJsonElement());
+            }
+            if (!entry.subtitle.isBlank()) {
+                obj.add("subtitle", entry.subtitle.toJsonElement());
+            }
             JsonArray unlocks = new JsonArray();
             for (String key : entry.unlocks.split(",")) {
                 if (!key.isBlank()) {
@@ -289,9 +347,6 @@ public final class GoalEditorScreen extends Screen {
         onClose();
     }
 
-    // --- rendering ---
-
-    /** Dark transparent gradient (no blur dirt) + the editor panel under the widgets. */
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         renderTransparentBackground(guiGraphics);
@@ -309,6 +364,10 @@ public final class GoalEditorScreen extends Screen {
                 rightX, panelY + 10, TEXT_COLOR);
         guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.goals"),
                 rightX, panelY + 22, DIM_COLOR);
+        if (titleEnBox != null) {
+            guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.title_row"),
+                    rightX, titleEnBox.getY() - 9, DIM_COLOR);
+        }
         if (unlocksBox != null) {
             guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.goaleditor.unlocks"),
                     rightX, unlocksBox.getY() + 3, DIM_COLOR);
@@ -328,14 +387,12 @@ public final class GoalEditorScreen extends Screen {
         return false;
     }
 
-    /** ALWAYS hand the system cursor back, whatever screen comes next (risk R12). */
     @Override
     public void removed() {
         CursorManager.reset();
         super.removed();
     }
 
-    /** Day selector tile: W9 hover suite via {@link EclipseWidget}, tab sound on switch. */
     private final class DayButton extends EclipseWidget {
         private final int index;
 

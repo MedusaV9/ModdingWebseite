@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/nether_portal_ns",
+  "render_type": "minecraft:translucent",
+  "textures": {
+    "particle": "eclipse:block/classic/nether_portal",
+    "portal": "eclipse:block/classic/nether_portal"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "variants": {
+    "snowy=false": [
+      {
+        "model": "eclipse:block/classic/mycelium"
+      },
+      {
+        "model": "eclipse:block/classic/mycelium",
+        "y": 90
+      },
+      {
+        "model": "eclipse:block/classic/mycelium",
+        "y": 180
+      },
+      {
+        "model": "eclipse:block/classic/mycelium",
+        "y": 270
+      }
+    ],
+    "snowy=true": {
+      "model": "eclipse:block/classic/grass_block_snow"
+    }
+  }
+}

@@ -277,6 +277,7 @@ public final class EclipseConfig {
                 EclipseConfig::defaultStages, EclipseConfig::stagesToJson, EclipseConfig::stagesFromJson);
         applyStageRadii();
         loaded = true;
+        ReloadHooks.runAll();
         EclipseMod.LOGGER.info("Eclipse config loaded: {} days, {} milestones, {} gated namespaces, "
                         + "{} anti-cheat entries, grave grace {} min, {} overworld + {} nether stages, "
                         + "ring budget {} ms",

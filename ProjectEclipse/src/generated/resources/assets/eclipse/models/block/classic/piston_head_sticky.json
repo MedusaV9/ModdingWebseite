@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/piston_head_sticky",
+  "textures": {
+    "particle": "eclipse:block/classic/piston_top",
+    "platform": "eclipse:block/classic/piston_top_sticky",
+    "side": "eclipse:block/classic/piston_side",
+    "unsticky": "eclipse:block/classic/piston_top"
+  }
+}

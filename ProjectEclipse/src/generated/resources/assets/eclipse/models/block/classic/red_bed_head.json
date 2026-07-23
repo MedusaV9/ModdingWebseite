@@ -1,0 +1,197 @@
+{
+  "elements": [
+    {
+      "faces": {
+        "down": {
+          "texture": "#sheet",
+          "uv": [
+            1.5,
+            1.5,
+            5.5,
+            5.5
+          ]
+        },
+        "east": {
+          "rotation": 270,
+          "texture": "#sheet",
+          "uv": [
+            5.5,
+            1.5,
+            7,
+            5.5
+          ]
+        },
+        "north": {
+          "texture": "#sheet",
+          "uv": [
+            1.5,
+            0,
+            5.5,
+            1.5
+          ]
+        },
+        "south": {
+          "texture": "#sheet",
+          "uv": [
+            1.5,
+            0,
+            5.5,
+            1.5
+          ]
+        },
+        "up": {
+          "texture": "#sheet",
+          "uv": [
+            1.5,
+            1.5,
+            5.5,
+            5.5
+          ]
+        },
+        "west": {
+          "rotation": 90,
+          "texture": "#sheet",
+          "uv": [
+            0,
+            1.5,
+            1.5,
+            5.5
+          ]
+        }
+      },
+      "from": [
+        0,
+        3,
+        0
+      ],
+      "to": [
+        16,
+        9,
+        16
+      ]
+    },
+    {
+      "faces": {
+        "down": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "east": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "north": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "south": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "west": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        }
+      },
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "faces": {
+        "down": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "east": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "north": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "south": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        },
+        "west": {
+          "texture": "#sheet",
+          "uv": [
+            12.75,
+            0.75,
+            13.5,
+            1.5
+          ]
+        }
+      },
+      "from": [
+        13,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        3,
+        3
+      ]
+    }
+  ],
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "eclipse:block/classic/red_bed_sheet",
+    "sheet": "eclipse:block/classic/red_bed_sheet"
+  }
+}

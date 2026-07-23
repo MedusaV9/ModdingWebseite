@@ -45,7 +45,18 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CMilestonesPayload.TYPE, S2CMilestonesPayload.STREAM_CODEC, EclipsePayloads::handleMilestones);
         registrar.playToClient(S2CShakePayload.TYPE, S2CShakePayload.STREAM_CODEC, EclipsePayloads::handleShake);
         registrar.playToClient(S2COpenGoalEditorPayload.TYPE, S2COpenGoalEditorPayload.STREAM_CODEC, EclipsePayloads::handleOpenGoalEditor);
+        registrar.playToClient(S2CDayClockPayload.TYPE, S2CDayClockPayload.STREAM_CODEC, EclipsePayloads::handleDayClock);
+        registrar.playToClient(S2CQuestStatePayload.TYPE, S2CQuestStatePayload.STREAM_CODEC, EclipsePayloads::handleQuestState);
+        registrar.playToClient(S2CSkillStatePayload.TYPE, S2CSkillStatePayload.STREAM_CODEC, EclipsePayloads::handleSkillState);
+        registrar.playToClient(S2CSkillProcPayload.TYPE, S2CSkillProcPayload.STREAM_CODEC, EclipsePayloads::handleSkillProc);
+        registrar.playToClient(S2CAwardRevealPayload.TYPE, S2CAwardRevealPayload.STREAM_CODEC, EclipsePayloads::handleAwardReveal);
+        registrar.playToClient(S2CBuffStatePayload.TYPE, S2CBuffStatePayload.STREAM_CODEC, EclipsePayloads::handleBuffState);
+        registrar.playToClient(S2CRecipeLocksPayload.TYPE, S2CRecipeLocksPayload.STREAM_CODEC, EclipsePayloads::handleRecipeLocks);
+        registrar.playToClient(S2CSidebarStatePayload.TYPE, S2CSidebarStatePayload.STREAM_CODEC, EclipsePayloads::handleSidebarState);
+        registrar.playToClient(S2CGhostRevealPayload.TYPE, S2CGhostRevealPayload.STREAM_CODEC, EclipsePayloads::handleGhostReveal);
+        registrar.playToClient(S2CSkillTreePayload.TYPE, S2CSkillTreePayload.STREAM_CODEC, EclipsePayloads::handleSkillTree);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
+        registrar.playToServer(C2SSkillNodeBuyPayload.TYPE, C2SSkillNodeBuyPayload.STREAM_CODEC, EclipsePayloads::handleSkillNodeBuy);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
         registrar.playToServer(C2SConfigEditPayload.TYPE, C2SConfigEditPayload.STREAM_CODEC, EclipsePayloads::handleConfigEdit);
@@ -208,6 +219,85 @@ public final class EclipsePayloads {
         if (context.player() instanceof ServerPlayer player) {
             dev.projecteclipse.eclipse.devtools.ConfigEditor.handleEdit(payload, player);
         }
+    }
+
+    private static void handleDayClock(S2CDayClockPayload payload, IPayloadContext context) {
+        ClientStateCache.dayClockDay = payload.day();
+        ClientStateCache.boundaryEpochMillis = payload.boundaryEpochMillis();
+        ClientStateCache.prevBoundaryEpochMillis = payload.prevBoundaryEpochMillis();
+        ClientStateCache.serverNowEpochMillis = payload.serverNowEpochMillis();
+        ClientStateCache.dayClockPaused = payload.paused();
+        ClientStateCache.pauseRemainingMillis = payload.pauseRemainingMillis();
+        ClientStateCache.clockSyncLocalMillis = System.currentTimeMillis();
+    }
+
+    private static void handleQuestState(S2CQuestStatePayload payload, IPayloadContext context) {
+        ClientStateCache.questDay = payload.day();
+        ClientStateCache.questEntries = payload.entries();
+    }
+
+    private static void handleSkillState(S2CSkillStatePayload payload, IPayloadContext context) {
+        ClientStateCache.skillLevel = payload.level();
+        ClientStateCache.skillTotalXp = payload.totalXp();
+        ClientStateCache.skillXpIntoLevel = payload.xpIntoLevel();
+        ClientStateCache.skillXpForLevel = payload.xpForLevel();
+        ClientStateCache.skillPoints = payload.points();
+        ClientStateCache.skillUnspent = payload.unspent();
+        ClientStateCache.skillOwnedNodes = payload.ownedNodes();
+        ClientStateCache.skillProcMsgEnabled = payload.procMsgEnabled();
+        ClientStateCache.skillSecretMultiplierActive = payload.secretMultiplierActive();
+    }
+
+    private static void handleSkillProc(S2CSkillProcPayload payload, IPayloadContext context) {
+        ClientStateCache.lastSkillProcId = payload.procId();
+        ClientStateCache.lastSkillProcMagnitude = payload.magnitude();
+    }
+
+    private static void handleAwardReveal(S2CAwardRevealPayload payload, IPayloadContext context) {
+        ClientStateCache.awardRevealDay = payload.day();
+        ClientStateCache.awardCategories = payload.categories();
+    }
+
+    private static void handleBuffState(S2CBuffStatePayload payload, IPayloadContext context) {
+        ClientStateCache.activeBuffs = payload.active();
+    }
+
+    private static void handleRecipeLocks(S2CRecipeLocksPayload payload, IPayloadContext context) {
+        ClientStateCache.lockedItemIds = payload.lockedItemIds();
+        ClientStateCache.lockedRecipeIds = payload.lockedRecipeIds();
+    }
+
+    private static void handleSidebarState(S2CSidebarStatePayload payload, IPayloadContext context) {
+        ClientStateCache.sidebarDay = payload.day();
+        ClientStateCache.sidebarBoundaryEpochMillis = payload.boundaryEpochMillis();
+        ClientStateCache.sidebarPaused = payload.paused();
+        ClientStateCache.sidebarSkillLevel = payload.skillLevel();
+        ClientStateCache.sidebarXpIntoLevel = payload.xpIntoLevel();
+        ClientStateCache.sidebarXpForLevel = payload.xpForLevel();
+        ClientStateCache.sidebarAltarLevel = payload.altarLevel();
+        ClientStateCache.sidebarMainsDone = payload.mainsDone();
+        ClientStateCache.sidebarMainsTotal = payload.mainsTotal();
+        ClientStateCache.sidebarSidesDone = payload.sidesDone();
+        ClientStateCache.sidebarSidesTotal = payload.sidesTotal();
+        ClientStateCache.sidebarPersonalsDone = payload.personalsDone();
+        ClientStateCache.sidebarPersonalsTotal = payload.personalsTotal();
+        ClientStateCache.sidebarBuffIds = payload.buffIds();
+        ClientStateCache.sidebarShards = payload.shards();
+    }
+
+    private static void handleGhostReveal(S2CGhostRevealPayload payload, IPayloadContext context) {
+        ClientStateCache.ghostRevealEntityId = payload.ghostEntityId();
+        ClientStateCache.ghostRevealOwnerName = payload.ownerName();
+        ClientStateCache.ghostRevealTicks = payload.ticks();
+    }
+
+    private static void handleSkillTree(S2CSkillTreePayload payload, IPayloadContext context) {
+        ClientStateCache.skillTreeJson = payload.json();
+    }
+
+    /** Stub until P4-B4 wires {@code skills.SkillService#buyNode}. */
+    private static void handleSkillNodeBuy(C2SSkillNodeBuyPayload payload, IPayloadContext context) {
+        // no-op foundation stub
     }
 
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {

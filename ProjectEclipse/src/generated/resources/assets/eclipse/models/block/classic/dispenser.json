@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "eclipse:block/classic/dispenser_front",
+    "side": "eclipse:block/classic/furnace_side",
+    "top": "eclipse:block/classic/furnace_top"
+  }
+}

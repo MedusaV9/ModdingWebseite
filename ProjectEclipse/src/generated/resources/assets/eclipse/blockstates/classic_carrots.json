@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "age=0": {
+      "model": "eclipse:block/classic/carrots_stage0"
+    },
+    "age=1": {
+      "model": "eclipse:block/classic/carrots_stage0"
+    },
+    "age=2": {
+      "model": "eclipse:block/classic/carrots_stage1"
+    },
+    "age=3": {
+      "model": "eclipse:block/classic/carrots_stage1"
+    },
+    "age=4": {
+      "model": "eclipse:block/classic/carrots_stage2"
+    },
+    "age=5": {
+      "model": "eclipse:block/classic/carrots_stage2"
+    },
+    "age=6": {
+      "model": "eclipse:block/classic/carrots_stage2"
+    },
+    "age=7": {
+      "model": "eclipse:block/classic/carrots_stage3"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/inner_stairs",
+  "textures": {
+    "bottom": "eclipse:block/classic/birch_planks",
+    "side": "eclipse:block/classic/birch_planks",
+    "top": "eclipse:block/classic/birch_planks"
+  }
+}

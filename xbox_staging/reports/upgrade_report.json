@@ -1,0 +1,41 @@
+{
+  "tu1": {
+    "chunkCount": 2916,
+    "chunkDataVersionHistogram": {
+      "3955": 2916
+    },
+    "entityChunkDataVersionHistogram": {
+      "3839": 27,
+      "3955": 22
+    },
+    "entityChunkNote": "vanilla --forceUpgrade rewrites entity chunks only when DFU changed them, so untouched chunks legitimately keep the source DataVersion; the game DFUs entity chunks per chunk at load (DataFixTypes.ENTITY_CHUNK), and the bake preserves per-chunk DataVersions on the wrappers",
+    "levelDatDataVersion": 3955,
+    "ok": true
+  },
+  "tu12": {
+    "chunkCount": 2916,
+    "chunkDataVersionHistogram": {
+      "3955": 2916
+    },
+    "entityChunkDataVersionHistogram": {
+      "3839": 93,
+      "3955": 10
+    },
+    "entityChunkNote": "vanilla --forceUpgrade rewrites entity chunks only when DFU changed them, so untouched chunks legitimately keep the source DataVersion; the game DFUs entity chunks per chunk at load (DataFixTypes.ENTITY_CHUNK), and the bake preserves per-chunk DataVersions on the wrappers",
+    "levelDatDataVersion": 3955,
+    "ok": true
+  },
+  "tu14": {
+    "chunkCount": 2916,
+    "chunkDataVersionHistogram": {
+      "3955": 2916
+    },
+    "entityChunkDataVersionHistogram": {
+      "3839": 73,
+      "3955": 18
+    },
+    "entityChunkNote": "vanilla --forceUpgrade rewrites entity chunks only when DFU changed them, so untouched chunks legitimately keep the source DataVersion; the game DFUs entity chunks per chunk at load (DataFixTypes.ENTITY_CHUNK), and the bake preserves per-chunk DataVersions on the wrappers",
+    "levelDatDataVersion": 3955,
+    "ok": true
+  }
+}

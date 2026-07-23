@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "eclipse:classic_gold_ore",
+    "eclipse:classic_diamond_ore",
+    "eclipse:classic_redstone_ore",
+    "eclipse:classic_emerald_ore",
+    "eclipse:classic_gold_block",
+    "eclipse:classic_diamond_block"
+  ]
+}

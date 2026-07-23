@@ -35,9 +35,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *
  * <ul>
  *   <li>{@code main_inventory} — every second, stacks in main inventory slots 9–35 are moved
- *       to free hotbar slots (or dropped at the player when the hotbar is full).</li>
+ *       to free hotbar slots (or dropped at the player when the hotbar is full) — except the
+ *       {@code eclipse:arm_artifact} item (looked up by id, null-guarded): it is pinned to
+ *       storage slot 17 by {@code artifact.ArtifactSlotLock} and is the ONE permitted
+ *       storage item while the inventory is sealed (B16 — thematically, the artifact IS the
+ *       seal). Without the exemption the two 1Hz sweeps would fight over slot 17.</li>
  *   <li>{@code armor} — armor slots 36–39 and offhand slot 40 are cleared the same way,
- *       except the {@code eclipse:arm_artifact} item (looked up by id, null-guarded).</li>
+ *       with the same {@code eclipse:arm_artifact} exemption.</li>
  *   <li>{@code workbenches}/{@code smithing}/{@code enchanting}/{@code brewing}/{@code ender_chests}
  *       — right-clicking the matching workstation blocks is cancelled.</li>
  *   <li>{@code nether}/{@code end} — dimension travel for players is cancelled.</li>
@@ -101,13 +105,17 @@ public final class PhaseInventoryLock {
         }
     }
 
-    /** Moves stacks out of main inventory slots 9..35; returns whether anything moved. */
+    /** Moves stacks out of main inventory slots 9..35 (except the pinned arm artifact, B16). */
     private static boolean sweepMainInventory(ServerPlayer player) {
+        // Exempted by id ANYWHERE in 9..35 (not just slot 17): a mid-relocation artifact on
+        // its way back to its pinned slot must never be yanked into the hotbar, or this sweep
+        // and the ArtifactSlotLock sweep would ping-pong it at 1Hz.
+        Item armArtifact = BuiltInRegistries.ITEM.getOptional(ARM_ARTIFACT_ID).orElse(null);
         Inventory inventory = player.getInventory();
         boolean moved = false;
         for (int slot = MAIN_START; slot <= MAIN_END; slot++) {
             ItemStack stack = inventory.getItem(slot);
-            if (stack.isEmpty()) {
+            if (stack.isEmpty() || (armArtifact != null && stack.is(armArtifact))) {
                 continue;
             }
             inventory.setItem(slot, ItemStack.EMPTY);

@@ -1,0 +1,24 @@
+{
+  "en_us": {
+    "config.eclipse.ores.created": "Created default Eclipse ore config {}",
+    "config.eclipse.ores.write_failed": "Failed to write default ore config {}",
+    "config.eclipse.ores.read_failed": "Failed to read ore config {}; using built-in defaults",
+    "config.eclipse.ores.loaded": "Eclipse ores loaded: {} overworld + {} nether entries",
+    "config.eclipse.ores.missing_id": "Skipping ore entry with no id in ores.json",
+    "config.eclipse.ores.missing_block": "Skipping ore '{}' with no block id in ores.json",
+    "config.eclipse.ores.skip_unknown": "Skipping ore '{}' — unknown block {}",
+    "config.eclipse.ores.skip_mod": "Skipping ore '{}' — required mod '{}' is not loaded",
+    "config.eclipse.ores.invalid_range": "Skipping ore '{}' — invalid Y range {}..{}"
+  },
+  "de_de": {
+    "config.eclipse.ores.created": "Standard-Erz-Konfiguration erstellt: {}",
+    "config.eclipse.ores.write_failed": "Standard-Erz-Konfiguration konnte nicht geschrieben werden: {}",
+    "config.eclipse.ores.read_failed": "Erz-Konfiguration {} konnte nicht gelesen werden; verwende Standardwerte",
+    "config.eclipse.ores.loaded": "Eclipse-Erzregeln geladen: {} Oberwelt- + {} Nether-Einträge",
+    "config.eclipse.ores.missing_id": "Erz-Eintrag ohne id in ores.json übersprungen",
+    "config.eclipse.ores.missing_block": "Erz '{}' ohne Block-id übersprungen",
+    "config.eclipse.ores.skip_unknown": "Erz '{}' übersprungen — unbekannter Block {}",
+    "config.eclipse.ores.skip_mod": "Erz '{}' übersprungen — benötigte Mod '{}' ist nicht geladen",
+    "config.eclipse.ores.invalid_range": "Erz '{}' übersprungen — ungültiger Y-Bereich {}..{}"
+  }
+}

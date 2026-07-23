@@ -42,6 +42,8 @@ public final class EclipseMod {
         EclipseMenus.register(modEventBus);
         EclipseWorldgen.register(modEventBus);
         EclipseEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.classicblocks.ClassicBlocksModule.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.ambient.AmbientEntities.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

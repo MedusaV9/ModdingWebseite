@@ -14,9 +14,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Polls the menu keybind (game bus, client only). The handbook opens immediately from
  * {@link ClientStateCache} and a {@link C2SOpenArtifactPayload} is sent to refresh: the
  * server replies with fresh lives/day-state (the screen renders live from the cache) plus
- * an open payload that no-ops because the screen is already showing. Closing with the same
- * key is handled by {@code HandbookScreen#keyPressed} (this IN_GAME mapping never fires
- * while a screen is open).
+ * an open payload that no-ops because the screen is already showing. {@code consumeClick}
+ * covers keyboard AND mouse bindings (mouse presses tick the same click counter), and
+ * closing with the same binding is handled inside the screen — {@code
+ * HandbookScreen#keyPressed} via {@code matches} plus {@code HandbookScreen#mouseClicked}
+ * via {@code matchesMouse} (B8) — because this IN_GAME mapping never fires while a screen
+ * is open. The second open path is a right-click on the pinned slot-17 artifact
+ * ({@link ArtifactScreenOpener#openFromInventory()}).
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class ArtifactKeyHandler {

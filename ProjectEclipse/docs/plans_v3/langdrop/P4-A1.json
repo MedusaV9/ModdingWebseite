@@ -1,0 +1,20 @@
+{
+  "en_us": {
+    "item.eclipse.heart_extractor": "Heart Extractor",
+    "item.eclipse.glitch_shard": "Glitch Shard",
+    "subtitles.eclipse.skill.proc": "Skill proc chime",
+    "subtitles.eclipse.skill.levelup": "Skill level up",
+    "subtitles.eclipse.award.sting": "Award reveal sting",
+    "subtitles.eclipse.offering.accept": "Offering accepted",
+    "subtitles.eclipse.ritual.extract": "Heart extracted"
+  },
+  "de_de": {
+    "item.eclipse.heart_extractor": "Herz-Extraktor",
+    "item.eclipse.glitch_shard": "Glitch-Splitter",
+    "subtitles.eclipse.skill.proc": "Skill-Proc-Klang",
+    "subtitles.eclipse.skill.levelup": "Skill-Levelaufstieg",
+    "subtitles.eclipse.award.sting": "Auszeichnungs-Enthüllung",
+    "subtitles.eclipse.offering.accept": "Opfer angenommen",
+    "subtitles.eclipse.ritual.extract": "Herz extrahiert"
+  }
+}

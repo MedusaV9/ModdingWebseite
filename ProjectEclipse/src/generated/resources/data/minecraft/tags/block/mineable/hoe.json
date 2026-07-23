@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "eclipse:classic_sponge",
+    "eclipse:classic_oak_leaves",
+    "eclipse:classic_spruce_leaves",
+    "eclipse:classic_birch_leaves",
+    "eclipse:classic_jungle_leaves"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "eclipse:block/classic/jukebox_side",
+    "side": "eclipse:block/classic/jukebox_side",
+    "top": "eclipse:block/classic/jukebox_top"
+  }
+}

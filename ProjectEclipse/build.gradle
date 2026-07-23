@@ -30,6 +30,12 @@ repositories {
     maven { url = "https://maven.maxhenkel.de/repository/public" }
     // Veil (foundry.veil) — see docs/ideas/02_veil_vfx.md §A
     maven { url = "https://maven.blamejared.com" }
+    // GeckoLib (software.bernie.geckolib) — see docs/plans_v3/P6_mobs_models_builds.md §2.1
+    maven {
+        name = 'GeckoLib'
+        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content { includeGroup 'software.bernie.geckolib' }
+    }
 }
 
 base {
@@ -135,6 +141,17 @@ dependencies {
         exclude group: "me.fallenbreath"
     }
 
+    // GeckoLib 4.9.2 — REQUIRED runtime dependency (P6 mob geo models/animations, glowmasks).
+    // Embedded jar-in-jar with an open range so any other pack mod shipping GeckoLib
+    // deduplicates to the highest version (same policy as Veil). Runs client+server.
+    // See docs/plans_v3/P6_mobs_models_builds.md §2.1 / §4.5.
+    jarJar(implementation("software.bernie.geckolib:geckolib-neoforge-${minecraft_version}")) {
+        version {
+            strictly "[${geckolib_version},)"
+            prefer "${geckolib_version}"
+        }
+    }
+
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
@@ -171,6 +188,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_license            : mod_license,
             mod_version            : mod_version,
             veil_version           : veil_version,
+            geckolib_version       : geckolib_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties

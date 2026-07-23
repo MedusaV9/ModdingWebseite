@@ -12,6 +12,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.CursorManager;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.SharedConstants;
 import net.minecraft.Util;
@@ -33,10 +34,21 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Eclipse title screen v2: the v1 cube map now turns at a deliberately slow cinematic
- * pace, with three independently drifting cloud layers, mouse parallax, screen-space
- * wisps, a vignette and a periodic eclipse flare across the logo. The vanilla
- * singleplayer/multiplayer/options/quit flows remain unchanged.
+ * Eclipse title screen v3 ({@code docs/plans_v3/P3_ui.md} §3.8, P3-W8): the v2 visuals (slow
+ * cube map, drifting cloud layers, mouse parallax, wisps, vignette, logo flare) are kept
+ * verbatim; the button block is rebuilt around the journey flow:
+ * <ul>
+ *   <li><b>"Reise beginnen"</b> (primary, accent pulse) appears whenever
+ *       {@code eclipse-journey.toml} carries a parseable {@code activationIso}. Before that
+ *       instant a click plays {@link GlitchErrorTheater}'s fake-error sequence and arms the
+ *       DIM countdown line ({@code reducedFx}: plain disabled button + countdown tooltip
+ *       instead); after it the button direct-connects via {@link JourneyController}.</li>
+ *   <li><b>Modpack mode</b> ({@code modpackMode=true}) removes Singleplayer/Multiplayer
+ *       (Realms/Mods buttons never exist on this screen); {@code devUnlock=true} or the
+ *       cached op flag restores them. The matrix is re-evaluated every tick, so hot config
+ *       edits rebuild the menu live.</li>
+ * </ul>
+ * The vanilla title screen is untouched — swap logic lives in {@link TitleScreenSwap}.
  */
 @OnlyIn(Dist.CLIENT)
 public class EclipseTitleScreen extends Screen {
@@ -77,58 +89,140 @@ public class EclipseTitleScreen extends Screen {
     private static final int BUTTON_SPACING = 24;
     private static final int MAX_WISPS = 40;
 
+    /** Extra vertical lane under the journey button reserved for the DIM countdown line. */
+    private static final int COUNTDOWN_LANE_HEIGHT = 10;
+    private static final long JOURNEY_PULSE_PERIOD_MS = 1500L;
+    private static final int DIM_TEXT_COLOR = 0xFF9A8FB8;
+
     private final List<MenuWisp> wisps = new ArrayList<>();
     private final Random random = new Random();
+    private final GlitchErrorTheater journeyTheater;
     private boolean panoramaUsable;
     private int nextWispTicks;
 
+    @Nullable
+    private Button journeyButton;
+    private int journeyBaseX;
+    /** Armed by the first gated click (theater end); survives resize/rebuild by design. */
+    private boolean countdownArmed;
+    private boolean journeyTooltipShown;
+    private String menuFingerprint = "";
+    private int tickCounter;
+
     public EclipseTitleScreen() {
         super(Component.translatable("narrator.screen.title"));
+        this.journeyTheater = new GlitchErrorTheater(() -> this.countdownArmed = true);
     }
 
     @Override
     protected void init() {
         this.panoramaUsable = checkPanoramaTextures();
+        this.menuFingerprint = JourneyController.menuFingerprint();
+        this.journeyButton = null;
+        this.journeyTooltipShown = false;
+
+        boolean journeyVisible = JourneyController.journeyConfigured();
+        boolean vanillaEntries = JourneyController.showVanillaEntries();
 
         int x = this.width / 2 - BUTTON_WIDTH / 2;
         int y = this.height / 4 + 48;
 
-        addRenderableWidget(Button.builder(Component.translatable("menu.singleplayer"),
-                        button -> this.minecraft.setScreen(new SelectWorldScreen(this)))
-                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
-                .build(EclipseMenuButton::new));
+        if (journeyVisible) {
+            journeyBaseX = x;
+            journeyButton = addRenderableWidget(Button.builder(
+                            EclipseLang.tr("gui.eclipse.journey.begin"), button -> onJourneyPressed())
+                    .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                    .build(EclipseMenuButton::new));
+            refreshJourneyButtonState();
+            y += BUTTON_SPACING + COUNTDOWN_LANE_HEIGHT;
+        }
 
-        Component multiplayerDisabledReason = getMultiplayerDisabledReason();
-        addRenderableWidget(Button.builder(Component.translatable("menu.multiplayer"), button -> {
-                    Screen next = this.minecraft.options.skipMultiplayerWarning
-                            ? new JoinMultiplayerScreen(this)
-                            : new SafetyScreen(this);
-                    this.minecraft.setScreen(next);
-                })
-                .bounds(x, y + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
-                .tooltip(multiplayerDisabledReason != null ? Tooltip.create(multiplayerDisabledReason) : null)
-                .build(EclipseMenuButton::new)).active = multiplayerDisabledReason == null;
+        if (vanillaEntries) {
+            addRenderableWidget(Button.builder(Component.translatable("menu.singleplayer"),
+                            button -> this.minecraft.setScreen(new SelectWorldScreen(this)))
+                    .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                    .build(EclipseMenuButton::new));
+            y += BUTTON_SPACING;
+
+            Component multiplayerDisabledReason = getMultiplayerDisabledReason();
+            addRenderableWidget(Button.builder(Component.translatable("menu.multiplayer"), button -> {
+                        Screen next = this.minecraft.options.skipMultiplayerWarning
+                                ? new JoinMultiplayerScreen(this)
+                                : new SafetyScreen(this);
+                        this.minecraft.setScreen(next);
+                    })
+                    .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                    .tooltip(multiplayerDisabledReason != null ? Tooltip.create(multiplayerDisabledReason) : null)
+                    .build(EclipseMenuButton::new)).active = multiplayerDisabledReason == null;
+            y += BUTTON_SPACING;
+        }
 
         addRenderableWidget(Button.builder(Component.translatable("menu.options"),
                         button -> this.minecraft.setScreen(new OptionsScreen(this, this.minecraft.options)))
-                .bounds(x, y + BUTTON_SPACING * 2, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
 
         addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.settings.title"),
                         button -> this.minecraft.setScreen(new EclipseSettingsScreen(this)))
-                .bounds(x + BUTTON_WIDTH + 6, y + BUTTON_SPACING * 2, BUTTON_HEIGHT, BUTTON_HEIGHT)
+                .bounds(x + BUTTON_WIDTH + 6, y, BUTTON_HEIGHT, BUTTON_HEIGHT)
                 .tooltip(Tooltip.create(Component.translatable("gui.eclipse.settings.open")))
                 .build(builder -> new EclipseMenuButton(builder, GEAR, 48, 48)));
+        y += BUTTON_SPACING;
 
         addRenderableWidget(Button.builder(Component.translatable("menu.quit"),
                         button -> this.minecraft.stop())
-                .bounds(x, y + BUTTON_SPACING * 3, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
+    }
+
+    /**
+     * Locked + {@code reducedFx} = plain disabled button with the countdown as tooltip
+     * (§3.8's no-theater path); every other state keeps the button clickable.
+     */
+    private void refreshJourneyButtonState() {
+        if (journeyButton == null) {
+            return;
+        }
+        boolean lockedCalm = !JourneyController.unlocked() && EclipseClientConfig.reducedFx();
+        journeyButton.active = !lockedCalm;
+        if (lockedCalm) {
+            journeyButton.setTooltip(Tooltip.create(JourneyController.countdownComponent()));
+            journeyTooltipShown = true;
+        } else if (journeyTooltipShown) {
+            journeyButton.setTooltip(null);
+            journeyTooltipShown = false;
+        }
+    }
+
+    private void onJourneyPressed() {
+        if (JourneyController.unlocked()) {
+            Component error = JourneyController.tryConnect(this);
+            if (error != null) {
+                journeyTheater.showSingle(error);
+            }
+        } else if (!EclipseClientConfig.reducedFx()) {
+            journeyTheater.trigger();
+        }
     }
 
     @Override
     public void tick() {
         super.tick();
+        tickCounter++;
+        journeyTheater.tick();
+
+        // Hot-apply: config-file edits (NeoForge watcher), the activation instant passing,
+        // or a fresh op grant all flip the fingerprint and rebuild the button block live.
+        String fingerprint = JourneyController.menuFingerprint();
+        if (!fingerprint.equals(menuFingerprint)) {
+            if (JourneyController.unlocked() && journeyTheater.modalActive()) {
+                journeyTheater.reset();
+            }
+            rebuildWidgets();
+        } else if (tickCounter % 20 == 0) {
+            refreshJourneyButtonState(); // keeps the reducedFx countdown tooltip ticking
+        }
+
         if (EclipseClientConfig.reducedFx()) {
             wisps.clear();
             return;
@@ -195,9 +289,67 @@ public class EclipseTitleScreen extends Screen {
         renderVignette(guiGraphics);
         renderLogo(guiGraphics);
 
+        if (journeyButton != null) {
+            journeyButton.setX(journeyBaseX + Math.round(journeyTheater.buttonShakeOffset()));
+        }
         super.render(guiGraphics, mouseX, mouseY, partialTick);
+        renderJourneyPulse(guiGraphics);
+        renderJourneyCountdown(guiGraphics);
         renderFooter(guiGraphics);
+        journeyTheater.render(guiGraphics, mouseX, mouseY, partialTick, this.width, this.height, this.font);
         CursorManager.endFrame();
+    }
+
+    /** Slow 1.5 s accent breathing ring around the primary journey button ({@code reducedFx} off). */
+    private void renderJourneyPulse(GuiGraphics guiGraphics) {
+        if (journeyButton == null || !journeyButton.active || journeyButton.isHoveredOrFocused()
+                || EclipseClientConfig.reducedFx()) {
+            return;
+        }
+        float phase = (Util.getMillis() % JOURNEY_PULSE_PERIOD_MS) / (float) JOURNEY_PULSE_PERIOD_MS;
+        float wave = 0.5F - 0.5F * Mth.cos(phase * (float) (Math.PI * 2.0));
+        int alpha = 0x30 + Math.round(wave * 0x55);
+        int color = (alpha << 24) | 0xB98CFF;
+        int x0 = journeyButton.getX() - 2;
+        int y0 = journeyButton.getY() - 2;
+        int x1 = journeyButton.getX() + journeyButton.getWidth() + 2;
+        int y1 = journeyButton.getY() + journeyButton.getHeight() + 2;
+        guiGraphics.fill(x0, y0, x1, y0 + 1, color);
+        guiGraphics.fill(x0, y1 - 1, x1, y1, color);
+        guiGraphics.fill(x0, y0 + 1, x0 + 1, y1 - 1, color);
+        guiGraphics.fill(x1 - 1, y0 + 1, x1, y1 - 1, color);
+    }
+
+    /**
+     * DIM "Öffnet in 3T 14h 02m" line in the reserved lane under the journey button. Appears
+     * after the first gated click (theater sequence end) and ticks live until activation;
+     * under {@code reducedFx} the disabled button's tooltip carries the countdown instead.
+     */
+    private void renderJourneyCountdown(GuiGraphics guiGraphics) {
+        if (journeyButton == null || !countdownArmed || EclipseClientConfig.reducedFx()
+                || JourneyController.unlocked()) {
+            return;
+        }
+        guiGraphics.drawCenteredString(this.font, JourneyController.countdownComponent(),
+                this.width / 2, journeyButton.getY() + BUTTON_HEIGHT + 3, DIM_TEXT_COLOR);
+    }
+
+    /** The glitch theater is modal: while a fake error panel is up it owns every click. */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (journeyTheater.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** Enter/Space/Esc acknowledge a fake error panel; other keys are swallowed while modal. */
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (journeyTheater.keyPressed(keyCode)) {
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     private void renderEclipseBackground(GuiGraphics guiGraphics, float partialTick) {

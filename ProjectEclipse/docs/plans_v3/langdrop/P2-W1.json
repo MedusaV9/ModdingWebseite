@@ -1,0 +1,24 @@
+{
+  "en_us": {
+    "subtitles.eclipse.event.lightning_close": "Lightning strikes close",
+    "subtitles.eclipse.event.lightning_far": "Thunder rolls in the distance",
+    "subtitles.eclipse.event.storm_loop": "The storm churns",
+    "subtitles.eclipse.event.storm_burst": "The storm bursts",
+    "subtitles.eclipse.event.rift_open": "A rift tears open",
+    "subtitles.eclipse.event.rift_slam": "Something slams into place",
+    "subtitles.eclipse.event.eclipse_drone": "The eclipse drones",
+    "subtitles.eclipse.event.beam_hum": "A beam hums",
+    "subtitles.eclipse.ui.caption_tick": "Caption ticks"
+  },
+  "de_de": {
+    "subtitles.eclipse.event.lightning_close": "Blitz schlägt nah ein",
+    "subtitles.eclipse.event.lightning_far": "Donner grollt in der Ferne",
+    "subtitles.eclipse.event.storm_loop": "Der Sturm brodelt",
+    "subtitles.eclipse.event.storm_burst": "Der Sturm bricht los",
+    "subtitles.eclipse.event.rift_open": "Ein Riss reißt auf",
+    "subtitles.eclipse.event.rift_slam": "Etwas schlägt donnernd ein",
+    "subtitles.eclipse.event.eclipse_drone": "Die Finsternis dröhnt",
+    "subtitles.eclipse.event.beam_hum": "Ein Strahl summt",
+    "subtitles.eclipse.ui.caption_tick": "Untertitel tickt"
+  }
+}

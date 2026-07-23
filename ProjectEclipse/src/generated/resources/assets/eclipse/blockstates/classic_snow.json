@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "layers=1": {
+      "model": "eclipse:block/classic/snow_height2"
+    },
+    "layers=2": {
+      "model": "eclipse:block/classic/snow_height4"
+    },
+    "layers=3": {
+      "model": "eclipse:block/classic/snow_height6"
+    },
+    "layers=4": {
+      "model": "eclipse:block/classic/snow_height8"
+    },
+    "layers=5": {
+      "model": "eclipse:block/classic/snow_height10"
+    },
+    "layers=6": {
+      "model": "eclipse:block/classic/snow_height12"
+    },
+    "layers=7": {
+      "model": "eclipse:block/classic/snow_height14"
+    },
+    "layers=8": {
+      "model": "eclipse:block/classic/snow_block"
+    }
+  }
+}

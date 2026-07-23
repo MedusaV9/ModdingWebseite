@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.worldgen.structure;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
 
@@ -11,8 +12,10 @@ import dev.projecteclipse.eclipse.registry.EclipseBlocks;
 import dev.projecteclipse.eclipse.worldgen.DiscChunkGenerator;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
+import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -26,33 +29,47 @@ import net.minecraft.world.level.block.state.properties.SlabType;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 /**
- * Builds the "Sanctum of the Occluded Sun" (docs/ideas/04_content.md §3) once at the
- * overworld spawn pad — GhostShipBuilder pattern: pure deterministic setBlock loops on
- * {@link ServerStartedEvent}, guarded by {@link EclipseWorldState#isSanctumBuilt()}.
- * This replaces the bare flat spawn pad the terrain function reserves (r &lt; 14 flattens
- * to y70, see {@code DiscTerrainFunction.computeSurfaceY}); the limbo-side ghost-ship
- * spawn platform is untouched.
+ * P6-W4 v2 entry point of the "Sanctum of the Occluded Sun": stage gate + version guard
+ * + delegates (GhostShipBuilder pattern: pure deterministic setBlock loops on
+ * {@link ServerStartedEvent}).
  *
- * <p>Layout (ground = flattened surface, y70 on a fresh map; altar at ground+4):
- * three concentric polished-blackstone dais steps (r 5/3.5/2 at ground+1/+2/+3, 15%
- * cracked, slab edge), the v1 {@code EclipseBlocks.ALTAR} at the y3 center, 8 pillars on
- * the r=9 ring every 45° (2×2 obsidian base 2 high + 2×2 purpur shafts, heights
- * {@link #PILLAR_SHAFT_HEIGHTS}, three snapped with deepslate-wall tops), an unsupported
- * purple glass ring r=4 at y+8 (every other block) and a crying-obsidian cardinal ring at
- * y+11, amethyst clusters on 6 dais blocks, soul lanterns chained from the 4 tall pillars,
- * 20% sculk veins on the dais perimeter, 4×3 purple candles, 4 cardinal blackstone-slab
- * approach paths and terrain flattened to r=12 with a coarse-dirt/rubble mix.</p>
+ * <p><b>Version flow ({@link SanctumVersionData}):</b></p>
+ * <ul>
+ *   <li><b>Stage 0 (pre-intro):</b> the v1 GROUNDED sanctum builds on the flat spawn pad
+ *       ({@link #build}) exactly as before — three concentric polished-blackstone dais
+ *       steps (r 5/3.5/2 at ground+1/+2/+3, 15% cracked, slab edge), the altar at
+ *       ground+{@value #ALTAR_ABOVE_GROUND}, 8 pillars on the
+ *       r={@value #PILLAR_RING_RADIUS} ring every 45° (2×2 obsidian base + purpur shafts,
+ *       heights {@link #PILLAR_SHAFT_HEIGHTS}, three snapped, four with lantern arms),
+ *       floating glass + crying-obsidian halos, decor, 4 approach paths, flattened
+ *       r={@value #FLATTEN_RADIUS} grounds.</li>
+ *   <li><b>Stage 1+ (post-intro fusion):</b> the sanctum is torn out of the disc —
+ *       {@link FloatingSanctumBuilder} rebuilds it as a floating island
+ *       {@value FloatingSanctumBuilder#ISLAND_LIFT} blocks up with the
+ *       {@link SanctumCrater} wound below, a switchback-bridge walk from the re-pinned
+ *       crater-rim spawn, glide-notch rim geometry and the W5 orbital anchor data. The
+ *       flip happens on boot when the committed overworld stage is already ≥
+ *       {@value #FLOATING_MIN_STAGE}, or live via a {@link WorldStageService.StageListener}
+ *       the moment the intro's stage-1 terrain sweep completes. One-way and idempotent:
+ *       once {@link SanctumVersionData#VERSION_FLOATING} is stamped, boots make ZERO
+ *       block changes.</li>
+ * </ul>
  *
- * <p><b>Altar contract:</b> if a v1 altar block already exists near spawn the sanctum
- * CENTERS on it and never overwrites it (its {@code AltarBlockEntity} state survives);
- * otherwise the altar is placed fresh. The world spawn is re-pinned onto the south
- * approach path every start so players never spawn inside the dais.</p>
+ * <p><b>Altar contract:</b> every consumer (rituals, Herald summon, sunmotes, shard
+ * economy, goal tracker) keys off {@link EclipseWorldState#getSanctumAltarPos()}, which is
+ * re-persisted through the existing {@code setSanctumBuilt} path whenever the altar moves
+ * up onto the island; {@code AltarBlockEntity} holds only transient interaction state, so
+ * the relocation is lossless. A pre-existing admin-placed altar still centers the build
+ * ({@link #findExistingAltar}). The world spawn is re-pinned every start — south approach
+ * path while grounded, crater-rim south plaza once floating — never inside the dais.</p>
  *
  * <p><b>W11 (Herald) API:</b> {@link #pillarBases(BlockPos)} + {@link #pillarTopY} expose
- * the exact pillar geometry for line-of-sight cover.</p>
+ * the exact pillar geometry for line-of-sight cover. Their formulas are UNCHANGED and
+ * relative to {@code altarPos} — on the island the ring simply rides the altar up.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AltarSanctumBuilder {
@@ -68,42 +85,112 @@ public final class AltarSanctumBuilder {
     public static final int FLATTEN_RADIUS = 12;
     /** Vertical offset of the altar block above the flattened ground surface. */
     public static final int ALTAR_ABOVE_GROUND = 4;
+    /** First overworld stage (intro fusion) at which the sanctum flips to the island. */
+    public static final int FLOATING_MIN_STAGE = 1;
+
+    /** Stage-listener registration is once per JVM ({@code LISTENERS} is a static list). */
+    private static final AtomicBoolean LISTENER_REGISTERED = new AtomicBoolean();
 
     private AltarSanctumBuilder() {}
+
+    /** Registers the stage listener that flips the sanctum live when stage 1 completes. */
+    @SubscribeEvent
+    public static void onServerAboutToStart(ServerAboutToStartEvent event) {
+        if (LISTENER_REGISTERED.compareAndSet(false, true)) {
+            WorldStageService.addListener(AltarSanctumBuilder::onStageTerrainComplete);
+            EclipseMod.LOGGER.info("AltarSanctumBuilder registered as world-stage listener (island flip at stage {})",
+                    FLOATING_MIN_STAGE);
+        }
+    }
 
     /**
      * Runs at LOW priority so {@code DiscSpawnPlacement} (HIGH) has already pinned the
      * spawn to the pad center — the sanctum then takes over and re-pins it onto the south
-     * approach path (the pad center is now the dais).
+     * approach (grounded) or the crater-rim plaza (floating).
      */
     @SubscribeEvent(priority = EventPriority.LOW)
     public static void onServerStarted(ServerStartedEvent event) {
-        ServerLevel overworld = event.getServer().overworld();
-        if (!(overworld.getChunkSource().getGenerator() instanceof DiscChunkGenerator)) {
-            return;
-        }
-        EclipseWorldState state = EclipseWorldState.get(event.getServer());
-        BlockPos altarPos = state.getSanctumAltarPos();
-        if (altarPos == null) {
-            altarPos = build(overworld);
-            state.setSanctumBuilt(altarPos);
-        }
-        repinSpawn(overworld, altarPos);
-        SanctumProtection.refresh(event.getServer());
-    }
-
-    /** World spawn on the south approach path, facing the altar (never inside the dais). */
-    private static void repinSpawn(ServerLevel overworld, BlockPos altarPos) {
-        int groundY = altarPos.getY() - ALTAR_ABOVE_GROUND;
-        BlockPos spawn = new BlockPos(altarPos.getX(), groundY + 1, altarPos.getZ() + 8);
-        overworld.setDefaultSpawnPos(spawn, 180.0F);
-        EclipseMod.LOGGER.info("Sanctum active: spawn re-pinned to ({}, {}, {}) on the south approach (altar {})",
-                spawn.getX(), spawn.getY(), spawn.getZ(), altarPos.toShortString());
+        ensureSanctum(event.getServer());
     }
 
     /**
-     * Unconditionally builds the sanctum, centering on a pre-existing v1 altar block near
-     * spawn when there is one (that block is preserved untouched). Returns the altar pos.
+     * Live stage-0→1 flip: the moment the intro fusion's terrain sweep completes, the
+     * grounded sanctum is torn out into the floating island (version-gated no-op on
+     * every later sweep). Fires on the server thread per the stage-service contract.
+     */
+    private static void onStageTerrainComplete(ServerLevel level, DiscProfile profile,
+            int fromStage, int toStage) {
+        if (profile != DiscProfile.OVERWORLD || toStage < FLOATING_MIN_STAGE) {
+            return;
+        }
+        if (SanctumVersionData.get(level).version() >= SanctumVersionData.VERSION_FLOATING) {
+            return;
+        }
+        EclipseMod.LOGGER.info("Sanctum stage listener: overworld stage {} -> {} complete — flipping the sanctum to the floating island",
+                fromStage, toStage);
+        ensureSanctum(level.getServer());
+    }
+
+    /**
+     * Single idempotent entry: builds/upgrades whatever the committed overworld stage and
+     * {@link SanctumVersionData} demand, then re-pins spawn and refreshes protection.
+     * With a matching version already stamped this makes ZERO block changes (the
+     * restart-idempotence contract — grep "idempotent boot" in the log).
+     */
+    static void ensureSanctum(MinecraftServer server) {
+        ServerLevel overworld = server.overworld();
+        if (!(overworld.getChunkSource().getGenerator() instanceof DiscChunkGenerator)) {
+            return;
+        }
+        EclipseWorldState state = EclipseWorldState.get(server);
+        SanctumVersionData version = SanctumVersionData.get(overworld);
+        if (version.version() == SanctumVersionData.VERSION_NONE && state.isSanctumBuilt()) {
+            // Pre-versioning world: a grounded sanctum exists but never got stamped.
+            version.setVersion(SanctumVersionData.VERSION_GROUNDED);
+            EclipseMod.LOGGER.info("Sanctum version adopt: legacy grounded sanctum stamped as v1");
+        }
+        int stage = WorldStageService.stage(server, DiscProfile.OVERWORLD);
+        BlockPos altarPos = state.getSanctumAltarPos();
+        boolean floating = version.version() >= SanctumVersionData.VERSION_FLOATING;
+        if (stage >= FLOATING_MIN_STAGE && !floating) {
+            altarPos = FloatingSanctumBuilder.buildOrUpgrade(overworld, altarPos);
+            state.setSanctumBuilt(altarPos);
+            version.setVersion(SanctumVersionData.VERSION_FLOATING);
+            floating = true;
+        } else if (altarPos == null) {
+            altarPos = build(overworld);
+            state.setSanctumBuilt(altarPos);
+            version.setVersion(SanctumVersionData.VERSION_GROUNDED);
+        } else {
+            EclipseMod.LOGGER.info("Sanctum v{} present at {} — idempotent boot, zero block changes",
+                    version.version(), altarPos.toShortString());
+        }
+        repinSpawn(overworld, altarPos, floating);
+        SanctumProtection.refresh(server);
+    }
+
+    /**
+     * World spawn re-pin, never inside the dais: south approach path while grounded,
+     * crater-rim south plaza (start of the bridge walk) once the island is up.
+     */
+    private static void repinSpawn(ServerLevel overworld, BlockPos altarPos, boolean floating) {
+        int walkGroundY = floating
+                ? FloatingSanctumBuilder.groundY(altarPos)
+                : altarPos.getY() - ALTAR_ABOVE_GROUND;
+        int southOffset = floating ? FloatingSanctumBuilder.SPAWN_SOUTH_OFFSET : 8;
+        BlockPos spawn = new BlockPos(altarPos.getX(), walkGroundY + 1, altarPos.getZ() + southOffset);
+        overworld.setDefaultSpawnPos(spawn, 180.0F);
+        EclipseMod.LOGGER.info("Sanctum active: spawn re-pinned to ({}, {}, {}) on the {} (altar {})",
+                spawn.getX(), spawn.getY(), spawn.getZ(),
+                floating ? "crater-rim south plaza" : "south approach path", altarPos.toShortString());
+    }
+
+    /**
+     * Unconditionally builds the GROUNDED (v1, stage-0) sanctum, centering on a
+     * pre-existing altar block near spawn when there is one (that block is preserved
+     * untouched). Returns the altar pos. The floating v2 island reuses every sanctum-top
+     * builder below with the island top as its ground, so both versions stay identical
+     * from the dais up.
      */
     public static BlockPos build(ServerLevel level) {
         BlockPos existingAltar = findExistingAltar(level);
@@ -138,9 +225,9 @@ public final class AltarSanctumBuilder {
         return altarPos;
     }
 
-    /** A v1 admin-placed altar within r=12 of the spawn column, or {@code null}. */
+    /** An admin-placed altar within r=12 of the spawn column, or {@code null}. */
     @Nullable
-    private static BlockPos findExistingAltar(ServerLevel level) {
+    static BlockPos findExistingAltar(ServerLevel level) {
         int surface = DiscTerrainFunction.surfaceY(DiscProfile.OVERWORLD, 0, 0);
         for (BlockPos pos : BlockPos.betweenClosed(-FLATTEN_RADIUS, surface - 10, -FLATTEN_RADIUS,
                 FLATTEN_RADIUS, surface + 20, FLATTEN_RADIUS)) {
@@ -196,8 +283,12 @@ public final class AltarSanctumBuilder {
         return Blocks.GRASS_BLOCK.defaultBlockState();
     }
 
-    /** Three concentric dais steps (r 5/3.5/2 at ground+1/+2/+3) with a slab skirt. */
-    private static void buildDais(ServerLevel level, int cx, int cz, int groundY) {
+    /**
+     * Three concentric dais steps (r 5/3.5/2 at ground+1/+2/+3) with a slab skirt.
+     * Package-private: {@link FloatingSanctumBuilder} reuses it with the island top as
+     * {@code groundY} (same for the pillar/halo/decor/path builders below).
+     */
+    static void buildDais(ServerLevel level, int cx, int cz, int groundY) {
         double[] radii = {5.0D, 3.5D, 2.0D};
         for (int step = 0; step < radii.length; step++) {
             int y = groundY + 1 + step;
@@ -223,7 +314,7 @@ public final class AltarSanctumBuilder {
     }
 
     /** 8 pillars on the r=9 ring: obsidian bases, purpur shafts, snapped tops, lanterns. */
-    private static void buildPillars(ServerLevel level, int cx, int cz, int groundY, BlockPos altarPos) {
+    static void buildPillars(ServerLevel level, int cx, int cz, int groundY, BlockPos altarPos) {
         BlockState obsidian = Blocks.OBSIDIAN.defaultBlockState();
         for (int k = 0; k < 8; k++) {
             BlockPos corner = pillarBaseCorner(altarPos, k);
@@ -268,7 +359,7 @@ public final class AltarSanctumBuilder {
     }
 
     /** Unsupported eclipse-halo rings floating over the dais. */
-    private static void buildFloatingRings(ServerLevel level, int cx, int cz, int groundY) {
+    static void buildFloatingRings(ServerLevel level, int cx, int cz, int groundY) {
         // r=4 purple glass ring at y0+8, every other block.
         int glassY = groundY + 1 + 8;
         for (int dx = -4; dx <= 4; dx++) {
@@ -289,7 +380,7 @@ public final class AltarSanctumBuilder {
     }
 
     /** Amethyst clusters, sculk veins, purple candles. */
-    private static void buildDecor(ServerLevel level, int cx, int cz, int groundY) {
+    static void buildDecor(ServerLevel level, int cx, int cz, int groundY) {
         // Amethyst clusters on 6 exposed dais-base blocks (r≈4.3 ring, top face).
         for (int i = 0; i < 6; i++) {
             double angle = Math.toRadians(15.0D + i * 60.0D);
@@ -318,7 +409,7 @@ public final class AltarSanctumBuilder {
     }
 
     /** Four cardinal approach paths (length 5, width 2) of flush top slabs. */
-    private static void buildApproachPaths(ServerLevel level, int cx, int cz, int groundY) {
+    static void buildApproachPaths(ServerLevel level, int cx, int cz, int groundY) {
         BlockState pathSlab = Blocks.POLISHED_BLACKSTONE_SLAB.defaultBlockState()
                 .setValue(SlabBlock.TYPE, SlabType.TOP);
         for (Direction cardinal : Direction.Plane.HORIZONTAL) {

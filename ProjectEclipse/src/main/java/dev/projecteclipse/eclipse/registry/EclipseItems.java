@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.economy.UmbralTier;
 import dev.projecteclipse.eclipse.economy.VitaeShardItem;
 import dev.projecteclipse.eclipse.economy.WatcherCompassItem;
 import dev.projecteclipse.eclipse.ritual.HeraldsLureItem;
+import dev.projecteclipse.eclipse.ritual.HeartExtractorItem;
 import dev.projecteclipse.eclipse.ritual.ReviveSigilItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -33,6 +34,25 @@ public final class EclipseItems {
     /** Dropped when a player voluntarily sacrifices a life at the altar. Revive-sigil ingredient. */
     public static final Supplier<Item> HEART_FRAGMENT = ITEMS.register("heart_fragment",
             () -> new Item(new Item.Properties()
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /**
+     * Player-wielded heart tap (R8): sacrifices one life for two {@link #HEART_FRAGMENT} on
+     * use-finish. Behavior completed by P4-B8; shell registers item + hold duration now.
+     */
+    public static final Supplier<HeartExtractorItem> HEART_EXTRACTOR = ITEMS.register("heart_extractor",
+            () -> new HeartExtractorItem(new Item.Properties()
+                    .stacksTo(1)
+                    .durability(4)
+                    .rarity(Rarity.UNCOMMON)));
+
+    /**
+     * Glitched mob drop (R9). Crafted into {@link #VITAE_SHARD} via glitch recipe; epic rarity.
+     */
+    public static final Supplier<Item> GLITCH_SHARD = ITEMS.register("glitch_shard",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(64)
+                    .rarity(Rarity.EPIC)
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
     /**

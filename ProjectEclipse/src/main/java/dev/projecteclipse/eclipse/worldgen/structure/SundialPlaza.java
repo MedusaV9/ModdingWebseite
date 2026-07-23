@@ -12,13 +12,22 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 /**
- * §F flavor landmark: the sundial plaza around the sanctum. The flattened sanctum grounds
- * double as a 24-block dial — 12 chiseled-blackstone hour markers on the r=11 ring (the
- * north marker gilded), plus a polished-basalt "shadow line" from the dais edge to the ring
+ * §F flavor landmark: the sundial plaza around the sanctum. The sanctum surface doubles
+ * as a 24-block dial — 12 chiseled-blackstone hour markers on the r=11 ring (the north
+ * marker gilded), plus a polished-basalt "shadow line" from the dais edge to the ring
  * whose angle encodes the current event day (day 1 = north, one 14th of the circle per
  * day). {@code DayScheduler.setDay} calls {@link #onDayChanged}: the old line is erased by
  * re-stamping the deterministic {@link AltarSanctumBuilder#groundMix} surface, then the new
  * line is placed — ~40 blocks rewritten per day change.
+ *
+ * <p>P6-W4 re-anchor: everything here derives from
+ * {@code EclipseWorldState.getSanctumAltarPos()} minus
+ * {@value AltarSanctumBuilder#ALTAR_ABOVE_GROUND}, so when the sanctum flips to the v2
+ * floating island the dial and shadow line automatically re-stamp onto the island TOP
+ * (whose surface layer is {@link AltarSanctumBuilder#groundMix} for exactly this erase
+ * contract — see {@code FloatingSanctumBuilder.massMix}). The r=11 ring and r 7..10
+ * shadow band both fit inside the island's r=16/14 top ellipse. No code change needed —
+ * do not key anything here off absolute ground Y.</p>
  */
 public final class SundialPlaza {
     /** Dial ring radius (markers sit inside the r=12 flattened grounds). */

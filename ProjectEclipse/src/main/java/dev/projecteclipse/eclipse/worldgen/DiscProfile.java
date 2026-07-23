@@ -14,9 +14,29 @@ import com.mojang.serialization.DataResult;
  * keeps {@link DiscTerrainFunction} reproducible across stages for worker 4.</p>
  */
 public final class DiscProfile {
-    /** Overworld disc: build range −176…336, spawn disc surface ~y 70, mountain peak y≈280. */
+    /**
+     * Overworld disc: build range −176…464 (height 640 — raised from 512 so the End disc
+     * fits in the sky), spawn disc surface ~y 70, mountain peak y≈280. The dimension_type
+     * JSON ({@code data/minecraft/dimension_type/overworld.json}) must always match
+     * {@code min_y}/{@code height} here.
+     */
     public static final DiscProfile OVERWORLD = new DiscProfile(
-            "overworld", -176, 512, 63, 71.0D, -130.0D, -80.0D, 480.0D);
+            "overworld", -176, 640, 63, 71.0D, -130.0D, -80.0D, 480.0D);
+
+    // --- End disc (D12): in-sky end-stone lens above the map center. ---
+    // Geometry lives in EndDiscGeometry; these are the frozen defaults it renders from.
+    // Mountain peak 280 keeps an 80-block clearance below END_DISC_SURFACE_Y.
+
+    /** Radius in blocks of the in-sky End disc (centered above the map origin). */
+    public static final int END_DISC_RADIUS = 96;
+    /** Ground surface Y of the End disc lens (undulates ±2 around this). */
+    public static final int END_DISC_SURFACE_Y = 360;
+    /** Lens thickness at the End disc center (tapers to ~4 at the rim). */
+    public static final int END_DISC_THICKNESS = 14;
+    /** X of the End disc center column. */
+    public static final int END_DISC_CENTER_X = 0;
+    /** Z of the End disc center column. */
+    public static final int END_DISC_CENTER_Z = 0;
 
     /** Nether disc: vanilla build range 0…256, disc y 32–~150, thinner rim, lava moat ring. */
     public static final DiscProfile NETHER = new DiscProfile(

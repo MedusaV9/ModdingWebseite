@@ -11,6 +11,10 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction.DiscColumn;
+import dev.projecteclipse.eclipse.worldgen.structure.VanillaLandmarks;
+import dev.projecteclipse.eclipse.worldgen.vanilla.BiomeFeatureFilter;
+import dev.projecteclipse.eclipse.worldgen.vanilla.DiscGenPipeline;
+import dev.projecteclipse.eclipse.worldgen.vanilla.FixedSeedGenRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
@@ -25,8 +29,8 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.NoiseColumn;
 import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -41,17 +45,23 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
 /**
- * Chunk generator of the disc world ({@code eclipse:disc}). All terrain comes from
- * {@link DiscTerrainFunction} evaluated at the CURRENT COMMITTED STAGE (read through the
- * {@link WorldStageAccess} seam, safe on worldgen worker threads, default stage 0) — so a
- * chunk generated for the first time after a stage grows already contains the wider disc,
- * while worker 4's runtime ring sweep rewrites chunks that generated earlier.
+ * Chunk generator of the disc world ({@code eclipse:disc}). The BASE terrain — silhouette,
+ * rim, underside, strata, rivers, sealed hull — comes from {@link DiscTerrainFunction}
+ * evaluated at the CURRENT COMMITTED STAGE (read through the {@link WorldStageAccess} seam,
+ * safe on worldgen worker threads, default stage 0) — so a chunk generated for the first
+ * time after a stage grows already contains the wider disc, while the runtime ring sweep
+ * rewrites chunks that generated earlier.
  *
- * <p>Everything vanilla that would break determinism is disabled: no structure starts
- * (worker 5 stamps structures itself), no biome decoration features (vegetation is part of
- * the terrain function), no carvers (caves are part of the terrain function) and no
- * surface rules. {@code fillFromNoise} writes {@link LevelChunkSection}s directly, bounded
- * by each column's {@code bottomY..topY} span.</p>
+ * <p>On top of that base the vanilla pipeline runs for real (design D1, the
+ * {@code worldgen/vanilla} engine): {@link #applyCarvers} runs vanilla cave/canyon carvers,
+ * {@link #applyBiomeDecoration} places each biome's real placed features (minus the
+ * {@link BiomeFeatureFilter} ore deny-list) under the frozen map seed via
+ * {@link FixedSeedGenRegion}, and {@link #spawnOriginalMobs} seeds animals — all phases
+ * hull-guarded and byte-deterministic per save (see {@link DiscGenPipeline}). Structure
+ * starts stay disabled (structures are stamped at fixed landmark sites) and surface rules
+ * stay off (sector palettes are strata in the terrain function). {@code fillFromNoise}
+ * writes {@link LevelChunkSection}s directly, bounded by each column's
+ * {@code bottomY..topY} span.</p>
  */
 public final class DiscChunkGenerator extends ChunkGenerator {
     public static final MapCodec<DiscChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(
@@ -63,9 +73,10 @@ public final class DiscChunkGenerator extends ChunkGenerator {
     private final DiscProfile profile;
 
     public DiscChunkGenerator(DiscProfile profile, HolderGetter<Biome> biomes) {
-        // Empty per-biome generation settings: vanilla placed features must never
-        // decorate the disc, or chunkgen output would diverge from the terrain function.
-        super(new DiscBiomeSource(profile, biomes), holder -> BiomeGenerationSettings.EMPTY);
+        // Real per-biome generation settings minus the ore deny-list: vanilla vegetation,
+        // springs, geodes and monster rooms decorate the disc, while the OreField engine
+        // owns every mineral ore (design D1.1/D5).
+        super(new DiscBiomeSource(profile, biomes), BiomeFeatureFilter::settingsFor);
         this.profile = profile;
     }
 
@@ -152,31 +163,20 @@ public final class DiscChunkGenerator extends ChunkGenerator {
     }
 
     /**
-     * Vanilla structures worker 5 stamps at fixed {@link DiscMapData.Landmark} sites, keyed
-     * by vanilla registry id → landmark id. Because {@link #createStructures} is empty, the
-     * disc has no {@code StructurePlacement}s and vanilla's placement-driven
-     * {@code findNearestMapStructure} always misses — {@code /locate structure} (and eyes of
-     * ender) resolve through this table instead.
-     */
-    private static final Map<ResourceLocation, String> LOCATE_SITES = Map.of(
-            ResourceLocation.withDefaultNamespace("desert_pyramid"), "eclipse:desert_temple",
-            ResourceLocation.withDefaultNamespace("jungle_pyramid"), "eclipse:jungle_temple",
-            ResourceLocation.withDefaultNamespace("village_plains"), "eclipse:village_plains",
-            ResourceLocation.withDefaultNamespace("stronghold"), "eclipse:stronghold_emergence",
-            ResourceLocation.withDefaultNamespace("fortress"), "eclipse:fortress_core");
-
-    /**
      * Resolves {@code /locate structure} against the deterministic landmark table instead of
      * vanilla structure placements (there are none — {@link #createStructures} is disabled).
-     * A site only resolves once its landmark stage is committed, i.e. once worker 5's
-     * {@code StructureStamper} has actually stamped it. {@code skipKnownStructures} is
-     * ignored: sites are fixed, there is exactly one instance of each.
+     * The vanilla-structure-id → landmark-id table is owned by
+     * {@link VanillaLandmarks#locateSites} (W1.6 seam, §3.10). A site only resolves once its
+     * landmark stage is committed, i.e. once the {@code StructureStamper} has actually
+     * stamped it. {@code skipKnownStructures} is ignored: sites are fixed, there is exactly
+     * one instance of each.
      */
     @Nullable
     @Override
     public Pair<BlockPos, Holder<Structure>> findNearestMapStructure(ServerLevel level,
             HolderSet<Structure> structures, BlockPos pos, int searchRadius, boolean skipKnownStructures) {
         int committedStage = WorldStageAccess.stage(this.profile);
+        Map<ResourceLocation, String> locateSites = VanillaLandmarks.locateSites();
         Pair<BlockPos, Holder<Structure>> nearest = null;
         double nearestDistSq = Double.MAX_VALUE;
         for (Holder<Structure> holder : structures) {
@@ -184,7 +184,7 @@ public final class DiscChunkGenerator extends ChunkGenerator {
             if (structureId == null) {
                 continue;
             }
-            String landmarkId = LOCATE_SITES.get(structureId);
+            String landmarkId = locateSites.get(structureId);
             if (landmarkId == null) {
                 continue;
             }
@@ -204,10 +204,34 @@ public final class DiscChunkGenerator extends ChunkGenerator {
         return nearest;
     }
 
-    /** Carving is part of {@link DiscTerrainFunction} (deterministic Perlin-worm caves). */
+    /**
+     * Vanilla cave/canyon carvers on the disc base (design D1.3). The world-derived
+     * arguments ({@code seed}, {@code random}, {@code biomeManager}) are deliberately
+     * ignored: the engine builds every input from the frozen map seed so carved caves are
+     * identical in every save and every ring-growth replay, and {@code HullRepair} re-seals
+     * the hull afterwards (inside {@link DiscGenPipeline#carve}).
+     */
     @Override
     public void applyCarvers(WorldGenRegion level, long seed, RandomState random, BiomeManager biomeManager,
             StructureManager structureManager, ChunkAccess chunk, GenerationStep.Carving step) {
+        DiscGenPipeline.carve(this, level.registryAccess(), chunk, step);
+    }
+
+    /**
+     * Vanilla biome decoration under the frozen map seed (design D1.2): the level is
+     * wrapped in {@link FixedSeedGenRegion} so the per-chunk population seed — and with it
+     * every placed feature — is identical in every save and every ring-growth replay; the
+     * shared post-pass ({@code HullRepair} + registered {@code ExtraDecor}s) runs through
+     * {@link DiscGenPipeline#afterDecoration}. Both generation paths land here:
+     * chunk generation passes the {@code WorldGenRegion}, and
+     * {@link DiscGenPipeline#runOnLiveChunk} passes the {@code ServerLevel}.
+     */
+    @Override
+    public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
+        WorldGenLevel fixed = level instanceof FixedSeedGenRegion wrapped ? wrapped
+                : new FixedSeedGenRegion(level, DiscGenPipeline.fixedSeed());
+        super.applyBiomeDecoration(fixed, chunk, structureManager);
+        DiscGenPipeline.afterDecoration(this.profile, fixed, chunk);
     }
 
     /** Surface blocks are part of {@link DiscTerrainFunction} (sector palettes). */
@@ -216,8 +240,10 @@ public final class DiscChunkGenerator extends ChunkGenerator {
             ChunkAccess chunk) {
     }
 
+    /** Chunk-generation animal seeding, the vanilla behavior (design D1.4 — req 4). */
     @Override
     public void spawnOriginalMobs(WorldGenRegion level) {
+        DiscGenPipeline.seedMobs(level, level.getCenter());
     }
 
     @Override
