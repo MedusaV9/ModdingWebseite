@@ -2,6 +2,9 @@ package dev.projecteclipse.eclipse.ritual;
 
 import com.mojang.serialization.MapCodec;
 
+import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,6 +19,10 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 /**
  * The ritual altar. Admin-placed only (no recipe, no loot table). Interactions:
@@ -31,6 +38,7 @@ import net.minecraft.world.phys.BlockHitResult;
  * </ul>
  * All feedback is action bar + sounds; nothing is ever printed to chat.
  */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public class AltarBlock extends BaseEntityBlock {
     public static final MapCodec<AltarBlock> CODEC = simpleCodec(AltarBlock::new);
 
@@ -51,6 +59,40 @@ public class AltarBlock extends BaseEntityBlock {
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new AltarBlockEntity(pos, state);
+    }
+
+    /**
+     * Sneak-item routing. Vanilla invokes {@code Item#useOn} instead of
+     * {@link #useItemOn} while secondary-use is active, so ordinary items need this event
+     * lane for offerings. LOWEST lets the day-14 dragon-egg finale consume/cancel first;
+     * the lure and revive sigil keep their own item handlers. Shards are handled here so
+     * their bank signal fires exactly once without editing the economy-owned item class.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onSneakRightClick(PlayerInteractEvent.RightClickBlock event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || !player.isShiftKeyDown()
+                || event.getItemStack().isEmpty()
+                || !(event.getLevel().getBlockEntity(event.getPos()) instanceof AltarBlockEntity altar)) {
+            return;
+        }
+        ItemStack stack = event.getItemStack();
+        if (stack.is(EclipseItems.REVIVE_SIGIL.get()) || stack.is(EclipseItems.HERALDS_LURE.get())) {
+            return;
+        }
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.CONSUME);
+        if (stack.is(EclipseItems.UMBRAL_SHARD.get())) {
+            int amount = stack.getCount();
+            ShardEconomy.deposit(player, stack);
+            if (amount > 0) {
+                EclipseSignals.fireAltarDeposit(player,
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(EclipseItems.UMBRAL_SHARD.get()),
+                        amount, EclipseSignals.AltarDepositPurpose.SHARD_BANK);
+            }
+            return;
+        }
+        altar.handleOffering(player, stack);
     }
 
     @Override

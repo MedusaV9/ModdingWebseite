@@ -11,12 +11,17 @@ import com.mojang.authlib.GameProfile;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.offering.OfferingRules;
+import dev.projecteclipse.eclipse.offering.OfferingService;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseBlockEntities;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,6 +36,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -47,11 +53,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public class AltarBlockEntity extends BlockEntity {
     /** Heart sacrifice must be confirmed by a second sneak-right-click within this window (5 s). */
     public static final long HEART_CONFIRM_WINDOW_TICKS = 100L;
+    /** Offerings use the same deliberate two-click confirmation window. */
+    public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
 
     /** Game time of each player's pending (unconfirmed) heart sacrifice. */
     private final Map<UUID, Long> pendingHeartSacrifices = new HashMap<>();
+    /** Item id + game time of each player's pending (unconfirmed) daily offering. */
+    private final Map<UUID, PendingOffering> pendingOfferings = new HashMap<>();
     /** Currently-selected revive target (banned player UUID) per interacting player. */
     private final Map<UUID, UUID> sigilSelections = new HashMap<>();
+
+    private record PendingOffering(long armedAt, String itemId) {}
 
     public AltarBlockEntity(BlockPos pos, BlockState state) {
         super(EclipseBlockEntities.ALTAR.get(), pos, state);
@@ -110,6 +122,8 @@ public class AltarBlockEntity extends BlockEntity {
         Component itemName = Component.translatable(stack.getItem().getDescriptionId());
         stack.shrink(consumed);
         long updated = state.addMilestoneProgress(key, consumed);
+        EclipseSignals.fireAltarDeposit(player, ResourceLocation.parse(itemId), consumed,
+                EclipseSignals.AltarDepositPurpose.MILESTONE);
 
         actionBar(player, Component.translatable("ritual.eclipse.altar.progress", updated, match.count(), itemName));
         serverLevel.playSound(null, this.worldPosition, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 0.8F);
@@ -178,6 +192,53 @@ public class AltarBlockEntity extends BlockEntity {
         return BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(cost.item()))
                 .map(item -> (Component) Component.translatable(item.getDescriptionId()))
                 .orElse(Component.literal(cost.item()));
+    }
+
+    // --- personal daily offering ---
+
+    /**
+     * Sneak-right-click with an ordinary item. First click arms the exact item type; the
+     * second within five seconds consumes one item. Values and duplicate outcomes stay secret.
+     */
+    public void handleOffering(ServerPlayer player, ItemStack stack) {
+        if (!(this.level instanceof ServerLevel serverLevel) || stack.isEmpty()) {
+            return;
+        }
+        UUID playerId = player.getUUID();
+        if (OfferingService.hasOfferedToday(player)) {
+            pendingOfferings.remove(playerId);
+            actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.1F);
+            return;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        long now = serverLevel.getGameTime();
+        PendingOffering pending = pendingOfferings.get(playerId);
+        if (OfferingRules.needsConfirmation(now, pending == null ? null : pending.armedAt(),
+                pending == null ? "" : pending.itemId(), itemId, OFFERING_CONFIRM_WINDOW_TICKS)) {
+            pendingOfferings.put(playerId, new PendingOffering(now, itemId));
+            actionBar(player, Component.translatable("ritual.eclipse.offering.confirm", stack.getHoverName()));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.7F);
+            return;
+        }
+
+        pendingOfferings.remove(playerId);
+        if (!OfferingService.accept(player, stack)) {
+            actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
+            return;
+        }
+        actionBar(player, Component.translatable("ritual.eclipse.offering.done"));
+        serverLevel.playSound(null, this.worldPosition, EclipseSounds.OFFERING_ACCEPT.get(),
+                SoundSource.BLOCKS, 1.0F, 1.0F);
+        serverLevel.sendParticles(ParticleTypes.PORTAL,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.15D,
+                this.worldPosition.getZ() + 0.5D, 36, 0.35D, 0.35D, 0.35D, 0.3D);
+        PacketDistributor.sendToPlayersNear(serverLevel, null,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                this.worldPosition.getZ() + 0.5D, 64.0D,
+                new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
+                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
     }
 
     // --- heart sacrifice ---
