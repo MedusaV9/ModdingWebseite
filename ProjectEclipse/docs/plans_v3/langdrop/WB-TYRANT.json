@@ -1,0 +1,10 @@
+{
+	"en_us": {
+		"entity.eclipse.fog_tyrant": "Fog Tyrant",
+		"entity.eclipse.fog_tyrant.bossbar": "The Fog Tyrant"
+	},
+	"de_de": {
+		"entity.eclipse.fog_tyrant": "Nebeltyrann",
+		"entity.eclipse.fog_tyrant.bossbar": "Der Nebeltyrann"
+	}
+}
