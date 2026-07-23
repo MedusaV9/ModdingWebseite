@@ -13,6 +13,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
@@ -25,6 +26,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 
 /**
@@ -152,9 +154,23 @@ public final class EclipseLang {
         return Component.literal(format(template, args));
     }
 
-    /** Loads override from client config on startup (no-op until W3 wires {@code langOverride}). */
+    /** Loads the persisted override from the client config ({@code langOverride}, P3-W3). */
     public static void initFromConfig() {
         override = normalizeOverride(LangConfigBridge.load());
+    }
+
+    /**
+     * Restores the persisted override the moment the client config file loads (before the
+     * title screen), so a saved {@code /lang} choice applies from the very first Eclipse
+     * screen — not only after the login-time {@link #initFromConfig()} call. Field-only:
+     * no {@link #reload()} here, resources may not be ready this early (tables build via
+     * the reload listener anyway).
+     */
+    @SubscribeEvent
+    static void onConfigLoading(ModConfigEvent.Loading event) {
+        if (event.getConfig().getSpec() == EclipseClientConfig.SPEC) {
+            initFromConfig();
+        }
     }
 
     @SubscribeEvent
@@ -282,17 +298,22 @@ public final class EclipseLang {
         return screen.getClass().getName().startsWith("dev.projecteclipse.eclipse.client.");
     }
 
-    /** Bridges {@code langOverride} in {@code eclipse-client.toml} once P3-W3 lands. */
+    /**
+     * Bridges the {@code langOverride} key in {@code eclipse-client.toml} (P3-W3, §7.1):
+     * {@link #save} persists every {@link #setOverride} (settings row, {@code /lang},
+     * {@code /sprache}) and {@link #load} restores it via {@link #initFromConfig()}, so the
+     * override survives client restarts. Both sides no-op safely while the config is not
+     * loaded yet ({@code EclipseClientConfig} getters fall back to {@code "auto"}).
+     */
     static final class LangConfigBridge {
         private LangConfigBridge() {}
 
         static String load() {
-            // Wave-1 partner (P3-W3): return EclipseClientConfig.langOverride();
-            return "auto";
+            return EclipseClientConfig.langOverride();
         }
 
         static void save(String value) {
-            // Wave-1 partner (P3-W3): EclipseClientConfig.setLangOverride(value);
+            EclipseClientConfig.setLangOverride(value);
         }
     }
 }

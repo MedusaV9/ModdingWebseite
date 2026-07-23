@@ -3,41 +3,43 @@ package dev.projecteclipse.eclipse.client.handbook.tabs;
 import java.util.List;
 
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.timeline.TimelineEntry;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Timeline page: a horizontal drag-scrollable spine of {@code ClientStateCache.timeline}
- * nodes (W8's anonymized {@link TimelineEntry} list). Reached entries show the lit node +
- * icon + caption (clamped to two lines, the last one ellipsized); the last reached entry of
- * each section pulses as "current"; hidden/future entries render the locked node with
- * {@link GlitchText} "???" captions. Day entries come first, then a divider, then
- * altar-milestone entries ({@code unlockDay == 0}). Drag to scroll with inertia (velocity
- * decays 15%/tick); the screen shows the grab cursor while {@link #dragging()}. The bottom
- * {@value #HINT_BAND_HEIGHT}px of the page is reserved for the drag hint — the node scissor
- * stops above it so captions can never overlap — and the hint only shows while there is
- * something to scroll, fading out for the session after the first successful drag/scroll
- * (instantly hidden under {@code reducedFx}).
+ * Timeline page, Quiet Eclipse v3 (plans_v3 P3 §3.1): a horizontal drag-scrollable spine
+ * of {@code ClientStateCache.timeline} nodes, now drawn flat — {@value #NODE_SIZE}px
+ * squares from pure fills (reached = accent fill, current = accent fill + softly pulsing
+ * ring, hidden/future = raised fill + hairline border) instead of the v2 32px textures.
+ * Day entries come first, then a hairline divider + DIM label for the altar-milestone
+ * section (replacing the v2 divider art). Reached entries show their 12px icon on the
+ * side of the spine opposite their caption; hidden entries stay {@link GlitchText} "???".
+ *
+ * <p>B5 fixed twice: {@link #onShown()} centers on the newest REACHED node including the
+ * {@value #SECTION_GAP}px section gap when that node sits in the milestone section, and
+ * {@link #maxScroll()} only adds the gap when milestone entries actually exist (no dead
+ * scroll zone). B20 fixed: presses are only consumed while there is something to scroll,
+ * so clicks over a non-scrolling page fall through instead of being swallowed.</p>
+ *
+ * <p>Kept from v2 (it works): drag with inertia (velocity decays 15%/tick), the reserved
+ * bottom hint band whose hint fades out for the session after the first successful
+ * drag/scroll, and the two-line caption clamp.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class TimelineTab extends HandbookTab {
-    private static final ResourceLocation NODE_LOCKED = handbookTexture("timeline_node_locked");
-    private static final ResourceLocation NODE_UNLOCKED = handbookTexture("timeline_node_unlocked");
-    private static final ResourceLocation NODE_CURRENT = handbookTexture("timeline_node_current");
-    private static final ResourceLocation DIVIDER = handbookTexture("divider");
-
-    private static final int NODE_SIZE = 32;
+    /** Flat node edge length (§3.1 "flat 10px nodes"). */
+    private static final int NODE_SIZE = 10;
     private static final int NODE_SPACING = 58;
-    /** Extra gap (with the divider art) between the day section and the milestone section. */
+    /** Extra gap (with the hairline divider) between the day and the milestone section. */
     private static final int SECTION_GAP = 64;
     /** Bottom band reserved for the drag hint; node/caption rendering is scissored above it. */
     private static final int HINT_BAND_HEIGHT = 14;
@@ -62,16 +64,18 @@ public class TimelineTab extends HandbookTab {
     public void onShown() {
         velocity = 0.0F;
         dragging = false;
-        // Start the view on the current day node.
+        // Start the view on the newest reached node — day OR milestone (B5: include the
+        // section gap when that node lives past the divider).
         List<TimelineEntry> timeline = ClientStateCache.timeline;
         int currentIndex = 0;
         for (int i = 0; i < timeline.size(); i++) {
-            TimelineEntry entry = timeline.get(i);
-            if (entry.unlockDay() > 0 && entry.reached()) {
+            if (timeline.get(i).reached()) {
                 currentIndex = i;
             }
         }
-        scrollX = Mth.clamp(currentIndex * NODE_SPACING - width / 2.0F + NODE_SPACING, 0.0F, maxScroll());
+        int firstMilestone = firstMilestoneIndex(timeline);
+        int gap = firstMilestone >= 0 && currentIndex >= firstMilestone ? SECTION_GAP : 0;
+        scrollX = Mth.clamp(30 + currentIndex * NODE_SPACING + gap - width / 2.0F, 0.0F, maxScroll());
     }
 
     @Override
@@ -95,10 +99,11 @@ public class TimelineTab extends HandbookTab {
 
         // The scissor stops above the reserved hint band: captions can never overlap it.
         guiGraphics.enableScissor(x, y, x + width, y + height - HINT_BAND_HEIGHT);
-        guiGraphics.fill(x, spineY - 1, x + width, spineY + 1, withAlpha(0x4A3C66, alpha));
+        guiGraphics.fill(x, spineY - 1, x + width, spineY + 1,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, alpha));
 
         if (timeline.isEmpty()) {
-            guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.handbook.timeline.empty"),
+            guiGraphics.drawCenteredString(font, EclipseLang.tr("gui.eclipse.handbook.timeline.empty"),
                     x + width / 2, spineY - 20, withAlpha(DIM_COLOR, alpha));
         }
 
@@ -121,7 +126,7 @@ public class TimelineTab extends HandbookTab {
             boolean milestone = entry.unlockDay() <= 0;
             if (milestone && !milestoneSectionSeen) {
                 milestoneSectionSeen = true;
-                renderSectionDivider(guiGraphics, i, spineY, alpha);
+                renderSectionDivider(guiGraphics, i, alpha);
             }
             int nodeCenterX = nodeCenterX(i, milestoneSectionSeen);
             if (nodeCenterX < x - NODE_SPACING || nodeCenterX > x + width + NODE_SPACING) {
@@ -148,55 +153,77 @@ public class TimelineTab extends HandbookTab {
         if (strength <= 0.05F) {
             return;
         }
-        guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.handbook.timeline.hint"),
+        guiGraphics.drawCenteredString(font, EclipseLang.tr("gui.eclipse.handbook.timeline.hint"),
                 x + width / 2, y + height - 10, withAlpha(DIM_COLOR, alpha * strength));
     }
 
-    private void renderSectionDivider(GuiGraphics guiGraphics, int index, int spineY, float alpha) {
+    /**
+     * Milestone-section divider, v3: a vertical hairline through the page with the section
+     * label at the top of the content area (clear of both caption rows) — no divider art.
+     */
+    private void renderSectionDivider(GuiGraphics guiGraphics, int index, float alpha) {
         int dividerCenter = nodeCenterX(index, true) - SECTION_GAP / 2 - NODE_SPACING / 2;
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        guiGraphics.blit(DIVIDER, dividerCenter - 24, spineY - 6, 0, 0, 48, 12, 48, 12);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.handbook.timeline.milestones"),
-                dividerCenter, spineY + 10, withAlpha(DIM_COLOR, alpha));
+        guiGraphics.fill(dividerCenter, y + 12, dividerCenter + 1, y + height - HINT_BAND_HEIGHT - 2,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, alpha));
+        String label = ellipsize(font,
+                EclipseLang.trString("gui.eclipse.handbook.timeline.milestones"), SECTION_GAP + 80);
+        guiGraphics.drawCenteredString(font, label, dividerCenter, y + 2, withAlpha(DIM_COLOR, alpha));
     }
 
+    /**
+     * One flat node: reached = accent fill; current additionally breathes a 1px ring
+     * (static under {@code reducedFx}); hidden/future = raised fill + hairline border.
+     * The entry icon (12px, 1:1) sits on the opposite side of the spine from the caption.
+     */
     private void renderNode(GuiGraphics guiGraphics, TimelineEntry entry, int index, int centerX, int spineY,
             boolean current, float alpha) {
-        ResourceLocation node = entry.hidden() ? NODE_LOCKED : current ? NODE_CURRENT : NODE_UNLOCKED;
-
-        float scale = 1.0F;
-        if (current && !EclipseClientConfig.reducedFx()) {
-            scale = 1.0F + 0.07F * Mth.sin(net.minecraft.Util.getMillis() / 160.0F);
+        int half = NODE_SIZE / 2;
+        int x0 = centerX - half;
+        int y0 = spineY - half;
+        if (entry.hidden() || !entry.reached()) {
+            guiGraphics.fill(x0, y0, x0 + NODE_SIZE, y0 + NODE_SIZE,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, alpha));
+            drawFrame(guiGraphics, x0, y0, NODE_SIZE,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, alpha));
+        } else {
+            guiGraphics.fill(x0, y0, x0 + NODE_SIZE, y0 + NODE_SIZE, withAlpha(ACCENT_COLOR, alpha));
         }
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(centerX, spineY, 0);
-        guiGraphics.pose().scale(scale, scale, 1.0F);
-        guiGraphics.pose().translate(-centerX, -spineY, 0);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        guiGraphics.blit(node, centerX - NODE_SIZE / 2, spineY - NODE_SIZE / 2, 0, 0,
-                NODE_SIZE, NODE_SIZE, NODE_SIZE, NODE_SIZE);
-        if (!entry.hidden() && !entry.icon().equals(TimelineEntry.NO_ICON)) {
-            guiGraphics.blit(entry.icon(), centerX - 6, spineY - 6, 0, 0, 12, 12, 12, 12);
+        if (current) {
+            float ringAlpha = EclipseClientConfig.reducedFx() ? 0.8F
+                    : 0.55F + 0.35F * Mth.sin(net.minecraft.Util.getMillis() / 320.0F);
+            drawFrame(guiGraphics, x0 - 3, y0 - 3, NODE_SIZE + 6, withAlpha(ACCENT_COLOR, alpha * ringAlpha));
         }
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        guiGraphics.pose().popPose();
 
         // Captions alternate above/below the spine so neighbors don't overlap.
-        boolean below = index % 2 == 0;
+        boolean captionBelow = index % 2 == 0;
+        if (!entry.hidden() && !entry.icon().equals(TimelineEntry.NO_ICON)) {
+            int iconY = captionBelow ? y0 - 6 - 12 : y0 + NODE_SIZE + 6;
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+            guiGraphics.blit(entry.icon(), centerX - 6, iconY, 0, 0, 12, 12, 12, 12);
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+
         if (entry.hidden()) {
             String glitch = GlitchText.unknown(entry.id());
-            int textY = below ? spineY + NODE_SIZE / 2 + 4 : spineY - NODE_SIZE / 2 - 12;
+            int textY = captionBelow ? spineY + half + 6 : spineY - half - 14;
             guiGraphics.drawCenteredString(font, glitch, centerX, textY, withAlpha(DIM_COLOR, alpha));
             return;
         }
-        List<String> caption = clampCaption(Component.translatable(entry.titleKey()).getString(), NODE_SPACING + 24);
-        int textY = below ? spineY + NODE_SIZE / 2 + 4 : spineY - NODE_SIZE / 2 - 4 - caption.size() * 9;
+        List<String> caption = clampCaption(EclipseLang.trString(entry.titleKey()), NODE_SPACING + 24);
+        int textY = captionBelow ? spineY + half + 6 : spineY - half - 6 - caption.size() * 9;
         for (String line : caption) {
             guiGraphics.drawCenteredString(font, line, centerX, textY,
                     withAlpha(current ? ACCENT_COLOR : TEXT_COLOR, alpha));
             textY += 9;
         }
+    }
+
+    /** 1px square frame outline from fills. */
+    private static void drawFrame(GuiGraphics guiGraphics, int x0, int y0, int size, int color) {
+        guiGraphics.fill(x0, y0, x0 + size, y0 + 1, color);
+        guiGraphics.fill(x0, y0 + size - 1, x0 + size, y0 + size, color);
+        guiGraphics.fill(x0, y0 + 1, x0 + 1, y0 + size - 1, color);
+        guiGraphics.fill(x0 + size - 1, y0 + 1, x0 + size, y0 + size - 1, color);
     }
 
     /**
@@ -225,14 +252,27 @@ public class TimelineTab extends HandbookTab {
         return x + 30 + index * NODE_SPACING + (afterSectionGap ? SECTION_GAP : 0) - Math.round(scrollX);
     }
 
+    /** First index of the milestone section ({@code unlockDay <= 0}), or -1 when absent. */
+    private static int firstMilestoneIndex(List<TimelineEntry> timeline) {
+        for (int i = 0; i < timeline.size(); i++) {
+            if (timeline.get(i).unlockDay() <= 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** B5: the section gap only counts toward the scroll range when milestones exist. */
     private float maxScroll() {
-        int count = ClientStateCache.timeline.size();
-        return Math.max(0, count * NODE_SPACING + SECTION_GAP + 60 - width);
+        List<TimelineEntry> timeline = ClientStateCache.timeline;
+        int gap = firstMilestoneIndex(timeline) >= 0 ? SECTION_GAP : 0;
+        return Math.max(0, timeline.size() * NODE_SPACING + gap + 60 - width);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && inRect(mouseX, mouseY)) {
+        // B20: only consume presses the page actually uses — no scroll range, no grab.
+        if (button == 0 && inRect(mouseX, mouseY) && maxScroll() > 0.0F) {
             dragging = true;
             velocity = 0.0F;
             return true;
@@ -268,7 +308,7 @@ public class TimelineTab extends HandbookTab {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollXDelta, double scrollYDelta) {
-        if (inRect(mouseX, mouseY)) {
+        if (inRect(mouseX, mouseY) && maxScroll() > 0.0F) {
             scrollX = Mth.clamp(scrollX - (float) (scrollYDelta + scrollXDelta) * 24.0F, 0.0F, maxScroll());
             velocity = 0.0F;
             if (scrollXDelta != 0.0D || scrollYDelta != 0.0D) {

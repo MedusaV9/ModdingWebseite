@@ -56,6 +56,12 @@ public final class EclipseMenuButton extends Button {
         this.iconTextureHeight = iconTextureHeight;
     }
 
+    /** The soft Quiet-Eclipse click instead of the vanilla button plink (B18). */
+    @Override
+    public void playDownSound(net.minecraft.client.sounds.SoundManager handler) {
+        UiSounds.click();
+    }
+
     @Override
     protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         boolean hovered = this.active && this.isHoveredOrFocused();

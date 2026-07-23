@@ -1,56 +1,57 @@
 package dev.projecteclipse.eclipse.client.menu;
 
-import java.util.List;
+import javax.annotation.Nullable;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-
-import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.CursorManager;
-import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.navigation.CommonInputs;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.neoforge.common.ModConfigSpec;
-import org.lwjgl.glfw.GLFW;
 
 /**
- * Live editor for all seven cosmetic values in {@code eclipse-client.toml}. Each themed
- * toggle remains a vanilla {@link AbstractSliderButton}, preserving keyboard focus,
- * narration and mouse handling while snapping its value to on/off. Changes call
- * {@link ModConfigSpec.BooleanValue#set} followed by {@link ModConfigSpec.BooleanValue#save}.
+ * Eclipse settings v2 ({@code docs/plans_v3/P3_ui.md} §3.4): one Quiet-Eclipse panel hosting
+ * the shared {@link SettingsPanel} (single source of truth — the same composite the handbook
+ * Settings tab mounts) plus a Done button. Reached from the pause menu
+ * ({@code PauseMenuHook}), the custom title gear ({@code EclipseTitleScreen}), the vanilla
+ * title gear ({@code VanillaTitleGear}, {@code customMenu=false}) and NeoForge's Mods screen
+ * ({@code ClientMenuExtensions} {@code IConfigScreenFactory}) — B1 is dead from every mount.
+ *
+ * <p>Values write through the typed {@code ModConfigSpec} handles inside
+ * {@link SettingsPanel} ({@code set()+save()}, B13 — the v1 {@code valueMap()} string lookup
+ * is gone) and apply live. All widget audio runs through {@code UiSounds} (B18). Motion per
+ * §2.3: 5-tick fade + 4px chrome rise on open, mirrored fade on close ({@code reducedFx} =
+ * instant); animation never moves hitboxes. ESC (or Done) returns to the parent screen;
+ * {@link #isPauseScreen()} is {@code true}, so opening it from the singleplayer pause menu
+ * actually keeps the game paused.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class EclipseSettingsScreen extends Screen {
-    private static final int TEXT_COLOR = 0xE8E0F5;
-    private static final int ACCENT_COLOR = 0xB98CFF;
-    private static final int DIM_COLOR = 0x9A8FB8;
-    private static final int PANEL_COLOR = 0xF0140C24;
-
-    private static final List<Option> OPTIONS = List.of(
-            new Option("customMenu", "gui.eclipse.settings.option.custom_menu"),
-            new Option("showBossbarSkin", "gui.eclipse.settings.option.bossbar"),
-            new Option("showSidebar", "gui.eclipse.settings.option.sidebar"),
-            new Option("uiSounds", "gui.eclipse.settings.option.ui_sounds"),
-            new Option("customCursor", "gui.eclipse.settings.option.cursor"),
-            new Option("veilPostFx", "gui.eclipse.settings.option.veil_fx"),
-            new Option("reducedFx", "gui.eclipse.settings.option.reduced_fx"));
+    /** §2.3 open/close: fade ticks + chrome rise distance. */
+    private static final int OPEN_TICKS = 5;
+    private static final int RISE_PX = 4;
+    /** Fade cover tint (near-black aubergine, matches the VEIL family). */
+    private static final int COVER_RGB = 0x04020A;
 
     private final Screen parent;
+
+    @Nullable
+    private SettingsPanel panel;
     private int panelX;
     private int panelY;
     private int panelW;
     private int panelH;
+
+    private int openTicks;
+    private boolean closing;
+    private int closeTicks;
 
     public EclipseSettingsScreen(Screen parent) {
         super(Component.translatable("gui.eclipse.settings.title"));
@@ -59,53 +60,113 @@ public final class EclipseSettingsScreen extends Screen {
 
     @Override
     protected void init() {
-        panelW = Mth.clamp(this.width - 24, 300, 420);
-        panelH = Mth.clamp(this.height - 24, 214, 280);
+        panelW = Mth.clamp(this.width - 24, 300, 400);
+        panelH = Mth.clamp(this.height - 24, 200, 320);
         panelX = (this.width - panelW) / 2;
         panelY = (this.height - panelH) / 2;
 
-        int gap = 8;
-        int toggleW = (panelW - 30 - gap) / 2;
-        int toggleH = 20;
-        int firstX = panelX + 15;
-        int firstY = panelY + 48;
-        for (int i = 0; i < OPTIONS.size(); i++) {
-            int column = i / 4;
-            int row = i % 4;
-            Option option = OPTIONS.get(i);
-            addRenderableWidget(new ConfigToggle(firstX + column * (toggleW + gap),
-                    firstY + row * 26, toggleW, toggleH, option, read(option.key())));
+        // Header block (title + subtitle) 38px, footer (Done) 32px, list between.
+        int listX = panelX + 12;
+        int listY = panelY + 38;
+        int listW = panelW - 24;
+        int listH = panelY + panelH - 32 - listY;
+
+        double keepScroll = panel != null ? panel.scrollAmount() : 0.0D;
+        panel = new SettingsPanel(listX, listY, listW, listH);
+        panel.setScrollAmount(keepScroll);
+        for (var widget : panel.widgets()) {
+            addRenderableWidget(widget);
         }
 
         int doneW = 120;
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose())
-                .bounds(panelX + (panelW - doneW) / 2, panelY + panelH - 30, doneW, 20)
+                .bounds(panelX + (panelW - doneW) / 2, panelY + panelH - 26, doneW, 20)
                 .build(EclipseMenuButton::new));
     }
 
     @Override
+    public void tick() {
+        if (openTicks < OPEN_TICKS) {
+            openTicks++;
+        }
+        if (closing && --closeTicks <= 0) {
+            returnToParent();
+        }
+    }
+
+    /** Panel fade progress 0..1 (open and close mirrored; instant with reducedFx). */
+    private float fade(float partialTick) {
+        if (EclipseClientConfig.reducedFx()) {
+            return closing ? 0.0F : 1.0F;
+        }
+        float progress = closing
+                ? Mth.clamp((closeTicks - partialTick) / OPEN_TICKS, 0.0F, 1.0F)
+                : Mth.clamp((openTicks + partialTick) / OPEN_TICKS, 0.0F, 1.0F);
+        float inv = 1.0F - progress;
+        return 1.0F - inv * inv * inv; // ease-out cubic
+    }
+
+    /** Flat VEIL backdrop + panel chrome + header — everything below the widgets. */
+    @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(guiGraphics);
-        guiGraphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, PANEL_COLOR);
-        guiGraphics.fill(panelX, panelY, panelX + panelW, panelY + 1, 0xFFB98CFF);
-        guiGraphics.fill(panelX, panelY + panelH - 1, panelX + panelW, panelY + panelH, 0xFFB98CFF);
+        float alpha = fade(partialTick);
+        int rise = Math.round((1.0F - alpha) * RISE_PX);
+        int py = panelY + rise;
+
+        guiGraphics.fill(0, 0, this.width, this.height,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.VEIL, alpha));
+        EclipseUiTheme.drawPanel(guiGraphics, panelX, py, panelW, panelH, alpha);
+        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, py + 10,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
+        guiGraphics.drawCenteredString(this.font, EclipseLang.tr("gui.eclipse.settings.subtitle"),
+                this.width / 2, py + 22, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, panelY + 12, ACCENT_COLOR);
-        guiGraphics.drawCenteredString(this.font, Component.translatable("gui.eclipse.settings.subtitle"),
-                this.width / 2, panelY + 27, DIM_COLOR);
+        // Widgets do not carry a per-element alpha — a thin cover fading out on top gives
+        // the whole screen the §2.3 open/close fade without moving any hitbox.
+        float alpha = fade(partialTick);
+        if (alpha < 0.98F) {
+            guiGraphics.fill(0, 0, this.width, this.height,
+                    EclipseUiTheme.withAlpha(0xFF000000 | COVER_RGB, 1.0F - alpha));
+        }
         CursorManager.endFrame();
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (closing) {
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (closing) {
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** Mirrored 5-tick fade-out, then the parent; instant under reducedFx or a second press. */
+    @Override
+    public void onClose() {
+        if (closing || EclipseClientConfig.reducedFx()) {
+            returnToParent();
+            return;
+        }
+        closing = true;
+        closeTicks = OPEN_TICKS;
     }
 
     /**
      * Turning the custom menu off from its own gear returns directly to a fresh vanilla
      * title screen. The Opening-event guard reads the just-saved value and leaves it alone.
      */
-    @Override
-    public void onClose() {
+    private void returnToParent() {
         if (this.parent instanceof EclipseTitleScreen && !EclipseClientConfig.customMenu()) {
             this.minecraft.setScreen(new TitleScreen());
         } else {
@@ -113,155 +174,16 @@ public final class EclipseSettingsScreen extends Screen {
         }
     }
 
+    /** Singleplayer pause menu → settings must actually stay paused (B1 follow-up, W8 note). */
     @Override
     public boolean isPauseScreen() {
-        return false;
+        return true;
     }
 
+    /** ALWAYS hand the system cursor back, whatever screen comes next (risk R12). */
     @Override
     public void removed() {
         CursorManager.reset();
         super.removed();
-    }
-
-    private static boolean read(String key) {
-        return switch (key) {
-            case "customMenu" -> EclipseClientConfig.customMenu();
-            case "showBossbarSkin" -> EclipseClientConfig.showBossbarSkin();
-            case "showSidebar" -> EclipseClientConfig.showSidebar();
-            case "uiSounds" -> EclipseClientConfig.uiSounds();
-            case "customCursor" -> EclipseClientConfig.customCursor();
-            case "veilPostFx" -> EclipseClientConfig.veilPostFx();
-            case "reducedFx" -> EclipseClientConfig.reducedFx();
-            default -> throw new IllegalArgumentException("Unknown Eclipse client option " + key);
-        };
-    }
-
-    private static void write(String key, boolean enabled) {
-        Object configValue = EclipseClientConfig.SPEC.getValues().valueMap().get(key);
-        if (!(configValue instanceof ModConfigSpec.BooleanValue booleanValue)) {
-            EclipseMod.LOGGER.error("Missing boolean client-config value {}", key);
-            return;
-        }
-        booleanValue.set(enabled);
-        booleanValue.save();
-    }
-
-    private record Option(String key, String labelKey) {}
-
-    /**
-     * Boolean specialization of vanilla's slider widget. Mouse/keyboard actions snap to
-     * two states, while the face uses the same v1 title art and W9 hover/cursor behavior.
-     */
-    private static final class ConfigToggle extends AbstractSliderButton {
-        private static final ResourceLocation FACE = ResourceLocation.fromNamespaceAndPath(
-                EclipseMod.MOD_ID, "textures/gui/title/button.png");
-        private static final ResourceLocation FACE_HOVERED = ResourceLocation.fromNamespaceAndPath(
-                EclipseMod.MOD_ID, "textures/gui/title/button_highlighted.png");
-        private static final int FACE_WIDTH = 200;
-        private static final int FACE_HEIGHT = 20;
-
-        private final Option option;
-        private boolean wasHovered;
-        private float glow;
-        private long lastFrameMillis;
-
-        ConfigToggle(int x, int y, int width, int height, Option option, boolean initialValue) {
-            super(x, y, width, height, Component.empty(), initialValue ? 1.0D : 0.0D);
-            this.option = option;
-            updateMessage();
-        }
-
-        @Override
-        public void onClick(double mouseX, double mouseY, int button) {
-            setBoolean(value < 0.5D);
-        }
-
-        @Override
-        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-            if (CommonInputs.selected(keyCode)) {
-                setBoolean(value < 0.5D);
-                return true;
-            }
-            if (keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT) {
-                setBoolean(keyCode == GLFW.GLFW_KEY_RIGHT);
-                return true;
-            }
-            return super.keyPressed(keyCode, scanCode, modifiers);
-        }
-
-        private void setBoolean(boolean enabled) {
-            this.value = enabled ? 1.0D : 0.0D;
-            applyValue();
-            updateMessage();
-        }
-
-        @Override
-        protected void updateMessage() {
-            Component state = value >= 0.5D ? CommonComponents.OPTION_ON : CommonComponents.OPTION_OFF;
-            setMessage(CommonComponents.optionNameValue(Component.translatable(option.labelKey()), state));
-        }
-
-        @Override
-        protected void applyValue() {
-            boolean enabled = value >= 0.5D;
-            this.value = enabled ? 1.0D : 0.0D;
-            // Drag events re-apply continuously — only touch (and save) the TOML when
-            // the boolean actually flips.
-            if (EclipseSettingsScreen.read(option.key()) != enabled) {
-                EclipseSettingsScreen.write(option.key(), enabled);
-            }
-        }
-
-        @Override
-        public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = this.active && isHoveredOrFocused();
-            if (hovered && !wasHovered) {
-                UiSounds.hover();
-            }
-            wasHovered = hovered;
-            advanceGlow(hovered);
-            if (hovered) {
-                CursorManager.requestPointer();
-            }
-
-            RenderSystem.enableBlend();
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, this.alpha);
-            guiGraphics.blit(hovered ? FACE_HOVERED : FACE, getX(), getY(), getWidth(), getHeight(),
-                    0.0F, 0.0F, FACE_WIDTH, FACE_HEIGHT, FACE_WIDTH, FACE_HEIGHT);
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-
-            int stateColor = value >= 0.5D ? 0xFFB98CFF : 0xFF453A5E;
-            guiGraphics.fill(getX() + getWidth() - 9, getY() + 7,
-                    getX() + getWidth() - 3, getY() + 13, stateColor);
-            renderScrollingString(guiGraphics, Minecraft.getInstance().font, 10,
-                    (this.active ? TEXT_COLOR : 0x8A80A0) | Mth.ceil(this.alpha * 255.0F) << 24);
-            if (glow > 0.02F) {
-                renderGlow(guiGraphics);
-            }
-            RenderSystem.disableBlend();
-        }
-
-        private void advanceGlow(boolean hovered) {
-            long now = System.currentTimeMillis();
-            float elapsedTicks = lastFrameMillis == 0L ? 1.0F
-                    : Math.min(4.0F, (now - lastFrameMillis) / 50.0F);
-            lastFrameMillis = now;
-            float target = hovered ? 1.0F : 0.0F;
-            float step = 0.25F * elapsedTicks;
-            glow = glow < target ? Math.min(target, glow + step) : Math.max(target, glow - step);
-        }
-
-        private void renderGlow(GuiGraphics guiGraphics) {
-            int color = ((int) (glow * 190.0F) << 24) | 0xB98CFF;
-            int x0 = getX() - 1;
-            int y0 = getY() - 1;
-            int x1 = getX() + width + 1;
-            int y1 = getY() + height + 1;
-            guiGraphics.fill(x0, y0, x1, y0 + 2, color);
-            guiGraphics.fill(x0, y1 - 2, x1, y1, color);
-            guiGraphics.fill(x0, y0 + 2, x0 + 2, y1 - 2, color);
-            guiGraphics.fill(x1 - 2, y0 + 2, x1, y1 - 2, color);
-        }
     }
 }

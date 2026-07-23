@@ -1,6 +1,8 @@
 package dev.projecteclipse.eclipse.client.handbook.tabs;
 
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -8,26 +10,34 @@ import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Map page: stylized top-down concentric ring diagram of the overworld disc. Rings come
- * from the shared {@code worldgen.StageRadii} table (one circle per stage radius);
- * committed stages ({@code stage <= ClientStateCache.stageOverworld}) render lit, future
- * rings stay dim and unlabeled, the CURRENT stage ring is highlighted with a soft pulse.
- * On top: the stage-0 satellite player discs ({@code DiscGeometry}), the animated soft
- * border circle from the border cache, the spawn/sanctum dot and stage-gated landmark
- * markers (fixed default stage → structure mapping; positions are decorative, not world
- * coordinates). A legend anchors the bottom.
+ * Map page, Quiet Eclipse v3 (plans_v3 P3 §3.1 — "kept, it's already vector-drawn;
+ * recolor + legend spacing"): stylized top-down concentric ring diagram of the overworld
+ * disc, now fully on §2.1 theme tokens — unlocked rings {@code ACCENT}, sealed rings
+ * {@code HAIRLINE}, the soft border {@code DANGER}, spawn dot and landmark diamonds
+ * {@code TEXT}. Rings come from the shared {@code worldgen.StageRadii} table; committed
+ * stages render lit, future rings stay dim and unlabeled, the CURRENT stage ring pulses
+ * softly ({@code reducedFx} = static). On top: the stage-0 satellite player discs
+ * ({@code DiscGeometry}), the animated soft border circle from the border cache, the
+ * spawn/sanctum dot and stage-gated landmark markers (decorative positions, not world
+ * coordinates). The flow-wrapped legend anchors the bottom on the §2.2 baseline grid.
  */
 @OnlyIn(Dist.CLIENT)
 public class MapTab extends HandbookTab {
     private static final int RING_COLOR_UNLOCKED = ACCENT_COLOR;
-    private static final int RING_COLOR_FUTURE = 0x453A5E;
-    private static final int BORDER_COLOR = 0xE86AA8;
+    private static final int RING_COLOR_FUTURE = EclipseUiTheme.HAIRLINE & 0xFFFFFF;
+    private static final int BORDER_COLOR = EclipseUiTheme.DANGER & 0xFFFFFF;
+    private static final int MARKER_COLOR = TEXT_COLOR;
+
+    /** Legend metrics (§2.2 rhythm): row height, swatch box, swatch→text and entry gaps. */
+    private static final int LEGEND_ROW = 12;
+    private static final int LEGEND_SWATCH = 6;
+    private static final int LEGEND_TEXT_GAP = 4;
+    private static final int LEGEND_ENTRY_GAP = 12;
 
     /** Default stage → landmark (v2 {@code stages.json} defaults); angle keeps markers apart. */
     private record Landmark(int stage, String labelKey, double angleDegrees) {}
@@ -48,7 +58,7 @@ public class MapTab extends HandbookTab {
         if (alpha < 0.1F) {
             return;
         }
-        int legendHeight = legendRows() * 12 + 4;
+        int legendHeight = legendRows() * LEGEND_ROW + EclipseUiTheme.GAP * 2;
         int diagramHeight = height - legendHeight;
         int centerX = x + width / 2;
         int centerY = y + diagramHeight / 2 + 4;
@@ -63,7 +73,8 @@ public class MapTab extends HandbookTab {
         worldRadius = Math.max(1.0F, worldRadius);
         float scale = (Math.min(width, diagramHeight) / 2.0F - 6.0F) / worldRadius;
 
-        guiGraphics.drawString(font, Component.translatable("gui.eclipse.handbook.map.stage", currentStage),
+        guiGraphics.drawString(font,
+                ellipsize(font, EclipseLang.trString("gui.eclipse.handbook.map.stage", currentStage), width),
                 x, y, withAlpha(ACCENT_COLOR, alpha));
 
         guiGraphics.enableScissor(x, y, x + width, y + height);
@@ -72,7 +83,7 @@ public class MapTab extends HandbookTab {
         for (int stage = 0; stage <= maxStage; stage++) {
             boolean unlocked = stage <= currentStage;
             float radius = StageRadii.radius(DiscProfile.OVERWORLD, stage) * scale;
-            float ringAlpha = unlocked ? alpha * 0.9F : alpha * 0.45F;
+            float ringAlpha = unlocked ? alpha * 0.9F : alpha * 0.8F;
             int color = unlocked ? RING_COLOR_UNLOCKED : RING_COLOR_FUTURE;
             boolean isCurrent = stage == currentStage;
             if (isCurrent && !EclipseClientConfig.reducedFx()) {
@@ -89,14 +100,14 @@ public class MapTab extends HandbookTab {
                     Math.max(2.0F, satelliteRadius), withAlpha(RING_COLOR_UNLOCKED, alpha * 0.5F), 1, false);
         }
 
-        // Soft border circle (dashed, warm accent), animated radius from the cache.
+        // Soft border circle (dashed, DANGER token — the one warning color), animated radius.
         if (borderRadius > 0.0D) {
             drawCircle(guiGraphics, centerX, centerY, (float) borderRadius * scale,
                     withAlpha(BORDER_COLOR, alpha * 0.9F), 1, true);
         }
 
         // Spawn / sanctum dot.
-        guiGraphics.fill(centerX - 2, centerY - 2, centerX + 2, centerY + 2, withAlpha(0xFFFFFF, alpha));
+        guiGraphics.fill(centerX - 2, centerY - 2, centerX + 2, centerY + 2, withAlpha(MARKER_COLOR, alpha));
 
         // Stage-gated landmark markers on the annulus their stage revealed.
         for (Landmark landmark : LANDMARKS) {
@@ -110,21 +121,21 @@ public class MapTab extends HandbookTab {
             int markX = (int) (centerX + Math.cos(angle) * radius);
             int markY = (int) (centerY + Math.sin(angle) * radius);
             // Diamond marker.
-            int diamond = withAlpha(0xF2E2FF, alpha);
+            int diamond = withAlpha(MARKER_COLOR, alpha);
             guiGraphics.fill(markX - 1, markY - 3, markX + 1, markY + 3, diamond);
             guiGraphics.fill(markX - 3, markY - 1, markX + 3, markY + 1, diamond);
             // Labels center on the marker: clamp to what fits inside the page both ways
             // (the scissor would otherwise hard-chop long localizations mid-glyph).
             int labelMax = Math.max(12, 2 * Math.min(markX - x, x + width - markX));
-            String label = ellipsize(font, Component.translatable(landmark.labelKey()).getString(), labelMax);
+            String label = ellipsize(font, EclipseLang.trString(landmark.labelKey()), labelMax);
             guiGraphics.drawCenteredString(font, label, markX, markY + 5, withAlpha(TEXT_COLOR, alpha));
         }
         guiGraphics.disableScissor();
 
-        renderLegend(guiGraphics, y + height - legendHeight + 4, alpha);
+        renderLegend(guiGraphics, y + height - legendHeight + EclipseUiTheme.GAP * 2, alpha);
     }
 
-    private static final int[] LEGEND_COLORS = {RING_COLOR_UNLOCKED, RING_COLOR_FUTURE, BORDER_COLOR, 0xFFFFFF};
+    private static final int[] LEGEND_COLORS = {RING_COLOR_UNLOCKED, RING_COLOR_FUTURE, BORDER_COLOR, MARKER_COLOR};
     private static final String[] LEGEND_KEYS = {
             "gui.eclipse.handbook.map.legend.unlocked",
             "gui.eclipse.handbook.map.legend.sealed",
@@ -132,7 +143,8 @@ public class MapTab extends HandbookTab {
             "gui.eclipse.handbook.map.legend.spawn"};
 
     private int legendEntryWidth(int index) {
-        return 9 + font.width(Component.translatable(LEGEND_KEYS[index])) + 10;
+        return LEGEND_SWATCH + LEGEND_TEXT_GAP + font.width(EclipseLang.trString(LEGEND_KEYS[index]))
+                + LEGEND_ENTRY_GAP;
     }
 
     /** Rows the flow-wrapped legend needs at the current page width (localization-safe). */
@@ -158,11 +170,12 @@ public class MapTab extends HandbookTab {
             int entryWidth = legendEntryWidth(i);
             if (lineX > x && lineX + entryWidth > x + width) {
                 lineX = x;
-                lineY += 12;
+                lineY += LEGEND_ROW;
             }
-            guiGraphics.fill(lineX, lineY + 2, lineX + 6, lineY + 8, withAlpha(LEGEND_COLORS[i], alpha));
-            guiGraphics.drawString(font, Component.translatable(LEGEND_KEYS[i]), lineX + 9, lineY,
-                    withAlpha(DIM_COLOR, alpha));
+            guiGraphics.fill(lineX, lineY + 1, lineX + LEGEND_SWATCH, lineY + 1 + LEGEND_SWATCH,
+                    withAlpha(LEGEND_COLORS[i], alpha));
+            guiGraphics.drawString(font, EclipseLang.tr(LEGEND_KEYS[i]),
+                    lineX + LEGEND_SWATCH + LEGEND_TEXT_GAP, lineY, withAlpha(DIM_COLOR, alpha));
             lineX += entryWidth;
         }
     }

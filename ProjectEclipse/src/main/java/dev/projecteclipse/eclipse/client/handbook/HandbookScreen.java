@@ -9,8 +9,10 @@ import dev.projecteclipse.eclipse.client.EclipseKeyMappings;
 import dev.projecteclipse.eclipse.client.handbook.tabs.BestiaryTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.HandbookTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.MapTab;
+import dev.projecteclipse.eclipse.client.handbook.tabs.RevivalTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.RewardsTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.RulesTab;
+import dev.projecteclipse.eclipse.client.handbook.tabs.SettingsTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.StatusTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.TimelineTab;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
@@ -79,11 +81,12 @@ public class HandbookScreen extends Screen {
     private static final int SWITCH_TICKS = 4;
     private static final int SLIDE_PX = 6;
 
-    // Tab roster. Ledger (docs/plans_v3/wiring/P3-W1_wiring.md): insert `new RevivalTab()`
-    // after RulesTab and `new SettingsTab()` last once W2/W3 land — the rail, hotkeys and
-    // footer all derive from tabs.size() and need no other change.
+    // Tab roster in the frozen §3.1 order (W1 ledger applied by W2): status, timeline,
+    // rules, revival, rewards, bestiary, map, settings. Keep Settings LAST — the rail,
+    // 1-8 hotkeys, footer counter and crossfade all derive from tabs.size(), and
+    // StatusTab's settings link reaches this page via the last hotkey.
     private final List<HandbookTab> tabs = List.of(new StatusTab(), new TimelineTab(), new RulesTab(),
-            new RewardsTab(), new BestiaryTab(), new MapTab());
+            new RevivalTab(), new RewardsTab(), new BestiaryTab(), new MapTab(), new SettingsTab());
     /** Widgets currently mounted for the active tab (removed on switch — B4). */
     private final List<AbstractWidget> activeTabWidgets = new ArrayList<>();
 

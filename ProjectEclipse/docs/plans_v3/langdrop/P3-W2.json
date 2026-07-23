@@ -1,0 +1,36 @@
+{
+  "en_us": {
+    "gui.eclipse.handbook.tab.revival": "Revival",
+    "gui.eclipse.handbook.status.more": "+%s more goals",
+    "gui.eclipse.handbook.bestiary.pending": "The ledger holds no account of this creature yet.",
+    "gui.eclipse.handbook.revival.intro": "No soul has to stay lost. Three seals bind the way back — blood, craft, and the altar.",
+    "gui.eclipse.handbook.revival.step1.title": "I. The blood price",
+    "gui.eclipse.handbook.revival.step1.text": "Hold the Heart Extractor to carve hearts from your own chest. Each channel costs %s hearts and yields %s fragments — the sigil demands %s.",
+    "gui.eclipse.handbook.revival.step1.math": "%s hearts → %s fragments",
+    "gui.eclipse.handbook.revival.step2.title": "II. Forge the sigil",
+    "gui.eclipse.handbook.revival.step2.text": "Bind the fragments with the materials shown below to craft a Revive Sigil.",
+    "gui.eclipse.handbook.revival.step2.math": "%s fragments + materials → 1 sigil",
+    "gui.eclipse.handbook.revival.step3.title": "III. The altar ritual",
+    "gui.eclipse.handbook.revival.step3.text": "Right-click the altar with the sigil to choose among the fallen, then sneak and use it again to seal the pact. The revived wakes on the ship of the dead with a single heart — and the door opens.",
+    "gui.eclipse.handbook.revival.step3.math": "1 sigil → return with ❤ 1",
+    "gui.eclipse.handbook.revival.warning": "The extractor never takes a final heart — it refuses unless you hold at least %s. And every heart given stays given.",
+    "gui.eclipse.handbook.revival.aftercare": "Vitae Shards from the altar's shard trade can grow lost hearts back."
+  },
+  "de_de": {
+    "gui.eclipse.handbook.tab.revival": "Wiederbelebung",
+    "gui.eclipse.handbook.status.more": "+%s weitere Ziele",
+    "gui.eclipse.handbook.bestiary.pending": "Das Buch weiß noch nichts über dieses Wesen zu berichten.",
+    "gui.eclipse.handbook.revival.intro": "Keine Seele muss verloren bleiben. Drei Siegel binden den Weg zurück — Blut, Handwerk und der Altar.",
+    "gui.eclipse.handbook.revival.step1.title": "I. Der Blutpreis",
+    "gui.eclipse.handbook.revival.step1.text": "Halte den Herz-Extraktor gedrückt, um Herzen aus deiner eigenen Brust zu lösen. Jede Entnahme kostet %s Herzen und ergibt %s Fragmente — das Siegel verlangt %s.",
+    "gui.eclipse.handbook.revival.step1.math": "%s Herzen → %s Fragmente",
+    "gui.eclipse.handbook.revival.step2.title": "II. Schmiede das Siegel",
+    "gui.eclipse.handbook.revival.step2.text": "Binde die Fragmente mit den gezeigten Materialien, um ein Wiederbelebungssiegel zu fertigen.",
+    "gui.eclipse.handbook.revival.step2.math": "%s Fragmente + Materialien → 1 Siegel",
+    "gui.eclipse.handbook.revival.step3.title": "III. Das Altar-Ritual",
+    "gui.eclipse.handbook.revival.step3.text": "Rechtsklicke mit dem Siegel auf den Altar, um unter den Gefallenen zu wählen; schleiche und benutze es erneut, um den Pakt zu besiegeln. Wer zurückkehrt, erwacht mit einem einzigen Herzen auf dem Schiff der Toten — und die Tür öffnet sich.",
+    "gui.eclipse.handbook.revival.step3.math": "1 Siegel → Rückkehr mit ❤ 1",
+    "gui.eclipse.handbook.revival.warning": "Der Extraktor nimmt niemals ein letztes Herz — er verweigert sich, wenn du weniger als %s besitzt. Und jedes gegebene Herz bleibt gegeben.",
+    "gui.eclipse.handbook.revival.aftercare": "Vitae-Splitter aus dem Splitterhandel des Altars lassen verlorene Herzen nachwachsen."
+  }
+}

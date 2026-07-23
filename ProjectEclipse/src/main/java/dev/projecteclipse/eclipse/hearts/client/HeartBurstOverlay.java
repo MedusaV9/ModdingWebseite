@@ -127,9 +127,11 @@ public final class HeartBurstOverlay {
         }
 
         // Only 1–2 remaining lives warrant the heartbeat: 0 lives is an event-banned
-        // ghost, who must not hear the death heartbeat forever.
+        // ghost, who must not hear the death heartbeat forever. Opt-out via the
+        // heartbeatSound settings toggle (B12) or reducedFx.
         int lives = ClientStateCache.lives;
         if (!EclipseClientConfig.reducedFx()
+                && EclipseClientConfig.heartbeatSound()
                 && lives >= 1 && lives <= 2
                 && minecraft.player.isAlive()
                 && minecraft.player.tickCount % 40 == 0) {

@@ -3,30 +3,30 @@ package dev.projecteclipse.eclipse.client.handbook.tabs;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Rules page: the v1 {@code client.RulesScreen} content (lang keys
- * {@code gui.eclipse.artifact.rules.line1..10}, kept verbatim so translations survive)
- * absorbed as a scrollable parchment panel. The standalone {@code RulesScreen} class was
- * deleted — its only opener was the v1 artifact popup this handbook replaced. Mouse wheel
- * or vertical drag scrolls (the screen shows the grab cursor while {@link #dragging()}); a
- * slim scrollbar marks the position.
+ * Rules page, Quiet Eclipse v3 (plans_v3 P3 §3.1): the ten event rules (lang keys
+ * {@code gui.eclipse.artifact.rules.line1..10}, kept verbatim so translations survive) as
+ * a flat scrolling text column directly on the panel — the v2 parchment texture is gone
+ * (nothing stretches, §2). Mouse wheel, vertical content drag or the shared
+ * {@link TabScrollbar} scroll; the screen shows the grab cursor while {@link #dragging()}.
+ * Presses are only consumed while there is actually something to scroll (B20 rule).
  */
 @OnlyIn(Dist.CLIENT)
 public class RulesTab extends HandbookTab {
-    private static final ResourceLocation PARCHMENT = handbookTexture("parchment_tile");
     private static final int RULE_LINE_COUNT = 10;
     private static final int LINE_HEIGHT = 11;
-    private static final int PADDING = 8;
+    /** Right-side inset reserved for the scrollbar + a small gap. */
+    private static final int SCROLLBAR_INSET = 8;
 
     private final List<FormattedCharSequence> lines = new ArrayList<>();
+    private final TabScrollbar scrollbar = new TabScrollbar();
     private double scrollAmount;
     private boolean dragging;
 
@@ -39,8 +39,8 @@ public class RulesTab extends HandbookTab {
     protected void onInit() {
         lines.clear();
         for (int i = 1; i <= RULE_LINE_COUNT; i++) {
-            lines.addAll(font.split(Component.translatable("gui.eclipse.artifact.rules.line" + i),
-                    width - 2 * PADDING - 8));
+            lines.addAll(font.split(EclipseLang.tr("gui.eclipse.artifact.rules.line" + i),
+                    width - SCROLLBAR_INSET));
             lines.add(FormattedCharSequence.EMPTY);
         }
         scrollAmount = Mth.clamp(scrollAmount, 0.0D, maxScroll());
@@ -56,35 +56,30 @@ public class RulesTab extends HandbookTab {
         if (alpha < 0.1F) {
             return;
         }
-        // Parchment panel behind the text (full texture squeezed into the rect).
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha * 0.85F);
-        guiGraphics.blit(PARCHMENT, x, y, 0, 0, width, height, width, height);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-
         guiGraphics.enableScissor(x, y, x + width, y + height);
-        int lineY = y + PADDING - (int) scrollAmount;
+        int lineY = y + 2 - (int) scrollAmount;
         for (FormattedCharSequence line : lines) {
             if (lineY > y - LINE_HEIGHT && lineY < y + height) {
-                guiGraphics.drawString(font, line, x + PADDING, lineY, withAlpha(TEXT_COLOR, alpha));
+                guiGraphics.drawString(font, line, x, lineY, withAlpha(TEXT_COLOR, alpha));
             }
             lineY += LINE_HEIGHT;
         }
         guiGraphics.disableScissor();
 
-        // Slim scrollbar on the right edge.
-        double max = maxScroll();
-        if (max > 0.0D) {
-            int track = height - 8;
-            int thumb = Math.max(12, (int) (track * (height / (double) (contentHeight()))));
-            int thumbY = y + 4 + (int) ((track - thumb) * (scrollAmount / max));
-            guiGraphics.fill(x + width - 3, y + 4, x + width - 1, y + 4 + track, withAlpha(0x3A2F52, alpha));
-            guiGraphics.fill(x + width - 3, thumbY, x + width - 1, thumbY + thumb, withAlpha(ACCENT_COLOR, alpha));
-        }
+        scrollbar.layout(x + width, y + 2, height - 4);
+        scrollbar.size(height, contentHeight());
+        scrollbar.render(guiGraphics, scrollAmount, alpha);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && inRect(mouseX, mouseY)) {
+        if (button != 0) {
+            return false;
+        }
+        if (scrollbar.mouseClicked(mouseX, mouseY, scrollAmount, value -> scrollAmount = value)) {
+            return true;
+        }
+        if (inRect(mouseX, mouseY) && maxScroll() > 0.0D) {
             dragging = true;
             return true;
         }
@@ -93,7 +88,13 @@ public class RulesTab extends HandbookTab {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (dragging && button == 0) {
+        if (button != 0) {
+            return false;
+        }
+        if (scrollbar.mouseDragged(mouseY, value -> scrollAmount = value)) {
+            return true;
+        }
+        if (dragging) {
             scrollAmount = Mth.clamp(scrollAmount - dragY, 0.0D, maxScroll());
             return true;
         }
@@ -102,7 +103,13 @@ public class RulesTab extends HandbookTab {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (dragging && button == 0) {
+        if (button != 0) {
+            return false;
+        }
+        if (scrollbar.mouseReleased()) {
+            return true;
+        }
+        if (dragging) {
             dragging = false;
             return true;
         }
@@ -111,7 +118,7 @@ public class RulesTab extends HandbookTab {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollXDelta, double scrollYDelta) {
-        if (inRect(mouseX, mouseY)) {
+        if (inRect(mouseX, mouseY) && maxScroll() > 0.0D) {
             scrollAmount = Mth.clamp(scrollAmount - scrollYDelta * LINE_HEIGHT * 2, 0.0D, maxScroll());
             return true;
         }
@@ -119,7 +126,7 @@ public class RulesTab extends HandbookTab {
     }
 
     private int contentHeight() {
-        return lines.size() * LINE_HEIGHT + 2 * PADDING;
+        return lines.size() * LINE_HEIGHT + 4;
     }
 
     private double maxScroll() {
@@ -128,6 +135,6 @@ public class RulesTab extends HandbookTab {
 
     @Override
     public boolean dragging() {
-        return dragging;
+        return dragging || scrollbar.dragging();
     }
 }
