@@ -10,14 +10,13 @@ import javax.annotation.Nullable;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import dev.projecteclipse.eclipse.client.handbook.CursorManager;
+import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
+import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
-import dev.projecteclipse.eclipse.registry.EclipseSounds;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -40,23 +39,23 @@ import org.lwjgl.glfw.GLFW;
  * decorative locked-gate sequence is never triggered under {@code reducedFx} (the screen shows
  * a plain disabled tooltip instead, per §3.8).</p>
  *
- * <p>Sound: {@code ui.error_glitch} is a W1-registered event that may not exist yet; per the
- * §2.3 procedural-fallback rule this plays the shipped {@code event.border_glitch} static
- * burst + a down-pitched {@code ui.tab} through {@code SimpleSoundInstance.forUI}, gated by
- * the {@code uiSounds} config (swap point documented in the P3-W8 wiring file).</p>
+ * <p>Sound: {@link UiSounds#error()} — W1's {@code ui.error_glitch} suite entry (which
+ * itself falls back to the shipped {@code event.border_glitch} re-pitched until the ledger
+ * event is registered, and handles the {@code uiSounds} gate + volume slider). Swap done
+ * per the P3-W8 wiring file.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class GlitchErrorTheater {
-    // Frozen "Quiet Eclipse" tokens (§2.1). Mirrored privately because W1's EclipseUiTheme
-    // lands in parallel — the integrator may swap these for the shared constants verbatim.
-    private static final int PANEL = 0xF2120B1E;
-    private static final int PANEL_RAISED = 0xF21A1128;
-    private static final int HAIRLINE = 0xFF2E2347;
-    private static final int ACCENT = 0xFFB98CFF;
-    private static final int TEXT = 0xFFEDE7F8;
-    private static final int DIM = 0xFF9A8FB8;
-    private static final int DANGER = 0xFFE86078;
-    private static final int VEIL = 0xB8060310;
+    // Frozen "Quiet Eclipse" tokens (§2.1) — W1's shared EclipseUiTheme constants
+    // (identical values to the private mirrors this class carried pre-integration).
+    private static final int PANEL = EclipseUiTheme.PANEL;
+    private static final int PANEL_RAISED = EclipseUiTheme.PANEL_RAISED;
+    private static final int HAIRLINE = EclipseUiTheme.HAIRLINE;
+    private static final int ACCENT = EclipseUiTheme.ACCENT;
+    private static final int TEXT = EclipseUiTheme.TEXT;
+    private static final int DIM = EclipseUiTheme.DIM;
+    private static final int DANGER = EclipseUiTheme.DANGER;
+    private static final int VEIL = EclipseUiTheme.VEIL;
 
     private static final String[] ERROR_KEYS = {
             "gui.eclipse.journey.error.1",
@@ -301,19 +300,12 @@ public final class GlitchErrorTheater {
     // ------------------------------------------------------------------ sound
 
     /**
-     * Procedural stand-in for W1's pending {@code ui.error_glitch} event (§2.3 fallback rule):
-     * the shipped border-glitch static burst layered over a down-pitched tab click.
+     * W1's glitchy error burst ({@code UiSounds.error()}, P3-W8 wiring swap point). The
+     * suite handles the {@code uiSounds} gate, the volume slider and the §2.3 procedural
+     * fallback while {@code ui.error_glitch} is not yet in the sound registry.
      */
     private void playGlitchBurst() {
-        if (!EclipseClientConfig.uiSounds()) {
-            return;
-        }
-        float pitchJitter = 0.9F + ThreadLocalRandom.current().nextFloat() * 0.2F;
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.getSoundManager().play(
-                SimpleSoundInstance.forUI(EclipseSounds.EVENT_BORDER_GLITCH.get(), pitchJitter, 0.5F));
-        minecraft.getSoundManager().play(
-                SimpleSoundInstance.forUI(EclipseSounds.UI_TAB.get(), 0.55F * pitchJitter, 0.6F));
+        UiSounds.error();
     }
 
     private static int withAlpha(int argb, float alphaScale) {

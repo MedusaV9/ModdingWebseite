@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CViewDistancePayload;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -22,65 +23,118 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Client side of the cinematic view-distance push (P2 R12). {@code FxPayloads} dispatches
- * {@link S2CViewDistancePayload} here (frozen entry point {@link #handle}).
+ * Client side of the server view-distance push. {@code FxPayloads} dispatches
+ * {@link S2CViewDistancePayload} here (frozen entry point {@link #handle}). Two server
+ * sources share this transport: P2's transient cinematic bumps ({@code
+ * cutscene.ViewDistanceService}) and P5-W34's persistent per-player pins ({@code
+ * devtools.dev.DevViewDistance} — which defers its sends while a cinematic session is
+ * active and re-sends on its falling edge, so the two never interleave).
  *
- * <p><b>Behaviour</b>: a payload with {@code chunks > 0} RAISES {@code options.renderDistance}
- * to that value for the duration of the cutscene session — only when
- * {@link EclipseClientConfig#cinematicViewDistance()} is enabled (the player toggle, default
- * ON) and only upward (a player already rendering further keeps their own setting). A payload
- * with {@code chunks == 0} restores the player's original value; so do logout/disconnect
- * (server-side end/watchdog sends the {@code 0} for the normal path).</p>
+ * <p><b>Behaviour</b> (WB-SLOTLOCK closes P5-W34's "client transport cannot lower an
+ * existing setting" limitation): a payload with {@code chunks > 0} overrides
+ * {@code options.renderDistance} for as long as the request stands —</p>
+ * <ul>
+ *   <li>while {@link EclipseClientConfig#allowServerRenderDistance()} is on (the §7.1
+ *       opt-out, default ON), the requested value is applied EXACTLY (clamped to the
+ *       vanilla 2–32 slider range) — server pins can now LOWER the effective render
+ *       distance;</li>
+ *   <li>otherwise, while {@link EclipseClientConfig#cinematicViewDistance()} is on, the
+ *       original upward-only cinematic semantics apply (a player already rendering
+ *       further keeps their own setting);</li>
+ *   <li>with both toggles off the request is held but nothing is touched.</li>
+ * </ul>
+ *
+ * <p>Both toggles are respected LIVE: a once-per-second tick check re-evaluates the
+ * standing request when either config value flips, restoring the player's own value the
+ * moment they opt out and re-applying if they opt back in. A payload with
+ * {@code chunks == 0} (cinematic end, {@code /dev viewdist unpin}) drops the request and
+ * restores; so do logout/disconnect. The player's own value is held in
+ * {@link #savedRenderDistance} — options.txt is never permanently mutated.</p>
  *
  * <p><b>Crash-robust</b> (mirrors {@code WaveOverlay}'s volume marker): the original render
  * distance is persisted to {@code config/}{@value #RESTORE_MARKER_NAME} before the first
  * mutation and the marker is deleted after a successful restore. If the session dies
- * mid-cutscene (kill -9, crash), the next launch's first client tick finds the marker,
- * restores the saved value, saves the options and deletes it — a bumped render distance can
- * never stick permanently.</p>
+ * mid-override (kill -9, crash), the next launch's first client tick finds the marker,
+ * restores the saved value, saves the options and deletes it — an overridden render
+ * distance can never stick permanently. (Persistent pins re-arrive on the next login via
+ * {@code DevViewDistance}'s login hook, so crash recovery never "loses" a pin.)</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class ViewDistanceClient {
-    /** Crash-recovery marker in the config dir: the pre-bump render distance, JSON. */
+    /** Crash-recovery marker in the config dir: the pre-override render distance, JSON. */
     private static final String RESTORE_MARKER_NAME = "eclipse-viewdistance-restore.json";
     private static final String MARKER_KEY = "renderDistance";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    /** Vanilla render-distance slider range (DevViewDistance clamps the same way). */
+    private static final int MIN_CHUNKS = 2;
+    private static final int MAX_CHUNKS = 32;
+    /** Config toggles are polled once per second — cheap, and plenty "live" for a TOML flip. */
+    private static final int TOGGLE_POLL_TICKS = 20;
 
-    /** The player's own render distance while a bump is active, or {@code -1} when inactive. */
+    /** The player's own render distance while an override is active, or {@code -1} when inactive. */
     private static int savedRenderDistance = -1;
+    /** The standing server request (pin or cinematic push), or {@code -1} when none. */
+    private static int requestedChunks = -1;
+    /** Last observed toggle pair (bit0 = allowServerRenderDistance, bit1 = cinematicViewDistance). */
+    private static int lastToggleBits = -1;
     /** One-shot flag: the crash-recovery marker check runs on the very first client tick. */
     private static boolean recoveryChecked;
+    private static int tickCounter;
 
     private ViewDistanceClient() {}
 
     /**
      * FROZEN entry point — called by {@code FxPayloads} on the client main thread.
-     * {@code chunks > 0} requests a temporary raise, {@code chunks == 0} restores.
+     * {@code chunks > 0} is a standing override request, {@code chunks == 0} drops it.
      */
     public static void handle(S2CViewDistancePayload payload) {
         Minecraft minecraft = Minecraft.getInstance();
         int chunks = payload.chunks();
         if (chunks <= 0) {
+            requestedChunks = -1;
             restore(minecraft);
             return;
         }
-        if (!EclipseClientConfig.cinematicViewDistance()) {
-            EclipseMod.LOGGER.info("ViewDistanceClient: ignoring cinematic bump to {} (player toggle off)", chunks);
+        requestedChunks = Mth.clamp(chunks, MIN_CHUNKS, MAX_CHUNKS);
+        apply(minecraft);
+    }
+
+    /**
+     * Applies the standing request under the current toggles: exact (may lower) with
+     * {@code allowServerRenderDistance}, upward-only with {@code cinematicViewDistance},
+     * hands-off (restoring anything already applied) with neither.
+     */
+    private static void apply(Minecraft minecraft) {
+        if (requestedChunks < 0) {
             return;
         }
         int current = minecraft.options.renderDistance().get();
-        if (savedRenderDistance < 0 && current >= chunks) {
-            return; // Already rendering at least this far — nothing to raise or restore.
+        int original = savedRenderDistance >= 0 ? savedRenderDistance : current;
+        int target;
+        if (EclipseClientConfig.allowServerRenderDistance()) {
+            target = requestedChunks;
+        } else if (EclipseClientConfig.cinematicViewDistance()) {
+            target = Math.max(requestedChunks, original);
+        } else {
+            EclipseMod.LOGGER.info(
+                    "ViewDistanceClient: holding server request of {} (both player toggles off)",
+                    requestedChunks);
+            restore(minecraft);
+            return;
+        }
+        if (target == current && savedRenderDistance < 0) {
+            return; // Nothing to change and nothing to restore later.
         }
         if (savedRenderDistance < 0) {
             // Crash safety: persist the original BEFORE the first mutation.
             savedRenderDistance = current;
             writeRestoreMarker(current);
         }
-        // A re-push (e.g. chained cutscenes) keeps the ORIGINAL saved value, never the bump.
-        minecraft.options.renderDistance().set(Math.max(chunks, minecraft.options.renderDistance().get()));
-        EclipseMod.LOGGER.info("ViewDistanceClient: cinematic render distance {} -> {} (will restore)",
-                savedRenderDistance, minecraft.options.renderDistance().get());
+        if (target != current) {
+            minecraft.options.renderDistance().set(target);
+            EclipseMod.LOGGER.info("ViewDistanceClient: server render-distance override {} -> {} (own value {} will restore)",
+                    current, target, savedRenderDistance);
+        }
     }
 
     /** Puts the player's own render distance back and drops the crash marker. */
@@ -94,18 +148,33 @@ public final class ViewDistanceClient {
         deleteRestoreMarker(); // Restore complete: the crash marker has nothing left to undo.
     }
 
-    /** First tick: crash recovery. */
+    /** First tick: crash recovery. Every second: live re-evaluation on config-toggle flips. */
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
         if (!recoveryChecked) {
             recoveryChecked = true;
             recoverCrashedBump(Minecraft.getInstance());
         }
+        if (++tickCounter % TOGGLE_POLL_TICKS != 0) {
+            return;
+        }
+        int toggleBits = (EclipseClientConfig.allowServerRenderDistance() ? 1 : 0)
+                | (EclipseClientConfig.cinematicViewDistance() ? 2 : 0);
+        if (toggleBits == lastToggleBits) {
+            return;
+        }
+        // Re-apply ONLY on a toggle flip — never every second, so a player manually
+        // moving the vanilla slider mid-override is not fought frame by frame.
+        lastToggleBits = toggleBits;
+        if (requestedChunks > 0) {
+            apply(Minecraft.getInstance());
+        }
     }
 
     /** Disconnect/logout always restores — the server-side watchdog cannot reach us anymore. */
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        requestedChunks = -1;
         restore(Minecraft.getInstance());
     }
 
@@ -122,7 +191,7 @@ public final class ViewDistanceClient {
         try {
             Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            EclipseMod.LOGGER.error("Failed to write {}; a crash mid-cutscene could keep the raised render distance", file, e);
+            EclipseMod.LOGGER.error("Failed to write {}; a crash mid-override could keep the server render distance", file, e);
         }
     }
 
@@ -137,8 +206,9 @@ public final class ViewDistanceClient {
 
     /**
      * First-tick crash recovery: a leftover marker means the previous session died between
-     * bump and restore — put its saved render distance back, persist the options (the crashed
-     * session may have saved the bumped value into options.txt) and drop the marker.
+     * override and restore — put its saved render distance back, persist the options (the
+     * crashed session may have saved the overridden value into options.txt) and drop the
+     * marker.
      */
     private static void recoverCrashedBump(Minecraft minecraft) {
         Path file = restoreMarkerPath();
@@ -151,7 +221,7 @@ public final class ViewDistanceClient {
                 int original = root.get(MARKER_KEY).getAsInt();
                 minecraft.options.renderDistance().set(original);
                 minecraft.options.save();
-                EclipseMod.LOGGER.info("Restored render distance {} left raised by a crashed cutscene session", original);
+                EclipseMod.LOGGER.info("Restored render distance {} left overridden by a crashed session", original);
             }
         } catch (IOException | RuntimeException e) {
             EclipseMod.LOGGER.error("Failed to restore render distance from {}", file, e);

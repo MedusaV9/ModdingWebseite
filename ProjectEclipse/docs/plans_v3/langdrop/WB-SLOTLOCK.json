@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "gui.eclipse.invlock.sealed_until": "Sealed until day %s",
+    "gui.eclipse.invlock.sealed": "Still sealed"
+  },
+  "de_de": {
+    "gui.eclipse.invlock.sealed_until": "Bis Tag %s versiegelt",
+    "gui.eclipse.invlock.sealed": "Noch versiegelt"
+  }
+}

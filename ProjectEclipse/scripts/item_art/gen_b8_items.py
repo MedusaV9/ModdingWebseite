@@ -2,7 +2,9 @@
 """Generate P4-B8's three 16x16 dark-gothic item sprites.
 
 The shapes are hand-authored pixel art (no noise/random fill):
-  * heart_extractor: violet claw-and-syringe/talon device
+  * heart_extractor: violet claw-and-syringe/talon device (repainted in the
+    WB-ART pass on the shared `eclipse_palette` ramp + finish pass — the
+    original claw tangle did not read at 16px)
   * glitch_shard: fractured magenta crystal with a hot glitch seam
   * heart_fragment: a jagged quarter of a crimson heart
 
@@ -10,9 +12,13 @@ Run from anywhere:
     python3 scripts/item_art/gen_b8_items.py
 """
 
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import eclipse_palette as ep  # noqa: E402
 
 SIZE = 16
 OUT = (
@@ -42,45 +48,37 @@ def blank() -> Image.Image:
 
 
 def heart_extractor() -> Image.Image:
-    img = blank()
-    d = ImageDraw.Draw(img)
+    """WB-ART repaint: syringe barrel on the diagonal, three distinct claw
+    prongs at the head (1px gaps so the outline pass separates them), crimson
+    blood chamber, steel T-plunger at the foot."""
+    img = ep.canvas()
 
-    # Three hooked extraction claws, each inked then highlighted.
-    claws = [
-        [(5, 6), (2, 5), (1, 2), (2, 1)],
-        [(6, 5), (5, 2), (6, 0), (7, 1)],
-        [(7, 6), (9, 3), (10, 2), (10, 4)],
-    ]
-    for points in claws:
-        d.line(points, fill=INK, width=3, joint="curve")
-        d.line(points, fill=PURPLE, width=1)
-    d.point((2, 1), fill=PALE)
-    d.point((6, 0), fill=PALE)
-    d.point((10, 2), fill=PALE)
+    # Claw head joint.
+    ep.put(img, ((4, 4), (5, 4), (4, 5), (5, 5)), ep.PURPLE_MID)
+    # Three grasping prongs with hooked tips.
+    ep.put(img, ((3, 3), (2, 2), (1, 1), (1, 2)), ep.PURPLE_MID)      # upper-left
+    ep.put(img, ((3, 5), (2, 5), (1, 4), (1, 3)), ep.PURPLE_DARK)     # left
+    ep.put(img, ((5, 3), (5, 2), (6, 1), (7, 1)), ep.PURPLE_DARK)     # up
+    ep.put(img, ((1, 1), (6, 1), (1, 3)), ep.ACCENT_DEEP)             # lit tips
 
-    # Heavy diagonal body.
-    body = [(4, 5), (6, 3), (13, 10), (11, 13)]
-    d.polygon(body, fill=INK)
-    d.polygon([(5, 5), (6, 4), (12, 10), (11, 12)], fill=DEEP_PURPLE)
-    d.line([(6, 5), (11, 10)], fill=LILAC, width=1)
+    # Barrel: 3px diagonal band from the claw joint to the plunger.
+    for i in range(7):
+        ep.put(img, ((6 + i, 4 + i),), ep.ACCENT_DEEP)    # lit upper edge
+        ep.put(img, ((5 + i, 5 + i),), ep.PURPLE_MID)     # core
+        ep.put(img, ((4 + i, 6 + i),), ep.PURPLE_DARK)    # shadowed lower edge
 
-    # Blood chamber and metal braces.
-    d.polygon([(6, 7), (7, 6), (10, 9), (9, 10)], fill=CRIMSON_DARK)
-    d.line([(7, 7), (9, 9)], fill=SCARLET, width=2)
-    d.point((7, 7), fill=PINK)
-    d.line([(4, 7), (7, 4)], fill=STEEL_LIGHT, width=1)
-    d.line([(10, 13), (13, 10)], fill=STEEL, width=2)
+    # Blood chamber riding the barrel core.
+    ep.put(img, ((7, 7), (8, 7), (7, 8), (8, 8), (9, 8), (8, 9), (9, 9)), ep.CRIMSON)
+    ep.put(img, ((8, 8), (9, 9)), ep.SCARLET)
 
-    # Plunger pommel and a long hooked syringe/talon tip.
-    d.polygon([(10, 12), (12, 10), (15, 13), (13, 15)], fill=INK)
-    d.polygon([(12, 11), (14, 13), (13, 14), (11, 12)], fill=PURPLE)
-    d.line([(11, 9), (14, 6), (15, 3)], fill=INK, width=2)
-    d.line([(12, 9), (14, 7), (15, 3)], fill=STEEL_LIGHT, width=1)
-    d.point((15, 3), fill=PALE)
+    # Steel T-plunger.
+    ep.put(img, ((11, 14), (12, 13), (13, 12), (14, 11)), ep.DIM)
+    ep.put(img, ((12, 14), (13, 13), (14, 12)), ep.HAIRLINE)
+    ep.put(img, ((14, 14),), ep.DIM)
 
-    # Tiny gothic rivets.
-    d.point((5, 5), fill=PALE)
-    d.point((11, 11), fill=LILAC)
+    ep.finish(img)
+    ep.put(img, ((7, 7),), ep.GLOW_WHITE)     # chamber glint
+    ep.put(img, ((2, 4),), ep.GLOW_MAGENTA)   # charge between the claws
     return img
 
 

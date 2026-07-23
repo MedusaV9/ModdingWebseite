@@ -13,11 +13,9 @@ import java.util.function.Consumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.sky.EclipseIrisState;
-import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.client.render.post.PostPipeline;
 import foundry.veil.api.client.render.post.PostProcessingManager;
-import foundry.veil.api.client.util.Easing;
 import foundry.veil.platform.VeilEventPlatform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -49,10 +47,11 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *       for the session (log-once).</li>
  * </ul>
  *
- * <p>W1 registers its own rows ({@code eclipse:world_grade}, {@code eclipse:sun_halo}) plus
- * backward-compatible default rows for {@code eclipse:limbo} / {@code eclipse:border_glitch}
- * that keep today's shaders alive until W3/W4 land; feature-owned {@link #register} calls
- * always replace a default row regardless of class-load order.</p>
+ * <p>W1 registers its own rows here ({@code eclipse:world_grade}, {@code eclipse:sun_halo});
+ * every other pipeline registers from its feature class's static init ({@code eclipse:limbo}
+ * from {@code LimboAmbience}, {@code eclipse:border_glitch} from {@code BorderFxRenderer},
+ * etc.). The W1 backward-compat default rows for limbo/border_glitch were removed once
+ * those v2 rows landed (P2-W3/W4 wiring notes sanctioned the deletion — WB-GHOSTFX).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class VeilPostController {
@@ -92,11 +91,8 @@ public final class VeilPostController {
     private static final int MAX_CONCURRENT = 3;
     /** A pipeline that throws this many times is disabled for the session (§1.1 audit rule). */
     private static final int MAX_FAILURES = 3;
-    /** Limbo grade fade-in length (~2 s), kept from v1. */
-    private static final int LIMBO_FADE_TICKS = 40;
-    private static final long LIMBO_FADE_MILLIS = LIMBO_FADE_TICKS * 50L;
 
-    private record Row(PipelineSpec spec, int order, boolean isDefault) {}
+    private record Row(PipelineSpec spec, int order) {}
 
     /** Lock-free for the per-frame feeder lookup; registration order lives in {@link Row#order}. */
     private static final Map<ResourceLocation, Row> ROWS = new ConcurrentHashMap<>();
@@ -112,9 +108,6 @@ public final class VeilPostController {
 
     private static int nextOrder;
 
-    /** Epoch millis of entering limbo, or {@code -1} while not in limbo (drives the fade). */
-    private static volatile long limboEnterMillis = -1L;
-
     static {
         registerBuiltins();
     }
@@ -129,7 +122,7 @@ public final class VeilPostController {
      * which class loads first.
      */
     public static synchronized void register(PipelineSpec spec) {
-        ROWS.put(spec.id(), new Row(spec, nextOrder++, false));
+        ROWS.put(spec.id(), new Row(spec, nextOrder++));
     }
 
     /**
@@ -165,17 +158,9 @@ public final class VeilPostController {
         // W1: screen-space sun halo around the CPU-projected SunScreen point (R2 fix).
         register(new PipelineSpec(SUN_HALO_POST, PipelinePriority.FEATURE,
                 VeilPostController::wantSunHalo, VeilPostController::feedSunHalo));
-        // Backward-compat rows: keep the v1 limbo grade and border glitch alive with their
-        // current shaders until W3/W4 register their v2 rows (which replace these).
-        registerDefault(new PipelineSpec(LIMBO_POST, PipelinePriority.GRADE,
-                VeilPostController::wantLimbo, VeilPostController::feedLimbo));
-        registerDefault(new PipelineSpec(BORDER_GLITCH_POST, PipelinePriority.FEATURE,
-                VeilPostController::wantBorderGlitch, VeilPostController::feedBorderGlitch));
-    }
-
-    /** Adds a compat row only when no feature row claimed the id yet (never overwrites). */
-    private static synchronized void registerDefault(PipelineSpec spec) {
-        ROWS.putIfAbsent(spec.id(), new Row(spec, nextOrder++, true));
+        // eclipse:limbo / eclipse:border_glitch register from LimboAmbience's /
+        // BorderFxRenderer's static init (the W1 backward-compat default rows they used to
+        // replace are gone — dead at runtime per P2-W3/W4 wiring, removed by WB-GHOSTFX).
     }
 
     // --- world_grade -------------------------------------------------------------------
@@ -248,38 +233,6 @@ public final class VeilPostController {
         return elevation * base;
     }
 
-    // --- limbo (compat row, replaced by W3) ------------------------------------------------
-
-    private static boolean wantLimbo() {
-        ClientLevel level = Minecraft.getInstance().level;
-        return level != null && level.dimension() == LimboDimension.LIMBO;
-    }
-
-    private static void feedLimbo(PostPipeline pipeline) {
-        pipeline.getUniform("Intensity").setFloat(limboIntensity());
-    }
-
-    /** Current limbo grade intensity in [0,1]; eased fade-in after entering limbo. */
-    private static float limboIntensity() {
-        long start = limboEnterMillis;
-        if (start < 0L) {
-            return 0.0F;
-        }
-        float linear = Mth.clamp((System.currentTimeMillis() - start) / (float) LIMBO_FADE_MILLIS, 0.0F, 1.0F);
-        return Easing.EASE_OUT_QUAD.ease(linear);
-    }
-
-    // --- border_glitch (compat row, replaced by W4) ----------------------------------------
-
-    private static boolean wantBorderGlitch() {
-        return EclipseFxState.borderProximity() > 0.01F;
-    }
-
-    private static void feedBorderGlitch(PostPipeline pipeline) {
-        pipeline.getUniform("Proximity").setFloat(EclipseFxState.borderProximity());
-        pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 100_000L) / 1000.0F);
-    }
-
     // ------------------------------------------------------------------ engine
 
     @SubscribeEvent
@@ -305,16 +258,6 @@ public final class VeilPostController {
 
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
-        ClientLevel level = Minecraft.getInstance().level;
-        boolean inLimbo = level != null && level.dimension() == LimboDimension.LIMBO;
-        if (inLimbo) {
-            if (limboEnterMillis < 0L) {
-                limboEnterMillis = System.currentTimeMillis();
-            }
-        } else {
-            limboEnterMillis = -1L;
-        }
-
         boolean gate = EclipseIrisState.postFxAllowed();
         DESIRED.clear();
         if (gate) {
@@ -354,7 +297,6 @@ public final class VeilPostController {
      */
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
-        limboEnterMillis = -1L;
         OVERRIDES.clear();
         synchronized (VeilPostController.class) {
             for (Row row : ROWS.values()) {

@@ -1,7 +1,10 @@
 package dev.projecteclipse.eclipse.limbo.door;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -35,6 +38,19 @@ public final class DoorPayloads {
     /** Sends a personal door pose cue ({@code S2CDoorCuePayload.POSE_*}) to one player. */
     public static void sendCue(ServerPlayer player, S2CDoorCuePayload payload) {
         PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    /**
+     * P2-W10 relog seam (WB-GHOSTFX): re-fires the door-glow FX cue at ONE player —
+     * {@code eclipse:fx/door_glow}, {@code a = 1/0} for on/off, exactly the shape
+     * {@code FxPayloads.sendFxEvent} broadcasts on state changes. The payload/handler
+     * already exist on W1's untouched {@code fx1} registrar; this is purely an additive
+     * per-player send owned inside {@code limbo/door} (the resync ownership carve-out).
+     * Called from {@link RespawnDoorApi#resyncGlowFor} on {@code PlayerLoggedInEvent}.
+     */
+    public static void sendDoorGlow(ServerPlayer player, Vec3 pos, boolean on) {
+        PacketDistributor.sendToPlayer(player,
+                new S2CFxEventPayload(FxPayloads.FX_DOOR_GLOW, pos, on ? 1.0F : 0.0F, 0.0F));
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */

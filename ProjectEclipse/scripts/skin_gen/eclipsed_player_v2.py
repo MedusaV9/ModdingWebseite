@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Skin v2 "Purple Mythic" generator (P6-W12, plans_v3 P6 §2.7).
+"""Skin v2 "Purple Mythic" generator (P6-W12 + WB-GHOSTFX upgrade, plans_v3 P6 §2.7).
 
-Writes three 64x64 RGBA canvases (vanilla WIDE player-skin layout, base + overlay
+Writes six 64x64 RGBA canvases (vanilla WIDE player-skin layout, base + overlay
 layers) with byte-for-byte deterministic pixels:
 
   assets/eclipse/textures/entity/eclipsed_player.png      the uniform player skin
   assets/eclipse/textures/entity/the_other.png            doppelganger derivative
   assets/eclipse/textures/entity/eclipsed_player_glow.png emissive mask (heart+veins+eyes)
+  assets/eclipse/textures/entity/eclipsed_player_arcs_{0,1,2}.png
+      three sparse lightning-arc overlay variants (transparent except the bolts),
+      frame-switched client-side as a brief additive flicker every 6-12 s per player
+      (EclipsedPlayerGlowLayer arc pass — WB-GHOSTFX)
 
 Design (frozen palette from the plan sheet): near-black charcoal-violet bodysuit
 #1C1826/#241E31 with woven dither; a glowing purple HEART dead-center chest (8x6
@@ -24,7 +28,9 @@ face column 3 (rows 8-15), applied to the base face always and to the hat face o
 where the hat is opaque.
 
 The glow mask carries alpha-graded pixels for `RenderType.eyes` (translucent-capable):
-heart core 255 / halo ~190, vein mains ~235, forks ~140, eyes 255 top / ~110 under-glow.
+heart core 255 / ring ~235 / halo ~215, vein mains ~235, forks ~140, eyes 255 top /
+~110 under-glow (WB-GHOSTFX strengthened the heart grades so the chest reads as the
+brightest emissive mass; the client layers a slow heartbeat alpha pulse on top).
 Everything else fully transparent. AI art may replace any PNG at the same path/size.
 
 Run from the ProjectEclipse root:
@@ -266,6 +272,9 @@ HEART_WIDTHS = (3, 6, 8, 8, 6, 3)
 
 
 def paint_heart(cv: Canvas):
+    # WB-GHOSTFX strengthen: slightly larger hot core/ring bands + lifted glow alphas
+    # so the chest heart is unmistakably the brightest emissive mass (the client adds
+    # a slow heartbeat alpha pulse on top of exactly these pixels).
     cx = 23.5
     for row, width in zip(HEART_ROWS, HEART_WIDTHS):
         x_start = int(round(cx - width / 2 + 0.01))
@@ -274,17 +283,18 @@ def paint_heart(cv: Canvas):
             dx = abs(gx + 0.5 - 24.0) / 4.0
             dy = abs(row + 0.5 - 25.0) / 3.0
             d = max(dx, dy) * 0.55 + (dx + dy) * 0.45
-            if d < 0.30:
+            if d < 0.34:
                 c, a = HEART_CORE, 255
-            elif d < 0.62:
-                c, a = HEART_RING, 220
+            elif d < 0.66:
+                c, a = HEART_RING, 235
             elif d < 0.92:
-                c, a = HEART_HALO, 190
+                c, a = HEART_HALO, 215
             else:
-                c, a = HEART_EDGE, 150
+                c, a = HEART_EDGE, 180
             cv.put(gx, row, c)
             glow(gx, row, c, a)
-    # 1px soft halo bleeding into the suit around the diamond (albedo only + low glow).
+    # 1px soft halo bleeding into the suit around the diamond (albedo + stronger glow
+    # bleed so the heart carries a visible aura even at the layer's pulse minimum).
     halo = []
     for row, width in zip(HEART_ROWS, HEART_WIDTHS):
         x_start = int(round(cx - width / 2 + 0.01))
@@ -292,8 +302,8 @@ def paint_heart(cv: Canvas):
     halo += [(23, 21), (24, 21), (23, 28), (24, 28)]
     for gx, gy in halo:
         if 20 <= gx <= 27 and 20 <= gy <= 31:
-            cv.put(gx, gy, mix(cv.get(gx, gy)[:3], HEART_EDGE, 0.55))
-            glow(gx, gy, HEART_EDGE, 90)
+            cv.put(gx, gy, mix(cv.get(gx, gy)[:3], HEART_EDGE, 0.65))
+            glow(gx, gy, HEART_EDGE, 130)
 
 
 # Vein path tables: (global_x, global_y) pixel runs. MAIN channels are 1px #B98CFF,
@@ -460,6 +470,52 @@ def build_glow() -> Canvas:
     return cv
 
 
+# ---------------------------------------------------------------- arc overlay frames
+# WB-GHOSTFX: three sparse "lightning arc" variants — jagged 1px violet bolts across a
+# different subset of body faces per frame, so the client's 2-tick frame switch reads
+# as one arc crawling over the body. Everything not a bolt stays fully transparent;
+# alphas stay <= 210 and the client pass scales them down further (horror-calm).
+ARC_CORE = 0xE7D6FF
+ARC_MAIN = 0xB98CFF
+ARC_DIM = 0x6E4DA8
+
+# (box, face, salt) per frame — torso always participates, limbs alternate.
+ARC_LAYOUT = (
+    (("body", "front", 1), ("body", "back", 2), ("arm_r", "front", 3), ("leg_l", "front", 4)),
+    (("body", "front", 5), ("body", "back", 6), ("arm_l", "front", 7), ("leg_r", "front", 8),
+     ("head", "back", 9)),
+    (("body", "front", 10), ("body", "right", 11), ("arm_r", "front", 12), ("arm_l", "back", 13),
+     ("leg_l", "front", 14)),
+)
+
+
+def draw_bolt(cv: Canvas, box: str, face: str, salt: int, frame: int):
+    """One deterministic jagged bolt down a face rect (±1px drift per row, rare spurs)."""
+    x0, y0, w, h = face_rect(box, face)
+    if w < 3 or h < 4:
+        return
+    x = x0 + 1 + hash32(frame, salt, 900) % (w - 2)
+    for step in range(h):
+        gy = y0 + step
+        x = min(x0 + w - 1, max(x0, x + hash32(step, salt, 901 + frame) % 3 - 1))
+        hot = hash32(x, gy, 902 + frame) % 4 == 0
+        cv.put(x, gy, ARC_CORE if hot else ARC_MAIN, 210 if hot else 160)
+        if hash32(step, salt, 903 + frame) % 5 == 0:  # 1px side spur
+            bx = x + (1 if hash32(step, salt, 904 + frame) % 2 == 0 else -1)
+            if x0 <= bx < x0 + w:
+                cv.put(bx, gy, ARC_DIM, 110)
+
+
+def build_arcs() -> list:
+    frames = []
+    for frame, bolts in enumerate(ARC_LAYOUT):
+        cv = Canvas()
+        for box, face, salt in bolts:
+            draw_bolt(cv, box, face, salt, frame)
+        frames.append(cv)
+    return frames
+
+
 # ---------------------------------------------------------------- preview sheet
 def composite_front(img: Image.Image) -> Image.Image:
     """16x32 front composite (base + overlay alpha-blended)."""
@@ -576,11 +632,15 @@ def main():
     player = build_player()
     other = build_the_other(player)
     glow_cv = build_glow()
+    arcs = build_arcs()
 
     player.img.save(OUT_DIR / "eclipsed_player.png")
     other.img.save(OUT_DIR / "the_other.png")
     glow_cv.img.save(OUT_DIR / "eclipsed_player_glow.png")
+    for i, arc in enumerate(arcs):
+        arc.img.save(OUT_DIR / f"eclipsed_player_arcs_{i}.png")
     print(f"skins    -> {OUT_DIR}/eclipsed_player.png, the_other.png, eclipsed_player_glow.png")
+    print(f"arcs     -> {OUT_DIR}/eclipsed_player_arcs_{{0,1,2}}.png")
     print(f"emissive -> {len(GLOW)} glow pixels")
 
     if args.preview:

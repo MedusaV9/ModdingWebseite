@@ -20,9 +20,10 @@ import javax.imageio.ImageIO;
  * brightness — they re-render additively via {@code RenderType.eyes}, so the surrounding
  * albedo stays dark to make the glow pass pop.</p>
  *
- * <p>{@code the_other.png} stays an exact derivative of the final
- * {@code uniform_skin.png} (spec §1.1: exactly two changes — pure-black eyes and a faint
- * purple face seam) so the doppelganger read is preserved.</p>
+ * <p>{@code the_other.png} is NOT painted here anymore: it is final art, generated (as an
+ * exact two-delta derivative of the shipped {@code eclipsed_player.png} — spec §1.1:
+ * pure-black eyes and a faint purple face seam) by
+ * {@code scripts/skin_gen/eclipsed_player_v2.py}. See {@link #writeTheOther()}.</p>
  *
  * Run from the ProjectEclipse root:
  * {@code java scripts/placeholder_gen/EntitySkinArtist.java}
@@ -49,7 +50,7 @@ public class EntitySkinArtist {
         writeSunmote();
         writeHerald();
         writeFerryman();
-        System.out.println("Painted 7 entity skins in " + DIR);
+        System.out.println("Painted 6 entity skins in " + DIR + " (the_other.png skipped — final art)");
     }
 
     // ------------------------------------------------------------------
@@ -223,31 +224,21 @@ public class EntitySkinArtist {
     }
 
     // ------------------------------------------------------------------
-    // the other (64x64, vanilla player-skin layout, derived from uniform_skin.png)
+    // the other (64x64, vanilla player-skin layout) — RETIRED, see below
     // ------------------------------------------------------------------
 
     /**
-     * Spec §1.1 pins this to EXACTLY two edits over the final-art uniform skin (any more
-     * detail would break the "indistinguishable from a teammate" read), applied to both the
-     * base face and the opaque hat-layer face.
+     * DELIBERATE NO-OP (WB-GHOSTFX, per P6-W12 wiring note 4): {@code the_other.png} is
+     * final art now, regenerated — with the same two frozen doppelganger deltas (pure-black
+     * 2x2 eyes at face cols 1-2/5-6 rows 11-12; {@code #8367A8} seam down face col 3 rows
+     * 8-15) at the same coordinates/colors — by {@code scripts/skin_gen/eclipsed_player_v2.py}
+     * from the shipped {@code eclipsed_player.png}. The old input this method derived from,
+     * {@code uniform_skin.png}, was deleted with the v2 skin, so the previous implementation
+     * crashed on {@code ImageIO.read} if this generator was re-run. Kept as a guard so
+     * re-running the Batch D painter can never crash on, or clobber, the shipped skin family.
      */
-    private static void writeTheOther() throws IOException {
-        BufferedImage img = ImageIO.read(DIR.resolve("uniform_skin.png").toFile());
-        int black = 0xFF000000;
-        int seam = c(0x8367A8).getRGB() | 0xFF000000;
-        for (int layerX : new int[] {8, 40}) {
-            // Pure-black 2x2 eyes at face columns 1-2 and 5-6, rows 11-12.
-            for (int y = 11; y <= 12; y++) {
-                for (int x : new int[] {1, 2, 5, 6}) {
-                    img.setRGB(layerX + x, y, black);
-                }
-            }
-            // Faint purple seam down the face center (column 3), full face height.
-            for (int y = 8; y <= 15; y++) {
-                img.setRGB(layerX + 3, y, seam);
-            }
-        }
-        ImageIO.write(img, "png", DIR.resolve("the_other.png").toFile());
+    private static void writeTheOther() {
+        System.out.println("the_other.png skipped (final art — owned by scripts/skin_gen/eclipsed_player_v2.py)");
     }
 
     // ------------------------------------------------------------------

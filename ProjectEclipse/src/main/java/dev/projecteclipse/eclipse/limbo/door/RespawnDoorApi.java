@@ -170,6 +170,34 @@ public final class RespawnDoorApi {
         sendCue(player, S2CDoorCuePayload.POSE_CLEAR);
     }
 
+    /**
+     * P2-W10 relog seam fix (WB-GHOSTFX, pure-additive): re-sends the door's CURRENT
+     * glow cue to one player. {@code client.ShipDoorGlow}'s desired state is
+     * client-transient (dropped on disconnect) and the {@code eclipse:fx/door_glow}
+     * event otherwise only travels on state changes — so without this login re-fire a
+     * relogging player sees no door glow until the next change (P2-W10 wiring
+     * "Login/relog" note). Glow mapping mirrors the multiblock's {@code LIT} rule: on
+     * for every state except {@link DoorState#SEALED}. No-op while limbo or the door is
+     * absent — the client's post-login default is already glow-off, so silence matches.
+     * The {@code eclipse:ship_door} anchor is re-sent by {@code FxAnchors} at login
+     * independently; event/anchor arrival order does not matter client-side.
+     */
+    public static void resyncGlowFor(ServerPlayer player) {
+        ServerLevel limbo = player.getServer().getLevel(LimboDimension.LIMBO);
+        if (limbo == null) {
+            return;
+        }
+        if (!(limbo.getBlockEntity(controllerPos(limbo)) instanceof RespawnDoorBlockEntity door)) {
+            return;
+        }
+        boolean on = door.doorState() != DoorState.SEALED;
+        // Same point publishAnchors() publishes for SHIP_DOOR (the client keys FX off the
+        // anchor and ignores this pos for door_glow — kept meaningful for logs/debugging).
+        int deckY = GhostShipBuilder.waterlineY(limbo) + 3;
+        DoorPayloads.sendDoorGlow(player,
+                new Vec3(GhostShipBuilder.DOOR_X + 1.0D, deckY + 3.5D, 0.5D), on);
+    }
+
     /** Global "the door refuses" rattle + sound (ghost knocks, denied revives). */
     public static void playLockedShudder(ServerLevel limbo) {
         BlockPos pos = controllerPos(limbo);

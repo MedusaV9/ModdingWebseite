@@ -58,6 +58,13 @@ tick or the integrator can turn the mailbox into a queue inside `handleGhostReve
 bob, deterministic whole-model micro-jitter (~19% of 3-tick windows, ±0.5px; every window
 ±1px during reveal), shadow radius 0, `shouldShowName` = false always.
 
+**WB-GHOSTFX update:** the bob now rides on a slower ±0.05-block drift sine (~15 s,
+per-entity phase), idle alpha shimmers 0.40 ± 0.04 (steady under `reducedFx`), and a
+nested `HeartGlowLayer` re-renders the model over `eclipsed_player_glow.png` with
+`RenderType.eyes` (alpha breathing 0.60–0.82 on the skin's ~2 s heartbeat) so the purple
+heart stays visible through the translucency at night. Contract, reveal flow and entity
+requirements are unchanged (see `docs/plans_v3/wiring/WB-GHOSTFX_wiring.md`).
+
 ## Testing once the entity lands
 
 1. Boot client into a world. Log check: `ghost renderer registered for eclipse:logout_ghost`.

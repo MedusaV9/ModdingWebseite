@@ -4,15 +4,20 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.entity.player.EclipsedPlayerGlowLayer;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.Util;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
@@ -39,9 +44,17 @@ import net.neoforged.api.distmarker.OnlyIn;
  * class is P4-B9's and may not exist at this worker's compile time — the frozen contract
  * (humanoid-sized LivingEntity) is all this renderer needs. Registered by lookup in
  * {@link GhostRenderers}.</p>
+ *
+ * <p><strong>WB-GHOSTFX refinements:</strong> a second, much slower vertical drift sine
+ * (~15 s period) under the bob plus a faint idle alpha shimmer (±{@value #SHIMMER_ALPHA})
+ * make the figure read as suspended rather than parked; and {@link HeartGlowLayer}
+ * re-renders the model over {@code eclipsed_player_glow.png} with {@code RenderType.eyes}
+ * so the purple heart (plus dim veins/eyes) stays fullbright THROUGH the 40% body
+ * translucency — the ghost is unmistakably a ghost <em>of the uniform skin</em>, readable
+ * at night. Both are allocation-free and deterministic per entity id.</p>
  */
 @OnlyIn(Dist.CLIENT)
-public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, GhostPlayerRenderer.GhostModel> {
+public final class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, GhostPlayerRenderer.GhostModel> {
     public static final ResourceLocation TEXTURE =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/entity/eclipsed_player.png");
 
@@ -49,12 +62,20 @@ public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, Ghos
     private static final float BASE_ALPHA = 0.40F;
     /** Baseline hover: +2px in model units. */
     private static final float HOVER_BLOCKS = 2.0F / 16.0F;
+    /** Slow whole-body drift under the bob: ±0.05 blocks over a ~15 s sine. */
+    private static final float DRIFT_BLOCKS = 0.05F;
+    private static final float DRIFT_SPEED = 0.021F;
+    /** Idle body-alpha shimmer amplitude (0.40 ± 0.04 — night readability preserved). */
+    private static final float SHIMMER_ALPHA = 0.04F;
+    private static final float SHIMMER_SPEED = 0.09F;
     private static final int NAME_RESOLVED_COLOR = 0xE7D6FF;
     private static final int NAME_SCRAMBLE_COLOR = 0x8367A8;
 
     public GhostPlayerRenderer(EntityRendererProvider.Context context) {
         // Shadow radius 0: a translucent spectre casting a hard blob shadow reads wrong.
         super(context, new GhostModel(context.bakeLayer(ModelLayers.PLAYER)), 0.0F);
+        // Heart glow through the translucency (same glow texture the living skin uses).
+        this.addLayer(new HeartGlowLayer(this));
     }
 
     @Override
@@ -82,7 +103,11 @@ public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, Ghos
         long now = Util.getMillis();
 
         float time = entity.tickCount + partialTick;
-        float bob = HOVER_BLOCKS + Mth.sin(time * 0.05F) * 0.035F;
+        // Bob (fast, small) layered over a much slower whole-body drift (WB-GHOSTFX);
+        // phases hashed per entity so two ghosts never float in lockstep.
+        float driftPhase = hash(entity.getId(), 0xD21F7) & 0xFF;
+        float bob = HOVER_BLOCKS + Mth.sin(time * 0.05F) * 0.035F
+                + Mth.sin((time + driftPhase) * DRIFT_SPEED) * DRIFT_BLOCKS;
 
         // Whole-model micro-jitter: a new deterministic offset every 3-tick window, active
         // ~19% of windows normally and every window while the reveal glitch is running.
@@ -95,7 +120,7 @@ public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, Ghos
             jitterZ = ((window >> 16 & 7) - 3.5F) / 3.5F * amplitude;
         }
 
-        this.model.alpha = computeAlpha(entity.getId(), reveal, now);
+        this.model.alpha = computeAlpha(entity.getId(), reveal, now, time);
 
         poseStack.pushPose();
         poseStack.translate(jitterX, bob, jitterZ);
@@ -108,10 +133,17 @@ public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, Ghos
         }
     }
 
-    /** Steady ~40%; while revealing, a 100 ms-bucket flicker between ~0.2 and ~0.62. */
-    private static float computeAlpha(int entityId, GhostRenderers.Reveal reveal, long nowMillis) {
+    /**
+     * Idle: ~40% with a slow ±{@value #SHIMMER_ALPHA} sine shimmer (calm under
+     * {@code reducedFx}); while revealing, a 100 ms-bucket flicker between ~0.2 and ~0.62.
+     */
+    private static float computeAlpha(int entityId, GhostRenderers.Reveal reveal, long nowMillis, float time) {
         if (reveal == null) {
-            return BASE_ALPHA;
+            if (EclipseClientConfig.reducedFx()) {
+                return BASE_ALPHA;
+            }
+            float shimmerPhase = hash(entityId, 0x5A11E) & 0xFF;
+            return BASE_ALPHA + Mth.sin((time + shimmerPhase) * SHIMMER_SPEED) * SHIMMER_ALPHA;
         }
         int bucket = hash(entityId, (int) (nowMillis / 100L));
         return Mth.clamp(BASE_ALPHA + ((bucket & 0xFF) / 255.0F - 0.5F) * 0.45F, 0.18F, 0.65F);
@@ -166,6 +198,48 @@ public class GhostPlayerRenderer extends LivingEntityRenderer<LivingEntity, Ghos
                 int packedOverlay, int color) {
             super.renderToBuffer(poseStack, buffer, packedLight, packedOverlay,
                     FastColor.ARGB32.multiply(color, FastColor.ARGB32.colorFromFloat(this.alpha, 1.0F, 1.0F, 1.0F)));
+        }
+    }
+
+    /**
+     * Heart-through-the-mist pass (WB-GHOSTFX): re-renders the posed ghost model over the
+     * skin family's shared glow texture ({@code eclipsed_player_glow.png} — heart, dim
+     * veins, eyes; transparent elsewhere) with {@code RenderType.eyes} at fullbright, so
+     * the purple heart stays visible through the 40% body translucency at any light level.
+     * Breathes {@value #GLOW_MIN}–{@value #GLOW_MAX} on the same ~2 s heartbeat as the
+     * living skin ({@link EclipsedPlayerGlowLayer#heartbeatAlpha}); steady mid-value under
+     * {@code reducedFx}. Skips invisible entities (mirrors the body pass) and no-ops
+     * forever if the glow texture is missing (one shared warning). Allocation-free.
+     */
+    @OnlyIn(Dist.CLIENT)
+    static final class HeartGlowLayer extends RenderLayer<LivingEntity, GhostModel> {
+        private static final RenderType GLOW_RENDER_TYPE =
+                RenderType.eyes(EclipsedPlayerGlowLayer.GLOW_TEXTURE);
+        /** Dimmer than the living skin's 0.75–1.0 pulse — spectral, but night-readable. */
+        private static final float GLOW_MIN = 0.60F;
+        private static final float GLOW_MAX = 0.82F;
+
+        HeartGlowLayer(GhostPlayerRenderer parent) {
+            super(parent);
+        }
+
+        @Override
+        public void render(PoseStack poseStack, MultiBufferSource bufferSource, int packedLight,
+                LivingEntity entity, float limbSwing, float limbSwingAmount, float partialTick,
+                float ageInTicks, float netHeadYaw, float headPitch) {
+            if (entity.isInvisible() || !EclipsedPlayerGlowLayer.glowTextureAvailable()) {
+                return;
+            }
+            float glowAlpha = EclipseClientConfig.reducedFx()
+                    ? (GLOW_MIN + GLOW_MAX) * 0.5F
+                    : EclipsedPlayerGlowLayer.heartbeatAlpha(entity.getId(),
+                            entity.tickCount + partialTick, GLOW_MIN, GLOW_MAX);
+            GhostModel model = this.getParentModel();
+            float bodyAlpha = model.alpha;
+            model.alpha = glowAlpha;
+            model.renderToBuffer(poseStack, bufferSource.getBuffer(GLOW_RENDER_TYPE),
+                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+            model.alpha = bodyAlpha;
         }
     }
 }

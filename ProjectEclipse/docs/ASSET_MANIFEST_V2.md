@@ -106,16 +106,21 @@ face boundaries).
 16×16). Orchestrator MAY optionally regenerate them at 256×256 in pixel-art style and
 downscale with nearest-neighbor — only replace if clearly better.
 
+WB-ART pass (2026-07-23): every row below is now **final pixel art (generated, drop-in
+replaceable)** — deterministic painters in `scripts/item_art/` (shared EclipseUiTheme
+palette in `scripts/item_art/eclipse_palette.py`). Byte-for-byte drop-in still allowed at
+the same paths/sizes if the orchestrator ever produces clearly better art.
+
 | Path | Size (px) | Alpha | Who | Hint |
 |---|---|---|---|---|
-| `assets/eclipse/textures/item/umbral_shard.png` | 16×16 | yes | worker first, image-gen optional | jagged violet crystal shard |
-| `assets/eclipse/textures/item/herald_core.png` | 16×16 | yes | worker first, image-gen optional | caged black sun orb |
-| `assets/eclipse/textures/item/ferryman_toll.png` | 16×16 | yes | worker first, image-gen optional | ancient ghostly coin |
-| `assets/eclipse/textures/item/heralds_lure.png` | 16×16 | yes | worker first, image-gen optional | shard bundle bound with sinew |
-| `assets/eclipse/textures/item/compass_of_watcher.png` | 16×16 | yes | worker first, image-gen optional | compass with an eye needle |
-| `assets/eclipse/textures/item/grave_dowser.png` | 16×16 | yes | worker first, image-gen optional | forked bone rod |
-| `assets/eclipse/textures/item/vitae_shard.png` | 16×16 | yes | worker first, image-gen optional | pulsing red-violet heart crystal |
-| `assets/eclipse/textures/item/umbral_pick.png` / `umbral_blade.png` | 16×16 | yes | worker first, image-gen optional | obsidian-violet tools |
+| `assets/eclipse/textures/item/umbral_shard.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_shards.py` | jagged violet crystal shard |
+| `assets/eclipse/textures/item/herald_core.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_relics.py` | caged black sun orb |
+| `assets/eclipse/textures/item/ferryman_toll.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_relics.py` | ancient ghostly coin |
+| `assets/eclipse/textures/item/heralds_lure.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_relics.py` | shard bundle bound with sinew |
+| `assets/eclipse/textures/item/compass_of_watcher_00..31.png` | 16×16 ×32 | yes | final pixel art (generated, drop-in replaceable) — `gen_trackers.py` | compass with an eye needle (32 angle frames) |
+| `assets/eclipse/textures/item/grave_dowser_00..31.png` | 16×16 ×32 | yes | final pixel art (generated, drop-in replaceable) — `gen_trackers.py` | forked bone rod (32 angle frames) |
+| `assets/eclipse/textures/item/vitae_shard.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_shards.py` | pulsing red-violet heart crystal |
+| `assets/eclipse/textures/item/umbral_pick.png` / `umbral_blade.png` | 16×16 | yes | final pixel art (generated, drop-in replaceable) — `gen_umbral_tools.py` | obsidian-violet tools |
 
 ## Procedural-by-worker ONLY (do NOT image-gen)
 
@@ -175,3 +180,38 @@ are deliberately UNTINTED (no biome color handler).
 | `assets/eclipse/textures/block/pale_moss_block.png` | 16×16 | no | sage mottle + pale sprout dots (also used by the carpet model) |
 | `assets/eclipse/textures/block/pale_hanging_moss.png` | 16×16 | yes | 3 wavering strands, pale tips (cross model, cutout) |
 | `assets/eclipse/textures/item/pale_hanging_moss.png` | 16×16 | yes | strand tuft icon (item/generated) |
+
+---
+
+## Addendum — WB-ART final pixel-art pass (2026-07-23)
+
+All remaining programmer-art item/block pixel placeholders were upgraded to
+**final pixel art (generated, drop-in replaceable)** by deterministic painters under
+`scripts/item_art/` (shared palette module `eclipse_palette.py` mirrors the frozen
+`EclipseUiTheme` tokens; shared finish pass = 2px black-purple edge, 3-tone shading,
+top-left rim light, selective 1px magenta/cyan glow accents, no noise fills).
+Paths/sizes/alpha are unchanged — byte-for-byte drop-in replacement stays possible.
+Full file-to-model wiring: `docs/plans_v3/wiring/WB-ART_wiring.md`.
+
+| Path | Size (px) | Alpha | Generator | Status |
+|---|---|---|---|---|
+| `assets/eclipse/textures/item/revive_sigil.png` | 16×16 | yes | `gen_relics.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/item/arm_artifact.png` | 16×16 | yes | `gen_relics.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/item/display_wand.png` | 16×16 | yes | `gen_display_wand.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/item/heart_extractor.png` | 16×16 | yes | `gen_b8_items.py` (repainted) | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/item/glitch_shard.png` | 16×16 | yes | `gen_b8_items.py` (unchanged — already read well) | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/item/heart_fragment.png` | 16×16 | yes | `gen_b8_items.py` (unchanged — already read well) | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/block/altar_top.png` | 16×16 | opaque | `gen_event_blocks.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/block/altar_side.png` | 16×16 | opaque | `gen_event_blocks.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/block/altar_bottom.png` | 16×16 | opaque | `gen_event_blocks.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/block/grave.png` | 16×16 | no (RGB) | `gen_event_blocks.py` | final pixel art (generated, drop-in replaceable) |
+| `assets/eclipse/textures/block/grave_side.png` | 16×16 | no (RGB) | `gen_event_blocks.py` | final pixel art (generated, drop-in replaceable) |
+
+NOT touched by WB-ART (out of scope per hard rules): hero art (`gui/title/background.png`,
+`logo.png`, `panorama_*`, sun/eclipse discs, artifact menu panel), all `textures/entity/*`
+(P6 pipeline, incl. `block/respawn_door*.png` which is painted by
+`scripts/geckolib_gen/mobs/respawn_door.py`), `block/classic/*` + `item/classic/*` (baked
+from real old textures), GUI nine-slices/handbook panels, and the P1-W1.4 pale garden set
+(evaluated — already shippable, deliberately pale/desaturated, not flat; generator
+`tools/palegarden/gen_textures.py` left as-is). `supply_beacon` / `eclipses_favor` have
+lang entries but no registered models/textures — nothing to regenerate.

@@ -79,6 +79,9 @@ public final class DevXboxCommands {
                 new DevCommandDoc("xboxevent.lockout.clear", DevCategory.XBOX,
                         "/dev xboxevent lockout clear (<player>|all)",
                         "dev.eclipse.doc.xboxevent.lockout.clear", Danger.SAFE, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("xboxevent.lockout.mode", DevCategory.XBOX,
+                        "/dev xboxevent lockout mode (voluntary|death|both)",
+                        "dev.eclipse.doc.xboxevent.lockout.mode", Danger.SAFE, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("xboxevent.reward.set", DevCategory.XBOX,
                         "/dev xboxevent reward set <buffId> <minutes>",
                         "dev.eclipse.doc.xboxevent.reward.set", Danger.SAFE, ClickAction.SUGGEST, 2),
@@ -125,7 +128,17 @@ public final class DevXboxCommands {
                                         .then(Commands.literal("all")
                                                 .executes(DevXboxCommands::lockoutClearAll))
                                         .then(Commands.argument("player", GameProfileArgument.gameProfile())
-                                                .executes(DevXboxCommands::lockoutClearPlayer))))
+                                                .executes(DevXboxCommands::lockoutClearPlayer)))
+                                .then(Commands.literal("mode")
+                                        .then(Commands.literal("voluntary")
+                                                .executes(context -> lockoutMode(context,
+                                                        XboxEventState.LockoutMode.VOLUNTARY)))
+                                        .then(Commands.literal("death")
+                                                .executes(context -> lockoutMode(context,
+                                                        XboxEventState.LockoutMode.DEATH)))
+                                        .then(Commands.literal("both")
+                                                .executes(context -> lockoutMode(context,
+                                                        XboxEventState.LockoutMode.BOTH)))))
                         .then(Commands.literal("reward")
                                 .then(Commands.literal("set")
                                         .then(Commands.argument("buffId", StringArgumentType.word())
@@ -216,6 +229,8 @@ public final class DevXboxCommands {
                 .filter(instance -> instance == state.instanceId()).count();
         source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.lockouts",
                 lockedThisInstance), false);
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.lockout_mode",
+                state.lockoutMode().name().toLowerCase(Locale.ROOT)), false);
 
         source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.portal",
                 state.portalPos() == null ? "-"
@@ -300,11 +315,32 @@ public final class DevXboxCommands {
         return cleared;
     }
 
+    private static int lockoutMode(CommandContext<CommandSourceStack> context,
+            XboxEventState.LockoutMode mode) {
+        CommandSourceStack source = context.getSource();
+        XboxEventState state = XboxEventState.get(source.getServer());
+        if (state.phase() != XboxEventState.Phase.OPEN
+                && state.phase() != XboxEventState.Phase.ANNOUNCED) {
+            source.sendFailure(Component.translatable("dev.eclipse.xbox.stop.idle"));
+            return 0;
+        }
+        state.setLockoutMode(mode);
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.lockout.mode",
+                mode.name().toLowerCase(Locale.ROOT), state.instanceId()), true);
+        return 1;
+    }
+
     private static int rewardSet(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
+        XboxEventState state = XboxEventState.get(source.getServer());
+        if (state.phase() != XboxEventState.Phase.OPEN
+                && state.phase() != XboxEventState.Phase.ANNOUNCED) {
+            source.sendFailure(Component.translatable("dev.eclipse.xbox.stop.idle"));
+            return 0;
+        }
         String buffId = StringArgumentType.getString(context, "buffId");
         int minutes = IntegerArgumentType.getInteger(context, "minutes");
-        XboxEventState.get(source.getServer()).setRewardOverride(buffId, minutes);
+        state.setRewardOverride(buffId, minutes);
         source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.reward.set", buffId, minutes), true);
         return 1;
     }
