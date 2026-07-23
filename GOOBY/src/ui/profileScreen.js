@@ -29,9 +29,71 @@ import { sessionXpSources, knownLifetimeXpSources } from './xpInfoSheet.js';
 // V4/G64 (§C-SYS2.8): „Rückblicke" row model (pure) — the player itself is
 // lazy-imported on tap so the recap chunk never rides the profile mount.
 import { historyRows, agoLabel } from './recapOverlay.logic.js';
+// V6/B3: passport chrome strings live in the owned v6 module — resolved
+// through the tx() fallback below until B2 commits the strings.js import pair.
+import { EN as THM_EN, DE as THM_DE } from '../data/strings/v6-screen-themes.js';
 
 const RING_R = 20;
 const RING_C = 2 * Math.PI * RING_R;
+
+/** V6/B3: t() with the module-local fallback (G52 tx() pattern).
+ * @param {string} key @param {Record<string, string|number>} [vars] */
+function tx(key, vars) {
+  const viaT = t(key, vars);
+  if (viaT !== key) return viaT;
+  let str = (getLang() === 'de' ? THM_DE : THM_EN)[key];
+  if (str == null) return key;
+  if (vars) for (const [k, v] of Object.entries(vars)) str = str.replaceAll(`{${k}}`, String(v));
+  return str;
+}
+
+// ---------------------------------------------------------------------------
+// V6/B3 — passport MRZ footer (PLAN6 Wave B / B3). Pure formatting of data
+// the screen already shows (name, level, joined date, fur skin) into two
+// machine-readable-zone style lines. Exported for test/screenThemeDetails.
+// ---------------------------------------------------------------------------
+
+/** Fixed MRZ line width (chars) — two lines, always exactly this long. */
+export const MRZ_WIDTH = 30;
+
+/**
+ * MRZ charset mapping: uppercase, DE umlauts transliterated (AE/OE/UE/SS),
+ * remaining diacritics stripped, every other run of non-[A-Z0-9] collapsed
+ * to a single '<' filler (the real-passport convention).
+ * @param {unknown} s
+ * @returns {string}
+ */
+function mrzField(s) {
+  return String(s ?? '')
+    .toUpperCase()
+    .replace(/Ä/g, 'AE').replace(/Ö/g, 'OE').replace(/Ü/g, 'UE').replace(/ß/gi, 'SS')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]+/g, '<')
+    .replace(/^<+|<+$/g, '');
+}
+
+/**
+ * Build the two passport MRZ footer lines from REAL profile data — pure and
+ * deterministic (UTC date parts), always exactly MRZ_WIDTH chars per line
+ * ('<'-padded, hard-truncated), charset [A-Z0-9<] only.
+ *   line 1: P<GBY{NAME}<<LVL{level}
+ *   line 2: {joined YYYYMMDD}<{FUR SKIN}<<GOOBY<PASS
+ * @param {{name?: unknown, level?: unknown, joined?: unknown, skin?: unknown}} [d]
+ * @returns {[string, string]}
+ */
+export function mrzLines(d = {}) {
+  const fit = (s) => (s.length > MRZ_WIDTH ? s.slice(0, MRZ_WIDTH) : s.padEnd(MRZ_WIDTH, '<'));
+  const level = Math.max(1, Math.floor(Number(d.level) || 1));
+  const at = new Date(Number(d.joined) || 0);
+  const ymd = Number.isFinite(at.getTime())
+    ? `${at.getUTCFullYear()}${String(at.getUTCMonth() + 1).padStart(2, '0')}${String(at.getUTCDate()).padStart(2, '0')}`
+    : '00000000';
+  const name = mrzField(d.name) || 'GOOBY';
+  return [
+    fit(`P<GBY${name}<<LVL${level}`),
+    fit(`${ymd}<${mrzField(d.skin)}<<GOOBY<PASS`),
+  ];
+}
 
 // V3/G33 (§B3): mechanical px→rem sweep (÷16) of this injected CSS string —
 // exemptions (1px hairlines/999px pills/shadows/@media px) per PLAN3 §B3.
@@ -115,6 +177,42 @@ const PROFILE_CSS = `
   :root[data-ui-scale="115"] .g23-pr-id .g23-pr-ring,
   :root[data-ui-scale="130"] .g23-pr-id .g23-pr-ring{margin-left:auto;}
 }
+/* ── V6/B3: passport ID card (PLAN6 Wave B / B3 — presentation only) ──────
+   Cover band + coin seal, rounded-square photo page with corner ticks,
+   passport field rows, .ac-stamp entry stamps re-inked to the A2 passport
+   accent, and the tabular-nums MRZ footer (nowrap + hidden overflow so it
+   clips safely at 320px). Rotated stamps live in their own padded row, so
+   nothing rotated can clip inside the overflow:hidden card. */
+.b3-pass{padding:0;overflow:hidden;}
+.b3-pass-cover{display:flex;align-items:center;gap:0.5rem;padding:0.5625rem 0.875rem;background:linear-gradient(180deg,var(--thm-accent,#4fa8a0),var(--thm-accent-dark,#3d8a83));color:#fff;}
+.b3-pass-seal{flex:none;width:1.625rem;height:1.625rem;background:var(--acui-coin) center/contain no-repeat;}
+.b3-pass-cover-word{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.875rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;text-shadow:0 1px 0 rgba(74,59,54,.2);}
+.b3-pass-cover-kind{flex:none;margin-left:auto;font-size:0.5625rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;opacity:.85;}
+.b3-pass-page{padding:0.75rem 0.875rem 0.25rem;}
+.b3-pass-photo{flex:none;position:relative;display:inline-flex;padding:0.3125rem;}
+.b3-pass .g23-pr-portrait{border-radius:0.75rem;background:var(--paper-shade);}
+.b3-pass-photo::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.75;background:
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) left top/0.75rem 0.125rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) left top/0.125rem 0.75rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) right top/0.75rem 0.125rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) right top/0.125rem 0.75rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) left bottom/0.75rem 0.125rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) left bottom/0.125rem 0.75rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) right bottom/0.75rem 0.125rem,
+  linear-gradient(var(--thm-accent,#4fa8a0),var(--thm-accent,#4fa8a0)) right bottom/0.125rem 0.75rem;
+  background-repeat:no-repeat;}
+.b3-pass-field{display:flex;flex-direction:column;margin-bottom:0.3125rem;min-width:0;}
+.b3-pass-k{font-size:0.5625rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--thm-accent-dark,#3d8a83);opacity:.9;}
+.b3-pass-v{font-size:0.875rem;font-weight:800;color:var(--brown);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.b3-pass-field-name .b3-pass-v{font-size:1.125rem;}
+.b3-pass .g23-pr-ring-fg{stroke:var(--thm-accent,var(--teal));}
+.b3-pass-stamps{display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem 0.875rem;padding:0.4375rem 1rem 0.3125rem;}
+.b3-pass-stamp.ac-stamp{border-width:0.125rem;border-color:var(--thm-accent-dark,#3d8a83);color:var(--thm-accent-dark,#3d8a83);background:var(--thm-soft,rgba(79,168,160,.16));font-size:0.625rem;padding:0.25rem 0.625rem;letter-spacing:0.04em;}
+.b3-pass-stamp.ac-stamp:nth-child(2){transform:rotate(4deg);}
+.b3-pass-stamp.ac-stamp:nth-child(3){transform:rotate(-3deg);}
+.b3-pass-mrz{margin:0.25rem 0.875rem 0.75rem;padding-top:0.4375rem;border-top:0.125rem dashed rgba(74,59,54,.2);font-variant-numeric:tabular-nums;font-size:0.6875rem;font-weight:700;line-height:1.55;letter-spacing:0.08em;color:var(--brown);opacity:.5;}
+.b3-pass-mrz span{display:block;white-space:nowrap;overflow:hidden;}
+/* ── end V6/B3 passport ── */
 `;
 
 /** V3/FIX-C: make long DE compounds line-breakable. Chrome's hyphens:auto
@@ -223,14 +321,53 @@ export function registerProfileScreen({ store, ui, audio, sceneManager }) {
       const best = state.minigames?.best ?? {};
       const plays = state.minigames?.plays ?? {};
 
+      // ── V6/B3: the ① header card reads as a passport — cover band with
+      // wordmark + coin seal, photo page with corner ticks (same
+      // .g23-pr-portrait node, so the captureFrame swap keeps working),
+      // passport field rows, decorative data-driven entry stamps and the
+      // MRZ footer built by the pure mrzLines() helper. Presentation only —
+      // every value was already on this screen, and the stamps read save
+      // data the profile already carries (vacation trips, recap history,
+      // achievements unlocked — no new state).
       body.innerHTML = `
-        <div class="g23-pr-card">
-          <div class="g23-pr-id">
-            <span class="g23-pr-portrait">${icon('rabbit', 40)}</span>
+      ${(() => {
+        const mrz = mrzLines({
+          name: t('profile.name'),
+          level,
+          joined: Number(state.createdAt) || now(),
+          skin: skinName,
+        });
+        const stamps = [];
+        const vacTrips = Math.max(0, Math.floor(Number(state.vacation?.trips) || 0));
+        if (vacTrips > 0) stamps.push(tx('thm.passport.stamp.vacations', { n: vacTrips }));
+        const recapHist = Array.isArray(state.recap?.history) ? state.recap.history : [];
+        const lastRecapLevel = recapHist.reduce(
+          (mx, r) => Math.max(mx, Math.floor(Number(r?.level) || 0)), 0);
+        if (lastRecapLevel > 0) stamps.push(tx('thm.passport.stamp.recap', { level: lastRecapLevel }));
+        const awardCount = Object.keys(state.achievements?.unlocked ?? {}).length;
+        if (awardCount > 0) stamps.push(tx('thm.passport.stamp.awards', { n: awardCount }));
+        return `
+        <div class="g23-pr-card b3-pass">
+          <div class="b3-pass-cover">
+            <span class="b3-pass-seal" aria-hidden="true"></span>
+            <span class="b3-pass-cover-word">${tx('thm.passport.cover')}</span>
+            <span class="b3-pass-cover-kind">${tx('thm.passport.kind')}</span>
+          </div>
+          <div class="g23-pr-id b3-pass-page">
+            <span class="b3-pass-photo"><span class="g23-pr-portrait">${icon('rabbit', 40)}</span></span>
             <span class="g23-pr-idbody">
-              <div class="g23-pr-name">${t('profile.name')}</div>
-              <div class="g23-pr-sub">${t('profile.joined', { date: dateStr })}</div>
-              <div class="g23-pr-sub">${t('profile.skin')}: ${skinName}</div>
+              <div class="b3-pass-field b3-pass-field-name">
+                <span class="b3-pass-k">${tx('thm.passport.field.name')}</span>
+                <span class="b3-pass-v">${t('profile.name')}</span>
+              </div>
+              <div class="b3-pass-field">
+                <span class="b3-pass-k">${tx('thm.passport.field.since')}</span>
+                <span class="b3-pass-v">${dateStr}</span>
+              </div>
+              <div class="b3-pass-field">
+                <span class="b3-pass-k">${tx('thm.passport.field.fur')}</span>
+                <span class="b3-pass-v">${skinName}</span>
+              </div>
             </span>
             <span class="g23-pr-ring">
               <svg width="52" height="52" viewBox="0 0 52 52">
@@ -245,7 +382,15 @@ export function registerProfileScreen({ store, ui, audio, sceneManager }) {
               </span>
             </span>
           </div>
-        </div>
+          ${stamps.length === 0 ? '' : `
+          <div class="b3-pass-stamps" aria-hidden="true">
+            ${stamps.map((label) => `<span class="ac-stamp b3-pass-stamp">${label}</span>`).join('')}
+          </div>`}
+          <div class="b3-pass-mrz" aria-hidden="true">${
+            /* the MRZ filler IS '<' — escape it or innerHTML eats the line */
+            mrz.map((line) => `<span>${line.replace(/</g, '&lt;')}</span>`).join('')}</div>
+        </div>`;
+      })()}
         ${(() => {
           // ── V4/G69 (§C-SYS3): profile entry + top XP sources. Lifetime is
           // explicitly the exact counter-derived subset; variable/capped

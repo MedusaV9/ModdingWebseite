@@ -5847,3 +5847,339 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
 }
 
 /* ========================== end V6/A2 THEMES ============================= */
+
+/* ========================================================================== */
+/* V6/B3 SCREEN-WORLDS — the shop as a cozy IKEA store (PLAN6 Wave B / B3)    */
+/*                                                                            */
+/* Presentation only: no catalog/flow change. Cards sit ON birch shelf        */
+/* planks (per-card ::after boards that meet across the 0.625rem grid gap     */
+/* into one continuous shelf per row, ::before bracket nubs underneath,       */
+/* contact shadows), the section labels become little hanging aisle tags,     */
+/* one big aisle sign under the tab bar echoes the active category, a         */
+/* scalloped awning strip sits under the header, and price pills read as      */
+/* hanging tags (punch-hole + a gentle alternate tilt). Everything rides      */
+/* the A2 --thm-* theme vars with the shop-blue fallbacks; the decorate       */
+/* panel's .shop-card clones are untouched (all shelf rules are scoped to     */
+/* the shopScreen-stamped .b3-shelf grids). Rotated bits stay clear of        */
+/* clipping: the aisle sign carries its own top padding for the strings,      */
+/* .b3-shelf pads its sides so planks never overflow .shop-body, and the      */
+/* tag tilt is a ≤3° transform well inside each card's box.                   */
+/* ========================================================================== */
+
+/* --- scalloped awning strip under the shop header ------------------------ */
+.b3-awning {
+  flex: none;
+  position: relative;
+  height: 1rem;
+  margin: -0.125rem 0 0.75rem;
+  border-radius: 0.375rem 0.375rem 0 0;
+  background: repeating-linear-gradient(90deg, var(--thm-accent, #6f9bd6) 0 1.5rem, var(--white) 1.5rem 3rem);
+  box-shadow: inset 0 0.125rem 0 rgba(255, 255, 255, 0.35), 0 0.1875rem 0.5rem rgba(74, 59, 54, 0.14);
+  pointer-events: none;
+}
+.b3-awning::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 0.6875rem;
+  background:
+    radial-gradient(circle at 0.75rem 0, var(--thm-accent, #6f9bd6) 0.625rem, transparent 0.6875rem),
+    radial-gradient(circle at 2.25rem 0, var(--white) 0.625rem, transparent 0.6875rem);
+  background-size: 3rem 0.6875rem;
+  background-repeat: repeat-x;
+}
+
+/* --- big aisle sign (first element in the scrolling body) ---------------- */
+.b3-aisle {
+  display: flex;
+  justify-content: center;
+  padding: 0.625rem 0 0.375rem; /* top padding hosts the hanging strings */
+}
+.b3-aisle-sign {
+  position: relative;
+  display: inline-block;
+  padding: 0.3125rem 1.125rem 0.4375rem;
+  border-radius: 0.625rem;
+  background: linear-gradient(180deg, var(--thm-accent, #6f9bd6), var(--thm-accent-dark, #557fb8));
+  color: var(--white);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(74, 59, 54, 0.18);
+  transform: rotate(-2deg);
+  box-shadow: inset 0 -0.1875rem 0 rgba(74, 59, 54, 0.16), 0 0.25rem 0.625rem var(--thm-soft, rgba(111, 155, 214, 0.3));
+}
+.b3-aisle-sign::before,
+.b3-aisle-sign::after {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  width: 0.125rem;
+  height: 0.5625rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.32);
+}
+.b3-aisle-sign::before {
+  left: 20%;
+}
+.b3-aisle-sign::after {
+  right: 20%;
+}
+
+/* --- shelf grids: planks + brackets + contact shadows --------------------- */
+.b3-shelf {
+  /* side padding hosts the half-gap plank extensions (no .shop-body
+     overflow); extra row/bottom room hosts plank + bracket */
+  padding: 0 0.3125rem 1.25rem;
+  row-gap: 1.5rem;
+}
+.b3-shelf .shop-card {
+  /* keep the card's own soft shadow + add the on-the-board contact shadow */
+  box-shadow: 0 3px 12px rgba(74, 59, 54, 0.08), 0 0.5625rem 0.375rem -0.3125rem rgba(74, 59, 54, 0.2);
+}
+.b3-shelf .shop-card::after {
+  /* the shelf plank: extends half the grid gap each side so neighbouring
+     planks meet into one continuous board per row (visible joints read as
+     real shelf-board seams) */
+  content: '';
+  position: absolute;
+  left: -0.3125rem;
+  right: -0.3125rem;
+  bottom: -0.75rem;
+  height: 0.5625rem;
+  border-radius: 0.1875rem;
+  background: linear-gradient(180deg, #ecd5ae, #d9b98d 55%, #c9a97a);
+  box-shadow: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.55), 0 0.25rem 0.375rem rgba(74, 59, 54, 0.16);
+  pointer-events: none;
+}
+.b3-shelf .shop-card::before {
+  /* bracket nub under the plank */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -1.1875rem;
+  width: 0.4375rem;
+  height: 0.5rem;
+  margin-left: -0.21875rem;
+  border-radius: 0 0 0.1875rem 0.1875rem;
+  background: linear-gradient(180deg, #c9a97a, #a9885c);
+  box-shadow: 0 0.125rem 0.25rem rgba(74, 59, 54, 0.2);
+  pointer-events: none;
+}
+
+/* --- hanging aisle tags (section labels) ---------------------------------- */
+.screen-shop .shop-section {
+  display: inline-block;
+  position: relative;
+  margin: 1.25rem 0.375rem 0.625rem;
+  padding: 0.25rem 0.8125rem 0.3125rem;
+  border-radius: 0.5rem;
+  background: var(--paper);
+  color: var(--thm-accent-dark, #557fb8);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  opacity: 1;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 0.125rem 0.375rem rgba(74, 59, 54, 0.12);
+}
+.screen-shop .shop-section::before {
+  /* the little string up to the shelf above */
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  left: 1.125rem;
+  width: 0.125rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.28);
+}
+
+/* --- price pills → hanging tags ------------------------------------------ */
+.screen-shop .shop-card .shop-price {
+  background: var(--thm-accent, var(--leaf));
+  box-shadow: inset 0 -0.0938rem 0 var(--thm-accent-dark, var(--leaf-dark));
+}
+.screen-shop .shop-card .shop-price::before {
+  /* punch hole of the hanging tag */
+  content: '';
+  flex: none;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(74, 59, 54, 0.22);
+}
+.b3-shelf .shop-card:nth-child(even) .shop-price {
+  transform: rotate(-3deg); /* hand-placed AC feel; ≤3° stays inside the card */
+}
+
+/* --- decor swatches sit on the same shelf language ------------------------ */
+.screen-shop .swatch-row {
+  padding: 0 0.3125rem 1.125rem;
+}
+.screen-shop .swatch::after {
+  content: '';
+  position: absolute;
+  left: -0.3125rem;
+  right: -0.3125rem;
+  bottom: -0.6875rem;
+  height: 0.5rem;
+  border-radius: 0.1875rem;
+  background: linear-gradient(180deg, #ecd5ae, #d9b98d 55%, #c9a97a);
+  box-shadow: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.55), 0 0.25rem 0.375rem rgba(74, 59, 54, 0.16);
+  pointer-events: none;
+}
+
+/* --- the one loud IKEA note: butter-yellow coins pill ---------------------- */
+.screen-shop .shop-coins {
+  background: var(--yellow);
+  color: var(--brown);
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.16), 0 2px 6px rgba(224, 176, 74, 0.4);
+}
+
+/* --- checkout counter: accent lip on the buy bar --------------------------- */
+.screen-shop .shop-buybar {
+  border-top: 0.25rem solid var(--thm-accent, #6f9bd6);
+}
+
+/* ── V6/B3: the album as a scrapbook (PLAN6 Wave B / B3) ────────────────────
+   The A2 kraft-gold theme (--thm-* on .screen-album) supplies the drifting
+   craft-table backdrop; these rules turn the CARDS into scrapbook pages:
+   kraft paper faces with a stitched inset seam, washi-tape strips pinning
+   each page down, sticker slots as softly tilted photo mounts, and the Fotos
+   grid as a polaroid wall (deterministic per-index tilt — polaroidJitter()
+   in albumScreen.js sets --b3-tilt). Locked stickers keep the V5 mystery
+   presentation untouched; scroll-snap on .g34-sb-pager is untouched (only
+   top padding is added so tape overhang survives the pager's clip box). */
+
+/* --- kraft scrapbook pages (collections page + every sticker-book page) --- */
+.screen-album .g23-al-page,
+.screen-album .g34-sb-page {
+  position: relative;
+  background:
+    radial-gradient(rgba(181, 132, 69, 0.1) 0.0469rem, transparent 0.0781rem) 0 0 / 0.6875rem 0.6875rem,
+    radial-gradient(rgba(255, 255, 255, 0.5) 0.0469rem, transparent 0.0781rem) 0.3438rem 0.3438rem / 0.6875rem 0.6875rem,
+    linear-gradient(180deg, #faf1e0, #f3e6cd);
+  outline: 1px dashed rgba(181, 132, 69, 0.4); /* scrapbook stitching */
+  outline-offset: -0.4375rem;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.28), var(--shadow-soft);
+}
+
+/* washi-tape strips pinning the page's top corners onto the craft table —
+   semi-transparent so the page edge reads through the tape. Both strips
+   overhang UPWARD only (never sideways): the sticker-book pager clips at its
+   own box, and the padding-top compensation below gives the lift room. */
+.screen-album .g23-al-page::before,
+.screen-album .g34-sb-page::before,
+.screen-album .g23-al-page::after,
+.screen-album .g34-sb-page::after {
+  content: '';
+  position: absolute;
+  top: -0.3125rem;
+  width: 3.125rem;
+  height: 0.875rem;
+  border-radius: 0.0938rem;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.42) 0 0.1563rem, transparent 0.1563rem 0.4375rem),
+    rgba(214, 163, 95, 0.45);
+  box-shadow: 0 0.0625rem 0.1875rem rgba(74, 59, 54, 0.12);
+  pointer-events: none;
+}
+.screen-album .g23-al-page::before,
+.screen-album .g34-sb-page::before {
+  left: 1.125rem;
+  transform: rotate(-5deg);
+}
+.screen-album .g23-al-page::after,
+.screen-album .g34-sb-page::after {
+  right: 1.125rem;
+  transform: rotate(4deg);
+}
+/* padding compensation (PLAN6): overflow-x:auto clips BOTH axes, so the snap
+   viewport gets headroom for the tape lift — snap geometry is x-only and the
+   pages keep flex-basis 100%, so scroll-snap survives unchanged. */
+.screen-album .g34-sb-pager {
+  padding-top: 0.5625rem;
+}
+
+/* --- sticker slots: softly tilted photo mounts glued into the page -------- */
+.screen-album .g34-sb-slot {
+  background: #fffdf8;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.18), 0 0.125rem 0.3125rem rgba(74, 59, 54, 0.1);
+  transform: rotate(-0.65deg);
+}
+.screen-album .g34-sb-grid > .g34-sb-slot:nth-child(even) {
+  transform: rotate(0.55deg);
+}
+/* locked mystery slots stay matte kraft (V5 rule: the „?" box, never <img>) */
+.screen-album .g34-sb-slot.g34-locked {
+  background: rgba(255, 253, 248, 0.6);
+}
+.screen-album .g34-sb-mystery {
+  background: rgba(214, 163, 95, 0.16);
+  color: rgba(148, 106, 58, 0.5);
+}
+
+/* --- collections: owned art tiles get a white photo-mat, missing slots turn
+   into pencil-sketch outlines waiting to be filled in ---------------------- */
+.screen-album .g23-al-slot.g23-owned .g23-al-art {
+  box-shadow: 0 0 0 0.2188rem #fffdf8, 0 0 0 calc(0.2188rem + 1px) rgba(181, 132, 69, 0.25), 0 0.1875rem 0.375rem rgba(74, 59, 54, 0.14);
+}
+.screen-album .g23-al-grid > .g23-al-slot:nth-child(odd) .g23-al-art {
+  transform: rotate(-1.1deg);
+}
+.screen-album .g23-al-grid > .g23-al-slot:nth-child(even) .g23-al-art {
+  transform: rotate(0.9deg);
+}
+.screen-album .g23-al-grid {
+  padding: 0.25rem 0.125rem; /* rotation + mat overhang headroom */
+}
+.screen-album .g23-al-slot.g23-missing .g23-al-art {
+  background: rgba(181, 132, 69, 0.08) !important; /* base rule is !important */
+  box-shadow: none;
+  outline: 1px dashed rgba(181, 132, 69, 0.45);
+  outline-offset: -0.1875rem;
+}
+
+/* --- Fotos tab: the polaroid wall (JS sets --b3-tilt deterministically) --- */
+.screen-album .g59-ph-grid {
+  gap: 0.6875rem 0.5625rem;
+  padding: 0.4375rem 0.1875rem 0.3125rem; /* tape + tilt headroom */
+}
+.screen-album .g59-ph-cell.b3-polaroid {
+  background: #fdfbf5;
+  border-radius: 0.1875rem;
+  overflow: visible;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.16), 0 0.1875rem 0.4375rem rgba(74, 59, 54, 0.16);
+  transform: rotate(var(--b3-tilt, 0deg));
+}
+.screen-album .g59-ph-cell.b3-polaroid .g59-ph-img {
+  /* white frame + classic thick polaroid chin. Explicit calc() sizes — an
+     absolutely-positioned REPLACED element with width:auto renders at its
+     intrinsic pixel size, so inset shorthand alone cannot shrink an <img>. */
+  inset: 0.3125rem auto auto 0.3125rem;
+  width: calc(100% - 0.625rem);
+  height: calc(100% - 1.3125rem);
+  border-radius: 0.125rem;
+  background: rgba(74, 59, 54, 0.08);
+}
+/* a short washi strip holds each polaroid to the wall */
+.screen-album .g59-ph-cell.b3-polaroid::after {
+  content: '';
+  position: absolute;
+  top: -0.25rem;
+  left: 50%;
+  width: 2.125rem;
+  height: 0.625rem;
+  border-radius: 0.0938rem;
+  transform: translateX(-50%) rotate(-2deg);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.42) 0 0.1563rem, transparent 0.1563rem 0.4375rem),
+    rgba(214, 163, 95, 0.5);
+  box-shadow: 0 0.0625rem 0.125rem rgba(74, 59, 54, 0.1);
+  pointer-events: none;
+}
+
+/* =================== end V6/B3 SCREEN-WORLDS (shop + album) ============== */

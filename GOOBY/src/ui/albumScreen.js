@@ -88,6 +88,20 @@ function tintOf(setId, entryId) {
   return `hsl(${h % 360} 62% 72%)`;
 }
 
+/** V6/B3 (PLAN6 Wave B): deterministic polaroid tilt for the Fotos grid —
+ * the SAME grid index always leans the SAME way (re-renders must never make
+ * the photo wall shiver), neighbours alternate direction so the wall reads
+ * hand-pinned rather than wind-blown. Pure (index → degrees, one decimal,
+ * |deg| ≤ 2.2) and exported for test/screenThemeDetails.test.js.
+ * @param {number} index 0-based grid position
+ * @returns {number} rotation in degrees */
+export function polaroidJitter(index) {
+  const n = Math.abs(Math.floor(Number(index) || 0));
+  const h = ((n + 1) * 2654435761) >>> 0; // Knuth multiplicative hash
+  const mag = 0.8 + ((h >>> 8) % 141) / 100; // 0.8° … 2.2°
+  return Math.round((n % 2 === 0 ? -mag : mag) * 10) / 10;
+}
+
 /* V4/G-UI: G23 block swept px→rem (§B3 — was the last FILE_ALLOW holdout in
    px-audit; values ÷16, matching the sibling screens' rem conventions:
    27.5rem rail, 0.625rem gaps, max(44px,2.75rem) tap floors). */
@@ -603,9 +617,11 @@ export function registerAlbumScreen({ store, ui, audio }) {
         }
         const grid = document.createElement('div');
         grid.className = 'g59-ph-grid';
-        for (const m of metas) {
+        for (const [idx, m] of metas.entries()) {
           const cell = document.createElement('button');
-          cell.className = 'g59-ph-cell';
+          // V6/B3: each photo is a polaroid pinned at a deterministic tilt
+          cell.className = 'g59-ph-cell b3-polaroid';
+          cell.style.setProperty('--b3-tilt', `${polaroidJitter(idx)}deg`);
           cell.dataset.photoId = String(m.id);
           const img = document.createElement('img');
           img.className = 'g59-ph-img';

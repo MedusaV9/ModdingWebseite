@@ -55,6 +55,9 @@ import {
   appliedSurface,
 } from '../systems/furniturePlacement.js';
 import { icon } from './icons.js';
+// V6/B3: aisle-sign strings live in the owned v6 module — resolved through
+// the tx() fallback below until B2 commits the strings.js import pair.
+import { EN as THM_EN, DE as THM_DE } from '../data/strings/v6-screen-themes.js';
 
 /** Food id → emoji (iconography, not translated text — mirrors G5's tray). */
 const FOOD_EMOJI = {
@@ -204,6 +207,15 @@ export function sickShopFocus(health, medicineCount, pulseShown = false) {
 const hyTab = (s) => String(s)
   .replace(/[A-Za-zÀ-ÿ]{8,}/g, (w) => w.replace(/(.{5})(?=.{3})/g, '$1\u00AD'));
 
+/** V6/B3: t() with the module-local fallback (G52 tx() pattern) — B2 commits
+ * the strings.js import pair for v6-screen-themes.js; until then the aisle
+ * signs resolve through the owned module directly. */
+const tx = (key) => {
+  const v = t(key);
+  if (v !== key) return v;
+  return (getLang() === 'de' ? THM_DE : THM_EN)[key] ?? key;
+};
+
 /**
  * Register the shop screen + quick-delivery hooks. Called once from the G11
  * marker in systems/shopTrip.js (browser only).
@@ -318,7 +330,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     bodyEl.appendChild(chips);
 
     const grid = document.createElement('div');
-    grid.className = 'shop-grid';
+    grid.className = 'shop-grid b3-shelf'; // V6/B3: cards sit on shelf planks
     const inv = store.get('inventory') ?? {};
     const matches = FOOD_FILTERS.find(([id]) => id === foodFilter)?.[2] ?? (() => true);
     for (const food of FOODS.filter(matches)) {
@@ -458,7 +470,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     bodyEl.appendChild(hint);
 
     const row = document.createElement('div');
-    row.className = 'shop-grid';
+    row.className = 'shop-grid b3-shelf'; // V6/B3: care row rides the shelf too
     const level = store.get('level') ?? 1;
 
     const careCard = ({ itemId, emoji, name, price, count, locked, lockLevel, onBuy }) => {
@@ -559,7 +571,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       head.textContent = roomLabel(roomId);
       bodyEl.appendChild(head);
       const grid = document.createElement('div');
-      grid.className = 'shop-grid';
+      grid.className = 'shop-grid b3-shelf'; // V6/B3
       for (const slotId of roomSlots(roomId)) {
         for (const entry of furnitureFor(roomId, slotId)) {
           grid.appendChild(furnitureCard(entry, roomId, slotId));
@@ -909,7 +921,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     mountSkinStage(stageEl, badgeEl);
 
     const grid = document.createElement('div');
-    grid.className = 'shop-grid';
+    grid.className = 'shop-grid b3-shelf'; // V6/B3
     for (const def of SKINS) {
       const owned = ownedSkins.includes(def.id);
       const equipped = equippedSkin === def.id;
@@ -994,6 +1006,13 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     if (!bodyEl) return;
     disposeSkinStage(); // V2/G22: the skins tab rebuilds its 3D stage per render
     bodyEl.textContent = '';
+    // V6/B3: aisle header sign — echoes the active category (the tabs above
+    // stay the functional selector; the sign is decorative store dressing).
+    const aisle = document.createElement('div');
+    aisle.className = 'b3-aisle';
+    aisle.setAttribute('aria-hidden', 'true');
+    aisle.innerHTML = `<span class="b3-aisle-sign">${tx(`thm.shop.aisle.${tab}`)}</span>`;
+    bodyEl.appendChild(aisle);
     TABS.find(([id]) => id === tab)?.[2]();
   }
 
@@ -1031,6 +1050,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
           ${coinsPill()}
           ${atTrip() ? `<button class="btn btn-teal shop-home">${icon('home', 18)} ${t('trip.goHome')}</button>` : ''}
         </div>
+        <div class="b3-awning" aria-hidden="true"></div>
         ${arrival ? `<div class="shop-hint">${icon('sparkle', 15)} ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
         ${atTrip() ? '' : `<div class="shop-hint">${icon('car', 15)} ${t('shop.browseHint')}</div>`}
         <div class="shop-tabs ac-tabbar ac-tabbar-wrap"></div>
