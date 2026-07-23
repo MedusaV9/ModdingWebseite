@@ -1,0 +1,172 @@
+{
+  "sections": [
+    {
+      "titleKey": "gui.eclipse.credits.section.music",
+      "entries": [
+        {
+          "name": "boss_ferryman — Final Battle of the Dark Wizards",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1500085",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500085",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "boss_herald — Volatile Reaction",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1400039",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400039",
+            "Trimmed ending, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "limbo_ambience — Echoes of Time v2",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1300030",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300030",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "title_theme — Atlantean Twilight",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1100322",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100322",
+            "Trimmed ending, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "expansion_theme — Enchanted Valley",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1200093",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200093",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "intro_storm — Stormfront",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1200043",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200043",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "victory_theme — Ascending the Vale",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1600064",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600064",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "xbox_nostalgia — Dream Culture",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1300046",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300046",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        }
+      ]
+    },
+    {
+      "titleKey": "gui.eclipse.credits.section.textures",
+      "entries": [
+        {
+          "name": "Minecraft: Classic Edition resource pack v1.2.3",
+          "details": [
+            "JS03 · MIT License · https://modrinth.com/resourcepack/minecraft-classic-edition",
+            "Community-made classic-look recreation; procedural and derived transformations are recorded in tools/classicblocks/provenance.json."
+          ]
+        }
+      ]
+    },
+    {
+      "titleKey": "gui.eclipse.credits.section.worlds",
+      "entries": [
+        {
+          "name": "Xbox 360 Tutorial World TU1",
+          "details": [
+            "World by Mojang / 4J Studios; Java conversion courtesy of theminecraftarchitect.com.",
+            "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU1%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip"
+          ]
+        },
+        {
+          "name": "Xbox 360 Tutorial World TU12",
+          "details": [
+            "World by Mojang / 4J Studios; Java conversion courtesy of theminecraftarchitect.com.",
+            "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU12%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip"
+          ]
+        },
+        {
+          "name": "Xbox 360 Tutorial World TU14",
+          "details": [
+            "World by Mojang / 4J Studios; Java conversion courtesy of theminecraftarchitect.com.",
+            "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU14%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip"
+          ]
+        },
+        {
+          "name": "Additional archive reference",
+          "details": [
+            "https://github.com/Fridtjof-DE/Minecraft-Xbox-360-Tutorial-Worlds"
+          ]
+        },
+        {
+          "name": "Tutorial-world legal notice",
+          "details": [
+            "No legal clearance is claimed for redistributing the Mojang/4J binaries. The conversions have no explicit redistribution license; intended for a private non-commercial event, not standalone re-hosting."
+          ]
+        }
+      ]
+    },
+    {
+      "titleKey": "gui.eclipse.credits.section.mods",
+      "entries": [
+        {
+          "name": "EMI 1.1.18+1.21.1",
+          "details": [
+            "Emily Ploszaj · MIT · https://github.com/emilyploszaj/emi"
+          ]
+        },
+        {
+          "name": "Mouse Tweaks 1.21-2.26.1-neoforge",
+          "details": [
+            "YaLTeR · BSD-3-Clause · https://github.com/YaLTeR/MouseTweaks"
+          ]
+        },
+        {
+          "name": "Veil 4.3.0",
+          "details": [
+            "FoundryMC · LGPL-3.0 · https://github.com/FoundryMC/Veil"
+          ]
+        },
+        {
+          "name": "GeckoLib 4.9.2",
+          "details": [
+            "GeckoLib contributors · MIT · https://github.com/bernie-g/geckolib"
+          ]
+        }
+      ]
+    },
+    {
+      "titleKey": "gui.eclipse.credits.section.notice",
+      "entries": [
+        {
+          "name": "Independent fan project",
+          "details": [
+            "Minecraft is © Mojang Studios. Xbox 360 Edition work is © Mojang / 4J Studios. Eclipse Event is not affiliated with or endorsed by Mojang, Microsoft, 4J Studios, or the credited artists.",
+            "Detailed music source URLs and license snapshot: CREDITS.md. Bundling decisions: docs/BUNDLING.md."
+          ]
+        }
+      ]
+    }
+  ]
+}

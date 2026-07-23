@@ -1,0 +1,40 @@
+{
+  "en_us": {
+    "dev.eclipse.music.unknown": "Unknown music cue '%1$s'. Use /dev music list.",
+    "dev.eclipse.music.played": "Playing Eclipse music cue: %1$s",
+    "dev.eclipse.music.stopped": "Eclipse music stopped.",
+    "dev.eclipse.music.list": "Music cues: %1$s",
+    "dev.eclipse.credits.opened": "Opened Eclipse credits.",
+    "dev.eclipse.doc.music.play": "Play one Eclipse music cue on your client.",
+    "dev.eclipse.doc.music.stop": "Fade out Eclipse music on your client.",
+    "dev.eclipse.doc.music.list": "List all registered Eclipse music cue ids.",
+    "dev.eclipse.doc.credits": "Open the in-game Eclipse credits screen.",
+    "gui.eclipse.credits.title": "Eclipse Event Credits",
+    "gui.eclipse.credits.subtitle": "Music, worlds, textures, and bundled libraries",
+    "gui.eclipse.credits.load_error": "The bundled credits could not be loaded.",
+    "gui.eclipse.credits.section.music": "Music",
+    "gui.eclipse.credits.section.textures": "Classic textures",
+    "gui.eclipse.credits.section.worlds": "Xbox 360 tutorial worlds",
+    "gui.eclipse.credits.section.mods": "Bundled mods and libraries",
+    "gui.eclipse.credits.section.notice": "Legal notice"
+  },
+  "de_de": {
+    "dev.eclipse.music.unknown": "Unbekannter Musiktitel „%1$s“. Nutze /dev music list.",
+    "dev.eclipse.music.played": "Eclipse-Musiktitel wird abgespielt: %1$s",
+    "dev.eclipse.music.stopped": "Eclipse-Musik wurde gestoppt.",
+    "dev.eclipse.music.list": "Musiktitel: %1$s",
+    "dev.eclipse.credits.opened": "Eclipse-Credits geöffnet.",
+    "dev.eclipse.doc.music.play": "Spielt einen Eclipse-Musiktitel auf deinem Client ab.",
+    "dev.eclipse.doc.music.stop": "Blendet die Eclipse-Musik auf deinem Client aus.",
+    "dev.eclipse.doc.music.list": "Listet alle registrierten Eclipse-Musiktitel-IDs auf.",
+    "dev.eclipse.doc.credits": "Öffnet die Eclipse-Credits im Spiel.",
+    "gui.eclipse.credits.title": "Eclipse Event – Credits",
+    "gui.eclipse.credits.subtitle": "Musik, Welten, Texturen und gebündelte Bibliotheken",
+    "gui.eclipse.credits.load_error": "Die mitgelieferten Credits konnten nicht geladen werden.",
+    "gui.eclipse.credits.section.music": "Musik",
+    "gui.eclipse.credits.section.textures": "Klassische Texturen",
+    "gui.eclipse.credits.section.worlds": "Xbox-360-Tutorialwelten",
+    "gui.eclipse.credits.section.mods": "Gebündelte Mods und Bibliotheken",
+    "gui.eclipse.credits.section.notice": "Rechtlicher Hinweis"
+  }
+}
