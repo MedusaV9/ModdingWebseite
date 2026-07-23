@@ -1,0 +1,46 @@
+{
+  "type": "minecraft:entity",
+  "_w8_note": "glitch_shard (1-2, 100%) intentionally NOT listed here: glitch/GlitchDrops pays it for every #eclipse:glitched tag member (dropsEnabled default true) — listing it again would double-drop the heart economy input. This table is only the corrupted vanilla scraps.",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:bone",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 2 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        { "condition": "minecraft:killed_by_player" },
+        { "condition": "minecraft:random_chance", "chance": 0.3 }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:string",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 2 }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "random_sequence": "eclipse:entities/glitched_hound"
+}
