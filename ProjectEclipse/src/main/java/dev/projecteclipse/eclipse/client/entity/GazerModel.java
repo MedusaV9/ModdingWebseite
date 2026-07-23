@@ -28,6 +28,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public class GazerModel extends HierarchicalModel<GazerEntity> {
     private final ModelPart root;
+    private final ModelPart bone;
     private final ModelPart cloak;
     private final ModelPart mantle;
     private final ModelPart hood;
@@ -38,7 +39,8 @@ public class GazerModel extends HierarchicalModel<GazerEntity> {
     public GazerModel(ModelPart root) {
         this.root = root;
         // bakeLayer() hands over the layer root, whose single child is the gazer_root bone.
-        ModelPart bone = root.getChild("gazer_root");
+        this.bone = root.getChild("gazer_root");
+        ModelPart bone = this.bone;
         this.cloak = bone.getChild("cloak");
         this.mantle = bone.getChild("mantle");
         this.hood = bone.getChild("hood");
@@ -81,7 +83,9 @@ public class GazerModel extends HierarchicalModel<GazerEntity> {
     @Override
     public void setupAnim(GazerEntity entity, float limbSwing, float limbSwingAmount, float ageInTicks,
             float netHeadYaw, float headPitch) {
-        this.root.y = 24.0F - Mth.sin(ageInTicks * 0.06F) * 0.8F;
+        // Bob the gazer_root bone (baked pivot y=24 = ground) — NOT the layer root, whose
+        // extra +24px used to sink the whole model 1.5 blocks into the ground.
+        this.bone.y = 24.0F - Mth.sin(ageInTicks * 0.06F) * 0.8F;
         this.hood.yRot = netHeadYaw * Mth.DEG_TO_RAD;
         this.tatterLeft.xRot = Mth.sin(ageInTicks * 0.1F) * 0.15F;
         this.tatterRight.xRot = Mth.sin(ageInTicks * 0.1F + (float) Math.PI) * 0.15F;
