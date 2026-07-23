@@ -1,11 +1,32 @@
-// V5/VACATION — vacation destination catalog (PLAN5 idea IDEA-01): the four
+// V5/VACATION — vacation destination catalog (PLAN5 idea IDEA-01): the
 // bookable airport trips. Pure data, same shape rules as data/crops.js /
 // data/skins.js — frozen rows, no DOM/three imports, node:test hits it
 // directly (test/vacation.test.js). Prices per the coordinator ruling
-// (Sol: 350–600 too high) — 180/220/280/350; trips last 3 or 4 REAL days.
+// (Sol: 350–600 too high) — the 180–350 band; trips last 3 or 4 REAL days.
+//
+// V6/B2 (PLAN6 Wave B): the canonical NINE-destination travel board — every
+// recap place becomes bookable. The catalog grows 4 → 9: the original four
+// rows stay byte-identical in behavior (ungated, same prices/days), and five
+// new rows land for the previously unbooked recap biomes. Two new fields:
+//   `biome`            the recap vignette biome id this destination shows
+//                      (systems/recapDirector.js DEFAULT_BIOMES — the 8 ids
+//                      meadow/city/harbor/space/spookGarden/bakery/nightSky/
+//                      toyRoom map 1:1 onto 8 destinations; `beach` is the
+//                      bonus NON-recap ninth place, so its biome is null.
+//                      Per the EVAL ruling harbor is its OWN destination —
+//                      never collapsed into beach).
+//   `unlockRecapLevel` recap.lastRecapLevel gate (0 = always bookable). The
+//                      five new rows unlock at 15/25/30/35/40 following the
+//                      milestone→vignette order (milestone N discovers
+//                      DEFAULT_BIOMES[N/5 − 1] — idea 09 §c): harbor 15,
+//                      spookGarden 25, bakery 30, nightSky 35, toyRoom 40.
+//                      Locked rows render as mystery cards (ui/airportScreen)
+//                      and stay bookable through the engine only via ids the
+//                      UI never exposes — economy paths are untouched.
 //
 // Every id doubles as the strings suffix: 'vacation.dest.<id>.name' /
-// '.sub' / 'vacation.postcard.<id>' live in strings/v5-vacation.js (EN+DE).
+// '.sub' / 'vacation.postcard.<id>' live in strings/v5-vacation.js for the
+// original four and strings/v6-vacations.js for the V6 five (EN+DE).
 // `icon` must be a ui/icons.js glyph name (icons.test.js-safe set only).
 // `souvenirCoins` is the coin souvenir paid at pickup through
 // economy.award(store, …, 'souvenir') — always well below `price` so a
@@ -19,25 +40,48 @@
  * @property {number} days      trip length in REAL days (3 or 4)
  * @property {number} souvenirCoins coin souvenir paid at pickup (< price)
  * @property {string} color     card accent (GOOBY palette pastels)
+ * @property {string|null} biome recap vignette biome id (null = non-recap)
+ * @property {number} unlockRecapLevel recap.lastRecapLevel gate (0 = open)
  */
 
 /** @type {readonly VacationDest[]} */
 export const VACATIONS = Object.freeze([
   Object.freeze({
     id: 'beach', icon: 'fish', price: 180, days: 3,
-    souvenirCoins: 30, color: '#3FC9C0',
+    souvenirCoins: 30, color: '#3FC9C0', biome: null, unlockRecapLevel: 0,
   }),
   Object.freeze({
     id: 'meadowTrip', icon: 'sprout', price: 220, days: 3,
-    souvenirCoins: 40, color: '#8FCB6B',
+    souvenirCoins: 40, color: '#8FCB6B', biome: 'meadow', unlockRecapLevel: 0,
   }),
   Object.freeze({
     id: 'bigCity', icon: 'car', price: 280, days: 4,
-    souvenirCoins: 55, color: '#FF9BD0',
+    souvenirCoins: 55, color: '#FF9BD0', biome: 'city', unlockRecapLevel: 0,
   }),
   Object.freeze({
     id: 'space', icon: 'moon', price: 350, days: 4,
-    souvenirCoins: 70, color: '#B9A7F0',
+    souvenirCoins: 70, color: '#B9A7F0', biome: 'space', unlockRecapLevel: 0,
+  }),
+  // ── V6/B2: the five new recap-place destinations (gates 15/25/30/35/40) ──
+  Object.freeze({
+    id: 'harbor', icon: 'bubble', price: 200, days: 3,
+    souvenirCoins: 35, color: '#6FB5E0', biome: 'harbor', unlockRecapLevel: 15,
+  }),
+  Object.freeze({
+    id: 'spookGarden', icon: 'hat', price: 240, days: 3,
+    souvenirCoins: 45, color: '#9B8CD8', biome: 'spookGarden', unlockRecapLevel: 25,
+  }),
+  Object.freeze({
+    id: 'bakery', icon: 'candy', price: 260, days: 3,
+    souvenirCoins: 50, color: '#E8A25F', biome: 'bakery', unlockRecapLevel: 30,
+  }),
+  Object.freeze({
+    id: 'nightSky', icon: 'star', price: 300, days: 4,
+    souvenirCoins: 60, color: '#7C8FE0', biome: 'nightSky', unlockRecapLevel: 35,
+  }),
+  Object.freeze({
+    id: 'toyRoom', icon: 'gamepad', price: 320, days: 4,
+    souvenirCoins: 65, color: '#F97B7B', biome: 'toyRoom', unlockRecapLevel: 40,
   }),
 ]);
 
@@ -53,4 +97,21 @@ const BY_ID = new Map(VACATIONS.map((v) => [v.id, v]));
  */
 export function getVacation(id) {
   return BY_ID.get(id);
+}
+
+/**
+ * V6/B2 — the pure lock decision for the airport board: a destination is
+ * bookable once the player's highest completed recap milestone
+ * (recap.lastRecapLevel) reaches the row's unlockRecapLevel. Ungated rows
+ * (gate 0/absent) are always unlocked; junk inputs fail CLOSED for gated
+ * rows (an unreadable recap level never reveals a mystery card early).
+ * @param {VacationDest|undefined|null} dest catalog row
+ * @param {number} lastRecapLevel recap.lastRecapLevel (junk → 0)
+ * @returns {boolean}
+ */
+export function isVacationUnlocked(dest, lastRecapLevel) {
+  const gate = Math.max(0, Math.floor(Number(dest?.unlockRecapLevel) || 0));
+  if (gate === 0) return true;
+  const level = Math.max(0, Math.floor(Number(lastRecapLevel) || 0));
+  return level >= gate;
 }

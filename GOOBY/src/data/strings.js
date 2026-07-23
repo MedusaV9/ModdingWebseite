@@ -76,6 +76,12 @@ import { EN as V5_VACATION_EN, DE as V5_VACATION_DE } from './strings/v5-vacatio
 // V6/A1: the cutscene-director strings — same versioned-module pattern,
 // spread below AFTER all v5 spreads, always EN + DE.
 import { EN as V6_CUTSCENES_EN, DE as V6_CUTSCENES_DE } from './strings/v6-cutscenes.js';
+// V6/B2: the nine-destination travel-board strings — same versioned-module
+// pattern, spread below AFTER v6-cutscenes, always EN + DE.
+import { EN as V6_VACATIONS_EN, DE as V6_VACATIONS_DE } from './strings/v6-vacations.js';
+// V6/B3: shop-aisle signs + passport chrome for the flagship screen worlds —
+// same versioned-module pattern, spread below AFTER the v6-cutscenes spread.
+import { EN as V6_SCREEN_THEMES_EN, DE as V6_SCREEN_THEMES_DE } from './strings/v6-screen-themes.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -608,6 +614,8 @@ export const EN = {
   ...V5_VACATION_EN, // V5/VACATION
   // V6 spreads (PLAN6 Wave A)
   ...V6_CUTSCENES_EN, // V6/A1
+  ...V6_VACATIONS_EN, // V6/B2
+  ...V6_SCREEN_THEMES_EN, // V6/B3
 };
 
 /** @type {Record<string, string>} */
@@ -1140,6 +1148,8 @@ export const DE = {
   ...V5_VACATION_DE, // V5/VACATION
   // V6 spreads (PLAN6 Wave A)
   ...V6_CUTSCENES_DE, // V6/A1
+  ...V6_VACATIONS_DE, // V6/B2
+  ...V6_SCREEN_THEMES_DE, // V6/B3
 };
 
 const DICTS = { en: EN, de: DE };

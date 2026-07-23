@@ -5,11 +5,26 @@
 // no-soft-lock rule), the timeEngine decay FREEZE while away, and the
 // offline.js catch-up (frozen stats + vacation events). Headless per §B —
 // only pure modules are imported.
+//
+// V6/B2 (PLAN6 Wave B): the catalog contract moves 4 → 9 (the canonical
+// nine-destination travel board): unique ids + unique recap biomes (beach
+// stays the bonus NON-recap ninth — biome null; harbor is its own row),
+// exact recap.lastRecapLevel gates 15/25/30/35/40 on the five new rows
+// (old four stay ungated), the 180–350 price band with souvenirCoins ≪
+// price on every row, the pure isVacationUnlocked lock decision, and
+// EN/DE parity for the strings/v6-vacations.js module.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { VACATIONS, VACATION_IDS, getVacation } from '../src/data/vacations.js';
+import {
+  VACATIONS,
+  VACATION_IDS,
+  getVacation,
+  isVacationUnlocked,
+} from '../src/data/vacations.js';
 import { EN as VAC_EN, DE as VAC_DE } from '../src/data/strings/v5-vacation.js';
+import { EN as VAC6_EN, DE as VAC6_DE } from '../src/data/strings/v6-vacations.js';
+import { DEFAULT_BIOMES } from '../src/systems/recapDirector.js';
 import {
   VACATION,
   VACATION_PHASE,
@@ -49,28 +64,151 @@ const near = (a, b, msg, tol = 5000) =>
 
 // ------------------------------------------------------------- catalog data
 
-test('catalog: exactly the 4 destinations at the ruled prices/days', () => {
-  assert.deepEqual(VACATION_IDS, ['beach', 'meadowTrip', 'bigCity', 'space']);
-  assert.deepEqual(VACATIONS.map((d) => d.price), [180, 220, 280, 350]);
+test('catalog: exactly the 9 destinations at the ruled prices/days (V6/B2)', () => {
+  assert.deepEqual(VACATION_IDS, [
+    'beach', 'meadowTrip', 'bigCity', 'space',
+    'harbor', 'spookGarden', 'bakery', 'nightSky', 'toyRoom',
+  ]);
+  assert.deepEqual(
+    VACATIONS.map((d) => d.price),
+    [180, 220, 280, 350, 200, 240, 260, 300, 320],
+  );
   for (const d of VACATIONS) {
     assert.ok(d.days === 3 || d.days === 4, `${d.id}: days 3 or 4`);
+    assert.ok(d.price >= 180 && d.price <= 350,
+      `${d.id}: price inside the coordinator's 180–350 band`);
     assert.ok(d.souvenirCoins > 0 && d.souvenirCoins < d.price,
       `${d.id}: souvenir must stay below the price (no arbitrage loop)`);
+    assert.ok(d.souvenirCoins * 4 <= d.price,
+      `${d.id}: souvenir ≪ price (≤ a quarter of the fare)`);
     assert.ok(Object.isFrozen(d), `${d.id}: row frozen`);
     assert.ok(iconNames().includes(d.icon), `${d.id}: '${d.icon}' is an authored glyph`);
+    assert.match(d.color, /^#[0-9A-Fa-f]{6}$/, `${d.id}: color is a hex pastel`);
   }
   assert.ok(Object.isFrozen(VACATIONS));
   assert.equal(getVacation('beach'), VACATIONS[0]);
   assert.equal(getVacation('nope'), undefined);
 });
 
+test('catalog: the original four rows keep their V5 shape (regression pin)', () => {
+  const pins = [
+    ['beach', 'fish', 180, 3, 30],
+    ['meadowTrip', 'sprout', 220, 3, 40],
+    ['bigCity', 'car', 280, 4, 55],
+    ['space', 'moon', 350, 4, 70],
+  ];
+  for (const [id, iconName, price, days, souvenir] of pins) {
+    const d = getVacation(id);
+    assert.equal(d.icon, iconName, `${id}: icon unchanged`);
+    assert.equal(d.price, price, `${id}: price unchanged`);
+    assert.equal(d.days, days, `${id}: days unchanged`);
+    assert.equal(d.souvenirCoins, souvenir, `${id}: souvenir unchanged`);
+  }
+});
+
+test('catalog: unique ids + unique biomes; the 8 recap biomes map 1:1, beach is the non-recap bonus', () => {
+  const ids = VACATIONS.map((d) => d.id);
+  assert.equal(new Set(ids).size, ids.length, 'ids unique');
+  const biomes = VACATIONS.map((d) => d.biome).filter((b) => b != null);
+  assert.equal(new Set(biomes).size, biomes.length, 'non-null biomes unique');
+  // beach = the bonus NON-recap ninth destination (EVAL ruling: harbor is
+  // its OWN destination, never collapsed into beach).
+  assert.equal(getVacation('beach').biome, null, 'beach carries no recap biome');
+  assert.equal(getVacation('harbor').biome, 'harbor', 'harbor is its own destination');
+  // every recapDirector DEFAULT_BIOMES id is covered by exactly one row
+  const biomeIds = DEFAULT_BIOMES.map((b) => b.id);
+  assert.deepEqual([...biomes].sort(), [...biomeIds].sort(),
+    'the 8 recap biomes map 1:1 onto the 8 recap destinations');
+});
+
+test('catalog: exact recap gates — old four ungated, new five at 15/25/30/35/40', () => {
+  const gates = Object.fromEntries(VACATIONS.map((d) => [d.id, d.unlockRecapLevel]));
+  assert.deepEqual(gates, {
+    beach: 0,
+    meadowTrip: 0,
+    bigCity: 0,
+    space: 0,
+    harbor: 15,
+    spookGarden: 25,
+    bakery: 30,
+    nightSky: 35,
+    toyRoom: 40,
+  });
+  // gate order follows the recap milestone→vignette mapping (idea 09 §c:
+  // milestone N discovers DEFAULT_BIOMES[N/5 − 1])
+  for (const d of VACATIONS) {
+    if (d.unlockRecapLevel === 0 || d.biome == null) continue;
+    const vignetteIndex = DEFAULT_BIOMES.findIndex((b) => b.id === d.biome);
+    assert.equal(d.unlockRecapLevel, (vignetteIndex + 1) * 5,
+      `${d.id}: gate = its vignette's recap milestone`);
+  }
+});
+
+test('isVacationUnlocked: pure lock decision — ungated always open, gated fails closed on junk', () => {
+  const beach = getVacation('beach');
+  const harbor = getVacation('harbor');
+  const toyRoom = getVacation('toyRoom');
+  // ungated rows are open at any (even junk) recap level
+  assert.equal(isVacationUnlocked(beach, 0), true);
+  assert.equal(isVacationUnlocked(beach, -5), true);
+  assert.equal(isVacationUnlocked(beach, NaN), true);
+  // gated rows: below < at ≤ above
+  assert.equal(isVacationUnlocked(harbor, 0), false);
+  assert.equal(isVacationUnlocked(harbor, 14), false);
+  assert.equal(isVacationUnlocked(harbor, 15), true);
+  assert.equal(isVacationUnlocked(harbor, 40), true);
+  assert.equal(isVacationUnlocked(toyRoom, 35), false);
+  assert.equal(isVacationUnlocked(toyRoom, 40), true);
+  // junk recap levels fail CLOSED for gated rows (no early reveal)
+  assert.equal(isVacationUnlocked(harbor, NaN), false);
+  assert.equal(isVacationUnlocked(harbor, undefined), false);
+  assert.equal(isVacationUnlocked(harbor, 'junk'), false);
+  assert.equal(isVacationUnlocked(harbor, -1), false);
+  // fractional levels floor (14.9 has not reached 15)
+  assert.equal(isVacationUnlocked(harbor, 14.9), false);
+  // missing row behaves as ungated (defensive default)
+  assert.equal(isVacationUnlocked(undefined, 0), true);
+});
+
 test('strings: EN/DE parity + every destination has name/sub/postcard keys', () => {
   assert.deepEqual(Object.keys(VAC_DE).sort(), Object.keys(VAC_EN).sort(),
     'v5-vacation: EN/DE key sets differ');
+  assert.deepEqual(Object.keys(VAC6_DE).sort(), Object.keys(VAC6_EN).sort(),
+    'v6-vacations: EN/DE key sets differ');
+  // the merged v5+v6 table covers all 9 destinations (v5 owns the original
+  // four, v6-vacations owns the five new rows — no overlap)
+  const EN_ALL = { ...VAC_EN, ...VAC6_EN };
+  const DE_ALL = { ...VAC_DE, ...VAC6_DE };
   for (const id of VACATION_IDS) {
     for (const key of [`vacation.dest.${id}.name`, `vacation.dest.${id}.sub`, `vacation.postcard.${id}`]) {
-      assert.ok(VAC_EN[key], `EN missing ${key}`);
-      assert.ok(VAC_DE[key], `DE missing ${key}`);
+      assert.ok(EN_ALL[key], `EN missing ${key}`);
+      assert.ok(DE_ALL[key], `DE missing ${key}`);
+    }
+  }
+  const v5Keys = new Set(Object.keys(VAC_EN));
+  for (const key of Object.keys(VAC6_EN)) {
+    assert.ok(!v5Keys.has(key), `v6-vacations must not shadow v5 key ${key}`);
+  }
+});
+
+test('strings: locked mystery card discloses nothing (V6/B2)', () => {
+  // the '???' presentation matches the V5 mystery-sticker language
+  assert.equal(VAC6_EN['vacation.dest.locked.name'], '???');
+  assert.equal(VAC6_DE['vacation.dest.locked.name'], '???');
+  for (const dict of [VAC6_EN, VAC6_DE]) {
+    assert.ok(dict['vacation.dest.locked.sub'], 'locked sub exists');
+    assert.ok(dict['vacation.dest.locked.hint']?.includes('{level}'),
+      'locked hint interpolates the unlock level');
+  }
+  // no locked-card string may leak a destination name
+  const names = VACATION_IDS
+    .map((id) => (VAC6_EN[`vacation.dest.${id}.name`] ?? VAC_EN[`vacation.dest.${id}.name`]))
+    .filter(Boolean);
+  for (const key of ['vacation.dest.locked.name', 'vacation.dest.locked.sub', 'vacation.dest.locked.hint']) {
+    for (const dict of [VAC6_EN, VAC6_DE]) {
+      for (const name of names) {
+        assert.ok(!dict[key].includes(name), `${key} must not leak '${name}'`);
+      }
     }
   }
 });
@@ -118,6 +256,18 @@ test('postcardsDue: one per full day away, none on the travel-home day', () => {
   assert.equal(postcardsDue(v, T0 + 30 * DAY), 2, 'cap holds after the trip');
   const space = bookSlice(null, 'space', T0); // 4 days → max 3
   assert.equal(postcardsDue(space, T0 + 10 * DAY), 3);
+});
+
+test('bookSlice: the five V6 destinations produce correct 3/4-day trips', () => {
+  for (const id of ['harbor', 'spookGarden', 'bakery', 'nightSky', 'toyRoom']) {
+    const dest = getVacation(id);
+    const v = bookSlice(null, id, T0);
+    assert.equal(v.destId, id);
+    assert.equal(v.returnAt, T0 + dest.days * DAY, `${id}: returnAt = booking + days`);
+    assert.equal(v.pickupBy, v.returnAt + VACATION.PICKUP_WINDOW_MS);
+    assert.equal(postcardsDue(v, T0 + 10 * DAY), dest.days - 1,
+      `${id}: one postcard per full day away`);
+  }
 });
 
 test('bookSlice/pickupSlice: trips counter carries over and bumps', () => {
@@ -185,6 +335,18 @@ test('bookVacation: pays the price, sets the away slice', async () => {
   assert.equal(v.destId, 'meadowTrip');
   near(v.returnAt, T0 + 3 * DAY, 'returnAt = booking + 3 days');
   assert.equal(store.get('profile.coinsSpent'), 220);
+});
+
+test('bookVacation: a V6 destination books like the originals (harbor)', () => {
+  pin(T0);
+  const store = makeStore();
+  store.update((s) => { s.coins = 500; });
+  const res = bookVacation(store, 'harbor');
+  assert.deepEqual(res, { ok: true, total: 200 });
+  assert.equal(store.get('coins'), 300);
+  const v = store.get('vacation');
+  assert.equal(v.destId, 'harbor');
+  near(v.returnAt, T0 + 3 * DAY, 'harbor is a 3-day trip');
 });
 
 test('bookVacation: refuses unknown/sleeping/already-away/broke — atomic', () => {
