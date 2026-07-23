@@ -1,0 +1,75 @@
+{
+  "type": "minecraft:entity",
+  "_doc": "Pale Sentinel drops (P6-W910). Default entity loot table — resolved from the frozen id eclipse:pale_sentinel, no code wiring. A felled tree-revenant breaks into its own timber: pale-oak logs + hanging moss, plus the phantom membrane its night-stalking earns. The 2x pale_resin economy drop is a P4 registry lookup in PaleSentinelEntity.dropCustomDeathLoot (skipped until P4 lands the item).",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "eclipse:pale_oak_log",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 3 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "eclipse:pale_hanging_moss",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 2 }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "eclipse:pale_moss_carpet",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 2 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:phantom_membrane",
+          "_doc": "the pale skin stretched between its antlers — a night-terror's trophy",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "random_sequence": "eclipse:entities/pale_sentinel"
+}

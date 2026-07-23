@@ -267,8 +267,12 @@ public final class DungeonSpawners {
         phase.addProperty("auto_delay_ticks", 100);
         phase.addProperty("place_interval_ticks", 20);
         root.add("structure_phase", phase);
-        root.add(COLLAPSED_VAULT, spawnerSection("minecraft:zombie", "minecraft:skeleton"));
-        root.add(UMBRAL_WARRENS, spawnerSection("minecraft:cave_spider", "minecraft:zombie"));
+        // P6-W910: eclipse_cultist leads both custom-dungeon rotations (plan §2.3 — the
+        // resolve() fallback keeps spawners on vanilla mobs until the registrar wiring lands).
+        root.add(COLLAPSED_VAULT, spawnerSection("eclipse:eclipse_cultist", "minecraft:skeleton",
+                "eclipse:eclipse_cultist", "minecraft:zombie"));
+        root.add(UMBRAL_WARRENS, spawnerSection("eclipse:eclipse_cultist", "minecraft:cave_spider",
+                "minecraft:zombie"));
         root.add(MONSTER_ROOM, spawnerSection("minecraft:zombie", "minecraft:skeleton", "minecraft:spider"));
         try {
             Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);

@@ -1,0 +1,147 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.eclipse_cultist",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 2.5,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 1, 0]
+			},
+			"bones": [
+				{
+					"name": "root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "root",
+					"pivot": [0, 10, 0]
+				},
+				{
+					"name": "robe_lower",
+					"parent": "body",
+					"pivot": [0, 10, 0],
+					"cubes": [
+						{"origin": [-4, 0, -2.5], "size": [8, 10, 5], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "torso",
+					"parent": "body",
+					"pivot": [0, 10, 0],
+					"cubes": [
+						{"origin": [-3, 10, -2], "size": [6, 10, 4], "uv": [26, 0]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "torso",
+					"pivot": [0, 20, 0],
+					"cubes": [
+						{"origin": [-2.5, 20, -2.5], "size": [5, 5, 5], "uv": [0, 16]}
+					]
+				},
+				{
+					"name": "hood",
+					"parent": "head",
+					"pivot": [0, 20, 0],
+					"cubes": [
+						{
+							"origin": [-2.5, 20, -2.5],
+							"size": [5, 5, 5],
+							"inflate": 0.5,
+							"uv": {
+								"east": {"uv": [20, 16], "uv_size": [5, 5]},
+								"west": {"uv": [25, 16], "uv_size": [5, 5]},
+								"south": {"uv": [30, 16], "uv_size": [5, 5]},
+								"up": {"uv": [35, 16], "uv_size": [5, 5]},
+								"down": {"uv": [40, 16], "uv_size": [5, 5]}
+							}
+						},
+						{"origin": [-1.5, 24.8, -1.5], "size": [3, 2, 3], "rotation": [-12, 0, 0], "pivot": [0, 25, 0], "uv": [46, 0]}
+					]
+				},
+				{
+					"name": "arm_right",
+					"parent": "torso",
+					"pivot": [-3.5, 18.5, 0],
+					"rotation": [0, 0, 4],
+					"cubes": [
+						{"origin": [-6, 10, -1.5], "size": [3, 9, 3], "uv": [0, 28]}
+					]
+				},
+				{
+					"name": "knife",
+					"parent": "arm_right",
+					"pivot": [-4.5, 10, 0],
+					"rotation": [-25, 0, 0],
+					"cubes": [
+						{"origin": [-5, 6.5, -0.5], "size": [1, 4, 1], "uv": [12, 28]}
+					]
+				},
+				{
+					"name": "arm_left",
+					"parent": "torso",
+					"pivot": [3.5, 18.5, 0],
+					"rotation": [0, 0, -4],
+					"cubes": [
+						{"origin": [3, 10, -1.5], "size": [3, 9, 3], "uv": [16, 28]}
+					]
+				},
+				{
+					"name": "runes",
+					"parent": "body",
+					"pivot": [4.5, 12, 0]
+				},
+				{
+					"name": "glow_rune_a",
+					"parent": "runes",
+					"pivot": [6.5, 12.5, 0],
+					"cubes": [
+						{
+							"origin": [6.5, 11, -1],
+							"size": [0, 3, 2],
+							"uv": {
+								"east": {"uv": [28, 28], "uv_size": [2, 3]},
+								"west": {"uv": [31, 28], "uv_size": [2, 3]}
+							}
+						}
+					]
+				},
+				{
+					"name": "glow_rune_b",
+					"parent": "runes",
+					"pivot": [4, 14.5, 2.5],
+					"cubes": [
+						{
+							"origin": [3, 13, 2.5],
+							"size": [2, 3, 0],
+							"uv": {
+								"north": {"uv": [34, 28], "uv_size": [2, 3]},
+								"south": {"uv": [37, 28], "uv_size": [2, 3]}
+							}
+						}
+					]
+				},
+				{
+					"name": "glow_rune_c",
+					"parent": "runes",
+					"pivot": [3.5, 11.5, -2.5],
+					"cubes": [
+						{
+							"origin": [2.5, 10, -2.5],
+							"size": [2, 3, 0],
+							"uv": {
+								"north": {"uv": [40, 28], "uv_size": [2, 3]},
+								"south": {"uv": [43, 28], "uv_size": [2, 3]}
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}

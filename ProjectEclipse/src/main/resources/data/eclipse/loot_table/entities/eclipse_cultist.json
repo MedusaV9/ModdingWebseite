@@ -1,0 +1,72 @@
+{
+  "type": "minecraft:entity",
+  "_doc": "Eclipse Cultist drops (P6-W910). Default entity loot table — resolved from the frozen id eclipse:eclipse_cultist, no code wiring. Ritual paraphernalia (candles, ink, lapis) + the rare umbral shard its shadow bolts are condensed from. The 10% cultist_sigil economy drop is a P4 registry lookup in EclipseCultistEntity.dropCustomDeathLoot (skipped until P4 lands the item).",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:purple_candle",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 2 }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:ink_sac",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 2 }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:lapis_lazuli",
+          "weight": 4,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 1, "max": 3 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 2 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "minecraft:random_chance_with_enchanted_bonus",
+          "enchantment": "minecraft:looting",
+          "unenchanted_chance": 0.3,
+          "enchanted_chance": {
+            "type": "minecraft:linear",
+            "base": 0.4,
+            "per_level_above_first": 0.1
+          }
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "eclipse:umbral_shard",
+          "_doc": "spec sheet: 0-1 umbral shard (spawner-farm friendly rarity)"
+        }
+      ]
+    }
+  ],
+  "random_sequence": "eclipse:entities/eclipse_cultist"
+}

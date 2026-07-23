@@ -1,0 +1,68 @@
+{
+  "type": "minecraft:entity",
+  "_doc": "Rift Warden drops (P6-W910). Default entity loot table — resolved from the frozen id eclipse:rift_warden, no code wiring. Mini-boss purse: guaranteed umbral shards, THE Replant book (the custom eclipse:replant enchantment — degrades gracefully while P4 hasn't registered it, storm_cache precedent) and a trophy-ish vanilla rare. The 1x rift_core progression drop (fallback 4 shards) + 2 shards at each participant's feet live in RiftWardenEntity.dropCustomDeathLoot.",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "eclipse:umbral_shard",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 4, "max": 6 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 2 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:enchanted_book",
+          "functions": [
+            {
+              "function": "minecraft:set_enchantments",
+              "enchantments": {
+                "eclipse:replant": 1
+              },
+              "add": false
+            }
+          ],
+          "_p4_hook": "eclipse:replant is registered by P4; entry degrades gracefully if absent (storm_cache precedent)"
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:music_disc_otherside",
+          "weight": 1,
+          "_doc": "trophy: the song from the other side of the rift"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:echo_shard",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 2, "max": 3 }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "random_sequence": "eclipse:entities/rift_warden"
+}
