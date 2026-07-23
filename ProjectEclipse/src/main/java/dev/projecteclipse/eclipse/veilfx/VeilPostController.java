@@ -22,6 +22,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
@@ -125,6 +126,36 @@ public final class VeilPostController {
         setPipelineActive(LIMBO_POST, inLimbo);
         setPipelineActive(SUN_HALO_POST, inOverworld);
         setPipelineActive(BORDER_GLITCH_POST, borderProximity > 0.01F);
+    }
+
+    /**
+     * Disconnect reset hook (mirrors {@code QuasarSpawner.DisconnectReset}): drops the fade
+     * and proximity state and removes every Eclipse pipeline immediately. The tick handler
+     * would also remove them one tick later on the title screen, but a Veil call that throws
+     * during disconnect teardown must not count toward the {@value #MAX_FAILURES}-strikes
+     * session disable — so this path removes quietly instead of via
+     * {@link #setPipelineActive}, and a limbo session can never leak its grade into the next
+     * world.
+     */
+    @SubscribeEvent
+    static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        limboEnterMillis = -1L;
+        borderProximity = 0.0F;
+        removeQuietly(LIMBO_POST);
+        removeQuietly(SUN_HALO_POST);
+        removeQuietly(BORDER_GLITCH_POST);
+    }
+
+    /** Best-effort removal that never counts as a pipeline failure (teardown-order safe). */
+    private static void removeQuietly(ResourceLocation pipeline) {
+        try {
+            PostProcessingManager manager = VeilRenderSystem.renderer().getPostProcessingManager();
+            if (manager.isActive(pipeline)) {
+                manager.remove(pipeline);
+            }
+        } catch (Throwable ignored) {
+            // Veil may already be tearing down; the next-tick gate re-removes if needed.
+        }
     }
 
     /**

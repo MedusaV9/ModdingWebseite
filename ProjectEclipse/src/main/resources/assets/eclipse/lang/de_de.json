@@ -154,6 +154,7 @@
   "message.eclipse.sealed.block": "Dieser Block ist noch versiegelt.",
   "message.eclipse.sealed.dimension": "Diese Dimension ist noch versiegelt.",
   "message.eclipse.sealed.mod": "Das ist noch von der Eclipse versiegelt.",
+  "message.eclipse.command_sealed": "Dieser Befehl ist versiegelt — die Eclipse hält jede Seele namenlos.",
   "message.eclipse.voice_sealed": "Stimme versiegelt",
   "message.eclipse.voice_sealed_remaining": "Stimme versiegelt noch %s",
   "message.eclipse.goals_updated": "%s gespeichert — Konfiguration neu geladen und an alle Spieler gesendet.",
@@ -235,5 +236,10 @@
   "subtitles.eclipse.boss.herald_ambient": "Der Herold dröhnt",
   "subtitles.eclipse.boss.herald_telegraph": "Koronasplitter flackern auf",
   "subtitles.eclipse.boss.ferryman_ambient": "Der Fährmann rudert",
-  "subtitles.eclipse.boss.ferryman_bell": "Eine ertrunkene Glocke schlägt"
+  "subtitles.eclipse.boss.ferryman_bell": "Eine ertrunkene Glocke schlägt",
+  "subtitles.eclipse.ambient.limbo_loop": "Limbo summt",
+  "subtitles.eclipse.event.submerge": "Das Schiff versinkt",
+  "subtitles.eclipse.event.emerge": "Die Welt taucht auf",
+  "subtitles.eclipse.ui.hover": "Interface piept",
+  "subtitles.eclipse.ui.tab": "Reiter klickt"
 }

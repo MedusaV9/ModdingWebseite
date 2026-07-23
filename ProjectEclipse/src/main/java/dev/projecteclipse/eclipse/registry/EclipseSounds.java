@@ -14,7 +14,7 @@ public final class EclipseSounds {
     public static final DeferredRegister<SoundEvent> SOUNDS =
             DeferredRegister.create(Registries.SOUND_EVENT, EclipseMod.MOD_ID);
 
-    /** Looping ambient bed of the Limbo dimension (also wired as the limbo biome's {@code ambient_sound}). */
+    /** Looping ambient bed of the Limbo dimension, played and faded by {@code veilfx.LimboAmbience}. */
     public static final Supplier<SoundEvent> AMBIENT_LIMBO_LOOP = SOUNDS.register(
             "ambient.limbo_loop",
             () -> SoundEvent.createVariableRangeEvent(
@@ -28,8 +28,7 @@ public final class EclipseSounds {
 
     /**
      * One-shot cue at the end of the intro rise / finale return camera paths (referenced by
-     * the default cutscene JSONs). Mapped in {@code sounds.json} to the submerge recording at
-     * a higher pitch until dedicated audio is dropped in.
+     * the default cutscene JSONs): a reverse-swell rising into a bright airy release.
      */
     public static final Supplier<SoundEvent> EVENT_EMERGE = SOUNDS.register(
             "event.emerge",
@@ -102,10 +101,9 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_telegraph")));
 
-    // W12 Ferryman boss suite (sounds.json maps both onto existing recordings at a
-    // deeper pitch until dedicated audio is dropped in — event.emerge pattern).
+    // W12 Ferryman boss suite.
 
-    /** Drowned-bell drone of the Ferryman (its mob ambient sound during the fight). */
+    /** Hollow, waterlogged groan of the Ferryman (its mob ambient sound during the fight). */
     public static final Supplier<SoundEvent> BOSS_FERRYMAN_AMBIENT = SOUNDS.register(
             "boss.ferryman_ambient",
             () -> SoundEvent.createVariableRangeEvent(

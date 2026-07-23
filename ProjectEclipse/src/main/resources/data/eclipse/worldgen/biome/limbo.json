@@ -7,7 +7,6 @@
     "water_color": 8007358,
     "water_fog_color": 3018834,
     "sky_color": 1181734,
-    "ambient_sound": "eclipse:ambient.limbo_loop",
     "mood_sound": {
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000,

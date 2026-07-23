@@ -41,7 +41,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the victim to a player killer (or just take one on PvE deaths), place a grave
  * with the drops, and ban the victim once they hit 0 lives. Deaths are never
  * announced in chat ({@code showDeathMessages=false}); the only cue is a global
- * thunder sound played to every online player at their own position.
+ * thunder sound played to every online player at their own position. Advancement
+ * announcements are likewise forced off ({@code announceAdvancements=false}) —
+ * they would broadcast player names.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class LifecycleEvents {
@@ -56,7 +58,8 @@ public final class LifecycleEvents {
     public static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         server.getGameRules().getRule(GameRules.RULE_SHOWDEATHMESSAGES).set(false, server);
-        EclipseMod.LOGGER.info("Eclipse lifecycle active: showDeathMessages=false");
+        server.getGameRules().getRule(GameRules.RULE_ANNOUNCE_ADVANCEMENTS).set(false, server);
+        EclipseMod.LOGGER.info("Eclipse lifecycle active: showDeathMessages=false, announceAdvancements=false");
     }
 
     @SubscribeEvent

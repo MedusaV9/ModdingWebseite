@@ -154,6 +154,7 @@
   "message.eclipse.sealed.block": "This block is still sealed.",
   "message.eclipse.sealed.dimension": "That dimension is still sealed.",
   "message.eclipse.sealed.mod": "That is still sealed by the Eclipse.",
+  "message.eclipse.command_sealed": "That command is sealed — the Eclipse keeps every soul nameless.",
   "message.eclipse.voice_sealed": "Voice sealed",
   "message.eclipse.voice_sealed_remaining": "Voice sealed for %s",
   "message.eclipse.goals_updated": "%s saved — config reloaded and re-synced to all players.",
@@ -235,5 +236,10 @@
   "subtitles.eclipse.boss.herald_ambient": "The Herald drones",
   "subtitles.eclipse.boss.herald_telegraph": "Corona shards flare",
   "subtitles.eclipse.boss.ferryman_ambient": "The Ferryman rows",
-  "subtitles.eclipse.boss.ferryman_bell": "A drowned bell tolls"
+  "subtitles.eclipse.boss.ferryman_bell": "A drowned bell tolls",
+  "subtitles.eclipse.ambient.limbo_loop": "Limbo hums",
+  "subtitles.eclipse.event.submerge": "The ship submerges",
+  "subtitles.eclipse.event.emerge": "The world emerges",
+  "subtitles.eclipse.ui.hover": "Interface blips",
+  "subtitles.eclipse.ui.tab": "Tab clicks"
 }

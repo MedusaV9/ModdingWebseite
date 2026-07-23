@@ -13,8 +13,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Replaces every local and remote client-player skin with one bundled texture.
+ * Replaces every local and remote client-player skin with one bundled texture:
+ * the "eclipsed" figure (charcoal hooded robe, glowing purple eye slit), always
+ * on the WIDE (classic) model. Covers the own player too (F5, inventory preview),
+ * and the {@code null} cape/elytra textures hide capes and custom elytra wings.
  * Player-info packets remain intact so remote player entities continue to render.
+ *
+ * <p>Deliberately NOT gated by an {@code EclipseClientConfig} toggle: like
+ * {@code ChatBlocker}/{@code NameTagHider}/{@code TabListHider} this is
+ * anonymity-critical, and a local config edit must never unmask players.</p>
  */
 @OnlyIn(Dist.CLIENT)
 @Mixin(AbstractClientPlayer.class)
@@ -22,7 +29,7 @@ public abstract class AbstractClientPlayerMixin {
     @Unique
     private static final PlayerSkin ECLIPSE$UNIFORM_SKIN = new PlayerSkin(
             ResourceLocation.fromNamespaceAndPath(
-                    EclipseMod.MOD_ID, "textures/entity/uniform_skin.png"),
+                    EclipseMod.MOD_ID, "textures/entity/eclipsed_player.png"),
             null,
             null,
             null,

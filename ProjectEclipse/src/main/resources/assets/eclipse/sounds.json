@@ -1,5 +1,6 @@
 {
   "ambient.limbo_loop": {
+    "subtitle": "subtitles.eclipse.ambient.limbo_loop",
     "sounds": [
       {
         "name": "eclipse:ambient/limbo_loop",
@@ -8,15 +9,17 @@
     ]
   },
   "event.submerge": {
+    "subtitle": "subtitles.eclipse.event.submerge",
     "sounds": [
       "eclipse:event/submerge"
     ]
   },
   "event.emerge": {
+    "subtitle": "subtitles.eclipse.event.emerge",
     "sounds": [
       {
-        "name": "eclipse:event/submerge",
-        "pitch": 1.4
+        "name": "eclipse:event/emerge",
+        "attenuation_distance": 64
       }
     ]
   },
@@ -46,6 +49,7 @@
     ]
   },
   "ui.hover": {
+    "subtitle": "subtitles.eclipse.ui.hover",
     "sounds": [
       {
         "name": "eclipse:ui/hover",
@@ -60,6 +64,7 @@
     ]
   },
   "ui.tab": {
+    "subtitle": "subtitles.eclipse.ui.tab",
     "sounds": [
       {
         "name": "eclipse:ui/tab",
@@ -104,9 +109,8 @@
     "subtitle": "subtitles.eclipse.boss.ferryman_ambient",
     "sounds": [
       {
-        "name": "eclipse:boss/herald_ambient",
-        "volume": 0.9,
-        "pitch": 0.55
+        "name": "eclipse:boss/ferryman_ambient",
+        "volume": 0.9
       }
     ]
   },
@@ -114,9 +118,8 @@
     "subtitle": "subtitles.eclipse.boss.ferryman_bell",
     "sounds": [
       {
-        "name": "eclipse:ui/unlock_sting",
-        "volume": 1.0,
-        "pitch": 0.45
+        "name": "eclipse:boss/ferryman_bell",
+        "attenuation_distance": 48
       }
     ]
   }

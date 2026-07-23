@@ -3,11 +3,14 @@ package dev.projecteclipse.eclipse.client.hud;
 import java.util.ArrayDeque;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -39,6 +42,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 public final class AnnouncementOverlay {
     public static final ResourceLocation LAYER_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "announcements");
+    /** Celebratory Quasar fountain spawned once per UNLOCK-style announcement (client-only emitter). */
+    private static final ResourceLocation UNLOCK_BURST =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "unlock_burst");
 
     private static final int SWEEP_IN_TICKS = 30;
     private static final int SWEEP_HOLD_TICKS = 60;
@@ -60,9 +66,28 @@ public final class AnnouncementOverlay {
 
     /** {@link S2CAnnouncePayload} entry point (client main thread). */
     public static void handle(S2CAnnouncePayload payload) {
+        if (S2CAnnouncePayload.STYLE_UNLOCK.equals(payload.style())) {
+            spawnUnlockBurst();
+        }
         if (QUEUE.size() < QUEUE_LIMIT) {
             QUEUE.add(payload);
         }
+    }
+
+    /**
+     * One {@code eclipse:unlock_burst} Quasar fountain (purple/gold sparks) at the local
+     * player's feet per UNLOCK-style announcement — the style used only for timeline
+     * milestone/config-key unlocks ({@code timeline.AnnouncementService}), never for
+     * day/goal/boss lines. Spawned on payload arrival (the unlock moment) rather than when
+     * the queued sweep plays; gated on {@code reducedFx} like the other non-essential
+     * particle FX.
+     */
+    private static void spawnUnlockBurst() {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null || EclipseClientConfig.reducedFx()) {
+            return;
+        }
+        QuasarSpawner.spawnOrFallback(UNLOCK_BURST, player.position());
     }
 
     @SubscribeEvent

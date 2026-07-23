@@ -140,7 +140,7 @@ public final class StrongholdEmergence {
     /** Deep global quake rumble (thunder pitched down + deepslate cracking for everyone). */
     private static void quake(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.AMBIENT, 1.0F, 0.4F);
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.AMBIENT, 1.0F, 0.5F);
             player.playNotifySound(Blocks.DEEPSLATE.defaultBlockState().getSoundType().getBreakSound(),
                     SoundSource.AMBIENT, 1.0F, 0.5F);
         }

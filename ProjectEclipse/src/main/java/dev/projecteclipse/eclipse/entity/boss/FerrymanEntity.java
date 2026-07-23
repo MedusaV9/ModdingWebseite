@@ -227,7 +227,7 @@ public class FerrymanEntity extends Monster {
         limbo.addFreshEntity(ferryman);
         PacketDistributor.sendToPlayersNear(limbo, null, x, deck + 1, z, 96.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, ferryman.position()));
-        limbo.playSound(null, ferryman.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.4F);
+        limbo.playSound(null, ferryman.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.5F);
         limbo.playSound(null, ferryman.blockPosition(), EclipseSounds.BOSS_FERRYMAN_AMBIENT.get(),
                 SoundSource.HOSTILE, 1.2F, 1.0F);
         limbo.sendParticles(ParticleTypes.SOUL, x, deck + 2.0D, z, 80, 1.0D, 1.4D, 1.0D, 0.04D);

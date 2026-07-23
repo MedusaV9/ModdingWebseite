@@ -1,7 +1,8 @@
 /**
  * Client-only Veil integration for Project: Eclipse v2 — post-processing pipeline control
- * ({@link dev.projecteclipse.eclipse.veilfx.VeilPostController}) and Quasar particle system
- * spawning ({@link dev.projecteclipse.eclipse.veilfx.QuasarSpawner}).
+ * ({@link dev.projecteclipse.eclipse.veilfx.VeilPostController}), Quasar particle system
+ * spawning ({@link dev.projecteclipse.eclipse.veilfx.QuasarSpawner}) and the limbo
+ * dimension's ambient motes + sound bed ({@link dev.projecteclipse.eclipse.veilfx.LimboAmbience}).
  *
  * <p>Hard rules enforced here (see {@code docs/ideas/02_veil_vfx.md}):</p>
  * <ul>

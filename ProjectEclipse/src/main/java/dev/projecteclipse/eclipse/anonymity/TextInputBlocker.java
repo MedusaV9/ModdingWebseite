@@ -63,12 +63,18 @@ public final class TextInputBlocker {
         }
     }
 
+    /**
+     * Cancels on BOTH logical sides: unlike the sign editor (opened by a server packet),
+     * the book edit screen is opened purely client-side, so the client-side cancel is what
+     * keeps it from appearing. {@code ServerGamePacketListenerImplMixin} additionally drops
+     * any edit/sign packet a bypassing client sends anyway — signing would stamp the
+     * player's profile name as the book author.
+     */
     @SubscribeEvent
     public static void onBookUsed(PlayerInteractEvent.RightClickItem event) {
-        if (event.getEntity() instanceof ServerPlayer
-                && (event.getItemStack().is(Items.WRITABLE_BOOK)
-                        || event.getItemStack().is(Items.WRITTEN_BOOK)
-                        || isModdedTextItem(event.getItemStack()))) {
+        if (event.getItemStack().is(Items.WRITABLE_BOOK)
+                || event.getItemStack().is(Items.WRITTEN_BOOK)
+                || isModdedTextItem(event.getItemStack())) {
             event.setCanceled(true);
         }
     }

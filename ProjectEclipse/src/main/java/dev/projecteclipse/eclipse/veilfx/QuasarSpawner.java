@@ -6,6 +6,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
@@ -49,22 +51,35 @@ public final class QuasarSpawner {
 
     /** Spawns a one-shot emitter at the given position. @return {@code true} on success. */
     public static boolean spawn(ResourceLocation emitterId, Vec3 pos) {
+        return spawnManaged(emitterId, pos) != null;
+    }
+
+    /**
+     * Spawns an emitter at the given position and returns the live handle so the caller can
+     * manage its lifetime, or {@code null} on failure (same warn/disable rules as
+     * {@link #spawn}). Required for {@code loop: true} emitters: Veil never expires a looping
+     * position-based emitter on its own (only entity-attached ones die with their entity), so
+     * whoever spawns a loop MUST keep the handle and {@code remove()} it — see
+     * {@link LimboAmbience} for the reference pattern.
+     */
+    @Nullable
+    public static ParticleEmitter spawnManaged(ResourceLocation emitterId, Vec3 pos) {
         if (BROKEN.contains(emitterId)) {
-            return false;
+            return null;
         }
         try {
             ParticleSystemManager manager = VeilRenderSystem.renderer().getParticleManager();
             ParticleEmitter emitter = manager.createEmitter(emitterId);
             if (emitter == null) {
                 warnUnknown(emitterId);
-                return false;
+                return null;
             }
             emitter.setPosition(pos);
             manager.addParticleSystem(emitter);
-            return true;
+            return emitter;
         } catch (Throwable t) {
             fail(emitterId, t);
-            return false;
+            return null;
         }
     }
 
