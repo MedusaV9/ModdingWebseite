@@ -478,6 +478,7 @@
   "dev.eclipse.display.list.entry": "%1$s — %2$s — %3$s bei %4$s — Drehung %5$s°/s, Schweben %6$s/%7$ss, Größe %8$s, Leuchten %9$s",
   "dev.eclipse.display.list.header": "Gespeicherte Dev-Anzeigen: %1$s",
   "dev.eclipse.display.list.hover": "Klicken, um einen /dev display param-Befehl vorzubereiten.",
+  "dev.eclipse.display.orbitals_rebuilt": "Orbitalring des Sanktums entfernt und neu erzeugt.",
   "dev.eclipse.display.param.failed": "Anzeige '%1$s' wurde nicht gefunden oder Parameter '%2$s' war ungültig.",
   "dev.eclipse.display.param.updated": "Anzeige %1$s: %2$s aktualisiert.",
   "dev.eclipse.display.placed": "Anzeige %1$s platziert und ausgewählt.",

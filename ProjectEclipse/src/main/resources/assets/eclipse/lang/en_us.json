@@ -478,6 +478,7 @@
   "dev.eclipse.display.list.entry": "%1$s — %2$s — %3$s @ %4$s — spin %5$s°/s, bob %6$s/%7$ss, scale %8$s, glow %9$s",
   "dev.eclipse.display.list.header": "Persisted dev displays: %1$s",
   "dev.eclipse.display.list.hover": "Click to prepare a /dev display param command.",
+  "dev.eclipse.display.orbitals_rebuilt": "Sanctum orbital ring wiped and respawned.",
   "dev.eclipse.display.param.failed": "Display '%1$s' was not found or parameter '%2$s' was invalid.",
   "dev.eclipse.display.param.updated": "Display %1$s: updated %2$s.",
   "dev.eclipse.display.placed": "Placed and selected display %1$s.",

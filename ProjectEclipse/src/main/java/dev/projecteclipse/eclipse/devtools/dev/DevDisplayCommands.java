@@ -70,6 +70,8 @@ public final class DevDisplayCommands {
                         .then(Commands.literal("clear")
                                 .requires(source -> source.hasPermission(3))
                                 .executes(DevDisplayCommands::clear))
+                        .then(Commands.literal("orbitals_rebuild")
+                                .executes(DevDisplayCommands::rebuildOrbitals))
                         .then(Commands.literal("param")
                                 .then(Commands.argument("id", StringArgumentType.word())
                                         .suggests(DISPLAY_SUGGESTIONS)
@@ -204,5 +206,14 @@ public final class DevDisplayCommands {
         context.getSource().sendSuccess(() -> Component.translatable(
                 "dev.eclipse.display.cleared", removed), true);
         return removed;
+    }
+
+    /** P6-W56 hook: wipes and respawns the sanctum orbital ring (safe no-op while grounded). */
+    private static int rebuildOrbitals(CommandContext<CommandSourceStack> context) {
+        dev.projecteclipse.eclipse.worldgen.structure.SanctumOrbitals
+                .rebuild(context.getSource().getServer().overworld());
+        context.getSource().sendSuccess(() -> Component.translatable(
+                "dev.eclipse.display.orbitals_rebuilt"), true);
+        return 1;
     }
 }

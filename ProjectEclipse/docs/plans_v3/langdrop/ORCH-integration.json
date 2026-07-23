@@ -1,8 +1,10 @@
 {
-  "en_us": {
-    "enchantment.eclipse.replant": "Replant"
-  },
   "de_de": {
+    "dev.eclipse.display.orbitals_rebuilt": "Orbitalring des Sanktums entfernt und neu erzeugt.",
     "enchantment.eclipse.replant": "Neuaussaat"
+  },
+  "en_us": {
+    "dev.eclipse.display.orbitals_rebuilt": "Sanctum orbital ring wiped and respawned.",
+    "enchantment.eclipse.replant": "Replant"
   }
 }
