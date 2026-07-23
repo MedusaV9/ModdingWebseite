@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "eclipse:glitched_husk",
+      "required": false
+    },
+    {
+      "id": "eclipse:glitched_hound",
+      "required": false
+    },
+    {
+      "id": "eclipse:glitched_tick",
+      "required": false
+    }
+  ]
+}
