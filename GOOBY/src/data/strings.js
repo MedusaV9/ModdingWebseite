@@ -73,6 +73,9 @@ import { EN as V5_STICKERS_EN, DE as V5_STICKERS_DE } from './strings/v5-sticker
 // V5/VACATION: the vacation/airport strings — same versioned-module
 // pattern, spread below AFTER v5-stickers, always EN + DE.
 import { EN as V5_VACATION_EN, DE as V5_VACATION_DE } from './strings/v5-vacation.js';
+// V6/A1: the cutscene-director strings — same versioned-module pattern,
+// spread below AFTER all v5 spreads, always EN + DE.
+import { EN as V6_CUTSCENES_EN, DE as V6_CUTSCENES_DE } from './strings/v6-cutscenes.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -603,6 +606,8 @@ export const EN = {
   ...V5_GAMES_EN,
   ...V5_STICKERS_EN, // V5/STICKERS wave 1
   ...V5_VACATION_EN, // V5/VACATION
+  // V6 spreads (PLAN6 Wave A)
+  ...V6_CUTSCENES_EN, // V6/A1
 };
 
 /** @type {Record<string, string>} */
@@ -1133,6 +1138,8 @@ export const DE = {
   ...V5_GAMES_DE,
   ...V5_STICKERS_DE, // V5/STICKERS wave 1
   ...V5_VACATION_DE, // V5/VACATION
+  // V6 spreads (PLAN6 Wave A)
+  ...V6_CUTSCENES_DE, // V6/A1
 };
 
 const DICTS = { en: EN, de: DE };
