@@ -48,6 +48,13 @@ const QB_CSS = `
 .g23-qb-locked svg{color:rgba(74,59,54,.3);}
 .g23-qb-locked-title{font-size:1.0625rem;font-weight:800;color:var(--brown);}
 .g23-qb-locked-teaser{font-size:0.8125rem;font-weight:700;opacity:.72;max-width:17.5rem;} /* V4/G-UI: .6→.72 — body-text contrast */
+/* V6/FIX3 (P2-5): decorative pinned paper note — fills the empty corkboard
+   bottom (the 3 cards only cover the top ~40%). Pure decoration: aria-hidden,
+   pointer-events none, slightly tilted, red pushpin on the top edge (the A2
+   pattern_quest notice-board theme). */
+.g23-qb-note{position:relative;width:100%;max-width:15.5rem;margin:1.75rem auto 2.25rem;flex:none;background:#FFFDF4;border-radius:0.625rem;box-shadow:0 3px 8px rgba(74,59,54,.16);padding:1.25rem 1rem 1rem;display:flex;align-items:center;justify-content:center;gap:0.4375rem;text-align:center;font-size:0.8125rem;font-weight:700;color:var(--brown);opacity:.88;transform:rotate(-2.5deg);pointer-events:none;}
+.g23-qb-note::before{content:'';position:absolute;top:-0.4375rem;left:50%;transform:translateX(-50%);width:0.875rem;height:0.875rem;border-radius:50%;background:#E5484D;box-shadow:inset 0 -0.1875rem 0 rgba(74,59,54,.28),0 2px 3px rgba(74,59,54,.3);}
+.g23-qb-note svg{flex:none;color:var(--yellow);}
 `;
 
 /**
@@ -90,9 +97,17 @@ export function registerQuestBoard({ store, ui, audio }) {
     foot.className = 'g23-qb-foot';
     el.appendChild(foot);
 
+    // V6/FIX3 (P2-5): pinned-note decoration below the foot — text is set in
+    // render() so language switches pick the new string up.
+    const note = document.createElement('div');
+    note.className = 'g23-qb-note';
+    note.setAttribute('aria-hidden', 'true');
+    el.appendChild(note);
+
     function renderLocked() {
       body.innerHTML = '';
       foot.innerHTML = '';
+      note.hidden = true; // the locked teaser card is the only note needed
       const box = document.createElement('div');
       box.className = 'g23-qb-locked';
       box.innerHTML = `
@@ -180,6 +195,9 @@ export function registerQuestBoard({ store, ui, audio }) {
         }
       });
       foot.append(midnight, rerollBtn);
+
+      note.hidden = false; // V6/FIX3 (P2-5)
+      note.innerHTML = `${icon('sparkle', 15)}<span>${t('quests.boardNote')}</span>`;
     }
 
     render();

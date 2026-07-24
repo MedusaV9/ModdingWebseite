@@ -29,6 +29,21 @@ import { HEALTH } from '../systems/health.js';
 import { tierOf } from '../systems/weight.js';
 import { icon } from './icons.js';
 
+// V6/FIX3 (P2-6) vet polish (injected like questBoard's owned block — the
+// base .vet-* rules live in styles.css, another agent's file):
+//  - avatar: the vetRabbit glyph filled currentColor→brown at 44px and read
+//    as a harsh black blob; give it the clinic-mint circle chip and tint the
+//    glyph teal-dark (the screen-vetPanel accent) — soft bunny-doctor face.
+//  - title: „Vet Clinic"/„Tierarztpraxis" could wrap to an awkward 2nd line
+//    under the icon; keep it one line and let the home button use the
+//    .vet-head flex-wrap line instead (the F3 320px rule already right-aligns
+//    it there via margin-left:auto).
+const VET_FIX_CSS = `
+.vet-avatar{width:3.75rem;height:3.75rem;border-radius:50%;background:rgba(89,201,185,.18);box-shadow:inset 0 0 0 0.125rem rgba(89,201,185,.4);display:flex;align-items:center;justify-content:center;color:var(--teal-dark);}
+.vet-avatar svg{color:var(--teal-dark);}
+.vet-title{white-space:nowrap;}
+`;
+
 /** §C3.5 bandaged-ear gag duration after a vet cure (ms). */
 export const BANDAGE_MS = 10 * 60 * 1000;
 
@@ -63,6 +78,12 @@ export function junkBand(junkScore) {
  */
 export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetArrival }) {
   if (typeof document === 'undefined') return;
+  if (!document.querySelector('style[data-owner="fix3-vet"]')) {
+    const style = document.createElement('style');
+    style.dataset.owner = 'fix3-vet';
+    style.textContent = VET_FIX_CSS;
+    document.head.appendChild(style);
+  }
   installResultsHook({ ui, isVetArrival });
 
   /** @type {Array<() => void>} */

@@ -9,8 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 import { CREDITS } from '../src/data/credits.js';
 import { EN, DE } from '../src/data/strings/v4-credits.js';
+// V6/FIX3 (P1-10): body copy + CC-BY change note moved to t() keys owned by
+// strings/v6-fixes.js — the pins below verify both locales resolve.
+import { EN as FIX_EN, DE as FIX_DE } from '../src/data/strings/v6-fixes.js';
 import { WELT_SCENES } from '../src/welt/weltScenes.js';
-import { setLang } from '../src/data/strings.js';
+import { setLang, t } from '../src/data/strings.js';
 import { renderCreditRow } from '../src/ui/creditsScreen.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -110,11 +113,23 @@ test('credits data is frozen and has the binding §C-SYS12.4 section order/conte
     assert.ok(rows.length > 0);
     assert.ok(rows.every(Object.isFrozen));
   }
-  // V6/D4: the raw 💛 left the credits copy (authored-interface sweep).
-  assert.equal(
-    CREDITS.gooby[0].text,
-    'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht.'
-  );
+  // V6/FIX3 (P1-10): body copy rows carry t() keys instead of hardcoded
+  // German literals; both locales must resolve (spread via strings.js).
+  assert.equal(CREDITS.gooby[0].textKey, 'credits.gooby.madeBy');
+  assert.equal(CREDITS.gooby[1].textKey, 'credits.gooby.acui');
+  assert.equal(CREDITS.technik[1].textKey, 'credits.technik.font');
+  for (const key of ['credits.gooby.madeBy', 'credits.gooby.acui', 'credits.technik.font']) {
+    assert.ok(FIX_EN[key]?.trim(), `empty EN ${key}`);
+    assert.ok(FIX_DE[key]?.trim(), `empty DE ${key}`);
+    assert.notEqual(FIX_EN[key], FIX_DE[key], `untranslated ${key}`);
+    setLang('en');
+    assert.equal(t(key), FIX_EN[key], `strings.js does not spread EN ${key}`);
+    setLang('de');
+    assert.equal(t(key), FIX_DE[key], `strings.js does not spread DE ${key}`);
+    setLang('en');
+  }
+  // V6/D4: the raw 💛 left the credits copy (authored-interface sweep);
+  // the tech notice line stays a verbatim literal.
   assert.equal(CREDITS.technik[0].text, 'three.js · Vite · Capacitor (MIT/BSD)');
 });
 
@@ -143,7 +158,11 @@ test('§G6.2: both shipped splat rows match world data verbatim and carry the ch
       { title: row.title, by: row.by, license: row.license, source: row.source },
       scene.attribution
     );
-    assert.equal(row.note, 'verändert (dezimiert/komprimiert)');
+    // V6/FIX3 (P1-10): the CC-BY change indication is a t() key now — BOTH
+    // locale values must still state the modification (license obligation).
+    assert.equal(row.noteKey, 'credits.note.modified');
+    assert.equal(FIX_DE['credits.note.modified'], 'verändert (dezimiert/komprimiert)');
+    assert.match(FIX_EN['credits.note.modified'], /modified/i);
     assert.ok(fs.existsSync(path.join(ASSETS, 'splats', scene.file)));
     const license = source(`public/assets/splats/${scene.licenseFile}`);
     assert.match(license, /CC BY 4\.0/);
@@ -194,12 +213,28 @@ test('renderer switches EN/DE labels while keeping rows and URLs inert text', ()
   const en = renderCreditRow(row);
   assert.match(en, /by azadbal/);
   assert.match(en, /Source: https:\/\/superspl\.at/);
+  // V6/FIX3 (P1-10): EN locale renders the EN change indication, not German.
+  assert.match(en, /modified \(decimated\/compressed\)/);
+  assert.doesNotMatch(en, /verändert/);
   setLang('de');
   const de = renderCreditRow(row);
   assert.match(de, /von azadbal/);
   assert.match(de, /Quelle: https:\/\/superspl\.at/);
   assert.match(de, /verändert \(dezimiert\/komprimiert\)/);
   assert.doesNotMatch(`${en}${de}`, /<a\b|href\s*=|target\s*=/i);
+  setLang('en');
+});
+
+test('V6/FIX3 (P1-10): body-copy rows localize — no German leaks into the EN locale', () => {
+  setLang('en');
+  const madeBy = renderCreditRow(CREDITS.gooby[0]);
+  const font = renderCreditRow(CREDITS.technik[1]);
+  assert.match(madeBy, /A game by PermissionMAXED/);
+  assert.match(font, /Font .Baloo 2. by Ek Type/);
+  assert.doesNotMatch(`${madeBy}${font}`, /Ein Spiel|Schrift/);
+  setLang('de');
+  assert.match(renderCreditRow(CREDITS.gooby[0]), /Ein Spiel von PermissionMAXED/);
+  assert.match(renderCreditRow(CREDITS.technik[1]), /Schrift .Baloo 2. von Ek Type/);
   setLang('en');
 });
 

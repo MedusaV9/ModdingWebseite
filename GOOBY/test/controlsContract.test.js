@@ -240,6 +240,47 @@ test('V4/G57 §G3.1-a: autopilot 4-corner convergence with the negated command',
 });
 
 // ---------------------------------------------------------------------------
+// V6/FIX3 (Sol P1-1): cityDrive §G3.3 invert wiring. carController owns DOM
+// steer zones OUTSIDE the framework's G56 input proxy, so the global
+// „Steuerung invertieren" flag must ride in as createCarController's
+// invertSteer param (the core/inputInvert.js car-game contract). cityDrive
+// declared `invertible: true` but never passed the flag — the toggle was a
+// silent no-op for its touch steering.
+// ---------------------------------------------------------------------------
+test('V6/FIX3 (Sol P1-1): cityDrive passes the §G3.3 invert flag into carController', () => {
+  const src = gameSource('cityDrive');
+  assert.match(
+    src,
+    /invertSteer: getStore\(\)\.get\('settings\.controls\.invertX'\) === true/,
+    'cityDrive wires settings.controls.invertX into createCarController'
+  );
+  // …and the controller applies it exactly once, at the ONE steer-intake
+  // boundary (§G2.1 — never a second mirror deeper in the physics)
+  const ctl = source('src/city/carController.js');
+  assert.equal(
+    ctl.match(/\* \(invertSteer \? -1 : 1\)/g)?.length,
+    1,
+    'exactly one invert application at the steer intake'
+  );
+});
+
+test('V6/FIX3 (Sol P1-1): inverted held-right steers screen-LEFT (mirrored heading)', () => {
+  // pure replica of carController's intake: steer = (R−L) × (invert ? −1 : 1)
+  const intake = (right, left, invert) =>
+    ((right ? 1 : 0) - (left ? 1 : 0)) * (invert ? -1 : 1);
+  const dt = 1 / 60;
+  const normal = { heading: 0, smoothed: 0 };
+  const inverted = { heading: 0, smoothed: 0 };
+  for (let t = 0; t < 1; t += dt) {
+    stepHeading(normal, intake(true, false, false), 9, dt);
+    stepHeading(inverted, intake(true, false, true), 9, dt);
+  }
+  assert.ok(normal.heading < 0, 'held-right (normal) turns screen-right (heading falls)');
+  assert.ok(inverted.heading > 0, 'held-right (inverted) turns screen-left (heading rises)');
+  assert.ok(Math.abs(normal.heading + inverted.heading) < 1e-9, 'exact mirror of the normal turn');
+});
+
+// ---------------------------------------------------------------------------
 // §G3.1-c: harborHopper input mirror.
 // ---------------------------------------------------------------------------
 test('V4/G57 §G3.1-c: harborHopper mirrors analog input at the drag boundary', () => {

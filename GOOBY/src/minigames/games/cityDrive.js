@@ -44,6 +44,11 @@ import {
   landmarksInRange, // V2/G21 (§C9.3)
 } from '../../city/cityBuilder.js';
 import { createCarController, wrapAngle } from '../../city/carController.js';
+// V6/FIX3 (Sol P1-1): the §G3.3 invert flag — carController owns DOM steer
+// zones outside the framework's input proxy, so the game passes the flag per
+// the core/inputInvert.js contract (§G2.1 ONE boundary: the mirror lives in
+// carController's syncSteer intake).
+import { getStore } from '../../core/store.js';
 import { createTraffic, separateFromHit, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
 import { driveRewards, isTripMode } from '../../systems/shopTrip.js'; // V2/G21: + isTripMode
 // V2/G21 (§C9.1/§C9.3): vet clinic + landmark dressing builders
@@ -277,14 +282,14 @@ function buildCity(scene, assets, layout) {
     addInstanced(assets.getModel(`city-kit-roads/${piece}`), transforms, group);
   }
 
-  // buildings (per GLB key), nature, lamps — all instanced
+  // buildings (per GLB key) + nature — all instanced. V6/FIX3 (Sol P2-3):
+  // the legacy light-square-double lamp batch is GONE — V3/G46 moved the
+  // streetlights into layout.nature (preloaded kaykit-city/streetlight), so
+  // the empty legacy batch only cold-loaded an unpreloaded placeholder model.
   /** @type {Record<string, THREE.Matrix4[]>} */
   const byKey = {};
   for (const b of layout.buildings) (byKey[b.key] ??= []).push(composeAt(b.x, T.ROAD_Y, b.z, b.rotY, b.scale));
   for (const n of layout.nature) (byKey[n.key] ??= []).push(composeAt(n.x, 0, n.z, n.rotY, n.scale));
-  (byKey['city-kit-roads/light-square-double'] ??= []).push(
-    ...layout.lamps.map((l) => composeAt(l.x, T.ROAD_Y, l.z, l.rotY, T.LAMP_SCALE))
-  );
   for (const [key, transforms] of Object.entries(byKey)) {
     addInstanced(assets.getModel(key), transforms, group);
   }
@@ -630,6 +635,10 @@ export default {
       speedProfile: this.mode === 'arcade'
         ? { maxSpeed: ARCADE_SPEED.MAX_SPEED_MS, rampDelaySec: ARCADE_SPEED.RAMP_DELAY_SEC }
         : undefined,
+      // V6/FIX3 (Sol P1-1): honor the global §G3.3 „Steuerung invertieren"
+      // toggle — the controller's DOM zones bypass the G56 input proxy, so
+      // the flag rides in per the inputInvert.js car-game contract.
+      invertSteer: getStore().get('settings.controls.invertX') === true,
     });
     // F4 P1-1 dev repro (?wedge=1): park the car nose-first (heading east)
     // against a building's west face — throttle-on, zero displacement — so

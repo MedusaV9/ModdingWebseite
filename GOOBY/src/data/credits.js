@@ -6,9 +6,11 @@
 // LITERALS (not translated); section labels come from strings/v4-credits.js.
 //
 // Row shape:
-//   { text }                          plain line
-//   { title, by, license, note?, source? }  attribution row — creditsScreen
-//       renders „{title}" von {by} — {license}(, {note}) · Quelle: {source}
+//   { text } / { textKey }            plain line (textKey = t()-translated —
+//       V6/FIX3 P1-10: body copy was hardcoded German and leaked into EN)
+//   { title, by, license, note?|noteKey?, source? }  attribution row —
+//       creditsScreen renders „{title}" von {by} — {license}(, {note}) ·
+//       Quelle: {source}; noteKey keys translate at render time
 //   { link }                          license/homepage URL (renders as TEXT —
 //                                     §C-SYS12.4: taps are inert, no browser)
 //   `packDir` (section 4 only): the committed root that proves the pack
@@ -16,11 +18,14 @@
 
 /**
  * @typedef {Object} CreditRow
- * @property {string} [text]    plain line (section 1/5)
+ * @property {string} [text]    plain LITERAL line (section 5 notice)
+ * @property {string} [textKey] plain line, t() key (localized body copy)
  * @property {string} [title]   work title (attribution rows)
  * @property {string} [by]      author/creator as credited by the source
  * @property {string} [license] SPDX-ish label, e.g. 'CC BY 4.0', 'CC0'
- * @property {string} [note]    change indication (CC BY) / optional credit
+ * @property {string} [note]    LITERAL change indication / optional credit
+ * @property {string} [noteKey] change indication as t() key (CC BY rows —
+ *     both locales must state modification, see strings/v6-fixes.js)
  * @property {string} [source]  source URL (rendered as text)
  * @property {string} [link]    bare URL row
  * @property {string} [packDir] committed dir under public/assets/ (section 4)
@@ -34,12 +39,12 @@
  * staged as reserve; its row ships ONLY if the scene ever ships (§G6.2).
  */
 export const CREDITS = Object.freeze({
-  /** Section 1 — GOOBY. */
+  /** Section 1 — GOOBY. V6/FIX3 (P1-10): body copy is now t()-keyed EN+DE. */
   gooby: Object.freeze([
-    Object.freeze({ text: 'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht.' }),
-    // V4/AC-1: cozy-UI art (assets/acui/ — Wortmarke, Muster-Kacheln, Münze)
-    // ist projekt-eigene, generierte Grafik — wie die Sticker-Kunst.
-    Object.freeze({ text: 'Cozy-UI-Grafik (Wortmarke, Muster, Münze): projekt-eigene GOOBY-Kunst.' }),
+    Object.freeze({ textKey: 'credits.gooby.madeBy' }),
+    // V4/AC-1: cozy-UI art (assets/acui/ — wordmark, pattern tiles, coin) is
+    // project-made generated art, like the sticker art.
+    Object.freeze({ textKey: 'credits.gooby.acui' }),
   ]),
 
   /** Section 2 — 3D-Welten (CC BY 4.0 — attribution REQUIRED, exact rows binding). */
@@ -48,14 +53,16 @@ export const CREDITS = Object.freeze({
       title: 'S Windmill in Golden Gate Park',
       by: 'azadbal',
       license: 'CC BY 4.0',
-      note: 'verändert (dezimiert/komprimiert)',
+      // V6/FIX3 (P1-10): CC BY change indication localizes via noteKey — both
+      // locale values state the modification (license obligation intact).
+      noteKey: 'credits.note.modified',
       source: 'https://superspl.at/scene/d5f14e49',
     }),
     Object.freeze({
       title: 'Ludlow - Quality Square',
       by: 'ijenko',
       license: 'CC BY 4.0',
-      note: 'verändert (dezimiert/komprimiert)',
+      noteKey: 'credits.note.modified', // V6/FIX3 (P1-10)
       source: 'https://superspl.at/scene/ca36efcc',
     }),
     Object.freeze({ link: 'https://creativecommons.org/licenses/by/4.0' }),
@@ -104,6 +111,8 @@ export const CREDITS = Object.freeze({
     Object.freeze({ text: 'three.js · Vite · Capacitor (MIT/BSD)' }),
     // V4/AC-1: bundled UI face — SIL OFL 1.1 obligation; license text ships at
     // public/assets/fonts/OFL.txt (renders as inert text like every row here).
-    Object.freeze({ text: 'Schrift „Baloo 2" von Ek Type (SIL OFL 1.1 — assets/fonts/OFL.txt)' }),
+    // V6/FIX3 (P1-10): the notice sentence localizes; font/foundry/license
+    // names stay verbatim inside both locale strings.
+    Object.freeze({ textKey: 'credits.technik.font' }),
   ]),
 });

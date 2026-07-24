@@ -41,19 +41,22 @@ function escapeHtml(value) {
 
 /**
  * Render one non-interactive credit row. Literal titles, names, licenses,
- * change indications, and URLs remain untouched apart from HTML escaping.
+ * and URLs remain untouched apart from HTML escaping; V6/FIX3 (P1-10) body
+ * copy and CC-BY change indications now arrive as t() keys (textKey/noteKey)
+ * so the EN locale no longer shows hardcoded German.
  * @param {import('../data/credits.js').CreditRow|object} row
  * @returns {string}
  */
 export function renderCreditRow(row) {
-  if (row.text) {
-    return `<p class="g81-credit-copy">${escapeHtml(row.text)}</p>`;
+  if (row.text || row.textKey) {
+    return `<p class="g81-credit-copy">${escapeHtml(row.textKey ? tx(row.textKey) : row.text)}</p>`;
   }
   if (row.link) {
     return `<p class="g81-credit-url" data-credit-url>${escapeHtml(row.link)}</p>`;
   }
 
-  const note = row.note ? `, ${escapeHtml(row.note)}` : '';
+  const noteText = row.noteKey ? tx(row.noteKey) : row.note;
+  const note = noteText ? `, ${escapeHtml(noteText)}` : '';
   const source = row.source
     ? `<span class="g81-credit-source">· ${tx('credits.source')}: ${escapeHtml(row.source)}</span>`
     : '';

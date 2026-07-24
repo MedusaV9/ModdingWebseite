@@ -346,7 +346,7 @@ import { CROPS } from '../src/data/crops.js';
 import { FURNITURE } from '../src/data/furniture.js';
 import {
   getFoodIcon, getCropIcon, getSlotIcon, getFurnitureIcon,
-  foodIconIds, slotIconIds,
+  foodIconIds, slotIconIds, itemIconIds,
 } from '../src/ui/foodIcons.js';
 import { icon, iconNames, iconTinted, stripRawGlyphs } from '../src/ui/icons.js';
 import { HIGHLIGHT_ICONS, endCardHighlights } from '../src/ui/recapOverlay.logic.js';
@@ -407,6 +407,31 @@ test('V6/D3 foodIcons: every furniture.js slot resolves to an authored category 
   for (const entry of FURNITURE) {
     assert.ok(getFurnitureIcon(entry, 34).startsWith('<svg '), `furniture '${entry.id}'`);
   }
+});
+
+test('V6/FIX3 (P1-13) foodIcons: the four kitchen appliances get DISTINCT per-item glyphs', () => {
+  const applianceIds = ['toaster', 'kitchenCoffeeMachine', 'kitchenBlender', 'kitchenMicrowave'];
+  // every override id must exist in the furniture catalog (no phantom rows)
+  for (const id of itemIconIds()) {
+    assert.ok(FURNITURE.some((e) => e.id === id), `ITEM_PATHS phantom entry '${id}'`);
+  }
+  assert.deepEqual(itemIconIds().sort(), [...applianceIds].sort());
+  const rendered = new Set();
+  const generic = getSlotIcon('appliance', 34);
+  for (const id of applianceIds) {
+    const entry = FURNITURE.find((e) => e.id === id);
+    assert.ok(entry, `furniture catalog is missing '${id}'`);
+    const svg = getFurnitureIcon(entry, 34);
+    assert.ok(svg.startsWith('<svg '), `getFurnitureIcon('${id}')`);
+    assert.notEqual(svg, generic, `'${id}' still renders the generic appliance glyph`);
+    assert.equal(xmlError(svg), null, `item '${id}': ${xmlError(svg)}`);
+    assert.ok(!EMOJI_RE.test(svg), `item '${id}' contains an emoji codepoint`);
+    rendered.add(svg);
+  }
+  assert.equal(rendered.size, applianceIds.length, 'appliance glyphs must be pairwise distinct');
+  // non-appliance furniture still resolves through its slot category
+  const sofaEntry = FURNITURE.find((e) => e.slot === 'sofa');
+  assert.equal(getFurnitureIcon(sofaEntry, 34), getSlotIcon('sofa', 34));
 });
 
 test('V6/D3 foodIcons: every crops.js id resolves (crop ids are food ids)', () => {

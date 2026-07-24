@@ -136,6 +136,46 @@ function targetFor(gameId) {
   return null;
 }
 
+// ── V6/FIX3 (P2-12): Funkelpark day-trip loading card ──────────────────────
+// A parkTrip launch rides cityDrive, so both veil cards (pre-switch launch()
+// card + the adopted showLoading() card) used to show the „Shopping Cruise"
+// title over the city cover art. Same card anatomy, park-themed override:
+// authored ferris-wheel line art (data-URI, white silhouette over a festival
+// gradient — the loadingVeil ready-line data-URI precedent) + its own title.
+const PARK_TRIP_COVER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">'
+  + '<g fill="none" stroke="#fff" stroke-opacity="0.8" stroke-width="3" stroke-linecap="round">'
+  + '<circle cx="100" cy="54" r="32"/>'
+  + '<path d="M100 22v64M68 54h64M77.4 31.4l45.2 45.2M122.6 31.4 77.4 76.6"/>'
+  + '<path d="M100 86 80 114M100 86l20 28"/>'
+  + '</g>'
+  + '<circle cx="100" cy="54" r="6" fill="#fff" fill-opacity="0.95"/>'
+  + '<g fill="#fff" fill-opacity="0.9">'
+  + '<circle cx="100" cy="22" r="5.5"/><circle cx="132" cy="54" r="5.5"/>'
+  + '<circle cx="68" cy="54" r="5.5"/><circle cx="122.6" cy="31.4" r="5.5"/>'
+  + '<circle cx="77.4" cy="31.4" r="5.5"/><circle cx="122.6" cy="76.6" r="5.5"/>'
+  + '<circle cx="77.4" cy="76.6" r="5.5"/>'
+  + '</g>'
+  + '<path d="M8 8 20 22 32 8 44 22 56 8" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3" stroke-linejoin="round"/>'
+  + '<path d="M144 8l12 14 12-14 12 14 12-14" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3" stroke-linejoin="round"/>'
+  + '</svg>';
+
+/**
+ * Veil-card override for the Funkelpark day trip (null for everything else —
+ * callers fall back to the game's own cover/gradient/title).
+ * @param {string|undefined} tripMode launch params `mode`
+ * @returns {{cover: string, gradient: string, title: string}|null}
+ */
+function parkTripCardMeta(tripMode) {
+  if (tripMode !== 'parkTrip') return null;
+  return {
+    cover: `data:image/svg+xml,${encodeURIComponent(PARK_TRIP_COVER_SVG)}`,
+    gradient: 'linear-gradient(155deg, #FFE9F3 0%, #FFB9D6 52%, #8E7CD8 100%)',
+    title: t('mg.title.parkTrip'),
+  };
+}
+// ── end V6/FIX3 (P2-12) ─────────────────────────────────────────────────────
+
 // V4/G56 (§G3.3): module NAMESPACE loaders for the games — registry.loadGame
 // returns only the default export, and registry.js is frozen (§E0.1-19), so
 // the framework reads G57's module-level `export const controls` through its
@@ -886,15 +926,19 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       // Cover backdrop: the game's cover art over its accent gradient — a
       // missing/unloadable cover falls back to the gradient (§G7.1 rule:
       // onerror swap, never a broken image). Same for the decorative motif.
-      loadingEl.querySelector('.mg-loading-cover').style.background = fallbackGradient(meta.id);
+      // V6/FIX3 (P2-12): a Funkelpark day trip overrides title/cover/gradient
+      // (parkTrip rides cityDrive — its own card art would read as shopping).
+      const parkCard = parkTripCardMeta(launchParams?.mode);
+      loadingEl.querySelector('.mg-loading-cover').style.background =
+        parkCard?.gradient ?? fallbackGradient(meta.id);
       const coverImg = loadingEl.querySelector('.mg-loading-cover-img');
       coverImg.addEventListener('error', () => coverImg.remove());
-      coverImg.src = coverUrl(meta.id);
+      coverImg.src = parkCard?.cover ?? coverUrl(meta.id);
       const motif = loadingEl.querySelector('.mg-loading-motif');
       motif.addEventListener('error', () => motif.remove());
       motif.src = 'assets/ui/gooby_loading_motif.png';
       loadingEl.querySelector('.mg-loading-ready').textContent = txD('ui2.loading.getReady');
-      loadingEl.querySelector('.mg-loading-title').textContent = t(meta.titleKey);
+      loadingEl.querySelector('.mg-loading-title').textContent = parkCard?.title ?? t(meta.titleKey);
       const tipN = 1 + Math.floor(Math.random() * LOADING_TIP_COUNT);
       loadingEl.querySelector('.mg-loading-tip').textContent = txD(`ui2.loading.tip${tipN}`);
       // V4/AC-3: ADOPT the card into the loading veil — the cream curtain,
@@ -1557,7 +1601,9 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     // card into the same veil. Awaited: the switch starts behind cover. ──
     await veil.show({
       mode: 'game',
-      meta: { cover: coverUrl(meta.id), gradient: fallbackGradient(meta.id), title: t(meta.titleKey) },
+      // V6/FIX3 (P2-12): Funkelpark trips get the park card, not cityDrive's
+      meta: parkTripCardMeta(params?.mode)
+        ?? { cover: coverUrl(meta.id), gradient: fallbackGradient(meta.id), title: t(meta.titleKey) },
     });
     const deadline = Date.now() + LAUNCH_RETRY_MAX_MS;
     const settled = () =>

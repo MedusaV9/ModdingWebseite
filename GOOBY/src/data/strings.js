@@ -52,6 +52,11 @@ import { EN as V4_DEV_EN, DE as V4_DEV_DE } from './strings/v4-dev.js';
 import { EN as V4_CONTROLS_EN, DE as V4_CONTROLS_DE } from './strings/v4-controls.js';
 import { EN as V4_DIFFICULTY_EN, DE as V4_DIFFICULTY_DE } from './strings/v4-difficulty.js';
 import { EN as V4_RECAP_EN, DE as V4_RECAP_DE } from './strings/v4-recap.js';
+// V6/FIX3 (Sol P2-1/P2-2): these two v4 modules were only ever consumed via
+// their owners' local tx() fallbacks — every first t() lookup warned before
+// the fallback answered. Spread them like the other v4 modules.
+import { EN as V4_RECAP2_EN, DE as V4_RECAP2_DE } from './strings/v4-recap2.js';
+import { EN as V4_GPGROUP5_EN, DE as V4_GPGROUP5_DE } from './strings/v4-gpgroup5.js';
 import { EN as V4_XP_EN, DE as V4_XP_DE } from './strings/v4-xp.js';
 import { EN as V4_MODIFIER_EN, DE as V4_MODIFIER_DE } from './strings/v4-modifier.js';
 import { EN as V4_SICK_EN, DE as V4_SICK_DE } from './strings/v4-sick.js';
@@ -99,6 +104,9 @@ import { EN as V6_PARK_EN, DE as V6_PARK_DE } from './strings/v6-park.js';
 // V6/F1: the 36 new sticker-book strings + six themed page titles — same
 // versioned-module pattern, spread below AFTER v6-park, always EN + DE.
 import { EN as V6_STICKERS_EN, DE as V6_STICKERS_DE } from './strings/v6-stickers.js';
+// V6/FIX3: post-eval fix keys (credits/photos/shop/quests/park/album) —
+// spread below AFTER v6-stickers, always EN + DE.
+import { EN as V6_FIXES_EN, DE as V6_FIXES_DE } from './strings/v6-fixes.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -627,6 +635,8 @@ export const EN = {
   ...V4_CONTROLS_EN,
   ...V4_DIFFICULTY_EN,
   ...V4_RECAP_EN,
+  ...V4_RECAP2_EN, // V6/FIX3 (Sol P2-1)
+  ...V4_GPGROUP5_EN, // V6/FIX3 (Sol P2-2)
   ...V4_XP_EN,
   ...V4_MODIFIER_EN,
   ...V4_SICK_EN,
@@ -652,6 +662,7 @@ export const EN = {
   ...V6_VACATION_CONTENT_EN, // V6/D2
   ...V6_PARK_EN, // V6/E3 (+E2 coaster captions)
   ...V6_STICKERS_EN, // V6/F1
+  ...V6_FIXES_EN, // V6/FIX3
 };
 
 /** @type {Record<string, string>} */
@@ -1180,6 +1191,8 @@ export const DE = {
   ...V4_CONTROLS_DE,
   ...V4_DIFFICULTY_DE,
   ...V4_RECAP_DE,
+  ...V4_RECAP2_DE, // V6/FIX3 (Sol P2-1)
+  ...V4_GPGROUP5_DE, // V6/FIX3 (Sol P2-2)
   ...V4_XP_DE,
   ...V4_MODIFIER_DE,
   ...V4_SICK_DE,
@@ -1205,6 +1218,7 @@ export const DE = {
   ...V6_VACATION_CONTENT_DE, // V6/D2
   ...V6_PARK_DE, // V6/E3 (+E2 coaster captions)
   ...V6_STICKERS_DE, // V6/F1
+  ...V6_FIXES_DE, // V6/FIX3
 };
 
 const DICTS = { en: EN, de: DE };

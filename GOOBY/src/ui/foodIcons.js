@@ -184,6 +184,23 @@ const SLOT_PATHS = {
     `<rect x="4.2" y="12.6" width="7" height="7" rx="1.4" fill="${RED}" ${plump(RED, 1.2)}/><rect x="7.6" y="5.4" width="7" height="7" rx="1.4" fill="${YELLOW}" ${plump(YELLOW, 1.2)}/><circle cx="16.8" cy="16" r="3.6" fill="${BLUE_DEEP}" ${plump(BLUE_DEEP, 1.2)}/><path d="M13.2 16h7.2" stroke="#fff" stroke-width="1.4" opacity="0.7" fill="none"/><path d="M7.7 16.1h.9M11.1 8.9h.9" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.8" fill="none"/>`,
 };
 
+// ── PER-ITEM overrides — data/furniture.js entry ids (V6/FIX3 P1-13) ────────
+// The four kitchen 'appliance' items shared the one generic category glyph, so
+// the furniture tab showed four identical cards. getFurnitureIcon checks this
+// map by ENTRY id before falling back to the slot category (same 2-tone +
+// plump() language as everything above).
+/** @type {Record<string, string>} */
+const ITEM_PATHS = {
+  toaster:
+    `<rect x="7" y="5.2" width="4.2" height="6" rx="1.5" fill="${GOLD}" ${plump(GOLD, 1.2)}/><rect x="12.8" y="5.2" width="4.2" height="6" rx="1.5" fill="#E0A85C" ${plump('#E0A85C', 1.2)}/><path d="M3.6 13.2c0-1.7 1.3-3 3-3h10.8c1.7 0 3 1.3 3 3v4.4a2.6 2.6 0 0 1-2.6 2.6H6.2a2.6 2.6 0 0 1-2.6-2.6z" fill="${BLUE}" ${plump(BLUE)}/><path d="M21.2 12.8v2.6" stroke="${GREY}" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="8.6" cy="15.6" r="1.2" fill="${CREAM}"/><circle cx="12.2" cy="15.6" r="1.2" fill="${CREAM}"/><path d="M5.8 12.8l2.2-.8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.7" fill="none"/>`,
+  kitchenCoffeeMachine:
+    `<rect x="5" y="2.8" width="14" height="4.6" rx="1.8" fill="#6E7787" ${plump('#6E7787')}/><rect x="8.2" y="7.4" width="7.6" height="2.4" rx="1" fill="#5A6272" ${plump('#5A6272', 1.2)}/><path d="M12 10v1.8" stroke="${CHOCO}" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M9.4 12.2h5.2v2a2.6 2.6 0 0 1-2.6 2.6 2.6 2.6 0 0 1-2.6-2.6z" fill="${CREAM}" ${plump(CREAM, 1.2)}/><path d="M14.8 13h.6a1.4 1.4 0 0 1 0 2.8h-.6" stroke="${CREAM}" stroke-width="1.4" fill="none"/><rect x="4.6" y="18" width="14.8" height="2.6" rx="1.3" fill="#5A6272" ${plump('#5A6272', 1.2)}/><circle cx="16.9" cy="5.1" r="1.1" fill="${RED}"/><path d="M7 4.8l2.4-.6" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.7" fill="none"/>`,
+  kitchenBlender:
+    `<path d="M8 4.6h8l-1 8.9a2.2 2.2 0 0 1-2.2 1.9h-1.6A2.2 2.2 0 0 1 9 13.5z" fill="#CFE8F5" ${plump('#CFE8F5')}/><path d="M8.7 8.6h6.6l-.5 4.6a1.9 1.9 0 0 1-1.9 1.6h-1.8a1.9 1.9 0 0 1-1.9-1.6z" fill="${PINK_SOFT}"/><rect x="7.4" y="2.4" width="9.2" height="2.2" rx="1.1" fill="#6E7787" ${plump('#6E7787', 1.2)}/><rect x="7" y="15.6" width="10" height="5" rx="1.8" fill="#6E7787" ${plump('#6E7787')}/><circle cx="12" cy="18.1" r="1.2" fill="${RED}"/><path d="M9.6 6.8l1.6-.5" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.7" fill="none"/>`,
+  kitchenMicrowave:
+    `<rect x="2.8" y="6" width="18.4" height="12" rx="2.2" fill="#6E7787" ${plump('#6E7787')}/><rect x="5" y="8.2" width="10.2" height="7.6" rx="1.2" fill="#4C5566"/><ellipse cx="10.1" cy="13.6" rx="3" ry="1.2" fill="${CREAM}"/><circle cx="18.3" cy="10" r="1.2" fill="${CREAM}"/><path d="M17.4 12.8h1.8M17.4 14.8h1.8" stroke="${CREAM}" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M6.4 18.4v1.2M17.6 18.4v1.2" stroke="${GREY}" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M6.4 9.9l2.2-.8" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.7" fill="none"/>`,
+};
+
 /** Fallback plate glyph (unknown ids warn — the catalogs must stay complete). */
 const PLATE =
   `<circle cx="12" cy="12" r="9.2" fill="#F3E4CE" ${plump('#F3E4CE')}/><circle cx="12" cy="12" r="5.4" fill="#fff" opacity="0.65"/>`;
@@ -243,12 +260,15 @@ export function getSlotIcon(slotId, size = 24) {
 }
 
 /**
- * Authored icon for a furniture catalog entry (resolves via its slot).
- * @param {{slot: string}} entry data/furniture.js FurnitureEntry
+ * Authored icon for a furniture catalog entry. V6/FIX3 (P1-13): per-item
+ * override first (the four kitchen appliances), then the slot category.
+ * @param {{id?: string, slot: string}} entry data/furniture.js FurnitureEntry
  * @param {number} [size] px
  * @returns {string}
  */
 export function getFurnitureIcon(entry, size = 24) {
+  const inner = ITEM_PATHS[entry?.id ?? ''];
+  if (inner) return wrap(inner, size);
   return getSlotIcon(entry?.slot ?? '', size);
 }
 
@@ -260,4 +280,9 @@ export function foodIconIds() {
 /** @returns {string[]} all slot ids with an authored icon (catalog-sync test) */
 export function slotIconIds() {
   return Object.keys(SLOT_PATHS);
+}
+
+/** @returns {string[]} furniture ENTRY ids with a per-item override (V6/FIX3) */
+export function itemIconIds() {
+  return Object.keys(ITEM_PATHS);
 }

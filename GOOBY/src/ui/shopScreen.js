@@ -332,7 +332,12 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         </span>
         ${canOffer
           ? `<button class="btn btn-yellow qd-buy" ${gate.ok ? '' : 'disabled'}>${t('shop.qd.unlock', { price: ECONOMY.QUICK_DELIVERY_PRICE })}</button>`
-          : `<span class="shop-banner-body shop-banner-hint">${level < ECONOMY.QUICK_DELIVERY_LEVEL ? t('shop.qd.needLevel', { level: ECONOMY.QUICK_DELIVERY_LEVEL }) : t('shop.browseHint')}</span>`}
+          : `<span class="shop-banner-body shop-banner-hint">${level < ECONOMY.QUICK_DELIVERY_LEVEL
+    ? t('shop.qd.needLevel', { level: ECONOMY.QUICK_DELIVERY_LEVEL })
+    // V6/FIX3 (P1-12): browsing from home at unlock level used to repeat
+    // the page's „Drive to the shop…" banner — state the REAL unlock
+    // condition instead (price at the next in-person trip, §C4.6).
+    : t('shop.qd.unlockHint', { price: ECONOMY.QUICK_DELIVERY_PRICE })}</span>`}
       `;
       banner.querySelector('.qd-buy')?.addEventListener('click', () => {
         const res = buyQuickDelivery(store);

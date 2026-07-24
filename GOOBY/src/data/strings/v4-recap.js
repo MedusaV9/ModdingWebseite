@@ -30,6 +30,7 @@ export const EN = {
   'recap.line.days': 'Since then: {n} days',
   'recap.line.days.one': 'Since then: 1 day',
   'recap.line.games': '{n} games played',
+  'recap.line.games.one': '1 game played', // V6/FIX3 (Sol P2-1): missing singular
   'recap.line.coinsEarned': '{n} coins earned',
   'recap.line.tickles': 'belly rubbed {n}×',
   'recap.line.feeds': '{n} tasty meals',
@@ -70,6 +71,7 @@ export const DE = {
   'recap.line.days': 'Seitdem: {n} Tage vergangen',
   'recap.line.days.one': 'Seitdem: 1 Tag vergangen',
   'recap.line.games': '{n} Spiele gespielt',
+  'recap.line.games.one': '1 Spiel gespielt', // V6/FIX3 (Sol P2-1): missing singular
   'recap.line.coinsEarned': '{n} Münzen verdient',
   'recap.line.tickles': '{n}× Bauch gekrault',
   'recap.line.feeds': '{n}× lecker gefuttert',

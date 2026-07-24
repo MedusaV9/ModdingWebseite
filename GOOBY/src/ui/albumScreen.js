@@ -237,10 +237,13 @@ const ALBUM_CSS = `
 .g59-ph-grid{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:0.375rem;}
 .g59-ph-cell{position:relative;border:none;background:rgba(74,59,54,.08);border-radius:var(--radius-row);padding:0;aspect-ratio:1;min-width:0;min-height:max(44px,2.75rem);overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .g59-ph-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
-.g59-ph-empty{width:100%;background:var(--white);border-radius:var(--card-radius);box-shadow:var(--shadow-soft);padding:1.5rem 1rem;display:flex;flex-direction:column;align-items:center;gap:0.625rem;text-align:center;}
-.g59-ph-empty-art{position:relative;width:6.5rem;height:6.5rem;border-radius:50%;background:rgba(244,156,187,.25);display:flex;align-items:center;justify-content:center;color:var(--pink);}
-.g59-ph-empty-art .g59-ph-cam{position:absolute;right:0.125rem;bottom:0.25rem;width:2.375rem;height:2.375rem;border-radius:50%;background:var(--white);box-shadow:var(--shadow-soft);display:flex;align-items:center;justify-content:center;color:var(--teal-dark);}
-.g59-ph-empty-txt{margin:0;font-size:0.9375rem;font-weight:800;color:var(--brown);}
+/* V6/FIX3 (P1-11): the empty card rides the shared .ac-emptystate dashed
+   pattern (codes panel / garden sell precedent) — this rule only adds width
+   and undoes the kit's svg dimming for the art badge + CTA. */
+.g59-ph-empty{width:100%;gap:0.625rem;}
+.g59-ph-empty-art{width:4.25rem;height:4.25rem;border-radius:50%;background:rgba(244,156,187,.22);box-shadow:inset 0 0 0 0.125rem rgba(244,156,187,.35);display:flex;align-items:center;justify-content:center;color:var(--pink);}
+.g59-ph-empty-art svg,.g59-ph-cta svg{opacity:1;}
+.g59-ph-empty-txt{margin:0;font-size:0.9375rem;font-weight:800;color:var(--brown);line-height:1.35;}
 .g59-ph-cta{display:inline-flex;align-items:center;gap:0.375rem;border:none;border-radius:999px;min-height:max(44px,2.75rem);padding:0.5625rem 1rem;font-family:inherit;font-size:0.8125rem;font-weight:800;background:var(--pink);color:#fff;box-shadow:var(--shadow-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .g59-vw{position:fixed;inset:0;z-index:var(--z-media);background:var(--veil-deep);display:flex;flex-direction:column;} /* V4/UI-DEEP: warm --veil-deep + media z-rung (was literal plum/70) */
 .g59-vw-top{flex:none;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:max(0.5rem,var(--safe-top)) max(0.5rem,var(--safe-right)) 0.25rem max(0.5rem,var(--safe-left));}
@@ -628,18 +631,26 @@ export function registerAlbumScreen({ store, ui, audio }) {
       wrap.className = 'g59-ph-wrap';
       body.appendChild(wrap);
       const token = ++photosToken;
+      // V6/FIX3 (P1-11): keep the chip hidden while the (first-visit) IDB
+      // list resolves — fill() shows it again as soon as a count exists.
+      count.hidden = true;
 
       const fill = (metas) => {
         if (token !== photosToken || !wrap.isConnected) return;
         count.textContent = `${metas.length}/${GALLERY.CAP}`; // §C-SYS9.2 „n/40"
+        // V6/FIX3 (P1-11): a „0/40" chip on an empty tab reads like a broken
+        // stat — hide it until the first snapshot exists (render() unhides).
+        count.hidden = metas.length === 0;
         wrap.innerHTML = '';
         if (metas.length === 0) {
-          // §C-SYS9.2 empty state: Gooby-with-camera + photo-mode deep link
+          // §C-SYS9.2 empty state + photo-mode deep link. V6/FIX3 (P1-11):
+          // restyled onto the shared .ac-emptystate dashed card (codes-panel
+          // pattern) with the authored g59 camera glyph.
           const empty = document.createElement('div');
-          empty.className = 'g59-ph-empty';
+          empty.className = 'g59-ph-empty ac-emptystate';
           empty.innerHTML = `
-            <span class="g59-ph-empty-art">${icon('rabbit', 56)}<span class="g59-ph-cam">${g59Icon('camera', 20)}</span></span>
-            <p class="g59-ph-empty-txt">${tG('gallery.empty')}</p>
+            <span class="g59-ph-empty-art">${g59Icon('camera', 30)}</span>
+            <p class="g59-ph-empty-txt">${tG('gallery.emptyTitle')}</p>
             <button class="g59-ph-cta">${g59Icon('camera', 16)}<span>${tG('gallery.emptyCta')}</span></button>`;
           empty.querySelector('.g59-ph-cta').addEventListener('click', () => {
             audio.play('ui.tap');
@@ -985,9 +996,13 @@ export function registerAlbumScreen({ store, ui, audio }) {
       const herzNew = !!state?.stickers?.unlocked?.herzGooby && state?.stickers?.seen?.herzGooby !== true;
       const unseen = counts.unseen + (herzNew && !STICKERS_BY_ID.herzGooby ? 1 : 0);
       topTabs.innerHTML = '';
+      // V6/FIX3 (P2-23): the book tab uses the SHORT label („Book"/„Buch") —
+      // EN „Sticker Book" was the only 2-line tab in the strip (the sibling
+      // „Stickers" tab already establishes context; profileScreen keeps the
+      // long album.tab.book).
       for (const [tabId, labelKey] of [
         ['collections', 'album.tab.collections'],
-        ['book', 'album.tab.book'],
+        ['book', 'album.tab.bookShort'],
         ['photos', 'album.tab.photos'], // V4/G59 (§C-SYS9.2)
       ]) {
         const tab = document.createElement('button');
@@ -1010,6 +1025,9 @@ export function registerAlbumScreen({ store, ui, audio }) {
       }
 
       body.innerHTML = '';
+      // V6/FIX3 (P1-11): only the empty Fotos tab hides the chip — every
+      // render starts visible so tab switches can't inherit hidden state.
+      count.hidden = false;
       if (activeTab === 'book') renderBook();
       else if (activeTab === 'photos') renderPhotos(); // V4/G59
       else renderCollections();
