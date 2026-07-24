@@ -29,6 +29,9 @@ import { t, getLang } from '../../data/strings.js'; // V4/GAME-POLISH-5: + getLa
 // V4/GAME-POLISH-5: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
 // ride the versioned module through the local tx() fallback below.
 import { EN as GP5_EN, DE as GP5_DE } from '../../data/strings/v4-gpgroup5.js';
+// V6/C4 (GAME-JUICE): coin/arrival float strings ride the v6-juice module
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
+import { clampFloatTextToView } from '../framework.js'; // V6/C4: chase cam → clamp floats
 import {
   generateCityLayout,
   layoutColliders,
@@ -82,11 +85,26 @@ export const DRIVE_FX = Object.freeze({
   NEAR_BANNER_COOLDOWN_SEC: 2.5,
 });
 
-/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback. */
+// ── V6/C4 (GAME-JUICE): drive-pair juice tuning — frozen module-local
+// (§E0.1-3). STRICTLY cosmetic and — per the PLAN4 §C7.2/§G4.8 motion-comfort
+// ruling — the drive pair adds NO camera shake: floats, particles, audio and
+// the passenger lean below are the whole budget. deliveryRush shares this via
+// the same export channel as CITY_BANDS/buildCity.
+export const DRIVE_JUICE6 = Object.freeze({
+  /** Passenger Gooby leans into turns: max roll (rad), yaw→roll gain, lerp/s. */
+  LEAN_MAX_RAD: 0.16,
+  LEAN_YAW_GAIN: 0.35,
+  LEAN_SMOOTH: 6,
+});
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
+/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback.
+ * V6/C4: also consults the v6-juice table (C3 commits the strings.js import). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  let text = (getLang() === 'de' ? GP5_DE : GP5_EN)[key] ?? key;
+  const de = getLang() === 'de';
+  let text = (de ? GP5_DE : GP5_EN)[key] ?? (de ? JUICE_DE : JUICE_EN)[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
@@ -108,6 +126,61 @@ const _guideDir = new THREE.Vector3();
 const _HIDDEN_M4 = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
 const _dustPos = new THREE.Vector3();
 const _nearPos = new THREE.Vector3();
+const _floatPos = new THREE.Vector3(); // V6/C4: coin/arrival float spawn temp
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing).
+ * Shared with deliveryRush through the module export list below (the same
+ * channel that already shares CITY_BANDS/buildCity/buildRouteGuides). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      // world-scale sprite: the chase cam sits ~10 m back, so floats read
+      // at ~3× the tabletop-game size
+      sprite.scale.set(4.2, 1.4, 1);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 2.1, halfH: 0.7 }));
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 2.6;
+        f.mat.opacity = Math.max(0, 1 - (f.age / f.life) ** 2);
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
+}
 
 // --- V2/G26 (§C10.2): city band dressing ------------------------------------
 // V2/G28 reuses: deliveryRush inherits this tint via the shared city setup —
@@ -552,6 +625,10 @@ export default {
     this.reduceMotion = prefersReducedMotion();
     // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
 
+    // V6/C4 (GAME-JUICE): coin/arrival float texts — the chase cam roams the
+    // whole city, so spawns clamp into view. NO camera shake added (§C7.2).
+    this.floats = createFloatTexts(scene, camera);
+
     // --- coin pickups (instanced; §C4.3 route coins / arcade scatter) -------
     this.coinGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.16, 14);
     this.coinGeo.rotateX(Math.PI / 2);
@@ -758,6 +835,9 @@ export default {
     this.ctx.hud.banner(t(this.mode === 'vetTrip' ? 'vet.arrived' : 'trip.arrived'));
     const park = this.layout.shop.parking; // V2/G21: = vet parking on a vetTrip
     this.particles.emit?.('confetti', new THREE.Vector3(park.x, T.ROAD_Y + 3, park.z), { count: 26 });
+    // V6/C4 juice: arrival label floats AT the parking ring (§C.5 #3 — the
+    // confetti + jingle were there; the WHERE wasn't)
+    this.floats.spawn(tx('v6.juice.arrived'), _floatPos.set(park.x, T.ROAD_Y + 2.6, park.z), '#D6428A');
     const coins = driveRewards({
       mode: this.mode, // V2/G21: same math for both trips (§C9.2)
       pickups: this.collected,
@@ -796,6 +876,11 @@ export default {
 
     // Gooby is the soul — keep him alive even in the car
     this.gooby.update(dt);
+    this.floats.update(dt); // V6/C4 juice
+    // V6/C4 juice: outside the drive phase the passenger lean settles upright
+    if (this.phase !== 'drive') {
+      this.gooby.group.rotation.z *= Math.max(0, 1 - dt * DRIVE_JUICE6.LEAN_SMOOTH);
+    }
     if (this.emotionT > 0) {
       this.emotionT -= dt;
       if (this.emotionT <= 0) this.gooby.setEmotion('happy');
@@ -931,8 +1016,21 @@ export default {
       }
       // drift dust at the rear bumper while the tires visibly work
       const h = this.car.heading();
-      const yawRate = Math.abs(wrapAngle(h - this.prevHeading)) / Math.max(1e-4, dt);
+      const yawSigned = wrapAngle(h - this.prevHeading) / Math.max(1e-4, dt); // V6/C4
+      const yawRate = Math.abs(yawSigned);
       this.prevHeading = h;
+      // V6/C4 juice: passenger Gooby leans into turns (§C.5 — cosmetic; the
+      // drive pair still adds NO camera shake per the §C7.2 ruling). Reduced
+      // motion keeps Gooby upright.
+      const leanTarget = this.reduceMotion
+        ? 0
+        : THREE.MathUtils.clamp(
+          -yawSigned * DRIVE_JUICE6.LEAN_YAW_GAIN,
+          -DRIVE_JUICE6.LEAN_MAX_RAD,
+          DRIVE_JUICE6.LEAN_MAX_RAD
+        );
+      this.gooby.group.rotation.z +=
+        (leanTarget - this.gooby.group.rotation.z) * Math.min(1, dt * DRIVE_JUICE6.LEAN_SMOOTH);
       this.dustT -= dt;
       if (!this.reduceMotion && speed > DRIVE_FX.DUST_MIN_SPEED
         && yawRate > DRIVE_FX.DUST_MIN_YAW_RATE && this.dustT <= 0) {
@@ -992,6 +1090,9 @@ export default {
         ctx.onScore(1);
         ctx.audio.play('coin.get');
         this.particles.emit?.('sparkles', new THREE.Vector3(coin.x, T.ROAD_Y + 1.4, coin.z), { count: 6 });
+        // V6/C4 juice: "+1" floats off the coin (§C.5 #1 — the drive pair had
+        // ZERO float texts; sfx + sparkles alone don't say WHAT was gained)
+        this.floats.spawn('+1', _floatPos.set(coin.x, T.ROAD_Y + 2.3, coin.z), '#D69A28');
         // arcade (§C4.7): coins respawn/scatter — reuse the slot elsewhere
         if (this.mode === 'arcade') Object.assign(coin, this.scatterCoins(1)[0]);
       }
@@ -1136,6 +1237,8 @@ export default {
     this.traffic?.dispose();
     this.gooby?.dispose();
     this.particles?.dispose?.();
+    this.floats?.dispose(); // V6/C4 juice
+    this.floats = null;
     this.chip?.remove();
     this.chip = null;
     this.veil?.remove();
@@ -1152,5 +1255,5 @@ export default {
   },
 };
 
-export { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows }; // V2/G28: deliveryRush consumes the shared dusk band table + instanced city assembly + arrow/route-line guides instead of duplicating them (§C1.2 #5, §C1.3, §C9.4)
+export { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows, createFloatTexts }; // V2/G28: deliveryRush consumes the shared dusk band table + instanced city assembly + arrow/route-line guides instead of duplicating them (§C1.2 #5, §C1.3, §C9.4); V6/C4 adds the shared float-text pool
 export const controls = Object.freeze({ invertible: true }); // V4/G57 (§G2.1 rule 4, §G3.3): global „Steuerung invertieren“ applies (G56 proxy / carController invertSteer param)

@@ -200,6 +200,24 @@ export function isMemoryEndlessOver(misses, tune = MEMORY) {
   return tune.ENDLESS && misses >= tune.ENDLESS_MISS_FLIPS;
 }
 
+// ── V6/C4 (GAME-JUICE): audiovisual-only feel tunables — STRICTLY cosmetic.
+// The frozen §C6.1 MEMORY scoring table above is untouched (pinned by
+// test/gamePolish6.test.js, the GP-1…4 invariant pattern).
+export const MEMORY_JUICE = Object.freeze({
+  /** Clean-streak beat: confetti count at Gooby when the peek is earned. */
+  STREAK_CONFETTI: 10,
+  /** Peek-token idle life: sinus scale pulse ±6 % (§C.1 audit item 3). */
+  TOKEN_PULSE_PCT: 0.06,
+  TOKEN_PULSE_HZ: 0.6,
+  /** One idle sparkle every ~3 s while the token is visible. */
+  TOKEN_SPARKLE_EVERY_SEC: 3,
+  /** Board-clear cascade: per-card hop, staggered left→right (§C.1 item 4). */
+  CLEAR_HOP_RISE: 0.22,
+  CLEAR_HOP_SEC: 0.35,
+  CLEAR_HOP_STAGGER_SEC: 0.04,
+});
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
 /** Deterministic certification model for the mode-aware memory bot. */
 export function simulateMemoryAutoplay(mode = 'normal', seed = 1) {
   const tune = applyDifficulty(MEMORY, mode);

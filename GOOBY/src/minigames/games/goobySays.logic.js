@@ -183,6 +183,32 @@ export function endlessShouldEnd(mode, mistakes) {
   return mode === 'endless' && mistakes >= 1;
 }
 
+// ── V6/C4 (GAME-JUICE): audiovisual-only feel tunables — STRICTLY cosmetic.
+// The frozen §C1.2 SAYS scoring table above is untouched (pinned by
+// test/gamePolish6.test.js, the GP-1…4 invariant pattern).
+export const SAYS_JUICE = Object.freeze({
+  /** Player pad press: quick press-dip depth (wu) + recovery time (s). */
+  PRESS_DIP_Y: 0.08,
+  PRESS_DIP_SEC: 0.2,
+  /** Conductor Gooby: min seconds between playback happyBounces (§C.2 #3). */
+  CONDUCT_BOUNCE_THROTTLE_SEC: 0.55,
+  /** Fail softening: 0.2 s camera micro-shake (reduced-motion gated). */
+  FAIL_SHAKE_SEC: 0.2,
+  FAIL_SHAKE_AMP: 0.06,
+  /** A giggle rides every 5th round banner (§C.2 #5). */
+  GIGGLE_EVERY_ROUNDS: 5,
+});
+
+/**
+ * V6/C4: whether a round banner carries the bonus `gooby.giggle` (every 5th).
+ * @param {number} round 1-based round number
+ * @returns {boolean}
+ */
+export function giggleRound(round) {
+  return round > 0 && round % SAYS_JUICE.GIGGLE_EVERY_ROUNDS === 0;
+}
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
 /**
  * Deterministic headless version of the shipped autoplay decisions. It is a
  * certification surface, not a second rules engine: same round sizes, slip

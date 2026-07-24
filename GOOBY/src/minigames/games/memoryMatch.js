@@ -10,13 +10,18 @@
 // store directly per §E8). Defaults to 1 (small layout).
 
 import * as THREE from 'three';
-import { t } from '../../data/strings.js';
+import { t, getLang } from '../../data/strings.js'; // V6/C4: + getLang (tx fallback)
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
+// V6/C4 (GAME-JUICE): float texts + board-clear cascade gate + juice strings
+import { clampFloatTextToView } from '../framework.js';
+import { prefersReducedMotion } from '../../ui/ui.js';
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
 import {
   MEMORY,
+  MEMORY_JUICE, // V6/C4: streak-beat/token-pulse/clear-cascade tuning
   FACE_KEYS,
   layoutForLevel,
   buildDeck,
@@ -28,6 +33,69 @@ import {
   applyDifficulty,
   isMemoryEndlessOver,
 } from './memoryMatch.logic.js';
+
+/** V6/C4: t() first, then the v6-juice EN/DE fallback (G52 tx pattern —
+ * C3 commits the strings.js import per the PLAN6 appendix rule). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? JUICE_DE : JUICE_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
+      sprite.scale.set(1.5, 0.5, 1);
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 1.1;
+        f.mat.opacity = 1 - (f.age / f.life) ** 2;
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
+}
 
 /** Procedural pastel card-back texture (dots on pink, shared per round). */
 function makeBackTexture() {
@@ -171,6 +239,8 @@ export default {
 
     // --- Gooby cameo above the grid, watching the reveals ---
     this.particles = createParticles(scene);
+    this.floats = createFloatTexts(scene, ctx.camera); // V6/C4: pair/streak floats
+    this.tokenSparkleT = MEMORY_JUICE.TOKEN_SPARKLE_EVERY_SEC; // V6/C4
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby); // G14: cameo wears the equipped outfits
     this.gooby.group.scale.setScalar(0.72);
@@ -278,6 +348,12 @@ export default {
       });
       this.particles.emit('sparkles', card.group.position.clone(), { count: 5 });
     }
+    // V6/C4 juice: "Pair!" float at the matched pair's midpoint (§C.1 item 1)
+    const mid = this.cards[a].group.position.clone()
+      .add(this.cards[b].group.position)
+      .multiplyScalar(0.5)
+      .add(new THREE.Vector3(0, 0.15, 0.6));
+    this.floats.spawn(tx('v6.juice.pair'), mid, '#2E8B57');
     this.picked = [];
     this.matched += 1;
     const progress = advancePeekProgress({
@@ -289,7 +365,15 @@ export default {
     const justEarned = !this.peekReady && progress.peekReady;
     this.peekReady = progress.peekReady;
     this.peekToken.visible = canUsePeek(this);
-    if (justEarned) this.ctx.hud.banner(t('mg.memory.peekReady'));
+    if (justEarned) {
+      this.ctx.hud.banner(t('mg.memory.peekReady'));
+      // V6/C4 juice: clean-streak beat — combo chime + confetti at Gooby
+      // (§C.1 item 2; the peek-earn branch was banner-only before).
+      this.ctx.audio.play('combo.up');
+      const gpos = this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0));
+      this.particles.emit('confetti', gpos, { count: MEMORY_JUICE.STREAK_CONFETTI });
+      this.floats.spawn(tx('v6.juice.streak', { n: this.cleanMatches }), gpos, '#D6428A');
+    }
     this.ctx.audio.play('card.match');
     this.gooby.play('happyBounce');
   },
@@ -351,6 +435,7 @@ export default {
       if (!seen.includes(i)) seen.push(i);
     }
     this.ctx.audio.play('card.flip');
+    this.ctx.audio.play('gooby.gasp'); // V6/C4 juice: delighted gasp on the peek
     this.ctx.hud.banner(t('mg.memory.peek'));
     this.particles.emit('sparkles', this.peekToken.position.clone(), { count: 10 });
   },
@@ -454,6 +539,22 @@ export default {
     const ctx = this.ctx;
     this.gooby.update(dt);
     this.particles.update(dt);
+    this.floats.update(dt); // V6/C4
+
+    // V6/C4 juice: peek-token idle life — sinus scale pulse (±6 %) + one
+    // sparkle every ~3 s while it waits to be tapped (§C.1 item 3).
+    if (this.peekToken.visible) {
+      const pulse = 1 + Math.sin(elapsed * MEMORY_JUICE.TOKEN_PULSE_HZ * Math.PI * 2)
+        * MEMORY_JUICE.TOKEN_PULSE_PCT;
+      this.peekToken.scale.setScalar(pulse);
+      this.tokenSparkleT -= dt;
+      if (this.tokenSparkleT <= 0) {
+        this.tokenSparkleT = MEMORY_JUICE.TOKEN_SPARKLE_EVERY_SEC;
+        this.particles.emit('sparkles', this.peekToken.position.clone(), { count: 1 });
+      }
+    } else {
+      this.peekToken.scale.setScalar(1);
+    }
 
     if (this.phase === 'ending') {
       this.endT += dt;
@@ -491,6 +592,8 @@ export default {
         ctx.audio.play('card.match');
         // V4/GAME-POLISH-2 juice: celebrate every endless board clear
         this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 10 });
+        // V6/C4 juice: name the board points at Gooby (§C.1 item 1, endless)
+        this.floats.spawn(`+${score}`, this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.5, 0.4)), '#2E8B57');
         this.gooby.play('happyBounce');
         this.resetEndlessBoard(elapsed);
         return;
@@ -504,6 +607,25 @@ export default {
       this.gooby.setEmotion('ecstatic');
       this.gooby.play('happyBounce');
       this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 16 });
+      this.floats.spawn(`+${score}`, this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.5, 0.4)), '#2E8B57'); // V6/C4
+      // V6/C4 juice: board-clear cascade — every card hops once, staggered
+      // left→right before onEnd; the full sweep is motion, so it is gated
+      // behind the OS reduced-motion preference (§C.1 item 4).
+      if (!prefersReducedMotion()) {
+        this.cards.forEach((card, i) => {
+          const grp = card.group;
+          const baseY = grp.position.y;
+          tween({
+            from: 0, to: 1,
+            duration: MEMORY_JUICE.CLEAR_HOP_SEC,
+            delay: i * MEMORY_JUICE.CLEAR_HOP_STAGGER_SEC,
+            ease: easings.easeOutQuad,
+            onUpdate: (v) => {
+              grp.position.y = baseY + Math.sin(v * Math.PI) * MEMORY_JUICE.CLEAR_HOP_RISE;
+            },
+          });
+        });
+      }
       if (this.autoplay) {
         console.log(
           `[memoryMatch] autoplay run ended — score ${score} ` +
@@ -517,6 +639,8 @@ export default {
   dispose() {
     this.offTap?.();
     this.particles?.dispose();
+    this.floats?.dispose(); // V6/C4
+    this.floats = null;
     this.gooby?.dispose();
     this.backTex?.dispose();
     for (const geo of this.ownedGeos ?? []) geo.dispose();

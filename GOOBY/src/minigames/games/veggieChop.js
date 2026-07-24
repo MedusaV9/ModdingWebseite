@@ -13,7 +13,11 @@
 import * as THREE from 'three';
 import { t, getLang } from '../../data/strings.js';
 import { EN as GP2_EN, DE as GP2_DE } from '../../data/strings/v4-gpgroup2.js';
+// V6/C4 (GAME-JUICE): frenzy float label rides the v6-juice module
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
 import { createParticles } from '../../gfx/particles.js';
+import { tween, easings } from '../../gfx/tween.js'; // V6/C4: half pop + shake + tint
+import { prefersReducedMotion } from '../../ui/ui.js'; // V6/C4: gate shake/flash
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { clampFloatTextToView } from '../framework.js';
@@ -39,11 +43,13 @@ import {
   segmentHitsMovingCircle,
 } from './veggieChop.logic.js';
 
-/** GP2 local i18n: strings.js first, v4-gpgroup2.js fallback (G52 pattern). */
+/** GP2 local i18n: strings.js first, v4-gpgroup2.js fallback (G52 pattern).
+ * V6/C4: also consults the v6-juice table (C3 commits the strings.js import). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  let text = (getLang() === 'de' ? GP2_DE : GP2_EN)[key] ?? key;
+  const de = getLang() === 'de';
+  let text = (de ? GP2_DE : GP2_EN)[key] ?? (de ? JUICE_DE : JUICE_EN)[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
@@ -58,6 +64,28 @@ const HALF_SIZE = 0.5;
 const TRAIL_MAX = 22;
 const TRAIL_LIFE = 0.22;
 const TRAIL_WIDTH = 0.15;
+
+// ── V6/C4 (GAME-JUICE): chop-juice tuning — frozen module-local (§E0.1-3;
+// veggieChop.logic.js is not owned by this pass). STRICTLY cosmetic: the
+// frozen §C1.2 #4 CHOP scoring table (+2/+1/−3) is untouched — pinned by
+// test/gamePolish6.test.js.
+export const CHOP_JUICE6 = Object.freeze({
+  /** Half pop-in: spawn scale + settle time (easeOutBack → 1, §C.6 #1). */
+  HALF_POP_SCALE: 0.55,
+  HALF_POP_SEC: 0.24,
+  /** Tiny confetti puff riding the tinted juice spray per chop. */
+  CHOP_CONFETTI: 3,
+  /** Frenzy entrance: confetti burst + golden backdrop pulse (§C.6 #2). */
+  FRENZY_CONFETTI: 16,
+  FRENZY_TINT_SEC: 0.6,
+  /** Junk-hit camera micro-shake: 0.2 s, tiny amplitude (§C.6 #3, RM-gated). */
+  JUNK_SHAKE_SEC: 0.2,
+  JUNK_SHAKE_AMP: 0.09,
+});
+// backdrop tint scratch colors (kitchen cream → frenzy gold)
+const _BG_BASE = new THREE.Color('#F6E7CF');
+const _BG_GOLD = new THREE.Color('#FFD98A');
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
 
 /** Fit a GLB into a target size, centered in a wrapper group. */
 function fitModel(model, targetSize) {
@@ -258,6 +286,8 @@ export default {
     this.frenzyCount = 0;
     this.frenzy = null;
     this.propLogged = false;
+    this.bgTween = null; // V6/C4: frenzy backdrop pulse
+    this.shakeTween = null; // V6/C4: junk micro-shake
 
     const camera = ctx.camera;
     camera.position.set(0, 0, 10);
@@ -485,6 +515,22 @@ export default {
     // V4/GAME-POLISH-2 juice: Gooby rides the frenzy hype
     this.gooby.setEmotion('ecstatic');
     this.emotionT = CHOP.FRENZY_DURATION_SEC;
+    // V6/C4 juice (§C.6 #2): the frenzy ENTERS instead of state-flipping —
+    // confetti burst + float at the arena + a golden backdrop pulse (flash ⇒
+    // reduced-motion gated; the banner + combo.up still carry it).
+    this.particles.emit('confetti', new THREE.Vector3(0, 1.1, 0.5), { count: CHOP_JUICE6.FRENZY_CONFETTI });
+    this.floats.spawn(tx('v6.juice.frenzy'), new THREE.Vector3(0, 0.4, 0.5), '#D69A28');
+    if (!prefersReducedMotion()) {
+      this.bgTween?.cancel();
+      this.bgTween = tween({
+        from: 0, to: 1, duration: CHOP_JUICE6.FRENZY_TINT_SEC, ease: easings.linear,
+        onUpdate: (v) => {
+          const bg = this.ctx?.scene?.background;
+          if (bg?.isColor) bg.copy(_BG_BASE).lerp(_BG_GOLD, Math.sin(v * Math.PI));
+        },
+        onComplete: () => { this.bgTween = null; },
+      });
+    }
   },
 
   /** Add a point to the swipe-trail ribbon. */
@@ -576,6 +622,8 @@ export default {
     } else if (this.swipeChops > 3) {
       this.particles.emit('sparkles', pos, { count: 5 });
     }
+    // V6/C4 juice (§C.6 #1): a tiny confetti puff rides the tinted spray
+    this.particles.emit('confetti', pos, { count: CHOP_JUICE6.CHOP_CONFETTI });
     // the two halves tumble apart under gravity
     const { rng } = this.ctx;
     for (const side of [-1, 1]) {
@@ -583,6 +631,18 @@ export default {
       holder.position.copy(pos);
       holder.visible = true;
       this.ctx.scene.add(holder);
+      // V6/C4 juice (§C.6 #1): the halves POP apart (easeOutBack settle to 1
+      // — the pooled holder's rest scale) instead of just appearing. The
+      // 0.24 s tween finishes long before the ~1 s fall returns the holder
+      // to the pool. RM-gated; the tumble physics below are untouched.
+      if (!prefersReducedMotion()) {
+        holder.scale.setScalar(CHOP_JUICE6.HALF_POP_SCALE);
+        tween({
+          from: CHOP_JUICE6.HALF_POP_SCALE, to: 1, duration: CHOP_JUICE6.HALF_POP_SEC,
+          ease: easings.easeOutBack,
+          onUpdate: (s) => holder.scale.setScalar(s),
+        });
+      }
       this.halves.push({
         key: item.half,
         holder,
@@ -611,6 +671,24 @@ export default {
     this.juice.emit(pos, '#8A7A5C', 10, this.ctx.rng);
     this.particles.emit('dizzyStars', pos);
     this.floats.spawn(`${this.tune.JUNK_PTS}`, pos, '#D64570');
+    // V6/C4 juice (§C.6 #3): 0.2 s camera micro-shake sells the splash —
+    // gated behind OS reduced motion (chop.junk + dizzyStars still carry it).
+    if (!prefersReducedMotion()) {
+      this.shakeTween?.cancel();
+      const cam = this.ctx.camera;
+      this.shakeTween = tween({
+        from: 1, to: 0, duration: CHOP_JUICE6.JUNK_SHAKE_SEC, ease: easings.easeOutQuad,
+        onUpdate: (k) => {
+          cam.position.x = Math.sin(k * 43) * CHOP_JUICE6.JUNK_SHAKE_AMP * k;
+          cam.position.y = Math.cos(k * 31) * CHOP_JUICE6.JUNK_SHAKE_AMP * k;
+        },
+        onComplete: () => {
+          cam.position.x = 0;
+          cam.position.y = 0;
+          this.shakeTween = null;
+        },
+      });
+    }
     this.ctx.hud.banner(t('mg.chop.junk'));
     this.gooby.setEmotion('dizzy');
     this.gooby.play('dizzy', { speed: 2.0 / this.tune.STUN_SEC });
@@ -780,6 +858,14 @@ export default {
     this.offStart?.();
     this.offDrag?.();
     this.offEnd?.();
+    // V6/C4 juice teardown: settle the camera + stop the backdrop pulse
+    if (this.shakeTween) {
+      this.shakeTween.cancel();
+      this.shakeTween = null;
+      this.ctx?.camera?.position.set(0, 0, 10);
+    }
+    this.bgTween?.cancel();
+    this.bgTween = null;
     this.floats?.dispose();
     this.juice?.dispose();
     this.particles?.dispose();

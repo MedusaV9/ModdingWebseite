@@ -18,6 +18,7 @@ import { t } from '../../data/strings.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new flash FX
+import { clampFloatTextToView } from '../framework.js'; // V6/C4 (GAME-JUICE)
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { buildNougatschleuse } from '../../home/nougatMesh.js';
@@ -48,6 +49,73 @@ const HOLE_SPACING = 8;
 const BALL_Y = 0.075;
 /** Windmill blade angular speed (rad/s). */
 const OMEGA = Math.PI * 2 * GOLF.WINDMILL_RPS;
+
+// ── V6/C4 (GAME-JUICE): golf-juice tuning — frozen module-local (§E0.1-3;
+// miniGolf.logic.js is not owned by this pass). STRICTLY cosmetic: the frozen
+// §C1.2 #6 GOLF scoring table (30/20/12/6) is untouched — pinned by
+// test/gamePolish6.test.js.
+export const GOLF_JUICE6 = Object.freeze({
+  /** Roll trail: sparkles while the ball runs hot (power shots, §C.4 #2). */
+  TRAIL_MIN_SPEED: 2.2,
+  TRAIL_EVERY_SEC: 0.08,
+  TRAIL_SPARKLES: 2, // halved under OS reduced motion
+  /** Power ticks: ui.count as the drag crosses each third of MAX_POWER. */
+  POWER_TICK_THIRDS: 3,
+  /** Bank flash: pooled impact-ring ping at the ball on bank/bump (§C.4 #4). */
+  BANK_RING_SCALE: 2.0,
+  BANK_RING_SEC: 0.28,
+});
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.5, 0.5, 1);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 1.1;
+        f.mat.opacity = Math.max(0, 1 - (f.age / f.life) ** 2);
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
+}
 
 /** Pastel sky gradient (§C1.3 binding look — pink → cream → mint). */
 function makePastelSky() {
@@ -245,6 +313,27 @@ export default {
       this.cupRings.push({ mesh, mat, tween: null });
     }
 
+    // --- V6/C4 (GAME-JUICE): pooled bank-impact rings + sink floats ----------
+    // The kit tiles clone shared cached GLB materials, so a wall must never
+    // flash in place (it would tint every wall) — a white ring ping at the
+    // impact point carries the bank instead.
+    /** @type {Array<{mesh: THREE.Mesh, mat: THREE.MeshBasicMaterial, tween: object|null}>} */
+    this.bankRings = [];
+    for (let i = 0; i < 2; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#FFFFFF', transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(this.ringGeo, mat);
+      mesh.visible = false;
+      this.ownedMats.push(mat);
+      scene.add(mesh);
+      this.bankRings.push({ mesh, mat, tween: null });
+    }
+    this.floats = createFloatTexts(scene, ctx.camera);
+    this.trailT = 0;
+    this.powerThird = 0;
+
     // --- Gooby the caddy -----------------------------------------------------
     this.particles = createParticles(scene);
     this.gooby = createGooby({ particles: this.particles });
@@ -265,6 +354,7 @@ export default {
     this.offDragStart = ctx.input.on('dragstart', (p) => {
       if (this.autoplay || this.state !== 'aim') return;
       this.drag = { sx: p.x, sy: p.y, x: p.x, y: p.y };
+      this.powerThird = 0; // V6/C4 juice: power ticks re-arm per drag
     });
     this.offDrag = ctx.input.on('drag', (p) => {
       if (!this.drag) return;
@@ -500,6 +590,14 @@ export default {
     }
     const hole = this.hole();
     const ox = this.offsetX(this.holeIdx);
+    // V6/C4 juice: power ticks — a low ui.count click as the drag crosses each
+    // third of MAX_POWER (§C.4 #3); re-crossing after easing off ticks again.
+    const third = Math.min(
+      GOLF_JUICE6.POWER_TICK_THIRDS,
+      Math.floor((aim.power / GOLF.MAX_POWER) * GOLF_JUICE6.POWER_TICK_THIRDS)
+    );
+    if (third > this.powerThird) this.ctx.audio.play('ui.count');
+    this.powerThird = third;
     const len = 0.4 + (aim.power / GOLF.MAX_POWER) * 2.2;
     for (let i = 0; i < this.dots.length; i += 1) {
       const f = ((i + 1) / this.dots.length) * len;
@@ -533,6 +631,32 @@ export default {
       onUpdate: (v) => {
         ring.mesh.scale.setScalar(1 + (to - 1) * v);
         ring.mat.opacity = 0.9 * (1 - v);
+      },
+      onComplete: () => {
+        ring.mesh.visible = false;
+        ring.tween = null;
+      },
+    });
+  },
+
+  /**
+   * V6/C4 juice: bank flash — pooled white ring ping where the ball banked
+   * (§C.4 #4). The kit wall materials are shared GLB caches, so the flash
+   * lives at the impact point instead of tinting every wall. RM-gated
+   * (golf.bank/golf.bump audio still carries the hit).
+   * @param {THREE.Vector3} pos world impact position (ball)
+   */
+  flashBankRing(pos) {
+    if (prefersReducedMotion()) return;
+    const ring = this.bankRings.find((r) => !r.mesh.visible) ?? this.bankRings[0];
+    ring.tween?.cancel();
+    ring.mesh.position.set(pos.x, pos.y + 0.02, pos.z);
+    ring.mesh.visible = true;
+    ring.tween = tween({
+      from: 0, to: 1, duration: GOLF_JUICE6.BANK_RING_SEC, ease: easings.easeOutQuad,
+      onUpdate: (v) => {
+        ring.mesh.scale.setScalar(1 + (GOLF_JUICE6.BANK_RING_SCALE - 1) * v);
+        ring.mat.opacity = 0.8 * (1 - v);
       },
       onComplete: () => {
         ring.mesh.visible = false;
@@ -575,6 +699,14 @@ export default {
     this.ctx.onScore(points);
     const cupPos = new THREE.Vector3(
       this.offsetX(this.holeIdx) + hole.hole.x, 0.4, hole.hole.z
+    );
+    // V6/C4 juice: sink float — the points finally land AT the cup (§C.4 #1;
+    // the four banner variants live at the top of the screen). The 10-stroke
+    // consolation floats at the ball instead (it never reached the cup).
+    this.floats.spawn(
+      `+${points}`,
+      holed ? cupPos.clone().add(new THREE.Vector3(0, 0.2, 0)) : this.ballMesh.position.clone().setY(0.45),
+      holed ? (ace ? '#FF7BA9' : '#D69A28') : '#8A7F78'
     );
     if (holed) {
       this.ballMesh.visible = false;
@@ -679,6 +811,7 @@ export default {
     this.theta = elapsed * OMEGA;
     this.gooby.update(dt);
     this.particles.update?.(dt);
+    this.floats.update(dt); // V6/C4 juice
     this.bankSoundT = Math.max(0, this.bankSoundT - dt);
     ctx.hud.setTime(elapsed);
 
@@ -755,9 +888,23 @@ export default {
           ctx.audio.play(ev === 'bump' ? 'golf.bump' : 'golf.bank');
           // V4/GAME-POLISH-4: tiny sparkle ping so banks read visually too
           this.particles.emit?.('sparkles', this.ballMesh.position, { count: GOLF_JUICE.BANK_SPARKLES });
+          this.flashBankRing(this.ballMesh.position); // V6/C4 juice (§C.4 #4)
         }
       }
       this.syncBall();
+      // V6/C4 juice: roll sparkle trail on power shots (§C.4 #2) — count
+      // halved under OS reduced motion rather than dropped (it's tiny).
+      const rollSpeedNow = Math.hypot(this.ball.vx, this.ball.vz);
+      if (this.state === 'rolling' && rollSpeedNow > GOLF_JUICE6.TRAIL_MIN_SPEED) {
+        this.trailT -= dt;
+        if (this.trailT <= 0) {
+          this.trailT = GOLF_JUICE6.TRAIL_EVERY_SEC;
+          const count = prefersReducedMotion()
+            ? Math.ceil(GOLF_JUICE6.TRAIL_SPARKLES / 2)
+            : GOLF_JUICE6.TRAIL_SPARKLES;
+          this.particles.emit?.('sparkles', this.ballMesh.position, { count });
+        }
+      }
       if (this.state === 'rolling' && isStopped(hole, this.ball)) {
         this.ball.vx = 0;
         this.ball.vz = 0;
@@ -799,6 +946,10 @@ export default {
     this.dots = [];
     for (const ring of this.cupRings ?? []) ring.tween?.cancel(); // V4/GAME-POLISH-4
     this.cupRings = [];
+    for (const ring of this.bankRings ?? []) ring.tween?.cancel(); // V6/C4 juice
+    this.bankRings = [];
+    this.floats?.dispose(); // V6/C4 juice
+    this.floats = null;
     this.ringGeo = null;
     this.clouds = [];
     this.course = null;

@@ -15,6 +15,9 @@ import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate
 // V4/GAME-POLISH-4: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
 // ride the versioned module through the local tx() fallback below.
 import { EN as GP4_EN, DE as GP4_DE } from '../../data/strings/v4-gpgroup4.js';
+// V6/C4 (GAME-JUICE): solve floats + flow celebration strings
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
+import { clampFloatTextToView } from '../framework.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import {
@@ -53,17 +56,90 @@ const COLORS = Object.freeze({
   BRASS: '#F2C14E',
 });
 
-/** V4/GAME-POLISH-4: t() first, then the v4-gpgroup4 EN/DE fallback. */
+/** V4/GAME-POLISH-4: t() first, then the v4-gpgroup4 EN/DE fallback.
+ * V6/C4: also consults the v6-juice table (C3 commits the strings.js import). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  let text = (getLang() === 'de' ? GP4_DE : GP4_EN)[key] ?? key;
+  const de = getLang() === 'de';
+  let text = (de ? GP4_DE : GP4_EN)[key] ?? (de ? JUICE_DE : JUICE_EN)[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
     }
   }
   return text;
+}
+
+// ── V6/C4 (GAME-JUICE): pipe-juice tuning — frozen module-local (§E0.1-3;
+// pipeFlow.logic.js is not owned by this pass). STRICTLY cosmetic: the frozen
+// §C1.2 #9 PIPE scoring table is untouched (test/gamePolish6.test.js pins it).
+export const PIPE_JUICE6 = Object.freeze({
+  /** tapTile(): easeOutBack overshoot + tiny scale pop on the tile. */
+  TAP_POP_SCALE: 1.09,
+  TAP_POP_SEC: 0.16,
+  /** startFill(): connection shimmer sweeps source→sprinkler per depth. */
+  SHIMMER_SEC: 0.3,
+  SHIMMER_STAGGER_SEC: 0.05,
+  /** Bloom beat: sparkles at each baked blueprint flower on solve. */
+  FLOWER_SPARKLES: 4,
+});
+// shimmer scratch colors (chalk pipe → pale water flash)
+const _SHIM_BASE = new THREE.Color(COLORS.PIPE);
+const _SHIM_FLASH = new THREE.Color('#9FE8FF');
+/** The four flower() doodle centers in blueprint-canvas coords (512×1024). */
+const FLOWER_CANVAS_SPOTS = Object.freeze([
+  [100, 105], [410, 160], [125, 885], [400, 905],
+]);
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
+      sprite.scale.set(1.5, 0.5, 1);
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 1.1;
+        f.mat.opacity = 1 - (f.age / f.life) ** 2;
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
 }
 
 /** Blueprint-sheet texture: grid lines, dashed garden beds, compass doodles. */
@@ -227,6 +303,20 @@ export default {
     ));
     sheet.position.set(0, 0, -3);
     scene.add(sheet);
+    // V6/C4: solve floats + bloom-beat anchors. The four garden flowers are
+    // BAKED into the blueprint texture (no individual sprites to scale), so
+    // the bloom beat celebrates them with sparkle bursts at their mapped
+    // world positions instead.
+    this.floats = createFloatTexts(scene, ctx.camera);
+    {
+      const planeW = this.halfW * 2 + 2;
+      const planeH = this.halfH * 2 + 2;
+      this.flowerSpots = FLOWER_CANVAS_SPOTS.map(([cx, cy]) => new THREE.Vector3(
+        (cx / 512 - 0.5) * planeW,
+        (0.5 - cy / 1024) * planeH,
+        -2.8
+      ));
+    }
 
     // flat "drawing" light — even, shadowless (top-down plan style)
     scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xBBD1EA, 1.25));
@@ -436,14 +526,24 @@ export default {
     view.turns += 1;
     const target = rotationTarget(view.turns);
     view.turnTween?.cancel();
+    // V6/C4 juice: easeOutBack overshoot sells the 90° click (was a flat
+    // easeOutQuad) + a tiny scale pop, gated behind reduced motion (§C.3 #1).
     view.turnTween = tween({
       from: pipes.rotation.z,
       to: target,
       duration: this.tune.ROTATE_SEC,
-      ease: easings.easeOutQuad,
+      ease: easings.easeOutBack,
       onUpdate: (v) => { pipes.rotation.z = v; },
       onComplete: () => { view.turnTween = null; },
     });
+    if (!prefersReducedMotion()) {
+      const grp = view.group;
+      tween({
+        from: PIPE_JUICE6.TAP_POP_SCALE, to: 1, duration: PIPE_JUICE6.TAP_POP_SEC,
+        ease: easings.easeOutQuad,
+        onUpdate: (s) => grp.scale.setScalar(s),
+      });
+    }
     if (isSolved(this.board)) this.startFill();
   },
 
@@ -472,6 +572,34 @@ export default {
     this.fillMax = Math.max(...depths.values()) + 1;
     this.fillT = 0;
     this.filledDepth = -1;
+    // V6/C4 juice: solve floats — "Flow!" + the +25 land AT the sprinkler
+    // (§C.3 #3; the banner above never happened AT the goal).
+    this.floats.spawn(tx('v6.juice.flow'), this.sprinklerPos.clone().add(new THREE.Vector3(0, 0.55, 0)), '#2B5F9E');
+    this.floats.spawn(`+${this.tune.SOLVE_POINTS}`, this.sprinklerPos.clone(), '#4FD8F7');
+    // V6/C4 juice: connection shimmer — a pale flash sweeps the connected
+    // tiles source→sprinkler ahead of the slower fill wave, so the solved
+    // path reads instantly (§C.3 #2). Flash ⇒ reduced-motion gated.
+    if (!prefersReducedMotion()) {
+      for (const [idx, depth] of depths) {
+        const mats = this.tileViews[idx].mats;
+        tween({
+          from: 0, to: 1, duration: PIPE_JUICE6.SHIMMER_SEC,
+          delay: depth * PIPE_JUICE6.SHIMMER_STAGGER_SEC,
+          ease: easings.linear,
+          onUpdate: (v) => {
+            if (this.filledDepth >= depth) return; // the fill wave owns it now
+            const k = Math.sin(v * Math.PI);
+            for (const mat of mats) mat.color.copy(_SHIM_BASE).lerp(_SHIM_FLASH, k);
+          },
+        });
+      }
+    }
+    // V6/C4 juice: bloom beat — the blueprint garden celebrates with you
+    // (§C.3 #4): a glisten ding + sparkles at each baked flower doodle.
+    this.ctx.audio.play('garden.harvestReady');
+    for (const spot of this.flowerSpots) {
+      this.particles.emit('sparkles', spot, { count: PIPE_JUICE6.FLOWER_SPARKLES });
+    }
     // HUD score reflects 25·solved live; the efficiency bonus lands at onEnd.
     this.ctx.onScore(this.tune.SOLVE_POINTS);
     this.displayedScore += this.tune.SOLVE_POINTS;
@@ -534,6 +662,7 @@ export default {
     const ctx = this.ctx;
     this.gooby.update(dt);
     this.particles.update(dt);
+    this.floats.update(dt); // V6/C4 juice
 
     if (this.phase === 'ending') {
       this.endT += dt;
@@ -621,13 +750,18 @@ export default {
   revealBonus() {
     if (this.solved <= 0) return;
     const bonus = tapEfficiencyBonus(this.totalTaps, this.totalOptimal, this.tune);
-    if (bonus > 0) this.ctx.hud.banner(tx('gp4.pipe.bonus', { n: bonus }));
+    if (bonus > 0) {
+      this.ctx.hud.banner(tx('gp4.pipe.bonus', { n: bonus }));
+      this.ctx.audio.play('hopper.gold'); // V6/C4 juice: glisten names the bonus (§C.3 #3)
+    }
   },
 
   dispose() {
     this.offTap?.();
     for (const view of this.tileViews ?? []) view.turnTween?.cancel();
     this.particles?.dispose();
+    this.floats?.dispose(); // V6/C4 juice
+    this.floats = null;
     this.gooby?.dispose();
     this.baseIM?.dispose(); // V2/FIX-F P1-1: frees the instanceMatrix buffer
     this.baseIM = null;

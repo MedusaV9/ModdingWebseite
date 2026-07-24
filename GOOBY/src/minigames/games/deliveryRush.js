@@ -23,6 +23,8 @@ import { t, getLang } from '../../data/strings.js'; // V4/GAME-POLISH-5: + getLa
 // V4/GAME-POLISH-5: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
 // ride the versioned module through the local tx() fallback below.
 import { EN as GP5_EN, DE as GP5_DE } from '../../data/strings/v4-gpgroup5.js';
+// V6/C4 (GAME-JUICE): delivered/tip float strings ride the v6-juice module
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
 import {
   generateCityLayout,
   layoutColliders,
@@ -38,7 +40,8 @@ import {
 import { createCarController, wrapAngle, ensureWheels } from '../../city/carController.js';
 import { createTraffic, separateFromHit, TRAFFIC_ASSET_KEYS } from '../../city/traffic.js';
 import { buildVetClinic, buildLandmarkDressing, VET_CLINIC_ASSET_KEYS } from '../../city/vetClinic.js';
-import { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows } from './cityDrive.js';
+// V6/C4: createFloatTexts rides the same V2/G28 sharing channel as the rest
+import { CITY_BANDS, buildCity, buildRouteGuides, hideNearbyArrows, createFloatTexts } from './cityDrive.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { createParticles } from '../../gfx/particles.js';
@@ -70,11 +73,13 @@ import {
 
 const T = DRIVE_TUNING;
 
-/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback. */
+/** V4/GAME-POLISH-5: t() first, then the v4-gpgroup5 EN/DE fallback.
+ * V6/C4: also consults the v6-juice table (C3 commits the strings.js import). */
 function tx(key, vars) {
   const global = t(key, vars);
   if (global !== key) return global;
-  let text = (getLang() === 'de' ? GP5_DE : GP5_EN)[key] ?? key;
+  const de = getLang() === 'de';
+  let text = (de ? GP5_DE : GP5_EN)[key] ?? (de ? JUICE_DE : JUICE_EN)[key] ?? key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.replaceAll(`{${name}}`, String(value));
@@ -89,6 +94,36 @@ const _guideDir = new THREE.Vector3();
 const _dustPos = new THREE.Vector3();
 const _nearPos = new THREE.Vector3();
 const _popFrom = new THREE.Vector3();
+const _floatPos = new THREE.Vector3(); // V6/C4: coin/delivery float spawn temp
+
+// ── V6/C4 (GAME-JUICE): delivery-juice tuning — frozen module-local
+// (§E0.1-3; deliveryRush.logic.js's DELIVERY score table is not touched —
+// test/gamePolish6.test.js pins it). Per the PLAN4 §C7.2/§G4.8 ruling the
+// drive pair adds NO camera shake: floats, hearts, the door glow and audio
+// are the whole budget.
+export const DELIVERY_JUICE6 = Object.freeze({
+  /** Warm door glow at the drop anchor: peak world scale + life (s). */
+  DOOR_GLOW_SCALE: 5.5,
+  DOOR_GLOW_SEC: 0.85,
+  /** Hearts burst from the delivered household. */
+  DELIVER_HEARTS: 6,
+});
+// ── end V6/C4 ────────────────────────────────────────────────────────────────
+
+/** V6/C4: soft warm radial glow texture for the door light-up beat. */
+function makeGlowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(255,224,150,0.95)');
+  grad.addColorStop(0.55, 'rgba(255,196,110,0.45)');
+  grad.addColorStop(1, 'rgba(255,180,90,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
+}
 
 /** @type {object} §E8 plugin */
 export default {
@@ -254,6 +289,21 @@ export default {
     this.popAnims = [];
     // ── end V4/GAME-POLISH-5 ─────────────────────────────────────────────────
 
+    // ── V6/C4 (GAME-JUICE): delivery float texts + door-glow sprite ──────────
+    // (cityDrive's shared float pool; chase cam → spawns clamp into view.
+    // NO camera shake added — §C7.2 drive-pair ruling.)
+    this.floats = createFloatTexts(scene, camera);
+    this.glowTex = makeGlowTexture();
+    this.glowMat = new THREE.SpriteMaterial({
+      map: this.glowTex, transparent: true, opacity: 0, depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.doorGlow = new THREE.Sprite(this.glowMat);
+    this.doorGlow.visible = false;
+    scene.add(this.doorGlow);
+    this.glowTween = null;
+    // ── end V6/C4 ─────────────────────────────────────────────────────────────
+
     // --- delivery ticket chip (📦 n/3 → next stop) ---------------------------
     this.chip = document.createElement('div');
     this.chip.className = 'mg-pill';
@@ -386,6 +436,7 @@ export default {
     const dest = this.destination();
     if (!dest) return;
     const deliveredParcel = this.drops;
+    const scoreBefore = this.score; // V6/C4: the float reports the real delta
     this.drops += 1;
     this.setScore(applyDrop(this.score));
     const fragileBonus = fragileDeliveryBonus(
@@ -400,6 +451,15 @@ export default {
     this.ctx.audio.play('delivery.doorbell');
     this.ctx.audio.play('delivery.drop'); // G29's confetti pop rides the burst
     this.particles.emit?.('confetti', new THREE.Vector3(dest.x, T.ROAD_Y + 3, dest.z), { count: 22 });
+    // V6/C4 juice (§C.5 #2): the drop finally SAYS what it paid — stacked
+    // "Delivered!" + "+{n}" floats at the ring, a hearts puff from the happy
+    // household, and a warm door glow at the curbside anchor (RM-gated).
+    this.floats.spawn(tx('v6.juice.delivered'), _floatPos.set(dest.x, T.ROAD_Y + 4.6, dest.z), '#D6428A');
+    this.floats.spawn(`+${this.score - scoreBefore}`, _floatPos.set(dest.x, T.ROAD_Y + 3.1, dest.z), '#D69A28');
+    this.particles.emit?.('hearts', _floatPos.set(dest.x, T.ROAD_Y + 2.2, dest.z), {
+      count: DELIVERY_JUICE6.DELIVER_HEARTS,
+    });
+    this.flashDoorGlow(dest);
     this.gooby.setEmotion('ecstatic');
     this.emotionT = 1.6;
     const parcel = this.parcels[DELIVERY.PARCELS - this.drops];
@@ -431,6 +491,33 @@ export default {
     if (this.autoplay) {
       console.log(`[deliveryRush] run complete — drops 3, crashes ${this.crashes}, bonus ${bonus}, score ${this.score}`);
     }
+  },
+
+  /**
+   * V6/C4 juice: warm door light-up at the drop anchor (§C.5 #2). The city
+   * buildings render as shared InstancedMesh (buildCity), so ONE house can't
+   * tint in place — a warm additive glow sprite at the curbside anchor sells
+   * the door opening instead. Flash ⇒ reduced-motion gated (doorbell +
+   * confetti + floats still carry the beat).
+   * @param {{x: number, z: number}} dest drop anchor
+   */
+  flashDoorGlow(dest) {
+    if (this.reduceMotion || !this.doorGlow) return;
+    this.glowTween?.cancel();
+    this.doorGlow.position.set(dest.x, T.ROAD_Y + 1.6, dest.z);
+    this.doorGlow.visible = true;
+    this.glowTween = tween({
+      from: 0, to: 1, duration: DELIVERY_JUICE6.DOOR_GLOW_SEC, ease: easings.easeOutQuad,
+      onUpdate: (v) => {
+        if (!this.doorGlow) return;
+        this.doorGlow.scale.setScalar(1.5 + (DELIVERY_JUICE6.DOOR_GLOW_SCALE - 1.5) * v);
+        this.glowMat.opacity = 0.95 * (1 - v);
+      },
+      onComplete: () => {
+        if (this.doorGlow) this.doorGlow.visible = false;
+        this.glowTween = null;
+      },
+    });
   },
 
   // ── V4/GAME-POLISH-5: parcel pop — the roof box visibly hops off in an
@@ -591,6 +678,7 @@ export default {
     }
 
     this.gooby.update(dt);
+    this.floats.update(dt); // V6/C4 juice: floats ride through every phase
     if (this.emotionT > 0) {
       this.emotionT -= dt;
       if (this.emotionT <= 0) this.gooby.setEmotion('happy');
@@ -741,6 +829,14 @@ export default {
         if (Math.hypot(coin.position.x - p.x, coin.position.z - p.z) < 2.5) {
           this.setScore(this.score + this.tune.COIN_POINTS);
           this.particles.emit?.('sparkles', coin.position, { count: 7 });
+          // V6/C4 juice (§C.5 #1): the Münzregen pickup was silent AND
+          // unlabelled — coin.get ding + a "+{n}" float name the tip.
+          this.ctx.audio.play('coin.get');
+          this.floats.spawn(
+            `+${this.tune.COIN_POINTS}`,
+            _floatPos.set(coin.position.x, T.ROAD_Y + 2.3, coin.position.z),
+            '#D69A28'
+          );
           this.ctx.scene.remove(coin);
           this.coinPickups.splice(i, 1);
         }
@@ -813,6 +909,17 @@ export default {
     this.traffic?.dispose();
     this.gooby?.dispose();
     this.particles?.dispose?.();
+    // V6/C4 juice teardown
+    this.floats?.dispose();
+    this.floats = null;
+    this.glowTween?.cancel();
+    this.glowTween = null;
+    this.doorGlow?.parent?.remove(this.doorGlow);
+    this.doorGlow = null;
+    this.glowMat?.dispose();
+    this.glowMat = null;
+    this.glowTex?.dispose();
+    this.glowTex = null;
     for (const coin of this.coinPickups ?? []) coin.parent?.remove(coin);
     this.coinGeo?.dispose();
     this.coinMat?.dispose();

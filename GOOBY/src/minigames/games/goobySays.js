@@ -13,8 +13,13 @@ import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
+// V6/C4 (GAME-JUICE): fail micro-shake gate — import was missing here
+import { prefersReducedMotion } from '../../ui/ui.js';
+import { clampFloatTextToView } from '../framework.js';
 import {
   SAYS,
+  SAYS_JUICE, // V6/C4: press-dip/conductor/fail-shake/giggle tuning
+  giggleRound, // V6/C4
   applyDifficulty,
   seqLengthAt,
   stepMsAt,
@@ -59,6 +64,55 @@ function makeStageTexture() {
   g.arc(128, 128, 122, 0, Math.PI * 2);
   g.stroke();
   return new THREE.CanvasTexture(canvas);
+}
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
+      sprite.scale.set(1.5, 0.5, 1);
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 1.1;
+        f.mat.opacity = 1 - (f.age / f.life) ** 2;
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
 }
 
 /** @type {object} §E8 plugin */
@@ -196,6 +250,11 @@ export default {
 
     // --- Gooby center stage ---
     this.particles = createParticles(this.stageGroup);
+    // V6/C4: floats live on the SCENE (world coords — the stage group is
+    // scaled) and clamp against the tilted stage camera.
+    this.floats = createFloatTexts(scene, camera);
+    this.conductBounceT = 0; // V6/C4: throttled conductor bounce (watch phase)
+    this.camBase = camera.position.clone(); // V6/C4: fail micro-shake anchor
     this.gooby = createGooby({ particles: this.particles });
     applyEquippedOutfits(this.gooby);
     this.gooby.group.scale.setScalar(0.8);
@@ -254,6 +313,8 @@ export default {
     this.playIdx = 0;
     this.stepT = 0.55;
     this.ctx.hud.banner(t('mg.says.round', { n: this.round }));
+    // V6/C4 juice: a giggle rides every 5th round banner (§C.2 item 5)
+    if (giggleRound(this.round)) this.ctx.audio.play('gooby.giggle');
     this.gooby.play('wave');
   },
 
@@ -272,6 +333,14 @@ export default {
     if (this.phase !== 'repeat') return;
     const expected = this.sequence[this.inputIdx];
     this.lightPad(i);
+    // V6/C4 juice: press-dip — the pad physically gives under the player's
+    // tap (distinct from the playback light-up, which only pops/tints).
+    const pad = this.pads[i];
+    tween({
+      from: 1, to: 0, duration: SAYS_JUICE.PRESS_DIP_SEC, ease: easings.easeOutQuad,
+      onUpdate: (v) => { pad.mesh.position.y = pad.baseY - SAYS_JUICE.PRESS_DIP_Y * v; },
+      onComplete: () => { pad.mesh.position.y = pad.baseY; },
+    });
     if (isChordStep(expected)) {
       if (!this.chordPending) {
       const status = chordTapResult(expected, i, null, 0, this.tune);
@@ -316,6 +385,15 @@ export default {
       this.score = this.tune.ROUND_POINTS * this.roundsCompleted;
       this.ctx.onScore(this.tune.ROUND_POINTS);
       this.ctx.audio.play('combo.up');
+      // V6/C4 juice: name the round points over center stage (§C.2 item 2 —
+      // this beat was banner-only before). +1.1 keeps the rising float in the
+      // clear band between Gooby's ears and the mirror ball (1.9 hid it
+      // BEHIND the ball at the play camera's pitch).
+      this.floats.spawn(
+        `+${this.tune.ROUND_POINTS}`,
+        this.gooby.group.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.1, 0)),
+        '#2E8B57'
+      );
       this.gooby.play('happyBounce');
       this.particles.emit('sparkles', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.4, 0)), { count: 8 });
       // V4/GAME-POLISH-2 juice: confetti pop + mirror-ball scale punch & spin
@@ -344,6 +422,20 @@ export default {
     this.gooby.setEmotion('dizzy');
     this.gooby.play('dizzy');
     this.particles.emit('dizzyStars', this.gooby.group.position.clone().add(new THREE.Vector3(0, 1.6, 0)));
+    // V6/C4 juice: fail softening — a 0.2 s camera micro-shake alongside the
+    // dizzy stars, gated behind the OS reduced-motion preference (§C.2 #4).
+    if (!prefersReducedMotion()) {
+      const cam = this.ctx.camera;
+      const base = this.camBase;
+      tween({
+        from: 1, to: 0, duration: SAYS_JUICE.FAIL_SHAKE_SEC, ease: easings.easeOutQuad,
+        onUpdate: (v) => {
+          cam.position.x = base.x + Math.sin(v * 41) * SAYS_JUICE.FAIL_SHAKE_AMP * v;
+          cam.position.y = base.y + Math.cos(v * 33) * SAYS_JUICE.FAIL_SHAKE_AMP * 0.6 * v;
+        },
+        onComplete: () => cam.position.copy(base),
+      });
+    }
   },
 
   avgReactionMs() {
@@ -355,6 +447,8 @@ export default {
     const ctx = this.ctx;
     this.gooby.update(dt);
     this.particles.update(dt);
+    this.floats.update(dt); // V6/C4
+    this.conductBounceT = Math.max(0, this.conductBounceT - dt); // V6/C4
     ctx.hud.setTime(elapsed);
     this.ball.rotation.y += dt * (0.9 + (this.ballSpin ?? 0));
     this.beams.forEach((beam, i) => {
@@ -375,6 +469,12 @@ export default {
       if (this.stepT <= 0) {
         if (this.playIdx < this.sequence.length) {
           this.lightStep(this.sequence[this.playIdx], { sing: true });
+          // V6/C4 juice: conductor Gooby — a throttled happyBounce per sung
+          // note so he leads the playback instead of standing still (§C.2 #3).
+          if (this.conductBounceT <= 0) {
+            this.conductBounceT = SAYS_JUICE.CONDUCT_BOUNCE_THROTTLE_SEC;
+            this.gooby.play('happyBounce');
+          }
           this.playIdx += 1;
           this.stepT = stepMsAt(this.round, this.tune) / 1000;
         } else {
@@ -439,6 +539,8 @@ export default {
   dispose() {
     this.offTap?.();
     this.particles?.dispose();
+    this.floats?.dispose(); // V6/C4
+    this.floats = null;
     this.gooby?.dispose();
     for (const geo of this.ownedGeos ?? []) geo.dispose();
     for (const mat of this.ownedMats ?? []) mat.dispose();
