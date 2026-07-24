@@ -233,3 +233,18 @@ reveal.
 *Also recommended while in the area (from C2): add the `ServerStopped` cleanup to
 `CutsceneService` and the heightmap re-snap in `restoreReturn` — together they close every
 stale/low return-spot path we could construct, including the reported y=38.*
+
+## Post-eval live observation (orchestrator, final session)
+
+- **Storm interior FX engages far outside the wall for TYPE_VORTEX**: with a vortex (r=14)
+  staged ~44 blocks from the viewer, the viewer's sky went black with interior rain for the
+  storm's whole lifetime. `StormInteriorFx` (or the fog clamp path) appears to treat vortex
+  storms with a much larger interior radius than the wall radius. Reproduce: stand 40+ blocks
+  away, `/eclipsefx storm add 14 40 vortex` at a `positioned` offset. Expected: interior
+  rain/fog only within ~r of the column.
+- **`/eclipsefx storm bolt` reads the command SOURCE position at execution**: when conducted
+  via `execute positioned`, bolts were not visible at the storm column from the viewer's
+  position in daylight — verify bolt anchor + daylight visibility (width/brightness scaling).
+- **Storm wall daylight read at mid-range**: from ~40 blocks in daylight the wall reads as a
+  flat solid cylinder rather than swirling smoke (noise contrast collapses against bright sky).
+  Consider a daylight-aware alpha/contrast boost or additive rim.
