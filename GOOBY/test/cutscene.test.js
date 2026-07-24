@@ -26,6 +26,10 @@ import {
 } from '../src/systems/cutscene.js';
 import { CUTSCENE_IDS, getCutscene } from '../src/data/cutscenes.js';
 import { EN as CUT_EN, DE as CUT_DE } from '../src/data/strings/v6-cutscenes.js';
+// V6/D1: the vacation set pieces keep their captions in their OWN versioned
+// module (§E0.1-8 ownership) — the caption mirror below aggregates every
+// module that authored scripts in data/cutscenes.js.
+import { EN as VAC_EN, DE as VAC_DE } from '../src/data/strings/v6-vacation-scenes.js';
 import { CLIP_IDS } from '../src/character/goobyAnims.js';
 import { EMOTION_IDS } from '../src/character/emotions.js';
 import { SFX_MAP } from '../src/audio/sfxMap.js';
@@ -444,9 +448,14 @@ test('data mirror: every caption key + the chrome keys exist in EN AND DE', () =
       if (stepDef.op === 'caption') used.add(stepDef.key);
     }
   }
+  // V6/D1: captions may live in any script-authoring agent's owned module —
+  // aggregate them all for the existence check (module-internal parity and
+  // namespace hygiene stay per-module below / in vacationCinematic.test.js).
+  const allEn = { ...CUT_EN, ...VAC_EN };
+  const allDe = { ...CUT_DE, ...VAC_DE };
   for (const key of used) {
-    assert.ok(typeof CUT_EN[key] === 'string' && CUT_EN[key].trim(), `EN missing '${key}'`);
-    assert.ok(typeof CUT_DE[key] === 'string' && CUT_DE[key].trim(), `DE missing '${key}'`);
+    assert.ok(typeof allEn[key] === 'string' && allEn[key].trim(), `EN missing '${key}'`);
+    assert.ok(typeof allDe[key] === 'string' && allDe[key].trim(), `DE missing '${key}'`);
   }
   // full module parity + namespace hygiene (v5-vacation precedent)
   assert.deepEqual(Object.keys(CUT_EN).sort(), Object.keys(CUT_DE).sort());

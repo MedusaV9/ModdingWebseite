@@ -110,6 +110,7 @@ export const HARNESS_PARAM_GROUPS = Object.freeze([
     de: '6.0',
     rows: Object.freeze([
       Object.freeze({ param: 'cutscene', example: '?cutscene=demo', en: 'play a cutscene by id over the home scene (first view = hold-to-skip, reruns = tap-skip) — V6/A1', de: 'Cutscene per Id über der Home-Szene abspielen (Erstansicht = Halten zum Überspringen, Wiederholung = Tippen) — V6/A1' }),
+      Object.freeze({ param: 'vacationcine', example: '?vacationcine=departure', en: 'stage a vacation set piece departure|reunionOnTime|reunionTaxi (departure seeds a booked trip first) — V6/D1', de: 'Urlaubs-Setpiece inszenieren departure|reunionOnTime|reunionTaxi (departure seedet zuerst eine gebuchte Reise) — V6/D1' }), // V6/D1 one-liner
     ]),
   }),
 ]);

@@ -1,0 +1,357 @@
+// V6/D1 — vacation cinematic suite (PLAN6 Wave D/D1): the PURE decision
+// logic behind the airport set pieces (script selection per explicit user
+// action, the mutation-then-present atomicity contract, the never-replay-
+// on-boot trigger rule, refused/failed-presentation fallthrough) plus the
+// DATA-MIRROR validation of the three authored scripts in data/cutscenes.js
+// — same technique as test/cutscene.test.js: every clip/emotion/sfx/particle
+// id resolves in the real registries, every caption key ships EN+DE in the
+// owned strings/v6-vacation-scenes.js module, and every prop model key maps
+// to a committed GLB on disk. Headless per §B — pure modules only (the view
+// presenter src/vacation/vacationCinematic.js imports the three.js graph, so
+// its call-site guarantees are checked by SOURCE SCAN, the onboarding
+// sfx-scan pattern).
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+import {
+  VAC_CINE_IDS,
+  CINE_TRIGGERS,
+  scriptForTrigger,
+  runMomentFlow,
+  harnessKickFor,
+} from '../src/vacation/vacationCinematic.logic.js';
+import { CUTSCENE_IDS, getCutscene } from '../src/data/cutscenes.js';
+import {
+  CUTSCENE,
+  OP_KINDS,
+  CUTSCENE_PARTICLE_TYPES,
+  compileScript,
+} from '../src/systems/cutscene.js';
+import { EN as VAC_EN, DE as VAC_DE } from '../src/data/strings/v6-vacation-scenes.js';
+import { CLIP_IDS } from '../src/character/goobyAnims.js';
+import { EMOTION_IDS } from '../src/character/emotions.js';
+import { SFX_MAP } from '../src/audio/sfxMap.js';
+import { VACATION } from '../src/systems/vacation.js';
+import { getModelUrl } from '../src/core/assets.js';
+import { HARNESS_PARAM_GROUPS, allHarnessParams } from '../src/data/harnessParams.js';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** The three authored ids, in one place. */
+const IDS = [VAC_CINE_IDS.departure, VAC_CINE_IDS.reunionOnTime, VAC_CINE_IDS.reunionTaxi];
+
+/** Recursively collect leaf steps of a raw script. @returns {object[]} */
+function leafSteps(steps) {
+  const out = [];
+  for (const s of steps) {
+    if (Array.isArray(s.steps)) out.push(...leafSteps(s.steps));
+    else out.push(s);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// script selection — explicit user actions map to the right script
+// ---------------------------------------------------------------------------
+
+test('selection: book/pickup/taxi map to departure/on-time/taxi scripts', () => {
+  assert.equal(scriptForTrigger('book', { ok: true }), 'vacDeparture');
+  assert.equal(scriptForTrigger('pickup', { ok: true }), 'vacReunionOnTime');
+  assert.equal(scriptForTrigger('taxi', { ok: true }), 'vacReunionTaxi');
+  // the trigger table itself is frozen and covers exactly the three actions
+  assert.ok(Object.isFrozen(CINE_TRIGGERS));
+  assert.deepEqual(Object.keys(CINE_TRIGGERS).sort(), ['book', 'pickup', 'taxi']);
+});
+
+test('selection: non-ok / junk results never present', () => {
+  for (const trigger of Object.keys(CINE_TRIGGERS)) {
+    assert.equal(scriptForTrigger(trigger, { ok: false }), null);
+    assert.equal(scriptForTrigger(trigger, { ok: 'yes' }), null, 'truthy-but-not-true refused');
+    assert.equal(scriptForTrigger(trigger, {}), null);
+    assert.equal(scriptForTrigger(trigger, null), null);
+    assert.equal(scriptForTrigger(trigger, undefined), null);
+    assert.equal(scriptForTrigger(trigger, 'ok'), null);
+  }
+});
+
+test('selection (never-replay-on-boot): phase/boot observations are NOT triggers', () => {
+  // Anything a phase observer, boot catch-up or offline walker could invent
+  // must fail CLOSED — the departure can never replay from state observation.
+  const nonTriggers = [
+    'boot', 'offline', 'phase', 'vacationChanged', 'vacationEvent',
+    'returnReady', 'overdue', 'away', 'postcard', 'tick', '', null, undefined, 42,
+  ];
+  for (const trigger of nonTriggers) {
+    assert.equal(scriptForTrigger(trigger, { ok: true }), null, `'${trigger}' must not present`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// atomicity — mutation completes BEFORE presentation; cinema is optional
+// ---------------------------------------------------------------------------
+
+test('atomicity: mutate runs to completion strictly before present', async () => {
+  const calls = [];
+  const { result, presented } = await runMomentFlow({
+    mutate: () => {
+      calls.push('mutate:start');
+      calls.push('mutate:done'); // synchronous completion — atomic
+      return { ok: true, souvenir: 30 };
+    },
+    present: (res) => {
+      calls.push('present');
+      assert.deepEqual(res, { ok: true, souvenir: 30 }, 'present sees the committed result');
+      return true;
+    },
+  });
+  assert.deepEqual(calls, ['mutate:start', 'mutate:done', 'present']);
+  assert.deepEqual(result, { ok: true, souvenir: 30 });
+  assert.equal(presented, true);
+});
+
+test('atomicity: a failed mutation never presents', async () => {
+  let presentCalls = 0;
+  for (const bad of [{ ok: false, reason: 'coins' }, {}, null, undefined]) {
+    const { result, presented } = await runMomentFlow({
+      mutate: () => bad,
+      present: () => {
+        presentCalls += 1;
+        return true;
+      },
+    });
+    assert.equal(presented, false);
+    assert.deepEqual(result, bad ?? null, 'mutation result passes through verbatim');
+  }
+  assert.equal(presentCalls, 0, 'present never ran for a non-ok mutation');
+});
+
+test('fallthrough: present() returning false leaves the flow state identical', async () => {
+  // Pure flow-state model: the mutation writes the state; a refused
+  // presentation must change NOTHING about it (and mutate never re-runs).
+  const state = { coins: 500, vacation: { phase: 'none', trips: 0 } };
+  let mutateRuns = 0;
+  const mutate = () => {
+    mutateRuns += 1;
+    state.coins -= 180;
+    state.vacation = { phase: 'away', trips: 0 };
+    return { ok: true, total: 180 };
+  };
+  const afterMutate = () => JSON.parse(JSON.stringify(state));
+
+  const refused = await runMomentFlow({ mutate, present: () => false });
+  const snapshot = afterMutate();
+  assert.equal(refused.presented, false);
+  assert.deepEqual(refused.result, { ok: true, total: 180 }, 'refusal never voids the transaction');
+  assert.equal(mutateRuns, 1);
+  assert.deepEqual(afterMutate(), snapshot, 'state untouched by the refusal');
+});
+
+test('fallthrough: a THROWING presentation is contained (flow continues silently)', async () => {
+  const { result, presented } = await runMomentFlow({
+    mutate: () => ({ ok: true, destId: 'beach' }),
+    present: () => {
+      throw new Error('camera lease refused');
+    },
+  });
+  assert.equal(presented, false);
+  assert.deepEqual(result, { ok: true, destId: 'beach' });
+  // async rejection path too
+  const rejected = await runMomentFlow({
+    mutate: () => ({ ok: true }),
+    present: () => Promise.reject(new Error('mid-pan')),
+  });
+  assert.equal(rejected.presented, false);
+  assert.deepEqual(rejected.result, { ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// never-replay-on-boot — source-scan the presenter + its ONLY call sites
+// ---------------------------------------------------------------------------
+
+test('never-replay: the presenter modules subscribe to NO store events', () => {
+  // The presenter must be driven exclusively by explicit call sites — a
+  // store subscription ('vacationChanged'/'vacationEvent'/tick) inside it
+  // would be phase observation, the exact replay-on-boot failure mode.
+  for (const file of ['src/vacation/vacationCinematic.js', 'src/vacation/vacationCinematic.logic.js']) {
+    const src = readFileSync(path.join(ROOT, file), 'utf8');
+    assert.ok(!/\bstore\s*\.\s*on\s*\(/.test(src), `${file}: must not subscribe to store events`);
+    assert.ok(!src.includes("on('vacation"), `${file}: must not observe vacation events`);
+  }
+});
+
+test('never-replay: presentVacationCinematic is called with user-action triggers only', () => {
+  // Every browser call site in src/ passes one of the three explicit
+  // user-action triggers — combined with the pure trigger table above this
+  // pins the rule end to end.
+  const files = ['src/ui/airportScreen.js', 'src/vacation/vacationCinematic.js'];
+  let callSites = 0;
+  for (const file of files) {
+    const src = readFileSync(path.join(ROOT, file), 'utf8');
+    for (const m of src.matchAll(/presentVacationCinematic\s*\([^)]*\)/g)) {
+      // skip the export declaration itself (function presentVacationCinematic(…))
+      if (src.slice(Math.max(0, m.index - 12), m.index).includes('function')) continue;
+      callSites += 1;
+      assert.match(
+        m[0],
+        /'(book|pickup|taxi)'|kick\.trigger/,
+        `${file}: unexpected trigger in ${m[0]}`,
+      );
+    }
+  }
+  assert.equal(callSites, 4, 'three airport call sites + the dev-harness kick');
+  // and no OTHER module calls the presenter at all (hud/timeEngine/offline
+  // walkers must never stage a departure)
+  const airportSrc = readFileSync(path.join(ROOT, 'src/ui/hud.js'), 'utf8');
+  assert.ok(!airportSrc.includes('presentVacationCinematic'), 'hud.js must not call the presenter');
+  const timeSrc = readFileSync(path.join(ROOT, 'src/core/timeEngine.js'), 'utf8');
+  assert.ok(!timeSrc.includes('presentVacationCinematic'), 'timeEngine.js must not call the presenter');
+});
+
+// ---------------------------------------------------------------------------
+// data mirror — the three scripts against the real registries
+// ---------------------------------------------------------------------------
+
+test('data mirror: all three scripts exist and compile (normal AND reduced motion)', () => {
+  for (const id of IDS) {
+    assert.ok(CUTSCENE_IDS.includes(id), `${id} registered in data/cutscenes.js`);
+    const scriptDef = getCutscene(id);
+    assert.equal(scriptDef.id, id);
+    for (const reducedMotion of [false, true]) {
+      const compiled = compileScript(scriptDef, { reducedMotion });
+      assert.ok(
+        compiled.totalSec < CUTSCENE.WATCHDOG_SEC,
+        `${id}: worst-case ${compiled.totalSec}s must beat the ${CUTSCENE.WATCHDOG_SEC}s watchdog`,
+      );
+      if (reducedMotion) {
+        for (const step of leafSteps(compiled.steps)) {
+          if (step.op === 'camera') assert.equal(step.duration, 0, `${id}: reduced camera collapses`);
+          if (step.op === 'wait') {
+            assert.ok(step.duration <= CUTSCENE.REDUCED_WAIT_MAX_SEC, `${id}: reduced waits shorten`);
+          }
+        }
+      }
+    }
+  }
+});
+
+test('data mirror: clips, emotions, sfx, particles and ops are all real', () => {
+  for (const id of IDS) {
+    for (const stepDef of leafSteps(getCutscene(id).steps)) {
+      assert.ok(OP_KINDS.includes(stepDef.op), `${id}: unknown op '${stepDef.op}'`);
+      if (stepDef.op === 'clip') {
+        assert.ok(CLIP_IDS.includes(stepDef.clip), `${id}: unknown clip '${stepDef.clip}'`);
+      }
+      if (stepDef.op === 'emotion') {
+        assert.ok(EMOTION_IDS.includes(stepDef.emotion), `${id}: unknown emotion '${stepDef.emotion}'`);
+      }
+      if (stepDef.op === 'sfx') {
+        assert.ok(stepDef.sfx in SFX_MAP, `${id}: unmapped sfx '${stepDef.sfx}' (sfxMap.js)`);
+      }
+      if (stepDef.op === 'particles') {
+        assert.ok(
+          CUTSCENE_PARTICLE_TYPES.includes(stepDef.type),
+          `${id}: particle type '${stepDef.type}' not whitelisted`,
+        );
+      }
+    }
+  }
+});
+
+test('data mirror: every prop model key resolves to a committed GLB on disk', () => {
+  for (const id of IDS) {
+    for (const stepDef of leafSteps(getCutscene(id).steps)) {
+      if (stepDef.op !== 'prop' || stepDef.action !== 'spawn') continue;
+      const url = getModelUrl(stepDef.model); // '/assets/<root>/<slug>/<file>.<ext>'
+      const file = path.join(ROOT, 'public', url.replace(/^\//, ''));
+      assert.ok(existsSync(file), `${id}: prop model '${stepDef.model}' missing on disk (${file})`);
+    }
+  }
+});
+
+test('data mirror: every caption key exists EN+DE in v6-vacation-scenes (owned module)', () => {
+  const used = new Set();
+  for (const id of IDS) {
+    for (const stepDef of leafSteps(getCutscene(id).steps)) {
+      if (stepDef.op === 'caption') used.add(stepDef.key);
+    }
+  }
+  assert.ok(used.size >= 9, 'all three scripts carry caption beats');
+  for (const key of used) {
+    assert.ok(typeof VAC_EN[key] === 'string' && VAC_EN[key].trim(), `EN missing '${key}'`);
+    assert.ok(typeof VAC_DE[key] === 'string' && VAC_DE[key].trim(), `DE missing '${key}'`);
+  }
+  // module parity + namespace hygiene + zero unused keys + no {vars} (the
+  // caption op renders keys WITHOUT interpolation)
+  assert.deepEqual(Object.keys(VAC_EN).sort(), Object.keys(VAC_DE).sort());
+  for (const key of Object.keys(VAC_EN)) {
+    assert.match(key, /^cutscene\.vac\./, `foreign namespace key '${key}'`);
+    assert.ok(used.has(key), `orphaned strings key '${key}'`);
+    assert.ok(!/\{\w+\}/.test(VAC_EN[key]) && !/\{\w+\}/.test(VAC_DE[key]),
+      `'${key}' must not use {vars} (caption op cannot interpolate)`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// on-time vs taxi — presentation-only difference, frozen rewards
+// ---------------------------------------------------------------------------
+
+test('variants: on-time and taxi reunions differ in ACTING only (no reward surface)', () => {
+  // The director's op vocabulary carries no economy/stat op at all — scripts
+  // physically cannot change rewards. Pin that plus the frozen V5 numbers
+  // the acceptance names (taxi fee, full-stat reunion fill).
+  for (const op of OP_KINDS) {
+    assert.ok(!/coin|award|spend|stat|economy/i.test(op), `economy-flavored op '${op}' in the vocabulary`);
+  }
+  assert.equal(VACATION.TAXI_FEE, 60, 'taxi fee frozen');
+  assert.equal(VACATION.PICKUP_STAT_FILL, 100, 'full-stat reunion fill frozen');
+
+  // Both reunions share the skeleton (taxi in → acting → hug beat →
+  // souvenir caption → taxi out → restore) and both end on a warm
+  // keepOnSkip happy emotion — the taxi variant is never punishing.
+  const onTime = leafSteps(getCutscene('vacReunionOnTime').steps);
+  const late = leafSteps(getCutscene('vacReunionTaxi').steps);
+  for (const steps of [onTime, late]) {
+    const final = steps.filter((s) => s.op === 'emotion').at(-1);
+    assert.deepEqual(
+      { emotion: final.emotion, keepOnSkip: final.keepOnSkip === true },
+      { emotion: 'happy', keepOnSkip: true },
+      'both variants land on a kept happy emotion',
+    );
+    assert.ok(steps.some((s) => s.op === 'particles' && s.type === 'hearts'), 'both keep a hearts beat');
+    assert.ok(steps.some((s) => s.op === 'sfx' && s.sfx === 'coin.get'), 'both keep the souvenir beat');
+    assert.ok(steps.some((s) => s.op === 'camera' && s.move === 'restore'), 'both restore the camera');
+  }
+  // …and the acting actually differs: droopy sleepy ears + tired stretch on
+  // the late variant only, ecstatic jump on the punctual one only.
+  assert.ok(late.some((s) => s.op === 'emotion' && s.emotion === 'sleepy'), 'late variant acts tired');
+  assert.ok(late.some((s) => s.op === 'clip' && s.clip === 'stretch'), 'late variant stretches');
+  assert.ok(!onTime.some((s) => s.op === 'emotion' && s.emotion === 'sleepy'), 'on-time never droops');
+  assert.ok(onTime.some((s) => s.op === 'emotion' && s.emotion === 'ecstatic'), 'on-time beams');
+  assert.ok(onTime.some((s) => s.op === 'clip' && s.clip === 'jump'), 'on-time hops out');
+});
+
+// ---------------------------------------------------------------------------
+// dev harness — ?vacationcine= table + the harnessParams row
+// ---------------------------------------------------------------------------
+
+test('harness: kick table maps the three stage names and refuses junk', () => {
+  assert.deepEqual(harnessKickFor('departure'), { trigger: 'book', seedAway: true });
+  assert.deepEqual(harnessKickFor('reunionOnTime'), { trigger: 'pickup', seedAway: false });
+  assert.deepEqual(harnessKickFor('reunionTaxi'), { trigger: 'taxi', seedAway: false });
+  for (const junk of ['', 'demo', 'DEPARTURE', null, undefined, 7]) {
+    assert.equal(harnessKickFor(junk), null);
+  }
+});
+
+test('harness: the ?vacationcine row exists in the v6 group', () => {
+  const row = allHarnessParams().find((r) => r.param === 'vacationcine');
+  assert.ok(row, 'harnessParams.js row for ?vacationcine missing');
+  assert.equal(row.example, '?vacationcine=departure');
+  assert.ok(row.en.trim() && row.de.trim());
+  const group = HARNESS_PARAM_GROUPS.find((g) => g.rows.some((r) => r.param === 'vacationcine'));
+  assert.equal(group.id, 'v6');
+});
