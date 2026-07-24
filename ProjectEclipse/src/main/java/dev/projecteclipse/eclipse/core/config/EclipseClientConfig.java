@@ -76,6 +76,11 @@ public final class EclipseClientConfig {
     public static final ModConfigSpec.BooleanValue REDUCED_FX = BUILDER
             .comment("Reduce non-essential visual effects (screen shake, particles, pulsing overlays).")
             .define("reducedFx", false);
+    public static final ModConfigSpec.BooleanValue PHOTON_FX = BUILDER
+            .comment("Use the optional Photon VFX mod for enhanced flagship effects (altar level-up,",
+                    "expansion rift glow) when the 'photon' mod is installed. Ignored (no-op) when",
+                    "Photon is absent; also disabled by reducedFx.")
+            .define("photonFx", true);
     public static final ModConfigSpec.BooleanValue CINEMATIC_VIEW_DISTANCE = BUILDER
             .comment("Allow Eclipse cinematics to temporarily raise your render distance for the",
                     "duration of a cutscene (restored automatically afterwards, even after a crash).")
@@ -174,6 +179,11 @@ public final class EclipseClientConfig {
 
     public static boolean reducedFx() {
         return get(REDUCED_FX, false);
+    }
+
+    /** D12: optional Photon enhancement layer toggle (only meaningful when 'photon' is loaded). */
+    public static boolean photonFx() {
+        return get(PHOTON_FX, true);
     }
 
     /** P2 R12: player toggle for the temporary cutscene render-distance bump (default ON). */

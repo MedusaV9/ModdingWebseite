@@ -1,0 +1,16 @@
+{
+  "en": {
+    "eclipse.caption.altar_level_1": "The veil takes notice.",
+    "eclipse.caption.altar_level_2": "A pillar answers from below.",
+    "eclipse.caption.altar_level_3": "Glyphs rain from the wound in the sky.",
+    "eclipse.caption.altar_level_4": "The sky cracks. Something vast leans closer.",
+    "eclipse.caption.altar_level_5": "The corona is crowned. The Eclipse remembers you."
+  },
+  "de": {
+    "eclipse.caption.altar_level_1": "Der Schleier wird aufmerksam.",
+    "eclipse.caption.altar_level_2": "Eine Lichtsäule antwortet aus der Tiefe.",
+    "eclipse.caption.altar_level_3": "Glyphen regnen aus der Wunde am Himmel.",
+    "eclipse.caption.altar_level_4": "Der Himmel reißt. Etwas Gewaltiges beugt sich näher.",
+    "eclipse.caption.altar_level_5": "Die Korona ist gekrönt. Die Eklipse erinnert sich an euch."
+  }
+}

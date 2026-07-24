@@ -59,9 +59,20 @@ public final class AltarIdleMotes {
      * disconnect reset shrinks the window via the existing oldest-first cull.
      */
     private static final int BASE_LIVE = 3;
-    private static final int MAX_LIVE_CAP = 6;
+    private static final int MAX_LIVE_CAP = 8;
     private static final int MIN_INTERVAL_TICKS = 70;
     private static final int MAX_INTERVAL_TICKS = 110;
+    /**
+     * W-P-ALTAR idle-presence scaling: each altar level shortens the spawn cadence by
+     * {@value #LEVEL_INTERVAL_BONUS_TICKS} t (floored at {@value #MIN_INTERVAL_FLOOR_TICKS} t)
+     * and pushes the placement ring/height band outward, so a leveled altar reads denser,
+     * wider and taller at a glance. Worst case (level 5): one spawn per ~1.75–3.75 s into
+     * a window of {@value #MAX_LIVE_CAP} loops — still far inside the AMBIENT budget.
+     */
+    private static final int LEVEL_INTERVAL_BONUS_TICKS = 7;
+    private static final int MIN_INTERVAL_FLOOR_TICKS = 35;
+    private static final double LEVEL_RING_BONUS = 0.35D;
+    private static final double LEVEL_HEIGHT_BONUS = 0.25D;
     /** Placement ring around the anchor (blocks) — hugging the island, never in the beam. */
     private static final double RING_MIN_RADIUS = 2.0D;
     private static final double RING_MAX_RADIUS = 5.5D;
@@ -102,10 +113,13 @@ public final class AltarIdleMotes {
             return;
         }
         RandomSource random = level.random;
-        countdown = random.nextIntBetweenInclusive(MIN_INTERVAL_TICKS, MAX_INTERVAL_TICKS);
+        int altarLevel = clientAltarLevel();
+        countdown = Math.max(MIN_INTERVAL_FLOOR_TICKS,
+                random.nextIntBetweenInclusive(MIN_INTERVAL_TICKS, MAX_INTERVAL_TICKS)
+                        - altarLevel * LEVEL_INTERVAL_BONUS_TICKS);
 
         ParticleEmitter emitter = QuasarSpawner.spawnManaged(MOTES_EMITTER,
-                pickSpawnPos(anchor, random), FxBudget.Channel.AMBIENT);
+                pickSpawnPos(anchor, random, altarLevel), FxBudget.Channel.AMBIENT);
         if (emitter == null) {
             return; // budget refusal / Quasar unavailable — the window simply stays thinner
         }
@@ -117,8 +131,13 @@ public final class AltarIdleMotes {
 
     /** Live-loop cap, richer as the altar levels up (clamped for the AMBIENT budget). */
     private static int maxLive() {
-        int level = Math.max(0, dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel);
-        return Math.min(BASE_LIVE + level, MAX_LIVE_CAP);
+        return Math.min(BASE_LIVE + clientAltarLevel(), MAX_LIVE_CAP);
+    }
+
+    /** Synced altar level, clamped to the presence-scaling band. */
+    private static int clientAltarLevel() {
+        return Math.min(Math.max(
+                dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel, 0), 5);
     }
 
     /** Disconnect reset (QuasarSpawner.DisconnectReset pattern). */
@@ -127,12 +146,14 @@ public final class AltarIdleMotes {
         clear();
     }
 
-    /** A random spot on the placement ring, biased into the low height band. */
-    private static Vec3 pickSpawnPos(Vec3 anchor, RandomSource random) {
+    /** A random spot on the placement ring (level-widened), biased into the height band. */
+    private static Vec3 pickSpawnPos(Vec3 anchor, RandomSource random, int altarLevel) {
         double angle = random.nextDouble() * Math.PI * 2.0D;
-        double radius = RING_MIN_RADIUS + random.nextDouble() * (RING_MAX_RADIUS - RING_MIN_RADIUS);
+        double maxRadius = RING_MAX_RADIUS + altarLevel * LEVEL_RING_BONUS;
+        double radius = RING_MIN_RADIUS + random.nextDouble() * (maxRadius - RING_MIN_RADIUS);
+        double heightRange = Y_BIAS_RANGE + altarLevel * LEVEL_HEIGHT_BONUS;
         return new Vec3(anchor.x + Math.cos(angle) * radius,
-                anchor.y + Y_BIAS_MIN + random.nextDouble() * Y_BIAS_RANGE,
+                anchor.y + Y_BIAS_MIN + random.nextDouble() * heightRange,
                 anchor.z + Math.sin(angle) * radius);
     }
 

@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -58,7 +59,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * lives pipeline ({@code lives.LifecycleEvents}: snapshot, life loss, kill transfer,
  * grave, ban) never runs and {@code LivingDropsEvent} never fires — inventory, Eclipse
  * lives and hearts stay untouched. Unlike xbox, a protected minigame death does NOT exit
- * the player: they respawn inside (arena center / last race checkpoint).</p>
+ * the player: they respawn inside (scattered arena respawn with a brief spawn shield /
+ * last race checkpoint).</p>
  *
  * <p><b>Ticket safety</b>: every entrant gets a {@link MinigameState.Ticket} (anchor +
  * game mode + health/food + full inventory NBT) BEFORE anything else happens, and the
@@ -157,6 +159,7 @@ public final class MinigameService {
         lastSeenRemainingMillis = Long.MAX_VALUE;
         totalWindowMillisHint = 0L;
         courseReady = false;
+        ArenaGame.resetTransient();
     }
 
     @SubscribeEvent
@@ -403,6 +406,7 @@ public final class MinigameService {
         LAST_BOUNCE_MESSAGE.clear();
         lastSeenRemainingMillis = Long.MAX_VALUE;
         courseReady = false;
+        ArenaGame.resetTransient();
         state.setPhase(MinigameState.Phase.IDLE);
         EclipseMod.LOGGER.info("Minigame event {} closed (seed {}, {} participants)",
                 gameId, state.openCount(), state.participantsSnapshot().size());
@@ -469,7 +473,7 @@ public final class MinigameService {
             long last = LAST_BOUNCE_MESSAGE.getOrDefault(uuid, 0L);
             if (now - last >= BOUNCE_MESSAGE_THROTTLE_MILLIS) {
                 LAST_BOUNCE_MESSAGE.put(uuid, now);
-                player.displayClientMessage(Component.translatable("eclipse.minigame.enter.not_ready")
+                player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.enter.not_ready")
                         .withStyle(ChatFormatting.YELLOW), false);
                 player.playNotifySound(SoundEvents.VILLAGER_NO, SoundSource.PLAYERS, 0.8F, 1.0F);
             }
@@ -505,7 +509,9 @@ public final class MinigameService {
         if (MinigameDimensions.GAME_RACE.equals(gameId)) {
             ElytraRace.placeIntoRace(target, state, player);
         } else {
-            ArenaGame.placeIntoArena(target, player, false);
+            // Scattered join (never the exact center) — simultaneous entrants must not
+            // pile into one block; the join shield covers the landing (W-P-ARENA).
+            ArenaGame.placeIntoArena(target, player, true);
         }
         player.setGameMode(GameType.ADVENTURE);
         player.getInventory().clearContent();
@@ -513,15 +519,17 @@ public final class MinigameService {
             ElytraRace.giveKit(player);
         } else {
             ArenaGame.giveKit(player);
+            ArenaGame.grantSpawnProtection(target, player);
         }
 
         player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 20));
-        player.connection.send(new ClientboundSetTitleTextPacket(gameName(gameId)));
+        player.connection.send(new ClientboundSetTitleTextPacket(
+                ServerLang.resolve(player, gameName(gameId))));
         player.connection.send(new ClientboundSetSubtitleTextPacket(
-                Component.translatable("eclipse.minigame.enter.subtitle").withStyle(ChatFormatting.GRAY)));
+                ServerLang.tr(player, "eclipse.minigame.enter.subtitle").withStyle(ChatFormatting.GRAY)));
         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7F, 0.8F);
 
-        player.displayClientMessage(leaveLine(), false);
+        player.displayClientMessage(leaveLine(player), false);
         EclipseMod.LOGGER.info("{} entered minigame {} (seed {})",
                 player.getScoreboardName(), gameId, state.openCount());
     }
@@ -560,6 +568,7 @@ public final class MinigameService {
         }
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        ArenaGame.clearSpawnProtection(player);
         removeFromBossBar(player);
 
         grantParticipationIfOwed(server, state, player);
@@ -569,7 +578,7 @@ public final class MinigameService {
             case TIME_UP -> "eclipse.minigame.exit.timeup";
             case CLOSED -> "eclipse.minigame.exit.closed";
         };
-        player.displayClientMessage(Component.translatable(key).withStyle(ChatFormatting.AQUA), false);
+        player.displayClientMessage(ServerLang.tr(player, key).withStyle(ChatFormatting.AQUA), false);
     }
 
     /**
@@ -591,7 +600,7 @@ public final class MinigameService {
         }
         state.queuePayout(player.getUUID(), payout);
         if (grantPayout(state, player, payout)) {
-            player.displayClientMessage(Component.translatable("eclipse.minigame.reward.participation",
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.reward.participation",
                     payout.shards(), payout.skillXp())
                     .withStyle(ChatFormatting.GOLD), false);
         }
@@ -649,7 +658,7 @@ public final class MinigameService {
         for (MinigameState.PendingPayout payout
                 : List.copyOf(state.pendingPayouts(player.getUUID()))) {
             if (grantPayout(state, player, payout)) {
-                player.displayClientMessage(Component.translatable("eclipse.minigame.reward.late",
+                player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.reward.late",
                         payout.shards(), payout.skillXp()).withStyle(ChatFormatting.GOLD), false);
             }
         }
@@ -661,7 +670,8 @@ public final class MinigameService {
      * Cancels player deaths inside minigame dimensions BEFORE the lives pipeline can run
      * (HIGHEST priority; cancelled events are not delivered to default subscribers):
      * no drops, no Eclipse life loss, no grave, no ban. The victim respawns INSIDE —
-     * arena center (killer credited) or last race checkpoint.
+     * scattered on the arena with a spawn shield (killer credited) or at the last race
+     * checkpoint.
      */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onLivingDeath(LivingDeathEvent event) {
@@ -684,7 +694,7 @@ public final class MinigameService {
             exitToTicket(server, state, player, ExitReason.CLOSED);
         } else if (MinigameDimensions.GAME_RACE.equals(dimGameId)) {
             ElytraRace.respawnAtCheckpoint(server, state, player);
-            player.displayClientMessage(Component.translatable("eclipse.minigame.race.respawn")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.race.respawn")
                     .withStyle(ChatFormatting.AQUA), true);
         } else {
             ServerPlayer killer = event.getSource().getEntity() instanceof ServerPlayer sourcePlayer
@@ -716,7 +726,7 @@ public final class MinigameService {
         if (dimGameId != null) {
             boolean eventStillOn = state.isActive() && state.gameId().equals(dimGameId);
             if (eventStillOn) {
-                player.displayClientMessage(leaveLine(), false);
+                player.displayClientMessage(leaveLine(player), false);
             } else {
                 exitToTicket(server, state, player, ExitReason.CLOSED);
             }
@@ -725,7 +735,7 @@ public final class MinigameService {
             MinigameState.restoreTicket(player, state.ticket(player.getUUID()));
             state.removeTicket(player.getUUID());
             grantParticipationIfOwed(server, state, player);
-            player.displayClientMessage(Component.translatable("eclipse.minigame.exit.rescued")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.exit.rescued")
                     .withStyle(ChatFormatting.AQUA), false);
             EclipseMod.LOGGER.info("Restored stranded minigame ticket for {} at login",
                     player.getScoreboardName());
@@ -739,6 +749,7 @@ public final class MinigameService {
         }
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        ArenaGame.clearSpawnProtection(player);
         removeFromBossBar(player);
     }
 
@@ -768,9 +779,10 @@ public final class MinigameService {
         state.removeTicket(player.getUUID());
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        ArenaGame.clearSpawnProtection(player);
         removeFromBossBar(player);
         grantParticipationIfOwed(server, state, player);
-        player.displayClientMessage(Component.translatable("eclipse.minigame.exit.rescued")
+        player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.exit.rescued")
                 .withStyle(ChatFormatting.AQUA), false);
         EclipseMod.LOGGER.info("Minigame ticket restored for {} after a foreign dimension exit to {}",
                 player.getScoreboardName(), event.getTo().location());
@@ -781,21 +793,21 @@ public final class MinigameService {
     /** First {@code /minigameleave}: confirmation click-through; outside dims: polite no-op. */
     public static int leaveRequested(ServerPlayer player) {
         if (!MinigameDimensions.isInMinigameDimension(player)) {
-            player.displayClientMessage(Component.translatable("eclipse.minigame.leave.outside")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
         }
         PENDING_LEAVE_CONFIRMS.put(player.getUUID(),
                 System.currentTimeMillis() + LEAVE_CONFIRM_WINDOW_MILLIS);
-        MutableComponent confirm = Component.translatable("eclipse.minigame.leave.confirm")
+        MutableComponent confirm = ServerLang.tr(player, "eclipse.minigame.leave.confirm")
                 .withStyle(ChatFormatting.YELLOW);
         confirm.append(Component.literal(" "));
-        confirm.append(Component.translatable("eclipse.minigame.leave.confirmbutton")
+        confirm.append(ServerLang.tr(player, "eclipse.minigame.leave.confirmbutton")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true).withUnderlined(true)
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
                                 "/minigameleave confirm"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("eclipse.minigame.leave.confirm.hover")))));
+                                ServerLang.tr(player, "eclipse.minigame.leave.confirm.hover")))));
         player.displayClientMessage(confirm, false);
         return 1;
     }
@@ -803,7 +815,7 @@ public final class MinigameService {
     /** {@code /minigameleave confirm}: voluntary exit — re-entry stays open (no lockouts). */
     public static int leaveConfirmed(ServerPlayer player) {
         if (!MinigameDimensions.isInMinigameDimension(player)) {
-            player.displayClientMessage(Component.translatable("eclipse.minigame.leave.outside")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
         }
@@ -883,13 +895,21 @@ public final class MinigameService {
         return level == null ? List.of() : List.copyOf(level.players());
     }
 
+    /**
+     * Global announce, pre-baked per recipient through {@link ServerLang#resolve} so every
+     * player reads it in their {@code /lang} locale (Wave-5 A1); the dedicated-server
+     * console still gets the raw line for the log.
+     */
     private static void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastSystemMessage(message, false);
+        server.sendSystemMessage(message);
+        for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
+            player.sendSystemMessage(ServerLang.resolve(player, message));
+        }
     }
 
     private static void broadcastInside(MinecraftServer server, MinigameState state, Component message) {
         for (ServerPlayer player : insidePlayers(server, state)) {
-            player.displayClientMessage(message, false);
+            player.displayClientMessage(ServerLang.resolve(player, message), false);
         }
     }
 
@@ -906,15 +926,15 @@ public final class MinigameService {
                 .withStyle(ChatFormatting.GREEN);
     }
 
-    private static Component leaveLine() {
-        MutableComponent line = Component.translatable("eclipse.minigame.enter.leaveline")
+    private static Component leaveLine(ServerPlayer player) {
+        MutableComponent line = ServerLang.tr(player, "eclipse.minigame.enter.leaveline")
                 .withStyle(ChatFormatting.GRAY);
         line.append(Component.literal(" "));
-        line.append(Component.translatable("eclipse.minigame.enter.leavebutton")
+        line.append(ServerLang.tr(player, "eclipse.minigame.enter.leavebutton")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withUnderlined(true)
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/minigameleave"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("eclipse.minigame.enter.leavebutton.hover")))));
+                                ServerLang.tr(player, "eclipse.minigame.enter.leavebutton.hover")))));
         return line;
     }
 

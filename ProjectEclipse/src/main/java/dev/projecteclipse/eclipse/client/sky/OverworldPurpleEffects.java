@@ -244,6 +244,13 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         moon.addVertex(celestialPose, -moonSize, -100.0F, -moonSize).setUv(u1, v0);
         BufferUploader.drawWithShader(moon.buildOrThrow());
 
+        // W-P-ALTAR: the altar level's permanent veil signature around the eclipse
+        // (ring → glyph constellation → aurora bands → halo beams → corona crown),
+        // keyed off the synced ClientStateCache.altarLevel. Additive blend and
+        // depthMask(false) are still active here; the star pass below rebinds its
+        // own shader, so the position-color swap inside needs no restore.
+        AltarVeilSky.render(celestialPose, partialTick, eclipse, rainAlpha);
+
         // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon
         float starBrightness = Math.max(level.getStarBrightness(partialTick), eclipse * 0.5F) * rainAlpha;
         if (starBrightness > 0.0F) {

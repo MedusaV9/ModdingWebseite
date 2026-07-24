@@ -43,7 +43,10 @@
     "fabric_block_view_api_v2": "*",
     "fabric_renderer_api_v1": "*",
     "fabric_rendering_data_attachment_v1": "*",
-    "mixinsquared": "*"
+    "mixinsquared": "*",
+    "photon": "*",
+    "ldlib2": "*",
+    "kilagraph": "*"
   },
   "requiredMods": [
     "minecraft",
@@ -80,7 +83,10 @@
     "fabric_block_view_api_v2",
     "fabric_renderer_api_v1",
     "fabric_rendering_data_attachment_v1",
-    "mixinsquared"
+    "mixinsquared",
+    "photon",
+    "ldlib2",
+    "kilagraph"
   ],
   "blockedModIdSubstrings": [
     "xray",

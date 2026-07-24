@@ -128,8 +128,8 @@ public final class XboxEventGameTests {
     public static void manifestAndDimensionsAgree(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         Map<String, XboxWorldsManifest.WorldEntry> worlds = XboxWorldsManifest.all();
-        helper.assertTrue(worlds.size() == 6, "manifest lists 6 worlds (got " + worlds.size() + ")");
-        for (String worldId : List.of("tu1", "tu12", "tu14", "tu19", "tu31", "tu75")) {
+        helper.assertTrue(worlds.size() == 7, "manifest lists 7 worlds (got " + worlds.size() + ")");
+        for (String worldId : List.of("tu1", "tu12", "tu14", "tu19", "tu31", "tu69", "tu75")) {
             XboxWorldsManifest.WorldEntry entry = worlds.get(worldId);
             helper.assertTrue(entry != null, "manifest has " + worldId);
             helper.assertTrue(entry.sha256().length() == 64, worldId + " sha256 present");

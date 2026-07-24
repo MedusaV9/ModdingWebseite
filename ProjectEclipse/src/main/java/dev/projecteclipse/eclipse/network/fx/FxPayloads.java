@@ -50,6 +50,8 @@ public final class FxPayloads {
     public static final ResourceLocation FX_ORE_PROC = fx("ore_proc");
     /** W4-ATMOS: post-expansion new-land band glow (a = innerR, b = outerR). */
     public static final ResourceLocation FX_NEW_LAND_GLOW = fx("new_land_glow");
+    /** W-P-ALTAR: altar level-up ceremony (pos = altar, a = freshly reached level). */
+    public static final ResourceLocation FX_ALTAR_LEVELUP = fx("altar_levelup");
 
     /** Glide-trail loop emitter (asset owned by W6; attached/removed by the glide FX events). */
     private static final ResourceLocation GLIDE_TRAIL_EMITTER =
@@ -149,6 +151,10 @@ public final class FxPayloads {
         } else if (FX_NEW_LAND_GLOW.equals(id)) {
             dev.projecteclipse.eclipse.sequence.ExpansionSequence.ClientHooks
                     .handleNewLandGlow(payload.a(), payload.b());
+        } else if (FX_ALTAR_LEVELUP.equals(id)) {
+            // W-P-ALTAR: per-level escalating level-up ceremony (a = the new level).
+            dev.projecteclipse.eclipse.client.drama.AltarCeremonyFx.start(
+                    payload.pos(), (int) payload.a());
         } else if (dev.projecteclipse.eclipse.drama.GestureGlyphService.FX_GLYPH.equals(id)) {
             // W4-CEREMONY IDEA-10 #2: pos = gesturing player, a = glyph 0 greet/1 danger/2 follow.
             dev.projecteclipse.eclipse.client.drama.GestureGlyphFx.show(payload.pos(), (int) payload.a());

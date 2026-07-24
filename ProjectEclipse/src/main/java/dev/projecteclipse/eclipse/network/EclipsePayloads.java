@@ -152,6 +152,8 @@ public final class EclipsePayloads {
         if (dev.projecteclipse.eclipse.client.drama.OfferingSwallowFx.intercept(payload.emitterId(), payload.pos())) {
             return;
         }
+        // D12: optional Photon enhancement layer — additive, never consumes the cue.
+        dev.projecteclipse.eclipse.veilfx.PhotonBridge.enhanceQuasarCue(payload.emitterId(), payload.pos());
         dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawnOrFallback(payload.emitterId(), payload.pos());
     }
 
@@ -328,6 +330,9 @@ public final class EclipsePayloads {
         ClientStateCache.rebirthCount = payload.count();
         ClientStateCache.rebirthNextCostShards = payload.nextCostShards();
         ClientStateCache.rebirthLevelCostMultiplier = payload.levelCostMultiplier();
+        // Skill-tree rebirth footer reads ClientRebirthState (synced flag gates the UI).
+        dev.projecteclipse.eclipse.client.skills.ClientRebirthState.update(
+                payload.count(), payload.nextCostShards(), payload.levelCostMultiplier());
     }
 
     /** D11 rebirth request; ALL validation lives in {@code rebirth.RebirthService}. */

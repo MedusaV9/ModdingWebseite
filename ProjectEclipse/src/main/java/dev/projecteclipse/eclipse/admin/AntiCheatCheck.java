@@ -629,6 +629,12 @@ public final class AntiCheatCheck {
         allowed.put("fabric_rendering_data_attachment_v1", "*");
         // MixinSquared is jarJar'd inside Supplementaries and registers as a real mod id.
         allowed.put("mixinsquared", "*");
+        // D12: Photon VFX layer is an OPTIONAL client extra (PhotonBridge no-ops without it).
+        // Photon 2.1.x requires LDLib2 at runtime; 2.2.x additionally pulls KilaGraph —
+        // allow all three so an optional install never trips the modcheck. docs/BUNDLING.md.
+        allowed.put("photon", "*");
+        allowed.put("ldlib2", "*");
+        allowed.put("kilagraph", "*");
 
         List<String> required = List.of(
                 "minecraft", "neoforge", "eclipse", "veil", "geckolib",
@@ -641,7 +647,8 @@ public final class AntiCheatCheck {
                 "ends_delight", "create_confectionery", "createconnected",
                 "fabric_api_base", "fabric_block_view_api_v2",
                 "fabric_renderer_api_v1", "fabric_rendering_data_attachment_v1",
-                "mixinsquared");
+                "mixinsquared",
+                "photon", "ldlib2", "kilagraph");
         return new Config(
                 ModlistMode.ALLOWLIST,
                 EclipseConfig.antiCheat().blockedModIdSubstrings(),

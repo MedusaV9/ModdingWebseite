@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.minigames.MinigameDimensions;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -94,6 +95,13 @@ public final class PhaseInventoryLock {
         }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!player.gameMode.isSurvival()) {
+                continue;
+            }
+            // Minigame dimensions are exempt (W-P-ARENA): fighters there are ADVENTURE-mode
+            // kit users whose real inventory is safely ticketed away — sweeping the arena
+            // kit's leather armor off a pre-phase player would break the minigame, and the
+            // seal has nothing real to protect inside.
+            if (MinigameDimensions.isInMinigameDimension(player)) {
                 continue;
             }
             if (mainLocked && sweepMainInventory(player)) {

@@ -6,7 +6,7 @@ true 1:1 console look still needs from the server owner. Companion docs:
 (frozen 156-id classic block contract), `tools/classicblocks/provenance.json`
 (per-texture provenance ledger).
 
-## Bundled worlds (6)
+## Bundled worlds (7)
 
 | id | display name | origin |
 |---|---|---|
@@ -15,27 +15,34 @@ true 1:1 console look still needs from the server owner. Companion docs:
 | `tu14` | Tutorial World (TU14) — 2013 | same pipeline |
 | `tu19` | Tutorial World (TU19) — 2014 | DERIVED from `tu12` by `tools/xboxworlds/variants.py` |
 | `tu31` | Tutorial World (TU31) — 2015 | derived, see below |
+| `tu69` | Tutorial World (TU69) — 2018 | derived, see below (V5 request; 30×30 trim) |
 | `tu75` | Tutorial World (TU75) — 2019 | derived, see below |
 
-**Why TU19/TU31/TU75 are derived:** theminecraftarchitect.com hosts no Java
-conversions for them (probed 404), and three more full bakes would blow the
+**Why TU19/TU31/TU69/TU75 are derived:** theminecraftarchitect.com hosts no
+Java conversions for them (probed 404), and more full bakes would blow the
 30 MB size gate. The 4J tutorial map itself did not change layout across these
 title updates — so each variant reuses the TU12 layout trimmed to the inner
-36×36 chunks (~3.1 MB each; all 6 zips total ≈ 27.7 MiB, within the gate) with
-a deterministic **era-aging palette pass** (every remap stays inside the frozen
-classic palette contract):
+36×36 chunks (~3.1 MB each; `tu69` uses a tighter 30×30 trim ≈ 2.2 MB because
+the gate had ~2.3 MB of headroom left when it was added — all 7 zips total
+≈ 29.9 MiB, within the gate) with a deterministic **era-aging palette pass**
+(every remap stays inside the frozen classic palette contract):
 
 * `tu19` (2014): ~18 % of cobblestone mossed, ~10 % of stone bricks cracked —
   the map after two years of title updates.
 * `tu31` (2015): ~30 % of oak planks rebuilt in spruce, stone-brick patches in
   the cobble, ferns in the grass — the renovation era.
+* `tu69` (2018): the aquatic-preview twilight — ~34 % cobble moss, ~20 % stone
+  bricks mossed, ~34 % ferns, ~12 % of sand gone gravelly (the Update-Aquatic
+  era beach read), poppies displacing dandelions.
 * `tu75` (2019): heavy moss (~40 % cobble, ~25 % stone bricks), overgrowth
   ferns, poppies — the last Xbox-360 title update; the world nobody resets.
 
 Regenerate with `python3 tools/xboxworlds/variants.py` then
 `python3 tools/xboxworlds/frames.py` (both deterministic; manifest + loot JSONs
-are rewritten in place). TU69 from the original request does not exist — TU75
-is the real final Xbox-360 update, TU19/TU31 the nearest real neighbours.
+are rewritten in place). Note on TU numbering: TU75 is the real final Xbox-360
+update; TU19/TU31 are the nearest real neighbours of the originally requested
+mid-era updates, and TU69 (a real ~2018 title update, never archived as a Java
+conversion) was added on explicit request in the V5 wave.
 
 ## Block/item texture provenance (what is authentic, what is recreated)
 

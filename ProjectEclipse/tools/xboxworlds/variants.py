@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""C17 step 8 — derive the TU19 / TU31 / TU75 tutorial-world VARIANTS from the
-committed TU12 payload (no network, no server jar — pure region-file surgery).
+"""C17 step 8 (+V5 P-MISC) — derive the TU19 / TU31 / TU69 / TU75 tutorial-world
+VARIANTS from the committed TU12 payload (no network, no server jar — pure
+region-file surgery).
 
 WHY derived, not fetched: theminecraftarchitect.com hosts no "JE Latest" zips
-for TU19/TU31/TU75 (probed 404), and three more full 54x54-chunk bakes
-(~6.5 MB each) would blow the 30 MB orchestrator size gate. The user-visible
-promise is "more TU worlds with era-correct palette differences" — so each
-variant reuses the TU12 tutorial LAYOUT (it is the same 4J map across those
-title updates), trimmed to the inner 36x36 chunks, with a deterministic
-era-aging palette pass:
+for TU19/TU31/TU75 (probed 404, TU69 was never archived there either), and more
+full 54x54-chunk bakes (~6.5 MB each) would blow the 30 MB orchestrator size
+gate. The user-visible promise is "more TU worlds with era-correct palette
+differences" — so each variant reuses the TU12 tutorial LAYOUT (it is the same
+4J map across those title updates), trimmed to the inner 36x36 chunks (TU69:
+30x30 — the size gate had ~2.3 MB of headroom left when it was added, so the
+newest variant takes the tighter trim), with a deterministic era-aging palette
+pass:
 
   tu19 (2014) — lightly weathered: some cobble mossed over, first cracked
                 stone bricks (the map as it looked after two years of TUs).
   tu31 (2015) — the renovation era: spruce-plank rebuilds, stone-brick
                 patches in the cobble, ferns creeping into the grass.
+  tu69 (2018) — the aquatic-preview twilight: deep moss and ferns, gravel
+                creeping into the beaches (the Update-Aquatic era read),
+                poppies displacing the dandelions.
   tu75 (2019) — the console sunset: heavily mossed + overgrown (the last
                 Xbox-360 title update; the world nobody resets anymore).
 
@@ -56,6 +62,8 @@ CHUNK_MIN, CHUNK_MAX = -18, 17
 ZIP_DATE = (2026, 1, 1, 0, 0, 0)  # keep package.py's deterministic-zip contract
 
 # (source classic id, target classic id, per-block probability) — all propertyless.
+# Optional per-variant "box": (chunkMin, chunkMax) trim override — MUST contain the
+# TU12 spawn chunk (6, -7). Default is the shared 36x36 box above.
 VARIANTS = {
     "tu19": {
         "year": 2014,
@@ -74,6 +82,22 @@ VARIANTS = {
             ("eclipse:classic_oak_planks", "eclipse:classic_spruce_planks", 0.30),
             ("eclipse:classic_cobblestone", "eclipse:classic_stone_bricks", 0.10),
             ("eclipse:classic_short_grass", "eclipse:classic_fern", 0.25),
+        ],
+    },
+    # V5 P-MISC: the explicitly requested TU69 (~2018, the aquatic-preview console
+    # twilight — between TU31's renovation and TU75's sunset). Smaller 30x30 trim box:
+    # when TU69 was added the 30 MB gate had only ~2.3 MB of headroom left.
+    "tu69": {
+        "year": 2018,
+        "displayName": {"en_us": "Tutorial World (TU69) — 2018",
+                        "de_de": "Tutorial-Welt (TU69) — 2018"},
+        "box": (-15, 14),
+        "remap": [
+            ("eclipse:classic_cobblestone", "eclipse:classic_mossy_cobblestone", 0.34),
+            ("eclipse:classic_stone_bricks", "eclipse:classic_mossy_stone_bricks", 0.20),
+            ("eclipse:classic_short_grass", "eclipse:classic_fern", 0.34),
+            ("eclipse:classic_sand", "eclipse:classic_gravel", 0.12),
+            ("eclipse:classic_dandelion", "eclipse:classic_poppy", 0.30),
         ],
     },
     "tu75": {
@@ -133,8 +157,8 @@ def load_source_zip() -> tuple[dict[tuple[int, int], bytes], dict[tuple[int, int
     return regions, entities, level_dat
 
 
-def in_box(cx: int, cz: int) -> bool:
-    return CHUNK_MIN <= cx <= CHUNK_MAX and CHUNK_MIN <= cz <= CHUNK_MAX
+def in_box(cx: int, cz: int, box: tuple[int, int] = (CHUNK_MIN, CHUNK_MAX)) -> bool:
+    return box[0] <= cx <= box[1] and box[0] <= cz <= box[1]
 
 
 def remap_chunk(variant: str, cx: int, cz: int, raw: bytes, recipe, stats: dict) -> bytes:
@@ -232,17 +256,17 @@ def deterministic_zip(src_dir: str, dest_zip: str) -> None:
                 zf.writestr(info, f.read(), compresslevel=9)
 
 
-def variant_loot(variant: str, source_loot: dict) -> dict:
+def variant_loot(variant: str, source_loot: dict, box: tuple[int, int]) -> dict:
     """TU12 loot filtered to the trim box (frames are added later by frames.py)."""
-    lo, hi = CHUNK_MIN * 16, CHUNK_MAX * 16 + 15
+    lo, hi = box[0] * 16, box[1] * 16 + 15
     containers = [c for c in source_loot["containers"]
                   if lo <= c["pos"][0] <= hi and lo <= c["pos"][2] <= hi]
     return {
         "worldId": variant,
         "dataVersion": source_loot["dataVersion"],
         "note": (f"derived from tu12_loot.json by tools/xboxworlds/variants.py (C17): "
-                 f"containers inside the {CHUNK_MAX - CHUNK_MIN + 1}x"
-                 f"{CHUNK_MAX - CHUNK_MIN + 1}-chunk trim box; "
+                 f"containers inside the {box[1] - box[0] + 1}x"
+                 f"{box[1] - box[0] + 1}-chunk trim box; "
                  + source_loot.get("note", "")),
         "containers": containers,
     }
@@ -260,9 +284,10 @@ def main() -> None:
     total_bytes = sum(w["sizeBytes"] for w in manifest["worlds"])
     for variant, spec in VARIANTS.items():
         stats: dict = {}
+        box = spec.get("box", (CHUNK_MIN, CHUNK_MAX))
         kept_regions = {key: remap_chunk(variant, key[0], key[1], raw, spec["remap"], stats)
-                        for key, raw in sorted(regions.items()) if in_box(*key)}
-        kept_entities = {key: raw for key, raw in sorted(entities.items()) if in_box(*key)}
+                        for key, raw in sorted(regions.items()) if in_box(*key, box)}
+        kept_entities = {key: raw for key, raw in sorted(entities.items()) if in_box(*key, box)}
 
         build = os.path.join("/tmp/xboxworlds", "variants", variant)
         if os.path.isdir(build):
@@ -280,7 +305,7 @@ def main() -> None:
         size = os.path.getsize(zip_path)
         total_bytes += size
 
-        loot = variant_loot(variant, source_loot)
+        loot = variant_loot(variant, source_loot, box)
         with open(os.path.join(DATA_DIR, f"{variant}_loot.json"), "w") as f:
             json.dump(loot, f, indent=2, ensure_ascii=False)
             f.write("\n")
@@ -297,10 +322,10 @@ def main() -> None:
             "sizeBytes": size,
             "chunkCount": len(kept_regions),
             "bounds": {
-                "chunkMin": [CHUNK_MIN, CHUNK_MIN],
-                "chunkMax": [CHUNK_MAX, CHUNK_MAX],
-                "blockMin": [CHUNK_MIN * 16, 0, CHUNK_MIN * 16],
-                "blockMax": [CHUNK_MAX * 16 + 15, 255, CHUNK_MAX * 16 + 15],
+                "chunkMin": [box[0], box[0]],
+                "chunkMax": [box[1], box[1]],
+                "blockMin": [box[0] * 16, 0, box[0] * 16],
+                "blockMax": [box[1] * 16 + 15, 255, box[1] * 16 + 15],
             },
             "lootManifest": f"data/eclipse/xboxworlds/{variant}_loot.json",
         })

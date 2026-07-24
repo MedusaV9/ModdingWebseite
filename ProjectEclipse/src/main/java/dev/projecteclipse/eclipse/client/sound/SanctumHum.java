@@ -66,6 +66,12 @@ public final class SanctumHum {
     private static final float START_THRESHOLD = 0.02F;
     /** Volume floor under the ramp: the hum never fully dies inside the zone (IDEA-07 §1). */
     private static final float BASE_VOLUME_SHARE = 0.4F;
+    /**
+     * W-P-ALTAR idle-presence scaling: extra hum volume per synced altar level (capped at
+     * level 5, final volume clamped to 1.0) — the aura audibly deepens as the community
+     * levels the altar.
+     */
+    private static final float LEVEL_VOLUME_BONUS = 0.07F;
     /** Ticks of continuous silence before a live instance stops itself. */
     private static final int SILENT_STOP_TICKS = 60;
 
@@ -125,7 +131,10 @@ public final class SanctumHum {
         double groundY = topY - FloatingSanctumBuilder.ISLAND_LIFT;
         float verticalFactor = (float) Mth.clamp(
                 (player.getEyeY() - groundY) / FloatingSanctumBuilder.ISLAND_LIFT, 0.0D, 1.0D);
-        targetVolume = aberration * (BASE_VOLUME_SHARE + (1.0F - BASE_VOLUME_SHARE) * verticalFactor);
+        float levelBoost = 1.0F + LEVEL_VOLUME_BONUS * Math.min(Math.max(
+                dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel, 0), 5);
+        targetVolume = Math.min(1.0F, aberration
+                * (BASE_VOLUME_SHARE + (1.0F - BASE_VOLUME_SHARE) * verticalFactor) * levelBoost);
 
         HumSound sound = humSound;
         if (sound == null || sound.isStopped()) {

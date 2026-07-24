@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
+import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import dev.projecteclipse.eclipse.veilfx.TransitionFx;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
@@ -139,6 +140,9 @@ public final class RiftFx {
 
         RIFTS.add(new Rift(level.dimension(), pos, orientedNormal(minecraft, pos, normal, style),
                 width, durationTicks, style, ticks));
+
+        // D12: optional Photon glow layered over the tear (no-op without the photon mod).
+        PhotonBridge.spawn(PhotonBridge.EXPANSION_RIFT_GLOW, pos);
 
         float falloff = distanceFalloff(minecraft, pos);
         TransitionFx.glitchPulse(Math.min(MAX_PULSE, (0.28F + width * 0.012F) * falloff), 14);

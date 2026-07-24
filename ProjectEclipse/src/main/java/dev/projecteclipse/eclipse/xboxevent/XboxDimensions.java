@@ -21,11 +21,12 @@ public final class XboxDimensions {
     public static final ResourceKey<Level> XBOX_TU1 = key("xbox_tu1");
     public static final ResourceKey<Level> XBOX_TU12 = key("xbox_tu12");
     public static final ResourceKey<Level> XBOX_TU14 = key("xbox_tu14");
-    // C17 era variants (TU69 never existed; the nearest real title updates are TU19,
-    // TU31 and TU75 — generated from the TU12 layout with era-correct palette shifts
-    // by tools/xboxworlds/generate_variants.py).
+    // C17/V5 era variants — generated from the TU12 layout with era-correct palette
+    // shifts by tools/xboxworlds/variants.py. TU19/TU31/TU75 landed with C17; TU69
+    // (~2018, the aquatic-preview era) was added on explicit request in the V5 wave.
     public static final ResourceKey<Level> XBOX_TU19 = key("xbox_tu19");
     public static final ResourceKey<Level> XBOX_TU31 = key("xbox_tu31");
+    public static final ResourceKey<Level> XBOX_TU69 = key("xbox_tu69");
     public static final ResourceKey<Level> XBOX_TU75 = key("xbox_tu75");
 
     /** worldId (manifest id, e.g. {@code tu12}) → dimension key, insertion-ordered. */
@@ -37,6 +38,7 @@ public final class XboxDimensions {
         BY_WORLD_ID.put("tu14", XBOX_TU14);
         BY_WORLD_ID.put("tu19", XBOX_TU19);
         BY_WORLD_ID.put("tu31", XBOX_TU31);
+        BY_WORLD_ID.put("tu69", XBOX_TU69);
         BY_WORLD_ID.put("tu75", XBOX_TU75);
     }
 
@@ -72,7 +74,7 @@ public final class XboxDimensions {
         return entity != null && isXboxDimension(entity.level().dimension());
     }
 
-    /** All known world ids in manifest order ({@code tu1, tu12, tu14, tu19, tu31, tu75}). */
+    /** All known world ids in manifest order ({@code tu1, tu12, tu14, tu19, tu31, tu69, tu75}). */
     public static Iterable<String> worldIds() {
         return BY_WORLD_ID.keySet();
     }

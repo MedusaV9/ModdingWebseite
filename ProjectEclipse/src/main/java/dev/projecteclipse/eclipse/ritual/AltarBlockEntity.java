@@ -185,8 +185,11 @@ public class AltarBlockEntity extends BlockEntity {
         S2CQuasarPayload ring = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_LEVELUP_RING,
                 fxPos.add(0.0D, 0.5D, 0.0D));
         double rangeSq = BeamEmitter.VIEW_RANGE * BeamEmitter.VIEW_RANGE;
+        // W-P-ALTAR: the final milestone's beam is WORLD-VISIBLE — every player gets the
+        // payload regardless of range (the L5 "corona ignition" ceremony beat).
+        boolean worldVisible = milestone.level() >= 5;
         for (ServerPlayer online : serverLevel.players()) {
-            if (online.position().distanceToSqr(fxPos) <= rangeSq) {
+            if (worldVisible || online.position().distanceToSqr(fxPos) <= rangeSq) {
                 PacketDistributor.sendToPlayer(online, beam);
                 PacketDistributor.sendToPlayer(online, ring);
             }
@@ -196,6 +199,12 @@ public class AltarBlockEntity extends BlockEntity {
         // → EclipseFxState.startShockwave; W4-ISLAND owns the beam/ring sends above).
         PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE,
                 Vec3.atCenterOf(this.worldPosition), 0.6F, 40.0F));
+        // W-P-ALTAR: the per-level ceremony escalation. The client sequences the ring /
+        // pillar / glyph-rain / sky-crack / corona-ignition beats off the level in `a`
+        // (AltarCeremonyFx); particle beats distance-cull client-side, screen/sky beats
+        // (L4 flash, L5 corona surge) are deliberately map-wide.
+        PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_ALTAR_LEVELUP,
+                fxPos, milestone.level(), 0.0F));
         EclipseMod.LOGGER.info("Altar milestone {} completed at {}; rewards {}",
                 milestone.level(), this.worldPosition, milestone.rewards());
     }

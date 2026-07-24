@@ -37,6 +37,15 @@ WANTED = [
     ("iris", "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar", MODS_CLIENT),
 ]
 
+# OPTIONAL extras (D12): fetched on a best-effort basis; a miss is reported but never
+# fails the run. Photon is the optional VFX enhancement layer consumed by
+# veilfx/PhotonBridge (reflection, isLoaded-guarded); its mods.toml requires LDLib2
+# (Modrinth slug "ldlib", mod id "ldlib2"). Both are client-side for our usage.
+OPTIONAL = [
+    ("photon-editor", "photon-neoforge-1.21.1-2.1.5.jar", MODS_CLIENT),
+    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29.jar", MODS_CLIENT),
+]
+
 
 def fetch_json(url: str):
     req = urllib.request.Request(url, headers=UA)
@@ -51,11 +60,8 @@ def download(url: str, dest: Path):
             out.write(chunk)
 
 
-def main() -> int:
-    MODS.mkdir(parents=True, exist_ok=True)
-    MODS_CLIENT.mkdir(parents=True, exist_ok=True)
-    failures = []
-    for slug, jar_name, target_dir in WANTED:
+def fetch_list(entries, failures) -> None:
+    for slug, jar_name, target_dir in entries:
         dest = target_dir / jar_name
         if dest.exists() and dest.stat().st_size > 10_000:
             print(f"SKIP {jar_name} (exists)")
@@ -86,12 +92,25 @@ def main() -> int:
             print(f"OK   {jar_name} ({dest.stat().st_size:,} bytes)")
         except Exception as exc:  # noqa: BLE001
             failures.append((jar_name, f"download failed: {exc}"))
+
+
+def main() -> int:
+    MODS.mkdir(parents=True, exist_ok=True)
+    MODS_CLIENT.mkdir(parents=True, exist_ok=True)
+    failures = []
+    fetch_list(WANTED, failures)
+    optional_failures = []
+    fetch_list(OPTIONAL, optional_failures)
+    if optional_failures:
+        print("\nOPTIONAL (skipped, not fatal):")
+        for jar_name, why in optional_failures:
+            print(f"  {jar_name}: {why}")
     if failures:
         print("\nFAILURES:")
         for jar_name, why in failures:
             print(f"  {jar_name}: {why}")
         return 1
-    print("\nAll mods fetched.")
+    print("\nAll required mods fetched.")
     return 0
 
 

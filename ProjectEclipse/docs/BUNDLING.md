@@ -28,7 +28,8 @@ must remain separate official downloads in the event pack.
 | End's Delight | 2.6.1+neoforge.1.21.1 | MIT | No (proposed) | C19 optional content; keep external with Farmer's Delight until the orchestrator approves the pack addition | [Modrinth](https://modrinth.com/mod/ends-delight/version/2.6.1+neoforge.1.21.1) |
 | Create Confectionery | 1.1.2 | MIT | No (proposed) | C19 optional content; external alongside Create for pack consistency | [Modrinth](https://modrinth.com/mod/create-confectionery/version/1.1.2) |
 | Create: Connected | 1.3.2-mc1.21.1 | AGPL-3.0-or-later plus notices | No (proposed) | C19 optional content; a separate jar preserves mere aggregation and its source/license notices | [Modrinth](https://modrinth.com/mod/create-connected/version/1.3.2-mc1.21.1) / [source](https://github.com/hlysine/create_connected) |
-| Photon | unresolved | Unresolved | No | The named project is ambiguous (shaderpack vs library); do not distribute until identity and license are verified | None approved |
+| Photon | mc1.21.1-2.1.5-neoforge | GPL-3.0 (Modrinth lists "LicenseRef-Custom", but the linked LICENSE file and the jar's mods.toml both say GPL-3.0 — verified 2026-07) | No | Identity RESOLVED: Modrinth `photon-editor` (id `gzevkJbM`, Low Drag MC/KilaBash, "Photon, a VFX library") with current NeoForge 1.21.1 builds. GPL-3.0 is copyleft — nesting it inside the ARR Eclipse jar is a license-compat trap, so it stays an OPTIONAL external install consumed via the reflection-only `veilfx/PhotonBridge` (see below) | [Modrinth](https://modrinth.com/mod/photon-editor/version/mc1.21.1-2.1.5-neoforge) / [Modrinth Maven](https://api.modrinth.com/maven/maven/modrinth/photon-editor/mc1.21.1-2.1.5-neoforge/photon-editor-mc1.21.1-2.1.5-neoforge.pom) (verified resolvable 2026-07) |
+| LDLib2 | mc1.21.1-2.2.29-neoforge | LGPL-3.0-only | No | Required runtime dependency of Photon (its mods.toml pins `ldlib2 [2.2.24,)`); rides with the optional Photon install only | [Modrinth](https://modrinth.com/mod/ldlib) (slug `ldlib`, mod id `ldlib2`) |
 | Axiom | 1.21.1 line is Fabric-only | ARR | N/A | No compatible NeoForge artifact and redistribution is not permitted | [Modrinth](https://modrinth.com/mod/axiom) |
 
 The resulting Eclipse jar is not a true “one jar” pack. Create assets, Supplementaries,
@@ -115,6 +116,72 @@ now machine-shipped. A giant mods **zip is deliberately NOT committed**: it woul
 violate the ARR licenses (if it contained the jars) or be worse than the `.mrpack` (if it
 did not); the committed, reviewable equivalents are the generator plus
 `tools/modpack/mods_manifest.json` (exact name+version+URL+hash per mod).
+
+### Photon (optional VFX layer) — final verdict (D12, evidence 2026-07)
+
+The v3 "unresolved/ambiguous" row was STALE. Facts, all re-verified against the live
+Modrinth API and the published jar:
+
+- **Identity:** Modrinth project `photon-editor` (id `gzevkJbM`), author KilaBash /
+  Low Drag MC — "Photon, a VFX library" with a Unity-style in-game effect editor.
+- **NeoForge 1.21.1 builds exist and are current:** latest `mc1.21.1-2.2.0-neoforge`
+  (2026-07-21, adds a required KilaGraph dependency); we target **`2.1.5`** (2026-06-26,
+  no Modrinth-declared dependency — but its `neoforge.mods.toml` REQUIRES
+  `ldlib2 [2.2.24,)`, so an install is always Photon + LDLib2).
+- **License:** GPL-3.0 (Modrinth labels it "LicenseRef-Custom-License", but the linked
+  LICENSE file is verbatim GPLv3 and the jar metadata says "GPL-3.0 license"). Copyleft:
+  never jarJar it into the ARR Eclipse jar — external install or `.mrpack` URL reference.
+- **Adoption shipped:** `veilfx/PhotonBridge` — **pure reflection, no compile-time or
+  Gradle dependency** (the Modrinth Maven coordinate
+  `maven.modrinth:photon-editor:mc1.21.1-2.1.5-neoforge` was verified resolvable, but the
+  build deliberately stays dependency-free; the three reflected API points were verified
+  by `javap` against the published 2.1.5 jar: `FXHelper.getFX(ResourceLocation)`,
+  `new BlockEffectExecutor(FX, Level, BlockPos)`, `start()`). Everything is behind
+  `ModList.get().isLoaded("photon")` plus the `photonFx` client-config toggle (and
+  `reducedFx`); absence of Photon is a silent no-op with the existing Quasar visuals
+  unchanged.
+- **Enhanced flagship moments (2):** the altar level-up (layered over the
+  `altar_levelup_ring` Quasar cue) and the expansion rift glow (layered over `RiftFx`
+  tears). Photon effects are DATA authored in its in-game editor (compressed-NBT
+  `assets/eclipse/fx/<id>.fx` files); the mod ships the hook points, and effect authors
+  drop `altar_levelup.fx` / `expansion_rift_glow.fx` into a resource pack. Until such an
+  asset exists the bridge logs one INFO per id and stays Quasar-only.
+- **Dev runtime:** `tools/modpack/fetch_dev_mods.py` fetches Photon 2.1.5 + LDLib2 2.2.29
+  into `run/mods-client` as best-effort OPTIONAL entries (a miss never fails the script).
+  Allowlist rows `photon`/`ldlib2`/`kilagraph` (all `"*"`, optional) are in
+  `AntiCheatCheck.defaults()` + `assets/eclipse/bootstrap.json`.
+- **Open risk (pre-authorized fallback):** Photon 2.x and Veil 4.3.0 both hook render
+  pipelines; if in-game testing shows mixin conflicts, flip `photonFx=false` by default
+  and record the logs here. Not yet observed — runtime testing needs a GL client.
+
+## NeoForge early loading window (client installs & dev runs)
+
+What is actually configurable on NeoForge 21.1 (FML loader 4.0.43 — keys verified from
+`FMLConfig$ConfigValue` in the shipped jar; there is **no `darkMode` fml.toml key**, that
+is a Forge-ism):
+
+- `config/fml.toml`: `earlyWindowControl` (true = FML owns the boot window; disabling it
+  loses the loading progress UI and "can be bad for mods that rely on new GL features" —
+  keep it ON; it has NOTHING to do with our in-game `EclipseLoadingScreen`, which only
+  swaps the vanilla world-join/dimension screens much later), `earlyWindowProvider`
+  (`"fmlearlywindow"` is the only shipped provider), `earlyWindowWidth`/`earlyWindowHeight`
+  (we set 1024×576 in the dev run for a tidier 16:9 boot window), `earlyWindowFBScale`,
+  `earlyWindowMaximized`, `earlyWindowSkipGLVersions`, `earlyWindowSquir` (easter egg).
+- **Dark scheme:** the early window picks `ColourScheme.BLACK` when the env var
+  `FML_EARLY_WINDOW_DARK` is set (any value) OR when the vanilla `options.txt` has
+  `darkMojangStudiosBackground:true` (which also darkens the Mojang loading overlay —
+  recommended for the Eclipse look; we ship it in the dev-run `run/options.txt`). Only
+  two schemes exist (default RED, BLACK) — a custom dark-purple palette is not a config
+  option.
+- **Window title** is hardcoded (`"Minecraft: NeoForge Loading..."`) — the mod
+  `displayName` does not appear there.
+- **Custom `ImmediateWindowProvider` verdict: NOT feasible from this mod.** The provider
+  is `ServiceLoader`-discovered on the FML **boot module layer** before mod discovery
+  (verified in `ImmediateWindowHandler`); a provider inside a regular mod jar is never
+  seen. Shipping one would require a separate boot-layer library installed next to FML —
+  high-risk, rejected per the config+docs fallback. Operators who want the dark boot
+  window on player installs should document `darkMojangStudiosBackground:true` /
+  `FML_EARLY_WINDOW_DARK=1` in the pack install notes.
 
 ## Adding a mod to the pack
 
