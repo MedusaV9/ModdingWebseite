@@ -1,12 +1,13 @@
 package dev.projecteclipse.eclipse.xboxevent;
 
+import java.util.HashSet;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.Set;
+import java.util.UUID;
 
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.classicblocks.ClassicBlocks;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
@@ -18,36 +19,35 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Xbox event portal lifecycle (plan §2.13.4): a pure marker construct — one vanilla
- * {@code minecraft:interaction} entity (3×4 trigger volume) framed by decorative vanilla
- * {@code minecraft:block_display} pieces built from W8's classic blocks. No custom
- * blocks/entities, so worlds stay loadable without the mod. All pieces carry the
- * {@value #ENTITY_TAG} command tag for restart-safe discovery/removal.
+ * Xbox event portal lifecycle (plan §2.13.4, C16 frameless rework): a pure marker
+ * construct — one vanilla {@code minecraft:interaction} entity (3×4 trigger volume) and
+ * NOTHING else. The decorative block-display frame is gone (C16: "no frame, just the
+ * star/rift"); the visual is entirely C7's volumetric star-rift, opened via the frozen
+ * {@code S2CFxEventPayload} rift events (§4.2: {@code a} = tear width 4.5–6, {@code b} =
+ * style 1 → the layered star-prism with the parallax portal surface in
+ * {@code veilfx/rift/RiftRenderer}). The {@value #ENTITY_TAG} command tag stays on the
+ * interaction entity AND keeps being swept on placement/removal so legacy frame pieces in
+ * existing worlds still clean themselves up.
  *
- * <p>VFX: spawn/despawn send P2's frozen {@code S2CFxEventPayload} rift events (§4.2,
- * P2-W8 wiring: {@code a} = tear width 4.5–6, {@code b} = style 1 (portal), sent at the
- * portal center); the always-on server-side fallback is a cheap reverse-portal particle
- * column + ambient loop, so the portal reads as a portal even without P2-W8's client
- * renderer.</p>
- *
- * <p>Note: W6's {@code DisplayPlacerService} (plan §2.7) has not landed in this wave — the
- * frame uses plain vanilla display entities directly; they are discoverable by tag and can
- * be re-skinned by W6 tooling later.</p>
+ * <p><b>Rift visibility (C16 upgrade)</b>: the open payload is per-player resynced from
+ * {@link #ambientTick} — players who log in late, teleport in, or walk into range after
+ * the placement broadcast get the rift opened for them exactly once ({@link #FX_SYNCED});
+ * leaving the level drops the mark (the client kills rifts on dimension change) so
+ * returning players resync too. The always-on server-side fallback is a cheap
+ * reverse-portal particle column + ambient hum loop, so the portal reads as a portal even
+ * for clients without the rift renderer (Iris/reducedFx fallback per §7).</p>
  */
 public final class XboxPortal {
     /** Command tag on every portal piece (interaction + displays). */
@@ -75,6 +75,13 @@ public final class XboxPortal {
     /** {@code b} value marking the portal style of {@code rift_open} (0 = structure). */
     private static final float RIFT_STYLE_PORTAL = 1.0F;
     private static final double FX_RANGE = 128.0D;
+
+    /**
+     * Players whose client has the rift open for the CURRENT portal (transient per-run
+     * state — a fresh boot resyncs everyone, which is correct: their clients have no rift).
+     * Guarded by the server thread; cleared on placement/removal.
+     */
+    private static final Set<UUID> FX_SYNCED = new HashSet<>();
 
     private XboxPortal() {}
 
@@ -146,18 +153,24 @@ public final class XboxPortal {
 
     // ------------------------------------------------------------------ spawn / despawn
 
-    /** Spawns trigger + frame at {@code base} (feet level), records it in state, fires FX. */
+    /**
+     * Spawns the frameless portal at {@code base} (feet level): trigger volume only, no
+     * decorative frame (C16). Records it in state and opens the star-rift for everyone
+     * in range; late arrivals resync from {@link #ambientTick}.
+     */
     public static void place(ServerLevel level, BlockPos base, XboxEventState state) {
-        removeEntities(level, base); // idempotent: clear leftovers at the same spot first
+        removeEntities(level, base); // idempotent: clears leftovers AND legacy frame pieces
 
         spawnInteraction(level, base);
-        spawnFrame(level, base);
 
         state.setPortal(level.dimension(), base);
-        Vec3 center = Vec3.atBottomCenterOf(base);
-        PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, FX_RANGE,
-                new S2CFxEventPayload(FX_RIFT_OPEN, center.add(0.0D, HEIGHT / 2.0D, 0.0D),
-                        RIFT_FX_WIDTH, RIFT_STYLE_PORTAL));
+        FX_SYNCED.clear();
+        Vec3 fxCenter = riftCenter(base);
+        for (ServerPlayer player : List.copyOf(level.players())) {
+            if (player.position().distanceToSqr(fxCenter) <= FX_RANGE * FX_RANGE) {
+                sendRiftOpen(player, fxCenter);
+            }
+        }
         // IDEA-07 §7: the portal speaks the mod's glitch language — EVENT_RIFT_OPEN's own
         // registry comment names "xbox portal — W7/W8" as an intended consumer.
         level.playSound(null, base, EclipseSounds.EVENT_RIFT_OPEN.get(), SoundSource.BLOCKS, 0.7F, 1.0F);
@@ -169,21 +182,33 @@ public final class XboxPortal {
         removeEntities(level, base);
         Vec3 center = Vec3.atBottomCenterOf(base);
         PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, FX_RANGE,
-                new S2CFxEventPayload(FX_RIFT_CLOSE, center.add(0.0D, HEIGHT / 2.0D, 0.0D),
-                        RIFT_FX_WIDTH, 0.0F));
+                new S2CFxEventPayload(FX_RIFT_CLOSE, riftCenter(base), RIFT_FX_WIDTH, 0.0F));
         // IDEA-07 §7: the tear snaps shut with the rift slam instead of vanilla glass.
         level.playSound(null, base, EclipseSounds.EVENT_RIFT_SLAM.get(), SoundSource.BLOCKS, 0.6F, 1.0F);
         state.setPortal(null, null);
+        FX_SYNCED.clear();
         EclipseMod.LOGGER.info("Xbox portal removed at {} in {}", base, level.dimension().location());
     }
 
     private static void removeEntities(ServerLevel level, BlockPos base) {
-        // Force the chunk so tagged pieces are discoverable right after boot.
+        // Force the chunk so tagged pieces are discoverable right after boot. The sweep
+        // box still covers the old frame footprint so pre-C16 worlds shed their frames.
         level.getChunk(base);
         AABB sweep = new AABB(base).inflate(6.0D, 8.0D, 6.0D);
         List<Entity> pieces = level.getEntities((Entity) null, sweep,
                 entity -> entity.getTags().contains(ENTITY_TAG));
         pieces.forEach(Entity::discard);
+    }
+
+    /** Rift FX anchor: the visual tear floats at half the trigger height over the base. */
+    private static Vec3 riftCenter(BlockPos base) {
+        return Vec3.atBottomCenterOf(base).add(0.0D, HEIGHT / 2.0D, 0.0D);
+    }
+
+    private static void sendRiftOpen(ServerPlayer player, Vec3 fxCenter) {
+        PacketDistributor.sendToPlayer(player, new S2CFxEventPayload(
+                FX_RIFT_OPEN, fxCenter, RIFT_FX_WIDTH, RIFT_STYLE_PORTAL));
+        FX_SYNCED.add(player.getUUID());
     }
 
     /** Player-entry trigger volume: the interaction entity's 3×4 box around {@code base}. */
@@ -217,38 +242,6 @@ public final class XboxPortal {
         level.addFreshEntity(interaction);
     }
 
-    /**
-     * Decorative frame: two classic-obsidian pillars flanking the 3-wide opening, a top bar,
-     * and glowstone corner accents — nostalgic W8 classic blocks rendered as block displays.
-     */
-    private static void spawnFrame(ServerLevel level, BlockPos base) {
-        BlockState obsidian = classicOrFallback("obsidian", Blocks.OBSIDIAN);
-        BlockState glowstone = classicOrFallback("glowstone", Blocks.GLOWSTONE);
-
-        for (int y = 0; y < 4; y++) {
-            spawnBlockDisplay(level, base.offset(-2, y, 0), obsidian);
-            spawnBlockDisplay(level, base.offset(2, y, 0), obsidian);
-        }
-        for (int x = -2; x <= 2; x++) {
-            boolean corner = Math.abs(x) == 2;
-            spawnBlockDisplay(level, base.offset(x, 4, 0), corner ? glowstone : obsidian);
-        }
-    }
-
-    private static BlockState classicOrFallback(String classicId, Block fallback) {
-        // all() is the null-safe lookup (byId throws on unknown ids).
-        Supplier<Block> classic = ClassicBlocks.all().get(classicId);
-        return classic != null ? classic.get().defaultBlockState() : fallback.defaultBlockState();
-    }
-
-    private static void spawnBlockDisplay(ServerLevel level, BlockPos pos, BlockState blockState) {
-        Display.BlockDisplay display = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
-        display.setBlockState(blockState);
-        display.moveTo(pos.getX(), pos.getY(), pos.getZ(), 0.0F, 0.0F);
-        display.addTag(ENTITY_TAG);
-        level.addFreshEntity(display);
-    }
-
     // ------------------------------------------------------------------ ambient fallback
 
     /**
@@ -262,12 +255,21 @@ public final class XboxPortal {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.xbox_portal_loop");
     private static final float PORTAL_LOOP_FALLBACK_PITCH = 1.15F;
 
-    /** Cheap always-on server-side FX (called every 10 ticks while the portal exists). */
+    /**
+     * Cheap always-on server-side FX (called every 10 ticks while the portal exists):
+     * reverse-portal particle column (the Iris/reducedFx fallback), the periodic hum loop,
+     * and the C16 per-player rift resync — anyone in the portal's level who has not yet
+     * received the open payload gets it once ({@link #FX_SYNCED}); players who left the
+     * level are unmarked so their client re-opens the rift when they come back.
+     */
     public static void ambientTick(ServerLevel level, BlockPos base, long gameTime) {
         Vec3 center = Vec3.atBottomCenterOf(base);
         level.sendParticles(ParticleTypes.REVERSE_PORTAL,
                 center.x, center.y + 2.0D, center.z,
                 6, WIDTH / 4.0D, 1.4D, WIDTH / 4.0D, 0.01D);
+
+        resyncRiftFx(level, base);
+
         if (gameTime % 100L == 0L) {
             // IDEA-07 §7: periodic hum in the mod's glitch language, not an End portal's.
             SoundEvent registered = BuiltInRegistries.SOUND_EVENT.getOptional(PORTAL_LOOP_ID).orElse(null);
@@ -278,5 +280,29 @@ public final class XboxPortal {
                         0.35F, PORTAL_LOOP_FALLBACK_PITCH);
             }
         }
+    }
+
+    /**
+     * Sends the rift-open payload to unsynced players in range. Exactly-once per stay in
+     * the level: the client replaces a same-position rift silently on double-send, but a
+     * re-send restarts the 20-tick opening ease — so marked players are never re-sent.
+     */
+    private static void resyncRiftFx(ServerLevel level, BlockPos base) {
+        Vec3 fxCenter = riftCenter(base);
+        List<ServerPlayer> players = level.players();
+        for (ServerPlayer player : List.copyOf(players)) {
+            if (!FX_SYNCED.contains(player.getUUID())
+                    && player.position().distanceToSqr(fxCenter) <= FX_RANGE * FX_RANGE) {
+                sendRiftOpen(player, fxCenter);
+            }
+        }
+        FX_SYNCED.removeIf(uuid -> {
+            for (ServerPlayer player : players) {
+                if (player.getUUID().equals(uuid)) {
+                    return false;
+                }
+            }
+            return true; // left the level — client killed the rift; resync on return
+        });
     }
 }

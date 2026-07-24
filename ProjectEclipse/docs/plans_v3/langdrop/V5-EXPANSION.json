@@ -1,0 +1,16 @@
+{
+  "en": {
+    "eclipse.caption.expansion.delivery": "Something colossal comes through.",
+    "subtitles.eclipse.event.rift_drone": "A rift groans open",
+    "subtitles.eclipse.event.rift_whoosh": "Debris whooshes from the rift",
+    "subtitles.eclipse.event.rift_thud": "A chunk thuds into place",
+    "subtitles.eclipse.event.rift_resolve": "The rift seals shut"
+  },
+  "de": {
+    "eclipse.caption.expansion.delivery": "Etwas Gewaltiges kommt hindurch.",
+    "subtitles.eclipse.event.rift_drone": "Ein Riss ächzt auf",
+    "subtitles.eclipse.event.rift_whoosh": "Trümmer schießen aus dem Riss",
+    "subtitles.eclipse.event.rift_thud": "Ein Brocken schlägt dumpf auf",
+    "subtitles.eclipse.event.rift_resolve": "Der Riss versiegelt sich"
+  }
+}

@@ -11,6 +11,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.admin.AntiCheatCheck;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.ClickEvent;
@@ -19,14 +20,16 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 
 /**
- * Registers the {@code /dev} Brigadier root (permission ≥ 2). Merges with sibling workers' subtrees
- * via separate {@link RegisterCommandsEvent} subscribers — never touches {@code EclipseCommands}.
+ * Registers the {@code /dev} Brigadier root (permission ≥ 2 OR a D7 dev-bypass identity, see
+ * {@link #canUseDev}). Merges with sibling workers' subtrees via separate
+ * {@link RegisterCommandsEvent} subscribers — never touches {@code EclipseCommands}.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevRoot {
@@ -43,9 +46,29 @@ public final class DevRoot {
 
     private DevRoot() {}
 
-    @SubscribeEvent
+    /**
+     * HIGHEST priority so this class creates the shared {@code dev} literal FIRST: Brigadier's
+     * {@code addChild} merge keeps the requirement of the first-registered node, so the relaxed
+     * {@link #canUseDev} gate below governs the whole merged {@code /dev} tree regardless of
+     * which sibling worker registers next. Perm-3 sub-nodes keep their own stricter checks.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         register(event.getDispatcher());
+    }
+
+    /**
+     * Single check point for {@code /dev} access (D7): vanilla permission level 2, OR a
+     * config-listed dev-bypass identity ({@code anticheat.json devBypassUuids}, e.g. Sonic0810).
+     * The bypass grants /dev at the perm-2 tier only — perm-3 subcommands stay op-only and the
+     * bypass never grants op.
+     */
+    public static boolean canUseDev(CommandSourceStack source) {
+        if (source.hasPermission(2)) {
+            return true;
+        }
+        return source.getEntity() instanceof ServerPlayer player
+                && AntiCheatCheck.isDevBypass(source.getServer(), player.getUUID());
     }
 
     @SubscribeEvent
@@ -56,7 +79,7 @@ public final class DevRoot {
 
     private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("dev")
-                .requires(source -> source.hasPermission(2))
+                .requires(DevRoot::canUseDev)
                 .executes(DevRoot::openHandbookOrHelp)
                 .then(Commands.literal("help")
                         .executes(ctx -> sendHelp(ctx, null, 1))

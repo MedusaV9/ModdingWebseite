@@ -89,7 +89,11 @@ public final class DevHandbookPayloads {
      * server-side: permission &lt; 2 is silently ignored — no error, no data, zero information.
      */
     private static void handleRequest(C2SDevHandbookRequestPayload payload, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player && player.hasPermissions(2)) {
+        // Same gate as the /dev root (D7): permission 2 OR a config-listed dev-bypass identity.
+        if (context.player() instanceof ServerPlayer player
+                && (player.hasPermissions(2)
+                        || dev.projecteclipse.eclipse.admin.AntiCheatCheck
+                                .isDevBypass(player.server, player.getUUID()))) {
             sendHandbook(player, DevCommandRegistry.visibleTo(player));
         }
     }

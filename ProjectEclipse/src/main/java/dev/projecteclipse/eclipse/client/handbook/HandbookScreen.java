@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.EclipseKeyMappings;
 import dev.projecteclipse.eclipse.client.handbook.tabs.BestiaryTab;
+import dev.projecteclipse.eclipse.client.handbook.tabs.CollectionsTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.HandbookTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.MapTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.RevivalTab;
@@ -47,7 +48,9 @@ import org.lwjgl.glfw.GLFW;
  * narration and input routing (fixes B4). ALL tabs tick every tick (fixes B6). The close
  * binding works from the keyboard AND as a mouse button ({@code matchesMouse}, fixes B8);
  * ESC and 1–8/←/→/PgUp/PgDn all work, with the active tab consulted FIRST on key input
- * (frozen API §7.2). Sounds run through {@link UiSounds} only: page turn on keyboard
+ * (frozen API §7.2). NOTE (D1): the number hotkeys stay capped at 1–8, so with the 9-tab
+ * roster they reach Status…Map only — Settings (page 9) is arrows/PgUp/PgDn territory
+ * (and ← from Status wraps straight to it). Sounds run through {@link UiSounds} only: page turn on keyboard
  * switches, tab click on rail presses, hover blips from {@link EclipseWidget}.</p>
  *
  * <p>Opens via the J keybind ({@code ArtifactKeyHandler}) or a right-click on the pinned
@@ -84,12 +87,15 @@ public class HandbookScreen extends Screen {
     /** Paper flex (W4-FEEL, IDEA-06 #3): max horizontal squash of a turning page. */
     private static final float SQUASH_AMOUNT = 0.03F;
 
-    // Tab roster in the frozen §3.1 order (W1 ledger applied by W2): status, timeline,
-    // rules, revival, rewards, bestiary, map, settings. Keep Settings LAST — the rail,
-    // 1-8 hotkeys, footer counter and crossfade all derive from tabs.size(), and
-    // StatusTab's settings link reaches this page via the last hotkey.
+    // Tab roster in the frozen §3.1 order (W1 ledger applied by W2), D1 adding
+    // Collections after Rewards (IDEAS-collections §3): status, timeline, rules, revival,
+    // rewards, collections, bestiary, map, settings. Keep Settings LAST — the rail,
+    // footer counter and crossfade all derive from tabs.size(). NOTE: with 9 tabs the
+    // number hotkeys only cover 1-8 (tabs 1..8); Settings is reached via ←/PgUp wrap
+    // (StatusTab's settings link uses exactly that route).
     private final List<HandbookTab> tabs = List.of(new StatusTab(), new TimelineTab(), new RulesTab(),
-            new RevivalTab(), new RewardsTab(), new BestiaryTab(), new MapTab(), new SettingsTab());
+            new RevivalTab(), new RewardsTab(), new CollectionsTab(), new BestiaryTab(), new MapTab(),
+            new SettingsTab());
     /** Widgets currently mounted for the active tab (removed on switch — B4). */
     private final List<AbstractWidget> activeTabWidgets = new ArrayList<>();
 

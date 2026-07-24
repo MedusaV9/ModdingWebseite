@@ -1,0 +1,216 @@
+package dev.projecteclipse.eclipse.network.credits;
+
+import java.util.function.Consumer;
+
+import dev.projecteclipse.eclipse.EclipseMod;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+
+/**
+ * Self-registering registrar for the C15 final-credits payloads ({@code BossPayloads} /
+ * {@code GatePayloads} pattern): own MOD-bus {@link RegisterPayloadHandlersEvent} subscriber
+ * under version group {@value #VERSION} — {@code EclipsePayloads} stays untouched. Payload
+ * ids are prefixed {@code eclipse:credits/}.
+ *
+ * <p>Client dispatch uses installable {@link Consumer} hooks so this class stays loadable on
+ * dedicated servers (no eager client-class references). The client owner
+ * ({@code client.credits.CreditsClient}) installs its consumers from its own class
+ * initialization; payloads received while no handler is installed are dropped
+ * (debug-logged).</p>
+ *
+ * <p><b>The nonce contract</b> (IDEAS-backrooms_finale §B3): {@link S2CCreditsBeginPayload}
+ * carries the credits instance id; {@link S2CCreditsClosePayload} repeats it. A client that
+ * never saw the matching begin (logged in on a different server, joined after a restart)
+ * ignores the close — {@code Minecraft.stop()} can only ever fire on a client that sat
+ * through this exact credits run.</p>
+ */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
+public final class CreditsPayloads {
+    private static final String VERSION = "credits1";
+
+    private static volatile Consumer<S2CCreditsBeginPayload> beginHandler;
+    private static volatile Consumer<S2CCreditsAutoRunPayload> autoRunHandler;
+    private static volatile Consumer<S2CCreditsRollPayload> rollHandler;
+    private static volatile Consumer<S2CCreditsTitlePayload> titleHandler;
+    private static volatile Consumer<S2CCreditsClosePayload> closeHandler;
+
+    private CreditsPayloads() {}
+
+    // ------------------------------------------------------------------ payloads
+
+    /** Sequence start marker: the client latches {@code nonce} for the later close check. */
+    public record S2CCreditsBeginPayload(int nonce) implements CustomPacketPayload {
+        public static final Type<S2CCreditsBeginPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/begin"));
+        public static final StreamCodec<ByteBuf, S2CCreditsBeginPayload> STREAM_CODEC =
+                ByteBufCodecs.VAR_INT.map(S2CCreditsBeginPayload::new, S2CCreditsBeginPayload::nonce);
+
+        @Override
+        public Type<S2CCreditsBeginPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Forced-walk toggle (IDEAS §B2): {@code active} arms/disarms the client input
+     * injection, {@code yawDegrees} is the locked run heading (free ±20° look-around),
+     * {@code maxTicks} is the client-side self-expiry watchdog (a lost OFF payload may
+     * never leave a player running forever).
+     */
+    public record S2CCreditsAutoRunPayload(boolean active, float yawDegrees, int maxTicks)
+            implements CustomPacketPayload {
+        public static final Type<S2CCreditsAutoRunPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/auto_run"));
+        public static final StreamCodec<ByteBuf, S2CCreditsAutoRunPayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.BOOL, S2CCreditsAutoRunPayload::active,
+                        ByteBufCodecs.FLOAT, S2CCreditsAutoRunPayload::yawDegrees,
+                        ByteBufCodecs.VAR_INT, S2CCreditsAutoRunPayload::maxTicks,
+                        S2CCreditsAutoRunPayload::new);
+
+        @Override
+        public Type<S2CCreditsAutoRunPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Starts the right-side credits text scroll (IDEAS §B4) over {@code durationTicks}.
+     * Line content is client-side: lang keys {@code eclipse.credits.roll.1..N} read until
+     * the first missing key. {@code durationTicks <= 0} stops a running scroll.
+     */
+    public record S2CCreditsRollPayload(int durationTicks) implements CustomPacketPayload {
+        public static final Type<S2CCreditsRollPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/roll"));
+        public static final StreamCodec<ByteBuf, S2CCreditsRollPayload> STREAM_CODEC =
+                ByteBufCodecs.VAR_INT.map(S2CCreditsRollPayload::new, S2CCreditsRollPayload::durationTicks);
+
+        @Override
+        public Type<S2CCreditsRollPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Full-screen title card ({@code client.credits.TitleCardLayer}): {@code titleKey}
+     * decodes from glitch noise (BossIntroOverlay recipe, gold credits theme),
+     * {@code holdTicks} is the post-decode hold.
+     */
+    public record S2CCreditsTitlePayload(String titleKey, int holdTicks) implements CustomPacketPayload {
+        public static final Type<S2CCreditsTitlePayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/title"));
+        public static final StreamCodec<ByteBuf, S2CCreditsTitlePayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8, S2CCreditsTitlePayload::titleKey,
+                        ByteBufCodecs.VAR_INT, S2CCreditsTitlePayload::holdTicks,
+                        S2CCreditsTitlePayload::new);
+
+        @Override
+        public Type<S2CCreditsTitlePayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * The client-close broadcast (IDEAS §B3): after {@code delayTicks} the client calls
+     * {@code Minecraft.stop()} — guarded client-side (nonce match, never in
+     * singleplayer/LAN, {@code allowFinaleClose} kill-switch).
+     */
+    public record S2CCreditsClosePayload(int delayTicks, int nonce) implements CustomPacketPayload {
+        public static final Type<S2CCreditsClosePayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/close"));
+        public static final StreamCodec<ByteBuf, S2CCreditsClosePayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, S2CCreditsClosePayload::delayTicks,
+                        ByteBufCodecs.VAR_INT, S2CCreditsClosePayload::nonce,
+                        S2CCreditsClosePayload::new);
+
+        @Override
+        public Type<S2CCreditsClosePayload> type() {
+            return TYPE;
+        }
+    }
+
+    // ------------------------------------------------------------------ registration
+
+    @SubscribeEvent
+    static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar(VERSION);
+        registrar.playToClient(S2CCreditsBeginPayload.TYPE, S2CCreditsBeginPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(beginHandler, payload, "begin"));
+        registrar.playToClient(S2CCreditsAutoRunPayload.TYPE, S2CCreditsAutoRunPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(autoRunHandler, payload, "auto_run"));
+        registrar.playToClient(S2CCreditsRollPayload.TYPE, S2CCreditsRollPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(rollHandler, payload, "roll"));
+        registrar.playToClient(S2CCreditsTitlePayload.TYPE, S2CCreditsTitlePayload.STREAM_CODEC,
+                (payload, context) -> dispatch(titleHandler, payload, "title"));
+        registrar.playToClient(S2CCreditsClosePayload.TYPE, S2CCreditsClosePayload.STREAM_CODEC,
+                (payload, context) -> dispatch(closeHandler, payload, "close"));
+    }
+
+    private static <T extends CustomPacketPayload> void dispatch(Consumer<T> handler, T payload, String name) {
+        if (handler != null) {
+            handler.accept(payload);
+        } else {
+            EclipseMod.LOGGER.debug("Credits payload '{}' — no client handler installed", name);
+        }
+    }
+
+    // ------------------------------------------------------------------ server send helpers
+
+    public static void sendBegin(ServerPlayer player, int nonce) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsBeginPayload(nonce));
+    }
+
+    public static void sendAutoRun(ServerPlayer player, boolean active, float yawDegrees, int maxTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsAutoRunPayload(active, yawDegrees, maxTicks));
+    }
+
+    public static void sendRoll(ServerPlayer player, int durationTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsRollPayload(durationTicks));
+    }
+
+    public static void sendTitle(ServerPlayer player, String titleKey, int holdTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks));
+    }
+
+    public static void sendClose(ServerPlayer player, int delayTicks, int nonce) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsClosePayload(delayTicks, nonce));
+    }
+
+    // ------------------------------------------------------------------ client dispatch seams
+
+    /** Installed by {@code client.credits.CreditsClient} (client class-load). */
+    public static void setClientBeginHandler(Consumer<S2CCreditsBeginPayload> handler) {
+        beginHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsAutoRun} (client class-load). */
+    public static void setClientAutoRunHandler(Consumer<S2CCreditsAutoRunPayload> handler) {
+        autoRunHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsPanel} (client class-load). */
+    public static void setClientRollHandler(Consumer<S2CCreditsRollPayload> handler) {
+        rollHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.TitleCardLayer} (client class-load). */
+    public static void setClientTitleHandler(Consumer<S2CCreditsTitlePayload> handler) {
+        titleHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsClient} (client class-load). */
+    public static void setClientCloseHandler(Consumer<S2CCreditsClosePayload> handler) {
+        closeHandler = handler;
+    }
+}

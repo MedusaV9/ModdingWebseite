@@ -8,6 +8,8 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.menu.EclipseTitleScreen;
+import dev.projecteclipse.eclipse.client.xbox.XboxEraSounds;
+import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
 import dev.projecteclipse.eclipse.stormfx.StormInteriorFx;
@@ -247,9 +249,14 @@ public final class MusicManager {
                 return MusicCues.EXPANSION_THEME;
             }
             if (XboxDimensions.isXboxDimension(dimension)) {
-                return MusicCues.XBOX_NOSTALGIA;
+                // C17 seam: while XboxEraSounds streams an actual C418-era vanilla track,
+                // the nostalgia bed yields the channel; it resumes in the gaps between
+                // tracks (XboxEraSounds keeps vanilla's scheduler muted meanwhile).
+                return XboxEraSounds.eraTrackPlaying() ? null : MusicCues.XBOX_NOSTALGIA;
             }
-            if (dimension == LimboDimension.LIMBO) {
+            // The C10 ferryman arena is limbo-styled (same sky, same dread): it shares the
+            // ambience bed so spectators beyond bossbar range are not left in silence.
+            if (dimension == LimboDimension.LIMBO || ArenaDimension.isArena(dimension)) {
                 return MusicCues.LIMBO_AMBIENCE;
             }
             // day_final: the last planned day's dread bed — weakest in-world rung, colors

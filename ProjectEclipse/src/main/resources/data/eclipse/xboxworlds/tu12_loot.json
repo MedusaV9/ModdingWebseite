@@ -4410,5 +4410,103 @@
         }
       ]
     }
+  ],
+  "frames": [
+    {
+      "pos": [
+        102,
+        73,
+        -107
+      ],
+      "facing": "west",
+      "item": {
+        "id": "minecraft:iron_sword",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        104,
+        73,
+        -105
+      ],
+      "facing": "south",
+      "item": {
+        "id": "minecraft:diamond",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        105,
+        73,
+        -102
+      ],
+      "facing": "west",
+      "item": {
+        "id": "minecraft:clock",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        87,
+        73,
+        -102
+      ],
+      "facing": "north",
+      "item": {
+        "id": "minecraft:music_disc_cat",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        104,
+        73,
+        -98
+      ],
+      "facing": "west",
+      "item": {
+        "id": "minecraft:bread",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        88,
+        73,
+        -99
+      ],
+      "facing": "north",
+      "item": {
+        "id": "minecraft:compass",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        101,
+        73,
+        -118
+      ],
+      "facing": "west",
+      "item": {
+        "id": "minecraft:iron_pickaxe",
+        "count": 1
+      }
+    },
+    {
+      "pos": [
+        97,
+        73,
+        -89
+      ],
+      "facing": "north",
+      "item": {
+        "id": "minecraft:golden_apple",
+        "count": 1
+      }
+    }
   ]
 }

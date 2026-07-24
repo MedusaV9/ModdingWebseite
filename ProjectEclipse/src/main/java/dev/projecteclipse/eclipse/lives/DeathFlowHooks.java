@@ -10,6 +10,7 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.ferryman.ArenaFight;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.door.RespawnDoorApi;
@@ -177,7 +178,18 @@ public final class DeathFlowHooks {
             KNOWN_GHOSTS.add(player.getUUID());
             FxPayloads.sendGhostState(player, true);
             RespawnDoorApi.clearCueFor(player);
+            // C10: while the arena fight runs, fresh ghosts haunt the SPECTATOR ship at
+            // the arena's edge instead of the limbo platform (they can watch the boss).
+            ArenaFight.redirectRespawnToSpectator(player);
             sendPhase(player, DeathFlowPayloads.PHASE_SHIP_WAKE, true);
+            return;
+        }
+        // C10: a fallen fighter with hearts left sits the rest of the arena fight out on
+        // the spectator ship — no limbo door theater mid-boss (the fight watch / finale
+        // bring them home afterwards).
+        if (ArenaFight.redirectRespawnToSpectator(player)) {
+            FLOWS.remove(player.getUUID());
+            sendPhase(player, DeathFlowPayloads.PHASE_CLEAR, false);
             return;
         }
         if (flow == null || flow.stage != Stage.AWAIT_RESPAWN) {

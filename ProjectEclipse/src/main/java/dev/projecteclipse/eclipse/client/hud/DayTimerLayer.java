@@ -113,7 +113,10 @@ public final class DayTimerLayer {
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!EclipseClientConfig.showDayTimer() || minecraft.level == null || minecraft.player == null
-                || minecraft.options.hideGui || !DayTimerCache.armed()) {
+                || minecraft.options.hideGui || !DayTimerCache.armed()
+                // C17 seam: the xbox event timer owns this slot while inside the tutorial
+                // worlds — exactly one bottom-center countdown ever renders (no stacking).
+                || XboxTimerLayer.active()) {
             visibleLastFrame = false;
             return;
         }

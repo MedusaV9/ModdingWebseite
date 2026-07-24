@@ -88,7 +88,7 @@ public final class XboxEventConfig {
 
     private static Values defaults() {
         return new Values(30, "double_skill_xp", 60, false,
-                8, 24, true, List.of("tu1", "tu12", "tu14"));
+                8, 24, true, List.of("tu1", "tu12", "tu14", "tu19", "tu31", "tu75"));
     }
 
     private static Values parse(JsonObject root) {

@@ -143,11 +143,27 @@ public final class StormFxClient {
             return;
         }
         if (storm == null) {
-            if (state == S2CStormStatePayload.STATE_DISSIPATE) {
-                return; // never knew it — nothing to fade out
+            if (state == S2CStormStatePayload.STATE_DISSIPATE
+                    || state == S2CStormStatePayload.STATE_EXPLODE) {
+                return; // never knew it — nothing to fade out / blow up
             }
             storm = new ClientStorm(payload.stormId());
             STORMS.add(storm);
+        }
+        if (state == S2CStormStatePayload.STATE_EXPLODE
+                && storm.state != S2CStormStatePayload.STATE_EXPLODE) {
+            // C8 death beat: 15t white-out — full inside the shell, feathering to nothing
+            // ~60 blocks out. Debris/expansion run off the state below; audio is server-sent.
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level != null) {
+                Vec3 cam = minecraft.gameRenderer.getMainCamera().getPosition();
+                double dx = cam.x - center.x;
+                double dz = cam.z - center.z;
+                double shellDist = Math.sqrt(dx * dx + dz * dz) - radius;
+                float strength = shellDist <= 0.0D ? 1.0F
+                        : 1.0F - (float) Math.min(1.0D, shellDist / 60.0D);
+                StormInteriorFx.explodeWhiteout(strength);
+            }
         }
         storm.center = center;
         storm.radius = radius;
@@ -245,7 +261,7 @@ public final class StormFxClient {
         }
     }
 
-    /** @return {@code false} once the storm fully dissipated and must be dropped. */
+    /** @return {@code false} once the storm fully dissipated/exploded and must be dropped. */
     private static boolean tickStorm(Minecraft minecraft, ClientLevel level, ClientStorm storm, Vec3 camera) {
         int elapsed = clientTicks - storm.stateStartTick;
         // State promotion / expiry.
@@ -254,7 +270,8 @@ public final class StormFxClient {
             storm.stateStartTick = clientTicks;
             storm.stateTicks = 1;
             elapsed = 0;
-        } else if (storm.state == S2CStormStatePayload.STATE_DISSIPATE && elapsed >= storm.stateTicks) {
+        } else if ((storm.state == S2CStormStatePayload.STATE_DISSIPATE
+                || storm.state == S2CStormStatePayload.STATE_EXPLODE) && elapsed >= storm.stateTicks) {
             return false;
         }
 
@@ -272,6 +289,14 @@ public final class StormFxClient {
         double shellDist = Math.abs(centerDist - storm.radius);
         float visibility = storm.visibility(1.0F);
 
+        if (storm.state == S2CStormStatePayload.STATE_EXPLODE) {
+            // C8 death beat: no arcs/wisps/dread — just the roar fading out and debris
+            // riding the expanding shockwave ring.
+            tickLoopSound(minecraft, storm, shellDist, visibility);
+            tickExplosionDebris(level, storm);
+            return true;
+        }
+
         tickArcs(level, storm, camera, centerDist, shellDist, visibility);
         tickWisps(storm, shellDist, visibility);
         tickLoopSound(minecraft, storm, shellDist, visibility);
@@ -279,10 +304,49 @@ public final class StormFxClient {
         return true;
     }
 
+    /**
+     * C8 explosion debris: dust/ash chunks thrown outward along the expanding shockwave
+     * ring (matches the renderer's {@code 1 + 1.8·progress} expansion), plus a rising
+     * smoke column off the collapsing center. Raw {@code addParticle} — a 2 s one-off.
+     */
+    private static void tickExplosionDebris(ClientLevel level, ClientStorm storm) {
+        RandomSource random = level.random;
+        float progress = storm.explodeProgress(1.0F);
+        double ringR = storm.radius * (1.0D + 1.8D * progress);
+        int bursts = EclipseClientConfig.reducedFx() ? 5 : 10;
+        for (int i = 0; i < bursts; i++) {
+            double angle = random.nextDouble() * Math.PI * 2.0D;
+            double x = storm.center.x + Math.cos(angle) * ringR;
+            double z = storm.center.z + Math.sin(angle) * ringR;
+            double y = storm.center.y + 0.5D + random.nextDouble() * storm.height * 0.5D * (1.0D - progress);
+            double out = 0.35D + random.nextDouble() * 0.3D;
+            level.addParticle(random.nextBoolean() ? ParticleTypes.CLOUD : ParticleTypes.LARGE_SMOKE,
+                    x, y, z, Math.cos(angle) * out, 0.05D + random.nextDouble() * 0.1D, Math.sin(angle) * out);
+            if (random.nextInt(3) == 0) {
+                level.addParticle(ParticleTypes.WHITE_ASH, x, y + 1.0D, z,
+                        Math.cos(angle) * out * 0.5D, 0.12D, Math.sin(angle) * out * 0.5D);
+            }
+        }
+        if (clientTicks % 2 == 0) {
+            level.addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
+                    storm.center.x + (random.nextDouble() - 0.5D) * 4.0D,
+                    storm.center.y + 1.0D,
+                    storm.center.z + (random.nextDouble() - 0.5D) * 4.0D,
+                    0.0D, 0.25D + random.nextDouble() * 0.2D, 0.0D);
+        }
+    }
+
     /** Periodic shell-surface arc crackles near the camera bearing (near LOD only, R14). */
     private static void tickArcs(ClientLevel level, ClientStorm storm, Vec3 camera,
             double centerDist, double shellDist, float visibility) {
         if (visibility < 0.35F || shellDist > ARC_RANGE || clientTicks < storm.nextArcTick) {
+            return;
+        }
+        if (storm.type == S2CStormStatePayload.TYPE_SPHERE
+                && StormInteriorFx.interiorAmount() > 0.3F) {
+            // C8: sphere interiors are LIGHTNING-LESS — StormInteriorFx owns the (silent)
+            // silhouette flickers there; arcs + their far-thunder stay an exterior read.
+            storm.nextArcTick = clientTicks + ARC_MAX_INTERVAL;
             return;
         }
         RandomSource random = level.random;
@@ -432,11 +496,12 @@ public final class StormFxClient {
                 storm.center.z + Math.sin(angle) * wispRadius);
     }
 
-    /** One positional churn loop per storm, tracking the nearest shell point (fixed range 64). */
+    /** One positional churn/roar loop per storm, tracking the nearest shell point (fixed range 64). */
     private static void tickLoopSound(Minecraft minecraft, ClientStorm storm, double shellDist, float visibility) {
         StormLoopSound sound = storm.loopSound;
         boolean wanted = shellDist < LOOP_SOUND_RANGE && visibility > 0.05F
-                && storm.state != S2CStormStatePayload.STATE_DISSIPATE;
+                && storm.state != S2CStormStatePayload.STATE_DISSIPATE
+                && storm.state != S2CStormStatePayload.STATE_EXPLODE;
         if (wanted) {
             if (sound == null || sound.isStopped()) {
                 if (!storm.loopStartedThisApproach) {
@@ -550,8 +615,9 @@ public final class StormFxClient {
 
         /**
          * Shell visibility 0..1: SPAWN ramps in (reveal-style over the LAST
-         * {@link StormRegistry#RAMP_TICKS} ticks of the hold), ACTIVE holds 1, DISSIPATE fades
-         * out. Smoothstep-eased; drives shell alpha, height scale, interior fog and audio.
+         * {@link StormRegistry#RAMP_TICKS} ticks of the hold), ACTIVE holds 1, DISSIPATE and
+         * EXPLODE fade out. Smoothstep-eased; drives shell alpha, height scale, interior fog
+         * and audio.
          */
         float visibility(float partialTick) {
             float elapsed = clientTicks + partialTick - stateStartTick;
@@ -562,13 +628,31 @@ public final class StormFxClient {
                             : elapsed / stateTicks;
                     return smooth(ramp);
                 }
-                case S2CStormStatePayload.STATE_DISSIPATE -> {
+                case S2CStormStatePayload.STATE_DISSIPATE, S2CStormStatePayload.STATE_EXPLODE -> {
                     return 1.0F - smooth(elapsed / stateTicks);
                 }
                 default -> {
                     return 1.0F;
                 }
             }
+        }
+
+        /** C8 shockwave progress 0..1 while EXPLODE runs (0 otherwise) — drives the expansion. */
+        float explodeProgress(float partialTick) {
+            if (state != S2CStormStatePayload.STATE_EXPLODE) {
+                return 0.0F;
+            }
+            float elapsed = clientTicks + partialTick - stateStartTick;
+            return Mth.clamp(elapsed / stateTicks, 0.0F, 1.0F);
+        }
+
+        /** C8 white-hot factor of the explosion's first ~15 ticks (0 otherwise). */
+        float explodeWhite(float partialTick) {
+            if (state != S2CStormStatePayload.STATE_EXPLODE) {
+                return 0.0F;
+            }
+            float elapsed = clientTicks + partialTick - stateStartTick;
+            return Mth.clamp(1.0F - elapsed / 15.0F, 0.0F, 1.0F);
         }
 
         void releaseWisp(int index) {
@@ -684,22 +768,28 @@ public final class StormFxClient {
     }
 
     /**
-     * The positional storm churn loop ({@code event.storm_loop}, fixed range 64). Follows the
-     * nearest shell point so the churn always comes from the wall's direction; volume scales
+     * The positional storm churn/roar loop (fixed range 64): {@code event.storm_loop} for
+     * walls/vortexes, {@code event.storm_sphere_roar} for C8 sphere storms. Follows the
+     * nearest shell point so the sound always comes from the wall's direction; volume scales
      * with shell visibility and fades in/out over {@value #FADE_TICKS} ticks (LimboLoopSound
-     * pattern).
+     * pattern). Inside a sphere the roar's pitch sinks with the interior amount — the cheap
+     * "lowpass alias" that makes the outside world read muffled through the fog wall.
      */
     static final class StormLoopSound extends AbstractTickableSoundInstance {
         private static final float MAX_VOLUME = 0.85F;
         private static final int FADE_TICKS = 30;
+        /** Sphere-interior muffle: pitch sinks by this much at full interior (lowpass alias). */
+        private static final float MUFFLE_PITCH_DROP = 0.42F;
 
         private final ClientStorm storm;
         private int fadeDirection = 1;
         private int fade;
 
         StormLoopSound(ClientStorm storm) {
-            super(EclipseSounds.EVENT_STORM_LOOP.get(), SoundSource.WEATHER,
-                    SoundInstance.createUnseededRandom());
+            super(storm.type == S2CStormStatePayload.TYPE_SPHERE
+                            ? EclipseSounds.EVENT_STORM_SPHERE_ROAR.get()
+                            : EclipseSounds.EVENT_STORM_LOOP.get(),
+                    SoundSource.WEATHER, SoundInstance.createUnseededRandom());
             this.storm = storm;
             this.looping = true;
             this.delay = 0;
@@ -718,6 +808,10 @@ public final class StormFxClient {
             updatePosition();
             float visibility = storm.visibility(1.0F);
             this.volume = MAX_VOLUME * visibility * Mth.clamp(this.fade / (float) FADE_TICKS, 0.0F, 1.0F);
+            if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
+                // C8 muffled-interior alias: the exterior roar dulls as the fog closes in.
+                this.pitch = 1.0F - MUFFLE_PITCH_DROP * StormInteriorFx.interiorAmount();
+            }
         }
 
         private void updatePosition() {

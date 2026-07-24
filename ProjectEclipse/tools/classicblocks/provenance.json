@@ -1,5 +1,5 @@
 {
-  "pack": "Resource pack \"Minecraft: Classic Edition\" by JS03 \u2014 https://modrinth.com/resourcepack/minecraft-classic-edition",
+  "pack": "Resource pack \"Minecraft: Classic Edition\" by JS03 — https://modrinth.com/resourcepack/minecraft-classic-edition",
   "license": "MIT (verified via https://api.modrinth.com/v2/project/minecraft-classic-edition)",
   "pack_version": "1.2.3",
   "pack_sha512": "b504783667df83649d055c0f999e510a46f9e9caa16b67c0883771ca24fbd09118a316ba4a3d7573ce9c19dad090cca75a4d1a26512c364a75fa8dd6c460875e",
@@ -234,9 +234,9 @@
     },
     {
       "texture": "block/classic/cobblestone.png",
-      "source": "pack block/cobblestone.png",
-      "op": "copy",
-      "note": ""
+      "source": "tools/classicblocks/procedural_era.py",
+      "op": "procedural era recreation",
+      "note": "X360-era look re-authored procedurally (tools/classicblocks/procedural_era.py, C17); MIT-pack original replaced — see docs/XBOX_WORLDS.md"
     },
     {
       "texture": "block/classic/cobweb.png",
@@ -510,9 +510,9 @@
     },
     {
       "texture": "block/classic/grass_block_side.png",
-      "source": "pack block/grass_block_side.png + grass_block_side_overlay.png",
-      "op": "composite overlay x GRASS",
-      "note": "classic baked-in green rim"
+      "source": "tools/classicblocks/procedural_era.py",
+      "op": "procedural era recreation",
+      "note": "X360-era look re-authored procedurally (tools/classicblocks/procedural_era.py, C17); MIT-pack original replaced — see docs/XBOX_WORLDS.md"
     },
     {
       "texture": "block/classic/grass_block_snow.png",
@@ -798,9 +798,9 @@
     },
     {
       "texture": "block/classic/oak_planks.png",
-      "source": "pack block/oak_planks.png",
-      "op": "copy",
-      "note": ""
+      "source": "tools/classicblocks/procedural_era.py",
+      "op": "procedural era recreation",
+      "note": "X360-era look re-authored procedurally (tools/classicblocks/procedural_era.py, C17); MIT-pack original replaced — see docs/XBOX_WORLDS.md"
     },
     {
       "texture": "block/classic/oak_sapling.png",

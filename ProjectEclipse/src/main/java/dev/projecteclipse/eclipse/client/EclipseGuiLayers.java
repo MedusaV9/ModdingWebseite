@@ -6,7 +6,9 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
 import dev.projecteclipse.eclipse.client.hud.DayTimerLayer;
 import dev.projecteclipse.eclipse.client.hud.MarkVignetteOverlay;
+import dev.projecteclipse.eclipse.client.hud.XboxTimerLayer;
 import dev.projecteclipse.eclipse.client.hud.SidebarPanel;
+import dev.projecteclipse.eclipse.client.backrooms.JumpscareOverlay;
 import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay;
@@ -47,12 +49,21 @@ public final class EclipseGuiLayers {
         // Deliberately NOT letterbox-whitelisted (§3.6 — cutscene HUD suppression hides it).
         event.registerBelow(AnnouncementOverlay.LAYER_ID,
                 DayTimerLayer.LAYER_ID, DayTimerLayer::render);
+        // C17 xbox event countdown: same bottom-center slot as the day timer, mutually
+        // exclusive with it (DayTimerLayer yields while XboxTimerLayer.active()). Also
+        // deliberately NOT letterbox-whitelisted — cutscene HUD suppression hides it.
+        event.registerBelow(AnnouncementOverlay.LAYER_ID,
+                XboxTimerLayer.LAYER_ID, XboxTimerLayer::render);
         // W12 Lantern Gaze mark: purple hunt vignette under the crosshair-level HUD,
         // deliberately NOT letterbox-whitelisted (cutscenes suppress it).
         event.registerBelow(VanillaGuiLayers.CROSSHAIR,
                 MarkVignetteOverlay.LAYER_ID, MarkVignetteOverlay::render);
         event.registerAboveAll(WaveOverlay.LAYER_ID, WaveOverlay::render);
         event.registerAboveAll(LetterboxLayer.LAYER_ID, LetterboxLayer::render);
+        // C18 backrooms jumpscare: over the letterbox (the face owns the frame) but UNDER
+        // the caption layer — captions must stay readable over the face (§A4 layering).
+        // Deliberately NOT letterbox-whitelisted: cutscene HUD suppression may hide it.
+        event.registerAboveAll(JumpscareOverlay.LAYER_ID, JumpscareOverlay::render);
         // P2-W2 cinematic captions + screen fades: registered AFTER the letterbox so text
         // draws on top of the bars (subtitles rest just above the bottom bar).
         event.registerAboveAll(CaptionRenderer.LAYER_ID, CaptionRenderer::render);

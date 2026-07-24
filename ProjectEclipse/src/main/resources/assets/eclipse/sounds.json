@@ -1,4 +1,14 @@
 {
+  "ambient.backrooms_buzz": {
+    "sounds": [
+      {
+        "name": "eclipse:ambient/gazer_whisper",
+        "pitch": 0.55,
+        "volume": 0.6
+      }
+    ],
+    "subtitle": "subtitles.eclipse.ambient.backrooms_buzz"
+  },
   "ambient.border_static": {
     "sounds": [
       {
@@ -42,6 +52,40 @@
       }
     ],
     "subtitle": "subtitles.eclipse.ambient.sanctum_hum"
+  },
+  "ambient.storm_dome_drone": {
+    "sounds": [
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.5,
+        "stream": true,
+        "volume": 0.75
+      },
+      {
+        "name": "eclipse:ambient/gazer_whisper",
+        "pitch": 0.45,
+        "volume": 0.3
+      }
+    ],
+    "subtitle": "subtitles.eclipse.ambient.storm_dome_drone"
+  },
+  "ambient.xbox_cave": {
+    "sounds": [
+      "minecraft:ambient/cave/cave1",
+      "minecraft:ambient/cave/cave2",
+      "minecraft:ambient/cave/cave3",
+      "minecraft:ambient/cave/cave4",
+      "minecraft:ambient/cave/cave5",
+      "minecraft:ambient/cave/cave6",
+      "minecraft:ambient/cave/cave7",
+      "minecraft:ambient/cave/cave8",
+      "minecraft:ambient/cave/cave9",
+      "minecraft:ambient/cave/cave10",
+      "minecraft:ambient/cave/cave11",
+      "minecraft:ambient/cave/cave12",
+      "minecraft:ambient/cave/cave13"
+    ],
+    "subtitle": "subtitles.ambient.cave"
   },
   "award.sting": {
     "sounds": [
@@ -156,6 +200,37 @@
     ],
     "subtitle": "subtitles.eclipse.event.emerge"
   },
+  "event.end_shatter_crack": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/heart_shatter",
+        "pitch": 0.55,
+        "volume": 1.0
+      },
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 0.4,
+        "volume": 0.5
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_shatter_crack"
+  },
+  "event.end_shatter_rumble": {
+    "sounds": [
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 0.4,
+        "volume": 1.0
+      },
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.45,
+        "stream": true,
+        "volume": 0.7
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_shatter_rumble"
+  },
   "event.lightning_close": {
     "sounds": [
       {
@@ -176,6 +251,22 @@
     ],
     "subtitle": "subtitles.eclipse.event.lightning_far"
   },
+  "event.rift_drone": {
+    "sounds": [
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.42,
+        "stream": true,
+        "volume": 0.8
+      },
+      {
+        "name": "eclipse:ambient/gazer_whisper",
+        "pitch": 0.5,
+        "volume": 0.35
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_drone"
+  },
   "event.rift_open": {
     "sounds": [
       {
@@ -185,6 +276,21 @@
       }
     ],
     "subtitle": "subtitles.eclipse.event.rift_open"
+  },
+  "event.rift_resolve": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/unlock_sting",
+        "pitch": 0.7,
+        "volume": 0.9
+      },
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 0.6,
+        "volume": 0.35
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_resolve"
   },
   "event.rift_slam": {
     "sounds": [
@@ -196,6 +302,41 @@
     ],
     "subtitle": "subtitles.eclipse.event.rift_slam"
   },
+  "event.rift_thud": {
+    "sounds": [
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 0.62,
+        "volume": 0.7
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_thud"
+  },
+  "event.rift_whoosh": {
+    "sounds": [
+      {
+        "name": "eclipse:event/emerge",
+        "pitch": 1.55,
+        "volume": 0.55
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.rift_whoosh"
+  },
+  "event.sky_launch": {
+    "sounds": [
+      {
+        "name": "eclipse:event/emerge",
+        "pitch": 1.3,
+        "volume": 1.0
+      },
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 1.6,
+        "volume": 0.35
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.sky_launch"
+  },
   "event.storm_burst": {
     "sounds": [
       {
@@ -204,6 +345,16 @@
       }
     ],
     "subtitle": "subtitles.eclipse.event.storm_burst"
+  },
+  "event.storm_flicker": {
+    "sounds": [
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 0.5,
+        "volume": 0.45
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_flicker"
   },
   "event.storm_loop": {
     "sounds": [
@@ -215,6 +366,42 @@
       }
     ],
     "subtitle": "subtitles.eclipse.event.storm_loop"
+  },
+  "event.storm_pulse": {
+    "sounds": [
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 0.42,
+        "volume": 0.7
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_pulse"
+  },
+  "event.storm_shatter": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/heart_shatter",
+        "pitch": 0.45,
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_shatter"
+  },
+  "event.storm_sphere_roar": {
+    "sounds": [
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.68,
+        "stream": true,
+        "volume": 0.95
+      },
+      {
+        "name": "eclipse:event/border_glitch",
+        "pitch": 0.3,
+        "volume": 0.25
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.storm_sphere_roar"
   },
   "event.submerge": {
     "sounds": [
@@ -341,6 +528,58 @@
     "sounds": [
       {
         "name": "eclipse:music/wand_awakening",
+        "stream": true
+      }
+    ]
+  },
+  "music.xbox_era": {
+    "sounds": [
+      {
+        "name": "minecraft:music/game/calm1",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/calm2",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/calm3",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/hal1",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/hal2",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/hal3",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/hal4",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/nuance1",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/nuance2",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/piano1",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/piano2",
+        "stream": true
+      },
+      {
+        "name": "minecraft:music/game/piano3",
         "stream": true
       }
     ]

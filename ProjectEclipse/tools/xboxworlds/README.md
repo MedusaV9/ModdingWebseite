@@ -34,6 +34,15 @@ Stages (each is independently re-runnable):
 Helper: `inspect_nbt.py` (`level` / `chunk` / `palette` / `block` / `dvhist`
 sub-commands) for NBT spot checks without any game runtime.
 
+**C17 post-pipeline passes** (run AFTER `package.py`, order matters — a
+`package.py` re-run rewrites `manifest.json` with the three fetched worlds
+only and must be followed by both):
+
+| # | Script | What it does |
+|---|---|---|
+| 5 | `variants.py` | Derives the TU19/TU31/TU75 zips from the committed `tu12.zip` (36×36-chunk trim + deterministic era-aging palette remap within the frozen contract), appends their manifest entries and writes their loot JSONs. See `docs/XBOX_WORLDS.md`. |
+| 6 | `frames.py` | Scans every committed zip for solid classic walls near spawn and writes the `frames` section (8 era-museum display frames) into each `<id>_loot.json` (consumed by `XboxWorldInstaller.decorate`). |
+
 ## Frozen contracts (consumed by P5-W8 / P5-W9)
 
 * **Classic naming scheme** (`mclib/palette.py`, mirrors plan §2.14):

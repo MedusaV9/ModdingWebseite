@@ -9,14 +9,22 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
@@ -77,6 +85,58 @@ public final class XboxWorldInstaller {
 
     public static boolean isResetStaged(MinecraftServer server, String worldId) {
         return Files.exists(resetMarker(server, worldId));
+    }
+
+    // ------------------------------------------------------------------ C17 frame pass
+
+    /** Command tag on installer-placed display frames (idempotency + tooling discovery). */
+    public static final String FRAME_TAG = "eclipse_xbox_frame";
+
+    /**
+     * C17 post-install decoration pass: hangs the period-correct display item frames from
+     * the loot manifest's {@code frames} section. Runs at EVENT START (not install time —
+     * entities need a live {@link ServerLevel}, and the installer runs before levels
+     * exist); idempotent via {@value #FRAME_TAG}, so re-starts and portal re-placements
+     * never double-hang. Frames are wiped with the dimension dir on a staged reset and
+     * re-hung by the next event start. Block items spawn classic-mapped like chest loot.
+     */
+    public static void decorate(MinecraftServer server, String worldId) {
+        List<XboxWorldsManifest.FrameEntry> frames = XboxWorldsManifest.frames(server, worldId);
+        if (frames.isEmpty()) {
+            return;
+        }
+        ResourceKey<Level> dimension = XboxDimensions.byWorldId(worldId);
+        ServerLevel level = dimension == null ? null : server.getLevel(dimension);
+        if (level == null) {
+            return;
+        }
+        int placed = 0;
+        for (XboxWorldsManifest.FrameEntry frame : frames) {
+            level.getChunk(frame.pos()); // force-load so existing frames are discoverable
+            if (hasTaggedFrame(level, frame.pos())) {
+                continue;
+            }
+            ItemFrame entity = new ItemFrame(level, frame.pos(), frame.facing());
+            if (!entity.survives()) {
+                EclipseMod.LOGGER.warn("Xbox frame at {} facing {} in {} has no supporting wall — skipped",
+                        frame.pos(), frame.facing(), worldId);
+                continue;
+            }
+            entity.setItem(XboxEventService.classicMapped(frame.item()), false);
+            entity.setInvulnerable(true); // display piece, not a takeable frame
+            entity.addTag(FRAME_TAG);
+            level.addFreshEntity(entity);
+            placed++;
+        }
+        if (placed > 0) {
+            EclipseMod.LOGGER.info("Hung {} classic display frame(s) in xbox world {}", placed, worldId);
+        }
+    }
+
+    private static boolean hasTaggedFrame(ServerLevel level, BlockPos pos) {
+        List<Entity> existing = level.getEntities((Entity) null, new AABB(pos),
+                entity -> entity instanceof ItemFrame && entity.getTags().contains(FRAME_TAG));
+        return !existing.isEmpty();
     }
 
     // ------------------------------------------------------------------ internals

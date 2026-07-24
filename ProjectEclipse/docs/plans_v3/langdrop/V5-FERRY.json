@@ -1,0 +1,20 @@
+{
+  "en": {
+    "eclipse.caption.ferry.door": "The dead door stands open. Step through — the ship waits.",
+    "eclipse.caption.ferry.wait": "The crossing begins. The ship calls for you.",
+    "eclipse.caption.ferry.depart": "The door is closing. All aboard.",
+    "eclipse.caption.ferry.crossed": "Between worlds. The last crossing begins soon.",
+    "eclipse.caption.ferry.transform": "The ship remembers what it was built for.",
+    "eclipse.caption.ferry.spectator": "The water gave you back — watch the toll from here.",
+    "message.eclipse.ferry.countdown": "The ferry departs in %s..."
+  },
+  "de": {
+    "eclipse.caption.ferry.door": "Die tote Tür steht offen. Tritt hindurch — das Schiff wartet.",
+    "eclipse.caption.ferry.wait": "Die Überfahrt beginnt. Das Schiff ruft nach dir.",
+    "eclipse.caption.ferry.depart": "Die Tür schließt sich. Alle an Bord.",
+    "eclipse.caption.ferry.crossed": "Zwischen den Welten. Die letzte Überfahrt beginnt bald.",
+    "eclipse.caption.ferry.transform": "Das Schiff erinnert sich, wofür es gebaut wurde.",
+    "eclipse.caption.ferry.spectator": "Das Wasser gab dich zurück — sieh dem Zoll von hier aus zu.",
+    "message.eclipse.ferry.countdown": "Die Fähre legt ab in %s..."
+  }
+}

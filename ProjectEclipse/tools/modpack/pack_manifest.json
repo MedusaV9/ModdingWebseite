@@ -1,0 +1,162 @@
+{
+  "_comment": "Single source of truth for the distributable Eclipse Event .mrpack (docs/BUNDLING.md, plans_v5 D9). build_mrpack.py resolves every 'modrinth' entry against the Modrinth API by exact jar filename (URL + sha1/sha512 + size come from the API), 'manual' entries land in overrides/MANUAL_INSTALL.md, and 'embedded' entries are documentation-only (they ride jarJar'd inside the Eclipse jar and must NOT be installed separately).",
+  "name": "Eclipse Event",
+  "packVersion": "2.1.0",
+  "summary": "Project: Eclipse community event pack — NeoForge 1.21.1. Public mods are referenced from Modrinth; the Eclipse jar and default configs ride as overrides.",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.238",
+  "eclipseJar": "build/libs/eclipse-2.1.0.jar",
+  "configSeeds": "run/config/eclipse",
+  "mods": [
+    {
+      "id": "create",
+      "name": "Create",
+      "source": "modrinth",
+      "slug": "create",
+      "version": "6.0.10",
+      "filename": "create-1.21.1-6.0.10.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "createaddition",
+      "name": "Create: Crafts & Additions",
+      "source": "modrinth",
+      "slug": "createaddition",
+      "version": "1.6.0",
+      "filename": "createaddition-1.6.0.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "farmersdelight",
+      "name": "Farmer's Delight",
+      "source": "modrinth",
+      "slug": "farmers-delight",
+      "version": "1.21.1-1.3.2",
+      "filename": "FarmersDelight-1.21.1-1.3.2.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "supplementaries",
+      "name": "Supplementaries",
+      "source": "modrinth",
+      "slug": "supplementaries",
+      "version": "1.21.1-3.8.3",
+      "filename": "supplementaries-neoforge-1.21.1-3.8.3.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "moonlight",
+      "name": "Moonlight Lib",
+      "source": "modrinth",
+      "slug": "moonlight",
+      "version": "1.21.1-3.1.1",
+      "filename": "moonlight-neoforge-1.21.1-3.1.1.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "sophisticatedbackpacks",
+      "name": "Sophisticated Backpacks",
+      "source": "modrinth",
+      "slug": "sophisticated-backpacks",
+      "version": "1.21.1-3.25.71.1997",
+      "filename": "sophisticatedbackpacks-1.21.1-3.25.71.1997.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "sophisticatedcore",
+      "name": "Sophisticated Core",
+      "source": "modrinth",
+      "slug": "sophisticated-core",
+      "version": "1.21.1-1.4.77.2173",
+      "filename": "sophisticatedcore-1.21.1-1.4.77.2173.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "voicechat",
+      "name": "Simple Voice Chat",
+      "source": "modrinth",
+      "slug": "simple-voice-chat",
+      "version": "1.21.1-2.6.16",
+      "filename": "voicechat-neoforge-1.21.1-2.6.16.jar",
+      "client": "required",
+      "server": "required"
+    },
+    {
+      "id": "sodium",
+      "name": "Sodium",
+      "source": "modrinth",
+      "slug": "sodium",
+      "version": "0.8.12+mc1.21.1",
+      "filename": "sodium-neoforge-0.8.12+mc1.21.1.jar",
+      "client": "optional",
+      "server": "unsupported",
+      "note": "Client performance extra; crashes a dedicated server (LWJGL bootstrap). Nests the four Forgified-Fabric-API sub-module ids — allowlisted, no separate install."
+    },
+    {
+      "id": "iris",
+      "name": "Iris",
+      "source": "modrinth",
+      "slug": "iris",
+      "version": "1.8.14-beta.1+mc1.21.1",
+      "filename": "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar",
+      "client": "optional",
+      "server": "unsupported",
+      "note": "Client shader extra; same nested Forgified-Fabric-API sub-modules as Sodium."
+    },
+    {
+      "id": "aeronautics",
+      "name": "Create: Aeronautics bundle (Aeronautics, Simulated, Offroad)",
+      "source": "manual",
+      "version": "1.21.1-1.3.0",
+      "filename": "create-aeronautics-bundled-1.21.1-1.3.0.jar",
+      "client": "required",
+      "server": "required",
+      "note": "Private bundled build; its Simulated Project License forbids rebundling and it is not treated as a stable public CDN artifact. Obtain the authorized event-pack jar from the event operator (docs/BUNDLING.md)."
+    },
+    {
+      "id": "sable",
+      "name": "Sable",
+      "source": "manual",
+      "version": "1.21.1-2.0.3",
+      "filename": "sable-neoforge-1.21.1-2.0.3.jar",
+      "client": "required",
+      "server": "required",
+      "note": "PolyForm Shield 1.0.0 — external installation from the official source is the safe policy (docs/BUNDLING.md). Obtain from the event operator."
+    },
+    {
+      "id": "veil",
+      "name": "Veil",
+      "source": "embedded",
+      "version": "4.3.0",
+      "note": "jarJar-embedded inside the Eclipse jar (LGPL-3.0). Do NOT install separately."
+    },
+    {
+      "id": "geckolib",
+      "name": "GeckoLib",
+      "source": "embedded",
+      "version": "4.9.2",
+      "note": "jarJar-embedded inside the Eclipse jar (MIT). Do NOT install separately."
+    },
+    {
+      "id": "emi",
+      "name": "EMI",
+      "source": "embedded",
+      "version": "1.1.24+1.21.1",
+      "note": "jarJar-embedded inside the Eclipse jar (MIT). Do NOT install separately."
+    },
+    {
+      "id": "mousetweaks",
+      "name": "Mouse Tweaks",
+      "source": "embedded",
+      "version": "2.26.1",
+      "note": "jarJar-embedded inside the Eclipse jar (BSD-3-Clause). Do NOT install separately."
+    }
+  ]
+}

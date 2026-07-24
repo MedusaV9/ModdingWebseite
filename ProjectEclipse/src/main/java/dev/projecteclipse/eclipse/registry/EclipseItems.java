@@ -123,6 +123,28 @@ public final class EclipseItems {
                     .rarity(Rarity.EPIC)
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
 
+    /**
+     * Guaranteed Fog Tyrant drop (C8 reward upgrade): the storm's condensed heart, epic
+     * trophy in the {@link #HERALD_CORE} family. Seam note (PLAN-C C8): if PLAN-D's
+     * economy packages add a loot config, its costs/uses route through there.
+     */
+    public static final Supplier<Item> FOG_CORE = ITEMS.register("fog_core",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.EPIC)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /**
+     * Unique cosmetic keepsake off the tyrant's mantle (C8 reward upgrade): a fog-cloak
+     * trim. Pure trophy/cosmetic — nothing consumes it; deliberately unstackable so the
+     * one cut per kill stays "the one".
+     */
+    public static final Supplier<Item> FOG_CLOAK_TRIM = ITEMS.register("fog_cloak_trim",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(1)
+                    .rarity(Rarity.EPIC)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
     /** Admin/debug item for the altar block; not craftable (admins place the altar manually). */
     public static final Supplier<BlockItem> ALTAR = ITEMS.register("altar",
             () -> new BlockItem(EclipseBlocks.ALTAR.get(), new Item.Properties()));

@@ -33,7 +33,9 @@ import net.minecraft.world.item.ItemStack;
  *       zip sha256/size (the installer verifies the zip bytes against it);</li>
  *   <li>{@code data/eclipse/xboxworlds/<id>_loot.json} — baked chest contents keyed by
  *       position, items in the vanilla {@link ItemStack#CODEC} JSON shape (original vanilla
- *       ids; classic mapping happens at spill time in {@code XboxEventService}).</li>
+ *       ids; classic mapping happens at spill time in {@code XboxEventService}), plus the
+ *       C17 optional {@code frames} section ({@code pos + facing + item}) consumed by
+ *       {@link XboxWorldInstaller#decorate} to hang period-correct display item frames.</li>
  * </ul>
  *
  * <p>The manifest itself is immutable jar content and parsed once per JVM. Decoded loot
@@ -60,10 +62,19 @@ public final class XboxWorldsManifest {
         }
     }
 
+    /**
+     * One C17 item-frame decoration: world position of the frame entity, the wall face it
+     * hangs on ({@code facing} = the direction the frame LOOKS, i.e. away from the wall)
+     * and the displayed stack (original vanilla id, classic-mapped at spawn time like
+     * chest loot).
+     */
+    public record FrameEntry(BlockPos pos, net.minecraft.core.Direction facing, ItemStack item) {}
+
     private static final String MANIFEST_RESOURCE = "assets/eclipse/xboxworlds/manifest.json";
 
     private static volatile Map<String, WorldEntry> entries;
     private static final Map<String, Map<BlockPos, List<ItemStack>>> LOOT_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, List<FrameEntry>> FRAMES_CACHE = new ConcurrentHashMap<>();
 
     private XboxWorldsManifest() {}
 
@@ -100,9 +111,23 @@ public final class XboxWorldsManifest {
         return LOOT_CACHE.computeIfAbsent(worldId, id -> parseLoot(server, entry));
     }
 
+    /**
+     * C17 item-frame decorations for {@code worldId} from the loot manifest's optional
+     * {@code frames} section (empty for worlds without one). Cached like {@link #loot};
+     * stacks are the cached instances — copy before use.
+     */
+    public static List<FrameEntry> frames(MinecraftServer server, String worldId) {
+        WorldEntry entry = all().get(worldId);
+        if (entry == null) {
+            return List.of();
+        }
+        return FRAMES_CACHE.computeIfAbsent(worldId, id -> parseFrames(server, entry));
+    }
+
     /** Drops decoded loot stacks; called from the service on {@code ServerStoppedEvent}. */
     public static void clearRuntimeCaches() {
         LOOT_CACHE.clear();
+        FRAMES_CACHE.clear();
     }
 
     // ------------------------------------------------------------------ parsing
@@ -178,6 +203,44 @@ public final class XboxWorldsManifest {
         } catch (IOException | RuntimeException e) {
             EclipseMod.LOGGER.error("Failed to parse {}", entry.lootResourcePath(), e);
             return Map.of();
+        }
+    }
+
+    private static List<FrameEntry> parseFrames(MinecraftServer server, WorldEntry entry) {
+        try (InputStream in = resource(entry.lootResourcePath())) {
+            if (in == null) {
+                return List.of();
+            }
+            JsonObject root = JsonParser.parseReader(
+                    new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (!root.has("frames") || !root.get("frames").isJsonArray()) {
+                return List.of(); // pre-C17 loot manifests have no frames section
+            }
+            DynamicOps<JsonElement> ops = RegistryOps.create(
+                    com.mojang.serialization.JsonOps.INSTANCE, server.registryAccess());
+            List<FrameEntry> frames = new ArrayList<>();
+            for (JsonElement frameElement : root.getAsJsonArray("frames")) {
+                JsonObject frame = frameElement.getAsJsonObject();
+                JsonArray pos = frame.getAsJsonArray("pos");
+                BlockPos blockPos = new BlockPos(
+                        pos.get(0).getAsInt(), pos.get(1).getAsInt(), pos.get(2).getAsInt());
+                net.minecraft.core.Direction facing =
+                        net.minecraft.core.Direction.byName(frame.get("facing").getAsString());
+                var decoded = ItemStack.CODEC.parse(ops, frame.get("item"));
+                if (facing == null || decoded.result().isEmpty()) {
+                    EclipseMod.LOGGER.warn("Undecodable frame entry at {} in {}: {}", blockPos,
+                            entry.lootResourcePath(),
+                            decoded.error().map(Object::toString).orElse("bad facing"));
+                    continue;
+                }
+                frames.add(new FrameEntry(blockPos, facing, decoded.result().get()));
+            }
+            EclipseMod.LOGGER.info("Decoded {} xbox item-frame decorations for {}",
+                    frames.size(), entry.worldId());
+            return Collections.unmodifiableList(frames);
+        } catch (IOException | RuntimeException e) {
+            EclipseMod.LOGGER.error("Failed to parse frames from {}", entry.lootResourcePath(), e);
+            return List.of();
         }
     }
 

@@ -86,6 +86,11 @@ public final class AnalyticsKeys {
     public static final String PREFIX_MINE = "mine:";
     /** Per-item-type craft counters (allowlisted ids only): {@code craft:minecraft:bread}. */
     public static final String PREFIX_CRAFT = "craft:";
+    /**
+     * Per-item-type ground-pickup counters (D1 pickup lane; thrower-null entities only,
+     * collections pickup allowlist only): {@code pickup:eclipse:glitch_shard}.
+     */
+    public static final String PREFIX_PICKUP = "pickup:";
 
     /** Every static category id, in documented order (frozen for B6 awards + P5-W4 commands). */
     private static final List<String> CATEGORIES = List.of(
@@ -99,7 +104,8 @@ public final class AnalyticsKeys {
 
     private static final Set<String> STATIC_KEYS = Set.copyOf(CATEGORIES);
 
-    private static final List<String> DYNAMIC_PREFIXES = List.of(PREFIX_KILL, PREFIX_MINE, PREFIX_CRAFT);
+    private static final List<String> DYNAMIC_PREFIXES =
+            List.of(PREFIX_KILL, PREFIX_MINE, PREFIX_CRAFT, PREFIX_PICKUP);
 
     private AnalyticsKeys() {}
 
@@ -108,7 +114,7 @@ public final class AnalyticsKeys {
         return CATEGORIES;
     }
 
-    /** The three dynamic key prefixes ({@code kill:}, {@code mine:}, {@code craft:}). */
+    /** The dynamic key prefixes ({@code kill:}, {@code mine:}, {@code craft:}, {@code pickup:}). */
     public static List<String> dynamicPrefixes() {
         return DYNAMIC_PREFIXES;
     }

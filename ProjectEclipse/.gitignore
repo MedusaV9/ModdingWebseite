@@ -3,6 +3,9 @@
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
+### Generated modpack artifacts (tools/modpack/build_mrpack.py) ###
+dist/
+
 ### Run directories ###
 run/
 runs/

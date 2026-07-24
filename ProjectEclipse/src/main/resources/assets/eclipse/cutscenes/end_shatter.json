@@ -1,0 +1,33 @@
+{
+  "id": "end_shatter",
+  "enabled": true,
+  "allowSkip": true,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 240,
+  "keyframes": [
+    { "t": 0.0, "pos": [-150.0, 55.0, -40.0], "yaw": 0, "pitch": 18, "roll": 0, "fov": 72, "easing": "easeInOutSine", "lookAt": [0.0, 4.0, 0.0] },
+    { "t": 0.22, "pos": [-105.0, 70.0, 105.0], "yaw": 0, "pitch": 24, "roll": -2, "fov": 66, "easing": "easeInOutSine", "lookAt": [0.0, 2.0, 0.0] },
+    { "t": 0.45, "pos": [60.0, 82.0, 140.0], "yaw": 0, "pitch": 28, "roll": 2, "fov": 62, "easing": "easeInOutSine", "lookAt": [10.0, 0.0, 10.0] },
+    { "t": 0.68, "pos": [150.0, 62.0, 20.0], "yaw": 0, "pitch": 22, "roll": -1, "fov": 64, "easing": "easeInOutSine", "lookAt": [-20.0, -6.0, 0.0] },
+    { "t": 0.86, "pos": [95.0, 44.0, -110.0], "yaw": 0, "pitch": 16, "roll": 0, "fov": 68, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
+    { "t": 1.0, "pos": [0.0, 92.0, -160.0], "yaw": 0, "pitch": 30, "roll": 0, "fov": 74, "easing": "easeOutCubic", "lookAt": [0.0, -8.0, 0.0] }
+  ],
+  "events": [
+    { "t": 0.02, "type": "sound", "id": "eclipse:event.end_shatter_rumble" },
+    { "t": 0.08, "type": "caption", "id": "eclipse.caption.end_shatter.break", "data": "subtitle,90" },
+    { "t": 0.12, "type": "shake", "id": "", "data": "0.5,40" },
+    { "t": 0.35, "type": "sound", "id": "eclipse:event.end_shatter_crack" },
+    { "t": 0.45, "type": "shake", "id": "", "data": "0.35,30" },
+    { "t": 0.62, "type": "sound", "id": "eclipse:event.end_shatter_crack" },
+    { "t": 0.72, "type": "caption", "id": "eclipse.caption.end_shatter.isles", "data": "subtitle,90" },
+    { "t": 0.85, "type": "shake", "id": "", "data": "0.2,20" }
+  ],
+  "params": {
+    "_comment": "PLAN-C C13 dragon-victory shatter orbit: a world-anchored sweep around the End disc while the deterministic carve pass splits it into floating islets (EndShatterSequence supplies the play anchor = disc center at surface height, so keyframe positions are offsets from it). Played as a GLOBAL_TELEPORT group show with returnAfter — the C6 validatedReturnPosition healing covers the way home.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end."
+  }
+}

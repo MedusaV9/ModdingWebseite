@@ -1201,6 +1201,13 @@ of scope for v1.
 
 ## Server pack (external mods)
 
+**Distributable pack:** `python3 tools/modpack/build_mrpack.py` generates the shareable
+Modrinth `.mrpack` (download references + the Eclipse jar and config seeds as overrides —
+never redistributed ARR jars) into `dist/`, plus the committed per-mod inventory
+`tools/modpack/mods_manifest.json`. See `tools/modpack/README.md` for import instructions
+(Modrinth App / Prism), the "why not a zip" rationale and the Forgified-Fabric-API answer
+(embedded Sodium/Iris sub-modules — no separate install).
+
 **Veil 4.3.0 is a REQUIRED dependency** (`neoforge.mods.toml`: modId `veil`, versionRange
 `[4.3.0,)`, ordering AFTER, side BOTH). It is LGPL-3.0 and embedded **jar-in-jar** from
 `foundry.veil:veil-neoforge-1.21.1:4.3.0` (repo `https://maven.blamejared.com`) with the open

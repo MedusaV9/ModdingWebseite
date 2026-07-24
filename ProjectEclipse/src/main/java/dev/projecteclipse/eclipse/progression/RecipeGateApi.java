@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.progression;
 import java.util.List;
 
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -11,9 +12,18 @@ import net.minecraft.world.item.ItemStack;
 public final class RecipeGateApi {
     private RecipeGateApi() {}
 
-    /** Whether crafting this stack's item is blocked on the current event day. */
+    /** Whether crafting this stack's item is blocked on the current event day (GLOBAL locks only). */
     public static boolean isItemLocked(MinecraftServer server, ItemStack stack) {
         return RecipeGate.isItemLocked(server, stack);
+    }
+
+    /**
+     * Whether crafting is blocked for THIS player: global day locks ∪ per-player provider
+     * locks (D1 collections). The craft-enforcement truth; the global overloads remain for
+     * EMI/devtools contexts without a player.
+     */
+    public static boolean isItemLockedFor(ServerPlayer player, ItemStack stack) {
+        return RecipeGate.isItemLockedFor(player, stack);
     }
 
     /** Item registry ids currently locked (tags expanded) — feeds {@code S2CRecipeLocksPayload}. */

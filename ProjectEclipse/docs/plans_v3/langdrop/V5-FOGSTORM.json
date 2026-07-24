@@ -1,0 +1,20 @@
+{
+	"en": {
+		"item.eclipse.fog_core": "Fog Core",
+		"item.eclipse.fog_cloak_trim": "Fog-Cloak Trim",
+		"subtitles.eclipse.ambient.storm_dome_drone": "Storm dome drones",
+		"subtitles.eclipse.event.storm_flicker": "Something flickers in the fog",
+		"subtitles.eclipse.event.storm_pulse": "The storm pulses",
+		"subtitles.eclipse.event.storm_shatter": "Storm shatters",
+		"subtitles.eclipse.event.storm_sphere_roar": "Storm wall roars"
+	},
+	"de": {
+		"item.eclipse.fog_core": "Nebelkern",
+		"item.eclipse.fog_cloak_trim": "Nebelmantel-Besatz",
+		"subtitles.eclipse.ambient.storm_dome_drone": "Sturmkuppel dröhnt",
+		"subtitles.eclipse.event.storm_flicker": "Etwas flackert im Nebel",
+		"subtitles.eclipse.event.storm_pulse": "Der Sturm pulsiert",
+		"subtitles.eclipse.event.storm_shatter": "Sturm zerbirst",
+		"subtitles.eclipse.event.storm_sphere_roar": "Sturmwand tost"
+	}
+}

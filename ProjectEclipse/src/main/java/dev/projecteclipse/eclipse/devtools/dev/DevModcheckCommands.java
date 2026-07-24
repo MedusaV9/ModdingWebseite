@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.devtools.dev;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,6 +25,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /** Operator diagnostics and maintenance for the pack allowlist and progression mod gates. */
@@ -153,6 +155,12 @@ public final class DevModcheckCommands {
             context.getSource().sendSuccess(() -> Component.translatable(
                     "dev.eclipse.modcheck.snapshot.saved",
                     updated.allowedMods().size(), updated.requiredMods().size()), true);
+            // D7: also regenerate the baked-manifest shape so assets/eclipse/bootstrap.json can
+            // be copied verbatim and never drifts from the server allowlist again.
+            Path manifest = AntiCheatCheck.writeSuggestedManifest(
+                    FMLPaths.GAMEDIR.get().resolve("bootstrap.json.suggested"));
+            context.getSource().sendSuccess(() -> Component.translatable(
+                    "dev.eclipse.modcheck.snapshot.manifest", manifest.toString()), false);
             return 1;
         } catch (IOException e) {
             EclipseMod.LOGGER.error("Failed to snapshot running mod allowlist", e);

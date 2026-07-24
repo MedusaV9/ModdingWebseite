@@ -54,6 +54,8 @@ public final class EclipseSignals {
     }
 
     private static final List<NaturalBlockMinedListener> NATURAL_BLOCK_MINED = new CopyOnWriteArrayList<>();
+    private static final List<CropHarvestedListener> CROP_HARVESTED = new CopyOnWriteArrayList<>();
+    private static final List<ItemCollectedListener> ITEM_COLLECTED = new CopyOnWriteArrayList<>();
     private static final List<BlockPlacedListener> BLOCK_PLACED = new CopyOnWriteArrayList<>();
     private static final List<MobKilledListener> MOB_KILLED = new CopyOnWriteArrayList<>();
     private static final List<PlayerDeathListener> PLAYER_DEATH = new CopyOnWriteArrayList<>();
@@ -71,6 +73,27 @@ public final class EclipseSignals {
 
     @FunctionalInterface public interface NaturalBlockMinedListener {
         void onNaturalBlockMined(ServerPlayer player, BlockState state, BlockPos pos);
+    }
+
+    /**
+     * D1 harvest lane: fired by the analytics {@code BlockEvent} owner when a broken block
+     * is a {@code CropBlock} at max age ({@code isMaxAge}) — planted crops always carry the
+     * placed bit, so {@link NaturalBlockMinedListener} can never see them. The max-age
+     * filter is the rate limiter: plant-and-break spam credits nothing.
+     */
+    @FunctionalInterface public interface CropHarvestedListener {
+        void onCropHarvested(ServerPlayer player, BlockState state, BlockPos pos);
+    }
+
+    /**
+     * D1 pickup lane: fired by the single {@code ItemEntityPickupEvent.Post} owner in
+     * analytics, only for thrower-null {@code ItemEntity}s (mob/boss drops have no thrower,
+     * player-tossed stacks do — drop-and-repickup never double-counts) and only for
+     * allowlisted item ids so the lane stays bounded. Hopper pickup never fires (accepted
+     * under-crediting, fail-safe direction).
+     */
+    @FunctionalInterface public interface ItemCollectedListener {
+        void onItemCollected(ServerPlayer player, ItemStack stack);
     }
 
     @FunctionalInterface public interface BlockPlacedListener {
@@ -138,6 +161,14 @@ public final class EclipseSignals {
         NATURAL_BLOCK_MINED.add(listener);
     }
 
+    public static void onCropHarvested(CropHarvestedListener listener) {
+        CROP_HARVESTED.add(listener);
+    }
+
+    public static void onItemCollected(ItemCollectedListener listener) {
+        ITEM_COLLECTED.add(listener);
+    }
+
     public static void onBlockPlaced(BlockPlacedListener listener) {
         BLOCK_PLACED.add(listener);
     }
@@ -200,6 +231,18 @@ public final class EclipseSignals {
     public static void fireNaturalBlockMined(ServerPlayer player, BlockState state, BlockPos pos) {
         for (NaturalBlockMinedListener listener : NATURAL_BLOCK_MINED) {
             listener.onNaturalBlockMined(player, state, pos);
+        }
+    }
+
+    public static void fireCropHarvested(ServerPlayer player, BlockState state, BlockPos pos) {
+        for (CropHarvestedListener listener : CROP_HARVESTED) {
+            listener.onCropHarvested(player, state, pos);
+        }
+    }
+
+    public static void fireItemCollected(ServerPlayer player, ItemStack stack) {
+        for (ItemCollectedListener listener : ITEM_COLLECTED) {
+            listener.onItemCollected(player, stack.copy());
         }
     }
 
@@ -292,6 +335,8 @@ public final class EclipseSignals {
     /** Drops every listener list. Invoked automatically on server stop. */
     public static void clearAllListeners() {
         NATURAL_BLOCK_MINED.clear();
+        CROP_HARVESTED.clear();
+        ITEM_COLLECTED.clear();
         BLOCK_PLACED.clear();
         MOB_KILLED.clear();
         PLAYER_DEATH.clear();

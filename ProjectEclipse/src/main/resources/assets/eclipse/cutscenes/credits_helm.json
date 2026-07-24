@@ -1,0 +1,26 @@
+{
+  "id": "credits_helm",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "eclipse:limbo",
+  "letterbox": true,
+  "hideHud": true,
+  "showOwnBody": true,
+  "durationTicks": 140,
+  "keyframes": [
+    { "t": 0.0, "pos": [16.0, 6.5, -9.0], "yaw": 115, "pitch": 16, "roll": 0, "fov": 66, "easing": "easeInOutCubic", "lookAt": [0.6, 1.4, 0.0] },
+    { "t": 0.5, "pos": [9.0, 3.4, -4.5], "yaw": 118, "pitch": 11, "roll": 0, "fov": 60, "easing": "easeInOutCubic", "lookAt": [0.6, 1.4, 0.0] },
+    { "t": 1.0, "pos": [3.4, 1.9, -0.7], "yaw": 122, "pitch": 5, "roll": 0, "fov": 52, "easing": "easeOutCubic", "lookAt": [0.6, 1.4, 0.0] }
+  ],
+  "events": [
+    { "t": 0.0, "type": "fade", "id": "credits_open", "data": "1,20,25" },
+    { "t": 0.12, "type": "caption", "id": "eclipse.credits.caption.helm", "data": "whisper,80" },
+    { "t": 0.65, "type": "caption", "id": "eclipse.credits.caption.wheel", "data": "whisper,70" }
+  ],
+  "params": {
+    "_comment": "C15 credits opener: 140t push-in on the survivor posed at the ghost ship's wheel. World-anchored — CreditsSequence passes the helm player's feet as the play anchor, so every pos/lookAt here is an offset from that spot (the wheel prop sits ~1.1 blocks toward +X). The shot ends 20t before the whiteout rises, handing the camera back for one breath at the wheel.",
+    "_doc": "lookAt points share the keyframe coordinate space (anchor offsets here); showOwnBody keeps the helm player visible in their own shot."
+  }
+}

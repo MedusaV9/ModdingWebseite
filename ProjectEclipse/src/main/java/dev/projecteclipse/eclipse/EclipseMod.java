@@ -59,6 +59,7 @@ public final class EclipseMod {
         dev.projecteclipse.eclipse.lang.LangService.register(modEventBus);
         dev.projecteclipse.eclipse.wand.WandItems.register(modEventBus);
         dev.projecteclipse.eclipse.entity.wizard.WizardEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.backrooms.BackroomsEntities.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

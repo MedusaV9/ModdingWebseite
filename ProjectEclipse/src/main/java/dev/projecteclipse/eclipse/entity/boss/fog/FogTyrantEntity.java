@@ -12,16 +12,23 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.enchant.ReplantEnchant;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.stormfx.StormRegistry;
+import dev.projecteclipse.eclipse.worldgen.fog.FogStormSites;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -30,6 +37,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -53,8 +61,14 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -115,11 +129,20 @@ import software.bernie.geckolib.animation.RawAnimation;
  * ship-shape ({@link FogBankMarker} re-arms the lair). <b>Death</b>:
  * {@value #DEATH_DURATION_TICKS}t scripted storm-burst — the crown falls first (anim),
  * the chest core gutters (synced {@code CORE_LIT} flag, Ferryman lantern pattern),
- * the body collapses, final thunderclap + camera shake. Drops: loot table
- * {@code eclipse:entities/fog_tyrant} (guaranteed umbral shards + the
- * {@code eclipse:replant} storm enchantment book + a storm trophy) plus 1
- * {@code storm_heart} by P4-registry lookup (fallback 6 umbral shards) and 3 umbral
- * shards at each participant's feet (Herald pattern).</p>
+ * the body collapses, final thunderclap + camera shake. C8 death beat: at the
+ * thunderclap the HOST SITE STORM EXPLODES — {@link StormRegistry#explode} bursts the
+ * sphere shell (shockwave expansion + white-out + debris client-side), the shatter
+ * stinger + {@code FX_SHOCKWAVE} land, and {@link FogStormSites#stormEnded} retires the
+ * site (wall down persistently + B13 snow recovery), so the sky clears in seconds.</p>
+ *
+ * <p><b>Reward (C8 upgrade)</b>: loot table {@code eclipse:entities/fog_tyrant} plus
+ * guaranteed corpse drops — 1 {@link EclipseItems#FOG_CORE}, 1
+ * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic) and 1 {@code storm_heart} by
+ * P4-registry lookup (fallback 6 umbral shards) — plus a placed reward CHEST holding
+ * the Mending/{@code eclipse:replant} book choice, and per-participant umbral shards
+ * direct-to-inventory ({@code ShardEconomy.deliverShardItems}, storm-scaled:
+ * 3 + 1 per extra scaled player, cap {@value #SHARD_PAYOUT_CAP}) staggered over the
+ * storm-burst award ceremony.</p>
  *
  * <p><b>Placement seam:</b> NOT a spawner mob — P1's mature-storm flow marks the lair via
  * {@link FogBankMarker#markLair} (proximity-triggered summon) or calls
@@ -195,6 +218,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     /** Death-anim keyframe where the chest core gutters out (crown already fallen). */
     private static final int DEATH_CORE_GUTTER_TICK = 32;
     private static final int DEATH_THUNDERCLAP_TICK = 60;
+    /** C8: an arena counts as hosted by a site whose wall (radius+margin) contains it. */
+    private static final double HOST_SITE_MARGIN = 12.0D;
+    /** C8 storm-scaled shard payout ceiling (per participant, per kill). */
+    private static final int SHARD_PAYOUT_CAP = 8;
 
     /** Current phase 1..3 (synced; lets the renderer/model react if it ever wants to). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -252,6 +279,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private final ArrayDeque<UUID> deathPayoutQueue = new ArrayDeque<>();
     private int deathPayoutInterval = 12;
     private int deathPayoutIndex;
+    // C8 death beat (transient like the queue): the hosting fog site, captured at the
+    // kill so the thunderclap keyframe can explode + retire the right storm.
+    @Nullable
+    private String hostSiteId;
 
     public FogTyrantEntity(EntityType<? extends FogTyrantEntity> entityType, Level level) {
         super(entityType, level);
@@ -1192,9 +1223,13 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             if (this.level() instanceof ServerLevel serverLevel) {
                 PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(),
                         this.getZ(), 64.0D, S2CShakePayload.shake(0.15F, 40));
+                // C8: lock the hosting site NOW — the thunderclap keyframe explodes it.
+                this.hostSiteId = findHostSiteId(serverLevel);
             }
-            EclipseMod.LOGGER.info("Fog Tyrant defeated (source: {}) — starting the {}t storm-burst",
-                    damageSource.getMsgId(), DEATH_DURATION_TICKS);
+            EclipseMod.LOGGER.info("Fog Tyrant defeated (source: {}) — starting the {}t storm-burst "
+                    + "(host fog site: {})",
+                    damageSource.getMsgId(), DEATH_DURATION_TICKS,
+                    this.hostSiteId == null ? "none" : this.hostSiteId);
         }
     }
 
@@ -1246,6 +1281,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             serverLevel.playSound(null, this.blockPosition(), SoundEvents.WARDEN_SONIC_BOOM,
                     SoundSource.HOSTILE, 0.8F, 1.2F);
             fogBurstFx(serverLevel, this.position().add(0.0D, 1.5D, 0.0D), 60);
+            explodeHostStorm(serverLevel); // C8: the site storm bursts with the thunderclap.
+            placeRewardChest(serverLevel); // C8: the Mending/Replant book choice chest.
             EclipseMod.LOGGER.info("Fog Tyrant death thunderclap at t={}", this.deathTime);
         }
         if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
@@ -1281,25 +1318,39 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             return;
         }
         // B14 §1: direct-to-inventory + reward overlay instead of a despawnable ground pop.
-        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 3, true);
+        int shards = shardPayout();
+        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, shards, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
-        EclipseMod.LOGGER.info("Fog Tyrant ceremony payout: 3 umbral shards to {} (deathTime {})",
-                player.getScoreboardName(), this.deathTime);
+        EclipseMod.LOGGER.info("Fog Tyrant ceremony payout: {} umbral shards to {} (deathTime {})",
+                shards, player.getScoreboardName(), this.deathTime);
     }
 
     /**
-     * Drops beyond the loot table: 1 {@code storm_heart} by P4-registry lookup (fallback
-     * 6 umbral shards while P4 hasn't landed it, plan §2.4). The per-participant shard
-     * payouts moved into {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony —
-     * everyone who braved the storm still gets paid, just staggered; see
-     * {@code tickPayoutCeremony}).
+     * C8 storm-scaled shard bonus routed through the existing reward rails: 3 base +1
+     * per extra summon-scaled player, capped at {@value #SHARD_PAYOUT_CAP}. Seam note
+     * (PLAN-C C8): if PLAN-D's economy packages add a loot config, route this through it.
+     */
+    private int shardPayout() {
+        return Math.min(SHARD_PAYOUT_CAP, 3 + Math.max(0, this.scaledPlayers - 1));
+    }
+
+    /**
+     * Drops beyond the loot table: guaranteed C8 reward upgrade — 1
+     * {@link EclipseItems#FOG_CORE} (the storm's condensed heart) + 1
+     * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic, one cut per kill) — plus 1
+     * {@code storm_heart} by P4-registry lookup (fallback 6 umbral shards while P4
+     * hasn't landed it, plan §2.4). The per-participant shard payouts moved into
+     * {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony — everyone who braved
+     * the storm still gets paid, just staggered; see {@code tickPayoutCeremony}).
      */
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
         super.dropCustomDeathLoot(level, damageSource, recentlyHit);
+        this.spawnAtLocation(new ItemStack(EclipseItems.FOG_CORE.get()));
+        this.spawnAtLocation(new ItemStack(EclipseItems.FOG_CLOAK_TRIM.get()));
         BuiltInRegistries.ITEM.getOptional(
                         ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "storm_heart"))
                 .ifPresentOrElse(
@@ -1309,8 +1360,127 @@ public class FogTyrantEntity extends EclipseGeoMonster {
                             EclipseMod.LOGGER.info("Fog Tyrant drop: eclipse:storm_heart not registered yet "
                                     + "(P4) — dropped the 6-umbral-shard fallback");
                         });
-        EclipseMod.LOGGER.info("Fog Tyrant drops: storm heart (or fallback) at the corpse; {} participant "
-                + "payout(s) queued for the storm-burst ceremony", this.participants.size());
+        EclipseMod.LOGGER.info("Fog Tyrant drops: fog core + cloak trim + storm heart (or fallback) at "
+                + "the corpse; {} participant payout(s) queued for the storm-burst ceremony",
+                this.participants.size());
+    }
+
+    // --- C8 death beat: the host site storm explodes + the reward chest lands ---
+
+    /**
+     * The active fog site whose footprint (radius + {@value #HOST_SITE_MARGIN}) contains
+     * this arena, nearest-center wins — or null for a plain {@code /summon} tyrant with
+     * no storm to burst.
+     */
+    @Nullable
+    private String findHostSiteId(ServerLevel level) {
+        String best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (FogStormSites.Site site : FogStormSites.sites()) {
+            if (!site.active()) {
+                continue;
+            }
+            double dx = site.x() + 0.5D - this.getX();
+            double dz = site.z() + 0.5D - this.getZ();
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist <= site.radius() + HOST_SITE_MARGIN && dist < bestDist) {
+                bestDist = dist;
+                best = site.id();
+            }
+        }
+        return best;
+    }
+
+    /**
+     * C8 death beat, fired on the thunderclap keyframe: {@link StormRegistry#explode}
+     * FIRST (shockwave shell expansion + white-out + debris on every client), THEN
+     * {@link FogStormSites#stormEnded} (persistent retirement + B13 snow recovery —
+     * its internal dissipate call is a no-op against an exploding storm, so the burst
+     * always finishes). Sender-owns-audio rule: the shatter stinger + the
+     * {@code FX_SHOCKWAVE} ring are layered here under the existing thunderclap.
+     */
+    private void explodeHostStorm(ServerLevel level) {
+        level.playSound(null, this.blockPosition(), EclipseSounds.EVENT_STORM_SHATTER.get(),
+                SoundSource.HOSTILE, 1.5F, 0.9F);
+        FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE,
+                this.position().add(0.0D, 1.0D, 0.0D), 1.0F, 30.0F, 160.0D);
+        String siteId = this.hostSiteId != null ? this.hostSiteId : findHostSiteId(level);
+        if (siteId == null) {
+            EclipseMod.LOGGER.info("Fog Tyrant death: no hosting fog site — storm explosion beat is "
+                    + "local FX only (plain-summon fight)");
+            return;
+        }
+        StormRegistry.explode(StormRegistry.siteStormId(siteId), StormRegistry.EXPLODE_TICKS);
+        FogStormSites.stormEnded(level, siteId);
+        EclipseMod.LOGGER.info("Fog Tyrant death: site storm '{}' exploded ({}t burst) and retired — "
+                + "sky clears, snow recovery queued", siteId, StormRegistry.EXPLODE_TICKS);
+    }
+
+    /**
+     * C8 reward chest — the Mending/{@code eclipse:replant} book CHOICE sits in a real
+     * chest beside the wreck (both books in one chest; the party decides who takes
+     * which). Placement walks a small offset ring around the corpse for a replaceable
+     * spot with solid footing (snapToFloor), skipping placement entirely (with a log)
+     * when the arena floor offers none — the guaranteed corpse drops never depend on it.
+     */
+    private void placeRewardChest(ServerLevel level) {
+        BlockPos placed = null;
+        for (int[] offset : new int[][] {{2, 0}, {-2, 0}, {0, 2}, {0, -2}, {2, 2}, {-2, -2}, {0, 0}}) {
+            Vec3 sample = new Vec3(this.getX() + offset[0], this.getY(), this.getZ() + offset[1]);
+            BlockPos pos = BlockPos.containing(snapToFloor(level, sample));
+            BlockPos below = pos.below();
+            BlockState state = level.getBlockState(pos);
+            if ((state.isAir() || state.canBeReplaced())
+                    && !level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
+                placed = pos.immutable();
+                break;
+            }
+        }
+        if (placed == null) {
+            EclipseMod.LOGGER.info("Fog Tyrant reward chest skipped: no placeable floor spot around "
+                    + "the wreck (corpse drops unaffected)");
+            return;
+        }
+        level.setBlockAndUpdate(placed, Blocks.CHEST.defaultBlockState());
+        if (!(level.getBlockEntity(placed) instanceof ChestBlockEntity chest)) {
+            EclipseMod.LOGGER.warn("Fog Tyrant reward chest at {} has no chest block entity — "
+                    + "skipping the book fill", placed.toShortString());
+            return;
+        }
+        ItemStack mending = enchantedBook(level, Enchantments.MENDING, 1);
+        ItemStack replant = enchantedBook(level, ReplantEnchant.KEY, 1);
+        if (!mending.isEmpty()) {
+            chest.setItem(11, mending);
+        }
+        if (!replant.isEmpty()) {
+            chest.setItem(15, replant);
+        }
+        level.sendParticles(ParticleTypes.END_ROD, placed.getX() + 0.5D, placed.getY() + 1.0D,
+                placed.getZ() + 0.5D, 12, 0.3D, 0.4D, 0.3D, 0.02D);
+        level.playSound(null, placed, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.2F, 0.6F);
+        EclipseMod.LOGGER.info("Fog Tyrant reward chest placed at {} (Mending book: {}, Replant book: {})",
+                placed.toShortString(), !mending.isEmpty(), !replant.isEmpty());
+    }
+
+    /**
+     * One stored-enchantment book off the datapack registry; EMPTY (and a warn for the
+     * custom key) when the enchantment isn't in this world's registry — the chest then
+     * simply holds fewer books instead of crashing the death script.
+     */
+    private static ItemStack enchantedBook(ServerLevel level, ResourceKey<Enchantment> key, int enchLevel) {
+        return level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolder(key)
+                .map(holder -> {
+                    ItemEnchantments.Mutable stored = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+                    stored.set(holder, enchLevel);
+                    ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                    book.set(DataComponents.STORED_ENCHANTMENTS, stored.toImmutable());
+                    return book;
+                })
+                .orElseGet(() -> {
+                    EclipseMod.LOGGER.warn("Fog Tyrant reward book skipped: enchantment {} not in the "
+                            + "world registry", key.location());
+                    return ItemStack.EMPTY;
+                });
     }
 
     // --- bossbar (wither pattern + boss-theme skin payload for every viewer) ---

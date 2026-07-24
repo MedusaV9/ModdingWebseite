@@ -12,6 +12,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.util.Mth;
@@ -22,27 +23,35 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
- * World-space renderer for {@link RiftFx}'s tears (P2 R17): a seeded star-polygon
- * <b>glitch tear</b> — additive white-violet core over a dark alpha-blended edge fringe —
- * plus, for {@link RiftFx#STYLE_PORTAL}, the elliptical portal surface: a near-black void
+ * World-space renderer for {@link RiftFx}'s tears — C7 "rift 2.0": a real VOLUMETRIC tear
+ * instead of the old single billboard star. Each rift is an extruded star-prism of
+ * {@value #SHELL_COUNT} depth-stacked, slowly counter-rotating jagged shells (additive
+ * white-violet emissive, radius tapering toward the prism ends), a dark alpha-blended edge
+ * fringe on the center shell, and flickering edge LIGHTNING ARCS crawling off the rim.
+ * The tear's size still comes from the payload {@code a} param — the server now computes
+ * it from the revealed structure's bounds ({@code StructurePendingRegistry.revealRiftWidth}),
+ * so a loot ruin opens a small tear and a trial chamber a massive one. For
+ * {@link RiftFx#STYLE_PORTAL} the elliptical portal surface remains: a near-black void
  * disc and a counter-scrolling swirl disc scaled {@value #SWIRL_SCALE} and pushed
- * {@value #PARALLAX_BLOCKS} blocks along the camera view direction (cheap parallax depth
- * fake, frozen in R17).
+ * {@value #PARALLAX_BLOCKS} blocks along the camera view direction (parallax interior;
+ * the {@code rift_glitch} screen pulse of {@code TransitionFx} supplies the rest).
  *
  * <p>Geometry is camera-relative {@code POSITION_COLOR} built with the vanilla-border draw
  * pattern proven by {@code border.client.BorderFxRenderer}, in <b>two sequential passes</b>
  * sharing one {@link Tesselator} (a Tesselator backs exactly one live {@link BufferBuilder}
- * at a time): first the alpha-blended fringe/void pass, then the additive core/swirl pass
- * on top. "Procedural distortion" is vertex-color pulses + a per-point integer-hash flicker
- * re-seeded every ~90 ms — the tear must read as unstable static, not a solid star.
- * Everything renders regardless of the Iris shaderpack state — world-space FX are the Iris
- * fallback (§7).</p>
+ * at a time): first the alpha-blended fringe/void pass, then the additive shells/arcs/swirl
+ * pass on top. "Procedural distortion" is vertex-color pulses + a per-point integer-hash
+ * flicker re-seeded every ~90 ms — the tear must read as unstable static, not a solid
+ * star. Everything renders regardless of the Iris shaderpack state — world-space FX are
+ * the Iris fallback (§7).</p>
  *
- * <p>Budgets (§3.5): hard early-outs (no rifts, {@code d² > }{@value #RENDER_RANGE}²,
- * open amount ≈ 0); per rift ≤ 160 triangles (core fan 2N + inner fan 2N + fringe 4N with
- * N ≤ 14 arms, + 2 × {@value #DISC_SEGMENTS}-segment portal discs), comfortably under the
- * frozen 400-tri cap. Zero per-frame heap allocations: visibility/perimeter scratch lives
- * in pre-sized static arrays, colors are primitive floats.</p>
+ * <p>Budgets (§3.5, recounted for C7 with N ≤ 14 arms → 28 perimeter points): shells
+ * 5 × 28 core tris = 140, inner hot fans on the 3 middle shells 3 × 28 = 84, fringe 56,
+ * arcs ≤ 3 × {@value #ARC_SEGMENTS} × 2 = 30, portal discs 48 → ≤ 358 triangles per rift,
+ * still under the frozen 400-tri cap. {@code reducedFx} collapses to ONE shell and no
+ * arcs — the pre-C7 geometry and budget exactly. Zero per-frame heap allocations:
+ * visibility/perimeter/arc scratch lives in pre-sized static arrays, colors are primitive
+ * floats.</p>
  *
  * <p>Render stage: {@link #STAGE} ({@code AFTER_PARTICLES}). If depth-sorting artifacts
  * appear under Sodium, swap the constant to {@code AFTER_TRANSLUCENT_BLOCKS} — both fire
@@ -72,6 +81,33 @@ public final class RiftRenderer {
     /** Mirrors {@code RiftFx}'s cap; sizes the per-frame visibility scratch. */
     private static final int MAX_VISIBLE = 8;
 
+    // --- C7 volumetric prism ---
+    /** Depth-stacked jagged shells of the star-prism (odd so one shell sits centered). */
+    private static final int SHELL_COUNT = 5;
+    private static final int CENTER_SHELL = SHELL_COUNT / 2;
+    /** Per-shell offset along the tear normal, as a fraction of the tear width. */
+    private static final float SHELL_DEPTH_FRACTION = 0.055F;
+    /** Radius shrink per shell away from the center — tapers the prism toward its ends. */
+    private static final float SHELL_TAPER = 0.13F;
+    /** Additive-alpha falloff per shell away from the center. */
+    private static final float SHELL_FADE = 0.28F;
+    /** Slow base rotation of the whole tear (radians/second). */
+    private static final float ROTATION_SPEED = 0.22F;
+    /** Odd shells rotate against the grain at this factor (counter-rotation). */
+    private static final float COUNTER_ROTATION = -0.7F;
+    /** Static in-plane phase offset between neighboring shells (radians). */
+    private static final float SHELL_PHASE = 0.75F;
+
+    // --- C7 edge lightning arcs ---
+    private static final int ARC_COUNT = 3;
+    private static final int ARC_SEGMENTS = 5;
+    /** Arc reach past the rim, as a fraction of the tear radius. */
+    private static final float ARC_LENGTH_FRACTION = 0.38F;
+    /** Arc half-width as a fraction of the tear width (thin jagged filaments). */
+    private static final float ARC_WIDTH_FRACTION = 0.018F;
+    /** Arcs strobe: an arc only draws while its per-frame gate hash exceeds this. */
+    private static final float ARC_GATE = 0.45F;
+
     // Per-frame visibility scratch (filled by the cull loop, read by both passes).
     private static final RiftFx.Rift[] VIS_RIFT = new RiftFx.Rift[MAX_VISIBLE];
     private static final float[] VIS_X = new float[MAX_VISIBLE];
@@ -87,6 +123,11 @@ public final class RiftRenderer {
     private static final float[] OUT_X = new float[MAX_PERIM];
     private static final float[] OUT_Y = new float[MAX_PERIM];
     private static final float[] OUT_Z = new float[MAX_PERIM];
+
+    /** Lightning-arc polyline scratch (camera-relative points). */
+    private static final float[] ARC_X = new float[ARC_SEGMENTS + 1];
+    private static final float[] ARC_Y = new float[ARC_SEGMENTS + 1];
+    private static final float[] ARC_Z = new float[ARC_SEGMENTS + 1];
 
     private RiftRenderer() {}
 
@@ -108,6 +149,7 @@ public final class RiftRenderer {
         long millis = System.currentTimeMillis();
         int flickerFrame = (int) (millis / FLICKER_FRAME_MILLIS);
         float swirlSeconds = (millis % 100_000L) / 1000.0F;
+        boolean reduced = EclipseClientConfig.reducedFx();
 
         // Cull once; both passes reuse the result.
         int visible = 0;
@@ -140,12 +182,12 @@ public final class RiftRenderer {
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(false);
 
-        // Pass A (alpha blend): dark edge fringe + portal void disc.
+        // Pass A (alpha blend): dark edge fringe (center shell) + portal void disc.
         BufferBuilder alpha = Tesselator.getInstance()
                 .begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         for (int v = 0; v < visible; v++) {
-            fillPerimeter(VIS_RIFT[v], VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v], flickerFrame);
-            buildAlpha(VIS_RIFT[v], alpha, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v], swirlSeconds);
+            buildAlpha(VIS_RIFT[v], alpha, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v],
+                    swirlSeconds, flickerFrame);
         }
         MeshData alphaMesh = alpha.build();
         if (alphaMesh != null) {
@@ -155,12 +197,12 @@ public final class RiftRenderer {
             BufferUploader.drawWithShader(alphaMesh);
         }
 
-        // Pass B (additive, on top): white-violet core fans + portal swirl disc.
+        // Pass B (additive, on top): shell stack + edge arcs + portal swirl disc.
         BufferBuilder additive = Tesselator.getInstance()
                 .begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         for (int v = 0; v < visible; v++) {
-            fillPerimeter(VIS_RIFT[v], VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v], flickerFrame);
-            buildAdditive(VIS_RIFT[v], additive, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v], swirlSeconds);
+            buildAdditive(VIS_RIFT[v], additive, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v],
+                    swirlSeconds, flickerFrame, reduced);
         }
         MeshData additiveMesh = additive.build();
         if (additiveMesh != null) {
@@ -181,33 +223,43 @@ public final class RiftRenderer {
         }
     }
 
+    /** In-plane rotation of one shell: slow base spin, odd shells counter-rotating. */
+    private static float shellRotation(int shell, float swirlSeconds) {
+        float base = swirlSeconds * ROTATION_SPEED;
+        return (shell % 2 == 0 ? base : base * COUNTER_ROTATION) + shell * SHELL_PHASE;
+    }
+
     /**
-     * Fills the perimeter scratch for one rift: alternating star tips and valleys, each
-     * with a flickering radius and slightly jittered angle. {@code cx/cy/cz} = rift center
-     * relative to the camera.
+     * Fills the perimeter scratch for one rift shell: alternating star tips and valleys,
+     * each with a flickering radius and slightly jittered angle. {@code cx/cy/cz} = rift
+     * center relative to the camera; {@code rotation} spins the whole star in-plane and
+     * {@code radiusScale} tapers it (prism shells).
      */
     private static void fillPerimeter(RiftFx.Rift rift, float cx, float cy, float cz,
-            float open, int flickerFrame) {
+            float open, int flickerFrame, float rotation, float radiusScale) {
         int arms = rift.armCount;
-        float radius = rift.width * 0.5F * open;
+        float radius = rift.width * 0.5F * open * radiusScale;
         for (int i = 0; i < arms; i++) {
-            float tipAngle = rift.armAngle[i] + (hash01(rift.seed, i * 2, flickerFrame) - 0.5F) * 0.06F;
+            float tipAngle = rift.armAngle[i] + rotation
+                    + (hash01(rift.seed, i * 2, flickerFrame) - 0.5F) * 0.06F;
             // 0.82–1.0 tip flicker (VFXPOLISH-3, was 0.86): slightly deeper arm shudder so
             // the tear visibly convulses instead of shimmering — same budget, same cadence.
             float tipRadius = radius * rift.armLength[i]
                     * (0.82F + 0.18F * hash01(rift.seed, i * 5 + 1, flickerFrame));
             emitPerimeter(rift, i * 2, tipAngle, tipRadius, cx, cy, cz);
             float nextAngle = i + 1 < arms ? rift.armAngle[i + 1] : rift.armAngle[0] + Mth.TWO_PI;
-            float valleyAngle = (rift.armAngle[i] + nextAngle) * 0.5F;
+            float valleyAngle = (rift.armAngle[i] + nextAngle) * 0.5F + rotation;
             float valleyRadius = radius * rift.valleyRadius[i]
                     * (0.90F + 0.10F * hash01(rift.seed, i * 7 + 3, flickerFrame));
             emitPerimeter(rift, i * 2 + 1, valleyAngle, valleyRadius, cx, cy, cz);
         }
     }
 
-    /** Alpha pass: dark edge fringe extruded outward + the PORTAL void ellipse. */
+    /** Alpha pass: dark edge fringe extruded outward (center shell) + the PORTAL void ellipse. */
     private static void buildAlpha(RiftFx.Rift rift, BufferBuilder alpha,
-            float cx, float cy, float cz, float open, float swirlSeconds) {
+            float cx, float cy, float cz, float open, float swirlSeconds, int flickerFrame) {
+        fillPerimeter(rift, cx, cy, cz, open, flickerFrame,
+                shellRotation(CENTER_SHELL, swirlSeconds), 1.0F);
         int perim = rift.armCount * 2;
         float fringe = rift.width * FRINGE_FRACTION * open;
         float fringeAlpha = 0.78F * open;
@@ -251,28 +303,57 @@ public final class RiftRenderer {
         }
     }
 
-    /** Additive pass: outer violet core fan + inner near-white hot fan + PORTAL swirl disc. */
+    /**
+     * Additive pass: the volumetric shell stack (outer violet core fan per shell, inner
+     * near-white hot fan on the middle shells), the strobing edge lightning arcs, and the
+     * PORTAL swirl disc. {@code reducedFx} draws the center shell only and skips the arcs
+     * — exactly the pre-C7 geometry.
+     */
     private static void buildAdditive(RiftFx.Rift rift, BufferBuilder additive,
-            float cx, float cy, float cz, float open, float swirlSeconds) {
+            float cx, float cy, float cz, float open, float swirlSeconds, int flickerFrame,
+            boolean reduced) {
         int perim = rift.armCount * 2;
         // Per-rift eased breath (VFXPOLISH-3): the hot core swells ±8% on a slow sine —
         // phase from the seed's low bits so neighbouring tears never pulse in lockstep.
         float breathe = 0.92F + 0.08F * Mth.sin(swirlSeconds * 2.6F + (rift.seed & 31) * 0.41F);
-        float coreAlpha = 0.75F * open * breathe;
-        for (int k = 0; k < perim; k++) {
-            int k1 = k + 1 == perim ? 0 : k + 1;
-            additive.addVertex(cx, cy, cz).setColor(0.97F, 0.90F, 1.0F, coreAlpha);
-            additive.addVertex(PERIM_X[k], PERIM_Y[k], PERIM_Z[k]).setColor(0.62F, 0.30F, 0.98F, 0.0F);
-            additive.addVertex(PERIM_X[k1], PERIM_Y[k1], PERIM_Z[k1]).setColor(0.62F, 0.30F, 0.98F, 0.0F);
+
+        int firstShell = reduced ? CENTER_SHELL : 0;
+        int lastShell = reduced ? CENTER_SHELL : SHELL_COUNT - 1;
+        for (int shell = firstShell; shell <= lastShell; shell++) {
+            int fromCenter = Math.abs(shell - CENTER_SHELL);
+            float depth = reduced ? 0.0F
+                    : (shell - CENTER_SHELL) * rift.width * SHELL_DEPTH_FRACTION * open;
+            float dx = rift.nx * depth;
+            float dy = rift.ny * depth;
+            float dz = rift.nz * depth;
+            float fade = 1.0F - fromCenter * SHELL_FADE;
+            fillPerimeter(rift, cx, cy, cz, open, flickerFrame,
+                    shellRotation(shell, swirlSeconds), 1.0F - fromCenter * SHELL_TAPER);
+
+            float coreAlpha = 0.75F * open * breathe * fade;
+            for (int k = 0; k < perim; k++) {
+                int k1 = k + 1 == perim ? 0 : k + 1;
+                additive.addVertex(cx + dx, cy + dy, cz + dz).setColor(0.97F, 0.90F, 1.0F, coreAlpha);
+                additive.addVertex(PERIM_X[k] + dx, PERIM_Y[k] + dy, PERIM_Z[k] + dz)
+                        .setColor(0.62F, 0.30F, 0.98F, 0.0F);
+                additive.addVertex(PERIM_X[k1] + dx, PERIM_Y[k1] + dy, PERIM_Z[k1] + dz)
+                        .setColor(0.62F, 0.30F, 0.98F, 0.0F);
+            }
+            if (fromCenter <= 1) {
+                float innerAlpha = 0.95F * open * fade;
+                for (int k = 0; k < perim; k++) {
+                    int k1 = k + 1 == perim ? 0 : k + 1;
+                    additive.addVertex(cx + dx, cy + dy, cz + dz).setColor(1.0F, 0.98F, 1.0F, innerAlpha);
+                    additive.addVertex(lerpToCenter(PERIM_X[k], cx) + dx, lerpToCenter(PERIM_Y[k], cy) + dy,
+                            lerpToCenter(PERIM_Z[k], cz) + dz).setColor(0.85F, 0.55F, 1.0F, 0.25F * open * fade);
+                    additive.addVertex(lerpToCenter(PERIM_X[k1], cx) + dx, lerpToCenter(PERIM_Y[k1], cy) + dy,
+                            lerpToCenter(PERIM_Z[k1], cz) + dz).setColor(0.85F, 0.55F, 1.0F, 0.25F * open * fade);
+                }
+            }
         }
-        float innerAlpha = 0.95F * open;
-        for (int k = 0; k < perim; k++) {
-            int k1 = k + 1 == perim ? 0 : k + 1;
-            additive.addVertex(cx, cy, cz).setColor(1.0F, 0.98F, 1.0F, innerAlpha);
-            additive.addVertex(lerpToCenter(PERIM_X[k], cx), lerpToCenter(PERIM_Y[k], cy),
-                    lerpToCenter(PERIM_Z[k], cz)).setColor(0.85F, 0.55F, 1.0F, 0.25F * open);
-            additive.addVertex(lerpToCenter(PERIM_X[k1], cx), lerpToCenter(PERIM_Y[k1], cy),
-                    lerpToCenter(PERIM_Z[k1], cz)).setColor(0.85F, 0.55F, 1.0F, 0.25F * open);
+
+        if (!reduced) {
+            buildArcs(rift, additive, cx, cy, cz, open, flickerFrame);
         }
 
         if (rift.style != RiftFx.STYLE_PORTAL) {
@@ -298,6 +379,64 @@ public final class RiftRenderer {
                     ellipseZ(rift, sz, a0, rx, ry)).setColor(0.55F, 0.30F, 0.95F, 0.38F * open * swirl0);
             additive.addVertex(ellipseX(rift, sx, a1, rx, ry), ellipseY(rift, sy, a1, rx, ry),
                     ellipseZ(rift, sz, a1, rx, ry)).setColor(0.55F, 0.30F, 0.95F, 0.38F * open * swirl1);
+        }
+    }
+
+    /**
+     * C7 edge lightning: up to {@value #ARC_COUNT} jagged filaments crawling outward off
+     * the tear rim, re-seeded on the flicker cadence and strobing on/off through a gate
+     * hash. Each arc is a {@value #ARC_SEGMENTS}-segment polyline of thin quads extruded
+     * along the tear normal, near-white at the rim fading to nothing at the tip.
+     */
+    private static void buildArcs(RiftFx.Rift rift, BufferBuilder additive,
+            float cx, float cy, float cz, float open, int flickerFrame) {
+        float r0 = rift.width * 0.5F * open;
+        for (int a = 0; a < ARC_COUNT; a++) {
+            float gate = hash01(rift.seed, 97 + a * 13, flickerFrame);
+            if (gate < ARC_GATE) {
+                continue; // this arc is dark this flicker frame (strobe)
+            }
+            float baseAngle = hash01(rift.seed, 41 + a * 7, flickerFrame / 3) * Mth.TWO_PI;
+            for (int i = 0; i <= ARC_SEGMENTS; i++) {
+                float f = i / (float) ARC_SEGMENTS;
+                float angle = baseAngle
+                        + (hash01(rift.seed, a * 31 + i * 3 + 1, flickerFrame) - 0.5F) * 0.55F * f;
+                float radius = r0 * (1.0F + ARC_LENGTH_FRACTION * f);
+                float wobble = (hash01(rift.seed, a * 17 + i * 5 + 2, flickerFrame) - 0.5F)
+                        * rift.width * 0.08F * f;
+                float cos = Mth.cos(angle);
+                float sin = Mth.sin(angle);
+                ARC_X[i] = cx + (rift.tx * cos + rift.bx * sin) * radius + rift.nx * wobble;
+                ARC_Y[i] = cy + (rift.ty * cos + rift.by * sin) * radius + rift.ny * wobble;
+                ARC_Z[i] = cz + (rift.tz * cos + rift.bz * sin) * radius + rift.nz * wobble;
+            }
+            float halfWidth = rift.width * ARC_WIDTH_FRACTION;
+            for (int i = 0; i < ARC_SEGMENTS; i++) {
+                float taper0 = 1.0F - i / (float) ARC_SEGMENTS;
+                float taper1 = 1.0F - (i + 1) / (float) ARC_SEGMENTS;
+                float w0 = halfWidth * (0.4F + 0.6F * taper0);
+                float w1 = halfWidth * (0.4F + 0.6F * taper1);
+                float alpha0 = 0.85F * open * gate * taper0;
+                float alpha1 = 0.85F * open * gate * taper1;
+                float ax0 = ARC_X[i] + rift.nx * w0;
+                float ay0 = ARC_Y[i] + rift.ny * w0;
+                float az0 = ARC_Z[i] + rift.nz * w0;
+                float bx0 = ARC_X[i] - rift.nx * w0;
+                float by0 = ARC_Y[i] - rift.ny * w0;
+                float bz0 = ARC_Z[i] - rift.nz * w0;
+                float ax1 = ARC_X[i + 1] + rift.nx * w1;
+                float ay1 = ARC_Y[i + 1] + rift.ny * w1;
+                float az1 = ARC_Z[i + 1] + rift.nz * w1;
+                float bx1 = ARC_X[i + 1] - rift.nx * w1;
+                float by1 = ARC_Y[i + 1] - rift.ny * w1;
+                float bz1 = ARC_Z[i + 1] - rift.nz * w1;
+                additive.addVertex(ax0, ay0, az0).setColor(0.88F, 0.72F, 1.0F, alpha0);
+                additive.addVertex(bx0, by0, bz0).setColor(0.88F, 0.72F, 1.0F, alpha0);
+                additive.addVertex(bx1, by1, bz1).setColor(0.95F, 0.85F, 1.0F, alpha1);
+                additive.addVertex(ax0, ay0, az0).setColor(0.88F, 0.72F, 1.0F, alpha0);
+                additive.addVertex(bx1, by1, bz1).setColor(0.95F, 0.85F, 1.0F, alpha1);
+                additive.addVertex(ax1, ay1, az1).setColor(0.95F, 0.85F, 1.0F, alpha1);
+            }
         }
     }
 

@@ -145,11 +145,37 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
         this.checkFailsafe();
 
         if (PortalTransitionController.active()) {
+            if (PortalTransitionController.whiteout()) {
+                // C15 credits: the disguised WHITE loading screen with a fake vanilla
+                // progress line — the gag is that it looks like a real load.
+                this.renderCreditsWhite(guiGraphics);
+                return;
+            }
             // Pure-black variant: the transition controller owns all visuals on top (§3.11).
             guiGraphics.fill(0, 0, this.width, this.height, 0xFF000000);
             return;
         }
         this.renderPanel(guiGraphics, this.width, this.height, System.currentTimeMillis(), 1.0F);
+    }
+
+    /**
+     * The C15 white credits variant (IDEAS-backrooms_finale §B1 t=230): plain white fill,
+     * a deadpan vanilla-styled "Building terrain…" line and a percentage that creeps toward
+     * (and never reaches) 100 — no sigil, no tips, none of the Eclipse dressing. With
+     * {@code reducedFx} the percentage is dropped (static line only).
+     */
+    private void renderCreditsWhite(GuiGraphics guiGraphics) {
+        guiGraphics.fill(0, 0, this.width, this.height, 0xFFFFFFFF);
+        int centerX = this.width / 2;
+        int centerY = this.height / 2;
+        Component line = EclipseLang.tr("gui.eclipse.loading.credits_fake");
+        guiGraphics.drawCenteredString(this.font, line, centerX, centerY - 10, 0xFF404040);
+        if (!EclipseClientConfig.reducedFx()) {
+            // Fake progress: fast out of the gate, asymptotically stuck in the high 90s.
+            long elapsed = System.currentTimeMillis() - this.createdAtMillis;
+            int percent = (int) Math.min(99L, Math.round(99.0D * (1.0D - Math.exp(-elapsed / 2_500.0D))));
+            guiGraphics.drawCenteredString(this.font, percent + "%", centerX, centerY + 4, 0xFF808080);
+        }
     }
 
     /**

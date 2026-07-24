@@ -1,8 +1,11 @@
 {
-  "_comment": "Client pack allowlist. '*' accepts any metadata version; all other values are exact/glob pins. Server id enforcement is configured independently in config/eclipse/anticheat.json.",
+  "_comment": "Client pack allowlist. '*' accepts any metadata version; all other values are exact/glob pins. Server id enforcement is configured independently in config/eclipse/anticheat.json. The fabric_* ids are Forgified-Fabric-API sub-modules nested INSIDE the Sodium/Iris NeoForge jars (no standalone install exists or is needed); mixinsquared is nested inside Supplementaries.",
   "schemaVersion": 1,
   "allowContinueOnMismatch": true,
   "downloadHintUrl": "See docs/BUNDLING.md and README.md#server-pack-external-mods",
+  "devBypassUuids": [
+    "name:Sonic0810"
+  ],
   "allowedMods": {
     "minecraft": "1.21.1",
     "neoforge": "21.1.238",
@@ -35,7 +38,12 @@
     "iris": "1.8.14-beta.1+mc1.21.1",
     "ends_delight": "2.6.1+neoforge.1.21.1",
     "create_confectionery": "1.1.2",
-    "createconnected": "1.3.2-mc1.21.1"
+    "createconnected": "1.3.2-mc1.21.1",
+    "fabric_api_base": "*",
+    "fabric_block_view_api_v2": "*",
+    "fabric_renderer_api_v1": "*",
+    "fabric_rendering_data_attachment_v1": "*",
+    "mixinsquared": "*"
   },
   "requiredMods": [
     "minecraft",
@@ -67,7 +75,12 @@
     "curios",
     "ends_delight",
     "create_confectionery",
-    "createconnected"
+    "createconnected",
+    "fabric_api_base",
+    "fabric_block_view_api_v2",
+    "fabric_renderer_api_v1",
+    "fabric_rendering_data_attachment_v1",
+    "mixinsquared"
   ],
   "blockedModIdSubstrings": [
     "xray",

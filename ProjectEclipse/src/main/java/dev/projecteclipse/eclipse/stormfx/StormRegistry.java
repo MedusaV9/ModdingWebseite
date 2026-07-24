@@ -37,7 +37,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <pre>{@code
  * int  id = StormRegistry.spawnVortex(level, center, 22.0F, 48.0F, StormRegistry.RAMP_TICKS);
  * int  id = StormRegistry.spawnWall(level, center, radius, height, StormRegistry.RAMP_TICKS);
+ * int  id = StormRegistry.spawnSphere(level, center, radius, StormRegistry.RAMP_TICKS); // C8 dome
  * StormRegistry.dissipate(id, StormRegistry.DISSIPATE_TICKS);   // fades out, then forgets
+ * StormRegistry.explode(id, StormRegistry.EXPLODE_TICKS);       // C8 shockwave burst, then forgets
  * StormRegistry.remove(id);                                     // near-instant removal
  * StormRegistry.handleFogSite(level, siteId, center, radius, active); // P1 S2CFogStormPayload bridge
  * }</pre>
@@ -60,6 +62,8 @@ public final class StormRegistry {
     public static final int RAMP_TICKS = 80;
     /** Default dissipate fade (R10 uses {@code DISSIPATE 60} for the intro vortex). */
     public static final int DISSIPATE_TICKS = 60;
+    /** C8 explosion burst: shockwave shell expands and fades over this many ticks (~2 s). */
+    public static final int EXPLODE_TICKS = 40;
     /** Reveal beat 1: pause after the terrain has loaded under the (still invisible) storm. */
     public static final int REVEAL_PAUSE_TICKS = 40;
     /** Reveal beat 2: the 0.4-strength rift-glitch pulse (client-run, see {@link StormFxClient}). */
@@ -138,6 +142,16 @@ public final class StormRegistry {
         return spawnStorm(level, center, radius, height, S2CStormStatePayload.TYPE_VORTEX, rampTicks);
     }
 
+    /**
+     * Spawns a fog-storm SPHERE — the C8 site-storm dome shell. The wire {@code height}
+     * carries the dome apex, which for a sphere IS the radius (the renderer derives the
+     * whole dome from it; {@link StormInteriorFx} fades interiors over it).
+     * @return the storm id.
+     */
+    public static int spawnSphere(ServerLevel level, Vec3 center, float radius, int rampTicks) {
+        return spawnStorm(level, center, radius, radius, S2CStormStatePayload.TYPE_SPHERE, rampTicks);
+    }
+
     /** Generic spawn ({@code stormType} per the payload constants). @return the storm id. */
     public static int spawnStorm(ServerLevel level, Vec3 center, float radius, float height,
             int stormType, int rampTicks) {
@@ -147,10 +161,28 @@ public final class StormRegistry {
     /** Fades a storm out over {@code ticks}, then forgets it. Unknown ids are ignored. */
     public static void dissipate(int stormId, int ticks) {
         ServerStorm storm = STORMS.get(stormId);
+        if (storm == null || storm.state == S2CStormStatePayload.STATE_EXPLODE) {
+            return; // an exploding storm finishes its burst — never downgrade to a plain fade
+        }
+        storm.state = S2CStormStatePayload.STATE_DISSIPATE;
+        storm.stateTotal = Math.max(1, ticks);
+        storm.ticksLeft = storm.stateTotal;
+        broadcast(storm);
+    }
+
+    /**
+     * C8 Fog-Tyrant death beat: the storm EXPLODES — clients play a white-out flash, an
+     * expanding shockwave shell + debris, and the sky clears within seconds. The storm is
+     * forgotten once the burst ends. Idempotent-ish: repeat calls restart the burst;
+     * unknown ids are ignored. Callers own the audio (thunder + glass-shatter layer) and
+     * the {@code S2CShakePayload}, per the sender-owns-audio rule.
+     */
+    public static void explode(int stormId, int ticks) {
+        ServerStorm storm = STORMS.get(stormId);
         if (storm == null) {
             return;
         }
-        storm.state = S2CStormStatePayload.STATE_DISSIPATE;
+        storm.state = S2CStormStatePayload.STATE_EXPLODE;
         storm.stateTotal = Math.max(1, ticks);
         storm.ticksLeft = storm.stateTotal;
         broadcast(storm);
@@ -185,7 +217,8 @@ public final class StormRegistry {
      * {@value #RAMP_TICKS}-tick ramp — dramatic first-materialization goes through
      * {@link StormReveal#request} instead) or retire it ({@code active=false}). Repeat
      * announcements of an already-live site are no-ops, so P1 may call this every re-sync.
-     * Height defaults to {@link #heightFor} until P1 site data carries an explicit height.
+     * C8: site storms stand up as SPHERE domes (height = dome apex = radius), no longer
+     * as opaque wall cylinders.
      */
     public static void handleFogSite(ServerLevel level, String siteId, Vec3 center, float radius, boolean active) {
         Integer known = SITE_IDS.get(siteId);
@@ -195,7 +228,7 @@ public final class StormRegistry {
             }
             float r = radius > 0.0F ? radius : DEFAULT_RADIUS;
             int id = siteStormId(siteId);
-            register(level, id, center, r, heightFor(r), S2CStormStatePayload.TYPE_WALL, RAMP_TICKS);
+            register(level, id, center, r, r, S2CStormStatePayload.TYPE_SPHERE, RAMP_TICKS);
         } else if (known != null) {
             dissipate(known, DISSIPATE_TICKS);
         }
@@ -230,8 +263,9 @@ public final class StormRegistry {
                 int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, site.x(), site.z());
                 Vec3 center = new Vec3(site.x() + 0.5D, y, site.z() + 0.5D);
                 String siteId = site.id();
-                StormReveal.request(level, siteId, center, radius, heightFor(radius),
-                        () -> EclipseMod.LOGGER.info("Storm wall revealed over fog site {}", siteId));
+                // C8: site storms are sphere domes — height carries the dome apex (= radius).
+                StormReveal.request(level, siteId, center, radius, radius,
+                        () -> EclipseMod.LOGGER.info("Storm sphere revealed over fog site {}", siteId));
             } else if (!site.active() && standing) {
                 dissipate(known, DISSIPATE_TICKS);
             }
@@ -248,11 +282,12 @@ public final class StormRegistry {
     /**
      * Registers a storm that plays the full reveal choreography client-side (SPAWN with
      * {@value #REVEAL_TOTAL_TICKS} ticks). Only {@link StormReveal} calls this; it owns the
-     * matching server-side strike/finish beats.
+     * matching server-side strike/finish beats. C8: reveal storms are site storms, so they
+     * come up as SPHERE domes.
      */
     static int beginRevealStorm(ServerLevel level, String areaId, Vec3 center, float radius, float height) {
         return register(level, siteStormId(areaId), center, radius, height,
-                S2CStormStatePayload.TYPE_WALL, REVEAL_TOTAL_TICKS);
+                S2CStormStatePayload.TYPE_SPHERE, REVEAL_TOTAL_TICKS);
     }
 
     // ------------------------------------------------------------------ internals

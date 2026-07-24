@@ -29,6 +29,8 @@ public final class JourneyPayloads {
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleOpStatus(S2COpStatusPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.client.menu.JourneyController.onOpStatus(payload.opLevel());
+        dev.projecteclipse.eclipse.bootstrap.PackBootstrap.onServerPolicy(
+                payload.modcheckAllowContinue(), payload.modcheckPolicyHash());
     }
 
     /**
@@ -42,8 +44,14 @@ public final class JourneyPayloads {
         @SubscribeEvent
         static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
             if (event.getEntity() instanceof ServerPlayer player) {
+                // D8: the op level rides together with the server's authoritative modcheck
+                // verdict + policy digest so the client can log config↔manifest drift.
+                var anticheat = dev.projecteclipse.eclipse.admin.AntiCheatCheck.config();
                 PacketDistributor.sendToPlayer(player,
-                        new S2COpStatusPayload(player.server.getProfilePermissions(player.getGameProfile())));
+                        new S2COpStatusPayload(
+                                player.server.getProfilePermissions(player.getGameProfile()),
+                                anticheat.allowContinueOnMismatch(),
+                                dev.projecteclipse.eclipse.admin.AntiCheatCheck.policyHash()));
             }
         }
     }

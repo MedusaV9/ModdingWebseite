@@ -3,7 +3,6 @@ package dev.projecteclipse.eclipse.xboxevent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,13 +27,10 @@ import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.Mth;
-import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -52,8 +48,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * The Xbox-360 tutorial event state machine (plan §2.13.3–2.13.6): dev-triggered lifecycle
  * {@code IDLE → ANNOUNCED → OPEN → CLOSING → IDLE} persisted in {@link XboxEventState},
- * portal collision entries, the 30:00 timer with bossbar fallback (§2.13.5), protected
- * deaths (no item loss, no Eclipse life loss), voluntary exit with per-instance lockouts,
+ * portal collision entries, the 30:00 timer (C17: {@code S2CXboxTimerPayload} → the client
+ * {@code XboxTimerLayer} is the single countdown surface, no bossbar), protected deaths
+ * (no item loss, no Eclipse life loss), voluntary exit with per-instance lockouts,
  * and the participation reward via {@code TimedBuffApi} (called through the P4-A1 Holder).
  *
  * <p><b>Death protection mechanics</b>: the {@link LivingDeathEvent} intercept runs at
@@ -75,14 +72,10 @@ public final class XboxEventService {
     private static final long GRACEFUL_STOP_MILLIS = 10_000L;
 
     // ---- transient per-run state (cleared on ServerStoppedEvent; SavedData is per-save) ----
-    @Nullable
-    private static ServerBossEvent bossBar;
-    private static final Set<UUID> OVERLAY_ACKED = new HashSet<>();
     private static final Map<UUID, Long> PENDING_LEAVE_CONFIRMS = new HashMap<>();
     private static final Map<UUID, Long> LAST_BOUNCE_MESSAGE = new HashMap<>();
     private static long lastPeriodicSyncMillis;
     private static long lastSeenRemainingMillis = Long.MAX_VALUE;
-    private static long totalWindowMillisHint;
 
     private XboxEventService() {}
 
@@ -120,8 +113,6 @@ public final class XboxEventService {
                             state.worldId());
                     beginClosing(server, state);
                 } else {
-                    totalWindowMillisHint = Math.max(state.endsAtEpochMillis() - now,
-                            XboxEventConfig.get().defaultMinutes() * 60_000L);
                     EclipseMod.LOGGER.info("Xbox event {} resumes: {} remaining",
                             state.worldId(), mmss(state.endsAtEpochMillis() - now));
                 }
@@ -137,13 +128,10 @@ public final class XboxEventService {
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
-        bossBar = null;
-        OVERLAY_ACKED.clear();
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
         lastPeriodicSyncMillis = 0L;
         lastSeenRemainingMillis = Long.MAX_VALUE;
-        totalWindowMillisHint = 0L;
         XboxWorldsManifest.clearRuntimeCaches();
     }
 
@@ -169,7 +157,6 @@ public final class XboxEventService {
         if (state.phase() == XboxEventState.Phase.OPEN) {
             checkWarnings(server, state, remaining);
             tickPortal(server, state);
-            updateBossBar(server, state, remaining);
             if (now - lastPeriodicSyncMillis >= PERIODIC_SYNC_MILLIS) {
                 lastPeriodicSyncMillis = now;
                 syncTimerToInside(server, state);
@@ -215,19 +202,20 @@ public final class XboxEventService {
         int effectiveMinutes = minutes > 0 ? minutes : config.defaultMinutes();
         long now = System.currentTimeMillis();
         state.beginInstance(worldId, now + effectiveMinutes * 60_000L);
-        totalWindowMillisHint = effectiveMinutes * 60_000L;
         lastSeenRemainingMillis = Long.MAX_VALUE;
         lastPeriodicSyncMillis = 0L;
 
-        broadcast(server, Component.translatable("eclipse.xbox.announce.start",
-                worldName(worldId), effectiveMinutes).withStyle(ChatFormatting.GREEN));
+        // C16/C17: the announcement is ONLY "A portal has opened." — no world name, no
+        // minutes, no coordinates. The details live on the INSIDE-only welcome title.
+        broadcast(server, Component.translatable("eclipse.xbox.announce.start")
+                .withStyle(ChatFormatting.GREEN));
 
         ServerLevel overworld = server.overworld();
         BlockPos spot = XboxPortal.findSpotNearSpawn(overworld);
         if (spot != null) {
             XboxPortal.place(overworld, spot, state);
             state.setPhase(XboxEventState.Phase.OPEN);
-            broadcast(server, portalHint(spot));
+            XboxWorldInstaller.decorate(server, worldId);
         } else {
             EclipseMod.LOGGER.warn("Xbox event {}: no portal spot within {}..{} blocks of spawn",
                     worldId, config.portalSearchMinRadius(), config.portalSearchMaxRadius());
@@ -259,8 +247,9 @@ public final class XboxEventService {
         XboxPortal.place(level, base, state);
         if (state.phase() == XboxEventState.Phase.ANNOUNCED) {
             state.setPhase(XboxEventState.Phase.OPEN);
+            XboxWorldInstaller.decorate(server, state.worldId());
         }
-        broadcast(server, portalHint(base));
+        // C16: no coordinate broadcast — the announcement stays "a portal has opened".
         return null;
     }
 
@@ -315,7 +304,6 @@ public final class XboxEventService {
         };
         state.setEndsAtEpochMillis(Math.max(now, newEndsAt));
         long newRemaining = Math.max(0L, state.endsAtEpochMillis() - now);
-        totalWindowMillisHint = Math.max(totalWindowMillisHint, newRemaining);
         lastSeenRemainingMillis = Long.MAX_VALUE; // re-arm T-5/T-1 warnings against the new window
         syncTimerToInside(server, state);
         broadcastInside(server, state, Component.translatable("eclipse.xbox.announce.time_changed",
@@ -357,7 +345,6 @@ public final class XboxEventService {
             EclipseMod.LOGGER.error("Could not stage xbox world reset for {}", worldId, e);
         }
 
-        removeBossBar();
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
         lastSeenRemainingMillis = Long.MAX_VALUE;
@@ -498,7 +485,6 @@ public final class XboxEventService {
         player.fallDistance = 0.0F;
         state.removeReturnAnchor(player.getUUID());
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
-        removeFromBossBar(player);
         sendTimer(state, player, false);
 
         String key = switch (reason) {
@@ -575,10 +561,8 @@ public final class XboxEventService {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        OVERLAY_ACKED.remove(player.getUUID());
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
-        removeFromBossBar(player);
     }
 
     // ================================================================== /xboxleave
@@ -636,16 +620,16 @@ public final class XboxEventService {
         return 1;
     }
 
-    // ================================================================== timer sync & bossbar
+    // ================================================================== timer sync
 
-    /** Overlay ack (§2.13.5): P3's overlay hides the bossbar fallback for capable clients. */
+    /**
+     * Overlay ack (§2.13.5), kept as the frozen payload's landing point: the C17 timer
+     * consolidation deleted the {@code ServerBossEvent} fallback (no stacked bars — the
+     * client {@code XboxTimerLayer} in the day-timer HUD slot is the ONLY surface), so
+     * there is nothing left to hide; older clients simply see no countdown.
+     */
     public static void onOverlayAck(ServerPlayer player, boolean overlayCapable) {
-        if (overlayCapable) {
-            OVERLAY_ACKED.add(player.getUUID());
-            removeFromBossBar(player);
-        } else {
-            OVERLAY_ACKED.remove(player.getUUID());
-        }
+        // deliberate no-op — see javadoc
     }
 
     private static void syncTimerToInside(MinecraftServer server, XboxEventState state) {
@@ -667,47 +651,6 @@ public final class XboxEventService {
         if (lastSeenRemainingMillis > WARN_1M_MILLIS && remaining <= WARN_1M_MILLIS) {
             broadcast(server, Component.translatable("eclipse.xbox.announce.warn1",
                     worldName(state.worldId())).withStyle(ChatFormatting.RED));
-        }
-    }
-
-    private static void updateBossBar(MinecraftServer server, XboxEventState state, long remaining) {
-        List<ServerPlayer> inside = insidePlayers(server, state);
-        if (inside.isEmpty() && bossBar == null) {
-            return;
-        }
-        if (bossBar == null) {
-            bossBar = new ServerBossEvent(Component.empty(),
-                    BossEvent.BossBarColor.GREEN, BossEvent.BossBarOverlay.PROGRESS);
-        }
-        bossBar.setName(Component.translatable("bossbar.eclipse.xbox",
-                worldName(state.worldId()), mmss(remaining)));
-        long total = Math.max(totalWindowMillisHint, 1L);
-        bossBar.setProgress(Mth.clamp((float) remaining / total, 0.0F, 1.0F));
-
-        Set<UUID> wanted = new HashSet<>();
-        for (ServerPlayer player : inside) {
-            if (!OVERLAY_ACKED.contains(player.getUUID())) {
-                wanted.add(player.getUUID());
-                bossBar.addPlayer(player); // set-backed: no-op when already shown
-            }
-        }
-        for (ServerPlayer shown : List.copyOf(bossBar.getPlayers())) {
-            if (!wanted.contains(shown.getUUID())) {
-                bossBar.removePlayer(shown);
-            }
-        }
-    }
-
-    private static void removeBossBar() {
-        if (bossBar != null) {
-            bossBar.removeAllPlayers();
-            bossBar = null;
-        }
-    }
-
-    private static void removeFromBossBar(ServerPlayer player) {
-        if (bossBar != null) {
-            bossBar.removePlayer(player);
         }
     }
 
@@ -742,7 +685,8 @@ public final class XboxEventService {
         return spilled;
     }
 
-    private static ItemStack classicMapped(ItemStack original) {
+    /** Package-shared with {@link XboxWorldInstaller#decorate} (frame items map the same way). */
+    static ItemStack classicMapped(ItemStack original) {
         if (original.getItem() instanceof BlockItem blockItem) {
             var vanillaId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(blockItem);
             if ("minecraft".equals(vanillaId.getNamespace())) {
@@ -801,13 +745,6 @@ public final class XboxEventService {
                 : Component.literal(entry.displayNameEn());
     }
 
-    private static Component portalHint(BlockPos pos) {
-        String coords = pos.getX() + " " + pos.getY() + " " + pos.getZ();
-        return Component.translatable("eclipse.xbox.announce.portal",
-                Component.literal(coords).withStyle(ChatFormatting.AQUA))
-                .withStyle(ChatFormatting.GREEN);
-    }
-
     private static Component leaveLine(ServerPlayer player) {
         MutableComponent line = ServerLang.tr(player, "eclipse.xbox.enter.leaveline")
                 .withStyle(ChatFormatting.GRAY);
@@ -820,7 +757,7 @@ public final class XboxEventService {
         return line;
     }
 
-    /** {@code 29:59} — used by the bossbar name and dev feedback. */
+    /** {@code 29:59} — used by dev-command feedback and log lines. */
     public static String mmss(long millis) {
         long totalSeconds = Math.max(0L, millis / 1000L);
         return String.format(java.util.Locale.ROOT, "%02d:%02d", totalSeconds / 60L, totalSeconds % 60L);

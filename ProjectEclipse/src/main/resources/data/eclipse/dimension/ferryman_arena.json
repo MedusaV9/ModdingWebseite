@@ -1,0 +1,21 @@
+{
+  "type": "eclipse:limbo",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "eclipse:limbo",
+      "lakes": false,
+      "features": false,
+      "layers": [
+        {
+          "block": "minecraft:barrier",
+          "height": 1
+        },
+        {
+          "block": "minecraft:water",
+          "height": 48
+        }
+      ]
+    }
+  }
+}

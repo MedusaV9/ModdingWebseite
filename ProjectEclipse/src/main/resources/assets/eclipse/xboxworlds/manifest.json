@@ -134,6 +134,138 @@
         ]
       },
       "lootManifest": "data/eclipse/xboxworlds/tu14_loot.json"
+    },
+    {
+      "worldId": "tu19",
+      "displayName": {
+        "en_us": "Tutorial World (TU19) — 2014",
+        "de_de": "Tutorial-Welt (TU19) — 2014"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu19.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        97,
+        72,
+        -106
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "bf39bda5eb35c5625534aeb2390eff076baa0c982018d4a34a1146236e166050",
+      "sizeBytes": 3113828,
+      "chunkCount": 1296,
+      "bounds": {
+        "chunkMin": [
+          -18,
+          -18
+        ],
+        "chunkMax": [
+          17,
+          17
+        ],
+        "blockMin": [
+          -288,
+          0,
+          -288
+        ],
+        "blockMax": [
+          287,
+          255,
+          287
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu19_loot.json"
+    },
+    {
+      "worldId": "tu31",
+      "displayName": {
+        "en_us": "Tutorial World (TU31) — 2015",
+        "de_de": "Tutorial-Welt (TU31) — 2015"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu31.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        97,
+        72,
+        -106
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "1c4a53d26aff9ebc259aa364e53fe70e5d1820de16b33b9d7185119d85729f53",
+      "sizeBytes": 3128622,
+      "chunkCount": 1296,
+      "bounds": {
+        "chunkMin": [
+          -18,
+          -18
+        ],
+        "chunkMax": [
+          17,
+          17
+        ],
+        "blockMin": [
+          -288,
+          0,
+          -288
+        ],
+        "blockMax": [
+          287,
+          255,
+          287
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu31_loot.json"
+    },
+    {
+      "worldId": "tu75",
+      "displayName": {
+        "en_us": "Tutorial World (TU75) — 2019",
+        "de_de": "Tutorial-Welt (TU75) — 2019"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu75.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        97,
+        72,
+        -106
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "d066adc1d9d0661e34083d98b803b8c178ea86900bee020a88ff50b92b699882",
+      "sizeBytes": 3149082,
+      "chunkCount": 1296,
+      "bounds": {
+        "chunkMin": [
+          -18,
+          -18
+        ],
+        "chunkMax": [
+          17,
+          17
+        ],
+        "blockMin": [
+          -288,
+          0,
+          -288
+        ],
+        "blockMax": [
+          287,
+          255,
+          287
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu75_loot.json"
     }
   ]
 }

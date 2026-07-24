@@ -52,6 +52,14 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * <p>Also draws every live lightning ribbon: sky strikes ({@link StormFxClient#bolts()}, 6
  * jittered sub-segments × core+glow layers + impact cross flash = ≤ 14 quads each, 2-tick
  * white core then violet decay) and small shell arc crackles ({@link StormFxClient#arcs()}).</p>
+ *
+ * <p><b>C8 sphere storms:</b> {@code TYPE_SPHERE} site storms tessellate as UV-sphere DOME
+ * shells (latitude bands from a below-ground skirt up to the apex) instead of cylinders:
+ * slow banded rotation (each latitude band leads the one below, so the wall visibly
+ * shears), a rim-lit silhouette edge, and green-violet churn bands that set the site
+ * storms apart from the intro vortex's slate. The occluder becomes a matching opaque dome.
+ * {@code STATE_EXPLODE} (tyrant death) blows the dome outward ~2.8× while it whites out
+ * and fades — the shockwave beat; the occluder drops immediately so the sky clears.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormWallRenderer {
@@ -105,6 +113,35 @@ public final class StormWallRenderer {
     private static final float OCC_R = 0.014F;
     private static final float OCC_G = 0.010F;
     private static final float OCC_B = 0.026F;
+
+    // --- C8 sphere storms (site domes: banded rotation, rim-lit edge, green-violet bands) ---
+    /** Latitude bands of a sphere shell per LOD tier (occluder dome uses the near count). */
+    private static final int SPHERE_RINGS_NEAR = 10;
+    private static final int SPHERE_RINGS_FAR = 6;
+    /** Below-equator skirt (radians) so uneven terrain never opens a gap at the rim. */
+    private static final float SPHERE_SKIRT_RAD = 0.16F;
+    /** Base band drift (rad/tick); each latitude band leads the one below by +12%. */
+    private static final float SPHERE_BAND_RAD_PER_TICK = 0.004F;
+    /** Sphere shell radial offsets / blend passes (outer additive, body alpha, inner additive). */
+    private static final float[] SPHERE_OFFSETS = {2.0F, 0.0F, -2.0F};
+    private static final boolean[] SPHERE_ADDITIVE = {true, false, true};
+    /** Sphere alpha-shell base (slate pulled toward the fog-green cast). */
+    private static final float SPH_ALPHA_R = 0.075F;
+    private static final float SPH_ALPHA_G = 0.105F;
+    private static final float SPH_ALPHA_B = 0.110F;
+    /** Additive band hues: churn bands alternate fog-green ↔ eclipse-violet (green-violet glow). */
+    private static final float SPH_GREEN_R = 0.22F;
+    private static final float SPH_GREEN_G = 0.44F;
+    private static final float SPH_GREEN_B = 0.32F;
+    private static final float SPH_VIOLET_R = 0.30F;
+    private static final float SPH_VIOLET_G = 0.20F;
+    private static final float SPH_VIOLET_B = 0.47F;
+    /** STATE_EXPLODE: the dome blows out to this many extra radii over the burst. */
+    private static final float EXPLODE_EXPAND = 1.8F;
+    /** White-hot flash target of the explosion's first ~15 ticks. */
+    private static final float EXPLODE_WHITE_R = 0.95F;
+    private static final float EXPLODE_WHITE_G = 0.93F;
+    private static final float EXPLODE_WHITE_B = 1.00F;
 
     // --- daylight readability (EVAL-4 post-eval: wall reads flat from ~40 blocks at noon) ---
     /**
@@ -202,6 +239,13 @@ public final class StormWallRenderer {
         if (vis <= 0.01F) {
             return;
         }
+        if (storm.state == S2CStormStatePayload.STATE_EXPLODE) {
+            return; // C8: the shockwave reveals the interior — the sky clears immediately
+        }
+        if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
+            buildSphereOccluder(buffer, storm, camera, vis);
+            return;
+        }
         int segments = OCCLUDER_SEGMENTS;
 
         float radius = Math.max(1.5F, storm.radius - OCCLUDER_INSET);
@@ -246,6 +290,46 @@ public final class StormWallRenderer {
         }
     }
 
+    /**
+     * C8 opaque occluder dome of a sphere storm (never-see-inside, same guarantee as the
+     * cylinder + cone lid): latitude bands at {@code r − }{@value #OCCLUDER_INSET} from the
+     * below-ground skirt to the apex — no separate lid needed, the dome closes itself.
+     */
+    private static void buildSphereOccluder(BufferBuilder buffer, StormFxClient.ClientStorm storm,
+            Vec3 camera, float vis) {
+        float radius = Math.max(1.5F, storm.radius - OCCLUDER_INSET);
+        float heightScale = heightScale(storm, vis);
+        float alpha = Math.min(1.0F, vis * 1.6F);
+        float cx = (float) (storm.center.x - camera.x);
+        float cy = (float) (storm.center.y - camera.y);
+        float cz = (float) (storm.center.z - camera.z);
+        int segments = OCCLUDER_SEGMENTS;
+        int rings = 8;
+        double step = Math.PI * 2.0D / segments;
+        float latSpan = (float) (Math.PI / 2.0D) + SPHERE_SKIRT_RAD;
+        float latStep = latSpan / rings;
+        for (int ring = 0; ring < rings; ring++) {
+            float lat0 = -SPHERE_SKIRT_RAD + ring * latStep;
+            float lat1 = lat0 + latStep;
+            float ringR0 = Mth.cos(lat0) * radius;
+            float ringR1 = Mth.cos(lat1) * radius;
+            float y0 = cy + Mth.sin(lat0) * radius * heightScale;
+            float y1 = cy + Mth.sin(lat1) * radius * heightScale;
+            for (int i = 0; i < segments; i++) {
+                float a0 = (float) (i * step);
+                float a1 = (float) ((i + 1) * step);
+                buffer.addVertex(cx + Mth.cos(a0) * ringR0, y0, cz + Mth.sin(a0) * ringR0)
+                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                buffer.addVertex(cx + Mth.cos(a1) * ringR0, y0, cz + Mth.sin(a1) * ringR0)
+                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                buffer.addVertex(cx + Mth.cos(a1) * ringR1, y1, cz + Mth.sin(a1) * ringR1)
+                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                buffer.addVertex(cx + Mth.cos(a0) * ringR1, y1, cz + Mth.sin(a0) * ringR1)
+                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ shells
 
     private static void buildShells(BufferBuilder buffer, StormFxClient.ClientStorm storm,
@@ -258,7 +342,9 @@ public final class StormWallRenderer {
         double dz = camera.z - storm.center.z;
         double centerDist = Math.sqrt(dx * dx + dz * dz);
         // Deep inside the occluder the shells are invisible anyway — the single d² early-out.
-        if (centerDist < storm.radius - OCCLUDER_INSET - 2.0D) {
+        // (Exploding storms skip it: the expanding shockwave must stay visible from within.)
+        if (storm.state != S2CStormStatePayload.STATE_EXPLODE
+                && centerDist < storm.radius - OCCLUDER_INSET - 2.0D) {
             return;
         }
         float shellDist = (float) Math.abs(centerDist - storm.radius);
@@ -273,6 +359,27 @@ public final class StormWallRenderer {
         double camAngle = Math.atan2(dz, dx); // bearing of the camera around the storm axis
         boolean vortex = storm.type == S2CStormStatePayload.TYPE_VORTEX;
         float heightScale = heightScale(storm, vis);
+
+        if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
+            // C8 dome shells (own tier ladder; impostor reuses the tapered cylinder ring).
+            if (nearW > 0.02F || farW > 0.02F) {
+                boolean near = nearW >= farW;
+                float tierAlpha = Math.max(nearW, farW) * vis;
+                int segments = near ? NEAR_SEGMENTS : FAR_SEGMENTS;
+                int rings = near ? SPHERE_RINGS_NEAR : SPHERE_RINGS_FAR;
+                for (int s = 0; s < SPHERE_OFFSETS.length; s++) {
+                    if (SPHERE_ADDITIVE[s] != additivePass || (!near && s == 2)) {
+                        continue; // far tier: outer additive + body alpha only
+                    }
+                    emitSphereShell(buffer, storm, camera, time, s, segments, rings, camAngle,
+                            centerDist, inside, heightScale, tierAlpha, additivePass, partialTick);
+                }
+            }
+            if (impW > 0.02F && !additivePass) {
+                emitImpostor(buffer, storm, camera, time, heightScale, impW * vis, true);
+            }
+            return;
+        }
 
         if (nearW > 0.02F) {
             float tierAlpha = nearW * vis;
@@ -418,6 +525,124 @@ public final class StormWallRenderer {
                     a0, a1, radius, apexRadius, 1.3F,
                     ADD_R, ADD_G, ADD_B, alpha,
                     ADD_R * 1.3F, ADD_G * 1.3F, ADD_B * 1.2F, 0.0F);
+        }
+    }
+
+    /**
+     * C8: one UV-sphere DOME shell of a sphere storm — latitude bands from the below-ground
+     * skirt to the apex, camera-facing tangent arc when outside (same budget rule as the
+     * cylinders). Distinctive reads vs the intro vortex: <b>banded rotation</b> (every
+     * latitude band leads the one below by +12% drift, so the wall shears visibly),
+     * <b>rim-lit edge</b> (additive alpha boosted toward the silhouette tangent), and
+     * <b>green-violet churn bands</b> (additive hue hashes between fog-green and
+     * eclipse-violet per band). {@code STATE_EXPLODE} expands the dome up to
+     * {@value #EXPLODE_EXPAND} extra radii and blows the palette white-hot for the first
+     * ~15 ticks while the storm's visibility fades it out — the shockwave shell.
+     */
+    private static void emitSphereShell(BufferBuilder buffer, StormFxClient.ClientStorm storm,
+            Vec3 camera, float time, int shellIndex, int fullSegments, int rings, double camAngle,
+            double centerDist, boolean inside, float heightScale, float alphaMul, boolean additive,
+            float partialTick) {
+        float boom = storm.explodeProgress(partialTick);
+        float white = storm.explodeWhite(partialTick);
+        float radius = (storm.radius + SPHERE_OFFSETS[shellIndex]) * (1.0F + EXPLODE_EXPAND * boom);
+        if (radius < 1.0F) {
+            return;
+        }
+        double halfArc = Math.PI;
+        if (!inside && boom <= 0.0F) {
+            halfArc = Math.min(Math.PI,
+                    Math.acos(Mth.clamp(radius / (float) centerDist, 0.0F, 1.0F)) + ARC_MARGIN);
+        }
+        double step = Math.PI * 2.0D / fullSegments;
+        int columns = Math.min(fullSegments, (int) Math.ceil(2.0D * halfArc / step));
+
+        float cx = (float) (storm.center.x - camera.x);
+        float cy = (float) (storm.center.y - camera.y);
+        float cz = (float) (storm.center.z - camera.z);
+        int noiseT = (int) (time / ((shellIndex & 1) == 0 ? 3.0F : 5.0F));
+        float latSpan = (float) (Math.PI / 2.0D) + SPHERE_SKIRT_RAD;
+        float latStep = latSpan / rings;
+        float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
+        float graySpan = 1.0F - grayFloor;
+
+        for (int ring = 0; ring < rings; ring++) {
+            float lat0 = -SPHERE_SKIRT_RAD + ring * latStep;
+            float lat1 = lat0 + latStep;
+            float ringR0 = Mth.cos(lat0) * radius;
+            float ringR1 = Mth.cos(lat1) * radius;
+            float y0 = cy + Mth.sin(lat0) * radius * heightScale;
+            float y1 = cy + Mth.sin(lat1) * radius * heightScale;
+            // Banded rotation: each band leads the one below — quads shear between bands.
+            float rot0 = time * SPHERE_BAND_RAD_PER_TICK * (1.0F + ring * 0.12F)
+                    * ((shellIndex & 1) == 0 ? 1.0F : -0.8F);
+            float rot1 = time * SPHERE_BAND_RAD_PER_TICK * (1.0F + (ring + 1) * 0.12F)
+                    * ((shellIndex & 1) == 0 ? 1.0F : -0.8F);
+            // Base-heavy density: near-opaque at the rim, thinning toward the apex.
+            float latFrac0 = (lat0 + SPHERE_SKIRT_RAD) / latSpan;
+            float latFrac1 = (lat1 + SPHERE_SKIRT_RAD) / latSpan;
+            // Band hue (additive pass): fog-green ↔ eclipse-violet, stable per band.
+            float hue = hash3(shellIndex + 40, ring, 0);
+            float bandR = Mth.lerp(hue, SPH_GREEN_R, SPH_VIOLET_R);
+            float bandG = Mth.lerp(hue, SPH_GREEN_G, SPH_VIOLET_G);
+            float bandB = Mth.lerp(hue, SPH_GREEN_B, SPH_VIOLET_B);
+
+            for (int i = 0; i < columns; i++) {
+                double a0 = camAngle - halfArc + i * step + rot0;
+                double a1 = a0 + step;
+                int noiseSeg = Mth.floor((float) (a0 / step));
+                float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg + ring * 131, noiseT);
+                float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT);
+                float gray1 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT + 977);
+                // Rim factor: silhouette columns (near the tangent arc edges) glow brightest.
+                float edge = halfArc <= 0.0D ? 0.0F
+                        : (float) Math.abs((a0 + step * 0.5D - rot0 - camAngle) / halfArc);
+                float rim = inside ? 0.55F : 0.35F + 0.65F * smoothstep(0.55F, 0.95F, edge);
+
+                float x00 = cx + (float) Math.cos(a0) * ringR0;
+                float z00 = cz + (float) Math.sin(a0) * ringR0;
+                float x10 = cx + (float) Math.cos(a1) * ringR0;
+                float z10 = cz + (float) Math.sin(a1) * ringR0;
+                float x01 = cx + (float) Math.cos(a0 - rot0 + rot1) * ringR1;
+                float z01 = cz + (float) Math.sin(a0 - rot0 + rot1) * ringR1;
+                float x11 = cx + (float) Math.cos(a1 - rot0 + rot1) * ringR1;
+                float z11 = cz + (float) Math.sin(a1 - rot0 + rot1) * ringR1;
+
+                float r0;
+                float g0;
+                float b0;
+                float alpha0;
+                float alpha1;
+                if (additive) {
+                    r0 = bandR;
+                    g0 = bandG;
+                    b0 = bandB;
+                    float aBand = 0.30F * churn * alphaMul * rim
+                            * (1.0F + DAY_ADDITIVE_BOOST * daylight);
+                    alpha0 = aBand * (1.0F - 0.65F * latFrac0);
+                    alpha1 = aBand * (1.0F - 0.65F * latFrac1);
+                } else {
+                    r0 = SPH_ALPHA_R;
+                    g0 = SPH_ALPHA_G;
+                    b0 = SPH_ALPHA_B;
+                    // Day carve: churn stripes the base band so the dome never reads flat.
+                    float aBase = 0.88F * alphaMul * (1.0F - DAY_BASE_CARVE * daylight * (1.0F - churn));
+                    alpha0 = aBase * (1.0F - 0.55F * latFrac0);
+                    alpha1 = aBase * (1.0F - 0.55F * latFrac1);
+                }
+                // Explosion white-out: palette blows toward white-hot, alpha pops.
+                if (white > 0.0F) {
+                    r0 = Mth.lerp(white, r0, EXPLODE_WHITE_R);
+                    g0 = Mth.lerp(white, g0, EXPLODE_WHITE_G);
+                    b0 = Mth.lerp(white, b0, EXPLODE_WHITE_B);
+                    alpha0 *= 1.0F + 1.2F * white;
+                    alpha1 *= 1.0F + 1.2F * white;
+                }
+                buffer.addVertex(x00, y0, z00).setColor(r0 * gray0, g0 * gray0, b0 * gray0, alpha0);
+                buffer.addVertex(x10, y0, z10).setColor(r0 * gray0, g0 * gray0, b0 * gray0, alpha0);
+                buffer.addVertex(x11, y1, z11).setColor(r0 * gray1, g0 * gray1, b0 * gray1, alpha1);
+                buffer.addVertex(x01, y1, z01).setColor(r0 * gray1, g0 * gray1, b0 * gray1, alpha1);
+            }
         }
     }
 
@@ -655,6 +880,9 @@ public final class StormWallRenderer {
     private static float heightScale(StormFxClient.ClientStorm storm, float visibility) {
         if (storm.state == S2CStormStatePayload.STATE_DISSIPATE) {
             return 1.0F + 0.3F * (1.0F - visibility);
+        }
+        if (storm.state == S2CStormStatePayload.STATE_EXPLODE) {
+            return 1.0F; // C8: the shockwave expands radially; no vertical stretch
         }
         return 0.25F + 0.75F * visibility;
     }

@@ -280,9 +280,11 @@ public class StatusTab extends HandbookTab {
     /**
      * The page's settings entry, as a REAL widget through the frozen {@link #widgets()}
      * API (B4: focus, narration and input routing come from the screen). Clicking turns to
-     * the Settings tab via the screen's public 1–8 hotkey path — Settings is pinned LAST
-     * in the §3.1 roster, i.e. page 8. The press itself stays silent; the audible feedback
-     * is the page-turn whoosh of the switch (§2.3 — no double sound).
+     * the Settings tab via the screen's public ←-wrap hotkey path — Settings is pinned
+     * LAST in the roster and Status is FIRST, so one left-arrow press wraps straight to it
+     * regardless of the roster size (the 1–8 number hotkeys stopped covering Settings when
+     * the D1 Collections tab made it page 9). The press itself stays silent; the audible
+     * feedback is the page-turn whoosh of the switch (§2.3 — no double sound).
      */
     private class SettingsLink extends EclipseWidget {
         SettingsLink() {
@@ -295,8 +297,9 @@ public class StatusTab extends HandbookTab {
 
         @Override
         public void onClick(double mouseX, double mouseY) {
-            // Public route to the roster's last page (the frame's switchTab is frame-only).
-            StatusTab.this.screen.keyPressed(GLFW.GLFW_KEY_8, 0, 0);
+            // Public route to the roster's LAST page (the frame's switchTab is frame-only):
+            // ← wraps from Status (first) to Settings (last) for any roster size.
+            StatusTab.this.screen.keyPressed(GLFW.GLFW_KEY_LEFT, 0, 0);
         }
 
         @Override

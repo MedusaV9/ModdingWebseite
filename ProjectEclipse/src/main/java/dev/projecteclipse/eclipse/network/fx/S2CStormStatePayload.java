@@ -9,20 +9,26 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Server → client: storm wall/vortex lifecycle (P2 §3.2, FROZEN shape). Dispatched to
- * W9's {@code stormfx.StormFxClient#handle}. {@code stormType}: 0=WALL, 1=VORTEX ("type" in
- * the plan table — renamed because a record component named {@code type} collides with
- * {@link CustomPacketPayload#type()}; wire format unchanged); {@code state}: 0=SPAWN,
- * 1=ACTIVE, 2=DISSIPATE; {@code ticks} is the ramp length of the given state.
+ * Server → client: storm wall/vortex/sphere lifecycle (P2 §3.2, FROZEN shape; C8 adds one
+ * type + one state byte value — wire format unchanged, VAR_INTs already carry them).
+ * Dispatched to W9's {@code stormfx.StormFxClient#handle}. {@code stormType}: 0=WALL,
+ * 1=VORTEX, 2=SPHERE ("type" in the plan table — renamed because a record component named
+ * {@code type} collides with {@link CustomPacketPayload#type()}); {@code state}: 0=SPAWN,
+ * 1=ACTIVE, 2=DISSIPATE, 3=EXPLODE (C8 tyrant-death shockwave burst); {@code ticks} is the
+ * ramp length of the given state.
  */
 public record S2CStormStatePayload(int stormId, Vec3 center, float radius, float height,
         int stormType, int state, int ticks) implements CustomPacketPayload {
 
     public static final int TYPE_WALL = 0;
     public static final int TYPE_VORTEX = 1;
+    /** C8: fog-site storms are dome/sphere shells (height carries the dome apex = radius). */
+    public static final int TYPE_SPHERE = 2;
     public static final int STATE_SPAWN = 0;
     public static final int STATE_ACTIVE = 1;
     public static final int STATE_DISSIPATE = 2;
+    /** C8 Fog-Tyrant death beat: shockwave shell expansion + fade, then the storm is gone. */
+    public static final int STATE_EXPLODE = 3;
 
     public static final CustomPacketPayload.Type<S2CStormStatePayload> TYPE = new CustomPacketPayload.Type<>(
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "fx/storm_state"));

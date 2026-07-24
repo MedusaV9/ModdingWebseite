@@ -1,0 +1,14 @@
+{
+  "en": {
+    "eclipse.xbox.announce.start": "A portal has opened.",
+    "eclipse.xboxworld.tu19.name": "Tutorial World (TU19) — 2014",
+    "eclipse.xboxworld.tu31.name": "Tutorial World (TU31) — 2015",
+    "eclipse.xboxworld.tu75.name": "Tutorial World (TU75) — 2019"
+  },
+  "de": {
+    "eclipse.xbox.announce.start": "Ein Portal hat sich geöffnet.",
+    "eclipse.xboxworld.tu19.name": "Tutorial-Welt (TU19) — 2014",
+    "eclipse.xboxworld.tu31.name": "Tutorial-Welt (TU31) — 2015",
+    "eclipse.xboxworld.tu75.name": "Tutorial-Welt (TU75) — 2019"
+  }
+}

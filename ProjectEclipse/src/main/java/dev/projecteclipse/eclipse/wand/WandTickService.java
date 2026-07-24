@@ -7,14 +7,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import com.mojang.math.Transformation;
+
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -22,6 +31,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The wand's server-tick engine (game bus, self-registering). Three jobs:
@@ -47,6 +57,12 @@ public final class WandTickService {
     private static final List<FireWave> FIRE_WAVES = new ArrayList<>();
     private static final List<MagmaJump> MAGMA_JUMPS = new ArrayList<>();
 
+    /** Command tag on wand scorch-decal block displays (boot sweep + `/kill @e[tag=…]`). */
+    private static final String SCORCH_TAG = "eclipse_wand_scorch";
+    /** Live scorch decals per level is capped hard — decals are accents, not terrain. */
+    private static final int MAX_SCORCH_DECALS = 24;
+    private static int liveScorchDecals;
+
     private WandTickService() {}
 
     // ------------------------------------------------------------------ public API
@@ -54,6 +70,41 @@ public final class WandTickService {
     /** Runs {@code action} after {@code delayTicks} server ticks (skipped if the level unloads). */
     public static void schedule(ServerLevel level, int delayTicks, Runnable action) {
         TASKS.add(new Task(level, Math.max(0, delayTicks), action));
+    }
+
+    /**
+     * D10 GLUT accent: a flat, slightly rotated char-plate block display laid onto the
+     * ground at {@code pos} — the "ground scorch decal" of Feuerwelle/Magmasprung. Purely
+     * visual: no block is ever modified, the display discards itself after
+     * {@code lifeTicks} via the task queue, carries {@value #SCORCH_TAG} for the boot
+     * sweep (crash safety) and the global count is hard-capped.
+     */
+    public static void spawnScorchDecal(ServerLevel level, Vec3 pos, float size, int lifeTicks) {
+        if (liveScorchDecals >= MAX_SCORCH_DECALS) {
+            return;
+        }
+        Display.BlockDisplay display = EntityType.BLOCK_DISPLAY.create(level);
+        if (display == null) {
+            return;
+        }
+        display.setBlockState(level.random.nextBoolean()
+                ? Blocks.COAL_BLOCK.defaultBlockState()
+                : Blocks.BLACKSTONE.defaultBlockState());
+        display.moveTo(pos.x, pos.y + 0.02D, pos.z, level.random.nextFloat() * 360.0F, 0.0F);
+        display.addTag(SCORCH_TAG);
+        display.setTransformationInterpolationDelay(0);
+        display.setTransformationInterpolationDuration(0);
+        display.setTransformation(new Transformation(
+                new Vector3f(-size * 0.5F, 0.0F, -size * 0.5F),
+                new Quaternionf(),
+                new Vector3f(size, 0.04F, size),
+                new Quaternionf()));
+        level.addFreshEntity(display);
+        liveScorchDecals++;
+        schedule(level, Math.max(20, lifeTicks), () -> {
+            display.discard();
+            liveScorchDecals = Math.max(0, liveScorchDecals - 1);
+        });
     }
 
     /** Starts a Feuerwelle ring march around {@code center} (see {@code WandPowers#castFeuerwelle}). */
@@ -77,6 +128,21 @@ public final class WandTickService {
         // Crash recovery FIRST: any Phasenwelle snapshot left from a crash goes back in
         // before players (or a new wave) can touch the terrain.
         WandPhaseService.restoreAllOnLoad(event.getServer());
+        // Scorch-decal sweep: discard requests ride the in-memory task queue, so a crash
+        // can strand tagged displays — clear every loaded one on boot (unloaded ones are
+        // caught the moment their chunk ticks a new decal or via /kill @e[tag=…]).
+        liveScorchDecals = 0;
+        int swept = 0;
+        for (ServerLevel level : event.getServer().getAllLevels()) {
+            for (Display.BlockDisplay display : level.getEntities(EntityType.BLOCK_DISPLAY,
+                    d -> d.getTags().contains(SCORCH_TAG))) {
+                display.discard();
+                swept++;
+            }
+        }
+        if (swept > 0) {
+            EclipseMod.LOGGER.info("Wand scorch-decal sweep: {} stranded display(s) removed", swept);
+        }
     }
 
     @SubscribeEvent
@@ -84,6 +150,7 @@ public final class WandTickService {
         TASKS.clear();
         FIRE_WAVES.clear();
         MAGMA_JUMPS.clear();
+        liveScorchDecals = 0;
         WandPowers.clearRuntime();
     }
 
@@ -194,9 +261,32 @@ public final class WandTickService {
                     level.sendParticles(ParticleTypes.LAVA, x, y + 0.1D, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
                 }
             }
+            // D10: magma crescents ride the CURRENT front — two glut_welle_ring bursts on
+            // opposite ring points every 6 ticks (rolling wall of dripping embers).
+            if (age % 6 == 0) {
+                double angle = level.random.nextDouble() * Math.PI * 2.0D;
+                for (int half = 0; half < 2; half++) {
+                    double a = angle + half * Math.PI;
+                    double x = center.x + Math.cos(a) * radius;
+                    double z = center.z + Math.sin(a) * radius;
+                    WandPowers.sendQuasar(level, WandPowers.GLUT_WELLE_RING,
+                            new Vec3(x, groundY(x, z) + 0.2D, z));
+                }
+            }
+            // Ground scorch decals: a charred plate roughly every quarter of the march.
+            if (age % Math.max(8, expandTicks / 4) == 0) {
+                double angle = level.random.nextDouble() * Math.PI * 2.0D;
+                double x = center.x + Math.cos(angle) * radius * 0.85D;
+                double z = center.z + Math.sin(angle) * radius * 0.85D;
+                spawnScorchDecal(level, new Vec3(x, groundY(x, z), z),
+                        0.8F + level.random.nextFloat() * 0.6F, 160);
+            }
             if (age % 8 == 0) {
+                // Bass crackle bed: fire ambience pitched down under a soft lava pop.
                 level.playSound(null, center.x, center.y, center.z,
-                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.8F);
+                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.9F, 0.55F);
+                level.playSound(null, center.x, center.y, center.z,
+                        SoundEvents.LAVA_POP, SoundSource.PLAYERS, 0.5F, 0.6F);
             }
 
             // Damage: everything living whose flat distance entered [lastRadius, radius].
@@ -280,21 +370,35 @@ public final class WandTickService {
             }
             if (!caster.onGround() && !caster.isInWater()) {
                 if (age % 2 == 0) {
+                    // Ember contrail: flames + the occasional falling spark.
                     level.sendParticles(ParticleTypes.FLAME, caster.getX(), caster.getY(), caster.getZ(),
                             3, 0.15D, 0.1D, 0.15D, 0.01D);
+                    if (level.random.nextInt(3) == 0) {
+                        level.sendParticles(ParticleTypes.SMALL_FLAME,
+                                caster.getX(), caster.getY() - 0.3D, caster.getZ(),
+                                2, 0.1D, 0.2D, 0.1D, 0.02D);
+                    }
                 }
                 return false;
             }
             // Touchdown: fire slam + fall-damage forgiveness for this one landing.
+            // D10 payoff: lava-splash crater burst + charred landing decal + a heavier
+            // boom stack and a small shared camera hit (damage/knockback untouched).
             caster.resetFallDistance();
             Vec3 impact = caster.position();
             WandPowers.damageAround(caster, impact, radius, damage, knockback, fireTicks);
+            WandPowers.sendQuasar(level, WandPowers.GLUT_SPRUNG_CRATER, impact);
+            spawnScorchDecal(level, impact, Math.min(2.2F, radius * 0.45F), 200);
             level.sendParticles(ParticleTypes.FLAME, impact.x, impact.y + 0.2D, impact.z,
-                    40, radius * 0.5D, 0.2D, radius * 0.5D, 0.05D);
+                    28, radius * 0.5D, 0.2D, radius * 0.5D, 0.05D);
             level.sendParticles(ParticleTypes.LAVA, impact.x, impact.y + 0.2D, impact.z,
                     8, radius * 0.3D, 0.1D, radius * 0.3D, 0.0D);
             level.playSound(null, impact.x, impact.y, impact.z,
-                    SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.7F, 1.3F);
+                    SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.8F, 0.75F);
+            level.playSound(null, impact.x, impact.y, impact.z,
+                    SoundEvents.LAVA_POP, SoundSource.PLAYERS, 0.8F, 0.55F);
+            PacketDistributor.sendToPlayersNear(level, null, impact.x, impact.y, impact.z,
+                    24.0D, S2CShakePayload.shake(0.28F, 10));
             return true;
         }
     }

@@ -42,6 +42,7 @@ public final class DevReload {
             new ConfigRefEntry("awards.json", "dev.eclipse.config.awards", "dev.eclipse.config.layer.global", 3),
             new ConfigRefEntry("offering_values.json", "dev.eclipse.config.offerings", "dev.eclipse.config.layer.global", 3),
             new ConfigRefEntry("recipegate.json", "dev.eclipse.config.recipegate", "dev.eclipse.config.layer.global", 3),
+            new ConfigRefEntry("collections.json", "dev.eclipse.config.collections", "dev.eclipse.config.layer.global", 3),
             new ConfigRefEntry("glitch.json", "dev.eclipse.config.glitch", "dev.eclipse.config.layer.global", 3),
             new ConfigRefEntry("buffs.json", "dev.eclipse.config.buffs", "dev.eclipse.config.layer.global", 3),
             new ConfigRefEntry("protection.json", "dev.eclipse.config.protection", "dev.eclipse.config.layer.global", 3),

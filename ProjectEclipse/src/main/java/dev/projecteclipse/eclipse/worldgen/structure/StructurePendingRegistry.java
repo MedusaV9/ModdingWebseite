@@ -25,12 +25,14 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CStructureRiftPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
+import dev.projecteclipse.eclipse.worldgen.stage.StructureFlightFx;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.dungeon.DungeonSpawners;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -54,7 +56,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       {@code structure_phase.auto_delay_ticks} ({@code config/eclipse/dungeons.json},
  *       default 100) so a site is NEVER lost without a client/P2. At most one site
  *       places per {@code structure_phase.place_interval_ticks} (default 20) so a stage
- *       with many sites (mansion + ancient city + mineshafts) staggers its paste cost.</li>
+ *       with many sites (mansion + ancient city + mineshafts) staggers its paste cost.
+ *       C7: when watchers are near, the placement is fronted by the
+ *       {@link dev.projecteclipse.eclipse.worldgen.stage.StructureFlightFx} delivery
+ *       flight (block-display pieces out of the tear, sized via
+ *       {@link #revealRiftWidth}); the placer runs when the last piece lands.</li>
  * </ol>
  *
  * <p><b>Persistence / restart resume</b>: pending rows and placed-site records live in
@@ -233,6 +239,18 @@ public final class StructurePendingRegistry {
         return List.copyOf(PENDING);
     }
 
+    /**
+     * C7 rift-sizing law: the full tear width for a reveal rift over a site with the given
+     * XZ {@code footprint} (the bounding-box edge length carried by every pending row) —
+     * {@code max(bounding box XZ diagonal × 1.15, 4)}. Small loot ruins get a small tear,
+     * a trial chamber gets a massive one; the client's {@code RiftFx} still clamps to its
+     * own render cap. Senders of {@code fx/rift_open} for pending sites (the delivery
+     * surge in {@link StructureFlightFx}) size their {@code a} payload param from this.
+     */
+    public static float revealRiftWidth(int footprint) {
+        return Math.max(footprint * Mth.SQRT_OF_TWO * 1.15F, 4.0F);
+    }
+
     /** Whether a site was already placed this save (and not erased since). */
     public static boolean wasPlaced(String siteId) {
         return PLACED.containsKey(siteId);
@@ -333,8 +351,43 @@ public final class StructurePendingRegistry {
 
     // --- placement ---
 
-    /** Runs or starts the site's placer; false only when no implementation is registered. */
+    /**
+     * C7 flight kickoff: a due site first plays its {@link StructureFlightFx} delivery
+     * (block-display pieces arc out of the sky tear onto the footprint) and places when
+     * the last piece lands — the flight's completion callback re-enters {@link #placeNow}.
+     * When the flight is skipped (disabled, no viewers, already played, excluded id) the
+     * site places immediately, byte-identical to pre-C7 behavior. The real placement
+     * stays the authority: the pending row persists through the whole flight, and the
+     * flight's own watchdog force-places if the visuals ever wedge.
+     */
     private static boolean place(MinecraftServer server, PendingSite site) {
+        if (StructureFlightFx.isDeliveryInFlight(site.siteId())) {
+            return true; // delivery animation owns this site; placement resumes on landing
+        }
+        ServerLevel flightLevel = levelOf(server, site);
+        if (flightLevel != null && StructureFlightFx.begin(flightLevel, site, () -> {
+            if (activeServer == server && isPending(site.siteId())) {
+                placeNow(server, site);
+            }
+        })) {
+            lastPlaceGameTime = flightLevel.getGameTime(); // the flight holds the interval slot
+            return true;
+        }
+        return placeNow(server, site);
+    }
+
+    /** Whether {@code siteId} still has a pending row (guards the flight's re-entry). */
+    private static boolean isPending(String siteId) {
+        for (PendingSite site : PENDING) {
+            if (site.siteId().equals(siteId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Runs or starts the site's placer; false only when no implementation is registered. */
+    private static boolean placeNow(MinecraftServer server, PendingSite site) {
         AsyncSitePlacer asyncPlacer = ASYNC_PLACERS.get(site.structureId());
         if (asyncPlacer != null) {
             if (!IN_FLIGHT.add(site.siteId())) {

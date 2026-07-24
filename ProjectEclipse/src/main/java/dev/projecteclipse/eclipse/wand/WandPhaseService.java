@@ -8,6 +8,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -133,8 +134,22 @@ public final class WandPhaseService {
         // must be ON DISK before the first air write can reach a chunk save. The earliest
         // vanish is this very game tick, so the flush happens here, synchronously.
         EclipseSavedData.flushOverworld(player.server);
+        // D10: the de-rez reads as a violet SCANLINE sweeping the cone — three
+        // ground-hugging riss_wave_front bands march caster → cone tip while the blocks
+        // behind the band dissolve. Audio = detuned teleport under a digital chirp.
+        Vec3 foot = player.position().add(0.0D, 0.15D, 0.0D);
+        Vec3 flatDir = new Vec3(dir.x, 0.0D, dir.z);
+        Vec3 march = flatDir.lengthSqr() > 1.0E-4D ? flatDir.normalize() : Vec3.ZERO;
+        double bandReach = length;
+        WandPowers.sendQuasar(level, WandPowers.RISS_WAVE_FRONT, foot.add(march.scale(1.5D)));
+        WandTickService.schedule(level, 3, () -> WandPowers.sendQuasar(level,
+                WandPowers.RISS_WAVE_FRONT, foot.add(march.scale(bandReach * 0.55D))));
+        WandTickService.schedule(level, 6, () -> WandPowers.sendQuasar(level,
+                WandPowers.RISS_WAVE_FRONT, foot.add(march.scale(bandReach))));
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.9F, 0.55F);
+        level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.6F, 1.35F);
         return true;
     }
 
@@ -185,8 +200,13 @@ public final class WandPhaseService {
                 entry.vanished = true;
                 dirty = true;
                 Vec3 center = Vec3.atCenterOf(entry.pos);
+                // Datamosh shimmer per de-rezzed block (the client budget caps the flood);
+                // 1-in-6 blocks emit a short digital chirp so the sweep crackles softly.
                 WandPowers.sendQuasar(level, BORDER_GLITCH, center);
-                if (level.random.nextInt(4) == 0) {
+                if (level.random.nextInt(6) == 0) {
+                    level.playSound(null, center.x, center.y, center.z,
+                            EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.BLOCKS, 0.4F, 1.65F);
+                } else if (level.random.nextInt(4) == 0) {
                     level.playSound(null, center.x, center.y, center.z,
                             SoundEvents.AMETHYST_CLUSTER_STEP, SoundSource.BLOCKS, 0.6F, 0.5F);
                 }
@@ -211,7 +231,11 @@ public final class WandPhaseService {
         level.setBlock(entry.pos, entry.state, 3);
         Vec3 center = Vec3.atCenterOf(entry.pos);
         WandPowers.sendQuasar(level, IMPACT_LIGHT, center);
-        if (level.random.nextInt(3) == 0) {
+        if (level.random.nextInt(8) == 0) {
+            // Re-rez chirp: the world knitting back is digital too, not just glassy.
+            level.playSound(null, center.x, center.y, center.z,
+                    EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.BLOCKS, 0.35F, 1.85F);
+        } else if (level.random.nextInt(3) == 0) {
             level.playSound(null, center.x, center.y, center.z,
                     SoundEvents.AMETHYST_BLOCK_PLACE, SoundSource.BLOCKS, 0.5F, 1.4F);
         }

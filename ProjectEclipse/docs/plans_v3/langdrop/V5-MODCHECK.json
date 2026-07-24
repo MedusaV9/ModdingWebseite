@@ -1,0 +1,38 @@
+{
+  "en": {
+    "bootstrap.eclipse.bypass": "Developer bypass active — this warning is advisory for you.",
+    "bootstrap.eclipse.copied": "Report copied!",
+    "bootstrap.eclipse.copy_report": "Copy report",
+    "bootstrap.eclipse.download_hint": "Get the curated event pack before joining:",
+    "bootstrap.eclipse.group.blocked": "Blocked mods (%s)",
+    "bootstrap.eclipse.group.missing": "Missing from your installation (%s)",
+    "bootstrap.eclipse.group.unknown": "Not part of the event pack (%s)",
+    "bootstrap.eclipse.group.version": "Wrong version (%s)",
+    "bootstrap.eclipse.open_download": "Open download page",
+    "bootstrap.eclipse.row.blocked": "installed %s — remove this mod",
+    "bootstrap.eclipse.row.missing": "needs %s",
+    "bootstrap.eclipse.row.unknown": "installed %s",
+    "bootstrap.eclipse.row.version": "%1$s → needs %2$s",
+    "dev.eclipse.doc.modcheck.snapshot": "Replaces the allowlist with the running server's real mod set (optional client mods preserved) and writes bootstrap.json.suggested in the baked-manifest shape.",
+    "dev.eclipse.modcheck.snapshot.manifest": "Suggested client manifest written to %s — review and copy over assets/eclipse/bootstrap.json.",
+    "message.eclipse.modcheck.server_warn": "Your mod set differs from the event pack (%s). The server tolerates it this session — please fix your installation."
+  },
+  "de": {
+    "bootstrap.eclipse.bypass": "Entwickler-Bypass aktiv — diese Warnung ist für dich nur ein Hinweis.",
+    "bootstrap.eclipse.copied": "Bericht kopiert!",
+    "bootstrap.eclipse.copy_report": "Bericht kopieren",
+    "bootstrap.eclipse.download_hint": "Hol dir das kuratierte Event-Pack, bevor du beitrittst:",
+    "bootstrap.eclipse.group.blocked": "Blockierte Mods (%s)",
+    "bootstrap.eclipse.group.missing": "Fehlt in deiner Installation (%s)",
+    "bootstrap.eclipse.group.unknown": "Nicht Teil des Event-Packs (%s)",
+    "bootstrap.eclipse.group.version": "Falsche Version (%s)",
+    "bootstrap.eclipse.open_download": "Download-Seite öffnen",
+    "bootstrap.eclipse.row.blocked": "installiert %s — diese Mod entfernen",
+    "bootstrap.eclipse.row.missing": "benötigt %s",
+    "bootstrap.eclipse.row.unknown": "installiert %s",
+    "bootstrap.eclipse.row.version": "%1$s → benötigt %2$s",
+    "dev.eclipse.doc.modcheck.snapshot": "Ersetzt die Allowlist durch das echte Mod-Set des laufenden Servers (optionale Client-Mods bleiben erhalten) und schreibt bootstrap.json.suggested im Format des eingebackenen Manifests.",
+    "dev.eclipse.modcheck.snapshot.manifest": "Vorgeschlagenes Client-Manifest nach %s geschrieben — prüfen und über assets/eclipse/bootstrap.json kopieren.",
+    "message.eclipse.modcheck.server_warn": "Dein Mod-Set weicht vom Event-Pack ab (%s). Der Server toleriert das für diese Sitzung — bitte bring deine Installation in Ordnung."
+  }
+}

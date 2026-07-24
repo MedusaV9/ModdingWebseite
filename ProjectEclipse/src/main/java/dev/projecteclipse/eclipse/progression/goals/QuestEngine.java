@@ -26,6 +26,7 @@ import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Kind;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Scope;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.skills.XpGates;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -381,6 +382,13 @@ public final class QuestEngine {
      */
     static void increment(MinecraftServer server, ServerPlayer player, GoalSpec spec, long amount) {
         if (amount <= 0) {
+            return;
+        }
+        // C17 quest gate (mirror of D2's XP gate, one guard on the single write path):
+        // no quest signal makes progress while the player is inside an event dimension
+        // (limbo, minigame arenas, the xbox tutorial worlds). Detectors keep firing —
+        // only the write is suppressed, so nothing else needs a dimension check.
+        if (XpGates.isEventDimension(player.level().dimension())) {
             return;
         }
         QuestState state = QuestState.get(server);

@@ -34,9 +34,15 @@ import net.minecraft.world.level.biome.Climate;
  *   <li><b>Cave biomes</b> below {@code surfaceY − 14}: dripstone / lush regions from
  *       {@link CaveBiomeMap}, {@code minecraft:deep_dark} under the mountain below
  *       y −96 (Ancient City region); the neutral band keeps the surface biome.</li>
- *   <li><b>End disc</b>: {@code minecraft:the_end} above y 320 inside the
- *       {@link EndDiscGeometry} footprint — always on (the biome pre-exists the
- *       materialization flag harmlessly, so chunks baked early stay correct).</li>
+ *   <li><b>End sky band</b>: {@code minecraft:the_end} for EVERY column above y 320
+ *       (plans_v5 PLAN-C C12) — always on (the biome pre-exists the materialization
+ *       flag harmlessly, so chunks baked early stay correct). The band deliberately
+ *       ignores the {@code EndDiscGeometry} footprint: vanilla precipitation gets
+ *       colder with altitude, so footprint-edged columns snowed onto the disc rim
+ *       through biome-quart blending. Nothing else legitimately occupies the band
+ *       (the wizard mountain tops out at ≈ 280; see
+ *       {@code gametest.worldgen.EndBiomeBandTest}), so the whole sky layer reads
+ *       End: no precipitation, no snow accumulation, correct sky/fog tint.</li>
  *   <li><b>Mountain</b>: core flips to {@code minecraft:jagged_peaks} above y 200; the
  *       flank ring splits into flank biome / cherry grove / meadow thirds. A snowline
  *       overlay (plans_v5 PLAN-B B1) covers the WHOLE mountain footprint: any sample at
@@ -68,7 +74,12 @@ public final class DiscBiomeSource extends BiomeSource {
                     RegistryOps.retrieveGetter(Registries.BIOME))
             .apply(instance, instance.stable(DiscBiomeSource::new)));
 
-    /** {@code minecraft:the_end} applies above this block Y inside the End-disc footprint. */
+    /**
+     * {@code minecraft:the_end} applies to EVERY column above this block Y (C12). No
+     * authored terrain may exceed it outside the disc: {@code DiscTerrainFunction}'s
+     * mountain peaks at ≈ 280 and {@code EndDiscGeometry.MIN_Y} is 340 — asserted by
+     * {@code gametest.worldgen.EndBiomeBandTest}.
+     */
     public static final int END_BIOME_MIN_Y = 320;
     /** Mountain-core samples above this block Y read {@code minecraft:jagged_peaks}. */
     public static final int JAGGED_PEAKS_MIN_Y = 200;
@@ -174,9 +185,11 @@ public final class DiscBiomeSource extends BiomeSource {
         int bx = QuartPos.toBlock(x) + 2;
         int by = QuartPos.toBlock(y) + 2;
         int bz = QuartPos.toBlock(z) + 2;
-        // 1. End disc in the sky (overworld only, always on — pre-exists harmlessly).
-        if (this.endHolder != null && by > END_BIOME_MIN_Y
-                && EndDiscGeometry.footprintContains(bx, bz)) {
+        // 1. End sky band (overworld only, always on — pre-exists harmlessly). The WHOLE
+        //    layer above END_BIOME_MIN_Y is the_end, not just the disc footprint: the
+        //    old footprint check left neighboring high-altitude columns snowy/cold, and
+        //    quart blending rendered their snowfall over the disc rim (C12).
+        if (this.endHolder != null && by > END_BIOME_MIN_Y) {
             return this.endHolder;
         }
         ColumnInfo info = columnInfo(bx, bz);

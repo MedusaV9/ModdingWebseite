@@ -1,0 +1,28 @@
+{
+  "en": {
+    "announce.eclipse.end.shatter": "The sky shard is breaking apart — hold on!",
+    "announce.eclipse.end.shatter_isles": "Where one island hung, an archipelago now drifts. The wind carries new treasures.",
+    "eclipse.caption.end_shatter.break": "The disc groans — the End is breaking apart.",
+    "eclipse.caption.end_shatter.grace": "The Veil cushions every fall — for now.",
+    "eclipse.caption.end_shatter.isles": "An archipelago drifts where one island hung.",
+    "eclipse.sky_launcher.charging": "The wind altar gathers its breath...",
+    "eclipse.sky_launcher.descent": "Step off — the wind carries you home.",
+    "eclipse.sky_launcher.launched": "The wind hurls you skyward!",
+    "subtitles.eclipse.event.end_shatter_crack": "End stone fractures",
+    "subtitles.eclipse.event.end_shatter_rumble": "The sky shard groans",
+    "subtitles.eclipse.event.sky_launch": "Wind altar erupts"
+  },
+  "de": {
+    "announce.eclipse.end.shatter": "Die Himmelsscherbe bricht auseinander — haltet euch fest!",
+    "announce.eclipse.end.shatter_isles": "Wo eine Insel hing, treibt nun ein Archipel. Der Wind trägt neue Schätze.",
+    "eclipse.caption.end_shatter.break": "Die Scheibe ächzt — das Ende bricht auseinander.",
+    "eclipse.caption.end_shatter.grace": "Der Schleier dämpft jeden Sturz — vorerst.",
+    "eclipse.caption.end_shatter.isles": "Ein Archipel treibt, wo eine Insel hing.",
+    "eclipse.sky_launcher.charging": "Der Windaltar holt Atem...",
+    "eclipse.sky_launcher.descent": "Tritt hinaus — der Wind trägt dich heim.",
+    "eclipse.sky_launcher.launched": "Der Wind schleudert dich himmelwärts!",
+    "subtitles.eclipse.event.end_shatter_crack": "Endstein zerbirst",
+    "subtitles.eclipse.event.end_shatter_rumble": "Die Himmelsscherbe ächzt",
+    "subtitles.eclipse.event.sky_launch": "Windaltar bricht aus"
+  }
+}

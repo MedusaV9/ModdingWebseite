@@ -48,6 +48,14 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class PortalTransitionController {
+    /**
+     * C15 credits style: the whole choreography holds WHITE instead of black and drops the
+     * glitch slabs — the "disguised white loading screen" of the finale
+     * ({@code EclipseLoadingScreen} renders its plain-white fake-progress variant while
+     * this is active; see {@link #whiteout()}).
+     */
+    public static final String STYLE_CREDITS_WHITE = "eclipse:credits_white";
+
     private static final long GLITCH_MILLIS = 500L;
     private static final long FADE_OUT_MILLIS = 250L;
     private static final long FADE_IN_MILLIS = 750L;
@@ -118,6 +126,11 @@ public final class PortalTransitionController {
     /** Whether the choreography is running (the loading screen switches to its black variant). */
     public static boolean active() {
         return phase != Phase.IDLE;
+    }
+
+    /** Whether the running choreography is the C15 white credits variant. */
+    public static boolean whiteout() {
+        return phase != Phase.IDLE && STYLE_CREDITS_WHITE.equals(styleId);
     }
 
     // ------------------------------------------------------------------ state machine
@@ -214,12 +227,20 @@ public final class PortalTransitionController {
         int width = guiGraphics.guiWidth();
         int height = guiGraphics.guiHeight();
         float black = blackLevel();
-        float glitch = glitchLevel();
+        boolean white = whiteout();
+        // C15 white variant: clean white, no glitch slabs — the gag is a "real" load screen.
+        float glitch = white ? 0.0F : glitchLevel();
         if (glitch > 0.02F && !EclipseClientConfig.reducedFx()) {
             renderGlitchSlabs(guiGraphics, width, height, glitch);
         }
         if (black > 0.01F) {
-            guiGraphics.fill(0, 0, width, height, EclipseUiTheme.withAlpha(0xFF000000, black));
+            if (white && Minecraft.getInstance().screen instanceof EclipseLoadingScreen) {
+                // The white loading screen already fills white AND draws the fake progress
+                // line — a cover fill here would hide the text.
+                return;
+            }
+            guiGraphics.fill(0, 0, width, height,
+                    EclipseUiTheme.withAlpha(white ? 0xFFFFFFFF : 0xFF000000, black));
         }
     }
 

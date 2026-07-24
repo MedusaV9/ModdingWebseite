@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,20 +75,35 @@ public final class AntiCheatCheck {
         }
     }
 
-    /** Immutable runtime schema for the extended {@code anticheat.json}. */
+    /**
+     * Immutable runtime schema for the extended {@code anticheat.json}.
+     *
+     * <p>{@code allowContinueOnMismatch} is the SERVER-authoritative mismatch policy (D8):
+     * {@code false} (default) keeps the historical disconnect-on-mismatch behaviour, {@code true}
+     * lets a mismatched client stay connected with a warning. The client's baked manifest flag of
+     * the same name only affects the local title-screen warning and is never trusted here.</p>
+     *
+     * <p>{@code devBypassUuids} (D7) lists identities that skip mod-set enforcement entirely and
+     * may use {@code /dev} without permission level 2. Entries are either literal UUIDs
+     * ({@code "01234567-89ab-…"}) or name pins ({@code "name:Sonic0810"}) resolved at runtime via
+     * the online player list and the server profile cache.</p>
+     */
     public record Config(
             ModlistMode mode,
             List<String> blockedModIdSubstrings,
             Map<String, String> allowedMods,
             List<String> requiredMods,
             List<String> optionalMods,
-            String downloadHintUrl) {
+            String downloadHintUrl,
+            boolean allowContinueOnMismatch,
+            List<String> devBypassUuids) {
         public Config {
             blockedModIdSubstrings = List.copyOf(blockedModIdSubstrings);
             allowedMods = Collections.unmodifiableMap(new LinkedHashMap<>(allowedMods));
             requiredMods = List.copyOf(requiredMods);
             optionalMods = List.copyOf(optionalMods);
             downloadHintUrl = downloadHintUrl == null ? "" : downloadHintUrl;
+            devBypassUuids = List.copyOf(devBypassUuids);
         }
     }
 
@@ -150,7 +167,7 @@ public final class AntiCheatCheck {
                 migrate = true;
             }
             for (String key : List.of("modlistMode", "allowedMods", "requiredMods", "optionalMods",
-                    "downloadHintUrl")) {
+                    "downloadHintUrl", "allowContinueOnMismatch", "devBypassUuids")) {
                 migrate |= !root.has(key);
             }
             config = parse(root, fallback);
@@ -171,7 +188,11 @@ public final class AntiCheatCheck {
 
     /** Evaluates a report using the current mode. Blocklist substrings apply in both modes. */
     public static Evaluation evaluate(Collection<String> modIds) {
-        Config current = config();
+        return evaluate(config(), modIds);
+    }
+
+    /** Config-explicit evaluation used by gametests; behaviour identical to {@link #evaluate(Collection)}. */
+    public static Evaluation evaluate(Config current, Collection<String> modIds) {
         Set<String> reported = normalize(modIds);
         Set<String> blocked = new LinkedHashSet<>();
         for (String modId : reported) {
@@ -227,11 +248,109 @@ public final class AntiCheatCheck {
         return Optional.ofNullable(reportedModlists.get(playerId));
     }
 
+    /**
+     * Whether the identity is on the {@code devBypassUuids} list (D7). Bypass identities skip
+     * mod-set enforcement (modlist verdict + report timeout) and gain {@code /dev} access via
+     * {@code DevRoot.canUseDev}; they NEVER gain op/permission-level rights beyond that.
+     */
+    public static boolean isDevBypass(MinecraftServer server, UUID uuid) {
+        return isDevBypass(config(), server, uuid);
+    }
+
+    /** Config-explicit variant used by gametests. Malformed list entries are ignored. */
+    public static boolean isDevBypass(Config current, MinecraftServer server, UUID uuid) {
+        if (uuid == null) {
+            return false;
+        }
+        for (String entry : current.devBypassUuids()) {
+            if (entry == null || entry.isBlank()) {
+                continue;
+            }
+            String trimmed = entry.strip();
+            if (trimmed.regionMatches(true, 0, "name:", 0, 5)) {
+                String name = trimmed.substring(5).strip();
+                if (!name.isEmpty() && uuid.equals(resolveNameUuid(server, name))) {
+                    return true;
+                }
+                continue;
+            }
+            try {
+                if (uuid.equals(UUID.fromString(trimmed))) {
+                    return true;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Not a UUID and not a name pin — skip; reloadConfig already logged the load.
+            }
+        }
+        return false;
+    }
+
+    /** Name→UUID pinning: online player first, then the server profile cache. */
+    private static UUID resolveNameUuid(MinecraftServer server, String name) {
+        if (server == null) {
+            return null;
+        }
+        ServerPlayer online = server.getPlayerList().getPlayerByName(name);
+        if (online != null) {
+            return online.getUUID();
+        }
+        var cache = server.getProfileCache();
+        if (cache != null) {
+            var profile = cache.get(name);
+            if (profile.isPresent()) {
+                return profile.get().getId();
+            }
+        }
+        return null;
+    }
+
+    /** Short hex digest of the current server mod policy (D8 drift detector, sent on login). */
+    public static String policyHash() {
+        Config current = config();
+        return policyHash(current.allowedMods(), current.requiredMods(), current.optionalMods(),
+                current.blockedModIdSubstrings());
+    }
+
+    /**
+     * Canonical policy digest shared by server config and client manifest: SHA-256 over the
+     * sorted allowed/required/optional/blocked ID sets, first 8 bytes as hex. Version pins are
+     * deliberately excluded — the client manifest legitimately globs metadata suffixes the
+     * server pins exactly, and the drift detector must only fire on real id-set divergence.
+     * Purely diagnostic — this is not a security boundary.
+     */
+    public static String policyHash(Map<String, String> allowed, Collection<String> required,
+            Collection<String> optional, Collection<String> blocked) {
+        StringBuilder canonical = new StringBuilder();
+        appendSorted(canonical, "a:", allowed.keySet());
+        appendSorted(canonical, "r:", required);
+        appendSorted(canonical, "o:", optional);
+        appendSorted(canonical, "b:", blocked);
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(canonical.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(16);
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format(Locale.ROOT, "%02x", hash[i]));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return "unavailable";
+        }
+    }
+
+    private static void appendSorted(StringBuilder canonical, String prefix, Collection<String> values) {
+        values.stream()
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .sorted()
+                .forEach(value -> canonical.append(prefix).append(value).append('\n'));
+    }
+
     /** Changes mode and persists the full schema. */
     public static synchronized void setMode(ModlistMode mode) throws IOException {
         Config old = config();
         Config updated = new Config(mode, old.blockedModIdSubstrings(), old.allowedMods(),
-                old.requiredMods(), old.optionalMods(), old.downloadHintUrl());
+                old.requiredMods(), old.optionalMods(), old.downloadHintUrl(),
+                old.allowContinueOnMismatch(), old.devBypassUuids());
         writeConfig(updated);
         config = updated;
     }
@@ -252,10 +371,36 @@ public final class AntiCheatCheck {
                 .sorted()
                 .toList();
         Config updated = new Config(ModlistMode.ALLOWLIST, old.blockedModIdSubstrings(), allowed,
-                required, old.optionalMods(), old.downloadHintUrl());
+                required, old.optionalMods(), old.downloadHintUrl(),
+                old.allowContinueOnMismatch(), old.devBypassUuids());
         writeConfig(updated);
         config = updated;
         return updated;
+    }
+
+    /**
+     * Writes the current allowlist in the shape of the baked client manifest
+     * ({@code assets/eclipse/bootstrap.json}) so ops can copy it verbatim after a snapshot and
+     * the client manifest can no longer drift from the server allowlist (D7).
+     */
+    public static synchronized Path writeSuggestedManifest(Path file) throws IOException {
+        Config current = config();
+        JsonObject root = new JsonObject();
+        root.addProperty("_comment",
+                "Generated by /dev modcheck snapshot from the running server's allowlist. Review, then copy over assets/eclipse/bootstrap.json (keep bundledMods maintained by hand).");
+        root.addProperty("schemaVersion", 1);
+        root.addProperty("allowContinueOnMismatch", current.allowContinueOnMismatch());
+        root.addProperty("downloadHintUrl", current.downloadHintUrl());
+        JsonObject allowed = new JsonObject();
+        current.allowedMods().forEach(allowed::addProperty);
+        root.add("allowedMods", allowed);
+        root.add("requiredMods", array(current.requiredMods()));
+        root.add("optionalMods", array(current.optionalMods()));
+        root.add("blockedModIdSubstrings", array(current.blockedModIdSubstrings()));
+        root.add("devBypassUuids", array(current.devBypassUuids()));
+        Files.createDirectories(file.toAbsolutePath().getParent());
+        Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
+        return file;
     }
 
     /** Server handler for {@link C2SModlistPayload}; wired in {@code EclipsePayloads}. */
@@ -265,6 +410,20 @@ public final class AntiCheatCheck {
         reportedModlists.put(player.getUUID(), normalized);
         Evaluation result = evaluate(normalized);
         if (!result.accepted()) {
+            if (isDevBypass(player.server, player.getUUID())) {
+                EclipseMod.LOGGER.info("Modcheck bypass (dev) for {}: {}",
+                        player.getScoreboardName(), result.summary());
+                return;
+            }
+            if (config().allowContinueOnMismatch()) {
+                // Server-authoritative continue verdict (D8): mismatch is tolerated this
+                // session, logged and surfaced to the player — never decided client-side.
+                EclipseMod.LOGGER.warn("Modcheck mismatch tolerated for {} (allowContinueOnMismatch): {}",
+                        player.getScoreboardName(), result.summary());
+                player.sendSystemMessage(Component.translatable(
+                        "message.eclipse.modcheck.server_warn", result.summary()));
+                return;
+            }
             EclipseMod.LOGGER.warn("Modcheck rejected {}: {}", player.getScoreboardName(), result.summary());
             String hint = config().downloadHintUrl();
             player.connection.disconnect(Component.translatable(
@@ -307,6 +466,11 @@ public final class AntiCheatCheck {
                 continue;
             }
             awaitingModlist.remove(entry.getKey());
+            if (isDevBypass(server, entry.getKey())) {
+                EclipseMod.LOGGER.info("Modcheck bypass (dev): {} never reported; timeout waived",
+                        entry.getKey());
+                continue;
+            }
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player != null) {
                 EclipseMod.LOGGER.warn("Modcheck: {} never reported within {} ms; disconnecting",
@@ -342,8 +506,14 @@ public final class AntiCheatCheck {
         Map<String, String> allowed = stringMap(root, "allowedMods", fallback.allowedMods());
         List<String> required = strings(root, "requiredMods", fallback.requiredMods());
         List<String> optional = strings(root, "optionalMods", fallback.optionalMods());
+        boolean allowContinue = root.has("allowContinueOnMismatch")
+                && root.get("allowContinueOnMismatch").isJsonPrimitive()
+                        ? root.get("allowContinueOnMismatch").getAsBoolean()
+                        : fallback.allowContinueOnMismatch();
+        List<String> devBypass = strings(root, "devBypassUuids", fallback.devBypassUuids());
         return new Config(mode, blocked, allowed, required, optional,
-                string(root, "downloadHintUrl", fallback.downloadHintUrl()));
+                string(root, "downloadHintUrl", fallback.downloadHintUrl()),
+                allowContinue, devBypass);
     }
 
     private static String string(JsonObject root, String key, String fallback) {
@@ -387,6 +557,8 @@ public final class AntiCheatCheck {
         JsonObject root = new JsonObject();
         root.addProperty("_comment",
                 "Allowlist is exact by mod id; version pins are checked by the client bootstrap because the legacy C2S payload carries ids only.");
+        root.addProperty("_comment_devBypass",
+                "devBypassUuids entries are literal UUIDs or 'name:<PlayerName>' pins (resolved via the profile cache). Listed identities skip modcheck enforcement and may use /dev without op. Prefer the UUID form; the shipped 'name:Sonic0810' placeholder should be replaced with the player's real UUID.");
         root.addProperty("modlistMode", value.mode().configName());
         root.add("blockedModIdSubstrings", array(value.blockedModIdSubstrings()));
         JsonObject allowed = new JsonObject();
@@ -395,6 +567,8 @@ public final class AntiCheatCheck {
         root.add("requiredMods", array(value.requiredMods()));
         root.add("optionalMods", array(value.optionalMods()));
         root.addProperty("downloadHintUrl", value.downloadHintUrl());
+        root.addProperty("allowContinueOnMismatch", value.allowContinueOnMismatch());
+        root.add("devBypassUuids", array(value.devBypassUuids()));
         return root;
     }
 
@@ -404,8 +578,11 @@ public final class AntiCheatCheck {
         return array;
     }
 
-    /** Defaults cover every external jar listed in README's Server pack plus optional additions. */
-    private static Config defaults() {
+    /**
+     * Defaults cover every external jar listed in README's Server pack plus optional additions.
+     * Public so gametests can evaluate against the shipped policy without touching disk.
+     */
+    public static Config defaults() {
         Map<String, String> allowed = new LinkedHashMap<>();
         allowed.put("minecraft", "1.21.1");
         allowed.put("neoforge", "21.1.238");
@@ -442,6 +619,16 @@ public final class AntiCheatCheck {
         allowed.put("ends_delight", "2.6.1+neoforge.1.21.1");
         allowed.put("create_confectionery", "1.1.2");
         allowed.put("createconnected", "1.3.2-mc1.21.1");
+        // Forgified-Fabric-API sub-modules jarJar'd INSIDE the Sodium/Iris NeoForge builds
+        // (verified by unpacking run/mods-client/*): they show up as loaded mods on any client
+        // running the optional performance extras. No standalone Forgified Fabric API install
+        // exists or is needed — see docs/BUNDLING.md.
+        allowed.put("fabric_api_base", "*");
+        allowed.put("fabric_block_view_api_v2", "*");
+        allowed.put("fabric_renderer_api_v1", "*");
+        allowed.put("fabric_rendering_data_attachment_v1", "*");
+        // MixinSquared is jarJar'd inside Supplementaries and registers as a real mod id.
+        allowed.put("mixinsquared", "*");
 
         List<String> required = List.of(
                 "minecraft", "neoforge", "eclipse", "veil", "geckolib",
@@ -451,14 +638,19 @@ public final class AntiCheatCheck {
         List<String> optional = List.of(
                 "emi", "mousetweaks", "sodium", "iris",
                 "flywheel", "ponder", "registrate", "curios",
-                "ends_delight", "create_confectionery", "createconnected");
+                "ends_delight", "create_confectionery", "createconnected",
+                "fabric_api_base", "fabric_block_view_api_v2",
+                "fabric_renderer_api_v1", "fabric_rendering_data_attachment_v1",
+                "mixinsquared");
         return new Config(
                 ModlistMode.ALLOWLIST,
                 EclipseConfig.antiCheat().blockedModIdSubstrings(),
                 allowed,
                 required,
                 optional,
-                "See docs/BUNDLING.md and README.md#server-pack-external-mods");
+                "See docs/BUNDLING.md and README.md#server-pack-external-mods",
+                false,
+                List.of("name:Sonic0810"));
     }
 
     /** Client-side half: warning bootstrap + modlist reporting. Only classloaded on the client. */

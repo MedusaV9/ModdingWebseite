@@ -12,6 +12,9 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
+import dev.projecteclipse.eclipse.entity.EclipseEntities;
+import dev.projecteclipse.eclipse.ferryman.ArenaBuilder;
+import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.ShipLanterns;
@@ -99,8 +102,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 public class FerrymanEntity extends Monster {
     public static final float BASE_MAX_HEALTH = 400.0F;
-    /** Deck X of the stern anchor (bow is +X): three blocks inboard of the stern cap. */
-    public static final int STERN_X = -(GhostShipBuilder.HALF_LENGTH - 3);
+    /**
+     * Deck X of the stern anchor (bow is +X): six blocks inboard of the stern cap
+     * (x=−13). C9: −16 put the spawn 1.5 blocks off the DOOR_X=−17 bulkhead and the
+     * kneeling model visually embedded in the door aperture; −13 clears the door AND
+     * stays off the x=−12 bench column.
+     */
+    public static final int STERN_X = -(GhostShipBuilder.HALF_LENGTH - 6);
     /** Scripted death collapse length (vanilla tips over after 20t; see {@link #tickDeath}). */
     public static final int DEATH_DURATION_TICKS = 70;
 
@@ -128,6 +136,9 @@ public class FerrymanEntity extends Monster {
     // so after 90 s with zero lantern progress one lantern force-relights every 20 s.
     private static final int KNEEL_STALL_TICKS = 1800; // 90 s
     private static final int KNEEL_FORCE_RELIGHT_TICKS = 400; // 20 s between forced relights
+    // C10 arena P2: no deckhands (limbo-bound) or channelable lanterns exist in the
+    // arena — the crew phase becomes a timed kneel beat (ring lanterns gutter, 15 s).
+    private static final int ARENA_KNEEL_TICKS = 300;
     // Finale grace: summon fires at cutscene t=100 but players stay frozen+invulnerable
     // for ~160t more — no attacks until they can actually be hit back.
     private static final int SPAWN_GRACE_TICKS = 160;
@@ -185,6 +196,8 @@ public class FerrymanEntity extends Monster {
     private int crewLitSeen;
     /** Crew-phase ticks since the last ghost lantern progress (not persisted: a reload restarts the window). */
     private int crewStallTicks;
+    /** Arena kneel-beat ticks left (not persisted: a reload restarts the beat). */
+    private int arenaKneelTicks;
     /** Post-summon grace countdown (not persisted: only the scripted finale spawn needs it). */
     private int spawnGraceTicks;
     private boolean sinkSlowedLogged;
@@ -229,32 +242,45 @@ public class FerrymanEntity extends Monster {
      * bounds) is derived from {@link GhostShipBuilder}.
      */
     public static FerrymanEntity summon(ServerLevel limbo) {
-        FerrymanEntity ferryman = dev.projecteclipse.eclipse.entity.EclipseEntities.FERRYMAN.get().create(limbo);
-        if (ferryman == null) {
-            throw new IllegalStateException("Ferryman entity type failed to instantiate");
-        }
         ShipLanterns.ensurePlaced(limbo);
         DeckhandEntity.reseatFallen(limbo); // The crew returns for every crossing (P2 fodder).
         int deck = GhostShipBuilder.waterlineY(limbo) + 3;
-        double x = STERN_X + 0.5D;
-        double z = 0.5D;
-        ferryman.moveTo(x, deck + 1, z, 90.0F, 0.0F); // faces the bow (+X)
-        ferryman.initFight(limbo, new Vec3(0.5D, deck, 0.5D), deck);
-        // The finale summons him at cutscene t=100 while everyone is still frozen and
-        // invulnerable — hold the attacks until the players can actually be hit back.
+        // C9: yaw −90 faces EAST (+X, the bow) — 90 was WEST, straight into the door.
+        return summon(limbo, new Vec3(STERN_X + 0.5D, deck + 1, 0.5D), -90.0F);
+    }
+
+    /**
+     * Anchor-parameterized summon (C9, consumed by C10's {@code ferryman.ArenaFight} for
+     * the {@code eclipse:ferryman_arena} fight): spawns the boss with feet at
+     * {@code anchor}, derives the fight plane as {@code deck = floor(anchor.y) − 1} and
+     * pins the fight center on the builder origin ({@code 0.5, deck, 0.5} — both the ship
+     * and the arena are stamped around x=0/z=0). Skips the limbo-only prep (lanterns,
+     * crew reseat) — the ship overload above does that itself.
+     */
+    public static FerrymanEntity summon(ServerLevel level, Vec3 anchor, float yaw) {
+        FerrymanEntity ferryman = EclipseEntities.FERRYMAN.get().create(level);
+        if (ferryman == null) {
+            throw new IllegalStateException("Ferryman entity type failed to instantiate");
+        }
+        int deck = Mth.floor(anchor.y) - 1;
+        ferryman.moveTo(anchor.x, anchor.y, anchor.z, yaw, 0.0F);
+        ferryman.initFight(level, new Vec3(0.5D, deck, 0.5D), deck);
+        // The finale summons him while everyone is still frozen and invulnerable —
+        // hold the attacks until the players can actually be hit back.
         ferryman.spawnGraceTicks = SPAWN_GRACE_TICKS;
-        limbo.addFreshEntity(ferryman);
-        PacketDistributor.sendToPlayersNear(limbo, null, x, deck + 1, z, 96.0D,
+        level.addFreshEntity(ferryman);
+        PacketDistributor.sendToPlayersNear(level, null, anchor.x, anchor.y, anchor.z, 96.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, ferryman.position()));
-        limbo.playSound(null, ferryman.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.5F);
-        limbo.playSound(null, ferryman.blockPosition(), EclipseSounds.BOSS_FERRYMAN_AMBIENT.get(),
+        level.playSound(null, ferryman.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.5F);
+        level.playSound(null, ferryman.blockPosition(), EclipseSounds.BOSS_FERRYMAN_AMBIENT.get(),
                 SoundSource.HOSTILE, 1.2F, 1.0F);
-        limbo.sendParticles(ParticleTypes.SOUL, x, deck + 2.0D, z, 80, 1.0D, 1.4D, 1.0D, 0.04D);
+        level.sendParticles(ParticleTypes.SOUL, anchor.x, anchor.y + 1.0D, anchor.z, 80, 1.0D, 1.4D, 1.0D, 0.04D);
         // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
-        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(limbo, ferryman.position(),
+        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(level, ferryman.position(),
                 "entity.eclipse.ferryman", "announce.eclipse.boss.intro.ferryman");
-        EclipseMod.LOGGER.info("Ferryman summoned at the stern ({}, {}, {}) — scaled for {} player(s): {} HP; bossbar {} created",
-                x, deck + 1, z, ferryman.scaledPlayers, ferryman.getMaxHealth(), ferryman.bossEvent.getId());
+        EclipseMod.LOGGER.info("Ferryman summoned at ({}, {}, {}) in {} yaw {} — scaled for {} player(s): {} HP; bossbar {} created",
+                anchor.x, anchor.y, anchor.z, level.dimension().location(), yaw,
+                ferryman.scaledPlayers, ferryman.getMaxHealth(), ferryman.bossEvent.getId());
         return ferryman;
     }
 
@@ -335,10 +361,11 @@ public class FerrymanEntity extends Monster {
         if (this.level().isClientSide) {
             tickClientAnim();
         } else if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
-            if (!serverLevel.dimension().equals(LimboDimension.LIMBO)) {
-                // The Ferryman exists only on the ghost ship.
-                EclipseMod.LOGGER.warn("Ferryman discarded: spawned outside {}",
-                        LimboDimension.LIMBO.location());
+            if (!serverLevel.dimension().equals(LimboDimension.LIMBO)
+                    && !ArenaDimension.isArena(serverLevel.dimension())) {
+                // The Ferryman exists only on the ghost ship or in the C10 fight arena.
+                EclipseMod.LOGGER.warn("Ferryman discarded: spawned outside {} / {}",
+                        LimboDimension.LIMBO.location(), ArenaDimension.ARENA.location());
                 this.discard();
                 return;
             }
@@ -575,6 +602,17 @@ public class FerrymanEntity extends Monster {
         this.crewActive = true;
         setKneeling(true);
         this.kneelHintShown.clear(); // Each crew phase re-teaches the counter once per player.
+        if (inArena()) {
+            // C10 arena beat: the ring lanterns blow out and the kneel simply holds for
+            // ARENA_KNEEL_TICKS — no crew to cut down, no ghosts in reach (they spectate),
+            // so a timer is the only softlock-free counter here.
+            this.arenaKneelTicks = ARENA_KNEEL_TICKS;
+            this.requiredLanterns = 0;
+            int darkened = ArenaBuilder.extinguishRing(level, Integer.MAX_VALUE);
+            EclipseMod.LOGGER.info("Ferryman P2 (arena): kneeling for {}t — {} ring lantern(s) extinguished",
+                    ARENA_KNEEL_TICKS, darkened);
+            return;
+        }
         int ghosts = ghostsOnline(level);
         this.requiredLanterns = Math.min(4, ghosts + 2);
         int darkened = ShipLanterns.extinguish(level, this.requiredLanterns);
@@ -596,6 +634,10 @@ public class FerrymanEntity extends Monster {
         this.setDeltaMovement(toAnchor);
         faceTowards(new Vec3(this.shipCenter.x + GhostShipBuilder.HALF_LENGTH, this.deckY + 1.0D, 0.5D));
         if (this.tickCount % CREW_CHECK_TICKS != 0) {
+            return;
+        }
+        if (inArena()) {
+            tickArenaKneel(level);
             return;
         }
         ShipLanterns.replaceMissing(level); // A mined/blasted lantern comes back — dark.
@@ -644,9 +686,40 @@ public class FerrymanEntity extends Monster {
                 KNEEL_STALL_TICKS, relit.toShortString(), this.crewLitSeen);
     }
 
+    /**
+     * C10 arena kneel beat (runs on the {@value #CREW_CHECK_TICKS}t crew cadence): a
+     * guttering soul wisp walks the lantern ring while the timer runs down; at zero the
+     * ring relights and the boss rises. Not persisted — a mid-beat reload restarts it.
+     */
+    private void tickArenaKneel(ServerLevel level) {
+        if (this.arenaKneelTicks <= 0) {
+            // Reload mid-beat (crewActive persisted, the timer not): restart the full
+            // kneel — endCrewPhase always leaves crewActive=false, so 0 here means reload.
+            this.arenaKneelTicks = ARENA_KNEEL_TICKS;
+            ArenaBuilder.extinguishRing(level, Integer.MAX_VALUE);
+        }
+        this.arenaKneelTicks -= CREW_CHECK_TICKS;
+        List<BlockPos> ring = ArenaBuilder.lanternRing(level);
+        if (!ring.isEmpty()) {
+            BlockPos flicker = ring.get(Math.floorMod(this.tickCount / CREW_CHECK_TICKS, ring.size()));
+            level.sendParticles(ParticleTypes.SOUL, flicker.getX() + 0.5D, flicker.getY() + 0.8D,
+                    flicker.getZ() + 0.5D, 6, 0.2D, 0.3D, 0.2D, 0.02D);
+        }
+        if (this.arenaKneelTicks <= 0) {
+            endCrewPhase(level, "the arena kneel beat ends");
+        }
+    }
+
     private void endCrewPhase(ServerLevel level, String reason) {
         this.crewActive = false;
         setKneeling(false);
+        if (inArena()) {
+            int relit = ArenaBuilder.relightRing(level);
+            level.playSound(null, this.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.HOSTILE, 1.0F, 0.9F);
+            EclipseMod.LOGGER.info("Ferryman P2 (arena) ended ({}) — {} ring lantern(s) relit; the Ferryman rises",
+                    reason, relit);
+            return;
+        }
         DeckhandEntity.calmCrew(level);
         level.playSound(null, this.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.HOSTILE, 1.0F, 0.9F);
         EclipseMod.LOGGER.info("Ferryman P2 Crew ended ({}) — {} lantern(s) burning; the Ferryman rises",
@@ -892,11 +965,25 @@ public class FerrymanEntity extends Monster {
         }
         this.placedWater.clear();
         this.sinkLayers = 0;
+        if (inArena()) {
+            // C10 arena: no ship lanterns/crew here — relighting the soul-campfire ring is
+            // the whole restore (ShipLanterns/DeckhandEntity would stamp limbo fixtures in).
+            int relit = ArenaBuilder.relightRing(level);
+            this.crewActive = false;
+            EclipseMod.LOGGER.info("Ferryman arena restored ({}): {} water block(s) drained, {} ring lantern(s) relit",
+                    reason, drained, relit);
+            return;
+        }
         ShipLanterns.relightAll(level);
         DeckhandEntity.calmCrew(level);
         this.crewActive = false;
         EclipseMod.LOGGER.info("Ferryman ship restored ({}): {} water block(s) drained, lanterns relit, crew calmed",
                 reason, drained);
+    }
+
+    /** True while the fight runs in the C10 {@code eclipse:ferryman_arena} dimension. */
+    private boolean inArena() {
+        return ArenaDimension.isArena(this.level().dimension());
     }
 
     // --- death / drops / finale handoff ---

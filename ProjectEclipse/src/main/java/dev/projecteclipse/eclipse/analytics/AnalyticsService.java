@@ -4,6 +4,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.collections.CollectionsConfig;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
@@ -15,8 +16,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -26,6 +29,7 @@ import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.TradeWithVillagerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -38,7 +42,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * {@code BlockEvent.BreakEvent}, {@code BlockEvent.EntityPlaceEvent},
  * {@code LivingDeathEvent} (LOW — after {@code lives/LifecycleEvents}),
  * {@code LivingDamageEvent.Post}, {@code ItemCraftedEvent}, {@code ItemSmeltedEvent},
- * {@code TradeWithVillagerEvent} and {@code BabyEntitySpawnEvent}. Every handler counts
+ * {@code TradeWithVillagerEvent}, {@code BabyEntitySpawnEvent} and (D1)
+ * {@code ItemEntityPickupEvent.Post}. Every handler counts
  * into {@link AnalyticsState} for the CURRENT event day and fans out via
  * {@link EclipseSignals} exactly once per underlying game event — downstream systems
  * (skills, goals, buffs, awards) must NOT add their own break/place/death subscribers.
@@ -126,10 +131,20 @@ public final class AnalyticsService {
     /**
      * Break core: natural check + clear FIRST (bit truth updates for every player kind),
      * then counters + {@code naturalBlockMined} fan-out for tracked players only.
+     *
+     * <p>D1 harvest lane: planted crops always carry the placed bit, so the natural lane
+     * can never see them — a {@code CropBlock} broken at max age gets its own
+     * {@code cropHarvested} fan-out (placed or not; max age is the rate limiter).</p>
      */
     public static void handleBreak(ServerPlayer player, ServerLevel level, BlockPos pos, BlockState state) {
         boolean wasPlaced = PlacedBlockTracker.clear(level, pos);
-        if (wasPlaced || !isTracked(player)) {
+        if (!isTracked(player)) {
+            return;
+        }
+        if (state.getBlock() instanceof CropBlock crop && crop.isMaxAge(state)) {
+            EclipseSignals.fireCropHarvested(player, state, pos);
+        }
+        if (wasPlaced) {
             return;
         }
         MinecraftServer server = player.server;
@@ -288,6 +303,45 @@ public final class AnalyticsService {
             LivingEntity subject = event.getChild() != null ? event.getChild() : event.getParentA();
             EclipseSignals.fireBreed(player, subject);
         }
+    }
+
+    // --- item pickup (single owner of ItemEntityPickupEvent.Post — D1 pickup lane) ---
+
+    @SubscribeEvent(priority = EventPriority.LOW)
+    public static void onItemPickup(ItemEntityPickupEvent.Post event) {
+        if (event.getPlayer() instanceof ServerPlayer player) {
+            handleItemCollected(player, event.getItemEntity(), event.getOriginalStack(),
+                    event.getCurrentStack());
+        }
+    }
+
+    /**
+     * Pickup core (D1): counts {@code pickup:<item_id>} + fires {@code itemCollected} only
+     * for tracked players, only for THROWER-NULL item entities (mob/boss drops carry no
+     * thrower, player-tossed stacks do — the raw persisted UUID is read via access
+     * transformer because {@code getOwner()} resolves the entity and returns {@code null}
+     * for offline throwers, which would over-credit), and only for ids on the collections
+     * pickup allowlist so the lane stays bounded. Hopper/container laundering never enters
+     * this path — accepted under-crediting, consistent with the analytics contract.
+     */
+    public static void handleItemCollected(ServerPlayer player, ItemEntity itemEntity,
+            ItemStack original, ItemStack remaining) {
+        if (!isTracked(player) || itemEntity.thrower != null) {
+            return;
+        }
+        int collected = original.getCount() - remaining.getCount();
+        if (collected <= 0) {
+            return;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(original.getItem()).toString();
+        if (!CollectionsConfig.pickupAllowlist().contains(itemId)) {
+            return;
+        }
+        MinecraftServer server = player.server;
+        AnalyticsState.get(server).addDynamic(currentDay(server), player.getUUID(),
+                AnalyticsKeys.PREFIX_PICKUP + itemId, collected,
+                AnalyticsConfig.get().maxDynamicKeysPerPlayerPerDay());
+        EclipseSignals.fireItemCollected(player, original.copyWithCount(collected));
     }
 
     /** Shared trade-lane consumer; creative/spectator/fake-player filtering is analytics-only. */

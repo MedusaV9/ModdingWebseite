@@ -9,6 +9,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
@@ -21,6 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.material.FogType;
@@ -53,6 +55,18 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * outside approach (§1), interior arc/bolt {@link #flash(int)} beats lift the far plane 24→56
  * with a violet-white color blow (§2), and the storm-center loot camp bleeds ONE budgeted warm
  * point light + ember motes through the fog at 12–45 blocks (§3).</p>
+ *
+ * <p><b>C8 sphere-interior variant</b> (site storms; keyed off the storm type): a clearly
+ * different treatment from the intro vortex — a lightning-less <i>green-violet</i> fog grade
+ * instead of the rain-slate, NO rain sheets (drifting ash/spore motes and ground-fog ribbons
+ * instead), self-scheduled silent silhouette flickers, a relative interior drone loop plus
+ * heartbeat-adjacent sub-bass pulses (both gated behind
+ * {@link EclipseClientConfig#heartbeatSound()} where pulse-like), and the exterior roar
+ * muffled via the loop sound's pitch alias (see {@code StormFxClient.StormLoopSound}). The
+ * interior scalar feeds {@code MusicManager}'s {@code fog_storm} cue exactly like before —
+ * sphere interiors arm the same 0.55/0.15 hysteresis. {@link #explodeWhiteout} is the C8
+ * tyrant-death beat: a ~15-tick white-out riding the fog color while the shockwave shell
+ * expands, after which the sky clears with the released interior.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormInteriorFx {
@@ -103,6 +117,30 @@ public final class StormInteriorFx {
     private static final float CAMP_GLOW_RELEASE = 0.3F;
     private static final int EMBER_INTERVAL_TICKS = 10;
 
+    // --- C8 sphere-interior variant (site storms: green-violet, lightning-less) ---
+    /** Sphere interior fog (deep fog-green with a violet under-hue — NOT the vortex slate). */
+    private static final float SPH_FOG_R = 0.045F;
+    private static final float SPH_FOG_G = 0.082F;
+    private static final float SPH_FOG_B = 0.064F;
+    /** Sphere silhouette-flicker blow color (pale sick green instead of violet-white). */
+    private static final float SPH_FLASH_R = 0.50F;
+    private static final float SPH_FLASH_G = 0.68F;
+    private static final float SPH_FLASH_B = 0.54F;
+    /** Sphere ambience engages above this interior amount (and releases with it). */
+    private static final float SPHERE_AMBIENCE_GATE = 0.30F;
+    /** Drifting ash/spore mote cadence (doubled under reducedFx). */
+    private static final int MOTE_INTERVAL_TICKS = 2;
+    /** Ground-fog ribbon cadence (low crawling smoke around the player's feet). */
+    private static final int RIBBON_INTERVAL_TICKS = 5;
+    /** Heartbeat-adjacent sub-bass pulse window (ticks) — gated by heartbeatSound(). */
+    private static final int PULSE_MIN_TICKS = 55;
+    private static final int PULSE_MAX_TICKS = 80;
+    /** Silent silhouette-flicker window (ticks) — the lightning-less scare rhythm. */
+    private static final int FLICKER_MIN_TICKS = 240;
+    private static final int FLICKER_MAX_TICKS = 440;
+    /** C8 explosion white-out length (ticks). */
+    private static final int WHITEOUT_TICKS = 15;
+
     /** Smoothed interior amount 0..1 (the render-facing value; raw target jumps at walls). */
     private static float smoothedInterior;
     /** Smoothed outside-approach amount 0..1 (1 at ≤20 blocks from a visible shell). */
@@ -121,6 +159,22 @@ public final class StormInteriorFx {
 
     private static final ArrayDeque<ParticleEmitter> RAIN_SHEETS = new ArrayDeque<>(MAX_RAIN_EMITTERS);
     private static int rainCountdown;
+
+    // --- C8 sphere-interior state ---
+    /** True while the dominant interior storm is a TYPE_SPHERE (drives the variant). */
+    private static boolean interiorSphere;
+    /** Relative interior drone loop (LimboAmbience pattern; volume rides the interior). */
+    @Nullable
+    private static SphereDroneSound droneSound;
+    private static int moteCountdown;
+    private static int ribbonCountdown;
+    private static int pulseCountdown;
+    private static int flickerCountdown;
+    /** Slowly-rotating bearing the ground-fog ribbons crawl along. */
+    private static float ribbonAngle;
+    /** C8 explosion white-out (ticks left + peak strength 0..1 at detonation). */
+    private static int whiteoutTicks;
+    private static float whiteoutStrength;
 
     static {
         // Feature-owned registration replaces nothing (new id) — GRADE priority per §3.3.
@@ -154,6 +208,21 @@ public final class StormInteriorFx {
      */
     static void flash(int ticks) {
         flashTicks = Math.max(flashTicks, Math.min(ticks, FLASH_MAX_TICKS));
+    }
+
+    /**
+     * C8 tyrant-death white-out: {@code strength} 1 inside the shell feathering to 0 well
+     * outside ({@code StormFxClient.handle} computes it on the EXPLODE transition). Rides
+     * the fog color toward white for {@value #WHITEOUT_TICKS} ticks — inside the pinched
+     * interior fog that IS the whole view — then releases with the dying interior: the sky
+     * clears in seconds.
+     */
+    static void explodeWhiteout(float strength) {
+        if (strength <= 0.05F) {
+            return;
+        }
+        whiteoutTicks = Math.max(whiteoutTicks, WHITEOUT_TICKS);
+        whiteoutStrength = Math.max(whiteoutStrength, Mth.clamp(strength, 0.0F, 1.0F));
     }
 
     // ------------------------------------------------------------------ tick
@@ -193,13 +262,21 @@ public final class StormInteriorFx {
         if (flashTicks > 0) {
             flashTicks--; // pause-safe: same guard as smoothedInterior (IDEA-15 §2)
         }
-        // Rain rides the interior amount (R14: rain exists only inside the storm).
-        EclipseFxState.setStormInterior(smoothedInterior, smoothedInterior);
+        if (whiteoutTicks > 0 && --whiteoutTicks == 0) {
+            whiteoutStrength = 0.0F; // C8: the white-out released — the sky clears
+        }
+        // Rain rides the interior amount (R14) — but NOT in sphere interiors (C8: motes
+        // and ground ribbons own that space; the grade's rain uniform stays 0 there).
+        EclipseFxState.setStormInterior(smoothedInterior, interiorSphere ? 0.0F : smoothedInterior);
         tickRainSheets(level, camera);
+        tickSphereAmbience(minecraft, level, camera);
         tickCampGlow(level, camera);
     }
 
-    /** Raw interior target: max over all storms of horizontal × vertical × ramp coverage. */
+    /**
+     * Raw interior target: max over all storms of horizontal × vertical × ramp coverage.
+     * Also latches {@link #interiorSphere} to the winning storm's type (C8 variant key).
+     */
     private static float interiorTargetAt(Vec3 camera) {
         List<StormFxClient.ClientStorm> storms = StormFxClient.storms();
         float best = 0.0F;
@@ -211,11 +288,19 @@ public final class StormInteriorFx {
             // IDEA-15 §6 (EVAL-4 obs #1): vortex shells lean inward 8°, so "inside" must be
             // judged against the TILTED radius at camera height (mirror of emitShell's
             // topRadius math) — never the base radius, which over-reaches for high cameras.
+            // C8: sphere domes shrink with the chord at camera height, same principle.
             double effectiveRadius = storm.radius;
             if (storm.type == S2CStormStatePayload.TYPE_VORTEX) {
                 double above = Math.max(0.0D, camera.y - storm.center.y);
                 effectiveRadius = Math.max(storm.radius * 0.25D,
                         storm.radius - above * StormWallRenderer.TAN_TILT);
+            } else if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
+                double above = Math.max(0.0D, camera.y - storm.center.y);
+                double chordSq = (double) storm.radius * storm.radius - above * above;
+                if (chordSq <= 0.0D) {
+                    continue; // above the dome apex
+                }
+                effectiveRadius = Math.sqrt(chordSq);
             }
             float horiz = (float) Mth.clamp(
                     ((effectiveRadius - StormWallRenderer.OCCLUDER_INSET) - dist) / INTERIOR_FEATHER,
@@ -228,6 +313,7 @@ public final class StormInteriorFx {
             float amount = horiz * top * bottom * storm.visibility(1.0F);
             if (amount > best) {
                 best = amount;
+                interiorSphere = storm.type == S2CStormStatePayload.TYPE_SPHERE;
             }
         }
         return best;
@@ -264,9 +350,9 @@ public final class StormInteriorFx {
 
     /** Rolling window of looping rain-sheet emitters around the camera (LimboAmbience pattern). */
     private static void tickRainSheets(ClientLevel level, Vec3 camera) {
-        if (smoothedInterior < 0.25F) {
-            if (smoothedInterior < 0.05F) {
-                clearRain();
+        if (smoothedInterior < 0.25F || interiorSphere) {
+            if (smoothedInterior < 0.05F || interiorSphere) {
+                clearRain(); // C8: sphere interiors are rain-less — motes/ribbons instead
             }
             return;
         }
@@ -287,6 +373,107 @@ public final class StormInteriorFx {
         RAIN_SHEETS.addLast(emitter);
         while (RAIN_SHEETS.size() > MAX_RAIN_EMITTERS) {
             removeEmitter(RAIN_SHEETS.pollFirst());
+        }
+    }
+
+    // ------------------------------------------------------------------ C8 sphere ambience
+
+    /**
+     * The sphere-interior sensory kit (engages above {@value #SPHERE_AMBIENCE_GATE} interior,
+     * all cadences halved-rate under reducedFx): drifting ash/spore motes, ground-fog ribbons
+     * crawling along a slowly rotating bearing at the player's feet, occasional SILENT
+     * silhouette flickers (the lightning-less scare — same fog-lift as an arc flash, sphere
+     * palette, only a quiet hiss sting), a relative interior drone loop, and
+     * heartbeat-adjacent sub-bass pulses that respect
+     * {@link EclipseClientConfig#heartbeatSound()}.
+     */
+    private static void tickSphereAmbience(Minecraft minecraft, ClientLevel level, Vec3 camera) {
+        boolean wanted = interiorSphere && smoothedInterior > SPHERE_AMBIENCE_GATE;
+        SphereDroneSound drone = droneSound;
+        if (wanted) {
+            if (drone == null || drone.isStopped()) {
+                droneSound = new SphereDroneSound();
+                minecraft.getSoundManager().play(droneSound);
+            }
+        } else {
+            if (drone != null && drone.isStopped()) {
+                droneSound = null; // ticks itself silent below the gate, then stops
+            }
+            return;
+        }
+        RandomSource random = level.random;
+        boolean reduced = EclipseClientConfig.reducedFx();
+        // Drifting ash/spore motes in a bubble around the camera.
+        if (--moteCountdown <= 0) {
+            moteCountdown = reduced ? MOTE_INTERVAL_TICKS * 2 : MOTE_INTERVAL_TICKS;
+            double mx = camera.x + (random.nextDouble() - 0.5D) * 18.0D;
+            double my = camera.y + (random.nextDouble() - 0.3D) * 8.0D;
+            double mz = camera.z + (random.nextDouble() - 0.5D) * 18.0D;
+            level.addParticle(random.nextInt(6) == 0
+                            ? ParticleTypes.SPORE_BLOSSOM_AIR : ParticleTypes.ASH,
+                    mx, my, mz, 0.0D, -0.005D - random.nextDouble() * 0.01D, 0.0D);
+        }
+        // Ground-fog ribbons: low smoke crawling along a slowly rotating bearing.
+        ribbonAngle += 0.012F;
+        if (--ribbonCountdown <= 0) {
+            ribbonCountdown = reduced ? RIBBON_INTERVAL_TICKS * 2 : RIBBON_INTERVAL_TICKS;
+            double along = 2.0D + random.nextDouble() * 7.0D;
+            double side = (random.nextDouble() - 0.5D) * 3.0D;
+            double cos = Math.cos(ribbonAngle);
+            double sin = Math.sin(ribbonAngle);
+            level.addParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                    camera.x + cos * along - sin * side,
+                    camera.y - 1.5D + random.nextDouble() * 0.4D,
+                    camera.z + sin * along + cos * side,
+                    cos * 0.02D, 0.002D, sin * 0.02D);
+        }
+        // Heartbeat-adjacent sub-bass pulse — user opt-out honored (B12 setting).
+        if (--pulseCountdown <= 0) {
+            pulseCountdown = PULSE_MIN_TICKS + random.nextInt(PULSE_MAX_TICKS - PULSE_MIN_TICKS + 1);
+            if (EclipseClientConfig.heartbeatSound()) {
+                level.playLocalSound(camera.x, camera.y, camera.z,
+                        EclipseSounds.EVENT_STORM_PULSE.get(), SoundSource.AMBIENT,
+                        0.38F * smoothedInterior, 0.72F + random.nextFloat() * 0.12F, false);
+            }
+        }
+        // Silent silhouette flicker (lightning-less): fog lifts, shapes read, fog closes.
+        if (--flickerCountdown <= 0) {
+            flickerCountdown = FLICKER_MIN_TICKS + random.nextInt(FLICKER_MAX_TICKS - FLICKER_MIN_TICKS + 1);
+            flash(5);
+            level.playLocalSound(camera.x, camera.y, camera.z,
+                    EclipseSounds.EVENT_STORM_FLICKER.get(), SoundSource.AMBIENT,
+                    0.3F * smoothedInterior, 0.85F + random.nextFloat() * 0.2F, false);
+        }
+    }
+
+    /** Relative drone bed of a sphere interior; volume rides the interior, self-stopping. */
+    private static final class SphereDroneSound
+            extends net.minecraft.client.resources.sounds.AbstractTickableSoundInstance {
+        private static final float MAX_VOLUME = 0.65F;
+
+        SphereDroneSound() {
+            super(EclipseSounds.AMBIENT_STORM_DOME_DRONE.get(), SoundSource.AMBIENT,
+                    net.minecraft.client.resources.sounds.SoundInstance.createUnseededRandom());
+            this.looping = true;
+            this.delay = 0;
+            this.relative = true;
+            this.x = 0.0D;
+            this.y = 0.0D;
+            this.z = 0.0D;
+            this.volume = 0.0F;
+        }
+
+        @Override
+        public void tick() {
+            if (!interiorSphere || smoothedInterior < 0.05F) {
+                this.stop();
+                return;
+            }
+            this.volume = MAX_VOLUME * smoothedInterior;
+        }
+
+        void forceStop() {
+            this.stop();
         }
     }
 
@@ -315,18 +502,30 @@ public final class StormInteriorFx {
     static void onComputeFogColor(ViewportEvent.ComputeFogColor event) {
         float interior = smoothedInterior;
         float approach = smoothedApproach;
-        if (interior <= 0.02F && approach <= 0.02F) {
+        // C8 explosion white-out (decays over WHITEOUT_TICKS, scaled by shell proximity).
+        float white = whiteoutTicks > 0
+                ? (whiteoutTicks / (float) WHITEOUT_TICKS) * whiteoutStrength : 0.0F;
+        if (interior <= 0.02F && approach <= 0.02F && white <= 0.02F) {
             return;
         }
-        // IDEA-15 §2: flash blows the slate toward violet-white — backlit cutouts.
+        // IDEA-15 §2: flash blows the palette toward its blow color — backlit cutouts.
+        // C8: sphere interiors run the green-violet grade + pale-green flicker blow, so the
+        // site storms read nothing like the intro vortex's rain-slate.
         float lift = interior > 0.02F
                 ? Mth.clamp(flashTicks / (float) FLASH_MAX_TICKS, 0.0F, 1.0F) * 0.7F
                 : 0.0F;
-        float targetR = Mth.lerp(lift, FOG_R, FLASH_R);
-        float targetG = Mth.lerp(lift, FOG_G, FLASH_G);
-        float targetB = Mth.lerp(lift, FOG_B, FLASH_B);
-        // IDEA-15 §1: outside, daylight drains up to 15 % toward the storm slate as you close.
+        boolean sphere = interiorSphere;
+        float targetR = sphere ? Mth.lerp(lift, SPH_FOG_R, SPH_FLASH_R) : Mth.lerp(lift, FOG_R, FLASH_R);
+        float targetG = sphere ? Mth.lerp(lift, SPH_FOG_G, SPH_FLASH_G) : Mth.lerp(lift, FOG_G, FLASH_G);
+        float targetB = sphere ? Mth.lerp(lift, SPH_FOG_B, SPH_FLASH_B) : Mth.lerp(lift, FOG_B, FLASH_B);
+        // IDEA-15 §1: outside, daylight drains up to 15 % toward the storm palette as you close.
         float blend = Math.max(interior * 0.92F, approach * APPROACH_TINT_MAX);
+        if (white > 0.0F) {
+            targetR = Mth.lerp(white, targetR, 0.96F);
+            targetG = Mth.lerp(white, targetG, 0.96F);
+            targetB = Mth.lerp(white, targetB, 1.00F);
+            blend = Math.max(blend, white * 0.92F);
+        }
         event.setRed(Mth.lerp(blend, event.getRed(), targetR));
         event.setGreen(Mth.lerp(blend, event.getGreen(), targetG));
         event.setBlue(Mth.lerp(blend, event.getBlue(), targetB));
@@ -456,6 +655,19 @@ public final class StormInteriorFx {
         EclipseFxState.setStormInterior(0.0F, 0.0F);
         clearRain();
         releaseCampLight();
+        // C8 sphere-interior state.
+        interiorSphere = false;
+        whiteoutTicks = 0;
+        whiteoutStrength = 0.0F;
+        moteCountdown = 0;
+        ribbonCountdown = 0;
+        pulseCountdown = 0;
+        flickerCountdown = 0;
+        SphereDroneSound drone = droneSound;
+        droneSound = null;
+        if (drone != null) {
+            drone.forceStop();
+        }
     }
 
     private static void pruneRain() {

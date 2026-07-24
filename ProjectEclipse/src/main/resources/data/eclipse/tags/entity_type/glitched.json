@@ -12,6 +12,10 @@
     {
       "id": "eclipse:glitched_tick",
       "required": false
+    },
+    {
+      "id": "eclipse:glitched_wanderer",
+      "required": false
     }
   ]
 }

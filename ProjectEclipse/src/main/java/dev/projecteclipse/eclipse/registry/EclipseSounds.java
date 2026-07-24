@@ -182,6 +182,40 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_burst")));
 
+    // C8 fog-storm sphere suite — 2 ambient loops + 3 stingers, all sounds.json aliases of
+    // shipped oggs (house rule: no new binary audio assets from event workers).
+
+    /** Exterior wall roar of a sphere-type site storm (fixed 64, mirrors the churn loop). */
+    public static final Supplier<SoundEvent> EVENT_STORM_SPHERE_ROAR = SOUNDS.register(
+            "event.storm_sphere_roar",
+            () -> SoundEvent.createFixedRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_sphere_roar"),
+                    64.0F));
+
+    /** Muffled interior drone bed inside a sphere storm (relative loop, StormInteriorFx). */
+    public static final Supplier<SoundEvent> AMBIENT_STORM_DOME_DRONE = SOUNDS.register(
+            "ambient.storm_dome_drone",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.storm_dome_drone")));
+
+    /** Heartbeat-adjacent sub-bass pulse of a sphere interior (heartbeatSound()-gated). */
+    public static final Supplier<SoundEvent> EVENT_STORM_PULSE = SOUNDS.register(
+            "event.storm_pulse",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_pulse")));
+
+    /** Silhouette-flicker hiss of a sphere interior (the lightning-less scare sting). */
+    public static final Supplier<SoundEvent> EVENT_STORM_FLICKER = SOUNDS.register(
+            "event.storm_flicker",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_flicker")));
+
+    /** Glass-shatter layer of the tyrant-death storm explosion (under the thunderclap). */
+    public static final Supplier<SoundEvent> EVENT_STORM_SHATTER = SOUNDS.register(
+            "event.storm_shatter",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.storm_shatter")));
+
     /** Rift tear-open crackle (structure drops, xbox portal — W7/W8). */
     public static final Supplier<SoundEvent> EVENT_RIFT_OPEN = SOUNDS.register(
             "event.rift_open",
@@ -244,6 +278,71 @@ public final class EclipseSounds {
             "event.xbox_portal_loop",
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.xbox_portal_loop")));
+
+    // C17 era-immersion pair (client.xbox.XboxEraSounds) — both are sounds.json POOLS of
+    // VANILLA asset files (C418-era tracks / cave1-13), so no audio is bundled.
+
+    /** C418-era in-game music pool (Volume Alpha tracks; scheduled inside xbox dims). */
+    public static final Supplier<SoundEvent> MUSIC_XBOX_ERA = SOUNDS.register(
+            "music.xbox_era",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "music.xbox_era")));
+
+    /** Era cave-ambience subset (cave1-13 only; {@code ambient.cave} remap target). */
+    public static final Supplier<SoundEvent> AMBIENT_XBOX_CAVE = SOUNDS.register(
+            "ambient.xbox_cave",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.xbox_cave")));
+
+    // PLAN-C C11/C13 End-event suite — sounds.json aliases of shipped oggs (house rule:
+    // event workers commit no new binary audio assets).
+
+    /** Wind-altar launch whoosh (C11 sky launcher fire + return-pad step-off). */
+    public static final Supplier<SoundEvent> EVENT_SKY_LAUNCH = SOUNDS.register(
+            "event.sky_launch",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.sky_launch")));
+
+    /** Bass rumble under the End-disc shatter beat 0 (C13, heard disc-wide). */
+    public static final Supplier<SoundEvent> EVENT_END_SHATTER_RUMBLE = SOUNDS.register(
+            "event.end_shatter_rumble",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_shatter_rumble")));
+
+    /** Layered stone-crack stinger while the carve pass splits the disc (C13). */
+    public static final Supplier<SoundEvent> EVENT_END_SHATTER_CRACK = SOUNDS.register(
+            "event.end_shatter_crack",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_shatter_crack")));
+
+    // C7 expansion-delivery suite (worldgen.stage.StructureFlightFx) — all sounds.json
+    // aliases of shipped oggs (the P2-W1 placeholder doctrine; real oggs may replace the
+    // aliases via the C19 pipeline without touching code).
+
+    /** Deep tear-groan bed while a delivery rift is open (64+ block presence). */
+    public static final Supplier<SoundEvent> EVENT_RIFT_DRONE = SOUNDS.register(
+            "event.rift_drone",
+            () -> SoundEvent.createFixedRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_drone"),
+                    96.0F));
+
+    /** Whoosh of a structure-piece batch launching out of the rift mouth. */
+    public static final Supplier<SoundEvent> EVENT_RIFT_WHOOSH = SOUNDS.register(
+            "event.rift_whoosh",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_whoosh")));
+
+    /** Bass thud of one flying piece settling on its target cell. */
+    public static final Supplier<SoundEvent> EVENT_RIFT_THUD = SOUNDS.register(
+            "event.rift_thud",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_thud")));
+
+    /** Resolve chord as the delivery completes and the tear snaps shut. */
+    public static final Supplier<SoundEvent> EVENT_RIFT_RESOLVE = SOUNDS.register(
+            "event.rift_resolve",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_resolve")));
 
     // --- Quiet-Eclipse UI kit (P3-W1 ledger; UiSounds resolves these by id at runtime) ---
 
