@@ -244,12 +244,35 @@ def api(path, key, payload=None):
         return json.loads(resp.read().decode())
 
 
+KEYS = []
+KEY_INDEX = [0]
+
+
+def current_key(fallback):
+    if KEYS:
+        return KEYS[min(KEY_INDEX[0], len(KEYS) - 1)]
+    return fallback
+
+
+def rotate_key():
+    if KEY_INDEX[0] + 1 < len(KEYS):
+        KEY_INDEX[0] += 1
+        print(f"  rotating to key #{KEY_INDEX[0] + 1}", flush=True)
+        return True
+    return False
+
+
 def submit_with_backoff(key, payload):
     """The API rate-limits submissions on a LONG window — wait patiently (5 min)."""
     for attempt in range(16):
         try:
-            return api("generations/v3", key, payload)
+            return api("generations/v3", current_key(key), payload)
         except urllib.error.HTTPError as err:
+            if err.code == 402:
+                if rotate_key():
+                    continue
+                print("  out of credits on ALL keys", flush=True)
+                return {}
             if err.code in (403, 429) and attempt < 15:
                 wait = 60 if attempt == 0 else 300
                 print(f"  rate-limited ({err.code}); retrying in {wait}s", flush=True)
@@ -280,7 +303,7 @@ def generate_one(track, key, out_dir, task_id=None):
         return tid, "FAILED to start"
     for _ in range(240):  # up to 40 min
         time.sleep(10)
-        status = api(f"generations/status/{task_id}", key)
+        status = api(f"generations/status/{task_id}", current_key(key))
         state = status if isinstance(status, str) else status.get("status")
         if state == "SUCCESS":
             break
@@ -289,7 +312,7 @@ def generate_one(track, key, out_dir, task_id=None):
             return tid, f"FAILURE: {detail.get('error_message', 'unknown')}"
     else:
         return tid, "TIMEOUT"
-    result = api(f"generations/{task_id}", key)
+    result = api(f"generations/{task_id}", current_key(key))
     url = result["song_paths"][0]
     raw = out_dir / f"{tid}_raw.ogg"
     with urllib.request.urlopen(url, timeout=120) as resp, open(raw, "wb") as out:
@@ -303,6 +326,7 @@ def main():
     parser.add_argument("--out", default="/tmp/treblo_out")
     args = parser.parse_args()
     key = os.environ.get("TREBLO_API_KEY", "")
+    KEYS.extend([k.strip() for k in key.split(",") if k.strip()])
     if not key:
         print("TREBLO_API_KEY not set", file=sys.stderr)
         return 1
