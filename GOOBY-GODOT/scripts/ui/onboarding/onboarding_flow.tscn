@@ -1,0 +1,219 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/onboarding/onboarding_flow.gd" id="1_flow"]
+[ext_resource type="Script" path="res://scripts/ui/wallpaper.gd" id="2_wall"]
+[ext_resource type="Script" path="res://scripts/ui/squish_button.gd" id="3_squish"]
+[ext_resource type="Script" path="res://scripts/ui/onboarding/gooby_preview.gd" id="4_preview"]
+
+[node name="OnboardingFlow" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_flow")
+
+[node name="Wallpaper" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_wall")
+pattern = "dots"
+
+[node name="Steps" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StepWelcome" type="PanelContainer" parent="Steps"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(540, 0)
+layout_mode = 2
+theme_type_variation = &"AcCardLg"
+
+[node name="WelcomeVBox" type="VBoxContainer" parent="Steps/StepWelcome"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="WelcomeTitle" type="Label" parent="Steps/StepWelcome/WelcomeVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadlineLabel"
+horizontal_alignment = 1
+
+[node name="WelcomeText" type="Label" parent="Steps/StepWelcome/WelcomeVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 2
+theme_type_variation = &"SoftLabel"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="NameEdit" type="LineEdit" parent="Steps/StepWelcome/WelcomeVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+alignment = 1
+max_length = 24
+
+[node name="NameHint" type="Label" parent="Steps/StepWelcome/WelcomeVBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+theme_override_colors/font_color = Color(0.8784, 0.3961, 0.3725, 1)
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="WelcomeNext" type="Button" parent="Steps/StepWelcome/WelcomeVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+theme_type_variation = &"BtnLeaf"
+script = ExtResource("3_squish")
+
+[node name="StepNickname" type="PanelContainer" parent="Steps"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(540, 0)
+layout_mode = 2
+theme_type_variation = &"AcCardLg"
+
+[node name="NicknameVBox" type="VBoxContainer" parent="Steps/StepNickname"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="NicknameTitle" type="Label" parent="Steps/StepNickname/NicknameVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadlineLabel"
+horizontal_alignment = 1
+
+[node name="NicknameText" type="Label" parent="Steps/StepNickname/NicknameVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 2
+theme_type_variation = &"SoftLabel"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="NicknameEdit" type="LineEdit" parent="Steps/StepNickname/NicknameVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+alignment = 1
+max_length = 24
+
+[node name="NicknameNext" type="Button" parent="Steps/StepNickname/NicknameVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+theme_type_variation = &"BtnLeaf"
+script = ExtResource("3_squish")
+
+[node name="StepEditor" type="PanelContainer" parent="Steps"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(680, 0)
+layout_mode = 2
+theme_type_variation = &"AcCardLg"
+
+[node name="EditorVBox" type="VBoxContainer" parent="Steps/StepEditor"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="EditorTitle" type="Label" parent="Steps/StepEditor/EditorVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+horizontal_alignment = 1
+
+[node name="EditorText" type="Label" parent="Steps/StepEditor/EditorVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SoftLabel"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="EditorBox" type="HBoxContainer" parent="Steps/StepEditor/EditorVBox"]
+layout_mode = 2
+theme_override_constants/separation = 26
+
+[node name="GoobyPreview" type="Control" parent="Steps/StepEditor/EditorVBox/EditorBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 300)
+layout_mode = 2
+script = ExtResource("4_preview")
+
+[node name="SliderRows" type="VBoxContainer" parent="Steps/StepEditor/EditorVBox/EditorBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="EditorButtons" type="HBoxContainer" parent="Steps/StepEditor/EditorVBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="EditorSkip" type="Button" parent="Steps/StepEditor/EditorVBox/EditorButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 52)
+layout_mode = 2
+focus_mode = 0
+script = ExtResource("3_squish")
+
+[node name="EditorNext" type="Button" parent="Steps/StepEditor/EditorVBox/EditorButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 52)
+layout_mode = 2
+focus_mode = 0
+theme_type_variation = &"BtnLeaf"
+script = ExtResource("3_squish")
+
+[node name="StepDone" type="PanelContainer" parent="Steps"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(540, 0)
+layout_mode = 2
+theme_type_variation = &"AcCardLg"
+
+[node name="DoneVBox" type="VBoxContainer" parent="Steps/StepDone"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="DoneTitle" type="Label" parent="Steps/StepDone/DoneVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HeadlineLabel"
+horizontal_alignment = 1
+
+[node name="DoneText" type="Label" parent="Steps/StepDone/DoneVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 2
+theme_type_variation = &"SoftLabel"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="DoneButton" type="Button" parent="Steps/StepDone/DoneVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 56)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+theme_type_variation = &"BtnPink"
+script = ExtResource("3_squish")

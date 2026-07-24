@@ -1,0 +1,102 @@
+{
+  "ui": {
+    "weiter": "Next",
+    "zurueck": "Back",
+    "schliessen": "Close",
+    "ueberspringen": "Skip",
+    "fertig": "Done",
+    "ok": "Okay!",
+    "abbrechen": "Cancel"
+  },
+  "hud": {
+    "reise": "Travel",
+    "arcade": "Arcade",
+    "bau": "Build",
+    "album": "Album",
+    "profil": "Profile",
+    "igohbie": "IGohbie",
+    "auge": "Show me everything!",
+    "wo_ist_gooby": "Where is my Gooby?",
+    "einstellungen": "Settings",
+    "level_pill": "Lv {level}",
+    "stat_hunger": "Hunger",
+    "stat_energie": "Energy",
+    "stat_hygiene": "Hygiene",
+    "stat_spass": "Fun"
+  },
+  "dialog": {
+    "weiter_hinweis": "Tap for more"
+  },
+  "onboarding": {
+    "welcome_titel": "Welcome!",
+    "welcome_text": "Hi! So glad you're here. What's your name?",
+    "name_placeholder": "Your name",
+    "name_pflicht": "Please tell me your name — Gooby wants to know who to hop over to!",
+    "nickname_titel": "Your Gooby!",
+    "nickname_text": "Want to give Gooby a nickname? You don't have to — Gooby is a lovely name too.",
+    "nickname_placeholder": "Gooby",
+    "editor_titel": "This is what {nickname} looks like!",
+    "editor_text": "Turn the sliders until your Gooby looks just right and fluffy.",
+    "slider_augenweite": "Eye spacing",
+    "slider_augengroesse": "Eye size",
+    "slider_ohrenlaenge": "Ear length",
+    "slider_pausbacken": "Chubby cheeks",
+    "done_titel": "Let's go!",
+    "done_text": "{nickname} can hardly wait, {name}! Off to your new home!",
+    "done_button": "Let's go!"
+  },
+  "settings": {
+    "titel": "Settings",
+    "allgemein": "General",
+    "sprache": "Language",
+    "sprache_de": "Deutsch",
+    "sprache_en": "English",
+    "orientierung": "Minigame orientation",
+    "orientierung_auto": "Automatic",
+    "orientierung_hochkant": "Portrait",
+    "orientierung_quer": "Landscape",
+    "reduced_motion": "Reduce motion",
+    "tuer_animation": "Door animation",
+    "audio": "Audio",
+    "laut_master": "Master",
+    "laut_musik": "Music",
+    "laut_effekte": "Effects",
+    "updates": "Updates",
+    "update_suchen": "Check for updates",
+    "update_bald": "Updates are coming soon — check back later!",
+    "ueber": "About",
+    "version": "Version {version}",
+    "news_button": "See what's new in 5.0"
+  },
+  "news": {
+    "titel": "New in 5.0",
+    "untertitel": "Rebuilt from scratch — with lots of love.",
+    "button": "Got it!",
+    "items": [
+      {
+        "titel": "Everything new in 3D!",
+        "text": "GOOBY has been rebuilt from the ground up — faster, prettier and even fluffier."
+      },
+      {
+        "titel": "Build your house!",
+        "text": "Place furniture freely on the grid, rearrange and make it truly cozy."
+      },
+      {
+        "titel": "Travel & city",
+        "text": "Drive through the city yourself, discover places and fly off on vacation."
+      },
+      {
+        "titel": "Friends",
+        "text": "Visit your friends, play board games together — and lovingly throw tomatoes."
+      },
+      {
+        "titel": "New games",
+        "text": "The arcade is back — with Goobys vs Zombies and more minigames."
+      },
+      {
+        "titel": "Moving box",
+        "text": "Your old save moves in with you — nothing gets lost."
+      }
+    ]
+  }
+}

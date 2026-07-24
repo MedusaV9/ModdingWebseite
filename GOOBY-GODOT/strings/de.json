@@ -1,0 +1,102 @@
+{
+  "ui": {
+    "weiter": "Weiter",
+    "zurueck": "Zurück",
+    "schliessen": "Schließen",
+    "ueberspringen": "Überspringen",
+    "fertig": "Fertig",
+    "ok": "Okay!",
+    "abbrechen": "Abbrechen"
+  },
+  "hud": {
+    "reise": "Reise",
+    "arcade": "Arcade",
+    "bau": "Bauen",
+    "album": "Album",
+    "profil": "Profil",
+    "igohbie": "IGohbie",
+    "auge": "Zeig mir alles!",
+    "wo_ist_gooby": "Wo ist mein Gooby?",
+    "einstellungen": "Einstellungen",
+    "level_pill": "Lv {level}",
+    "stat_hunger": "Hunger",
+    "stat_energie": "Energie",
+    "stat_hygiene": "Hygiene",
+    "stat_spass": "Spaß"
+  },
+  "dialog": {
+    "weiter_hinweis": "Tippen für mehr"
+  },
+  "onboarding": {
+    "welcome_titel": "Willkommen!",
+    "welcome_text": "Hallo! Schön, dass du da bist. Wie heißt du denn?",
+    "name_placeholder": "Dein Name",
+    "name_pflicht": "Verrätst du mir deinen Namen? Gooby möchte wissen, wen er anhoppeln darf!",
+    "nickname_titel": "Dein Gooby!",
+    "nickname_text": "Willst du Gooby einen Spitznamen geben? Musst du aber nicht — Gooby ist auch ein schöner Name.",
+    "nickname_placeholder": "Gooby",
+    "editor_titel": "So sieht {nickname} aus!",
+    "editor_text": "Dreh an den Reglern, bis dein Gooby genau richtig flauschig guckt.",
+    "slider_augenweite": "Augenweite",
+    "slider_augengroesse": "Augengröße",
+    "slider_ohrenlaenge": "Ohrenlänge",
+    "slider_pausbacken": "Pausbäckchen",
+    "done_titel": "Los geht’s!",
+    "done_text": "{nickname} kann es kaum erwarten, {name}! Auf ins neue Zuhause!",
+    "done_button": "Los geht’s!"
+  },
+  "settings": {
+    "titel": "Einstellungen",
+    "allgemein": "Allgemein",
+    "sprache": "Sprache",
+    "sprache_de": "Deutsch",
+    "sprache_en": "English",
+    "orientierung": "Minispiel-Ausrichtung",
+    "orientierung_auto": "Automatisch",
+    "orientierung_hochkant": "Hochkant",
+    "orientierung_quer": "Querformat",
+    "reduced_motion": "Weniger Bewegung",
+    "tuer_animation": "Tür-Animation",
+    "audio": "Audio",
+    "laut_master": "Gesamt",
+    "laut_musik": "Musik",
+    "laut_effekte": "Effekte",
+    "updates": "Updates",
+    "update_suchen": "Nach Updates suchen",
+    "update_bald": "Updates kommen bald — schau später wieder rein!",
+    "ueber": "Über",
+    "version": "Version {version}",
+    "news_button": "Neu in 5.0 ansehen"
+  },
+  "news": {
+    "titel": "Neu in 5.0",
+    "untertitel": "Alles neu gebaut — mit ganz viel Liebe.",
+    "button": "Alles klar!",
+    "items": [
+      {
+        "titel": "Alles neu in 3D!",
+        "text": "GOOBY wurde von Grund auf neu gebaut — schneller, hübscher und noch flauschiger."
+      },
+      {
+        "titel": "Bau dein Haus!",
+        "text": "Stell Möbel frei im Raster auf, räum um und mach es dir richtig gemütlich."
+      },
+      {
+        "titel": "Reise & Stadt",
+        "text": "Fahr selbst durch die Stadt, entdecke Orte und flieg in den Urlaub."
+      },
+      {
+        "titel": "Freunde",
+        "text": "Besuch deine Freunde, spielt zusammen Brettspiele — und werft liebevoll Tomaten."
+      },
+      {
+        "titel": "Neue Spiele",
+        "text": "Das Arcade ist zurück — mit Goobys vs Zombies und weiteren Minispielen."
+      },
+      {
+        "titel": "Umzugskoffer",
+        "text": "Dein alter Spielstand zieht mit um — nichts geht verloren."
+      }
+    ]
+  }
+}
