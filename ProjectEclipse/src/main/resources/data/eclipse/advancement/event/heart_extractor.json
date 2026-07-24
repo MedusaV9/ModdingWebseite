@@ -1,0 +1,27 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "eclipse:heart_extractor"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.heart_extractor.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.heart_extractor.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "crafted": {
+      "trigger": "minecraft:recipe_crafted",
+      "conditions": {
+        "recipe_id": "eclipse:heart_extractor"
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

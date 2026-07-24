@@ -1,0 +1,36 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:deepslate"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.deep_below.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.deep_below.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "depth": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "location": {
+            "dimension": "minecraft:overworld",
+            "position": {
+              "y": {
+                "max": -64
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/outer_stairs",
+  "textures": {
+    "bottom": "eclipse:block/classic/nether_bricks",
+    "side": "eclipse:block/classic/nether_bricks",
+    "top": "eclipse:block/classic/nether_bricks"
+  }
+}

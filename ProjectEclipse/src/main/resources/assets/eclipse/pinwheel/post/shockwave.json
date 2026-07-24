@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:shockwave",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/end_portal_frame",
+  "textures": {
+    "bottom": "eclipse:block/classic/end_stone",
+    "particle": "eclipse:block/classic/end_portal_frame_side",
+    "side": "eclipse:block/classic/end_portal_frame_side",
+    "top": "eclipse:block/classic/end_portal_frame_top"
+  }
+}

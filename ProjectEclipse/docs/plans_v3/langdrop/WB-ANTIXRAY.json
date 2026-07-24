@@ -1,0 +1,42 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.anticheat.status": "Show behavioral anti-xray configuration and current suspicion counts.",
+    "dev.eclipse.doc.anticheat.player": "Show one player's valuable-ore exposure score.",
+    "dev.eclipse.doc.anticheat.threshold": "Show the active soft and hard suspicion thresholds.",
+    "dev.eclipse.doc.anticheat.threshold.set": "Persist a new behavioral anti-xray threshold and clear old samples.",
+    "dev.eclipse.anticheat.alert": "[ANTI-XRAY] %s crossed %s: score %s%%, encased %s/%s at %s.",
+    "dev.eclipse.anticheat.status": "Behavioral anti-xray: enabled %s; action %s; tracked %s; soft %s; hard %s.",
+    "dev.eclipse.anticheat.thresholds": "Thresholds: soft %s%%, hard %s%% after at least %s/%s samples.",
+    "dev.eclipse.anticheat.player.no_uuid": "Could not resolve a UUID for profile %s.",
+    "dev.eclipse.anticheat.player": "%s — %s — score %s%%; encased %s/%s; exposed %s.",
+    "dev.eclipse.anticheat.threshold.invalid": "Invalid thresholds: soft %s%% must not exceed hard %s%%.",
+    "dev.eclipse.anticheat.threshold.updated": "Behavioral anti-xray %s threshold set to %s%%; rolling windows cleared.",
+    "dev.eclipse.anticheat.level.clear": "clear",
+    "dev.eclipse.anticheat.level.soft": "soft suspicion",
+    "dev.eclipse.anticheat.level.hard": "hard suspicion",
+    "dev.eclipse.anticheat.action.notify_only": "notify only",
+    "dev.eclipse.anticheat.action.slowdown": "temporary mining slowdown",
+    "dev.eclipse.anticheat.threshold.soft": "soft",
+    "dev.eclipse.anticheat.threshold.hard": "hard"
+  },
+  "de_de": {
+    "dev.eclipse.doc.anticheat.status": "Zeigt Konfiguration und Verdachtszahlen der verhaltensbasierten Anti-XRay-Prüfung.",
+    "dev.eclipse.doc.anticheat.player": "Zeigt den Erzfreilegungs-Verdachtswert eines Spielers.",
+    "dev.eclipse.doc.anticheat.threshold": "Zeigt die aktiven weichen und harten Verdachtsgrenzwerte.",
+    "dev.eclipse.doc.anticheat.threshold.set": "Speichert einen neuen Anti-XRay-Grenzwert und leert alte Proben.",
+    "dev.eclipse.anticheat.alert": "[ANTI-XRAY] %s überschritt %s: Wert %s%%, eingeschlossen %s/%s bei %s.",
+    "dev.eclipse.anticheat.status": "Verhaltensbasiertes Anti-XRay: aktiv %s; Aktion %s; erfasst %s; weich %s; hart %s.",
+    "dev.eclipse.anticheat.thresholds": "Grenzwerte: weich %s%%, hart %s%% nach mindestens %s/%s Proben.",
+    "dev.eclipse.anticheat.player.no_uuid": "Für Profil %s konnte keine UUID ermittelt werden.",
+    "dev.eclipse.anticheat.player": "%s — %s — Wert %s%%; eingeschlossen %s/%s; freigelegt %s.",
+    "dev.eclipse.anticheat.threshold.invalid": "Ungültige Grenzwerte: weich %s%% darf hart %s%% nicht überschreiten.",
+    "dev.eclipse.anticheat.threshold.updated": "Anti-XRay-Grenzwert %s auf %s%% gesetzt; Zeitfenster wurden geleert.",
+    "dev.eclipse.anticheat.level.clear": "unauffällig",
+    "dev.eclipse.anticheat.level.soft": "weicher Verdacht",
+    "dev.eclipse.anticheat.level.hard": "harter Verdacht",
+    "dev.eclipse.anticheat.action.notify_only": "nur benachrichtigen",
+    "dev.eclipse.anticheat.action.slowdown": "vorübergehende Abbauverlangsamung",
+    "dev.eclipse.anticheat.threshold.soft": "weich",
+    "dev.eclipse.anticheat.threshold.hard": "hart"
+  }
+}

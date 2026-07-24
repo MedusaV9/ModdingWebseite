@@ -1,0 +1,68 @@
+{
+	"en_us": {
+		"entity.eclipse.wizard_orin": "Orin the Sun-Reader",
+		"name.eclipse.wizard_orin": "Orin",
+		"item.eclipse.wizard_catalyst": "Sun-Core Catalyst",
+
+		"dialogue.eclipse.wizard_orin.1": "The sky is a ledger, friend, and the eclipse is a debt come due. I have read its columns for forty years from this very summit.",
+		"dialogue.eclipse.wizard_orin.2": "Look up. The dark disc does not devour the sun — it borrows it. And what is borrowed must be returned... or taken back by force.",
+		"dialogue.eclipse.wizard_orin.3": "Every falling star is a word the night forgot. My telescope catches a few. The rest land out there, in the dark, waiting to be picked up.",
+		"dialogue.eclipse.wizard_orin.4": "You carry my sun-core well. When the last night comes, point it at the sky and remind it who the light belongs to.",
+		"dialogue.eclipse.wizard_orin.quest_hint": "I can distill you a sun-core catalyst — the heart of a veil wand. Bring me %s more amethyst shard(s) and %s more umbral shard(s), and it is yours.",
+		"dialogue.eclipse.wizard_orin.quest_done": "Shards of song and shards of shadow... yes, these will do. Hold still — ha! There. One sun-core catalyst. Spend it on something bright.",
+		"dialogue.eclipse.wizard_orin.quest_already": "I have already given you your sun-core, friend. Keep those shards — the night is long and full of appetites.",
+		"dialogue.eclipse.wizard_orin.provoked": "So you choose the taking. Then let me show you what I have READ in the stars!",
+
+		"bestiary.eclipse.wizard_orin.name": "Orin the Sun-Reader",
+		"bestiary.eclipse.wizard_orin.lore": "A hermit astronomer who watched the eclipse arrive from the highest summit and decided to take notes instead of fleeing. He will distill a sun-core catalyst for anyone who brings him shards — and call down the very stars on anyone who tries to take it. He is always back the next day. The mountain does not let him leave.",
+
+		"dev.eclipse.doc.wizard.enable": "Re-enable Orin: he respawns at his observatory (if built) and resumes his routine.",
+		"dev.eclipse.doc.wizard.disable": "Disable Orin: despawns him and blocks the respawn service. The observatory stays.",
+		"dev.eclipse.doc.wizard.tp": "Teleport to the live Orin, or onto the observatory terrace if he is absent.",
+		"dev.eclipse.doc.wizard.givecatalyst": "Hand the player one wizard catalyst (test hook — does not touch the quest ledger).",
+		"dev.eclipse.doc.wizard.resetquest": "Re-open the once-per-player catalyst fetch quest for the player.",
+
+		"dev.eclipse.wizard.enabled": "Orin enabled — the respawn service will restore him at his observatory.",
+		"dev.eclipse.wizard.disabled": "Orin disabled — despawned and blocked from respawning.",
+		"dev.eclipse.wizard.tp.orin": "Teleported to Orin.",
+		"dev.eclipse.wizard.tp.hut": "Orin is absent — teleported to his observatory.",
+		"dev.eclipse.wizard.tp.none": "No observatory has been built yet (world stage below 3, or no mountain authored).",
+		"dev.eclipse.wizard.give.unbound": "eclipse:wizard_catalyst is not registered — apply the W4-WIZARD wiring line first.",
+		"dev.eclipse.wizard.give.ok": "Gave %s one wizard catalyst.",
+		"dev.eclipse.wizard.resetquest.ok": "Reset the wizard quest for %s — Orin will trade with them again.",
+		"dev.eclipse.wizard.resetquest.noop": "%s has not completed the wizard quest — nothing to reset."
+	},
+	"de_de": {
+		"entity.eclipse.wizard_orin": "Orin der Sonnenleser",
+		"name.eclipse.wizard_orin": "Orin",
+		"item.eclipse.wizard_catalyst": "Sonnenkern-Katalysator",
+
+		"dialogue.eclipse.wizard_orin.1": "Der Himmel ist ein Kontobuch, mein Freund, und die Finsternis eine fällige Schuld. Vierzig Jahre lese ich seine Spalten von diesem Gipfel aus.",
+		"dialogue.eclipse.wizard_orin.2": "Schau hinauf. Die dunkle Scheibe verschlingt die Sonne nicht — sie leiht sie sich. Und Geliehenes muss zurückgegeben werden... oder mit Gewalt zurückgeholt.",
+		"dialogue.eclipse.wizard_orin.3": "Jede Sternschnuppe ist ein Wort, das die Nacht vergessen hat. Mein Teleskop fängt ein paar davon. Der Rest landet dort draußen im Dunkeln und wartet darauf, aufgelesen zu werden.",
+		"dialogue.eclipse.wizard_orin.4": "Du trägst meinen Sonnenkern gut. Wenn die letzte Nacht kommt, richte ihn auf den Himmel und erinnere ihn daran, wem das Licht gehört.",
+		"dialogue.eclipse.wizard_orin.quest_hint": "Ich kann dir einen Sonnenkern-Katalysator destillieren — das Herz eines Schleierstabs. Bring mir noch %s Amethystscherbe(n) und %s Umbralscherbe(n), dann gehört er dir.",
+		"dialogue.eclipse.wizard_orin.quest_done": "Scherben aus Klang und Scherben aus Schatten... ja, die taugen. Halt still — ha! So. Ein Sonnenkern-Katalysator. Gib ihn für etwas Helles aus.",
+		"dialogue.eclipse.wizard_orin.quest_already": "Deinen Sonnenkern habe ich dir schon gegeben, mein Freund. Behalte die Scherben — die Nacht ist lang und hat viele Mäuler.",
+		"dialogue.eclipse.wizard_orin.provoked": "Du wählst also das Nehmen. Dann zeige ich dir, was ich in den Sternen GELESEN habe!",
+
+		"bestiary.eclipse.wizard_orin.name": "Orin der Sonnenleser",
+		"bestiary.eclipse.wizard_orin.lore": "Ein einsiedlerischer Astronom, der die Finsternis vom höchsten Gipfel aus kommen sah und beschloss, Notizen zu machen statt zu fliehen. Wer ihm Scherben bringt, dem destilliert er einen Sonnenkern-Katalysator — wer ihn nehmen will, auf den ruft er die Sterne selbst herab. Am nächsten Tag ist er immer wieder da. Der Berg lässt ihn nicht gehen.",
+
+		"dev.eclipse.doc.wizard.enable": "Orin wieder aktivieren: Er erscheint an seinem Observatorium (falls gebaut) und nimmt seinen Alltag wieder auf.",
+		"dev.eclipse.doc.wizard.disable": "Orin deaktivieren: Er wird entfernt und der Respawn-Dienst blockiert. Das Observatorium bleibt.",
+		"dev.eclipse.doc.wizard.tp": "Zum lebenden Orin teleportieren, oder auf die Observatoriumsterrasse, falls er fehlt.",
+		"dev.eclipse.doc.wizard.givecatalyst": "Gibt dem Spieler einen Katalysator (Test-Hook — das Quest-Register bleibt unberührt).",
+		"dev.eclipse.doc.wizard.resetquest": "Öffnet die Einmal-pro-Spieler-Holquest für den Spieler erneut.",
+
+		"dev.eclipse.wizard.enabled": "Orin aktiviert — der Respawn-Dienst stellt ihn an seinem Observatorium wieder her.",
+		"dev.eclipse.wizard.disabled": "Orin deaktiviert — entfernt und am Respawnen gehindert.",
+		"dev.eclipse.wizard.tp.orin": "Zu Orin teleportiert.",
+		"dev.eclipse.wizard.tp.hut": "Orin ist nicht da — zu seinem Observatorium teleportiert.",
+		"dev.eclipse.wizard.tp.none": "Es wurde noch kein Observatorium gebaut (Weltstufe unter 3 oder kein Berg definiert).",
+		"dev.eclipse.wizard.give.unbound": "eclipse:wizard_catalyst ist nicht registriert — zuerst die W4-WIZARD-Wiring-Zeile anwenden.",
+		"dev.eclipse.wizard.give.ok": "%s hat einen Katalysator erhalten.",
+		"dev.eclipse.wizard.resetquest.ok": "Wizard-Quest für %s zurückgesetzt — Orin handelt wieder mit dem Spieler.",
+		"dev.eclipse.wizard.resetquest.noop": "%s hat die Wizard-Quest noch nicht abgeschlossen — nichts zurückzusetzen."
+	}
+}

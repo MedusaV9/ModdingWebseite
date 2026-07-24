@@ -1,0 +1,22 @@
+{
+  "en_us": {
+    "eclipse.caption.intro.depart": "...the ship shudders. Something below has taken hold...",
+    "eclipse.caption.intro.awaken": "THE ECLIPSE RISES",
+    "eclipse.caption.intro.fuse": "The islands drift together — the world is being rewritten.",
+    "eclipse.caption.intro.vortex": "...something gathers at the center...",
+    "eclipse.caption.intro.approach": "Control returns. Approach the storm.",
+    "eclipse.caption.intro.strike": "...the eclipse strikes back...",
+    "eclipse.caption.intro.reveal": "The altar. Torn from the earth, held by the sky.",
+    "eclipse.caption.intro.begin": "IT BEGINS"
+  },
+  "de_de": {
+    "eclipse.caption.intro.depart": "...das Schiff erbebt. Etwas dort unten hat euch ergriffen...",
+    "eclipse.caption.intro.awaken": "DIE FINSTERNIS ERHEBT SICH",
+    "eclipse.caption.intro.fuse": "Die Inseln treiben zusammen — die Welt wird neu geschrieben.",
+    "eclipse.caption.intro.vortex": "...etwas sammelt sich in der Mitte...",
+    "eclipse.caption.intro.approach": "Ihr habt wieder die Kontrolle. Nähert euch dem Sturm.",
+    "eclipse.caption.intro.strike": "...die Finsternis schlägt zurück...",
+    "eclipse.caption.intro.reveal": "Der Altar. Aus der Erde gerissen, vom Himmel gehalten.",
+    "eclipse.caption.intro.begin": "ES BEGINNT"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=east": {
+      "model": "eclipse:block/classic/anvil",
+      "y": 270
+    },
+    "facing=north": {
+      "model": "eclipse:block/classic/anvil",
+      "y": 180
+    },
+    "facing=south": {
+      "model": "eclipse:block/classic/anvil"
+    },
+    "facing=west": {
+      "model": "eclipse:block/classic/anvil",
+      "y": 90
+    }
+  }
+}

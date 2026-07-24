@@ -1,0 +1,2655 @@
+{
+  "_generated": "tools/xboxworlds/package.py (P5-W7) - do not hand-edit; re-run the pipeline instead",
+  "purpose": "authoritative block list for P5-W8 ClassicBlockList (plan SS2.14 'Block list generation'); every entry below occurs in the shipped baked region files with the listed classicId",
+  "namingScheme": "minecraft:<path> -> eclipse:classic_<path>",
+  "exceptions": {
+    "airPassthrough": [
+      "minecraft:air",
+      "minecraft:cave_air",
+      "minecraft:void_air"
+    ],
+    "airCountsInBakedWorlds": {
+      "minecraft:air": {
+        "tu1": 142088013,
+        "tu12": 142849273,
+        "tu14": 142727944
+      }
+    },
+    "fluidSolid": {
+      "minecraft:water": "eclipse:classic_water",
+      "minecraft:lava": "eclipse:classic_lava"
+    },
+    "fluidSolidNote": "water/lava palette entries are baked PROPERTYLESS (level=* collapsed); register classic_water/classic_lava without blockstate properties",
+    "waterloggedNote": "the bake forces waterlogged=false everywhere; waterloggable base classes are fine (default state matches), no fluid exists in the baked worlds"
+  },
+  "propertiesNote": "'properties' lists every property VALUE present in the baked palettes per id; classic blocks MUST declare identical property sets (vanilla base classes provide them, SS2.14 shape kinds)",
+  "worlds": [
+    "tu1",
+    "tu12",
+    "tu14"
+  ],
+  "distinctBlockCount": 156,
+  "entries": [
+    {
+      "vanillaId": "minecraft:anvil",
+      "classicId": "eclipse:classic_anvil",
+      "count": 2,
+      "perWorld": {
+        "tu14": 2
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:attached_pumpkin_stem",
+      "classicId": "eclipse:classic_attached_pumpkin_stem",
+      "count": 5,
+      "perWorld": {
+        "tu14": 5
+      },
+      "properties": {
+        "facing": [
+          "east"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:bedrock",
+      "classicId": "eclipse:classic_bedrock",
+      "count": 5970953,
+      "perWorld": {
+        "tu1": 2237511,
+        "tu12": 1866716,
+        "tu14": 1866726
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:birch_leaves",
+      "classicId": "eclipse:classic_birch_leaves",
+      "count": 47582,
+      "perWorld": {
+        "tu1": 26714,
+        "tu12": 10713,
+        "tu14": 10155
+      },
+      "properties": {
+        "distance": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ],
+        "persistent": [
+          "false"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:birch_log",
+      "classicId": "eclipse:classic_birch_log",
+      "count": 5412,
+      "perWorld": {
+        "tu1": 2990,
+        "tu12": 1256,
+        "tu14": 1166
+      },
+      "properties": {
+        "axis": [
+          "y"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:birch_planks",
+      "classicId": "eclipse:classic_birch_planks",
+      "count": 4,
+      "perWorld": {
+        "tu12": 2,
+        "tu14": 2
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:birch_stairs",
+      "classicId": "eclipse:classic_birch_stairs",
+      "count": 73,
+      "perWorld": {
+        "tu12": 42,
+        "tu14": 31
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom"
+        ],
+        "shape": [
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:black_wool",
+      "classicId": "eclipse:classic_black_wool",
+      "count": 7204,
+      "perWorld": {
+        "tu1": 1196,
+        "tu12": 3000,
+        "tu14": 3008
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:blue_wool",
+      "classicId": "eclipse:classic_blue_wool",
+      "count": 1,
+      "perWorld": {
+        "tu14": 1
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:bookshelf",
+      "classicId": "eclipse:classic_bookshelf",
+      "count": 1238,
+      "perWorld": {
+        "tu1": 82,
+        "tu12": 578,
+        "tu14": 578
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:brewing_stand",
+      "classicId": "eclipse:classic_brewing_stand",
+      "count": 12,
+      "perWorld": {
+        "tu12": 6,
+        "tu14": 6
+      },
+      "properties": {
+        "has_bottle_0": [
+          "false"
+        ],
+        "has_bottle_1": [
+          "false"
+        ],
+        "has_bottle_2": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:bricks",
+      "classicId": "eclipse:classic_bricks",
+      "count": 130,
+      "perWorld": {
+        "tu1": 16,
+        "tu12": 55,
+        "tu14": 59
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:brown_mushroom",
+      "classicId": "eclipse:classic_brown_mushroom",
+      "count": 655,
+      "perWorld": {
+        "tu1": 138,
+        "tu12": 256,
+        "tu14": 261
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:brown_mushroom_block",
+      "classicId": "eclipse:classic_brown_mushroom_block",
+      "count": 462,
+      "perWorld": {
+        "tu12": 206,
+        "tu14": 256
+      },
+      "properties": {
+        "down": [
+          "false"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cactus",
+      "classicId": "eclipse:classic_cactus",
+      "count": 555,
+      "perWorld": {
+        "tu1": 96,
+        "tu12": 231,
+        "tu14": 228
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "10",
+          "11",
+          "12",
+          "13",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "9"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:carrots",
+      "classicId": "eclipse:classic_carrots",
+      "count": 154,
+      "perWorld": {
+        "tu14": 154
+      },
+      "properties": {
+        "age": [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:carved_pumpkin",
+      "classicId": "eclipse:classic_carved_pumpkin",
+      "count": 4,
+      "perWorld": {
+        "tu12": 2,
+        "tu14": 2
+      },
+      "properties": {
+        "facing": [
+          "east"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:chest",
+      "classicId": "eclipse:classic_chest",
+      "count": 407,
+      "perWorld": {
+        "tu1": 108,
+        "tu12": 146,
+        "tu14": 153
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "type": [
+          "left",
+          "right",
+          "single"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:chiseled_sandstone",
+      "classicId": "eclipse:classic_chiseled_sandstone",
+      "count": 39,
+      "perWorld": {
+        "tu14": 39
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:chiseled_stone_bricks",
+      "classicId": "eclipse:classic_chiseled_stone_bricks",
+      "count": 302,
+      "perWorld": {
+        "tu12": 119,
+        "tu14": 183
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:clay",
+      "classicId": "eclipse:classic_clay",
+      "count": 25448,
+      "perWorld": {
+        "tu1": 43,
+        "tu12": 12917,
+        "tu14": 12488
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:coal_ore",
+      "classicId": "eclipse:classic_coal_ore",
+      "count": 1330547,
+      "perWorld": {
+        "tu1": 453901,
+        "tu12": 437384,
+        "tu14": 439262
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:cobblestone",
+      "classicId": "eclipse:classic_cobblestone",
+      "count": 308861,
+      "perWorld": {
+        "tu1": 8980,
+        "tu12": 151158,
+        "tu14": 148723
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:cobblestone_slab",
+      "classicId": "eclipse:classic_cobblestone_slab",
+      "count": 16,
+      "perWorld": {
+        "tu12": 8,
+        "tu14": 8
+      },
+      "properties": {
+        "type": [
+          "bottom",
+          "double"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cobblestone_stairs",
+      "classicId": "eclipse:classic_cobblestone_stairs",
+      "count": 787,
+      "perWorld": {
+        "tu1": 96,
+        "tu12": 334,
+        "tu14": 357
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cobblestone_wall",
+      "classicId": "eclipse:classic_cobblestone_wall",
+      "count": 172,
+      "perWorld": {
+        "tu14": 172
+      },
+      "properties": {
+        "east": [
+          "low",
+          "none"
+        ],
+        "north": [
+          "low",
+          "none"
+        ],
+        "south": [
+          "low",
+          "none"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false"
+        ],
+        "west": [
+          "low",
+          "none"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cobweb",
+      "classicId": "eclipse:classic_cobweb",
+      "count": 3703,
+      "perWorld": {
+        "tu12": 1853,
+        "tu14": 1850
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:cocoa",
+      "classicId": "eclipse:classic_cocoa",
+      "count": 326,
+      "perWorld": {
+        "tu12": 153,
+        "tu14": 173
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "2"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cracked_stone_bricks",
+      "classicId": "eclipse:classic_cracked_stone_bricks",
+      "count": 7063,
+      "perWorld": {
+        "tu12": 3476,
+        "tu14": 3587
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:crafting_table",
+      "classicId": "eclipse:classic_crafting_table",
+      "count": 8,
+      "perWorld": {
+        "tu12": 4,
+        "tu14": 4
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:creeper_head",
+      "classicId": "eclipse:classic_creeper_head",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ],
+        "rotation": [
+          "14"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:cut_sandstone",
+      "classicId": "eclipse:classic_cut_sandstone",
+      "count": 3992,
+      "perWorld": {
+        "tu14": 3992
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:cyan_wool",
+      "classicId": "eclipse:classic_cyan_wool",
+      "count": 8,
+      "perWorld": {
+        "tu12": 8
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:dandelion",
+      "classicId": "eclipse:classic_dandelion",
+      "count": 4240,
+      "perWorld": {
+        "tu1": 862,
+        "tu12": 1694,
+        "tu14": 1684
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:dead_bush",
+      "classicId": "eclipse:classic_dead_bush",
+      "count": 16,
+      "perWorld": {
+        "tu14": 16
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:diamond_ore",
+      "classicId": "eclipse:classic_diamond_ore",
+      "count": 29867,
+      "perWorld": {
+        "tu1": 11716,
+        "tu12": 9073,
+        "tu14": 9078
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:dirt",
+      "classicId": "eclipse:classic_dirt",
+      "count": 12207804,
+      "perWorld": {
+        "tu1": 3999532,
+        "tu12": 4097751,
+        "tu14": 4110521
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:dispenser",
+      "classicId": "eclipse:classic_dispenser",
+      "count": 2,
+      "perWorld": {
+        "tu14": 2
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north"
+        ],
+        "triggered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:emerald_ore",
+      "classicId": "eclipse:classic_emerald_ore",
+      "count": 1437,
+      "perWorld": {
+        "tu14": 1437
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:enchanting_table",
+      "classicId": "eclipse:classic_enchanting_table",
+      "count": 4,
+      "perWorld": {
+        "tu12": 2,
+        "tu14": 2
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:end_portal_frame",
+      "classicId": "eclipse:classic_end_portal_frame",
+      "count": 24,
+      "perWorld": {
+        "tu12": 12,
+        "tu14": 12
+      },
+      "properties": {
+        "eye": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:ender_chest",
+      "classicId": "eclipse:classic_ender_chest",
+      "count": 2,
+      "perWorld": {
+        "tu14": 2
+      },
+      "properties": {
+        "facing": [
+          "east"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:farmland",
+      "classicId": "eclipse:classic_farmland",
+      "count": 1396,
+      "perWorld": {
+        "tu1": 15,
+        "tu12": 708,
+        "tu14": 673
+      },
+      "properties": {
+        "moisture": [
+          "0",
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:fern",
+      "classicId": "eclipse:classic_fern",
+      "count": 3644,
+      "perWorld": {
+        "tu12": 1701,
+        "tu14": 1943
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:fire",
+      "classicId": "eclipse:classic_fire",
+      "count": 100,
+      "perWorld": {
+        "tu1": 14,
+        "tu12": 35,
+        "tu14": 51
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "15",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:furnace",
+      "classicId": "eclipse:classic_furnace",
+      "count": 11,
+      "perWorld": {
+        "tu1": 4,
+        "tu12": 3,
+        "tu14": 4
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "south",
+          "west"
+        ],
+        "lit": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:glass",
+      "classicId": "eclipse:classic_glass",
+      "count": 1095,
+      "perWorld": {
+        "tu1": 173,
+        "tu12": 457,
+        "tu14": 465
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:glass_pane",
+      "classicId": "eclipse:classic_glass_pane",
+      "count": 622,
+      "perWorld": {
+        "tu12": 289,
+        "tu14": 333
+      },
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:glowstone",
+      "classicId": "eclipse:classic_glowstone",
+      "count": 44,
+      "perWorld": {
+        "tu1": 25,
+        "tu12": 10,
+        "tu14": 9
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:gold_block",
+      "classicId": "eclipse:classic_gold_block",
+      "count": 8,
+      "perWorld": {
+        "tu12": 4,
+        "tu14": 4
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:gold_ore",
+      "classicId": "eclipse:classic_gold_ore",
+      "count": 75899,
+      "perWorld": {
+        "tu1": 27966,
+        "tu12": 23982,
+        "tu14": 23951
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:grass_block",
+      "classicId": "eclipse:classic_grass_block",
+      "count": 1028738,
+      "perWorld": {
+        "tu1": 303989,
+        "tu12": 360579,
+        "tu14": 364170
+      },
+      "properties": {
+        "snowy": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:gravel",
+      "classicId": "eclipse:classic_gravel",
+      "count": 3636831,
+      "perWorld": {
+        "tu1": 1251707,
+        "tu12": 1190279,
+        "tu14": 1194845
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:gray_wool",
+      "classicId": "eclipse:classic_gray_wool",
+      "count": 34,
+      "perWorld": {
+        "tu12": 17,
+        "tu14": 17
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:ice",
+      "classicId": "eclipse:classic_ice",
+      "count": 73369,
+      "perWorld": {
+        "tu1": 67916,
+        "tu12": 2707,
+        "tu14": 2746
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:infested_cobblestone",
+      "classicId": "eclipse:classic_infested_cobblestone",
+      "count": 7,
+      "perWorld": {
+        "tu14": 7
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:infested_stone",
+      "classicId": "eclipse:classic_infested_stone",
+      "count": 6,
+      "perWorld": {
+        "tu12": 3,
+        "tu14": 3
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:infested_stone_bricks",
+      "classicId": "eclipse:classic_infested_stone_bricks",
+      "count": 1712,
+      "perWorld": {
+        "tu12": 843,
+        "tu14": 869
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:iron_bars",
+      "classicId": "eclipse:classic_iron_bars",
+      "count": 525,
+      "perWorld": {
+        "tu12": 254,
+        "tu14": 271
+      },
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:iron_block",
+      "classicId": "eclipse:classic_iron_block",
+      "count": 16,
+      "perWorld": {
+        "tu12": 8,
+        "tu14": 8
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:iron_door",
+      "classicId": "eclipse:classic_iron_door",
+      "count": 168,
+      "perWorld": {
+        "tu1": 2,
+        "tu12": 82,
+        "tu14": 84
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:iron_ore",
+      "classicId": "eclipse:classic_iron_ore",
+      "count": 739391,
+      "perWorld": {
+        "tu1": 255447,
+        "tu12": 241775,
+        "tu14": 242169
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:jungle_leaves",
+      "classicId": "eclipse:classic_jungle_leaves",
+      "count": 132764,
+      "perWorld": {
+        "tu12": 67832,
+        "tu14": 64932
+      },
+      "properties": {
+        "distance": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ],
+        "persistent": [
+          "false"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:jungle_log",
+      "classicId": "eclipse:classic_jungle_log",
+      "count": 37593,
+      "perWorld": {
+        "tu12": 18956,
+        "tu14": 18637
+      },
+      "properties": {
+        "axis": [
+          "y"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:jungle_planks",
+      "classicId": "eclipse:classic_jungle_planks",
+      "count": 999,
+      "perWorld": {
+        "tu12": 453,
+        "tu14": 546
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:ladder",
+      "classicId": "eclipse:classic_ladder",
+      "count": 192,
+      "perWorld": {
+        "tu1": 30,
+        "tu12": 70,
+        "tu14": 92
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:lapis_ore",
+      "classicId": "eclipse:classic_lapis_ore",
+      "count": 30217,
+      "perWorld": {
+        "tu1": 10490,
+        "tu12": 9851,
+        "tu14": 9876
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:lava",
+      "classicId": "eclipse:classic_lava",
+      "count": 1082754,
+      "perWorld": {
+        "tu1": 319014,
+        "tu12": 381179,
+        "tu14": 382561
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:lever",
+      "classicId": "eclipse:classic_lever",
+      "count": 19,
+      "perWorld": {
+        "tu1": 2,
+        "tu12": 7,
+        "tu14": 10
+      },
+      "properties": {
+        "face": [
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:light_gray_wool",
+      "classicId": "eclipse:classic_light_gray_wool",
+      "count": 2784,
+      "perWorld": {
+        "tu1": 928,
+        "tu12": 928,
+        "tu14": 928
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:lily_pad",
+      "classicId": "eclipse:classic_lily_pad",
+      "count": 728,
+      "perWorld": {
+        "tu12": 356,
+        "tu14": 372
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:lime_wool",
+      "classicId": "eclipse:classic_lime_wool",
+      "count": 348,
+      "perWorld": {
+        "tu12": 174,
+        "tu14": 174
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:melon",
+      "classicId": "eclipse:classic_melon",
+      "count": 17,
+      "perWorld": {
+        "tu12": 12,
+        "tu14": 5
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:melon_stem",
+      "classicId": "eclipse:classic_melon_stem",
+      "count": 17,
+      "perWorld": {
+        "tu12": 12,
+        "tu14": 5
+      },
+      "properties": {
+        "age": [
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:mossy_cobblestone",
+      "classicId": "eclipse:classic_mossy_cobblestone",
+      "count": 8930,
+      "perWorld": {
+        "tu1": 2854,
+        "tu12": 2794,
+        "tu14": 3282
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:mossy_cobblestone_wall",
+      "classicId": "eclipse:classic_mossy_cobblestone_wall",
+      "count": 3,
+      "perWorld": {
+        "tu14": 3
+      },
+      "properties": {
+        "east": [
+          "none"
+        ],
+        "north": [
+          "none"
+        ],
+        "south": [
+          "none"
+        ],
+        "up": [
+          "false"
+        ],
+        "waterlogged": [
+          "false"
+        ],
+        "west": [
+          "none"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:mossy_stone_bricks",
+      "classicId": "eclipse:classic_mossy_stone_bricks",
+      "count": 11121,
+      "perWorld": {
+        "tu12": 5486,
+        "tu14": 5635
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:mushroom_stem",
+      "classicId": "eclipse:classic_mushroom_stem",
+      "count": 108,
+      "perWorld": {
+        "tu12": 51,
+        "tu14": 57
+      },
+      "properties": {
+        "down": [
+          "false"
+        ],
+        "east": [
+          "true"
+        ],
+        "north": [
+          "true"
+        ],
+        "south": [
+          "true"
+        ],
+        "up": [
+          "false"
+        ],
+        "west": [
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:mycelium",
+      "classicId": "eclipse:classic_mycelium",
+      "count": 1451,
+      "perWorld": {
+        "tu12": 725,
+        "tu14": 726
+      },
+      "properties": {
+        "snowy": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:nether_brick_stairs",
+      "classicId": "eclipse:classic_nether_brick_stairs",
+      "count": 4,
+      "perWorld": {
+        "tu12": 4
+      },
+      "properties": {
+        "facing": [
+          "north",
+          "south"
+        ],
+        "half": [
+          "bottom"
+        ],
+        "shape": [
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:nether_portal",
+      "classicId": "eclipse:classic_nether_portal",
+      "count": 12,
+      "perWorld": {
+        "tu12": 6,
+        "tu14": 6
+      },
+      "properties": {
+        "axis": [
+          "x"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:netherrack",
+      "classicId": "eclipse:classic_netherrack",
+      "count": 17,
+      "perWorld": {
+        "tu1": 13,
+        "tu12": 2,
+        "tu14": 2
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:oak_door",
+      "classicId": "eclipse:classic_oak_door",
+      "count": 308,
+      "perWorld": {
+        "tu1": 32,
+        "tu12": 134,
+        "tu14": 142
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_fence",
+      "classicId": "eclipse:classic_oak_fence",
+      "count": 15477,
+      "perWorld": {
+        "tu1": 260,
+        "tu12": 7466,
+        "tu14": 7751
+      },
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_fence_gate",
+      "classicId": "eclipse:classic_oak_fence_gate",
+      "count": 14,
+      "perWorld": {
+        "tu12": 7,
+        "tu14": 7
+      },
+      "properties": {
+        "facing": [
+          "north",
+          "south",
+          "west"
+        ],
+        "in_wall": [
+          "false"
+        ],
+        "open": [
+          "false"
+        ],
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_leaves",
+      "classicId": "eclipse:classic_oak_leaves",
+      "count": 672781,
+      "perWorld": {
+        "tu1": 311741,
+        "tu12": 184504,
+        "tu14": 176536
+      },
+      "properties": {
+        "distance": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ],
+        "persistent": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_log",
+      "classicId": "eclipse:classic_oak_log",
+      "count": 43224,
+      "perWorld": {
+        "tu1": 22628,
+        "tu12": 10832,
+        "tu14": 9764
+      },
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_planks",
+      "classicId": "eclipse:classic_oak_planks",
+      "count": 30554,
+      "perWorld": {
+        "tu1": 2588,
+        "tu12": 14051,
+        "tu14": 13915
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:oak_pressure_plate",
+      "classicId": "eclipse:classic_oak_pressure_plate",
+      "count": 112,
+      "perWorld": {
+        "tu12": 53,
+        "tu14": 59
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_stairs",
+      "classicId": "eclipse:classic_oak_stairs",
+      "count": 3636,
+      "perWorld": {
+        "tu1": 600,
+        "tu12": 1695,
+        "tu14": 1341
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_trapdoor",
+      "classicId": "eclipse:classic_oak_trapdoor",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "facing": [
+          "west"
+        ],
+        "half": [
+          "bottom"
+        ],
+        "open": [
+          "false"
+        ],
+        "powered": [
+          "false"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:oak_wall_sign",
+      "classicId": "eclipse:classic_oak_wall_sign",
+      "count": 6,
+      "perWorld": {
+        "tu1": 6
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:obsidian",
+      "classicId": "eclipse:classic_obsidian",
+      "count": 15863,
+      "perWorld": {
+        "tu1": 3386,
+        "tu12": 6554,
+        "tu14": 5923
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:orange_wool",
+      "classicId": "eclipse:classic_orange_wool",
+      "count": 54,
+      "perWorld": {
+        "tu14": 54
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:petrified_oak_slab",
+      "classicId": "eclipse:classic_petrified_oak_slab",
+      "count": 990,
+      "perWorld": {
+        "tu1": 4,
+        "tu12": 400,
+        "tu14": 586
+      },
+      "properties": {
+        "type": [
+          "bottom",
+          "double"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:piston_head",
+      "classicId": "eclipse:classic_piston_head",
+      "count": 19,
+      "perWorld": {
+        "tu12": 8,
+        "tu14": 11
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "south",
+          "west"
+        ],
+        "short": [
+          "false"
+        ],
+        "type": [
+          "sticky"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:player_head",
+      "classicId": "eclipse:classic_player_head",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ],
+        "rotation": [
+          "14"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:poppy",
+      "classicId": "eclipse:classic_poppy",
+      "count": 1121,
+      "perWorld": {
+        "tu1": 362,
+        "tu12": 396,
+        "tu14": 363
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:potatoes",
+      "classicId": "eclipse:classic_potatoes",
+      "count": 131,
+      "perWorld": {
+        "tu14": 131
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:potted_dandelion",
+      "classicId": "eclipse:classic_potted_dandelion",
+      "count": 4,
+      "perWorld": {
+        "tu14": 4
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:potted_oak_sapling",
+      "classicId": "eclipse:classic_potted_oak_sapling",
+      "count": 2,
+      "perWorld": {
+        "tu14": 2
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:potted_poppy",
+      "classicId": "eclipse:classic_potted_poppy",
+      "count": 8,
+      "perWorld": {
+        "tu14": 8
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:powered_rail",
+      "classicId": "eclipse:classic_powered_rail",
+      "count": 14,
+      "perWorld": {
+        "tu1": 8,
+        "tu12": 3,
+        "tu14": 3
+      },
+      "properties": {
+        "powered": [
+          "false",
+          "true"
+        ],
+        "shape": [
+          "ascending_north",
+          "east_west",
+          "north_south"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:pumpkin",
+      "classicId": "eclipse:classic_pumpkin",
+      "count": 90,
+      "perWorld": {
+        "tu1": 34,
+        "tu12": 35,
+        "tu14": 21
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:pumpkin_stem",
+      "classicId": "eclipse:classic_pumpkin_stem",
+      "count": 12,
+      "perWorld": {
+        "tu12": 12
+      },
+      "properties": {
+        "age": [
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:quartz_block",
+      "classicId": "eclipse:classic_quartz_block",
+      "count": 70,
+      "perWorld": {
+        "tu14": 70
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:quartz_pillar",
+      "classicId": "eclipse:classic_quartz_pillar",
+      "count": 24,
+      "perWorld": {
+        "tu14": 24
+      },
+      "properties": {
+        "axis": [
+          "y"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:quartz_stairs",
+      "classicId": "eclipse:classic_quartz_stairs",
+      "count": 46,
+      "perWorld": {
+        "tu14": 46
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:rail",
+      "classicId": "eclipse:classic_rail",
+      "count": 4280,
+      "perWorld": {
+        "tu1": 69,
+        "tu12": 2101,
+        "tu14": 2110
+      },
+      "properties": {
+        "shape": [
+          "ascending_east",
+          "ascending_north",
+          "ascending_west",
+          "east_west",
+          "north_east",
+          "north_south",
+          "north_west",
+          "south_west"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:red_bed",
+      "classicId": "eclipse:classic_red_bed",
+      "count": 86,
+      "perWorld": {
+        "tu1": 24,
+        "tu12": 32,
+        "tu14": 30
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "occupied": [
+          "false"
+        ],
+        "part": [
+          "foot",
+          "head"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:red_carpet",
+      "classicId": "eclipse:classic_red_carpet",
+      "count": 102,
+      "perWorld": {
+        "tu14": 102
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:red_mushroom",
+      "classicId": "eclipse:classic_red_mushroom",
+      "count": 441,
+      "perWorld": {
+        "tu1": 139,
+        "tu12": 161,
+        "tu14": 141
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:red_mushroom_block",
+      "classicId": "eclipse:classic_red_mushroom_block",
+      "count": 450,
+      "perWorld": {
+        "tu12": 225,
+        "tu14": 225
+      },
+      "properties": {
+        "down": [
+          "false"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:red_wool",
+      "classicId": "eclipse:classic_red_wool",
+      "count": 199,
+      "perWorld": {
+        "tu12": 107,
+        "tu14": 92
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:redstone_lamp",
+      "classicId": "eclipse:classic_redstone_lamp",
+      "count": 37,
+      "perWorld": {
+        "tu12": 17,
+        "tu14": 20
+      },
+      "properties": {
+        "lit": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:redstone_ore",
+      "classicId": "eclipse:classic_redstone_ore",
+      "count": 241784,
+      "perWorld": {
+        "tu1": 94686,
+        "tu12": 73646,
+        "tu14": 73452
+      },
+      "properties": {
+        "lit": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:redstone_torch",
+      "classicId": "eclipse:classic_redstone_torch",
+      "count": 8,
+      "perWorld": {
+        "tu12": 4,
+        "tu14": 4
+      },
+      "properties": {
+        "lit": [
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:redstone_wall_torch",
+      "classicId": "eclipse:classic_redstone_wall_torch",
+      "count": 23,
+      "perWorld": {
+        "tu1": 4,
+        "tu12": 7,
+        "tu14": 12
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "lit": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:redstone_wire",
+      "classicId": "eclipse:classic_redstone_wire",
+      "count": 298,
+      "perWorld": {
+        "tu1": 14,
+        "tu12": 122,
+        "tu14": 162
+      },
+      "properties": {
+        "east": [
+          "none",
+          "side",
+          "up"
+        ],
+        "north": [
+          "none",
+          "side",
+          "up"
+        ],
+        "power": [
+          "0",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "south": [
+          "none",
+          "side",
+          "up"
+        ],
+        "west": [
+          "none",
+          "side",
+          "up"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:repeater",
+      "classicId": "eclipse:classic_repeater",
+      "count": 28,
+      "perWorld": {
+        "tu12": 13,
+        "tu14": 15
+      },
+      "properties": {
+        "delay": [
+          "1",
+          "4"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "locked": [
+          "false"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:sand",
+      "classicId": "eclipse:classic_sand",
+      "count": 2135914,
+      "perWorld": {
+        "tu1": 708276,
+        "tu12": 717587,
+        "tu14": 710051
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:sandstone",
+      "classicId": "eclipse:classic_sandstone",
+      "count": 637077,
+      "perWorld": {
+        "tu1": 299045,
+        "tu12": 166708,
+        "tu14": 171324
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:sandstone_slab",
+      "classicId": "eclipse:classic_sandstone_slab",
+      "count": 3,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 2
+      },
+      "properties": {
+        "type": [
+          "bottom",
+          "double"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:sandstone_stairs",
+      "classicId": "eclipse:classic_sandstone_stairs",
+      "count": 695,
+      "perWorld": {
+        "tu12": 130,
+        "tu14": 565
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom"
+        ],
+        "shape": [
+          "straight"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:short_grass",
+      "classicId": "eclipse:classic_short_grass",
+      "count": 136568,
+      "perWorld": {
+        "tu1": 15039,
+        "tu12": 60199,
+        "tu14": 61330
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:skeleton_skull",
+      "classicId": "eclipse:classic_skeleton_skull",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ],
+        "rotation": [
+          "14"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:smooth_stone_slab",
+      "classicId": "eclipse:classic_smooth_stone_slab",
+      "count": 35774,
+      "perWorld": {
+        "tu1": 226,
+        "tu12": 17738,
+        "tu14": 17810
+      },
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:snow",
+      "classicId": "eclipse:classic_snow",
+      "count": 155210,
+      "perWorld": {
+        "tu1": 63312,
+        "tu12": 46015,
+        "tu14": 45883
+      },
+      "properties": {
+        "layers": [
+          "1"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:snow_block",
+      "classicId": "eclipse:classic_snow_block",
+      "count": 296,
+      "perWorld": {
+        "tu12": 192,
+        "tu14": 104
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:spawner",
+      "classicId": "eclipse:classic_spawner",
+      "count": 206,
+      "perWorld": {
+        "tu1": 58,
+        "tu12": 77,
+        "tu14": 71
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:spruce_leaves",
+      "classicId": "eclipse:classic_spruce_leaves",
+      "count": 116715,
+      "perWorld": {
+        "tu1": 19707,
+        "tu12": 49395,
+        "tu14": 47613
+      },
+      "properties": {
+        "distance": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ],
+        "persistent": [
+          "false"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:spruce_log",
+      "classicId": "eclipse:classic_spruce_log",
+      "count": 15333,
+      "perWorld": {
+        "tu1": 2585,
+        "tu12": 6391,
+        "tu14": 6357
+      },
+      "properties": {
+        "axis": [
+          "y"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:spruce_planks",
+      "classicId": "eclipse:classic_spruce_planks",
+      "count": 1760,
+      "perWorld": {
+        "tu12": 849,
+        "tu14": 911
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:spruce_stairs",
+      "classicId": "eclipse:classic_spruce_stairs",
+      "count": 101,
+      "perWorld": {
+        "tu12": 33,
+        "tu14": 68
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:sticky_piston",
+      "classicId": "eclipse:classic_sticky_piston",
+      "count": 35,
+      "perWorld": {
+        "tu12": 15,
+        "tu14": 20
+      },
+      "properties": {
+        "extended": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:stone",
+      "classicId": "eclipse:classic_stone",
+      "count": 107803199,
+      "perWorld": {
+        "tu1": 36895818,
+        "tu12": 35394805,
+        "tu14": 35512576
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:stone_brick_slab",
+      "classicId": "eclipse:classic_stone_brick_slab",
+      "count": 230,
+      "perWorld": {
+        "tu12": 115,
+        "tu14": 115
+      },
+      "properties": {
+        "type": [
+          "bottom"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:stone_brick_stairs",
+      "classicId": "eclipse:classic_stone_brick_stairs",
+      "count": 688,
+      "perWorld": {
+        "tu12": 321,
+        "tu14": 367
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ],
+        "waterlogged": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:stone_bricks",
+      "classicId": "eclipse:classic_stone_bricks",
+      "count": 25205,
+      "perWorld": {
+        "tu12": 12192,
+        "tu14": 13013
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:stone_button",
+      "classicId": "eclipse:classic_stone_button",
+      "count": 120,
+      "perWorld": {
+        "tu1": 2,
+        "tu12": 59,
+        "tu14": 59
+      },
+      "properties": {
+        "face": [
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:stone_pressure_plate",
+      "classicId": "eclipse:classic_stone_pressure_plate",
+      "count": 1,
+      "perWorld": {
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:sugar_cane",
+      "classicId": "eclipse:classic_sugar_cane",
+      "count": 377,
+      "perWorld": {
+        "tu12": 217,
+        "tu14": 160
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "12",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:tnt",
+      "classicId": "eclipse:classic_tnt",
+      "count": 9,
+      "perWorld": {
+        "tu14": 9
+      },
+      "properties": {
+        "unstable": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:torch",
+      "classicId": "eclipse:classic_torch",
+      "count": 924,
+      "perWorld": {
+        "tu1": 151,
+        "tu12": 362,
+        "tu14": 411
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:tripwire",
+      "classicId": "eclipse:classic_tripwire",
+      "count": 9,
+      "perWorld": {
+        "tu14": 9
+      },
+      "properties": {
+        "attached": [
+          "false",
+          "true"
+        ],
+        "disarmed": [
+          "false"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:tripwire_hook",
+      "classicId": "eclipse:classic_tripwire_hook",
+      "count": 6,
+      "perWorld": {
+        "tu14": 6
+      },
+      "properties": {
+        "attached": [
+          "true"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:vine",
+      "classicId": "eclipse:classic_vine",
+      "count": 107258,
+      "perWorld": {
+        "tu12": 54130,
+        "tu14": 53128
+      },
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:wall_torch",
+      "classicId": "eclipse:classic_wall_torch",
+      "count": 1601,
+      "perWorld": {
+        "tu1": 354,
+        "tu12": 620,
+        "tu14": 627
+      },
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:water",
+      "classicId": "eclipse:classic_water",
+      "count": 6601559,
+      "perWorld": {
+        "tu1": 1589116,
+        "tu12": 2510427,
+        "tu14": 2502016
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:water_cauldron",
+      "classicId": "eclipse:classic_water_cauldron",
+      "count": 12,
+      "perWorld": {
+        "tu12": 6,
+        "tu14": 6
+      },
+      "properties": {
+        "level": [
+          "1"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:wheat",
+      "classicId": "eclipse:classic_wheat",
+      "count": 1065,
+      "perWorld": {
+        "tu1": 15,
+        "tu12": 684,
+        "tu14": 366
+      },
+      "properties": {
+        "age": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:white_wool",
+      "classicId": "eclipse:classic_white_wool",
+      "count": 104,
+      "perWorld": {
+        "tu1": 104
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:wither_skeleton_skull",
+      "classicId": "eclipse:classic_wither_skeleton_skull",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ],
+        "rotation": [
+          "14"
+        ]
+      }
+    },
+    {
+      "vanillaId": "minecraft:yellow_carpet",
+      "classicId": "eclipse:classic_yellow_carpet",
+      "count": 55,
+      "perWorld": {
+        "tu14": 55
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:yellow_wool",
+      "classicId": "eclipse:classic_yellow_wool",
+      "count": 66,
+      "perWorld": {
+        "tu12": 55,
+        "tu14": 11
+      },
+      "properties": {}
+    },
+    {
+      "vanillaId": "minecraft:zombie_head",
+      "classicId": "eclipse:classic_zombie_head",
+      "count": 2,
+      "perWorld": {
+        "tu12": 1,
+        "tu14": 1
+      },
+      "properties": {
+        "powered": [
+          "false"
+        ],
+        "rotation": [
+          "14"
+        ]
+      }
+    }
+  ]
+}

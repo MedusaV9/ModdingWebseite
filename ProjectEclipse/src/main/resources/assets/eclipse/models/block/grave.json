@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "eclipse:block/grave",
+    "side": "eclipse:block/grave_side"
+  }
+}

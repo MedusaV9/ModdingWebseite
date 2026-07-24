@@ -1,0 +1,12 @@
+{
+  "en_us": {
+    "item.eclipse.heart_fragment": "Heart Fragment",
+    "item.eclipse.heart_extractor.too_few": "The extractor refuses to take your last heart.",
+    "item.eclipse.heart_extractor.used": "You tear out %s hearts. %s remain."
+  },
+  "de_de": {
+    "item.eclipse.heart_fragment": "Herzfragment",
+    "item.eclipse.heart_extractor.too_few": "Der Extraktor weigert sich, dein letztes Herz zu nehmen.",
+    "item.eclipse.heart_extractor.used": "Du reißt dir %s Herzen heraus. %s verbleiben."
+  }
+}

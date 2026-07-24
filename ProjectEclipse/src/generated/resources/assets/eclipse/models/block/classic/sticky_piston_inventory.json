@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "eclipse:block/classic/piston_bottom",
+    "side": "eclipse:block/classic/piston_side",
+    "top": "eclipse:block/classic/piston_top_sticky"
+  }
+}

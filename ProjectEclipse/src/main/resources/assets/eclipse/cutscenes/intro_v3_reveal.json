@@ -1,0 +1,24 @@
+{
+  "id": "intro_v3_reveal",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 300,
+  "keyframes": [
+    { "t": 0.0, "pos": [46.0, -12.0, 32.0], "yaw": -145, "pitch": -8, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
+    { "t": 0.28, "pos": [34.0, 2.0, -34.0], "yaw": -95, "pitch": 2, "roll": -2, "fov": 58, "easing": "easeInOutSine", "lookAt": [0.0, -6.0, 0.0] },
+    { "t": 0.55, "pos": [-36.0, 10.0, -30.0], "yaw": -35, "pitch": 8, "roll": 0, "fov": 55, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
+    { "t": 0.8, "pos": [-42.0, 4.0, 26.0], "yaw": 40, "pitch": 4, "roll": 2, "fov": 58, "easing": "easeInOutSine", "lookAt": [0.0, -2.0, 0.0] },
+    { "t": 1.0, "pos": [-12.0, -4.0, 46.0], "yaw": 15, "pitch": -4, "roll": 0, "fov": 64, "easing": "easeOutCubic", "lookAt": [0.0, 2.0, 0.0] }
+  ],
+  "events": [
+    { "t": 0.02, "type": "sound", "id": "eclipse:event.storm_burst" },
+    { "t": 0.1, "type": "caption", "id": "eclipse.caption.intro.reveal", "data": "subtitle,110" },
+    { "t": 0.5, "type": "sound", "id": "eclipse:event.emerge" },
+    { "t": 0.88, "type": "shake", "id": "reveal_settle", "data": "0.15,24,2.2" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "gui.eclipse.timer.paused": "Paused",
+    "gui.eclipse.timer.zero": "The day ends"
+  },
+  "de_de": {
+    "gui.eclipse.timer.paused": "Pausiert",
+    "gui.eclipse.timer.zero": "Der Tag endet"
+  }
+}

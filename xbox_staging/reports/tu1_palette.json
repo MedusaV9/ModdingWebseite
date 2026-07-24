@@ -1,0 +1,520 @@
+{
+  "blockCounts": {
+    "minecraft:air": 142088013,
+    "minecraft:bedrock": 2237511,
+    "minecraft:birch_leaves": 26714,
+    "minecraft:birch_log": 2990,
+    "minecraft:black_wool": 1196,
+    "minecraft:bookshelf": 82,
+    "minecraft:bricks": 16,
+    "minecraft:brown_mushroom": 138,
+    "minecraft:cactus": 96,
+    "minecraft:chest": 108,
+    "minecraft:clay": 43,
+    "minecraft:coal_ore": 453901,
+    "minecraft:cobblestone": 8980,
+    "minecraft:cobblestone_stairs": 96,
+    "minecraft:dandelion": 862,
+    "minecraft:diamond_ore": 11716,
+    "minecraft:dirt": 3999532,
+    "minecraft:farmland": 15,
+    "minecraft:fire": 14,
+    "minecraft:furnace": 4,
+    "minecraft:glass": 173,
+    "minecraft:glowstone": 25,
+    "minecraft:gold_ore": 27966,
+    "minecraft:grass_block": 303989,
+    "minecraft:gravel": 1251707,
+    "minecraft:ice": 67916,
+    "minecraft:iron_door": 2,
+    "minecraft:iron_ore": 255447,
+    "minecraft:ladder": 30,
+    "minecraft:lapis_ore": 10490,
+    "minecraft:lava": 319014,
+    "minecraft:lever": 2,
+    "minecraft:light_gray_wool": 928,
+    "minecraft:mossy_cobblestone": 2854,
+    "minecraft:netherrack": 13,
+    "minecraft:oak_door": 32,
+    "minecraft:oak_fence": 260,
+    "minecraft:oak_leaves": 311741,
+    "minecraft:oak_log": 22628,
+    "minecraft:oak_planks": 2588,
+    "minecraft:oak_stairs": 600,
+    "minecraft:oak_wall_sign": 6,
+    "minecraft:obsidian": 3386,
+    "minecraft:petrified_oak_slab": 4,
+    "minecraft:poppy": 362,
+    "minecraft:powered_rail": 8,
+    "minecraft:pumpkin": 34,
+    "minecraft:rail": 69,
+    "minecraft:red_bed": 24,
+    "minecraft:red_mushroom": 139,
+    "minecraft:redstone_ore": 94686,
+    "minecraft:redstone_wall_torch": 4,
+    "minecraft:redstone_wire": 14,
+    "minecraft:sand": 708276,
+    "minecraft:sandstone": 299045,
+    "minecraft:short_grass": 15039,
+    "minecraft:smooth_stone_slab": 226,
+    "minecraft:snow": 63312,
+    "minecraft:spawner": 58,
+    "minecraft:spruce_leaves": 19707,
+    "minecraft:spruce_log": 2585,
+    "minecraft:stone": 36895818,
+    "minecraft:stone_button": 2,
+    "minecraft:torch": 151,
+    "minecraft:wall_torch": 354,
+    "minecraft:water": 1589116,
+    "minecraft:wheat": 15,
+    "minecraft:white_wool": 104
+  },
+  "properties": {
+    "minecraft:birch_leaves": {
+      "distance": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "persistent": [
+        "false"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:birch_log": {
+      "axis": [
+        "y"
+      ]
+    },
+    "minecraft:cactus": {
+      "age": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "2",
+        "3",
+        "4",
+        "5",
+        "7",
+        "9"
+      ]
+    },
+    "minecraft:chest": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "type": [
+        "left",
+        "right",
+        "single"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:cobblestone_stairs": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "half": [
+        "bottom"
+      ],
+      "shape": [
+        "inner_right",
+        "outer_left",
+        "outer_right",
+        "straight"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:farmland": {
+      "moisture": [
+        "7"
+      ]
+    },
+    "minecraft:fire": {
+      "age": [
+        "0",
+        "1",
+        "15"
+      ],
+      "east": [
+        "false"
+      ],
+      "north": [
+        "false"
+      ],
+      "south": [
+        "false"
+      ],
+      "up": [
+        "false"
+      ],
+      "west": [
+        "false"
+      ]
+    },
+    "minecraft:furnace": {
+      "facing": [
+        "south",
+        "west"
+      ],
+      "lit": [
+        "false"
+      ]
+    },
+    "minecraft:grass_block": {
+      "snowy": [
+        "false",
+        "true"
+      ]
+    },
+    "minecraft:iron_door": {
+      "facing": [
+        "east"
+      ],
+      "half": [
+        "lower",
+        "upper"
+      ],
+      "hinge": [
+        "left"
+      ],
+      "open": [
+        "false"
+      ],
+      "powered": [
+        "false"
+      ]
+    },
+    "minecraft:ladder": {
+      "facing": [
+        "east",
+        "north",
+        "south"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:lava": {
+      "level": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    "minecraft:lever": {
+      "face": [
+        "wall"
+      ],
+      "facing": [
+        "north",
+        "south"
+      ],
+      "powered": [
+        "false"
+      ]
+    },
+    "minecraft:oak_door": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "half": [
+        "lower",
+        "upper"
+      ],
+      "hinge": [
+        "left",
+        "right"
+      ],
+      "open": [
+        "false",
+        "true"
+      ],
+      "powered": [
+        "false"
+      ]
+    },
+    "minecraft:oak_fence": {
+      "east": [
+        "false",
+        "true"
+      ],
+      "north": [
+        "false",
+        "true"
+      ],
+      "south": [
+        "false",
+        "true"
+      ],
+      "waterlogged": [
+        "false"
+      ],
+      "west": [
+        "false",
+        "true"
+      ]
+    },
+    "minecraft:oak_leaves": {
+      "distance": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "persistent": [
+        "false"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:oak_log": {
+      "axis": [
+        "y"
+      ]
+    },
+    "minecraft:oak_stairs": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "half": [
+        "bottom"
+      ],
+      "shape": [
+        "straight"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:oak_wall_sign": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:petrified_oak_slab": {
+      "type": [
+        "bottom",
+        "double"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:powered_rail": {
+      "powered": [
+        "false",
+        "true"
+      ],
+      "shape": [
+        "ascending_north",
+        "east_west",
+        "north_south"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:rail": {
+      "shape": [
+        "ascending_north",
+        "ascending_west",
+        "east_west",
+        "north_east",
+        "north_south",
+        "north_west",
+        "south_west"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:red_bed": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ],
+      "occupied": [
+        "false"
+      ],
+      "part": [
+        "foot",
+        "head"
+      ]
+    },
+    "minecraft:redstone_ore": {
+      "lit": [
+        "false",
+        "true"
+      ]
+    },
+    "minecraft:redstone_wall_torch": {
+      "facing": [
+        "north",
+        "south"
+      ],
+      "lit": [
+        "true"
+      ]
+    },
+    "minecraft:redstone_wire": {
+      "east": [
+        "none",
+        "side"
+      ],
+      "north": [
+        "none",
+        "side",
+        "up"
+      ],
+      "power": [
+        "0",
+        "10",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
+      "south": [
+        "none",
+        "side"
+      ],
+      "west": [
+        "none",
+        "side"
+      ]
+    },
+    "minecraft:smooth_stone_slab": {
+      "type": [
+        "bottom",
+        "double"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:snow": {
+      "layers": [
+        "1"
+      ]
+    },
+    "minecraft:spruce_leaves": {
+      "distance": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "persistent": [
+        "false"
+      ],
+      "waterlogged": [
+        "false"
+      ]
+    },
+    "minecraft:spruce_log": {
+      "axis": [
+        "y"
+      ]
+    },
+    "minecraft:stone_button": {
+      "face": [
+        "wall"
+      ],
+      "facing": [
+        "north",
+        "west"
+      ],
+      "powered": [
+        "false"
+      ]
+    },
+    "minecraft:wall_torch": {
+      "facing": [
+        "east",
+        "north",
+        "south",
+        "west"
+      ]
+    },
+    "minecraft:water": {
+      "level": [
+        "0",
+        "1",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    "minecraft:wheat": {
+      "age": [
+        "7"
+      ]
+    }
+  }
+}

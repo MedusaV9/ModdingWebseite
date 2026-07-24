@@ -1,0 +1,40 @@
+{
+  "type": "minecraft:entity",
+  "_w8_note": "glitch_shard (1-2, 100%) intentionally NOT listed here: glitch/GlitchDrops pays it for every #eclipse:glitched tag member (dropsEnabled default true) — listing it again would double-drop the heart economy input (and ticks come in threes). This table is only a corrupted circuit scrap.",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:redstone",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            },
+            {
+              "function": "minecraft:enchanted_count_increase",
+              "enchantment": "minecraft:looting",
+              "count": { "type": "minecraft:uniform", "min": 0, "max": 1 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        { "condition": "minecraft:killed_by_player" },
+        { "condition": "minecraft:random_chance", "chance": 0.15 }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:amethyst_shard"
+        }
+      ]
+    }
+  ],
+  "random_sequence": "eclipse:entities/glitched_tick"
+}

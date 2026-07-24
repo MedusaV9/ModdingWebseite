@@ -1,0 +1,67 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "minecraft:lightning_rod"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.fog_storm_found.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.fog_storm_found.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "western_storm": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "location": {
+            "dimension": "minecraft:overworld",
+            "position": {
+              "x": {
+                "min": -197,
+                "max": -149
+              },
+              "z": {
+                "min": -197,
+                "max": -149
+              }
+            }
+          }
+        }
+      }
+    },
+    "northern_storm": {
+      "trigger": "minecraft:location",
+      "conditions": {
+        "player": {
+          "location": {
+            "dimension": "minecraft:overworld",
+            "position": {
+              "x": {
+                "min": -24,
+                "max": 24
+              },
+              "z": {
+                "min": -274,
+                "max": -226
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "requirements": [
+    [
+      "western_storm",
+      "northern_storm"
+    ]
+  ],
+  "sends_telemetry_event": false
+}

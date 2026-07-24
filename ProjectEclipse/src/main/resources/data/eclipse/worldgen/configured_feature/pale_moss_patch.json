@@ -1,0 +1,42 @@
+{
+  "_comment": "Ground-cover patches of pale moss carpet between the pale oaks (P1-W1.4). simple_block already gates on canSurvive; the would_survive filter keeps tries cheap on air columns.",
+  "type": "minecraft:random_patch",
+  "config": {
+    "tries": 32,
+    "xz_spread": 5,
+    "y_spread": 2,
+    "feature": {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "config": {
+          "to_place": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "eclipse:pale_moss_carpet"
+            }
+          }
+        }
+      },
+      "placement": [
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:all_of",
+            "predicates": [
+              {
+                "type": "minecraft:matching_blocks",
+                "blocks": "minecraft:air"
+              },
+              {
+                "type": "minecraft:would_survive",
+                "state": {
+                  "Name": "eclipse:pale_moss_carpet"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

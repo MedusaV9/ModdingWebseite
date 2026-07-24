@@ -1,0 +1,4414 @@
+{
+  "worldId": "tu12",
+  "dataVersion": 3955,
+  "note": "items use the vanilla ItemStack JSON codec shape ({id,count,components}); ids are the ORIGINAL vanilla ids - P5-W9 decides at spill time what stays vanilla (music discs) vs maps to classic items (SS2.14 chest loot).",
+  "containers": [
+    {
+      "pos": [
+        -432,
+        20,
+        412
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -428,
+        18,
+        64
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -425,
+        23,
+        77
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:diamond",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -404,
+        39,
+        -388
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -402,
+        17,
+        -396
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -401,
+        39,
+        -385
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -401,
+        77,
+        -232
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_far",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_shovel",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:efficiency": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        -397,
+        12,
+        54
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:diamond",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -397,
+        17,
+        -396
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -390,
+        16,
+        106
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -389,
+        17,
+        132
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 6
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 7
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -375,
+        33,
+        427
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 7
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "pos": [
+        -367,
+        19,
+        393
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -363,
+        17,
+        170
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -362,
+        33,
+        224
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -359,
+        33,
+        227
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -358,
+        13,
+        101
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:coal",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -358,
+        33,
+        428
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 8
+        }
+      ]
+    },
+    {
+      "pos": [
+        -333,
+        18,
+        -84
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -333,
+        18,
+        -82
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -297,
+        11,
+        192
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -296,
+        11,
+        195
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -282,
+        76,
+        261
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_chirp",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_chestplate",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:fire_protection": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        -265,
+        21,
+        221
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -222,
+        12,
+        -351
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -210,
+        47,
+        -192
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -210,
+        47,
+        -191
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -205,
+        63,
+        -41
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_mellohi",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_sword",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:smite": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        -204,
+        25,
+        -72
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -189,
+        24,
+        170
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -179,
+        65,
+        125
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:diamond",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:apple",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -159,
+        41,
+        252
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -158,
+        41,
+        256
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -150,
+        17,
+        -354
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 8
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 5
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -149,
+        42,
+        -328
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -143,
+        12,
+        -191
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -143,
+        43,
+        -282
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 7
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -142,
+        34,
+        159
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -141,
+        34,
+        162
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -137,
+        25,
+        102
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -136,
+        25,
+        103
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -112,
+        34,
+        -282
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 5
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -109,
+        15,
+        -275
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 8
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -108,
+        29,
+        299
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -103,
+        19,
+        -336
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:coal",
+          "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 9
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 5
+        },
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -101,
+        15,
+        -265
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -98,
+        37,
+        285
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -97,
+        37,
+        290
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -97,
+        39,
+        237
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -95,
+        39,
+        239
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -90,
+        34,
+        -262
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -90,
+        34,
+        -256
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -83,
+        30,
+        -291
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 9
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -77,
+        28,
+        -298
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -65,
+        27,
+        -294
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 8
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -64,
+        27,
+        -364
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 7
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 5
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "pos": [
+        -62,
+        52,
+        171
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:music_disc_13",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -57,
+        52,
+        168
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -52,
+        26,
+        -280
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -44,
+        59,
+        6
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -42,
+        20,
+        225
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:paper",
+          "count": 5
+        },
+        {
+          "id": "minecraft:book",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -40,
+        35,
+        166
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:apple",
+          "count": 2
+        },
+        {
+          "id": "minecraft:apple",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -38,
+        59,
+        7
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -34,
+        80,
+        -91
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_boots",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:feather_falling": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        -33,
+        25,
+        221
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:book",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        -28,
+        11,
+        175
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        -26,
+        11,
+        172
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        -19,
+        34,
+        183
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:book",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        -15,
+        63,
+        -371
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_ward",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:unbreaking": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        0,
+        54,
+        153
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_blocks",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_helmet",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:respiration": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        4,
+        21,
+        211
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_boots",
+          "count": 1
+        },
+        {
+          "id": "minecraft:diamond",
+          "count": 2
+        },
+        {
+          "id": "minecraft:ender_pearl",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        10,
+        71,
+        -62
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 20
+        },
+        {
+          "id": "minecraft:wheat_seeds",
+          "count": 20
+        },
+        {
+          "id": "minecraft:beef",
+          "count": 20
+        },
+        {
+          "id": "minecraft:bone",
+          "count": 10
+        },
+        {
+          "id": "minecraft:cod",
+          "count": 10
+        }
+      ]
+    },
+    {
+      "pos": [
+        13,
+        42,
+        -376
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        15,
+        73,
+        -100
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 64
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 64
+        },
+        {
+          "id": "minecraft:repeater",
+          "count": 10
+        },
+        {
+          "id": "minecraft:redstone_torch",
+          "count": 30
+        },
+        {
+          "id": "minecraft:lever",
+          "count": 10
+        },
+        {
+          "id": "minecraft:piston",
+          "count": 10
+        },
+        {
+          "id": "minecraft:sticky_piston",
+          "count": 10
+        },
+        {
+          "id": "minecraft:stone_button",
+          "count": 10
+        }
+      ]
+    },
+    {
+      "pos": [
+        22,
+        81,
+        -103
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:experience_bottle",
+          "count": 64
+        },
+        {
+          "id": "minecraft:iron_sword",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_axe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_shovel",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_hoe",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        23,
+        71,
+        -60
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_hoe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat_seeds",
+          "count": 5
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 1
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        25,
+        34,
+        297
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        25,
+        63,
+        -25
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:oak_boat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        29,
+        49,
+        -337
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        31,
+        81,
+        -104
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:magma_cream",
+          "count": 5
+        },
+        {
+          "id": "minecraft:glass_bottle",
+          "count": 64
+        },
+        {
+          "id": "minecraft:glass_bottle",
+          "count": 64
+        },
+        {
+          "id": "minecraft:water_bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        32,
+        40,
+        -143
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        33,
+        40,
+        -146
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        34,
+        21,
+        86
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:rail",
+          "count": 6
+        }
+      ]
+    },
+    {
+      "pos": [
+        34,
+        37,
+        47
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        34,
+        63,
+        -34
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        },
+        {
+          "id": "minecraft:fishing_rod",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        38,
+        42,
+        285
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        40,
+        42,
+        281
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        45,
+        7,
+        16
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 5
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 7
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        47,
+        7,
+        1
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 6
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        48,
+        81,
+        -97
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_13",
+          "count": 1
+        },
+        {
+          "id": "minecraft:jukebox",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bow",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:flame": 1
+              }
+            }
+          }
+        },
+        {
+          "id": "minecraft:arrow",
+          "count": 20
+        }
+      ]
+    },
+    {
+      "pos": [
+        81,
+        44,
+        207
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        85,
+        33,
+        323
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:diamond",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        95,
+        16,
+        78
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 5
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        96,
+        19,
+        274
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        101,
+        24,
+        264
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        102,
+        11,
+        -81
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        102,
+        37,
+        336
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 6
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:diamond",
+          "count": 1
+        },
+        {
+          "id": "minecraft:lapis_lazuli",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        103,
+        28,
+        272
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        105,
+        29,
+        302
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 9
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        106,
+        11,
+        -82
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        112,
+        16,
+        -199
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        114,
+        16,
+        -196
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        115,
+        42,
+        -57
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        115,
+        57,
+        107
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_stal",
+          "count": 1
+        },
+        {
+          "id": "minecraft:flint_and_steel",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_leggings",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:blast_protection": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        118,
+        62,
+        30
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        124,
+        31,
+        -365
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        127,
+        24,
+        296
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 3
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        128,
+        31,
+        -363
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        148,
+        23,
+        305
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:iron_pickaxe",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 3
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 7
+        }
+      ]
+    },
+    {
+      "pos": [
+        208,
+        53,
+        61
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        218,
+        11,
+        125
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        224,
+        24,
+        -376
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        240,
+        15,
+        -310
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        253,
+        91,
+        -185
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_wait",
+          "count": 1
+        },
+        {
+          "id": "minecraft:diamond_pickaxe",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:silk_touch": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        258,
+        58,
+        40
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        293,
+        68,
+        232
+      ],
+      "block": "minecraft:furnace",
+      "items": [
+        {
+          "id": "minecraft:spruce_log",
+          "count": 18
+        }
+      ]
+    },
+    {
+      "pos": [
+        294,
+        68,
+        235
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_strad",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_axe",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:fortune": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        299,
+        15,
+        111
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        303,
+        49,
+        -24
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        304,
+        49,
+        -20
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        323,
+        59,
+        225
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        323,
+        59,
+        226
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        328,
+        51,
+        282
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        328,
+        51,
+        285
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        332,
+        25,
+        106
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:coal",
+          "count": 8
+        },
+        {
+          "id": "minecraft:gold_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "pos": [
+        336,
+        36,
+        -300
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        349,
+        16,
+        34
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 4
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        353,
+        53,
+        -292
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        358,
+        53,
+        -295
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        367,
+        32,
+        88
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        367,
+        75,
+        -57
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_11",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bow",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:power": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        368,
+        59,
+        84
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        371,
+        19,
+        -386
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        371,
+        59,
+        83
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        375,
+        59,
+        89
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        377,
+        59,
+        92
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        381,
+        24,
+        390
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:redstone",
+          "count": 2
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        382,
+        24,
+        390
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 3
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        382,
+        25,
+        361
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        383,
+        25,
+        367
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        400,
+        17,
+        179
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        404,
+        17,
+        179
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        416,
+        36,
+        122
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        418,
+        36,
+        117
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        425,
+        20,
+        110
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:rail",
+          "count": 6
+        },
+        {
+          "id": "minecraft:diamond",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    }
+  ]
+}

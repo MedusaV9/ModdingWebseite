@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/enchanting_table",
+  "textures": {
+    "bottom": "eclipse:block/classic/enchanting_table_bottom",
+    "particle": "eclipse:block/classic/enchanting_table_bottom",
+    "side": "eclipse:block/classic/enchanting_table_side",
+    "top": "eclipse:block/classic/enchanting_table_top"
+  }
+}

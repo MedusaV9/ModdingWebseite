@@ -1,0 +1,8 @@
+{
+  "en_us": {
+    "gui.eclipse.timer.day_unit": "d"
+  },
+  "de_de": {
+    "gui.eclipse.timer.day_unit": "T"
+  }
+}

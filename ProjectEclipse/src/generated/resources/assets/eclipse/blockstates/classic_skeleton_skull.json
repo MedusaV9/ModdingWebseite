@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "rotation=0": {
+      "model": "eclipse:block/classic/skeleton_skull"
+    },
+    "rotation=1": {
+      "model": "eclipse:block/classic/skeleton_skull_r22"
+    },
+    "rotation=10": {
+      "model": "eclipse:block/classic/skeleton_skull_r45",
+      "y": 180
+    },
+    "rotation=11": {
+      "model": "eclipse:block/classic/skeleton_skull_r68",
+      "y": 270
+    },
+    "rotation=12": {
+      "model": "eclipse:block/classic/skeleton_skull",
+      "y": 270
+    },
+    "rotation=13": {
+      "model": "eclipse:block/classic/skeleton_skull_r22",
+      "y": 270
+    },
+    "rotation=14": {
+      "model": "eclipse:block/classic/skeleton_skull_r45",
+      "y": 270
+    },
+    "rotation=15": {
+      "model": "eclipse:block/classic/skeleton_skull_r68"
+    },
+    "rotation=2": {
+      "model": "eclipse:block/classic/skeleton_skull_r45"
+    },
+    "rotation=3": {
+      "model": "eclipse:block/classic/skeleton_skull_r68",
+      "y": 90
+    },
+    "rotation=4": {
+      "model": "eclipse:block/classic/skeleton_skull",
+      "y": 90
+    },
+    "rotation=5": {
+      "model": "eclipse:block/classic/skeleton_skull_r22",
+      "y": 90
+    },
+    "rotation=6": {
+      "model": "eclipse:block/classic/skeleton_skull_r45",
+      "y": 90
+    },
+    "rotation=7": {
+      "model": "eclipse:block/classic/skeleton_skull_r68",
+      "y": 180
+    },
+    "rotation=8": {
+      "model": "eclipse:block/classic/skeleton_skull",
+      "y": 180
+    },
+    "rotation=9": {
+      "model": "eclipse:block/classic/skeleton_skull_r22",
+      "y": 180
+    }
+  }
+}

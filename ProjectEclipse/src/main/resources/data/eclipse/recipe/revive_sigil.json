@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "HGH",
+    "GDG",
+    "HGH"
+  ],
+  "key": {
+    "H": {
+      "item": "eclipse:heart_fragment"
+    },
+    "G": {
+      "item": "minecraft:gold_block"
+    },
+    "D": {
+      "item": "minecraft:diamond_block"
+    }
+  },
+  "result": {
+    "id": "eclipse:revive_sigil",
+    "count": 1
+  }
+}

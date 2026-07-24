@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "lit=false": {
+      "model": "eclipse:block/classic/redstone_lamp"
+    },
+    "lit=true": {
+      "model": "eclipse:block/classic/redstone_lamp_on"
+    }
+  }
+}

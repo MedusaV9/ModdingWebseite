@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:the_nether",
+  "generator": {
+    "type": "eclipse:disc",
+    "profile": "nether"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "command.eclipse.worldgen.refreeze.success": "Refroze worldgen section '%s' from global config.",
+  "command.eclipse.worldgen.refreeze.fail": "Failed to refreeze worldgen: %s",
+  "config.eclipse.fogstorms.created": "Created default fog storm config at %s",
+  "config.eclipse.worldgen.freeze_created": "Created per-save worldgen freeze at %s"
+}

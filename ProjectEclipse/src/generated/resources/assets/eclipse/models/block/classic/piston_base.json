@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/piston_base",
+  "textures": {
+    "bottom": "eclipse:block/classic/piston_bottom",
+    "inside": "eclipse:block/classic/piston_inner",
+    "particle": "eclipse:block/classic/piston_side",
+    "side": "eclipse:block/classic/piston_side"
+  }
+}

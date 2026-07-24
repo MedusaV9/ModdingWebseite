@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "powered=false": {
+      "model": "eclipse:block/classic/stone_pressure_plate"
+    },
+    "powered=true": {
+      "model": "eclipse:block/classic/stone_pressure_plate_down"
+    }
+  }
+}

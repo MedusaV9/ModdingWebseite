@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=east": {
+      "model": "eclipse:block/classic/wall_torch"
+    },
+    "facing=north": {
+      "model": "eclipse:block/classic/wall_torch",
+      "y": 270
+    },
+    "facing=south": {
+      "model": "eclipse:block/classic/wall_torch",
+      "y": 90
+    },
+    "facing=west": {
+      "model": "eclipse:block/classic/wall_torch",
+      "y": 180
+    }
+  }
+}

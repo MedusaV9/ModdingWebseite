@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "eclipse:block/classic/birch_slab"
+    },
+    "type=double": {
+      "model": "eclipse:block/classic/birch_planks"
+    },
+    "type=top": {
+      "model": "eclipse:block/classic/birch_slab_top"
+    }
+  }
+}

@@ -1,0 +1,165 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.deckhand",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 8,
+				"visible_bounds_height": 4,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "robe",
+					"parent": "root",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{"origin": [-4, 0, -3], "size": [8, 8, 6], "uv": [24, 16]}
+					]
+				},
+				{
+					"name": "torso",
+					"parent": "root",
+					"pivot": [0, 8, 0],
+					"rotation": [-8.5, 0, 0],
+					"cubes": [
+						{"origin": [-4, 8, -2], "size": [8, 10, 4], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "torso",
+					"pivot": [0, 18, 0],
+					"cubes": [
+						{"origin": [-4, 18, -4], "size": [8, 8, 8], "uv": [24, 0]}
+					]
+				},
+				{
+					"name": "hood",
+					"parent": "head",
+					"pivot": [0, 18, 0],
+					"cubes": [
+						{"origin": [-4, 18, -4], "size": [8, 8, 8], "inflate": 0.25, "uv": [0, 27]}
+					]
+				},
+				{
+					"name": "arm_right",
+					"parent": "torso",
+					"pivot": [-5.5, 17, 0],
+					"cubes": [
+						{"origin": [-7, 7, -1.5], "size": [3, 10, 3], "uv": [0, 14]}
+					]
+				},
+				{
+					"name": "arm_left",
+					"parent": "torso",
+					"pivot": [5.5, 17, 0],
+					"cubes": [
+						{"origin": [4, 7, -1.5], "size": [3, 10, 3], "uv": [12, 14]}
+					]
+				},
+				{
+					"name": "tatter_right",
+					"parent": "torso",
+					"pivot": [-3.2, 8.5, -2.4],
+					"rotation": [0, 0, 7],
+					"cubes": [
+						{
+							"origin": [-4.2, 3.5, -2.4],
+							"size": [2, 5, 0],
+							"uv": {
+								"north": {"uv": [48, 30], "uv_size": [2, 5]},
+								"south": {"uv": [48, 36], "uv_size": [2, 5]}
+							}
+						}
+					]
+				},
+				{
+					"name": "tatter_left",
+					"parent": "torso",
+					"pivot": [3.0, 8.5, 2.4],
+					"rotation": [0, 0, -6],
+					"cubes": [
+						{
+							"origin": [2.0, 4.5, 2.4],
+							"size": [2, 4, 0],
+							"uv": {
+								"north": {"uv": [0, 56], "uv_size": [2, 4]},
+								"south": {"uv": [3, 56], "uv_size": [2, 4]}
+							}
+						}
+					]
+				},
+				{
+					"name": "oar",
+					"parent": "root",
+					"pivot": [0, 11, -10],
+					"rotation": [-30, 0, 0]
+				},
+				{
+					"name": "oar_loom",
+					"parent": "oar",
+					"pivot": [0, 11, -10],
+					"cubes": [
+						{
+							"origin": [-1, 10, -10],
+							"size": [2, 2, 10],
+							"uv": {
+								"north": {"uv": [56, 0], "uv_size": [2, 2]},
+								"south": {"uv": [59, 0], "uv_size": [2, 2]},
+								"east": {"uv": [0, 44], "uv_size": [10, 2]},
+								"west": {"uv": [0, 47], "uv_size": [10, 2]},
+								"up": {"uv": [56, 4], "uv_size": [2, 10]},
+								"down": {"uv": [59, 4], "uv_size": [2, 10]}
+							}
+						}
+					]
+				},
+				{
+					"name": "oar_shaft",
+					"parent": "oar",
+					"pivot": [0, 11, -10],
+					"cubes": [
+						{
+							"origin": [-1, 10, -40],
+							"size": [2, 2, 30],
+							"uv": {
+								"north": {"uv": [62, 0], "uv_size": [2, 2]},
+								"south": {"uv": [62, 3], "uv_size": [2, 2]},
+								"east": {"uv": [0, 50], "uv_size": [30, 2]},
+								"west": {"uv": [0, 53], "uv_size": [30, 2]},
+								"up": {"uv": [52, 16], "uv_size": [2, 30]},
+								"down": {"uv": [55, 16], "uv_size": [2, 30]}
+							}
+						}
+					]
+				},
+				{
+					"name": "oar_blade",
+					"parent": "oar",
+					"pivot": [0, 11, -40],
+					"cubes": [
+						{
+							"origin": [-0.5, 8, -52],
+							"size": [1, 6, 12],
+							"uv": {
+								"north": {"uv": [62, 6], "uv_size": [1, 6]},
+								"south": {"uv": [63, 6], "uv_size": [1, 6]},
+								"east": {"uv": [32, 30], "uv_size": [12, 6]},
+								"west": {"uv": [32, 36], "uv_size": [12, 6]},
+								"up": {"uv": [44, 30], "uv_size": [1, 12]},
+								"down": {"uv": [45, 30], "uv_size": [1, 12]}
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}

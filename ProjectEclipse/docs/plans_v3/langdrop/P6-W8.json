@@ -1,0 +1,14 @@
+{
+	"en_us": {
+		"entity.eclipse.fog_colossus": "Fog Colossus",
+		"entity.eclipse.glitched_husk": "Glitched Husk",
+		"entity.eclipse.glitched_hound": "Glitched Hound",
+		"entity.eclipse.glitched_tick": "Glitched Tick"
+	},
+	"de_de": {
+		"entity.eclipse.fog_colossus": "Nebelkoloss",
+		"entity.eclipse.glitched_husk": "Glitch-Hülle",
+		"entity.eclipse.glitched_hound": "Glitch-Hund",
+		"entity.eclipse.glitched_tick": "Glitch-Zecke"
+	}
+}

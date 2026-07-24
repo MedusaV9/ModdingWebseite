@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "eclipse:block/classic/chest_front",
+    "side": "eclipse:block/classic/chest_side",
+    "top": "eclipse:block/classic/chest_top"
+  }
+}

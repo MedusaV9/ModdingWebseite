@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab_top",
+  "textures": {
+    "bottom": "eclipse:block/classic/oak_planks",
+    "side": "eclipse:block/classic/oak_planks",
+    "top": "eclipse:block/classic/oak_planks"
+  }
+}

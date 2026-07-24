@@ -1,0 +1,32 @@
+{
+  "en_us": {
+    "gui.eclipse.handbook.footer": "1\u2013%1$s / arrows turn the pages \u00b7 %2$s closes the ledger",
+    "item.eclipse.arm_artifact.tooltip": "Right-click: open the ledger",
+    "gui.eclipse.artifact.rules.line8": "8. The arm artifact is bound to you: it sits sealed in the top-right inventory slot and cannot be dropped, stored or moved. Right-click it (or press J) to open this ledger.",
+    "subtitles.eclipse.ui.click": "Interface clicks",
+    "subtitles.eclipse.ui.toggle": "Toggle flips",
+    "subtitles.eclipse.ui.slider": "Slider slides",
+    "subtitles.eclipse.ui.error_glitch": "Interface glitches",
+    "subtitles.eclipse.ui.level_up": "The altar's hunger grows",
+    "subtitles.eclipse.ui.skill_buy": "A skill is learned",
+    "subtitles.eclipse.ui.roulette_tick": "Roulette ticks",
+    "subtitles.eclipse.ui.roulette_win": "Roulette settles",
+    "subtitles.eclipse.ui.timer_zero": "Time runs out",
+    "subtitles.eclipse.ui.ghost_burst": "A ghost heart bursts"
+  },
+  "de_de": {
+    "gui.eclipse.handbook.footer": "1\u2013%1$s / Pfeiltasten bl\u00e4ttern \u00b7 %2$s schlie\u00dft das Buch",
+    "item.eclipse.arm_artifact.tooltip": "Rechtsklick: Logbuch \u00f6ffnen",
+    "gui.eclipse.artifact.rules.line8": "8. Das Armartefakt ist an dich gebunden: Es ruht versiegelt im Inventarslot oben rechts und kann nicht fallengelassen, gelagert oder bewegt werden. Rechtsklicke es (oder dr\u00fccke J), um dieses Buch zu \u00f6ffnen.",
+    "subtitles.eclipse.ui.click": "Interface klickt",
+    "subtitles.eclipse.ui.toggle": "Schalter kippt",
+    "subtitles.eclipse.ui.slider": "Regler gleitet",
+    "subtitles.eclipse.ui.error_glitch": "Interface flackert",
+    "subtitles.eclipse.ui.level_up": "Der Hunger des Altars w\u00e4chst",
+    "subtitles.eclipse.ui.skill_buy": "Eine F\u00e4higkeit wird erlernt",
+    "subtitles.eclipse.ui.roulette_tick": "Roulette tickt",
+    "subtitles.eclipse.ui.roulette_win": "Roulette h\u00e4lt an",
+    "subtitles.eclipse.ui.timer_zero": "Die Zeit l\u00e4uft ab",
+    "subtitles.eclipse.ui.ghost_burst": "Ein Geisterherz zerbirst"
+  }
+}

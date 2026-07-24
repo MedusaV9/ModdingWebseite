@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/template_cauldron_level2",
+  "textures": {
+    "bottom": "eclipse:block/classic/cauldron_bottom",
+    "content": "eclipse:block/classic/water_still",
+    "inside": "eclipse:block/classic/cauldron_inner",
+    "particle": "eclipse:block/classic/cauldron_side",
+    "side": "eclipse:block/classic/cauldron_side",
+    "top": "eclipse:block/classic/cauldron_top"
+  }
+}

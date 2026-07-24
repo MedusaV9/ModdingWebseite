@@ -1,0 +1,194 @@
+package dev.projecteclipse.eclipse.worldgen.stage;
+
+import java.util.ArrayDeque;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.function.Consumer;
+
+import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import net.minecraft.core.SectionPos;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ThreadedLevelLightEngine;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+
+/**
+ * Shared machinery of the tick-budgeted bulk chunk writers (W14 refactor out of
+ * {@link RingGrowthService}; also used by {@code devtools.StageIO}'s snapshot loader):
+ * short-lived load tickets for chunks that must be rewritten, and the
+ * relight-and-resend pass a chunk needs after its sections were mutated directly
+ * (bypassing {@code Level.setBlock} — the flag 2|16 equivalent for bulk section writes).
+ * Callers own their budget loop; behavior of the extracted pieces is byte-identical to
+ * the pre-refactor {@code RingGrowthService} code.
+ */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID)
+public final class BudgetedBlockWriter {
+    /** Keeps freshly loaded chunks around long enough to rewrite + relight + resend. */
+    public static final TicketType<ChunkPos> WRITER_TICKET =
+            TicketType.create("eclipse_ring_growth", Comparator.comparingLong(ChunkPos::toLong), 200);
+
+    /**
+     * Keeps a bulk-rewritten chunk loaded until its async relight callback lands. A sweep
+     * can queue thousands of light rebuilds, so {@code waitForPendingTasks} may complete
+     * well after {@link #WRITER_TICKET}'s 200-tick TTL — an unloaded chunk at callback
+     * time silently leaves watching clients with stale lighting. Rather than tracking and
+     * refreshing tickets per pending relight, the TTL is raised to comfortably outlast a
+     * saturated light queue (600 ticks = 30 s; measured worst-case drain during a full
+     * stage sweep is far below that); the callback logs if a chunk still fell out.
+     */
+    private static final TicketType<ChunkPos> RELIGHT_TICKET =
+            TicketType.create("eclipse_relight", Comparator.comparingLong(ChunkPos::toLong), 600);
+    /** Maximum logical block operations handed to one resumable job at a time. */
+    private static final int JOB_SLICE_OPERATIONS = 1024;
+    private static final Deque<QueuedJob> JOBS = new ArrayDeque<>();
+
+    /**
+     * Resumable unit of bulk world work. Implementations retain their own cursor and
+     * process no more than {@code operationBudget} logical block operations per call.
+     *
+     * @return {@code true} once all work is complete
+     */
+    @FunctionalInterface
+    public interface BudgetedWork {
+        boolean run(int operationBudget);
+    }
+
+    private record QueuedJob(ServerLevel level, BudgetedWork work, Runnable onComplete,
+            Consumer<Throwable> onFailure) {}
+
+    private BudgetedBlockWriter() {}
+
+    /**
+     * Enqueues resumable server-thread world work. Jobs share the configured ring-writer
+     * millisecond budget and are round-robin sliced, preventing a large structure prep
+     * from monopolizing one tick.
+     */
+    public static void enqueue(ServerLevel level, BudgetedWork work, Runnable onComplete,
+            Consumer<Throwable> onFailure) {
+        JOBS.addLast(new QueuedJob(level, work, onComplete, onFailure));
+    }
+
+    /** Number of queued bulk jobs, exposed for operator diagnostics. */
+    public static int queuedJobs() {
+        return JOBS.size();
+    }
+
+    /** Advances queued bulk jobs within the shared per-tick nanosecond budget. */
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        if (JOBS.isEmpty()) {
+            return;
+        }
+        long deadline = System.nanoTime() + EclipseConfig.ringBlocksBudgetMs() * 1_000_000L;
+        int slices = JOBS.size();
+        while (slices-- > 0 && !JOBS.isEmpty() && System.nanoTime() < deadline) {
+            QueuedJob job = JOBS.removeFirst();
+            if (job.level().getServer() != event.getServer()) {
+                continue;
+            }
+            try {
+                if (job.work().run(JOB_SLICE_OPERATIONS)) {
+                    job.onComplete().run();
+                } else {
+                    JOBS.addLast(job);
+                }
+            } catch (Throwable failure) {
+                job.onFailure().accept(failure);
+            }
+        }
+    }
+
+    /** Drops in-memory cursors on shutdown; owning SavedData rows remain pending for restart. */
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        JOBS.removeIf(job -> job.level().getServer() == event.getServer());
+    }
+
+    /** Sync-loads a chunk from disk (or generates it) under a short-lived {@link #WRITER_TICKET}. */
+    public static LevelChunk loadWithTicket(ServerLevel level, int chunkX, int chunkZ) {
+        ChunkPos pos = new ChunkPos(chunkX, chunkZ);
+        level.getChunkSource().addRegionTicket(WRITER_TICKET, pos, 1, pos);
+        return level.getChunk(chunkX, chunkZ);
+    }
+
+    /**
+     * Sync-loads (or generates) every not-currently-loaded neighbour of {@code center}
+     * under short-lived {@link #WRITER_TICKET}s — the caller-side 3×3 neighbourhood
+     * guarantee of the {@code DiscGenPipeline.runOnLiveChunk} contract (W1.5): decoration
+     * reads the neighbourhood's biomes and cross-border features write into ±1 chunks
+     * through {@code ServerLevel}, which would sync-load them MID-FEATURE otherwise
+     * (legal, but recursive loads inside feature placement make replay cost spiky and
+     * unmeasurable). Neighbours past the disc rim resolve to void chunks — generating
+     * one is cheap, every pipeline phase early-outs on no-solid-sections.
+     */
+    public static void ensureNeighborsLoaded(ServerLevel level, ChunkPos center) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if ((dx != 0 || dz != 0)
+                        && level.getChunkSource().getChunkNow(center.x + dx, center.z + dz) == null) {
+                    loadWithTicket(level, center.x + dx, center.z + dz);
+                }
+            }
+        }
+    }
+
+    /**
+     * Rebuilds a bulk-rewritten chunk's light through the light-engine task queue —
+     * clear (mirrors vanilla {@code updateChunkStatus}) then re-init + propagate (mirrors
+     * {@code initializeLight} + {@code lightChunk}; 1.21.1 has no {@code relight} helper)
+     * — and resends the chunk to watching clients once the light tasks drain. The caller
+     * must have re-primed heightmaps and dropped orphaned block entities already.
+     */
+    public static void relightAndResend(ServerLevel level, LevelChunk chunk) {
+        ChunkPos pos = chunk.getPos();
+        level.getChunkSource().addRegionTicket(RELIGHT_TICKET, pos, 1, pos);
+        chunk.initializeLightSources();
+        chunk.setUnsaved(true);
+        chunk.setLightCorrect(false);
+
+        ThreadedLevelLightEngine light = level.getChunkSource().getLightEngine();
+        light.retainData(pos, false);
+        light.setLightEnabled(pos, false);
+        for (int section = light.getMinLightSection(); section < light.getMaxLightSection(); section++) {
+            light.queueSectionData(LightLayer.BLOCK, SectionPos.of(pos, section), null);
+            light.queueSectionData(LightLayer.SKY, SectionPos.of(pos, section), null);
+        }
+        for (int section = level.getMinSection(); section < level.getMaxSection(); section++) {
+            light.updateSectionStatus(SectionPos.of(pos, section), true);
+        }
+        for (int index = 0; index < chunk.getSectionsCount(); index++) {
+            if (!chunk.getSection(index).hasOnlyAir()) {
+                light.updateSectionStatus(
+                        SectionPos.of(pos, level.getSectionYFromSectionIndex(index)), false);
+            }
+        }
+        light.propagateLightSources(pos);
+        light.waitForPendingTasks(pos.x, pos.z).thenRunAsync(() -> {
+            LevelChunk lit = level.getChunkSource().getChunkNow(pos.x, pos.z);
+            if (lit == null) {
+                // Should not happen under the 600-tick RELIGHT_TICKET; if it does, any
+                // client still watching this chunk keeps pre-rewrite lighting until the
+                // chunk reloads (light data was persisted, so this is display-only).
+                EclipseMod.LOGGER.warn(
+                        "Relight callback found chunk {} unloaded in {} — client lighting may be stale",
+                        pos, level.dimension().location());
+                return;
+            }
+            lit.setLightCorrect(true);
+            ClientboundLevelChunkWithLightPacket packet = new ClientboundLevelChunkWithLightPacket(
+                    lit, level.getChunkSource().getLightEngine(), null, null);
+            for (ServerPlayer player : level.getChunkSource().chunkMap.getPlayers(pos, false)) {
+                player.connection.send(packet);
+            }
+        }, level.getServer());
+    }
+}

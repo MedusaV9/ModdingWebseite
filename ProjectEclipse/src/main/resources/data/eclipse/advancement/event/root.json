@@ -1,0 +1,24 @@
+{
+  "display": {
+    "icon": {
+      "id": "eclipse:altar"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.root.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.root.description"
+    },
+    "background": "minecraft:textures/gui/advancements/backgrounds/stone.png",
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "joined": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "sends_telemetry_event": false
+}

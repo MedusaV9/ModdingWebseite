@@ -1,0 +1,48 @@
+{
+  "minecraftVersion": "1.21.1",
+  "targetDataVersion": 3955,
+  "trimChunkRadius": 27,
+  "keepEntityIds": [
+    "minecraft:painting",
+    "minecraft:item_frame",
+    "minecraft:glow_item_frame"
+  ],
+  "workDir": "/tmp/xboxworlds",
+  "stagingDir": "/workspace/xbox_staging",
+  "worlds": {
+    "tu1": {
+      "displayName": {
+        "en_us": "Tutorial World (TU1) — 2012",
+        "de_de": "Tutorial-Welt (TU1) — 2012"
+      },
+      "source": {
+        "url": "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU1%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip",
+        "sha256": "206e49ca4f8dae07bb21427f280ad03cf81419593c6a61b155722f268ae09f7a"
+      }
+    },
+    "tu12": {
+      "displayName": {
+        "en_us": "Tutorial World (TU12) — 2012",
+        "de_de": "Tutorial-Welt (TU12) — 2012"
+      },
+      "source": {
+        "url": "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU12%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip",
+        "sha256": "ebe10f2c20bd757e8d6b0fdcab0ba08c3f0b06bafcdb99af68a0ff2b81821d1a"
+      }
+    },
+    "tu14": {
+      "displayName": {
+        "en_us": "Tutorial World (TU14) — 2013",
+        "de_de": "Tutorial-Welt (TU14) — 2013"
+      },
+      "source": {
+        "url": "https://downloads.theminecraftarchitect.com/tutorial-worlds/TU14%20Tutorial%20World%20%5BJE%20Latest%5D%20%5BUNZIP%5D.zip",
+        "sha256": "0f558e2d3635651183e3ed8cf81d5083dd3e15a9cef33c30f0956061d252c83a"
+      }
+    }
+  },
+  "fallbackSources": [
+    "https://github.com/Fridtjof-DE/Minecraft-Xbox-360-Tutorial-Worlds (Java conversions at DataVersion 1631 / 1.13.2; TU12-13 MISSING there; needs a two-hop upgrade)",
+    "https://www.curseforge.com/minecraft/worlds/console-edition-tutorial-worlds (mirror of similar conversions; manual download only)"
+  ]
+}

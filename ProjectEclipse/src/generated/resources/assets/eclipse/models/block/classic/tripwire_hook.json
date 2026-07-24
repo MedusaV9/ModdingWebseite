@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/tripwire_hook",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "hook": "eclipse:block/classic/tripwire_hook",
+    "particle": "eclipse:block/classic/oak_planks",
+    "wood": "eclipse:block/classic/oak_planks"
+  }
+}

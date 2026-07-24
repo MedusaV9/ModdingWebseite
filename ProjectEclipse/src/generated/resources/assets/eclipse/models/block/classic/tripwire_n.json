@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/tripwire_n",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "eclipse:block/classic/tripwire",
+    "texture": "eclipse:block/classic/tripwire"
+  }
+}

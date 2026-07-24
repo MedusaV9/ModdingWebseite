@@ -1,0 +1,29 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "eclipse:pale_oak_log"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.tame_the_dark.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.tame_the_dark.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "sentinel": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": {
+          "type": "eclipse:pale_sentinel"
+        }
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

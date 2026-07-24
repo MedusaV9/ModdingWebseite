@@ -1,0 +1,1382 @@
+{
+  "pack": "Resource pack \"Minecraft: Classic Edition\" by JS03 \u2014 https://modrinth.com/resourcepack/minecraft-classic-edition",
+  "license": "MIT (verified via https://api.modrinth.com/v2/project/minecraft-classic-edition)",
+  "pack_version": "1.2.3",
+  "pack_sha512": "b504783667df83649d055c0f999e510a46f9e9caa16b67c0883771ca24fbd09118a316ba4a3d7573ce9c19dad090cca75a4d1a26512c364a75fa8dd6c460875e",
+  "textures": [
+    {
+      "texture": "block/classic/anvil.png",
+      "source": "pack block/anvil.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/anvil_top.png",
+      "source": "pack block/anvil_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/attached_melon_stem.png",
+      "source": "pack block/attached_melon_stem.png",
+      "op": "tint STEM_RIPE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/attached_pumpkin_stem.png",
+      "source": "pack block/attached_pumpkin_stem.png",
+      "op": "tint STEM_RIPE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/bedrock.png",
+      "source": "pack block/bedrock.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/birch_leaves.png",
+      "source": "pack block/birch_leaves.png",
+      "op": "tint BIRCH",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/birch_log.png",
+      "source": "pack block/birch_log.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/birch_log_top.png",
+      "source": "pack block/birch_log_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/birch_planks.png",
+      "source": "pack block/birch_planks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/birch_sapling.png",
+      "source": "pack block/birch_sapling.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/black_wool.png",
+      "source": "pack block/black_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/blue_wool.png",
+      "source": "pack block/blue_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/bookshelf.png",
+      "source": "pack block/bookshelf.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/brewing_stand.png",
+      "source": "pack block/brewing_stand.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/brewing_stand_base.png",
+      "source": "pack block/brewing_stand_base.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/bricks.png",
+      "source": "pack block/bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/brown_mushroom.png",
+      "source": "pack block/brown_mushroom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/brown_mushroom_block.png",
+      "source": "pack block/brown_mushroom_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/brown_wool.png",
+      "source": "pack block/brown_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cactus_bottom.png",
+      "source": "pack block/cactus_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cactus_side.png",
+      "source": "pack block/cactus_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cactus_top.png",
+      "source": "pack block/cactus_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/carrots_stage0.png",
+      "source": "pack block/carrots_stage0.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/carrots_stage1.png",
+      "source": "pack block/carrots_stage1.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/carrots_stage2.png",
+      "source": "pack block/carrots_stage2.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/carrots_stage3.png",
+      "source": "pack block/carrots_stage3.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/carved_pumpkin.png",
+      "source": "pack block/carved_pumpkin.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cauldron_bottom.png",
+      "source": "pack block/cauldron_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cauldron_inner.png",
+      "source": "pack block/cauldron_inner.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cauldron_side.png",
+      "source": "pack block/cauldron_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cauldron_top.png",
+      "source": "pack block/cauldron_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/chest_front.png",
+      "source": "derived from pack block/oak_planks.png",
+      "op": "drawn cube-chest front",
+      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+    },
+    {
+      "texture": "block/classic/chest_side.png",
+      "source": "derived from pack block/oak_planks.png",
+      "op": "drawn cube-chest side",
+      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+    },
+    {
+      "texture": "block/classic/chest_top.png",
+      "source": "derived from pack block/oak_planks.png",
+      "op": "drawn cube-chest top",
+      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+    },
+    {
+      "texture": "block/classic/chiseled_sandstone.png",
+      "source": "pack block/chiseled_sandstone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/chiseled_stone_bricks.png",
+      "source": "pack block/chiseled_stone_bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/clay.png",
+      "source": "pack block/clay.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/coal_ore.png",
+      "source": "pack block/coal_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cobblestone.png",
+      "source": "pack block/cobblestone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cobweb.png",
+      "source": "pack block/cobweb.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cocoa_stage0.png",
+      "source": "pack block/cocoa_stage0.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cocoa_stage1.png",
+      "source": "pack block/cocoa_stage1.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cocoa_stage2.png",
+      "source": "pack block/cocoa_stage2.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cracked_stone_bricks.png",
+      "source": "pack block/cracked_stone_bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/crafting_table_front.png",
+      "source": "pack block/crafting_table_front.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/crafting_table_side.png",
+      "source": "pack block/crafting_table_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/crafting_table_top.png",
+      "source": "pack block/crafting_table_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cut_sandstone.png",
+      "source": "pack block/cut_sandstone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/cyan_wool.png",
+      "source": "pack block/cyan_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/dandelion.png",
+      "source": "pack block/dandelion.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/dead_bush.png",
+      "source": "pack block/dead_bush.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/detector_rail.png",
+      "source": "pack block/detector_rail.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/detector_rail_on.png",
+      "source": "pack block/detector_rail_on.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/diamond_block.png",
+      "source": "pack block/diamond_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/diamond_ore.png",
+      "source": "pack block/diamond_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/dirt.png",
+      "source": "pack block/dirt.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/dispenser_front.png",
+      "source": "pack block/dispenser_front.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/dispenser_front_vertical.png",
+      "source": "pack block/dispenser_front_vertical.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/emerald_ore.png",
+      "source": "pack block/emerald_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/enchanting_table_bottom.png",
+      "source": "pack block/enchanting_table_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/enchanting_table_side.png",
+      "source": "pack block/enchanting_table_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/enchanting_table_top.png",
+      "source": "pack block/enchanting_table_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/end_portal_frame_eye.png",
+      "source": "pack block/end_portal_frame_eye.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/end_portal_frame_side.png",
+      "source": "derived from pack block/cobblestone.png",
+      "op": "end frame side recolor",
+      "note": "pack has no end textures; drawn over the recreated end stone"
+    },
+    {
+      "texture": "block/classic/end_portal_frame_top.png",
+      "source": "derived from pack block/cobblestone.png",
+      "op": "end frame top recolor",
+      "note": "pack has no end textures; drawn over the recreated end stone"
+    },
+    {
+      "texture": "block/classic/end_stone.png",
+      "source": "derived from pack block/cobblestone.png",
+      "op": "color-inverted + pale tint",
+      "note": "pack has no end textures; recreated with the classic invert-cobble trick"
+    },
+    {
+      "texture": "block/classic/ender_chest_front.png",
+      "source": "derived from pack block/obsidian.png",
+      "op": "drawn cube-chest front",
+      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+    },
+    {
+      "texture": "block/classic/ender_chest_side.png",
+      "source": "derived from pack block/obsidian.png",
+      "op": "drawn cube-chest side",
+      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+    },
+    {
+      "texture": "block/classic/ender_chest_top.png",
+      "source": "derived from pack block/obsidian.png",
+      "op": "drawn cube-chest top",
+      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+    },
+    {
+      "texture": "block/classic/farmland.png",
+      "source": "pack block/farmland.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/farmland_moist.png",
+      "source": "pack block/farmland_moist.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/fern.png",
+      "source": "pack block/fern.png",
+      "op": "tint GRASS",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/fire_0.png",
+      "source": "pack block/campfire_fire.png",
+      "op": "16x16 frame 0 of animation strip",
+      "note": "static frame keeps the jar small; deco block needs no animation"
+    },
+    {
+      "texture": "block/classic/fire_1.png",
+      "source": "pack block/campfire_fire.png",
+      "op": "16x16 frame 8 of animation strip",
+      "note": "static frame keeps the jar small; deco block needs no animation"
+    },
+    {
+      "texture": "block/classic/flower_pot.png",
+      "source": "pack block/flower_pot.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/furnace_front.png",
+      "source": "pack block/furnace_front.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/furnace_front_on.png",
+      "source": "pack block/furnace_front_on.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/furnace_side.png",
+      "source": "pack block/furnace_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/furnace_top.png",
+      "source": "pack block/furnace_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/glass.png",
+      "source": "pack block/glass.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/glass_pane_top.png",
+      "source": "pack block/glass_pane_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/glowstone.png",
+      "source": "pack block/glowstone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/gold_block.png",
+      "source": "pack block/gold_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/gold_ore.png",
+      "source": "pack block/gold_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/grass_block_side.png",
+      "source": "pack block/grass_block_side.png + grass_block_side_overlay.png",
+      "op": "composite overlay x GRASS",
+      "note": "classic baked-in green rim"
+    },
+    {
+      "texture": "block/classic/grass_block_snow.png",
+      "source": "pack block/grass_block_snow.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/grass_block_top.png",
+      "source": "pack block/grass_block_top.png",
+      "op": "tint GRASS",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/gravel.png",
+      "source": "pack block/gravel.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/gray_wool.png",
+      "source": "pack block/gray_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/green_wool.png",
+      "source": "pack block/green_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/ice.png",
+      "source": "pack block/ice.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/iron_bars.png",
+      "source": "pack block/iron_bars.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/iron_block.png",
+      "source": "pack block/iron_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/iron_door_bottom.png",
+      "source": "pack block/iron_door_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/iron_door_top.png",
+      "source": "pack block/iron_door_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/iron_ore.png",
+      "source": "pack block/iron_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jack_o_lantern.png",
+      "source": "pack block/jack_o_lantern.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jukebox_side.png",
+      "source": "pack block/jukebox_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jukebox_top.png",
+      "source": "pack block/jukebox_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jungle_leaves.png",
+      "source": "pack block/jungle_leaves.png",
+      "op": "tint FOLIAGE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/jungle_log.png",
+      "source": "pack block/jungle_log.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jungle_log_top.png",
+      "source": "pack block/jungle_log_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jungle_planks.png",
+      "source": "pack block/jungle_planks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/jungle_sapling.png",
+      "source": "pack block/jungle_sapling.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/ladder.png",
+      "source": "pack block/ladder.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/lapis_block.png",
+      "source": "pack block/lapis_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/lapis_ore.png",
+      "source": "pack block/lapis_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/lava_still.png",
+      "source": "pack block/lava_still.png",
+      "op": "first 16x16 frame of animation strip",
+      "note": "static frame keeps the jar small; deco block needs no animation"
+    },
+    {
+      "texture": "block/classic/lever.png",
+      "source": "pack block/lever.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/light_blue_wool.png",
+      "source": "pack block/light_blue_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/light_gray_wool.png",
+      "source": "pack block/light_gray_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/lily_pad.png",
+      "source": "pack block/lily_pad.png",
+      "op": "tint LILY",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/lime_wool.png",
+      "source": "pack block/lime_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/magenta_wool.png",
+      "source": "pack block/magenta_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/melon_side.png",
+      "source": "pack block/melon_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/melon_stem.png",
+      "source": "pack block/melon_stem.png",
+      "op": "tint STEM_GREEN",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/melon_top.png",
+      "source": "pack block/melon_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mossy_cobblestone.png",
+      "source": "pack block/mossy_cobblestone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mossy_stone_bricks.png",
+      "source": "pack block/mossy_stone_bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mushroom_block_inside.png",
+      "source": "pack block/mushroom_block_inside.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mushroom_stem.png",
+      "source": "pack block/mushroom_stem.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mycelium_side.png",
+      "source": "pack block/mycelium_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/mycelium_top.png",
+      "source": "pack block/mycelium_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/nether_bricks.png",
+      "source": "pack block/nether_bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/nether_portal.png",
+      "source": "pack block/nether_portal.png",
+      "op": "16x16 frame 0 of animation strip",
+      "note": "static frame keeps the jar small; deco block needs no animation"
+    },
+    {
+      "texture": "block/classic/netherrack.png",
+      "source": "pack block/netherrack.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/note_block.png",
+      "source": "pack block/note_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_door_bottom.png",
+      "source": "pack block/oak_door_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_door_top.png",
+      "source": "pack block/oak_door_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_leaves.png",
+      "source": "pack block/oak_leaves.png",
+      "op": "tint FOLIAGE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/oak_log.png",
+      "source": "pack block/oak_log.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_log_top.png",
+      "source": "pack block/oak_log_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_planks.png",
+      "source": "pack block/oak_planks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_sapling.png",
+      "source": "pack block/oak_sapling.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/oak_trapdoor.png",
+      "source": "pack block/oak_trapdoor.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/obsidian.png",
+      "source": "pack block/obsidian.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/orange_wool.png",
+      "source": "pack block/orange_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/pink_wool.png",
+      "source": "pack block/pink_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/piston_bottom.png",
+      "source": "pack block/piston_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/piston_inner.png",
+      "source": "pack block/piston_inner.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/piston_side.png",
+      "source": "pack block/piston_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/piston_top.png",
+      "source": "pack block/piston_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/piston_top_sticky.png",
+      "source": "pack block/piston_top_sticky.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/poppy.png",
+      "source": "pack block/poppy.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/potatoes_stage0.png",
+      "source": "pack block/potatoes_stage0.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/potatoes_stage1.png",
+      "source": "pack block/potatoes_stage1.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/potatoes_stage2.png",
+      "source": "pack block/potatoes_stage2.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/potatoes_stage3.png",
+      "source": "pack block/potatoes_stage3.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/powered_rail.png",
+      "source": "pack block/powered_rail.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/powered_rail_on.png",
+      "source": "pack block/powered_rail_on.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/pumpkin_side.png",
+      "source": "pack block/pumpkin_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/pumpkin_stem.png",
+      "source": "pack block/pumpkin_stem.png",
+      "op": "tint STEM_GREEN",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/pumpkin_top.png",
+      "source": "pack block/pumpkin_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/purple_wool.png",
+      "source": "pack block/purple_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/quartz_block_bottom.png",
+      "source": "pack block/quartz_block_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/quartz_block_side.png",
+      "source": "pack block/quartz_block_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/quartz_block_top.png",
+      "source": "pack block/quartz_block_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/quartz_pillar.png",
+      "source": "pack block/quartz_pillar.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/quartz_pillar_top.png",
+      "source": "pack block/quartz_pillar_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/rail.png",
+      "source": "pack block/rail.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/rail_corner.png",
+      "source": "pack block/rail_corner.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/red_bed_sheet.png",
+      "source": "pack entity/bed/red.png",
+      "op": "copy (64x64)",
+      "note": "bed model UV-maps into the sheet"
+    },
+    {
+      "texture": "block/classic/red_mushroom.png",
+      "source": "pack block/red_mushroom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/red_mushroom_block.png",
+      "source": "pack block/red_mushroom_block.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/red_wool.png",
+      "source": "pack block/red_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_dust_dot.png",
+      "source": "derived from pack block/redstone_dust_line0.png",
+      "op": "palette-sampled dot blob",
+      "note": "modern packs have no dot; drawn using the pack's own dust color"
+    },
+    {
+      "texture": "block/classic/redstone_dust_line0.png",
+      "source": "pack block/redstone_dust_line0.png",
+      "op": "tint RED_DUST",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/redstone_dust_line1.png",
+      "source": "pack block/redstone_dust_line1.png",
+      "op": "tint RED_DUST",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/redstone_dust_overlay.png",
+      "source": "pack block/redstone_dust_overlay.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_lamp.png",
+      "source": "pack block/redstone_lamp.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_lamp_on.png",
+      "source": "pack block/redstone_lamp_on.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_ore.png",
+      "source": "pack block/redstone_ore.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_torch.png",
+      "source": "pack block/redstone_torch.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/redstone_torch_off.png",
+      "source": "pack block/redstone_torch_off.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/repeater.png",
+      "source": "pack block/repeater.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/repeater_on.png",
+      "source": "pack block/repeater_on.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sand.png",
+      "source": "pack block/sand.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sandstone.png",
+      "source": "pack block/sandstone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sandstone_bottom.png",
+      "source": "pack block/sandstone_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sandstone_top.png",
+      "source": "pack block/sandstone_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/short_grass.png",
+      "source": "pack block/grass.png",
+      "op": "tint GRASS",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/sign_oak.png",
+      "source": "pack entity/sign.png",
+      "op": "64x16 board crop",
+      "note": "wall-sign model UV-maps into this"
+    },
+    {
+      "texture": "block/classic/skull_creeper.png",
+      "source": "pack entity/creeper/creeper.png",
+      "op": "32x16 head crop",
+      "note": "skull cube UV-maps into this"
+    },
+    {
+      "texture": "block/classic/skull_skeleton.png",
+      "source": "pack entity/skeleton/skeleton.png",
+      "op": "32x16 head crop",
+      "note": "skull cube UV-maps into this"
+    },
+    {
+      "texture": "block/classic/skull_steve.png",
+      "source": "pack entity/steve.png",
+      "op": "32x16 head crop",
+      "note": "skull cube UV-maps into this"
+    },
+    {
+      "texture": "block/classic/skull_wither_skeleton.png",
+      "source": "pack entity/skeleton/wither_skeleton.png",
+      "op": "32x16 head crop",
+      "note": "skull cube UV-maps into this"
+    },
+    {
+      "texture": "block/classic/skull_zombie.png",
+      "source": "pack entity/zombie/zombie.png",
+      "op": "32x16 head crop",
+      "note": "skull cube UV-maps into this"
+    },
+    {
+      "texture": "block/classic/smooth_stone.png",
+      "source": "pack block/smooth_stone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/smooth_stone_slab_side.png",
+      "source": "pack block/smooth_stone_slab_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/snow.png",
+      "source": "pack block/snow.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/soul_sand.png",
+      "source": "pack block/soul_sand.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/spawner.png",
+      "source": "pack block/spawner.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sponge.png",
+      "source": "pack block/sponge.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/spruce_leaves.png",
+      "source": "pack block/spruce_leaves.png",
+      "op": "tint SPRUCE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/spruce_log.png",
+      "source": "pack block/spruce_log.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/spruce_log_top.png",
+      "source": "pack block/spruce_log_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/spruce_planks.png",
+      "source": "pack block/spruce_planks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/spruce_sapling.png",
+      "source": "pack block/spruce_sapling.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/stone.png",
+      "source": "pack block/stone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/stone_bricks.png",
+      "source": "pack block/stone_bricks.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/sugar_cane.png",
+      "source": "pack block/sugar_cane.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/tnt_bottom.png",
+      "source": "pack block/tnt_bottom.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/tnt_side.png",
+      "source": "pack block/tnt_side.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/tnt_top.png",
+      "source": "pack block/tnt_top.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/torch.png",
+      "source": "pack block/torch.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/tripwire.png",
+      "source": "pack block/tripwire.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/tripwire_hook.png",
+      "source": "pack block/tripwire_hook.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/vine.png",
+      "source": "pack block/vine.png",
+      "op": "tint FOLIAGE",
+      "note": "pack ships grayscale for live biome tinting; fixed classic tone baked in"
+    },
+    {
+      "texture": "block/classic/water_still.png",
+      "source": "procedural",
+      "op": "drawn from scratch (sine ripple tile)",
+      "note": "pack does not skin water; nothing copied"
+    },
+    {
+      "texture": "block/classic/wheat_stage0.png",
+      "source": "pack block/wheat_stage0.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage1.png",
+      "source": "pack block/wheat_stage1.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage2.png",
+      "source": "pack block/wheat_stage2.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage3.png",
+      "source": "pack block/wheat_stage3.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage4.png",
+      "source": "pack block/wheat_stage4.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage5.png",
+      "source": "pack block/wheat_stage5.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage6.png",
+      "source": "pack block/wheat_stage6.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/wheat_stage7.png",
+      "source": "pack block/wheat_stage7.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/white_wool.png",
+      "source": "pack block/white_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "block/classic/yellow_wool.png",
+      "source": "pack block/yellow_wool.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/brewing_stand.png",
+      "source": "pack item/brewing_stand.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/carrot.png",
+      "source": "pack item/carrot.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/iron_door.png",
+      "source": "pack item/iron_door.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/oak_door.png",
+      "source": "pack item/oak_door.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/potato.png",
+      "source": "pack item/potato.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/red_bed.png",
+      "source": "pack item/red_bed.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/redstone.png",
+      "source": "pack item/redstone.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/repeater.png",
+      "source": "pack item/repeater.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/sugar_cane.png",
+      "source": "pack item/sugar_cane.png",
+      "op": "copy",
+      "note": ""
+    },
+    {
+      "texture": "item/classic/wheat.png",
+      "source": "pack item/wheat.png",
+      "op": "copy",
+      "note": ""
+    }
+  ]
+}

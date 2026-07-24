@@ -1,0 +1,14 @@
+{
+ "en_us": {
+  "announce.eclipse.boss.intro.herald": "The eclipse speaks through it.",
+  "announce.eclipse.boss.intro.ferryman": "The crossing has a price.",
+  "announce.eclipse.boss.intro.rift_warden": "It guards what should stay shut.",
+  "announce.eclipse.boss.intro.fog_tyrant": "The storm wears a crown."
+ },
+ "de_de": {
+  "announce.eclipse.boss.intro.herald": "Die Finsternis spricht durch ihn.",
+  "announce.eclipse.boss.intro.ferryman": "Die Überfahrt hat ihren Preis.",
+  "announce.eclipse.boss.intro.rift_warden": "Er bewacht, was verschlossen bleiben sollte.",
+  "announce.eclipse.boss.intro.fog_tyrant": "Der Sturm trägt eine Krone."
+ }
+}

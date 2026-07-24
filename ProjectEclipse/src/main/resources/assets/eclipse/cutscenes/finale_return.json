@@ -1,0 +1,25 @@
+{
+  "id": "finale_return",
+  "enabled": true,
+  "allowSkip": false,
+  "interpolation": "catmullrom",
+  "anchor": "player",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 240,
+  "keyframes": [
+    { "t": 0.0, "pos": [-14.0, 30.0, -26.0], "yaw": -28, "pitch": 44, "roll": -2, "fov": 62, "easing": "linear", "lookAt": "player" },
+    { "t": 0.36, "pos": [20.0, 18.0, -14.0], "yaw": 55, "pitch": 34, "roll": 2, "fov": 60, "easing": "linear", "lookAt": "player" },
+    { "t": 0.62, "pos": [16.0, 8.0, 12.0], "yaw": 127, "pitch": 18, "roll": 1, "fov": 64, "easing": "linear", "lookAt": "player" },
+    { "t": 0.84, "pos": [-6.0, 3.5, 8.0], "yaw": -143, "pitch": 11, "roll": 0, "fov": 68, "easing": "easeOutCubic", "lookAt": "player" },
+    { "t": 1.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "linear" }
+  ],
+  "events": [
+    { "t": 0.0, "type": "fade", "id": "finale_open", "data": "1,14,30" },
+    { "t": 0.06, "type": "caption", "id": "eclipse.caption.finale.dawn", "data": "subtitle,80" },
+    { "t": 0.5, "type": "caption", "id": "eclipse.caption.finale.home", "data": "whisper,70" },
+    { "t": 0.85, "type": "sound", "id": "eclipse:event.emerge" },
+    { "t": 0.85, "type": "shake", "id": "finale_settle", "data": "0.18,26,2.5" }
+  ]
+}

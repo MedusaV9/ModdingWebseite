@@ -1,0 +1,29 @@
+{
+  "parent": "eclipse:event/herald_slain",
+  "display": {
+    "icon": {
+      "id": "eclipse:ferryman_toll"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.ferryman_slain.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.ferryman_slain.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "ferryman": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": {
+          "type": "eclipse:ferryman"
+        }
+      }
+    }
+  },
+  "sends_telemetry_event": false
+}

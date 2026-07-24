@@ -11,3 +11,10 @@ A multi-page marketing/community website for **BAPBAP Modding** (a fan-made comm
 - **Routing**: the site is multi-page via react-router-dom v7 **HashRouter** (deliberate — the static host has no SPA fallback, so only `/#/...` deep links survive refresh). Routes live in `src/App.tsx`, page components in `src/pages/`, and the shared Navbar/Footer shell in `src/Layout.tsx`.
 - **Content lives in data files**: all site content (mod catalog, game modes, launcher features/changelog, radio track list, archived builds, bundles, external links) is hardcoded in `src/data/` (`mods.ts`, `modes.ts`, `launcher.ts`, `radio.ts`, `versions.ts`, `bundles.ts`, `links.ts`). Edit these to update the catalog — pages in `src/pages/` (and the home sections in `src/sections/`) render from them.
 - **Assets are optional / drop-in**: the site renders fully with no local image assets (visuals are CSS gradients/SVG). Real art can be dropped into `public/assets/` using the filenames documented in `public/assets/README.md` (`logo.svg`, `hero-art.png`, `og-image.png`, `mods/<mod-id>.png`). Mod cards try a local `/assets/mods/<id>.png` first, then fall back to a remote `raw.githubusercontent.com` thumbnail, then to a generated initials tile — so mod thumbnails depend on outbound network access unless local overrides are added.
+
+## ProjectEclipse (Minecraft-Mod)
+
+- A **NeoForge 1.21.1** Minecraft mod (mod id `eclipse`, package `dev.projecteclipse.eclipse`) lives in `ProjectEclipse/` — a separate project from the website.
+- Build with `cd ProjectEclipse && ./gradlew build` (requires **Java 21**; the first build downloads ~1–2 GB of NeoForge/Minecraft artifacts).
+- Dev docs and the full architecture reference are in `ProjectEclipse/README.md` and `ProjectEclipse/AGENTS.md`.
+- The `ProjectEclipse/run/` folder is gitignored dev state (world saves, mods, server config) — do not commit it.

@@ -1,0 +1,10 @@
+{
+  "parent": "minecraft:block/flower_pot_cross",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "dirt": "eclipse:block/classic/dirt",
+    "flowerpot": "eclipse:block/classic/flower_pot",
+    "particle": "eclipse:block/classic/flower_pot",
+    "plant": "eclipse:block/classic/poppy"
+  }
+}

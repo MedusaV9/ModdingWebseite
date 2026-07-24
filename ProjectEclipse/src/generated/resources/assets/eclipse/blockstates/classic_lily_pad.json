@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "eclipse:block/classic/lily_pad"
+      },
+      {
+        "model": "eclipse:block/classic/lily_pad",
+        "y": 90
+      },
+      {
+        "model": "eclipse:block/classic/lily_pad",
+        "y": 180
+      },
+      {
+        "model": "eclipse:block/classic/lily_pad",
+        "y": 270
+      }
+    ]
+  }
+}

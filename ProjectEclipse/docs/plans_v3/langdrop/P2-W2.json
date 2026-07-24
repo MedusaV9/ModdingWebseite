@@ -1,0 +1,40 @@
+{
+  "en_us": {
+    "eclipse.caption.finale.dawn": "The light returns. The world breathes again.",
+    "eclipse.caption.finale.home": "You made it home.",
+    "eclipse.caption.demo.title": "THE ECLIPSE",
+    "eclipse.caption.demo.whisper": "...it sees you...",
+    "dev.eclipse.doc.fx.post": "Force an Eclipse Veil post pipeline on/off on your client, or list live pipelines.",
+    "dev.eclipse.doc.fx.uniform": "Override one float uniform of a Veil post pipeline on your client (debug knob).",
+    "dev.eclipse.doc.fx.emitter": "Spawn a Quasar emitter on your client, at your feet or at the given position.",
+    "dev.eclipse.doc.fx.cutscene.play": "Play a cutscene for ALL players: global teleport gather, view-distance bump, return after.",
+    "dev.eclipse.doc.fx.cutscene.stop": "Abort every active cutscene session (unfreeze + return gathered players).",
+    "dev.eclipse.doc.fx.cutscene.preview": "Trace a cutscene flight path with particles (arc-length spaced; no camera takeover).",
+    "dev.eclipse.doc.fx.sequence": "Replay one phase of a scripted sequence in FX-only mode (no world/state changes).",
+    "dev.eclipse.doc.fx.storm": "Spawn/dissipate a dev storm wall or vortex at your position, or fire a lightning bolt where you look.",
+    "dev.eclipse.doc.fx.rift": "Open a rift tear FX at a position with the given width; 'rift close' closes your last one.",
+    "dev.eclipse.doc.fx.supplybeam": "Toggle a test supply-beam marker at your position (add on first run, remove on second).",
+    "dev.eclipse.doc.fx.sun.debug": "Toggle the sun-debug HUD cross at the CPU-projected sun point (compare against the disc).",
+    "dev.eclipse.doc.fx.viewdist": "Push a cinematic view distance to your client, or reset the server+client bump.",
+    "dev.eclipse.doc.fx.caption": "Show a cinematic caption on your client in the given style (subtitle, title or whisper)."
+  },
+  "de_de": {
+    "eclipse.caption.finale.dawn": "Das Licht kehrt zurück. Die Welt atmet wieder.",
+    "eclipse.caption.finale.home": "Du hast es nach Hause geschafft.",
+    "eclipse.caption.demo.title": "DIE FINSTERNIS",
+    "eclipse.caption.demo.whisper": "...es sieht dich...",
+    "dev.eclipse.doc.fx.post": "Erzwingt eine Eclipse-Veil-Post-Pipeline auf deinem Client an/aus oder listet laufende Pipelines.",
+    "dev.eclipse.doc.fx.uniform": "Überschreibt eine Float-Uniform einer Veil-Post-Pipeline auf deinem Client (Debug-Regler).",
+    "dev.eclipse.doc.fx.emitter": "Spawnt einen Quasar-Emitter auf deinem Client, an deiner Position oder den angegebenen Koordinaten.",
+    "dev.eclipse.doc.fx.cutscene.play": "Spielt eine Cutscene für ALLE Spieler: globales Teleport-Sammeln, Sichtweiten-Erhöhung, Rückkehr danach.",
+    "dev.eclipse.doc.fx.cutscene.stop": "Bricht jede aktive Cutscene-Session ab (Freeze lösen + gesammelte Spieler zurückbringen).",
+    "dev.eclipse.doc.fx.cutscene.preview": "Zeichnet einen Cutscene-Kamerapfad mit Partikeln nach (bogenlängen-gleichmäßig; keine Kameraübernahme).",
+    "dev.eclipse.doc.fx.sequence": "Spielt eine Phase einer Skript-Sequenz im Nur-FX-Modus erneut ab (keine Welt-/Zustandsänderungen).",
+    "dev.eclipse.doc.fx.storm": "Spawnt/löst einen Dev-Sturm (Wand oder Wirbel) an deiner Position auf oder feuert einen Blitz auf deinen Blickpunkt.",
+    "dev.eclipse.doc.fx.rift": "Öffnet einen Riss-Effekt an einer Position mit der angegebenen Breite; 'rift close' schließt deinen letzten.",
+    "dev.eclipse.doc.fx.supplybeam": "Schaltet einen Test-Versorgungsstrahl-Marker an deiner Position um (erster Aufruf setzt, zweiter entfernt).",
+    "dev.eclipse.doc.fx.sun.debug": "Schaltet das Sonnen-Debug-HUD-Kreuz am CPU-projizierten Sonnenpunkt um (Vergleich mit der Scheibe).",
+    "dev.eclipse.doc.fx.viewdist": "Sendet eine kinematische Sichtweite an deinen Client oder setzt die Server+Client-Erhöhung zurück.",
+    "dev.eclipse.doc.fx.caption": "Zeigt eine kinematische Bildunterschrift auf deinem Client im gewählten Stil (subtitle, title oder whisper)."
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/snow_height10",
+  "textures": {
+    "particle": "eclipse:block/classic/snow",
+    "texture": "eclipse:block/classic/snow"
+  }
+}

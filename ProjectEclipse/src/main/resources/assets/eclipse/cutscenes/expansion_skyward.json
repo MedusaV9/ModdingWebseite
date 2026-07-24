@@ -1,0 +1,24 @@
+{
+  "id": "expansion_skyward",
+  "enabled": true,
+  "allowSkip": true,
+  "interpolation": "bezier",
+  "anchor": "player",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 80,
+  "keyframes": [
+    { "t": 0.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "easeInOutSine" },
+    { "t": 0.4, "pos": [0.0, 3.2, -1.0], "yaw": 0, "pitch": -38, "roll": 0, "fov": 66, "easing": "easeInOutSine" },
+    { "t": 0.75, "pos": [0.0, 5.0, -2.2], "yaw": 0, "pitch": -68, "roll": 0, "fov": 60, "easing": "easeInOutSine" },
+    { "t": 1.0, "pos": [0.0, 5.8, -2.6], "yaw": 0, "pitch": -74, "roll": 0, "fov": 56, "easing": "easeOutCubic" }
+  ],
+  "events": [
+    { "t": 0.05, "type": "sound", "id": "eclipse:event.eclipse_drone" },
+    { "t": 0.85, "type": "shake", "id": "", "data": "0.12,20" }
+  ],
+  "params": {
+    "_comment": "W7 expansion SKYWARD beat: player-anchored tilt from the watcher's own eyes up into the darkening sky while the eclipse grade ramps in. Bezier so the camera settles on the sky hold instead of overshooting. The follow-up shot is expansion_flyover."
+  }
+}

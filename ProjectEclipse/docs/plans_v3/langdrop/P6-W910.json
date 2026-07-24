@@ -1,0 +1,16 @@
+{
+	"en_us": {
+		"entity.eclipse.pale_sentinel": "Pale Sentinel",
+		"entity.eclipse.eclipse_cultist": "Eclipse Cultist",
+		"entity.eclipse.shadow_bolt": "Shadow Bolt",
+		"entity.eclipse.rift_warden": "Rift Warden",
+		"entity.eclipse.rift_warden.bossbar": "The Rift Warden"
+	},
+	"de_de": {
+		"entity.eclipse.pale_sentinel": "Fahler Wächter",
+		"entity.eclipse.eclipse_cultist": "Eklipsen-Kultist",
+		"entity.eclipse.shadow_bolt": "Schattengeschoss",
+		"entity.eclipse.rift_warden": "Risswächter",
+		"entity.eclipse.rift_warden.bossbar": "Der Risswächter"
+	}
+}

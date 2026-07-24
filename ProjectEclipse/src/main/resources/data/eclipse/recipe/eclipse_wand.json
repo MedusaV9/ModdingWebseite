@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "UUC",
+    "UDU",
+    "DUU"
+  ],
+  "key": {
+    "C": {
+      "item": "eclipse:wizard_catalyst"
+    },
+    "U": {
+      "item": "eclipse:umbral_shard"
+    },
+    "D": {
+      "item": "minecraft:diamond_block"
+    }
+  },
+  "result": {
+    "id": "eclipse:eclipse_wand",
+    "count": 1
+  }
+}

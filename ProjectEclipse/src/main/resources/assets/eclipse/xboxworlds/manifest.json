@@ -1,0 +1,139 @@
+{
+  "formatVersion": 1,
+  "_generated": "tools/xboxworlds/package.py (P5-W7) - do not hand-edit",
+  "note": "world zips are staged in /workspace/xbox_staging until the orchestrator approves the size gate (plan SS3 P5-W7); after approval they are copied NEXT TO this manifest as <worldId>.zip",
+  "worlds": [
+    {
+      "worldId": "tu1",
+      "displayName": {
+        "en_us": "Tutorial World (TU1) — 2012",
+        "de_de": "Tutorial-Welt (TU1) — 2012"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu1.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        -4,
+        70,
+        -36
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "9e04f097ae736e476cd1a5ed47e1ba55e415ff4ff39824146917eac43707687a",
+      "sizeBytes": 6598826,
+      "chunkCount": 2916,
+      "bounds": {
+        "chunkMin": [
+          -27,
+          -27
+        ],
+        "chunkMax": [
+          26,
+          26
+        ],
+        "blockMin": [
+          -432,
+          0,
+          -432
+        ],
+        "blockMax": [
+          431,
+          255,
+          431
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu1_loot.json"
+    },
+    {
+      "worldId": "tu12",
+      "displayName": {
+        "en_us": "Tutorial World (TU12) — 2012",
+        "de_de": "Tutorial-Welt (TU12) — 2012"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu12.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        97,
+        72,
+        -106
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "015d60bbf756251d3fcfff2c1dbfe15dbf61618146de8d07f23dbdd1277a696f",
+      "sizeBytes": 6539810,
+      "chunkCount": 2916,
+      "bounds": {
+        "chunkMin": [
+          -27,
+          -27
+        ],
+        "chunkMax": [
+          26,
+          26
+        ],
+        "blockMin": [
+          -432,
+          0,
+          -432
+        ],
+        "blockMax": [
+          431,
+          255,
+          431
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu12_loot.json"
+    },
+    {
+      "worldId": "tu14",
+      "displayName": {
+        "en_us": "Tutorial World (TU14) — 2013",
+        "de_de": "Tutorial-Welt (TU14) — 2013"
+      },
+      "zip": "assets/eclipse/xboxworlds/tu14.zip",
+      "zipEntries": [
+        "region/*.mca",
+        "entities/*.mca (optional)",
+        "level.dat (dev-client only)"
+      ],
+      "spawn": [
+        97,
+        72,
+        -106
+      ],
+      "spawnYaw": 0.0,
+      "dataVersion": 3955,
+      "sha256": "3071a02ef77e53d9580f9bb254fcd404fe85726b55b2307d440e46ee7ef455a9",
+      "sizeBytes": 6560905,
+      "chunkCount": 2916,
+      "bounds": {
+        "chunkMin": [
+          -27,
+          -27
+        ],
+        "chunkMax": [
+          26,
+          26
+        ],
+        "blockMin": [
+          -432,
+          0,
+          -432
+        ],
+        "blockMax": [
+          431,
+          255,
+          431
+        ]
+      },
+      "lootManifest": "data/eclipse/xboxworlds/tu14_loot.json"
+    }
+  ]
+}

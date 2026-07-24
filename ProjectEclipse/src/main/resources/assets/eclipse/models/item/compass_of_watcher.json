@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "eclipse:item/compass_of_watcher_16"
+  },
+  "overrides": [
+    { "predicate": { "angle": 0.000000 }, "model": "eclipse:item/compass_of_watcher" },
+    { "predicate": { "angle": 0.015625 }, "model": "eclipse:item/compass_of_watcher_17" },
+    { "predicate": { "angle": 0.046875 }, "model": "eclipse:item/compass_of_watcher_18" },
+    { "predicate": { "angle": 0.078125 }, "model": "eclipse:item/compass_of_watcher_19" },
+    { "predicate": { "angle": 0.109375 }, "model": "eclipse:item/compass_of_watcher_20" },
+    { "predicate": { "angle": 0.140625 }, "model": "eclipse:item/compass_of_watcher_21" },
+    { "predicate": { "angle": 0.171875 }, "model": "eclipse:item/compass_of_watcher_22" },
+    { "predicate": { "angle": 0.203125 }, "model": "eclipse:item/compass_of_watcher_23" },
+    { "predicate": { "angle": 0.234375 }, "model": "eclipse:item/compass_of_watcher_24" },
+    { "predicate": { "angle": 0.265625 }, "model": "eclipse:item/compass_of_watcher_25" },
+    { "predicate": { "angle": 0.296875 }, "model": "eclipse:item/compass_of_watcher_26" },
+    { "predicate": { "angle": 0.328125 }, "model": "eclipse:item/compass_of_watcher_27" },
+    { "predicate": { "angle": 0.359375 }, "model": "eclipse:item/compass_of_watcher_28" },
+    { "predicate": { "angle": 0.390625 }, "model": "eclipse:item/compass_of_watcher_29" },
+    { "predicate": { "angle": 0.421875 }, "model": "eclipse:item/compass_of_watcher_30" },
+    { "predicate": { "angle": 0.453125 }, "model": "eclipse:item/compass_of_watcher_31" },
+    { "predicate": { "angle": 0.484375 }, "model": "eclipse:item/compass_of_watcher_00" },
+    { "predicate": { "angle": 0.515625 }, "model": "eclipse:item/compass_of_watcher_01" },
+    { "predicate": { "angle": 0.546875 }, "model": "eclipse:item/compass_of_watcher_02" },
+    { "predicate": { "angle": 0.578125 }, "model": "eclipse:item/compass_of_watcher_03" },
+    { "predicate": { "angle": 0.609375 }, "model": "eclipse:item/compass_of_watcher_04" },
+    { "predicate": { "angle": 0.640625 }, "model": "eclipse:item/compass_of_watcher_05" },
+    { "predicate": { "angle": 0.671875 }, "model": "eclipse:item/compass_of_watcher_06" },
+    { "predicate": { "angle": 0.703125 }, "model": "eclipse:item/compass_of_watcher_07" },
+    { "predicate": { "angle": 0.734375 }, "model": "eclipse:item/compass_of_watcher_08" },
+    { "predicate": { "angle": 0.765625 }, "model": "eclipse:item/compass_of_watcher_09" },
+    { "predicate": { "angle": 0.796875 }, "model": "eclipse:item/compass_of_watcher_10" },
+    { "predicate": { "angle": 0.828125 }, "model": "eclipse:item/compass_of_watcher_11" },
+    { "predicate": { "angle": 0.859375 }, "model": "eclipse:item/compass_of_watcher_12" },
+    { "predicate": { "angle": 0.890625 }, "model": "eclipse:item/compass_of_watcher_13" },
+    { "predicate": { "angle": 0.921875 }, "model": "eclipse:item/compass_of_watcher_14" },
+    { "predicate": { "angle": 0.953125 }, "model": "eclipse:item/compass_of_watcher_15" },
+    { "predicate": { "angle": 0.984375 }, "model": "eclipse:item/compass_of_watcher" }
+  ]
+}

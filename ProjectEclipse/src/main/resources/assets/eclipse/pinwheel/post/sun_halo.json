@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:sun_halo",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}

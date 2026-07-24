@@ -1,0 +1,28 @@
+{
+  "en_us": {
+    "gui.eclipse.loading.receiving": "Crossing the veil…",
+    "gui.eclipse.loading.preparing": "The disc takes shape…",
+    "gui.eclipse.loading.tip.1": "The sun has not set. It has been put away.",
+    "gui.eclipse.loading.tip.2": "Count your hearts. Something else already has.",
+    "gui.eclipse.loading.tip.3": "The border is not a wall. It is a held breath.",
+    "gui.eclipse.loading.tip.4": "Days end on the clock, not in the sky.",
+    "gui.eclipse.loading.tip.5": "What the altar takes, it remembers.",
+    "gui.eclipse.loading.tip.6": "Nobody here knows your name. Keep it that way.",
+    "gui.eclipse.loading.tip.7": "The static between worlds is not empty.",
+    "gui.eclipse.loading.tip.8": "The ferryman keeps exact change.",
+    "gui.eclipse.emi.stale_hint": "New content unlocked — the item index will refresh after the next resource reload or rejoin."
+  },
+  "de_de": {
+    "gui.eclipse.loading.receiving": "Durchquere den Schleier …",
+    "gui.eclipse.loading.preparing": "Die Scheibe nimmt Gestalt an …",
+    "gui.eclipse.loading.tip.1": "Die Sonne ist nicht untergegangen. Sie wurde weggeräumt.",
+    "gui.eclipse.loading.tip.2": "Zähl deine Herzen. Etwas anderes tut es bereits.",
+    "gui.eclipse.loading.tip.3": "Die Grenze ist keine Mauer. Sie ist ein angehaltener Atemzug.",
+    "gui.eclipse.loading.tip.4": "Tage enden auf der Uhr, nicht am Himmel.",
+    "gui.eclipse.loading.tip.5": "Was der Altar nimmt, das behält er im Gedächtnis.",
+    "gui.eclipse.loading.tip.6": "Niemand hier kennt deinen Namen. Lass es so bleiben.",
+    "gui.eclipse.loading.tip.7": "Das Rauschen zwischen den Welten ist nicht leer.",
+    "gui.eclipse.loading.tip.8": "Der Fährmann gibt passend heraus.",
+    "gui.eclipse.emi.stale_hint": "Neue Inhalte freigeschaltet — der Gegenstandsindex aktualisiert sich nach dem nächsten Ressourcen-Reload oder Neubeitritt."
+  }
+}

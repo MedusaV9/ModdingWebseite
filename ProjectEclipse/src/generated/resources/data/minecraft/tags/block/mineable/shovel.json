@@ -1,0 +1,15 @@
+{
+  "replace": false,
+  "values": [
+    "eclipse:classic_grass_block",
+    "eclipse:classic_dirt",
+    "eclipse:classic_sand",
+    "eclipse:classic_gravel",
+    "eclipse:classic_clay",
+    "eclipse:classic_snow",
+    "eclipse:classic_snow_block",
+    "eclipse:classic_soul_sand",
+    "eclipse:classic_farmland",
+    "eclipse:classic_mycelium"
+  ]
+}

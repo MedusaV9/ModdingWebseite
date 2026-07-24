@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/lever",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "base": "eclipse:block/classic/cobblestone",
+    "lever": "eclipse:block/classic/lever",
+    "particle": "eclipse:block/classic/cobblestone"
+  }
+}

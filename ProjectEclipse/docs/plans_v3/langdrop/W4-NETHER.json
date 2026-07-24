@@ -1,0 +1,5 @@
+{
+  "_comment": "W4-NETHER (IDEA-17 nether rebuild) adds no user-facing strings: worldgen math, drift physics and FX payloads only — no commands/UI/chat text. Vanilla sound events (SOUL_ESCAPE, SCULK_CLICKING, RESPAWN_ANCHOR_DEPLETE) carry their own subtitles. Intentionally empty.",
+  "en_us": {},
+  "de_de": {}
+}

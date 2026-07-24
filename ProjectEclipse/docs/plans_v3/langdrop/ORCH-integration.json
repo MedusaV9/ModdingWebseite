@@ -1,0 +1,30 @@
+{
+  "de_de": {
+    "command.eclipse.awards.sent": "Award-Enthüllung an alle Spieler gesendet.",
+    "dev.eclipse.display.orbitals_rebuilt": "Orbitalring des Sanktums entfernt und neu erzeugt.",
+    "enchantment.eclipse.replant": "Neuaussaat"
+  },
+  "en_us": {
+    "command.eclipse.awards.sent": "Award reveal broadcast to all players.",
+    "dev.eclipse.category.analytics": "Analytics",
+    "dev.eclipse.category.buffs": "Buffs",
+    "dev.eclipse.category.config": "Config & Handbook",
+    "dev.eclipse.category.cutscene": "Cutscene",
+    "dev.eclipse.category.display": "Display",
+    "dev.eclipse.category.event": "Event",
+    "dev.eclipse.category.legacy": "Legacy",
+    "dev.eclipse.category.mods": "Mods",
+    "dev.eclipse.category.music": "Music",
+    "dev.eclipse.category.players": "Players",
+    "dev.eclipse.category.quests": "Quests",
+    "dev.eclipse.category.spawn": "Spawn",
+    "dev.eclipse.category.stage": "Stage",
+    "dev.eclipse.category.timer": "Timer",
+    "dev.eclipse.category.xbox": "Xbox Event",
+    "dev.eclipse.danger.caution": "Caution",
+    "dev.eclipse.danger.destructive": "Destructive",
+    "dev.eclipse.danger.safe": "Safe",
+    "dev.eclipse.display.orbitals_rebuilt": "Sanctum orbital ring wiped and respawned.",
+    "enchantment.eclipse.replant": "Replant"
+  }
+}

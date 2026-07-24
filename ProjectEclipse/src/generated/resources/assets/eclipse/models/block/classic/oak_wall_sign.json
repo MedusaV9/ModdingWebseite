@@ -1,0 +1,78 @@
+{
+  "elements": [
+    {
+      "faces": {
+        "down": {
+          "texture": "#board",
+          "uv": [
+            6.5,
+            0,
+            12.5,
+            2
+          ]
+        },
+        "east": {
+          "texture": "#board",
+          "uv": [
+            0,
+            2,
+            0.5,
+            14
+          ]
+        },
+        "north": {
+          "texture": "#board",
+          "uv": [
+            0.5,
+            2,
+            6.5,
+            14
+          ]
+        },
+        "south": {
+          "texture": "#board",
+          "uv": [
+            6.5,
+            2,
+            12.5,
+            14
+          ]
+        },
+        "up": {
+          "texture": "#board",
+          "uv": [
+            0.5,
+            0,
+            6.5,
+            2
+          ]
+        },
+        "west": {
+          "texture": "#board",
+          "uv": [
+            0,
+            2,
+            0.5,
+            14
+          ]
+        }
+      },
+      "from": [
+        0,
+        4.5,
+        14
+      ],
+      "to": [
+        16,
+        12.5,
+        16
+      ]
+    }
+  ],
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "board": "eclipse:block/classic/sign_oak",
+    "particle": "eclipse:block/classic/sign_oak"
+  }
+}

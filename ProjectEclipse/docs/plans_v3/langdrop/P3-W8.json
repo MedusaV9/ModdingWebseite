@@ -1,0 +1,34 @@
+{
+  "en_us": {
+    "gui.eclipse.journey.begin": "Begin Journey",
+    "gui.eclipse.journey.countdown": "Opens in %s",
+    "gui.eclipse.journey.countdown.days": "d",
+    "gui.eclipse.journey.server_name": "Project Eclipse",
+    "gui.eclipse.journey.settings_entry": "Eclipse…",
+    "gui.eclipse.journey.error.title": "ERROR 0xECL1PSE",
+    "gui.eclipse.journey.error.ok": "[ OK ]",
+    "gui.eclipse.journey.error.1": "Connection refused: the sun is still awake.",
+    "gui.eclipse.journey.error.2": "The veil is not yet thin enough. Try again when the light dies.",
+    "gui.eclipse.journey.error.3": "Signal lost in the umbra — 0 of 1 moons answered.",
+    "gui.eclipse.journey.error.4": "Access denied: your shadow is not long enough yet.",
+    "gui.eclipse.journey.error.5": "Protocol ECLIPSE/9 not ready. The darkness is still loading…",
+    "gui.eclipse.journey.error.nohost": "No destination in the fog — serverHost is missing in eclipse-journey.toml.",
+    "gui.eclipse.journey.error.connect": "No path through the dark: %s did not answer."
+  },
+  "de_de": {
+    "gui.eclipse.journey.begin": "Reise beginnen",
+    "gui.eclipse.journey.countdown": "Öffnet in %s",
+    "gui.eclipse.journey.countdown.days": "T",
+    "gui.eclipse.journey.server_name": "Projekt Eclipse",
+    "gui.eclipse.journey.settings_entry": "Eclipse…",
+    "gui.eclipse.journey.error.title": "FEHLER 0xECL1PSE",
+    "gui.eclipse.journey.error.ok": "[ OK ]",
+    "gui.eclipse.journey.error.1": "Verbindung verweigert: Die Sonne ist noch wach.",
+    "gui.eclipse.journey.error.2": "Der Schleier ist noch nicht dünn genug. Versuche es, wenn das Licht stirbt.",
+    "gui.eclipse.journey.error.3": "Signal im Umbra verloren — 0 von 1 Monden hat geantwortet.",
+    "gui.eclipse.journey.error.4": "Zugriff verweigert: Dein Schatten ist noch nicht lang genug.",
+    "gui.eclipse.journey.error.5": "Protokoll ECLIPSE/9 nicht bereit. Die Dunkelheit lädt noch …",
+    "gui.eclipse.journey.error.nohost": "Kein Ziel im Nebel — serverHost fehlt in eclipse-journey.toml.",
+    "gui.eclipse.journey.error.connect": "Kein Pfad durch das Dunkel: %s antwortet nicht."
+  }
+}

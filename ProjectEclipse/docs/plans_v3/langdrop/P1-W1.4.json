@@ -1,0 +1,26 @@
+{
+  "en_us": {
+    "block.eclipse.pale_oak_log": "Pale Oak Log",
+    "block.eclipse.stripped_pale_oak_log": "Stripped Pale Oak Log",
+    "block.eclipse.pale_oak_wood": "Pale Oak Wood",
+    "block.eclipse.stripped_pale_oak_wood": "Stripped Pale Oak Wood",
+    "block.eclipse.pale_oak_planks": "Pale Oak Planks",
+    "block.eclipse.pale_oak_leaves": "Pale Oak Leaves",
+    "block.eclipse.pale_moss_block": "Pale Moss Block",
+    "block.eclipse.pale_moss_carpet": "Pale Moss Carpet",
+    "block.eclipse.pale_hanging_moss": "Pale Hanging Moss",
+    "biome.eclipse.pale_garden": "Pale Garden"
+  },
+  "de_de": {
+    "block.eclipse.pale_oak_log": "Blasseichenstamm",
+    "block.eclipse.stripped_pale_oak_log": "Entrindeter Blasseichenstamm",
+    "block.eclipse.pale_oak_wood": "Blasseichenholz",
+    "block.eclipse.stripped_pale_oak_wood": "Entrindetes Blasseichenholz",
+    "block.eclipse.pale_oak_planks": "Blasseichenholzbretter",
+    "block.eclipse.pale_oak_leaves": "Blasseichenlaub",
+    "block.eclipse.pale_moss_block": "Blassmoosblock",
+    "block.eclipse.pale_moss_carpet": "Blassmoosteppich",
+    "block.eclipse.pale_hanging_moss": "Blasses H\u00e4ngemoos",
+    "biome.eclipse.pale_garden": "Blasser Garten"
+  }
+}

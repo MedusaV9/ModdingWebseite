@@ -1,0 +1,408 @@
+package dev.projecteclipse.eclipse.ritual;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.mojang.authlib.GameProfile;
+
+import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.entity.GazerEntity;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
+import dev.projecteclipse.eclipse.offering.OfferingRules;
+import dev.projecteclipse.eclipse.offering.OfferingService;
+import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
+import dev.projecteclipse.eclipse.registry.EclipseBlockEntities;
+import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.Containers;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+/**
+ * Server-side brain of the altar. Holds only transient per-player interaction
+ * state (heart-sacrifice confirmations, revive-sigil selections); all durable
+ * progress lives in {@link EclipseWorldState}.
+ *
+ * <p>Milestone progress is tracked in {@link EclipseWorldState#getMilestoneProgress(String)}
+ * under {@code altar_level_<n>} (single-cost milestones) or
+ * {@code altar_level_<n>:<item_id>} (one counter per cost entry of multi-cost milestones).</p>
+ *
+ * <p>All player feedback is action bar + sounds; nothing is ever sent to chat.</p>
+ */
+public class AltarBlockEntity extends BlockEntity {
+    /** Heart sacrifice must be confirmed by a second sneak-right-click within this window (5 s). */
+    public static final long HEART_CONFIRM_WINDOW_TICKS = 100L;
+    /** Offerings use the same deliberate two-click confirmation window. */
+    public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
+
+    /** Game time of each player's pending (unconfirmed) heart sacrifice. */
+    private final Map<UUID, Long> pendingHeartSacrifices = new HashMap<>();
+    /** Item id + game time of each player's pending (unconfirmed) daily offering. */
+    private final Map<UUID, PendingOffering> pendingOfferings = new HashMap<>();
+    /** Currently-selected revive target (banned player UUID) per interacting player. */
+    private final Map<UUID, UUID> sigilSelections = new HashMap<>();
+
+    private record PendingOffering(long armedAt, String itemId) {}
+
+    public AltarBlockEntity(BlockPos pos, BlockState state) {
+        super(EclipseBlockEntities.ALTAR.get(), pos, state);
+    }
+
+    // --- milestone sacrifice ---
+
+    /**
+     * Right-click with an item: consumes as much of the held stack as the next
+     * milestone (current altar level + 1) still needs of that item. Completing
+     * all cost entries raises the altar level, syncs it to all clients and plays
+     * the subtle global cue (end-portal sound + portal particles, no text).
+     */
+    public void handleMilestoneDeposit(ServerPlayer player, ItemStack stack) {
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        // W11: the Herald's Lure is a ritual item, not a milestone cost — hint at the
+        // sneak-deposit (HeraldsLureItem#useOn) instead of barking "wrong item".
+        if (stack.is(EclipseItems.HERALDS_LURE.get())) {
+            actionBar(player, Component.translatable("ritual.eclipse.lure.sneak_hint"));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
+            return;
+        }
+        MinecraftServer server = player.server;
+        EclipseWorldState state = EclipseWorldState.get(server);
+        EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);
+        if (milestone == null) {
+            actionBar(player, Component.translatable("ritual.eclipse.altar.complete"));
+            return;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        EclipseConfig.ItemCost match = null;
+        for (EclipseConfig.ItemCost cost : milestone.cost()) {
+            if (cost.item().equals(itemId)
+                    && state.getMilestoneProgress(progressKey(milestone, cost.item())) < cost.count()) {
+                match = cost;
+                break;
+            }
+        }
+        if (match == null) {
+            // W13: umbral shards are shop currency, not (usually) a milestone cost — hint
+            // at the sneak-deposit bank instead of barking "wrong item".
+            if (stack.is(EclipseItems.UMBRAL_SHARD.get())) {
+                actionBar(player, Component.translatable("shop.eclipse.deposit_hint"));
+                player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
+                return;
+            }
+            actionBar(player, Component.translatable("ritual.eclipse.altar.wrong_item"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+            return;
+        }
+        String key = progressKey(milestone, match.item());
+        long remaining = match.count() - state.getMilestoneProgress(key);
+        int consumed = (int) Math.min(stack.getCount(), remaining);
+        Component itemName = Component.translatable(stack.getItem().getDescriptionId());
+        stack.shrink(consumed);
+        long updated = state.addMilestoneProgress(key, consumed);
+        EclipseSignals.fireAltarDeposit(player, ResourceLocation.parse(itemId), consumed,
+                EclipseSignals.AltarDepositPurpose.MILESTONE);
+
+        actionBar(player, Component.translatable("ritual.eclipse.altar.progress", updated, match.count(), itemName));
+        serverLevel.playSound(null, this.worldPosition, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 0.8F);
+
+        // W10: a sacrifice never goes unobserved — one gazer materializes at the treeline.
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
+
+        if (isMilestoneComplete(state, milestone)) {
+            completeMilestone(serverLevel, state, milestone);
+        }
+    }
+
+    /** Right-click with an empty hand (not sneaking): current level + next requirement on the action bar. */
+    public void handleStatusHint(ServerPlayer player) {
+        EclipseWorldState state = EclipseWorldState.get(player.server);
+        EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);
+        if (milestone == null) {
+            actionBar(player, Component.translatable("ritual.eclipse.altar.complete"));
+            return;
+        }
+        for (EclipseConfig.ItemCost cost : milestone.cost()) {
+            long progress = state.getMilestoneProgress(progressKey(milestone, cost.item()));
+            if (progress < cost.count()) {
+                Component itemName = costItemName(cost);
+                actionBar(player, Component.translatable("ritual.eclipse.altar.status",
+                        state.getAltarLevel(), progress, cost.count(), itemName));
+                return;
+            }
+        }
+    }
+
+    private boolean isMilestoneComplete(EclipseWorldState state, EclipseConfig.Milestone milestone) {
+        for (EclipseConfig.ItemCost cost : milestone.cost()) {
+            if (state.getMilestoneProgress(progressKey(milestone, cost.item())) < cost.count()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void completeMilestone(ServerLevel serverLevel, EclipseWorldState state, EclipseConfig.Milestone milestone) {
+        state.setAltarLevel(milestone.level());
+        PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
+                EclipseConfig.day(state.getDay()).goals()));
+        // Subtle global cue: end-portal sound for everyone, portal particles at the altar. No text.
+        for (ServerPlayer online : serverLevel.getServer().getPlayerList().getPlayers()) {
+            online.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER, 0.4F, 1.3F);
+        }
+        serverLevel.sendParticles(ParticleTypes.PORTAL,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.2D, this.worldPosition.getZ() + 0.5D,
+                150, 0.6D, 0.8D, 0.6D, 0.8D);
+        // W4-ISLAND / IDEA-12 #3 moment layer: the beam plus an expanding gold→violet
+        // ring for everyone in beam view range. The PERMANENT tells (AltarIdleMotes
+        // window, SanctumOrbitals ring growth) ride the altarLevel sync above for free.
+        Vec3 fxPos = Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D);
+        S2CQuasarPayload beam = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM, fxPos);
+        S2CQuasarPayload ring = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_LEVELUP_RING,
+                fxPos.add(0.0D, 0.5D, 0.0D));
+        double rangeSq = BeamEmitter.VIEW_RANGE * BeamEmitter.VIEW_RANGE;
+        for (ServerPlayer online : serverLevel.players()) {
+            if (online.position().distanceToSqr(fxPos) <= rangeSq) {
+                PacketDistributor.sendToPlayer(online, beam);
+                PacketDistributor.sendToPlayer(online, ring);
+            }
+        }
+        // W4-CEREMONY / IDEA-11 #3: one map-wide radial light pulse for EVERY player — the
+        // world itself acknowledges the unlock (client path exists: FxPayloads FX_SHOCKWAVE
+        // → EclipseFxState.startShockwave; W4-ISLAND owns the beam/ring sends above).
+        PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE,
+                Vec3.atCenterOf(this.worldPosition), 0.6F, 40.0F));
+        EclipseMod.LOGGER.info("Altar milestone {} completed at {}; rewards {}",
+                milestone.level(), this.worldPosition, milestone.rewards());
+    }
+
+    /**
+     * Progress key for a milestone cost entry: {@code altar_level_<n>} when the
+     * milestone has a single cost entry, else {@code altar_level_<n>:<item_id>}.
+     */
+    private static String progressKey(EclipseConfig.Milestone milestone, String itemId) {
+        String base = "altar_level_" + milestone.level();
+        return milestone.cost().size() == 1 ? base : base + ":" + itemId;
+    }
+
+    private static Component costItemName(EclipseConfig.ItemCost cost) {
+        return BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(cost.item()))
+                .map(item -> (Component) Component.translatable(item.getDescriptionId()))
+                .orElse(Component.literal(cost.item()));
+    }
+
+    // --- personal daily offering ---
+
+    /**
+     * Sneak-right-click with an ordinary item. First click arms the exact item type; the
+     * second within five seconds consumes one item. Values and duplicate outcomes stay secret.
+     */
+    public void handleOffering(ServerPlayer player, ItemStack stack) {
+        if (!(this.level instanceof ServerLevel serverLevel) || stack.isEmpty()) {
+            return;
+        }
+        UUID playerId = player.getUUID();
+        if (OfferingService.hasOfferedToday(player)) {
+            pendingOfferings.remove(playerId);
+            actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.1F);
+            return;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        long now = serverLevel.getGameTime();
+        PendingOffering pending = pendingOfferings.get(playerId);
+        if (OfferingRules.needsConfirmation(now, pending == null ? null : pending.armedAt(),
+                pending == null ? "" : pending.itemId(), itemId, OFFERING_CONFIRM_WINDOW_TICKS)) {
+            pendingOfferings.put(playerId, new PendingOffering(now, itemId));
+            actionBar(player, Component.translatable("ritual.eclipse.offering.confirm", stack.getHoverName()));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.7F);
+            return;
+        }
+
+        pendingOfferings.remove(playerId);
+        // Hand anchor for the swallow flight, captured before the stack shrinks.
+        Vec3 handPos = player.getEyePosition()
+                .add(player.getLookAngle().scale(0.7D)).subtract(0.0D, 0.35D, 0.0D);
+        java.util.OptionalInt exactValue = OfferingService.acceptWithValue(player, stack);
+        if (exactValue.isEmpty()) {
+            actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
+            return;
+        }
+        actionBar(player, Component.translatable("ritual.eclipse.offering.done"));
+        // W4-ISLAND / IDEA-12 #2: the ack chime is split — the OFFERER hears a quantized
+        // pitch band (a private, deniable tier tell; values stay secret, no text/numbers),
+        // bystanders keep the neutral 1.0 cue so the daily-winner metagame never leaks.
+        player.playNotifySound(EclipseSounds.OFFERING_ACCEPT.get(), SoundSource.BLOCKS,
+                1.0F, offeringTellPitch(exactValue.getAsInt(), serverLevel.random));
+        serverLevel.playSound(player, this.worldPosition, EclipseSounds.OFFERING_ACCEPT.get(),
+                SoundSource.BLOCKS, 1.0F, 1.0F);
+        serverLevel.sendParticles(ParticleTypes.PORTAL,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.15D,
+                this.worldPosition.getZ() + 0.5D, 36, 0.35D, 0.35D, 0.35D, 0.3D);
+        // W4-ISLAND / IDEA-12 #1: swallow FIRST, beam second (same connection, ordered):
+        // the client spirals the offered item hand → altar over ~30 t and holds the beam
+        // until the item vanishes into the stone. Non-Quasar clients keep the old beat via
+        // QuasarSpawner.spawnOrFallback's vanilla burst.
+        PacketDistributor.sendToPlayersNear(serverLevel, null,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                this.worldPosition.getZ() + 0.5D, 64.0D,
+                new S2CQuasarPayload(
+                        S2CQuasarPayload.offeringSwallow(ResourceLocation.parse(itemId)), handPos));
+        PacketDistributor.sendToPlayersNear(serverLevel, null,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                this.worldPosition.getZ() + 0.5D, 64.0D,
+                new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
+                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
+    }
+
+    /**
+     * IDEA-12 #2 pitch buckets (junk ≤ 5 → 0.85, mid ≤ 40 → 1.0, high → 1.15) with ±0.03
+     * random jitter so adjacent tiers stay deniable. Ear-training only — never text.
+     */
+    private static float offeringTellPitch(int exactValue, net.minecraft.util.RandomSource random) {
+        float base = exactValue <= 5 ? 0.85F : exactValue <= 40 ? 1.0F : 1.15F;
+        return base + (random.nextFloat() - 0.5F) * 0.06F;
+    }
+
+    // --- heart sacrifice ---
+
+    /**
+     * Sneak-right-click with an empty hand. The first click arms a pending
+     * sacrifice; a second one within {@link #HEART_CONFIRM_WINDOW_TICKS} takes a
+     * life ({@link LivesApi}) and drops one heart fragment on the altar. Players
+     * at 1 life or below are blocked with an action-bar hint.
+     */
+    public void handleHeartSacrifice(ServerPlayer player) {
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        if (LivesApi.get(player) <= 1) {
+            pendingHeartSacrifices.remove(player.getUUID());
+            actionBar(player, Component.translatable("ritual.eclipse.heart.blocked"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
+            return;
+        }
+        long now = serverLevel.getGameTime();
+        Long pending = pendingHeartSacrifices.get(player.getUUID());
+        if (pending == null || now - pending > HEART_CONFIRM_WINDOW_TICKS) {
+            pendingHeartSacrifices.put(player.getUUID(), now);
+            actionBar(player, Component.translatable("ritual.eclipse.heart.confirm"));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
+            return;
+        }
+        pendingHeartSacrifices.remove(player.getUUID());
+        LivesApi.add(player, -1);
+        dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
+        // W4-HEARTS R2: the sacrificed heart shatters over the hotbar + a world echo at the altar.
+        PacketDistributor.sendToPlayer(player,
+                new dev.projecteclipse.eclipse.network.S2CHeartBurstPayload(LivesApi.get(player)),
+                new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
+                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 1.2D, 0.0D)));
+        Containers.dropItemStack(serverLevel,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D, this.worldPosition.getZ() + 0.5D,
+                new ItemStack(EclipseItems.HEART_FRAGMENT.get()));
+        serverLevel.playSound(null, this.worldPosition, SoundEvents.WARDEN_HEARTBEAT, SoundSource.BLOCKS, 1.0F, 0.8F);
+        actionBar(player, Component.translatable("ritual.eclipse.heart.done"));
+        // W10: heart sacrifices draw a watcher too.
+        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
+        EclipseMod.LOGGER.info("{} sacrificed a life at the altar {} ({} lives left)",
+                player.getScoreboardName(), this.worldPosition, LivesApi.get(player));
+    }
+
+    // --- revive sigil ---
+
+    /**
+     * Right-click with a revive sigil (not sneaking): advances this player's
+     * selection through {@link EclipseWorldState#getBanned()} (deterministic
+     * order) and shows the selected name on the action bar.
+     */
+    public void handleSigilCycle(ServerPlayer player) {
+        MinecraftServer server = player.server;
+        List<UUID> banned = new ArrayList<>(EclipseWorldState.get(server).getBanned());
+        if (banned.isEmpty()) {
+            sigilSelections.remove(player.getUUID());
+            actionBar(player, Component.translatable("ritual.eclipse.revive.none_banned"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+            return;
+        }
+        banned.sort(Comparator.comparing(UUID::toString));
+        int index = banned.indexOf(sigilSelections.get(player.getUUID()));
+        UUID next = banned.get((index + 1) % banned.size());
+        sigilSelections.put(player.getUUID(), next);
+        actionBar(player, Component.translatable("ritual.eclipse.revive.selected", resolveName(server, next)));
+        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.6F, 1.4F);
+    }
+
+    /**
+     * Sneak-right-click with a revive sigil (via {@link ReviveSigilItem#useOn}):
+     * starts the {@link ReviveRitual} for the currently displayed selection. The
+     * ritual consumes one sigil only when it completes successfully.
+     */
+    public void handleSigilConfirm(ServerPlayer player) {
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        MinecraftServer server = player.server;
+        if (ReviveRitual.isRunningAt(serverLevel, this.worldPosition)) {
+            actionBar(player, Component.translatable("ritual.eclipse.revive.already_running"));
+            return;
+        }
+        UUID target = sigilSelections.get(player.getUUID());
+        if (target == null || !EclipseWorldState.get(server).getBanned().contains(target)) {
+            actionBar(player, Component.translatable("ritual.eclipse.revive.no_selection"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+            return;
+        }
+        String targetName = resolveName(server, target);
+        if (ReviveRitual.start(serverLevel, this.worldPosition, player, target, targetName)) {
+            sigilSelections.remove(player.getUUID());
+            actionBar(player, Component.translatable("ritual.eclipse.revive.started"));
+        } else {
+            actionBar(player, Component.translatable("ritual.eclipse.revive.already_running"));
+        }
+    }
+
+    // --- helpers ---
+
+    private static void actionBar(ServerPlayer player, Component message) {
+        player.displayClientMessage(message, true);
+    }
+
+    /** Player name for a UUID: online player, then profile cache, then a short UUID prefix. */
+    private static String resolveName(MinecraftServer server, UUID id) {
+        ServerPlayer online = server.getPlayerList().getPlayer(id);
+        if (online != null) {
+            return online.getScoreboardName();
+        }
+        if (server.getProfileCache() != null) {
+            return server.getProfileCache().get(id).map(GameProfile::getName)
+                    .orElse(id.toString().substring(0, 8));
+        }
+        return id.toString().substring(0, 8);
+    }
+}

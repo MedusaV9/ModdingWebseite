@@ -1,0 +1,24 @@
+{
+  "parent": "eclipse:event/root",
+  "display": {
+    "icon": {
+      "id": "eclipse:revive_sigil"
+    },
+    "title": {
+      "translate": "advancement.eclipse.event.first_revive.title"
+    },
+    "description": {
+      "translate": "advancement.eclipse.event.first_revive.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "revived": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "sends_telemetry_event": false
+}

@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=east": {
+      "model": "eclipse:block/classic/oak_wall_sign",
+      "y": 90
+    },
+    "facing=north": {
+      "model": "eclipse:block/classic/oak_wall_sign"
+    },
+    "facing=south": {
+      "model": "eclipse:block/classic/oak_wall_sign",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "eclipse:block/classic/oak_wall_sign",
+      "y": 270
+    }
+  }
+}
