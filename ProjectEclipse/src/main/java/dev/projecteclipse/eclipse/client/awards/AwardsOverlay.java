@@ -18,16 +18,22 @@ import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.network.S2CAwardRevealPayload;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -102,6 +108,10 @@ public final class AwardsOverlay {
 
     /** Flare ray palette mirroring {@code quasar/emitters/roulette_flare.json} (warm → purple). */
     private static final int[] FLARE_COLORS = {0xFFF3C4, 0xFFD166, 0xC77DFF, 0x7B2CBF};
+
+    /** Podium-moment flourish over the local winner (client-local; IDEA-11 #2). */
+    private static final ResourceLocation PODIUM_BURST_EMITTER =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "unlock_burst");
 
     private enum Phase { IDLE, INTRO, SPIN, LAND, STAT, REWARD, HOLD, FADE, SUMMARY, DONE_FADE }
 
@@ -290,6 +300,9 @@ public final class AwardsOverlay {
                 }
                 if (reveal.strip().done()) {
                     landAge = 0;
+                    if (reveal.localWon()) {
+                        podiumBurst();
+                    }
                     setPhase(Phase.LAND);
                 }
             }
@@ -345,6 +358,38 @@ public final class AwardsOverlay {
                 }
             }
             default -> {}
+        }
+    }
+
+    /**
+     * W4-CEREMONY / IDEA-11 #2 — PODIUM MOMENT: the instant the strip lands on "YOU" the
+     * celebration escapes the UI. A CLIENT-LOCAL {@code eclipse:unlock_burst} Quasar flourish
+     * plus a small vanilla firework ring pop ~2.4 blocks above the local player — visible in
+     * the world behind the 0.85-alpha veil. Nothing is broadcast, so co-players learn
+     * nothing (the reveal's UUID-only anonymity design stays intact); the award sting layers
+     * at land instead of waiting for the stat-line end. {@code reducedFx} keeps only the
+     * sting; ties included ({@code localWon} covers shared wins).
+     */
+    private static void podiumBurst() {
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null) {
+            return;
+        }
+        minecraft.getSoundManager().play(
+                SimpleSoundInstance.forUI(EclipseSounds.AWARD_STING.get(), 1.0F, 0.85F));
+        if (EclipseClientConfig.reducedFx()) {
+            return;
+        }
+        Vec3 top = player.position().add(0.0D, 2.4D, 0.0D);
+        QuasarSpawner.spawnOrFallback(PODIUM_BURST_EMITTER, top);
+        for (int i = 0; i < 8; i++) {
+            double angle = Math.PI * 2.0D * i / 8.0D;
+            double dx = Math.cos(angle);
+            double dz = Math.sin(angle);
+            player.level().addParticle(ParticleTypes.FIREWORK,
+                    top.x + dx * 0.6D, top.y, top.z + dz * 0.6D,
+                    dx * 0.18D, 0.05D, dz * 0.18D);
         }
     }
 

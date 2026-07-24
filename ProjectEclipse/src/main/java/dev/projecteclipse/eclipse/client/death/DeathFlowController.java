@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.client.death;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.death.DeathFlowPayloads;
@@ -113,6 +114,8 @@ public final class DeathFlowController {
             }
             case DeathFlowPayloads.PHASE_DOOR_OPEN -> {
                 if (theaterOn()) {
+                    // W4-ATMOS (IDEA-07 §8): the creak lands with the ShipDoorGlow visual.
+                    UiSounds.doorOpen();
                     prompt("message.eclipse.death.door_opening");
                 }
             }

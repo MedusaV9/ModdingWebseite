@@ -22,6 +22,7 @@ public final class BuffState extends SavedData {
     private static final String TAG_ENDS = "endsAtEpochMillis";
     private static final String TAG_MAG = "magnitude";
     private static final String TAG_LAST_PERIODIC = "lastPeriodicEpochMillis";
+    private static final String TAG_TOTAL = "totalDurationMillis";
 
     private final List<BuffMath.ActiveBuff> active = new ArrayList<>();
 
@@ -38,11 +39,14 @@ public final class BuffState extends SavedData {
             ListTag list = tag.getList(TAG_ACTIVE, Tag.TAG_COMPOUND);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag entry = list.getCompound(i);
+                // TAG_TOTAL is absent in pre-v3 saves; getLong then yields 0 = "unknown",
+                // which readers resolve against the definition's default duration.
                 state.active.add(new BuffMath.ActiveBuff(
                         entry.getString(TAG_ID),
                         entry.getLong(TAG_ENDS),
                         entry.getFloat(TAG_MAG),
-                        entry.getLong(TAG_LAST_PERIODIC)));
+                        entry.getLong(TAG_LAST_PERIODIC),
+                        entry.getLong(TAG_TOTAL)));
             }
         }
         return state;
@@ -57,6 +61,7 @@ public final class BuffState extends SavedData {
             entry.putLong(TAG_ENDS, buff.endsAtEpochMillis());
             entry.putFloat(TAG_MAG, buff.magnitude());
             entry.putLong(TAG_LAST_PERIODIC, buff.lastPeriodicEpochMillis());
+            entry.putLong(TAG_TOTAL, buff.totalDurationMillis());
             list.add(entry);
         }
         tag.put(TAG_ACTIVE, list);
@@ -77,7 +82,8 @@ public final class BuffState extends SavedData {
         for (int i = 0; i < active.size(); i++) {
             BuffMath.ActiveBuff buff = active.get(i);
             if (buff.id().equals(id)) {
-                active.set(i, new BuffMath.ActiveBuff(buff.id(), buff.endsAtEpochMillis(), buff.magnitude(), epochMillis));
+                active.set(i, new BuffMath.ActiveBuff(buff.id(), buff.endsAtEpochMillis(), buff.magnitude(),
+                        epochMillis, buff.totalDurationMillis()));
                 setDirty();
                 return;
             }

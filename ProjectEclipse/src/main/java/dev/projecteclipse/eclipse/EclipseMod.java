@@ -57,6 +57,8 @@ public final class EclipseMod {
         dev.projecteclipse.eclipse.devtools.display.DevToolItems.register(modEventBus);
         dev.projecteclipse.eclipse.music.EclipseMusicSounds.register(modEventBus);
         dev.projecteclipse.eclipse.lang.LangService.register(modEventBus);
+        dev.projecteclipse.eclipse.wand.WandItems.register(modEventBus);
+        dev.projecteclipse.eclipse.entity.wizard.WizardEntities.register(modEventBus);
 
         EclipsePayloads.register(modEventBus);
         EclipseClientConfig.register(modContainer);

@@ -120,6 +120,9 @@ public final class IntroSequence implements SequenceReplayable {
     private static final String CAPTION_STRIKE = "eclipse.caption.intro.strike";
     private static final String CAPTION_APPROACH = "eclipse.caption.intro.approach";
     private static final String CAPTION_BEGIN = "eclipse.caption.intro.begin";
+    /** W4-CEREMONY / IDEA-01 #3: post-sunrise Logbook handoff (flavor caption + keybind line). */
+    private static final String CAPTION_LOGBOOK = "eclipse.caption.intro.logbook";
+    private static final String MESSAGE_LOGBOOK_KEY = "message.eclipse.intro.logbook_key";
 
     // --- eclipse phases (S2CEclipsePhasePayload contract: 0=NONE 1=BUILDUP 2=TOTAL 3=ENDING) ---
     private static final int ECLIPSE_NONE = 0;
@@ -150,6 +153,10 @@ public final class IntroSequence implements SequenceReplayable {
     private static final int SUNRISE_RAMP_TICKS = 200;
     /** Cinematic view-distance bump for the global plays (R12 cap is 12). */
     private static final int VIEW_DISTANCE_CHUNKS = 12;
+    /** W4-CEREMONY / IDEA-01 #1: re-whisper cadence while APPROACH stalls (~1 min). */
+    private static final int APPROACH_RENUDGE_TICKS = 1200;
+    /** W4-CEREMONY / IDEA-01 #3: Logbook handoff hint delay after {@link #finish} (~15 s). */
+    private static final int LOGBOOK_HINT_DELAY_TICKS = 300;
 
     /** White half of the burst flash (in, hold, out, argb). */
     private static final S2CScreenFadePayload FLASH_WHITE = new S2CScreenFadePayload(2, 2, 2, 0xFFFFFFFF);
@@ -320,6 +327,8 @@ public final class IntroSequence implements SequenceReplayable {
                 }
                 if (firstPlayerNearVortex(current)) {
                     beginLightning(current);
+                } else {
+                    renudgeStalledApproach(current);
                 }
             }
             case LIGHTNING -> {
@@ -401,6 +410,31 @@ public final class IntroSequence implements SequenceReplayable {
             }
         }
         return false;
+    }
+
+    /**
+     * W4-CEREMONY / IDEA-01 #1 — APPROACH stall re-nudge: the phase is untimed by design,
+     * but the only "walk into the storm" instruction is one subtitle during FLIGHT. If
+     * nobody has tripped the smoke wall after ~1 minute, gently re-whisper the approach
+     * caption plus one distant thunder roll, repeating every minute. Per-player notify
+     * sound (low volume, low pitch) so the "distant" read reaches players regardless of
+     * how far from the vortex they idle.
+     */
+    private static void renudgeStalledApproach(Run current) {
+        int stalled = current.ticks - current.phaseStartTick;
+        if (stalled <= 0 || stalled % APPROACH_RENUDGE_TICKS != 0) {
+            return;
+        }
+        for (ServerPlayer player : current.overworld.players()) {
+            if (player.isSpectator()) {
+                continue;
+            }
+            PacketDistributor.sendToPlayer(player,
+                    new S2CCaptionPayload(CAPTION_APPROACH, 130, S2CCaptionPayload.STYLE_WHISPER));
+            player.playNotifySound(net.minecraft.sounds.SoundEvents.LIGHTNING_BOLT_THUNDER,
+                    SoundSource.WEATHER, 0.3F, 0.7F);
+        }
+        EclipseMod.LOGGER.info("IntroSequence: APPROACH stalled for {} ticks — re-nudge whispered", stalled);
     }
 
     /**
@@ -547,10 +581,35 @@ public final class IntroSequence implements SequenceReplayable {
             return;
         }
         IntroData data = IntroData.get(current.server);
+        // W4-CEREMONY / IDEA-01 #3: once per world (dev re-fires of a completed world skip it).
+        boolean firstCompletion = !data.isCompleted();
         data.setCompleted(true);
         data.setPhase("");
         run = null;
+        if (firstCompletion) {
+            MinecraftServer server = current.server;
+            schedule(server, LOGBOOK_HINT_DELAY_TICKS, () -> sendLogbookHint(server));
+        }
         EclipseMod.LOGGER.info("IntroSequence: complete — permanent sun rim latched");
+    }
+
+    /**
+     * W4-CEREMONY / IDEA-01 #3 — post-sunrise Logbook handoff: ~15 s after "IT BEGINS"
+     * fades, one flavor subtitle plus an actionbar line whose key name is resolved
+     * CLIENT-side via {@link net.minecraft.network.chat.Component#keybind} (the caption
+     * pipeline has no format args, so the bound-key half rides the actionbar — same
+     * client-resolution idea as {@code gui.eclipse.handbook.hint}).
+     */
+    private static void sendLogbookHint(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player,
+                    new S2CCaptionPayload(CAPTION_LOGBOOK, 120, S2CCaptionPayload.STYLE_SUBTITLE));
+            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                    MESSAGE_LOGBOOK_KEY,
+                    net.minecraft.network.chat.Component.keybind("key.eclipse.menu")), true);
+        }
+        EclipseMod.LOGGER.info("IntroSequence: Logbook handoff hint sent to {} player(s)",
+                server.getPlayerList().getPlayerCount());
     }
 
     // ------------------------------------------------------------------ restart / login safety

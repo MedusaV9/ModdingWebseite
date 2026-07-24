@@ -17,7 +17,9 @@ import dev.projecteclipse.eclipse.worldgen.ore.OreField;
  * W1.2): a STRATA-ONLY base. The function owns the disc silhouette, rim, underside,
  * rivers, moat, mountain, ring scars, cave voids ({@link CaveDensity} worms + cheese,
  * {@link CaveEntrances} walk-in craters), the nether-breach funnel
- * ({@link BreachGeometry}) and the in-sky End disc ({@link EndDiscGeometry}).
+ * ({@link BreachGeometry}), the in-sky End disc ({@link EndDiscGeometry}) and, since
+ * IDEA-17 (W4-NETHER), the nether ceiling roof shell with its stalactite forests and
+ * the seam lava-fall curtains.
  * It emits NO vegetation and NO ores anymore:
  * trees/grass/flowers/cacti/snow-layers and every other plant come from real vanilla
  * biome features replayed by W1.1's decoration pipeline, and ore placement is delegated
@@ -87,7 +89,8 @@ public final class DiscTerrainFunction {
     // Save-frozen noise fields (never the world seed). Salt registry of the
     // map-seed noise family: 1-5 + 9 live here, 6/7/10 in CaveDensity, 8 in
     // DiscMapData's sector-seam wobble, 24/27 here (dunes / red-sand patches),
-    // 25 in EndDiscGeometry, 26 in BreachGeometry. Next free (noise or hash): 29+.
+    // 25 in EndDiscGeometry, 26 in BreachGeometry, 29 in CaveBiomeMap,
+    // 30-32 in DiscMapDefaults. Next free noise salt: 33+.
     private static volatile TerrainNoises terrainNoises;
 
     private record TerrainNoises(long seed, SimplexNoise rim, SimplexNoise surfaceLarge,
@@ -98,7 +101,8 @@ public final class DiscTerrainFunction {
     // owned by the sibling geometry modules; 17 + ore.salt() belongs to W1.3's OreField
     // (cell-coordinate domain, carried over from the legacy in-file ore table). 28 is
     // shared here between the badlands band jitter and the sandstone accents (disjoint
-    // column families). Next free hash salt: 29+.
+    // column families); 29 between the nether ceiling-forest cell mask (x>>4, z>>4
+    // domain) and the roof body mix (x, y, z domain). Next free hash salt: 31+.
     private static final int H_CRUMBLE = 11;
     private static final int H_DEEPSLATE = 12;
     private static final int H_GLOW = 16;
@@ -109,6 +113,25 @@ public final class DiscTerrainFunction {
     private static final int H_INCLUSION = 21;
     private static final int H_STRIPE = 22;
     private static final int H_RIVER_BED = 23;
+    /** IDEA-17: nether ceiling stalactite-forest cell mask + roof body mix (W4-NETHER). */
+    private static final int H_CEILING = 29;
+    /** IDEA-17: lava-fall curtain segment gate on the nether sector seams (W4-NETHER). */
+    private static final int H_SEAM = 30;
+
+    // --- IDEA-17 nether roof shell ("the bedrock you are under") ---
+
+    /** Roof lens base Y at the disc center (cavern is tallest here). */
+    private static final double CEILING_CENTER_BOTTOM_Y = 232.0D;
+    /** Roof lens base Y at the FINAL rim ({@code lensNormRadius}). */
+    private static final double CEILING_RIM_BOTTOM_Y = 200.0D;
+    /** Max downward reach in blocks of a ceiling stalactite-forest needle. */
+    private static final int CEILING_NEEDLE_MAX = 24;
+    /** Fraction of 16-block cells that carry a stalactite forest (clearings elsewhere). */
+    private static final double CEILING_FOREST_CELL_CHANCE = 0.35D;
+    /** Seam-blend weight above which a column joins a lava-fall curtain (~1.3° of seam). */
+    private static final double SEAM_CURTAIN_MIN_T = 0.42D;
+    /** Seam-blend weight of the curtain CORE (splash bowl + pour sources). */
+    private static final double SEAM_CORE_MIN_T = 0.46D;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private static final BlockState CAVE_AIR = Blocks.CAVE_AIR.defaultBlockState();
@@ -279,6 +302,39 @@ public final class DiscTerrainFunction {
             }
         }
 
+        // IDEA-17 idea 5 — lava-fall curtains at the five nether sector seams: segmented
+        // sheets pouring from the roof into a magma splash bowl. Keyed to fixed map data
+        // + final radii only (stage-independent interior; the edge gate lies inside the
+        // rim band the ring sweep rewrites anyway). Level 1 = magma splash lip, 2 = core
+        // bowl (1-deep lava fill), 3 = core + ONE ceiling pour source per ~5 radial
+        // blocks (bounds the vanilla flow-update budget to <=4 sources per chunk seam
+        // run). Suppressed near the moat, its causeways and all landmark clearances.
+        int seamCurtain = 0;
+        if (profile == DiscProfile.NETHER && edge > 0.5D) {
+            DiscMapData.SectorBlend seamBlend = map.sectorBlendAt(profile, x, z);
+            if (seamBlend != null && seamBlend.t() > SEAM_CURTAIN_MIN_T) {
+                double angle = angleDeg(x, z);
+                DiscMapData.Moat moat = map.profile(profile).moat();
+                boolean nearMoat = moat != null
+                        && (Math.abs(r - moat.radius()) <= moat.halfWidth() + 4.0D
+                                || moat.withinBridge(angle, 4.0D));
+                if (!nearMoat && !nearNetherLandmark(map, x, z)) {
+                    // Both flanks of one seam share a bucket (boundaries at 0/72/…/288°).
+                    int seamIndex = ((int) Math.floor((angle + 36.0D) / 72.0D)) % 5;
+                    if (hash01(H_SEAM, seamIndex, (int) (r / 24.0D)) < 0.5D) {
+                        seamCurtain = seamBlend.t() > SEAM_CORE_MIN_T ? 2 : 1;
+                        if (seamCurtain == 2) {
+                            surfaceY -= 1; // splash bowl; fill is flush with the terrain
+                            lavaTopY = Math.max(lavaTopY, surfaceY + 1);
+                            if (Math.floorMod((int) Math.floor(r), 5) == 0) {
+                                seamCurtain = 3;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Lens underside (normalised against the FINAL radius: stage-independent) with
         // the rim taper thinning the disc to a crumbly knife edge over the last blocks.
         int lensBottomY = (int) Math.floor(profile.lensBottomY(r));
@@ -301,6 +357,40 @@ public final class DiscTerrainFunction {
                     needle += hf * hf * fringe * 10.0D;
                 }
                 groundBottomY -= Math.min(24, (int) needle);
+            }
+        }
+
+        // IDEA-17 idea 1b — nether roof shell: a mirrored lens hanging from the world
+        // top (cavern tallest at the center), rim-tapered by the SAME edge factor as
+        // the floor so the roof thins and crumbles inside the rim band the ring sweep
+        // rewrites (interior output stays keyed to the FINAL lensNormRadius only).
+        // Idea 3 — ceiling stalactite forests: the floor fringe formula mirrored onto
+        // the roof on an offset noise domain, clustered by a 16-block cell mask so the
+        // needles read as forests with clearings.
+        int ceilingBottomY = Integer.MAX_VALUE;
+        int ceilingBodyY = Integer.MAX_VALUE;
+        int ceilingTopY = Integer.MIN_VALUE;
+        if (profile == DiscProfile.NETHER) {
+            ceilingTopY = profile.minY() + profile.height() - 1;
+            double tRoof = Math.min(1.0D, r / profile.lensNormRadius());
+            int roofBase = (int) Math.floor(CEILING_CENTER_BOTTOM_Y
+                    + (CEILING_RIM_BOTTOM_Y - CEILING_CENTER_BOTTOM_Y) * tRoof * tRoof);
+            int roofFull = Math.max(4, ceilingTopY + 1 - roofBase);
+            int roofThickness = Math.max(2, (int) (roofFull * (0.08D + 0.92D * edge)));
+            ceilingBodyY = ceilingTopY + 1 - roofThickness;
+            ceilingBottomY = ceilingBodyY;
+            if (edge > 0.75D && hash01(H_CEILING, x >> 4, z >> 4) < CEILING_FOREST_CELL_CHANCE) {
+                SimplexNoise fringeNoise = terrainNoises().fringe();
+                double fringe = fringeNoise.getValue(x / 22.0D + 1024.0D, z / 22.0D + 1024.0D);
+                if (fringe > 0.0D) {
+                    double f2 = fringe * fringe;
+                    double needle = f2 * f2 * 18.0D;
+                    double hf = fringeNoise.getValue(x / 6.0D + 1536.0D, z / 6.0D - 1536.0D);
+                    if (hf > 0.0D) {
+                        needle += hf * hf * fringe * 10.0D;
+                    }
+                    ceilingBottomY -= Math.min(CEILING_NEEDLE_MAX, (int) needle);
+                }
             }
         }
 
@@ -419,12 +509,29 @@ public final class DiscTerrainFunction {
         if (endDisc) {
             topY = Math.max(topY, EndDiscGeometry.topYAt(x, z));
         }
+        if (ceilingTopY > topY) {
+            topY = ceilingTopY; // nether roof shell reaches the world top
+        }
 
         return new DiscColumn(profile, x, z, stage, true, r, surfaceY, undersideY, bottomY,
                 groundBottomY, topY, style, deepslateTopY, lavaTopY, waterTopY, waterBottomY,
                 snowCap, riverBed, scar, moatLip, iceCascade, swampPool, false, hangState,
                 cavityMinY, cavityMaxY, cavityLavaY, cavityShell, caveMinY, caveMaxY,
-                caveFade, entrance, breach, endDisc);
+                caveFade, entrance, breach, endDisc, ceilingBottomY, ceilingBodyY,
+                ceilingTopY, seamCurtain);
+    }
+
+    /** Whether (x, z) lies within 24 blocks of any nether landmark's clearance radius. */
+    private static boolean nearNetherLandmark(DiscMapData map, int x, int z) {
+        for (DiscMapData.Landmark landmark : map.profile(DiscProfile.NETHER).landmarks()) {
+            double reach = landmark.radius() + 24.0D;
+            double dx = x - landmark.x();
+            double dz = z - landmark.z();
+            if (dx * dx + dz * dz <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Channel depth below the original surface: 4 near the centerline, 3 towards the edges. */
@@ -453,7 +560,8 @@ public final class DiscTerrainFunction {
         return new DiscColumn(profile, x, z, stage, true, r, top, bottom, bottom, bottom, top,
                 style, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE,
                 false, false, 0, false, false, false, true, null,
-                1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false);
+                1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false,
+                Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0);
     }
 
     /** Normalised 0..360 disc-map angle (degrees from +X towards +Z) of the column. */
@@ -470,6 +578,15 @@ public final class DiscTerrainFunction {
         int x = col.x();
         int z = col.z();
         if (y > col.surfaceY()) {
+            // Nether roof shell first (ceilingBottomY is MAX_VALUE on the overworld):
+            // solid roof body/needles, then the seam-curtain pour source hanging one
+            // block under the needle tip of curtain-core columns.
+            if (y >= col.ceilingBottomY()) {
+                return ceilingBlock(col, y);
+            }
+            if (col.seamCurtain() == 3 && y == col.ceilingBottomY() - 1) {
+                return LAVA;
+            }
             // Sky band: End-disc geometry, then the river/moat fills, then breach fire.
             if (col.endDisc() && y >= EndDiscGeometry.MIN_Y) {
                 BlockState end = EndDiscGeometry.stateAt(x, y, z);
@@ -771,11 +888,28 @@ public final class DiscTerrainFunction {
 
     // --- strata ---
 
+    /**
+     * IDEA-17 nether roof shell block at {@code y >= ceilingBottomY}: the top three
+     * layers are BEDROCK (mirror of the floor seal), the lens body a blackstone-veined
+     * netherrack mass, and everything below {@code ceilingBodyY} reuses the floor
+     * fringe palette — blackstone stalactite needles with glowstone sprinkles, so the
+     * forests are glowing-tipped for free.
+     */
+    private static BlockState ceilingBlock(DiscColumn col, int y) {
+        if (y > col.ceilingTopY() - 3) {
+            return BEDROCK;
+        }
+        if (y < col.ceilingBodyY()) {
+            return hash01x3(H_GLOW, col.x(), y, col.z()) < 0.10D ? GLOWSTONE : BLACKSTONE;
+        }
+        return hash01x3(H_CEILING, col.x(), y, col.z()) < 0.30D ? BLACKSTONE : NETHERRACK;
+    }
+
     private static BlockState strataBlock(DiscColumn col, int y) {
         SectorStyle style = col.style();
         if (col.profile() == DiscProfile.NETHER) {
             if (y == col.surfaceY()) {
-                return col.moatLip() ? MAGMA_BLOCK : style.top;
+                return col.moatLip() || col.seamCurtain() > 0 ? MAGMA_BLOCK : style.top;
             }
             if (y > col.surfaceY() - 3) {
                 return style.filler;
@@ -983,7 +1117,13 @@ public final class DiscTerrainFunction {
      * {@code shard=true} marks a detached floating rim shard (no bedrock seal, caves,
      * ores or event geometry). {@code caveFade} is the 0..1 rim fade of the cheese cave
      * layer; {@code entrance} the cell's authored walk-in entrance (null = none);
-     * {@code breach}/{@code endDisc} flag the per-save event geometry overlays.</p>
+     * {@code breach}/{@code endDisc} flag the per-save event geometry overlays.
+     * IDEA-17 nether roof (overworld columns: {@code MAX/MAX/MIN_VALUE}):
+     * {@code ceilingBottomY} is the lowest solid roof block (stalactite needle tips),
+     * {@code ceilingBodyY} the roof lens base (fringe palette between the two),
+     * {@code ceilingTopY} the sealed world-top layer. {@code seamCurtain} is the
+     * lava-fall curtain level: 0 none, 1 magma splash lip, 2 core bowl, 3 core with a
+     * ceiling pour source.</p>
      */
     public record DiscColumn(DiscProfile profile, int x, int z, int stage, boolean inside,
             double radial, int surfaceY, int undersideY, int bottomY, int groundBottomY,
@@ -992,13 +1132,15 @@ public final class DiscTerrainFunction {
             boolean iceCascade, boolean swampPool, boolean shard, BlockState hangState,
             int cavityMinY, int cavityMaxY, int cavityLavaY, boolean cavityShell,
             int caveMinY, int caveMaxY, double caveFade, CaveEntrances.Entrance entrance,
-            boolean breach, boolean endDisc) {
+            boolean breach, boolean endDisc, int ceilingBottomY, int ceilingBodyY,
+            int ceilingTopY, int seamCurtain) {
 
         static DiscColumn outside(DiscProfile profile, int x, int z, int stage) {
             return new DiscColumn(profile, x, z, stage, false, 0.0D, 0, 0, 0, 0, -1,
                     SectorStyle.PLAINS, 0, Integer.MIN_VALUE, Integer.MIN_VALUE,
                     Integer.MAX_VALUE, false, false, 0, false, false, false, false, null,
-                    1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false);
+                    1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false,
+                    Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0);
         }
     }
 

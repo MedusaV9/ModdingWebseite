@@ -253,13 +253,13 @@ def api(path, key, payload=None):
 
 
 def submit_with_backoff(key, payload):
-    """Sequential submits still hit burst limits (403/429) — retry with backoff."""
-    for attempt in range(5):
+    """The API rate-limits submissions on a LONG window — wait patiently (5 min)."""
+    for attempt in range(16):
         try:
             return api("generations/v3", key, payload)
         except urllib.error.HTTPError as err:
-            if err.code in (403, 429) and attempt < 4:
-                wait = 15 * (attempt + 1)
+            if err.code in (403, 429) and attempt < 15:
+                wait = 60 if attempt == 0 else 300
                 print(f"  rate-limited ({err.code}); retrying in {wait}s", flush=True)
                 time.sleep(wait)
                 continue
@@ -309,16 +309,16 @@ def main():
     wanted = [t for t in TRACKS if not args.only or t["id"] in args.only.split(",")]
     print(f"Generating {len(wanted)} tracks -> {out_dir}")
     results = {}
-    # Stagger submissions (burst 403s observed), then poll concurrently.
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {}
-        for track in wanted:
-            futures[pool.submit(generate_one, track, key, out_dir)] = track["id"]
-            time.sleep(20)
-        for future in as_completed(futures):
-            tid, msg = future.result()
-            results[tid] = msg
-            print(f"[{tid}] {msg}", flush=True)
+    # STRICTLY SEQUENTIAL: the API 403s concurrent submissions — one live task at a time.
+    for track in wanted:
+        if (out_dir / f"{track['id']}_raw.ogg").exists():
+            results[track["id"]] = "OK (already downloaded)"
+            print(f"[{track['id']}] already downloaded, skipping", flush=True)
+            continue
+        tid, msg = generate_one(track, key, out_dir)
+        results[tid] = msg
+        print(f"[{tid}] {msg}", flush=True)
+        time.sleep(10)
     failed = [t for t, m in results.items() if not m.startswith("OK")]
     print(f"\nDone. {len(results) - len(failed)} ok, {len(failed)} failed: {failed}")
     return 0 if not failed else 2

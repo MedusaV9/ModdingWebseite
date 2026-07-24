@@ -165,8 +165,10 @@ public final class RingGrowthService {
     private static final long FINISH_BUDGET_NANOS_ANIMATED = 12_000_000L;
     private static final long FINISH_BUDGET_NANOS_INSTANT = 25_000_000L;
 
-    /** Strength/duration of the periodic growth rumble ({@code growth.shakeEveryRings}). */
-    private static final float SHAKE_STRENGTH = 0.35F;
+    /**
+     * Duration of the periodic growth rumble ({@code growth.shakeEveryRings}); strength is
+     * per-player, scaled 0.08–0.5 by radial distance to the front (IDEA-14 §1).
+     */
     private static final int SHAKE_TICKS = 15;
 
     /** Extra XZ pad (blocks) around a protected landmark's measured piece extent. */
@@ -906,8 +908,17 @@ public final class RingGrowthService {
                     this.lastShakeRing = waveRing;
                 } else if (Math.abs(waveRing - this.lastShakeRing) >= shakeEvery) {
                     this.lastShakeRing = waveRing;
-                    PacketDistributor.sendToPlayersInDimension(this.level,
-                            S2CShakePayload.shake(SHAKE_STRENGTH, SHAKE_TICKS));
+                    // IDEA-14 §1: the rumble ARRIVES — per-player strength scales with the
+                    // player's radial distance to the front (full 0.5 within a few blocks,
+                    // fading to a faint 0.08 by 128 blocks) instead of one flat global shake.
+                    for (ServerPlayer player : this.level.players()) {
+                        double playerR = Math.sqrt(
+                                player.getX() * player.getX() + player.getZ() * player.getZ());
+                        float closeness = (float) Mth.clamp(
+                                1.0D - Math.abs(playerR - waveRing) / 128.0D, 0.0D, 1.0D);
+                        PacketDistributor.sendToPlayer(player,
+                                S2CShakePayload.shake(Mth.lerp(closeness, 0.08F, 0.5F), SHAKE_TICKS));
+                    }
                 }
             }
         }

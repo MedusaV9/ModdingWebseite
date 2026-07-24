@@ -1,0 +1,18 @@
+{
+ "en_us": {
+  "subtitles.eclipse.ambient.sanctum_hum": "The sanctum resonates",
+  "subtitles.eclipse.ambient.border_static": "Static gnaws at the edge",
+  "subtitles.eclipse.boss.herald_roar_far": "The Herald howls in the distance",
+  "subtitles.eclipse.boss.herald_telegraph_far": "Distant shards chime",
+  "subtitles.eclipse.event.xbox_portal_loop": "The portal murmurs",
+  "subtitles.eclipse.ui.door_open": "A heavy door creaks open"
+ },
+ "de_de": {
+  "subtitles.eclipse.ambient.sanctum_hum": "Das Sanktum resoniert",
+  "subtitles.eclipse.ambient.border_static": "Statisches Rauschen nagt am Rand",
+  "subtitles.eclipse.boss.herald_roar_far": "Der Herold heult in der Ferne",
+  "subtitles.eclipse.boss.herald_telegraph_far": "Ferne Splitter klingen",
+  "subtitles.eclipse.event.xbox_portal_loop": "Das Portal raunt",
+  "subtitles.eclipse.ui.door_open": "Eine schwere Tür knarrt auf"
+ }
+}

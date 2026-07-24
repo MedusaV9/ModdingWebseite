@@ -1,0 +1,32 @@
+{
+ "en_us": {
+  "message.eclipse.vein.reveal": "%1$s vein · %2$s blocks",
+  "message.eclipse.skill.proc.vein_clear": "Vein cleared",
+  "message.eclipse.skill.proc.ore_first_coal": "Firstbreak — your first Coal Ore!",
+  "message.eclipse.skill.proc.ore_first_copper": "Firstbreak — your first Copper Ore!",
+  "message.eclipse.skill.proc.ore_first_iron": "Firstbreak — your first Iron Ore!",
+  "message.eclipse.skill.proc.ore_first_gold": "Firstbreak — your first Gold Ore!",
+  "message.eclipse.skill.proc.ore_first_redstone": "Firstbreak — your first Redstone Ore!",
+  "message.eclipse.skill.proc.ore_first_lapis": "Firstbreak — your first Lapis Lazuli Ore!",
+  "message.eclipse.skill.proc.ore_first_diamond": "Firstbreak — your first Diamond Ore!",
+  "message.eclipse.skill.proc.ore_first_zinc": "Firstbreak — your first Zinc Ore!",
+  "message.eclipse.skill.proc.ore_first_quartz": "Firstbreak — your first Nether Quartz!",
+  "message.eclipse.skill.proc.ore_first_nether_gold": "Firstbreak — your first Nether Gold!",
+  "message.eclipse.skill.proc.ore_first_netherite": "Firstbreak — your first Ancient Debris!"
+ },
+ "de_de": {
+  "message.eclipse.vein.reveal": "%1$s-Ader · %2$s Blöcke",
+  "message.eclipse.skill.proc.vein_clear": "Ader abgebaut",
+  "message.eclipse.skill.proc.ore_first_coal": "Erstfund — dein erstes Kohleerz!",
+  "message.eclipse.skill.proc.ore_first_copper": "Erstfund — dein erstes Kupfererz!",
+  "message.eclipse.skill.proc.ore_first_iron": "Erstfund — dein erstes Eisenerz!",
+  "message.eclipse.skill.proc.ore_first_gold": "Erstfund — dein erstes Golderz!",
+  "message.eclipse.skill.proc.ore_first_redstone": "Erstfund — dein erstes Redstone-Erz!",
+  "message.eclipse.skill.proc.ore_first_lapis": "Erstfund — dein erstes Lapislazulierz!",
+  "message.eclipse.skill.proc.ore_first_diamond": "Erstfund — dein erstes Diamanterz!",
+  "message.eclipse.skill.proc.ore_first_zinc": "Erstfund — dein erstes Zinkerz!",
+  "message.eclipse.skill.proc.ore_first_quartz": "Erstfund — dein erster Netherquarz!",
+  "message.eclipse.skill.proc.ore_first_nether_gold": "Erstfund — dein erstes Nethergold!",
+  "message.eclipse.skill.proc.ore_first_netherite": "Erstfund — deine ersten Antiken Trümmer!"
+ }
+}

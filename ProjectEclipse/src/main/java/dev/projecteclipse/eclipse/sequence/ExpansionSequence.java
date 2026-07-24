@@ -127,6 +127,15 @@ public final class ExpansionSequence implements SequenceReplayable {
 
     private static final ResourceLocation GROWTH_DUST_WALL = emitter("growth_dust_wall");
     private static final ResourceLocation STRUCTURE_SLAM_DUST = emitter("structure_slam_dust");
+    /** IDEA-14 §2: gravity debris arcing out of the closing sky tear after a slam. */
+    private static final ResourceLocation SLAM_DEBRIS = emitter("slam_debris");
+    /**
+     * IDEA-14 §3: one-shot new-land glow cue (a = innerR, b = outerR of the fresh annulus).
+     * Defined here because {@code FxPayloads} is shared — its 2-line {@code handleFxEvent}
+     * dispatch (→ {@link ClientHooks#handleNewLandGlow}) is a documented W4-ATMOS wiring ask.
+     */
+    private static final ResourceLocation FX_NEW_LAND_GLOW =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "fx/new_land_glow");
 
     private static final String CAPTION_SKYWARD = "eclipse.caption.expansion.skyward";
     private static final String CAPTION_GROWING = "eclipse.caption.expansion.growing";
@@ -152,6 +161,20 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int SKY_RIFT_HEIGHT = 26;
     /** Rift width from the pending site's footprint (payload contract: diagonal · 1.2 ≈ · 1.7). */
     private static final float RIFT_WIDTH_PER_FOOTPRINT = 1.7F;
+
+    // --- IDEA-14 §2: three-beat crater read (rings + debris; 15 spawns/20 ticks ≤ BURST cap) ---
+    /** Expanding dust rings after the slam: inner ring at t+6, outer ring at t+12. */
+    private static final int SLAM_RING_1_DELAY = 6;
+    private static final int SLAM_RING_2_DELAY = 12;
+    private static final int SLAM_RING_POINTS = 6;
+    /** Ring radii as fractions of the site footprint. */
+    private static final double SLAM_RING_1_RADIUS = 0.35D;
+    private static final double SLAM_RING_2_RADIUS = 0.6D;
+    /** Debris rain out of the closing sky tear (t+8 / t+20 after the slam). */
+    private static final int DEBRIS_DELAY_1 = 8;
+    private static final int DEBRIS_DELAY_2 = 20;
+    /** Representative footprint used by the FX-only replay's fake beat. */
+    private static final int REPLAY_FOOTPRINT = 24;
 
     /** How far inside the OLD rim transported nether players are parked (safe, pre-existing terrain). */
     private static final int VIEWPOINT_INSET_BLOCKS = 24;
@@ -502,29 +525,53 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static void slamBeat(Run run, Beat beat) {
         MinecraftServer server = run.level.getServer();
         slamFx(run.level, beat.slamPos, beat.site.footprint());
+        // IDEA-14 §2: chunks arc out of the closing sky tear and rain over the fresh paste
+        // (both beats land while RiftFx's close animation is still playing).
+        schedule(server, DEBRIS_DELAY_1, () -> sendDebris(run.level, beat.riftPos));
+        schedule(server, DEBRIS_DELAY_2, () -> sendDebris(run.level, beat.riftPos));
         schedule(server, RIFT_CLOSE_DELAY_TICKS, () ->
                 FxPayloads.sendFxEvent(run.level, FxPayloads.FX_RIFT_CLOSE, beat.riftPos, 0.0F, 0.0F, -1.0D));
         run.activeBeat = null;
         schedule(server, BEAT_SPACING_TICKS, () -> maybeStartNextBeat(run));
     }
 
-    /** Slam burst: dust + shockwave + thunderous rift-slam + shake (R11 numbers). */
+    /**
+     * Slam burst: dust + shockwave + thunderous rift-slam + shake (R11 numbers). IDEA-14 §2
+     * upgrades the read to expanding dust rings — a shock ring racing outward from the
+     * impact at t+6 and t+12 (replaces the old ≥64-footprint corner special case; total
+     * spawns 1 + 6 + 6 + 2 debris = 15 over 20 ticks, exactly the client BURST window cap).
+     */
     private static void slamFx(ServerLevel level, Vec3 pos, int footprint) {
         PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, 192.0D,
                 new S2CQuasarPayload(STRUCTURE_SLAM_DUST, pos));
-        if (footprint >= 64) {
-            // Big footprints get corner dust so the curtain reads across the whole site.
-            double d = footprint / 4.0D;
-            for (int corner = 0; corner < 4; corner++) {
-                Vec3 offset = new Vec3((corner & 1) == 0 ? -d : d, 0.0D, (corner & 2) == 0 ? -d : d);
-                PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, 192.0D,
-                        new S2CQuasarPayload(STRUCTURE_SLAM_DUST, pos.add(offset)));
-            }
-        }
+        MinecraftServer server = level.getServer();
+        schedule(server, SLAM_RING_1_DELAY,
+                () -> slamDustRing(level, pos, footprint * SLAM_RING_1_RADIUS));
+        schedule(server, SLAM_RING_2_DELAY,
+                () -> slamDustRing(level, pos, footprint * SLAM_RING_2_RADIUS));
         FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, pos, 0.5F, 30.0F, -1.0D);
         level.playSound(null, pos.x, pos.y, pos.z, EclipseSounds.EVENT_RIFT_SLAM.get(),
                 SoundSource.BLOCKS, 1.2F, 0.94F + level.random.nextFloat() * 0.08F);
         PacketDistributor.sendToPlayersInDimension(level, S2CShakePayload.shake(0.4F, 18));
+    }
+
+    /** One ring of {@value #SLAM_RING_POINTS} dust bursts on a circle around the slam. */
+    private static void slamDustRing(ServerLevel level, Vec3 center, double radius) {
+        if (radius < 2.0D) {
+            return; // tiny footprints: the center burst already covers the ring
+        }
+        for (int k = 0; k < SLAM_RING_POINTS; k++) {
+            double angle = k * (Math.PI * 2.0D / SLAM_RING_POINTS);
+            Vec3 pos = center.add(Math.cos(angle) * radius, 0.0D, Math.sin(angle) * radius);
+            PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, 192.0D,
+                    new S2CQuasarPayload(STRUCTURE_SLAM_DUST, pos));
+        }
+    }
+
+    /** Debris burst at the closing sky tear (gravity emitter — IDEA-14 §2). */
+    private static void sendDebris(ServerLevel level, Vec3 riftPos) {
+        PacketDistributor.sendToPlayersNear(level, null, riftPos.x, riftPos.y, riftPos.z, 192.0D,
+                new S2CQuasarPayload(SLAM_DEBRIS, riftPos));
     }
 
     /** END: grade off, nether visitors home, award-roulette timing hook. */
@@ -538,6 +585,15 @@ public final class ExpansionSequence implements SequenceReplayable {
         RUNS.remove(run.profile, run);
 
         captionDimension(run.level, CAPTION_DONE, 80);
+        // IDEA-14 §3: fresh-land afterglow — one-shot band-radii cue (a = innerR,
+        // b = outerR per the documented float payload contract), fading client-side over
+        // ~10 min. Transient by design: a rejoin loses the remaining glow, like the grade.
+        int glowInnerR = StageRadii.radius(run.profile, run.fromStage);
+        int glowOuterR = StageRadii.radius(run.profile, run.toStage);
+        if (glowOuterR > glowInnerR) {
+            FxPayloads.sendFxEvent(run.level, FX_NEW_LAND_GLOW, Vec3.ZERO,
+                    glowInnerR, glowOuterR, -1.0D);
+        }
         boolean lastRun = RUNS.isEmpty();
         if (lastRun) {
             FxPayloads.sendEclipsePhase(server, ECLIPSE_ENDING, 0.0F, 100, permanentRim(server));
@@ -868,6 +924,21 @@ public final class ExpansionSequence implements SequenceReplayable {
                         PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.4F, 18));
                         player.playNotifySound(EclipseSounds.EVENT_RIFT_SLAM.get(), SoundSource.BLOCKS, 1.2F, 1.0F);
                     });
+                    // IDEA-14 §2 replay parity (R12): dust rings + debris rain, FX-only.
+                    schedule(server, RIFT_HOLD_TICKS + SLAM_RING_1_DELAY, () ->
+                            replaySlamRing(player, ground, REPLAY_FOOTPRINT * SLAM_RING_1_RADIUS));
+                    schedule(server, RIFT_HOLD_TICKS + SLAM_RING_2_DELAY, () ->
+                            replaySlamRing(player, ground, REPLAY_FOOTPRINT * SLAM_RING_2_RADIUS));
+                    schedule(server, RIFT_HOLD_TICKS + DEBRIS_DELAY_1, () -> {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(SLAM_DEBRIS, rift));
+                        }
+                    });
+                    schedule(server, RIFT_HOLD_TICKS + DEBRIS_DELAY_2, () -> {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(SLAM_DEBRIS, rift));
+                        }
+                    });
                     schedule(server, RIFT_HOLD_TICKS + RIFT_CLOSE_DELAY_TICKS, () -> {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player,
@@ -892,6 +963,18 @@ public final class ExpansionSequence implements SequenceReplayable {
         for (ServerPlayer player : players) {
             PacketDistributor.sendToPlayer(player,
                     new S2CCaptionPayload(langKey, ticks, S2CCaptionPayload.STYLE_SUBTITLE));
+        }
+    }
+
+    /** Per-player mirror of {@link #slamDustRing} for the FX-only replay (IDEA-14 §2). */
+    private static void replaySlamRing(ServerPlayer player, Vec3 center, double radius) {
+        if (player.hasDisconnected()) {
+            return;
+        }
+        for (int k = 0; k < SLAM_RING_POINTS; k++) {
+            double angle = k * (Math.PI * 2.0D / SLAM_RING_POINTS);
+            PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(STRUCTURE_SLAM_DUST,
+                    center.add(Math.cos(angle) * radius, 0.0D, Math.sin(angle) * radius)));
         }
     }
 
@@ -991,6 +1074,13 @@ public final class ExpansionSequence implements SequenceReplayable {
         /** Arc spacing of the secondary spawn (blocks along the front). */
         private static final double SECONDARY_SPACING_BLOCKS = 10.0D;
 
+        /** IDEA-14 §1: once-per-sweep underfoot latch — reset when a sweep's pulse 0 arrives. */
+        private static boolean frontCrossedPlayer;
+        /** IDEA-14 §3: cadence of the new-land upwelling motes (~2 s; reducedFx doubles it). */
+        private static final int NEW_LAND_MOTE_INTERVAL_TICKS = 40;
+        private static final ResourceLocation MAP_EXPAND_MATERIALIZE = emitter("map_expand_materialize");
+        private static int newLandMoteCountdown;
+
         private ClientHooks() {}
 
         @SubscribeEvent
@@ -1009,6 +1099,22 @@ public final class ExpansionSequence implements SequenceReplayable {
             net.minecraft.world.entity.player.Player player = minecraft.player;
             if (level == null || player == null || payload.waveR() <= 0) {
                 return;
+            }
+
+            // IDEA-14 §1: the wave passes THROUGH you — the front is monotonic outward, so
+            // the first pulse whose ring reached the player's radius fires one underfoot
+            // beat per sweep: the shockwave post pass + a dust wall right at the feet.
+            if (payload.pulseIndex() == 0) {
+                frontCrossedPlayer = false;
+            }
+            double playerR = Math.sqrt(player.getX() * player.getX() + player.getZ() * player.getZ());
+            if (!frontCrossedPlayer && payload.waveR() >= playerR
+                    && playerR >= payload.innerR() - 8.0D) {
+                frontCrossedPlayer = true;
+                Vec3 feet = player.position();
+                dev.projecteclipse.eclipse.veilfx.EclipseFxState.startShockwave(feet, 0.25F, 18);
+                dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawn(GROWTH_DUST_WALL, feet,
+                        dev.projecteclipse.eclipse.veilfx.FxBudget.Channel.SEQUENCE);
             }
 
             // Nearest point of the pulse's arc segment to the player.
@@ -1036,6 +1142,65 @@ public final class ExpansionSequence implements SequenceReplayable {
                     break;
                 }
             }
+        }
+
+        /**
+         * IDEA-14 §3 entry point of the {@code eclipse:fx/new_land_glow} cue (a = innerR,
+         * b = outerR). Wiring ask (W4-ATMOS): {@code FxPayloads.handleFxEvent} must add a
+         * 2-line dispatch here — exact diff in {@code docs/plans_v3/wiring/W4-ATMOS_wiring.md}.
+         * Until that lands, the cue is logged as an unknown FX id at debug and the glow is
+         * simply absent (graceful degrade).
+         */
+        public static void handleNewLandGlow(float innerR, float outerR) {
+            dev.projecteclipse.eclipse.veilfx.EclipseFxState.setNewLandBand(innerR, outerR);
+        }
+
+        /**
+         * IDEA-14 §3: ambient upwelling motes on the fresh annulus — one AMBIENT-channel
+         * {@code map_expand_materialize} spawn per ~2 s at a random surface point near the
+         * player, probability × glow so the afterglow visibly thins over the ~10 minutes.
+         */
+        @SubscribeEvent
+        static void onClientTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+            float glow = dev.projecteclipse.eclipse.veilfx.EclipseFxState.newLandGlow();
+            if (glow <= 0.0F) {
+                return;
+            }
+            net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+            net.minecraft.client.multiplayer.ClientLevel level = minecraft.level;
+            net.minecraft.world.entity.player.Player player = minecraft.player;
+            if (level == null || player == null || minecraft.isPaused()) {
+                return;
+            }
+            if (--newLandMoteCountdown > 0) {
+                return;
+            }
+            newLandMoteCountdown = dev.projecteclipse.eclipse.core.config.EclipseClientConfig.reducedFx()
+                    ? NEW_LAND_MOTE_INTERVAL_TICKS * 2 : NEW_LAND_MOTE_INTERVAL_TICKS;
+            double playerR = Math.sqrt(player.getX() * player.getX() + player.getZ() * player.getZ());
+            if (!dev.projecteclipse.eclipse.veilfx.EclipseFxState.newLandBandContains(playerR)
+                    || level.random.nextFloat() > glow) {
+                return;
+            }
+            double angle = level.random.nextDouble() * Math.PI * 2.0D;
+            double dist = 6.0D + level.random.nextDouble() * 18.0D;
+            double x = player.getX() + Math.cos(angle) * dist;
+            double z = player.getZ() + Math.sin(angle) * dist;
+            int surfaceY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
+                    net.minecraft.util.Mth.floor(x), net.minecraft.util.Mth.floor(z));
+            if (surfaceY <= level.getMinBuildHeight() + 1) {
+                return;
+            }
+            dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawn(MAP_EXPAND_MATERIALIZE,
+                    new Vec3(x, surfaceY + 1.0D, z),
+                    dev.projecteclipse.eclipse.veilfx.FxBudget.Channel.AMBIENT);
+        }
+
+        /** The glow band is dimension-local — never carry it across respawn/dimension change. */
+        @SubscribeEvent
+        static void onClone(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.Clone event) {
+            dev.projecteclipse.eclipse.veilfx.EclipseFxState.clearNewLandBand();
+            frontCrossedPlayer = false;
         }
 
         /**

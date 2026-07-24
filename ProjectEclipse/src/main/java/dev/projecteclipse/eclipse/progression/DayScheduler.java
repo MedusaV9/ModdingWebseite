@@ -130,14 +130,10 @@ public final class DayScheduler {
                     S2CDayStatePayload.currentFor(online, newDay, state.getAltarLevel()));
         }
         if (changed && !quiet) {
-            for (ServerPlayer online : server.getPlayerList().getPlayers()) {
-                online.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.MASTER, 1.0F, 1.0F);
-            }
-            // W8: the bell is augmented by a typewriter/sweep announcement + the day's new
-            // unlock announcements, and the anonymized timeline is rebroadcast. Quiet
-            // catch-up days skip this whole stack — the unlock-key baseline then diffs all
-            // skipped days' keys into the FINAL (loud) day's announcements at once.
-            AnnouncementService.onDayChanged(server, previousDay, newDay);
+            // W4-CEREMONY IDEA-09 #1: the DawnCeremony spaces the morning beats (sun pulse →
+            // dawn toll → onDayChanged at T+40 → goals → awards roulette) over ~10 s. Quiet
+            // catch-up days still skip the whole stack (unchanged contract).
+            dev.projecteclipse.eclipse.drama.DawnCeremony.begin(server, previousDay, newDay);
         }
         EclipseMod.LOGGER.info("Eclipse day set to {}{} (goals: {}; unlocked keys: {})",
                 newDay, quiet ? " [quiet]" : "", plan.goals(), UnlockState.unlockedKeys(server));

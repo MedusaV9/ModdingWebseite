@@ -207,6 +207,38 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ui.caption_tick")));
 
+    // W4-ATMOS sound suite (IDEA-07 §1/§2/§3/§7) — all aliases of shipped oggs.
+
+    /** Sanctum aura hum loop (client.sound.SanctumHum resolves it at runtime, self-healing). */
+    public static final Supplier<SoundEvent> AMBIENT_SANCTUM_HUM = SOUNDS.register(
+            "ambient.sanctum_hum",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.sanctum_hum")));
+
+    /** Soft-border static whisper loop (client.sound.BorderStaticSound, relative bed). */
+    public static final Supplier<SoundEvent> AMBIENT_BORDER_STATIC = SOUNDS.register(
+            "ambient.border_static",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ambient.border_static")));
+
+    /** Distant low howl layered under the Herald summon roar (heard disc-wide). */
+    public static final Supplier<SoundEvent> BOSS_HERALD_ROAR_FAR = SOUNDS.register(
+            "boss.herald_roar_far",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_roar_far")));
+
+    /** Muffled far-shell volley telegraph for players kiting outside the arena. */
+    public static final Supplier<SoundEvent> BOSS_HERALD_TELEGRAPH_FAR = SOUNDS.register(
+            "boss.herald_telegraph_far",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "boss.herald_telegraph_far")));
+
+    /** Periodic hum of the xbox portal (xboxevent.XboxPortal resolves it at runtime). */
+    public static final Supplier<SoundEvent> EVENT_XBOX_PORTAL_LOOP = SOUNDS.register(
+            "event.xbox_portal_loop",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.xbox_portal_loop")));
+
     // --- Quiet-Eclipse UI kit (P3-W1 ledger; UiSounds resolves these by id at runtime) ---
 
     /** Generic widget press. */
@@ -227,8 +259,17 @@ public final class EclipseSounds {
     public static final Supplier<SoundEvent> UI_ROULETTE_WIN = uiEvent("ui.roulette_win");
     /** Day timer reaching 00:00. */
     public static final Supplier<SoundEvent> UI_TIMER_ZERO = uiEvent("ui.timer_zero");
+    /** Ship door creak of the death-flow door beat (W1-ledger id, closed by W4-ATMOS). */
+    public static final Supplier<SoundEvent> UI_DOOR_OPEN = uiEvent("ui.door_open");
     /** Ghost-heart burst on revive. */
     public static final Supplier<SoundEvent> UI_GHOST_BURST = uiEvent("ui.ghost_burst");
+    // W4-FEEL ui ledger (aliases; UiSounds self-heals until these land).
+    /** Sidebar goal-complete stamp (pitch-salted at the call site). */
+    public static final Supplier<SoundEvent> UI_GOAL_STAMP = uiEvent("ui.goal_stamp");
+    /** Skill-tree purchase cascade whoosh (one per cascade). */
+    public static final Supplier<SoundEvent> UI_SKILL_UNLOCK = uiEvent("ui.skill_unlock");
+    /** Settings toggle knob-dock tick (ON 1.1 / OFF 0.75). */
+    public static final Supplier<SoundEvent> UI_TOGGLE_SETTLE = uiEvent("ui.toggle_settle");
 
     private static Supplier<SoundEvent> uiEvent(String id) {
         return SOUNDS.register(id, () -> SoundEvent.createVariableRangeEvent(

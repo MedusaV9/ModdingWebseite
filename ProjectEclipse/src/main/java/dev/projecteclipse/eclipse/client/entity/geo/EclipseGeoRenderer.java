@@ -2,6 +2,9 @@ package dev.projecteclipse.eclipse.client.entity.geo;
 
 import javax.annotation.Nullable;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -11,6 +14,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.DefaultedEntityGeoModel;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
@@ -76,6 +80,24 @@ public class EclipseGeoRenderer<T extends LivingEntity & GeoEntity> extends GeoE
     @Override
     protected float getDeathMaxRotation(T animatable) {
         return this.uprightDeath ? 0.0F : super.getDeathMaxRotation(animatable);
+    }
+
+    /**
+     * Universal hit feedback (W4-FEEL, IDEA-02 #1): every Eclipse custom mob pops one
+     * BURST-budgeted {@code eclipse:rift_spark} crackle on the first {@code hurtTime}
+     * frame — {@link HurtSparks} dedupes per entity, so this per-frame call is cheap.
+     * Subclasses overriding {@code preRender} keep the behavior via their
+     * {@code super.preRender} call.
+     */
+    @Override
+    public void preRender(PoseStack poseStack, T entity, BakedGeoModel model,
+            MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender, float partialTick,
+            int packedLight, int packedOverlay, int colour) {
+        super.preRender(poseStack, entity, model, bufferSource, buffer, isReRender, partialTick,
+                packedLight, packedOverlay, colour);
+        if (!isReRender && entity.isAlive() && entity.hurtTime > 0) {
+            HurtSparks.onHurtFrame(entity);
+        }
     }
 
     @Override

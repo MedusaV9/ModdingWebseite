@@ -96,6 +96,11 @@ public final class BuffEffects {
             addExtraCopies(level, drop, multiplier, extras);
         }
         event.getDrops().addAll(extras);
+        if (!extras.isEmpty()) {
+            // W4-FEEL (IDEA-03 #4): the silent buff payout gets a visible ore-tinted glint.
+            dev.projecteclipse.eclipse.drama.MiningFeelService.sendOreProcSparkle(
+                    level, event.getPos(), extras.size(), event.getState());
+        }
     }
 
     @SubscribeEvent(priority = EventPriority.LOW)

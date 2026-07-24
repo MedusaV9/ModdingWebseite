@@ -144,6 +144,11 @@ public final class EclipsePayloads {
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleQuasar(S2CQuasarPayload payload, IPayloadContext context) {
+        // W4-ISLAND: OfferingSwallowFx consumes offering_swallow/<item> ids (spiral flight)
+        // and briefly holds ALTAR_BEAM while a swallow is in flight (arrival-beat sync).
+        if (dev.projecteclipse.eclipse.client.drama.OfferingSwallowFx.intercept(payload.emitterId(), payload.pos())) {
+            return;
+        }
         dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawnOrFallback(payload.emitterId(), payload.pos());
     }
 

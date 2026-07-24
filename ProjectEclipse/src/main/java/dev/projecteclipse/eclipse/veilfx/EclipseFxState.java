@@ -82,6 +82,13 @@ public final class EclipseFxState {
     private static int transHold;
     private static int transOut;
 
+    // --- post-expansion new-land glow band (IDEA-14 §3; additive — the frozen API is untouched) ---
+    /** New-land glow envelope: full at set time, gone after {@value} ticks (~10 min). */
+    private static final int NEW_LAND_GLOW_TICKS = 12000;
+    private static float newLandInnerR;
+    private static float newLandOuterR;
+    private static int newLandStartTick = Integer.MIN_VALUE;
+
     private EclipseFxState() {}
 
     // ------------------------------------------------------------------ eclipse
@@ -215,6 +222,49 @@ public final class EclipseFxState {
         return stormRain;
     }
 
+    // ------------------------------------------------------------------ new-land glow (IDEA-14 §3)
+
+    /**
+     * Records the freshly grown annulus ({@code fx/new_land_glow} band-radii payload) so the
+     * ambient upwelling motes can fade over the next ~10 minutes. Transient by design:
+     * a rejoin simply loses the remaining glow (matches the eclipse-grade rejoin behavior).
+     */
+    public static void setNewLandBand(float innerR, float outerR) {
+        if (outerR <= innerR || outerR <= 0.0F) {
+            clearNewLandBand();
+            return;
+        }
+        newLandInnerR = innerR;
+        newLandOuterR = outerR;
+        newLandStartTick = clientTicks;
+    }
+
+    /** Dimension change / logout: the band is dimension-local, so it must not survive. */
+    public static void clearNewLandBand() {
+        newLandInnerR = 0.0F;
+        newLandOuterR = 0.0F;
+        newLandStartTick = Integer.MIN_VALUE;
+    }
+
+    /** New-land glow envelope 0..1: {@code 1 − age/12000}, 0 when unset or expired. */
+    public static float newLandGlow() {
+        if (newLandStartTick == Integer.MIN_VALUE) {
+            return 0.0F;
+        }
+        float glow = 1.0F - (clientTicks - newLandStartTick) / (float) NEW_LAND_GLOW_TICKS;
+        if (glow <= 0.0F) {
+            clearNewLandBand();
+            return 0.0F;
+        }
+        return glow;
+    }
+
+    /** Whether a horizontal radius from the origin lies inside the glowing annulus. */
+    public static boolean newLandBandContains(double radius) {
+        return newLandStartTick != Integer.MIN_VALUE
+                && radius >= newLandInnerR && radius <= newLandOuterR;
+    }
+
     // ------------------------------------------------------------------ transition glitch
 
     /**
@@ -279,6 +329,7 @@ public final class EclipseFxState {
         ghostStartTick = clientTicks - GHOST_RAMP_TICKS;
         shockOrigin = null;
         transStartTick = Integer.MIN_VALUE;
+        clearNewLandBand();
     }
 
     /** Current client tick counter — shared time base for {@link FxBudget} windows. */

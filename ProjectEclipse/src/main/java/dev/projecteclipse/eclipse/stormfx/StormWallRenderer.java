@@ -76,8 +76,12 @@ public final class StormWallRenderer {
     /** Shell radial offsets and their blend pass (true = additive). */
     private static final float[] SHELL_OFFSETS = {2.0F, 0.0F, -2.0F, -4.0F};
     private static final boolean[] SHELL_ADDITIVE = {true, false, false, true};
-    /** Vortex shells lean inward 8° (R14): top radius shrinks by tan(8°) per block of height. */
-    private static final float TAN_TILT = 0.1405F;
+    /**
+     * Vortex shells lean inward 8° (R14): top radius shrinks by tan(8°) per block of height.
+     * Package-visible so {@link StormInteriorFx} evaluates inside/outside against the TILTED
+     * radius at camera height (IDEA-15 §6 — EVAL-4 post-eval interior over-reach).
+     */
+    static final float TAN_TILT = 0.1405F;
     /** Total geometric twist of a vortex shell column over its height (radians). */
     private static final float VORTEX_TWIST = 0.9F;
     /** Vortex swirl 0.35 rad/s (R14) at 20 ticks/s; walls only drift slowly. */

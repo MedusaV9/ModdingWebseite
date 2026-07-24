@@ -11,6 +11,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
@@ -55,6 +56,12 @@ public final class SidebarPanel {
     private static final int GOAL_TEXT_INDENT = 12;
     private static final long SLIDE_MILLIS = 300L;
     private static final long TICK_SWEEP_MILLIS = 6L * 50L;
+    /** Goal stamp tail (W4-FEEL, IDEA-05 #1): ring + text crossfade outlive the box sweep. */
+    private static final long STAMP_MILLIS = 600L;
+    /** White flash on the checkbox for the first 2 ticks of the stamp. */
+    private static final long STAMP_FLASH_MILLIS = 100L;
+    /** Ring expands 0 → this many px from the box center while fading. */
+    private static final int STAMP_RING_RADIUS = 6;
 
     private static int lastSlideHash = Integer.MIN_VALUE;
     private static long slideStartMillis;
@@ -217,6 +224,16 @@ public final class SidebarPanel {
             int color = row.goalDone() == null
                     ? EclipseUiTheme.TEXT
                     : (row.goalDone() ? EclipseUiTheme.GOOD : EclipseUiTheme.DIM);
+            // Stamp (c): the row text crossfades TEXT → GOOD over the stamp window
+            // instead of snapping the frame goalDone() flips (reducedFx keeps the snap).
+            if (Boolean.TRUE.equals(row.goalDone()) && !EclipseClientConfig.reducedFx()) {
+                long stamp = GOAL_SWEEP_STARTED.getOrDefault(row.id(), 0L);
+                if (stamp > 0L) {
+                    float t = Mth.clamp((now - stamp) / (float) STAMP_MILLIS, 0.0F, 1.0F);
+                    color = lerpColor(EclipseUiTheme.TEXT, EclipseUiTheme.GOOD,
+                            SidebarExpanded.easeOutCubic(t));
+                }
+            }
             color = MarqueeText.faded(color, alpha);
             if (EclipseClientConfig.sidebarOverflow() == EclipseClientConfig.SidebarOverflow.ELLIPSIS) {
                 guiGraphics.drawString(font, EclipseUiTheme.ellipsize(font, row.text(), maxWidth),
@@ -246,11 +263,44 @@ public final class SidebarPanel {
             return;
         }
         long started = GOAL_SWEEP_STARTED.getOrDefault(row.id(), 0L);
-        float sweep = started == 0L ? 1.0F
-                : Mth.clamp((now - started) / (float) TICK_SWEEP_MILLIS, 0.0F, 1.0F);
+        if (EclipseClientConfig.reducedFx() || started == 0L) {
+            // Instant swap (reducedFx) or stamp already expired — plain done state.
+            guiGraphics.fill(x + 2, y + 1, x + 7, y + 6,
+                    MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+            return;
+        }
+        long elapsed = now - started;
+        float sweep = Mth.clamp(elapsed / (float) TICK_SWEEP_MILLIS, 0.0F, 1.0F);
+        // Stamp (a): white flash for the first 2 ticks, then the fill settles GOOD.
+        float flash = Mth.clamp(1.0F - elapsed / (float) STAMP_FLASH_MILLIS, 0.0F, 1.0F);
+        int fillColor = flash > 0.0F
+                ? lerpColor(EclipseUiTheme.GOOD, 0xFFFFFFFF, flash) : EclipseUiTheme.GOOD;
         int fillWidth = Math.max(1, Math.round(5.0F * SidebarExpanded.easeOutCubic(sweep)));
         guiGraphics.fill(x + 2, y + 1, x + 2 + fillWidth, y + 6,
-                MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+                MarqueeText.faded(fillColor, alpha));
+        // Stamp (b): 1px GOOD ring expanding from the box center, fading over the tail.
+        float stampT = Mth.clamp(elapsed / (float) STAMP_MILLIS, 0.0F, 1.0F);
+        int radius = Math.round(STAMP_RING_RADIUS * SidebarExpanded.easeOutCubic(stampT));
+        float ringAlpha = 0.7F * (1.0F - stampT) * alpha;
+        if (radius >= 2 && ringAlpha > 0.02F) {
+            int ring = EclipseUiTheme.withAlpha(EclipseUiTheme.GOOD, ringAlpha);
+            int cx = x + 4;
+            int cy = y + 3;
+            guiGraphics.fill(cx - radius, cy - radius, cx + radius + 1, cy - radius + 1, ring);
+            guiGraphics.fill(cx - radius, cy + radius, cx + radius + 1, cy + radius + 1, ring);
+            guiGraphics.fill(cx - radius, cy - radius + 1, cx - radius + 1, cy + radius, ring);
+            guiGraphics.fill(cx + radius, cy - radius + 1, cx + radius + 1, cy + radius, ring);
+        }
+    }
+
+    /** ARGB lerp (component-wise), t clamped 0..1 — the stamp flash/crossfade curve. */
+    private static int lerpColor(int from, int to, float t) {
+        float clamped = Mth.clamp(t, 0.0F, 1.0F);
+        int a = Math.round(Mth.lerp(clamped, (from >>> 24) & 0xFF, (to >>> 24) & 0xFF));
+        int r = Math.round(Mth.lerp(clamped, (from >>> 16) & 0xFF, (to >>> 16) & 0xFF));
+        int g = Math.round(Mth.lerp(clamped, (from >>> 8) & 0xFF, (to >>> 8) & 0xFF));
+        int b = Math.round(Mth.lerp(clamped, from & 0xFF, to & 0xFF));
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
     private static List<Row> buildRows() {
@@ -301,17 +351,31 @@ public final class SidebarPanel {
     }
 
     private static void updateGoalSweeps(long now) {
+        // First population after join/day-flip seeds silently: goals that arrive already
+        // done must not stamp/chime a login chorus (W4-FEEL, IDEA-05 #1).
+        boolean seeding = LAST_GOAL_DONE.isEmpty();
         for (Row row : cachedRows) {
             if (row.goalDone() == null) {
                 continue;
             }
             boolean previous = LAST_GOAL_DONE.getOrDefault(row.id(), false);
-            if (row.goalDone() && !previous) {
+            if (row.goalDone() && !previous && !seeding) {
                 GOAL_SWEEP_STARTED.put(row.id(), now);
+                // Edge-driven, never from render; UiSounds self-gates on config/volume.
+                // phaseSalt arpeggiates back-to-back completions (goals salt 10,11,12…).
+                UiSounds.goalStamp(0.9F + (row.phaseSalt() % 8) * 0.045F);
             }
             LAST_GOAL_DONE.put(row.id(), row.goalDone());
         }
-        GOAL_SWEEP_STARTED.entrySet().removeIf(entry -> now - entry.getValue() > TICK_SWEEP_MILLIS);
+        GOAL_SWEEP_STARTED.entrySet().removeIf(entry -> now - entry.getValue() > STAMP_MILLIS);
+    }
+
+    /**
+     * Shared stamp timestamp for the TAB card's checkmark draw-on (IDEA-05 #2 — both
+     * classes live in {@code client/hud}); 0 when the goal has no live stamp.
+     */
+    static long goalStampStarted(String goalId) {
+        return GOAL_SWEEP_STARTED.getOrDefault(goalId, 0L);
     }
 
     /** Major-content hash: progress/tick counters are deliberately excluded (B11). */

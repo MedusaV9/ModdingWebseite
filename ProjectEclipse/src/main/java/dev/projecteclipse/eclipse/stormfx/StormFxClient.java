@@ -6,6 +6,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
@@ -19,7 +20,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -93,6 +96,19 @@ public final class StormFxClient {
     /** Reveal glitch pulse strength (R14: "rift_glitch pulse 0.4"). */
     private static final float REVEAL_GLITCH_STRENGTH = 0.4F;
 
+    // IDEA-15 §1 approach dread ladder: heartbeat + ground-fog tendrils at 60/40/20 blocks.
+    /** Heartbeat band — the storm reaches for you before the churn loop fades in at 56. */
+    private static final float DREAD_FAR = 60.0F;
+    /** Ground tendrils crawl out from the wall base inside this shell distance. */
+    private static final float DREAD_MID = 40.0F;
+    /** Tendrils reach the player's feet and the heartbeat doubles inside this distance. */
+    private static final float DREAD_NEAR = 20.0F;
+    /** Heartbeat cadence tightens 50 → 22 ticks over the 60→20 approach. */
+    private static final int HEARTBEAT_SLOW_TICKS = 50;
+    private static final int HEARTBEAT_FAST_TICKS = 22;
+    /** Second thump of the ≤20-block double heartbeat, this many ticks after the first. */
+    private static final int HEARTBEAT_ECHO_TICKS = 6;
+
     /** Live storms of the current client level (tiny list; index-iterated, no iterators in render). */
     private static final List<ClientStorm> STORMS = new ArrayList<>(4);
     /** Live lightning bolts (sky→impact ribbons). */
@@ -163,6 +179,10 @@ public final class StormFxClient {
         addCapped(BOLTS, bolt, MAX_BOLTS);
         // Impact crackle burst (visual support; budget-charged on the STORM channel).
         QuasarSpawner.spawn(STORM_ARC_EMITTER, to, FxBudget.Channel.STORM);
+        // IDEA-15 §2: interior strikes lift the fog for a 6-tick silhouette reveal.
+        if (StormInteriorFx.interiorAmount() > 0.5F) {
+            StormInteriorFx.flash(6);
+        }
     }
 
     // ------------------------------------------------------------------ package reads (renderer/interior)
@@ -255,6 +275,7 @@ public final class StormFxClient {
         tickArcs(level, storm, camera, centerDist, shellDist, visibility);
         tickWisps(storm, shellDist, visibility);
         tickLoopSound(minecraft, storm, shellDist, visibility);
+        tickApproachDread(level, storm, camera, centerDist, shellDist, visibility);
         return true;
     }
 
@@ -284,6 +305,76 @@ public final class StormFxClient {
         float volume = (float) Mth.clamp(0.55D * (1.0D - shellDist / ARC_RANGE), 0.05D, 0.55D);
         level.playLocalSound(x, baseY, z, EclipseSounds.EVENT_LIGHTNING_FAR.get(), SoundSource.WEATHER,
                 volume, 0.85F + random.nextFloat() * 0.3F, false);
+        // IDEA-15 §2: interior arcs give a shorter 4-tick silhouette reveal — the existing
+        // 20–60-tick cadence is a free ~2/min scare rhythm.
+        if (StormInteriorFx.interiorAmount() > 0.5F) {
+            StormInteriorFx.flash(4);
+        }
+    }
+
+    /**
+     * IDEA-15 §1 approach dread ladder — the storm reaches for you before you reach it.
+     * Outside only ({@code visibility > 0.5}, {@code interiorAmount() < 0.1} — idea 6's clamp
+     * makes that gate trustworthy for vortexes): a faint heartbeat whose cadence tightens
+     * 50→22 ticks from 60 blocks in, ground-fog tendrils crawling out from the wall base
+     * along the camera bearing inside 40, and inside 20 the tendrils ring the player's feet
+     * while the heartbeat doubles into a two-beat thump.
+     */
+    private static void tickApproachDread(ClientLevel level, ClientStorm storm, Vec3 camera,
+            double centerDist, double shellDist, float visibility) {
+        if (visibility <= 0.5F || shellDist > DREAD_FAR || centerDist < storm.radius
+                || StormInteriorFx.interiorAmount() >= 0.1F
+                || storm.state == S2CStormStatePayload.STATE_DISSIPATE) {
+            storm.heartbeatEchoTick = -1;
+            return;
+        }
+        RandomSource random = level.random;
+        // Second thump of the double heartbeat (scheduled below once inside 20 blocks).
+        if (storm.heartbeatEchoTick >= 0 && clientTicks >= storm.heartbeatEchoTick) {
+            storm.heartbeatEchoTick = -1;
+            playHeartbeat(level, camera, 0.22F, 0.75F);
+        }
+        if (clientTicks >= storm.nextHeartbeatTick) {
+            float closeness = (float) Mth.clamp((DREAD_FAR - shellDist) / (DREAD_FAR - DREAD_NEAR),
+                    0.0D, 1.0D);
+            storm.nextHeartbeatTick = clientTicks
+                    + Math.round(Mth.lerp(closeness, HEARTBEAT_SLOW_TICKS, HEARTBEAT_FAST_TICKS));
+            playHeartbeat(level, camera, 0.25F, 0.8F);
+            if (shellDist <= DREAD_NEAR) {
+                storm.heartbeatEchoTick = clientTicks + HEARTBEAT_ECHO_TICKS;
+            }
+        }
+        if (shellDist > DREAD_MID) {
+            return;
+        }
+        // Ground tendrils: ~3 fingers/s (raw addParticle — negligible; halved under reducedFx),
+        // crawling OUT from the wall base toward the player along the camera bearing.
+        int interval = EclipseClientConfig.reducedFx() ? 14 : 7;
+        if (clientTicks % interval == 0) {
+            double camAngle = Math.atan2(camera.z - storm.center.z, camera.x - storm.center.x);
+            double angle = camAngle + (random.nextDouble() - 0.5D) * 0.5D;
+            double reach = storm.radius + random.nextDouble() * shellDist * 0.5D;
+            double x = storm.center.x + Math.cos(angle) * reach;
+            double z = storm.center.z + Math.sin(angle) * reach;
+            double y = storm.center.y + 0.15D + random.nextDouble() * 0.5D;
+            level.addParticle(random.nextBoolean()
+                            ? ParticleTypes.CAMPFIRE_COSY_SMOKE : ParticleTypes.CLOUD,
+                    x, y, z, (camera.x - x) * 0.015D, 0.01D, (camera.z - z) * 0.015D);
+        }
+        // ≤ 20: the fingers reach your feet — a low ring around the player drifting inward.
+        if (shellDist <= DREAD_NEAR && clientTicks % 9 == 0) {
+            double ringAngle = random.nextDouble() * Math.PI * 2.0D;
+            double rx = camera.x + Math.cos(ringAngle) * 2.0D;
+            double rz = camera.z + Math.sin(ringAngle) * 2.0D;
+            level.addParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, rx, camera.y - 1.4D, rz,
+                    Math.cos(ringAngle) * -0.02D, 0.005D, Math.sin(ringAngle) * -0.02D);
+        }
+    }
+
+    /** Faint warden-heartbeat thump at the camera (sits under the churn loop at 56). */
+    private static void playHeartbeat(ClientLevel level, Vec3 camera, float volume, float pitch) {
+        level.playLocalSound(camera.x, camera.y, camera.z, SoundEvents.WARDEN_HEARTBEAT,
+                SoundSource.AMBIENT, volume, pitch, false);
     }
 
     /**
@@ -432,6 +523,10 @@ public final class StormFxClient {
         boolean revealStyle;
         boolean glitchStarted;
         int nextArcTick;
+        /** Approach-dread heartbeat cadence (IDEA-15 §1; keepalive-proof — handle() skips it). */
+        int nextHeartbeatTick;
+        /** Scheduled second thump of the ≤20-block double heartbeat (-1 = none pending). */
+        int heartbeatEchoTick = -1;
         /** Spiraling vortex wisp emitters (looping; positions driven per tick). */
         final ParticleEmitter[] wisps = new ParticleEmitter[MAX_WISPS];
         final float[] wispHeights = new float[MAX_WISPS];

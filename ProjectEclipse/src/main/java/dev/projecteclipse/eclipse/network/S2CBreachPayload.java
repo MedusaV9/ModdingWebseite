@@ -9,14 +9,24 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Server-to-client lifecycle cue for the Nether breach materialization (plan v3 D10).
+ * Server-to-client lifecycle cue for the Nether breach materialization (plan v3 D10)
+ * and, since IDEA-17 (W4-NETHER), the per-player glitch-drift transfer phases.
  * P2 owns the client smoke, quake and ember presentation; W1.7 only supplies the
- * deterministic crater geometry and these three phase boundaries.
+ * deterministic crater geometry and the phase boundaries.
  *
- * @param phase lifecycle boundary ({@link Phase#QUAKE}, {@link Phase#OPEN}, or
- *        {@link Phase#SETTLED})
- * @param center overworld crater center at the surface lip
- * @param radius crater-mouth radius in blocks
+ * <p>The {@code DRIFT_*} phases are APPEND-ONLY additions: {@link #read}'s ordinal
+ * clamp tolerates unknown ordinals on old clients (they degrade to the last known
+ * phase instead of crashing), so new phases must only ever be appended to the enum.
+ * For drift phases the payload is player-targeted, {@code center} is the shaft anchor
+ * (overworld crater / nether arrival) and {@code radius} carries the requested glitch
+ * PULSE hold in ticks (short — the transition envelope also fades to black, so the
+ * pulses mark capture and each dimension seam instead of covering the whole ride).</p>
+ *
+ * @param phase lifecycle boundary ({@link Phase#QUAKE}, {@link Phase#OPEN},
+ *        {@link Phase#SETTLED}) or drift boundary ({@link Phase#DRIFT_DOWN},
+ *        {@link Phase#DRIFT_UP}, {@link Phase#DRIFT_END})
+ * @param center overworld crater center at the surface lip (drift: shaft anchor)
+ * @param radius crater-mouth radius in blocks (drift: glitch pulse hold ticks)
  */
 public record S2CBreachPayload(Phase phase, BlockPos center, int radius)
         implements CustomPacketPayload {
@@ -24,7 +34,13 @@ public record S2CBreachPayload(Phase phase, BlockPos center, int radius)
     public enum Phase {
         QUAKE,
         OPEN,
-        SETTLED
+        SETTLED,
+        /** Glitch-drift descent captured at the breach lip (player-targeted). */
+        DRIFT_DOWN,
+        /** Updraft tractor engaged towards the nether ceiling (player-targeted). */
+        DRIFT_UP,
+        /** Drift finished or aborted — force the glitch-post out ramp (player-targeted). */
+        DRIFT_END
     }
 
     public static final CustomPacketPayload.Type<S2CBreachPayload> TYPE =

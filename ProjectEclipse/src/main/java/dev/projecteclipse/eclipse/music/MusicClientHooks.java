@@ -19,6 +19,10 @@ final class MusicClientHooks {
         MusicManager.stop();
     }
 
+    static void release(MusicCues cue) {
+        MusicManager.release(cue);
+    }
+
     static void openCredits() {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.setScreen(new dev.projecteclipse.eclipse.client.menu.CreditsScreen(minecraft.screen));

@@ -7,6 +7,7 @@ import com.mojang.math.Axis;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -15,15 +16,15 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Shatter animation rendered over the exact vanilla heart that was lost. This layer
- * augments, and never replaces, the vanilla health layer.
+ * Shatter animation rendered over the exact heart that was lost. This layer augments,
+ * and never replaces, the health layer (vanilla's — or {@link PurpleHeartsLayer}'s,
+ * which renders the identical geometry).
  *
  * <p>v2 (P2 R18(a), W10): the flash/crack intro is unchanged, but the shatter now throws
  * <b>14 fragments in two populations</b> — {@value #SHARD_COUNT} rotating glass shards on
@@ -32,6 +33,15 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * reuse the burst-sheet fragment sprites (no new textures); sparks are plain quads so the
  * sheet needs no new regions. All motion is a pure function of the animation time — no
  * per-frame allocations, no per-shard state.</p>
+ *
+ * <p>v3 (W4-HEARTS R2): the single static burst slot became a fixed-capacity FIFO
+ * <b>queue</b> ({@value #QUEUE_CAPACITY} entries — one per possible heart plus one).
+ * Repeated {@link #trigger} calls stagger {@value #STAGGER_TICKS} ticks apart (the
+ * {@code GhostHeartsLayer.BURST_STAGGER_TICKS} precedent), each with its own glass-crack
+ * cue at burst start — so the heart extractor's two hearts and a multi-heart respawn
+ * replay shatter one by one instead of overwriting each other. Row math moved to the
+ * shared {@link HeartRowGeometry}; while the purple layer owns the row the frames/shards
+ * are tinted toward the UI accent so debris matches the heart color.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class HeartBurstOverlay {
@@ -50,7 +60,15 @@ public final class HeartBurstOverlay {
     private static final int SHARD_FLIGHT_TICKS = 12;
     private static final int ANIMATION_TICKS = SHATTER_START_TICKS + SHARD_FLIGHT_TICKS;
 
-    private static final RandomSource JITTER_RANDOM = RandomSource.create();
+    /** Queued bursts start this many ticks apart (GhostHeartsLayer stagger precedent). */
+    private static final int STAGGER_TICKS = 8;
+    /** One slot per possible heart plus one — a full-row replay can never overflow. */
+    private static final int QUEUE_CAPACITY = HeartsService.MAX_HEARTS + 1;
+
+    /** Accent tint for burst debris over the purple row ({@code EclipseUiTheme.ACCENT} #B98CFF). */
+    private static final float ACCENT_RED = 0xB9 / 255.0F;
+    private static final float ACCENT_GREEN = 0x8C / 255.0F;
+    private static final float ACCENT_BLUE = 0xFF / 255.0F;
 
     private static final int SHARD_COUNT = 8;
     private static final int SPARK_COUNT = 6;
@@ -93,17 +111,44 @@ public final class HeartBurstOverlay {
     private static final int SPARK_VIOLET_GREEN = 0x7D;
     private static final int SPARK_VIOLET_BLUE = 0xFF;
 
-    private static int heartIndex = -1;
-    private static int animationTick = -1;
+    // --- burst queue (fixed capacity, FIFO, allocation-free) ---
+    private static final int[] QUEUE_HEART = new int[QUEUE_CAPACITY];
+    private static final long[] QUEUE_START = new long[QUEUE_CAPACITY];
+    private static final boolean[] QUEUE_CUE_PLAYED = new boolean[QUEUE_CAPACITY];
+    private static int queueHead;
+    private static int queueSize;
+    /** Monotonic in-world tick clock driving every queued timeline. */
+    private static long clock;
+    /** Earliest start tick available to the next queued burst (enforces the stagger). */
+    private static long nextStart;
 
     private HeartBurstOverlay() {}
 
-    /** Starts a fresh burst and plays its local glass-crack cue. */
+    /**
+     * Queues a burst over the given heart slot. Bursts play in trigger order,
+     * {@value #STAGGER_TICKS} ticks apart; each plays its own glass-crack cue the tick
+     * it starts. A full queue (impossible from real senders — capacity covers a whole
+     * row) drops the trigger rather than corrupting running animations.
+     */
     public static void trigger(int firstMissingHeart) {
-        heartIndex = Math.max(0, firstMissingHeart);
-        animationTick = 0;
-        Minecraft minecraft = Minecraft.getInstance();
-        minecraft.getSoundManager().play(
+        if (queueSize >= QUEUE_CAPACITY) {
+            return;
+        }
+        long start = Math.max(clock, nextStart);
+        int tail = (queueHead + queueSize) % QUEUE_CAPACITY;
+        QUEUE_HEART[tail] = Math.max(0, firstMissingHeart);
+        QUEUE_START[tail] = start;
+        QUEUE_CUE_PLAYED[tail] = false;
+        queueSize++;
+        nextStart = start + STAGGER_TICKS;
+        if (start <= clock) {
+            QUEUE_CUE_PLAYED[tail] = true;
+            playCrackCue();
+        }
+    }
+
+    private static void playCrackCue() {
+        Minecraft.getInstance().getSoundManager().play(
                 SimpleSoundInstance.forUI(EclipseSounds.UI_HEART_SHATTER.get(), 0.92F, 0.85F));
     }
 
@@ -111,8 +156,10 @@ public final class HeartBurstOverlay {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.player == null) {
-            heartIndex = -1;
-            animationTick = -1;
+            queueSize = 0;
+            queueHead = 0;
+            clock = 0L;
+            nextStart = 0L;
             return;
         }
         if (minecraft.isPaused()) {
@@ -121,9 +168,18 @@ public final class HeartBurstOverlay {
             return;
         }
 
-        if (animationTick >= 0 && ++animationTick >= ANIMATION_TICKS) {
-            heartIndex = -1;
-            animationTick = -1;
+        clock++;
+        // Retire finished bursts (FIFO — starts are monotonic) and fire due crack cues.
+        while (queueSize > 0 && clock - QUEUE_START[queueHead] >= ANIMATION_TICKS) {
+            queueHead = (queueHead + 1) % QUEUE_CAPACITY;
+            queueSize--;
+        }
+        for (int i = 0; i < queueSize; i++) {
+            int slot = (queueHead + i) % QUEUE_CAPACITY;
+            if (!QUEUE_CUE_PLAYED[slot] && QUEUE_START[slot] <= clock) {
+                QUEUE_CUE_PLAYED[slot] = true;
+                playCrackCue();
+            }
         }
 
         // Only 1–2 remaining lives warrant the heartbeat: 0 lives is an event-banned
@@ -142,9 +198,9 @@ public final class HeartBurstOverlay {
     }
 
     /**
-     * GUI-layer body registered immediately above {@code PLAYER_HEALTH}. Draws nothing
-     * under F1 ({@code hideGui}) — the tick driver keeps running so a mid-burst animation
-     * still expires on schedule.
+     * GUI-layer body registered above {@code PLAYER_HEALTH} (and above
+     * {@link PurpleHeartsLayer}). Draws nothing under F1 ({@code hideGui}) — the tick
+     * driver keeps running so mid-burst animations still expire on schedule.
      */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
@@ -153,67 +209,60 @@ public final class HeartBurstOverlay {
         }
 
         renderLowHeartPulse(guiGraphics, minecraft);
-        if (animationTick < 0 || heartIndex < 0) {
+        if (queueSize == 0) {
             return;
         }
 
         float partialTick = deltaTracker.getGameTimeDeltaPartialTick(false);
-        float time = animationTick + partialTick;
-        HeartPosition position = heartPosition(guiGraphics, minecraft, heartIndex);
+        int displayHealth = PurpleHeartsLayer.displayHealthMirror();
+        boolean suppressJitter = PurpleHeartsLayer.tintsBurst() && HeartRowGeometry.jitterSuppressed();
+        for (int i = 0; i < queueSize; i++) {
+            int slot = (queueHead + i) % QUEUE_CAPACITY;
+            if (QUEUE_START[slot] > clock) {
+                break; // starts are monotonic — nothing later is running either
+            }
+            float time = (clock - QUEUE_START[slot]) + partialTick;
+            long position = HeartRowGeometry.heartPosition(guiGraphics, minecraft,
+                    QUEUE_HEART[slot], displayHealth, suppressJitter);
+            renderBurst(guiGraphics, HeartRowGeometry.x(position), HeartRowGeometry.y(position), time);
+        }
+    }
 
+    /** One burst timeline (flash → cracks → shatter) at an already-resolved position. */
+    private static void renderBurst(GuiGraphics guiGraphics, int x, int y, float time) {
         if (time < 2.0F) {
-            drawFrame(guiGraphics, position.x(), position.y(), 0, 1.0F);
+            drawFrame(guiGraphics, x, y, 0, 1.0F);
             drawRedVignette(guiGraphics, 0.30F * (1.0F - time / 2.0F));
         } else if (time < SHATTER_START_TICKS) {
             int crackFrame = 1 + Math.min(2, Mth.floor(time - 2.0F));
-            drawFrame(guiGraphics, position.x(), position.y(), crackFrame, 1.0F);
+            drawFrame(guiGraphics, x, y, crackFrame, 1.0F);
         } else {
             float shatterTime = time - SHATTER_START_TICKS;
             float burstAlpha = Mth.clamp(1.0F - shatterTime / SHARD_FLIGHT_TICKS, 0.0F, 1.0F);
-            drawFrame(guiGraphics, position.x(), position.y(),
-                    shatterTime < 2.0F ? 4 : 5, burstAlpha * 0.55F);
-            float centerX = position.x() + 4.5F;
-            float centerY = position.y() + 4.5F;
+            drawFrame(guiGraphics, x, y, shatterTime < 2.0F ? 4 : 5, burstAlpha * 0.55F);
+            float centerX = x + 4.5F;
+            float centerY = y + 4.5F;
             drawShards(guiGraphics, centerX, centerY, shatterTime, burstAlpha);
             drawSparks(guiGraphics, centerX, centerY, shatterTime);
         }
     }
 
-    /**
-     * Reconstructs vanilla's health origin from the public post-layer
-     * {@code Gui.leftHeight}, including multi-row compression and low-health
-     * random jitter.
-     */
-    private static HeartPosition heartPosition(GuiGraphics guiGraphics, Minecraft minecraft, int index) {
-        float maxAndAbsorption = minecraft.player.getMaxHealth() + minecraft.player.getAbsorptionAmount();
-        int heartSlots = Math.max(1, Mth.ceil(maxAndAbsorption / 2.0F));
-        int rows = Math.max(1, Mth.ceil(heartSlots / 10.0F));
-        int rowStep = Math.max(10 - (rows - 2), 3);
-        int occupiedHeight = (rows - 1) * rowStep + 10;
-
-        int x = guiGraphics.guiWidth() / 2 - 91 + (index % 10) * 8;
-        int y = guiGraphics.guiHeight() - minecraft.gui.leftHeight
-                + occupiedHeight - (index / 10) * rowStep;
-
-        if (minecraft.player.getHealth() <= 4.0F) {
-            JITTER_RANDOM.setSeed((long) minecraft.gui.getGuiTicks() * 312871L);
-            for (int slot = heartSlots - 1; slot >= index; slot--) {
-                int jitter = JITTER_RANDOM.nextInt(2);
-                if (slot == index) {
-                    y += jitter;
-                }
-            }
-        }
-        return new HeartPosition(x, y);
-    }
-
     private static void drawFrame(GuiGraphics guiGraphics, int x, int y, int frame, float alpha) {
         RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+        setDebrisColor(guiGraphics, alpha);
         guiGraphics.blit(BURST_SHEET, x, y, DRAW_SIZE, DRAW_SIZE,
                 (float) (frame * FRAME_SIZE), 0.0F, FRAME_SIZE, FRAME_SIZE, SHEET_WIDTH, FRAME_SIZE);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
+    }
+
+    /** Debris matches the drawn heart: accent-tinted while the purple layer owns the row. */
+    private static void setDebrisColor(GuiGraphics guiGraphics, float alpha) {
+        if (PurpleHeartsLayer.tintsBurst()) {
+            guiGraphics.setColor(ACCENT_RED, ACCENT_GREEN, ACCENT_BLUE, alpha);
+        } else {
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+        }
     }
 
     /**
@@ -224,7 +273,7 @@ public final class HeartBurstOverlay {
     private static void drawShards(GuiGraphics guiGraphics, float centerX, float centerY,
             float time, float alpha) {
         RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
+        setDebrisColor(guiGraphics, alpha);
         PoseStack pose = guiGraphics.pose();
         float drag = Math.max(SHARD_DRAG_FLOOR, 1.0F - SHARD_DRAG_PER_TICK * time);
         for (int i = 0; i < SHARD_COUNT; i++) {
@@ -303,6 +352,4 @@ public final class HeartBurstOverlay {
         return (Mth.floor(Mth.clamp(alpha, 0.0F, 1.0F) * 255.0F) << 24)
                 | (red << 16) | (green << 8) | blue;
     }
-
-    private record HeartPosition(int x, int y) {}
 }

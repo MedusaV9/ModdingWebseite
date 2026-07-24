@@ -38,9 +38,16 @@ public final class DiscProfile {
     /** Z of the End disc center column. */
     public static final int END_DISC_CENTER_Z = 0;
 
-    /** Nether disc: vanilla build range 0…256, disc y 32–~150, thinner rim, lava moat ring. */
+    /**
+     * Nether disc: vanilla build range 0…256, disc y 32–~150, thinner rim, lava moat ring.
+     * IDEA-17: 1:1 footprint under the overworld — {@code lensNormRadius} 480 mirrors the
+     * overworld's lens-shape constant (deliberately NOT the 440 final stage radius, same
+     * rule as the overworld), so the rim-normalised floor and ceiling lenses stay
+     * stage-reproducible. NEW SAVES ONLY in effect: pre-change saves keep small frozen
+     * radii but the lens constant is code — reset dev worlds after this change.
+     */
     public static final DiscProfile NETHER = new DiscProfile(
-            "nether", 0, 256, 32, 138.0D, 32.0D, 56.0D, 160.0D);
+            "nether", 0, 256, 32, 138.0D, 32.0D, 56.0D, 480.0D);
 
     /** Serialised as a plain string ({@code "overworld"} / {@code "nether"}) in dimension JSONs. */
     public static final Codec<DiscProfile> CODEC = Codec.STRING.comapFlatMap(

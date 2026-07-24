@@ -8,8 +8,10 @@ import java.util.Set;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CBuffStatePayload;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
+import net.minecraft.Util;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -26,6 +28,8 @@ public final class SidebarExpanded {
     private static final long ANIMATION_MILLIS = 8L * 50L;
     private static final int PAD = 10;
     private static final int BAR_HEIGHT = 2;
+    /** Checkmark draw-on window (W4-FEEL, IDEA-05 #2): two strokes over ~8 ticks. */
+    private static final long CHECK_DRAW_MILLIS = 8L * 50L;
 
     private static float progress;
     private static long lastUpdateMillis;
@@ -133,11 +137,29 @@ public final class SidebarExpanded {
                     left, y, MarqueeText.faded(EclipseUiTheme.DIM, alpha));
             y += 12;
         } else {
+            long now = Util.getMillis();
+            boolean reduced = EclipseClientConfig.reducedFx();
             for (S2CQuestStatePayload.QuestEntry goal : goals) {
                 int color = goal.done() ? EclipseUiTheme.GOOD : EclipseUiTheme.TEXT;
-                String marker = goal.done() ? "\u2713" : kindMarker(goal.kind());
-                guiGraphics.drawString(font, marker, left, y,
-                        MarqueeText.faded(color, alpha));
+                // Checkmark draw-on (IDEA-05 #2): keyed off the shared stamp timestamp —
+                // holding TAB when the payload lands shows it live, opening within the
+                // TTL catches the tail; no live stamp = fully-drawn check.
+                float stampT = 1.0F;
+                if (goal.done() && !reduced) {
+                    long stamp = SidebarPanel.goalStampStarted(goal.id());
+                    if (stamp > 0L) {
+                        stampT = Mth.clamp((now - stamp) / (float) CHECK_DRAW_MILLIS,
+                                0.0F, 1.0F);
+                    }
+                }
+                if (goal.done() && !reduced) {
+                    drawCheckmark(guiGraphics, left, y, easeOutCubic(stampT),
+                            MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+                } else {
+                    String marker = goal.done() ? "\u2713" : kindMarker(goal.kind());
+                    guiGraphics.drawString(font, marker, left, y,
+                            MarqueeText.faded(color, alpha));
+                }
                 List<FormattedCharSequence> lines =
                         font.split(Component.literal(goalText(goal)), goalTextWidth);
                 for (FormattedCharSequence line : lines) {
@@ -146,7 +168,8 @@ public final class SidebarExpanded {
                     y += font.lineHeight;
                 }
                 drawBar(guiGraphics, left + 10, y + 1, goalTextWidth,
-                        goal.progress(), goal.target(), goal.done(), alpha);
+                        goal.progress(), goal.target(), goal.done(), alpha,
+                        reduced ? 1.0F : easeOutCubic(stampT));
                 y += BAR_HEIGHT + 5;
             }
         }
@@ -213,6 +236,15 @@ public final class SidebarExpanded {
 
     private static void drawBar(GuiGraphics guiGraphics, int x, int y, int width,
             int progressValue, int targetValue, boolean done, float alpha) {
+        drawBar(guiGraphics, x, y, width, progressValue, targetValue, done, alpha, 1.0F);
+    }
+
+    /**
+     * {@code doneSweep} 0..1 recolors a done bar ACCENT → GOOD left-to-right over the
+     * checkmark draw-on window (IDEA-05 #2) instead of the instant recolor; 1 = plain.
+     */
+    private static void drawBar(GuiGraphics guiGraphics, int x, int y, int width,
+            int progressValue, int targetValue, boolean done, float alpha, float doneSweep) {
         guiGraphics.fill(x, y, x + width, y + BAR_HEIGHT,
                 MarqueeText.faded(EclipseUiTheme.HAIRLINE, alpha));
         float fraction = targetValue <= 0 ? 0.0F
@@ -221,9 +253,53 @@ public final class SidebarExpanded {
             fraction = 1.0F;
         }
         int fill = Math.round(width * fraction);
-        if (fill > 0) {
-            guiGraphics.fill(x, y, x + fill, y + BAR_HEIGHT,
-                    MarqueeText.faded(done ? EclipseUiTheme.GOOD : EclipseUiTheme.ACCENT, alpha));
+        if (fill <= 0) {
+            return;
+        }
+        if (done && doneSweep < 1.0F) {
+            int good = Math.round(fill * Mth.clamp(doneSweep, 0.0F, 1.0F));
+            if (good > 0) {
+                guiGraphics.fill(x, y, x + good, y + BAR_HEIGHT,
+                        MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+            }
+            if (good < fill) {
+                guiGraphics.fill(x + good, y, x + fill, y + BAR_HEIGHT,
+                        MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
+            }
+            return;
+        }
+        guiGraphics.fill(x, y, x + fill, y + BAR_HEIGHT,
+                MarqueeText.faded(done ? EclipseUiTheme.GOOD : EclipseUiTheme.ACCENT, alpha));
+    }
+
+    /**
+     * Two-stroke vector check drawn from six 1×2 {@code fill()} pixels (IDEA-05 #2): the
+     * short stroke (down-right) lands in the first ~35% of {@code t}, the long stroke
+     * (up-right) draws over the rest. {@code t} is already eased by the caller.
+     */
+    private static void drawCheckmark(GuiGraphics guiGraphics, int x, int y, float t, int color) {
+        // Pixel columns of the check, left to right: short stroke (2), long stroke (4).
+        float shortT = Mth.clamp(t / 0.35F, 0.0F, 1.0F);
+        float longT = Mth.clamp((t - 0.35F) / 0.65F, 0.0F, 1.0F);
+        int shortLen = Math.round(2.0F * shortT);
+        int longLen = Math.round(4.0F * longT);
+        if (shortLen >= 1) {
+            guiGraphics.fill(x, y + 3, x + 1, y + 5, color);
+        }
+        if (shortLen >= 2) {
+            guiGraphics.fill(x + 1, y + 4, x + 2, y + 6, color);
+        }
+        if (longLen >= 1) {
+            guiGraphics.fill(x + 2, y + 5, x + 3, y + 7, color);
+        }
+        if (longLen >= 2) {
+            guiGraphics.fill(x + 3, y + 4, x + 4, y + 6, color);
+        }
+        if (longLen >= 3) {
+            guiGraphics.fill(x + 4, y + 3, x + 5, y + 5, color);
+        }
+        if (longLen >= 4) {
+            guiGraphics.fill(x + 5, y + 2, x + 6, y + 4, color);
         }
     }
 

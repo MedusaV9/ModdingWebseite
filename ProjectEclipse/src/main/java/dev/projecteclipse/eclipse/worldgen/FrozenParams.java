@@ -47,7 +47,13 @@ public final class FrozenParams {
 
     /** D8-rebalanced defaults for fresh saves (index 0 = stage-0 main disc / nether empty). */
     public static final int[] DEFAULT_OVERWORLD_RADII = {96, 150, 210, 280, 360, 440};
-    public static final int[] DEFAULT_NETHER_RADII = {0, 64, 110, 150};
+    /**
+     * IDEA-17: the nether disc is 1:1 with the overworld — stage radii align with the
+     * overworld growth beats (150/280/440), so the cavern reads as sitting directly under
+     * the overworld's bedrock seal. Index 0 stays 0 (nether not yet born). NEW SAVES
+     * ONLY: existing saves keep their frozen radii (per-save freeze semantics above).
+     */
+    public static final int[] DEFAULT_NETHER_RADII = {0, 150, 280, 440};
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String WORLDGEN_FILE = "worldgen.json";

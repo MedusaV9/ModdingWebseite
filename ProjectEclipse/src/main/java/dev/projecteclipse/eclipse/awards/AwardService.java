@@ -4,6 +4,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +19,7 @@ import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.network.S2CAwardRevealPayload;
+import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.offering.OfferingService;
 import dev.projecteclipse.eclipse.offering.OfferingState;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -96,7 +98,14 @@ public final class AwardService {
         } else {
             // POST runs after applyDayTriggers (the expansion sequence's server-side start). P2
             // may call sendRevealNow again at the actual cinematic completion seam.
-            sendRevealNow(server);
+            // W4-CEREMONY / IDEA-09 #1: while a DawnCeremony is sequencing the morning, IT owns
+            // the roulette timing (its T+200 beat) — the inline send here would start the show
+            // concurrently with the day announcement sweep. Expansion days keep the END-seam
+            // call in ExpansionSequence.beginEnd; the client dedupes reveals by day
+            // (AwardsOverlay.HANDLED_DAYS), so overlapping sends stay safe.
+            if (!dev.projecteclipse.eclipse.drama.DawnCeremony.isRunning(server)) {
+                sendRevealNow(server);
+            }
         }
     }
 
@@ -212,6 +221,11 @@ public final class AwardService {
     }
 
     public static void queueReward(MinecraftServer server, UUID player, String id, AwardConfig.Reward reward) {
+        // W4-CONTRACTS: a wrong-killer's award eligibility is voided for the day (Blutschuld).
+        if (dev.projecteclipse.eclipse.contracts.ContractModifierService.isAwardVoided(server, player,
+                dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(server).getDay())) {
+            return;
+        }
         queueReward(server, player, AwardsState.PendingReward.of(id, reward));
     }
 
@@ -221,7 +235,7 @@ public final class AwardService {
         }
         ServerPlayer online = server.getPlayerList().getPlayer(player);
         if (online != null) {
-            deliverPending(online);
+            deliverPending(online, false); // live grant — full materialization client-side
         }
     }
 
@@ -232,8 +246,18 @@ public final class AwardService {
         }
     }
 
-    /** Claims every queued award/offering reward for this player (login and immediate-online path). */
+    /** Login/restart claim path: queued rewards deliver as calm replays (frozen signature). */
     public static int deliverPending(ServerPlayer player) {
+        return deliverPending(player, true);
+    }
+
+    /**
+     * Claims every queued award/offering reward for this player. {@code replay=false} only on
+     * the immediate-online path right after a live resolve ({@code queueReward}) — the client
+     * then plays the full materialization; login/restart claims ride the calm replay variant
+     * (W4-CEREMONY / IDEA-11 #1, the AwardsOverlay late-join rule).
+     */
+    private static int deliverPending(ServerPlayer player, boolean replay) {
         AwardsState state = AwardsState.get(player.server);
         List<AwardsState.PendingReward> rewards = List.copyOf(state.pending(player.getUUID()));
         int delivered = 0;
@@ -253,9 +277,28 @@ public final class AwardService {
             for (ItemStack item : items) {
                 giveItem(player, item);
             }
+            // Presentation-only materialization payload; carries only what actually landed
+            // (materializeItems already dropped unknown ids). skill-XP-only rewards send
+            // nothing — the XP strip + LevelUpOverlay own that celebration.
+            RewardPayloads.sendRewardGrant(player, toEntries(items), reward.shards(),
+                    RewardPayloads.SOURCE_AWARD, replay);
             delivered++;
         }
         return delivered;
+    }
+
+    /** Collapses the stack-split materialized list back to one (id, total count) line per item. */
+    private static List<RewardPayloads.ItemEntry> toEntries(List<ItemStack> items) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (ItemStack stack : items) {
+            counts.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
+                    stack.getCount(), Integer::sum);
+        }
+        List<RewardPayloads.ItemEntry> entries = new ArrayList<>(counts.size());
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            entries.add(new RewardPayloads.ItemEntry(entry.getKey(), entry.getValue()));
+        }
+        return entries;
     }
 
     /** Bilingual literal line baked into the secret reveal payload. */

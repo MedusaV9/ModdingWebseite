@@ -23,6 +23,16 @@ public final class EclipseMusicSounds {
     public static final Supplier<SoundEvent> VICTORY_THEME = music("victory_theme");
     public static final Supplier<SoundEvent> XBOX_NOSTALGIA = music("xbox_nostalgia");
 
+    // --- Wave-4 tracks (W4-BOSSJUICE): OGGs land at assets/eclipse/sounds/music/<id>.ogg
+    // from tools/music/treblo_generate.py; sounds.json entries in W4-BOSSJUICE_wiring.md. ---
+    public static final Supplier<SoundEvent> ECLIPSE_TOTALITY = music("eclipse_totality");
+    public static final Supplier<SoundEvent> FOG_STORM = music("fog_storm");
+    public static final Supplier<SoundEvent> BOSS_RIFT_WARDEN = music("boss_rift_warden");
+    public static final Supplier<SoundEvent> BOSS_FOG_TYRANT = music("boss_fog_tyrant");
+    public static final Supplier<SoundEvent> KILL_CONTRACT = music("kill_contract");
+    public static final Supplier<SoundEvent> WAND_AWAKENING = music("wand_awakening");
+    public static final Supplier<SoundEvent> DAY_FINAL = music("day_final");
+
     private EclipseMusicSounds() {}
 
     private static Supplier<SoundEvent> music(String id) {

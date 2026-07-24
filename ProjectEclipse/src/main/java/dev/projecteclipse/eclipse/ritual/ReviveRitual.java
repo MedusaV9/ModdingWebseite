@@ -8,7 +8,9 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lives.BanService;
+import dev.projecteclipse.eclipse.lives.DeathFlowHooks;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.network.hearts.HeartsPayloads;
 import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -55,6 +57,16 @@ public final class ReviveRitual {
     /** Maximum distance the confirming player may move from the altar. */
     public static final double MAX_CONFIRMER_DISTANCE = 16.0D;
     private static final int BEAM_INTERVAL_TICKS = 10;
+    /** W4-HEARTS R4: vigil-progress sync cadence to the online ghost target. */
+    private static final int VIGIL_INTERVAL_TICKS = 20;
+    /**
+     * W4-CEREMONY / IDEA-10 #1 — Revive Witness Circle: each crouching bystander within
+     * {@value #MAX_CONFIRMER_DISTANCE} blocks shaves 2 s off the ritual per beam batch
+     * (multiples of {@value #BEAM_INTERVAL_TICKS} keep the vigil-sync cadence aligned),
+     * capped at −50% of {@link #DURATION_TICKS} total.
+     */
+    private static final int WITNESS_BONUS_TICKS_PER_BATCH = 40;
+    private static final int WITNESS_MAX_BONUS_TICKS = DURATION_TICKS / 2;
 
     private static final List<ReviveRitual> ACTIVE = new ArrayList<>();
 
@@ -65,6 +77,8 @@ public final class ReviveRitual {
     private final String targetName;
     private final ServerBossEvent bossEvent;
     private int ticksElapsed;
+    /** W4-CEREMONY / IDEA-10 #1: total ticks already shaved off by witnesses (cap bookkeeping). */
+    private int witnessBonusTicks;
 
     private ReviveRitual(ServerLevel level, BlockPos altarPos, UUID confirmerId, UUID targetId, String targetName) {
         this.level = level;
@@ -133,9 +147,26 @@ public final class ReviveRitual {
             return true;
         }
         this.ticksElapsed++;
-        this.bossEvent.setProgress((float) (DURATION_TICKS - this.ticksElapsed) / DURATION_TICKS);
         if (this.ticksElapsed % BEAM_INTERVAL_TICKS == 0) {
-            BeamEmitter.emit(this.level, this.altarPos);
+            // W4-CEREMONY / IDEA-10 #1 — Revive Witness Circle: crouching bystanders are
+            // mechanical witnesses. Each shaves 2 s off the remaining duration per batch
+            // (capped at −50% total) and adds one staggered beam to the altar ring, so the
+            // crowd literally makes the ritual faster and brighter. No text, no names.
+            int witnesses = countWitnesses();
+            if (witnesses > 0 && this.witnessBonusTicks < WITNESS_MAX_BONUS_TICKS) {
+                int bonus = Math.min(witnesses * WITNESS_BONUS_TICKS_PER_BATCH,
+                        WITNESS_MAX_BONUS_TICKS - this.witnessBonusTicks);
+                this.witnessBonusTicks += bonus;
+                this.ticksElapsed += bonus;
+            }
+            BeamEmitter.emit(this.level, this.altarPos, witnesses);
+        }
+        this.bossEvent.setProgress(
+                (float) Math.max(0, DURATION_TICKS - this.ticksElapsed) / DURATION_TICKS);
+        if (this.ticksElapsed % VIGIL_INTERVAL_TICKS == 0) {
+            // W4-HEARTS R4: the ghost watches their cracked hearts re-knit. Online-only;
+            // a mid-ritual login is caught by the next 20-tick send.
+            sendVigil((float) this.ticksElapsed / DURATION_TICKS, true);
         }
         if (this.ticksElapsed >= DURATION_TICKS) {
             succeed();
@@ -144,11 +175,42 @@ public final class ReviveRitual {
         return false;
     }
 
+    /**
+     * W4-CEREMONY / IDEA-10 #1: witnesses are non-confirmer players crouching within
+     * {@value #MAX_CONFIRMER_DISTANCE} blocks of the altar (the same crouch predicate the
+     * altar/finale interactions use). Spectators and banned ghosts never count.
+     */
+    private int countWitnesses() {
+        Vec3 center = Vec3.atCenterOf(this.altarPos);
+        double rangeSq = MAX_CONFIRMER_DISTANCE * MAX_CONFIRMER_DISTANCE;
+        int witnesses = 0;
+        for (ServerPlayer player : this.level.players()) {
+            if (player.getUUID().equals(this.confirmerId) || !player.isShiftKeyDown()
+                    || player.isSpectator() || player.getData(EclipseAttachments.BANNED)) {
+                continue;
+            }
+            if (player.position().distanceToSqr(center) <= rangeSq) {
+                witnesses++;
+            }
+        }
+        return witnesses;
+    }
+
+    /** Vigil sync to the online ghost target (no-op while the target is offline). */
+    private void sendVigil(float progress, boolean active) {
+        ServerPlayer target = this.level.getServer().getPlayerList().getPlayer(this.targetId);
+        if (target != null) {
+            HeartsPayloads.sendRitualVigil(target, progress, active);
+        }
+    }
+
     // --- outcomes ---
 
     /** Failure: the ritual leaves the sigil untouched and the bossbar disappears. */
     private void fail(String reason) {
         this.level.playSound(null, this.altarPos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0F, 0.6F);
+        // R4 vigil revert: the ghost's violet fill drains and the cracks return.
+        sendVigil(0.0F, false);
         cleanup();
         EclipseMod.LOGGER.info("Revive ritual at {} for {} FAILED ({}); sigil not consumed",
                 this.altarPos, this.targetName, reason);
@@ -185,6 +247,11 @@ public final class ReviveRitual {
         }
         if (target != null) {
             BanService.unban(target);
+            // W4-CEREMONY / IDEA-10 #1: direct call into the javadoc'd revive seam so the
+            // deck celebration starts THIS tick instead of the next tick's unban watch.
+            // Must run AFTER unban — onRevived() no-ops while the ban flag is still set;
+            // the watch's duplicate detection makes the double-route a safe no-op.
+            DeathFlowHooks.onRevived(target);
         } else {
             // Offline: clear the persistent ban now; the attachment-based ghost state is
             // reconciled (full unban) the moment the player logs back in, see onPlayerLoggedIn.

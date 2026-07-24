@@ -46,6 +46,9 @@ public class SkillTreeWidget extends AbstractWidget {
     private static final long RING_MILLIS = 400L;
     private static final long LINE_MILLIS = 300L;
     private static final long PULSE_PERIOD_MILLIS = 2000L;
+    /** Cascade (W4-FEEL, IDEA-06 #1): wake-up border flash length + sibling stagger. */
+    private static final long UNLOCK_FLASH_MILLIS = 250L;
+    private static final long UNLOCK_STAGGER_MILLIS = 80L;
     /** Canvas padding around the content bounds (room for branch headers + glow). */
     private static final int CONTENT_PAD = 28;
 
@@ -70,6 +73,13 @@ public class SkillTreeWidget extends AbstractWidget {
 
     /** Purchase celebration start millis per node id (flash + ring + line draw-in). */
     private final Map<String, Long> purchaseAnimStart = new HashMap<>();
+
+    /**
+     * Cascade wake-up start millis per newly-available child id (W4-FEEL, IDEA-06 #1).
+     * Starts sit in the FUTURE (buy ring + per-sibling stagger) — render sites skip
+     * negative elapsed and prune once both the edge wipe and border flash finished.
+     */
+    private final Map<String, Long> unlockAnimStart = new HashMap<>();
 
     public SkillTreeWidget(int x, int y, int width, int height, Consumer<String> onSelect) {
         super(x, y, width, height, Component.empty());
@@ -104,8 +114,27 @@ public class SkillTreeWidget extends AbstractWidget {
 
     /** Screen tick hook: a node flipped to OWNED — play the purchase celebration. */
     public void onNodePurchased(String nodeId) {
-        purchaseAnimStart.put(nodeId, Util.getMillis());
+        long now = Util.getMillis();
+        purchaseAnimStart.put(nodeId, now);
         UiSounds.skillBuy();
+
+        // Cascade (W4-FEEL, IDEA-06 #1): the confirmation wave travels onward. Children
+        // of the bought node that are AVAILABLE now were LOCKED a frame ago (they
+        // required this node), so their edges draw in and their tiles wake up after the
+        // buy ring, staggered per sibling — juice that doubles as information.
+        SkillTreeModel model = SkillTreeModel.current();
+        int order = 0;
+        for (SkillTreeModel.Node child : model.nodes().values()) {
+            if (child.requires.contains(nodeId)
+                    && model.stateOf(child) == SkillTreeModel.State.AVAILABLE) {
+                unlockAnimStart.put(child.id,
+                        now + RING_MILLIS + UNLOCK_STAGGER_MILLIS * order);
+                order++;
+            }
+        }
+        if (order > 0) {
+            UiSounds.skillUnlockWave(); // once per cascade, never per node
+        }
     }
 
     /** Re-center on the tree (first open and after resize when the view was never touched). */
@@ -213,6 +242,24 @@ public class SkillTreeWidget extends AbstractWidget {
 
             int alpha = childState == SkillTreeModel.State.AVAILABLE
                     ? (int) (150 + 80 * glowPulse) : 255;
+
+            // Cascade light-up (IDEA-06 #1): edges into a freshly-unlocked child keep the
+            // old locked hairline underlay while the dim-accent wipe travels over it.
+            Long unlockStart = !reduced && childState == SkillTreeModel.State.AVAILABLE
+                    ? unlockAnimStart.get(node.id) : null;
+            if (unlockStart != null && now - unlockStart < LINE_MILLIS) {
+                long unlockElapsed = now - unlockStart;
+                drawEdge(guiGraphics, parent, node,
+                        EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, 1.0F), 1.0F);
+                if (unlockElapsed >= 0L) {
+                    float wipe = easeOutCubic(
+                            Mth.clamp(unlockElapsed / (float) LINE_MILLIS, 0.0F, 1.0F));
+                    drawEdge(guiGraphics, parent, node,
+                            EclipseUiTheme.withAlpha(color, alpha / 255.0F), wipe);
+                }
+                continue;
+            }
+
             drawEdge(guiGraphics, parent, node, EclipseUiTheme.withAlpha(color, alpha / 255.0F), drawIn);
         }
     }
@@ -330,6 +377,25 @@ public class SkillTreeWidget extends AbstractWidget {
             drawBorderOutset(guiGraphics, x, y, size, 2, EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, 0.85F));
         } else if (hovered) {
             drawBorderOutset(guiGraphics, x, y, size, 2, EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, 0.6F));
+        }
+
+        // Cascade wake-up (IDEA-06 #1): a newly-available tile flashes a soft accent
+        // border once after the buy ring reaches it, then the normal affordable pulse
+        // takes over. reducedFx (or a state change) just drops the entry.
+        Long unlockStart = unlockAnimStart.get(node.id);
+        if (unlockStart != null) {
+            if (reduced || state != SkillTreeModel.State.AVAILABLE) {
+                unlockAnimStart.remove(node.id);
+            } else {
+                long unlockElapsed = now - unlockStart;
+                if (unlockElapsed >= 0L && unlockElapsed <= UNLOCK_FLASH_MILLIS) {
+                    float t = unlockElapsed / (float) UNLOCK_FLASH_MILLIS;
+                    drawBorderOutset(guiGraphics, x, y, size, 2,
+                            EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, 0.6F * (1.0F - t)));
+                } else if (unlockElapsed > Math.max(UNLOCK_FLASH_MILLIS, LINE_MILLIS)) {
+                    unlockAnimStart.remove(node.id);
+                }
+            }
         }
 
         // Purchase celebration: 2t white flash + 8t expanding glow ring.

@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.entity.boss.fog;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
@@ -188,6 +190,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final double RESET_RANGE = 24.0D;
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
     private static final double SUMMON_DEDUP_RANGE = 64.0D;
+    /** W4 loot ceremony: first participant payout keyframe of the death storm-burst. */
+    private static final int DEATH_PAYOUT_START_TICK = 20;
     private static final double ADD_CLEANUP_RANGE = 64.0D;
     /** Death-anim keyframe where the chest core gutters out (crown already fallen). */
     private static final int DEATH_CORE_GUTTER_TICK = 32;
@@ -244,6 +248,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private boolean colossusCalled;
     private boolean warnedHoundUnbound;
     private boolean warnedColossusUnbound;
+    // W4 loot ceremony (transient — die() runs exactly once, so a restart mid-collapse
+    // loses only the staggering, never the guaranteed corpse drops).
+    private final ArrayDeque<UUID> deathPayoutQueue = new ArrayDeque<>();
+    private int deathPayoutInterval = 12;
+    private int deathPayoutIndex;
 
     public FogTyrantEntity(EntityType<? extends FogTyrantEntity> entityType, Level level) {
         super(entityType, level);
@@ -299,6 +308,9 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         }
         level.playSound(null, center, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.HOSTILE, 1.4F, 0.6F);
         level.playSound(null, center, SoundEvents.WARDEN_ROAR, SoundSource.HOSTILE, 1.6F, 0.5F);
+        // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
+        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(level, tyrant.position(),
+                "entity.eclipse.fog_tyrant", "announce.eclipse.boss.intro.fog_tyrant");
         EclipseMod.LOGGER.info("Fog Tyrant summoned at {} — scaled for {} player(s): {} HP; bossbar {} created",
                 center.toShortString(), tyrant.scaledPlayers, tyrant.getMaxHealth(), tyrant.bossEvent.getId());
         return tyrant;
@@ -353,6 +365,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_CROWN_CALL, EclipseGeoAnimations.once(GEO_ID, ANIM_CROWN_CALL));
         action.triggerableAnim(ANIM_SQUALL, EclipseGeoAnimations.once(GEO_ID, ANIM_SQUALL));
         action.triggerableAnim(ANIM_ENRAGE, EclipseGeoAnimations.once(GEO_ID, ANIM_ENRAGE));
+        // W4 IDEA-16 #3 death slow-mo: the held death anim eases toward ~0.2x speed over
+        // the first ~8 death ticks (Herald tickClientAnim pattern, Geo-boss flavor;
+        // client-side render illusion — server ticks untouched).
+        action.setAnimationSpeedHandler(tyrant -> this.deathTime > 0
+                ? Math.max(0.2D, 1.0D - this.deathTime * 0.1D) : 1.0D);
     }
 
     // --- synced state accessors ---
@@ -522,7 +539,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         return true;
     }
 
-    /** Leash + wall: inward impulse past r=18 and the fog-wall ring segment. */
+    /**
+     * Leash + wall: inward impulse past r=18 and the fog-wall ring segment. The synced
+     * phase feeds {@link FogTyrantArena#particleWall} as its severity, so P2 thickens the
+     * wall and P3 adds the visual-only ring lightning (W4 IDEA-16 #2).
+     */
     private void tickArenaLock(ServerLevel level) {
         if (this.arena == null) {
             return;
@@ -530,7 +551,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         for (ServerPlayer player : livingParticipants(level)) {
             this.arena.impulseInward(player, this.tickCount);
             if (this.tickCount % 8 == 0) {
-                this.arena.particleWall(level, player);
+                this.arena.particleWall(level, player, getPhase());
             }
         }
     }
@@ -1162,6 +1183,17 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             clearTelegraphs();
             this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             triggerAction(EclipseGeoAnimations.ANIM_DEATH);
+            // W4 IDEA-16 #3: queue the award ceremony (one shard payout per participant on
+            // tickDeath keyframes) and start the long soft slow-mo drift shake at the kill.
+            this.deathPayoutQueue.clear();
+            this.deathPayoutQueue.addAll(this.participants);
+            this.deathPayoutInterval = Mth.clamp(
+                    (DEATH_THUNDERCLAP_TICK - DEATH_PAYOUT_START_TICK - 5)
+                            / Math.max(1, this.deathPayoutQueue.size()), 3, 12);
+            if (this.level() instanceof ServerLevel serverLevel) {
+                PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(),
+                        this.getZ(), 64.0D, S2CShakePayload.shake(0.15F, 40));
+            }
             EclipseMod.LOGGER.info("Fog Tyrant defeated (source: {}) — starting the {}t storm-burst",
                     damageSource.getMsgId(), DEATH_DURATION_TICKS);
         }
@@ -1206,6 +1238,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             serverLevel.sendParticles(ParticleTypes.CLOUD,
                     this.getX(), this.getY() + 2.6D, this.getZ(), 6, 0.8D, 0.4D, 0.8D, 0.06D);
         }
+        tickPayoutCeremony(serverLevel);
         if (this.deathTime == DEATH_THUNDERCLAP_TICK) {
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     64.0D, S2CShakePayload.shake(0.8F, 18));
@@ -1223,9 +1256,46 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     }
 
     /**
+     * W4 IDEA-16 #3 loot ceremony (Herald pattern): one participant is rewarded per
+     * keyframe — 3 umbral shards at their feet with a HEART_BURST quasar and a rising
+     * amethyst chime — so the storm-burst doubles as the award sequence. Any remainder
+     * drains at the thunderclap, so an oversized roster can never lose payouts to the
+     * body removal. Eligibility matches the old {@code dropCustomDeathLoot} dump.
+     */
+    private void tickPayoutCeremony(ServerLevel level) {
+        if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
+            return;
+        }
+        boolean drainAll = this.deathTime >= DEATH_THUNDERCLAP_TICK;
+        if (!drainAll && (this.deathTime - DEATH_PAYOUT_START_TICK) % this.deathPayoutInterval != 0) {
+            return;
+        }
+        do {
+            payoutParticipant(level, this.deathPayoutQueue.poll());
+        } while (drainAll && !this.deathPayoutQueue.isEmpty());
+    }
+
+    private void payoutParticipant(ServerLevel level, UUID id) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+        if (player == null || !player.isAlive() || player.level() != level) {
+            return;
+        }
+        Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D, player.getZ(),
+                new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
+        PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
+                64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
+        level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
+        EclipseMod.LOGGER.info("Fog Tyrant ceremony payout: 3 umbral shards to {} (deathTime {})",
+                player.getScoreboardName(), this.deathTime);
+    }
+
+    /**
      * Drops beyond the loot table: 1 {@code storm_heart} by P4-registry lookup (fallback
-     * 6 umbral shards while P4 hasn't landed it, plan §2.4) + 3 umbral shards at each
-     * participant's feet (Herald pattern — everyone who braved the storm gets paid).
+     * 6 umbral shards while P4 hasn't landed it, plan §2.4). The per-participant shard
+     * payouts moved into {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony —
+     * everyone who braved the storm still gets paid, just staggered; see
+     * {@code tickPayoutCeremony}).
      */
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
@@ -1239,17 +1309,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
                             EclipseMod.LOGGER.info("Fog Tyrant drop: eclipse:storm_heart not registered yet "
                                     + "(P4) — dropped the 6-umbral-shard fallback");
                         });
-        int rewarded = 0;
-        for (UUID id : this.participants) {
-            ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-            if (player != null && player.isAlive() && player.level() == level) {
-                Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D, player.getZ(),
-                        new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
-                rewarded++;
-            }
-        }
-        EclipseMod.LOGGER.info("Fog Tyrant drops: storm heart (or fallback) at the corpse + 3 umbral "
-                + "shards to {} participant(s)", rewarded);
+        EclipseMod.LOGGER.info("Fog Tyrant drops: storm heart (or fallback) at the corpse; {} participant "
+                + "payout(s) queued for the storm-burst ceremony", this.participants.size());
     }
 
     // --- bossbar (wither pattern + boss-theme skin payload for every viewer) ---

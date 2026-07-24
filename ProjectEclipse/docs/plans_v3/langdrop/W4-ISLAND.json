@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "movement.eclipse.glide.lift": "The updraft carries you — sneak to let go",
+    "movement.eclipse.glide.soften": "The island cushions your fall"
+  },
+  "de_de": {
+    "movement.eclipse.glide.lift": "Der Aufwind trägt dich — Schleichen zum Loslassen",
+    "movement.eclipse.glide.soften": "Die Insel dämpft deinen Fall"
+  }
+}

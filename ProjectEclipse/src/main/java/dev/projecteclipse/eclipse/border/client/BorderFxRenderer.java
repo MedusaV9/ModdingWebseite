@@ -16,6 +16,7 @@ import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
+import dev.projecteclipse.eclipse.client.sound.BorderStaticSound;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
@@ -265,6 +266,7 @@ public final class BorderFxRenderer {
         LocalPlayer player = minecraft.player;
         if (level == null || player == null) {
             EclipseFxState.setBorderProximity(0.0F);
+            BorderStaticSound.update(0.0F);
             ringPoint = null;
             clusterCount = 0;
             resetThrottles(); // world/server change: old gameTime bases would stall the throttles
@@ -273,6 +275,8 @@ public final class BorderFxRenderer {
         double radius = ringRadius(level);
         float prox = proximity(radius, player.getX(), player.getZ());
         EclipseFxState.setBorderProximity(prox);
+        // IDEA-07 §3 whisper hook: the static bed loop tracks the same per-tick proximity.
+        BorderStaticSound.update(prox);
         if (prox <= 0.01F) {
             ringPoint = null;
             clusterCount = 0; // zero cost while far: no field, no reseeds, no emitters

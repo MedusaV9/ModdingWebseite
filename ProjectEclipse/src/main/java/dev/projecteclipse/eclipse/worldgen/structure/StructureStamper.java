@@ -235,23 +235,26 @@ public final class StructureStamper {
      * terraform + heightmap re-prime + relight). When vanilla refuses after
      * {@value #VANILLA_ATTEMPTS} attempts, the procedural fallback builds on a SitePrep'd
      * pad instead — never on raw (tree-covered) ground; sites without a fallback builder
-     * (mansion, outpost) log and consume the site.
+     * (mansion, outpost) fail the row so {@link StructurePendingRegistry} retries it with
+     * an adjusted anchor + fresh seeds ({@link #retryAnchor}).
      */
     private static void placeWithFallback(ServerLevel level, PendingSite site,
             ResourceLocation vanillaId, @Nullable FallbackBuild fallback,
             Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
-        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, site.anchor(),
-                SitePrep.Mode.PLATEAU, ignored -> onComplete.run(), onFailure);
+        int retry = StructurePendingRegistry.failureCount(site.siteId());
+        BlockPos anchor = retryAnchor(level, site, retry);
+        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, anchor,
+                SitePrep.Mode.PLATEAU, retry * VANILLA_ATTEMPTS, ignored -> onComplete.run(), onFailure);
         if (queued != null) {
             return;
         }
         if (fallback == null) {
             onFailure.accept(new IllegalStateException(vanillaId + " failed to generate at "
-                    + site.anchor().toShortString() + " and has no procedural fallback"));
+                    + anchor.toShortString() + " (retry " + retry + ") and has no procedural fallback"));
             return;
         }
         EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: {} failed to generate at {}; building the fallback piece",
-                vanillaId, site.anchor().toShortString());
+                vanillaId, anchor.toShortString());
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         int pad = Math.max(12, site.footprint() / 4);
         SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
@@ -268,12 +271,39 @@ public final class StructureStamper {
     /** Cavity-mode vanilla placement (underground envelope + entrance shaft). */
     private static void placeCavity(ServerLevel level, PendingSite site, ResourceLocation vanillaId,
             Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
-        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, site.anchor(),
-                SitePrep.Mode.CAVITY, ignored -> onComplete.run(), onFailure);
+        int retry = StructurePendingRegistry.failureCount(site.siteId());
+        BlockPos anchor = retryAnchor(level, site, retry);
+        BoundingBox queued = VanillaLandmarks.placeVanillaAsync(level, vanillaId, anchor,
+                SitePrep.Mode.CAVITY, retry * VANILLA_ATTEMPTS, ignored -> onComplete.run(), onFailure);
         if (queued == null) {
             onFailure.accept(new IllegalStateException(vanillaId + " failed to generate at "
-                    + site.anchor().toShortString() + " (no procedural equivalent)"));
+                    + anchor.toShortString() + " (retry " + retry + ", no procedural equivalent)"));
         }
+    }
+
+    /**
+     * Registry-retry anchor adjustment: attempt 1 builds exactly at the authored landmark;
+     * retries 2/3 shift the anchor 24 blocks diagonally (alternating sides, always across
+     * a chunk border so {@code Structure.generate} sees a genuinely new start chunk) while
+     * staying within the landmark footprint. Plateau anchors re-derive their surface Y at
+     * the shifted column; cavity anchors (authored well below the surface) keep their depth.
+     */
+    private static BlockPos retryAnchor(ServerLevel level, PendingSite site, int retry) {
+        if (retry <= 0) {
+            return site.anchor();
+        }
+        int step = 24 * ((retry + 1) / 2) * (retry % 2 == 1 ? 1 : -1); // 24, -24, 48, ...
+        int x = site.anchor().getX() + step;
+        int z = site.anchor().getZ() - step;
+        DiscProfile profile = WorldStageService.profileOf(level.dimension());
+        DiscProfile resolved = profile != null ? profile : DiscProfile.OVERWORLD;
+        boolean cavity = site.anchor().getY()
+                < DiscTerrainFunction.surfaceY(resolved, site.anchor().getX(), site.anchor().getZ()) - 8;
+        int y = cavity ? site.anchor().getY() : DiscTerrainFunction.surfaceY(resolved, x, z);
+        BlockPos adjusted = new BlockPos(x, y, z);
+        EclipseMod.LOGGER.warn("Structure retry {} for {}: adjusting anchor {} -> {}",
+                retry, site.siteId(), site.anchor().toShortString(), adjusted.toShortString());
+        return adjusted;
     }
 
     /**
@@ -348,6 +378,17 @@ public final class StructureStamper {
      */
     @Nullable
     static StructureStart generateVanilla(ServerLevel level, ResourceLocation structureId, BlockPos anchor) {
+        return generateVanilla(level, structureId, anchor, 0);
+    }
+
+    /**
+     * {@code seedNudge} variant for registry retries: without it a retried site would
+     * re-roll the exact same {@code mapSeed + attempt} seeds at the same chunk and fail
+     * identically {@link StructurePendingRegistry} retry after retry.
+     */
+    @Nullable
+    static StructureStart generateVanilla(ServerLevel level, ResourceLocation structureId, BlockPos anchor,
+            int seedNudge) {
         Structure structure = level.registryAccess().registryOrThrow(Registries.STRUCTURE).get(structureId);
         if (structure == null) {
             EclipseMod.LOGGER.error("Structure {} missing from registry", structureId);
@@ -358,7 +399,7 @@ public final class StructureStamper {
             try {
                 StructureStart start = structure.generate(level.registryAccess(), generator,
                         generator.getBiomeSource(), level.getChunkSource().randomState(),
-                        level.getStructureManager(), FrozenParams.mapSeed() + attempt,
+                        level.getStructureManager(), FrozenParams.mapSeed() + seedNudge + attempt,
                         new ChunkPos(anchor), 0, level, biome -> true);
                 if (start != null && start.isValid()) {
                     return start;

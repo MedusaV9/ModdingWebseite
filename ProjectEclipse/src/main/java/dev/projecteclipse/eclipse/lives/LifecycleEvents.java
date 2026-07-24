@@ -170,9 +170,15 @@ public final class LifecycleEvents {
         }
 
         PendingHeartLoss loss = PENDING_HEART_LOSSES.remove(player.getUUID());
-        if (loss != null && LivesApi.get(player) < loss.previousHearts()) {
+        int heartsNow = LivesApi.get(player);
+        if (loss != null && heartsNow < loss.previousHearts()) {
+            // W4-HEARTS R2: one burst per heart actually gone since the death (a plain
+            // death replays exactly loss.heartIndex(); extra losses while dead — admin
+            // edits — shatter too). HeartBurstOverlay's queue staggers them 8 t apart.
+            for (int heartIndex = heartsNow; heartIndex < loss.previousHearts(); heartIndex++) {
+                PacketDistributor.sendToPlayer(player, new S2CHeartBurstPayload(heartIndex));
+            }
             PacketDistributor.sendToPlayer(player,
-                    new S2CHeartBurstPayload(loss.heartIndex()),
                     new S2CQuasarPayload(
                             S2CQuasarPayload.HEART_BURST,
                             player.position().add(0.0D, 1.0D, 0.0D)));

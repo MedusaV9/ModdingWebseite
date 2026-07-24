@@ -18,6 +18,7 @@ import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.C2SLocalePayload;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -121,6 +122,8 @@ public final class SettingsPanel extends AbstractContainerWidget {
         y = toggle(y, "xp_bar", EclipseClientConfig::showCustomXpBar, EclipseClientConfig.SHOW_CUSTOM_XP_BAR);
         y = toggle(y, "death_screen", EclipseClientConfig::customDeathScreen,
                 EclipseClientConfig.CUSTOM_DEATH_SCREEN);
+        y = toggle(y, "purple_hearts", EclipseClientConfig::purpleHearts,
+                EclipseClientConfig.PURPLE_HEARTS);
         y = toggle(y, "loading_screens", EclipseClientConfig::customLoadingScreens,
                 EclipseClientConfig.CUSTOM_LOADING_SCREENS);
 
@@ -444,14 +447,23 @@ public final class SettingsPanel extends AbstractContainerWidget {
 
     /**
      * Boolean row: label left, On/Off state + accent pill right. Presses through
-     * {@link UiSounds#toggle()} (B18); Enter/Space flips from the keyboard.
+     * {@link UiSounds#toggle()} (B18); Enter/Space flips from the keyboard. The knob
+     * glides between its docks over {@value #GLIDE_MILLIS} ms with a settle tick when it
+     * lands (W4-FEEL, IDEA-06 #2) — a two-stage physical switch. Drawn pixels only, the
+     * hitbox never moves (B3); {@code reducedFx} keeps the instant snap and one click.
      */
     private static final class ThemedToggle extends Row {
         private static final int PILL_W = 16;
         private static final int PILL_H = 8;
+        /** Knob glide window; the settle tick fires the frame the knob docks. */
+        private static final long GLIDE_MILLIS = 80L;
 
         private final BooleanSupplier read;
         private final ModConfigSpec.BooleanValue handle;
+        /** Wall-clock start of the running glide; 0 = never flipped this mount. */
+        private long flipMillis;
+        /** False while the knob is in flight — flips true exactly once per glide. */
+        private boolean settled = true;
 
         ThemedToggle(String optionKey, int width, BooleanSupplier read, ModConfigSpec.BooleanValue handle) {
             super(optionKey, width);
@@ -461,6 +473,10 @@ public final class SettingsPanel extends AbstractContainerWidget {
 
         private void flip() {
             save(handle, !read.getAsBoolean());
+            if (!EclipseClientConfig.reducedFx()) {
+                flipMillis = Util.getMillis();
+                settled = false;
+            }
         }
 
         @Override
@@ -492,9 +508,23 @@ public final class SettingsPanel extends AbstractContainerWidget {
             int pillX = getX() + this.width - 4 - PILL_W;
             int pillY = getY() + (this.height - PILL_H) / 2;
             guiGraphics.fill(pillX, pillY, pillX + PILL_W, pillY + PILL_H, EclipseUiTheme.HAIRLINE);
-            int knobX = value ? pillX + PILL_W - 7 : pillX + 1;
+
+            // Knob glide (IDEA-06 #2): eased slide between docks, color riding along.
+            int knobOn = pillX + PILL_W - 7;
+            int knobOff = pillX + 1;
+            float t = 1.0F;
+            if (!settled && !EclipseClientConfig.reducedFx()) {
+                t = easeOutCubic(Mth.clamp(
+                        (Util.getMillis() - flipMillis) / (float) GLIDE_MILLIS, 0.0F, 1.0F));
+            }
+            if (!settled && t >= 1.0F) {
+                settled = true;
+                UiSounds.toggleSettle(value); // stage two: the knob docks audibly
+            }
+            int knobX = Math.round(Mth.lerp(t, value ? knobOff : knobOn, value ? knobOn : knobOff));
+            float colorT = value ? t : 1.0F - t;
             guiGraphics.fill(knobX, pillY + 1, knobX + 6, pillY + PILL_H - 1,
-                    value ? EclipseUiTheme.ACCENT : EclipseUiTheme.DIM);
+                    lerpColor(EclipseUiTheme.DIM, EclipseUiTheme.ACCENT, colorT));
 
             Component state = value ? CommonComponents.OPTION_ON : CommonComponents.OPTION_OFF;
             int stateW = font.width(state);
@@ -502,6 +532,21 @@ public final class SettingsPanel extends AbstractContainerWidget {
                     value ? EclipseUiTheme.ACCENT : EclipseUiTheme.DIM);
 
             drawLabel(guiGraphics, font, this.width - PILL_W - stateW - 16);
+        }
+
+        private static float easeOutCubic(float t) {
+            float inv = 1.0F - t;
+            return 1.0F - inv * inv * inv;
+        }
+
+        /** ARGB lerp (component-wise), t clamped 0..1 — the knob's in-flight tint. */
+        private static int lerpColor(int from, int to, float t) {
+            float clamped = Mth.clamp(t, 0.0F, 1.0F);
+            int a = Math.round(Mth.lerp(clamped, (from >>> 24) & 0xFF, (to >>> 24) & 0xFF));
+            int r = Math.round(Mth.lerp(clamped, (from >>> 16) & 0xFF, (to >>> 16) & 0xFF));
+            int g = Math.round(Mth.lerp(clamped, (from >>> 8) & 0xFF, (to >>> 8) & 0xFF));
+            int b = Math.round(Mth.lerp(clamped, from & 0xFF, to & 0xFF));
+            return (a << 24) | (r << 16) | (g << 8) | b;
         }
     }
 

@@ -81,6 +81,8 @@ public class HandbookScreen extends Screen {
     /** Tab switch: crossfade ticks + content slide distance (§2.3). */
     private static final int SWITCH_TICKS = 4;
     private static final int SLIDE_PX = 6;
+    /** Paper flex (W4-FEEL, IDEA-06 #3): max horizontal squash of a turning page. */
+    private static final float SQUASH_AMOUNT = 0.03F;
 
     // Tab roster in the frozen §3.1 order (W1 ledger applied by W2): status, timeline,
     // rules, revival, rewards, bestiary, map, settings. Keep Settings LAST — the rail,
@@ -309,21 +311,40 @@ public class HandbookScreen extends Screen {
                 contentX + contentW + 2, contentY + contentH + 2 + rise);
         float turn = switchProgress(partialTick);
         if (turn >= 1.0F) {
-            renderTabContent(guiGraphics, tabs.get(activeTab), 0.0F, rise, mouseX, mouseY, partialTick, alpha);
+            renderTabContent(guiGraphics, tabs.get(activeTab), 0.0F, rise, mouseX, mouseY,
+                    partialTick, alpha, 1.0F, 0.0F);
         } else {
             float eased = easeOutCubic(turn);
+            // Paper flex (W4-FEEL, IDEA-06 #3): the outgoing page squashes toward its
+            // exit edge while the incoming one un-squashes from 0.97 — drawn pixels
+            // only, widgets are rendered untransformed by the screen (B3 safe).
+            float outSquash = 1.0F - SQUASH_AMOUNT * eased;
+            float inSquash = 1.0F - SQUASH_AMOUNT * (1.0F - eased);
+            float outPivot = switchDir > 0 ? contentX : contentX + contentW;
+            float inPivot = switchDir > 0 ? contentX + contentW : contentX;
             renderTabContent(guiGraphics, tabs.get(switchFrom), -switchDir * SLIDE_PX * eased, rise,
-                    mouseX, mouseY, partialTick, alpha * (1.0F - eased));
+                    mouseX, mouseY, partialTick, alpha * (1.0F - eased), outSquash, outPivot);
             renderTabContent(guiGraphics, tabs.get(activeTab), switchDir * SLIDE_PX * (1.0F - eased), rise,
-                    mouseX, mouseY, partialTick, alpha * eased);
+                    mouseX, mouseY, partialTick, alpha * eased, inSquash, inPivot);
+            // Page-edge light: a 1px accent line sweeps the content rect in the switch
+            // direction and fades out with the turn.
+            int edgeX = contentX + Math.round((switchDir > 0 ? eased : 1.0F - eased) * contentW);
+            guiGraphics.fill(edgeX, contentY + rise, edgeX + 1, contentY + contentH + rise,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, 0.35F * (1.0F - eased) * alpha));
         }
         guiGraphics.disableScissor();
     }
 
+    /** {@code squash} < 1 flexes the page horizontally around {@code pivotX} (paper feel). */
     private void renderTabContent(GuiGraphics guiGraphics, HandbookTab tab, float dx, int rise,
-            int mouseX, int mouseY, float partialTick, float alpha) {
+            int mouseX, int mouseY, float partialTick, float alpha, float squash, float pivotX) {
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(dx, rise, 0.0F);
+        if (squash < 1.0F) {
+            guiGraphics.pose().translate(pivotX, 0.0F, 0.0F);
+            guiGraphics.pose().scale(squash, 1.0F, 1.0F);
+            guiGraphics.pose().translate(-pivotX, 0.0F, 0.0F);
+        }
         tab.render(guiGraphics, mouseX, mouseY, partialTick, alpha);
         guiGraphics.pose().popPose();
     }
@@ -354,7 +375,8 @@ public class HandbookScreen extends Screen {
             switchFrom = -1;
         }
         if (!fromRail) {
-            UiSounds.pageTurn();
+            // Directional pitch (IDEA-06 #3): forward turns whoosh brighter than back.
+            UiSounds.pageTurn(index > from ? 1.05F : 0.9F);
         }
 
         // Real widget lifecycle (B4): unmount the old page's widgets, mount the new page's.

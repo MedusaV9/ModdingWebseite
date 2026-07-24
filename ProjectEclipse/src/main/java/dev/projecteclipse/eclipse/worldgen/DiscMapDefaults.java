@@ -176,10 +176,13 @@ public final class DiscMapDefaults {
     }
 
     /**
-     * Built-in nether map template: the five wedges and E/W moat causeways of v1 plus
-     * the v2 landmarks — the breach arrival chimney near the stage-1 rim (D10; must
-     * exist at nether stage 1 / day 2, i.e. r &lt; 64), the top-side bastion remnant and
-     * the underside Hanging Court set-piece (both stage 2, W1.7 places them).
+     * Built-in nether map template, rescaled for IDEA-17's 1:1 disc (frozen radii
+     * {@code {0, 150, 280, 440}}): the five wedges (angular — they scale for free), a
+     * mid-ring lava moat the stage-2 growth crosses, and the v2 landmarks — the breach
+     * arrival chimney vertically under the overworld funnel (D10; must exist at nether
+     * stage 1 / day 2, i.e. r &lt; 150), the top-side bastion remnant and the underside
+     * Hanging Court set-piece (both stage 2, W1.7 places them) pushed out to the
+     * stage-2 ring.
      */
     public static DiscMapData.MapProfile netherDefaults() {
         List<DiscMapData.Sector> sectors = List.of(
@@ -188,18 +191,20 @@ public final class DiscMapDefaults {
                 new DiscMapData.Sector("minecraft:basalt_deltas", 144.0D, 216.0D),
                 new DiscMapData.Sector("minecraft:crimson_forest", 216.0D, 288.0D),
                 new DiscMapData.Sector("minecraft:warped_forest", 288.0D, 360.0D));
-        DiscMapData.Moat moat = new DiscMapData.Moat(50, 4, List.of(0.0D, 180.0D), 6.0D);
+        // Mid-ring barrier between stage 1 (150) and stage 2 (280): channel 184..196,
+        // causeway bridges east/west. Materializes with the stage-2 growth sweep.
+        DiscMapData.Moat moat = new DiscMapData.Moat(190, 6, List.of(0.0D, 180.0D), 4.0D);
         List<DiscMapData.Landmark> landmarks = List.of(
                 new DiscMapData.Landmark("eclipse:fortress_core", 0, 0, 40, 1),
                 // Basalt spiral + soul updraft return chimney (W1.7 builds; the radius
-                // is the protection clearance, not the build size). The only legal band
-                // at nether stage 1 is the 10-block annulus between the moat channel's
-                // outer edge (50 + 4) and the rim (64): center r ≈ 59.4, clearance 4
-                // keeps 55.4 > 54 off the moat and 63.4 <= 64 inside the rim. Wastes
-                // wedge, 30 deg away from the 0 deg bridge causeway.
-                new DiscMapData.Landmark("eclipse:breach_arrival", 48, 35, 4, 1),
-                new DiscMapData.Landmark("eclipse:bastion_remnant", -25, -76, 24, 2),   // crimson wedge, r≈80
-                new DiscMapData.Landmark("eclipse:hanging_court", 60, -60, 20, 2));     // warped wedge, underside
+                // is the protection clearance, not the build size). 1:1 rule: the
+                // arrival sits at the SAME (x, z) as the overworld eclipse:nether_breach
+                // landmark (85, 85), so the descent drops straight through the new
+                // ceiling bore — r ≈ 120 is comfortably inside the stage-1 rim (150)
+                // and far off the r=190 moat. Wastes wedge (45°, 27° off both seams).
+                new DiscMapData.Landmark("eclipse:breach_arrival", 85, 85, 4, 1),
+                new DiscMapData.Landmark("eclipse:bastion_remnant", -70, -214, 24, 2),  // crimson wedge, r≈225
+                new DiscMapData.Landmark("eclipse:hanging_court", 194, -141, 20, 2));   // warped wedge, r≈240, underside
         return new DiscMapData.MapProfile("minecraft:nether_wastes", 30, sectors, null, moat,
                 landmarks, List.of(), List.of());
     }

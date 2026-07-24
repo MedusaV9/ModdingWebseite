@@ -12,9 +12,19 @@ import javax.annotation.Nullable;
 public final class BuffMath {
     private BuffMath() {}
 
-    public record ActiveBuff(String id, long endsAtEpochMillis, float magnitude, long lastPeriodicEpochMillis) {
+    /**
+     * {@code totalDurationMillis} is the full window the buff was granted for (grows when a
+     * STACK start extends it); the bossbar divides remaining by it. {@code 0} means unknown
+     * (legacy save entries) — readers must fall back to the definition's default duration.
+     */
+    public record ActiveBuff(String id, long endsAtEpochMillis, float magnitude, long lastPeriodicEpochMillis,
+            long totalDurationMillis) {
         public ActiveBuff(String id, long endsAtEpochMillis, float magnitude) {
-            this(id, endsAtEpochMillis, magnitude, 0L);
+            this(id, endsAtEpochMillis, magnitude, 0L, 0L);
+        }
+
+        public ActiveBuff(String id, long endsAtEpochMillis, float magnitude, long lastPeriodicEpochMillis) {
+            this(id, endsAtEpochMillis, magnitude, lastPeriodicEpochMillis, 0L);
         }
     }
 
@@ -75,8 +85,14 @@ public final class BuffMath {
             }
             ActiveBuff existing = active.get(existingIndex);
             long newEnds = existing.endsAtEpochMillis() + durationMillis;
+            // Legacy entries (total 0) reconstruct their window from what is left right now,
+            // so the extended bar starts full and drains over remaining + the new grant.
+            long existingTotal = existing.totalDurationMillis() > 0L
+                    ? existing.totalDurationMillis()
+                    : existing.endsAtEpochMillis() - nowEpochMillis;
             List<ActiveBuff> copy = new ArrayList<>(active);
-            copy.set(existingIndex, new ActiveBuff(def.id(), newEnds, magnitude, existing.lastPeriodicEpochMillis()));
+            copy.set(existingIndex, new ActiveBuff(def.id(), newEnds, magnitude,
+                    existing.lastPeriodicEpochMillis(), existingTotal + durationMillis));
             return List.copyOf(copy);
         }
 
@@ -88,7 +104,7 @@ public final class BuffMath {
         List<ActiveBuff> copy = new ArrayList<>(active);
         // Periodic effects wait one complete period before their first fire. Non-periodic
         // effects ignore this field, so activation time is a safe uniform initial value.
-        copy.add(new ActiveBuff(def.id(), endsAt, magnitude, nowEpochMillis));
+        copy.add(new ActiveBuff(def.id(), endsAt, magnitude, nowEpochMillis, durationMillis));
         return List.copyOf(copy);
     }
 

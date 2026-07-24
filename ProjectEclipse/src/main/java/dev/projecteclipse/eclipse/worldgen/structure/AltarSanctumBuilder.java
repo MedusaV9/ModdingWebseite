@@ -56,7 +56,10 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
  *       {@value #FLOATING_MIN_STAGE}, or live via a {@link WorldStageService.StageListener}
  *       the moment the intro's stage-1 terrain sweep completes. One-way and idempotent:
  *       once {@link SanctumVersionData#VERSION_FLOATING} is stamped, boots make ZERO
- *       block changes.</li>
+ *       block changes — except a one-shot ADDITIVE geometry dress migration when the
+ *       island {@link SanctumVersionData#revision() revision} is behind
+ *       {@link SanctumVersionData#REVISION_ISLAND_V3} (W4-ISLAND; pre-v3 floating saves
+ *       gain the tendrils/islets/rune-ring/terraces exactly once, then go terminal).</li>
  * </ul>
  *
  * <p><b>Altar contract:</b> every consumer (rituals, Herald summon, sunmotes, shard
@@ -156,14 +159,20 @@ public final class AltarSanctumBuilder {
             altarPos = FloatingSanctumBuilder.buildOrUpgrade(overworld, altarPos);
             state.setSanctumBuilt(altarPos);
             version.setVersion(SanctumVersionData.VERSION_FLOATING);
+            version.setRevision(SanctumVersionData.REVISION_ISLAND_V3);
             floating = true;
         } else if (altarPos == null) {
             altarPos = build(overworld);
             state.setSanctumBuilt(altarPos);
             version.setVersion(SanctumVersionData.VERSION_GROUNDED);
+        } else if (floating && version.revision() < SanctumVersionData.REVISION_ISLAND_V3) {
+            // W4-ISLAND: pre-v3 floating save — run the additive geometry v3 dress pass
+            // once (no clears, player builds untouched) and stamp the revision terminal.
+            FloatingSanctumBuilder.upgradeToV3(overworld, altarPos);
+            version.setRevision(SanctumVersionData.REVISION_ISLAND_V3);
         } else {
-            EclipseMod.LOGGER.info("Sanctum v{} present at {} — idempotent boot, zero block changes",
-                    version.version(), altarPos.toShortString());
+            EclipseMod.LOGGER.info("Sanctum v{} (rev {}) present at {} — idempotent boot, zero block changes",
+                    version.version(), version.revision(), altarPos.toShortString());
         }
         repinSpawn(overworld, altarPos, floating);
         SanctumProtection.refresh(server);

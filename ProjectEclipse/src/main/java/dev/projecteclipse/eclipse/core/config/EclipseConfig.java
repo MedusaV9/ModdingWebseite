@@ -669,10 +669,13 @@ public final class EclipseConfig {
                         List.of("eclipse:village_plains", "minecraft:mansion", "minecraft:ancient_city"), Map.of()),
                 new StageEntry(5, 440, "final_day",
                         List.of("eclipse:stronghold_emergence"), Map.of())));
+        // IDEA-17 (W4-NETHER): 1:1 nether disc — radii aligned with the overworld growth
+        // beats. Must stay in lockstep with FrozenParams.DEFAULT_NETHER_RADII (the freeze
+        // file is built from THESE entries; the FrozenParams constant is the fallback).
         defaults.put("nether", List.of(
-                new StageEntry(1, 64, "day:2", List.of("eclipse:fortress_core"), Map.of()),
-                new StageEntry(2, 110, "day:10", List.of(), Map.of()),
-                new StageEntry(3, 150, "day:12", List.of(), Map.of())));
+                new StageEntry(1, 150, "day:2", List.of("eclipse:fortress_core"), Map.of()),
+                new StageEntry(2, 280, "day:10", List.of(), Map.of()),
+                new StageEntry(3, 440, "day:12", List.of(), Map.of())));
         return Collections.unmodifiableMap(defaults);
     }
 

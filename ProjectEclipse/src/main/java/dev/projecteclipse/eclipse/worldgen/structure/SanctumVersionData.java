@@ -22,6 +22,16 @@ import net.minecraft.world.level.saveddata.SavedData;
  *       ({@link FloatingSanctumBuilder}). Terminal: once floating, boots make ZERO block
  *       changes (restart-idempotence contract of the build).</li>
  * </ul>
+ *
+ * <p><b>Island revision (W4-ISLAND):</b> {@link #version()} is a FROZEN interface — several
+ * consumers ({@code IntroSequence}, {@code SanctumOrbitals}) compare against
+ * {@link #VERSION_FLOATING} with exact equality, so the geometry v3 dress pass is stamped
+ * in a separate {@link #revision()} counter instead of a new version number. Semantics:
+ * {@code version() >= VERSION_FLOATING && revision() < REVISION_ISLAND_V3} → the island is
+ * floating but still wears the v2 dressing; {@code AltarSanctumBuilder.ensureSanctum} runs
+ * the additive {@link FloatingSanctumBuilder#upgradeToV3 v3 dress pass} once and stamps
+ * {@link #REVISION_ISLAND_V3} (same adopt/flip idempotence contract as the v1→v2 flip —
+ * old saves have no revision tag, load as {@link #REVISION_NONE} and migrate on boot).</p>
  */
 public final class SanctumVersionData extends SavedData {
     public static final String DATA_NAME = "eclipse_sanctum_version";
@@ -33,9 +43,16 @@ public final class SanctumVersionData extends SavedData {
     /** v2 floating island + crater (stage 1+, post-intro fusion). */
     public static final int VERSION_FLOATING = 2;
 
+    /** No island dress revision stamped (pre-W4-ISLAND save, or not floating yet). */
+    public static final int REVISION_NONE = 0;
+    /** Geometry v3 dress pass (belly tendrils, satellite islets, rune ring, crater terraces). */
+    public static final int REVISION_ISLAND_V3 = 3;
+
     private static final String TAG_VERSION = "version";
+    private static final String TAG_REVISION = "revision";
 
     private int version = VERSION_NONE;
+    private int revision = REVISION_NONE;
 
     public SanctumVersionData() {}
 
@@ -49,12 +66,14 @@ public final class SanctumVersionData extends SavedData {
     public static SanctumVersionData load(CompoundTag tag, HolderLookup.Provider registries) {
         SanctumVersionData data = new SanctumVersionData();
         data.version = tag.getInt(TAG_VERSION);
+        data.revision = tag.getInt(TAG_REVISION);
         return data;
     }
 
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putInt(TAG_VERSION, this.version);
+        tag.putInt(TAG_REVISION, this.revision);
         return tag;
     }
 
@@ -67,6 +86,19 @@ public final class SanctumVersionData extends SavedData {
     public void setVersion(int version) {
         if (this.version != version) {
             this.version = version;
+            setDirty();
+        }
+    }
+
+    /** Current island dress revision ({@link #REVISION_NONE} until a dress pass stamps one). */
+    public int revision() {
+        return this.revision;
+    }
+
+    /** Stamps a new island dress revision (no-op when unchanged; marks dirty otherwise). */
+    public void setRevision(int revision) {
+        if (this.revision != revision) {
+            this.revision = revision;
             setDirty();
         }
     }

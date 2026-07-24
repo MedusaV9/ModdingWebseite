@@ -80,6 +80,8 @@ public final class LimboAmbience {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_godray");
     private static final ResourceLocation LIMBO_FOG =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_fog");
+    private static final ResourceLocation LIMBO_FOGBANK =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_fogbank");
 
     /** Limbo grade fade-in length after entering the dimension (~2 s, kept from v1). */
     private static final long POST_FADE_MILLIS = 2000L;
@@ -196,7 +198,13 @@ public final class LimboAmbience {
     /** Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few). */
     private static final Window FOG = new Window(
             LIMBO_FOG, 2, 110, 160, 8.0D, 22.0D, 0.4D, 1.2D);
-    private static final Window[] WINDOWS = {MOTES, GODRAYS, FOG};
+    /**
+     * IDEA-18 §3: big slow middle-distance fog banks rolling +X past the ship (the
+     * buoy-lane heading) — the emitter's raised wind sells that the sea moves.
+     */
+    private static final Window FOGBANKS = new Window(
+            LIMBO_FOGBANK, 2, 140, 200, 35.0D, 70.0D, 0.5D, 2.0D);
+    private static final Window[] WINDOWS = {MOTES, GODRAYS, FOG, FOGBANKS};
 
     /** The playing loop instance, or {@code null} while none is live. */
     @Nullable

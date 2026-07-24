@@ -8,6 +8,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -104,12 +106,21 @@ public final class FogTyrantArena {
         return true;
     }
 
-    /** Storm wall: the fog-and-spark arc segment of the combat ring facing a player. */
-    public void particleWall(ServerLevel level, ServerPlayer player) {
+    /**
+     * Storm wall: the fog-and-spark arc segment of the combat ring facing a player.
+     * W4 IDEA-16 #2 — {@code severity} (pass the synced phase, 1..3) re-dresses the wall
+     * without touching the impulse/deflect math: P2 thickens fog and sparks, P3 turns the
+     * ring into a closing storm cell with intermittent visual-only {@link LightningBolt}s
+     * ON the wall itself ({@code releaseCrownLightning}'s zero-damage/zero-fire pattern —
+     * particle-only, no restore bookkeeping; the only damaging bolts remain the telegraphed
+     * crown strikes inside the ring).
+     */
+    public void particleWall(ServerLevel level, ServerPlayer player, int severity) {
         double dist = horizontalDistance(player.position());
         if (dist <= ARENA_RADIUS - 6.0D) {
             return;
         }
+        boolean thick = severity >= 2;
         double angle = Math.atan2(player.getZ() - this.center.z, player.getX() - this.center.x);
         for (int i = -2; i <= 2; i++) {
             double a = angle + i * 0.1D;
@@ -117,11 +128,23 @@ public final class FogTyrantArena {
             double z = this.center.z + Math.sin(a) * ARENA_RADIUS;
             level.sendParticles(ParticleTypes.CLOUD, x,
                     this.groundY + 0.4D + level.getRandom().nextDouble() * 3.5D, z,
-                    1, 0.05D, 0.4D, 0.05D, 0.0D);
-            if (level.getRandom().nextInt(3) == 0) {
+                    thick ? 2 : 1, 0.05D, thick ? 0.7D : 0.4D, 0.05D, 0.0D);
+            if (level.getRandom().nextInt(thick ? 2 : 3) == 0) {
                 level.sendParticles(ParticleTypes.ELECTRIC_SPARK, x,
                         this.groundY + 1.0D + level.getRandom().nextDouble() * 2.5D, z,
                         1, 0.05D, 0.3D, 0.05D, 0.01D);
+            }
+        }
+        if (severity >= 3 && level.getRandom().nextInt(10) == 0) {
+            // P3: the wall itself arcs — one visual-only bolt on the ring (~every 4 s per
+            // leash-zone player at the caller's 8t cadence). setVisualOnly = no damage, no fire.
+            double a = angle + (level.getRandom().nextDouble() - 0.5D) * 0.5D;
+            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level);
+            if (bolt != null) {
+                bolt.moveTo(this.center.x + Math.cos(a) * ARENA_RADIUS, this.groundY,
+                        this.center.z + Math.sin(a) * ARENA_RADIUS);
+                bolt.setVisualOnly(true);
+                level.addFreshEntity(bolt);
             }
         }
     }

@@ -36,7 +36,18 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * block state per debris piece. This class owns the presentation on top: a per-anchor
  * {@link #SCALE_VARIATION size spread} (final display scales
  * {@value #MIN_FINAL_SCALE}–{@value #MAX_FINAL_SCALE} — a couple of big purpur chunks
- * down to small obsidian shards), initial rotations, and all motion.</p>
+ * down to small obsidian shards), initial rotations, and all motion. Since geometry v3
+ * (W4-ISLAND) the anchor list also carries four ring-2 companion shards, each tightly
+ * arcing around one satellite islet; they animate through the same pass (ring ≠ 0 ⇒
+ * counter-clockwise) with the default trailing variation row.</p>
+ *
+ * <p><b>Level-scaled ring (W4-ISLAND, IDEA-12 #3 permanent tell):</b> the two debris
+ * rings breathe bigger as the altar levels up — orbit radius grows
+ * {@value #LEVEL_RADIUS_BONUS} and the bob amplitude {@value #LEVEL_BOB_BONUS} per altar
+ * level (both capped at level {@value #LEVEL_SCALE_CAP}). Pose components stay absolute
+ * functions of game time, so a level-up simply retargets the next 40 t interpolation
+ * window and the ring glides outward — no snap, zero extra packets. The islet companion
+ * shards (ring 2) keep their tight fixed orbits.</p>
  *
  * <p><b>Animation transport</b> (OarAnimator precedent — the accesstransformer-opened
  * {@code Display} setters): every {@value #UPDATE_CADENCE_TICKS} ticks the server pushes
@@ -95,6 +106,13 @@ public final class SanctumOrbitals {
     private static final double BOB_BASE_PERIOD_TICKS = 140.0D;
     /** Individual tumble rate base (deg/tick, ~1.6–4.4°/s across the ring). */
     private static final double SPIN_DEG_PER_TICK_BASE = 0.08D;
+
+    /** Extra orbit radius per altar level on rings 0/1 (blocks; W4-ISLAND level tell). */
+    private static final double LEVEL_RADIUS_BONUS = 0.35D;
+    /** Extra bob amplitude per altar level on rings 0/1 (fraction of the base). */
+    private static final double LEVEL_BOB_BONUS = 0.08D;
+    /** Altar levels beyond this stop growing the ring (keeps r ≤ ~14.8 ≤ scan margin). */
+    private static final int LEVEL_SCALE_CAP = 5;
 
     /**
      * Per-anchor size spread multiplied onto the frozen anchor scales (W4 bases run
@@ -278,9 +296,25 @@ public final class SanctumOrbitals {
         // Initial pose without interpolation: born already mid-orbit at its phase angle.
         display.setTransformationInterpolationDelay(0);
         display.setTransformationInterpolationDuration(0);
-        display.setTransformation(poseAt(anchor, orderIndex, mount, gameTime));
+        display.setTransformation(poseAt(anchor, orderIndex, mount, gameTime,
+                levelRadiusBonus(overworld), levelBobScale(overworld)));
         overworld.addFreshEntity(display);
         return display;
+    }
+
+    /** Extra ring 0/1 orbit radius from the altar level (the permanent level-up tell). */
+    private static double levelRadiusBonus(ServerLevel overworld) {
+        return cappedAltarLevel(overworld) * LEVEL_RADIUS_BONUS;
+    }
+
+    /** Bob amplitude multiplier from the altar level (rings 0/1). */
+    private static double levelBobScale(ServerLevel overworld) {
+        return 1.0D + cappedAltarLevel(overworld) * LEVEL_BOB_BONUS;
+    }
+
+    private static int cappedAltarLevel(ServerLevel overworld) {
+        return Math.min(Math.max(
+                EclipseWorldState.get(overworld.getServer()).getAltarLevel(), 0), LEVEL_SCALE_CAP);
     }
 
     // --- motion ---
@@ -294,6 +328,8 @@ public final class SanctumOrbitals {
         List<FloatingSanctumBuilder.OrbitalAnchor> anchors =
                 FloatingSanctumBuilder.orbitalAnchors(altarPos);
         Vec3 mount = anchorMountPos(altarPos);
+        double radiusBonus = levelRadiusBonus(overworld);
+        double bobScale = levelBobScale(overworld);
         boolean missing = false;
         for (int i = 0; i < current.length && i < anchors.size(); i++) {
             Display.BlockDisplay display = current[i];
@@ -304,7 +340,7 @@ public final class SanctumOrbitals {
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(UPDATE_CADENCE_TICKS);
             display.setTransformation(poseAt(anchors.get(i), i, mount,
-                    gameTime + UPDATE_CADENCE_TICKS));
+                    gameTime + UPDATE_CADENCE_TICKS, radiusBonus, bobScale));
         }
         if (missing) {
             reconciled = false;
@@ -313,29 +349,33 @@ public final class SanctumOrbitals {
 
     /**
      * Absolute pose of one debris piece at {@code gameTime}: orbit around the island axis
-     * (ring 0 clockwise, ring 1 counter-clockwise), per-anchor bob, per-anchor tumble
+     * (ring 0 clockwise, rings 1/2 counter-clockwise), per-anchor bob, per-anchor tumble
      * about a fixed tilted axis, all folded into a single {@link Transformation} whose
      * translation is relative to the fixed {@code mount} entity position. The rotation
      * pivots the SCALED block around its own center
      * ({@code T = orbitPoint − mount − Q·(s/2)}, matrix order T·L·S).
+     * {@code radiusBonus}/{@code bobScale} carry the altar-level growth and only apply
+     * to the two big rings — the ring-2 islet companions keep their tight orbits.
      */
     private static Transformation poseAt(FloatingSanctumBuilder.OrbitalAnchor anchor,
-            int orderIndex, Vec3 mount, long gameTime) {
+            int orderIndex, Vec3 mount, long gameTime, double radiusBonus, double bobScale) {
         int variationIndex = Math.min(orderIndex, SCALE_VARIATION.length - 1);
         float scale = anchor.scale() * SCALE_VARIATION[variationIndex];
         double direction = anchor.ring() == 0 ? 1.0D : -1.0D; // counter-rotating rings
         double orbitAngle = anchor.phaseRadians()
                 + direction * Math.toRadians(ORBIT_DEG_PER_TICK) * gameTime;
 
+        boolean bigRing = anchor.ring() <= 1;
+        double radius = anchor.radius() + (bigRing ? radiusBonus : 0.0D);
         double bobPeriod = BOB_BASE_PERIOD_TICKS * (0.8D + 0.35D * (orderIndex % 4));
         double bob = Math.sin((Math.PI * 2.0D / bobPeriod) * gameTime
-                + anchor.phaseRadians() * 3.0D) * BOB_AMPLITUDE;
+                + anchor.phaseRadians() * 3.0D) * BOB_AMPLITUDE * (bigRing ? bobScale : 1.0D);
 
         Vec3 center = anchor.center();
         Vector3f translation = new Vector3f(
-                (float) (center.x + Math.cos(orbitAngle) * anchor.radius() - mount.x),
+                (float) (center.x + Math.cos(orbitAngle) * radius - mount.x),
                 (float) (center.y + bob - mount.y),
-                (float) (center.z + Math.sin(orbitAngle) * anchor.radius() - mount.z));
+                (float) (center.z + Math.sin(orbitAngle) * radius - mount.z));
 
         // Tumble: fixed tilted axis per anchor, rate varying across the ring, starting
         // from a per-anchor initial angle so no two fragments are ever pose-synced.

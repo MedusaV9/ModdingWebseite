@@ -61,6 +61,28 @@ import net.minecraft.world.phys.Vec3;
  *       P6-W5 spawns and animates the display entities in build pass 2; W4 owns only the
  *       anchor data.</li>
  * </ul>
+ *
+ * <p><b>Geometry v3 dress pass (W4-ISLAND, {@link SanctumVersionData#REVISION_ISLAND_V3}):</b>
+ * a purely ADDITIVE layer on top of the v2 island — no airspace sweeps, no clears — so the
+ * v2→v3 migration ({@link #upgradeToV3}) can run over a lived-in world without eating
+ * player builds. Contents (all deterministic, {@link FallbackBuilders#hash01} only):</p>
+ * <ul>
+ *   <li><b>Belly tendrils + amethyst pockets</b>: glow-berry cave-vine strands and inset
+ *       amethyst pockets under the island belly ({@link #placeBellyTendrils}; columns the
+ *       v2 hanging decor already claimed are skipped via the same hash predicate).</li>
+ *   <li><b>Satellite islets</b>: four small hash-carved stone islets floating off the rim
+ *       ({@link #ISLETS}, r 23–26 — clear of the bridge, crater rim and glide notches),
+ *       each contributing one extra ring-2 companion-shard anchor to
+ *       {@link #orbitalAnchors} so {@code SanctumOrbitals} animates a debris shard arcing
+ *       around every islet (the connecting particle-arc anchors).</li>
+ *   <li><b>Rune ring</b>: 16 glowstone/crying-obsidian tiles inlaid flush in the lawn on
+ *       the r≈6.5 band ({@link #RUNE_RING_CELLS}) — inside the sundial shadow band
+ *       (r 7–10, erase contract untouched) and outside the dais slab skirt (r ≤ 6).</li>
+ *   <li><b>Crater terraces + updraft</b>: {@link SanctumCrater#dressTerraces} layers two
+ *       slab terrace bands onto the bowl rim; the faint updraft + waterfall-of-light are
+ *       client-side managed emitters ({@code client/sanctum/SanctumLightfall}) keyed on
+ *       the {@code ALTAR_CENTER} anchor — zero server blocks/packets.</li>
+ * </ul>
  */
 public final class FloatingSanctumBuilder {
     /** Height of the island top surface above the flattened ground surface. */
@@ -99,6 +121,22 @@ public final class FloatingSanctumBuilder {
     public static final double ORBITAL_HIGH_RADIUS = 9.0D;
     public static final int ORBITAL_HIGH_COUNT = 5;
     public static final int ORBITAL_HIGH_ABOVE_ALTAR = 7;
+
+    // --- v3 dress-pass data (W4-ISLAND; additive only, see class doc) ---
+
+    /** Satellite islets: {angleDeg, ringRadius, yAboveGround, size} — bridge/notches avoided. */
+    private static final int[][] ISLETS = {
+            {20, 24, 7, 2}, {110, 26, 10, 3}, {200, 23, 6, 2}, {290, 25, 9, 3}};
+    /** Companion-shard orbit radius around each islet (ring-2 orbital anchors). */
+    public static final double ISLET_ORBIT_RADIUS = 2.0D;
+    /**
+     * Rune ring lawn cells (relative to the altar column), all with r² in [37, 47]:
+     * strictly outside the dais slab skirt (r ≤ 6) and strictly inside the sundial
+     * shadow band (r 7–10) so neither ever stamps over a rune tile.
+     */
+    private static final int[][] RUNE_RING_CELLS = {
+            {6, 2}, {5, 4}, {3, 6}, {1, 6}, {-1, 6}, {-3, 6}, {-5, 4}, {-6, 2},
+            {-6, -2}, {-5, -4}, {-3, -6}, {-1, -6}, {1, -6}, {3, -6}, {5, -4}, {6, -2}};
 
     /** Switchback flight 1 walk cells (relative to center), plaza level → landing A. */
     private static final int[][] FLIGHT_1 = {
@@ -139,10 +177,13 @@ public final class FloatingSanctumBuilder {
             double phaseRadians, float scale, BlockState block) {}
 
     /**
-     * The 12 frozen debris anchors for {@code SanctumOrbitals} (P6-W5): 7 on the low ring
-     * (r={@value #ORBITAL_LOW_RADIUS} at island mid-height) and 5 on the high ring
-     * (r={@value #ORBITAL_HIGH_RADIUS} above the glass halo). Composition per plan §2.6:
-     * 5 purpur, 3 obsidian shards (small scales), 2 crying obsidian, 2 amethyst clusters.
+     * The debris anchors for {@code SanctumOrbitals} (P6-W5): 7 on the low ring
+     * (r={@value #ORBITAL_LOW_RADIUS} at island mid-height), 5 on the high ring
+     * (r={@value #ORBITAL_HIGH_RADIUS} above the glass halo) — both UNCHANGED since the
+     * frozen v2 hand-off (composition per plan §2.6: 5 purpur, 3 obsidian shards, 2
+     * crying obsidian, 2 amethyst clusters) — plus, since geometry v3 (W4-ISLAND), four
+     * ring-2 companion shards each tightly orbiting one satellite islet
+     * (r={@value #ISLET_ORBIT_RADIUS}, the islets' connecting particle-arc anchors).
      */
     public static List<OrbitalAnchor> orbitalAnchors(BlockPos altarPos) {
         Vec3 lowCenter = new Vec3(altarPos.getX() + 0.5D,
@@ -158,7 +199,8 @@ public final class FloatingSanctumBuilder {
         BlockState[] highBlocks = {purpur, obsidian, crying, purpur, amethyst};
         float[] highScales = {0.60F, 0.45F, 0.50F, 0.55F, 0.60F};
 
-        List<OrbitalAnchor> anchors = new ArrayList<>(ORBITAL_LOW_COUNT + ORBITAL_HIGH_COUNT);
+        List<OrbitalAnchor> anchors =
+                new ArrayList<>(ORBITAL_LOW_COUNT + ORBITAL_HIGH_COUNT + ISLETS.length);
         for (int i = 0; i < ORBITAL_LOW_COUNT; i++) {
             anchors.add(new OrbitalAnchor(0, i, lowCenter, ORBITAL_LOW_RADIUS,
                     i * (Math.PI * 2.0D / ORBITAL_LOW_COUNT), lowScales[i], lowBlocks[i]));
@@ -167,7 +209,29 @@ public final class FloatingSanctumBuilder {
             anchors.add(new OrbitalAnchor(1, i, highCenter, ORBITAL_HIGH_RADIUS,
                     i * (Math.PI * 2.0D / ORBITAL_HIGH_COUNT), highScales[i], highBlocks[i]));
         }
+        BlockState[] isletBlocks = {amethyst, obsidian, amethyst, crying};
+        for (int i = 0; i < ISLETS.length; i++) {
+            anchors.add(new OrbitalAnchor(2, i, isletShardCenter(altarPos, i),
+                    ISLET_ORBIT_RADIUS, i * (Math.PI / 2.0D), 0.40F, isletBlocks[i]));
+        }
         return anchors;
+    }
+
+    /** North-west base corner of islet {@code index} (pure geometry, crater datum math). */
+    private static BlockPos isletBasePos(BlockPos altarPos, int index) {
+        int[] islet = ISLETS[index];
+        double angle = Math.toRadians(islet[0]);
+        return new BlockPos(
+                altarPos.getX() + (int) Math.round(Math.cos(angle) * islet[1]),
+                groundY(altarPos) + islet[2],
+                altarPos.getZ() + (int) Math.round(Math.sin(angle) * islet[1]));
+    }
+
+    /** Orbit center of islet {@code index}'s companion shard (just above the islet cap). */
+    private static Vec3 isletShardCenter(BlockPos altarPos, int index) {
+        BlockPos base = isletBasePos(altarPos, index);
+        return new Vec3(base.getX() + 0.5D, base.getY() + ISLETS[index][3] + 1.5D,
+                base.getZ() + 0.5D);
     }
 
     /**
@@ -232,6 +296,7 @@ public final class FloatingSanctumBuilder {
         AltarSanctumBuilder.buildDecor(level, cx, cz, topY);
         AltarSanctumBuilder.buildApproachPaths(level, cx, cz, topY);
         buildAccess(level, cx, cz, ground);
+        dressV3(level, cx, cz, ground);
         if (!level.getBlockState(altarPos).is(EclipseBlocks.ALTAR.get())) {
             set(level, altarPos, EclipseBlocks.ALTAR.get().defaultBlockState());
         }
@@ -245,10 +310,154 @@ public final class FloatingSanctumBuilder {
                 EclipseWorldState.get(level.getServer()).getDay());
         rescueStranded(level, cx, cz, ground);
         EclipseMod.LOGGER.info(
-                "Sanctum v2 floating island built: altar {}, island top y{} (ellipse r{}x{}), ground y{}, crater floor y{}, {} legacy blocks cleared, bridge+plaza south, glide notches at {} deg",
+                "Sanctum v2 floating island built (geometry v3 dress inline): altar {}, island top y{} (ellipse r{}x{}), ground y{}, crater floor y{}, {} legacy blocks cleared, bridge+plaza south, glide notches at {} deg, {} satellite islets",
                 altarPos.toShortString(), topY, SURFACE_RADIUS_X, SURFACE_RADIUS_Z, ground,
-                ground - SanctumCrater.MAX_DEPTH, cleared, java.util.Arrays.toString(GLIDE_NOTCH_ANGLES));
+                ground - SanctumCrater.MAX_DEPTH, cleared,
+                java.util.Arrays.toString(GLIDE_NOTCH_ANGLES), ISLETS.length);
         return altarPos;
+    }
+
+    /**
+     * v2 → v3 migration entry ({@code AltarSanctumBuilder.ensureSanctum}, revision-gated):
+     * runs ONLY the additive v3 dress pass over an already-floating island. Deliberately
+     * no clears, no airspace sweeps, no re-stamp of the v2 mass — a lived-in island keeps
+     * every player-placed block; the pass itself is idempotent (fixed deterministic
+     * positions, plain setBlock).
+     */
+    static void upgradeToV3(ServerLevel level, BlockPos altarPos) {
+        int cx = altarPos.getX();
+        int cz = altarPos.getZ();
+        int ground = groundY(altarPos);
+        dressV3(level, cx, cz, ground);
+        EclipseMod.LOGGER.info(
+                "Sanctum island upgraded v2 -> geometry v3 (belly tendrils, {} satellite islets, rune ring, crater terraces) around altar {}",
+                ISLETS.length, altarPos.toShortString());
+    }
+
+    // --- v3 dress pass (additive only — see class doc) ---
+
+    /** Runs every v3 dressing layer; shared by the fresh build and the v2→v3 migration. */
+    private static void dressV3(ServerLevel level, int cx, int cz, int ground) {
+        placeBellyTendrils(level, cx, cz, ground);
+        buildSatelliteIslets(level, cx, cz, ground);
+        buildRuneRing(level, cx, cz, ground + ISLAND_LIFT);
+        SanctumCrater.dressTerraces(level, cx, cz, ground);
+    }
+
+    /**
+     * Glow-berry cave-vine tendrils and inset amethyst pockets under the island belly.
+     * Only columns the v2 hanging decor left untouched are used (same salt-23 predicate
+     * as {@link #placeHangingDecor}), the torn-root strand columns are excluded, and the
+     * central d &lt; 0.30 core stays clear for the waterfall-of-light column.
+     */
+    private static void placeBellyTendrils(ServerLevel level, int cx, int cz, int ground) {
+        int topY = ground + ISLAND_LIFT;
+        for (int dx = -SURFACE_RADIUS_X; dx <= SURFACE_RADIUS_X; dx++) {
+            for (int dz = -SURFACE_RADIUS_Z; dz <= SURFACE_RADIUS_Z; dz++) {
+                double d = Math.sqrt(ellipse(dx, dz));
+                if (d < 0.30D || d > 0.95D || isRootStrandColumn(dx, dz)) {
+                    continue;
+                }
+                int x = cx + dx;
+                int z = cz + dz;
+                if (FallbackBuilders.hash01(x, 23, z) < 0.115D) {
+                    continue; // column already carries v2 hanging decor
+                }
+                level.getChunk(x >> 4, z >> 4);
+                int bottomY = topY - thicknessAt(x, z, d) + 1;
+                if (FallbackBuilders.hash01(x, 141, z) < 0.035D) {
+                    // Amethyst pocket: inset block + down-facing cluster beneath it.
+                    set(level, new BlockPos(x, bottomY, z), Blocks.AMETHYST_BLOCK.defaultBlockState());
+                    set(level, new BlockPos(x, bottomY - 1, z),
+                            Blocks.AMETHYST_CLUSTER.defaultBlockState()
+                                    .setValue(AmethystClusterBlock.FACING, Direction.DOWN));
+                } else if (FallbackBuilders.hash01(x, 143, z) < 0.05D) {
+                    int length = 2 + (int) (FallbackBuilders.hash01(x, 145, z) * 4.0D);
+                    for (int i = 1; i < length; i++) {
+                        set(level, new BlockPos(x, bottomY - i, z),
+                                Blocks.CAVE_VINES_PLANT.defaultBlockState().setValue(
+                                        BlockStateProperties.BERRIES,
+                                        FallbackBuilders.hash01(x, bottomY - i, z) < 0.35D));
+                    }
+                    set(level, new BlockPos(x, bottomY - length, z),
+                            Blocks.CAVE_VINES.defaultBlockState().setValue(
+                                    BlockStateProperties.BERRIES,
+                                    FallbackBuilders.hash01(x, 147, z) < 0.5D));
+                }
+            }
+        }
+    }
+
+    /** Whether (dx, dz) is one of the torn-root strand start columns (v2 decor, avoid). */
+    private static boolean isRootStrandColumn(int dx, int dz) {
+        for (int[] strand : ROOT_STRANDS) {
+            if (strand[0] == dx && strand[1] == dz) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Four small hash-carved stone islets floating off the rim ({@link #ISLETS}) — torn
+     * shrapnel of the rip, each with a lawn cap, one glinting amethyst cluster and a
+     * hanging root. Their companion-shard orbital anchors ride {@link #orbitalAnchors}.
+     */
+    private static void buildSatelliteIslets(ServerLevel level, int cx, int cz, int ground) {
+        BlockPos altarSurrogate = new BlockPos(cx,
+                ground + ISLAND_LIFT + AltarSanctumBuilder.ALTAR_ABOVE_GROUND, cz);
+        for (int i = 0; i < ISLETS.length; i++) {
+            int size = ISLETS[i][3];
+            BlockPos base = isletBasePos(altarSurrogate, i);
+            int half = size / 2;
+            level.getChunk(base.getX() >> 4, base.getZ() >> 4);
+            for (int ox = -half; ox <= half; ox++) {
+                for (int oz = -half; oz <= half; oz++) {
+                    for (int oy = 0; oy < size; oy++) {
+                        int x = base.getX() + ox;
+                        int y = base.getY() + oy;
+                        int z = base.getZ() + oz;
+                        double keep = 0.92D - 0.20D * (Math.abs(ox) + Math.abs(oz)) - 0.12D * oy;
+                        if (FallbackBuilders.hash01(x, y, z) >= keep) {
+                            continue;
+                        }
+                        level.getChunk(x >> 4, z >> 4);
+                        set(level, new BlockPos(x, y, z), oy == size - 1
+                                ? AltarSanctumBuilder.groundMix(x, z) : isletMix(x, y, z));
+                    }
+                }
+            }
+            // Cap glint + hanging root on the islet's center column.
+            set(level, base.above(size), Blocks.AMETHYST_CLUSTER.defaultBlockState()
+                    .setValue(AmethystClusterBlock.FACING, Direction.UP));
+            set(level, base.below(), Blocks.HANGING_ROOTS.defaultBlockState());
+        }
+    }
+
+    /** Islet stone mix — the island-underside palette, minus the bright tip blocks. */
+    private static BlockState isletMix(int x, int y, int z) {
+        double h = FallbackBuilders.hash01(x, y + 151, z);
+        if (h < 0.35D) return Blocks.DEEPSLATE.defaultBlockState();
+        if (h < 0.62D) return Blocks.BLACKSTONE.defaultBlockState();
+        if (h < 0.82D) return Blocks.TUFF.defaultBlockState();
+        return Blocks.COBBLED_DEEPSLATE.defaultBlockState();
+    }
+
+    /**
+     * Sixteen glowing rune tiles inlaid flush in the lawn around the altar
+     * ({@link #RUNE_RING_CELLS}), alternating glowstone and crying obsidian — the gold →
+     * violet identity of the milestone FX, sculk-sensor-free and outside both the dais
+     * skirt and the sundial shadow band.
+     */
+    private static void buildRuneRing(ServerLevel level, int cx, int cz, int topY) {
+        for (int i = 0; i < RUNE_RING_CELLS.length; i++) {
+            int x = cx + RUNE_RING_CELLS[i][0];
+            int z = cz + RUNE_RING_CELLS[i][1];
+            level.getChunk(x >> 4, z >> 4);
+            set(level, new BlockPos(x, topY, z), (i & 1) == 0
+                    ? Blocks.GLOWSTONE.defaultBlockState()
+                    : Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        }
     }
 
     /** Erases the v1 grounded sanctum volume (r=13, ground+1..+16 — plan §2.6). */

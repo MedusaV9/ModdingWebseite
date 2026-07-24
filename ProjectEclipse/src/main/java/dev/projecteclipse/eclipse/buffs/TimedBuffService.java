@@ -295,22 +295,29 @@ public final class TimedBuffService implements TimedBuffApi {
             return;
         }
 
+        if (active.size() > 1 && server.getTickCount() % (TICK_INTERVAL * 5) == 0) {
+            barNameIndex = (barNameIndex + 1) % active.size();
+        }
         BuffMath.ActiveBuff shown = active.get(barNameIndex % active.size());
         BuffConfig.BuffDefinition def = BuffConfig.get().buffs().get(shown.id());
         String title = def != null ? def.title().en() : shown.id();
         long remaining = shown.endsAtEpochMillis() - now;
-        long total = Math.max(remaining, 1L);
-        if (active.size() > 1 && server.getTickCount() % (TICK_INTERVAL * 5) == 0) {
-            barNameIndex = (barNameIndex + 1) % active.size();
-            shown = active.get(barNameIndex);
-            def = BuffConfig.get().buffs().get(shown.id());
-            title = def != null ? def.title().en() : shown.id();
-            remaining = shown.endsAtEpochMillis() - now;
-            total = Math.max(remaining, 1L);
-        }
 
         bossEvent.setName(Component.literal(title + " — " + formatRemaining(remaining)));
-        bossEvent.setProgress(Mth.clamp((float) remaining / (float) total, 0.0F, 1.0F));
+        bossEvent.setProgress(Mth.clamp((float) remaining / (float) totalDurationMillis(shown, def), 0.0F, 1.0F));
+    }
+
+    /**
+     * Full granted window for the progress denominator. Legacy save entries carry no total
+     * (0): reconstruct from the definition's default duration, clamped so the fraction never
+     * exceeds 1 while the legacy remainder is longer than the default.
+     */
+    private static long totalDurationMillis(BuffMath.ActiveBuff buff, @Nullable BuffConfig.BuffDefinition def) {
+        long total = buff.totalDurationMillis();
+        if (total <= 0L && def != null) {
+            total = def.defaultMinutes() * 60_000L;
+        }
+        return Math.max(total, Math.max(buff.endsAtEpochMillis() - nowEpochMillis(), 1L));
     }
 
     private static void ensureBossbar(MinecraftServer server) {

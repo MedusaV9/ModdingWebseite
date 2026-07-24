@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.entity.boss;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -133,6 +134,11 @@ public class HeraldEntity extends Monster {
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
     /** {@link #summon} dedup radius: a live Herald within this range blocks a second spawn. */
     private static final double SUMMON_DEDUP_RANGE = 128.0D;
+    /** W4 P3 dais transformation: soul-fire jet ring radii + burst cadence (visual-only). */
+    private static final double[] DAIS_JET_RADII = {4.0D, 8.0D, 12.0D};
+    private static final int DAIS_JET_INTERVAL = 8;
+    /** W4 loot ceremony: first participant payout keyframe of the death collapse. */
+    private static final int DEATH_PAYOUT_START_TICK = 20;
     /** Death collapse: one remaining corona shard tears loose every N ticks. */
     private static final int DEATH_SHARD_DETACH_INTERVAL = 5;
     // SoftBorder pushback formula (border/SoftBorder.impulseInward).
@@ -192,6 +198,11 @@ public class HeraldEntity extends Monster {
     private int noPlayerTicks;
     private int lastPhase = 1;
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
+    // W4 loot ceremony (transient — die() runs exactly once, so a restart mid-collapse
+    // loses only the staggering, never the guaranteed corpse drops).
+    private final ArrayDeque<UUID> deathPayoutQueue = new ArrayDeque<>();
+    private int deathPayoutInterval = 15;
+    private int deathPayoutIndex;
 
     // Client-side smooth animation clock: advances at the phase speed (x2 in P3) with an
     // eased ramp so the ring spin / bobs never snap on a phase change.
@@ -241,7 +252,12 @@ public class HeraldEntity extends Monster {
                 new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM, Vec3.atCenterOf(altarPos)));
         level.playSound(null, altarPos, SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.6F);
         level.playSound(null, altarPos, EclipseSounds.BOSS_HERALD_AMBIENT.get(), SoundSource.HOSTILE, 1.2F, 0.8F);
+        // W4-ATMOS (IDEA-07 §2): disc-wide low howl under the full-band arena roar.
+        level.playSound(null, altarPos, EclipseSounds.BOSS_HERALD_ROAR_FAR.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
         level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, x, herald.getY(), z, 60, 1.2D, 1.2D, 1.2D, 0.05D);
+        // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
+        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(level,
+                new Vec3(x, groundY, z), "entity.eclipse.herald", "announce.eclipse.boss.intro.herald");
         EclipseMod.LOGGER.info("Herald summoned at ({}, {}, {}) — scaled for {} player(s): {} HP; bossbar {} created",
                 x, herald.getY(), z, herald.scaledPlayers, herald.getMaxHealth(), herald.bossEvent.getId());
         return herald;
@@ -366,6 +382,20 @@ public class HeraldEntity extends Monster {
             PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
                     new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
             this.ringTimer = RING_INTERVAL / 2;
+            // W4 IDEA-16 #2: the dais cracks — one full flash of the three soul-fire jet
+            // rings at the break; tickDaisJets keeps them venting for the rest of P3.
+            if (this.arenaCenter != null) {
+                for (double radius : DAIS_JET_RADII) {
+                    int points = (int) (radius * 3.0D);
+                    for (int i = 0; i < points; i++) {
+                        double angle = i * (Math.PI * 2.0D / points);
+                        level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                                this.arenaCenter.x + Math.cos(angle) * radius, this.groundY + 0.1D,
+                                this.arenaCenter.z + Math.sin(angle) * radius,
+                                3, 0.05D, 0.9D, 0.05D, 0.02D);
+                    }
+                }
+            }
         }
         return true;
     }
@@ -495,6 +525,9 @@ public class HeraldEntity extends Monster {
             level.playSound(null, this.blockPosition(), SoundEvents.BEACON_POWER_SELECT,
                     SoundSource.HOSTILE, 1.2F, 1.3F);
             level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_HERALD_TELEGRAPH.get(),
+                    SoundSource.HOSTILE, 1.0F, 1.0F);
+            // W4-ATMOS (IDEA-07 §2): muffled far-shell tell for players kiting outside the arena.
+            level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_HERALD_TELEGRAPH_FAR.get(),
                     SoundSource.HOSTILE, 1.0F, 1.0F);
             return;
         }
@@ -674,6 +707,33 @@ public class HeraldEntity extends Monster {
         tickDamageRings(level);
         tickShardDetach(level);
         tickShardCrashes(level);
+        tickDaisJets(level);
+    }
+
+    /**
+     * W4 IDEA-16 #2 — P3 dais transformation, particle-only (the expanding damage rings
+     * above stay the only floor hazard, so the fight's fairness is untouched): precessing
+     * soul-fire jets vent from the cracked dais at r=4/8/12 every {@value #DAIS_JET_INTERVAL}t,
+     * under a persistent low purple haze column at the center. No restore bookkeeping —
+     * nothing here edits blocks.
+     */
+    private void tickDaisJets(ServerLevel level) {
+        if (this.arenaCenter == null || this.tickCount % DAIS_JET_INTERVAL != 0) {
+            return;
+        }
+        double precession = (this.tickCount / (double) DAIS_JET_INTERVAL) * 0.35D;
+        for (double radius : DAIS_JET_RADII) {
+            int points = (int) (radius * 2.0D);
+            for (int i = 0; i < points; i++) {
+                double angle = i * (Math.PI * 2.0D / points) + precession;
+                level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                        this.arenaCenter.x + Math.cos(angle) * radius, this.groundY + 0.1D,
+                        this.arenaCenter.z + Math.sin(angle) * radius,
+                        2, 0.05D, 0.55D, 0.05D, 0.01D);
+            }
+        }
+        level.sendParticles(ParticleTypes.WITCH, this.arenaCenter.x, this.groundY + 0.5D,
+                this.arenaCenter.z, 6, 1.6D, 0.9D, 1.6D, 0.0D);
     }
 
     private void tickDamageRings(ServerLevel level) {
@@ -881,18 +941,11 @@ public class HeraldEntity extends Monster {
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
         super.dropCustomDeathLoot(level, damageSource, recentlyHit);
         this.spawnAtLocation(new ItemStack(EclipseItems.HERALD_CORE.get()));
-        int rewarded = 0;
-        for (UUID id : this.participants) {
-            ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-            if (player != null && player.isAlive() && player.level() == level) {
-                // Per spec: 3 umbral shards dropped at EACH participant's feet.
-                net.minecraft.world.Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D,
-                        player.getZ(), new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
-                rewarded++;
-            }
-        }
-        EclipseMod.LOGGER.info("Herald drops: 1 herald_core at the corpse + 3 umbral shards to {} participant(s)",
-                rewarded);
+        // W4 IDEA-16 #3: the per-participant shard payouts moved out of this t=0 dump into
+        // tickDeath keyframes (the collapse doubles as the award ceremony) — see die() /
+        // tickPayoutCeremony. The guaranteed-once corpse core stays here.
+        EclipseMod.LOGGER.info("Herald drops: 1 herald_core at the corpse; {} participant payout(s) "
+                + "queued for the collapse ceremony", this.participants.size());
     }
 
     /**
@@ -919,6 +972,15 @@ public class HeraldEntity extends Monster {
             }
             EclipseMod.LOGGER.info("Herald defeated (source: {}) — heraldDefeated flag set, unlock key 'herald_slain' active",
                     damageSource.getMsgId());
+            // W4 IDEA-16 #3: queue the award ceremony (one shard payout per participant on
+            // tickDeath keyframes) and start the long soft slow-mo drift shake at the kill.
+            this.deathPayoutQueue.clear();
+            this.deathPayoutQueue.addAll(this.participants);
+            this.deathPayoutInterval = Mth.clamp(
+                    (DEATH_DURATION_TICKS - DEATH_PAYOUT_START_TICK - 10)
+                            / Math.max(1, this.deathPayoutQueue.size()), 3, 15);
+            PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
+                    96.0D, S2CShakePayload.shake(0.15F, 40));
         }
     }
 
@@ -962,6 +1024,7 @@ public class HeraldEntity extends Monster {
                     SoundSource.HOSTILE, 1.5F, 0.6F);
         }
         tickShardCrashes(serverLevel); // In-flight shards keep landing during the collapse.
+        tickPayoutCeremony(serverLevel);
         if (this.deathTime == DEATH_DURATION_TICKS - 1) {
             shatter(serverLevel);
         }
@@ -970,6 +1033,43 @@ public class HeraldEntity extends Monster {
             serverLevel.broadcastEntityEvent(this, (byte) 60);
             this.remove(Entity.RemovalReason.KILLED);
         }
+    }
+
+    /**
+     * W4 IDEA-16 #3 loot ceremony: one participant is rewarded per keyframe — 3 umbral
+     * shards at their feet with a HEART_BURST quasar and a rising amethyst chime — so the
+     * collapse doubles as the award sequence. Any remainder drains just before the
+     * shatter, so an oversized roster can never lose payouts to the body removal.
+     * Eligibility matches the old {@code dropCustomDeathLoot} dump (online + alive +
+     * same dimension).
+     */
+    private void tickPayoutCeremony(ServerLevel level) {
+        if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
+            return;
+        }
+        boolean drainAll = this.deathTime >= DEATH_DURATION_TICKS - 2;
+        if (!drainAll && (this.deathTime - DEATH_PAYOUT_START_TICK) % this.deathPayoutInterval != 0) {
+            return;
+        }
+        do {
+            payoutParticipant(level, this.deathPayoutQueue.poll());
+        } while (drainAll && !this.deathPayoutQueue.isEmpty());
+    }
+
+    private void payoutParticipant(ServerLevel level, UUID id) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+        if (player == null || !player.isAlive() || player.level() != level) {
+            return;
+        }
+        // Per spec: 3 umbral shards dropped at EACH participant's feet.
+        net.minecraft.world.Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D,
+                player.getZ(), new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
+        PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
+                64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
+        level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
+        EclipseMod.LOGGER.info("Herald ceremony payout: 3 umbral shards to {} (deathTime {})",
+                player.getScoreboardName(), this.deathTime);
     }
 
     /** The end of the collapse: the sunken core bursts apart on the dais. */
@@ -1024,8 +1124,10 @@ public class HeraldEntity extends Monster {
 
     /** Advances the smooth animation clock and the P3 shard tilt-out lerp (client only). */
     private void tickClientAnim() {
-        float targetSpeed = getPhase() >= 3 ? 2.0F : 1.0F;
-        this.animSpeed += (targetSpeed - this.animSpeed) * 0.05F;
+        // W4 IDEA-16 #3 death slow-mo: while the scripted collapse runs, the anim clock
+        // eases toward ~0.2x — a client-only illusion (server ticks are untouched).
+        float targetSpeed = this.deathTime > 0 ? 0.2F : getPhase() >= 3 ? 2.0F : 1.0F;
+        this.animSpeed += (targetSpeed - this.animSpeed) * (this.deathTime > 0 ? 0.15F : 0.05F);
         this.animAgePrev = this.animAge;
         this.animAge += this.animSpeed;
         this.shardTiltPrev = this.shardTilt;

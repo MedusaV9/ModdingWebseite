@@ -1,29 +1,16 @@
 package dev.projecteclipse.eclipse.client.entity.glitch;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.entity.geo.EclipseGeoRenderer;
 import dev.projecteclipse.eclipse.entity.glitch.GlitchedMonster;
-import dev.projecteclipse.eclipse.veilfx.FxBudget;
-import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
-import foundry.veil.api.quasar.particle.ParticleEmitter;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 
 /**
@@ -49,14 +36,14 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
  *       {@code hurtTime ≥ }{@value #HURT_ALT_MIN_HURT_TIME} ORs into the alt-frame
  *       selection, so every hit pops a ~3&nbsp;t datamosh burst in lockstep with the
  *       vanilla red flash (re-hits are throttled by vanilla invulnerability, keeping the
- *       ≥&nbsp;8&nbsp;t seizure guard intact), and the first hurt frame spawns one tiny
- *       {@code eclipse:rift_spark} crackle at the impact ({@link HurtSparks} manages the
- *       looping emitter's short lifetime, BURST-budgeted).</li>
+ *       ≥&nbsp;8&nbsp;t seizure guard intact). The first-hurt-frame
+ *       {@code eclipse:rift_spark} crackle now lives in the {@code EclipseGeoRenderer}
+ *       base ({@code client/entity/geo/HurtSparks}, W4-FEEL hoist) — every custom mob
+ *       pops it; this class keeps only the GLITCHED alt-frame extra.</li>
  * </ul>
  *
  * <p>All scheduling is pure function of (entity id, game time): zero per-frame state,
- * consistent across camera cuts and re-renders (the hit-spark dedup map is the one tiny
- * exception and lives in {@link HurtSparks}).</p>
+ * consistent across camera cuts and re-renders.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends EclipseGeoRenderer<T> {
@@ -104,9 +91,6 @@ public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends Ecl
         if (isReRender || !entity.isAlive()) {
             return;
         }
-        if (entity.hurtTime > 0) {
-            HurtSparks.onHurtFrame(entity);
-        }
         long popHash = scramble(entity.getId() * 0x9E3779B97F4A7C15L
                 ^ entity.level().getGameTime() * 0xC2B2AE3D27D4EB4FL ^ 0x5DEECE66DL);
         if ((popHash & 31L) == 0L) {
@@ -145,90 +129,5 @@ public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends Ecl
         x *= 0xC4CEB9FE1A85EC53L;
         x ^= x >>> 33;
         return x;
-    }
-
-    /**
-     * One tiny {@code eclipse:rift_spark} crackle on the first hurt frame of a GLITCHED mob
-     * (FIX-5, IDEAS-C #2). The emitter JSON is {@code loop: true}, so each spawn goes
-     * through {@link QuasarSpawner#spawnManaged} and the handle is expired here after
-     * {@value #PUFF_LIFE_TICKS} ticks (the {@code LimboAmbience} owner-manages-loop law);
-     * a per-entity dedup window keeps one puff per hit even though {@code preRender} runs
-     * every frame. BURST-budgeted — over-budget puffs drop silently.
-     */
-    @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
-    static final class HurtSparks {
-        private static final ResourceLocation RIFT_SPARK_EMITTER =
-                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "rift_spark");
-
-        /** Loop-emitter lifetime — a short crackle accent (~4–6 particles), not a fountain. */
-        private static final int PUFF_LIFE_TICKS = 8;
-        /** Minimum game-time gap between puffs per entity (matches the ≥ 8 t flash guard). */
-        private static final long DEDUP_WINDOW_TICKS = 10L;
-        /** Dedup map safety valve — cleared wholesale rather than tracked precisely. */
-        private static final int MAX_TRACKED = 128;
-
-        private record Puff(ParticleEmitter emitter, int expireTick) {}
-
-        /** Live short-lifetime spark handles, oldest first. */
-        private static final ArrayDeque<Puff> PUFFS = new ArrayDeque<>();
-        /** Last puff game time per entity id (render-thread only). */
-        private static final Map<Integer, Long> LAST_PUFF = new HashMap<>();
-
-        private static int clientTicks;
-
-        private HurtSparks() {}
-
-        /** Render-thread entry from {@link GlitchedGeoRenderer#preRender}. */
-        static void onHurtFrame(LivingEntity entity) {
-            long gameTime = entity.level().getGameTime();
-            Long last = LAST_PUFF.get(entity.getId());
-            if (last != null && gameTime - last < DEDUP_WINDOW_TICKS) {
-                return;
-            }
-            if (LAST_PUFF.size() >= MAX_TRACKED) {
-                LAST_PUFF.clear();
-            }
-            LAST_PUFF.put(entity.getId(), gameTime);
-            ParticleEmitter emitter = QuasarSpawner.spawnManaged(RIFT_SPARK_EMITTER,
-                    entity.position().add(0.0D, entity.getBbHeight() * 0.55D, 0.0D),
-                    FxBudget.Channel.BURST);
-            if (emitter != null) {
-                PUFFS.addLast(new Puff(emitter, clientTicks + PUFF_LIFE_TICKS));
-            }
-        }
-
-        @SubscribeEvent
-        static void onClientTick(ClientTickEvent.Post event) {
-            if (Minecraft.getInstance().level == null) {
-                clear();
-                return;
-            }
-            clientTicks++;
-            while (!PUFFS.isEmpty() && PUFFS.peekFirst().expireTick() <= clientTicks) {
-                removeEmitter(PUFFS.pollFirst().emitter());
-            }
-        }
-
-        @SubscribeEvent
-        static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
-            clear();
-        }
-
-        private static void clear() {
-            while (!PUFFS.isEmpty()) {
-                removeEmitter(PUFFS.pollFirst().emitter());
-            }
-            LAST_PUFF.clear();
-        }
-
-        private static void removeEmitter(ParticleEmitter emitter) {
-            try {
-                if (!emitter.isRemoved()) {
-                    emitter.remove();
-                }
-            } catch (Throwable ignored) {
-                // Teardown-order safe (QuasarSpawner.clearAttached pattern).
-            }
-        }
     }
 }

@@ -104,20 +104,33 @@ public final class RiftAnchor {
         return true;
     }
 
-    /** Reverse-portal wall: the arc segment of the combat ring facing a nearby player. */
-    public void particleWall(ServerLevel level, ServerPlayer player) {
+    /**
+     * Reverse-portal wall: the arc segment of the combat ring facing a nearby player.
+     * W4 IDEA-16 #2 — {@code phase} re-dresses the wall (visual-only; the impulse/deflect
+     * math is untouched, so escape difficulty never changes): P2 turns it into a visible
+     * torn rift — reverse-portal density ×3 plus END_ROD streaks arcing over the ring.
+     */
+    public void particleWall(ServerLevel level, ServerPlayer player, int phase) {
         double dist = horizontalDistance(player.position());
         if (dist <= ARENA_RADIUS - 6.0D) {
             return;
         }
+        boolean torn = phase >= 2;
         double angle = Math.atan2(player.getZ() - this.center.z, player.getX() - this.center.x);
         for (int i = -2; i <= 2; i++) {
             double a = angle + i * 0.12D;
+            double wallX = this.center.x + Math.cos(a) * ARENA_RADIUS;
+            double wallZ = this.center.z + Math.sin(a) * ARENA_RADIUS;
             level.sendParticles(ParticleTypes.REVERSE_PORTAL,
-                    this.center.x + Math.cos(a) * ARENA_RADIUS,
-                    this.groundY + 0.5D + level.getRandom().nextDouble() * 3.0D,
-                    this.center.z + Math.sin(a) * ARENA_RADIUS,
-                    1, 0.05D, 0.4D, 0.05D, 0.0D);
+                    wallX, this.groundY + 0.5D + level.getRandom().nextDouble() * 3.0D, wallZ,
+                    torn ? 3 : 1, 0.05D, torn ? 0.8D : 0.4D, 0.05D, 0.0D);
+            if (torn && (i & 1) == 0) {
+                // END_ROD streak arcing over the wall top: spawned near the crest with an
+                // inward-tangential drift so it reads as light spilling over the tear.
+                level.sendParticles(ParticleTypes.END_ROD,
+                        wallX, this.groundY + 3.0D + level.getRandom().nextDouble() * 1.5D, wallZ,
+                        0, -Math.cos(a) * 0.12D, 0.06D, -Math.sin(a) * 0.12D, 1.0D);
+            }
         }
     }
 

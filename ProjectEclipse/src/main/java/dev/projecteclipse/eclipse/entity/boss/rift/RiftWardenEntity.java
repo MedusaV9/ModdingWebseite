@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.entity.boss.rift;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import dev.projecteclipse.eclipse.entity.dungeon.ShadowBoltProjectile;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
@@ -134,6 +136,8 @@ public class RiftWardenEntity extends EclipseGeoMonster {
     private static final double RESET_RANGE = 24.0D;
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
     private static final double SUMMON_DEDUP_RANGE = 64.0D;
+    /** W4 loot ceremony: first participant payout keyframe of the death implosion. */
+    private static final int DEATH_PAYOUT_START_TICK = 15;
 
     /** Current phase 1..2 (synced; lets the renderer/model react if it ever wants to). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -172,6 +176,16 @@ public class RiftWardenEntity extends EclipseGeoMonster {
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
     private boolean addsSummoned;
     private boolean warnedBoltUnbound;
+    // W4 loot ceremony (transient — die() runs exactly once, so a restart mid-implosion
+    // loses only the staggering, never the guaranteed corpse drops).
+    private final ArrayDeque<UUID> deathPayoutQueue = new ArrayDeque<>();
+    private int deathPayoutInterval = 12;
+    private int deathPayoutIndex;
+
+    // Client-side stagger slump ease (W4 IDEA-16 DATA_STAGGERED flourish; renderer-only
+    // weakpoint language — see tickClientAnim / staggerSlump).
+    private float staggerSlump;
+    private float staggerSlumpPrev;
 
     public RiftWardenEntity(EntityType<? extends RiftWardenEntity> entityType, Level level) {
         super(entityType, level);
@@ -222,6 +236,9 @@ public class RiftWardenEntity extends EclipseGeoMonster {
                 60, 0.8D, 1.4D, 0.8D, 0.1D);
         level.playSound(null, center, SoundEvents.ENDERMAN_TELEPORT, SoundSource.HOSTILE, 1.2F, 0.4F);
         level.playSound(null, center, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.HOSTILE, 1.5F, 0.5F);
+        // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
+        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(level, warden.position(),
+                "entity.eclipse.rift_warden", "announce.eclipse.boss.intro.rift_warden");
         EclipseMod.LOGGER.info("Rift Warden summoned at {} — scaled for {} player(s): {} HP; bossbar {} created",
                 center.toShortString(), warden.scaledPlayers, warden.getMaxHealth(), warden.bossEvent.getId());
         return warden;
@@ -269,6 +286,11 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_BLINK_IN, EclipseGeoAnimations.once(GEO_ID, ANIM_BLINK_IN));
         action.triggerableAnim(ANIM_SUMMON, EclipseGeoAnimations.once(GEO_ID, ANIM_SUMMON));
         action.triggerableAnim(ANIM_STAGGER, EclipseGeoAnimations.once(GEO_ID, ANIM_STAGGER));
+        // W4 IDEA-16 #3 death slow-mo: the held death anim eases toward ~0.2x speed over
+        // the first ~8 death ticks (Herald tickClientAnim pattern, Geo-boss flavor;
+        // client-side render illusion — server ticks untouched).
+        action.setAnimationSpeedHandler(warden -> this.deathTime > 0
+                ? Math.max(0.2D, 1.0D - this.deathTime * 0.1D) : 1.0D);
     }
 
     // --- synced state accessors ---
@@ -307,11 +329,30 @@ public class RiftWardenEntity extends EclipseGeoMonster {
     @Override
     public void tick() {
         super.tick();
-        if (!this.level().isClientSide && this.isAlive()
-                && this.level() instanceof ServerLevel serverLevel) {
+        if (this.level().isClientSide) {
+            tickClientAnim();
+        } else if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
             ensureFightInitialized(serverLevel);
             tickFight(serverLevel);
         }
+    }
+
+    /**
+     * Eases the stagger slump toward its synced target (client only, Herald
+     * {@code tickClientAnim} pattern) — the renderer reads {@link #staggerSlump} to sag
+     * the knight while the weakpoint window is open (W4 IDEA-16 {@code DATA_STAGGERED}
+     * flourish). Fast sag-in (the stumble), slower recovery (the weary straighten-up).
+     */
+    private void tickClientAnim() {
+        this.staggerSlumpPrev = this.staggerSlump;
+        float target = isStaggered() && this.deathTime <= 0 ? 1.0F : 0.0F;
+        this.staggerSlump += (target - this.staggerSlump)
+                * (target > this.staggerSlump ? 0.28F : 0.10F);
+    }
+
+    /** Smooth 0..1 weakpoint slump for the renderer (client-side visual only). */
+    public float staggerSlump(float partialTick) {
+        return Mth.lerp(partialTick, this.staggerSlumpPrev, this.staggerSlump);
     }
 
     private void tickFight(ServerLevel level) {
@@ -410,7 +451,11 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         return true;
     }
 
-    /** Leash + wall: inward impulse past r=14 and the reverse-portal ring segment. */
+    /**
+     * Leash + wall: inward impulse past r=14 and the reverse-portal ring segment. The
+     * synced phase feeds {@link RiftAnchor#particleWall} so P2 shows the torn-rift wall
+     * (W4 IDEA-16 #2, visual-only).
+     */
     private void tickArenaLock(ServerLevel level) {
         if (this.anchor == null) {
             return;
@@ -418,7 +463,7 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         for (ServerPlayer player : livingParticipants(level)) {
             this.anchor.impulseInward(player, this.tickCount);
             if (this.tickCount % 8 == 0) {
-                this.anchor.particleWall(level, player);
+                this.anchor.particleWall(level, player, getPhase());
             }
         }
     }
@@ -839,6 +884,17 @@ public class RiftWardenEntity extends EclipseGeoMonster {
             setStaggered(false);
             this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             triggerAction(EclipseGeoAnimations.ANIM_DEATH);
+            // W4 IDEA-16 #3: queue the award ceremony (one shard payout per participant on
+            // tickDeath keyframes) and start the long soft slow-mo drift shake at the kill.
+            this.deathPayoutQueue.clear();
+            this.deathPayoutQueue.addAll(this.participants);
+            this.deathPayoutInterval = Mth.clamp(
+                    (DEATH_DURATION_TICKS - DEATH_PAYOUT_START_TICK - 10)
+                            / Math.max(1, this.deathPayoutQueue.size()), 3, 12);
+            if (this.level() instanceof ServerLevel serverLevel) {
+                PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(),
+                        this.getZ(), 64.0D, S2CShakePayload.shake(0.15F, 40));
+            }
             EclipseMod.LOGGER.info("Rift Warden defeated (source: {}) — starting the {}t implosion",
                     damageSource.getMsgId(), DEATH_DURATION_TICKS);
         }
@@ -861,6 +917,7 @@ public class RiftWardenEntity extends EclipseGeoMonster {
             serverLevel.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE,
                     SoundSource.HOSTILE, 1.0F, pitch);
         }
+        tickPayoutCeremony(serverLevel);
         if (this.deathTime == DEATH_DURATION_TICKS - 1) {
             implode(serverLevel);
         }
@@ -868,6 +925,41 @@ public class RiftWardenEntity extends EclipseGeoMonster {
             serverLevel.broadcastEntityEvent(this, EntityEvent.POOF);
             this.remove(RemovalReason.KILLED);
         }
+    }
+
+    /**
+     * W4 IDEA-16 #3 loot ceremony (Herald pattern): one participant is rewarded per
+     * keyframe — 2 umbral shards at their feet with a HEART_BURST quasar and a rising
+     * amethyst chime — so the implosion doubles as the award sequence. Any remainder
+     * drains just before the final implode, so an oversized roster can never lose payouts
+     * to the body removal. Eligibility matches the old {@code dropCustomDeathLoot} dump.
+     */
+    private void tickPayoutCeremony(ServerLevel level) {
+        if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
+            return;
+        }
+        boolean drainAll = this.deathTime >= DEATH_DURATION_TICKS - 2;
+        if (!drainAll && (this.deathTime - DEATH_PAYOUT_START_TICK) % this.deathPayoutInterval != 0) {
+            return;
+        }
+        do {
+            payoutParticipant(level, this.deathPayoutQueue.poll());
+        } while (drainAll && !this.deathPayoutQueue.isEmpty());
+    }
+
+    private void payoutParticipant(ServerLevel level, UUID id) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+        if (player == null || !player.isAlive() || player.level() != level) {
+            return;
+        }
+        Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D, player.getZ(),
+                new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 2));
+        PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
+                64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
+        level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
+        EclipseMod.LOGGER.info("Rift Warden ceremony payout: 2 umbral shards to {} (deathTime {})",
+                player.getScoreboardName(), this.deathTime);
     }
 
     /** The end of the collapse: the rift swallows the body — shake + soul burst. */
@@ -887,8 +979,9 @@ public class RiftWardenEntity extends EclipseGeoMonster {
 
     /**
      * Drops beyond the loot table: 1 {@code rift_core} by P4-registry lookup (fallback 4
-     * umbral shards while P4 hasn't landed it) + 2 umbral shards at each participant's
-     * feet (Herald pattern — everyone who stepped in the ring gets paid).
+     * umbral shards while P4 hasn't landed it). The per-participant shard payouts moved
+     * into {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony — everyone who
+     * stepped in the ring still gets paid, just staggered; see {@code tickPayoutCeremony}).
      */
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
@@ -902,17 +995,8 @@ public class RiftWardenEntity extends EclipseGeoMonster {
                             EclipseMod.LOGGER.info("Rift Warden drop: eclipse:rift_core not registered yet "
                                     + "(P4) — dropped the 4-umbral-shard fallback");
                         });
-        int rewarded = 0;
-        for (UUID id : this.participants) {
-            ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-            if (player != null && player.isAlive() && player.level() == level) {
-                Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D, player.getZ(),
-                        new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 2));
-                rewarded++;
-            }
-        }
-        EclipseMod.LOGGER.info("Rift Warden drops: rift core (or fallback) at the corpse + 2 umbral "
-                + "shards to {} participant(s)", rewarded);
+        EclipseMod.LOGGER.info("Rift Warden drops: rift core (or fallback) at the corpse; {} participant "
+                + "payout(s) queued for the implosion ceremony", this.participants.size());
     }
 
     // --- bossbar (wither pattern + boss-theme skin payload for every viewer) ---

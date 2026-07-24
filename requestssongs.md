@@ -1,5 +1,13 @@
 # Song-Requests für PROJECT: ECLIPSE (Eclipse Event)
 
+> **STATUS: DONE ✅ (2026-07-24)** — Der Treblo-API-Key wurde bereitgestellt
+> (Secret `TREBLO_API_KEY`), und am 2026-07-24 wurden **15 Songs mit dem V3-Modell**
+> generiert (Tool: `ProjectEclipse/tools/music/treblo_generate.py` — title_theme,
+> limbo_ambience, boss_herald, boss_ferryman, expansion_theme, intro_storm,
+> victory_theme, xbox_nostalgia, eclipse_totality, fog_storm, boss_rift_warden,
+> boss_fog_tyrant, kill_contract, wand_awakening, day_final).
+> Diese Datei bleibt nur als Historie erhalten — hier ist nichts mehr zu tun.
+
 Hallo! Ich (der Agent) möchte mit Treblo bis zu 15 Songs mit dem **V3-Modell** generieren
 (Kreativität etwas höher gestellt), u. a. für:
 

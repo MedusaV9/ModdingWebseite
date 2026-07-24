@@ -26,6 +26,17 @@ public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements 
     public static final ResourceLocation HEART_BURST = emitter("heart_burst");
     public static final ResourceLocation LIMBO_MOTES = emitter("limbo_motes");
     public static final ResourceLocation CUTSCENE_VEIL = emitter("cutscene_veil");
+    /** W4-ISLAND: altar level-up flattened ring burst (IDEA-12 #3 moment layer). */
+    public static final ResourceLocation ALTAR_LEVELUP_RING = emitter("altar_levelup_ring");
+    /**
+     * W4-ISLAND: offering swallow (IDEA-12 #1). The bare id is the trail emitter JSON;
+     * live payloads ride the offered item id in the path suffix
+     * ({@link #offeringSwallow}) so no new payload shape is needed — the client handler
+     * routes any {@code offering_swallow/…} id to {@code client.drama.OfferingSwallowFx}.
+     */
+    public static final ResourceLocation OFFERING_SWALLOW = emitter("offering_swallow");
+
+    private static final String OFFERING_SWALLOW_PREFIX = "offering_swallow/";
 
     public static final CustomPacketPayload.Type<S2CQuasarPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "quasar"));
@@ -39,6 +50,30 @@ public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements 
 
     private static ResourceLocation emitter(String name) {
         return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, name);
+    }
+
+    /**
+     * Offering-swallow emitter id carrying the offered item:
+     * {@code eclipse:offering_swallow/<item namespace>/<item path>} (both components are
+     * already valid resource-location path characters, so the composite id is well-formed).
+     */
+    public static ResourceLocation offeringSwallow(ResourceLocation itemId) {
+        return emitter(OFFERING_SWALLOW_PREFIX + itemId.getNamespace() + "/" + itemId.getPath());
+    }
+
+    /** The item id riding an offering-swallow emitter id, or {@code null} for other ids. */
+    @javax.annotation.Nullable
+    public static ResourceLocation offeringSwallowItem(ResourceLocation emitterId) {
+        if (!EclipseMod.MOD_ID.equals(emitterId.getNamespace())
+                || !emitterId.getPath().startsWith(OFFERING_SWALLOW_PREFIX)) {
+            return null;
+        }
+        String rest = emitterId.getPath().substring(OFFERING_SWALLOW_PREFIX.length());
+        int slash = rest.indexOf('/');
+        if (slash <= 0 || slash >= rest.length() - 1) {
+            return null;
+        }
+        return ResourceLocation.tryBuild(rest.substring(0, slash), rest.substring(slash + 1));
     }
 
     @Override

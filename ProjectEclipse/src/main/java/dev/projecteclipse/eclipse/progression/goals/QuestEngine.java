@@ -21,6 +21,7 @@ import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
+import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Kind;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Scope;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -506,13 +507,15 @@ public final class QuestEngine {
 
     /** Shard + item rewards, granted directly; skillXp travels via the questCompleted signal (B4). */
     private static void grantRewards(ServerPlayer player, GoalSpec spec) {
-        grantRewardContents(player, spec.id(), spec.reward());
+        grantRewardContents(player, spec.id(), spec.reward(), false);
     }
 
-    private static void grantRewardContents(ServerPlayer player, String goalId, GoalSpec.Reward reward) {
+    private static void grantRewardContents(ServerPlayer player, String goalId, GoalSpec.Reward reward,
+            boolean replay) {
         if (reward.shards() > 0) {
             ShardEconomy.addShards(player, reward.shards());
         }
+        List<RewardPayloads.ItemEntry> granted = new ArrayList<>(reward.items().size());
         for (GoalSpec.ItemReward itemReward : reward.items()) {
             BuiltInRegistries.ITEM.getOptional(ResourceLocation.tryParse(itemReward.id()))
                     .ifPresentOrElse(item -> {
@@ -520,9 +523,14 @@ public final class QuestEngine {
                         if (!player.getInventory().add(stack)) {
                             player.drop(stack, false);
                         }
+                        granted.add(new RewardPayloads.ItemEntry(itemReward.id(), itemReward.count()));
                     }, () -> EclipseMod.LOGGER.warn("Quest '{}' reward item '{}' unknown — skipped",
                             goalId, itemReward.id()));
         }
+        // W4-CEREMONY / IDEA-11 #1: presentation-only materialization payload — only what was
+        // actually granted rides it; login replays flag the calm client variant.
+        RewardPayloads.sendRewardGrant(player, granted, reward.shards(),
+                RewardPayloads.SOURCE_QUEST, replay);
     }
 
     /** Delivers reward snapshots removed from the ledger at login (award-ledger pattern). */
@@ -530,7 +538,7 @@ public final class QuestEngine {
         List<QuestState.PendingReward> pending =
                 QuestState.get(player.server).takePendingRewards(player.getUUID());
         for (QuestState.PendingReward reward : pending) {
-            grantRewardContents(player, reward.goalId(), reward.reward());
+            grantRewardContents(player, reward.goalId(), reward.reward(), true);
             Kind kind = switch (reward.kind()) {
                 case 0 -> Kind.MAIN;
                 case 1 -> Kind.SIDE;

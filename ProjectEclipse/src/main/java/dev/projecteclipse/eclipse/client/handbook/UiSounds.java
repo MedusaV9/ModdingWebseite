@@ -63,7 +63,16 @@ public final class UiSounds {
 
     /** Handbook page-turn whoosh (keyboard tab switch; §2.3 keeps it at 0.9 volume). */
     public static void pageTurn() {
-        play(EclipseSounds.UI_PAGE_TURN.get(), 0.9F + ThreadLocalRandom.current().nextFloat() * 0.2F, 0.9F);
+        pageTurn(1.0F);
+    }
+
+    /**
+     * Directional page-turn (W4-FEEL, IDEA-06 #3): forward switches ride ≈1.05, backward
+     * ≈0.9 — the jitter stays so repeated turns never sound machine-gunned.
+     */
+    public static void pageTurn(float pitchScale) {
+        play(EclipseSounds.UI_PAGE_TURN.get(),
+                (0.9F + ThreadLocalRandom.current().nextFloat() * 0.2F) * pitchScale, 0.9F);
     }
 
     /** Rail/tongue tab press. */
@@ -109,7 +118,15 @@ public final class UiSounds {
 
     /** Level-up celebration sting (W9, client-local). */
     public static void levelUp() {
-        play("ui.level_up", 1.0F, 0.9F, EclipseSounds.UI_UNLOCK_STING, 1.15F);
+        levelUp(1.0F);
+    }
+
+    /**
+     * Re-pitched level-up sting (W4-FEEL, IDEA-05 #3): the XP strip's multi-level carry
+     * sweeps arpeggiate 1.06/1.12 for the 2nd/3rd queued sweep.
+     */
+    public static void levelUp(float pitch) {
+        play("ui.level_up", pitch, 0.9F, EclipseSounds.UI_UNLOCK_STING, 1.15F);
     }
 
     /** Skill purchase confirmation (W9). */
@@ -132,9 +149,40 @@ public final class UiSounds {
         play("ui.timer_zero", 1.0F, 0.9F, EclipseSounds.EVENT_BORDER_GLITCH, 0.7F);
     }
 
+    /** Ship door creak of the death-flow door beat (W1-ledger id, self-healing fallback). */
+    public static void doorOpen() {
+        play("ui.door_open", 1.0F, 0.8F, EclipseSounds.UI_PAGE_TURN, 0.55F);
+    }
+
     /** Ghost hearts burst back into real hearts on revive (W7). */
     public static void ghostBurst() {
         play("ui.ghost_burst", 1.0F, 0.9F, EclipseSounds.UI_UNLOCK_STING, 0.7F);
+    }
+
+    // --- W4-FEEL additions (ledger events; see docs/plans_v3/wiring/W4-FEEL_wiring.md) ---
+
+    /**
+     * Goal-complete stamp on the sidebar (IDEA-05 #1). Caller pitch-salts by the row's
+     * {@code phaseSalt} so back-to-back completions arpeggiate instead of repeating.
+     */
+    public static void goalStamp(float pitch) {
+        play("ui.goal_stamp", pitch, 0.5F, EclipseSounds.UI_TAB, 1.4F);
+    }
+
+    /**
+     * Skill-purchase cascade wave (IDEA-06 #1): the "your point just opened these" whoosh,
+     * fired once per cascade (never per node) right after {@link #skillBuy()}.
+     */
+    public static void skillUnlockWave() {
+        play("ui.skill_unlock", 0.8F, 0.5F, EclipseSounds.UI_HOVER, 0.8F);
+    }
+
+    /**
+     * Settings toggle knob docking tick (IDEA-06 #2), the second stage after
+     * {@link #toggle()}: ON lands brighter than OFF so the state is audible eyes-free.
+     */
+    public static void toggleSettle(boolean on) {
+        play("ui.toggle_settle", on ? 1.1F : 0.75F, 0.35F, EclipseSounds.UI_TAB, 1.0F);
     }
 
     // --- plumbing ---

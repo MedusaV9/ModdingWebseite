@@ -25,7 +25,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * Altar island idle motes (FIX-5, IDEAS-C #3): the altar is the social hub but sits
  * visually dead between rituals — while the camera is within {@value #MATERIALIZE_DIST}
  * blocks of the client-synced {@link FxAnchors#ALTAR_CENTER} anchor, a rolling window of
- * 2–3 looping {@code eclipse:door_glow_motes} emitters drifts slowly around the altar.
+ * looping {@code eclipse:door_glow_motes} emitters drifts slowly around the altar —
+ * {@value #BASE_LIVE} loops at altar level 0, one more per synced altar level (capped at
+ * {@value #MAX_LIVE_CAP}): the hub visibly thickens as the community levels the altar.
  * The {@code LimboAmbience} window pattern verbatim: looping position emitters never
  * expire on their own, so handles are kept and the oldest is culled beyond the live cap.
  *
@@ -48,8 +50,16 @@ public final class AltarIdleMotes {
     private static final double MATERIALIZE_DIST_SQ = MATERIALIZE_DIST * MATERIALIZE_DIST;
     private static final double RELEASE_DIST_SQ = RELEASE_DIST * RELEASE_DIST;
 
-    /** Rolling-window shape: ≤ 3 live loops, one fresh spawn every 3.5–5.5 s. */
-    private static final int MAX_LIVE = 3;
+    /**
+     * Rolling-window shape: one fresh spawn every 3.5–5.5 s into a live cap that grows
+     * with the altar (W4-ISLAND level-up transformation): {@value #BASE_LIVE} at level 0,
+     * +1 per {@code ClientStateCache.altarLevel}, hard-capped at {@value #MAX_LIVE_CAP}
+     * (still comfortably inside the AMBIENT budget window). A level-up mid-window simply
+     * lets the next spawns stack deeper — no re-shuffle needed; the level dropping on
+     * disconnect reset shrinks the window via the existing oldest-first cull.
+     */
+    private static final int BASE_LIVE = 3;
+    private static final int MAX_LIVE_CAP = 6;
     private static final int MIN_INTERVAL_TICKS = 70;
     private static final int MAX_INTERVAL_TICKS = 110;
     /** Placement ring around the anchor (blocks) — hugging the island, never in the beam. */
@@ -100,9 +110,15 @@ public final class AltarIdleMotes {
             return; // budget refusal / Quasar unavailable — the window simply stays thinner
         }
         LIVE.addLast(emitter);
-        while (LIVE.size() > MAX_LIVE) {
+        while (LIVE.size() > maxLive()) {
             removeEmitter(LIVE.pollFirst());
         }
+    }
+
+    /** Live-loop cap, richer as the altar levels up (clamped for the AMBIENT budget). */
+    private static int maxLive() {
+        int level = Math.max(0, dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel);
+        return Math.min(BASE_LIVE + level, MAX_LIVE_CAP);
     }
 
     /** Disconnect reset (QuasarSpawner.DisconnectReset pattern). */

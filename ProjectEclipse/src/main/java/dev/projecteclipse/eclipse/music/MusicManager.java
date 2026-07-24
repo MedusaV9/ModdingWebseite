@@ -6,6 +6,9 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.menu.EclipseTitleScreen;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
+import dev.projecteclipse.eclipse.ritual.FinaleRitual;
+import dev.projecteclipse.eclipse.stormfx.StormInteriorFx;
+import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.xboxevent.XboxDimensions;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -43,6 +46,11 @@ public final class MusicManager {
      * bridges letterboxed boss intros and brief F1 use instead of the old 1 s.
      */
     private static final long BOSS_SEEN_GRACE_MILLIS = 100L * 50L;
+    /** fog_storm rung hysteresis on {@link StormInteriorFx#interiorAmount()} (arm/disarm). */
+    private static final float FOG_STORM_ARM = 0.55F;
+    private static final float FOG_STORM_DISARM = 0.15F;
+    /** eclipse_totality rung threshold on {@link EclipseFxState#eclipseAmount}. */
+    private static final float TOTALITY_THRESHOLD = 0.6F;
 
     @Nullable
     private static CueSound current;
@@ -59,6 +67,19 @@ public final class MusicManager {
     private static boolean suppressSituation;
     @Nullable
     private static MusicCues suppressedSituation;
+
+    /** fog_storm hysteresis latch: armed above {@link #FOG_STORM_ARM}, released below {@link #FOG_STORM_DISARM}. */
+    private static boolean fogStormArmed;
+
+    /**
+     * Music memory (IDEA-08 #4): the situation cue being held past its rung going quiet.
+     * Mirrors {@code observedBossCue}'s grace, generalized to any cue with
+     * {@link MusicCues#lingerTicks()} &gt; 0. Rung upgrades bypass it so fights take over
+     * instantly; only drops (to silence or a weaker rung) are held.
+     */
+    @Nullable
+    private static MusicCues lingerCue;
+    private static int lingerTicksLeft;
 
     private MusicManager() {}
 
@@ -77,9 +98,24 @@ public final class MusicManager {
         Minecraft minecraft = Minecraft.getInstance();
         forcedCue = null;
         forcedTicks = 0;
+        lingerCue = null;
+        lingerTicksLeft = 0;
         suppressedSituation = naturalCue(minecraft);
         suppressSituation = true;
         transitionTo(minecraft, null);
+    }
+
+    /**
+     * Clears the forced cue iff it matches, letting the situation ladder resume immediately.
+     * Unlike {@link #stop()} this never mutes the underlying situation — intended for
+     * private overrides such as the Lantern Gaze {@code kill_contract} release, where the
+     * boss theme underneath must come back the moment the override ends.
+     */
+    public static void release(MusicCues cue) {
+        if (forcedCue == cue) {
+            forcedCue = null;
+            forcedTicks = 0;
+        }
     }
 
     public static String currentCueId() {
@@ -107,6 +143,7 @@ public final class MusicManager {
                 suppressedSituation = null;
             }
         }
+        natural = applyLinger(natural);
 
         MusicCues desired = MusicConfig.enabled() ? (forcedCue != null ? forcedCue : natural) : null;
         if (current == null || current.cue != desired) {
@@ -133,6 +170,8 @@ public final class MusicManager {
         MusicCues cue = switch (translatable.getKey()) {
             case "entity.eclipse.herald.bossbar" -> MusicCues.BOSS_HERALD;
             case "entity.eclipse.ferryman.bossbar" -> MusicCues.BOSS_FERRYMAN;
+            case "entity.eclipse.rift_warden.bossbar" -> MusicCues.BOSS_RIFT_WARDEN;
+            case "entity.eclipse.fog_tyrant.bossbar" -> MusicCues.BOSS_FOG_TYRANT;
             default -> null;
         };
         // Other bossbars may render later in the same frame. They must not erase a matching
@@ -152,6 +191,9 @@ public final class MusicManager {
         bossSeenMillis = 0L;
         suppressSituation = false;
         suppressedSituation = null;
+        fogStormArmed = false;
+        lingerCue = null;
+        lingerTicksLeft = 0;
     }
 
     @Nullable
@@ -161,6 +203,21 @@ public final class MusicManager {
             return observedBossCue;
         }
         if (minecraft.level != null) {
+            // fog_storm: inside a hunting fog storm. Asymmetric 0.55/0.15 hysteresis on the
+            // smoothed interior scalar stops wall-skimming flap; brief exits are then covered
+            // by the cue's 200-tick linger (music memory).
+            float interior = StormInteriorFx.interiorAmount();
+            if (fogStormArmed ? interior < FOG_STORM_DISARM : interior > FOG_STORM_ARM) {
+                fogStormArmed = !fogStormArmed;
+            }
+            if (fogStormArmed) {
+                return MusicCues.FOG_STORM;
+            }
+            // eclipse_totality: black-sun drone while the eclipse grade is (near) total.
+            // Below boss/storm priority so fights and storm interiors keep their themes.
+            if (EclipseFxState.eclipseAmount(0.0F) > TOTALITY_THRESHOLD) {
+                return MusicCues.ECLIPSE_TOTALITY;
+            }
             var dimension = minecraft.level.dimension();
             if ((dimension == Level.OVERWORLD && ClientStateCache.stageAnimatingOverworld)
                     || (dimension == Level.NETHER && ClientStateCache.stageAnimatingNether)) {
@@ -172,6 +229,11 @@ public final class MusicManager {
             if (dimension == LimboDimension.LIMBO) {
                 return MusicCues.LIMBO_AMBIENCE;
             }
+            // day_final: the last planned day's dread bed — weakest in-world rung, colors
+            // the gaps between beats on day 14 and bows out to every rung above.
+            if (dimension == Level.OVERWORLD && ClientStateCache.day >= FinaleRitual.FINALE_DAY) {
+                return MusicCues.DAY_FINAL;
+            }
         }
         if (minecraft.screen instanceof EclipseTitleScreen) {
             return MusicCues.TITLE_THEME;
@@ -179,12 +241,74 @@ public final class MusicManager {
         return null;
     }
 
+    /**
+     * Situation-ladder rank for the linger comparison (higher = louder claim). Matches the
+     * branch order in {@link #naturalCue}; non-situation cues rank 0 and never linger.
+     */
+    private static int situationRank(@Nullable MusicCues cue) {
+        if (cue == null) {
+            return 0;
+        }
+        return switch (cue) {
+            case BOSS_HERALD, BOSS_FERRYMAN, BOSS_RIFT_WARDEN, BOSS_FOG_TYRANT -> 8;
+            case FOG_STORM -> 7;
+            case ECLIPSE_TOTALITY -> 6;
+            case EXPANSION_THEME -> 5;
+            case XBOX_NOSTALGIA -> 4;
+            case LIMBO_AMBIENCE -> 3;
+            case DAY_FINAL -> 2;
+            case TITLE_THEME -> 1;
+            default -> 0;
+        };
+    }
+
+    /**
+     * Music memory (IDEA-08 #4): when the natural cue would drop from the current looping
+     * situation to silence or a strictly weaker rung, keep returning the current cue for its
+     * {@link MusicCues#lingerTicks()} window. Upgrades (storm → boss) bypass the hold.
+     */
+    @Nullable
+    private static MusicCues applyLinger(@Nullable MusicCues natural) {
+        if (suppressSituation) {
+            lingerCue = null;
+            lingerTicksLeft = 0;
+            return natural;
+        }
+        MusicCues held = lingerCue != null ? lingerCue
+                : (current != null && current.cue == forcedCue ? null
+                        : current != null ? current.cue : null);
+        if (held == null || held.lingerTicks() <= 0
+                || situationRank(natural) >= situationRank(held)) {
+            lingerCue = null;
+            lingerTicksLeft = 0;
+            return natural;
+        }
+        if (lingerCue == null) {
+            lingerCue = held;
+            lingerTicksLeft = held.lingerTicks();
+        }
+        if (lingerTicksLeft-- > 0) {
+            return lingerCue;
+        }
+        lingerCue = null;
+        lingerTicksLeft = 0;
+        return natural;
+    }
+
     private static void transitionTo(Minecraft minecraft, @Nullable MusicCues cue) {
         if (current != null && current.cue == cue) {
             return;
         }
+        // Un-fade resume (IDEA-08 #4): the fading instance keeps streaming until fade==0,
+        // so cancelling its fade mid-flight resumes the SAME sound at the SAME playback
+        // position — a brief exit dips and swells instead of restarting from bar 1.
+        CueSound resumed = null;
         if (outgoing != null) {
-            outgoing.forceStop();
+            if (cue != null && outgoing.cue == cue && !outgoing.isStopped()) {
+                resumed = outgoing;
+            } else {
+                outgoing.forceStop();
+            }
             outgoing = null;
         }
         if (current != null) {
@@ -192,7 +316,10 @@ public final class MusicManager {
             outgoing = current;
             current = null;
         }
-        if (cue != null) {
+        if (resumed != null) {
+            resumed.resume();
+            current = resumed;
+        } else if (cue != null) {
             current = new CueSound(cue);
             minecraft.getSoundManager().play(current);
         }
@@ -248,6 +375,11 @@ public final class MusicManager {
 
         void fadeOut() {
             fadeDirection = -1;
+        }
+
+        /** Cancels an in-flight fade-out (un-fade resume; position is preserved). */
+        void resume() {
+            fadeDirection = 1;
         }
 
         void forceStop() {

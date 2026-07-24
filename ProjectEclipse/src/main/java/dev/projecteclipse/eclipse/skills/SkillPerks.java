@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.PlacedBlockData;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.drama.MiningFeelService;
 import dev.projecteclipse.eclipse.network.S2CSkillProcPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -177,6 +178,7 @@ public final class SkillPerks {
             }
             if (!drops.isEmpty()) {
                 sendProcFeedback(player, "double_ore", 2.0F);
+                MiningFeelService.sendOreProcSparkle(level, pos, 2.0F, state);
             }
         }
         float bonusRoll = level.random.nextFloat();
@@ -184,7 +186,10 @@ public final class SkillPerks {
         if (bonus != null) {
             Block.popResource(level, pos, bonus);
             sendProcFeedback(player, "bonus_ore", 1.0F);
+            MiningFeelService.sendOreProcSparkle(level, pos, 1.0F, state);
         }
+        // W4-FEEL mining feel tail: first-ore fanfare + vein reveal/complete (IDEA-03 #1/#2).
+        MiningFeelService.onNaturalOreMined(player, state, pos);
     }
 
     /**

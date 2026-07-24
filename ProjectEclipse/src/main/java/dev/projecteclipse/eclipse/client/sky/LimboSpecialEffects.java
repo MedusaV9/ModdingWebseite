@@ -96,6 +96,14 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float GLOW_RADIUS = 135.0F;
     private static final int GLOW_SEGMENTS = 24;
 
+    /** IDEA-18 §1: water-reflection streak shape (elongated fan on the water plane). */
+    private static final int STREAK_SEGMENTS = 16;
+    private static final float STREAK_MIN_HALF_LEN = 14.0F;
+    private static final float STREAK_MAX_HALF_LEN = 55.0F;
+    private static final float STREAK_HALF_WIDTH = 5.5F;
+    /** The streak fades to nothing this many blocks of camera height above the waterline. */
+    private static final double STREAK_FADE_HEIGHT = 70.0D;
+
     // Pre-allocated render scratch (§3.5: no per-frame heap allocations in render loops).
     private static final Quaternionf ZENITH_ROT = new Quaternionf();
     private static final Vector3f ZENITH_DIR = new Vector3f();
@@ -194,6 +202,12 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         RenderSystem.setShaderColor(0.35F, 0.9F, 0.45F, 0.85F);
         FogRenderer.setupNoFog();
         GREEN_STARS.draw(poseStack.last().pose(), projectionMatrix);
+        // IDEA-18 §2: horizon silhouette ships share the stars' no-fog window.
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableCull();
+        LimboHorizonShips.draw(poseStack.last().pose(), level, camera);
+        RenderSystem.enableCull();
         setupFog.run();
 
         // --- eclipse at the exact zenith over the ship, with its radiating aura -------------
@@ -229,11 +243,72 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         SkyRenderUtil.drawCelestialQuad(zenithPose, DISC_SIZE, SKY_DISTANCE);
         poseStack.popPose();
 
+        // IDEA-18 §1: smeared reflection streak on the water plane below the zenith —
+        // additive, world-oriented (not in the zenith rotation), breathing with the same
+        // pulse as the aura so disc and reflection never desync.
+        RenderSystem.blendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        drawWaterReflection(poseStack.last().pose(), zenith, cam, pulse);
+
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.depthMask(true);
         return true;
+    }
+
+    /**
+     * IDEA-18 §1 — the eclipse's reflection on the black water: a long, thin additive
+     * violet streak on the water plane directly below the zenith point, stretched toward
+     * the camera (elongated triangle fan, {@code drawAuraGlow} builder pattern). Alpha
+     * falls with camera height above the waterline; the waterline is the zenith source Y
+     * ({@code ship_deck} anchor or shared spawn) minus 4 — deck sits ~waterline + 3.
+     */
+    private static void drawWaterReflection(Matrix4f pose, Vec3 zenith, Vec3 cam, float pulse) {
+        double waterY = zenith.y - ZENITH_HEIGHT - 4.0D;
+        double camAbove = cam.y - waterY;
+        if (camAbove <= 0.5D) {
+            return; // camera at/under the waterline — nothing to reflect
+        }
+        float heightFade = (float) Mth.clamp(1.0D - (camAbove - 4.0D) / STREAK_FADE_HEIGHT, 0.0D, 1.0D);
+        if (heightFade <= 0.01F) {
+            return;
+        }
+        float cx = (float) (zenith.x - cam.x);
+        float cy = (float) (waterY - cam.y);
+        float cz = (float) (zenith.z - cam.z);
+        // Long axis: horizontal, pointing from the below-zenith point toward the camera.
+        float dx = -cx;
+        float dz = -cz;
+        float horizLen = Mth.sqrt(dx * dx + dz * dz);
+        if (horizLen < 1.0E-3F) {
+            dx = 0.0F;
+            dz = 1.0F;
+        } else {
+            dx /= horizLen;
+            dz /= horizLen;
+        }
+        float perpX = -dz;
+        float perpZ = dx;
+        float halfLen = Mth.clamp(horizLen * 0.6F, STREAK_MIN_HALF_LEN, STREAK_MAX_HALF_LEN);
+        float alpha = 0.35F * pulse * heightFade;
+
+        BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        builder.addVertex(pose, cx, cy, cz).setColor(0.62F, 0.30F, 1.0F, alpha);
+        for (int i = 0; i <= STREAK_SEGMENTS; i++) {
+            float angle = (float) i / STREAK_SEGMENTS * ((float) Math.PI * 2.0F);
+            float along = Mth.cos(angle) * halfLen;
+            float side = Mth.sin(angle) * STREAK_HALF_WIDTH;
+            builder.addVertex(pose,
+                            cx + dx * along + perpX * side,
+                            cy,
+                            cz + dz * along + perpZ * side)
+                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
+        }
+        BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     /** Soft radial glow fan behind the disc: violet center fading to nothing at the rim. */

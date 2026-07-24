@@ -1,0 +1,136 @@
+{
+	"en_us": {
+		"gui.eclipse.handbook.bestiary.tierup.t1": "New bestiary entry: %s",
+		"gui.eclipse.handbook.bestiary.tierup.t2": "Bestiary updated: %s — field notes added",
+		"gui.eclipse.handbook.bestiary.tierup.t3": "Bestiary updated: %s — weaknesses revealed",
+		"gui.eclipse.handbook.bestiary.kills": "Kills: %s",
+		"gui.eclipse.handbook.bestiary.sightings": "Sightings: %s",
+		"gui.eclipse.handbook.bestiary.next_kills": "Next entry at %s kills",
+		"gui.eclipse.handbook.bestiary.next_sightings": "Next entry at %s sightings",
+		"gui.eclipse.handbook.bestiary.behavior": "Field notes",
+		"gui.eclipse.handbook.bestiary.weakness": "Weakness",
+
+		"bestiary.eclipse.deckhand.behavior": "Hunting: rows in silence and does not fight until roused — then it comes off the bench swinging its oar in short, brutal arcs. Grounds: the ghost ship from day one; during the final toll the Ferryman calls fresh crews to the deck.",
+		"bestiary.eclipse.deckhand.weakness": "While it rows it cannot be harmed — the bench is its sanctuary and blades pass through it. It only becomes flesh when it rises to fight; cut it down then. During the Ferryman's toll, felling the crew is the only way to drag him back off his knee.",
+
+		"bestiary.eclipse.drift_lantern.behavior": "Habits: drifts the limbo ferry lane in a slow, aimless bob — it never hunts, never flees, never strays from the route. Grounds: the buoy lane of the dead sea, kept at a loose handful of lights at all times.",
+		"bestiary.eclipse.drift_lantern.weakness": "It has no defenses at all: one solid strike shatters the cage and the soul-flame gutters out into glowstone dust. The only cost is the dark it leaves behind.",
+
+		"bestiary.eclipse.gazer.behavior": "Habits: keeps to the rim of your torchlight from night three onward, drifting to wherever you are not quite looking; it never attacks, it only watches. Grounds: the night around any wanderer — there is always at most one, and it is always yours.",
+		"bestiary.eclipse.gazer.weakness": "It cannot be slain: meet its gaze or strike it and it merely scatters into the dark — never far, and never for long. What can be worn down is its mystery; every sighting survived writes another line onto this page.",
+
+		"bestiary.eclipse.the_other.behavior": "Hunting: wears our uniform on pale nights and walks like one of us, drifting closer until it is within arm's reach — then it stops pretending. Grounds: pale nights from day four; gone without a trace by dawn.",
+		"bestiary.eclipse.the_other.weakness": "It needs closeness to kill: keep any 'friend' you cannot name at more than arm's length on pale nights and it never gets its opening. It cannot outlive the dawn — survive the night, and the night takes it back.",
+
+		"bestiary.eclipse.umbral_stalker.behavior": "Hunting: circles in packs of three or four — one growls to pin your attention while the others flank, and wounding one brings the whole pack in leaping. Grounds: the open night from day five; umbral nights drive them out in force.",
+		"bestiary.eclipse.umbral_stalker.weakness": "The pack is its strength and its leash: they break and scatter at first light, so a defensible corner held until dawn routs them all. Their spring is committed the moment they jump — a sidestep leaves them landing on empty ground.",
+
+		"bestiary.eclipse.fog_revenant.behavior": "Hunting: drifts the storm scars in a slow phase-glide, shrugging off shoves and falls, closing until it can root itself and channel. Grounds: fog storms at night from day six, a handful per storm.",
+		"bestiary.eclipse.fog_revenant.weakness": "Its blinding burst is announced: the claws rise and the wisps flare through a rooted second-and-a-half channel, and the pulse only reaches five blocks. Step back — or break its line of sight — during the flare and the cast is wasted; a revenant that cannot blind you is just a slow robe.",
+
+		"bestiary.eclipse.storm_hound.behavior": "Hunting: runs in packs of two or three out of the storm wall, announced by a low howl; it crouches, charges up, and lunges down a dead-straight line. Grounds: fog storms at night from day six, whelped fresh as the storm needs them.",
+		"bestiary.eclipse.storm_hound.weakness": "The lunge is locked the instant the crouch ends — a single sidestep dodges the entire line. If it misses or slams a wall, the hound stands sparking and helpless for two full seconds. That stagger is the kill window; take it every time.",
+
+		"bestiary.eclipse.herald.behavior": "Hunting: fights in three movements — homing shard volleys, a marking gaze, and a collapsing pull — and never leaves its arena. Grounds: descends on day seven to weigh the settlement; there is only ever the one.",
+		"bestiary.eclipse.herald.weakness": "Anything thrown from outside its arena is deflected — this fight happens inside or not at all. When its eye fixes you, the mark dies with the view: put stone between you before it tolls. In the collapse, run against the pull; the rings burn where you would be dragged.",
+
+		"bestiary.eclipse.glitched_husk.behavior": "Hunting: shambles openly while watched, blinks a few blocks sideways every ten seconds or so, and sprints the moment your back is turned. Grounds: freshly grown rings from day eight, mostly after dark.",
+		"bestiary.eclipse.glitched_husk.weakness": "Its speed is stolen from your blind spot — it moves half again as fast only while you are NOT looking at it. Walk backwards and keep it on screen: watched, it is just a slow shambler with a long reach. The static burst behind you is the only warning you get.",
+
+		"bestiary.eclipse.glitched_hound.behavior": "Hunting: closing distance is its whole design — a frame-skip blink of up to four blocks every six to ten seconds, then a pounce across the last stretch. Grounds: freshly grown rings from day eight, hunting alongside the husks.",
+		"bestiary.eclipse.glitched_hound.weakness": "Every trick it has closes distance; none of them protect it. The pounce is committed the moment it leaves the ground — step aside and cut it down as it lands, before the next skipped frame.",
+
+		"bestiary.eclipse.glitched_tick.behavior": "Hunting: boils out of unstable ground in threes and swarms the nearest pair of ankles; a landed bite clamps on and gnaws once a second. Grounds: freshly grown rings from day eight, wherever the world has not yet decided to stay.",
+		"bestiary.eclipse.glitched_tick.weakness": "A latched mite lets go the instant you strike it — one swat with anything and it pops off. Two quick paces of distance shake it just as well. Each is a nuisance; the countdown only kills the one who ignores it.",
+
+		"bestiary.eclipse.fog_colossus.behavior": "Hunting: advances like a landslide — unhurried, unstoppable, immune to any shove — and raises both fists once someone strays within five blocks. Grounds: the heart of mature fog storms from day nine; one per storm, rarely more in the world.",
+		"bestiary.eclipse.fog_colossus.weakness": "The slam is announced a full second before it lands, and the shockwave HUGS THE GROUND: beyond three blocks from the fists, a well-timed jump clears it entirely. Inside those three blocks there is no dodge at all. Keep your feet ready and your distance honest, and the mountain never touches you.",
+
+		"bestiary.eclipse.eclipse_cultist.behavior": "Hunting: holds an eight-to-fourteen-block band, rooting for a one-second chant before releasing a three-bolt shadow fan that curves back in late. Grounds: the vaults beneath the new land from day nine; the Rift Warden calls more of them mid-fight.",
+		"bestiary.eclipse.eclipse_cultist.weakness": "Every cast roots it for the chant, and the fan spreads twelve degrees per bolt — strafe through a gap or make it waste the volley on a pillar. Rushed, it has only a panic knife and a backpedal: close the band, and the caster becomes a coward with a letter opener.",
+
+		"bestiary.eclipse.pale_sentinel.behavior": "Hunting: utterly still under any gaze; every unwatched moment is a fast, silent stride closer. It burrows away at daybreak. Grounds: the pale garden at night from day ten — the outer plains ring suffers at most a few.",
+		"bestiary.eclipse.pale_sentinel.weakness": "Its bark hardens under observation: while frozen it takes only HALF damage — but a statue cannot swing back. Keep every eye on it and grind it down in perfect safety; the halved blade is slow, but the unwatched stride is lethal. Never trade full damage for a glance away.",
+
+		"bestiary.eclipse.rift_warden.behavior": "Hunting: a duelist's rhythm — blade sweeps, homing shadow volleys, and a rift-step that re-renders it behind you, chimes tolling at the landing spot. Grounds: the deep vault dungeons from day ten; it grows with the number who walk in.",
+		"bestiary.eclipse.rift_warden.weakness": "Wounded below half, every volley costs it: the rift gutters and the knight stands ROOTED for two seconds, taking half again more damage — that stagger is where the fight is won. Trust your ears over your eyes: the chimes always toll where the blink will land. Outside its ring your arrows bounce; step in or stay home.",
+
+		"bestiary.eclipse.wizard_orin.name": "Orin the Sun-Reader",
+		"bestiary.eclipse.wizard_orin.lore": "A hermit astronomer perched on the highest mountain, reading the dying sun through a brass eye. He was counting down to the eclipse long before the rest of us learned to fear it. He will talk — if you climb.",
+		"bestiary.eclipse.wizard_orin.behavior": "Habits: keeps to his mountain observatory, charting the eclipse; he hunts nothing and nothing hunts him. Grounds: the observatory on the highest peak — he is learned by visiting, not by the blade.",
+		"bestiary.eclipse.wizard_orin.weakness": "He is an old man, not a monster — he has no defenses worth the name. His Sun-Core Catalyst can be EARNED through his errand, or torn once from his corpse; the corpse gives no second counsel and brews no second favor. The only thing you can truly lose here is him.",
+
+		"bestiary.eclipse.fog_tyrant.behavior": "Hunting: a court in three acts — cleaver work and telegraphed fog-lances, then a living crown of lightning and blinding squalls, finally a desperate barrage of storm-steps with a colossus called to court. It howls its hound pack back to strength throughout. Grounds: the crowned storm lair from day twelve.",
+		"bestiary.eclipse.fog_tyrant.weakness": "Every death it deals is announced first. Lance lines glitter along their EXACT path for a breath — one sidestep or any wall defeats them. The crown's lightning strikes only its marked rings; walk off them. And the blinding squall takes ONLY those holding line of sight — duck behind cover at the rising howl and keep your eyes.",
+
+		"bestiary.eclipse.ferryman.behavior": "Hunting: three movements at the helm — sweeping oar arcs and gunwale slams, a kneeling toll while his deckhand crew boards, and a lantern gaze that hunts the weakest heart aboard. Grounds: the ship of the last day; he sails on day fourteen.",
+		"bestiary.eclipse.ferryman.weakness": "His oar sweeps only the half-circle BEFORE him — the safe footing is at his back and flanks. While he kneels for the toll he cannot be touched: fell the crew to force him back to his feet. And stay out of the black water; it collects by the second."
+	},
+	"de_de": {
+		"gui.eclipse.handbook.bestiary.tierup.t1": "Neuer Bestiariumseintrag: %s",
+		"gui.eclipse.handbook.bestiary.tierup.t2": "Bestiarium aktualisiert: %s — Feldnotizen ergänzt",
+		"gui.eclipse.handbook.bestiary.tierup.t3": "Bestiarium aktualisiert: %s — Schwächen enthüllt",
+		"gui.eclipse.handbook.bestiary.kills": "Tötungen: %s",
+		"gui.eclipse.handbook.bestiary.sightings": "Sichtungen: %s",
+		"gui.eclipse.handbook.bestiary.next_kills": "Nächster Eintrag bei %s Tötungen",
+		"gui.eclipse.handbook.bestiary.next_sightings": "Nächster Eintrag bei %s Sichtungen",
+		"gui.eclipse.handbook.bestiary.behavior": "Feldnotizen",
+		"gui.eclipse.handbook.bestiary.weakness": "Schwachstelle",
+
+		"bestiary.eclipse.deckhand.behavior": "Jagdmuster: rudert stumm und kämpft erst, wenn man es aufschreckt — dann steigt es von der Bank und drischt mit dem Ruder in kurzen, brutalen Bögen. Reviere: das Geisterschiff ab Tag eins; beim letzten Zoll ruft der Fährmann frische Mannschaften an Deck.",
+		"bestiary.eclipse.deckhand.weakness": "Solange es rudert, ist es unverwundbar — die Bank ist sein Heiligtum, Klingen gehen hindurch. Erst wenn es sich zum Kampf erhebt, wird es zu Fleisch; dann schlag zu. Beim Zoll des Fährmanns ist das Fällen der Mannschaft der einzige Weg, ihn von seinem Knie zu zwingen.",
+
+		"bestiary.eclipse.drift_lantern.behavior": "Verhalten: treibt in langsamem, ziellosem Wiegen die Fährroute des Limbus entlang — sie jagt nie, flieht nie, verlässt die Route nie. Reviere: die Bojengasse der toten See, stets eine lose Handvoll Lichter.",
+		"bestiary.eclipse.drift_lantern.weakness": "Sie hat keinerlei Verteidigung: Ein fester Schlag zerschmettert den Käfig, und die Seelenflamme erlischt zu Leuchtsteinstaub. Der einzige Preis ist die Dunkelheit, die sie zurücklässt.",
+
+		"bestiary.eclipse.gazer.behavior": "Verhalten: hält sich ab der dritten Nacht am Rand deines Fackellichts und gleitet dorthin, wo du gerade nicht hinsiehst; er greift nie an, er beobachtet nur. Reviere: die Nacht um jeden Wanderer — es gibt höchstens einen, und er gehört immer dir.",
+		"bestiary.eclipse.gazer.weakness": "Er lässt sich nicht erschlagen: Erwidere seinen Blick oder triff ihn, und er zerstiebt bloß ins Dunkel — nie weit und nie für lange. Abnutzen lässt sich nur sein Geheimnis; jede überstandene Sichtung schreibt eine weitere Zeile auf diese Seite.",
+
+		"bestiary.eclipse.the_other.behavior": "Jagdmuster: trägt in bleichen Nächten unsere Uniform und geht wie einer von uns, treibt näher heran, bis es auf Armlänge ist — dann hört es auf, so zu tun. Reviere: bleiche Nächte ab Tag vier; im Morgengrauen spurlos verschwunden.",
+		"bestiary.eclipse.the_other.weakness": "Es braucht Nähe zum Töten: Halte in bleichen Nächten jeden 'Freund', den du nicht beim Namen nennen kannst, auf mehr als Armlänge, und es bekommt nie seine Gelegenheit. Die Morgendämmerung überlebt es nicht — überstehe die Nacht, und die Nacht holt es zurück.",
+
+		"bestiary.eclipse.umbral_stalker.behavior": "Jagdmuster: kreist in Rudeln von drei oder vier — einer knurrt und bindet deinen Blick, während die anderen flankieren; verwunde einen, und das ganze Rudel antwortet mit Sprüngen. Reviere: die offene Nacht ab Tag fünf; Umbra-Nächte treiben sie in voller Stärke hervor.",
+		"bestiary.eclipse.umbral_stalker.weakness": "Das Rudel ist seine Stärke und seine Leine: Beim ersten Licht brechen sie auseinander — eine verteidigungsfähige Ecke, bis zur Dämmerung gehalten, schlägt sie alle in die Flucht. Ihr Sprung ist festgelegt, sobald sie abspringen — ein Seitschritt lässt sie auf leerem Boden landen.",
+
+		"bestiary.eclipse.fog_revenant.behavior": "Jagdmuster: gleitet in langsamem Phasendrift durch die Sturmnarben, schüttelt Stöße und Stürze ab und rückt vor, bis er sich verwurzeln und kanalisieren kann. Reviere: Nebelstürme bei Nacht ab Tag sechs, eine Handvoll pro Sturm.",
+		"bestiary.eclipse.fog_revenant.weakness": "Sein Blendstoß kündigt sich an: Die Klauen heben sich, die Irrlichter flammen auf — anderthalb Sekunden verwurzelt kanalisiert, und der Puls reicht nur fünf Blöcke. Tritt während des Aufflammens zurück — oder brich die Sichtlinie —, und der Zauber verpufft; ein Wiedergänger, der dich nicht blenden kann, ist nur eine langsame Robe.",
+
+		"bestiary.eclipse.storm_hound.behavior": "Jagdmuster: läuft in Rudeln von zwei oder drei aus der Sturmwand, angekündigt von einem tiefen Heulen; er duckt sich, lädt auf und schießt eine schnurgerade Linie entlang. Reviere: Nebelstürme bei Nacht ab Tag sechs, frisch geworfen, wie der Sturm sie braucht.",
+		"bestiary.eclipse.storm_hound.weakness": "Der Sturmlauf ist festgelegt, sobald die Kauerstellung endet — ein einziger Seitschritt weicht der ganzen Linie aus. Verfehlt er oder prallt gegen eine Wand, steht der Hund zwei volle Sekunden funkensprühend und hilflos da. Dieses Taumeln ist das Tötungsfenster; nimm es jedes Mal.",
+
+		"bestiary.eclipse.herald.behavior": "Jagdmuster: kämpft in drei Sätzen — zielsuchende Splittersalven, ein zeichnender Blick und ein einwärts reißender Kollaps — und verlässt seine Arena nie. Reviere: steigt an Tag sieben herab, um die Siedlung zu wiegen; es gibt immer nur den einen.",
+		"bestiary.eclipse.herald.weakness": "Alles, was von außerhalb seiner Arena kommt, wird abgelenkt — dieser Kampf findet drinnen statt oder gar nicht. Heftet sich sein Auge an dich, stirbt das Mal mit der Sicht: Bring Stein zwischen euch, bevor es läutet. Im Kollaps lauf gegen den Sog; die Ringe brennen dort, wohin er dich zerrt.",
+
+		"bestiary.eclipse.glitched_husk.behavior": "Jagdmuster: schlurft offen, solange man hinsieht, blinzelt etwa alle zehn Sekunden ein paar Blöcke zur Seite und sprintet, sobald du ihm den Rücken kehrst. Reviere: frisch gewachsene Ringe ab Tag acht, meist nach Einbruch der Dunkelheit.",
+		"bestiary.eclipse.glitched_husk.weakness": "Seine Geschwindigkeit stiehlt er aus deinem toten Winkel — nur solange du NICHT hinsiehst, ist er um die Hälfte schneller. Geh rückwärts und behalte ihn im Bild: Beobachtet ist er nur ein langsamer Schlurfer mit langem Arm. Das Rauschen hinter dir ist die einzige Warnung, die du bekommst.",
+
+		"bestiary.eclipse.glitched_hound.behavior": "Jagdmuster: Distanz schließen ist sein ganzes Design — ein Bildsprung-Blinzeln von bis zu vier Blöcken alle sechs bis zehn Sekunden, dann ein Satz über die letzte Strecke. Reviere: frisch gewachsene Ringe ab Tag acht, auf der Jagd Seite an Seite mit den Hüllen.",
+		"bestiary.eclipse.glitched_hound.weakness": "Jeder seiner Tricks schließt Distanz; keiner schützt ihn. Der Satz ist festgelegt, sobald er den Boden verlässt — tritt beiseite und schlag zu, wenn er landet, noch vor dem nächsten Sprungbild.",
+
+		"bestiary.eclipse.glitched_tick.behavior": "Jagdmuster: quillt zu dritt aus instabilem Boden und schwärmt auf das nächste Paar Knöchel; ein gelandeter Biss klammert sich fest und nagt im Sekundentakt. Reviere: frisch gewachsene Ringe ab Tag acht, überall dort, wo die Welt sich noch nicht entschieden hat.",
+		"bestiary.eclipse.glitched_tick.weakness": "Eine festgeklammerte Milbe lässt in dem Moment los, in dem du sie triffst — ein Klaps mit irgendetwas, und sie springt ab. Zwei schnelle Schritte Abstand schütteln sie ebenso gut ab. Einzeln ist sie ein Ärgernis; der Countdown tötet nur den, der ihn ignoriert.",
+
+		"bestiary.eclipse.fog_colossus.behavior": "Jagdmuster: rückt vor wie ein Erdrutsch — ohne Eile, unaufhaltsam, gegen jeden Stoß immun — und hebt beide Fäuste, sobald jemand näher als fünf Blöcke kommt. Reviere: das Herz ausgewachsener Nebelstürme ab Tag neun; einer pro Sturm, selten mehr auf der Welt.",
+		"bestiary.eclipse.fog_colossus.weakness": "Der Schlag kündigt sich eine volle Sekunde an, und die Druckwelle KRIECHT AM BODEN: Jenseits von drei Blöcken um die Fäuste hebt ein gut getimter Sprung sie vollständig auf. Innerhalb dieser drei Blöcke gibt es kein Ausweichen. Halt die Beine bereit und den Abstand ehrlich, und der Berg berührt dich nie.",
+
+		"bestiary.eclipse.eclipse_cultist.behavior": "Jagdmuster: hält ein Band von acht bis vierzehn Blöcken, verwurzelt sich für einen sekundenlangen Gesang und entlässt dann einen Fächer aus drei Schattengeschossen, die sich spät wieder einkrümmen. Reviere: die Gewölbe unter dem neuen Land ab Tag neun; der Risswächter ruft mitten im Kampf weitere herbei.",
+		"bestiary.eclipse.eclipse_cultist.weakness": "Jeder Zauber verwurzelt ihn für den Gesang, und der Fächer spreizt zwölf Grad pro Geschoss — lauf schräg durch eine Lücke oder lass ihn die Salve an einem Pfeiler verschwenden. Bedrängt bleiben ihm nur ein Panikmesser und der Rückzug: Schließ das Band, und der Beschwörer wird zum Feigling mit Brieföffner.",
+
+		"bestiary.eclipse.pale_sentinel.behavior": "Jagdmuster: vollkommen reglos unter jedem Blick; jeder unbeobachtete Moment ist ein schneller, lautloser Schritt näher. Bei Tagesanbruch gräbt er sich ein. Reviere: der fahle Garten bei Nacht ab Tag zehn — der äußere Ebenenring duldet höchstens wenige.",
+		"bestiary.eclipse.pale_sentinel.weakness": "Unter Beobachtung härtet seine Rinde: Eingefroren nimmt er nur den HALBEN Schaden — doch eine Statue schlägt nicht zurück. Lass kein Auge von ihm und schleif ihn in vollkommener Sicherheit nieder; die halbierte Klinge ist langsam, aber der unbeobachtete Schritt ist tödlich. Tausch nie vollen Schaden gegen einen Blick zur Seite.",
+
+		"bestiary.eclipse.rift_warden.behavior": "Jagdmuster: der Rhythmus eines Duellanten — Klingenhiebe, zielsuchende Schattensalven und ein Riss-Schritt, der ihn hinter dir neu erscheinen lässt, Glockenklang am Landepunkt. Reviere: die tiefen Gewölbe ab Tag zehn; er wächst mit der Zahl derer, die eintreten.",
+		"bestiary.eclipse.rift_warden.weakness": "Unter halber Kraft kostet ihn jede Salve: Der Riss flackert, und der Ritter steht zwei Sekunden VERWURZELT — und nimmt anderthalbfachen Schaden. In diesem Taumeln wird der Kampf gewonnen. Trau den Ohren mehr als den Augen: Die Glocken läuten immer dort, wo der Sprung enden wird. Außerhalb seines Rings prallen deine Pfeile ab; tritt ein oder bleib daheim.",
+
+		"bestiary.eclipse.wizard_orin.name": "Orin der Sonnenleser",
+		"bestiary.eclipse.wizard_orin.lore": "Ein Einsiedler-Astronom auf dem höchsten Berg, der die sterbende Sonne durch ein Messingauge liest. Er zählte den Countdown zur Eclipse, lange bevor der Rest von uns das Fürchten lernte. Er redet — wenn du kletterst.",
+		"bestiary.eclipse.wizard_orin.behavior": "Verhalten: bleibt in seinem Bergobservatorium und kartiert die Eclipse; er jagt nichts, und nichts jagt ihn. Reviere: das Observatorium auf dem höchsten Gipfel — man lernt ihn durch Besuche kennen, nicht durch die Klinge.",
+		"bestiary.eclipse.wizard_orin.weakness": "Er ist ein alter Mann, kein Ungeheuer — nennenswerte Verteidigung hat er nicht. Sein Sonnenkern-Katalysator lässt sich durch seinen Botengang VERDIENEN oder ein einziges Mal seinem Leichnam entreißen; der Leichnam gibt keinen zweiten Rat und keinen zweiten Gefallen. Das Einzige, was du hier wirklich verlieren kannst, ist ihn.",
+
+		"bestiary.eclipse.fog_tyrant.behavior": "Jagdmuster: ein Hofstaat in drei Akten — Hackmesserarbeit und angekündigte Nebellanzen, dann eine lebendige Krone aus Blitzen und blendende Böen, zuletzt ein verzweifeltes Sperrfeuer aus Sturmschritten mit einem an den Hof gerufenen Koloss. Sein Hunderudel heult er dabei immer wieder zu voller Stärke. Reviere: das gekrönte Sturmversteck ab Tag zwölf.",
+		"bestiary.eclipse.fog_tyrant.weakness": "Jeder Tod, den er austeilt, wird zuerst angekündigt. Lanzenlinien glitzern einen Atemzug lang auf ihrer EXAKTEN Bahn — ein Seitschritt oder irgendeine Mauer besiegt sie. Der Kronenblitz trifft nur seine markierten Ringe; tritt herunter. Und die blendende Bö nimmt NUR, wer Sichtlinie hält — duck dich beim ansteigenden Heulen hinter Deckung und behalte deine Augen.",
+
+		"bestiary.eclipse.ferryman.behavior": "Jagdmuster: drei Sätze am Ruder — ausholende Ruderbögen und Bordwandschläge, ein kniender Zoll, während seine Decksmannschaft an Bord geht, und ein Laternenblick, der das schwächste Herz an Bord jagt. Reviere: das Schiff des letzten Tages; er sticht an Tag vierzehn in See.",
+		"bestiary.eclipse.ferryman.weakness": "Sein Ruder streicht nur den Halbkreis VOR ihm — der sichere Stand liegt in seinem Rücken und an den Flanken. Solange er für den Zoll kniet, ist er unantastbar: Fälle die Mannschaft, um ihn wieder auf die Beine zu zwingen. Und meide das schwarze Wasser; es kassiert im Sekundentakt."
+	}
+}

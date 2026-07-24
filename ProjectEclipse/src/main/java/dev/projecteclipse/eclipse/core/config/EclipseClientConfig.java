@@ -104,6 +104,10 @@ public final class EclipseClientConfig {
             .comment("Replace vanilla world-join/dimension loading screens with the Eclipse ones",
                     "(false = vanilla loading screens killswitch).")
             .define("customLoadingScreens", true);
+    public static final ModConfigSpec.BooleanValue PURPLE_HEARTS = BUILDER
+            .comment("Render the player health row as Eclipse purple hearts",
+                    "(false = vanilla red hearts killswitch).")
+            .define("purpleHearts", true);
     public static final ModConfigSpec.BooleanValue PROC_MESSAGES = BUILDER
             .comment("Show skill proc messages in chat.")
             .define("procMessages", true);
@@ -205,6 +209,11 @@ public final class EclipseClientConfig {
 
     public static boolean customLoadingScreens() {
         return get(CUSTOM_LOADING_SCREENS, true);
+    }
+
+    /** W4-HEARTS R1: purple player-hearts renderer (read reflectively by PurpleHeartsLayer). */
+    public static boolean purpleHearts() {
+        return get(PURPLE_HEARTS, true);
     }
 
     public static boolean procMessages() {

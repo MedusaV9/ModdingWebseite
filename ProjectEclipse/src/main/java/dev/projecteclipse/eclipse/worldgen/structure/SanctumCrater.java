@@ -66,6 +66,9 @@ public final class SanctumCrater {
         return (int) Math.round(MAX_DEPTH * (1.0D - rr2 / (double) (RADIUS * RADIUS)));
     }
 
+    /** Terrace bands (inner/outer radius pairs) of the v3 rim dress — see {@link #dressTerraces}. */
+    private static final double[][] TERRACE_BANDS = {{9.6D, 10.4D}, {11.0D, 11.8D}};
+
     /** Carves and dresses the crater centered on (cx, cz) with ground surface {@code groundY}. */
     static void build(ServerLevel level, int cx, int cz, int groundY) {
         carveBowl(level, cx, cz, groundY);
@@ -74,6 +77,51 @@ public final class SanctumCrater {
         placeWoundDecor(level, cx, cz, groundY);
         EclipseMod.LOGGER.info("Sanctum crater carved: center ({}, {}, {}), r={}, floor y{}..y{}",
                 cx, groundY, cz, RADIUS, groundY - MAX_DEPTH, groundY);
+    }
+
+    /**
+     * Geometry v3 (W4-ISLAND): two layered slab terrace bands on the bowl rim
+     * ({@link #TERRACE_BANDS}) so the crater edge reads as stepped strata instead of a
+     * smooth parabola. Additive only (slabs on top of the carved floor — half-step
+     * walkable, no clears), deterministic, south walk sector kept clear per the crater
+     * contract. The faint updraft particles over the bowl are client-side
+     * ({@code client/sanctum/SanctumLightfall}), zero server work.
+     */
+    static void dressTerraces(ServerLevel level, int cx, int cz, int groundY) {
+        int bound = (int) Math.ceil(TERRACE_BANDS[TERRACE_BANDS.length - 1][1]);
+        for (int dx = -bound; dx <= bound; dx++) {
+            for (int dz = -bound; dz <= bound; dz++) {
+                double rr = Math.sqrt(dx * dx + dz * dz);
+                if (!inTerraceBand(rr) || inWalkSector(dx, dz)) {
+                    continue;
+                }
+                int x = cx + dx;
+                int z = cz + dz;
+                if (FallbackBuilders.hash01(x, 127, z) >= 0.55D) {
+                    continue;
+                }
+                level.getChunk(x >> 4, z >> 4);
+                int floorY = groundY - roughDepth(x, z, dx, dz);
+                set(level, new BlockPos(x, floorY + 1, z), terraceMix(x, floorY + 1, z));
+            }
+        }
+    }
+
+    private static boolean inTerraceBand(double rr) {
+        for (double[] band : TERRACE_BANDS) {
+            if (rr >= band[0] && rr <= band[1]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Terrace slab palette — the bowl's own strata as flat half-steps. */
+    private static BlockState terraceMix(int x, int y, int z) {
+        double h = FallbackBuilders.hash01(x, y + 129, z);
+        if (h < 0.40D) return Blocks.POLISHED_BLACKSTONE_SLAB.defaultBlockState();
+        if (h < 0.72D) return Blocks.BLACKSTONE_SLAB.defaultBlockState();
+        return Blocks.COBBLED_DEEPSLATE_SLAB.defaultBlockState();
     }
 
     /** Bowl carve + strata floor + sub-floor layer + rim rubble ring. */

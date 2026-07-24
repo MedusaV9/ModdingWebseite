@@ -1,0 +1,20 @@
+{
+ "en_us": {
+  "eclipse.caption.dawn.goals": "New decrees are written. The day has goals.",
+  "eclipse.caption.intro.logbook": "The artifact remembers everything it has shown you.",
+  "message.eclipse.intro.logbook_key": "Press %s to open the artifact logbook",
+  "eclipse.caption.limbo.arrive": "Between worlds. The ferryman's deck holds you now.",
+  "gui.eclipse.reward.shards": "%s Umbral Shards",
+  "gui.eclipse.reward.more": "+%s more",
+  "gui.eclipse.announce.day_card": "DAY"
+ },
+ "de_de": {
+  "eclipse.caption.dawn.goals": "Neue Dekrete sind geschrieben. Der Tag hat Ziele.",
+  "eclipse.caption.intro.logbook": "Das Artefakt erinnert sich an alles, was es dir gezeigt hat.",
+  "message.eclipse.intro.logbook_key": "Drücke %s, um das Artefakt-Logbuch zu öffnen",
+  "eclipse.caption.limbo.arrive": "Zwischen den Welten. Das Deck des Fährmanns hält dich nun.",
+  "gui.eclipse.reward.shards": "%s Umbral-Splitter",
+  "gui.eclipse.reward.more": "+%s weitere",
+  "gui.eclipse.announce.day_card": "TAG"
+ }
+}

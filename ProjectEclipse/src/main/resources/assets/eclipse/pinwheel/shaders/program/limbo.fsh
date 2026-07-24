@@ -83,6 +83,18 @@ void main() {
             + vec3(0.42, 0.16, 0.80) * web
             + vec3(0.55, 0.30, 1.00) * sparkle * 0.6) * water;
 
+    // ---- eclipse reflection smear (IDEA-18 §1): the zenith disc mirrored on the water ----
+    // Mirror of the zenith NDC across the horizon — zero new uniforms (frozen §3.3); the
+    // (10,10) offscreen push while the zenith is behind the camera kills it via the guard.
+    vec2 mirrorNdc = vec2(GodrayDir.x, -GodrayDir.y);
+    if (abs(mirrorNdc.x) < 2.5 && abs(mirrorNdc.y) < 2.5) {
+        vec2 dm = (uv - (mirrorNdc * 0.5 + 0.5)) * vec2(aspect * 3.2, 1.1);
+        float smear = exp(-dot(dm, dm) * 6.0);
+        // Same 1.3 rad/s breathing rate as the sky-pass aura pulse — never desyncs.
+        float shimmer = 0.85 + 0.15 * sin(Time * 1.3);
+        color += vec3(0.55, 0.28, 1.00) * smear * shimmer * water * 0.5;
+    }
+
     // ---- screen-space radial god rays from the zenith disc ------------------------------
     float lookUp = 1.0 - smoothstep(0.9, 2.6, length(GodrayDir));
     float rayStrength = lookUp * Intensity;

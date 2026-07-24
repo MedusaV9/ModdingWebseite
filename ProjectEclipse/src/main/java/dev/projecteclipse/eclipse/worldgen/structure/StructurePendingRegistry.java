@@ -238,6 +238,15 @@ public final class StructurePendingRegistry {
         return PLACED.containsKey(siteId);
     }
 
+    /**
+     * Failed placement attempts of the current pending row (0 on the first attempt).
+     * Placers use this to adjust position/seed on retries — re-running the exact same
+     * deterministic placement {@value #MAX_PLACEMENT_FAILURES} times would fail identically.
+     */
+    public static int failureCount(String siteId) {
+        return FAILURES.getOrDefault(siteId, 0);
+    }
+
     /** Immutable sorted snapshot of placed site ids for operator diagnostics. */
     public static List<String> placedSiteIds() {
         return PLACED.keySet().stream().sorted().toList();

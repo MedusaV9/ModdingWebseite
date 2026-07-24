@@ -73,8 +73,20 @@ public final class OfferingService {
      * visual feedback. Returns false without consuming when this player already offered today.
      */
     public static boolean accept(ServerPlayer player, ItemStack stack) {
+        return acceptWithValue(player, stack).isPresent();
+    }
+
+    /**
+     * {@link #accept} variant that additionally returns the (secret) exact value of the
+     * accepted offering so the caller can shape private feedback (W4-ISLAND / IDEA-12 #2:
+     * the offerer-only quantized pitch tell). Empty when nothing was accepted/consumed.
+     * The value never reaches other players or any text channel — secrecy rules
+     * ({@code resolveDay} duplicate cancellation etc.) are untouched, and {@code accept}
+     * delegates here so gametest-covered behavior stays byte-identical.
+     */
+    public static java.util.OptionalInt acceptWithValue(ServerPlayer player, ItemStack stack) {
         if (stack.isEmpty()) {
-            return false;
+            return java.util.OptionalInt.empty();
         }
         MinecraftServer server = player.server;
         int day = DayScheduler.getDay(server);
@@ -83,7 +95,7 @@ public final class OfferingService {
         boolean renamed = stack.get(DataComponents.CUSTOM_NAME) != null;
         OfferingState state = OfferingState.get(server);
         if (!state.add(day, new OfferingState.Offer(player.getUUID(), itemId.toString(), enchanted, renamed))) {
-            return false;
+            return java.util.OptionalInt.empty();
         }
 
         OfferingConfig.Data config = OfferingConfig.get();
@@ -108,7 +120,7 @@ public final class OfferingService {
                 analytics.add(day, player.getUUID(), AnalyticsKeys.ALTAR_VALUE, reconciliation);
             }
         }
-        return true;
+        return java.util.OptionalInt.of(exactValue);
     }
 
     /**

@@ -119,7 +119,10 @@ public class HeartExtractorItem extends Item {
 
         player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 10 * 20, 1, false, false));
         player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 6 * 20, 0, false, false));
-        PacketDistributor.sendToPlayer(player, new S2CHeartBurstPayload(heartsAfter));
+        // Both torn-out hearts shatter: HeartBurstOverlay's queue staggers them 8 t apart.
+        PacketDistributor.sendToPlayer(player,
+                new S2CHeartBurstPayload(heartsAfter),
+                new S2CHeartBurstPayload(heartsAfter + 1));
         player.displayClientMessage(
                 Component.translatable("item.eclipse.heart_extractor.used", HEART_COST, heartsAfter), true);
         EclipseMod.LOGGER.info("{} used a heart extractor ({} -> {} hearts, {} fragments)",

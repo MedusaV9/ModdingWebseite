@@ -1,0 +1,10 @@
+{
+ "en_us": {
+  "gui.eclipse.settings.option.purple_hearts": "Purple hearts",
+  "gui.eclipse.settings.option.purple_hearts.tip": "Render your health as Eclipse purple hearts (off = vanilla red hearts)."
+ },
+ "de_de": {
+  "gui.eclipse.settings.option.purple_hearts": "Violette Herzen",
+  "gui.eclipse.settings.option.purple_hearts.tip": "Zeigt deine Lebensanzeige als violette Eclipse-Herzen (aus = rote Vanilla-Herzen)."
+ }
+}

@@ -203,6 +203,8 @@ public class FerrymanEntity extends Monster {
     // Client-side smooth animation clock + pose blend weights (raise/kneel/plant).
     private float animAge;
     private float animAgePrev;
+    /** Eased clock speed (Herald pattern) — W4 death slow-mo drops it toward ~0.2x. */
+    private float animSpeed = 1.0F;
     private float raiseLerp;
     private float raiseLerpPrev;
     private float kneelLerp;
@@ -248,6 +250,9 @@ public class FerrymanEntity extends Monster {
         limbo.playSound(null, ferryman.blockPosition(), EclipseSounds.BOSS_FERRYMAN_AMBIENT.get(),
                 SoundSource.HOSTILE, 1.2F, 1.0F);
         limbo.sendParticles(ParticleTypes.SOUL, x, deck + 2.0D, z, 80, 1.0D, 1.4D, 1.0D, 0.04D);
+        // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
+        dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(limbo, ferryman.position(),
+                "entity.eclipse.ferryman", "announce.eclipse.boss.intro.ferryman");
         EclipseMod.LOGGER.info("Ferryman summoned at the stern ({}, {}, {}) — scaled for {} player(s): {} HP; bossbar {} created",
                 x, deck + 1, z, ferryman.scaledPlayers, ferryman.getMaxHealth(), ferryman.bossEvent.getId());
         return ferryman;
@@ -927,6 +932,10 @@ public class FerrymanEntity extends Monster {
             state.setFerrymanDefeated(true);
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
+            // W4 IDEA-16 #3: long soft slow-mo drift shake at the kill (pairs with the
+            // ~0.2x anim clock in tickClientAnim for the held-breath collapse read).
+            PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
+                    96.0D, S2CShakePayload.shake(0.15F, 40));
             EclipseMod.LOGGER.info("Ferryman defeated (source: {}) — ferrymanDefeated set, mass-revive finale starting",
                     damageSource.getMsgId());
             FinaleRitual.beginVictory(serverLevel.getServer());
@@ -1100,8 +1109,12 @@ public class FerrymanEntity extends Monster {
 
     /** Advances the smooth clock and eases the raise/kneel/plant pose weights (client only). */
     private void tickClientAnim() {
+        // W4 IDEA-16 #3 death slow-mo: the final-bell collapse plays at ~0.2x clock speed
+        // (Herald tickClientAnim lerp pattern; client-only illusion, server untouched).
+        float targetSpeed = this.deathTime > 0 ? 0.2F : getPhase() >= 3 ? 1.4F : 1.0F;
+        this.animSpeed += (targetSpeed - this.animSpeed) * (this.deathTime > 0 ? 0.15F : 0.05F);
         this.animAgePrev = this.animAge;
-        this.animAge += getPhase() >= 3 ? 1.4F : 1.0F;
+        this.animAge += this.animSpeed;
         this.raiseLerpPrev = this.raiseLerp;
         this.raiseLerp += ((isTelegraphing() ? 1.0F : 0.0F) - this.raiseLerp) * 0.16F;
         this.kneelLerpPrev = this.kneelLerp;

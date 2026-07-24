@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
+import dev.projecteclipse.eclipse.hearts.client.HeartRowGeometry;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -56,15 +57,21 @@ public final class GhostHeartsLayer {
 
     /** Vanilla single-row health baseline (ghosts have exactly one row, no absorption). */
     private static final int ROW_BOTTOM_OFFSET = 39;
-    private static final int HEART_STEP = 8;
-    private static final int HEART_SIZE = 9;
-    /** Vanilla health-layer leftHeight increment for one heart row (restored on cancel). */
-    private static final int LEFT_HEIGHT_COMPENSATION = 10;
+    /** Row metrics shared with the W4-HEARTS geometry (identical to the old locals). */
+    private static final int HEART_STEP = HeartRowGeometry.HEART_STEP_X;
+    private static final int HEART_SIZE = HeartRowGeometry.HEART_SIZE;
 
     private static final float GHOST_HEART_ALPHA = 0.62F;
     private static final int FADE_IN_TICKS = 12;
     /** Crack hairlines inside a ghost heart (translucent near-black aubergine). */
     private static final int CRACK_COLOR = 0x8C0A0614;
+
+    /** Ritual-vigil fill (W4-HEARTS R4): violet, the ACCENT family (#B98CFF). */
+    private static final int VIGIL_FILL_COLOR = 0xFFB98CFF;
+    /** Displayed fill catch-up per tick while the ritual runs (payloads land every 20 t). */
+    private static final float VIGIL_RISE_PER_TICK = 0.004F;
+    /** Drain per tick after a ritual failure: a full row re-cracks over ~20 ticks. */
+    private static final float VIGIL_REVERT_PER_TICK = 0.05F;
 
     static final int BURST_STAGGER_TICKS = 8;
     private static final int BURST_LEN_TICKS = 12;
@@ -91,9 +98,35 @@ public final class GhostHeartsLayer {
     /** Index of the next heart whose burst sound has not fired yet (BURST mode). */
     private static int nextBurstSound;
 
+    /** Ritual-vigil progress last synced by {@code S2CRitualVigilPayload} (0..1). */
+    private static float vigilTarget;
+    /** Smoothed on-screen vigil fill (eases toward {@link #vigilTarget} per tick). */
+    private static float vigilShown;
+
     private GhostHeartsLayer() {}
 
     // ------------------------------------------------------------------ public seam
+
+    /**
+     * Whether this layer currently replaces the vanilla health slot. W4-HEARTS R1:
+     * {@code PurpleHeartsLayer} defers (never cancels, never compensates) while this
+     * returns {@code true}, so the {@code leftHeight} compensation is applied exactly once.
+     */
+    public static boolean isOwningHealthSlot() {
+        return mode != Mode.IDLE;
+    }
+
+    /**
+     * {@code S2CRitualVigilPayload} entry (W4-HEARTS R4): while a revive ritual targets
+     * this ghost, a violet fill rises across the cracked hearts proportional to ritual
+     * progress and the crack hairlines knit shut. {@code active=false} (ritual failed or
+     * aborted) drains the fill and the cracks return over ~20 ticks. Only stores the
+     * sync target — the fill is drawn (and eased) exclusively while the ghost row owns
+     * the health slot, and resets on revive burst / level unload.
+     */
+    public static void setRitualVigil(float progress, boolean active) {
+        vigilTarget = active ? Mth.clamp(progress, 0.0F, 1.0F) : 0.0F;
+    }
 
     /** {@code S2CRevivedPayload} entry (via {@link DeathFlowController}): start the one-by-one burst. */
     public static void beginReviveBurst(int heartsRestored) {
@@ -117,17 +150,28 @@ public final class GhostHeartsLayer {
      * of {@value #HEART_SIZE} for crisp cracks (9 on the HUD, 18 on the screen).
      */
     public static void drawGhostHeart(GuiGraphics guiGraphics, int x, int y, int size, float alpha) {
+        drawGhostHeart(guiGraphics, x, y, size, alpha, 1.0F);
+    }
+
+    /**
+     * {@link #drawGhostHeart(GuiGraphics, int, int, int, float)} with a separate crack
+     * opacity — the ritual vigil (R4) knits the hairlines shut as its fill rises.
+     */
+    private static void drawGhostHeart(GuiGraphics guiGraphics, int x, int y, int size,
+            float alpha, float crackAlpha) {
         RenderSystem.enableBlend();
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha * 0.85F);
         guiGraphics.blitSprite(HEART_CONTAINER_SPRITE, x, y, size, size);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
         guiGraphics.blitSprite(HEART_GHOST_SPRITE, x, y, size, size);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        int unit = size / HEART_SIZE;
-        int crack = EclipseUiTheme.withAlpha(CRACK_COLOR, alpha);
-        guiGraphics.fill(x + 4 * unit, y + 2 * unit, x + 5 * unit, y + 4 * unit, crack);
-        guiGraphics.fill(x + 3 * unit, y + 4 * unit, x + 4 * unit, y + 6 * unit, crack);
-        guiGraphics.fill(x + 5 * unit, y + 5 * unit, x + 6 * unit, y + 7 * unit, crack);
+        if (crackAlpha > 0.02F) {
+            int unit = size / HEART_SIZE;
+            int crack = EclipseUiTheme.withAlpha(CRACK_COLOR, alpha * crackAlpha);
+            guiGraphics.fill(x + 4 * unit, y + 2 * unit, x + 5 * unit, y + 4 * unit, crack);
+            guiGraphics.fill(x + 3 * unit, y + 4 * unit, x + 4 * unit, y + 6 * unit, crack);
+            guiGraphics.fill(x + 5 * unit, y + 5 * unit, x + 6 * unit, y + 7 * unit, crack);
+        }
         RenderSystem.disableBlend();
     }
 
@@ -140,13 +184,14 @@ public final class GhostHeartsLayer {
 
     /**
      * Replaces (never stacks with) the vanilla hearts while the ghost row owns the slot.
-     * {@code leftHeight} is compensated so armor/vehicle rows keep their vanilla position.
+     * {@code leftHeight} is compensated by vanilla's exact one-row increment so
+     * armor/vehicle rows keep their vanilla position.
      */
     @SubscribeEvent
     static void onRenderGuiLayerPre(RenderGuiLayerEvent.Pre event) {
-        if (mode != Mode.IDLE && event.getName().equals(VanillaGuiLayers.PLAYER_HEALTH)) {
+        if (isOwningHealthSlot() && event.getName().equals(VanillaGuiLayers.PLAYER_HEALTH)) {
             event.setCanceled(true);
-            Minecraft.getInstance().gui.leftHeight += LEFT_HEIGHT_COMPENSATION;
+            Minecraft.getInstance().gui.leftHeight += HeartRowGeometry.leftHeightIncrement(1);
         }
     }
 
@@ -158,12 +203,14 @@ public final class GhostHeartsLayer {
         if (minecraft.level == null || minecraft.player == null) {
             mode = Mode.IDLE;
             modeTicks = 0;
+            resetVigil();
             return;
         }
         if (minecraft.isPaused()) {
             return;
         }
         modeTicks++;
+        tickVigil();
         boolean ghostLives = ClientStateCache.lives <= 0;
         switch (mode) {
             case IDLE -> {
@@ -186,9 +233,11 @@ public final class GhostHeartsLayer {
                 } else if (modeTicks >= PENDING_REVIVE_GRACE_TICKS) {
                     mode = Mode.IDLE; // no celebration came (plain lives edit) — release
                     modeTicks = 0;
+                    resetVigil();
                 }
             }
             case BURST -> {
+                resetVigil(); // the revive celebration owns the row from here
                 int due = Math.min(GHOST_HEART_COUNT - 1, modeTicks / BURST_STAGGER_TICKS);
                 while (nextBurstSound <= due) {
                     UiSounds.ghostBurst();
@@ -203,6 +252,22 @@ public final class GhostHeartsLayer {
         }
     }
 
+    /** Eases the on-screen vigil fill toward the last synced ritual progress. */
+    private static void tickVigil() {
+        if (vigilShown < vigilTarget) {
+            // Rising: slow knit — steady-state trails the 20-tick progress payloads.
+            vigilShown = Math.min(vigilTarget, vigilShown + VIGIL_RISE_PER_TICK);
+        } else if (vigilShown > vigilTarget) {
+            // Failure (or abort): the fill drains and the cracks return over ~20 ticks.
+            vigilShown = Math.max(vigilTarget, vigilShown - VIGIL_REVERT_PER_TICK);
+        }
+    }
+
+    private static void resetVigil() {
+        vigilTarget = 0.0F;
+        vigilShown = 0.0F;
+    }
+
     // ------------------------------------------------------------------ layer body
 
     /** GUI-layer body (self-registered above {@code PLAYER_HEALTH}). Draws nothing under F1. */
@@ -212,7 +277,7 @@ public final class GhostHeartsLayer {
             return;
         }
         float time = modeTicks + deltaTracker.getGameTimeDeltaPartialTick(false);
-        int rowX = guiGraphics.guiWidth() / 2 - 91;
+        int rowX = HeartRowGeometry.rowLeft(guiGraphics);
         int rowY = guiGraphics.guiHeight() - ROW_BOTTOM_OFFSET;
 
         float rowAlpha = mode == Mode.GHOST
@@ -231,7 +296,13 @@ public final class GhostHeartsLayer {
                     continue;
                 }
             }
-            drawGhostHeart(guiGraphics, x, rowY, HEART_SIZE, rowAlpha);
+            // R4 ritual vigil: the fill knits left-to-right across the row; each heart's
+            // crack hairlines fade out exactly as its own fill completes.
+            float heartFill = Mth.clamp(vigilShown * GHOST_HEART_COUNT - i, 0.0F, 1.0F);
+            drawGhostHeart(guiGraphics, x, rowY, HEART_SIZE, rowAlpha, 1.0F - heartFill);
+            if (heartFill > 0.02F) {
+                drawVigilFill(guiGraphics, x, rowY, heartFill, rowAlpha);
+            }
         }
 
         if (mode != Mode.BURST) {
@@ -240,6 +311,27 @@ public final class GhostHeartsLayer {
                     rowX + GHOST_HEART_COUNT * HEART_STEP + 5, rowY + 1,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, rowAlpha));
         }
+    }
+
+    /**
+     * R4 vigil: a faint violet fill rising bottom-up through one cracked heart — the
+     * ghost heart sprite re-blitted ACCENT-tinted, cropped to the filled rows, with a
+     * 1px brighter waterline. Pure function of {@code fill}; allocation-free.
+     */
+    private static void drawVigilFill(GuiGraphics guiGraphics, int x, int y, float fill, float rowAlpha) {
+        int filledPx = Mth.clamp(Mth.floor(fill * HEART_SIZE + 0.5F), 1, HEART_SIZE);
+        int top = y + HEART_SIZE - filledPx;
+        RenderSystem.enableBlend();
+        guiGraphics.setColor(0.725F, 0.549F, 1.0F, rowAlpha * 0.85F);
+        guiGraphics.blitSprite(HEART_GHOST_SPRITE, HEART_SIZE, HEART_SIZE,
+                0, HEART_SIZE - filledPx, x, top, HEART_SIZE, filledPx);
+        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        if (filledPx < HEART_SIZE) {
+            // Waterline shimmer just above the fill (skipped once the heart is whole).
+            guiGraphics.fill(x + 2, top - 1, x + HEART_SIZE - 2, top,
+                    EclipseUiTheme.withAlpha(VIGIL_FILL_COLOR, rowAlpha * 0.55F));
+        }
+        RenderSystem.disableBlend();
     }
 
     /**

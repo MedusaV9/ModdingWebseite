@@ -16,6 +16,8 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
 import dev.projecteclipse.eclipse.offering.OfferingRules;
 import dev.projecteclipse.eclipse.offering.OfferingService;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
@@ -175,6 +177,25 @@ public class AltarBlockEntity extends BlockEntity {
         serverLevel.sendParticles(ParticleTypes.PORTAL,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.2D, this.worldPosition.getZ() + 0.5D,
                 150, 0.6D, 0.8D, 0.6D, 0.8D);
+        // W4-ISLAND / IDEA-12 #3 moment layer: the beam plus an expanding gold→violet
+        // ring for everyone in beam view range. The PERMANENT tells (AltarIdleMotes
+        // window, SanctumOrbitals ring growth) ride the altarLevel sync above for free.
+        Vec3 fxPos = Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D);
+        S2CQuasarPayload beam = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM, fxPos);
+        S2CQuasarPayload ring = new S2CQuasarPayload(S2CQuasarPayload.ALTAR_LEVELUP_RING,
+                fxPos.add(0.0D, 0.5D, 0.0D));
+        double rangeSq = BeamEmitter.VIEW_RANGE * BeamEmitter.VIEW_RANGE;
+        for (ServerPlayer online : serverLevel.players()) {
+            if (online.position().distanceToSqr(fxPos) <= rangeSq) {
+                PacketDistributor.sendToPlayer(online, beam);
+                PacketDistributor.sendToPlayer(online, ring);
+            }
+        }
+        // W4-CEREMONY / IDEA-11 #3: one map-wide radial light pulse for EVERY player — the
+        // world itself acknowledges the unlock (client path exists: FxPayloads FX_SHOCKWAVE
+        // → EclipseFxState.startShockwave; W4-ISLAND owns the beam/ring sends above).
+        PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE,
+                Vec3.atCenterOf(this.worldPosition), 0.6F, 40.0F));
         EclipseMod.LOGGER.info("Altar milestone {} completed at {}; rewards {}",
                 milestone.level(), this.worldPosition, milestone.rewards());
     }
@@ -223,22 +244,49 @@ public class AltarBlockEntity extends BlockEntity {
         }
 
         pendingOfferings.remove(playerId);
-        if (!OfferingService.accept(player, stack)) {
+        // Hand anchor for the swallow flight, captured before the stack shrinks.
+        Vec3 handPos = player.getEyePosition()
+                .add(player.getLookAngle().scale(0.7D)).subtract(0.0D, 0.35D, 0.0D);
+        java.util.OptionalInt exactValue = OfferingService.acceptWithValue(player, stack);
+        if (exactValue.isEmpty()) {
             actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
             return;
         }
         actionBar(player, Component.translatable("ritual.eclipse.offering.done"));
-        serverLevel.playSound(null, this.worldPosition, EclipseSounds.OFFERING_ACCEPT.get(),
+        // W4-ISLAND / IDEA-12 #2: the ack chime is split — the OFFERER hears a quantized
+        // pitch band (a private, deniable tier tell; values stay secret, no text/numbers),
+        // bystanders keep the neutral 1.0 cue so the daily-winner metagame never leaks.
+        player.playNotifySound(EclipseSounds.OFFERING_ACCEPT.get(), SoundSource.BLOCKS,
+                1.0F, offeringTellPitch(exactValue.getAsInt(), serverLevel.random));
+        serverLevel.playSound(player, this.worldPosition, EclipseSounds.OFFERING_ACCEPT.get(),
                 SoundSource.BLOCKS, 1.0F, 1.0F);
         serverLevel.sendParticles(ParticleTypes.PORTAL,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.15D,
                 this.worldPosition.getZ() + 0.5D, 36, 0.35D, 0.35D, 0.35D, 0.3D);
+        // W4-ISLAND / IDEA-12 #1: swallow FIRST, beam second (same connection, ordered):
+        // the client spirals the offered item hand → altar over ~30 t and holds the beam
+        // until the item vanishes into the stone. Non-Quasar clients keep the old beat via
+        // QuasarSpawner.spawnOrFallback's vanilla burst.
+        PacketDistributor.sendToPlayersNear(serverLevel, null,
+                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                this.worldPosition.getZ() + 0.5D, 64.0D,
+                new S2CQuasarPayload(
+                        S2CQuasarPayload.offeringSwallow(ResourceLocation.parse(itemId)), handPos));
         PacketDistributor.sendToPlayersNear(serverLevel, null,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
                 this.worldPosition.getZ() + 0.5D, 64.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
                         Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
         GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
+    }
+
+    /**
+     * IDEA-12 #2 pitch buckets (junk ≤ 5 → 0.85, mid ≤ 40 → 1.0, high → 1.15) with ±0.03
+     * random jitter so adjacent tiers stay deniable. Ear-training only — never text.
+     */
+    private static float offeringTellPitch(int exactValue, net.minecraft.util.RandomSource random) {
+        float base = exactValue <= 5 ? 0.85F : exactValue <= 40 ? 1.0F : 1.15F;
+        return base + (random.nextFloat() - 0.5F) * 0.06F;
     }
 
     // --- heart sacrifice ---
@@ -270,6 +318,11 @@ public class AltarBlockEntity extends BlockEntity {
         pendingHeartSacrifices.remove(player.getUUID());
         LivesApi.add(player, -1);
         dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
+        // W4-HEARTS R2: the sacrificed heart shatters over the hotbar + a world echo at the altar.
+        PacketDistributor.sendToPlayer(player,
+                new dev.projecteclipse.eclipse.network.S2CHeartBurstPayload(LivesApi.get(player)),
+                new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
+                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 1.2D, 0.0D)));
         Containers.dropItemStack(serverLevel,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D, this.worldPosition.getZ() + 0.5D,
                 new ItemStack(EclipseItems.HEART_FRAGMENT.get()));

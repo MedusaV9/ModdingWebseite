@@ -65,6 +65,12 @@ public final class RealtimeDayService {
     private static final int FIRE_CHECK_TICKS = 100;
     /** Bossbar text/progress refresh cadence (1 s). */
     private static final int BAR_UPDATE_TICKS = 20;
+    /**
+     * W4-CEREMONY / IDEA-09 #2: inside this window before the boundary, the fire check runs
+     * on EVERY bar pass (1 s) instead of the 5 s poll, so the flip lands ON the T-0 climax
+     * ({@code LastMinuteHush} release + {@code ui.timer_zero}) instead of up to 5 s late.
+     */
+    private static final long NEAR_BOUNDARY_MILLIS = 15_000L;
     /** {@code add}/{@code set} clamp: a shifted boundary is never closer than this. */
     public static final long MIN_FUTURE_MILLIS = 5_000L;
     /** Poll-to-poll backwards jump beyond this logs a WARN (NTP correction etc.). */
@@ -428,6 +434,13 @@ public final class RealtimeDayService {
             removeBar();
         }
         if (server.getTickCount() % FIRE_CHECK_TICKS != 0) {
+            // W4-CEREMONY / IDEA-09 #2: near-boundary precision — one extra long compare per
+            // second in the final 15 s. The epoch-day guard keeps extra checks idempotent;
+            // the skew/auto-arm bookkeeping stays on the 5 s poll.
+            if (state.isArmed() && !state.isPaused() && state.getBoundaryEpochMillis() > 0L
+                    && state.getBoundaryEpochMillis() - now < NEAR_BOUNDARY_MILLIS) {
+                runFireCheckNow(server);
+            }
             return;
         }
         if (lastPollNowMillis != 0L && now < lastPollNowMillis - CLOCK_REGRESS_WARN_MILLIS) {

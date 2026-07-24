@@ -104,13 +104,24 @@ public final class VanillaLandmarks {
     public static BoundingBox placeVanillaAsync(ServerLevel level, ResourceLocation structureId,
             BlockPos anchor, SitePrep.Mode mode, Consumer<BoundingBox> onComplete,
             Consumer<Throwable> onFailure) {
+        return placeVanillaAsync(level, structureId, anchor, mode, 0, onComplete, onFailure);
+    }
+
+    /**
+     * {@code seedNudge} variant (registry retries): rolls fresh {@code Structure.generate}
+     * layouts instead of re-failing the identical deterministic attempt.
+     */
+    @Nullable
+    public static BoundingBox placeVanillaAsync(ServerLevel level, ResourceLocation structureId,
+            BlockPos anchor, SitePrep.Mode mode, int seedNudge, Consumer<BoundingBox> onComplete,
+            Consumer<Throwable> onFailure) {
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         if (profile == null) {
             EclipseMod.LOGGER.warn("placeVanilla({}) called for non-disc dimension {}; skipping",
                     structureId, level.dimension().location());
             return null;
         }
-        StructureStart start = StructureStamper.generateVanilla(level, structureId, anchor);
+        StructureStart start = StructureStamper.generateVanilla(level, structureId, anchor, seedNudge);
         if (start == null) {
             return null;
         }

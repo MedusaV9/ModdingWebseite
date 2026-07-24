@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.worldgen.BreachGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
+import dev.projecteclipse.eclipse.worldgen.WorldStageAccess;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
@@ -41,7 +42,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * a three-part deterministic job:
  *
  * <ol>
- *   <li>build and ticket the Nether arrival/updraft chimney,</li>
+ *   <li>build and ticket the Nether arrival/updraft chimney, including the IDEA-17
+ *       ceiling bore that pierces the nether roof shell (so the glitch-drift descent
+ *       passes seamlessly from the overworld funnel through the roof to the floor),</li>
  *   <li>carve {@link BreachGeometry} through the already-generated overworld disc while
  *       repainting its crimson-creep halo,</li>
  *   <li>place the overworld return pad, then persist {@code breachOpen=true}.</li>
@@ -60,8 +63,14 @@ public final class BreachBuilder {
     private static final int MAX_FINALIZE_CHUNKS_PER_TICK = 2;
     private static final int CHIMNEY_HEIGHT = 22;
     private static final int CRATER_SCAN_MARGIN = 5;
-    private static final int FALLBACK_ARRIVAL_X = 48;
-    private static final int FALLBACK_ARRIVAL_Z = 35;
+    private static final int FALLBACK_ARRIVAL_X = 85;
+    private static final int FALLBACK_ARRIVAL_Z = 85;
+    /**
+     * Squared radius of the IDEA-17 ceiling bore (r ≈ 3.5): wide enough that the
+     * glitch-drift handoff (arrival center ± the 2-block 1:1 offset clamp) always drops
+     * through open air, narrow enough to stay inside the chimney's basalt collar.
+     */
+    private static final int BORE_RADIUS_SQ = 12;
 
     private static final Set<Heightmap.Types> HEIGHTMAPS = EnumSet.of(
             Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
@@ -485,6 +494,35 @@ public final class BreachBuilder {
         for (int dy = 3; dy <= CHIMNEY_HEIGHT; dy += 5) {
             writes.add(new BlockWrite(updraft.offset(1, dy, 0),
                     Blocks.CRYING_OBSIDIAN.defaultBlockState()));
+        }
+
+        // IDEA-17 ceiling bore: extend the chimney's air shaft straight up THROUGH the
+        // nether roof shell (stalactites, body and the mirrored bedrock cap) to the
+        // world top, so the glitch-drift descent physically passes the ceiling. The
+        // mouth gets a polished-blackstone collar ring so the pierced roof reads as
+        // built, not broken. Deterministic and replayed by openNow (repair-idempotent).
+        int stage = WorldStageAccess.stage(DiscProfile.NETHER);
+        int worldTopY = DiscProfile.NETHER.minY() + DiscProfile.NETHER.height() - 1;
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dz = -4; dz <= 4; dz++) {
+                int d2 = dx * dx + dz * dz;
+                if (d2 > 18) {
+                    continue;
+                }
+                if (d2 <= BORE_RADIUS_SQ) {
+                    for (int y = cy + CHIMNEY_HEIGHT + 1; y <= worldTopY; y++) {
+                        writes.add(new BlockWrite(new BlockPos(cx + dx, y, cz + dz), air));
+                    }
+                } else {
+                    DiscTerrainFunction.DiscColumn column = DiscTerrainFunction.column(
+                            DiscProfile.NETHER, cx + dx, cz + dz, stage);
+                    if (column.inside() && column.ceilingBodyY() != Integer.MAX_VALUE) {
+                        for (int y = column.ceilingBottomY(); y <= column.ceilingBodyY() + 1; y++) {
+                            writes.add(new BlockWrite(new BlockPos(cx + dx, y, cz + dz), blackstone));
+                        }
+                    }
+                }
+            }
         }
         return List.copyOf(writes);
     }

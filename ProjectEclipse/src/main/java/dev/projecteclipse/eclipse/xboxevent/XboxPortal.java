@@ -8,15 +8,17 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.classicblocks.ClassicBlocks;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
@@ -156,7 +158,9 @@ public final class XboxPortal {
         PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, FX_RANGE,
                 new S2CFxEventPayload(FX_RIFT_OPEN, center.add(0.0D, HEIGHT / 2.0D, 0.0D),
                         RIFT_FX_WIDTH, RIFT_STYLE_PORTAL));
-        level.playSound(null, base, SoundEvents.END_PORTAL_SPAWN, SoundSource.BLOCKS, 0.7F, 1.2F);
+        // IDEA-07 §7: the portal speaks the mod's glitch language — EVENT_RIFT_OPEN's own
+        // registry comment names "xbox portal — W7/W8" as an intended consumer.
+        level.playSound(null, base, EclipseSounds.EVENT_RIFT_OPEN.get(), SoundSource.BLOCKS, 0.7F, 1.0F);
         EclipseMod.LOGGER.info("Xbox portal placed at {} in {}", base, level.dimension().location());
     }
 
@@ -167,7 +171,8 @@ public final class XboxPortal {
         PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, FX_RANGE,
                 new S2CFxEventPayload(FX_RIFT_CLOSE, center.add(0.0D, HEIGHT / 2.0D, 0.0D),
                         RIFT_FX_WIDTH, 0.0F));
-        level.playSound(null, base, SoundEvents.GLASS_BREAK, SoundSource.BLOCKS, 0.6F, 0.6F);
+        // IDEA-07 §7: the tear snaps shut with the rift slam instead of vanilla glass.
+        level.playSound(null, base, EclipseSounds.EVENT_RIFT_SLAM.get(), SoundSource.BLOCKS, 0.6F, 1.0F);
         state.setPortal(null, null);
         EclipseMod.LOGGER.info("Xbox portal removed at {} in {}", base, level.dimension().location());
     }
@@ -246,6 +251,17 @@ public final class XboxPortal {
 
     // ------------------------------------------------------------------ ambient fallback
 
+    /**
+     * W4-ATMOS ledger id of the portal hum (IDEA-07 §7). Resolved from the registry at play
+     * time and self-healing (the {@code UiSounds.play(String, ...)} pattern): until the
+     * registry + sounds.json ask in {@code docs/plans_v3/wiring/W4-ATMOS_wiring.md} lands,
+     * the loop falls back to {@code EVENT_BEAM_HUM} (gazer_whisper @1.2 baked) re-pitched
+     * {@value #PORTAL_LOOP_FALLBACK_PITCH} — nearly the alias's gazer_whisper @1.35 target.
+     */
+    private static final ResourceLocation PORTAL_LOOP_ID =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.xbox_portal_loop");
+    private static final float PORTAL_LOOP_FALLBACK_PITCH = 1.15F;
+
     /** Cheap always-on server-side FX (called every 10 ticks while the portal exists). */
     public static void ambientTick(ServerLevel level, BlockPos base, long gameTime) {
         Vec3 center = Vec3.atBottomCenterOf(base);
@@ -253,7 +269,14 @@ public final class XboxPortal {
                 center.x, center.y + 2.0D, center.z,
                 6, WIDTH / 4.0D, 1.4D, WIDTH / 4.0D, 0.01D);
         if (gameTime % 100L == 0L) {
-            level.playSound(null, base, SoundEvents.PORTAL_AMBIENT, SoundSource.BLOCKS, 0.35F, 0.8F);
+            // IDEA-07 §7: periodic hum in the mod's glitch language, not an End portal's.
+            SoundEvent registered = BuiltInRegistries.SOUND_EVENT.getOptional(PORTAL_LOOP_ID).orElse(null);
+            if (registered != null) {
+                level.playSound(null, base, registered, SoundSource.BLOCKS, 0.35F, 1.0F);
+            } else {
+                level.playSound(null, base, EclipseSounds.EVENT_BEAM_HUM.get(), SoundSource.BLOCKS,
+                        0.35F, PORTAL_LOOP_FALLBACK_PITCH);
+            }
         }
     }
 }
