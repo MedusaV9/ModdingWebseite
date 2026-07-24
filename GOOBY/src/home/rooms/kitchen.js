@@ -41,14 +41,20 @@ export const ROOM = Object.freeze({
       id: 'wallTrim', kind: 'wallTrim', batch: 'color',
       tint: '#E8D5C0', walls: Object.freeze(['back', 'left']),
     }),
+    // V6/E4: + cash_register on the display case's right end completes the
+    // Purble-Bäckerei corner (pack faces +x natively ⇒ rotY −90 turns it to
+    // the camera). The mixer slides to the case's left end and the macaron
+    // trio regroups front-left so all four props share the 0.57×0.42 m top
+    // without clipping.
     Object.freeze({
       id: 'bakeryCorner', kind: 'assetCluster', batch: 'bakery',
       pieces: Object.freeze([
         Object.freeze({ key: 'bakery-interior/display_case_short', at: Object.freeze([1.55, 0, -0.58]), scale: 0.42, rotY: -90 }),
-        Object.freeze({ key: 'bakery-interior/stand_mixer', at: Object.freeze([1.54, 0.66, -0.61]), scale: 0.22, rotY: -90 }),
-        Object.freeze({ key: 'bakery-interior/macaron_pink', at: Object.freeze([1.35, 0.68, -0.43]), scale: 0.42 }),
-        Object.freeze({ key: 'bakery-interior/macaron_blue', at: Object.freeze([1.51, 0.68, -0.42]), scale: 0.42 }),
-        Object.freeze({ key: 'bakery-interior/macaron_yellow', at: Object.freeze([1.67, 0.68, -0.43]), scale: 0.42 }),
+        Object.freeze({ key: 'bakery-interior/stand_mixer', at: Object.freeze([1.4, 0.66, -0.63]), scale: 0.22, rotY: -90 }),
+        Object.freeze({ key: 'bakery-interior/cash_register', at: Object.freeze([1.68, 0.66, -0.55]), scale: 0.28, rotY: -90 }),
+        Object.freeze({ key: 'bakery-interior/macaron_pink', at: Object.freeze([1.33, 0.68, -0.42]), scale: 0.42 }),
+        Object.freeze({ key: 'bakery-interior/macaron_blue', at: Object.freeze([1.49, 0.68, -0.43]), scale: 0.42 }),
+        Object.freeze({ key: 'bakery-interior/macaron_yellow', at: Object.freeze([1.41, 0.68, -0.5]), scale: 0.42 }),
       ]),
     }),
     Object.freeze({
@@ -73,6 +79,19 @@ export const ROOM = Object.freeze({
       ]),
     }),
     // ---- end V5/ASSETS -------------------------------------------------------
+    // ---- V6/E4: baked-goods breakfast on the dining table (top y 0.405 —
+    // table native 0.32673 × FURNITURE_SCALE 1.55 × entry scale 0.8). The
+    // pack's GLBs embed their own copy of the Tiny Treats atlas, so they get
+    // their OWN merged batch (+1 call, kitchen dressing total 4) instead of
+    // piggybacking the kitchenware batch's external texture.
+    Object.freeze({
+      id: 'breakfastSet', kind: 'assetCluster', batch: 'baked',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'baked-goods/croissant', at: Object.freeze([0.65, 0.406, 0.12]), scale: 0.5, rotY: -15 }),
+        Object.freeze({ key: 'baked-goods/cupcake', at: Object.freeze([0.98, 0.406, 0.28]), scale: 0.45 }),
+      ]),
+    }),
+    // ---- end V6/E4 -------------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 

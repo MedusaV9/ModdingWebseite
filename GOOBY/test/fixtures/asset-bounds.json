@@ -1019,6 +1019,23 @@
         0
       ]
     },
+    "bakery-interior/cash_register": {
+      "min": [
+        -0.4443,
+        0,
+        -0.38378
+      ],
+      "max": [
+        0.50546,
+        1.20465,
+        0.48564
+      ],
+      "forward": [
+        1,
+        0,
+        0
+      ]
+    },
     "bakery-interior/macaron_pink": {
       "min": [
         -0.125,
@@ -1161,6 +1178,32 @@
       ],
       "forward": null
     },
+    "baked-goods/croissant": {
+      "min": [
+        -0.36826,
+        0,
+        -0.17333
+      ],
+      "max": [
+        0.36826,
+        0.3073,
+        0.21598
+      ],
+      "forward": null
+    },
+    "baked-goods/cupcake": {
+      "min": [
+        -0.18086,
+        -0.00553,
+        -0.18086
+      ],
+      "max": [
+        0.18086,
+        0.50471,
+        0.18086
+      ],
+      "forward": null
+    },
     "aline-furniture/bookshelf": {
       "min": [
         -0.46156,
@@ -1178,16 +1221,76 @@
         1
       ]
     },
-    "aline-furniture/plant": {
+    "kaykit-furniture/armchair": {
       "min": [
-        -0.12797,
-        -0.08587,
-        -0.13812
+        -0.9,
+        0,
+        -0.75
       ],
       "max": [
-        0.12797,
-        0.37709,
-        0.1328
+        0.9,
+        1.22406,
+        0.85
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
+    },
+    "kaykit-furniture/lamp_standing": {
+      "min": [
+        -0.5,
+        0,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        2.52,
+        0.5
+      ],
+      "forward": null
+    },
+    "kaykit-furniture/book_set": {
+      "min": [
+        -0.39,
+        -0.25,
+        -0.17746
+      ],
+      "max": [
+        0.39,
+        0.25,
+        0.18754
+      ],
+      "forward": null
+    },
+    "kaykit-furniture/pictureframe_standing_A": {
+      "min": [
+        -0.25,
+        -0.00102,
+        -0.20821
+      ],
+      "max": [
+        0.25,
+        0.61752,
+        0.17126
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
+    },
+    "house-plants/monstera_plant_large_potted": {
+      "min": [
+        -1.3974,
+        0,
+        -1.47948
+      ],
+      "max": [
+        1.19495,
+        3.68025,
+        1.31073
       ],
       "forward": null
     },
@@ -1241,7 +1344,11 @@
         0.39299,
         0.2509
       ],
-      "forward": null
+      "forward": [
+        0,
+        0,
+        1
+      ]
     },
     "bubbly-bathroom/towel_stacked": {
       "min": [
@@ -1282,16 +1389,16 @@
       ],
       "forward": null
     },
-    "house-plants/monstera_plant_large_potted": {
+    "house-plants/sansevieria_plant_small_potted": {
       "min": [
-        -1.3974,
-        0,
-        -1.47948
+        -0.35007,
+        0.0004,
+        -0.24362
       ],
       "max": [
-        1.19495,
-        3.68025,
-        1.31073
+        0.36544,
+        1.05896,
+        0.29447
       ],
       "forward": null
     },
@@ -1307,6 +1414,126 @@
         0.0355
       ],
       "forward": null
+    },
+    "kaykit-furniture/pictureframe_medium": {
+      "min": [
+        -0.35,
+        -0.45,
+        0
+      ],
+      "max": [
+        0.35,
+        0.45,
+        0.2
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
+    },
+    "aline-furniture/plant": {
+      "min": [
+        -0.12797,
+        -0.08587,
+        -0.13812
+      ],
+      "max": [
+        0.12797,
+        0.37709,
+        0.1328
+      ],
+      "forward": null
+    },
+    "pretty-park/street_lantern": {
+      "min": [
+        -0.46989,
+        -0.2,
+        -0.46989
+      ],
+      "max": [
+        0.46989,
+        4.3,
+        0.46989
+      ],
+      "forward": null
+    },
+    "pretty-park/flower_A": {
+      "min": [
+        -0.22453,
+        -0.02,
+        -0.22453
+      ],
+      "max": [
+        0.22453,
+        0.11833,
+        0.22453
+      ],
+      "forward": null
+    },
+    "pretty-park/flower_B": {
+      "min": [
+        -0.15556,
+        -0.02,
+        -0.17963
+      ],
+      "max": [
+        0.15556,
+        0.09066,
+        0.11667
+      ],
+      "forward": null
+    },
+    "pretty-park/bird": {
+      "min": [
+        -0.2217,
+        0,
+        -0.26744
+      ],
+      "max": [
+        0.2205,
+        0.44041,
+        0.28261
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
+    },
+    "pleasant-picnic/picnic_basket_round": {
+      "min": [
+        -0.60603,
+        0,
+        -0.47005
+      ],
+      "max": [
+        0.60603,
+        1.03358,
+        0.47005
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
+    },
+    "pleasant-picnic/picnic_basket_square": {
+      "min": [
+        -0.75951,
+        0,
+        -0.56193
+      ],
+      "max": [
+        0.75951,
+        0.68063,
+        0.56193
+      ],
+      "forward": [
+        0,
+        0,
+        1
+      ]
     },
     "proc:door": {
       "min": [
@@ -2026,21 +2253,6 @@
       },
       {
         "index": 4,
-        "name": "furn-books",
-        "key": "furniture-kit/books",
-        "min": [
-          -0.54001,
-          0.59,
-          -1.3215
-        ],
-        "max": [
-          -0.31998,
-          0.71884,
-          -1.1185
-        ]
-      },
-      {
-        "index": 5,
         "name": "slot-nightstand",
         "key": "furniture-kit/lampSquareTable",
         "min": [
@@ -2055,7 +2267,7 @@
         ]
       },
       {
-        "index": 6,
+        "index": 5,
         "name": "furn-lampSwitch",
         "key": "proc:lampSwitch",
         "min": [
@@ -2070,7 +2282,7 @@
         ]
       },
       {
-        "index": 7,
+        "index": 6,
         "name": "furn-bookcaseClosedWide",
         "key": "furniture-kit/bookcaseClosedWide",
         "min": [
@@ -2085,7 +2297,7 @@
         ]
       },
       {
-        "index": 8,
+        "index": 7,
         "name": "furn-window",
         "key": "proc:window",
         "min": [
@@ -2100,7 +2312,7 @@
         ]
       },
       {
-        "index": 9,
+        "index": 8,
         "name": "slot-rug",
         "key": "furniture-kit/rugRounded",
         "min": [
@@ -2115,7 +2327,7 @@
         ]
       },
       {
-        "index": 10,
+        "index": 9,
         "name": "slot-plushie",
         "key": "furniture-kit/bear",
         "min": [
@@ -2130,7 +2342,7 @@
         ]
       },
       {
-        "index": 11,
+        "index": 10,
         "name": "furn-plantSmall1",
         "key": "furniture-kit/plantSmall1",
         "min": [
@@ -2466,14 +2678,14 @@
         "name": "furn-nature-kit/flower_yellowA",
         "key": "nature-kit/flower_yellowA",
         "min": [
-          -1.79158,
+          -1.67158,
           0,
-          0.76153
+          0.39153
         ],
         "max": [
-          -1.60842,
+          -1.48842,
           0.14919,
-          0.93847
+          0.56847
         ]
       },
       {

@@ -31,7 +31,10 @@ export const ROOM = Object.freeze({
 
   // ---- V4/G79 (PLAN4-GAMES §G9.1): static room dressing, never saved ------
   // Aline geometry + picture frames merge into `color`; each sticker artwork
-  // is one textured plane, for exactly 3 added calls. Placements avoid the TV,
+  // is one textured plane. V6/E4 adds the KayKit Furniture Bits reading nook
+  // (one merged `kaykitbits` atlas batch) and a Tiny Treats monstera (one
+  // `plants` atlas batch) — 5 dressing calls total, +2 vs the V5 baseline
+  // (within the ≤4-added-per-room budget). Placements avoid the TV,
   // front-door hitbox, ballSpawn and the player-owned wallArt slot.
   dressing: Object.freeze([
     // V4/AC-3D: moved from the back wall (x −0.08, z −1.13) where it sat
@@ -50,10 +53,32 @@ export const ROOM = Object.freeze({
       id: 'pictureBallBuddy', kind: 'picture', batch: 'picture-ballBuddy',
       art: 'ballBuddy', at: Object.freeze([0.9, 2.15, -1.43]),
     }),
+    // ---- V6/E4: KayKit Furniture Bits reading nook (one merged atlas call).
+    // The armchair angles at the coffee table/TV (facing rule: target); its
+    // rotated AABB corner overlaps the standing lamp's box on paper only —
+    // the true rotated footprint clears the lamp pole by ≥0.24 m (bounded
+    // clipAllow pair in roomAudit.rules.js). The lamp warms the corner right
+    // of the Aline shelf; the book set tops the shelf; the standing frame
+    // poses on the bookcase (the TV cabinet top is fully claimed by the
+    // pinned radio fixture x −0.43…0.13 + the TV x 0.14…0.78).
     Object.freeze({
-      id: 'alinePlant', kind: 'asset', batch: 'color',
-      key: 'aline-furniture/plant', at: Object.freeze([-1.68, 0, 0.82]), scale: 1.35, rotY: 18,
+      id: 'readingNook', kind: 'assetCluster', batch: 'kaykitbits',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'kaykit-furniture/armchair', at: Object.freeze([0.72, 0, 0.28]), scale: 0.62, rotY: -140 }),
+        Object.freeze({ key: 'kaykit-furniture/lamp_standing', at: Object.freeze([1.62, 0, 0.06]), scale: 0.62 }),
+        Object.freeze({ key: 'kaykit-furniture/book_set', at: Object.freeze([1.77, 1.001, -0.5]), scale: 0.5, rotY: -90 }),
+        Object.freeze({ key: 'kaykit-furniture/pictureframe_standing_A', at: Object.freeze([-1.76, 1.36, -0.1]), scale: 0.5, rotY: 105 }),
+      ]),
     }),
+    // V6/E4: Tiny Treats monstera replaces the Aline plant in this corner
+    // (the Aline plant moved to the bedroom) — one `plants` atlas batch.
+    Object.freeze({
+      id: 'livingPlants', kind: 'assetCluster', batch: 'plants',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'house-plants/monstera_plant_large_potted', at: Object.freeze([-1.55, 0, 1.05]), scale: 0.24, rotY: 24 }),
+      ]),
+    }),
+    // ---- end V6/E4 -----------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 

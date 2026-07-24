@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import { ROOMS } from '../src/data/constants.js';
 import { PACKS, modelEntry } from '../scripts/kenney-manifest.mjs';
 import { MODEL_PACKS as ITCH_MODEL_PACKS } from '../scripts/fetch-itch.mjs';
+// V6/E4: KayKit Furniture Bits dressing stock (second asset root, §B6)
+import { KAYKIT_PACKS, kaykitEntry } from '../scripts/kaykit-manifest.mjs';
 import { STICKERS } from '../src/data/stickers.js';
 import { ROOM as KITCHEN } from '../src/home/rooms/kitchen.js';
 import { ROOM as LIVING } from '../src/home/rooms/living.js';
@@ -81,6 +83,10 @@ const REQUIRED_ANCHORS = {
   compost: 'garden',
   wateringCan: 'garden',
   fertilizer: 'garden',
+  // V6/E4 (PLAN6 Wave E/F contract): fence-post perch for Wave F's transient
+  // bird visitor — the anchor ships with the room rebuild, the moving bird
+  // is ambient/Wave F's.
+  gardenFenceBird: 'garden',
 };
 
 /** Fixed interactables that must emit tap events (§C2/§G G4 + V2/G19). */
@@ -268,21 +274,37 @@ test('V3/G46 garden uses real additions but keeps the compost identity item proc
   assert.equal(compost?.item, undefined);
 });
 
-test('V4/G79 indoor dressing is complete, asset-backed, and budgeted at ≤4 calls per room', () => {
+test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call budget', () => {
   const expected = {
-    // V5/ASSETS: + kitchenware/bathware Tiny Treats clusters (one extra
-    // merged atlas batch each — still within the four-call budget below)
-    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware'],
-    living: ['alineBookshelf', 'pictureFirstNom', 'pictureBallBuddy', 'alinePlant'],
+    // V5/ASSETS: kitchenware/bathware Tiny Treats clusters; V6/E4: baked-goods
+    // breakfast (own batch — the pack embeds its own atlas copy)
+    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware', 'breakfastSet'],
+    // V6/E4: KayKit reading nook + Tiny Treats monstera (the Aline plant
+    // moved to the bedroom)
+    living: ['alineBookshelf', 'pictureFirstNom', 'pictureBallBuddy', 'readingNook', 'livingPlants'],
     bathroom: ['wallTrim', 'towelRail', 'alineCactus', 'bathware'],
-    bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead'],
+    // V6/E4: KayKit cozy corner + relocated Aline plant + sansevieria
+    bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead', 'cozyCorner', 'alinePlant', 'bedroomPlants'],
+    // V6/E4: the garden ships a dressing table now — Tiny Treats park pieces
+    // (pretty-park has its OWN atlas revision ⇒ separate batch from the
+    // pleasant-picnic baskets) + the checkered-blanket painter
+    garden: ['parkDressing', 'picnicCorner', 'picnicBlanket'],
   };
+  // V6/E4 (PLAN6 Wave E budget): per-room dressing draw calls — colored merge
+  // + one call per textured atlas batch + fairy dots + one per picture + one
+  // per blanket quad. The plan's bar is ≤4 calls ADDED per room over the V5
+  // baseline {kitchen 3, living 3, bathroom 2, bedroom 3, garden 0}.
+  const expectedCalls = { kitchen: 4, living: 5, bathroom: 2, bedroom: 5, garden: 3 };
+  const baselineCalls = { kitchen: 3, living: 3, bathroom: 2, bedroom: 3, garden: 0 };
   const itchKeys = new Set(
     ITCH_MODEL_PACKS.flatMap((pack) => pack.files.map(({ key }) => `${pack.slug}/${key}`))
   );
+  // V6/E4: KayKit Furniture Bits joins the dressing stock (second asset root)
+  const kaykitKeys = new Set(
+    KAYKIT_PACKS.flatMap((pack) => pack.files.map((entry) => `${pack.slug}/${kaykitEntry(entry, pack.ext).key}`))
+  );
   const stickerIds = new Set(STICKERS.map((sticker) => sticker.id));
 
-  assert.equal(GARDEN.dressing, undefined, 'G79 must leave the already-dense garden untouched');
   for (const [roomId, ids] of Object.entries(expected)) {
     const dressing = byId[roomId].dressing;
     assert.ok(Object.isFrozen(dressing), `${roomId}: dressing table not frozen`);
@@ -295,8 +317,8 @@ test('V4/G79 indoor dressing is complete, asset-backed, and budgeted at ≤4 cal
       for (const piece of pieces) {
         if (piece.key) {
           assert.ok(
-            itchKeys.has(piece.key),
-            `${roomId}.${entry.id}: itch asset '${piece.key}' missing from manifest`
+            itchKeys.has(piece.key) || kaykitKeys.has(piece.key),
+            `${roomId}.${entry.id}: asset '${piece.key}' missing from the itch/kaykit manifests`
           );
         }
       }
@@ -314,9 +336,12 @@ test('V4/G79 indoor dressing is complete, asset-backed, and budgeted at ≤4 cal
     ).size;
     const emissive = dressing.some((entry) => entry.kind === 'fairyLights') ? 1 : 0;
     const pictures = dressing.filter((entry) => entry.kind === 'picture').length;
+    const blankets = dressing.filter((entry) => entry.kind === 'picnicBlanket').length;
+    const calls = colored + textured + emissive + pictures + blankets;
+    assert.equal(calls, expectedCalls[roomId], `${roomId}: dressing draw-call recipe changed`);
     assert.ok(
-      colored + textured + emissive + pictures <= 4,
-      `${roomId}: dressing recipe exceeds the four-call budget`
+      calls - baselineCalls[roomId] <= 4,
+      `${roomId}: dressing adds ${calls - baselineCalls[roomId]} calls — over the ≤4-added budget`
     );
   }
 });

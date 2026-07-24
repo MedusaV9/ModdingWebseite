@@ -67,8 +67,32 @@ const FORWARD_BY_PACK = {
   'furniture-kit': [0, 0, 1],
   'bakery-interior': [1, 0, 0],
   'pleasant-picnic': [0, 0, 1],
+  // V6/E4: KayKit Furniture Bits shares the Kenney +z convention (armchair
+  // seat/footrest expand toward +z at rotY 0; verified visually in-room).
+  'kaykit-furniture': [0, 0, 1],
+  // V6/E4: Tiny Treats packs — declared so the facing audit is no longer
+  // blind by omission. Mugs/pots/plants/flowers/baskets have no meaningful
+  // visual front (rotY is purely compositional) → pack-level null, with the
+  // few real fronts opted back in via FORWARD_OVERRIDES below.
+  'pretty-park': null,
+  'house-plants': null,
+  'charming-kitchen': null,
+  'bubbly-bathroom': null,
+  'baked-goods': null,
 };
 const FORWARD_OVERRIDES = {
+  // V6/E4 pretty-park: only the bench + bird have a visual front; the
+  // fountain/lantern are rotationally symmetric, flowers are clumps.
+  'pretty-park/bench': [0, 0, 1],
+  'pretty-park/bird': [0, 0, 1], // beak toward +z (larger +z bbox lobe)
+  'pretty-park/fountain': null,
+  // V6/E4 kaykit-furniture: books read fine at any angle; both frames show
+  // their picture toward +z (the standing frame's kickstand leans to −z).
+  'kaykit-furniture/book_set': null,
+  'kaykit-furniture/lamp_standing': null,
+  // V6/E4 bubbly-bathroom: the ducky's beak points +z (compositional only —
+  // no facing rule keys it, but the forward documents the convention).
+  'bubbly-bathroom/ducky': [0, 0, 1],
   // aline-furniture dressing pieces: only the bookshelf has a visual front
   'aline-furniture/bookshelf': [0, 0, 1],
   'aline-furniture/plant': null,

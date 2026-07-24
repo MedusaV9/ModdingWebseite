@@ -38,6 +38,51 @@ export const ROOM = Object.freeze({
     gardenTree: Object.freeze({ default: 'nature-kit/tree_default', items: Object.freeze(['nature-kit/tree_default', 'proc:blossomTree']) }),
   }),
 
+  // ---- V6/E4: static garden dressing (never saved) — the Tiny Treats park
+  // upgrade. decor.js merges each assetCluster batch into ONE draw call;
+  // pretty-park ships its OWN tiny_treats_texture_1 atlas revision (md5
+  // differs from the shared one) so it cannot share a batch with
+  // pleasant-picnic — hence separate `park`/`picnic` batches. Together with
+  // the checkered-blanket painter that is +3 calls for the whole garden
+  // (V4/G79 budget: ≤4 added per room). Every piece stays clear of the 9
+  // interactable hit boxes (plot0–5/compost/wateringCan/fertilizer) and of
+  // goobyIdle/canopySit — test/roomAudit.test.js locks tap-zone overlaps.
+  dressing: Object.freeze([
+    Object.freeze({
+      id: 'parkDressing', kind: 'assetCluster', batch: 'park',
+      pieces: Object.freeze([
+        // street lantern at the fence gate's right post — its base kisses the
+        // right hedge bush's leaf AABB by ≤2.5 cm (under clipTol, flush fit)
+        Object.freeze({ key: 'pretty-park/street_lantern', at: Object.freeze([0.62, 0, -1.64]), scale: 0.45 }),
+        // edge flowers: left ground edge + right edge below the tree — both
+        // fully on the 5 m ground, partially outside the 390 px portrait
+        // frustum by design (wide-viewport dressing, V4/FIX-3D precedent)
+        Object.freeze({ key: 'pretty-park/flower_A', at: Object.freeze([-2.15, 0, -0.05]), scale: 0.5, rotY: 35 }),
+        Object.freeze({ key: 'pretty-park/flower_B', at: Object.freeze([2.25, 0, 0.35]), scale: 0.5, rotY: -60 }),
+        // songbird perched on the bench backrest (bench top y 0.491), turned
+        // a touch toward the camera. STATIC prop — the MOVING fence visitor
+        // is Wave F's (see the gardenFenceBird anchor below).
+        Object.freeze({ key: 'pretty-park/bird', at: Object.freeze([-1.62, 0.491, -1.35]), scale: 0.45, rotY: 20 }),
+      ]),
+    }),
+    // picnic corner on the front-left grass, beside Gooby's idle spot —
+    // both baskets stand ON the blanket quad (flat ≤9 mm ⇒ audit-legal).
+    Object.freeze({
+      id: 'picnicCorner', kind: 'assetCluster', batch: 'picnic',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'pleasant-picnic/picnic_basket_round', at: Object.freeze([-1.12, 0.006, 0.85]), scale: 0.35, rotY: -25 }),
+        Object.freeze({ key: 'pleasant-picnic/picnic_basket_square', at: Object.freeze([-1.72, 0.006, 1.3]), scale: 0.32, rotY: 15 }),
+      ]),
+    }),
+    // checkered CanvasTexture ground quad (decor.js g79PicnicBlanket painter)
+    Object.freeze({
+      id: 'picnicBlanket', kind: 'picnicBlanket', batch: 'blanket',
+      at: Object.freeze([-1.35, 0.005, 1.15]), rotY: 8,
+      size: Object.freeze([1.3, 0.95]),
+    }),
+  ]),
+  // ---- end V6/E4 -------------------------------------------------------------
+
   furniture: Object.freeze([
     // low fence line at the back (§C2.1: suburban fence-1x4 ×3)
     Object.freeze({ item: 'city-kit-suburban/fence-1x4', at: Object.freeze([-1.65, 0, -1.9]), rotY: 0, scale: 0.42 }),
@@ -116,7 +161,9 @@ export const ROOM = Object.freeze({
     // bare front-left corner, a flat stone by the birdbath spot and one cheeky
     // toadstool front-right; all outside every plot/tool tap line ----------
     Object.freeze({ item: 'nature-kit/grass_large', at: Object.freeze([-1.95, 0, 0.5]), rotY: 20, scale: 0.5, noShadow: true }),
-    Object.freeze({ item: 'nature-kit/flower_yellowA', at: Object.freeze([-1.7, 0, 0.85]), rotY: 60, scale: 0.5 }),
+    // V6/E4: nudged from [−1.7, 0.85] — the old spot sits under the new
+    // picnic-blanket quad (a stem through the blanket reads wrong).
+    Object.freeze({ item: 'nature-kit/flower_yellowA', at: Object.freeze([-1.58, 0, 0.48]), rotY: 60, scale: 0.5 }),
     Object.freeze({ item: 'nature-kit/rock_smallFlatA', at: Object.freeze([-1.9, 0, -0.5]), rotY: -35, scale: 0.55 }),
     Object.freeze({ item: 'nature-kit/mushroom_red', at: Object.freeze([1.8, 0, 1.25]), rotY: -30, scale: 0.45 }),
     // ---- end V4/POLISH-I ----------------------------------------------------
@@ -135,5 +182,10 @@ export const ROOM = Object.freeze({
     // this spot keeps the canopy overhead but clears the bin (front face
     // z −0.855) and the stump/tool cluster.
     canopySit: Object.freeze([1.55, 0, -0.5]),
+    // V6/E4 (PLAN6 Wave E/F contract): perch point for Wave F's TRANSIENT
+    // bird visitor — the top of the fence gate's LEFT post (gate AABB tops
+    // out at y 0.62; the right post hosts the street lantern). E4 places no
+    // moving bird itself — ambient/Wave F owns all moving visitors.
+    gardenFenceBird: Object.freeze([-0.8, 0.62, -1.9]),
   }),
 });

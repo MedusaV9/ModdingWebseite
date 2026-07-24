@@ -408,7 +408,9 @@ async function buildG79RoomDressing(target) {
   const rec = { rm: target, groups: [], geos: [], mats: [], textures: [] };
 
   for (const def of ROOM_DEFS) {
-    if (!def.dressing?.length) continue; // garden intentionally untouched
+    // V6/E4: the garden ships a dressing table too (Tiny Treats park pieces
+    // + the picnic-blanket painter) — every room with rows gets a group.
+    if (!def.dressing?.length) continue;
     const room = target.getRoomGroup(def.id);
     if (!room) continue;
 
@@ -444,6 +446,8 @@ async function buildG79RoomDressing(target) {
       } else if (entry.kind === 'picture') {
         g79PictureFrame(entry, colored);
         pictures.push(entry);
+      } else if (entry.kind === 'picnicBlanket') {
+        g79PicnicBlanket(group, entry, rec); // V6/E4 (own mesh — 1 call)
       }
     }
 
@@ -679,6 +683,60 @@ function g79AddPicture(group, entry, rec) {
   picture.position.set(entry.at[0], entry.at[1], entry.at[2] + 0.021);
   picture.castShadow = false;
   group.add(picture);
+  rec.geos.push(geo);
+  rec.mats.push(mat);
+  rec.textures.push(texture);
+}
+
+/**
+ * V6/E4: checkered picnic-blanket ground quad for the garden's picnic
+ * corner — a CanvasTexture painter following the room painter pattern
+ * (roomManager makeTexture): warm cream base, rose gingham bands, darker
+ * squares where they cross, stitched border. One mesh = one draw call;
+ * MeshStandardMaterial (NOT basic) so setAmbience's light lerp dims it at
+ * night like every other garden prop. Sits at entry.at[1] (≈5 mm above the
+ * grass — same anti-z-fight lift as the dirt path / layered rugs).
+ * @param {THREE.Group} group @param {object} entry @param {G79DressingRecord} rec
+ */
+function g79PicnicBlanket(group, entry, rec) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#FFF6EC';
+  ctx.fillRect(0, 0, 128, 128);
+  const CELL = 16;
+  ctx.fillStyle = 'rgba(242, 169, 184, 0.55)'; // rose bands, both directions
+  for (let i = 0; i < 8; i += 2) {
+    ctx.fillRect(i * CELL, 0, CELL, 128);
+    ctx.fillRect(0, i * CELL, 128, CELL);
+  }
+  ctx.fillStyle = 'rgba(226, 121, 144, 0.5)'; // darker where bands cross
+  for (let ix = 0; ix < 8; ix += 2) {
+    for (let iz = 0; iz < 8; iz += 2) {
+      ctx.fillRect(ix * CELL, iz * CELL, CELL, CELL);
+    }
+  }
+  ctx.strokeStyle = '#E27990'; // stitched border
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(4, 4, 120, 120);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const [w, d] = entry.size ?? [1.2, 0.9];
+  const geo = new THREE.PlaneGeometry(w, d);
+  const mat = new THREE.MeshStandardMaterial({
+    map: texture, roughness: 0.92, metalness: 0,
+  });
+  const blanket = new THREE.Mesh(geo, mat);
+  blanket.name = `v6-g79-picnic-blanket-${entry.id}`;
+  blanket.rotation.x = -Math.PI / 2; // lay the plane flat on the grass
+  blanket.rotation.z = THREE.MathUtils.degToRad(entry.rotY ?? 0);
+  blanket.position.set(entry.at[0], entry.at[1], entry.at[2]);
+  blanket.castShadow = false;
+  blanket.receiveShadow = true;
+  group.add(blanket);
   rec.geos.push(geo);
   rec.mats.push(mat);
   rec.textures.push(texture);

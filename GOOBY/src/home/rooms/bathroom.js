@@ -53,6 +53,14 @@ export const ROOM = Object.freeze({
         Object.freeze({ key: 'bubbly-bathroom/toilet_roll_stack', at: Object.freeze([0.86, 0, -1.32]), scale: 0.4 }),
         Object.freeze({ key: 'bubbly-bathroom/toilet_roll_holder', at: Object.freeze([1.83, 0.62, -0.75]), scale: 0.45, rotY: -90 }),
         Object.freeze({ key: 'house-plants/monstera_plant_large_potted', at: Object.freeze([1.53, 0, 0.95]), scale: 0.22, rotY: -35 }),
+        // ---- V6/E4 completion pass (same merged batch — +0 draw calls):
+        // a second mini ducky waiting ON the tub's front rim (tub top
+        // y 0.651 = native 0.42 × FURNITURE_SCALE 1.55; the tub tap zone
+        // deliberately covers it — tapping the ducky taps the tub), and a
+        // sansevieria filling the bare front-left floor corner.
+        Object.freeze({ key: 'bubbly-bathroom/ducky', at: Object.freeze([-0.45, 0.651, -0.24]), scale: 0.3, rotY: -25 }),
+        Object.freeze({ key: 'house-plants/sansevieria_plant_small_potted', at: Object.freeze([-1.8, 0, 1.1]), scale: 0.3, rotY: 20 }),
+        // ---- end V6/E4 -----------------------------------------------------------
       ]),
     }),
     // ---- end V5/ASSETS -------------------------------------------------------

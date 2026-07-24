@@ -44,6 +44,8 @@ export const AUDIT_RULES = Object.freeze({
         // (pack faces +x natively — the -90° rotY is what the audit verifies)
         'bakery-interior/display_case_short': { mode: 'camera' },
         'bakery-interior/stand_mixer': { mode: 'camera' },
+        // V6/E4: the register joins the case top — same +x-native pack
+        'bakery-interior/cash_register': { mode: 'camera' },
       }),
       wallMounted: Object.freeze(['furniture-kit/kitchenCabinetUpper']),
       elevated: Object.freeze(['furniture-kit/kitchenCabinetUpper']),
@@ -62,9 +64,23 @@ export const AUDIT_RULES = Object.freeze({
         // Aline bookshelf backs onto the right wall, opens into the room (−x)
         'aline-furniture/bookshelf': { mode: 'vector', dir: [-1, 0], wallBacked: true },
         'pleasant-picnic/radio': { mode: 'camera' },
+        // V6/E4: the KayKit armchair angles at the coffee-table/TV corner
+        // (rotY −140 ⇒ ~51° off the exact table line — inside the target cone)
+        'kaykit-furniture/armchair': { mode: 'target', at: [-0.85, 0.3] },
+        // V6/E4: the standing frame on the bookcase shows its picture into
+        // the room (+x, rotY 105 ⇒ 15° off — kickstand toward the wall)
+        'kaykit-furniture/pictureframe_standing_A': { mode: 'vector', dir: [1, 0] },
       }),
       wallMounted: Object.freeze(['proc:door']),
       elevated: Object.freeze(['furniture-kit/lampSquareCeiling']),
+      clipAllow: Object.freeze([
+        // V6/E4: rotated-AABB phantom only — the −140° armchair's
+        // axis-aligned box corner sweeps over the standing lamp's box, but
+        // the TRUE rotated footprint clears the lamp pole by ≥0.24 m and the
+        // shade hangs above the chair back (shade y ≥1.1 vs chair top 0.76).
+        // Bounded at 0.20 m so a real shove regresses loudly.
+        ['kaykit-furniture/armchair', 'kaykit-furniture/lamp_standing', 0.2],
+      ]),
       extras: Object.freeze([
         // V4/G52 pinned radio fixture (roomManager.js places it — scale 0.5,
         // groundAndCenter, then position; keep values in sync)
@@ -106,9 +122,22 @@ export const AUDIT_RULES = Object.freeze({
         'furniture-kit/bookcaseClosedWide': { mode: 'camera', wallBacked: true },
         'proc:window': { mode: 'camera' },
         'proc:lampSwitch': { mode: 'camera' },
+        // V6/E4: the KayKit medium frame hangs on the back wall (its picture
+        // shows +z at rotY 0) just above the wardrobe top
+        'kaykit-furniture/pictureframe_medium': { mode: 'camera', wallBacked: true },
       }),
-      wallMounted: Object.freeze(['proc:window', 'proc:lampSwitch']),
-      elevated: Object.freeze(['proc:window', 'proc:lampSwitch', 'furniture-kit/lampSquareCeiling']),
+      wallMounted: Object.freeze([
+        'proc:window', 'proc:lampSwitch',
+        // V6/E4: wall-hung frame (may embed up to the wall thickness)
+        'kaykit-furniture/pictureframe_medium',
+      ]),
+      elevated: Object.freeze([
+        'proc:window', 'proc:lampSwitch', 'furniture-kit/lampSquareCeiling',
+        // V6/E4: the frame hangs at y 2.0 — wall-mounted by intent, NOT
+        // wardrobe-supported (a 4 cm air gap reads as hanging; declaring it
+        // elevated keeps the audit honest if the wardrobe ever moves)
+        'kaykit-furniture/pictureframe_medium',
+      ]),
       clipAllow: Object.freeze([
         // pillows + plushie rest ON the mattress, below the headboard's AABB
         ['furniture-kit/pillow', 'furniture-kit/bedSingle'],
@@ -127,6 +156,9 @@ export const AUDIT_RULES = Object.freeze({
         'nature-kit/bench': { mode: 'camera' },
         'nature-kit/fence_gate': { mode: 'camera' },
         'proc:fertilizerBag': { mode: 'camera' },
+        // V6/E4: the songbird perched on the bench backrest turns its beak
+        // (+z native) toward the camera (rotY 20 ⇒ 20° off — inside the cone)
+        'pretty-park/bird': { mode: 'camera' },
       }),
       // V4/FIX-3D: the old unlimited tree∩compost clipAllow is GONE — it hid
       // a 0.32×0.73×0.38 m canopy-through-bin clip. The garden layout now

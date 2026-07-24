@@ -339,6 +339,127 @@ test('drift lock: the pinned V4/G52 radio extra matches the live fixture spot (�
   }
 });
 
+// ---------------------------------------------------------------------------
+// V6/E4: tap-target overlap lock. Dressing props are VISUAL-ONLY (merged
+// batches, never raycast targets), so a dressing AABB overlapping a fixed
+// interactable's invisible tap box means tapping the prop fires that
+// interactable's event. That is only acceptable where the prop reads as part
+// of the interactable (the ducky ON the tub rim, the roll stack against the
+// toilet, cookware under the wall-hung Nougatschleuse) — every such pair is
+// allowlisted below with a BOUNDED depth + justification; everything else
+// must stay clear. FLAT dressing (rugs / the picnic-blanket ground quad,
+// height ≤ flatMax) is exempt: ground cover cannot visually shadow a tap —
+// the interactable above it legitimately owns that floor area.
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirror of roomManager's tap-box build: BoxGeometry(hitSize) positioned at
+ * [at.x, at.y + h/2, at.z] (its rotY is irrelevant here — every hit carrier
+ * is rotY 0 except the wateringCan, whose x/z hitSize is square and thus
+ * AABB-invariant under rotation).
+ */
+function tapBoxes(def) {
+  const out = [];
+  for (const entry of def.furniture) {
+    if (!entry.interact || !entry.hitSize) continue;
+    const [w, h, d] = entry.hitSize;
+    out.push({
+      interact: entry.interact,
+      min: [entry.at[0] - w / 2, entry.at[1], entry.at[2] - d / 2],
+      max: [entry.at[0] + w / 2, entry.at[1] + h, entry.at[2] + d / 2],
+    });
+  }
+  return out;
+}
+
+/**
+ * Pinned cross-file tap boxes roomManager.js hard-codes outside the room
+ * defs (keep in sync): the V4/G52 radio hit (BoxGeometry 0.62×0.54×0.44
+ * centered at [−0.15, 0.79, −1.2]) and the V3/G35 Nougatschleuse hit
+ * (0.9×1.2×0.5 centered at [0.95, 1.24, −1.24], active once installed).
+ */
+const PINNED_TAP_BOXES = {
+  living: [{ interact: 'radio', min: [-0.46, 0.52, -1.42], max: [0.16, 1.06, -0.98] }],
+  kitchen: [{ interact: 'nougatschleuse', min: [0.5, 0.64, -1.49], max: [1.4, 1.84, -0.99] }],
+};
+
+/**
+ * Deliberate prop-inside-tap-zone compositions: [room, dressingKey,
+ * interact, maxDepth]. Each is a REVIEWED overlap where tapping the prop
+ * reading as the interactable is the intended UX.
+ */
+const TAP_OVERLAP_ALLOW = [
+  // V5/V6: both rubber duckies live against/on the bathtub (the V6 one ON
+  // the front rim) — tapping a ducky IS tapping the tub.
+  ['bathroom', 'bubbly-bathroom/ducky', 'bathtub', 0.16],
+  // V5: the spare-roll stack leans on the toilet's generous side — tapping
+  // it reads as the toilet.
+  ['bathroom', 'bubbly-bathroom/toilet_roll_stack', 'toilet', 0.1],
+  // V5-placed cookware on the counter below the wall-hung Nougatschleuse:
+  // its hand-authored tap box (h 1.2 from y 0.64) deliberately reaches the
+  // counter top for generous tapping — cookware taps there read as the
+  // machine (which only exists once installed).
+  // (the pan's shallow box only grazes the zone by <2 cm — no row needed)
+  ['kitchen', 'charming-kitchen/kettle', 'nougatschleuse', 0.2],
+  ['kitchen', 'charming-kitchen/pot', 'nougatschleuse', 0.25],
+];
+
+test('V6/E4 tap-target lock: dressing never shadows a tap box (allowlisted pairs stay bounded)', () => {
+  const offences = [];
+  const allowUsed = new Set();
+  for (const def of DEFS) {
+    const hits = [...tapBoxes(def), ...(PINNED_TAP_BOXES[def.id] ?? [])];
+    const dressing = computePlacedBoxes(def, FIXTURE, {
+      extras: AUDIT_RULES.rooms?.[def.id]?.extras,
+    }).filter((b) => b.source === 'dressing' && !b.flat);
+    for (const b of dressing) {
+      for (const hit of hits) {
+        const pen = Math.min(
+          Math.min(b.max[0], hit.max[0]) - Math.max(b.min[0], hit.min[0]),
+          Math.min(b.max[1], hit.max[1]) - Math.max(b.min[1], hit.min[1]),
+          Math.min(b.max[2], hit.max[2]) - Math.max(b.min[2], hit.min[2])
+        );
+        if (pen <= 0.02) continue; // clear (or a grazing sliver)
+        const allow = TAP_OVERLAP_ALLOW.find(([room, key, interact]) =>
+          room === def.id && key === b.key && interact === hit.interact);
+        if (allow && pen <= allow[3]) {
+          allowUsed.add(allow.join('|'));
+          continue;
+        }
+        offences.push(
+          `${def.id}: dressing '${b.key}' overlaps tap:${hit.interact} by ${pen.toFixed(3)} m`
+          + (allow ? ` (beyond its ${allow[3]} m allowance)` : ' (not allowlisted)')
+        );
+      }
+    }
+  }
+  assert.deepEqual(offences, [], 'dressing shadows a tap zone — move the prop or review an allowance');
+  // every allowance must stay EXERCISED — a stale entry means the layout
+  // moved on and the allowance should be deleted, not silently linger
+  const stale = TAP_OVERLAP_ALLOW.map((a) => a.join('|')).filter((k) => !allowUsed.has(k));
+  assert.deepEqual(stale, [], 'stale tap-overlap allowance — the pair no longer overlaps');
+});
+
+test('V6/E4: the living armchair∩lamp clipAllow stays exercised and inside its cap', () => {
+  // roomAudit.rules.js forgives ≤0.20 m between the −140° armchair and the
+  // standing lamp (rotated-AABB phantom — the true footprints clear). This
+  // lock keeps the allowance HONEST: if the nook is rearranged so the boxes
+  // separate, the allowance must be deleted; if a real shove pushes past the
+  // cap, the zero-warning lock above fails.
+  const boxes = computePlacedBoxes(LIVING, FIXTURE, {});
+  const chair = boxes.find((b) => b.key === 'kaykit-furniture/armchair');
+  const lamp = boxes.find((b) => b.key === 'kaykit-furniture/lamp_standing');
+  assert.ok(chair && lamp, 'reading-nook pieces missing from the living dressing');
+  const pen = Math.min(
+    Math.min(chair.max[0], lamp.max[0]) - Math.max(chair.min[0], lamp.min[0]),
+    Math.min(chair.max[1], lamp.max[1]) - Math.max(chair.min[1], lamp.min[1]),
+    Math.min(chair.max[2], lamp.max[2]) - Math.max(chair.min[2], lamp.min[2])
+  );
+  assert.ok(pen > DEFAULT_TOLERANCES.clipTol,
+    `armchair/lamp AABBs no longer overlap (pen ${pen.toFixed(3)} m) — delete the clipAllow pair`);
+  assert.ok(pen <= 0.2, `armchair/lamp overlap ${pen.toFixed(3)} m exceeds the 0.20 m cap`);
+});
+
 test('tolerances stay honest: the clip threshold cannot silently balloon', () => {
   // 3.5 cm is the visual bar agreed in V4/AC-3D — anything looser lets real
   // interpenetration ship; anything tighter flags deliberate flush fits.

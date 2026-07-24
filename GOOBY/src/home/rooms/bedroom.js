@@ -24,9 +24,12 @@ export const ROOM = Object.freeze({
   }),
 
   // ---- V4/G79 (PLAN4-GAMES §G9.1): static room dressing, never saved ------
-  // Rug + frame/cord merge into `color`; emissive fairy dots and sticker art
-  // are one call each (3 added calls). The picture stays clear of the window,
-  // wardrobe and lamp-switch interaction zones.
+  // Rug + frame/cord + the relocated Aline plant merge into `color`;
+  // emissive fairy dots and sticker art are one call each. V6/E4 adds the
+  // KayKit cozy-corner cluster (wall frame + nightstand books, one merged
+  // `kaykitbits` atlas batch) and a Tiny Treats sansevieria (one `plants`
+  // batch) — 5 dressing calls total, +2 vs the V5 baseline. The picture
+  // stays clear of the window, wardrobe and lamp-switch interaction zones.
   dressing: Object.freeze([
     Object.freeze({
       id: 'alineRug', kind: 'asset', batch: 'color',
@@ -41,6 +44,37 @@ export const ROOM = Object.freeze({
       id: 'pictureSleepyhead', kind: 'picture', batch: 'picture-sleepyhead',
       art: 'sleepyhead', at: Object.freeze([-0.68, 2.12, -1.43]),
     }),
+    // ---- V6/E4: KayKit cozy corner (one merged atlas call). The medium
+    // frame hangs on the back wall above the wardrobe (model top y 1.96,
+    // tap box top y 2.1 — the frame's y 2.12 base clears BOTH, so a tap on
+    // the frame never reads as the wardrobe; wallMounted + elevated rules);
+    // the book set replaces the old furniture-kit `books` stack on the
+    // nightstand (removed below) so the tabletop stays a 3-piece composition.
+    Object.freeze({
+      id: 'cozyCorner', kind: 'assetCluster', batch: 'kaykitbits',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'kaykit-furniture/pictureframe_medium', at: Object.freeze([1.42, 2.12, -1.415]), scale: 0.55 }),
+        Object.freeze({ key: 'kaykit-furniture/book_set', at: Object.freeze([-0.5, 0.596, -1.26]), scale: 0.42, rotY: 20 }),
+      ]),
+    }),
+    // V6/E4: the Aline plant moves here from the living room (its old corner
+    // there now hosts the Tiny Treats monstera) — softens the bare strip
+    // past the bed's footboard. z 0.72 keeps the leaf AABB clear of the
+    // bed's generous tap box (hitSize ends at z 0.4 — the tap-zone lock in
+    // test/roomAudit.test.js) while staying left of the sideTable slot spot.
+    Object.freeze({
+      id: 'alinePlant', kind: 'asset', batch: 'color',
+      key: 'aline-furniture/plant', at: Object.freeze([-1.81, 0, 0.72]), scale: 1.2, rotY: 18,
+    }),
+    // V6/E4: Tiny Treats sansevieria in the right-wall gap between the
+    // wardrobe front and the floorClutter slot anchor (one `plants` batch).
+    Object.freeze({
+      id: 'bedroomPlants', kind: 'assetCluster', batch: 'plants',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'house-plants/sansevieria_plant_small_potted', at: Object.freeze([1.75, 0, -0.55]), scale: 0.3, rotY: -30 }),
+      ]),
+    }),
+    // ---- end V6/E4 -----------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 
@@ -54,9 +88,9 @@ export const ROOM = Object.freeze({
     // V4/POLISH-I: second accent pillow — the bed reads as freshly made
     Object.freeze({ item: 'pillowBlue', at: Object.freeze([-1.04, 0.3, -0.98]), rotY: -14, scale: 0.95 }),
     // nightstand: side table (composition) + lamp on top (nightstand decor slot)
-    // V4/POLISH-I: + a bedtime-reading stack on the table's left end
+    // V6/E4: the V4/POLISH-I furniture-kit `books` stack on the table's left
+    // end is replaced by the KayKit book_set in the dressing table above.
     Object.freeze({ item: 'sideTable', at: Object.freeze([-0.25, 0, -1.28]), rotY: 0 }),
-    Object.freeze({ item: 'books', at: Object.freeze([-0.43, 0.59, -1.22]), rotY: 35, scale: 0.8 }),
     Object.freeze({
       slot: 'nightstand', item: 'lampSquareTable', at: Object.freeze([-0.25, 0.59, -1.28]),
       rotY: 0, anchor: 'lamp',
