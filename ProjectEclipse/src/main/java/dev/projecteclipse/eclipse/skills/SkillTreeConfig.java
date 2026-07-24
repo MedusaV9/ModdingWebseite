@@ -275,10 +275,12 @@ public final class SkillTreeConfig {
                 "Prospector", "Schürfer",
                 "+10% mining skill XP.", "+10 % Bergbau-Skill-EP.",
                 "mine_skill_xp_pct", 0.10F, 0, 0));
+        // FINAL-DOPA-SOL §2: at 2% the jackpot beat fired 1.2–2.4x/h (a no-proc hour was
+        // 9–30% likely) — 3% keeps it rare but present in every focused mining hour.
         nodes.add(node("T2", "delve", 2, List.of("T1"),
                 "Fortune's Echo", "Echo des Glücks",
-                "2% chance to double natural ore drops.", "2 % Chance, natürliche Erz-Drops zu verdoppeln.",
-                "double_ore_drop_chance", 0.02F, 0, 0));
+                "3% chance to double natural ore drops.", "3 % Chance, natürliche Erz-Drops zu verdoppeln.",
+                "double_ore_drop_chance", 0.03F, 0, 0));
         nodes.add(node("T3", "delve", 2, List.of("T2"),
                 "Iron Stomach", "Eiserner Magen",
                 "-5% hunger drain.", "−5 % Hungerverbrauch.",

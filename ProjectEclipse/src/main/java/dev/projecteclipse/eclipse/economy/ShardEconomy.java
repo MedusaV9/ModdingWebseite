@@ -37,9 +37,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * The altar shard shop (spec §4). UX flow, all action bar + sounds, never chat:
  * <ol>
  *   <li><b>Bank:</b> sneak-right-click the altar with umbral shards ({@link
- *       UmbralShardItem#useOn}) — the whole stack is deposited, crediting the personal
- *       {@code eclipse:shards} balance AND the team pool ({@link
- *       EclipseWorldState#getShardPool()}).</li>
+ *       UmbralShardItem#useOn}) — the whole stack is deposited into the TEAM POOL only
+ *       ({@link EclipseWorldState#getShardPool()}). FINAL-DOPA-SOL §3: crediting the
+ *       personal balance too let one physical shard buy one unit of personal value AND
+ *       one unit of pooled value (double-spend). Personal balances are now funded only
+ *       by direct rewards (goals/quests/contracts/admin); the per-player contribution
+ *       stays visible through the {@code shards_banked} analytics counter that feeds
+ *       the Shard Banker award.</li>
  *   <li><b>Browse:</b> sneak while looking at the altar — the offer list cycles on the
  *       action bar every {@value #CYCLE_INTERVAL_TICKS} ticks.</li>
  *   <li><b>Buy:</b> sneak-punch (left-click) the altar — buys the offer currently shown.
@@ -127,19 +131,22 @@ public final class ShardEconomy {
 
     // --- bank (called by UmbralShardItem#useOn) ---
 
-    /** Deposits the WHOLE held shard stack: personal balance + team pool, chime + action-bar receipt. */
+    /**
+     * Deposits the WHOLE held shard stack into the TEAM POOL, chime + action-bar receipt.
+     * Pool-only on purpose (FINAL-DOPA-SOL §3 double-spend fix): the personal balance is
+     * NOT credited here — one physical shard is one unit of value, spendable once.
+     */
     public static void deposit(ServerPlayer player, ItemStack shardStack) {
         int amount = shardStack.getCount();
         if (amount <= 0) {
             return;
         }
         shardStack.shrink(amount);
-        int balance = addShards(player, amount);
         int pool = EclipseWorldState.get(player.server).addShardPool(amount);
-        player.displayClientMessage(Component.translatable("shop.eclipse.deposited", amount, balance, pool), true);
+        player.displayClientMessage(Component.translatable("shop.eclipse.deposited_pool", amount, pool), true);
         player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
-        EclipseMod.LOGGER.info("{} banked {} umbral shard(s) (balance {}, pool {})",
-                player.getScoreboardName(), amount, balance, pool);
+        EclipseMod.LOGGER.info("{} banked {} umbral shard(s) into the team pool (pool {})",
+                player.getScoreboardName(), amount, pool);
     }
 
     // --- browse: action-bar offer cycling ---

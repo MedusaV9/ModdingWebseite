@@ -8,8 +8,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.economy.ShardEconomy;
-import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -227,14 +225,16 @@ public final class ElytraRace {
             MinigameConfig.Values config = MinigameConfig.get();
             int shards = config.podiumShards().get(position - 1);
             int xp = config.podiumSkillXp().get(position - 1);
-            if (shards > 0) {
-                ShardEconomy.addShards(racer, shards);
+            // FFIX-B (FINAL-SAT-SOL H4): queue + claim-before-give by a stable
+            // instance-scoped id — the finisher record and the payout ledger live in the
+            // SAME SavedData, so a crash replay can never double-pay this position.
+            MinigameState.PendingPayout payout = new MinigameState.PendingPayout(
+                    "minigame:race:" + state.openCount() + ":finish:" + position, shards, xp);
+            state.queuePayout(uuid, payout);
+            if (MinigameService.grantPayout(state, racer, payout)) {
+                racer.displayClientMessage(Component.translatable("eclipse.minigame.race.finish_position",
+                        position, shards, xp).withStyle(ChatFormatting.GOLD), false);
             }
-            if (xp > 0) {
-                SkillsApi.addXp(racer, "minigame", xp);
-            }
-            racer.displayClientMessage(Component.translatable("eclipse.minigame.race.finish_position",
-                    position, shards, xp).withStyle(ChatFormatting.GOLD), false);
         }
 
         // Roll straight into the next lap: timer re-arms, fireworks top up.

@@ -1,0 +1,8 @@
+{
+  "en_us": {
+    "eclipse.minigame.reward.late": "A minigame reward from an earlier event arrived: %1$s shard(s) and %2$s skill XP."
+  },
+  "de_de": {
+    "eclipse.minigame.reward.late": "Eine Minispiel-Belohnung von einem früheren Event ist angekommen: %1$s Splitter und %2$s Fähigkeits-EP."
+  }
+}

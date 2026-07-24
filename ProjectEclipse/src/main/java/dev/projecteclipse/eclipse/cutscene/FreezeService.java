@@ -104,12 +104,47 @@ public final class FreezeService {
                 player.getScoreboardName(), lock.ttlTicks, lock.graceTicks, survivesDimensionChange);
     }
 
-    /** Releases a player's freeze immediately. Safe to call when not frozen. */
+    /**
+     * Owner-tagged freeze (FFIX-B / POLISH-SOL-06): like {@link #freeze(ServerPlayer, int)}
+     * but stamps {@code ownerToken} into the lock, so the installing system can later use
+     * {@link #unfreeze(ServerPlayer, String)} and never release a foreign lock that
+     * replaced its own. Cutscene/admin freezes keep the default {@code null} owner.
+     */
+    public static void freeze(ServerPlayer player, int ttlTicks, String ownerToken) {
+        freeze(player, ttlTicks, false, 0);
+        player.getData(EclipseAttachments.CUTSCENE_LOCK).ownerToken = ownerToken;
+    }
+
+    /**
+     * Releases a player's freeze immediately, REGARDLESS of owner (cutscene/admin teardown
+     * semantics — these lanes are the lock's primary authority). Systems that install
+     * owner-tagged locks must use {@link #unfreeze(ServerPlayer, String)} instead.
+     * Safe to call when not frozen.
+     */
     public static void unfreeze(ServerPlayer player) {
         if (player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
             player.removeData(EclipseAttachments.CUTSCENE_LOCK);
             EclipseMod.LOGGER.info("FreezeService: unfroze {}", player.getScoreboardName());
         }
+    }
+
+    /**
+     * Owner-checked release (FFIX-B / POLISH-SOL-06): removes the lock ONLY while it is
+     * still owned by {@code ownerToken}. A cutscene/admin freeze that overwrote the
+     * owner's lock in the meantime is left untouched — its own watchdog/teardown releases
+     * it. Returns whether a lock was actually released.
+     */
+    public static boolean unfreeze(ServerPlayer player, String ownerToken) {
+        if (!player.hasData(EclipseAttachments.CUTSCENE_LOCK)) {
+            return false;
+        }
+        if (!ownerToken.equals(player.getData(EclipseAttachments.CUTSCENE_LOCK).ownerToken)) {
+            return false;
+        }
+        player.removeData(EclipseAttachments.CUTSCENE_LOCK);
+        EclipseMod.LOGGER.info("FreezeService: unfroze {} (owner {})",
+                player.getScoreboardName(), ownerToken);
+        return true;
     }
 
     /** Whether the player is currently frozen. W7's border physics skips frozen players. */

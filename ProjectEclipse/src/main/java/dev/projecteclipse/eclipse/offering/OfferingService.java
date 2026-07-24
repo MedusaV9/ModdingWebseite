@@ -49,6 +49,12 @@ public final class OfferingService {
             EclipseSignals.onDayRollover((server, endedDay, newDay, phase) -> {
                 if (phase == EclipseSignals.DayRolloverPhase.PRE) {
                     resolveDay(server, endedDay);
+                } else if (!dev.projecteclipse.eclipse.drama.DawnCeremony.isRunning(server)) {
+                    // FFIX-A / SAT-D3: while a DawnCeremony sequences the morning, IT owns
+                    // the offering-announcement timing (its beat between toll and goals) —
+                    // the exact AwardService sendRevealNow gating pattern. Quiet/catch-up
+                    // rollovers have no ceremony and announce inline here at POST.
+                    announceResult(server, endedDay);
                 }
             });
         }
@@ -151,13 +157,27 @@ public final class OfferingService {
         }
 
         queueWinnerRewards(server, result);
-        if (!result.winners().isEmpty()) {
-            AnnouncementService.announce(server, "announce.eclipse.offering.title",
-                    itemDescriptionId(result.winningItemId()), S2CAnnouncePayload.STYLE_GOAL);
-        }
         EclipseMod.LOGGER.info("Resolved {} altar offering(s) for day {}: {} winner(s), best value {}",
                 result.offerings().size(), day, result.winners().size(), result.bestValue());
         return result;
+    }
+
+    /**
+     * FFIX-A / SAT-D3: the offering-result announcement, extracted from {@link #resolveDay}
+     * (which runs at rollover PRE, T+0 — a STYLE_GOAL line queued there sat AHEAD of the
+     * ceremony's T+40 STYLE_DAY payload, displacing the day-number card and pushing it into
+     * the T+200 roulette). {@code DawnCeremony} now fires this at its dedicated beat
+     * between the toll and the goals reveal; rollovers without a ceremony announce inline
+     * at POST. Idempotence rides the callers: exactly one of the two paths runs per
+     * rollover, and dev re-announces are harmless (presentation only).
+     */
+    public static void announceResult(MinecraftServer server, int day) {
+        OfferingState.get(server).resolved(day).ifPresent(result -> {
+            if (!result.winners().isEmpty()) {
+                AnnouncementService.announce(server, "announce.eclipse.offering.title",
+                        itemDescriptionId(result.winningItemId()), S2CAnnouncePayload.STYLE_GOAL);
+            }
+        });
     }
 
     public static OfferingState.DayResult peek(MinecraftServer server, int day) {
@@ -195,14 +215,21 @@ public final class OfferingService {
                 resolution.bestValue(), resolution.winningItemId());
     }
 
-    /** Repairs a missing queue write from the frozen result; stable ids deduplicate retries. */
+    /**
+     * Repairs a missing queue write from the frozen result; stable ids deduplicate retries.
+     * FFIX-A / SAT-D1: best-offering winners are reveal-path rewards — queued silently and
+     * delivered by {@code AwardService.sendRevealNow}, so the winner's materialization lands
+     * after the roulette, never at rollover T+0.
+     */
     private static void queueWinnerRewards(MinecraftServer server, OfferingState.DayResult result) {
         AwardConfig.Reward frozen = result.winnerReward().isEmpty()
                 ? OfferingConfig.get().winnerReward() : result.winnerReward();
         AwardConfig.Reward share = frozen.split(result.winners().size());
         for (UUID winner : result.winners()) {
-            AwardService.queueReward(server, winner,
-                    "offering:" + result.day() + ":" + winner, share);
+            // FFIX-B (POLISH-SOL-01): pass the settled day explicitly — this runs at rollover
+            // PRE for the ENDED day, so the mutable current day must not decide AWARD_VOID.
+            AwardService.queueRewardForReveal(server, winner,
+                    "offering:" + result.day() + ":" + winner, share, result.day());
         }
     }
 

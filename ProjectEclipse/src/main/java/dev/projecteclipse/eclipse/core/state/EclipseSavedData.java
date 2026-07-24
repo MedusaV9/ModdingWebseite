@@ -31,4 +31,20 @@ public final class EclipseSavedData {
             SavedData.Factory<T> factory) {
         return overworld(server).getDataStorage().computeIfAbsent(factory, dataId);
     }
+
+    /**
+     * FFIX-B durability barrier (POLISH-SOL-02 / FINAL-SAT-SOL C2+C3): writes every dirty
+     * overworld {@link SavedData} NOW and blocks until NeoForge's IO worker has finished
+     * the atomic, {@code fsync}ed writes ({@code IOUtilities.atomicWrite} +
+     * {@code channel.force(true)}). {@code setDirty()} alone only schedules a future save
+     * — chunk/player NBT and SavedData are separate persistence streams, so any recovery
+     * scheme whose journal lives in SavedData must flush that journal BEFORE the
+     * irreversible world/player mutation it protects (Phasenwelle vanish, minigame entry
+     * ticket). Cheap: only dirty {@code .dat} files are rewritten, and callers are rare
+     * one-shot events, never per-tick paths.
+     */
+    public static void flushOverworld(MinecraftServer server) {
+        overworld(server).getDataStorage().save();
+        net.neoforged.neoforge.common.IOUtilities.waitUntilIOWorkerComplete();
+    }
 }

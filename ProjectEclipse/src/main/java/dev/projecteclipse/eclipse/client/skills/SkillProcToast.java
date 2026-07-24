@@ -64,6 +64,12 @@ public final class SkillProcToast {
     private static final String DISABLE_KEY = "message.eclipse.skill.proc.disable";
     /** Toast baseline above the hotbar: below the actionbar (-68), above the armor row (-49). */
     private static final int BOTTOM_OFFSET = 59;
+    /**
+     * FFIX-A / POLISH C-2: while a reward materialization is touching down at {@code h-58}
+     * (absorb flash ring reaches ±38 px), the toast lane lifts here so the two
+     * bottom-center beats never stack (proc + reward grant can land the same tick).
+     */
+    private static final int BOTTOM_OFFSET_MATERIALIZING = 70;
     private static final int IN_TICKS = 5;
     private static final int HOLD_TICKS = 36;
     private static final int OUT_TICKS = 8;
@@ -157,7 +163,9 @@ public final class SkillProcToast {
         int starWidth = font.width(star);
         int width = starWidth + font.width(body);
         int x = (guiGraphics.guiWidth() - width) / 2;
-        int y = guiGraphics.guiHeight() - BOTTOM_OFFSET + rise;
+        int bottomOffset = dev.projecteclipse.eclipse.client.rewards.RewardMaterializeOverlay
+                .isMaterializing() ? BOTTOM_OFFSET_MATERIALIZING : BOTTOM_OFFSET;
+        int y = guiGraphics.guiHeight() - bottomOffset + rise;
 
         // Quiet backdrop pill so the line reads over bright terrain (no hard panel).
         guiGraphics.fill(x - 5, y - 3, x + width + 5, y + font.lineHeight + 2,

@@ -8,8 +8,6 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.economy.ShardEconomy;
-import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -215,6 +213,9 @@ public final class ArenaGame {
         if (state.roundEndsAtEpochMillis() == 0L) {
             return;
         }
+        // FFIX-B (H4): stable per-round identity for the payout ids, captured BEFORE the
+        // deadline reset — a crash replay of this round derives the exact same ids.
+        long roundKey = state.roundEndsAtEpochMillis();
         state.setRoundEndsAtEpochMillis(0L);
         Map<UUID, Integer> scores = state.killsSnapshot();
         List<Map.Entry<UUID, Integer>> ranked = new ArrayList<>(scores.entrySet());
@@ -236,16 +237,19 @@ public final class ArenaGame {
                 Map.Entry<UUID, Integer> entry = ranked.get(place);
                 broadcast(server, Component.translatable(podiumKeys[place], entry.getValue())
                         .withStyle(place == 0 ? ChatFormatting.GOLD : ChatFormatting.YELLOW));
+                int shards = config.podiumShards().get(place);
+                int xp = config.podiumSkillXp().get(place);
+                // FFIX-B (FINAL-SAT-SOL H3/H4): the payout is QUEUED by a stable
+                // per-instance/per-round/per-place id — offline winners keep their
+                // entitlement (paid at next login instead of being silently skipped),
+                // and crash replays cannot double-pay (claim-before-give).
+                MinigameState.PendingPayout payout = new MinigameState.PendingPayout(
+                        "minigame:arena:" + state.openCount() + ":" + roundKey
+                                + ":place:" + (place + 1),
+                        shards, xp);
+                state.queuePayout(entry.getKey(), payout);
                 ServerPlayer winner = server.getPlayerList().getPlayer(entry.getKey());
-                if (winner != null) {
-                    int shards = config.podiumShards().get(place);
-                    int xp = config.podiumSkillXp().get(place);
-                    if (shards > 0) {
-                        ShardEconomy.addShards(winner, shards);
-                    }
-                    if (xp > 0) {
-                        SkillsApi.addXp(winner, "minigame", xp);
-                    }
+                if (winner != null && MinigameService.grantPayout(state, winner, payout)) {
                     winner.displayClientMessage(Component.translatable(
                             "eclipse.minigame.arena.podium.private", place + 1, entry.getValue(),
                             shards, xp).withStyle(ChatFormatting.GOLD), false);

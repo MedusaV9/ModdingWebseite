@@ -1,0 +1,8 @@
+{
+  "en_us": {
+    "shop.eclipse.deposited_pool": "Banked %1$s shard(s) into the team pool — pool: %2$s"
+  },
+  "de_de": {
+    "shop.eclipse.deposited_pool": "%1$s Splitter in den Team-Pool gebankt — Pool: %2$s"
+  }
+}

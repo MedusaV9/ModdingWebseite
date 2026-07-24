@@ -35,10 +35,15 @@ import net.minecraft.world.phys.Vec3;
  * {@code holdTicks}, then re-materializes <b>block by block</b> in random order with
  * glitch bursts. The world re-rendering itself IS the fantasy.
  *
- * <p><b>Crash safety:</b> every de-rezzed block's state is snapshotted into the
- * {@link Data} SavedData (dirty immediately, so it hits disk with the next autosave
- * BEFORE the vanish can be lost). On server start {@link #restoreAllOnLoad} puts every
- * leftover snapshot back — a crash can therefore never permanently eat terrain.</p>
+ * <p><b>Crash safety (FFIX-B / POLISH-SOL-02):</b> every de-rezzed block's state is
+ * snapshotted into the {@link Data} SavedData at cast time, and the journal is
+ * force-flushed to disk ({@link EclipseSavedData#flushOverworld}) BEFORE the first block
+ * can vanish — {@code setDirty()} alone only schedules a save and gives no ordering
+ * against the chunk write that contains the air. On server start
+ * {@link #restoreAllOnLoad} reconciles EVERY leftover journal entry (including
+ * {@code vanished=false} prepare records whose air write reached the chunk while the
+ * phase flag didn't) against the actual block — a crash can therefore never permanently
+ * eat terrain.</p>
  *
  * <p><b>Hard blacklist</b> (never de-rezzed): block entities (chests, the altar, spawners
  * — inventories must never be voided), anything inside a spawn-protection zone
@@ -124,6 +129,10 @@ public final class WandPhaseService {
             data.add(level.dimension(), candidate.pos(), state, vanishAt, restoreAt);
         }
         data.setDirty();
+        // FFIX-B (POLISH-SOL-02 / FINAL-SAT-SOL C2): durable prepare barrier — the journal
+        // must be ON DISK before the first air write can reach a chunk save. The earliest
+        // vanish is this very game tick, so the flush happens here, synchronously.
+        EclipseSavedData.flushOverworld(player.server);
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.9F, 0.55F);
         return true;
@@ -212,6 +221,13 @@ public final class WandPhaseService {
      * Crash recovery: puts every leftover snapshot back immediately (called from
      * {@code WandTickService} on server start, before any new wave can run). Blocks whose
      * position is occupied are discarded, never overwritten.
+     *
+     * <p>FFIX-B (POLISH-SOL-02 / FINAL-SAT-SOL C2): reconciles ALL entries, not only
+     * {@code vanished=true} ones. Chunk data and SavedData are separate persistence
+     * streams, so a crash can persist the air write while the journal still says
+     * {@code vanished=false}; {@link #restore} itself is the reconciler — it fills air /
+     * replaceables with the snapshot and refuses to overwrite anything solid, so entries
+     * whose vanish never reached the chunk are discarded without touching the world.</p>
      */
     static void restoreAllOnLoad(MinecraftServer server) {
         Data data = Data.get(server);
@@ -224,9 +240,7 @@ public final class WandPhaseService {
             if (level == null) {
                 continue;
             }
-            if (entry.vanished) {
-                restore(level, entry);
-            }
+            restore(level, entry);
             restored++;
         }
         data.entries.clear();

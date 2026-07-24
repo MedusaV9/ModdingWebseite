@@ -185,6 +185,30 @@ public final class UiSounds {
         play("ui.toggle_settle", on ? 1.1F : 0.75F, 0.35F, EclipseSounds.UI_TAB, 1.0F);
     }
 
+    // --- FFIX-A additions (ledger events; see docs/plans_v3/wiring/FFIX-A_wiring.md) ---
+
+    /**
+     * Contract X-stamp slam (FFIX-A / POLISH V-1). Until the ledger registers
+     * {@code eclipse:ui.stamp}, the fallback reproduces the shipped two-layer read
+     * (anvil land + bell resonance) — but now behind the {@code uiSounds} kill-switch and
+     * the {@code uiSoundVolume} slider like every other presentation flourish.
+     */
+    public static void stamp() {
+        SoundEvent registered = resolve("ui.stamp");
+        if (registered != null) {
+            play(registered, 1.0F, 0.8F);
+        } else {
+            play(net.minecraft.sounds.SoundEvents.ANVIL_LAND, 0.55F, 0.8F);
+            play(net.minecraft.sounds.SoundEvents.BELL_RESONATE, 0.5F, 0.6F);
+        }
+    }
+
+    /** Soft glass chime — the contract prank exhale (FFIX-A / POLISH V-1). */
+    public static void chime() {
+        play("ui.chime", 0.8F, 0.7F, () -> net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME,
+                1.0F);
+    }
+
     // --- plumbing ---
 
     /**
@@ -194,14 +218,20 @@ public final class UiSounds {
      */
     private static void play(String path, float pitch, float volume,
             Supplier<SoundEvent> fallback, float fallbackPitchScale) {
-        SoundEvent registered = RESOLVED.computeIfAbsent(path, key -> BuiltInRegistries.SOUND_EVENT
-                .getOptional(ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, key))
-                .orElse(null));
+        SoundEvent registered = resolve(path);
         if (registered != null) {
             play(registered, pitch, volume);
         } else {
             play(fallback.get(), pitch * fallbackPitchScale, volume);
         }
+    }
+
+    /** Cached ledger lookup; {@code null} until the id lands in the sound registry. */
+    @javax.annotation.Nullable
+    private static SoundEvent resolve(String path) {
+        return RESOLVED.computeIfAbsent(path, key -> BuiltInRegistries.SOUND_EVENT
+                .getOptional(ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, key))
+                .orElse(null));
     }
 
     private static void play(SoundEvent sound, float pitch, float volume) {

@@ -24,10 +24,11 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
  *
  * <p>Variants: regular Eclipse mobs get the standard chime; ELITES ({@link
  * FogColossusEntity}, {@link StormHoundEntity}) get a deeper, slightly louder version;
- * BOSSES ({@link FogTyrantEntity}, {@link RiftWardenEntity}) get NOTHING — their
- * scripted deaths (storm burst, gutter collapse) already own the moment. Herald and
- * Ferryman are plain {@code Monster}s, so the {@link EclipseGeoMonster} guard excludes
- * them for free.</p>
+ * BOSSES ({@link FogTyrantEntity}, {@link RiftWardenEntity}) get NOTHING here — their
+ * scripted deaths (storm burst, gutter collapse) already own the moment, and the global
+ * boss-down release sting lives in {@link BossDownSting} (FFIX-A). Herald and Ferryman
+ * are plain {@code Monster}s, so the {@link EclipseGeoMonster} guard excludes them for
+ * free.</p>
  *
  * <p>Runs at {@link EventPriority#LOW} on {@code LivingDeathEvent} — after the death
  * economy, purely observational (the {@code drama/FirstBloodService} pattern). Delivered

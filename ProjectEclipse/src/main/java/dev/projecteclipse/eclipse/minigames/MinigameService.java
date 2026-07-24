@@ -1,13 +1,16 @@
 package dev.projecteclipse.eclipse.minigames;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.ChatFormatting;
@@ -58,9 +61,14 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * the player: they respawn inside (arena center / last race checkpoint).</p>
  *
  * <p><b>Ticket safety</b>: every entrant gets a {@link MinigameState.Ticket} (anchor +
- * game mode + health/food + full inventory NBT) BEFORE anything else happens. Every exit
- * path — voluntary leave, timeout, dev stop, crash rescue at login — funnels through
- * {@link #exitToTicket}, which restores the ticket and only then deletes it.</p>
+ * game mode + health/food + full inventory NBT) BEFORE anything else happens, and the
+ * ticket is force-flushed to disk before the real inventory is cleared (FFIX-B C3).
+ * Every exit path — voluntary leave, timeout, dev stop, crash rescue at login, and any
+ * foreign teleport out of a minigame dimension (FFIX-B H1) — restores the ticket and
+ * only then deletes it. Podium/participation payouts ride the persisted
+ * {@link MinigameState.PendingPayout} ledger (queue by stable instance-scoped id, claim
+ * before give), so offline winners are paid at next login and crash replays cannot
+ * double-pay (FFIX-B H2–H4).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class MinigameService {
@@ -76,6 +84,12 @@ public final class MinigameService {
     private static ServerBossEvent bossBar;
     private static final Map<UUID, Long> PENDING_LEAVE_CONFIRMS = new HashMap<>();
     private static final Map<UUID, Long> LAST_BOUNCE_MESSAGE = new HashMap<>();
+    /**
+     * Reentrancy guard for {@link #onPlayerChangedDimension}: players currently being
+     * teleported OUT by {@link #exitToTicket} itself (their ticket is restored right
+     * after the teleport — the watchdog must not double-restore mid-flight). FFIX-B H1.
+     */
+    private static final Set<UUID> EXIT_IN_PROGRESS = new HashSet<>();
     private static long lastSeenRemainingMillis = Long.MAX_VALUE;
     private static long totalWindowMillisHint;
     /** Course generation finished for the current instance (entries bounce until true). */
@@ -139,6 +153,7 @@ public final class MinigameService {
         bossBar = null;
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
+        EXIT_IN_PROGRESS.clear();
         lastSeenRemainingMillis = Long.MAX_VALUE;
         totalWindowMillisHint = 0L;
         courseReady = false;
@@ -209,6 +224,9 @@ public final class MinigameService {
 
         int effectiveMinutes = minutes > 0 ? minutes : MinigameConfig.get().defaultMinutes();
         long now = System.currentTimeMillis();
+        // FFIX-B (H2): defense in depth — beginClosing already settles, but saves written
+        // before this fix may still carry unsettled participants of the PREVIOUS instance.
+        settleParticipation(state);
         state.beginInstance(gameId, now + effectiveMinutes * 60_000L);
         totalWindowMillisHint = effectiveMinutes * 60_000L;
         lastSeenRemainingMillis = Long.MAX_VALUE;
@@ -359,6 +377,9 @@ public final class MinigameService {
      */
     private static void beginClosing(MinecraftServer server, MinigameState state, ExitReason reason) {
         state.setPhase(MinigameState.Phase.CLOSING);
+        // FFIX-B (H2): queue every participant's entitlement — online or not — before any
+        // of this instance's bookkeeping can be discarded by a later beginInstance.
+        settleParticipation(state);
         String gameId = state.gameId();
         broadcast(server, Component.translatable("eclipse.minigame.announce.end", gameName(gameId))
                 .withStyle(ChatFormatting.GREEN));
@@ -475,6 +496,11 @@ public final class MinigameService {
         if (state.phase() == MinigameState.Phase.OPEN) {
             state.setPhase(MinigameState.Phase.RUNNING);
         }
+        // FFIX-B (FINAL-SAT-SOL C3 / POLISH-SOL-08): the ticket must be ON DISK before
+        // the player's real inventory is destroyed below. setDirty() alone only schedules
+        // a save — player NBT and SavedData are separate persistence streams, so a crash
+        // could otherwise persist the kit-equipped player with no ticket to rescue them.
+        EclipseSavedData.flushOverworld(server);
 
         if (MinigameDimensions.GAME_RACE.equals(gameId)) {
             ElytraRace.placeIntoRace(target, state, player);
@@ -512,14 +538,19 @@ public final class MinigameService {
         if (ticket != null) {
             target = server.getLevel(ticket.anchor().dimension());
         }
-        if (target != null) {
-            MinigameState.ReturnAnchor anchor = ticket.anchor();
-            player.teleportTo(target, anchor.x(), anchor.y(), anchor.z(), anchor.yaw(), anchor.pitch());
-        } else {
-            ServerLevel overworld = server.overworld();
-            BlockPos spawn = overworld.getSharedSpawnPos();
-            player.teleportTo(overworld, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
-                    overworld.getSharedSpawnAngle(), 0.0F);
+        EXIT_IN_PROGRESS.add(player.getUUID());
+        try {
+            if (target != null) {
+                MinigameState.ReturnAnchor anchor = ticket.anchor();
+                player.teleportTo(target, anchor.x(), anchor.y(), anchor.z(), anchor.yaw(), anchor.pitch());
+            } else {
+                ServerLevel overworld = server.overworld();
+                BlockPos spawn = overworld.getSharedSpawnPos();
+                player.teleportTo(overworld, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
+                        overworld.getSharedSpawnAngle(), 0.0F);
+            }
+        } finally {
+            EXIT_IN_PROGRESS.remove(player.getUUID());
         }
         player.fallDistance = 0.0F;
 
@@ -541,24 +572,86 @@ public final class MinigameService {
         player.displayClientMessage(Component.translatable(key).withStyle(ChatFormatting.AQUA), false);
     }
 
-    /** Once-per-instance participation payout (config: shards + skill XP), paid on exit. */
+    /**
+     * Once-per-instance participation payout (config: shards + skill XP), settled through
+     * the persisted payout ledger (FFIX-B, FINAL-SAT-SOL H2/H4): queued by an
+     * instance-scoped id and durably claimed BEFORE the grant, so a crash can neither
+     * duplicate nor lose it. {@code markParticipationRewarded} stays as the legacy
+     * per-instance bookkeeping but no longer gates the payout — the ledger does.
+     */
     private static void grantParticipationIfOwed(MinecraftServer server, MinigameState state,
             ServerPlayer player) {
-        if (!state.isParticipant(player.getUUID())
-                || !state.markParticipationRewarded(player.getUUID())) {
+        if (!state.isParticipant(player.getUUID())) {
             return;
         }
-        MinigameConfig.Values config = MinigameConfig.get();
-        if (config.participationShards() > 0) {
-            ShardEconomy.addShards(player, config.participationShards());
+        state.markParticipationRewarded(player.getUUID());
+        MinigameState.PendingPayout payout = participationPayout(state.openCount());
+        if (payout == null) {
+            return;
         }
-        if (config.participationSkillXp() > 0) {
-            SkillsApi.addXp(player, "minigame", config.participationSkillXp());
-        }
-        if (config.participationShards() > 0 || config.participationSkillXp() > 0) {
+        state.queuePayout(player.getUUID(), payout);
+        if (grantPayout(state, player, payout)) {
             player.displayClientMessage(Component.translatable("eclipse.minigame.reward.participation",
-                    config.participationShards(), config.participationSkillXp())
+                    payout.shards(), payout.skillXp())
                     .withStyle(ChatFormatting.GOLD), false);
+        }
+    }
+
+    /** The current instance's participation payout, or {@code null} when configured to 0/0. */
+    @Nullable
+    private static MinigameState.PendingPayout participationPayout(int instanceId) {
+        MinigameConfig.Values config = MinigameConfig.get();
+        if (config.participationShards() <= 0 && config.participationSkillXp() <= 0) {
+            return null;
+        }
+        return new MinigameState.PendingPayout("minigame:participation:" + instanceId,
+                config.participationShards(), config.participationSkillXp());
+    }
+
+    /**
+     * FFIX-B (FINAL-SAT-SOL H2): queues the current instance's participation payout for
+     * EVERY participant — online or not — so entitlements outlive the instance
+     * bookkeeping that {@code beginInstance} clears. Offline participants are paid at
+     * their next login. Idempotent by stable payout id (safe on close replays).
+     */
+    private static void settleParticipation(MinigameState state) {
+        MinigameState.PendingPayout payout = participationPayout(state.openCount());
+        if (payout == null) {
+            return;
+        }
+        for (UUID participant : state.participantsSnapshot()) {
+            state.queuePayout(participant, payout);
+        }
+    }
+
+    /**
+     * Applies one queued payout with the AwardService claim-before-give pattern (FFIX-B,
+     * FINAL-SAT-SOL H4): the durable delivered-marker is written FIRST, so crash replays
+     * and login retries can never apply the same stable payout id twice. Package-private
+     * — {@link ArenaGame}/{@link ElytraRace} route their podium payouts through here.
+     */
+    static boolean grantPayout(MinigameState state, ServerPlayer player,
+            MinigameState.PendingPayout payout) {
+        if (!state.claimPayout(player.getUUID(), payout.id())) {
+            return false;
+        }
+        if (payout.shards() > 0) {
+            ShardEconomy.addShards(player, payout.shards());
+        }
+        if (payout.skillXp() > 0) {
+            SkillsApi.addXp(player, "minigame", payout.skillXp());
+        }
+        return true;
+    }
+
+    /** Login delivery of queued payouts (offline podium/participation — FFIX-B H2/H3). */
+    private static void deliverPendingPayouts(MinigameState state, ServerPlayer player) {
+        for (MinigameState.PendingPayout payout
+                : List.copyOf(state.pendingPayouts(player.getUUID()))) {
+            if (grantPayout(state, player, payout)) {
+                player.displayClientMessage(Component.translatable("eclipse.minigame.reward.late",
+                        payout.shards(), payout.skillXp()).withStyle(ChatFormatting.GOLD), false);
+            }
         }
     }
 
@@ -617,6 +710,8 @@ public final class MinigameService {
         }
         MinecraftServer server = player.server;
         MinigameState state = MinigameState.get(server);
+        // FFIX-B (H2/H3): payouts queued while this player was offline land first.
+        deliverPendingPayouts(state, player);
         String dimGameId = MinigameDimensions.gameIdOf(player.level().dimension());
         if (dimGameId != null) {
             boolean eventStillOn = state.isActive() && state.gameId().equals(dimGameId);
@@ -645,6 +740,40 @@ public final class MinigameService {
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
         removeFromBossBar(player);
+    }
+
+    /**
+     * FFIX-B (FINAL-SAT-SOL H1): catches EVERY dimension exit that does not run through
+     * {@link #exitToTicket} — admin teleport, other systems' transports, anything. A
+     * ticket holder leaving a minigame dimension for a non-minigame one gets their real
+     * inventory restored IN PLACE (the foreign teleport's destination is respected, like
+     * the login-rescue path) and their ticket released, so the disposable kit can never
+     * leak into the outside world. {@code EXIT_IN_PROGRESS} excludes our own exits.
+     */
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)
+                || MinigameDimensions.gameIdOf(event.getFrom()) == null
+                || MinigameDimensions.gameIdOf(event.getTo()) != null
+                || EXIT_IN_PROGRESS.contains(player.getUUID())) {
+            return;
+        }
+        MinecraftServer server = player.server;
+        MinigameState state = MinigameState.get(server);
+        MinigameState.Ticket ticket = state.ticket(player.getUUID());
+        if (ticket == null) {
+            return;
+        }
+        MinigameState.restoreTicket(player, ticket);
+        state.removeTicket(player.getUUID());
+        PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
+        LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        removeFromBossBar(player);
+        grantParticipationIfOwed(server, state, player);
+        player.displayClientMessage(Component.translatable("eclipse.minigame.exit.rescued")
+                .withStyle(ChatFormatting.AQUA), false);
+        EclipseMod.LOGGER.info("Minigame ticket restored for {} after a foreign dimension exit to {}",
+                player.getScoreboardName(), event.getTo().location());
     }
 
     // ================================================================== /minigameleave

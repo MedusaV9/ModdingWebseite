@@ -157,6 +157,17 @@ public final class AwardService {
                     rewardLine(share, false), rewardLine(share, true),
                     resolution.candidates(), resolution.winners()));
             for (UUID winner : resolution.winners()) {
+                // FFIX-B (POLISH-SOL-01): the Blutschuld AWARD_VOID decision is made HERE,
+                // with the resolved award's own day, and frozen into the record — never with
+                // the mutable current day. Replay/repair of an already resolved day therefore
+                // stays deterministic even after the modifier ledger purges the void entry at
+                // the next rollover. The reveal still shows the winner; only the reward is voided.
+                if (dev.projecteclipse.eclipse.contracts.ContractModifierService
+                        .isAwardVoided(server, winner, day)) {
+                    EclipseMod.LOGGER.info("Daily award reward for {} voided on day {} (Blutschuld)",
+                            winner, day);
+                    continue;
+                }
                 String rewardId = "award:" + day + ":" + category.config().id() + ":" + winner;
                 rewards.add(new AwardsState.RewardGrant(
                         winner, AwardsState.PendingReward.of(rewardId, share)));
@@ -204,7 +215,17 @@ public final class AwardService {
         return state.reroll(day, AwardConfig.get().maxRerollsPerDay());
     }
 
-    /** Public expansion-sequence seam: broadcasts the latest frozen reveal immediately. */
+    /**
+     * Public expansion-sequence seam: broadcasts the latest frozen reveal immediately.
+     *
+     * <p>FFIX-A / SAT-D1: this is also the delivery seam for the reveal-path rewards that
+     * {@link #queueResolvedRewards} / {@code OfferingService.queueWinnerRewards} held back
+     * at resolve time (rollover PRE, T+0). Delivering here — instead of ~10 s before the
+     * roulette — keeps the winner's materialization AFTER the reveal; the client
+     * additionally defers {@code RewardMaterializeOverlay} playback behind the running
+     * roulette show ({@code AwardsOverlay.showLiveOrArmed}), so the touchdown plays once
+     * the veil lifts. Winners offline at reveal time keep the calm login-claim replay.</p>
+     */
     public static void sendRevealNow(MinecraftServer server) {
         AwardsState state = AwardsState.get(server);
         int day = state.latestResolvedDay();
@@ -216,22 +237,56 @@ public final class AwardService {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 state.markRevealSeen(player.getUUID(), day);
                 player.playNotifySound(EclipseSounds.AWARD_STING.get(), SoundSource.MASTER, 0.8F, 1.0F);
+                // Held reveal-path rewards (award + best-offering winners) land now with
+                // the full live materialization; non-winners simply have nothing pending.
+                deliverPending(player, false);
             }
         });
     }
 
     public static void queueReward(MinecraftServer server, UUID player, String id, AwardConfig.Reward reward) {
-        // W4-CONTRACTS: a wrong-killer's award eligibility is voided for the day (Blutschuld).
-        if (dev.projecteclipse.eclipse.contracts.ContractModifierService.isAwardVoided(server, player,
-                dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(server).getDay())) {
-            return;
-        }
-        queueReward(server, player, AwardsState.PendingReward.of(id, reward));
+        queueReward(server, player, id, reward,
+                dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(server).getDay());
     }
 
-    private static void queueReward(MinecraftServer server, UUID player, AwardsState.PendingReward reward) {
+    /**
+     * Queues one reward with an explicit day identity for the Blutschuld check. Callers that
+     * settle a PAST day (contract expiry at rollover, offering settle) must pass that day —
+     * querying the mutable current day after rollover voids/passes the wrong entries
+     * (FFIX-B / POLISH-SOL-01).
+     */
+    public static void queueReward(MinecraftServer server, UUID player, String id,
+            AwardConfig.Reward reward, int day) {
+        // W4-CONTRACTS: a wrong-killer's award eligibility is voided for the day (Blutschuld).
+        if (dev.projecteclipse.eclipse.contracts.ContractModifierService.isAwardVoided(
+                server, player, day)) {
+            return;
+        }
+        queueReward(server, player, AwardsState.PendingReward.of(id, reward), true);
+    }
+
+    /**
+     * FFIX-A / SAT-D1: reveal-path variant — queues silently, WITHOUT the immediate online
+     * delivery. Used for winners frozen at rollover PRE (daily awards, best offering) whose
+     * materialization belongs AFTER the T+200 roulette; {@link #sendRevealNow} delivers them.
+     * Offline winners keep the calm login-claim replay unchanged.
+     */
+    public static void queueRewardForReveal(MinecraftServer server, UUID player, String id,
+            AwardConfig.Reward reward, int day) {
+        if (dev.projecteclipse.eclipse.contracts.ContractModifierService.isAwardVoided(
+                server, player, day)) {
+            return;
+        }
+        queueReward(server, player, AwardsState.PendingReward.of(id, reward), false);
+    }
+
+    private static void queueReward(MinecraftServer server, UUID player,
+            AwardsState.PendingReward reward, boolean deliverNow) {
         if (!AwardsState.get(server).queue(player, reward)) {
             return;
+        }
+        if (!deliverNow) {
+            return; // reveal-path hold: sendRevealNow (or the next login claim) delivers
         }
         ServerPlayer online = server.getPlayerList().getPlayer(player);
         if (online != null) {
@@ -239,10 +294,21 @@ public final class AwardService {
         }
     }
 
-    /** Repairs queue writes from the frozen resolution; stable ids make this safe on every retry. */
+    /**
+     * Repairs queue writes from the frozen resolution; stable ids make this safe on every retry.
+     * FFIX-B (POLISH-SOL-01): grants frozen by the fixed {@link #resolveDay} already exclude
+     * voided winners; the extra check here (with the record's own day, never the current day)
+     * also covers records frozen before the fix while their void entries are still alive.
+     * FFIX-A / SAT-D1: award grants are reveal-path — queued silently, delivered by
+     * {@link #sendRevealNow} so the winner's materialization never precedes the roulette.
+     */
     private static void queueResolvedRewards(MinecraftServer server, AwardsState.ResolvedDay resolved) {
         for (AwardsState.RewardGrant grant : resolved.rewardGrants()) {
-            queueReward(server, grant.player(), grant.reward());
+            if (dev.projecteclipse.eclipse.contracts.ContractModifierService.isAwardVoided(
+                    server, grant.player(), resolved.day())) {
+                continue;
+            }
+            queueReward(server, grant.player(), grant.reward(), false);
         }
     }
 

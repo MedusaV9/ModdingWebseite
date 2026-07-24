@@ -66,10 +66,24 @@ public final class WandPowers {
         COOLDOWNS.clear();
     }
 
+    /**
+     * FFIX-B (POLISH-SOL-03): basic actor-state gate for every C2S wand entry point. A
+     * modified client can send cast/choose packets while dead, mid-removal or in spectator
+     * — none of which can reach the normal item-use path. Allowed game modes are exactly
+     * the hand-interaction ones: survival, creative and adventure; spectator is rejected.
+     * Rejections are SILENT (no message/sound) so forged packets cannot spam feedback.
+     */
+    private static boolean isActorValid(ServerPlayer player) {
+        return player.isAlive() && !player.isRemoved() && !player.isSpectator();
+    }
+
     // ------------------------------------------------------------------ payload entry points
 
     /** {@code C2SWandCastPayload} handler — the ONLY way a power executes. */
     public static void handleCast(ServerPlayer player, boolean mainHand) {
+        if (!isActorValid(player)) {
+            return; // forged/stale request from a dead, removed or spectator client
+        }
         InteractionHand hand = mainHand ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         ItemStack stack = player.getItemInHand(hand);
         if (!(stack.getItem() instanceof EclipseWandItem)) {
@@ -133,6 +147,9 @@ public final class WandPowers {
 
     /** {@code C2SWandChoosePathPayload} handler — first-choice lock, server-validated. */
     public static void handleChoosePath(ServerPlayer player, int pathId) {
+        if (!isActorValid(player)) {
+            return; // same actor-state gate as casting (POLISH-SOL-03)
+        }
         WandPath chosen = WandPath.byId(pathId);
         if (chosen == WandPath.NONE) {
             return;

@@ -77,6 +77,13 @@ public final class ActionTogglesService {
      * appears for a long-term move-denied player (5 min).
      */
     private static final int MOVE_FREEZE_TTL_TICKS = 6000;
+    /**
+     * FFIX-B (POLISH-SOL-06): owner token stamped into every move-deny freeze. Releases go
+     * through {@code FreezeService.unfreeze(player, token)}, which refuses when a foreign
+     * (cutscene/admin) lock replaced ours — this service can therefore never strip a
+     * freeze it does not own.
+     */
+    private static final String FREEZE_OWNER = "action_toggles:move";
 
     /** Lock-free early-out mask: bit set while {@link ToggleAction#bit()} has restrictions. */
     private static volatile long activeBits = 0L;
@@ -166,7 +173,8 @@ public final class ActionTogglesService {
             if (MOVE_LOCKED.contains(player.getUUID())
                     && (player.isSpectator() || state.isAllowed(ToggleAction.MOVE, player.getUUID()))) {
                 MOVE_LOCKED.remove(player.getUUID());
-                FreezeService.unfreeze(player);
+                // Owner-checked: never releases a cutscene lock that replaced ours (SOL-06).
+                FreezeService.unfreeze(player, FREEZE_OWNER);
             }
         }
     }
@@ -277,13 +285,14 @@ public final class ActionTogglesService {
             // Re-assert after watchdog TTL/death/dimension-change/relog releases. Never stack
             // on top of a foreign (cutscene) lock — it already prevents movement.
             if (!FreezeService.isFrozen(player)) {
-                FreezeService.freeze(player, MOVE_FREEZE_TTL_TICKS);
+                FreezeService.freeze(player, MOVE_FREEZE_TTL_TICKS, FREEZE_OWNER);
                 if (MOVE_LOCKED.add(id)) {
                     hint(player, ToggleAction.MOVE);
                 }
             }
         } else if (MOVE_LOCKED.remove(id)) {
-            FreezeService.unfreeze(player);
+            // Owner-checked: never releases a cutscene lock that replaced ours (SOL-06).
+            FreezeService.unfreeze(player, FREEZE_OWNER);
         }
     }
 

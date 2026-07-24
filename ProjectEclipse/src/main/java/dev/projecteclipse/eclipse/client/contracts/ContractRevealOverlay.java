@@ -12,15 +12,14 @@ import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.network.contracts.ContractPayloads;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.resources.PlayerSkin;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.neoforged.api.distmarker.Dist;
@@ -76,6 +75,13 @@ public final class ContractRevealOverlay {
 
     // --- ceremony state (client thread) ---
     private static Show show = Show.NONE;
+    /**
+     * FFIX-A / POLISH S-2: a ceremony arriving while a cutscene suppresses the HUD is held
+     * here (latest wins) and starts once the flight ends — the layer is not
+     * letterbox-whitelisted, so starting immediately used to tick VEIL→SPIN→STAMP→TEXT
+     * invisibly with full roulette/anvil/typewriter audio and be gone when the bars lifted.
+     */
+    private static Show pendingShow = Show.NONE;
     private static Stage stage = Stage.VEIL;
     private static int stageTicks;
     @Nullable
@@ -89,10 +95,18 @@ public final class ContractRevealOverlay {
     // --- role/window state (survives the ceremony while the window runs) ---
     private static byte role;
     @Nullable
-    private static UUID targetUuid;
+    private static volatile UUID targetUuid;
     /** Set from skin-loader threads; render thread falls back to the uniform face while null. */
     @Nullable
     private static volatile PlayerSkin resolvedSkin;
+    /**
+     * FFIX-B (POLISH-SOL-05): session/lookup token for the async face futures. Bumped on
+     * every new lookup, reset and logout; a completing {@code SkinManager} future must
+     * present the generation (and target UUID) it was started with, so a stale future from
+     * a previous window/session can never overwrite the current face.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger FACE_GENERATION =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     private ContractRevealOverlay() {}
 
@@ -106,13 +120,14 @@ public final class ContractRevealOverlay {
             targetUuid = payload.targetUuid();
             resolveFace(payload.targetUuid());
             if (!payload.replay()) {
-                startCeremony(Show.HUNTER_REVEAL);
+                startOrDefer(Show.HUNTER_REVEAL);
             }
         } else {
             targetUuid = null;
             resolvedSkin = null;
+            FACE_GENERATION.incrementAndGet(); // invalidate any in-flight hunter lookup
             if (!payload.replay()) {
-                startCeremony(Show.TARGET_REVEAL);
+                startOrDefer(Show.TARGET_REVEAL);
             }
         }
     }
@@ -120,11 +135,11 @@ public final class ContractRevealOverlay {
     /** {@link ContractPayloads.S2CContractResolvePayload} (client main thread). */
     public static void handleResolve(ContractPayloads.S2CContractResolvePayload payload) {
         switch (payload.kind()) {
-            case ContractPayloads.RESOLVE_FULFILLED -> startCeremony(Show.FULFILLED);
-            case ContractPayloads.RESOLVE_LAPSED -> startCeremony(Show.LAPSED);
-            case ContractPayloads.RESOLVE_SURVIVED -> startCeremony(Show.SURVIVED);
-            case ContractPayloads.RESOLVE_PRANK_REVEAL -> startCeremony(Show.PRANK_REVEAL);
-            case ContractPayloads.RESOLVE_WITHDRAWN -> startCeremony(Show.WITHDRAWN);
+            case ContractPayloads.RESOLVE_FULFILLED -> startOrDefer(Show.FULFILLED);
+            case ContractPayloads.RESOLVE_LAPSED -> startOrDefer(Show.LAPSED);
+            case ContractPayloads.RESOLVE_SURVIVED -> startOrDefer(Show.SURVIVED);
+            case ContractPayloads.RESOLVE_PRANK_REVEAL -> startOrDefer(Show.PRANK_REVEAL);
+            case ContractPayloads.RESOLVE_WITHDRAWN -> startOrDefer(Show.WITHDRAWN);
             default -> { /* unknown kind: ignore (forward-compat) */ }
         }
     }
@@ -135,12 +150,28 @@ public final class ContractRevealOverlay {
             // The window closed under a running reveal (force-stop): cut the ceremony.
             reset(false);
         }
+        if (!active && (pendingShow == Show.HUNTER_REVEAL || pendingShow == Show.TARGET_REVEAL)) {
+            pendingShow = Show.NONE; // held reveal for a window that no longer exists
+        }
         if (!active) {
             role = 0;
         }
     }
 
     // ================================================================== ceremony state machine
+
+    /**
+     * FFIX-A / POLISH S-2: ceremonies never start into a suppressed HUD. The pending slot
+     * keeps the newest kind (a resolve beat arriving mid-flight supersedes a stale held
+     * reveal — matching the live behavior where {@code startCeremony} replaces the show).
+     */
+    private static void startOrDefer(Show kind) {
+        if (CameraDirector.isHudSuppressed()) {
+            pendingShow = kind;
+            return;
+        }
+        startCeremony(kind);
+    }
 
     private static void startCeremony(Show kind) {
         show = kind;
@@ -168,7 +199,19 @@ public final class ContractRevealOverlay {
             role = 0;
             targetUuid = null;
             resolvedSkin = null;
+            FACE_GENERATION.incrementAndGet(); // stale futures must not complete into a new window
         }
+    }
+
+    /**
+     * FFIX-B (POLISH-SOL-05): explicit logout boundary (the GestureGlyphFx /
+     * ClientBestiaryCache pattern) — waiting for a tick to observe {@code level == null}
+     * leaves a window in which a reconnect could inherit the previous session's face/role.
+     */
+    @SubscribeEvent
+    static void onLoggingOut(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        reset(false);
+        pendingShow = Show.NONE;
     }
 
     @SubscribeEvent
@@ -176,9 +219,23 @@ public final class ContractRevealOverlay {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) {
             reset(false);
+            pendingShow = Show.NONE;
             return;
         }
-        if (minecraft.isPaused() || show == Show.NONE) {
+        if (minecraft.isPaused()) {
+            return;
+        }
+        if (CameraDirector.isHudSuppressed()) {
+            // S-2: FULL pause under cutscene suppression — the render is cancelled by the
+            // letterbox layer anyway, so a running ceremony freezes here (no invisible
+            // stage advancement, no roulette/stamp/typewriter audio) and resumes after.
+            return;
+        }
+        if (show == Show.NONE) {
+            if (pendingShow != Show.NONE) {
+                startCeremony(pendingShow); // held during a flight; the player sees it now
+                pendingShow = Show.NONE;
+            }
             return;
         }
         stageTicks++;
@@ -218,8 +275,8 @@ public final class ContractRevealOverlay {
             case RESOLVE -> {
                 if (stageTicks >= RESOLVE_TICKS) {
                     advance(Stage.STAMP);
-                    playUi(SoundEvents.ANVIL_LAND, 0.55F, 0.8F);
-                    playUi(SoundEvents.BELL_RESONATE, 0.5F, 0.6F);
+                    // FFIX-A / POLISH V-1: through UiSounds — kill-switch + volume slider.
+                    UiSounds.stamp();
                 }
             }
             case STAMP -> {
@@ -257,7 +314,7 @@ public final class ContractRevealOverlay {
                     typer = titleKey != null ? new Typer(EclipseLang.trString(titleKey)) : null;
                     subTyper = new Typer(EclipseLang.trString(subKey));
                     if (show == Show.PRANK_REVEAL) {
-                        playUi(SoundEvents.AMETHYST_BLOCK_CHIME, 0.8F, 0.7F);
+                        UiSounds.chime(); // FFIX-A / POLISH V-1: UiSounds-routed exhale
                     }
                 }
             }
@@ -297,20 +354,30 @@ public final class ContractRevealOverlay {
      */
     private static void resolveFace(UUID uuid) {
         resolvedSkin = null;
+        // FFIX-B (POLISH-SOL-05): every lookup claims a fresh generation; completions are
+        // accepted only while that generation (and the target UUID) is still current.
+        int generation = FACE_GENERATION.incrementAndGet();
         Minecraft minecraft = Minecraft.getInstance();
         try {
             PlayerInfo info = minecraft.getConnection() != null
                     ? minecraft.getConnection().getPlayerInfo(uuid) : null;
             if (info != null) {
                 minecraft.getSkinManager().getOrLoad(info.getProfile())
-                        .thenAccept(skin -> resolvedSkin = skin);
+                        .thenAccept(skin -> acceptFace(generation, uuid, skin));
                 return;
             }
             SkullBlockEntity.fetchGameProfile(uuid).thenAccept(optional ->
                     optional.ifPresent(profile -> minecraft.getSkinManager().getOrLoad(profile)
-                            .thenAccept(skin -> resolvedSkin = skin)));
+                            .thenAccept(skin -> acceptFace(generation, uuid, skin))));
         } catch (Exception e) {
             EclipseMod.LOGGER.debug("Contract face lookup failed for {} — uniform fallback", uuid, e);
+        }
+    }
+
+    /** Future completion gate — may run on skin-loader threads (all fields are volatile). */
+    private static void acceptFace(int generation, UUID uuid, @Nullable PlayerSkin skin) {
+        if (skin != null && FACE_GENERATION.get() == generation && uuid.equals(targetUuid)) {
+            resolvedSkin = skin;
         }
     }
 
@@ -575,11 +642,6 @@ public final class ContractRevealOverlay {
                 EclipseUiTheme.withAlpha(RED, alpha));
         guiGraphics.fill(-reach, -1, reach, 1, EclipseUiTheme.withAlpha(DEEP_RED, alpha));
         guiGraphics.pose().popPose();
-    }
-
-    private static void playUi(net.minecraft.sounds.SoundEvent sound, float pitch, float volume) {
-        Minecraft.getInstance().getSoundManager().play(
-                SimpleSoundInstance.forUI(sound, pitch, volume));
     }
 
     // ================================================================== layer registration

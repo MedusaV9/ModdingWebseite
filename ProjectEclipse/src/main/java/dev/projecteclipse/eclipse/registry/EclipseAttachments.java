@@ -42,10 +42,12 @@ public final class EclipseAttachments {
             () -> AttachmentType.builder(CutsceneLock::new).build());
 
     /**
-     * Personal umbral-shard balance banked at the altar shop (W13 economy). Credited by
-     * sneak-depositing umbral shards at the altar, spent on personal rewards; survives
-     * death so a kill can never rob the victim's bank. Only {@code economy.ShardEconomy}
-     * should write it (plus the {@code /eclipse shards} admin command).
+     * Personal umbral-shard balance of the altar shop (W13 economy). Credited by DIRECT
+     * rewards only — goals, personal quests, contracts, admin grants; sneak-deposited
+     * physical shards go to the team pool instead (FINAL-DOPA-SOL §3 double-spend fix).
+     * Spent on personal rewards; survives death so a kill can never rob the victim's
+     * bank. Only {@code economy.ShardEconomy} should write it (plus the
+     * {@code /eclipse shards} admin command).
      */
     public static final Supplier<AttachmentType<Integer>> SHARDS = ATTACHMENTS.register(
             "shards",

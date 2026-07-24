@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.hud.CenterStageArbiter;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
@@ -55,11 +56,20 @@ public final class LevelUpOverlay {
     private static final int GLITCH_IN_TICKS = 8;
     private static final int HOLD_TICKS = 26;
     private static final int GLITCH_OUT_TICKS = 8;
-    private static final int TOTAL_TICKS = GLITCH_IN_TICKS + HOLD_TICKS + GLITCH_OUT_TICKS;
     /** Quiet gap between queued celebrations so back-to-back levels stay readable. */
     private static final int GAP_TICKS = 8;
     private static final int QUEUE_LIMIT = 8;
     private static final float SCALE = 2.0F;
+
+    // FFIX-A / DOPA #4: the authored milestone levels (mirror of
+    // AdvancementXpBridge.MILESTONE_LEVELS) celebrate bigger — larger glyph, deeper
+    // sting with the unlock layer over it, longer read hold.
+    private static final int[] MILESTONE_LEVELS = {10, 25, 40};
+    private static final float MILESTONE_SCALE = 2.5F;
+    private static final int MILESTONE_HOLD_BONUS_TICKS = 14;
+
+    /** {@link CenterStageArbiter} claim id (FFIX-A / POLISH C-1). */
+    private static final String STAGE_ID = "skill_level_up";
 
     // Client tick thread only.
     private static final ArrayDeque<Integer> QUEUE = new ArrayDeque<>();
@@ -67,6 +77,8 @@ public final class LevelUpOverlay {
     /** Ticks into the active celebration; {@code -1} = idle. */
     private static int ticks = -1;
     private static int celebratedLevel;
+    /** Latched at start: milestone celebrations hold longer and render larger. */
+    private static boolean milestone;
 
     private LevelUpOverlay() {}
 
@@ -88,6 +100,7 @@ public final class LevelUpOverlay {
             QUEUE.clear();
             lastSeenLevel = -1;
             ticks = -1;
+            CenterStageArbiter.release(STAGE_ID);
             return;
         }
         if (minecraft.isPaused()) {
@@ -127,29 +140,66 @@ public final class LevelUpOverlay {
             QUEUE.clear(); // toggled off mid-queue: drop pending celebrations
         }
 
-        if (ticks >= 0 && ++ticks > TOTAL_TICKS + GAP_TICKS) {
+        if (ticks >= 0 && ++ticks > totalTicks() + GAP_TICKS) {
             ticks = -1;
+            CenterStageArbiter.release(STAGE_ID);
         }
-        // Cutscene flights defer playback (the layer render is cancelled anyway).
-        if (ticks < 0 && !QUEUE.isEmpty() && !CameraDirector.isHudSuppressed()) {
+        // Cutscene flights defer playback (the layer render is cancelled anyway); the h/3
+        // center stage must also be free (FFIX-A / POLISH C-1 — no glyph through a reward
+        // materialization, day card or roulette veil).
+        if (ticks < 0 && !QUEUE.isEmpty() && !CameraDirector.isHudSuppressed()
+                && CenterStageArbiter.tryClaim(STAGE_ID,
+                        totalTicksFor(isMilestone(QUEUE.peekFirst())) + GAP_TICKS)) {
             start(QUEUE.pollFirst());
         }
     }
 
     private static void start(int level) {
         celebratedLevel = level;
+        milestone = isMilestone(level);
         ticks = 0;
-        UiSounds.levelUp();
+        if (milestone) {
+            // FFIX-A / DOPA #4: deeper sting + the unlock layer over it — the top of the
+            // ladder finally celebrates louder than an ordinary level.
+            UiSounds.levelUp(0.8F);
+            UiSounds.unlockSting();
+        } else {
+            UiSounds.levelUp();
+        }
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null && !EclipseClientConfig.reducedFx()) {
             QuasarSpawner.spawnOrFallback(FLOURISH_EMITTER, player.position());
         }
     }
 
+    private static boolean isMilestone(int level) {
+        for (int milestoneLevel : MILESTONE_LEVELS) {
+            if (level == milestoneLevel) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Hold length of the ACTIVE celebration (milestones read a little longer). */
+    private static int holdTicks() {
+        return HOLD_TICKS + (milestone ? MILESTONE_HOLD_BONUS_TICKS : 0);
+    }
+
+    private static int totalTicks() {
+        return GLITCH_IN_TICKS + holdTicks() + GLITCH_OUT_TICKS;
+    }
+
+    /** Total length a celebration of the given kind will run (stage-lease sizing). */
+    private static int totalTicksFor(boolean milestoneLevel) {
+        return GLITCH_IN_TICKS + HOLD_TICKS
+                + (milestoneLevel ? MILESTONE_HOLD_BONUS_TICKS : 0) + GLITCH_OUT_TICKS;
+    }
+
     /** GUI layer body (self-registered above all; letterbox suppression cancels it). */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (ticks < 0 || ticks > TOTAL_TICKS || minecraft.options.hideGui) {
+        if (ticks < 0 || ticks > totalTicks() || minecraft.options.hideGui) {
             return;
         }
         float t = ticks + deltaTracker.getGameTimeDeltaPartialTick(true);
@@ -159,10 +209,10 @@ public final class LevelUpOverlay {
         float alpha;
         if (t < GLITCH_IN_TICKS) {
             alpha = easeOutCubic(t / GLITCH_IN_TICKS);
-        } else if (t <= GLITCH_IN_TICKS + HOLD_TICKS) {
+        } else if (t <= GLITCH_IN_TICKS + holdTicks()) {
             alpha = 1.0F;
         } else {
-            alpha = 1.0F - easeOutCubic((t - GLITCH_IN_TICKS - HOLD_TICKS) / GLITCH_OUT_TICKS);
+            alpha = 1.0F - easeOutCubic((t - GLITCH_IN_TICKS - holdTicks()) / GLITCH_OUT_TICKS);
         }
         alpha = Mth.clamp(alpha, 0.0F, 1.0F);
         if (alpha <= 0.01F) {
@@ -176,8 +226,8 @@ public final class LevelUpOverlay {
             int resolved = length;
             if (t < GLITCH_IN_TICKS) {
                 resolved = Math.round(t / GLITCH_IN_TICKS * length);
-            } else if (t > GLITCH_IN_TICKS + HOLD_TICKS) {
-                resolved = Math.round((1.0F - (t - GLITCH_IN_TICKS - HOLD_TICKS) / GLITCH_OUT_TICKS) * length);
+            } else if (t > GLITCH_IN_TICKS + holdTicks()) {
+                resolved = Math.round((1.0F - (t - GLITCH_IN_TICKS - holdTicks()) / GLITCH_OUT_TICKS) * length);
             }
             resolved = Mth.clamp(resolved, 0, length);
             if (resolved < length) {
@@ -189,11 +239,12 @@ public final class LevelUpOverlay {
         Font font = minecraft.font;
         float centerX = guiGraphics.guiWidth() / 2.0F;
         float centerY = guiGraphics.guiHeight() / 3.0F;
-        boolean glitchPhase = !reduced && (t < GLITCH_IN_TICKS || t > GLITCH_IN_TICKS + HOLD_TICKS);
+        boolean glitchPhase = !reduced && (t < GLITCH_IN_TICKS || t > GLITCH_IN_TICKS + holdTicks());
+        float scale = milestone ? MILESTONE_SCALE : SCALE;
 
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(centerX, centerY, 0.0F);
-        guiGraphics.pose().scale(SCALE, SCALE, 1.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
         int halfWidth = font.width(shown) / 2;
 
         if (glitchPhase) {
@@ -210,7 +261,7 @@ public final class LevelUpOverlay {
         }
 
         // Hold-phase breathing: the accent lifts toward white on a slow sine.
-        float breath = !reduced && t >= GLITCH_IN_TICKS && t <= GLITCH_IN_TICKS + HOLD_TICKS
+        float breath = !reduced && t >= GLITCH_IN_TICKS && t <= GLITCH_IN_TICKS + holdTicks()
                 ? (Mth.sin((t - GLITCH_IN_TICKS) * 0.35F) + 1.0F) * 0.5F * 0.25F : 0.0F;
         int main = EclipseUiTheme.withAlpha(lerpColor(EclipseUiTheme.ACCENT, 0xFFFFFFFF, breath), alpha);
         guiGraphics.drawString(font, shown, -halfWidth, -font.lineHeight / 2, main, false);
@@ -224,6 +275,22 @@ public final class LevelUpOverlay {
                     EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT_DEEP, alpha * 0.9F));
         }
         guiGraphics.pose().popPose();
+
+        // FFIX-A / DOPA #5: the earn→spend handoff — a quiet "a skill point awaits" line
+        // under the glyph while unspent points wait (S2CSkillStatePayload already syncs
+        // them). Fades in with the underline; 1× type, DIM — never competes with the glyph.
+        int unspent = ClientStateCache.skillUnspent;
+        if (unspent > 0 && t >= GLITCH_IN_TICKS) {
+            float hintAlpha = alpha * Mth.clamp((t - GLITCH_IN_TICKS) / 6.0F, 0.0F, 1.0F);
+            if (hintAlpha > 0.05F) {
+                String hint = unspent == 1
+                        ? EclipseLang.trString("gui.eclipse.skills.point_available")
+                        : EclipseLang.trString("gui.eclipse.skills.points_available", unspent);
+                int hintY = Math.round(centerY + (font.lineHeight / 2.0F + 4.0F) * scale) + 4;
+                guiGraphics.drawString(font, hint, (int) centerX - font.width(hint) / 2, hintY,
+                        EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, hintAlpha));
+            }
+        }
     }
 
     private static float easeOutCubic(float t) {

@@ -42,6 +42,17 @@ public final class VoiceChangerService {
     /** Worst frame observed since the last reset (status display, nanoseconds). */
     private static final AtomicLong worstFrameNanos = new AtomicLong();
 
+    /**
+     * FFIX-B (FINAL-SAT-SOL H5): consecutive decode/DSP/encode failure strikes per speaker.
+     * A failed frame never reaches {@link #reportFrameNanos}, so without this counter a
+     * broken native codec is retried on every mic packet forever. After
+     * {@value #MAX_PIPELINE_FAILURE_STRIKES} consecutive failures for one speaker the
+     * global kill switch trips (same re-arm as the budget switch). Reset by a successful
+     * frame, disconnect, {@code /dev voice changer reset} and server start.
+     */
+    private static final Map<UUID, Integer> FAILURE_STRIKES = new ConcurrentHashMap<>();
+    private static final int MAX_PIPELINE_FAILURE_STRIKES = 3;
+
     private VoiceChangerService() {}
 
     // --- hot path (voice packet thread) ---
@@ -78,6 +89,29 @@ public final class VoiceChangerService {
                             + "(worst {} us). Re-arm with /dev voice changer reset.",
                     strikes, config.frameBudgetMicros(), worstFrameNanos.get() / 1000L);
         }
+    }
+
+    /**
+     * Failure accounting for one broken decode→DSP→encode attempt (voice thread; FFIX-B /
+     * FINAL-SAT-SOL H5). The plugin closes and discards the failed pipeline before calling
+     * this; after {@value #MAX_PIPELINE_FAILURE_STRIKES} consecutive failures for the same
+     * speaker the global kill switch trips so the changer stops retrying entirely — the
+     * original voice always keeps flowing.
+     */
+    public static void reportPipelineFailure(UUID speaker) {
+        int strikes = FAILURE_STRIKES.merge(speaker, 1, Integer::sum);
+        if (strikes >= MAX_PIPELINE_FAILURE_STRIKES && !autoDisabled) {
+            autoDisabled = true;
+            EclipseMod.LOGGER.warn(
+                    "VoiceChanger: auto-disabled — {} consecutive pipeline failures for {}. "
+                            + "Re-arm with /dev voice changer reset.",
+                    strikes, speaker);
+        }
+    }
+
+    /** Breaks a speaker's consecutive-failure streak (successful frame or disconnect). */
+    public static void clearPipelineFailures(UUID speaker) {
+        FAILURE_STRIKES.remove(speaker);
     }
 
     // --- queries (server thread; commands/status) ---
@@ -125,11 +159,12 @@ public final class VoiceChangerService {
                 preset == null ? "cleared" : preset.id());
     }
 
-    /** Re-arms the budget kill switch ({@code /dev voice changer reset}). */
+    /** Re-arms the budget/failure kill switch ({@code /dev voice changer reset}). */
     public static void resetAutoDisable() {
         autoDisabled = false;
         overBudgetStrikes.set(0);
         worstFrameNanos.set(0L);
+        FAILURE_STRIKES.clear();
         EclipseMod.LOGGER.info("VoiceChanger: budget kill switch re-armed");
     }
 
@@ -145,5 +180,6 @@ public final class VoiceChangerService {
         autoDisabled = false;
         overBudgetStrikes.set(0);
         worstFrameNanos.set(0L);
+        FAILURE_STRIKES.clear();
     }
 }

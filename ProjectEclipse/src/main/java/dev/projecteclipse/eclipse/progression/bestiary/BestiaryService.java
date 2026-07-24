@@ -38,12 +38,14 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *
  * <p><b>Encounters</b> (T0 → T1 without a kill) come from a slow proximity scan: every
  * {@value #SCAN_INTERVAL_TICKS} ticks (phase-offset from the analytics/unlock sweeps),
- * one {@value #ENCOUNTER_RANGE}-block AABB query per tracked player marks every living
- * {@code eclipse:} mob inside it as encountered. For {@link BestiaryTiers#isSightingProgress}
- * ids the same scan ALSO accumulates the progress count, throttled to one sighting per
- * mob id per {@value #SIGHTING_COOLDOWN_TICKS} ticks (in-memory; a restart forgiving one
- * cooldown is harmless) — that is how the unkillable gazer and the neutral Orin still
- * reach T3 by observation.</p>
+ * one AABB query per tracked player (sized by {@link BestiaryTiers#maxSightingRange},
+ * filtered back per id — encounters stay at {@value #ENCOUNTER_RANGE} blocks) marks every
+ * living {@code eclipse:} mob inside it as encountered. For
+ * {@link BestiaryTiers#isSightingProgress} ids the same scan ALSO accumulates the
+ * progress count, throttled to one sighting per mob id per
+ * {@value #SIGHTING_COOLDOWN_TICKS} ticks (in-memory; a restart forgiving one cooldown
+ * is harmless) — that is how the unkillable gazer, the neutral Orin, the day-14-only
+ * deckhands and the vanishing Other still reach T3 by observation.</p>
  *
  * <p><b>Sync policy</b>: full snapshot to the player on login, plus a re-send on every
  * progress change (payload is ~350 bytes and eclipse-mob events are rare — see
@@ -119,10 +121,17 @@ public final class BestiaryService {
         }
     }
 
-    /** One AABB pass: mark encounters, count throttled sightings, sync when changed. */
+    /**
+     * One AABB pass: mark encounters, count throttled sightings, sync when changed.
+     * The query box spans the widest per-id sighting range (FINAL-DOPA-SOL §6: the
+     * gazer deliberately hovers 20–40 blocks out, beyond the 16-block encounter scan);
+     * each mob is then filtered back to ITS range, so plain encounters stay at
+     * {@value #ENCOUNTER_RANGE} blocks.
+     */
     private static void scanAround(ServerPlayer player, int serverTick) {
         List<Mob> nearby = player.serverLevel().getEntitiesOfClass(Mob.class,
-                player.getBoundingBox().inflate(ENCOUNTER_RANGE), LivingEntity::isAlive);
+                player.getBoundingBox().inflate(BestiaryTiers.maxSightingRange(ENCOUNTER_RANGE)),
+                LivingEntity::isAlive);
         if (nearby.isEmpty()) {
             return;
         }
@@ -134,6 +143,13 @@ public final class BestiaryService {
         for (Mob mob : nearby) {
             String id = eclipseMobId(mob);
             if (id == null) {
+                continue;
+            }
+            double range = BestiaryTiers.isSightingProgress(id)
+                    ? BestiaryTiers.sightingRange(id, ENCOUNTER_RANGE)
+                    : ENCOUNTER_RANGE;
+            // Same box-intersection semantics the old single-range query used.
+            if (!mob.getBoundingBox().intersects(player.getBoundingBox().inflate(range))) {
                 continue;
             }
             byte oldTier = state.tier(uuid, id);

@@ -10,7 +10,7 @@ import net.minecraft.world.level.Level;
 /**
  * The umbral shard (W10's night-mob drop, W13's shop currency). Sneak-right-clicking the
  * altar with a stack deposits ALL of it into the shard bank ({@link ShardEconomy#deposit}):
- * personal balance + team pool.
+ * team pool only (FINAL-DOPA-SOL §3 — banking no longer also credits the personal balance).
  *
  * <p>Same routing trick as {@code ritual.HeraldsLureItem}: vanilla skips block interaction
  * entirely while sneaking with an item in hand, so this {@link #useOn} IS the sneak path.

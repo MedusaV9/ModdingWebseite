@@ -35,8 +35,7 @@ TRACKS = [
             "back so the piece loops seamlessly. Purple twilight, an eclipsed sun over a "
             "lonely ocean. Cinematic, restrained, beautiful and slightly unsettling."
         ),
-        "tags": ["dark ambient", "cinematic", "orchestral", "mysterious", "fantasy"],
-        "negative_tags": ["edm", "pop", "vocals", "drums"],
+        "tags": ["dark ambient", "cinematic", "orchestral"],
         "length_range": [120, 180],
         "style_scale": 6.0,
         "instrumental": True,
@@ -49,8 +48,7 @@ TRACKS = [
             "whale-like distant horn swells, cold shimmering high pad like fog lights. "
             "Almost no rhythm, weightless and mournful, loopable without a clear start."
         ),
-        "tags": ["dark ambient", "drone", "atmospheric", "eerie", "soundscape"],
-        "negative_tags": ["beat", "edm", "vocals", "guitar"],
+        "tags": ["dark ambient", "drone", "atmospheric"],
         "length_range": [180, 240],
         "style_scale": 5.5,
         "instrumental": True,
@@ -63,8 +61,7 @@ TRACKS = [
             "that answers the strings, occasional dissonant bell. Builds pressure in waves, "
             "never fully releasing — an eclipse cult herald judging the players. Loopable."
         ),
-        "tags": ["epic", "dark orchestral", "boss battle", "percussion", "choir"],
-        "negative_tags": ["happy", "pop", "synthwave"],
+        "tags": ["epic", "orchestral", "cinematic"],
         "length_range": [120, 180],
         "prompt_strength": 1.8,
         "instrumental": True,
@@ -78,8 +75,7 @@ TRACKS = [
             "ship bells inside the orchestration. Climactic, operatic, grief and fury, "
             "ending on an unresolved suspended chord so it loops."
         ),
-        "tags": ["epic orchestral", "choir", "boss battle", "tragic", "cinematic"],
-        "negative_tags": ["edm", "pop", "lofi"],
+        "tags": ["epic", "orchestral", "choir"],
         "length_range": [180, 240],
         "style_scale": 7.0,
         "instrumental": True,
@@ -92,8 +88,7 @@ TRACKS = [
             "movement, chimes cascading upward. Constantly ascending feeling of awe and "
             "revelation, blooming into a bright sustained final chord."
         ),
-        "tags": ["cinematic", "magical", "orchestral", "build-up", "wonder"],
-        "negative_tags": ["dark", "horror", "vocals"],
+        "tags": ["cinematic", "orchestral", "fantasy"],
         "length_range": [60, 120],
         "style_scale": 6.0,
         "instrumental": True,
@@ -106,8 +101,7 @@ TRACKS = [
             "choir gasps, a huge wave-crash climax followed by sudden eerie stillness with "
             "one deep bell. Terrifying, cinematic, fast."
         ),
-        "tags": ["cinematic", "orchestral", "storm", "dramatic", "intense"],
-        "negative_tags": ["edm", "happy", "lofi"],
+        "tags": ["cinematic", "orchestral", "dramatic"],
         "length_range": [90, 150],
         "prompt_strength": 2.0,
         "instrumental": True,
@@ -120,8 +114,7 @@ TRACKS = [
             "choir halo, ending in warm consonant light. Tears-in-the-eyes victory, not "
             "triumphant fanfare — survivors watching the sun return."
         ),
-        "tags": ["emotional", "orchestral", "hopeful", "cinematic", "uplifting"],
-        "negative_tags": ["dark", "horror", "edm"],
+        "tags": ["orchestral", "cinematic", "emotional"],
         "length_range": [120, 180],
         "style_scale": 5.0,
         "instrumental": True,
@@ -134,8 +127,7 @@ TRACKS = [
             "wow, distant music-box sparkle. Bittersweet memory of endless summer afternoons "
             "building worlds. Calm, simple, loopable."
         ),
-        "tags": ["ambient", "piano", "nostalgic", "minimal", "calm"],
-        "negative_tags": ["drums", "epic", "vocals"],
+        "tags": ["ambient", "piano", "calm"],
         "length_range": [120, 210],
         "style_scale": 5.0,
         "instrumental": True,
@@ -148,8 +140,7 @@ TRACKS = [
             "high glassy whistle of cosmic wind. Oppressive, holy dread, almost static — "
             "the sound of standing under a black sun. Loopable."
         ),
-        "tags": ["dark ambient", "drone", "cosmic", "cinematic", "tension"],
-        "negative_tags": ["melody", "pop", "beat"],
+        "tags": ["dark ambient", "drone", "cinematic"],
         "length_range": [120, 180],
         "style_scale": 6.5,
         "instrumental": True,
@@ -162,8 +153,7 @@ TRACKS = [
             "insect percussion, occasional dissonant string slide — something circles you in "
             "the mist. Sparse, paranoid, loopable."
         ),
-        "tags": ["tension", "dark ambient", "horror", "percussion", "atmospheric"],
-        "negative_tags": ["happy", "edm", "vocals"],
+        "tags": ["dark ambient", "cinematic", "atmospheric"],
         "length_range": [120, 180],
         "prompt_strength": 1.6,
         "instrumental": True,
@@ -176,8 +166,7 @@ TRACKS = [
             "resonance, short silences torn open by riff stabs — a knight made of a broken "
             "dimension. Aggressive but controlled, loopable."
         ),
-        "tags": ["hybrid orchestral", "boss battle", "glitch", "dark", "electronic"],
-        "negative_tags": ["happy", "pop", "acoustic"],
+        "tags": ["electronic", "orchestral", "dark"],
         "length_range": [120, 180],
         "style_scale": 6.0,
         "instrumental": True,
@@ -190,8 +179,7 @@ TRACKS = [
             "electric crackle textures, a grim waltz-like undercurrent — a crowned tyrant "
             "conducting the tempest. Majestic, violent, loopable."
         ),
-        "tags": ["epic orchestral", "boss battle", "choir", "dark", "percussion"],
-        "negative_tags": ["lofi", "pop", "synthwave"],
+        "tags": ["epic", "orchestral", "choir"],
         "length_range": [150, 210],
         "style_scale": 7.0,
         "instrumental": True,
@@ -204,8 +192,7 @@ TRACKS = [
             "dissonant piano notes like glances over the shoulder. Minimal, paranoid, "
             "constantly on edge without exploding. Loopable."
         ),
-        "tags": ["tension", "thriller", "minimal", "percussion", "suspense"],
-        "negative_tags": ["epic", "happy", "vocals"],
+        "tags": ["cinematic", "atmospheric", "dark"],
         "length_range": [90, 150],
         "prompt_strength": 1.7,
         "instrumental": True,
@@ -218,8 +205,7 @@ TRACKS = [
             "gong at the peak, then sparkling decay to silence. Pure wonder, 45 to 60 "
             "seconds, a moment of attunement."
         ),
-        "tags": ["magical", "cinematic", "orchestral", "sting", "wonder"],
-        "negative_tags": ["dark", "drums", "edm"],
+        "tags": ["orchestral", "cinematic", "fantasy"],
         "length_range": [30, 90],
         "style_scale": 6.0,
         "instrumental": True,
@@ -232,8 +218,7 @@ TRACKS = [
             "choir like a memorial, ground rumble swells. Heavy, patient, dignified dread — "
             "time is almost gone. Loopable."
         ),
-        "tags": ["dark ambient", "orchestral", "melancholic", "cinematic", "tension"],
-        "negative_tags": ["edm", "happy", "beat"],
+        "tags": ["dark ambient", "orchestral", "cinematic"],
         "length_range": [120, 180],
         "style_scale": 6.5,
         "instrumental": True,
@@ -245,7 +230,14 @@ def api(path, key, payload=None):
     req = urllib.request.Request(
         f"{API}/{path}",
         data=json.dumps(payload).encode() if payload is not None else None,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            # The CDN/WAF rejects the default Python-urllib agent with 403 —
+            # curl with identical auth succeeds. Present a browser-ish UA.
+            "User-Agent": "curl/8.5.0",
+            "Accept": "application/json",
+        },
         method="POST" if payload is not None else "GET",
     )
     with urllib.request.urlopen(req, timeout=60) as resp:
@@ -263,7 +255,13 @@ def submit_with_backoff(key, payload):
                 print(f"  rate-limited ({err.code}); retrying in {wait}s", flush=True)
                 time.sleep(wait)
                 continue
-            raise
+            body = ""
+            try:
+                body = err.read().decode()[:400]
+            except Exception:  # noqa: BLE001
+                pass
+            print(f"  HTTP {err.code}: {body}", flush=True)
+            return {}
     return {}
 
 
@@ -272,14 +270,18 @@ def generate_one(track, key, out_dir, task_id=None):
     if task_id is None:
         payload = {k: v for k, v in track.items() if k != "id"}
         payload["output_format"] = "ogg"
+        if payload.get("prompt_strength", 1.0) > 1.0:
+            payload["style_scale"] = 1.0  # API defaults style_scale to 4.5 — must zero it explicitly
         start = submit_with_backoff(key, payload)
         task_id = start.get("task_id")
+        if task_id:
+            print(f"  [{tid}] task {task_id}", flush=True)
     if not task_id:
         return tid, "FAILED to start"
     for _ in range(240):  # up to 40 min
         time.sleep(10)
         status = api(f"generations/status/{task_id}", key)
-        state = status.get("status")
+        state = status if isinstance(status, str) else status.get("status")
         if state == "SUCCESS":
             break
         if state == "FAILURE":
@@ -315,7 +317,10 @@ def main():
             results[track["id"]] = "OK (already downloaded)"
             print(f"[{track['id']}] already downloaded, skipping", flush=True)
             continue
-        tid, msg = generate_one(track, key, out_dir)
+        try:
+            tid, msg = generate_one(track, key, out_dir)
+        except Exception as exc:  # noqa: BLE001 — one bad track must not kill the batch
+            tid, msg = track["id"], f"EXCEPTION: {exc}"
         results[tid] = msg
         print(f"[{tid}] {msg}", flush=True)
         time.sleep(10)

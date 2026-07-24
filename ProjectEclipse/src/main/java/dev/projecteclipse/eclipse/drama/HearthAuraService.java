@@ -48,6 +48,15 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * making the limbo wait a shared vigil instead of solitary. No regen for ghosts — limbo
  * economy stays untouched.</p>
  *
+ * <p><b>AFK cap (FFIX-B / FINAL-SAT-SOL L1)</b>: each player receives at most
+ * {@value #MAX_HEARTS_PER_DAY} hearth hearts per Eclipse day. The rule is deliberately a
+ * daily CAP rather than a recent-movement requirement — sitting still together IS the
+ * intended fantasy, so activity checks would punish exactly the behavior the feature
+ * rewards. The cap bounds the two-idle-alts exploit: parking an alt at a fire overnight
+ * now yields the same {@value #MAX_HEARTS_PER_DAY} hearts as five minutes of honest
+ * sitting. The counter is transient (a restart forgives it — bounded, operator-driven
+ * edge) and resets at each day change.</p>
+ *
  * <p>Anonymity intact: no text, no names, only smoke, soul motes and slow healing.
  * Statics reset on {@link ServerStoppedEvent} per house rule.</p>
  */
@@ -63,9 +72,15 @@ public final class HearthAuraService {
     private static final int REGEN_INTERVAL_TICKS = 600;
     /** Minimum circle size for the aura. */
     private static final int MIN_CIRCLE = 2;
+    /** Daily per-player heal cap in hearts (FFIX-B / FINAL-SAT-SOL L1 — see class doc). */
+    private static final int MAX_HEARTS_PER_DAY = 5;
 
     /** Continuously-held aura ticks per player. Server thread only; statics reset on ServerStopped. */
     private static final Map<UUID, Integer> AURA_TICKS = new HashMap<>();
+    /** Hearts healed per player on {@link #heartsDay}. Server thread only; transient. */
+    private static final Map<UUID, Integer> HEARTS_HEALED_TODAY = new HashMap<>();
+    /** Eclipse day {@link #HEARTS_HEALED_TODAY} belongs to; a day change clears the map. */
+    private static int heartsDay = Integer.MIN_VALUE;
 
     private HearthAuraService() {}
 
@@ -114,7 +129,10 @@ public final class HearthAuraService {
                 int held = previous.getOrDefault(member.getUUID(), 0) + SCAN_INTERVAL_TICKS;
                 if (held >= REGEN_INTERVAL_TICKS) {
                     held = 0;
-                    if (member.getHealth() < member.getMaxHealth()) {
+                    // Cap check only when a heal would actually land — a full-health pulse
+                    // never consumes the daily budget (FFIX-B / L1).
+                    if (member.getHealth() < member.getMaxHealth()
+                            && tryConsumeDailyHeal(level, member.getUUID())) {
                         member.heal(2.0F);
                         level.sendParticles(ParticleTypes.HEART,
                                 member.getX(), member.getY() + 1.9D, member.getZ(),
@@ -124,6 +142,25 @@ public final class HearthAuraService {
                 AURA_TICKS.put(member.getUUID(), held);
             }
         }
+    }
+
+    /**
+     * Consumes one heart of the player's daily hearth budget; {@code false} when the
+     * {@value #MAX_HEARTS_PER_DAY}-hearts cap for the current Eclipse day is exhausted
+     * (FFIX-B / FINAL-SAT-SOL L1 — the AFK/idle-alt bound, see class doc).
+     */
+    private static boolean tryConsumeDailyHeal(ServerLevel level, UUID player) {
+        int day = dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(level.getServer()).getDay();
+        if (day != heartsDay) {
+            heartsDay = day;
+            HEARTS_HEALED_TODAY.clear();
+        }
+        int healed = HEARTS_HEALED_TODAY.getOrDefault(player, 0);
+        if (healed >= MAX_HEARTS_PER_DAY) {
+            return false;
+        }
+        HEARTS_HEALED_TODAY.put(player, healed + 1);
+        return true;
     }
 
     /** Slow smoke ring around the fire — legible from a distance, calm up close. */
@@ -197,5 +234,7 @@ public final class HearthAuraService {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         AURA_TICKS.clear();
+        HEARTS_HEALED_TODAY.clear();
+        heartsDay = Integer.MIN_VALUE;
     }
 }

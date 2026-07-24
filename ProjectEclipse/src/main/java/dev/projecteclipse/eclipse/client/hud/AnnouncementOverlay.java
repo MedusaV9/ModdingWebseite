@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
@@ -41,7 +42,14 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * <p>Payload styles map onto the three bar skins: {@code day}→day, {@code boss}→boss,
  * {@code goal}/{@code unlock}→goal. Incoming announcements queue (cap
  * {@value #QUEUE_LIMIT}) so unlock bursts play one after another instead of overwriting.
- * The layer is deliberately NOT letterbox-whitelisted: cutscene HUD suppression hides it.</p>
+ * The layer IS letterbox-whitelisted (P2 §1.7: cutscene subtitles are delivered as
+ * announcement lines, so suppression must not cancel this layer) — which is exactly why
+ * the day-number card gates ITSELF on {@code CameraDirector.isHudSuppressed()} (FFIX-A /
+ * POLISH S-1): a STYLE_DAY payload waits at the queue head while a flight runs, a card
+ * already on screen freezes (no invisible roll/sting), and {@link #render} never paints
+ * the 5× numeral over the cinematic frame. The card also claims the shared
+ * {@link CenterStageArbiter} h/3 token (POLISH C-1/C-3) so it defers politely to a
+ * running level-up glyph, reward materialization, boss intro or roulette veil.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class AnnouncementOverlay {
@@ -79,6 +87,10 @@ public final class AnnouncementOverlay {
     private static final float CARD_ROLL_HEIGHT = 10.0F;
     /** From day 14 on, the numeral renders in the warn accent (deep purple). */
     private static final int CARD_WARN_DAY = 14;
+    /** {@link CenterStageArbiter} claim id (FFIX-A / POLISH C-1/C-3). */
+    private static final String STAGE_ID = "day_card";
+    /** Stage lease: longest card variant (~62t) + margin; renewed while the card lives. */
+    private static final int CARD_LEASE_TICKS = 80;
 
     /** Client thread only. */
     private static final ArrayDeque<S2CAnnouncePayload> QUEUE = new ArrayDeque<>();
@@ -146,7 +158,18 @@ public final class AnnouncementOverlay {
             return;
         }
         if (typewriter == null && sweepTicks < 0 && cardTicks < 0 && !QUEUE.isEmpty()) {
-            start(QUEUE.poll());
+            // FFIX-A / POLISH S-1 + C-1: a STYLE_DAY payload that would begin the 5× card
+            // waits at the queue head while a cutscene suppresses the HUD (the whitelist
+            // exists for subtitles, not the numeral) or while another hero moment owns the
+            // h/3 center stage. Everything queued behind it waits too — announcements stay
+            // strictly ordered.
+            if (dayCardWouldStart(QUEUE.peek())
+                    && (CameraDirector.isHudSuppressed()
+                            || !CenterStageArbiter.tryClaim(STAGE_ID, CARD_LEASE_TICKS))) {
+                // defer politely; retry next tick
+            } else {
+                start(QUEUE.poll());
+            }
         }
         tickDayCard();
         if (typewriter != null && typewriter.tick()) {
@@ -157,10 +180,17 @@ public final class AnnouncementOverlay {
         }
     }
 
+    /** Whether dequeuing this payload would start the numeral card (mirror of {@link #beginDayCard}). */
+    private static boolean dayCardWouldStart(S2CAnnouncePayload payload) {
+        return S2CAnnouncePayload.STYLE_DAY.equals(payload.style()) && ClientStateCache.dayClockDay > 0;
+    }
+
     private static void start(S2CAnnouncePayload payload) {
         if (S2CAnnouncePayload.STYLE_DAY.equals(payload.style()) && beginDayCard(payload)) {
             return; // the numeral card plays first; the line starts at its shrink beat
         }
+        // No card began — free a stage claim taken for it (no-op unless we own the stage).
+        CenterStageArbiter.release(STAGE_ID);
         startLine(payload);
     }
 
@@ -209,6 +239,12 @@ public final class AnnouncementOverlay {
         if (cardTicks < 0) {
             return;
         }
+        // Renew the center-stage lease while the card lives — a cutscene freeze below may
+        // outlast the initial lease (owner renewal always succeeds).
+        CenterStageArbiter.tryClaim(STAGE_ID, CARD_LEASE_TICKS);
+        if (CameraDirector.isHudSuppressed()) {
+            return; // S-1: a flight starting mid-card freezes it — no invisible roll/sting
+        }
         cardTicks++;
         int stingTick = cardReduced ? CARD_IN_TICKS
                 : CARD_IN_TICKS + CARD_ROLL_DELAY_TICKS + CARD_ROLL_TICKS;
@@ -222,6 +258,7 @@ public final class AnnouncementOverlay {
         }
         if (cardTicks > cardShrinkStartTick() + CARD_SHRINK_TICKS) {
             cardTicks = -1;
+            CenterStageArbiter.release(STAGE_ID);
         }
     }
 
@@ -253,7 +290,10 @@ public final class AnnouncementOverlay {
         if (minecraft.options.hideGui) {
             return;
         }
-        if (cardTicks >= 0) {
+        // S-1: this layer is subtitle-whitelisted, so suppression does NOT cancel it — the
+        // 5× numeral must gate itself off the cinematic frame (the frozen card resumes
+        // when the flight ends; sweep/typewriter below stay live for subtitles).
+        if (cardTicks >= 0 && !CameraDirector.isHudSuppressed()) {
             renderDayCard(guiGraphics, deltaTracker, minecraft);
         }
         if (sweepTicks >= 0) {

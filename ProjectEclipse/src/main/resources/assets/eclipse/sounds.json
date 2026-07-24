@@ -126,6 +126,16 @@
     ],
     "subtitle": "subtitles.eclipse.event.border_glitch"
   },
+  "event.boss_down": {
+    "sounds": [
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 0.48,
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.boss_down"
+  },
   "event.eclipse_drone": {
     "sounds": [
       {
@@ -383,6 +393,16 @@
     ],
     "subtitle": "subtitles.eclipse.ui.caption_tick"
   },
+  "ui.chime": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/unlock_sting",
+        "pitch": 1.2,
+        "volume": 0.5
+      }
+    ],
+    "subtitle": "subtitles.eclipse.ui.chime"
+  },
   "ui.click": {
     "sounds": [
       {
@@ -506,6 +526,16 @@
       }
     ],
     "subtitle": "subtitles.eclipse.ui.slider"
+  },
+  "ui.stamp": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/tab",
+        "pitch": 0.7,
+        "volume": 0.5
+      }
+    ],
+    "subtitle": "subtitles.eclipse.ui.stamp"
   },
   "ui.tab": {
     "sounds": [

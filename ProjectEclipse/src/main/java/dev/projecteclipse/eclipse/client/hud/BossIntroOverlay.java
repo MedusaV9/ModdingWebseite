@@ -52,6 +52,10 @@ public final class BossIntroOverlay {
     /** Band paddings around the two text lines (logical px). */
     private static final int BAND_PAD_TOP = 12;
     private static final int BAND_PAD_BOTTOM = 10;
+    /** {@link CenterStageArbiter} claim id (FFIX-A / POLISH C-3). */
+    private static final String STAGE_ID = "boss_intro";
+    /** Generous lease: PRE + a long localized name decode + HOLD + FADE, with margin. */
+    private static final int STAGE_LEASE_TICKS = 220;
 
     static {
         // Payload consumer seam (GatePayloads pattern): installed on client class-load, so
@@ -84,12 +88,17 @@ public final class BossIntroOverlay {
         if (minecraft.level == null) {
             QUEUE.clear();
             ticks = -1;
+            CenterStageArbiter.release(STAGE_ID);
             return;
         }
         if (minecraft.isPaused()) {
             return; // freeze mid-card like the announcement overlay; the queue stays intact
         }
-        if (ticks < 0 && !QUEUE.isEmpty()) {
+        // FFIX-A / POLISH C-3: the DANGER band at h/4 physically overlaps the 5× day card
+        // at h/3 on short windows — hold the queue until the shared center stage is free
+        // (day card, level-up, materialization and roulette claim the same token).
+        if (ticks < 0 && !QUEUE.isEmpty()
+                && CenterStageArbiter.tryClaim(STAGE_ID, STAGE_LEASE_TICKS)) {
             start(QUEUE.poll());
         }
         if (ticks < 0) {
@@ -110,6 +119,7 @@ public final class BossIntroOverlay {
         }
         if (ticks > decodeEnd + HOLD_TICKS + FADE_TICKS) {
             ticks = -1;
+            CenterStageArbiter.release(STAGE_ID);
         }
     }
 

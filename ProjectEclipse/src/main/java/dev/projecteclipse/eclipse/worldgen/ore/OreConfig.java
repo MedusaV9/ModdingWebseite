@@ -248,8 +248,14 @@ public final class OreConfig {
         return obj.has(key) ? obj.get(key).getAsBoolean() : fallback;
     }
 
-    // --- default ores.json (day-gating: coal/copper stage-1, iron/gold/quartz stage-2,
-    // diamond/netherite stage-3+, mod ores gated by requiredMod) ---
+    // --- default ores.json ---
+    // FINAL-DOPA-SOL §3 "Concrete fix": every ore must be mineable one stage BEFORE the
+    // milestone that consumes it (the old table gated iron/gold behind the very milestones
+    // that required them — a hard circular deadlock, since vanilla mineral features are
+    // removed by BiomeFeatureFilter and OreField rejects annulusBand < unlockStage).
+    // Ladder now: coal/copper/iron stage 0 (starting disc), gold + Nether quartz/gold
+    // stage 1 (Nether opens day 2), redstone/lapis/diamond stage 2 (post-milestone-2),
+    // netherite stage 2 in the Nether (second annulus, day 10). Mod ores keep requiredMod.
 
     /** Default {@code ores.json} root for freeze snapshots and first-run file creation. */
     public static JsonObject defaultRootJson() {
@@ -269,16 +275,22 @@ public final class OreConfig {
                 -32, 52, 0.30D, 3.2D, 0, FLAT_BANDS, false, null));
         array.add(ore("copper", "minecraft:copper_ore", "minecraft:deepslate_copper_ore",
                 -20, 52, 0.22D, 3.0D, 0, FLAT_BANDS, false, null));
+        // unlockStage 2 -> 0: milestone L2 costs 48 iron, so iron must exist across the
+        // starting disc (FINAL-DOPA-SOL §3 — was UNREACHABLE before L1/L2).
         array.add(ore("iron", "minecraft:iron_ore", "minecraft:deepslate_iron_ore",
-                -64, 52, 0.30D, 2.8D, 2, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null));
+                -64, 52, 0.30D, 2.8D, 0, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null));
+        // unlockStage 2 -> 1: milestone L3 costs 32 gold; band 1 exists from event start
+        // (fresh radii [96, 150]) so gold is a day-1+ find (FINAL-DOPA-SOL §3).
         array.add(ore("gold", "minecraft:gold_ore", "minecraft:deepslate_gold_ore",
-                -64, -8, 0.11D, 2.6D, 2, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null));
+                -64, -8, 0.11D, 2.6D, 1, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null));
         array.add(ore("redstone", "minecraft:redstone_ore", "minecraft:deepslate_redstone_ore",
                 -96, -24, 0.13D, 2.8D, 2, FLAT_BANDS, false, null));
         array.add(ore("lapis", "minecraft:lapis_ore", "minecraft:deepslate_lapis_ore",
                 -80, -16, 0.07D, 2.4D, 2, FLAT_BANDS, false, null));
+        // unlockStage 3 -> 2: milestone L4 (day 8) costs 24 diamonds; stage 3 was gated
+        // by milestone 3 itself — circular (FINAL-DOPA-SOL §3). Stage 2 opens ~day 3.
         array.add(ore("diamond", "minecraft:diamond_ore", "minecraft:deepslate_diamond_ore",
-                -125, -40, 0.12D, 2.4D, 3,
+                -125, -40, 0.12D, 2.4D, 2,
                 new double[] {1.3D, 1.0D, 0.7D, 0.45D, 0.3D, 0.2D}, true, null));
         array.add(ore("zinc", "create:zinc_ore", "create:deepslate_zinc_ore",
                 -32, 52, 0.18D, 2.8D, 3, FLAT_BANDS, false, "create"));
@@ -287,10 +299,15 @@ public final class OreConfig {
 
     private static JsonArray defaultNether() {
         JsonArray array = new JsonArray();
+        // unlockStage 2 -> 1 for quartz + Nether gold: the first Nether annulus opens on
+        // day 2, but the SECOND (band 2) only on day 10 — stage-2 gating starved the L3
+        // gold cost and the L5 quartz sink for eight days (FINAL-DOPA-SOL §3).
         array.add(ore("quartz", "minecraft:nether_quartz_ore", "minecraft:nether_quartz_ore",
-                36, 140, 0.25D, 3.0D, 2, FLAT_BANDS, false, null));
+                36, 140, 0.25D, 3.0D, 1, FLAT_BANDS, false, null));
         array.add(ore("nether_gold", "minecraft:nether_gold_ore", "minecraft:nether_gold_ore",
-                34, 110, 0.14D, 2.6D, 2, FLAT_BANDS, false, null));
+                34, 110, 0.14D, 2.6D, 1, FLAT_BANDS, false, null));
+        // Deliberately still stage 2: netherite is the L5 era and the day-10 second
+        // annulus is exactly its intended day-10+ window (FINAL-DOPA-SOL §3 keeps it).
         array.add(ore("netherite", "minecraft:ancient_debris", "minecraft:ancient_debris",
                 34, 72, 0.022D, 1.6D, 2, FLAT_BANDS, true, null));
         return array;

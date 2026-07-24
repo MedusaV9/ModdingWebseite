@@ -102,7 +102,18 @@ public final class VoiceChangerPlugin implements VoicechatPlugin {
             long elapsed = System.nanoTime() - start;
             event.getPacket().setOpusEncodedData(encoded);
             VoiceChangerService.reportFrameNanos(elapsed);
+            VoiceChangerService.clearPipelineFailures(speaker);
         } catch (Throwable t) {
+            // FFIX-B (FINAL-SAT-SOL H5): never retry possibly-corrupt native codec state —
+            // remove-and-close the failed pipeline (close itself guarded) so the next packet
+            // lazily builds a clean one, and account the failure: after N consecutive
+            // failures the service kill switch turns the changer OFF instead of retrying
+            // forever. The original packet always passes through untouched.
+            Pipeline failed = PIPELINES.remove(speaker);
+            if (failed != null) {
+                failed.closeQuietly();
+            }
+            VoiceChangerService.reportPipelineFailure(speaker);
             long now = System.currentTimeMillis();
             long last = LAST_ERROR_LOG.get();
             if (now - last > ERROR_LOG_THROTTLE_MILLIS && LAST_ERROR_LOG.compareAndSet(last, now)) {
@@ -116,6 +127,7 @@ public final class VoiceChangerPlugin implements VoicechatPlugin {
         if (pipeline != null) {
             pipeline.close();
         }
+        VoiceChangerService.clearPipelineFailures(event.getPlayerUuid());
     }
 
     private static void onVoiceServerStopped(VoicechatServerStoppedEvent event) {
@@ -150,6 +162,15 @@ public final class VoiceChangerPlugin implements VoicechatPlugin {
             }
             if (!encoder.isClosed()) {
                 encoder.close();
+            }
+        }
+
+        /** Failure-path close (FFIX-B / H5): a broken native codec may also fail to close. */
+        void closeQuietly() {
+            try {
+                close();
+            } catch (Throwable t) {
+                EclipseMod.LOGGER.debug("VoiceChanger: pipeline close failed after DSP error", t);
             }
         }
     }

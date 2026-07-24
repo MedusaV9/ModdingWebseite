@@ -1,0 +1,20 @@
+{
+  "en_us": {
+    "message.eclipse.vein.progress": "%1$s vein · %2$s/%3$s",
+    "message.eclipse.skill.levelup": "Skill level %s reached — a skill point awaits.",
+    "gui.eclipse.skills.point_available": "A skill point awaits",
+    "gui.eclipse.skills.points_available": "%s skill points await",
+    "subtitles.eclipse.ui.stamp": "A stamp slams down",
+    "subtitles.eclipse.ui.chime": "A soft chime",
+    "subtitles.eclipse.event.boss_down": "A boss falls"
+  },
+  "de_de": {
+    "message.eclipse.vein.progress": "%1$s-Ader · %2$s/%3$s",
+    "message.eclipse.skill.levelup": "Skill-Level %s erreicht — ein Skill-Punkt wartet.",
+    "gui.eclipse.skills.point_available": "Ein Skill-Punkt wartet",
+    "gui.eclipse.skills.points_available": "%s Skill-Punkte warten",
+    "subtitles.eclipse.ui.stamp": "Ein Stempel knallt auf",
+    "subtitles.eclipse.ui.chime": "Ein leises Klingen",
+    "subtitles.eclipse.event.boss_down": "Ein Boss fällt"
+  }
+}

@@ -115,12 +115,16 @@ public final class ContractConfig {
     }
 
     /**
-     * Authored defaults: the auto-daily roll ships OFF (dev-triggered until the operator
-     * arms it); when armed the default odds are 25% REAL / 5% PRANK per day.
+     * Authored defaults. FINAL-DOPA-SOL §5: the auto-daily roll now ships ON at the
+     * authored 25% REAL / 5% PRANK odds — the chance system is part of the normal
+     * 14-day cadence, not a dev-only trigger. The success package is strengthened to
+     * "massive but not run-ending": hunter 2.0x skills (was 1.5x) with a stronger buff
+     * (+15% damage, +2 temp hearts), target 0.6x skills (was 0.75x) keeping the -15%
+     * damage debuff. Wrong-kill justice values are unchanged (eval: "massive but fair").
      */
     private static JsonObject defaultJson() {
         JsonObject root = new JsonObject();
-        root.addProperty("autoDaily", false);
+        root.addProperty("autoDaily", true);
         root.addProperty("realChancePct", 25);
         root.addProperty("prankChancePct", 5);
         root.addProperty("windowMinutes", 30);
@@ -135,14 +139,14 @@ public final class ContractConfig {
         root.addProperty("prankConsolationShards", 2);
 
         JsonObject success = new JsonObject();
-        success.addProperty("hunterSkillsMul", 1.5F);
+        success.addProperty("hunterSkillsMul", 2.0F);   // FINAL-DOPA-SOL §5: 1.5 -> 2.0
         success.addProperty("hunterShards", 12);
-        success.addProperty("hunterTempHearts", 1);
-        success.addProperty("hunterDamageMul", 1.10F);
+        success.addProperty("hunterTempHearts", 2);     // stronger buff: 1 -> 2 (clamp max)
+        success.addProperty("hunterDamageMul", 1.15F);  // stronger buff: +10% -> +15%
         success.addProperty("hunterGlobalBuffId", "");
         success.addProperty("hunterXp", 400);
-        success.addProperty("targetSkillsMul", 0.75F);
-        success.addProperty("targetDamageMul", 0.85F);
+        success.addProperty("targetSkillsMul", 0.6F);   // FINAL-DOPA-SOL §5: 0.75 -> 0.6
+        success.addProperty("targetDamageMul", 0.85F);  // kept: the -15% damage debuff
         root.add("success", success);
 
         JsonObject expiry = new JsonObject();
@@ -163,8 +167,10 @@ public final class ContractConfig {
         JsonObject s = obj(root, "success");
         JsonObject e = obj(root, "expiry");
         JsonObject w = obj(root, "wrongKill");
+        // Fallbacks mirror defaultJson (FINAL-DOPA-SOL §5 values) so a stale/partial
+        // contracts.json resolves to the same shipped economy.
         return new Values(
-                bool(root, "autoDaily", false),
+                bool(root, "autoDaily", true),
                 clampPct(intVal(root, "realChancePct", 25)),
                 clampPct(intVal(root, "prankChancePct", 5)),
                 Mth.clamp(intVal(root, "windowMinutes", 30), 1, 1_440),
@@ -178,13 +184,13 @@ public final class ContractConfig {
                 Mth.clamp(intVal(root, "ghostPayoutPct", 60), 0, 100),
                 Math.max(0, intVal(root, "prankConsolationShards", 2)),
                 new SuccessValues(
-                        floatVal(s, "hunterSkillsMul", 1.5F),
+                        floatVal(s, "hunterSkillsMul", 2.0F),
                         Math.max(0, intVal(s, "hunterShards", 12)),
-                        Mth.clamp(intVal(s, "hunterTempHearts", 1), 0, 2),
-                        floatVal(s, "hunterDamageMul", 1.10F),
+                        Mth.clamp(intVal(s, "hunterTempHearts", 2), 0, 2),
+                        floatVal(s, "hunterDamageMul", 1.15F),
                         str(s, "hunterGlobalBuffId", ""),
                         Math.max(0, intVal(s, "hunterXp", 400)),
-                        floatVal(s, "targetSkillsMul", 0.75F),
+                        floatVal(s, "targetSkillsMul", 0.6F),
                         floatVal(s, "targetDamageMul", 0.85F)),
                 new ExpiryValues(
                         Math.max(0, intVal(e, "survivorXp", 250)),

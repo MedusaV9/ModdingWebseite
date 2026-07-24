@@ -123,7 +123,10 @@ public final class WandConfig {
 
         JsonObject xp = obj(root, "xp");
         int[] levelCosts = new int[WandPath.MAX_LEVEL - 1];
-        int[] defaults = {120, 260, 450, 700};
+        // FINAL-DOPA-SOL §4: the old 120/260/450/700 curve reached L3 in 25–55 casts
+        // (minutes, not a day of play). ~5x early costs put the efficient L3 route near
+        // 140 successful casts — a full active day at a normal cast pace.
+        int[] defaults = {600, 1800, 3600, 6000};
         if (xp.has("levelCosts") && xp.get("levelCosts").isJsonArray()) {
             var array = xp.getAsJsonArray("levelCosts");
             for (int i = 0; i < levelCosts.length; i++) {
@@ -195,11 +198,13 @@ public final class WandConfig {
         JsonObject xp = new JsonObject();
         xp.addProperty("perCostPoint", 0.6F);
         xp.addProperty("killBonus", 8);
+        // FINAL-DOPA-SOL §4 curve (~5x the old 120/260/450/700): L2 after ~67–86 casts,
+        // L3 after ~140 — day-long wand progression instead of a first-hour cap-out.
         var levelCosts = new com.google.gson.JsonArray();
-        levelCosts.add(120);
-        levelCosts.add(260);
-        levelCosts.add(450);
-        levelCosts.add(700);
+        levelCosts.add(600);
+        levelCosts.add(1800);
+        levelCosts.add(3600);
+        levelCosts.add(6000);
         xp.add("levelCosts", levelCosts);
         xp.addProperty("skillXpPerCostPoint", 0.4F);
         root.add("xp", xp);

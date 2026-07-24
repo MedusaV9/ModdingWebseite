@@ -529,22 +529,44 @@ public final class EclipseConfig {
     /**
      * The v3 event milestone costs (P4 §2.6): multi-item, pooled sinks sized for a 20–30
      * player team. L4 remains boss-locked by the guaranteed Herald Core.
+     *
+     * <p><b>FINAL-DOPA-SOL §3 ladder fix:</b> the old table was circular — L1 demanded
+     * iron ({@code unlockStage 2}, opened by milestone 2), L2 gold (same) and L3
+     * diamonds + 72 emeralds (stage 3 / no Eclipse emerald ore), deadlocking the altar
+     * before L1. Each level now consumes only materials mineable BEFORE it (with the
+     * matching {@code ores.json} unlock stages): L1 copper/coal era (stage 0, day 1–2),
+     * L2 iron era (iron stage 0, amethyst geodes day 2–3), L3 gold era (gold stage 1 +
+     * redstone from the stage-2 ring milestone 2 raised, day 4–5), L4 diamond era
+     * (diamond stage 2, Herald Core day 7, day 8), L5 netherite era (debris behind the
+     * day-10 Nether annulus, quartz from day 2). Emerald blocks are dropped entirely
+     * (eval: "Seventy-two emeralds are not [reasonable]"). Counts stay deliberately
+     * chunky — pooled team sinks, not solo errands.
      */
     private static List<Milestone> defaultMilestones() {
         return List.of(
+                // L1 — copper/coal era: both unlockStage 0, mineable from minute one.
                 new Milestone(1, List.of(
-                        new ItemCost("minecraft:iron_ingot", 48),
+                        new ItemCost("minecraft:copper_ingot", 48),
                         new ItemCost("minecraft:coal", 32)), List.of("create")),
+                // L2 — iron era: iron is unlockStage 0 (FINAL-DOPA-SOL fix), amethyst
+                // is geode loot the eval rates "reasonable by day 2–3".
                 new Milestone(2, List.of(
-                        new ItemCost("minecraft:gold_ingot", 32),
+                        new ItemCost("minecraft:iron_ingot", 48),
                         new ItemCost("minecraft:amethyst_shard", 16)), List.of("simulated")),
+                // L3 — gold era: gold unlockStage 1 (starting disc band 1 + Nether gold
+                // from day 2); redstone sits in the stage-2 ring that milestone 2 raised.
                 new Milestone(3, List.of(
-                        new ItemCost("minecraft:diamond", 24),
-                        new ItemCost("minecraft:emerald_block", 8)), List.of("aeronautics")),
+                        new ItemCost("minecraft:gold_ingot", 32),
+                        new ItemCost("minecraft:redstone", 32)), List.of("aeronautics")),
+                // L4 — diamond era, still boss-locked: diamond unlockStage 2 is open
+                // since milestone 2 (~day 3), the Core drops from the day-7 Herald.
                 new Milestone(4, List.of(
                         new ItemCost("eclipse:herald_core", 1),
+                        new ItemCost("minecraft:diamond", 24),
                         new ItemCost("minecraft:ender_pearl", 32),
                         new ItemCost("minecraft:obsidian", 16)), List.of("sable")),
+                // L5 — netherite era: ancient debris opens with the day-10 Nether
+                // annulus; 48 quartz blocks are 10+ days of day-2-unlocked quartz.
                 new Milestone(5, List.of(
                         new ItemCost("minecraft:netherite_ingot", 4),
                         new ItemCost("minecraft:quartz_block", 48)), List.of("end")));

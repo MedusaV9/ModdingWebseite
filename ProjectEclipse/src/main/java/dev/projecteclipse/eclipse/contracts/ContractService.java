@@ -83,7 +83,6 @@ public final class ContractService {
     private static final Random RANDOM = new Random();
 
     // ---- transient per-run state (cleared on ServerStoppedEvent) ----
-    private static long lastPauseCheckMillis;
     private static boolean missingCueLogged;
 
     private ContractService() {}
@@ -105,7 +104,6 @@ public final class ContractService {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         SIGNALS_REGISTERED.set(false);
-        lastPauseCheckMillis = 0L;
         missingCueLogged = false;
     }
 
@@ -113,13 +111,32 @@ public final class ContractService {
      * Crash resume: the periodic tick would catch everything anyway, but resolving an
      * already-expired window here keeps the boot log honest and replays the compressed
      * (banner-only) expiry ceremony immediately.
+     *
+     * <p>FFIX-B (POLISH-SOL-04): the pause anchor is PERSISTED ({@link ContractState}), so
+     * a pause that spanned the downtime shifts every deadline forward by exactly the
+     * offline span before any expiry decision. While the realtime day is still paused at
+     * boot nothing is ever resolved here — the pause-aware tick owns the frozen window.</p>
      */
     public static void resumeOnBoot(MinecraftServer server) {
         ContractState state = ContractState.get(server);
         long now = EclipseClock.epochMillis();
+        boolean paused = RealtimeDayApi.isPaused(server);
+        if (state.phase() != ContractState.Phase.IDLE) {
+            long anchor = state.pauseAnchorEpochMillis();
+            if (anchor > 0L) {
+                EclipseMod.LOGGER.info("Contract deadlines shifted by {} ms of paused downtime",
+                        now - anchor);
+                state.shiftDeadlines(now - anchor);
+            }
+            state.setPauseAnchorEpochMillis(paused ? now : 0L);
+        }
         switch (state.phase()) {
             case ACTIVE -> {
-                if (state.endsAtEpochMillis() <= now) {
+                if (paused) {
+                    EclipseMod.LOGGER.info(
+                            "Contract window resumes PAUSED: {} ms remaining (mode {})",
+                            Math.max(0L, state.endsAtEpochMillis() - now), state.mode());
+                } else if (state.endsAtEpochMillis() <= now) {
                     EclipseMod.LOGGER.info("Contract window expired while the server was down — resolving now");
                     resolveExpired(server, state);
                 } else {
@@ -189,20 +206,23 @@ public final class ContractService {
         }
         ContractState state = ContractState.get(server);
         if (state.phase() == ContractState.Phase.IDLE) {
-            lastPauseCheckMillis = 0L;
+            state.setPauseAnchorEpochMillis(0L);
             return;
         }
         long now = EclipseClock.epochMillis();
         // Pause-aware deadlines: while the real-time day is frozen, every pending deadline
         // shifts forward by exactly the frozen span (the xbox timeMutate philosophy).
+        // FFIX-B (POLISH-SOL-04): the anchor lives in ContractState (persisted), so a
+        // stop/crash mid-pause still shifts the offline span at the next boot.
         if (RealtimeDayApi.isPaused(server)) {
-            if (lastPauseCheckMillis > 0L) {
-                state.shiftDeadlines(now - lastPauseCheckMillis);
+            long anchor = state.pauseAnchorEpochMillis();
+            if (anchor > 0L) {
+                state.shiftDeadlines(now - anchor);
             }
-            lastPauseCheckMillis = now;
+            state.setPauseAnchorEpochMillis(now);
             return;
         }
-        lastPauseCheckMillis = now;
+        state.setPauseAnchorEpochMillis(0L);
 
         switch (state.phase()) {
             case SCHEDULED -> {
@@ -579,9 +599,16 @@ public final class ContractService {
                         Component.translatable("eclipse.contract.survivor"), false);
                 ContractPayloads.sendResolve(target, ContractPayloads.RESOLVE_SURVIVED);
             } else {
-                AwardService.queueReward(server, targetId, "contract_survived",
+                // FFIX-B (FINAL-SAT-SOL C1): the id MUST be scoped per contract instance —
+                // AwardsState treats delivered ids as permanent per-player idempotency keys,
+                // so a constant "contract_survived" pays each offline survivor at most once
+                // per save. Retries for the SAME instance still reuse the same id. The day
+                // is passed explicitly so the Blutschuld check uses the contract's own day.
+                AwardService.queueReward(server, targetId,
+                        "contract_survived:" + state.contractDay(),
                         new AwardConfig.Reward(config.expiry().survivorXp(),
-                                config.expiry().survivorShards(), List.of()));
+                                config.expiry().survivorShards(), List.of()),
+                        state.contractDay());
             }
         }
         ServerPlayer hunter = playerOf(server, state.hunter());

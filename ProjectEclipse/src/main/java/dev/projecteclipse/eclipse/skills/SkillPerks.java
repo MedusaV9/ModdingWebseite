@@ -133,6 +133,28 @@ public final class SkillPerks {
     // ------------------------------------------------------------------
 
     /**
+     * FFIX-A DOPA #1 — pitch families for the proc chime (one file, 15 proc ids): the
+     * hash set breaks the "one identical chime for every proc semantic" monotony while
+     * the family rules keep semantics audible (jackpots bright, vein clears scale with
+     * vein size, ore firsts climb the tier ladder coal→netherite).
+     */
+    private static final float[] PROC_PITCH_SET = {0.94F, 1.0F, 1.06F, 1.12F};
+
+    /** Ore-first tier ladder (ids from {@code ores.json}); unknown ids fall to the hash set. */
+    private static final Map<String, Float> ORE_FIRST_PITCH = Map.ofEntries(
+            Map.entry("coal", 0.90F),
+            Map.entry("copper", 0.95F),
+            Map.entry("zinc", 0.95F),
+            Map.entry("iron", 1.0F),
+            Map.entry("quartz", 1.05F),
+            Map.entry("redstone", 1.05F),
+            Map.entry("lapis", 1.05F),
+            Map.entry("gold", 1.1F),
+            Map.entry("nether_gold", 1.1F),
+            Map.entry("diamond", 1.2F),
+            Map.entry("netherite", 1.3F));
+
+    /**
      * Fires the full proc feedback trio to one player. Returns whether the CHAT line was
      * sent (false when globally disabled in skills.json or opted out per player) — pinned
      * by the procmsg gametest.
@@ -142,7 +164,8 @@ public final class SkillPerks {
         SoundEvent sound = BuiltInRegistries.SOUND_EVENT
                 .getOptional(ResourceLocation.tryParse(cfg.procSound()))
                 .orElseGet(EclipseSounds.SKILL_PROC);
-        player.serverLevel().playSound(null, player.blockPosition(), sound, SoundSource.PLAYERS, 0.7F, 1.0F);
+        player.serverLevel().playSound(null, player.blockPosition(), sound, SoundSource.PLAYERS,
+                procVolume(magnitude), procPitch(procId, magnitude));
         PacketDistributor.sendToPlayer(player, new S2CSkillProcPayload(procId, magnitude));
 
         boolean chatWanted = cfg.procChatLine()
@@ -161,6 +184,35 @@ public final class SkillPerks {
             player.sendSystemMessage(line);
         }
         return chatWanted;
+    }
+
+    /**
+     * Family pitch: vein clears rise with vein size (magnitude IS the size), ore firsts
+     * follow the tier ladder, jackpot families sit bright, everything else hashes into a
+     * small 4-step set so distinct proc ids stop sounding verbatim-identical.
+     */
+    static float procPitch(String procId, float magnitude) {
+        if ("vein_clear".equals(procId)) {
+            return 1.0F + Math.min(0.3F, magnitude * 0.02F);
+        }
+        if (procId.startsWith("ore_first_")) {
+            Float tier = ORE_FIRST_PITCH.get(procId.substring("ore_first_".length()));
+            if (tier != null) {
+                return tier;
+            }
+        }
+        if (procId.startsWith("double_")) {
+            return 1.1F;
+        }
+        if (procId.startsWith("bonus_")) {
+            return 1.15F;
+        }
+        return PROC_PITCH_SET[Math.floorMod(procId.hashCode(), PROC_PITCH_SET.length)];
+    }
+
+    /** Gentle magnitude nudge over the 0.7 base — a ×2 jackpot reads slightly fuller. */
+    static float procVolume(float magnitude) {
+        return 0.7F + Math.min(0.1F, Math.max(0.0F, magnitude) * 0.02F);
     }
 
     // ------------------------------------------------------------------

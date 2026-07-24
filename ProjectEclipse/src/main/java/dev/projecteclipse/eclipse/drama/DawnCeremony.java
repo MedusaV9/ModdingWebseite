@@ -45,6 +45,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       bell of the pre-ceremony stack.</li>
  *   <li><b>T+{@value #BEAT_DAY_ANNOUNCE}</b> — {@code AnnouncementService.onDayChanged}:
  *       day typewriter/sweep, unlock sweeps, timeline rebroadcast (moved, not changed).</li>
+ *   <li><b>T+{@value #BEAT_OFFERING}</b> — offering-result line
+ *       ({@code OfferingService.announceResult}, FFIX-A / SAT-D3): enqueued behind the day
+ *       announcement so the numeral card is never displaced; non-ceremony rollovers
+ *       announce inline at POST via {@code OfferingService}'s own gate.</li>
  *   <li><b>T+{@value #BEAT_GOALS}</b> — goals reveal: one calm subtitle pointing at the
  *       day's decrees (the goal DATA already rides the T+0 day-state sync).</li>
  *   <li><b>T+{@value #BEAT_AWARDS}</b> — awards roulette:
@@ -72,6 +76,16 @@ public final class DawnCeremony {
     private static final int BEAT_SUN_PULSE = 10;
     private static final int BEAT_TOLL = 20;
     private static final int BEAT_DAY_ANNOUNCE = 40;
+    /**
+     * FFIX-A / SAT-D3: the offering-result line, moved INTO the ceremony from
+     * {@code OfferingService.resolveDay} (announcing at rollover PRE queued the STYLE_GOAL
+     * line ahead of the T+{@value #BEAT_DAY_ANNOUNCE} day announcement, displacing the
+     * day-number card). The beat sits between the toll and the goals reveal; the payload
+     * enqueues behind the day line, so the announcement queue plays card → day line →
+     * offering line in order. Rollovers without a ceremony announce inline at POST
+     * ({@code OfferingService}'s own gate, the {@code AwardService.sendRevealNow} pattern).
+     */
+    private static final int BEAT_OFFERING = 90;
     private static final int BEAT_GOALS = 140;
     private static final int BEAT_AWARDS = 200;
     /** {@link #isRunning} window: the last beat plus a small margin. */
@@ -112,6 +126,9 @@ public final class DawnCeremony {
         schedule(server, BEAT_TOLL, () -> dawnToll(server));
         schedule(server, BEAT_DAY_ANNOUNCE,
                 () -> AnnouncementService.onDayChanged(server, previousDay, newDay));
+        schedule(server, BEAT_OFFERING,
+                () -> dev.projecteclipse.eclipse.offering.OfferingService
+                        .announceResult(server, previousDay));
         schedule(server, BEAT_GOALS, () -> goalsReveal(server, newDay));
         schedule(server, BEAT_AWARDS, () -> awardsRoulette(server));
         EclipseMod.LOGGER.info("DawnCeremony: day {} -> {} — beats scheduled over {} ticks",

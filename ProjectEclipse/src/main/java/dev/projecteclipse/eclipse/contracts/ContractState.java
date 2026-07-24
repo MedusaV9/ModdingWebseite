@@ -74,6 +74,13 @@ public final class ContractState extends SavedData {
     private int contractDay;
     /** Last day the daily odds were rolled (never roll twice for one day). */
     private int rolledForDay = Integer.MIN_VALUE;
+    /**
+     * FFIX-B (POLISH-SOL-04): epoch millis of the last pause-aware deadline shift while
+     * {@code RealtimeDayApi.isPaused}. Persisted so boot resume can shift deadlines by the
+     * OFFLINE span of a pause ({@code now - anchor}) instead of letting the wall clock
+     * consume the window while the server was down. {@code 0} = not paused / no anchor.
+     */
+    private long pauseAnchorEpochMillis;
     private boolean targetLoggedOut;
     private int ghostHits;
 
@@ -108,6 +115,7 @@ public final class ContractState extends SavedData {
         state.endsAtEpochMillis = tag.getLong("endsAt");
         state.contractDay = tag.getInt("contractDay");
         state.rolledForDay = tag.contains("rolledForDay") ? tag.getInt("rolledForDay") : Integer.MIN_VALUE;
+        state.pauseAnchorEpochMillis = tag.getLong("pauseAnchor");
         state.targetLoggedOut = tag.getBoolean("targetLoggedOut");
         state.ghostHits = tag.getInt("ghostHits");
         for (Tag element : tag.getList("pairHistory", Tag.TAG_COMPOUND)) {
@@ -140,6 +148,7 @@ public final class ContractState extends SavedData {
         tag.putLong("endsAt", endsAtEpochMillis);
         tag.putInt("contractDay", contractDay);
         tag.putInt("rolledForDay", rolledForDay);
+        tag.putLong("pauseAnchor", pauseAnchorEpochMillis);
         tag.putBoolean("targetLoggedOut", targetLoggedOut);
         tag.putInt("ghostHits", ghostHits);
         ListTag history = new ListTag();
@@ -226,6 +235,19 @@ public final class ContractState extends SavedData {
         if (endsAtEpochMillis > 0L) {
             endsAtEpochMillis += deltaMillis;
         }
+        setDirty();
+    }
+
+    /** See {@link #pauseAnchorEpochMillis} — persisted pause bookkeeping (FFIX-B). */
+    public long pauseAnchorEpochMillis() {
+        return pauseAnchorEpochMillis;
+    }
+
+    public void setPauseAnchorEpochMillis(long epochMillis) {
+        if (this.pauseAnchorEpochMillis == epochMillis) {
+            return;
+        }
+        this.pauseAnchorEpochMillis = epochMillis;
         setDirty();
     }
 
@@ -327,6 +349,7 @@ public final class ContractState extends SavedData {
         target = null;
         windowStartsAtEpochMillis = 0L;
         endsAtEpochMillis = 0L;
+        pauseAnchorEpochMillis = 0L;
         targetLoggedOut = false;
         ghostHits = 0;
         setDirty();

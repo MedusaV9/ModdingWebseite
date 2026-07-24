@@ -124,7 +124,9 @@ public final class CollapsedVaultBuilder {
             int[] p = path[roomSteps[r]];
             room(level, p[0], p[1], p[2], 4, 4, 4, r == 2);
         }
-        room(level, portalTarget.getX(), portalTarget.getY(), portalTarget.getZ(), 4, 5, 4, true);
+        // FINAL-DOPA-SOL P0-2: the antechamber doubles as the Rift Warden's arena — 21x13x21
+        // interior satisfies the P6-W910 boss-room spec (>=20x20x8, flat floor).
+        room(level, portalTarget.getX(), portalTarget.getY(), portalTarget.getZ(), 10, 6, 10, true);
 
         // Pass 2 — carve the full descent.
         for (int[] p : path) {
@@ -154,8 +156,13 @@ public final class CollapsedVaultBuilder {
         if (exit.getAxis().isVertical()) {
             exit = Direction.NORTH;
         }
-        BlockPos exitDoor = portalTarget.relative(exit, 4);
+        BlockPos exitDoor = portalTarget.relative(exit, 10);
         door(level, exitDoor.getX(), portalTarget.getY(), exitDoor.getZ());
+
+        // P6-W910 seam (wiring doc): the vault's end-portal guardian. summonAt self-pins its
+        // r=12 arena on first tick; if the entity type is missing the helper no-ops safely.
+        dev.projecteclipse.eclipse.entity.boss.rift.RiftWardenEntity.summonAt(
+                level, portalTarget.above());
 
         BoundingBox bounds = BoundingBox.fromCorners(
                 new Vec3i(Math.min(from.getX(), portalTarget.getX()) - 12,

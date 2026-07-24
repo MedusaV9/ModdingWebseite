@@ -52,6 +52,10 @@ public final class EclipseLang {
             "item.eclipse.",
             "block.eclipse.",
             "entity.eclipse.",
+            // FFIX-A / POLISH L-1: the wand path chooser + power lines must follow the
+            // /lang override like every other client-rendered surface. (Contract strings
+            // ride gui.eclipse.contract.* — already covered by the gui prefix.)
+            "wand.eclipse.",
     };
 
     private static final Map<String, String> EN_US = new HashMap<>();

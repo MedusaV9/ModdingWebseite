@@ -3,9 +3,11 @@ package dev.projecteclipse.eclipse.client.rewards;
 import java.util.ArrayDeque;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.awards.AwardsOverlay;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.hud.CenterStageArbiter;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
@@ -38,6 +40,9 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
  * skeleton: ArrayDeque queue, {@code ClientTickEvent.Post} driver, self-registered
  * above-all GUI layer (never a Screen — input is never captured), F1 hides while state
  * keeps advancing, pause freezes, cutscene HUD suppression defers queued playback.
+ * FFIX-A: playback also defers behind a live/armed {@code AwardsOverlay} roulette show
+ * (SAT-D1 — a held winner reward lands after the reveal, never through the veil) and
+ * behind the shared {@link CenterStageArbiter} h/3 token (POLISH C-1).
  *
  * <p><b>Calm variants:</b> {@code reducedFx} fades the stack in at its final position
  * (no descent, no scramble, no flicker). {@code replay=true} payloads (login delivery of
@@ -51,6 +56,8 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 public final class RewardMaterializeOverlay {
     public static final ResourceLocation LAYER_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "reward_materialize");
+    /** {@link CenterStageArbiter} claim id (FFIX-A / POLISH C-1). */
+    private static final String STAGE_ID = "reward_materialize";
 
     // --- timing (game ticks) ---
     private static final int FLOAT_TICKS = 30;
@@ -156,6 +163,7 @@ public final class RewardMaterializeOverlay {
             QUEUE.clear();
             ticks = -1;
             active = null;
+            CenterStageArbiter.release(STAGE_ID);
             return;
         }
         if (minecraft.isPaused()) {
@@ -172,14 +180,34 @@ public final class RewardMaterializeOverlay {
             if (ticks > totalTicks() + GAP_TICKS) {
                 ticks = -1;
                 active = null;
+                CenterStageArbiter.release(STAGE_ID);
             }
         }
-        // Cutscene flights defer playback (the layer render is cancelled anyway).
-        if (ticks < 0 && !QUEUE.isEmpty() && !CameraDirector.isHudSuppressed()) {
-            active = QUEUE.pollFirst();
-            calm = active.replay() || EclipseClientConfig.reducedFx();
-            ticks = 0;
+        // Cutscene flights defer playback (the layer render is cancelled anyway); a live or
+        // armed roulette show holds the queue too (FFIX-A / SAT-D1: a winner's held reward
+        // must land AFTER the reveal, never through the veil), and the h/3 center stage
+        // must be free (FFIX-A / POLISH C-1).
+        if (ticks < 0 && !QUEUE.isEmpty() && !CameraDirector.isHudSuppressed()
+                && !AwardsOverlay.showLiveOrArmed()) {
+            Grant next = QUEUE.peekFirst();
+            boolean nextCalm = next.replay() || EclipseClientConfig.reducedFx();
+            int lease = (nextCalm ? CALM_IN_TICKS + CALM_HOLD_TICKS + FADE_TICKS
+                    : FLOAT_TICKS + HOLD_TICKS + FADE_TICKS) + GAP_TICKS;
+            if (CenterStageArbiter.tryClaim(STAGE_ID, lease)) {
+                active = QUEUE.pollFirst();
+                calm = nextCalm;
+                ticks = 0;
+            }
         }
+    }
+
+    /**
+     * Whether a materialization is playing right now — {@code SkillProcToast} nudges its
+     * lane from {@code h-59} to {@code h-70} while this is true so the toast never sits
+     * inside the touchdown/absorb-flash window at {@code h-58} (FFIX-A / POLISH C-2).
+     */
+    public static boolean isMaterializing() {
+        return ticks >= 0 && active != null;
     }
 
     private static int totalTicks() {

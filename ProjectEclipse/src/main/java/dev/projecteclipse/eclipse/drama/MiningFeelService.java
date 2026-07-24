@@ -32,10 +32,11 @@ import net.minecraft.world.phys.Vec3;
  *       {@code UI_UNLOCK_STING} plays over the {@code ore_first_<oreId>} proc toast.
  *       Detection is the analytics {@code mine:<block_id>} lifetime sum {@code == 1}
  *       right after the increment (the signal fires post-count) — zero new state.</li>
- *   <li><b>Vein reveal + vein-complete chime (#2):</b> {@link VeinTracker} re-derives
- *       the deterministic vein at break time; an intact first break shows the actionbar
- *       size reveal ("Iron Ore vein · 7 blocks") and the last remaining block plays a
- *       two-note chime (amethyst + the proc chime) with a "Vein cleared ×7" toast.</li>
+ *   <li><b>Vein reveal + countdown + vein-complete chime (#2):</b> {@link VeinTracker}
+ *       re-derives the deterministic vein at break time; an intact first break shows the
+ *       actionbar size reveal ("Iron Ore vein · 7 blocks"), middle breaks tick a mined/total
+ *       countdown with a rising typewriter blip (FFIX-A), and the last remaining block plays
+ *       a two-note chime (amethyst + the proc chime) with a "Vein cleared ×7" toast.</li>
  *   <li><b>Ore-proc sparkle (#3/#4):</b> {@link #sendOreProcSparkle} ships the
  *       {@code eclipse:fx/ore_proc} id on the sanctioned {@code S2CFxEventPayload} seam
  *       ({@code a} = magnitude, {@code b} = packed 24-bit ore RGB — exact in a float).
@@ -95,6 +96,16 @@ public final class MiningFeelService {
             // payoff note is saved for completion; Quiet-Eclipse anticipation).
             player.displayClientMessage(Component.translatable("message.eclipse.vein.reveal",
                     state.getBlock().getName(), scan.total()).withColor(REVEAL_COLOR), true);
+        } else if (scan.present() > 1) {
+            // FFIX-A DOPA #2 — countdown ramp for breaks 2…n−1 (was reveal→silence→payoff):
+            // actionbar "Iron Ore vein · 3/7" (mined/total) + a soft typewriter blip whose
+            // pitch climbs as the vein empties. Data is already in the scan; private + quiet.
+            int mined = scan.total() - scan.present() + 1;
+            player.displayClientMessage(Component.translatable("message.eclipse.vein.progress",
+                    state.getBlock().getName(), mined, scan.total()).withColor(REVEAL_COLOR), true);
+            float ramp = (float) mined / (float) scan.total();
+            player.playNotifySound(EclipseSounds.UI_TYPEWRITER.get(), SoundSource.PLAYERS,
+                    0.35F, 0.9F + 0.5F * ramp);
         }
         if (scan.present() == 1) {
             // This break clears the vein: bright note over the proc chime = two-note payoff.

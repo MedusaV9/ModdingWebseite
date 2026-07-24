@@ -5,9 +5,10 @@
  * Vitae Shard, the umbral tools) and the pooled team Supply Beacon drop ({@link
  * dev.projecteclipse.eclipse.economy.SupplyBeacon}).
  *
- * <p>Currency flow: every deposited umbral shard credits BOTH the depositor's persisted
- * {@code eclipse:shards} attachment (personal purchases) and the global
- * {@code EclipseWorldState#getShardPool()} (team purchases). Personal buys deduct only the
- * personal balance; pooled buys deduct only the pool.</p>
+ * <p>Currency flow (FINAL-DOPA-SOL §3 double-spend fix): deposited physical shards credit
+ * ONLY the global {@code EclipseWorldState#getShardPool()} (team purchases); the persisted
+ * {@code eclipse:shards} attachment (personal purchases) is credited only by direct
+ * rewards — goals, personal quests, contracts, admin grants. Personal buys deduct only the
+ * personal balance; pooled buys deduct only the pool — each shard is spendable once.</p>
  */
 package dev.projecteclipse.eclipse.economy;

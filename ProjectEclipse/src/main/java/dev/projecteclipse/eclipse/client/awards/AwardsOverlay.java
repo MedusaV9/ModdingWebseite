@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.hud.CenterStageArbiter;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
@@ -84,6 +85,8 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 public final class AwardsOverlay {
     public static final ResourceLocation LAYER_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "awards_roulette");
+    /** {@link CenterStageArbiter} claim id (FFIX-A / POLISH C-1). */
+    private static final String STAGE_ID = "awards_roulette";
 
     // --- timing (game ticks) ---
     private static final int INTRO_TICKS = 18;
@@ -220,14 +223,32 @@ public final class AwardsOverlay {
         QUEUE.add(new PendingShow(day, categories));
     }
 
+    /**
+     * FFIX-A / SAT-D1: whether a roulette show is running OR armed (queued/just cached).
+     * {@code RewardMaterializeOverlay} consults this at its queue-start seam so a winner's
+     * held reward materialization never plays THROUGH the reveal veil — it lands right
+     * after the show. Polls the payload cache first so the answer is correct even when
+     * the caller's tick runs before ours in the same client tick.
+     */
+    public static boolean showLiveOrArmed() {
+        pollPayload();
+        return phase != Phase.IDLE || !QUEUE.isEmpty();
+    }
+
     private static void maybeStart(Minecraft minecraft) {
         if (QUEUE.isEmpty() || LetterboxLayer.barPx(1000) > 0) {
             return; // hold behind an active cutscene letterbox
+        }
+        // FFIX-A / POLISH C-1: the roulette is a hero moment too — wait politely for the
+        // center stage instead of dropping the veil over a running level-up/day card.
+        if (!CenterStageArbiter.tryClaim(STAGE_ID, SHOW_HARD_CAP_TICKS)) {
+            return;
         }
         PendingShow pending = QUEUE.poll();
         UUID localId = minecraft.player != null ? minecraft.player.getUUID() : null;
         List<Reveal> built = buildReveals(pending.day(), pending.categories(), localId);
         if (built.isEmpty()) {
+            CenterStageArbiter.release(STAGE_ID);
             return;
         }
         showDay = pending.day();
@@ -426,6 +447,7 @@ public final class AwardsOverlay {
         showTicks = 0;
         reveals = List.of();
         revealIndex = 0;
+        CenterStageArbiter.release(STAGE_ID);
     }
 
     private static void hardReset() {

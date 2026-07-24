@@ -54,4 +54,16 @@ public final class ContractClientState {
             endsAtLocalMillis = 0L;
         }
     }
+
+    /**
+     * FFIX-B (POLISH-SOL-05): explicit logout boundary — the tick-based
+     * {@code level == null} sweep leaves a gap in which a quick reconnect could inherit
+     * the previous session's blackout flag (the wave-4 glyph/bestiary client pattern).
+     */
+    @SubscribeEvent
+    static void onLoggingOut(
+            net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        windowActive = false;
+        endsAtLocalMillis = 0L;
+    }
 }

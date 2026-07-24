@@ -23,6 +23,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
@@ -79,6 +80,16 @@ public final class MinigameState extends SavedData {
     public record Ticket(ReturnAnchor anchor, int gameModeId, float health, int foodLevel,
             float saturation, ListTag main, ListTag armor, ListTag offhand) {}
 
+    /**
+     * FFIX-B (FINAL-SAT-SOL H2/H3/H4): one queued minigame payout — a stable,
+     * instance-scoped idempotency id plus the shard/skill-XP amounts. Mirrors the awards
+     * offline queue pattern ({@code AwardsState.PendingReward}): queue once by id,
+     * durably claim BEFORE any player-visible grant. Queued payouts survive restarts AND
+     * new instances (like tickets), so offline podium winners and participants are paid
+     * at their next login no matter what happened in between.
+     */
+    public record PendingPayout(String id, int shards, int skillXp) {}
+
     private static final String TAG_PHASE = "phase";
     private static final String TAG_GAME_ID = "gameId";
     private static final String TAG_ENDS_AT = "endsAtEpochMillis";
@@ -95,6 +106,8 @@ public final class MinigameState extends SavedData {
     private static final String TAG_BEST_LAP = "bestLapMillis";
     private static final String TAG_BUILT_SEED_ARENA = "builtSeedArena";
     private static final String TAG_BUILT_SEED_RACE = "builtSeedRace";
+    private static final String TAG_PENDING_PAYOUTS = "pendingPayouts";
+    private static final String TAG_DELIVERED_PAYOUTS = "deliveredPayouts";
 
     private Phase phase = Phase.IDLE;
     private String gameId = "";
@@ -108,6 +121,9 @@ public final class MinigameState extends SavedData {
     private final Set<UUID> participants = new HashSet<>();
     private final Map<UUID, Ticket> tickets = new HashMap<>();
     private final Set<UUID> rewardedParticipation = new HashSet<>();
+    /** FFIX-B payout ledger — survives {@link #beginInstance} like tickets do. */
+    private final Map<UUID, List<PendingPayout>> pendingPayouts = new HashMap<>();
+    private final Map<UUID, Set<String>> deliveredPayoutIds = new HashMap<>();
     private final Map<UUID, Integer> kills = new HashMap<>();
     private final Map<UUID, Integer> raceProgress = new HashMap<>();
     private final Map<UUID, Long> raceLapStart = new HashMap<>();
@@ -174,6 +190,9 @@ public final class MinigameState extends SavedData {
      * Starts a fresh event instance: bumps {@link #openCount()}, clears all per-instance
      * scoring/reward bookkeeping and records game + end time. Tickets are deliberately
      * NOT cleared — an unrestored ticket means a player still owed their inventory.
+     * The payout ledger ({@link #queuePayout}/{@link #claimPayout}) also survives
+     * (FFIX-B H2): its ids are instance-scoped, so a new instance can never erase a prior
+     * instance's unclaimed entitlements.
      */
     public void beginInstance(String newGameId, long endsAt) {
         this.openCount++;
@@ -238,6 +257,48 @@ public final class MinigameState extends SavedData {
             setDirty();
         }
         return added;
+    }
+
+    // ------------------------------------------------------------------ payout ledger (FFIX-B)
+
+    /** Queues once by stable payout id (skipped when already pending or already delivered). */
+    public boolean queuePayout(UUID player, PendingPayout payout) {
+        if (deliveredPayoutIds.getOrDefault(player, Set.of()).contains(payout.id())) {
+            return false;
+        }
+        List<PendingPayout> pending = pendingPayouts.computeIfAbsent(player, key -> new ArrayList<>());
+        if (pending.stream().anyMatch(existing -> existing.id().equals(payout.id()))) {
+            return false;
+        }
+        pending.add(payout);
+        setDirty();
+        return true;
+    }
+
+    public List<PendingPayout> pendingPayouts(UUID player) {
+        List<PendingPayout> payouts = pendingPayouts.get(player);
+        return payouts == null ? List.of() : Collections.unmodifiableList(payouts);
+    }
+
+    /**
+     * Durably claims one queued payout by stable id BEFORE its effects are applied (the
+     * {@code AwardsState.claim} pattern): the delivered marker and the queue live in the
+     * SAME SavedData, so a crash replay can never apply the same payout id twice.
+     */
+    public boolean claimPayout(UUID player, String payoutId) {
+        Set<String> delivered = deliveredPayoutIds.computeIfAbsent(player, key -> new HashSet<>());
+        if (!delivered.add(payoutId)) {
+            return false;
+        }
+        List<PendingPayout> payouts = pendingPayouts.get(player);
+        if (payouts != null) {
+            payouts.removeIf(payout -> payout.id().equals(payoutId));
+            if (payouts.isEmpty()) {
+                pendingPayouts.remove(player);
+            }
+        }
+        setDirty();
+        return true;
     }
 
     // ------------------------------------------------------------------ arena scoring
@@ -475,6 +536,44 @@ public final class MinigameState extends SavedData {
         state.bestLapMillis = tag.getLong(TAG_BEST_LAP);
         state.builtSeedArena = tag.contains(TAG_BUILT_SEED_ARENA) ? tag.getInt(TAG_BUILT_SEED_ARENA) : -1;
         state.builtSeedRace = tag.contains(TAG_BUILT_SEED_RACE) ? tag.getInt(TAG_BUILT_SEED_RACE) : -1;
+
+        for (Tag raw : tag.getList(TAG_PENDING_PAYOUTS, Tag.TAG_COMPOUND)) {
+            CompoundTag playerTag = (CompoundTag) raw;
+            if (!playerTag.hasUUID("uuid")) {
+                continue;
+            }
+            List<PendingPayout> payouts = new ArrayList<>();
+            for (Tag payoutRaw : playerTag.getList("payouts", Tag.TAG_COMPOUND)) {
+                CompoundTag payoutTag = (CompoundTag) payoutRaw;
+                payouts.add(new PendingPayout(payoutTag.getString("id"),
+                        payoutTag.getInt("shards"), payoutTag.getInt("xp")));
+            }
+            if (!payouts.isEmpty()) {
+                state.pendingPayouts.put(playerTag.getUUID("uuid"), payouts);
+            }
+        }
+        for (Tag raw : tag.getList(TAG_DELIVERED_PAYOUTS, Tag.TAG_COMPOUND)) {
+            CompoundTag playerTag = (CompoundTag) raw;
+            if (!playerTag.hasUUID("uuid")) {
+                continue;
+            }
+            Set<String> ids = new HashSet<>();
+            for (Tag idTag : playerTag.getList("ids", Tag.TAG_STRING)) {
+                ids.add(idTag.getAsString());
+            }
+            if (!ids.isEmpty()) {
+                UUID uuid = playerTag.getUUID("uuid");
+                state.deliveredPayoutIds.put(uuid, ids);
+                // Reconcile a torn write: a payout both pending and delivered stays claimed.
+                List<PendingPayout> pending = state.pendingPayouts.get(uuid);
+                if (pending != null) {
+                    pending.removeIf(payout -> ids.contains(payout.id()));
+                    if (pending.isEmpty()) {
+                        state.pendingPayouts.remove(uuid);
+                    }
+                }
+            }
+        }
         return state;
     }
 
@@ -547,6 +646,34 @@ public final class MinigameState extends SavedData {
         tag.putLong(TAG_BEST_LAP, bestLapMillis);
         tag.putInt(TAG_BUILT_SEED_ARENA, builtSeedArena);
         tag.putInt(TAG_BUILT_SEED_RACE, builtSeedRace);
+
+        ListTag pendingPayoutsTag = new ListTag();
+        for (Map.Entry<UUID, List<PendingPayout>> entry : pendingPayouts.entrySet()) {
+            CompoundTag playerTag = new CompoundTag();
+            playerTag.putUUID("uuid", entry.getKey());
+            ListTag payoutList = new ListTag();
+            for (PendingPayout payout : entry.getValue()) {
+                CompoundTag payoutTag = new CompoundTag();
+                payoutTag.putString("id", payout.id());
+                payoutTag.putInt("shards", payout.shards());
+                payoutTag.putInt("xp", payout.skillXp());
+                payoutList.add(payoutTag);
+            }
+            playerTag.put("payouts", payoutList);
+            pendingPayoutsTag.add(playerTag);
+        }
+        tag.put(TAG_PENDING_PAYOUTS, pendingPayoutsTag);
+
+        ListTag deliveredTag = new ListTag();
+        for (Map.Entry<UUID, Set<String>> entry : deliveredPayoutIds.entrySet()) {
+            CompoundTag playerTag = new CompoundTag();
+            playerTag.putUUID("uuid", entry.getKey());
+            ListTag ids = new ListTag();
+            entry.getValue().stream().sorted().forEach(id -> ids.add(StringTag.valueOf(id)));
+            playerTag.put("ids", ids);
+            deliveredTag.add(playerTag);
+        }
+        tag.put(TAG_DELIVERED_PAYOUTS, deliveredTag);
         return tag;
     }
 

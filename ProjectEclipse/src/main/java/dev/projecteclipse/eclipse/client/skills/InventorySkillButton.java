@@ -5,6 +5,8 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.EclipseWidget;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -12,6 +14,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -97,9 +100,20 @@ public final class InventorySkillButton {
             guiGraphics.fill(getX() + SIZE - 1, getY() + 1, getX() + SIZE, getY() + SIZE - 1, border);
 
             // Unspent-points nudge: the glyph brightens to full accent while points wait.
-            int glyphColor = ClientStateCache.skillUnspent > 0 ? EclipseUiTheme.ACCENT : EclipseUiTheme.DIM;
+            boolean unspent = ClientStateCache.skillUnspent > 0;
+            int glyphColor = unspent ? EclipseUiTheme.ACCENT : EclipseUiTheme.DIM;
             guiGraphics.drawCenteredString(Minecraft.getInstance().font, "✦",
                     getX() + SIZE / 2, getY() + (SIZE - 8) / 2 + 1, glyphColor);
+
+            // FFIX-A DOPA #5: unspent-point beacon — a 3×3 accent dot on the button's
+            // shoulder with a slow pulse (steady under reducedFx), so the earn→spend
+            // handoff reads at a glance even before the glyph color shift registers.
+            if (unspent) {
+                float pulse = EclipseClientConfig.reducedFx() ? 1.0F
+                        : 0.65F + 0.35F * Mth.sin(Util.getMillis() / 320.0F);
+                int dot = EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, pulse);
+                guiGraphics.fill(getX() + SIZE - 4, getY() + 1, getX() + SIZE - 1, getY() + 4, dot);
+            }
         }
     }
 }
