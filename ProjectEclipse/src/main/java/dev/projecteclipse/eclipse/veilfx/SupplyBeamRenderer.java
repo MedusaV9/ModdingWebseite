@@ -123,7 +123,11 @@ public final class SupplyBeamRenderer {
             float pulse = 0.78F + 0.22F * Mth.sin(pulseTime * 5.0F + beam.pulsePhase);
             float strength = alpha * pulse;
 
-            addPlanes(buffer, x, y, z, CORE_WIDTH * 0.5F, scrollCore,
+            // Far presence (VFXPOLISH-3): a 0.35-block core is ~1–2 px beyond the core-only
+            // LOD, so the core widens continuously with distance (capped ×2.5 at ~480) —
+            // the beam stays a readable landmark out to the 512-block cutoff.
+            float widthBoost = (float) Mth.clamp(Math.sqrt(distSq) / CORE_ONLY_DISTANCE, 1.0D, 2.5D);
+            addPlanes(buffer, x, y, z, CORE_WIDTH * 0.5F * widthBoost, scrollCore,
                     0.85F, 0.62F, 1.0F, 0.55F * strength);
             if (distSq <= CORE_ONLY_DISTANCE * CORE_ONLY_DISTANCE) {
                 addPlanes(buffer, x, y, z, HAZE_WIDTH * 0.5F, scrollHaze,

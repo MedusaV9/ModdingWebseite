@@ -191,14 +191,17 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         RenderSystem.setShaderTexture(0, SUN_PURPLE);
 
         // R1: three slowly rotating additive corona quads carry the eclipse's screen presence.
+        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         if (eclipse > 0.001F) {
-            float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
             for (int i = 0; i < CORONA_SIZES.length; i++) {
                 poseStack.pushPose();
                 poseStack.mulPose(Axis.YP.rotationDegrees(seconds * CORONA_DEG_PER_SEC[i]));
+                // Slow phase-offset breathing per layer (±10%) so the corona shimmers as a
+                // living thing instead of holding three frozen alpha rings.
+                float breathe = 0.90F + 0.10F * Mth.sin(seconds * 0.7F + i * 2.1F);
                 RenderSystem.setShaderColor(
                         0.75F - 0.12F * i, 0.40F - 0.09F * i, 1.00F - 0.05F * i,
-                        CORONA_ALPHAS[i] * eclipse * rainAlpha);
+                        CORONA_ALPHAS[i] * breathe * eclipse * rainAlpha);
                 SkyRenderUtil.drawCelestialQuad(poseStack.last().pose(), CORONA_SIZES[i], 100.0F);
                 poseStack.popPose();
             }
@@ -211,9 +214,12 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
 
         float sunSize = Mth.lerp(eclipse, SUN_SIZE_IDLE, SUN_SIZE_ECLIPSE);
 
-        // R10 SUNRISE: permanent purple rim pass behind the sun disc after the intro.
+        // R10 SUNRISE: permanent purple rim pass behind the sun disc after the intro. A very
+        // slow ±0.04 breath around the frozen 0.50 keeps the rim from reading as a static
+        // decal without changing its average strength.
         if (EclipseFxState.permanentSunRim()) {
-            RenderSystem.setShaderColor(0.62F, 0.22F, 1.00F, 0.50F * rainAlpha);
+            float rimBreathe = 0.50F + 0.04F * Mth.sin(seconds * 0.45F);
+            RenderSystem.setShaderColor(0.62F, 0.22F, 1.00F, rimBreathe * rainAlpha);
             SkyRenderUtil.drawCelestialQuad(celestialPose, sunSize * 1.35F, 100.0F);
         }
 

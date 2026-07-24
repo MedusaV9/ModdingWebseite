@@ -192,8 +192,10 @@ public final class RiftRenderer {
         float radius = rift.width * 0.5F * open;
         for (int i = 0; i < arms; i++) {
             float tipAngle = rift.armAngle[i] + (hash01(rift.seed, i * 2, flickerFrame) - 0.5F) * 0.06F;
+            // 0.82–1.0 tip flicker (VFXPOLISH-3, was 0.86): slightly deeper arm shudder so
+            // the tear visibly convulses instead of shimmering — same budget, same cadence.
             float tipRadius = radius * rift.armLength[i]
-                    * (0.86F + 0.14F * hash01(rift.seed, i * 5 + 1, flickerFrame));
+                    * (0.82F + 0.18F * hash01(rift.seed, i * 5 + 1, flickerFrame));
             emitPerimeter(rift, i * 2, tipAngle, tipRadius, cx, cy, cz);
             float nextAngle = i + 1 < arms ? rift.armAngle[i + 1] : rift.armAngle[0] + Mth.TWO_PI;
             float valleyAngle = (rift.armAngle[i] + nextAngle) * 0.5F;
@@ -253,7 +255,10 @@ public final class RiftRenderer {
     private static void buildAdditive(RiftFx.Rift rift, BufferBuilder additive,
             float cx, float cy, float cz, float open, float swirlSeconds) {
         int perim = rift.armCount * 2;
-        float coreAlpha = 0.75F * open;
+        // Per-rift eased breath (VFXPOLISH-3): the hot core swells ±8% on a slow sine —
+        // phase from the seed's low bits so neighbouring tears never pulse in lockstep.
+        float breathe = 0.92F + 0.08F * Mth.sin(swirlSeconds * 2.6F + (rift.seed & 31) * 0.41F);
+        float coreAlpha = 0.75F * open * breathe;
         for (int k = 0; k < perim; k++) {
             int k1 = k + 1 == perim ? 0 : k + 1;
             additive.addVertex(cx, cy, cz).setColor(0.97F, 0.90F, 1.0F, coreAlpha);

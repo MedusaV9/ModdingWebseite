@@ -334,11 +334,14 @@ public final class StormFxClient {
             storm.heartbeatEchoTick = -1;
             playHeartbeat(level, camera, 0.22F, 0.75F);
         }
+        float closeness = (float) Mth.clamp((DREAD_FAR - shellDist) / (DREAD_FAR - DREAD_NEAR),
+                0.0D, 1.0D);
+        // Smoothstep-eased cadence: the tightening accelerates as you close in instead of
+        // ramping linearly — the last 20 blocks feel like the storm noticed you.
+        float eased = closeness * closeness * (3.0F - 2.0F * closeness);
         if (clientTicks >= storm.nextHeartbeatTick) {
-            float closeness = (float) Mth.clamp((DREAD_FAR - shellDist) / (DREAD_FAR - DREAD_NEAR),
-                    0.0D, 1.0D);
             storm.nextHeartbeatTick = clientTicks
-                    + Math.round(Mth.lerp(closeness, HEARTBEAT_SLOW_TICKS, HEARTBEAT_FAST_TICKS));
+                    + Math.round(Mth.lerp(eased, HEARTBEAT_SLOW_TICKS, HEARTBEAT_FAST_TICKS));
             playHeartbeat(level, camera, 0.25F, 0.8F);
             if (shellDist <= DREAD_NEAR) {
                 storm.heartbeatEchoTick = clientTicks + HEARTBEAT_ECHO_TICKS;
@@ -348,8 +351,10 @@ public final class StormFxClient {
             return;
         }
         // Ground tendrils: ~3 fingers/s (raw addParticle — negligible; halved under reducedFx),
-        // crawling OUT from the wall base toward the player along the camera bearing.
+        // crawling OUT from the wall base toward the player along the camera bearing. The
+        // inward crawl speeds up with the eased closeness — the fingers "reach harder" near.
         int interval = EclipseClientConfig.reducedFx() ? 14 : 7;
+        double crawl = 0.010D + 0.012D * eased;
         if (clientTicks % interval == 0) {
             double camAngle = Math.atan2(camera.z - storm.center.z, camera.x - storm.center.x);
             double angle = camAngle + (random.nextDouble() - 0.5D) * 0.5D;
@@ -359,7 +364,7 @@ public final class StormFxClient {
             double y = storm.center.y + 0.15D + random.nextDouble() * 0.5D;
             level.addParticle(random.nextBoolean()
                             ? ParticleTypes.CAMPFIRE_COSY_SMOKE : ParticleTypes.CLOUD,
-                    x, y, z, (camera.x - x) * 0.015D, 0.01D, (camera.z - z) * 0.015D);
+                    x, y, z, (camera.x - x) * crawl, 0.01D, (camera.z - z) * crawl);
         }
         // ≤ 20: the fingers reach your feet — a low ring around the player drifting inward.
         if (shellDist <= DREAD_NEAR && clientTicks % 9 == 0) {

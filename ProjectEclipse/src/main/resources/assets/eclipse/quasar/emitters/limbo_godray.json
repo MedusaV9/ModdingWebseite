@@ -3,6 +3,7 @@
   "loop": true,
   "rate": 10,
   "count": 1,
+  "max_particles": 10,
   "emitter_settings": {
     "shape": {
       "shape": "veil:cylinder",

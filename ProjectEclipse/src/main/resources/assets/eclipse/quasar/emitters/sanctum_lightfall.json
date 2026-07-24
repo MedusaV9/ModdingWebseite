@@ -1,8 +1,9 @@
 {
   "max_lifetime": 40,
   "loop": true,
-  "rate": 1,
+  "rate": 2,
   "count": 1,
+  "max_particles": 32,
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",
@@ -41,7 +42,7 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": false,
+    "face_velocity": true,
     "velocity_stretch_factor": 0.9,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
@@ -70,15 +71,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#FFF6D8"
+              "color": "#EFE4FF"
             },
             {
               "percent": 0.45,
-              "color": "#D9A8FF"
+              "color": "#B98CFF"
             },
             {
               "percent": 1.0,
-              "color": "#5B1E99"
+              "color": "#2E2347"
             }
           ],
           "alpha_points": [

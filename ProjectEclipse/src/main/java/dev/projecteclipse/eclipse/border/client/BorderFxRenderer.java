@@ -344,6 +344,11 @@ public final class BorderFxRenderer {
         } else {
             clusterCount = 3;
         }
+        // Approach densification (VFXPOLISH-3): the field thickens with smoothstep-eased
+        // proximity — a sparse crackle at the fxRange edge rising to the full quality-tier
+        // density on the ring, so the push-back boundary reads as a wall of static.
+        float density = prox * prox * (3.0F - 2.0F * prox);
+        clusterCount = Math.max(2, Math.round(clusterCount * (0.45F + 0.55F * density)));
         for (int c = 0; c < clusterCount; c++) {
             CLUSTER_ANGLE[c] = bearing + (random.nextDouble() * 2.0D - 1.0D) * halfArc;
             CLUSTER_Y[c] = eyeY + random.nextDouble() * (CLUSTER_Y_UP + CLUSTER_Y_DOWN) - CLUSTER_Y_DOWN;

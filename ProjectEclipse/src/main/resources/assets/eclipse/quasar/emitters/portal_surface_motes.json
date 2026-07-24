@@ -73,11 +73,11 @@
           0.0,
           0.0
         ],
-        "local_position": true,
+        "localPosition": true,
         "range": 7.0,
         "strength": 0.012,
-        "strength_by_distance": true,
-        "invert_distance_modifier": false
+        "strengthByDistance": true,
+        "invertDistanceModifier": false
       },
       {
         "module": "veil:drag",
@@ -89,15 +89,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#B65CFF"
+              "color": "#B98CFF"
             },
             {
               "percent": 0.6,
-              "color": "#9D4EDD"
+              "color": "#7B4FD0"
             },
             {
               "percent": 1.0,
-              "color": "#3C096C"
+              "color": "#2E2347"
             }
           ],
           "alpha_points": [

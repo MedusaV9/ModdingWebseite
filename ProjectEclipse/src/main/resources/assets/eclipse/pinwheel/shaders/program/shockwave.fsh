@@ -40,7 +40,11 @@ void main() {
     // dir lives in aspect space; displacements convert back to UV units through this.
     vec2 uvDir = vec2(dir.x / aspect, dir.y);
 
-    float ring = dist - ShockProgress * RING_MAX_RADIUS;
+    // Ease-out expansion: a blast front bursts outward and decelerates. The previous
+    // linear ShockProgress·R crawl read mechanical, especially on the 45-tick submerge
+    // loop. Falloff/front strengths stay on the RAW progress so lifetime is unchanged.
+    float expand = 1.0 - (1.0 - ShockProgress) * (1.0 - ShockProgress);
+    float ring = dist - expand * RING_MAX_RADIUS;
     // Strongest at the ring front, dying off as the expansion completes (so looping submerge
     // rings breathe: fire at the center, fade before the next one).
     float falloff = exp(-abs(ring) * 7.0) * (1.0 - ShockProgress * ShockProgress);
@@ -51,6 +55,11 @@ void main() {
     // Chromatic split hugging the ring front.
     float front = exp(-abs(ring) * 12.0) * (1.0 - ShockProgress);
     vec3 color = efxChroma(DiffuseSampler0, uv, uvDir, front * ShockStrength * 0.02);
+
+    // Day readability: pure refraction vanishes over flat bright regions (noon sky), so a
+    // faint brightness crest/trough rides the wave itself — ≤ ~10% at full strength and
+    // dying with the same falloff, so night/dusk scenes keep their subtle glassy read.
+    color *= 1.0 + wave * falloff * clamp(ShockStrength, 0.0, 1.0) * 0.10;
 
     // 8% desaturation inside the ring (the "pressure" read of the frozen design).
     float inside = (1.0 - smoothstep(-0.08, 0.08, ring)) * clamp(ShockStrength, 0.0, 1.0);

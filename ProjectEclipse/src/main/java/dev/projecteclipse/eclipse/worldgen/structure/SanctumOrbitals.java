@@ -102,7 +102,13 @@ public final class SanctumOrbitals {
     private static final double ORBIT_DEG_PER_TICK = 0.15D;
     /** Gentle vertical bob amplitude (blocks). */
     private static final double BOB_AMPLITUDE = 0.4D;
-    /** Bob period base; each anchor stretches it via its variation row (~6–10 s). */
+    /**
+     * Bob period base; each anchor stretches it via its variation row (~8.5–16 s). The
+     * floor is chosen so one {@value #UPDATE_CADENCE_TICKS}-tick interpolation window never
+     * spans more than ~90° of bob phase — beyond that the client's linear tween visibly
+     * flattens the sine's peaks (VFXPOLISH-3: the old 112 t fastest period put 129° in one
+     * window and the quickest fragments hitched at the top/bottom of their bob).
+     */
     private static final double BOB_BASE_PERIOD_TICKS = 140.0D;
     /** Individual tumble rate base (deg/tick, ~1.6–4.4°/s across the ring). */
     private static final double SPIN_DEG_PER_TICK_BASE = 0.08D;
@@ -367,7 +373,7 @@ public final class SanctumOrbitals {
 
         boolean bigRing = anchor.ring() <= 1;
         double radius = anchor.radius() + (bigRing ? radiusBonus : 0.0D);
-        double bobPeriod = BOB_BASE_PERIOD_TICKS * (0.8D + 0.35D * (orderIndex % 4));
+        double bobPeriod = BOB_BASE_PERIOD_TICKS * (1.2D + 0.35D * (orderIndex % 4));
         double bob = Math.sin((Math.PI * 2.0D / bobPeriod) * gameTime
                 + anchor.phaseRadians() * 3.0D) * BOB_AMPLITUDE * (bigRing ? bobScale : 1.0D);
 

@@ -23,8 +23,8 @@
       "random_speed": true,
       "base_particle_size": 0.4,
       "particle_size_variation": 0.1,
-      "particle_lifetime": 50,
-      "particle_lifetime_variation": 12,
+      "particle_lifetime": 40,
+      "particle_lifetime_variation": 10,
       "initial_direction": [
         0.0,
         1.0,
@@ -56,7 +56,7 @@
       },
       {
         "module": "veil:drag",
-        "strength": 0.98
+        "strength": 0.6
       },
       {
         "module": "veil:color",
@@ -64,15 +64,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#6E5F8A"
+              "color": "#7A6B99"
             },
             {
               "percent": 0.4,
-              "color": "#4A3E61"
+              "color": "#473A63"
             },
             {
               "percent": 1.0,
-              "color": "#241E38"
+              "color": "#241C38"
             }
           ],
           "alpha_points": [

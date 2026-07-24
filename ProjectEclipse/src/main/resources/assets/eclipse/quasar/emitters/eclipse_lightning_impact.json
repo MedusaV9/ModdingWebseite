@@ -68,15 +68,15 @@
             },
             {
               "percent": 0.25,
-              "color": "#E4C6FF"
+              "color": "#B98CFF"
             },
             {
               "percent": 0.6,
-              "color": "#B65CFF"
+              "color": "#7B4FD0"
             },
             {
               "percent": 1.0,
-              "color": "#5B1E99"
+              "color": "#2E2347"
             }
           ],
           "alpha_points": [

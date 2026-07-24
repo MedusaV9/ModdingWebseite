@@ -41,7 +41,7 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": false,
+    "face_velocity": true,
     "velocity_stretch_factor": 1.6,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",

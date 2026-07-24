@@ -38,7 +38,8 @@ void main() {
     float sky = step(0.9999, depth);
     color *= 1.0 - sky * crush * 0.25;
 
-    // Exposure dip (0.35 during eclipse TOTAL, eased CPU-side over 60 ticks).
+    // Exposure dip (0.62 during eclipse TOTAL, eased CPU-side over 60 ticks — the old
+    // 0.35 target rendered totality near-black on top of the crush; see EclipseFxState).
     color *= ExposureMul;
 
     fragColor = vec4(color, 1.0);

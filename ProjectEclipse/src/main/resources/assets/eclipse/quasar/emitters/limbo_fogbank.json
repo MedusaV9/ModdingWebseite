@@ -3,6 +3,7 @@
   "loop": true,
   "rate": 20,
   "count": 1,
+  "max_particles": 8,
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",

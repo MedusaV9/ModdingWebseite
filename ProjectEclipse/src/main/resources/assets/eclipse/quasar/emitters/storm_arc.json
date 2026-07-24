@@ -41,7 +41,7 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": false,
+    "face_velocity": true,
     "velocity_stretch_factor": 1.2,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
@@ -60,11 +60,11 @@
             },
             {
               "percent": 0.35,
-              "color": "#D9A8FF"
+              "color": "#B98CFF"
             },
             {
               "percent": 1.0,
-              "color": "#6B2FB3"
+              "color": "#7B4FD0"
             }
           ],
           "alpha_points": [

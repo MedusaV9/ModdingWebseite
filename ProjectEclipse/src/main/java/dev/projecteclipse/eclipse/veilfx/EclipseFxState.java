@@ -100,7 +100,7 @@ public final class EclipseFxState {
         eclipseStartTick = clientTicks;
         eclipseRampTicks = Math.max(1, rampTicks);
         eclipsePhase = Mth.clamp(phase, PHASE_NONE, PHASE_ENDING);
-        // R3: during TOTAL the exposure dips to 0.35 with its own 60-tick ease.
+        // R3: during TOTAL the exposure dips to TOTAL_EXPOSURE (0.62) with its own 60-tick ease.
         float wantedExposure = eclipsePhase == PHASE_TOTAL ? TOTAL_EXPOSURE : 1.0F;
         if (wantedExposure != exposureTarget) {
             exposureFrom = exposureMul(0.0F);

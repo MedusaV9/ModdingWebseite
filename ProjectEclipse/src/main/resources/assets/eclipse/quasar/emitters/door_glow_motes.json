@@ -70,15 +70,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#D9A7FF"
+              "color": "#B98CFF"
             },
             {
               "percent": 0.55,
-              "color": "#B65CFF"
+              "color": "#7B4FD0"
             },
             {
               "percent": 1.0,
-              "color": "#7B2CBF"
+              "color": "#2E2347"
             }
           ],
           "alpha_points": [

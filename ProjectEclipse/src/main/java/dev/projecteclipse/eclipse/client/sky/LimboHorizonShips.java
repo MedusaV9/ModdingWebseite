@@ -40,6 +40,10 @@ final class LimboHorizonShips {
     /** Invisible hold after a sighting: 1200 + hash·1200 ticks (60–120 s). */
     private static final int RESEED_MIN_TICKS = 1200;
     private static final int RESEED_RANGE_TICKS = 1200;
+    /** Eased re-appear length after a reseed (ticks) — a ship must never pop into view. */
+    private static final int APPEAR_TICKS = 60;
+    /** Hold the reseed while the fresh azimuth is this close to the gaze center (dot). */
+    private static final float APPEAR_GAZE_GUARD = FADE_DOT_START - 0.06F;
     /** Silhouettes sit this far above the horizon plane (units on the sky sphere). */
     private static final float HORIZON_LIFT = 2.0F;
 
@@ -73,6 +77,8 @@ final class LimboHorizonShips {
     private static final float[] fade = new float[SHIP_COUNT];
     private static final boolean[] latched = new boolean[SHIP_COUNT];
     private static final long[] reseedAtGameTime = new long[SHIP_COUNT];
+    /** Game time of the last (re-)appearance; drives the eased fade-in multiplier. */
+    private static final long[] appearedAtGameTime = new long[SHIP_COUNT];
     private static final int[] sightings = new int[SHIP_COUNT];
     private static boolean seeded;
 
@@ -100,9 +106,18 @@ final class LimboHorizonShips {
                 if (gameTime < reseedAtGameTime[i]) {
                     continue;
                 }
-                latched[i] = false;
+                // reseed() is idempotent for a fixed sighting counter, so the candidate
+                // direction can be computed before committing. Hold the reseed while the
+                // player is looking near the fresh azimuth — a ship must materialize
+                // off-gaze (per-client, like the fade; the azimuth stays deterministic).
                 reseed(i);
+                float candidateDot = look.x() * dirX[i] + look.y() * dirY[i] + look.z() * dirZ[i];
+                if (candidateDot > APPEAR_GAZE_GUARD) {
+                    continue;
+                }
+                latched[i] = false;
                 fade[i] = 1.0F;
+                appearedAtGameTime[i] = gameTime;
             }
             // One-way fade latch: alpha only ever falls while a sighting is in progress.
             float dot = look.x() * dirX[i] + look.y() * dirY[i] + look.z() * dirZ[i];
@@ -122,7 +137,12 @@ final class LimboHorizonShips {
                 builder = Tesselator.getInstance().begin(
                         VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
             }
-            emitShip(builder, pose, i, fade[i]);
+            // Eased fade-in after (re-)appearing: smoothstep over APPEAR_TICKS, so a fresh
+            // silhouette breathes in from nothing instead of popping to full alpha.
+            float appear = Mth.clamp((gameTime - appearedAtGameTime[i]) / (float) APPEAR_TICKS,
+                    0.0F, 1.0F);
+            appear = appear * appear * (3.0F - 2.0F * appear);
+            emitShip(builder, pose, i, fade[i] * appear);
         }
         if (builder != null) {
             BufferUploader.drawWithShader(builder.buildOrThrow());

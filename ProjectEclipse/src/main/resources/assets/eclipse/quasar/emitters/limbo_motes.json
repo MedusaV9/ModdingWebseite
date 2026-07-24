@@ -3,6 +3,7 @@
   "loop": true,
   "rate": 3,
   "count": 2,
+  "max_particles": 64,
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",
@@ -66,11 +67,11 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#B65CFF"
+              "color": "#B98CFF"
             },
             {
               "percent": 1.0,
-              "color": "#7B2CBF"
+              "color": "#7B4FD0"
             }
           ],
           "alpha_points": [

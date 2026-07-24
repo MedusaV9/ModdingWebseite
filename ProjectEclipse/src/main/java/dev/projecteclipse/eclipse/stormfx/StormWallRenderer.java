@@ -12,6 +12,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.sky.OverworldPurpleEffects;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -65,8 +66,12 @@ public final class StormWallRenderer {
     private static final int NEAR_SEGMENTS = 96;
     private static final int FAR_SEGMENTS = 48;
     private static final int IMPOSTOR_SEGMENTS = 8;
-    private static final int OCCLUDER_SEGMENTS_NEAR = 48;
-    private static final int OCCLUDER_SEGMENTS_FAR = 24;
+    /**
+     * Occluder segment count is fixed (EVAL-4 M4): the old 48/24 distance step popped the
+     * opaque rim silhouette against the sky once per approach (~0.9-block radius error on a
+     * r=100 storm). 48-gon everywhere costs only 2·segments quads per storm — trivial.
+     */
+    private static final int OCCLUDER_SEGMENTS = 48;
     /** Extra visible-arc margin (radians) beyond the geometric tangent arc when outside. */
     private static final double ARC_MARGIN = 0.5D;
 
@@ -101,6 +106,27 @@ public final class StormWallRenderer {
     private static final float OCC_G = 0.010F;
     private static final float OCC_B = 0.026F;
 
+    // --- daylight readability (EVAL-4 post-eval: wall reads flat from ~40 blocks at noon) ---
+    /**
+     * At night the dense base band holds a constant 0.86 alpha (the frozen R14 look). Against
+     * a bright day sky that constant-alpha band reads as a featureless dark cylinder, so at
+     * midday the churn noise is allowed to carve up to this much alpha out of each column —
+     * per-column striping that restores the "swirling smoke" read without weakening the
+     * never-see-inside guarantee (the opaque occluder sits 5 blocks further in regardless).
+     */
+    private static final float DAY_BASE_CARVE = 0.28F;
+    /** Additive violet band alpha boost at full daylight (additive light washes out at noon). */
+    private static final float DAY_ADDITIVE_BOOST = 0.55F;
+    /** Extra downward spread of the churn gray range at full daylight (0.72 → 0.44 floor). */
+    private static final float DAY_GRAY_SPREAD = 0.28F;
+    /** Bolt ribbons widen up to this factor at noon so strikes stay readable at range. */
+    private static final float DAY_BOLT_WIDEN = 0.35F;
+    /**
+     * Daylight factor of the current frame (0 night → 1 midday), written once per
+     * {@link #onRenderLevelStage} before any build call — render-thread only, never stale.
+     */
+    private static float daylight;
+
     // --- bolts ---
     private static final int BOLT_SUB_SEGMENTS = 6;
     private static final int BOLT_CORE_TICKS = 2;
@@ -127,6 +153,11 @@ public final class StormWallRenderer {
         Vec3 camera = event.getCamera().getPosition();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         float time = StormFxClient.ticks() + partialTick;
+        // Day/night readability factor (same cosine curve the sky pass uses); dimensions
+        // without a sky light cycle keep the night look.
+        daylight = level.dimensionType().hasSkyLight()
+                ? OverworldPurpleEffects.dayFactor(level, partialTick)
+                : 0.0F;
 
         // PASS 1 — opaque occluders (depth-writing; the never-see-inside guarantee).
         if (!storms.isEmpty()) {
@@ -171,11 +202,7 @@ public final class StormWallRenderer {
         if (vis <= 0.01F) {
             return;
         }
-        double dx = camera.x - storm.center.x;
-        double dz = camera.z - storm.center.z;
-        double centerDist = Math.sqrt(dx * dx + dz * dz);
-        float shellDist = (float) Math.abs(centerDist - storm.radius);
-        int segments = shellDist < NEAR_LOD_END + LOD_FADE ? OCCLUDER_SEGMENTS_NEAR : OCCLUDER_SEGMENTS_FAR;
+        int segments = OCCLUDER_SEGMENTS;
 
         float radius = Math.max(1.5F, storm.radius - OCCLUDER_INSET);
         float heightScale = heightScale(storm, vis);
@@ -315,26 +342,34 @@ public final class StormWallRenderer {
         float g = additive ? ADD_G : ALPHA_G;
         float b = additive ? ADD_B : ALPHA_B;
 
+        // Daylight contrast (EVAL-4 post-eval): widen the churn gray range so column-to-column
+        // color variation survives a bright sky; at night the frozen R14 range is untouched.
+        float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
+        float graySpan = 1.0F - grayFloor;
         for (int i = 0; i < columns; i++) {
             double a0 = camAngle - halfArc + i * step + rot;
             double a1 = a0 + step;
             int noiseSeg = Mth.floor((float) (a0 / step)); // stable per column, moves with rot
             float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT);
             float churnHi = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT + 7331);
-            float gray0 = 0.72F + 0.28F * hash3(shellIndex + 8, noiseSeg, noiseT);
-            float gray1 = 0.72F + 0.28F * hash3(shellIndex + 8, noiseSeg, noiseT + 977);
+            float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg, noiseT);
+            float gray1 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg, noiseT + 977);
 
             if (additive) {
-                // Single band, fading to zero at the (slightly ragged) top.
+                // Single band, fading to zero at the (slightly ragged) top. In daylight the
+                // additive violet is boosted — additive light washes out against a noon sky.
                 float topJitter = hash3(shellIndex + 16, noiseSeg, noiseT / 2) * 4.0F;
-                float aBot = 0.34F * churn * alphaMul;
+                float aBot = 0.34F * churn * alphaMul * (1.0F + DAY_ADDITIVE_BOOST * daylight);
                 emitColumn(buffer, cx, cz, baseY, baseY + height * 1.02F + topJitter,
                         a0, a1, radius, topRadius, twist,
                         r * gray0, g * gray0, b * gray0, aBot,
                         r * gray1, g * gray1, b * gray1, 0.0F);
             } else {
                 float split = height * 0.72F;
-                float aBase = 0.86F * alphaMul;
+                // Night: the frozen constant 0.86 base. Day: churn carves per-column alpha
+                // striping into the base band so the swirl reads instead of a flat cylinder.
+                float aBase = 0.86F * alphaMul
+                        * (1.0F - DAY_BASE_CARVE * daylight * (1.0F - churn));
                 float aMid = 0.74F * churn * alphaMul;
                 // Dense base band.
                 emitColumn(buffer, cx, cz, baseY, baseY + split,
@@ -378,7 +413,7 @@ public final class StormWallRenderer {
             double a0 = i * step + rot;
             double a1 = a0 + step;
             float churn = 0.4F + 0.6F * hash3(31, i, noiseT);
-            float alpha = 0.30F * churn * alphaMul;
+            float alpha = 0.30F * churn * alphaMul * (1.0F + DAY_ADDITIVE_BOOST * daylight);
             emitColumn(buffer, cx, cz, baseY, baseY + coneTop,
                     a0, a1, radius, apexRadius, 1.3F,
                     ADD_R, ADD_G, ADD_B, alpha,
@@ -510,14 +545,19 @@ public final class StormWallRenderer {
         }
 
         float decay = 1.0F - Math.max(0.0F, (age - BOLT_CORE_TICKS) / (float) (life - BOLT_CORE_TICKS));
+        // Daylight widening (EVAL-4 post-eval): additive ribbons lose apparent brightness
+        // against a noon sky, so bolts trade a little width for the lost punch.
+        float dayWiden = 1.0F + DAY_BOLT_WIDEN * daylight;
         if (bolt.arc) {
-            float width = 0.10F + 0.22F * bolt.intensity;
+            float width = (0.10F + 0.22F * bolt.intensity) * dayWiden;
             float alpha = 0.8F * (1.0F - lifeFrac);
             emitRibbon(buffer, width, 0.85F, 0.72F, 1.0F, alpha);
         } else {
-            // Outer violet glow layer.
-            float coreWidth = (0.28F + 0.6F * bolt.intensity) * (core ? 1.0F : 0.55F + 0.45F * decay);
-            emitRibbon(buffer, coreWidth * 2.6F, 0.62F, 0.42F, 1.0F, (core ? 0.55F : 0.42F * decay));
+            // Outer violet glow layer (daylight also lifts its alpha — it carries the sky read).
+            float coreWidth = (0.28F + 0.6F * bolt.intensity) * (core ? 1.0F : 0.55F + 0.45F * decay)
+                    * dayWiden;
+            float glowAlpha = (core ? 0.55F : 0.42F * decay) * (1.0F + 0.35F * daylight);
+            emitRibbon(buffer, coreWidth * 2.6F, 0.62F, 0.42F, 1.0F, Math.min(0.8F, glowAlpha));
             // Core: white while hot, violet-white while decaying.
             float cr = core ? 1.0F : 0.88F;
             float cg = core ? 1.0F : 0.74F;
