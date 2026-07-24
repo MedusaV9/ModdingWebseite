@@ -4,7 +4,19 @@ Working notes for AI/build agents (and humans) developing GOOBY. The binding
 architecture contract is `PLAN.md` (§E especially); `PLAN2.md` is the binding
 2.0 spec, `PLAN3.md` the binding 3.0 spec and `PLAN4.md` + `PLAN4-GAMES.md`
 the binding 4.0 specs (§A acceptance, §B deltas, §C/§G feature numbers) — this
-file is the quick map.
+file is the quick map. `PLAN6.md` is the binding V6 wave plan (per-agent file
+ownership, budgets, pin choreography) — V6/V6.1 shipped: per-screen themed UI
+worlds with slow pattern drift, the landscape Ruckblick, a 9-destination
+vacation system (departure/reunion cutscenes via the src/systems/cutscene.js
+director, daily postcards, pickup reminders ids 9/10, visited map + Reisepass
+chip), Funkelpark (day trip via the shopTrip machine: plaza scene, Sparkle-Loop
+coaster, Riesenrad, Candy Alley w/ 3 park:true foods), 32 arcade games
+(+lanternFloat/snailMail), an 84+1 sticker book on 14 titled pages, 44
+achievements, authored-SVG icons everywhere (scripts/emoji-audit.mjs gates a
+zero-raw-emoji policy; px-audit covers all CSS-in-JS), home ambient life
+(src/home/ambientLife.js + ambientVisitors), souvenir shelf, Gooby-versary
+cutscenes, and a batched roomAudit zero-warning lock (scripts/audit-rooms.mjs).
+Counts elsewhere in this file predate V6 where they disagree.
 
 ## Layout
 
