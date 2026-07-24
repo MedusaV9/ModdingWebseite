@@ -99,20 +99,42 @@ test('catalog: exactly the 9 destinations at the ruled prices/days (V6/B2)', () 
   assert.equal(getVacation('nope'), undefined);
 });
 
-test('catalog: the original four rows keep their V5 shape (regression pin)', () => {
+test('catalog: the original four rows keep their V5 economy shape (regression pin)', () => {
+  // V6.1/A2: the borrowed fish/sprout/car/moon icon pins retire ON PURPOSE —
+  // every destination now carries its own authored glyph (pinned in the
+  // dedicated nine-glyph test below). Prices/days/souvenirs stay frozen.
   const pins = [
-    ['beach', 'fish', 180, 3, 30],
-    ['meadowTrip', 'sprout', 220, 3, 40],
-    ['bigCity', 'car', 280, 4, 55],
-    ['space', 'moon', 350, 4, 70],
+    ['beach', 180, 3, 30],
+    ['meadowTrip', 220, 3, 40],
+    ['bigCity', 280, 4, 55],
+    ['space', 350, 4, 70],
   ];
-  for (const [id, iconName, price, days, souvenir] of pins) {
+  for (const [id, price, days, souvenir] of pins) {
     const d = getVacation(id);
-    assert.equal(d.icon, iconName, `${id}: icon unchanged`);
     assert.equal(d.price, price, `${id}: price unchanged`);
     assert.equal(d.days, days, `${id}: days unchanged`);
     assert.equal(d.souvenirCoins, souvenir, `${id}: souvenir unchanged`);
   }
+});
+
+test('V6.1/A2 catalog: all nine destinations map 1:1 onto their authored glyphs', () => {
+  assert.deepEqual(
+    Object.fromEntries(VACATIONS.map((d) => [d.id, d.icon])),
+    {
+      beach: 'sandcastle',
+      meadowTrip: 'picnicBasket',
+      bigCity: 'skyline',
+      space: 'rocket',
+      harbor: 'lighthouse',
+      spookGarden: 'pumpkin',
+      bakery: 'croissant',
+      nightSky: 'shootingStar',
+      toyRoom: 'toyBlock',
+    },
+  );
+  // 1:1 means UNIQUE too — no two worlds share a glyph
+  const icons = VACATIONS.map((d) => d.icon);
+  assert.equal(new Set(icons).size, icons.length, 'glyph per destination is unique');
 });
 
 test('catalog: unique ids + unique biomes; the 8 recap biomes map 1:1, beach is the non-recap bonus', () => {
@@ -298,6 +320,87 @@ test('V6/D2 transitions: keepsakes survive book/pickup; bookkeeping resets', () 
   const rebooked = bookSlice(home, 'space', T0 + 10 * DAY);
   assert.deepEqual(rebooked.archive, traveled.archive, 'bookSlice carries the archive');
   assert.equal(rebooked.lastPostcardDayProcessed, 0, 'bookSlice restarts the trip at day 0');
+});
+
+// ---------------------------------------- V6.1/C3: Reiseziele-Sammelpass
+
+test('V6.1/C3 sliceOf: visited defaults empty; junk/unknown ids strip, cap is 9', () => {
+  // defaults carry the new additive field (no SAVE.VERSION bump — the same
+  // self-heal contract the D2 fields ride)
+  assert.deepEqual(defaultSlice().visited, {});
+  assert.deepEqual(sliceOf(defaultState()).visited, {});
+  // junk containers fall back
+  for (const junk of ['x', 42, null, [1, 2], true]) {
+    assert.deepEqual(sliceOf({ vacation: { visited: junk } }).visited, {});
+  }
+  // unknown ids and non-strictly-true values DROP; the map is naturally
+  // capped at the nine VACATION_IDS
+  const healed = sliceOf({
+    vacation: {
+      visited: {
+        beach: true,
+        atlantis: true, // unknown id
+        harbor: 1, // truthy junk — not strictly true
+        space: 'true', // string junk
+        toyRoom: true,
+      },
+    },
+  });
+  assert.deepEqual(healed.visited, { beach: true, toyRoom: true });
+  const everything = Object.fromEntries(
+    [...VACATION_IDS, 'mars', 'narnia'].map((id) => [id, true]),
+  );
+  const capped = sliceOf({ vacation: { visited: everything } });
+  assert.equal(Object.keys(capped.visited).length, VACATION_IDS.length, 'capped at 9');
+});
+
+test('V6.1/C3: booking never latches; pickup latches the completed destination', () => {
+  const away = bookSlice(null, 'beach', T0);
+  assert.deepEqual(away.visited, {}, 'booking alone marks nothing');
+  const home = pickupSlice(away);
+  assert.deepEqual(home.visited, { beach: true }, 'the reunion is the ONE latch');
+  // re-completing the same destination stays a single latched key
+  assert.deepEqual(pickupSlice(bookSlice(home, 'beach', T0 + 10 * DAY)).visited,
+    { beach: true });
+});
+
+test('V6.1/C3: visited carries book→pickup→book and JSON round-trips', () => {
+  let v = pickupSlice(bookSlice(null, 'beach', T0));
+  v = bookSlice(v, 'space', T0 + 10 * DAY);
+  assert.deepEqual(v.visited, { beach: true }, 'bookSlice carries the pass');
+  v = pickupSlice(v);
+  assert.deepEqual(v.visited, { beach: true, space: true });
+  const revived = sliceOf({ vacation: JSON.parse(JSON.stringify(v)) });
+  assert.deepEqual(revived, v, 'sliceOf must not strip visited (whitelist trap)');
+});
+
+test('V6.1/C3: the overdue taxi latches too (money path through pickupSlice)', () => {
+  pin(T0);
+  const store = makeStore();
+  store.update((s) => { s.coins = 500; });
+  bookVacation(store, 'harbor');
+  const overdue = tick(store.get(), T0 + 3 * DAY + VACATION.PICKUP_WINDOW_MS + HOUR);
+  store.update((s) => { s.vacation = overdue.changes; });
+  assert.equal(payTaxiReturn(store).ok, true);
+  assert.deepEqual(store.get('vacation.visited'), { harbor: true });
+});
+
+test('V6.1/C3: all nine complete — and old saves grant nothing retroactively', () => {
+  let v = null;
+  for (const id of VACATION_IDS) {
+    v = pickupSlice(bookSlice(v, id, T0));
+  }
+  assert.equal(Object.keys(v.visited).length, 9);
+  assert.deepEqual(Object.keys(v.visited).sort(), [...VACATION_IDS].sort());
+  // an old save with trips/archive but no visited map starts the pass at 0 —
+  // NO retroactive archive-derived grants (plan ruling)
+  const old = sliceOf({
+    vacation: {
+      trips: 12,
+      archive: [{ destId: 'beach', dayIndex: 1, variant: 1, atMs: T0 }],
+    },
+  });
+  assert.deepEqual(old.visited, {}, 'archive history never back-fills the pass');
 });
 
 test('V6/D2 money path: the archive survives a full store-driven reunion', () => {

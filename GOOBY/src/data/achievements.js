@@ -30,6 +30,16 @@
 //   V3/G34 special (PLAN3 §B5/§C5.5):
 //     'stickerCount' sticker-BOOK unlocks ≥ N      (stickers.unlocked — the
 //                    §C5 book, NOT the v2 collections 'stickers' special)
+//
+//   V6.1/C2 specials (FINAL-WAVE G1 — evaluated in v6SpecialProgress; every
+//   read goes through the owning module's normalizer):
+//     'parkVisits'   themePark.visits ≥ N           (plaza entries)
+//     'coasterRides' themePark.rides.coaster ≥ N
+//     'wheelRides'   themePark.rides.wheel ≥ N      (live since V6.1/C1)
+//     'parkNight'    themePark.nightVisit latched   (0/1)
+//     'postcards'    normalized capped postcard archive length ≥ N
+//     'vacationDestinations' known ids latched strictly true in
+//                    vacation.visited ≥ N           (C3 Sammelpass)
 
 /**
  * @typedef {Object} AchievementDef
@@ -42,7 +52,8 @@
  * @property {number} target    threshold the progress value must reach
  */
 
-/** @type {AchievementDef[]} all 37: 16 v1 (§C8.3) + 17 v2 (PLAN2 §C5.3) + 4 v3 (PLAN3 §C5.5/§C6.4), in table order. */
+/** @type {AchievementDef[]} all 44: 16 v1 (§C8.3) + 17 v2 (PLAN2 §C5.3) + 4 v3
+ * (PLAN3 §C5.5/§C6.4) + 7 v6.1 (FINAL-WAVE G1 §C2), in table order. */
 export const ACHIEVEMENTS = Object.freeze(
   [
     { id: 'firstFeed', counter: 'feeds', target: 1, coins: 10 },
@@ -91,6 +102,21 @@ export const ACHIEVEMENTS = Object.freeze(
     { id: 'stickerBook20', special: 'stickerCount', target: 20, coins: 100 },
     { id: 'stickerBookFull', special: 'stickerCount', target: 28, coins: 300 },
     { id: 'nougatmeister', counter: 'nougatGlobs', target: 25, coins: 80 },
+    // V6.1/C2 (FINAL-WAVE G1): +7 V6-content achievements → catalog 44.
+    // The achievements screen finally acknowledges the Funkelpark + the
+    // nine-world travel board. Specials are pure slice reads evaluated in
+    // achievementsEngine's v6SpecialProgress (V6/F1 stickerBook precedent —
+    // zero wiring; the store 'change' event stays the only trigger).
+    // stickerBook84 rides the EXISTING stickerCount special: 84 is the full
+    // regular book (target 28 = the legacy v3 page set stays byte-identical
+    // above). New lifetime award: 20+40+20+30+40+60+80 = exactly 290 coins.
+    { id: 'parkDay', special: 'parkVisits', target: 1, coins: 20 },
+    { id: 'coasterFan', special: 'coasterRides', target: 5, coins: 40 },
+    { id: 'wheelRide', special: 'wheelRides', target: 1, coins: 20 },
+    { id: 'funkelnacht', special: 'parkNight', target: 1, coins: 30 },
+    { id: 'postmaster', special: 'postcards', target: 10, coins: 40 },
+    { id: 'stickerBook84', special: 'stickerCount', target: 84, coins: 60 },
+    { id: 'weltenbummler', special: 'vacationDestinations', target: 9, coins: 80 },
   ].map((a) => Object.freeze({ ...a, nameKey: `ach.${a.id}.name`, descKey: `ach.${a.id}.desc` }))
 );
 

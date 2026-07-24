@@ -95,8 +95,10 @@ test('the 6 new metadata rows carry titleKey/minLevel/energy/coinTable (§E0.1-9
 
 // -------------------------------------------------------------- achievements
 
-test('achievements catalog is 37 with the verbatim §C5.5/§C6.4 additions', () => {
-  assert.equal(ACHIEVEMENTS.length, 37); // 33 + stickerBook10/20/Full + nougatmeister
+test('achievements catalog carries the verbatim §C5.5/§C6.4 additions', () => {
+  // 33 + stickerBook10/20/Full + nougatmeister; V6.1/C2 (FINAL-WAVE G1)
+  // appends 7 more → 44 (the new rows are pinned in achievements.test.js)
+  assert.equal(ACHIEVEMENTS.length, 44);
   const spec = {
     stickerBook10: ['stickerCount', 10, 50],
     stickerBook20: ['stickerCount', 20, 100],

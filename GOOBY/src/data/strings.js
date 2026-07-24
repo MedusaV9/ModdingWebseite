@@ -107,6 +107,10 @@ import { EN as V6_STICKERS_EN, DE as V6_STICKERS_DE } from './strings/v6-sticker
 // V6/FIX3: post-eval fix keys (credits/photos/shop/quests/park/album) —
 // spread below AFTER v6-stickers, always EN + DE.
 import { EN as V6_FIXES_EN, DE as V6_FIXES_DE } from './strings/v6-fixes.js';
+// V6.1 (FINAL-WAVE G1): the single shared V6.1-wave module — G1's C2/C3/B2/
+// A2/B4 keys plus the G2 (secret.ducky) and G3 (versary/postcards/gallery/
+// wheel/settings) manifest keys — spread below AFTER v6-fixes, always EN+DE.
+import { EN as V6_1_CONTENT_EN, DE as V6_1_CONTENT_DE } from './strings/v6_1-content.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -663,6 +667,7 @@ export const EN = {
   ...V6_PARK_EN, // V6/E3 (+E2 coaster captions)
   ...V6_STICKERS_EN, // V6/F1
   ...V6_FIXES_EN, // V6/FIX3
+  ...V6_1_CONTENT_EN, // V6.1 FINAL WAVE (G1 + G2/G3 manifests)
 };
 
 /** @type {Record<string, string>} */
@@ -1219,6 +1224,7 @@ export const DE = {
   ...V6_PARK_DE, // V6/E3 (+E2 coaster captions)
   ...V6_STICKERS_DE, // V6/F1
   ...V6_FIXES_DE, // V6/FIX3
+  ...V6_1_CONTENT_DE, // V6.1 FINAL WAVE (G1 + G2/G3 manifests)
 };
 
 const DICTS = { en: EN, de: DE };

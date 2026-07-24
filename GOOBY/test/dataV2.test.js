@@ -30,7 +30,7 @@ function assertKey(key, label = key) {
 
 // ------------------------------------------------------ headline counts (§A3)
 
-test('headline catalog counts: 38 unique foods / 8 crops / 28 quests / 4×32 stickers / 7 skins / 37 achievements / 28 games', () => {
+test('headline catalog counts: 38 unique foods / 8 crops / 28 quests / 4×32 stickers / 7 skins / 44 achievements / 32 games', () => {
   // V3/G35: +1 nutella (§C6.1 — appended in foods.js; constants.js FOOD_TABLE
   // stays frozen at the 32 v2 rows per the §E0.1-3 ruling). V4/G79 adds two
   // new ids and upgrades the existing v2 croissant id in place (§G9.3).
@@ -48,7 +48,9 @@ test('headline catalog counts: 38 unique foods / 8 crops / 28 quests / 4×32 sti
   // V4/G53: +goobyWelt (PLAN4 §E0.1) → 28 games.
   // V5/G06: +teaParty/hideSeek (PLAN5 §V5) → 30 games.
   // V6/C3: +snailMail/lanternFloat (PLAN6 Wave C) → 32 games.
-  assert.equal(ACHIEVEMENTS.length, 37);
+  // V6.1/C2 (FINAL-WAVE G1): 37 → 44 achievements — the exact seven-row
+  // V6-content table is asserted verbatim in achievements.test.js.
+  assert.equal(ACHIEVEMENTS.length, 44);
   assert.equal(MINIGAME_IDS.length, 32);
 });
 

@@ -923,5 +923,35 @@ export function isShown() {
   return el != null;
 }
 
-/** The AC-3 veil API (show/progress/hide/isShown) as one handle. */
-export const veil = { show, progress, hide, isShown };
+/**
+ * V6.1/A7 (FINAL-WAVE G1) — resolves once NO veil covers the screen.
+ * Resolves immediately when already clear; otherwise it POLLS the module's
+ * single source of truth (`el`), so it rides every reveal path for free —
+ * a normal hide(), the show() watchdog force-hide AND hide()'s hard-timeout
+ * force-reveal all end in reveal() dropping `el`. Read-only by design: it
+ * survives supersede tokens (a newer show() mid-wait simply keeps the
+ * promise pending until THAT veil drops too).
+ *
+ * `graceMs` covers boot-order races where the caller runs BEFORE the boot
+ * veil's show() (ui/airportScreen.js' dev/return open — hud.js' dynamic
+ * import can resolve ahead of main.js' cold-boot veil block): the wait only
+ * arms if a veil appears inside the grace window, else it resolves clear.
+ *
+ * NEVER DEADLOCKS: the veil's own watchdog/hard-timeout ceilings guarantee
+ * an eventual reveal, and a belt-and-braces cap (watchdog + hard timeout +
+ * slack) bounds the wait even against a pathological show() loop.
+ * @param {{graceMs?: number}} [opts]
+ * @returns {Promise<void>}
+ */
+export function whenHidden({ graceMs = 0 } = {}) {
+  if (typeof document === 'undefined') return Promise.resolve();
+  return (async () => {
+    const graceUntil = nowMs() + Math.max(0, Number(graceMs) || 0);
+    while (!el && nowMs() < graceUntil) await sleep(VEIL.POLL_MS);
+    const hardAt = nowMs() + VEIL.WATCHDOG_MS + VEIL.HARD_TIMEOUT_MS + 2000;
+    while (el && nowMs() < hardAt) await sleep(VEIL.POLL_MS);
+  })();
+}
+
+/** The AC-3 veil API (show/progress/hide/isShown/whenHidden) as one handle. */
+export const veil = { show, progress, hide, isShown, whenHidden };

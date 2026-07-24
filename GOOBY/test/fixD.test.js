@@ -1,5 +1,5 @@
 // V3/FIX-D regression suite — pins the ENGINE-side recipes behind the dev
-// panel fixes (E14 P1-1 unlock-all → 37/37, E14 P1-3 sticker-fire → any of
+// panel fixes (E14 P1-1 unlock-all → 44/44, E14 P1-3 sticker-fire → any of
 // the 84+1 ids) and the E20 P1-2 NEU-ribbon lock gate. Pure modules only
 // (devPanel.js itself uses import.meta.glob and stays browser-only — these
 // tests replay its exact staged state recipe against the real engines; the
@@ -16,12 +16,13 @@ import { COLLECTION_SETS } from '../src/data/collections.js';
 import { OUTFITS, OUTFIT_SLOTS } from '../src/data/outfits.js';
 import { SKINS } from '../src/data/skins.js';
 import { MINIGAME_IDS } from '../src/data/minigames.js';
+import { VACATION_IDS } from '../src/data/vacations.js';
 import { LEVELING } from '../src/data/constants.js';
 import { isMinigameUnlocked } from '../src/systems/leveling.js';
 import { defaultState } from '../src/core/save.js';
 
 // ---------------------------------------------------------------------------
-// E14 P1-1 — unlock-all recipe reaches 37/37 through the real engine
+// E14 P1-1 — unlock-all recipe reaches 44/44 through the real engine
 // ---------------------------------------------------------------------------
 
 /** Replays devPanel doUnlockAll's PASS-1 persistent grants on a state. */
@@ -55,6 +56,17 @@ function applyUnlockAllPersistentGrants(state, nowMs = 1_000_000) {
     state.minigames.plays[id] = Math.max(1, Math.floor(Number(state.minigames.plays[id]) || 0));
   }
   state.daily.streak = Math.max(Math.floor(Number(state.daily.streak) || 0), 7);
+  // V6.1/C2: the seven V6-content specials read the themePark/vacation
+  // slices — stage the sources a harness/dev tool must set (the stickers
+  // grant above already covers stickerBook84's stickerCount ≥ 84).
+  state.themePark = { visits: 1, nightVisit: true, rides: { coaster: 5, wheel: 1 } };
+  state.vacation = {
+    ...(state.vacation ?? {}),
+    archive: Array.from({ length: 10 }, (_, i) => ({
+      destId: 'beach', dayIndex: 1, variant: 1, atMs: 1000 + i,
+    })),
+    visited: Object.fromEntries(VACATION_IDS.map((id) => [id, true])),
+  };
   return state;
 }
 
@@ -94,7 +106,7 @@ function runUnlockAllSequence(state) {
   return r.state;
 }
 
-test('FIX-D E14 P1-1: unlock-all recipe latches ALL 37 achievements on a fresh save', () => {
+test('FIX-D E14 P1-1: unlock-all recipe latches ALL 44 achievements on a fresh save', () => {
   const s = runUnlockAllSequence(defaultState());
   const unlocked = Object.keys(s.achievements.unlocked);
   const missing = ACHIEVEMENTS.map((a) => a.id).filter((id) => !unlocked.includes(id));
@@ -176,7 +188,7 @@ function applyFireStickerRecipe(state, def) {
   } else if (cond.special === 'vacationTrips') {
     state.vacation = { ...(state.vacation ?? {}), trips: target };
   } else if (cond.special === 'park') {
-    const slice = { visits: 0, nightVisit: false, rides: { coaster: 0 }, candyBought: 0 };
+    const slice = { visits: 0, nightVisit: false, rides: { coaster: 0, wheel: 0 }, candyBought: 0 };
     if (cond.key === 'visits') slice.visits = target;
     else if (cond.key === 'coasterRides') slice.rides.coaster = target;
     else if (cond.key === 'candyBought') slice.candyBought = target;

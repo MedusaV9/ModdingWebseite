@@ -533,6 +533,24 @@ test('V6/B1 restore-on-exit pins: every exit path un-rotates (source scan)', () 
   assert.match(overlay, /--rsafe-top/);
 });
 
+test('V6.1/C1 pin: recapsSeen bumps ONCE, inside the committed-completion seam only', () => {
+  const overlay = readFileSync(join(ROOT, 'src/ui/recapOverlay.js'), 'utf8');
+  // exactly ONE write site for the counter in the whole overlay (the
+  // storyTeller sticker reads it — recapsSeen ≥ 3)
+  const writes = overlay.match(/counters\.recapsSeen\s*=/g) ?? [];
+  assert.equal(writes.length, 1, 'recapsSeen must have exactly one write site');
+  // …and that site lives INSIDE finishRecap's `if (s.commit)` store.update —
+  // the single §B5.2 committed-completion seam (normal finish AND the
+  // completing skip both land there; commit:false previews/replays never do).
+  assert.match(
+    overlay,
+    /if \(s\.commit\) \{[\s\S]{0,900}?counters\.recapsSeen = Math\.floor\(Number\(counters\.recapsSeen\) \|\| 0\) \+ 1;/,
+    'the bump rides the commit block, junk-safe accumulation'
+  );
+  // the completing skip routes through finishRecap (no second bump path)
+  assert.ok(!/skip[\s\S]{0,200}?recapsSeen/.test(overlay), 'skip path has no own writer');
+});
+
 test('V6/B1 scene-settle pin: a swallowed switchTo never leaves sceneMode over a foreign scene', () => {
   const overlay = readFileSync(join(ROOT, 'src/ui/recapOverlay.js'), 'utf8');
   // switchTo resolves even when SWALLOWED (switch in flight) — the recap must

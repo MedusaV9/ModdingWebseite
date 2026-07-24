@@ -493,6 +493,29 @@ test('V6/D3 recap logic: endCardHighlights output carries names only (headless-p
   }
 });
 
+test('V6.1/A2: the nine authored destination glyphs exist, parse and are pairwise distinct', () => {
+  // FINAL-WAVE G1 — one glyph per data/vacations.js row (rocket already
+  // shipped in the V6/D3 set; the other eight are new this wave). The
+  // generic well-formedness sweep above already covers them — this pins
+  // the exact NAME set so a catalog typo can't silently fall back.
+  const nine = [
+    'sandcastle', 'picnicBasket', 'skyline', 'rocket', 'lighthouse',
+    'pumpkin', 'croissant', 'shootingStar', 'toyBlock',
+  ];
+  const names = new Set(iconNames());
+  const rendered = new Set();
+  for (const name of nine) {
+    assert.ok(names.has(name), `icons.js is missing the '${name}' destination glyph`);
+    const svg = icon(name, 24);
+    assert.ok(svg.startsWith('<svg '), `icon('${name}') must render SVG markup`);
+    assert.equal(xmlError(svg), null, `icon '${name}': ${xmlError(svg)}`);
+    assert.ok(svg.includes('currentColor'), `'${name}' must tint via currentColor`);
+    assert.match(svg, /width="24" height="24"/, 'consumer-sized 24×24');
+    rendered.add(svg);
+  }
+  assert.equal(rendered.size, nine.length, 'destination glyphs must be pairwise distinct');
+});
+
 test('V6/D3 stripRawGlyphs: removes emoji + collapses leftover whitespace, keeps text intact', () => {
   assert.equal(stripRawGlyphs('Schneller! \u{1F525}'), 'Schneller!');
   assert.equal(stripRawGlyphs('\u{26F3} Bahn 2/6 \u{00B7} Par 3'), 'Bahn 2/6 \u{00B7} Par 3');

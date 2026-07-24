@@ -1008,6 +1008,16 @@ async function finishRecap() {
     store.update((state) => {
       const res = completeRecap(state, now(), s.lines);
       state.recap = res.recap;
+      // V6.1/C1: recapsSeen finally gets its writer — the storyTeller
+      // sticker (recapsSeen ≥ 3) reads it; save.js has carried the default
+      // since V6 with no writer. This is the SINGLE committed completion
+      // seam (normal finish AND the completing skip both land in
+      // finishRecap); previews/replays run with commit:false and never
+      // reach this block.
+      const counters = state.achievements?.counters;
+      if (counters) {
+        counters.recapsSeen = Math.floor(Number(counters.recapsSeen) || 0) + 1;
+      }
       // POLISH-H: persist the recap's PLAYED song as heard — the radio only
       // unlocks Recap-category tracks after a real recap featured them.
       const played = s.trackId ? trackById(s.trackId) : null;

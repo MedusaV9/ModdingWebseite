@@ -26,10 +26,13 @@ test('defaultSlice: zeroed counters, known ride ids only, night unlatched', () =
   assert.deepEqual(d, {
     visits: 0,
     nightVisit: false,
-    rides: { coaster: 0 },
+    rides: { coaster: 0, wheel: 0 },
     handsUp: 0,
     candyBought: 0,
   });
+  // V6.1/C1 pin: the catalog is EXACTLY ['coaster', 'wheel'] — the Riesenrad
+  // fills the slot the V6 header comment reserved for it.
+  assert.deepEqual([...PARK_RIDE_IDS], ['coaster', 'wheel']);
   assert.deepEqual(Object.keys(d.rides), [...PARK_RIDE_IDS]);
   // fresh object each call (no shared mutable default)
   assert.notEqual(defaultSlice().rides, d.rides);
@@ -58,7 +61,7 @@ test('sliceOf: junk leaves normalize (NaN/negative/fractional/strings)', () => {
     themePark: {
       visits: -3,
       nightVisit: 'yes', // truthy but not true → false (strict latch)
-      rides: { coaster: 2.9, ghostTrain: 7 }, // unknown id must DROP
+      rides: { coaster: 2.9, wheel: '4', ghostTrain: 7 }, // unknown id must DROP
       handsUp: NaN,
       candyBought: '12',
     },
@@ -66,7 +69,7 @@ test('sliceOf: junk leaves normalize (NaN/negative/fractional/strings)', () => {
   assert.deepEqual(s, {
     visits: 0,
     nightVisit: false,
-    rides: { coaster: 2 },
+    rides: { coaster: 2, wheel: 4 },
     handsUp: 0,
     candyBought: 12,
   });
@@ -114,6 +117,14 @@ test('recordRide: known id bumps; unknown id is a normalized no-op', () => {
   assert.ok(!('ghostTrain' in s.rides));
 });
 
+test('V6.1/C1 recordRide: wheel bumps independently of the coaster', () => {
+  let s = recordRide(undefined, 'wheel');
+  assert.deepEqual(s.rides, { coaster: 0, wheel: 1 });
+  s = recordRide(s, 'wheel');
+  s = recordRide(s, 'coaster');
+  assert.deepEqual(s.rides, { coaster: 1, wheel: 2 });
+});
+
 test('recordCandy / recordHandsUp: defensive counts', () => {
   let s = recordCandy(undefined); // default 1
   assert.equal(s.candyBought, 1);
@@ -134,7 +145,7 @@ test('transitions always return a fully-normalized slice from junk input', () =>
   assert.deepEqual(s, {
     visits: 1,
     nightVisit: false,
-    rides: { coaster: 0 },
+    rides: { coaster: 0, wheel: 0 },
     handsUp: 0,
     candyBought: 0,
   });
@@ -145,12 +156,15 @@ test('transitions always return a fully-normalized slice from junk input', () =>
 
 test('slice survives a JSON save round-trip verbatim (additive top-level key)', () => {
   const state = defaultState();
-  state.themePark = recordCandy(recordRide(recordVisit(undefined, { night: true }), 'coaster'), 2);
+  state.themePark = recordCandy(
+    recordRide(recordRide(recordVisit(undefined, { night: true }), 'coaster'), 'wheel'),
+    2,
+  );
   const revived = JSON.parse(JSON.stringify(state));
   assert.deepEqual(sliceOf(revived), {
     visits: 1,
     nightVisit: true,
-    rides: { coaster: 1 },
+    rides: { coaster: 1, wheel: 1 },
     handsUp: 0,
     candyBought: 2,
   });

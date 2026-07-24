@@ -27,7 +27,11 @@
 
 import { t } from '../data/strings.js';
 import { icon } from './icons.js';
-import { VACATIONS, getVacation, isVacationUnlocked } from '../data/vacations.js';
+import { VACATIONS, VACATION_IDS, getVacation, isVacationUnlocked } from '../data/vacations.js';
+// V6.1/B4: deterministic weather read for the welcome-home greeting (pure)
+import { weatherAt } from '../systems/weather.js';
+// V6.1/A7: veil-settled signal — replaces the fixed 800 ms open race (P2-24)
+import { whenHidden } from './loadingVeil.js';
 import {
   VACATION,
   VACATION_PHASE,
@@ -89,6 +93,13 @@ const AIRPORT_CSS = `
    with (token stripped from strings/v6-vacation-content.js EN+DE). */
 .v6-rack-stamp{margin-left:auto;flex:none;width:1.375rem;height:1.625rem;margin-top:0.125rem;border-radius:0.25rem;border:1px dashed var(--v6-rack-accent, var(--teal));color:var(--v6-rack-accent, var(--teal));display:flex;align-items:center;justify-content:center;transform:rotate(6deg);opacity:.75;}
 .v6-rack-stamp svg{margin-top:0;}
+/* V6.1/C3: the Reiseziele-Sammelpass chip — a small dashed travel-pass pill
+   under the board subtitle; 9/9 flips to the solid golden "complete" look. */
+.v6-pass{display:flex;justify-content:center;padding:0 0 0.125rem;}
+.v6-pass-chip{display:inline-flex;align-items:center;gap:0.375rem;padding:0.25rem 0.8125rem;border-radius:999rem;background:var(--frost);box-shadow:var(--shadow-soft);border:0.125rem dashed rgba(63,201,192,.55);color:var(--brown);font-size:0.75rem;font-weight:800;font-variant-numeric:tabular-nums;}
+.v6-pass-chip svg{color:var(--teal);flex:none;}
+.v6-pass-chip-done{border:0.125rem solid #E8B23F;background:linear-gradient(180deg,#FFF6DF,#FFEDC2);}
+.v6-pass-chip-done svg{color:#D99A22;}
 `;
 
 /**
@@ -103,12 +114,16 @@ const AIRPORT_CSS = `
  */
 function bookingCard(d, lastRecapLevel) {
   if (!isVacationUnlocked(d, lastRecapLevel)) {
+    // V6.1/A2: each locked card whispers ITS OWN teaser line (nine distinct
+    // vacation.dest.<id>.teaser keys) instead of one shared '.sub' — but the
+    // mystery contract holds: no destination name, glyph, accent, price or
+    // days is disclosed, and the <div> still carries no data-dest/click path.
     return `
       <div class="v5-air-card v5-air-locked" aria-disabled="true">
         ${icon('lock', 26)}
         <span>
           <span class="v5-air-name">${t('vacation.dest.locked.name')}</span>
-          <span class="v5-air-flavor">${t('vacation.dest.locked.sub')}</span>
+          <span class="v5-air-flavor">${t(`vacation.dest.${d.id}.teaser`)}</span>
         </span>
         <span class="v5-air-price">${t('vacation.dest.locked.hint', { level: d.unlockRecapLevel })}</span>
       </div>`;
@@ -192,6 +207,12 @@ export function registerAirport({ store, ui, audio }) {
    */
   function celebrate(res, played) {
     ui.toast('vacation.welcomeBack', { coins: res.souvenir ?? 0 });
+    // V6.1/B4: the world noticed Gooby was gone — exactly ONE deterministic
+    // weather line queued right after the welcome toast (ui.toast queues
+    // sequentially, V3/FIX-D). weatherAt is pure/deterministic (?now= pins
+    // it for captures) and celebrate() only ever runs after a committed
+    // pickup/taxi reunion, so this can never fire while away.
+    ui.toast(`vacation.home.${weatherAt(now()).state}`);
     if (played) return; // the cutscene owned the confetti + arrival beat
     audio.play('jingle.arrival');
     // Confetti over the whole app layer — dynamic import keeps three.js out
@@ -211,10 +232,19 @@ export function registerAirport({ store, ui, audio }) {
       // ---- booking: one card per catalog destination (V6/B2: 9 rows;
       // recap-gated rows render as mystery cards until unlocked) ----------
       const recapLevel = Math.max(0, Math.floor(Number(state?.recap?.lastRecapLevel) || 0));
+      // V6.1/C3: the Reisepass chip — sliceOf's visited map is whitelisted
+      // to the nine catalog ids, so n/9 is bounded by construction.
+      const visitedCount = Object.keys(v.visited).length;
+      const passDone = visitedCount >= VACATION_IDS.length;
       panelEl.innerHTML = `
         <div class="v5-air">
           <h2 class="perm-title v5-air-title">${icon('globe', 22)} ${t('vacation.airport.title')}</h2>
           <p class="v5-air-sub">${t('vacation.airport.sub')}</p>
+          <div class="v6-pass">
+            <span class="v6-pass-chip${passDone ? ' v6-pass-chip-done' : ''}">
+              ${icon('suitcase', 14)} ${t('vacation.pass.progress', { n: visitedCount, total: VACATION_IDS.length })}${passDone ? ` ${icon('check', 13)}` : ''}
+            </span>
+          </div>
           ${VACATIONS.map((d) => bookingCard(d, recapLevel)).join('')}
           ${postcardRack(state)}
           <button class="btn btn-ghost v5-air-later">${t('ui.later')}</button>
@@ -358,6 +388,24 @@ export function registerAirport({ store, ui, audio }) {
       state.recap.lastRecapLevel = Math.max(0, Math.floor(recapLevelParam));
     });
   }
+  // V6.1/C3 (dev): ?visited=N|all|id,id — seed the Sammelpass map so the
+  // Reisepass chip states can be captured at any n/9 (pairs with
+  // ?vacation=open; same dev-only guard as the rest of this harness block).
+  const visitedParam = query ? query.get('visited') : null;
+  if (visitedParam) {
+    const ids = visitedParam === 'all'
+      ? [...VACATION_IDS]
+      : /^\d+$/.test(visitedParam)
+        ? VACATION_IDS.slice(0, Number(visitedParam))
+        : visitedParam.split(',').map((s) => s.trim());
+    store.update((state) => {
+      const v = sliceOf(state);
+      for (const id of ids) {
+        if (VACATION_IDS.includes(id)) v.visited[id] = true;
+      }
+      state.vacation = v;
+    });
+  }
   if (param) {
     const nowMs = now();
     /** @type {object|null} */
@@ -392,9 +440,16 @@ export function registerAirport({ store, ui, audio }) {
       store.emit?.('vacationChanged', { phase: seed.phase, destId: seed.destId });
     }
     // 'away' only seeds (the home scene demos the chip + hidden Gooby);
-    // the pickup states and 'open' also open the sheet after the boot fade.
+    // the pickup states and 'open' also open the sheet after the boot veil.
     if (param === 'return' || param === 'overdue' || param === 'open') {
-      setTimeout(() => ui.openPanel('airport'), 800);
+      // V6.1/A7 (P2-24): the old fixed 800 ms timer raced the cold-boot
+      // veil — slow boots opened the sheet UNDER the curtain. Gate on the
+      // veil's own settled signal instead: whenHidden() resolves on every
+      // reveal path (normal hide, watchdog, hard timeout) and immediately
+      // when nothing covers the screen; the grace window covers the
+      // register-before-show boot order (this module arrives via hud.js'
+      // dynamic import, which can land before main.js shows the boot veil).
+      whenHidden({ graceMs: 1500 }).then(() => ui.openPanel('airport'));
     }
   }
 }

@@ -16,7 +16,8 @@
 // State writes (the ONLY themePark writers, see systems/themePark.js):
 // recordVisit on every plaza enter except coaster returns ({from:'coaster'}),
 // recordNight when the band is/turns night while in the plaza, recordRide in
-// the coaster onDone, recordCandy from the 'inventoryChanged' diff of the
+// the coaster onDone AND the wheel onDone (V6.1/C1 — completed rides only),
+// recordCandy from the 'inventoryChanged' diff of the
 // three park foods while the plaza is active (E3's stall buys through the
 // plain economy.buyFood — no new economy event exists, so the scene observes
 // the inventory delta instead of editing E3's module).
@@ -665,6 +666,11 @@ export function createParkScene(ctx) {
   async function kickWheelRide() {
     if (wheelRiding || coasterStarting || sceneManager.isSwitching?.()) return;
     wheelRiding = true;
+    // V6.1/C1: 'wheel' finally records like the coaster does. F4's onDone
+    // also fires on a FAILED start (its catch path finishes instantly,
+    // BEFORE the await below resolves false) — this flag flips true only
+    // after startWheelRide resolved ok, so refusal/cancel records nothing.
+    let rideStarted = false;
     // V6 fix P1-6: the ride chrome mounts on <body>, but #ui is a fixed-
     // position stacking context — a body-level sibling at z 60 paints OVER
     // the §E6 sheets (--z-panel 200) no matter their z-index. Re-home the
@@ -690,7 +696,17 @@ export function createParkScene(ctx) {
       }),
       onDone: () => {
         wheelRiding = false;
-        if (!entered || !gooby) return; // scene already left/disposed
+        // scene already left/disposed — a cancelRide() onDone lands here
+        // (exit() clears `entered` BEFORE cancelling), so an interrupted
+        // ride never records (V6.1/C1 acceptance: cancel records nothing)
+        if (!entered || !gooby) return;
+        if (rideStarted) {
+          // V6.1/C1: the ONE 'wheel' ride-counter write site (mirrors the
+          // coaster onDone above).
+          store.update((s) => {
+            s.themePark = recordRide(s.themePark, 'wheel');
+          });
+        }
         // Gooby resumes his stroll exactly where the loop left off
         strollPhase = 'move';
         strollT = 0;
@@ -700,6 +716,7 @@ export function createParkScene(ctx) {
       },
     });
     if (!ok) wheelRiding = false;
+    else rideStarted = true; // V6.1/C1: onDone may now record the ride
   }
   // ---- end V6/F4 ride kick --------------------------------------------------
 

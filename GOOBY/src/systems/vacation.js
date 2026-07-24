@@ -36,7 +36,7 @@
 // `postcards` (the count) keeps its V5 semantics untouched — it stays the
 // toast counter; the archive is parallel bookkeeping.
 
-import { getVacation } from '../data/vacations.js';
+import { getVacation, VACATION_IDS } from '../data/vacations.js';
 // V6/D2 (PLAN6 Wave D): postcard-archive engine (pure sibling — this module
 // stays the only writer of the slice; postcards.js owns the archive math).
 import { normalizeArchive, processPostcardsUpTo } from './postcards.js';
@@ -72,10 +72,18 @@ export const VACATION = Object.freeze({
  * reset on book/pickup). Both are wired through defaultSlice(), sliceOf()
  * AND the carried-transition helpers bookSlice()/pickupSlice() per the
  * whitelist-strip rule (sliceOf strips unknown fields silently).
+ *
+ * V6.1/C3 (FINAL-WAVE G1): one more ADDITIVE field — `visited`, the
+ * Reiseziele-Sammelpass truth: a `{destId: true}` map latched by
+ * pickupSlice() when a trip COMPLETES (booking alone never marks it).
+ * Bounded by construction: sliceOf() keeps only the nine VACATION_IDS whose
+ * value is strictly `true`, so junk saves can never grow it. Lifetime like
+ * `archive` — both carried transitions preserve it. No SAVE.VERSION bump
+ * (mergeDefaults passes the slice through; sliceOf self-heals).
  * @returns {{phase: string, destId: string, bookedAt: number,
  *   returnAt: number, pickupBy: number, postcards: number, trips: number,
  *   archive: import('./postcards.js').PostcardEntry[],
- *   lastPostcardDayProcessed: number}}
+ *   lastPostcardDayProcessed: number, visited: Record<string, true>}}
  */
 export function defaultSlice() {
   return {
@@ -89,6 +97,8 @@ export function defaultSlice() {
     // V6/D2: postcard archive + per-trip day bookkeeping (additive)
     archive: [],
     lastPostcardDayProcessed: 0,
+    // V6.1/C3: destinations completed at least once (additive, lifetime)
+    visited: {},
   };
 }
 
@@ -115,7 +125,27 @@ export function sliceOf(state) {
     // V6/D2: junk archives normalize (drop/dedupe/sort/cap) in postcards.js
     archive: normalizeArchive(raw.archive),
     lastPostcardDayProcessed: Math.max(0, Math.floor(num(raw.lastPostcardDayProcessed))),
+    // V6.1/C3: whitelist-normalize the Sammelpass map — only the nine
+    // catalog ids survive, and only when strictly `true` (unknown ids and
+    // truthy junk drop silently; the map is naturally capped at 9 keys).
+    visited: normalizeVisited(raw.visited),
   };
+}
+
+/**
+ * V6.1/C3 — normalize a raw `visited` map: known VACATION_IDS with a value
+ * of strictly `true` only (catalog order; everything else drops).
+ * @param {unknown} raw
+ * @returns {Record<string, true>}
+ */
+function normalizeVisited(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  /** @type {Record<string, true>} */
+  const out = {};
+  for (const id of VACATION_IDS) {
+    if (raw[id] === true) out[id] = true;
+  }
+  return out;
 }
 
 /**
@@ -173,6 +203,8 @@ export function bookSlice(prev, destId, nowMs) {
   const returnAt = nowMs + days * VACATION.MS_PER_DAY;
   // V6/D2: the archive is a LIFETIME keepsake shelf — it carries across the
   // booking; the per-trip day bookkeeping restarts at 0 (defaultSlice).
+  // V6.1/C3: the Sammelpass map carries too — but booking NEVER latches the
+  // new destination (only a completed pickup does, in pickupSlice below).
   const carried = sliceOf({ vacation: prev });
   return {
     ...defaultSlice(),
@@ -183,6 +215,7 @@ export function bookSlice(prev, destId, nowMs) {
     pickupBy: returnAt + VACATION.PICKUP_WINDOW_MS,
     trips: carried.trips,
     archive: carried.archive,
+    visited: carried.visited,
   };
 }
 
@@ -195,8 +228,18 @@ export function bookSlice(prev, destId, nowMs) {
 export function pickupSlice(prev) {
   // V6/D2: postcards survive the reunion (travel artifacts, stored once);
   // the per-trip bookkeeping resets with the rest of the slice.
+  // V6.1/C3: the reunion is the ONE Sammelpass latch — the just-completed
+  // destination stamps `visited` (valid catalog ids only; both the on-time
+  // pickup and the overdue taxi land here through economy.js).
   const carried = sliceOf({ vacation: prev });
-  return { ...defaultSlice(), trips: carried.trips + 1, archive: carried.archive };
+  const visited = { ...carried.visited };
+  if (getVacation(carried.destId)) visited[carried.destId] = true;
+  return {
+    ...defaultSlice(),
+    trips: carried.trips + 1,
+    archive: carried.archive,
+    visited,
+  };
 }
 
 /**

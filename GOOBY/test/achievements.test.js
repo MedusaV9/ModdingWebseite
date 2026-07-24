@@ -36,6 +36,10 @@ const SPEC_COINS = {
   // V3/G34: +4 3.0 rewards (PLAN3 §C5.5 stickerCount tiers + §C6.4 nougat;
   // deep coverage in dataV3.test.js)
   stickerBook10: 50, stickerBook20: 100, stickerBookFull: 300, nougatmeister: 80,
+  // V6.1/C2: +7 V6-content rewards (FINAL-WAVE G1 exact table — new lifetime
+  // award 20+40+20+30+40+60+80 = exactly 290 coins)
+  parkDay: 20, coasterFan: 40, wheelRide: 20, funkelnacht: 30,
+  postmaster: 40, stickerBook84: 60, weltenbummler: 80,
 };
 
 function freshState() {
@@ -45,7 +49,8 @@ function freshState() {
 // ------------------------------------------------------------------ catalog
 
 test('catalog has all 16 §C8.3 achievements with verbatim coin rewards', () => {
-  assert.equal(ACHIEVEMENTS.length, 37); // V2/G16: 16 v1 + 17 §C5.3; V3/G34: +4 (§C5.5/§C6.4)
+  // V2/G16: 16 v1 + 17 §C5.3; V3/G34: +4 (§C5.5/§C6.4); V6.1/C2: +7 → 44
+  assert.equal(ACHIEVEMENTS.length, 44);
   assert.deepEqual(new Set(ACHIEVEMENTS.map((a) => a.id)), new Set(Object.keys(SPEC_COINS)));
   for (const [id, coins] of Object.entries(SPEC_COINS)) {
     assert.equal(ACHIEVEMENTS_BY_ID[id].coins, coins, `${id} reward (§C8.3 binding)`);
@@ -432,8 +437,10 @@ import {
   V2_QUEST_POOL,
   questCtxOf,
   v2SpecialProgress,
+  v6SpecialProgress,
   photoXpGrant,
 } from '../src/systems/achievementsEngine.js';
+import { VACATION_IDS } from '../src/data/vacations.js';
 import { localDay } from '../src/core/clock.js';
 import { LEVELING, UNLOCKS, PHOTO } from '../src/data/constants.js';
 import { QUEST_POOL } from '../src/data/quests.js';
@@ -541,7 +548,7 @@ test('V2/G23 specials: play21 needs all 21 catalog games; holeInOne counter', ()
   assert.equal(isSatisfied(hole, state), true);
 });
 
-test('V2/G23: ALL 33 achievements reachable via counters/specials', () => {
+test('V2/G23 + V6.1/C2: ALL 44 achievements reachable via counters/specials', () => {
   const state = freshState();
   state.coins = 1000;
   state.level = 10;
@@ -549,6 +556,8 @@ test('V2/G23: ALL 33 achievements reachable via counters/specials', () => {
     feeds: 100, washes: 50, sleeps: 20, trips: 25, cleanTrips: 1, tickles: 100,
     harvests: 50, questsDone: 50, cures: 1, vetTrips: 1, deliveries: 10,
     photosTaken: 10, holeInOnes: 1, sickEver: 0,
+    // V3/G34 nougat tier — reachable in the same sweep now (was staged 0)
+    nougatGlobs: 25,
   });
   state.outfits.equipped = { hat: 'crown', glasses: 'starGlasses', neck: 'scarfRed' };
   state.furniture.placed = Object.fromEntries(
@@ -560,13 +569,26 @@ test('V2/G23: ALL 33 achievements reachable via counters/specials', () => {
     state.collections.entries[`veggies.${c}`] = 1;
   }
   state.collections.claimedSets = { veggies: 1, fish: 2, landmarks: 3, treats: 4 };
+  // V3/G34 stickerCount tiers + V6.1 stickerBook84: the full 84-sticker book
+  state.stickers = {
+    unlocked: Object.fromEntries(Array.from({ length: 84 }, (_, i) => [`stk${i}`, 1])),
+  };
+  // V6.1/C2: the V6-content specials — park visits/rides/night, 10 kept
+  // postcards, all nine destinations completed
+  state.themePark = { visits: 1, nightVisit: true, rides: { coaster: 5, wheel: 1 } };
+  state.vacation = {
+    archive: Array.from({ length: 10 }, (_, i) => (
+      { destId: 'beach', dayIndex: 1, variant: 1, atMs: 1000 + i }
+    )),
+    visited: Object.fromEntries(VACATION_IDS.map((id) => [id, true])),
+  };
   state.weight.value = 86; // chonkZone first …
   const pass1 = applyUnlocks(state, 7);
-  assert.equal(pass1.unlocked.length, 32, 'everything except sleekMode');
+  assert.equal(pass1.unlocked.length, 43, 'everything except sleekMode');
   pass1.state.weight = { value: 25 }; // … then slim down for sleekMode
   const pass2 = applyUnlocks(pass1.state, 8);
   assert.deepEqual(pass2.unlocked.map((d) => d.id), ['sleekMode']);
-  assert.equal(Object.keys(pass2.state.achievements.unlocked).length, 33, 'all 33');
+  assert.equal(Object.keys(pass2.state.achievements.unlocked).length, 44, 'all 44');
 });
 
 test('V2/G23 photoXpGrant: +1 XP per photo, cap 5/day, day rollover resets', () => {
@@ -760,6 +782,118 @@ test('V2/FIX-A (E7): counter-diff watcher grants §C5.2 harvest/delivery XP', ()
   assert.equal(store.get('xp'), xp0);
   resetAchievementsEngineForTests();
 });
+
+// ═══════════════════════════════════════════════════════════ V6.1 (G1) ═══
+// C2: the seven V6-content achievements — pure v6SpecialProgress reads of
+// the normalized themePark/vacation/postcard slices. C1: the repaired
+// galleryPhotos writer (photosTaken and galleryPhotos advance in lockstep
+// through the real photoTaken() API).
+
+test('V6.1/C2: the exact seven-row table (conditions, targets, coins)', () => {
+  const rows = [
+    ['parkDay', 'parkVisits', 1, 20],
+    ['coasterFan', 'coasterRides', 5, 40],
+    ['wheelRide', 'wheelRides', 1, 20],
+    ['funkelnacht', 'parkNight', 1, 30],
+    ['postmaster', 'postcards', 10, 40],
+    ['stickerBook84', 'stickerCount', 84, 60],
+    ['weltenbummler', 'vacationDestinations', 9, 80],
+  ];
+  for (const [id, special, target, coins] of rows) {
+    const def = ACHIEVEMENTS_BY_ID[id];
+    assert.ok(def, `catalog is missing '${id}'`);
+    assert.equal(def.special, special, `${id} condition`);
+    assert.equal(def.target, target, `${id} target`);
+    assert.equal(def.coins, coins, `${id} reward`);
+  }
+  // the legacy v3 tier is byte-semantically unchanged next to the new 84
+  assert.equal(ACHIEVEMENTS_BY_ID.stickerBookFull.target, 28, 'legacy tier untouched');
+  assert.equal(rows.reduce((sum, [, , , c]) => sum + c, 0), 290, 'new lifetime award');
+});
+
+test('V6.1/C2 specials: park reads ride the themePark normalizer (junk-safe)', () => {
+  const state = freshState();
+  const parkDay = ACHIEVEMENTS_BY_ID.parkDay;
+  const coasterFan = ACHIEVEMENTS_BY_ID.coasterFan;
+  const wheelRide = ACHIEVEMENTS_BY_ID.wheelRide;
+  const funkelnacht = ACHIEVEMENTS_BY_ID.funkelnacht;
+  // fresh save: no themePark slice at all — everything reads 0
+  for (const def of [parkDay, coasterFan, wheelRide, funkelnacht]) {
+    assert.equal(isSatisfied(def, state), false, `${def.id} fresh`);
+    assert.equal(v6SpecialProgress(def, state), 0, `${def.id} progress 0`);
+  }
+  state.themePark = { visits: 1, nightVisit: false, rides: { coaster: 4, wheel: 0 } };
+  assert.equal(isSatisfied(parkDay, state), true);
+  assert.equal(isSatisfied(coasterFan, state), false);
+  assert.deepEqual(progressOf(coasterFan, state), { current: 4, target: 5 });
+  state.themePark.rides.coaster = 5;
+  state.themePark.rides.wheel = 1;
+  state.themePark.nightVisit = true;
+  assert.equal(isSatisfied(coasterFan, state), true);
+  assert.equal(isSatisfied(wheelRide, state), true);
+  assert.equal(isSatisfied(funkelnacht, state), true);
+  // junk slice heals through sliceOf — never throws, never satisfies
+  state.themePark = { visits: 'x', rides: { wheel: 'junk', ghostTrain: 9 } };
+  assert.equal(v6SpecialProgress(wheelRide, state), 0);
+  assert.equal(isSatisfied(parkDay, state), false);
+});
+
+test('V6.1/C2 specials: postmaster counts the normalized capped archive', () => {
+  const def = ACHIEVEMENTS_BY_ID.postmaster;
+  const state = freshState();
+  assert.equal(v6SpecialProgress(def, state), 0);
+  const entry = (i) => ({ destId: 'beach', dayIndex: 1, variant: 1, atMs: 1000 + i });
+  state.vacation = { archive: [...Array.from({ length: 9 }, (_, i) => entry(i)), 'junk', null] };
+  assert.equal(v6SpecialProgress(def, state), 9, 'junk leaves never count');
+  assert.equal(isSatisfied(def, state), false);
+  state.vacation.archive.push(entry(99));
+  assert.equal(isSatisfied(def, state), true);
+});
+
+test('V6.1/C2 specials: weltenbummler counts only latched known destinations', () => {
+  const def = ACHIEVEMENTS_BY_ID.weltenbummler;
+  const state = freshState();
+  assert.equal(v6SpecialProgress(def, state), 0);
+  state.vacation = { visited: { beach: true, atlantis: true, harbor: 1 } };
+  assert.equal(v6SpecialProgress(def, state), 1, 'unknown ids / non-true junk drop');
+  state.vacation.visited = Object.fromEntries(VACATION_IDS.map((id) => [id, true]));
+  assert.equal(isSatisfied(def, state), true);
+  assert.deepEqual(progressOf(def, state), { current: 9, target: 9 });
+});
+
+test('V6.1/C2 engine: a store-driven park ride unlocks + pays through the change wiring', () => {
+  resetAchievementsEngineForTests();
+  const store = createStore(freshState(), { autosave: false });
+  initAchievements({ store, ui: { toast: () => {} }, audio: { play: () => {} } });
+  const coins0 = store.get('coins');
+  // exactly what parkScene's wheel onDone does (V6.1/C1 write site)
+  store.update((s) => {
+    s.themePark = { visits: 1, nightVisit: false, rides: { coaster: 0, wheel: 1 } };
+  });
+  store.flush();
+  assert.equal(store.get('achievements.unlocked.wheelRide') > 0, true);
+  assert.equal(store.get('achievements.unlocked.parkDay') > 0, true);
+  assert.equal(store.get('coins'), coins0 + 20 + 20, 'both rewards paid once');
+  resetAchievementsEngineForTests();
+});
+
+test('V6.1/C1 photoTaken: photosTaken and galleryPhotos advance in lockstep', () => {
+  resetAchievementsEngineForTests();
+  const store = createStore(freshState(), { autosave: false });
+  const engine = initAchievements({ store, ui: { toast: () => {} }, audio: { play: () => {} } });
+  assert.equal(store.get('achievements.counters.galleryPhotos') ?? 0, 0);
+  engine.photoTaken();
+  engine.photoTaken();
+  assert.equal(store.get('achievements.counters.photosTaken'), 2);
+  assert.equal(store.get('achievements.counters.galleryPhotos'), 2, 'lockstep');
+  // the memoryKeeper sticker target (40) is REACHABLE now: the counter is
+  // plain-integer accumulation with no cap in this writer
+  store.update((s) => { s.achievements.counters.galleryPhotos = 39; });
+  engine.photoTaken();
+  assert.equal(store.get('achievements.counters.galleryPhotos'), 40);
+  resetAchievementsEngineForTests();
+});
+// ═══════════════════════════════════════════════════════ end V6.1 (G1) ═══
 
 test('V2/G23 engine: sickEver latch feeds neverSick bookkeeping', () => {
   resetAchievementsEngineForTests();

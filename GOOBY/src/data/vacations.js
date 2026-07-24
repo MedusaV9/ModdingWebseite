@@ -26,8 +26,15 @@
 //
 // Every id doubles as the strings suffix: 'vacation.dest.<id>.name' /
 // '.sub' / 'vacation.postcard.<id>' live in strings/v5-vacation.js for the
-// original four and strings/v6-vacations.js for the V6 five (EN+DE).
+// original four and strings/v6-vacations.js for the V6 five (EN+DE); the
+// V6.1/A2 locked-card teasers ('vacation.dest.<id>.teaser') live in
+// strings/v6_1-content.js.
 // `icon` must be a ui/icons.js glyph name (icons.test.js-safe set only).
+// V6.1/A2 (FINAL-WAVE G1): every destination now carries its OWN authored
+// glyph (sandcastle/picnicBasket/skyline/rocket/lighthouse/pumpkin/
+// croissant/shootingStar/toyBlock) — the old borrowed fish/sprout/car/moon
+// set retires from this catalog; board cards, booked chip and postcard
+// rack all read `getVacation(id).icon`, so they upgrade for free.
 // `souvenirCoins` is the coin souvenir paid at pickup through
 // economy.award(store, …, 'souvenir') — always well below `price` so a
 // vacation can never be a coin arbitrage loop.
@@ -47,40 +54,40 @@
 /** @type {readonly VacationDest[]} */
 export const VACATIONS = Object.freeze([
   Object.freeze({
-    id: 'beach', icon: 'fish', price: 180, days: 3,
+    id: 'beach', icon: 'sandcastle', price: 180, days: 3,
     souvenirCoins: 30, color: '#3FC9C0', biome: null, unlockRecapLevel: 0,
   }),
   Object.freeze({
-    id: 'meadowTrip', icon: 'sprout', price: 220, days: 3,
+    id: 'meadowTrip', icon: 'picnicBasket', price: 220, days: 3,
     souvenirCoins: 40, color: '#8FCB6B', biome: 'meadow', unlockRecapLevel: 0,
   }),
   Object.freeze({
-    id: 'bigCity', icon: 'car', price: 280, days: 4,
+    id: 'bigCity', icon: 'skyline', price: 280, days: 4,
     souvenirCoins: 55, color: '#FF9BD0', biome: 'city', unlockRecapLevel: 0,
   }),
   Object.freeze({
-    id: 'space', icon: 'moon', price: 350, days: 4,
+    id: 'space', icon: 'rocket', price: 350, days: 4,
     souvenirCoins: 70, color: '#B9A7F0', biome: 'space', unlockRecapLevel: 0,
   }),
   // ── V6/B2: the five new recap-place destinations (gates 15/25/30/35/40) ──
   Object.freeze({
-    id: 'harbor', icon: 'bubble', price: 200, days: 3,
+    id: 'harbor', icon: 'lighthouse', price: 200, days: 3,
     souvenirCoins: 35, color: '#6FB5E0', biome: 'harbor', unlockRecapLevel: 15,
   }),
   Object.freeze({
-    id: 'spookGarden', icon: 'hat', price: 240, days: 3,
+    id: 'spookGarden', icon: 'pumpkin', price: 240, days: 3,
     souvenirCoins: 45, color: '#9B8CD8', biome: 'spookGarden', unlockRecapLevel: 25,
   }),
   Object.freeze({
-    id: 'bakery', icon: 'candy', price: 260, days: 3,
+    id: 'bakery', icon: 'croissant', price: 260, days: 3,
     souvenirCoins: 50, color: '#E8A25F', biome: 'bakery', unlockRecapLevel: 30,
   }),
   Object.freeze({
-    id: 'nightSky', icon: 'star', price: 300, days: 4,
+    id: 'nightSky', icon: 'shootingStar', price: 300, days: 4,
     souvenirCoins: 60, color: '#7C8FE0', biome: 'nightSky', unlockRecapLevel: 35,
   }),
   Object.freeze({
-    id: 'toyRoom', icon: 'gamepad', price: 320, days: 4,
+    id: 'toyRoom', icon: 'toyBlock', price: 320, days: 4,
     souvenirCoins: 65, color: '#F97B7B', biome: 'toyRoom', unlockRecapLevel: 40,
   }),
 ]);

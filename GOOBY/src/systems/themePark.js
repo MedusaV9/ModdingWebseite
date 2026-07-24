@@ -13,8 +13,10 @@
 //                 visit — parkScene passes {from:'coaster'} and skips it)
 //   nightVisit    latched true once Gooby stood in the plaza during the
 //                 dayNight 'night' band (never unlatches)
-//   rides         rides ridden, keyed by KNOWN ids only (['coaster'] —
-//                 F4's ferris wheel adds its id HERE when it lands)
+//   rides         rides ridden, keyed by KNOWN ids only (['coaster','wheel']
+//                 — V6.1/C1: F4's Riesenrad finally records through the slot
+//                 this comment reserved; parkScene's kickWheelRide onDone is
+//                 the one 'wheel' write site)
 //   handsUp       hands-up moments booked from the coaster (E2's ride has
 //                 no store writes of its own — E1's onDone/F1 may call
 //                 recordHandsUp; 0 until someone does)
@@ -28,8 +30,9 @@
 // writers; everyone else reads. Slice assignment happens inside store.update
 // so the coalesced 'change' event reaches the sticker book for free.
 
-/** Known ride ids (frozen — unknown ids are DROPPED by the normalizer). */
-export const PARK_RIDE_IDS = Object.freeze(['coaster']);
+/** Known ride ids (frozen — unknown ids are DROPPED by the normalizer).
+ *  V6.1/C1: + 'wheel' — the F4 Riesenrad fills its reserved slot. */
+export const PARK_RIDE_IDS = Object.freeze(['coaster', 'wheel']);
 
 /** §E0.1-2: binding park-state numbers live in the owning module. */
 export const THEME_PARK = Object.freeze({
@@ -121,7 +124,7 @@ export function recordNight(slice) {
  * Book one finished ride. Unknown ride ids are a normalized no-op (the
  * counter set stays restricted to PARK_RIDE_IDS — risk row 7).
  * @param {object} [slice]
- * @param {string} rideId one of PARK_RIDE_IDS ('coaster')
+ * @param {string} rideId one of PARK_RIDE_IDS ('coaster' | 'wheel')
  * @returns {ThemeParkSlice}
  */
 export function recordRide(slice, rideId) {

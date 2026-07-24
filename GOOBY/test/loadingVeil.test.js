@@ -49,13 +49,50 @@ test('AC-3 VEIL consts: anti-pop-in numbers are sane and frozen', () => {
   assert.ok(VEIL.FRAME_FALLBACK_MS > 0);
 });
 
-test('AC-3 veil API: show/progress/hide/isShown handle (node-safe no-ops)', () => {
-  for (const fn of ['show', 'progress', 'hide', 'isShown']) {
+test('AC-3 veil API: show/progress/hide/isShown/whenHidden handle (node-safe no-ops)', () => {
+  for (const fn of ['show', 'progress', 'hide', 'isShown', 'whenHidden']) {
     assert.equal(typeof veil[fn], 'function', `veil.${fn} missing`);
   }
   // without a DOM the veil is inert — never throws, never "shown"
   assert.equal(veil.isShown(), false);
   assert.doesNotThrow(() => veil.progress(50));
+});
+
+test('V6.1/A7 whenHidden: resolves immediately when nothing covers the screen', async () => {
+  // node has no document → the veil can never be shown → both the bare and
+  // the grace-window calls must resolve promptly (never hang the airport)
+  const timeout = new Promise((_, reject) => {
+    const t = setTimeout(() => reject(new Error('whenHidden hung')), 2000);
+    t.unref?.();
+  });
+  await Promise.race([veil.whenHidden(), timeout]);
+  await Promise.race([veil.whenHidden({ graceMs: 1500 }), timeout]);
+  assert.ok(veil.whenHidden() instanceof Promise, 'always a Promise');
+});
+
+test('V6.1/A7 whenHidden: bounded wait + every reveal path (source scan)', () => {
+  const lv = source('src/ui/loadingVeil.js');
+  // the wait polls the module's single source of truth (`el`) — riding the
+  // normal hide, the watchdog force-hide AND the hard-timeout force-reveal
+  // for free (all three end in reveal() dropping `el`)
+  assert.match(lv, /while \(!el && nowMs\(\) < graceUntil\) await sleep\(VEIL\.POLL_MS\);/);
+  assert.match(lv, /while \(el && nowMs\(\) < hardAt\) await sleep\(VEIL\.POLL_MS\);/);
+  // belt-and-braces cap: the wait is bounded even against a pathological
+  // show() loop (watchdog + hard timeout + slack)
+  assert.match(lv, /VEIL\.WATCHDOG_MS \+ VEIL\.HARD_TIMEOUT_MS \+ 2000/);
+});
+
+test('V6.1/A7 wiring: the airport dev/return open gates on the veil, not a timer', () => {
+  const air = source('src/ui/airportScreen.js');
+  // the fixed 800 ms race (P2-24) is gone for good…
+  assert.ok(!/setTimeout\([^)]*800\)/.test(air), 'no fixed 800 ms open timer left');
+  // …replaced by the settled signal, with the boot-order grace window
+  assert.match(air, /import \{ whenHidden \} from '\.\/loadingVeil\.js'/);
+  assert.match(
+    air,
+    /whenHidden\(\{ graceMs: 1500 \}\)\.then\(\(\) => ui\.openPanel\('airport'\)\)/,
+    'panel opens only after the veil settles'
+  );
 });
 
 // ---------------------------------------------------------------------------

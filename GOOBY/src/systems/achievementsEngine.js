@@ -36,6 +36,12 @@ import { award as economyAward } from './economy.js';
 import { applyXp, unlockedMinigames } from './leveling.js';
 import { localDay } from '../core/clock.js';
 // ── end V2/G23 imports ──
+// ── V6.1/C2 imports: pure slice readers for the V6-content specials (all
+// §B-safe — no DOM/three; node:test keeps driving this file headlessly) ──
+import { sliceOf as themeParkSliceOf } from './themePark.js';
+import { sliceOf as vacationSliceOf } from './vacation.js';
+import { archiveOf } from './postcards.js';
+// ── end V6.1/C2 imports ──
 
 const DEFAULT_ITEM_SET = new Set(DECOR_DEFAULT_ITEMS);
 
@@ -124,6 +130,20 @@ export function progressOf(def, state) {
         current = Object.keys(state?.stickers?.unlocked ?? {}).length;
         break;
       // ── end V3/G34 ──
+      // ── V6.1/C2: V6-content specials (FINAL-WAVE G1) — pure reads of the
+      // normalized themePark / vacation / postcard slices, evaluated in
+      // v6SpecialProgress. Zero wiring needed: parkScene and the vacation
+      // tick write through store.update, so the coalesced 'change' event
+      // already re-runs checkNow() (the V6/F1 stickerBook precedent). ──
+      case 'parkVisits':
+      case 'coasterRides':
+      case 'wheelRides':
+      case 'parkNight':
+      case 'postcards':
+      case 'vacationDestinations':
+        current = v6SpecialProgress(def, state);
+        break;
+      // ── end V6.1/C2 ──
       default:
         current = 0;
     }
@@ -226,6 +246,41 @@ export function v2SpecialProgress(def, state) {
     }
     case 'holeInOne':
       return Math.floor(Number(state?.achievements?.counters?.holeInOnes) || 0);
+    default:
+      return 0;
+  }
+}
+
+/**
+ * V6.1/C2 — progress for the 7 V6-content specials (pure; progressOf clamps
+ * to target). Every read goes through the owning module's normalizer, so
+ * junk/legacy saves evaluate against healed slices:
+ *   parkVisits            themePark.visits (plaza entries)
+ *   coasterRides          themePark.rides.coaster
+ *   wheelRides            themePark.rides.wheel (C1 made this a live signal)
+ *   parkNight             themePark.nightVisit latch → 0/1
+ *   postcards             the normalized capped postcard archive length
+ *   vacationDestinations  known destination ids latched strictly true in
+ *                         vacation.visited (C3's Sammelpass map — sliceOf
+ *                         already drops unknown ids / non-true values)
+ * @param {import('../data/achievements.js').AchievementDef} def
+ * @param {object} state
+ * @returns {number}
+ */
+export function v6SpecialProgress(def, state) {
+  switch (def.special) {
+    case 'parkVisits':
+      return themeParkSliceOf(state).visits;
+    case 'coasterRides':
+      return themeParkSliceOf(state).rides.coaster;
+    case 'wheelRides':
+      return themeParkSliceOf(state).rides.wheel;
+    case 'parkNight':
+      return themeParkSliceOf(state).nightVisit ? 1 : 0;
+    case 'postcards':
+      return archiveOf(state).length;
+    case 'vacationDestinations':
+      return Object.keys(vacationSliceOf(state).visited).length;
     default:
       return 0;
   }
@@ -511,6 +566,12 @@ export function initAchievements({ store, ui, audio, framework }) {
       state.achievements.counters = g.counters;
       const counters = state.achievements.counters;
       counters.photosTaken = Math.floor(Number(counters.photosTaken) || 0) + 1;
+      // V6.1/C1: galleryPhotos finally gets its writer — the memoryKeeper
+      // sticker (galleryPhotos ≥ 40) reads this counter; save.js has carried
+      // its default since V6 but nothing ever bumped it. Every successful
+      // capture lands here (ui/photoMode.js is the single call site), so
+      // the two counters advance in lockstep.
+      counters.galleryPhotos = Math.floor(Number(counters.galleryPhotos) || 0) + 1;
       state.profile = profileStats.onPhoto(state.profile);
       if (g.xp > 0) {
         grantXp(state, g.xp, 'photo'); // V4/G56: xpGranted source tag (§C-SYS3.1 #9 — daily cap 5 suppresses via g.xp = 0)

@@ -384,8 +384,14 @@ test('celebration (FIX2): airport reunion tail runs once, AFTER the cinematic', 
   }
   assert.ok(!/celebrate\(res\);/.test(src), 'no unconditional pre-cinematic celebrate() call remains');
   // A PLAYED cutscene owns the confetti/jingle beat (authored 18-confetti
-  // ending) — only the toast follows it; the toast always fires exactly once.
-  assert.match(src, /ui\.toast\('vacation\.welcomeBack',[^)]*\);\s*\r?\n\s*if \(played\) return;/);
+  // ending) — only the toasts follow it; each fires exactly once. V6.1/B4
+  // (FINAL-WAVE G1): the deterministic weather welcome-home line queues
+  // sequentially after the welcomeBack toast, still BEFORE the played-branch
+  // return (both reunion branches greet the weather).
+  assert.match(
+    src,
+    /ui\.toast\('vacation\.welcomeBack',[^)]*\);[\s\S]{0,600}?ui\.toast\(`vacation\.home\.\$\{weatherAt\(now\(\)\)\.state\}`\);\s*\r?\n\s*if \(played\) return;/,
+  );
   // The booked toast rides the same contract (it fed the identical
   // hold/release double before the departure cutscene).
   assert.match(src, /presentVacationCinematic\(\{ store \}, 'book', res\)\.then\(/);

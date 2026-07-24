@@ -32,6 +32,9 @@ import { historyRows, agoLabel } from './recapOverlay.logic.js';
 // V6/B3: passport chrome strings live in the owned v6 module — resolved
 // through the tx() fallback below until B2 commits the strings.js import pair.
 import { EN as THM_EN, DE as THM_DE } from '../data/strings/v6-screen-themes.js';
+// V6.1/B2 (FINAL-WAVE G1): pure themePark read for the Funkelpark/Riesenrad
+// passport stamps (the systems/stickerBook.js read-only precedent).
+import { sliceOf as parkSliceOf } from '../systems/themePark.js';
 
 const RING_R = 20;
 const RING_C = 2 * Math.PI * RING_R;
@@ -210,6 +213,11 @@ const PROFILE_CSS = `
 .b3-pass-stamp.ac-stamp{border-width:0.125rem;border-color:var(--thm-accent-dark,#3d8a83);color:var(--thm-accent-dark,#3d8a83);background:var(--thm-soft,rgba(79,168,160,.16));font-size:0.625rem;padding:0.25rem 0.625rem;letter-spacing:0.04em;}
 .b3-pass-stamp.ac-stamp:nth-child(2){transform:rotate(4deg);}
 .b3-pass-stamp.ac-stamp:nth-child(3){transform:rotate(-3deg);}
+/* V6.1/B2: the Funkelpark/Riesenrad stamps can push the row to 4–5 entries —
+   keep the hand-stamped rhythm going (readable at 320 px / DE / uiScale 130
+   because the row wraps and each pill stays its own line box). */
+.b3-pass-stamp.ac-stamp:nth-child(4){transform:rotate(3deg);}
+.b3-pass-stamp.ac-stamp:nth-child(5){transform:rotate(-2deg);}
 .b3-pass-mrz{margin:0.25rem 0.875rem 0.75rem;padding-top:0.4375rem;border-top:0.125rem dashed rgba(74,59,54,.2);font-variant-numeric:tabular-nums;font-size:0.6875rem;font-weight:700;line-height:1.55;letter-spacing:0.08em;color:var(--brown);opacity:.5;}
 .b3-pass-mrz span{display:block;white-space:nowrap;overflow:hidden;}
 /* ── end V6/B3 passport ── */
@@ -346,6 +354,12 @@ export function registerProfileScreen({ store, ui, audio, sceneManager }) {
         if (lastRecapLevel > 0) stamps.push(tx('thm.passport.stamp.recap', { level: lastRecapLevel }));
         const awardCount = Object.keys(state.achievements?.unlocked ?? {}).length;
         if (awardCount > 0) stamps.push(tx('thm.passport.stamp.awards', { n: awardCount }));
+        // V6.1/B2: Funkelpark + Riesenrad entry stamps — pure reads of the
+        // normalized park slice; old saves (0 visits / 0 wheel rides) show
+        // neither, exactly like the other data-driven stamps above.
+        const park = parkSliceOf(state);
+        if (park.visits > 0) stamps.push(tx('thm.passport.stamp.park', { n: park.visits }));
+        if (park.rides.wheel > 0) stamps.push(tx('thm.passport.stamp.wheel', { n: park.rides.wheel }));
         return `
         <div class="g23-pr-card b3-pass">
           <div class="b3-pass-cover">

@@ -181,6 +181,28 @@ const PATHS = {
   musicNote:
     '<path d="M9.4 18.4V6.6a1.3 1.3 0 0 1 1-1.3l7.6-1.9a1.3 1.3 0 0 1 1.6 1.3v11.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" fill="none"/><path d="M9.4 9.4l10.2-2.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" fill="none"/><ellipse cx="6.5" cy="18.6" rx="3" ry="2.5"/><ellipse cx="16.7" cy="16.4" rx="3" ry="2.5"/>',
   // ── end V6/D3 glyphs ──
+  // ── V6.1/A2 (FINAL-WAVE G1): the nine authored DESTINATION glyphs — one
+  // per data/vacations.js row so the travel board, booked chip and postcard
+  // rack sell each world at a glance (the ninth, 'rocket', already ships in
+  // the V6/D3 set above). Same plumping language: fat 24×24 currentColor
+  // shapes, round joins, white accents; zero raster/network payload. ──
+  sandcastle:
+    '<path d="M5 20.6a1.2 1.2 0 0 1-1.2-1.2V11h3.4V8.6h2.6V11h4.4V8.6h2.6V11h3.4v8.4a1.2 1.2 0 0 1-1.2 1.2H5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14.1 20.6v-2.9a2.1 2.1 0 0 0-4.2 0v2.9z" fill="#fff" opacity="0.6"/><path d="M12 11V3.6M12 4l3.2 1-3.2 1.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M7.2 14.4h2M14.8 14.4h2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.55" fill="none"/>',
+  picnicBasket:
+    '<path d="M4.4 9.6h15.2a1 1 0 0 1 1 1.1l-1.1 7.7a2.4 2.4 0 0 1-2.4 2.2H6.9a2.4 2.4 0 0 1-2.4-2.2l-1.1-7.7a1 1 0 0 1 1-1.1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7.6 9.4a4.4 4.4 0 0 1 8.8 0" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M7.3 13h9.4M8 16.2h8" stroke="#fff" stroke-width="1.7" stroke-linecap="round" opacity="0.7" fill="none"/><path d="M9.8 11.4l1.2 6.6M14.2 11.4 13 18" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.45" fill="none"/>',
+  skyline:
+    '<path d="M3.4 20V9.8h5.2V20M8.6 20V4.6h6.2V20M14.8 20v-8h5.8v8" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M2.6 20.4h18.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M10.7 7.6h2M10.7 10.6h2M10.7 13.6h2M5 12.6h2M16.9 14.8h1.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.75" fill="none"/>',
+  lighthouse:
+    '<path d="M9.6 8.8h4.8L16 20.2H8L9.6 8.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.9 3.6h6.2v3.2a1.9 1.9 0 0 1-1.9 1.9h-2.4a1.9 1.9 0 0 1-1.9-1.9V3.6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.2 12.3h5.6M8.7 15.8h6.6" stroke="#fff" stroke-width="1.7" stroke-linecap="round" opacity="0.7" fill="none"/><path d="M6.4 5.8 3.4 4.6M17.6 5.8l3-1.2M6.2 8.4H3M17.8 8.4H21" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/><path d="M5.2 20.6h13.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
+  pumpkin:
+    '<path d="M12 7c5 0 9 2.9 9 7 0 3.8-2.6 6.6-6 6.6-1.1 0-2.2-.3-3-.9-.8.6-1.9.9-3 .9-3.4 0-6-2.8-6-6.6 0-4.1 4-7 9-7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 7.3c-1.6 1.6-2.4 3.9-2.4 6.6 0 2.5.8 4.8 2.4 6.4 1.6-1.6 2.4-3.9 2.4-6.4 0-2.7-.8-5-2.4-6.6z" fill="#fff" opacity="0.35"/><path d="M12 6.8c-.2-1.7.5-2.9 2.1-3.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>',
+  croissant:
+    '<path d="M4.2 15.4c0-4.5 3.5-8.2 7.8-8.2s7.8 3.7 7.8 8.2c1.1.2 1.9.8 1.9 1.6 0 1.1-1.7 2-3.7 2-1.2 0-2.3-.3-2.9-.8-.9.3-2 .5-3.1.5s-2.2-.2-3.1-.5c-.6.5-1.7.8-2.9.8-2 0-3.7-.9-3.7-2 0-.8.8-1.4 1.9-1.6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9.3 8.2c-.9 2-1.4 4.5-1.5 7.3M14.7 8.2c.9 2 1.4 4.5 1.5 7.3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.7" fill="none"/>',
+  shootingStar:
+    '<path d="M14.9 3l1.6 3.6 3.9.4-2.9 2.6.8 3.9-3.4-2-3.4 2 .8-3.9-2.9-2.6 3.9-.4L14.9 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.8 12.6 2.8 19.6M12.6 15.6l-4.2 4.2M7.2 10.2l-4.6 4.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><circle cx="14.9" cy="8.2" r="1" fill="#fff" opacity="0.7"/>',
+  toyBlock:
+    '<path d="M12 2.8l8 4v9.4l-8 4.4-8-4.4V6.8l8-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4.4 7.2 12 11l7.6-3.8M12 11v9.2" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" opacity="0.6" fill="none"/><circle cx="8.1" cy="14.6" r="1.3" fill="#fff" opacity="0.85"/><circle cx="16" cy="6.9" r="1.1" fill="#fff" opacity="0.6"/>',
+  // ── end V6.1/A2 destination glyphs ──
 };
 
 /**
