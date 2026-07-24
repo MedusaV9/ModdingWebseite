@@ -70,90 +70,152 @@ export const CUTSCENES = Object.freeze({
   // committed GLBs only: 'car-kit/taxi' (kenney), Tiny Treats
   // 'pleasant-picnic/picnic_basket_square' as Gooby's cute strap-case, and —
   // since no plane GLB exists on disk (verified) — the stylized
-  // 'plane in the sky' beat spawns 'space-kit/craft_speederA' high above
-  // with a sparkle trail. Offsets are GOOBY-RELATIVE (no anchor) so the
-  // staging works in whichever room Gooby currently idles.
+  // 'plane in the sky' beat spawns 'space-kit/craft_speederA' with a sparkle
+  // trail.
+  //
+  // V6/FIX2 restaging (post-eval P1-1): every beat now SHOWS what its caption
+  // narrates inside the 390×844 portrait frame, using the cutsceneView
+  // staging capabilities (all compile-valid ops — systems/cutscene.js is
+  // untouched):
+  //   · 'cs:doorway'/'cs:sky' anchors — view-computed stage marks that exist
+  //     in every room (the living room resolves its real frontDoor);
+  //   · 'cam:*' propIds — virtual camera-rig cuts: spawn pans/dollies to the
+  //     anchored point (scale = dolly fraction), despawn eases back;
+  //   · re-spawning a live propId GLIDES it to the new mark (prop moves);
+  //   · 'prop:<id>' particle anchors — sparkle trails track a gliding prop.
+  // Gooby-relative offsets (no anchor) remain for the beats that play around
+  // Gooby himself, so the staging still works in whichever room he idles.
 
-  // The booking send-off: taxi pulls up, suitcase plops down, Gooby bounces
-  // happily, waves goodbye, the taxi departs and a tiny plane crosses the
-  // sky trailing sparkles. Rewards/state are already committed by
-  // economy.bookVacation BEFORE this plays (decoration only).
+  // The booking send-off, beat table (V6/FIX2):
+  //   1 PACK    full room frame — suitcase plops down center-low by Gooby,
+  //             happy bounce ("Suitcase packed!")
+  //   2 TAXI    doorway vignette — camera pans to the front door, the taxi
+  //             pulls up AT the doorway, doorbell + engine cues ("The taxi
+  //             is here")
+  //   3 WAVE    camera returns — Gooby waves while the suitcase glides over
+  //             to the taxi ("Bye-bye!")
+  //   4 DEPART  taxi + case vanish behind a whoosh + doorway sparkle burst
+  //   5 SKY     camera tilts up the back wall — the tiny plane crosses the
+  //             frame trailing sparkles ("up, up and away!" over a VISIBLE
+  //             plane)
+  //   6 POSTCARDS camera eases home, closing promise + stinger
+  // Rewards/state are already committed by economy.bookVacation BEFORE this
+  // plays (decoration only).
   vacDeparture: Object.freeze({
     id: 'vacDeparture',
     steps: Object.freeze([
-      Object.freeze({ op: 'camera', move: 'pushIn', duration: 1.2 }),
+      // 1 PACK — no push-in: the lease frame keeps Gooby AND the floor spot
+      // in view; the case lands center-low, fully in frame.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({
-            op: 'prop', action: 'spawn', propId: 'vacTaxi',
-            model: 'car-kit/taxi', offset: Object.freeze([0.9, 0, -0.55]), scale: 0.5,
+            op: 'prop', action: 'spawn', propId: 'vacSuitcase',
+            model: 'pleasant-picnic/picnic_basket_square',
+            offset: Object.freeze([0.55, 0, 0.5]), scale: 0.5,
           }),
-          Object.freeze({ op: 'sfx', sfx: 'whoosh' }),
-          Object.freeze({ op: 'particles', type: 'sparkles', count: 10 }),
-          Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.taxi' }),
-          Object.freeze({ op: 'wait', duration: 1.0 }),
-        ]),
-      }),
-      Object.freeze({
-        op: 'prop', action: 'spawn', propId: 'vacSuitcase',
-        model: 'pleasant-picnic/picnic_basket_square',
-        offset: Object.freeze([-0.6, 0, 0.35]), scale: 0.5,
-      }),
-      Object.freeze({ op: 'sfx', sfx: 'ball.bounce' }),
-      Object.freeze({
-        op: 'parallel',
-        steps: Object.freeze([
+          Object.freeze({ op: 'sfx', sfx: 'ball.bounce' }),
           Object.freeze({ op: 'emotion', emotion: 'happy' }),
           Object.freeze({ op: 'clip', clip: 'happyBounce' }),
-          Object.freeze({ op: 'sfx', sfx: 'gooby.squeakHappy' }),
+          Object.freeze({ op: 'particles', type: 'sparkles', count: 10 }),
           Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.pack' }),
-          Object.freeze({ op: 'wait', duration: 1.0 }),
-        ]),
-      }),
-      Object.freeze({ op: 'tapWait', timeout: 6 }),
-      Object.freeze({
-        op: 'parallel',
-        steps: Object.freeze([
-          Object.freeze({ op: 'clip', clip: 'wave' }),
-          Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.wave' }),
           Object.freeze({ op: 'wait', duration: 1.2 }),
         ]),
       }),
-      // drive-away: taxi + case vanish behind a whoosh + sparkle burst
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      // 2 TAXI — doorway vignette: rig cut to the door, taxi parked AT it.
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'cam:door',
+            model: 'virtual', anchor: 'cs:doorway',
+            offset: Object.freeze([0, 0.85, 0]), scale: 0.42,
+          }),
+          Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'vacTaxi',
+            model: 'car-kit/taxi', anchor: 'cs:doorway', scale: 0.5,
+          }),
+          Object.freeze({ op: 'sfx', sfx: 'tow' }),
+          Object.freeze({ op: 'sfx', sfx: 'delivery.doorbell' }),
+          Object.freeze({ op: 'particles', type: 'sparkles', count: 10, anchor: 'prop:vacTaxi' }),
+          Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.taxi' }),
+          Object.freeze({ op: 'wait', duration: 1.5 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      // 3 WAVE — camera eases home; the case glides over to the taxi.
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'prop', action: 'despawn', propId: 'cam:door' }),
+          Object.freeze({ op: 'clip', clip: 'wave' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.squeakHappy' }),
+          Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'vacSuitcase',
+            model: 'pleasant-picnic/picnic_basket_square',
+            anchor: 'cs:doorway', offset: Object.freeze([-0.15, 0, 0.35]), scale: 0.5,
+          }),
+          Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.wave' }),
+          Object.freeze({ op: 'wait', duration: 1.5 }),
+        ]),
+      }),
+      // 4 DEPART — taxi + case vanish behind a whoosh + doorway burst.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({ op: 'prop', action: 'despawn', propId: 'vacSuitcase' }),
           Object.freeze({ op: 'prop', action: 'despawn', propId: 'vacTaxi' }),
           Object.freeze({ op: 'sfx', sfx: 'whoosh' }),
-          Object.freeze({ op: 'particles', type: 'sparkles', count: 16 }),
-          Object.freeze({ op: 'wait', duration: 0.6 }),
+          Object.freeze({ op: 'particles', type: 'sparkles', count: 16, anchor: 'cs:doorway' }),
+          Object.freeze({ op: 'wait', duration: 0.7 }),
         ]),
       }),
-      // stylized plane-in-the-sky lift-off beat (no plane GLB on disk)
+      // 5 SKY — tilt-up cutaway: the tiny plane CROSSES the upper frame
+      // left→right with a sparkle trail riding its glide.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'cam:sky',
+            model: 'virtual', anchor: 'cs:sky', scale: 0.3,
+          }),
+          Object.freeze({
             op: 'prop', action: 'spawn', propId: 'vacPlane',
             model: 'space-kit/craft_speederA',
-            offset: Object.freeze([-0.5, 2.1, -1.0]), scale: 0.45,
+            anchor: 'cs:sky', offset: Object.freeze([-1.0, -0.08, -0.1]), scale: 0.4,
           }),
           Object.freeze({ op: 'sfx', sfx: 'hop.flap' }),
-          Object.freeze({ op: 'particles', type: 'sparkles', count: 14 }),
           Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.sky' }),
-          Object.freeze({ op: 'wait', duration: 1.4 }),
+          Object.freeze({
+            op: 'sequence',
+            steps: Object.freeze([
+              Object.freeze({ op: 'wait', duration: 0.5 }),
+              Object.freeze({
+                op: 'prop', action: 'spawn', propId: 'vacPlane',
+                model: 'space-kit/craft_speederA',
+                anchor: 'cs:sky', offset: Object.freeze([0.45, 0.15, -0.1]), scale: 0.4,
+              }),
+              Object.freeze({ op: 'wait', duration: 0.35 }),
+              Object.freeze({ op: 'particles', type: 'sparkles', count: 8, anchor: 'prop:vacPlane' }),
+              Object.freeze({ op: 'wait', duration: 0.35 }),
+              Object.freeze({ op: 'particles', type: 'sparkles', count: 8, anchor: 'prop:vacPlane' }),
+              Object.freeze({ op: 'wait', duration: 0.45 }),
+              Object.freeze({ op: 'particles', type: 'sparkles', count: 10, anchor: 'prop:vacPlane' }),
+            ]),
+          }),
         ]),
       }),
       Object.freeze({ op: 'tapWait', timeout: 6 }),
+      // 6 POSTCARDS — camera eases home under the closing promise.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({ op: 'prop', action: 'despawn', propId: 'vacPlane' }),
+          Object.freeze({ op: 'prop', action: 'despawn', propId: 'cam:sky' }),
           Object.freeze({ op: 'particles', type: 'sparkles', count: 8 }),
           Object.freeze({ op: 'caption', key: 'cutscene.vac.depart.postcards' }),
-          Object.freeze({ op: 'wait', duration: 0.8 }),
+          Object.freeze({ op: 'wait', duration: 0.9 }),
         ]),
       }),
       Object.freeze({ op: 'tapWait', timeout: 5 }),
@@ -163,37 +225,53 @@ export const CUTSCENES = Object.freeze({
     ]),
   }),
 
-  // The on-time reunion: taxi pulls up, Gooby leaps out ecstatic, a
-  // run-to-camera hug beat (camera dolly-in) under a hearts burst, then the
-  // souvenir-coins caption with confetti. Stats/souvenir were already paid
-  // by economy.pickupVacation BEFORE this plays.
+  // The on-time reunion, beat table (V6/FIX2):
+  //   1 ARRIVAL  doorway vignette — camera pans to the front door, the taxi
+  //              pulls up AT it, doorbell rings ("A taxi pulls up...")
+  //   2 ENTER    camera cuts back to the room — Gooby is there, leaping
+  //              ecstatic (reads as "he just came in")
+  //   3 HUG      dolly-in toward Gooby under the hearts burst (the beat the
+  //              eval loved — kept verbatim)
+  //   4 SOUVENIR coin stinger + authored 18-confetti beat + caption
+  //   5 DEPART   taxi whooshes away, camera restores, happy stinger
+  // Stats/souvenir were already paid by economy.pickupVacation BEFORE this
+  // plays.
   vacReunionOnTime: Object.freeze({
     id: 'vacReunionOnTime',
     steps: Object.freeze([
+      // 1 ARRIVAL — door-focused frame + doorbell cue.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'cam:door',
+            model: 'virtual', anchor: 'cs:doorway',
+            offset: Object.freeze([0, 0.85, 0]), scale: 0.42,
+          }),
+          Object.freeze({
             op: 'prop', action: 'spawn', propId: 'vacTaxi',
-            model: 'car-kit/taxi', offset: Object.freeze([0.9, 0, -0.55]), scale: 0.5,
+            model: 'car-kit/taxi', anchor: 'cs:doorway', scale: 0.5,
           }),
           Object.freeze({ op: 'sfx', sfx: 'whoosh' }),
+          Object.freeze({ op: 'sfx', sfx: 'delivery.doorbell' }),
           Object.freeze({ op: 'caption', key: 'cutscene.vac.reunion.taxiBack' }),
-          Object.freeze({ op: 'wait', duration: 1.0 }),
+          // Hold past the 0.9s rig cut so the settled door vignette READS.
+          Object.freeze({ op: 'wait', duration: 2.6 }),
         ]),
       }),
-      Object.freeze({ op: 'sfx', sfx: 'ball.bounce' }),
+      // 2 ENTER — cut back to the room: Gooby leaps out ecstatic.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
+          Object.freeze({ op: 'prop', action: 'despawn', propId: 'cam:door' }),
           Object.freeze({ op: 'emotion', emotion: 'ecstatic' }),
           Object.freeze({ op: 'clip', clip: 'jump' }),
           Object.freeze({ op: 'sfx', sfx: 'gooby.giggle' }),
           Object.freeze({ op: 'particles', type: 'sparkles', count: 8 }),
-          Object.freeze({ op: 'wait', duration: 0.7 }),
+          Object.freeze({ op: 'wait', duration: 0.9 }),
         ]),
       }),
-      // hug beat: dolly-in toward Gooby while he bounces into the camera
+      // 3 HUG — dolly-in toward Gooby while he bounces into the camera.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
@@ -206,6 +284,8 @@ export const CUTSCENES = Object.freeze({
         ]),
       }),
       Object.freeze({ op: 'tapWait', timeout: 6 }),
+      // 4 SOUVENIR — the cutscene OWNS the celebration confetti beat
+      // (airportScreen defers its toast until after playback — Sol P1-3).
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
@@ -216,6 +296,7 @@ export const CUTSCENES = Object.freeze({
         ]),
       }),
       Object.freeze({ op: 'tapWait', timeout: 5 }),
+      // 5 DEPART — taxi away, camera home, happy stinger.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
@@ -239,22 +320,32 @@ export const CUTSCENES = Object.freeze({
   vacReunionTaxi: Object.freeze({
     id: 'vacReunionTaxi',
     steps: Object.freeze([
+      // 1 ARRIVAL — the same door-focused frame as the on-time reunion,
+      // only slower: the tired taxi rolls up, the driver rings.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
           Object.freeze({
+            op: 'prop', action: 'spawn', propId: 'cam:door',
+            model: 'virtual', anchor: 'cs:doorway',
+            offset: Object.freeze([0, 0.85, 0]), scale: 0.42,
+          }),
+          Object.freeze({
             op: 'prop', action: 'spawn', propId: 'vacTaxi',
-            model: 'car-kit/taxi', offset: Object.freeze([0.9, 0, -0.55]), scale: 0.5,
+            model: 'car-kit/taxi', anchor: 'cs:doorway', scale: 0.5,
           }),
           Object.freeze({ op: 'sfx', sfx: 'tow' }),
+          Object.freeze({ op: 'sfx', sfx: 'delivery.doorbell' }),
           Object.freeze({ op: 'caption', key: 'cutscene.vac.late.taxi' }),
-          Object.freeze({ op: 'wait', duration: 1.4 }),
+          // Hold past the 0.9s rig cut so the settled door vignette READS.
+          Object.freeze({ op: 'wait', duration: 2.8 }),
         ]),
       }),
-      Object.freeze({ op: 'sfx', sfx: 'ball.bounce' }),
+      // 2 ENTER — cut back to the room: droopy ears, a tired stretch.
       Object.freeze({
         op: 'parallel',
         steps: Object.freeze([
+          Object.freeze({ op: 'prop', action: 'despawn', propId: 'cam:door' }),
           Object.freeze({ op: 'emotion', emotion: 'sleepy' }),
           Object.freeze({ op: 'clip', clip: 'stretch' }),
           Object.freeze({ op: 'sfx', sfx: 'gooby.yawn' }),

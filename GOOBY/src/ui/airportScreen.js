@@ -84,6 +84,11 @@ const AIRPORT_CSS = `
 .v6-rack-text{display:block;font-size:0.75rem;font-weight:700;color:var(--brown);}
 .v6-rack-meta{display:block;font-size:0.6875rem;font-weight:700;color:var(--brown);opacity:.55;font-variant-numeric:tabular-nums;}
 .v6-rack-empty{font-size:0.75rem;font-weight:700;color:var(--brown);opacity:.55;text-align:center;padding:0.25rem 0;}
+/* V6/FIX2 (P1-3): the postmark — a tilted dashed mini-stamp with the heart
+   glyph replaces the literal '*stamp*' token the postcard texts used to end
+   with (token stripped from strings/v6-vacation-content.js EN+DE). */
+.v6-rack-stamp{margin-left:auto;flex:none;width:1.375rem;height:1.625rem;margin-top:0.125rem;border-radius:0.25rem;border:1px dashed var(--v6-rack-accent, var(--teal));color:var(--v6-rack-accent, var(--teal));display:flex;align-items:center;justify-content:center;transform:rotate(6deg);opacity:.75;}
+.v6-rack-stamp svg{margin-top:0;}
 `;
 
 /**
@@ -143,6 +148,7 @@ function postcardRack(state) {
           <span class="v6-rack-text">${t(postcardTextKey(e))}</span>
           <span class="v6-rack-meta">${t(`vacation.dest.${e.destId}.name`)} · ${t('vacation.rack.day', { day: e.dayIndex })} · ${stamp}</span>
         </span>
+        <span class="v6-rack-stamp" aria-hidden="true">${icon('heart', 11)}</span>
       </div>`;
     })
     .join('');
@@ -172,16 +178,27 @@ export function registerAirport({ store, ui, audio }) {
   let panelEl = null;
   let countTimer = 0;
 
-  /** Reunion tail shared by pickup + taxi: confetti, jingle, toast, close. */
-  function celebrate(res) {
-    audio.play('jingle.arrival');
+  /**
+   * Reunion tail shared by pickup + taxi. V6/FIX2 (Sol P1-3 fix round): the
+   * celebration presents exactly ONCE, strictly AFTER the cinematic settles
+   * — celebrate() used to run before playCutscene, whose holdToasts() swept
+   * the live toast and releaseToasts() respawned it (same toast twice), and
+   * its 40 DOM confetti overlapped the cutscene's authored 18-confetti beat.
+   * A PLAYED cutscene owns the confetti/jingle beat, so only the welcome
+   * toast follows it; refused cinema still celebrates in full (toast text
+   * unchanged either way). Economy/state committed long before this runs.
+   * @param {{souvenir?: number}} res the completed economy result
+   * @param {boolean} played true when the reunion cutscene actually played
+   */
+  function celebrate(res, played) {
     ui.toast('vacation.welcomeBack', { coins: res.souvenir ?? 0 });
+    if (played) return; // the cutscene owned the confetti + arrival beat
+    audio.play('jingle.arrival');
     // Confetti over the whole app layer — dynamic import keeps three.js out
     // of this module's static graph (burstConfettiDom is DOM-only at call).
     import('../gfx/particles.js')
       .then((mod) => mod.burstConfettiDom(ui.el ?? document.body, { count: 40 }))
       .catch(() => { /* reduced environments celebrate quietly */ });
-    ui.closePanel('airport');
   }
 
   function render() {
@@ -210,16 +227,19 @@ export function registerAirport({ store, ui, audio }) {
           const res = bookVacation(store, destId);
           if (res.ok) {
             audio.play('ui.confirmBig');
-            ui.toast('vacation.booked', {
-              name: t(`vacation.dest.${destId}.name`),
-              days: getVacation(destId)?.days ?? 3,
-            });
             ui.closePanel('airport');
             // V6/D1: departure send-off — keyed off THIS explicit user
             // action (never phase observation, so boot/offline catch-up can
             // never replay it). bookVacation committed atomically above;
-            // the cutscene is fire-and-forget decoration.
-            presentVacationCinematic({ store }, 'book', res);
+            // the cutscene is optional decoration. V6/FIX2 (Sol P1-3): the
+            // booked toast follows the presentation — fired before it, the
+            // cutscene's holdToasts/releaseToasts pair presented it twice.
+            presentVacationCinematic({ store }, 'book', res).then(() => {
+              ui.toast('vacation.booked', {
+                name: t(`vacation.dest.${destId}.name`),
+                days: getVacation(destId)?.days ?? 3,
+              });
+            });
           } else if (res.reason === 'coins') {
             audio.play('ui.error');
             ui.toast('vacation.noCoins');
@@ -263,19 +283,24 @@ export function registerAirport({ store, ui, audio }) {
     panelEl.querySelector('.v5-air-pickup')?.addEventListener('click', () => {
       const res = pickupVacation(store);
       if (res.ok) {
-        celebrate(res);
+        ui.closePanel('airport');
         // V6/D1: on-time reunion — pickupVacation completed atomically
-        // above (stats/souvenir committed); fire-and-forget decoration.
-        presentVacationCinematic({ store }, 'pickup', res);
+        // above (stats/souvenir committed). V6/FIX2 (Sol P1-3): the shared
+        // celebrate() tail runs ONCE, after the cinematic settles (played →
+        // toast only, the cutscene owned the beat; refused → full tail).
+        presentVacationCinematic({ store }, 'pickup', res)
+          .then((played) => celebrate(res, played));
       } else render(); // phase slipped (e.g. turned overdue) — re-render
     });
     panelEl.querySelector('.v5-air-taxi')?.addEventListener('click', () => {
       const res = payTaxiReturn(store);
       if (res.ok) {
         audio.play('coin.spend');
-        celebrate(res);
+        ui.closePanel('airport');
         // V6/D1: late-pickup reunion — same rewards, sheepish acting only.
-        presentVacationCinematic({ store }, 'taxi', res);
+        // V6/FIX2 (Sol P1-3): same once-after-settle celebration contract.
+        presentVacationCinematic({ store }, 'taxi', res)
+          .then((played) => celebrate(res, played));
       } else render();
     });
     panelEl.querySelector('.v5-air-later')?.addEventListener('click', () => ui.closePanel('airport'));

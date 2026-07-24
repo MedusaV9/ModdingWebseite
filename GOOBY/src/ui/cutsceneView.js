@@ -15,7 +15,24 @@
 // the scene (systems/sleep.js isSleeping), while sceneManager.isSwitching(),
 // outside the home scene, or while any §E6 screen is open — refusal returns
 // false and callers skip silently (PLAN6 D1 contract).
+//
+// V6/FIX2 staging capabilities (post-eval fix round, P1-1/Sol P2-3) — all
+// expressed through the EXISTING compiled op vocabulary (systems/cutscene.js
+// is untouched), interpreted here:
+//   · prop prewarm — every authored spawn model is assets.preload()ed before
+//     the first beat (bounded by PRELOAD_TIMEOUT_MS; a slow fetch degrades to
+//     the legacy getModel self-heal instead of stalling).
+//   · 'cam:*' propIds are VIRTUAL camera-rig cuts: spawn dollies/pans the
+//     camera toward the resolved anchor point (prop.scale = dolly fraction),
+//     despawn eases back to the leased pose. model is ignored (authors write
+//     'virtual'); cleanup still snaps the exact lease.
+//   · 'cs:doorway'/'cs:sky' anchors are view-computed stage marks that exist
+//     in EVERY room (rm anchors only exist where the furniture does), and
+//     'prop:<id>' anchors track a live staged prop (sparkle trails).
+//   · re-spawning a LIVE propId GLIDES it to the new mark over GLIDE_SEC —
+//     the declarative 'prop move' beat (suitcase→taxi, plane crossing).
 
+import * as THREE from 'three'; // V6/FIX2: Box3 for prop recentering only
 import { t, getLang } from '../data/strings.js';
 import { EN as CUT_EN, DE as CUT_DE } from '../data/strings/v6-cutscenes.js';
 import { tween, easings } from '../gfx/tween.js';
@@ -53,6 +70,21 @@ const VIEW = Object.freeze({
   DEV_KICK_RETRIES: 20,
   /** Music context held (push/pop balanced) during playback. */
   MUSIC_CONTEXT: 'home',
+  /** V6/FIX2: seconds a 'cam:' rig cut dollies/pans (staging vignettes). */
+  RIG_CUT_SEC: 0.9,
+  /** Default lease→target dolly fraction for 'cam:' rig cuts (prop.scale
+   * overrides, clamped to ≤1). */
+  RIG_FRACTION: 0.4,
+  /** Metres ahead of the leased camera used to reconstruct its look target
+   * (matches the home look-at distance — roomManager CAM_OFFSET/LOOK_AT). */
+  LEASE_LOOK_DIST: 7.8,
+  /** Seconds a re-spawned prop GLIDES to its new mark (declarative moves). */
+  GLIDE_SEC: 1.4,
+  /** Near-floor anchored particle bursts lift this high (headlight glows). */
+  ANCHOR_BURST_LIFT: 0.55,
+  /** ms budget for the pre-playback prop prewarm (Sol P2-3) — a slow fetch
+   * degrades to the assets.getModel self-heal instead of stalling the beat. */
+  PRELOAD_TIMEOUT_MS: 4000,
 });
 
 const CSS = `
@@ -79,6 +111,10 @@ const CSS = `
 .v6cs-root.v6cs-out .v6cs-hint,.v6cs-root.v6cs-out .v6cs-skip,.v6cs-root.v6cs-out .v6cs-caption{opacity:0;}
 /* HUD hides (CSS-only — hud.js untouched) while a cutscene plays. */
 #ui.v6cs-active .g5-hud{opacity:0;pointer-events:none;transition:opacity .3s ease;}
+/* V6/FIX2 (P1-1/P1-2 fix round): the room-pan chevrons + dot rail hide with
+   the HUD (roomNav.js untouched — same CSS-only mechanism). visibility gates
+   hit-testing on children that set their own pointer-events:auto. */
+#ui.v6cs-active .room-nav{opacity:0;visibility:hidden;transition:opacity .3s ease,visibility 0s .3s;}
 @media (prefers-reduced-motion: reduce){
   .v6cs-bar,.v6cs-caption,.v6cs-hint{transition:none;}
   .v6cs-hint{animation:none;}
@@ -94,6 +130,37 @@ let deps = null;
 
 /** @type {{cleanup: () => void}|null} the single active run (one at a time) */
 let activeRun = null;
+
+/** V6/FIX2: latched while the pre-playback prop prewarm awaits (activeRun is
+ * still null there — this keeps a second playCutscene out of the window). */
+let prewarming = false;
+
+/**
+ * V6/FIX2: reserved propId namespace — 'cam:*' props are VIRTUAL camera-rig
+ * cuts (no model is spawned; the view dollies/pans instead).
+ * @param {string} propId
+ * @returns {boolean}
+ */
+function isCameraRigProp(propId) {
+  return typeof propId === 'string' && propId.startsWith('cam:');
+}
+
+/**
+ * Collect every REAL prop model key a compiled script can spawn (Sol P2-3
+ * prewarm set — virtual 'cam:' rig props carry no model to load).
+ * @param {readonly object[]} steps compiled steps
+ * @param {Set<string>} [out]
+ * @returns {Set<string>}
+ */
+function collectPropModels(steps, out = new Set()) {
+  for (const step of steps) {
+    if (step.steps) collectPropModels(step.steps, out);
+    else if (step.op === 'prop' && step.action === 'spawn' && !isCameraRigProp(step.propId)) {
+      out.add(step.model);
+    }
+  }
+  return out;
+}
 
 /**
  * t() with the module-local fallback (G52 pattern) — A2 commits the
@@ -139,26 +206,30 @@ export async function playCutscene(id, opts = {}) {
     return false;
   };
   if (!deps) return false;
-  if (activeRun) return refuse('another cutscene is active');
+  if (activeRun || prewarming) return refuse('another cutscene is active');
   const { store, ui, audio, sceneManager, assets } = deps;
   const script = getCutscene(id);
   if (!script) {
     console.warn(`[cutscene] unknown cutscene '${id}'`);
     return false;
   }
-  // ---- camera-lease refusals (PLAN6 A1 acceptance) ----
-  if (sceneManager.currentId() !== 'home') return refuse('not on the home scene');
-  if (sceneManager.isSwitching()) return refuse('scene switch in flight');
-  const camera = getCamera();
-  const gooby = getGooby();
-  const rm = getRoomManager();
-  // The live home scene graph: Gooby's group is a direct child of it
-  // (sceneManager keeps its instances private — §E6 spirit).
-  const scene = gooby?.group?.parent ?? null;
-  if (!camera || !gooby || !rm || !scene) return refuse('home handles not live yet');
-  if (rm.isPanning?.()) return refuse('room pan in flight (camera lease)');
-  if (isSleeping(store.get())) return refuse('sleep flow owns the scene');
-  if (ui.activeScreenId?.()) return refuse('a screen is open');
+  // ---- camera-lease refusals (PLAN6 A1 acceptance) — one sweep, run before
+  // AND after the prewarm await (state can shift under an await) ----
+  function leaseBlocker() {
+    if (sceneManager.currentId() !== 'home') return 'not on the home scene';
+    if (sceneManager.isSwitching()) return 'scene switch in flight';
+    // The live home scene graph: Gooby's group is a direct child of it
+    // (sceneManager keeps its instances private — §E6 spirit).
+    if (!getCamera() || !getGooby()?.group?.parent || !getRoomManager()) {
+      return 'home handles not live yet';
+    }
+    if (getRoomManager().isPanning?.()) return 'room pan in flight (camera lease)';
+    if (isSleeping(store.get())) return 'sleep flow owns the scene';
+    if (ui.activeScreenId?.()) return 'a screen is open';
+    return null;
+  }
+  const early = leaseBlocker();
+  if (early) return refuse(early);
 
   /** @type {ReturnType<typeof compileScript>} */
   let compiled;
@@ -168,6 +239,33 @@ export async function playCutscene(id, opts = {}) {
     console.warn(`[cutscene] '${id}' failed to compile — refusing:`, err);
     return false;
   }
+
+  // V6/FIX2 (Sol P2-3): prewarm every authored prop GLB BEFORE the first
+  // beat — a cold assets.getModel() hands out a placeholder box that
+  // self-heals with a visible pop-in mid-scene. Bounded: a slow fetch falls
+  // back to that legacy self-heal instead of stalling the moment.
+  const propModels = [...collectPropModels(compiled.steps)];
+  if (propModels.length > 0 && typeof assets?.preload === 'function') {
+    prewarming = true;
+    try {
+      await Promise.race([
+        assets.preload(propModels).catch((err) => {
+          if (DEV) console.info(`[cutscene] '${id}' prop prewarm failed (self-heal covers):`, err);
+        }),
+        new Promise((resolve) => { setTimeout(resolve, VIEW.PRELOAD_TIMEOUT_MS); }),
+      ]);
+    } finally {
+      prewarming = false;
+    }
+    if (activeRun) return refuse('another cutscene started during the prewarm');
+    const late = leaseBlocker();
+    if (late) return refuse(late);
+  }
+
+  const camera = getCamera();
+  const gooby = getGooby();
+  const rm = getRoomManager();
+  const scene = gooby.group.parent;
 
   const replay = typeof opts.replay === 'boolean' ? opts.replay : hasSeen(store.get(), id);
   if (DEV) {
@@ -192,10 +290,28 @@ export async function playCutscene(id, opts = {}) {
       w: camera.quaternion.w,
     },
   };
+  // V6/FIX2: the leased LOOK target (world point the camera faces) — rig
+  // cuts ('cam:' props) pan the camera, and every return leg eases back
+  // toward this point. Reconstructed by projecting the leased forward ray
+  // (position.clone() supplies a Vector3 without importing three here).
+  const leaseLook = (() => {
+    const dir = camera.position.clone();
+    camera.getWorldDirection(dir);
+    return {
+      x: lease.pos.x + dir.x * VIEW.LEASE_LOOK_DIST,
+      y: lease.pos.y + dir.y * VIEW.LEASE_LOOK_DIST,
+      z: lease.pos.z + dir.z * VIEW.LEASE_LOOK_DIST,
+    };
+  })();
+  /** @type {{x: number, y: number, z: number}|null} live look point while a
+   * rig cut has the camera turned (null = untouched leased orientation). */
+  let rigLook = null;
   /** @type {{cancel: () => void}|null} */
   let cameraTween = null;
   /** @type {Map<string, object>} propId → spawned Object3D */
   const props = new Map();
+  /** @type {Map<string, {cancel: () => void}>} live prop glide tweens */
+  const propTweens = new Map();
   /** @type {ReturnType<typeof createParticles>|null} */
   let particles = null;
   /** @type {HTMLElement|null} */
@@ -220,6 +336,10 @@ export async function playCutscene(id, opts = {}) {
     safe('cameraRestore', () => {
       camera.position.set(lease.pos.x, lease.pos.y, lease.pos.z);
       camera.quaternion.set(lease.quat.x, lease.quat.y, lease.quat.z, lease.quat.w);
+    });
+    safe('propTweens', () => {
+      for (const tw of propTweens.values()) tw.cancel();
+      propTweens.clear();
     });
     safe('props', () => {
       for (const obj of props.values()) obj.parent?.remove(obj);
@@ -286,11 +406,42 @@ export async function playCutscene(id, opts = {}) {
     requestAnimationFrame(() => overlay?.classList.add('v6cs-in')); // bars slide in
 
     // ---- op binding ----
-    /** @param {object} op */
-    function startCameraMove(op) {
+    /**
+     * ONE camera tween driver: position always lerps; when a look target is
+     * given, orientation eases too via camera.lookAt on the lerped look
+     * point. Scripts that never use a 'cam:' rig keep the exact pre-FIX2
+     * behavior (position-only moves, orientation untouched).
+     * @param {{x,y,z}} toPos @param {{x,y,z}|null} toLook @param {number} duration
+     */
+    function startCameraTween(toPos, toLook, duration) {
       cameraTween?.cancel();
       cameraTween = null;
-      const from = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+      const fromPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+      const fromLook = toLook ? { ...(rigLook ?? leaseLook) } : null;
+      const apply = (v) => {
+        camera.position.set(
+          fromPos.x + (toPos.x - fromPos.x) * v,
+          fromPos.y + (toPos.y - fromPos.y) * v,
+          fromPos.z + (toPos.z - fromPos.z) * v,
+        );
+        if (toLook && fromLook) {
+          rigLook = {
+            x: fromLook.x + (toLook.x - fromLook.x) * v,
+            y: fromLook.y + (toLook.y - fromLook.y) * v,
+            z: fromLook.z + (toLook.z - fromLook.z) * v,
+          };
+          camera.lookAt(rigLook.x, rigLook.y, rigLook.z);
+        }
+      };
+      if (duration <= 0) {
+        apply(1); // reduced-motion / zero-duration instant cut
+        return;
+      }
+      cameraTween = tween({ duration, ease: easings.easeInOutQuad, onUpdate: apply });
+    }
+
+    /** @param {object} op */
+    function startCameraMove(op) {
       /** @type {{x: number, y: number, z: number}} */
       let to;
       if (op.move === 'restore') {
@@ -307,39 +458,154 @@ export async function playCutscene(id, opts = {}) {
           z: lease.pos.z + (focus.z - lease.pos.z) * f,
         };
       }
-      if (op.duration <= 0) {
-        camera.position.set(to.x, to.y, to.z); // reduced-motion instant cut
+      // Once a rig cut has turned the camera, scripted camera moves also
+      // ease the look point home so 'restore' really restores mid-scene.
+      startCameraTween(to, rigLook ? { ...leaseLook } : null, op.duration);
+    }
+
+    /**
+     * V6/FIX2: a 'cam:' rig prop — spawn pans/dollies toward the resolved
+     * stage point (prop.scale = lease→target dolly fraction, ≤1); despawn
+     * eases back to the leased pose. Reduced motion cuts instantly; cleanup
+     * still snaps the exact lease on every exit path.
+     * @param {object} op
+     */
+    function applyCameraRig(op) {
+      if (op.action !== 'spawn') {
+        startCameraTween({ ...lease.pos }, { ...leaseLook }, compiled.reducedMotion ? 0 : VIEW.RIG_CUT_SEC);
         return;
       }
-      cameraTween = tween({
-        duration: op.duration,
-        ease: easings.easeInOutQuad,
-        onUpdate: (v) => {
-          camera.position.set(
-            from.x + (to.x - from.x) * v,
-            from.y + (to.y - from.y) * v,
-            from.z + (to.z - from.z) * v,
-          );
-        },
-      });
+      const target = resolvePoint(op.anchor, op.offset);
+      const f = Math.min(1, op.scale ?? VIEW.RIG_FRACTION);
+      const toPos = {
+        x: lease.pos.x + (target.x - lease.pos.x) * f,
+        y: lease.pos.y + (target.y - lease.pos.y) * f,
+        z: lease.pos.z + (target.z - lease.pos.z) * f,
+      };
+      startCameraTween(toPos, target, compiled.reducedMotion ? 0 : VIEW.RIG_CUT_SEC);
+    }
+
+    /**
+     * V6/FIX2: the two view-computed stage marks (world space, active room).
+     * They exist in EVERY room — rm anchors only exist where the furniture
+     * does, and the vacation set pieces play wherever Gooby currently idles.
+     * @param {string} name 'cs:doorway' | 'cs:sky'
+     * @returns {{x: number, y: number, z: number}}
+     */
+    function stageMark(name) {
+      const roomId = rm.activeRoom?.();
+      const centerX = rm.getRoomGroup?.(roomId)?.position?.x ?? gooby.group.position.x;
+      if (name === 'cs:doorway') {
+        // The floor spot just inside the room's front door where one exists
+        // (the living room); other rooms use the same right-of-center mark.
+        // The rig camera dollies ALONG the lease→mark line, so the sight
+        // corridor at any depth is fixed by the mark alone: x −0.1 / z +0.9
+        // keeps that corridor right of the reading-nook armchair (local
+        // x ≈ 1.17) while the taxi stays clear of the right-wall shelf.
+        const door = roomId ? rm.getAnchor('frontDoor', roomId) : null;
+        if (door) return { x: door.x - 0.1, y: 0, z: door.z + 0.9 };
+        return { x: centerX + 1.05, y: 0, z: -0.72 };
+      }
+      // 'cs:sky' — high on the room's back wall (open sky in the garden).
+      return { x: centerX, y: 2.35, z: -0.95 };
+    }
+
+    /**
+     * V6/FIX2: staging-anchor resolution. Namespaces beyond the §C2 rm
+     * registry: 'cs:*' view stage marks and 'prop:<id>' live staged props
+     * (sparkle trails track the glide). Unresolvable anchors answer null and
+     * callers fall back to Gooby — the legacy behavior.
+     * @param {string|undefined} anchor
+     * @returns {{x: number, y: number, z: number}|null}
+     */
+    function resolveAnchor(anchor) {
+      if (!anchor) return null;
+      if (anchor === 'cs:doorway' || anchor === 'cs:sky') return stageMark(anchor);
+      if (anchor.startsWith('prop:')) {
+        const obj = props.get(anchor.slice('prop:'.length));
+        return obj ? { x: obj.position.x, y: obj.position.y, z: obj.position.z } : null;
+      }
+      return rm.getAnchor(anchor);
+    }
+
+    /**
+     * @param {string|undefined} anchor
+     * @param {readonly number[]|undefined} offset
+     * @returns {{x: number, y: number, z: number}} anchor/Gooby base + offset
+     */
+    function resolvePoint(anchor, offset) {
+      const g = gooby.group.position;
+      const base = resolveAnchor(anchor) ?? { x: g.x, y: g.y, z: g.z };
+      const off = offset ?? [0, 0, 0];
+      return { x: base.x + off[0], y: base.y + off[1], z: base.z + off[2] };
     }
 
     /** @param {object} op @returns {{x:number,y:number,z:number}} */
     function opPosition(op) {
-      const anchored = op.anchor ? rm.getAnchor(op.anchor) : null;
-      if (anchored) return anchored;
+      const anchored = op.anchor ? resolveAnchor(op.anchor) : null;
+      if (anchored) {
+        // Floor-level marks (cs:doorway, plot anchors, …) lift the burst so
+        // sparkles read at prop height instead of inside the floor.
+        return anchored.y < 0.01
+          ? { x: anchored.x, y: anchored.y + VIEW.ANCHOR_BURST_LIFT, z: anchored.z }
+          : anchored;
+      }
       const g = gooby.group.position;
       return { x: g.x, y: g.y + VIEW.BURST_LIFT, z: g.z };
     }
 
+    /**
+     * V6/FIX2: recenter a freshly cloned prop's horizontal bounds on its
+     * group origin. Some kit GLTFs bake a large node offset (the space-kit
+     * speeder's meshes sit ~2 m off their root), which would park the
+     * VISUAL metres away from the authored mark — and glides + 'prop:'
+     * particle trails track the group origin. Model-local (called while
+     * detached, pre-position/scale); y stays untouched so floor props keep
+     * their authored grounding.
+     * @param {object} obj detached getModel clone
+     */
+    function recenterHorizontal(obj) {
+      const box = new THREE.Box3().setFromObject(obj);
+      if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return;
+      const cx = (box.min.x + box.max.x) / 2;
+      const cz = (box.min.z + box.max.z) / 2;
+      for (const child of obj.children) {
+        child.position.x -= cx;
+        child.position.z -= cz;
+      }
+    }
+
     /** @param {object} op */
     function spawnProp(op) {
-      if (props.has(op.propId)) return;
+      const to = resolvePoint(op.anchor, op.offset);
+      const existing = props.get(op.propId);
+      if (existing) {
+        // V6/FIX2: re-spawning a LIVE propId GLIDES it to the new mark — the
+        // declarative 'prop move' beat (suitcase→taxi, plane crossing).
+        propTweens.get(op.propId)?.cancel();
+        propTweens.delete(op.propId);
+        if (compiled.reducedMotion) {
+          existing.position.set(to.x, to.y, to.z);
+          return;
+        }
+        const from = { x: existing.position.x, y: existing.position.y, z: existing.position.z };
+        propTweens.set(op.propId, tween({
+          duration: VIEW.GLIDE_SEC,
+          ease: easings.easeInOutQuad,
+          onUpdate: (v) => {
+            existing.position.set(
+              from.x + (to.x - from.x) * v,
+              from.y + (to.y - from.y) * v,
+              from.z + (to.z - from.z) * v,
+            );
+          },
+        }));
+        return;
+      }
       const obj = assets.getModel(op.model);
       if (!obj) return;
-      const base = (op.anchor ? rm.getAnchor(op.anchor) : null) ?? gooby.group.position;
-      const off = op.offset ?? [0, 0, 0];
-      obj.position.set(base.x + off[0], base.y + off[1], base.z + off[2]);
+      recenterHorizontal(obj);
+      obj.position.set(to.x, to.y, to.z);
       if (op.scale) obj.scale.setScalar(op.scale);
       scene.add(obj);
       props.set(op.propId, obj);
@@ -377,8 +643,16 @@ export async function playCutscene(id, opts = {}) {
           audio.play?.(op.sfx);
           break;
         case 'prop':
+          if (isCameraRigProp(op.propId)) {
+            // Virtual rig cut — a skipped replay never moves the camera
+            // (cleanup snaps the exact lease regardless).
+            if (!info.skipped) applyCameraRig(op);
+            break;
+          }
           if (op.action === 'spawn') spawnProp(op);
           else {
+            propTweens.get(op.propId)?.cancel();
+            propTweens.delete(op.propId);
             const obj = props.get(op.propId);
             if (obj) {
               obj.parent?.remove(obj);

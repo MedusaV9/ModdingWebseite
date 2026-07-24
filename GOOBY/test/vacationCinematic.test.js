@@ -265,11 +265,130 @@ test('data mirror: every prop model key resolves to a committed GLB on disk', ()
   for (const id of IDS) {
     for (const stepDef of leafSteps(getCutscene(id).steps)) {
       if (stepDef.op !== 'prop' || stepDef.action !== 'spawn') continue;
+      // V6/FIX2: 'cam:*' propIds are VIRTUAL camera-rig cuts — the view never
+      // loads their model (authors write the sentinel 'virtual').
+      if (stepDef.propId.startsWith('cam:')) {
+        assert.equal(stepDef.model, 'virtual', `${id}: rig prop '${stepDef.propId}' must use the 'virtual' sentinel`);
+        continue;
+      }
       const url = getModelUrl(stepDef.model); // '/assets/<root>/<slug>/<file>.<ext>'
       const file = path.join(ROOT, 'public', url.replace(/^\//, ''));
       assert.ok(existsSync(file), `${id}: prop model '${stepDef.model}' missing on disk (${file})`);
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// V6/FIX2 staging mirror — the restaged beats against the view capabilities
+// ---------------------------------------------------------------------------
+
+test('staging mirror (FIX2): every anchor resolves through a view capability', () => {
+  // The view (ui/cutsceneView.js) resolves three anchor namespaces beyond
+  // the rm registry: the 'cs:*' stage marks it computes itself, and
+  // 'prop:<id>' live-prop tracking. Source-scan the view for the marks
+  // (three.js graph — not headless-importable) and pin every script anchor
+  // to a namespace the view implements.
+  const viewSrc = readFileSync(path.join(ROOT, 'src/ui/cutsceneView.js'), 'utf8');
+  const stageMarks = ['cs:doorway', 'cs:sky'];
+  for (const mark of stageMarks) {
+    assert.ok(viewSrc.includes(`'${mark}'`), `cutsceneView.js must implement stage mark '${mark}'`);
+  }
+  assert.ok(/anchor\.startsWith\('prop:'\)/.test(viewSrc), 'cutsceneView.js must implement prop: anchors');
+  for (const id of IDS) {
+    const spawned = new Set();
+    for (const stepDef of leafSteps(getCutscene(id).steps)) {
+      const anchor = stepDef.anchor;
+      if (stepDef.op === 'prop' && stepDef.action === 'spawn') spawned.add(stepDef.propId);
+      if (typeof anchor !== 'string') continue;
+      if (anchor.startsWith('prop:')) {
+        assert.ok(
+          spawned.has(anchor.slice('prop:'.length)),
+          `${id}: '${anchor}' must reference a prop spawned earlier in the script`,
+        );
+      } else {
+        assert.ok(stageMarks.includes(anchor), `${id}: unknown staging anchor '${anchor}'`);
+      }
+    }
+  }
+});
+
+test('staging mirror (FIX2): the beats SHOW what the captions narrate', () => {
+  // P1-1 regression pins — the exact staging defects the eval found:
+  // a taxi caption with the prop parked mid-room outside the portrait
+  // frame, and an 'up, up and away' caption over an unchanged room.
+  for (const id of IDS) {
+    const steps = leafSteps(getCutscene(id).steps);
+    // The taxi arrives AT the doorway mark (never a mid-room rug offset)…
+    const taxi = steps.find((s) => s.op === 'prop' && s.action === 'spawn' && s.propId === 'vacTaxi');
+    assert.equal(taxi.anchor, 'cs:doorway', `${id}: taxi must stage at the doorway mark`);
+    // …under a door-focused camera frame with an audible arrival cue.
+    const rig = steps.find((s) => s.op === 'prop' && s.action === 'spawn' && s.propId === 'cam:door');
+    assert.ok(rig, `${id}: arrival beat needs the cam:door vignette`);
+    assert.equal(rig.anchor, 'cs:doorway');
+    assert.ok(
+      steps.some((s) => s.op === 'sfx' && s.sfx === 'delivery.doorbell'),
+      `${id}: arrival beat needs the doorbell cue`,
+    );
+    // Every rig cut is balanced by its return leg (the camera comes home).
+    for (const prop of ['cam:door', 'cam:sky']) {
+      const spawns = steps.filter((s) => s.op === 'prop' && s.propId === prop && s.action === 'spawn').length;
+      const despawns = steps.filter((s) => s.op === 'prop' && s.propId === prop && s.action === 'despawn').length;
+      assert.equal(spawns, despawns, `${id}: '${prop}' spawns must balance despawns`);
+    }
+  }
+  // Departure only: the sky beat pairs its caption with a VISIBLE plane —
+  // a tilt-up rig cut plus a spawn→glide pair that crosses the frame, with
+  // the sparkle trail anchored to the gliding prop.
+  const dep = leafSteps(getCutscene(VAC_CINE_IDS.departure).steps);
+  const planeSpawns = dep.filter((s) => s.op === 'prop' && s.action === 'spawn' && s.propId === 'vacPlane');
+  assert.equal(planeSpawns.length, 2, 'departure: plane needs a spawn + a glide re-spawn');
+  assert.ok(planeSpawns.every((s) => s.anchor === 'cs:sky'), 'departure: plane rides the sky mark');
+  assert.ok(
+    planeSpawns[0].offset[0] < 0 && planeSpawns[1].offset[0] > 0,
+    'departure: the glide must CROSS the frame (left → right)',
+  );
+  assert.ok(
+    dep.some((s) => s.op === 'prop' && s.action === 'spawn' && s.propId === 'cam:sky'),
+    'departure: the sky beat needs the tilt-up rig cut',
+  );
+  assert.ok(
+    dep.some((s) => s.op === 'particles' && s.anchor === 'prop:vacPlane'),
+    'departure: the sparkle trail must track the gliding plane',
+  );
+  // The suitcase beat lands center-low BY GOOBY (small gooby-relative
+  // offset, no anchor) — the eval caught it half-clipped at the frame edge.
+  const cases = dep.filter((s) => s.op === 'prop' && s.action === 'spawn' && s.propId === 'vacSuitcase');
+  assert.equal(cases[0].anchor, undefined, 'departure: pack beat stages the case by Gooby');
+  assert.ok(
+    Math.abs(cases[0].offset[0]) <= 0.7 && cases[0].offset[2] > 0,
+    'departure: the case lands center-low in the portrait frame',
+  );
+  assert.equal(cases[1]?.anchor, 'cs:doorway', 'departure: the case glides to the taxi');
+});
+
+// ---------------------------------------------------------------------------
+// Sol P1-3 — the celebration presents ONCE, after the cinematic settles
+// ---------------------------------------------------------------------------
+
+test('celebration (FIX2): airport reunion tail runs once, AFTER the cinematic', () => {
+  const src = readFileSync(path.join(ROOT, 'src/ui/airportScreen.js'), 'utf8');
+  // The pickup/taxi handlers must chain the shared tail off the presenter's
+  // settlement — never call it before (holdToasts swept the live toast and
+  // releaseToasts respawned it: the same celebration twice).
+  for (const trigger of ['pickup', 'taxi']) {
+    assert.match(
+      src,
+      new RegExp(`presentVacationCinematic\\(\\{ store \\}, '${trigger}', res\\)\\s*\\r?\\n\\s*\\.then\\(\\(played\\) => celebrate\\(res, played\\)\\)`),
+      `${trigger}: celebrate must chain off the settled presentation`,
+    );
+  }
+  assert.ok(!/celebrate\(res\);/.test(src), 'no unconditional pre-cinematic celebrate() call remains');
+  // A PLAYED cutscene owns the confetti/jingle beat (authored 18-confetti
+  // ending) — only the toast follows it; the toast always fires exactly once.
+  assert.match(src, /ui\.toast\('vacation\.welcomeBack',[^)]*\);\s*\r?\n\s*if \(played\) return;/);
+  // The booked toast rides the same contract (it fed the identical
+  // hold/release double before the departure cutscene).
+  assert.match(src, /presentVacationCinematic\(\{ store \}, 'book', res\)\.then\(/);
 });
 
 test('data mirror: every caption key exists EN+DE in v6-vacation-scenes (owned module)', () => {
