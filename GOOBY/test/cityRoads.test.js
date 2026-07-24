@@ -142,10 +142,16 @@ test('§C7.1-3: 20 seeds — every adjacent road-tile pair shares a facing port 
   }
 });
 
-test('§C7.1-3: shop + vet route tiles connect port-to-port along both drives (20 seeds)', () => {
+test('§C7.1-3: shop + vet + park route tiles connect port-to-port along all three drives (20 seeds)', () => {
+  // V6/E1: the Funkelpark route (PLAN6 Wave E) joins the same invariant —
+  // every guided drive must roll over openly-connected road tiles.
   for (const seed of SEEDS) {
     const layout = generateCityLayout(seed);
-    for (const [name, tiles] of [['route', layout.route], ['vetRoute', layout.vetRoute]]) {
+    for (const [name, tiles] of [
+      ['route', layout.route],
+      ['vetRoute', layout.vetRoute],
+      ['parkRoute', layout.parkRoute], // V6/E1
+    ]) {
       for (let i = 1; i < tiles.length; i++) {
         const a = tiles[i - 1];
         const b = tiles[i];

@@ -256,6 +256,33 @@ const LANDMARK_TILES = Object.freeze([
 ]);
 // ── end V2/G21 ──────────────────────────────────────────────────────────────
 
+// ── V6/E1: Funkelpark gate + route (PLAN6 Wave E/E1) ────────────────────────
+/** Park gate block tile (south-east block — the third fixed destination). */
+const PARK_TILE = Object.freeze([6, 6]);
+/**
+ * Fixed park route (V6/E1): home → east along the south ring to the cross
+ * column → north up the middle of the city (past the fountain plaza) → east
+ * along the cross row → south down the east ring to the gate. ≈ 11 tiles
+ * ≈ 200 m — a day-trip drive between the vet hop and the full shop tour.
+ * No tile visited twice; every waypoint on the fixed ring+cross network.
+ */
+const PARK_ROUTE_TILES = Object.freeze([
+  [7, 2], [7, 3], [7, 4],
+  [6, 4], [5, 4], [4, 4],
+  [4, 5], [4, 6], [4, 7],
+  [5, 7], [6, 7],
+].map((rc) => Object.freeze(rc)));
+
+/** Coin pickups on the park route (§E0.1-2: frozen in the owning module —
+ *  between VET.ROUTE_PICKUP_COUNT 10 and DRIVE.PICKUP_COUNT 20). */
+export const PARK_ROUTE_PICKUP_COUNT = 12;
+
+/** §D1 minigolf-kit castle as the park gate (authored 1×0.65×1 units) —
+ *  BUILDING_SCALE turns it into a 10 m storybook gate front. */
+const PARK_GATE_SCALE = DRIVE_TUNING.BUILDING_SCALE;
+const PARK_GATE_HALF = Object.freeze({ hw: 0.5, hd: 0.5 }); // castle.glb bounds
+// ── end V6/E1 ───────────────────────────────────────────────────────────────
+
 /** Traffic lane loops (closed tile cycles, clockwise = right-hand traffic). */
 const TRAFFIC_LOOP_CORNERS = Object.freeze([
   // full ring, clockwise
@@ -409,6 +436,7 @@ export const CITY_ASSET_KEYS = Object.freeze([
   'car-kit/cone',
   'car-kit/box',
   'minigolf-kit/windmill', // V2/G21: windmillCafe landmark (§C9.3, in layout.buildings)
+  'minigolf-kit/castle', // V6/E1: Funkelpark gate (in layout.buildings)
   ...CITY_DRESSING_KEYS,
   ...SHOP_DRESSING_KEYS,
 ]);
@@ -522,6 +550,13 @@ export function roadPieceFor(n, e, s, w) {
  * @property {Array<{x: number, z: number}>} vetLane  V2/G21 right-lane polyline
  * @property {number} vetLaneLength  V2/G21 arc length (m)
  * @property {Array<{x: number, z: number}>} vetPickups  V2/G21 §C9.2: 10 coins
+ * @property {{tile: {r: number, c: number}, gateAt: {x: number, z: number}, rotY: number,
+ *   parking: {x: number, z: number}, heading: number}} park  V6/E1: Funkelpark gate
+ * @property {Array<{r: number, c: number}>} parkRoute  V6/E1: home→park tile waypoints
+ * @property {Array<{x: number, z: number}>} parkRouteCenter  V6/E1 centerline
+ * @property {Array<{x: number, z: number}>} parkLane  V6/E1 right-lane polyline
+ * @property {number} parkLaneLength  V6/E1 arc length (m)
+ * @property {Array<{x: number, z: number}>} parkPickups  V6/E1: 12 coins
  * @property {Array<{id: string, x: number, z: number, at: {x: number, z: number}}>} landmarks
  *   V2/G21 §C9.3: 6 sticker landmarks — x/z = curbside trigger/delivery anchor,
  *   `at` = visual dressing center (city/vetClinic.js builders)
@@ -639,6 +674,35 @@ export function generateCityLayout(seed) {
     vetPickups.push({ x: p.x, z: p.z });
   }
 
+  // ── V6/E1: Funkelpark gate route + parking (mirror of the SHOP recipe) ────
+  // Castle gate on the WEST half of the tile, front facing east toward the
+  // east ring (rotY 90°); parking apron on the tile's east half so the car
+  // pulls west off the east ring into it — the same approach players already
+  // know from the shop arrival, one city block further south.
+  const parkWorld = tileToWorld(PARK_TILE[0], PARK_TILE[1]);
+  const parkGateAt = { x: parkWorld.x - 5, z: parkWorld.z };
+  const parkRotY = 90 * DEG; // authored front (+z) → east (+x)
+  const parkParking = { x: parkWorld.x + 6.5, z: parkWorld.z };
+
+  const parkRoute = PARK_ROUTE_TILES.map(([r, c]) => ({ r, c }));
+  const parkRouteCenter = parkRoute.map(({ r, c }) => tileToWorld(r, c));
+  const parkLane = laneOffsetPolyline(parkRouteCenter, LANE_OFFSET_M, false);
+  parkLane.push({ x: parkParking.x, z: parkParking.z });
+  const parkLaneLength = polylineLength(parkLane);
+  const parkStart = pointAtLength(parkLane, 0);
+  const parkHeading = Math.atan2(parkStart.dx, parkStart.dz); // car spawn: east
+
+  // 12 coin pickups on the park route (PARK_ROUTE_PICKUP_COUNT above)
+  const parkPickups = [];
+  const parkFirst = 24;
+  const parkLast = parkLaneLength - 16;
+  for (let i = 0; i < PARK_ROUTE_PICKUP_COUNT; i++) {
+    const s = parkFirst + ((parkLast - parkFirst) * i) / (PARK_ROUTE_PICKUP_COUNT - 1);
+    const p = pointAtLength(parkLane, s);
+    parkPickups.push({ x: p.x, z: p.z });
+  }
+  // ── end V6/E1 ──────────────────────────────────────────────────────────────
+
   // §C9.3 landmarks: shop + vet anchors are their parking aprons (triggered
   // by every arrival); the other four sit curbside on reserved block tiles.
   const landmarks = [
@@ -657,6 +721,7 @@ export function generateCityLayout(seed) {
       if (grid[r][c].kind !== 'block') continue;
       if (r === SHOP_TILE[0] && c === SHOP_TILE[1]) continue; // shop tile stays clear
       if (isLandmarkTile(r, c)) continue; // V2/G21: vet + landmark tiles stay clear (§C9.3)
+      if (r === PARK_TILE[0] && c === PARK_TILE[1]) continue; // V6/E1: park gate tile stays clear
       const { x, z } = tileToWorld(r, c);
       // face the nearest road: pick the closest road neighbor direction
       const facings = [];
@@ -726,6 +791,16 @@ export function generateCityLayout(seed) {
     halfX: 0.6 * WINDMILL_SCALE, halfZ: 0.5 * WINDMILL_SCALE,
   });
   // ── end V2/G21 ─────────────────────────────────────────────────────────────
+
+  // ── V6/E1: the Funkelpark gate — a storybook castle front at the route end
+  // (minigolf-kit/castle, ±90° rotY swaps the half extents like the vet).
+  buildings.push({
+    key: 'minigolf-kit/castle',
+    x: parkGateAt.x, z: parkGateAt.z, rotY: parkRotY, scale: PARK_GATE_SCALE,
+    halfX: PARK_GATE_HALF.hd * PARK_GATE_SCALE,
+    halfZ: PARK_GATE_HALF.hw * PARK_GATE_SCALE,
+  });
+  // ── end V6/E1 ───────────────────────────────────────────────────────────────
 
   // --- nature filler on the rim ---------------------------------------------
   const nature = [];
@@ -901,6 +976,19 @@ export function generateCityLayout(seed) {
     vetLane,
     vetLaneLength,
     vetPickups,
+    // V6/E1: Funkelpark destination + route (PLAN6 Wave E)
+    park: {
+      tile: { r: PARK_TILE[0], c: PARK_TILE[1] },
+      gateAt: parkGateAt,
+      rotY: parkRotY,
+      parking: parkParking,
+      heading: parkHeading,
+    },
+    parkRoute,
+    parkRouteCenter,
+    parkLane,
+    parkLaneLength,
+    parkPickups,
     landmarks,
     pickups,
     trafficLoops, // V4/FIX-3D: same expandLoop result the prop clamp used

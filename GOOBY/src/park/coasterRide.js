@@ -780,40 +780,8 @@ export async function startCoasterRide(ctx) {
   }
 }
 
-// ---- TEMPORARY dev kick — E1: delete this block when the park hub lands ----
-// Until E1's parkScene + harness row exist, nothing imports this module. Dev
-// test flow (documented in the E2 handoff): load
-//   http://127.0.0.1:5173/?coaster=1[&rm=1][&coasterhud=1]
-// then dynamic-import once from the console/CDP:
-//   await import('/src/park/coasterRide.js')
-// The kick below waits for the harness handle and rides immediately.
-if (import.meta.env.DEV && typeof window !== 'undefined'
-  && new URLSearchParams(location.search).get('coaster') === '1') {
-  const q = new URLSearchParams(location.search);
-  let kickTries = 0;
-  const arm = () => {
-    const g = window.__gooby;
-    // startCoasterRide refuses while the boot home-switch is still in
-    // flight — keep retrying until the manager is idle (bounded)
-    if (!g?.sceneManager || g.sceneManager.isSwitching?.()) {
-      kickTries += 1;
-      if (kickTries < 100) setTimeout(arm, 300);
-      return;
-    }
-    startCoasterRide({
-      sceneManager: g.sceneManager,
-      store: g.store,
-      ui: g.ui,
-      reducedMotion: q.get('rm') === '1' ? true : undefined,
-      hud: q.get('coasterhud') === '1',
-    }).then((ok) => {
-      if (!ok) {
-        kickTries += 1;
-        if (kickTries < 100) setTimeout(arm, 300);
-        else console.warn('[coasterRide] dev kick: ride refused to start');
-      }
-    });
-  };
-  arm();
-}
-// ---- end TEMPORARY dev kick ----
+// V6/E1: E2's TEMPORARY dev-kick block (documented in the E2→E1 handoff)
+// was deleted here — the official `?coaster=1` route now lives in
+// park/parkScene.js initParkScene() (same &rm=1 / &coasterhud=1 companions),
+// which supplies the full frozen ctx incl. audio/assets + the back-to-plaza
+// onDone.

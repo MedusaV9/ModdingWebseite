@@ -9,12 +9,14 @@
 // Modes (ctx.params.mode): 'shopTrip' (§C4 — home→shop, arrival fanfare,
 // hands off to systems/shopTrip.js via params.onArrive/onExit), 'vetTrip'
 // (V2/G21 §C9.2 — same machinery over the shorter vet route with 10 pickups,
-// arrival hands off to the vet panel) and 'arcade' (§C4.7 — 90 s open
-// coin-run in the same city, default from the arcade).
+// arrival hands off to the vet panel), 'parkTrip' (V6/E1 PLAN6 Wave E — the
+// Funkelpark day trip over the medium park route with 12 pickups, arrival
+// hands off to park/parkScene.js) and 'arcade' (§C4.7 — 90 s open coin-run
+// in the same city, default from the arcade).
 //
 // Dev flags (dev builds only, §G G7 DoD): ?topcam=1 top-down city overview,
 // ?autopilot=1 steers along the route so a full trip completes headlessly,
-// ?mode=shopTrip|vetTrip forces a trip mode when launched via
+// ?mode=shopTrip|vetTrip|parkTrip forces a trip mode when launched via
 // ?minigame=cityDrive, ?wedge=1 parks the car throttle-on against the
 // nearest building face so the F4 P1-1 stuck-rescue can be reproduced
 // deterministically.
@@ -302,6 +304,68 @@ function buildCity(scene, assets, layout) {
   apron.position.set(layout.shop.parking.x, T.ROAD_Y + 0.02, layout.shop.parking.z);
   group.add(apron);
 
+  // ── V6/E1: the Funkelpark gate destination dressing (PLAN6 Wave E) ────────
+  // The castle gate itself is instanced through layout.buildings above; this
+  // adds the arrival read (mirroring the shop recipe): a parking apron, a
+  // canvas FUNKELPARK sign over the castle front and a balloon arch over the
+  // apron approach — 4 draw calls total, visible in every city mode so the
+  // park exists as a place, not only during a parkTrip.
+  if (layout.park) {
+    const parkApron = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 13),
+      new THREE.MeshStandardMaterial({ color: '#6b6f76', roughness: 1 })
+    );
+    parkApron.rotation.x = -Math.PI / 2;
+    parkApron.position.set(layout.park.parking.x, T.ROAD_Y + 0.02, layout.park.parking.z);
+    group.add(parkApron);
+
+    // signage: „FUNKELPARK" banner floating over the gate front
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 512;
+    signCanvas.height = 128;
+    const g2 = signCanvas.getContext('2d');
+    g2.fillStyle = '#D6428A';
+    g2.beginPath();
+    g2.roundRect(6, 10, 500, 108, 26);
+    g2.fill();
+    g2.font = '900 64px system-ui, sans-serif';
+    g2.textAlign = 'center';
+    g2.textBaseline = 'middle';
+    g2.fillStyle = '#FFF6EC';
+    g2.fillText(t('park.name').toUpperCase(), 256, 66);
+    const signTex = new THREE.CanvasTexture(signCanvas);
+    signTex.colorSpace = THREE.SRGBColorSpace;
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(8.6, 2.15),
+      new THREE.MeshBasicMaterial({ map: signTex, transparent: true, side: THREE.DoubleSide })
+    );
+    // castle front faces east (rotY 90°) — the sign hangs off that face
+    sign.position.set(layout.park.gateAt.x + 5.4, T.ROAD_Y + 7.4, layout.park.gateAt.z);
+    sign.rotation.y = layout.park.rotY;
+    group.add(sign);
+
+    // balloon arch spanning the apron approach (one InstancedMesh)
+    const balloonGeo = new THREE.SphereGeometry(0.42, 8, 6);
+    const balloonMat = new THREE.MeshStandardMaterial({ roughness: 0.5 });
+    const BALLOONS = 13;
+    const arch = new THREE.InstancedMesh(balloonGeo, balloonMat, BALLOONS);
+    const archM = new THREE.Matrix4();
+    const archColors = ['#F781B0', '#7FD4C9', '#F7C531', '#B3A0E8'];
+    const archSpanZ = 5.2; // arch legs north/south of the apron center
+    for (let i = 0; i < BALLOONS; i++) {
+      const s = i / (BALLOONS - 1); // 0..1 along the arch
+      const zi = layout.park.parking.z + (s * 2 - 1) * archSpanZ;
+      const yi = T.ROAD_Y + 1.2 + Math.sin(s * Math.PI) * 4.6;
+      archM.makeTranslation(layout.park.parking.x + 4.6, yi, zi);
+      arch.setMatrixAt(i, archM);
+      arch.setColorAt(i, new THREE.Color(archColors[i % archColors.length]));
+    }
+    arch.instanceMatrix.needsUpdate = true;
+    if (arch.instanceColor) arch.instanceColor.needsUpdate = true;
+    group.add(arch);
+  }
+  // ── end V6/E1 ───────────────────────────────────────────────────────────────
+
   // --- home: a tiny pastel house next to the start tile --------------------
   const homeGarden = tileToWorld(layout.home.tile.r + 1, layout.home.tile.c);
   const house = new THREE.Group();
@@ -495,6 +559,8 @@ export default {
     // heading so every existing route/arrival code path runs unchanged.
     // City assembly below always renders the BASE layout (real shop apron —
     // the vet apron is drawn by buildVetClinic).
+    // V6/E1: the park trip rides the identical route-view recipe over the
+    // Funkelpark lane (12 pickups, gate parking) — see cityBuilder.js.
     this.baseLayout = generateCityLayout(T.CITY_SEED);
     this.layout = this.mode === 'vetTrip'
       ? {
@@ -505,9 +571,19 @@ export default {
           home: { ...this.baseLayout.home, heading: this.baseLayout.vet.heading },
           shop: { ...this.baseLayout.shop, parking: this.baseLayout.vet.parking },
         }
-      : this.baseLayout;
+      : this.mode === 'parkTrip'
+        ? {
+            ...this.baseLayout,
+            lane: this.baseLayout.parkLane,
+            laneLength: this.baseLayout.parkLaneLength,
+            pickups: this.baseLayout.parkPickups,
+            home: { ...this.baseLayout.home, heading: this.baseLayout.park.heading },
+            shop: { ...this.baseLayout.shop, parking: this.baseLayout.park.parking },
+          }
+        : this.baseLayout;
     // parked-at-destination heading after the tow teleport (§C4.5): the shop
-    // is entered from the east (face west), the vet from the west (face east)
+    // and the park gate are entered from the east (face west), the vet from
+    // the west (face east)
     this.parkHeading = this.mode === 'vetTrip' ? Math.PI / 2 : -Math.PI / 2;
     // ── end V2/G21 ─────────────────────────────────────────────────────────
     const layout = this.layout;
@@ -757,8 +833,11 @@ export default {
     this.towed = true;
     this.car.setFrozen(true);
     this.ctx.audio.play('tow');
-    // V2/G21: destination-specific tow line (§C9.2)
-    this.ctx.hud.banner(t(this.mode === 'vetTrip' ? 'vet.towed' : 'trip.towed'));
+    // V2/G21: destination-specific tow line (§C9.2); V6/E1: + park line
+    this.ctx.hud.banner(t(
+      this.mode === 'vetTrip' ? 'vet.towed'
+        : this.mode === 'parkTrip' ? 'park.towed' : 'trip.towed'
+    ));
     // the tow truck rolls up behind the car
     this.truck = this.ctx.assets.getModel('car-kit/truck');
     this.truck.scale.setScalar(T.CAR_SCALE);
@@ -835,9 +914,12 @@ export default {
     this.gooby.setEmotion('ecstatic');
     this.emotionT = 0;
     this.ctx.audio.play('jingle.arrival');
-    // V2/G21: destination-specific arrival line (§C9.2)
-    this.ctx.hud.banner(t(this.mode === 'vetTrip' ? 'vet.arrived' : 'trip.arrived'));
-    const park = this.layout.shop.parking; // V2/G21: = vet parking on a vetTrip
+    // V2/G21: destination-specific arrival line (§C9.2); V6/E1: + park line
+    this.ctx.hud.banner(t(
+      this.mode === 'vetTrip' ? 'vet.arrived'
+        : this.mode === 'parkTrip' ? 'park.arrived' : 'trip.arrived'
+    ));
+    const park = this.layout.shop.parking; // V2/G21: = vet/park parking on those trips
     this.particles.emit?.('confetti', new THREE.Vector3(park.x, T.ROAD_Y + 3, park.z), { count: 26 });
     // V6/C4 juice: arrival label floats AT the parking ring (§C.5 #3 — the
     // confetti + jingle were there; the WHERE wasn't)
@@ -905,7 +987,7 @@ export default {
       }
       if (this.veil) this.veil.style.opacity = String(Math.max(0, Math.min(1, (this.phaseT - 1.2) / 0.7)));
       if (this.phaseT >= 2.1) {
-        const park = layout.shop.parking; // V2/G21: = vet parking on a vetTrip (route view)
+        const park = layout.shop.parking; // V2/G21: = vet/park parking on those trips (route view)
         this.car.teleport(park.x, park.z, this.parkHeading); // V2/G21: parked facing the building
         if (this.truck) {
           ctx.scene.remove(this.truck);

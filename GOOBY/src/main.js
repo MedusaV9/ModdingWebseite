@@ -416,6 +416,24 @@ async function boot() {
   }
   // ---- end V6/A1 block ----
 
+  // ---- V6/E1: Funkelpark plaza hub (PLAN6 Wave E/E1, single marked block) ----
+  // Registers the 'park' §E1 scene (park/parkScene.js — builds the plaza from
+  // parkBuilder, mounts E3's dressing, wires E2's coaster kiosk + E3's stall
+  // counters via initParkStall on enter), the 'parkLeaveConfirm' §E6 panel and
+  // the dev-harness kicks `?park=1` / `?coaster=1` (the official route
+  // replacing E2's deleted temp kick). The trip side (`?parktrip=1`, the
+  // door-sheet park row, parkLeaveRequested→goHome) lives in
+  // systems/shopTrip.js, which registerCareUi already wired above. Must
+  // precede the boot switchTo('home') below so the kicks arm in time. Lazy
+  // import + guard: a broken park chunk never kills boot.
+  try {
+    const { initParkScene } = await import('./park/parkScene.js');
+    initParkScene({ store, ui, audio, sceneManager, assets });
+  } catch (err) {
+    console.warn('[boot] V6/E1 Funkelpark unavailable:', err);
+  }
+  // ---- end V6/E1 block ----
+
   // ---- V4/AC-9: interaction juice (single marked block) ----
   // Press squash + tap pops + coin-fly + springy toasts (ui/juice.js): one
   // delegated listener set on the #ui root, pooled DOM effects, fully gated

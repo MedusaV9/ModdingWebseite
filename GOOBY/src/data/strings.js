@@ -170,6 +170,19 @@ export const EN = {
   'trip.shopSoon': 'Shop coming soon!',
   'trip.earned': 'Earned this trip: {coins} coins',
 
+  // ── V6/E1: Funkelpark day trip (PLAN6 Wave E — E1-owned additions; the
+  // Candy Alley / coaster copy lives in E3's strings/v6-park.js) ──
+  'park.name': 'Funkelpark',
+  'city.dest.park': 'Funkelpark',
+  'city.dest.parkSub': 'Day trip · {energy} energy',
+  'park.confirm': 'Drive to Funkelpark?',
+  'park.confirmBody': 'A day at the theme park! The drive costs {energy} energy.',
+  'park.arrived': 'Welcome to Funkelpark!',
+  'park.towed': 'Oh no — the tow truck brings you to the park…',
+  'park.leave.title': 'Head home?',
+  'park.leave.body': 'Gooby waves the park goodbye — the car is waiting at the gate.',
+  // ── end V6/E1 ──
+
   // --- City drive controls (§C6.1 #1) ---
   'drive.steerLeft': 'Steer left',
   'drive.steerRight': 'Steer right',
@@ -708,6 +721,19 @@ export const DE = {
   'trip.shopTitle': 'Laden',
   'trip.shopSoon': 'Der Laden öffnet bald!',
   'trip.earned': 'Diesmal verdient: {coins} Münzen',
+
+  // ── V6/E1: Funkelpark day trip (PLAN6 Wave E — E1-owned additions; the
+  // Candy Alley / coaster copy lives in E3's strings/v6-park.js) ──
+  'park.name': 'Funkelpark',
+  'city.dest.park': 'Funkelpark',
+  'city.dest.parkSub': 'Tagesausflug · {energy} Energie',
+  'park.confirm': 'Zum Funkelpark fahren?',
+  'park.confirmBody': 'Ein Tag im Freizeitpark! Die Fahrt kostet {energy} Energie.',
+  'park.arrived': 'Willkommen im Funkelpark!',
+  'park.towed': 'Oh nein — der Abschleppwagen bringt dich zum Park…',
+  'park.leave.title': 'Nach Hause fahren?',
+  'park.leave.body': 'Gooby winkt dem Park zum Abschied — das Auto wartet am Tor.',
+  // ── end V6/E1 ──
 
   // --- City drive controls (§C6.1 #1) ---
   'drive.steerLeft': 'Nach links lenken',

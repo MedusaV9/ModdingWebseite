@@ -19,6 +19,7 @@ import {
   isRoadTile,
   landmarksInRange, // V2/G21 (§C9.3)
   LANDMARK_TRIGGER_M, // V2/G21 (§C9.3)
+  PARK_ROUTE_PICKUP_COUNT, // V6/E1 (PLAN6 Wave E)
 } from '../src/city/cityBuilder.js';
 import { DRIVE, DRIVE_TUNING, VET, COLLECTIONS } from '../src/data/constants.js'; // V2/G21: + VET/COLLECTIONS
 
@@ -402,3 +403,95 @@ test('V2 §C9.1: vet building renders west-facing on the tile east half (buildin
   assert.ok(entry, 'vet building-e must be instanced via layout.buildings');
 });
 // ── end V2/G21 ──────────────────────────────────────────────────────────────
+
+// ── V6/E1: Funkelpark gate + route (PLAN6 Wave E) ────────────────────────────
+
+test('V6/E1: park gate sits at fixed [6,6] and is a FIXED POI across seeds', () => {
+  const a = generateCityLayout(SEED);
+  assert.deepEqual(a.park.tile, { r: 6, c: 6 });
+  // determinism-across-seeds: the park is a fixed destination like shop/vet
+  const b = generateCityLayout(SEED + 7);
+  assert.deepEqual(a.park, b.park);
+  assert.deepEqual(a.parkRoute, b.parkRoute);
+  assert.deepEqual(a.parkPickups, b.parkPickups);
+});
+
+test('V6/E1: park route starts at home; waypoints are roads, adjacent-connected, no tile twice', () => {
+  const layout = generateCityLayout(SEED);
+  assert.deepEqual(layout.parkRoute[0], layout.home.tile);
+  const seen = new Set();
+  for (let i = 0; i < layout.parkRoute.length; i++) {
+    const { r, c } = layout.parkRoute[i];
+    assert.ok(isRoadTile(layout.grid, r, c), `park waypoint (${r},${c}) must be road`);
+    const key = `${r},${c}`;
+    assert.ok(!seen.has(key), `park tile (${key}) visited twice`);
+    seen.add(key);
+    if (i > 0) {
+      const prev = layout.parkRoute[i - 1];
+      assert.equal(
+        Math.abs(r - prev.r) + Math.abs(c - prev.c), 1,
+        `park waypoints ${i - 1}→${i} must be 4-adjacent`
+      );
+    }
+  }
+});
+
+test('V6/E1: park route ends adjacent to the gate tile and the lane hits the parking trigger', () => {
+  const layout = generateCityLayout(SEED);
+  const end = layout.parkRoute[layout.parkRoute.length - 1];
+  const manhattan = Math.abs(layout.park.tile.r - end.r) + Math.abs(layout.park.tile.c - end.c);
+  assert.equal(manhattan, 1, 'park route must end adjacent to PARK_TILE');
+  const last = layout.parkLane[layout.parkLane.length - 1];
+  const dPark = Math.hypot(last.x - layout.park.parking.x, last.z - layout.park.parking.z);
+  assert.ok(dPark < DRIVE.PARKING_RADIUS, 'park lane must end at the parking trigger');
+  // day-trip length sits BETWEEN the vet hop and the full shop tour
+  assert.ok(layout.parkLaneLength > layout.vetLaneLength, 'park drive longer than the vet hop');
+  assert.ok(layout.parkLaneLength < layout.laneLength, 'park drive shorter than the shop tour');
+});
+
+test('V6/E1: park parking apron never overlaps the shop or vet aprons', () => {
+  const layout = generateCityLayout(SEED);
+  for (const [name, apron] of [['shop', layout.shop.parking], ['vet', layout.vet.parking]]) {
+    const d = Math.hypot(layout.park.parking.x - apron.x, layout.park.parking.z - apron.z);
+    assert.ok(d > T.TILE_M, `park/${name} aprons ${d.toFixed(1)} m apart (must exceed a tile)`);
+  }
+});
+
+test('V6/E1: exactly PARK_ROUTE_PICKUP_COUNT pickups on the park lane, on roads', () => {
+  const layout = generateCityLayout(SEED);
+  assert.equal(PARK_ROUTE_PICKUP_COUNT, 12); // between VET 10 and DRIVE 20
+  assert.ok(PARK_ROUTE_PICKUP_COUNT > VET.ROUTE_PICKUP_COUNT);
+  assert.ok(PARK_ROUTE_PICKUP_COUNT < DRIVE.PICKUP_COUNT);
+  assert.equal(layout.parkPickups.length, PARK_ROUTE_PICKUP_COUNT);
+  for (const p of layout.parkPickups) {
+    assert.ok(distanceToPolyline(layout.parkLane, p.x, p.z) < 0.5, 'park pickup off the lane');
+    const { r, c } = worldToTile(p.x, p.z);
+    assert.ok(isRoadTile(layout.grid, r, c), `park pickup at (${r},${c}) not on a road`);
+  }
+});
+
+test('V6/E1: colliders never block the park drive lane', () => {
+  const layout = generateCityLayout(SEED);
+  const boxes = layoutColliders(layout);
+  const r = T.CAR_RADIUS_M;
+  for (let s = 0; s <= layout.parkLaneLength; s += 2) {
+    const p = pointAtLength(layout.parkLane, s);
+    for (const b of boxes) {
+      const inside =
+        p.x > b.minX - r && p.x < b.maxX + r && p.z > b.minZ - r && p.z < b.maxZ + r;
+      assert.ok(!inside, `collider [${b.minX.toFixed(1)},${b.minZ.toFixed(1)}] blocks park lane at s=${s}`);
+    }
+  }
+});
+
+test('V6/E1: castle gate renders east-facing on the tile west half via layout.buildings', () => {
+  const layout = generateCityLayout(SEED);
+  assert.equal(layout.park.rotY, Math.PI / 2); // authored front (+z) → east (+x)
+  const tileWorld = tileToWorld(layout.park.tile.r, layout.park.tile.c);
+  assert.ok(layout.park.gateAt.x < tileWorld.x, 'gate on the west half');
+  assert.ok(layout.park.parking.x > tileWorld.x, 'parking apron on the east half');
+  const entry = layout.buildings.find((b) => b.key === 'minigolf-kit/castle'
+    && b.x === layout.park.gateAt.x && b.z === layout.park.gateAt.z);
+  assert.ok(entry, 'park castle gate must be instanced via layout.buildings');
+});
+// ── end V6/E1 ────────────────────────────────────────────────────────────────

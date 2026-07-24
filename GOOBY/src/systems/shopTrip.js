@@ -46,6 +46,17 @@
 // counter bumps +1 on arrival for BOTH methods; surfRuns/surfDistanceM bump
 // on every finished shoppingSurf round (both modes — framework marked block).
 // The vet destination stays drive-only. Dev kick: ?travel=surf (§E9).
+//
+// V6/E1 (PLAN6 Wave E): the machine gains its THIRD destination — the
+// Funkelpark day trip. mode='parkTrip' rides the exact same states over the
+// park route (12 pickups, castle-gate parking — cityBuilder.js), identical
+// §C4 crash/tow rules, drive-only like the vet, and hands off to the
+// park/parkScene.js plaza hub on arrival (a SCENE, not a panel — the machine
+// treats it as "at the destination" until the gate's leave confirm fires the
+// runtime store event 'parkLeaveRequested' → goHome()). Entry points: the
+// travel chooser + destination picker both gain a Funkelpark row → the park
+// confirm sheet. canRequestTrip gating (sleep/vacation) is INHERITED
+// untouched. Dev kick: ?parktrip=1 (§E9).
 
 import { DRIVE, COIN_TABLE, MINIGAME, VET } from '../data/constants.js'; // V2/G21: + VET (§C9.2)
 import { t } from '../data/strings.js';
@@ -132,8 +143,9 @@ export function createTripMachine(onChange) {
  * forfeits both bonuses (car still placed at the shop — never a hard fail).
  * V2/G21: vetTrip uses the identical trip math (§C9.2 — same crash/tow
  * rules; only the pickup COUNT differs, and that lives in the layout).
+ * V6/E1: parkTrip too (12 pickups → max 12+10+5 = 27, under the trip cap).
  * Arcade (§C4.7) = collected coins, clamped to the §C6 table max.
- * @param {{mode?: 'shopTrip'|'vetTrip'|'arcade', pickups?: number,
+ * @param {{mode?: 'shopTrip'|'vetTrip'|'parkTrip'|'arcade', pickups?: number,
  *   crashes?: number, towed?: boolean}} result
  * @returns {number}
  */
@@ -162,7 +174,7 @@ export function isShopHandoff(mode) {
 
 /**
  * Whether a drive result hands off to the vet arrival panel (§C9.2).
- * @param {'shopTrip'|'vetTrip'|'arcade'|string} mode
+ * @param {'shopTrip'|'vetTrip'|'parkTrip'|'arcade'|string} mode
  * @returns {boolean}
  */
 export function isVetHandoff(mode) {
@@ -170,13 +182,25 @@ export function isVetHandoff(mode) {
 }
 
 /**
+ * V6/E1: whether a drive result hands off to the Funkelpark plaza scene
+ * (PLAN6 Wave E — the third destination, a SCENE handoff instead of a panel).
+ * @param {'shopTrip'|'vetTrip'|'parkTrip'|'arcade'|string} mode
+ * @returns {boolean}
+ */
+export function isParkHandoff(mode) {
+  return mode === 'parkTrip';
+}
+
+/**
  * Guided-trip modes sharing the §C4 machine, route guidance and crash/tow
  * rules (consumed by games/cityDrive.js and G28's deliveryRush spec).
+ * V6/E1: + 'parkTrip' (the Funkelpark route rides the same machinery);
+ * surf travel stays a mode of the SHOP destination, never a trip mode here.
  * @param {string} mode
  * @returns {boolean}
  */
 export function isTripMode(mode) {
-  return mode === 'shopTrip' || mode === 'vetTrip';
+  return mode === 'shopTrip' || mode === 'vetTrip' || mode === 'parkTrip';
 }
 
 /**
@@ -283,9 +307,10 @@ export function clampSurfTravelCoins(coins) {
  * Pure launch spec for a trip request (§C8.6/§B8): maps destination mode ×
  * travel method onto the framework launch (game id + ctx.params.mode). The
  * surf method exists for the SHOP destination only — the vet trip stays a
- * drive (the §C9.2 sheet keeps its row unchanged), and unknown methods
- * degrade to the drive so a stale caller can never strand the machine.
- * @param {'shopTrip'|'vetTrip'} [mode] destination trip mode
+ * drive (the §C9.2 sheet keeps its row unchanged), V6/E1's park trip is
+ * drive-only too, and unknown methods degrade to the drive so a stale
+ * caller can never strand the machine.
+ * @param {'shopTrip'|'vetTrip'|'parkTrip'} [mode] destination trip mode
  * @param {'drive'|'surf'} [method] travel method picked on the door sheet
  * @returns {{gameId: string, mode: string, method: 'drive'|'surf'}}
  */
@@ -302,8 +327,11 @@ export function tripLaunchSpec(mode = 'shopTrip', method = 'drive') {
  * roadTripper ride this); vet arrivals additionally bump vetTrips. surfRuns
  * is NOT bumped here — it counts finished shoppingSurf ROUNDS of both modes
  * and rides the framework's onEnd forwarding instead (single count site).
+ * V6/E1: park arrivals bump ONLY trips here — the canonical park visit
+ * counter is systems/themePark.js `visits` (recorded on every plaza enter,
+ * so harness jumps count too; F1's stickers read that slice).
  * @param {object} counters achievements.counters slice (mutated + returned)
- * @param {'shopTrip'|'vetTrip'} [mode] destination of the arriving trip
+ * @param {'shopTrip'|'vetTrip'|'parkTrip'} [mode] destination of the arriving trip
  * @returns {object} counters
  */
 export function bumpTripCounters(counters, mode = 'shopTrip') {
@@ -360,7 +388,7 @@ export function initShopTrip({
   });
   /** Last arrival result from the trip game (for the shop panel / autopilot). */
   let lastArrival = null;
-  /** V2/G21 (§C9.2): destination of the trip in flight ('shopTrip'|'vetTrip'). */
+  /** V2/G21 (§C9.2): destination of the trip in flight ('shopTrip'|'vetTrip'|V6/E1 'parkTrip'). */
   let tripMode = 'shopTrip';
   /** V3/G38 (§C8.6): travel method of the trip in flight ('drive'|'surf'). */
   let tripMethod = 'drive';
@@ -398,6 +426,13 @@ export function initShopTrip({
               <span class="dest-sub">${t('travel.runSub', { energy: SURF_TRAVEL.ENERGY })}</span>
             </span>
           </button>
+          <button class="dest-option travel-opt-park">
+            <span class="dest-emoji" aria-hidden="true">${icon('sparkle', 30)}</span>
+            <span class="dest-text">
+              <span class="dest-name">${t('city.dest.park')}</span>
+              <span class="dest-sub">${t('city.dest.parkSub', { energy: MINIGAME.DRIVE_ENERGY_COST })}</span>
+            </span>
+          </button>
           <button class="dest-option travel-opt-airport">
             <span class="dest-emoji" aria-hidden="true">${icon('globe', 30)}</span>
             <span class="dest-text">
@@ -416,6 +451,13 @@ export function initShopTrip({
         audio.play('ui.pick');
         ui.closePanel('shopTripConfirm');
         startTrip('shopTrip', 'surf');
+      });
+      // V6/E1: Funkelpark row — the day trip is reachable pre-vet-discovery
+      // too (a theme park is public knowledge; only the vet needs finding).
+      el.querySelector('.travel-opt-park').addEventListener('click', () => {
+        audio.play('ui.pick');
+        ui.closePanel('shopTripConfirm');
+        ui.openPanel('parkTripConfirm');
       });
       // V5/VACATION: airport row — pre-vet-discovery players reach the
       // vacation booking through the travel chooser (the destination picker
@@ -457,6 +499,33 @@ export function initShopTrip({
     unmount() {},
   });
 
+  // ── V6/E1: park confirm sheet (PLAN6 Wave E — the vet-sheet recipe) ───────
+  // „Zum Funkelpark fahren?" — drive-only day trip; the framework re-checks
+  // the sleep/energy/sick gates on launch exactly like the other trips.
+  ui.registerPanel('parkTripConfirm', {
+    /** @param {HTMLElement} el */
+    mount(el) {
+      el.innerHTML = `
+        <div style="text-align:center">
+          <h2 class="perm-title">${t('park.confirm')}</h2>
+          <p class="perm-body">${t('park.confirmBody', {
+            energy: MINIGAME.DRIVE_ENERGY_COST,
+          })}</p>
+          <div class="mg-btn-row">
+            <button class="btn btn-teal park-trip-yes">${t('trip.go')}</button>
+            <button class="btn btn-ghost park-trip-no">${t('ui.later')}</button>
+          </div>
+        </div>`;
+      el.querySelector('.park-trip-yes').addEventListener('click', () => {
+        ui.closePanel('parkTripConfirm');
+        startTrip('parkTrip');
+      });
+      el.querySelector('.park-trip-no').addEventListener('click', () => ui.closePanel('parkTripConfirm'));
+    },
+    unmount() {},
+  });
+  // ── end V6/E1 ───────────────────────────────────────────────────────────────
+
   // Destination picker sheet („Laden / Tierarzt" with prices) — the front
   // door / HUD entry once the vet is discovered; each option opens its
   // destination's confirm sheet (V3/G38: the Laden row now opens the travel
@@ -481,6 +550,13 @@ export function initShopTrip({
               <span class="dest-sub">${t('city.dest.vetSub', { cure: VET.CURE_PRICE, checkup: VET.CHECKUP_PRICE })}</span>
             </span>
           </button>
+          <button class="dest-option dest-opt-park">
+            <span class="dest-emoji" aria-hidden="true">${icon('sparkle', 30)}</span>
+            <span class="dest-text">
+              <span class="dest-name">${t('city.dest.park')}</span>
+              <span class="dest-sub">${t('city.dest.parkSub', { energy: MINIGAME.DRIVE_ENERGY_COST })}</span>
+            </span>
+          </button>
           <button class="dest-option dest-opt-airport">
             <span class="dest-emoji" aria-hidden="true">${icon('globe', 30)}</span>
             <span class="dest-text">
@@ -499,6 +575,12 @@ export function initShopTrip({
         audio.play('ui.pick');
         ui.closePanel('cityDestinations');
         ui.openPanel('vetTripConfirm');
+      });
+      // V6/E1: Funkelpark row → the park confirm sheet (vet recipe)
+      el.querySelector('.dest-opt-park').addEventListener('click', () => {
+        audio.play('ui.pick');
+        ui.closePanel('cityDestinations');
+        ui.openPanel('parkTripConfirm');
       });
       // V5/VACATION: airport row → the booking/pickup panel
       // (ui/airportScreen.js — registered from the hud.js vacation block).
@@ -571,9 +653,37 @@ export function initShopTrip({
     ui.showScreen('vetPanel');
   }
 
-  /** Post-results handoff for the trip in flight (shop screen or vet panel). */
+  // ── V6/E1: park handoff (PLAN6 Wave E) ─────────────────────────────────────
+  /**
+   * Switches into the Funkelpark plaza SCENE (park/parkScene.js — registered
+   * by the main.js V6/E1 block). Unlike shop/vet this is a scene handoff, so
+   * it rides the same travel curtain as goHome(); the machine stays in state
+   * 'shop' ("at the destination") until the gate confirm emits
+   * 'parkLeaveRequested' below. §E0.1-11 degrade: while the scene isn't
+   * registered yet, fall back home cleanly instead of stranding the player.
+   */
+  async function openPark() {
+    ui.closeAll();
+    if (!(sceneManager.has?.('park'))) {
+      console.warn('[shopTrip] park scene not registered — returning home');
+      return goHome();
+    }
+    await Promise.resolve(tripVeil?.show({ mode: 'trip' }))
+      .then(() => sceneManager.switchTo('park', { from: 'trip' }))
+      .catch((err) => {
+        // full goHome(): machine home + the scene switch (a bare machine
+        // transition would strand the player in the post-results backdrop)
+        console.error('[shopTrip] park handoff failed:', err);
+        goHome();
+      });
+    tripVeil?.hide();
+  }
+  // ── end V6/E1 ───────────────────────────────────────────────────────────────
+
+  /** Post-results handoff for the trip in flight (shop / vet / park). */
   async function openDestination() {
     if (tripMode === 'vetTrip') await openVet();
+    else if (tripMode === 'parkTrip') await openPark(); // V6/E1
     else await openShop();
   }
   // ── end V2/G21 ─────────────────────────────────────────────────────────────
@@ -584,14 +694,15 @@ export function initShopTrip({
   // Chrome where timer and rAF clocks drift apart).
   // V2/G21: vet trips auto-advance results → vetPanel and STOP there — the
   // cure/checkup interaction is the point of the trip (CDP scripts click it).
+  // V6/E1: park trips stop at the plaza the same way (the hub IS the trip).
   if (autopilot) {
     let shopOpenedAt = 0;
     setInterval(() => {
       if (machine.state() !== TRIP_STATE.SHOP) return;
       if (ui.activeScreenId?.() === 'mgResults') {
         // equivalent of tapping "Home" on the results screen
-        shopOpenedAt = tripMode === 'vetTrip' ? 0 : Date.now(); // V2/G21
-        openDestination(); // V2/G21: shop screen or vet panel
+        shopOpenedAt = tripMode === 'shopTrip' ? Date.now() : 0; // V2/G21 + V6/E1
+        openDestination(); // V2/G21: shop screen, vet panel or park plaza
       } else if (shopOpenedAt > 0 && Date.now() - shopOpenedAt > 2000) {
         goHome(); // equivalent of tapping "Nach Hause / Go home"
         shopOpenedAt = 0;
@@ -634,7 +745,8 @@ export function initShopTrip({
 
   /**
    * Launch the trip (§C4.2/§C8.6) — the framework re-checks sleep/energy/sick.
-   * V2/G21: `mode` picks the destination ('shopTrip' default | 'vetTrip').
+   * V2/G21: `mode` picks the destination ('shopTrip' default | 'vetTrip' |
+   * V6/E1 'parkTrip').
    * V3/G38: `method` picks the travel method ('drive' default | 'surf' —
    * shop destination only, per tripLaunchSpec). The surf path launches
    * G37's shoppingSurf in travel mode between 'start' and 'arrive' instead
@@ -642,7 +754,7 @@ export function initShopTrip({
    * While the module isn't in the tree yet (§E0.1-11 degrade rule) the
    * framework refuses with 'toast.minigameMissing' and the machine cancels
    * cleanly back home.
-   * @param {'shopTrip'|'vetTrip'} [mode]
+   * @param {'shopTrip'|'vetTrip'|'parkTrip'} [mode]
    * @param {'drive'|'surf'} [method]
    */
   async function startTrip(mode = 'shopTrip', method = 'drive') {
@@ -689,6 +801,16 @@ export function initShopTrip({
   // 'vetTripRequested' (store.emit — returns the listener count so the sheet
   // can show a graceful fallback when this flow isn't wired yet).
   store.on('vetTripRequested', requestVetTrip);
+
+  // ── V6/E1: park leave contract (PLAN6 Wave E) ──────────────────────────────
+  // parkScene's gate confirm emits the runtime-only store event
+  // 'parkLeaveRequested' (store.emit returns the listener count, so the
+  // scene can fall back to a bare switchTo('home') when this flow isn't
+  // wired). Rides the normal goHome() — machine → 'home', travel curtain,
+  // return teleport — for trip arrivals AND harness ?park=1 jumps alike
+  // (goHome from state 'home' is a no-op transition + the same switch).
+  store.on('parkLeaveRequested', () => goHome());
+  // ── end V6/E1 ───────────────────────────────────────────────────────────────
 
   // §C9.3 landmark stickers: games/cityDrive.js has no store access, so it
   // dispatches a SYNCHRONOUS window event per landmark radius entry. The
@@ -750,11 +872,13 @@ export function initShopTrip({
   // V2/G21: ?vettrip=1 does the same for the vet trip (§C9.2 CDP proof).
   // V3/G38: ?travel=surf starts a SURF shop trip the same way (§C8.6 CDP
   // proof; ?travel=drive is accepted as an explicit drive spelling).
+  // V6/E1: ?parktrip=1 kicks the Funkelpark drive the same way.
   const travelParam = isDev && typeof location !== 'undefined'
     ? new URLSearchParams(location.search).get('travel')
     : null;
   const devTripMode = urlFlag('vettrip') ? 'vetTrip'
-    : (urlFlag('shoptrip') || travelParam != null) ? 'shopTrip' : null;
+    : urlFlag('parktrip') ? 'parkTrip' // V6/E1
+      : (urlFlag('shoptrip') || travelParam != null) ? 'shopTrip' : null;
   const devTripMethod = travelParam === 'surf' ? 'surf' : 'drive'; // V3/G38
   if (devTripMode) {
     let tries = 0;

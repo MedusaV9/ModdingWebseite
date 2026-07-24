@@ -14,6 +14,7 @@ import {
   driveRewards,
   isShopHandoff,
   isVetHandoff, // V2/G21 (§C9.2)
+  isParkHandoff, // V6/E1 (PLAN6 Wave E)
   isTripMode, // V2/G21 (§C9.2)
   isVetDiscovered, // V2/G21 (§C9.2)
   canRequestTrip, // V2/FIX-C (P2-7)
@@ -25,6 +26,7 @@ import {
   bumpTripCounters, // V3/G38 (§C4/§C8.6/§C9.2)
 } from '../src/systems/shopTrip.js';
 import { DRIVE, MINIGAME, COIN_TABLE, VET } from '../src/data/constants.js'; // V2/G21: + VET
+import { PARK_ROUTE_PICKUP_COUNT } from '../src/city/cityBuilder.js'; // V6/E1
 import { MINIGAMES, computeCoins } from '../src/data/minigames.js'; // V3/G38: + computeCoins (×2-after-clamp proof)
 // V2/G21: vetTrip cure/checkup ride economy.payVet (§C3.5) — real store runs
 // V3/G38: + awardMinigame (the real surf-travel payout path incl. daily ×2)
@@ -290,8 +292,10 @@ test('V3 §C8.6: mode helpers — surf arrival hands off to the SHOP; drive-guid
   assert.equal(isShopHandoff('surfTravel'), true);
   assert.equal(isShopHandoff('travel'), true);
   assert.equal(isVetHandoff('surfTravel'), false);
-  // isTripMode stays the cityDrive guidance predicate ('shopTrip'|'vetTrip')
-  // — G39's drive must not see a new guided mode (§C7.3 invariant).
+  // isTripMode stays the cityDrive guidance predicate — surf travel is a
+  // METHOD of the shop destination, never a guided drive mode. (V6/E1
+  // superseded the "no new guided mode" wording: 'parkTrip' joined the
+  // predicate as a real third DESTINATION — see the V6/E1 block below.)
   assert.equal(isTripMode('surfTravel'), false);
   assert.equal(isTripMode('travel'), false);
 });
@@ -384,3 +388,70 @@ test('V3 §C8.6: sleeping gate covers BOTH methods — the chooser sheet never o
   assert.deepEqual(canRequestTrip(asleep), { ok: false, reason: 'sleeping' });
 });
 // ── end V3/G38 ──────────────────────────────────────────────────────────────
+
+// ── V6/E1: parkTrip — the Funkelpark day trip (PLAN6 Wave E) ─────────────────
+
+test('V6/E1: parkTrip rides the same machine verbatim — home →start→ driveOut →arrive→ shop(=park) →goHome→ home', () => {
+  // destination-agnostic machine ('shop' reads "at the destination"; the
+  // plaza SCENE plays there until the gate's leave confirm fires goHome)
+  let s = tripTransition(TRIP_STATE.HOME, 'start');
+  assert.equal(s, TRIP_STATE.DRIVE_OUT);
+  s = tripTransition(s, 'arrive');
+  assert.equal(s, TRIP_STATE.SHOP);
+  s = tripTransition(s, 'goHome'); // 'parkLeaveRequested' store event → goHome()
+  assert.equal(s, TRIP_STATE.HOME);
+  // quit from pause mid-drive cancels home, exactly like the other trips
+  assert.equal(tripTransition(TRIP_STATE.DRIVE_OUT, 'cancel'), TRIP_STATE.HOME);
+});
+
+test('V6/E1: mode helpers — parkTrip is a guided trip that hands off ONLY to the park', () => {
+  assert.equal(isTripMode('parkTrip'), true); // cityDrive shows route guides
+  assert.equal(isParkHandoff('parkTrip'), true);
+  assert.equal(isParkHandoff('shopTrip'), false);
+  assert.equal(isParkHandoff('vetTrip'), false);
+  assert.equal(isParkHandoff('arcade'), false);
+  assert.equal(isParkHandoff(undefined), false);
+  assert.equal(isShopHandoff('parkTrip'), false); // park arrivals skip the shop…
+  assert.equal(isVetHandoff('parkTrip'), false); // …and the vet panel
+});
+
+test('V6/E1: tripLaunchSpec — the park trip is drive-only; a surf ask degrades to the drive', () => {
+  assert.deepEqual(tripLaunchSpec('parkTrip'), { gameId: 'cityDrive', mode: 'parkTrip', method: 'drive' });
+  assert.deepEqual(tripLaunchSpec('parkTrip', 'drive'), { gameId: 'cityDrive', mode: 'parkTrip', method: 'drive' });
+  assert.deepEqual(tripLaunchSpec('parkTrip', 'surf'), { gameId: 'cityDrive', mode: 'parkTrip', method: 'drive' });
+});
+
+test('V6/E1: park reward math — 12 pickups + bonuses = 27, safely under the 35 trip cap', () => {
+  assert.equal(
+    driveRewards({ mode: 'parkTrip', pickups: PARK_ROUTE_PICKUP_COUNT, crashes: 0, towed: false }),
+    PARK_ROUTE_PICKUP_COUNT * DRIVE.PICKUP_COINS + DRIVE.ARRIVAL_BONUS + DRIVE.ZERO_CRASH_BONUS
+  );
+  assert.ok(
+    PARK_ROUTE_PICKUP_COUNT * DRIVE.PICKUP_COINS + DRIVE.ARRIVAL_BONUS + DRIVE.ZERO_CRASH_BONUS
+      <= COIN_TABLE.cityDrive.max
+  );
+  // §C4 crash/tow rules identical: crashes forfeit the bonus, tow keeps pickups
+  assert.equal(driveRewards({ mode: 'parkTrip', pickups: 8, crashes: 2 }), 8 + DRIVE.ARRIVAL_BONUS);
+  assert.equal(
+    driveRewards({ mode: 'parkTrip', pickups: 5, crashes: DRIVE.CRASHES_FOR_TOW, towed: true }),
+    5 * DRIVE.PICKUP_COINS
+  );
+});
+
+test('V6/E1: bumpTripCounters — a park arrival bumps ONLY trips (visits live in themePark.js)', () => {
+  const counters = defaultState().achievements.counters;
+  bumpTripCounters(counters, 'parkTrip');
+  assert.equal(counters.trips, 1);
+  assert.equal(counters.vetTrips, 0); // never the vet counter
+  // the canonical park counter is systems/themePark.js `visits` (recorded on
+  // every plaza enter so ?park=1 harness jumps count too) — not bumped here.
+  assert.equal('parkTrips' in counters, false);
+});
+
+test('V6/E1: the sleep gate covers the park sheet too (same canRequestTrip guard)', () => {
+  const asleep = defaultState();
+  asleep.sleep = { sleeping: true, startedAt: 1, wakeAt: 2 };
+  assert.deepEqual(canRequestTrip(asleep), { ok: false, reason: 'sleeping' });
+  assert.deepEqual(canRequestTrip(defaultState()), { ok: true });
+});
+// ── end V6/E1 ────────────────────────────────────────────────────────────────

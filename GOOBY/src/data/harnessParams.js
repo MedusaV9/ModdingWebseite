@@ -111,6 +111,9 @@ export const HARNESS_PARAM_GROUPS = Object.freeze([
     rows: Object.freeze([
       Object.freeze({ param: 'cutscene', example: '?cutscene=demo', en: 'play a cutscene by id over the home scene (first view = hold-to-skip, reruns = tap-skip) — V6/A1', de: 'Cutscene per Id über der Home-Szene abspielen (Erstansicht = Halten zum Überspringen, Wiederholung = Tippen) — V6/A1' }),
       Object.freeze({ param: 'vacationcine', example: '?vacationcine=departure', en: 'stage a vacation set piece departure|reunionOnTime|reunionTaxi (departure seeds a booked trip first) — V6/D1', de: 'Urlaubs-Setpiece inszenieren departure|reunionOnTime|reunionTaxi (departure seedet zuerst eine gebuchte Reise) — V6/D1' }), // V6/D1 one-liner
+      Object.freeze({ param: 'park', example: '?park=1', en: 'jump straight to the Funkelpark plaza hub (skips the drive) — V6/E1', de: 'direkt zum Funkelpark-Plaza-Hub springen (überspringt die Fahrt) — V6/E1' }), // V6/E1 one-liner
+      Object.freeze({ param: 'parktrip', example: '?parktrip=1&autopilot=1', en: 'kick the park day-trip drive from boot (autopilot optional) — V6/E1', de: 'Funkelpark-Tagesausflug ab Boot starten (Autopilot optional) — V6/E1' }), // V6/E1 one-liner
+      Object.freeze({ param: 'coaster', example: '?coaster=1', en: 'ride the Sparkle Loop coaster right away (+&rm=1 reduced motion, &coasterhud=1 budget HUD) — V6/E2 ride, V6/E1 route', de: 'sofort die Funkelschleife fahren (+&rm=1 reduzierte Bewegung, &coasterhud=1 Budget-HUD) — V6/E2-Fahrt, V6/E1-Route' }), // V6/E1 one-liner
     ]),
   }),
 ]);
@@ -131,6 +134,7 @@ export function allHarnessParams() {
 /** @type {readonly string[]} scene ids for sceneManager.has() probing */
 export const JUMP_SCENES = Object.freeze([
   'home', 'gooby', 'roadtest', 'minigame', 'recap', 'goobyWelt',
+  'park', 'coasterRide', // V6/E1 hub + V6/E2 ride
 ]);
 
 /** @type {readonly string[]} §E6 screen ids for ui.hasScreen() probing */
