@@ -62,6 +62,8 @@ import { ROOM as LIVING } from './rooms/living.js';
 import { ROOM as BATHROOM } from './rooms/bathroom.js';
 import { ROOM as BEDROOM } from './rooms/bedroom.js';
 import { ROOM as GARDEN, GARDEN_SIZE } from './rooms/garden.js'; // V2/G19 (§C2)
+import { iconTinted } from '../ui/icons.js'; // V6/D3: authored radio-note sprite
+import { iconCanvas } from '../ui/iconCanvas.js';
 
 /**
  * @typedef {Object} RoomFurnitureEntry
@@ -1048,14 +1050,12 @@ export function createRoomManager({ scene, camera, assets, store }) {
 
     // Four pooled sprites: each 4 s burst activates exactly two. No runtime
     // allocations, and one shared note texture keeps this to tiny draw cost.
-    const noteCanvas = document.createElement('canvas');
-    noteCanvas.width = noteCanvas.height = 64;
-    const noteCtx = noteCanvas.getContext('2d');
-    noteCtx.fillStyle = '#FF7BA9';
-    noteCtx.font = '900 48px system-ui, sans-serif';
-    noteCtx.textAlign = 'center';
-    noteCtx.textBaseline = 'middle';
-    noteCtx.fillText('♫', 32, 32);
+    // V6/D3: authored SVG note via iconCanvas (canvas surfaces never
+    // font-render pictographs) — onReady flips needsUpdate once the SVG
+    // decodes; cached repeat builds paint synchronously.
+    const noteCanvas = iconCanvas(iconTinted('musicNote', 64, '#FF7BA9'), 64, () => {
+      if (radioNoteTexture) radioNoteTexture.needsUpdate = true;
+    });
     radioNoteTexture = new THREE.CanvasTexture(noteCanvas);
     for (let i = 0; i < 4; i += 1) {
       const material = track.mat(new THREE.SpriteMaterial({

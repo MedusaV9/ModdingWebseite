@@ -41,7 +41,9 @@ import { now } from '../core/clock.js';
 import { weatherAt } from '../systems/weather.js';
 import { createParticles } from '../gfx/particles.js';
 import { getGooby, getRoomManager, getCamera } from './homeScene.js';
-import { CROP_EMOJI, showForecastChip, hideForecastChip } from '../ui/gardenPanel.js';
+import { showForecastChip, hideForecastChip } from '../ui/gardenPanel.js';
+import { iconTinted } from '../ui/icons.js'; // V6/D3: authored coin on the for-sale sign
+import { drawIcon } from '../ui/iconCanvas.js';
 
 /** water pour threshold (§C2.2: drag the can over a plot ≥ 0.5 s). */
 const WATER_HOLD_MS = 500;
@@ -163,8 +165,19 @@ function buildForSaleSign(price) {
   g.fillText(t('garden.plot.forSale'), S / 2, 26, S - 16);
   g.fillStyle = '#4A3B36';
   g.font = '800 18px system-ui, sans-serif';
-  g.fillText(`${price}c 🪙`, S / 2, 52, S - 16);
+  // V6/D3: authored coin glyph via iconCanvas — canvas surfaces never
+  // font-render emoji. Text shifts left to make room; the deferred draw
+  // flips tex.needsUpdate after the SVG decodes (cached builds paint sync).
+  const priceLabel = `${price}c`;
+  const coinPx = 18;
+  const labelW = Math.min(g.measureText(priceLabel).width, S - 20 - coinPx);
+  const startX = S / 2 - (labelW + 4 + coinPx) / 2;
+  g.textAlign = 'left';
+  g.fillText(priceLabel, startX, 52, S - 20 - coinPx);
   const tex = new THREE.CanvasTexture(canvas);
+  drawIcon(g, iconTinted('coin', coinPx, '#E8B04B'), startX + labelW + 4, 52 - coinPx + 3, coinPx, () => {
+    tex.needsUpdate = true;
+  });
   tex.colorSpace = THREE.SRGBColorSpace;
   track.tex(tex);
   const panelMat = new THREE.MeshBasicMaterial({ map: tex });
@@ -392,9 +405,13 @@ function onPlotTap(idx) {
   // recordHarvest is V2/FIX-A's economy API; the final tree has both.
   economy.recordHarvest?.(store, res.foodId, res.qty);
   audio.play('garden.harvest');
+  // V6/D3: emoji interpolation retired (toasts are textContent — no icon
+  // surface). D4 removes the {emoji} placeholder from the 'garden.harvested'
+  // template in v2-garden.js; until then the empty string leaves a benign
+  // double space.
   ui.toast('garden.harvested', {
     qty: res.qty,
-    emoji: CROP_EMOJI[crop.id] ?? '🌱',
+    emoji: '',
     name: t(crop.nameKey),
   });
   if (firstSticker) {

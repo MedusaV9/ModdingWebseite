@@ -25,6 +25,7 @@ import { RACER_FX, fovLerp, createSpeedLines } from '../../gfx/speedLines.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish restore (dispose)
 import { clampFloatTextToView } from '../framework.js';
+import { icon } from '../../ui/icons.js'; // V6/D3: authored item-slot glyphs
 import {
   RACER,
   applyDifficulty, // V4/G74 §G5.3
@@ -749,7 +750,16 @@ export default {
     this.posEl.textContent = `${race.ended ? race.finishRank : playerRank(race)}.`;
     this.meterEl.style.width = `${Math.round(kart.driftCharge * 100)}%`;
     this.meterEl.classList.toggle('g41-ready', kart.driftCharge >= RACER.DRIFT_MIN_CHARGE);
-    this.itemEl.textContent = kart.item ? { turbo: '🚀', shield: '🛡', block: '🧱' }[kart.item] : '–';
+    // V6/D3: authored item glyphs (rocket/shield/brick wall) replace emoji
+    const itemName = kart.item ? { turbo: 'rocket', shield: 'shield', block: 'brickWall' }[kart.item] : null;
+    if (this.itemGlyph !== (itemName ?? '–')) {
+      this.itemGlyph = itemName ?? '–';
+      if (itemName) {
+        this.itemEl.innerHTML = `<span style="display:inline-flex;align-items:center;justify-content:center;vertical-align:middle">${icon(itemName, 24)}</span>`;
+      } else {
+        this.itemEl.textContent = '–';
+      }
+    }
 
     if (import.meta.env?.DEV) {
       this.maxDrawCalls = Math.max(this.maxDrawCalls ?? 0, ctx.renderer?.info?.render?.calls ?? 0);

@@ -43,7 +43,9 @@ import {
 import { getCamera, getGooby, getRoomManager } from './homeScene.js';
 import { ROOM_DEFS, FURNITURE_SCALE, SHELL } from './roomManager.js';
 import { standardMat, goobyMat, disposeIfOwned, PALETTE } from '../gfx/materials.js';
-import { SLOT_EMOJI, furnEmoji } from '../ui/shopScreen.js';
+// V6/D3: authored slot/furniture card art (shopScreen's SLOT_EMOJI/furnEmoji
+// emoji tables are retired — foodIcons.js is the one source of truth).
+import { getSlotIcon, getFurnitureIcon } from '../ui/foodIcons.js';
 import { icon } from '../ui/icons.js';
 import * as assets from '../core/assets.js';
 
@@ -710,7 +712,7 @@ function createDecoratePanel({ store, ui, audio }) {
         el.innerHTML = `
           <div class="decor-head">
             ${slotId ? `<button class="decor-back" aria-label="${t('ui.back')}">${icon('arrowLeft', 18)}</button>` : ''}
-            <h2 class="decor-title">🎨 ${t('decor.title')} · ${slotId ? t(`slot.${slotId}`) : t(`room.${roomId}`)}</h2>
+            <h2 class="decor-title">${icon('palette', 20)} ${t('decor.title')} · ${slotId ? t(`slot.${slotId}`) : t(`room.${roomId}`)}</h2>
           </div>
           <div class="decor-sub">${slotId ? t('decor.shopHint') : t('decor.pickSlot')}</div>
           <div class="decor-grid"></div>`;
@@ -739,7 +741,7 @@ function createDecoratePanel({ store, ui, audio }) {
           const card = document.createElement('button');
           card.className = 'shop-card';
           card.innerHTML = `
-            <span class="shop-emoji">${SLOT_EMOJI[s] ?? '🪑'}</span>
+            <span class="shop-emoji">${getSlotIcon(s, 34)}</span>
             <span class="shop-name">${t(`slot.${s}`)}</span>
             <span class="shop-state">${current ? t(getEntry(current)?.nameKey ?? '') : '—'}</span>`;
           card.addEventListener('click', () => {
@@ -756,13 +758,13 @@ function createDecoratePanel({ store, ui, audio }) {
           const card = document.createElement('button');
           card.className = `shop-card${placed ? ' shop-card-sel' : ''}`;
           card.innerHTML = `
-            <span class="shop-emoji">${furnEmoji(entry)}</span>
+            <span class="shop-emoji">${getFurnitureIcon(entry, 34)}</span>
             <span class="shop-name">${t(entry.nameKey)}</span>
             ${placed
-              ? `<span class="shop-state">✓ ${t('shop.placed')}</span>`
+              ? `<span class="shop-state">${icon('check', 11)} ${t('shop.placed')}</span>`
               : owned
                 ? `<span class="shop-state">${t('shop.apply')}</span>`
-                : `<span class="shop-price">${icon('coin', 13)}${entry.price} 🔒</span>`}`;
+                : `<span class="shop-price">${icon('coin', 13)}${entry.price} ${icon('lock', 11)}</span>`}`;
           card.addEventListener('click', () => {
             audio.play('ui.tap');
             if (placed) return;

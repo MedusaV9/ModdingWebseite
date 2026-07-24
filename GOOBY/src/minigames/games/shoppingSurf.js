@@ -902,7 +902,10 @@ export default {
       for (const th of crossedMilestones(S.fx.prevSpeed, run.speed, SURF_FX.MILESTONES, S.fx.seen)) {
         S.fx.seen.add(th);
         ctx.audio.play('combo.up');
-        ctx.hud.banner(t(th >= SURF.MAX_SPEED ? 'mg.speedfx.top' : 'mg.speedfx.up'));
+        // V6/D3: icon-capable banner — the framework strips the raw flame
+        // still living in 'mg.speedfx.up' (D4's v4-surf.js sweep) and renders
+        // the authored glyph instead.
+        ctx.hud.banner(t(th >= SURF.MAX_SPEED ? 'mg.speedfx.top' : 'mg.speedfx.up'), { icon: 'flame' });
       }
       S.fx.prevSpeed = run.speed;
       if (S.mode === 'arcade' && run.distanceM >= S.fx.nextDistM) {

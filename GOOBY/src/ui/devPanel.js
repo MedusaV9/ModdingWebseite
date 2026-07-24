@@ -22,6 +22,7 @@
 // feature-detected per §E0.1-11 — absent ones render a "not built yet" note.
 
 import { t, getLang } from '../data/strings.js';
+import { icon } from './icons.js'; // V6/D3: authored wrench/check glyphs
 import * as clock from '../core/clock.js';
 import * as notifications from '../core/notifications.js';
 import * as economy from '../systems/economy.js';
@@ -363,7 +364,7 @@ export function mountDevPanel(el, deps) {
       <div class="g33-dev-wrap">
         <div class="settings-head">
           <button class="btn btn-ghost btn-round g33-dev-back" aria-label="${t('ui.back')}">${backIcon()}</button>
-          <h1 class="settings-title">🔧 ${tx('dev.title')}</h1>
+          <h1 class="settings-title">${icon('wrench', 22)} ${tx('dev.title')}</h1>
         </div>
 
         <div class="card g33-dev-card" data-card="unlockAll">
@@ -663,7 +664,7 @@ export function mountDevPanel(el, deps) {
     const redeemedAt = store.get('codes')?.redeemed?.[id];
     return `
           <div class="g33-dev-line g58-dev-code">
-            <span class="g33-dev-label">${redeemedAt ? '✅' : '—'} ${escHtml(name)} <code class="g58-dev-secret">${escHtml(secret)}</code></span>
+            <span class="g33-dev-label">${redeemedAt ? icon('check', 13) : '—'} ${escHtml(name)} <code class="g58-dev-secret">${escHtml(secret)}</code></span>
             <button class="btn btn-ghost g33-dev-btn g58-flexnone" data-act="codeRedeem" data-secret="${escHtml(secret)}">${tx('dev.codes.redeem')}</button>
             <button class="btn btn-ghost g33-dev-btn g58-flexnone" data-act="codeReset" data-id="${escHtml(id)}" ${redeemedAt ? '' : 'disabled'}>${tx('dev.codes.reset')}</button>
           </div>`;

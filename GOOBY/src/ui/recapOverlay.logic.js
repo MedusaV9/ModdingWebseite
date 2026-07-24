@@ -455,28 +455,30 @@ export function agoLabel(atMs, nowMs) {
 // ---------------------------------------------------------------------------
 
 /**
- * POLISH-J: display icon per STAT_CATALOG id (end-card highlight chips).
+ * POLISH-J: display icon NAME per STAT_CATALOG id (end-card highlight chips).
+ * V6/D3: values are icons.js glyph names, never raw emoji — this module stays
+ * headless-pure; the view (recapOverlay.js) maps name → SVG via icon().
  * @type {Readonly<Record<string, string>>}
  */
 export const HIGHLIGHT_ICONS = Object.freeze({
-  days: '📅',
-  games: '🎮',
-  coinsEarned: '💰',
-  tickles: '💞',
-  feeds: '🍎',
-  harvests: '🌻',
-  stickers: '⭐',
-  quests: '📜',
-  washes: '🫧',
-  sleeps: '😴',
-  trips: '🚗',
-  distance: '🛣️',
-  photos: '📸',
-  deliveries: '📦',
-  cures: '💊',
-  cakes: '🎂',
-  nougat: '🍫',
-  coinsSpent: '🛍️',
+  days: 'calendar',
+  games: 'gamepad',
+  coinsEarned: 'coin',
+  tickles: 'heart',
+  feeds: 'carrot',
+  harvests: 'sprout',
+  stickers: 'star',
+  quests: 'scroll',
+  washes: 'suds',
+  sleeps: 'moon',
+  trips: 'car',
+  distance: 'road',
+  photos: 'camera',
+  deliveries: 'crate',
+  cures: 'medicine',
+  cakes: 'cake',
+  nougat: 'nutellaJar',
+  coinsSpent: 'shoppingBag',
 });
 
 /**
@@ -498,7 +500,7 @@ export function endCardHighlights(lines, max = 3) {
       id: l.id,
       value: Math.round(num(l.value)),
       weight: weights.get(l.id) ?? 0,
-      icon: HIGHLIGHT_ICONS[l.id] ?? '⭐',
+      icon: HIGHLIGHT_ICONS[l.id] ?? 'star',
     }))
     .sort((a, b) => b.weight - a.weight || b.value - a.value
       || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))

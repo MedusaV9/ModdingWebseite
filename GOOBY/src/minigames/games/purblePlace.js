@@ -47,6 +47,7 @@ import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // cameo
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { getStore } from '../../core/store.js'; // radio-wish restore only (dispose)
 import { clampFloatTextToView } from '../framework.js';
+import { icon } from '../../ui/icons.js'; // V6/D3: authored strip/pedal/ship glyphs
 import * as cakeLogic from './purblePlace.logic.js';
 
 // ---------------------------------------------------------------------------
@@ -146,7 +147,17 @@ const ICING_HEX = cakeLogic.ICING_HEX ?? Object.freeze({
   white: '#FFF8F0', pink: '#F781B0', chocolate: '#4E3524',
 });
 const SPRINKLE_COLORS = ['#E4572E', '#F5C518', '#4CB5AE', '#B37FD4', '#7CC15E', '#F781B0'];
-const SHAPE_GLYPH = { round: '●', square: '■', heart: '♥' };
+// V6/D3: authored shape glyphs (were text '●'/'■'/'♥' — the shape SELECTOR is
+// iconography, not the sanctioned bubblePop a11y geometry, so it gets the same
+// SVG treatment as the other dock buttons).
+function shapeSvg(shape, size = 24) {
+  const inner = shape === 'round'
+    ? '<circle cx="12" cy="12" r="8.4"/>'
+    : shape === 'square'
+      ? '<rect x="4.4" y="4.4" width="15.2" height="15.2" rx="3"/>'
+      : '<path d="M12 7.4c1.5-2.6 5.6-2.9 7.1-.3 1.3 2.4-.5 5.2-7.1 10.2C5.4 12.3 3.6 9.5 4.9 7.1 6.4 4.5 10.5 4.8 12 7.4z"/>';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${inner}</svg>`;
+}
 const DEKO_HEX = Object.freeze({ cherry: '#D6293A', sprinkles: '#F5C518', berries: '#E4405F' });
 
 /** Splat/drop tint per station id. */
@@ -1489,12 +1500,13 @@ export default {
     const strip = document.createElement('div');
     strip.className = 'g62-strip';
     strip.setAttribute('aria-label', t('mg.cake4.strip'));
-    // station glyphs at their s positions (display only — §G1.4)
+    // station glyphs at their s positions (display only — §G1.4).
+    // V6/D3: authored icons (pot/flame/crate/candle) replace the emoji row.
     const glyphs = [
-      [G62.SPAWN_S, '🥘'],
-      [(G62.OVEN_IN + G62.OVEN_OUT) / 2, '🔥'],
-      [G62.SHIP_S, '📦'],
-      [5.6, '🕯'],
+      [G62.SPAWN_S, icon('pot', 11)],
+      [(G62.OVEN_IN + G62.OVEN_OUT) / 2, icon('flame', 11)],
+      [G62.SHIP_S, icon('crate', 11)],
+      [5.6, icon('candle', 11)],
     ];
     for (const noz of NOZZLES) {
       if (noz.kind === 'kerzen') continue;
@@ -1508,7 +1520,7 @@ export default {
       const el = document.createElement('span');
       el.className = 'g62-strip-glyph';
       el.style.left = `${(s / G62.BELT_LEN) * 100}%`;
-      el.textContent = ch;
+      el.innerHTML = ch; // trusted module-local icon() markup
       strip.appendChild(el);
     }
     this.stripWinEl = document.createElement('div');
@@ -1551,8 +1563,8 @@ export default {
       root.appendChild(b);
       return b;
     };
-    this.pedalBackEl = mkPedal('g62-pedal-back', '◀', t('mg.cake4.pedal.back'), -1);
-    this.pedalFwdEl = mkPedal('g62-pedal-fwd', '▶', t('mg.cake4.pedal.fwd'), 1);
+    this.pedalBackEl = mkPedal('g62-pedal-back', icon('arrowLeft', 28), t('mg.cake4.pedal.back'), -1);
+    this.pedalFwdEl = mkPedal('g62-pedal-fwd', icon('arrowRight', 28), t('mg.cake4.pedal.fwd'), 1);
 
     // desktop nicety: arrow keys drive the pedals (still 100 % button-driven)
     this.onKey = (ev) => {
@@ -1583,7 +1595,7 @@ export default {
       return b;
     };
     // shape cycle + spawn pair (far left when the spawn station is in view)
-    this.shapeBtn = dockBtn('shape', 'g62-drop g62-shape', `<span class="g62-shape-glyph">${SHAPE_GLYPH[this.spawnShape]}</span>`, t('mg.cake4.shape'), () => {
+    this.shapeBtn = dockBtn('shape', 'g62-drop g62-shape', `<span class="g62-shape-glyph">${shapeSvg(this.spawnShape, 24)}</span>`, t('mg.cake4.shape'), () => {
       const i = SHAPES.indexOf(this.spawnShape);
       this.spawnShape = SHAPES[(i + 1) % SHAPES.length];
       this.ctx?.audio.play('ui.tap');
@@ -1603,7 +1615,7 @@ export default {
       el.style.setProperty('--g62-face', stationHex(noz.id));
       this.dockBtns.set(noz.id, { el, noz });
     }
-    this.shipBtn = dockBtn('versand', 'g62-drop g62-ship', `📦 ${t('mg.cake4.ship')}`, t('mg.cake4.ship'), () => this.queueShip());
+    this.shipBtn = dockBtn('versand', 'g62-drop g62-ship', `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">${icon('crate', 16)}<span>${t('mg.cake4.ship')}</span></span>`, t('mg.cake4.ship'), () => this.queueShip());
     this.remPx = 16;
     this.remRefresh = 0;
   },
@@ -1627,7 +1639,7 @@ export default {
 
   syncSpawnButton() {
     const glyphEl = this.shapeBtn?.querySelector('.g62-shape-glyph');
-    if (glyphEl) glyphEl.textContent = SHAPE_GLYPH[this.spawnShape];
+    if (glyphEl) glyphEl.innerHTML = shapeSvg(this.spawnShape, 24); // trusted local markup
   },
 
   /** The §G1.4 camera window edges (world x at z = 0). */

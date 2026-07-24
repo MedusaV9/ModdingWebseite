@@ -14,6 +14,8 @@ import { createParticles } from '../../gfx/particles.js';
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { clampFloatTextToView } from '../framework.js';
+import { iconTinted } from '../../ui/icons.js'; // V6/D3: authored ticket glyphs
+import { drawIcon } from '../../ui/iconCanvas.js'; // canvas never font-renders pictographs
 import {
   BURGER,
   applyDifficulty,
@@ -319,14 +321,17 @@ export default {
       g.fillStyle = '#4A3B36';
       g.font = '700 15px system-ui, sans-serif';
       g.fillText(t(`mg.burger.ing.${id}`), 100, y - rowH / 2 + 4);
+      // V6/D3: authored check/chevron via iconCanvas — first-ever decode is
+      // async (onReady flips needsUpdate; the per-second countdown repaint
+      // heals layout drift), every later paint is synchronous from cache.
       if (i < this.placed) {
-        g.font = '900 18px system-ui, sans-serif';
-        g.fillStyle = '#2E8B57';
-        g.fillText('✓', 28, y - rowH / 2 + 5);
+        drawIcon(g, iconTinted('check', 18, '#2E8B57'), 19, y - rowH / 2 - 9, 18, () => {
+          this.ticketTex.needsUpdate = true;
+        });
       } else if (i === this.placed) {
-        g.font = '900 18px system-ui, sans-serif';
-        g.fillStyle = '#D64545';
-        g.fillText('▶', 28, y - rowH / 2 + 5);
+        drawIcon(g, iconTinted('arrowRight', 18, '#D64545'), 19, y - rowH / 2 - 9, 18, () => {
+          this.ticketTex.needsUpdate = true;
+        });
       }
     }
     this.ticketTex.needsUpdate = true;

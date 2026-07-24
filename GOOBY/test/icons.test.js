@@ -332,3 +332,149 @@ test('iconContentsJson: appearances entries present (shipped) / absent (fallback
   assert.equal(fallback.images.length, 1);
   assert.equal(fallback.images[0].filename, 'AppIcon-512@2x.png');
 });
+
+// ===========================================================================
+// V6/D3 (PLAN6 Wave D) — authored SVG icon catalogs (ui/foodIcons.js +
+// ui/icons.js) replace every raw-emoji lookup table. These tests pin the
+// catalog-sync contract (every foods.js id / furniture.js slot / crops.js id
+// resolves), SVG well-formedness (parse-able, zero emoji codepoints inside),
+// and that recapOverlay.logic.js stays headless-pure (icon NAMES only).
+// ===========================================================================
+
+import { FOODS } from '../src/data/foods.js';
+import { CROPS } from '../src/data/crops.js';
+import { FURNITURE } from '../src/data/furniture.js';
+import {
+  getFoodIcon, getCropIcon, getSlotIcon, getFurnitureIcon,
+  foodIconIds, slotIconIds,
+} from '../src/ui/foodIcons.js';
+import { icon, iconNames, iconTinted, stripRawGlyphs } from '../src/ui/icons.js';
+import { HIGHLIGHT_ICONS, endCardHighlights } from '../src/ui/recapOverlay.logic.js';
+
+/** Emoji / pictograph codepoints that must never appear in rendered output.
+ * eslint-disable-next-line applies: matching LONE variation selectors / ZWJ is
+ * the point — the assertion rejects any sequence fragment. */
+// eslint-disable-next-line no-misleading-character-class
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0E}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{25A0}-\u{25FF}\u{2665}]/u;
+
+/**
+ * Minimal XML well-formedness check for the generated SVG strings: every
+ * opened tag closes in order, attributes keep balanced double quotes, and
+ * self-closing tags are accepted. (No DOMParser in node:test — this is
+ * deliberately strict enough for machine-generated markup.)
+ * @param {string} svg
+ * @returns {string|null} an error description, or null when well-formed
+ */
+function xmlError(svg) {
+  if ((svg.match(/"/g) ?? []).length % 2 !== 0) return 'unbalanced quotes';
+  const stack = [];
+  const tagRe = /<(\/?)([a-zA-Z][\w-]*)((?:[^"<>]|"[^"]*")*?)(\/?)>/g;
+  let last = 0;
+  let m;
+  while ((m = tagRe.exec(svg)) !== null) {
+    const between = svg.slice(last, m.index);
+    if (between.includes('<') || between.includes('>')) return `stray angle bracket near ${last}`;
+    last = tagRe.lastIndex;
+    const [, close, name, , selfClose] = m;
+    if (close) {
+      if (stack.pop() !== name) return `mismatched </${name}>`;
+    } else if (!selfClose) {
+      stack.push(name);
+    }
+  }
+  if (svg.slice(last).trim() !== '') return 'trailing junk after last tag';
+  if (stack.length > 0) return `unclosed <${stack[stack.length - 1]}>`;
+  return null;
+}
+
+test('V6/D3 foodIcons: every foods.js id resolves to an authored icon (catalog sync)', () => {
+  const have = new Set(foodIconIds());
+  for (const food of FOODS) {
+    assert.ok(have.has(food.id), `foodIcons.js is missing an authored glyph for '${food.id}'`);
+    const svg = getFoodIcon(food.id, 34);
+    assert.ok(svg.startsWith('<svg '), `getFoodIcon('${food.id}') must return SVG markup`);
+    assert.match(svg, /width="34" height="34"/, 'consumer-sized');
+  }
+});
+
+test('V6/D3 foodIcons: every furniture.js slot resolves to an authored category icon', () => {
+  const have = new Set(slotIconIds());
+  const slots = new Set(FURNITURE.map((e) => e.slot));
+  for (const slot of slots) {
+    assert.ok(have.has(slot), `foodIcons.js is missing a category glyph for slot '${slot}'`);
+  }
+  // and the entry-level lookup resolves through the slot for every item
+  for (const entry of FURNITURE) {
+    assert.ok(getFurnitureIcon(entry, 34).startsWith('<svg '), `furniture '${entry.id}'`);
+  }
+});
+
+test('V6/D3 foodIcons: every crops.js id resolves (crop ids are food ids)', () => {
+  for (const crop of CROPS) {
+    const svg = getCropIcon(crop.id, 26);
+    assert.ok(svg.startsWith('<svg '), `getCropIcon('${crop.id}')`);
+    assert.ok(new Set(foodIconIds()).has(crop.id), `crop '${crop.id}' must map onto the food catalog`);
+  }
+});
+
+test('V6/D3 SVG well-formedness: food + slot catalogs parse and carry zero emoji codepoints', () => {
+  for (const id of foodIconIds()) {
+    const svg = getFoodIcon(id, 24);
+    assert.equal(xmlError(svg), null, `food '${id}': ${xmlError(svg)}`);
+    assert.ok(!EMOJI_RE.test(svg), `food '${id}' contains an emoji codepoint`);
+  }
+  for (const id of slotIconIds()) {
+    const svg = getSlotIcon(id, 24);
+    assert.equal(xmlError(svg), null, `slot '${id}': ${xmlError(svg)}`);
+    assert.ok(!EMOJI_RE.test(svg), `slot '${id}' contains an emoji codepoint`);
+  }
+});
+
+test('V6/D3 SVG well-formedness: every icons.js glyph parses and carries zero emoji codepoints', () => {
+  for (const name of iconNames()) {
+    const svg = icon(name, 24);
+    assert.equal(xmlError(svg), null, `icon '${name}': ${xmlError(svg)}`);
+    assert.ok(!EMOJI_RE.test(svg), `icon '${name}' contains an emoji codepoint`);
+  }
+});
+
+test('V6/D3 iconTinted: resolves currentColor to an explicit fill (canvas rasterization)', () => {
+  const svg = iconTinted('musicNote', 64, '#FF7BA9');
+  assert.ok(!svg.includes('currentColor'), 'no currentColor left for CSS-less decode');
+  assert.ok(svg.includes('#FF7BA9'));
+  assert.equal(xmlError(svg), null);
+});
+
+test('V6/D3 recap logic: HIGHLIGHT_ICONS values are icons.js glyph NAMES, never emoji', () => {
+  const names = new Set(iconNames());
+  for (const [statId, iconName] of Object.entries(HIGHLIGHT_ICONS)) {
+    assert.ok(!EMOJI_RE.test(iconName), `'${statId}' carries an emoji`);
+    assert.match(iconName, /^[a-zA-Z][a-zA-Z0-9]*$/, `'${statId}' must be a bare glyph name`);
+    assert.ok(names.has(iconName), `'${statId}' → '${iconName}' is not an icons.js glyph`);
+  }
+});
+
+test('V6/D3 recap logic: endCardHighlights output carries names only (headless-pure)', () => {
+  const names = new Set(iconNames());
+  const lines = [
+    { id: 'games', value: 4 },
+    { id: 'coinsEarned', value: 120 },
+    { id: 'washes', value: 2 },
+    { id: 'unknownStat', value: 9 },
+  ];
+  for (const h of endCardHighlights(lines, 3)) {
+    assert.ok(!EMOJI_RE.test(h.icon), `'${h.id}' highlight carries an emoji`);
+    assert.ok(names.has(h.icon), `'${h.id}' → '${h.icon}' is not an icons.js glyph`);
+  }
+});
+
+test('V6/D3 stripRawGlyphs: removes emoji + collapses leftover whitespace, keeps text intact', () => {
+  assert.equal(stripRawGlyphs('Schneller! \u{1F525}'), 'Schneller!');
+  assert.equal(stripRawGlyphs('\u{26F3} Bahn 2/6 \u{00B7} Par 3'), 'Bahn 2/6 \u{00B7} Par 3');
+  assert.equal(stripRawGlyphs('\u{1F4E6} 1/5 \u{2192} Museum'), '1/5 Museum');
+  // U+23F3 hourglass (Misc Technical block) — the framework/veil loading label
+  assert.equal(stripRawGlyphs('Loading\u{2026} \u{23F3}'), 'Loading\u{2026}');
+  assert.equal(stripRawGlyphs('plain text stays'), 'plain text stays');
+  assert.equal(stripRawGlyphs(''), '');
+  assert.equal(stripRawGlyphs(null), '');
+});

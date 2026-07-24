@@ -49,6 +49,7 @@ import { createParticles } from '../../gfx/particles.js';
 import { streakRate, createSpeedLines } from '../../gfx/speedLines.js';
 import { tween, easings } from '../../gfx/tween.js';
 import { prefersReducedMotion } from '../../ui/ui.js';
+import { icon, stripRawGlyphs } from '../../ui/icons.js'; // V6/D3: authored parcel chip
 import {
   DELIVERY,
   DELIVERY_FX, // V4/GAME-POLISH-5
@@ -389,13 +390,18 @@ export default {
   updateChip() {
     if (!this.chip) return;
     const dest = this.destination();
-    const ticket = t('mg.delivery.ticket', { n: this.drops, max: DELIVERY.PARCELS });
+    // V6/D3: authored crate glyph + glyph-stripped ticket text
+    // ('mg.delivery.ticket' still opens with a raw parcel emoji until D4's
+    // v2-games-e.js sweep lands; the '→' arrow is stripped too, so the
+    // destination joins with '·' instead).
+    const ticket = stripRawGlyphs(t('mg.delivery.ticket', { n: this.drops, max: DELIVERY.PARCELS }));
     const fragile = this.drops === this.fragileParcel
       ? ` · ${t(this.fragileDamaged ? 'v3.depth.delivery.damaged' : 'v3.depth.delivery.fragile')}`
       : '';
-    this.chip.textContent = dest
-      ? `${ticket}${fragile} → ${t(`sticker.landmarks.${dest.id}.name`)}`
+    const text = dest
+      ? `${ticket}${fragile} · ${t(`sticker.landmarks.${dest.id}.name`)}`
       : `${ticket}${fragile}`;
+    this.chip.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${icon('crate', 16)}<span>${text}</span></span>`;
   },
 
   /** Track score with the §C1.2 #5 floor and mirror it into the HUD. */

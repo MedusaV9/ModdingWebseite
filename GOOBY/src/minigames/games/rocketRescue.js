@@ -17,6 +17,8 @@ import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { getAchievementsEngine } from '../../systems/achievementsEngine.js';
 import { clampFloatTextToView } from '../framework.js';
+import { icon, iconTinted } from '../../ui/icons.js'; // V6/D3: authored HUD glyphs
+import { drawIcon } from '../../ui/iconCanvas.js'; // V6/D3: floats never font-render emoji
 // V4/GAME-POLISH-4: strings.js is frozen (PLAN4 §E0.1-8) — new juice strings
 // ride the versioned module through the local tx() fallback below.
 import { EN as GP4_EN, DE as GP4_DE } from '../../data/strings/v4-gpgroup4.js';
@@ -118,14 +120,19 @@ function makeGlowTexture(color) {
 function createFloatTexts(scene, camera) {
   const active = new Set();
   return {
-    spawn(text, pos, color = '#FFFFFF') {
+    /** V6/D3: optional opts.icon (SVG markup, e.g. iconTinted(...)) renders
+     * an authored glyph after the text — floats never font-render emoji. */
+    spawn(text, pos, color = '#FFFFFF', opts = null) {
       const canvas = document.createElement('canvas');
       const font = '900 40px system-ui, sans-serif';
       // V4/GAME-POLISH-4: size the canvas to the text — long labels
       // ("Butter landing!") used to clip at the fixed 200 px width.
       const probe = canvas.getContext('2d');
       probe.font = font;
-      const w = Math.max(200, Math.ceil(probe.measureText(text).width) + 28);
+      const iconSvg = opts?.icon ?? null;
+      const iconPx = 36;
+      const textW = Math.ceil(probe.measureText(text).width);
+      const w = Math.max(200, textW + 28 + (iconSvg ? iconPx + 8 : 0));
       canvas.width = w;
       canvas.height = 80;
       const g = canvas.getContext('2d');
@@ -134,10 +141,18 @@ function createFloatTexts(scene, camera) {
       g.textBaseline = 'middle';
       g.lineWidth = 8;
       g.strokeStyle = 'rgba(8,10,26,0.9)';
-      g.strokeText(text, w / 2, 40);
+      const textX = iconSvg ? (w - iconPx - 8) / 2 : w / 2;
+      g.strokeText(text, textX, 40);
       g.fillStyle = color;
-      g.fillText(text, w / 2, 40);
+      g.fillText(text, textX, 40);
       const tex = new THREE.CanvasTexture(canvas);
+      if (iconSvg) {
+        // deferred first-decode repaint flips needsUpdate; cached spawns
+        // (every one after the first) draw synchronously
+        drawIcon(g, iconSvg, textX + textW / 2 + 8, 40 - iconPx / 2, iconPx, () => {
+          tex.needsUpdate = true;
+        });
+      }
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
       // clamp margin scales with the sprite so wide labels stay fully on-screen
@@ -473,10 +488,10 @@ export default {
       `<span>${t('mg.rocket.hud.fuel')}</span>` +
       '<span style="display:inline-block;width:52px;height:8px;border-radius:4px;background:rgba(0,0,0,0.25);overflow:hidden;">' +
       '<span class="rr-fill" style="display:block;height:100%;border-radius:4px;background:#7ED957;width:100%"></span></span>' +
-      '<span class="rr-bun">🐰 0/5</span>';
+      `<span class="rr-bun" style="display:inline-flex;align-items:center;gap:4px">${icon('rabbit', 18)}<span class="rr-bun-n">0/5</span></span>`;
     (document.getElementById('ui') ?? document.body).appendChild(this.chip);
     this.fillEl = this.chip.querySelector('.rr-fill');
-    this.bunEl = this.chip.querySelector('.rr-bun');
+    this.bunEl = this.chip.querySelector('.rr-bun-n'); // V6/D3: count span only (rabbit SVG stays put)
     this.lastFuelPct = 100;
 
     // --- input: hold = thrust, pointer x thirds = tilt (§C10.1 controls) ----
@@ -582,7 +597,7 @@ export default {
       this.squashCraft(); // V4/GAME-POLISH-4
       ctx.audio.play('rocket.land.hard');
       ctx.hud.banner(t('mg.rocket.hard'));
-      this.floats.spawn('−10⛽', craftPos.clone(), '#FF6B6B');
+      this.floats.spawn('−10', craftPos.clone(), '#FF6B6B', { icon: iconTinted('fuelCan', 36, '#FF6B6B') });
       this.particles.emit('dizzyStars', craftPos.clone().add(new THREE.Vector3(0, 0.5, 0)));
       this.shakeT = 0.45;
       this.gooby.setEmotion('sad');
@@ -638,7 +653,7 @@ export default {
       const view = this.canViews[ev.index];
       if (view) this.particles.emit('sparkles', view.grp.position.clone(), { count: 6 });
       // V4/G74: the logic reports the (Endlos-thinned) refill amount
-      this.floats.spawn(`+${Math.round(ev.amount ?? ROCKET.FUEL_PICKUP_AMOUNT)}⛽`, craftPos.clone(), '#63E0FF');
+      this.floats.spawn(`+${Math.round(ev.amount ?? ROCKET.FUEL_PICKUP_AMOUNT)}`, craftPos.clone(), '#63E0FF', { icon: iconTinted('fuelCan', 36, '#63E0FF') });
     } else if (ev.type === 'fuelLow') {
       ctx.audio.play('rocket.fuelLow');
       ctx.hud.banner(t('mg.rocket.fuelLow'));
@@ -668,7 +683,7 @@ export default {
       this.ctx.onScore(final - this.shownScore);
       this.shownScore = final;
       if (s.fuel > 0) {
-        this.floats.spawn(`+${Math.floor(s.fuel / ROCKET.FUEL_SCORE_DIVISOR)}⛽`, this.craft.position.clone(), '#63E0FF');
+        this.floats.spawn(`+${Math.floor(s.fuel / ROCKET.FUEL_SCORE_DIVISOR)}`, this.craft.position.clone(), '#63E0FF', { icon: iconTinted('fuelCan', 36, '#63E0FF') });
       }
     }
     if (reason === 'complete') {
@@ -841,8 +856,8 @@ export default {
     }
     // V4/G74 §G5.4 Endlos: rescues keep counting past the field size
     const bunTxt = this.tune.ENDLESS
-      ? `🐰 ${state.rescued}`
-      : `🐰 ${state.rescued}/${ROCKET.PLATFORM_COUNT}`;
+      ? `${state.rescued}`
+      : `${state.rescued}/${ROCKET.PLATFORM_COUNT}`;
     if (this.bunEl.textContent !== bunTxt) this.bunEl.textContent = bunTxt;
   },
 

@@ -137,6 +137,50 @@ const PATHS = {
     '<path d="M21.6 6.6a5.4 5.4 0 0 1-7.3 6.5L7.4 20a2.3 2.3 0 0 1-3.3-3.3l6.9-6.9a5.4 5.4 0 0 1 6.5-7.3L14 6l.7 3.3L18 10l3.6-3.4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
   radish:
     '<path d="M12 8.8c3.8 0 6.6 2.5 6.6 5.6 0 3.4-3.1 5.6-5.6 6.9a2.1 2.1 0 0 1-2 0c-2.5-1.3-5.6-3.5-5.6-6.9 0-3.1 2.8-5.6 6.6-5.6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 8.8C12 5.4 9.6 3.2 6.4 3c.3 3.3 2.5 5.4 5.6 5.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 8.8c0-3.4 2.4-5.6 5.6-5.8-.3 3.3-2.5 5.4-5.6 5.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 16.6v2.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>',
+  // ── V6/D3 (PLAN6 Wave D): authored glyphs for the raw-emoji end-game —
+  // recap highlight names, loading-veil accents, tray/wash chrome and the
+  // minigame HUD tickets/badges (same plumping language: fat 24×24 shapes,
+  // round joins, white accents; single-color via currentColor).
+  fertilizer:
+    '<path d="M8.6 7.4 6.6 4.8c1.2-.9 2.3-1.2 3.3-.8L12 5l2.1-1c1-.4 2.1-.1 3.3.8l-2 2.6c2 1.3 3.2 3.5 3.2 6 0 4.3-2.9 7.4-6.6 7.4s-6.6-3.1-6.6-7.4c0-2.5 1.2-4.7 3.2-6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 17.2v-3" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.85" fill="none"/><path d="M12 14.2c0-2.1-1.5-3.5-3.6-3.6.1 2.1 1.6 3.5 3.6 3.6zm0 0c0-2.1 1.5-3.5 3.6-3.6-.1 2.1-1.6 3.5-3.6 3.6z" fill="#fff" opacity="0.85"/>',
+  suds: '<circle cx="9.2" cy="9.8" r="6.6"/><circle cx="16.9" cy="13.9" r="4.7"/><circle cx="10" cy="18.8" r="3.1"/><circle cx="7" cy="7.6" r="2" fill="#fff" opacity="0.55"/><circle cx="15.8" cy="12.4" r="1.2" fill="#fff" opacity="0.5"/>',
+  calendar:
+    '<rect x="3.2" y="4.8" width="17.6" height="15.6" rx="3"/><path d="M7.6 2.4v4.2M16.4 2.4v4.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M3.2 9.6h17.6" stroke="#fff" stroke-width="1.6" opacity="0.6"/><rect x="13.2" y="12.2" width="4.4" height="4.4" rx="1.3" fill="#fff" opacity="0.85"/>',
+  road: '<path d="M9.2 3h5.6a1 1 0 0 1 1 .9l1.9 16a1 1 0 0 1-1 1.1H7.3a1 1 0 0 1-1-1.1l1.9-16a1 1 0 0 1 1-.9z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 5.2v2.4M12 10.6v2.8M12 16.4v3.2" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.8" fill="none"/>',
+  crate:
+    '<rect x="3.4" y="5.2" width="17.2" height="14.4" rx="2.4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.4 7.2l13.2 10.4M18.6 7.2 5.4 17.6" stroke="#fff" stroke-width="1.9" stroke-linecap="round" opacity="0.7" fill="none"/><path d="M3.4 8.2h17.2M3.4 16.6h17.2" stroke="#fff" stroke-width="1.4" opacity="0.45"/>',
+  shoppingBag:
+    '<path d="M5.2 8.2h13.6a1 1 0 0 1 1 1.1l-.9 9.5a2.6 2.6 0 0 1-2.6 2.4H7.7a2.6 2.6 0 0 1-2.6-2.4l-.9-9.5a1 1 0 0 1 1-1.1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.8 8V6.8a3.2 3.2 0 0 1 6.4 0V8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M12 13.4c.5-.9 1.9-1 2.4-.1.4.8-.2 1.7-2.4 3.3-2.2-1.6-2.8-2.5-2.4-3.3.5-.9 1.9-.8 2.4.1z" fill="#fff" opacity="0.85"/>',
+  scroll:
+    '<path d="M7 3.6h10.2a2.4 2.4 0 0 1 2.4 2.4v11a3.4 3.4 0 0 1-3.4 3.4H7V3.6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7 3.6a2.3 2.3 0 0 0 0 4.6M16.2 20.4a3.4 3.4 0 0 0 3.4-3.4" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M10.2 9h5.8M10.2 12.6h4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.8" fill="none"/>',
+  suitcase:
+    '<rect x="3.2" y="7" width="17.6" height="13.4" rx="3"/><path d="M8.8 7V5.2A2.4 2.4 0 0 1 11.2 2.8h1.6a2.4 2.4 0 0 1 2.4 2.4V7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M8.4 7.4v12.6M15.6 7.4v12.6" stroke="#fff" stroke-width="1.6" opacity="0.5"/><circle cx="12" cy="13.7" r="1.8" fill="#fff" opacity="0.85"/>',
+  cottage:
+    '<path d="M3 11.6 12 3.2l3.2 3V4.4h3.2v4.8l2.6 2.4v7.8A1.6 1.6 0 0 1 19.4 21H4.6A1.6 1.6 0 0 1 3 19.4v-7.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13.8" r="2.7" fill="#fff" opacity="0.75"/><circle cx="12" cy="13.8" r="1" />',
+  palette:
+    '<path d="M12 2.8c-5.2 0-9.4 3.9-9.4 8.8s4.2 8.8 9 8.8c1.5 0 2.5-.9 2.5-2.1 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.3 0-1.1.9-1.9 2.1-1.9h2.2c2.5 0 4.2-1.8 4.2-4.1 0-3.9-4.2-6.8-9.4-6.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="8.4" r="1.6" fill="#fff" opacity="0.85"/><circle cx="13.4" cy="6.8" r="1.6" fill="#fff" opacity="0.6"/><circle cx="6.6" cy="13.2" r="1.6" fill="#fff" opacity="0.4"/>',
+  fuelCan:
+    '<path d="M7 3.2h7.8a2 2 0 0 1 1.4.6l2.6 2.6a2 2 0 0 1 .6 1.4v10.8a2.2 2.2 0 0 1-2.2 2.2H7a2.2 2.2 0 0 1-2.2-2.2V5.4A2.2 2.2 0 0 1 7 3.2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 6.6h4.4" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.75" fill="none"/><path d="M12 10.4c1.5 1.7 2.3 3 2.3 4.1a2.3 2.3 0 0 1-4.6 0c0-1.1.8-2.4 2.3-4.1z" fill="#fff" opacity="0.85"/>',
+  horn: '<path d="M7 8.9 17.4 4a1.5 1.5 0 0 1 2.1 1.4v13.2a1.5 1.5 0 0 1-2.1 1.4L7 15.1V8.9z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="2.6" y="8.9" width="4.4" height="6.2" rx="1.6"/><path d="M21.8 9.6a4.6 4.6 0 0 1 0 4.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M9.4 9.9v4.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.6" fill="none"/>',
+  rocket:
+    '<path d="M12 2.2c3.1 1.8 5 5.2 5 8.9 0 2.5-.7 4.8-2 6.6H9c-1.3-1.8-2-4.1-2-6.6 0-3.7 1.9-7.1 5-8.9z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.1" fill="#fff" opacity="0.8"/><path d="M8 13.6l-3 4.5c-.4.7.1 1.5.9 1.5h3.3M16 13.6l3 4.5c.4.7-.1 1.5-.9 1.5h-3.3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10.5 18.4h3c0 1.5-.5 2.7-1.5 3.7-1-1-1.5-2.2-1.5-3.7z"/>',
+  brickWall:
+    '<rect x="2.8" y="4.4" width="18.4" height="15.2" rx="2.2"/><path d="M2.8 9.5h18.4M2.8 14.5h18.4M12 4.4v5.1M7.4 9.5v5M16.6 9.5v5M12 14.5v5.1" stroke="#fff" stroke-width="1.6" opacity="0.7" fill="none"/>',
+  pot: '<path d="M4.8 9.6h14.4a1 1 0 0 1 1 1v5.2a4.4 4.4 0 0 1-4.4 4.4H8.2a4.4 4.4 0 0 1-4.4-4.4v-5.2a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12.6H2.2M20 12.6h1.8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M4.8 12.4h14.4" stroke="#fff" stroke-width="1.6" opacity="0.55"/><path d="M9.2 6.8c-.3-1.1.6-1.6.3-2.8M13.9 6.8c-.3-1.1.6-1.6.3-2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>',
+  flame:
+    '<path d="M12 2.6c.9 2.4 2.4 4 4 5.9 1.4 1.6 2.4 3.4 2.4 5.5A6.7 6.7 0 0 1 12 20.9a6.7 6.7 0 0 1-6.4-6.9c0-2.1 1-3.9 2.4-5.5 1.6-1.9 3.1-3.5 4-5.9z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 20.9c-1.9 0-3.3-1.4-3.3-3.2 0-1.9 1.6-3.2 3.3-4.9 1.7 1.7 3.3 3 3.3 4.9 0 1.8-1.4 3.2-3.3 3.2z" fill="#fff" opacity="0.6"/>',
+  candle:
+    '<rect x="9" y="8.2" width="6" height="10.4" rx="1.7"/><rect x="5.4" y="18.4" width="13.2" height="3" rx="1.5"/><path d="M12 2c1.1 1.3 1.7 2.4 1.7 3.4a1.7 1.7 0 0 1-3.4 0c0-1 .6-2.1 1.7-3.4z"/><path d="M9 10.2c.9.7 1.5 1.8 1.5 3.1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" opacity="0.6" fill="none"/>',
+  cake: '<path d="M4 12.6c0-3.2 3.6-5.6 8-5.6s8 2.4 8 5.6v4.8a1.8 1.8 0 0 1-1.8 1.8H5.8A1.8 1.8 0 0 1 4 17.4v-4.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 13.4c1.3 1 2.3-.7 3.7.1 1.4.8 2.4 1.3 4.3.3 1.9-1 2.6-1.3 4-.5 1.4.8 2.5 1.1 4 .1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.8"/><circle cx="12" cy="4.4" r="1.8"/><path d="M12 5.8v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>',
+  clover:
+    '<circle cx="8.1" cy="8.5" r="3.8"/><circle cx="15.9" cy="8.5" r="3.8"/><circle cx="12" cy="14.1" r="3.8"/><path d="M12 14.4c-.6 2.8-.2 5 1.7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="7" cy="7.2" r="1.2" fill="#fff" opacity="0.6"/>',
+  burst:
+    '<path d="M12 2.2l2 5.4 5.2-2.6-2.6 5.2 5.4 2-5.4 2 2.6 5.2-5.2-2.6-2 5.4-2-5.4-5.2 2.6 2.6-5.2-5.4-2 5.4-2-2.6-5.2 5.2 2.6 2-5.4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12.2" r="2.3" fill="#fff" opacity="0.65"/>',
+  golfFlag:
+    '<path d="M9.6 2.8v14.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M9.6 3.2l8.8 2.7-8.8 2.7V3.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><ellipse cx="12" cy="19.4" rx="7.4" ry="2.8" fill="none" stroke="currentColor" stroke-width="2.2"/>',
+  musicNote:
+    '<path d="M9.4 18.4V6.6a1.3 1.3 0 0 1 1-1.3l7.6-1.9a1.3 1.3 0 0 1 1.6 1.3v11.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" fill="none"/><path d="M9.4 9.4l10.2-2.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" fill="none"/><ellipse cx="6.5" cy="18.6" rx="3" ry="2.5"/><ellipse cx="16.7" cy="16.4" rx="3" ry="2.5"/>',
+  // ── end V6/D3 glyphs ──
 };
 
 /**
@@ -157,4 +201,57 @@ export function icon(name, size = 24) {
 /** @returns {string[]} all icon names */
 export function iconNames() {
   return Object.keys(PATHS);
+}
+
+/**
+ * V6/D3: icon() with `currentColor` resolved to an explicit color — for
+ * canvas rasterization (iconCanvas.js), where the SVG decodes in an Image
+ * outside any CSS cascade and currentColor would land as black.
+ * @param {string} name key in the icon set
+ * @param {number} size px
+ * @param {string} color any CSS color literal (e.g. '#FF7BA9')
+ * @returns {string} SVG markup
+ */
+export function iconTinted(name, size, color) {
+  return icon(name, size).replaceAll('currentColor', color);
+}
+
+// ── V6/D3: raw-glyph strip for HUD text ─────────────────────────────────────
+// Some t() string VALUES still carry decorative emoji (owned by the D2/D4
+// strings sweeps — e.g. 'mg.golf.hole', 'drive.crashes', 'mg.speedfx.up').
+// Icon-capable consumers render an authored icon() next to the text and run
+// the text through this helper so the emoji never double-renders, regardless
+// of which wave-D commit lands first. Once the string values are cleaned this
+// becomes a no-op. Codepoints are written as escapes on purpose (the D4
+// emoji-audit gate scans source literals).
+/* eslint-disable no-misleading-character-class -- matching lone variation
+   selectors / ZWJ is intentional: this strip-regex REMOVES sequence fragments. */
+const RAW_GLYPH_RE = new RegExp(
+  '[' +
+    '\\u{1F000}-\\u{1FAFF}' + // symbols & pictographs, incl. supplemental
+    '\\u{2600}-\\u{27BF}' + //   misc symbols + dingbats (⛳ 💥 ✨ …)
+    '\\u{2B00}-\\u{2BFF}' + //   misc symbols and arrows (⭐ …)
+    '\\u{FE0E}\\u{FE0F}' + //    variation selectors
+    '\\u{200D}' + //             zero-width joiner
+    '\\u{2190}-\\u{21FF}' + //   arrows (→ …)
+    '\\u{231A}\\u{231B}' + //    watch + hourglass (⌚ ⌛)
+    '\\u{23CF}\\u{23E9}-\\u{23FA}' + // eject + media/clock emoji (⏳ ⏰ ⏸ …)
+    '\\u{20E3}' + //             combining enclosing keycap
+    '\\u{2B50}\\u{2764}\\u{263A}\\u{2665}\\u{266A}\\u{266B}' +
+  ']',
+  'gu'
+);
+/* eslint-enable no-misleading-character-class */
+
+/**
+ * Strip raw emoji/pictograph glyphs out of a display string (HUD tickets,
+ * banners, chips) and collapse the whitespace they leave behind.
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripRawGlyphs(text) {
+  return String(text ?? '')
+    .replace(RAW_GLYPH_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }

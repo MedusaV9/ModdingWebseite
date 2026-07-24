@@ -23,25 +23,15 @@ import { now } from '../core/clock.js';
 import { forecast } from '../systems/weather.js';
 import audio from '../audio/audio.js';
 import { icon } from './icons.js'; // V4/UI-DEEP: authored glyphs for UI chrome
+import { getCropIcon } from './foodIcons.js'; // V6/D3: authored crop art
 
-/** crop id → emoji (mirrors the fridge tray's food emojis — §C2.2 toasts).
- * CONTENT contract: gardenInteractions.js interpolates these into the
- * 'garden.harvested' toast copy, so the values stay text emoji. */
-export const CROP_EMOJI = Object.freeze({
-  radish: '🍠', carrot: '🥕', salad: '🥗', tomato: '🍅',
-  corn: '🌽', eggplant: '🍆', pumpkin: '🎃', watermelon: '🍉',
-});
-
-/** V4/FIX-EMOJI: crop id → authored icons.js glyph for the panel ROW chrome
- * (fixes the wrong 🍠 sweet-potato standing in for the radish/turnip crop —
- * Unicode has no radish; crops without an authored glyph keep their content
- * food emoji so the rows still mirror the fridge tray). */
-const CROP_ICON = Object.freeze({ radish: 'radish', carrot: 'carrot' });
-
+/** V6/D3: every crop resolves through the authored foodIcons catalog (crop
+ * ids ARE food ids) — the CROP_EMOJI table and its V4/FIX-EMOJI partial
+ * override are retired; gardenInteractions' harvest toast dropped its emoji
+ * interpolation in the same commit. */
 /** @param {string} cropId @param {number} [size] @returns {string} row glyph HTML */
 function cropGlyph(cropId, size = 26) {
-  const name = CROP_ICON[cropId];
-  return name ? icon(name, size) : (CROP_EMOJI[cropId] ?? icon('sprout', size));
+  return getCropIcon(cropId, size);
 }
 
 /** ☀️/☁️/🌧 procedural SVG icons (§C11.3) — stroke-free flat shapes. */

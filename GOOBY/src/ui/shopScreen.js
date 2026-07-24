@@ -55,72 +55,13 @@ import {
   appliedSurface,
 } from '../systems/furniturePlacement.js';
 import { icon } from './icons.js';
+// V6/D3 (PLAN6 Wave D): authored food/furniture card art — the FOOD_EMOJI /
+// FURN_EMOJI / SLOT_EMOJI lookup tables that used to live here are retired;
+// foodIcons.js is the one source of truth (interactions.js + decor.js share it).
+import { getFoodIcon, getFurnitureIcon } from './foodIcons.js';
 // V6/B3: aisle-sign strings live in the owned v6 module — resolved through
 // the tx() fallback below until B2 commits the strings.js import pair.
 import { EN as THM_EN, DE as THM_DE } from '../data/strings/v6-screen-themes.js';
-
-/** Food id → emoji (iconography, not translated text — mirrors G5's tray). */
-const FOOD_EMOJI = {
-  carrot: '🥕', apple: '🍎', banana: '🍌', bread: '🍞', cheese: '🧀',
-  watermelon: '🍉', 'donut-sprinkles': '🍩', cupcake: '🧁', salad: '🥗',
-  'ice-cream': '🍦', sandwich: '🥪', 'hot-dog': '🌭', pancakes: '🥞',
-  burger: '🍔', pizza: '🍕', cake: '🍰',
-  // V2/G22: G20's §C7 catalog additions (kept in sync with interactions.js)
-  radish: '🍠', tomato: '🍅', corn: '🌽', eggplant: '🍆', pumpkin: '🎃',
-  strawberry: '🍓', grapes: '🍇', croissant: '🥐', lollypop: '🍭',
-  cookie: '🍪', chocolate: '🍫', 'candy-bar': '🍬', muffin: '🥮',
-  fries: '🍟', 'corn-dog': '🍢', sundae: '🍨',
-  nutella: '🫙', // V3/G35 (§C6.1 — kept in sync with interactions.js)
-  // V4/G79 (§G9.3): Tiny Treats bakery rows (croissant keeps its v2 glyph).
-  cupcakePink: '🧁', cinnamonRoll: '🍥',
-};
-
-/** Furniture id → emoji (falls back to the slot emoji). */
-const FURN_EMOJI = {
-  loungeSofa: '🛋️', loungeDesignSofa: '🛋️', loungeSofaCorner: '🛋️',
-  televisionVintage: '📺', televisionModern: '📺',
-  rugRounded: '🧶', rugRectangle: '🧶', rugRound: '🧶', rugDoormat: '🧶', rugSquare: '🧶',
-  pottedPlant: '🪴', plantSmall1: '🌿', plantSmall2: '🌱', plantSmall3: '🍃',
-  lampRoundFloor: '💡', lampSquareFloor: '💡', lampSquareTable: '💡', lampRoundTable: '🏮',
-  bookcaseOpen: '📚', bookcaseClosedWide: '📚',
-  'proc:artSunset': '🌅', 'proc:artCarrot': '🥕', 'proc:artAbstract': '🎨',
-  table: '🍽️', tableCloth: '🍽️',
-  kitchenFridge: '🧊', kitchenFridgeLarge: '🧊',
-  toaster: '🍞', kitchenCoffeeMachine: '☕', kitchenBlender: '🥤',
-  kitchenCabinetUpper: '🗄️', kitchenCabinetUpperDouble: '🗄️',
-  bathtub: '🛁', showerRound: '🚿',
-  bathroomCabinet: '🗄️', bathroomCabinetDrawer: '🗄️',
-  bedSingle: '🛏️', bedDouble: '🛏️',
-  bear: '🧸', 'proc:miniGooby': '🐰',
-  // V2/G22 (§C8.1/§C8.3): the +30 catalog additions
-  loungeChair: '🛋️', tableCoffee: '🪵', tableCoffeeGlass: '🫖',
-  cabinetTelevision: '🗄️', radio: '📻', speaker: '🔊', ceilingFan: '🌀',
-  'proc:artSkyline': '🌆', 'proc:artRainbow': '🌈',
-  kitchenMicrowave: '♨️', kitchenBar: '🍹', stoolBar: '🪑',
-  washer: '🧺', shower: '🚿',
-  sideTable: '🗄️', sideTableDrawers: '🗄️', cabinetBed: '🛏️', cabinetBedDrawer: '🛏️',
-  coatRackStanding: '🧥', pillow: '🪶', pillowBlue: '🪶', books: '📚', trashcan: '🗑️',
-  'proc:benchWood': '🪑', 'proc:benchPastel': '🎀', 'proc:gnome': '🧙', 'proc:gnomeGold': '✨',
-  'proc:birdbath': '⛲', flowerBedWild: '🌼', flowerBedRose: '🌹',
-  'proc:pathDirt': '🛤️', pathStones: '🪨', treeDefault: '🌳', treeBlossom: '🌸',
-};
-
-/** Decor slot id → emoji (decorate panel + furniture groups share these). */
-export const SLOT_EMOJI = {
-  sofa: '🛋️', tv: '📺', rug: '🧶', plant: '🪴', lamp: '💡', bookcase: '📚',
-  wallArt: '🖼️', tableSet: '🍽️', fridge: '🧊', appliance: '☕', wallShelf: '🗄️',
-  tub: '🛁', shelf: '🗄️', bed: '🛏️', nightstand: '💡', plushie: '🧸',
-  // V2/G22: new indoor slots (§C8.1) + the 6 garden decor slots (§C8.3)
-  ceilingFan: '🌀', sideboard: '📻', bar: '🍹', washer: '🧺',
-  sideTable: '🗄️', floorClutter: '📚',
-  gardenBench: '🪑', gardenGnome: '🧙', birdbath: '⛲', flowerBed: '🌼',
-  gardenPath: '🪨', gardenTree: '🌳',
-};
-
-/** @param {import('../data/furniture.js').FurnitureEntry} entry */
-export function furnEmoji(entry) {
-  return FURN_EMOJI[entry.id] ?? SLOT_EMOJI[entry.slot] ?? '🪑';
-}
 
 /**
  * CSS background for a wallpaper/floor swatch chip (§D3-ish motif preview).
@@ -182,6 +123,10 @@ const SHOP_FIX_CSS = `
 .shop-card.g70-sick-medicine.g70-pulse{animation:g70-shop-medicine 1.15s ease-in-out 3;}
 @keyframes g70-shop-medicine{0%,100%{transform:scale(1);box-shadow:0 0 .75rem rgba(255,123,169,.28)}50%{transform:scale(1.045);box-shadow:0 0 0 .5rem rgba(255,123,169,.18)}}
 /* ── end V4/G70 block. */
+/* ── V6/D3: authored SVG card art replaces font emoji (foodIcons.js). */
+.shop-card .shop-emoji svg{display:block;}
+.shop-buybar-name svg{vertical-align:-0.1875rem;}
+/* ── end V6/D3. */
 `;
 
 /**
@@ -344,7 +289,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
         ${owned > 0 ? `<span class="shop-count">×${owned}</span>` : ''}
         ${food.junk ? `<span class="g22-junk" aria-hidden="true">${icon('candy', 14)}</span>` : ''}
-        <span class="shop-emoji">${FOOD_EMOJI[food.id] ?? '🍽️'}</span>
+        <span class="shop-emoji">${getFoodIcon(food.id, 34)}</span>
         <span class="shop-name">${t(food.nameKey)}</span>
         ${priceTag(foodUnit(food))}
         ${foodValueChips(food)}`;
@@ -409,7 +354,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
       const total = () => unit * qty;
       bar.innerHTML = `
         <span class="shop-buybar-info">
-          <span class="shop-buybar-name">${FOOD_EMOJI[food.id] ?? ''} ${t(food.nameKey)}</span>
+          <span class="shop-buybar-name">${getFoodIcon(food.id, 16)} ${t(food.nameKey)}</span>
           <span class="shop-buybar-total">${t('shop.total')}: ${icon('coin', 13)}<span class="bb-total">${total()}</span>${atTrip() ? '' : ` · ${t('shop.qd.note')}`}</span>
         </span>
         <span class="shop-qty">
@@ -604,7 +549,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         : priceTag(NOUGAT.PRICE);
     card.innerHTML = `
       ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
-      <span class="shop-emoji">🍫</span>
+      <span class="shop-emoji">${getFoodIcon('chocolate', 34)}</span>
       <span class="shop-name">${t('nougat.shopName')}</span>
       ${state}`;
     card.addEventListener('click', () => {
@@ -653,7 +598,7 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
         ? `<span class="shop-state">${entry.default ? t('shop.free') : t('shop.owned')} · ${t('shop.placeNow')}</span>`
         : priceTag(entry.price);
     card.innerHTML = `
-      <span class="shop-emoji">${furnEmoji(entry)}</span>
+      <span class="shop-emoji">${getFurnitureIcon(entry, 34)}</span>
       <span class="shop-name">${t(entry.nameKey)}</span>
       ${state}`;
     card.addEventListener('click', () => {

@@ -52,6 +52,7 @@ import { createParticles } from '../../gfx/particles.js';
 // V4/GAME-POLISH-5: pooled 1-draw-call streaks + reduced-motion gate (§G4)
 import { streakRate, createSpeedLines } from '../../gfx/speedLines.js';
 import { prefersReducedMotion } from '../../ui/ui.js';
+import { icon, stripRawGlyphs } from '../../ui/icons.js'; // V6/D3: authored crash chip
 // V2/G26 (§C10.2): the city drives under the real day/night band
 import { bandAt } from '../../systems/dayNight.js';
 import { now } from '../../core/clock.js';
@@ -724,7 +725,10 @@ export default {
 
   updateChip() {
     if (!this.chip) return;
-    this.chip.textContent = t('drive.crashes', { n: this.crashes, max: DRIVE.CRASHES_FOR_TOW });
+    // V6/D3: authored burst glyph + glyph-stripped text ('drive.crashes'
+    // still opens with a raw collision emoji until D2's strings.js sweep).
+    const text = stripRawGlyphs(t('drive.crashes', { n: this.crashes, max: DRIVE.CRASHES_FOR_TOW }));
+    this.chip.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${icon('burst', 16)}<span>${text}</span></span>`;
   },
 
   /** §C4.5 bump: shake + „Autsch!" + speed to 30%; 3rd crash → tow. */

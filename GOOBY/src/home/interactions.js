@@ -31,6 +31,7 @@ import { deriveEmotion } from '../character/emotions.js';
 import { t } from '../data/strings.js';
 import { now, localDay } from '../core/clock.js';
 import { icon } from '../ui/icons.js'; // V4/G79: shared hunger/fun chip glyphs
+import { getFoodIcon } from '../ui/foodIcons.js'; // V6/D3: authored tray/ghost food art
 // V2/G20: pet-sim engines feeding the care pipeline (all pure modules)
 import { onEat as healthOnEat, tick as healthTick, HEALTH } from '../systems/health.js';
 import { onEat as weightOnEat, onBallFetch as weightOnBallFetch, tierOf } from '../systems/weight.js';
@@ -503,21 +504,9 @@ export function careEmotionFor(state, atMs) {
 // 2. WIRING (browser only — three.js via dynamic import, DOM inside functions)
 // ===========================================================================
 
-/** Food id → emoji for the tray + drag ghost (iconography, not translated text). */
-const FOOD_EMOJI = {
-  carrot: '🥕', apple: '🍎', banana: '🍌', bread: '🍞', cheese: '🧀',
-  watermelon: '🍉', 'donut-sprinkles': '🍩', cupcake: '🧁', salad: '🥗',
-  'ice-cream': '🍦', sandwich: '🥪', 'hot-dog': '🌭', pancakes: '🥞',
-  burger: '🍔', pizza: '🍕', cake: '🍰',
-  // V2/G20: §C7 catalog additions
-  radish: '🍠', tomato: '🍅', corn: '🌽', eggplant: '🍆', pumpkin: '🎃',
-  strawberry: '🍓', grapes: '🍇', croissant: '🥐', lollypop: '🍭',
-  cookie: '🍪', chocolate: '🍫', 'candy-bar': '🍬', muffin: '🥮',
-  fries: '🍟', 'corn-dog': '🍢', sundae: '🍨',
-  nutella: '🫙', // V3/G35 (§C6.1): jar glyph — SVG icon treatment in icons.js
-  // V4/G79 (§G9.3): Tiny Treats bakery rows (croissant keeps its v2 glyph).
-  cupcakePink: '🧁', cinnamonRoll: '🍥',
-};
+// V6/D3 (PLAN6 Wave D): the tray/ghost FOOD_EMOJI table is retired — the
+// authored foodIcons.js catalog is the one source of truth (shared with
+// shopScreen's cards and gardenPanel's crop rows).
 
 /** V2/G20: junkScore band → belly icon fill (§C7 green/yellow/orange). */
 const BELLY_BAND_COLOR = { ok: '#8BC98A', warn: '#F2C14E', high: '#F28C4E' };
@@ -575,6 +564,19 @@ const CARE_CSS = `
 .tray-care-item.g70-sick-medicine{outline:0.1875rem solid rgba(255,123,169,.72);outline-offset:0.125rem;animation:g70-medicine-pulse 1.8s ease-in-out infinite;}
 @keyframes g70-medicine-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,123,169,0)}50%{box-shadow:0 0 0 .4375rem rgba(255,123,169,.18)}}
 /* ── end V4/G70 block. */
+/* ── V6/D3: authored SVG art replaces font emoji (foodIcons.js / icons.js).
+   The ghost's old font-size grow (3.25rem → 4rem on g5-near) becomes a
+   width/height transition on the inline SVG. */
+.tray-emoji svg{display:block;}
+.tray-junk svg{display:block;color:var(--pink-dark,#E05F8D);}
+.tray-care-item[data-care-item="medicine"] .tray-emoji{color:var(--pink-dark,#E05F8D);}
+.tray-care-item[data-care-item="fertilizer"] .tray-emoji{color:#58A65C;}
+.g5-ghost svg{display:block;width:3.25rem;height:3.25rem;transition:width 120ms ease,height 120ms ease;}
+.g5-ghost.g5-near svg{width:4rem;height:4rem;}
+.g5-ghost-medicine{color:var(--pink-dark,#E05F8D);}
+.g5-float.g5-float-icon svg{display:block;color:var(--pink-dark,#E05F8D);filter:drop-shadow(0 2px 0 #fff);}
+.g5-wash-meter svg{display:block;color:var(--stat-hygiene,#6EC6FF);}
+/* ── end V6/D3. */
 `;
 
 let careStylesInjected = false;
@@ -992,6 +994,20 @@ function floatText(s, text, x, y, bad = false) {
   laterTimer(s, () => el.remove(), 1200);
 }
 
+/** V6/D3: floatText's icon twin — same juice, authored SVG payload
+ * (trusted module-local markup only; the medicine float used to be a raw
+ * pill emoji). */
+function floatIcon(s, svgMarkup, x, y) {
+  if (typeof document === 'undefined') return;
+  const el = document.createElement('div');
+  el.className = 'g5-float g5-float-icon';
+  el.innerHTML = svgMarkup;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  document.body.appendChild(el);
+  laterTimer(s, () => el.remove(), 1200);
+}
+
 // ---------------------------------------------------------------------------
 // pet / tickle / poke (§C3)
 // ---------------------------------------------------------------------------
@@ -1191,11 +1207,11 @@ function createFoodTrayPanel() {
         const btn = document.createElement('button');
         btn.className = 'tray-item';
         const food = getFood(id);
-        // V2/G20: §C7 junk foods carry a tiny 🍬 badge
-        const junkBadge = food?.junk ? `<span class="tray-junk" title="${t('tray.junkBadge')}">🍬</span>` : '';
+        // V2/G20: §C7 junk foods carry a tiny candy badge (V6/D3: authored)
+        const junkBadge = food?.junk ? `<span class="tray-junk" title="${t('tray.junkBadge')}">${icon('candy', 13)}</span>` : '';
         btn.innerHTML = `
           ${junkBadge}<span class="tray-count">×${count}</span>
-          <span class="tray-emoji">${FOOD_EMOJI[id] ?? '🍽️'}</span>
+          <span class="tray-emoji">${getFoodIcon(id, 34)}</span>
           <span class="tray-name">${t(`food.${id}`)}</span>
           ${food ? foodValueChips(food) : ''}`;
         btn.addEventListener('pointerdown', (e) => {
@@ -1265,8 +1281,9 @@ function mountCareRow(el, store, opts = {}) {
     }
   };
 
-  renderItem('medicine', '💊', true, null);
-  renderItem('fertilizer', '🌱', false, t('tray.fertilizerHint'));
+  // V6/D3: authored care glyphs (per-item tint via the CARE_CSS data-attr rules)
+  renderItem('medicine', icon('medicine', 34), true, null);
+  renderItem('fertilizer', icon('fertilizer', 34), false, t('tray.fertilizerHint'));
   el.appendChild(wrap);
 }
 
@@ -1278,7 +1295,9 @@ function startFoodDrag(s, foodId, downEvent) {
 
   const ghost = document.createElement('div');
   ghost.className = 'g5-ghost';
-  ghost.textContent = FOOD_EMOJI[foodId] ?? '🍽️';
+  // V6/D3: authored SVG (trusted module-local markup — .g5-ghost svg rules
+  // recreate the old font-size grow on g5-near).
+  ghost.innerHTML = getFoodIcon(foodId, 52);
   ghost.style.left = `${downEvent.clientX}px`;
   ghost.style.top = `${downEvent.clientY}px`;
   document.body.appendChild(ghost);
@@ -1369,8 +1388,8 @@ function startMedicineDrag(s, downEvent) {
   s.audio.play('ui.pick');
 
   const ghost = document.createElement('div');
-  ghost.className = 'g5-ghost';
-  ghost.textContent = '💊';
+  ghost.className = 'g5-ghost g5-ghost-medicine';
+  ghost.innerHTML = icon('medicine', 52); // V6/D3: authored pill ghost
   ghost.style.left = `${downEvent.clientX}px`;
   ghost.style.top = `${downEvent.clientY}px`;
   document.body.appendChild(ghost);
@@ -1442,7 +1461,7 @@ function performMedicine(s, screenPos) {
   // grimace (yuck!) … then relief (§C3.5)
   audio.play('gooby.refuse');
   ui.toast('care.medicineGiven');
-  if (screenPos) floatText(s, '💊', screenPos.x, screenPos.y - 40);
+  if (screenPos) floatIcon(s, icon('medicine', 30), screenPos.x, screenPos.y - 40);
   if (gooby) {
     gooby.setEmotion('grumpy');
     gooby.play('refuse').then(() => {
@@ -1612,7 +1631,7 @@ function startWash(s) {
   const overlay = document.createElement('div');
   overlay.className = 'g5-wash';
   overlay.innerHTML = `
-    <div class="g5-wash-meter">🫧 <span class="g5-suds-label"></span>
+    <div class="g5-wash-meter">${icon('suds', 18)} <span class="g5-suds-label"></span>
       <span class="g5-wash-track"><span class="g5-wash-fill"></span></span></div>
     <div class="g5-wash-hint">${t('wash.hint')}</div>`;
   const rinseBtn = document.createElement('button');
@@ -1622,7 +1641,7 @@ function startWash(s) {
   overlay.appendChild(rinseBtn);
   const closeBtn = document.createElement('button');
   closeBtn.className = 'btn btn-ghost btn-round g5-wash-close';
-  closeBtn.textContent = '✕';
+  closeBtn.innerHTML = icon('close', 18); // V6/D3: authored close glyph
   closeBtn.setAttribute('aria-label', t('ui.close'));
   closeBtn.addEventListener('click', () => endWash(s, {}));
   overlay.appendChild(closeBtn);

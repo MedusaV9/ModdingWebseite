@@ -1,5 +1,10 @@
 // Food catalog (§C5.1) — derived from the verbatim FOOD_TABLE in constants.js.
 // Pure data: no three.js/DOM. GLB models come from Kenney food-kit (agent G2).
+//
+// V6/D3 (PLAN6 Wave D) CONTRACT: every id in this catalog MUST have an
+// authored SVG icon in ui/foodIcons.js (the tray/shop/garden card art).
+// test/icons.test.js enforces the sync — when adding a food here, add its
+// glyph to FOOD_PATHS in foodIcons.js in the same commit.
 
 import { FOOD_TABLE } from './constants.js';
 

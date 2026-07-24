@@ -53,6 +53,8 @@ import {
 } from './recapOverlay.logic.js';
 // V6/B1: the same OS reduced-motion predicate every effect gate uses (AC-9)
 import { prefersReducedMotion } from './ui.js';
+// V6/D3: the logic layer emits icon NAMES; this view maps them to SVG here.
+import { icon } from './icons.js';
 
 const DEV = !!import.meta.env?.DEV;
 
@@ -337,6 +339,9 @@ canvas.g64-landscape-canvas {
   left: max(0.5rem, var(--rsafe-left, 0px));
   bottom: max(0.5rem, var(--rsafe-bottom, 0px));
 }
+/* V6/D3: authored SVG chips (logic emits names; icon() renders them here). */
+.g64-hl-icon svg { display: block; }
+.g64-end-coins svg { display: block; color: var(--yellow-dark, #E0B04A); }
 `;
 
 /** Inject the landscape stylesheet once (idempotent — loadingVeil pattern). */
@@ -885,7 +890,7 @@ function showEndCard() {
   const highlights = endCardHighlights(s.lines, 3);
   const chips = highlights.map((h, i) => `
       <div class="g64-hl-chip" style="animation-delay: ${420 + i * 150}ms">
-        <span class="g64-hl-icon">${h.icon}</span>
+        <span class="g64-hl-icon">${icon(h.icon, 20)}</span>
         <span class="g64-hl-n">${h.value}</span>
         <span class="g64-hl-label">${tx(`recap2.stat.${h.id}`)}</span>
       </div>`).join('');
@@ -904,7 +909,7 @@ function showEndCard() {
       <span class="g64-ring-n">${s.level}</span>
     </div>
     <div class="g64-end-title">${t('recap.title', { n: s.level })}</div>
-    ${coins > 0 ? `<div class="g64-end-coins">💰 <span data-coins>${t('recap.endcard.rewards', { n: 0 })}</span></div>` : ''}
+    ${coins > 0 ? `<div class="g64-end-coins">${icon('coin', 16)} <span data-coins>${t('recap.endcard.rewards', { n: 0 })}</span></div>` : ''}
     ${chips ? `<div class="g64-hl-title">${tx('recap2.endcard.highlights')}</div><div class="g64-hl">${chips}</div>` : ''}
     ${nextLine ? `<div class="g64-end-line g64-end-next">${nextLine}</div>` : ''}
     ${songLine ? `<div class="g64-end-song">${songLine}</div>` : ''}

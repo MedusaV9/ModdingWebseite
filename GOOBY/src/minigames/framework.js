@@ -36,7 +36,7 @@ import { now } from '../core/clock.js';
 // in shopTrip.js's import chain imports this module.
 import { isSurfTravel, clampSurfTravelCoins } from '../systems/shopTrip.js';
 import { hasGame, loadGame } from './registry.js';
-import { icon } from '../ui/icons.js';
+import { icon, stripRawGlyphs } from '../ui/icons.js'; // V6/D3: + defensive HUD-text glyph strip
 import { burstConfettiDom } from '../gfx/particles.js'; // G14: results polish (V4/FIX-JUICE: coin-fly now rides AC-9's pooled flyCoins)
 // ── V4/G56 imports (framework 2.0) ──
 import {
@@ -378,9 +378,9 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
         const detailText = detail
           ? `${tx(detail.key, detail.vars)}${detail.coin ? ` ${icon('coin', 16)}` : ''}`
           : '';
-        modifierRow = `<div class="mg-results-row g76-mod-row" style="--modifier-color:${r.modifierInfo.color}"><span>${tx('mg.results.modifierActive', { name: modifierName })}</span><span class="mg-value">${detailText}</span></div>`;
+        modifierRow = `<div class="mg-results-row g76-mod-row" style="--modifier-color:${r.modifierInfo.color}"><span>${stripRawGlyphs(tx('mg.results.modifierActive', { name: modifierName }))}</span><span class="mg-value">${detailText}</span></div>`;
         if (r.modifierInfo.type === 'glueckspilz') {
-          modifierRow += `<div class="mg-results-row g76-mod-row g76-roll-row" style="--modifier-color:${r.modifierInfo.color}"><span>🍀 ${tx('modifier.results.glueckspilz')}</span><span class="mg-value g76-roll-value">…</span></div>`;
+          modifierRow += `<div class="mg-results-row g76-mod-row g76-roll-row" style="--modifier-color:${r.modifierInfo.color}"><span>${icon('clover', 16)} ${tx('modifier.results.glueckspilz')}</span><span class="mg-value g76-roll-value">…</span></div>`;
         }
       }
       // ── end V4/G76 (results breakdown) ──
@@ -697,16 +697,26 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
     const BANNER_SEC = 1.2;
     const BANNER_QUEUED_SEC = 0.7;
     const BANNER_QUEUE_MAX = 3;
-    /** @type {string[]} */
+    /** @type {Array<{text: string, icon: string|null}>} */
     const bannerQueue = [];
     /** @type {HTMLElement|null} */
     let bannerEl = null;
     let bannerTimer = 0;
 
-    function showNextBanner(text) {
+    function showNextBanner(item) {
       bannerEl = document.createElement('div');
       bannerEl.className = 'mg-banner';
-      bannerEl.textContent = text;
+      // V6/D3: icon-capable banners — authored SVG leads, plain text follows.
+      // Text runs through the defensive glyph strip so emoji still living in
+      // t() string VALUES (D2/D4's sweeps) never font-render here.
+      const text = stripRawGlyphs(item.text);
+      if (item.icon) {
+        // inline style: .mg-banner lives in styles.css (another agent's file)
+        bannerEl.innerHTML = `<span class="mg-banner-icon" style="display:inline-block;vertical-align:-0.22em">${icon(item.icon, 30)}</span>`;
+        bannerEl.appendChild(document.createTextNode(` ${text}`));
+      } else {
+        bannerEl.textContent = text;
+      }
       hudEl.appendChild(bannerEl);
       const holdSec = bannerQueue.length > 0 ? BANNER_QUEUED_SEC : BANNER_SEC;
       bannerTimer = setTimeout(() => {
@@ -734,15 +744,20 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
       setTime(sec) {
         if (timeEl) timeEl.textContent = String(Math.max(0, Math.ceil(sec)));
       },
-      /** @param {string} text pre-translated (games pass t(...) themselves) */
-      banner(text) {
+      /**
+       * @param {string} text pre-translated (games pass t(...) themselves)
+       * @param {{icon?: string}} [opts] V6/D3: optional authored icons.js
+       *   glyph name rendered ahead of the (glyph-stripped) text
+       */
+      banner(text, opts) {
         if (!hudEl) return;
+        const item = { text, icon: opts?.icon ?? null };
         if (bannerEl) {
           if (bannerQueue.length >= BANNER_QUEUE_MAX) bannerQueue.shift();
-          bannerQueue.push(text);
+          bannerQueue.push(item);
           return;
         }
-        showNextBanner(text);
+        showNextBanner(item);
       },
     };
 
@@ -864,7 +879,7 @@ export function createMinigameFramework({ sceneManager, store, ui, audio }) {
               role="progressbar" aria-valuemin="0" aria-valuemax="100">
               <div class="mg-loading-bar-fill"></div>
             </div>
-            <div class="mg-loading-text">${tx('mg.loading')} <span data-pct></span></div>
+            <div class="mg-loading-text">${stripRawGlyphs(tx('mg.loading'))} <span data-pct></span></div>
             <div class="mg-loading-tip"></div>
           </div>
         </div>`;

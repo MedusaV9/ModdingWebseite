@@ -20,6 +20,7 @@ import { getStore } from '../../core/store.js'; // V4/POLISH-G: radio-wish resto
 // GP3: reduced-motion gate for the NEW celebration tweens (§AC-9 predicate).
 import { prefersReducedMotion } from '../../ui/ui.js';
 import { clampFloatTextToView } from '../framework.js';
+import { icon } from '../../ui/icons.js'; // V6/D3: authored crate/horn HUD glyphs
 import {
   HARBOR,
   HARBOR_JUICE, // GP3 juice knobs (crate pop)
@@ -488,13 +489,16 @@ export default {
     ctx.hud.banner(t('mg.harbor.hint'));
   },
 
-  /** HUD chip text (crates aboard + horn charges). */
+  /** HUD chip (crates aboard + horn charges) — V6/D3: authored SVG glyphs. */
   updateChip(force) {
     const s = this.engine.state;
-    const txt = `📦 ${s.crates} · 📯 ${s.hornCharges}`;
+    const txt = `${s.crates}·${s.hornCharges}`;
     if (force || this.chipTxt !== txt) {
       this.chipTxt = txt;
-      this.chip.textContent = txt;
+      this.chip.innerHTML =
+        `<span style="display:inline-flex;align-items:center;gap:4px">${icon('crate', 18)}${s.crates}</span>` +
+        ' · ' +
+        `<span style="display:inline-flex;align-items:center;gap:4px">${icon('horn', 18)}${s.hornCharges}</span>`;
     }
   },
 

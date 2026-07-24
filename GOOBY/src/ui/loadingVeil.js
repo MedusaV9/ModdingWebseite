@@ -39,6 +39,7 @@
 // this module under node is safe (no top-level DOM access).
 
 import { t, getLang } from '../data/strings.js';
+import { iconTinted, stripRawGlyphs } from './icons.js'; // V6/D3: authored ready-line accents + label glyph strip
 import { EN as ACUI_EN, DE as ACUI_DE } from '../data/strings/v4-acui-loading.js';
 import { EN as UI2_EN, DE as UI2_DE } from '../data/strings/v4-ui2.js';
 
@@ -225,9 +226,20 @@ const VEIL_CSS = `
 .acui-veil .mg-loading-tip {
   transition: opacity 200ms ease;
 }
-/* cozy mode accents on the ready line */
-.acui-veil[data-mode='home'] .mg-loading-ready::before { content: '🏡 '; }
-.acui-veil[data-mode='trip'] .mg-loading-ready::before { content: '🧳 '; }
+/* cozy mode accents on the ready line — V6/D3: authored SVG (data-URI
+   background; pseudo-elements have no cascade for inline SVG markup, and the
+   ready line is white-on-photo so the tint is baked into the URI). */
+.acui-veil .mg-loading-ready::before {
+  content: '';
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.375em;
+  vertical-align: -0.2em;
+  background: center / contain no-repeat;
+}
+.acui-veil[data-mode='home'] .mg-loading-ready::before { background-image: url("data:image/svg+xml,${encodeURIComponent(iconTinted('cottage', 24, '#FFFFFF'))}"); }
+.acui-veil[data-mode='trip'] .mg-loading-ready::before { background-image: url("data:image/svg+xml,${encodeURIComponent(iconTinted('suitcase', 24, '#FFFFFF'))}"); }
 /* reduced motion: plain fade instead of the iris, decorative loops off */
 @media (prefers-reduced-motion: reduce) {
   .acui-veil.acui-veil-in { animation: acui-veil-fade-in 160ms ease-out both; }
@@ -360,7 +372,7 @@ function buildCard(m, meta = {}) {
           role="progressbar" aria-valuemin="0" aria-valuemax="100">
           <div class="mg-loading-bar-fill"></div>
         </div>
-        <div class="mg-loading-text">${tx(s.labelKey)} <span data-pct></span></div>
+        <div class="mg-loading-text">${stripRawGlyphs(tx(s.labelKey))} <span data-pct></span></div>
         <div class="mg-loading-tip"></div>
       </div>
     </div>`;

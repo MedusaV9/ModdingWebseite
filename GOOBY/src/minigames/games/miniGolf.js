@@ -19,6 +19,7 @@ import { tween, easings } from '../../gfx/tween.js';
 import { createParticles } from '../../gfx/particles.js';
 import { prefersReducedMotion } from '../../ui/ui.js'; // V4/GAME-POLISH-4: gate new flash FX
 import { clampFloatTextToView } from '../framework.js'; // V6/C4 (GAME-JUICE)
+import { icon, stripRawGlyphs } from '../../ui/icons.js'; // V6/D3: authored flag chip
 import { createGooby } from '../../character/gooby.js';
 import { applyEquippedOutfits } from '../../character/outfitAttach.js';
 import { buildNougatschleuse } from '../../home/nougatMesh.js';
@@ -557,7 +558,10 @@ export default {
     if (!this.chip) return;
     const hole = this.hole();
     if (!hole) return;
-    this.chip.textContent = `${t('mg.golf.hole', { n: this.holeIdx + 1, max: this.course.length, par: hole.par })} · ${t('mg.golf.strokes', { n: this.strokes })}`;
+    // V6/D3: authored flag glyph + glyph-stripped text ('mg.golf.hole' still
+    // carries a raw flag emoji until D4's v2-games-e.js sweep lands).
+    const text = stripRawGlyphs(`${t('mg.golf.hole', { n: this.holeIdx + 1, max: this.course.length, par: hole.par })} · ${t('mg.golf.strokes', { n: this.strokes })}`);
+    this.chip.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${icon('golfFlag', 18)}<span>${text}</span></span>`;
   },
 
   /** Ball mesh ← physics state (world = island offset + local). */
