@@ -68,6 +68,9 @@ const ADAPTERS = Object.freeze({
   // V5/G06 (PLAN5 §V5): the two 5.0 certification sims.
   teaParty: ['simulateTeaAutoplay', 'ms'],
   hideSeek: ['simulateSeekAutoplay', 'ms'],
+  // V6/C3 (PLAN6 Wave C): the two 6.0 certification sims (C1/C2 exports).
+  lanternFloat: ['simulateLanternAutoplay', 'ms'],
+  snailMail: ['simulateSnailAutoplay', 'ms'],
 });
 
 // ---------------------------------------------------------------------------

@@ -67,10 +67,15 @@ const EXPECTED_INVERTIBLE = {
   // nonsense per §G2.1 rule 3 exemptions.
   teaParty: false,
   hideSeek: false,
+  // V6/C3 (PLAN6 Wave C): lanternFloat is a horizontal drag steer —
+  // screen-true per §G2.1 rule 4 → invertible (harborHopper §G3.1-c pattern);
+  // snailMail is positional path drawing → §G2.1 rule 3 exemption.
+  lanternFloat: true,
+  snailMail: false,
 };
 
-test('V4/G57 §G3.2: all 30 games declare controls.invertible (§G3.3 values)', () => {
-  assert.equal(MINIGAME_IDS.length, 30);
+test('V4/G57 §G3.2: all 32 games declare controls.invertible (§G3.3 values)', () => {
+  assert.equal(MINIGAME_IDS.length, 32);
   assert.deepEqual([...MINIGAME_IDS].sort(), Object.keys(EXPECTED_INVERTIBLE).sort());
   for (const id of MINIGAME_IDS) {
     // §E0.1-11: wave-2 modules (goobyWelt) may not be built yet — skip the

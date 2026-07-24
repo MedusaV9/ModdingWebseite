@@ -66,9 +66,9 @@ test('the 6 §E0.1-3 unlock levels are verbatim (UNLOCKS.MINIGAMES)', () => {
 
 // ---------------------------------------------------------------- minigames
 
-test('minigames.js lists exactly 30 shipping ids incl. the 6 new (§E0.1-9)', () => {
-  // V4/G53: +goobyWelt (PLAN4 §E0.1) → 28; V5/G06: +teaParty/hideSeek → 30
-  assert.equal(MINIGAME_IDS.length, 30);
+test('minigames.js lists exactly 32 shipping ids incl. the 6 new (§E0.1-9)', () => {
+  // V5/G06: +teaParty/hideSeek → 30; V6/C3: +snailMail/lanternFloat → 32
+  assert.equal(MINIGAME_IDS.length, 32);
   for (const id of Object.keys(V3_COIN_ROWS)) {
     assert.ok(MINIGAME_IDS.includes(id), `${id} in MINIGAME_IDS`);
   }
@@ -88,7 +88,7 @@ test('the 6 new metadata rows carry titleKey/minLevel/energy/coinTable (§E0.1-9
     assert.equal(m.dev, undefined, `${id} is a shipping game`);
     assertKey(m.titleKey);
   }
-  assert.equal(MINIGAMES.filter((m) => !m.dev).length, 30); // V5/G06: +teaParty/hideSeek
+  assert.equal(MINIGAMES.filter((m) => !m.dev).length, 32); // V6/C3: +snailMail/lanternFloat
 });
 
 // -------------------------------------------------------------- achievements

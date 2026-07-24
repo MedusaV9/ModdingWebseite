@@ -46,8 +46,9 @@ test('headline catalog counts: 35 unique foods / 8 crops / 28 quests / 4×32 sti
   // the 3.0 rows themselves are asserted verbatim in dataV3.test.js.
   // V4/G53: +goobyWelt (PLAN4 §E0.1) → 28 games.
   // V5/G06: +teaParty/hideSeek (PLAN5 §V5) → 30 games.
+  // V6/C3: +snailMail/lanternFloat (PLAN6 Wave C) → 32 games.
   assert.equal(ACHIEVEMENTS.length, 37);
-  assert.equal(MINIGAME_IDS.length, 30);
+  assert.equal(MINIGAME_IDS.length, 32);
 });
 
 // ---------------------------------------------------- §C1.1 coin rows verbatim
@@ -298,6 +299,8 @@ test('UNLOCKS matches the §B6 gating table verbatim', () => {
     goobyWelt: 12,
     // V5/G06: the two 5.0 gates (PLAN5 §V5.1/§V5.2)
     hideSeek: 2, teaParty: 3,
+    // V6/C3: the two 6.0 gates (PLAN6 Wave C §C3)
+    snailMail: 6, lanternFloat: 7,
   });
   assert.deepEqual({ ...UNLOCKS.CROPS }, {
     radish: 3, carrot: 3, salad: 3, tomato: 4, corn: 6, eggplant: 8, pumpkin: 10, watermelon: 12,

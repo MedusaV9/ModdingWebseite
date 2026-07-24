@@ -102,11 +102,12 @@ export const MODIFIER_TYPES = Object.freeze({
 });
 
 /**
- * §C-SYS4.3 — the frozen eligibility matrix. HARD-CODED literal 29-game
+ * §C-SYS4.3 — the frozen eligibility matrix. HARD-CODED literal 31-game
  * list (NOT derived from data/minigames.js) so G53's later `goobyWelt` row
  * can never join: goobyWelt and trips (`mode: shopTrip/vetTrip`) are NEVER
  * modified (§G8-5 — getActiveFor enforces both). V5/G06: the two 5.0 arcade
- * games (teaParty/hideSeek — PLAN5 §V5) joined the all-games rows.
+ * games (teaParty/hideSeek — PLAN5 §V5) joined the all-games rows. V6/C3:
+ * the two 6.0 arcade games (snailMail/lanternFloat — PLAN6 Wave C) likewise.
  */
 const ALL_ARCADE_GAMES = Object.freeze([
   'carrotCatch', 'bunnyHop', 'cityDrive', 'carrotGuard', 'goobySays',
@@ -114,7 +115,8 @@ const ALL_ARCADE_GAMES = Object.freeze([
   'shoppingSurf', 'runner', 'veggieChop', 'purblePlace', 'bubblePop',
   'deliveryRush', 'fishingPond', 'danceParty', 'miniGolf', 'trampoline',
   'goalieGooby', 'starHopper', 'pipeFlow', 'toyRacer', 'ghostHunt',
-  'rocketRescue', 'harborHopper', 'teaParty', 'hideSeek',
+  'rocketRescue', 'harborHopper', 'teaParty', 'hideSeek', 'snailMail',
+  'lanternFloat',
 ]);
 
 export const MODIFIER_ELIGIBLE = Object.freeze({

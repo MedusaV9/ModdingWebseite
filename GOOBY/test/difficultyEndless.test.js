@@ -82,6 +82,9 @@ const G54_ORACLE = Object.freeze({
   // V5/G06 (PLAN5 §V5.1/§V5.2): the two 5.0 rows (same ≈80 %-of-cap rule).
   teaParty: { capScore: 104, target: 85 },
   hideSeek: { capScore: 100, target: 80 },
+  // V6/C3 (PLAN6 Wave C §C3): the two 6.0 rows.
+  snailMail: { capScore: 100, target: 80 },
+  lanternFloat: { capScore: 96, target: 75 },
 });
 const GAME_IDS = Object.keys(G54_ORACLE);
 

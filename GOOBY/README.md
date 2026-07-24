@@ -6,7 +6,7 @@ timed arcade modifiers, secret codes, gyro parallax, a persistent photo gallery,
 hard economy guards and a complete settings/developer-tool pass — all on a
 lossless save v4. Gooby is still the same fat, lovable procedural rabbit to
 feed, wash, tickle, dress, photograph and play with across a cozy apartment,
-garden, city and 30 games.
+garden, city and 32 games.
 
 A Pou / Talking-Tom-style virtual-pet game: mobile-first three.js web app, wrapped
 with Capacitor for iOS. Fully offline, single-player, no server, no monetization.
@@ -50,14 +50,15 @@ radio, secret codes and photo gallery. Fresh saves never see this veteran panel.
   shop: **Fahren** through the rebuilt low-poly city, or **Laufen** in a fixed
   Shopping Surf run. Both arrive at the same shop. The vet stays drive-only;
   six named landmarks still award stickers.
-- **Arcade — 30 games** (unlock by level): Carrot Catch, Bunny Hop,
+- **Arcade — 32 games** (unlock by level): Carrot Catch, Bunny Hop,
   Shopping Cruise, Carrot Guard, Gooby Says, Memory Match, Basket Bounce,
   Garden Rush, Pancake Tower, Burger Build, **Shopping Surf**, Gooby Runner,
   Veggie Chop, **Purble Place**, Bubble Pop, Delivery Rush, Fishing Pond,
   Dance Party, Mini Golf, Trampoline Tricks, Goalie Gooby, Star Hopper, Pipe
   Flow, **Toy Grand Prix**, **Ghost Hunt**, **Rocket Rescue**, **Harbor
-  Hopper**, **Guck-guck-Garten** and **Teestube**, plus the chill
-  Gaussian-splat special **Gooby Welt**. The 29
+  Hopper**, **Guck-guck-Garten**, **Teestube**, **Schneckenpost** and
+  **Sternenlaterne**, plus the chill
+  Gaussian-splat special **Gooby Welt**. The 31
   arcade games offer Leicht/Mittel/Schwer and unlock Endlos after
   beating Schwer; first play of each game every day pays ×2 coins. New 3.0
   games keep their first-play NEU ribbons, while Gooby Welt uses its own

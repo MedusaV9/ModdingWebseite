@@ -166,6 +166,9 @@ export const COIN_TABLE = Object.freeze({
   // V5/G06: the TWO new 5.0 coin rows (PLAN5 §V5.1/§V5.2 verbatim)
   teaParty: Object.freeze({ divisor: 4, min: 4, max: 26 }),
   hideSeek: Object.freeze({ divisor: 5, min: 4, max: 20 }),
+  // V6/C3: the TWO new 6.0 coin rows (PLAN6 Wave C — §C3 verbatim)
+  snailMail: Object.freeze({ divisor: 4, min: 4, max: 25 }),
+  lanternFloat: Object.freeze({ divisor: 4, min: 4, max: 24 }),
 });
 
 /** Minigame unlock schedule (§C6.3): level → new game. */
@@ -544,6 +547,9 @@ export const UNLOCKS = Object.freeze({
     // V5/G06: the TWO new 5.0 game gates (PLAN5 §V5.1/§V5.2)
     hideSeek: 2,
     teaParty: 3,
+    // V6/C3: the TWO new 6.0 game gates (PLAN6 Wave C — §C3)
+    snailMail: 6,
+    lanternFloat: 7,
   }),
   /** Crop unlock levels (§B6/§C2.3). */
   CROPS: Object.freeze({
@@ -803,3 +809,17 @@ export const MODIFIER = Object.freeze({
 // ============================================================================
 
 // ============================================================== end V5/G06 ==
+
+// ============================================================================
+// V6/C3: GOOBY 6.0 game data spine (PLAN6 Wave C §C3 — the ruled 6.0
+// re-opening of this file, V5/G06 precedent): the TWO new COIN_TABLE rows +
+// UNLOCKS.MINIGAMES gates (snailMail „Schneckenpost" L6, lanternFloat
+// „Sternenlaterne" L7) — marked inline at their tables above, because the
+// frozen objects cannot be extended after definition. Every other 6.0 game
+// number (per-game tunes, difficulty families, bot knobs) lives as exported
+// frozen consts inside the owning games/*.logic.js (§E0.1-2 pattern).
+// constants.js is FROZEN again after this edit — the only other ruled 6.0
+// block is D2's labeled notify/postcard block (PLAN6 Wave D).
+// ============================================================================
+
+// ============================================================== end V6/C3 ===

@@ -54,6 +54,9 @@ export const TARGETS = Object.freeze({
   // V5/G06 (PLAN5 §V5.1/§V5.2): the two 5.0 rows — same ≈80 %-of-cap rule.
   teaParty: Object.freeze({ capScore: 104, target: 85, endless: '3 spilled/missed cups' }),
   hideSeek: Object.freeze({ capScore: 100, target: 80, endless: '3 expired (uncleared) waves' }),
+  // V6/C3 (PLAN6 Wave C §C3): the two 6.0 rows — same ≈80 %-of-cap rule.
+  snailMail: Object.freeze({ capScore: 100, target: 80, endless: '3 splashed (wet) deliveries' }),
+  lanternFloat: Object.freeze({ capScore: 96, target: 75, endless: '3 cloud bumps' }),
 });
 
 /**

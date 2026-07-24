@@ -82,6 +82,12 @@ import { EN as V6_VACATIONS_EN, DE as V6_VACATIONS_DE } from './strings/v6-vacat
 // V6/B3: shop-aisle signs + passport chrome for the flagship screen worlds —
 // same versioned-module pattern, spread below AFTER the v6-cutscenes spread.
 import { EN as V6_SCREEN_THEMES_EN, DE as V6_SCREEN_THEMES_DE } from './strings/v6-screen-themes.js';
+// V6/C3: the 6.0 minigame-wave strings (snailMail + lanternFloat) — same
+// versioned-module pattern, spread below AFTER v6-screen-themes, always EN + DE.
+import { EN as V6_GAMES_EN, DE as V6_GAMES_DE } from './strings/v6-games.js';
+// V6/C4: six-game juice-pass float/celebration labels - same versioned-module
+// pattern, spread below AFTER the v6-screen-themes spread.
+import { EN as V6_JUICE_EN, DE as V6_JUICE_DE } from './strings/v6-juice.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -616,6 +622,8 @@ export const EN = {
   ...V6_CUTSCENES_EN, // V6/A1
   ...V6_VACATIONS_EN, // V6/B2
   ...V6_SCREEN_THEMES_EN, // V6/B3
+  ...V6_GAMES_EN, // V6/C3
+  ...V6_JUICE_EN, // V6/C4
 };
 
 /** @type {Record<string, string>} */
@@ -1150,6 +1158,8 @@ export const DE = {
   ...V6_CUTSCENES_DE, // V6/A1
   ...V6_VACATIONS_DE, // V6/B2
   ...V6_SCREEN_THEMES_DE, // V6/B3
+  ...V6_GAMES_DE, // V6/C3
+  ...V6_JUICE_DE, // V6/C4
 };
 
 const DICTS = { en: EN, de: DE };

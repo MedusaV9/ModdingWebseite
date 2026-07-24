@@ -17,12 +17,13 @@ import { COIN_TABLE, UNLOCK_LEVELS, UNLOCKS, MINIGAME } from './constants.js'; /
  */
 
 /**
- * The 30 shipping games (§C6 + PLAN2 §C1 + PLAN3 §C8–§C10 + PLAN4-GAMES §G6 +
- * PLAN5 §V5), in unlock order (§B6/§B8 merged with v1 §C6.3;
+ * The 32 shipping games (§C6 + PLAN2 §C1 + PLAN3 §C8–§C10 + PLAN4-GAMES §G6 +
+ * PLAN5 §V5 + PLAN6 Wave C), in unlock order (§B6/§B8 merged with v1 §C6.3;
  * earlier-generation-first within a level). V2/G16: 9 new 2.0 ids added.
  * V3/G34 (§E0.1-9): 6 new 3.0 ids added. V4/G53 (§E0.1-19): goobyWelt added.
- * V5/G06 (PLAN5 §V5.1/§V5.2): teaParty + hideSeek added — coin rows/gates are
- * live in COIN_TABLE/UNLOCKS, energy 8 = the §C6 default.
+ * V5/G06 (PLAN5 §V5.1/§V5.2): teaParty + hideSeek added. V6/C3 (PLAN6 Wave C
+ * §C3): snailMail + lanternFloat added — coin rows/gates are live in
+ * COIN_TABLE/UNLOCKS, energy 8 = the §C6 default.
  */
 export const MINIGAME_IDS = Object.freeze([
   'carrotCatch', //  L1
@@ -41,8 +42,10 @@ export const MINIGAME_IDS = Object.freeze([
   'runner', //       L6
   'veggieChop', //   L6  (2.0)
   'purblePlace', //  L6  (3.0 — V3/G34, flagship §C9)
+  'snailMail', //    L6  (6.0 — V6/C3, PLAN6 Wave C)
   'bubblePop', //    L7
   'deliveryRush', // L7  (2.0)
+  'lanternFloat', // L7  (6.0 — V6/C3, PLAN6 Wave C)
   'fishingPond', //  L8
   'danceParty', //   L9
   'miniGolf', //     L9  (2.0)
@@ -95,6 +98,10 @@ const ICONS = {
   // V5/G06: 5.0 tiles reuse existing icon names (ui/icons.js stays frozen).
   teaParty: 'candy',
   hideSeek: 'sprout',
+  // V6/C3: 6.0 tiles reuse existing icon names (ui/icons.js is D3's file in
+  // Wave D); no 'mail' glyph ships yet, so snailMail rides the garden sprout.
+  snailMail: 'sprout',
+  lanternFloat: 'star',
 };
 
 /** V2/G16: car games cost 6 energy (§C1 shared rules — cityDrive + deliveryRush). */

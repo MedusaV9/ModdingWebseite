@@ -104,9 +104,9 @@ test('§C-SYS4.2 tuning params are exact (the ctx.params.modifier payload number
   assert.deepEqual({ ...MODIFIER_TYPES.glueckspilz.params }, { bonusMin: 10, bonusMax: 60 });
 });
 
-test('§C-SYS4.3 all-games rows: 29 arcade games, goobyWelt NEVER included', () => {
+test('§C-SYS4.3 all-games rows: 31 arcade games, goobyWelt NEVER included', () => {
   const arcade = MINIGAME_IDS.filter((id) => id !== 'goobyWelt').sort();
-  assert.equal(arcade.length, 29); // V5/G06: +teaParty/hideSeek
+  assert.equal(arcade.length, 31); // V6/C3: +snailMail/lanternFloat
   for (const type of ['doppelGold', 'glueckspilz', 'stickerChance']) {
     assert.deepEqual([...MODIFIER_ELIGIBLE[type]].sort(), arcade, type);
   }
@@ -250,8 +250,8 @@ test('eligibility filtering at levels 1/5/15/40 (§C-SYS4.7 matrix × unlocks)',
   // level 1: exactly the three L1 games across the matrix rows
   const l1games = new Set(eligiblePairs(1).map((p) => p.gameId));
   assert.deepEqual([...l1games].sort(), ['bunnyHop', 'carrotCatch', 'cityDrive']);
-  // level 40 all-games rows contribute all 29 (no goobyWelt anywhere)
-  assert.equal(counts[40], 29 * 3 + 9 + 8 + 8); // V5/G06: +teaParty/hideSeek
+  // level 40 all-games rows contribute all 31 (no goobyWelt anywhere)
+  assert.equal(counts[40], 31 * 3 + 9 + 8 + 8); // V6/C3: +snailMail/lanternFloat
   assert.ok(!eligiblePairs(40).some((p) => p.gameId === 'goobyWelt'));
 });
 
@@ -259,7 +259,7 @@ test('eligiblePairs honors the no-repeat guard and empties at hostile level 0', 
   assert.deepEqual(eligiblePairs(0), []);
   const without = eligiblePairs(40, 'shoppingSurf');
   assert.ok(!without.some((p) => p.gameId === 'shoppingSurf'));
-  assert.equal(without.length, 28 * 3 + 8 + 7 + 7); // shoppingSurf sits in all 6 rows
+  assert.equal(without.length, 30 * 3 + 8 + 7 + 7); // shoppingSurf sits in all 6 rows
 });
 
 test('one event at a time: a due nextAt waits while a window is active', () => {

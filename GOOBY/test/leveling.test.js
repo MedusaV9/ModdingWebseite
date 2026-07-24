@@ -108,8 +108,16 @@ test('V2/G16: unlock queries cover the 9 new §B6 games', () => {
   // V3/G34: catalog is 27 now; the last gate is harborHopper at L20 (§E0.1-3)
   // V4/G53: +goobyWelt at L12 (PLAN4 §B10) → 28
   // V5/G06: +hideSeek at L2, +teaParty at L3 (PLAN5 §V5) → 30
-  assert.equal(unlockedMinigames(20).length, 30);
-  assert.equal(unlockedMinigames(40).length, 30);
+  // V6/C3: +snailMail at L6, +lanternFloat at L7 (PLAN6 Wave C) → 32
+  assert.equal(unlockedMinigames(20).length, 32);
+  assert.equal(unlockedMinigames(40).length, 32);
+});
+
+test('V6/C3: unlock queries cover the two new Wave-C gates', () => {
+  assert.equal(isMinigameUnlocked('snailMail', 5), false);
+  assert.equal(isMinigameUnlocked('snailMail', 6), true);
+  assert.equal(isMinigameUnlocked('lanternFloat', 6), false);
+  assert.equal(isMinigameUnlocked('lanternFloat', 7), true);
 });
 
 test('V5/G06: unlock queries cover the two new §V5 gates', () => {

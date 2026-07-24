@@ -130,11 +130,11 @@ test('coinsChanged fires on award/spend after a flush (§E2 events)', () => {
 
 // ---------------------- payout clamps (12 §C6 rows + V2/G16: 9 §C1.1 rows)
 
-test('coin table has exactly the 30 §C6/§C1.1/§E0.1-3/§V5 rows', () => {
+test('coin table has exactly the 32 §C6/§C1.1/§E0.1-3/§V5/V6-C3 rows', () => {
   assert.deepEqual([...MINIGAME_IDS].sort(), Object.keys(COIN_TABLE).sort());
   // V2/G16: 12 v1 + 9 §C1.1; V3/G34: +6 3.0 rows; V4/G53: +goobyWelt (§B10);
-  // V5/G06: +teaParty/hideSeek (PLAN5 §V5)
-  assert.equal(MINIGAME_IDS.length, 30);
+  // V5/G06: +teaParty/hideSeek (PLAN5 §V5); V6/C3: +snailMail/lanternFloat
+  assert.equal(MINIGAME_IDS.length, 32);
 });
 
 for (const id of MINIGAME_IDS.filter((g) => !COIN_TABLE[g].special)) {
