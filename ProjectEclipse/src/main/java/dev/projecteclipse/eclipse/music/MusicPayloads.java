@@ -63,9 +63,9 @@ public final class MusicPayloads {
         }
     }
 
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCredits(S2COpenCreditsPayload payload, IPayloadContext context) {
-        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
-        minecraft.setScreen(new dev.projecteclipse.eclipse.client.menu.CreditsScreen(minecraft.screen));
+        MusicClientHooks.openCredits();
     }
 
     public static void sendPlay(ServerPlayer player, String cueId) {

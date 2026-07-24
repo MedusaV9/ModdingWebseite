@@ -183,6 +183,18 @@ public final class FixedSeedGenRegion implements WorldGenLevel {
 
     // --- LevelReader ---
 
+    /**
+     * MUST delegate the two-arg overload directly: {@code LevelReader}'s default requests
+     * {@code ChunkStatus.FULL}, but the real {@code WorldGenRegion} overrides it to request
+     * {@code EMPTY} (clamped). Falling through to the interface default makes vanilla's
+     * {@code applyBiomeDecoration} neighbour scan throw "Requested chunk unavailable during
+     * world generation" on the dedicated server.
+     */
+    @Override
+    public ChunkAccess getChunk(int x, int z) {
+        return this.delegate.getChunk(x, z);
+    }
+
     @Nullable
     @Override
     public ChunkAccess getChunk(int x, int z, ChunkStatus chunkStatus, boolean requireChunk) {

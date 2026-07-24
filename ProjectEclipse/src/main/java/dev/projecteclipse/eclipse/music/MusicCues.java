@@ -67,7 +67,9 @@ public enum MusicCues {
     /** Client payload-handler entry point. Returns false for an unknown id. */
     public static boolean play(String id) {
         Optional<MusicCues> cue = fromId(id);
-        cue.ifPresent(MusicManager::play);
+        // MusicClientHooks is resolved lazily on first execution (client only); do not
+        // use a MusicManager method reference here — it breaks dedicated-server verification.
+        cue.ifPresent(value -> MusicClientHooks.play(value));
         return cue.isPresent();
     }
 
@@ -83,7 +85,7 @@ public enum MusicCues {
 
     /** Client payload-handler entry point: fade the custom channel out. */
     public static void stop() {
-        MusicManager.stop();
+        MusicClientHooks.stop();
     }
 
     /** Server-side bridge for dimension/event exit hooks. */

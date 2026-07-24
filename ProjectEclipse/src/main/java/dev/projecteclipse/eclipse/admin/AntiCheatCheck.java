@@ -419,8 +419,11 @@ public final class AntiCheatCheck {
         allowed.put("simulated", "*");
         allowed.put("offroad", "*");
         allowed.put("sable", "2.0.3");
+        allowed.put("sablecompanion", "*");
         allowed.put("voicechat", "2.6.16");
-        allowed.put("farmersdelight", "1.21.1-1.3.2");
+        allowed.put("voicechat_api", "*");
+        // FD reports its version WITHOUT the MC prefix at runtime (jar name differs).
+        allowed.put("farmersdelight", "1.3.2");
         allowed.put("supplementaries", "1.21.1-3.8.3");
         allowed.put("moonlight", "1.21.1-3.1.1");
         allowed.put("sophisticatedbackpacks", "1.21.1-3.25.71");
@@ -431,6 +434,8 @@ public final class AntiCheatCheck {
         allowed.put("ponder", "*");
         allowed.put("registrate", "*");
         allowed.put("curios", "*");
+        allowed.put("aeronautics_bundled", "*");
+        allowed.put("codecui", "*");
         // Client extras and the C19 content proposal are optional.
         allowed.put("sodium", "0.8.12+mc1.21.1");
         allowed.put("iris", "1.8.14-beta.1+mc1.21.1");
