@@ -29,6 +29,11 @@ public final class LangService {
 
     private LangService() {}
 
+    /** Eagerly registers the locale-override attachment; call from the EclipseMod constructor. */
+    public static void register(net.neoforged.bus.api.IEventBus modEventBus) {
+        LocaleAttachmentStore.register(modEventBus);
+    }
+
     /**
      * Effective locale token for server-baked text: {@code "en"} or {@code "de"}. Checks the
      * explicit override (session map + attachment when wired) before vanilla client language.

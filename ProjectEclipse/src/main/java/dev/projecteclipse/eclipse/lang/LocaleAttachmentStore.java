@@ -23,11 +23,16 @@ final class LocaleAttachmentStore {
             "locale_override",
             () -> AttachmentType.builder(() -> "").serialize(Codec.STRING).copyOnDeath().build());
 
-    static {
-        ATTACHMENTS.register(net.neoforged.fml.ModLoadingContext.get().getActiveContainer().getEventBus());
-    }
+    // Registration happens eagerly from the EclipseMod constructor via LangService.register.
+    // NEVER register from a static initializer here: this class is loaded lazily at the first
+    // player login, long after mod construction, where ModLoadingContext has no active
+    // container — that was a guaranteed ExceptionInInitializerError on join.
 
     private LocaleAttachmentStore() {}
+
+    static void register(net.neoforged.bus.api.IEventBus modEventBus) {
+        ATTACHMENTS.register(modEventBus);
+    }
 
     static void set(ServerPlayer player, String locale) {
         player.setData(LOCALE_OVERRIDE, locale);

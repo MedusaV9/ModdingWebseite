@@ -30,8 +30,12 @@ public final class EclipseFxState {
     public static final int PHASE_TOTAL = 2;
     public static final int PHASE_ENDING = 3;
 
-    /** Exposure dip target while the eclipse phase is TOTAL (R3), eased over {@value #EXPOSURE_RAMP_TICKS} ticks. */
-    private static final float TOTAL_EXPOSURE = 0.35F;
+    /**
+     * Exposure dip target while the eclipse phase is TOTAL (R3), eased over
+     * {@value #EXPOSURE_RAMP_TICKS} ticks. 0.62 keeps the totality readable — combined
+     * with the world-grade crush the old 0.35 rendered the whole world near-black.
+     */
+    private static final float TOTAL_EXPOSURE = 0.62F;
     private static final int EXPOSURE_RAMP_TICKS = 60;
     /** Ghost grade ease length (R18). */
     private static final int GHOST_RAMP_TICKS = 30;

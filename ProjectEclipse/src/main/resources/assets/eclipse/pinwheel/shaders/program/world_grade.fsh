@@ -20,7 +20,9 @@ out vec4 fragColor;
 
 void main() {
     vec3 color = texture(DiffuseSampler0, texCoord).rgb;
-    float crush = max(NightAmount, EclipseAmount * 0.8);
+    // 0.55 cap keeps a full eclipse readable (dark violet dusk, not black) — the
+    // cinematic flight and the approach walk both happen at EclipseAmount == 1.
+    float crush = max(NightAmount, EclipseAmount * 0.55);
 
     // Shadow-crushing tone curve (robust against user gamma — operates on the final frame).
     color = efxCrush(color, crush);
@@ -34,7 +36,7 @@ void main() {
     // so the dome reads dark even where fog/sky colors fight the grade.
     float depth = texture(DiffuseDepthSampler, texCoord).r;
     float sky = step(0.9999, depth);
-    color *= 1.0 - sky * crush * 0.35;
+    color *= 1.0 - sky * crush * 0.25;
 
     // Exposure dip (0.35 during eclipse TOTAL, eased CPU-side over 60 ticks).
     color *= ExposureMul;
