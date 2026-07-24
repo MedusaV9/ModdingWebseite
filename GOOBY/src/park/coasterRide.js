@@ -373,6 +373,11 @@ export function createCoasterRideScene(ctx) {
             map: tex,
             roughness: 0.85,
             metalness: 0,
+            // V6.1/FIX5: the kit GLBs author their colormap material
+            // doubleSided — the pastel override must keep that, or every
+            // back-facing run is culled (visible ribbon gaps on descents,
+            // the loop rings' lower band missing = "floating" loops).
+            side: THREE.DoubleSide,
           });
           ownedMats.push(this.kitMat); // dispose() drops the map too
         }

@@ -897,6 +897,13 @@ export async function startWheelRide(ctx) {
       case 'depart':
         audio?.play?.('pipe.rotate'); // gondola door clunk
         gooby.play?.('sitDrive', { loop: 'hold' })?.catch?.(() => {});
+        // V6.1/FIX5: stepWheelRide zeroes ride.t on the board→ride flip
+        // BEFORE driveGooby can ever observe the hop's s = 1 (update order:
+        // step → driveGooby), so a still-'hop' phase would REPLAY the whole
+        // hop from the plaza on the new ride clock — Gooby grounded in the
+        // sit pose beside the rising gondola. The board window is over:
+        // seat him now ('seated' re-derives the live seat every frame).
+        if (goobyPhase === 'hop') goobyPhase = 'seated';
         break;
       case 'apex': {
         // V6.1/G3 (B8): band-aware apex line — night rides get the twinkle.
@@ -971,7 +978,10 @@ export async function startWheelRide(ctx) {
       group.localToWorld(seatV);
       gooby.group.position.lerpVectors(hopFrom, seatV, e);
       gooby.group.position.y += Math.sin(Math.min(1, s * 1.15) * Math.PI) * 0.85;
-      gooby.group.scale.setScalar(1 + (RIDER_SCALE - 1) * e);
+      // V6.1/FIX5: blend from the SNAPSHOT base scale (the plaza strolls
+      // Gooby at 1.3 since P1-4) — a hardcoded 1 popped him smaller the
+      // instant the hop started.
+      gooby.group.scale.setScalar(goobySnapshot.scale + (RIDER_SCALE - goobySnapshot.scale) * e);
       gooby.group.rotation.y = group.rotation.y + Math.PI * e;
       if (s >= 1) goobyPhase = 'seated';
       return;
@@ -1003,7 +1013,9 @@ export async function startWheelRide(ctx) {
       const e = easings.easeInOutQuad(s);
       gooby.group.position.lerpVectors(hopFrom, platformWorld, e);
       gooby.group.position.y += Math.sin(s * Math.PI) * 0.7;
-      gooby.group.scale.setScalar(RIDER_SCALE + (1 - RIDER_SCALE) * e);
+      // V6.1/FIX5: grow back to the snapshot base scale (finish() restores
+      // the same value — no pop when the plaza takes Gooby back).
+      gooby.group.scale.setScalar(RIDER_SCALE + (goobySnapshot.scale - RIDER_SCALE) * e);
       if (s >= 1) {
         goobyPhase = 'off';
         gooby.play?.('happyBounce')?.catch?.(() => {});
