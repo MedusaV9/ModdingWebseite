@@ -1,0 +1,19 @@
+{
+  "name": "gooby-server",
+  "version": "1.0.0",
+  "description": "GOOBY 5.0 Privat-Server: Freunde, Presence, GoobyPal, Codes, Events, Analytics, Besuche, Brettspiele + Admin-Webpanel. Ein Prozess, ein Port (express + ws), reines JSON-Storage — keine nativen Module (AMP Node.js App Runner tauglich).",
+  "type": "module",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}
