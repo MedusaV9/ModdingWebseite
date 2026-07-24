@@ -74,20 +74,24 @@ export function ensureWheels(carModel, assets) {
   return wheels;
 }
 
+// V6/F3 (§B3 rem sweep): px → rem ÷16 so the drive HUD scales with
+// settings.uiScale (85–130 root-rem). The brake button is a HIT TARGET —
+// its size keeps the §B3 real-px 44px floor as max(44px, 4.75rem); shadow
+// px values are exempt per the px-audit grammar.
 const CONTROLS_CSS = `
 .g7-drive{position:absolute;inset:0;pointer-events:none;z-index:30;}
 .g7-steer{position:absolute;top:0;bottom:0;width:50%;pointer-events:auto;touch-action:none;
   display:flex;align-items:center;-webkit-tap-highlight-color:transparent;}
 .g7-steer-l{left:0;justify-content:flex-start;}
 .g7-steer-r{right:0;justify-content:flex-end;}
-.g7-steer .g7-chev{font-size:44px;font-weight:800;color:rgba(255,255,255,.55);
-  text-shadow:0 2px 6px rgba(74,59,54,.35);padding:0 10px;transition:transform 120ms ease,color 120ms ease;}
+.g7-steer .g7-chev{font-size:2.75rem;font-weight:800;color:rgba(255,255,255,.55);
+  text-shadow:0 2px 6px rgba(74,59,54,.35);padding:0 0.625rem;transition:transform 120ms ease,color 120ms ease;}
 .g7-steer.g7-held .g7-chev{color:#fff;transform:scale(1.35);}
 .g7-brake{position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(18px + var(--safe-bottom));pointer-events:auto;touch-action:none;
-  width:76px;height:76px;border-radius:50%;border:none;cursor:pointer;
-  background:#FF7BA9;border-bottom:5px solid rgba(74,59,54,.3);
-  color:#fff;font-family:inherit;font-weight:800;font-size:13px;
+  bottom:calc(1.125rem + var(--safe-bottom));pointer-events:auto;touch-action:none;
+  width:max(44px, 4.75rem);height:max(44px, 4.75rem);border-radius:50%;border:none;cursor:pointer;
+  background:#FF7BA9;border-bottom:0.3125rem solid rgba(74,59,54,.3);
+  color:#fff;font-family:inherit;font-weight:800;font-size:0.8125rem;
   box-shadow:0 4px 14px rgba(74,59,54,.3);-webkit-tap-highlight-color:transparent;}
 .g7-brake.g7-held{transform:translateX(-50%) scale(.92);background:#e9689a;}
 `;

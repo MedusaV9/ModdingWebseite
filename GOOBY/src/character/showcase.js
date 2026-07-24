@@ -12,15 +12,18 @@ import { EMOTION_IDS } from './emotions.js';
 import { CLIP_IDS } from './goobyAnims.js';
 import { createParticles, PARTICLE_TYPES } from '../gfx/particles.js';
 
+// V6/F3 (§B3 rem sweep): px → rem ÷16 so the showcase chrome scales with
+// settings.uiScale (85–130 root-rem); shadow px values are exempt per the
+// px-audit grammar.
 const PANEL_CSS = `
 .gooby-showcase{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;font-family:system-ui,sans-serif;}
-.gs-status{pointer-events:none;position:absolute;top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;color:#4A3B36;font-size:12px;font-weight:700;text-shadow:0 1px 0 #fff;}
+.gs-status{pointer-events:none;position:absolute;top:calc(0.5rem + env(safe-area-inset-top));left:0.625rem;right:0.625rem;color:#4A3B36;font-size:0.75rem;font-weight:700;text-shadow:0 1px 0 #fff;}
 .gs-status .gs-tap{color:#B0567A;}
-.gs-panel{pointer-events:auto;max-height:44%;overflow-y:auto;background:rgba(255,255,255,.92);border-radius:20px 20px 0 0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(74,59,54,.18);}
-.gs-section{margin-bottom:8px;}
-.gs-section h4{margin:2px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#B79E92;}
-.gs-row{display:flex;flex-wrap:wrap;gap:6px;}
-.gs-btn{border:none;border-radius:14px;background:#FFF6EC;color:#4A3B36;font-weight:800;font-size:13px;padding:9px 12px;border-bottom:3px solid #EBD9C8;cursor:pointer;}
+.gs-panel{pointer-events:auto;max-height:44%;overflow-y:auto;background:rgba(255,255,255,.92);border-radius:1.25rem 1.25rem 0 0;padding:0.625rem 0.75rem calc(0.625rem + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(74,59,54,.18);}
+.gs-section{margin-bottom:0.5rem;}
+.gs-section h4{margin:0.125rem 0 0.375rem;font-size:0.6875rem;text-transform:uppercase;letter-spacing:.06em;color:#B79E92;}
+.gs-row{display:flex;flex-wrap:wrap;gap:0.375rem;}
+.gs-btn{border:none;border-radius:0.875rem;background:#FFF6EC;color:#4A3B36;font-weight:800;font-size:0.8125rem;padding:0.5625rem 0.75rem;border-bottom:0.1875rem solid #EBD9C8;cursor:pointer;}
 .gs-btn:active{transform:scale(.96);}
 .gs-btn.on{background:#FF7BA9;border-bottom-color:#D95E8B;color:#fff;}
 .gs-btn.gs-teal.on{background:#59C9B9;border-bottom-color:#3EA495;}
