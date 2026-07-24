@@ -1,0 +1,44 @@
+{
+	"en": {
+		"gui.eclipse.handbook.map.altar": "Altar",
+		"gui.eclipse.handbook.map.compass.n": "N",
+		"gui.eclipse.handbook.map.compass.e": "E",
+		"gui.eclipse.handbook.map.compass.s": "S",
+		"gui.eclipse.handbook.map.compass.w": "W",
+
+		"gui.eclipse.handbook.map.legend.explored": "Charted ground",
+		"gui.eclipse.handbook.map.legend.veiled": "The unseen",
+		"gui.eclipse.handbook.map.legend.altar": "Altar / spawn",
+		"gui.eclipse.handbook.map.legend.players": "Players",
+		"gui.eclipse.handbook.map.legend.landmark": "Discovered landmarks",
+
+		"gui.eclipse.handbook.map.landmark.village_plains": "Village",
+		"gui.eclipse.handbook.map.landmark.stronghold_emergence": "Stronghold",
+		"gui.eclipse.handbook.map.landmark.pillager_outpost": "Pillager Outpost",
+		"gui.eclipse.handbook.map.landmark.trial_chambers": "Trial Chambers",
+		"gui.eclipse.handbook.map.landmark.ancient_city": "Ancient City",
+		"gui.eclipse.handbook.map.landmark.mansion": "Woodland Mansion",
+		"gui.eclipse.handbook.map.landmark.nether_breach": "The Breach"
+	},
+	"de": {
+		"gui.eclipse.handbook.map.altar": "Altar",
+		"gui.eclipse.handbook.map.compass.n": "N",
+		"gui.eclipse.handbook.map.compass.e": "O",
+		"gui.eclipse.handbook.map.compass.s": "S",
+		"gui.eclipse.handbook.map.compass.w": "W",
+
+		"gui.eclipse.handbook.map.legend.explored": "Kartiertes Land",
+		"gui.eclipse.handbook.map.legend.veiled": "Das Ungesehene",
+		"gui.eclipse.handbook.map.legend.altar": "Altar / Spawn",
+		"gui.eclipse.handbook.map.legend.players": "Spieler",
+		"gui.eclipse.handbook.map.legend.landmark": "Entdeckte Orte",
+
+		"gui.eclipse.handbook.map.landmark.village_plains": "Dorf",
+		"gui.eclipse.handbook.map.landmark.stronghold_emergence": "Festung",
+		"gui.eclipse.handbook.map.landmark.pillager_outpost": "Plünderer-Außenposten",
+		"gui.eclipse.handbook.map.landmark.trial_chambers": "Prüfungskammern",
+		"gui.eclipse.handbook.map.landmark.ancient_city": "Antike Stadt",
+		"gui.eclipse.handbook.map.landmark.mansion": "Waldanwesen",
+		"gui.eclipse.handbook.map.landmark.nether_breach": "Der Riss"
+	}
+}

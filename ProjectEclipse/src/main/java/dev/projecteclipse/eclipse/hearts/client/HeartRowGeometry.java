@@ -17,6 +17,13 @@ import net.minecraft.world.entity.player.Player;
  * resolve <b>identical pixels</b> for every heart slot — multi-row compression, the
  * regen-wave −2px lift and the ≤4&nbsp;hp jitter included.
  *
+ * <p><b>v5 Leben compression (A13):</b> while the purple layer is enabled, one drawn heart
+ * represents {@link #hpPerSlot()} = 4&nbsp;hp = 1 Leben = 2 vanilla hearts. All slot/row
+ * functions transform real hp into "display units" ({@link #displayUnits}, 2 units per
+ * drawn slot — the vanilla half-heart law on compressed values) INTERNALLY, so callers
+ * keep passing real hp/absorption and both consumers stay pixel-consistent. With the
+ * kill-switch off (vanilla row rendering) the transform is the identity.</p>
+ *
  * <p>All entry points run after the health layer's {@code leftHeight} increment (both
  * callers render above {@code PLAYER_HEALTH}), so the row origin is reconstructed from
  * the public post-layer {@code Gui.leftHeight}. Single-slot lookups return a packed
@@ -47,6 +54,31 @@ public final class HeartRowGeometry {
     }
 
     /**
+     * Real hp represented by one drawn heart slot: {@code HeartsService.HP_PER_LIFE} (4,
+     * 1 Leben = 2 vanilla hearts) while the purple Leben row is enabled, vanilla 2 when
+     * the kill-switch falls back to the vanilla renderer.
+     */
+    public static int hpPerSlot() {
+        return PurpleHeartsLayer.enabled()
+                ? dev.projecteclipse.eclipse.hearts.HeartsService.HP_PER_LIFE
+                : 2;
+    }
+
+    /**
+     * Display units for a real hp value — the vanilla half-heart law applied to the
+     * compressed row (2 units = 1 drawn slot, so 1 unit = half a Leben heart). Ceil keeps
+     * any remaining sliver of real hp visible as a half heart.
+     */
+    public static int displayUnits(int hp) {
+        return Mth.ceil(hp * 2.0F / hpPerSlot());
+    }
+
+    /** Float variant for row sizing ({@code rowMaxHealth} is fractional in vanilla). */
+    public static float displayUnits(float hp) {
+        return hp * 2.0F / hpPerSlot();
+    }
+
+    /**
      * Vanilla's {@code f}: the hp value the row is sized for — the max-health attribute
      * or, briefly after damage/heal, the still-displayed health if larger.
      */
@@ -55,19 +87,19 @@ public final class HeartRowGeometry {
                 (float) Math.max(displayHealth, Mth.ceil(player.getHealth())));
     }
 
-    /** Health heart slots (vanilla {@code i = ceil(f / 2)}). */
+    /** Health heart slots (vanilla {@code i = ceil(f / 2)} on display units). */
     public static int healthSlots(float rowMaxHealth) {
-        return Mth.ceil(rowMaxHealth / 2.0D);
+        return Mth.ceil(displayUnits(rowMaxHealth) / 2.0F);
     }
 
-    /** Total slots including absorption (vanilla {@code i + j}). */
+    /** Total slots including absorption (vanilla {@code i + j} on display units). */
     public static int totalSlots(float rowMaxHealth, int absorption) {
-        return healthSlots(rowMaxHealth) + Mth.ceil(absorption / 2.0D);
+        return healthSlots(rowMaxHealth) + Mth.ceil(displayUnits(absorption) / 2.0F);
     }
 
-    /** Row count (vanilla {@code l1 = ceil((f + absorption) / 2 / 10)}), never below 1. */
+    /** Row count (vanilla {@code l1 = ceil((f + absorption) / 2 / 10)} on display units), never below 1. */
     public static int rows(float rowMaxHealth, int absorption) {
-        return Math.max(1, Mth.ceil((rowMaxHealth + absorption) / 2.0F / 10.0F));
+        return Math.max(1, Mth.ceil((displayUnits(rowMaxHealth) + displayUnits((float) absorption)) / 2.0F / 10.0F));
     }
 
     /** Vertical compression step between rows (vanilla {@code max(10 - (rows - 2), 3)}). */
@@ -81,13 +113,14 @@ public final class HeartRowGeometry {
     }
 
     /**
-     * Vanilla regen-wave slot index for this frame ({@code tickCount % ceil(f + 5)}),
-     * or {@code -1} when the player has no regeneration. Only slots below
+     * Vanilla regen-wave slot index for this frame ({@code tickCount % ceil(f + 5)} on
+     * display units — the wiggle sweeps the compressed row at the vanilla cadence), or
+     * {@code -1} when the player has no regeneration. Only slots below
      * {@link #healthSlots} are lifted by 2px.
      */
     public static int regenSlot(Minecraft minecraft, Player player, float rowMaxHealth) {
         return player.hasEffect(MobEffects.REGENERATION)
-                ? minecraft.gui.getGuiTicks() % Mth.ceil(rowMaxHealth + 5.0F)
+                ? minecraft.gui.getGuiTicks() % Mth.ceil(displayUnits(rowMaxHealth) + 5.0F)
                 : -1;
     }
 

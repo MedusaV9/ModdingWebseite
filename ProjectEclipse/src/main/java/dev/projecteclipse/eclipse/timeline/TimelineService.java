@@ -5,6 +5,7 @@ import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CTimelinePayload;
@@ -47,6 +48,7 @@ public final class TimelineService {
      * {@code title} when one is configured, else the generic lang-key fallback.
      * {@code EclipseConfig.day} clamps out-of-range days to the first/last plan, so the
      * plan's day is re-checked — unplanned days always fall back to the generic line.
+     * Done-variant-unaware legacy seam; the sync paths use the server-aware forms.
      */
     public static String dayTitleKey(int day) {
         EclipseConfig.DayPlan plan = EclipseConfig.day(day);
@@ -55,12 +57,37 @@ public final class TimelineService {
                 : "announce.eclipse.day.generic.title";
     }
 
-    /** Receiver-localized form for server-baked day titles. */
+    /**
+     * Receiver-localized form for server-baked day titles. A5-extra: swaps to the plan's
+     * {@code titleDone} once {@link DayTextConditions#isDone} holds (beaten content stops
+     * being advertised).
+     */
     public static String dayTitleKey(int day, ServerPlayer player) {
         EclipseConfig.DayPlan plan = EclipseConfig.day(day);
-        return plan.day() == day && !plan.localizedTitle().isBlank()
-                ? LangService.pick(plan.localizedTitle(), player)
+        if (plan.day() != day) {
+            return "announce.eclipse.day.generic.title";
+        }
+        Localized title = pickTitle(plan, player.server);
+        return !title.isBlank()
+                ? LangService.pick(title, player)
                 : "announce.eclipse.day.generic.title";
+    }
+
+    /** Receiver-less (English) done-variant-aware form for the anonymized timeline build. */
+    private static String dayTitleKey(MinecraftServer server, int day) {
+        EclipseConfig.DayPlan plan = EclipseConfig.day(day);
+        if (plan.day() != day) {
+            return "announce.eclipse.day.generic.title";
+        }
+        Localized title = pickTitle(plan, server);
+        return !title.isBlank() ? title.en() : "announce.eclipse.day.generic.title";
+    }
+
+    /** The plan's done-variant title when authored AND the day's content is beaten, else the regular one. */
+    private static Localized pickTitle(EclipseConfig.DayPlan plan, MinecraftServer server) {
+        return !plan.localizedTitleDone().isBlank() && DayTextConditions.isDone(server, plan.day())
+                ? plan.localizedTitleDone()
+                : plan.localizedTitle();
     }
 
     /** The lang key of a milestone's announcement/timeline line, with a generic fallback. */
@@ -83,7 +110,7 @@ public final class TimelineService {
         List<TimelineEntry> entries = new ArrayList<>();
         for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
             boolean reached = plan.day() <= day;
-            String title = receiver == null ? dayTitleKey(plan.day()) : dayTitleKey(plan.day(), receiver);
+            String title = receiver == null ? dayTitleKey(server, plan.day()) : dayTitleKey(plan.day(), receiver);
             entries.add(reached
                     ? new TimelineEntry(plan.day(), plan.day(), title, DAY_ICON, false, true)
                     : new TimelineEntry(plan.day(), plan.day(), "", TimelineEntry.NO_ICON, true, false));

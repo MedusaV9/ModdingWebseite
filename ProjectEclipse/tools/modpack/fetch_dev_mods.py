@@ -18,6 +18,9 @@ MODS_CLIENT = ROOT / "run/mods-client"
 API = "https://api.modrinth.com/v2"
 UA = {"User-Agent": "ProjectEclipse-dev-setup/1.0 (cursor cloud agent)"}
 
+# NOTE: EMI (1.1.24+1.21.1) and Mouse Tweaks (1.21-2.26.1-neoforge) are deliberately NOT
+# fetched here — both are jarJar-embedded in the eclipse jar itself (build.gradle /
+# docs/BUNDLING.md), so the dev runs pick them up without a mods-folder copy.
 # (modrinth slug, expected jar filename, target dir)
 WANTED = [
     ("create", "create-1.21.1-6.0.10.jar", MODS),

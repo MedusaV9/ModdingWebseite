@@ -15,16 +15,17 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
 /**
- * The custom skill-XP bar (WB-SKILLS, plan §3.9 {@code CustomXpBarLayer}): a slim 2px
- * accent strip, 182px wide like the vanilla bar, sitting 2px above the vanilla XP bar
- * (skill XP is a separate track — the vanilla bar is untouched), plus the current skill
- * level numeral in the free column right of the bar. Registered directly above
- * {@code EXPERIENCE_BAR} so the vanilla status rows (hearts/food) still draw over the
- * strip where they overlap — the strip peeks through their transparent edges instead of
- * striking through them.
+ * The custom skill-XP bar (WB-SKILLS §3.9, reworked by PLAN-A A9): it REPLACES the vanilla
+ * XP bar instead of stacking above it. While the replacement is active this class cancels
+ * the vanilla {@code EXPERIENCE_BAR} and {@code EXPERIENCE_LEVEL} layers via
+ * {@link RenderGuiLayerEvent.Pre} and renders the skill bar in the vanilla slot
+ * (182px wide, centered, {@code guiHeight - 29..-24} band) with the skill level numeral
+ * centered above it in the vanilla level position — mod styling (theme colors, odometer
+ * level carry) retained.
  *
  * <p><b>Motion (dopamine, Quiet-Eclipse calm):</b> the displayed fill eases toward the
  * synced {@code xpIntoLevel/xpForLevel} fraction over ~6 ticks (count-up), every XP gain
@@ -36,8 +37,12 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * numeral odometer-increments once per sweep, flashing white each step. {@code reducedFx}
  * snaps the fill and drops pulse/spark/flash/carry.</p>
  *
- * <p>Gates: {@code showCustomXpBar} config, F1 ({@code hideGui}), spectators, and "no
- * skill sync yet" ({@code xpForLevel <= 0} — vanilla servers never show a dead bar).
+ * <p>Gates (A9): {@code showCustomXpBar} config, F1 ({@code hideGui}), spectators, "no
+ * skill sync yet" ({@code xpForLevel <= 0} — vanilla servers never show a dead bar),
+ * pre-event ({@code !ClientStateCache.eventStarted}, the A8 §0.1 contract flag — vanilla
+ * stays uncancelled and the mod bar hidden until the start event ran), and riding
+ * ({@code player.jumpableVehicle() != null} — nothing is cancelled so the vanilla jump
+ * meter owns the slot exactly like vanilla; vehicle-health rows are untouched anyway).
  * Cutscene HUD suppression cancels the layer via {@code LetterboxLayer}'s
  * {@code RenderGuiLayerEvent.Pre} hook (deliberately not whitelisted). Self-registered:
  * {@code EclipseGuiLayers} is frozen this wave (see the WB-SKILLS wiring doc).</p>
@@ -48,9 +53,12 @@ public final class SkillXpBarLayer {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "skill_xp_bar");
 
     private static final int BAR_WIDTH = 182;
-    private static final int BAR_HEIGHT = 2;
-    /** Bar top: 2px above the vanilla XP bar (its sprite top is at h-29). */
-    private static final int BOTTOM_OFFSET = 33;
+    /** A9: the bar fills the whole vanilla XP-bar band (5px, sprite-exact). */
+    private static final int BAR_HEIGHT = 5;
+    /** Bar top: the vanilla XP-bar sprite top ({@code guiHeight - 32 + 3}). */
+    private static final int BOTTOM_OFFSET = 29;
+    /** Level numeral baseline: the vanilla level position ({@code guiHeight - 31 - 4}). */
+    private static final int LEVEL_BOTTOM_OFFSET = 35;
     /** Fraction of the remaining distance covered per tick (~settles in 6 ticks). */
     private static final float FILL_STEP = 0.35F;
     private static final int PULSE_TICKS = 12;
@@ -79,7 +87,12 @@ public final class SkillXpBarLayer {
 
     private SkillXpBarLayer() {}
 
-    /** Mod-bus layer registration (nested, {@code SkillKeybind.Registrar} pattern). */
+    /**
+     * Mod-bus layer registration (nested, {@code SkillKeybind.Registrar} pattern).
+     * Registered directly above {@code EXPERIENCE_BAR}: that IS the vanilla slot in the
+     * layer order — the vanilla bar itself is cancelled by {@link #onRenderGuiLayerPre}
+     * while the replacement is active, so exactly one bar ever occupies the slot.
+     */
     @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
     static final class Registrar {
         private Registrar() {}
@@ -87,6 +100,37 @@ public final class SkillXpBarLayer {
         @SubscribeEvent
         static void onRegisterGuiLayers(RegisterGuiLayersEvent event) {
             event.registerAbove(VanillaGuiLayers.EXPERIENCE_BAR, LAYER_ID, SkillXpBarLayer::render);
+        }
+    }
+
+    /**
+     * A9 replacement gate — one truth for both the vanilla-cancel hook and {@link #render},
+     * so the vanilla bar is never hidden without ours actually taking the slot.
+     */
+    private static boolean replacingVanillaBar(Minecraft minecraft) {
+        return EclipseClientConfig.showCustomXpBar()
+                && minecraft.level != null
+                && minecraft.player != null
+                && !minecraft.player.isSpectator()
+                && ClientStateCache.eventStarted
+                && ClientStateCache.skillXpForLevel > 0
+                && lastLevel >= 0
+                && minecraft.player.jumpableVehicle() == null;
+    }
+
+    /**
+     * Cancels the vanilla {@code EXPERIENCE_BAR} + {@code EXPERIENCE_LEVEL} layers while
+     * the skill bar owns the slot (game bus). Riding is excluded by the gate — the vanilla
+     * jump meter (its own {@code JUMP_METER} layer) works exactly as before.
+     */
+    @SubscribeEvent
+    static void onRenderGuiLayerPre(RenderGuiLayerEvent.Pre event) {
+        if (!event.getName().equals(VanillaGuiLayers.EXPERIENCE_BAR)
+                && !event.getName().equals(VanillaGuiLayers.EXPERIENCE_LEVEL)) {
+            return;
+        }
+        if (replacingVanillaBar(Minecraft.getInstance())) {
+            event.setCanceled(true);
         }
     }
 
@@ -194,15 +238,10 @@ public final class SkillXpBarLayer {
         return Mth.clamp((float) ClientStateCache.skillXpIntoLevel / forLevel, 0.0F, 1.0F);
     }
 
-    /** GUI layer body (self-registered above {@code EXPERIENCE_BAR}). */
+    /** GUI layer body (self-registered above {@code EXPERIENCE_BAR} = the vanilla slot). */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!EclipseClientConfig.showCustomXpBar()
-                || minecraft.options.hideGui
-                || minecraft.player == null
-                || minecraft.player.isSpectator()
-                || ClientStateCache.skillXpForLevel <= 0
-                || lastLevel < 0) {
+        if (minecraft.options.hideGui || !replacingVanillaBar(minecraft)) {
             return;
         }
 
@@ -213,9 +252,12 @@ public final class SkillXpBarLayer {
         float fill = sweepTicks > 0 ? 1.0F : Mth.lerp(partial, displayedPrev, displayed);
         fill = Mth.clamp(fill, 0.0F, 1.0F);
 
-        // Track: quiet hairline so the strip reads as UI, not as damage to the HUD.
+        // Track (A9, vanilla-slot width): a quiet dark bed filling the vanilla band with a
+        // 1px hairline top edge — reads as Eclipse UI in the exact place the vanilla bar sat.
         guiGraphics.fill(barX, barY, barX + BAR_WIDTH, barY + BAR_HEIGHT,
-                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, 0.75F));
+                EclipseUiTheme.withAlpha(0xFF140A24, 0.85F));
+        guiGraphics.fill(barX, barY, barX + BAR_WIDTH, barY + 1,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, 0.6F));
 
         int fillWidth = Math.round(fill * BAR_WIDTH);
         if (fillWidth > 0) {
@@ -249,14 +291,24 @@ public final class SkillXpBarLayer {
             }
         }
 
-        // Level numeral in the free column right of the bar (clear of the food row).
-        // Odometer carry (IDEA-05 #3): each pending sweep still owes one increment.
-        String numeral = Integer.toString(
-                Math.max(0, ClientStateCache.skillLevel - pendingSweeps));
-        float flash = flashTicks > 0 ? (flashTicks - partial) / LEVEL_FLASH_TICKS : 0.0F;
-        int textColor = lerpColor(EclipseUiTheme.ACCENT, 0xFFFFFFFF, flash);
-        guiGraphics.drawString(minecraft.font, numeral, barX + BAR_WIDTH + 4,
-                barY - (minecraft.font.lineHeight - BAR_HEIGHT) / 2, textColor);
+        // A9: skill level numeral centered above the bar in the vanilla level position
+        // (vanilla EXPERIENCE_LEVEL is cancelled while we own the slot), with the vanilla
+        // 4-way dark outline for readability over world pixels but mod accent coloring.
+        // Odometer carry (IDEA-05 #3): each pending sweep still owes one increment; like
+        // vanilla, level 0 draws no numeral.
+        int shownLevel = Math.max(0, ClientStateCache.skillLevel - pendingSweeps);
+        if (shownLevel > 0) {
+            String numeral = Integer.toString(shownLevel);
+            float flash = flashTicks > 0 ? (flashTicks - partial) / LEVEL_FLASH_TICKS : 0.0F;
+            int textColor = lerpColor(EclipseUiTheme.ACCENT, 0xFFFFFFFF, flash);
+            int textX = (guiGraphics.guiWidth() - minecraft.font.width(numeral)) / 2;
+            int textY = guiGraphics.guiHeight() - LEVEL_BOTTOM_OFFSET;
+            guiGraphics.drawString(minecraft.font, numeral, textX + 1, textY, 0xFF000000, false);
+            guiGraphics.drawString(minecraft.font, numeral, textX - 1, textY, 0xFF000000, false);
+            guiGraphics.drawString(minecraft.font, numeral, textX, textY + 1, 0xFF000000, false);
+            guiGraphics.drawString(minecraft.font, numeral, textX, textY - 1, 0xFF000000, false);
+            guiGraphics.drawString(minecraft.font, numeral, textX, textY, textColor, false);
+        }
     }
 
     /** ARGB lerp (component-wise), t clamped 0..1. */

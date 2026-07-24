@@ -74,9 +74,16 @@ public final class SidebarPanel {
 
     private SidebarPanel() {}
 
+    /**
+     * A8: the whole sidebar surface (persistent panel AND TAB card) stays hidden until the
+     * server-synced {@link ClientStateCache#eventStarted} flag flips true; {@code showSidebar}
+     * remains the master killswitch. Which surfaces render while active is decided per-frame
+     * from {@link EclipseClientConfig#sidebarMode()} in {@link #render}.
+     */
     private static boolean isActive() {
         Minecraft minecraft = Minecraft.getInstance();
         return EclipseClientConfig.showSidebar()
+                && ClientStateCache.eventStarted
                 && minecraft.level != null
                 && minecraft.player != null
                 && !minecraft.options.hideGui;
@@ -127,6 +134,14 @@ public final class SidebarPanel {
                 && minecraft.options.keyPlayerList.isDown();
         float expansion = SidebarExpanded.update(expansionRequested,
                 EclipseClientConfig.reducedFx(), now);
+        // A8 sidebarMode: only FULL keeps the persistent edge panel; TAB_ONLY/OFF draw
+        // nothing until TAB is held (the expanded card always answers a TAB-hold).
+        boolean persistent =
+                EclipseClientConfig.sidebarMode() == EclipseClientConfig.SidebarMode.FULL;
+        if (!persistent && expansion <= 0.001F) {
+            hoveredLastFrame = false;
+            return;
+        }
         Font font = minecraft.font;
         float scale = (float) Mth.clamp(EclipseClientConfig.sidebarScale(), 0.6D, 1.4D);
         boolean leftSide = EclipseClientConfig.sidebarSide() == EclipseClientConfig.SidebarSide.LEFT;
@@ -161,6 +176,10 @@ public final class SidebarPanel {
         float normalX = leftSide ? 3.0F
                 : guiGraphics.guiWidth() - 3.0F - PANEL_WIDTH * scale;
         normalX += leftSide ? -slideOffset : slideOffset;
+        if (!persistent) {
+            // TAB_ONLY/OFF: the card morphs in from fully off-screen at the anchored edge.
+            normalX = leftSide ? -(PANEL_WIDTH + 4) * scale : guiGraphics.guiWidth() + 4.0F;
+        }
         float normalY = (guiGraphics.guiHeight() - normalHeight * scale) * 0.5F;
         float expandedX = (guiGraphics.guiWidth() - SidebarExpanded.WIDTH * scale) * 0.5F;
         float expandedY = (guiGraphics.guiHeight() - expandedHeight * scale) * 0.5F;
@@ -188,7 +207,7 @@ public final class SidebarPanel {
 
         float normalAlpha = 1.0F - smoothstep(0.16F, 0.58F, expansion);
         float expandedAlpha = smoothstep(0.52F, 0.92F, expansion);
-        if (normalAlpha > 0.01F) {
+        if (normalAlpha > 0.01F && persistent) {
             int originX = leftSide ? 0 : width - PANEL_WIDTH;
             renderCollapsed(guiGraphics, font, originX, normalHeight, normalAlpha, now,
                     marqueeMillis, marqueeActive, x, y, scale);
@@ -305,13 +324,15 @@ public final class SidebarPanel {
 
     private static List<Row> buildRows() {
         List<Row> rows = new ArrayList<>();
-        String timer = SidebarExpanded.formatRemaining(SidebarExpanded.remainingMillis());
+        // timer lives in DayTimerLayer now (A7): the collapsed panel keeps "Day N" only.
         rows.add(new Row("day", ICON_DAY,
-                EclipseLang.trString("sidebar.eclipse.day_timer",
-                        Math.max(1, ClientStateCache.sidebarDay), timer), null, 1));
+                EclipseLang.trString("sidebar.eclipse.day",
+                        Math.max(1, ClientStateCache.sidebarDay)), null, 1));
+        // Count-aware Leben grammar (A8 §4, keys landed by W-REBIRTH): "1 Life" / "%s Lives".
+        int lives = Math.max(0, ClientStateCache.lives);
         rows.add(new Row("hearts", ICON_HEART,
-                EclipseLang.trString("sidebar.eclipse.hearts",
-                        Math.max(0, ClientStateCache.lives)), null, 2));
+                lives == 1 ? EclipseLang.trString("gui.eclipse.lives.one")
+                        : EclipseLang.trString("gui.eclipse.lives.many", lives), null, 2));
         rows.add(new Row("altar", ICON_ALTAR,
                 EclipseLang.trString("sidebar.eclipse.altar",
                         Math.max(0, ClientStateCache.sidebarAltarLevel)), null, 3));
@@ -329,11 +350,8 @@ public final class SidebarPanel {
                                     ClientStateCache.sidebarPersonalsTotal),
                             Math.max(0, ClientStateCache.sidebarPersonalsTotal)), null, 5));
         }
-        if (!ClientStateCache.sidebarBuffIds.isEmpty()) {
-            rows.add(new Row("buffs", ICON_GOAL,
-                    EclipseLang.trString("sidebar.eclipse.buffs",
-                            Math.min(32, ClientStateCache.sidebarBuffIds.size())), null, 6));
-        }
+        // A7 hand-off (executed by A8): no buff-count row in the collapsed panel — active
+        // buff timers render exclusively in the TAB-expanded card.
 
         if (ClientStateCache.questDay == ClientStateCache.sidebarDay) {
             int index = 0;

@@ -11,7 +11,9 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.CutscenePath;
+import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.PathSampler;
+import dev.projecteclipse.eclipse.network.C2SCutsceneReadyPayload;
 import dev.projecteclipse.eclipse.network.C2SCutsceneStatePayload;
 import dev.projecteclipse.eclipse.network.S2CCutscenePlayPayload;
 import dev.projecteclipse.eclipse.veilfx.FxAnchors;
@@ -28,6 +30,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderPlayerEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -42,8 +45,18 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@link ViewportEvent.ComputeCameraAngles} handler applies the same yaw/pitch/roll as a
  * redundancy/fallback if another mixin wins the setup TAIL, and
  * {@link ViewportEvent.ComputeFov} drives the per-keyframe FOV. During a flight the camera
- * type is switched to {@code THIRD_PERSON_BACK} (own body renders in frame) and restored
- * afterwards.</p>
+ * type is switched to {@code THIRD_PERSON_BACK} and restored afterwards; the watcher's OWN
+ * body is hidden while possessed (plans_v5 C6, {@link #onRenderPlayer}) unless the path
+ * opts back in with {@code showOwnBody} (e.g. the finale's ship-deck shot).</p>
+ *
+ * <p><b>Chunk-preload hold</b> (plans_v5 C6): a world-anchored flight starts behind an
+ * instant black veil, frozen on frame 0, until the chunk columns along the path are present
+ * client-side ({@link ViewDistanceClient#chunksReady}) or the shared
+ * {@link CutsceneService#PRELOAD_TIMEOUT_TICKS} fallback expires — the server tickets those
+ * columns at play time, so normally the veil lifts within a few ticks. On release the
+ * flight clock starts and a {@link C2SCutsceneReadyPayload} re-arms the server watchdog.
+ * Player-anchored paths fly beside their watcher, whose chunks are loaded by definition,
+ * and start immediately.</p>
  *
  * <p><b>Path evaluation</b> (P2 R12): position via <b>arc-length reparameterized</b>
  * Catmull-Rom (default) or damped Hermite ({@code "bezier"}) — a {@link PathSampler} with a
@@ -112,6 +125,16 @@ public final class CameraDirector {
     private static int firedEvents;
     @Nullable
     private static CameraType previousCameraType;
+
+    // --- chunk-preload hold (C6) ---
+    /** Chunk columns sampled along the flight path this play probes for (world positions). */
+    private static final int PRELOAD_PROBE_SAMPLES = 12;
+    /** Veil fade-out length once the hold releases (~0.5 s). */
+    private static final int VEIL_OUT_TICKS = 10;
+    /** True while frozen on frame 0 behind the black veil; the flight clock has not started. */
+    private static boolean preloadHolding;
+    /** World positions whose chunk columns must be present before the hold releases. */
+    private static List<Vec3> preloadProbes = List.of();
 
     // --- lookAt smoothing + per-frame shot cache (fresh eval in the camera-setup hook) ---
     /** Last frame's final orientation — the slerp-smoothing anchor for lookAt aims. */
@@ -190,10 +213,58 @@ public final class CameraDirector {
             anchorYawDeg = 0.0F;
         }
         LetterboxLayer.setActive(requested.letterbox(), allowSkip);
+        beginPreloadHold(requested);
         PacketDistributor.sendToServer(
                 new C2SCutsceneStatePayload(requested.id(), C2SCutsceneStatePayload.State.STARTED));
-        EclipseMod.LOGGER.info("CameraDirector: playing '{}' ({} ticks, anchor {} @ {}, allowSkip {})",
-                requested.id(), requested.durationTicks(), requested.anchor(), anchorPos, allowSkip);
+        EclipseMod.LOGGER.info("CameraDirector: playing '{}' ({} ticks, anchor {} @ {}, allowSkip {}, preloadHold {})",
+                requested.id(), requested.durationTicks(), requested.anchor(), anchorPos, allowSkip, preloadHolding);
+    }
+
+    /**
+     * C6 chunk-preload hold entry: world-anchored flights drop an instant black veil and
+     * freeze on frame 0 until {@link #tickPreloadHold} releases them (chunks present or
+     * timeout). Player-anchored paths start immediately and ACK ready right away.
+     */
+    private static void beginPreloadHold(CutscenePath requested) {
+        PathSampler activeSampler = sampler;
+        if (requested.isPlayerAnchored() || activeSampler == null) {
+            preloadHolding = false;
+            preloadProbes = List.of();
+            PacketDistributor.sendToServer(new C2SCutsceneReadyPayload(requested.id()));
+            return;
+        }
+        List<Vec3> probes = new ArrayList<>(PRELOAD_PROBE_SAMPLES + 1);
+        for (int i = 0; i <= PRELOAD_PROBE_SAMPLES; i++) {
+            probes.add(toWorld(activeSampler.positionAtPathFraction(i / (double) PRELOAD_PROBE_SAMPLES)));
+        }
+        preloadProbes = probes;
+        preloadHolding = true;
+        // Veil: instant black, held for at most the shared timeout, releasing over the same
+        // fade-out the hold release re-arms below (a timeout thus lifts the veil seamlessly).
+        CaptionRenderer.fade(0, CutsceneService.PRELOAD_TIMEOUT_TICKS, VEIL_OUT_TICKS, 0xFF000000);
+    }
+
+    /**
+     * Polls the hold each client tick: releases when every probed chunk column is present
+     * ({@link ViewDistanceClient#chunksReady}) or the shared
+     * {@link CutsceneService#PRELOAD_TIMEOUT_TICKS} fallback expires. Release starts the
+     * flight clock, lifts the veil and sends the {@link C2SCutsceneReadyPayload} watchdog
+     * re-arm.
+     */
+    private static void tickPreloadHold(Minecraft minecraft, CutscenePath active, long now) {
+        long heldTicks = (now - startNanos) / TICK_NANOS;
+        boolean ready = ViewDistanceClient.chunksReady(minecraft, preloadProbes);
+        if (!ready && heldTicks < CutsceneService.PRELOAD_TIMEOUT_TICKS) {
+            return;
+        }
+        preloadHolding = false;
+        startNanos = System.nanoTime();
+        lastFreshNanos = startNanos;
+        cachedShot = null;
+        CaptionRenderer.fade(0, 0, VEIL_OUT_TICKS, 0xFF000000);
+        PacketDistributor.sendToServer(new C2SCutsceneReadyPayload(active.id()));
+        EclipseMod.LOGGER.info("CameraDirector: preload hold of '{}' released after {} tick(s) ({})",
+                active.id(), heldTicks, ready ? "chunks ready" : "timeout");
     }
 
     /** One decaying ~2 s shake impulse (W4's {@code SHAKE} phase pulses; path events later). */
@@ -293,6 +364,23 @@ public final class CameraDirector {
         }
     }
 
+    /**
+     * C6: a possessed camera hides the watcher's OWN body — a detached third-person flight
+     * must not show the player floating frozen mid-air — unless the path opts back in with
+     * {@code showOwnBody} (the finale's ship-deck shot, the intro's ship reveal). Other
+     * players keep rendering; the preload veil covers the single setup frame.
+     */
+    @SubscribeEvent
+    static void onRenderPlayer(RenderPlayerEvent.Pre event) {
+        CutscenePath active = path;
+        if (active == null || active.showOwnBody()) {
+            return;
+        }
+        if (event.getEntity() == Minecraft.getInstance().player) {
+            event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent
     static void onComputeFov(ViewportEvent.ComputeFov event) {
         if (!event.usedConfiguredFov()) {
@@ -329,6 +417,10 @@ public final class CameraDirector {
             stop(minecraft);
             return;
         }
+        if (preloadHolding) {
+            tickPreloadHold(minecraft, active, now);
+            return; // frozen on frame 0 behind the veil — no events, no finish
+        }
         double progress = progress(active, now);
         fireEvents(active, progress, minecraft);
         if (progress >= 1.0D) {
@@ -348,6 +440,13 @@ public final class CameraDirector {
         endBlendFrom = null;
         cachedShot = null;
         haveLastOrientation = false;
+        if (preloadHolding) {
+            // A skip/stop mid-hold must not leave the veil parked at full black for the
+            // rest of its hold window — release it into its fade-out now.
+            CaptionRenderer.fade(0, 0, VEIL_OUT_TICKS, 0xFF000000);
+        }
+        preloadHolding = false;
+        preloadProbes = List.of();
         pendingEvents = List.of();
         LetterboxLayer.setActive(false, false);
         if (previousCameraType != null) {
@@ -396,6 +495,9 @@ public final class CameraDirector {
     }
 
     private static double progress(CutscenePath active, long nowNanos) {
+        if (preloadHolding) {
+            return 0.0D; // the flight clock starts when the preload hold releases (C6)
+        }
         return (nowNanos - startNanos) / (double) TICK_NANOS / Math.max(1, active.durationTicks());
     }
 

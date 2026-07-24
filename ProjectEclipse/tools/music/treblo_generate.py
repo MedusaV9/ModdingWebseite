@@ -8,8 +8,13 @@ length_range and exactly ONE of prompt_strength / style_scale > 1.0 (V3 contract
 Usage:
   TREBLO_API_KEY=... python3 tools/music/treblo_generate.py [--only id,id] [--out DIR]
 
-Raw downloads land in --out (default /tmp/treblo_out); post-processing to
-Minecraft-ready OGG Vorbis happens in postprocess() (loudnorm + size budget).
+Raw downloads land in --out (default /tmp/treblo_out) as <id>_raw.ogg; post-processing
+to Minecraft-ready OGG Vorbis happens in postprocess() (two-pass loudnorm to -16 LUFS,
+48 kHz stereo Vorbis, non-audio streams stripped, size budget) and writes <id>.ogg next
+to the raw file. postprocess() runs automatically after every download, so raw API
+payloads (192 kHz upsamples, opus-in-ogg, or Theora video containers) can never ship
+into assets/eclipse/sounds/music/ again. Validate installed assets with
+tools/music/validate_oggs.py.
 """
 import argparse
 import json
@@ -22,6 +27,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 API = "https://api.treblo.com/v1"
+
+# Minecraft-ready encode targets (mirrored by tools/music/validate_oggs.py).
+TARGET_LUFS = -16.0
+TARGET_SAMPLE_RATE = 48000
+TARGET_CHANNELS = 2
+# Vorbis VBR qualities to try, best first; stepped down if the size budget is exceeded.
+QUALITY_LADDER = (4, 3, 2)
+SIZE_BUDGET_BYTES = 2_500_000  # stream=true keeps memory flat; keep tracks lean anyway
 
 # Track catalog. Every entry: elaborate prompt, >=3 tags, negative tags, length range
 # (multiples of 30), and exactly one of style_scale/prompt_strength > 1.0.
@@ -226,6 +239,51 @@ TRACKS = [
 ]
 
 
+def _measure_loudness(raw):
+    """First loudnorm pass: measure integrated loudness/peak/range of the first audio stream."""
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(raw), "-map", "0:a:0",
+         "-af", f"loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11:print_format=json",
+         "-f", "null", "-"],
+        capture_output=True, text=True, check=True)
+    # The JSON block is the last {...} in stderr.
+    stderr = proc.stderr
+    start = stderr.rfind("{")
+    return json.loads(stderr[start:])
+
+
+def postprocess(raw, final):
+    """Turns a raw API download into a Minecraft-ready OGG: pure Vorbis, 48 kHz stereo,
+    loudness-normalized to -16 LUFS (two-pass linear loudnorm), video/subtitle/data
+    streams stripped, and re-encoded down the quality ladder until the size budget holds.
+    Returns the final Path; raises on encode failure or a busted size budget."""
+    raw = Path(raw)
+    final = Path(final)
+    measured = _measure_loudness(raw)
+    loudnorm = (
+        f"loudnorm=I={TARGET_LUFS}:TP=-1.5:LRA=11:linear=true"
+        f":measured_I={measured['input_i']}:measured_TP={measured['input_tp']}"
+        f":measured_LRA={measured['input_lra']}:measured_thresh={measured['input_thresh']}"
+        f":offset={measured['target_offset']}"
+    )
+    for quality in QUALITY_LADDER:
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(raw),
+             "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1",
+             "-af", loudnorm, "-c:a", "libvorbis", "-q:a", str(quality),
+             "-ar", str(TARGET_SAMPLE_RATE), "-ac", str(TARGET_CHANNELS), str(final)],
+            check=True)
+        size = final.stat().st_size
+        if size <= SIZE_BUDGET_BYTES:
+            print(f"  postprocess: {final.name} q{quality} {size:,} bytes "
+                  f"(I={measured['input_i']} LUFS -> {TARGET_LUFS})", flush=True)
+            return final
+        print(f"  postprocess: {final.name} q{quality} {size:,} bytes over budget; "
+              "stepping down", flush=True)
+    raise RuntimeError(f"{final.name} exceeds {SIZE_BUDGET_BYTES:,} bytes even at "
+                       f"q{QUALITY_LADDER[-1]}")
+
+
 def api(path, key, payload=None):
     req = urllib.request.Request(
         f"{API}/{path}",
@@ -317,7 +375,8 @@ def generate_one(track, key, out_dir, task_id=None):
     raw = out_dir / f"{tid}_raw.ogg"
     with urllib.request.urlopen(url, timeout=120) as resp, open(raw, "wb") as out:
         out.write(resp.read())
-    return tid, f"OK {raw.stat().st_size:,} bytes (task {task_id})"
+    final = postprocess(raw, out_dir / f"{tid}.ogg")
+    return tid, f"OK {final.stat().st_size:,} bytes (task {task_id}, postprocessed)"
 
 
 def main():
@@ -337,7 +396,12 @@ def main():
     results = {}
     # STRICTLY SEQUENTIAL: the API 403s concurrent submissions — one live task at a time.
     for track in wanted:
-        if (out_dir / f"{track['id']}_raw.ogg").exists():
+        raw = out_dir / f"{track['id']}_raw.ogg"
+        if raw.exists():
+            # Re-run postprocess for raws downloaded before postprocess() existed.
+            final = out_dir / f"{track['id']}.ogg"
+            if not final.exists() or final.stat().st_mtime < raw.stat().st_mtime:
+                postprocess(raw, final)
             results[track["id"]] = "OK (already downloaded)"
             print(f"[{track['id']}] already downloaded, skipping", flush=True)
             continue

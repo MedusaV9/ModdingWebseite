@@ -1,0 +1,8 @@
+{
+  "en": {
+    "gui.eclipse.settings.option.custom_menu.tip": "Replace the vanilla title screen with the Eclipse one. Settings are reachable in-game either way (pause menu and artifact)."
+  },
+  "de": {
+    "gui.eclipse.settings.option.custom_menu.tip": "Ersetzt den Vanilla-Titelbildschirm durch den Eclipse-Titel. Die Einstellungen sind in beiden Fällen im Spiel erreichbar (Pausenmenü und Artefakt)."
+  }
+}

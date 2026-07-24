@@ -142,6 +142,17 @@ public enum MusicCues {
         return cue.isPresent();
     }
 
+    /**
+     * Server-side bridge mirroring {@link #release(String)} for event hooks that own a
+     * specific player (e.g. the contract window ending mid-boss-fight must un-duck the
+     * boss theme rather than mute the whole ladder like {@link #stop(ServerPlayer)}).
+     */
+    public static boolean release(String id, ServerPlayer player) {
+        Optional<MusicCues> cue = fromId(id);
+        cue.ifPresent(value -> MusicPayloads.sendRelease(player, value.id()));
+        return cue.isPresent();
+    }
+
     /** Server-side bridge for dimension/event exit hooks. */
     public static void stop(ServerPlayer player) {
         MusicPayloads.sendStop(player);

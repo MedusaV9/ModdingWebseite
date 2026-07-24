@@ -77,10 +77,20 @@ public final class CutscenePaths {
      * version you replaced (W6/W7: intro/unlock shots).
      */
     private static final Map<String, List<String>> LEGACY_DEFAULT_HASHES = Map.of(
-            "finale_return", List.of("6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43"),
+            // plans_v5 C6 (W-CUTSCENE) touched five bundled JSONs (showOwnBody flags + fov/_doc
+            // notes); the second finale_return hash and the *_ship/expansion entries are the
+            // versions that reshoot replaced.
+            "finale_return", List.of(
+                    "6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43",
+                    "d1f5df2d5a106e0ca660292db304d1a49cdfd13be2dedcfa99171d66014db3ab"),
             // W7 reshot the unlock_ring orbit; the v2-era default hash stays on record so
-            // untouched config copies upgrade in place.
-            "unlock_ring", List.of("2d5f63f7cb778bd799f185e700549fcc1e213488229b63fff5a0a4cd457eaefa"),
+            // untouched config copies upgrade in place. Second entry: the pre-C6 W7 version.
+            "unlock_ring", List.of(
+                    "2d5f63f7cb778bd799f185e700549fcc1e213488229b63fff5a0a4cd457eaefa",
+                    "3bc082fd3f01b144a8adc375e6abace73233aef088d1c124fb5c252911eee8b3"),
+            "intro_v3_ship", List.of("8259e1f6050b1232962ab7c9e01c397757205003511ba82c9664edf22b04138a"),
+            "expansion_skyward", List.of("de4ce2d7ca058da3fed835dc4337972c3f0cdc08bb660651d7fe4d9e68650d62"),
+            "expansion_flyover", List.of("02d76d7cbbe9370ce59873c452306a5e6ebd2b4ae4230305abb2219b146c540f"),
             // W6 deleted the v1 intro pair from DEFAULT_IDS (superseded by the intro_v3_*
             // shots). Their shipped hashes stay on record so a future re-adoption of either
             // id can still tell "stale old default" from "operator edit"; stale config
@@ -197,6 +207,7 @@ public final class CutscenePaths {
                         EclipseMod.LOGGER.warn("Cutscene path {} has fewer than 2 keyframes; skipping", fileName);
                         continue;
                     }
+                    warnLiteralCaptions(path);
                     parsed.put(path.id(), path);
                     raw.put(path.id(), json);
                 } catch (IOException | RuntimeException e) {
@@ -260,8 +271,26 @@ public final class CutscenePaths {
         raw.put(path.id(), json);
         paths = Collections.unmodifiableMap(parsed);
         rawJson = Collections.unmodifiableMap(raw);
+        warnLiteralCaptions(path);
         EclipseMod.LOGGER.info("Saved cutscene path {} ({} keyframes)", path.id(), path.keyframes().size());
         return true;
+    }
+
+    /**
+     * C6: caption event ids must be TRANSLATION KEYS ({@code CaptionRenderer} resolves them
+     * via {@code EclipseLang} — a literal English sentence renders raw on every locale).
+     * Spaces or a dot-less id are a near-certain literal; warn so operator-authored paths
+     * surface the mistake instead of silently shipping untranslatable prose.
+     */
+    private static void warnLiteralCaptions(CutscenePath path) {
+        for (CutscenePath.PathEvent event : path.events()) {
+            if ("caption".equals(event.type())
+                    && (event.id().indexOf(' ') >= 0 || event.id().indexOf('.') < 0)) {
+                EclipseMod.LOGGER.warn("Cutscene path '{}': caption id '{}' looks like literal text, not a "
+                        + "translation key — captions are translated client-side; use a key like "
+                        + "eclipse.caption.<scene>.<line> and add it to the lang files", path.id(), event.id());
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------------------

@@ -1,0 +1,22 @@
+{
+  "en": {
+    "gui.eclipse.sidebar.section.global": "Global Missions",
+    "gui.eclipse.sidebar.section.side": "Sidequests",
+    "gui.eclipse.settings.option.sidebar_mode": "Sidebar mode",
+    "gui.eclipse.settings.option.sidebar_mode.tip": "FULL keeps the panel at the screen edge; TAB ONLY and OFF hide it — holding TAB always shows the expanded overview.",
+    "gui.eclipse.settings.sidebar_mode.full": "Full",
+    "gui.eclipse.settings.sidebar_mode.tab_only": "TAB only",
+    "gui.eclipse.settings.sidebar_mode.off": "Off",
+    "gui.eclipse.artifact.not_chosen": "The artifact has not chosen you yet."
+  },
+  "de": {
+    "gui.eclipse.sidebar.section.global": "Globale Missionen",
+    "gui.eclipse.sidebar.section.side": "Nebenquests",
+    "gui.eclipse.settings.option.sidebar_mode": "Seitenleisten-Modus",
+    "gui.eclipse.settings.option.sidebar_mode.tip": "VOLL zeigt die Leiste dauerhaft am Bildschirmrand; NUR TAB und AUS verbergen sie — TAB halten öffnet immer die erweiterte Übersicht.",
+    "gui.eclipse.settings.sidebar_mode.full": "Voll",
+    "gui.eclipse.settings.sidebar_mode.tab_only": "Nur TAB",
+    "gui.eclipse.settings.sidebar_mode.off": "Aus",
+    "gui.eclipse.artifact.not_chosen": "Das Artefakt hat dich noch nicht erwählt."
+  }
+}

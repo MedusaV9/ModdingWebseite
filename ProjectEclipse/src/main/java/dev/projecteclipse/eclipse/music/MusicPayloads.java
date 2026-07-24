@@ -18,10 +18,15 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class MusicPayloads {
     private static final String VERSION = "music1";
+    /**
+     * Cue-id prefix marking a release (clear-if-matching, situation ladder resumes) instead
+     * of a play. Cue ids are lowercase identifiers, so the prefix can never collide.
+     */
+    private static final String RELEASE_PREFIX = "-";
 
     private MusicPayloads() {}
 
-    /** Empty cue id means stop; otherwise it is one of {@link MusicCues#ids()}. */
+    /** Empty cue id means stop; {@code -id} means release; otherwise one of {@link MusicCues#ids()}. */
     public record S2CMusicCuePayload(String cueId) implements CustomPacketPayload {
         public static final Type<S2CMusicCuePayload> TYPE = new Type<>(
                 ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "music/cue"));
@@ -56,10 +61,15 @@ public final class MusicPayloads {
     }
 
     private static void handleCue(S2CMusicCuePayload payload, IPayloadContext context) {
-        if (payload.cueId().isEmpty()) {
+        String cueId = payload.cueId();
+        if (cueId.isEmpty()) {
             MusicCues.stop();
-        } else if (!MusicCues.play(payload.cueId())) {
-            EclipseMod.LOGGER.warn("Received unknown music cue '{}'", payload.cueId());
+        } else if (cueId.startsWith(RELEASE_PREFIX)) {
+            if (!MusicCues.release(cueId.substring(RELEASE_PREFIX.length()))) {
+                EclipseMod.LOGGER.warn("Received unknown music release '{}'", cueId);
+            }
+        } else if (!MusicCues.play(cueId)) {
+            EclipseMod.LOGGER.warn("Received unknown music cue '{}'", cueId);
         }
     }
 
@@ -74,6 +84,11 @@ public final class MusicPayloads {
 
     public static void sendStop(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new S2CMusicCuePayload(""));
+    }
+
+    /** Releases a forced cue without muting the situation ladder (see {@link MusicCues#release}). */
+    public static void sendRelease(ServerPlayer player, String cueId) {
+        PacketDistributor.sendToPlayer(player, new S2CMusicCuePayload(RELEASE_PREFIX + cueId));
     }
 
     public static void sendOpenCredits(ServerPlayer player) {

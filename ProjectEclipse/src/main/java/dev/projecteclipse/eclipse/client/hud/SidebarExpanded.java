@@ -24,7 +24,11 @@ import net.minecraft.util.Mth;
  * value while this renderer crossfades in the detailed content.
  */
 public final class SidebarExpanded {
-    public static final int WIDTH = 220;
+    /** A8: TAB card widened 220 → 280 px for the sectioned global/side layout. */
+    public static final int WIDTH = 280;
+    /** Goal kinds: 0 = global mission; 1 = sidequest and 2 = personal share one section. */
+    private static final int[] GLOBAL_KINDS = {0};
+    private static final int[] SIDE_KINDS = {1, 2};
     private static final long ANIMATION_MILLIS = 8L * 50L;
     private static final int PAD = 10;
     private static final int BAR_HEIGHT = 2;
@@ -76,11 +80,9 @@ public final class SidebarExpanded {
     /** Natural logical height of the complete detail card at {@link #WIDTH}. */
     public static int preferredHeight(Font font) {
         int textWidth = WIDTH - PAD * 2 - 10;
-        int height = PAD + 14 + 14 + 13; // title, vitals, goals header
-        for (S2CQuestStatePayload.QuestEntry entry : validGoals()) {
-            height += Math.max(1, font.split(Component.literal(goalText(entry)), textWidth).size())
-                    * font.lineHeight + BAR_HEIGHT + 5;
-        }
+        int height = PAD + 16 + 14; // title block, vitals row
+        height += 13 + goalListHeight(font, validGoals(GLOBAL_KINDS), textWidth); // global missions
+        height += 13 + goalListHeight(font, validGoals(SIDE_KINDS), textWidth); // sidequests
         height += 13; // side/personal summary
         List<S2CBuffStatePayload.Buff> buffs = validBuffs();
         if (!buffs.isEmpty()) {
@@ -88,6 +90,20 @@ public final class SidebarExpanded {
         }
         height += 13 + 20 + 11 + PAD; // "you", skill rows, stage footer
         return Math.max(156, height);
+    }
+
+    /** Height of one rendered goal list; an empty list still spends its placeholder row. */
+    private static int goalListHeight(Font font, List<S2CQuestStatePayload.QuestEntry> goals,
+            int textWidth) {
+        if (goals.isEmpty()) {
+            return 12;
+        }
+        int height = 0;
+        for (S2CQuestStatePayload.QuestEntry entry : goals) {
+            height += Math.max(1, font.split(Component.literal(goalText(entry)), textWidth).size())
+                    * font.lineHeight + BAR_HEIGHT + 5;
+        }
+        return height;
     }
 
     /** Draws expanded content into an already-rendered/morphed panel rectangle. */
@@ -128,51 +144,16 @@ public final class SidebarExpanded {
                 MarqueeText.faded(EclipseUiTheme.TEXT, alpha));
         y += 14;
 
-        y = section(guiGraphics, font, EclipseLang.tr("sidebar.eclipse.expanded.goals"),
-                left, right, y, alpha);
+        // A8 §3: two clearly labeled goal sections — global missions, then sidequests.
         int goalTextWidth = right - left - 10;
-        List<S2CQuestStatePayload.QuestEntry> goals = validGoals();
-        if (goals.isEmpty()) {
-            guiGraphics.drawString(font, EclipseLang.tr("sidebar.eclipse.expanded.no_goals"),
-                    left, y, MarqueeText.faded(EclipseUiTheme.DIM, alpha));
-            y += 12;
-        } else {
-            long now = Util.getMillis();
-            boolean reduced = EclipseClientConfig.reducedFx();
-            for (S2CQuestStatePayload.QuestEntry goal : goals) {
-                int color = goal.done() ? EclipseUiTheme.GOOD : EclipseUiTheme.TEXT;
-                // Checkmark draw-on (IDEA-05 #2): keyed off the shared stamp timestamp —
-                // holding TAB when the payload lands shows it live, opening within the
-                // TTL catches the tail; no live stamp = fully-drawn check.
-                float stampT = 1.0F;
-                if (goal.done() && !reduced) {
-                    long stamp = SidebarPanel.goalStampStarted(goal.id());
-                    if (stamp > 0L) {
-                        stampT = Mth.clamp((now - stamp) / (float) CHECK_DRAW_MILLIS,
-                                0.0F, 1.0F);
-                    }
-                }
-                if (goal.done() && !reduced) {
-                    drawCheckmark(guiGraphics, left, y, easeOutCubic(stampT),
-                            MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
-                } else {
-                    String marker = goal.done() ? "\u2713" : kindMarker(goal.kind());
-                    guiGraphics.drawString(font, marker, left, y,
-                            MarqueeText.faded(color, alpha));
-                }
-                List<FormattedCharSequence> lines =
-                        font.split(Component.literal(goalText(goal)), goalTextWidth);
-                for (FormattedCharSequence line : lines) {
-                    guiGraphics.drawString(font, line, left + 10, y,
-                            MarqueeText.faded(color, alpha));
-                    y += font.lineHeight;
-                }
-                drawBar(guiGraphics, left + 10, y + 1, goalTextWidth,
-                        goal.progress(), goal.target(), goal.done(), alpha,
-                        reduced ? 1.0F : easeOutCubic(stampT));
-                y += BAR_HEIGHT + 5;
-            }
-        }
+        y = section(guiGraphics, font, EclipseLang.tr("gui.eclipse.sidebar.section.global"),
+                left, right, y, alpha);
+        y = renderGoalList(guiGraphics, font, validGoals(GLOBAL_KINDS),
+                left, y, goalTextWidth, alpha);
+        y = section(guiGraphics, font, EclipseLang.tr("gui.eclipse.sidebar.section.side"),
+                left, right, y, alpha);
+        y = renderGoalList(guiGraphics, font, validGoals(SIDE_KINDS),
+                left, y, goalTextWidth, alpha);
 
         String optional = EclipseLang.trString("sidebar.eclipse.expanded.optional",
                 ClientStateCache.sidebarSidesDone, ClientStateCache.sidebarSidesTotal,
@@ -232,6 +213,53 @@ public final class SidebarExpanded {
         int lineStart = Math.min(right, left + font.width(title) + 5);
         EclipseUiTheme.drawHairline(guiGraphics, lineStart, right, y + 5, alpha);
         return y + 13;
+    }
+
+    /** One goal section's entries (marker/check, wrapped text, progress bar); returns new y. */
+    private static int renderGoalList(GuiGraphics guiGraphics, Font font,
+            List<S2CQuestStatePayload.QuestEntry> goals, int left, int y,
+            int goalTextWidth, float alpha) {
+        if (goals.isEmpty()) {
+            guiGraphics.drawString(font, EclipseLang.tr("sidebar.eclipse.expanded.no_goals"),
+                    left, y, MarqueeText.faded(EclipseUiTheme.DIM, alpha));
+            return y + 12;
+        }
+        long now = Util.getMillis();
+        boolean reduced = EclipseClientConfig.reducedFx();
+        for (S2CQuestStatePayload.QuestEntry goal : goals) {
+            int color = goal.done() ? EclipseUiTheme.GOOD : EclipseUiTheme.TEXT;
+            // Checkmark draw-on (IDEA-05 #2): keyed off the shared stamp timestamp —
+            // holding TAB when the payload lands shows it live, opening within the
+            // TTL catches the tail; no live stamp = fully-drawn check.
+            float stampT = 1.0F;
+            if (goal.done() && !reduced) {
+                long stamp = SidebarPanel.goalStampStarted(goal.id());
+                if (stamp > 0L) {
+                    stampT = Mth.clamp((now - stamp) / (float) CHECK_DRAW_MILLIS,
+                            0.0F, 1.0F);
+                }
+            }
+            if (goal.done() && !reduced) {
+                drawCheckmark(guiGraphics, left, y, easeOutCubic(stampT),
+                        MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
+            } else {
+                String marker = goal.done() ? "\u2713" : kindMarker(goal.kind());
+                guiGraphics.drawString(font, marker, left, y,
+                        MarqueeText.faded(color, alpha));
+            }
+            List<FormattedCharSequence> lines =
+                    font.split(Component.literal(goalText(goal)), goalTextWidth);
+            for (FormattedCharSequence line : lines) {
+                guiGraphics.drawString(font, line, left + 10, y,
+                        MarqueeText.faded(color, alpha));
+                y += font.lineHeight;
+            }
+            drawBar(guiGraphics, left + 10, y + 1, goalTextWidth,
+                    goal.progress(), goal.target(), goal.done(), alpha,
+                    reduced ? 1.0F : easeOutCubic(stampT));
+            y += BAR_HEIGHT + 5;
+        }
+        return y;
     }
 
     private static void drawBar(GuiGraphics guiGraphics, int x, int y, int width,
@@ -303,16 +331,22 @@ public final class SidebarExpanded {
         }
     }
 
-    private static List<S2CQuestStatePayload.QuestEntry> validGoals() {
+    /** Today's payload-fed goals filtered to the given kinds, in payload order (cap 32). */
+    private static List<S2CQuestStatePayload.QuestEntry> validGoals(int... kinds) {
         List<S2CQuestStatePayload.QuestEntry> result = new ArrayList<>();
         int expectedDay = ClientStateCache.sidebarDay;
         if (ClientStateCache.questDay != expectedDay) {
             return result;
         }
         for (S2CQuestStatePayload.QuestEntry entry : ClientStateCache.questEntries) {
-            if (entry != null && entry.kind() >= 0 && entry.kind() <= 2
-                    && entry.target() > 0 && result.size() < 32) {
-                result.add(entry);
+            if (entry == null || entry.target() <= 0 || result.size() >= 32) {
+                continue;
+            }
+            for (int kind : kinds) {
+                if (entry.kind() == kind) {
+                    result.add(entry);
+                    break;
+                }
             }
         }
         return result;

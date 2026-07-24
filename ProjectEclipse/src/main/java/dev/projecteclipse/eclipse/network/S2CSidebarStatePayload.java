@@ -9,7 +9,14 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-/** Server → client: consolidated sidebar stats (R18). No online player count — removed by design. */
+/**
+ * Server → client: consolidated sidebar stats (R18). No online player count — removed by design.
+ *
+ * <p>{@code eventStarted} is the PLAN-A §0.1 contract flag (server truth:
+ * {@code StartState.isAssigned() || EclipseWorldState.isStartEventDone()}), sent on join and
+ * re-sent at start-event completion; A8 (sidebar), A9 (XP bar) and A12 (artifact opener)
+ * read it via {@code ClientStateCache.eventStarted}.</p>
+ */
 public record S2CSidebarStatePayload(
         int day,
         long boundaryEpochMillis,
@@ -25,7 +32,8 @@ public record S2CSidebarStatePayload(
         int personalsDone,
         int personalsTotal,
         List<String> buffIds,
-        int shards) implements CustomPacketPayload {
+        int shards,
+        boolean eventStarted) implements CustomPacketPayload {
 
     public S2CSidebarStatePayload {
         buffIds = List.copyOf(buffIds);
@@ -54,6 +62,7 @@ public record S2CSidebarStatePayload(
         ByteBufCodecs.VAR_INT.encode(buf, value.personalsTotal());
         ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()).encode(buf, value.buffIds());
         ByteBufCodecs.VAR_INT.encode(buf, value.shards());
+        ByteBufCodecs.BOOL.encode(buf, value.eventStarted());
     }
 
     private static S2CSidebarStatePayload decode(ByteBuf buf) {
@@ -72,7 +81,8 @@ public record S2CSidebarStatePayload(
                 ByteBufCodecs.VAR_INT.decode(buf),
                 ByteBufCodecs.VAR_INT.decode(buf),
                 ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()).decode(buf),
-                ByteBufCodecs.VAR_INT.decode(buf));
+                ByteBufCodecs.VAR_INT.decode(buf),
+                ByteBufCodecs.BOOL.decode(buf));
     }
 
     @Override

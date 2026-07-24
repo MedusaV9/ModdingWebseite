@@ -2,21 +2,26 @@ package dev.projecteclipse.eclipse.cutscene;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.network.C2SCutsceneReadyPayload;
 import dev.projecteclipse.eclipse.network.C2SCutsceneStatePayload;
 import dev.projecteclipse.eclipse.network.S2CCutsceneLibraryPayload;
 import dev.projecteclipse.eclipse.network.S2CCutscenePlayPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
+import dev.projecteclipse.eclipse.progression.BorderController;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -28,6 +33,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -84,6 +91,31 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class CutsceneService {
     /** Watchdog slack on top of a path's {@code durationTicks} (freeze TTL and session deadline). */
     public static final int WATCHDOG_MARGIN_TICKS = 100;
+
+    /**
+     * C6 chunk-preload hold cap, shared with the client ({@code CameraDirector}): a flight
+     * whose chunks never arrive starts regardless after this many ticks. Freeze TTLs and
+     * session deadlines budget it on top of {@code durationTicks}, and the client's
+     * {@link C2SCutsceneReadyPayload} re-arms the deadline when the flight actually starts.
+     */
+    public static final int PRELOAD_TIMEOUT_TICKS = 100;
+
+    /** Auto-expiring region ticket that pre-loads the columns under a camera path (C6). */
+    private static final TicketType<ChunkPos> PRELOAD_TICKET = TicketType.create(
+            "eclipse_cutscene_preload", Comparator.comparingLong(ChunkPos::toLong),
+            PRELOAD_TIMEOUT_TICKS + 200);
+    /** Whole-path arc-length fractions sampled for preload tickets (plus both endpoints). */
+    private static final int PRELOAD_PATH_SAMPLES = 12;
+    /** Region-ticket radius per sampled column (1 → a 3×3 of chunks per sample). */
+    private static final int PRELOAD_TICKET_RADIUS = 1;
+    /** Hard cap of ticketed columns per play — bounds server load on absurd operator paths. */
+    private static final int PRELOAD_MAX_COLUMNS = 48;
+
+    /**
+     * Air gap (blocks) under a heightmap surface that marks it as a FLOATING SHELL rather
+     * than real ground (C6 return healing — the day-12 "returned onto the End island" bug).
+     */
+    private static final int FLOATING_SHELL_AIR_GAP = 32;
 
     /** Library sync budget: entries past this many UTF-8 payload bytes are dropped. */
     private static final int MAX_LIBRARY_SYNC_BYTES = 512 * 1024;
@@ -161,8 +193,45 @@ public final class CutsceneService {
         }
     }
 
-    /** One player's active playback; {@code preview} sessions have no freeze to release. */
-    private record Session(String pathId, long deadlineTick, boolean preview, Group group) {}
+    /**
+     * One player's active playback; {@code preview} sessions have no freeze to release.
+     * The deadline is mutable: the client's preload-ready ACK re-arms it to the flight's
+     * REAL start moment (C6), so a long chunk hold never eats into the watchdog margin.
+     */
+    private static final class Session {
+        private final String pathId;
+        private final boolean preview;
+        private final Group group;
+        private long deadlineTick;
+
+        Session(String pathId, long deadlineTick, boolean preview, Group group) {
+            this.pathId = pathId;
+            this.deadlineTick = deadlineTick;
+            this.preview = preview;
+            this.group = group;
+        }
+
+        String pathId() {
+            return this.pathId;
+        }
+
+        long deadlineTick() {
+            return this.deadlineTick;
+        }
+
+        boolean preview() {
+            return this.preview;
+        }
+
+        Group group() {
+            return this.group;
+        }
+
+        /** Pushes the deadline out (never pulls it in — ACKs release early anyway). */
+        void rearmDeadline(long newDeadlineTick) {
+            this.deadlineTick = Math.max(this.deadlineTick, newDeadlineTick);
+        }
+    }
 
     /** Active sessions by player UUID. Server-thread only (tick + main-thread payload handlers). */
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
@@ -299,7 +368,9 @@ public final class CutsceneService {
         }
 
         Vec3 playAnchor = anchor != null ? anchor : resolveDynamicAnchor(server, path, players);
-        int watchdogTicks = path.durationTicks() + WATCHDOG_MARGIN_TICKS;
+        // C6: freeze TTLs + session deadlines budget the client's chunk-preload hold too;
+        // the C2SCutsceneReadyPayload re-arms the deadline when the flight really starts.
+        int watchdogTicks = path.durationTicks() + PRELOAD_TIMEOUT_TICKS + WATCHDOG_MARGIN_TICKS;
         long deadline = server.getTickCount() + watchdogTicks;
         boolean intro = id.startsWith("intro_");
 
@@ -317,6 +388,7 @@ public final class CutsceneService {
         if (options.teleportPolicy() == TeleportPolicy.GLOBAL_TELEPORT) {
             gatherPlayers(server, path, players, playAnchor, options.returnAfter());
         }
+        preloadPathChunks(server, path, playAnchor);
 
         Group group = new Group(id, players.size(), groupCallback);
         S2CCutscenePlayPayload payload =
@@ -334,6 +406,39 @@ public final class CutsceneService {
                 id, players.size(), path.durationTicks(), watchdogTicks, path.allowSkip(), playAnchor,
                 options.teleportPolicy(), options.viewDistance(), options.returnAfter());
         return players.size();
+    }
+
+    /**
+     * C6 chunk preload: auto-expiring region tickets along the sampled keyframe path, so
+     * the server loads (and its chunk tracker sends) the flight's terrain while the
+     * watching clients hold on their black veil ({@code CameraDirector}'s preload hold —
+     * released by chunk arrival or the shared {@value #PRELOAD_TIMEOUT_TICKS}-tick
+     * timeout). Player-anchored paths fly right next to their watcher, whose chunks are
+     * loaded by definition, and need no tickets.
+     */
+    private static void preloadPathChunks(MinecraftServer server, CutscenePath path, @Nullable Vec3 anchor) {
+        if (path.isPlayerAnchored() || path.keyframes().size() < 2) {
+            return;
+        }
+        ServerLevel level = resolveLevel(server, path.dimension());
+        if (level == null) {
+            return;
+        }
+        Vec3 origin = anchor != null ? anchor : Vec3.ZERO;
+        PathSampler sampler = PathSampler.of(path);
+        Set<Long> columns = new LinkedHashSet<>();
+        for (int i = 0; i <= PRELOAD_PATH_SAMPLES && columns.size() < PRELOAD_MAX_COLUMNS; i++) {
+            Vec3 world = PathSampler.toWorld(
+                    sampler.positionAtPathFraction(i / (double) PRELOAD_PATH_SAMPLES), origin, 0.0F);
+            BlockPos pos = BlockPos.containing(world.x, world.y, world.z);
+            columns.add(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4));
+        }
+        for (long packed : columns) {
+            ChunkPos pos = new ChunkPos(packed);
+            level.getChunkSource().addRegionTicket(PRELOAD_TICKET, pos, PRELOAD_TICKET_RADIUS, pos);
+        }
+        EclipseMod.LOGGER.info("CutsceneService: preload-ticketed {} column(s) along '{}' in {}",
+                columns.size(), path.id(), level.dimension().location());
     }
 
     /**
@@ -427,7 +532,11 @@ public final class CutsceneService {
         }
     }
 
-    /** A spot on the gather ring, snapped to the surface when the heightmap knows better. */
+    /**
+     * A spot on the gather ring, snapped to the surface when the heightmap knows better —
+     * unless that "surface" is a floating shell far above the sequence area (C6: the End
+     * disc's heightmap must not host gathered players hundreds of blocks over the show).
+     */
     private static Vec3 gatherSpot(ServerLevel level, Vec3 area, int index, int count) {
         double angle = (Math.PI * 2.0D * index) / count;
         double x = area.x + Math.cos(angle) * GATHER_RING_RADIUS;
@@ -435,6 +544,10 @@ public final class CutsceneService {
         BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 BlockPos.containing(x, area.y, z));
         double y = top.getY() > level.getMinBuildHeight() ? top.getY() : area.y;
+        if (y > area.y + 2.0D
+                && isFloatingShellAbove(level, BlockPos.containing(x, 0.0D, z), top.getY() - 1, area.y)) {
+            y = area.y;
+        }
         return new Vec3(x, y, z);
     }
 
@@ -486,18 +599,72 @@ public final class CutsceneService {
 
     /**
      * Heals stale snapshots and origins covered by terrain written during a cutscene.
-     * Heightmap values are the first free block above the motion-blocking surface.
+     *
+     * <p>A snapshot whose spot still stands FREE is returned untouched — in particular it is
+     * never snapped UP just because the column's heightmap towers above it (C6: the day-12
+     * "returned onto the End island" bug — the return column pierced the vortex disc, and the
+     * old {@code y < surface - 2} heightmap snap hoisted players hundreds of blocks onto the
+     * shell). Only a buried or below-world snapshot climbs, and it climbs to the FIRST free
+     * two-block gap above itself, not to the heightmap top.</p>
      */
     private static Vec3 validatedReturnPosition(ServerLevel level, Vec3 pos) {
         BlockPos column = BlockPos.containing(pos.x, 0.0D, pos.z);
-        level.getChunk(column.getX() >> 4, column.getZ() >> 4);
-        int safeY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                column.getX(), column.getZ());
-        int surfaceY = safeY - 1;
-        if (pos.y < level.getMinBuildHeight() || pos.y < surfaceY - 2.0D) {
-            return new Vec3(pos.x, Math.max(safeY, level.getMinBuildHeight() + 1), pos.z);
+        level.getChunk(column.getX() >> 4, column.getZ() >> 4); // block + heightmap reads need it
+        int minY = level.getMinBuildHeight();
+        int feetY = (int) Math.floor(pos.y);
+        if (pos.y >= minY && isFreeSpot(level, column.atY(feetY))) {
+            return pos;
         }
-        return pos;
+        int safeY = Math.max(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                column.getX(), column.getZ()), minY + 1);
+        int start = Math.max(feetY, minY);
+        int limit = Math.min(Math.max(safeY, start), level.getMaxBuildHeight() - 2);
+        for (int y = start; y <= limit; y++) {
+            if (isFreeSpot(level, column.atY(y))) {
+                return new Vec3(pos.x, y, pos.z);
+            }
+        }
+        return new Vec3(pos.x, safeY, pos.z);
+    }
+
+    /** Feet and head blocks free of motion-blocking collision — a player fits here. */
+    private static boolean isFreeSpot(ServerLevel level, BlockPos feet) {
+        return !hasCollision(level, feet) && !hasCollision(level, feet.above());
+    }
+
+    /** Whether the block at {@code pos} has any collision shape (a stand-in for the deprecated blocksMotion). */
+    private static boolean hasCollision(ServerLevel level, BlockPos pos) {
+        return !level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
+    }
+
+    /**
+     * True when the heightmap "surface" ending at {@code surfaceY} (its top motion-blocking
+     * block) is a FLOATING SHELL rather than real ground: under at most a few blocks of crust
+     * yawns a drop of {@value #FLOATING_SHELL_AIR_GAP}+ blocks of air — or pure air all the
+     * way down to {@code baseY}. Such shells (the vortex End disc, leftover build artifacts)
+     * must never host gathered or returned players (C6).
+     */
+    private static boolean isFloatingShellAbove(ServerLevel level, BlockPos column, int surfaceY, double baseY) {
+        final int maxShellThickness = 8;
+        int floor = Math.max(level.getMinBuildHeight(), (int) Math.floor(baseY));
+        int y = surfaceY;
+        int thickness = 0;
+        while (y >= floor && thickness < maxShellThickness && hasCollision(level, column.atY(y))) {
+            y--;
+            thickness++;
+        }
+        if (thickness >= maxShellThickness) {
+            return false; // Solid that deep is terrain, not a shell.
+        }
+        int gap = 0;
+        while (y >= floor) {
+            if (hasCollision(level, column.atY(y))) {
+                return gap >= FLOATING_SHELL_AIR_GAP;
+            }
+            gap++;
+            y--;
+        }
+        return gap > 0; // Nothing but air between the shell and the base.
     }
 
     /**
@@ -550,6 +717,27 @@ public final class CutsceneService {
         }
     }
 
+    /**
+     * Handles a {@link C2SCutsceneReadyPayload} on the server thread (C6): the client's
+     * preload hold just ended and the flight is starting NOW — re-arm the session watchdog
+     * from this moment so the hold never eats into the margin. Stray ACKs (no session,
+     * superseded id) are ignored; clients that never send one (vanilla, packet loss) are
+     * covered by the play-time deadline, which already budgets the full preload timeout.
+     */
+    public static void handleClientReady(C2SCutsceneReadyPayload payload, ServerPlayer player) {
+        Session session = SESSIONS.get(player.getUUID());
+        if (session == null || !session.pathId().equals(payload.id())) {
+            EclipseMod.LOGGER.debug("CutsceneService: stray preload-ready ACK '{}' from {} (no matching session)",
+                    payload.id(), player.getScoreboardName());
+            return;
+        }
+        CutscenePath path = CutscenePaths.get(payload.id());
+        int durationTicks = path != null ? path.durationTicks() : 0;
+        session.rearmDeadline(player.server.getTickCount() + durationTicks + WATCHDOG_MARGIN_TICKS);
+        EclipseMod.LOGGER.info("CutsceneService: {} preload-ready for '{}' — flight starting (watchdog re-armed)",
+                player.getScoreboardName(), payload.id());
+    }
+
     /** Grants a skip only when the session matches, the path allows it, and it is not disabled. */
     private static void handleSkipRequest(String id, ServerPlayer player, @Nullable Session session) {
         if (session == null || !session.pathId().equals(id)) {
@@ -581,6 +769,9 @@ public final class CutsceneService {
         }
         EclipseMod.LOGGER.info("CutsceneService: session '{}' of {} complete ({})",
                 session.pathId(), player.getScoreboardName(), reason);
+        // C6 belt-and-suspenders: no cutscene may end with a red border vignette armed
+        // (worlds saved pre-fix persist vanilla's 15 s warningTime; see BorderController).
+        BorderController.clearWarningVisuals(player.server);
         session.group().playerDone();
     }
 

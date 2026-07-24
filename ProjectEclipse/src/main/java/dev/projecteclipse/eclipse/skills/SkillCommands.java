@@ -89,7 +89,8 @@ public final class SkillCommands {
     private static int info(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         SkillState.Entry entry = SkillState.get(player.server).entry(player.getUUID());
-        SkillCurve.Params curve = SkillConfig.get().curve();
+        SkillCurve.Params curve = RebirthHooks.curveFor(player.server, player.getUUID(),
+                SkillConfig.get().curve());
         int level = SkillCurve.levelForXp(entry.totalXp, curve);
         // Action-bar dump (feedback rule: action bar, never chat). Secret multiplier is
         // deliberately absent — nothing here may reveal it.

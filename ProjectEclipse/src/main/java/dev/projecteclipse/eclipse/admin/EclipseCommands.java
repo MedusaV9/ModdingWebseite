@@ -1318,8 +1318,8 @@ public final class EclipseCommands {
         EclipseWorldState state = EclipseWorldState.get(server);
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
                 EclipseConfig.day(state.getDay()).goals()));
-        // Edited milestones.json feeds the handbook Rewards tab live.
-        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current());
+        // Edited milestones.json feeds the handbook Altar Offering tab live.
+        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current(server));
         // Same for the cutscene path library (edited JSONs apply immediately).
         CutsceneService.syncLibraryToAll(server);
         source.sendSuccess(() -> Component.literal("Eclipse config reloaded: "

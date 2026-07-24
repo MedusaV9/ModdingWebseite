@@ -66,20 +66,43 @@ public final class EclipseConfig {
      * would let clients datamine the anonymized arc ("DAY 14 — THE FERRYMAN") straight out
      * of the jar. {@code borderSize} is deprecated since W7 (the soft border follows
      * {@code stages.json}) — parsed for backward compat, never written, {@code 0} when absent.
+     *
+     * <p>Wave-5 (PLAN-C §C13 / A5-extra): optional {@code titleDone}/{@code subtitleDone}
+     * variants replace the regular lines once the day's content is actually beaten
+     * (server truth via {@code timeline.DayTextConditions}) — so the timeline and
+     * announcements stop advertising already-beaten content. Absent/blank = never swap
+     * (fully backward compatible with existing {@code days.json} files).</p>
      */
     public record DayPlan(int day, List<Localized> localizedGoals, List<String> unlocks,
-            double borderSize, Localized localizedTitle, Localized localizedSubtitle) {
+            double borderSize, Localized localizedTitle, Localized localizedSubtitle,
+            Localized localizedTitleDone, Localized localizedSubtitleDone) {
         public DayPlan {
             localizedGoals = List.copyOf(localizedGoals);
             unlocks = List.copyOf(unlocks);
             localizedTitle = localizedTitle == null ? Localized.of("") : localizedTitle;
             localizedSubtitle = localizedSubtitle == null ? Localized.of("") : localizedSubtitle;
+            localizedTitleDone = localizedTitleDone == null ? Localized.of("") : localizedTitleDone;
+            localizedSubtitleDone = localizedSubtitleDone == null ? Localized.of("") : localizedSubtitleDone;
+        }
+
+        /** Pre-Wave-5 canonical shape (no done-variants) — kept so existing callers compile. */
+        public DayPlan(int day, List<Localized> localizedGoals, List<String> unlocks,
+                double borderSize, Localized localizedTitle, Localized localizedSubtitle) {
+            this(day, localizedGoals, unlocks, borderSize, localizedTitle, localizedSubtitle,
+                    Localized.of(""), Localized.of(""));
         }
 
         /** Backward-compatible constructor for the built-in English-only defaults. */
         public DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
                 String title, String subtitle) {
-            this(day, localize(goals), unlocks, borderSize, Localized.of(title), Localized.of(subtitle));
+            this(day, goals, unlocks, borderSize, title, subtitle, "", "");
+        }
+
+        /** English-only defaults WITH the beaten-content done-variants (days 12/13). */
+        public DayPlan(int day, List<String> goals, List<String> unlocks, double borderSize,
+                String title, String subtitle, String titleDone, String subtitleDone) {
+            this(day, localize(goals), unlocks, borderSize, Localized.of(title), Localized.of(subtitle),
+                    Localized.of(titleDone), Localized.of(subtitleDone));
         }
 
         /** Legacy English view used by old command/editor seams. */
@@ -472,10 +495,14 @@ public final class EclipseConfig {
                 "DAY 10 — DEEP RUIN", "Day 10. Netherite awaits the patient smith."));
         plans.add(new DayPlan(11, List.of("Everyone reaches 4+ hearts", "Revive a banned player", "Assemble an End raid kit"), List.of(), 0.0D,
                 "DAY 11 — THE WEAKEST LINK", "Day 11. A chain is judged by its weakest link."));
+        // Days 12/13 carry done-variants (C13/A5-extra): once the End has arrived / the
+        // dragon has fallen, the timeline and announcements stop advertising the hunt.
         plans.add(new DayPlan(12, List.of("Locate the stronghold", "Breach the portal room", "Hold the portal room overnight"), List.of("end"), 0.0D,
-                "DAY 12 — STRONGHOLD", "Day 12. The end portal hums beneath the stone."));
+                "DAY 12 — STRONGHOLD", "Day 12. The end portal hums beneath the stone.",
+                "DAY 12 — THE BROKEN SEAL", "Day 12. The portal room lies open — the stone has given up its secret."));
         plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 0.0D,
-                "DAY 13 — THE DRAGON", "Day 13. Bring the dragon down and claim the egg."));
+                "DAY 13 — THE DRAGON", "Day 13. Bring the dragon down and claim the egg.",
+                "DAY 13 — THE SILENT SKY", "The dragon has fallen. Rest — tomorrow the ship sails."));
         plans.add(new DayPlan(14, List.of("Offer the egg at dusk", "Survive the crossing", "Defeat the Ferryman before the ship sinks"), List.of(), 0.0D,
                 "DAY 14 — THE FERRYMAN", "Day 14. Gather. The ship sails at dusk."));
         return plans;
@@ -499,6 +526,12 @@ public final class EclipseConfig {
             if (!plan.localizedSubtitle().isBlank()) {
                 obj.add("subtitle", plan.localizedSubtitle().toJsonElement());
             }
+            if (!plan.localizedTitleDone().isBlank()) {
+                obj.add("titleDone", plan.localizedTitleDone().toJsonElement());
+            }
+            if (!plan.localizedSubtitleDone().isBlank()) {
+                obj.add("subtitleDone", plan.localizedSubtitleDone().toJsonElement());
+            }
             array.add(obj);
         }
         return array;
@@ -515,7 +548,9 @@ public final class EclipseConfig {
                     // Legacy field: pre-W16 files (and ConfigEditor normalization) still carry it.
                     obj.has("borderSize") ? obj.get("borderSize").getAsDouble() : 0.0D,
                     obj.has("title") ? Localized.fromJson(obj.get("title")) : Localized.of(""),
-                    obj.has("subtitle") ? Localized.fromJson(obj.get("subtitle")) : Localized.of("")));
+                    obj.has("subtitle") ? Localized.fromJson(obj.get("subtitle")) : Localized.of(""),
+                    obj.has("titleDone") ? Localized.fromJson(obj.get("titleDone")) : Localized.of(""),
+                    obj.has("subtitleDone") ? Localized.fromJson(obj.get("subtitleDone")) : Localized.of("")));
         }
         if (plans.isEmpty()) {
             throw new IllegalStateException("days.json contains no day entries");

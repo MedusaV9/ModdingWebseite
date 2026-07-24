@@ -13,6 +13,7 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.realtime.RealtimeConfig;
 import dev.projecteclipse.eclipse.progression.realtime.RealtimeDayApi;
@@ -223,7 +224,7 @@ public final class DevTimerCommands {
         source.sendSuccess(() -> feedback, false);
         for (ServerPlayer operator : source.getServer().getPlayerList().getPlayers()) {
             if (operator.hasPermissions(2) && operator != source.getEntity()) {
-                operator.sendSystemMessage(Component.translatable("dev.eclipse.audit",
+                operator.sendSystemMessage(ServerLang.tr(operator, "dev.eclipse.audit",
                         source.getTextName(), feedback));
             }
         }

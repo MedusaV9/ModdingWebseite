@@ -78,8 +78,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       fury (strikes every 15 ticks) until the flip lands or
  *       {@value #BURST_FLIP_TIMEOUT_TICKS} ticks pass.</li>
  *   <li>{@code BURST} — the GIANT strike ({@code intensity 1, b=1}), {@code fx/shockwave}
- *       (1.0, 50), vortex {@code DISSIPATE 60}, white→violet screen flash,
- *       {@code eclipse:altar_reveal_burst} at the altar and {@link FloatingDecor#ensure}.</li>
+ *       (1.0, 50), vortex {@code DISSIPATE 60}, white→violet screen flash, the C5 scripted
+ *       day switch (the clock snaps forward to morning under the flash; see
+ *       {@link #scriptedDaySwitch}), {@code eclipse:altar_reveal_burst} at the altar and
+ *       {@link FloatingDecor#ensure}.</li>
  *   <li>{@code REVEAL} (300 ticks) — {@code intro_v3_reveal} orbit of the floating altar
  *       island (anchor = altar position; nobody is far by now, so the global play only bumps
  *       view distance).</li>
@@ -167,6 +169,17 @@ public final class IntroSequence implements SequenceReplayable {
     /** Reserved storm id of FX-only replays — never collides with StormRegistry's counter. */
     private static final int REPLAY_STORM_ID = 999_006;
 
+    // --- scripted day switch (plans_v5 C5) ---
+    /** Morning time-of-day the final blast snaps the clock to (vanilla "day", 1000 t). */
+    private static final long DAY_START_TIME_OF_DAY = 1_000L;
+    /**
+     * Overworld game time of the intro's scripted night→day jump, or {@code -1} while none
+     * happened this server run. Transient by design (never persisted): a restart clears it,
+     * matching the read-only guard seam in {@code progression.goals.QuestDetectors} — no
+     * "survived the night" credit may come from the cinematic's clock snap.
+     */
+    private static volatile long scriptedTimeJumpGameTime = -1L;
+
     private static final IntroSequence INSTANCE = new IntroSequence();
     private static final AtomicBoolean REGISTERED = new AtomicBoolean();
 
@@ -208,6 +221,16 @@ public final class IntroSequence implements SequenceReplayable {
         run = null;
         TASKS.clear();
         REPLAY_LIGHTNING.clear();
+        scriptedTimeJumpGameTime = -1L;
+    }
+
+    /**
+     * Overworld game time of the intro's scripted night→day jump, or {@code -1} (C5 seam):
+     * {@code QuestDetectors.pollNightWindow} voids any night window whose dawn crossing
+     * lands within its grace band of this marker.
+     */
+    public static long scriptedTimeJumpGameTime() {
+        return scriptedTimeJumpGameTime;
     }
 
     // ------------------------------------------------------------------ phase machine
@@ -532,6 +555,10 @@ public final class IntroSequence implements SequenceReplayable {
         // White → violet screen flash (R10: 8 ticks total across the two fades).
         PacketDistributor.sendToAllPlayers(FLASH_WHITE);
         schedule(server, FLASH_VIOLET_DELAY_TICKS, () -> PacketDistributor.sendToAllPlayers(FLASH_VIOLET));
+        // C5: the final blast turns the sky to DAY — the event always begins in daylight.
+        // The jump is forward-only (dayTime never rewinds) and lands under the white flash;
+        // the marker lets QuestDetectors void the scripted dawn (no free night credit).
+        scriptedDaySwitch(current.overworld);
 
         Vec3 altar = altarCenterOr(current.server, current.center);
         PacketDistributor.sendToPlayersInDimension(current.overworld,
@@ -543,6 +570,27 @@ public final class IntroSequence implements SequenceReplayable {
             FloatingDecor.ensure(current.overworld, altarPos);
         }
         schedule(server, BURST_HOLD_TICKS, () -> beginReveal(current));
+    }
+
+    /**
+     * C5 scripted day switch: snaps the overworld clock forward to the next morning
+     * ({@value #DAY_START_TIME_OF_DAY} t into the day) so the sun the SUNRISE phase reveals
+     * is a real morning sun. Forward-only — systems comparing {@code getDayTime()} against
+     * remembered values (favor expiries, night ids) never see time move backwards — and a
+     * no-op when the clock already sits exactly at morning. Records the game-time marker
+     * read by {@code QuestDetectors}.
+     */
+    private static void scriptedDaySwitch(ServerLevel overworld) {
+        long dayTime = overworld.getDayTime();
+        long timeOfDay = Math.floorMod(dayTime, 24_000L);
+        if (timeOfDay == DAY_START_TIME_OF_DAY) {
+            return;
+        }
+        long forward = Math.floorMod(DAY_START_TIME_OF_DAY - timeOfDay, 24_000L);
+        overworld.setDayTime(dayTime + forward);
+        scriptedTimeJumpGameTime = overworld.getGameTime();
+        EclipseMod.LOGGER.info("IntroSequence: scripted time jump +{} ticks to morning (dayTime {} -> {}, marker gameTime {})",
+                forward, dayTime, dayTime + forward, scriptedTimeJumpGameTime);
     }
 
     /** REVEAL: slow orbit of the floating altar island. */

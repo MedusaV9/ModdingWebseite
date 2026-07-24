@@ -26,8 +26,11 @@ public final class ClientStateCache {
             java.util.List.of();
 
     /**
-     * Altar milestone ladder (S2CMilestonesPayload; sent at login + on /eclipse reload).
-     * The handbook Rewards tab renders it; Status derives the ring max level from it.
+     * Altar milestone ladder (S2CMilestonesPayload; sent at login, on /eclipse reload and
+     * on every altar level change). A5: TRIMMED server-side to the reached tiers + the
+     * hungering tier (revealed) + one anonymized next-tier stub — future demands never
+     * reach this cache. The handbook Altar Offering tab renders it; Status derives the
+     * ring max level from it.
      */
     public static volatile java.util.List<dev.projecteclipse.eclipse.network.S2CMilestonesPayload.Entry> milestones =
             java.util.List.of();
@@ -107,6 +110,16 @@ public final class ClientStateCache {
     public static volatile java.util.List<String> lockedItemIds = java.util.List.of();
     public static volatile java.util.List<String> lockedRecipeIds = java.util.List.of();
 
+    // --- PLAN-A §0.1 contract: event-started flag (separate block — A8 owns the sync) ---
+    /**
+     * Whether the start event has run (server truth: {@code StartState.isAssigned() ||
+     * EclipseWorldState.isStartEventDone()}). Synced inside {@code S2CSidebarStatePayload}
+     * (sent on join + at start-event completion); A9 ({@code SkillXpBarLayer}) and A12
+     * ({@code ArtifactScreenOpener}) only read it. Defaults {@code false}: pre-event HUD
+     * surfaces stay hidden until the first sidebar-state payload says otherwise.
+     */
+    public static volatile boolean eventStarted = false;
+
     /** {@link dev.projecteclipse.eclipse.network.S2CSidebarStatePayload} */
     public static volatile int sidebarDay = 1;
     public static volatile long sidebarBoundaryEpochMillis = 0L;
@@ -131,6 +144,12 @@ public final class ClientStateCache {
 
     /** {@link dev.projecteclipse.eclipse.network.S2CSkillTreePayload} raw JSON text */
     public static volatile String skillTreeJson = "{}";
+
+    // Rebirth standing (S2CRebirthStatePayload; login + after each ceremony). W-SKILLTREE's
+    // rebirth footer renders these; multiplier 1.0 = never reborn.
+    public static volatile int rebirthCount = 0;
+    public static volatile int rebirthNextCostShards = 0;
+    public static volatile float rebirthLevelCostMultiplier = 1.0F;
 
     /**
      * Snaps every synced field back to its pre-login default (disconnect hook): the cache
@@ -189,6 +208,7 @@ public final class ClientStateCache {
         activeBuffs = java.util.List.of();
         lockedItemIds = java.util.List.of();
         lockedRecipeIds = java.util.List.of();
+        eventStarted = false;
         sidebarDay = 1;
         sidebarBoundaryEpochMillis = 0L;
         sidebarPaused = false;
@@ -208,6 +228,9 @@ public final class ClientStateCache {
         ghostRevealOwnerName = "";
         ghostRevealTicks = 0;
         skillTreeJson = "{}";
+        rebirthCount = 0;
+        rebirthNextCostShards = 0;
+        rebirthLevelCostMultiplier = 1.0F;
     }
 
     /**

@@ -1,0 +1,16 @@
+{
+  "en": {
+    "gui.eclipse.handbook.tab.rewards": "Altar Offering",
+    "gui.eclipse.handbook.rewards.level": "Offering Level %s",
+    "gui.eclipse.handbook.rewards.tease": "The altar will hunger again…",
+    "gui.eclipse.handbook.rewards.complete": "The altar is sated — no further offering is demanded.",
+    "gui.eclipse.invlock.sealed": "Sealed by the Eclipse"
+  },
+  "de": {
+    "gui.eclipse.handbook.tab.rewards": "Altar-Opfergabe",
+    "gui.eclipse.handbook.rewards.level": "Opfergaben-Stufe %s",
+    "gui.eclipse.handbook.rewards.tease": "Der Altar wird wieder hungern…",
+    "gui.eclipse.handbook.rewards.complete": "Der Altar ist gestillt — keine weitere Opfergabe wird verlangt.",
+    "gui.eclipse.invlock.sealed": "Von der Finsternis versiegelt"
+  }
+}

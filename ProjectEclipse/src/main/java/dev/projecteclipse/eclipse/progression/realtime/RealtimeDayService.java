@@ -5,28 +5,20 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.annotation.Nullable;
-
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
-import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CDayClockPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Mth;
-import net.minecraft.world.BossEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -55,16 +47,18 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       jump; a poll-to-poll regression &gt; 60 s logs a WARN. Manual one-shot boundaries
  *       ({@code /eclipse schedule next}, {@code /eclipse-rt set|add}) bypass the guard.</li>
  *   <li><b>Clients</b>: {@link S2CDayClockPayload} is broadcast on every state change, at
- *       login, and re-synced every {@code clientSyncSeconds} while armed. The countdown
- *       bossbar keeps the exact W14 rendering (purple, {@code day} theme).</li>
+ *       login, and re-synced every {@code clientSyncSeconds} while armed. The countdown is
+ *       presented ONLY by the client {@code DayTimerLayer} above the hotbar (PLAN-A A7) —
+ *       the old W14 countdown bossbar is gone; this service never creates a
+ *       {@code ServerBossEvent}.</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class RealtimeDayService {
     /** Wall-clock fire/auto-arm check cadence (5 s — the legacy scheduler/auto-advance poll). */
     private static final int FIRE_CHECK_TICKS = 100;
-    /** Bossbar text/progress refresh cadence (1 s). */
-    private static final int BAR_UPDATE_TICKS = 20;
+    /** Clock poll cadence (1 s — near-boundary fire checks + client re-sync window). */
+    private static final int CLOCK_POLL_TICKS = 20;
     /**
      * W4-CEREMONY / IDEA-09 #2: inside this window before the boundary, the fire check runs
      * on EVERY bar pass (1 s) instead of the 5 s poll, so the flip lands ON the T-0 climax
@@ -81,10 +75,6 @@ public final class RealtimeDayService {
     /** ReloadHooks registration is once per JVM (hooks outlive saves by design). */
     private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean();
 
-    /** The one lazy global countdown bar; {@code null} whenever disarmed. */
-    // statics reset on ServerStopped
-    @Nullable
-    private static ServerBossEvent bossEvent;
     /** True while THIS service drives a {@code DayScheduler.setDay} (rollover in flight). */
     // statics reset on ServerStopped
     private static boolean rollingOver = false;
@@ -140,7 +130,6 @@ public final class RealtimeDayService {
         state.setAutoArmDone(true);
         state.setBoundaryEpochMillis(0L);
         state.setPrevBoundaryEpochMillis(0L);
-        removeBar();
         EclipseMod.LOGGER.info("RealtimeDayService: disarmed");
         broadcastClock(server);
     }
@@ -361,7 +350,6 @@ public final class RealtimeDayService {
                 // Armed solely by a legacy one-shot schedule: fire once, then nothing re-arms.
                 state.setArmed(false);
                 state.setBoundaryEpochMillis(0L);
-                removeBar();
                 EclipseMod.LOGGER.info("RealtimeDayService: one-shot schedule fired — engine disarmed "
                         + "(arm via /eclipse-rt arm for the recurring cadence)");
             } else {
@@ -387,7 +375,6 @@ public final class RealtimeDayService {
             state.setPaused(false);
             state.setPauseRemainingMillis(0L);
             state.setBoundaryEpochMillis(0L);
-            removeBar();
         }
     }
 
@@ -418,20 +405,14 @@ public final class RealtimeDayService {
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
-        if (server.getTickCount() % BAR_UPDATE_TICKS != 0) {
+        if (server.getTickCount() % CLOCK_POLL_TICKS != 0) {
             return;
         }
         RealtimeState state = RealtimeState.get(server);
         RealtimeConfig.Config cfg = RealtimeConfig.get();
         long now = EclipseClock.epochMillis();
-        if (state.isArmed()) {
-            ensureBar(server);
-            updateBar(state, now);
-            if (now - lastClientSyncMillis >= cfg.clientSyncSeconds() * 1000L) {
-                broadcastClock(server);
-            }
-        } else {
-            removeBar();
+        if (state.isArmed() && now - lastClientSyncMillis >= cfg.clientSyncSeconds() * 1000L) {
+            broadcastClock(server);
         }
         if (server.getTickCount() % FIRE_CHECK_TICKS != 0) {
             // W4-CEREMONY / IDEA-09 #2: near-boundary precision — one extra long compare per
@@ -626,85 +607,24 @@ public final class RealtimeDayService {
         return advanced;
     }
 
-    // --- bossbar (exact W14 PhaseScheduler rendering: purple, `day` theme) ---
-
-    /** Creates the countdown bar if missing: all online players + the W8 {@code day} skin tag. */
-    private static void ensureBar(MinecraftServer server) {
-        if (bossEvent != null) {
-            return;
-        }
-        bossEvent = new ServerBossEvent(Component.translatable("bossbar.eclipse.schedule", "…"),
-                BossEvent.BossBarColor.PURPLE, BossEvent.BossBarOverlay.PROGRESS);
-        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
-            bossEvent.addPlayer(online);
-        }
-        PacketDistributor.sendToAllPlayers(
-                new S2CBossbarStylePayload(bossEvent.getId(), S2CBossbarStylePayload.THEME_DAY));
-        EclipseMod.LOGGER.info("RealtimeDayService: countdown bossbar created (id {})", bossEvent.getId());
-    }
-
-    private static void removeBar() {
-        if (bossEvent != null) {
-            bossEvent.removeAllPlayers();
-            bossEvent = null;
-        }
-    }
-
-    /** Whether the countdown bossbar currently exists (gametest assertion hook). */
-    public static boolean isBarVisible() {
-        return bossEvent != null;
-    }
-
-    /** Name "Next phase: 2h 14m" (frozen remaining while paused); progress = remaining/window. */
-    private static void updateBar(RealtimeState state, long now) {
-        if (bossEvent == null) {
-            return;
-        }
-        long boundary = state.getBoundaryEpochMillis();
-        long total = Math.max(1L, boundary - state.getPrevBoundaryEpochMillis());
-        long remaining = state.isPaused()
-                ? Math.max(0L, state.getPauseRemainingMillis())
-                : Math.max(0L, boundary - now);
-        bossEvent.setName(state.isPaused()
-                ? Component.translatable("bossbar.eclipse.schedule.paused", RealtimeMath.remainingText(remaining))
-                : Component.translatable("bossbar.eclipse.schedule", RealtimeMath.remainingText(remaining)));
-        bossEvent.setProgress(Mth.clamp((float) remaining / total, 0.0F, 1.0F));
-    }
-
     // --- player/server lifecycle ---
 
-    /** Late joiners get the running bar (+ theme tag) and a fresh clock payload. */
+    // PLAN-A A7: the countdown bossbar (ensureBar/updateBar/removeBar + the W8 `day` skin
+    // tag) is deleted — the ONE day-timer surface is the client DayTimerLayer above the
+    // hotbar, fed purely by S2CDayClockPayload.
+
+    /** Late joiners get a fresh clock payload. */
     @SubscribeEvent
     static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        if (bossEvent != null) {
-            bossEvent.addPlayer(player);
-            PacketDistributor.sendToPlayer(player,
-                    new S2CBossbarStylePayload(bossEvent.getId(), S2CBossbarStylePayload.THEME_DAY));
-        }
         PacketDistributor.sendToPlayer(player, buildClockPayload(player.server));
-    }
-
-    /** Drop stale bossbar references for disconnecting players. */
-    @SubscribeEvent
-    static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (bossEvent != null && event.getEntity() instanceof ServerPlayer player) {
-            bossEvent.removePlayer(player);
-        }
-    }
-
-    /** The schedule itself is persisted; only the transient bar needs pre-stop cleanup. */
-    @SubscribeEvent
-    static void onServerStopping(ServerStoppingEvent event) {
-        removeBar();
     }
 
     /** Statics reset so a singleplayer relaunch (same JVM) never leaks across saves. */
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
-        removeBar();
         rollingOver = false;
         pendingBoundaryEpochMillis = 0L;
         lastPollNowMillis = 0L;

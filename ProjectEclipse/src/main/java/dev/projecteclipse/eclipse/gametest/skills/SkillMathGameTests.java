@@ -25,12 +25,16 @@ public final class SkillMathGameTests {
     public static void curveAnchorsAndMonotonicity(GameTestHelper helper) {
         SkillCurve.Params defaults = SkillCurve.Params.defaults();
 
+        // v5 (D2) retuned anchors: the early game is deliberately ~10x the old grind.
+        long c5 = SkillCurve.cumulativeXp(5, defaults);
+        helper.assertTrue(Math.abs(c5 - 3564L) <= 3564L * 5 / 100,
+                "C(5)=" + c5 + " must be within ±5% of 3564");
+        long c7 = SkillCurve.cumulativeXp(7, defaults);
+        helper.assertTrue(Math.abs(c7 - 8405L) <= 8405L * 5 / 100,
+                "C(7)=" + c7 + " must be within ±5% of 8405");
         long c12 = SkillCurve.cumulativeXp(12, defaults);
-        helper.assertTrue(Math.abs(c12 - 2650L) <= 2650L * 5 / 100,
-                "C(12)=" + c12 + " must be within ±5% of 2650");
-        long c50 = SkillCurve.cumulativeXp(50, defaults);
-        helper.assertTrue(Math.abs(c50 - 70000L) <= 70000L * 5 / 100,
-                "C(50)=" + c50 + " must be within ±5% of 70000");
+        helper.assertTrue(Math.abs(c12 - 33225L) <= 33225L * 5 / 100,
+                "C(12)=" + c12 + " must be within ±5% of 33225");
 
         int previousCost = 0;
         for (int level = 1; level <= 80; level++) {
@@ -51,8 +55,10 @@ public final class SkillMathGameTests {
                     "levelForXp(C(" + level + ")-1)");
         }
         helper.assertTrue(SkillCurve.levelForXp(0, defaults) == 0, "level 0 at 0 XP");
-        // ~L12 after 4 h at the documented ~700 XP/h earn rate.
-        helper.assertTrue(SkillCurve.levelForXp(2800, defaults) == 12, "4h at 700 XP/h lands on L12");
+        // D2 pacing pin: a hot first session (~800 XP) is level 2 at most — the old
+        // "level 7 after 5 minutes" is mathematically impossible (C(7)=8405).
+        helper.assertTrue(SkillCurve.levelForXp(800, defaults) <= 2, "800 XP stays <= L2");
+        helper.assertTrue(SkillCurve.levelForXp(8404, defaults) == 6, "just below C(7) is L6");
         helper.succeed();
     }
 
@@ -77,7 +83,9 @@ public final class SkillMathGameTests {
                 net.minecraft.world.item.Items.CRAFTING_TABLE)) == 2.0F, "crafting table = 2");
 
         helper.assertTrue(data.death() == -50.0F, "death = -50");
-        helper.assertTrue(data.visitNewBiome() == 40.0F, "new biome = 40");
+        helper.assertTrue(data.visitNewBiome() == 15.0F, "new biome trimmed to 15 (D2)");
+        helper.assertTrue(data.exploreChunk() == 2.0F, "explore chunk trimmed to 2 (D2)");
+        helper.assertTrue(data.dailyCap("explore") == 800.0F, "explore daily cap 800 (D2)");
         helper.assertTrue(data.dailyCap("mine") == 3000.0F, "mine daily cap 3000");
         helper.assertTrue(data.dailyCap("quest") == Float.MAX_VALUE, "quest uncapped by default");
         helper.succeed();
@@ -86,7 +94,8 @@ public final class SkillMathGameTests {
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void treeShapeMatchesPlanTable(GameTestHelper helper) {
         SkillTreeConfig.Tree tree = SkillTreeConfig.parse(SkillTreeConfig.defaultsJson());
-        helper.assertTrue(tree.nodes().size() == 21, "21 nodes (3 spine + 3x6 branches)");
+        helper.assertTrue(tree.nodes().size() == 60,
+                "60 nodes (wave-5 A14 table), got " + tree.nodes().size());
 
         int totalCost = 0;
         for (SkillTreeConfig.Node node : tree.nodes().values()) {
@@ -98,7 +107,7 @@ public final class SkillMathGameTests {
             helper.assertTrue(!node.title().en().isBlank() && node.title().de() != null,
                     node.id() + " has en+de title");
         }
-        helper.assertTrue(totalCost == 51, "full tree costs 51 points, got " + totalCost);
+        helper.assertTrue(totalCost == 147, "full tree costs 147 points, got " + totalCost);
 
         // Spot-check plan values: S1 +5% vanilla XP (cost 1), U6 +50% night-event kill XP (cost 4).
         SkillTreeConfig.Node s1 = tree.node("S1");
@@ -109,8 +118,15 @@ public final class SkillMathGameTests {
                 && u6.value() == 0.50F, "U6 Umbral Pact per plan");
         SkillTreeConfig.Node v4 = tree.node("V4");
         helper.assertTrue(v4 != null && v4.value() == 6.0F, "V4 Soft Landing 6 blocks");
-        helper.assertTrue(!tree.clientJson().isEmpty() && tree.clientJson().contains("\"S1\""),
-                "client JSON carries node ids");
+
+        // Wave-5 fillers reuse EXISTING effect contracts and stack additively.
+        SkillTreeConfig.Node t9 = tree.node("T9");
+        helper.assertTrue(t9 != null && "double_ore_drop_chance".equals(t9.effectType())
+                && t9.value() == 0.02F, "T9 Fortune's Echo III per plan");
+        helper.assertTrue(SkillTree.effectTotal(tree.nodes(), java.util.Set.of("V4", "V10"),
+                "no_fall_damage_below_blocks") == 8.0F, "V10 extends the safe-fall window 6 -> 8");
+        helper.assertTrue(!tree.clientJson().isEmpty() && tree.clientJson().contains("\"S1\"")
+                && tree.clientJson().contains("\"V17\""), "client JSON carries node ids");
         helper.succeed();
     }
 

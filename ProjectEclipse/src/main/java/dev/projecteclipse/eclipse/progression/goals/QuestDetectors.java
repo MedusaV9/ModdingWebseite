@@ -6,6 +6,7 @@ import java.util.UUID;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.sequence.IntroSequence;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -237,10 +238,18 @@ public final class QuestDetectors {
 
     // --- night watcher (stepped by QuestEngine's shared 20t poll) ---
 
+    /** Grace band (ticks) around the intro's scripted time jump within which dawns are voided. */
+    private static final long SCRIPTED_JUMP_GRACE_TICKS = 200L;
+
     /**
      * Night-window state machine for {@code survive_night_no_damage}: arms at dusk with the
      * players online right then; damage or logout drops eligibility; at dawn every survivor
      * gains one night of progress. Idle (and disarmed) while no such spec is active today.
+     *
+     * <p>C5 guard: the intro's final blast snaps the clock forward to morning
+     * ({@code IntroSequence.scriptedTimeJumpGameTime}). A dawn crossing observed within
+     * ±{@value #SCRIPTED_JUMP_GRACE_TICKS} ticks of that scripted jump is the cinematic,
+     * not a survived night — the window is voided instead of credited.</p>
      */
     static void pollNightWindow(MinecraftServer server, QuestEngine.ResolvedDay day) {
         List<GoalSpec> specs = day.ofType(TriggerType.SURVIVE_NIGHT_NO_DAMAGE);
@@ -259,8 +268,21 @@ public final class QuestDetectors {
             return;
         }
         if (state.isNightOpen(day.day)) {
+            if (isScriptedDawn(server)) {
+                EclipseMod.LOGGER.info("Quest night window voided: dawn crossed within {} ticks of the "
+                        + "intro's scripted night->day jump — no survive-the-night credit", SCRIPTED_JUMP_GRACE_TICKS);
+                state.endNight(day.day);
+                return;
+            }
             creditSurvivors(server, day.day, specs);
         }
+    }
+
+    /** Whether the current dawn crossing sits inside the scripted-jump grace band (C5). */
+    private static boolean isScriptedDawn(MinecraftServer server) {
+        long jump = IntroSequence.scriptedTimeJumpGameTime();
+        return jump >= 0L
+                && Math.abs(server.overworld().getGameTime() - jump) <= SCRIPTED_JUMP_GRACE_TICKS;
     }
 
     /** Dawn: credit the survivors that are still online and still eligible. */

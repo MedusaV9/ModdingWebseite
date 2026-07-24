@@ -8,6 +8,7 @@ import dev.projecteclipse.eclipse.client.entity.geo.EclipseGeoRenderer;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
+import dev.projecteclipse.eclipse.limbo.OarAnimator;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -148,8 +149,19 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
                 partialTick, packedLight, packedOverlay, colour);
     }
 
-    /** Portside rowers face {@code -Z} (bench yaw 180); starboard face {@code +Z} (yaw 0). */
+    /**
+     * Portside rowers sit at benches 0–3 ({@code -Z}); starboard at 4–7 ({@code +Z}).
+     * C3: the mirror derives from the SEAT ASSIGNMENT (synced bench index +
+     * {@link OarAnimator#isPortBench}) instead of the live {@code yBodyRot} — the old
+     * heuristic flipped the row cycle whenever a look-at dragged the torso across the
+     * mirror threshold. Legacy pre-P6 entities without a bench keep the yaw fallback
+     * (their body is pinned server-side now, so it is stable there too).
+     */
     private static boolean isPortSide(DeckhandEntity entity) {
+        int bench = entity.benchIndex();
+        if (bench >= 0) {
+            return OarAnimator.isPortBench(bench);
+        }
         return Mth.cos(entity.yBodyRot * Mth.DEG_TO_RAD) < 0.0F;
     }
 

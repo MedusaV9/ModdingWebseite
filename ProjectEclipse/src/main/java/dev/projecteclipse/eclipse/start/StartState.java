@@ -71,6 +71,16 @@ public final class StartState extends SavedData {
         return assigned;
     }
 
+    /**
+     * Server-side event-started truth (PLAN-A §0.1 contract): the start cohort has been
+     * assigned to discs OR the intro cutscene has fully completed. Read by the sidebar
+     * aggregate sync (A8) and the artifact grant gate (A12).
+     */
+    public static boolean eventStarted(MinecraftServer server) {
+        return get(server).isAssigned()
+                || dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(server).isStartEventDone();
+    }
+
     public Integer getIndex(UUID uuid) {
         return assignments.get(uuid);
     }

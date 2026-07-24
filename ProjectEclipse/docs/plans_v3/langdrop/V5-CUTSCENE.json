@@ -1,0 +1,22 @@
+{
+  "en": {
+    "eclipse.caption.intro.depart": "...the ship shudders. Something below has taken hold...",
+    "eclipse.caption.intro.approach": "Control returns. Approach the storm.",
+    "eclipse.caption.intro.fuse": "The islands drift together — the world is being rewritten.",
+    "eclipse.caption.intro.vortex": "...something gathers at the center...",
+    "eclipse.caption.intro.reveal": "The altar. Torn from the earth, held by the sky.",
+    "eclipse.caption.expansion.growing": "The world is growing.",
+    "eclipse.caption.finale.dawn": "The light returns. The world breathes again.",
+    "eclipse.caption.finale.home": "You made it home."
+  },
+  "de": {
+    "eclipse.caption.intro.depart": "...das Schiff erbebt. Etwas dort unten hat euch ergriffen...",
+    "eclipse.caption.intro.approach": "Ihr habt wieder die Kontrolle. Nähert euch dem Sturm.",
+    "eclipse.caption.intro.fuse": "Die Inseln treiben zusammen — die Welt wird neu geschrieben.",
+    "eclipse.caption.intro.vortex": "...etwas sammelt sich in der Mitte...",
+    "eclipse.caption.intro.reveal": "Der Altar. Aus der Erde gerissen, vom Himmel gehalten.",
+    "eclipse.caption.expansion.growing": "Die Welt wächst.",
+    "eclipse.caption.finale.dawn": "Das Licht kehrt zurück. Die Welt atmet wieder.",
+    "eclipse.caption.finale.home": "Du hast es nach Hause geschafft."
+  }
+}

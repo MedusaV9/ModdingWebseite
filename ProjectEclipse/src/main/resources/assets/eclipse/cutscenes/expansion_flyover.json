@@ -23,6 +23,7 @@
   ],
   "params": {
     "_comment": "W7 expansion FLYOVER beat: world-anchored approach + sweep over the ring-growth wavefront. The play anchor is resolved per play via the growth_front dynamic anchor (ExpansionSequence feeds it from RingGrowthService.progressFraction), so keyframe positions are offsets from a point just inside the moving wave edge at terrain height. lookAt targets keep the camera trained on the front regardless of approach angle. Played as a GLOBAL_TELEPORT group show with returnAfter.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher.",
     "dynamicAnchor": "growth_front"
   }
 }

@@ -18,7 +18,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * EMI integration (P3 §3.12, EMI 1.1.18+1.21.1 API): hides gated/dev content from EMI's
+ * EMI integration (P3 §3.12, EMI 1.1.24+1.21.1 API): hides gated/dev content from EMI's
  * item index and recipe viewer. EMI discovers this class itself via its {@link EmiEntrypoint}
  * annotation scan (the NeoForge plugin mechanism — no service file, no code registration), so
  * when EMI is absent this class is simply never loaded; it is the ONLY Eclipse class with
@@ -30,10 +30,17 @@ import net.minecraft.world.item.ItemStack;
  * <ol>
  *   <li>every stack (item OR fluid) whose id namespace is a currently-locked ModGate
  *       namespace (server-synced; reverses on unlock),</li>
+ *   <li>every stack whose exact id matches a currently-locked {@code modgate_ids.json}
+ *       glob rule ({@link ClientUnlockCache#isIdLocked} — A16; this is how the
+ *       whole-namespace globs for {@code createconnected}, {@code create_confectionery}
+ *       and {@code ends_delight} stay out of the index: by design those mods are gated
+ *       ONLY through id globs, never through the {@code modgate.json} namespace list, so
+ *       the shared schema stays untouched — see {@code ModGateIds.defaultRoot}),</li>
  *   <li>every item in {@code #eclipse:emi_hidden} (172 classic souvenir blocks, the Display
  *       Wand and other dev/admin items — data file seeded by W11, extended by P4/P5),</li>
- *   <li>recipes whose id is RecipeGate-locked, whose id namespace is locked (belt+braces on
- *       top of EMI's own hidden-stack invalidation), or with a hidden/locked output.</li>
+ *   <li>recipes whose id is RecipeGate-locked, whose id namespace or id glob is locked
+ *       (belt+braces on top of EMI's own hidden-stack invalidation), or with a
+ *       hidden/locked output.</li>
  * </ol>
  *
  * <p>Hiding is client cosmetics only — {@code progression.ModGate}/{@code RecipeGate} remain
@@ -82,7 +89,9 @@ public final class EclipseEmiPlugin implements EmiPlugin {
             if (id == null) {
                 return false;
             }
-            return id.equals(DISPLAY_WAND_ID) || ClientUnlockCache.isNamespaceLocked(id.getNamespace());
+            return id.equals(DISPLAY_WAND_ID)
+                    || ClientUnlockCache.isNamespaceLocked(id.getNamespace())
+                    || ClientUnlockCache.isIdLocked(id);
         } catch (Throwable t) {
             return false;
         }
@@ -96,7 +105,8 @@ public final class EclipseEmiPlugin implements EmiPlugin {
             }
             ResourceLocation id = recipe.getId();
             if (id != null && (lockedRecipeIds.contains(id.toString())
-                    || ClientUnlockCache.isNamespaceLocked(id.getNamespace()))) {
+                    || ClientUnlockCache.isNamespaceLocked(id.getNamespace())
+                    || ClientUnlockCache.isIdLocked(id))) {
                 return true;
             }
             for (EmiStack output : recipe.getOutputs()) {

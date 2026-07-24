@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.artifact;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.start.StartState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -47,6 +48,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * exempt {@code eclipse:arm_artifact} by registry id (storage sweep = B16, armor/offhand
  * sweep always did), so a sealed day-1 main inventory leaves slot {@value #ARTIFACT_SLOT}
  * alone and the two 1Hz sweeps never fight over the artifact.</p>
+ *
+ * <p><b>Pre-event gate (PLAN-A A12):</b> the artifact must not exist before the start
+ * event. Every enforcement pass first consults {@link StartState#eventStarted} — pre-event
+ * it PURGES any artifact copies (cursor, open menu, whole inventory) instead of granting.
+ * The grant happens exactly at the ceremony moment: {@code limbo.StartEventCutscene}
+ * calls {@link #grantAll} right after flipping {@code startEventDone}; login/respawn/sweep
+ * re-runs keep it idempotent and relog-safe.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ArtifactSlotLock {
@@ -87,6 +95,19 @@ public final class ArtifactSlotLock {
         }
     }
 
+    /**
+     * A12: one immediate enforcement pass at the start-event ceremony moment, so every
+     * player receives the artifact the tick the event begins instead of on the next sweep.
+     * Idempotent — re-running it (or the regular sweep) never mints a second copy.
+     */
+    public static void grantAll(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!player.isSpectator()) {
+                enforce(player);
+            }
+        }
+    }
+
     /** The artifact cannot be dropped: cancel the toss and put the stack back into its slot. */
     @SubscribeEvent
     public static void onItemToss(ItemTossEvent event) {
@@ -96,6 +117,9 @@ public final class ArtifactSlotLock {
         }
         event.setCanceled(true);
         if (event.getPlayer() instanceof ServerPlayer player) {
+            if (!StartState.eventStarted(player.server)) {
+                return; // pre-event the artifact must not exist — the tossed copy vanishes
+            }
             Inventory inventory = player.getInventory();
             if (inventory.getItem(ARTIFACT_SLOT).is(EclipseItems.ARM_ARTIFACT.get())) {
                 // The slot already holds one — the tossed stack was a duplicate; let it vanish.
@@ -113,6 +137,14 @@ public final class ArtifactSlotLock {
     private static void enforce(ServerPlayer player) {
         Inventory inventory = player.getInventory();
         Item artifact = EclipseItems.ARM_ARTIFACT.get();
+
+        // A12 pre-event gate: before the start event the artifact must not exist at all —
+        // remove any copy instead of granting one. The grant lands via grantAll() at the
+        // ceremony moment, and this same path re-runs on login/respawn (relog-safe).
+        if (!StartState.eventStarted(player.server)) {
+            purge(player, artifact);
+            return;
+        }
 
         // Mid-drag the artifact sits on the cursor, invisible to the slot scan — inserting a
         // fresh one now would duplicate it. Skip; the next sweep runs after the drag settles.
@@ -159,6 +191,31 @@ public final class ArtifactSlotLock {
         inventory.setItem(ARTIFACT_SLOT, misplaced.isEmpty() ? new ItemStack(artifact) : misplaced);
         if (!occupant.isEmpty()) {
             relocate(player, occupant);
+        }
+    }
+
+    /**
+     * A12 pre-event removal: deletes every artifact copy the player could be holding —
+     * the carried cursor stack, every slot of the OPEN container menu (chest rows and the
+     * mirrored player rows alike) and the whole player inventory (hotbar, storage, armor,
+     * offhand). Runs once per sweep pre-event; a no-op when no copy exists.
+     */
+    private static void purge(ServerPlayer player, Item artifact) {
+        if (player.containerMenu != null) {
+            if (player.containerMenu.getCarried().is(artifact)) {
+                player.containerMenu.setCarried(ItemStack.EMPTY);
+            }
+            for (Slot menuSlot : player.containerMenu.slots) {
+                if (menuSlot.getItem().is(artifact)) {
+                    menuSlot.set(ItemStack.EMPTY);
+                }
+            }
+        }
+        Inventory inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            if (inventory.getItem(slot).is(artifact)) {
+                inventory.setItem(slot, ItemStack.EMPTY);
+            }
         }
     }
 

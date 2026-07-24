@@ -33,6 +33,15 @@ public final class EclipseClientConfig {
         ELLIPSIS, MARQUEE
     }
 
+    /**
+     * Persistent-sidebar visibility (PLAN-A A8): {@code FULL} keeps the edge panel on
+     * screen, {@code TAB_ONLY} and {@code OFF} hide it. Holding TAB always shows the
+     * expanded overview card in every mode (the goals/lives data stays reachable).
+     */
+    public enum SidebarMode {
+        FULL, TAB_ONLY, OFF
+    }
+
     /** Bossbar chrome: full themed frame or frameless rounded strip (§7.1, P3-W6). */
     public enum BossbarStyle {
         ORNATE, SLIM
@@ -89,6 +98,10 @@ public final class EclipseClientConfig {
     public static final ModConfigSpec.EnumValue<SidebarOverflow> SIDEBAR_OVERFLOW = BUILDER
             .comment("Long sidebar rows: ELLIPSIS trims with '…', MARQUEE scrolls them horizontally.")
             .defineEnum("sidebarOverflow", SidebarOverflow.ELLIPSIS);
+    public static final ModConfigSpec.EnumValue<SidebarMode> SIDEBAR_MODE = BUILDER
+            .comment("Persistent sidebar panel: FULL shows it at the screen edge, TAB_ONLY and OFF",
+                    "hide it. Holding TAB always brings up the expanded overview card.")
+            .defineEnum("sidebarMode", SidebarMode.FULL);
     public static final ModConfigSpec.EnumValue<BossbarStyle> BOSSBAR_STYLE = BUILDER
             .comment("Themed bossbar chrome: ORNATE full frame or SLIM frameless strip",
                     "(only applies while showBossbarSkin is true).")
@@ -193,6 +206,11 @@ public final class EclipseClientConfig {
 
     public static SidebarOverflow sidebarOverflow() {
         return SPEC.isLoaded() ? SIDEBAR_OVERFLOW.get() : SidebarOverflow.ELLIPSIS;
+    }
+
+    /** PLAN-A A8: persistent-sidebar mode (TAB-hold expansion works in every mode). */
+    public static SidebarMode sidebarMode() {
+        return SPEC.isLoaded() ? SIDEBAR_MODE.get() : SidebarMode.FULL;
     }
 
     public static BossbarStyle bossbarStyle() {

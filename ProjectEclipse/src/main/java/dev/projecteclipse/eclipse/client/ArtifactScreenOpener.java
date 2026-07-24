@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client;
 
 import dev.projecteclipse.eclipse.client.handbook.HandbookScreen;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.network.C2SOpenArtifactPayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -25,12 +26,33 @@ public final class ArtifactScreenOpener {
     private ArtifactScreenOpener() {}
 
     /**
+     * A12 pre-event gate shared by every client open path (payload, keybind, slot click):
+     * before {@code ClientStateCache.eventStarted} the handbook must not open — the
+     * artifact does not exist yet. Shows the quiet actionbar toast and reports whether
+     * the caller may proceed.
+     */
+    static boolean notChosenYet() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (ClientStateCache.eventStarted) {
+            return false;
+        }
+        if (minecraft.player != null) {
+            minecraft.player.displayClientMessage(
+                    EclipseLang.tr("gui.eclipse.artifact.not_chosen"), true);
+        }
+        return true;
+    }
+
+    /**
      * Opens the screen only when no other screen is open: a duplicate open request while the
      * handbook is already showing is a no-op (it renders live from the cache anyway),
      * and other screens (inventory, chat, ...) are never interrupted.
      */
     public static void open() {
         Minecraft minecraft = Minecraft.getInstance();
+        if (notChosenYet()) {
+            return;
+        }
         if (minecraft.player != null && minecraft.screen == null) {
             minecraft.setScreen(new HandbookScreen());
         }
@@ -53,7 +75,7 @@ public final class ArtifactScreenOpener {
     public static void openFromInventory() {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.tell(() -> {
-            if (minecraft.player == null) {
+            if (minecraft.player == null || notChosenYet()) {
                 return;
             }
             if (minecraft.screen instanceof AbstractContainerScreen<?>) {

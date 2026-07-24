@@ -21,6 +21,7 @@ import dev.projecteclipse.eclipse.progression.realtime.RealtimeState;
 import dev.projecteclipse.eclipse.skills.SkillConfig;
 import dev.projecteclipse.eclipse.skills.SkillCurve;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
+import dev.projecteclipse.eclipse.start.StartState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -50,7 +51,7 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class SidebarSyncService {
     /** Diagnostic schema revision of the current {@link S2CSidebarStatePayload} field order. */
-    public static final int PAYLOAD_SCHEMA_VERSION = 1;
+    public static final int PAYLOAD_SCHEMA_VERSION = 2;
     /** Half-second trailing debounce at 20 TPS. */
     public static final int DEBOUNCE_TICKS = 10;
     private static final int MAX_BUFF_IDS = 32;
@@ -238,7 +239,9 @@ public final class SidebarSyncService {
         RealtimeState realtime = RealtimeState.get(server);
 
         long totalXp = Math.max(0L, SkillsApi.getTotalXp(server, player.getUUID()));
-        SkillCurve.Params curve = SkillConfig.get().curve();
+        // D11: per-player curve so a reborn player's sidebar level matches SkillsApi.getLevel.
+        SkillCurve.Params curve = dev.projecteclipse.eclipse.skills.RebirthHooks.curveFor(
+                server, player.getUUID(), SkillConfig.get().curve());
         int skillLevel = SkillCurve.levelForXp(totalXp, curve);
         int xpIntoLevel = SkillCurve.xpIntoLevel(totalXp, skillLevel, curve);
         int xpForLevel = SkillCurve.xpForLevel(skillLevel + 1, curve);
@@ -284,6 +287,7 @@ public final class SidebarSyncService {
                 done[1], total[1],
                 done[2], total[2],
                 List.copyOf(new ArrayList<>(cleanBuffIds)),
-                Math.max(0, ShardEconomy.getShards(player)));
+                Math.max(0, ShardEconomy.getShards(player)),
+                StartState.eventStarted(server));
     }
 }

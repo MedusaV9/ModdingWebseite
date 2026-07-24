@@ -93,7 +93,7 @@ public final class HarnessSmokeTest {
         GameTestSupport.assertPayloadRoundTrip(S2CSidebarStatePayload.STREAM_CODEC,
                 new S2CSidebarStatePayload(4, 1_800_000_000_000L, false,
                         7, 50, 120, 2, 1, 3, 0, 2, 1, 2,
-                        List.of("double_ore_drops"), 8));
+                        List.of("double_ore_drops"), 8, true));
 
         GameTestSupport.assertPayloadRoundTrip(S2CGhostRevealPayload.STREAM_CODEC,
                 new S2CGhostRevealPayload(99, "PlayerOne", 60));

@@ -5,6 +5,7 @@ import java.util.Iterator;
 
 import javax.annotation.Nullable;
 
+import org.joml.Matrix4f;
 import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
@@ -30,6 +31,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 /**
  * Client-side ambience of the Limbo dimension, active only while the local level is
@@ -60,6 +62,18 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * after entering limbo, as in v1), {@code GodrayDir} (NDC of the zenith eclipse point from
  * {@link LimboSpecialEffects#zenithWorldPoint} projected through {@link SunTracker#worldToNdc},
  * pushed far offscreen while behind the camera), {@code CausticsAmount} and {@code Time}.</p>
+ *
+ * <p><b>Post pipeline (v3, PLAN-C C1)</b>: the feeder additionally supplies the water-mask /
+ * horizon set — {@code InvViewProj} + {@code CameraPos} (this frame's exact AFTER_SKY render
+ * matrices captured by {@link #onRenderLevelStage}, view bobbing included, inverted once per
+ * frame — the {@link SunTracker} law: never reconstruct from {@code veil:camera}),
+ * {@code WaterlineY} ({@code GhostShipBuilder.waterlineY} reaching the client through the
+ * {@code ship_deck} anchor sync, see {@link LimboSpecialEffects#clientWaterlineY}),
+ * {@code VoyageOffset} (steadily increasing world-XZ scroll along ship forward −X→+X — the
+ * caustic field streams slowly astern past the hull: the shader half of the "sailing"
+ * illusion; wraps hourly like {@code Time}), {@code CurveAmount} (horizon curvature strength,
+ * forced 0 under {@code reducedFx}) and {@code FarDist} (effective render distance in
+ * blocks, where the loaded sea geometry ends).</p>
  *
  * <p><b>Sound</b>: one looping {@code ambient.limbo_loop} instance
  * ({@link SoundSource#AMBIENT}, peak volume {@code 0.6}) that fades in over
@@ -222,6 +236,18 @@ public final class LimboAmbience {
     /** Scratch NDC projection of the zenith point (feeder-only; never escapes). */
     private static final Vector4f GODRAY_NDC = new Vector4f();
 
+    /** C1 voyage drift speed: the caustic field streams astern at this rate (blocks/s). */
+    private static final float VOYAGE_BLOCKS_PER_SECOND = 0.55F;
+    /** {@code WaterlineY} fallback pushed far below the world until the anchor sync lands. */
+    private static final float WATERLINE_UNKNOWN = -1.0E5F;
+
+    /** This frame's inverse {@code Proj · ModelView} (NDC → camera-relative world). */
+    private static final Matrix4f INV_VIEW_PROJ = new Matrix4f();
+    /** Scratch for the forward matrix before inversion (render-thread only). */
+    private static final Matrix4f MVP_SCRATCH = new Matrix4f();
+    private static Vec3 frameCameraPos = Vec3.ZERO;
+    private static boolean haveFrameMatrices;
+
     static {
         // v2 pipeline row — replaces W1's backward-compat Intensity-only row regardless of
         // class-load order (P2-W1 wiring: feature rows always win over default rows).
@@ -269,6 +295,34 @@ public final class LimboAmbience {
         reset();
     }
 
+    /**
+     * C1: captures this frame's EXACT render matrices (AFTER_SKY, view bobbing included —
+     * the {@link SunTracker} capture point) and inverts them once on the CPU. The limbo post
+     * shader reconstructs per-pixel world positions from the depth buffer with this inverse,
+     * so the water mask and the depth buffer can never disagree the way a
+     * {@code veil:camera}-based reconstruction would (its modelview strips bobbing).
+     */
+    @SubscribeEvent
+    static void onRenderLevelStage(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SKY) {
+            return;
+        }
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null || level.dimension() != LimboDimension.LIMBO) {
+            haveFrameMatrices = false;
+            return;
+        }
+        MVP_SCRATCH.set(event.getProjectionMatrix()).mul(event.getModelViewMatrix());
+        // A degenerate matrix (mid-resize frame) must not poison the shader with NaNs.
+        if (!Float.isFinite(MVP_SCRATCH.determinant()) || Math.abs(MVP_SCRATCH.determinant()) < 1.0E-12F) {
+            haveFrameMatrices = false;
+            return;
+        }
+        INV_VIEW_PROJ.set(MVP_SCRATCH).invert();
+        frameCameraPos = event.getCamera().getPosition();
+        haveFrameMatrices = true;
+    }
+
     // ------------------------------------------------------------------ post pipeline (v2)
 
     private static boolean wantLimboPost() {
@@ -282,9 +336,10 @@ public final class LimboAmbience {
      */
     private static void feedLimboPost(PostPipeline pipeline) {
         float intensity = postIntensity();
+        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         pipeline.getUniform("Intensity").setFloat(intensity);
         pipeline.getUniform("CausticsAmount").setFloat(intensity);
-        pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
+        pipeline.getUniform("Time").setFloat(seconds);
 
         ClientLevel level = Minecraft.getInstance().level;
         boolean valid = level != null
@@ -297,6 +352,34 @@ public final class LimboAmbience {
             // the shader's look-up ramp fades the god rays out instead of popping.
             pipeline.getUniform("GodrayDir").setVector(10.0F, 10.0F);
         }
+
+        // --- v3 (C1): water mask + world anchoring + curvature + voyage drift ------------
+        if (haveFrameMatrices && level != null && level.dimension() == LimboDimension.LIMBO) {
+            pipeline.getUniform("InvViewProj").setMatrix(INV_VIEW_PROJ);
+            pipeline.getUniform("CameraPos").setVector(
+                    (float) frameCameraPos.x, (float) frameCameraPos.y, (float) frameCameraPos.z);
+            pipeline.getUniform("WaterlineY").setFloat(
+                    (float) LimboSpecialEffects.clientWaterlineY(level));
+        } else {
+            // No frame captured yet (first frame / mid-resize): park the waterline far below
+            // the world so the band test is empty instead of reading NaN reconstructions.
+            pipeline.getUniform("InvViewProj").setMatrix(MVP_SCRATCH.identity());
+            pipeline.getUniform("CameraPos").setVector(0.0F, 0.0F, 0.0F);
+            pipeline.getUniform("WaterlineY").setFloat(WATERLINE_UNKNOWN);
+        }
+        // Ship forward is +X: an increasing +X lookup offset streams the caustic features
+        // toward −X, i.e. slowly astern past the hull (the item-6 sailing illusion). Wraps
+        // hourly with the same period as Time (one small jump per hour, like Time itself).
+        pipeline.getUniform("VoyageOffset").setVector(seconds * VOYAGE_BLOCKS_PER_SECOND, 0.0F);
+        pipeline.getUniform("CurveAmount").setFloat(
+                EclipseClientConfig.reducedFx() ? 0.0F : intensity);
+        pipeline.getUniform("FarDist").setFloat(farDistBlocks());
+    }
+
+    /** Approximate distance (blocks) where the loaded sea geometry ends (≥ 96, ≤ 512). */
+    private static float farDistBlocks() {
+        int chunks = Minecraft.getInstance().options.getEffectiveRenderDistance();
+        return Mth.clamp(chunks * 16.0F, 96.0F, 512.0F);
     }
 
     /** Current limbo grade intensity in [0,1]; eased ~2 s fade-in after entering limbo (v1 curve). */
@@ -320,6 +403,7 @@ public final class LimboAmbience {
         }
         soundStartedThisVisit = false;
         limboEnterMillis = -1L;
+        haveFrameMatrices = false;
         clearWindows();
     }
 

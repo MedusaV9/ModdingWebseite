@@ -43,8 +43,8 @@ import org.lwjgl.glfw.GLFW;
  * self-contained Quiet-Eclipse widget composite, NOT a screen. Every player-facing
  * {@code eclipse-client.toml} key (§7.1) is rendered as a themed row, grouped into the §3.4
  * sections (Anzeige / Effekte / Audio / Benachrichtigungen / Sprache / Server). The same
- * panel is mounted by {@code EclipseSettingsScreen} v2 (standalone: pause menu, title gear,
- * Mods screen) and by the handbook's {@code SettingsTab} — single source of truth.
+ * panel is mounted by {@code EclipseSettingsScreen} v2 (standalone: pause menu, Mods
+ * screen) and by the handbook's {@code SettingsTab} — single source of truth.
  *
  * <p><b>Writes (B13)</b>: every row holds the typed {@link ModConfigSpec.ConfigValue} handle
  * from {@link EclipseClientConfig} and applies changes via {@code set()} + {@code save()} —
@@ -105,6 +105,9 @@ public final class SettingsPanel extends AbstractContainerWidget {
         y = header(y, "gui.eclipse.settings.section.display");
         y = toggle(y, "custom_menu", EclipseClientConfig::customMenu, EclipseClientConfig.CUSTOM_MENU);
         y = toggle(y, "sidebar", EclipseClientConfig::showSidebar, EclipseClientConfig.SHOW_SIDEBAR);
+        y = enumCycle(y, "sidebar_mode", "sidebar_mode",
+                List.of(EclipseClientConfig.SidebarMode.values()),
+                EclipseClientConfig::sidebarMode, EclipseClientConfig.SIDEBAR_MODE);
         y = enumCycle(y, "sidebar_side", "side",
                 List.of(EclipseClientConfig.SidebarSide.values()),
                 EclipseClientConfig::sidebarSide, EclipseClientConfig.SIDEBAR_SIDE);

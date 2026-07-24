@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.buffs.TimedBuffApi;
 import dev.projecteclipse.eclipse.classicblocks.ClassicBlockItems;
 import dev.projecteclipse.eclipse.classicblocks.ClassicChestLoot;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.ClickEvent;
@@ -427,7 +428,7 @@ public final class XboxEventService {
             long last = LAST_BOUNCE_MESSAGE.getOrDefault(uuid, 0L);
             if (now - last >= BOUNCE_MESSAGE_THROTTLE_MILLIS) {
                 LAST_BOUNCE_MESSAGE.put(uuid, now);
-                player.displayClientMessage(Component.translatable("eclipse.xbox.enter.locked")
+                player.displayClientMessage(ServerLang.tr(player, "eclipse.xbox.enter.locked")
                         .withStyle(ChatFormatting.RED), false);
                 player.playNotifySound(SoundEvents.VILLAGER_NO, SoundSource.PLAYERS, 0.8F, 1.0F);
             }
@@ -463,12 +464,13 @@ public final class XboxEventService {
         state.addParticipant(player.getUUID());
 
         player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 20));
-        player.connection.send(new ClientboundSetTitleTextPacket(worldName(worldId)));
+        player.connection.send(new ClientboundSetTitleTextPacket(
+                ServerLang.resolve(player, worldName(worldId))));
         player.connection.send(new ClientboundSetSubtitleTextPacket(
-                Component.translatable("eclipse.xbox.enter.subtitle").withStyle(ChatFormatting.GRAY)));
+                ServerLang.tr(player, "eclipse.xbox.enter.subtitle").withStyle(ChatFormatting.GRAY)));
         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7F, 0.6F);
 
-        player.displayClientMessage(leaveLine(), false);
+        player.displayClientMessage(leaveLine(player), false);
         sendTimer(state, player, true);
         EclipseMod.LOGGER.info("{} entered xbox world {} (instance {})",
                 player.getScoreboardName(), worldId, state.instanceId());
@@ -507,7 +509,7 @@ public final class XboxEventService {
             case TIME_UP -> "eclipse.xbox.exit.timeup";
             case CLOSED -> "eclipse.xbox.exit.closed";
         };
-        player.displayClientMessage(Component.translatable(key).withStyle(ChatFormatting.AQUA), false);
+        player.displayClientMessage(ServerLang.tr(player, key).withStyle(ChatFormatting.AQUA), false);
     }
 
     // ================================================================== death protection
@@ -558,7 +560,7 @@ public final class XboxEventService {
                     && state.worldId().equals(dimWorldId);
             if (eventStillOn) {
                 sendTimer(state, player, true);
-                player.displayClientMessage(leaveLine(), false);
+                player.displayClientMessage(leaveLine(player), false);
             } else {
                 exitToAnchor(server, state, player, ExitReason.CLOSED);
             }
@@ -584,7 +586,7 @@ public final class XboxEventService {
     /** First {@code /xboxleave}: confirmation click-through; outside dims: polite no-op. */
     public static int leaveRequested(ServerPlayer player) {
         if (!XboxDimensions.isInXboxDimension(player)) {
-            player.displayClientMessage(Component.translatable("eclipse.xbox.leave.outside")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.xbox.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
         }
@@ -593,16 +595,16 @@ public final class XboxEventService {
                 && state.lockoutMode().locksVoluntaryExit();
         PENDING_LEAVE_CONFIRMS.put(player.getUUID(),
                 System.currentTimeMillis() + LEAVE_CONFIRM_WINDOW_MILLIS);
-        MutableComponent confirm = Component.translatable(willLockOut
+        MutableComponent confirm = ServerLang.tr(player, willLockOut
                 ? "eclipse.xbox.leave.confirm"
                 : "eclipse.xbox.leave.confirm_unlocked")
                 .withStyle(ChatFormatting.YELLOW);
         confirm.append(Component.literal(" "));
-        confirm.append(Component.translatable("eclipse.xbox.leave.confirmbutton")
+        confirm.append(ServerLang.tr(player, "eclipse.xbox.leave.confirmbutton")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true).withUnderlined(true)
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/xboxleave confirm"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable(willLockOut
+                                ServerLang.tr(player, willLockOut
                                         ? "eclipse.xbox.leave.confirm.hover"
                                         : "eclipse.xbox.leave.confirm_unlocked.hover")))));
         player.displayClientMessage(confirm, false);
@@ -612,7 +614,7 @@ public final class XboxEventService {
     /** {@code /xboxleave confirm}: voluntary exit + lockout for THIS instance (§2.13.6). */
     public static int leaveConfirmed(ServerPlayer player) {
         if (!XboxDimensions.isInXboxDimension(player)) {
-            player.displayClientMessage(Component.translatable("eclipse.xbox.leave.outside")
+            player.displayClientMessage(ServerLang.tr(player, "eclipse.xbox.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
         }
@@ -770,13 +772,21 @@ public final class XboxEventService {
                 && state.worldId().equals(XboxDimensions.worldIdOf(player.level().dimension()));
     }
 
+    /**
+     * Per-recipient broadcast: the shared translatable is baked through
+     * {@link ServerLang#resolve} so every player reads it in their {@code /lang} locale
+     * (Wave-5 A1). The dedicated-server console still gets the raw line for the log.
+     */
     private static void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastSystemMessage(message, false);
+        server.sendSystemMessage(message);
+        for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
+            player.sendSystemMessage(ServerLang.resolve(player, message));
+        }
     }
 
     private static void broadcastInside(MinecraftServer server, XboxEventState state, Component message) {
         for (ServerPlayer player : insidePlayers(server, state)) {
-            player.displayClientMessage(message, false);
+            player.displayClientMessage(ServerLang.resolve(player, message), false);
         }
     }
 
@@ -798,15 +808,15 @@ public final class XboxEventService {
                 .withStyle(ChatFormatting.GREEN);
     }
 
-    private static Component leaveLine() {
-        MutableComponent line = Component.translatable("eclipse.xbox.enter.leaveline")
+    private static Component leaveLine(ServerPlayer player) {
+        MutableComponent line = ServerLang.tr(player, "eclipse.xbox.enter.leaveline")
                 .withStyle(ChatFormatting.GRAY);
         line.append(Component.literal(" "));
-        line.append(Component.translatable("eclipse.xbox.enter.leavebutton")
+        line.append(ServerLang.tr(player, "eclipse.xbox.enter.leavebutton")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withUnderlined(true)
                         .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/xboxleave"))
                         .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("eclipse.xbox.enter.leavebutton.hover")))));
+                                ServerLang.tr(player, "eclipse.xbox.enter.leavebutton.hover")))));
         return line;
     }
 

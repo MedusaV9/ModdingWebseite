@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
 import net.minecraft.commands.CommandSourceStack;
@@ -147,7 +148,7 @@ public final class DevPlayerCommands {
         source.sendSuccess(() -> feedback, false);
         for (ServerPlayer operator : source.getServer().getPlayerList().getPlayers()) {
             if (operator.hasPermissions(2) && operator != source.getEntity()) {
-                operator.sendSystemMessage(Component.translatable("dev.eclipse.audit",
+                operator.sendSystemMessage(ServerLang.tr(operator, "dev.eclipse.audit",
                         source.getTextName(), feedback));
             }
         }

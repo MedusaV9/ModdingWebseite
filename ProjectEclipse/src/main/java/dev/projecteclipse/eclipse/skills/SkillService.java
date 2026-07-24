@@ -29,8 +29,9 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
  * Skill engine (R3, plan §2.3): consumes {@link EclipseSignals} for action XP, runs the
- * add-XP pipeline (source scales → S2 → buff → secret multiplier → remainder → daily caps →
- * level-ups), owns node purchases and the client sync payloads.
+ * add-XP pipeline (D2 {@link XpGates} gate → source scales → S2 → buff → secret multiplier →
+ * remainder → daily caps → level-ups), owns node purchases and the client sync payloads.
+ * Level derivation routes through {@link RebirthHooks#curveFor} (D11 per-rebirth cost scale).
  *
  * <p>Multiplier order (frozen, documented for gametests): {@code base × sourceScale(T1/V2/U6)
  * × (1 + S2) × TimedBuffApi("skill_xp") × secretMultiplier}. Negative XP (death penalty)
@@ -186,6 +187,11 @@ public final class SkillService {
             entry.totalXp = Math.max(0L, entry.totalXp + Math.round(baseAmount));
             applied = (int) (entry.totalXp - before);
         } else {
+            // D2 pacing gate: action XP is off pre-event and in event dimensions; reward
+            // sources (quest/altar/advancement/admin/…) bypass it inside XpGates.
+            if (!XpGates.allows(player, source)) {
+                return 0;
+            }
             float scaled = baseAmount * sourceScale(player, entry, source);
             scaled *= 1.0F + SkillTree.effectTotal(SkillTreeConfig.get().nodes(), entry.ownedNodes, "skill_xp_pct");
             scaled *= TimedBuffApi.Holder.get().multiplier(server, "skill_xp");
@@ -262,7 +268,8 @@ public final class SkillService {
 
     /** Level-up sweep: +1 point per level (via lastLevelSeen), cue, signal, advancements. */
     private static void handleLevelUps(ServerPlayer player, SkillState.Entry entry) {
-        SkillCurve.Params curve = SkillConfig.get().curve();
+        SkillCurve.Params curve = RebirthHooks.curveFor(player.server, player.getUUID(),
+                SkillConfig.get().curve());
         int level = SkillCurve.levelForXp(entry.totalXp, curve);
         if (level <= entry.lastLevelSeen) {
             return;
@@ -332,7 +339,8 @@ public final class SkillService {
     /** Immediate full state payload to one player. {@code secretMultiplierActive} is ALWAYS false on wire. */
     public static void syncTo(ServerPlayer player) {
         SkillState.Entry entry = SkillState.get(player.server).entry(player.getUUID());
-        SkillCurve.Params curve = SkillConfig.get().curve();
+        SkillCurve.Params curve = RebirthHooks.curveFor(player.server, player.getUUID(),
+                SkillConfig.get().curve());
         int level = SkillCurve.levelForXp(entry.totalXp, curve);
         PacketDistributor.sendToPlayer(player, new S2CSkillStatePayload(
                 level,

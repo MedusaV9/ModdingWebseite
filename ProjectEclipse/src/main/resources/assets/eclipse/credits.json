@@ -6,112 +6,106 @@
         {
           "name": "title_theme — mystic dark-fantasy title theme",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         },
         {
           "name": "limbo_ambience — ghost-ship purgatory ambience",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         },
         {
           "name": "boss_herald — ritual boss theme (Herald)",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         },
         {
           "name": "boss_ferryman — final boss theme (Ferryman)",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "boss_rift_warden — void dungeon boss theme (Rift Warden)",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "boss_fog_tyrant — storm monarch boss theme (Fog Tyrant)",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "intro_storm — shipwreck storm sequence",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "expansion_theme — world-growth build-up cue",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "eclipse_totality — black-sun totality drone",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "fog_storm — hunting fog-storm tension loop",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "kill_contract — assassination-hour stealth loop",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         },
         {
           "name": "wand_awakening — catalyst attunement sting",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "day_final — last-day inevitability bed",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
+          ]
+        },
+        {
+          "name": "victory_theme — dawn-after-the-eclipse finale",
+          "details": [
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         },
         {
           "name": "xbox_nostalgia — nostalgic piano nocturne",
           "details": [
-            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
-            "Loudness normalization, fade-in, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "expansion_theme — Enchanted Valley",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1200093",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200093",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "intro_storm — Stormfront",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1200043",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200043",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "victory_theme — Ascending the Vale",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1600064",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600064",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "eclipse_totality — Echoes of Time v2",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · Echoes of Time v2",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300030",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "kill_contract — Volatile Reaction",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · Volatile Reaction",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100051",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "boss_rift_warden — Final Battle of the Dark Wizards",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · Final Battle of the Dark Wizards",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500085",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "day_final — Atlantean Twilight",
-          "details": [
-            "Kevin MacLeod · CC BY 4.0 · Atlantean Twilight",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100196",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
-          ]
-        },
-        {
-          "name": "fog_storm / boss_fog_tyrant — pitched aliases",
-          "details": [
-            "Re-pitched aliases of intro_storm / boss_ferryman (see those credits)."
+            "Generated with Treblo (Sonauto V3) for Eclipse Event · custom prompt design",
+            "Loudness normalization (-16 LUFS), OGG Vorbis 48 kHz stereo encoding."
           ]
         }
       ]
@@ -170,7 +164,7 @@
       "titleKey": "gui.eclipse.credits.section.mods",
       "entries": [
         {
-          "name": "EMI 1.1.18+1.21.1",
+          "name": "EMI 1.1.24+1.21.1",
           "details": [
             "Emily Ploszaj · MIT · https://github.com/emilyploszaj/emi"
           ]

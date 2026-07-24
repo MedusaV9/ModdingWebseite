@@ -7,6 +7,7 @@
   "dimension": "minecraft:overworld",
   "letterbox": true,
   "hideHud": true,
+  "showOwnBody": true,
   "durationTicks": 240,
   "keyframes": [
     { "t": 0.0, "pos": [-14.0, 30.0, -26.0], "yaw": -28, "pitch": 44, "roll": -2, "fov": 62, "easing": "linear", "lookAt": "player" },
@@ -21,5 +22,9 @@
     { "t": 0.5, "type": "caption", "id": "eclipse.caption.finale.home", "data": "whisper,70" },
     { "t": 0.85, "type": "sound", "id": "eclipse:event.emerge" },
     { "t": 0.85, "type": "shake", "id": "finale_settle", "data": "0.18,26,2.5" }
-  ]
+  ],
+  "params": {
+    "_comment": "Day-14 finale descent: player-anchored reverse-intro drop that hands the camera back at the watcher's own eyes. Every keyframe lookAt-tracks the player, so showOwnBody stays true — the shot is ABOUT the returning player.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
+  }
 }

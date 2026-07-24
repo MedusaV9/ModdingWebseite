@@ -412,7 +412,7 @@ public final class AntiCheatCheck {
         allowed.put("eclipse", "2.1.0");
         allowed.put("veil", "4.3.0");
         allowed.put("geckolib", "4.9.2");
-        allowed.put("emi", "1.1.18+1.21.1");
+        allowed.put("emi", "1.1.24+1.21.1");
         allowed.put("mousetweaks", "2.26.1");
         allowed.put("create", "6.0.10");
         allowed.put("aeronautics", "1.3.0");

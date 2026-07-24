@@ -10,6 +10,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
 import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import net.minecraft.ChatFormatting;
@@ -154,7 +155,7 @@ public final class DevQuestCommands {
         source.sendSuccess(() -> feedback, false);
         for (ServerPlayer operator : source.getServer().getPlayerList().getPlayers()) {
             if (operator.hasPermissions(2) && operator != source.getEntity()) {
-                operator.sendSystemMessage(Component.translatable("dev.eclipse.audit",
+                operator.sendSystemMessage(ServerLang.tr(operator, "dev.eclipse.audit",
                         source.getTextName(), feedback));
             }
         }

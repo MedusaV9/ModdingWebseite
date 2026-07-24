@@ -7,6 +7,8 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -52,7 +54,10 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * {@code outTicks}, any ARGB). Drawn below the caption text so titles stay readable over
  * flashes/fades (intro v3's white→violet burst, expansion's cut-to-black). A new fade
  * replaces the current one. Captions queue (cap {@value #QUEUE_LIMIT}); a stop/disconnect
- * clears everything.</p>
+ * clears everything. The queue arbitrates two-ways with {@code AnnouncementOverlay} (A15):
+ * a caption waits for a live announcement typewriter line to finish ({@code isBandBusy()})
+ * and announcements likewise defer while a caption is on screen ({@link #isBusy()}) —
+ * both queues only ever delay, never drop.</p>
  *
  * <p>Timing is client-tick based (+ partial tick), so captions and fades freeze with the
  * pause screen exactly like the rest of the HUD.</p>
@@ -140,6 +145,15 @@ public final class CaptionRenderer {
         fadeStartTick = Integer.MIN_VALUE;
     }
 
+    /**
+     * A15 two-way arbitration: whether a caption currently owns the shared screen band.
+     * {@link AnnouncementOverlay} polls this before dequeuing its next announcement and
+     * defers while true — its queue is preserved, nothing is dropped, only delayed.
+     */
+    public static boolean isBusy() {
+        return active != null;
+    }
+
     // ------------------------------------------------------------------ tick
 
     @SubscribeEvent
@@ -160,7 +174,12 @@ public final class CaptionRenderer {
             active = null;
             current = null;
         }
-        if (current == null && !QUEUE.isEmpty()) {
+        // A15 two-way arbitration: don't start a caption while the announcement overlay's
+        // typewriter line (or the day-number card that feeds one) is live — wait for it to
+        // finish, then start. The caption queue is preserved (poll, never drop); the
+        // announcement side defers to isBusy() in the same way, so the two systems never
+        // draw over each other and neither can starve the other permanently.
+        if (current == null && !QUEUE.isEmpty() && !AnnouncementOverlay.isBandBusy()) {
             active = QUEUE.poll();
             activeStartTick = ticks;
             lastBlippedChars = 0;
@@ -175,7 +194,7 @@ public final class CaptionRenderer {
                 || !EclipseClientConfig.uiSounds()) {
             return;
         }
-        String text = Component.translatable(current.langKey()).getString();
+        String text = EclipseLang.trString(current.langKey());
         int revealed = Math.min(text.length(), (ticks - activeStartTick) * SUBTITLE_CHARS_PER_TICK);
         if (revealed / 2 > lastBlippedChars / 2 && revealed < text.length()) {
             minecraft.getSoundManager().play(SimpleSoundInstance.forUI(
@@ -253,7 +272,7 @@ public final class CaptionRenderer {
             return;
         }
         Font font = Minecraft.getInstance().font;
-        String full = Component.translatable(caption.langKey()).getString();
+        String full = EclipseLang.trString(caption.langKey());
         int revealed = Math.min(full.length(), (int) (age * SUBTITLE_CHARS_PER_TICK));
         List<String> lines = wrap(font, full, SUBTITLE_MAX_WIDTH);
         if (lines.isEmpty()) {
@@ -317,7 +336,7 @@ public final class CaptionRenderer {
             return;
         }
         Font font = Minecraft.getInstance().font;
-        String text = Component.translatable(caption.langKey()).getString();
+        String text = EclipseLang.trString(caption.langKey());
         if (text.isEmpty()) {
             return;
         }
@@ -356,7 +375,7 @@ public final class CaptionRenderer {
             return;
         }
         Font font = Minecraft.getInstance().font;
-        Component text = Component.translatable(caption.langKey()).withStyle(ChatFormatting.ITALIC);
+        Component text = EclipseLang.tr(caption.langKey()).copy().withStyle(ChatFormatting.ITALIC);
         // ±0.5 px value-noise jitter — unsettling, but readable.
         float jitterX = (noise(age * 1.7F, 11) - 0.5F);
         float jitterY = (noise(age * 1.7F, 37) - 0.5F);

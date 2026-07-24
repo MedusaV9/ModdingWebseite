@@ -28,6 +28,7 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -109,6 +110,9 @@ public class DeckhandEntity extends EclipseGeoMob {
     /** Bug 4a: how long {@link #reseatFallen} waits for entity sections before re-seating. */
     private static final int RESEAT_WINDOW_TICKS = 100;
 
+    /** C3: how far a benched rower's head may glance off its bench yaw (torso never moves). */
+    private static final float BENCH_HEAD_CLAMP_DEG = 30.0F;
+
     private static final String ANIM_ROW = "row";
     private static final String ANIM_IDLE_SAG = "idle_sag";
     private static final String ANIM_RISE = "rise";
@@ -120,6 +124,14 @@ public class DeckhandEntity extends EclipseGeoMob {
     /** True during the start-event keel-over (transient — never saved; see {@link #tick}). */
     private static final EntityDataAccessor<Boolean> DATA_TILT =
             SynchedEntityData.defineId(DeckhandEntity.class, EntityDataSerializers.BOOLEAN);
+    /**
+     * This rower's bench slot (0–7, {@code -1} for pre-P6 legacy entities), SYNCED so the
+     * renderer can mirror the port-side oar from the seat assignment instead of the live
+     * body yaw (C3 — the old {@code yBodyRot} heuristic flipped the row cycle whenever a
+     * look-at dragged the torso across the mirror threshold). Persisted via NBT.
+     */
+    private static final EntityDataAccessor<Integer> DATA_BENCH =
+            SynchedEntityData.defineId(DeckhandEntity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ROW_ANIM = EclipseGeoAnimations.loop("deckhand", ANIM_ROW);
     private static final RawAnimation TILT_ANIM = EclipseGeoAnimations.loop("deckhand", ANIM_TILT);
@@ -128,8 +140,6 @@ public class DeckhandEntity extends EclipseGeoMob {
     private static int pendingReseatTicks;
     private static int reseatResolvedMask;
 
-    /** This rower's bench (0–7, {@code -1} for pre-P6 legacy entities), persisted in NBT. */
-    private int benchIndex = -1;
     /** Consecutive hostile ticks without a living Ferryman (bug 4b self-heal). */
     private int hostileOrphanTicks;
 
@@ -195,7 +205,20 @@ public class DeckhandEntity extends EclipseGeoMob {
                 return isHostile() && super.canContinueToUse();
             }
         });
-        this.goalSelector.addGoal(1, new LookAtPlayerGoal(this, Player.class, 48.0F, 0.02F));
+        // C3: the curious idle stare was the ONLY driver of the row-cycle mirror flip
+        // (vanilla body rotation drags yBodyRot after yHeadRot) — look-at is now a
+        // hostile-only behavior, exactly like the combat goals above.
+        this.goalSelector.addGoal(1, new LookAtPlayerGoal(this, Player.class, 48.0F, 0.02F) {
+            @Override
+            public boolean canUse() {
+                return isHostile() && super.canUse();
+            }
+
+            @Override
+            public boolean canContinueToUse() {
+                return isHostile() && super.canContinueToUse();
+            }
+        });
         // Only the LIVING are prey: banned ghosts share the ship with the crew.
         this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false,
                 target -> target instanceof ServerPlayer serverPlayer && !BanService.isBanned(serverPlayer)) {
@@ -216,6 +239,35 @@ public class DeckhandEntity extends EclipseGeoMob {
         super.defineSynchedData(builder);
         builder.define(DATA_HOSTILE, false);
         builder.define(DATA_TILT, false);
+        builder.define(DATA_BENCH, -1);
+    }
+
+    /**
+     * C3 body pin: while benched/rowing (not hostile) the torso is hard-locked to the
+     * bench's outboard yaw and the head may only glance ±{@value #BENCH_HEAD_CLAMP_DEG}°
+     * off it — vanilla's head-turn tick (which drags {@code yBodyRot} after
+     * {@code yHeadRot} via the {@code BodyRotationControl}) never runs for a seated
+     * rower, so no rotation source can ever flip the renderer's row-cycle mirror again.
+     * Runs on both sides ({@code LivingEntity.tick} calls it on client and server).
+     */
+    @Override
+    protected float tickHeadTurn(float yRot, float animStep) {
+        if (!isHostile()) {
+            float pin = benchFacingYaw();
+            this.yBodyRot = pin;
+            this.yBodyRotO = pin;
+            float glance = Mth.clamp(Mth.wrapDegrees(this.yHeadRot - pin),
+                    -BENCH_HEAD_CLAMP_DEG, BENCH_HEAD_CLAMP_DEG);
+            this.yHeadRot = pin + glance;
+            return animStep;
+        }
+        return super.tickHeadTurn(yRot, animStep);
+    }
+
+    /** The yaw a seated rower's torso is pinned to (legacy benchless entities hold still). */
+    private float benchFacingYaw() {
+        int index = benchIndex();
+        return index >= 0 && index < BENCH_COUNT ? benchYaw(index) : this.yBodyRot;
     }
 
     // --- hostile mode ---
@@ -278,7 +330,7 @@ public class DeckhandEntity extends EclipseGeoMob {
             List<UUID> listed = EclipseWorldState.get(serverLevel.getServer()).getDeckhandEntities();
             if (!listed.isEmpty() && !listed.contains(this.getUUID())) {
                 EclipseMod.LOGGER.info("Deckhand {} is not on the crew list — discarding orphan (bench {})",
-                        this.getUUID(), this.benchIndex);
+                        this.getUUID(), benchIndex());
                 this.discard();
                 return;
             }
@@ -292,7 +344,7 @@ public class DeckhandEntity extends EclipseGeoMob {
             if (this.hostileOrphanTicks >= ORPHAN_CALM_TICKS) {
                 EclipseMod.LOGGER.info(
                         "Deckhand at bench {} was hostile with no Ferryman alive for {}t — self-calming",
-                        this.benchIndex, ORPHAN_CALM_TICKS);
+                        benchIndex(), ORPHAN_CALM_TICKS);
                 setHostile(false);
                 snapToBench(serverLevel);
             }
@@ -382,21 +434,28 @@ public class DeckhandEntity extends EclipseGeoMob {
     public void addAdditionalSaveData(CompoundTag compound) {
         super.addAdditionalSaveData(compound);
         compound.putBoolean("Hostile", isHostile());
-        compound.putInt("BenchIndex", this.benchIndex);
+        compound.putInt("BenchIndex", benchIndex());
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag compound) {
         super.readAdditionalSaveData(compound);
         setHostile(compound.getBoolean("Hostile"));
-        this.benchIndex = compound.contains("BenchIndex") ? compound.getInt("BenchIndex") : -1;
+        setBenchIndex(compound.contains("BenchIndex") ? compound.getInt("BenchIndex") : -1);
     }
 
     // --- bench geometry ---
 
-    /** This rower's persisted bench slot (0–7), or {@code -1} for pre-P6 legacy entities. */
+    /**
+     * This rower's persisted bench slot (0–7), or {@code -1} for pre-P6 legacy entities.
+     * Synced (C3): the renderer reads it for the seat-side oar mirror.
+     */
     public int benchIndex() {
-        return this.benchIndex;
+        return this.entityData.get(DATA_BENCH);
+    }
+
+    private void setBenchIndex(int index) {
+        this.entityData.set(DATA_BENCH, index);
     }
 
     /**
@@ -430,7 +489,7 @@ public class DeckhandEntity extends EclipseGeoMob {
      * without a bench index derive one from their crew-list slot.
      */
     private void snapToBench(ServerLevel limbo) {
-        int index = this.benchIndex;
+        int index = benchIndex();
         if (index < 0 || index >= BENCH_COUNT) {
             index = EclipseWorldState.get(limbo.getServer()).getDeckhandEntities().indexOf(this.getUUID());
             if (index < 0 || index >= BENCH_COUNT) {
@@ -438,7 +497,7 @@ public class DeckhandEntity extends EclipseGeoMob {
                         this.getUUID());
                 return;
             }
-            this.benchIndex = index;
+            setBenchIndex(index);
         }
         Vec3 seat = benchCenter(limbo, index);
         float yaw = benchYaw(index);
@@ -604,7 +663,7 @@ public class DeckhandEntity extends EclipseGeoMob {
         }
         Vec3 seat = benchCenter(limbo, index);
         float yaw = benchYaw(index);
-        deckhand.benchIndex = index;
+        deckhand.setBenchIndex(index);
         deckhand.moveTo(seat.x, seat.y, seat.z, yaw, 0.0F);
         deckhand.setYBodyRot(yaw);
         deckhand.setYHeadRot(yaw);

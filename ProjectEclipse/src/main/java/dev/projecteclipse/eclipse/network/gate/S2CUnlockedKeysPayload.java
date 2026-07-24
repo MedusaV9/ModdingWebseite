@@ -14,18 +14,23 @@ import net.minecraft.resources.ResourceLocation;
  * Sent by {@code progression.UnlockSync} on login and whenever the derived
  * {@code UnlockState} key set changes (day change, altar level, boss kill, config reload).
  * Cached client-side in {@code client.progression.ClientUnlockCache}; the EMI plugin
- * consults that cache to hide items/recipes of still-locked mod namespaces.
+ * consults that cache to hide items/recipes of still-locked mod namespaces and
+ * still-locked {@code modgate_ids.json} glob rules.
  *
  * @param keys             all currently-unlocked {@code UnlockState} gate keys
  * @param lockedNamespaces registry namespaces currently locked by {@code ModGate}
  *                         (pre-resolved server-side so the client needs no config knowledge)
+ * @param lockedIdGlobs    {@code modgate_ids.json} glob rules whose unlock key is still
+ *                         locked (A16 — pre-filtered server-side like the namespaces; the
+ *                         client recompiles them via {@code ModGateIds.compile})
  */
-public record S2CUnlockedKeysPayload(List<String> keys, List<String> lockedNamespaces)
-        implements CustomPacketPayload {
+public record S2CUnlockedKeysPayload(List<String> keys, List<String> lockedNamespaces,
+        List<String> lockedIdGlobs) implements CustomPacketPayload {
 
     public S2CUnlockedKeysPayload {
         keys = List.copyOf(keys);
         lockedNamespaces = List.copyOf(lockedNamespaces);
+        lockedIdGlobs = List.copyOf(lockedIdGlobs);
     }
 
     public static final CustomPacketPayload.Type<S2CUnlockedKeysPayload> TYPE =
@@ -35,6 +40,7 @@ public record S2CUnlockedKeysPayload(List<String> keys, List<String> lockedNames
     public static final StreamCodec<ByteBuf, S2CUnlockedKeysPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), S2CUnlockedKeysPayload::keys,
             ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), S2CUnlockedKeysPayload::lockedNamespaces,
+            ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), S2CUnlockedKeysPayload::lockedIdGlobs,
             S2CUnlockedKeysPayload::new);
 
     @Override

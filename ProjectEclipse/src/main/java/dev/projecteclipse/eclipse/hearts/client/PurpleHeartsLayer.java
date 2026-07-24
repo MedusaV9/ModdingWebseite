@@ -27,10 +27,19 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
 /**
- * Purple hearts as THE player hearts renderer (W4-HEARTS R1). Cancels the vanilla
- * {@code PLAYER_HEALTH} layer (re-adding its exact {@code leftHeight} increment so
- * armor/vehicle rows keep their positions) and redraws the row from the eclipse-palette
- * 9x9 set under {@code textures/gui/hearts/} with full vanilla parity:
+ * Purple hearts as THE player hearts renderer (W4-HEARTS R1; v5 A13 Leben rework).
+ * Cancels the vanilla {@code PLAYER_HEALTH} layer (re-adding the {@code leftHeight}
+ * increment of the row it actually draws, so armor/vehicle rows stack directly above it)
+ * and redraws the row from the eclipse-palette 9x9 set under
+ * {@code textures/gui/hearts/}.
+ *
+ * <p><b>v5 Leben compression (A13):</b> ONE purple heart = 1 Leben/Life = 2 vanilla
+ * hearts = 4 real hp ({@code HeartsService.HP_PER_LIFE}) — the purple row REPLACES the
+ * vanilla hearts display entirely, so the heart count on screen is always the player's
+ * Leben count and there is no second "real" health row to be confused by. The compression
+ * lives in {@link HeartRowGeometry} (display units), shared with the burst overlay.</p>
+ *
+ * <p>Full vanilla parity on the compressed row:</p>
  *
  * <ul>
  *   <li>absorption hearts (violet-white {@code heart_absorbing_*} sprites),</li>
@@ -196,7 +205,14 @@ public final class PurpleHeartsLayer {
 
     // ------------------------------------------------------------------ layer body
 
-    /** GUI-layer body (below the burst overlay). Only draws on frames the Pre hook owned. */
+    /**
+     * GUI-layer body (below the burst overlay). Only draws on frames the Pre hook owned.
+     *
+     * <p>v5 Leben compression: all row/slot geometry keeps REAL hp inputs (the transform
+     * lives inside {@link HeartRowGeometry}); only the per-slot fill comparisons below
+     * run on display units (2 units per drawn Leben heart), so damage flash, regen wiggle
+     * and absorption keep their vanilla state machines on the compressed row.</p>
+     */
     public static void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!owningFrame || !(minecraft.getCameraEntity() instanceof Player player)) {
@@ -204,8 +220,11 @@ public final class PurpleHeartsLayer {
         }
 
         int guiTicks = minecraft.gui.getGuiTicks();
-        int health = Mth.ceil(player.getHealth());
         int absorption = Mth.ceil(player.getAbsorptionAmount());
+        // Display units (1 Leben heart = 2 units = 4 real hp while compression is on).
+        int health = HeartRowGeometry.displayUnits(Mth.ceil(player.getHealth()));
+        int absorptionUnits = HeartRowGeometry.displayUnits(absorption);
+        int shownHealth = HeartRowGeometry.displayUnits(displayHealth);
         boolean highlight = healthBlinkTime > guiTicks && (healthBlinkTime - guiTicks) / 3L % 2L == 1L;
 
         float rowMax = HeartRowGeometry.rowMaxHealth(player, displayHealth);
@@ -246,8 +265,8 @@ public final class PurpleHeartsLayer {
             if (slot >= healthSlots) {
                 // Absorption slot. Vanilla renders WITHERED hearts here while withering.
                 int absorbed = hp - healthSlots * 2;
-                if (absorbed < absorption) {
-                    boolean last = absorbed + 1 == absorption;
+                if (absorbed < absorptionUnits) {
+                    boolean last = absorbed + 1 == absorptionUnits;
                     if (withered) {
                         drawSprite(guiGraphics, last ? HALF : FULL, x, y, tint);
                     } else {
@@ -255,8 +274,8 @@ public final class PurpleHeartsLayer {
                     }
                 }
             }
-            if (highlight && hp < displayHealth) {
-                drawSprite(guiGraphics, hp + 1 == displayHealth ? HALF_BLINKING : FULL_BLINKING,
+            if (highlight && hp < shownHealth) {
+                drawSprite(guiGraphics, hp + 1 == shownHealth ? HALF_BLINKING : FULL_BLINKING,
                         x, y, tint);
             }
             if (hp < health) {

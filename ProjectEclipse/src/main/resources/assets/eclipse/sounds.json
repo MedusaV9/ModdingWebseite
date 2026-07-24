@@ -244,8 +244,7 @@
   "music.boss_fog_tyrant": {
     "sounds": [
       {
-        "name": "eclipse:music/boss_ferryman",
-        "pitch": 0.95,
+        "name": "eclipse:music/boss_fog_tyrant",
         "stream": true
       }
     ]
@@ -293,8 +292,7 @@
   "music.fog_storm": {
     "sounds": [
       {
-        "name": "eclipse:music/intro_storm",
-        "pitch": 0.92,
+        "name": "eclipse:music/fog_storm",
         "stream": true
       }
     ]

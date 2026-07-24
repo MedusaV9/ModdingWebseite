@@ -33,12 +33,24 @@ import net.neoforged.api.distmarker.OnlyIn;
  * <p>Kept from v2 (it works): drag with inertia (velocity decays 15%/tick), the reserved
  * bottom hint band whose hint fades out for the session after the first successful
  * drag/scroll, and the two-line caption clamp.</p>
+ *
+ * <p>Wave-5 A4 fix: caption lines are horizontally SHIFTED (not clipped) so they always
+ * stay {@value #TEXT_EDGE_PAD}px inside the panel — the scissor at the panel edge used to
+ * chop the first node's caption to "AY 1 …". A4 polish: one {@value #LINE_HEIGHT}px line
+ * grid for captions, glitch labels and the divider label, a calmer current-node pulse,
+ * higher-contrast drag hint, and {@value #NODE_SPACING}px node spacing so neighboring
+ * two-line captions never touch.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class TimelineTab extends HandbookTab {
     /** Flat node edge length (§3.1 "flat 10px nodes"). */
     private static final int NODE_SIZE = 10;
-    private static final int NODE_SPACING = 58;
+    /** Widened +8px in the A4 polish pass so alternating two-line captions keep clear air. */
+    private static final int NODE_SPACING = 66;
+    /** Shared text line grid: captions, glitch labels and the divider label all step by this. */
+    private static final int LINE_HEIGHT = 9;
+    /** Minimum gap between any caption line and the panel edges (A4 shift-clamp). */
+    private static final int TEXT_EDGE_PAD = 4;
     /** Extra gap (with the hairline divider) between the day and the milestone section. */
     private static final int SECTION_GAP = 64;
     /** Bottom band reserved for the drag hint; node/caption rendering is scissored above it. */
@@ -153,21 +165,26 @@ public class TimelineTab extends HandbookTab {
         if (strength <= 0.05F) {
             return;
         }
+        // A4 polish: hint reads in TEXT color (the DIM line was near-invisible on the band).
         guiGraphics.drawCenteredString(font, EclipseLang.tr("gui.eclipse.handbook.timeline.hint"),
-                x + width / 2, y + height - 10, withAlpha(DIM_COLOR, alpha * strength));
+                x + width / 2, y + height - 10, withAlpha(TEXT_COLOR, alpha * strength));
     }
 
     /**
      * Milestone-section divider, v3: a vertical hairline through the page with the section
      * label at the top of the content area (clear of both caption rows) — no divider art.
+     * A4 polish: the label sits on the shared {@value #LINE_HEIGHT}px line grid (baseline
+     * matches caption rows) and shift-clamps into the panel like every caption.
      */
     private void renderSectionDivider(GuiGraphics guiGraphics, int index, float alpha) {
         int dividerCenter = nodeCenterX(index, true) - SECTION_GAP / 2 - NODE_SPACING / 2;
-        guiGraphics.fill(dividerCenter, y + 12, dividerCenter + 1, y + height - HINT_BAND_HEIGHT - 2,
+        int labelY = y + 3;
+        guiGraphics.fill(dividerCenter, labelY + LINE_HEIGHT + 2, dividerCenter + 1,
+                y + height - HINT_BAND_HEIGHT - 2,
                 EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, alpha));
         String label = ellipsize(font,
                 EclipseLang.trString("gui.eclipse.handbook.timeline.milestones"), SECTION_GAP + 80);
-        guiGraphics.drawCenteredString(font, label, dividerCenter, y + 2, withAlpha(DIM_COLOR, alpha));
+        drawClampedCentered(guiGraphics, label, dividerCenter, labelY, withAlpha(DIM_COLOR, alpha));
     }
 
     /**
@@ -189,8 +206,9 @@ public class TimelineTab extends HandbookTab {
             guiGraphics.fill(x0, y0, x0 + NODE_SIZE, y0 + NODE_SIZE, withAlpha(ACCENT_COLOR, alpha));
         }
         if (current) {
+            // A4 polish: slower, shallower breath — the old 320ms/±0.35 pulse read as a blink.
             float ringAlpha = EclipseClientConfig.reducedFx() ? 0.8F
-                    : 0.55F + 0.35F * Mth.sin(net.minecraft.Util.getMillis() / 320.0F);
+                    : 0.68F + 0.18F * Mth.sin(net.minecraft.Util.getMillis() / 520.0F);
             drawFrame(guiGraphics, x0 - 3, y0 - 3, NODE_SIZE + 6, withAlpha(ACCENT_COLOR, alpha * ringAlpha));
         }
 
@@ -205,17 +223,39 @@ public class TimelineTab extends HandbookTab {
 
         if (entry.hidden()) {
             String glitch = GlitchText.unknown(entry.id());
-            int textY = captionBelow ? spineY + half + 6 : spineY - half - 14;
-            guiGraphics.drawCenteredString(font, glitch, centerX, textY, withAlpha(DIM_COLOR, alpha));
+            // Same line grid as real captions (the old -14 offset sat 1px off the grid).
+            int textY = captionBelow ? spineY + half + 6 : spineY - half - 6 - LINE_HEIGHT;
+            drawClampedCentered(guiGraphics, glitch, centerX, textY, withAlpha(DIM_COLOR, alpha));
             return;
         }
         List<String> caption = clampCaption(EclipseLang.trString(entry.titleKey()), NODE_SPACING + 24);
-        int textY = captionBelow ? spineY + half + 6 : spineY - half - 6 - caption.size() * 9;
+        int textY = captionBelow ? spineY + half + 6 : spineY - half - 6 - caption.size() * LINE_HEIGHT;
         for (String line : caption) {
-            guiGraphics.drawCenteredString(font, line, centerX, textY,
+            drawClampedCentered(guiGraphics, line, centerX, textY,
                     withAlpha(current ? ACCENT_COLOR : TEXT_COLOR, alpha));
-            textY += 9;
+            textY += LINE_HEIGHT;
         }
+    }
+
+    /**
+     * A4 fix: centered text whose X is SHIFTED so the line always stays
+     * {@value #TEXT_EDGE_PAD}px inside the panel — the scissor set in
+     * {@link #render} starts at the panel edge, so an unshifted first-node caption
+     * ("DAY 1 — FIRST LIGHT") had its leading glyphs clipped away ("AY 1 …"). Applies to
+     * every node, not just node 0 (long last-node captions clamp off the right edge too).
+     */
+    private void drawClampedCentered(GuiGraphics guiGraphics, String line, int centerX, int textY, int color) {
+        int drawCenterX = centerX;
+        // Only shift while the anchor is on the panel: a node scrolling OUT should slide
+        // under the scissor naturally instead of leaving its caption pinned to the edge.
+        if (centerX >= x && centerX <= x + width) {
+            int lineWidth = font.width(line);
+            int min = x + TEXT_EDGE_PAD + lineWidth / 2;
+            int max = x + width - TEXT_EDGE_PAD - lineWidth / 2;
+            // A line wider than the panel cannot satisfy both edges; center it in the panel.
+            drawCenterX = min > max ? x + width / 2 : Mth.clamp(centerX, min, max);
+        }
+        guiGraphics.drawCenteredString(font, line, drawCenterX, textY, color);
     }
 
     /** 1px square frame outline from fills. */

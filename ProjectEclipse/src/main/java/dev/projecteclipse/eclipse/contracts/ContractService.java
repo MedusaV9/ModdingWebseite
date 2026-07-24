@@ -771,8 +771,10 @@ public final class ContractService {
     }
 
     private static void stopMusic(@Nullable ServerPlayer player) {
-        if (player != null && MusicCues.fromId(MUSIC_CUE_ID).isPresent()) {
-            MusicCues.stop(player);
+        if (player != null) {
+            // Release, not stop: stop() mutes the situation ladder underneath, so a contract
+            // ending mid-boss-fight (or inside a storm) would silence that theme too (C19).
+            MusicCues.release(MUSIC_CUE_ID, player);
         }
     }
 

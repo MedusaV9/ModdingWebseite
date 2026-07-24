@@ -11,6 +11,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
@@ -47,12 +48,14 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  *       fires events, so the ghost is redrawn from cached geometry). A bar re-seen after
  *       &gt; {@value #REENTER_MILLIS} ms without events replays the entrance.</li>
  *   <li><b>Animated fill</b>: a 4-frame sheet {@code fill_anim.png} (512x128, 8 ticks/frame,
- *       P2 asset) replaces the single tinted fill when present; the committed procedural
- *       fallback is the current fill plus a second scroll pass at 0.5x speed.</li>
+ *       P2 asset) replaces the single tinted fill when present. A10 replaced the old
+ *       scrolling color sweep with a quiet fill dressing: 1px top-highlight/bottom-shade
+ *       edges plus a single 1px highlight column scanning the filled width.</li>
  *   <li><b>Damage flash + micro-shake</b>: a progress DROP &gt; {@value #DAMAGE_DROP_THRESHOLD}
- *       flashes the fill white for ~3 ticks and shakes the frame ±2px; a trailing "damage
- *       ghost" segment lingers behind the lerped fill and drains after a short hold.
- *       Progress RISES keep the v2 soft leading-edge glow flash.</li>
+ *       flashes the fill white for ~3 ticks and shakes the frame ±1px (A10 halved the v3
+ *       amplitude); a trailing "damage ghost" segment lingers behind the lerped fill and
+ *       drains after a short hold. Progress RISES keep the v2 soft leading-edge glow
+ *       flash.</li>
  *   <li><b>Phase notches</b>: NOTCHED_6/10/12/20 overlays draw a thin tick at every notch
  *       fraction (v2 hardcoded NOTCHED_6 at thirds).</li>
  *   <li><b>Styles</b>: {@code bossbarStyle=ORNATE} keeps the themed 512x64 frames;
@@ -63,8 +66,14 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  *       fill band (subtle scrim, {@code DIM} → {@code TEXT} flash on change) so stacked
  *       bars read tighter; the vanilla 19px increment is kept (v2 reserved +10 for the
  *       floating name line).</li>
- *   <li><b>Breathing</b>: while a {@code boss}-themed bar is on screen its outer frame
- *       hairline breathes (sin, 3 s).</li>
+ *   <li><b>Hit glow, not idle pulse (A10)</b>: the v3 3-second breathing hairline is gone —
+ *       a {@code boss}-themed bar's outer hairline only glows for ~1 s after a real
+ *       damage event, then rests. Premium, not noisy.</li>
+ *   <li><b>Bar cap (A10, "zu viele bossbars")</b>: at most {@value #MAX_VISIBLE_BARS}
+ *       skinned bars render at once; further skinned bars collapse into a single
+ *       "+N more" overflow counter row directly under the visible stack (their
+ *       {@link BarState} lerps stay warm so un-hiding never jumps). Unmatched vanilla
+ *       bars are never hidden.</li>
  * </ul>
  *
  * <p>Server-driven telegraphs survive: {@code boss}-themed bars tint fill/glow toward the
@@ -75,9 +84,8 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class BossbarSkin {
     private static final ResourceLocation FILL = texture("fill");
-    /** P2 asset (512x128, 4 frames of 512x32); probed live, procedural fallback until it lands. */
+    /** P2 asset (512x128, 4 frames of 512x32); probed live, plain fill until it lands. */
     private static final ResourceLocation FILL_ANIM = texture("fill_anim");
-    private static final ResourceLocation SCROLL = texture("scroll");
     private static final ResourceLocation GLOW = texture("glow");
 
     /** Frame blit rect relative to the vanilla bar origin (x, y). */
@@ -89,12 +97,14 @@ public final class BossbarSkin {
     private static final int FILL_OFFSET_Y = -1;
     private static final int FILL_WIDTH = 182;
     private static final int FILL_HEIGHT = 7;
-    /** Displayed progress approaches the real progress this much per rendered frame. */
-    private static final float LERP_PER_FRAME = 0.05F;
+    /**
+     * A10 smoother fill lerp: the displayed progress approaches the real progress on a
+     * time-based exponential with this time constant (settles in ~1 s, eases out instead
+     * of the old constant-speed per-frame clamp — frame-rate independent).
+     */
+    private static final float FILL_LERP_TAU_MILLIS = 250.0F;
     /** End-cap flash duration after a progress rise. */
     private static final long FLASH_MILLIS = 400L;
-    /** The scroll overlay pattern repeats every this many logical px (256 texels at 2 tx/px). */
-    private static final int SCROLL_PERIOD = 128;
     /** Untagged skinned-bar states are dropped after this long without rendering. */
     private static final long STATE_TTL_MILLIS = 120_000L;
 
@@ -112,28 +122,41 @@ public final class BossbarSkin {
     private static final float DAMAGE_DROP_THRESHOLD = 0.005F;
     /** White damage-flash length (~3 ticks). */
     private static final long DAMAGE_FLASH_MILLIS = 150L;
-    /** Micro-shake amplitude on damage (logical px). */
-    private static final float SHAKE_PX = 2.0F;
+    /** Micro-shake amplitude on damage (logical px; A10 halved the v3 ±2px). */
+    private static final float SHAKE_PX = 1.0F;
     /** The damage ghost holds this long before draining toward the lerped fill. */
     private static final long GHOST_HOLD_MILLIS = 200L;
-    /** Ghost drain per rendered frame once the hold elapsed. */
-    private static final float GHOST_DRAIN_PER_FRAME = 0.01F;
+    /** Ghost drain per SECOND once the hold elapsed (time-based, ≈ the old 0.01/frame @60fps). */
+    private static final float GHOST_DRAIN_PER_SECOND = 0.6F;
     /** Name flashes DIM → TEXT for this long after the bar name changes. */
     private static final long NAME_FLASH_MILLIS = 600L;
-    /** Boss-theme frame breathing period (3 s sine). */
-    private static final float BREATHE_PERIOD_MILLIS = 3_000.0F;
+    /** A10 hit glow: the boss-theme hairline fades out over this long after a damage event. */
+    private static final long DAMAGE_GLOW_MILLIS = 1_000L;
+    /** A10 fill dressing: the 1px highlight column crosses the full bar width per period. */
+    private static final long SCAN_PERIOD_MILLIS = 2_600L;
     /** fill_anim sheet: 4 frames, 8 ticks (400 ms) each. */
     private static final long ANIM_FRAME_MILLIS = 400L;
+    /** A10 cap: at most this many skinned bars render; the rest collapse to "+N more". */
+    private static final int MAX_VISIBLE_BARS = 2;
+    /** Height reserved for the overflow counter row in the top stack. */
+    private static final int OVERFLOW_ROW_HEIGHT = 10;
 
     /** Per-skinned-bar client state, keyed by the {@code BossEvent} UUID. Client thread only. */
     private static final Map<UUID, BarState> SKINNED = new HashMap<>();
 
-    /** Geometry observed this frame, so timer/announcement layers can stack below real bars. */
+    /** Geometry observed this frame, so the announcement sweep can stack below real bars. */
     private static long lastBarSeenMillis;
     /** Reset to the vanilla anchor every frame ({@link #onRenderGuiPre}); bars re-stack it. */
     private static int observedBarsBottom = 12;
     /** {@code fill_anim.png} probe: 0 = unknown (re-probe), 1 = present, 2 = absent. */
     private static int fillAnimProbe;
+    // --- A10 bar cap, per-frame (reset in onRenderGuiPre, drawn in onRenderGuiPost) ---
+    /** Bar rows observed this frame (vanilla ones included — they occupy rows too). */
+    private static int barsThisFrame;
+    /** Skinned bars collapsed into the overflow counter this frame. */
+    private static int hiddenThisFrame;
+    /** Y of the overflow counter row (= the row the first hidden bar would have taken). */
+    private static int overflowRowY;
 
     private static final class BarState {
         String theme;
@@ -147,6 +170,8 @@ public final class BossbarSkin {
         long lastSeenMillis;
         long nameFlashStartMillis;
         long lastNameChangeMillis;
+        /** Last fill-lerp step (A10 time-based smoothing); 0 = fresh entrance. */
+        long lastLerpMillis;
         /** Name-change detection: string compared only when the component REFERENCE changes. */
         @Nullable
         Component lastNameComponent;
@@ -173,6 +198,7 @@ public final class BossbarSkin {
             this.lastActualProgress = -1.0F;
             this.damageStartMillis = 0L;
             this.flashStartMillis = 0L;
+            this.lastLerpMillis = 0L;
         }
 
         float entranceProgress(long now) {
@@ -196,33 +222,29 @@ public final class BossbarSkin {
     }
 
     /**
-     * Y of the next free bossbar slot: below the last bar (or reserved overlay row) rendered
-     * within the last ~250 ms, or the vanilla top anchor (12) when nothing is showing. Used
-     * by the day-timer layer and the announcement sweep so they never overlap real bars.
+     * Y of the next free bossbar slot: below the last bar (or the A10 overflow counter row)
+     * rendered within the last ~250 ms, or the vanilla top anchor (12) when nothing is
+     * showing. Used by the announcement sweep so it never overlaps real bars. (A7: the day
+     * timer left the top stack for its slot above the hotbar — the old
+     * {@code reserveOverlayRow} hand-shake is gone with it.)
      */
     public static int nextFreeBarY() {
         return Util.getMillis() - lastBarSeenMillis < 250L ? observedBarsBottom : 12;
     }
 
     /**
-     * Reserves a row of the top-center overlay stack ({@code DayTimerLayer} calls this after
-     * drawing, BEFORE the announcement layer renders — see the registration order in
-     * {@code EclipseGuiLayers}) so later {@link #nextFreeBarY()} readers stack below it.
-     */
-    public static void reserveOverlayRow(int bottomY) {
-        lastBarSeenMillis = Util.getMillis();
-        observedBarsBottom = Math.max(observedBarsBottom, bottomY);
-    }
-
-    /**
      * Fresh stacking geometry at the top of every GUI frame: the old wall-clock reset
      * (25 ms without a bar event) never fires above 40 fps, so {@code observedBarsBottom}
      * stuck at its historical max until ALL bars vanished. The bar events below re-stack
-     * it each frame before the timer/announcement layers read it.
+     * it each frame before the announcement layer reads it. Also resets the A10 bar-cap
+     * counters (re-filled by this frame's bar events, drawn from {@link #onRenderGuiPost}).
      */
     @SubscribeEvent
     static void onRenderGuiPre(RenderGuiEvent.Pre event) {
         observedBarsBottom = 12;
+        barsThisFrame = 0;
+        hiddenThisFrame = 0;
+        overflowRowY = 12;
     }
 
     @SubscribeEvent
@@ -230,6 +252,7 @@ public final class BossbarSkin {
         long now = Util.getMillis();
         // Track stacking geometry for ALL bars (vanilla ones included) before any matching.
         lastBarSeenMillis = now;
+        barsThisFrame++;
 
         LerpingBossEvent bar = event.getBossEvent();
         BarState state = SKINNED.get(bar.getId());
@@ -279,21 +302,43 @@ public final class BossbarSkin {
             }
         }
         state.lastActualProgress = actual;
+        // A10 smoother fill lerp: frame-time-based exponential ease-out toward the actual
+        // progress (the old ±0.05/frame clamp moved at constant speed and sped up with fps).
+        long stepMillis = state.lastLerpMillis == 0L ? 50L : Math.min(200L, now - state.lastLerpMillis);
+        state.lastLerpMillis = now;
         if (state.displayedProgress < 0.0F) {
             state.displayedProgress = actual;
         } else {
-            state.displayedProgress += Mth.clamp(actual - state.displayedProgress, -LERP_PER_FRAME, LERP_PER_FRAME);
+            float catchUp = 1.0F - (float) Math.exp(-stepMillis / FILL_LERP_TAU_MILLIS);
+            state.displayedProgress += (actual - state.displayedProgress) * catchUp;
         }
         // Trailing damage ghost: hold briefly, then drain toward the lerped fill.
         if (state.ghostProgress > state.displayedProgress) {
             if (now - state.damageStartMillis > GHOST_HOLD_MILLIS) {
-                state.ghostProgress = Math.max(state.displayedProgress, state.ghostProgress - GHOST_DRAIN_PER_FRAME);
+                state.ghostProgress = Math.max(state.displayedProgress,
+                        state.ghostProgress - GHOST_DRAIN_PER_SECOND * stepMillis / 1_000.0F);
             }
         } else {
             state.ghostProgress = state.displayedProgress;
         }
         state.lastColor = bar.getColor();
         state.lastOverlay = bar.getOverlay();
+
+        // A10 bar cap ("zu viele bossbars"): rows beyond MAX_VISIBLE_BARS collapse into one
+        // "+N more" counter row (drawn from onRenderGuiPost, after all bar events counted).
+        // The bookkeeping above stays warm so an un-hidden bar resumes with a current fill.
+        if (barsThisFrame > MAX_VISIBLE_BARS) {
+            event.setCanceled(true);
+            event.setIncrement(0); // hidden rows collapse — the stack stays compact
+            if (hiddenThisFrame == 0) {
+                overflowRowY = event.getY();
+                // Reserve the counter row so the announcement sweep stacks below it.
+                observedBarsBottom = Math.max(observedBarsBottom, event.getY() + OVERFLOW_ROW_HEIGHT);
+            }
+            hiddenThisFrame++;
+            state.lastX = Integer.MIN_VALUE; // a cap-hidden bar leaves no exit ghost
+            return;
+        }
 
         if (Minecraft.getInstance().options.hideGui) {
             // F1: the BarState above stays warm so displayedProgress doesn't jump when the
@@ -333,6 +378,10 @@ public final class BossbarSkin {
         float entrance = state.entranceProgress(now);
         float damageFlash = reduced || state.damageStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.damageStartMillis) / (float) DAMAGE_FLASH_MILLIS, 0.0F, 1.0F);
+        // A10: the frame hairline glows ONLY off damage events (no idle breathing) — a
+        // slower ease-out than the white flash, so the hit reads without strobing.
+        float damageGlow = reduced || state.damageStartMillis == 0L ? 0.0F
+                : Mth.clamp(1.0F - (now - state.damageStartMillis) / (float) DAMAGE_GLOW_MILLIS, 0.0F, 1.0F);
         if (!reduced && damageFlash > 0.0F) {
             // Deterministic micro-shake: two incommensurate sines, decaying with the flash.
             x += Math.round(Mth.sin(now * 0.09F) * SHAKE_PX * damageFlash);
@@ -341,23 +390,30 @@ public final class BossbarSkin {
         float nameFlash = state.nameFlashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.nameFlashStartMillis) / (float) NAME_FLASH_MILLIS, 0.0F, 1.0F);
         drawBar(guiGraphics, x, y, state.theme, state.displayedProgress, state.ghostProgress,
-                glowAlpha, name, alpha, barColor, overlay, entrance, damageFlash, nameFlash, now);
+                glowAlpha, name, alpha, barColor, overlay, entrance, damageFlash, damageGlow,
+                nameFlash, now);
     }
 
     /**
-     * Exit state machine: tracked bars that stopped firing events within the last
-     * {@value #EXIT_MILLIS} ms (after a {@value #EXIT_GRACE_MILLIS} ms grace so low fps never
-     * false-triggers) are redrawn from cached geometry as a fading, slightly rising ghost.
-     * Skipped under F1, cutscene HUD suppression, the minimal-strip fallback and
-     * {@code reducedFx} (exit snaps).
+     * Post pass, two jobs: (1) the A10 overflow counter row — "+N more" under the visible
+     * stack whenever the bar cap collapsed rows this frame (drawn in every skin mode; the
+     * bars are hidden regardless); (2) the exit state machine — tracked bars that stopped
+     * firing events within the last {@value #EXIT_MILLIS} ms (after a
+     * {@value #EXIT_GRACE_MILLIS} ms grace so low fps never false-triggers) are redrawn
+     * from cached geometry as a fading, slightly rising ghost. Ghosts are skipped under
+     * the minimal-strip fallback and {@code reducedFx} (exit snaps); everything is skipped
+     * under F1 and cutscene HUD suppression.
      */
     @SubscribeEvent
     static void onRenderGuiPost(RenderGuiEvent.Post event) {
-        if (SKINNED.isEmpty() || EclipseClientConfig.reducedFx() || !EclipseClientConfig.showBossbarSkin()) {
-            return;
-        }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.options.hideGui || CameraDirector.isHudSuppressed()) {
+            return;
+        }
+        if (hiddenThisFrame > 0) {
+            drawOverflowRow(event.getGuiGraphics(), minecraft, hiddenThisFrame);
+        }
+        if (SKINNED.isEmpty() || EclipseClientConfig.reducedFx() || !EclipseClientConfig.showBossbarSkin()) {
             return;
         }
         long now = Util.getMillis();
@@ -373,13 +429,23 @@ public final class BossbarSkin {
             int rise = Math.round(4.0F * (1.0F - fade));
             drawBar(event.getGuiGraphics(), state.lastX, state.lastY - rise, state.theme,
                     state.displayedProgress, state.displayedProgress, 0.0F, state.lastNameComponent,
-                    0.9F * fade * fade, state.lastColor, state.lastOverlay, 1.0F, 0.0F, 0.0F, now);
+                    0.9F * fade * fade, state.lastColor, state.lastOverlay, 1.0F, 0.0F, 0.0F, 0.0F, now);
         }
+    }
+
+    /** A10 overflow counter: a quiet DIM "+N more" line where the first hidden bar would sit. */
+    private static void drawOverflowRow(GuiGraphics guiGraphics, Minecraft minecraft, int hidden) {
+        Component label = EclipseLang.tr("gui.eclipse.bossbar.more", hidden);
+        int width = minecraft.font.width(label);
+        int x = (guiGraphics.guiWidth() - width) / 2;
+        // Same subtle scrim treatment as the in-band name line, for guiScale-2/3 legibility.
+        guiGraphics.fill(x - 3, overflowRowY - 1, x + width + 3, overflowRowY + 9, 0x66000000);
+        guiGraphics.drawString(minecraft.font, label, x, overflowRowY, EclipseUiTheme.DIM);
     }
 
     /**
      * Shared skinned-bar body, also used by {@link AnnouncementOverlay}'s client-local sweep:
-     * track, lerped fill, scrolling energy overlay, chrome (ORNATE frame / SLIM strip),
+     * track, lerped fill, A10 fill dressing, chrome (ORNATE frame / SLIM strip),
      * leading-edge glow and the in-band name line. {@code alpha} scales the whole bar (the
      * announcement sweep's fade-out); real bars pass {@code 1}. Sweeps have no backing
      * {@code BossEvent}, so this variant carries no color/overlay telegraphs.
@@ -398,19 +464,21 @@ public final class BossbarSkin {
             float progress, float glowAlpha, Component name, float alpha,
             @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay) {
         drawBar(guiGraphics, x, y, theme, progress, progress, glowAlpha, name, alpha, barColor, overlay,
-                1.0F, 0.0F, 1.0F, Util.getMillis());
+                1.0F, 0.0F, 0.0F, 1.0F, Util.getMillis());
     }
 
     /**
      * The one master renderer behind every skinned look. {@code entrance} 0..1 drives the
      * drop-in (y offset, alpha ramp, L→R fill wipe), {@code damageFlash} 0..1 whitens the
-     * fill, {@code nameFlash} 0..1 lerps the name {@code DIM → TEXT}. {@code ghostProgress}
-     * ≥ {@code progress} draws the trailing damage segment between the two.
+     * fill, {@code damageGlow} 0..1 drives the A10 post-hit hairline glow (the only frame
+     * "pulse" left), {@code nameFlash} 0..1 lerps the name {@code DIM → TEXT}.
+     * {@code ghostProgress} ≥ {@code progress} draws the trailing damage segment between
+     * the two.
      */
     private static void drawBar(GuiGraphics guiGraphics, int x, int y, String theme,
             float progress, float ghostProgress, float glowAlpha, @Nullable Component name, float alpha,
             @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay,
-            float entrance, float damageFlash, float nameFlash, long now) {
+            float entrance, float damageFlash, float damageGlow, float nameFlash, long now) {
         float ease = easeOutCubic(entrance);
         y += Math.round(-6.0F * (1.0F - ease));
         alpha = Mth.clamp(alpha, 0.0F, 1.0F) * ease;
@@ -437,10 +505,10 @@ public final class BossbarSkin {
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
         if (slim) {
             drawSlimBody(guiGraphics, x, y, fillY, theme, fillWidth, ghostWidth, tint, damageFlash,
-                    alpha, bossTheme, now);
+                    damageGlow, alpha, bossTheme, now);
         } else {
             drawOrnateBody(guiGraphics, x, y, fillY, theme, fillWidth, ghostWidth,
-                    tintRed, tintGreen, tintBlue, damageFlash, alpha, bossTheme, now);
+                    tintRed, tintGreen, tintBlue, damageFlash, damageGlow, alpha, bossTheme, now);
         }
         // Phase notches: a thin dark tick at every notch fraction of the fill window.
         int notches = notchCount(overlay);
@@ -466,10 +534,10 @@ public final class BossbarSkin {
         drawNameBand(guiGraphics, x, fillY, name, alpha, nameFlash);
     }
 
-    /** ORNATE body: textured track/fill/scroll, damage ghost, themed frame, boss breathing. */
+    /** ORNATE body: textured track/fill, quiet fill dressing, damage ghost, themed frame. */
     private static void drawOrnateBody(GuiGraphics guiGraphics, int x, int y, int fillY, String theme,
             int fillWidth, int ghostWidth, float tintRed, float tintGreen, float tintBlue,
-            float damageFlash, float alpha, boolean bossTheme, long now) {
+            float damageFlash, float damageGlow, float alpha, boolean bossTheme, long now) {
         // Empty track: the fill strip darkened to a faint violet bed.
         guiGraphics.setColor(0.28F, 0.22F, 0.36F, 0.85F * alpha);
         guiGraphics.blit(FILL, x, fillY, FILL_WIDTH, FILL_HEIGHT, 0.0F, 0.0F, 512, 32, 512, 32);
@@ -480,20 +548,14 @@ public final class BossbarSkin {
                 int frame = (int) ((now / ANIM_FRAME_MILLIS) % 4L);
                 guiGraphics.blit(FILL_ANIM, x, fillY, fillWidth, FILL_HEIGHT, 0.0F, frame * 32.0F,
                         Math.round(512.0F * fillWidth / FILL_WIDTH), 32, 512, 128);
-                drawScrollOverlay(guiGraphics, x, fillY, fillWidth, 12L);
             } else {
                 guiGraphics.blit(FILL, x, fillY, fillWidth, FILL_HEIGHT, 0.0F, 0.0F,
                         Math.round(512.0F * fillWidth / FILL_WIDTH), 32, 512, 32);
-                drawScrollOverlay(guiGraphics, x, fillY, fillWidth, 12L);
-                if (!EclipseClientConfig.reducedFx()) {
-                    // Procedural fill_anim fallback: second energy pass at half speed.
-                    guiGraphics.setColor(tintRed, tintGreen, tintBlue, 0.45F * alpha);
-                    drawScrollOverlay(guiGraphics, x, fillY, fillWidth, 24L);
-                }
             }
         }
         // fill()-based passes below carry their own alpha — reset the shader tint first.
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        drawFillDressing(guiGraphics, x, fillY, fillWidth, alpha, now);
         drawGhostSegment(guiGraphics, x, fillY, fillWidth, ghostWidth, alpha);
         if (damageFlash > 0.0F && fillWidth > 0) {
             guiGraphics.fill(x, fillY, x + fillWidth, fillY + FILL_HEIGHT,
@@ -504,18 +566,18 @@ public final class BossbarSkin {
         guiGraphics.blit(frameTexture(theme), x + FRAME_OFFSET_X, y + FRAME_OFFSET_Y,
                 FRAME_WIDTH, FRAME_HEIGHT, 0.0F, 0.0F, 512, 64, 512, 64);
         guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        if (bossTheme && !EclipseClientConfig.reducedFx()) {
-            float breathe = 0.22F + 0.16F * Mth.sin(now * (Mth.TWO_PI / BREATHE_PERIOD_MILLIS));
+        if (bossTheme && damageGlow > 0.0F && !EclipseClientConfig.reducedFx()) {
+            // A10: no idle breathing — the outer hairline only glows after a hit, fading ~1 s.
             drawFrameOutline(guiGraphics, x + FRAME_OFFSET_X - 1, y + FRAME_OFFSET_Y - 1,
                     FRAME_WIDTH + 2, FRAME_HEIGHT + 2,
-                    ((int) (breathe * alpha * 255.0F) << 24) | (EclipseUiTheme.DANGER & 0xFFFFFF));
+                    ((int) (0.38F * damageGlow * alpha * 255.0F) << 24) | (EclipseUiTheme.DANGER & 0xFFFFFF));
         }
     }
 
     /** SLIM body (§3.5): frameless rounded Quiet-Eclipse strip rendered from pure fills. */
     private static void drawSlimBody(GuiGraphics guiGraphics, int x, int y, int fillY, String theme,
-            int fillWidth, int ghostWidth, int bossTint, float damageFlash, float alpha,
-            boolean bossTheme, long now) {
+            int fillWidth, int ghostWidth, int bossTint, float damageFlash, float damageGlow,
+            float alpha, boolean bossTheme, long now) {
         int accent = bossTheme ? bossTint : switch (theme) {
             case S2CBossbarStylePayload.THEME_GOAL -> 0x9AF0E0;
             case S2CBossbarStylePayload.THEME_BOSS -> EclipseUiTheme.DANGER & 0xFFFFFF;
@@ -523,32 +585,49 @@ public final class BossbarSkin {
         };
         int fillRgb = lerpRgb(accent, 0xFFFFFF, damageFlash);
         int bedColor = ((int) (0.88F * alpha * 255.0F) << 24) | 0x140A24;
-        // Rounded bed (1px cut corners) + hairline outline that breathes on boss bars.
+        // Rounded bed (1px cut corners) + the steady EclipseUiTheme panel hairline. A10:
+        // the outline no longer breathes — it only warms toward the accent after a hit.
         fillRounded(guiGraphics, x, fillY, FILL_WIDTH, FILL_HEIGHT, bedColor);
-        float outlineAlpha = alpha;
         int outlineRgb = EclipseUiTheme.HAIRLINE & 0xFFFFFF;
-        if (bossTheme && !EclipseClientConfig.reducedFx()) {
-            outlineAlpha = alpha * (0.55F + 0.45F * (0.5F + 0.5F * Mth.sin(now * (Mth.TWO_PI / BREATHE_PERIOD_MILLIS))));
-            outlineRgb = lerpRgb(outlineRgb, accent, 0.6F);
+        if (bossTheme && damageGlow > 0.0F && !EclipseClientConfig.reducedFx()) {
+            outlineRgb = lerpRgb(outlineRgb, accent, 0.6F * damageGlow);
         }
         drawFrameOutline(guiGraphics, x - 1, fillY - 1, FILL_WIDTH + 2, FILL_HEIGHT + 2,
-                ((int) (outlineAlpha * 255.0F) << 24) | outlineRgb);
+                ((int) (alpha * 255.0F) << 24) | outlineRgb);
         if (fillWidth > 0) {
             fillRounded(guiGraphics, x, fillY, fillWidth, FILL_HEIGHT,
                     ((int) (alpha * 255.0F) << 24) | fillRgb);
-            // Scroll energy on top of the flat fill (kept subtle for the quiet look).
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 0.5F * alpha);
-            drawScrollOverlay(guiGraphics, x, fillY, fillWidth, 12L);
-            if (!EclipseClientConfig.reducedFx()) {
-                guiGraphics.setColor(1.0F, 1.0F, 1.0F, 0.25F * alpha);
-                drawScrollOverlay(guiGraphics, x, fillY, fillWidth, 24L);
-            }
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+            drawFillDressing(guiGraphics, x, fillY, fillWidth, alpha, now);
         }
         drawGhostSegment(guiGraphics, x, fillY, fillWidth, ghostWidth, alpha);
         if (damageFlash > 0.0F && fillWidth > 0) {
             guiGraphics.fill(x, fillY, x + fillWidth, fillY + FILL_HEIGHT,
                     ((int) (0.55F * damageFlash * alpha * 255.0F) << 24) | 0xFFFFFF);
+        }
+    }
+
+    /**
+     * A10 fill dressing — replaces the v3 scrolling color sweep. Static edge treatment
+     * (1px top highlight, 1px bottom shade — a quiet scanline read that keeps the fill
+     * dimensional) plus a single 1px highlight column scanning the filled width every
+     * {@value #SCAN_PERIOD_MILLIS} ms. {@code reducedFx} keeps the edges, drops the scan.
+     */
+    private static void drawFillDressing(GuiGraphics guiGraphics, int x, int fillY, int fillWidth,
+            float alpha, long now) {
+        if (fillWidth <= 0) {
+            return;
+        }
+        guiGraphics.fill(x, fillY, x + fillWidth, fillY + 1,
+                ((int) (0.14F * alpha * 255.0F) << 24) | 0xFFFFFF);
+        guiGraphics.fill(x, fillY + FILL_HEIGHT - 1, x + fillWidth, fillY + FILL_HEIGHT,
+                ((int) (0.30F * alpha * 255.0F) << 24) | 0x0A0512);
+        if (EclipseClientConfig.reducedFx()) {
+            return;
+        }
+        int scanX = x + (int) (now % SCAN_PERIOD_MILLIS * FILL_WIDTH / SCAN_PERIOD_MILLIS);
+        if (scanX < x + fillWidth) {
+            guiGraphics.fill(scanX, fillY, scanX + 1, fillY + FILL_HEIGHT,
+                    ((int) (0.22F * alpha * 255.0F) << 24) | 0xFFFFFF);
         }
     }
 
@@ -578,21 +657,6 @@ public final class BossbarSkin {
                 ((int) (0.4F * alpha * 255.0F) << 24));
         int rgb = lerpRgb(EclipseUiTheme.DIM & 0xFFFFFF, EclipseUiTheme.TEXT & 0xFFFFFF, nameFlash);
         guiGraphics.drawString(minecraft.font, name, textX, textY, (alphaByte << 24) | rgb);
-    }
-
-    /** Scrolling energy streaks clipped to the filled width; segments avoid UV wrap-around. */
-    private static void drawScrollOverlay(GuiGraphics guiGraphics, int x, int fillY, int fillWidth,
-            long millisPerPx) {
-        // 2 texels per logical px -> the 256px texture repeats every SCROLL_PERIOD logical px.
-        int scroll = (int) ((Util.getMillis() / millisPerPx) % SCROLL_PERIOD);
-        int drawn = 0;
-        while (drawn < fillWidth) {
-            int phase = (scroll + drawn) % SCROLL_PERIOD;
-            int segment = Math.min(SCROLL_PERIOD - phase, fillWidth - drawn);
-            guiGraphics.blit(SCROLL, x + drawn, fillY, segment, FILL_HEIGHT,
-                    phase * 2.0F, 0.0F, segment * 2, 32, 256, 32);
-            drawn += segment;
-        }
     }
 
     /**

@@ -57,10 +57,13 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CSkillTreePayload.TYPE, S2CSkillTreePayload.STREAM_CODEC, EclipsePayloads::handleSkillTree);
         registrar.playToClient(S2CFogStormPayload.TYPE, S2CFogStormPayload.STREAM_CODEC, EclipsePayloads::handleFogStorm);
         registrar.playToClient(S2CStructureRiftPayload.TYPE, S2CStructureRiftPayload.STREAM_CODEC, EclipsePayloads::handleStructureRift);
+        registrar.playToClient(S2CRebirthStatePayload.TYPE, S2CRebirthStatePayload.STREAM_CODEC, EclipsePayloads::handleRebirthState);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
+        registrar.playToServer(C2SRebirthPayload.TYPE, C2SRebirthPayload.STREAM_CODEC, EclipsePayloads::handleRebirthRequest);
         registrar.playToServer(C2SSkillNodeBuyPayload.TYPE, C2SSkillNodeBuyPayload.STREAM_CODEC, EclipsePayloads::handleSkillNodeBuy);
         registrar.playToServer(C2SModlistPayload.TYPE, C2SModlistPayload.STREAM_CODEC, EclipsePayloads::handleModlist);
         registrar.playToServer(C2SCutsceneStatePayload.TYPE, C2SCutsceneStatePayload.STREAM_CODEC, EclipsePayloads::handleCutsceneState);
+        registrar.playToServer(C2SCutsceneReadyPayload.TYPE, C2SCutsceneReadyPayload.STREAM_CODEC, EclipsePayloads::handleCutsceneReady);
         registrar.playToServer(C2SConfigEditPayload.TYPE, C2SConfigEditPayload.STREAM_CODEC, EclipsePayloads::handleConfigEdit);
     }
 
@@ -221,6 +224,13 @@ public final class EclipsePayloads {
         }
     }
 
+    /** Chunk-preload readiness ACK (C6); watchdog re-arm lives in {@code cutscene.CutsceneService}. */
+    private static void handleCutsceneReady(C2SCutsceneReadyPayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.cutscene.CutsceneService.handleClientReady(payload, player);
+        }
+    }
+
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleOpenGoalEditor(S2COpenGoalEditorPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.devtools.client.GoalEditorScreen.open(payload.daysJson());
@@ -295,6 +305,7 @@ public final class EclipsePayloads {
         ClientStateCache.sidebarPersonalsTotal = payload.personalsTotal();
         ClientStateCache.sidebarBuffIds = payload.buffIds();
         ClientStateCache.sidebarShards = payload.shards();
+        ClientStateCache.eventStarted = payload.eventStarted();
     }
 
     private static void handleGhostReveal(S2CGhostRevealPayload payload, IPayloadContext context) {
@@ -310,6 +321,19 @@ public final class EclipsePayloads {
     private static void handleSkillNodeBuy(C2SSkillNodeBuyPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             dev.projecteclipse.eclipse.skills.SkillService.handleNodeBuy(payload, player);
+        }
+    }
+
+    private static void handleRebirthState(S2CRebirthStatePayload payload, IPayloadContext context) {
+        ClientStateCache.rebirthCount = payload.count();
+        ClientStateCache.rebirthNextCostShards = payload.nextCostShards();
+        ClientStateCache.rebirthLevelCostMultiplier = payload.levelCostMultiplier();
+    }
+
+    /** D11 rebirth request; ALL validation lives in {@code rebirth.RebirthService}. */
+    private static void handleRebirthRequest(C2SRebirthPayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            dev.projecteclipse.eclipse.rebirth.RebirthService.handleRebirthRequest(player);
         }
     }
 
@@ -334,7 +358,7 @@ public final class EclipsePayloads {
         if (event.getEntity() instanceof ServerPlayer player) {
             sendArtifactState(player, false);
             PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player));
-            PacketDistributor.sendToPlayer(player, S2CMilestonesPayload.current());
+            PacketDistributor.sendToPlayer(player, S2CMilestonesPayload.current(player.server));
             dev.projecteclipse.eclipse.timeline.TimelineService.syncTo(player);
             dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
             dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);

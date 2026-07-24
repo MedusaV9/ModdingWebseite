@@ -132,7 +132,9 @@ public final class AnnouncementService {
      * Altar level poll: {@code AltarBlockEntity} and {@code /eclipse altar set} both write
      * {@link EclipseWorldState#setAltarLevel} without any event, so change detection lives
      * here. Level gains announce each milestone + its new unlock keys; lowering re-baselines
-     * silently (keys were removed, not added). Both directions refresh the timeline.
+     * silently (keys were removed, not added). Both directions refresh the timeline AND the
+     * trimmed milestone ladder (A5: {@code S2CMilestonesPayload} only carries levels up to
+     * {@code altarLevel + 1}, so every level change must re-send it).
      */
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
@@ -155,6 +157,8 @@ public final class AnnouncementService {
         }
         lastAltarLevel = altarLevel;
         TimelineService.syncAll(server);
+        PacketDistributor.sendToAllPlayers(
+                dev.projecteclipse.eclipse.network.S2CMilestonesPayload.current(server));
     }
 
     /** Announces every unlock key present now but missing from the last snapshot. */
@@ -184,12 +188,20 @@ public final class AnnouncementService {
      * The typewriter subtitle of a day, matching {@link TimelineService#dayTitleKey}: the
      * {@code days.json} plan's literal {@code subtitle} when configured (the plan's day is
      * re-checked because {@code EclipseConfig.day} clamps out-of-range days), else the
-     * generic lang-key fallback.
+     * generic lang-key fallback. A5-extra: swaps to the plan's {@code subtitleDone} once
+     * {@link DayTextConditions#isDone} holds — beaten content is not re-advertised.
      */
     private static String daySubtitleKey(int day, ServerPlayer player) {
         EclipseConfig.DayPlan plan = EclipseConfig.day(day);
-        return plan.day() == day && !plan.localizedSubtitle().isBlank()
-                ? LangService.pick(plan.localizedSubtitle(), player)
+        if (plan.day() != day) {
+            return "announce.eclipse.day.generic.sub";
+        }
+        Localized subtitle = !plan.localizedSubtitleDone().isBlank()
+                && DayTextConditions.isDone(player.server, day)
+                ? plan.localizedSubtitleDone()
+                : plan.localizedSubtitle();
+        return !subtitle.isBlank()
+                ? LangService.pick(subtitle, player)
                 : "announce.eclipse.day.generic.sub";
     }
 }

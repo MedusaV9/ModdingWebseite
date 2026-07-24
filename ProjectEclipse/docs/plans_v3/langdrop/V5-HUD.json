@@ -1,0 +1,12 @@
+{
+  "en": {
+    "gui.eclipse.bossbar.more": "+%s more",
+    "sidebar.eclipse.day": "Day %s",
+    "gui.eclipse.settings.option.day_timer.tip": "Show the real-time day countdown above the hotbar."
+  },
+  "de": {
+    "gui.eclipse.bossbar.more": "+%s weitere",
+    "sidebar.eclipse.day": "Tag %s",
+    "gui.eclipse.settings.option.day_timer.tip": "Zeigt den Echtzeit-Tages-Countdown über der Hotbar."
+  }
+}

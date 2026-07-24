@@ -139,7 +139,9 @@ public final class SkillConfig {
             float questMain,
             float questSide,
             float questPersonal,
-            Map<String, Float> dailyCaps) {
+            Map<String, Float> dailyCaps,
+            boolean gatePreEvent,
+            boolean gateEventDimensions) {
 
         public float dailyCap(String source) {
             Float cap = dailyCaps.get(source);
@@ -201,10 +203,15 @@ public final class SkillConfig {
     public static Data parse(JsonObject root) {
         JsonObject curve = obj(root, "curve");
         SkillCurve.Params params = new SkillCurve.Params(
-                asDouble(curve, "baseCost", 20.0D),
-                asDouble(curve, "exponent", 1.3D),
+                asDouble(curve, "baseCost", 150.0D),
+                asDouble(curve, "exponent", 1.55D),
                 (int) asDouble(curve, "softcapLevel", 50.0D),
                 asDouble(curve, "softcapMult", 2.0D));
+
+        JsonObject gates = obj(root, "gates");
+        boolean gatePreEvent = !gates.has("preEvent") || gates.get("preEvent").getAsBoolean();
+        boolean gateEventDimensions = !gates.has("eventDimensions")
+                || gates.get("eventDimensions").getAsBoolean();
 
         JsonObject proc = obj(root, "procFeedback");
         String procSound = proc.has("sound") ? proc.get("sound").getAsString() : "eclipse:skill.proc";
@@ -229,8 +236,8 @@ public final class SkillConfig {
                 table(xp, "craft", 0.5F),
                 table(xp, "smelt", 1.0F),
                 table(xp, "advancements", 50.0F),
-                asFloat(xp, "exploreChunk", 5.0F),
-                asFloat(xp, "visitNewBiome", 40.0F),
+                asFloat(xp, "exploreChunk", 2.0F),
+                asFloat(xp, "visitNewBiome", 15.0F),
                 asFloat(xp, "trade", 10.0F),
                 asFloat(xp, "breed", 6.0F),
                 asFloat(xp, "altarDepositPerValuePoint", 2.0F),
@@ -239,7 +246,9 @@ public final class SkillConfig {
                 asFloat(xp, "questMain", 0.0F),
                 asFloat(xp, "questSide", 0.0F),
                 asFloat(xp, "questPersonal", 0.0F),
-                Map.copyOf(caps));
+                Map.copyOf(caps),
+                gatePreEvent,
+                gateEventDimensions);
     }
 
     private static JsonObject obj(JsonObject parent, String key) {
@@ -280,7 +289,15 @@ public final class SkillConfig {
         JsonObject doc = new JsonObject();
         doc.addProperty("curve", "xpForLevel(n)=C(n)-C(n-1), C(L)=baseCost*L^(exponent+1)/(exponent+1); "
                 + "past softcapLevel each level costs softcapMult x the raw increment. "
-                + "Defaults hit C(12)=2639 (~L12 after 4h at ~660 XP/h) and C(50)=70296.");
+                + "v5 retune (D2): baseCost 150 / exponent 1.55 price C(5)=3564, C(7)=8405, "
+                + "C(12)=33225 - early levels take ~x10 the old grind, a 5-minute level 7 is impossible.");
+        doc.addProperty("gates", "D2 XP pacing: preEvent = action XP off until the start event completes; "
+                + "eventDimensions = action XP off in limbo/minigame/xbox dimensions. Reward sources "
+                + "(quest/altar/advancement/death/admin/collection/contract) always pay.");
+        doc.addProperty("_migration_v5", "Existing skills.json files are never rewritten (loadOrCreate). "
+                + "For live saves: delete this file (or manually set curve.baseCost=150, curve.exponent=1.55, "
+                + "xp.exploreChunk=2, xp.visitNewBiome=15, dailyCaps.explore=800 and add the gates block), "
+                + "then run /eclipse reload.");
         doc.addProperty("xp", "Earn values per action. Sub-tables (mine/kill/craft/smelt/advancements) "
                 + "resolve exact id -> first #tag in file order -> default. Fractions allowed "
                 + "(remainder carried per player). death is the only negative entry and skips all "
@@ -299,11 +316,16 @@ public final class SkillConfig {
         root.add("_doc", doc);
 
         JsonObject curve = new JsonObject();
-        curve.addProperty("baseCost", 20);
-        curve.addProperty("exponent", 1.3D);
+        curve.addProperty("baseCost", 150);
+        curve.addProperty("exponent", 1.55D);
         curve.addProperty("softcapLevel", 50);
         curve.addProperty("softcapMult", 2.0D);
         root.add("curve", curve);
+
+        JsonObject gates = new JsonObject();
+        gates.addProperty("preEvent", true);
+        gates.addProperty("eventDimensions", true);
+        root.add("gates", gates);
 
         JsonObject proc = new JsonObject();
         proc.addProperty("sound", "eclipse:skill.proc");
@@ -374,8 +396,8 @@ public final class SkillConfig {
         kill.addProperty("#eclipse:glitched", 60);
         xp.add("kill", kill);
 
-        xp.addProperty("exploreChunk", 5);
-        xp.addProperty("visitNewBiome", 40);
+        xp.addProperty("exploreChunk", 2);
+        xp.addProperty("visitNewBiome", 15);
 
         JsonObject craft = new JsonObject();
         craft.addProperty("default", 0.5D);
@@ -424,7 +446,7 @@ public final class SkillConfig {
         JsonObject caps = new JsonObject();
         caps.addProperty("mine", 3000);
         caps.addProperty("kill", 3000);
-        caps.addProperty("explore", 2000);
+        caps.addProperty("explore", 800);
         caps.addProperty("craft", 1000);
         caps.addProperty("smelt", 1000);
         caps.addProperty("trade", 500);

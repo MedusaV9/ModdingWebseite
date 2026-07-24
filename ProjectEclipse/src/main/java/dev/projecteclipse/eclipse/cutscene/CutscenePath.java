@@ -42,6 +42,12 @@ import com.google.gson.JsonParser;
  *   <li>{@code enabled} — config-level default switch. The world-scoped runtime toggle is
  *       {@code EclipseWorldState.disabledCutscenes} (see {@code /eclipse cutscene
  *       enable|disable}).</li>
+ *   <li>{@code showOwnBody} (optional, default {@code false}; plans_v5 C6) — whether the
+ *       watching player's OWN model stays visible during the flight. Default off: the
+ *       camera director cancels the local player render, so possessed-camera shots never
+ *       show the watcher's body floating in frame. Shots that deliberately frame the
+ *       watcher (the ship deck flyaround, the finale descent — both lookAt the player)
+ *       author {@code true}.</li>
  *   <li>{@code events} — timed side effects fired client-side by the camera director.
  *       Types: {@code "sound"} (id = sound event id), {@code "caption"} (id = lang key,
  *       {@code data = "<subtitle|title|whisper>[,durationTicks]"}), {@code "shake"}
@@ -63,6 +69,7 @@ public record CutscenePath(
         String dimension,
         boolean letterbox,
         boolean hideHud,
+        boolean showOwnBody,
         int durationTicks,
         List<Keyframe> keyframes,
         List<PathEvent> events,
@@ -148,20 +155,20 @@ public record CutscenePath(
 
     public CutscenePath withKeyframes(List<Keyframe> newKeyframes) {
         return new CutscenePath(this.id, this.enabled, this.allowSkip, this.interpolation, this.anchor,
-                this.dimension, this.letterbox, this.hideHud, this.durationTicks, newKeyframes,
-                this.events, this.params);
+                this.dimension, this.letterbox, this.hideHud, this.showOwnBody, this.durationTicks,
+                newKeyframes, this.events, this.params);
     }
 
     public CutscenePath withAllowSkip(boolean newAllowSkip) {
         return new CutscenePath(this.id, this.enabled, newAllowSkip, this.interpolation, this.anchor,
-                this.dimension, this.letterbox, this.hideHud, this.durationTicks, this.keyframes,
-                this.events, this.params);
+                this.dimension, this.letterbox, this.hideHud, this.showOwnBody, this.durationTicks,
+                this.keyframes, this.events, this.params);
     }
 
     public CutscenePath withEnabled(boolean newEnabled) {
         return new CutscenePath(this.id, newEnabled, this.allowSkip, this.interpolation, this.anchor,
-                this.dimension, this.letterbox, this.hideHud, this.durationTicks, this.keyframes,
-                this.events, this.params);
+                this.dimension, this.letterbox, this.hideHud, this.showOwnBody, this.durationTicks,
+                this.keyframes, this.events, this.params);
     }
 
     // --- JSON ---
@@ -211,6 +218,7 @@ public record CutscenePath(
                 obj.has("dimension") ? obj.get("dimension").getAsString() : "minecraft:overworld",
                 !obj.has("letterbox") || obj.get("letterbox").getAsBoolean(),
                 !obj.has("hideHud") || obj.get("hideHud").getAsBoolean(),
+                obj.has("showOwnBody") && obj.get("showOwnBody").getAsBoolean(),
                 obj.has("durationTicks") ? obj.get("durationTicks").getAsInt() : 100,
                 keyframes,
                 events,
@@ -256,6 +264,7 @@ public record CutscenePath(
         obj.addProperty("dimension", this.dimension);
         obj.addProperty("letterbox", this.letterbox);
         obj.addProperty("hideHud", this.hideHud);
+        obj.addProperty("showOwnBody", this.showOwnBody);
         obj.addProperty("durationTicks", this.durationTicks);
         JsonArray keyframeArray = new JsonArray(this.keyframes.size());
         for (Keyframe kf : this.keyframes) {

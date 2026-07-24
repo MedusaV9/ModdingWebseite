@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
@@ -172,7 +173,7 @@ public final class WandPowers {
         celebrationBurst(player.serverLevel(), player.position().add(0.0D, 1.0D, 0.0D));
         player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.9F, 1.3F);
-        player.sendSystemMessage(Component.translatable("wand.eclipse.msg.path_chosen",
+        player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.path_chosen",
                 Component.translatable(chosen.langKey())));
     }
 
@@ -227,7 +228,7 @@ public final class WandPowers {
         serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.9F, 0.8F);
         WandPath path = WandSoulbind.pathOf(stack);
-        player.sendSystemMessage(Component.translatable("wand.eclipse.msg.levelup", level,
+        player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.levelup", level,
                 Component.translatable(path.powerLangKey(level - 1))));
     }
 

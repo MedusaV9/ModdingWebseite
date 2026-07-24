@@ -40,13 +40,21 @@ public final class UnlockSync {
     /** Last broadcast unlocked-key set; {@code null} = nothing broadcast yet. Server thread only. */
     private static Set<String> lastKeys;
     private static List<String> lastLockedNamespaces;
+    private static List<String> lastLockedIdGlobs;
 
     private UnlockSync() {}
 
-    /** Snapshot payload of the current unlock state (keys + locked ModGate namespaces). */
+    /**
+     * Snapshot payload of the current unlock state (keys + locked ModGate namespaces).
+     * Also unions {@link LandmarkDiscoveryService#discoveredKeys} ({@code landmark:<id>}
+     * — A6 map-discovery contract: same payload, no new type); discoveries push their own
+     * {@link #broadcastAll} so the 1 Hz poll below stays a pure {@code UnlockState} watch.
+     */
     public static S2CUnlockedKeysPayload payloadFor(MinecraftServer server) {
         Set<String> keys = UnlockState.unlockedKeys(server);
-        return new S2CUnlockedKeysPayload(List.copyOf(keys), lockedNamespaces(server));
+        List<String> merged = new ArrayList<>(keys);
+        merged.addAll(LandmarkDiscoveryService.discoveredKeys(server));
+        return new S2CUnlockedKeysPayload(merged, lockedNamespaces(server), lockedIdGlobs(server));
     }
 
     /** Sends the current snapshot to one player. */
@@ -77,17 +85,21 @@ public final class UnlockSync {
         }
         Set<String> keys = UnlockState.unlockedKeys(server);
         List<String> locked = lockedNamespaces(server);
-        if (keys.equals(lastKeys) && locked.equals(lastLockedNamespaces)) {
+        List<String> lockedGlobs = lockedIdGlobs(server);
+        if (keys.equals(lastKeys) && locked.equals(lastLockedNamespaces)
+                && lockedGlobs.equals(lastLockedIdGlobs)) {
             return;
         }
         boolean firstPoll = lastKeys == null;
         lastKeys = keys;
         lastLockedNamespaces = locked;
+        lastLockedIdGlobs = lockedGlobs;
         if (firstPoll) {
             return; // baseline capture at boot; login sends already covered anyone online
         }
-        EclipseMod.LOGGER.info("Unlock state changed ({} keys, {} locked namespaces) — broadcasting",
-                keys.size(), locked.size());
+        EclipseMod.LOGGER.info(
+                "Unlock state changed ({} keys, {} locked namespaces, {} locked id globs) — broadcasting",
+                keys.size(), locked.size(), lockedGlobs.size());
         broadcastAll(server);
     }
 
@@ -96,6 +108,7 @@ public final class UnlockSync {
     static void onServerStopped(ServerStoppedEvent event) {
         lastKeys = null;
         lastLockedNamespaces = null;
+        lastLockedIdGlobs = null;
     }
 
     private static List<String> lockedNamespaces(MinecraftServer server) {
@@ -103,6 +116,22 @@ public final class UnlockSync {
         for (String namespace : EclipseConfig.modGate().gatedNamespaces()) {
             if (ModGate.isNamespaceLocked(server, namespace)) {
                 locked.add(namespace);
+            }
+        }
+        return locked;
+    }
+
+    /**
+     * The {@code modgate_ids.json} glob rules whose unlock key is still locked (A16) —
+     * pre-filtered server-side exactly like {@link #lockedNamespaces} so the client needs
+     * no unlock-key knowledge; the EMI plugin hides matching stacks via
+     * {@code ClientUnlockCache.isIdLocked}.
+     */
+    private static List<String> lockedIdGlobs(MinecraftServer server) {
+        List<String> locked = new ArrayList<>();
+        for (ModGateIds.GateRule rule : ModGateIds.rules()) {
+            if (!UnlockState.isUnlocked(server, rule.unlockKey())) {
+                locked.add(rule.glob());
             }
         }
         return locked;

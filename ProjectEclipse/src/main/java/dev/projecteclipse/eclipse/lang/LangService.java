@@ -21,6 +21,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * when absent the player's vanilla {@code clientInformation().language()} is normalized to
  * {@code "en"} or {@code "de"}. P4 should call {@link #pick(Localized, ServerPlayer)} for every
  * per-player goal/title/subtitle line once {@code DayPlan} carries {@link Localized} fields.
+ * Lang-KEY-based server sends bake through {@link ServerLang} (Wave-5 A1), which resolves the
+ * per-player locale via {@link #locale(ServerPlayer)}.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class LangService {

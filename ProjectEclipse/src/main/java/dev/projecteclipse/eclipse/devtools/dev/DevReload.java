@@ -94,7 +94,7 @@ public final class DevReload {
         EclipseWorldState state = EclipseWorldState.get(server);
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
                 EclipseConfig.day(state.getDay()).goals()));
-        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current());
+        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current(server));
         CutsceneService.syncLibraryToAll(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             WorldStageService.syncStagesTo(player);

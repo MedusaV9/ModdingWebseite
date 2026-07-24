@@ -56,6 +56,18 @@ public final class EclipseLang {
             // /lang override like every other client-rendered surface. (Contract strings
             // ride gui.eclipse.contract.* — already covered by the gui prefix.)
             "wand.eclipse.",
+            // Wave-5 A1: cutscene/dawn captions (CaptionRenderer resolves through
+            // EclipseLang), xbox event lines and minigame lines. Prefix-audit note for the
+            // remaining families in assets/eclipse/lang/*.json: advancement./analytics./
+            // bootstrap./config./dev. eclipse keys render through vanilla surfaces or
+            // dev-command feedback (server-baked via lang.ServerLang), and biome./boss./
+            // bossbar./buff./award./command./dialogue./disconnect./enchantment./movement./
+            // name./quest. plus eclipse.contract./structure./xboxworld. have no
+            // EclipseLang.tr call sites today — server senders bake them per player via
+            // lang.ServerLang instead of growing these client tables.
+            "eclipse.caption.",
+            "eclipse.xbox.",
+            "eclipse.minigame.",
     };
 
     private static final Map<String, String> EN_US = new HashMap<>();
@@ -190,13 +202,19 @@ public final class EclipseLang {
         DE_DE.clear();
         mergeLocale(resourceManager, "en_us", EN_US);
         mergeLocale(resourceManager, "de_de", DE_DE);
+        // Regression canary: both counts at 0 means the resource predicate went dead again
+        // (Wave-5 A1 root cause) and every /lang override surface silently falls back to
+        // the vanilla language.
+        EclipseMod.LOGGER.debug("EclipseLang merged lang tables: en_us={} keys, de_de={} keys",
+                EN_US.size(), DE_DE.size());
     }
 
     private static void mergeLocale(ResourceManager resourceManager, String localeFile,
             Map<String, String> target) {
+        // Resource paths under listResourceStacks("lang", …) are the full "lang/<code>.json"
+        // path — an endsWith("/<code>") match never fires (the Wave-5 A1 dead-merge bug).
         Map<ResourceLocation, List<Resource>> stacks = resourceManager.listResourceStacks(
-                "lang", location -> location.getPath().endsWith("/" + localeFile)
-                        || location.getPath().equals(localeFile));
+                "lang", location -> location.getPath().equals("lang/" + localeFile + ".json"));
         for (Map.Entry<ResourceLocation, List<Resource>> entry : stacks.entrySet()) {
             for (Resource resource : entry.getValue()) {
                 try (var reader = resource.openAsReader()) {

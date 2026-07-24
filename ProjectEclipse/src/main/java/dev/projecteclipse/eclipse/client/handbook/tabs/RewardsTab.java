@@ -4,6 +4,7 @@ import java.util.List;
 
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.network.S2CMilestonesPayload;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,14 +18,15 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Rewards page, Quiet Eclipse v3 (plans_v3 P3 §3.1): the altar milestone ladder from
- * {@code ClientStateCache.milestones} as flat raised rows. Each row shows the level, its
- * state relative to {@code ClientStateCache.altarLevel} (sated / hungering / sealed — the
- * "hungering" next milestone keeps its 2px accent edge, sated states read in
- * {@link EclipseUiTheme#GOOD}), the offering costs as real item icons and the granted
- * unlock keys as short names. The B7 fix: the list now scrolls with the shared
- * {@link TabScrollbar} + vertical content drag, so the affordance is always visible;
- * presses are only consumed while something can actually scroll (B20 rule).
+ * Altar Offering page, Wave-5 A5 rework (was "Rewards"): instead of the full milestone
+ * ladder, the page shows ONLY what matters right now — the tier the altar is currently
+ * hungering for ({@code altarLevel + 1}, full costs as real item icons + granted unlock
+ * keys, 2px accent edge) and one anonymized "???" teaser row for the tier after it
+ * ({@link GlitchText}, no data — the server ships that entry as a data-free stub, see
+ * {@code S2CMilestonesPayload}). Beaten tiers are not re-advertised and future tiers
+ * never reach the client. With the ladder exhausted the page shows a single "sated"
+ * line. Scroll plumbing (shared {@link TabScrollbar} + drag, B7/B20 rules) is kept for
+ * the empty/none states and in case rows ever outgrow the panel.
  */
 @OnlyIn(Dist.CLIENT)
 public class RewardsTab extends HandbookTab {
@@ -62,14 +64,26 @@ public class RewardsTab extends HandbookTab {
             return;
         }
 
-        int altarLevel = ClientStateCache.altarLevel;
+        S2CMilestonesPayload.Entry target = currentTarget(milestones);
+        S2CMilestonesPayload.Entry teaser = teaser(milestones);
+        if (target == null && teaser == null) {
+            // Ladder exhausted: every demanded offering has been made.
+            int textY = y + 12;
+            for (var line : font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.complete"), width - 8)) {
+                guiGraphics.drawString(font, line, x + 4, textY, withAlpha(EclipseUiTheme.GOOD & 0xFFFFFF, alpha));
+                textY += 10;
+            }
+            return;
+        }
+
         guiGraphics.enableScissor(x, y, x + width, y + height);
         int rowY = y + 2 - (int) scrollAmount;
-        for (S2CMilestonesPayload.Entry milestone : milestones) {
-            if (rowY > y - ROW_HEIGHT && rowY < y + height) {
-                renderRow(guiGraphics, milestone, altarLevel, rowY, alpha);
-            }
+        if (target != null) {
+            renderTargetRow(guiGraphics, target, rowY, alpha);
             rowY += ROW_HEIGHT;
+        }
+        if (teaser != null) {
+            renderTeaserRow(guiGraphics, teaser, rowY, alpha);
         }
         guiGraphics.disableScissor();
 
@@ -78,29 +92,47 @@ public class RewardsTab extends HandbookTab {
         scrollbar.render(guiGraphics, scrollAmount, alpha);
     }
 
-    private void renderRow(GuiGraphics guiGraphics, S2CMilestonesPayload.Entry milestone, int altarLevel,
+    /**
+     * The tier the altar currently hungers for: the lowest revealed entry above
+     * {@code altarLevel}, or {@code null} while the client caches disagree for a beat
+     * (the server re-broadcasts the trimmed ladder within a second of a level change).
+     */
+    private static S2CMilestonesPayload.Entry currentTarget(List<S2CMilestonesPayload.Entry> milestones) {
+        S2CMilestonesPayload.Entry target = null;
+        for (S2CMilestonesPayload.Entry milestone : milestones) {
+            if (milestone.revealed() && milestone.level() > ClientStateCache.altarLevel
+                    && (target == null || milestone.level() < target.level())) {
+                target = milestone;
+            }
+        }
+        return target;
+    }
+
+    /** The anonymized next-tier stub the server ships alongside the target, or {@code null}. */
+    private static S2CMilestonesPayload.Entry teaser(List<S2CMilestonesPayload.Entry> milestones) {
+        for (S2CMilestonesPayload.Entry milestone : milestones) {
+            if (!milestone.revealed()) {
+                return milestone;
+            }
+        }
+        return null;
+    }
+
+    /** The hungering tier: full costs + grants, accent edge — the one actionable row. */
+    private void renderTargetRow(GuiGraphics guiGraphics, S2CMilestonesPayload.Entry milestone,
             int rowY, float alpha) {
-        boolean reached = milestone.level() <= altarLevel;
-        boolean current = milestone.level() == altarLevel + 1;
         int rowWidth = width - SCROLLBAR_INSET;
 
-        // Raised row card; the "hungering" (next) milestone keeps its accent edge.
         guiGraphics.fill(x, rowY, x + rowWidth, rowY + ROW_HEIGHT - 4,
                 EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, alpha));
-        if (current) {
-            guiGraphics.fill(x, rowY, x + 2, rowY + ROW_HEIGHT - 4, withAlpha(ACCENT_COLOR, alpha));
-        }
+        guiGraphics.fill(x, rowY, x + 2, rowY + ROW_HEIGHT - 4, withAlpha(ACCENT_COLOR, alpha));
 
-        int headerColor = reached ? ACCENT_COLOR : current ? TEXT_COLOR : DIM_COLOR;
         guiGraphics.drawString(font, EclipseLang.tr("gui.eclipse.handbook.rewards.level", milestone.level()),
-                x + 6, rowY + 4, withAlpha(headerColor, alpha));
+                x + 6, rowY + 4, withAlpha(TEXT_COLOR, alpha));
 
-        String stateKey = reached ? "gui.eclipse.handbook.rewards.reached"
-                : current ? "gui.eclipse.handbook.rewards.current" : "gui.eclipse.handbook.rewards.locked";
-        String state = EclipseLang.trString(stateKey);
-        int stateColor = reached ? EclipseUiTheme.GOOD & 0xFFFFFF : current ? ACCENT_COLOR : DIM_COLOR;
+        String state = EclipseLang.trString("gui.eclipse.handbook.rewards.current");
         guiGraphics.drawString(font, state, x + rowWidth - font.width(state) - 6, rowY + 4,
-                withAlpha(stateColor, alpha));
+                withAlpha(ACCENT_COLOR, alpha));
 
         // Offering costs as item icons with counts (icons skipped mid-crossfade: item
         // rendering ignores alpha and would burn opaque through the fade).
@@ -123,8 +155,28 @@ public class RewardsTab extends HandbookTab {
         if (grants.length() > 0) {
             String line = EclipseLang.trString("gui.eclipse.handbook.rewards.grants", grants.toString());
             guiGraphics.drawString(font, ellipsize(font, line, rowWidth - 12), x + 6, rowY + 33,
-                    withAlpha(reached ? TEXT_COLOR : DIM_COLOR, alpha));
+                    withAlpha(TEXT_COLOR, alpha));
         }
+    }
+
+    /** The "???" teaser: glitched header, sealed state, a single flavor line — no data. */
+    private void renderTeaserRow(GuiGraphics guiGraphics, S2CMilestonesPayload.Entry milestone,
+            int rowY, float alpha) {
+        int rowWidth = width - SCROLLBAR_INSET;
+
+        guiGraphics.fill(x, rowY, x + rowWidth, rowY + ROW_HEIGHT - 4,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, alpha));
+
+        guiGraphics.drawString(font, GlitchText.unknown(milestone.level()),
+                x + 6, rowY + 4, withAlpha(DIM_COLOR, alpha));
+
+        String state = EclipseLang.trString("gui.eclipse.handbook.rewards.locked");
+        guiGraphics.drawString(font, state, x + rowWidth - font.width(state) - 6, rowY + 4,
+                withAlpha(DIM_COLOR, alpha));
+
+        String flavor = EclipseLang.trString("gui.eclipse.handbook.rewards.tease");
+        guiGraphics.drawString(font, ellipsize(font, flavor, rowWidth - 12), x + 6, rowY + 17,
+                withAlpha(DIM_COLOR, alpha));
     }
 
     private void renderCosts(GuiGraphics guiGraphics, List<S2CMilestonesPayload.Cost> costs,
@@ -212,7 +264,9 @@ public class RewardsTab extends HandbookTab {
     }
 
     private int contentHeight() {
-        return ClientStateCache.milestones.size() * ROW_HEIGHT + 4;
+        List<S2CMilestonesPayload.Entry> milestones = ClientStateCache.milestones;
+        int rows = (currentTarget(milestones) != null ? 1 : 0) + (teaser(milestones) != null ? 1 : 0);
+        return rows * ROW_HEIGHT + 4;
     }
 
     private double maxScroll() {

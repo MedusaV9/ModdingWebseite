@@ -80,7 +80,10 @@ public final class SidebarSyncTests {
                             ids -> ids.stream().limit(32).toList()));
             helper.assertTrue(payload.buffIds().equals(expectedBuffs),
                     "buff ids come from the active timed-buff API");
-            helper.assertTrue(SidebarSyncService.PAYLOAD_SCHEMA_VERSION == 1,
+            helper.assertTrue(payload.eventStarted()
+                    == dev.projecteclipse.eclipse.start.StartState.eventStarted(server),
+                    "eventStarted mirrors the PLAN-A §0.1 server truth");
+            helper.assertTrue(SidebarSyncService.PAYLOAD_SCHEMA_VERSION == 2,
                     "sidebar payload schema revision is pinned");
             GameTestSupport.assertPayloadRoundTrip(
                     S2CSidebarStatePayload.STREAM_CODEC, payload);

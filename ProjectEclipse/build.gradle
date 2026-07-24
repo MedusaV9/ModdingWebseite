@@ -30,7 +30,7 @@ repositories {
     maven { url = "https://maven.maxhenkel.de/repository/public" }
     // Veil (foundry.veil) — see docs/ideas/02_veil_vfx.md §A
     maven { url = "https://maven.blamejared.com" }
-    // EMI's official Maven. The requested 1.1.18 NeoForge artifact is not mirrored by BlameJared.
+    // EMI's official Maven. The requested 1.1.24 NeoForge artifact is not mirrored by BlameJared.
     maven {
         name = 'TerraformersMC'
         url = 'https://maven.terraformersmc.com/releases/'
@@ -140,13 +140,15 @@ configurations {
 dependencies {
     compileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.20"
 
-    // EMI 1.1.18 — MIT, client recipe-viewer API used by the optional Eclipse EMI plugin.
+    // EMI 1.1.24 — MIT, client recipe-viewer API used by the optional Eclipse EMI plugin.
+    // Newest +1.21.1 neoforge build on the TerraformersMC maven (verified resolvable
+    // 2026-07: pom + api jar + runtime jar all present under 1.1.24+1.21.1).
     // Keep the small API classifier compile-only and embed the exact runtime artifact.
-    compileOnly "dev.emi:emi-neoforge:1.1.18+1.21.1:api"
-    jarJar(implementation("dev.emi:emi-neoforge:1.1.18+1.21.1")) {
+    compileOnly "dev.emi:emi-neoforge:1.1.24+1.21.1:api"
+    jarJar(implementation("dev.emi:emi-neoforge:1.1.24+1.21.1")) {
         version {
-            strictly "1.1.18+1.21.1"
-            prefer "1.1.18+1.21.1"
+            strictly "1.1.24+1.21.1"
+            prefer "1.1.24+1.21.1"
         }
     }
 

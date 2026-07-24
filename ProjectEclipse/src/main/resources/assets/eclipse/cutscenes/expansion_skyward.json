@@ -19,6 +19,7 @@
     { "t": 0.85, "type": "shake", "id": "", "data": "0.12,20" }
   ],
   "params": {
-    "_comment": "W7 expansion SKYWARD beat: player-anchored tilt from the watcher's own eyes up into the darkening sky while the eclipse grade ramps in. Bezier so the camera settles on the sky hold instead of overshooting. The follow-up shot is expansion_flyover."
+    "_comment": "W7 expansion SKYWARD beat: player-anchored tilt from the watcher's own eyes up into the darkening sky while the eclipse grade ramps in. Bezier so the camera settles on the sky hold instead of overshooting. The follow-up shot is expansion_flyover.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
   }
 }

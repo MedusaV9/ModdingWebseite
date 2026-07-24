@@ -34,9 +34,12 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Eclipse title screen v3 ({@code docs/plans_v3/P3_ui.md} §3.8, P3-W8): the v2 visuals (slow
- * cube map, drifting cloud layers, mouse parallax, wisps, vignette, logo flare) are kept
- * verbatim; the button block is rebuilt around the journey flow:
+ * Eclipse title screen v4 ({@code docs/plans_v3/P3_ui.md} §3.8, P3-W8; reworked by
+ * {@code docs/plans_v3/plans_v5/PLAN-A_client_ui.md} A3): a slow procedural eclipse cube map
+ * (seamless faces from {@code tools/art/gen_title_panorama.py}), wisps, vignette and logo
+ * flare — the v2/v3 drifting cloud/fog plates are gone (playtest item 16, "weird fog"), and
+ * the logo now ships true 8-bit alpha ({@code tools/art/fix_logo_alpha.py}) blended over the
+ * sky. The button block is built around the journey flow:
  * <ul>
  *   <li><b>"Reise beginnen"</b> (primary, accent pulse) appears whenever
  *       {@code eclipse-journey.toml} carries a parseable {@code activationIso}. Before that
@@ -47,6 +50,9 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       (Realms/Mods buttons never exist on this screen); {@code devUnlock=true} or the
  *       cached op flag restores them. The matrix is re-evaluated every tick, so hot config
  *       edits rebuild the menu live.</li>
+ *   <li><b>No settings entry</b> (playtest item 3): Eclipse settings are reachable only
+ *       in-game (pause menu via {@code PauseMenuHook}, artifact handbook tab). Options and
+ *       Credits share one half-width row above Quit.</li>
  * </ul>
  * The vanilla title screen is untouched — swap logic lives in {@link TitleScreenSwap}.
  */
@@ -57,13 +63,7 @@ public class EclipseTitleScreen extends Screen {
     private static final ResourceLocation LOGO = titleTexture("logo.png");
     private static final ResourceLocation FLARE = titleTexture("flare_sweep.png");
     private static final ResourceLocation WISP = titleTexture("wisp.png");
-    private static final ResourceLocation GEAR = titleTexture("gear.png");
     private static final ResourceLocation FALLBACK_BACKGROUND = titleTexture("background.png");
-    private static final ResourceLocation[] PARALLAX = {
-            titleTexture("parallax_far.png"),
-            titleTexture("parallax_mid.png"),
-            titleTexture("parallax_near.png")
-    };
 
     private static final CubeMap CUBE_MAP =
             new CubeMap(ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, PANORAMA_BASE_PATH));
@@ -75,8 +75,6 @@ public class EclipseTitleScreen extends Screen {
     private static final int LOGO_HEIGHT = 80;
     private static final int BACKGROUND_TEXTURE_WIDTH = 1024;
     private static final int BACKGROUND_TEXTURE_HEIGHT = 576;
-    private static final int PARALLAX_TEXTURE_WIDTH = 1024;
-    private static final int PARALLAX_TEXTURE_HEIGHT = 512;
     private static final int WISP_TEXTURE_SIZE = 32;
     private static final int FLARE_TEXTURE_WIDTH = 512;
     private static final int FLARE_TEXTURE_HEIGHT = 128;
@@ -87,6 +85,8 @@ public class EclipseTitleScreen extends Screen {
     private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 20;
     private static final int BUTTON_SPACING = 24;
+    /** Options/Credits share one row: two half-width buttons with a 4px gutter. */
+    private static final int HALF_BUTTON_WIDTH = (BUTTON_WIDTH - 4) / 2;
     private static final int MAX_WISPS = 40;
 
     /** Extra vertical lane under the journey button reserved for the DIM countdown line. */
@@ -157,21 +157,15 @@ public class EclipseTitleScreen extends Screen {
             y += BUTTON_SPACING;
         }
 
+        // A3 (playtest item 3): no Eclipse-settings entry on the title screen — settings
+        // live in-game only (pause menu + artifact). Options and Credits share one row.
         addRenderableWidget(Button.builder(Component.translatable("menu.options"),
                         button -> this.minecraft.setScreen(new OptionsScreen(this, this.minecraft.options)))
-                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(x, y, HALF_BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
-
-        addRenderableWidget(Button.builder(EclipseLang.tr("gui.eclipse.settings.title"),
-                        button -> this.minecraft.setScreen(new EclipseSettingsScreen(this)))
-                .bounds(x + BUTTON_WIDTH + 6, y, BUTTON_HEIGHT, BUTTON_HEIGHT)
-                .tooltip(Tooltip.create(EclipseLang.tr("gui.eclipse.settings.open")))
-                .build(builder -> new EclipseMenuButton(builder, GEAR, 48, 48)));
-        y += BUTTON_SPACING;
-
         addRenderableWidget(Button.builder(EclipseLang.tr("gui.eclipse.credits.title"),
                         button -> this.minecraft.setScreen(new CreditsScreen(this)))
-                .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(x + BUTTON_WIDTH - HALF_BUTTON_WIDTH, y, HALF_BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
         y += BUTTON_SPACING;
 
@@ -279,18 +273,9 @@ public class EclipseTitleScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        // A3 (playtest item 16): the drifting cloud/fog plates that used to render here
+        // are gone for good — the panorama sky stays clean; only wisp motes float on top.
         renderEclipseBackground(guiGraphics, partialTick);
-
-        float mouseParallaxX = EclipseClientConfig.reducedFx()
-                ? 0.0F
-                : Mth.clamp(mouseX / Math.max(1.0F, this.width) * 2.0F - 1.0F, -1.0F, 1.0F);
-        float mouseParallaxY = EclipseClientConfig.reducedFx()
-                ? 0.0F
-                : Mth.clamp(mouseY / Math.max(1.0F, this.height) * 2.0F - 1.0F, -1.0F, 1.0F);
-
-        renderParallaxLayer(guiGraphics, PARALLAX[0], mouseParallaxX, mouseParallaxY, 2.0F, 2.0F, 0.36F);
-        renderParallaxLayer(guiGraphics, PARALLAX[1], mouseParallaxX, mouseParallaxY, 4.0F, 5.0F, 0.48F);
-        renderParallaxLayer(guiGraphics, PARALLAX[2], mouseParallaxX, mouseParallaxY, 8.0F, 10.0F, 0.56F);
         renderWisps(guiGraphics, partialTick);
         renderVignette(guiGraphics);
         renderLogo(guiGraphics);
@@ -371,33 +356,6 @@ public class EclipseTitleScreen extends Screen {
         guiGraphics.blit(FALLBACK_BACKGROUND, 0, 0, this.width, this.height, 0.0F, 0.0F,
                 BACKGROUND_TEXTURE_WIDTH, BACKGROUND_TEXTURE_HEIGHT,
                 BACKGROUND_TEXTURE_WIDTH, BACKGROUND_TEXTURE_HEIGHT);
-    }
-
-    /**
-     * Repeats one transparent 2:1 cloud plate across the screen. Wall-clock drift gives
-     * the far/mid/near layers distinct speeds; the mouse shifts them oppositely by 2/4/8px.
-     */
-    private void renderParallaxLayer(GuiGraphics guiGraphics, ResourceLocation texture,
-            float mouseX, float mouseY, float mouseDepth, float speedPixelsPerSecond, float alpha) {
-        int margin = 12;
-        int tileWidth = this.width + margin * 2;
-        int tileHeight = this.height + margin * 2;
-        float seconds = EclipseClientConfig.reducedFx() ? 0.0F : Util.getMillis() / 1000.0F;
-        int drift = Mth.floor(seconds * speedPixelsPerSecond) % Math.max(1, tileWidth);
-        int parallaxX = -Math.round(mouseX * mouseDepth);
-        int parallaxY = -Math.round(mouseY * mouseDepth * 0.5F);
-        int firstX = -margin - drift + parallaxX;
-        int y = -margin + parallaxY;
-
-        RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        for (int i = 0; i < 3; i++) {
-            guiGraphics.blit(texture, firstX + i * tileWidth, y, tileWidth, tileHeight,
-                    0.0F, 0.0F, PARALLAX_TEXTURE_WIDTH, PARALLAX_TEXTURE_HEIGHT,
-                    PARALLAX_TEXTURE_WIDTH, PARALLAX_TEXTURE_HEIGHT);
-        }
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        RenderSystem.disableBlend();
     }
 
     private void spawnWisp() {
@@ -547,9 +505,13 @@ public class EclipseTitleScreen extends Screen {
      * Vanilla's {@link PanoramaRenderer} replaces a non-zero partial tick with real-time
      * delta internally, so scaling the argument cannot slow it down. This tiny subclass
      * keeps the same CubeMap/overlay pipeline but advances at 18% of vanilla's spin rate.
+     * The vanilla fog overlay plate is toned way down (A3, playtest item 16: it read as
+     * "weird fog" over the old flat cube) — just a whisper of it survives for depth.
      */
     private static final class SlowPanoramaRenderer extends PanoramaRenderer {
         private static final float SPIN_PER_REALTIME_TICK = 0.018F;
+        /** Vanilla draws its foggy overlay at full fade; A3 caps it at 0.2 (plan: <= 0.25). */
+        private static final float OVERLAY_ALPHA = 0.20F;
         private final CubeMap cubeMap;
         private float spin;
 
@@ -566,7 +528,7 @@ public class EclipseTitleScreen extends Screen {
                     * SPIN_PER_REALTIME_TICK, 360.0F);
             cubeMap.render(minecraft, 10.0F, -spin, fade);
             RenderSystem.enableBlend();
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, fade);
+            guiGraphics.setColor(1.0F, 1.0F, 1.0F, fade * OVERLAY_ALPHA);
             guiGraphics.blit(PanoramaRenderer.PANORAMA_OVERLAY, 0, 0, width, height,
                     0.0F, 0.0F, 16, 128, 16, 128);
             guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);

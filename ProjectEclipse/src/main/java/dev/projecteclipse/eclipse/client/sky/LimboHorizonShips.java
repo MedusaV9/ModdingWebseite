@@ -19,11 +19,18 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * IDEA-18 §2 — distant silhouette ships that vanish when observed. Two to three flat black
  * ship silhouettes (hull + masts from a static triangle table, plus one soul-green stern
- * lantern point) sit at fixed azimuths on the Limbo horizon at sky distance. The moment the
- * camera centers one ({@code dot(look, dirToShip)} past ~0.88), it fades out with a ONE-WAY
- * latch — once fully faded it holds invisible for 1200–2400 ticks, then re-seeds a new
- * azimuth from an {@code ECLIPSE_SEED}-derived hash of its sighting counter (deterministic;
- * no {@code level.random}, identical on every client).
+ * lantern point) ride the Limbo horizon at sky distance. The moment the camera centers one
+ * ({@code dot(look, dirToShip)} past ~0.88), it fades out with a ONE-WAY latch — once fully
+ * faded it holds invisible for 1200–2400 ticks, then re-seeds a new azimuth from an
+ * {@code ECLIPSE_SEED}-derived hash of its sighting counter (deterministic; no
+ * {@code level.random}, identical on every client).
+ *
+ * <p>PLAN-C C2 (sailing illusion, item 6): silhouettes are no longer pinned — each one
+ * materializes AHEAD (within ±{@code 60°} of the bow heading, +X) and slides slowly astern
+ * down its own side of the horizon over ~90 s, melting away near the stern and requeueing
+ * ahead. Together with C1's {@code VoyageOffset} caustic stream and the
+ * {@code LimboSpecialEffects} drift cues, the horizon itself appears to move past the
+ * anchored ship.</p>
  *
  * <p>Drawn from {@link LimboSpecialEffects#renderSky} inside the stars' no-fog window, so
  * the Iris guard and fog restore come for free. Purely cosmetic: no entities, no server
@@ -46,6 +53,12 @@ final class LimboHorizonShips {
     private static final float APPEAR_GAZE_GUARD = FADE_DOT_START - 0.06F;
     /** Silhouettes sit this far above the horizon plane (units on the sky sphere). */
     private static final float HORIZON_LIFT = 2.0F;
+    /** C2 sailing drift: silhouettes slide astern (bow +X → stern −X) over ~90 s. */
+    private static final float DRIFT_RAD_PER_TICK = (float) (Math.PI / 2400.0D);
+    /** Fresh silhouettes materialize within ±60° of the bow heading (+X). */
+    private static final float SPAWN_AHEAD_HALF_ARC = (float) Math.toRadians(60.0D);
+    /** Eased melt-away band before the stern; culled + requeued at a quarter of it. */
+    private static final float STERN_CULL_ARC = (float) Math.toRadians(22.0D);
 
     /**
      * Silhouette triangle table, ship-local units: pairs of (along, up) per vertex, three
@@ -80,6 +93,10 @@ final class LimboHorizonShips {
     /** Game time of the last (re-)appearance; drives the eased fade-in multiplier. */
     private static final long[] appearedAtGameTime = new long[SHIP_COUNT];
     private static final int[] sightings = new int[SHIP_COUNT];
+    /** C2: +1 drifts astern over the port side (+Z), −1 over starboard (−Z). */
+    private static final float[] driftSign = new float[SHIP_COUNT];
+    /** Game time the drift was last advanced (clamps lag spikes to ≤ 20 t of motion). */
+    private static long lastDriftGameTime = Long.MIN_VALUE;
     private static boolean seeded;
 
     private LimboHorizonShips() {}
@@ -90,14 +107,19 @@ final class LimboHorizonShips {
      * position-color shader to be active.
      */
     static void draw(Matrix4f pose, ClientLevel level, Camera camera) {
+        long gameTime = level.getGameTime();
         if (!seeded) {
             seeded = true;
+            lastDriftGameTime = gameTime;
             for (int i = 0; i < SHIP_COUNT; i++) {
                 reseed(i);
                 fade[i] = 1.0F;
             }
         }
-        long gameTime = level.getGameTime();
+        // C2 sailing drift: elapsed game time since the last frame, clamped so a lag spike
+        // (or a world swap rewinding game time) can never teleport a ship across the sky.
+        long driftTicks = Math.max(0L, Math.min(20L, gameTime - lastDriftGameTime));
+        lastDriftGameTime = gameTime;
         Vector3f look = camera.getLookVector();
 
         BufferBuilder builder = null;
@@ -118,6 +140,21 @@ final class LimboHorizonShips {
                 latched[i] = false;
                 fade[i] = 1.0F;
                 appearedAtGameTime[i] = gameTime;
+            }
+            // C2: slide astern down this ship's side of the horizon (sailing illusion).
+            if (driftTicks > 0L) {
+                azimuth[i] += driftSign[i] * DRIFT_RAD_PER_TICK * driftTicks;
+                refreshDirection(i);
+            }
+            float toStern = angleToStern(azimuth[i]);
+            if (toStern <= STERN_CULL_ARC * 0.25F) {
+                // Fully astern: hold invisible briefly, then materialize ahead again.
+                fade[i] = 0.0F;
+                latched[i] = true;
+                sightings[i]++;
+                reseedAtGameTime[i] = gameTime + 100
+                        + (int) (hash01(i * 197 + 31, sightings[i]) * 400.0D);
+                continue;
             }
             // One-way fade latch: alpha only ever falls while a sighting is in progress.
             float dot = look.x() * dirX[i] + look.y() * dirY[i] + look.z() * dirZ[i];
@@ -142,7 +179,9 @@ final class LimboHorizonShips {
             float appear = Mth.clamp((gameTime - appearedAtGameTime[i]) / (float) APPEAR_TICKS,
                     0.0F, 1.0F);
             appear = appear * appear * (3.0F - 2.0F * appear);
-            emitShip(builder, pose, i, fade[i] * appear);
+            // Eased melt-away toward the stern so a drifting silhouette never pops out.
+            float sternFade = smoothstep(STERN_CULL_ARC * 0.25F, STERN_CULL_ARC, toStern);
+            emitShip(builder, pose, i, fade[i] * appear * sternFade);
         }
         if (builder != null) {
             BufferUploader.drawWithShader(builder.buildOrThrow());
@@ -181,9 +220,19 @@ final class LimboHorizonShips {
         builder.addVertex(pose, x0, ly + LANTERN_HALF, z0).setColor(0.35F, 0.9F, 0.45F, lanternAlpha);
     }
 
-    /** New deterministic azimuth from the sighting counter; refreshes the cached direction. */
+    /**
+     * New deterministic azimuth from the sighting counter. C2: fresh silhouettes always
+     * materialize AHEAD — within ±60° of the bow heading (+X) — and then drift astern down
+     * the side of the horizon they seeded on ({@code driftSign}).
+     */
     private static void reseed(int i) {
-        azimuth[i] = (float) (hash01(i, sightings[i]) * Math.PI * 2.0D);
+        azimuth[i] = (float) ((hash01(i, sightings[i]) - 0.5D) * 2.0D * SPAWN_AHEAD_HALF_ARC);
+        driftSign[i] = Mth.sin(azimuth[i]) >= 0.0F ? 1.0F : -1.0F;
+        refreshDirection(i);
+    }
+
+    /** Refreshes the cached unit direction after the azimuth changed (reseed or drift). */
+    private static void refreshDirection(int i) {
         float cos = Mth.cos(azimuth[i]);
         float sin = Mth.sin(azimuth[i]);
         // Normalized direction to the (slightly lifted) silhouette center for the look-dot.
@@ -192,6 +241,17 @@ final class LimboHorizonShips {
         dirX[i] = cos * inv;
         dirY[i] = lift * inv;
         dirZ[i] = sin * inv;
+    }
+
+    /** Absolute angular distance from the given azimuth to the stern heading (π, −X). */
+    private static float angleToStern(float az) {
+        float d = (az - (float) Math.PI) % ((float) Math.PI * 2.0F);
+        if (d > (float) Math.PI) {
+            d -= (float) Math.PI * 2.0F;
+        } else if (d < -(float) Math.PI) {
+            d += (float) Math.PI * 2.0F;
+        }
+        return Math.abs(d);
     }
 
     /** Fixed-seed hash 0..1 (LimboSeascape.hash01 mixer; deterministic on every client). */

@@ -47,7 +47,8 @@ public final class SkillsApi {
 
     /** Level derived from lifetime XP (offline players included; 0 when unknown). */
     public static int getLevel(MinecraftServer server, UUID uuid) {
-        return SkillCurve.levelForXp(getTotalXp(server, uuid), SkillConfig.get().curve());
+        return SkillCurve.levelForXp(getTotalXp(server, uuid),
+                RebirthHooks.curveFor(server, uuid, SkillConfig.get().curve()));
     }
 
     public static long getTotalXp(MinecraftServer server, UUID uuid) {
@@ -74,6 +75,27 @@ public final class SkillsApi {
         int refund = SkillTree.totalCost(SkillTreeConfig.get().nodes(), entry.ownedNodes);
         entry.spentPoints = Math.max(0, entry.spentPoints - refund);
         entry.ownedNodes.clear();
+        state.setDirty();
+        SkillService.syncTo(player);
+    }
+
+    /**
+     * D11 rebirth reset helper (package-private by design — external callers go through
+     * {@code RebirthHooks.resetSkillProgression}): FULL progression wipe. Lifetime XP,
+     * remainder, owned nodes, spent/bonus points, daily-cap usage and {@code lastLevelSeen}
+     * all return to zero, so levels re-earned after a rebirth grant fresh points. The
+     * proc-message preference and the secret multiplier deliberately survive.
+     */
+    static void resetAllProgression(ServerPlayer player) {
+        SkillState state = SkillState.get(player.server);
+        SkillState.Entry entry = state.entry(player.getUUID());
+        entry.totalXp = 0L;
+        entry.xpRemainder = 0.0F;
+        entry.ownedNodes.clear();
+        entry.spentPoints = 0;
+        entry.bonusPoints = 0;
+        entry.lastLevelSeen = 0;
+        entry.capUsed.clear();
         state.setDirty();
         SkillService.syncTo(player);
     }

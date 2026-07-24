@@ -41,7 +41,7 @@ public final class ModGateIds {
 
     /** One compiled config entry, retained in file order for deterministic diagnostics. */
     public record GateRule(String glob, String unlockKey, String namespace, Pattern pathPattern) {
-        boolean matches(ResourceLocation id) {
+        public boolean matches(ResourceLocation id) {
             return namespace.equals(id.getNamespace()) && pathPattern.matcher(id.getPath()).matches();
         }
     }
@@ -123,25 +123,40 @@ public final class ModGateIds {
         }
     }
 
+    /**
+     * Compiles one {@code namespace:pathglob} entry into a rule; {@code null} when the glob
+     * is malformed or the unlock key is empty. Public because
+     * {@code client.progression.ClientUnlockCache} recompiles the server-synced locked
+     * globs with exactly these syntax/matching rules (A16 EMI gate fix) — keep the two
+     * sides byte-identical by construction.
+     */
+    public static GateRule compile(String rawGlob, String unlockKey) {
+        String glob = rawGlob.strip().toLowerCase(java.util.Locale.ROOT);
+        int colon = glob.indexOf(':');
+        if (colon <= 0 || colon != glob.lastIndexOf(':') || colon == glob.length() - 1
+                || !glob.substring(0, colon).matches("[a-z0-9_.-]+")
+                || !glob.substring(colon + 1).matches("[a-z0-9_./*?-]+")
+                || unlockKey.isEmpty()) {
+            return null;
+        }
+        String namespace = glob.substring(0, colon);
+        String pathGlob = glob.substring(colon + 1);
+        return new GateRule(glob, unlockKey, namespace, Pattern.compile(globToRegex(pathGlob)));
+    }
+
     private static List<GateRule> parse(JsonObject root) {
         if (!root.has("gatedIds") || !root.get("gatedIds").isJsonObject()) {
             return List.of();
         }
         List<GateRule> parsed = new ArrayList<>();
         for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("gatedIds").entrySet()) {
-            String glob = entry.getKey().strip().toLowerCase(java.util.Locale.ROOT);
-            String unlockKey = entry.getValue().getAsString().strip();
-            int colon = glob.indexOf(':');
-            if (colon <= 0 || colon != glob.lastIndexOf(':') || colon == glob.length() - 1
-                    || !glob.substring(0, colon).matches("[a-z0-9_.-]+")
-                    || !glob.substring(colon + 1).matches("[a-z0-9_./*?-]+")
-                    || unlockKey.isEmpty()) {
-                EclipseMod.LOGGER.warn("Ignoring invalid modgate_ids entry '{}': '{}'", glob, unlockKey);
+            GateRule rule = compile(entry.getKey(), entry.getValue().getAsString().strip());
+            if (rule == null) {
+                EclipseMod.LOGGER.warn("Ignoring invalid modgate_ids entry '{}': '{}'",
+                        entry.getKey(), entry.getValue().getAsString());
                 continue;
             }
-            String namespace = glob.substring(0, colon);
-            String pathGlob = glob.substring(colon + 1);
-            parsed.add(new GateRule(glob, unlockKey, namespace, Pattern.compile(globToRegex(pathGlob))));
+            parsed.add(rule);
         }
         return List.copyOf(parsed);
     }

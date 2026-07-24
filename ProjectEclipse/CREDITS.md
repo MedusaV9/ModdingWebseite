@@ -2,48 +2,29 @@
 
 ## Musik — Treblo-generierte Tracks (2026-07-24)
 
-Sechs Tracks wurden mit **Treblo (Sonauto) V3** über die offizielle API generiert
+Alle 15 Musik-Cues wurden mit **Treblo (Sonauto V3)** über die offizielle API generiert
 (Custom-Prompt-Design, style_scale/prompt_strength-Tuning, instrumental):
-`title_theme`, `limbo_ambience`, `boss_herald`, `boss_ferryman`, `wand_awakening`,
-`xbox_nostalgia`. Nachbearbeitung: Loudness-Normalisierung, Fade-in, OGG-Vorbis.
-Das API-Guthaben erlaubte 6 der 15 geplanten Generierungen; die übrigen Slots nutzen
-weiterhin die unten creditierten CC-BY-Tracks (teils neu zugeordnet:
-`eclipse_totality` ← Echoes of Time, `kill_contract` ← Volatile Reaction,
-`boss_rift_warden` ← Final Battle of the Dark Wizards, `day_final` ← Atlantean
-Twilight; `fog_storm`/`boss_fog_tyrant` sind gepitchte Aliasse).
+`title_theme`, `limbo_ambience`, `boss_herald`, `boss_ferryman`, `boss_rift_warden`,
+`boss_fog_tyrant`, `intro_storm`, `expansion_theme`, `eclipse_totality`, `fog_storm`,
+`kill_contract`, `wand_awakening`, `day_final`, `victory_theme`, `xbox_nostalgia`.
+Nachbearbeitung (`tools/music/treblo_generate.py` `postprocess()`):
+Loudness-Normalisierung auf −16 LUFS (Two-Pass loudnorm), Re-Encode als
+OGG Vorbis 48 kHz stereo (~q4/128 kbps, Step-down bei >2,5 MB), Nicht-Audio-Streams
+entfernt. Die früher als Platzhalter genutzten Kevin-MacLeod-CC-BY-Tracks und die
+gepitchten Aliasse (`fog_storm`/`boss_fog_tyrant`) werden nicht mehr ausgeliefert.
 
 ## Music
 
-All eight tracks are by **Kevin MacLeod** and were downloaded from
-[incompetech.com](https://incompetech.com). They are redistributed under
-[Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/).
-The mod copies are trimmed where noted, loudness-normalized to approximately -16 LUFS,
-faded for one second at each edge, and encoded as stereo OGG Vorbis.
+All 15 music cues in `assets/eclipse/sounds/music/` were **generated with Treblo
+(Sonauto V3)** through the official API for Eclipse Event (custom prompt design,
+instrumental). Post-processing via `tools/music/treblo_generate.py postprocess()`:
+two-pass loudness normalization to -16 LUFS, re-encoded to stereo OGG Vorbis at
+48 kHz (~q4/128 kbps, stepped down when a track exceeds the 2.5 MB budget), with all
+non-audio streams stripped. Shipped assets are checked by
+`tools/music/validate_oggs.py` (pure-Vorbis, ≤ 48 kHz, stereo, size budget).
 
-| Eclipse cue | Track / ISRC | Source (exact downloaded file) | Mod copy | License |
-|---|---|---|---|---|
-| `boss_ferryman` | “Final Battle of the Dark Wizards” / `USUAN1500085` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Final%20Battle%20of%20the%20Dark%20Wizards.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500085) | 03:00, 2,109,802 B; excerpt from 00:30 | CC BY 4.0 |
-| `boss_herald` | “Volatile Reaction” / `USUAN1400039` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400039) | 02:43, 1,895,245 B | CC BY 4.0 |
-| `limbo_ambience` | “Echoes of Time v2” / `USUAN1300030` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Echoes%20of%20Time%20v2.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300030) | 03:00, 2,157,957 B; opening excerpt | CC BY 4.0 |
-| `title_theme` | “Atlantean Twilight” / `USUAN1100322` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Atlantean%20Twilight.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100322) | 02:49, 1,999,372 B | CC BY 4.0 |
-| `expansion_theme` | “Enchanted Valley” / `USUAN1200093` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Enchanted%20Valley.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200093) | 01:30, 1,165,397 B; excerpt from 00:25 | CC BY 4.0 |
-| `intro_storm` | “Stormfront” / `USUAN1200043` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Stormfront.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200043) | 02:30, 2,016,591 B; excerpt from 00:30 | CC BY 4.0 |
-| `victory_theme` | “Ascending the Vale” / `USUAN1600064` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ascending%20the%20Vale.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600064) | 03:00, 2,063,594 B; opening excerpt | CC BY 4.0 |
-| `xbox_nostalgia` | “Dream Culture” / `USUAN1300046` | [MP3](https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dream%20Culture.mp3) · [track page](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300046) | 03:00, 2,024,259 B; opening excerpt | CC BY 4.0 |
-
-Attribution text requested by the artist:
-
-> “[Track title]” Kevin MacLeod (incompetech.com)  
-> Licensed under Creative Commons: By Attribution 4.0  
-> https://creativecommons.org/licenses/by/4.0/
-
-License snapshot checked **2026-07-23**:
-[Incompetech's Music FAQ](https://incompetech.com/music/royalty-free/faq.html) says the music
-may be used in video games with a discoverable credits screen, requires the attribution above,
-and permits chopping, splicing, compressing and otherwise changing the music. CC BY 4.0 grants
-worldwide permission to reproduce, share and adapt the material subject to attribution. The
-canonical full legal code is
-<https://creativecommons.org/licenses/by/4.0/legalcode.en>.
+Earlier builds shipped Kevin MacLeod (incompetech.com, CC BY 4.0) placeholder tracks
+for some cues; as of 2026-07-24 no third-party music is redistributed anymore.
 
 ## Classic textures
 
@@ -86,7 +67,7 @@ bundling decisions, external pack dependencies and source links belong to
 
 | Component | Bundled version | Author/project | License |
 |---|---|---|---|
-| EMI | 1.1.18+1.21.1 | [Emily Ploszaj / EMI](https://github.com/emilyploszaj/emi) | MIT |
+| EMI | 1.1.24+1.21.1 | [Emily Ploszaj / EMI](https://github.com/emilyploszaj/emi) | MIT |
 | Mouse Tweaks | 1.21-2.26.1-neoforge | [YaLTeR / Mouse Tweaks](https://github.com/YaLTeR/MouseTweaks) | BSD-3-Clause |
 | Veil | 4.3.0 | [FoundryMC / Veil](https://github.com/FoundryMC/Veil) | LGPL-3.0 |
 | GeckoLib | 4.9.2 | [GeckoLib](https://github.com/bernie-g/geckolib) | MIT |

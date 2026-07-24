@@ -42,8 +42,8 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  * same {@code x−1..x+17} hitbox as the vanilla slot hit test), and hotbar-swap/offhand
  * key presses are swallowed while a voided slot is hovered — the server sweep already
  * reverses every escape path; this layer just keeps the illusion airtight. Hovering the
- * voided region shows one small padlock + day hint anchored to the row edge (never a
- * per-slot item tooltip).</p>
+ * voided region shows one small padlock + a day-less "sealed" flavor line anchored to
+ * the row edge (never a per-slot item tooltip, never the unlock day — A11).</p>
  *
  * <p>When a payload unseals slots, the cover materializes away: staggered per column,
  * each cover fades out while insetting toward the slot center, with a brief accent ring
@@ -158,17 +158,17 @@ public final class InvLockOverlay {
     }
 
     /**
-     * One padlock + day hint panel anchored to the edge of the hovered voided row (per
-     * the plan: a row-edge affordance, never per-slot tooltips). Flips to the left edge
-     * when the right edge would clip the screen.
+     * One padlock + sealed-flavor panel anchored to the edge of the hovered voided row
+     * (per the plan: a row-edge affordance, never per-slot tooltips). Flips to the left
+     * edge when the right edge would clip the screen. Wave-5 A11: the line is DAY-LESS on
+     * purpose — the old "Sealed until day N" hint leaked the unlock schedule, so the
+     * unlock day the server still sends ({@code InvLockClientState.unlockDayFor}) is no
+     * longer displayed anywhere.
      */
     private static void drawRowEdgeHint(GuiGraphics guiGraphics, AbstractContainerScreen<?> screen,
             Slot hovered) {
         Font font = Minecraft.getInstance().font;
-        int day = InvLockClientState.unlockDayFor(hovered.getContainerSlot());
-        Component text = day > 0
-                ? EclipseLang.tr("gui.eclipse.invlock.sealed_until", day)
-                : EclipseLang.tr("gui.eclipse.invlock.sealed");
+        Component text = EclipseLang.tr("gui.eclipse.invlock.sealed");
         int textWidth = font.width(text);
         int height = 16;
         int width = 4 + 8 + 3 + textWidth + 4;

@@ -1,5 +1,8 @@
 package dev.projecteclipse.eclipse.music;
 
+import java.util.EnumMap;
+import java.util.EnumSet;
+
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
@@ -51,6 +54,10 @@ public final class MusicManager {
     private static final float FOG_STORM_DISARM = 0.15F;
     /** eclipse_totality rung threshold on {@link EclipseFxState#eclipseAmount}. */
     private static final float TOTALITY_THRESHOLD = 0.6F;
+    /** Manager-side ticks granted for the engine to accept a freshly played instance. */
+    private static final int START_GRACE_TICKS = 10;
+    /** Consecutive refused starts before a cue is given up (C19 anti-mute belt). */
+    private static final int FAILED_STARTS_LIMIT = 3;
 
     @Nullable
     private static CueSound current;
@@ -80,6 +87,16 @@ public final class MusicManager {
     @Nullable
     private static MusicCues lingerCue;
     private static int lingerTicksLeft;
+
+    /**
+     * C19 anti-mute belt: cues whose instances the engine repeatedly refuses to start (or
+     * culls before the fade-in completes, e.g. an unplayable asset) are latched here and
+     * excluded from selection. Without the latch a broken cue keeps {@code current}
+     * occupied forever, which keeps {@link net.minecraft.client.sounds.MusicManager}
+     * muted every tick — total silence instead of falling back to vanilla music.
+     */
+    private static final EnumSet<MusicCues> deadCues = EnumSet.noneOf(MusicCues.class);
+    private static final EnumMap<MusicCues, Integer> failedStarts = new EnumMap<>(MusicCues.class);
 
     private MusicManager() {}
 
@@ -146,13 +163,17 @@ public final class MusicManager {
         natural = applyLinger(natural);
 
         MusicCues desired = MusicConfig.enabled() ? (forcedCue != null ? forcedCue : natural) : null;
+        if (desired != null && deadCues.contains(desired)) {
+            desired = null;
+        }
         if (current == null || current.cue != desired) {
             transitionTo(minecraft, desired);
         }
 
         // Minecraft's scheduler may have started a track earlier in the same client tick.
-        // Stop it throughout both halves of our fade to guarantee no double-playing.
-        if (current != null || outgoing != null || desired != null) {
+        // Stop it throughout both halves of our fade to guarantee no double-playing. When no
+        // cue is active (nothing desired, nothing fading) vanilla music must keep running.
+        if (current != null || outgoing != null) {
             minecraft.getMusicManager().stopPlaying();
         }
     }
@@ -194,6 +215,8 @@ public final class MusicManager {
         fogStormArmed = false;
         lingerCue = null;
         lingerTicksLeft = 0;
+        deadCues.clear();
+        failedStarts.clear();
     }
 
     @Nullable
@@ -326,13 +349,42 @@ public final class MusicManager {
     }
 
     private static void cleanupFinished(Minecraft minecraft) {
-        if (outgoing != null && (outgoing.isStopped()
-                || outgoing.age > 10 && !minecraft.getSoundManager().isActive(outgoing))) {
-            outgoing = null;
+        if (outgoing != null) {
+            outgoing.managerAge++;
+            if (outgoing.isStopped() || outgoing.managerAge > START_GRACE_TICKS
+                    && !minecraft.getSoundManager().isActive(outgoing)) {
+                outgoing = null;
+            }
         }
-        if (current != null && (current.isStopped()
-                || current.age > 10 && !minecraft.getSoundManager().isActive(current))) {
-            current = null;
+        if (current != null) {
+            current.managerAge++;
+            // `age` only advances once the engine ticks a started instance, so it stays 0
+            // for a refused start; `managerAge` is manager-owned and always advances.
+            if (current.age == FADE_TICKS) {
+                failedStarts.remove(current.cue);
+            }
+            if (current.isStopped()) {
+                current = null;
+            } else if (current.managerAge > START_GRACE_TICKS
+                    && !minecraft.getSoundManager().isActive(current)) {
+                // The engine refused the start (age == 0) or culled the instance before its
+                // fade-in finished (unplayable stream). A natural end of a non-looping cue
+                // (large age) is NOT a failure.
+                if (current.age < FADE_TICKS) {
+                    noteFailedStart(current.cue);
+                }
+                current = null;
+            }
+        }
+    }
+
+    private static void noteFailedStart(MusicCues cue) {
+        int failures = failedStarts.merge(cue, 1, Integer::sum);
+        if (failures >= FAILED_STARTS_LIMIT && deadCues.add(cue)) {
+            EclipseMod.LOGGER.warn(
+                    "Music cue '{}' failed to start {} times (engine refused it or the asset "
+                            + "is unplayable) — giving it up so vanilla music can resume",
+                    cue.id(), failures);
         }
     }
 
@@ -353,6 +405,8 @@ public final class MusicManager {
         private int fade;
         private int fadeDirection = 1;
         private int age;
+        /** Ticks since the manager created the instance; advances even if the engine never accepts it. */
+        private int managerAge;
 
         CueSound(MusicCues cue) {
             super(cue.sound(), SoundSource.MUSIC, SoundInstance.createUnseededRandom());
@@ -361,6 +415,18 @@ public final class MusicManager {
             this.delay = 0;
             this.relative = true;
             this.volume = 0.0F;
+        }
+
+        /**
+         * THE C19 critical fix: the crossfade starts every cue at volume 0, and
+         * {@code SoundEngine.play} refuses to start any sound whose initial effective volume
+         * is zero unless it may start silent ("skipped playing sound …, volume was zero").
+         * Without this override no cue ever started, while the manager kept muting vanilla
+         * music — total silence. Vanilla's own fading sounds (biome ambience) do the same.
+         */
+        @Override
+        public boolean canStartSilent() {
+            return true;
         }
 
         @Override

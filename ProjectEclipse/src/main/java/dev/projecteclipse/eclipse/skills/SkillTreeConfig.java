@@ -20,10 +20,14 @@ import dev.projecteclipse.eclipse.core.config.Localized;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
- * Loader for {@code config/eclipse/skilltree.json} (R3, plan §2.3 node table): 25 nodes on a
- * 4-point spine plus three 7-node branches (hunt / delve / stride). Node effects are small,
- * incremental and never OP by design — every magnitude is a config value consumed by
- * {@link SkillPerks} / {@link SkillService}, so balance can be retuned live via
+ * Loader for {@code config/eclipse/skilltree.json} (R3, plan §2.3 node table; expanded by
+ * wave-5 A14): 60 nodes — the original 25 keystones (4-point spine + three 7-node
+ * branches: hunt / delve / stride) plus 35 incremental filler tiers threaded between them
+ * (fortune-echo, loot-luck, xp-gain %, mining pace, night stride, fall reduction, …).
+ * Every filler reuses an EXISTING {@link SkillPerks}/{@link SkillService} effect-type
+ * contract — no node ships an effect string the code does not implement. Node effects are
+ * small, incremental and never OP by design — every magnitude is a config value consumed
+ * by {@link SkillPerks} / {@link SkillService}, so balance can be retuned live via
  * {@code /eclipse reload}. The canonical serialized tree (not secret) ships to clients as
  * {@code S2CSkillTreePayload} for P3's GUI.
  */
@@ -211,8 +215,13 @@ public final class SkillTreeConfig {
                 + "(0.05 = 5%) except post_kill_absorption (hearts), no_fall_damage_below_blocks "
                 + "(blocks) and first_biome_bonus_xp (flat XP). All values are live-tunable; "
                 + "effect TYPE strings are code contracts (SkillPerks) - do not rename.");
-        doc.addProperty("balance", "Total cost 66 points = level 66 to complete everything. "
-                + "The four capstones add only 2-4% each; full completion sits beyond softcap 50.");
+        doc.addProperty("balance", "Total cost 147 points across 60 nodes = level 147 to complete "
+                + "everything. Filler tiers are deliberately tiny (1-5% each); the keystones keep "
+                + "their old values, so owning everything is a long-arc goal far beyond softcap 50.");
+        doc.addProperty("migration", "Existing skilltree.json files are NOT rewritten (loadOrCreate). "
+                + "To pick up the wave-5 60-node tree on a live save, delete config/eclipse/skilltree.json "
+                + "(or merge the new nodes manually) and run /eclipse reload. Old owned node ids are "
+                + "unchanged and stay owned.");
         root.add("_doc", doc);
 
         JsonObject branches = new JsonObject();
@@ -239,6 +248,27 @@ public final class SkillTreeConfig {
                 "Resonant", "Nachhallend",
                 "+2% skill XP from all sources.", "+2 % Skill-EP aus allen Quellen.",
                 "skill_xp_pct", 0.02F, 0, 0));
+        // Wave-5 A14 fillers: the xp-gain % family (small stacking tiers, existing contracts).
+        nodes.add(node("S5", "spine", 2, List.of("S2"),
+                "Keen Mind", "Wacher Geist",
+                "+3% vanilla XP from all sources.", "+3 % Vanilla-EP aus allen Quellen.",
+                "vanilla_xp_pct", 0.03F, 0, 0));
+        nodes.add(node("S9", "spine", 2, List.of("S5"),
+                "Bright Soul", "Helle Seele",
+                "+2% vanilla XP from all sources.", "+2 % Vanilla-EP aus allen Quellen.",
+                "vanilla_xp_pct", 0.02F, 0, 0));
+        nodes.add(node("S6", "spine", 2, List.of("S4"),
+                "Deep Attunement", "Tiefe Einstimmung",
+                "+3% skill XP from all sources.", "+3 % Skill-EP aus allen Quellen.",
+                "skill_xp_pct", 0.03F, 0, 0));
+        nodes.add(node("S7", "spine", 3, List.of("S6"),
+                "Fatewoven", "Schicksalsgewebt",
+                "+0.5% proc chance for all chance perks.", "+0,5 % Auslösechance für alle Zufalls-Perks.",
+                "proc_chance_add", 0.005F, 0, 0));
+        nodes.add(node("S8", "spine", 4, List.of("S7"),
+                "Umbral Resonance", "Umbrale Resonanz",
+                "+5% skill XP from all sources.", "+5 % Skill-EP aus allen Quellen.",
+                "skill_xp_pct", 0.05F, 0, 0));
 
         nodes.add(node("U1", "hunt", 1, List.of(),
                 "Night's Edge", "Klinge der Nacht",
@@ -270,6 +300,48 @@ public final class SkillTreeConfig {
                 "Quickened Edge", "Beschleunigte Klinge",
                 "+2% attack speed.", "+2 % Angriffsgeschwindigkeit.",
                 "attack_speed_pct", 0.02F, 0, 0));
+        // Wave-5 A14 fillers: night-damage, loot-luck, shard-sense and attack-speed tiers.
+        nodes.add(node("U8", "hunt", 1, List.of("U1"),
+                "Sharpened Fang", "Geschärfter Fang",
+                "+2% melee damage at night.", "+2 % Nahkampfschaden bei Nacht.",
+                "melee_damage_night_pct", 0.02F, 0, 0));
+        nodes.add(node("U9", "hunt", 2, List.of("U8"),
+                "Night Predator", "Nachtjäger",
+                "+2% melee damage at night.", "+2 % Nahkampfschaden bei Nacht.",
+                "melee_damage_night_pct", 0.02F, 0, 0));
+        nodes.add(node("U10", "hunt", 1, List.of("U2"),
+                "Loot Luck I", "Beuteglück I",
+                "+1% chance for double mob drops.", "+1 % Chance auf doppelte Monster-Beute.",
+                "double_mob_drop_chance", 0.01F, 0, 0));
+        nodes.add(node("U11", "hunt", 2, List.of("U10"),
+                "Loot Luck II", "Beuteglück II",
+                "+1% chance for double mob drops.", "+1 % Chance auf doppelte Monster-Beute.",
+                "double_mob_drop_chance", 0.01F, 0, 0));
+        nodes.add(node("U12", "hunt", 3, List.of("U11"),
+                "Loot Luck III", "Beuteglück III",
+                "+2% chance for double mob drops.", "+2 % Chance auf doppelte Monster-Beute.",
+                "double_mob_drop_chance", 0.02F, 0, 0));
+        nodes.add(node("U17", "hunt", 3, List.of("U12"),
+                "Reaper's Due", "Schnitters Lohn",
+                "+1% chance for double mob drops.", "+1 % Chance auf doppelte Monster-Beute.",
+                "double_mob_drop_chance", 0.01F, 0, 0));
+        nodes.add(node("U13", "hunt", 2, List.of("U4"),
+                "Splinter Sense", "Splittergespür",
+                "+1% chance for a bonus umbral shard on night kills.",
+                "+1 % Chance auf einen Bonus-Umbralsplitter bei Nacht-Kills.",
+                "bonus_shard_on_night_kill", 0.01F, 0, 0));
+        nodes.add(node("U14", "hunt", 2, List.of("U5"),
+                "Quick Wrists", "Flinke Handgelenke",
+                "+1% attack speed.", "+1 % Angriffsgeschwindigkeit.",
+                "attack_speed_pct", 0.01F, 0, 0));
+        nodes.add(node("U15", "hunt", 3, List.of("U14"),
+                "Battle Flow", "Kampffluss",
+                "+2% attack speed.", "+2 % Angriffsgeschwindigkeit.",
+                "attack_speed_pct", 0.02F, 0, 0));
+        nodes.add(node("U16", "hunt", 4, List.of("U6"),
+                "Night's Bounty", "Ernte der Nacht",
+                "+25% kill skill XP during night events.", "+25 % Kill-Skill-EP während Nachtereignissen.",
+                "night_event_kill_xp_pct", 0.25F, 0, 0));
 
         nodes.add(node("T1", "delve", 1, List.of(),
                 "Prospector", "Schürfer",
@@ -302,6 +374,51 @@ public final class SkillTreeConfig {
                 "Deep Rhythm", "Tiefer Rhythmus",
                 "+3% mining speed below Y=0.", "+3 % Abbautempo unter Y=0.",
                 "break_speed_below0_pct", 0.03F, 0, 0));
+        // Wave-5 A14 fillers: fortune-echo tiers, miner's pace (mining speed %), mine-XP,
+        // smelt and hunger tiers — all existing SkillPerks contracts.
+        nodes.add(node("T8", "delve", 2, List.of("T2"),
+                "Fortune's Echo II", "Echo des Glücks II",
+                "+1% chance to double natural ore drops.",
+                "+1 % Chance, natürliche Erz-Drops zu verdoppeln.",
+                "double_ore_drop_chance", 0.01F, 0, 0));
+        nodes.add(node("T9", "delve", 3, List.of("T8"),
+                "Fortune's Echo III", "Echo des Glücks III",
+                "+2% chance to double natural ore drops.",
+                "+2 % Chance, natürliche Erz-Drops zu verdoppeln.",
+                "double_ore_drop_chance", 0.02F, 0, 0));
+        nodes.add(node("T10", "delve", 1, List.of("T1"),
+                "Miner's Pace I", "Bergmannstempo I",
+                "+3% mining speed below Y=0.", "+3 % Abbautempo unter Y=0.",
+                "break_speed_below0_pct", 0.03F, 0, 0));
+        nodes.add(node("T11", "delve", 2, List.of("T10"),
+                "Miner's Pace II", "Bergmannstempo II",
+                "+3% mining speed below Y=0.", "+3 % Abbautempo unter Y=0.",
+                "break_speed_below0_pct", 0.03F, 0, 0));
+        nodes.add(node("T12", "delve", 3, List.of("T11"),
+                "Miner's Pace III", "Bergmannstempo III",
+                "+4% mining speed below Y=0.", "+4 % Abbautempo unter Y=0.",
+                "break_speed_below0_pct", 0.04F, 0, 0));
+        nodes.add(node("T13", "delve", 1, List.of("T1"),
+                "Ore Scholar", "Erzgelehrter",
+                "+5% mining skill XP.", "+5 % Bergbau-Skill-EP.",
+                "mine_skill_xp_pct", 0.05F, 0, 0));
+        nodes.add(node("T14", "delve", 2, List.of("T13"),
+                "Vein Scholar", "Adergelehrter",
+                "+5% mining skill XP.", "+5 % Bergbau-Skill-EP.",
+                "mine_skill_xp_pct", 0.05F, 0, 0));
+        nodes.add(node("T15", "delve", 2, List.of("T5"),
+                "Bellows Rhythm", "Blasebalg-Rhythmus",
+                "+3% chance for double smelting skill XP.", "+3 % Chance auf doppelte Schmelz-Skill-EP.",
+                "smelt_double_xp_chance", 0.03F, 0, 0));
+        nodes.add(node("T16", "delve", 2, List.of("T3"),
+                "Iron Stomach II", "Eiserner Magen II",
+                "-3% hunger drain.", "−3 % Hungerverbrauch.",
+                "hunger_drain_pct", -0.03F, 0, 0));
+        nodes.add(node("T17", "delve", 4, List.of("T6"),
+                "Earthen Bond II", "Erdenbund II",
+                "+1% chance for a bonus raw ore from natural ores.",
+                "+1 % Chance auf ein Bonus-Roherz aus natürlichen Erzen.",
+                "bonus_raw_ore_chance", 0.01F, 0, 0));
 
         nodes.add(node("V1", "stride", 1, List.of(),
                 "Islander", "Inselläufer",
@@ -332,6 +449,50 @@ public final class SkillTreeConfig {
                 "Surefooted", "Trittsicher",
                 "-4% fall damage.", "−4 % Fallschaden.",
                 "fall_damage_reduce_pct", 0.04F, 0, 0));
+        // Wave-5 A14 fillers: fall-reduction, explore-XP, movement (sprint-at-night /
+        // island stride) and safe-fall tiers. no_fall_damage_below_blocks SUMS with V4
+        // (SkillPerks.effect adds owned values), so V10 extends the safe window 6 -> 8.
+        nodes.add(node("V8", "stride", 1, List.of("V3"),
+                "Featherfall II", "Federfall II",
+                "-5% fall damage.", "−5 % Fallschaden.",
+                "fall_damage_reduce_pct", 0.05F, 0, 0));
+        nodes.add(node("V9", "stride", 2, List.of("V8"),
+                "Featherfall III", "Federfall III",
+                "-5% fall damage.", "−5 % Fallschaden.",
+                "fall_damage_reduce_pct", 0.05F, 0, 0));
+        nodes.add(node("V10", "stride", 3, List.of("V4"),
+                "Soft Landing II", "Sanfte Landung II",
+                "Safe falls extend by 2 more blocks.", "Sichere Stürze um 2 weitere Blöcke verlängert.",
+                "no_fall_damage_below_blocks", 2.0F, 0, 0));
+        nodes.add(node("V11", "stride", 2, List.of("V2"),
+                "Wayfarer II", "Wanderer II",
+                "+10% exploration skill XP.", "+10 % Erkundungs-Skill-EP.",
+                "explore_xp_pct", 0.10F, 0, 0));
+        nodes.add(node("V12", "stride", 3, List.of("V11"),
+                "Wayfarer III", "Wanderer III",
+                "+15% exploration skill XP.", "+15 % Erkundungs-Skill-EP.",
+                "explore_xp_pct", 0.15F, 0, 0));
+        nodes.add(node("V13", "stride", 2, List.of("V5"),
+                "Night Stride II", "Nachtschritt II",
+                "+1% movement speed at night.", "+1 % Bewegungstempo bei Nacht.",
+                "night_speed_pct", 0.01F, 0, 0));
+        nodes.add(node("V14", "stride", 3, List.of("V13"),
+                "Night Stride III", "Nachtschritt III",
+                "+2% movement speed at night.", "+2 % Bewegungstempo bei Nacht.",
+                "night_speed_pct", 0.02F, 0, 0));
+        nodes.add(node("V15", "stride", 1, List.of("V1"),
+                "Islander II", "Inselläufer II",
+                "+1% movement speed on the spawn island.", "+1 % Bewegungstempo auf der Spawn-Insel.",
+                "spawn_island_speed_pct", 0.01F, 0, 0));
+        nodes.add(node("V16", "stride", 4, List.of("V6"),
+                "Cartographer II", "Kartograf II",
+                "+50 bonus skill XP for each first biome visit.",
+                "+50 Bonus-Skill-EP für jeden Erstbesuch eines Bioms.",
+                "first_biome_bonus_xp", 50.0F, 0, 0));
+        nodes.add(node("V17", "stride", 2, List.of("V7"),
+                "Surefooted II", "Trittsicher II",
+                "-3% fall damage.", "−3 % Fallschaden.",
+                "fall_damage_reduce_pct", 0.03F, 0, 0));
 
         root.add("nodes", nodes);
         return root;

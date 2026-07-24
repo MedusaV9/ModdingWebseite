@@ -118,6 +118,20 @@ public final class OarAnimator {
         return tiltMode;
     }
 
+    /**
+     * C3 seat-side accessor: whether bench {@code benchIndex} sits portside. The ship
+     * seats {@code DeckhandEntity.BENCH_COUNT} rowers — the first half of the bench
+     * indices are portside ({@code -Z}, bench yaw 180), the second half starboard
+     * ({@code +Z}, yaw 0). {@code DeckhandRenderer} mirrors the port oar sweep from THIS
+     * (the seat assignment) instead of the live {@code yBodyRot}, so the mirror decision
+     * is immune to any rotation source by construction. Legacy entities without a bench
+     * ({@code -1}) return false — the renderer keeps its own fallback for those.
+     */
+    public static boolean isPortBench(int benchIndex) {
+        return benchIndex >= 0
+                && benchIndex < dev.projecteclipse.eclipse.entity.DeckhandEntity.BENCH_COUNT / 2;
+    }
+
     /** Discards resolvable listed displays; persists + returns the still-unresolved rest. */
     private static List<UUID> purgeListedDisplays(ServerLevel limbo) {
         EclipseWorldState state = EclipseWorldState.get(limbo.getServer());

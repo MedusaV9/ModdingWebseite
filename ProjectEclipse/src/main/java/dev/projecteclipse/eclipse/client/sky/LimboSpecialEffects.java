@@ -13,14 +13,17 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.material.FogType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -48,6 +51,23 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       ≤&nbsp;0.4 fading to zero at the tips, with a slow breathing pulse.</li>
  *   <li><b>No clouds</b>: cloud height stays {@code NaN} and {@link #renderClouds} reports
  *       handled so vanilla draws nothing.</li>
+ * </ul>
+ *
+ * <p>PLAN-C C2 overhaul (the "giant glitchy purple thing" fix):</p>
+ * <ul>
+ *   <li><b>Stable celestial disc</b>: the disc/aura direction is low-pass filtered and the
+ *       whole disc+aura+reflection group draws INSIDE the stars' no-fog window with the
+ *       depth test off — camera-relative at effectively infinite distance, fixed angular
+ *       size, no parallax jitter, no fog/horizon-plane pops.</li>
+ *   <li><b>Mirror-locked reflection</b>: the water reflection streak is derived from the
+ *       SAME angular direction as the disc, mirrored about the waterline plane
+ *       ({@link #clientWaterlineY}, the C1 {@code WaterlineY} seam) — disc and reflection
+ *       can never desynchronize; alpha fades with camera height, never with luminance.</li>
+ *   <li><b>Sailing cues</b>: a sparse client-side lane of mist bands + foam glints streams
+ *       astern past the hull ({@link #spawnDriftCues}, respects {@code reducedFx}), and
+ *       {@link LimboHorizonShips} silhouettes slide astern and respawn ahead — combined
+ *       with C1's {@code VoyageOffset} caustic stream, the world reads as moving around
+ *       the anchored ship.</li>
  * </ul>
  *
  * <p>The same zenith point feeds the {@code eclipse:limbo} post pipeline's {@code GodrayDir}
@@ -96,7 +116,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float GLOW_RADIUS = 135.0F;
     private static final int GLOW_SEGMENTS = 24;
 
-    /** IDEA-18 §1: water-reflection streak shape (elongated fan on the water plane). */
+    /** IDEA-18 §1/C2: water-reflection streak shape (elongated fan at the mirrored disc dir). */
     private static final int STREAK_SEGMENTS = 16;
     private static final float STREAK_MIN_HALF_LEN = 14.0F;
     private static final float STREAK_MAX_HALF_LEN = 55.0F;
@@ -104,9 +124,26 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     /** The streak fades to nothing this many blocks of camera height above the waterline. */
     private static final double STREAK_FADE_HEIGHT = 70.0D;
 
+    /**
+     * C2: per-frame low-pass factor for the disc direction. Kills single-frame pops (anchor
+     * republish, degenerate snap, ship bob) while converging within ~10 frames — walking
+     * parallax stays imperceptible, jitter cannot.
+     */
+    private static final float DIR_SMOOTHING = 0.2F;
+
+    /** C2 sailing cues: ticks between drift-cue spawns (doubled under reducedFx). */
+    private static final int DRIFT_CUE_INTERVAL_TICKS = 3;
+    /** Mist bands/foam glints stream astern at this speed (blocks/t, −X = astern). */
+    private static final float DRIFT_CUE_SPEED = 0.22F;
+
     // Pre-allocated render scratch (§3.5: no per-frame heap allocations in render loops).
     private static final Quaternionf ZENITH_ROT = new Quaternionf();
     private static final Vector3f ZENITH_DIR = new Vector3f();
+    /** Low-pass filtered disc direction (C2); world axes, unit length. */
+    private static final Vector3f SMOOTH_DIR = new Vector3f();
+    private static boolean hasSmoothDir;
+    /** Game time of the last drift-cue spawn (C2 sailing illusion throttle). */
+    private static long lastDriftCueGameTime = Long.MIN_VALUE;
 
     /** Cached zenith world point; rebuilt only when the anchor/spawn source moves. */
     private static Vec3 zenithPoint = Vec3.ZERO;
@@ -170,6 +207,18 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         return zenithPoint;
     }
 
+    /**
+     * Client-side limbo waterline: the Y of the top water block of the limbo ocean. The
+     * {@code ship_deck} anchor publishes {@code deckY + 1} and deck = waterline + 3
+     * ({@code GhostShipBuilder} frozen contract), so the value is
+     * {@code GhostShipBuilder.waterlineY} reaching the client through the anchor sync —
+     * ONE seam shared by the C1 {@code WaterlineY} post uniform (via
+     * {@code veilfx.LimboAmbience}), the reflection streak fade and the drift-cue lane.
+     */
+    public static double clientWaterlineY(ClientLevel level) {
+        return zenithWorldPoint(level).y - ZENITH_HEIGHT - 4.0D;
+    }
+
     @Override
     public boolean renderSky(ClientLevel level, int ticks, float partialTick, Matrix4f modelViewMatrix,
             Camera camera, Matrix4f projectionMatrix, boolean isFoggy, Runnable setupFog) {
@@ -208,23 +257,39 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         RenderSystem.disableCull();
         LimboHorizonShips.draw(poseStack.last().pose(), level, camera);
         RenderSystem.enableCull();
-        setupFog.run();
 
-        // --- eclipse at the exact zenith over the ship, with its radiating aura -------------
+        // --- eclipse disc + aura: a stable camera-relative celestial (C2) -------------------
+        // Drawn INSIDE the stars' no-fog window with the depth test off, at effectively
+        // infinite distance (normalized direction, fixed angular size at SKY_DISTANCE): no
+        // parallax jitter, no fog/horizon-plane pops, no clipping.
         Vec3 zenith = zenithWorldPoint(level);
         Vec3 cam = camera.getPosition();
         ZENITH_DIR.set((float) (zenith.x - cam.x), (float) (zenith.y - cam.y), (float) (zenith.z - cam.z));
         if (ZENITH_DIR.lengthSquared() < 1.0E-4F || ZENITH_DIR.y <= 0.0F) {
             ZENITH_DIR.set(0.0F, 1.0F, 0.0F); // degenerate (camera above the zenith point)
         }
-        ZENITH_ROT.rotationTo(0.0F, 1.0F, 0.0F, ZENITH_DIR.x, ZENITH_DIR.y, ZENITH_DIR.z);
+        ZENITH_DIR.normalize();
+        // Low-pass the direction: a snap only on the first frame or a genuinely new source
+        // (dimension change / anchor jump); otherwise any per-frame pop is eased away.
+        if (!hasSmoothDir || SMOOTH_DIR.dot(ZENITH_DIR) < 0.5F) {
+            SMOOTH_DIR.set(ZENITH_DIR);
+            hasSmoothDir = true;
+        } else {
+            SMOOTH_DIR.lerp(ZENITH_DIR, DIR_SMOOTHING).normalize();
+        }
+        ZENITH_ROT.rotationTo(0.0F, 1.0F, 0.0F, SMOOTH_DIR.x, SMOOTH_DIR.y, SMOOTH_DIR.z);
 
         poseStack.pushPose();
         poseStack.mulPose(ZENITH_ROT);
         Matrix4f zenithPose = poseStack.last().pose();
 
         float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
-        float pulse = 0.85F + 0.15F * Mth.sin(seconds * 1.3F);
+        // Subtle dual-frequency aura pulse — primary 1.3 rad/s matches the post shader's
+        // reflection smear curve exactly (limbo.fsh), so the two can never desync.
+        float pulse = 0.85F + 0.11F * Mth.sin(seconds * 1.3F)
+                + 0.04F * Mth.sin(seconds * 0.37F + 1.7F);
+
+        RenderSystem.disableDepthTest();
 
         // additive aura: glow floor first, then the two counter-rotating ray layers
         RenderSystem.blendFuncSeparate(
@@ -243,32 +308,39 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         SkyRenderUtil.drawCelestialQuad(zenithPose, DISC_SIZE, SKY_DISTANCE);
         poseStack.popPose();
 
-        // IDEA-18 §1: smeared reflection streak on the water plane below the zenith —
-        // additive, world-oriented (not in the zenith rotation), breathing with the same
-        // pulse as the aura so disc and reflection never desync.
+        // C2: the reflection streak is derived from the SAME angular direction as the disc,
+        // mirrored about the waterline plane — disc and reflection cannot desynchronize.
         RenderSystem.blendFuncSeparate(
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        drawWaterReflection(poseStack.last().pose(), zenith, cam, pulse);
+        drawWaterReflection(poseStack.last().pose(), SMOOTH_DIR, level, cam, pulse);
+
+        RenderSystem.enableDepthTest();
+        setupFog.run();
 
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.depthMask(true);
+
+        // C2 (item 6, world half): mist bands + foam glints streaming astern past the hull.
+        spawnDriftCues(level, cam);
         return true;
     }
 
     /**
-     * IDEA-18 §1 — the eclipse's reflection on the black water: a long, thin additive
-     * violet streak on the water plane directly below the zenith point, stretched toward
-     * the camera (elongated triangle fan, {@code drawAuraGlow} builder pattern). Alpha
-     * falls with camera height above the waterline; the waterline is the zenith source Y
-     * ({@code ship_deck} anchor or shared spawn) minus 4 — deck sits ~waterline + 3.
+     * C2 — the eclipse's reflection on the black water: an elongated additive violet streak
+     * derived from the SAME angular direction as the disc, mirrored about the waterline
+     * plane, drawn camera-relative at sky distance exactly like the disc — the two can
+     * never desynchronize. (The old version placed the streak from an independently
+     * computed world point on the water plane and visibly tore away from the disc while
+     * the camera moved.) Alpha falls with camera height above the waterline
+     * ({@link #clientWaterlineY}, the C1 {@code WaterlineY} seam) — never with luminance.
      */
-    private static void drawWaterReflection(Matrix4f pose, Vec3 zenith, Vec3 cam, float pulse) {
-        double waterY = zenith.y - ZENITH_HEIGHT - 4.0D;
-        double camAbove = cam.y - waterY;
+    private static void drawWaterReflection(Matrix4f pose, Vector3f discDir, ClientLevel level,
+            Vec3 cam, float pulse) {
+        double camAbove = cam.y - clientWaterlineY(level);
         if (camAbove <= 0.5D) {
             return; // camera at/under the waterline — nothing to reflect
         }
@@ -276,23 +348,49 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         if (heightFade <= 0.01F) {
             return;
         }
-        float cx = (float) (zenith.x - cam.x);
-        float cy = (float) (waterY - cam.y);
-        float cz = (float) (zenith.z - cam.z);
-        // Long axis: horizontal, pointing from the below-zenith point toward the camera.
-        float dx = -cx;
-        float dz = -cz;
-        float horizLen = Mth.sqrt(dx * dx + dz * dz);
-        if (horizLen < 1.0E-3F) {
-            dx = 0.0F;
-            dz = 1.0F;
+        // Mirror about the waterline plane: same azimuth, negated pitch — below the horizon.
+        float mx = discDir.x;
+        float my = -discDir.y;
+        float mz = discDir.z;
+        // Long axis: the tangent at the mirror point along the disc's azimuth (the classic
+        // glitter path toward the horizon); ship forward +X when the azimuth degenerates
+        // (camera exactly under the zenith).
+        float hx = discDir.x;
+        float hz = discDir.z;
+        float hLenRaw = Mth.sqrt(hx * hx + hz * hz);
+        if (hLenRaw < 1.0E-3F) {
+            hx = 1.0F;
+            hz = 0.0F;
         } else {
-            dx /= horizLen;
-            dz /= horizLen;
+            hx /= hLenRaw;
+            hz /= hLenRaw;
         }
-        float perpX = -dz;
-        float perpZ = dx;
-        float halfLen = Mth.clamp(horizLen * 0.6F, STREAK_MIN_HALF_LEN, STREAK_MAX_HALF_LEN);
+        float hDotM = hx * mx + hz * mz;
+        float tx = hx - hDotM * mx;
+        float ty = -hDotM * my;
+        float tz = hz - hDotM * mz;
+        float tLen = Mth.sqrt(tx * tx + ty * ty + tz * tz);
+        if (tLen < 1.0E-3F) {
+            tx = hx;
+            ty = 0.0F;
+            tz = hz;
+            tLen = 1.0F;
+        }
+        tx /= tLen;
+        ty /= tLen;
+        tz /= tLen;
+        // Width axis: m × t — reads horizontal on the water.
+        float wx = my * tz - mz * ty;
+        float wy = mz * tx - mx * tz;
+        float wz = mx * ty - my * tx;
+
+        float cx = mx * SKY_DISTANCE;
+        float cy = my * SKY_DISTANCE;
+        float cz = mz * SKY_DISTANCE;
+        // Streak stretches with the disc's off-zenith offset (glitter paths lengthen as the
+        // source leaves the zenith), clamped to the frozen streak envelope.
+        float halfLen = Mth.clamp(hLenRaw * SKY_DISTANCE * 1.8F,
+                STREAK_MIN_HALF_LEN, STREAK_MAX_HALF_LEN);
         float alpha = 0.35F * pulse * heightFade;
 
         BufferBuilder builder = Tesselator.getInstance().begin(
@@ -303,12 +401,48 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             float along = Mth.cos(angle) * halfLen;
             float side = Mth.sin(angle) * STREAK_HALF_WIDTH;
             builder.addVertex(pose,
-                            cx + dx * along + perpX * side,
-                            cy,
-                            cz + dz * along + perpZ * side)
+                            cx + tx * along + wx * side,
+                            cy + ty * along + wy * side,
+                            cz + tz * along + wz * side)
                     .setColor(0.45F, 0.18F, 0.85F, 0.0F);
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * C2 (item 6, world half) — sparse sailing cues: low mist bands (campfire smoke —
+     * long-lived and velocity-honoring) plus occasional faint foam glints (end rod)
+     * streaming astern (−X, the buoy-lane heading) just above the water surface. Purely
+     * cosmetic and client-side, throttled by game time (this runs from the per-frame render
+     * hook); {@code reducedFx} doubles the cadence and halves the density.
+     */
+    private static void spawnDriftCues(ClientLevel level, Vec3 cam) {
+        long gameTime = level.getGameTime();
+        boolean reduced = EclipseClientConfig.reducedFx();
+        int interval = reduced ? DRIFT_CUE_INTERVAL_TICKS * 2 : DRIFT_CUE_INTERVAL_TICKS;
+        long sinceLast = gameTime - lastDriftCueGameTime;
+        if (lastDriftCueGameTime != Long.MIN_VALUE && sinceLast >= 0L && sinceLast < interval) {
+            return;
+        }
+        lastDriftCueGameTime = gameTime;
+        RandomSource random = level.random;
+        double surfaceY = clientWaterlineY(level) + 1.0D;
+        int bands = reduced ? 1 : 2;
+        for (int i = 0; i < bands; i++) {
+            // Spawned ahead/abeam so the astern drift visibly carries the band past the hull.
+            double x = cam.x - 8.0D + random.nextDouble() * 44.0D;
+            double z = cam.z + (random.nextBoolean() ? 1.0D : -1.0D)
+                    * (5.0D + random.nextDouble() * 20.0D);
+            level.addParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, x, surfaceY + 0.2D, z,
+                    -DRIFT_CUE_SPEED * (0.8D + random.nextDouble() * 0.4D), 0.004D, 0.0D);
+        }
+        if (!reduced && random.nextInt(3) == 0) {
+            double x = cam.x - 4.0D + random.nextDouble() * 30.0D;
+            double z = cam.z + (random.nextBoolean() ? 1.0D : -1.0D)
+                    * (4.0D + random.nextDouble() * 12.0D);
+            level.addParticle(ParticleTypes.END_ROD, x, surfaceY + 0.05D, z,
+                    -DRIFT_CUE_SPEED * 1.1D, 0.0D, 0.0D);
+        }
     }
 
     /** Soft radial glow fan behind the disc: violet center fading to nothing at the rim. */

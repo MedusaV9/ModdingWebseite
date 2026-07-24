@@ -1,15 +1,24 @@
 package dev.projecteclipse.eclipse.client.loading;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.veilfx.TransitionFx;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ReceivingLevelScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 
 /**
  * The Quiet-Eclipse loading screen (P3 §3.11, R10): replaces {@code ReceivingLevelScreen}
@@ -37,6 +46,9 @@ import net.minecraft.util.Mth;
  *
  * <p>While rendering, {@link TransitionFx#setLoadingPulse(float)} is refreshed every frame
  * (world-side glitch breathing per the frozen R13 contract) and zeroed in {@link #removed()}.</p>
+ *
+ * <p><b>Dismissal (Wave-5 A2):</b> a plain (non-portal) close no longer hard-cuts — see
+ * {@link DismissFade}.</p>
  */
 public final class EclipseLoadingScreen extends ReceivingLevelScreen {
     /** Which vanilla screen this replaces (affects title line + failsafe budget). */
@@ -73,6 +85,7 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
         super(() -> false, ReceivingLevelScreen.Reason.OTHER);
         this.delegate = delegate;
         this.variant = variant;
+        DismissFade.cancel(); // a new load supersedes any lingering dismissal fade
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -96,6 +109,14 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
     public void removed() {
         TransitionFx.setLoadingPulse(0.0F);
         this.delegate.removed();
+        // Wave-5 A2: a plain world join/dimension change pops this screen the frame the
+        // level is ready — hand the last frame to the DismissFade overlay for a smooth
+        // ease-out instead of a hard cut. Portal-driven closes are excluded: the
+        // PortalTransitionController already owns that fade (its black hold + fade-in).
+        Minecraft minecraft = this.minecraft != null ? this.minecraft : Minecraft.getInstance();
+        if (minecraft != null && minecraft.level != null && !PortalTransitionController.active()) {
+            DismissFade.begin(this);
+        }
     }
 
     /**
@@ -123,47 +144,57 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
         TransitionFx.setLoadingPulse(LOADING_PULSE);
         this.checkFailsafe();
 
-        int w = this.width;
-        int h = this.height;
         if (PortalTransitionController.active()) {
             // Pure-black variant: the transition controller owns all visuals on top (§3.11).
-            guiGraphics.fill(0, 0, w, h, 0xFF000000);
+            guiGraphics.fill(0, 0, this.width, this.height, 0xFF000000);
             return;
         }
+        this.renderPanel(guiGraphics, this.width, this.height, System.currentTimeMillis(), 1.0F);
+    }
 
-        long now = System.currentTimeMillis();
+    /**
+     * The full loading composition (panel, sigil, title, hairline, tip) at a master
+     * {@code alpha} — {@code 1.0} while the screen is live; the {@link DismissFade}
+     * overlay replays it with a decaying alpha for the A2 ease-out dismissal.
+     */
+    void renderPanel(GuiGraphics guiGraphics, int w, int h, long now, float alpha) {
         boolean reduced = EclipseClientConfig.reducedFx();
 
         // Dark panel base + soft vertical vignette (no textures required).
-        guiGraphics.fill(0, 0, w, h, 0xFF0A0714);
-        guiGraphics.fillGradient(0, 0, w, h / 3, 0x66000000, 0x00000000);
-        guiGraphics.fillGradient(0, h - h / 3, w, h, 0x00000000, 0x80000000);
+        guiGraphics.fill(0, 0, w, h, EclipseUiTheme.withAlpha(0xFF0A0714, alpha));
+        guiGraphics.fillGradient(0, 0, w, h / 3,
+                EclipseUiTheme.withAlpha(0x66000000, alpha), 0x00000000);
+        guiGraphics.fillGradient(0, h - h / 3, w, h, 0x00000000,
+                EclipseUiTheme.withAlpha(0x80000000, alpha));
 
         int cx = w / 2;
         int cy = Math.max(SIGIL_RADIUS + 12, h / 2 - 28);
-        this.renderSigil(guiGraphics, cx, cy, now, reduced);
+        this.renderSigil(guiGraphics, cx, cy, now, reduced, alpha);
 
-        // Title line.
+        // Title line (resolved at render time so /lang switches apply mid-load).
         Component title = EclipseLang.tr(this.variant.titleKey);
         int titleY = cy + SIGIL_RADIUS + 18;
-        guiGraphics.drawCenteredString(this.font, title, cx, titleY, EclipseUiTheme.TEXT);
+        guiGraphics.drawCenteredString(this.font, title, cx, titleY,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, alpha));
 
         // Shimmer hairline (drifting highlight — deliberately NOT a progress bar).
         int barHalf = Math.min(70, w / 4);
         int barY = titleY + 14;
         guiGraphics.fill(cx - barHalf, barY, cx + barHalf, barY + 1,
-                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, 0.9F));
+                EclipseUiTheme.withAlpha(EclipseUiTheme.HAIRLINE, 0.9F * alpha));
         if (!reduced) {
             float sweep = (now % 2_200L) / 2_200.0F;
             int hx = cx - barHalf + Math.round(sweep * (barHalf * 2 - 18));
-            guiGraphics.fill(hx, barY, hx + 18, barY + 1, EclipseUiTheme.ACCENT);
+            guiGraphics.fill(hx, barY, hx + 18, barY + 1,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
         }
 
-        this.renderTip(guiGraphics, cx, Math.min(h - 12, barY + 26), now);
+        this.renderTip(guiGraphics, cx, Math.min(h - 12, barY + 26), now, alpha);
     }
 
     /** Breathing eclipse sigil: accent corona ring occluded by the dark disc. */
-    private void renderSigil(GuiGraphics guiGraphics, int cx, int cy, long now, boolean reduced) {
+    private void renderSigil(GuiGraphics guiGraphics, int cx, int cy, long now, boolean reduced,
+            float masterAlpha) {
         float breath = reduced ? 0.7F
                 : 0.55F + 0.25F * Mth.sin((float) (now % 2_400L) / 2_400.0F * Mth.TWO_PI);
         float highlightAngle = reduced ? -Mth.HALF_PI
@@ -178,7 +209,7 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
             float highlight = 0.5F + 0.5F * Mth.cos(angle - highlightAngle);
             float alpha = breath * (0.25F + 0.6F * highlight * highlight);
             guiGraphics.fill(x - 1, y - 1, x + 1, y + 1,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha * masterAlpha));
         }
         // Faint outer glow ring.
         int glowRadius = coronaRadius + 4;
@@ -187,18 +218,19 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
             int x = cx + Math.round(Mth.cos(angle) * glowRadius);
             int y = cy + Math.round(Mth.sin(angle) * glowRadius);
             guiGraphics.fill(x, y, x + 1, y + 1,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT_DEEP, breath * 0.35F));
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT_DEEP, breath * 0.35F * masterAlpha));
         }
         // Occluding disc (the eclipse body), scanline-filled.
         int discRadius = SIGIL_RADIUS - 3;
+        int discColor = EclipseUiTheme.withAlpha(0xFF06030F, masterAlpha);
         for (int dy = -discRadius; dy <= discRadius; dy++) {
             int half = (int) Math.floor(Math.sqrt((double) discRadius * discRadius - (double) dy * dy));
-            guiGraphics.fill(cx - half, cy + dy, cx + half + 1, cy + dy + 1, 0xFF06030F);
+            guiGraphics.fill(cx - half, cy + dy, cx + half + 1, cy + dy + 1, discColor);
         }
     }
 
     /** Rotating flavor line ({@code gui.eclipse.loading.tip.1..8}), crossfaded per slot. */
-    private void renderTip(GuiGraphics guiGraphics, int cx, int y, long now) {
+    private void renderTip(GuiGraphics guiGraphics, int cx, int y, long now, float masterAlpha) {
         long slot = (now - this.createdAtMillis) / TIP_ROTATE_MILLIS;
         int index = (int) ((this.tipOffset + slot) % TIP_COUNT);
         long within = (now - this.createdAtMillis) % TIP_ROTATE_MILLIS;
@@ -211,13 +243,86 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
         if (EclipseClientConfig.reducedFx()) {
             alpha = 1.0F;
         }
+        // Resolved at render time (never cached) so a /lang switch mid-load applies.
         Component tip = EclipseLang.tr("gui.eclipse.loading.tip." + (index + 1));
         guiGraphics.drawCenteredString(this.font, tip, cx, y,
-                EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
+                EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha * masterAlpha));
     }
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         // Fully custom visuals; never the vanilla portal/panorama backgrounds.
+    }
+
+    /**
+     * Wave-5 A2 dismissal fade: when a plain (non-portal) load finishes, the screen pops
+     * immediately — the vanilla delegate owns closing and its {@code setScreen(null)} is
+     * not interceptable ({@code ScreenEvent.Closing} is informational) — and this overlay
+     * replays the final loading frame over the now-live world with a
+     * {@value #FADE_MILLIS} ms ease-out-cubic alpha ramp ({@link FadeCurve#easeOutCubic}).
+     *
+     * <p><b>No soft-lock by construction:</b> the pop has already happened before the fade
+     * begins; the overlay is pure cosmetics, is not a screen, captures no input, expires on
+     * the wall clock even when rendering stalls, and resets on logout or whenever a new
+     * {@link EclipseLoadingScreen} takes over.</p>
+     */
+    @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
+    static final class DismissFade {
+        private static final long FADE_MILLIS = 400L;
+
+        @Nullable
+        private static EclipseLoadingScreen source;
+        private static long startMillis;
+
+        private DismissFade() {}
+
+        static void begin(EclipseLoadingScreen screen) {
+            source = screen;
+            startMillis = System.currentTimeMillis();
+        }
+
+        static void cancel() {
+            source = null;
+        }
+
+        /** World-visible frames; screen frames are covered by {@link #onScreenRender}. */
+        @SubscribeEvent
+        static void onRenderGui(RenderGuiEvent.Post event) {
+            if (Minecraft.getInstance().screen == null) {
+                render(event.getGuiGraphics());
+            }
+        }
+
+        /** Frames where a screen (chat, …) opened right after the load: keep fading on top. */
+        @SubscribeEvent
+        static void onScreenRender(ScreenEvent.Render.Post event) {
+            if (!(event.getScreen() instanceof EclipseLoadingScreen)) {
+                render(event.getGuiGraphics());
+            }
+        }
+
+        @SubscribeEvent
+        static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+            cancel();
+        }
+
+        private static void render(GuiGraphics guiGraphics) {
+            EclipseLoadingScreen screen = source;
+            if (screen == null) {
+                return;
+            }
+            if (Minecraft.getInstance().level == null) {
+                cancel(); // world already gone (disconnect) — nothing to fade over
+                return;
+            }
+            float progress = (System.currentTimeMillis() - startMillis) / (float) FADE_MILLIS;
+            float alpha = 1.0F - FadeCurve.easeOutCubic(progress);
+            if (alpha <= 0.02F) {
+                cancel();
+                return;
+            }
+            screen.renderPanel(guiGraphics, guiGraphics.guiWidth(), guiGraphics.guiHeight(),
+                    System.currentTimeMillis(), alpha);
+        }
     }
 }

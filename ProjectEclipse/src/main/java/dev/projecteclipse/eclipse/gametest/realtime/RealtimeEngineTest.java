@@ -32,7 +32,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * <p>Every injected-clock test runs synchronously inside one invocation (no server ticks
  * interleave with a swapped clock), and every test disarms the engine, restores the entry
  * day and resets the clock supplier before succeeding, so the shared gametest server stays
- * clean for sibling packages. Only the bossbar test spans real ticks — on the real clock.</p>
+ * clean for sibling packages.</p>
  */
 @PrefixGameTestTemplate(false)
 @GameTestHolder(EclipseMod.MOD_ID)
@@ -272,31 +272,9 @@ public final class RealtimeEngineTest {
         helper.succeed();
     }
 
-    /**
-     * Acceptance "bossbar appears/disappears": the live 20-tick loop creates the countdown
-     * bar for an armed engine; disarm removes it synchronously. Uses the REAL clock (the
-     * armed cadence boundary is hours away — nothing can fire mid-test).
-     */
-    @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
-    public static void bossbarAppearsWhileArmedAndDisappearsOnDisarm(GameTestHelper helper) {
-        MinecraftServer server = helper.getLevel().getServer();
-        int entryDay = DayScheduler.getDay(server);
-        GameTestSupport.setEventDay(server, 2);
-        RealtimeDayApi.arm(server);
-        helper.runAfterDelay(45L, () -> { // ≥2 bar-update ticks later
-            try {
-                helper.assertTrue(RealtimeDayService.isBarVisible(),
-                        "armed engine shows the countdown bossbar");
-                RealtimeDayApi.disarm(server);
-                helper.assertTrue(!RealtimeDayService.isBarVisible(),
-                        "disarming removes the bossbar immediately");
-            } finally {
-                RealtimeDayApi.disarm(server);
-                GameTestSupport.setEventDay(server, Math.max(1, entryDay));
-            }
-            helper.succeed();
-        });
-    }
+    // PLAN-A A7: the "bossbar appears/disappears" acceptance test is gone with the countdown
+    // bossbar itself — the day timer is now a client-only HUD layer (DayTimerLayer) fed by
+    // S2CDayClockPayload; there is no server bossbar left to assert on.
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void outOfBandDaySetReanchorsTheClock(GameTestHelper helper) {

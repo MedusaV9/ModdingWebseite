@@ -13,6 +13,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.phys.Vec3;
@@ -48,8 +50,20 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * guarantee, this clamp keeps the impulse itself from ever aiming off the rim. Frozen
  * players (replays, stragglers still in a cutscene) are never pushed.</p>
  *
+ * <p><b>Standing push zone</b> (plans_v5 C5): the strike kickback alone left the vortex
+ * approach unguarded BETWEEN strikes — players could walk arbitrarily deep into the smoke.
+ * {@link #tick} therefore runs a continuous protective zone every tick of the whole storm
+ * phase (including the pre-burst hold): players inside
+ * {@code radius + }{@value #PUSH_ZONE_BEYOND_RADIUS} blocks of the vortex center get a
+ * smooth radial outward velocity ramp — stronger the deeper they stand, capped at
+ * {@value #PUSH_MAX_SPEED} blocks/t at the smoke wall — plus brief slow fall. Velocity
+ * only, accelerated at ≤ {@value #PUSH_ACCEL_PER_TICK} blocks/t per tick: never a single
+ * hard kick, never damage. The strike kickback still lands on top, and the same
+ * containment clamp keeps the zone from ever aiming anyone off the disc rim.</p>
+ *
  * <p>FX-only replays construct this with {@code applyKickback=false} and no world
- * mutations happen (the visual-only bolt is transient FX and spawns only in live runs).</p>
+ * mutations happen (the visual-only bolt is transient FX and spawns only in live runs;
+ * the push zone is off too).</p>
  */
 public final class IntroLightningPhase {
     /** Length of the ramping-strikes window before the giant burst (R10: t=0..600). */
@@ -70,6 +84,16 @@ public final class IntroLightningPhase {
     private static final double RIM_MARGIN = 2.0D;
     /** Strikes closer than this play the violent close sting instead of the far rumble. */
     private static final double CLOSE_SOUND_RANGE = 64.0D;
+
+    // --- standing push zone (plans_v5 C5) ---
+    /** Outer edge of the continuous push zone, measured beyond the smoke-wall radius. */
+    private static final double PUSH_ZONE_BEYOND_RADIUS = KICK_RANGE_BEYOND_RADIUS;
+    /** Outward speed cap at the smoke wall and deeper (blocks per tick). */
+    private static final double PUSH_MAX_SPEED = 1.2D;
+    /** Per-tick outward acceleration cap — the ramp is smooth, never a single hard kick. */
+    private static final double PUSH_ACCEL_PER_TICK = 0.18D;
+    /** Brief slow fall while the zone carries a player (no fall damage from the loft). */
+    private static final int PUSH_SLOW_FALL_TICKS = 40;
 
     private static final ResourceLocation LIGHTNING_IMPACT_EMITTER =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "eclipse_lightning_impact");
@@ -103,6 +127,12 @@ public final class IntroLightningPhase {
      * {@value #DURATION_TICKS} ticks have elapsed (the caller fires the giant burst).
      */
     public boolean tick(ServerLevel level) {
+        if (this.applyKickback) {
+            // C5: the protective zone stands the WHOLE phase — the caller keeps ticking
+            // this controller through the pre-burst hold (tick() returning false), so the
+            // push runs first, before the duration check.
+            pushZoneTick(level);
+        }
         if (this.ticks >= DURATION_TICKS) {
             return false;
         }
@@ -206,6 +236,53 @@ public final class IntroLightningPhase {
             }
             player.setDeltaMovement(dir.x * strength, KICK_VERTICAL, dir.z * strength);
             player.hurtMarked = true; // sync the velocity to the client (risePlayerAt pattern)
+        }
+    }
+
+    /**
+     * C5 standing push zone (see class doc): every unfrozen player inside the zone gets a
+     * smooth radial outward velocity ramp — 0 at the outer zone edge, up to
+     * {@value #PUSH_MAX_SPEED} blocks/t at the smoke wall — accelerated at most
+     * {@value #PUSH_ACCEL_PER_TICK} blocks/t per tick and never overdriving a player who is
+     * already leaving faster. Velocity only (no damage); brief slow fall keeps lofted
+     * players safe. The kickback's containment clamp applies unchanged.
+     */
+    private void pushZoneTick(ServerLevel level) {
+        double zoneEdge = this.radius + PUSH_ZONE_BEYOND_RADIUS;
+        for (ServerPlayer player : level.players()) {
+            if (player.isSpectator() || FreezeService.isFrozen(player)) {
+                continue;
+            }
+            Vec3 fromCenter = player.position().subtract(this.center).multiply(1.0D, 0.0D, 1.0D);
+            double dist = fromCenter.length();
+            if (dist > zoneEdge) {
+                continue;
+            }
+            // Depth ramp (eased): gentle at the outer edge, full strength at the wall.
+            double depth = Mth.clamp((zoneEdge - dist) / PUSH_ZONE_BEYOND_RADIUS, 0.0D, 1.0D);
+            double targetSpeed = PUSH_MAX_SPEED * depth * depth;
+            if (targetSpeed <= 1.0E-3D) {
+                continue;
+            }
+            Vec3 dir = dist > 1.0E-3D ? fromCenter.scale(1.0D / dist) : randomHorizontal(level);
+            Vec3 predicted = player.position().add(dir.scale(KICK_TRAVEL_BLOCKS));
+            if (!isOnDisc(level, predicted.x, predicted.z)) {
+                // Containment clamp: repel back inward instead of off the rim.
+                dir = dir.scale(-1.0D);
+            }
+            Vec3 motion = player.getDeltaMovement();
+            double outward = motion.x * dir.x + motion.z * dir.z;
+            if (outward >= targetSpeed) {
+                continue; // already leaving fast enough — never fight or stack the exit
+            }
+            double add = Math.min(targetSpeed - outward, PUSH_ACCEL_PER_TICK);
+            player.setDeltaMovement(motion.x + dir.x * add, motion.y, motion.z + dir.z * add);
+            player.hurtMarked = true; // velocity sync (risePlayerAt pattern)
+            player.fallDistance = 0.0F;
+            if (!player.hasEffect(MobEffects.SLOW_FALLING)) {
+                player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                        PUSH_SLOW_FALL_TICKS, 0, true, false));
+            }
         }
     }
 

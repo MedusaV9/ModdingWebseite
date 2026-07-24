@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
+import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
@@ -42,6 +43,10 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * <p>Payload styles map onto the three bar skins: {@code day}→day, {@code boss}→boss,
  * {@code goal}/{@code unlock}→goal. Incoming announcements queue (cap
  * {@value #QUEUE_LIMIT}) so unlock bursts play one after another instead of overwriting.
+ * Identical payloads that are still pending/visible (or started within
+ * {@value #DEDUPE_WINDOW_TICKS}t) coalesce instead of replaying, and the queue defers —
+ * poll, never drop — while a {@code CaptionRenderer} caption owns the shared text band;
+ * captions return the politeness through {@link #isBandBusy()} (A15 two-way arbitration).
  * The layer IS letterbox-whitelisted (P2 §1.7: cutscene subtitles are delivered as
  * announcement lines, so suppression must not cancel this layer) — which is exactly why
  * the day-number card gates ITSELF on {@code CameraDirector.isHudSuppressed()} (FFIX-A /
@@ -63,6 +68,14 @@ public final class AnnouncementOverlay {
     private static final int SWEEP_HOLD_TICKS = 60;
     private static final int SWEEP_FADE_TICKS = 20;
     private static final int QUEUE_LIMIT = 8;
+    /**
+     * A15 dedupe window: an identical announcement arriving within this many ticks of the
+     * last identical one coalesces into it instead of replaying. Sized to cover the whole
+     * visible presentation (sweep {@value #SWEEP_IN_TICKS}+{@value #SWEEP_HOLD_TICKS}+
+     * {@value #SWEEP_FADE_TICKS} ≈ 110t) plus margin, so a server double-send never shows
+     * the same text twice back to back.
+     */
+    private static final int DEDUPE_WINDOW_TICKS = 200;
     private static final String UNLOCK_KEY_PREFIX = "announce.eclipse.unlock.key.";
     /** Typewriter baseline above the hotbar (clear of the vanilla actionbar at -68). */
     private static final int TYPEWRITER_BOTTOM_OFFSET = 80;
@@ -99,6 +112,11 @@ public final class AnnouncementOverlay {
     private static String sweepTheme;
     /** Ticks since the active sweep started; {@code -1} = no sweep running. */
     private static int sweepTicks = -1;
+    /** Monotonic unpaused-tick clock backing the A15 dedupe window. */
+    private static int clock;
+    /** Identity of the most recently started announcement + its {@link #clock} stamp (A15 dedupe). */
+    private static S2CAnnouncePayload lastStarted;
+    private static int lastStartedClock = Integer.MIN_VALUE;
 
     // Day card state (client thread only). {@code cardTicks < 0} = no card running.
     private static int cardTicks = -1;
@@ -116,12 +134,32 @@ public final class AnnouncementOverlay {
 
     /** {@link S2CAnnouncePayload} entry point (client main thread). */
     public static void handle(S2CAnnouncePayload payload) {
+        if (isDuplicate(payload)) {
+            return; // A15: same text already pending/visible/just shown — coalesce, don't replay
+        }
         if (S2CAnnouncePayload.STYLE_UNLOCK.equals(payload.style())) {
             spawnUnlockBurst();
         }
         if (QUEUE.size() < QUEUE_LIMIT) {
             QUEUE.add(payload);
         }
+    }
+
+    /**
+     * A15 dedupe: whether an identical payload (record equality — title, subtitle, style)
+     * is already queued, is the pending day line of a live numeral card, or started within
+     * the last {@value #DEDUPE_WINDOW_TICKS} ticks (i.e. is visible or only just faded).
+     */
+    private static boolean isDuplicate(S2CAnnouncePayload payload) {
+        if (payload.equals(pendingDayLine)) {
+            return true;
+        }
+        for (S2CAnnouncePayload queued : QUEUE) {
+            if (payload.equals(queued)) {
+                return true;
+            }
+        }
+        return payload.equals(lastStarted) && clock - lastStartedClock < DEDUPE_WINDOW_TICKS;
     }
 
     /**
@@ -150,6 +188,8 @@ public final class AnnouncementOverlay {
             cardTicks = -1;
             pendingDayLine = null;
             lastCardDay = -1;
+            lastStarted = null;
+            lastStartedClock = Integer.MIN_VALUE;
             return;
         }
         if (minecraft.isPaused()) {
@@ -157,7 +197,13 @@ public final class AnnouncementOverlay {
             // advancement + its tick sounds included) freeze; the queue stays intact.
             return;
         }
-        if (typewriter == null && sweepTicks < 0 && cardTicks < 0 && !QUEUE.isEmpty()) {
+        clock++;
+        // A15 two-way arbitration: while a cinematic caption is on screen, the whole
+        // announcement queue defers (poll, never drop) so the two text systems never draw
+        // over each other; CaptionRenderer extends the same politeness back via
+        // isBandBusy(). Ordering within each queue is preserved.
+        if (typewriter == null && sweepTicks < 0 && cardTicks < 0 && !QUEUE.isEmpty()
+                && !CaptionRenderer.isBusy()) {
             // FFIX-A / POLISH S-1 + C-1: a STYLE_DAY payload that would begin the 5× card
             // waits at the queue head while a cutscene suppresses the HUD (the whitelist
             // exists for subtitles, not the numeral) or while another hero moment owns the
@@ -185,7 +231,27 @@ public final class AnnouncementOverlay {
         return S2CAnnouncePayload.STYLE_DAY.equals(payload.style()) && ClientStateCache.dayClockDay > 0;
     }
 
+    /**
+     * A15 two-way arbitration: whether the announcement presentation currently owns the
+     * shared lower text band — a typewriter line is live, or the day-number card is live
+     * (its typewriter line starts at the card's shrink beat, so the band is spoken for).
+     * {@code CaptionRenderer} polls this before starting its next caption and defers while
+     * true; its caption queue is preserved, nothing is ever dropped, only delayed.
+     *
+     * <p>Exception: while a cutscene suppresses the HUD, a running card is frozen AND
+     * invisible (it gates itself off the cinematic frame, see {@link #render}) — it must
+     * not starve cutscene subtitles, so only a live typewriter counts then.</p>
+     */
+    public static boolean isBandBusy() {
+        if (typewriter != null) {
+            return true;
+        }
+        return cardTicks >= 0 && !CameraDirector.isHudSuppressed();
+    }
+
     private static void start(S2CAnnouncePayload payload) {
+        lastStarted = payload;
+        lastStartedClock = clock;
         if (S2CAnnouncePayload.STYLE_DAY.equals(payload.style()) && beginDayCard(payload)) {
             return; // the numeral card plays first; the line starts at its shrink beat
         }
@@ -252,11 +318,16 @@ public final class AnnouncementOverlay {
             cardStingPlayed = true;
             UiSounds.rouletteWin();
         }
-        if (pendingDayLine != null && cardTicks >= cardShrinkStartTick()) {
-            startLine(pendingDayLine); // the typewriter line begins as the card flies off
+        // A15: the line normally begins as the card flies off — but never over an active
+        // caption (two-way politeness). If a caption outlasts the card, the fully-faded
+        // card state simply lingers invisibly (render alpha is 0 past the shrink) holding
+        // the band until the caption ends, then the line plays — delayed, never dropped.
+        if (pendingDayLine != null && cardTicks >= cardShrinkStartTick()
+                && !CaptionRenderer.isBusy()) {
+            startLine(pendingDayLine);
             pendingDayLine = null;
         }
-        if (cardTicks > cardShrinkStartTick() + CARD_SHRINK_TICKS) {
+        if (pendingDayLine == null && cardTicks > cardShrinkStartTick() + CARD_SHRINK_TICKS) {
             cardTicks = -1;
             CenterStageArbiter.release(STAGE_ID);
         }

@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.contracts.ContractModifierService;
 import dev.projecteclipse.eclipse.contracts.ContractService;
 import dev.projecteclipse.eclipse.contracts.ContractState;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -206,7 +207,7 @@ public final class DevContractCommands {
         source.sendSuccess(() -> feedback, false);
         for (ServerPlayer operator : source.getServer().getPlayerList().getPlayers()) {
             if (operator.hasPermissions(2) && operator != source.getEntity()) {
-                operator.sendSystemMessage(Component.translatable("dev.eclipse.audit",
+                operator.sendSystemMessage(ServerLang.tr(operator, "dev.eclipse.audit",
                         source.getTextName(), feedback));
             }
         }

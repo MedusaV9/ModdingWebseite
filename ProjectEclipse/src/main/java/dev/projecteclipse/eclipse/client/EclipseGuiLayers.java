@@ -39,9 +39,11 @@ public final class EclipseGuiLayers {
         // overlay so the sweep stacks with real bars. Whitelisted below (P2 §1.7 fix).
         event.registerAbove(VanillaGuiLayers.BOSS_OVERLAY,
                 AnnouncementOverlay.LAYER_ID, AnnouncementOverlay::render);
-        // P3-W6 day timer: top-center countdown under the bossbar stack. MUST render below
-        // (= before) the announcement layer: the timer reserves its row via
-        // BossbarSkin.reserveOverlayRow so the announcement sweep stacks under it.
+        // A7 day timer: THE one countdown, bottom-center above the hotbar (guiHeight-50
+        // slot). It no longer reserves a top-stack row, so its order vs the announcement
+        // layer is free — but it MUST stay registered after the vanilla status rows
+        // (health/armor/food render before BOSS_OVERLAY) because it reads the final
+        // Gui.leftHeight/rightHeight to clear stacked armor/absorption rows.
         // Deliberately NOT letterbox-whitelisted (§3.6 — cutscene HUD suppression hides it).
         event.registerBelow(AnnouncementOverlay.LAYER_ID,
                 DayTimerLayer.LAYER_ID, DayTimerLayer::render);

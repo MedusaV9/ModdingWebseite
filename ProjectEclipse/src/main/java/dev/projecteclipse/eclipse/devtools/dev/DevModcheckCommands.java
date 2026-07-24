@@ -180,7 +180,7 @@ public final class DevModcheckCommands {
         Map<String, String> bundled = new LinkedHashMap<>();
         bundled.put("veil", "4.3.0");
         bundled.put("geckolib", "4.9.2");
-        bundled.put("emi", "1.1.18+1.21.1");
+        bundled.put("emi", "1.1.24+1.21.1");
         bundled.put("mousetweaks", "2.26.1");
         return Collections.unmodifiableMap(bundled);
     }

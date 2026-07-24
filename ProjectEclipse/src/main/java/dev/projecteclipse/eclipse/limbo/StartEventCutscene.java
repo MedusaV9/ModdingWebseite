@@ -270,6 +270,12 @@ public final class StartEventCutscene {
         PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.EMERGE));
         OarAnimator.endTilt();
         EclipseWorldState.get(server).setStartEventDone(true);
+        // A12: the artifact chooses everyone at the ceremony moment (idempotent grant pass);
+        // A8: immediately re-sync the sidebar aggregate so eventStarted reaches every client.
+        dev.projecteclipse.eclipse.artifact.ArtifactSlotLock.grantAll(server);
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            dev.projecteclipse.eclipse.hud.SidebarSyncService.sendNow(online);
+        }
         long now = System.currentTimeMillis();
         ServerLevel overworld = server.overworld();
         for (UUID id : teleportedPlayers) {

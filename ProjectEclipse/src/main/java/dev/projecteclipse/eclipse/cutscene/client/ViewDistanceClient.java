@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -15,6 +16,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CViewDistancePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -82,6 +84,23 @@ public final class ViewDistanceClient {
     private static int tickCounter;
 
     private ViewDistanceClient() {}
+
+    /**
+     * C6 chunk-preload probe (used by {@link CameraDirector}'s hold): whether ALL the given
+     * world positions' chunk columns are present client-side. An empty probe list is ready;
+     * no level means nothing is ready.
+     */
+    public static boolean chunksReady(Minecraft minecraft, List<Vec3> positions) {
+        if (minecraft.level == null) {
+            return false;
+        }
+        for (Vec3 pos : positions) {
+            if (!minecraft.level.getChunkSource().hasChunk(Mth.floor(pos.x) >> 4, Mth.floor(pos.z) >> 4)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /**
      * FROZEN entry point — called by {@code FxPayloads} on the client main thread.

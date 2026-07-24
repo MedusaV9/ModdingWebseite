@@ -11,6 +11,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.ViewDistanceService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.fx.S2CViewDistancePayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -222,7 +223,7 @@ public final class DevViewDistance {
         source.sendSuccess(() -> feedback, false);
         for (ServerPlayer operator : source.getServer().getPlayerList().getPlayers()) {
             if (operator.hasPermissions(2) && operator != source.getEntity()) {
-                operator.sendSystemMessage(Component.translatable("dev.eclipse.audit",
+                operator.sendSystemMessage(ServerLang.tr(operator, "dev.eclipse.audit",
                         source.getTextName(), feedback));
             }
         }

@@ -14,12 +14,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
 /**
- * R7 day-timer HUD ({@code docs/plans_v3/P3_ui.md} §3.6): a top-center real-time countdown
- * to the next day boundary, stacked under the bossbar stack via
- * {@link BossbarSkin#nextFreeBarY()} (and reserving its own row through
- * {@link BossbarSkin#reserveOverlayRow} so the announcement sweep stacks below it — see the
- * registration order in {@code EclipseGuiLayers}). All state comes from
- * {@link DayTimerCache}; this class only renders.
+ * R7 day-timer HUD ({@code docs/plans_v3/P3_ui.md} §3.6, repositioned by PLAN-A A7): THE one
+ * real-time countdown to the next day boundary, bottom-center directly ABOVE the hotbar
+ * cluster (the bossbar/top-center duplicates are gone — {@code RealtimeDayService} no longer
+ * creates a countdown bossbar). Fixed coordinates agreed with A9: the timer block bottoms
+ * out at {@code guiHeight - 47} ({@code topY = guiHeight - 50 - digitHeight}), safely above
+ * the A9 skill-XP bar in the vanilla slot ({@code guiHeight - 32..-29}); when the vanilla
+ * status rows stack higher (armor, absorption, mounted hearts — NeoForge
+ * {@code Gui.leftHeight}/{@code rightHeight}), the block lifts above them instead. All state
+ * comes from {@link DayTimerCache}; this class only renders.
  *
  * <ul>
  *   <li><b>Digits</b>: {@code HH:MM:SS} ({@code DDdHH:MM} above 48 h, with a localized
@@ -39,7 +42,7 @@ import net.minecraft.util.Mth;
  *       a DIM {@code 00:00:00} until the server flips the day — the timer itself triggers
  *       NOTHING.</li>
  *   <li><b>Paused</b>: frozen remaining window in {@code DIM} with a slow alpha pulse and a
- *       localized caption.</li>
+ *       localized caption (drawn ABOVE the digits — below is hotbar territory).</li>
  *   <li><b>Anti-clutter (B19/§3.13)</b>: hidden with {@code showDayTimer=false}, under F1
  *       ({@code hideGui}) and during cutscene HUD suppression (the layer is deliberately
  *       NOT letterbox-whitelisted). Appearing eases in with the §2.3 5-tick fade + 4px
@@ -66,6 +69,12 @@ public final class DayTimerLayer {
     /** Final-window pulse: 1.0 → 1.12 once per second inside the last 10 s. */
     private static final long PULSE_WINDOW_MILLIS = 10_000L;
     private static final float PULSE_AMPLITUDE = 0.12F;
+    /**
+     * A7 bottom slot: the block (digits + underline) bottoms out at {@code guiHeight - 47}
+     * — i.e. {@code topY = guiHeight - 50 - digitHeight} — the fixed coordinate agreed with
+     * A9 (whose XP bar owns the vanilla {@code guiHeight - 32..-29} slot).
+     */
+    private static final int BOTTOM_ANCHOR = 47;
 
     /** Monospace cell layout at 1x: D D : D D : D D (digit cell 7px, colon cell 4px). */
     private static final int[] CELL_X = { 0, 7, 14, 18, 25, 32, 36, 43 };
@@ -170,9 +179,16 @@ public final class DayTimerLayer {
         Font font = minecraft.font;
         float totalWidthAbs = (dayMode ? DAY_TOTAL_WIDTH : TOTAL_WIDTH) * SCALE;
         int baseX = Math.round((guiGraphics.guiWidth() - totalWidthAbs) / 2.0F);
-        int topY = BossbarSkin.nextFreeBarY() + 4 + Math.round(4.0F * (1.0F - appear));
         int digitHeightAbs = Math.round(9.0F * SCALE);
-        int underlineY = topY + digitHeightAbs + 2;
+        // A7 slot: block bottom at guiHeight - 47 (topY = guiHeight - 50 - digitHeight),
+        // above hotbar + offhand and clear of the A9 XP bar; lifted further when the
+        // vanilla status rows (armor/absorption/mount hearts) stack past the default.
+        // The §2.3 appear motion rises the whole block 4px into place from below.
+        int statusStack = Math.max(minecraft.gui.leftHeight, minecraft.gui.rightHeight);
+        int blockBottom = guiGraphics.guiHeight() - Math.max(BOTTOM_ANCHOR, statusStack + 3)
+                + Math.round(4.0F * (1.0F - appear));
+        int underlineY = blockBottom - 1;
+        int topY = underlineY - 2 - digitHeightAbs;
         int color = EclipseUiTheme.withAlpha(0xFF000000 | rgb, alpha);
 
         boolean pulsing = pulse != 1.0F;
@@ -216,16 +232,13 @@ public final class DayTimerLayer {
             guiGraphics.pose().popPose();
         }
 
-        int bottom = underlineY + 1;
         if (paused || zeroHold) {
+            // Caption sits ABOVE the digit line — everything below is hotbar territory.
             Component caption = caption(paused);
             int captionX = guiGraphics.guiWidth() / 2 - font.width(caption) / 2;
-            guiGraphics.drawString(font, caption, captionX, underlineY + 4,
+            guiGraphics.drawString(font, caption, captionX, topY - 12,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, appear));
-            bottom = underlineY + 4 + 9;
         }
-        // Reserve the row BEFORE the announcement layer renders — its sweep stacks below.
-        BossbarSkin.reserveOverlayRow(bottom + 4);
     }
 
     /** One monospace glyph, centered in its cell, drawn at {@link #SCALE} via a pose. */

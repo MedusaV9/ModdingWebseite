@@ -67,6 +67,7 @@ public final class EclipseSignals {
     private static final List<SkillLevelUpListener> SKILL_LEVEL_UP = new CopyOnWriteArrayList<>();
     private static final List<BreedListener> BREED = new CopyOnWriteArrayList<>();
     private static final List<TradeListener> TRADE = new CopyOnWriteArrayList<>();
+    private static final List<RebirthListener> REBIRTH = new CopyOnWriteArrayList<>();
 
     @FunctionalInterface public interface NaturalBlockMinedListener {
         void onNaturalBlockMined(ServerPlayer player, BlockState state, BlockPos pos);
@@ -122,6 +123,11 @@ public final class EclipseSignals {
 
     @FunctionalInterface public interface TradeListener {
         void onTrade(ServerPlayer player);
+    }
+
+    /** D11: fired once per completed rebirth ceremony; {@code newCount} includes it. */
+    @FunctionalInterface public interface RebirthListener {
+        void onRebirth(ServerPlayer player, int newCount);
     }
 
     private EclipseSignals() {}
@@ -183,6 +189,10 @@ public final class EclipseSignals {
 
     public static void onTrade(TradeListener listener) {
         TRADE.add(listener);
+    }
+
+    public static void onRebirth(RebirthListener listener) {
+        REBIRTH.add(listener);
     }
 
     // --- fire helpers (called by the single owning subscriber per signal) ---
@@ -272,6 +282,13 @@ public final class EclipseSignals {
         }
     }
 
+    /** Fired by {@code rebirth.RebirthService} after the transaction commits (drama/awards/ceremony hooks). */
+    public static void fireRebirth(ServerPlayer player, int newCount) {
+        for (RebirthListener listener : REBIRTH) {
+            listener.onRebirth(player, newCount);
+        }
+    }
+
     /** Drops every listener list. Invoked automatically on server stop. */
     public static void clearAllListeners() {
         NATURAL_BLOCK_MINED.clear();
@@ -288,6 +305,7 @@ public final class EclipseSignals {
         SKILL_LEVEL_UP.clear();
         BREED.clear();
         TRADE.clear();
+        REBIRTH.clear();
     }
 
     @SubscribeEvent

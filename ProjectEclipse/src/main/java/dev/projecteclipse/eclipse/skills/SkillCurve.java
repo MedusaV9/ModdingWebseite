@@ -5,7 +5,7 @@ package dev.projecteclipse.eclipse.skills;
  * config-parameterized so gametests can pin the numbers without touching disk.
  *
  * <p>The cumulative curve is the closed form the planner used for its anchors
- * ({@code C(12) ≈ 2 650}, {@code C(50) ≈ 70 000}):
+ * (v5 retune: {@code C(5) ≈ 3 560}, {@code C(7) ≈ 8 400}, {@code C(12) ≈ 33 200}):
  * {@code C(L) = baseCost · L^(exponent+1) / (exponent+1)}, i.e. the integral of the
  * per-action cost sketch {@code baseCost · n^exponent}. Past {@code softcapLevel}
  * every additional level costs {@code softcapMult} times the raw increment. Per-level
@@ -18,9 +18,9 @@ public final class SkillCurve {
 
     /** Curve knobs (mirrors the {@code curve} object in {@code skills.json}). */
     public record Params(double baseCost, double exponent, int softcapLevel, double softcapMult) {
-        /** Plan defaults: 20 / 1.3 / 50 / 2.0. */
+        /** v5 (D2) retuned defaults: 150 / 1.55 / 50 / 2.0 — C(5)=3564, C(7)=8405. */
         public static Params defaults() {
-            return new Params(20.0D, 1.3D, 50, 2.0D);
+            return new Params(150.0D, 1.55D, 50, 2.0D);
         }
     }
 

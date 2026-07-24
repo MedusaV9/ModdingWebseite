@@ -31,16 +31,23 @@ import javax.annotation.Nullable;
  * tile plays a white flash + expanding glow ring (all wall-clock eased, {@code reducedFx}
  * snaps everything).
  *
- * <p>Interaction: drag = pan (grab cursor), scroll = zoom 0.75–1.5 anchored on the mouse,
- * click = select (the owning screen shows the detail footer + buy button), hover = pointer
- * cursor + themed tooltip (drawn by the screen so it overlays everything). Pan is clamped
- * to the content bounds, so a tree smaller than the viewport is simply centered and
- * effectively static. Offscreen nodes are culled before any pose math.</p>
+ * <p>Interaction (wave-5 A14/D10): drag = pan (grab cursor), scroll = smooth zoom
+ * 0.45–1.5 eased toward the mouse anchor, click = select (the owning screen shows the
+ * detail footer + buy button), <b>double-click = buy request</b> (routed to the screen,
+ * which sends {@code C2SSkillNodeBuyPayload} — or arms a confirm step for point-costly
+ * nodes), hover = pointer cursor + themed tooltip (drawn by the screen so it overlays
+ * everything). Pan is clamped to the content bounds, so a tree smaller than the viewport
+ * is simply centered and effectively static; the 60-node tree opens zoomed out far enough
+ * to read whole branches. Offscreen nodes are culled before any pose math.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class SkillTreeWidget extends AbstractWidget {
-    private static final float MIN_ZOOM = 0.75F;
+    private static final float MIN_ZOOM = 0.45F;
     private static final float MAX_ZOOM = 1.5F;
+    /** Second click on the same node within this window = buy request (A14/D10 §3). */
+    private static final long DOUBLE_CLICK_MILLIS = 350L;
+    /** First-open zoom never goes below this — branches must stay readable. */
+    private static final float DEFAULT_MIN_ZOOM = 0.6F;
     /** Wall-clock animation lengths (ms): 2t flash, 8t ring, 6t line draw-in. */
     private static final long FLASH_MILLIS = 100L;
     private static final long RING_MILLIS = 400L;
@@ -53,15 +60,29 @@ public class SkillTreeWidget extends AbstractWidget {
     private static final int CONTENT_PAD = 28;
 
     private final Consumer<String> onSelect;
+    /** Double-click hook — the screen owns the buy/confirm flow (A14/D10 §3). */
+    private final Consumer<String> onBuyRequest;
 
-    /** View center in canvas units + zoom factor. */
+    /** View center in canvas units + zoom factor (eased toward {@link #targetZoom}). */
     private float viewX;
     private float viewY;
     private float zoom = 1.0F;
+    private float targetZoom = 1.0F;
     private boolean viewInitialized;
+    /** Mouse anchor of the running zoom ease (canvas + screen space). */
+    private float zoomAnchorCanvasX;
+    private float zoomAnchorCanvasY;
+    private double zoomAnchorScreenX;
+    private double zoomAnchorScreenY;
+    private long lastZoomFrameMillis;
 
     private boolean dragging;
     private double dragTravel;
+
+    /** Double-click tracking: last clicked node id + wall-clock millis. */
+    @Nullable
+    private String lastClickNodeId;
+    private long lastClickMillis;
 
     @Nullable
     private String hoveredNodeId;
@@ -81,9 +102,11 @@ public class SkillTreeWidget extends AbstractWidget {
      */
     private final Map<String, Long> unlockAnimStart = new HashMap<>();
 
-    public SkillTreeWidget(int x, int y, int width, int height, Consumer<String> onSelect) {
+    public SkillTreeWidget(int x, int y, int width, int height, Consumer<String> onSelect,
+            Consumer<String> onBuyRequest) {
         super(x, y, width, height, Component.empty());
         this.onSelect = onSelect;
+        this.onBuyRequest = onBuyRequest;
     }
 
     // ------------------------------------------------------------------
@@ -143,14 +166,39 @@ public class SkillTreeWidget extends AbstractWidget {
             return;
         }
         viewInitialized = true;
+        // A14 default zoom-out: fit as much of the 60-node tree as stays readable.
+        float contentW = model.maxX() - model.minX() + 2 * CONTENT_PAD;
+        float contentH = model.maxY() - model.minY() + 2 * CONTENT_PAD;
+        float fit = Math.min(this.width / Math.max(1.0F, contentW),
+                this.height / Math.max(1.0F, contentH));
+        zoom = Mth.clamp(fit, DEFAULT_MIN_ZOOM, 1.0F);
+        targetZoom = zoom;
         viewX = (model.minX() + model.maxX()) / 2.0F;
         // Top-align tall trees: show the roots first, they are what a fresh player buys.
-        float contentH = model.maxY() - model.minY() + 2 * CONTENT_PAD;
         if (contentH * zoom > this.height) {
             viewY = model.minY() - CONTENT_PAD + this.height / (2.0F * zoom);
         } else {
             viewY = (model.minY() + model.maxY()) / 2.0F;
         }
+    }
+
+    /**
+     * Frame-rate independent zoom ease toward {@link #targetZoom}; while animating, the
+     * canvas point under the scroll anchor stays put ({@code reducedFx} snapped already).
+     */
+    private void advanceZoom(long now) {
+        long elapsed = lastZoomFrameMillis == 0L ? 16L : Math.min(100L, now - lastZoomFrameMillis);
+        lastZoomFrameMillis = now;
+        if (zoom == targetZoom) {
+            return;
+        }
+        float step = 1.0F - (float) Math.pow(0.82D, elapsed / 16.0D);
+        zoom += (targetZoom - zoom) * step;
+        if (Math.abs(targetZoom - zoom) < 0.003F) {
+            zoom = targetZoom;
+        }
+        viewX = zoomAnchorCanvasX - (float) ((zoomAnchorScreenX - getX() - this.width / 2.0F) / zoom);
+        viewY = zoomAnchorCanvasY - (float) ((zoomAnchorScreenY - getY() - this.height / 2.0F) / zoom);
     }
 
     // ------------------------------------------------------------------
@@ -161,6 +209,7 @@ public class SkillTreeWidget extends AbstractWidget {
     protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         SkillTreeModel model = SkillTreeModel.current();
         resetViewIfUntouched(model);
+        advanceZoom(Util.getMillis());
         clampView(model);
 
         hoveredNodeId = null;
@@ -530,12 +579,25 @@ public class SkillTreeWidget extends AbstractWidget {
         dragging = true;
         dragTravel = 0.0D;
         SkillTreeModel.Node hit = nodeAt(SkillTreeModel.current(), mouseX, mouseY);
+        long now = Util.getMillis();
         if (hit != null) {
+            // A14/D10 §3: single click = select/preview, second click on the SAME node
+            // within the window = buy request (the screen validates + may ask to confirm).
+            boolean doubleClick = hit.id.equals(lastClickNodeId)
+                    && now - lastClickMillis <= DOUBLE_CLICK_MILLIS;
+            lastClickNodeId = hit.id;
+            lastClickMillis = now;
             if (!hit.id.equals(selectedNodeId)) {
                 selectedNodeId = hit.id;
                 UiSounds.click();
                 onSelect.accept(hit.id);
             }
+            if (doubleClick) {
+                lastClickMillis = 0L; // a triple click must not fire twice
+                onBuyRequest.accept(hit.id);
+            }
+        } else {
+            lastClickNodeId = null;
         }
     }
 
@@ -543,6 +605,7 @@ public class SkillTreeWidget extends AbstractWidget {
     protected void onDrag(double mouseX, double mouseY, double dragX, double dragY) {
         dragTravel += Math.abs(dragX) + Math.abs(dragY);
         if (dragTravel > 2.0D) {
+            zoom = targetZoom; // panning settles any running zoom ease (no anchor fight)
             viewX -= (float) (dragX / zoom);
             viewY -= (float) (dragY / zoom);
         }
@@ -558,12 +621,18 @@ public class SkillTreeWidget extends AbstractWidget {
         if (!isMouseOver(mouseX, mouseY)) {
             return false;
         }
-        float anchorX = screenToCanvasX(mouseX);
-        float anchorY = screenToCanvasY(mouseY);
-        zoom = Mth.clamp(zoom * (scrollY > 0 ? 1.1F : 1.0F / 1.1F), MIN_ZOOM, MAX_ZOOM);
-        // Keep the canvas point under the mouse stationary while zooming.
-        viewX = anchorX - (float) ((mouseX - getX() - this.width / 2.0F) / zoom);
-        viewY = anchorY - (float) ((mouseY - getY() - this.height / 2.0F) / zoom);
+        // Smooth zoom: scroll only retargets; advanceZoom eases toward it while keeping
+        // the canvas point under the mouse stationary. reducedFx snaps immediately.
+        targetZoom = Mth.clamp(targetZoom * (scrollY > 0 ? 1.15F : 1.0F / 1.15F), MIN_ZOOM, MAX_ZOOM);
+        zoomAnchorCanvasX = screenToCanvasX(mouseX);
+        zoomAnchorCanvasY = screenToCanvasY(mouseY);
+        zoomAnchorScreenX = mouseX;
+        zoomAnchorScreenY = mouseY;
+        if (EclipseClientConfig.reducedFx()) {
+            zoom = targetZoom;
+            viewX = zoomAnchorCanvasX - (float) ((mouseX - getX() - this.width / 2.0F) / zoom);
+            viewY = zoomAnchorCanvasY - (float) ((mouseY - getY() - this.height / 2.0F) / zoom);
+        }
         clampView(SkillTreeModel.current());
         return true;
     }

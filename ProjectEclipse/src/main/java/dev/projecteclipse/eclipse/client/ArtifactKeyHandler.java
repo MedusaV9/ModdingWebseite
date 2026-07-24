@@ -30,7 +30,8 @@ public final class ArtifactKeyHandler {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         while (EclipseKeyMappings.OPEN_MENU.consumeClick()) {
-            if (minecraft.player != null && minecraft.screen == null) {
+            if (minecraft.player != null && minecraft.screen == null
+                    && !ArtifactScreenOpener.notChosenYet()) {
                 PacketDistributor.sendToServer(new C2SOpenArtifactPayload());
                 minecraft.setScreen(new HandbookScreen());
             }

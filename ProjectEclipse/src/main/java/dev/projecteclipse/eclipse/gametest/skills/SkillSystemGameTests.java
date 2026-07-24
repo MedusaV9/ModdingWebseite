@@ -192,18 +192,26 @@ public final class SkillSystemGameTests {
         ServerPlayer player = mockServerPlayer(helper);
         SkillState.Entry entry = freshEntry(player);
 
-        // Default mine cap = 3000: a 5000 grant clamps, the next grant is fully eaten.
-        int applied = SkillsApi.addXp(player, "mine", 5000.0F);
-        helper.assertTrue(applied == 3000, "clamped to cap, applied=" + applied);
-        helper.assertTrue(SkillsApi.addXp(player, "mine", 50.0F) == 0, "cap exhausted");
-        helper.assertTrue(entry.totalXp == 3000L, "totalXp stopped at cap");
+        // "mine" is an action source: open the D2 pre-event gate for this test.
+        var world = dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(player.server);
+        boolean eventWasDone = world.isStartEventDone();
+        world.setStartEventDone(true);
+        try {
+            // Default mine cap = 3000: a 5000 grant clamps, the next grant is fully eaten.
+            int applied = SkillsApi.addXp(player, "mine", 5000.0F);
+            helper.assertTrue(applied == 3000, "clamped to cap, applied=" + applied);
+            helper.assertTrue(SkillsApi.addXp(player, "mine", 50.0F) == 0, "cap exhausted");
+            helper.assertTrue(entry.totalXp == 3000L, "totalXp stopped at cap");
 
-        // Uncapped sources are unaffected by the mine budget.
-        helper.assertTrue(SkillsApi.addXp(player, "admin", 10.0F) == 10, "admin uncapped");
+            // Uncapped sources are unaffected by the mine budget.
+            helper.assertTrue(SkillsApi.addXp(player, "admin", 10.0F) == 10, "admin uncapped");
 
-        // Simulate the day rolling over: stale capDay resets the per-source counters.
-        entry.capDay = entry.capDay - 1;
-        helper.assertTrue(SkillsApi.addXp(player, "mine", 50.0F) == 50, "cap reset next day");
+            // Simulate the day rolling over: stale capDay resets the per-source counters.
+            entry.capDay = entry.capDay - 1;
+            helper.assertTrue(SkillsApi.addXp(player, "mine", 50.0F) == 50, "cap reset next day");
+        } finally {
+            world.setStartEventDone(eventWasDone);
+        }
         helper.succeed();
     }
 

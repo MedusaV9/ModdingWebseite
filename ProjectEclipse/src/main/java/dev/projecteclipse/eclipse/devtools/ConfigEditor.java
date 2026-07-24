@@ -19,6 +19,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.C2SConfigEditPayload;
 import dev.projecteclipse.eclipse.network.S2CDayStatePayload;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
@@ -85,14 +86,21 @@ public final class ConfigEditor {
             JsonArray unlocks = new JsonArray();
             plan.unlocks().forEach(unlocks::add);
             obj.add("unlocks", unlocks);
-            // title/subtitle mirror EclipseConfig.daysToJson (written when non-empty) so a
-            // round-trip never loses the hand-written announcement lines; the deprecated
-            // borderSize is deliberately NOT written (daysToJson omits it too).
+            // title/subtitle (+ the Wave-5 done-variants) mirror EclipseConfig.daysToJson
+            // (written when non-empty) so a round-trip never loses the hand-written
+            // announcement lines; the deprecated borderSize is deliberately NOT written
+            // (daysToJson omits it too).
             if (!plan.localizedTitle().isBlank()) {
                 obj.add("title", plan.localizedTitle().toJsonElement());
             }
             if (!plan.localizedSubtitle().isBlank()) {
                 obj.add("subtitle", plan.localizedSubtitle().toJsonElement());
+            }
+            if (!plan.localizedTitleDone().isBlank()) {
+                obj.add("titleDone", plan.localizedTitleDone().toJsonElement());
+            }
+            if (!plan.localizedSubtitleDone().isBlank()) {
+                obj.add("subtitleDone", plan.localizedSubtitleDone().toJsonElement());
             }
             dayArray.add(obj);
 
@@ -121,7 +129,7 @@ public final class ConfigEditor {
         if (!player.hasPermissions(3)) {
             EclipseMod.LOGGER.warn("ConfigEditor: REJECTED config edit of '{}' from {} — permission level 3 required",
                     payload.fileName(), player.getScoreboardName());
-            player.sendSystemMessage(Component.translatable("message.eclipse.goals_denied"));
+            player.sendSystemMessage(ServerLang.tr(player, "message.eclipse.goals_denied"));
             return;
         }
         if (payload.json().getBytes(StandardCharsets.UTF_8).length > C2SConfigEditPayload.MAX_JSON_BYTES) {
@@ -159,13 +167,13 @@ public final class ConfigEditor {
         broadcastConfigState(player.server);
         EclipseMod.LOGGER.info("ConfigEditor: {} wrote {} ({} bytes) — config reloaded and re-synced",
                 player.getScoreboardName(), file, payload.json().length());
-        player.sendSystemMessage(Component.translatable("message.eclipse.goals_updated", payload.fileName()));
+        player.sendSystemMessage(ServerLang.tr(player, "message.eclipse.goals_updated", payload.fileName()));
     }
 
     private static void fail(ServerPlayer player, String fileName, String reason) {
         EclipseMod.LOGGER.warn("ConfigEditor: rejected edit of '{}' from {}: {}",
                 fileName, player.getScoreboardName(), reason);
-        player.sendSystemMessage(Component.translatable("message.eclipse.goals_invalid", reason));
+        player.sendSystemMessage(ServerLang.tr(player, "message.eclipse.goals_invalid", reason));
     }
 
     /** The {@code /eclipse reload} sync set: day state + milestones + per-player goal progress. */
@@ -173,7 +181,7 @@ public final class ConfigEditor {
         EclipseWorldState state = EclipseWorldState.get(server);
         PacketDistributor.sendToAllPlayers(new S2CDayStatePayload(state.getDay(), state.getAltarLevel(),
                 EclipseConfig.day(state.getDay()).goals()));
-        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current());
+        PacketDistributor.sendToAllPlayers(S2CMilestonesPayload.current(server));
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             PacketDistributor.sendToPlayer(online, S2CGoalProgressPayload.currentFor(online));
         }
@@ -219,10 +227,16 @@ public final class ConfigEditor {
             JsonArray unlocks = obj.has("unlocks") ? requireStringArray(obj, "unlocks", true) : new JsonArray();
             Localized title = obj.has("title")
                     ? requireLocalized(obj.get("title"), "title")
-                    : fallbackTitle(day, true);
+                    : fallbackDayText(day, "title");
             Localized subtitle = obj.has("subtitle")
                     ? requireLocalized(obj.get("subtitle"), "subtitle")
-                    : fallbackTitle(day, false);
+                    : fallbackDayText(day, "subtitle");
+            Localized titleDone = obj.has("titleDone")
+                    ? requireLocalized(obj.get("titleDone"), "titleDone")
+                    : fallbackDayText(day, "titleDone");
+            Localized subtitleDone = obj.has("subtitleDone")
+                    ? requireLocalized(obj.get("subtitleDone"), "subtitleDone")
+                    : fallbackDayText(day, "subtitleDone");
 
             JsonObject normalized = new JsonObject();
             normalized.addProperty("day", day);
@@ -233,6 +247,12 @@ public final class ConfigEditor {
             }
             if (!subtitle.isBlank()) {
                 normalized.add("subtitle", subtitle.toJsonElement());
+            }
+            if (!titleDone.isBlank()) {
+                normalized.add("titleDone", titleDone.toJsonElement());
+            }
+            if (!subtitleDone.isBlank()) {
+                normalized.add("subtitleDone", subtitleDone.toJsonElement());
             }
             out.add(normalized);
         }
@@ -287,14 +307,20 @@ public final class ConfigEditor {
     }
 
     /**
-     * The CURRENT config's title/subtitle for EXACTLY that day ({@code ""} for new days) —
-     * {@code EclipseConfig.day} is not used directly because it falls back to a neighbor
-     * plan for unmatched days, which would copy another day's announcement lines.
+     * The CURRENT config's announcement line (title/subtitle/done-variant) for EXACTLY
+     * that day ({@code ""} for new days) — {@code EclipseConfig.day} is not used directly
+     * because it falls back to a neighbor plan for unmatched days, which would copy
+     * another day's announcement lines.
      */
-    private static Localized fallbackTitle(int day, boolean title) {
+    private static Localized fallbackDayText(int day, String field) {
         for (EclipseConfig.DayPlan plan : EclipseConfig.days()) {
             if (plan.day() == day) {
-                return title ? plan.localizedTitle() : plan.localizedSubtitle();
+                return switch (field) {
+                    case "title" -> plan.localizedTitle();
+                    case "subtitle" -> plan.localizedSubtitle();
+                    case "titleDone" -> plan.localizedTitleDone();
+                    default -> plan.localizedSubtitleDone();
+                };
             }
         }
         return Localized.of("");

@@ -26,6 +26,12 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  * screen keeps {@code isPauseScreen()==true}, a singleplayer game stays actually paused
  * for the whole visit and ESC unwinds Settings → Pause → world.
  *
+ * <p><b>Wave 5 (PLAN-A A3, playtest item 3)</b>: the title-screen settings entries (custom
+ * gear + {@code VanillaTitleGear}) are gone — settings are "nur ingame". This minimal
+ * pause-menu entry is deliberately KEPT as the non-artifact fallback path (item 13 gates
+ * the artifact until the start event, so without this row a player who disabled something
+ * pre-event would have zero way back into settings).</p>
+ *
  * <p><b>Placement</b> (§3.4 rule, kept from the interim fix): the free half-width slot
  * right of "Options…" — which mirrors the Open-to-LAN slot — or, when that slot is
  * occupied (vanilla NeoForge always fills it with LAN/player-reporting), a full row

@@ -280,8 +280,8 @@ public final class PortalTransitionController {
         return System.currentTimeMillis();
     }
 
+    /** Shared with the loading screen's dismissal fade (Wave-5 A2). */
     private static float smooth01(float x) {
-        x = Mth.clamp(x, 0.0F, 1.0F);
-        return x * x * (3.0F - 2.0F * x);
+        return FadeCurve.smooth01(x);
     }
 }

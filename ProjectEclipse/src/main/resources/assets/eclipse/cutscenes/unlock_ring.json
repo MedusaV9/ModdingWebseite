@@ -21,6 +21,7 @@
   ],
   "params": {
     "_comment": "Orbital template for stage-growth unlocks (W7 reshoot: low dramatic pickup, rising lookAt-tracked orbit, high reveal at the end instead of the old fixed-yaw ring). The play payload supplies the anchor position (nearest old ring edge); keyframe positions are offsets from that anchor. Also the FLYOVER fallback when expansion_flyover is missing/disabled.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher.",
     "orbitRadius": 45
   }
 }

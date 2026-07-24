@@ -20,9 +20,9 @@ import net.neoforged.api.distmarker.OnlyIn;
  * Eclipse settings v2 ({@code docs/plans_v3/P3_ui.md} §3.4): one Quiet-Eclipse panel hosting
  * the shared {@link SettingsPanel} (single source of truth — the same composite the handbook
  * Settings tab mounts) plus a Done button. Reached from the pause menu
- * ({@code PauseMenuHook}), the custom title gear ({@code EclipseTitleScreen}), the vanilla
- * title gear ({@code VanillaTitleGear}, {@code customMenu=false}) and NeoForge's Mods screen
- * ({@code ClientMenuExtensions} {@code IConfigScreenFactory}) — B1 is dead from every mount.
+ * ({@code PauseMenuHook}) and NeoForge's Mods screen ({@code ClientMenuExtensions}
+ * {@code IConfigScreenFactory}) — the title-screen gears (custom + vanilla) were removed by
+ * PLAN-A wave 5 A3 (playtest item 3: settings are in-game only) — B1 is dead from every mount.
  *
  * <p>Values write through the typed {@code ModConfigSpec} handles inside
  * {@link SettingsPanel} ({@code set()+save()}, B13 — the v1 {@code valueMap()} string lookup

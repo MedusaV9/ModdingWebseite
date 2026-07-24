@@ -110,6 +110,12 @@ public final class DawnCeremony {
     private static final List<Task> TASKS = new ArrayList<>();
     /** Absolute server tick the running ceremony ends at; {@code -1} = idle. */
     private static long ceremonyEndTick = -1L;
+    /**
+     * A15: content hash of the goal set last shown by the decree beat; {@code null} = no
+     * ceremony has run this session (a restart seeds the comparison from the previous
+     * day's config instead, see {@link #goalsReveal}). Server thread only.
+     */
+    private static Integer lastGoalsHash;
 
     private DawnCeremony() {}
 
@@ -129,7 +135,7 @@ public final class DawnCeremony {
         schedule(server, BEAT_OFFERING,
                 () -> dev.projecteclipse.eclipse.offering.OfferingService
                         .announceResult(server, previousDay));
-        schedule(server, BEAT_GOALS, () -> goalsReveal(server, newDay));
+        schedule(server, BEAT_GOALS, () -> goalsReveal(server, previousDay, newDay));
         schedule(server, BEAT_AWARDS, () -> awardsRoulette(server));
         EclipseMod.LOGGER.info("DawnCeremony: day {} -> {} — beats scheduled over {} ticks",
                 previousDay, newDay, CEREMONY_TICKS);
@@ -175,9 +181,28 @@ public final class DawnCeremony {
         });
     }
 
-    /** One calm subtitle; the goal data itself already synced at T+0 with the day state. */
-    private static void goalsReveal(MinecraftServer server, int newDay) {
-        if (EclipseConfig.day(newDay).goals().isEmpty()) {
+    /**
+     * One calm subtitle; the goal data itself already synced at T+0 with the day state.
+     *
+     * <p>A15: the "New Decree" caption plays ONLY when the goal set actually changed since
+     * the previous day — an unchanged decree list skips the beat entirely (the ceremony
+     * simply moves on, no empty gap) instead of re-announcing every dawn. Change detection
+     * hashes the day's goal texts; the hash of the last announced set lives in ceremony
+     * state ({@link #lastGoalsHash}), and after a restart the previous day's config goals
+     * seed the comparison so an unchanged set stays quiet across relaunches too.</p>
+     */
+    private static void goalsReveal(MinecraftServer server, int previousDay, int newDay) {
+        List<String> goals = EclipseConfig.day(newDay).goals();
+        int hash = goals.hashCode();
+        int previousHash = lastGoalsHash != null ? lastGoalsHash
+                : EclipseConfig.day(previousDay).goals().hashCode();
+        lastGoalsHash = hash;
+        if (goals.isEmpty()) {
+            return;
+        }
+        if (hash == previousHash) {
+            EclipseMod.LOGGER.debug(
+                    "DawnCeremony: goal set unchanged on day {} — decree caption skipped", newDay);
             return;
         }
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
@@ -245,5 +270,6 @@ public final class DawnCeremony {
     static void onServerStopped(ServerStoppedEvent event) {
         TASKS.clear();
         ceremonyEndTick = -1L;
+        lastGoalsHash = null;
     }
 }
