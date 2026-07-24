@@ -1,0 +1,19 @@
+{
+	"schema": 1,
+	"items": [
+		{
+			"id": "sticker_erster_boot",
+			"name_de": "Erster Start!",
+			"set": "meilensteine",
+			"image": "res://content/stickers/assets/sticker_erster_boot.png",
+			"cond": { "type": "special", "key": "first_boot" }
+		},
+		{
+			"id": "sticker_zahnfee",
+			"name_de": "Zahnfee",
+			"set": "pflege",
+			"image": "res://content/stickers/assets/sticker_zahnfee.png",
+			"cond": { "type": "counter", "key": "teeth_brushed", "count": 10 }
+		}
+	]
+}

@@ -1,0 +1,29 @@
+{
+	"schema": 1,
+	"items": [
+		{
+			"id": "hat_party",
+			"type": "hat",
+			"name_de": "Partyhut",
+			"price": 120,
+			"rarity": "common",
+			"asset": "res://content/cosmetics/assets/hat_party.png"
+		},
+		{
+			"id": "outfit_matrose",
+			"type": "outfit",
+			"name_de": "Matrosen-Anzug",
+			"price": 340,
+			"rarity": "rare",
+			"asset": "res://content/cosmetics/assets/outfit_matrose.png"
+		},
+		{
+			"id": "fur_karamell",
+			"type": "fur",
+			"name_de": "Karamell-Fell",
+			"price": 500,
+			"rarity": "epic",
+			"asset": ""
+		}
+	]
+}

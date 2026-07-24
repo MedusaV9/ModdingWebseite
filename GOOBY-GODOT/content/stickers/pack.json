@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "stickers",
+	"version": "1.0.0",
+	"priority": 500,
+	"min_native": "5.0.0",
+	"domains": ["stickers"],
+	"name_de": "Sticker",
+	"notes_de": "Eingebauter Basisstand: 2 Beispiel-Sticker (W3d liefert den vollen Katalog)."
+}

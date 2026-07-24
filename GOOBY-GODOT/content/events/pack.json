@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "events",
+	"version": "1.0.0",
+	"priority": 300,
+	"min_native": "5.0.0",
+	"domains": ["events"],
+	"name_de": "Events",
+	"notes_de": "Zeitfenster-Events {id, start, end, payload}. M1: leer — W3d/M2 füllt."
+}

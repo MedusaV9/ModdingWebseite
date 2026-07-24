@@ -1,0 +1,11 @@
+{
+	"schema": 1,
+	"id": "config",
+	"version": "1.0.0",
+	"priority": 700,
+	"min_native": "5.0.0",
+	"domains": ["config"],
+	"type": "json",
+	"name_de": "Config",
+	"notes_de": "KEIN PCK — plain JSON, wirkt sofort ohne Neustart (Doc B §1.1). Remote-Stand liegt unter user://packs/config.json."
+}

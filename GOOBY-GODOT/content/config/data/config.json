@@ -1,0 +1,11 @@
+{
+	"schema": 1,
+	"manifest_url": "https://github.com/MedusaV9/CustomServerPrivate/releases/download/updates/manifest.json",
+	"net": {
+		"host": "127.0.0.1",
+		"port": 8765,
+		"tls": false
+	},
+	"flags": {},
+	"news_text_de": ""
+}

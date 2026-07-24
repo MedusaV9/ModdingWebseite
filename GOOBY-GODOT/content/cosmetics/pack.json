@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "cosmetics",
+	"version": "1.0.0",
+	"priority": 400,
+	"min_native": "5.0.0",
+	"domains": ["cosmetics"],
+	"name_de": "Cosmetics",
+	"notes_de": "Eingebauter Basisstand: 3 Test-Cosmetics (M1)."
+}

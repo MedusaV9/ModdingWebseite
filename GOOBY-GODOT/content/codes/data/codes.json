@@ -1,0 +1,20 @@
+{
+	"schema": 1,
+	"items": [
+		{
+			"id": "willkommen2026",
+			"secret_sha256": "0701336524b52888edc904d7e0587f44e2d077e69487937d8c9df89333ad8338",
+			"effect": { "type": "coins", "amount": 250 },
+			"once": true,
+			"notes_de": "Geheimwort = sha256(normalisiert). Klartext steht NIE im Pack (Doc B §1.1)."
+		},
+		{
+			"id": "dev_gooby",
+			"secret": "gooby",
+			"effect": { "type": "sticker", "sticker_id": "sticker_erster_boot" },
+			"once": false,
+			"dev_only": true,
+			"notes_de": "DEV-Code mit Klartext-Secret — nur für lokale Tests, CI-Releases sollten dev_only-Codes filtern."
+		}
+	]
+}

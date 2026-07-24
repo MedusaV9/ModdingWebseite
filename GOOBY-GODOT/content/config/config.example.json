@@ -1,0 +1,14 @@
+{
+	"schema": 1,
+	"_kommentar": "Beispiel/Referenz fuer den config-Pack (Doc B §1.1). Echte Datei: data/config.json (eingebaut) bzw. user://packs/config.json (per Update geladen, gewinnt immer). Alle Keys optional ausser schema.",
+	"manifest_url": "https://github.com/MedusaV9/gooby-updates/releases/download/updates/manifest.json",
+	"net": {
+		"host": "gooby.example.org",
+		"port": 8765,
+		"tls": false
+	},
+	"flags": {
+		"freunde_aktiv": true
+	},
+	"news_text_de": "Kurzer News-Text fuers Update-Panel."
+}
