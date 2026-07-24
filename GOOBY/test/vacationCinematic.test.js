@@ -390,7 +390,10 @@ test('celebration (FIX2): airport reunion tail runs once, AFTER the cinematic', 
   // return (both reunion branches greet the weather).
   assert.match(
     src,
-    /ui\.toast\('vacation\.welcomeBack',[^)]*\);[\s\S]{0,600}?ui\.toast\(`vacation\.home\.\$\{weatherAt\(now\(\)\)\.state\}`\);\s*\r?\n\s*if \(played\) return;/,
+    // V6.1 sign-off fix: the weather line is STAGGERED (spawnToast stacks
+    // live toasts; there is no live-queue), so it rides a setTimeout ≥ TOAST_MS
+    // after the welcome toast — still before the played-branch return.
+    /ui\.toast\('vacation\.welcomeBack',[^)]*\);[\s\S]{0,700}?setTimeout\(\(\) => ui\.toast\(`vacation\.home\.\$\{weatherAt\(now\(\)\)\.state\}`\), \d+\);\s*\r?\n\s*if \(played\) return;/,
   );
   // The booked toast rides the same contract (it fed the identical
   // hold/release double before the departure cutscene).

@@ -212,7 +212,9 @@ export function registerAirport({ store, ui, audio }) {
     // sequentially, V3/FIX-D). weatherAt is pure/deterministic (?now= pins
     // it for captures) and celebrate() only ever runs after a committed
     // pickup/taxi reunion, so this can never fire while away.
-    ui.toast(`vacation.home.${weatherAt(now()).state}`);
+    // Staggered: spawnToast stacks immediately (V3/FIX-D has no live-queue),
+    // so the weather line waits for the welcome toast to finish its run.
+    setTimeout(() => ui.toast(`vacation.home.${weatherAt(now()).state}`), 2600);
     if (played) return; // the cutscene owned the confetti + arrival beat
     audio.play('jingle.arrival');
     // Confetti over the whole app layer — dynamic import keeps three.js out

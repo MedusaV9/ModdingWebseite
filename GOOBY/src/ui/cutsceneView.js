@@ -115,6 +115,7 @@ const CSS = `
    the HUD (roomNav.js untouched — same CSS-only mechanism). visibility gates
    hit-testing on children that set their own pointer-events:auto. */
 #ui.v6cs-active .room-nav{opacity:0;visibility:hidden;transition:opacity .3s ease,visibility 0s .3s;}
+#ui.v6cs-active .g52-now-chip{opacity:0;pointer-events:none;transition:opacity .3s ease;}
 @media (prefers-reduced-motion: reduce){
   .v6cs-bar,.v6cs-caption,.v6cs-hint{transition:none;}
   .v6cs-hint{animation:none;}

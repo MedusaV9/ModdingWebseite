@@ -81,7 +81,7 @@ export const CREDITS = Object.freeze({
    * packs each; the itch rows point at their exact committed folder.
    */
   soundsGrafik: Object.freeze([
-    Object.freeze({ title: 'Kenney.nl', by: 'Kenney (alle Kenney-Packs)', license: 'CC0', packDir: 'kenney' }),
+    Object.freeze({ title: 'Kenney.nl', by: 'Kenney (all Kenney packs)', license: 'CC0', packDir: 'kenney' }),
     Object.freeze({ title: 'KayKit', by: 'Kay Lousberg', license: 'CC0', packDir: 'kaykit' }),
     Object.freeze({ title: 'Tiny Treats — Baked Goods', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/baked-goods' }),
     Object.freeze({ title: 'Tiny Treats — Bakery Interior', by: 'Isa Lousberg', license: 'CC0', packDir: 'itch/bakery-interior' }),

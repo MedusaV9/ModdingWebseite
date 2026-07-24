@@ -33,10 +33,10 @@ export const EN = {
 
   // live events
   'vacation.postcard': 'A postcard from Gooby: {text}',
-  'vacation.postcard.beach': 'The waves are so splashy! *stamp*',
-  'vacation.postcard.meadowTrip': 'I rolled down a whole hill! *stamp*',
-  'vacation.postcard.bigCity': 'So many snack stands!! *stamp*',
-  'vacation.postcard.space': 'Carrots float up here!! *stamp*',
+  'vacation.postcard.beach': 'The waves are so splashy!',
+  'vacation.postcard.meadowTrip': 'I rolled down a whole hill!',
+  'vacation.postcard.bigCity': 'So many snack stands!!',
+  'vacation.postcard.space': 'Carrots float up here!!',
   'vacation.returnReady': 'Gooby landed! Pick him up at the airport.',
   'vacation.overdueToast': 'Oh no — Gooby is stranded! He needs a taxi.',
 
@@ -84,10 +84,10 @@ export const DE = {
 
   // live events
   'vacation.postcard': 'Eine Postkarte von Gooby: {text}',
-  'vacation.postcard.beach': 'Die Wellen sind so platschig! *Stempel*',
-  'vacation.postcard.meadowTrip': 'Ich bin einen ganzen Hügel runtergerollt! *Stempel*',
-  'vacation.postcard.bigCity': 'So viele Snackbuden!! *Stempel*',
-  'vacation.postcard.space': 'Hier oben schweben die Karotten!! *Stempel*',
+  'vacation.postcard.beach': 'Die Wellen sind so platschig!',
+  'vacation.postcard.meadowTrip': 'Ich bin einen ganzen Hügel runtergerollt!',
+  'vacation.postcard.bigCity': 'So viele Snackbuden!!',
+  'vacation.postcard.space': 'Hier oben schweben die Karotten!!',
   'vacation.returnReady': 'Gooby ist gelandet! Hol ihn am Flughafen ab.',
   'vacation.overdueToast': 'Oh nein — Gooby ist gestrandet! Er braucht ein Taxi.',
 

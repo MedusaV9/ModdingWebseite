@@ -21,11 +21,11 @@ export const EN = {
   'vacation.dest.toyRoom.sub': 'A sleepover with the toys',
 
   // postcards (vacation.postcard.<id> — v5-vacation shape)
-  'vacation.postcard.harbor': 'A gull shared my pretzel!! *stamp*',
-  'vacation.postcard.spookGarden': 'The ghosts giggle when I sneeze! *stamp*',
-  'vacation.postcard.bakery': 'I napped on a warm bread loaf… *stamp*',
-  'vacation.postcard.nightSky': 'I counted 100 stars, then lost count!! *stamp*',
-  'vacation.postcard.toyRoom': 'The toy robot is my best friend now! *stamp*',
+  'vacation.postcard.harbor': 'A gull shared my pretzel!!',
+  'vacation.postcard.spookGarden': 'The ghosts giggle when I sneeze!',
+  'vacation.postcard.bakery': 'I napped on a warm bread loaf…',
+  'vacation.postcard.nightSky': 'I counted 100 stars, then lost count!!',
+  'vacation.postcard.toyRoom': 'The toy robot is my best friend now!',
 
   // locked mystery cards (no name/sub/art disclosure before unlock)
   'vacation.dest.locked.name': '???',
@@ -48,11 +48,11 @@ export const DE = {
   'vacation.dest.toyRoom.sub': 'Übernachtung bei den Spielsachen',
 
   // postcards (vacation.postcard.<id> — v5-vacation shape)
-  'vacation.postcard.harbor': 'Eine Möwe hat meine Brezel geteilt!! *Stempel*',
-  'vacation.postcard.spookGarden': 'Die Geister kichern, wenn ich niese! *Stempel*',
-  'vacation.postcard.bakery': 'Ich habe auf einem warmen Brot geschlafen… *Stempel*',
-  'vacation.postcard.nightSky': 'Ich habe 100 Sterne gezählt und mich dann verzählt!! *Stempel*',
-  'vacation.postcard.toyRoom': 'Der Spielzeugroboter ist jetzt mein bester Freund! *Stempel*',
+  'vacation.postcard.harbor': 'Eine Möwe hat meine Brezel geteilt!!',
+  'vacation.postcard.spookGarden': 'Die Geister kichern, wenn ich niese!',
+  'vacation.postcard.bakery': 'Ich habe auf einem warmen Brot geschlafen…',
+  'vacation.postcard.nightSky': 'Ich habe 100 Sterne gezählt und mich dann verzählt!!',
+  'vacation.postcard.toyRoom': 'Der Spielzeugroboter ist jetzt mein bester Freund!',
 
   // locked mystery cards (no name/sub/art disclosure before unlock)
   'vacation.dest.locked.name': '???',

@@ -32,6 +32,7 @@ export const EN = {
   'recap.line.games': '{n} games played',
   'recap.line.games.one': '1 game played', // V6/FIX3 (Sol P2-1): missing singular
   'recap.line.coinsEarned': '{n} coins earned',
+  'recap.line.coinsEarned.one': '1 coin earned',
   'recap.line.tickles': 'belly rubbed {n}×',
   'recap.line.feeds': '{n} tasty meals',
   'recap.line.harvests': '{n} harvests brought in',
@@ -73,6 +74,7 @@ export const DE = {
   'recap.line.games': '{n} Spiele gespielt',
   'recap.line.games.one': '1 Spiel gespielt', // V6/FIX3 (Sol P2-1): missing singular
   'recap.line.coinsEarned': '{n} Münzen verdient',
+  'recap.line.coinsEarned.one': '1 Münze verdient',
   'recap.line.tickles': '{n}× Bauch gekrault',
   'recap.line.feeds': '{n}× lecker gefuttert',
   'recap.line.harvests': '{n} Ernten eingeholt',
