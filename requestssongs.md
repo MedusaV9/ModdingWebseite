@@ -34,3 +34,6 @@ binde sie als SoundEvents/Musik-Manager ein und liste alles in den CREDITS auf.
 
 **Fallback:** Wenn kein Key eingetragen wird, lade ich passende lizenzfreie Musik
 herunter und credite die Quellen in `CREDITS.md`.
+
+
+> **Update 2026-07-24 (Runde 2):** API-Key erhalten — 6 Songs mit V3 generiert (Guthaben erschöpft nach 6/15: title_theme, limbo_ambience, boss_herald, boss_ferryman, wand_awakening, xbox_nostalgia). Die übrigen Slots behalten die CC-BY-Fallbacks (neu zugeordnet, siehe CREDITS.md). Mit neuem Guthaben generiert `tools/music/treblo_generate.py --only <ids>` die restlichen 9 Designs automatisch.

@@ -1,5 +1,17 @@
 # Eclipse Event Credits
 
+## Musik — Treblo-generierte Tracks (2026-07-24)
+
+Sechs Tracks wurden mit **Treblo (Sonauto) V3** über die offizielle API generiert
+(Custom-Prompt-Design, style_scale/prompt_strength-Tuning, instrumental):
+`title_theme`, `limbo_ambience`, `boss_herald`, `boss_ferryman`, `wand_awakening`,
+`xbox_nostalgia`. Nachbearbeitung: Loudness-Normalisierung, Fade-in, OGG-Vorbis.
+Das API-Guthaben erlaubte 6 der 15 geplanten Generierungen; die übrigen Slots nutzen
+weiterhin die unten creditierten CC-BY-Tracks (teils neu zugeordnet:
+`eclipse_totality` ← Echoes of Time, `kill_contract` ← Volatile Reaction,
+`boss_rift_warden` ← Final Battle of the Dark Wizards, `day_final` ← Atlantean
+Twilight; `fog_storm`/`boss_fog_tyrant` sind gepitchte Aliasse).
+
 ## Music
 
 All eight tracks are by **Kevin MacLeod** and were downloaded from

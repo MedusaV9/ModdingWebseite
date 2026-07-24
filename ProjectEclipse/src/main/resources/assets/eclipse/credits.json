@@ -4,39 +4,45 @@
       "titleKey": "gui.eclipse.credits.section.music",
       "entries": [
         {
-          "name": "boss_ferryman — Final Battle of the Dark Wizards",
+          "name": "title_theme — mystic dark-fantasy title theme",
           "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1500085",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500085",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
           ]
         },
         {
-          "name": "boss_herald — Volatile Reaction",
+          "name": "limbo_ambience — ghost-ship purgatory ambience",
           "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1400039",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1400039",
-            "Trimmed ending, fades, loudness normalization, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
           ]
         },
         {
-          "name": "limbo_ambience — Echoes of Time v2",
+          "name": "boss_herald — ritual boss theme (Herald)",
           "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1300030",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300030",
-            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
           ]
         },
         {
-          "name": "title_theme — Atlantean Twilight",
+          "name": "boss_ferryman — final boss theme (Ferryman)",
           "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1100322",
-            "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100322",
-            "Trimmed ending, fades, loudness normalization, OGG Vorbis encoding."
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "wand_awakening — catalyst attunement sting",
+          "details": [
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "xbox_nostalgia — nostalgic piano nocturne",
+          "details": [
+            "Generated with Treblo (Sonauto) V3 for Eclipse Event · custom prompt design",
+            "Loudness normalization, fade-in, OGG Vorbis encoding."
           ]
         },
         {
@@ -67,12 +73,45 @@
           ]
         },
         {
-          "name": "xbox_nostalgia — Dream Culture",
+          "name": "eclipse_totality — Echoes of Time v2",
           "details": [
-            "Kevin MacLeod · CC BY 4.0 · ISRC USUAN1300046",
+            "Kevin MacLeod · CC BY 4.0 · Echoes of Time v2",
             "https://creativecommons.org/licenses/by/4.0/",
-            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300046",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300030",
             "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "kill_contract — Volatile Reaction",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · Volatile Reaction",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100051",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "boss_rift_warden — Final Battle of the Dark Wizards",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · Final Battle of the Dark Wizards",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1500085",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "day_final — Atlantean Twilight",
+          "details": [
+            "Kevin MacLeod · CC BY 4.0 · Atlantean Twilight",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100196",
+            "Trimmed excerpt, fades, loudness normalization, OGG Vorbis encoding."
+          ]
+        },
+        {
+          "name": "fog_storm / boss_fog_tyrant — pitched aliases",
+          "details": [
+            "Re-pitched aliases of intro_storm / boss_ferryman (see those credits)."
           ]
         }
       ]

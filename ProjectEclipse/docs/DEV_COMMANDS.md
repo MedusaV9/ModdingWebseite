@@ -52,6 +52,22 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 - `/dev display list` — Lists every persisted vanilla block display and its animation parameters. · perm **2**
 - `/dev display param <id> <axis|speed|bob|period|scale|glow|pos|delete> …` — Edits one display's rotation axis/speed, bob, scale, glow or position, or deletes it. · perm **2** · *caution*
 
+## Event
+
+- `/dev contract odds <pct>` — Set the daily REAL contract odds percent (transient). · perm **2** · *caution*
+- `/dev contract prank` — Force-start a PRANK round — everyone gets the hunted warning, nobody is hunted. · perm **2** · *caution*
+- `/dev contract start [hunter] [target]` — Force-start a REAL contract; optionally force the hunter and target. · perm **2** · *caution*
+- `/dev contract status` — Show phase, pair (ops eyes only), odds and outcome tallies. · perm **2**
+- `/dev contract stop` — Stop the current contract; an ACTIVE window resolves as expired. · perm **2** · *caution*
+- `/dev contract window <minutes>` — Set the contract window length in minutes (transient). · perm **2** · *caution*
+- `/dev minigame portal (here|remove)` — Relocates the minigame portal to your position or removes it. · perm **2**
+- `/dev minigame start (arena|race) [<minutes>]` — Opens a minigame event (arena or race), builds the course and spawns the entry portal near spawn. · perm **2** · *caution*
+- `/dev minigame status` — Shows minigame phase, remaining time, course state, participants, open inventory tickets and the portal. · perm **2**
+- `/dev minigame stop [now]` — Ends the minigame event: graceful 10-second close, or immediately with 'now'. · perm **2** · *caution*
+- `/dev minigame time (add|sub|set) <duration>` — Extends, shortens or sets the minigame window (e.g. 10m, 1h10m, 90s). · perm **2**
+- `/dev status` — Show a compact health dashboard for the live Eclipse event. · perm **2**
+- `/minigameleave` — Leaves the current minigame after a confirmation click — inventory restored, re-entry stays open. · perm **0**
+
 ## Mods
 
 - `/dev modcheck` — Reports loaded mods against the allowlist, namespace/id gate state, and nested bundles. · perm **2**
@@ -72,11 +88,25 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 - `/dev player multiplier set <player> <factor>` — Set a player's hidden persisted skill-XP multiplier. · perm **2** · *caution*
 - `/dev player multiplier show <player>` — Show a player's hidden skill-XP multiplier to the issuing operator. · perm **2**
 - `/dev player xp give <player> <amount>` — Grant skill XP through the normal multiplier and cap pipeline. · perm **2** · *caution*
+- `/dev toggle <action> global (on|off)` — Enables/disables an action (build, mine, craft, pvp, move, interact, drop, pickup) for EVERYONE. Per-player overrides still win. · perm **2** · *caution*
+- `/dev toggle <action> player <player> (allow|deny|clear)` — Sets an ALLOW/DENY override for one player (beats the global flag) or clears it back to inherit. · perm **2** · *caution*
+- `/dev toggle clearall` — Resets ALL action toggles: every global flag back to allowed, every override removed, move-locks released. · perm **2** · *caution*
+- `/dev toggle status [player]` — Shows every toggle's global state and override counts, or one player's effective permissions. · perm **2**
 - `/dev viewdist pin <player|@a> <chunks>` — Persistently request a client render-distance pin for selected players. · perm **2** · *caution*
 - `/dev viewdist status [player|@a]` — Show persistent pins, server distance, and transient override state. · perm **2**
 - `/dev viewdist unpin <player|@a>` — Remove selected players' persistent render-distance pins. · perm **2** · *caution*
+- `/dev voice changer <player> (off|deep|high|ghost|glitch|clear)` — Sets a voice-changer preset for one player (off, deep, high, ghost, glitch) or clears their override. Requires Simple Voice Chat. · perm **2** · *caution*
+- `/dev voice changer default (off|deep|high|ghost|glitch|clear)` — Sets the global default voice preset applied to everyone without a per-player override ('clear' = off). · perm **2** · *caution*
+- `/dev voice changer reset` — Re-arms the voice-changer DSP budget kill switch after an auto-disable. · perm **2** · *caution*
+- `/dev voice changer status` — Shows the voice-changer default, per-player presets, config state and the DSP budget kill switch. · perm **2**
 - `/dev voice mute global (on|off)` — Enable or disable the server-wide voice mute. · perm **2** · *caution*
 - `/dev voice mute player <player> (on|off)` — Enable or disable a persistent per-player voice mute. · perm **2** · *caution*
+- `/dev wand disable <minutes>` — Globally disables all wand casting for N minutes (wands stay holdable). · perm **2** · *caution*
+- `/dev wand enable` — Re-enables wand casting immediately. · perm **2**
+- `/dev wand mode player|item` — player = per-player progression, the default (WandStore rules); item = progression lives on the stack (stolen wands keep their levels). · perm **2** · *caution*
+- `/dev wand reset <player>` — Wipes a player's wand progression and resets their carried wands to pathless level 1. · perm **2** · *destructive*
+- `/dev wand set <player> path|level|xp|charge <value>` — Sets a player's wand path/level/xp (store row in PLAYER mode + all carried owned wands) or charge (carried wands only). · perm **2** · *caution*
+- `/dev wand trading on|off` — on = soulbind conversion paused so wands can be handed over; off = default (foreign wands convert). · perm **2**
 
 ## Quests
 
@@ -90,6 +120,11 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 - `/dev spawn radius <blocks>` — Overrides both saved spawn-protection geometries; without an override gameplay defaults to r=96 and sanctum build protection to r=18. · perm **2** · *caution*
 - `/dev spawn set <x> <y> <z>` — Moves the shared spawn and the center used by both spawn-protection geometries. · perm **2** · *caution*
 - `/dev spawn show [on|off]` — Shows both protection radii and draws/toggles an op-only particle preview. · perm **2**
+- `/dev wizard disable` — Disable Orin: despawns him and blocks the respawn service. The observatory stays. · perm **3** · *caution*
+- `/dev wizard enable` — Re-enable Orin: he respawns at his observatory (if built) and resumes his routine. · perm **3**
+- `/dev wizard givecatalyst <player>` — Hand the player one wizard catalyst (test hook — does not touch the quest ledger). · perm **3** · *caution*
+- `/dev wizard resetquest <player>` — Re-open the once-per-player catalyst fetch quest for the player. · perm **3** · *caution*
+- `/dev wizard tp` — Teleport to the live Orin, or onto the observatory terrace if he is absent. · perm **3**
 
 ## Stage
 
