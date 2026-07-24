@@ -96,6 +96,9 @@ import { EN as V6_VAC_SCENES_EN, DE as V6_VAC_SCENES_DE } from './strings/v6-vac
 // versioned-module pattern, spread below AFTER v6-juice, always EN + DE.
 import { EN as V6_VACATION_CONTENT_EN, DE as V6_VACATION_CONTENT_DE } from './strings/v6-vacation-content.js';
 import { EN as V6_PARK_EN, DE as V6_PARK_DE } from './strings/v6-park.js';
+// V6/F1: the 36 new sticker-book strings + six themed page titles — same
+// versioned-module pattern, spread below AFTER v6-park, always EN + DE.
+import { EN as V6_STICKERS_EN, DE as V6_STICKERS_DE } from './strings/v6-stickers.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -648,6 +651,7 @@ export const EN = {
   ...V6_VAC_SCENES_EN, // V6/D1
   ...V6_VACATION_CONTENT_EN, // V6/D2
   ...V6_PARK_EN, // V6/E3 (+E2 coaster captions)
+  ...V6_STICKERS_EN, // V6/F1
 };
 
 /** @type {Record<string, string>} */
@@ -1200,6 +1204,7 @@ export const DE = {
   ...V6_VAC_SCENES_DE, // V6/D1
   ...V6_VACATION_CONTENT_DE, // V6/D2
   ...V6_PARK_DE, // V6/E3 (+E2 coaster captions)
+  ...V6_STICKERS_DE, // V6/F1
 };
 
 const DICTS = { en: EN, de: DE };

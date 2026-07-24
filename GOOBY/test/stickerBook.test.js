@@ -1,7 +1,9 @@
 // V3/G34 — sticker-book engine (PLAN3 §B5/§C5.4/§C5.5, binding): every
-// condition shape (counter/special ×7/event), pure-core purity + latching,
-// the live store wiring (coalesced 'change' → unlock → 'stickersChanged' +
-// toast + 'sticker.get'), the §E0.1-7 'stickerHook' contract
+// condition shape (counter / special ×7 + the V6/F1 pure-read specials
+// postcards/vacationTrips/park/streak/playtimeMin/coinsSpent/outfitsOwned/
+// decorPlaced / event / code), pure-core purity + latching, the live store
+// wiring (coalesced 'change' → unlock → 'stickersChanged' + toast +
+// 'sticker.get'), the §E0.1-7 'stickerHook' contract
 // (store.emit('stickerHook', {id})), the §C5.5 toast queue (max 1 per 3 s)
 // and the seen/„NEU" bookkeeping (markSeen drives the dot).
 import test from 'node:test';
@@ -115,6 +117,97 @@ test('V5/STICKERS: new defs ride the existing counter/gameBest shapes', () => {
   assert.equal(isStickerSatisfied(champ, state), true);
 });
 
+// ------------------------------------------------ V6/F1 pure-read specials
+
+test('V6/F1 postcards: total + per-destination reads of the D2 archive', () => {
+  const state = defaultState();
+  const beach = STICKERS_BY_ID.beachPostcard; // dest 'beach' ≥ 1
+  const penPal = STICKERS_BY_ID.penPal; // total ≥ 10
+  const card = (destId, i) => ({ destId, dayIndex: 1, variant: 1, atMs: 1000 + i });
+  // no vacation slice at all → zero progress
+  assert.deepEqual(stickerProgress(beach, state), { current: 0, target: 1 });
+  state.vacation = { archive: [card('harbor', 0)] };
+  assert.equal(isStickerSatisfied(beach, state), false, 'a harbor card is not a beach card');
+  state.vacation.archive.push(card('beach', 1));
+  assert.equal(isStickerSatisfied(beach, state), true);
+  // total count normalizes junk: unknown destinations NEVER count
+  state.vacation.archive = [
+    ...Array.from({ length: 9 }, (_, i) => card('beach', i)),
+    { destId: 'atlantis', dayIndex: 1, variant: 1, atMs: 5 }, // unknown → dropped
+    'garbage',
+  ];
+  assert.deepEqual(stickerProgress(penPal, state), { current: 9, target: 10 });
+  state.vacation.archive.push(card('nightSky', 50));
+  assert.equal(isStickerSatisfied(penPal, state), true);
+});
+
+test('V6/F1 park: every key rides the E1 sliceOf normalization', () => {
+  const state = defaultState(); // no themePark slice → all reads 0
+  assert.deepEqual(stickerProgress(STICKERS_BY_ID.parkFirstVisit, state), { current: 0, target: 1 });
+  assert.deepEqual(stickerProgress(STICKERS_BY_ID.nightLights, state), { current: 0, target: 1 });
+  state.themePark = { visits: 5, nightVisit: true, rides: { coaster: 3 }, candyBought: 2 };
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.parkFirstVisit, state), true); // visits ≥ 1
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.parkExplorer, state), true); // visits ≥ 5
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.loopStar, state), true); // coaster ≥ 1
+  // handsUp is the ruled coaster ≥ 3 read (no hands-up writer exists)
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.handsUp, state), true);
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.nightLights, state), true); // latched flag
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.candyDay, state), false); // 2 < 3
+  state.themePark.candyBought = 3;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.candyDay, state), true);
+  // junk slice self-heals through sliceOf → zero progress, never throws
+  state.themePark = 'funfair';
+  assert.deepEqual(stickerProgress(STICKERS_BY_ID.parkExplorer, state), { current: 0, target: 5 });
+});
+
+test('V6/F1 trivial reads: vacationTrips/streak/playtimeMin/coinsSpent/outfitsOwned', () => {
+  const state = defaultState();
+  const ff = STICKERS_BY_ID.frequentFlyer; // vacation.trips ≥ 3
+  assert.deepEqual(stickerProgress(ff, state), { current: 0, target: 3 });
+  state.vacation = { trips: 2 };
+  assert.equal(isStickerSatisfied(ff, state), false);
+  state.vacation.trips = 3;
+  assert.equal(isStickerSatisfied(ff, state), true);
+
+  state.daily.streak = 7;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.weekStreak, state), true);
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.monthStreak, state), false);
+  state.daily.streak = 30;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.monthStreak, state), true);
+
+  state.profile.playtimeMin = 299;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.bestBuddies, state), false);
+  state.profile.playtimeMin = 300;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.bestBuddies, state), true);
+  assert.deepEqual(stickerProgress(STICKERS_BY_ID.inseparable, state), { current: 300, target: 1500 });
+
+  state.profile.coinsSpent = 2999;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.bigSpender, state), false);
+  state.profile.coinsSpent = 3000;
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.bigSpender, state), true);
+
+  state.outfits.owned = Array.from({ length: 9 }, (_, i) => `piece${i}`);
+  assert.deepEqual(stickerProgress(STICKERS_BY_ID.hatParade, state), { current: 9, target: 10 });
+  state.outfits.owned.push('crown');
+  assert.equal(isStickerSatisfied(STICKERS_BY_ID.hatParade, state), true);
+});
+
+test('V6/F1 decorPlaced: rides the achievements decorator read, junk-safe', () => {
+  const state = defaultState();
+  const def = STICKERS_BY_ID.interiorDesigner; // ≥ 20
+  // the default save ships ONE non-default piece (living:shelf1 radio)
+  assert.deepEqual(stickerProgress(def, state), { current: 1, target: 20 });
+  for (let i = 0; i < 18; i += 1) state.furniture.placed[`living:d${i}`] = `chair${i}`;
+  assert.equal(isStickerSatisfied(def, state), false, '19 < 20');
+  state.furniture.placed['living:d18'] = 'chair18';
+  assert.equal(isStickerSatisfied(def, state), true);
+  // hostile non-object placed shapes read 0 (never throw)
+  for (const junk of ['sofa', ['sofa'], 42]) {
+    state.furniture.placed = junk;
+    assert.deepEqual(stickerProgress(def, state), { current: 0, target: 20 }, String(junk));
+  }
+});
+
 test('event shape: no progress from state, 1/1 only once latched', () => {
   const def = STICKERS_BY_ID.grumpMorning;
   const state = defaultState();
@@ -131,6 +224,9 @@ test('hostile state: wrong-typed slices read as zero progress, never throw', () 
     { achievements: { counters: 'many' } },
     { outfits: { equipped: null }, skins: { owned: 'cream' } },
     { minigames: { best: null }, collections: null, weight: { value: 'chonky' } },
+    // V6/F1 slices in hostile shapes (postcards/park/streak/profile/decor)
+    { vacation: 'lots', themePark: 7, daily: { streak: 'week' }, profile: null, furniture: { placed: 'sofa' } },
+    { vacation: { archive: 'cards', trips: -3 }, themePark: { rides: [] }, outfits: { owned: 'crown' } },
     null,
     undefined,
   ]) {
@@ -164,13 +260,13 @@ test('applyStickerUnlocks never unlocks event stickers (hook-only path)', () => 
   assert.deepEqual(unlocked.filter((d) => d.cond.event), []);
 });
 
-test('stickerCounts: unlocked/total/unseen drive the n/48 header + NEU dot', () => {
+test('stickerCounts: unlocked/total/unseen drive the n/84 header + NEU dot', () => {
   const state = defaultState();
-  // V5/STICKERS: 48 regular defs (28 §C5.1 + 20 wave-1); secret excluded
-  assert.deepEqual(stickerCounts(state), { unlocked: 0, total: 48, unseen: 0 });
+  // V6/F1: 84 regular defs (28 §C5.1 + 20 V5 + 36 V6); secret excluded
+  assert.deepEqual(stickerCounts(state), { unlocked: 0, total: 84, unseen: 0 });
   state.stickers.unlocked = { firstNom: 1, sleepyhead: 2, bigTen: 3 };
   state.stickers.seen = { firstNom: true };
-  assert.deepEqual(stickerCounts(state), { unlocked: 3, total: 48, unseen: 2 });
+  assert.deepEqual(stickerCounts(state), { unlocked: 3, total: 84, unseen: 2 });
 });
 
 // ------------------------------------------------------- live store wiring
@@ -243,10 +339,10 @@ test('markSeen: sets seen once, only for unlocked; counts() reflects NEU', () =>
   store.emit('stickerHook', { id: 'towed' });
   assert.equal(engine.isUnlocked('towTrouble'), true);
   assert.equal(engine.isSeen('towTrouble'), false);
-  assert.deepEqual(engine.counts(), { unlocked: 1, total: 48, unseen: 1 });
+  assert.deepEqual(engine.counts(), { unlocked: 1, total: 84, unseen: 1 });
   engine.markSeen('towTrouble');
   assert.equal(engine.isSeen('towTrouble'), true);
-  assert.deepEqual(engine.counts(), { unlocked: 1, total: 48, unseen: 0 });
+  assert.deepEqual(engine.counts(), { unlocked: 1, total: 84, unseen: 0 });
   resetStickerBookForTests();
 });
 

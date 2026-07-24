@@ -1,9 +1,10 @@
 // V3/G34 — sticker catalog integrity (PLAN3 §C5.1/§C5.2, binding). THE WAVE
 // GATE: catalog ↔ committed PNG 1:1 (fails on missing OR extra files), every
 // art 512×512 ≤ 150 KB (§C5.2/§D6), the frozen ids in table order (28 §C5.1
-// originals + 20 V5/STICKERS wave-1 appends + the secret slot last), every
-// condition row verbatim against an independent spec copy, EN/DE
-// title/flavor/hint parity, and — via the pure engine — all 48 unlockable
+// originals + 20 V5/STICKERS wave-1 appends + 36 V6/F1 themed-page appends +
+// the secret slot last), every condition row verbatim against an independent
+// spec copy, the V6/F1 STICKER_PAGES presentation catalog, EN/DE
+// title/flavor/hint parity, and — via the pure engine — all 84 unlockable
 // through their real condition shapes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 
 import {
   STICKERS, STICKERS_BY_ID, getSticker, TOTAL_BOOK_STICKERS,
-  STICKER_PAGE_SIZES, stickerPages,
+  STICKER_PAGE_SIZES, STICKER_PAGES, stickerPages,
 } from '../src/data/stickers.js';
 import {
   stickerProgress, isStickerSatisfied, applyStickerUnlocks,
@@ -75,29 +76,78 @@ const SPEC_CONDS = [
   ['getWellSoon', { counter: 'cures', target: 3 }],
   ['radioBunny', { counter: 'radioMinutes', target: 30 }],
   ['codeWhisperer', { counter: 'codesRedeemed', target: 1 }],
+  // V6/F1 (PLAN6 Wave F): 36 new regular rows on six themed pages, appended
+  // after the 48 frozen pre-V6 rows and before the secret slot. Conditions
+  // are PURE READS of existing slices only (postcard archive, vacation
+  // trips, themePark, bests, counters, daily/profile/outfits/furniture).
+  // NOTE: handsUp keys off rides.coaster ≥ 3 (no hands-up writer exists —
+  // the ruled fallback; hint copy says so honestly).
+  ['beachPostcard', { special: 'postcards', dest: 'beach', target: 1 }],
+  ['harborPostcard', { special: 'postcards', dest: 'harbor', target: 1 }],
+  ['bakeryPostcard', { special: 'postcards', dest: 'bakery', target: 1 }],
+  ['nightSkyPostcard', { special: 'postcards', dest: 'nightSky', target: 1 }],
+  ['frequentFlyer', { special: 'vacationTrips', target: 3 }],
+  ['penPal', { special: 'postcards', target: 10 }],
+  ['parkFirstVisit', { special: 'park', key: 'visits', target: 1 }],
+  ['loopStar', { special: 'park', key: 'coasterRides', target: 1 }],
+  ['handsUp', { special: 'park', key: 'coasterRides', target: 3 }],
+  ['candyDay', { special: 'park', key: 'candyBought', target: 3 }],
+  ['nightLights', { special: 'park', key: 'nightVisit', target: 1 }],
+  ['parkExplorer', { special: 'park', key: 'visits', target: 5 }],
+  ['lanternKeeper', { special: 'gameBest', game: 'lanternFloat', target: 60 }],
+  ['snailCourier', { special: 'gameBest', game: 'snailMail', target: 60 }],
+  ['ghostWhisperer', { counter: 'ghostsCaught', target: 25 }],
+  ['harborMaster', { counter: 'cratesShipped', target: 50 }],
+  ['rocketHero', { counter: 'rescues', target: 15 }],
+  ['pipeDreamer', { special: 'gameBest', game: 'pipeFlow', target: 70 }],
+  ['weekStreak', { special: 'streak', target: 7 }],
+  ['medsMaster', { counter: 'medsGiven', target: 10 }],
+  ['marketDay', { counter: 'sells', target: 25 }],
+  ['memoryKeeper', { counter: 'galleryPhotos', target: 40 }],
+  ['interiorDesigner', { special: 'decorPlaced', target: 20 }],
+  ['storyTeller', { counter: 'recapsSeen', target: 3 }],
+  ['teaTime', { special: 'gameBest', game: 'teaParty', target: 60 }],
+  ['pancakeMountain', { special: 'gameBest', game: 'pancakeTower', target: 40 }],
+  ['burgerBoss', { special: 'gameBest', game: 'burgerBuild', target: 60 }],
+  ['veggieChef', { special: 'gameBest', game: 'veggieChop', target: 70 }],
+  ['cakeParade', { counter: 'cakesServed', target: 25 }],
+  ['nougatFlood', { counter: 'nougatGlobs', target: 10 }],
+  ['bestBuddies', { special: 'playtimeMin', target: 300 }],
+  ['inseparable', { special: 'playtimeMin', target: 1500 }],
+  ['tickleTornado', { counter: 'tickles', target: 200 }],
+  ['monthStreak', { special: 'streak', target: 30 }],
+  ['hatParade', { special: 'outfitsOwned', target: 10 }],
+  ['bigSpender', { special: 'coinsSpent', target: 3000 }],
   // V4/G53 (PLAN4 §C-SYS5.4/§B6): the secret BONUS sticker — outside the
   // regular count (secret: true), unlocked only via the 'herzGooby' code
   // word, LAST in table order.
   ['herzGooby', { code: 'herzGooby' }],
 ];
 
+/** V6/F1: the six themed-page ids in page order (pages 9–14). */
+const V6_PAGE_IDS = ['travel', 'funkelpark', 'arcadeStars', 'cozyLife', 'foodieFeast', 'bestFriends'];
+
 // ------------------------------------------------------------------ catalog
 
-test('48 regular stickers + secret, ids in frozen table order, unique', () => {
-  // V5/STICKERS: 28 §C5.1 originals + 20 wave-1 appends = 48 regular; the
-  // secret herzGooby stays outside the count and LAST in table order.
-  assert.equal(STICKERS.length, 49);
-  assert.equal(TOTAL_BOOK_STICKERS, 48);
+test('84 regular stickers + secret, ids in frozen table order, unique', () => {
+  // V6/F1: 28 §C5.1 originals + 20 V5 wave-1 + 36 V6 themed = 84 regular;
+  // the secret herzGooby stays outside the count and LAST in table order.
+  assert.equal(STICKERS.length, 85);
+  assert.equal(TOTAL_BOOK_STICKERS, 84);
   assert.deepEqual(STICKERS.map((s) => s.id), SPEC_CONDS.map(([id]) => id));
-  assert.equal(new Set(STICKERS.map((s) => s.id)).size, 49);
+  assert.equal(new Set(STICKERS.map((s) => s.id)).size, 85);
   assert.equal(getSticker('firstNom'), STICKERS[0]);
   assert.equal(getSticker('bogus'), undefined);
   // the ONE secret def is herzGooby, flagged + last in table order
   assert.deepEqual(STICKERS.filter((s) => s.secret).map((s) => s.id), ['herzGooby']);
-  assert.equal(STICKERS[48].id, 'herzGooby');
-  // the 28 §C5.1 originals stay FROZEN in their exact positions
+  assert.equal(STICKERS[84].id, 'herzGooby');
+  // the 28 §C5.1 originals + 20 V5 rows stay FROZEN in their exact positions
   assert.equal(STICKERS[27].id, 'albumMaster');
   assert.equal(STICKERS[28].id, 'snackStack');
+  assert.equal(STICKERS[47].id, 'codeWhisperer');
+  // the V6/F1 append starts right after the frozen 48
+  assert.equal(STICKERS[48].id, 'beachPostcard');
+  assert.equal(STICKERS[83].id, 'bigSpender');
 });
 
 test('every condition row matches §C5.1 verbatim', () => {
@@ -117,17 +167,41 @@ test('defs carry nameKey/flavorKey/hintKey/art in the §B5 shapes', () => {
   }
 });
 
-test('page layout: 8 pages of 6 (V5), table order preserved', () => {
-  assert.deepEqual([...STICKER_PAGE_SIZES], [6, 6, 6, 6, 6, 6, 6, 6]);
+test('page layout: 14 pages of 6 (V6/F1), table order preserved', () => {
+  assert.deepEqual([...STICKER_PAGE_SIZES], Array(14).fill(6));
   const pages = stickerPages();
-  assert.deepEqual(pages.map((p) => p.length), [6, 6, 6, 6, 6, 6, 6, 6]);
-  // V4/G53 (§C-SYS5.4): pages carry the 48 REGULAR defs only — the secret
+  assert.deepEqual(pages.map((p) => p.length), Array(14).fill(6));
+  // V4/G53 (§C-SYS5.4): pages carry the 84 REGULAR defs only — the secret
   // slot is appended to the LAST page by ui/albumScreen.js, outside paging.
   assert.deepEqual(
     pages.flat().map((s) => s.id),
     STICKERS.filter((s) => !s.secret).map((s) => s.id)
   );
   assert.ok(pages.flat().every((s) => s.id !== 'herzGooby'));
+});
+
+test('V6/F1 STICKER_PAGES: positional catalog (ids/titles/icons/tints) matches the slicing', () => {
+  // one presentation row per page, positional with stickerPages()
+  assert.equal(STICKER_PAGES.length, STICKER_PAGE_SIZES.length);
+  assert.deepEqual(STICKER_PAGES.slice(8).map((p) => p.id), V6_PAGE_IDS);
+  const pages = stickerPages();
+  STICKER_PAGES.forEach((meta, i) => {
+    assert.ok(Object.isFrozen(meta), `${meta.id} frozen`);
+    assert.match(meta.tint, /^#[0-9A-Fa-f]{6}$/, `${meta.id} tint is #rrggbb`);
+    assert.ok(typeof meta.icon === 'string' && meta.icon.length > 0, `${meta.id} icon`);
+    if (i < 8) {
+      // legacy pages: numbered titles (titleKey null), rows carry no page id
+      assert.equal(meta.id, `classic${i + 1}`);
+      assert.equal(meta.titleKey, null);
+      assert.ok(pages[i].every((d) => d.page === undefined), `page ${i} legacy rows`);
+    } else {
+      // themed pages: EN+DE titles + every row pinned to its page id
+      assert.equal(meta.titleKey, `stickerbook.pageTitle.${meta.id}`);
+      assert.equal(typeof EN[meta.titleKey], 'string', `EN ${meta.titleKey}`);
+      assert.equal(typeof DE[meta.titleKey], 'string', `DE ${meta.titleKey}`);
+      assert.ok(pages[i].every((d) => d.page === meta.id), `page ${i} rows carry page='${meta.id}'`);
+    }
+  });
 });
 
 test('every sticker title/flavor/hint exists in BOTH dictionaries (EN+DE)', () => {
@@ -179,6 +253,11 @@ test('every sticker PNG is 512×512 and ≤ 150 KB (§C5.2/§D6)', () => {
  * Build a state that legitimately satisfies every §C5.1 condition at once
  * (event stickers unlock via their hook path — asserted separately).
  */
+/** V6/F1: a synthetic (valid-shaped) postcard-archive entry. */
+function card(destId, i) {
+  return { destId, dayIndex: 1, variant: 1, atMs: 1000 + i };
+}
+
 function maxedState() {
   const s = defaultState();
   s.level = 40;
@@ -188,30 +267,62 @@ function maxedState() {
     // still satisfies the lower original — e.g. feeds 50 covers firstNom 1)
     feeds: 50, washes: 25, balls: 50, sleeps: 25, sickEver: 1, vetTrips: 1,
     harvests: 25, photosTaken: 10, trips: 10, holeInOnes: 1, deliveries: 50,
-    nougatGlobs: 1, perfectCakes: 1, surfRuns: 1,
-    // V5/STICKERS wave-1 counters (all existing §B1/§B2 keys)
-    tickles: 50, waterings: 50, plantings: 10, cleanTrips: 5,
+    perfectCakes: 1, surfRuns: 1,
+    // V5/STICKERS wave-1 counters (all existing §B1/§B2 keys); tickles and
+    // nougatGlobs raised for the V6 rows (200 covers bellyLaugh's 50,
+    // 10 covers nutellaGlob's 1)
+    tickles: 200, waterings: 50, plantings: 10, cleanTrips: 5,
     modifierPlays: 5, questsDone: 10, cures: 3, radioMinutes: 30,
-    codesRedeemed: 1,
+    codesRedeemed: 1, nougatGlobs: 10,
+    // V6/F1 counter rows (all existing §B1/§B2 save-schema keys)
+    ghostsCaught: 25, cratesShipped: 50, rescues: 15, medsGiven: 10,
+    sells: 25, galleryPhotos: 40, recapsSeen: 3, cakesServed: 25,
   });
   s.minigames.best.danceParty = 100;
   // V5/STICKERS gameBest rows
   s.minigames.best.carrotCatch = 60;
   s.minigames.best.memoryMatch = 40;
   s.minigames.best.goobySays = 100;
+  // V6/F1 gameBest rows
+  s.minigames.best.lanternFloat = 60;
+  s.minigames.best.snailMail = 60;
+  s.minigames.best.pipeFlow = 70;
+  s.minigames.best.teaParty = 60;
+  s.minigames.best.pancakeTower = 40;
+  s.minigames.best.burgerBuild = 60;
+  s.minigames.best.veggieChop = 70;
   s.collections.entries['fish.goldenFish'] = 1;
   s.collections.claimedSets = { veggies: 1, fish: 1, landmarks: 1, treats: 1 };
   s.skins.owned = ['cream', 'snow'];
   s.outfits.equipped = { hat: 'crown', glasses: 'starGlasses', neck: 'scarfRed', back: null };
   s.codes.redeemed.herzGooby = 777; // V4/G53: secret unlocks via its code latch
+  // ── V6/F1 slices (pure-read specials) ──
+  // 10 postcards spanning all four destination rows (penPal needs 10 total)
+  s.vacation = {
+    trips: 3, // frequentFlyer
+    archive: [
+      card('beach', 0), card('harbor', 1), card('bakery', 2), card('nightSky', 3),
+      card('beach', 4), card('harbor', 5), card('bakery', 6), card('nightSky', 7),
+      card('beach', 8), card('nightSky', 9),
+    ],
+  };
+  s.themePark = { visits: 5, nightVisit: true, rides: { coaster: 3 }, candyBought: 3 };
+  s.daily.streak = 30; // weekStreak 7 + monthStreak 30
+  s.profile.playtimeMin = 1500; // bestBuddies 300 + inseparable 1500
+  s.profile.coinsSpent = 3000; // bigSpender
+  s.outfits.owned = Array.from({ length: 10 }, (_, i) => `piece${i}`); // hatParade
+  // interiorDesigner: the default save ships 1 non-default piece (radio) —
+  // 19 more placed non-defaults reach the 20 target
+  for (let i = 0; i < 19; i += 1) s.furniture.placed[`living:v6spec${i}`] = `fancy${i}`;
   return s;
 }
 
-test('all 44 counter/special stickers unlock through applyStickerUnlocks', () => {
+test('all 80 counter/special stickers unlock through applyStickerUnlocks', () => {
   const eventIds = SPEC_CONDS.filter(([, c]) => c.event).map(([id]) => id);
   assert.deepEqual(eventIds, ['grumpMorning', 'rainyDay', 'starGazer', 'towTrouble']);
   const { state, unlocked } = applyStickerUnlocks(maxedState(), 777);
-  // 44 counter/special (24 original + 20 V5) + the code-latched secret = 45
+  // 80 counter/special (24 original + 20 V5 + 36 V6) + the code-latched
+  // secret = 81
   assert.equal(unlocked.length, SPEC_CONDS.length - eventIds.length);
   for (const [id, cond] of SPEC_CONDS) {
     if (cond.event) {
@@ -240,6 +351,31 @@ test('each individual condition flips exactly at its threshold', () => {
     else if (cond.special === 'collectionEntry') below.collections.entries = {};
     else if (cond.special === 'fullOutfit') {
       below.outfits.equipped = { hat: 'crown', glasses: 'starGlasses', neck: null, back: null };
+    }
+    // ── V6/F1 pure-read specials ──
+    else if (cond.special === 'postcards') {
+      // per-destination rows: a card from a DIFFERENT destination never
+      // counts; total rows: one short of the target
+      below.vacation = {
+        archive: cond.dest
+          ? [card(cond.dest === 'beach' ? 'harbor' : 'beach', 0)]
+          : Array.from({ length: cond.target - 1 }, (_, i) => card('beach', i)),
+      };
+    } else if (cond.special === 'vacationTrips') below.vacation = { trips: cond.target - 1 };
+    else if (cond.special === 'park') {
+      below.themePark = { visits: 0, nightVisit: false, rides: { coaster: 0 }, candyBought: 0 };
+      if (cond.key === 'visits') below.themePark.visits = cond.target - 1;
+      else if (cond.key === 'coasterRides') below.themePark.rides.coaster = cond.target - 1;
+      else if (cond.key === 'candyBought') below.themePark.candyBought = cond.target - 1;
+      // nightVisit: the un-latched flag IS below threshold
+    } else if (cond.special === 'streak') below.daily.streak = cond.target - 1;
+    else if (cond.special === 'playtimeMin') below.profile.playtimeMin = cond.target - 1;
+    else if (cond.special === 'coinsSpent') below.profile.coinsSpent = cond.target - 1;
+    else if (cond.special === 'outfitsOwned') {
+      below.outfits.owned = Array.from({ length: cond.target - 1 }, (_, i) => `piece${i}`);
+    } else if (cond.special === 'decorPlaced') {
+      // default save ships 1 non-default piece (radio) → add target-2 more
+      for (let i = 0; i < cond.target - 2; i += 1) below.furniture.placed[`living:x${i}`] = `b${i}`;
     }
     assert.equal(isStickerSatisfied(def, below), false, `${id} below threshold`);
     assert.equal(isStickerSatisfied(def, at), true, `${id} at threshold`);

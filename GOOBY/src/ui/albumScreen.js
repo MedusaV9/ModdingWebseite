@@ -3,15 +3,19 @@
 //
 // 3.0 layout (§B5/§C5.3): a TOP-LEVEL tab strip splits the screen into
 //   „Sticker"     the v2 collections album (4 sets, claim rewards) — UNCHANGED
-//   „Stickerbuch" the §C5 sticker book (V5: 48 regular): 8 pages (6 slots
-//                 each, 2×3 grid), horizontal swipe + page dots, page titles.
-//                 Locked = mystery „?" placeholder (V5/STICKERS: the art img
-//                 is NEVER rendered/fetched while locked — no padlock and no
-//                 grey-filter reveal); unlocked = full AI art with a 300 ms
-//                 pop-in + confetti on first view. Tap any slot → detail
-//                 sheet (art large, title, flavor; locked shows the mystery
-//                 box + hint line instead). „NEU" pink dot until seen
-//                 (stickers.seen via the engine). Header shows n/48.
+//   „Stickerbuch" the §C5 sticker book (V6/F1: 84 regular): 14 pages (6
+//                 slots each, 2×3 grid), horizontal swipe + the V6/F1 titled
+//                 page-chip rail (icon + title + n/6 count, ←/→ keyboard
+//                 paging — replaces the V3 page dots), themed page titles
+//                 from STICKER_PAGES. Locked = mystery „?" placeholder
+//                 (V5/STICKERS: the art img is NEVER rendered/fetched while
+//                 locked — no padlock and no grey-filter reveal; V6/F1 tints
+//                 the box in its page accent + glyph watermark + table
+//                 number, all page-generic); unlocked = full AI art with a
+//                 300 ms pop-in + confetti on first view. Tap any slot →
+//                 detail sheet (art large, title, flavor; locked shows the
+//                 mystery box + hint line instead). „NEU" pink dot until
+//                 seen (stickers.seen via the engine). Header shows n/84.
 // Book styles are component-injected module CSS (G33 owns styles.css this
 // wave); new 3.0 rules are rem-based so the §B3 uiScale mechanism scales them.
 //
@@ -31,7 +35,8 @@ import { COLLECTION_SETS, getCollectionSet } from '../data/collections.js';
 import { countOf, setProgress, isSetComplete } from '../systems/collections.js';
 import { getAchievementsEngine } from '../systems/achievementsEngine.js';
 // V3/G34: sticker-book catalog + engine (both G34-owned — no lazy import needed)
-import { STICKERS, STICKERS_BY_ID, stickerPages } from '../data/stickers.js';
+// V6/F1: + STICKER_PAGES (page rail titles/icons/tints + mystery-box tinting)
+import { STICKERS, STICKERS_BY_ID, stickerPages, STICKER_PAGES } from '../data/stickers.js';
 import { getStickerBook, stickerCounts } from '../systems/stickerBook.js';
 import { burstConfettiDom } from '../gfx/particles.js';
 import { t, getLang } from '../data/strings.js';
@@ -53,6 +58,26 @@ const SET_ICONS = { fish: 'fish', veggies: 'carrot', landmarks: 'home', treats: 
 // (wave-1b concurrency, §E0.1-11) a placeholder def keeps the render whole —
 // the PNG is ART-GATE-1-committed either way.
 const REGULAR_STICKERS = STICKERS.filter((s) => s.id !== 'herzGooby');
+
+// ── V6/F1 (PLAN6 Wave F): page-rail + mystery-box presentation lookups ──────
+/** sticker id → 1-based table number (the locked-slot „#n" badge — position
+ * only, leaks no art/name). */
+const STICKER_NO = new Map(REGULAR_STICKERS.map((s, i) => [s.id, i + 1]));
+/** sticker id → its STICKER_PAGES meta (positional — pages()[i] ↔ PAGES[i]),
+ * for the per-page mystery tint + watermark glyph. */
+const PAGE_META = (() => {
+  const m = new Map();
+  stickerPages().forEach((defs, i) => {
+    for (const d of defs) m.set(d.id, STICKER_PAGES[i]);
+  });
+  return m;
+})();
+const FALLBACK_PAGE_META = Object.freeze({ icon: 'star', tint: '#E3C6DE' });
+/** Page title: themed pages carry a titleKey; legacy pages fall back to the
+ * V3 „Seite n" numbering. */
+const pageTitle = (i) =>
+  (STICKER_PAGES[i]?.titleKey ? t(STICKER_PAGES[i].titleKey) : t('stickerbook.page', { n: i + 1 }));
+// ── end V6/F1 lookups ────────────────────────────────────────────────────────
 const SECRET_STICKER = () => STICKERS_BY_ID.herzGooby ?? {
   id: 'herzGooby',
   nameKey: 'stickerbook.herzGooby.name',
@@ -175,12 +200,27 @@ const ALBUM_CSS = `
 .g34-sb-slot .g34-sb-newdot{position:absolute;top:0.25rem;right:0.375rem;}
 .g34-sb-pop{animation:g34-sb-pop 300ms cubic-bezier(.34,1.56,.64,1);} /* §C5.3 300 ms pop-in */
 @keyframes g34-sb-pop{0%{transform:scale(.2);opacity:0;}100%{transform:scale(1);opacity:1;}}
-/* V3/FIX-C (E9 P1-3): pager dot hit areas were 28-30px tall — ≥44px effective
-   at every scale now (44px real-px floor); tighter margins compensate. */
-.g34-sb-dots{width:100%;display:flex;justify-content:center;gap:0.125rem;flex:none;margin:0 0 0.5rem;}
-.g34-sb-dot{border:none;background:none;padding:0;width:max(44px,2.75rem);height:max(44px,2.75rem);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.g34-sb-dot::after{content:'';width:0.5rem;height:0.5rem;border-radius:999px;background:rgba(74,59,54,.22);transition:background 150ms ease,transform 150ms ease;}
-.g34-sb-dot.g34-active::after{background:var(--pink);transform:scale(1.35);}
+/* ── V6/F1 (PLAN6 Wave F): titled page-chip rail — replaces the V3 page dots
+   (14 pages don't fit as dots). Horizontal scroll, snap-free (chips center
+   themselves via scrollTo), ≥44px chip height (the V3/FIX-C tap floor). ── */
+.f1-sb-rail{width:100%;max-width:27.5rem;flex:none;display:flex;gap:0.375rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0.125rem 0.125rem 0.375rem;margin:0 0 0.25rem;}
+.f1-sb-rail::-webkit-scrollbar{display:none;}
+.f1-sb-chip{flex:none;display:inline-flex;align-items:center;gap:0.3125rem;border:none;border-radius:999px;min-height:max(44px,2.75rem);padding:0.375rem 0.6875rem;font-family:inherit;font-size:0.6875rem;font-weight:800;color:var(--brown);background:var(--paper);box-shadow:0 0 0 1px var(--outline-soft);cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;transition:background 150ms ease,box-shadow 150ms ease;}
+.f1-sb-chip svg{flex:none;opacity:.8;}
+.f1-sb-chip-count{font-variant-numeric:tabular-nums;opacity:.55;font-size:0.625rem;}
+.f1-sb-chip.f1-active{background:var(--f1-tint);box-shadow:0 0 0 2px rgba(74,59,54,.18),var(--shadow-soft);}
+.f1-sb-chip.f1-active svg{opacity:1;}
+/* V6/F1: page-tinted mystery tile — the locked-slot „?" box picks up its
+   page's pastel accent + a low-opacity page-glyph watermark + the sticker's
+   table number. STILL no <img>/art/name anywhere in the locked branch (the
+   V5 no-fetch rule — the watermark is a shared ui/icons.js glyph). */
+.f1-sb-tile{position:relative;overflow:hidden;background:color-mix(in srgb,var(--f1-tint) 55%,var(--white));display:flex;align-items:center;justify-content:center;}
+.f1-sb-tile::after{content:'';position:absolute;inset:0.3125rem;border:2px dashed color-mix(in srgb,var(--f1-tint) 70%,rgba(74,59,54,.35));border-radius:0.5rem;opacity:.6;pointer-events:none;}
+.f1-sb-tile .g34-sb-mystery{position:absolute;inset:0;background:none;}
+.f1-sb-wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(74,59,54,.9);opacity:.13;transform:rotate(-12deg);}
+.f1-sb-num{position:absolute;right:0.4375rem;bottom:0.3125rem;font-size:0.5625rem;font-weight:800;color:rgba(74,59,54,.5);font-variant-numeric:tabular-nums;z-index:1;}
+/* the locked DETAIL sheet mystery box rides the same page tint */
+.f1-sb-tint{background:color-mix(in srgb,var(--f1-tint) 55%,var(--white));}
 .g34-sb-sheet{position:fixed;inset:0;z-index:var(--z-float);display:flex;align-items:center;justify-content:center;background:var(--veil);padding:1rem;} /* V4/UI-DEEP: token scrim + z-ladder (was literal plum) */
 .g34-sb-card{position:relative;width:100%;max-width:20rem;background:var(--white);border-radius:1.375rem;box-shadow:var(--shadow-pop);padding:1.25rem 1rem 1.125rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;text-align:center;}
 .g34-sb-card-art{width:min(60vw,13rem);aspect-ratio:1;object-fit:contain;}
@@ -343,12 +383,13 @@ export function registerAlbumScreen({ store, ui, audio }) {
       const card = document.createElement('div');
       card.className = `g34-sb-card${unlocked ? '' : ' g34-locked'}`;
       // V5/STICKERS: locked sheets render the mystery „?" box — NEVER an
-      // <img src> (no art fetch, no grey-filter reveal).
+      // <img src> (no art fetch, no grey-filter reveal). V6/F1: the box
+      // rides the sticker's PAGE tint (page-generic, leaks nothing).
       card.innerHTML = `
         <button class="g34-sb-close" aria-label="${t('ui.close')}">${icon('close', 18)}</button>
         ${unlocked
           ? `<img class="g34-sb-card-art${firstView ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" draggable="false"/>`
-          : '<span class="g34-sb-card-art g34-sb-mystery" aria-hidden="true">?</span>'}
+          : `<span style="--f1-tint:${(PAGE_META.get(def.id) ?? FALLBACK_PAGE_META).tint}" class="g34-sb-card-art f1-sb-tint g34-sb-mystery" aria-hidden="true">?</span>`}
         <h2 class="g34-sb-card-title">${unlocked ? t(def.nameKey) : t('stickerbook.unknown')}</h2>
         ${unlocked
           ? `<p class="g34-sb-card-flavor">${t(def.flavorKey)}</p>`
@@ -774,11 +815,18 @@ export function registerAlbumScreen({ store, ui, audio }) {
       }
       prevUnlocked = new Set(Object.keys(unlockedMap));
 
+      const pages = stickerPages();
+
+      // V6/F1: the titled page-chip rail sits ABOVE the pager — it replaces
+      // the V3 page dots (14 pages don't scan as dots). Populated below,
+      // after the pages loop, with live per-page n/6 unlock counts.
+      const rail = document.createElement('div');
+      rail.className = 'f1-sb-rail';
+      body.appendChild(rail);
+
       const pager = document.createElement('div');
       pager.className = 'g34-sb-pager';
       body.appendChild(pager);
-
-      const pages = stickerPages();
       /** @type {HTMLElement[]} */
       const confettiSlots = [];
       pages.forEach((defs, pageIdx) => {
@@ -786,7 +834,9 @@ export function registerAlbumScreen({ store, ui, audio }) {
         page.className = 'g34-sb-page';
         const pt = document.createElement('h2');
         pt.className = 'g34-sb-pagetitle';
-        pt.textContent = t('stickerbook.page', { n: pageIdx + 1 }); // „Seite 1–5"
+        // V6/F1: themed pages show their title („Reise", „Funkelpark", …);
+        // the 8 legacy pages keep the V3 „Seite n" numbering (titleKey null).
+        pt.textContent = pageTitle(pageIdx);
         page.appendChild(pt);
         const grid = document.createElement('div');
         grid.className = 'g34-sb-grid';
@@ -801,11 +851,19 @@ export function registerAlbumScreen({ store, ui, audio }) {
           slot.className = `g34-sb-slot ${unlocked ? 'g34-unlocked' : 'g34-locked'}`;
           // V5/STICKERS: locked slots render the mystery „?" placeholder —
           // no <img src> means the art is never fetched, so it can't be
-          // grey-filter revealed (matches the secret-slot style).
+          // grey-filter revealed (matches the secret-slot style). V6/F1
+          // dresses that box in its PAGE's pastel tint + a low-opacity page
+          // glyph watermark + the sticker's table number — page-generic
+          // decoration only (shared ui/icons.js glyph, zero art/name leaks).
+          const meta = PAGE_META.get(def.id) ?? FALLBACK_PAGE_META;
           slot.innerHTML = `
             ${unlocked
               ? `<img class="g34-sb-art${pop ? ' g34-sb-pop' : ''}" src="/${def.art}" alt="" loading="lazy" draggable="false"/>`
-              : '<span class="g34-sb-art g34-sb-mystery" aria-hidden="true">?</span>'}
+              : `<span class="g34-sb-art f1-sb-tile" style="--f1-tint:${meta.tint}">
+                   <span class="f1-sb-wm" aria-hidden="true">${icon(meta.icon, 52)}</span>
+                   <span class="g34-sb-mystery" aria-hidden="true">?</span>
+                   <span class="f1-sb-num">#${STICKER_NO.get(def.id) ?? '?'}</span>
+                 </span>`}
             <span class="g34-sb-name">${unlocked ? t(def.nameKey) : t('stickerbook.unknown')}</span>
             ${isNew ? `<span class="g34-sb-newdot">${t('stickerbook.new')}</span>` : ''}`;
           slot.addEventListener('click', () => {
@@ -827,35 +885,70 @@ export function registerAlbumScreen({ store, ui, audio }) {
         pager.appendChild(page);
       });
 
-      const dots = document.createElement('div');
-      dots.className = 'g34-sb-dots';
-      body.appendChild(dots);
-      /** Dot-tap smooth scroll in flight (page index) — while set, the scroll
-       * listener must NOT downgrade bookPage to intermediate positions, or a
-       * mid-flight 1 Hz store re-render pins the book back on the origin page
-       * (navigation aborts). Cleared on arrival or on the re-render restore. */
+      // ── V6/F1: page-chip rail population (icon + title + n/6 count) ─────
+      /** Chip-tap smooth scroll in flight (page index) — while set, the
+       * scroll listener must NOT downgrade bookPage to intermediate
+       * positions, or a mid-flight 1 Hz store re-render pins the book back
+       * on the origin page (navigation aborts). Cleared on arrival or on
+       * the re-render restore. (The V3 dot-tap guard, unchanged.) */
       let scrollTarget = null;
       /** @type {HTMLElement[]} */
-      const dotEls = pages.map((_, i) => {
-        const dot = document.createElement('button');
-        dot.className = `g34-sb-dot${i === bookPage ? ' g34-active' : ''}`;
-        dot.setAttribute('aria-label', t('stickerbook.page', { n: i + 1 }));
-        dot.addEventListener('click', () => {
-          audio.play('ui.tap');
-          bookPage = i;
-          scrollTarget = i;
-          pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' });
-          updateDots();
-        });
-        dots.appendChild(dot);
-        return dot;
+      const chipEls = pages.map((defs, i) => {
+        const meta = STICKER_PAGES[i] ?? FALLBACK_PAGE_META;
+        const have = defs.reduce((n, d) => n + (unlockedMap[d.id] ? 1 : 0), 0);
+        const chip = document.createElement('button');
+        chip.className = `f1-sb-chip${i === bookPage ? ' f1-active' : ''}`;
+        chip.style.setProperty('--f1-tint', meta.tint);
+        chip.setAttribute('aria-label', `${pageTitle(i)} ${have}/${defs.length}`);
+        chip.setAttribute('aria-current', i === bookPage ? 'true' : 'false');
+        chip.innerHTML = `${icon(meta.icon, 14)}<span class="f1-sb-chip-title">${pageTitle(i)}</span><span class="f1-sb-chip-count">${have}/${defs.length}</span>`;
+        chip.addEventListener('click', () => goToPage(i));
+        rail.appendChild(chip);
+        return chip;
       });
 
-      function updateDots() {
-        dotEls.forEach((d, i) => d.classList.toggle('g34-active', i === bookPage));
+      /** Center the active chip in the rail — re-renders rebuild the rail
+       * DOM every second, so its scroll position must be restored
+       * deterministically (the pager scrollLeft-restore pattern). */
+      function centerChip(behavior) {
+        const chip = chipEls[bookPage];
+        if (!chip) return;
+        rail.scrollTo({
+          left: chip.offsetLeft - (rail.clientWidth - chip.offsetWidth) / 2,
+          behavior,
+        });
       }
 
-      // Horizontal swipe = native scroll-snap; track the page for the dots
+      function updateRail() {
+        chipEls.forEach((c, i) => {
+          c.classList.toggle('f1-active', i === bookPage);
+          c.setAttribute('aria-current', i === bookPage ? 'true' : 'false');
+        });
+        centerChip('smooth');
+      }
+
+      function goToPage(i) {
+        if (i === bookPage) return;
+        audio.play('ui.tap');
+        bookPage = i;
+        scrollTarget = i;
+        pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' });
+        updateRail();
+      }
+
+      // V6/F1 keyboard support: ←/→ page the book while a chip has focus
+      // (chips are buttons, so Tab + Enter/Space already work natively).
+      rail.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const next = Math.max(0, Math.min(pages.length - 1, bookPage + (e.key === 'ArrowRight' ? 1 : -1)));
+        if (next !== bookPage) {
+          goToPage(next);
+          chipEls[next]?.focus();
+        }
+      });
+
+      // Horizontal swipe = native scroll-snap; track the page for the rail
       // and so the 1 Hz store re-renders restore the scroll position.
       pager.addEventListener('scroll', () => {
         const w = pager.clientWidth || 1;
@@ -866,15 +959,17 @@ export function registerAlbumScreen({ store, ui, audio }) {
         }
         if (p !== bookPage) {
           bookPage = p;
-          updateDots();
+          updateRail();
         }
       }, { passive: true });
       // Restore the current page instantly (before paint) after a re-render
-      // (an instant jump lands exactly on bookPage, so any in-flight dot-tap
+      // (an instant jump lands exactly on bookPage, so any in-flight chip-tap
       // navigation completes here instead of aborting).
       pager.scrollLeft = bookPage * (pager.clientWidth || 0);
+      centerChip('auto');
       requestAnimationFrame(() => {
         pager.scrollLeft = bookPage * (pager.clientWidth || 0);
+        centerChip('auto');
       });
 
       for (const slot of confettiSlots) burstConfettiDom(slot);

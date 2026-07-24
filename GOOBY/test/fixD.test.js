@@ -1,8 +1,10 @@
 // V3/FIX-D regression suite — pins the ENGINE-side recipes behind the dev
 // panel fixes (E14 P1-1 unlock-all → 37/37, E14 P1-3 sticker-fire → any of
-// the 28 ids) and the E20 P1-2 NEU-ribbon lock gate. Pure modules only
+// the 84+1 ids) and the E20 P1-2 NEU-ribbon lock gate. Pure modules only
 // (devPanel.js itself uses import.meta.glob and stays browser-only — these
-// tests replay its exact staged state recipe against the real engines).
+// tests replay its exact staged state recipe against the real engines; the
+// V6/F1 branches below model the state a harness/dev tool must stage to
+// fire the new pure-read specials).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -162,6 +164,35 @@ function applyFireStickerRecipe(state, def) {
     }
   } else if (cond.special === 'skinsOwned') {
     state.skins.owned = [...new Set([...(state.skins.owned ?? []), ...SKINS.map((k) => k.id)])];
+  } else if (cond.special === 'postcards') {
+    // V6/F1: stage `target` valid archive entries (of the pinned destination
+    // when the row is per-destination) — distinct atMs defeats the dedupe.
+    state.vacation = {
+      ...(state.vacation ?? {}),
+      archive: Array.from({ length: target }, (_, i) => ({
+        destId: cond.dest ?? 'beach', dayIndex: 1, variant: 1, atMs: 1000 + i,
+      })),
+    };
+  } else if (cond.special === 'vacationTrips') {
+    state.vacation = { ...(state.vacation ?? {}), trips: target };
+  } else if (cond.special === 'park') {
+    const slice = { visits: 0, nightVisit: false, rides: { coaster: 0 }, candyBought: 0 };
+    if (cond.key === 'visits') slice.visits = target;
+    else if (cond.key === 'coasterRides') slice.rides.coaster = target;
+    else if (cond.key === 'candyBought') slice.candyBought = target;
+    else if (cond.key === 'nightVisit') slice.nightVisit = true;
+    else assert.fail(`fireSticker recipe misses park key '${cond.key}' (${def.id})`);
+    state.themePark = slice;
+  } else if (cond.special === 'streak') {
+    state.daily.streak = Math.max(Math.floor(Number(state.daily.streak) || 0), target);
+  } else if (cond.special === 'playtimeMin') {
+    state.profile.playtimeMin = Math.max(Math.floor(Number(state.profile.playtimeMin) || 0), target);
+  } else if (cond.special === 'coinsSpent') {
+    state.profile.coinsSpent = Math.max(Math.floor(Number(state.profile.coinsSpent) || 0), target);
+  } else if (cond.special === 'outfitsOwned') {
+    state.outfits.owned = [...new Set([...(state.outfits.owned ?? []), ...OUTFITS.map((o) => o.id)])].slice(0, Math.max(target, 0));
+  } else if (cond.special === 'decorPlaced') {
+    for (let i = 0; i < target; i += 1) state.furniture.placed[`fire:${i}`] = `fireProbe${i}`;
   } else {
     assert.fail(`fireSticker recipe misses special '${cond.special}' (${def.id})`);
   }
@@ -169,9 +200,10 @@ function applyFireStickerRecipe(state, def) {
 }
 
 test('FIX-D E14 P1-3: the fire recipe unlocks each of the sticker defs', () => {
-  // V5/STICKERS: 48 regular (28 §C5.1 + 20 wave-1) + the secret herzGooby.
-  // The recipe stays generic over counter/gameBest, so the new defs ride it.
-  assert.equal(STICKERS.length, 49);
+  // V6/F1: 84 regular (28 §C5.1 + 20 V5 + 36 V6) + the secret herzGooby.
+  // The recipe stays generic over counter/gameBest; the V6 pure-read
+  // specials have their own staging branches above.
+  assert.equal(STICKERS.length, 85);
   for (const def of STICKERS) {
     const state = applyFireStickerRecipe(defaultState(), def);
     if (def.cond.event) {

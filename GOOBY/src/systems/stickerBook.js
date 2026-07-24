@@ -15,12 +15,28 @@
 //                 counter plumbing (engine.track / direct store bumps).
 //   specials      level / fullOutfit / weightMax / setsClaimed / skinsOwned /
 //                 gameBest / collectionEntry — read from live state.
+//   V6/F1 specials (PLAN6 Wave F — pure reads of existing slices, evaluated
+//                 HERE only; no new fire sites anywhere else):
+//                 postcards (D2 archive via systems/postcards.js archiveOf,
+//                 optional per-destination `dest`), vacationTrips
+//                 (vacation.trips), park (E1 slice via systems/themePark.js
+//                 sliceOf — key: visits/coasterRides/nightVisit/candyBought),
+//                 streak (daily.streak), playtimeMin/coinsSpent (profile),
+//                 outfitsOwned (outfits.owned.length), decorPlaced
+//                 (achievementsEngine countNonDefaultDecor).
 //   events        the 4 §C5.4 one-shot hooks. CONTRACT (§E0.1-7): hook firers
 //                 call  store.emit('stickerHook', { id: '<hookId>' })  with
 //                 id ∈ {grumpyWake, rainCanopy, nightStars, towed} — G35 owns
 //                 the 4 fire sites; later agents may reuse the same channel.
 // Every counter/special mutation flows through store.update → the coalesced
 // 'change' event (§E2) → checkNow(), so unlocks need no per-feature calls.
+// That single subscription IS the V6 re-evaluation contract too: postcard
+// generation (vacation.tick — live ticker AND systems/offline.js boot
+// catch-up), park writes (parkScene store.update), minigame bests, profile
+// accrual and daily-streak claims all mutate through store.update, and boot
+// itself re-checks via initStickerBook's initial checkNow() — which main.js
+// runs AFTER the offline sim, so a save that crossed a threshold while the
+// app was closed unlocks on the very first pass.
 //
 // Unlock flow (§B5): detect → stickers.unlocked[id] = now() → runtime store
 // event 'stickersChanged' (payload {id}) → queued toast „Neuer Sticker! 🏷️"
@@ -29,12 +45,27 @@
 
 import { STICKERS } from '../data/stickers.js';
 import { now } from '../core/clock.js';
+// V6/F1 (PLAN6 Wave F): the ruled pure-read APIs for the new specials — all
+// three are §B-pure sibling modules (no three.js/DOM), so this file stays
+// headless-importable for node:test.
+import { archiveOf } from './postcards.js';
+import { sliceOf as parkSliceOf } from './themePark.js';
+import { countNonDefaultDecor } from './achievementsEngine.js';
 
 /** §C5.5: bulk unlocks show at most 1 sticker toast per 3 s (queued). */
 export const STICKER_TOAST_THROTTLE_MS = 3000;
 
 /** §C13.3: fullFit counts the 3 ORIGINAL equip slots (back not required). */
 const FULL_FIT_SLOTS = Object.freeze(['hat', 'glasses', 'neck']);
+
+/** V6/F1: 'park' special key → themePark slice read (normalized by sliceOf —
+ * unknown keys read 0, so a junk cond can never unlock anything). */
+const PARK_READS = Object.freeze({
+  visits: (p) => p.visits,
+  coasterRides: (p) => p.rides.coaster,
+  nightVisit: (p) => (p.nightVisit ? 1 : 0),
+  candyBought: (p) => p.candyBought,
+});
 
 /**
  * Progress of one sticker condition against the live state (§B5 shapes).
@@ -86,6 +117,49 @@ export function stickerProgress(def, state) {
           Number(state?.collections?.entries?.[`${cond.set}.${cond.entry}`]) || 0
         );
         break;
+      // ── V6/F1 (PLAN6 Wave F): pure reads of existing slices ──────────────
+      case 'postcards': {
+        // D2's archive read API (normalizes junk, drops unknown destinations,
+        // caps at 36). `dest` restricts to one destination's cards.
+        const cards = archiveOf(state);
+        current = cond.dest
+          ? cards.filter((c) => c.destId === cond.dest).length
+          : cards.length;
+        break;
+      }
+      case 'vacationTrips':
+        current = Math.floor(Number(state?.vacation?.trips) || 0);
+        break;
+      case 'park': {
+        // E1's slice read API (self-heals junk; rides whitelisted).
+        const read = PARK_READS[cond.key];
+        current = read ? read(parkSliceOf(state)) : 0;
+        break;
+      }
+      case 'streak':
+        current = Math.floor(Number(state?.daily?.streak) || 0);
+        break;
+      case 'playtimeMin':
+        current = Math.floor(Number(state?.profile?.playtimeMin) || 0);
+        break;
+      case 'coinsSpent':
+        current = Math.floor(Number(state?.profile?.coinsSpent) || 0);
+        break;
+      case 'outfitsOwned': {
+        const owned = state?.outfits?.owned;
+        current = Array.isArray(owned) ? owned.length : 0;
+        break;
+      }
+      case 'decorPlaced': {
+        // The achievements 'decorator' read, guarded against hostile
+        // non-object `furniture.placed` shapes (strings/arrays read 0).
+        const placed = state?.furniture?.placed;
+        current = placed != null && typeof placed === 'object' && !Array.isArray(placed)
+          ? countNonDefaultDecor(state)
+          : 0;
+        break;
+      }
+      // ── end V6/F1 ─────────────────────────────────────────────────────────
       default:
         current = 0;
     }

@@ -16,6 +16,8 @@ import { EN as V3_CORE_EN, DE as V3_CORE_DE } from '../src/data/strings/v3-core.
 import { EN as V3_STICKERS_EN, DE as V3_STICKERS_DE } from '../src/data/strings/v3-stickers.js';
 // V5/STICKERS wave 1: the 20 new sticker keys live in their own module
 import { EN as V5_STICKERS_EN, DE as V5_STICKERS_DE } from '../src/data/strings/v5-stickers.js';
+// V6/F1: the 36 themed-page sticker keys + 6 page titles live in their own module
+import { EN as V6_STICKERS_EN, DE as V6_STICKERS_DE } from '../src/data/strings/v6-stickers.js';
 
 /** Both dictionaries must carry a non-empty string for the key. */
 function assertKey(key, label = key) {
@@ -141,10 +143,14 @@ test('v3-stickers: EN/DE key parity; every catalog key + book chrome present', (
     // V4/G53: the secret herzGooby row is keyed in strings/v4-core.js
     if (s.secret) continue;
     for (const key of [s.nameKey, s.flavorKey, s.hintKey]) {
-      // V5/STICKERS wave 1: the 20 new ids own their keys in v5-stickers.js;
-      // the 28 §C5.1 originals stay in v3-stickers.js (frozen ownership).
-      const owner = V5_STICKERS_EN[s.nameKey] != null ? V5_STICKERS_EN : V3_STICKERS_EN;
-      assert.equal(typeof owner[key], 'string', `v3/v5-stickers owns ${key}`);
+      // V5/STICKERS wave 1: the 20 wave-1 ids own their keys in
+      // v5-stickers.js; V6/F1: the 36 themed-page ids own theirs in
+      // v6-stickers.js; the 28 §C5.1 originals stay in v3-stickers.js
+      // (frozen ownership).
+      const owner = V5_STICKERS_EN[s.nameKey] != null
+        ? V5_STICKERS_EN
+        : V6_STICKERS_EN[s.nameKey] != null ? V6_STICKERS_EN : V3_STICKERS_EN;
+      assert.equal(typeof owner[key], 'string', `v3/v5/v6-stickers owns ${key}`);
     }
   }
   for (const key of [
@@ -164,8 +170,9 @@ test('v5-stickers: EN/DE parity; exactly the 20 wave-1 ids × 3 keys, merged', (
   for (const key of Object.keys(V5_STICKERS_EN)) {
     assert.equal(V3_STICKERS_EN[key], undefined, `${key} also in v3-stickers`);
   }
-  // the wave-1 ids are exactly the catalog rows 29–48 (after the §C5.1 28)
-  const waveIds = STICKERS.filter((s) => !s.secret).slice(28).map((s) => s.id);
+  // the wave-1 ids are exactly the catalog rows 29–48 (after the §C5.1 28;
+  // V6/F1 appends rows 49–84 AFTER them — sliced off here)
+  const waveIds = STICKERS.filter((s) => !s.secret).slice(28, 48).map((s) => s.id);
   assert.equal(waveIds.length, 20);
   for (const id of waveIds) {
     for (const suffix of ['name', 'flavor', 'hint']) {
@@ -174,6 +181,36 @@ test('v5-stickers: EN/DE parity; exactly the 20 wave-1 ids × 3 keys, merged', (
         `v5-stickers owns stickerbook.${id}.${suffix}`
       );
     }
+  }
+});
+
+test('v6-stickers: EN/DE parity; exactly the 36 V6/F1 ids × 3 keys + 6 page titles, merged', () => {
+  assert.deepEqual(Object.keys(V6_STICKERS_EN).sort(), Object.keys(V6_STICKERS_DE).sort());
+  for (const key of Object.keys(V6_STICKERS_EN)) assertKey(key, `v6-stickers ${key}`);
+  assert.equal(Object.keys(V6_STICKERS_EN).length, 36 * 3 + 6);
+  // v6-stickers must never shadow a v3/v5-stickers key (spread-order safety)
+  for (const key of Object.keys(V6_STICKERS_EN)) {
+    assert.equal(V3_STICKERS_EN[key], undefined, `${key} also in v3-stickers`);
+    assert.equal(V5_STICKERS_EN[key], undefined, `${key} also in v5-stickers`);
+  }
+  // the V6/F1 ids are exactly the catalog rows 49–84 (after the frozen 48)
+  const v6Ids = STICKERS.filter((s) => !s.secret).slice(48).map((s) => s.id);
+  assert.equal(v6Ids.length, 36);
+  for (const id of v6Ids) {
+    for (const suffix of ['name', 'flavor', 'hint']) {
+      assert.equal(
+        typeof V6_STICKERS_EN[`stickerbook.${id}.${suffix}`], 'string',
+        `v6-stickers owns stickerbook.${id}.${suffix}`
+      );
+    }
+  }
+  // the six themed page titles (data/stickers.js STICKER_PAGES pages 9–14)
+  for (const pageId of ['travel', 'funkelpark', 'arcadeStars', 'cozyLife', 'foodieFeast', 'bestFriends']) {
+    assertKey(`stickerbook.pageTitle.${pageId}`, `page title ${pageId}`);
+    assert.equal(
+      typeof V6_STICKERS_EN[`stickerbook.pageTitle.${pageId}`], 'string',
+      `v6-stickers owns stickerbook.pageTitle.${pageId}`
+    );
   }
 });
 
