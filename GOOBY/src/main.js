@@ -416,6 +416,31 @@ async function boot() {
   }
   // ---- end V6/A1 block ----
 
+  // ---- V6.1/G3: Gooby-versary + charm strings (FINAL-WAVE B5, single marked block) ----
+  // Merges the G3 fallback dictionaries (cutscene.versary.*, postcard
+  // variants 4/5, gallery.frame.park, park.wheel.apexNight, settings.loveNote
+  // — manifest handed to G1) into the RUNTIME dicts additively (existing
+  // keys, i.e. G1's canonical strings, always win — the V4/FIX-JUICE merge
+  // pattern), then arms the quiet-home versary poll on top of the A1 director
+  // registered above. Lazy import + guard: a broken versary chunk never
+  // kills boot.
+  try {
+    const versaryMod = await import('./ui/versary.js');
+    for (const [globalDict, dict] of [
+      [STRINGS_EN, versaryMod.VERSARY_EN],
+      [STRINGS_DE, versaryMod.VERSARY_DE],
+    ]) {
+      for (const [key, value] of Object.entries(dict)) {
+        if (!(key in globalDict)) globalDict[key] = value;
+      }
+    }
+    const { playCutscene, isCutsceneActive } = await import('./ui/cutsceneView.js');
+    versaryMod.initVersary({ store, ui, sceneManager, playCutscene, isCutsceneActive });
+  } catch (err) {
+    console.warn('[boot] V6.1/G3 versary unavailable:', err);
+  }
+  // ---- end V6.1/G3 block ----
+
   // ---- V6/E1: Funkelpark plaza hub (PLAN6 Wave E/E1, single marked block) ----
   // Registers the 'park' §E1 scene (park/parkScene.js — builds the plaza from
   // parkBuilder, mounts E3's dressing, wires E2's coaster kiosk + E3's stall

@@ -98,6 +98,22 @@ function tx(key, vars) {
   return str;
 }
 
+/**
+ * V6.1/G3 (FINAL-WAVE B1): the tiny love note under the version footer.
+ * The authored string keeps a `{heart}` placeholder (no raw glyph/emoji in
+ * the table — D4 audit) which renders as the icons.js heart glyph here.
+ * Resolves through t() (main.js merges the G3 fallback dict at boot; G1's
+ * canonical entry wins once merged).
+ * @returns {string} footer-note HTML
+ */
+function loveNoteHtml() {
+  const line = t('settings.loveNote');
+  if (line === 'settings.loveNote') return ''; // key missing — render nothing
+  return line
+    .split('{heart}')
+    .join(`<span class="g3-lovenote-heart">${icon('heart', 12)}</span>`);
+}
+
 // ---------------------------------------------------------------------------
 // V3/G33 — UI scale appliers (§B3) + fake notch (§B9)
 // ---------------------------------------------------------------------------
@@ -621,6 +637,7 @@ export function createSettingsScreen({ store, ui }) {
           </div>
         </div>
         <div class="settings-footer">${t('settings.version', { v: pkg.version })}</div>
+        <div class="settings-lovenote">${loveNoteHtml()}</div>
       </div>`;
 
     function navRow(id, labelHtml) {

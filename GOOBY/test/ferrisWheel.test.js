@@ -29,8 +29,12 @@ import {
   createWheelLedger,
   createWheelRide,
   stepWheelRide,
+  apexCaptionKey,
   mountFerrisWheel,
 } from '../src/park/ferrisWheel.js';
+import { bandAt } from '../src/systems/dayNight.js';
+import { VERSARY_EN, VERSARY_DE } from '../src/ui/versary.js';
+import { EN as PARK_EN, DE as PARK_DE } from '../src/data/strings/v6-park.js';
 
 const TAU = Math.PI * 2;
 const DT = 1 / 60;
@@ -252,6 +256,35 @@ test('reduced motion compiles: static apex shot, caption beats, tap ends it', ()
   const rmTap = runRide({ reducedMotion: true }, (ride, t) => t > 1);
   assert.ok(rmTap.total < 2);
   assert.deepEqual(rmTap.events.map((e) => e.type), ['board', 'apex', 'arrived', 'done']);
+});
+
+// ───────────────────────────────── V6.1/G3 (B8): the night apex caption
+
+test('apexCaptionKey: night band ONLY gets the night line; junk keeps classic', () => {
+  assert.equal(apexCaptionKey('night'), 'park.wheel.apexNight');
+  for (const band of ['dawn', 'day', 'dusk']) {
+    assert.equal(apexCaptionKey(band), 'park.wheel.apex', `${band} keeps the classic line`);
+  }
+  for (const junk of [null, undefined, '', 'NIGHT', 42, {}]) {
+    assert.equal(apexCaptionKey(junk), 'park.wheel.apex', `junk band ${String(junk)}`);
+  }
+});
+
+test('apexCaptionKey: real bandAt() wall-clock bands route as authored', () => {
+  // dayNight.js bands: night 21–6, dawn 6–8, day 8–18, dusk 18–21 (local).
+  const at = (h) => bandAt(new Date(2026, 3, 14, h, 30, 0).getTime()).band;
+  assert.equal(apexCaptionKey(at(23)), 'park.wheel.apexNight', '23:30 is night');
+  assert.equal(apexCaptionKey(at(3)), 'park.wheel.apexNight', '03:30 is night');
+  assert.equal(apexCaptionKey(at(12)), 'park.wheel.apex', 'noon is day');
+  assert.equal(apexCaptionKey(at(19)), 'park.wheel.apex', 'dusk keeps the classic line');
+});
+
+test('apex caption strings: both keys localized EN+DE (classic + night)', () => {
+  // classic line lives in the owned v6-park module; the night line ships in
+  // the G3 fallback dict until G1 merges the manifest (runtime-merged by
+  // main.js, so ferrisWheel's tx() resolves it through t()).
+  assert.ok(PARK_EN['park.wheel.apex'] && PARK_DE['park.wheel.apex']);
+  assert.ok(VERSARY_EN['park.wheel.apexNight'] && VERSARY_DE['park.wheel.apexNight']);
 });
 
 test('watchdog: a stuck ride force-finishes (risk-row-5 discipline)', () => {

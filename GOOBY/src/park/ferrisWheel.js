@@ -34,6 +34,7 @@ import { EN as PARK_EN, DE as PARK_DE } from '../data/strings/v6-park.js';
 import { tween, easings } from '../gfx/tween.js';
 import { now } from '../core/clock.js';
 import { mirrorSlice } from '../systems/gallery.logic.js';
+import { bandAt } from '../systems/dayNight.js'; // V6.1/G3 (B8): night apex line
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PURE MODEL (no three.js/DOM below this banner until "VIEW") — everything
@@ -407,6 +408,20 @@ export function stepWheelRide(ride, dt, input = {}) {
   }
 
   return events;
+}
+
+/**
+ * V6.1/G3 (FINAL-WAVE B8): which caption the apex beat shows — the night
+ * line ONLY in the 'night' band (the lights already glow, BAND_GLOW 0.8);
+ * dawn/day/dusk (and junk) keep the classic line, so souvenir timing and
+ * every other apex beat stay byte-identical. Pure (band id → key) —
+ * headless-tested by test/ferrisWheel.test.js; the view passes
+ * `bandAt(now()).band` at the apex event.
+ * @param {string|null|undefined} band dayNight band id
+ * @returns {'park.wheel.apexNight'|'park.wheel.apex'}
+ */
+export function apexCaptionKey(band) {
+  return band === 'night' ? 'park.wheel.apexNight' : 'park.wheel.apex';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -884,7 +899,8 @@ export async function startWheelRide(ctx) {
         gooby.play?.('sitDrive', { loop: 'hold' })?.catch?.(() => {});
         break;
       case 'apex': {
-        showCaption('park.wheel.apex');
+        // V6.1/G3 (B8): band-aware apex line — night rides get the twinkle.
+        showCaption(apexCaptionKey(bandAt(now()).band));
         audio?.play?.('gooby.squeakHappy');
         apexBeatT = APEX_BEAT_SEC;
         try {

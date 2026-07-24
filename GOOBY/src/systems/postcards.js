@@ -37,8 +37,13 @@ export const POSTCARDS = Object.freeze({
   MS_PER_DAY: 86400000,
   /** Archive hard cap (PLAN6 §5): oldest entries drop first (FIFO). */
   MAX_ARCHIVE: 36,
-  /** Text-pool size per destination (keys `vacation.postcard.<id>.1..N`). */
-  VARIANTS: 3,
+  /** Text-pool size per destination (keys `vacation.postcard.<id>.1..N`).
+   * V6.1/G3 (FINAL-WAVE B3): 3 → 5 — variants 4/5 live in the G3 fallback
+   * dict (ui/versary.js) until G1 merges the manifest into the canonical
+   * module. Archived entries persist their `variant` at generation time and
+   * postcardTextKey() renders from that stored value, so a bigger pool can
+   * NEVER reroll an old card — only newly generated cards see 4/5. */
+  VARIANTS: 5,
 });
 
 /**

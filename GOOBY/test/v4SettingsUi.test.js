@@ -312,3 +312,36 @@ test('styles.css: G58 block ships the shake keyframe + chip + card styles', () =
   assert.match(css, /\.panel-settingsDisplay/);
   assert.match(css, /end V4\/G58/);
 });
+
+// ---------------------------------------------------------------------------
+// V6.1/G3 (FINAL-WAVE B1): the settings love note
+// ---------------------------------------------------------------------------
+
+test('B1 love note: renders under the version footer with the AUTHORED heart glyph', () => {
+  const src = source('src/ui/settingsScreen.js');
+  // the note sits DIRECTLY under the version footer line in the template
+  assert.match(
+    src,
+    /settings-footer">\$\{t\('settings\.version'[^\n]*\n\s*<div class="settings-lovenote">\$\{loveNoteHtml\(\)\}<\/div>/,
+    'love-note line must follow the version footer',
+  );
+  // the {heart} slot renders the icons.js glyph — never a raw glyph/emoji
+  assert.match(src, /loveNoteHtml/);
+  assert.match(src, /\{heart\}/);
+  assert.match(src, /icon\('heart', 12\)/);
+  // the styles ship (quiet footer note + pink glyph tint)
+  const css = source('src/ui/styles.css');
+  assert.match(css, /\.settings-lovenote/);
+  assert.match(css, /\.settings-lovenote \.g3-lovenote-heart/);
+});
+
+test('B1 love note: EN+DE strings keep the {heart} placeholder, no raw glyph', async () => {
+  const { VERSARY_EN, VERSARY_DE } = await import('../src/ui/versary.js');
+  for (const [lang, dict] of [['EN', VERSARY_EN], ['DE', VERSARY_DE]]) {
+    const line = dict['settings.loveNote'];
+    assert.ok(line && line.trim(), `${lang} love note missing`);
+    assert.ok(line.includes('{heart}'), `${lang} love note needs the {heart} slot`);
+    assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u2665]/u.test(line),
+      `${lang} love note must not carry a raw glyph/emoji`);
+  }
+});

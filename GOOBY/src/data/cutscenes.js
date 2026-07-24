@@ -401,6 +401,121 @@ export const CUTSCENES = Object.freeze({
     ]),
   }),
   // ── end V6/D1 ─────────────────────────────────────────────────────────────
+
+  // ── V6.1/G3 (FINAL-WAVE B5): the Gooby-versary home moments ──────────────
+  // Fired by the ui/versary.js quiet-home poll when the save's createdAt age
+  // crosses 30 days (month) / 365 days (year); each plays once ever (the
+  // playCutscene seen latch). Both reuse ONLY validated staging: existing
+  // clips/emotions, the three whitelisted particle types and mapped sfx ids
+  // — no props, so there is nothing to prewarm and the beat can never pop in.
+  // Worst-case durations (tapWait timeouts included) stay far under the 45 s
+  // watchdog: month ≈ 23.6 s, year ≈ 31.8 s.
+
+  // One month: a soft three-beat thank-you — wave hello, a happy bounce
+  // under hearts, then a quiet purr close.
+  versaryMonth: Object.freeze({
+    id: 'versaryMonth',
+    steps: Object.freeze([
+      Object.freeze({ op: 'camera', move: 'pushIn', duration: 1.4 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'emotion', emotion: 'happy' }),
+          Object.freeze({ op: 'clip', clip: 'wave' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.squeakHappy' }),
+          Object.freeze({ op: 'particles', type: 'sparkles', count: 10 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.month.title' }),
+          Object.freeze({ op: 'wait', duration: 1.4 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'clip', clip: 'happyBounce' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.giggle' }),
+          Object.freeze({ op: 'particles', type: 'hearts', count: 12 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.month.dance' }),
+          Object.freeze({ op: 'wait', duration: 1.4 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'clip', clip: 'tailWiggle' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.purr' }),
+          Object.freeze({ op: 'particles', type: 'hearts', count: 8 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.month.thanks' }),
+          Object.freeze({ op: 'wait', duration: 1.4 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 5 }),
+      Object.freeze({ op: 'captionClear', keepOnSkip: true }),
+      Object.freeze({ op: 'camera', move: 'restore', duration: 1.0 }),
+      Object.freeze({ op: 'emotion', emotion: 'happy', keepOnSkip: true }),
+      Object.freeze({ op: 'sfx', sfx: 'jingle.short', keepOnSkip: true }),
+    ]),
+  }),
+
+  // One year: the big one — an ecstatic gasp, a memory-lane dance, a jump
+  // into a full confetti burst, then a warm hearts close.
+  versaryYear: Object.freeze({
+    id: 'versaryYear',
+    steps: Object.freeze([
+      Object.freeze({ op: 'camera', move: 'pushIn', duration: 1.6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'emotion', emotion: 'ecstatic' }),
+          Object.freeze({ op: 'clip', clip: 'wave' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.gasp' }),
+          Object.freeze({ op: 'particles', type: 'sparkles', count: 12 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.year.title' }),
+          Object.freeze({ op: 'wait', duration: 1.5 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'clip', clip: 'dance' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.giggle' }),
+          Object.freeze({ op: 'particles', type: 'hearts', count: 12 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.year.memories' }),
+          Object.freeze({ op: 'wait', duration: 1.8 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'clip', clip: 'jump' }),
+          Object.freeze({ op: 'sfx', sfx: 'jingle.levelUp' }),
+          Object.freeze({ op: 'particles', type: 'confetti', count: 20 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.year.confetti' }),
+          Object.freeze({ op: 'wait', duration: 1.5 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 6 }),
+      Object.freeze({
+        op: 'parallel',
+        steps: Object.freeze([
+          Object.freeze({ op: 'clip', clip: 'happyBounce' }),
+          Object.freeze({ op: 'sfx', sfx: 'gooby.purr' }),
+          Object.freeze({ op: 'particles', type: 'hearts', count: 14 }),
+          Object.freeze({ op: 'caption', key: 'cutscene.versary.year.thanks' }),
+          Object.freeze({ op: 'wait', duration: 1.4 }),
+        ]),
+      }),
+      Object.freeze({ op: 'tapWait', timeout: 5 }),
+      Object.freeze({ op: 'captionClear', keepOnSkip: true }),
+      Object.freeze({ op: 'camera', move: 'restore', duration: 1.0 }),
+      Object.freeze({ op: 'emotion', emotion: 'happy', keepOnSkip: true }),
+      Object.freeze({ op: 'sfx', sfx: 'jingle.short', keepOnSkip: true }),
+    ]),
+  }),
+  // ── end V6.1/G3 ───────────────────────────────────────────────────────────
 });
 
 /** @type {readonly string[]} the known ids — bounds the persisted seen map */

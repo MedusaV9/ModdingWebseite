@@ -30,6 +30,10 @@ import { EN as CUT_EN, DE as CUT_DE } from '../src/data/strings/v6-cutscenes.js'
 // module (§E0.1-8 ownership) — the caption mirror below aggregates every
 // module that authored scripts in data/cutscenes.js.
 import { EN as VAC_EN, DE as VAC_DE } from '../src/data/strings/v6-vacation-scenes.js';
+// V6.1/G3 (FINAL-WAVE B5): the versary scripts keep their caption fallbacks
+// in ui/versary.js (pure module root — the whatsNew.js layering) until G1
+// merges the manifest into the canonical modules.
+import { VERSARY_EN, VERSARY_DE } from '../src/ui/versary.js';
 import { CLIP_IDS } from '../src/character/goobyAnims.js';
 import { EMOTION_IDS } from '../src/character/emotions.js';
 import { SFX_MAP } from '../src/audio/sfxMap.js';
@@ -451,8 +455,8 @@ test('data mirror: every caption key + the chrome keys exist in EN AND DE', () =
   // V6/D1: captions may live in any script-authoring agent's owned module —
   // aggregate them all for the existence check (module-internal parity and
   // namespace hygiene stay per-module below / in vacationCinematic.test.js).
-  const allEn = { ...CUT_EN, ...VAC_EN };
-  const allDe = { ...CUT_DE, ...VAC_DE };
+  const allEn = { ...CUT_EN, ...VAC_EN, ...VERSARY_EN };
+  const allDe = { ...CUT_DE, ...VAC_DE, ...VERSARY_DE };
   for (const key of used) {
     assert.ok(typeof allEn[key] === 'string' && allEn[key].trim(), `EN missing '${key}'`);
     assert.ok(typeof allDe[key] === 'string' && allDe[key].trim(), `DE missing '${key}'`);

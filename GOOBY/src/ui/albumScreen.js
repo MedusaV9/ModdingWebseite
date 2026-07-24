@@ -127,6 +127,29 @@ export function polaroidJitter(index) {
   return Math.round((n % 2 === 0 ? -mag : mag) * 10) / 10;
 }
 
+// ── V6.1/G3 (FINAL-WAVE B6): ride-photo polaroid helpers — pure, exported
+// for test/v61CharmUi.test.js ────────────────────────────────────────────────
+
+/** The two park-ride souvenir frames (coasterRide.js / ferrisWheel.js persist
+ * them into photoStore metadata — dormant until this consumer). ONLY these
+ * two get the keepsake treatment; ordinary/legacy/unknown frames stay
+ * pixel-semantically unchanged.
+ * @param {unknown} frame photo meta `frame` field
+ * @returns {boolean} */
+export function isParkRideFrame(frame) {
+  return frame === 'coasterRide' || frame === 'ferrisWheel';
+}
+
+/** Ride polaroids lean a touch harder than the regular wall (they read as
+ * hand-pinned keepsakes) but stay bounded and alternate exactly like
+ * polaroidJitter: same sign per index, 1.6× magnitude, one decimal,
+ * |deg| ≤ 3.6 — deterministic, so re-renders never make the wall shiver.
+ * @param {number} index 0-based grid position
+ * @returns {number} rotation in degrees */
+export function ridePolaroidTilt(index) {
+  return Math.round(polaroidJitter(index) * 16) / 10;
+}
+
 /* V4/G-UI: G23 block swept px→rem (§B3 — was the last FILE_ALLOW holdout in
    px-audit; values ÷16, matching the sibling screens' rem conventions:
    27.5rem rail, 0.625rem gaps, max(44px,2.75rem) tap floors). */
@@ -512,6 +535,20 @@ export function registerAlbumScreen({ store, ui, audio }) {
       date.textContent = when.toLocaleString(getLang() === 'de' ? 'de-DE' : 'en-US', {
         year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
       });
+      // V6.1/G3 (B6): localized park chip for coaster/wheel souvenirs — added
+      // or removed per photo (viewerShow re-runs on every swipe nav).
+      const top = viewer.el.querySelector('.g59-vw-top');
+      let parkChip = top.querySelector('.g3-vw-park');
+      if (isParkRideFrame(meta?.frame)) {
+        if (!parkChip) {
+          parkChip = document.createElement('span');
+          parkChip.className = 'g3-vw-park';
+          top.insertBefore(parkChip, top.querySelector('.g59-vw-close'));
+        }
+        parkChip.textContent = tG('gallery.frame.park');
+      } else {
+        parkChip?.remove();
+      }
       if (viewer.url) {
         URL.revokeObjectURL(viewer.url); // §C-SYS9.2 objectURL lifecycle
         viewer.url = null;
@@ -674,6 +711,15 @@ export function registerAlbumScreen({ store, ui, audio }) {
           // V6/B3: each photo is a polaroid pinned at a deterministic tilt
           cell.className = 'g59-ph-cell b3-polaroid';
           cell.style.setProperty('--b3-tilt', `${polaroidJitter(idx)}deg`);
+          // V6.1/G3 (B6): coaster/wheel souvenirs become Funkelpark keepsakes
+          // — additive class (cream inset border + caption strip via the
+          // styles.css .g3-ph-ride rules) and the slightly bolder (still
+          // bounded, alternating) ride tilt overriding the same property.
+          const ride = isParkRideFrame(m.frame);
+          if (ride) {
+            cell.classList.add('g3-ph-ride');
+            cell.style.setProperty('--b3-tilt', `${ridePolaroidTilt(idx)}deg`);
+          }
           cell.dataset.photoId = String(m.id);
           const img = document.createElement('img');
           img.className = 'g59-ph-img';
@@ -691,6 +737,13 @@ export function registerAlbumScreen({ store, ui, audio }) {
             });
           }
           cell.appendChild(img);
+          if (ride) {
+            // V6.1/G3 (B6): the tiny „Funkelpark" strip on the polaroid chin
+            const strip = document.createElement('span');
+            strip.className = 'g3-ph-ride-strip';
+            strip.textContent = tG('gallery.frame.park');
+            cell.appendChild(strip);
+          }
           cell.addEventListener('click', () => {
             audio.play('ui.pick');
             openViewer(m.id);

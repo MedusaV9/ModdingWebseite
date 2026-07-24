@@ -346,7 +346,11 @@
    of the old dark pill; enter/exit spring gently. ui.js timing contract
    untouched (toast-out still settles well inside its 300ms removal window). */
 .toast {
-  position: absolute;
+  /* V6.1/G3 (FINAL-WAVE A4, P2-19): viewport-FIXED — the bubble anchors to
+     the real viewport (immune to ancestor layout/scroll), so it can never
+     ride mid-page content. Same geometry as the old absolute-in-#ui values
+     (#ui is inset:0), only the anchor semantics harden. */
+  position: fixed;
   left: 50%;
   bottom: calc(4.75rem + var(--safe-bottom));
   transform: translateX(-50%);
@@ -367,12 +371,29 @@
 /* V4/FIX-UI: while the home HUD action dock is visible (home scene, no sheet
    up) lift toasts fully ABOVE the dock rows so they never sit on the buttons.
    Offsets = dock bottom inset + two button rows + gap (hud.js HUD_CSS);
-   the 130 % variant tracks that scale's shorter 44px-floor buttons. */
-#ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)) .toast {
+   the 130 % variant tracks that scale's shorter 44px-floor buttons.
+   V6.1/G3 (A4): + :not(:has(.screen)) — a full screen COVERS the dock even
+   though hud.js only toggles .g5-hud-hidden on scene switches (the element
+   stays "visible" under album/settings/… on the home scene), so the dock lift
+   must stand down whenever a screen is up. The three .toast anchor rules are
+   mutually exclusive: sheet(base) / screen(drop) / home dock(lift). */
+#ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)):not(:has(.screen)) .toast {
   bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 7.625rem);
 }
-:root[data-ui-scale='130'] #ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)) .toast {
+:root[data-ui-scale='130'] #ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)):not(:has(.screen)) .toast {
   bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 5rem);
+}
+/* V6.1/G3 (FINAL-WAVE A4, P2-19): while a FULL SCREEN (album/achievements/
+   settings…) is up — no bottom sheet — the 4.75rem home offset (or worse, the
+   dock lift: hud.js keeps .g5-hud un-hidden under screens on the home scene)
+   would park the bubble ON the content rows (the eval's sticker toast over
+   the book completion). Drop it to the safe bottom edge instead: it reads as
+   chrome over the screen's bottom padding, clear of the reading area.
+   rem-based so uiScale 130 tracks; --safe-bottom keeps it off the
+   notch/home-indicator down to 320×568. Sheets keep the base offset (toasts
+   ride above .panel-backdrop bottom sheets). */
+#ui:has(.screen):not(:has(.panel-backdrop)) .toast {
+  bottom: max(0.75rem, calc(var(--safe-bottom) + 0.375rem));
 }
 .toast::before {
   /* little leaf accent: a green droplet rotated into a leaf silhouette */
@@ -749,6 +770,26 @@
   font-size: 0.8125rem;
   font-weight: 700;
   opacity: 0.45;
+}
+/* V6.1/G3 (FINAL-WAVE B1): the tiny love note under the version footer —
+   quiet body text with the authored icons.js heart glyph inline (no raw
+   glyph in the string table; settingsScreen.js swaps the {heart} slot). */
+.settings-lovenote {
+  margin-top: 0.25rem;
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.55;
+}
+.settings-lovenote .g3-lovenote-heart {
+  display: inline-block;
+  vertical-align: -0.0938rem;
+  color: var(--pink);
+  margin: 0 0.125rem;
+}
+.settings-lovenote .g3-lovenote-heart svg {
+  display: inline-block;
 }
 /* V4/AC-1: segmented controls sit in a soft shaded well (sprite rim gone);
    the selected pill inside stays pure CSS (identity accent). */
@@ -6213,6 +6254,58 @@ body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
   box-shadow: 0 0.0625rem 0.125rem rgba(74, 59, 54, 0.1);
   pointer-events: none;
 }
+
+/* ── V6.1/G3 (FINAL-WAVE B6): Funkelpark ride-photo keepsakes ──────────────
+   ONLY .g3-ph-ride cells (albumScreen adds the class for frame ===
+   'coasterRide'|'ferrisWheel') get the cream card, the inset border and the
+   „Funkelpark" chin strip; every other polaroid keeps the V6/B3 look
+   byte-identical. The bolder-but-bounded alternating tilt rides the same
+   --b3-tilt custom property (albumScreen feeds ridePolaroidTilt there). */
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride {
+  background: #fbf3df; /* cream keepsake card (vs the #fdfbf5 wall stock) */
+}
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride::before {
+  /* the cream inset border framing the photo window */
+  content: '';
+  position: absolute;
+  inset: 0.1875rem 0.1875rem 0.875rem;
+  border: 0.0938rem solid rgba(214, 163, 95, 0.55);
+  border-radius: 0.1563rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride .g3-ph-ride-strip {
+  position: absolute;
+  left: 0.3125rem;
+  right: 0.3125rem;
+  bottom: 0.1563rem;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(181, 132, 69, 0.9);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+/* the photo viewer's localized park chip (top bar, next to the date) */
+.g59-vw-top .g3-vw-park {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(251, 243, 223, 0.92);
+  color: #4a3b36;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  box-shadow: 0 0 0 1px rgba(214, 163, 95, 0.4);
+}
+/* ── end V6.1/G3 B6 ── */
 
 /* =================== end V6/B3 SCREEN-WORLDS (shop + album) ============== */
 

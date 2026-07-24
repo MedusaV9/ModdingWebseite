@@ -4,8 +4,10 @@
 // math (DST-safe by construction: day k = bookedAt + k·86400000, never
 // calendar days), the 36-entry FIFO archive cap, junk normalization, the
 // shared processPostcardsUpTo() processor both catch-up paths reach through
-// vacation.tick(), and EN/DE pool parity for strings/v6-vacation-content.js
-// (3 variants × 9 destinations). Headless per §B — pure modules only.
+// vacation.tick(), and EN/DE pool parity for the full pool (V6.1/G3 B3:
+// 5 variants × 9 destinations — variants 1–3 in strings/v6-vacation-content.js,
+// 4/5 in the ui/versary.js G3 fallback dict until G1 merges the manifest into
+// the canonical module). Headless per §B — pure modules only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -28,6 +30,10 @@ import {
 } from '../src/systems/vacation.js';
 import { VACATION_IDS } from '../src/data/vacations.js';
 import { EN as CONTENT_EN, DE as CONTENT_DE } from '../src/data/strings/v6-vacation-content.js';
+// V6.1/G3 (B3): variants 4/5 ship in the G3 fallback dict (runtime-merged by
+// main.js; G1's canonical entries win once the manifest lands) — aggregate
+// them for the full-pool parity loop below.
+import { VERSARY_EN, VERSARY_DE } from '../src/ui/versary.js';
 import { EN as ALL_EN, DE as ALL_DE } from '../src/data/strings.js';
 
 const DAY = POSTCARDS.MS_PER_DAY;
@@ -46,7 +52,8 @@ test('POSTCARDS frozen: cap 36 (PLAN6 §5), day pinned to VACATION.MS_PER_DAY', 
   assert.equal(POSTCARDS.MAX_ARCHIVE, 36, 'PLAN6 hard guardrail: archive cap 36');
   assert.equal(POSTCARDS.MS_PER_DAY, VACATION.MS_PER_DAY,
     'postcards.js duplicates the day length to stay import-cycle-free — MUST stay pinned');
-  assert.ok(POSTCARDS.VARIANTS >= 3, '3+ text variants per destination');
+  assert.equal(POSTCARDS.VARIANTS, 5,
+    'V6.1/G3 (FINAL-WAVE B3): the pool is exactly 5 variants per destination');
 });
 
 // -------------------------------------------------------------- determinism
@@ -93,19 +100,58 @@ test('postcardTextKey: pooled key shape + junk-variant clamp into 1..VARIANTS', 
   assert.equal(postcardTextKey(entry({ variant: 'junk' })), 'vacation.postcard.beach.1');
 });
 
-test('strings: EN/DE parity + full 3-variant pool for all 9 destinations', () => {
+test('B3 pool 3→5: archived VARIANTS=3-era entries NEVER reroll; new picks span 1..5', () => {
+  // Vectors captured from the 3-variant era: the variant is persisted at
+  // generation time and both normalization and the render key preserve it
+  // verbatim — growing the pool can never rewrite an old card.
+  const oldEntries = [
+    { destId: 'beach', dayIndex: 1, variant: 1, atMs: T0 + DAY },
+    { destId: 'space', dayIndex: 2, variant: 3, atMs: T0 + 2 * DAY },
+    { destId: 'toyRoom', dayIndex: 3, variant: 2, atMs: T0 + 3 * DAY },
+  ];
+  for (const e of oldEntries) {
+    assert.deepEqual(normalizeEntry(e), e, 'normalization preserves the stored variant');
+    assert.equal(postcardTextKey(e), `vacation.postcard.${e.destId}.${e.variant}`);
+  }
+  assert.deepEqual(normalizeArchive(oldEntries), oldEntries, 'archive pass preserves them too');
+  // New deterministic picks stay inside the 5-pool AND actually reach the
+  // new variants 4/5 somewhere (anti-dead-pool guard) — pure PRNG, so this
+  // sweep is fully deterministic.
+  const seen = new Set();
+  for (const id of VACATION_IDS) {
+    for (let trip = 0; trip < 40; trip += 1) {
+      for (let k = 1; k <= 3; k += 1) {
+        const v = variantOf(id, T0 + trip * 11 * DAY, k);
+        assert.ok(v >= 1 && v <= POSTCARDS.VARIANTS, `${id}: pick ${v} inside 1..5`);
+        seen.add(v);
+      }
+    }
+  }
+  assert.ok(seen.has(4) && seen.has(5), 'the new variants 4/5 are actually reachable');
+});
+
+test('strings: EN/DE parity + full 5-variant pool for all 9 destinations', () => {
   assert.deepEqual(Object.keys(CONTENT_DE).sort(), Object.keys(CONTENT_EN).sort(),
     'v6-vacation-content: EN/DE key sets differ');
+  // V6.1/G3 (B3): the render pool = canonical module + the G3 fallback dict
+  // (the exact aggregation the runtime sees after main.js' additive merge) —
+  // this loop proves all 90 localized pool values (9 × 5 × EN+DE).
+  const POOL_EN = { ...CONTENT_EN, ...VERSARY_EN };
+  const POOL_DE = { ...CONTENT_DE, ...VERSARY_DE };
   for (const id of VACATION_IDS) {
     for (let k = 1; k <= POSTCARDS.VARIANTS; k += 1) {
       const key = `vacation.postcard.${id}.${k}`;
-      assert.ok(CONTENT_EN[key], `EN missing ${key}`);
-      assert.ok(CONTENT_DE[key], `DE missing ${key}`);
+      assert.ok(POOL_EN[key], `EN missing ${key}`);
+      assert.ok(POOL_DE[key], `DE missing ${key}`);
       // pooled lines are rendered by the game (rack) — NO raw emoji (D4 gate)
-      assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(CONTENT_EN[key]),
-        `${key} EN must not carry raw emoji (rendered in the rack)`);
-      assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(CONTENT_DE[key]),
-        `${key} DE must not carry raw emoji (rendered in the rack)`);
+      // and no legacy '*stamp*' token (V6/FIX2 dropped it — rack draws a
+      // real postmark glyph)
+      for (const [lang, dict] of [['EN', POOL_EN], ['DE', POOL_DE]]) {
+        assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(dict[key]),
+          `${key} ${lang} must not carry raw emoji (rendered in the rack)`);
+        assert.ok(!dict[key].includes('*'),
+          `${key} ${lang} must not carry a stamp token`);
+      }
     }
   }
   // rack labels + the two notification copy pairs (ids 9/10)
