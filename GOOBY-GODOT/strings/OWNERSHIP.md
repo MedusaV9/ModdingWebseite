@@ -23,9 +23,9 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `settings.*` | W1c UIKIT | W1 |
 | `news.*` | W1c UIKIT | W1 |
 | `migration.*` | W1d STATE | W1 |
-| `house.*` | W2a HOUSE | W2 |
+| `home.*`, `build.*` (Datei `strings/<locale>/home.json`) | W2a HOUSE | W2 |
 | `updates.*` | W2b UPDATES | W2 |
-| `minigames.*`, `friends.*` | W2d NETMG | W2 |
+| `mg.*`, `net.*` (Dateien `strings/<locale>/mg.json` + `net.json`) | W2d NETMG | W2 |
 | `city.*` | W3a CITY | W3 |
 | `gvz.*` | W3b GVZ | W3 |
 | `visit.*` | W3c VISIT | W3 |

@@ -1,0 +1,82 @@
+{
+	"schema": "gooby.homeLayouts/1",
+	"comment": "Liebevolles Start-Layout (auch Migrations-Umzugstag). Schlafzimmer OHNE Bett — das Bett liegt im Lager (Erste-Male-Bauquest, Doc D §3.1).",
+	"storage": [
+		{ "item": "bedSingle", "variant": "default", "count": 1 },
+		{ "item": "loungeChair", "variant": "default", "count": 1 },
+		{ "item": "rugDoormat", "variant": "default", "count": 1 },
+		{ "item": "plantSmall2", "variant": "default", "count": 1 },
+		{ "item": "pillowBlue", "variant": "default", "count": 1 }
+	],
+	"rooms": {
+		"living": [
+			{ "item": "rugRectangle", "at": [4, 4], "rot": 0 },
+			{ "item": "loungeSofa", "at": [4, 7], "rot": 2 },
+			{ "item": "cabinetTelevision", "at": [5, 0], "rot": 0 },
+			{ "item": "televisionModern", "at": [5, 0], "rot": 0 },
+			{ "item": "tableCoffee", "at": [5, 5], "rot": 0 },
+			{ "item": "books", "at": [5, 5], "rot": 0 },
+			{ "item": "loungeChair", "at": [8, 5], "rot": 3 },
+			{ "item": "bookcaseClosedWide", "at": [8, 0], "rot": 0 },
+			{ "item": "pottedPlant", "at": [11, 0], "rot": 0 },
+			{ "item": "lampRoundFloor", "at": [0, 2], "rot": 0 },
+			{ "item": "bookcaseOpenLow", "at": [0, 8], "rot": 0 },
+			{ "item": "radio", "at": [0, 8], "rot": 0 },
+			{ "item": "bear", "at": [1, 8], "rot": 0 },
+			{ "item": "rugDoormat", "at": [10, 7], "rot": 0 }
+		],
+		"kitchen": [
+			{ "item": "kitchenFridge", "at": [0, 0], "rot": 0 },
+			{ "item": "kitchenSink", "at": [2, 0], "rot": 0 },
+			{ "item": "kitchenStove", "at": [4, 0], "rot": 0 },
+			{ "item": "kitchenCabinet", "at": [6, 0], "rot": 0 },
+			{ "item": "toaster", "at": [6, 0], "rot": 0 },
+			{ "item": "kitchenCabinetDrawer", "at": [8, 0], "rot": 0 },
+			{ "item": "table", "at": [4, 4], "rot": 0 },
+			{ "item": "plantSmall1", "at": [5, 4], "rot": 0 },
+			{ "item": "chair", "at": [4, 3], "rot": 2 },
+			{ "item": "chair", "at": [5, 6], "rot": 0 },
+			{ "item": "chairCushion", "at": [7, 4], "rot": 3 },
+			{ "item": "rugRound", "at": [1, 5], "rot": 0 },
+			{ "item": "stoolBar", "at": [9, 5], "rot": 0 },
+			{ "item": "trashcan", "at": [9, 7], "rot": 0 },
+			{ "item": "rugDoormat", "at": [2, 3], "rot": 1 }
+		],
+		"bathroom": [
+			{ "item": "bathtub", "at": [4, 0], "rot": 0 },
+			{ "item": "toilet", "at": [0, 0], "rot": 0 },
+			{ "item": "bathroomSink", "at": [2, 0], "rot": 0 },
+			{ "item": "bathroomMirror", "wall": "N", "at": [2, 0] },
+			{ "item": "bathroomCabinet", "at": [3, 0], "rot": 0 },
+			{ "item": "washer", "at": [6, 5], "rot": 0 },
+			{ "item": "rugSquare", "at": [2, 4], "rot": 0 },
+			{ "item": "pottedPlant", "at": [0, 6], "rot": 0 }
+		],
+		"bedroom": [
+			{ "item": "boxA", "at": [2, 2], "rot": 0 },
+			{ "item": "boxB", "at": [3, 2], "rot": 1 },
+			{ "item": "boxA", "at": [2, 3], "rot": 2 },
+			{ "item": "boxB", "at": [5, 5], "rot": 0 },
+			{ "item": "sideTable", "at": [0, 0], "rot": 0 },
+			{ "item": "lampRoundTable", "at": [0, 0], "rot": 0 },
+			{ "item": "rugRound", "at": [3, 4], "rot": 0 },
+			{ "item": "coatRackStanding", "at": [9, 0], "rot": 0 },
+			{ "item": "bookcaseOpen", "at": [4, 0], "rot": 0 },
+			{ "item": "monsteraPlant", "at": [0, 6], "rot": 0 }
+		],
+		"garden": [
+			{ "item": "treeDefault", "at": [1, 2], "rot": 0 },
+			{ "item": "treeFat", "at": [11, 8], "rot": 0 },
+			{ "item": "gardenBench", "at": [5, 4], "rot": 0 },
+			{ "item": "flowerRed", "at": [3, 3], "rot": 0 },
+			{ "item": "flowerPurple", "at": [4, 3], "rot": 0 },
+			{ "item": "flowerYellow", "at": [10, 3], "rot": 0 },
+			{ "item": "gardenBush", "at": [0, 0], "rot": 0 },
+			{ "item": "gardenBush", "at": [13, 0], "rot": 0 },
+			{ "item": "potLarge", "at": [9, 4], "rot": 0 },
+			{ "item": "grassTuft", "at": [2, 7], "rot": 0 },
+			{ "item": "grassTuft", "at": [8, 9], "rot": 0 },
+			{ "item": "grassTuft", "at": [12, 2], "rot": 0 }
+		]
+	}
+}

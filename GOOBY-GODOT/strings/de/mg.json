@@ -1,0 +1,68 @@
+{
+	"mg": {
+		"teaParty": {
+			"title": "Teestube",
+			"hint": "Halten: gießen — Loslassen: servieren!",
+			"spill": "Verschüttet!",
+			"streak_bonus": "Serien-Bonus!",
+			"spills": "Verschüttet: {spills}/{max}"
+		},
+		"carrotCatch": {
+			"title": "Möhrenfang",
+			"hint": "Zieh den Korb hin und her!",
+			"yuck": "Igitt!",
+			"missed": "Am Boden: {n}/{max}"
+		},
+		"gvz": {"title": "Gooby vs. Zombies"},
+		"gobnom": {"title": "Gobnom"},
+		"arcade": {
+			"title": "Arcade",
+			"back": "‹ Zurück",
+			"coming_soon": "Bald!"
+		},
+		"pregame": {
+			"difficulty": "Schwierigkeit",
+			"orientation": "Ausrichtung",
+			"best": "Bestwert: {best}",
+			"play": "Spielen!",
+			"back": "‹ Zurück"
+		},
+		"diff": {
+			"easy": "Leicht",
+			"normal": "Normal",
+			"hard": "Schwer",
+			"endless": "Endlos"
+		},
+		"orient": {
+			"auto": "Auto",
+			"portrait": "Hochkant",
+			"landscape": "Quer"
+		},
+		"host": {
+			"score": "★ {score}",
+			"pause": "❚❚ Pause",
+			"paused": "Pause",
+			"resume": "Weiter",
+			"quit": "Beenden",
+			"go": "Los!"
+		},
+		"results": {
+			"title": "Runde vorbei!",
+			"score": "{score} Punkte",
+			"best": "Bestwert: {best}",
+			"new_best": "Neuer Rekord!",
+			"coins": "+{coins} Münzen",
+			"daily_bonus": "Tagesbonus ×2!",
+			"day_cap": "Tageslimit erreicht",
+			"xp": "+{xp} XP",
+			"level_up": "Level-Up! +{coins} Münzen",
+			"beat_target": "Ziel geschafft!",
+			"again": "Nochmal",
+			"back": "Zur Arcade"
+		},
+		"game": {
+			"time": "{sec} s",
+			"streak": "Serie ×{n}"
+		}
+	}
+}

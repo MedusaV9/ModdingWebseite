@@ -1,0 +1,12 @@
+{
+	"updates": {
+		"alles_aktuell": "Everything is up to date!",
+		"update_geladen": "Update downloaded — restart to load the new content",
+		"braucht_ipa": "New app version required — please install the new IPA",
+		"fehler": "Currently unreachable — you can keep playing as usual",
+		"pruefe": "Checking for updates…",
+		"pack_deaktiviert": "An update caused problems and has been disabled.",
+		"safe_mode": "Safe mode: updates are temporarily off — built-in content active.",
+		"erneut_versuchen": "Try again"
+	}
+}

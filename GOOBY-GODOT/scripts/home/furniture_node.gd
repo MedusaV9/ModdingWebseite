@@ -1,0 +1,138 @@
+class_name FurnitureNode
+extends Node3D
+## Sichtbares Möbel-Exemplar (W2a HOUSE): lädt das Katalog-GLB und fittet es
+## PROZEDURAL aufs Grid (Kenney/KayKit/itch-Assets haben verschiedene Maße
+## und Pivots — Auto-Fit statt Asset-Anfassen): uniform skaliert in den
+## Footprint (× fill), XZ-zentriert, Unterkante auf y=0.
+##
+## Metadaten: `uid` + `item_id` (Baumodus-Picking läuft über GridData-Zellen,
+## nicht über Physik).
+
+var uid := ""
+var item_def: Dictionary = {}
+
+var _model: Node3D
+var _top_y := 0.0
+var _light: OmniLight3D
+
+
+## Boden-Layer-Item (RUG/FLOOR/SURFACE). `base_y` hebt SURFACE-Items auf die
+## Trägerfläche. Liefert null bei fehlendem/kaputtem GLB (weich degradieren).
+static func create(def: Dictionary, at: Vector2i, rot: int, item_uid: String) -> FurnitureNode:
+	var node := _build(def, item_uid)
+	if node == null:
+		return null
+	var center := GridData.world_center(at, def["footprint"], rot)
+	node.position = center
+	node.rotation.y = -rot * PI / 2.0
+	return node
+
+
+## Wand-Layer-Item: sitzt AUF der Wand (Doc D §1.2, kein CSG), Blick in den
+## Raum, Höhe ~Möbelhöhe.
+static func create_wall(
+	def: Dictionary, wall: String, offset: int, room_grid: Vector2i, item_uid: String
+) -> FurnitureNode:
+	var node := _build(def, item_uid)
+	if node == null:
+		return null
+	var span := int(def["wall_size"]) * GridData.CELL_SIZE
+	var along := offset * GridData.CELL_SIZE + span * 0.5
+	var lift := Vector3(0.0, 1.35, 0.0)
+	var inset := 0.06
+	match wall:
+		"N":
+			node.position = Vector3(along, 0, inset) + lift
+		"S":
+			node.position = Vector3(along, 0, room_grid.y * GridData.CELL_SIZE - inset) + lift
+			node.rotation.y = PI
+		"W":
+			node.position = Vector3(inset, 0, along) + lift
+			node.rotation.y = -PI / 2.0
+		"E":
+			node.position = Vector3(room_grid.x * GridData.CELL_SIZE - inset, 0, along) + lift
+			node.rotation.y = PI / 2.0
+	return node
+
+
+## Oberkante (Welt-y-Offset) — SURFACE-Items werden hier draufgestellt.
+func top_y() -> float:
+	return _top_y
+
+
+## Ghost-Optik für den Baumodus: halbtransparent + Gültigkeits-Tönung.
+func set_ghost(valid: bool) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.45, 0.95, 0.5, 0.6) if valid else Color(0.98, 0.35, 0.3, 0.6)
+	for mesh in find_children("*", "MeshInstance3D", true, false):
+		(mesh as MeshInstance3D).material_override = mat
+
+
+func set_light_enabled(enabled: bool) -> void:
+	if _light != null:
+		_light.visible = enabled
+
+
+static func _build(def: Dictionary, item_uid: String) -> FurnitureNode:
+	var path := FurnitureCatalog.glb_path(def)
+	if not ResourceLoader.exists(path):
+		push_warning("Möbel-GLB fehlt: %s (%s)" % [path, def.get("id", "?")])
+		return null
+	var scene: PackedScene = load(path)
+	if scene == null:
+		return null
+	var node := FurnitureNode.new()
+	node.uid = item_uid
+	node.item_def = def
+	node.name = "Furniture_%s" % item_uid
+	node._model = scene.instantiate()
+	node.add_child(node._model)
+	node._fit_model(def)
+	if bool(def.get("can_toggle_light", false)):
+		node._attach_light()
+	return node
+
+
+func _fit_model(def: Dictionary) -> void:
+	var aabb := _merged_aabb(_model, Transform3D.IDENTITY)
+	if aabb.size.x <= 0.0001 or aabb.size.z <= 0.0001:
+		return
+	var fp: Vector2i = def["footprint"]
+	var fill: float = def["fill"]
+	var target_w := fp.x * GridData.CELL_SIZE * fill
+	var target_d := fp.y * GridData.CELL_SIZE * fill
+	var s := minf(target_w / aabb.size.x, target_d / aabb.size.z)
+	_model.scale = Vector3.ONE * s
+	var center := aabb.get_center()
+	_model.position = Vector3(-center.x * s, -aabb.position.y * s, -center.z * s)
+	if int(def["layer"]) == GridData.Layer.RUG:
+		_model.position.y += 0.005
+	_top_y = aabb.size.y * s
+
+
+func _attach_light() -> void:
+	_light = OmniLight3D.new()
+	_light.light_color = Color(1.0, 0.85, 0.6)
+	_light.light_energy = 1.4
+	_light.omni_range = 2.4
+	_light.position = Vector3(0.0, maxf(_top_y - 0.1, 0.3), 0.0)
+	_light.shadow_enabled = false
+	add_child(_light)
+
+
+static func _merged_aabb(node: Node, xform: Transform3D) -> AABB:
+	var merged := AABB()
+	var found := false
+	var local := xform
+	if node is Node3D:
+		local = xform * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		merged = local * (node as MeshInstance3D).mesh.get_aabb()
+		found = true
+	for child in node.get_children():
+		var sub := _merged_aabb(child, local)
+		if sub.size != Vector3.ZERO or sub.position != Vector3.ZERO:
+			merged = merged.merge(sub) if found else sub
+			found = true
+	return merged

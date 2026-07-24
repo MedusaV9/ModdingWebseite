@@ -1,0 +1,12 @@
+{
+	"updates": {
+		"alles_aktuell": "Alles aktuell!",
+		"update_geladen": "Update geladen — Neustart lädt Inhalte",
+		"braucht_ipa": "Neue App-Version nötig — bitte neue IPA installieren",
+		"fehler": "Gerade nicht erreichbar — du kannst ganz normal weiterspielen",
+		"pruefe": "Suche nach Updates…",
+		"pack_deaktiviert": "Ein Update hat Probleme gemacht und wurde deaktiviert.",
+		"safe_mode": "Sicherer Modus: Updates sind vorübergehend aus — eingebaute Inhalte aktiv.",
+		"erneut_versuchen": "Erneut versuchen"
+	}
+}

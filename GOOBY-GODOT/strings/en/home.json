@@ -1,0 +1,43 @@
+{
+	"home": {
+		"raum": {
+			"living": "Living Room",
+			"kitchen": "Kitchen",
+			"bathroom": "Bathroom",
+			"bedroom": "Bedroom",
+			"garden": "Garden"
+		},
+		"tuer": {
+			"stuck": "Gooby got stuck!",
+			"mash_hint": "Tap! Tap! Tap!"
+		},
+		"blocked": {
+			"bubble": "I'm not that good at climbing… awww man!",
+			"umbauen": "I'll rebuild",
+			"lava": "FLOOR IS LAVA",
+			"spidergooby": "I AM SPIDERGOOBY!!"
+		},
+		"gooby": {
+			"watch": "Oooh, is it gonna be pretty?"
+		},
+		"umzug": "Moving day! Everything is still in boxes…",
+		"aktion_bald": "Coming soon!"
+	},
+	"build": {
+		"lager": "Storage {used}/{cap}",
+		"lager_voll": "Storage full! Build a shed in the garden!",
+		"leer": "Your storage is empty.",
+		"fertig": "Done",
+		"rotieren": "Rotate",
+		"bestaetigen": "Place",
+		"einlagern": "Store",
+		"abbrechen": "Cancel",
+		"bett_quest": "Place your bed! Gooby wants to snuggle!",
+		"hammer_fertig": "Tadaa! Built it myself!",
+		"pflicht": {
+			"bett": "Gooby needs his bed! 😤",
+			"couch": "Gooby needs his couch! 😤",
+			"kuehlschrank": "Gooby needs his fridge! 😤"
+		}
+	}
+}

@@ -183,8 +183,12 @@ func test_settings_und_news_smoke() -> void:
 	check_eq(update_requests[0], 1, "Update-Signal feuert")
 	await tree.process_frame
 	await tree.process_frame
-	var toast := settings.get_node("%Toast") as ToastLayer
-	check(toast.is_showing(), "»bald«-Toast erscheint ohne UpdateManager")
+	# Seit W2b existiert der echte UpdateManager als Autoload: der Knopf
+	# startet dann den echten Check (kein »bald«-Platzhalter-Toast mehr).
+	# Ohne Autoload (isolierter Testlauf) bleibt der Platzhalter-Toast Pflicht.
+	if settings.get_node_or_null("/root/UpdateManager") == null:
+		var toast := settings.get_node("%Toast") as ToastLayer
+		check(toast.is_showing(), "»bald«-Toast erscheint ohne UpdateManager")
 	var news: News50Panel = NEWS_SCENE.instantiate()
 	mount(news)
 	await tree.process_frame
