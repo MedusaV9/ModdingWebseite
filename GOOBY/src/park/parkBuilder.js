@@ -168,14 +168,21 @@ export function generateParkLayout(seed) {
   };
   items.push(coasterKiosk);
 
-  // --- RESERVED ferrisWheel anchor (north-west — F4 lands here) ------------
+  // --- ferrisWheel anchor (north-west) — V6/F4's Riesenrad mounts here -----
+  // The wheel itself is fully procedural (park/ferrisWheel.js — primitives +
+  // instancing, no GLB), so kind/key STAY 'reserved'/null: parkScene parents
+  // the build at this anchor and buildPlaza's key-instancing loop keeps
+  // skipping it (test/parkLayout.test.js pins kind/key + the clear footprint).
   const ferrisWheel = {
     id: 'ferrisWheel',
     kind: 'reserved',
-    key: null, // deliberately empty: F4's wheel mounts at this anchor
+    key: null, // procedural — mounted by parkScene, never GLB-instanced
     x: -12,
     z: -15,
-    rotY: 90 * DEG, // suggested facing: wheel plane toward the plaza center
+    // V6/F4: disc normal points at the plaza heart (atan2(12, 15) ≈ 38.7°),
+    // so the south overview camera reads the wheel face in a 3/4 view
+    // instead of edge-on (the old 90° suggestion).
+    rotY: Math.atan2(12, 15),
     scale: 1,
     hw: 5.5,
     hd: 5.5,

@@ -38,6 +38,8 @@ import { generateParkLayout, PARK_ASSET_KEYS } from './parkBuilder.js';
 import { mountParkDressing, setBand as setDressingBand, PARK_STALLS } from './parkDressing.js';
 // E2's frozen export (PLAN6 Wave E integration contract)
 import { startCoasterRide } from './coasterRide.js';
+// V6/F4: the Riesenrad — procedural build + the calm in-scene ride
+import { mountFerrisWheel, startWheelRide } from './ferrisWheel.js';
 import { openParkStall, initParkStall } from '../ui/parkStall.js';
 import { recordVisit, recordNight, recordRide, recordCandy } from '../systems/themePark.js';
 
@@ -130,6 +132,10 @@ export function createParkScene(ctx) {
 
   let gooby = null;
   let dressingHandle = null;
+  // V6/F4: wheel mount handle + the riding lock (plaza modal while riding)
+  let wheelHandle = null;
+  let wheelRiding = false;
+  let offWheelRide = null;
   let hemi = null;
   let dir = null;
   let band = 'day';
@@ -168,6 +174,7 @@ export function createParkScene(ctx) {
       dir.intensity = cfg.dirIntensity;
     }
     setDressingBand(band); // E3's once-per-change material swap (≤2 calls)
+    wheelHandle?.setBand(band); // V6/F4: rim fairy glow (emissive only, +0 calls)
   }
 
   /** Latch themePark.nightVisit (enter at night OR band flips while here). */
@@ -325,6 +332,8 @@ export function createParkScene(ctx) {
     const a = layout.anchors;
     addTap('gate', 'gate', a.gate.x, a.gate.z, 7.4, 6, 6.6);
     addTap('coaster', 'coaster', a.coasterKiosk.x, a.coasterKiosk.z, 4.6, 4.4, 3.4);
+    // V6/F4: the wheel is a tap target → confirm sheet → the calm ride
+    addTap('wheel', 'wheel', a.ferrisWheel.x, a.ferrisWheel.z, 9.4, 9.6, 7);
     // stall counters: E3's row runs along the alley's local x (spacing 3.4 m,
     // stalls facing local +z = plaza east after the 90° anchor rotation)
     for (let i = 0; i < PARK_STALLS.length; i++) {
@@ -361,7 +370,39 @@ export function createParkScene(ctx) {
     if (!ok) console.warn('[parkScene] coaster refused to start');
   }
 
+  // ---- V6/F4: the Riesenrad ride kick (confirm sheet → startWheelRide) ----
+  // Mirrors the coaster wire: a `wheelRiding` lock makes the plaza modal
+  // (onTap ignores everything; update() pauses stroll + pan — the ride owns
+  // Gooby and the camera and hands both back through onDone).
+  async function kickWheelRide() {
+    if (wheelRiding || coasterStarting || sceneManager.isSwitching?.()) return;
+    wheelRiding = true;
+    const ok = await startWheelRide({
+      wheel: wheelHandle,
+      camera,
+      gooby,
+      audio,
+      store,
+      sceneManager,
+      reducedMotion: reduceMotion || devParam('rm') === '1' || undefined,
+      getRestorePose: () => ({ pos: [panX, 24, 52], look: [panX * 0.45, 0, -8] }),
+      onDone: () => {
+        wheelRiding = false;
+        if (!entered || !gooby) return; // scene already left/disposed
+        // Gooby resumes his stroll exactly where the loop left off
+        strollPhase = 'move';
+        strollT = 0;
+        placeGoobyAt(strollS);
+        gooby.group.position.y = 0;
+        gooby.play('idle');
+      },
+    });
+    if (!ok) wheelRiding = false;
+  }
+  // ---- end V6/F4 ride kick --------------------------------------------------
+
   function onTap(p) {
+    if (wheelRiding) return; // V6/F4: the ride overlay owns input while riding
     const hit = input.pick(camera, tapTargets, p);
     if (!hit) return;
     let obj = hit.object;
@@ -373,6 +414,11 @@ export function createParkScene(ctx) {
       ui.openPanel('parkLeaveConfirm');
     } else if (tap.kind === 'coaster') {
       kickCoaster();
+    } else if (tap.kind === 'wheel') {
+      // V6/F4: confirm sheet first (park.wheel.confirm.* — panel registered
+      // in initParkScene; its GO emits 'parkWheelRideRequested')
+      audio.play('ui.open');
+      ui.openPanel('parkWheelConfirm');
     } else if (tap.kind === 'stall') {
       audio.play('ui.open');
       openParkStall(ui, tap.stallId, { store, audio });
@@ -415,6 +461,15 @@ export function createParkScene(ctx) {
       buildKiosk(group);
       buildCoasterSilhouette(group);
       buildTapAnchors(group);
+
+      // ---- V6/F4: mount the Riesenrad at E1's reserved anchor -------------
+      // (+6 draw calls — the WHEEL_BATCHES pure ledger; ambient ~1 rpm)
+      wheelHandle = mountFerrisWheel(group, layout.anchors.ferrisWheel, {
+        reducedMotion: reduceMotion,
+      });
+      wheelHandle.setBand(band);
+      offWheelRide = store.on('parkWheelRideRequested', kickWheelRide);
+      // ---- end V6/F4 mount --------------------------------------------------
 
       // E3's Candy Alley: position the anchor parent, let the dressing build
       // around its local origin (stalls facing local +z → plaza east)
@@ -498,33 +553,40 @@ export function createParkScene(ctx) {
         }
       }
 
+      // V6/F4: ambient wheel spin / the active ride drive (theta + cabins)
+      wheelHandle?.update(dt);
+
       // Gooby: stroll → pause → stroll (reduced motion: slow glide, no hops)
       gooby.update(dt);
-      strollT += dt;
-      if (strollPhase === 'move') {
-        strollS += dt * (reduceMotion ? STROLL.SPEED * 0.7 : STROLL.SPEED);
-        placeGoobyAt(strollS);
-        gooby.group.position.y = reduceMotion
-          ? 0
-          : Math.abs(Math.sin(strollS * 3.4)) * STROLL.BOUNCE;
-        if (strollT >= STROLL.MOVE_SEC) {
-          strollPhase = 'pause';
-          strollT = 0;
-          gooby.group.position.y = 0;
-          gooby.play(Math.random() < 0.5 ? 'lookAround' : 'happyBounce');
+      // V6/F4 (wrap): while the wheel ride is on, it leases Gooby AND the
+      // camera — the stroll and the pan glide pause and resume via onDone.
+      if (!wheelRiding) {
+        strollT += dt;
+        if (strollPhase === 'move') {
+          strollS += dt * (reduceMotion ? STROLL.SPEED * 0.7 : STROLL.SPEED);
+          placeGoobyAt(strollS);
+          gooby.group.position.y = reduceMotion
+            ? 0
+            : Math.abs(Math.sin(strollS * 3.4)) * STROLL.BOUNCE;
+          if (strollT >= STROLL.MOVE_SEC) {
+            strollPhase = 'pause';
+            strollT = 0;
+            gooby.group.position.y = 0;
+            gooby.play(Math.random() < 0.5 ? 'lookAround' : 'happyBounce');
+          }
+        } else {
+          if (strollT >= STROLL.PAUSE_SEC) {
+            strollPhase = 'move';
+            strollT = 0;
+            gooby.play('idle');
+          }
         }
-      } else {
-        if (strollT >= STROLL.PAUSE_SEC) {
-          strollPhase = 'move';
-          strollT = 0;
-          gooby.play('idle');
-        }
-      }
 
-      // camera pan glide
-      panX += (panTargetX - panX) * Math.min(1, dt * 6);
-      camera.position.set(panX, 24, 52);
-      camera.lookAt(panX * 0.45, 0, -8);
+        // camera pan glide
+        panX += (panTargetX - panX) * Math.min(1, dt * 6);
+        camera.position.set(panX, 24, 52);
+        camera.lookAt(panX * 0.45, 0, -8);
+      }
 
       // dev budget HUD + console ledger (§E10-style)
       if (import.meta.env?.DEV) {
@@ -550,6 +612,11 @@ export function createParkScene(ctx) {
       entered = false;
       offInventory?.();
       offInventory = null;
+      // V6/F4: never leave an in-flight ride behind (forced scene exits)
+      offWheelRide?.();
+      offWheelRide = null;
+      wheelHandle?.cancelRide();
+      wheelRiding = false;
       hudEl?.remove();
       hudEl = null;
     },
@@ -559,6 +626,10 @@ export function createParkScene(ctx) {
         dressingHandle?.dispose();
       } catch { /* dressing-owned resources only */ }
       dressingHandle = null;
+      try {
+        wheelHandle?.dispose(); // V6/F4: wheel-owned geos/mats + ride overlay
+      } catch { /* wheel-owned resources only */ }
+      wheelHandle = null;
       try {
         gooby?.dispose();
       } catch { /* gooby-owned resources only */ }
@@ -625,6 +696,32 @@ export function initParkScene({ store, ui, audio, sceneManager, assets }) {
     unmount() {},
   });
 
+  // ---- V6/F4: wheel confirm sheet (the parkLeaveConfirm pattern) ------------
+  // GO emits the runtime 'parkWheelRideRequested' event; the ACTIVE park
+  // scene instance subscribes in enter() and runs kickWheelRide.
+  ui.registerPanel('parkWheelConfirm', {
+    /** @param {HTMLElement} el */
+    mount(el) {
+      el.innerHTML = `
+        <div style="text-align:center">
+          <h2 class="perm-title">${t('park.wheel.confirm.title')}</h2>
+          <p class="perm-body">${t('park.wheel.confirm.body')}</p>
+          <div class="mg-btn-row">
+            <button class="btn btn-teal park-wheel-go">${t('park.wheel.confirm.go')}</button>
+            <button class="btn btn-ghost park-wheel-stay">${t('ui.later')}</button>
+          </div>
+        </div>`;
+      el.querySelector('.park-wheel-go').addEventListener('click', () => {
+        audio.play('ui.pick');
+        ui.closePanel('parkWheelConfirm');
+        store.emit('parkWheelRideRequested');
+      });
+      el.querySelector('.park-wheel-stay').addEventListener('click', () => ui.closePanel('parkWheelConfirm'));
+    },
+    unmount() {},
+  });
+  // ---- end V6/F4 confirm sheet ----------------------------------------------
+
   // ---- dev harness kicks (§E9, dev builds only) ----------------------------
   if (!import.meta.env?.DEV || typeof location === 'undefined') return;
   const q = new URLSearchParams(location.search);
@@ -644,6 +741,11 @@ export function initParkScene({ store, ui, audio, sceneManager, assets }) {
       if (wantPark) {
         await sceneManager.switchTo('park', { from: 'harness' });
         ok = sceneManager.currentId?.() === 'park';
+        // V6/F4: `?park=1&wheel=1` auto-boards the Riesenrad (same &rm=1
+        // companion as the coaster kick — kickWheelRide reads it)
+        if (ok && q.get('wheel') === '1') {
+          setTimeout(() => store.emit('parkWheelRideRequested'), 900);
+        }
       } else {
         ok = await startCoasterRide({
           sceneManager,

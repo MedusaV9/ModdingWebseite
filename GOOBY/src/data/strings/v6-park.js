@@ -36,6 +36,18 @@ export const EN = {
   'park.coaster.handsUpHint': 'Hold anywhere: hands up!',
   'park.coaster.photoSaved': 'Ride photo saved to your album!',
   // ---- end E2 coaster captions ----
+
+  // ---- F4: Riesenrad — the calm wheel ride (park.wheel.*, labeled block) ----
+  'park.wheel.name': 'Giant Wheel',
+  'park.wheel.confirm.title': 'A calm round?',
+  'park.wheel.confirm.body': 'Float up over Funkelpark \u2014 one gentle spin on the Giant Wheel.',
+  'park.wheel.confirm.go': 'Hop in',
+  'park.wheel.board': 'Gooby snuggles into a pastel gondola.',
+  'park.wheel.apex': 'The very top! Gooby waves at the whole park.',
+  'park.wheel.done': 'Back down \u2014 what a lovely view that was.',
+  'park.wheel.skipHint': 'Tap to come back down',
+  'park.wheel.photoSaved': 'View photo saved to your album!',
+  // ---- end F4 wheel strings ----
 };
 
 /** @type {Record<string, string>} */
@@ -69,4 +81,16 @@ export const DE = {
   'park.coaster.handsUpHint': '\u00dcberall halten: H\u00e4nde hoch!',
   'park.coaster.photoSaved': 'Fahrtfoto in deinem Album gespeichert!',
   // ---- end E2 coaster captions ----
+
+  // ---- F4: Riesenrad — the calm wheel ride (park.wheel.*, labeled block) ----
+  'park.wheel.name': 'Riesenrad',
+  'park.wheel.confirm.title': 'Eine ruhige Runde?',
+  'park.wheel.confirm.body': 'Schweb hoch \u00fcber den Funkelpark \u2014 eine sanfte Runde im Riesenrad.',
+  'park.wheel.confirm.go': 'Einsteigen',
+  'park.wheel.board': 'Gooby kuschelt sich in eine Pastell-Gondel.',
+  'park.wheel.apex': 'Ganz oben! Gooby winkt dem ganzen Park zu.',
+  'park.wheel.done': 'Wieder unten \u2014 was f\u00fcr eine sch\u00f6ne Aussicht.',
+  'park.wheel.skipHint': 'Tippen zum Runterfahren',
+  'park.wheel.photoSaved': 'Aussichtsfoto in deinem Album gespeichert!',
+  // ---- end F4 wheel strings ----
 };
