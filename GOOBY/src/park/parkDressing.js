@@ -338,8 +338,9 @@ export async function mountParkDressing(sceneGroup, band) {
   // ── counter planes at the measured front face + 2 cm (plan acceptance) ──
   const counterTopY = wallTopY * D.COUNTER_H_FRACTION;
   const counterZ = counterPlaneZ(wallFrontZ) + D.COUNTER_D_M / 2;
+  // V6 fix P2-10: pinker counters — the brown #C98A4B read as scaffolding
   const counterGeo = own(new THREE.BoxGeometry(D.COUNTER_W_M, D.COUNTER_T_M, D.COUNTER_D_M));
-  const counterMat = own(new THREE.MeshLambertMaterial({ color: '#C98A4B' }));
+  const counterMat = own(new THREE.MeshLambertMaterial({ color: '#E3A7B4' }));
   {
     const counters = new THREE.InstancedMesh(counterGeo, counterMat, PARK_STALLS.length);
     PARK_STALLS.forEach((_, i) => {
@@ -352,24 +353,79 @@ export async function mountParkDressing(sceneGroup, band) {
     group.add(counters);
   }
 
-  // ── awnings (city-kit-commercial detail-awning-wide, per-stall tint) ────
-  // White-base material override so the per-instance pastel tints render
-  // clean (setColorAt MULTIPLIES the base material — the GLB's own dark
-  // awning color muddied the candy palette; dev-verified).
-  const awning = measure('city-kit-commercial/detail-awning-wide');
-  const awningScale = (D.STALL_SPACING_M * 0.62) /
-    Math.max(0.001, awning.box.max.x - awning.box.min.x);
-  const awningLift = -awning.box.min.y * awningScale; // hang line at its bbox base
+  // ── awnings — V6 fix P2-10: procedural scalloped candy stripes ──────────
+  // The tinted GLB slab read as a grey/tan shelf; the stall SHEET icons
+  // promise candy stripes. Each stall gets a sloped striped top + a
+  // scallop-edged skirt (shared quad geometries, one striped CanvasTexture
+  // per stall — alphaTest cuts the scallops, no blend sorting).
+  const AWN = Object.freeze({ RISE: 0.34, OUT: 0.55, SKIRT: 0.3, W: D.STALL_SPACING_M * 0.74 });
   const awningBaseY = wallTopY * 0.86;
-  const awningTopY = awningBaseY + (awning.box.max.y - awning.box.min.y) * awningScale;
-  addInstanced(
-    awning.model,
-    PARK_STALLS.map((_, i) =>
-      composeAt(stallX(i), awningBaseY + awningLift, wallFrontZ + 0.01, 0, awningScale)
-    ),
-    PARK_STALLS.map((s) => s.tint),
-    own(new THREE.MeshLambertMaterial({ color: '#FFFFFF' }))
-  );
+  const awningTopY = awningBaseY + AWN.RISE;
+  const stripeTexture = (tint) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const g = canvas.getContext('2d');
+    const paintStripes = () => {
+      const sw = 32;
+      for (let x = 0; x < 256; x += sw) {
+        g.fillStyle = (x / sw) % 2 === 0 ? '#FFF6EC' : tint;
+        g.fillRect(x, 0, sw, 256);
+      }
+    };
+    paintStripes();
+    // scallop the bottom band: erase it, then repaint clipped to half-discs
+    const seam = 256 - 30;
+    g.globalCompositeOperation = 'destination-out';
+    g.fillRect(0, seam, 256, 30);
+    g.globalCompositeOperation = 'source-over';
+    const n = 6;
+    const w = 256 / n;
+    g.save();
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const cx = w * (i + 0.5);
+      g.moveTo(cx + w / 2, seam);
+      g.arc(cx, seam, w / 2, 0, Math.PI, false); // downward half-disc
+    }
+    g.clip();
+    paintStripes();
+    g.restore();
+    const tex = own(new THREE.CanvasTexture(canvas));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  if (typeof document !== 'undefined') {
+    const slopeLen = Math.hypot(AWN.RISE, AWN.OUT);
+    const slopeGeo = own(new THREE.PlaneGeometry(AWN.W, slopeLen));
+    {
+      // slope samples the plain-stripe region above the scallop band
+      const uv = slopeGeo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setY(i, 0.35 + uv.getY(i) * 0.65);
+    }
+    const skirtGeo = own(new THREE.PlaneGeometry(AWN.W, AWN.SKIRT));
+    {
+      // skirt samples the scallop band (canvas bottom → uv v 0…0.35)
+      const uv = skirtGeo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * 0.35);
+    }
+    const slopeTilt = -Math.atan2(AWN.OUT, AWN.RISE);
+    for (let i = 0; i < PARK_STALLS.length; i++) {
+      const matAwn = own(new THREE.MeshLambertMaterial({
+        map: stripeTexture(PARK_STALLS[i].tint),
+        side: THREE.DoubleSide,
+        transparent: true,
+        alphaTest: 0.5,
+      }));
+      const slope = new THREE.Mesh(slopeGeo, matAwn);
+      slope.rotation.x = slopeTilt;
+      slope.position.set(stallX(i), awningBaseY + AWN.RISE / 2, wallFrontZ + 0.02 + AWN.OUT / 2);
+      group.add(slope);
+      const skirt = new THREE.Mesh(skirtGeo, matAwn);
+      skirt.rotation.x = -0.08; // slight outward flare
+      skirt.position.set(stallX(i), awningBaseY - AWN.SKIRT / 2 + 0.02, wallFrontZ + 0.02 + AWN.OUT);
+      group.add(skirt);
+    }
+  }
 
   // ── stall signage: CanvasTexture name boards above the awnings ──────────
   // Above the MEASURED awning top (+ margin) — a fixed wallTopY offset left
@@ -543,13 +599,14 @@ export async function mountParkDressing(sceneGroup, band) {
   const bulbSpots = [
     ...spans.flatMap(([a, b]) => buntingSpots(a, b, D.BULBS_PER_SPAN)),
     ...PARK_STALLS.flatMap((_, i) => {
+      // V6 fix P2-10 follow-through: bulbs hang off the new scallop edge
       const edge = [];
       for (let k = 0; k < D.BULBS_PER_AWNING; k++) {
         const s = (k + 0.5) / D.BULBS_PER_AWNING;
         edge.push({
           x: stallX(i) + (s - 0.5) * D.STALL_SPACING_M * 0.58,
-          y: awningBaseY - 0.03,
-          z: wallFrontZ + 0.16,
+          y: awningBaseY - AWN.SKIRT + 0.01,
+          z: wallFrontZ + 0.04 + AWN.OUT,
         });
       }
       return edge;
@@ -567,15 +624,20 @@ export async function mountParkDressing(sceneGroup, band) {
   // glow per stall + a halo per lantern head (radial gradient CanvasTexture).
   let glow = null;
   if (typeof document !== 'undefined') {
+    // V6 fix P2-11: exponential-ish falloff — the old 0.9→0 two-stop
+    // gradient read as a hard white puck; peak comes down and the energy
+    // spreads over a larger, dimmer halo instead.
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const g = canvas.getContext('2d');
-    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,214,140,0.9)');
-    grad.addColorStop(1, 'rgba(255,214,140,0)');
+    const grad = g.createRadialGradient(64, 64, 2, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,214,140,0.5)');
+    grad.addColorStop(0.3, 'rgba(255,206,130,0.26)');
+    grad.addColorStop(0.62, 'rgba(255,196,120,0.09)');
+    grad.addColorStop(1, 'rgba(255,190,110,0)');
     g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
+    g.fillRect(0, 0, 128, 128);
     const tex = own(new THREE.CanvasTexture(canvas));
     const mat = own(new THREE.MeshBasicMaterial({
       map: tex,
@@ -586,10 +648,10 @@ export async function mountParkDressing(sceneGroup, band) {
     const geo = own(new THREE.PlaneGeometry(1, 1));
     const glowSpots = [
       ...PARK_STALLS.map((_, i) => ({
-        x: stallX(i), y: counterTopY + 0.42, z: wallFrontZ + 0.04, s: 1.35,
+        x: stallX(i), y: counterTopY + 0.42, z: wallFrontZ + 0.04, s: 1.7,
       })),
       ...lanternXs.map((x) => ({
-        x, y: lanternTopY - 0.12, z: wallFrontZ + 0.9, s: 0.8,
+        x, y: lanternTopY - 0.12, z: wallFrontZ + 0.9, s: 1.05,
       })),
     ];
     glow = new THREE.InstancedMesh(geo, mat, glowSpots.length);

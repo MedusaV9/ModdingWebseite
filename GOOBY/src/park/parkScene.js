@@ -63,6 +63,53 @@ const PARK_FOOD_IDS = Object.freeze(PARK_STALLS.map((s) => s.foodId));
 /** Gooby's stroll speed (m/s) and hop bounce height (m). */
 const STROLL = Object.freeze({ SPEED: 1.15, BOUNCE: 0.16, MOVE_SEC: 7, PAUSE_SEC: 3.2 });
 
+/** V6 fix P1-4: overview framing — lower + closer than the V6.0 (0,24,52)
+ * rig so the visible horizon sits in the top quarter (with the backdrop
+ * ring below) and Gooby reads ~30% bigger. LOOK lifts the aim point so the
+ * plaza heart stays centered. */
+const FRAME = Object.freeze({
+  CAM_Y: 17.5,
+  CAM_Z: 41,
+  LOOK_Y: 1.0,
+  LOOK_Z: -11,
+  PAN_LOOK: 0.45,
+  /** Gooby's plaza presence scale — at the ~40 m hub distance a 1.05 m
+   * Gooby is a speck; the toy-scale bump keeps him readable (the wheel
+   * ride snapshots/restores whatever base scale it finds). */
+  GOOBY_SCALE: 1.3,
+});
+
+/** V6 fix P1-5: night dressing numbers (lamp glow, pools, moon, stars). */
+const NIGHT_FX = Object.freeze({
+  LAMP_GLOW_COLOR: '#FFD9A0',
+  LAMP_GLOW_R: 0.26,
+  POOL_COLOR: '#FFC98A',
+  POOL_R: 2.6,
+  POOL_OPACITY: 0.5,
+  FOUNTAIN_COLOR: '#9FDCFF',
+  FOUNTAIN_R: 3.4,
+  FOUNTAIN_OPACITY: 0.55,
+  STAR_COUNT: 130,
+  STAR_COLOR: '#FFE9A8', //  gfx/sky.js paintSky star tint (garden match)
+  MOON_COLOR: '#F4EFD9', //  gfx/sky.js paintSky moon tint (garden match)
+});
+
+/** Soft radial falloff sprite (glow pools / fountain glow / moon halo). */
+function makeGlowTexture(size = 128) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** @param {string} name @returns {string|null} dev-only URL param */
 function devParam(name) {
   if (!import.meta.env?.DEV || typeof location === 'undefined') return null;
@@ -138,6 +185,7 @@ export function createParkScene(ctx) {
   let offWheelRide = null;
   let hemi = null;
   let dir = null;
+  let nightFx = null; // V6 fix P1-5: lamp glow + pools + moon + stars group
   let band = 'day';
   let bandCheckT = 0;
   let offInventory = null;
@@ -152,6 +200,9 @@ export function createParkScene(ctx) {
   let panX = 0;
   let panTargetX = 0;
   const tapTargets = [];
+  // dev: ?alleycam=1 pins a close-up Candy Alley framing (dressing checks —
+  // the ?parkhud=1 pattern; no effect outside dev builds)
+  const alleyCam = devParam('alleycam') === '1';
   let hudEl = null;
   let hudT = 0;
   let logT = 0;
@@ -175,6 +226,7 @@ export function createParkScene(ctx) {
     }
     setDressingBand(band); // E3's once-per-change material swap (≤2 calls)
     wheelHandle?.setBand(band); // V6/F4: rim fairy glow (emissive only, +0 calls)
+    if (nightFx) nightFx.visible = band === 'night'; // V6 fix P1-5
   }
 
   /** Latch themePark.nightVisit (enter at night OR band flips while here). */
@@ -316,6 +368,242 @@ export function createParkScene(ctx) {
     group.add(cols);
   }
 
+  // ---- V6 fix P1-4: cheap backdrop ring -------------------------------------
+  /** Pastel hills + 3 distant tent/flag silhouettes fill the empty band
+   *  between the grass edge and the sky (4 draw calls; deterministic). */
+  function buildBackdrop(group) {
+    const hash = (i, salt) => {
+      const s = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    // low hills: one InstancedMesh of squashed spheres on a north-facing arc
+    const hillGeo = geo(new THREE.SphereGeometry(1, 14, 9));
+    const hillMat = mat(new THREE.MeshStandardMaterial({ color: '#7fbf72', roughness: 1 }));
+    const HILL_N = 11;
+    const hills = new THREE.InstancedMesh(hillGeo, hillMat, HILL_N);
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < HILL_N; i++) {
+      const a = (-95 + (i / (HILL_N - 1)) * 190) * (Math.PI / 180); // az. from north
+      const r = 104 + hash(i, 5) * 38;
+      const sx = 22 + hash(i, 9) * 14;
+      const sy = 7 + hash(i, 13) * 5.5;
+      m.compose(
+        new THREE.Vector3(Math.sin(a) * r, 0, -Math.cos(a) * r),
+        new THREE.Quaternion(),
+        new THREE.Vector3(sx, sy, sx * 0.8)
+      );
+      hills.setMatrixAt(i, m);
+    }
+    hills.instanceMatrix.needsUpdate = true;
+    group.add(hills);
+
+    // distant funfair tents (cones) + cream pennant flags above the tips
+    const tentGeo = geo(new THREE.ConeGeometry(1, 1, 9));
+    const tentMat = mat(new THREE.MeshStandardMaterial({ color: '#d99fb2', roughness: 0.9 }));
+    // pennant flags: unlit cream (Standard shades them grey at this angle)
+    const flagGeo = geo(new THREE.PlaneGeometry(2.2, 1.2));
+    const flagMat = mat(new THREE.MeshBasicMaterial({
+      color: '#fff3dd', side: THREE.DoubleSide,
+    }));
+    const TENTS = [
+      { x: -40, z: -66, s: 10 },
+      { x: 14, z: -78, s: 11 },
+      { x: 44, z: -58, s: 8.5 },
+    ];
+    const tents = new THREE.InstancedMesh(tentGeo, tentMat, TENTS.length);
+    const flags = new THREE.InstancedMesh(flagGeo, flagMat, TENTS.length);
+    for (let i = 0; i < TENTS.length; i++) {
+      const tnt = TENTS[i];
+      m.compose(
+        new THREE.Vector3(tnt.x, tnt.s * 0.45, tnt.z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(tnt.s, tnt.s * 0.9, tnt.s)
+      );
+      tents.setMatrixAt(i, m);
+      // pennant leans off the tip like a wind-caught banner
+      m.compose(
+        new THREE.Vector3(tnt.x + 1.1, tnt.s * 0.9 + 0.55, tnt.z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(1, 1, 1)
+      );
+      flags.setMatrixAt(i, m);
+    }
+    tents.instanceMatrix.needsUpdate = true;
+    flags.instanceMatrix.needsUpdate = true;
+    group.add(tents, flags);
+  }
+
+  // ---- V6 fix P1-4: exit affordance -----------------------------------------
+  /** Signpost beside the entry path: home glyph + the trip.goHome label —
+   *  the gate now reads as THE exit (2 draw calls). */
+  function buildGateSign(group) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#FFF6EC';
+    g.beginPath();
+    g.roundRect(6, 10, 500, 236, 30);
+    g.fill();
+    g.lineWidth = 10;
+    g.strokeStyle = '#E8A9BE';
+    g.stroke();
+    // little house glyph (roof + body + door)
+    g.fillStyle = '#7A5A48';
+    g.beginPath();
+    g.moveTo(96, 118);
+    g.lineTo(160, 62);
+    g.lineTo(224, 118);
+    g.closePath();
+    g.fill();
+    g.fillRect(112, 118, 96, 76);
+    g.fillStyle = '#FFF6EC';
+    g.fillRect(146, 146, 28, 48);
+    // label (maxWidth shrink-to-fit — 'Nach Hause' must fit too)
+    g.fillStyle = '#7A5A48';
+    g.font = '900 58px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(t('trip.goHome'), 366, 132, 244);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    ownedMats.push({ dispose: () => tex.dispose() });
+
+    const pole = new THREE.Mesh(
+      geo(new THREE.CylinderGeometry(0.09, 0.11, 2.6, 8)),
+      mat(new THREE.MeshStandardMaterial({ color: '#8a6a52', roughness: 0.9 }))
+    );
+    pole.position.set(4.9, 1.3, 14.2); // clear of the castle, on the pave
+    group.add(pole);
+    const board = new THREE.Mesh(
+      geo(new THREE.PlaneGeometry(2.9, 1.45)),
+      mat(new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }))
+    );
+    board.position.set(4.9, 2.2, 14.28);
+    board.rotation.y = -0.14; // jaunty tilt toward the entry spine
+    group.add(board);
+  }
+
+  // ---- V6 fix P1-5: night dressing ------------------------------------------
+  /** Lamp head glows + warm ground pools (batched: 1+1 calls), a lit
+   *  fountain glow, and a garden-matched moon + sparse stars (fog: false so
+   *  the night fog never swallows them). Visibility rides applyBand. */
+  function buildNightFx(group) {
+    nightFx = new THREE.Group();
+    nightFx.name = 'parkNightFx';
+
+    const lanterns = layout.items.filter((it) => it.kind === 'lantern');
+    // lantern head height from the GLB itself (authored minY sinks −0.2)
+    const lanternModel = assets.getModel('pretty-park/street_lantern');
+    const box = new THREE.Box3().setFromObject(lanternModel);
+    const headY = box.max.y * 1.1 - 0.12; // LANTERN_SCALE 1.1, head just below the cap
+    const glowTex = makeGlowTexture();
+    ownedMats.push({ dispose: () => glowTex.dispose() });
+
+    // emissive head sprites (one InstancedMesh of unlit spheres)
+    const headGeo = geo(new THREE.SphereGeometry(NIGHT_FX.LAMP_GLOW_R, 10, 8));
+    const headMat = mat(new THREE.MeshBasicMaterial({ color: NIGHT_FX.LAMP_GLOW_COLOR }));
+    const heads = new THREE.InstancedMesh(headGeo, headMat, lanterns.length);
+    // warm ground pools (one InstancedMesh of radial-falloff discs)
+    const poolGeo = geo(new THREE.CircleGeometry(1, 24));
+    const poolMat = mat(new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: NIGHT_FX.POOL_COLOR,
+      transparent: true,
+      opacity: NIGHT_FX.POOL_OPACITY,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    const pools = new THREE.InstancedMesh(poolGeo, poolMat, lanterns.length);
+    const m = new THREE.Matrix4();
+    const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    for (let i = 0; i < lanterns.length; i++) {
+      const l = lanterns[i];
+      m.compose(new THREE.Vector3(l.x, headY, l.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+      heads.setMatrixAt(i, m);
+      m.compose(
+        new THREE.Vector3(l.x, 0.06, l.z),
+        flat,
+        new THREE.Vector3(NIGHT_FX.POOL_R, NIGHT_FX.POOL_R, 1)
+      );
+      pools.setMatrixAt(i, m);
+    }
+    heads.instanceMatrix.needsUpdate = true;
+    pools.instanceMatrix.needsUpdate = true;
+    nightFx.add(heads, pools);
+
+    // lit fountain: one aqua pool under the basin
+    const f = layout.anchors.fountain;
+    const fountainGlow = new THREE.Mesh(poolGeo, mat(new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: NIGHT_FX.FOUNTAIN_COLOR,
+      transparent: true,
+      opacity: NIGHT_FX.FOUNTAIN_OPACITY,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })));
+    fountainGlow.rotation.x = -Math.PI / 2;
+    fountainGlow.scale.setScalar(NIGHT_FX.FOUNTAIN_R);
+    fountainGlow.position.set(f.x, 0.08, f.z);
+    nightFx.add(fountainGlow);
+
+    // moon (paintSky's #F4EFD9 disc + crater shadows) low in the north sky —
+    // the garden dome's moon sits at ~26° elevation, above this camera's top
+    // of frame, so the park paints its own at ~5°
+    const mc = document.createElement('canvas');
+    mc.width = mc.height = 128;
+    const mg = mc.getContext('2d');
+    mg.fillStyle = NIGHT_FX.MOON_COLOR;
+    mg.beginPath();
+    mg.arc(64, 64, 56, 0, Math.PI * 2);
+    mg.fill();
+    mg.fillStyle = 'rgba(160,160,190,0.35)';
+    for (const [dx, dy, rr] of [[-0.3, -0.15, 0.22], [0.25, 0.3, 0.16], [0.05, -0.4, 0.12]]) {
+      mg.beginPath();
+      mg.arc(64 + dx * 56, 64 + dy * 56, rr * 56, 0, Math.PI * 2);
+      mg.fill();
+    }
+    const moonTex = new THREE.CanvasTexture(mc);
+    moonTex.colorSpace = THREE.SRGBColorSpace;
+    ownedMats.push({ dispose: () => moonTex.dispose() });
+    const moon = new THREE.Mesh(
+      geo(new THREE.PlaneGeometry(13, 13)),
+      mat(new THREE.MeshBasicMaterial({ map: moonTex, transparent: true, fog: false, depthWrite: false }))
+    );
+    moon.position.set(29, 34, -150);
+    nightFx.add(moon);
+
+    // sparse stars (Points, garden #FFE9A8) across the visible north band
+    const hash = (i, salt) => {
+      const s = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const starPos = new Float32Array(NIGHT_FX.STAR_COUNT * 3);
+    for (let i = 0; i < NIGHT_FX.STAR_COUNT; i++) {
+      const az = (-72 + hash(i, 3) * 144) * (Math.PI / 180);
+      const elev = (2.5 + hash(i, 11) * 26) * (Math.PI / 180);
+      const r = 165;
+      starPos[i * 3] = Math.sin(az) * Math.cos(elev) * r;
+      starPos[i * 3 + 1] = 20 + Math.sin(elev) * r;
+      starPos[i * 3 + 2] = -Math.cos(az) * Math.cos(elev) * r;
+    }
+    const starGeo = geo(new THREE.BufferGeometry());
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const stars = new THREE.Points(starGeo, mat(new THREE.PointsMaterial({
+      color: NIGHT_FX.STAR_COLOR,
+      size: 2.4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.85,
+      fog: false,
+      depthWrite: false,
+    })));
+    nightFx.add(stars);
+
+    nightFx.visible = band === 'night';
+    group.add(nightFx);
+  }
+
   // ---- tap anchors (invisible boxes — the roomManager hitbox recipe) -------
   function buildTapAnchors(group) {
     const hitMat = mat(new THREE.MeshBasicMaterial({ visible: false }));
@@ -377,6 +665,17 @@ export function createParkScene(ctx) {
   async function kickWheelRide() {
     if (wheelRiding || coasterStarting || sceneManager.isSwitching?.()) return;
     wheelRiding = true;
+    // V6 fix P1-6: the ride chrome mounts on <body>, but #ui is a fixed-
+    // position stacking context — a body-level sibling at z 60 paints OVER
+    // the §E6 sheets (--z-panel 200) no matter their z-index. Re-home the
+    // overlay into #ui as soon as F4's ride creates it (listeners survive
+    // appendChild; F4's own remove() cleanup is unaffected).
+    const rehomeOverlay = () => {
+      const el = document.querySelector('body > .v6fw-root');
+      if (el) (document.getElementById('ui') ?? document.body).appendChild(el);
+      else if (wheelRiding && entered) requestAnimationFrame(rehomeOverlay);
+    };
+    requestAnimationFrame(rehomeOverlay);
     const ok = await startWheelRide({
       wheel: wheelHandle,
       camera,
@@ -385,7 +684,10 @@ export function createParkScene(ctx) {
       store,
       sceneManager,
       reducedMotion: reduceMotion || devParam('rm') === '1' || undefined,
-      getRestorePose: () => ({ pos: [panX, 24, 52], look: [panX * 0.45, 0, -8] }),
+      getRestorePose: () => ({
+        pos: [panX, FRAME.CAM_Y, FRAME.CAM_Z],
+        look: [panX * FRAME.PAN_LOOK, FRAME.LOOK_Y, FRAME.LOOK_Z],
+      }),
       onDone: () => {
         wheelRiding = false;
         if (!entered || !gooby) return; // scene already left/disposed
@@ -460,6 +762,9 @@ export function createParkScene(ctx) {
       const group = buildPlaza();
       buildKiosk(group);
       buildCoasterSilhouette(group);
+      buildBackdrop(group); //   V6 fix P1-4: hills + tent silhouettes
+      buildGateSign(group); //   V6 fix P1-4: home signpost at the gate
+      buildNightFx(group); //    V6 fix P1-5: lamps/fountain/moon/stars
       buildTapAnchors(group);
 
       // ---- V6/F4: mount the Riesenrad at E1's reserved anchor -------------
@@ -487,6 +792,7 @@ export function createParkScene(ctx) {
       // Gooby strolls the fountain loop
       gooby = createGooby();
       applyEquippedOutfits(gooby);
+      gooby.group.scale.setScalar(FRAME.GOOBY_SCALE); // V6 fix P1-4
       strollCurve = new THREE.CatmullRomCurve3(
         layout.goobyPath.map((p) => new THREE.Vector3(p.x, 0, p.z)),
         true
@@ -500,12 +806,17 @@ export function createParkScene(ctx) {
       gooby.play('idle');
       scene.add(gooby.group);
 
-      // camera: high south overview (whole hub in one portrait frame — the
-      // projections were verified for 390×844); drag pans gently sideways to
-      // lean toward the alley (west) or the kiosk (east).
+      // camera: south overview (V6 fix P1-4 FRAME — horizon in the top
+      // quarter, Gooby bigger); drag pans gently sideways to lean toward
+      // the alley (west) or the kiosk (east).
       panX = panTargetX = 0;
-      camera.position.set(0, 24, 52);
-      camera.lookAt(0, 0, -8);
+      camera.position.set(0, FRAME.CAM_Y, FRAME.CAM_Z);
+      camera.lookAt(0, FRAME.LOOK_Y, FRAME.LOOK_Z);
+      if (alleyCam) {
+        const a = layout.anchors.candyAlley;
+        camera.position.set(a.x + 12.5, 3.6, a.z - 5.5);
+        camera.lookAt(a.x, 1.5, a.z - 0.4);
+      }
       input.on('tap', onTap);
       input.on('drag', (p) => {
         panTargetX = Math.max(-6, Math.min(6, panTargetX - p.dx * 0.03));
@@ -582,10 +893,12 @@ export function createParkScene(ctx) {
           }
         }
 
-        // camera pan glide
-        panX += (panTargetX - panX) * Math.min(1, dt * 6);
-        camera.position.set(panX, 24, 52);
-        camera.lookAt(panX * 0.45, 0, -8);
+        // camera pan glide (the alleycam dev framing pins the camera instead)
+        if (!alleyCam) {
+          panX += (panTargetX - panX) * Math.min(1, dt * 6);
+          camera.position.set(panX, FRAME.CAM_Y, FRAME.CAM_Z);
+          camera.lookAt(panX * FRAME.PAN_LOOK, FRAME.LOOK_Y, FRAME.LOOK_Z);
+        }
       }
 
       // dev budget HUD + console ledger (§E10-style)
@@ -634,6 +947,7 @@ export function createParkScene(ctx) {
         gooby?.dispose();
       } catch { /* gooby-owned resources only */ }
       gooby = null;
+      nightFx = null; // V6 fix P1-5 (geos/mats disposed via the owned lists)
       for (const g of ownedGeos.splice(0)) g.dispose?.();
       for (const m of ownedMats.splice(0)) m.dispose?.();
       tapTargets.length = 0;

@@ -49,7 +49,6 @@ import {
   PIECE_MODEL_KEYS,
   DIRS,
   ROAD_Y_OFFSET,
-  computeSupports,
   pointAt,
 } from './trackPieces.js';
 
@@ -90,11 +89,36 @@ const VIEW = Object.freeze({
   DONE_HOLD_SEC: 1.6, //      arrival caption dwell before onDone
   ARMS_UP_RAD: 1.3, //        extra arm raise when hands are up
   ARMS_LERP: 6,
-  CART_COLORS: Object.freeze([0xf2668b, 0x6fb7e8]),
-  SKY_TOP: 0x7ec8f2,
-  SKY_HORIZON: 0xffe8cf,
-  GROUND: 0xa8d98a,
+  /** V6 fix P0-1: boarding plays in ≤3 s of real time (the logic's
+   * BOARD_SEC clock is scaled in update() — physics/timeline untouched). */
+  BOARD_SEC_VIEW: 3,
+  HOP_START_SEC: 0.25, //     Gooby waits a beat on the platform…
+  HOP_SEC: 0.85, //           …then hops into the front cart (arc)
+  HOP_ARC_M: 0.8,
+  BOUNCE_SEC: 1.2, //         damped cart bounce after the landing
+  BOUNCE_AMP_M: 0.085,
+  /** V6 fix P0-1: portrait boarding shot (track units) — the logic's SHOT_*
+   * station frame is landscape-composed and clips the cart on a 390-wide
+   * portrait view; this VIEW pose centers the cart + Gooby's hop and blends
+   * into cameraPose()'s own station→chase move after departure. */
+  BOARD_CAM_SIDE: 2.9, //     platform side (cart-local +x = up × tangent)
+  BOARD_CAM_AHEAD: 1.35,
+  BOARD_CAM_UP: 1.05,
+  BOARD_LOOK_SIDE: 0.3, //    look bias toward the hop midpoint
+  BOARD_LOOK_UP: 0.55,
+  /** V6 fix P0-1 palette: game pastels — dusty-rose/mint carts with a cream
+   * rim (the wheel's F2A7BE/FBF3E4 family), plaza-tone ground, soft sky. */
+  CART_COLORS: Object.freeze([0xf2a7be, 0xa9dcc6]),
+  CART_RIM: 0xfbf3e4,
+  SKY_TOP: 0x9ecdf2,
+  SKY_HORIZON: 0xfff1dc,
+  GROUND: 0x8fc76d, //        parkScene grass tone
+  PLAZA: 0xe8d9c3, //         parkScene pave tone (station apron)
   TREE_RING: 46,
+  /** Dense support struts (the trackPieces catalog probes every 2.5 u and
+   * skips anything below 0.3 — the eval read that as floating track). */
+  SUPPORT_SPACING: 1.3,
+  SUPPORT_MIN_Y: 0.18,
 });
 
 /** Scoped overlay chrome (own v6co- prefix — cutsceneView CSS precedent). */
@@ -117,6 +141,76 @@ const OVERLAY_CSS = `
 function hash01(i) {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
+}
+
+// ---------------------------------------------------------------------------
+// V6 fix P0-1: pastel palette pass on the toy-car-kit colormap
+// ---------------------------------------------------------------------------
+
+/** rgb 0–255 → [h 0–360, s 0–1, l 0–1] */
+function rgbToHsl(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
+  else if (max === gn) h = ((bn - rn) / d + 2) * 60;
+  else h = ((rn - gn) / d + 4) * 60;
+  return [h, s, l];
+}
+
+/** [h 0–360, s 0–1, l 0–1] → rgb 0–255 */
+function hslToRgb(h, s, l) {
+  const hn = ((h % 360) + 360) % 360 / 360;
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return [v, v, v];
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const f = (t) => {
+    let tn = t;
+    if (tn < 0) tn += 1;
+    if (tn > 1) tn -= 1;
+    if (tn < 1 / 6) return p + (q - p) * 6 * tn;
+    if (tn < 1 / 2) return q;
+    if (tn < 2 / 3) return p + (q - p) * (2 / 3 - tn) * 6;
+    return p;
+  };
+  return [Math.round(f(hn + 1 / 3) * 255), Math.round(f(hn) * 255), Math.round(f(hn - 1 / 3) * 255)];
+}
+
+/**
+ * Remap one colormap pixel into the Funkelpark pastels: oranges/reds →
+ * dusty rose (the wheel-rim family), yellows → warm cream, blues (support
+ * steel) → cream, greens → soft mint; neutrals warm up, deep darks stay a
+ * warm chocolate so wheels/shadows keep contrast.
+ * @param {number} r @param {number} g @param {number} b
+ * @returns {[number, number, number]}
+ */
+export function pastelizePixel(r, g, b) {
+  const [h, s, l] = rgbToHsl(r, g, b);
+  if (s < 0.14) {
+    if (l < 0.24) return hslToRgb(18, 0.24, 0.19); // warm chocolate darks
+    return hslToRgb(38, 0.28, Math.min(0.93, l * 0.35 + 0.62)); // warm paper
+  }
+  if (h < 62 || h >= 300) {
+    // oranges / reds / magentas → dusty rose, keep the light/dark structure
+    return hslToRgb(341, 0.52, Math.min(0.88, l * 0.5 + 0.42));
+  }
+  if (h < 92) {
+    return hslToRgb(40, 0.5, Math.min(0.94, l * 0.3 + 0.66)); // yellows → cream
+  }
+  if (h < 170) {
+    return hslToRgb(152, 0.32, Math.min(0.9, l * 0.4 + 0.5)); // greens → mint
+  }
+  return hslToRgb(41, 0.36, Math.min(0.94, l * 0.3 + 0.62)); // blues → cream
 }
 
 /**
@@ -203,7 +297,7 @@ export function createCoasterRideScene(ctx) {
       sun.position.set(40, 90, -60);
       scene.add(sun);
 
-      // ---- ground disc + distant park silhouettes (3 draws) ----
+      // ---- ground disc + plaza apron + distant park silhouettes ----
       const ground = own(new THREE.Mesh(
         new THREE.CircleGeometry(360, 40),
         new THREE.MeshStandardMaterial({ color: VIEW.GROUND, roughness: 1 })
@@ -211,9 +305,18 @@ export function createCoasterRideScene(ctx) {
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -0.02;
       scene.add(ground);
+      // V6 fix P0-1: paved plaza-tone apron under the whole circuit footprint
+      // (the walk spans x −36…0, z −6…24 track units) — kills the olive void
+      const apron = own(new THREE.Mesh(
+        new THREE.CircleGeometry(52, 36),
+        new THREE.MeshStandardMaterial({ color: VIEW.PLAZA, roughness: 1 })
+      ));
+      apron.rotation.x = -Math.PI / 2;
+      apron.position.set(-18 * S, -0.005, 9 * S);
+      scene.add(apron);
 
       const treeGeo = new THREE.ConeGeometry(2.6, 7, 7);
-      const treeMat = new THREE.MeshStandardMaterial({ color: 0x7cc19a, roughness: 1 });
+      const treeMat = new THREE.MeshStandardMaterial({ color: 0x86cba4, roughness: 1 });
       ownedGeos.push(treeGeo);
       ownedMats.push(treeMat);
       const trees = new THREE.InstancedMesh(treeGeo, treeMat, VIEW.TREE_RING);
@@ -233,6 +336,48 @@ export function createCoasterRideScene(ctx) {
       trees.frustumCulled = false;
       scene.add(trees);
       this.trees = trees;
+
+      // ---- V6 fix P0-1: ONE pastel override material for every kit GLB ----
+      // The toy-car-kit pieces all sample a shared colormap atlas (mustard /
+      // burnt-orange / steel-blue patches). Remap it ONCE into the game's
+      // pastels (pastelizePixel) and render every track/support/gate mesh
+      // with the same dusty-rose/cream material — zero extra draw calls.
+      this.kitMat = null;
+      {
+        const probe = assets.getModel('toy-car-kit/track-narrow-straight');
+        let srcMap = null;
+        probe.traverse((obj) => {
+          if (!srcMap && obj.isMesh && obj.material?.map?.image) srcMap = obj.material.map;
+        });
+        if (srcMap?.image?.width) {
+          const cv = document.createElement('canvas');
+          cv.width = srcMap.image.width;
+          cv.height = srcMap.image.height;
+          const g = cv.getContext('2d');
+          g.drawImage(srcMap.image, 0, 0);
+          const img = g.getImageData(0, 0, cv.width, cv.height);
+          const d = img.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const [pr, pg, pb] = pastelizePixel(d[i], d[i + 1], d[i + 2]);
+            d[i] = pr;
+            d[i + 1] = pg;
+            d[i + 2] = pb;
+          }
+          g.putImageData(img, 0, 0);
+          const tex = new THREE.CanvasTexture(cv);
+          tex.colorSpace = srcMap.colorSpace;
+          tex.flipY = srcMap.flipY;
+          tex.wrapS = srcMap.wrapS;
+          tex.wrapT = srcMap.wrapT;
+          this.kitMat = new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.85,
+            metalness: 0,
+          });
+          ownedMats.push(this.kitMat); // dispose() drops the map too
+        }
+      }
+      const kitMaterial = (orig) => this.kitMat ?? orig;
 
       // ---- the track: InstancedMesh per (piece type × submesh) ----
       const assembly = this.ride.assembly;
@@ -266,8 +411,9 @@ export function createCoasterRideScene(ctx) {
           if (obj.isMesh) subs.push(obj);
         });
         for (const sub of subs) {
-          // geometry/material are shared asset-cache masters — never disposed
-          const inst = new THREE.InstancedMesh(sub.geometry, sub.material, pieces.length);
+          // geometry is a shared asset-cache master — never disposed; the
+          // material is the scene-owned pastel override (P0-1 palette)
+          const inst = new THREE.InstancedMesh(sub.geometry, kitMaterial(sub.material), pieces.length);
           for (let i = 0; i < pieces.length; i += 1) {
             const m = pieceMatrix(pieces[i]).multiply(sub.matrixWorld);
             inst.setMatrixAt(i, m);
@@ -280,7 +426,22 @@ export function createCoasterRideScene(ctx) {
       }
 
       // ---- supports: instanced columns + clamps under elevated track ----
-      const supports = computeSupports(assembly);
+      // V6 fix P0-1: probe DENSER than the trackPieces default (2.5 u,
+      // MIN_Y 0.3 read as floating track) — every 1.3 u down to 0.18 u
+      // rail height, so nothing hovers. Same two draw calls.
+      const supports = [];
+      {
+        const loopSpans = assembly.pieces
+          .filter((piece) => piece.type === 'loop')
+          .map((piece) => [piece.s0, piece.s1]);
+        for (let s = 0; s < assembly.totalLen; s += VIEW.SUPPORT_SPACING) {
+          if (loopSpans.some(([s0, s1]) => s >= s0 && s <= s1)) continue;
+          const smp = pointAt(assembly, s);
+          if (smp.p[1] > VIEW.SUPPORT_MIN_Y) {
+            supports.push({ p: [smp.p[0], 0, smp.p[2]], h: smp.p[1] });
+          }
+        }
+      }
       const placeSupportSet = (key, place) => {
         const model = assets.getModel(`toy-car-kit/${key}`);
         model.updateMatrixWorld(true);
@@ -289,7 +450,7 @@ export function createCoasterRideScene(ctx) {
           if (obj.isMesh) subs.push(obj);
         });
         for (const sub of subs) {
-          const inst = new THREE.InstancedMesh(sub.geometry, sub.material, supports.length);
+          const inst = new THREE.InstancedMesh(sub.geometry, kitMaterial(sub.material), supports.length);
           for (let i = 0; i < supports.length; i += 1) {
             inst.setMatrixAt(i, place(supports[i]).multiply(sub.matrixWorld));
           }
@@ -318,10 +479,65 @@ export function createCoasterRideScene(ctx) {
         );
       });
 
+      // ---- V6 fix P0-1: loop braces — cream A-frame struts anchor both
+      // loop rings to the ground (the rings read as hovering donuts before).
+      // One InstancedMesh = one draw call.
+      {
+        const anchors = [];
+        for (const piece of assembly.pieces) {
+          if (piece.type !== 'loop') continue;
+          const def = TRACK_PIECES.loop;
+          const h = DIRS[piece.dir];
+          const l = DIRS[(piece.dir + 1) % 4];
+          const c0 = [piece.x + h[0] * def.entry, piece.y, piece.z + h[1] * def.entry];
+          // ring side points (hub height r, fore + aft of the circle center,
+          // corkscrew drift included — matches trackPieces emitPiece)
+          for (const [side, driftK] of [[1, 0.25], [-1, 0.75]]) {
+            anchors.push({
+              x: c0[0] + h[0] * def.r * side + l[0] * def.shift * driftK,
+              y: piece.y + def.r,
+              z: c0[2] + h[1] * def.r * side + l[1] * def.shift * driftK,
+              lx: l[0],
+              lz: l[1],
+            });
+          }
+        }
+        const braceGeo = new THREE.BoxGeometry(0.13 * S, 1, 0.13 * S);
+        const braceMat = new THREE.MeshStandardMaterial({ color: VIEW.CART_RIM, roughness: 0.9 });
+        ownedGeos.push(braceGeo);
+        ownedMats.push(braceMat);
+        const braces = new THREE.InstancedMesh(braceGeo, braceMat, anchors.length * 2);
+        const upV = new THREE.Vector3(0, 1, 0);
+        const dirV = new THREE.Vector3();
+        const midV = new THREE.Vector3();
+        const q = new THREE.Quaternion();
+        let bi = 0;
+        for (const a of anchors) {
+          for (const lat of [-0.62, 0.62]) {
+            const foot = new THREE.Vector3((a.x + a.lx * lat) * S, 0, (a.z + a.lz * lat) * S);
+            const top = new THREE.Vector3(a.x * S, a.y * S, a.z * S);
+            dirV.subVectors(top, foot);
+            const len = dirV.length();
+            q.setFromUnitVectors(upV, dirV.normalize());
+            midV.addVectors(foot, top).multiplyScalar(0.5);
+            braces.setMatrixAt(bi, new THREE.Matrix4().compose(midV, q, new THREE.Vector3(1, len, 1)));
+            bi += 1;
+          }
+        }
+        braces.instanceMatrix.needsUpdate = true;
+        braces.frustumCulled = false;
+        scene.add(braces);
+        this.trackMeshes.push(braces);
+      }
+
       // ---- station arch + photo gantry (committed gate GLBs) ----
       const placeGate = (key, s, scale) => {
         const smp = pointAt(assembly, s);
         const gate = assets.getModel(`toy-car-kit/${key}`);
+        // P0-1 palette: gate clones ride the same pastel-remapped material
+        gate.traverse((obj) => {
+          if (obj.isMesh && this.kitMat) obj.material = this.kitMat;
+        });
         gate.position.set(smp.p[0] * S, smp.p[1] * S, smp.p[2] * S);
         gate.rotation.y = Math.atan2(smp.t[0], smp.t[2]);
         gate.scale.setScalar(S * scale);
@@ -332,11 +548,12 @@ export function createCoasterRideScene(ctx) {
         placeGate('gate', 2, 0.82),
         placeGate('gate-finish', this.ride.photoS, 0.82),
       ];
-      // station platform slab beside the boarding straight
+      // station platform slab beside the boarding straight (P0-1: cream, not
+      // mustard — the wheel-platform family)
       const stationPose = pointAt(assembly, 2);
       const platform = own(new THREE.Mesh(
         new THREE.BoxGeometry(1.4 * S, 0.24 * S, 4 * S),
-        new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.9 })
+        new THREE.MeshStandardMaterial({ color: VIEW.CART_RIM, roughness: 0.9 })
       ));
       platform.position.set(
         (stationPose.p[0] + 1.15) * S,
@@ -347,25 +564,34 @@ export function createCoasterRideScene(ctx) {
       this.platform = platform;
 
       // ---- the 2-cart train + Gooby up front (sitDrive) ----
+      // V6 fix P0-1: OPEN-TOP tubs (bottom hemisphere + cream rim) replace
+      // the closed hull + dark lid that buried Gooby — head, ears and paws
+      // now clearly read above the rim. Pastel pink + mint, wheel family.
       const wheelGeo = new THREE.SphereGeometry(0.09 * S, 10, 8);
       const wheelMat = new THREE.MeshStandardMaterial({ color: 0x4a3b36, roughness: 0.6 });
-      ownedGeos.push(wheelGeo);
-      ownedMats.push(wheelMat);
+      const rimGeo = new THREE.TorusGeometry(0.5 * S, 0.05 * S, 8, 22);
+      const rimMat = new THREE.MeshStandardMaterial({ color: VIEW.CART_RIM, roughness: 0.55 });
+      const tubGeo = new THREE.SphereGeometry(0.5 * S, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+      ownedGeos.push(wheelGeo, rimGeo, tubGeo);
+      ownedMats.push(wheelMat, rimMat);
+      const RIM_Y = 0.36 * S; //  open-tub rim plane (world: 0.72 m)
       for (let c = 0; c < 2; c += 1) {
         const cart = new THREE.Group();
-        const hull = own(new THREE.Mesh(
-          new THREE.SphereGeometry(0.5 * S, 20, 14),
-          new THREE.MeshStandardMaterial({ color: VIEW.CART_COLORS[c], roughness: 0.45 })
-        ));
-        hull.scale.set(0.74, 0.5, 1.05);
-        hull.position.y = 0.22 * S;
-        cart.add(hull);
-        const inset = own(new THREE.Mesh(
-          new THREE.BoxGeometry(0.5 * S, 0.16 * S, 0.72 * S),
-          new THREE.MeshStandardMaterial({ color: 0x4a3b36, roughness: 0.8 })
-        ));
-        inset.position.y = 0.34 * S;
-        cart.add(inset);
+        const tubMat = new THREE.MeshStandardMaterial({
+          color: VIEW.CART_COLORS[c],
+          roughness: 0.45,
+          side: THREE.DoubleSide, // the open bowl shows its inside
+        });
+        ownedMats.push(tubMat);
+        const tub = new THREE.Mesh(tubGeo, tubMat);
+        tub.scale.set(0.74, 0.58, 1.05);
+        tub.position.y = RIM_Y;
+        cart.add(tub);
+        const rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.scale.set(0.74, 1.05, 1);
+        rim.position.y = RIM_Y;
+        cart.add(rim);
         const wheels = new THREE.InstancedMesh(wheelGeo, wheelMat, 4);
         const wm = new THREE.Matrix4();
         const corners = [[-0.3, 0.35], [0.3, 0.35], [-0.3, -0.35], [0.3, -0.35]];
@@ -380,13 +606,43 @@ export function createCoasterRideScene(ctx) {
       }
       this.gooby = createGooby();
       applyEquippedOutfits(this.gooby);
-      this.gooby.group.scale.setScalar(0.62);
-      this.gooby.group.position.set(0, 0.3 * S, -0.08 * S);
+      // full-size rider seated high: rim plane is 0.36·S — the seat puts the
+      // head pivot (~0.45 world) clearly above it so head + ears + paws read
+      this.gooby.group.scale.setScalar(1);
+      this.goobySeat = new THREE.Vector3(0, 0.2 * S, -0.04 * S);
+      // P0-1 boarding: Gooby starts ON the platform (cart-local +x) and hops
+      // in during the ≤3 s boarding beat (reduced motion: seated from t0)
+      this.goobyPerch = new THREE.Vector3(0.62 * S, 0.24 * S, -0.04 * S);
+      this.boardFx = { t: 0, landed: reducedMotion, bounceT: 0 };
+      this.gooby.group.position.copy(reducedMotion ? this.goobySeat : this.goobyPerch);
       this.gooby.setEmotion('happy');
-      this.gooby.play?.('wave')?.catch?.(() => {});
+      this.gooby.play?.(reducedMotion ? 'sitDrive' : 'happyBounce')?.catch?.(() => {});
       this.train[0].add(this.gooby.group);
       this.armGrpL = this.gooby.group.getObjectByName('armGrpL') ?? null;
       this.armGrpR = this.gooby.group.getObjectByName('armGrpR') ?? null;
+
+      // V6 fix P0-1: portrait boarding shot from the station basis (cleared
+      // once the post-departure blend completes — see composedPose()).
+      const bp = pointAt(assembly, 0);
+      const bs = [
+        bp.up[1] * bp.t[2] - bp.up[2] * bp.t[1],
+        bp.up[2] * bp.t[0] - bp.up[0] * bp.t[2],
+        bp.up[0] * bp.t[1] - bp.up[1] * bp.t[0],
+      ]; // cart-local +x (the platform side)
+      this.boardShot = {
+        p: [
+          bp.p[0] + bs[0] * VIEW.BOARD_CAM_SIDE + bp.t[0] * VIEW.BOARD_CAM_AHEAD,
+          bp.p[1] + VIEW.BOARD_CAM_UP,
+          bp.p[2] + bs[2] * VIEW.BOARD_CAM_SIDE + bp.t[2] * VIEW.BOARD_CAM_AHEAD,
+        ],
+        look: [
+          bp.p[0] + bs[0] * VIEW.BOARD_LOOK_SIDE,
+          bp.p[1] + VIEW.BOARD_LOOK_UP,
+          bp.p[2] + bs[2] * VIEW.BOARD_LOOK_SIDE,
+        ],
+        up: [0, 1, 0],
+        fov01: 0,
+      };
 
       this.particles = createParticles(scene);
 
@@ -403,7 +659,11 @@ export function createCoasterRideScene(ctx) {
           <span class="v6co-skip-ring"></span><span class="v6co-skip-label"></span>
         </button>
         <div class="v6co-flash"></div>`;
-      document.body.appendChild(overlay);
+      // V6 fix P1-6: mount INSIDE #ui — #ui is position:fixed (a stacking
+      // context), so a body-level sibling at z 60 painted OVER the §E6
+      // sheets (z 200) no matter their z-index. As a #ui child the caption
+      // chrome correctly stacks below --z-panel.
+      (document.getElementById('ui') ?? document.body).appendChild(overlay);
       this.overlay = overlay;
       this.captionEl = overlay.querySelector('.v6co-caption');
       this.hintEl = overlay.querySelector('.v6co-hint');
@@ -449,10 +709,38 @@ export function createCoasterRideScene(ctx) {
       } catch { /* music is optional */ }
 
       // park scale: place the camera before the first render (no origin pop)
-      this.applyCamera(cameraPose(this.ride));
+      this.applyCamera(this.composedPose());
 
       // dev probe (the __roadtest/__recapPreview precedent — CDP evidence)
       if (import.meta.env.DEV) window.__coaster = this;
+    },
+
+    /** cameraPose() + the view's boarding-shot blend (V6 fix P0-1): hold the
+     * portrait station frame through boarding, then ease into the logic's
+     * own station→chase move over CAM_BLEND_SEC after departure. */
+    composedPose() {
+      const pose = cameraPose(this.ride);
+      const shot = this.boardShot;
+      if (!shot || this.ride.reducedMotion) return pose;
+      const k = this.ride.phase === 'boarding'
+        ? 0
+        : Math.min(1, this.ride.rideT / COASTER.CAM_BLEND_SEC);
+      if (k >= 1) {
+        this.boardShot = null;
+        return pose;
+      }
+      const e = k * k * (3 - 2 * k);
+      const mix = (a, b) => [
+        a[0] + (b[0] - a[0]) * e,
+        a[1] + (b[1] - a[1]) * e,
+        a[2] + (b[2] - a[2]) * e,
+      ];
+      return {
+        p: mix(shot.p, pose.p),
+        look: mix(shot.look, pose.look),
+        up: pose.up,
+        fov01: pose.fov01 * e,
+      };
     },
 
     /** Per-frame camera drive from the pure pose model. */
@@ -584,8 +872,14 @@ export function createCoasterRideScene(ctx) {
       const ride = this.ride;
 
       // ---- pure sim step + event routing ----
+      // V6 fix P0-1: boarding plays out in BOARD_SEC_VIEW (3) real seconds —
+      // ONLY the logic's boarding clock is stepped faster; riding physics
+      // stay 1:1 with real time (tests/timeline untouched).
       const holdingHands = this.holding && !this.skipHolding;
-      for (const event of stepRide(ride, dt, { holding: holdingHands })) {
+      const simDt = ride.phase === 'boarding'
+        ? dt * (COASTER.BOARD_SEC / VIEW.BOARD_SEC_VIEW)
+        : dt;
+      for (const event of stepRide(ride, simDt, { holding: holdingHands })) {
         this.handleEvent(event);
       }
 
@@ -656,6 +950,31 @@ export function createCoasterRideScene(ctx) {
           (pose.p[2] + pose.up[2] * 0.05) * S
         );
       }
+      // ---- V6 fix P0-1: boarding beat — hop-in arc + damped cart bounce ----
+      if (!ride.reducedMotion && this.boardFx) {
+        const fx = this.boardFx;
+        if (ride.phase === 'boarding' || fx.bounceT > 0) {
+          fx.t += dt;
+          if (!fx.landed) {
+            const k = Math.min(1, Math.max(0, (fx.t - VIEW.HOP_START_SEC) / VIEW.HOP_SEC));
+            const e = k * k * (3 - 2 * k);
+            this.gooby.group.position.lerpVectors(this.goobyPerch, this.goobySeat, e);
+            this.gooby.group.position.y += Math.sin(e * Math.PI) * VIEW.HOP_ARC_M;
+            if (k >= 1) {
+              fx.landed = true;
+              fx.bounceT = VIEW.BOUNCE_SEC;
+              audio?.play?.('pipe.rotate'); // restraint clunk on landing
+              this.gooby.play?.('sitDrive')?.catch?.(() => {});
+            }
+          } else if (fx.bounceT > 0) {
+            fx.bounceT -= dt;
+            const bt = VIEW.BOUNCE_SEC - fx.bounceT;
+            const bounce = Math.exp(-bt * 3.4) * Math.sin(bt * 17) * VIEW.BOUNCE_AMP_M;
+            this.train[0].position.y += bounce;
+            this.train[1].position.y += bounce * 0.45;
+          }
+        }
+      }
       this.gooby?.update(dt);
       // hands-up on top of the seated clip (post-update arm override)
       const wantArms = holdingHands && ride.activeWindow != null ? 1 : 0;
@@ -669,7 +988,7 @@ export function createCoasterRideScene(ctx) {
       this.particles?.update(dt);
 
       // ---- camera (chase with clamped roll / reduced-motion static shots) ----
-      this.applyCamera(cameraPose(ride));
+      this.applyCamera(this.composedPose());
 
       // ---- dev draw-call HUD ----
       if (this.hudEl) {

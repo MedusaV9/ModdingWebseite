@@ -78,6 +78,14 @@ const PARK_STALL_CSS = `
 .e3-stall-food{display:flex;align-items:center;gap:.375rem;font-size:.8125rem;flex-wrap:wrap;}
 .e3-stall-pitch{font-size:.6875rem;opacity:.7;}
 .e3-stall-buy{flex:none;display:flex;flex-direction:column;align-items:center;gap:.25rem;}
+.e3-stall-buy .e3-buy{display:inline-flex;align-items:center;gap:.25rem;}
+/* V6 fix P1-14: the shared coin glyph fills currentColor — inside the teal
+   button that is white, which reads as a blank dot. Gold, like .shop-coins. */
+.e3-stall-buy .e3-buy svg{color:var(--yellow,#ffd166);}
+/* V6 fix P2-9: .g22-junk is position:absolute for shop cards; without a
+   positioned ancestor here it escaped the card and clipped into the sheet's
+   top-left corner. Render it inline next to the food name instead. */
+.e3-stall-food .g22-junk{position:static;display:inline-flex;align-items:center;}
 .e3-stall-count{font-size:.625rem;font-weight:800;opacity:.7;}
 `;
 
