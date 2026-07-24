@@ -18,6 +18,8 @@ export const EN = {
   'gooby.clip.lookAround': 'Look Around',
   'gooby.clip.tailWiggle': 'Tail Wiggle',
   'gooby.clip.shiver': 'Shiver',
+  // V6 fix: 'wakeUp' clip (added post-2.0) had no label — showcase showed the raw key
+  'gooby.clip.wakeUp': 'Wake Up',
 
   // --- one-time "What's new in 2.0" panel (§A3 checklist 12) ---
   'whatsnew.title': 'What’s new in 2.0',
@@ -45,6 +47,7 @@ export const DE = {
   'gooby.clip.lookAround': 'Umschauen',
   'gooby.clip.tailWiggle': 'Schwanzwedeln',
   'gooby.clip.shiver': 'Bibbern',
+  'gooby.clip.wakeUp': 'Aufwachen',
 
   // --- one-time "What's new in 2.0" panel (§A3 checklist 12) ---
   'whatsnew.title': 'Neu in 2.0',
