@@ -19,6 +19,11 @@ import { FOOD_TABLE } from './constants.js';
  * @property {boolean} junk        V2/G16: sugary/greasy (PLAN2 §C7) — feeds the
  *   health junkScore + weight gain (health.onEat/weight.onEat, §B5) and the
  *   'treats' sticker set (§C6); 🍬 badge in the shop/tray.
+ * @property {boolean} [park]      V6/E3 (PLAN6 Wave E): Funkelpark stall
+ *   exclusive — hidden from the normal shop food tab (ui/shopScreen.js
+ *   filter), sold only through ui/parkStall.js. Everything downstream
+ *   (inventory, fridge tray, feed path, junk pipeline) treats park foods
+ *   exactly like shop foods.
  */
 
 // ============================================================================
@@ -62,6 +67,52 @@ const V4_BAKERY_BY_ID = Object.freeze(
 );
 // ============================================================ end V4/G79 ==
 
+// ============================================================================
+// V6/E3 (PLAN6 Wave E): Funkelpark Candy Alley stall foods — park: true rows,
+// hidden from the normal shop (shopScreen filters them) and sold only via the
+// parkStall panel through the SAME economy.buyFood path. Anti-undercut rule
+// (§idea-02/5, V2/FIX-A spirit): every park food is priced ≥ its closest shop
+// equivalents so the fair can never undercut the shop (equivalents map is
+// pinned in test/parkAttractions.test.js). Zuckerwatte/Softeis are junk
+// (junkScore/weight pipeline applies); the fresh waffle stays the lighter,
+// non-junk option. cottonCandy has no dedicated GLB — the 3D stall prop is
+// procedural in park/parkDressing.js; the feed-ghost stand-in reuses the
+// food-kit lollypop (nutella's re-tinted honey-jar precedent, §C6.1).
+// ============================================================================
+export const V6_PARK_FOODS = Object.freeze([
+  Object.freeze({
+    id: 'cottonCandy',
+    nameKey: 'food.cottonCandy',
+    modelKey: 'food-kit/lollypop', // stand-in GLB: pink puff on a stick
+    price: 12, // ≥ lollypop 6 / candy-bar 10
+    deltas: Object.freeze({ hunger: 5, fun: 16, energy: 2, hygiene: -2 }),
+    favorite: false,
+    junk: true, // sugar cloud — junkScore +1, weight +2 on a normal feed
+    park: true,
+  }),
+  Object.freeze({
+    id: 'softServe',
+    nameKey: 'food.softServe',
+    modelKey: 'food-kit/ice-cream',
+    price: 18, // ≥ ice-cream 16 / sundae 18
+    deltas: Object.freeze({ hunger: 7, fun: 15, energy: 4, hygiene: -1 }),
+    favorite: false,
+    junk: true,
+    park: true,
+  }),
+  Object.freeze({
+    id: 'waffle',
+    nameKey: 'food.waffle',
+    modelKey: 'food-kit/waffle',
+    price: 20, // ≥ pancakes 20 (the griddle equivalent)
+    deltas: Object.freeze({ hunger: 22, fun: 8, energy: 3, hygiene: -1 }),
+    favorite: false,
+    junk: false, // the lighter fair option (croissant/pancakes class)
+    park: true,
+  }),
+]);
+// ============================================================ end V6/E3 ===
+
 /** @type {FoodItem[]} ordered by price ascending (catalog/tray order). */
 export const FOODS = Object.freeze([
   ...Object.entries(FOOD_TABLE).map(([id, row]) =>
@@ -101,6 +152,8 @@ export const FOODS = Object.freeze([
   // ============================================================ end V3/G35 ==
   // V4/G79: croissant is already represented by its upgraded v2-id row above.
   ...V4_BAKERY_FOODS.filter((food) => !(food.id in FOOD_TABLE)),
+  // V6/E3: Funkelpark stall exclusives (park: true — see the block above).
+  ...V6_PARK_FOODS,
 ]);
 
 /** @type {Record<string, FoodItem>} id → item lookup. */

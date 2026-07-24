@@ -278,7 +278,9 @@ function createShopScreen({ store, ui, audio, goHome, getArrival }) {
     grid.className = 'shop-grid b3-shelf'; // V6/B3: cards sit on shelf planks
     const inv = store.get('inventory') ?? {};
     const matches = FOOD_FILTERS.find(([id]) => id === foodFilter)?.[2] ?? (() => true);
-    for (const food of FOODS.filter(matches)) {
+    // V6/E3 (PLAN6 Wave E): park-exclusive foods (park: true) are hidden here —
+    // they sell only through the Funkelpark stall sheet (ui/parkStall.js).
+    for (const food of FOODS.filter((f) => f.park !== true).filter(matches)) {
       const isNewContent = food.id === 'nutella'
         && store.get('onboarding.v3ContentSeen.nutella') !== true;
       const card = document.createElement('button');

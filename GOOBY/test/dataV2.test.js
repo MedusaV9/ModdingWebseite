@@ -30,11 +30,12 @@ function assertKey(key, label = key) {
 
 // ------------------------------------------------------ headline counts (§A3)
 
-test('headline catalog counts: 35 unique foods / 8 crops / 28 quests / 4×32 stickers / 7 skins / 37 achievements / 28 games', () => {
+test('headline catalog counts: 38 unique foods / 8 crops / 28 quests / 4×32 stickers / 7 skins / 37 achievements / 28 games', () => {
   // V3/G35: +1 nutella (§C6.1 — appended in foods.js; constants.js FOOD_TABLE
   // stays frozen at the 32 v2 rows per the §E0.1-3 ruling). V4/G79 adds two
   // new ids and upgrades the existing v2 croissant id in place (§G9.3).
-  assert.equal(FOODS.length, 35);
+  // V6/E3: +3 Funkelpark Candy-Alley rows (cottonCandy/softServe/waffle)
+  assert.equal(FOODS.length, 38);
   assert.equal(Object.keys(FOOD_TABLE).length, 32);
   assert.equal(CROPS.length, 8);
   assert.equal(QUEST_POOL.length, 28);
@@ -175,6 +176,7 @@ test('FOOD_TABLE junk flags match §C7 exactly; FOODS exposes boolean junk', () 
     'lollypop', 'cookie', 'chocolate', 'candy-bar', 'muffin', 'fries', 'corn-dog', 'sundae',
     'nutella', // V3/G35 (§C6.1 — foods.js append, junk: true)
     'cupcakePink', 'cinnamonRoll', // V4/G79 (§G9.3 sweet bakery rows)
+    'cottonCandy', 'softServe', // V6/E3 (Funkelpark Candy Alley; waffle stays non-junk)
   ]);
   for (const [id, row] of Object.entries(FOOD_TABLE)) {
     assert.equal(row.junk === true, JUNK.has(id), `junk flag for ${id}`);

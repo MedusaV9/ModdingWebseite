@@ -112,6 +112,13 @@ const FOOD_PATHS = {
     `<path d="M6.6 13h10.8l-1.2 6.4a2.1 2.1 0 0 1-2.1 1.7h-4.2a2.1 2.1 0 0 1-2.1-1.7z" fill="#D6669C" ${plump('#D6669C')}/><path d="M9.4 13.4l.6 7M14.6 13.4l-.6 7" stroke="#fff" stroke-width="1.3" opacity="0.5" fill="none"/><path d="M6.8 13.2c-1.4-.6-2.1-2-1.6-3.4.5-1.2 1.7-1.8 2.9-1.5C8.4 6 9.9 4.7 12 4.7s3.6 1.3 3.9 3.6c1.2-.3 2.4.3 2.9 1.5.5 1.4-.2 2.8-1.6 3.4z" fill="${PINK_SOFT}" ${plump(PINK_SOFT, 1.2)}/><circle cx="9.4" cy="9.4" r="0.8" fill="#fff"/><circle cx="12.6" cy="7.8" r="0.8" fill="#fff"/><circle cx="14.8" cy="10.2" r="0.8" fill="#fff"/>`,
   cinnamonRoll:
     `<circle cx="12" cy="12" r="8.8" fill="${TAN}" ${plump(TAN)}/><path d="M12 12.2a1.9 1.9 0 0 1 3.8 0c0 2.2-1.9 3.9-4.1 3.9-3 0-5.5-2.4-5.5-5.4 0-3.7 2.9-6.2 6.3-6.2 4.1 0 7.3 3.1 7.3 7" stroke="#F3E4CE" stroke-width="2.1" stroke-linecap="round" fill="none"/><path d="M7 6.4c1.4 1 3 1.4 4.8 1.2" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity="0.6" fill="none"/>`,
+  // V6/E3 park foods (Candy Alley stall exclusives — specs from the E3 handoff)
+  cottonCandy:
+    `<path d="M12 3.2c1.6 0 3 .8 3.8 2 1.9-.5 3.9.4 4.7 2.2.8 1.7.3 3.7-1.1 4.9.4 1.9-.5 3.8-2.3 4.6-1.2.5-2.5.4-3.6-.2-1.1.6-2.4.7-3.6.2-1.8-.8-2.7-2.7-2.3-4.6-1.4-1.2-1.9-3.2-1.1-4.9.8-1.8 2.8-2.7 4.7-2.2.8-1.2 2.2-2 3.8-2z" fill="${PINK_SOFT}" ${plump(PINK_SOFT)}/><circle cx="9" cy="8.2" r="1.5" fill="#fff" opacity="0.6"/><path d="M8.6 12.4c1 .9 2.2 1.3 3.4 1.3s2.4-.4 3.4-1.3" stroke="${PINK}" stroke-width="1.4" stroke-linecap="round" opacity="0.7" fill="none"/><path d="M12 16.6v4.8" stroke="#C9A87A" stroke-width="2.2" stroke-linecap="round" fill="none"/>`,
+  softServe:
+    `<path d="M8.2 12.6h7.6l-3 8.6a.9.9 0 0 1-1.7 0z" fill="${GOLD}" ${plump(GOLD)}/><path d="M9.3 14.8h5.4M10.2 17.4h3.6" stroke="${CREAM}" stroke-width="1.2" stroke-linecap="round" opacity="0.75" fill="none"/><path d="M9.4 12.2c-1.6 0-2.8-1.2-2.8-2.7 0-1.3.9-2.3 2.1-2.6.2-1.9 1.6-3.3 3.3-3.3 1.3 0 2.4.7 3 1.9 1.5.1 2.7 1.3 2.7 2.8 0 1.3-.8 2.4-2 2.7l-.6 1.2z" fill="${CREAM}" ${plump(CREAM)}/><path d="M12 12.4c-1.9-.4-3-1.5-3.4-3.2M12 12.4c1.9-.4 3-1.5 3.4-3.2" stroke="#EAD9C2" stroke-width="1.3" stroke-linecap="round" fill="none"/><circle cx="9.8" cy="6.8" r="1.2" fill="#fff" opacity="0.7"/>`,
+  waffle:
+    `<rect x="4" y="5.6" width="16" height="13.6" rx="2.6" fill="${GOLD}" ${plump(GOLD)}/><path d="M9.3 6v13M14.7 6v13M4.4 10.1h15.2M4.4 14.7h15.2" stroke="#B97E3F" stroke-width="1.5" stroke-linecap="round" opacity="0.85" fill="none"/><circle cx="12" cy="12.4" r="2" fill="${RED}"/><path d="M6.4 8.2l1.6-.9" stroke="#fff" stroke-width="1.3" stroke-linecap="round" opacity="0.6" fill="none"/>`,
 };
 
 // ── FURNITURE CATEGORY glyphs — one per decor slot id (data/furniture.js) ───

@@ -95,6 +95,7 @@ import { EN as V6_VAC_SCENES_EN, DE as V6_VAC_SCENES_DE } from './strings/v6-vac
 // labels + the two vacation notification copy pairs (ids 9/10) — same
 // versioned-module pattern, spread below AFTER v6-juice, always EN + DE.
 import { EN as V6_VACATION_CONTENT_EN, DE as V6_VACATION_CONTENT_DE } from './strings/v6-vacation-content.js';
+import { EN as V6_PARK_EN, DE as V6_PARK_DE } from './strings/v6-park.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -163,7 +164,7 @@ export const EN = {
   'trip.go': "Let's drive!",
   'trip.goHome': 'Go home',
   'trip.crash': 'Ouch!',
-  'trip.arrived': 'You made it to the shop! 🎉',
+  'trip.arrived': 'You made it to the shop!',
   'trip.towed': 'Oh no — the tow truck brings you to the shop…',
   'trip.shopTitle': 'Shop',
   'trip.shopSoon': 'Shop coming soon!',
@@ -173,7 +174,7 @@ export const EN = {
   'drive.steerLeft': 'Steer left',
   'drive.steerRight': 'Steer right',
   'drive.brake': 'Brake',
-  'drive.crashes': '💥 {n}/{max}',
+  'drive.crashes': '{n}/{max}',
 
   // --- Foods (§C5.1) ---
   'food.carrot': 'Carrot',
@@ -289,8 +290,8 @@ export const EN = {
   'toast.toiletNoNeed': 'Gooby doesn’t need to go right now',
 
   // --- G6: sleep flow (§C1.4) ---
-  'toast.fellAsleep': 'Gooby fell asleep… 💤',
-  'toast.wokeEarly': 'Gooby is up — and a little grumpy… 😾',
+  'toast.fellAsleep': 'Gooby fell asleep…',
+  'toast.wokeEarly': 'Gooby is up — and a little grumpy…',
   'toast.notSleepy': 'Gooby is not sleepy yet!',
   'sleep.wakeConfirm.title': 'Wake Gooby up?',
   'sleep.wakeConfirm.body': 'Gooby is sleeping deeply. Waking him early makes him a bit grumpy for a while.',
@@ -306,7 +307,7 @@ export const EN = {
   'perm.title': 'Little notes from Gooby?',
   'perm.body': 'Gooby would love to tell you when he wakes up or needs you — just a few gentle notes, never at night.',
   'perm.yes': 'Yes, notify me',
-  'perm.grantedToast': 'Gooby will keep you posted! 🔔',
+  'perm.grantedToast': 'Gooby will keep you posted!',
 
   // --- G8: minigames A (§C6.1 #2–5) ---
   'mg.hop.crash': 'Bonk!',
@@ -397,7 +398,7 @@ export const EN = {
   // --- G12: achievements (§C8.3 — names verbatim from the table) ---
   'ach.title': 'Achievements',
   'ach.unlockedLabel': 'Unlocked!',
-  'ach.unlockedToast': '🏆 {name} — +{coins} coins!',
+  'ach.unlockedToast': '{name} — +{coins} coins!',
   'ach.firstFeed.name': 'First Nibble',
   'ach.firstFeed.desc': 'Feed Gooby for the first time',
   'ach.feed100.name': 'Chonky Boy',
@@ -439,7 +440,7 @@ export const EN = {
   'daily.claim': 'Claim!',
   'daily.comeBack': 'Come back tomorrow!',
   'daily.foodBonus': 'a snack surprise',
-  'daily.claimedToast': '+{coins} coins — see you tomorrow! 🎁',
+  'daily.claimedToast': '+{coins} coins — see you tomorrow!',
 
   // --- G11: shop (§C5), quick delivery (§C4.6), decorate mode (§C5.2) ---
   'shop.title': 'Shop',
@@ -633,6 +634,7 @@ export const EN = {
   ...V6_JUICE_EN, // V6/C4
   ...V6_VAC_SCENES_EN, // V6/D1
   ...V6_VACATION_CONTENT_EN, // V6/D2
+  ...V6_PARK_EN, // V6/E3 (+E2 coaster captions)
 };
 
 /** @type {Record<string, string>} */
@@ -701,7 +703,7 @@ export const DE = {
   'trip.go': 'Los geht’s!',
   'trip.goHome': 'Nach Hause',
   'trip.crash': 'Autsch!',
-  'trip.arrived': 'Du bist am Laden angekommen! 🎉',
+  'trip.arrived': 'Du bist am Laden angekommen!',
   'trip.towed': 'Oh nein — der Abschleppwagen bringt dich zum Laden…',
   'trip.shopTitle': 'Laden',
   'trip.shopSoon': 'Der Laden öffnet bald!',
@@ -711,7 +713,7 @@ export const DE = {
   'drive.steerLeft': 'Nach links lenken',
   'drive.steerRight': 'Nach rechts lenken',
   'drive.brake': 'Bremsen',
-  'drive.crashes': '💥 {n}/{max}',
+  'drive.crashes': '{n}/{max}',
 
   // --- Foods (§C5.1) ---
   'food.carrot': 'Karotte',
@@ -827,8 +829,8 @@ export const DE = {
   'toast.toiletNoNeed': 'Gooby muss gerade nicht',
 
   // --- G6: sleep flow (§C1.4) ---
-  'toast.fellAsleep': 'Gooby ist eingeschlafen… 💤',
-  'toast.wokeEarly': 'Gooby ist wach – und etwas brummig… 😾',
+  'toast.fellAsleep': 'Gooby ist eingeschlafen…',
+  'toast.wokeEarly': 'Gooby ist wach – und etwas brummig…',
   'toast.notSleepy': 'Gooby ist noch gar nicht müde!',
   'sleep.wakeConfirm.title': 'Gooby aufwecken?',
   'sleep.wakeConfirm.body': 'Gooby schläft tief. Wenn du ihn zu früh weckst, ist er eine Weile brummig.',
@@ -844,7 +846,7 @@ export const DE = {
   'perm.title': 'Kleine Nachrichten von Gooby?',
   'perm.body': 'Gooby würde dir gern Bescheid geben, wenn er aufwacht oder dich braucht – nur ein paar liebe Nachrichten, nie nachts.',
   'perm.yes': 'Ja, benachrichtige mich',
-  'perm.grantedToast': 'Gooby hält dich auf dem Laufenden! 🔔',
+  'perm.grantedToast': 'Gooby hält dich auf dem Laufenden!',
 
   // --- G8: minigames A (§C6.1 #2–5) ---
   'mg.hop.crash': 'Rums!',
@@ -935,7 +937,7 @@ export const DE = {
   // --- G12: achievements (§C8.3 – Namen wörtlich aus der Tabelle) ---
   'ach.title': 'Erfolge',
   'ach.unlockedLabel': 'Freigeschaltet!',
-  'ach.unlockedToast': '🏆 {name} – +{coins} Münzen!',
+  'ach.unlockedToast': '{name} – +{coins} Münzen!',
   'ach.firstFeed.name': 'Erster Happen',
   'ach.firstFeed.desc': 'Füttere Gooby zum ersten Mal',
   'ach.feed100.name': 'Moppelhase',
@@ -977,7 +979,7 @@ export const DE = {
   'daily.claim': 'Abholen!',
   'daily.comeBack': 'Komm morgen wieder!',
   'daily.foodBonus': 'eine Snack-Überraschung',
-  'daily.claimedToast': '+{coins} Münzen – bis morgen! 🎁',
+  'daily.claimedToast': '+{coins} Münzen – bis morgen!',
 
   // --- G11: shop (§C5), quick delivery (§C4.6), decorate mode (§C5.2) ---
   'shop.title': 'Laden',
@@ -1171,6 +1173,7 @@ export const DE = {
   ...V6_JUICE_DE, // V6/C4
   ...V6_VAC_SCENES_DE, // V6/D1
   ...V6_VACATION_CONTENT_DE, // V6/D2
+  ...V6_PARK_DE, // V6/E3 (+E2 coaster captions)
 };
 
 const DICTS = { en: EN, de: DE };

@@ -42,7 +42,8 @@ const SPEC = Object.freeze({
 test('V4/G79 bakery definitions are exact, unique and bilingual (§G9.3)', () => {
   assert.equal(V4_BAKERY_FOODS.length, 3);
   assert.deepEqual(V4_BAKERY_FOODS.map((food) => food.id), Object.keys(SPEC));
-  assert.equal(FOODS.length, 35, '33 baseline + 2 new ids; croissant upgrades its existing v2 id');
+  // V6/E3: +3 park-exclusive rows (V6_PARK_FOODS — cottonCandy/softServe/waffle)
+  assert.equal(FOODS.length, 38, '33 baseline + 2 bakery ids + 3 V6 park ids; croissant upgrades its existing v2 id');
   assert.equal(new Set(FOODS.map((food) => food.id)).size, FOODS.length, 'catalog ids stay unique');
 
   for (const [id, expected] of Object.entries(SPEC)) {
