@@ -12,7 +12,7 @@ export const EN = {
   // --- Album third tab + grid (§C-SYS9.2) ---
   'album.tab.photos': 'Photos',
   'gallery.footnote': 'Oldest photos get replaced',
-  'gallery.empty': 'Take your first photo! 📸',
+  'gallery.empty': 'Take your first photo!',
   'gallery.emptyCta': 'To photo mode',
 
   // --- Viewer (§C-SYS9.2) ---
@@ -25,7 +25,7 @@ export const EN = {
   'gallery.shareFailed': 'Sharing not possible — download started',
 
   // --- Discoverability (§C-SYS9.3) ---
-  'gallery.hint': 'Your photo is saved in the album! 📖',
+  'gallery.hint': 'Your photo is saved in the album!',
   'gallery.viewInAlbum': 'View in album',
   'profile.galleryRow': 'Gallery ({n} photos)',
   'profile.albumRows': 'Album',
@@ -40,7 +40,7 @@ export const DE = {
   // --- Album third tab + grid (§C-SYS9.2) ---
   'album.tab.photos': 'Fotos',
   'gallery.footnote': 'Älteste Fotos werden ersetzt',
-  'gallery.empty': 'Mach dein erstes Foto! 📸',
+  'gallery.empty': 'Mach dein erstes Foto!',
   'gallery.emptyCta': 'Zum Fotomodus',
 
   // --- Viewer (§C-SYS9.2) ---
@@ -53,7 +53,7 @@ export const DE = {
   'gallery.shareFailed': 'Teilen nicht möglich — Download gestartet',
 
   // --- Discoverability (§C-SYS9.3) ---
-  'gallery.hint': 'Dein Foto ist im Album gespeichert! 📖',
+  'gallery.hint': 'Dein Foto ist im Album gespeichert!',
   'gallery.viewInAlbum': 'Im Album ansehen',
   'profile.galleryRow': 'Galerie ({n} Fotos)',
   'profile.albumRows': 'Album',

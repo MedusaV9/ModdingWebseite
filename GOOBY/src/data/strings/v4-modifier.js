@@ -27,7 +27,7 @@ export const EN = {
   'modifier.desc.stickerChance': 'A collection find is guaranteed this round!',
   'modifier.desc.glueckspilz': 'Lucky roll after the round: +10–60 coins!',
   // §C-SYS4.6 start toast (fires with jingle.short)
-  'modifier.start': 'Bonus event: {name} in {game}! ✨',
+  'modifier.start': 'Bonus event: {name} in {game}!',
   // HUD modifier chip (V4/G76 block in ui/hud.js)
   'modifier.hud.open': 'Bonus event active — open the arcade',
   // results breakdown (§G8-3 bonus row + §C-SYS4.2 per-type lines)
@@ -53,7 +53,7 @@ export const DE = {
   'modifier.desc.riesenGooby': 'Riesen-Gooby mit größeren Trefferfenstern!',
   'modifier.desc.stickerChance': 'Ein Sammel-Fund ist diese Runde garantiert!',
   'modifier.desc.glueckspilz': 'Glücksrolle nach der Runde: +10–60 Münzen!',
-  'modifier.start': 'Bonus-Event: {name} in {game}! ✨',
+  'modifier.start': 'Bonus-Event: {name} in {game}!',
   'modifier.hud.open': 'Bonus-Event aktiv — Arcade öffnen',
   'modifier.results.doppelGold': '+{n} extra',
   'modifier.results.turbo': 'Punkte ×1,5',

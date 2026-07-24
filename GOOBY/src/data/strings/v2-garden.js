@@ -8,7 +8,7 @@ export const EN = {
   'room.garden': 'Garden',
 
   // §B6 L3 padlock teaser
-  'garden.locked': 'The garden opens at level {level}! 🔒',
+  'garden.locked': 'The garden opens at level {level}!',
 
   // seed picker (§C2.2)
   'garden.seeds.title': 'Plant a seed',
@@ -19,22 +19,22 @@ export const EN = {
   'garden.seeds.locked': 'Level {level}',
   'garden.seeds.growTime': '{min} min',
   'garden.seeds.noCoins': 'Not enough coins!',
-  'garden.planted': '{name} planted! 🌱',
+  'garden.planted': '{name} planted!',
 
   // watering (§C2.2/§C2.3)
-  'garden.watered': 'Watered! 💧',
-  'garden.alreadyWatered': 'Already watered 💧',
+  'garden.watered': 'Watered!',
+  'garden.alreadyWatered': 'Already watered',
   'garden.waterHint': 'Drag the watering can over a plot!',
-  'garden.rainWatered': 'The rain is doing the watering ☔',
+  'garden.rainWatered': 'The rain is doing the watering',
 
   // harvest (§C2.2)
-  'garden.ready': '{name} is ready to harvest! 🌟',
-  'garden.harvested': '+{qty} {emoji} {name}!',
-  'garden.notReady': 'Still growing… 🌱',
-  'garden.sticker': 'New sticker: {name}! ⭐',
+  'garden.ready': '{name} is ready to harvest!',
+  'garden.harvested': '+{qty} {name}!',
+  'garden.notReady': 'Still growing…',
+  'garden.sticker': 'New sticker: {name}!',
 
   // fertilizer (§C2.2)
-  'garden.fertilized': 'Fertilized! ✨ +25% growth',
+  'garden.fertilized': 'Fertilized! +25% growth',
   'garden.alreadyFertilized': 'This planting is already fertilized',
   'garden.fertilizeEmpty': 'Nothing planted here yet',
   'garden.fert.title': 'Fertilizer',
@@ -49,7 +49,7 @@ export const EN = {
   'garden.sell.one': 'Sell 1',
   'garden.sell.all': 'Sell all',
   'garden.sell.price': '{price}c each',
-  'garden.sold': 'Sold! +{coins}c 🪙',
+  'garden.sold': 'Sold! +{coins}c',
 
   // plot purchase (§B6)
   'garden.plot.title': 'Buy this plot?',
@@ -57,7 +57,7 @@ export const EN = {
   'garden.plot.price': 'Price: {price}c',
   'garden.plot.buy': 'Buy plot',
   'garden.plot.locked': 'Unlocks at level {level}',
-  'garden.plot.bought': 'New plot! 🌱',
+  'garden.plot.bought': 'New plot!',
   'garden.plot.noCoins': 'Not enough coins!',
   'garden.plot.forSale': 'FOR SALE',
 
@@ -76,7 +76,7 @@ export const EN = {
 export const DE = {
   'room.garden': 'Garten',
 
-  'garden.locked': 'Der Garten öffnet ab Level {level}! 🔒',
+  'garden.locked': 'Der Garten öffnet ab Level {level}!',
 
   'garden.seeds.title': 'Samen pflanzen',
   'garden.seeds.hint': 'Wähle einen Samen für dieses Beet',
@@ -86,19 +86,19 @@ export const DE = {
   'garden.seeds.locked': 'Level {level}',
   'garden.seeds.growTime': '{min} Min.',
   'garden.seeds.noCoins': 'Nicht genug Münzen!',
-  'garden.planted': '{name} gepflanzt! 🌱',
+  'garden.planted': '{name} gepflanzt!',
 
-  'garden.watered': 'Gegossen! 💧',
-  'garden.alreadyWatered': 'Schon gegossen 💧',
+  'garden.watered': 'Gegossen!',
+  'garden.alreadyWatered': 'Schon gegossen',
   'garden.waterHint': 'Zieh die Gießkanne über ein Beet!',
-  'garden.rainWatered': 'Der Regen gießt gerade ☔',
+  'garden.rainWatered': 'Der Regen gießt gerade',
 
-  'garden.ready': '{name} ist erntereif! 🌟',
-  'garden.harvested': '+{qty} {emoji} {name}!',
-  'garden.notReady': 'Wächst noch… 🌱',
-  'garden.sticker': 'Neuer Sticker: {name}! ⭐',
+  'garden.ready': '{name} ist erntereif!',
+  'garden.harvested': '+{qty} {name}!',
+  'garden.notReady': 'Wächst noch…',
+  'garden.sticker': 'Neuer Sticker: {name}!',
 
-  'garden.fertilized': 'Gedüngt! ✨ +25 % Wachstum',
+  'garden.fertilized': 'Gedüngt! +25 % Wachstum',
   'garden.alreadyFertilized': 'Dieses Beet ist schon gedüngt',
   'garden.fertilizeEmpty': 'Hier wächst noch nichts',
   'garden.fert.title': 'Dünger',
@@ -112,14 +112,14 @@ export const DE = {
   'garden.sell.one': '1 verkaufen',
   'garden.sell.all': 'Alle verkaufen',
   'garden.sell.price': 'je {price}c',
-  'garden.sold': 'Verkauft! +{coins}c 🪙',
+  'garden.sold': 'Verkauft! +{coins}c',
 
   'garden.plot.title': 'Dieses Beet kaufen?',
   'garden.plot.body': 'Ein neues Beet für dein Gemüse.',
   'garden.plot.price': 'Preis: {price}c',
   'garden.plot.buy': 'Beet kaufen',
   'garden.plot.locked': 'Öffnet ab Level {level}',
-  'garden.plot.bought': 'Neues Beet! 🌱',
+  'garden.plot.bought': 'Neues Beet!',
   'garden.plot.noCoins': 'Nicht genug Münzen!',
   'garden.plot.forSale': 'ZU VERKAUFEN',
 

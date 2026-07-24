@@ -19,13 +19,13 @@ export const EN = {
   'mg.pipe.puzzle': 'Puzzle {n}',
 
   // --- deliveryRush (§C1.2 #5) — V2/G28 ---
-  'mg.delivery.ticket': '📦 {n}/{max}',
+  'mg.delivery.ticket': '{n}/{max}',
   'mg.delivery.delivered': 'Delivered! Next stop!',
   'mg.delivery.timeBonus': 'All delivered! Time bonus +{n}!',
   'mg.delivery.allDone': 'All parcels delivered!',
 
   // --- miniGolf (§C1.2 #6) — V2/G28 ---
-  'mg.golf.hole': '⛳ Hole {n}/{max} · Par {par}',
+  'mg.golf.hole': 'Hole {n}/{max} · Par {par}',
   'mg.golf.strokes': 'Strokes: {n}',
   'mg.golf.ace': 'HOLE-IN-ONE! +30',
   'mg.golf.great': 'Great putt! +{n}',
@@ -46,13 +46,13 @@ export const DE = {
   'mg.pipe.puzzle': 'Rätsel {n}',
 
   // --- deliveryRush (§C1.2 #5) — V2/G28 ---
-  'mg.delivery.ticket': '📦 {n}/{max}',
+  'mg.delivery.ticket': '{n}/{max}',
   'mg.delivery.delivered': 'Zugestellt! Nächster Halt!',
   'mg.delivery.timeBonus': 'Alles zugestellt! Zeitbonus +{n}!',
   'mg.delivery.allDone': 'Alle Pakete zugestellt!',
 
   // --- miniGolf (§C1.2 #6) — V2/G28 ---
-  'mg.golf.hole': '⛳ Bahn {n}/{max} · Par {par}',
+  'mg.golf.hole': 'Bahn {n}/{max} · Par {par}',
   'mg.golf.strokes': 'Schläge: {n}',
   'mg.golf.ace': 'HOLE-IN-ONE! +30',
   'mg.golf.great': 'Super Putt! +{n}',

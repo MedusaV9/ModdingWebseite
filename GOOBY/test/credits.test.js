@@ -110,9 +110,10 @@ test('credits data is frozen and has the binding §C-SYS12.4 section order/conte
     assert.ok(rows.length > 0);
     assert.ok(rows.every(Object.isFrozen));
   }
+  // V6/D4: the raw 💛 left the credits copy (authored-interface sweep).
   assert.equal(
     CREDITS.gooby[0].text,
-    'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht. 💛'
+    'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht.'
   );
   assert.equal(CREDITS.technik[0].text, 'three.js · Vite · Capacitor (MIT/BSD)');
 });

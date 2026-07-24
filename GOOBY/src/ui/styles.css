@@ -3911,6 +3911,27 @@
   padding: 0 0.75rem;
 }
 
+/* V6/D4 (PLAN6 Wave D): authored-icon spacing for the chips that dropped
+   their raw glyphs (🔒 lock line/modeline, ✨ modifier badge). The icons are
+   inline icon() SVGs, so give them flex/inline breathing room here. */
+.g68-play-locked {
+  gap: 0.375rem;
+}
+
+.g68-play-locked svg,
+.g68-mod-plays svg {
+  flex: none;
+}
+
+.g68-mod-plays svg {
+  margin-left: 0.1875rem;
+}
+
+.g68-modeline svg {
+  vertical-align: -0.125rem;
+  margin-right: 0.25rem;
+}
+
 /* =============================== end V4/G68 =============================== */
 
 /* ========= V4/G67 — surf near-miss vignette flash (PLAN4-GAMES §G4.6) =====

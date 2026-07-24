@@ -9,14 +9,14 @@
 
 /** @type {Record<string, string>} */
 export const EN = {
-  'mg.speedfx.up': 'Speed up! 🔥',
+  'mg.speedfx.up': 'Speed up!',
   'mg.speedfx.top': 'TOP SPEED!!',
   'mg.surf.distance': '{m} m!',
 };
 
 /** @type {Record<string, string>} */
 export const DE = {
-  'mg.speedfx.up': 'Schneller! 🔥',
+  'mg.speedfx.up': 'Schneller!',
   'mg.speedfx.top': 'VOLLGAS!!',
   'mg.surf.distance': '{m} m!',
 };

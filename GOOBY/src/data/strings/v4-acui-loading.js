@@ -11,7 +11,7 @@
 export const EN = {
   // shared "Loading…" label under the progress bar (mirrors 'mg.loading',
   // which lives in the frozen-elsewhere v4-difficulty module)
-  'acui.loading.label': 'Loading… ⏳',
+  'acui.loading.label': 'Loading…',
   // OUT veil — returning to the house (results "Home", pause quit)
   'acui.loading.homeTitle': 'Home sweet home',
   'acui.loading.homeReady': 'Heading home…',
@@ -28,7 +28,7 @@ export const EN = {
 
 /** @type {Record<string, string>} */
 export const DE = {
-  'acui.loading.label': 'Lädt… ⏳',
+  'acui.loading.label': 'Lädt…',
   'acui.loading.homeTitle': 'Trautes Heim',
   'acui.loading.homeReady': 'Auf dem Heimweg…',
   'acui.loading.tipHome1': 'Kissen werden aufgeschüttelt…',

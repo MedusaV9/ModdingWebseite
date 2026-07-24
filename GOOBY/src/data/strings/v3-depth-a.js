@@ -7,8 +7,8 @@
 export const EN = {
   'mg.catch.golden': 'Golden carrot! +10',
   'mg.catch.rotten': 'Rotten! Streak broken',
-  'mg.hop.gustUpWarn': 'Wind rising! ↑',
-  'mg.hop.gustDownWarn': 'Wind dropping! ↓',
+  'mg.hop.gustUpWarn': 'Wind rising!',
+  'mg.hop.gustDownWarn': 'Wind dropping!',
   'mg.hop.gust': 'Gust! Gates score ×2',
   'mg.guard.king': 'Mole King! 3 bonks!',
   'mg.guard.kingDefeated': 'King bonked! +8 + 2 coins',
@@ -26,8 +26,8 @@ export const EN = {
 export const DE = {
   'mg.catch.golden': 'Goldene Karotte! +10',
   'mg.catch.rotten': 'Faul! Serie gerissen',
-  'mg.hop.gustUpWarn': 'Aufwind kommt! ↑',
-  'mg.hop.gustDownWarn': 'Abwind kommt! ↓',
+  'mg.hop.gustUpWarn': 'Aufwind kommt!',
+  'mg.hop.gustDownWarn': 'Abwind kommt!',
   'mg.hop.gust': 'Windstoß! Tore zählen ×2',
   'mg.guard.king': 'Maulwurfkönig! 3 Treffer!',
   'mg.guard.kingDefeated': 'König besiegt! +8 + 2 Münzen',

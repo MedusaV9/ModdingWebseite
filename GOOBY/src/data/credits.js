@@ -36,10 +36,10 @@
 export const CREDITS = Object.freeze({
   /** Section 1 — GOOBY. */
   gooby: Object.freeze([
-    Object.freeze({ text: 'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht. 💛' }),
+    Object.freeze({ text: 'Ein Spiel von PermissionMAXED & den GOOBY-Agenten. Gooby ist handgemacht.' }),
     // V4/AC-1: cozy-UI art (assets/acui/ — Wortmarke, Muster-Kacheln, Münze)
     // ist projekt-eigene, generierte Grafik — wie die Sticker-Kunst.
-    Object.freeze({ text: 'Cozy-UI-Grafik (Wortmarke, Muster, Münze): projekt-eigene GOOBY-Kunst. 🍃' }),
+    Object.freeze({ text: 'Cozy-UI-Grafik (Wortmarke, Muster, Münze): projekt-eigene GOOBY-Kunst.' }),
   ]),
 
   /** Section 2 — 3D-Welten (CC BY 4.0 — attribution REQUIRED, exact rows binding). */

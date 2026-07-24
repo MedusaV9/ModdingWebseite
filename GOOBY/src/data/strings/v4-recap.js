@@ -17,7 +17,7 @@ export const EN = {
   'recap.continue': 'Continue',
   'recap.endcard.rewards': '{n} coins in level rewards',
   'recap.endcard.next': 'Next: {name} (L{n})',
-  'recap.endcard.all': 'Everything unlocked! 🏆',
+  'recap.endcard.all': 'Everything unlocked!',
   // ── profile „Rückblicke" row (§C-SYS2.8) ─────────────────────────────────
   'recap.profile.title': 'Recaps',
   'recap.profile.row': 'Level {level} · {ago}',
@@ -57,7 +57,7 @@ export const DE = {
   'recap.continue': 'Weiter',
   'recap.endcard.rewards': '{n} Münzen Level-Belohnung',
   'recap.endcard.next': 'Nächstes: {name} (L{n})',
-  'recap.endcard.all': 'Alles freigeschaltet! 🏆',
+  'recap.endcard.all': 'Alles freigeschaltet!',
   // ── profile „Rückblicke" row (§C-SYS2.8) ─────────────────────────────────
   'recap.profile.title': 'Rückblicke',
   'recap.profile.row': 'Level {level} · {ago}',

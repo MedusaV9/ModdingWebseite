@@ -16,7 +16,7 @@ export const EN = {
   // vet trip confirm sheet (§C9.2)
   'vet.confirm': 'Drive to the vet?',
   'vet.confirmBody': 'Treatment costs {price} coins at the clinic. The drive costs {energy} energy.',
-  'vet.arrived': 'Welcome at the vet clinic! 🩺',
+  'vet.arrived': 'Welcome at the vet clinic!',
   'vet.towed': 'Oh no — the tow truck brings you to the vet…',
 
   // vet arrival panel (§C9.2)
@@ -27,12 +27,12 @@ export const EN = {
   'vet.greet.sick': '“Oh dear, Gooby is really sick! A treatment will make him all better.”',
   'vet.cure': 'Treatment',
   'vet.cureDesc': 'Full cure: tummy and care troubles reset to zero, +{bonus} to all stats — stronger than medicine!',
-  'vet.cured': 'Gooby is healthy again! ✨',
+  'vet.cured': 'Gooby is healthy again!',
   'vet.cureNotNeeded': 'Only needed when Gooby feels unwell.',
   'vet.hintMedicine': 'Short on coins? Medicine costs {price} coins at the shop.',
   'vet.checkup': 'Checkup',
   'vet.checkupDesc': 'Health report card — and a fresh care start.',
-  'vet.bandage': '🩹 Gooby wears his vet bandage with pride!',
+  'vet.bandage': 'Gooby wears his vet bandage with pride!',
 
   // checkup report card (§C9.2)
   'vet.report.title': 'Health report',
@@ -55,7 +55,7 @@ export const EN = {
   'vet.reportDone': 'Thanks, doc!',
 
   // landmarks (§C9.3)
-  'landmark.found': 'Landmark discovered: {name} 📸',
+  'landmark.found': 'Landmark discovered: {name}',
 };
 
 /** @type {Record<string, string>} */
@@ -70,7 +70,7 @@ export const DE = {
   // vet trip confirm sheet (§C9.2)
   'vet.confirm': 'Zum Tierarzt fahren?',
   'vet.confirmBody': 'Die Behandlung kostet {price} Münzen in der Praxis. Die Fahrt kostet {energy} Energie.',
-  'vet.arrived': 'Willkommen in der Tierarztpraxis! 🩺',
+  'vet.arrived': 'Willkommen in der Tierarztpraxis!',
   'vet.towed': 'Oh nein — der Abschleppwagen bringt dich zum Tierarzt…',
 
   // vet arrival panel (§C9.2)
@@ -81,12 +81,12 @@ export const DE = {
   'vet.greet.sick': '„Oje, Gooby ist richtig krank! Eine Behandlung macht ihn wieder ganz gesund.“',
   'vet.cure': 'Behandlung',
   'vet.cureDesc': 'Rundum-Kur: Bauch- und Pflegesorgen komplett zurückgesetzt, +{bonus} auf alle Werte — stärker als Medizin!',
-  'vet.cured': 'Gooby ist wieder gesund! ✨',
+  'vet.cured': 'Gooby ist wieder gesund!',
   'vet.cureNotNeeded': 'Nur nötig, wenn es Gooby schlecht geht.',
   'vet.hintMedicine': 'Zu wenig Münzen? Medizin gibt’s für {price} Münzen im Laden.',
   'vet.checkup': 'Checkup',
   'vet.checkupDesc': 'Gesundheitsbericht — und ein frischer Pflege-Start.',
-  'vet.bandage': '🩹 Gooby trägt sein Tierarzt-Pflaster mit Stolz!',
+  'vet.bandage': 'Gooby trägt sein Tierarzt-Pflaster mit Stolz!',
 
   // checkup report card (§C9.2)
   'vet.report.title': 'Gesundheitsbericht',
@@ -109,5 +109,5 @@ export const DE = {
   'vet.reportDone': 'Danke, Doktor!',
 
   // landmarks (§C9.3)
-  'landmark.found': 'Sehenswürdigkeit entdeckt: {name} 📸',
+  'landmark.found': 'Sehenswürdigkeit entdeckt: {name}',
 };

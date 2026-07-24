@@ -12,7 +12,7 @@
 export const EN = {
   // ── POLISH-J end card ─────────────────────────────────────────────────────
   'recap2.endcard.highlights': 'Highlights',
-  'recap2.endcard.song': '♪ {name}',
+  'recap2.endcard.song': '{name}',
   // ── POLISH-J short chip labels (one per §C-SYS2.4 STAT_CATALOG id) ───────
   'recap2.stat.days': 'Days',
   'recap2.stat.games': 'Games',
@@ -38,7 +38,7 @@ export const EN = {
 export const DE = {
   // ── POLISH-J end card ─────────────────────────────────────────────────────
   'recap2.endcard.highlights': 'Highlights',
-  'recap2.endcard.song': '♪ {name}',
+  'recap2.endcard.song': '{name}',
   // ── POLISH-J short chip labels (one per §C-SYS2.4 STAT_CATALOG id) ───────
   'recap2.stat.days': 'Tage',
   'recap2.stat.games': 'Spiele',

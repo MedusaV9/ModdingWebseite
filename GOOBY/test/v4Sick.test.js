@@ -27,13 +27,14 @@ test('§C-SYS7.3 v4 sick strings have EN/DE parity and binding copy', () => {
   assert.equal(DE['care.shopTrip'], 'Zum Laden fahren');
   assert.equal(EN['care.shopTrip.sub'], 'Buy medicine (trip costs energy)');
   assert.equal(DE['care.shopTrip.sub'], 'Medizin kaufen (Fahrt kostet Energie)');
+  // V6/D4: the raw 🤒 left the toast copy (authored-interface sweep).
   assert.equal(
     EN['toast.sickNow'],
-    'Gooby is sick! 🤒 Give medicine — or drive to the shop or the vet.'
+    'Gooby is sick! Give medicine — or drive to the shop or the vet.'
   );
   assert.equal(
     DE['toast.sickNow'],
-    'Gooby ist krank! 🤒 Medizin geben — oder zum Laden oder Tierarzt fahren.'
+    'Gooby ist krank! Medizin geben — oder zum Laden oder Tierarzt fahren.'
   );
 });
 

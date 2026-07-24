@@ -13,7 +13,7 @@ export const EN = {
   'hud.sickChip': 'Gooby is not feeling well — tap for care',
 
   // --- framework sick refusal gate (§C3.4/§B5 — exact §C3.4 wording) ---
-  'toast.tooSick': 'Gooby is sick! 🤒',
+  'toast.tooSick': 'Gooby is sick!',
 
   // --- daily quest board (§C5.1) ---
   'quests.title': 'Daily Quests',
@@ -101,9 +101,9 @@ export const EN = {
   'photo.frame.stars': 'Stars',
   'photo.shutter': 'Take photo',
   'photo.exit': 'Close photo mode',
-  'photo.caption': 'Gooby ♥',
-  'toast.photoSaved': 'Photo saved! 📸 +{xp} XP',
-  'toast.photoSavedNoXp': 'Photo saved! 📸',
+  'photo.caption': 'Gooby',
+  'toast.photoSaved': 'Photo saved! +{xp} XP',
+  'toast.photoSavedNoXp': 'Photo saved!',
   'toast.photoFailed': 'Capture failed — try again',
 
   // --- fishing pond species (§C6 fish set) ---
@@ -120,7 +120,7 @@ export const DE = {
   'hud.sickChip': 'Gooby geht es nicht gut — tippe für Pflege',
 
   // --- framework sick refusal gate (§C3.4/§B5 — exact §C3.4 wording) ---
-  'toast.tooSick': 'Gooby ist krank! 🤒',
+  'toast.tooSick': 'Gooby ist krank!',
 
   // --- daily quest board (§C5.1) ---
   'quests.title': 'Tagesquests',
@@ -208,9 +208,9 @@ export const DE = {
   'photo.frame.stars': 'Sterne',
   'photo.shutter': 'Foto machen',
   'photo.exit': 'Fotomodus schließen',
-  'photo.caption': 'Gooby ♥',
-  'toast.photoSaved': 'Foto gespeichert! 📸 +{xp} XP',
-  'toast.photoSavedNoXp': 'Foto gespeichert! 📸',
+  'photo.caption': 'Gooby',
+  'toast.photoSaved': 'Foto gespeichert! +{xp} XP',
+  'toast.photoSavedNoXp': 'Foto gespeichert!',
   'toast.photoFailed': 'Aufnahme fehlgeschlagen — nochmal versuchen',
 
   // --- fishing pond species (§C6 fish set) ---

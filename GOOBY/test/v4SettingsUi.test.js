@@ -70,9 +70,10 @@ test('no key is defined in more than one G58 string module', () => {
 test('§C-SYS5.2/5.3 + §C-SYS8.1/8.2 + §G3.3 exact plan copy is verbatim', () => {
   assert.equal(CODES_DE['codes.wrong'], 'Hmm, das Wort kennt Gooby nicht');
   assert.equal(CODES_EN['codes.wrong'], "Hmm, Gooby doesn't know that word");
-  assert.equal(CODES_DE['codes.already'], 'Schon eingelöst! 😉');
-  assert.equal(CODES_DE['codes.toast.updateLiebe'], 'Doppelte Münzen für 10 Minuten! 💛');
-  assert.equal(CODES_DE['codes.toast.herzGooby'], 'Gooby hat dich auch lieb! 💗');
+  // V6/D4: raw emoji left the toast copy (authored-interface sweep).
+  assert.equal(CODES_DE['codes.already'], 'Schon eingelöst!');
+  assert.equal(CODES_DE['codes.toast.updateLiebe'], 'Doppelte Münzen für 10 Minuten!');
+  assert.equal(CODES_DE['codes.toast.herzGooby'], 'Gooby hat dich auch lieb!');
   assert.equal(SET_DE['settings.gyro.sub'], 'Bewege dein Handy — schau tiefer ins Zimmer');
   assert.equal(SET_EN['settings.gyro.sub'], 'Move your phone — peek deeper into the room');
   assert.equal(CTRL_DE['settings.controls.title'], 'Steuerung');

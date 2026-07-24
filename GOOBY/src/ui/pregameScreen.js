@@ -243,8 +243,11 @@ export function registerPregameScreen({ store, ui, framework }) {
           pillsEl.appendChild(pill);
         }
         const line = modeLine(diff, selected);
-        lineEl.textContent = t(line.key, line.vars);
-        lineEl.classList.toggle('g68-modeline-lock', selected === 'endless' && !diff.endlessUnlocked);
+        // V6/D4: the endless lock line lost its raw 🔒 — render the authored
+        // lock glyph ahead of the text instead (icon '' for normal lines).
+        const lineLocked = selected === 'endless' && !diff.endlessUnlocked;
+        lineEl.innerHTML = `${lineLocked ? icon('lock', 12) : ''}${t(line.key, line.vars)}`;
+        lineEl.classList.toggle('g68-modeline-lock', lineLocked);
       };
       if (diff?.enabled) {
         const block = document.createElement('div');
@@ -368,7 +371,8 @@ export function registerPregameScreen({ store, ui, framework }) {
         // Locked games show the level requirement INSTEAD of PLAY.
         const lockLine = document.createElement('div');
         lockLine.className = 'g68-play-locked';
-        lockLine.textContent = t('pregame.locked', { n: meta.minLevel });
+        // V6/D4: authored lock icon leads; the 🔒 left the string value.
+        lockLine.innerHTML = `${icon('lock', 14)}<span>${t('pregame.locked', { n: meta.minLevel })}</span>`;
         playRow.appendChild(lockLine);
       } else if (!implemented) {
         const soon = document.createElement('button');
@@ -379,7 +383,9 @@ export function registerPregameScreen({ store, ui, framework }) {
       } else {
         const play = document.createElement('button');
         play.className = 'btn btn-teal g68-play-btn';
-        play.textContent = t('pregame.play'); // §G7.3 „Spielen ▶" — arrow lives in the string
+        // §G7.3 „Spielen" — V6/D4: the old raw-▶ suffix is now the authored
+        // play glyph rendered beside the label (.btn flex gap handles spacing).
+        play.innerHTML = `<span>${t('pregame.play')}</span>${icon('play', 16)}`;
         play.addEventListener('click', () => {
           if (!framework) {
             ui.toast('toast.minigameMissing');

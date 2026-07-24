@@ -12,7 +12,7 @@ export const EN = {
 
   // §C-SYS5.4 sticker #29 (unlocked via the 'IchLIE3BDich' code word)
   'stickerbook.herzGooby.name': 'Gooby Loves You',
-  'stickerbook.herzGooby.flavor': 'Gooby hugs a big glossy pink heart. Love you too! 💗',
+  'stickerbook.herzGooby.flavor': 'Gooby hugs a big glossy pink heart. Love you too!',
   'stickerbook.herzGooby.hint': 'A secret code word unlocks it…',
 };
 
@@ -24,6 +24,6 @@ export const DE = {
 
   // §C-SYS5.4 Sticker #29 (freigeschaltet über das Codewort „IchLIE3BDich")
   'stickerbook.herzGooby.name': 'Gooby hat dich lieb',
-  'stickerbook.herzGooby.flavor': 'Gooby drückt ein großes rosa Glanzherz. Hab dich auch lieb! 💗',
+  'stickerbook.herzGooby.flavor': 'Gooby drückt ein großes rosa Glanzherz. Hab dich auch lieb!',
   'stickerbook.herzGooby.hint': 'Ein geheimes Codewort schaltet ihn frei…',
 };

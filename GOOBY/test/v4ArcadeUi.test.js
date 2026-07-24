@@ -62,8 +62,10 @@ test('v4-arcade: the §G7.4 key list is present verbatim', () => {
     assert.ok(ARC_DE[key], `missing DE ${key}`);
   }
   assert.equal(ARC_DE['arcade.special.ribbon'], 'SPECIAL — echte 3D-Welt!');
-  assert.equal(ARC_DE['pregame.play'], 'Spielen ▶');
-  assert.equal(ARC_DE['pregame.endlessLocked'], '🔒 Schlage Schwer (Ziel {n}) · ab L10');
+  // V6/D4: raw ▶/🔒 left the string values — pregameScreen renders the
+  // authored play/lock icon() beside these labels instead.
+  assert.equal(ARC_DE['pregame.play'], 'Spielen');
+  assert.equal(ARC_DE['pregame.endlessLocked'], 'Schlage Schwer (Ziel {n}) · ab L10');
 });
 
 test('v4-arcade: one banner effect blurb per §C-SYS4.2 modifier type', () => {

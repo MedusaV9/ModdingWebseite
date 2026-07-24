@@ -126,6 +126,7 @@ const ARCADE_CSS = `
 .g68-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:0.375rem 0.625rem 0;font-size:0.8125rem;font-weight:800;line-height:1.2;min-height:1.25rem;overflow-wrap:anywhere;}
 .g68-info{display:flex;align-items:center;justify-content:space-between;gap:0.375rem;padding:0.125rem 0.625rem 0.5rem;font-size:0.6875rem;font-weight:700;opacity:.6;min-height:1.125rem;}
 .g68-info span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;}
+.g68-info svg{flex:none;vertical-align:-0.0625rem;margin-right:0.1875rem;} /* V6/D4: authored ★ best-chip glyph */
 /* F3: 320px-wide fit — tighter screen padding + gaps */
 @media (max-width:359px){
   .screen-arcade{padding-left:calc(0.625rem + var(--safe-left));padding-right:calc(0.625rem + var(--safe-right));}
@@ -238,8 +239,10 @@ export function createArcadeScreen({ store, ui, framework }) {
         infoEl.className = 'g68-info';
         const bestScore = best[meta.id];
         const endlessOn = endlessUnlocked(state, meta.id);
+        // V6/D4: authored star glyph leads the best chip (the raw ★ left
+        // the 'arcade.best.short' string value).
         infoEl.innerHTML = `
-          <span>${bestScore != null ? t('arcade.best.short', { n: bestScore }) : '&nbsp;'}</span>
+          <span>${bestScore != null ? `${icon('star', 10)}${t('arcade.best.short', { n: bestScore })}` : '&nbsp;'}</span>
           ${endlessOn ? `<span>${t('arcade.endless.short', { n: bestForMode(state, meta.id, 'endless') })}</span>` : ''}`;
         tile.appendChild(infoEl);
 
@@ -316,8 +319,9 @@ export function createArcadeScreen({ store, ui, framework }) {
         glowHandle = glow.attach(tile.querySelector('.g68-cover'), { color: active.color });
         const badge = document.createElement('span');
         badge.className = 'g68-mod-badge';
+        // V6/D4: authored sparkle glyph replaces the raw ✨ in the badge text.
         badge.innerHTML = `
-          <span class="g68-mod-plays">${t('arcade.modifier.badge', { n: active.remainingPlays })}</span>
+          <span class="g68-mod-plays">${t('arcade.modifier.badge', { n: active.remainingPlays })}${icon('sparkle', 10)}</span>
           <span class="g68-mod-count">${formatCountdown(active.endsAt - now())}</span>`;
         tile.appendChild(badge);
         const chip = document.createElement('span');

@@ -11,6 +11,7 @@
     "test": "node --test \"test/*.test.js\"",
     "lint": "eslint .",
     "px-audit": "node scripts/px-audit.mjs",
+    "emoji-audit": "node scripts/emoji-audit.mjs",
     "fetch-assets": "node scripts/fetch-kenney.mjs",
     "fetch-itch": "node scripts/fetch-itch.mjs",
     "music-manifest": "node scripts/gen-music-manifest.mjs",

@@ -12,17 +12,17 @@
 /** @type {Record<string, string>} */
 export const EN = {
   // welcome-back toast parts (systems/offline.js)
-  'offline.cropsReady': 'Crops are ready! 🥕',
-  'offline.becameSick': 'Gooby got sick 🤒',
+  'offline.cropsReady': 'Crops are ready!',
+  'offline.becameSick': 'Gooby got sick',
 
   // sickness ramp + transitions (§C3.2/§C3.3/§C3.4 toasts)
   'health.tummyWarning': "Gooby's tummy is rumbling…",
-  'health.becameQueasy': 'Gooby feels queasy… 🤢',
-  'health.becameSick': 'Gooby is sick! 🤒',
-  'health.recovered': 'Gooby feels better! 💚',
+  'health.becameQueasy': 'Gooby feels queasy…',
+  'health.becameSick': 'Gooby is sick!',
+  'health.recovered': 'Gooby feels better!',
 
   // feeding pipeline (§C3.4: sick Gooby only accepts healthy food)
-  'toast.junkRefusedSick': 'Gooby is sick! Only healthy food… 🤒',
+  'toast.junkRefusedSick': 'Gooby is sick! Only healthy food…',
 
   // fridge tray additions (§C7 junk badge + Care row)
   'tray.careTitle': 'Care',
@@ -31,8 +31,8 @@ export const EN = {
   'tray.medicine': 'Medicine',
   'tray.fertilizer': 'Fertilizer',
   'tray.fertilizerHint': 'Use it in the garden!',
-  'tray.noCoins': 'Not enough coins! 🪙',
-  'tray.bought': 'Bought! 🧾',
+  'tray.noCoins': 'Not enough coins!',
+  'tray.bought': 'Bought!',
 
   // belly junk-band icon labels (a11y/status text)
   'health.junkBand.ok': 'Tummy is happy',
@@ -41,19 +41,19 @@ export const EN = {
 
   // care sheet (§C3.4/§C3.5)
   'care.title': 'Gooby Care',
-  'care.status.healthy': 'Gooby is doing great! 💚',
-  'care.status.queasy': 'Gooby feels queasy… 🤢',
-  'care.status.sick': 'Gooby is sick! 🤒',
+  'care.status.healthy': 'Gooby is doing great!',
+  'care.status.queasy': 'Gooby feels queasy…',
+  'care.status.sick': 'Gooby is sick!',
   'care.weightTier': 'Fluff level: {tier}',
   'care.weightNote': 'Gooby is perfect just the way he is.',
   'care.medicine': 'Give medicine',
   'care.medicineOwned': '×{count} in the cabinet',
   'care.medicineNone': 'No medicine! Buy it in the shop (40c).',
   'care.medicineNotNeeded': 'Gooby is healthy — no medicine needed!',
-  'care.medicineGiven': 'Yuck… ahh, better! 💊',
+  'care.medicineGiven': 'Yuck… ahh, better!',
   'care.vet': 'Drive to the vet',
   'care.vetPrice': 'Cure 120c · Checkup 30c',
-  'care.vetNotBuilt': 'The vet clinic opens soon! 🏥',
+  'care.vetNotBuilt': 'The vet clinic opens soon!',
   'care.close': 'Close',
 
   // weight tiers (§C4.3 names)
@@ -66,17 +66,17 @@ export const EN = {
 /** @type {Record<string, string>} */
 export const DE = {
   // welcome-back toast parts
-  'offline.cropsReady': 'Ernte ist reif! 🥕',
-  'offline.becameSick': 'Gooby ist krank geworden 🤒',
+  'offline.cropsReady': 'Ernte ist reif!',
+  'offline.becameSick': 'Gooby ist krank geworden',
 
   // sickness ramp + transitions
   'health.tummyWarning': 'Goobys Bauch grummelt…',
-  'health.becameQueasy': 'Gooby ist ganz flau… 🤢',
-  'health.becameSick': 'Gooby ist krank! 🤒',
-  'health.recovered': 'Gooby geht es besser! 💚',
+  'health.becameQueasy': 'Gooby ist ganz flau…',
+  'health.becameSick': 'Gooby ist krank!',
+  'health.recovered': 'Gooby geht es besser!',
 
   // feeding pipeline
-  'toast.junkRefusedSick': 'Gooby ist krank! Nur gesundes Essen… 🤒',
+  'toast.junkRefusedSick': 'Gooby ist krank! Nur gesundes Essen…',
 
   // fridge tray additions
   'tray.careTitle': 'Pflege',
@@ -85,8 +85,8 @@ export const DE = {
   'tray.medicine': 'Medizin',
   'tray.fertilizer': 'Dünger',
   'tray.fertilizerHint': 'Benutz ihn im Garten!',
-  'tray.noCoins': 'Nicht genug Münzen! 🪙',
-  'tray.bought': 'Gekauft! 🧾',
+  'tray.noCoins': 'Nicht genug Münzen!',
+  'tray.bought': 'Gekauft!',
 
   // belly junk-band icon labels
   'health.junkBand.ok': 'Bauch ist happy',
@@ -95,19 +95,19 @@ export const DE = {
 
   // care sheet
   'care.title': 'Gooby-Pflege',
-  'care.status.healthy': 'Gooby geht es prima! 💚',
-  'care.status.queasy': 'Gooby ist ganz flau… 🤢',
-  'care.status.sick': 'Gooby ist krank! 🤒',
+  'care.status.healthy': 'Gooby geht es prima!',
+  'care.status.queasy': 'Gooby ist ganz flau…',
+  'care.status.sick': 'Gooby ist krank!',
   'care.weightTier': 'Flausch-Level: {tier}',
   'care.weightNote': 'Gooby ist perfekt, so wie er ist.',
   'care.medicine': 'Medizin geben',
   'care.medicineOwned': '×{count} im Schrank',
   'care.medicineNone': 'Keine Medizin! Kauf sie im Laden (40c).',
   'care.medicineNotNeeded': 'Gooby ist gesund — keine Medizin nötig!',
-  'care.medicineGiven': 'Igitt… ahh, besser! 💊',
+  'care.medicineGiven': 'Igitt… ahh, besser!',
   'care.vet': 'Zum Tierarzt fahren',
   'care.vetPrice': 'Behandlung 120c · Checkup 30c',
-  'care.vetNotBuilt': 'Die Tierarztpraxis öffnet bald! 🏥',
+  'care.vetNotBuilt': 'Die Tierarztpraxis öffnet bald!',
   'care.close': 'Schließen',
 
   // weight tiers (§C4.3 names)

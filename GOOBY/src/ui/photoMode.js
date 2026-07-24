@@ -16,7 +16,7 @@
 import { PHOTO } from '../data/constants.js';
 import { getAchievementsEngine } from '../systems/achievementsEngine.js';
 import { t, getLang } from '../data/strings.js'; // V3/FIX-C: getLang for hyphens:auto lang tagging
-import { icon } from './icons.js';
+import { icon, stripRawGlyphs } from './icons.js'; // V6/D4: strip keeps captions authored-only
 // V4/G59 (§C-SYS9.1/9.3/9.4): IndexedDB gallery persistence + extracted export
 import * as photoStore from '../core/photoStore.js';
 import { mirrorSlice, shouldShowFirstPhotoHint, toastG, tG } from '../systems/gallery.logic.js';
@@ -57,7 +57,7 @@ export const PHOTO_FRAMES = Object.freeze([
  * @param {string} frameId PHOTO_FRAMES id
  * @param {string} caption polaroid caption text
  */
-export function drawFrame(g, w, h, frameId, caption = 'Gooby ♥') {
+export function drawFrame(g, w, h, frameId, caption = 'Gooby') {
   if (frameId === 'polaroid') {
     const b = Math.round(w * 0.045); // side border
     const foot = Math.round(h * 0.14); // classic fat bottom
@@ -70,7 +70,23 @@ export function drawFrame(g, w, h, frameId, caption = 'Gooby ♥') {
     g.font = `700 ${Math.round(h * 0.045)}px "Comic Sans MS", "Chalkboard SE", cursive, sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(caption, w / 2, h - foot / 2);
+    // V6/D4: the caption heart is drawn as authored path art (the old
+    // 'Gooby ♥' string font-rendered a pictograph — same class of raw glyph
+    // D3 killed on the other canvas surfaces). Text is defensively stripped.
+    const text = stripRawGlyphs(caption);
+    g.fillText(text, w / 2, h - foot / 2);
+    const hr = Math.round(h * 0.014); // heart radius ≈ caption cap height/2
+    const hx = w / 2 + g.measureText(text).width / 2 + hr * 2.2;
+    const hy = h - foot / 2;
+    g.save();
+    g.fillStyle = '#E4707E';
+    g.beginPath();
+    g.moveTo(hx, hy + hr * 1.15);
+    g.bezierCurveTo(hx - hr * 2.1, hy - hr * 0.4, hx - hr * 1.05, hy - hr * 1.7, hx, hy - hr * 0.55);
+    g.bezierCurveTo(hx + hr * 1.05, hy - hr * 1.7, hx + hr * 2.1, hy - hr * 0.4, hx, hy + hr * 1.15);
+    g.closePath();
+    g.fill();
+    g.restore();
   } else if (frameId === 'stars') {
     const band = Math.round(w * 0.075);
     // deterministic star confetti along the 4 edges (mulberry-ish LCG)

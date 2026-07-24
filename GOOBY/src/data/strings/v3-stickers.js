@@ -17,7 +17,7 @@ export const EN = {
   'stickerbook.new': 'NEW',
   'stickerbook.unknown': '???',
   'stickerbook.hintLabel': 'How to unlock',
-  'stickerbook.unlockToast': 'New sticker! 🏷️',
+  'stickerbook.unlockToast': 'New sticker!',
 
   // --- §C5.5 stickerCount achievements ---
   'ach.stickerBook10.name': 'Sticker Fan',
@@ -125,7 +125,7 @@ export const DE = {
   'stickerbook.new': 'NEU',
   'stickerbook.unknown': '???',
   'stickerbook.hintLabel': 'So schaltest du ihn frei',
-  'stickerbook.unlockToast': 'Neuer Sticker! 🏷️',
+  'stickerbook.unlockToast': 'Neuer Sticker!',
 
   // --- §C5.5 stickerCount achievements ---
   'ach.stickerBook10.name': 'Sticker-Fan',

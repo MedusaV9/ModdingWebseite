@@ -10,7 +10,7 @@ export const EN = {
   // POLISH-D loading-card headline (game title renders above it)
   'ui2.loading.getReady': 'Get ready!',
   // POLISH-D rotating loading tips (picked per launch)
-  'ui2.loading.tip1': 'Tip: You can pause any time with the ⏸ button.',
+  'ui2.loading.tip1': 'Tip: You can pause any time with the Pause button.',
   'ui2.loading.tip2': 'Tip: The first round of each game every day pays double coins!',
   'ui2.loading.tip3': 'Tip: Hard mode pays ×1.3 coins — Endless is pure bragging rights.',
 };
@@ -18,7 +18,7 @@ export const EN = {
 /** @type {Record<string, string>} */
 export const DE = {
   'ui2.loading.getReady': 'Mach dich bereit!',
-  'ui2.loading.tip1': 'Tipp: Mit ⏸ kannst du jederzeit pausieren.',
+  'ui2.loading.tip1': 'Tipp: Mit der Pause-Taste kannst du jederzeit pausieren.',
   'ui2.loading.tip2': 'Tipp: Die erste Runde pro Spiel am Tag bringt doppelte Münzen!',
   'ui2.loading.tip3': 'Tipp: Schwer zahlt ×1,3 Münzen — Endlos ist für den Ruhm.',
 };

@@ -22,14 +22,14 @@ export const EN = {
   'mg.diff.coins.endless': '5 coins · High score ∞: {n}',
   'mg.diff.target': 'Target: {n}',
   // §G5.5 lock line (pill + launch-refusal toast)
-  'mg.diff.lock': '🔒 Beat Hard (target {n}) · from L10',
+  'mg.diff.lock': 'Beat Hard (target {n}) · from L10',
   'toast.endlessLocked': 'Endless ∞ unlocks after beating Hard (from level 10)',
   // §G5.6 endless results row
   'mg.results.endlessBest': 'Endless best',
   // §C-SYS4.4 results modifier chip
-  'mg.results.modifierActive': '{name} active ✨',
+  'mg.results.modifierActive': '{name} active',
   // §G6.6 async-init loading card (generic; goobyWelt layers its own copy)
-  'mg.loading': 'Loading… ⏳',
+  'mg.loading': 'Loading…',
   // §C-SYS3.1 XP floater
   'hud.xpFloater': '+{n} XP',
   // §C-SYS3.3 level-up toast with next-unlock preview
@@ -41,7 +41,7 @@ export const EN = {
   'unlock.quickDelivery': 'Quick Delivery',
   'unlock.plot5': '5th garden plot',
   'unlock.plot6': '6th garden plot',
-  'unlock.all': 'Everything unlocked! 🏆',
+  'unlock.all': 'Everything unlocked!',
 };
 
 /** @type {Record<string, string>} */
@@ -55,11 +55,11 @@ export const DE = {
   'mg.diff.coins.hard': '×1,3 Münzen · Ziel: {n}',
   'mg.diff.coins.endless': '5 Münzen · Highscore ∞: {n}',
   'mg.diff.target': 'Ziel: {n}',
-  'mg.diff.lock': '🔒 Schlage Schwer (Ziel {n}) · ab L10',
+  'mg.diff.lock': 'Schlage Schwer (Ziel {n}) · ab L10',
   'toast.endlessLocked': 'Endlos ∞: Erst Schwer schlagen (ab Level 10)',
   'mg.results.endlessBest': 'Endlos-Best',
-  'mg.results.modifierActive': '{name} aktiv ✨',
-  'mg.loading': 'Lädt… ⏳',
+  'mg.results.modifierActive': '{name} aktiv',
+  'mg.loading': 'Lädt…',
   'hud.xpFloater': '+{n} XP',
   'toast.levelUpNext': 'Level {level}! +{coins} Münzen · Nächstes: {name} (L{n})',
   'unlock.quests': 'Tages-Quests',
@@ -68,5 +68,5 @@ export const DE = {
   'unlock.quickDelivery': 'Schnell-Lieferung',
   'unlock.plot5': '5. Garten-Beet',
   'unlock.plot6': '6. Garten-Beet',
-  'unlock.all': 'Alles freigeschaltet! 🏆',
+  'unlock.all': 'Alles freigeschaltet!',
 };

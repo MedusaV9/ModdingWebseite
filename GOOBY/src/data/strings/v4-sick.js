@@ -11,9 +11,9 @@ export const EN = {
   'care.fridgeMedicine.sub': 'Opens the fridge Care row',
   'care.shopTrip': 'Drive to the shop',
   'care.shopTrip.sub': 'Buy medicine (trip costs energy)',
-  'toast.sickNow': 'Gooby is sick! 🤒 Give medicine — or drive to the shop or the vet.',
+  'toast.sickNow': 'Gooby is sick! Give medicine — or drive to the shop or the vet.',
   // Override the old v2 refusal/chip copy through the v4 spread.
-  'toast.tooSick': 'Gooby is sick! 🤒 Buy medicine at the shop or drive to the vet.',
+  'toast.tooSick': 'Gooby is sick! Buy medicine at the shop or drive to the vet.',
   'hud.sickChip': 'Medicine, shop or vet — tap for care',
   'shop.tab.care': 'Care',
 };
@@ -26,9 +26,9 @@ export const DE = {
   'care.fridgeMedicine.sub': 'Öffnet die Pflege-Zeile im Kühlschrank',
   'care.shopTrip': 'Zum Laden fahren',
   'care.shopTrip.sub': 'Medizin kaufen (Fahrt kostet Energie)',
-  'toast.sickNow': 'Gooby ist krank! 🤒 Medizin geben — oder zum Laden oder Tierarzt fahren.',
+  'toast.sickNow': 'Gooby ist krank! Medizin geben — oder zum Laden oder Tierarzt fahren.',
   // Überschreibt die alten V2-Texte über den V4-Spread.
-  'toast.tooSick': 'Gooby ist krank! 🤒 Kauf Medizin im Laden oder fahre zum Tierarzt.',
+  'toast.tooSick': 'Gooby ist krank! Kauf Medizin im Laden oder fahre zum Tierarzt.',
   'hud.sickChip': 'Medizin, Laden oder Tierarzt — tippe für Pflege',
   'shop.tab.care': 'Pflege',
 };
