@@ -153,8 +153,10 @@ test('V6.1/B4 wiring: celebrate() queues ONE weather line right after the welcom
   assert.match(air, /import \{ weatherAt \} from '\.\.\/systems\/weather\.js'/);
   assert.match(
     air,
-    /ui\.toast\('vacation\.welcomeBack', \{ coins: res\.souvenir \?\? 0 \}\);[\s\S]{0,600}?ui\.toast\(`vacation\.home\.\$\{weatherAt\(now\(\)\)\.state\}`\);/,
-    'weather line queues sequentially after vacation.welcomeBack'
+    // V6.1 sign-off: the weather line is staggered via setTimeout (spawnToast
+    // stacks live toasts — there is no live queue), still right after welcome.
+    /ui\.toast\('vacation\.welcomeBack', \{ coins: res\.souvenir \?\? 0 \}\);[\s\S]{0,700}?setTimeout\(\(\) => ui\.toast\(`vacation\.home\.\$\{weatherAt\(now\(\)\)\.state\}`\), \d+\);/,
+    'weather line staggers right after vacation.welcomeBack'
   );
   // exactly one weather-toast call site (celebrate runs once per reunion,
   // for both the pickup and the taxi path)
