@@ -19,7 +19,9 @@ import dev.projecteclipse.eclipse.worldgen.ore.OreField;
  * {@link CaveEntrances} walk-in craters), the nether-breach funnel
  * ({@link BreachGeometry}), the in-sky End disc ({@link EndDiscGeometry}) and, since
  * IDEA-17 (W4-NETHER), the nether ceiling roof shell with its stalactite forests and
- * the seam lava-fall curtains.
+ * the seam lava-fall curtains. Since plans_v5 B6 it also owns the nether FLOOR
+ * landforms (soul valleys, basalt-delta benches, wastes lava-spring pits) and the
+ * overworld outer-ring cliffiness pass (badlands mesas / savanna cuestas).
  * It emits NO vegetation and NO ores anymore:
  * trees/grass/flowers/cacti/snow-layers and every other plant come from real vanilla
  * biome features replayed by W1.1's decoration pipeline, and ore placement is delegated
@@ -102,7 +104,7 @@ public final class DiscTerrainFunction {
     // (cell-coordinate domain, carried over from the legacy in-file ore table). 28 is
     // shared here between the badlands band jitter and the sandstone accents (disjoint
     // column families); 29 between the nether ceiling-forest cell mask (x>>4, z>>4
-    // domain) and the roof body mix (x, y, z domain). Next free hash salt: 31+.
+    // domain) and the roof body mix (x, y, z domain). Next free hash salt: 33+.
     private static final int H_CRUMBLE = 11;
     private static final int H_DEEPSLATE = 12;
     private static final int H_GLOW = 16;
@@ -117,6 +119,10 @@ public final class DiscTerrainFunction {
     private static final int H_CEILING = 29;
     /** IDEA-17: lava-fall curtain segment gate on the nether sector seams (W4-NETHER). */
     private static final int H_SEAM = 30;
+    /** B6: nether wastes lava-spring pit cells ({@value #PIT_CELL}-block cell domain). */
+    private static final int H_PIT = 31;
+    /** B6: basalt-delta bench phase (24-block cell domain). */
+    private static final int H_BENCH = 32;
 
     // --- IDEA-17 nether roof shell ("the bedrock you are under") ---
 
@@ -132,6 +138,19 @@ public final class DiscTerrainFunction {
     private static final double SEAM_CURTAIN_MIN_T = 0.42D;
     /** Seam-blend weight of the curtain CORE (splash bowl + pour sources). */
     private static final double SEAM_CORE_MIN_T = 0.46D;
+
+    // --- B6 nether floor landforms + overworld outer cliffs ---
+
+    /** Cell size in blocks of the wastes lava-spring pit field (one candidate per cell). */
+    private static final int PIT_CELL = 48;
+    /** Fraction of pit cells that actually carry a lava-spring pit. */
+    private static final double PIT_CELL_CHANCE = 0.22D;
+    /** Radial width of the magma lip ring around a pit (reuses the moat-lip palette). */
+    private static final double PIT_LIP_WIDTH = 1.8D;
+    /** Pit-core depression weight above which the spring's lava pool fills in. */
+    private static final double PIT_LAVA_MIN_CORE = 0.75D;
+    /** Ridge-noise mesa lift cap of the cliffiness pass — deliberately below mountain scale. */
+    private static final double CLIFF_LIFT_MAX = 18.0D;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private static final BlockState CAVE_AIR = Blocks.CAVE_AIR.defaultBlockState();
@@ -298,6 +317,17 @@ public final class DiscTerrainFunction {
                     } else if (!moat.withinBridge(angle, 2.0D)) {
                         moatLip = true;
                     }
+                }
+            }
+            // B6 lava-spring pits (wastes): a 2-block lava pool in the bowl core and a
+            // magma lip ring around the rim (the moat-lip palette). The bowl depression
+            // itself lives in computeSurfaceY so surfaceY() stays consistent.
+            if (style == SectorStyle.NETHER_WASTES) {
+                PitSample pit = lavaPit(map, x, z);
+                if (pit.lip()) {
+                    moatLip = true;
+                } else if (pit.core() >= PIT_LAVA_MIN_CORE) {
+                    lavaTopY = Math.max(lavaTopY, surfaceY + 2);
                 }
             }
         }
@@ -534,6 +564,72 @@ public final class DiscTerrainFunction {
         return false;
     }
 
+    /**
+     * Whether (x, z) lies within 24 blocks of any overworld landmark's clearance radius
+     * (B6: the cliffiness pass keeps village/temple plateaus calm).
+     */
+    private static boolean nearOverworldLandmark(DiscMapData map, int x, int z) {
+        for (DiscMapData.Landmark landmark : map.profile(DiscProfile.OVERWORLD).landmarks()) {
+            double reach = landmark.radius() + 24.0D;
+            double dx = x - landmark.x();
+            double dz = z - landmark.z();
+            if (dx * dx + dz * dz <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * B6 lava-spring pit sample of a wastes column: {@code core} is the smoothstepped
+     * 0..1 depression weight (0 = untouched), {@code bottomY} the pit's target floor
+     * (y ≤ 118) and {@code lip} flags the magma ring just outside the bowl.
+     */
+    private record PitSample(double core, double bottomY, boolean lip) {
+        static final PitSample NONE = new PitSample(0.0D, 0.0D, false);
+    }
+
+    /**
+     * Deterministic wastes lava-spring pit field: one candidate per
+     * {@value #PIT_CELL}-block cell, placed with enough margin that the pit + lip never
+     * cross the cell border (single-cell membership test). Pits whose CENTER falls in a
+     * landmark clearance are dropped whole, so the arrival pad and fortress core never
+     * get half-pits at their edges.
+     */
+    private static PitSample lavaPit(DiscMapData map, int x, int z) {
+        int cellX = Math.floorDiv(x, PIT_CELL);
+        int cellZ = Math.floorDiv(z, PIT_CELL);
+        long h = hash(H_PIT, cellX, cellZ);
+        if (to01(h) >= PIT_CELL_CHANCE) {
+            return PitSample.NONE;
+        }
+        int span = PIT_CELL - 16;
+        int px = cellX * PIT_CELL + 8 + (int) ((h >>> 8) & 0x7FFFFFFFL) % span;
+        int pz = cellZ * PIT_CELL + 8 + (int) ((h >>> 32) & 0x7FFFFFFFL) % span;
+        double radius = 3.0D + (double) ((h >>> 16) % 3L);      // 3..5
+        double dx = x - px;
+        double dz = z - pz;
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist > radius + PIT_LIP_WIDTH || nearNetherLandmark(map, px, pz)) {
+            return PitSample.NONE;
+        }
+        // Wedge-seam gates: only wastes columns evaluate pits, so a pit whose CENTER
+        // sits over (or hard against) a wedge boundary would be clipped to a half-bowl.
+        // Drop those candidates whole.
+        if (!"minecraft:nether_wastes".equals(map.biomeAt(DiscProfile.NETHER, px, pz))) {
+            return PitSample.NONE;
+        }
+        DiscMapData.SectorBlend blend = map.sectorBlendAt(DiscProfile.NETHER, px, pz);
+        if (blend != null && blend.t() > 0.25D) {
+            return PitSample.NONE;
+        }
+        double bottomY = 114.0D + (double) ((h >>> 48) & 3L);   // 114..117 (≤ 118)
+        if (dist > radius) {
+            return new PitSample(0.0D, bottomY, true);
+        }
+        return new PitSample(smoothstep(1.0D - dist / radius), bottomY, false);
+    }
+
     /** Channel depth below the original surface: 4 near the centerline, 3 towards the edges. */
     private static int riverDepth(double riverDist) {
         return riverDist < 2.5D ? 4 : 3;
@@ -740,12 +836,40 @@ public final class DiscTerrainFunction {
                     + noises.surfaceMedium().getValue(x / 50.0D, z / 50.0D) * 3.0D;
             double s = 138.0D + n * relief[0] + relief[1]
                     + noises.surfaceDetail().getValue(x / 12.0D, z / 12.0D) * 2.0D;
+            // B6 sector-keyed floor landforms. All masks ride the frozen noise/hash
+            // families; the valley/bench forms fade to 0 at wedge borders (relief[2])
+            // so wedge seams stay continuous.
+            double borderFade = Math.max(0.0D, relief[2]);
+            if (style == SectorStyle.SOUL && borderFade > 0.0D) {
+                // Broad sunken soul valleys: −6..−10 bowls with smoothstepped shoulders
+                // (offset-domain sample of the large field — the fringe-noise trick).
+                double valley = noises.surfaceLarge().getValue(x / 90.0D + 2048.0D,
+                        z / 90.0D + 2048.0D);
+                if (valley > 0.10D) {
+                    double w = smoothstep(Math.min(1.0D, (valley - 0.10D) / 0.45D));
+                    s -= (6.0D + 4.0D * w) * w * borderFade;
+                }
+            } else if (style == SectorStyle.BASALT && borderFade > 0.0D) {
+                // Columnar basalt-delta benches: quantize towards 3-block steps whose
+                // phase shifts per 24-block cell, so terraces read as broken columns.
+                double phase = hash01(H_BENCH, Math.floorDiv(x, 24), Math.floorDiv(z, 24)) * 3.0D;
+                double bench = Math.floor((s + phase) / 3.0D) * 3.0D - phase;
+                s += (bench - s) * 0.85D * borderFade;
+            } else if (style == SectorStyle.NETHER_WASTES) {
+                // Occasional lava-spring pits: small smoothstepped depressions sinking
+                // the wastes floor to y <= 118; column() adds the pool + magma lip.
+                PitSample pit = lavaPit(map, x, z);
+                if (pit.core() > 0.0D && pit.bottomY() < s) {
+                    s += (pit.bottomY() - s) * pit.core();
+                }
+            }
             double r0 = Math.sqrt((double) x * x + (double) z * z);
             if (r0 < 20.0D) {
                 double t = smoothstep(r0 / 20.0D);
                 s = 132.0D * (1.0D - t) + s * t; // flat pad for the fortress core
             }
-            return (int) Math.round(Math.max(100.0D, Math.min(150.0D, s)));
+            // Clamp widened from 100..150 (B6) so the new landforms survive.
+            return (int) Math.round(Math.max(96.0D, Math.min(156.0D, s)));
         }
         int painted = map.surfaceOverrideAt(x, z);
         if (painted != Integer.MIN_VALUE) {
@@ -764,6 +888,24 @@ public final class DiscTerrainFunction {
             detailAmp = 0.6D; // dunes suppress the small-scale jitter
         }
         s += noises.surfaceDetail().getValue(x / 12.0D, z / 12.0D) * detailAmp;
+        // B6 (item 11) outer-terrain cliffiness: in high-cliff sectors (badlands ring,
+        // savanna plateaus) a mid-frequency mask lifts its cores into mesa/cuesta tops
+        // (up to +18 — deliberately far below THE mountain) and blends the surface
+        // towards 8-block terrace steps (the mountain terrace trick at a lower
+        // threshold). Fades at wedge borders (relief[2]); landmark plateaus (villages,
+        // temples) stay calm via the clearance guard.
+        double cliff = style.cliffiness * Math.max(0.0D, relief[2]);
+        if (cliff > 0.0D && !nearOverworldLandmark(map, x, z)) {
+            double mask = noises.surfaceLarge().getValue(x / 110.0D - 4096.0D,
+                    z / 110.0D - 4096.0D);
+            if (mask > 0.05D) {
+                double core = smoothstep(Math.max(0.0D,
+                        Math.min(1.0D, (mask - 0.30D) / 0.35D)));
+                s += CLIFF_LIFT_MAX * core * cliff;
+                double w = smoothstep(Math.min(1.0D, (mask - 0.05D) / 0.40D)) * cliff;
+                s += (Math.floor(s / 8.0D) * 8.0D - s) * w;
+            }
+        }
         DiscMapData.Mountain mountain = map.profile(profile).mountain();
         if (mountain != null) {
             double dx = x - mountain.x();
@@ -1034,39 +1176,43 @@ public final class DiscTerrainFunction {
     /**
      * Per-sector terrain palette and relief shaping. STRATA ONLY as of v2 — vegetation
      * densities are gone (vanilla biome features own all plants via W1.1).
+     * {@code cliffiness} (B6, item 11) weights the overworld mesa/terrace pass:
+     * badlands/terracotta rings high, savanna medium, everything else flat.
      */
     private enum SectorStyle {
-        PLAINS(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.7D, 0.0D),
-        DESERT(Blocks.SAND, Blocks.SAND, 3, 0.5D, 2.0D),
-        BADLANDS(Blocks.RED_SAND, Blocks.ORANGE_TERRACOTTA, 1, 0.9D, 3.0D),
-        FOREST(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.0D, 0.0D),
-        JUNGLE(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.15D, 0.0D),
-        SAVANNA(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.8D, 1.0D),
-        SWAMP(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.35D, -7.0D),
-        SNOWY(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.4D, 6.0D),
-        GROVE(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.2D, 4.0D),
-        DARK_FOREST(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.0D, 0.0D),
-        MEADOW(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.6D, 0.0D),
-        MUSHROOM(Blocks.MYCELIUM, Blocks.DIRT, 3, 0.55D, 0.0D),
-        NETHER_WASTES(Blocks.NETHERRACK, Blocks.NETHERRACK, 3, 1.0D, 0.0D),
-        SOUL(Blocks.SOUL_SAND, Blocks.SOUL_SOIL, 3, 0.7D, -2.0D),
-        BASALT(Blocks.BASALT, Blocks.BLACKSTONE, 3, 1.3D, 1.0D),
-        CRIMSON(Blocks.CRIMSON_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D),
-        WARPED(Blocks.WARPED_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D);
+        PLAINS(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.7D, 0.0D, 0.0D),
+        DESERT(Blocks.SAND, Blocks.SAND, 3, 0.5D, 2.0D, 0.0D),
+        BADLANDS(Blocks.RED_SAND, Blocks.ORANGE_TERRACOTTA, 1, 0.9D, 3.0D, 1.0D),
+        FOREST(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.0D, 0.0D, 0.0D),
+        JUNGLE(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.15D, 0.0D, 0.0D),
+        SAVANNA(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.8D, 1.0D, 0.5D),
+        SWAMP(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.35D, -7.0D, 0.0D),
+        SNOWY(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.4D, 6.0D, 0.0D),
+        GROVE(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.2D, 4.0D, 0.0D),
+        DARK_FOREST(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.0D, 0.0D, 0.0D),
+        MEADOW(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.6D, 0.0D, 0.0D),
+        MUSHROOM(Blocks.MYCELIUM, Blocks.DIRT, 3, 0.55D, 0.0D, 0.0D),
+        NETHER_WASTES(Blocks.NETHERRACK, Blocks.NETHERRACK, 3, 1.0D, 0.0D, 0.0D),
+        SOUL(Blocks.SOUL_SAND, Blocks.SOUL_SOIL, 3, 0.7D, -2.0D, 0.0D),
+        BASALT(Blocks.BASALT, Blocks.BLACKSTONE, 3, 1.3D, 1.0D, 0.0D),
+        CRIMSON(Blocks.CRIMSON_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.0D),
+        WARPED(Blocks.WARPED_NYLIUM, Blocks.NETHERRACK, 3, 0.9D, 0.0D, 0.0D);
 
         final BlockState top;
         final BlockState filler;
         final int fillerDepth;
         final double surfaceAmp;
         final double surfaceOffset;
+        final double cliffiness;
 
         SectorStyle(Block top, Block filler, int fillerDepth, double surfaceAmp,
-                double surfaceOffset) {
+                double surfaceOffset, double cliffiness) {
             this.top = top.defaultBlockState();
             this.filler = filler.defaultBlockState();
             this.fillerDepth = fillerDepth;
             this.surfaceAmp = surfaceAmp;
             this.surfaceOffset = surfaceOffset;
+            this.cliffiness = cliffiness;
         }
     }
 

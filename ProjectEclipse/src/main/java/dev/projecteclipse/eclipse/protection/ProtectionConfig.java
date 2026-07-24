@@ -37,10 +37,18 @@ public final class ProtectionConfig {
 
     private ProtectionConfig() {}
 
+    /**
+     * {@code noBuild} (plans_v5 PLAN-B B10, default true) extends the break/place/
+     * explosion cancels from the r=18 sanctum cylinder to the whole broad spawn zone;
+     * {@code buildRadius} (default 0 = use {@code radius()}) lets servers tune the
+     * no-build ring independently of the PvP/grief ring.
+     */
     public record SpawnRules(
             int radius,
             int verticalFrom,
             int verticalTo,
+            boolean noBuild,
+            int buildRadius,
             boolean noPvp,
             boolean noFluidPlace,
             boolean noVehiclePlace,
@@ -64,7 +72,7 @@ public final class ProtectionConfig {
     public record Snapshot(SpawnRules spawn, VillagerRules villagers, ContainmentRules containment) {
         static Snapshot defaults() {
             return new Snapshot(
-                    new SpawnRules(96, -64, 320, true, true, true, true, true, 16, 3, true),
+                    new SpawnRules(96, -64, 320, true, 0, true, true, true, true, true, 16, 3, true),
                     new VillagerRules(true, true, true),
                     new ContainmentRules(List.of(1), -180));
         }
@@ -140,6 +148,8 @@ public final class ProtectionConfig {
                 intOr(obj, "radius", fallback.radius()),
                 intOr(obj, "verticalFrom", fallback.verticalFrom()),
                 intOr(obj, "verticalTo", fallback.verticalTo()),
+                boolOr(obj, "noBuild", fallback.noBuild()),
+                intOr(obj, "buildRadius", fallback.buildRadius()),
                 boolOr(obj, "noPvp", fallback.noPvp()),
                 boolOr(obj, "noFluidPlace", fallback.noFluidPlace()),
                 boolOr(obj, "noVehiclePlace", fallback.noVehiclePlace()),
@@ -185,6 +195,8 @@ public final class ProtectionConfig {
         spawn.addProperty("radius", defaults.spawn().radius());
         spawn.addProperty("verticalFrom", defaults.spawn().verticalFrom());
         spawn.addProperty("verticalTo", defaults.spawn().verticalTo());
+        spawn.addProperty("noBuild", defaults.spawn().noBuild());
+        spawn.addProperty("buildRadius", defaults.spawn().buildRadius());
         spawn.addProperty("noPvp", defaults.spawn().noPvp());
         spawn.addProperty("noFluidPlace", defaults.spawn().noFluidPlace());
         spawn.addProperty("noVehiclePlace", defaults.spawn().noVehiclePlace());

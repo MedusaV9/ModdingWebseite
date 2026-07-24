@@ -1,0 +1,28 @@
+{
+  "en": {
+    "dev.eclipse.doc.chunk.regen": "Rewrite loaded disc chunks from the frozen terrain function at the committed stage and replay carving/decoration (radius 0-2 around a position; 'force' overrides structure protection).",
+    "dev.eclipse.doc.player.names": "List the real names of all online players to the issuing operator (anonymity for players stays intact).",
+    "dev.eclipse.chunk.regen.started": "Chunk regen started: %1$s chunk(s) around chunk [%2$s, %3$s] (radius %4$s).",
+    "dev.eclipse.chunk.regen.progress": "Chunk regen: %1$s/%2$s chunks rewritten.",
+    "dev.eclipse.chunk.regen.done": "Chunk regen complete: %1$s chunk(s) rewritten (%2$s columns) in %3$s ms; %4$s chunk(s) skipped (structure protection).",
+    "dev.eclipse.chunk.regen.protected": "%s chunk(s) intersect a protected structure box and were skipped — repeat with 'force' to rewrite them too.",
+    "dev.eclipse.chunk.regen.refused.busy": "A terrain sweep or chunk regen is already running in this dimension — try again once it finishes.",
+    "dev.eclipse.chunk.regen.refused.structure": "Refused: every targeted chunk intersects a protected structure box. Repeat with 'force' to rewrite structures back to base terrain.",
+    "dev.eclipse.player.names.header": "Online players (%s) — ops eyes only:",
+    "dev.eclipse.player.names.entry": " - %1$s — %2$s%3$s",
+    "dev.eclipse.player.names.empty": "(no players online)"
+  },
+  "de": {
+    "dev.eclipse.doc.chunk.regen": "Baut geladene Disc-Chunks aus der eingefrorenen Terrainfunktion der aktuellen Stage neu und wiederholt Carving/Dekoration (Radius 0-2 um eine Position; 'force' übergeht den Strukturschutz).",
+    "dev.eclipse.doc.player.names": "Listet die echten Namen aller Online-Spieler nur für den ausführenden Operator (Anonymität der Spieler bleibt bestehen).",
+    "dev.eclipse.chunk.regen.started": "Chunk-Regeneration gestartet: %1$s Chunk(s) um Chunk [%2$s, %3$s] (Radius %4$s).",
+    "dev.eclipse.chunk.regen.progress": "Chunk-Regeneration: %1$s/%2$s Chunks neu geschrieben.",
+    "dev.eclipse.chunk.regen.done": "Chunk-Regeneration abgeschlossen: %1$s Chunk(s) neu geschrieben (%2$s Spalten) in %3$s ms; %4$s Chunk(s) übersprungen (Strukturschutz).",
+    "dev.eclipse.chunk.regen.protected": "%s Chunk(s) schneiden eine geschützte Struktur-Box und wurden übersprungen — mit 'force' wiederholen, um auch sie neu zu schreiben.",
+    "dev.eclipse.chunk.regen.refused.busy": "In dieser Dimension läuft bereits ein Terrain-Sweep oder eine Chunk-Regeneration — bitte danach erneut versuchen.",
+    "dev.eclipse.chunk.regen.refused.structure": "Abgelehnt: Jeder Ziel-Chunk schneidet eine geschützte Struktur-Box. Mit 'force' wiederholen, um Strukturen auf Basisterrain zurückzusetzen.",
+    "dev.eclipse.player.names.header": "Online-Spieler (%s) — nur für Operatoren:",
+    "dev.eclipse.player.names.entry": " - %1$s — %2$s%3$s",
+    "dev.eclipse.player.names.empty": "(keine Spieler online)"
+  }
+}

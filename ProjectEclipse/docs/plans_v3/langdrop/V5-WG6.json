@@ -1,0 +1,10 @@
+{
+	"en": {
+		"eclipse.structure.flooded_crypt": "Flooded Crypt",
+		"eclipse.structure.glitch_reliquary": "Glitch Reliquary"
+	},
+	"de": {
+		"eclipse.structure.flooded_crypt": "Geflutete Gruft",
+		"eclipse.structure.glitch_reliquary": "Glitch-Reliquiar"
+	}
+}

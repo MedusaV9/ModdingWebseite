@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.analytics.AnalyticsState;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.sequence.IntroSequence;
@@ -166,6 +167,86 @@ public final class QuestDetectors {
                 QuestEngine.raiseTo(server, player, spec, spec.target());
             }
         }
+    }
+
+    // --- visit_dimension (plans_v5 PLAN-B B8) ---
+
+    /**
+     * {@code visit_dimension} live detector: fires on EVERY dimension entry (unlike the
+     * lifetime-once biome signal that stranded "Betrete den Nether" — B8 root cause), so a
+     * quest active on any later day still completes on the next crossing. The engine's
+     * eligibility check + done-latch inside {@code raiseTo} dedupe repeat entries.
+     */
+    @SubscribeEvent
+    static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        QuestEngine.ResolvedDay day = QuestEngine.resolved(player.server);
+        String dimensionId = event.getTo().location().toString();
+        for (GoalSpec spec : day.ofType(TriggerType.VISIT_DIMENSION)) {
+            if (spec.trigger().target().equals(dimensionId)) {
+                QuestEngine.raiseTo(player.server, player, spec, spec.target());
+            }
+        }
+    }
+
+    /**
+     * B8 retro-heal, called from {@code QuestEngine.ensurePlayer} (login + day resolution =
+     * "when the quest becomes eligible"): credits a {@code visit_dimension} spec when the
+     * player is standing in the target dimension right now (day-2 rollover case) OR has a
+     * recorded lifetime visit of one of its biomes (visit consumed before the quest existed).
+     */
+    static void backfillVisitDimension(ServerPlayer player, GoalSpec spec) {
+        String target = spec.trigger().target();
+        if (player.level().dimension().location().toString().equals(target)
+                || lifetimeBiomesMatch(player, dimensionBiomeTag(target))) {
+            QuestEngine.raiseTo(player.server, player, spec, spec.target());
+        }
+    }
+
+    /**
+     * B8 retro-heal for single-target {@code visit_biomes} specs (same seam): the biome
+     * signal fires only on the FIRST-EVER visit per player, so a spec assigned after that
+     * visit could never complete. The lifetime set already knows the visit — credit it.
+     * Distinct-count specs (empty target) keep their per-day semantics and are not healed.
+     */
+    static void backfillVisitBiomes(ServerPlayer player, GoalSpec spec) {
+        String target = spec.trigger().target();
+        if (!target.isEmpty() && lifetimeBiomesMatch(player, target)) {
+            QuestEngine.raiseTo(player.server, player, spec, spec.target());
+        }
+    }
+
+    /** Whether any biome in the player's lifetime visited set matches the biome/#tag target. */
+    private static boolean lifetimeBiomesMatch(ServerPlayer player, String target) {
+        if (target.isEmpty()) {
+            return false;
+        }
+        for (String biomeId : AnalyticsState.get(player.server)
+                .biomesVisitedLifetime(player.getUUID())) {
+            ResourceLocation id = ResourceLocation.tryParse(biomeId);
+            if (id != null && QuestEngine.matchesBiome(player.server, id, target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Conventional biome tag of a dimension id ("has the player ever been there" proxy —
+     * the analytics store tracks biomes, not dimensions, so past visits are inferred
+     * through it). NOT mapped: {@code minecraft:the_end}, because on this map End biomes
+     * live on the in-sky End disc INSIDE the overworld (see {@code DiscBiomeSource}), so a
+     * lifetime end-biome visit proves nothing about the end dimension. Unknown/modded
+     * dimensions return "" (current-dimension check only).
+     */
+    private static String dimensionBiomeTag(String dimensionId) {
+        return switch (dimensionId) {
+            case "minecraft:the_nether" -> "#minecraft:is_nether";
+            case "minecraft:overworld" -> "#minecraft:is_overworld";
+            default -> "";
+        };
     }
 
     private static void handleAltarDeposit(ServerPlayer player, ResourceLocation itemId, int count,

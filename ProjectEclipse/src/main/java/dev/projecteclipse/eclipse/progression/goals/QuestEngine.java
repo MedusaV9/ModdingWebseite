@@ -22,6 +22,7 @@ import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
 import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
+import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Kind;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Scope;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -82,10 +83,12 @@ public final class QuestEngine {
             Stats.HORSE_ONE_CM, Stats.PIG_ONE_CM, Stats.MINECART_ONE_CM, Stats.AVIATE_ONE_CM,
             Stats.CLIMB_ONE_CM, Stats.FLY_ONE_CM, Stats.STRIDER_ONE_CM);
 
-    /** Current day's resolved specs + per-detector indexes, rebuilt on day/config change. */
+    /** Current day's resolved specs + per-detector indexes, rebuilt on day/config/unlock change. */
     static final class ResolvedDay {
         final int day;
         final int generation;
+        /** Unlock-key snapshot the day was materialized against (D5 phase gate). */
+        final Set<String> unlocks;
         final List<GoalSpec> mains;
         final List<GoalSpec> sides;
         final List<GoalSpec> shared;
@@ -97,9 +100,10 @@ public final class QuestEngine {
         /** stat_threshold goalId → resolved vanilla stat (null = unresolvable, logged once). */
         final Map<String, Stat<?>> stats = new HashMap<>();
 
-        ResolvedDay(int day, int generation, List<GoalSpec> dayGoals) {
+        ResolvedDay(int day, int generation, Set<String> unlocks, List<GoalSpec> dayGoals) {
             this.day = day;
             this.generation = generation;
+            this.unlocks = unlocks;
             List<GoalSpec> mainList = new ArrayList<>();
             List<GoalSpec> sideList = new ArrayList<>();
             for (GoalSpec spec : dayGoals) {
@@ -206,13 +210,30 @@ public final class QuestEngine {
 
     // --- resolution / assignment ---
 
-    /** Current day's resolved specs; rebuilds (and re-assigns online players) on day/config change. */
+    /**
+     * Current day's resolved specs; rebuilds (and re-assigns online players) on day/config
+     * change AND when the {@code UnlockState} key set changes (D5: a side gated on
+     * {@code requiresUnlock} materializes the moment its key is granted — and never before).
+     */
     static ResolvedDay resolved(MinecraftServer server) {
         int day = EclipseWorldState.get(server).getDay();
         int generation = GoalConfig.generation();
+        Set<String> unlocked = UnlockState.unlockedKeys(server);
         ResolvedDay current = resolved;
-        if (current == null || current.day != day || current.generation != generation) {
-            current = new ResolvedDay(day, generation, GoalConfig.goalsForDay(day));
+        if (current == null || current.day != day || current.generation != generation
+                || !current.unlocks.equals(unlocked)) {
+            List<GoalSpec> dayGoals = new ArrayList<>();
+            for (GoalSpec spec : GoalConfig.goalsForDay(day)) {
+                // D5 phase gate: locked SIDE content never materializes (mains are the
+                // hard-authored day arc and stay untouched; a stalled unlock must not be
+                // able to strand a day without its mains).
+                if (spec.goalKind() == Kind.SIDE && !spec.requiresUnlock().isEmpty()
+                        && !unlocked.contains(spec.requiresUnlock())) {
+                    continue;
+                }
+                dayGoals.add(spec);
+            }
+            current = new ResolvedDay(day, generation, unlocked, dayGoals);
             resolved = current;
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 ensurePlayer(server, player);
@@ -248,8 +269,13 @@ public final class QuestEngine {
 
         for (GoalSpec spec : specsFor(day, state, uuid)) {
             captureBaselines(state, day, player, spec, false);
-            if (spec.trigger().type() == TriggerType.SKILL_LEVEL) {
-                QuestDetectors.backfillSkillLevel(player, spec);
+            switch (spec.trigger().type()) {
+                case SKILL_LEVEL -> QuestDetectors.backfillSkillLevel(player, spec);
+                // B8 retro-heals (login + assignment): visit signals consumed before the
+                // spec existed, or the player already standing in the target dimension.
+                case VISIT_DIMENSION -> QuestDetectors.backfillVisitDimension(player, spec);
+                case VISIT_BIOMES -> QuestDetectors.backfillVisitBiomes(player, spec);
+                default -> { }
             }
         }
 
@@ -267,8 +293,14 @@ public final class QuestEngine {
     private static List<String> drawPersonals(MinecraftServer server, QuestState state, int day,
             UUID uuid, int nonce) {
         Set<String> completed = state.lifetimeCompletedPersonals(uuid);
+        Set<String> unlocked = UnlockState.unlockedKeys(server);
         List<QuestMath.Candidate> candidates = new ArrayList<>();
         for (GoalSpec spec : GoalConfig.personalPool()) {
+            // D5 phase gate: specs naming a not-yet-granted UnlockState key never roll
+            // (nether quests before the nether opens etc.); day windows stay the coarse bound.
+            if (!spec.requiresUnlock().isEmpty() && !unlocked.contains(spec.requiresUnlock())) {
+                continue;
+            }
             if (spec.weight() > 0 && spec.inDayWindow(day) && !completed.contains(spec.id())) {
                 candidates.add(new QuestMath.Candidate(spec.id(), spec.weight()));
             }
@@ -513,7 +545,9 @@ public final class QuestEngine {
     private static void grantRewardContents(ServerPlayer player, String goalId, GoalSpec.Reward reward,
             boolean replay) {
         if (reward.shards() > 0) {
-            ShardEconomy.addShards(player, reward.shards());
+            // announce=false: the sendRewardGrant materialization below IS the ceremony
+            // for quest shards — the D14 "+N Umbrasplitter" toast would celebrate twice.
+            ShardEconomy.addShards(player, reward.shards(), false);
         }
         List<RewardPayloads.ItemEntry> granted = new ArrayList<>(reward.items().size());
         for (GoalSpec.ItemReward itemReward : reward.items()) {

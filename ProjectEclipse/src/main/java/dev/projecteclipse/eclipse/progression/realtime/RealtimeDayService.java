@@ -25,7 +25,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * Real-time day engine (R1, P4-B1): the 14-day arc advances at persistent real-world
  * boundaries ({@code realtime.json}: {@code zone} + {@code boundaryTime}, default Berlin
- * 18:00) instead of one-shot schedules. Replaces the firing half of the W14
+ * 18:00 — or, D6, {@code cadenceMode: "interval"} chaining every {@code intervalHours}
+ * real hours via {@link #nextBoundaryFor}) instead of one-shot schedules. Replaces the
+ * firing half of the W14
  * {@code devtools.PhaseScheduler} (now a thin delegate into this service) and the
  * {@code dayAutoAdvance} half of {@code DayScheduler} (deprecated, parsed but ignored).
  *
@@ -90,19 +92,33 @@ public final class RealtimeDayService {
 
     private RealtimeDayService() {}
 
+    /**
+     * D6: the ONE schedule-derived boundary router. Daily mode chains {@code boundaryTime}
+     * occurrences in {@code zone}; interval mode chains {@code intervalHours} steps.
+     * {@code fromEpochMillis} is {@code now} for live derivations and the elapsed boundary
+     * for catch-up stepping (both overloads treat it as the exclusive lower bound).
+     */
+    public static long nextBoundaryFor(RealtimeConfig.Config cfg, long fromEpochMillis) {
+        if (cfg.cadenceMode() == RealtimeConfig.CadenceMode.INTERVAL) {
+            return RealtimeMath.nextBoundary(fromEpochMillis, cfg.intervalMillis());
+        }
+        return RealtimeMath.nextBoundary(fromEpochMillis, cfg.zone(), cfg.boundaryTime());
+    }
+
     // --- dev API backing (surfaced by RealtimeDayApi for P5-W3; reference commands in RealtimeCommands) ---
 
     /**
      * Arms the engine on the configured cadence: the next boundary is the next occurrence
-     * of {@code boundaryTime} in {@code zone} after now. Clears pause, any one-shot
-     * override AND the same-calendar-day dedup baseline (an explicit re-arm is operator
-     * intent to start a fresh cadence). Returns the armed boundary (epoch millis).
+     * of {@code boundaryTime} in {@code zone} after now (daily mode) or now +
+     * {@code intervalHours} (interval mode). Clears pause, any one-shot override AND the
+     * same-calendar-day dedup baseline (an explicit re-arm is operator intent to start a
+     * fresh cadence). Returns the armed boundary (epoch millis).
      */
     public static long arm(MinecraftServer server) {
         RealtimeState state = RealtimeState.get(server);
         RealtimeConfig.Config cfg = RealtimeConfig.get();
         long now = EclipseClock.epochMillis();
-        long boundary = RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime());
+        long boundary = nextBoundaryFor(cfg, now);
         state.setArmed(true);
         state.setPaused(false);
         state.setPauseRemainingMillis(0L);
@@ -256,7 +272,7 @@ public final class RealtimeDayService {
         RealtimeConfig.Config cfg = RealtimeConfig.get();
         long now = EclipseClock.epochMillis();
         state.setPrevBoundaryEpochMillis(now);
-        state.setBoundaryEpochMillis(RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime()));
+        state.setBoundaryEpochMillis(nextBoundaryFor(cfg, now));
         state.setPaused(false);
         state.setPauseRemainingMillis(0L);
         EclipseMod.LOGGER.info("RealtimeDayService: one-shot override cleared — reverted to {}",
@@ -271,23 +287,74 @@ public final class RealtimeDayService {
         return state.isArmed() && state.isManualOverride();
     }
 
+    /** Human-readable cadence description ({@code daily 18:00 Europe/Berlin} / {@code every 2h 0m}). */
+    public static String cadenceText(RealtimeConfig.Config cfg) {
+        return cfg.cadenceMode() == RealtimeConfig.CadenceMode.INTERVAL
+                ? "every " + RealtimeMath.remainingText(cfg.intervalMillis())
+                : "daily " + cfg.boundaryTime() + " " + cfg.zone();
+    }
+
     /** One human-readable status line (dev commands + P5 surface). */
     public static String status(MinecraftServer server) {
         RealtimeState state = RealtimeState.get(server);
         RealtimeConfig.Config cfg = RealtimeConfig.get();
         int day = DayScheduler.getDay(server);
+        String cadence = "cadence " + cadenceText(cfg);
         if (!state.isArmed()) {
-            return "disarmed (day " + day + "/" + EclipseConfig.maxDay() + ")";
+            return "disarmed (day " + day + "/" + EclipseConfig.maxDay() + ", " + cadence + ")";
         }
         if (state.isPaused()) {
             return "PAUSED (day " + day + "/" + EclipseConfig.maxDay() + ", "
-                    + RealtimeMath.remainingText(state.getPauseRemainingMillis()) + " frozen)";
+                    + RealtimeMath.remainingText(state.getPauseRemainingMillis()) + " frozen, "
+                    + cadence + ")";
         }
         long now = EclipseClock.epochMillis();
-        return "armed (day " + day + "/" + EclipseConfig.maxDay() + ", next boundary "
+        return "armed (day " + day + "/" + EclipseConfig.maxDay() + ", " + cadence
+                + ", next boundary "
                 + formatInstant(state.getBoundaryEpochMillis(), cfg.zone()) + " " + cfg.zone()
                 + ", in " + RealtimeMath.remainingText(state.getBoundaryEpochMillis() - now) + ")"
                 + (state.isManualOverride() ? " [one-shot override]" : "");
+    }
+
+    /**
+     * D6 {@code /dev phase next}: advances the arc one day RIGHT NOW through the full
+     * {@code DayScheduler.setDay} rollover (PRE/POST signals, bell, announcements). An
+     * armed clock re-anchors via the {@link #onDayApplied} out-of-band branch (interval
+     * mode: next phase in {@code intervalHours}; daily mode: the epoch-day stamp dedups
+     * today's remaining slot). Returns the new day, or {@code -1} when the arc is already
+     * on its final configured day.
+     */
+    public static int advancePhaseNow(MinecraftServer server) {
+        int day = DayScheduler.getDay(server);
+        if (day >= EclipseConfig.maxDay()) {
+            return -1;
+        }
+        EclipseMod.LOGGER.info("RealtimeDayService: /dev phase next — advancing day {} -> {} now",
+                day, day + 1);
+        DayScheduler.setDay(server, day + 1);
+        return DayScheduler.getDay(server);
+    }
+
+    /**
+     * D6 cadence switch: persists the new mode/interval to {@code realtime.json}
+     * ({@link RealtimeConfig#setCadence}) and, when the clock is armed and not paused,
+     * re-derives the pending boundary from now on the new cadence (a pending one-shot
+     * override is deliberately preserved — it fires first, then the new cadence chains).
+     * Returns the resulting config.
+     */
+    public static RealtimeConfig.Config applyCadence(MinecraftServer server,
+            RealtimeConfig.CadenceMode mode, double intervalHours) {
+        RealtimeConfig.Config cfg = RealtimeConfig.setCadence(mode, intervalHours);
+        RealtimeState state = RealtimeState.get(server);
+        if (state.isArmed() && !state.isPaused() && !state.isManualOverride()) {
+            long now = EclipseClock.epochMillis();
+            state.setPrevBoundaryEpochMillis(now);
+            state.setBoundaryEpochMillis(nextBoundaryFor(cfg, now));
+            EclipseMod.LOGGER.info("RealtimeDayService: cadence now {} — next boundary {}",
+                    cadenceText(cfg), formatInstant(state.getBoundaryEpochMillis(), cfg.zone()));
+        }
+        broadcastClock(server);
+        return cfg;
     }
 
     /** Formats an instant in the given zone for logs/feedback ({@code yyyy-MM-dd HH:mm:ss}). */
@@ -358,7 +425,7 @@ public final class RealtimeDayService {
         } else if (state.isArmed() && previousDay != newDay) {
             // Out-of-band /eclipse day set (or a gametest helper): re-anchor per plan §2.1.
             state.setPrevBoundaryEpochMillis(now);
-            state.setBoundaryEpochMillis(RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime()));
+            state.setBoundaryEpochMillis(nextBoundaryFor(cfg, now));
             state.setManualOverride(false);
             state.setArmedByScheduleOnly(false);
             if (newDay > previousDay) {
@@ -462,16 +529,19 @@ public final class RealtimeDayService {
         }
         EclipseMod.LOGGER.info("RealtimeDayService: boundary {} reached — advancing day {} -> {}",
                 formatInstant(boundary, cfg.zone()), day, day + 1);
-        rollover(server, false, RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime()));
+        rollover(server, false, nextBoundaryFor(cfg, now));
     }
 
     /**
      * The monotonic guard: a schedule-derived boundary whose zone-local calendar day was
      * already advanced does not fire again (backwards NTP jumps, re-arm after a manual
      * {@code /eclipse day set} the same real day). Manual one-shot overrides bypass it.
+     * D6: DAILY-mode only — interval mode legitimately advances several times per
+     * calendar day, so the epoch-day dedup would eat every fire after the first.
      */
     private static boolean isGuardBlocked(RealtimeState state, RealtimeConfig.Config cfg) {
-        return !state.isManualOverride()
+        return cfg.cadenceMode() == RealtimeConfig.CadenceMode.DAILY
+                && !state.isManualOverride()
                 && RealtimeMath.epochDay(state.getBoundaryEpochMillis(), cfg.zone())
                         <= state.getLastAdvanceEpochDay();
     }
@@ -481,7 +551,7 @@ public final class RealtimeDayService {
             RealtimeConfig.Config cfg, long now) {
         long skipped = state.getBoundaryEpochMillis();
         state.setPrevBoundaryEpochMillis(skipped);
-        state.setBoundaryEpochMillis(RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime()));
+        state.setBoundaryEpochMillis(nextBoundaryFor(cfg, now));
         EclipseMod.LOGGER.info("RealtimeDayService: boundary {} skipped — its calendar day already "
                         + "advanced (epoch-day guard); next boundary {}",
                 formatInstant(skipped, cfg.zone()),
@@ -586,7 +656,7 @@ public final class RealtimeDayService {
                 EclipseMod.LOGGER.warn("RealtimeDayService: catch-up cap ({} days) reached with "
                         + "boundaries still elapsed — re-anchoring forward", cfg.catchUpMaxDays());
                 state.setPrevBoundaryEpochMillis(boundary);
-                state.setBoundaryEpochMillis(RealtimeMath.nextBoundary(now, cfg.zone(), cfg.boundaryTime()));
+                state.setBoundaryEpochMillis(nextBoundaryFor(cfg, now));
                 broadcastClock(server);
                 break;
             }
@@ -594,7 +664,7 @@ public final class RealtimeDayService {
                 skipGuardedSlot(server, state, cfg, now);
                 continue;
             }
-            long stepped = RealtimeMath.nextBoundary(boundary, cfg.zone(), cfg.boundaryTime());
+            long stepped = nextBoundaryFor(cfg, boundary);
             boolean lastStep = stepped > now
                     || day + 1 >= EclipseConfig.maxDay()
                     || advanced + 1 >= cfg.catchUpMaxDays();

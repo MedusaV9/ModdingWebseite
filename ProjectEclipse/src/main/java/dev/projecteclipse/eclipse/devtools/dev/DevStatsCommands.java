@@ -17,22 +17,36 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.AnalyticsApi;
 import dev.projecteclipse.eclipse.analytics.AnalyticsService;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-/** Read-only operator query surface over the retained per-day analytics store. */
+/**
+ * Read-only operator query surface over the retained per-day analytics store, plus two
+ * LIVE economy metrics (D14 ops debugging): {@code shards} = the player's current
+ * personal balance ({@link ShardEconomy#getShards}, needs the player online) and
+ * {@code shard_pool} = the team pool ({@code shards_banked} — the deposit tally — was
+ * already queryable through the analytics store).
+ */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevStatsCommands {
+    /** Live-value metrics resolved outside the analytics store (D14). */
+    private static final String METRIC_SHARDS = "shards";
+    private static final String METRIC_SHARD_POOL = "shard_pool";
+
     private static final SuggestionProvider<CommandSourceStack> METRICS = (context, builder) -> {
         int day = AnalyticsService.currentDay(context.getSource().getServer());
-        Set<String> metrics = new LinkedHashSet<>(AnalyticsApi.categories());
+        Set<String> metrics = new LinkedHashSet<>(List.of(METRIC_SHARDS, METRIC_SHARD_POOL));
+        metrics.addAll(AnalyticsApi.categories());
         metrics.addAll(AnalyticsApi.keys(context.getSource().getServer(), day).stream().sorted().toList());
         return SharedSuggestionProvider.suggest(metrics, builder);
     };
@@ -83,12 +97,33 @@ public final class DevStatsCommands {
             throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         MinecraftServer server = source.getServer();
+        if (METRIC_SHARD_POOL.equals(metric)) {
+            // Player-independent live value — one line, no per-profile analytics header.
+            int pool = EclipseWorldState.get(server).getShardPool();
+            source.sendSuccess(() -> Component.translatable("dev.eclipse.stats.query.live",
+                    METRIC_SHARD_POOL, pool), false);
+            return pool;
+        }
         Collection<GameProfile> profiles = GameProfileArgument.getGameProfiles(context, "player");
         int printed = 0;
         for (GameProfile profile : profiles) {
             UUID uuid = profile.getId();
             if (uuid == null) {
                 source.sendFailure(Component.translatable("dev.eclipse.stats.profile.no_uuid", profile.getName()));
+                continue;
+            }
+            if (METRIC_SHARDS.equals(metric)) {
+                // Live personal balance rides a player attachment — online players only.
+                ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+                if (online == null) {
+                    source.sendFailure(Component.translatable("dev.eclipse.stats.query.offline",
+                            profile.getName()));
+                    continue;
+                }
+                int balance = ShardEconomy.getShards(online);
+                source.sendSuccess(() -> Component.translatable("dev.eclipse.stats.query.live_player",
+                        profile.getName(), METRIC_SHARDS, balance), false);
+                printed++;
                 continue;
             }
             source.sendSuccess(() -> Component.translatable("dev.eclipse.stats.query.header",

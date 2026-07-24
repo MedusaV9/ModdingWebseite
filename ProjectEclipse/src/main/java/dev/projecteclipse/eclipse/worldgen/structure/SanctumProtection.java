@@ -42,6 +42,17 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * bridge (max r ≈ 17.5), crater bowl (floor at altar−22) and the W5 orbital rings.
  * {@code isProtected(Level, BlockPos)} keeps its exact signature: it is the frozen
  * block-side interface P4's edge/auto-glide safety rule and P2's FX queries consume.</p>
+ *
+ * <p>plans_v5 PLAN-B B10: the break/place/explosion handlers additionally enforce the
+ * BROAD {@code protection.json} spawn zone (default r=96) whenever {@code spawn.noBuild}
+ * is set (default true; {@code spawn.buildRadius} > 0 overrides the ring size) — the
+ * r=19..96 band around the altar is no longer freely minable. Fluid buckets and
+ * vehicles/TNT in the broad zone are already cancelled by
+ * {@link dev.projecteclipse.eclipse.protection.SpawnProtectionRules} (RightClickBlock +
+ * FluidPlaceBlockEvent + EntityJoinLevelEvent); flint-and-steel fire rides the vanilla
+ * {@code useOn} snapshot capture into {@code EntityPlaceEvent}, so no extra interact
+ * handler is needed here. Before the sanctum builds ({@code altarPos == null}) the zone
+ * centers on the authored disc center, so spawn is protected from tick 0.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class SanctumProtection {
@@ -53,6 +64,13 @@ public final class SanctumProtection {
     public static final int VERTICAL_ABOVE = 24;
     /** Vanilla permission level that bypasses the protection (ops). */
     private static final int EXEMPT_PERMISSION = 3;
+    /**
+     * B10 null-altar fallback: the authored disc center — the flat spawn pad sits at
+     * y 70 ({@code DiscTerrainFunction.computeSurfaceY}, r &lt; 14 blend) — so the spawn
+     * zone is protected from tick 0, before the sanctum builds (or after a failed
+     * {@link #refresh}).
+     */
+    private static final BlockPos FALLBACK_CENTER = new BlockPos(0, 70, 0);
 
     @Nullable
     private static BlockPos altarPos;
@@ -77,7 +95,8 @@ public final class SanctumProtection {
     /**
      * Center shared by the fixed sanctum build cylinder and configurable gameplay spawn
      * zone. A {@code /dev spawn set} override wins; otherwise the authored altar remains
-     * the center.
+     * the center. Before the sanctum builds ({@code altarPos == null}) the authored disc
+     * center stands in (B10) — a null return used to silently disable ALL protection.
      */
     @Nullable
     public static BlockPos center(Level level) {
@@ -88,7 +107,7 @@ public final class SanctumProtection {
                 return override;
             }
         }
-        return altarPos;
+        return altarPos != null ? altarPos : FALLBACK_CENTER;
     }
 
     /** Radius of the sanctum build cylinder: saved override, otherwise static r=18. */
@@ -124,21 +143,48 @@ public final class SanctumProtection {
      */
     public static boolean isSpawnProtected(Level level, BlockPos pos) {
         MinecraftServer server = level.getServer();
+        if (server == null) {
+            return false;
+        }
+        return withinSpawnBand(level, pos, spawnRadius(server));
+    }
+
+    /** The broad-zone cylinder test at an explicit radius (shared by build gate + spawn zone). */
+    private static boolean withinSpawnBand(Level level, BlockPos pos, int radius) {
         BlockPos center = center(level);
-        if (server == null || center == null || level.dimension() != Level.OVERWORLD) {
+        if (center == null || level.dimension() != Level.OVERWORLD) {
             return false;
         }
         ProtectionConfig.SpawnRules rules = ProtectionConfig.current().spawn();
         int dx = pos.getX() - center.getX();
         int dz = pos.getZ() - center.getZ();
-        int configuredRadius = spawnRadius(server);
-        return (long) dx * dx + (long) dz * dz <= (long) configuredRadius * configuredRadius
+        return (long) dx * dx + (long) dz * dz <= (long) radius * radius
                 && pos.getY() >= rules.verticalFrom() && pos.getY() <= rules.verticalTo();
+    }
+
+    /**
+     * Build gate of the break/place/explosion handlers (B10): the r=18 sanctum cylinder
+     * always blocks; with {@code spawn.noBuild} (default true) the broad spawn zone
+     * blocks too — {@code spawn.buildRadius} &gt; 0 sizes the no-build ring independently
+     * of the PvP/grief ring, 0 reuses {@code spawn.radius}.
+     */
+    public static boolean isBuildBlocked(Level level, BlockPos pos) {
+        if (isProtected(level, pos)) {
+            return true;
+        }
+        ProtectionConfig.SpawnRules rules = ProtectionConfig.current().spawn();
+        if (!rules.noBuild()) {
+            return false;
+        }
+        if (rules.buildRadius() > 0) {
+            return withinSpawnBand(level, pos, rules.buildRadius());
+        }
+        return isSpawnProtected(level, pos);
     }
 
     @SubscribeEvent
     public static void onBlockBreak(BlockEvent.BreakEvent event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !isProtected(level, event.getPos())) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !isBuildBlocked(level, event.getPos())) {
             return;
         }
         Player player = event.getPlayer();
@@ -151,7 +197,7 @@ public final class SanctumProtection {
 
     @SubscribeEvent
     public static void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !isProtected(level, event.getPos())) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !isBuildBlocked(level, event.getPos())) {
             return;
         }
         Entity entity = event.getEntity();
@@ -164,13 +210,13 @@ public final class SanctumProtection {
         }
     }
 
-    /** Explosions may still hurt entities, but never break sanctum blocks. */
+    /** Explosions may still hurt entities, but never break sanctum/spawn-zone blocks. */
     @SubscribeEvent
     public static void onExplosionDetonate(ExplosionEvent.Detonate event) {
         if (!(event.getLevel() instanceof ServerLevel level)) {
             return;
         }
-        event.getAffectedBlocks().removeIf(pos -> isProtected(level, pos));
+        event.getAffectedBlocks().removeIf(pos -> isBuildBlocked(level, pos));
     }
 
     /** Suppresses non-eclipse hostile spawns in the zone (spawn eggs/commands still work). */

@@ -1037,7 +1037,8 @@ public class HeraldEntity extends Monster {
 
     /**
      * W4 IDEA-16 #3 loot ceremony: one participant is rewarded per keyframe — 3 umbral
-     * shards at their feet with a HEART_BURST quasar and a rising amethyst chime — so the
+     * shards straight into their inventory (B14: ground drops despawned/burned and were
+     * never "received") with a HEART_BURST quasar and a rising amethyst chime — so the
      * collapse doubles as the award sequence. Any remainder drains just before the
      * shatter, so an oversized roster can never lose payouts to the body removal.
      * Eligibility matches the old {@code dropCustomDeathLoot} dump (online + alive +
@@ -1061,9 +1062,9 @@ public class HeraldEntity extends Monster {
         if (player == null || !player.isAlive() || player.level() != level) {
             return;
         }
-        // Per spec: 3 umbral shards dropped at EACH participant's feet.
-        net.minecraft.world.Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D,
-                player.getZ(), new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
+        // Per spec: 3 umbral shards to EACH participant — direct-to-inventory + reward
+        // overlay (B14 §1: ground pops despawned in 5 min / burned in the arena).
+        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 3, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,

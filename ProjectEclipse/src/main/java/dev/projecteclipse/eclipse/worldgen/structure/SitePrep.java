@@ -1,9 +1,12 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -23,6 +26,7 @@ import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.Direction;
 
@@ -45,8 +49,10 @@ import net.minecraft.core.Direction;
  *       desert, grass in the plains) — with a smoothstep skirt over
  *       {@value #SKIRT_WIDTH} blocks so the plateau reads as a natural shelf,</li>
  *   <li>{@link Mode#CAVITY} — underground sites (trial chambers, ancient city): a clean
- *       interior envelope is carved around the piece bounds, a floor pad laid, and a
- *       ladder entrance shaft raised to the surface (collared) so the site is reachable.</li>
+ *       interior envelope is carved PER PIECE (each piece box + a small pad, plan B3 —
+ *       not the whole union box, whose mostly-empty volume read as one giant air
+ *       bubble), floor pads laid under every envelope, and a ladder entrance shaft
+ *       raised to the surface (collared) so the site is reachable.</li>
  * </ul>
  *
  * <p>After piece placement the caller runs {@link #finish}: every touched chunk gets its
@@ -309,39 +315,61 @@ public final class SitePrep {
     // --- CAVITY ---
 
     /**
-     * Carves a clean interior envelope ({@value #CAVITY_PAD}-block pad around the piece
-     * bounds), lays a floor pad below it and raises a collared ladder shaft to the surface
-     * so the underground site (trial chambers, ancient city, vaults) is reachable. Work
-     * is queued in bounded resumable slices; place pieces from
-     * {@link PreparedGround#whenReady}.
+     * Legacy whole-box signature: carves one envelope around the given bounds. Delegates
+     * to the per-piece overload with a single box, so callers that genuinely want the
+     * full volume cleared (single-room vaults) keep compiling and behaving identically.
      */
     public static PreparedGround prepareCavity(ServerLevel level, DiscProfile profile,
             int boundsMinX, int boundsMinY, int boundsMinZ,
             int boundsMaxX, int boundsMaxY, int boundsMaxZ, BlockPos anchor) {
+        return prepareCavity(level, profile, List.of(new BoundingBox(
+                boundsMinX, boundsMinY, boundsMinZ, boundsMaxX, boundsMaxY, boundsMaxZ)), anchor);
+    }
+
+    /**
+     * Per-piece cavity prep (plan B3): carves the UNION OF PER-PIECE ENVELOPES — each
+     * piece box padded by {@value #CAVITY_PAD} in XZ and above, 1 below (floor-pad seat) —
+     * instead of the outer union box. Sprawling jigsaw sets (trial chambers, ancient
+     * city) fill only a fraction of their union box; carving the whole box left the
+     * structure standing "open-air" in a giant cavern. Piece interiors still get cleared
+     * (their own boxes are part of the union), floor pads are laid under every envelope
+     * column, and the collared ladder shaft descends into the pad gallery of the
+     * anchor-nearest envelope so the site stays reachable. Work is queued in bounded
+     * resumable slices; place pieces from {@link PreparedGround#whenReady}.
+     */
+    public static PreparedGround prepareCavity(ServerLevel level, DiscProfile profile,
+            List<BoundingBox> pieceBoxes, BlockPos anchor) {
         int stage = WorldStageAccess.stage(profile);
-        int minX = boundsMinX - CAVITY_PAD;
-        int minZ = boundsMinZ - CAVITY_PAD;
-        int maxX = boundsMaxX + CAVITY_PAD;
-        int maxZ = boundsMaxZ + CAVITY_PAD;
-        int minY = Math.max(boundsMinY - 1, profile.minY() + 12);
+        BoundingBox union = BoundingBox.encapsulatingBoxes(pieceBoxes).orElseThrow();
+        int minX = union.minX() - CAVITY_PAD;
+        int minZ = union.minZ() - CAVITY_PAD;
+        int maxX = union.maxX() + CAVITY_PAD;
+        int maxZ = union.maxZ() + CAVITY_PAD;
+        int minY = Math.max(union.minY() - 1, profile.minY() + 12);
         int surfaceGuard = DiscTerrainFunction.surfaceY(profile, anchor.getX(), anchor.getZ()) - 10;
-        int maxY = Math.min(boundsMaxY + CAVITY_PAD, surfaceGuard);
+        int maxY = Math.min(union.maxY() + CAVITY_PAD, surfaceGuard);
+        List<BoundingBox> envelopes = new ArrayList<>(pieceBoxes.size());
+        for (BoundingBox box : pieceBoxes) {
+            envelopes.add(new BoundingBox(
+                    box.minX() - CAVITY_PAD, box.minY() - 1, box.minZ() - CAVITY_PAD,
+                    box.maxX() + CAVITY_PAD, box.maxY() + CAVITY_PAD, box.maxZ() + CAVITY_PAD));
+        }
         PreparedGround prepared = new PreparedGround(level, profile, Mode.CAVITY,
                 minX, minZ, maxX, maxZ, minY);
         BudgetedBlockWriter.enqueue(level,
-                new CavityWork(level, profile, stage, prepared, minY, maxY),
+                new CavityWork(level, profile, stage, prepared, envelopes, anchor, minY, maxY),
                 () -> {
                     primeTouched(level, prepared);
                     EclipseMod.LOGGER.info(
-                            "SitePrep: cavity envelope carved [{}..{} x {}..{}] y {}..{} + entrance shaft, {} chunk(s)",
-                            minX, maxX, minZ, maxZ, minY, maxY, prepared.touched.size());
+                            "SitePrep: {} per-piece cavity envelope(s) carved within [{}..{} x {}..{}] y {}..{} + entrance shaft, {} chunk(s)",
+                            envelopes.size(), minX, maxX, minZ, maxZ, minY, maxY, prepared.touched.size());
                     prepared.complete();
                 },
                 prepared::fail);
         return prepared;
     }
 
-    /** Resumable cavity-envelope, entrance-shaft and collar cursor. */
+    /** Resumable per-piece cavity-envelope, entrance-shaft and collar cursor. */
     private static final class CavityWork implements BudgetedBlockWriter.BudgetedWork {
         private static final BlockState AIR = Blocks.CAVE_AIR.defaultBlockState();
         private static final BlockState WALL = Blocks.COBBLESTONE.defaultBlockState();
@@ -354,8 +382,11 @@ public final class SitePrep {
         private final PreparedGround prepared;
         private final int minY;
         private final int maxY;
+        /** Chunk-column index: chunk key → padded piece envelopes intersecting its XZ. */
+        private final Map<Long, List<BoundingBox>> chunkIndex = new HashMap<>();
         private final int shaftX;
         private final int shaftZ;
+        private final int shaftBottomY;
         private final int surface;
         private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         private int x;
@@ -364,31 +395,71 @@ public final class SitePrep {
         private int phase;
         private int shaftStep;
         private int collarIndex;
+        /** Merged ascending carve intervals of the current column: [lo0, hi0, lo1, hi1, …]. */
+        private int[] intervals;
+        private int intervalIndex;
         private DiscColumn column;
 
         private CavityWork(ServerLevel level, DiscProfile profile, int stage,
-                PreparedGround prepared, int minY, int maxY) {
+                PreparedGround prepared, List<BoundingBox> envelopes, BlockPos anchor,
+                int minY, int maxY) {
             this.level = level;
             this.profile = profile;
             this.stage = stage;
             this.prepared = prepared;
             this.minY = minY;
             this.maxY = maxY;
-            this.shaftX = prepared.minX + 2;
-            this.shaftZ = prepared.minZ + 2;
+            for (BoundingBox envelope : envelopes) {
+                for (int cx = envelope.minX() >> 4; cx <= envelope.maxX() >> 4; cx++) {
+                    for (int cz = envelope.minZ() >> 4; cz <= envelope.maxZ() >> 4; cz++) {
+                        this.chunkIndex.computeIfAbsent(ChunkPos.asLong(cx, cz),
+                                key -> new ArrayList<>()).add(envelope);
+                    }
+                }
+            }
+            // The shaft must land inside a carved envelope (the old union-box corner may
+            // now be solid rock): descend into the pad gallery of the anchor-nearest
+            // envelope, at the same +2/+2 corner offset the whole-box carve used.
+            BoundingBox shaftEnvelope = anchorEnvelope(envelopes, anchor);
+            this.shaftX = shaftEnvelope.minX() + 2;
+            this.shaftZ = shaftEnvelope.minZ() + 2;
+            this.shaftBottomY = Math.max(shaftEnvelope.minY(), minY);
             this.surface = DiscTerrainFunction.surfaceY(profile, this.shaftX, this.shaftZ);
             this.x = prepared.minX;
             this.z = prepared.minZ;
+        }
+
+        /** The envelope containing the anchor XZ, else the one nearest to it (deterministic). */
+        private static BoundingBox anchorEnvelope(List<BoundingBox> envelopes, BlockPos anchor) {
+            BoundingBox best = envelopes.get(0);
+            long bestDistSq = Long.MAX_VALUE;
+            for (BoundingBox envelope : envelopes) {
+                long dx = Math.max(0, Math.max(envelope.minX() - anchor.getX(), anchor.getX() - envelope.maxX()));
+                long dz = Math.max(0, Math.max(envelope.minZ() - anchor.getZ(), anchor.getZ() - envelope.maxZ()));
+                long distSq = dx * dx + dz * dz;
+                if (distSq < bestDistSq) {
+                    best = envelope;
+                    bestDistSq = distSq;
+                }
+            }
+            return best;
         }
 
         @Override
         public boolean run(int operationBudget) {
             int remaining = operationBudget;
             while (remaining > 0) {
-                if (this.phase == 0) {
+                if (this.phase == 0) { // column setup: envelope intervals + disc membership
                     if (this.x > this.prepared.maxX) {
-                        this.phase = this.surface > this.maxY ? 2 : 4;
-                        this.y = this.minY;
+                        this.phase = this.surface > this.maxY ? 3 : 5;
+                        this.y = this.shaftBottomY;
+                        continue;
+                    }
+                    List<BoundingBox> candidates =
+                            this.chunkIndex.get(ChunkPos.asLong(this.x >> 4, this.z >> 4));
+                    this.intervals = candidates == null ? null : mergedIntervals(candidates, this.x, this.z);
+                    if (this.intervals == null) {
+                        advanceColumn();
                         continue;
                     }
                     this.column = DiscTerrainFunction.column(this.profile, this.x, this.z, this.stage);
@@ -397,18 +468,29 @@ public final class SitePrep {
                         continue;
                     }
                     ensureChunk(this.level, this.prepared, this.x, this.z);
-                    this.cursor.set(this.x, this.minY - 1, this.z);
-                    if (!this.level.getBlockState(this.cursor).isSolidRender(this.level, this.cursor)) {
-                        setSilent(this.level, this.cursor, padBlockOf(this.column, this.minY));
-                    }
-                    this.y = this.minY;
+                    this.intervalIndex = 0;
                     this.phase = 1;
                     remaining--;
                     continue;
                 }
-                if (this.phase == 1) {
-                    if (this.y > this.maxY) {
-                        advanceColumn();
+                if (this.phase == 1) { // floor pad seat below the current interval
+                    int lo = this.intervals[this.intervalIndex * 2];
+                    this.cursor.set(this.x, lo - 1, this.z);
+                    if (!this.level.getBlockState(this.cursor).isSolidRender(this.level, this.cursor)) {
+                        setSilent(this.level, this.cursor, padBlockOf(this.column, lo));
+                    }
+                    this.y = lo;
+                    this.phase = 2;
+                    remaining--;
+                    continue;
+                }
+                if (this.phase == 2) { // carve the current interval
+                    if (this.y > this.intervals[this.intervalIndex * 2 + 1]) {
+                        if ((++this.intervalIndex) * 2 >= this.intervals.length) {
+                            advanceColumn();
+                        } else {
+                            this.phase = 1;
+                        }
                         continue;
                     }
                     this.cursor.set(this.x, this.y++, this.z);
@@ -418,16 +500,16 @@ public final class SitePrep {
                     remaining--;
                     continue;
                 }
-                if (this.phase == 2) {
+                if (this.phase == 3) { // entrance shaft
                     if (this.y > this.surface + 1) {
-                        this.phase = 3;
+                        this.phase = 4;
                         continue;
                     }
                     runShaftStep();
                     remaining--;
                     continue;
                 }
-                if (this.phase == 4) {
+                if (this.phase == 5) {
                     return true;
                 }
                 if (this.collarIndex >= 16) {
@@ -449,6 +531,46 @@ public final class SitePrep {
                 remaining--;
             }
             return false;
+        }
+
+        /**
+         * Merged, ascending carve intervals of column (x, z) across the padded envelopes
+         * of its chunk, clamped to the global [minY, maxY] band; {@code null} when no
+         * envelope covers the column (the block-skipping heart of the B3 fix).
+         */
+        private int[] mergedIntervals(List<BoundingBox> candidates, int x, int z) {
+            List<int[]> raw = null;
+            for (BoundingBox envelope : candidates) {
+                if (x < envelope.minX() || x > envelope.maxX()
+                        || z < envelope.minZ() || z > envelope.maxZ()) {
+                    continue;
+                }
+                int lo = Math.max(envelope.minY(), this.minY);
+                int hi = Math.min(envelope.maxY(), this.maxY);
+                if (lo > hi) {
+                    continue;
+                }
+                if (raw == null) {
+                    raw = new ArrayList<>();
+                }
+                raw.add(new int[] {lo, hi});
+            }
+            if (raw == null) {
+                return null;
+            }
+            raw.sort((a, b) -> Integer.compare(a[0], b[0]));
+            int[] flat = new int[raw.size() * 2];
+            int count = 0;
+            for (int[] interval : raw) {
+                if (count > 0 && interval[0] <= flat[count * 2 - 1] + 1) {
+                    flat[count * 2 - 1] = Math.max(flat[count * 2 - 1], interval[1]);
+                } else {
+                    flat[count * 2] = interval[0];
+                    flat[count * 2 + 1] = interval[1];
+                    count++;
+                }
+            }
+            return count * 2 == flat.length ? flat : Arrays.copyOf(flat, count * 2);
         }
 
         private void runShaftStep() {
@@ -477,6 +599,7 @@ public final class SitePrep {
         private void advanceColumn() {
             this.phase = 0;
             this.column = null;
+            this.intervals = null;
             if (++this.z > this.prepared.maxZ) {
                 this.z = this.prepared.minZ;
                 this.x++;

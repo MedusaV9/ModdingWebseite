@@ -55,6 +55,11 @@ config="${mod_id}.mixins.json"
 [[mixins]]
 config="${mod_id}.client.mixins.json"
 
+# Worldgen/spawn mixins (plans_v5 PLAN-B B5): natural-spawn Y-band bias for the discs.
+# Own package root (dev.projecteclipse.eclipse.mixin) per the same isolation rule.
+[[mixins]]
+config="${mod_id}.worldgen.mixins.json"
+
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
 [[accessTransformers]]

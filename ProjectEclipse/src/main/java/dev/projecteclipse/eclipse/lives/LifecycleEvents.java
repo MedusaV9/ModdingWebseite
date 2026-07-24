@@ -39,7 +39,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * The death economy: on a player death we snapshot first, then move a life from
  * the victim to a player killer (or just take one on PvE deaths), place a grave
- * with the drops, and ban the victim once they hit 0 lives. Deaths are never
+ * with the drops, and ban the victim once they hit 0 lives. PvP kills route
+ * through {@link HeartTheftService} (D4): the transfer only happens on a STEAL
+ * verdict, and floor/cooldown verdicts freeze even the victim's loss. Deaths are never
  * announced in chat ({@code showDeathMessages=false}); the only cue is a global
  * thunder sound played to every online player at their own position. Advancement
  * announcements are likewise forced off ({@code announceAdvancements=false}) —
@@ -81,6 +83,20 @@ public final class LifecycleEvents {
         long now = System.currentTimeMillis();
         PENDING_HEART_LOSSES.values().removeIf(loss -> now - loss.diedAtMillis() > PENDING_HEART_LOSS_TTL_MILLIS);
 
+        // D4: every PvP kill is routed through the heart-theft policy. STEAL is the only
+        // verdict that still moves a Leben to the killer; floor/cooldown verdicts freeze
+        // even the victim's normal death loss (anti-farm + the never-ghost-from-theft law).
+        ServerPlayer killer = event.getSource().getEntity() instanceof ServerPlayer sp
+                && sp != victim ? sp : null;
+        HeartTheftService.Verdict theft = killer != null
+                ? HeartTheftService.evaluate(killer, victim) : null;
+        if (theft != null && theft.freezesDeathLoss()) {
+            EclipseMod.LOGGER.info("PvP kill without Leben movement: {} -> {} ({})",
+                    killer.getScoreboardName(), victim.getScoreboardName(), theft);
+            playDeathCue(victim.server);
+            return;
+        }
+
         int previousHearts = LivesApi.get(victim);
         int remainingHearts = LivesApi.add(victim, -1);
         boolean heartLost = remainingHearts < previousHearts;
@@ -90,10 +106,11 @@ public final class LifecycleEvents {
                     new PendingHeartLoss(previousHearts, remainingHearts, now));
         }
 
-        if (heartLost && event.getSource().getEntity() instanceof ServerPlayer killer && killer != victim) {
-            // Kill transfer: the killer gains a heart ONLY when the victim actually lost
-            // one (a 0-heart ghost death must never mint hearts), hard-capped at the vitae
-            // ceiling like the blade bonus (the v1 "uncapped" law is overruled).
+        if (heartLost && theft == HeartTheftService.Verdict.STEAL) {
+            // Kill transfer = the STEAL: the killer gains a heart ONLY when the victim
+            // actually lost one (a 0-heart ghost death must never mint hearts), hard-capped
+            // at the vitae ceiling like the blade bonus (the v1 "uncapped" law is overruled).
+            // Contract-pair kills never reach here — they pay through the contract economy.
             if (LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
                 LivesApi.add(killer, +1);
             }
@@ -104,6 +121,11 @@ public final class LifecycleEvents {
                 EclipseMod.LOGGER.info("{}'s umbral blade drank a heart from {} ({} hearts now)",
                         killer.getScoreboardName(), victim.getScoreboardName(), LivesApi.get(killer));
             }
+            HeartTheftService.recordSteal(killer, victim);
+            HeartTheftService.celebrate(killer, victim);
+        } else if (theft != null && !theft.steals()) {
+            EclipseMod.LOGGER.info("PvP kill without Leben transfer to the killer: {} -> {} ({})",
+                    killer.getScoreboardName(), victim.getScoreboardName(), theft);
         }
 
         playDeathCue(victim.server);

@@ -31,11 +31,14 @@ public final class AmbientEntities {
 
     /**
      * Drift Lantern — limbo sea ambience wisp and the GeckoLib pipeline pilot (spec §2.3:
-     * CREATURE, 0.6×1.1, tracking range 10). Fire-immune flavor: it IS a soul flame.
+     * 0.6×1.1, tracking range 10). Fire-immune flavor: it IS a soul flame.
+     * MISC since plans_v5 PLAN-B B5 (was the spec's CREATURE): the lane population is
+     * maintained by {@code EventSpawnRules} (target 8), so as CREATURE it consumed most of
+     * limbo's 10-slot passive budget; MISC mobs are exempt from the vanilla spawn census.
      */
     public static final DeferredHolder<EntityType<?>, EntityType<DriftLanternEntity>> DRIFT_LANTERN =
             ENTITIES.register("drift_lantern",
-                    () -> EntityType.Builder.of(DriftLanternEntity::new, MobCategory.CREATURE)
+                    () -> EntityType.Builder.of(DriftLanternEntity::new, MobCategory.MISC)
                             .sized(0.6F, 1.1F)
                             .eyeHeight(0.75F)
                             .clientTrackingRange(10)

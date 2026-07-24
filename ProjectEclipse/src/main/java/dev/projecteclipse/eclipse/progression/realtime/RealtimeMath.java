@@ -50,6 +50,16 @@ public final class RealtimeMath {
         return candidate.toInstant().toEpochMilli();
     }
 
+    /**
+     * D6 interval overload: the next interval boundary strictly after {@code fromEpochMillis}
+     * — simply {@code from + interval} with the interval clamped ≥ 5 s. Call sites pass the
+     * fired boundary during catch-up stepping (boundary-by-boundary chain) and {@code now}
+     * everywhere else, mirroring the daily overload's usage.
+     */
+    public static long nextBoundary(long fromEpochMillis, long intervalMillis) {
+        return fromEpochMillis + Math.max(5_000L, intervalMillis);
+    }
+
     /** The calendar day of {@code epochMillis} in {@code zone}, as {@link LocalDate#toEpochDay}. */
     public static long epochDay(long epochMillis, ZoneId zone) {
         return Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate().toEpochDay();

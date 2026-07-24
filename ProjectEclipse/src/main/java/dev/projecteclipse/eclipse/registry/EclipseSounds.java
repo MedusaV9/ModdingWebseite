@@ -147,6 +147,12 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ritual.extract")));
 
+    /** D4 heart-theft pulse (layered under a deep bell at the call site; shipped-ogg alias). */
+    public static final Supplier<SoundEvent> THEFT_STEAL = SOUNDS.register(
+            "theft.steal",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "theft.steal")));
+
     // P2-W1 FX suite (§3.5) — every entry maps to an EXISTING ogg in sounds.json as a
     // placeholder (P2 commits no new binary assets); consumers: W6 intro lightning, W9
     // storms, W7/W8 rifts, W5 supply beam, W2 captions.

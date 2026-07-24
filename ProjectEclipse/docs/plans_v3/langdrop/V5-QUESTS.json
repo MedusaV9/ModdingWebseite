@@ -1,0 +1,38 @@
+{
+  "en": {
+    "dev.eclipse.doc.phase.daily": "Switch the day/phase cadence back to once per real day at the configured boundary time (persisted in realtime.json).",
+    "dev.eclipse.doc.phase.interval": "Switch the day/phase cadence to a recurring real-time interval, e.g. a new phase every 2 hours (persisted in realtime.json).",
+    "dev.eclipse.doc.phase.next": "Skip to the next phase immediately: a full day rollover with signals, bell, and announcements; the clock re-anchors on the active cadence.",
+    "dev.eclipse.doc.phase.status": "Show the phase cadence mode, current event day, next boundary, and remaining time.",
+    "dev.eclipse.phase.daily.ok": "Phase cadence back to daily at %s (%s) — persisted to realtime.json.",
+    "dev.eclipse.phase.interval.ok": "Phase cadence set: a new phase every %s — persisted to realtime.json.",
+    "dev.eclipse.phase.mode.daily": "daily at %s (%s)",
+    "dev.eclipse.phase.mode.interval": "every %s",
+    "dev.eclipse.phase.next.final": "Already on the final event day (%s) — nothing to advance.",
+    "dev.eclipse.phase.next.ok": "Phase advanced — now event day %s/%s; next boundary %s.",
+    "dev.eclipse.phase.next.ok_disarmed": "Phase advanced — now event day %s/%s (clock disarmed; no next boundary).",
+    "dev.eclipse.phase.status.boundary": "Next phase: %s %s (in %s)",
+    "dev.eclipse.phase.status.disarmed": "Clock disarmed — /dev phase interval hours 2 or /eclipse-rt arm starts it.",
+    "dev.eclipse.phase.status.header": "Phase cadence: %s — event day %s/%s",
+    "dev.eclipse.phase.status.oneshot": "A one-shot boundary override is pending; the cadence resumes after it fires.",
+    "dev.eclipse.phase.status.paused": "Countdown paused — %s frozen."
+  },
+  "de": {
+    "dev.eclipse.doc.phase.daily": "Stellt den Tag-/Phasenrhythmus zurück auf einmal pro realem Tag zur konfigurierten Wechselzeit (gespeichert in realtime.json).",
+    "dev.eclipse.doc.phase.interval": "Stellt den Tag-/Phasenrhythmus auf ein wiederkehrendes Echtzeit-Intervall um, z. B. alle 2 Stunden eine neue Phase (gespeichert in realtime.json).",
+    "dev.eclipse.doc.phase.next": "Springt sofort zur nächsten Phase: vollständiger Tageswechsel mit Signalen, Glocke und Ankündigungen; die Uhr richtet sich am aktiven Rhythmus neu aus.",
+    "dev.eclipse.doc.phase.status": "Zeigt Rhythmus-Modus, aktuellen Event-Tag, nächsten Wechsel und verbleibende Zeit.",
+    "dev.eclipse.phase.daily.ok": "Phasenrhythmus wieder täglich um %s (%s) — in realtime.json gespeichert.",
+    "dev.eclipse.phase.interval.ok": "Phasenrhythmus gesetzt: alle %s eine neue Phase — in realtime.json gespeichert.",
+    "dev.eclipse.phase.mode.daily": "täglich um %s (%s)",
+    "dev.eclipse.phase.mode.interval": "alle %s",
+    "dev.eclipse.phase.next.final": "Bereits am letzten Event-Tag (%s) — nichts weiterzuschalten.",
+    "dev.eclipse.phase.next.ok": "Phase weitergeschaltet — jetzt Event-Tag %s/%s; nächster Wechsel %s.",
+    "dev.eclipse.phase.next.ok_disarmed": "Phase weitergeschaltet — jetzt Event-Tag %s/%s (Uhr deaktiviert; kein nächster Wechsel).",
+    "dev.eclipse.phase.status.boundary": "Nächste Phase: %s %s (in %s)",
+    "dev.eclipse.phase.status.disarmed": "Uhr deaktiviert — /dev phase interval hours 2 oder /eclipse-rt arm startet sie.",
+    "dev.eclipse.phase.status.header": "Phasenrhythmus: %s — Event-Tag %s/%s",
+    "dev.eclipse.phase.status.oneshot": "Eine einmalige Wechsel-Überschreibung steht aus; danach greift wieder der Rhythmus.",
+    "dev.eclipse.phase.status.paused": "Countdown pausiert — %s eingefroren."
+  }
+}

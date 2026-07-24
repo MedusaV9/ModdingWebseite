@@ -31,11 +31,14 @@ public final class PaleEntities {
 
     /**
      * Pale Sentinel — the 2.4-block gaunt tree-revenant of the Pale Garden (frozen §6 id;
-     * MONSTER, 0.8×2.4, tracking range 10 per the §2.3 sheet).
+     * 0.8×2.4, tracking range 10 per the §2.3 sheet).
+     * MISC since plans_v5 PLAN-B B5 (was the spec's MONSTER): population is gated and
+     * budgeted by {@code EventSpawnRules} ({@code SpawnGates.PALE_GARDEN}), so it must
+     * not consume the vanilla MONSTER cap.
      */
     public static final DeferredHolder<EntityType<?>, EntityType<PaleSentinelEntity>> PALE_SENTINEL =
             ENTITIES.register("pale_sentinel",
-                    () -> EntityType.Builder.of(PaleSentinelEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(PaleSentinelEntity::new, MobCategory.MISC)
                             .sized(0.8F, 2.4F)
                             .eyeHeight(2.1F)
                             .clientTrackingRange(10)

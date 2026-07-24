@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.contracts;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -12,6 +13,9 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.progression.realtime.RealtimeDayApi;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -31,12 +35,24 @@ import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
- * Per-day, per-player contract modifiers (IDEA-20 #5/#6): the advantage/disadvantage ledger
- * behind SUCCESS/EXPIRY/WRONG_KILL. Everything expires at the next day rollover; nothing
- * here EVER touches {@code EclipseAttachments.LIVES}, {@code BanService} or drops a player
- * below one effective heart — "massive but never run-ending" is enforced structurally.
+ * Per-player contract modifiers (IDEA-20 #5/#6): the advantage/disadvantage ledger behind
+ * SUCCESS/EXPIRY/WRONG_KILL. Nothing here EVER touches {@code EclipseAttachments.LIVES},
+ * {@code BanService} or drops a player below one effective heart — "massive but never
+ * run-ending" is enforced structurally.
+ *
+ * <p><b>Two expiry scopes (D3):</b> ADVANTAGES (hunter/survivor buffs) stay day-scoped and
+ * clear at the next day rollover, as before. DEBUFFS (Blutschuld, the target's scar,
+ * negative temp hearts, the Vergeltung grudge) additionally carry
+ * {@link Entry#expiresAtEpochMillis} — the CONTRACT WINDOW end — and are purged by a
+ * periodic epoch sweep ({@value #SWEEP_INTERVAL_TICKS} ticks) long before the ~24 h real
+ * day ends. {@code 0} = day-scoped only (also how pre-D3 saves load, NBT-compatible).
+ * Whichever scope expires first wins: epoch rows are still dropped at rollover.
+ * The sweep is pause-aware: while {@code RealtimeDayApi.isPaused} the stored epochs shift
+ * forward with the frozen wall clock, via the same persisted-anchor pattern as
+ * {@code ContractState.shiftDeadlines} (FFIX-B).</p>
  *
  * <p><b>Damage modifiers are event-scaled, not attributes</b> (the IDEA-20 #5 stance): a
  * {@link LivingIncomingDamageEvent} listener multiplies OUTGOING player damage, so nothing
@@ -44,7 +60,7 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * stays invisible until it cuts. Temp hearts use one transient MAX_HEALTH modifier
  * ({@code eclipse:contract_hearts}) rebuilt on login/respawn/clone — never serialized into
  * player NBT, mirroring {@code hearts.HeartsService}. Skills use the existing persisted
- * {@code SkillsApi.setSecretMultiplier} and are reset to 1.0 when the entry expires.</p>
+ * {@code SkillsApi.setSecretMultiplier} and are restored when the entry expires.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ContractModifierService {
@@ -57,7 +73,7 @@ public final class ContractModifierService {
         GRUDGE,
         /** Temporary bonus/malus hearts (transient MAX_HEALTH modifier, ±1). */
         TEMP_HEARTS,
-        /** Secret skills XP multiplier — applied via {@code SkillsApi}, reset on expiry. */
+        /** Secret skills XP multiplier — applied via {@code SkillsApi}, restored on expiry. */
         SKILLS_MUL,
         /** Daily-award eligibility void marker (queried by the awards integration ask). */
         AWARD_VOID;
@@ -72,11 +88,24 @@ public final class ContractModifierService {
         }
     }
 
-    /** One ledger row. {@code other} is only used by {@link Kind#GRUDGE}. */
-    public record Entry(UUID holder, Kind kind, float value, @Nullable UUID other, int expiresAfterDay) {}
+    /**
+     * One ledger row. {@code other} is only used by {@link Kind#GRUDGE}.
+     * {@code expiresAtEpochMillis > 0} = window-scoped (purged by the epoch sweep as soon
+     * as the wall clock passes it); {@code 0} = day-scoped only (rollover purge).
+     */
+    public record Entry(UUID holder, Kind kind, float value, @Nullable UUID other,
+            int expiresAfterDay, long expiresAtEpochMillis) {
+
+        /** Day-scoped convenience constructor (pre-D3 call shape). */
+        public Entry(UUID holder, Kind kind, float value, @Nullable UUID other, int expiresAfterDay) {
+            this(holder, kind, value, other, expiresAfterDay, 0L);
+        }
+    }
 
     private static final ResourceLocation CONTRACT_HEARTS_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "contract_hearts");
+    /** Epoch-sweep cadence (5 s) — debuffs may outlive their window by at most this. */
+    private static final int SWEEP_INTERVAL_TICKS = 100;
     private static final AtomicBoolean SIGNALS_REGISTERED = new AtomicBoolean();
 
     private ContractModifierService() {}
@@ -85,11 +114,24 @@ public final class ContractModifierService {
 
     @SubscribeEvent
     static void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
         if (SIGNALS_REGISTERED.compareAndSet(false, true)) {
             EclipseSignals.onDayRollover(ContractModifierService::onDayRollover);
         }
+        // FFIX-B boot resume: a pause that spanned the downtime shifts every stored epoch
+        // by the offline span BEFORE any expiry decision (the ContractState.resumeOnBoot
+        // pattern) — the wall clock must not consume a frozen debuff while nobody played.
+        ModifierState state = ModifierState.get(server);
+        long anchor = state.pauseAnchorEpochMillis();
+        if (anchor > 0L) {
+            long now = EclipseClock.epochMillis();
+            EclipseMod.LOGGER.info("Contract modifier epochs shifted by {} ms of paused downtime",
+                    now - anchor);
+            state.shiftEpochDeadlines(now - anchor);
+            state.setPauseAnchorEpochMillis(RealtimeDayApi.isPaused(server) ? now : 0L);
+        }
         // Rebuild transient heart modifiers for players already present (integrated server).
-        for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             applyTempHearts(player);
         }
     }
@@ -99,17 +141,73 @@ public final class ContractModifierService {
         SIGNALS_REGISTERED.set(false);
     }
 
-    /** POST rollover: purge expired entries, reset their skills multipliers and hearts. */
+    /** POST rollover: purge expired entries, restore their skills multipliers and hearts. */
     private static void onDayRollover(MinecraftServer server, int endedDay, int newDay,
             EclipseSignals.DayRolloverPhase phase) {
         if (phase != EclipseSignals.DayRolloverPhase.POST) {
             return;
         }
-        ModifierState state = ModifierState.get(server);
-        List<Entry> expired = state.removeExpired(newDay);
+        List<Entry> expired = ModifierState.get(server).removeExpired(newDay);
         if (expired.isEmpty()) {
             return;
         }
+        restoreExpiredHolders(server, expired);
+        EclipseMod.LOGGER.info("Contract modifiers expired at day {}: {} entr(y/ies) cleared",
+                newDay, expired.size());
+    }
+
+    // ================================================================== epoch sweep (D3)
+
+    /**
+     * The 100-tick epoch sweep. While the realtime day is paused every stored epoch is
+     * shifted forward by the frozen span instead (persisted anchor, FFIX-B) — a debuff
+     * never burns down during a pause.
+     */
+    @SubscribeEvent
+    static void onServerTick(ServerTickEvent.Post event) {
+        MinecraftServer server = event.getServer();
+        if (server.getTickCount() % SWEEP_INTERVAL_TICKS != 0) {
+            return;
+        }
+        ModifierState state = ModifierState.get(server);
+        long now = EclipseClock.epochMillis();
+        if (RealtimeDayApi.isPaused(server)) {
+            long anchor = state.pauseAnchorEpochMillis();
+            if (anchor > 0L) {
+                state.shiftEpochDeadlines(now - anchor);
+            }
+            state.setPauseAnchorEpochMillis(now);
+            return;
+        }
+        state.setPauseAnchorEpochMillis(0L);
+        sweepExpired(server);
+    }
+
+    /**
+     * Purges every window-scoped entry whose epoch deadline has passed and restores the
+     * holders' skills multipliers / temp hearts. Also called by
+     * {@code ContractService.finishWindow} so a resolving window clears already-expired
+     * debuffs immediately instead of waiting for the next sweep tick.
+     *
+     * @return the purged rows (gametest surface)
+     */
+    public static List<Entry> sweepExpired(MinecraftServer server) {
+        List<Entry> expired = ModifierState.get(server).removeEpochExpired(EclipseClock.epochMillis());
+        if (!expired.isEmpty()) {
+            restoreExpiredHolders(server, expired);
+            EclipseMod.LOGGER.info("Contract modifiers window-expired: {} entr(y/ies) cleared",
+                    expired.size());
+        }
+        return expired;
+    }
+
+    /**
+     * Shared restore path for both sweeps: skills multipliers fall back to the LAST still
+     * live {@link Kind#SKILLS_MUL} entry of the holder (grant order = last write wins,
+     * matching {@code grantSkillsMul}'s immediate apply), else 1.0; temp hearts are
+     * rebuilt from the live ledger for online holders.
+     */
+    private static void restoreExpiredHolders(MinecraftServer server, List<Entry> expired) {
         Set<UUID> skillsHolders = new HashSet<>();
         Set<UUID> heartHolders = new HashSet<>();
         for (Entry entry : expired) {
@@ -120,7 +218,13 @@ public final class ContractModifierService {
             }
         }
         for (UUID uuid : skillsHolders) {
-            SkillsApi.setSecretMultiplier(server, uuid, 1.0F);
+            float remaining = 1.0F;
+            for (Entry live : ModifierState.get(server).entries()) {
+                if (live.kind() == Kind.SKILLS_MUL && live.holder().equals(uuid)) {
+                    remaining = live.value();
+                }
+            }
+            SkillsApi.setSecretMultiplier(server, uuid, remaining);
         }
         for (UUID uuid : heartHolders) {
             ServerPlayer online = server.getPlayerList().getPlayer(uuid);
@@ -128,8 +232,6 @@ public final class ContractModifierService {
                 applyTempHearts(online);
             }
         }
-        EclipseMod.LOGGER.info("Contract modifiers expired at day {}: {} entr(y/ies) cleared",
-                newDay, expired.size());
     }
 
     // ================================================================== grants
@@ -141,12 +243,32 @@ public final class ContractModifierService {
         ModifierState.get(server).add(new Entry(holder, Kind.DAMAGE_MUL, mul, null, expiresAfterDay));
     }
 
+    /** Window-scoped damage debuff/buff: expires at {@code expiresAtEpochMillis} (D3). */
+    public static void grantDamageMulUntil(MinecraftServer server, UUID holder, float mul,
+            long expiresAtEpochMillis) {
+        if (Math.abs(mul - 1.0F) < 1.0E-4F) {
+            return;
+        }
+        ModifierState.get(server).add(new Entry(holder, Kind.DAMAGE_MUL, mul, null,
+                currentDay(server), expiresAtEpochMillis));
+    }
+
     public static void grantGrudge(MinecraftServer server, UUID holder, UUID versus, float mul,
             int expiresAfterDay) {
         if (Math.abs(mul - 1.0F) < 1.0E-4F) {
             return;
         }
         ModifierState.get(server).add(new Entry(holder, Kind.GRUDGE, mul, versus, expiresAfterDay));
+    }
+
+    /** Window-scoped Vergeltung grudge: expires at {@code expiresAtEpochMillis} (D3). */
+    public static void grantGrudgeUntil(MinecraftServer server, UUID holder, UUID versus, float mul,
+            long expiresAtEpochMillis) {
+        if (Math.abs(mul - 1.0F) < 1.0E-4F) {
+            return;
+        }
+        ModifierState.get(server).add(new Entry(holder, Kind.GRUDGE, mul, versus,
+                currentDay(server), expiresAtEpochMillis));
     }
 
     /**
@@ -160,10 +282,18 @@ public final class ContractModifierService {
             return;
         }
         ModifierState.get(server).add(new Entry(holder, Kind.TEMP_HEARTS, hearts, null, expiresAfterDay));
-        ServerPlayer online = server.getPlayerList().getPlayer(holder);
-        if (online != null && online.isAlive()) {
-            applyTempHearts(online);
+        applyTempHeartsIfOnline(server, holder);
+    }
+
+    /** Window-scoped temp hearts (the wrong-kill victim malus): epoch expiry (D3). */
+    public static void grantTempHeartsUntil(MinecraftServer server, UUID holder, int hearts,
+            long expiresAtEpochMillis) {
+        if (hearts == 0) {
+            return;
         }
+        ModifierState.get(server).add(new Entry(holder, Kind.TEMP_HEARTS, hearts, null,
+                currentDay(server), expiresAtEpochMillis));
+        applyTempHeartsIfOnline(server, holder);
     }
 
     /** Sets the secret skills multiplier now and records the reset-at-rollover entry. */
@@ -176,8 +306,30 @@ public final class ContractModifierService {
         SkillsApi.setSecretMultiplier(server, holder, mul);
     }
 
+    /** Window-scoped skills malus/buff: restored by the epoch sweep (D3). */
+    public static void grantSkillsMulUntil(MinecraftServer server, UUID holder, float mul,
+            long expiresAtEpochMillis) {
+        if (Math.abs(mul - 1.0F) < 1.0E-4F) {
+            return;
+        }
+        ModifierState.get(server).add(new Entry(holder, Kind.SKILLS_MUL, mul, null,
+                currentDay(server), expiresAtEpochMillis));
+        SkillsApi.setSecretMultiplier(server, holder, mul);
+    }
+
     public static void grantAwardVoid(MinecraftServer server, UUID holder, int expiresAfterDay) {
         ModifierState.get(server).add(new Entry(holder, Kind.AWARD_VOID, 0.0F, null, expiresAfterDay));
+    }
+
+    private static int currentDay(MinecraftServer server) {
+        return EclipseWorldState.get(server).getDay();
+    }
+
+    private static void applyTempHeartsIfOnline(MinecraftServer server, UUID holder) {
+        ServerPlayer online = server.getPlayerList().getPlayer(holder);
+        if (online != null && online.isAlive()) {
+            applyTempHearts(online);
+        }
     }
 
     // ================================================================== queries
@@ -197,17 +349,29 @@ public final class ContractModifierService {
         return false;
     }
 
-    /** Human-readable ledger rows for one player ({@code /dev contract status}). */
+    /**
+     * Human-readable ledger rows for one player ({@code /dev contract status}).
+     * Window-scoped rows print their remaining wall-clock time (D3).
+     */
     public static List<String> describe(MinecraftServer server, UUID uuid) {
         List<String> lines = new ArrayList<>();
+        long now = EclipseClock.epochMillis();
         for (Entry entry : ModifierState.get(server).entries()) {
-            if (entry.holder().equals(uuid)) {
-                lines.add(entry.kind() + "=" + entry.value()
-                        + (entry.other() != null ? " vs " + entry.other() : "")
-                        + " (until day " + entry.expiresAfterDay() + " ends)");
+            if (!entry.holder().equals(uuid)) {
+                continue;
             }
+            String scope = entry.expiresAtEpochMillis() > 0L
+                    ? " (" + mmss(entry.expiresAtEpochMillis() - now) + " left)"
+                    : " (until day " + entry.expiresAfterDay() + " ends)";
+            lines.add(entry.kind() + "=" + entry.value()
+                    + (entry.other() != null ? " vs " + entry.other() : "") + scope);
         }
         return lines;
+    }
+
+    private static String mmss(long millis) {
+        long totalSeconds = Math.max(0L, millis / 1000L);
+        return String.format(Locale.ROOT, "%02d:%02d", totalSeconds / 60L, totalSeconds % 60L);
     }
 
     /** Total active entry count (status line). */
@@ -335,20 +499,27 @@ public final class ContractModifierService {
     /**
      * The ledger file ({@code data/eclipse_contract_modifiers.dat}) — separate from
      * {@link ContractState} so modifier churn never dirties the contract state machine.
+     * Public (with public mutators) for the D3 gametest surface only.
      */
-    static final class ModifierState extends SavedData {
+    public static final class ModifierState extends SavedData {
         static final String DATA_NAME = "eclipse_contract_modifiers";
 
         private final List<Entry> entries = new ArrayList<>();
+        /**
+         * FFIX-B: epoch millis of the last pause-aware epoch shift while
+         * {@code RealtimeDayApi.isPaused}. Persisted so boot resume can shift epochs by
+         * the OFFLINE span of a pause. {@code 0} = not paused / no anchor.
+         */
+        private long pauseAnchorEpochMillis;
 
-        static ModifierState get(MinecraftServer server) {
+        public static ModifierState get(MinecraftServer server) {
             return EclipseSavedData.getOverworld(server, DATA_NAME,
                     new SavedData.Factory<>(ModifierState::new, ModifierState::load));
         }
 
-        ModifierState() {}
+        public ModifierState() {}
 
-        static ModifierState load(CompoundTag tag, HolderLookup.Provider registries) {
+        public static ModifierState load(CompoundTag tag, HolderLookup.Provider registries) {
             ModifierState state = new ModifierState();
             for (Tag element : tag.getList("entries", Tag.TAG_COMPOUND)) {
                 CompoundTag entry = (CompoundTag) element;
@@ -360,8 +531,11 @@ public final class ContractModifierService {
                         Kind.byName(entry.getString("kind")),
                         entry.getFloat("value"),
                         entry.hasUUID("other") ? entry.getUUID("other") : null,
-                        entry.getInt("expiresAfterDay")));
+                        entry.getInt("expiresAfterDay"),
+                        // Absent on pre-D3 saves: getLong returns 0 = day-scoped only.
+                        entry.getLong("expiresAtEpoch")));
             }
+            state.pauseAnchorEpochMillis = tag.getLong("pauseAnchor");
             return state;
         }
 
@@ -377,23 +551,29 @@ public final class ContractModifierService {
                     row.putUUID("other", entry.other());
                 }
                 row.putInt("expiresAfterDay", entry.expiresAfterDay());
+                if (entry.expiresAtEpochMillis() > 0L) {
+                    row.putLong("expiresAtEpoch", entry.expiresAtEpochMillis());
+                }
                 list.add(row);
             }
             tag.put("entries", list);
+            if (pauseAnchorEpochMillis > 0L) {
+                tag.putLong("pauseAnchor", pauseAnchorEpochMillis);
+            }
             return tag;
         }
 
-        List<Entry> entries() {
+        public List<Entry> entries() {
             return List.copyOf(entries);
         }
 
-        void add(Entry entry) {
+        public void add(Entry entry) {
             entries.add(entry);
             setDirty();
         }
 
         /** Removes and returns every entry that expired before {@code newDay}. */
-        List<Entry> removeExpired(int newDay) {
+        public List<Entry> removeExpired(int newDay) {
             List<Entry> expired = new ArrayList<>();
             entries.removeIf(entry -> {
                 if (newDay > entry.expiresAfterDay()) {
@@ -406,6 +586,55 @@ public final class ContractModifierService {
                 setDirty();
             }
             return expired;
+        }
+
+        /** Removes and returns every window-scoped entry whose epoch passed (D3 sweep). */
+        public List<Entry> removeEpochExpired(long nowEpochMillis) {
+            List<Entry> expired = new ArrayList<>();
+            entries.removeIf(entry -> {
+                if (entry.expiresAtEpochMillis() > 0L
+                        && nowEpochMillis >= entry.expiresAtEpochMillis()) {
+                    expired.add(entry);
+                    return true;
+                }
+                return false;
+            });
+            if (!expired.isEmpty()) {
+                setDirty();
+            }
+            return expired;
+        }
+
+        /** Pause-aware shift: pushes every window-scoped deadline forward (FFIX-B). */
+        public void shiftEpochDeadlines(long deltaMillis) {
+            if (deltaMillis <= 0L) {
+                return;
+            }
+            boolean shifted = false;
+            for (int i = 0; i < entries.size(); i++) {
+                Entry entry = entries.get(i);
+                if (entry.expiresAtEpochMillis() > 0L) {
+                    entries.set(i, new Entry(entry.holder(), entry.kind(), entry.value(),
+                            entry.other(), entry.expiresAfterDay(),
+                            entry.expiresAtEpochMillis() + deltaMillis));
+                    shifted = true;
+                }
+            }
+            if (shifted) {
+                setDirty();
+            }
+        }
+
+        public long pauseAnchorEpochMillis() {
+            return pauseAnchorEpochMillis;
+        }
+
+        public void setPauseAnchorEpochMillis(long epochMillis) {
+            if (this.pauseAnchorEpochMillis == epochMillis) {
+                return;
+            }
+            this.pauseAnchorEpochMillis = epochMillis;
+            setDirty();
         }
 
         void clear() {

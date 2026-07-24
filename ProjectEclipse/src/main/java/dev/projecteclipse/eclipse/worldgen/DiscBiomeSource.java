@@ -38,7 +38,12 @@ import net.minecraft.world.level.biome.Climate;
  *       {@link EndDiscGeometry} footprint — always on (the biome pre-exists the
  *       materialization flag harmlessly, so chunks baked early stay correct).</li>
  *   <li><b>Mountain</b>: core flips to {@code minecraft:jagged_peaks} above y 200; the
- *       flank ring splits into flank biome / cherry grove / meadow thirds.</li>
+ *       flank ring splits into flank biome / cherry grove / meadow thirds. A snowline
+ *       overlay (plans_v5 PLAN-B B1) covers the WHOLE mountain footprint: any sample at
+ *       {@code by >= }{@value #SNOWLINE_Y} inside {@code mountain.radius()} reads
+ *       {@code minecraft:snowy_slopes} (jagged core above y 200 still outranks), so
+ *       {@code freeze_top_layer} snow/ice persists and high-altitude rain falls as snow
+ *       instead of melting the caps into runoff.</li>
  *   <li><b>River ribbon</b>: {@code minecraft:river} along the authored polylines
  *       (channel + banks).</li>
  *   <li><b>Detached shards</b>: crumble shards off the FINAL rim read
@@ -67,6 +72,12 @@ public final class DiscBiomeSource extends BiomeSource {
     public static final int END_BIOME_MIN_Y = 320;
     /** Mountain-core samples above this block Y read {@code minecraft:jagged_peaks}. */
     public static final int JAGGED_PEAKS_MIN_Y = 200;
+    /**
+     * Mountain-footprint samples at/above this block Y read {@code minecraft:snowy_slopes}
+     * (B1 snowline overlay) — just above the terrace-quantization start (y 150 in
+     * {@code DiscTerrainFunction.computeSurfaceY}) so the stepped cliff bands read snowy.
+     */
+    public static final int SNOWLINE_Y = 152;
     /** River-ribbon half width: channel ({@code RIVER_HALF_WIDTH}) + bank margin. */
     public static final double RIVER_BIOME_HALF_WIDTH =
             DiscTerrainFunction.RIVER_HALF_WIDTH + DiscTerrainFunction.RIVER_BANK_MARGIN;
@@ -90,6 +101,8 @@ public final class DiscBiomeSource extends BiomeSource {
     private final Holder<Biome> deepDarkHolder;
     @Nullable
     private final Holder<Biome> jaggedHolder;
+    @Nullable
+    private final Holder<Biome> snowySlopesHolder;
 
     private final ThreadLocal<ColumnCache> columnCache = ThreadLocal.withInitial(ColumnCache::new);
 
@@ -102,6 +115,7 @@ public final class DiscBiomeSource extends BiomeSource {
         this.endHolder = overworld ? this.biomesById.get("minecraft:the_end") : null;
         this.deepDarkHolder = overworld ? this.biomesById.get(CaveBiomeMap.DEEP_DARK_ID) : null;
         this.jaggedHolder = overworld ? this.biomesById.get("minecraft:jagged_peaks") : null;
+        this.snowySlopesHolder = overworld ? this.biomesById.get("minecraft:snowy_slopes") : null;
     }
 
     /**
@@ -180,12 +194,18 @@ public final class DiscBiomeSource extends BiomeSource {
         if (info.jaggedCore() && by > JAGGED_PEAKS_MIN_Y && this.jaggedHolder != null) {
             return this.jaggedHolder;
         }
+        // 4. Snowline overlay (B1): every above-snowline sample of the whole mountain
+        //    footprint is snowy — y-aware like the jagged rule, so vertical cliff faces
+        //    and the frozen-cascade sides freeze consistently, not just column tops.
+        if (info.mountainFootprint() && by >= SNOWLINE_Y && this.snowySlopesHolder != null) {
+            return this.snowySlopesHolder;
+        }
         return info.base();
     }
 
     /** Cached per-column data: 2-D resolution + everything the y rules key off. */
     private record ColumnInfo(Holder<Biome> base, int surfaceY, boolean jaggedCore,
-            @Nullable Holder<Biome> caveRegion, boolean deepDark) {}
+            boolean mountainFootprint, @Nullable Holder<Biome> caveRegion, boolean deepDark) {}
 
     /** Per-thread direct-mapped cache; keyed to the live {@link DiscMapData} instance. */
     private static final class ColumnCache {
@@ -227,18 +247,20 @@ public final class DiscBiomeSource extends BiomeSource {
     private ColumnInfo resolveColumn(DiscMapData map, int bx, int bz) {
         if (this.profile == DiscProfile.NETHER) {
             // Nether stays the plain 2-D wedge map (Appendix A: ids unchanged, no rings).
-            return new ColumnInfo(holderOf(map.biomeAt(this.profile, bx, bz)), 0, false, null, false);
+            return new ColumnInfo(holderOf(map.biomeAt(this.profile, bx, bz)), 0, false, false, null, false);
         }
         DiscMapData.MapProfile mapProfile = map.profile(this.profile);
         DiscMapData.Mountain mountain = mapProfile.mountain();
         int surfaceY = DiscTerrainFunction.surfaceY(this.profile, bx, bz);
         boolean jaggedCore = false;
+        boolean mountainFootprint = false;
         String id = null;
         double mountainDistSq = Double.MAX_VALUE;
         if (mountain != null) {
             double dx = bx - mountain.x();
             double dz = bz - mountain.z();
             mountainDistSq = dx * dx + dz * dz;
+            mountainFootprint = mountainDistSq < (double) mountain.radius() * mountain.radius();
             double coreR = mountain.radius() * 0.45D;
             if (mountainDistSq < coreR * coreR) {
                 id = mountain.coreBiome();
@@ -251,7 +273,7 @@ public final class DiscBiomeSource extends BiomeSource {
         if (id == null && mountain != null) {
             double flankR = mountain.radius() * 0.8D;
             if (mountainDistSq < flankR * flankR) {
-                id = DiscMapDefaults.flankBiome(mountain, bx, bz);
+                id = DiscMapDefaults.flankBiome(mountain, bx, bz, surfaceY);
             }
         }
         if (id == null) {
@@ -271,9 +293,15 @@ public final class DiscBiomeSource extends BiomeSource {
                 }
             }
         }
+        // B1 snowline overlay, column part: whatever the 2-D rules resolved (flank thirds,
+        // warm wedge terraces, high river/pool columns), an above-snowline surface on the
+        // mountain reads snowy_slopes so freeze_top_layer keeps its snow layers and ice.
+        if (mountainFootprint && surfaceY >= SNOWLINE_Y) {
+            id = "minecraft:snowy_slopes";
+        }
         String caveRegion = CaveBiomeMap.regionAt(bx, bz);
         boolean deepDark = CaveBiomeMap.deepDarkColumn(mountain, bx, bz);
-        return new ColumnInfo(holderOf(id), surfaceY, jaggedCore,
+        return new ColumnInfo(holderOf(id), surfaceY, jaggedCore, mountainFootprint,
                 caveRegion != null ? this.biomesById.get(caveRegion) : null, deepDark);
     }
 

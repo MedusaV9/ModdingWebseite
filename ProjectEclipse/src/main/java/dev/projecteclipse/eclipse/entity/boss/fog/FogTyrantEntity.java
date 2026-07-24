@@ -40,7 +40,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
-import net.minecraft.world.Containers;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -1257,7 +1256,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
 
     /**
      * W4 IDEA-16 #3 loot ceremony (Herald pattern): one participant is rewarded per
-     * keyframe — 3 umbral shards at their feet with a HEART_BURST quasar and a rising
+     * keyframe — 3 umbral shards straight into their inventory (B14: ground drops were
+     * never "received") with a HEART_BURST quasar and a rising
      * amethyst chime — so the storm-burst doubles as the award sequence. Any remainder
      * drains at the thunderclap, so an oversized roster can never lose payouts to the
      * body removal. Eligibility matches the old {@code dropCustomDeathLoot} dump.
@@ -1280,8 +1280,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         if (player == null || !player.isAlive() || player.level() != level) {
             return;
         }
-        Containers.dropItemStack(level, player.getX(), player.getY() + 0.2D, player.getZ(),
-                new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 3));
+        // B14 §1: direct-to-inventory + reward overlay instead of a despawnable ground pop.
+        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 3, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,

@@ -1,0 +1,36 @@
+{
+  "en": {
+    "announce.eclipse.theft.title": "A LIFE HAS BEEN STOLEN",
+    "eclipse.theft.taken": "You tore a Life out of %s. It beats for you now.",
+    "eclipse.theft.lost": "%s tore a Life out of you.",
+    "message.eclipse.theft.global": "%1$s stole a Life from %2$s.",
+    "subtitles.eclipse.theft.steal": "A Life changes hands",
+
+    "dev.eclipse.contract.theft.on.ok": "Heart theft ENABLED (transient until config reload).",
+    "dev.eclipse.contract.theft.off.ok": "Heart theft DISABLED (transient until config reload).",
+    "dev.eclipse.contract.theft.status.header": "Heart theft: enabled=%1$s, pair cooldown=%2$s min, victim floor=%3$s Life/Lives",
+    "dev.eclipse.contract.theft.status.cooldown": "Cooldown %s",
+    "dev.eclipse.contract.theft.status.none": "No theft cooldowns are running.",
+    "dev.eclipse.contract.status.modifiers": "Modifiers %1$s: %2$s",
+
+    "dev.eclipse.doc.contract.theft": "Toggle the out-of-event heart-theft system live (transient until config reload).",
+    "dev.eclipse.doc.contract.theft.status": "Show the heart-theft config and every running pair cooldown."
+  },
+  "de": {
+    "announce.eclipse.theft.title": "EIN LEBEN WURDE GESTOHLEN",
+    "eclipse.theft.taken": "Du hast %s ein Leben entrissen. Jetzt schlägt es für dich.",
+    "eclipse.theft.lost": "%s hat dir ein Leben entrissen.",
+    "message.eclipse.theft.global": "%1$s hat %2$s ein Leben gestohlen.",
+    "subtitles.eclipse.theft.steal": "Ein Leben wechselt den Besitzer",
+
+    "dev.eclipse.contract.theft.on.ok": "Lebensdiebstahl AKTIVIERT (bis zum Config-Reload).",
+    "dev.eclipse.contract.theft.off.ok": "Lebensdiebstahl DEAKTIVIERT (bis zum Config-Reload).",
+    "dev.eclipse.contract.theft.status.header": "Lebensdiebstahl: aktiv=%1$s, Paar-Cooldown=%2$s min, Opfer-Untergrenze=%3$s Leben",
+    "dev.eclipse.contract.theft.status.cooldown": "Cooldown %s",
+    "dev.eclipse.contract.theft.status.none": "Keine Diebstahl-Cooldowns aktiv.",
+    "dev.eclipse.contract.status.modifiers": "Modifikatoren %1$s: %2$s",
+
+    "dev.eclipse.doc.contract.theft": "Schaltet das Lebensdiebstahl-System außerhalb von Events live um (flüchtig bis zum Config-Reload).",
+    "dev.eclipse.doc.contract.theft.status": "Zeigt die Diebstahl-Konfiguration und alle laufenden Paar-Cooldowns."
+  }
+}

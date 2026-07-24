@@ -25,47 +25,69 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * server-side keyed off the event day and the night-event state, and the Deckhand crew is
  * seeded once by {@code limbo.GhostShipBuilder}. No spawn eggs are registered on purpose
  * (event mod: admins use {@code /summon}).</p>
+ *
+ * <p><b>MobCategory audit (plans_v5 PLAN-B B5):</b> the self-capped event mobs register as
+ * {@link MobCategory#MISC} so they are excluded from {@code NaturalSpawner.createState}'s
+ * per-category census and stop eating the vanilla MONSTER/CREATURE spawn budgets
+ * ({@code LocalMobCapCalculator}) — their population is bounded by their own spawner caps
+ * ({@link EclipseSpawner} / {@code EventSpawnRules}), not by the biome cycle. Only the
+ * summon-only bosses keep {@link MobCategory#MONSTER}.</p>
  */
 public final class EclipseEntities {
     public static final DeferredRegister<EntityType<?>> ENTITIES =
             DeferredRegister.create(Registries.ENTITY_TYPE, EclipseMod.MOD_ID);
 
-    /** Doppelganger event hunter (Pale Nights only); player-sized so the mimicry holds up. */
+    /**
+     * Doppelganger event hunter (Pale Nights only); player-sized so the mimicry holds up.
+     * MISC (B5): per-event budget of 2–3 via {@link EclipseSpawner} — must not shrink the
+     * vanilla MONSTER budget on Pale Nights.
+     */
     public static final Supplier<EntityType<TheOtherEntity>> THE_OTHER = ENTITIES.register("the_other",
-            () -> EntityType.Builder.of(TheOtherEntity::new, MobCategory.MONSTER)
+            () -> EntityType.Builder.of(TheOtherEntity::new, MobCategory.MISC)
                     .sized(0.6F, 1.8F)
                     .eyeHeight(1.62F)
                     .clientTrackingRange(10)
                     .build("the_other"));
 
-    /** Ambient watcher; never attacks, vanishes when stared at, unkillable. */
+    /**
+     * Ambient watcher; never attacks, vanishes when stared at, unkillable.
+     * MISC (B5): was CREATURE and silently ate the 10-slot passive-animal budget.
+     */
     public static final Supplier<EntityType<GazerEntity>> GAZER = ENTITIES.register("gazer",
-            () -> EntityType.Builder.of(GazerEntity::new, MobCategory.CREATURE)
+            () -> EntityType.Builder.of(GazerEntity::new, MobCategory.MISC)
                     .sized(0.8F, 2.1F)
                     .eyeHeight(1.6F)
                     .clientTrackingRange(10)
                     .fireImmune()
                     .build("gazer"));
 
-    /** Night pack hunter (day 5+, packs doubled on Umbral Nights). */
+    /**
+     * Night pack hunter (day 5+, packs doubled on Umbral Nights).
+     * MISC (B5): population-scaled cap in {@link EclipseSpawner}; packs near players were
+     * the main custom drain on the per-player MONSTER budget.
+     */
     public static final Supplier<EntityType<UmbralStalkerEntity>> UMBRAL_STALKER = ENTITIES.register("umbral_stalker",
-            () -> EntityType.Builder.of(UmbralStalkerEntity::new, MobCategory.MONSTER)
+            () -> EntityType.Builder.of(UmbralStalkerEntity::new, MobCategory.MISC)
                     .sized(0.9F, 1.2F)
                     .eyeHeight(0.85F)
                     .clientTrackingRange(10)
                     .build("umbral_stalker"));
 
-    /** Mute rowing crew of the limbo ghost ship; invulnerable ambience. */
+    /** Mute rowing crew of the limbo ghost ship; invulnerable ambience. MISC (B5). */
     public static final Supplier<EntityType<DeckhandEntity>> DECKHAND = ENTITIES.register("deckhand",
-            () -> EntityType.Builder.of(DeckhandEntity::new, MobCategory.CREATURE)
+            () -> EntityType.Builder.of(DeckhandEntity::new, MobCategory.MISC)
                     .sized(0.7F, 1.6F)
                     .eyeHeight(1.3F)
                     .clientTrackingRange(10)
                     .build("deckhand"));
 
-    /** Fullbright wisp orbiting the sanctum altar (one per altar level). */
+    /**
+     * Fullbright wisp orbiting the sanctum altar (one per altar level).
+     * MISC (B5): altar decor right at spawn — was CREATURE, i.e. permanent passive-cap
+     * pressure exactly where players judge animal spawn rates.
+     */
     public static final Supplier<EntityType<SunmoteEntity>> SUNMOTE = ENTITIES.register("sunmote",
-            () -> EntityType.Builder.of(SunmoteEntity::new, MobCategory.CREATURE)
+            () -> EntityType.Builder.of(SunmoteEntity::new, MobCategory.MISC)
                     .sized(0.4F, 0.4F)
                     .eyeHeight(0.2F)
                     .clientTrackingRange(10)

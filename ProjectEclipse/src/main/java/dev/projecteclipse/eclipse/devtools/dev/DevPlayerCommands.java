@@ -1,5 +1,9 @@
 package dev.projecteclipse.eclipse.devtools.dev;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -18,7 +22,10 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-/** Player XP/secret-perk controls plus the Simple Voice Chat moderation bridge. */
+/**
+ * Player XP/secret-perk controls, the ops-eyes-only online-name roster (B17), and the
+ * Simple Voice Chat moderation bridge.
+ */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevPlayerCommands {
     static {
@@ -35,6 +42,9 @@ public final class DevPlayerCommands {
                 new DevCommandDoc("player.multiplier.show", DevCategory.PLAYERS,
                         "/dev player multiplier show <player>",
                         "dev.eclipse.doc.player.multiplier.show", Danger.SAFE, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("player.names", DevCategory.PLAYERS,
+                        "/dev player names",
+                        "dev.eclipse.doc.player.names", Danger.SAFE, ClickAction.RUN, 2),
                 new DevCommandDoc("voice.mute.global", DevCategory.PLAYERS,
                         "/dev voice mute global (on|off)",
                         "dev.eclipse.doc.voice.mute.global", Danger.CAUTION, ClickAction.SUGGEST, 2),
@@ -60,6 +70,8 @@ public final class DevPlayerCommands {
                                                 .then(Commands.argument("amount",
                                                                 FloatArgumentType.floatArg(0.0F, 10_000_000.0F))
                                                         .executes(DevPlayerCommands::giveXp)))))
+                        .then(Commands.literal("names")
+                                .executes(DevPlayerCommands::listNames))
                         .then(Commands.literal("multiplier")
                                 .then(Commands.literal("set")
                                         .then(Commands.argument("player", EntityArgument.player())
@@ -85,6 +97,33 @@ public final class DevPlayerCommands {
                                                         .executes(context -> playerMute(context, true)))
                                                 .then(Commands.literal("off")
                                                         .executes(context -> playerMute(context, false))))))));
+    }
+
+    /**
+     * PLAN-B B17 ops discovery aid: the anonymity layer hides the tab list and seals
+     * {@code /list} below permission 2, so operators had no way to LEARN names for
+     * name-targeted commands ({@code /give}, {@code /dev player xp give}, …). Prints the
+     * real-name roster of everyone online to the issuing operator only — never broadcast,
+     * no audit echo (the same ops-eyes-only discipline as {@code /dev contract status}).
+     */
+    private static int listNames(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        List<ServerPlayer> players = new ArrayList<>(source.getServer().getPlayerList().getPlayers());
+        if (players.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("dev.eclipse.player.names.empty"), false);
+            return 0;
+        }
+        players.sort(Comparator.comparing(player -> player.getGameProfile().getName(),
+                String.CASE_INSENSITIVE_ORDER));
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.player.names.header",
+                players.size()), false);
+        for (ServerPlayer player : players) {
+            String dimension = player.serverLevel().dimension().location().toString();
+            String opMarker = player.hasPermissions(2) ? " [OP]" : "";
+            source.sendSuccess(() -> Component.translatable("dev.eclipse.player.names.entry",
+                    player.getGameProfile().getName(), dimension, opMarker), false);
+        }
+        return players.size();
     }
 
     private static int giveXp(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

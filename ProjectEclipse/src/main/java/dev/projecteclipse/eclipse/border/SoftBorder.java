@@ -21,6 +21,7 @@ import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -61,16 +62,18 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * players skipped — creative flight ignores impulses client-side, so admins would only
  * ever get dragged into the teleport fallback):</p>
  * <ul>
+ *   <li>{@code d > R−4} (still inside): pre-band warning cue — throttled glitch sound +
+ *       action-bar hint (plans_v5 PLAN-B B9), so the pushback/kick never feels sudden.</li>
  *   <li>{@code d > R}: horizontal impulse {@code normalize(center−pos) ·
- *       min(1.2, 0.25·(d−R)+0.4)} + 0.3 Y with {@code hurtMarked = true} (the proven
+ *       min(1.2, 0.55·(d−R)+0.4)} + 0.3 Y with {@code hurtMarked = true} (the proven
  *       {@code StartEventCutscene.risePlayerAt} velocity-sync pattern); elytra flight is
  *       stopped first; a glitch sound + {@code BORDER_GLITCH} Quasar burst play at the
  *       player (throttled).</li>
- *   <li>{@code d > R+3}: teleport fallback onto the clamped point at {@code R−2} — pulled
+ *   <li>{@code d > R+1.5}: teleport fallback onto the clamped point at {@code R−2} — pulled
  *       into the stage's full-thickness interior when the ring is stage-derived — with a
  *       heightmap ground raycast stepping inward until SOLID ground (two consecutive
  *       non-void steps, so a 1-block rim-crumble fragment is never a landing spot), a
- *       {@code surfaceY} landing and a short Slow Falling grace (covers players moving
+ *       {@code surfaceY} landing and a 5 s Slow Falling grace (covers players moving
  *       "impossibly" — e.g. inside Aeronautics/Sable sub-level airships, which are not
  *       vanilla vehicles; see README known limits).</li>
  *   <li><b>Vehicles</b>: the impulse targets {@code getRootVehicle()}; ridden vehicles are
@@ -95,13 +98,23 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class SoftBorder {
-    /** Teleport fallback engages beyond {@code R + } this. */
-    private static final double TELEPORT_BAND = 3.0D;
+    /**
+     * Teleport fallback engages beyond {@code R + } this. B9: tightened 3.0 → 1.5 —
+     * sprint-jump/elytra momentum made the old band read as "kicked too late".
+     */
+    private static final double TELEPORT_BAND = 1.5D;
+    /** Pre-band warning cue plays from {@code R − } this (action bar + throttled sound). */
+    private static final double WARNING_BAND = 4.0D;
     /** Teleport fallback lands at {@code R − } this (before the inward ground search). */
     private static final double TELEPORT_INSET = 2.0D;
     private static final double MAX_IMPULSE = 1.2D;
     private static final double IMPULSE_BASE = 0.4D;
-    private static final double IMPULSE_SCALE = 0.25D;
+    /**
+     * B9: raised 0.25 → 0.55 so the escalation saturates at {@link #MAX_IMPULSE} within
+     * the tightened {@value #TELEPORT_BAND}-block band — a sprinting player is turned
+     * around ≤ 2 blocks past R instead of coasting into the teleport.
+     */
+    private static final double IMPULSE_SCALE = 0.55D;
     private static final double IMPULSE_Y = 0.3D;
     /** Vanilla failsafe border sits this far outside the overworld ring. */
     public static final int FAILSAFE_MARGIN = 48;
@@ -114,10 +127,10 @@ public final class SoftBorder {
     private static final int GROUND_SEARCH_STEPS = 24;
     private static final int GROUND_SEARCH_STEP = 4;
     /**
-     * Slow Falling granted on every teleport fallback (~3 s): even a solid landing column
-     * can neighbor a crumble hole — a soft descent can never kill.
+     * Slow Falling granted on every teleport fallback (5 s, B9: 60 → 100): even a solid
+     * landing column can neighbor a crumble hole — a soft descent can never kill.
      */
-    private static final int FALLBACK_SLOW_FALLING_TICKS = 60;
+    private static final int FALLBACK_SLOW_FALLING_TICKS = 100;
     private static final int SOUND_THROTTLE_TICKS = 15;
     private static final int VEHICLE_VIOLATION_WINDOW_TICKS = 40;
     private static final int VEHICLE_VIOLATIONS_TO_EJECT = 3;
@@ -454,6 +467,12 @@ public final class SoftBorder {
         double dz = player.getZ() - state.getBorderCenterZ();
         double distSq = dx * dx + dz * dz;
         if (distSq <= radius * radius) {
+            // Pre-band warning (B9): approaching the ring from inside cues the player
+            // BEFORE any physics engage, so the pushback/kick never feels sudden.
+            double warnR = radius - WARNING_BAND;
+            if (warnR > 0.0D && distSq > warnR * warnR && !player.isCreative()) {
+                warnApproach(player, level);
+            }
             return;
         }
         double dist = Math.sqrt(distSq);
@@ -503,7 +522,7 @@ public final class SoftBorder {
      * {@code min(R − 2, stageOuterRadius − RIM_REWRITE_MARGIN)} (full-thickness interior,
      * inside the rim taper/crumble band), requires TWO consecutive non-void heightmap
      * steps (the landing column plus its inward neighbor — isolated fragments fail this),
-     * lands exactly at {@code surfaceY} (feet on the ground, no drop) and grants ~3 s of
+     * lands exactly at {@code surfaceY} (feet on the ground, no drop) and grants 5 s of
      * Slow Falling as a final safety net.
      */
     private static void teleportInside(ServerPlayer player, ServerLevel level, DiscProfile profile,
@@ -583,6 +602,23 @@ public final class SoftBorder {
             return Integer.MIN_VALUE;
         }
         return chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, blockX & 15, blockZ & 15) + 1;
+    }
+
+    /**
+     * Pre-band warning cue (B9): action-bar hint + a softer glitch sound at the player,
+     * riding the same {@link #LAST_SOUND} throttle as the pushback feedback so the two
+     * cues never stack in the same window.
+     */
+    private static void warnApproach(ServerPlayer player, ServerLevel level) {
+        long now = level.getGameTime();
+        Long last = LAST_SOUND.get(player.getUUID());
+        if (last != null && now - last < SOUND_THROTTLE_TICKS) {
+            return;
+        }
+        LAST_SOUND.put(player.getUUID(), now);
+        player.displayClientMessage(Component.translatable("message.eclipse.border_warning"), true);
+        player.playNotifySound(EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.AMBIENT,
+                0.4F, 1.1F + level.random.nextFloat() * 0.1F);
     }
 
     /** Glitch sound (throttled per player) + one BORDER_GLITCH Quasar burst at the player. */

@@ -12,7 +12,6 @@ import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
-import dev.projecteclipse.eclipse.worldgen.structure.dungeon.CollapsedVaultBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
@@ -45,12 +44,12 @@ import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
  *       which fixes the "structures spawn weirdly on trees" bug: vegetation is cleared
  *       and the ground is terraformed BEFORE pieces snap to the re-primed heightmaps.</li>
  *   <li><b>Procedural set pieces</b> — fortress core, watcher statues (stage-1 flavor,
- *       placed directly), the {@link FallbackBuilders} fallbacks whenever a vanilla
- *       start refuses to generate (a listed structure never silently misses), and the
- *       stage-5 <b>stronghold surface vault</b>: a collapsed-keep ruin at the
- *       {@code eclipse:stronghold_emergence} rim landmark whose gauntlet descends to the
- *       portal room's doorstep in the mountain cavity
- *       ({@link CollapsedVaultBuilder#buildStrongholdGauntlet}).</li>
+ *       placed directly), and the {@link FallbackBuilders} fallbacks whenever a vanilla
+ *       start refuses to generate (a listed structure never silently misses). The
+ *       stage-5 stronghold pair (emergence + surface vault) was removed in plans_v5
+ *       PLAN-B B15 — the End-disc finale replaced it; the {@code
+ *       eclipse:stronghold_emergence} placer stays registered so persisted pending
+ *       rows of old saves can still resume, but nothing enqueues it anymore.</li>
  *   <li><b>Underground tables</b> — {@link UndergroundSites} rows (mineshafts, monster
  *       rooms, both custom dungeons) enqueued alongside the stage's configured
  *       {@code structures[]}.</li>
@@ -70,10 +69,6 @@ public final class StructureStamper {
     private static final int TRIAL_CHAMBERS_Y = -20;
     /** Anchor depth of the ancient city (D6: y ≈ −40 inside the mountain). */
     private static final int ANCIENT_CITY_Y = -40;
-    /** Implicit stage-5 companion site of the stronghold emergence (D8 table). */
-    private static final String STRONGHOLD_VAULT_ID = "eclipse:stronghold_vault";
-    /** Overworld stage that triggers the finale pair (emergence + surface vault). */
-    private static final int FINALE_STAGE = 5;
 
     private static final AtomicBoolean LISTENER_REGISTERED = new AtomicBoolean();
 
@@ -124,9 +119,8 @@ public final class StructureStamper {
                     enqueueConfigured(profile, stage, structureId, gameTime);
                 }
             }
-            if (profile == DiscProfile.OVERWORLD && stage == FINALE_STAGE) {
-                enqueueStrongholdVault(stage, gameTime);
-            }
+            // B15: the hardcoded FINALE_STAGE stronghold-vault enqueue is gone — the
+            // End-disc finale replaced the stronghold; stage 5 enqueues config rows only.
             for (PendingSite site : UndergroundSites.sitesFor(profile, stage, gameTime)) {
                 StructurePendingRegistry.enqueue(site);
             }
@@ -160,18 +154,6 @@ public final class StructureStamper {
         };
         StructurePendingRegistry.enqueue(new PendingSite(landmarkId, structureId, profile.name(),
                 anchor, stage, footprintOf(structureId, landmark), gameTime));
-    }
-
-    /** The finale's companion surface site at the stronghold rim landmark (D6/D8). */
-    private static void enqueueStrongholdVault(int stage, long gameTime) {
-        DiscMapData.Landmark landmark = findLandmark(DiscProfile.OVERWORLD, "eclipse:stronghold_emergence");
-        if (landmark == null) {
-            EclipseMod.LOGGER.warn("No eclipse:stronghold_emergence landmark; skipping the surface vault");
-            return;
-        }
-        StructurePendingRegistry.enqueue(new PendingSite(STRONGHOLD_VAULT_ID, STRONGHOLD_VAULT_ID,
-                DiscProfile.OVERWORLD.name(), surfaceAnchor(DiscProfile.OVERWORLD, landmark),
-                stage, 44, gameTime));
     }
 
     /** Expected XZ extent of a structure (P2 rift sizing): measured minimums per id. */
@@ -216,7 +198,9 @@ public final class StructureStamper {
                 (level, site, complete, failure) -> placeCavity(level, site,
                         ResourceLocation.withDefaultNamespace("ancient_city"), complete, failure));
         // The emergence runs its own quake/fissure/beam sequence — the rift phase of the
-        // registry is its announcement; the sequence itself starts on trigger.
+        // registry is its announcement; the sequence itself starts on trigger. B15: the
+        // registration stays ONLY so persisted pending rows of pre-B15 saves resume;
+        // nothing enqueues the emergence anymore (and the vault placer is gone).
         StructurePendingRegistry.registerPlacer("eclipse:stronghold_emergence",
                 (level, site) -> StrongholdEmergence.begin(level));
         StructurePendingRegistry.registerPlacer("eclipse:fortress_core", (level, site) -> {
@@ -225,8 +209,6 @@ public final class StructureStamper {
                 FortressCoreBuilder.build(level, landmark);
             }
         });
-        StructurePendingRegistry.registerAsyncPlacer(STRONGHOLD_VAULT_ID,
-                StructureStamper::placeStrongholdVault);
         UndergroundSites.registerPlacers();
     }
 
@@ -304,45 +286,6 @@ public final class StructureStamper {
         EclipseMod.LOGGER.warn("Structure retry {} for {}: adjusting anchor {} -> {}",
                 retry, site.siteId(), site.anchor().toShortString(), adjusted.toShortString());
         return adjusted;
-    }
-
-    /**
-     * The stage-5 stronghold surface vault: collapsed-keep ruin on a SitePrep plateau at
-     * the rim landmark + the Collapsed Vault gauntlet descending to the portal-room
-     * doorstep — the cavity edge nearest the ruin, at portal-room floor height
-     * ({@code StrongholdEmergence} stamps the stronghold centered in the mountain-core
-     * cavity). Without a mountain the gauntlet dead-drops 40 blocks below the ruin into
-     * a sealed antechamber (flavor only; the emergence fallback already placed a portal).
-     */
-    private static void placeStrongholdVault(ServerLevel level, PendingSite site,
-            Runnable onComplete, java.util.function.Consumer<Throwable> onFailure) {
-        BlockPos anchor = site.anchor();
-        DiscProfile profile = WorldStageService.profileOf(level.dimension());
-        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
-                profile != null ? profile : DiscProfile.OVERWORLD,
-                anchor.getX() - 12, anchor.getZ() - 12, anchor.getX() + 12, anchor.getZ() + 12, anchor);
-        prepared.whenReady(() -> {
-            BlockPos surface = new BlockPos(anchor.getX(), prepared.plateauY(), anchor.getZ());
-            DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
-            BlockPos target;
-            if (mountain == null) {
-                target = surface.below(40).offset(24, 0, 0);
-                EclipseMod.LOGGER.warn(
-                        "No mountain in disc_map.json; stronghold gauntlet ends in a sealed antechamber");
-            } else {
-                double dx = surface.getX() - mountain.x();
-                double dz = surface.getZ() - mountain.z();
-                double len = Math.max(1.0D, Math.sqrt(dx * dx + dz * dz));
-                int doorstepR = mountain.caveRadiusXz() + 5;
-                target = new BlockPos(mountain.x() + (int) Math.round(dx / len * doorstepR),
-                        mountain.caveY() - mountain.caveRadiusY() + 2,
-                        mountain.z() + (int) Math.round(dz / len * doorstepR));
-            }
-            BoundingBox bounds = CollapsedVaultBuilder.buildStrongholdGauntlet(level, surface, target);
-            SitePrep.finish(level, prepared);
-            SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
-            onComplete.run();
-        }, onFailure);
     }
 
     /** Procedural fallback builder taking the prepared plateau anchor. */

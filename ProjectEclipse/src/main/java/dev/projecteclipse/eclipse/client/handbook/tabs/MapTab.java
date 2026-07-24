@@ -93,9 +93,14 @@ public class MapTab extends HandbookTab {
     /** Reused roll source for static/glitch overlays (render thread only). */
     private static final RandomSource RANDOM = RandomSource.create();
 
-    /** Ids of authored landmarks that are ambient events, not chartable structures. */
+    /**
+     * Ids of authored landmarks that are ambient events, not chartable structures. The
+     * stronghold emergence is excluded too (plans_v5 PLAN-B B15): its authored landmark
+     * row survives in {@code DiscMapDefaults} but nothing ever builds it anymore, so it
+     * must never chart.
+     */
     private static boolean chartable(String landmarkId) {
-        return !landmarkId.contains("fog_storm");
+        return !landmarkId.contains("fog_storm") && !landmarkId.contains("stronghold");
     }
 
     // ------------------------------------------------------------------

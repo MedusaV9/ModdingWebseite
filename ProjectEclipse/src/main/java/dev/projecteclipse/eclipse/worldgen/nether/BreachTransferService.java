@@ -66,7 +66,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * player with generous Slow Falling — never stranded, never damaged. This class also
  * still owns the breach-specific pearl/elytra wall guards, the Nether hard clamp at
  * stage radius + {@value #NETHER_BORDER_MARGIN}, and cancellation of vanilla Nether
- * portal creation.</p>
+ * portal creation. Since plans_v5 B7 it additionally drives the per-viewer fog veil
+ * hanging in the crater mouth (depth illusion) and re-arms the drift safety Slow
+ * Falling periodically so long drifts can never land with fall damage.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class BreachTransferService {
@@ -106,14 +108,27 @@ public final class BreachTransferService {
     private static final int DESCENT_HANDOFF_DEPTH = 36;
     /** The return pull-through re-enters the overworld chimney this far below the lip. */
     private static final int ASCENT_REENTRY_DEPTH = 36;
-    /** Hard per-drift timeout; the abort path takes over beyond this. */
-    private static final int DRIFT_TIMEOUT_TICKS = 900;
+    /**
+     * Hard per-drift timeout; the abort path takes over beyond this. B7: extended from
+     * 900 so long scenic drifts are never dumped early — the safety Slow Falling is
+     * re-armed every {@value #DRIFT_SLOW_FALL_REFRESH_TICKS} ticks, so it can never
+     * expire mid-drift no matter how long the ride runs.
+     */
+    private static final int DRIFT_TIMEOUT_TICKS = 1800;
     /** Leaving the descent shaft line by more than this aborts the drift. */
     private static final double DRIFT_ESCAPE_RADIUS = 10.0D;
     /** Leaving the updraft tractor line by more than this aborts the ascent. */
     private static final double ASCENT_ESCAPE_RADIUS = 6.0D;
     /** Safety-net Slow Falling that outlives any drift leg (abort/kick/lag cover). */
     private static final int DRIFT_SAFETY_SLOW_FALL_TICKS = 600;
+    /** B7: cadence of the airborne Slow Falling re-arm during any drift leg. */
+    private static final int DRIFT_SLOW_FALL_REFRESH_TICKS = 100;
+    /** B7 fog veil: per-viewer particle cadence at the breach mouth. */
+    private static final int FOG_VEIL_PERIOD_TICKS = 3;
+    /** B7 fog veil: horizontal viewer range around the crater center. */
+    private static final double FOG_VEIL_VIEW_RANGE = 64.0D;
+    /** B7 fog veil: smoke puffs per emission (budget: ≤ 2 packets each). */
+    private static final int FOG_VEIL_PUFFS = 6;
     /** Client glitch pulse hold sent with DRIFT payloads (capture + each seam). */
     private static final int DRIFT_PULSE_HOLD_TICKS = 12;
     /** Fallback ceiling body Y when the arrival column is unavailable (roof lens ~230). */
@@ -166,6 +181,7 @@ public final class BreachTransferService {
     }
 
     private static void tickOverworld(ServerPlayer player, ServerLevel overworld, long now) {
+        emitFogVeil(player, overworld, now);
         DriftState drift = DRIFTING.get(player.getUUID());
         if (drift != null) {
             switch (drift.phase) {
@@ -237,6 +253,7 @@ public final class BreachTransferService {
     private static void tickDriftDescentOverworld(ServerPlayer player, ServerLevel overworld,
             DriftState drift, long now) {
         drift.ticks++;
+        refreshDriftSafety(player, drift);
         double dx = player.getX() - drift.anchorX;
         double dz = player.getZ() - drift.anchorZ;
         if (dx * dx + dz * dz > DRIFT_ESCAPE_RADIUS * DRIFT_ESCAPE_RADIUS
@@ -298,6 +315,7 @@ public final class BreachTransferService {
     private static void tickDriftDescentNether(ServerPlayer player, ServerLevel nether,
             DriftState drift, long now) {
         drift.ticks++;
+        refreshDriftSafety(player, drift);
         double dx = player.getX() - drift.anchorX;
         double dz = player.getZ() - drift.anchorZ;
         if (dx * dx + dz * dz > DRIFT_ESCAPE_RADIUS * DRIFT_ESCAPE_RADIUS
@@ -353,12 +371,18 @@ public final class BreachTransferService {
         if (player.isFallFlying()) {
             player.stopFallFlying();
         }
-        if (!player.isCreative() && cooldownExpired(player, now)) {
-            captureAscent(player, updraft, ceilingY, now);
+        if (!player.isCreative()) {
+            // B7: survival players NEVER ride the legacy boost — fresh arrivals still on
+            // transfer cooldown used to be shoved straight back up the shaft. They now
+            // simply stand in the column until the cooldown expires and the tractor
+            // captures them.
+            if (cooldownExpired(player, now)) {
+                captureAscent(player, updraft, ceilingY, now);
+            }
             return;
         }
-        // Legacy fallback (creative, or cooldown still running): additive soul boost and
-        // the historic pad teleport at the old column cap.
+        // Legacy fallback (creative/spectator only, B7): additive soul boost and the
+        // historic pad teleport at the old column cap.
         Vec3 motion = player.getDeltaMovement();
         player.setDeltaMovement(motion.x - dx * 0.06D,
                 Math.max(motion.y, UPDRAFT_STRENGTH),
@@ -390,6 +414,7 @@ public final class BreachTransferService {
     private static void tickDriftAscentNether(ServerPlayer player, ServerLevel nether,
             DriftState drift, long now) {
         drift.ticks++;
+        refreshDriftSafety(player, drift);
         double dx = player.getX() - drift.anchorX;
         double dz = player.getZ() - drift.anchorZ;
         if (dx * dx + dz * dz > ASCENT_ESCAPE_RADIUS * ASCENT_ESCAPE_RADIUS
@@ -440,6 +465,7 @@ public final class BreachTransferService {
     private static void tickDriftAscentOverworld(ServerPlayer player, ServerLevel overworld,
             DriftState drift, long now) {
         drift.ticks++;
+        refreshDriftSafety(player, drift);
         double dx = player.getX() - drift.anchorX;
         double dz = player.getZ() - drift.anchorZ;
         if (drift.ticks > DRIFT_TIMEOUT_TICKS) {
@@ -557,10 +583,59 @@ public final class BreachTransferService {
         }
     }
 
+    /**
+     * B7: re-arms the safety Slow Falling every {@value #DRIFT_SLOW_FALL_REFRESH_TICKS}
+     * ticks while a drift leg is airborne, so even rides outliving the original
+     * {@value #DRIFT_SAFETY_SLOW_FALL_TICKS}-tick net can never land with fall damage
+     * (kicks, lag spikes and dimension-seam stalls included).
+     */
+    private static void refreshDriftSafety(ServerPlayer player, DriftState drift) {
+        // Fires on the FIRST controller tick too, covering the ascent capture (which,
+        // unlike the descent capture, grants no Slow Falling of its own).
+        if (drift.ticks % DRIFT_SLOW_FALL_REFRESH_TICKS == 1 && !player.onGround()) {
+            player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                    DRIFT_SAFETY_SLOW_FALL_TICKS, 0, false, false));
+        }
+    }
+
+    /**
+     * B7 fog veil: a budgeted per-viewer smoke curtain hanging inside the breach mouth,
+     * so the hole reads bottomless (depth illusion) instead of exposing raw funnel
+     * geometry. Deterministic scatter keyed to the tick makes the veil drift rather
+     * than strobe; only viewers within {@value #FOG_VEIL_VIEW_RANGE} blocks pay for it.
+     * A real client fog payload stays a P2 {@code stormfx}/{@code veilfx} seam.
+     */
+    private static void emitFogVeil(ServerPlayer player, ServerLevel overworld, long now) {
+        if (Math.floorMod(now, FOG_VEIL_PERIOD_TICKS) != 0) {
+            return;
+        }
+        BlockPos center = BreachBuilder.breachCenter();
+        double px = player.getX() - (center.getX() + 0.5D);
+        double pz = player.getZ() - (center.getZ() + 0.5D);
+        if (px * px + pz * pz > FOG_VEIL_VIEW_RANGE * FOG_VEIL_VIEW_RANGE) {
+            return;
+        }
+        for (int i = 0; i < FOG_VEIL_PUFFS; i++) {
+            long h = driftHash(player, now * 131L + i);
+            double r = Math.sqrt(to01(h)) * (BreachGeometry.CRATER_RADIUS - 1.0D);
+            double a = to01(h >>> 8) * Math.PI * 2.0D;
+            double x = center.getX() + 0.5D + Math.cos(a) * r;
+            double z = center.getZ() + 0.5D + Math.sin(a) * r;
+            double y = center.getY() - 1.0D - to01(h >>> 16) * 5.0D;
+            overworld.sendParticles(player, ParticleTypes.CAMPFIRE_COSY_SMOKE, false,
+                    x, y, z, 1, 0.45D, 0.35D, 0.45D, 0.004D);
+            if ((h & 3L) == 0L) {
+                overworld.sendParticles(player, ParticleTypes.LARGE_SMOKE, false,
+                        x, y + 1.0D, z, 1, 0.6D, 0.25D, 0.6D, 0.002D);
+            }
+        }
+    }
+
     /** Normal drift completion: cooldown, end pulse (client out-ramp + thud), burst FX. */
     private static void finishDrift(ServerPlayer player, ServerLevel level, long now, String what) {
         DRIFTING.remove(player.getUUID());
         TRANSFER_COOLDOWN.put(player.getUUID(), now + TRANSFER_COOLDOWN_TICKS);
+        player.fallDistance = 0.0F; // B7: the landing tick itself must never carry a fall
         sendDriftPhase(player, Phase.DRIFT_END, player.blockPosition());
         level.sendParticles(ParticleTypes.REVERSE_PORTAL,
                 player.getX(), player.getY() + 0.6D, player.getZ(),
@@ -577,6 +652,7 @@ public final class BreachTransferService {
     private static void releaseDrift(ServerPlayer player, long now, String reason) {
         DRIFTING.remove(player.getUUID());
         TRANSFER_COOLDOWN.put(player.getUUID(), now + TRANSFER_COOLDOWN_TICKS);
+        player.fallDistance = 0.0F;
         player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
                 DRIFT_SAFETY_SLOW_FALL_TICKS, 0, false, false));
         sendDriftPhase(player, Phase.DRIFT_END, player.blockPosition());

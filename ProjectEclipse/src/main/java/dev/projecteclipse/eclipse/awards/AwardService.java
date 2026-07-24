@@ -338,7 +338,9 @@ public final class AwardService {
                 SkillsApi.addXp(player, "award", reward.skillXp());
             }
             if (reward.shards() > 0) {
-                ShardEconomy.addShards(player, reward.shards());
+                // announce=false: the sendRewardGrant materialization below IS the ceremony
+                // for award shards (incl. offering winners) — no double D14 gain toast.
+                ShardEconomy.addShards(player, reward.shards(), false);
             }
             for (ItemStack item : items) {
                 giveItem(player, item);

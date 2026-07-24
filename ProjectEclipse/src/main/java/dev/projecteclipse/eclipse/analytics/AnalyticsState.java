@@ -255,6 +255,16 @@ public final class AnalyticsState extends SavedData {
         return added;
     }
 
+    /**
+     * Read-only view of the player's LIFETIME visited-biome ids (plans_v5 PLAN-B B8:
+     * {@code QuestDetectors} retro-heals visit quests whose lifetime-once signal was
+     * consumed before the quest became active).
+     */
+    public Set<String> biomesVisitedLifetime(UUID player) {
+        Set<String> visited = biomesLifetime.get(player);
+        return visited == null ? Set.of() : Collections.unmodifiableSet(visited);
+    }
+
     /** Drops all day maps with {@code day < minDayKept}; returns how many days were pruned. */
     public int pruneDaysBefore(int minDayKept) {
         int before = days.size();

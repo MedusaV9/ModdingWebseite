@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.devtools.SpawnTuningData;
+import dev.projecteclipse.eclipse.entity.spawn.SpawnYBands;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -14,12 +15,21 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.level.NaturalSpawner;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-/** SavedData-backed spawn center/radius editor and operator-only particle preview. */
+/**
+ * SavedData-backed spawn center/radius editor and operator-only particle preview.
+ *
+ * <p>Since plans_v5 PLAN-B B5 this file also owns {@code /dev spawn census} — the live
+ * diagnostic for the natural-spawn fixes: per-category mob-cap usage from the level's
+ * last {@link NaturalSpawner.SpawnState} plus the Y-band attempt/success counters
+ * collected by {@link SpawnYBands} (see {@code mixin/NaturalSpawnerMixin}).</p>
+ */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevSpawnCommands {
     private static final int PREVIEW_INTERVAL = 10;
@@ -36,6 +46,9 @@ public final class DevSpawnCommands {
                         Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("spawn.show", DevCategory.SPAWN,
                         "/dev spawn show [on|off]", "dev.eclipse.doc.spawn.show",
+                        Danger.SAFE, ClickAction.RUN, 2),
+                new DevCommandDoc("spawn.census", DevCategory.SPAWN,
+                        "/dev spawn census [reset]", "dev.eclipse.doc.spawn.census",
                         Danger.SAFE, ClickAction.RUN, 2));
     }
 
@@ -64,7 +77,11 @@ public final class DevSpawnCommands {
                                 .then(Commands.literal("on")
                                         .executes(context -> preview(context, true)))
                                 .then(Commands.literal("off")
-                                        .executes(context -> preview(context, false))))));
+                                        .executes(context -> preview(context, false))))
+                        .then(Commands.literal("census")
+                                .executes(DevSpawnCommands::census)
+                                .then(Commands.literal("reset")
+                                        .executes(DevSpawnCommands::censusReset)))));
     }
 
     private static int set(CommandContext<CommandSourceStack> context) {
@@ -109,6 +126,50 @@ public final class DevSpawnCommands {
         if (source.getEntity() instanceof ServerPlayer player && player.serverLevel() == level) {
             drawRing(level, player, center, gameplayRadius);
         }
+        return 1;
+    }
+
+    /**
+     * B5 diagnostic: prints per-category mob-cap usage (live count vs. effective cap from
+     * the last spawn cycle's {@link NaturalSpawner.SpawnState}) and the Y-band
+     * attempt/re-band/success counters from {@link SpawnYBands} for the SOURCE's dimension.
+     */
+    private static int census(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        long seconds = SpawnYBands.millisSinceReset() / 1000L;
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.spawn.census.header",
+                level.dimension().location().toString(), seconds), false);
+
+        NaturalSpawner.SpawnState state = level.getChunkSource().getLastSpawnState();
+        SpawnYBands.DimCensus bands = SpawnYBands.census(level.dimension());
+        if (state == null) {
+            source.sendSuccess(() -> Component.translatable("dev.eclipse.spawn.census.nostate"), false);
+        } else {
+            int spawnableChunks = state.getSpawnableChunkCount();
+            for (MobCategory category : MobCategory.values()) {
+                if (category == MobCategory.MISC) {
+                    continue; // Never part of the vanilla cap census.
+                }
+                // Vanilla cap formula (NaturalSpawner.SpawnState#canSpawnForCategory):
+                // maxInstancesPerChunk * spawnableChunkCount / 17^2.
+                int cap = category.getMaxInstancesPerChunk() * spawnableChunks / (17 * 17);
+                int count = state.getMobCategoryCounts().getInt(category);
+                long natural = bands.naturalSpawns(category);
+                source.sendSuccess(() -> Component.translatable("dev.eclipse.spawn.census.category",
+                        category.getName(), count, cap, natural), false);
+            }
+        }
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.spawn.census.bands",
+                bands.attempts(), bands.inBand(), bands.rebanded(), bands.offDisc(),
+                bands.naturalSpawnsTotal()), false);
+        return 1;
+    }
+
+    private static int censusReset(CommandContext<CommandSourceStack> context) {
+        SpawnYBands.reset();
+        context.getSource().sendSuccess(
+                () -> Component.translatable("dev.eclipse.spawn.census.reset"), true);
         return 1;
     }
 

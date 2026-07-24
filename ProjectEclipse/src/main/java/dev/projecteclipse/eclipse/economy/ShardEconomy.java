@@ -8,6 +8,9 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.hud.SidebarSyncService;
+import dev.projecteclipse.eclipse.network.economy.ShardPayloads;
+import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.ritual.AltarBlock;
@@ -28,6 +31,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -97,6 +101,13 @@ public final class ShardEconomy {
     private static final Map<UUID, Integer> BROWSE_INDEX = new HashMap<>();
 
     /**
+     * B14 §4 playtest diagnostic: while on, every personal-balance mutation, team-pool bank
+     * and physical shard delivery/pickup is logged with its calling source (toggled by
+     * {@code /dev shards trace on|off}). Transient by design — resets on server stop.
+     */
+    private static volatile boolean traceEnabled = false;
+
+    /**
      * Absolute overworld {@code dayTime} at which the running Eclipse's Favor expires
      * (the next dawn), or {@code 0} while inactive. Transient by design — mirrors
      * {@link SupplyBeacon}'s marker list: a restart simply drops the remaining buff.
@@ -118,15 +129,109 @@ public final class ShardEconomy {
         return player.getData(EclipseAttachments.SHARDS);
     }
 
-    /** Adds {@code delta} (may be negative) to the personal balance, clamped to {@code >= 0}; returns the new value. */
+    /**
+     * Adds {@code delta} (may be negative) to the personal balance, clamped to {@code >= 0};
+     * returns the new value. Positive gains announce a client "+N Umbrasplitter" toast
+     * (D14) — call sites whose gains already ride the {@code RewardMaterializeOverlay}
+     * ceremony (quest/award grants) pass {@code announce=false} via the overload.
+     */
     public static int addShards(ServerPlayer player, int delta) {
-        return setShards(player, getShards(player) + delta);
+        return addShards(player, delta, true);
+    }
+
+    /** {@link #addShards(ServerPlayer, int)} with an explicit gain-toast switch (D14 choke point). */
+    public static int addShards(ServerPlayer player, int delta, boolean announce) {
+        int value = setShards(player, getShards(player) + delta);
+        if (announce && delta > 0) {
+            ShardPayloads.sendShardGain(player, delta, value);
+        }
+        return value;
     }
 
     public static int setShards(ServerPlayer player, int value) {
+        int previous = getShards(player);
         int clamped = Math.max(0, value);
         player.setData(EclipseAttachments.SHARDS, clamped);
+        // B14 §3: the balance must move on the HUD in the same second, not on the next
+        // periodic push — the debounced dirty hook coalesces bursts into one payload.
+        SidebarSyncService.markDirty(player);
+        if (clamped != previous) {
+            trace(player, "personal balance %+d -> %d", clamped - previous, clamped);
+        }
         return clamped;
+    }
+
+    // --- physical shard delivery + pickup feedback (B14 §1/§2) ---
+
+    /**
+     * B14 §1 reliable delivery: puts {@code count} physical umbral shards straight into the
+     * player's inventory (overflow drops at their feet — never at the kill site, where boss
+     * arenas burn/despawn items) and shows the receipt on the action bar. {@code overlay}
+     * additionally plays the {@code RewardMaterializeOverlay} ceremony (boss payouts); quiet
+     * procs (skill-perk bonus shard) keep their own proc toast and pass {@code false}.
+     *
+     * <p>Deliberately does NOT touch the personal balance: one physical shard stays one
+     * unit of TEAM-pool value, spendable once at the altar (FINAL-DOPA-SOL §3).</p>
+     */
+    public static void deliverShardItems(ServerPlayer player, int count, boolean overlay) {
+        if (count <= 0) {
+            return;
+        }
+        ItemStack stack = new ItemStack(EclipseItems.UMBRAL_SHARD.get(), count);
+        if (!player.getInventory().add(stack)) {
+            player.drop(stack, false);
+        }
+        player.displayClientMessage(Component.translatable("shop.eclipse.shards_received", count), true);
+        if (overlay) {
+            RewardPayloads.sendRewardGrant(player,
+                    List.of(new RewardPayloads.ItemEntry("eclipse:umbral_shard", count)),
+                    0, RewardPayloads.SOURCE_AWARD, false);
+        }
+        trace(player, "delivered %d physical shard(s) to inventory (overlay=%s)", count, overlay);
+    }
+
+    /**
+     * B14 §2 visible pickup: an umbral shard picked up off the ground cues "erhalten — am
+     * Altar einzahlen" on the action bar, so holding ≠ banked is understood. Direct
+     * inventory deliveries get the same cue inside {@link #deliverShardItems}.
+     */
+    @SubscribeEvent
+    static void onItemPickup(ItemEntityPickupEvent.Post event) {
+        if (!(event.getPlayer() instanceof ServerPlayer player)
+                || !event.getOriginalStack().is(EclipseItems.UMBRAL_SHARD.get())) {
+            return;
+        }
+        int pickedUp = event.getOriginalStack().getCount() - event.getCurrentStack().getCount();
+        if (pickedUp <= 0) {
+            return;
+        }
+        player.displayClientMessage(Component.translatable("shop.eclipse.shards_received", pickedUp), true);
+        trace(player, "picked up %d physical shard(s) off the ground", pickedUp);
+    }
+
+    // --- /dev shards trace (B14 §4) ---
+
+    public static void setTraceEnabled(boolean enabled) {
+        traceEnabled = enabled;
+        EclipseMod.LOGGER.info("[shards] trace {}", enabled ? "ON" : "OFF");
+    }
+
+    public static boolean isTraceEnabled() {
+        return traceEnabled;
+    }
+
+    /** One trace line with the calling source frame (first frame outside this class). */
+    private static void trace(ServerPlayer player, String format, Object... args) {
+        if (!traceEnabled) {
+            return;
+        }
+        String caller = StackWalker.getInstance().walk(frames -> frames
+                .map(frame -> frame.getClassName() + "." + frame.getMethodName())
+                .filter(name -> !name.startsWith(ShardEconomy.class.getName())
+                        && !name.startsWith("java."))
+                .findFirst().orElse("?"));
+        EclipseMod.LOGGER.info("[shards] {} — {} (source: {})",
+                player.getScoreboardName(), String.format(java.util.Locale.ROOT, format, args), caller);
     }
 
     // --- bank (called by UmbralShardItem#useOn) ---
@@ -145,6 +250,9 @@ public final class ShardEconomy {
         int pool = EclipseWorldState.get(player.server).addShardPool(amount);
         player.displayClientMessage(Component.translatable("shop.eclipse.deposited_pool", amount, pool), true);
         player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
+        // B14 §3: resync the depositor's sidebar in the same second as the receipt line.
+        SidebarSyncService.markDirty(player);
+        trace(player, "banked %d physical shard(s) into the TEAM pool (pool %d)", amount, pool);
         EclipseMod.LOGGER.info("{} banked {} umbral shard(s) into the team pool (pool {})",
                 player.getScoreboardName(), amount, pool);
     }
@@ -340,5 +448,6 @@ public final class ShardEconomy {
         BROWSE_INDEX.clear();
         favorExpiryDayTime = 0L;
         favorExpiryGameTime = 0L;
+        traceEnabled = false;
     }
 }

@@ -65,8 +65,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code ghostKillHits} strikes for a reduced ({@code ghostPayoutPct}) payout.</p>
  *
  * <p>Hard invariants (IDEA-20 #6): contracts never touch permanent LIVES, never trigger
- * bans, and every advantage/disadvantage expires at the next rollover via
- * {@link ContractModifierService}.</p>
+ * bans, and every advantage/disadvantage expires at the latest at the next rollover via
+ * {@link ContractModifierService}. D3 tightens the DEBUFF half: Blutschuld, the target's
+ * scar, negative temp hearts and the Vergeltung grudge are window-scoped
+ * ({@link #debuffExpiresAt}) — they end with the hunting window (floored at
+ * {@code debuffMinMinutes}), not with the ~24 h real day. Advantages keep the day scope;
+ * they are the prize.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ContractService {
@@ -468,20 +472,36 @@ public final class ContractService {
         }
     }
 
+    /**
+     * The epoch deadline of a contract DEBUFF (D3): the hunting window's end, floored at
+     * {@code now + debuffMinMinutes} so a last-second Blutschuld still stings a little.
+     * Pure math — public for the {@code ModifierWindowTests} pins.
+     */
+    public static long debuffExpiresAt(ContractState state, long now) {
+        long floor = now + ContractConfig.get().debuffMinMinutes() * 60_000L;
+        return Math.max(state.endsAtEpochMillis(), floor);
+    }
+
     /** Blutschuld + Vergeltung (IDEA-20 #5). Non-terminal: the contract keeps running. */
     private static void applyWrongKill(MinecraftServer server, ContractState state,
             ServerPlayer killer, ServerPlayer victim) {
         ContractConfig.Values config = ContractConfig.get();
         ContractConfig.WrongKillValues wk = config.wrongKill();
         int day = state.contractDay();
+        // D3: every wrong-kill punishment is WINDOW-scoped — it dies with the hunt.
+        long debuffUntil = debuffExpiresAt(state, EclipseClock.epochMillis());
 
-        ContractModifierService.grantDamageMul(server, killer.getUUID(), wk.killerDamageMul(), day);
-        ContractModifierService.grantSkillsMul(server, killer.getUUID(), wk.killerSkillsMul(), day);
+        ContractModifierService.grantDamageMulUntil(server, killer.getUUID(), wk.killerDamageMul(),
+                debuffUntil);
+        ContractModifierService.grantSkillsMulUntil(server, killer.getUUID(), wk.killerSkillsMul(),
+                debuffUntil);
+        // Award-void stays day-scoped: it exists to void THIS day's award.
         ContractModifierService.grantAwardVoid(server, killer.getUUID(), day);
 
-        ContractModifierService.grantTempHearts(server, victim.getUUID(), wk.victimTempHearts(), day);
-        ContractModifierService.grantGrudge(server, victim.getUUID(), killer.getUUID(),
-                wk.victimGrudgeMul(), day);
+        ContractModifierService.grantTempHeartsUntil(server, victim.getUUID(), wk.victimTempHearts(),
+                debuffUntil);
+        ContractModifierService.grantGrudgeUntil(server, victim.getUUID(), killer.getUUID(),
+                wk.victimGrudgeMul(), debuffUntil);
 
         state.recordWrongKill();
 
@@ -560,10 +580,14 @@ public final class ContractService {
         }
 
         // Target disadvantage — offline-safe: modifiers key off the UUID, hearts/skills
-        // reapply on login through ContractModifierService.
+        // reapply on login through ContractModifierService. D3: the scar is WINDOW-scoped
+        // (remaining window, floored at debuffMinMinutes), never a full real day.
         if (targetId != null) {
-            ContractModifierService.grantSkillsMul(server, targetId, sv.targetSkillsMul(), day);
-            ContractModifierService.grantDamageMul(server, targetId, sv.targetDamageMul(), day);
+            long debuffUntil = debuffExpiresAt(state, EclipseClock.epochMillis());
+            ContractModifierService.grantSkillsMulUntil(server, targetId, sv.targetSkillsMul(),
+                    debuffUntil);
+            ContractModifierService.grantDamageMulUntil(server, targetId, sv.targetDamageMul(),
+                    debuffUntil);
         }
 
         // Ceremony: one deep bell + one shake + one nameless banner (FirstBlood grammar).
@@ -645,8 +669,12 @@ public final class ContractService {
         }
         ShardEconomy.addShards(target, sv.hunterShards());
         SkillsApi.addXp(target, "contract", sv.hunterXp());
-        ContractModifierService.grantSkillsMul(server, deadHunter.getUUID(), sv.targetSkillsMul(), day);
-        ContractModifierService.grantDamageMul(server, deadHunter.getUUID(), sv.targetDamageMul(), day);
+        // D3: the fallen hunter's scar is a DEBUFF — window-scoped like every other one.
+        long debuffUntil = debuffExpiresAt(state, EclipseClock.epochMillis());
+        ContractModifierService.grantSkillsMulUntil(server, deadHunter.getUUID(),
+                sv.targetSkillsMul(), debuffUntil);
+        ContractModifierService.grantDamageMulUntil(server, deadHunter.getUUID(),
+                sv.targetDamageMul(), debuffUntil);
 
         AnnouncementService.announce(server, "announce.eclipse.contract.tables.title", "",
                 S2CAnnouncePayload.STYLE_BOSS);
@@ -687,6 +715,9 @@ public final class ContractService {
         }
         state.recordOutcome(outcome);
         state.clearContract();
+        // D3 "clear on resolve": any debuff whose window deadline already passed is purged
+        // NOW instead of waiting for the next 100-tick sweep slot.
+        ContractModifierService.sweepExpired(server);
         EclipseMod.LOGGER.info("Contract resolved: {} ({})", outcome, state.tallyLine());
     }
 

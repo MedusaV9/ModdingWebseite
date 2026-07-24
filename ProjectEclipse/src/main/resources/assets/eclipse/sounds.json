@@ -383,6 +383,16 @@
     ],
     "subtitle": "subtitles.eclipse.skill.proc"
   },
+  "theft.steal": {
+    "sounds": [
+      {
+        "name": "eclipse:ui/heart_shatter",
+        "pitch": 0.7,
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.eclipse.theft.steal"
+  },
   "ui.caption_tick": {
     "sounds": [
       {

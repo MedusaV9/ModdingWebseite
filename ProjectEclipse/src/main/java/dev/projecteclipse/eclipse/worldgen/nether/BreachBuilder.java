@@ -24,6 +24,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -65,6 +67,15 @@ public final class BreachBuilder {
     private static final int CRATER_SCAN_MARGIN = 5;
     private static final int FALLBACK_ARRIVAL_X = 85;
     private static final int FALLBACK_ARRIVAL_Z = 85;
+    /**
+     * B7: radial inward offset (towards the disc center) separating the arrival pad from
+     * the soul-updraft shaft. Landing pad r=4 + shaft column r≈2 + 2 blocks of safety
+     * demand ≥ 8; the diagonal rounding of the (85, 85) landmark yields ~11.3 — fresh
+     * survival arrivals can no longer touch the updraft column.
+     */
+    private static final int ARRIVAL_INWARD_OFFSET = 11;
+    /** B7 storm moment: thunderstorm burst length (ticks) when the breach rips open. */
+    private static final int STORM_BURST_TICKS = 600;
     /**
      * Squared radius of the IDEA-17 ceiling bore (r ≈ 3.5): wide enough that the
      * glitch-drift handoff (arrival center ± the 2-block 1:1 offset clamp) always drops
@@ -112,9 +123,31 @@ public final class BreachBuilder {
         overworld.playSound(null, center,
                 Blocks.DEEPSLATE.defaultBlockState().getSoundType().getBreakSound(),
                 SoundSource.BLOCKS, 2.0F, 0.5F);
+        strikeStormMoment(overworld, center);
         EclipseMod.LOGGER.info("Nether breach materialization queued at {} (repair={})",
                 center.toShortString(), EclipseWorldgenState.get(server).breachOpen());
         return true;
+    }
+
+    /**
+     * B7 storm moment: REAL (visual-only, no damage/fire) lightning bolts at the breach
+     * mouth plus a short thunderstorm burst, so the opening reads as a sky-wide event
+     * instead of a lone thunder sound. Replayed on repair runs like the rest of openNow.
+     */
+    private static void strikeStormMoment(ServerLevel overworld, BlockPos center) {
+        overworld.setWeatherParameters(0, STORM_BURST_TICKS, true, true);
+        for (int i = 0; i < 3; i++) {
+            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(overworld);
+            if (bolt == null) {
+                return;
+            }
+            double a = 0.7D + i * (Math.PI * 2.0D / 3.0D);
+            double r = i == 0 ? 0.0D : BreachGeometry.CRATER_RADIUS - 2.0D;
+            bolt.moveTo(center.getX() + 0.5D + Math.cos(a) * r, center.getY(),
+                    center.getZ() + 0.5D + Math.sin(a) * r);
+            bolt.setVisualOnly(true);
+            overworld.addFreshEntity(bolt);
+        }
     }
 
     /** True while a live materialization is in flight (the transfer service treats it as open). */
@@ -127,24 +160,38 @@ public final class BreachBuilder {
         return new BlockPos(BreachGeometry.centerX(), BreachGeometry.lipY(), BreachGeometry.centerZ());
     }
 
-    /** Nether arrival landmark at its deterministic surface. */
+    /**
+     * Nether arrival pad center: the landmark anchor pushed
+     * {@value #ARRIVAL_INWARD_OFFSET} blocks towards the disc center (B7), so the pad —
+     * and with it the ceiling bore + descent landing — sits ≥ 8 blocks off the updraft
+     * shaft and fresh arrivals are never shoved straight back up.
+     */
     public static BlockPos arrivalCenter() {
-        DiscMapData.Landmark landmark = landmark(DiscProfile.NETHER, "eclipse:breach_arrival");
-        int x = landmark != null ? landmark.x() : FALLBACK_ARRIVAL_X;
-        int z = landmark != null ? landmark.z() : FALLBACK_ARRIVAL_Z;
+        BlockPos anchor = landmarkAnchorXz();
+        double length = Math.max(1.0D, Math.hypot(anchor.getX(), anchor.getZ()));
+        int x = anchor.getX() - (int) Math.round(anchor.getX() / length * ARRIVAL_INWARD_OFFSET);
+        int z = anchor.getZ() - (int) Math.round(anchor.getZ() / length * ARRIVAL_INWARD_OFFSET);
         return new BlockPos(x, DiscTerrainFunction.surfaceY(DiscProfile.NETHER, x, z), z);
     }
 
     /**
-     * Soul-updraft column, offset three blocks toward the disc center so it stays inside
-     * the stage-1 radius and normally does not overlap the mapped descent landing.
+     * Soul-updraft column at the landmark anchor itself — the return shaft keeps the
+     * mapped spot while the arrival pad moved inward (B7); both stay well inside the
+     * stage-1 radius.
      */
     public static BlockPos updraftCenter() {
-        BlockPos arrival = arrivalCenter();
-        double length = Math.max(1.0D, Math.hypot(arrival.getX(), arrival.getZ()));
-        int x = arrival.getX() - (int) Math.round(arrival.getX() / length * 3.0D);
-        int z = arrival.getZ() - (int) Math.round(arrival.getZ() / length * 3.0D);
-        return new BlockPos(x, arrival.getY(), z);
+        BlockPos anchor = landmarkAnchorXz();
+        int x = anchor.getX();
+        int z = anchor.getZ();
+        return new BlockPos(x, DiscTerrainFunction.surfaceY(DiscProfile.NETHER, x, z), z);
+    }
+
+    /** The {@code eclipse:breach_arrival} landmark (x, z); y is unresolved (0). */
+    private static BlockPos landmarkAnchorXz() {
+        DiscMapData.Landmark landmark = landmark(DiscProfile.NETHER, "eclipse:breach_arrival");
+        int x = landmark != null ? landmark.x() : FALLBACK_ARRIVAL_X;
+        int z = landmark != null ? landmark.z() : FALLBACK_ARRIVAL_Z;
+        return new BlockPos(x, 0, z);
     }
 
     /** Safe return pad on the inward side of the overworld crater rim. */
@@ -485,7 +532,9 @@ public final class BreachBuilder {
             writes.add(new BlockWrite(new BlockPos(x, y, z).below(), blackstone));
         }
 
-        // Keep the soul-updraft shaft unobstructed after the helix writes.
+        // Free-standing soul-updraft shaft (B7: ≥ 8 blocks off the funnel/arrival pad,
+        // at the landmark anchor): soul-sand base, clear rise column, hovering
+        // crying-obsidian markers riding beside the tractor line.
         BlockPos updraft = updraftCenter();
         writes.add(new BlockWrite(updraft, Blocks.SOUL_SAND.defaultBlockState()));
         for (int dy = 1; dy <= CHIMNEY_HEIGHT + 2; dy++) {

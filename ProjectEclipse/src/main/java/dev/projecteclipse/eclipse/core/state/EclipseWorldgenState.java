@@ -80,9 +80,12 @@ public final class EclipseWorldgenState extends SavedData {
 
     /**
      * Persisted lifecycle of one fog site. {@code placed} records that terrain/chests
-     * exist; {@code active} records that its standing storm wall should be restored.
+     * exist; {@code active} records that its standing storm wall should be restored;
+     * {@code recovered} records that the B13 snow-recovery sweep already ran after the
+     * storm retired (so restarts never re-run it).
      */
-    public record FogSiteState(List<BlockPos> chests, boolean placed, boolean active) {
+    public record FogSiteState(List<BlockPos> chests, boolean placed, boolean active,
+            boolean recovered) {
         public FogSiteState {
             chests = List.copyOf(chests);
         }
@@ -111,7 +114,7 @@ public final class EclipseWorldgenState extends SavedData {
                 positions.add(BlockPos.of(packed));
             }
             // Legacy chest-only rows represented materialized standing storms.
-            state.fogSiteStates.put(siteId, new FogSiteState(positions, true, true));
+            state.fogSiteStates.put(siteId, new FogSiteState(positions, true, true, false));
         }
         CompoundTag fogSites = tag.getCompound(TAG_FOG_SITE_STATES);
         for (String siteId : fogSites.getAllKeys()) {
@@ -121,7 +124,8 @@ public final class EclipseWorldgenState extends SavedData {
                 positions.add(BlockPos.of(packed));
             }
             state.fogSiteStates.put(siteId, new FogSiteState(positions,
-                    row.getBoolean("placed"), row.getBoolean("active")));
+                    row.getBoolean("placed"), row.getBoolean("active"),
+                    row.getBoolean("recovered")));
         }
         // Worker threads read the flags through the FrozenParams mirror (the volatile
         // context activates on ServerAboutToStartEvent, before any SavedData can load).
@@ -158,6 +162,7 @@ public final class EclipseWorldgenState extends SavedData {
             row.putLongArray("chests", packed);
             row.putBoolean("placed", entry.getValue().placed());
             row.putBoolean("active", entry.getValue().active());
+            row.putBoolean("recovered", entry.getValue().recovered());
             fogSites.put(entry.getKey(), row);
         }
         tag.put(TAG_FOG_CHESTS, chests);
@@ -246,7 +251,7 @@ public final class EclipseWorldgenState extends SavedData {
     public void setFogChests(String siteId, List<BlockPos> positions) {
         FogSiteState old = this.fogSiteStates.get(siteId);
         this.fogSiteStates.put(siteId, new FogSiteState(positions, true,
-                old == null || old.active()));
+                old == null || old.active(), false));
         setDirty();
     }
 
@@ -257,12 +262,31 @@ public final class EclipseWorldgenState extends SavedData {
 
     /** Persisted fog-site state, or an empty inactive row when the id is unknown. */
     public FogSiteState fogSiteState(String siteId) {
-        return this.fogSiteStates.getOrDefault(siteId, new FogSiteState(List.of(), false, false));
+        return this.fogSiteStates.getOrDefault(siteId,
+                new FogSiteState(List.of(), false, false, false));
     }
 
-    /** Atomically records chest positions plus placed/active lifecycle flags. */
+    /**
+     * Atomically records chest positions plus placed/active lifecycle flags. Resets the
+     * B13 {@code recovered} flag — every call marks a fresh materialization/retire
+     * transition, after which a retired site is eligible for one recovery sweep again.
+     */
     public void setFogSiteState(String siteId, List<BlockPos> positions, boolean placed, boolean active) {
-        this.fogSiteStates.put(siteId, new FogSiteState(positions, placed, active));
+        setFogSiteState(siteId, positions, placed, active, false);
+    }
+
+    /** {@link #setFogSiteState(String, List, boolean, boolean)} with an explicit recovered flag. */
+    public void setFogSiteState(String siteId, List<BlockPos> positions, boolean placed,
+            boolean active, boolean recovered) {
+        this.fogSiteStates.put(siteId, new FogSiteState(positions, placed, active, recovered));
+        setDirty();
+    }
+
+    /** Flips only the B13 snow-recovery flag of one fog site (chests/lifecycle kept). */
+    public void setFogSiteRecovered(String siteId, boolean recovered) {
+        FogSiteState old = fogSiteState(siteId);
+        this.fogSiteStates.put(siteId,
+                new FogSiteState(old.chests(), old.placed(), old.active(), recovered));
         setDirty();
     }
 }

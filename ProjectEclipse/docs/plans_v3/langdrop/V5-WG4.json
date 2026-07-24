@@ -1,0 +1,18 @@
+{
+	"en": {
+		"dev.eclipse.doc.spawn.census": "Prints per-category mob-cap usage and the Y-band spawn-attempt counters of your current dimension (B5 diagnostic); 'reset' clears the counters.",
+		"dev.eclipse.spawn.census.header": "Spawn census for %1$s (%2$ss since reset):",
+		"dev.eclipse.spawn.census.category": "%1$s: %2$s/%3$s toward cap, %4$s natural spawns since reset",
+		"dev.eclipse.spawn.census.bands": "Y-band attempts %1$s — %2$s already in band, %3$s re-banded, %4$s off-disc; %5$s natural spawns total",
+		"dev.eclipse.spawn.census.nostate": "No natural-spawn cycle has run in this dimension yet — cap usage unavailable.",
+		"dev.eclipse.spawn.census.reset": "Spawn census counters reset."
+	},
+	"de": {
+		"dev.eclipse.doc.spawn.census": "Zeigt die Mob-Cap-Auslastung je Kategorie und die Y-Band-Spawnversuchszähler deiner aktuellen Dimension (B5-Diagnose); 'reset' setzt die Zähler zurück.",
+		"dev.eclipse.spawn.census.header": "Spawn-Zensus für %1$s (%2$s s seit Zurücksetzung):",
+		"dev.eclipse.spawn.census.category": "%1$s: %2$s/%3$s zum Cap, %4$s natürliche Spawns seit Zurücksetzung",
+		"dev.eclipse.spawn.census.bands": "Y-Band-Versuche %1$s — %2$s bereits im Band, %3$s umgelenkt, %4$s außerhalb der Scheibe; %5$s natürliche Spawns gesamt",
+		"dev.eclipse.spawn.census.nostate": "In dieser Dimension lief noch kein natürlicher Spawn-Zyklus — Cap-Auslastung nicht verfügbar.",
+		"dev.eclipse.spawn.census.reset": "Spawn-Zensus-Zähler zurückgesetzt."
+	}
+}

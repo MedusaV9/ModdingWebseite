@@ -12,6 +12,8 @@ import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import dev.projecteclipse.eclipse.worldgen.structure.dungeon.CollapsedVaultBuilder;
 import dev.projecteclipse.eclipse.worldgen.structure.dungeon.DungeonSpawners;
+import dev.projecteclipse.eclipse.worldgen.structure.dungeon.FloodedCryptBuilder;
+import dev.projecteclipse.eclipse.worldgen.structure.dungeon.GlitchReliquaryBuilder;
 import dev.projecteclipse.eclipse.worldgen.structure.dungeon.UmbralWarrensBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -33,10 +35,13 @@ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
  *
  * <p>Per overworld annulus: 1–3 {@code minecraft:mineshaft} starts (y ≈ −20…10), up to
  * {@value #MAX_MONSTER_ROOMS} vanilla-style monster rooms at the shaft bottoms of
- * {@link CaveEntrances} in the band, and — on stage {@value #DUNGEON_STAGE} — the two
- * custom dungeons: the standalone {@link CollapsedVaultBuilder Collapsed Vault} in the
- * annulus and the {@link UmbralWarrensBuilder Umbral Warrens} inside the deep-dark band
- * under the mountain flank ({@code CaveBiomeMap}: y &lt; −32, r ≤ 120 of the mountain).</p>
+ * {@link CaveEntrances} in the band, and the custom dungeons of the {@code DUNGEON_ROWS}
+ * table (plans_v5 B12: per-row stages instead of one hard-wired stage): Collapsed Vaults
+ * on the stage-3 AND stage-4 annuli, the {@link FloodedCryptBuilder Flooded Crypt} on
+ * stage 4, the {@link GlitchReliquaryBuilder Glitch Reliquary} on stage 5, plus the
+ * {@link UmbralWarrensBuilder Umbral Warrens} inside the deep-dark band under the
+ * mountain flank ({@code CaveBiomeMap}: y &lt; −32, r ≤ 120 of the mountain) on stage
+ * {@value #DUNGEON_STAGE}.</p>
  *
  * <p>Sites are two-phase: {@link StructureStamper} enqueues the rows returned by
  * {@link #sitesFor} into {@link StructurePendingRegistry} when their stage's terrain
@@ -50,12 +55,16 @@ public final class UndergroundSites {
     public static final String MINESHAFT_ID = "eclipse:mineshaft";
     /** Placer key of the monster-room cluster sites. */
     public static final String MONSTER_ROOM_ID = "eclipse:monster_room";
-    /** Placer key of the standalone Collapsed Vault instance. */
+    /** Placer key of the standalone Collapsed Vault instances. */
     public static final String COLLAPSED_VAULT_ID = "eclipse:collapsed_vault";
     /** Placer key of the Umbral Warrens. */
     public static final String UMBRAL_WARRENS_ID = "eclipse:umbral_warrens";
+    /** Placer key of the Flooded Crypt (plans_v5 B12). */
+    public static final String FLOODED_CRYPT_ID = "eclipse:flooded_crypt";
+    /** Placer key of the Glitch Reliquary (plans_v5 B12). */
+    public static final String GLITCH_RELIQUARY_ID = "eclipse:glitch_reliquary";
 
-    /** Stage whose annulus hosts both custom dungeons (D7/D8: stage-3 band). */
+    /** Stage whose annulus hosts the Umbral Warrens (D7/D8: stage-3 band). */
     public static final int DUNGEON_STAGE = 3;
 
     /** Keep-out margin from both edges of the annulus band. */
@@ -68,11 +77,30 @@ public final class UndergroundSites {
     private static final int ATTEMPTS_PER_SITE = 24;
     /** Monster-room cap per annulus. */
     private static final int MAX_MONSTER_ROOMS = 4;
-    /** Salt family for this class's rolls (seed registry: wiring doc P1-W1.6). */
+    /** Salt family for this class's rolls (seed registry: wiring doc P1-W1.6; 65/66 B12). */
     private static final int SALT_MINESHAFT = 61;
     private static final int SALT_VAULT = 62;
     private static final int SALT_WARRENS = 63;
     private static final int SALT_ROOM = 64;
+    private static final int SALT_CRYPT = 65;
+    private static final int SALT_RELIQUARY = 66;
+
+    /**
+     * One annulus-hosted custom-dungeon roll (plans_v5 B12): {@code placerId} keys the
+     * registered placer, {@code stage} the hosting annulus, {@code salt} the hashed
+     * band pick, {@code yBase}/{@code ySpan} the anchor-Y roll and {@code footprint}
+     * the pending-site footprint hint. Site ids stay unique per row because the stage
+     * is baked into the id ({@code <placer>/s<stage>}).
+     */
+    private record DungeonRow(String placerId, int stage, int salt, int yBase, int ySpan,
+            int footprint) {}
+
+    /** The per-stage custom-dungeon table (B12; the Umbral Warrens row is separate). */
+    private static final List<DungeonRow> DUNGEON_ROWS = List.of(
+            new DungeonRow(COLLAPSED_VAULT_ID, 3, SALT_VAULT, -6, 12, 48),
+            new DungeonRow(COLLAPSED_VAULT_ID, 4, SALT_VAULT, -6, 12, 48),
+            new DungeonRow(FLOODED_CRYPT_ID, 4, SALT_CRYPT, -14, 10, 32),
+            new DungeonRow(GLITCH_RELIQUARY_ID, 5, SALT_RELIQUARY, -30, 12, 24));
 
     private UndergroundSites() {}
 
@@ -130,15 +158,23 @@ public final class UndergroundSites {
             rooms++;
         }
 
-        // Both custom dungeons roll on the stage-3 annulus.
-        if (stage == DUNGEON_STAGE) {
-            BlockPos vault = pickInBand(profile, SALT_VAULT, stage, 0, inner, outer, taken);
-            if (vault != null) {
-                int y = -6 + (int) (hash01(SALT_VAULT, vault.getX(), 7, vault.getZ()) * 12.0D);
-                taken.add(vault);
-                sites.add(new PendingSite(COLLAPSED_VAULT_ID + "/s" + stage, COLLAPSED_VAULT_ID,
-                        profile.name(), new BlockPos(vault.getX(), y, vault.getZ()), stage, 48, gameTime));
+        // Custom dungeons: one row table entry per (type, stage) pair — B12.
+        for (DungeonRow row : DUNGEON_ROWS) {
+            if (row.stage() != stage) {
+                continue;
             }
+            BlockPos pos = pickInBand(profile, row.salt(), stage, 0, inner, outer, taken);
+            if (pos == null) {
+                continue;
+            }
+            int y = row.yBase() + (int) (hash01(row.salt(), pos.getX(), 7, pos.getZ()) * row.ySpan());
+            taken.add(pos);
+            sites.add(new PendingSite(row.placerId() + "/s" + stage, row.placerId(),
+                    profile.name(), new BlockPos(pos.getX(), y, pos.getZ()), stage,
+                    row.footprint(), gameTime));
+        }
+        // The Umbral Warrens keep their authored deep-dark anchor under the mountain.
+        if (stage == DUNGEON_STAGE) {
             sites.add(new PendingSite(UMBRAL_WARRENS_ID + "/s" + stage, UMBRAL_WARRENS_ID,
                     profile.name(), warrensAnchor(map), stage, 64, gameTime));
         }
@@ -270,7 +306,7 @@ public final class UndergroundSites {
 
     // --- placers (registered by StructureStamper at server start) ---
 
-    /** Registers the four underground-site placers (idempotent, first wins). */
+    /** Registers the six underground-site placers (idempotent, first wins). */
     public static void registerPlacers() {
         StructurePendingRegistry.registerPlacer(MINESHAFT_ID, UndergroundSites::placeMineshaft);
         StructurePendingRegistry.registerPlacer(MONSTER_ROOM_ID, (level, site) -> {
@@ -285,6 +321,14 @@ public final class UndergroundSites {
         });
         StructurePendingRegistry.registerPlacer(UMBRAL_WARRENS_ID, (level, site) -> {
             BoundingBox bounds = UmbralWarrensBuilder.build(level, site.anchor());
+            SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
+        });
+        StructurePendingRegistry.registerPlacer(FLOODED_CRYPT_ID, (level, site) -> {
+            BoundingBox bounds = FloodedCryptBuilder.build(level, site.anchor());
+            SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
+        });
+        StructurePendingRegistry.registerPlacer(GLITCH_RELIQUARY_ID, (level, site) -> {
+            BoundingBox bounds = GlitchReliquaryBuilder.build(level, site.anchor());
             SitePrep.finishBounds(level, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ());
         });
     }

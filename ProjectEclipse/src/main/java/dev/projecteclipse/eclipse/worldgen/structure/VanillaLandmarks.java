@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -29,15 +30,15 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
 public final class VanillaLandmarks {
     /**
      * vanilla structure id → landmark id. Immutable — thread-safe for locate reads. The
-     * first five entries preserve the generator's original hardcoded table (regression
-     * contract, see {@code docs/plans_v3/wiring/P1-W1.1_wiring.md}); the rest are the D6
-     * set-piece sites + the deterministic underground mineshaft sites.
+     * first four entries preserve the generator's original hardcoded table (regression
+     * contract, see {@code docs/plans_v3/wiring/P1-W1.1_wiring.md}; the stronghold row
+     * was removed with the stronghold itself — plan B15 seam executed here); the rest
+     * are the D6 set-piece sites + the deterministic underground mineshaft sites.
      */
     private static final Map<ResourceLocation, String> LOCATE_SITES = Map.ofEntries(
             Map.entry(ResourceLocation.withDefaultNamespace("desert_pyramid"), "eclipse:desert_temple"),
             Map.entry(ResourceLocation.withDefaultNamespace("jungle_pyramid"), "eclipse:jungle_temple"),
             Map.entry(ResourceLocation.withDefaultNamespace("village_plains"), "eclipse:village_plains"),
-            Map.entry(ResourceLocation.withDefaultNamespace("stronghold"), "eclipse:stronghold_emergence"),
             Map.entry(ResourceLocation.withDefaultNamespace("fortress"), "eclipse:fortress_core"),
             Map.entry(ResourceLocation.withDefaultNamespace("mansion"), "eclipse:mansion"),
             Map.entry(ResourceLocation.withDefaultNamespace("pillager_outpost"), "eclipse:pillager_outpost"),
@@ -74,9 +75,11 @@ public final class VanillaLandmarks {
      *       ({@link StructureStamper#generateVanilla});</li>
      *   <li>{@link SitePrep.Mode#CAVITY} sites are piece-translated so the piece-union
      *       center lands exactly on the anchor (vanilla picked its own Y);
-     *       {@link SitePrep.Mode#PLATEAU} pieces keep their generated position — they
-     *       ground-snap against the heightmaps SitePrep just re-primed;</li>
-     *   <li>{@link SitePrep} queues its resumable plateau/cavity worker;</li>
+     *       {@link SitePrep.Mode#PLATEAU} pieces are translated vertically onto the
+     *       deterministic plateau height (plan B4) — jigsaw pieces get no ground snap
+     *       at placement and would otherwise keep the pre-plateau slope's Y;</li>
+     *   <li>{@link SitePrep} queues its resumable plateau/cavity worker (cavity mode
+     *       carves per-piece envelopes, plan B3);</li>
      *   <li>once prep completes, pieces place chunk-by-chunk, the start is registered
      *       for {@code /locate}, and {@link SitePrep#finish} relights/resends.</li>
      * </ol>
@@ -137,11 +140,31 @@ public final class VanillaLandmarks {
                 piece.move(dx, dy, dz);
             }
             bounds = StructureStamper.pieceUnion(start);
+        } else {
+            // Plan B4: Structure.generate Y-snapped the jigsaw start + roads against the
+            // LIVE pre-plateau heightmaps, and jigsaw pieces get no per-piece ground snap
+            // at placement — wherever the plateau ends up lower than the old slope, the
+            // pieces float. Translate every piece vertically so the start piece's base
+            // sits on the deterministic plateau SitePrep is about to build (all pieces
+            // lie inside the flat footprint, so a single vertical delta keeps streets,
+            // farms and houses seamless).
+            int plateauY = DiscTerrainFunction.surfaceY(profile, anchor.getX(), anchor.getZ());
+            int groundY = start.getPieces().get(0).getBoundingBox().minY();
+            int dy = plateauY - groundY;
+            if (dy != 0) {
+                for (StructurePiece piece : start.getPieces()) {
+                    piece.move(0, dy, 0);
+                }
+                bounds = StructureStamper.pieceUnion(start);
+            }
         }
 
         SitePrep.PreparedGround prepared = mode == SitePrep.Mode.CAVITY
-                ? SitePrep.prepareCavity(level, profile, bounds.minX(), bounds.minY(), bounds.minZ(),
-                        bounds.maxX(), bounds.maxY(), bounds.maxZ(), anchor)
+                // Plan B3 seam: hand SitePrep the per-piece boxes so the cavity carve hugs
+                // each piece instead of blowing out the whole union box.
+                ? SitePrep.prepareCavity(level, profile,
+                        start.getPieces().stream().map(StructurePiece::getBoundingBox).toList(),
+                        anchor)
                 : SitePrep.preparePlateau(level, profile, bounds.minX(), bounds.minZ(),
                         bounds.maxX(), bounds.maxZ(), anchor);
         prepared.whenReady(() -> {

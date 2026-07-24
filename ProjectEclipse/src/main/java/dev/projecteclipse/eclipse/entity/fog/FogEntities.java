@@ -26,11 +26,17 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * registration) no-ops via {@link DeferredHolder#isBound()}, so the build and both run
  * configs stay green either way.
  *
- * <p>Sizes are frozen in plan §2.3/§6: fog_revenant MONSTER 0.7×2.2, storm_hound MONSTER
- * 0.9×1.1, both {@code clientTrackingRange(10)}. No spawn eggs (house rule: event mod,
- * admins use {@code /summon}); natural population is P6-W6's spawn rules, so the spawn
- * placements registered here only matter for dungeon spawners and any future biome
- * hooks — standard on-ground monster rules (light-gated, MOTION_BLOCKING_NO_LEAVES).</p>
+ * <p>Sizes are frozen in plan §2.3/§6: fog_revenant 0.7×2.2, storm_hound 0.9×1.1, both
+ * {@code clientTrackingRange(10)}. No spawn eggs (house rule: event mod, admins use
+ * {@code /summon}); natural population is P6-W6's spawn rules, so the spawn placements
+ * registered here only matter for dungeon spawners and any future biome hooks — standard
+ * on-ground monster rules (light-gated, MOTION_BLOCKING_NO_LEAVES).</p>
+ *
+ * <p><b>MobCategory MISC since plans_v5 PLAN-B B5</b> (was the spec's MONSTER): both mobs
+ * are self-capped by {@code EventSpawnRules} (site + global caps), so counting them
+ * against the per-player MONSTER budget only starved vanilla hostile spawns near storms.
+ * MISC mobs are exempt from {@code NaturalSpawner.createState}'s census; despawn rules
+ * are unchanged (same 128-block despawn distance).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FogEntities {
@@ -43,7 +49,7 @@ public final class FogEntities {
      */
     public static final DeferredHolder<EntityType<?>, EntityType<FogRevenantEntity>> FOG_REVENANT =
             ENTITIES.register("fog_revenant",
-                    () -> EntityType.Builder.of(FogRevenantEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(FogRevenantEntity::new, MobCategory.MISC)
                             .sized(0.7F, 2.2F)
                             .eyeHeight(1.9F)
                             .clientTrackingRange(10)
@@ -55,7 +61,7 @@ public final class FogEntities {
      */
     public static final DeferredHolder<EntityType<?>, EntityType<StormHoundEntity>> STORM_HOUND =
             ENTITIES.register("storm_hound",
-                    () -> EntityType.Builder.of(StormHoundEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(StormHoundEntity::new, MobCategory.MISC)
                             .sized(0.9F, 1.1F)
                             .eyeHeight(0.8F)
                             .clientTrackingRange(10)

@@ -10,6 +10,8 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 - `/dev anticheat threshold` — Show the active soft and hard suspicion thresholds. · perm **2**
 - `/dev anticheat threshold hard <score>` — Persist a new behavioral anti-xray threshold and clear old samples. · perm **3** · *caution*
 - `/dev anticheat threshold soft <score>` — Persist a new behavioral anti-xray threshold and clear old samples. · perm **3** · *caution*
+- `/dev shards status` — Show the team shard pool and whether shard tracing is active. · perm **2**
+- `/dev shards trace on|off` — Toggle shard-economy tracing: every personal balance change, team-pool bank, physical delivery and ground pickup is logged with its calling source. · perm **2**
 - `/dev stats query <player> [metric] [day]` — Query one player's analytics for a metric/day or list all non-zero metrics. · perm **2**
 - `/dev stats top <metric>` — Show the current-day top ten for an analytics metric. · perm **2**
 
@@ -84,9 +86,12 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 
 ## Players
 
+- `/dev lives give <player> <n>` — Grant or remove Lives for ONE player through the standard pipeline (negative removes; capped at 7 Lives, hitting 0 engages the ghost flow). · perm **2** · *caution*
+- `/dev lives status [player]` — Show Lives and ghost state for one player or everyone online. · perm **2**
 - `/dev player multiplier clear <player>` — Reset a player's hidden skill-XP multiplier to 1. · perm **2** · *caution*
 - `/dev player multiplier set <player> <factor>` — Set a player's hidden persisted skill-XP multiplier. · perm **2** · *caution*
 - `/dev player multiplier show <player>` — Show a player's hidden skill-XP multiplier to the issuing operator. · perm **2**
+- `/dev player names` — List the real names of all online players to the issuing operator (anonymity for players stays intact). · perm **2**
 - `/dev player xp give <player> <amount>` — Grant skill XP through the normal multiplier and cap pipeline. · perm **2** · *caution*
 - `/dev toggle <action> global (on|off)` — Enables/disables an action (build, mine, craft, pvp, move, interact, drop, pickup) for EVERYONE. Per-player overrides still win. · perm **2** · *caution*
 - `/dev toggle <action> player <player> (allow|deny|clear)` — Sets an ALLOW/DENY override for one player (beats the global flag) or clears it back to inherit. · perm **2** · *caution*
@@ -128,6 +133,7 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 
 ## Stage
 
+- `/dev chunk regen [<pos>|current] [<radius>] [force]` — Rewrite loaded disc chunks from the frozen terrain function at the committed stage and replay carving/decoration (radius 0-2 around a position; 'force' overrides structure protection). · perm **3** · *destructive*
 - `/dev stage backup now [<label>]` — Captures a timestamped live-terrain backup immediately, with an optional label. · perm **3**
 - `/dev stage list` — Lists curated snapshots and live backups with clickable restore links and UTC timestamps. · perm **3**
 - `/dev stage load <name>` — Restores a curated snapshot or timestamped live backup; first backs up the current terrain. · perm **3** · *destructive*

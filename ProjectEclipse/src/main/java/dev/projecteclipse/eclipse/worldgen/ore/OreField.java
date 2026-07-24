@@ -1,90 +1,110 @@
 package dev.projecteclipse.eclipse.worldgen.ore;
 
+import java.util.Arrays;
+import java.util.List;
+
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Config-driven, stage-annulus-gated ore blobs. One hashed vein candidate per 16³ cell per ore
- * type (same algorithm as legacy {@code DiscTerrainFunction.oreAt}), with unlock stages and
- * {@link FrozenParams#annulusBand(double)} whitelisting.
+ * Config-driven, stage-annulus-gated ore VEINS (B2, PLAN-B plans_v5). Veins are derived
+ * per 16³ cell per ore by {@link OreVeinShape} — the deterministic port of vanilla
+ * {@code OreFeature.doPlace}'s segment + sine-ellipsoid chain — with unlock stages and
+ * {@link FrozenParams#annulusBand(DiscProfile, double)} whitelisting unchanged from the
+ * legacy blob field. {@link VeinTracker} re-derives the exact same chains through the
+ * same helper, so mining feel / anti-xray stay in lockstep by construction.
+ *
+ * <p>Membership stays a pure per-block function of (mapSeed, ore table, cell): the
+ * derived chain of a cell is reused for all ~4096 block lookups through a per-thread
+ * direct-mapped cache (the {@code DiscBiomeSource.ColumnCache} pattern), keyed on the
+ * live config snapshot + frozen seed so hot reloads and refreezes drop stale chains.</p>
  */
 public final class OreField {
-    private static final int H_ORE = 17;
+
+    /** Direct-mapped per-thread cell cache size (power of two). A chunk touches ~24 cells/ore. */
+    private static final int CACHE_SIZE = 1024;
+
+    private static final ThreadLocal<CellCache> CACHE = ThreadLocal.withInitial(CellCache::new);
 
     private OreField() {}
 
     /**
-     * Returns an ore block at world coordinates when the cell blob intersects {@code y}, or
-     * {@code null} when no ore applies. {@code deepslate} selects the deepslate variant when
-     * {@code true}, otherwise the stone (or nether) variant.
+     * Returns an ore block at world coordinates when a derived vein chain of the cell
+     * contains {@code (x, y, z)}, or {@code null} when no ore applies. {@code deepslate}
+     * selects the deepslate variant when {@code true}, otherwise the stone (or nether)
+     * variant.
      */
     public static BlockState oreAt(DiscProfile profile, int x, int y, int z, boolean deepslate) {
         OreConfig.Snapshot snapshot = OreConfig.current();
-        for (OreConfig.ResolvedOre ore : snapshot.oresOf(profile)) {
-            BlockState state = tryOre(ore, profile, x, y, z, deepslate);
-            if (state != null) {
-                return state;
+        List<OreConfig.ResolvedOre> ores = snapshot.oresOf(profile);
+        if (ores.isEmpty()) {
+            return null;
+        }
+        long seed = FrozenParams.mapSeed();
+        CellCache cache = CACHE.get();
+        if (cache.snapshot != snapshot || cache.seed != seed) {
+            // Config hot reload / refreeze / save swap — drop every cached chain.
+            Arrays.fill(cache.keys, Long.MIN_VALUE);
+            Arrays.fill(cache.values, null);
+            cache.snapshot = snapshot;
+            cache.seed = seed;
+        }
+        int cellX = x >> 4;
+        int cellZ = z >> 4;
+        int cellY = Math.floorDiv(y, 16);
+        for (OreConfig.ResolvedOre ore : ores) {
+            if (y < ore.minY() || y > ore.maxY()) {
+                continue;
+            }
+            OreVeinShape[] veins = cellVeins(cache, seed, ore, profile, cellX, cellY, cellZ);
+            for (OreVeinShape vein : veins) {
+                if (vein.contains(x, y, z)) {
+                    return (deepslate ? ore.deepOre() : ore.stoneOre()).defaultBlockState();
+                }
             }
         }
         return null;
     }
 
-    private static BlockState tryOre(OreConfig.ResolvedOre ore, DiscProfile profile, int x, int y, int z,
-            boolean deepslate) {
-        if (y < ore.minY() || y > ore.maxY()) {
-            return null;
+    private static OreVeinShape[] cellVeins(CellCache cache, long seed, OreConfig.ResolvedOre ore,
+            DiscProfile profile, int cellX, int cellY, int cellZ) {
+        long key = packKey(profile, ore.salt(), cellX, cellY, cellZ);
+        int slot = (int) (OreVeinShape.mix(key) & (CACHE_SIZE - 1));
+        if (cache.keys[slot] == key) {
+            return cache.values[slot];
         }
-
-        int cx = x >> 4;
-        int cz = z >> 4;
-        int cy = Math.floorDiv(y, 16);
-        double cellR = Math.hypot(cx * 16 + 8, cz * 16 + 8);
-        int band = FrozenParams.annulusBand(profile, cellR);
-        if (band < ore.unlockStage()) {
-            return null;
-        }
-
-        long h = hash3(H_ORE + ore.salt(), cx, cy, cz);
-        double p = ore.cellP() * ore.bandFactor()[Math.min(band, ore.bandFactor().length - 1)];
-        if (ore.centerBias()) {
-            p *= Math.max(0.15D, 1.0D - cellR / profile.lensNormRadius());
-        }
-        if (to01(h) >= p) {
-            return null;
-        }
-
-        int vx = (cx << 4) + 4 + (int) ((h >>> 12) & 7);
-        int vy = cy * 16 + 4 + (int) ((h >>> 16) & 7);
-        int vz = (cz << 4) + 4 + (int) ((h >>> 20) & 7);
-        if (vy < ore.minY() || vy > ore.maxY()) {
-            return null;
-        }
-
-        double radius = ore.radius() * (0.65D + 0.35D * ((h >>> 24 & 255) / 255.0D));
-        double dx = x - vx;
-        double dy = y - vy;
-        double dz = z - vz;
-        if (dx * dx + dy * dy * 1.6D + dz * dz <= radius * radius) {
-            return (deepslate ? ore.deepOre() : ore.stoneOre()).defaultBlockState();
-        }
-        return null;
+        double scale = OreVeinShape.gateScale(ore, profile, cellX, cellZ);
+        OreVeinShape[] veins = scale < 0.0D
+                ? OreVeinShape.NO_VEINS
+                : OreVeinShape.veinsOf(seed, ore, cellX, cellY, cellZ, scale);
+        cache.keys[slot] = key;
+        cache.values[slot] = veins;
+        return veins;
     }
 
-    private static long mix(long z) {
-        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-        return z ^ (z >>> 31);
+    /**
+     * Collision-free key: 16-bit cell X/Z (disc radius ≪ ±32k cells), 8-bit cell Y,
+     * 8-bit ore salt, 1 profile bit (salts restart at 1 per dimension list). Bit 63 is
+     * never set, so the {@code Long.MIN_VALUE} empty-slot sentinel stays unreachable.
+     */
+    private static long packKey(DiscProfile profile, int salt, int cellX, int cellY, int cellZ) {
+        return (cellX & 0xFFFFL)
+                | ((cellZ & 0xFFFFL) << 16)
+                | ((cellY & 0xFFL) << 32)
+                | ((salt & 0xFFL) << 40)
+                | ((profile == DiscProfile.NETHER ? 1L : 0L) << 48);
     }
 
-    private static long hash3(int salt, int a, int b, int c) {
-        long h = FrozenParams.mapSeed() + salt * 0x9E3779B97F4A7C15L;
-        h = mix(h ^ (a & 0xFFFFFFFFL));
-        h = mix(h ^ (b & 0xFFFFFFFFL));
-        return mix(h ^ (c & 0xFFFFFFFFL));
-    }
+    /** Per-thread direct-mapped cache; keyed to the live snapshot + frozen map seed. */
+    private static final class CellCache {
+        final long[] keys = new long[CACHE_SIZE];
+        final OreVeinShape[][] values = new OreVeinShape[CACHE_SIZE][];
+        OreConfig.Snapshot snapshot;
+        long seed;
 
-    private static double to01(long hash) {
-        return (hash >>> 11) * 0x1.0p-53D;
+        CellCache() {
+            Arrays.fill(this.keys, Long.MIN_VALUE);
+        }
     }
 }

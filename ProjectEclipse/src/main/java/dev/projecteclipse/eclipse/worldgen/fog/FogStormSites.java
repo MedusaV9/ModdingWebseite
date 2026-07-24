@@ -24,6 +24,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
+import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.SitePrep;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
@@ -33,9 +34,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowyDirtBlock;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -54,6 +58,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the registered placer runs {@link SitePrep} and materializes the grove after a rift
  * trigger/auto-delay. Chest positions and placed/active lifecycle flags persist in
  * {@link EclipseWorldgenState}, so standing walls are re-announced after restart.</p>
+ *
+ * <p>B13: the grove palette is biome-aware (cold columns keep a snow/powder-snow scar
+ * instead of mud/podzol), and when a storm retires — stage rollback or the
+ * {@link #stormEnded} hook — a budgeted {@code freeze_top_layer}-style sweep re-snows
+ * the footprint. The per-site {@code recovered} flag in {@link EclipseWorldgenState}
+ * keeps restarts from re-running the sweep.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FogStormSites {
@@ -161,6 +171,8 @@ public final class FogStormSites {
                 if (site.stage() <= toStage) {
                     continue;
                 }
+                // B13: sweep before the state reset — recoverSite reads placed/recovered.
+                recoverSite(level, site);
                 state.setFogSiteState(site.id(), List.of(), false, false);
                 retireSessionSite(level, site);
                 broadcast(level, site, surfaceCenter(level, site.x(), site.z()), false);
@@ -230,6 +242,87 @@ public final class FogStormSites {
         StormRegistry.handleFogSite(level, site.id(), Vec3.atCenterOf(center), site.radius(), false);
     }
 
+    /**
+     * B13 "storm ended" hook: retires one site's standing wall at runtime (boss defeat,
+     * quest beat or dev command) and runs the one-shot snow-recovery sweep. Unlike the
+     * server-stop retirement this persists {@code active=false}, so the wall stays down
+     * after restart. Unknown ids are ignored.
+     */
+    public static void stormEnded(ServerLevel level, String siteId) {
+        Site site = findSite(siteId);
+        if (site == null) {
+            return;
+        }
+        recoverSite(level, site);
+        BlockPos center = surfaceCenter(level, site.x(), site.z());
+        FogBankMarker.clearLair(level, center);
+        StormRegistry.handleFogSite(level, site.id(), Vec3.atCenterOf(center), site.radius(), false);
+        EclipseWorldgenState state = EclipseWorldgenState.get(level.getServer());
+        EclipseWorldgenState.FogSiteState saved = state.fogSiteState(site.id());
+        state.setFogSiteState(site.id(), saved.chests(), saved.placed(), false, saved.recovered());
+        broadcast(level, site, center, false);
+        reconcileTyrantLair(level);
+    }
+
+    /**
+     * B13 snow-recovery sweep: after the storm retires, walks every column of the site
+     * footprint and re-freezes cold-biome tops — a manual {@code freeze_top_layer}:
+     * water sources become ice, then a snow layer lands on motion-blocking,
+     * snow-supporting tops (chest/campfire columns are skipped). Runs through
+     * {@link BudgetedBlockWriter} like all site work and flips the persisted
+     * {@code recovered} flag exactly once; never runs for unplaced or already
+     * recovered sites.
+     */
+    private static void recoverSite(ServerLevel level, Site site) {
+        EclipseWorldgenState state = EclipseWorldgenState.get(level.getServer());
+        EclipseWorldgenState.FogSiteState saved = state.fogSiteState(site.id());
+        if (!saved.placed() || saved.recovered()) {
+            return;
+        }
+        state.setFogSiteRecovered(site.id(), true);
+        int radius = site.radius();
+        int span = radius * 2 + 1;
+        int total = span * span;
+        int[] cursor = {0};
+        BudgetedBlockWriter.enqueue(level, budget -> {
+            int end = Math.min(total, cursor[0] + budget);
+            for (; cursor[0] < end; cursor[0]++) {
+                int dx = cursor[0] % span - radius;
+                int dz = cursor[0] / span - radius;
+                if (dx * dx + dz * dz <= radius * radius) {
+                    recoverColumn(level, site.x() + dx, site.z() + dz);
+                }
+            }
+            return cursor[0] >= total;
+        }, () -> EclipseMod.LOGGER.info("FogStormSites: snow recovery finished for {}", site.id()),
+                error -> EclipseMod.LOGGER.error("FogStormSites: snow recovery for {} failed",
+                        site.id(), error));
+    }
+
+    /** One column of the recovery sweep; no-op outside cold-at-surface biomes. */
+    private static void recoverColumn(ServerLevel level, int x, int z) {
+        BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, new BlockPos(x, 0, z));
+        Biome biome = level.getBiome(top).value();
+        if (!biome.coldEnoughToSnow(top)) {
+            return;
+        }
+        BlockPos below = top.below();
+        BlockState ground = level.getBlockState(below);
+        if (ground.is(Blocks.CHEST) || ground.is(Blocks.CAMPFIRE)) {
+            return;
+        }
+        if (biome.shouldFreeze(level, below, false)) {
+            level.setBlock(below, Blocks.ICE.defaultBlockState(), 3);
+            return;
+        }
+        if (biome.shouldSnow(level, top)) {
+            level.setBlock(top, Blocks.SNOW.defaultBlockState(), 3);
+            if (ground.hasProperty(SnowyDirtBlock.SNOWY)) {
+                level.setBlock(below, ground.setValue(SnowyDirtBlock.SNOWY, true), 2);
+            }
+        }
+    }
+
     private static BlockPos surfaceCenter(ServerLevel level, int x, int z) {
         int y = DiscTerrainFunction.surfaceY(DiscProfile.OVERWORLD, x, z);
         if (y <= level.getMinBuildHeight()) {
@@ -257,10 +350,23 @@ public final class FogStormSites {
                 // under the plateau (or suspend them above it on former slopes).
                 int colY = surfaceY;
                 double scar = 1.0D - dist / radius;
-                BlockState ground = scar > 0.55D ? Blocks.MUD.defaultBlockState()
-                        : scar > 0.25D ? Blocks.PODZOL.defaultBlockState()
-                        : Blocks.GRASS_BLOCK.defaultBlockState();
-                level.setBlock(new BlockPos(x, colY, z), ground, 3);
+                BlockPos groundPos = new BlockPos(x, colY, z);
+                // B13: cold columns (snowy grove ring) keep a snow scar instead of the
+                // biome-blind mud/podzol palette; the scorched center stays mud.
+                boolean cold = level.getBiome(groundPos.above()).value()
+                        .coldEnoughToSnow(groundPos.above());
+                BlockState ground;
+                if (scar > 0.55D) {
+                    ground = Blocks.MUD.defaultBlockState();
+                } else if (cold) {
+                    ground = Math.floorMod(x * 31 + z * 17, 19) == 0
+                            ? Blocks.POWDER_SNOW.defaultBlockState()
+                            : Blocks.SNOW_BLOCK.defaultBlockState();
+                } else {
+                    ground = scar > 0.25D ? Blocks.PODZOL.defaultBlockState()
+                            : Blocks.GRASS_BLOCK.defaultBlockState();
+                }
+                level.setBlock(groundPos, ground, 3);
                 if (scar > 0.7D && (x + z) % 7 == 0) {
                     level.setBlock(new BlockPos(x, colY + 1, z), Blocks.DEAD_BUSH.defaultBlockState(), 3);
                 }

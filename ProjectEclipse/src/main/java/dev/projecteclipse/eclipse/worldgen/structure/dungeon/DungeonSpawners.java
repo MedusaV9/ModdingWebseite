@@ -68,6 +68,10 @@ public final class DungeonSpawners {
     public static final String UMBRAL_WARRENS = "umbral_warrens";
     /** Dungeon id of the vanilla-style monster-room clusters ({@code UndergroundSites}). */
     public static final String MONSTER_ROOM = "monster_room";
+    /** Dungeon id of the Flooded Crypt (plans_v5 B12). */
+    public static final String FLOODED_CRYPT = "flooded_crypt";
+    /** Dungeon id of the Glitch Reliquary (plans_v5 B12). */
+    public static final String GLITCH_RELIQUARY = "glitch_reliquary";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -75,7 +79,9 @@ public final class DungeonSpawners {
     private static final Map<String, List<EntityType<?>>> FALLBACKS = Map.of(
             COLLAPSED_VAULT, List.of(EntityType.ZOMBIE, EntityType.SKELETON),
             UMBRAL_WARRENS, List.of(EntityType.CAVE_SPIDER, EntityType.ZOMBIE),
-            MONSTER_ROOM, List.of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER));
+            MONSTER_ROOM, List.of(EntityType.ZOMBIE, EntityType.SKELETON, EntityType.SPIDER),
+            FLOODED_CRYPT, List.of(EntityType.DROWNED, EntityType.ZOMBIE),
+            GLITCH_RELIQUARY, List.of(EntityType.ENDERMITE, EntityType.SILVERFISH));
 
     /** Parsed snapshot; volatile swap on reload. */
     private static volatile Snapshot snapshot;
@@ -274,6 +280,10 @@ public final class DungeonSpawners {
         root.add(UMBRAL_WARRENS, spawnerSection("eclipse:eclipse_cultist", "minecraft:cave_spider",
                 "minecraft:zombie"));
         root.add(MONSTER_ROOM, spawnerSection("minecraft:zombie", "minecraft:skeleton", "minecraft:spider"));
+        // B12 dungeons lead with gated eclipse mobs; resolve() keeps spawners on the
+        // vanilla fallbacks until those registrations exist in the build.
+        root.add(FLOODED_CRYPT, spawnerSection("eclipse:fog_revenant", "minecraft:drowned"));
+        root.add(GLITCH_RELIQUARY, spawnerSection("eclipse:glitched_husk", "eclipse:glitched_tick"));
         try {
             Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
             EclipseMod.LOGGER.info("Created default Eclipse config {}", file);

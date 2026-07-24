@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,10 +33,26 @@ import net.neoforged.fml.loading.FMLPaths;
  * Loads {@code ores.json} from {@code <configDir>/ores.json} (typically
  * {@code config/eclipse/}). Missing files are written with day-gated defaults on first load.
  * Hot reload swaps an immutable {@link Snapshot} via {@link #current()}.
+ *
+ * <p>B2 (PLAN-B plans_v5): each ore now carries vanilla-style {@code layers} — per layer a
+ * vein {@code size} ({@code OreConfiguration.size}), a per-chunk vein {@code count}
+ * ({@code CountPlacement}) and a height {@code distribution} ({@code HeightRangePlacement}
+ * uniform/triangle over {@code minY..maxY}). The default tables below are vanilla 1.21.1
+ * ({@code OreFeatures} + {@code OrePlacements}) so vein caliber and density match vanilla
+ * 1:1; the SHAPE comes from {@link OreVeinShape}. Progression gates (unlockStage /
+ * bandFactor / centerBias, FINAL-DOPA-SOL §3) are unchanged. Legacy entries without
+ * {@code layers} keep working: {@code cellP}/{@code radius} are converted into one
+ * per-cell-probability layer of an equivalent vein size.</p>
  */
 public final class OreConfig {
-    /** Hard ceiling for overworld ore blobs — prevents surface-exposed boulders (D5 / req 8). */
+    /** Hard ceiling for overworld ore veins — prevents surface-exposed ore (D5 / req 8). */
     public static final int OVERWORLD_MAX_Y_CAP = 52;
+    /**
+     * Largest allowed vein size (vanilla's biggest is copper large, 20). Above this the
+     * chain could poke out of its 16³ cell and break {@link OreVeinShape}'s containment
+     * invariant, so bigger configured sizes are clamped with a warning.
+     */
+    public static final int MAX_VEIN_SIZE = 20;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final double[] FLAT_BANDS = {1.0D, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D};
@@ -73,9 +90,61 @@ public final class OreConfig {
         }
     }
 
+    /** How a layer's per-chunk vein count is spread over Y (vanilla HeightRangePlacement). */
+    public enum Distribution {
+        /** Vanilla {@code HeightRangePlacement.uniform(minY, maxY)}. */
+        UNIFORM,
+        /** Vanilla {@code HeightRangePlacement.triangle(minY, maxY)} (peak at the midpoint). */
+        TRIANGLE,
+        /**
+         * Legacy semantics: {@code count} is the per-16³-cell vein probability directly
+         * (the old {@code cellP}), independent of Y. Used by converted legacy entries.
+         */
+        CELL
+    }
+
+    /**
+     * One placement layer: vanilla vein {@code size}, per-chunk vein {@code count}
+     * (fractions allowed — e.g. vanilla's rarity-1/9 large diamond is 0.111) and the
+     * height distribution it is spread with. {@code distMinY..distMaxY} is the
+     * distribution's own range; the ore's {@code minY}/{@code maxY} gate still clips
+     * blocks (e.g. the overworld y≤{@value #OVERWORLD_MAX_Y_CAP} cap).
+     */
+    public record Layer(int size, double count, Distribution distribution, int distMinY, int distMaxY) {
+
+        /**
+         * Share of this layer's veins whose anchor falls in the 16-block cell band
+         * starting at {@code cellFloorY} — the vanilla height-distribution mass at
+         * 16-block resolution.
+         */
+        public double cellMass(int cellFloorY) {
+            return switch (this.distribution) {
+                case CELL -> 1.0D;
+                case UNIFORM -> {
+                    int lo = Math.max(cellFloorY, this.distMinY);
+                    int hi = Math.min(cellFloorY + 15, this.distMaxY);
+                    yield hi < lo ? 0.0D : (hi - lo + 1) / (double) (this.distMaxY - this.distMinY + 1);
+                }
+                case TRIANGLE -> triangleCdf(cellFloorY + 16) - triangleCdf(cellFloorY);
+            };
+        }
+
+        private double triangleCdf(int y) {
+            double width = this.distMaxY + 1.0D - this.distMinY;
+            double t = (y - this.distMinY) / width;
+            if (t <= 0.0D) {
+                return 0.0D;
+            }
+            if (t >= 1.0D) {
+                return 1.0D;
+            }
+            return t <= 0.5D ? 2.0D * t * t : 1.0D - 2.0D * (1.0D - t) * (1.0D - t);
+        }
+    }
+
     /** One validated ore entry ready for placement. */
     public record ResolvedOre(String id, int salt, Block stoneOre, Block deepOre, int minY, int maxY,
-            double cellP, double radius, int unlockStage, double[] bandFactor, boolean centerBias) {}
+            List<Layer> layers, int unlockStage, double[] bandFactor, boolean centerBias) {}
 
     /** The active ore snapshot; safe to read from worldgen threads after a volatile read. */
     public static Snapshot current() {
@@ -198,14 +267,78 @@ public final class OreConfig {
             return null;
         }
 
-        double cellP = doubleOrDefault(obj, "cellP", 0.1D);
-        double radius = doubleOrDefault(obj, "radius", 2.5D);
         int unlockStage = intOrDefault(obj, "unlockStage", 0);
         boolean centerBias = boolOrDefault(obj, "centerBias", false);
         double[] bandFactor = bandFactorOrDefault(obj);
+        List<Layer> layers = parseLayers(obj, id, minY, maxY);
+        if (layers.isEmpty()) {
+            EclipseMod.LOGGER.warn("Ore '{}' has no usable placement layers; skipping entry", id);
+            return null;
+        }
 
-        return new ResolvedOre(id, salt, stone.get(), deep, minY, maxY, cellP, radius, unlockStage, bandFactor,
+        return new ResolvedOre(id, salt, stone.get(), deep, minY, maxY, layers, unlockStage, bandFactor,
                 centerBias);
+    }
+
+    /**
+     * Parses the {@code layers} array; entries without one fall back to the legacy
+     * {@code cellP}/{@code radius} pair, converted to one {@link Distribution#CELL} layer
+     * (λ = cellP per cell) of roughly equivalent vein size, so pre-B2 config files keep
+     * their tuned density and only pick up the vanilla vein SHAPE.
+     */
+    private static List<Layer> parseLayers(JsonObject obj, String id, int minY, int maxY) {
+        if (obj.has("layers") && obj.get("layers").isJsonArray()) {
+            List<Layer> out = new ArrayList<>();
+            for (JsonElement element : obj.getAsJsonArray("layers")) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject layer = element.getAsJsonObject();
+                int size = intOrDefault(layer, "size", 9);
+                if (size < 1 || size > MAX_VEIN_SIZE) {
+                    EclipseMod.LOGGER.warn("Ore '{}' layer size {} outside 1..{}; clamping", id, size, MAX_VEIN_SIZE);
+                    size = Math.max(1, Math.min(size, MAX_VEIN_SIZE));
+                }
+                double count = doubleOrDefault(layer, "count", 1.0D);
+                if (count <= 0.0D) {
+                    continue;
+                }
+                Distribution distribution = parseDistribution(stringOrNull(layer, "distribution"), id);
+                int distMinY = intOrDefault(layer, "minY", minY);
+                int distMaxY = intOrDefault(layer, "maxY", maxY);
+                if (distMaxY < distMinY) {
+                    EclipseMod.LOGGER.warn("Ore '{}' layer has minY {} > maxY {}; skipping layer", id, distMinY, distMaxY);
+                    continue;
+                }
+                out.add(new Layer(size, count, distribution, distMinY, distMaxY));
+            }
+            return List.copyOf(out);
+        }
+        // Legacy pre-B2 entry: cellP was the per-cell blob probability, radius the blob
+        // half-extent. size ≈ radius·4.5 keeps the per-vein block yield in the same
+        // ballpark as the old ellipsoid.
+        double cellP = doubleOrDefault(obj, "cellP", 0.1D);
+        double radius = doubleOrDefault(obj, "radius", 2.5D);
+        if (cellP <= 0.0D) {
+            return List.of();
+        }
+        int size = Math.max(4, Math.min((int) Math.round(radius * 4.5D), MAX_VEIN_SIZE));
+        return List.of(new Layer(size, cellP, Distribution.CELL, minY, maxY));
+    }
+
+    private static Distribution parseDistribution(@Nullable String raw, String id) {
+        if (raw == null || raw.isEmpty()) {
+            return Distribution.UNIFORM;
+        }
+        return switch (raw.toLowerCase(Locale.ROOT)) {
+            case "uniform" -> Distribution.UNIFORM;
+            case "triangle", "trapezoid" -> Distribution.TRIANGLE;
+            case "cell" -> Distribution.CELL;
+            default -> {
+                EclipseMod.LOGGER.warn("Ore '{}' has unknown distribution '{}'; using uniform", id, raw);
+                yield Distribution.UNIFORM;
+            }
+        };
     }
 
     private static Optional<Block> resolveBlock(String id) {
@@ -250,12 +383,19 @@ public final class OreConfig {
 
     // --- default ores.json ---
     // FINAL-DOPA-SOL §3 "Concrete fix": every ore must be mineable one stage BEFORE the
-    // milestone that consumes it (the old table gated iron/gold behind the very milestones
-    // that required them — a hard circular deadlock, since vanilla mineral features are
-    // removed by BiomeFeatureFilter and OreField rejects annulusBand < unlockStage).
-    // Ladder now: coal/copper/iron stage 0 (starting disc), gold + Nether quartz/gold
-    // stage 1 (Nether opens day 2), redstone/lapis/diamond stage 2 (post-milestone-2),
-    // netherite stage 2 in the Nether (second annulus, day 10). Mod ores keep requiredMod.
+    // milestone that consumes it. Ladder: coal/copper/iron (+emerald) stage 0 (starting
+    // disc), gold + Nether quartz/gold stage 1 (Nether opens day 2), redstone/lapis/
+    // diamond stage 2 (post-milestone-2), netherite stage 2 in the Nether (second
+    // annulus, day 10). Mod ores keep requiredMod.
+    //
+    // B2: size/count/distribution values are vanilla 1.21.1 (OreFeatures/OrePlacements).
+    // Layers above the OVERWORLD_MAX_Y_CAP (coal upper y136+, iron upper y80+, gold
+    // extra) are omitted — they can never place on the disc. The air-exposure "buried"
+    // discard has no per-block equivalent here and is dropped; triangle masses above the
+    // cap self-limit density exactly like vanilla's unreachable heights would (e.g.
+    // emerald's 100@triangle(-16..480) yields only ~3.7 sub-cap veins per chunk).
+    // Netherite deliberately KEEPS its event-tuned scarcity (way below vanilla): only
+    // its vein shape/caliber went vanilla (sizes 3/2).
 
     /** Default {@code ores.json} root for freeze snapshots and first-run file creation. */
     public static JsonObject defaultRootJson() {
@@ -271,59 +411,98 @@ public final class OreConfig {
 
     private static JsonArray defaultOverworld() {
         JsonArray array = new JsonArray();
+        // Coal: vanilla ore_coal_lower — size 17 ("coal 17@large"), 20/chunk, triangle 0..192.
         array.add(ore("coal", "minecraft:coal_ore", "minecraft:deepslate_coal_ore",
-                -32, 52, 0.30D, 3.2D, 0, FLAT_BANDS, false, null));
+                0, 192, 0, FLAT_BANDS, false, null,
+                layer(17, 20.0D, "triangle", 0, 192)));
+        // Copper: vanilla ore_copper (size 10, 16/chunk, triangle -16..112) plus a small
+        // size-20 share standing in for the dripstone-cave ore_copper_large variant
+        // (this per-block field has no biome routing).
         array.add(ore("copper", "minecraft:copper_ore", "minecraft:deepslate_copper_ore",
-                -20, 52, 0.22D, 3.0D, 0, FLAT_BANDS, false, null));
-        // unlockStage 2 -> 0: milestone L2 costs 48 iron, so iron must exist across the
-        // starting disc (FINAL-DOPA-SOL §3 — was UNREACHABLE before L1/L2).
+                -16, 112, 0, FLAT_BANDS, false, null,
+                layer(10, 16.0D, "triangle", -16, 112),
+                layer(20, 3.0D, "triangle", -16, 112)));
+        // Iron stage 0: milestone L2 costs 48 iron (FINAL-DOPA-SOL §3). Vanilla
+        // ore_iron_middle (9, 10/chunk, triangle -24..56) + ore_iron_small (4, 10/chunk,
+        // uniform -64..72); ore_iron_upper lives above the cap.
         array.add(ore("iron", "minecraft:iron_ore", "minecraft:deepslate_iron_ore",
-                -64, 52, 0.30D, 2.8D, 0, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null));
-        // unlockStage 2 -> 1: milestone L3 costs 32 gold; band 1 exists from event start
-        // (fresh radii [96, 150]) so gold is a day-1+ find (FINAL-DOPA-SOL §3).
+                -64, 72, 0, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null,
+                layer(9, 10.0D, "triangle", -24, 56),
+                layer(4, 10.0D, "uniform", -64, 72)));
+        // Gold stage 1: milestone L3 costs 32 gold; band 1 exists from event start
+        // (FINAL-DOPA-SOL §3). Vanilla ore_gold (9, 4/chunk, triangle -64..32) +
+        // ore_gold_lower (9, avg 0.5/chunk, uniform -64..-48).
         array.add(ore("gold", "minecraft:gold_ore", "minecraft:deepslate_gold_ore",
-                -64, -8, 0.11D, 2.6D, 1, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null));
+                -64, 32, 1, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null,
+                layer(9, 4.0D, "triangle", -64, 32),
+                layer(9, 0.5D, "uniform", -64, -48)));
+        // Redstone: vanilla ore_redstone (8, 4/chunk, uniform -64..15) + ore_redstone_lower
+        // (8, 8/chunk, triangle -96..-32).
         array.add(ore("redstone", "minecraft:redstone_ore", "minecraft:deepslate_redstone_ore",
-                -96, -24, 0.13D, 2.8D, 2, FLAT_BANDS, false, null));
+                -96, 15, 2, FLAT_BANDS, false, null,
+                layer(8, 4.0D, "uniform", -64, 15),
+                layer(8, 8.0D, "triangle", -96, -32)));
+        // Lapis: vanilla ore_lapis (7, 2/chunk, triangle -32..32) + ore_lapis_buried
+        // (7, 4/chunk, uniform -64..64).
         array.add(ore("lapis", "minecraft:lapis_ore", "minecraft:deepslate_lapis_ore",
-                -80, -16, 0.07D, 2.4D, 2, FLAT_BANDS, false, null));
-        // unlockStage 3 -> 2: milestone L4 (day 8) costs 24 diamonds; stage 3 was gated
-        // by milestone 3 itself — circular (FINAL-DOPA-SOL §3). Stage 2 opens ~day 3.
+                -64, 64, 2, FLAT_BANDS, false, null,
+                layer(7, 2.0D, "triangle", -32, 32),
+                layer(7, 4.0D, "uniform", -64, 64)));
+        // Diamond stage 2: milestone L4 (day 8) costs 24 diamonds (FINAL-DOPA-SOL §3).
+        // Vanilla ore_diamond (4, 7/chunk) + medium (8, 2/chunk uniform -64..-4) + large
+        // (12, rarity 1/9 => 0.111/chunk) + buried (8, 4/chunk), triangles -144..16.
         array.add(ore("diamond", "minecraft:diamond_ore", "minecraft:deepslate_diamond_ore",
-                -125, -40, 0.12D, 2.4D, 2,
-                new double[] {1.3D, 1.0D, 0.7D, 0.45D, 0.3D, 0.2D}, true, null));
+                -144, 16, 2, new double[] {1.3D, 1.0D, 0.7D, 0.45D, 0.3D, 0.2D}, true, null,
+                layer(4, 7.0D, "triangle", -144, 16),
+                layer(8, 2.0D, "uniform", -64, -4),
+                layer(12, 0.111D, "triangle", -144, 16),
+                layer(8, 4.0D, "triangle", -144, 16)));
+        // Emerald: vanilla ore_emerald (3, 100/chunk, triangle -16..480). The mass above
+        // the y<=52 cap self-limits this to ~3.7 veins/chunk of size 3 — the vanilla
+        // sub-surface emerald experience without biome routing.
+        array.add(ore("emerald", "minecraft:emerald_ore", "minecraft:deepslate_emerald_ore",
+                -16, 480, 0, FLAT_BANDS, false, null,
+                layer(3, 100.0D, "triangle", -16, 480)));
+        // Create zinc: no vanilla table — keeps its legacy event tuning as a CELL layer
+        // (count = old cellP 0.18, size ≈ old radius 2.8 blob yield).
         array.add(ore("zinc", "create:zinc_ore", "create:deepslate_zinc_ore",
-                -32, 52, 0.18D, 2.8D, 3, FLAT_BANDS, false, "create"));
+                -32, 52, 3, FLAT_BANDS, false, "create",
+                layer(11, 0.18D, "cell", -32, 52)));
         return array;
     }
 
     private static JsonArray defaultNether() {
         JsonArray array = new JsonArray();
-        // unlockStage 2 -> 1 for quartz + Nether gold: the first Nether annulus opens on
-        // day 2, but the SECOND (band 2) only on day 10 — stage-2 gating starved the L3
-        // gold cost and the L5 quartz sink for eight days (FINAL-DOPA-SOL §3).
+        // Stage 1 for quartz + Nether gold: the first Nether annulus opens on day 2
+        // (FINAL-DOPA-SOL §3). Vanilla calibers/counts (ore_quartz_nether 14@16,
+        // ore_gold_nether 10@10), spread uniformly over the disc's own gate band (the
+        // disc floor/ceiling sit elsewhere than vanilla's 10..117 world band).
         array.add(ore("quartz", "minecraft:nether_quartz_ore", "minecraft:nether_quartz_ore",
-                36, 140, 0.25D, 3.0D, 1, FLAT_BANDS, false, null));
+                36, 140, 1, FLAT_BANDS, false, null,
+                layer(14, 16.0D, "uniform", 36, 140)));
         array.add(ore("nether_gold", "minecraft:nether_gold_ore", "minecraft:nether_gold_ore",
-                34, 110, 0.14D, 2.6D, 1, FLAT_BANDS, false, null));
-        // Deliberately still stage 2: netherite is the L5 era and the day-10 second
-        // annulus is exactly its intended day-10+ window (FINAL-DOPA-SOL §3 keeps it).
+                34, 110, 1, FLAT_BANDS, false, null,
+                layer(10, 10.0D, "uniform", 34, 110)));
+        // Deliberately still stage 2 AND deliberately far below vanilla density:
+        // netherite is the L5 era and the day-10 second annulus is its intended window
+        // (FINAL-DOPA-SOL §3). Vanilla vein calibers (large 3 / small 2), old total
+        // rarity (~0.05 veins/chunk, ex-cellP 0.022).
         array.add(ore("netherite", "minecraft:ancient_debris", "minecraft:ancient_debris",
-                34, 72, 0.022D, 1.6D, 2, FLAT_BANDS, true, null));
+                34, 72, 2, FLAT_BANDS, true, null,
+                layer(3, 0.033D, "triangle", 34, 72),
+                layer(2, 0.021D, "uniform", 34, 72)));
         return array;
     }
 
-    private static JsonObject ore(String id, String block, String deepslate, int minY, int maxY, double cellP,
-            double radius, int unlockStage, double[] bandFactor, boolean centerBias,
-            @Nullable String requiredMod) {
+    private static JsonObject ore(String id, String block, String deepslate, int minY, int maxY,
+            int unlockStage, double[] bandFactor, boolean centerBias, @Nullable String requiredMod,
+            JsonObject... layers) {
         JsonObject obj = new JsonObject();
         obj.addProperty("id", id);
         obj.addProperty("block", block);
         obj.addProperty("deepslate", deepslate);
         obj.addProperty("minY", minY);
         obj.addProperty("maxY", maxY);
-        obj.addProperty("cellP", cellP);
-        obj.addProperty("radius", radius);
         obj.addProperty("unlockStage", unlockStage);
         obj.addProperty("centerBias", centerBias);
         JsonArray bands = new JsonArray();
@@ -331,9 +510,24 @@ public final class OreConfig {
             bands.add(factor);
         }
         obj.add("bandFactor", bands);
+        JsonArray layerArray = new JsonArray();
+        for (JsonObject layer : layers) {
+            layerArray.add(layer);
+        }
+        obj.add("layers", layerArray);
         if (requiredMod != null) {
             obj.addProperty("requiredMod", requiredMod);
         }
+        return obj;
+    }
+
+    private static JsonObject layer(int size, double count, String distribution, int minY, int maxY) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("size", size);
+        obj.addProperty("count", count);
+        obj.addProperty("distribution", distribution);
+        obj.addProperty("minY", minY);
+        obj.addProperty("maxY", maxY);
         return obj;
     }
 }

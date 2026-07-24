@@ -11,33 +11,28 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Stateless vein derivation for mining feel (W4-FEEL, IDEA-03 #2). Re-derives the ONE
- * deterministic vein candidate of a mined ore block's 16³ cell — center, radius and blob
- * membership — with the exact {@link OreField#tryOre} math, then counts how many blob
- * blocks are still present in the (already-loaded) chunk. That makes "first break of an
- * intact vein" and "this break clears the vein" exact, cheap and cheat-proof: no chunk
- * scans, no persistence, at most ~245 in-cell block reads per ORE break.
+ * Stateless vein derivation for mining feel (W4-FEEL, IDEA-03 #2). Re-derives the
+ * deterministic vein chains of a mined ore block's 16³ cell through the SAME
+ * {@link OreVeinShape} helper {@link OreField} generates with (B2 — lockstep by
+ * construction, the old duplicated hash mirrors are gone), finds the chain containing
+ * the block, then counts how many of that vein's blocks are still present in the
+ * (already-loaded) chunk. That makes "first break of an intact vein" and "this break
+ * clears the vein" exact, cheap and cheat-proof: no chunk scans, no persistence, at
+ * most one cell derivation + a few dozen in-cell block reads per ORE break.
  *
- * <p>Blob containment invariant: {@code tryOre} places the vein center at
- * {@code cell*16 + 4 + [0..7]} with radius ≤ {@code ore.radius()} (≤ 3.2 in the shipped
- * {@code ores.json}), so the whole ellipsoid ({@code dy² × 1.6}) always lives inside the
- * block's own 16³ cell — one cell derivation covers the entire vein.</p>
- *
- * <p><b>Hash-parity warning:</b> {@link #hash3}/{@link #mix}/{@link #to01}/{@link #H_ORE}
- * MUST stay bit-identical to {@code OreField}'s private copies. The wiring doc asks the
- * OreField owner to expose a package-private {@code veinAt(...)} so this duplication can
- * collapse; until then, treat the two files as one frozen algorithm.</p>
+ * <p>Chain containment invariant: {@link OreVeinShape} anchors every vein at
+ * {@code cell·16 + 4 + [0..7]} and caps sizes at {@link OreConfig#MAX_VEIN_SIZE}, so a
+ * whole chain always lives inside the block's own 16³ cell — one cell derivation
+ * covers the entire vein. Where two derived chains of the same ore overlap, the census
+ * covers the first containing chain only (overlapping veins read as one bigger deposit
+ * in-world, exactly like vanilla).</p>
  */
 public final class VeinTracker {
-    /** Mirror of {@code OreField.H_ORE} — the ore channel salt of the shared hash. */
-    private static final int H_ORE = 17;
-    /** Vertical ellipsoid squash from {@code OreField.tryOre}'s membership test. */
-    private static final double Y_SQUASH = 1.6D;
 
     private VeinTracker() {}
 
     /**
-     * One derived-vein snapshot at break time. {@code total} counts every blob position
+     * One derived-vein snapshot at break time. {@code total} counts every chain position
      * inside the ore's Y-range (the vein's generated size, assuming no cave carving);
      * {@code present} counts positions still holding the ore block — INCLUDING the block
      * currently being broken ({@code BlockEvent.BreakEvent} fires pre-removal), so
@@ -72,9 +67,10 @@ public final class VeinTracker {
 
     /**
      * Derives the vein containing {@code pos} and counts its remaining blocks. Returns
-     * {@code null} when the block is not part of a derivable vein (hash gates fail, blob
-     * misses, Y outside the ore range — e.g. structure loot ore) — callers just skip the
-     * vein feel then. Server thread only; reads blocks of one already-loaded cell.
+     * {@code null} when the block is not part of a derivable vein (stage gate locked, no
+     * chain contains it, Y outside the ore range — e.g. structure loot ore) — callers
+     * just skip the vein feel then. Server thread only; reads blocks of one
+     * already-loaded cell.
      */
     @Nullable
     public static Scan scan(ServerLevel level, BlockPos pos, DiscProfile profile,
@@ -86,82 +82,39 @@ public final class VeinTracker {
             return null;
         }
 
-        // --- exact OreField.tryOre derivation (keep in lockstep) ---
-        int cx = x >> 4;
-        int cz = z >> 4;
-        int cy = Math.floorDiv(y, 16);
-        double cellR = Math.hypot(cx * 16 + 8, cz * 16 + 8);
-        int band = FrozenParams.annulusBand(profile, cellR);
-        if (band < ore.unlockStage()) {
+        // --- exact OreField derivation (shared OreVeinShape — lockstep by construction) ---
+        int cellX = x >> 4;
+        int cellZ = z >> 4;
+        int cellY = Math.floorDiv(y, 16);
+        double scale = OreVeinShape.gateScale(ore, profile, cellX, cellZ);
+        if (scale < 0.0D) {
             return null;
         }
-        long h = hash3(H_ORE + ore.salt(), cx, cy, cz);
-        double p = ore.cellP() * ore.bandFactor()[Math.min(band, ore.bandFactor().length - 1)];
-        if (ore.centerBias()) {
-            p *= Math.max(0.15D, 1.0D - cellR / profile.lensNormRadius());
+        OreVeinShape[] veins = OreVeinShape.veinsOf(FrozenParams.mapSeed(), ore, cellX, cellY, cellZ, scale);
+        OreVeinShape hit = null;
+        for (OreVeinShape vein : veins) {
+            if (vein.contains(x, y, z)) {
+                hit = vein;
+                break;
+            }
         }
-        if (to01(h) >= p) {
-            return null;
-        }
-        int vx = (cx << 4) + 4 + (int) ((h >>> 12) & 7);
-        int vy = cy * 16 + 4 + (int) ((h >>> 16) & 7);
-        int vz = (cz << 4) + 4 + (int) ((h >>> 20) & 7);
-        if (vy < ore.minY() || vy > ore.maxY()) {
-            return null;
-        }
-        double radius = ore.radius() * (0.65D + 0.35D * ((h >>> 24 & 255) / 255.0D));
-        double radiusSq = radius * radius;
-
-        double dx = x - vx;
-        double dy = y - vy;
-        double dz = z - vz;
-        if (dx * dx + dy * dy * Y_SQUASH + dz * dz > radiusSq) {
-            return null; // the broken block is not a member of this cell's vein
+        if (hit == null) {
+            return null; // the broken block is not a member of any of this cell's veins
         }
 
-        // --- blob census: total candidates vs ore blocks still in the world ---
-        int reachXz = (int) Math.floor(radius);
-        int reachY = (int) Math.floor(radius / Math.sqrt(Y_SQUASH));
-        int total = 0;
-        int present = 0;
+        // --- vein census: total chain candidates vs ore blocks still in the world ---
+        int[] counts = new int[2];
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int oy = -reachY; oy <= reachY; oy++) {
-            int wy = vy + oy;
-            if (wy < ore.minY() || wy > ore.maxY()) {
-                continue;
+        hit.forEachBlock((bx, by, bz) -> {
+            if (by < ore.minY() || by > ore.maxY()) {
+                return;
             }
-            for (int ox = -reachXz; ox <= reachXz; ox++) {
-                for (int oz = -reachXz; oz <= reachXz; oz++) {
-                    if (ox * ox + oy * oy * Y_SQUASH + oz * oz > radiusSq) {
-                        continue;
-                    }
-                    total++;
-                    Block block = level.getBlockState(cursor.set(vx + ox, wy, vz + oz)).getBlock();
-                    if (block == ore.stoneOre() || block == ore.deepOre()) {
-                        present++;
-                    }
-                }
+            counts[0]++;
+            Block block = level.getBlockState(cursor.set(bx, by, bz)).getBlock();
+            if (block == ore.stoneOre() || block == ore.deepOre()) {
+                counts[1]++;
             }
-        }
-        return new Scan(ore, total, present);
-    }
-
-    // --- bit-identical mirrors of OreField's private hash helpers ---
-
-    private static long mix(long z) {
-        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-        return z ^ (z >>> 31);
-    }
-
-    private static long hash3(int salt, int a, int b, int c) {
-        long h = FrozenParams.mapSeed() + salt * 0x9E3779B97F4A7C15L;
-        h = mix(h ^ (a & 0xFFFFFFFFL));
-        h = mix(h ^ (b & 0xFFFFFFFFL));
-        return mix(h ^ (c & 0xFFFFFFFFL));
-    }
-
-    private static double to01(long hash) {
-        return (hash >>> 11) * 0x1.0p-53D;
+        });
+        return new Scan(ore, counts[0], counts[1]);
     }
 }

@@ -32,6 +32,11 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * rule: event mod, admins use {@code /summon}); natural population is
  * {@code GlitchSpawnService} (fresh-ring sampling), so the spawn placements here only
  * matter for dungeon spawners — standard on-ground monster rules.</p>
+ *
+ * <p><b>MobCategory MISC since plans_v5 PLAN-B B5</b> (was the spec's MONSTER): the
+ * family is self-capped by {@code GlitchSpawnService}/{@code EventSpawnRules}, so keeping
+ * them MONSTER only drained the vanilla hostile budget around fresh chunks. MISC is
+ * exempt from {@code NaturalSpawner.createState}'s census; despawn behavior unchanged.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class GlitchEntities {
@@ -41,7 +46,7 @@ public final class GlitchEntities {
     /** Glitched Husk — humanoid shambler with the unseen speed burst (30 HP / 5 / 0.27). */
     public static final DeferredHolder<EntityType<?>, EntityType<GlitchedHuskEntity>> GLITCHED_HUSK =
             ENTITIES.register("glitched_husk",
-                    () -> EntityType.Builder.of(GlitchedHuskEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(GlitchedHuskEntity::new, MobCategory.MISC)
                             .sized(0.6F, 1.9F)
                             .eyeHeight(1.66F)
                             .clientTrackingRange(10)
@@ -50,7 +55,7 @@ public final class GlitchEntities {
     /** Glitched Hound — fast blink-stutter quadruped (24 HP / 4 / 0.35). */
     public static final DeferredHolder<EntityType<?>, EntityType<GlitchedHoundEntity>> GLITCHED_HOUND =
             ENTITIES.register("glitched_hound",
-                    () -> EntityType.Builder.of(GlitchedHoundEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(GlitchedHoundEntity::new, MobCategory.MISC)
                             .sized(0.9F, 1.2F)
                             .eyeHeight(0.85F)
                             .clientTrackingRange(10)
@@ -59,7 +64,7 @@ public final class GlitchEntities {
     /** Glitched Tick — latching shard-mite, spawns in threes (12 HP / 3 / 0.42). */
     public static final DeferredHolder<EntityType<?>, EntityType<GlitchedTickEntity>> GLITCHED_TICK =
             ENTITIES.register("glitched_tick",
-                    () -> EntityType.Builder.of(GlitchedTickEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(GlitchedTickEntity::new, MobCategory.MISC)
                             .sized(0.6F, 0.5F)
                             .eyeHeight(0.35F)
                             .clientTrackingRange(10)

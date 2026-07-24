@@ -26,11 +26,16 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * here (and the client registration in {@code FogEliteRenderers}) no-ops via
  * {@link DeferredHolder#isBound()}, so both run configs stay green either way.
  *
- * <p>Size is frozen in plan §2.3/§6: fog_colossus MONSTER 1.6×3.4,
+ * <p>Size is frozen in plan §2.3/§6: fog_colossus 1.6×3.4,
  * {@code clientTrackingRange(10)}. No spawn egg (house rule: event mod, admins use
  * {@code /summon}); natural population is P6-W6's storm spawn rules (1 per storm, day
  * ≥ 9), so the spawn placement registered here only matters for dungeon spawners and
  * future hooks — standard on-ground monster rules.</p>
+ *
+ * <p><b>MobCategory MISC since plans_v5 PLAN-B B5</b> (was the spec's MONSTER): the
+ * colossus is hard-capped at 1 per storm by {@code EventSpawnRules}, so it must not
+ * consume a vanilla MONSTER slot. MISC is exempt from {@code NaturalSpawner.createState}'s
+ * census; despawn behavior is unchanged.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FogEliteEntities {
@@ -43,7 +48,7 @@ public final class FogEliteEntities {
      */
     public static final DeferredHolder<EntityType<?>, EntityType<FogColossusEntity>> FOG_COLOSSUS =
             ENTITIES.register("fog_colossus",
-                    () -> EntityType.Builder.of(FogColossusEntity::new, MobCategory.MONSTER)
+                    () -> EntityType.Builder.of(FogColossusEntity::new, MobCategory.MISC)
                             .sized(1.6F, 3.4F)
                             .eyeHeight(2.8F)
                             .clientTrackingRange(10)

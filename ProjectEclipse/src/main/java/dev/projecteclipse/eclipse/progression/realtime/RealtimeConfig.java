@@ -24,21 +24,50 @@ import dev.projecteclipse.eclipse.EclipseMod;
  * {
  *   "zone": "Europe/Berlin",
  *   "boundaryTime": "18:00",
+ *   "cadenceMode": "daily",
+ *   "intervalHours": 2.0,
  *   "autoArmOnStartEvent": true,
  *   "catchUpMaxDays": 13,
  *   "clientSyncSeconds": 5
  * }
  * }</pre>
+ *
+ * <p>D6: {@code cadenceMode} selects how the next boundary is derived — {@code "daily"}
+ * (the classic {@code boundaryTime}-in-{@code zone} chain) or {@code "interval"}
+ * (every {@code intervalHours} real hours, the "phase every 2 h" experience).
+ * {@code intervalHours} is only read in interval mode.</p>
  */
 public final class RealtimeConfig {
+    /** D6 cadence selector: once per real day at {@code boundaryTime}, or every N hours. */
+    public enum CadenceMode {
+        DAILY, INTERVAL;
+
+        /** Lenient parse; anything unrecognized falls back to {@link #DAILY}. */
+        static CadenceMode fromString(String raw) {
+            return "interval".equalsIgnoreCase(raw) ? INTERVAL : DAILY;
+        }
+
+        public String id() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
     /** Parsed config values; {@code zone}/{@code boundaryTime} are already validated. */
-    public record Config(ZoneId zone, LocalTime boundaryTime, boolean autoArmOnStartEvent,
-            int catchUpMaxDays, int clientSyncSeconds) {}
+    public record Config(ZoneId zone, LocalTime boundaryTime, CadenceMode cadenceMode,
+            double intervalHours, boolean autoArmOnStartEvent,
+            int catchUpMaxDays, int clientSyncSeconds) {
+
+        /** Interval cadence length in millis, clamped ≥ 5 s (plan D6). */
+        public long intervalMillis() {
+            return Math.max(5_000L, (long) (intervalHours * 3_600_000.0));
+        }
+    }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String FILE_NAME = "realtime.json";
     private static final String DEFAULT_ZONE = "Europe/Berlin";
     private static final String DEFAULT_BOUNDARY_TIME = "18:00";
+    private static final double DEFAULT_INTERVAL_HOURS = 2.0;
 
     private static volatile Config config = defaultConfig();
     private static volatile Path configDir =
@@ -66,9 +95,10 @@ public final class RealtimeConfig {
             }
             String json = Files.readString(file, StandardCharsets.UTF_8);
             config = parse(json);
-            EclipseMod.LOGGER.info("RealtimeConfig loaded: zone={}, boundaryTime={}, autoArm={}, "
-                            + "catchUpMaxDays={}, clientSyncSeconds={}",
-                    config.zone(), config.boundaryTime(), config.autoArmOnStartEvent(),
+            EclipseMod.LOGGER.info("RealtimeConfig loaded: zone={}, boundaryTime={}, cadenceMode={}, "
+                            + "intervalHours={}, autoArm={}, catchUpMaxDays={}, clientSyncSeconds={}",
+                    config.zone(), config.boundaryTime(), config.cadenceMode().id(),
+                    config.intervalHours(), config.autoArmOnStartEvent(),
                     config.catchUpMaxDays(), config.clientSyncSeconds());
         } catch (Exception e) {
             EclipseMod.LOGGER.error("RealtimeConfig failed to load {}; using defaults", file, e);
@@ -76,14 +106,47 @@ public final class RealtimeConfig {
         }
     }
 
+    /**
+     * D6: switches the cadence and persists it to {@code realtime.json} (read-modify-write
+     * preserving unrelated fields). {@code intervalHours} is only rewritten when
+     * {@code mode == INTERVAL}; a file write failure keeps the in-memory switch so the
+     * running server still honors the operator's command.
+     */
+    public static Config setCadence(CadenceMode mode, double intervalHours) {
+        Config current = config;
+        double hours = mode == CadenceMode.INTERVAL
+                ? Math.max(5.0 / 3600.0, intervalHours) : current.intervalHours();
+        config = new Config(current.zone(), current.boundaryTime(), mode, hours,
+                current.autoArmOnStartEvent(), current.catchUpMaxDays(), current.clientSyncSeconds());
+        Path file = configDir.resolve(FILE_NAME);
+        try {
+            Files.createDirectories(configDir);
+            JsonObject root = Files.isRegularFile(file)
+                    ? JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject()
+                    : defaultJson();
+            root.addProperty("cadenceMode", mode.id());
+            root.addProperty("intervalHours", hours);
+            Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
+            EclipseMod.LOGGER.info("RealtimeConfig: cadence persisted — mode={}, intervalHours={}",
+                    mode.id(), hours);
+        } catch (Exception e) {
+            EclipseMod.LOGGER.error("RealtimeConfig: cadence switched in memory but persisting {} failed",
+                    file, e);
+        }
+        return config;
+    }
+
     static Config defaultConfig() {
-        return new Config(ZoneId.of(DEFAULT_ZONE), LocalTime.of(18, 0), true, 13, 5);
+        return new Config(ZoneId.of(DEFAULT_ZONE), LocalTime.of(18, 0), CadenceMode.DAILY,
+                DEFAULT_INTERVAL_HOURS, true, 13, 5);
     }
 
     private static JsonObject defaultJson() {
         JsonObject root = new JsonObject();
         root.addProperty("zone", DEFAULT_ZONE);
         root.addProperty("boundaryTime", DEFAULT_BOUNDARY_TIME);
+        root.addProperty("cadenceMode", CadenceMode.DAILY.id());
+        root.addProperty("intervalHours", DEFAULT_INTERVAL_HOURS);
         root.addProperty("autoArmOnStartEvent", true);
         root.addProperty("catchUpMaxDays", 13);
         root.addProperty("clientSyncSeconds", 5);
@@ -110,11 +173,24 @@ public final class RealtimeConfig {
                     timeText, DEFAULT_BOUNDARY_TIME);
             boundaryTime = LocalTime.of(18, 0);
         }
+        CadenceMode cadenceMode = root.has("cadenceMode")
+                ? CadenceMode.fromString(root.get("cadenceMode").getAsString()) : CadenceMode.DAILY;
+        double intervalHours = DEFAULT_INTERVAL_HOURS;
+        if (root.has("intervalHours")) {
+            double parsed = root.get("intervalHours").getAsDouble();
+            if (parsed > 0.0) {
+                intervalHours = parsed;
+            } else {
+                EclipseMod.LOGGER.warn("realtime.json: invalid intervalHours '{}'; using {}",
+                        parsed, DEFAULT_INTERVAL_HOURS);
+            }
+        }
         boolean autoArm = !root.has("autoArmOnStartEvent") || root.get("autoArmOnStartEvent").getAsBoolean();
         int catchUpMaxDays = root.has("catchUpMaxDays")
                 ? Math.max(0, root.get("catchUpMaxDays").getAsInt()) : 13;
         int clientSyncSeconds = root.has("clientSyncSeconds")
                 ? Math.max(1, root.get("clientSyncSeconds").getAsInt()) : 5;
-        return new Config(zone, boundaryTime, autoArm, catchUpMaxDays, clientSyncSeconds);
+        return new Config(zone, boundaryTime, cadenceMode, intervalHours, autoArm,
+                catchUpMaxDays, clientSyncSeconds);
     }
 }

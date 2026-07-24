@@ -262,6 +262,22 @@ public final class DiscMapDefaults {
         return angle < 240.0D ? "minecraft:cherry_grove" : "minecraft:meadow";
     }
 
+    /**
+     * Snowline-aware flank ring split (plans_v5 PLAN-B B1, belt + braces under the
+     * {@code DiscBiomeSource} overlay): above the mountain snowline the warm thirds
+     * (cherry grove / meadow, vanilla temperature 0.5 — {@code freeze_top_layer} skips
+     * them and rain melts their snow) clamp to {@code minecraft:grove}, so the flank
+     * table can never emit a warm biome for an above-snowline column.
+     */
+    public static String flankBiome(DiscMapData.Mountain mountain, double x, double z, int surfaceY) {
+        String id = flankBiome(mountain, x, z);
+        if (surfaceY >= DiscBiomeSource.SNOWLINE_Y
+                && ("minecraft:cherry_grove".equals(id) || "minecraft:meadow".equals(id))) {
+            return "minecraft:grove";
+        }
+        return id;
+    }
+
     private static MapNoises mapNoises() {
         long seed = FrozenParams.mapSeed();
         MapNoises cached = mapNoises;

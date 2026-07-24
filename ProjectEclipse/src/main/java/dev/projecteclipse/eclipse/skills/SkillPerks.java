@@ -13,7 +13,6 @@ import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.drama.MiningFeelService;
 import dev.projecteclipse.eclipse.network.S2CSkillProcPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
-import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
 import net.minecraft.ChatFormatting;
@@ -300,8 +299,9 @@ public final class SkillPerks {
         float shardChance = effect(player, "bonus_shard_on_night_kill");
         if (shardChance > 0.0F && player.serverLevel().isNight()
                 && player.serverLevel().random.nextFloat() < procChance(player, shardChance)) {
-            Block.popResource(player.serverLevel(), victim.blockPosition(),
-                    new ItemStack(EclipseItems.UMBRAL_SHARD.get()));
+            // B14 §1: insert, don't pop — the ground drop at the victim despawned/burned
+            // before anyone understood it was theirs. The proc toast stays the ceremony.
+            dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 1, false);
             sendProcFeedback(player, "bonus_shard", 1.0F);
         }
     }

@@ -156,9 +156,15 @@ public final class GoalSpec implements EclipseSignals.QuestSpecRef {
     private final int weight;
     private final int minDay;
     private final int maxDay;
+    private final String requiresUnlock;
 
     public GoalSpec(String id, Kind kind, Scope scope, Trigger trigger, Reward reward,
             Localized text, int weight, int minDay, int maxDay) {
+        this(id, kind, scope, trigger, reward, text, weight, minDay, maxDay, "");
+    }
+
+    public GoalSpec(String id, Kind kind, Scope scope, Trigger trigger, Reward reward,
+            Localized text, int weight, int minDay, int maxDay, String requiresUnlock) {
         this.id = id == null || id.isBlank() ? "goal" : id;
         this.kind = kind == null ? Kind.MAIN : kind;
         this.scope = scope == null ? Scope.EACH_PLAYER : scope;
@@ -168,6 +174,7 @@ public final class GoalSpec implements EclipseSignals.QuestSpecRef {
         this.weight = Math.max(0, weight);
         this.minDay = Math.max(0, minDay);
         this.maxDay = Math.max(0, maxDay);
+        this.requiresUnlock = requiresUnlock == null ? "" : requiresUnlock.trim();
     }
 
     // --- EclipseSignals.QuestSpecRef ---
@@ -218,6 +225,15 @@ public final class GoalSpec implements EclipseSignals.QuestSpecRef {
     /** Personal only: latest day this quest may be drawn (0 = any). */
     public int maxDay() {
         return maxDay;
+    }
+
+    /**
+     * D5 phase gate: {@code UnlockState} key that must be granted before this spec may
+     * materialize (personal draws + side materialization; empty = ungated). This is the
+     * real phase filter — {@link #minDay()}/{@link #maxDay()} stay the coarse bound.
+     */
+    public String requiresUnlock() {
+        return requiresUnlock;
     }
 
     /** Whether the personal quest is drawable on {@code day} (window check only). */
@@ -281,7 +297,8 @@ public final class GoalSpec implements EclipseSignals.QuestSpecRef {
                 obj.has("text") ? Localized.parse(obj.get("text")) : Localized.of(""),
                 obj.has("weight") ? obj.get("weight").getAsInt() : 1,
                 obj.has("minDay") ? obj.get("minDay").getAsInt() : 0,
-                obj.has("maxDay") ? obj.get("maxDay").getAsInt() : 0);
+                obj.has("maxDay") ? obj.get("maxDay").getAsInt() : 0,
+                obj.has("requiresUnlock") ? obj.get("requiresUnlock").getAsString() : "");
     }
 
     /** Normalized JSON form (stable field order; defaults omitted where legal). */
@@ -349,6 +366,9 @@ public final class GoalSpec implements EclipseSignals.QuestSpecRef {
             if (maxDay > 0) {
                 obj.addProperty("maxDay", maxDay);
             }
+        }
+        if (!requiresUnlock.isEmpty()) {
+            obj.addProperty("requiresUnlock", requiresUnlock);
         }
         return obj;
     }

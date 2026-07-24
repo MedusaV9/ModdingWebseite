@@ -1168,6 +1168,18 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 | `/eclipse reload` | `EclipseConfig.reload()` of all six JSON configs (re-applies `stages.json` radii) + cutscene path library re-read/re-sync. |
 | `/eclipse status` | Dumps day / altar level / night event / team shard pool + threshold / soft-border rings + failsafe / start-event flag / unlocked keys / banned list / online players' lives — to the source only. |
 
+### Day/phase cadence (ops)
+
+The 14-day arc advances at real-world boundaries driven by `RealtimeDayService` and
+`config/eclipse/realtime.json`. `cadenceMode: "daily"` (default) advances once per real day
+at `boundaryTime` in `zone` (Berlin 18:00); `cadenceMode: "interval"` advances every
+`intervalHours` real hours (the "new phase every 2 h" event mode). Operators switch live —
+and persistently — with `/dev phase interval hours <n>` (or `minutes <n>`), back with
+`/dev phase daily`, inspect with `/dev phase status`, and skip ahead immediately with
+`/dev phase next` (a full rollover: signals, bell, announcements). Cadence changes are
+announced to all online OPs. One-shot boundaries (`/dev timer set`, `/eclipse schedule next`)
+still fire first; the configured cadence chains afterwards.
+
 ## Anti-cheat — `dev.projecteclipse.eclipse.admin.AntiCheatCheck`
 
 `config/eclipse/anticheat.json` holds a config-maintained list of **mod-id substrings**

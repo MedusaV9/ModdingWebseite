@@ -7,6 +7,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
@@ -107,6 +108,11 @@ public final class StrongholdEmergence {
     /**
      * Self-heal: if the final stage is committed but the cavity holds no portal frame (crash
      * mid-sequence, pre-W5 save raised by hand, …), re-run the emergence on start-up.
+     * plans_v5 PLAN-B B15: gated on the emergence still being LISTED in {@code stages.json}
+     * — the built-in defaults no longer enqueue it (the End-disc finale replaced the
+     * stronghold), and without this gate every post-stage-5 restart of a new save would
+     * quietly rebuild the removed stronghold. Legacy saves whose config still lists the
+     * emergence keep the self-heal unchanged.
      */
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
@@ -116,12 +122,25 @@ public final class StrongholdEmergence {
         if (stage < WorldStageService.maxStage(DiscProfile.OVERWORLD)) {
             return;
         }
+        if (!emergenceConfigured()) {
+            return;
+        }
         DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
         if (mountain == null || hasPortalFrame(overworld, mountain)) {
             return;
         }
         EclipseMod.LOGGER.warn("Final stage committed but no portal room found in the mountain cavity; re-running emergence");
         begin(overworld);
+    }
+
+    /** B15: whether any configured overworld stage still lists the emergence (legacy saves). */
+    private static boolean emergenceConfigured() {
+        for (EclipseConfig.StageEntry entry : EclipseConfig.stages(DiscProfile.OVERWORLD.name())) {
+            if (entry.structures().contains("eclipse:stronghold_emergence")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean hasPortalFrame(ServerLevel level, DiscMapData.Mountain mountain) {

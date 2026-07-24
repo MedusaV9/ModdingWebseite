@@ -497,9 +497,10 @@ public final class EclipseConfig {
                 "DAY 11 — THE WEAKEST LINK", "Day 11. A chain is judged by its weakest link."));
         // Days 12/13 carry done-variants (C13/A5-extra): once the End has arrived / the
         // dragon has fallen, the timeline and announcements stop advertising the hunt.
-        plans.add(new DayPlan(12, List.of("Locate the stronghold", "Breach the portal room", "Hold the portal room overnight"), List.of("end"), 0.0D,
-                "DAY 12 — STRONGHOLD", "Day 12. The end portal hums beneath the stone.",
-                "DAY 12 — THE BROKEN SEAL", "Day 12. The portal room lies open — the stone has given up its secret."));
+        // B15: day 12 targets the End disc in the sky — the stronghold no longer spawns.
+        plans.add(new DayPlan(12, List.of("Locate the End disc in the sky", "Open the rift to the End disc", "Purge the endermites around the rift"), List.of("end"), 0.0D,
+                "DAY 12 — THE SKY SHARD", "Day 12. A shard of the End hangs in the sky — the rift hums above the clouds.",
+                "DAY 12 — THE OPEN RIFT", "Day 12. The rift stands open — the sky has given up its secret."));
         plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 0.0D,
                 "DAY 13 — THE DRAGON", "Day 13. Bring the dragon down and claim the egg.",
                 "DAY 13 — THE SILENT SKY", "The dragon has fallen. Rest — tomorrow the ship sails."));
@@ -724,8 +725,11 @@ public final class EclipseConfig {
                         List.of("eclipse:jungle_temple", "minecraft:trial_chambers"), Map.of()),
                 new StageEntry(4, 360, "milestone:4",
                         List.of("eclipse:village_plains", "minecraft:mansion", "minecraft:ancient_city"), Map.of()),
-                new StageEntry(5, 440, "final_day",
-                        List.of("eclipse:stronghold_emergence"), Map.of())));
+                // plans_v5 PLAN-B B15: the stronghold no longer spawns — the End-disc
+                // finale replaced it (EndDiscService/EndConfig own their own trigger),
+                // so stage 5 grows terrain only. Frozen saves that already committed
+                // stage 5 keep their stronghold; new saves never get one.
+                new StageEntry(5, 440, "final_day", List.of(), Map.of())));
         // IDEA-17 (W4-NETHER): 1:1 nether disc — radii aligned with the overworld growth
         // beats. Must stay in lockstep with FrozenParams.DEFAULT_NETHER_RADII (the freeze
         // file is built from THESE entries; the FrozenParams constant is the fallback).

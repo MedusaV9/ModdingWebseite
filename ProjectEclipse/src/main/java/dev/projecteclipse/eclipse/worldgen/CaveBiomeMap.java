@@ -14,10 +14,17 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * authored Ancient City anchor at y −40 (D6/D7). Cave features (pointed dripstone, moss/glow berries,
  * sculk) then arrive from the real biome generation settings via the W1.1 pipeline.
  *
+ * <p>Plans_v5 B12 adds two rarer DETAIL regions on a second noise channel: sculk-pocket
+ * satellites of the deep dark (fold into the {@code minecraft:deep_dark} biome away from
+ * the mountain, so sculk decoration fires there too) and a crystal region (folds into
+ * {@code minecraft:lush_caves} biome-wise; {@code CaveDressings} keys its amethyst
+ * sparkle nooks off {@link #detailRegionAt} directly).</p>
+ *
  * <p>All lookups are pure functions of position + frozen map data (no stage, no world
  * seed) — chunks generated before a ring grows must already carry the same biomes the
- * grown terrain will expose. Noise salt 29 of the frozen map-seed family lives
- * here (registry: {@code docs/plans_v3/wiring/P1-W1.2_wiring.md}).</p>
+ * grown terrain will expose. Noise salts 29 (region field) and 33 (B12 detail field) of
+ * the frozen map-seed family live here (registry: {@code
+ * docs/plans_v3/wiring/P1-W1.2_wiring.md}).</p>
  */
 public final class CaveBiomeMap {
     /**
@@ -35,8 +42,25 @@ public final class CaveBiomeMap {
     /** |noise| above this splits a region off the neutral band (~⅓ of area total). */
     private static final double REGION_THRESHOLD = 0.34D;
 
+    /** Feature scale of the B12 detail field — smaller pockets than the main regions. */
+    private static final double DETAIL_SCALE = 132.0D;
+    /** Detail noise above this → sculk-pocket satellite (rare). */
+    private static final double SCULK_POCKET_THRESHOLD = 0.72D;
+    /** Detail noise below this → crystal region (rare). */
+    private static final double CRYSTAL_THRESHOLD = -0.70D;
+
+    /** The rarer B12 detail regions layered over the dripstone/lush field. */
+    public enum DetailRegion {
+        /** Deep-dark satellite: sculk pocket away from the mountain root. */
+        SCULK_POCKET,
+        /** Amethyst-heavy sparkle nook region ({@code CaveDressings} decor key). */
+        CRYSTAL
+    }
+
     /** Lifecycle-keyed region field (salt 29 of the frozen map-seed family). */
     private static volatile SeededNoise regionNoise;
+    /** Lifecycle-keyed B12 detail field (salt 33 of the frozen map-seed family). */
+    private static volatile SeededNoise detailNoise;
 
     private record SeededNoise(long seed, SimplexNoise noise) {}
 
@@ -78,17 +102,42 @@ public final class CaveBiomeMap {
 
     /**
      * Region id of the column — {@code minecraft:dripstone_caves},
-     * {@code minecraft:lush_caves} or {@code null} (neutral band). 2-D on purpose so
+     * {@code minecraft:lush_caves}, {@code minecraft:deep_dark} (a B12 sculk-pocket
+     * satellite) or {@code null} (neutral band). 2-D on purpose so
      * {@code DiscBiomeSource} can fold it into its per-column cache; the y gates
      * ({@link #SURFACE_MARGIN}, {@link #DEEP_DARK_MAX_Y}) are applied per sample there.
+     * The B12 detail regions outrank the base field (their thresholds are far rarer);
+     * both fold into biome ids the biome source already resolves.
      */
     @Nullable
     public static String regionAt(int x, int z) {
+        DetailRegion detail = detailRegionAt(x, z);
+        if (detail == DetailRegion.SCULK_POCKET) {
+            return DEEP_DARK_ID;
+        }
+        if (detail == DetailRegion.CRYSTAL) {
+            return LUSH_CAVES_ID;
+        }
         double v = regionNoise().getValue(x / REGION_SCALE, z / REGION_SCALE);
         if (v > REGION_THRESHOLD) {
             return DRIPSTONE_CAVES_ID;
         }
         return v < -REGION_THRESHOLD ? LUSH_CAVES_ID : null;
+    }
+
+    /**
+     * B12 detail region of the column ({@link DetailRegion#SCULK_POCKET} /
+     * {@link DetailRegion#CRYSTAL}), or {@code null} almost everywhere. 2-D like
+     * {@link #regionAt}; {@code CaveDressings} keys its amethyst nooks and extra sculk
+     * skin off this directly (the biome fold-in above handles vanilla decoration).
+     */
+    @Nullable
+    public static DetailRegion detailRegionAt(int x, int z) {
+        double w = detailNoise().getValue(x / DETAIL_SCALE, z / DETAIL_SCALE);
+        if (w > SCULK_POCKET_THRESHOLD) {
+            return DetailRegion.SCULK_POCKET;
+        }
+        return w < CRYSTAL_THRESHOLD ? DetailRegion.CRYSTAL : null;
     }
 
     private static SimplexNoise regionNoise() {
@@ -100,6 +149,21 @@ public final class CaveBiomeMap {
                 if (cached == null || cached.seed() != seed) {
                     cached = new SeededNoise(seed, DiscTerrainFunction.noise(29));
                     regionNoise = cached;
+                }
+            }
+        }
+        return cached.noise();
+    }
+
+    private static SimplexNoise detailNoise() {
+        long seed = FrozenParams.mapSeed();
+        SeededNoise cached = detailNoise;
+        if (cached == null || cached.seed() != seed) {
+            synchronized (CaveBiomeMap.class) {
+                cached = detailNoise;
+                if (cached == null || cached.seed() != seed) {
+                    cached = new SeededNoise(seed, DiscTerrainFunction.noise(33));
+                    detailNoise = cached;
                 }
             }
         }

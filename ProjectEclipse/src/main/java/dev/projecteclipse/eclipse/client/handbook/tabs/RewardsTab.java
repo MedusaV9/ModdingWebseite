@@ -27,6 +27,12 @@ import net.neoforged.api.distmarker.OnlyIn;
  * never reach the client. With the ladder exhausted the page shows a single "sated"
  * line. Scroll plumbing (shared {@link TabScrollbar} + drag, B7/B20 rules) is kept for
  * the empty/none states and in case rows ever outgrow the panel.
+ *
+ * <p><b>D14 (W-SHARDS) addition:</b> a personal Umbral-Splitter block heads the page —
+ * live balance from the sidebar cache ({@link ClientStateCache#sidebarShards}, resynced
+ * within a second of every change per B14), the earn-lane list, and the explicit
+ * TEAM-pool label (altar deposits fund the pool ONLY — they never join the personal
+ * balance). RewardsTab is owned by D14 for this addition.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class RewardsTab extends HandbookTab {
@@ -54,42 +60,84 @@ public class RewardsTab extends HandbookTab {
             return;
         }
         List<S2CMilestonesPayload.Entry> milestones = ClientStateCache.milestones;
+        S2CMilestonesPayload.Entry target = currentTarget(milestones);
+        S2CMilestonesPayload.Entry teaser = teaser(milestones);
         scrollAmount = Mth.clamp(scrollAmount, 0.0D, maxScroll());
+
+        guiGraphics.enableScissor(x, y, x + width, y + height);
+        // D14: the personal shard block heads the page in every milestone state.
+        int rowY = y + 2 - (int) scrollAmount;
+        rowY += renderShardsHeader(guiGraphics, rowY, alpha);
+
         if (milestones.isEmpty()) {
-            int textY = y + 12;
+            int textY = rowY + 6;
             for (var line : font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.none"), width - 8)) {
                 guiGraphics.drawString(font, line, x + 4, textY, withAlpha(DIM_COLOR, alpha));
                 textY += 10;
             }
-            return;
-        }
-
-        S2CMilestonesPayload.Entry target = currentTarget(milestones);
-        S2CMilestonesPayload.Entry teaser = teaser(milestones);
-        if (target == null && teaser == null) {
+        } else if (target == null && teaser == null) {
             // Ladder exhausted: every demanded offering has been made.
-            int textY = y + 12;
+            int textY = rowY + 6;
             for (var line : font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.complete"), width - 8)) {
                 guiGraphics.drawString(font, line, x + 4, textY, withAlpha(EclipseUiTheme.GOOD & 0xFFFFFF, alpha));
                 textY += 10;
             }
-            return;
-        }
-
-        guiGraphics.enableScissor(x, y, x + width, y + height);
-        int rowY = y + 2 - (int) scrollAmount;
-        if (target != null) {
-            renderTargetRow(guiGraphics, target, rowY, alpha);
-            rowY += ROW_HEIGHT;
-        }
-        if (teaser != null) {
-            renderTeaserRow(guiGraphics, teaser, rowY, alpha);
+        } else {
+            if (target != null) {
+                renderTargetRow(guiGraphics, target, rowY, alpha);
+                rowY += ROW_HEIGHT;
+            }
+            if (teaser != null) {
+                renderTeaserRow(guiGraphics, teaser, rowY, alpha);
+            }
         }
         guiGraphics.disableScissor();
 
         scrollbar.layout(x + width, y + 2, height - 4);
         scrollbar.size(height, contentHeight());
         scrollbar.render(guiGraphics, scrollAmount, alpha);
+    }
+
+    /**
+     * D14: personal Umbral-Splitter block — balance (right-aligned, accent) from the
+     * sidebar cache, the earn-lane list, then the TEAM-pool distinction in dim text.
+     * Returns the block height consumed (also counted by {@link #contentHeight()}).
+     */
+    private int renderShardsHeader(GuiGraphics guiGraphics, int rowY, float alpha) {
+        int rowWidth = width - SCROLLBAR_INSET;
+        int headerHeight = shardsHeaderHeight();
+
+        guiGraphics.fill(x, rowY, x + rowWidth, rowY + headerHeight - 4,
+                EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, alpha));
+        guiGraphics.fill(x, rowY, x + 2, rowY + headerHeight - 4, withAlpha(ACCENT_COLOR, alpha));
+
+        guiGraphics.drawString(font, EclipseLang.tr("gui.eclipse.handbook.rewards.shards.title"),
+                x + 6, rowY + 4, withAlpha(TEXT_COLOR, alpha));
+        String balance = EclipseLang.trString("gui.eclipse.handbook.rewards.shards.balance",
+                ClientStateCache.sidebarShards);
+        guiGraphics.drawString(font, balance, x + rowWidth - font.width(balance) - 6, rowY + 4,
+                withAlpha(ACCENT_COLOR, alpha));
+
+        int textY = rowY + 16;
+        for (var line : font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.shards.sources"),
+                rowWidth - 12)) {
+            guiGraphics.drawString(font, line, x + 6, textY, withAlpha(TEXT_COLOR, alpha));
+            textY += 10;
+        }
+        for (var line : font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.shards.pool_label"),
+                rowWidth - 12)) {
+            guiGraphics.drawString(font, line, x + 6, textY, withAlpha(DIM_COLOR, alpha));
+            textY += 10;
+        }
+        return headerHeight;
+    }
+
+    /** Wrap-aware height of the shard block (title row + wrapped source/pool lines + padding). */
+    private int shardsHeaderHeight() {
+        int textWidth = width - SCROLLBAR_INSET - 12;
+        int lines = font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.shards.sources"), textWidth).size()
+                + font.split(EclipseLang.tr("gui.eclipse.handbook.rewards.shards.pool_label"), textWidth).size();
+        return 16 + lines * 10 + 8;
     }
 
     /**
@@ -266,7 +314,14 @@ public class RewardsTab extends HandbookTab {
     private int contentHeight() {
         List<S2CMilestonesPayload.Entry> milestones = ClientStateCache.milestones;
         int rows = (currentTarget(milestones) != null ? 1 : 0) + (teaser(milestones) != null ? 1 : 0);
-        return rows * ROW_HEIGHT + 4;
+        int base = shardsHeaderHeight() + 4;
+        if (rows == 0) {
+            // Empty/none/complete states: header + the wrapped info text below it.
+            String key = milestones.isEmpty()
+                    ? "gui.eclipse.handbook.rewards.none" : "gui.eclipse.handbook.rewards.complete";
+            return base + 6 + font.split(EclipseLang.tr(key), width - 8).size() * 10;
+        }
+        return base + rows * ROW_HEIGHT;
     }
 
     private double maxScroll() {

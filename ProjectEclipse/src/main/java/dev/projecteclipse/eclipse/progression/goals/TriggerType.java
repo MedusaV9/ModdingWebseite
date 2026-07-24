@@ -31,6 +31,13 @@ public enum TriggerType {
     VISIT_LOCATION("visit_location", true, "Reach a location (x/z/radius, overworld)"),
     /** {@code biomeVisited} signal; target biome/#tag = visit it once, empty = count distinct. */
     VISIT_BIOMES("visit_biomes", false, "Visit biomes (target = biome/#tag, or count distinct)"),
+    /**
+     * {@code PlayerChangedDimensionEvent}; target = dimension id (e.g. {@code minecraft:the_nether}).
+     * Fires on EVERY entry (unlike the lifetime-once biome signal — plans_v5 PLAN-B B8); the
+     * engine's done-latch dedupes, and {@code QuestDetectors.backfillVisitDimension} retro-heals
+     * players already inside (or with a recorded past visit of) the dimension on assignment/login.
+     */
+    VISIT_DIMENSION("visit_dimension", false, "Enter a dimension (target = dimension id)"),
     /** {@code chunkExplored} signal. */
     EXPLORE_CHUNKS("explore_chunks", false, "Explore new chunks"),
     /** 20t poll on player Y <= trigger.y. */

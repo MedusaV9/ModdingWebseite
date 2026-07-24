@@ -12,6 +12,7 @@ import dev.projecteclipse.eclipse.contracts.ContractService;
 import dev.projecteclipse.eclipse.contracts.ContractState;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.lang.ServerLang;
+import dev.projecteclipse.eclipse.lives.HeartTheftService;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -56,7 +57,13 @@ public final class DevContractCommands {
                         "dev.eclipse.doc.contract.odds", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("contract.window", DevCategory.EVENT,
                         "/dev contract window <minutes>",
-                        "dev.eclipse.doc.contract.window", Danger.CAUTION, ClickAction.SUGGEST, 2));
+                        "dev.eclipse.doc.contract.window", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("contract.theft", DevCategory.EVENT,
+                        "/dev contract theft (on|off)",
+                        "dev.eclipse.doc.contract.theft", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("contract.theft.status", DevCategory.EVENT,
+                        "/dev contract theft status",
+                        "dev.eclipse.doc.contract.theft.status", Danger.SAFE, ClickAction.RUN, 2));
     }
 
     private DevContractCommands() {}
@@ -85,7 +92,14 @@ public final class DevContractCommands {
                                         .executes(DevContractCommands::odds)))
                         .then(Commands.literal("window")
                                 .then(Commands.argument("minutes", IntegerArgumentType.integer(1, 1440))
-                                        .executes(DevContractCommands::window)))));
+                                        .executes(DevContractCommands::window)))
+                        .then(Commands.literal("theft")
+                                .then(Commands.literal("on")
+                                        .executes(context -> theftToggle(context, true)))
+                                .then(Commands.literal("off")
+                                        .executes(context -> theftToggle(context, false)))
+                                .then(Commands.literal("status")
+                                        .executes(DevContractCommands::theftStatus)))));
     }
 
     private static int start(CommandContext<CommandSourceStack> context,
@@ -160,6 +174,43 @@ public final class DevContractCommands {
                 config.windowMinutes()), false);
         source.sendSuccess(() -> Component.translatable("dev.eclipse.contract.status.tallies",
                 state.tallyLine(), ContractModifierService.entryCount(server)), false);
+        // D3: per-player ledger rows; window-scoped rows print their remaining minutes.
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            java.util.List<String> rows = ContractModifierService.describe(server, online.getUUID());
+            if (!rows.isEmpty()) {
+                String name = online.getScoreboardName();
+                String joined = String.join(", ", rows);
+                source.sendSuccess(() -> Component.translatable(
+                        "dev.eclipse.contract.status.modifiers", name, joined), false);
+            }
+        }
+        return 1;
+    }
+
+    private static int theftToggle(CommandContext<CommandSourceStack> context, boolean enabled) {
+        CommandSourceStack source = context.getSource();
+        HeartTheftService.setEnabledLive(enabled);
+        audit(source, Component.translatable(enabled
+                        ? "dev.eclipse.contract.theft.on.ok" : "dev.eclipse.contract.theft.off.ok"),
+                (enabled ? "enabled" : "disabled") + " heart theft (transient)");
+        return 1;
+    }
+
+    private static int theftStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        HeartTheftService.Values config = HeartTheftService.config();
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.contract.theft.status.header",
+                config.enabled(), config.cooldownMinutes(), config.floorLives()), false);
+        java.util.List<String> cooldowns = HeartTheftService.describeCooldowns(source.getServer());
+        if (cooldowns.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable(
+                    "dev.eclipse.contract.theft.status.none"), false);
+        } else {
+            for (String row : cooldowns) {
+                source.sendSuccess(() -> Component.translatable(
+                        "dev.eclipse.contract.theft.status.cooldown", row), false);
+            }
+        }
         return 1;
     }
 

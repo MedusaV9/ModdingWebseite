@@ -51,6 +51,7 @@ public final class ContractConfig {
             int ghostKillHits,
             int ghostPayoutPct,
             int prankConsolationShards,
+            int debuffMinMinutes,
             SuccessValues success,
             ExpiryValues expiry,
             WrongKillValues wrongKill) {}
@@ -78,7 +79,8 @@ public final class ContractConfig {
         values = new Values(v.autoDaily(), Mth.clamp(pct, 0, 100), v.prankChancePct(),
                 v.windowMinutes(), v.omenSeconds(), v.windowStartMinMinutes(), v.windowStartMaxMinutes(),
                 v.minOnlineForReal(), v.pairCooldownDays(), v.proximityWeighting(), v.ghostKillHits(),
-                v.ghostPayoutPct(), v.prankConsolationShards(), v.success(), v.expiry(), v.wrongKill());
+                v.ghostPayoutPct(), v.prankConsolationShards(), v.debuffMinMinutes(), v.success(),
+                v.expiry(), v.wrongKill());
     }
 
     /** Live window override ({@code /dev contract window <minutes>}) — transient until reload. */
@@ -88,7 +90,8 @@ public final class ContractConfig {
                 Mth.clamp(minutes, 1, 1_440), v.omenSeconds(), v.windowStartMinMinutes(),
                 v.windowStartMaxMinutes(), v.minOnlineForReal(), v.pairCooldownDays(),
                 v.proximityWeighting(), v.ghostKillHits(), v.ghostPayoutPct(),
-                v.prankConsolationShards(), v.success(), v.expiry(), v.wrongKill());
+                v.prankConsolationShards(), v.debuffMinMinutes(), v.success(), v.expiry(),
+                v.wrongKill());
     }
 
     public static void reload() {
@@ -137,6 +140,9 @@ public final class ContractConfig {
         root.addProperty("ghostKillHits", 3);
         root.addProperty("ghostPayoutPct", 60);
         root.addProperty("prankConsolationShards", 2);
+        // D3: debuffs are window-scoped; a wrong kill landing seconds before the window
+        // closes still stings for at least this many minutes.
+        root.addProperty("debuffMinMinutes", 10);
 
         JsonObject success = new JsonObject();
         success.addProperty("hunterSkillsMul", 2.0F);   // FINAL-DOPA-SOL §5: 1.5 -> 2.0
@@ -183,6 +189,7 @@ public final class ContractConfig {
                 Math.max(1, intVal(root, "ghostKillHits", 3)),
                 Mth.clamp(intVal(root, "ghostPayoutPct", 60), 0, 100),
                 Math.max(0, intVal(root, "prankConsolationShards", 2)),
+                Mth.clamp(intVal(root, "debuffMinMinutes", 10), 0, 1_440),
                 new SuccessValues(
                         floatVal(s, "hunterSkillsMul", 2.0F),
                         Math.max(0, intVal(s, "hunterShards", 12)),
