@@ -276,11 +276,17 @@ public class AltarBlockEntity extends BlockEntity {
         // the client spirals the offered item hand → altar over ~30 t and holds the beam
         // until the item vanishes into the stone. Non-Quasar clients keep the old beat via
         // QuasarSpawner.spawnOrFallback's vanilla burst.
-        PacketDistributor.sendToPlayersNear(serverLevel, null,
+        // W-P-ALTAR2 value tell: the OFFERER's swallow id rides a private brightness tier
+        // (same quantized buckets as the pitch tell below — deniable, never text);
+        // bystanders receive the neutral mid-tier id, mirroring the split-chime law.
+        ResourceLocation offeredItem = ResourceLocation.parse(itemId);
+        PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(
+                S2CQuasarPayload.offeringSwallow(offeredItem,
+                        offeringTellTier(exactValue.getAsInt())), handPos));
+        PacketDistributor.sendToPlayersNear(serverLevel, player,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
                 this.worldPosition.getZ() + 0.5D, 64.0D,
-                new S2CQuasarPayload(
-                        S2CQuasarPayload.offeringSwallow(ResourceLocation.parse(itemId)), handPos));
+                new S2CQuasarPayload(S2CQuasarPayload.offeringSwallow(offeredItem), handPos));
         PacketDistributor.sendToPlayersNear(serverLevel, null,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
                 this.worldPosition.getZ() + 0.5D, 64.0D,
@@ -290,12 +296,25 @@ public class AltarBlockEntity extends BlockEntity {
     }
 
     /**
-     * IDEA-12 #2 pitch buckets (junk ≤ 5 → 0.85, mid ≤ 40 → 1.0, high → 1.15) with ±0.03
-     * random jitter so adjacent tiers stay deniable. Ear-training only — never text.
+     * IDEA-12 #2 pitch buckets (junk → 0.85, mid → 1.0, high → 1.15) with ±0.03 random
+     * jitter so adjacent tiers stay deniable. Ear-training only — never text.
      */
     private static float offeringTellPitch(int exactValue, net.minecraft.util.RandomSource random) {
-        float base = exactValue <= 5 ? 0.85F : exactValue <= 40 ? 1.0F : 1.15F;
+        float base = switch (offeringTellTier(exactValue)) {
+            case 0 -> 0.85F;
+            case 2 -> 1.15F;
+            default -> 1.0F;
+        };
         return base + (random.nextFloat() - 0.5F) * 0.06F;
+    }
+
+    /**
+     * IDEA-12 #2 quantized value buckets (junk ≤ 5 / mid ≤ 40 / rich), shared by the
+     * private pitch tell and the W-P-ALTAR2 swallow-brightness tell so the two cues can
+     * never disagree. The exact value itself must stay unobservable.
+     */
+    private static int offeringTellTier(int exactValue) {
+        return exactValue <= 5 ? 0 : exactValue <= 40 ? 1 : 2;
     }
 
     // --- heart sacrifice ---

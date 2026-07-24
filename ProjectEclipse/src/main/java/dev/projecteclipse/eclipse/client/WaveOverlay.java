@@ -15,6 +15,7 @@ import com.google.gson.JsonParser;
 import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CCutscenePayload.Phase;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.VeilPostController;
@@ -84,6 +85,12 @@ public final class WaveOverlay {
     private static final float WAVE_CYCLE_TICKS = 45.0F;
     /** Peak ShockStrength of the submerge rings (world shockwave events carry their own). */
     private static final float WAVE_BASE_STRENGTH = 0.55F;
+    /**
+     * reducedFx scale on every fed {@code ShockStrength} (GLITCH team): softer rings, and —
+     * by construction — nothing scaled by it can reach the shader's ≥0.75 double-pulse
+     * gate, so reduced players get exactly one gentle ring per event.
+     */
+    private static final float REDUCED_FX_STRENGTH = 0.6F;
     /** Underwater tint at 40% of the v1 wash alpha (0.35) — the rings carry the effect now. */
     private static final float TINT_ALPHA = 0.14F;
 
@@ -283,16 +290,17 @@ public final class WaveOverlay {
      */
     private static void feedShockwave(PostPipeline pipeline) {
         float partialTick = partialTick();
+        float fxScale = EclipseClientConfig.reducedFx() ? REDUCED_FX_STRENGTH : 1.0F;
         Vector4f world = EclipseFxState.shockwaveParams(partialTick);
         if (world != null) {
             pipeline.getUniform("ShockCenter").setVector(world.x(), world.y());
             pipeline.getUniform("ShockProgress").setFloat(world.z());
-            pipeline.getUniform("ShockStrength").setFloat(world.w());
+            pipeline.getUniform("ShockStrength").setFloat(world.w() * fxScale);
             return;
         }
         pipeline.getUniform("ShockCenter").setVector(0.0F, 0.0F);
         pipeline.getUniform("ShockProgress").setFloat(((waveTicks + partialTick) % WAVE_CYCLE_TICKS) / WAVE_CYCLE_TICKS);
-        pipeline.getUniform("ShockStrength").setFloat(waveStrength(partialTick));
+        pipeline.getUniform("ShockStrength").setFloat(waveStrength(partialTick) * fxScale);
     }
 
     /** Submerge-ring strength envelope: ramp in (SUBMERGE/WAVES), hold, fade out (EMERGE). */

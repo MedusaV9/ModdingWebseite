@@ -19,12 +19,12 @@
       "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 0.5,
+      "particle_speed": 0.55,
       "random_speed": true,
       "base_particle_size": 0.12,
-      "particle_size_variation": 0.05,
-      "particle_lifetime": 20,
-      "particle_lifetime_variation": 6,
+      "particle_size_variation": 0.06,
+      "particle_lifetime": 22,
+      "particle_lifetime_variation": 7,
       "initial_direction": [
         0.0,
         1.0,
@@ -42,7 +42,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": false,
-    "velocity_stretch_factor": 0.25,
+    "velocity_stretch_factor": 0.4,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -52,7 +52,7 @@
     "modules": [
       {
         "module": "veil:gravity",
-        "strength": 0.18
+        "strength": 0.14
       },
       {
         "module": "veil:drag",
@@ -64,19 +64,27 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#FFF1B8"
+              "color": "#FFFFFF"
             },
             {
-              "percent": 0.3,
+              "percent": 0.15,
+              "color": "#FFE9A8"
+            },
+            {
+              "percent": 0.42,
               "color": "#FFD166"
             },
             {
-              "percent": 0.65,
-              "color": "#B98CFF"
+              "percent": 0.56,
+              "color": "#C77DFF"
+            },
+            {
+              "percent": 0.8,
+              "color": "#8A5BE0"
             },
             {
               "percent": 1.0,
-              "color": "#7B4FD0"
+              "color": "#5B3AA6"
             }
           ],
           "alpha_points": [
@@ -85,8 +93,12 @@
               "alpha": 1.0
             },
             {
-              "percent": 0.6,
-              "alpha": 0.85
+              "percent": 0.35,
+              "alpha": 0.9
+            },
+            {
+              "percent": 0.75,
+              "alpha": 0.45
             },
             {
               "percent": 1.0,

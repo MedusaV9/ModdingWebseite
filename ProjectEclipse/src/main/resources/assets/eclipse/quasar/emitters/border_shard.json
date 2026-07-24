@@ -23,7 +23,7 @@
       "random_speed": true,
       "base_particle_size": 0.9,
       "particle_size_variation": 0.5,
-      "particle_lifetime": 10,
+      "particle_lifetime": 12,
       "particle_lifetime_variation": 4,
       "initial_direction": [
         0.0,
@@ -77,20 +77,24 @@
               "alpha": 1.0
             },
             {
-              "percent": 0.3,
+              "percent": 0.2,
+              "alpha": 0.85
+            },
+            {
+              "percent": 0.35,
               "alpha": 0.15
             },
             {
               "percent": 0.5,
-              "alpha": 0.9
+              "alpha": 0.6
             },
             {
-              "percent": 0.75,
-              "alpha": 0.2
+              "percent": 0.65,
+              "alpha": 0.15
             },
             {
-              "percent": 0.9,
-              "alpha": 0.7
+              "percent": 0.8,
+              "alpha": 0.35
             },
             {
               "percent": 1.0,

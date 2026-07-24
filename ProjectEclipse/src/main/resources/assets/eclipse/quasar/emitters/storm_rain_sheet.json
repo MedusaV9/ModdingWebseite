@@ -42,7 +42,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": true,
-    "velocity_stretch_factor": 1.6,
+    "velocity_stretch_factor": 2.2,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -65,16 +65,26 @@
         "strength": 0.5
       },
       {
+        "module": "veil:wind",
+        "wind_direction": [
+          0.35,
+          0.0,
+          1.0
+        ],
+        "wind_speed": 0.01,
+        "strength": 0.25
+      },
+      {
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#8B95C4"
+              "color": "#8A94C8"
             },
             {
               "percent": 1.0,
-              "color": "#5A5E8F"
+              "color": "#525785"
             }
           ],
           "alpha_points": [
@@ -84,11 +94,11 @@
             },
             {
               "percent": 0.15,
-              "alpha": 0.28
+              "alpha": 0.31
             },
             {
               "percent": 0.8,
-              "alpha": 0.22
+              "alpha": 0.24
             },
             {
               "percent": 1.0,

@@ -19,12 +19,12 @@
       "from_surface": false
     },
     "particle_settings": {
-      "particle_speed": 0.5,
+      "particle_speed": 0.62,
       "random_speed": true,
       "base_particle_size": 0.13,
       "particle_size_variation": 0.06,
-      "particle_lifetime": 16,
-      "particle_lifetime_variation": 6,
+      "particle_lifetime": 13,
+      "particle_lifetime_variation": 5,
       "initial_direction": [
         0.0,
         1.0,
@@ -52,7 +52,7 @@
     "modules": [
       {
         "module": "veil:gravity",
-        "strength": 0.34
+        "strength": 0.4
       },
       {
         "module": "veil:drag",
@@ -67,8 +67,8 @@
               "color": "#FFFFFF"
             },
             {
-              "percent": 0.25,
-              "color": "#E8B7FF"
+              "percent": 0.2,
+              "color": "#F3C9FF"
             },
             {
               "percent": 1.0,
@@ -81,8 +81,8 @@
               "alpha": 1.0
             },
             {
-              "percent": 0.7,
-              "alpha": 0.9
+              "percent": 0.55,
+              "alpha": 0.95
             },
             {
               "percent": 1.0,

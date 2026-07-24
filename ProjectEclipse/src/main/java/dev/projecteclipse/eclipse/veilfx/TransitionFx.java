@@ -1,10 +1,17 @@
 package dev.projecteclipse.eclipse.veilfx;
 
+import javax.annotation.Nullable;
+
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import foundry.veil.api.client.render.post.PostPipeline;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -27,7 +34,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *
  * <p>The visual is the {@code eclipse:rift_glitch} post pipeline (TRANSITION priority,
  * registered here; uniforms frozen in §3.3: {@code GlitchAmount}, {@code FadeAmount},
- * {@code Time}). {@code GlitchAmount} is the max of three sources: the transition envelope,
+ * {@code Time}; the GLITCH-team v2 pass ADDED {@code RiftCenter}/{@code RiftAmount} for the
+ * ambient rift-proximity corruption — see {@link #setRiftAmbient}, fed by {@code RiftFx},
+ * always 0 under {@code reducedFx}). {@code GlitchAmount} is the max of three sources: the transition envelope,
  * the loading pulse, and short {@link #glitchPulse(float, int)} pops (rift open/close —
  * {@code RiftFx} feeds these; W9's storm reveal may call it too, R14's "rift_glitch pulse
  * 0.4"). The pipeline renders the WORLD-side effect only — GUI-side visuals during loading
@@ -86,6 +95,18 @@ public final class TransitionFx {
     private static float loadingPulse;
     private static int loadingSetTick = Integer.MIN_VALUE;
 
+    // --- v2 ambient rift corruption (GLITCH team): RiftFx → RiftAmount/RiftCenter ---
+    /** Ambient corruption 0..1 published once per tick by {@code RiftFx} (0 = no rift near). */
+    private static float riftAmbient;
+    /** World position of the nearest live rift while {@link #riftAmbient} > 0. */
+    @Nullable
+    private static Vec3 riftCenterWorld;
+    /** Scratch for {@link SunTracker#worldToNdc} — feeder-only, overwritten every frame. */
+    private static final Vector4f RIFT_NDC = new Vector4f();
+    /** Tick-cached horizontal bearing toward the rift (offscreen-park side decision). */
+    private static double toRiftX = 1.0D;
+    private static double toRiftZ;
+
     static {
         // Feature-owned pipeline row (P2 §3.1 pattern): this class is an event subscriber,
         // so it loads on client startup and the row exists before the first tick.
@@ -135,6 +156,29 @@ public final class TransitionFx {
     }
 
     // ------------------------------------------------------------------ additive helpers
+
+    /**
+     * v2 ambient rift feed (GLITCH team): {@code RiftFx} publishes the nearest live rift
+     * once per client tick — {@code amount} 0..1 (distance falloff × open amount, already
+     * capped and forced 0 under {@code reducedFx} at the source) and its world position.
+     * The feeder projects the position to NDC per frame ({@code RiftCenter}) and feeds
+     * {@code amount} as {@code RiftAmount} for the voxel-sort / mirror-shard / echo layers.
+     * Pass {@code (0, null)} when no rift is near — the row idles off again.
+     */
+    public static void setRiftAmbient(float amount, @Nullable Vec3 center) {
+        riftAmbient = Mth.clamp(amount, 0.0F, 1.0F);
+        riftCenterWorld = riftAmbient > 0.0F ? center : null;
+        if (riftCenterWorld != null) {
+            // Tick-cached bearing for the feeder's offscreen park (render path stays
+            // alloc-free — the BorderFxRenderer.toBorderX/Z pattern).
+            Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+            double dx = riftCenterWorld.x - camera.x;
+            double dz = riftCenterWorld.z - camera.z;
+            double len = Math.sqrt(dx * dx + dz * dz);
+            toRiftX = len > 1.0E-4D ? dx / len : 1.0D;
+            toRiftZ = len > 1.0E-4D ? dz / len : 0.0D;
+        }
+    }
 
     /**
      * Short screen-glitch pop (no fade): {@code amplitude} clamps to [0,1] and decays
@@ -205,7 +249,8 @@ public final class TransitionFx {
     // ------------------------------------------------------------------ pipeline row
 
     private static boolean wantPipeline() {
-        return phase != Phase.NONE || pulseValue(1.0F) > 0.004F || loadingValue(1.0F) > 0.004F;
+        return phase != Phase.NONE || pulseValue(1.0F) > 0.004F || loadingValue(1.0F) > 0.004F
+                || riftAmbient > 0.004F;
     }
 
     private static void feedPipeline(PostPipeline pipeline) {
@@ -217,6 +262,26 @@ public final class TransitionFx {
         // Wall-clock time: the artifact pattern keeps animating even when client ticks
         // stall during a dimension change (exactly when this pipeline matters most).
         pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 100_000L) / 1000.0F);
+        // v2 ambient rift corruption: nearest-rift NDC lens + amount. Projected through
+        // THIS frame's exact matrices; behind the camera the lens parks just off the screen
+        // edge on the rift's side (border_glitch trick — turning away softens, never snaps).
+        pipeline.getUniform("RiftAmount").setFloat(riftAmbient);
+        float riftX = 0.0F;
+        float riftY = -1.9F;
+        Vec3 center = riftCenterWorld;
+        if (center != null) {
+            if (SunTracker.worldToNdc(center, RIFT_NDC)) {
+                riftX = Mth.clamp(RIFT_NDC.x(), -2.5F, 2.5F);
+                riftY = Mth.clamp(RIFT_NDC.y(), -2.5F, 2.5F);
+            } else {
+                Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+                Vector3f left = camera.getLeftVector();
+                double dotLeft = left.x() * toRiftX + left.z() * toRiftZ;
+                riftX = dotLeft > 0.0D ? -1.9F : 1.9F;
+                riftY = -0.15F;
+            }
+        }
+        pipeline.getUniform("RiftCenter").setVector(riftX, riftY);
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -258,6 +323,8 @@ public final class TransitionFx {
         pulseStart = Integer.MIN_VALUE;
         loadingPulse = 0.0F;
         loadingSetTick = Integer.MIN_VALUE;
+        riftAmbient = 0.0F;
+        riftCenterWorld = null;
     }
 
     private static float elapsed(float partialTick) {

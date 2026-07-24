@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -70,6 +71,27 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       the anchored ship.</li>
  * </ul>
  *
+ * <p>v4 overhaul (FXTEAM-LIMBO — craft pass on top of C2, none of whose fixes move):</p>
+ * <ul>
+ *   <li><b>Breathing corona</b>: the aura glow fan's radius now breathes on a slow
+ *       ~27&nbsp;s cycle (alpha dims slightly as it expands, like a real corona thinning),
+ *       independent of — and layered under — the existing dual-frequency alpha pulse.</li>
+ *   <li><b>Coronal-mass wisps</b>: occasionally (deterministic {@code ECLIPSE_SEED} slot
+ *       hash, ~every 90&nbsp;s on average) a faint curved plume detaches from the disc rim
+ *       and dissolves outward over ~10&nbsp;s ({@link #drawCoronalWisp}) — subtle
+ *       (peak alpha 0.15), root hidden behind the disc, skipped under {@code reducedFx}.</li>
+ *   <li><b>Parallax-layered aura rays</b>: the spin is slowed to
+ *       {@value #RAY_SPIN_DEG_PER_SEC}&nbsp;°/s and layer B (the counter-rotating one) is
+ *       offset opposite the camera's walk offset from the ship anchor
+ *       ({@value #RAY_PARALLAX}, clamped) — the two fans read as depth-separated sheets
+ *       when the player moves on deck. The disc quad itself is untouched (C2 stability).</li>
+ *   <li><b>Wave-broken reflection streak</b>: {@link #drawWaterReflection} draws the
+ *       glitter path as {@value #STREAK_DASHES} independently shimmering dashes (golden-
+ *       angle phase spread) instead of one solid fan — same mirror-locked basis, same
+ *       height fade, comparable alpha budget. The post-shader smear got the matching
+ *       world-anchored ripple break-up (limbo.fsh v4).</li>
+ * </ul>
+ *
  * <p>The same zenith point feeds the {@code eclipse:limbo} post pipeline's {@code GodrayDir}
  * uniform (see {@code veilfx.LimboAmbience}), so the screen-space god rays and the sky-pass
  * aura radiate from one source of truth and cannot diverge.</p>
@@ -98,8 +120,17 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     /** Aura ray fan: 12 rays in two counter-rotating 6-ray layers (R5 freeze). */
     private static final int RAY_COUNT = 12;
     private static final int RAYS_PER_LAYER = RAY_COUNT / 2;
-    /** 0.02 °/frame at 60 fps ≈ 1.2 °/s; layer B spins the opposite way. */
-    private static final float RAY_SPIN_DEG_PER_SEC = 1.2F;
+    /** v4: VERY slow spin (was 1.2 °/s) — barely-perceptible drift; layer B counter-spins. */
+    private static final float RAY_SPIN_DEG_PER_SEC = 0.35F;
+    /**
+     * v4 parallax depth layering: ray layer B is offset opposite the camera's horizontal
+     * walk offset from the ship anchor by this factor (celestial-plane units per block,
+     * clamped to ±{@value #RAY_PARALLAX_MAX}). Layer A stays locked to the disc — the two
+     * fans separate into near/far sheets as the player moves, and converge again at the
+     * anchor. Zero effect on the disc quad itself (the C2 stability freeze).
+     */
+    private static final float RAY_PARALLAX = 0.06F;
+    private static final float RAY_PARALLAX_MAX = 5.0F;
     /** Rays start slightly inside the disc silhouette so their roots hide behind it. */
     private static final float RAY_INNER_RADIUS = 30.0F;
     /** Peak root alpha of a ray (plan: additive, 0.4 alpha). */
@@ -115,12 +146,28 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     /** Radial glow fan behind the disc (the aura "floor"). */
     private static final float GLOW_RADIUS = 135.0F;
     private static final int GLOW_SEGMENTS = 24;
+    /** v4 breathing corona: glow radius swells ±5% on a slow ~27 s cycle (0.23 rad/s). */
+    private static final float CORONA_BREATH_RATE = 0.23F;
+
+    /**
+     * v4 coronal-mass wisps: deterministic slot schedule — every {@value #WISP_SLOT_SECONDS}
+     * seconds a seed hash decides flash/no-flash (~45%), an ejection azimuth, a curl side
+     * and a start offset; an active wisp grows from the disc rim over
+     * {@value #WISP_DURATION_SECONDS} s and dissolves (sin-in-out alpha, peak
+     * {@value #WISP_PEAK_ALPHA} · pulse — always subtler than the ray roots).
+     */
+    private static final float WISP_SLOT_SECONDS = 41.0F;
+    private static final float WISP_DURATION_SECONDS = 10.0F;
+    private static final float WISP_PEAK_ALPHA = 0.15F;
+    /** Wisp reach beyond the disc rim (units in the celestial plane) when fully extended. */
+    private static final float WISP_REACH = 62.0F;
 
     /** IDEA-18 §1/C2: water-reflection streak shape (elongated fan at the mirrored disc dir). */
-    private static final int STREAK_SEGMENTS = 16;
     private static final float STREAK_MIN_HALF_LEN = 14.0F;
     private static final float STREAK_MAX_HALF_LEN = 55.0F;
     private static final float STREAK_HALF_WIDTH = 5.5F;
+    /** v4: the streak is drawn as this many wave-broken dashes (2 quads each). */
+    private static final int STREAK_DASHES = 6;
     /** The streak fades to nothing this many blocks of camera height above the waterline. */
     private static final double STREAK_FADE_HEIGHT = 70.0D;
 
@@ -288,6 +335,16 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         // reflection smear curve exactly (limbo.fsh), so the two can never desync.
         float pulse = 0.85F + 0.11F * Mth.sin(seconds * 1.3F)
                 + 0.04F * Mth.sin(seconds * 0.37F + 1.7F);
+        // v4 breathing corona: the glow fan swells ±5% on a slow independent cycle and
+        // dims slightly while expanded (a corona thins as it grows) — layered UNDER the
+        // alpha pulse, so the two periods beat against each other organically.
+        float breath = 1.0F + 0.05F * Mth.sin(seconds * CORONA_BREATH_RATE + 0.9F);
+        // v4 parallax depth layering: layer B shifts opposite the camera's walk offset
+        // from the ship anchor (the zenith point's x/z IS the anchor x/z), clamped small.
+        float parX = Mth.clamp((float) (cam.x - zenith.x) * -RAY_PARALLAX,
+                -RAY_PARALLAX_MAX, RAY_PARALLAX_MAX);
+        float parZ = Mth.clamp((float) (cam.z - zenith.z) * -RAY_PARALLAX,
+                -RAY_PARALLAX_MAX, RAY_PARALLAX_MAX);
 
         RenderSystem.disableDepthTest();
 
@@ -297,8 +354,13 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        drawAuraGlow(zenithPose, pulse);
-        drawAuraRays(zenithPose, seconds, pulse);
+        drawAuraGlow(zenithPose, pulse, breath);
+        drawAuraRays(zenithPose, seconds, pulse, parX, parZ);
+        // v4: occasional coronal-mass wisp — drawn after the rays so the disc core still
+        // occludes its root; garnish tier, so reducedFx skips it entirely.
+        if (!EclipseClientConfig.reducedFx()) {
+            drawCoronalWisp(zenithPose, seconds, pulse);
+        }
 
         // the eclipse disc itself, alpha-blended so its black core occludes the ray roots
         RenderSystem.defaultBlendFunc();
@@ -314,7 +376,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        drawWaterReflection(poseStack.last().pose(), SMOOTH_DIR, level, cam, pulse);
+        drawWaterReflection(poseStack.last().pose(), SMOOTH_DIR, level, cam, pulse, seconds);
 
         RenderSystem.enableDepthTest();
         setupFog.run();
@@ -337,9 +399,17 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      * computed world point on the water plane and visibly tore away from the disc while
      * the camera moved.) Alpha falls with camera height above the waterline
      * ({@link #clientWaterlineY}, the C1 {@code WaterlineY} seam) — never with luminance.
+     *
+     * <p>v4 — wave-broken shimmer: the solid fan is replaced by {@value #STREAK_DASHES}
+     * glitter dashes along the same tangent axis (2 quads each, bright seam in the middle,
+     * fading to zero at both ends). Every dash shimmers on its own frequency with
+     * golden-angle phase spread (2.399 rad — no two ever beat in sync) and drifts a little
+     * sideways, so the path reads as light broken across moving wave crests. Same basis,
+     * same envelope (peak per-dash alpha ≈ the old center alpha at mid-streak), and the
+     * whole thing still vanishes with camera height exactly as before.</p>
      */
     private static void drawWaterReflection(Matrix4f pose, Vector3f discDir, ClientLevel level,
-            Vec3 cam, float pulse) {
+            Vec3 cam, float pulse, float seconds) {
         double camAbove = cam.y - clientWaterlineY(level);
         if (camAbove <= 0.5D) {
             return; // camera at/under the waterline — nothing to reflect
@@ -393,20 +463,57 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                 STREAK_MIN_HALF_LEN, STREAK_MAX_HALF_LEN);
         float alpha = 0.35F * pulse * heightFade;
 
+        // v4: glitter dashes. Each dash occupies 1/STREAK_DASHES of the tangent span with
+        // ~28% gaps; per-dash shimmer frequency and phase use the golden-angle spread.
         BufferBuilder builder = Tesselator.getInstance().begin(
-                VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-        builder.addVertex(pose, cx, cy, cz).setColor(0.62F, 0.30F, 1.0F, alpha);
-        for (int i = 0; i <= STREAK_SEGMENTS; i++) {
-            float angle = (float) i / STREAK_SEGMENTS * ((float) Math.PI * 2.0F);
-            float along = Mth.cos(angle) * halfLen;
-            float side = Mth.sin(angle) * STREAK_HALF_WIDTH;
-            builder.addVertex(pose,
-                            cx + tx * along + wx * side,
-                            cy + ty * along + wy * side,
-                            cz + tz * along + wz * side)
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        for (int i = 0; i < STREAK_DASHES; i++) {
+            float u = ((i + 0.5F) / STREAK_DASHES) * 2.0F - 1.0F; // dash center in −1..1
+            float phase = i * 2.399F;
+            float shimmer = 0.55F + 0.45F * Mth.sin(seconds * (1.35F + 0.13F * i) + phase);
+            float dashAlpha = alpha * (1.0F - u * u) * shimmer;
+            if (dashAlpha <= 0.004F) {
+                continue;
+            }
+            float alongC = u * halfLen;
+            float dashHalf = (halfLen / STREAK_DASHES) * 0.72F;
+            // Slow sideways wander — the dash slides across wave crests.
+            float side = Mth.sin(seconds * 0.9F + phase) * STREAK_HALF_WIDTH * 0.35F;
+            float width = STREAK_HALF_WIDTH * (1.0F - 0.55F * Math.abs(u));
+
+            float mcx = cx + tx * alongC + wx * side;
+            float mcy = cy + ty * alongC + wy * side;
+            float mcz = cz + tz * alongC + wz * side;
+            float sxv = tx * dashHalf;
+            float syv = ty * dashHalf;
+            float szv = tz * dashHalf;
+            float wxv = wx * width;
+            float wyv = wy * width;
+            float wzv = wz * width;
+            // start → bright mid seam
+            builder.addVertex(pose, mcx - sxv - wxv, mcy - syv - wyv, mcz - szv - wzv)
+                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
+            builder.addVertex(pose, mcx - sxv + wxv, mcy - syv + wyv, mcz - szv + wzv)
+                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
+            builder.addVertex(pose, mcx + wxv, mcy + wyv, mcz + wzv)
+                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
+            builder.addVertex(pose, mcx - wxv, mcy - wyv, mcz - wzv)
+                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
+            // bright mid seam → end
+            builder.addVertex(pose, mcx - wxv, mcy - wyv, mcz - wzv)
+                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
+            builder.addVertex(pose, mcx + wxv, mcy + wyv, mcz + wzv)
+                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
+            builder.addVertex(pose, mcx + sxv + wxv, mcy + syv + wyv, mcz + szv + wzv)
+                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
+            builder.addVertex(pose, mcx + sxv - wxv, mcy + syv - wyv, mcz + szv - wzv)
                     .setColor(0.45F, 0.18F, 0.85F, 0.0F);
         }
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        // Every dash can drop out near the fade floor — an empty builder must not throw.
+        MeshData mesh = builder.build();
+        if (mesh != null) {
+            BufferUploader.drawWithShader(mesh);
+        }
     }
 
     /**
@@ -445,27 +552,110 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         }
     }
 
-    /** Soft radial glow fan behind the disc: violet center fading to nothing at the rim. */
-    private static void drawAuraGlow(Matrix4f pose, float pulse) {
+    /**
+     * Soft radial glow fan behind the disc: violet center fading to nothing at the rim.
+     * v4: the fan radius breathes with {@code breath} (±5%, ~27 s) and the center alpha
+     * dims as it expands — energy conservation makes the breathing read physical instead
+     * of like a scale wobble.
+     */
+    private static void drawAuraGlow(Matrix4f pose, float pulse, float breath) {
+        float radius = GLOW_RADIUS * breath;
+        float centerAlpha = 0.30F * pulse * (1.96F - breath);
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         builder.addVertex(pose, 0.0F, SKY_DISTANCE, 0.0F)
-                .setColor(0.55F, 0.22F, 0.95F, 0.30F * pulse);
+                .setColor(0.55F, 0.22F, 0.95F, centerAlpha);
         for (int i = 0; i <= GLOW_SEGMENTS; i++) {
             float angle = (float) i / GLOW_SEGMENTS * ((float) Math.PI * 2.0F);
-            builder.addVertex(pose, Mth.cos(angle) * GLOW_RADIUS, SKY_DISTANCE, Mth.sin(angle) * GLOW_RADIUS)
+            builder.addVertex(pose, Mth.cos(angle) * radius, SKY_DISTANCE, Mth.sin(angle) * radius)
                     .setColor(0.35F, 0.10F, 0.70F, 0.0F);
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
     /**
-     * The {@value #RAY_COUNT}-ray aura fan: two 6-ray layers counter-rotating at
-     * ±{@value #RAY_SPIN_DEG_PER_SEC} °/s. Each ray is a tapered additive wedge from just
-     * inside the disc silhouette out to its own 40–120-unit length, root alpha
-     * {@value #RAY_ALPHA}·pulse fading to zero at the tip.
+     * v4 — an occasional coronal-mass wisp: a faint curved plume that detaches from the
+     * disc rim and dissolves outward. Deterministic ({@link LimboHorizonShips#hash01}, the
+     * shared {@code ECLIPSE_SEED} mixer with wisp-specific salts): each
+     * {@value #WISP_SLOT_SECONDS}-second slot of the hourly clock either hosts one wisp
+     * (~45%) or none; azimuth, curl side and start offset are slot-hashed. Two chained
+     * quads (root→mid→tip) with the mid bulging perpendicular — the classic CME loop —
+     * growing with an ease-out and fading on a sin-in-out envelope, peak alpha
+     * {@value #WISP_PEAK_ALPHA}·pulse. The root sits inside the disc silhouette
+     * ({@code RAY_INNER_RADIUS}), so the black core occludes it like the ray roots.
      */
-    private static void drawAuraRays(Matrix4f pose, float seconds, float pulse) {
+    private static void drawCoronalWisp(Matrix4f pose, float seconds, float pulse) {
+        int slot = (int) (seconds / WISP_SLOT_SECONDS);
+        if (LimboHorizonShips.hash01(slot * 31 + 5, 977) >= 0.45D) {
+            return;
+        }
+        float start = (float) (LimboHorizonShips.hash01(slot * 31 + 6, 977)
+                * (WISP_SLOT_SECONDS - WISP_DURATION_SECONDS - 1.0F));
+        float t01 = (seconds - slot * WISP_SLOT_SECONDS - start) / WISP_DURATION_SECONDS;
+        if (t01 <= 0.0F || t01 >= 1.0F) {
+            return;
+        }
+        float grow = 1.0F - (1.0F - t01) * (1.0F - t01); // ease-out reach
+        float alpha = WISP_PEAK_ALPHA * Mth.sin(t01 * (float) Math.PI) * pulse;
+        float angle = (float) (LimboHorizonShips.hash01(slot * 31 + 7, 977) * Math.PI * 2.0D);
+        float curl = LimboHorizonShips.hash01(slot * 31 + 8, 977) < 0.5D ? -1.0F : 1.0F;
+
+        float dirX = Mth.cos(angle);
+        float dirZ = Mth.sin(angle);
+        float perpX = -dirZ * curl;
+        float perpZ = dirX * curl;
+        float reach = WISP_REACH * grow;
+        float r0 = RAY_INNER_RADIUS;
+        float r1 = RAY_INNER_RADIUS + reach * 0.5F;
+        float r2 = RAY_INNER_RADIUS + reach;
+        // The plume bows sideways as it extends (the detached-loop read).
+        float bow1 = reach * 0.18F;
+        float bow2 = reach * 0.55F;
+        float w0 = 5.0F;
+        float w1 = 8.0F;
+        float w2 = 2.5F;
+
+        BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        // root → mid
+        builder.addVertex(pose, dirX * r0 - perpX * w0, SKY_DISTANCE, dirZ * r0 - perpZ * w0)
+                .setColor(0.82F, 0.50F, 1.0F, alpha);
+        builder.addVertex(pose, dirX * r0 + perpX * w0, SKY_DISTANCE, dirZ * r0 + perpZ * w0)
+                .setColor(0.82F, 0.50F, 1.0F, alpha);
+        builder.addVertex(pose, dirX * r1 + perpX * (w1 + bow1), SKY_DISTANCE,
+                        dirZ * r1 + perpZ * (w1 + bow1))
+                .setColor(0.62F, 0.30F, 0.95F, alpha * 0.7F);
+        builder.addVertex(pose, dirX * r1 + perpX * (bow1 - w1), SKY_DISTANCE,
+                        dirZ * r1 + perpZ * (bow1 - w1))
+                .setColor(0.62F, 0.30F, 0.95F, alpha * 0.7F);
+        // mid → tip
+        builder.addVertex(pose, dirX * r1 + perpX * (bow1 - w1), SKY_DISTANCE,
+                        dirZ * r1 + perpZ * (bow1 - w1))
+                .setColor(0.62F, 0.30F, 0.95F, alpha * 0.7F);
+        builder.addVertex(pose, dirX * r1 + perpX * (w1 + bow1), SKY_DISTANCE,
+                        dirZ * r1 + perpZ * (w1 + bow1))
+                .setColor(0.62F, 0.30F, 0.95F, alpha * 0.7F);
+        builder.addVertex(pose, dirX * r2 + perpX * (bow2 + w2), SKY_DISTANCE,
+                        dirZ * r2 + perpZ * (bow2 + w2))
+                .setColor(0.45F, 0.15F, 0.85F, 0.0F);
+        builder.addVertex(pose, dirX * r2 + perpX * (bow2 - w2), SKY_DISTANCE,
+                        dirZ * r2 + perpZ * (bow2 - w2))
+                .setColor(0.45F, 0.15F, 0.85F, 0.0F);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * The {@value #RAY_COUNT}-ray aura fan: two 6-ray layers counter-rotating at
+     * ±{@value #RAY_SPIN_DEG_PER_SEC} °/s (v4: slowed from 1.2 — a drift you only notice
+     * by staring). Each ray is a tapered additive wedge from just inside the disc
+     * silhouette out to its own 40–120-unit length, root alpha {@value #RAY_ALPHA}·pulse
+     * fading to zero at the tip. v4: layer B is shifted by the clamped parallax offset
+     * {@code (parX, parZ)} — nearer sheet, moves against the camera walk — while layer A
+     * stays locked to the disc; the offsets are continuous in camera position, so nothing
+     * can pop (the C2 law).
+     */
+    private static void drawAuraRays(Matrix4f pose, float seconds, float pulse,
+            float parX, float parZ) {
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         float spin = seconds * RAY_SPIN_DEG_PER_SEC;
@@ -479,6 +669,9 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             // perpendicular in the celestial plane
             float perpX = -dirZ;
             float perpZ = dirX;
+            // v4 parallax: the whole layer-B fan translates in the celestial plane.
+            float offX = layerB ? parX : 0.0F;
+            float offZ = layerB ? parZ : 0.0F;
 
             float rootW = RAY_WIDTHS[i];
             float tipW = rootW * 0.12F;
@@ -486,13 +679,17 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             float r1 = RAY_INNER_RADIUS + RAY_LENGTHS[i];
             float rootAlpha = RAY_ALPHA * pulse * (layerB ? 0.85F : 1.0F);
 
-            builder.addVertex(pose, dirX * r0 - perpX * rootW, SKY_DISTANCE, dirZ * r0 - perpZ * rootW)
+            builder.addVertex(pose, offX + dirX * r0 - perpX * rootW, SKY_DISTANCE,
+                            offZ + dirZ * r0 - perpZ * rootW)
                     .setColor(0.78F, 0.42F, 1.0F, rootAlpha);
-            builder.addVertex(pose, dirX * r0 + perpX * rootW, SKY_DISTANCE, dirZ * r0 + perpZ * rootW)
+            builder.addVertex(pose, offX + dirX * r0 + perpX * rootW, SKY_DISTANCE,
+                            offZ + dirZ * r0 + perpZ * rootW)
                     .setColor(0.78F, 0.42F, 1.0F, rootAlpha);
-            builder.addVertex(pose, dirX * r1 + perpX * tipW, SKY_DISTANCE, dirZ * r1 + perpZ * tipW)
+            builder.addVertex(pose, offX + dirX * r1 + perpX * tipW, SKY_DISTANCE,
+                            offZ + dirZ * r1 + perpZ * tipW)
                     .setColor(0.45F, 0.15F, 0.85F, 0.0F);
-            builder.addVertex(pose, dirX * r1 - perpX * tipW, SKY_DISTANCE, dirZ * r1 - perpZ * tipW)
+            builder.addVertex(pose, offX + dirX * r1 - perpX * tipW, SKY_DISTANCE,
+                            offZ + dirZ * r1 - perpZ * tipW)
                     .setColor(0.45F, 0.15F, 0.85F, 0.0F);
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());

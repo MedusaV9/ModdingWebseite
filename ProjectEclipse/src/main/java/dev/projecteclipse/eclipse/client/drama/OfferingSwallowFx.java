@@ -6,7 +6,18 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+
+import org.joml.Matrix4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
@@ -16,9 +27,12 @@ import dev.projecteclipse.eclipse.veilfx.FxBudget;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.SpriteContents;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -48,13 +62,23 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * Beams with no matching flight pass through untouched (revive ritual, level-ups while
  * nobody is offering, …).</p>
  *
+ * <p><b>W-P-ALTAR2 glow + value tell</b>: the spiraling item carries a soft additive
+ * glow fan whose inner color is SAMPLED from the item's own particle sprite (average of
+ * the opaque pixels, mixed toward the violet-gold house palette; violet-gold dual tone
+ * when sampling fails) and whose brightness follows the offerer-private tier riding the
+ * emitter id ({@link S2CQuasarPayload#offeringSwallowTier} — richer offering = brighter
+ * swallow; bystanders always see the neutral mid tier). On arrival the swallow pokes
+ * {@link AltarCeremonyFx#notifyOfferingSwallowed()} so the L3+ aurora veil briefly
+ * brightens map-side (the sky acknowledging the meal).</p>
+ *
  * <p><b>Fallbacks</b>: under {@code reducedFx} (or when the altar anchor has not synced)
  * the payload degrades to a plain {@code offering_swallow} burst at the hand via
  * {@code QuasarSpawner.spawnOrFallback} — never a silent drop, and no unknown-id warn
  * spam from the item-suffixed ids. The item billboard itself needs no Veil, so the
  * spiral works even when Quasar is unavailable (only the trail motes disappear).
- * Budgets: one BURST-channel emitter per flight, flights hard-capped at
- * {@value #MAX_FLIGHTS}; per-frame work is zero while no flight is live.</p>
+ * Sprite sampling is try/caught with a violet-gold fallback. Budgets: one BURST-channel
+ * emitter per flight, flights hard-capped at {@value #MAX_FLIGHTS}; per-frame work is
+ * zero while no flight is live.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class OfferingSwallowFx {
@@ -76,21 +100,41 @@ public final class OfferingSwallowFx {
     /** Beam release padding after the item vanishes (ticks). */
     private static final int BEAM_RELEASE_PAD = 2;
 
+    // --- W-P-ALTAR2 glow fan (item-color aura around the spiraling item) ---
+    /** Glow fan alpha per value-tell tier (junk / mid / rich) — the brightness tell. */
+    private static final float[] GLOW_TIER_ALPHA = {0.24F, 0.40F, 0.62F};
+    /** Item billboard scale multiplier per tier (subtle: the glow carries the tell). */
+    private static final float[] GLOW_TIER_SCALE = {0.94F, 1.0F, 1.08F};
+    /** Glow fan radius as a multiple of the current item scale. */
+    private static final float GLOW_RADIUS_FACTOR = 1.05F;
+    private static final int GLOW_FAN_SEGMENTS = 10;
+    /** Dual-tone fallback + rim: warm gold core into the house violet rim. */
+    private static final float[] GLOW_FALLBACK_CORE = {1.0F, 0.85F, 0.55F};
+    private static final float[] GLOW_RIM = {0.62F, 0.42F, 1.0F};
+    /** Sprite sample grid per axis (16 probes across the particle icon). */
+    private static final int GLOW_SAMPLE_GRID = 4;
+
     private static final class Flight {
         final ItemStack stack;
         final Vec3 start;
         final Vec3 target;
         final float spiralPhase;
+        /** Value-tell tier 0..2 (offerer-private; bystanders always get 1). */
+        final int tier;
+        /** Glow core color sampled from the item sprite (violet-gold fallback). */
+        final float[] glowColor;
         @Nullable
         ParticleEmitter trail;
         int age;
 
-        Flight(ItemStack stack, Vec3 start, Vec3 target, float spiralPhase,
-                @Nullable ParticleEmitter trail) {
+        Flight(ItemStack stack, Vec3 start, Vec3 target, float spiralPhase, int tier,
+                float[] glowColor, @Nullable ParticleEmitter trail) {
             this.stack = stack;
             this.start = start;
             this.target = target;
             this.spiralPhase = spiralPhase;
+            this.tier = tier;
+            this.glowColor = glowColor;
             this.trail = trail;
         }
     }
@@ -120,7 +164,7 @@ public final class OfferingSwallowFx {
     public static boolean intercept(ResourceLocation emitterId, Vec3 pos) {
         ResourceLocation itemId = S2CQuasarPayload.offeringSwallowItem(emitterId);
         if (itemId != null) {
-            beginFlight(itemId, pos);
+            beginFlight(itemId, pos, S2CQuasarPayload.offeringSwallowTier(emitterId));
             return true;
         }
         if (S2CQuasarPayload.ALTAR_BEAM.equals(emitterId) && !FLIGHTS.isEmpty()) {
@@ -137,7 +181,7 @@ public final class OfferingSwallowFx {
         return false;
     }
 
-    private static void beginFlight(ResourceLocation itemId, Vec3 handPos) {
+    private static void beginFlight(ResourceLocation itemId, Vec3 handPos, int tier) {
         Vec3 anchor = FxAnchors.get(FxAnchors.ALTAR_CENTER);
         if (anchor == null || EclipseClientConfig.reducedFx()) {
             // Degraded beat: one plain trail burst at the hand, beam stays immediate.
@@ -154,7 +198,67 @@ public final class OfferingSwallowFx {
         float phase = (float) (Math.atan2(handPos.z - target.z, handPos.x - target.x));
         ParticleEmitter trail = QuasarSpawner.spawnManaged(
                 S2CQuasarPayload.OFFERING_SWALLOW, handPos, FxBudget.Channel.BURST);
-        FLIGHTS.add(new Flight(stack, handPos, target, phase, trail));
+        FLIGHTS.add(new Flight(stack, handPos, target, phase,
+                Mth.clamp(tier, 0, 2), sampleItemGlowColor(stack), trail));
+    }
+
+    /**
+     * W-P-ALTAR2 item-color sampling: averages the opaque pixels of the item's particle
+     * sprite (a {@value #GLOW_SAMPLE_GRID}×{@value #GLOW_SAMPLE_GRID} probe grid over the
+     * first animation frame), normalizes toward full brightness for additive readability
+     * and mixes 30% toward the warm gold house tone so every glow still reads "altar".
+     * Dark or unreadable sprites fall back to the violet-gold dual tone.
+     */
+    private static float[] sampleItemGlowColor(ItemStack stack) {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            TextureAtlasSprite sprite = minecraft.getItemRenderer()
+                    .getModel(stack, minecraft.level, null, 0)
+                    .getParticleIcon(net.neoforged.neoforge.client.model.data.ModelData.EMPTY);
+            SpriteContents contents = sprite.contents();
+            NativeImage image = contents.getOriginalImage();
+            int width = Math.min(contents.width(), image.getWidth());
+            int height = Math.min(contents.height(), image.getHeight());
+            long r = 0;
+            long g = 0;
+            long b = 0;
+            int opaque = 0;
+            for (int sy = 0; sy < GLOW_SAMPLE_GRID; sy++) {
+                for (int sx = 0; sx < GLOW_SAMPLE_GRID; sx++) {
+                    int x = (sx * 2 + 1) * width / (GLOW_SAMPLE_GRID * 2);
+                    int y = (sy * 2 + 1) * height / (GLOW_SAMPLE_GRID * 2);
+                    int abgr = image.getPixelRGBA(x, y); // NativeImage packs ABGR
+                    if ((abgr >>> 24) < 48) {
+                        continue; // transparent probe
+                    }
+                    r += abgr & 0xFF;
+                    g += (abgr >> 8) & 0xFF;
+                    b += (abgr >> 16) & 0xFF;
+                    opaque++;
+                }
+            }
+            if (opaque < 3) {
+                return GLOW_FALLBACK_CORE;
+            }
+            float fr = r / (255.0F * opaque);
+            float fg = g / (255.0F * opaque);
+            float fb = b / (255.0F * opaque);
+            // Normalize the dominant channel to 1 (additive glows need brightness) …
+            float max = Math.max(fr, Math.max(fg, fb));
+            if (max < 0.12F) {
+                return GLOW_FALLBACK_CORE; // near-black sprite: keep the dual tone
+            }
+            fr /= max;
+            fg /= max;
+            fb /= max;
+            // … then fold 30% of the gold house tone in for palette cohesion.
+            return new float[]{
+                    Mth.lerp(0.3F, fr, GLOW_FALLBACK_CORE[0]),
+                    Mth.lerp(0.3F, fg, GLOW_FALLBACK_CORE[1]),
+                    Mth.lerp(0.3F, fb, GLOW_FALLBACK_CORE[2])};
+        } catch (Throwable t) {
+            return GLOW_FALLBACK_CORE; // sprite/atlas unavailable — dual tone fallback
+        }
     }
 
     // --- tick: advance flights, drag the trail along, release held beams ---
@@ -176,6 +280,9 @@ public final class OfferingSwallowFx {
             if (flight.age >= FLIGHT_TICKS) {
                 flights.remove();
                 finishFlight(flight);
+                // W-P-ALTAR2: the altar swallowed the item — let the L3+ aurora veil
+                // answer with a brief brightening (AltarVeilSky reads the envelope).
+                AltarCeremonyFx.notifyOfferingSwallowed();
                 continue;
             }
             if (flight.trail != null) {
@@ -250,7 +357,7 @@ public final class OfferingSwallowFx {
             double age = Math.min(flight.age + partialTick, FLIGHT_TICKS);
             Vec3 pos = posAt(flight, age);
             float t = (float) (age / FLIGHT_TICKS);
-            float scale = BASE_SCALE * (1.0F - t * t);
+            float scale = BASE_SCALE * (1.0F - t * t) * GLOW_TIER_SCALE[flight.tier];
             if (scale <= 0.01F) {
                 continue;
             }
@@ -264,6 +371,81 @@ public final class OfferingSwallowFx {
             poseStack.popPose();
         }
         bufferSource.endBatch();
+        renderGlowFans(event, poseStack, camera, partialTick);
+    }
+
+    /**
+     * W-P-ALTAR2 glow fans: an additive camera-facing radial fan around each spiraling
+     * item — sampled item color at the core fading into the house violet rim (the
+     * violet-gold dual tone when sampling fell back), alpha scaled by the offerer's
+     * value-tell tier. One position-color mesh for all flights, drawn additively with
+     * {@code depthMask(false)} (the {@code SupplyBeamRenderer} state discipline) so the
+     * invisible rim never occludes weather/particles behind it. No texture, no extra
+     * particles, zero FX-budget cost.
+     */
+    private static void renderGlowFans(RenderLevelStageEvent event, PoseStack poseStack,
+            Vec3 camera, float partialTick) {
+        BufferBuilder buffer = null;
+        for (int i = 0; i < FLIGHTS.size(); i++) {
+            Flight flight = FLIGHTS.get(i);
+            double age = Math.min(flight.age + partialTick, FLIGHT_TICKS);
+            float t = (float) (age / FLIGHT_TICKS);
+            float radius = BASE_SCALE * (1.0F - t * t) * GLOW_TIER_SCALE[flight.tier]
+                    * GLOW_RADIUS_FACTOR;
+            if (radius <= 0.02F) {
+                continue;
+            }
+            Vec3 pos = posAt(flight, age);
+            // Gentle shimmer so the aura feels alive, phase-split per flight; nudged
+            // toward the camera so the additive wash always reads over the item sprite.
+            float shimmer = 0.85F + 0.15F * Mth.sin((float) age * 0.55F + flight.spiralPhase);
+            float alpha = GLOW_TIER_ALPHA[flight.tier] * shimmer;
+            Vec3 toCamera = camera.subtract(pos).normalize().scale(0.08D);
+            poseStack.pushPose();
+            poseStack.translate(pos.x - camera.x + toCamera.x, pos.y - camera.y + toCamera.y,
+                    pos.z - camera.z + toCamera.z);
+            poseStack.mulPose(event.getCamera().rotation());
+            Matrix4f matrix = poseStack.last().pose();
+            if (buffer == null) {
+                buffer = Tesselator.getInstance().begin(
+                        VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+            }
+            float cr = flight.glowColor[0];
+            float cg = flight.glowColor[1];
+            float cb = flight.glowColor[2];
+            for (int seg = 0; seg < GLOW_FAN_SEGMENTS; seg++) {
+                float a0 = seg * ((float) Math.PI * 2.0F / GLOW_FAN_SEGMENTS);
+                float a1 = (seg + 1) * ((float) Math.PI * 2.0F / GLOW_FAN_SEGMENTS);
+                // Degenerate quad = center triangle fan slice: core color → violet rim.
+                buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(cr, cg, cb, alpha);
+                buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(cr, cg, cb, alpha);
+                buffer.addVertex(matrix, Mth.cos(a0) * radius, Mth.sin(a0) * radius, 0.0F)
+                        .setColor(GLOW_RIM[0], GLOW_RIM[1], GLOW_RIM[2], 0.0F);
+                buffer.addVertex(matrix, Mth.cos(a1) * radius, Mth.sin(a1) * radius, 0.0F)
+                        .setColor(GLOW_RIM[0], GLOW_RIM[1], GLOW_RIM[2], 0.0F);
+            }
+            poseStack.popPose();
+        }
+        if (buffer == null) {
+            return;
+        }
+        MeshData mesh = buffer.build();
+        if (mesh == null) {
+            return;
+        }
+        RenderSystem.enableBlend();
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.disableCull();
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthMask(false);
+        BufferUploader.drawWithShader(mesh);
+        RenderSystem.depthMask(true);
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+        RenderSystem.defaultBlendFunc();
     }
 
     /**

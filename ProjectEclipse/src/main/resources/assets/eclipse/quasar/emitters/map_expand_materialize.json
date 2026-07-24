@@ -19,7 +19,7 @@
       "from_surface": false
     },
     "particle_settings": {
-      "particle_speed": 0.04,
+      "particle_speed": 0.14,
       "random_speed": true,
       "base_particle_size": 0.36,
       "particle_size_variation": 0.06,
@@ -48,6 +48,23 @@
         "module": "veil:block"
       },
       {
+        "module": "veil:point_attractor",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "localPosition": true,
+        "range": 3.0,
+        "strength": 0.05,
+        "strengthByDistance": true,
+        "invertDistanceModifier": false
+      },
+      {
+        "module": "veil:drag",
+        "strength": 0.25
+      },
+      {
         "module": "veil:color",
         "gradient": {
           "rgb_points": [
@@ -66,12 +83,12 @@
               "alpha": 0.0
             },
             {
-              "percent": 0.25,
-              "alpha": 0.9
+              "percent": 0.3,
+              "alpha": 0.95
             },
             {
               "percent": 0.7,
-              "alpha": 0.75
+              "alpha": 0.7
             },
             {
               "percent": 1.0,

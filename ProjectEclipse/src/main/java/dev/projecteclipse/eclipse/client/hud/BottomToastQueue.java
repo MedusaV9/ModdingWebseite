@@ -32,11 +32,16 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * {@value #MATERIALIZE_LIFT} px so it also clears the LIFTED proc lane — the DOPA-S-05
  * "lifted proc under an active collection card" stack is gone too.</p>
  *
- * <p>Fade in / hold / fade out and the 3 px rise mirror the retired per-class renderers
- * (fade + rise suppressed under {@code reducedFx}); hold length is per-toast (a two-line
- * card holds longer than a one-line pill). Pause freezes active toasts and the queue.
- * Self-registered GUI layer ({@code SkillProcToast.Registrar} pattern); F1-hidden;
- * cutscene-suppressed via the letterbox whitelist like every non-whitelisted layer.</p>
+ * <p><b>Motion (UIFEEL):</b> entrance is a spring — the toast rises {@value #RISE_PX} px
+ * with a {@value #OVERSHOOT_PX} px overshoot past its lane, then settles back over
+ * {@value #SETTLE_TICKS}t (anticipation→impact→settle); exit is a fade-slide, dropping
+ * {@value #SLIDE_PX} px while the alpha runs out. Toast icons can ride
+ * {@link #iconBounce(float)} for a 1 px micro-bounce the moment the spring lands. All
+ * motion (rise, overshoot, slide, bounce) is suppressed under {@code reducedFx} — pure
+ * fade only. Hold length is per-toast (a two-line card holds longer than a one-line
+ * pill). Pause freezes active toasts and the queue. Self-registered GUI layer
+ * ({@code SkillProcToast.Registrar} pattern); F1-hidden; cutscene-suppressed via the
+ * letterbox whitelist like every non-whitelisted layer.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class BottomToastQueue {
@@ -56,6 +61,16 @@ public final class BottomToastQueue {
         default void onShow() {}
 
         void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha);
+
+        /**
+         * Age-aware draw hook (UIFEEL): {@code ageTicks} is the time since activation
+         * including the partial tick, so implementations can time icon flourishes against
+         * {@link #iconBounce(float)}. Default delegates to the age-less {@link #draw}.
+         */
+        default void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha,
+                float ageTicks) {
+            draw(guiGraphics, font, centerX, y, alpha);
+        }
     }
 
     /**
@@ -75,6 +90,14 @@ public final class BottomToastQueue {
     private static final int IN_TICKS = 5;
     private static final int OUT_TICKS = 8;
     private static final int RISE_PX = 3;
+    /** Spring overshoot: the entrance rises this far PAST the lane before settling back. */
+    private static final int OVERSHOOT_PX = 1;
+    /** Ticks the entrance spring takes to relax the overshoot back onto the lane. */
+    private static final int SETTLE_TICKS = 4;
+    /** Exit fade-slide: the toast drops this far while the out-fade runs. */
+    private static final int SLIDE_PX = 4;
+    /** Icon micro-bounce window, starting the tick the entrance spring lands. */
+    private static final float BOUNCE_TICKS = 5.0F;
 
     // Client tick thread only.
     private static final ArrayDeque<Toast> QUEUE = new ArrayDeque<>();
@@ -166,11 +189,47 @@ public final class BottomToastQueue {
             if (alpha <= 0.04F) {
                 continue; // fill() alpha-floor guard AND skips the invisible first frame
             }
-            int rise = reduced ? 0
-                    : Math.round((1.0F - easeOutCubic(Math.min(1.0F, t / IN_TICKS))) * RISE_PX);
-            int y = guiGraphics.guiHeight() - (BASE_BOTTOM_OFFSET + s * SLOT_SPACING + lift) + rise;
-            toast.draw(guiGraphics, font, centerX, y, alpha);
+            int offset = reduced ? 0 : springOffset(t, hold);
+            int y = guiGraphics.guiHeight() - (BASE_BOTTOM_OFFSET + s * SLOT_SPACING + lift)
+                    + offset;
+            toast.draw(guiGraphics, font, centerX, y, alpha, t);
         }
+    }
+
+    /**
+     * Vertical motion offset in px (positive = below the lane). Entrance: rise from
+     * {@code +RISE_PX} through {@code -OVERSHOOT_PX} (the spring's 1 px overshoot) over
+     * {@code IN_TICKS}, then relax back to 0 over {@code SETTLE_TICKS}. Exit: accelerate
+     * {@code +SLIDE_PX} downward while the out-fade runs (fade-slide).
+     */
+    private static int springOffset(float t, int hold) {
+        if (t < IN_TICKS) {
+            return Math.round((RISE_PX + OVERSHOOT_PX) * (1.0F - easeOutCubic(t / IN_TICKS))
+                    - OVERSHOOT_PX);
+        }
+        if (t < IN_TICKS + SETTLE_TICKS) {
+            return Math.round(-OVERSHOOT_PX * (1.0F - easeOutCubic((t - IN_TICKS) / SETTLE_TICKS)));
+        }
+        if (t > IN_TICKS + hold) {
+            float out = Mth.clamp((t - IN_TICKS - hold) / OUT_TICKS, 0.0F, 1.0F);
+            return Math.round(SLIDE_PX * out * out * out); // ease-in: departs gaining speed
+        }
+        return 0;
+    }
+
+    /**
+     * Icon micro-bounce offset in px for toast icons (◆ / ✦): {@code 0} until the entrance
+     * spring lands at {@code IN_TICKS}, then a 1 px up-and-back hop over
+     * {@value #BOUNCE_TICKS}t — the icon "lands" a beat after the pill. Suppressed (always
+     * {@code 0}) under {@code reducedFx}. Call from {@link Toast#draw(GuiGraphics, Font,
+     * int, int, float, float)} with the given {@code ageTicks}.
+     */
+    public static int iconBounce(float ageTicks) {
+        if (EclipseClientConfig.reducedFx() || ageTicks < IN_TICKS
+                || ageTicks >= IN_TICKS + BOUNCE_TICKS) {
+            return 0;
+        }
+        return -Math.round(Mth.sin((ageTicks - IN_TICKS) / BOUNCE_TICKS * Mth.PI));
     }
 
     private static float easeOutCubic(float t) {

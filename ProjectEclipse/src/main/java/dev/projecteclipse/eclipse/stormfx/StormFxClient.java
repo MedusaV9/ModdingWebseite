@@ -72,6 +72,12 @@ public final class StormFxClient {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "storm_arc");
     private static final ResourceLocation VORTEX_WISP_EMITTER =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "vortex_wisp");
+    /**
+     * FX-STORM explosion stage 3 support: the {@code border_glitch} strobing-alpha burst
+     * IS the "wall fragments dissolve as glitch voxels" read — reused, not duplicated.
+     */
+    private static final ResourceLocation EXPLOSION_GLITCH_EMITTER =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "border_glitch");
 
     /** Shell arc-flash cadence (R14: "shell-surface arc flashes every 20–60 ticks per storm"). */
     private static final int ARC_MIN_INTERVAL = 20;
@@ -305,15 +311,51 @@ public final class StormFxClient {
     }
 
     /**
-     * C8 explosion debris: dust/ash chunks thrown outward along the expanding shockwave
-     * ring (matches the renderer's {@code 1 + 1.8·progress} expansion), plus a rising
-     * smoke column off the collapsing center. Raw {@code addParticle} — a 2 s one-off.
+     * C8 explosion debris, staged (FX-STORM multi-stage burst, mirroring the renderer's
+     * {@code explodeRadiusScale} curve):
+     * <ul>
+     *   <li><b>implosion</b> (progress &lt; {@link StormWallRenderer#EXPLODE_IMPLODE_FRAC}):
+     *       debris tears off the shell and is sucked INTO the center — no smoke column yet;</li>
+     *   <li><b>flash beat</b> (&lt; 0.30): white owns the frame, the air stays almost clean;</li>
+     *   <li><b>expansion</b>: debris ring on the renderer's eased {@code 1 + 1.8·t²} radius
+     *       law + rising center column + a {@code border_glitch} strobe burst every 5 ticks
+     *       riding the ring — the glitch-voxel shard dissolve (tier ≥ 1 only).</li>
+     * </ul>
+     * Raw {@code addParticle} for the dust — a 2 s one-off; only the glitch bursts charge
+     * the STORM channel.
      */
     private static void tickExplosionDebris(ClientLevel level, ClientStorm storm) {
         RandomSource random = level.random;
         float progress = storm.explodeProgress(1.0F);
-        double ringR = storm.radius * (1.0D + 1.8D * progress);
-        int bursts = EclipseClientConfig.reducedFx() ? 5 : 10;
+        boolean reduced = EclipseClientConfig.reducedFx();
+        if (progress < StormWallRenderer.EXPLODE_IMPLODE_FRAC) {
+            // Stage 1 — implosion suck-in: shell debris streams toward the center.
+            int bursts = reduced ? 3 : 6;
+            for (int i = 0; i < bursts; i++) {
+                double angle = random.nextDouble() * Math.PI * 2.0D;
+                double x = storm.center.x + Math.cos(angle) * storm.radius;
+                double z = storm.center.z + Math.sin(angle) * storm.radius;
+                double y = storm.center.y + random.nextDouble() * storm.height * 0.6D;
+                double in = 0.5D + random.nextDouble() * 0.4D;
+                level.addParticle(random.nextBoolean() ? ParticleTypes.CLOUD : ParticleTypes.LARGE_SMOKE,
+                        x, y, z, -Math.cos(angle) * in, -0.03D, -Math.sin(angle) * in);
+            }
+            return;
+        }
+        if (progress < 0.30F) {
+            // Stage 2 — the flash beat: a lone ash flake over the center, nothing else.
+            if (clientTicks % 4 == 0) {
+                level.addParticle(ParticleTypes.WHITE_ASH,
+                        storm.center.x, storm.center.y + 2.0D, storm.center.z,
+                        0.0D, 0.1D, 0.0D);
+            }
+            return;
+        }
+        // Stage 3 — expanding debris ring (the renderer's eased expansion law).
+        float expandT = (progress - StormWallRenderer.EXPLODE_IMPLODE_FRAC)
+                / (1.0F - StormWallRenderer.EXPLODE_IMPLODE_FRAC);
+        double ringR = storm.radius * (1.0D + 1.8D * expandT * expandT);
+        int bursts = reduced ? 5 : 10;
         for (int i = 0; i < bursts; i++) {
             double angle = random.nextDouble() * Math.PI * 2.0D;
             double x = storm.center.x + Math.cos(angle) * ringR;
@@ -326,6 +368,15 @@ public final class StormFxClient {
                 level.addParticle(ParticleTypes.WHITE_ASH, x, y + 1.0D, z,
                         Math.cos(angle) * out * 0.5D, 0.12D, Math.sin(angle) * out * 0.5D);
             }
+        }
+        // Glitch-voxel shard support: one strobing border_glitch burst per 5 ticks on the
+        // ring (STORM-charged; a budget refusal just skips the beat).
+        if (clientTicks % 5 == 0 && FxBudget.qualityTier() >= 1) {
+            double angle = random.nextDouble() * Math.PI * 2.0D;
+            QuasarSpawner.spawn(EXPLOSION_GLITCH_EMITTER, new Vec3(
+                    storm.center.x + Math.cos(angle) * ringR,
+                    storm.center.y + 1.5D + random.nextDouble() * 3.0D,
+                    storm.center.z + Math.sin(angle) * ringR), FxBudget.Channel.STORM);
         }
         if (clientTicks % 2 == 0) {
             level.addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
@@ -478,7 +529,9 @@ public final class StormFxClient {
                         wispPos(storm, wispRadius, k), FxBudget.Channel.STORM);
                 continue;
             }
-            storm.wispHeights[k] += WISP_RISE_PER_TICK * (1.0F + k * 0.15F);
+            // FX-STORM: the updraft gusts with the roar-loop clock (interior gusts only).
+            storm.wispHeights[k] += WISP_RISE_PER_TICK * (1.0F + k * 0.15F)
+                    * (1.0F + 0.5F * StormInteriorFx.gustAmount());
             if (storm.wispHeights[k] > storm.height * 0.9F) {
                 storm.wispHeights[k] = 2.0F;
             }
@@ -646,13 +699,21 @@ public final class StormFxClient {
             return Mth.clamp(elapsed / stateTicks, 0.0F, 1.0F);
         }
 
-        /** C8 white-hot factor of the explosion's first ~15 ticks (0 otherwise). */
+        /**
+         * C8 white-hot factor (0 otherwise). FX-STORM retiming: charges up through the
+         * implosion suck-in (to 0.55), PEAKS at the pinch release — the flash beat —
+         * then decays over ~15 ticks while the shockwave expands.
+         */
         float explodeWhite(float partialTick) {
             if (state != S2CStormStatePayload.STATE_EXPLODE) {
                 return 0.0F;
             }
             float elapsed = clientTicks + partialTick - stateStartTick;
-            return Mth.clamp(1.0F - elapsed / 15.0F, 0.0F, 1.0F);
+            float implodeEnd = Math.max(1.0F, stateTicks * StormWallRenderer.EXPLODE_IMPLODE_FRAC);
+            if (elapsed < implodeEnd) {
+                return Mth.clamp(elapsed / implodeEnd, 0.0F, 1.0F) * 0.55F; // charging glow
+            }
+            return Mth.clamp(1.0F - (elapsed - implodeEnd) / 15.0F, 0.0F, 1.0F);
         }
 
         void releaseWisp(int index) {
@@ -807,7 +868,11 @@ public final class StormFxClient {
             this.fade = Math.min(this.fade + this.fadeDirection, FADE_TICKS);
             updatePosition();
             float visibility = storm.visibility(1.0F);
-            this.volume = MAX_VOLUME * visibility * Mth.clamp(this.fade / (float) FADE_TICKS, 0.0F, 1.0F);
+            // FX-STORM: the roar swells with the gust clock — the wind-gust bursts of the
+            // interior rain/motes land exactly on the loop's loudest beat.
+            this.volume = Math.min(1.0F, MAX_VOLUME * visibility
+                    * Mth.clamp(this.fade / (float) FADE_TICKS, 0.0F, 1.0F)
+                    * (1.0F + 0.18F * StormInteriorFx.gustAmount()));
             if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
                 // C8 muffled-interior alias: the exterior roar dulls as the fog closes in.
                 this.pitch = 1.0F - MUFFLE_PITCH_DROP * StormInteriorFx.interiorAmount();

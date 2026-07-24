@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -31,6 +32,14 @@ import net.neoforged.api.distmarker.OnlyIn;
  * ahead. Together with C1's {@code VoyageOffset} caustic stream and the
  * {@code LimboSpecialEffects} drift cues, the horizon itself appears to move past the
  * anchored ship.</p>
+ *
+ * <p>v4 (FXTEAM-LIMBO) — the <b>passing lantern</b>: rarely (every 4–8 minutes,
+ * deterministic per event counter), a single tiny warm-amber light crosses ~30–50° of the
+ * horizon over 30–45 s with a slow bob, then is gone. Deliberately NOT gaze-latched — the
+ * silhouette ships vanish when observed, the lantern is the one thing out there that lets
+ * itself be watched (and it is warm, the only non-violet/non-soul-green light in limbo:
+ * someone else is sailing). Skipped entirely under {@code reducedFx} (garnish ladder), and
+ * its schedule self-heals across world swaps / game-time rewinds.</p>
  *
  * <p>Drawn from {@link LimboSpecialEffects#renderSky} inside the stars' no-fog window, so
  * the Iris guard and fog restore come for free. Purely cosmetic: no entities, no server
@@ -98,6 +107,30 @@ final class LimboHorizonShips {
     /** Game time the drift was last advanced (clamps lag spikes to ≤ 20 t of motion). */
     private static long lastDriftGameTime = Long.MIN_VALUE;
     private static boolean seeded;
+
+    // ---- v4 passing lantern -------------------------------------------------------------
+    /** Ticks between lantern events: {@value} + hash·{@value} (4–8 minutes). */
+    private static final int LANTERN_GAP_TICKS = 4800;
+    /** Crossing duration: 600 + hash·300 ticks (30–45 s). */
+    private static final int LANTERN_MIN_DURATION = 600;
+    private static final int LANTERN_DURATION_RANGE = 300;
+    /** Crossing arc: 0.5 + hash·0.35 rad (~29–49°). */
+    private static final float LANTERN_MIN_ARC = 0.5F;
+    private static final float LANTERN_ARC_RANGE = 0.35F;
+    /** The lantern rides slightly above the ships' hull line and bobs ±0.25 units. */
+    private static final float LANTERN_EVENT_UP = 1.4F;
+    private static final float LANTERN_CORE_HALF = 0.4F;
+    private static final float LANTERN_HALO_HALF = 1.5F;
+
+    private static boolean lanternActive;
+    private static long lanternStart;
+    private static int lanternDuration;
+    private static float lanternAz0;
+    private static float lanternAz1;
+    /** Game time of the next lantern trigger; {@code MIN_VALUE} = not yet scheduled. */
+    private static long lanternNextAt = Long.MIN_VALUE;
+    /** Event counter — the only input to the deterministic per-event hashes. */
+    private static int lanternEvents;
 
     private LimboHorizonShips() {}
 
@@ -183,9 +216,124 @@ final class LimboHorizonShips {
             float sternFade = smoothstep(STERN_CULL_ARC * 0.25F, STERN_CULL_ARC, toStern);
             emitShip(builder, pose, i, fade[i] * appear * sternFade);
         }
+        // v4: the passing lantern shares the ships' buffer and no-fog window.
+        builder = tickAndDrawLantern(builder, pose, gameTime);
         if (builder != null) {
             BufferUploader.drawWithShader(builder.buildOrThrow());
         }
+    }
+
+    /**
+     * v4 — the rare passing lantern: a tiny warm-amber light (core + soft halo) crossing a
+     * hash-picked horizon arc with a gentle bob. Runs off absolute game time with
+     * self-healing guards (a world swap that rewinds the clock re-arms the schedule within
+     * a minute instead of parking it hours out). Returns the (possibly newly created)
+     * builder so a lantern with no ships on screen still draws.
+     */
+    private static BufferBuilder tickAndDrawLantern(BufferBuilder builder, Matrix4f pose,
+            long gameTime) {
+        if (EclipseClientConfig.reducedFx()) {
+            lanternActive = false; // garnish tier: drop the event, keep the schedule
+            return builder;
+        }
+        if (lanternNextAt == Long.MIN_VALUE) {
+            lanternNextAt = gameTime + 1800 + (int) (hash01(911, lanternEvents) * 3600.0D);
+        }
+        if (lanternNextAt - gameTime > LANTERN_GAP_TICKS * 2L) {
+            lanternNextAt = gameTime + 1200; // clock rewound (world swap) — re-arm soon
+        }
+        if (!lanternActive) {
+            if (gameTime < lanternNextAt) {
+                return builder;
+            }
+            lanternActive = true;
+            lanternStart = gameTime;
+            lanternDuration = LANTERN_MIN_DURATION
+                    + (int) (hash01(913, lanternEvents) * LANTERN_DURATION_RANGE);
+            lanternAz0 = (float) (hash01(917, lanternEvents) * Math.PI * 2.0D);
+            float arc = LANTERN_MIN_ARC + (float) hash01(919, lanternEvents) * LANTERN_ARC_RANGE;
+            lanternAz1 = lanternAz0 + (hash01(923, lanternEvents) < 0.5D ? -arc : arc);
+        }
+        float t01 = (gameTime - lanternStart) / (float) lanternDuration;
+        if (t01 >= 1.0F || t01 < 0.0F) { // done, or the clock rewound mid-crossing
+            lanternActive = false;
+            lanternEvents++;
+            lanternNextAt = gameTime + LANTERN_GAP_TICKS
+                    + (int) (hash01(929, lanternEvents) * LANTERN_GAP_TICKS);
+            return builder;
+        }
+
+        float az = Mth.lerp(t01, lanternAz0, lanternAz1);
+        float envelope = Mth.sin(t01 * (float) Math.PI); // breathe in, cross, breathe out
+        float cos = Mth.cos(az);
+        float sin = Mth.sin(az);
+        float rightX = -sin;
+        float rightZ = cos;
+        float baseX = cos * DISTANCE;
+        float baseZ = sin * DISTANCE;
+        // Slow bob (6 s period; 120-tick mod = exactly one cycle, so the wrap is seamless).
+        float up = HORIZON_LIFT + LANTERN_EVENT_UP
+                + 0.25F * Mth.sin((gameTime % 120L) * ((float) Math.PI / 60.0F));
+
+        if (builder == null) {
+            builder = Tesselator.getInstance().begin(
+                    VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        }
+        // Warm amber — deliberately the only non-violet/non-soul-green light in limbo.
+        // Halo first (a 4-triangle diamond gradient: bright center, transparent rim — a
+        // uniform-alpha quad would read as a hard square at this size), then the core dot.
+        emitLanternHalo(builder, pose, baseX, baseZ, rightX, rightZ, up,
+                LANTERN_HALO_HALF, 0.98F, 0.80F, 0.45F, 0.22F * envelope);
+        emitLanternQuad(builder, pose, baseX, baseZ, rightX, rightZ, up,
+                LANTERN_CORE_HALF, 0.95F, 0.72F, 0.38F, 0.75F * envelope);
+        return builder;
+    }
+
+    /** One small solid quad (two triangles) in the horizon silhouette plane — the core dot. */
+    private static void emitLanternQuad(BufferBuilder builder, Matrix4f pose,
+            float baseX, float baseZ, float rightX, float rightZ, float up,
+            float half, float r, float g, float b, float alpha) {
+        float x0 = baseX - rightX * half;
+        float x1 = baseX + rightX * half;
+        float z0 = baseZ - rightZ * half;
+        float z1 = baseZ + rightZ * half;
+        builder.addVertex(pose, x0, up - half, z0).setColor(r, g, b, alpha);
+        builder.addVertex(pose, x1, up - half, z1).setColor(r, g, b, alpha);
+        builder.addVertex(pose, x1, up + half, z1).setColor(r, g, b, alpha);
+        builder.addVertex(pose, x0, up - half, z0).setColor(r, g, b, alpha);
+        builder.addVertex(pose, x1, up + half, z1).setColor(r, g, b, alpha);
+        builder.addVertex(pose, x0, up + half, z0).setColor(r, g, b, alpha);
+    }
+
+    /**
+     * Soft diamond glow: four triangles sharing a bright center vertex, alpha 0 at the
+     * left/top/right/bottom rim points (no scratch arrays — §3.5, this runs per frame).
+     */
+    private static void emitLanternHalo(BufferBuilder builder, Matrix4f pose,
+            float baseX, float baseZ, float rightX, float rightZ, float up,
+            float half, float r, float g, float b, float centerAlpha) {
+        float lx = baseX - rightX * half;
+        float lz = baseZ - rightZ * half;
+        float rx = baseX + rightX * half;
+        float rz = baseZ + rightZ * half;
+        float topY = up + half;
+        float botY = up - half;
+        // left → top
+        builder.addVertex(pose, baseX, up, baseZ).setColor(r, g, b, centerAlpha);
+        builder.addVertex(pose, lx, up, lz).setColor(r, g, b, 0.0F);
+        builder.addVertex(pose, baseX, topY, baseZ).setColor(r, g, b, 0.0F);
+        // top → right
+        builder.addVertex(pose, baseX, up, baseZ).setColor(r, g, b, centerAlpha);
+        builder.addVertex(pose, baseX, topY, baseZ).setColor(r, g, b, 0.0F);
+        builder.addVertex(pose, rx, up, rz).setColor(r, g, b, 0.0F);
+        // right → bottom
+        builder.addVertex(pose, baseX, up, baseZ).setColor(r, g, b, centerAlpha);
+        builder.addVertex(pose, rx, up, rz).setColor(r, g, b, 0.0F);
+        builder.addVertex(pose, baseX, botY, baseZ).setColor(r, g, b, 0.0F);
+        // bottom → left
+        builder.addVertex(pose, baseX, up, baseZ).setColor(r, g, b, centerAlpha);
+        builder.addVertex(pose, baseX, botY, baseZ).setColor(r, g, b, 0.0F);
+        builder.addVertex(pose, lx, up, lz).setColor(r, g, b, 0.0F);
     }
 
     /** One ship: 6 near-black triangles + a soul-green stern lantern (two lantern tris). */
@@ -254,8 +402,12 @@ final class LimboHorizonShips {
         return Math.abs(d);
     }
 
-    /** Fixed-seed hash 0..1 (LimboSeascape.hash01 mixer; deterministic on every client). */
-    private static double hash01(int a, int b) {
+    /**
+     * Fixed-seed hash 0..1 (LimboSeascape.hash01 mixer; deterministic on every client).
+     * v4: package-private — {@link LimboSpecialEffects#drawCoronalWisp} shares the mixer
+     * (with its own salts) for the coronal-mass wisp schedule.
+     */
+    static double hash01(int a, int b) {
         long h = DiscMapData.ECLIPSE_SEED ^ (a * 341873128712L + b * 132897987541L + 0x51D7B0A5L);
         h = (h ^ (h >>> 30)) * 0xBF58476D1CE4E5B9L;
         h = (h ^ (h >>> 27)) * 0x94D049BB133111EBL;

@@ -56,24 +56,70 @@ public record S2CQuasarPayload(ResourceLocation emitterId, Vec3 pos) implements 
      * Offering-swallow emitter id carrying the offered item:
      * {@code eclipse:offering_swallow/<item namespace>/<item path>} (both components are
      * already valid resource-location path characters, so the composite id is well-formed).
+     * This neutral form implies the mid value-tell tier ({@code 1}) — it is what
+     * bystanders receive.
      */
     public static ResourceLocation offeringSwallow(ResourceLocation itemId) {
         return emitter(OFFERING_SWALLOW_PREFIX + itemId.getNamespace() + "/" + itemId.getPath());
     }
 
+    /**
+     * W-P-ALTAR2 value tell: offering-swallow id additionally carrying an OFFERER-PRIVATE
+     * brightness tier ({@code 0} junk / {@code 1} mid / {@code 2} rich — the IDEA-12 #2
+     * pitch buckets): {@code eclipse:offering_swallow/t<tier>/<ns>/<path>}. Sent only to
+     * the offerer; everyone else gets the neutral {@link #offeringSwallow(ResourceLocation)}
+     * form so the daily-winner metagame never leaks (the split-chime law).
+     */
+    public static ResourceLocation offeringSwallow(ResourceLocation itemId, int tier) {
+        int clamped = Math.min(Math.max(tier, 0), 2);
+        return emitter(OFFERING_SWALLOW_PREFIX + "t" + clamped + "/"
+                + itemId.getNamespace() + "/" + itemId.getPath());
+    }
+
     /** The item id riding an offering-swallow emitter id, or {@code null} for other ids. */
     @javax.annotation.Nullable
     public static ResourceLocation offeringSwallowItem(ResourceLocation emitterId) {
-        if (!EclipseMod.MOD_ID.equals(emitterId.getNamespace())
-                || !emitterId.getPath().startsWith(OFFERING_SWALLOW_PREFIX)) {
+        String rest = offeringSwallowRest(emitterId);
+        if (rest == null) {
             return null;
         }
-        String rest = emitterId.getPath().substring(OFFERING_SWALLOW_PREFIX.length());
         int slash = rest.indexOf('/');
         if (slash <= 0 || slash >= rest.length() - 1) {
             return null;
         }
         return ResourceLocation.tryBuild(rest.substring(0, slash), rest.substring(slash + 1));
+    }
+
+    /**
+     * The value-tell tier riding an offering-swallow id; {@code 1} (mid/neutral) when the
+     * id carries no tier segment or is not an offering-swallow id at all.
+     */
+    public static int offeringSwallowTier(ResourceLocation emitterId) {
+        if (EclipseMod.MOD_ID.equals(emitterId.getNamespace())
+                && emitterId.getPath().startsWith(OFFERING_SWALLOW_PREFIX)) {
+            String rest = emitterId.getPath().substring(OFFERING_SWALLOW_PREFIX.length());
+            if (hasTierSegment(rest)) {
+                return rest.charAt(1) - '0';
+            }
+        }
+        return 1;
+    }
+
+    /** Swallow-id remainder with the optional {@code t<tier>/} segment stripped, or null. */
+    @javax.annotation.Nullable
+    private static String offeringSwallowRest(ResourceLocation emitterId) {
+        if (!EclipseMod.MOD_ID.equals(emitterId.getNamespace())
+                || !emitterId.getPath().startsWith(OFFERING_SWALLOW_PREFIX)) {
+            return null;
+        }
+        String rest = emitterId.getPath().substring(OFFERING_SWALLOW_PREFIX.length());
+        return hasTierSegment(rest) ? rest.substring(3) : rest;
+    }
+
+    /** {@code t<0..2>/} tier segment probe (no real item namespace collides with it). */
+    private static boolean hasTierSegment(String rest) {
+        return rest.length() > 3 && rest.charAt(0) == 't' && rest.charAt(2) == '/'
+                && rest.charAt(1) >= '0' && rest.charAt(1) <= '2';
     }
 
     @Override

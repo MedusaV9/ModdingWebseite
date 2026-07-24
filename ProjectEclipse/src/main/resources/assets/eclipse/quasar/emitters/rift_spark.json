@@ -23,7 +23,7 @@
       "random_speed": true,
       "base_particle_size": 0.1,
       "particle_size_variation": 0.06,
-      "particle_lifetime": 10,
+      "particle_lifetime": 9,
       "particle_lifetime_variation": 5,
       "initial_direction": [
         0.0,
@@ -42,7 +42,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": false,
-    "velocity_stretch_factor": 0.35,
+    "velocity_stretch_factor": 0.6,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -50,6 +50,25 @@
       "stretch_to_lifetime": false
     },
     "modules": [
+      {
+        "module": "veil:trail",
+        "settings": [
+          {
+            "trailFrequency": 1,
+            "trailLength": 4,
+            "trailColor": [
+              0.73,
+              0.55,
+              1.0,
+              0.4
+            ],
+            "trailWidthModifier": 0.03,
+            "billboard": true,
+            "parentRotation": false,
+            "trailPointModifier": 1.0
+          }
+        ]
+      },
       {
         "module": "veil:drag",
         "strength": 0.08

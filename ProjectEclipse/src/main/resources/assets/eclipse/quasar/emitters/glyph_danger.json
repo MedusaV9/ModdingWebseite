@@ -19,12 +19,12 @@
       "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 0.22,
+      "particle_speed": 0.26,
       "random_speed": false,
-      "base_particle_size": 0.13,
+      "base_particle_size": 0.14,
       "particle_size_variation": 0.05,
-      "particle_lifetime": 18,
-      "particle_lifetime_variation": 4,
+      "particle_lifetime": 16,
+      "particle_lifetime_variation": 3,
       "initial_direction": [
         0.0,
         1.0,
@@ -60,15 +60,19 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#FF6B6B"
+              "color": "#FFB3AD"
             },
             {
-              "percent": 0.5,
-              "color": "#E63946"
+              "percent": 0.35,
+              "color": "#FF3B3B"
+            },
+            {
+              "percent": 0.7,
+              "color": "#C21807"
             },
             {
               "percent": 1.0,
-              "color": "#7B4FD0"
+              "color": "#5C1A66"
             }
           ],
           "alpha_points": [
@@ -77,8 +81,20 @@
               "alpha": 0.0
             },
             {
-              "percent": 0.2,
+              "percent": 0.08,
               "alpha": 1.0
+            },
+            {
+              "percent": 0.3,
+              "alpha": 0.25
+            },
+            {
+              "percent": 0.45,
+              "alpha": 0.95
+            },
+            {
+              "percent": 0.7,
+              "alpha": 0.3
             },
             {
               "percent": 1.0,

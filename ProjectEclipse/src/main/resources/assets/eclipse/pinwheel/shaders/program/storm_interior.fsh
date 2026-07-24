@@ -3,7 +3,8 @@
 // soft vignette — together with the ViewportEvent fog clamp (~24 blocks) this is the "low
 // visibility inside" read. Uniforms: Interior, RainAmount, Time (frozen §3.3) + Sphere
 // (EVAL-POL-F #4: 1 inside a C8 site-sphere storm — the grade tints green-violet instead of
-// the vortex blue-slate, so the fog color and the post grade stop fighting each other) — fed
+// the vortex blue-slate, so the fog color and the post grade stop fighting each other) +
+// WallProx (FX-STORM: 0..1 wall proximity inside — drives the heat-shimmer refraction) — fed
 // per frame by stormfx.StormInteriorFx through the VeilPostController row. Active only while
 // EclipseFxState.stormInterior() > 0.01 (and never under an Iris shaderpack — the fog clamp
 // and the wall geometry carry the interior look there).
@@ -15,6 +16,7 @@ uniform float Interior;
 uniform float RainAmount;
 uniform float Time;
 uniform float Sphere;
+uniform float WallProx;
 
 in vec2 texCoord;
 
@@ -36,8 +38,19 @@ float rainLayer(vec2 uv, float t, float density, float speed, float seed) {
 }
 
 void main() {
-    vec3 color = texture(DiffuseSampler0, texCoord).rgb;
     float amt = clamp(Interior, 0.0, 1.0);
+
+    // Heat-shimmer refraction near the wall inside (FX-STORM): a slow RISING two-noise
+    // wobble bends the frame by up to ~0.8% UV within the shimmer band; depth is sampled
+    // at the SAME wobbled UV so the sky mask can never halo around bent geometry.
+    vec2 uv = texCoord;
+    float shimmer = clamp(WallProx, 0.0, 1.0) * amt;
+    if (shimmer > 0.005) {
+        float wobX = efxNoise(uv * 34.0 + vec2(Time * 0.9, -Time * 1.6));
+        float wobY = efxNoise(uv * 21.0 + vec2(-Time * 1.1, Time * 0.7));
+        uv += (vec2(wobX, wobY) - 0.5) * 0.008 * shimmer;
+    }
+    vec3 color = texture(DiffuseSampler0, uv).rgb;
 
     // Shadow crush + cold desaturation. Vortex interiors cool toward the storm blue-slate;
     // sphere interiors (Sphere = 1) grade green-violet to match the C8 fog identity — the
@@ -49,10 +62,20 @@ void main() {
 
     // The sky is gone inside: far-plane pixels sink into the storm palette (slate for the
     // vortex, deep green-violet for spheres).
-    float depth = texture(DiffuseDepthSampler, texCoord).r;
+    float depth = texture(DiffuseDepthSampler, uv).r;
     float sky = step(0.9999, depth);
     vec3 skySink = mix(vec3(0.05, 0.045, 0.075), vec3(0.040, 0.070, 0.056), Sphere);
     color = mix(color, skySink, sky * amt * 0.85);
+
+    // Interior depth-fog with height gradient (FX-STORM): geometry sinks into a mist that
+    // is densest LOW in the frame — the ground ahead drowns first, so the interior reads
+    // like wading through standing fog. Depth window ≈ 10 → 56 blocks (hyperbolic depth,
+    // near ≈ 0.05): it ramps across the pinched fog band and keeps working through the
+    // 24→56 flash lift, so flash-revealed silhouettes stay smoky instead of popping clean.
+    float depthFog = smoothstep(0.995, 0.9998, depth) * (1.0 - sky);
+    float heightGrad = 1.0 - smoothstep(0.0, 0.75, texCoord.y);
+    vec3 mist = mix(vec3(0.070, 0.062, 0.100), vec3(0.052, 0.092, 0.072), Sphere);
+    color = mix(color, mist, depthFog * amt * (0.18 + 0.38 * heightGrad));
 
     // Rain streak overlay (two layers, different densities/speeds, faint cool highlight).
     float rain = clamp(RainAmount, 0.0, 1.0) * amt;

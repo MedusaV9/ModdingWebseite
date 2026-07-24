@@ -186,6 +186,22 @@ final class RouletteStrip {
         return spinTicks <= 0 ? 1.0F : Mth.clamp(ticks / (float) spinTicks, 0.0F, 1.0F);
     }
 
+    /**
+     * Normalized strip speed at the current render time, 1.0 at spin start decaying to 0
+     * at landing — the ease-out-quart derivative {@code (1-u)^3} with the constant factors
+     * dropped. Drives the marker-needle deflection in {@code AwardsOverlay}: the needle
+     * leans with the passing heads while the strip is fast and relaxes as it decelerates,
+     * which is what sells the deceleration as physical drag rather than a video fade.
+     */
+    float speedFraction(float partialTick) {
+        if (spinTicks <= 0 || done()) {
+            return 0.0F;
+        }
+        double u = Math.min((ticks + partialTick) / (double) spinTicks, 1.0D);
+        double inverse = 1.0D - u;
+        return (float) (inverse * inverse * inverse);
+    }
+
     int candidateCount() {
         return displayOrder.size();
     }

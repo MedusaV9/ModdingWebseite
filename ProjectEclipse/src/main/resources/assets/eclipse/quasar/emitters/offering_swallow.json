@@ -55,12 +55,12 @@
         "settings": [
           {
             "trailFrequency": 1,
-            "trailLength": 6,
+            "trailLength": 7,
             "trailColor": [
               1.0,
               0.85,
               0.55,
-              0.45
+              0.5
             ],
             "trailWidthModifier": 0.04,
             "billboard": true,
@@ -93,7 +93,7 @@
           "alpha_points": [
             {
               "percent": 0.0,
-              "alpha": 0.85
+              "alpha": 0.9
             },
             {
               "percent": 1.0,

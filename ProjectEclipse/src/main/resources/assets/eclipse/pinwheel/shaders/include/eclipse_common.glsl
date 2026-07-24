@@ -42,3 +42,12 @@ vec2 efxBlockOffset(vec2 uv, float seed, float amt) {
 vec3 efxCrush(vec3 c, float amt) {
     return mix(c, pow(max(c, vec3(0.0)), vec3(1.35)) * 0.42, clamp(amt, 0.0, 1.0));
 }
+
+// Banding guard (GLITCH team): signed ±1-LSB dither for strengthened smooth gradients.
+// Pass gl_FragCoord.xy plus any per-frame-varying jitter in [0,1) for temporal dither
+// (fract(Time * k) is fine), or a constant for purely spatial dither. The 1/61 downscale
+// keeps the hash's sin() argument small enough to stay well-conditioned in fp32 while
+// neighboring pixels remain fully decorrelated.
+float efxDither(vec2 fragCoord, float jitter) {
+    return (efxHash(fragCoord * (1.0 / 61.0) + jitter * vec2(17.0, 29.0)) - 0.5) * (2.0 / 255.0);
+}

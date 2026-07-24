@@ -47,7 +47,8 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  * Daily-awards head-roulette overlay (P3-W10, {@code docs/plans_v3/P3_ui.md} §3.10): plays
  * the {@code S2CAwardRevealPayload} reveal as N sequential roulette cards — spinning head
  * strip with {@code ui.roulette_tick} per marker pass, exact deterministic landing on the
- * winner ({@link RouletteStrip}), flare + pop on the winner head, typewritten stat line,
+ * winner ({@link RouletteStrip}), flare + winner-flash ring + confetti-glyph burst + pop
+ * on the winner head (all screen-space — see {@link #renderConfetti}), typewritten stat line,
  * purple per-character glitch-settle reward line with {@code ui.roulette_win}, 2 s hold,
  * crossfade to the next category, then a compact summary card.
  *
@@ -111,6 +112,18 @@ public final class AwardsOverlay {
 
     /** Flare ray palette mirroring {@code quasar/emitters/roulette_flare.json} (warm → purple). */
     private static final int[] FLARE_COLORS = {0xFFF3C4, 0xFFD166, 0xC77DFF, 0x7B2CBF};
+
+    // --- UIFEEL winner celebration (screen-space; see renderConfetti) ---
+    /** Confetti-glyph particle count per land (deterministic per reveal salt). */
+    private static final int CONFETTI_COUNT = 14;
+    /** Longest confetti-glyph life in ticks (individual particles die 60–100% of this). */
+    private static final float CONFETTI_LIFE_TICKS = 26.0F;
+    /** The glyph half of the confetti (odd indices draw 2×2 px accent motes instead). */
+    private static final String[] CONFETTI_GLYPHS = {"✦", "◆", "+", "·"};
+    /** Needle lean at full spin speed in px (relaxes to 0 as the strip decelerates). */
+    private static final float NEEDLE_LEAN_PX = 2.2F;
+    /** Post-land needle springback wobble window in ticks. */
+    private static final float NEEDLE_WOBBLE_TICKS = 6.0F;
 
     /** Podium-moment flourish over the local winner (client-local; IDEA-11 #2). */
     private static final ResourceLocation PODIUM_BURST_EMITTER =
@@ -543,7 +556,8 @@ public final class AwardsOverlay {
 
         boolean landed = reveal.strip().done();
         int stripCenterY = panelY + 62;
-        drawMarker(guiGraphics, centerX, panelY + 44, panelY + 84, contentAlpha, landed);
+        drawMarker(guiGraphics, centerX, panelY + 44, panelY + 84, contentAlpha, landed,
+                needleDeflect(reveal, landed, partialTick));
         guiGraphics.enableScissor(panelX + 1, panelY + 42, panelX + panelWidth - 1, panelY + 88);
         reveal.strip().render(guiGraphics, font, centerX, stripCenterY,
                 innerWidth / 2 - 2, partialTick, contentAlpha, landed);
@@ -557,6 +571,14 @@ public final class AwardsOverlay {
             }
             renderWinnerHeads(guiGraphics, reveal, centerX, stripCenterY, landTime, contentAlpha);
             guiGraphics.disableScissor();
+            if (!EclipseClientConfig.reducedFx()) {
+                // Confetti clips to the card, not the strip band — it bursts up over the title.
+                guiGraphics.enableScissor(panelX + 1, panelY + 1,
+                        panelX + panelWidth - 1, panelY + panelHeight - 1);
+                renderConfetti(guiGraphics, font, centerX, stripCenterY, landTime, contentAlpha,
+                        reveal.salt());
+                guiGraphics.disableScissor();
+            }
             renderWinnerLabel(guiGraphics, font, reveal, centerX, panelY + 92, contentAlpha);
         }
 
@@ -580,15 +602,39 @@ public final class AwardsOverlay {
                 EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, showAlpha * 0.9F));
     }
 
+    /**
+     * UIFEEL physicality: how far the marker needle leans right now, in px. While spinning
+     * it leans WITH the heads sweeping leftward, proportional to the strip's normalized
+     * speed ({@link RouletteStrip#speedFraction} — the ease-out-quart derivative), so the
+     * deceleration is visible in the needle itself, not just the strip; on land it springs
+     * back through a decaying 1 px wobble ({@value #NEEDLE_WOBBLE_TICKS}t). Zero under
+     * {@code reducedFx} (pre-landed strips report zero speed; the wobble is gated too).
+     */
+    private static int needleDeflect(Reveal reveal, boolean landed, float partialTick) {
+        if (EclipseClientConfig.reducedFx()) {
+            return 0;
+        }
+        if (!landed) {
+            return Math.round(-NEEDLE_LEAN_PX * reveal.strip().speedFraction(partialTick));
+        }
+        float landTime = landAge + partialTick;
+        if (landTime < NEEDLE_WOBBLE_TICKS) {
+            return Math.round(-Mth.sin(landTime * 2.1F) * (1.0F - landTime / NEEDLE_WOBBLE_TICKS)
+                    * 1.5F);
+        }
+        return 0;
+    }
+
     /** Center marker: accent needle with small arrow blocks above/below the strip band. */
     private static void drawMarker(GuiGraphics guiGraphics, int centerX, int top, int bottom,
-            float alpha, boolean landed) {
+            float alpha, boolean landed, int deflect) {
         int color = EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha * (landed ? 0.35F : 0.8F));
-        guiGraphics.fill(centerX, top, centerX + 1, bottom, color);
-        guiGraphics.fill(centerX - 2, top - 3, centerX + 3, top - 1, color);
-        guiGraphics.fill(centerX - 1, top - 1, centerX + 2, top, color);
-        guiGraphics.fill(centerX - 2, bottom + 1, centerX + 3, bottom + 3, color);
-        guiGraphics.fill(centerX - 1, bottom, centerX + 2, bottom + 1, color);
+        int x = centerX + deflect;
+        guiGraphics.fill(x, top, x + 1, bottom, color);
+        guiGraphics.fill(x - 2, top - 3, x + 3, top - 1, color);
+        guiGraphics.fill(x - 1, top - 1, x + 2, top, color);
+        guiGraphics.fill(x - 2, bottom + 1, x + 3, bottom + 3, color);
+        guiGraphics.fill(x - 1, bottom, x + 2, bottom + 1, color);
     }
 
     /**
@@ -601,6 +647,19 @@ public final class AwardsOverlay {
             float landTime, float alpha) {
         float grow = 1.0F - (float) Math.pow(1.0F - Math.min(landTime / 14.0F, 1.0F), 3.0D);
         float fade = Mth.clamp(1.15F - landTime / 60.0F, 0.18F, 1.0F) * alpha;
+        // UIFEEL winner flash: one expanding hairline ring in the first 8t after landing —
+        // a single non-repeating pulse, small area, alpha capped at the ray level (stays
+        // inside the existing photosensitivity envelope; no full-screen fill).
+        if (landTime < 8.0F) {
+            float ringGrow = 1.0F - (1.0F - landTime / 8.0F) * (1.0F - landTime / 8.0F);
+            int ring = (int) (10.0F + 22.0F * ringGrow);
+            int ringColor = EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT,
+                    0.5F * (1.0F - landTime / 8.0F) * alpha);
+            guiGraphics.fill(centerX - ring, centerY - ring, centerX + ring, centerY - ring + 1, ringColor);
+            guiGraphics.fill(centerX - ring, centerY + ring - 1, centerX + ring, centerY + ring, ringColor);
+            guiGraphics.fill(centerX - ring, centerY - ring + 1, centerX - ring + 1, centerY + ring - 1, ringColor);
+            guiGraphics.fill(centerX + ring - 1, centerY - ring + 1, centerX + ring, centerY + ring - 1, ringColor);
+        }
         int glowOuter = (int) (20.0F * grow);
         int glowInner = (int) (13.0F * grow);
         guiGraphics.fill(centerX - glowOuter, centerY - glowOuter, centerX + glowOuter,
@@ -618,6 +677,51 @@ public final class AwardsOverlay {
             guiGraphics.pose().mulPose(Axis.ZP.rotationDegrees(angle));
             guiGraphics.fill(9, -1, 9 + length, 1, color);
             guiGraphics.pose().popPose();
+        }
+    }
+
+    /**
+     * UIFEEL winner celebration — confetti-glyph burst. There is no screen-space Quasar
+     * hook (the checked-in {@code eclipse:roulette_flare} emitter is world-space, unusable
+     * behind a fixed overlay — same verdict as {@link #renderFlare}), so the confetti
+     * draws here: {@value #CONFETTI_COUNT} deterministic particles seeded by the reveal
+     * salt, launched in an upward fan from the winner head with per-particle speed/life,
+     * pulled down by a soft gravity term and fading quadratically. Even indices are tiny
+     * font glyphs (✦ ◆ + ·), odd indices 2×2 px motes, all in the shared
+     * {@link #FLARE_COLORS} warm→purple palette. Pure function of {@code landTime} +
+     * salt — no state, no per-frame allocation. Caller gates {@code reducedFx} and clips
+     * to the card panel.
+     */
+    private static void renderConfetti(GuiGraphics guiGraphics, Font font, int centerX,
+            int centerY, float landTime, float alpha, int salt) {
+        if (landTime >= CONFETTI_LIFE_TICKS) {
+            return;
+        }
+        for (int i = 0; i < CONFETTI_COUNT; i++) {
+            int hash = salt * 0x9E3779B9 + i * 0x85EBCA6B;
+            // Upward fan: -27°..-153° with hash jitter; speed and life vary per particle.
+            float angle = (float) (-Math.PI * (0.15D + 0.7D * ((hash >>> 8 & 0xFF) / 255.0D)));
+            float speed = 1.1F + 1.5F * ((hash >>> 16 & 0xFF) / 255.0F);
+            float life = CONFETTI_LIFE_TICKS * (0.6F + 0.4F * ((hash >>> 4 & 0xFF) / 255.0F));
+            if (landTime >= life) {
+                continue;
+            }
+            float progress = landTime / life;
+            float x = centerX + Mth.cos(angle) * speed * landTime;
+            float y = centerY + Mth.sin(angle) * speed * landTime
+                    + 0.055F * landTime * landTime; // soft gravity arcs the burst back down
+            float fade = alpha * (1.0F - progress * progress);
+            if (fade <= 0.06F) {
+                continue; // font-renderer alpha floor: tiny alphas snap to opaque
+            }
+            int color = EclipseUiTheme.withAlpha(FLARE_COLORS[i % FLARE_COLORS.length],
+                    0.85F * fade);
+            if ((i & 1) == 0) {
+                guiGraphics.drawString(font, CONFETTI_GLYPHS[(i >> 1) % CONFETTI_GLYPHS.length],
+                        (int) x - 2, (int) y - 4, color, false);
+            } else {
+                guiGraphics.fill((int) x, (int) y, (int) x + 2, (int) y + 2, color);
+            }
         }
     }
 

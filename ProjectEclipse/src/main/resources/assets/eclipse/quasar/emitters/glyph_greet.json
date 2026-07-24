@@ -19,7 +19,7 @@
       "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 0.18,
+      "particle_speed": 0.22,
       "random_speed": true,
       "base_particle_size": 0.1,
       "particle_size_variation": 0.04,
@@ -76,11 +76,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#FFF1B8"
+              "color": "#FFF6D0"
             },
             {
-              "percent": 0.5,
-              "color": "#FFD166"
+              "percent": 0.45,
+              "color": "#FFC94D"
+            },
+            {
+              "percent": 0.75,
+              "color": "#E0AAFF"
             },
             {
               "percent": 1.0,
@@ -93,8 +97,16 @@
               "alpha": 0.0
             },
             {
-              "percent": 0.25,
+              "percent": 0.15,
               "alpha": 0.9
+            },
+            {
+              "percent": 0.35,
+              "alpha": 0.35
+            },
+            {
+              "percent": 0.55,
+              "alpha": 0.85
             },
             {
               "percent": 1.0,

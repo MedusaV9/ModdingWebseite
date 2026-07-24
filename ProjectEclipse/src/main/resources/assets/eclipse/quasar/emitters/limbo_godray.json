@@ -8,9 +8,9 @@
     "shape": {
       "shape": "veil:cylinder",
       "dimensions": [
-        1.2,
-        7.0,
-        1.2
+        0.9,
+        9.5,
+        0.9
       ],
       "rotation": [
         0.0,
@@ -20,12 +20,12 @@
       "from_surface": false
     },
     "particle_settings": {
-      "particle_speed": 0.03,
+      "particle_speed": 0.022,
       "random_speed": true,
       "base_particle_size": 6.0,
       "particle_size_variation": 4.0,
-      "particle_lifetime": 80,
-      "particle_lifetime_variation": 0,
+      "particle_lifetime": 100,
+      "particle_lifetime_variation": 20,
       "initial_direction": [
         0.0,
         -1.0,
@@ -34,7 +34,7 @@
       "random_initial_direction": false,
       "random_initial_rotation": false,
       "random_size": true,
-      "random_lifetime": false
+      "random_lifetime": true
     },
     "force_spawn": false
   },
@@ -43,7 +43,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": true,
-    "velocity_stretch_factor": 2.5,
+    "velocity_stretch_factor": 3.4,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -84,12 +84,12 @@
               "alpha": 0.0
             },
             {
-              "percent": 0.25,
-              "alpha": 0.12
+              "percent": 0.2,
+              "alpha": 0.1
             },
             {
-              "percent": 0.75,
-              "alpha": 0.12
+              "percent": 0.7,
+              "alpha": 0.1
             },
             {
               "percent": 1.0,

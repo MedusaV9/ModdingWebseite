@@ -11,17 +11,22 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import org.joml.Vector4f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.sky.EclipseIrisState;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.client.render.post.PostPipeline;
 import foundry.veil.api.client.render.post.PostProcessingManager;
 import foundry.veil.platform.VeilEventPlatform;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -178,6 +183,11 @@ public final class VeilPostController {
         return nightAmount(level, partialTick) > 0.01F || EclipseFxState.eclipseAmount(partialTick) > 0.01F;
     }
 
+    /** Scratch for the horizon projection (feeder-only; never escapes). */
+    private static final Vector4f HORIZON_NDC = new Vector4f();
+    /** Horizon probe distance — far enough that camera height is angularly negligible. */
+    private static final double HORIZON_PROBE_BLOCKS = 4096.0D;
+
     private static void feedWorldGrade(PostPipeline pipeline) {
         ClientLevel level = Minecraft.getInstance().level;
         float partialTick = partialTick();
@@ -186,6 +196,31 @@ public final class VeilPostController {
         pipeline.getUniform("NightAmount").setFloat(level == null ? 0.0F : nightAmount(level, partialTick));
         pipeline.getUniform("DesatAmount").setFloat(eclipse * 0.5F);
         pipeline.getUniform("ExposureMul").setFloat(EclipseFxState.exposureMul(partialTick));
+        // v2 (FX team GRADE): grain/breath/seethe clock (limbo hour-wrap pattern), the
+        // true-horizon band line, and the reducedFx detail gate.
+        pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
+        pipeline.getUniform("HorizonY").setFloat(horizonNdcY());
+        pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+    }
+
+    /**
+     * NDC y of the world horizon along the camera yaw: a point at CAMERA height,
+     * {@value #HORIZON_PROBE_BLOCKS} blocks along the horizontal forward, projected
+     * through this frame's exact render matrices ({@link SunTracker#worldToNdc} — the
+     * SunTracker law, so the band tracks pitch and view bobbing). Returns the +10 park
+     * (band gaussian dies to zero) while unprojectable: no frame yet, or the camera is
+     * pitched so far the horizontal forward leaves the clip volume. One small {@code Vec3}
+     * per frame — the {@code LimboAmbience.zenithWorldPoint} feeder precedent.
+     */
+    private static float horizonNdcY() {
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        float yawRad = camera.getYRot() * Mth.DEG_TO_RAD;
+        Vec3 far = camera.getPosition().add(
+                -Mth.sin(yawRad) * HORIZON_PROBE_BLOCKS, 0.0D, Mth.cos(yawRad) * HORIZON_PROBE_BLOCKS);
+        if (SunTracker.worldToNdc(far, HORIZON_NDC)) {
+            return Mth.clamp(HORIZON_NDC.y(), -10.0F, 10.0F);
+        }
+        return 10.0F;
     }
 
     /** R3: {@code clamp(1 − dayFactor) · 0.55} — overworld only (the nether has no day cycle). */
@@ -198,6 +233,11 @@ public final class VeilPostController {
     }
 
     // --- sun_halo ------------------------------------------------------------------------
+
+    /** Eased CPU occlusion for the halo (~6-tick slew — glow fades instead of popping). */
+    private static float easedRimOnly;
+    /** RimOnly slew per tick: full binary transition in ~6 ticks (0.3 s). */
+    private static final float RIM_ONLY_SLEW = 0.18F;
 
     private static boolean wantSunHalo() {
         ClientLevel level = Minecraft.getInstance().level;
@@ -214,7 +254,21 @@ public final class VeilPostController {
         }
         pipeline.getUniform("SunScreen").setVector(SunTracker.sunScreen());
         pipeline.getUniform("HaloStrength").setFloat(haloStrength(level, partialTick()));
-        pipeline.getUniform("RimOnly").setFloat(SunTracker.sunOccluded() ? 1.0F : 0.0F);
+        // v2 (FX team GRADE): RimOnly is now the ~6-tick eased 0..1 amount (the shader
+        // always clamped it, so the semantics only widened — never a breaking change).
+        pipeline.getUniform("RimOnly").setFloat(easedRimOnly);
+        pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
+        pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+    }
+
+    /** Per-tick slew of the binary {@link SunTracker#sunOccluded} probe toward 0/1. */
+    private static void tickSunOcclusionEase() {
+        float target = SunTracker.sunOccluded() ? 1.0F : 0.0F;
+        if (easedRimOnly < target) {
+            easedRimOnly = Math.min(target, easedRimOnly + RIM_ONLY_SLEW);
+        } else if (easedRimOnly > target) {
+            easedRimOnly = Math.max(target, easedRimOnly - RIM_ONLY_SLEW);
+        }
     }
 
     /**
@@ -258,6 +312,7 @@ public final class VeilPostController {
 
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
+        tickSunOcclusionEase();
         boolean gate = EclipseIrisState.postFxAllowed();
         DESIRED.clear();
         if (gate) {

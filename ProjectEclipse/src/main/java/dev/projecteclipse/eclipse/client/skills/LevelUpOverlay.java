@@ -29,10 +29,14 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 /**
  * Client-local level-up celebration (WB-SKILLS): a center-screen "LEVEL 12" glyph that
  * glitches in and out in the purple accent palette — characters resolve left-to-right out
- * of {@link GlitchText} noise over {@value #GLITCH_IN_TICKS}t, hold with a soft breathing
- * glow and an expanding hairline underline, then dissolve back — plus one
- * {@code ui.level_up} sting and a small {@code eclipse:unlock_burst} Quasar flourish at
- * the player's feet ({@code spawnOrFallback}: vanilla END_ROD/PORTAL burst when Veil is
+ * of {@link GlitchText} noise over {@value #GLITCH_IN_TICKS}t while the level number
+ * rolls up odometer-style ({@value #ROLL_SPAN} steps, ease-out) to land exactly as the
+ * glyph resolves, hold with a soft breathing glow and an expanding hairline underline,
+ * then dissolve back — plus one {@code ui.level_up} sting at start and a small
+ * {@code eclipse:unlock_burst} Quasar flourish at the player's feet timed to the sting's
+ * swell: it fires at the resolve beat ({@code t == GLITCH_IN_TICKS}), not at t=0, so
+ * scramble+roll-up = anticipation, resolved glyph + burst = impact, breathing hold =
+ * settle ({@code spawnOrFallback}: vanilla END_ROD/PORTAL burst when Veil is
  * unavailable, {@code reducedFx}-gated like the announcement unlock burst).
  *
  * <p><b>Self only, server truth:</b> level-ups are detected by polling the synced
@@ -56,6 +60,8 @@ public final class LevelUpOverlay {
     private static final int GLITCH_IN_TICKS = 8;
     private static final int HOLD_TICKS = 26;
     private static final int GLITCH_OUT_TICKS = 8;
+    /** Number roll-up: the level counts up this many steps during the glitch-in phase. */
+    private static final int ROLL_SPAN = 4;
     /** Quiet gap between queued celebrations so back-to-back levels stay readable. */
     private static final int GAP_TICKS = 8;
     private static final int QUEUE_LIMIT = 8;
@@ -140,9 +146,18 @@ public final class LevelUpOverlay {
             QUEUE.clear(); // toggled off mid-queue: drop pending celebrations
         }
 
-        if (ticks >= 0 && ++ticks > totalTicks() + GAP_TICKS) {
-            ticks = -1;
-            CenterStageArbiter.release(STAGE_ID);
+        if (ticks >= 0) {
+            ticks++;
+            // UIFEEL: the unlock burst fires at the RESOLVE beat — the moment the scramble
+            // clears and the rolled-up number lands — so the world flourish hits the sting's
+            // swell instead of leading it (anticipation→impact→settle).
+            if (ticks == GLITCH_IN_TICKS) {
+                impactBurst();
+            }
+            if (ticks > totalTicks() + GAP_TICKS) {
+                ticks = -1;
+                CenterStageArbiter.release(STAGE_ID);
+            }
         }
         // Cutscene flights defer playback (the layer render is cancelled anyway); the h/3
         // center stage must also be free (FFIX-A / POLISH C-1 — no glyph through a reward
@@ -166,6 +181,11 @@ public final class LevelUpOverlay {
         } else {
             UiSounds.levelUp();
         }
+        // The unlock_burst flourish is deferred to the resolve beat — see onClientTick.
+    }
+
+    /** The resolve-beat world flourish (fired from the tick driver at GLITCH_IN_TICKS). */
+    private static void impactBurst() {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null && !EclipseClientConfig.reducedFx()) {
             QuasarSpawner.spawnOrFallback(FLOURISH_EMITTER, player.position());
@@ -203,8 +223,20 @@ public final class LevelUpOverlay {
             return;
         }
         float t = ticks + deltaTracker.getGameTimeDeltaPartialTick(true);
-        String text = EclipseLang.trString("gui.eclipse.skills.level_glyph", celebratedLevel);
         boolean reduced = EclipseClientConfig.reducedFx();
+
+        // UIFEEL number roll-up: during the glitch-in the level counts up odometer-style
+        // (ease-out, so the last step is the slowest) and lands exactly at the resolve
+        // beat — in sync with the impact burst. Reduced FX shows the final number only.
+        int shownLevel = celebratedLevel;
+        if (!reduced && t < GLITCH_IN_TICKS) {
+            int span = Math.min(ROLL_SPAN, celebratedLevel - 1);
+            if (span > 0) {
+                shownLevel = celebratedLevel
+                        - Math.round((1.0F - easeOutCubic(t / GLITCH_IN_TICKS)) * span);
+            }
+        }
+        String text = EclipseLang.trString("gui.eclipse.skills.level_glyph", shownLevel);
 
         float alpha;
         if (t < GLITCH_IN_TICKS) {

@@ -1,0 +1,147 @@
+{
+  "max_lifetime": 5,
+  "loop": false,
+  "rate": 2,
+  "count": 9,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:torus",
+      "dimensions": [
+        1.5,
+        0.35,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "from_surface": true
+    },
+    "particle_settings": {
+      "particle_speed": 0.12,
+      "random_speed": true,
+      "base_particle_size": 0.09,
+      "particle_size_variation": 0.04,
+      "particle_lifetime": 20,
+      "particle_lifetime_variation": 4,
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "random_initial_direction": true,
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": true,
+    "should_collide": false,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.0,
+    "sprite_data": {
+      "sprite": "eclipse:textures/particle/wisp_white.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": false
+    },
+    "modules": [
+      {
+        "module": "veil:trail",
+        "settings": [
+          {
+            "trailFrequency": 1,
+            "trailLength": 8,
+            "trailColor": [
+              1.0,
+              1.0,
+              1.0,
+              0.5
+            ],
+            "trailWidthModifier": 0.04,
+            "billboard": true,
+            "parentRotation": false,
+            "trailPointModifier": 1.0
+          }
+        ]
+      },
+      {
+        "module": "veil:vortex",
+        "vortex_axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "vortex_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_position": true,
+        "range": 6.0,
+        "strength": 1.5
+      },
+      {
+        "module": "veil:point_force",
+        "point": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "localPoint": true,
+        "range": 6.0,
+        "strength": -1.8
+      },
+      {
+        "module": "veil:drag",
+        "strength": 0.08
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            {
+              "percent": 0.0,
+              "color": "#FFFFFF"
+            },
+            {
+              "percent": 0.45,
+              "color": "#EFE4FF"
+            },
+            {
+              "percent": 0.85,
+              "color": "#CBB7F5"
+            },
+            {
+              "percent": 1.0,
+              "color": "#8A79B8"
+            }
+          ],
+          "alpha_points": [
+            {
+              "percent": 0.0,
+              "alpha": 0.0
+            },
+            {
+              "percent": 0.15,
+              "alpha": 0.95
+            },
+            {
+              "percent": 0.7,
+              "alpha": 0.75
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
+          ]
+        },
+        "interpolant": "q.agePercent"
+      }
+    ]
+  }
+}

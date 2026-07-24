@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.wand;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,17 @@ public final class WandPowers {
     private static final ResourceLocation STERN_SCHAUER_FIELD = emitter("stern_schauer_field");
     private static final ResourceLocation STERN_KOMET_CORE = emitter("stern_komet_core");
 
+    // D11 FX residue layer — every path now LEAVES something behind (visuals/audio only):
+    // RISS scars reality, GLUT sheds ash + heat, STERN writes tiny star maps.
+    static final ResourceLocation RISS_SEAM_SCAR = emitter("riss_seam_scar");
+    private static final ResourceLocation RISS_MAW_SHIMMER = emitter("riss_maw_shimmer");
+    private static final ResourceLocation GLUT_ASH_FLAKES = emitter("glut_ash_flakes");
+    static final ResourceLocation GLUT_HEAT_COLUMN = emitter("glut_heat_column");
+    private static final ResourceLocation STERN_CONSTELLATION = emitter("stern_constellation");
+    // D11 soulbind ceremony (path-agnostic): converging white orbit + one white flash.
+    private static final ResourceLocation SOULBIND_ORBIT = emitter("wand_soulbind_orbit");
+    private static final ResourceLocation SOULBIND_FLASH = emitter("wand_soulbind_flash");
+
     private WandPowers() {}
 
     private static ResourceLocation emitter(String name) {
@@ -166,7 +178,7 @@ public final class WandPowers {
         if (!execute(player, stack, path, selected, power)) {
             return; // refused (e.g. blink found no room) — no cost, no cooldown
         }
-        castFlourish(player, path, mainHand);
+        castFlourish(player, path, mainHand, power);
         stack.set(WandItems.WAND_CHARGE.get(), charge - power.cost());
         COOLDOWNS.computeIfAbsent(player.getUUID(), id -> new HashMap<>())
                 .put(key, now + power.cooldownTicks());
@@ -200,15 +212,33 @@ public final class WandPowers {
         WandSoulbind.persistToStore(player, stack);
 
         EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_AWAKEN);
-        celebrationBurst(player.serverLevel(), player.position().add(0.0D, 1.0D, 0.0D));
-        sendQuasar(player.serverLevel(), castHandEmitter(chosen),
-                player.position().add(0.0D, 1.3D, 0.0D));
-        player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.9F, 1.3F);
-        // D10 seam (W-MUSIC): first soulbind = the path lock — the private ~60 s
-        // wand_awakening sting plays exactly once per player (a path can never return to
-        // NONE outside dev edits). MusicCues validates the id and self-expires client-side.
-        MusicCues.play("wand_awakening", player);
+        // D11 first-bind ceremony: white wisps spiral inward and converge into the wand
+        // over ~1 s (two orbit pulses), then ONE white flash pops on the same tick the
+        // wand_awakening sting starts — flash and musical downbeat land together. The
+        // ceremony is path-agnostic white; the path's own cast-hand flourish rides the
+        // flash beat so the chosen color is the first thing seen after the white.
+        ServerLevel ceremonyLevel = player.serverLevel();
+        sendQuasar(ceremonyLevel, SOULBIND_ORBIT, player.position().add(0.0D, 1.3D, 0.0D));
+        ceremonyLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.7F, 1.35F);
+        WandTickService.schedule(ceremonyLevel, 7, () -> sendQuasar(ceremonyLevel,
+                SOULBIND_ORBIT, player.position().add(0.0D, 1.3D, 0.0D)));
+        WandTickService.schedule(ceremonyLevel, 18, () -> {
+            if (player.hasDisconnected()) {
+                return; // ceremony evaporates quietly; the sting stays unplayed until relog casts
+            }
+            Vec3 wandPos = player.position().add(0.0D, 1.3D, 0.0D);
+            sendQuasar(ceremonyLevel, SOULBIND_FLASH, wandPos);
+            sendQuasar(ceremonyLevel, castHandEmitter(chosen), wandPos);
+            celebrationBurst(ceremonyLevel, player.position().add(0.0D, 1.0D, 0.0D));
+            ceremonyLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.9F, 1.3F);
+            // D10 seam (W-MUSIC): first soulbind = the path lock — the private ~60 s
+            // wand_awakening sting plays exactly once per player (a path can never return
+            // to NONE outside dev edits). MusicCues validates the id and self-expires
+            // client-side. D11 moved it onto the flash tick for the timing sync.
+            MusicCues.play("wand_awakening", player);
+        });
         player.displayClientMessage(Component.translatable("wand.eclipse.msg.awakening"), true);
         player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.path_chosen",
                 Component.translatable(chosen.langKey())));
@@ -293,8 +323,18 @@ public final class WandPowers {
      * every SUCCESSFUL cast so the paths read distinct before the power's own FX land.
      * Purely audiovisual — the client {@code FxBudget} caps the emitter, and the shake is a
      * 0.06-strength 5-tick impulse (well inside the reducedFx-halved budget conventions).
+     *
+     * <p>D11 weight scaling: the wand casts on an instant click (no hold-time exists in the
+     * cast flow — {@code EclipseWandItem#use} sends the payload immediately), so the one
+     * intensity signal available is the cast's CHARGE COST. Heavy payoffs (cost ≥
+     * {@value #HEAVY_CAST_COST}) get a second flourish pop a tick later just above the hand
+     * and a slightly firmer (still caster-only) camera tick; cheap spam casts stay
+     * feather-light.</p>
      */
-    private static void castFlourish(ServerPlayer player, WandPath path, boolean mainHand) {
+    private static final int HEAVY_CAST_COST = 30;
+
+    private static void castFlourish(ServerPlayer player, WandPath path, boolean mainHand,
+            WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 look = player.getLookAngle();
         Vec3 flat = new Vec3(look.x, 0.0D, look.z);
@@ -303,16 +343,26 @@ public final class WandPowers {
                 : Vec3.ZERO;
         Vec3 hand = player.getEyePosition().add(look.scale(0.55D)).add(side).add(0.0D, -0.25D, 0.0D);
         sendQuasar(level, castHandEmitter(path), hand);
+        boolean heavy = power.cost() >= HEAVY_CAST_COST;
+        if (heavy) {
+            // Second pop rides one tick behind, slightly above — reads as the flourish
+            // SWELLING for the big spells rather than a separate effect.
+            WandTickService.schedule(level, 1,
+                    () -> sendQuasar(level, castHandEmitter(path), hand.add(0.0D, 0.28D, 0.0D)));
+        }
         switch (path) {
             case RISS -> level.playSound(null, hand.x, hand.y, hand.z,
-                    EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.35F, 1.7F);
+                    EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS,
+                    heavy ? 0.45F : 0.35F, heavy ? 1.5F : 1.7F);
             case GLUT -> level.playSound(null, hand.x, hand.y, hand.z,
-                    SoundEvents.FIRECHARGE_USE, SoundSource.PLAYERS, 0.3F, 0.65F);
+                    SoundEvents.FIRECHARGE_USE, SoundSource.PLAYERS,
+                    heavy ? 0.4F : 0.3F, heavy ? 0.55F : 0.65F);
             case STERN -> level.playSound(null, hand.x, hand.y, hand.z,
-                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.45F, 1.85F);
+                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS,
+                    heavy ? 0.55F : 0.45F, heavy ? 1.7F : 1.85F);
             default -> { }
         }
-        PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.06F, 5));
+        PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(heavy ? 0.08F : 0.06F, 5));
     }
 
     /** Impact-payoff camera feedback for everyone close to {@code pos} (small by design). */
@@ -378,6 +428,22 @@ public final class WandPowers {
             level.playSound(null, fxTo.x, fxTo.y, fxTo.z,
                     EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.5F, 1.55F);
         });
+        // D11 afterimage doubling: a laterally offset ghost tear re-flickers at the
+        // DEPARTURE point — for a beat the spot reads as two overlapping selves before
+        // both dissolve.
+        Vec3 look = player.getLookAngle();
+        Vec3 doubling = new Vec3(-look.z, 0.0D, look.x);
+        Vec3 ghost = fxFrom.add(doubling.lengthSqr() > 1.0E-4D
+                ? doubling.normalize().scale(0.35D) : new Vec3(0.35D, 0.0D, 0.0D));
+        WandTickService.schedule(level, 3, () -> sendQuasar(level, RISS_BLINK_TEAR, ghost));
+        // D11 reality seams: thin glitch scars flicker for ~2 s where both tears opened,
+        // then heal — the blink leaves a mark on the world instead of vanishing cleanly.
+        WandTickService.schedule(level, 5, () -> {
+            sendQuasar(level, RISS_SEAM_SCAR, fxFrom);
+            sendQuasar(level, RISS_SEAM_SCAR, fxTo);
+            level.playSound(null, fxFrom.x, fxFrom.y, fxFrom.z,
+                    EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.22F, 1.95F);
+        });
         WandTickService.schedule(level, 12, () -> {
             FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_CLOSE, fxFrom, 0.0F, 0.0F, FX_RANGE);
             FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_CLOSE, fxTo, 0.0F, 0.0F, FX_RANGE);
@@ -426,9 +492,23 @@ public final class WandPowers {
         FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_OPEN, target, width, 1.0F, FX_RANGE);
         sendQuasar(level, RISS_SCHLAG_MAW, target);
         WandTickService.schedule(level, 2, () -> sendQuasar(level, RISS_SCHLAG_MAW, target));
-        WandTickService.schedule(level, (int) power.param("openTicks", 25.0F), () -> {
+        int openTicks = (int) power.param("openTicks", 25.0F);
+        if (openTicks >= 10) {
+            // D11 pre-snap tell: the maw's lips shimmer (flickering ring, drifting inward)
+            // and a thin rising chirp sounds ~6 ticks before the bite snaps shut. Pure
+            // readability — the close timing itself is untouched.
+            WandTickService.schedule(level, openTicks - 6, () -> {
+                sendQuasar(level, RISS_MAW_SHIMMER, target);
+                level.playSound(null, target.x, target.y, target.z,
+                        EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.3F, 1.9F);
+            });
+        }
+        WandTickService.schedule(level, openTicks, () -> {
             FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_CLOSE, target, 0.0F, 0.0F, FX_RANGE);
             sendQuasar(level, RISS_BLINK_TEAR, target); // the maw snaps shut on itself
+            // D11 reality seam: the snap leaves a glitch scar hanging where the maw was,
+            // flickering out over ~2 s — reality closes badly here.
+            WandTickService.schedule(level, 3, () -> sendQuasar(level, RISS_SEAM_SCAR, target));
             level.playSound(null, target.x, target.y, target.z,
                     EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.45F, 1.3F);
         });
@@ -491,6 +571,15 @@ public final class WandPowers {
             sendQuasar(level, GLUT_STOSS_LANCE, impact);
             level.playSound(null, impact.x, impact.y, impact.z, SoundEvents.FIRE_EXTINGUISH,
                     SoundSource.PLAYERS, 0.5F, hitSomething ? 0.7F : 1.1F);
+        });
+        // D11 ash fallout: the lance's wake sheds slow NON-glowing ash flakes (the one
+        // alpha-blended GLUT emitter) that drift down for ~2 s at the midpoint and the
+        // impact — the burn leaves residue, not just light. Soft crackle under the flakes.
+        WandTickService.schedule(level, 4, () -> sendQuasar(level, GLUT_ASH_FLAKES, mid));
+        WandTickService.schedule(level, 6, () -> {
+            sendQuasar(level, GLUT_ASH_FLAKES, impact);
+            level.playSound(null, impact.x, impact.y, impact.z,
+                    SoundEvents.CAMPFIRE_CRACKLE, SoundSource.PLAYERS, 0.5F, 0.75F);
         });
         if (victim != null) {
             victim.hurt(player.damageSources().indirectMagic(player, player), power.param("damage", 5.0F));
@@ -556,6 +645,12 @@ public final class WandPowers {
         Vec3 feet = player.position();
         sendQuasar(level, GLUT_SPRUNG_CRATER, feet);
         WandTickService.spawnScorchDecal(level, feet, 1.1F, 100);
+        // D11 take-off heat: a faint shimmer column stands over the launch scorch for a
+        // second — the ground remembers the blast-off (landing gets the full treatment
+        // in WandTickService.MagmaJump). +1.4 because the cylinder shape is
+        // center-anchored (same convention as stern_funke_fall): base sits on the ground.
+        WandTickService.schedule(level, 2,
+                () -> sendQuasar(level, GLUT_HEAT_COLUMN, feet.add(0.0D, 1.4D, 0.0D)));
         level.sendParticles(ParticleTypes.FLAME, feet.x, feet.y, feet.z,
                 14, 0.4D, 0.1D, 0.4D, 0.05D);
         // Launch bass whoosh: low blaze bark over a sub-pitched firecharge.
@@ -583,6 +678,14 @@ public final class WandPowers {
         sendQuasar(level, STERN_FUNKE_FALL, target.add(0.0D, 1.8D, 0.0D));
         WandTickService.schedule(level, 2,
                 () -> sendQuasar(level, STERN_FUNKE_FALL, target.add(0.0D, 0.3D, 0.0D)));
+        // D11 micro-constellation: five near-static star points with hairline trails drift
+        // apart over the impact — the lines connect-the-dots into a tiny star map that
+        // twinkles for ~1.7 s, then fades. One high quiet chime marks it.
+        WandTickService.schedule(level, 4, () -> {
+            sendQuasar(level, STERN_CONSTELLATION, target.add(0.0D, 1.1D, 0.0D));
+            level.playSound(null, target.x, target.y, target.z,
+                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.35F, 1.95F);
+        });
         damageAround(player, target, power.param("radius", 2.0F), power.param("damage", 5.0F), 0.4F, 0);
         // Sender owns audio (strikeLightning contract) — crystal chimes, not thunder.
         level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_CHIME,
@@ -631,6 +734,7 @@ public final class WandPowers {
         level.playSound(null, zone.x, zone.y, zone.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
                 SoundSource.PLAYERS, 0.7F, 1.4F);
 
+        List<Vec3> landed = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             int delay = telegraph + (i * duration) / count;
             boolean last = i == count - 1;
@@ -642,6 +746,7 @@ public final class WandPowers {
                 double z = zone.z + Math.sin(angle) * dist;
                 double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(x), (int) Math.floor(z));
                 Vec3 impact = new Vec3(x, y, z);
+                landed.add(impact); // remembered for the D11 synced-pillar finale
                 // Thin silver ribbon (0.15) + the starfall needle reading as a light pillar.
                 FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, impact, 0.15F, 0.0F, FX_RANGE);
                 sendQuasar(level, STERN_FUNKE_FALL, impact.add(0.0D, 1.6D, 0.0D));
@@ -655,6 +760,25 @@ public final class WandPowers {
                 }
             });
         }
+        // D11 field finale: one synced pulse — every landed star's pillar re-lights AT
+        // ONCE a beat after the last impact (sampled down to 6 pillars for the budget
+        // law; reducedFx clients drop extras silently), over a single held resonate.
+        // The shower now ENDS instead of trailing off.
+        WandTickService.schedule(level, telegraph + duration + 6, () -> {
+            if (landed.isEmpty()) {
+                return;
+            }
+            int step = Math.max(1, landed.size() / 6);
+            int pulsed = 0;
+            for (int i = 0; i < landed.size() && pulsed < 6; i += step, pulsed++) {
+                sendQuasar(level, STERN_FUNKE_FALL, landed.get(i).add(0.0D, 1.6D, 0.0D));
+            }
+            Vec3 heart = landed.get(landed.size() / 2);
+            level.playSound(null, heart.x, heart.y, heart.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
+                    SoundSource.PLAYERS, 0.85F, 1.1F);
+            level.playSound(null, heart.x, heart.y, heart.z, SoundEvents.AMETHYST_BLOCK_CHIME,
+                    SoundSource.PLAYERS, 0.6F, 1.5F);
+        });
         return true;
     }
 
@@ -684,12 +808,27 @@ public final class WandPowers {
                 SoundSource.PLAYERS, 0.8F, 0.6F);
 
         // Descent beats: the comet head visibly falls (sky → mid) before the payoff tick.
-        WandTickService.schedule(level, Math.max(1, telegraph - 8),
-                () -> sendQuasar(level, STERN_KOMET_CORE, target.add(0.0D, 18.0D, 0.0D)));
+        // D11 impact herald: each beat also draws a GROWING light circle on the ground —
+        // the landing zone brightens as the comet closes in (vanilla END_ROD rings, no
+        // emitter budget), with a rising chime tracking the growth.
+        WandTickService.schedule(level, Math.max(1, telegraph - 8), () -> {
+            sendQuasar(level, STERN_KOMET_CORE, target.add(0.0D, 18.0D, 0.0D));
+            groundLightRing(level, target, radius * 0.35D);
+            level.playSound(null, target.x, target.y, target.z,
+                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.35F, 1.0F);
+        });
         WandTickService.schedule(level, Math.max(2, telegraph - 4), () -> {
             sendQuasar(level, STERN_KOMET_CORE, target.add(0.0D, 9.0D, 0.0D));
+            groundLightRing(level, target, radius * 0.6D);
             level.playSound(null, target.x, target.y + 9.0D, target.z,
                     SoundEvents.ELYTRA_FLYING, SoundSource.PLAYERS, 0.5F, 1.6F);
+            level.playSound(null, target.x, target.y, target.z,
+                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.4F, 1.25F);
+        });
+        WandTickService.schedule(level, Math.max(3, telegraph - 1), () -> {
+            groundLightRing(level, target, radius * 0.9D);
+            level.playSound(null, target.x, target.y, target.z,
+                    SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.45F, 1.5F);
         });
         WandTickService.schedule(level, telegraph, () -> {
             FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, target, 1.0F, 1.0F, FX_RANGE + 32.0D);
@@ -706,6 +845,21 @@ public final class WandPowers {
             shakeNear(level, target, 32.0D, 0.4F, 13);
         });
         return true;
+    }
+
+    /**
+     * D11 Kometenschlag herald: one ring of END_ROD motes laid on the ground around the
+     * aim point — called with a growing radius per descent beat so the landing light
+     * visibly expands. Vanilla particles by design (14/ring — no Quasar budget spend).
+     */
+    private static void groundLightRing(ServerLevel level, Vec3 center, double ringRadius) {
+        int points = 14;
+        for (int i = 0; i < points; i++) {
+            double angle = i * Math.PI * 2.0D / points;
+            level.sendParticles(ParticleTypes.END_ROD,
+                    center.x + Math.cos(angle) * ringRadius, center.y + 0.25D,
+                    center.z + Math.sin(angle) * ringRadius, 1, 0.03D, 0.05D, 0.03D, 0.004D);
+        }
     }
 
     // ------------------------------------------------------------------ shared helpers

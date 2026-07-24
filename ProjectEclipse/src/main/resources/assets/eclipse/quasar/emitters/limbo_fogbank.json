@@ -8,9 +8,9 @@
     "shape": {
       "shape": "veil:sphere",
       "dimensions": [
-        18.0,
-        2.5,
-        18.0
+        26.0,
+        1.8,
+        26.0
       ],
       "rotation": [
         0.0,
@@ -22,10 +22,10 @@
     "particle_settings": {
       "particle_speed": 0.004,
       "random_speed": true,
-      "base_particle_size": 20.0,
-      "particle_size_variation": 4.0,
-      "particle_lifetime": 90,
-      "particle_lifetime_variation": 30,
+      "base_particle_size": 26.0,
+      "particle_size_variation": 6.0,
+      "particle_lifetime": 110,
+      "particle_lifetime_variation": 40,
       "initial_direction": [
         0.0,
         1.0,
@@ -67,15 +67,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#2B1546"
+              "color": "#1C0D33"
             },
             {
               "percent": 0.5,
-              "color": "#47257A"
+              "color": "#2E1755"
             },
             {
               "percent": 1.0,
-              "color": "#1E0F33"
+              "color": "#120826"
             }
           ],
           "alpha_points": [
@@ -84,12 +84,12 @@
               "alpha": 0.0
             },
             {
-              "percent": 0.3,
-              "alpha": 0.08
+              "percent": 0.25,
+              "alpha": 0.1
             },
             {
-              "percent": 0.75,
-              "alpha": 0.08
+              "percent": 0.7,
+              "alpha": 0.1
             },
             {
               "percent": 1.0,

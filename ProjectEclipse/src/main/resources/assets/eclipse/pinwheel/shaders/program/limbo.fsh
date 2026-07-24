@@ -1,3 +1,20 @@
+// eclipse:limbo v4 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework;
+// FXTEAM-LIMBO v4 craft pass). v4 adds, WITHOUT touching the v3 fixes (depth water mask,
+// ray-elevation curvature, voyage drift):
+//   * Layered water — a near-hull micro-ripple octave (extra causticWeb at 3.1× frequency,
+//     faded out by 16 blocks) plus long-wavelength swells far out (a very low-frequency
+//     noise that re-shades the web brightness beyond ~18 blocks) — three perceptual bands
+//     of wave scale instead of one.
+//   * Sparse bioluminescent glints — rare soul-green spots in the world-anchored caustic
+//     field (they ride wp, so they trail the VoyageOffset drift astern automatically),
+//     elongated along the drift axis, blinking on slow per-cell phases.
+//   * Wave-broken reflection smear — the zenith-disc water smear is modulated by a
+//     world-anchored ripple noise instead of reading as one solid blob.
+//   * Far storm-glow pulses (LightningGlow) — an occasional soft violet glow along one
+//     horizon azimuth (no bolts): pure ray-geometry like the curvature (EVAL-POL-F #3),
+//     applied only to sky + melted-horizon pixels so fog banks and horizon ships
+//     silhouette against it. Idle at strength 0; reducedFx feeds 0 (CurveAmount ladder).
+// --- v3 header kept below ---
 // eclipse:limbo v3 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework).
 // v2 kept: desaturate toward violet + breathing vignette, GodrayDir radial god rays, edge
 // chroma fringe. v3 (C1) replaces the old luma/screen-band water heuristic with a REAL
@@ -38,6 +55,8 @@ uniform float WaterlineY;   // top water block Y of the limbo ocean (−1e5 unti
 uniform vec2 VoyageOffset;  // steadily increasing world-XZ scroll (blocks) — sailing drift
 uniform float CurveAmount;  // horizon curvature strength (0 under reducedFx)
 uniform float FarDist;      // approx. distance (blocks) where the loaded sea geometry ends
+// v4:
+uniform vec3 LightningGlow; // xy = world-XZ azimuth unit dir of the pulse, z = strength 0..1
 
 in vec2 texCoord;
 
@@ -73,9 +92,14 @@ void main() {
     // the mast didn't), smearing ghost copies of the rigging into the sky. A pure ray
     // function is C0 across silhouettes, so nothing can tear. Warp still fades near the
     // screen border and is off under reducedFx.
+    // Shared view ray for the pure-ray effects (curvature warp + v4 storm glow). Both are
+    // fed 0 under reducedFx, so the reconstruction is skipped entirely on that tier.
+    vec3 rayDir = vec3(0.0, 1.0, 0.0);
+    if (CurveAmount > 0.001 || LightningGlow.z > 0.001) {
+        rayDir = normalize(reconstructRel(uv, 1.0));
+    }
     vec2 suv = uv;
     if (CurveAmount > 0.001) {
-        vec3 rayDir = normalize(reconstructRel(uv, 1.0));
         // Camera height above the sea plane, clamped sane while WaterlineY is unsynced.
         float camH = clamp(CameraPos.y - (WaterlineY + 0.9), 2.0, 64.0);
         // Horizontal distance where this ray meets the sea; horizon/up rays saturate.
@@ -136,14 +160,42 @@ void main() {
     purple *= 1.0 - smoothstep(0.45, 0.95, d) * breathe;
     color = mix(color, purple, Intensity);
 
-    // ---- purple water: violet lift + shimmering caustic web + glints --------------------
-    // Distance rolloff calms the far field so the shimmer recedes with perspective.
-    float calm = 1.0 - 0.6 * smoothstep(30.0, max(FarDist * 0.7, 60.0), dist);
-    float web = causticWeb(wp, Time);
-    float sparkle = pow(causticWeb(wp * 2.3 + vec2(17.0), Time * 1.6), 2.0);
-    color += (vec3(0.10, 0.03, 0.17)
-            + vec3(0.42, 0.16, 0.80) * web * calm
-            + vec3(0.55, 0.30, 1.00) * sparkle * 0.6 * calm) * water;
+    // ---- purple water: violet lift + LAYERED caustic web + glints (v4) ------------------
+    // Distance rolloff calms the far field so the shimmer recedes with perspective. The
+    // whole block is gated on the water mask so the extra v4 octaves cost nothing on sky,
+    // hull or deckhand pixels.
+    if (water > 0.001) {
+        float calm = 1.0 - 0.6 * smoothstep(30.0, max(FarDist * 0.7, 60.0), dist);
+        float web = causticWeb(wp, Time);
+        float sparkle = pow(causticWeb(wp * 2.3 + vec2(17.0), Time * 1.6), 2.0);
+        // v4 layered water, far band: long-wavelength swells (~35-block features, near-
+        // static) re-shade the web brightness beyond ~18 blocks — the far field reads as
+        // rolling water instead of a uniform shimmer sheet.
+        float swell = efxNoise(wp * 0.055 + vec2(Time * 0.045, Time * 0.028));
+        float webAmp = mix(1.0, 0.55 + 0.90 * swell, smoothstep(18.0, 60.0, dist));
+        // v4 layered water, near band: a micro-ripple octave hugging the hull (3.1× web
+        // frequency, faster counter-scroll), fully faded out by 16 blocks.
+        float nearW = 1.0 - smoothstep(5.0, 16.0, dist);
+        float micro = nearW > 0.001 ? causticWeb(wp * 3.1 + vec2(53.0), Time * 2.1) : 0.0;
+        color += (vec3(0.10, 0.03, 0.17)
+                + vec3(0.42, 0.16, 0.80) * web * webAmp * calm
+                + vec3(0.55, 0.30, 1.00) * sparkle * 0.6 * calm
+                + vec3(0.36, 0.18, 0.70) * micro * nearW * 0.35) * water;
+        // v4: sparse bioluminescent glints. Cells of the world-anchored field (they ride
+        // wp, so they trail the voyage drift astern like real flotsam); ~1.8% of ~4.4-block
+        // cells host a glint, each an elongated-along-drift soul-green spot blinking on its
+        // own slow phase (sin² halves the duty cycle — mostly-dark reads alive, not busy).
+        vec2 gp = wp * 0.5;
+        float gh = efxHash(floor(gp));
+        if (gh > 0.982) {
+            vec2 lp = fract(gp) - 0.5;
+            lp.x *= 0.45; // stretch along the drift axis (+X)
+            float spot = exp(-dot(lp, lp) * 22.0);
+            float blink = max(sin(Time * (0.5 + gh) + gh * 41.0), 0.0);
+            blink *= blink;
+            color += vec3(0.28, 0.95, 0.55) * spot * blink * calm * water * 0.5;
+        }
+    }
 
     // ---- eclipse reflection smear (IDEA-18 §1): the zenith disc mirrored on the water ----
     // Mirror of the zenith NDC across the horizon; gated by the REAL water mask now (C1),
@@ -154,7 +206,10 @@ void main() {
         float smear = exp(-dot(dm, dm) * 6.0);
         // Same breathing curve as the sky-pass aura pulse — never desyncs.
         float shimmer = 0.85 + 0.11 * sin(Time * 1.3) + 0.04 * sin(Time * 0.37 + 1.7);
-        color += vec3(0.55, 0.28, 1.00) * smear * shimmer * water * 0.5;
+        // v4: wave-broken smear — a world-anchored ripple (it rides wp, so it streams with
+        // the voyage drift) breaks the solid blob into moving patches of reflection.
+        float ripple = 0.70 + 0.30 * efxNoise(wp * 1.3 + vec2(Time * 0.20, 0.0));
+        color += vec3(0.55, 0.28, 1.00) * smear * shimmer * ripple * water * 0.5;
     }
 
     // ---- endless-sea horizon fade (item 5): last 15% melts into the sky gradient --------
@@ -162,6 +217,21 @@ void main() {
     // fully faded); true sky pixels keep their crisp stars/disc.
     float horizonMix = smoothstep(FarDist * 0.85, FarDist, dist) * (1.0 - sky) * Intensity;
     color = mix(color, vec3(0.030, 0.018, 0.062), horizonMix);
+
+    // ---- v4: far storm-glow pulses — a soft violet sheet along one horizon azimuth ------
+    // Pure ray geometry like the curvature (EVAL-POL-F #3: C0 across silhouettes, nothing
+    // can tear), weighted by sky + melted-horizon coverage. Horizon ships / fog banks sit
+    // at sky depth, so they receive the SAME additive glow as the sky behind them — their
+    // darkening is preserved in absolute terms and they still read as silhouettes against
+    // the pulse. No bolts, just the glow; LimboAmbience feeds the deterministic envelope
+    // (and holds it at 0 while InvViewProj is parked at identity).
+    if (LightningGlow.z > 0.001) {
+        vec2 az = rayDir.xz / max(length(rayDir.xz), 1.0e-4);
+        float azim = pow(max(dot(az, LightningGlow.xy), 0.0), 6.0);
+        float belt = smoothstep(-0.08, 0.01, rayDir.y) * (1.0 - smoothstep(0.08, 0.28, rayDir.y));
+        color += vec3(0.62, 0.42, 1.00) * azim * belt * LightningGlow.z
+                * (sky + horizonMix) * 0.30;
+    }
 
     // ---- screen-space radial god rays from the zenith disc ------------------------------
     float lookUp = 1.0 - smoothstep(0.9, 2.6, length(GodrayDir));

@@ -31,6 +31,15 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * The {@code LimboAmbience} window pattern verbatim: looping position emitters never
  * expire on their own, so handles are kept and the oldest is culled beyond the live cap.
  *
+ * <p><b>W-P-ALTAR2 motifs:</b> at altar level {@value #HELIX_MIN_LEVEL}+ two of every
+ * three window spawns are placed on a slow DOUBLE-HELIX column above the altar
+ * (deterministic strand positions from game time; the motes' own upward wind animates
+ * the strands) while the third keeps the old ambient ring. At level
+ * {@value #PATCH_MIN_LEVEL}+ a second slow cadence projects faint moving LIGHT PATCHES
+ * onto the island floor ({@code eclipse:altar_halo_patch}) whose azimuth follows the
+ * sky halo-beam fan ({@code AltarVeilSky.BEAM_SPIN_DEG_PER_SEC[0]}) — the ground read
+ * of the L4 sky tier.</p>
+ *
  * <p>All spawns charge {@link FxBudget.Channel#AMBIENT}; the whole effect pauses under
  * {@code reducedFx} (FIX-5 order — existing emitters are released, not just thinned).
  * Overworld-gated: anchors carry no dimension client-side (the {@code ShipDoorGlow}
@@ -80,9 +89,39 @@ public final class AltarIdleMotes {
     private static final double Y_BIAS_MIN = 0.3D;
     private static final double Y_BIAS_RANGE = 1.9D;
 
+    // --- W-P-ALTAR2: L3+ double-helix column (deterministic strand placement) ---
+    private static final int HELIX_MIN_LEVEL = 3;
+    /** Strand radius — tighter than the ambient ring, outside the beam core. */
+    private static final double HELIX_RADIUS = 1.7D;
+    private static final double HELIX_HEIGHT = 3.4D;
+    private static final double HELIX_BASE_Y = 0.35D;
+    /** Whole-helix slow rotation period (ticks). */
+    private static final double HELIX_TURN_TICKS = 460.0D;
+    /** One full base→top climb per this many ticks (samples trace the strands). */
+    private static final double HELIX_CLIMB_TICKS = 360.0D;
+    /** Strand twist over the full column height (radians). */
+    private static final double HELIX_TWIST = Math.PI * 1.5D;
+
+    // --- W-P-ALTAR2: L4+ ground-projected halo light patches ---
+    private static final int PATCH_MIN_LEVEL = 4;
+    private static final ResourceLocation PATCH_EMITTER =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "altar_halo_patch");
+    private static final int PATCH_MIN_INTERVAL_TICKS = 55;
+    private static final int PATCH_MAX_INTERVAL_TICKS = 80;
+    /** MUST match {@code AltarVeilSky.BEAM_SPIN_DEG_PER_SEC[0]} — the sky-fan azimuth. */
+    private static final float PATCH_DEG_PER_SEC = 2.1F;
+    private static final double PATCH_RADIUS = 4.6D;
+    /** Patches hover just off the floor so the additive quad reads as cast light. */
+    private static final double PATCH_HOVER_Y = 0.12D;
+
     /** Live looping emitters, oldest first (LimboAmbience window law). */
     private static final ArrayDeque<ParticleEmitter> LIVE = new ArrayDeque<>();
     private static int countdown;
+    /** Round-robin spawn counter (helix strand alternation + ring interleave). */
+    private static int spawnCounter;
+    private static int patchCountdown;
+    /** Which of the four sky beams the next patch tracks (round-robin). */
+    private static int patchBeamIndex;
 
     private AltarIdleMotes() {}
 
@@ -109,17 +148,18 @@ public final class AltarIdleMotes {
             return; // keep the window, freeze the cadence
         }
         prune();
+        int altarLevel = clientAltarLevel();
+        tickHaloPatches(level, anchor, altarLevel);
         if (--countdown > 0) {
             return;
         }
         RandomSource random = level.random;
-        int altarLevel = clientAltarLevel();
         countdown = Math.max(MIN_INTERVAL_FLOOR_TICKS,
                 random.nextIntBetweenInclusive(MIN_INTERVAL_TICKS, MAX_INTERVAL_TICKS)
                         - altarLevel * LEVEL_INTERVAL_BONUS_TICKS);
 
         ParticleEmitter emitter = QuasarSpawner.spawnManaged(MOTES_EMITTER,
-                pickSpawnPos(anchor, random, altarLevel), FxBudget.Channel.AMBIENT);
+                pickSpawnPos(level, anchor, random, altarLevel), FxBudget.Channel.AMBIENT);
         if (emitter == null) {
             return; // budget refusal / Quasar unavailable — the window simply stays thinner
         }
@@ -127,6 +167,35 @@ public final class AltarIdleMotes {
         while (LIVE.size() > maxLive()) {
             removeEmitter(LIVE.pollFirst());
         }
+    }
+
+    /**
+     * W-P-ALTAR2 L4+ ground read of the sky halo beams: on its own slow cadence, one
+     * {@code altar_halo_patch} one-shot lands on the island floor at the azimuth of the
+     * next beam of the sky fan (same 2.1 °/s spin constant, wall-clock driven exactly
+     * like {@code AltarVeilSky}), so the faint light pools genuinely SWEEP with the sky.
+     * One-shots — no handles to manage; a budget refusal just skips a pool.
+     */
+    private static void tickHaloPatches(ClientLevel level, Vec3 anchor, int altarLevel) {
+        if (altarLevel < PATCH_MIN_LEVEL) {
+            patchCountdown = 0;
+            return;
+        }
+        if (--patchCountdown > 0) {
+            return;
+        }
+        patchCountdown = level.random.nextIntBetweenInclusive(
+                PATCH_MIN_INTERVAL_TICKS, PATCH_MAX_INTERVAL_TICKS);
+        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
+        patchBeamIndex = (patchBeamIndex + 1) & 3;
+        double angle = Math.toRadians(seconds * PATCH_DEG_PER_SEC)
+                + patchBeamIndex * (Math.PI / 2.0D);
+        double radius = PATCH_RADIUS + (altarLevel - PATCH_MIN_LEVEL) * 0.4D
+                + (level.random.nextDouble() - 0.5D) * 1.2D;
+        QuasarSpawner.spawn(PATCH_EMITTER, new Vec3(
+                anchor.x + Math.cos(angle) * radius,
+                anchor.y + PATCH_HOVER_Y,
+                anchor.z + Math.sin(angle) * radius), FxBudget.Channel.AMBIENT);
     }
 
     /** Live-loop cap, richer as the altar levels up (clamped for the AMBIENT budget). */
@@ -146,8 +215,30 @@ public final class AltarIdleMotes {
         clear();
     }
 
-    /** A random spot on the placement ring (level-widened), biased into the height band. */
-    private static Vec3 pickSpawnPos(Vec3 anchor, RandomSource random, int altarLevel) {
+    /**
+     * Spawn placement. Below level {@value #HELIX_MIN_LEVEL}: a random spot on the
+     * ambient ring (level-widened), biased into the height band. At
+     * {@value #HELIX_MIN_LEVEL}+ (W-P-ALTAR2 motif), two of every three spawns land on
+     * one of two double-helix strands instead: the strand point is a deterministic
+     * function of game time (slow whole-helix rotation + a climbing sample height with
+     * {@value #HELIX_TWIST}-radian twist), so the rolling window of standing loops
+     * traces a faint slow double helix while each mote's own upward wind animates it.
+     */
+    private static Vec3 pickSpawnPos(ClientLevel level, Vec3 anchor, RandomSource random,
+            int altarLevel) {
+        spawnCounter++;
+        if (altarLevel >= HELIX_MIN_LEVEL && spawnCounter % 3 != 0) {
+            long gameTime = level.getGameTime();
+            double strand = (spawnCounter & 1) == 0 ? 0.0D : Math.PI;
+            double climb = (gameTime % (long) HELIX_CLIMB_TICKS) / HELIX_CLIMB_TICKS;
+            double spin = (gameTime % (long) HELIX_TURN_TICKS) / HELIX_TURN_TICKS
+                    * Math.PI * 2.0D;
+            double angle = spin + strand + climb * HELIX_TWIST;
+            double radius = HELIX_RADIUS + (random.nextDouble() - 0.5D) * 0.3D;
+            return new Vec3(anchor.x + Math.cos(angle) * radius,
+                    anchor.y + HELIX_BASE_Y + climb * HELIX_HEIGHT,
+                    anchor.z + Math.sin(angle) * radius);
+        }
         double angle = random.nextDouble() * Math.PI * 2.0D;
         double maxRadius = RING_MAX_RADIUS + altarLevel * LEVEL_RING_BONUS;
         double radius = RING_MIN_RADIUS + random.nextDouble() * (maxRadius - RING_MIN_RADIUS);
@@ -176,6 +267,7 @@ public final class AltarIdleMotes {
             removeEmitter(LIVE.pollFirst());
         }
         countdown = 0;
+        patchCountdown = 0;
     }
 
     private static void removeEmitter(ParticleEmitter emitter) {

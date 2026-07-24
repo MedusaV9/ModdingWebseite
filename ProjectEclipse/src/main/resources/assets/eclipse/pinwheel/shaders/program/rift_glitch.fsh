@@ -1,31 +1,56 @@
-// eclipse:rift_glitch — rift/portal/loading transition pass (P2 R13/R17, TRANSITION
-// priority). Two independent knobs, fed per frame by veilfx.TransitionFx:
-//   GlitchAmount — digital tearing: datamosh block displacement + fine row jitter +
-//                  chromatic tear + 2-frame invert pops + scanline shimmer.
-//   FadeAmount   — fade-to-black as a closing iris with a violet edge bleed at the front
-//                  (0 = clear, 1 = fully black; the portal hold keeps it at 1 while the
-//                  dimension change happens behind it).
-//   Time         — wall-clock seconds (keeps animating while client ticks stall during a
-//                  dimension change).
-// Uniform names are frozen (§3.3). GUI-side loading visuals are P3's; this pass only
-// touches the world frame.
+// eclipse:rift_glitch v2 — transition pass + ambient rift-proximity corruption (GLITCH
+// team pass over the P2 R13/R17 original, TRANSITION priority). Fed by veilfx.TransitionFx:
+//   GlitchAmount — digital tearing (transition envelope / rift open-close pulses / loading
+//                  pulse): datamosh blocks + fine row jitter + chromatic tear + 2-frame
+//                  invert pops + scanline shimmer. Contract unchanged (§3.3 frozen name).
+//   FadeAmount   — fade-to-black closing iris with violet edge bleed (0 = clear, 1 = black;
+//                  the portal hold keeps it at 1 during the dimension change). Unchanged.
+//   Time         — wall-clock seconds (keeps animating while client ticks stall).
+//   RiftCenter   — v2 ADDITION: NDC position of the nearest live rift tear (parked just
+//                  offscreen on the rift's side when it is behind the camera,
+//                  border_glitch-style, so turning away softens instead of snapping).
+//   RiftAmount   — v2 ADDITION: 0..1 ambient "corrupted spacetime" amount from rift
+//                  proximity (RiftFx → TransitionFx.setRiftAmbient; capped 0.6, ALWAYS 0
+//                  under reducedFx). Drives three new layers: voxel-sort streaks, mirror-
+//                  shard refraction around RiftCenter, and a time-jitter echo ghost.
+// NOTE on the echo: this is a single-stage veil:blit pipeline with NO history buffer, so
+// the "previous-frame ghost" is faked by re-sampling the CURRENT frame at a jitter offset
+// that re-rolls at ~8 Hz — the stale-looking displaced copy sells the same beat without a
+// second render target.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
 uniform float GlitchAmount;
 uniform float FadeAmount;
 uniform float Time;
+uniform vec2 RiftCenter;
+uniform float RiftAmount;
 
 in vec2 texCoord;
 
 out vec4 fragColor;
 
+// 60° mirror shards around the rift center.
+const float SHARD_WIDTH = 1.0471976;
+
 void main() {
     float g = clamp(GlitchAmount, 0.0, 1.0);
     float f = clamp(FadeAmount, 0.0, 1.0);
+    float rift = clamp(RiftAmount, 0.0, 1.0);
+    // Shared "spacetime corruption" driver: full near a rift; heavy transitions inherit a
+    // share so portal enters speak the same streak/echo vocabulary as standing at a tear.
+    float corr = max(rift, g * 0.55);
 
     // Re-seed the artifact pattern ~12x/s — blocks pop instead of sliding.
     float seed = floor(Time * 12.0) * 0.618 + 1.0;
+
+    // Aspect-corrected space (shards must be round on any resolution) + the rift lens.
+    vec2 screenSize = vec2(textureSize(DiffuseSampler0, 0));
+    float aspect = screenSize.x / max(screenSize.y, 1.0);
+    vec2 p = (texCoord * 2.0 - 1.0) * vec2(aspect, 1.0);
+    vec2 lens = clamp(RiftCenter, vec2(-2.5), vec2(2.5)) * vec2(aspect, 1.0);
+    vec2 fromLens = p - lens;
+    float lensDist = length(fromLens);
 
     // Coarse datamosh rows jump sideways; a sparse set of fine rows jitters on top.
     vec2 uv = texCoord + efxBlockOffset(texCoord, seed, g);
@@ -33,28 +58,75 @@ void main() {
     uv.x += (efxHash(vec2(row, seed * 1.37)) - 0.5) * 0.02 * g
             * step(0.82, efxHash(vec2(row * 0.71, seed)));
 
-    // Chromatic tear along the displacement axis (~15 px at 1080p when fully glitched).
-    vec3 color = efxChroma(DiffuseSampler0, uv, vec2(1.0, 0.35), g * 0.008);
+    // v2 — VOXEL-SORT streaks: narrow lanes perpendicular to the away-from-rift axis drag
+    // outward by random QUANTIZED lengths (the pixel-sorting read, faked as a directional
+    // smear — a true sort needs unbounded taps). Lane layout re-rolls with the 12 Hz seed.
+    // Polish 3 note: with no rift near, RiftCenter defaults to (0, −1.9) below the screen,
+    // so pure-transition streaks (corr = g·0.55) drag VERTICALLY — the classic pixel-sort
+    // orientation. Deliberate, keep the default park at the bottom edge.
+    vec2 axis = lensDist > 1.0e-4 ? fromLens / lensDist : vec2(0.0, 1.0);
+    vec2 axisUv = normalize(vec2(axis.x / aspect, axis.y));
+    float lane = floor(dot(p, vec2(-axis.y, axis.x)) * 34.0);
+    float laneGate = step(1.0 - 0.30 * corr, efxHash(vec2(lane, seed * 2.23)));
+    float laneLen = floor(efxHash(vec2(lane * 1.31, seed)) * 5.0) * 0.012;
+    uv -= axisUv * (laneLen * laneGate * corr);
 
-    // 2-frame invert pops once the glitch is violent (gated by the re-seed hash so a pop
-    // lasts exactly one seed frame ≈ 2 render frames).
+    // v2 — MIRROR-SHARD refraction near the rift center: the disc around RiftCenter splits
+    // into 60° shards; gated shards resample the scene reflected across their bisector
+    // (kaleidoscope-lite) — space around the tear looks reassembled from shattered copies.
+    float shardZone = (1.0 - smoothstep(0.18, 0.62, lensDist)) * rift;
+    if (shardZone > 0.003) {
+        float ang = atan(fromLens.y, fromLens.x);
+        float sector = floor(ang / SHARD_WIDTH);
+        float shardGate = step(0.35, efxHash(vec2(sector, seed * 3.1)));
+        float mirrored = 2.0 * (sector * SHARD_WIDTH + SHARD_WIDTH * 0.5) - ang;
+        vec2 mirrorP = lens + vec2(cos(mirrored), sin(mirrored)) * lensDist;
+        vec2 mirrorUv = (mirrorP / vec2(aspect, 1.0) + 1.0) * 0.5;
+        uv = mix(uv, clamp(mirrorUv, vec2(0.001), vec2(0.999)), shardZone * shardGate * 0.65);
+    }
+    uv = clamp(uv, vec2(0.001), vec2(0.999));
+
+    // Chromatic tear along the displacement axis (~15 px at 1080p fully glitched); ambient
+    // rift corruption feeds a smaller share so idle proximity stays a simmer (~4 px).
+    vec3 color = efxChroma(DiffuseSampler0, uv, vec2(1.0, 0.35), g * 0.008 + rift * 0.0035);
+
+    // v2 — TIME-JITTER ECHO: the faked previous-frame ghost (see header). The offset
+    // re-rolls at ~8 Hz; max() keeps the ghost additive-bright, like an undecayed phosphor
+    // copy of a frame that never got replaced.
+    float echoAmt = corr * 0.16;
+    if (echoAmt > 0.003) {
+        float echoSeed = floor(Time * 8.0);
+        vec2 echoOff = vec2(efxHash(vec2(echoSeed, 4.7)) - 0.5,
+                efxHash(vec2(echoSeed * 1.7, 9.2)) - 0.5) * 0.018;
+        vec3 echo = texture(DiffuseSampler0, clamp(uv + echoOff, vec2(0.001), vec2(0.999))).rgb;
+        color = mix(color, max(color, echo), echoAmt);
+    }
+
+    // 2-frame invert pops once the glitch is violent — TRANSITION envelope only (g), never
+    // the ambient rift feed: standing near a tear must not strobe (R11 spirit).
     float pop = step(0.9, efxHash(vec2(seed, 17.3))) * step(0.55, g);
     color = mix(color, vec3(1.0) - color, pop);
 
-    // Scanline shimmer.
-    color *= 1.0 - 0.10 * g * (0.5 + 0.5 * sin(texCoord.y * 420.0 + Time * 28.0));
+    // Scanline shimmer (the ambient rift contributes a half share).
+    color *= 1.0 - 0.10 * max(g, rift * 0.5) * (0.5 + 0.5 * sin(texCoord.y * 420.0 + Time * 28.0));
 
-    // Fade-to-black iris: the black front closes from the screen edges toward the center;
-    // pixels just inside the front bleed violet (R13's "fade-to-black with violet edge
-    // bleed"). At f=1 the whole frame is exactly black (front radius is past the center).
-    vec2 p = texCoord * 2.0 - 1.0;
-    float r = length(p * vec2(1.15, 1.0));
+    // Fade-to-black iris (contract unchanged): the black front closes from the screen edges
+    // toward the center; pixels just inside the front bleed violet. At f=1 the whole frame
+    // is exactly black (front radius is past the center).
+    vec2 q = texCoord * 2.0 - 1.0;
+    float r = length(q * vec2(1.15, 1.0));
     float front = 1.62 - f * 2.1;
     float black = smoothstep(front, front + 0.28, r);
     float bleed = smoothstep(front - 0.30, front, r) * (1.0 - black);
-    vec3 violet = vec3(0.30, 0.08, 0.52) * (0.35 + 0.65 * efxNoise(p * 5.0 + vec2(Time, -Time)));
+    vec3 violet = vec3(0.30, 0.08, 0.52) * (0.35 + 0.65 * efxNoise(q * 5.0 + vec2(Time, -Time)));
     color = mix(color, color * 0.35 + violet, bleed * min(1.0, f * 2.0));
     color *= 1.0 - black;
+
+    // v2 banding guard: violet bleed / echo / shard-zone gradients — temporal ±1 LSB dither
+    // (scaled up while the pass is actually doing something). Polish 2: multiplied by
+    // (1 − black) so the f = 1 portal hold stays EXACTLY black (frozen R13 contract) —
+    // the bleed gradient still gets dithered because black < 1 there.
+    color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * (0.5 + corr + f)) * (1.0 - black);
 
     fragColor = vec4(color, 1.0);
 }

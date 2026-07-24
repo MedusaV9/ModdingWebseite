@@ -146,6 +146,13 @@ public final class WandPhaseService {
                 WandPowers.RISS_WAVE_FRONT, foot.add(march.scale(bandReach * 0.55D))));
         WandTickService.schedule(level, 6, () -> WandPowers.sendQuasar(level,
                 WandPowers.RISS_WAVE_FRONT, foot.add(march.scale(bandReach))));
+        // D11 reality seams (visual-only): two thin glitch scars linger where the
+        // scanline passed, flickering out over ~2 s while the cone blocks are still
+        // de-rezzed — the wave leaves stitches in the world, not just a sweep.
+        WandTickService.schedule(level, 5, () -> WandPowers.sendQuasar(level,
+                WandPowers.RISS_SEAM_SCAR, foot.add(march.scale(bandReach * 0.3D)).add(0.0D, 0.4D, 0.0D)));
+        WandTickService.schedule(level, 8, () -> WandPowers.sendQuasar(level,
+                WandPowers.RISS_SEAM_SCAR, foot.add(march.scale(bandReach * 0.75D)).add(0.0D, 0.4D, 0.0D)));
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.9F, 0.55F);
         level.playSound(null, player.getX(), player.getY(), player.getZ(),

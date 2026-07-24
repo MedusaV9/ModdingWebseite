@@ -38,6 +38,12 @@ public final class ShardGainToast {
 
         @Override
         public void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha) {
+            draw(guiGraphics, font, centerX, y, alpha, Float.MAX_VALUE); // settled fallback
+        }
+
+        @Override
+        public void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha,
+                float ageTicks) {
             String diamond = "◆ ";
             String body = toastText(this);
             int diamondWidth = font.width(diamond);
@@ -46,7 +52,8 @@ public final class ShardGainToast {
             // Quiet backdrop pill so the line reads over bright terrain (no hard panel).
             guiGraphics.fill(x - 5, y - 3, x + width + 5, y + font.lineHeight + 2,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL, alpha * 0.7F));
-            guiGraphics.drawString(font, diamond, x, y,
+            // UIFEEL: the diamond hops 1 px as the entrance spring lands (micro-bounce).
+            guiGraphics.drawString(font, diamond, x, y + BottomToastQueue.iconBounce(ageTicks),
                     EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
             guiGraphics.drawString(font, body, x + diamondWidth, y,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, alpha));

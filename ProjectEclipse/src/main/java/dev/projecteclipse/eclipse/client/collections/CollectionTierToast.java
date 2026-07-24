@@ -44,6 +44,12 @@ public final class CollectionTierToast {
 
         @Override
         public void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha) {
+            draw(guiGraphics, font, centerX, y, alpha, Float.MAX_VALUE); // settled fallback
+        }
+
+        @Override
+        public void draw(GuiGraphics guiGraphics, Font font, int centerX, int y, float alpha,
+                float ageTicks) {
             String star = "✦ ";
             String title = titleText(payload);
             String detail = detailText(payload);
@@ -59,7 +65,8 @@ public final class CollectionTierToast {
                     y + cardHeight - 2,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL, alpha * 0.7F));
             int titleX = centerX - titleWidth / 2;
-            guiGraphics.drawString(font, star, titleX, y,
+            // UIFEEL: the star hops 1 px as the entrance spring lands (micro-bounce).
+            guiGraphics.drawString(font, star, titleX, y + BottomToastQueue.iconBounce(ageTicks),
                     EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
             guiGraphics.drawString(font, title, titleX + starWidth, y,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));

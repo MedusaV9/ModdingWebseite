@@ -14,6 +14,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.sky.OverworldPurpleEffects;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
+import dev.projecteclipse.eclipse.veilfx.FxBudget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.GameRenderer;
@@ -60,6 +61,15 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * storms apart from the intro vortex's slate. The occluder becomes a matching opaque dome.
  * {@code STATE_EXPLODE} (tyrant death) blows the dome outward ~2.8× while it whites out
  * and fades — the shockwave beat; the occluder drops immediately so the sky clears.</p>
+ *
+ * <p><b>FX-STORM round:</b> two-layer churn (per-shell noise clocks/band leads — slow
+ * coarse outer billow, fast fine inner sheet), lightning veins whose bright heads crawl UP
+ * the wall surface (color-only, near tier, quality ≥ 1), a ground-skirt dust band where
+ * wall meets terrain, a counter-rotating crown-swirl collar on the vortex cone, the
+ * multi-stage explosion (implosion pinch → flash peak at release → eased expansion with
+ * glitch-dissolving wall-fragment shards → clear-sky bloom ring), and the living Tyrant's
+ * silhouette pinned to the inner wall during {@link StormInteriorFx#flash} flickers
+ * (ACTIVE sphere storms only — the occluder guarantee is untouched, he is drawn ON it).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormWallRenderer {
@@ -138,10 +148,51 @@ public final class StormWallRenderer {
     private static final float SPH_VIOLET_B = 0.47F;
     /** STATE_EXPLODE: the dome blows out to this many extra radii over the burst. */
     private static final float EXPLODE_EXPAND = 1.8F;
-    /** White-hot flash target of the explosion's first ~15 ticks. */
+    /** White-hot flash target of the explosion flash beat. */
     private static final float EXPLODE_WHITE_R = 0.95F;
     private static final float EXPLODE_WHITE_G = 0.93F;
     private static final float EXPLODE_WHITE_B = 1.00F;
+
+    // --- FX-STORM round: multi-stage explosion (implosion → flash → shard ring → bloom) ---
+    /** Fraction of the burst spent on the implosion suck-in before the shell releases. */
+    static final float EXPLODE_IMPLODE_FRAC = 0.18F;
+    /** Radius pinch depth at the implosion's deepest point. */
+    private static final float EXPLODE_PINCH = 0.10F;
+    /** Wall-fragment shard cross-quads riding the shockwave ring (reduced tier flies fewer). */
+    private static final int EXPLODE_SHARDS_FULL = 22;
+    private static final int EXPLODE_SHARDS_REDUCED = 12;
+
+    // --- FX-STORM round: two-layer churn (fast inner sheet + slow outer billow) ---
+    /**
+     * Per-shell churn clocks (ticks per noise frame). Sphere: slow outer billow / body /
+     * fast inner sheet. Cylinder: outermost slow → innermost fast, replacing the old
+     * two-speed parity split so depth reads through the layered motion.
+     */
+    private static final float[] SPHERE_CHURN_TICKS = {9.0F, 5.0F, 2.0F};
+    private static final float[] SHELL_CHURN_TICKS = {8.0F, 5.0F, 3.0F, 2.0F};
+    /** Per-sphere-shell band-lead multipliers (outer billow lags, inner sheet counter-races). */
+    private static final float[] SPHERE_BAND_LEAD = {0.6F, -0.8F, 1.6F};
+
+    // --- FX-STORM round: lightning veins crawling ALONG the wall surface (UV crawl) ---
+    /** Vein head crawl speed in latitude-fraction per tick (base → apex in ~3 s). */
+    private static final float VEIN_CRAWL_PER_TICK = 0.016F;
+    /** A vein cell re-rolls its gate every this many ticks. */
+    private static final int VEIN_WINDOW_TICKS = 44;
+    /** Gate threshold — roughly 1 in 5 longitude cells carries a live vein. */
+    private static final float VEIN_GATE = 0.80F;
+    /** Latitude half-extent of the bright crawling head. */
+    private static final float VEIN_HALF_WIDTH = 0.16F;
+
+    // --- FX-STORM round: ground skirt dust where the wall meets terrain ---
+    /** Neutral warm-gray so the skirt reads as kicked-up dust, not storm palette. */
+    private static final float DUST_R = 0.135F;
+    private static final float DUST_G = 0.125F;
+    private static final float DUST_B = 0.115F;
+
+    // --- FX-STORM round: Tyrant wall silhouette (interior flicker beat, ACTIVE spheres) ---
+    private static final float SIL_R = 0.010F;
+    private static final float SIL_G = 0.008F;
+    private static final float SIL_B = 0.018F;
 
     // --- daylight readability (EVAL-4 post-eval: wall reads flat from ~40 blocks at noon) ---
     /**
@@ -345,6 +396,12 @@ public final class StormWallRenderer {
         // (Exploding storms skip it: the expanding shockwave must stay visible from within.)
         if (storm.state != S2CStormStatePayload.STATE_EXPLODE
                 && centerDist < storm.radius - OCCLUDER_INSET - 2.0D) {
+            // FX-STORM: the Tyrant wall silhouette lives exactly HERE — deep interior,
+            // pinned to the wall during an interior flicker — so it draws before the out.
+            if (!additivePass && storm.type == S2CStormStatePayload.TYPE_SPHERE
+                    && storm.state == S2CStormStatePayload.STATE_ACTIVE) {
+                emitTyrantSilhouette(buffer, storm, camera, time, Math.atan2(dz, dx), vis);
+            }
             return;
         }
         float shellDist = (float) Math.abs(centerDist - storm.radius);
@@ -361,6 +418,7 @@ public final class StormWallRenderer {
         float heightScale = heightScale(storm, vis);
 
         if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
+            float boom = storm.explodeProgress(partialTick);
             // C8 dome shells (own tier ladder; impostor reuses the tapered cylinder ring).
             if (nearW > 0.02F || farW > 0.02F) {
                 boolean near = nearW >= farW;
@@ -374,6 +432,18 @@ public final class StormWallRenderer {
                     emitSphereShell(buffer, storm, camera, time, s, segments, rings, camAngle,
                             centerDist, inside, heightScale, tierAlpha, additivePass, partialTick);
                 }
+            }
+            if (additivePass && boom > 0.0F) {
+                // FX-STORM explosion stages 3+4: glitch-dissolving wall-fragment shards on
+                // the shockwave ring, then the late clear-sky bloom ring behind it.
+                emitExplosionShards(buffer, storm, camera, time, partialTick);
+                emitClearSkyRing(buffer, storm, camera, boom);
+            }
+            if (!additivePass && inside && boom <= 0.0F
+                    && storm.state == S2CStormStatePayload.STATE_ACTIVE) {
+                // FX-STORM: the living Tyrant flickers in the wall (ACTIVE = alive; the
+                // EXPLODE death beat never draws him).
+                emitTyrantSilhouette(buffer, storm, camera, time, camAngle, vis);
             }
             if (impW > 0.02F && !additivePass) {
                 emitImpostor(buffer, storm, camera, time, heightScale, impW * vis, true);
@@ -435,8 +505,9 @@ public final class StormWallRenderer {
         float rot = vortex
                 ? time * SWIRL_RAD_PER_TICK * (0.8F + shellIndex * 0.13F)
                 : time * WALL_DRIFT_RAD_PER_TICK * ((shellIndex & 1) == 0 ? 1.0F : -1.0F);
-        // Two scroll speeds for the churn noise (frozen R14 detail).
-        int noiseT = (int) (time / ((shellIndex & 1) == 0 ? 3.0F : 5.0F));
+        // Two-layer churn (FX-STORM): the outermost shell billows slowly, the innermost
+        // races — replaces the old two-speed parity split so the layers read as depth.
+        int noiseT = (int) (time / SHELL_CHURN_TICKS[shellIndex]);
 
         float height = storm.height * heightScale;
         float baseY = (float) (storm.center.y - camera.y) - BASE_SKIRT;
@@ -501,6 +572,16 @@ public final class StormWallRenderer {
                             r * gray1, g * gray1, b * gray1, aMid * 0.55F,
                             r, g, b, 0.0F);
                 }
+                // Ground skirt dust (FX-STORM, near tier, main shell only): a flared
+                // low-alpha band where the wall meets terrain — kicked-up dust, not palette.
+                if (nearTier && !vortex && shellIndex == 1) {
+                    float groundY = (float) (storm.center.y - camera.y);
+                    float dustJitter = hash3(shellIndex + 60, noiseSeg, noiseT / 2);
+                    emitColumn(buffer, cx, cz, groundY - 1.2F, groundY + 2.6F,
+                            a0, a1, radius + 2.2F + dustJitter * 0.8F, radius + 0.3F, 0.0F,
+                            DUST_R, DUST_G, DUST_B, 0.40F * churn * alphaMul,
+                            DUST_R, DUST_G, DUST_B, 0.0F);
+                }
             }
         }
     }
@@ -529,6 +610,19 @@ public final class StormWallRenderer {
                     ADD_R, ADD_G, ADD_B, alpha,
                     ADD_R * 1.3F, ADD_G * 1.3F, ADD_B * 1.2F, 0.0F);
         }
+        // Crown swirl collar (FX-STORM): a counter-rotating rim band under the cone so
+        // the cap reads as a sheared double swirl instead of one solid spinning cone.
+        float rot2 = -time * SWIRL_RAD_PER_TICK * 0.8F;
+        for (int i = 0; i < segments; i++) {
+            double a0 = i * step + rot2;
+            double a1 = a0 + step;
+            float churn = 0.4F + 0.6F * hash3(37, i, noiseT);
+            float alpha = 0.20F * churn * alphaMul * (1.0F + DAY_ADDITIVE_BOOST * daylight);
+            emitColumn(buffer, cx, cz, baseY - 1.0F, baseY + 2.5F,
+                    a0, a1, radius + 1.5F, radius - 0.5F, -0.5F,
+                    ADD_R * 0.9F, ADD_G * 0.9F, ADD_B, alpha,
+                    ADD_R * 1.2F, ADD_G * 1.2F, ADD_B * 1.15F, 0.0F);
+        }
     }
 
     /**
@@ -549,7 +643,8 @@ public final class StormWallRenderer {
             float partialTick) {
         float boom = storm.explodeProgress(partialTick);
         float white = storm.explodeWhite(partialTick);
-        float radius = (storm.radius + SPHERE_OFFSETS[shellIndex]) * (1.0F + EXPLODE_EXPAND * boom);
+        // FX-STORM stage curve: implosion pinch → release → eased expansion.
+        float radius = (storm.radius + SPHERE_OFFSETS[shellIndex]) * explodeRadiusScale(boom);
         if (radius < 1.0F) {
             return;
         }
@@ -561,10 +656,16 @@ public final class StormWallRenderer {
         double step = Math.PI * 2.0D / fullSegments;
         int columns = Math.min(fullSegments, (int) Math.ceil(2.0D * halfArc / step));
 
+        boolean nearTier = fullSegments == NEAR_SEGMENTS;
+        // Lightning veins crawl only the OUTER additive shell at near tier, quality ≥ 1,
+        // and never during the explosion (the shockwave owns the additive read there).
+        boolean veins = additive && shellIndex == 0 && nearTier && boom <= 0.0F
+                && FxBudget.qualityTier() >= 1;
         float cx = (float) (storm.center.x - camera.x);
         float cy = (float) (storm.center.y - camera.y);
         float cz = (float) (storm.center.z - camera.z);
-        int noiseT = (int) (time / ((shellIndex & 1) == 0 ? 3.0F : 5.0F));
+        // Two-layer churn (FX-STORM): per-shell clocks — slow outer billow, fast inner sheet.
+        int noiseT = (int) (time / SPHERE_CHURN_TICKS[shellIndex]);
         float latSpan = (float) (Math.PI / 2.0D) + SPHERE_SKIRT_RAD;
         float latStep = latSpan / rings;
         float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
@@ -578,10 +679,11 @@ public final class StormWallRenderer {
             float y0 = cy + Mth.sin(lat0) * radius * heightScale;
             float y1 = cy + Mth.sin(lat1) * radius * heightScale;
             // Banded rotation (EVAL-POL-F #1): geometry stays camera-centered — each band's
-            // rotation feeds the CHURN PATTERN index only, at a per-band lead (+12% per ring),
+            // rotation feeds the CHURN PATTERN index only, at a per-band lead (+12% per ring)
+            // times the per-shell lead (FX-STORM: outer billow lags, inner sheet counter-races),
             // so the wall still visibly shears while coverage and rim light hold the bearing.
             float rot0 = time * SPHERE_BAND_RAD_PER_TICK * (1.0F + ring * 0.12F)
-                    * ((shellIndex & 1) == 0 ? 1.0F : -0.8F);
+                    * SPHERE_BAND_LEAD[shellIndex];
             // Base-heavy density: near-opaque at the rim, thinning toward the apex.
             float latFrac0 = (lat0 + SPHERE_SKIRT_RAD) / latSpan;
             float latFrac1 = (lat1 + SPHERE_SKIRT_RAD) / latSpan;
@@ -595,9 +697,11 @@ public final class StormWallRenderer {
                 double a0 = camAngle - halfArc + i * step;
                 double a1 = a0 + step;
                 int noiseSeg = Mth.floor((float) ((a0 + rot0) / step)); // pattern scrolls per band
-                float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg + ring * 131, noiseT);
-                float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT);
-                float gray1 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT + 977);
+                // Slow outer billow uses coarse 2-column noise cells; the inner sheet stays fine.
+                int cell = shellIndex == 0 ? noiseSeg >> 1 : noiseSeg;
+                float churn = 0.45F + 0.55F * hash3(shellIndex, cell + ring * 131, noiseT);
+                float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, cell + ring * 131, noiseT);
+                float gray1 = grayFloor + graySpan * hash3(shellIndex + 8, cell + ring * 131, noiseT + 977);
                 // Rim factor: silhouette columns (near the tangent arc edges) glow brightest —
                 // a0 is camera-centered now, so the rim light sits on the actual silhouette.
                 float edge = halfArc <= 0.0D ? 0.0F
@@ -626,6 +730,34 @@ public final class StormWallRenderer {
                             * (1.0F + DAY_ADDITIVE_BOOST * daylight);
                     alpha0 = aBand * (1.0F - 0.65F * latFrac0);
                     alpha1 = aBand * (1.0F - 0.65F * latFrac1);
+                    // Lightning veins (FX-STORM): a gated longitude cell carries a bright
+                    // head that crawls UP the latitude — animated UV crawl along the wall
+                    // surface, zero extra quads (pure color/alpha modulation). The gate
+                    // indexes the RAW angle (not the per-ring rotated pattern index) so a
+                    // vein lines up vertically across every latitude band it crosses.
+                    if (veins) {
+                        int veinCell = Mth.floor((float) (a0 / step)) >> 2;
+                        int veinT = (int) (time / VEIN_WINDOW_TICKS);
+                        if (hash3(shellIndex + 55, veinCell, veinT) > VEIN_GATE) {
+                            float head = fract(time * VEIN_CRAWL_PER_TICK
+                                    + hash3(shellIndex + 56, veinCell, veinT));
+                            float mid = (latFrac0 + latFrac1) * 0.5F;
+                            float vein = Math.max(0.0F,
+                                    1.0F - Math.abs(mid - head) / VEIN_HALF_WIDTH);
+                            vein *= vein; // sharp crawling head, soft tail
+                            if (vein > 0.01F) {
+                                r0 = Mth.lerp(vein, r0, 1.00F);
+                                g0 = Mth.lerp(vein, g0, 0.95F);
+                                b0 = Mth.lerp(vein, b0, 1.00F);
+                                // Daylight boost mirrors the band alpha rule — additive
+                                // veins would wash out against a noon sky otherwise.
+                                float glow = 0.40F * vein * alphaMul
+                                        * (1.0F + DAY_ADDITIVE_BOOST * daylight);
+                                alpha0 += glow;
+                                alpha1 += glow;
+                            }
+                        }
+                    }
                 } else {
                     r0 = SPH_ALPHA_R;
                     g0 = SPH_ALPHA_G;
@@ -634,6 +766,15 @@ public final class StormWallRenderer {
                     float aBase = 0.88F * alphaMul * (1.0F - DAY_BASE_CARVE * daylight * (1.0F - churn));
                     alpha0 = aBase * (1.0F - 0.55F * latFrac0);
                     alpha1 = aBase * (1.0F - 0.55F * latFrac1);
+                    // Ground skirt dust (FX-STORM, near tier, equator ring only): flared
+                    // low band where the dome meets terrain.
+                    if (nearTier && ring == 0 && boom <= 0.0F) {
+                        float dustJitter = hash3(shellIndex + 60, noiseSeg, noiseT / 2);
+                        emitColumn(buffer, cx, cz, cy - 1.2F, cy + 2.6F,
+                                a0, a1, radius + 2.2F + dustJitter * 0.8F, radius + 0.3F, 0.0F,
+                                DUST_R, DUST_G, DUST_B, 0.40F * churn * alphaMul,
+                                DUST_R, DUST_G, DUST_B, 0.0F);
+                    }
                 }
                 // Explosion white-out: palette blows toward white-hot, alpha pops.
                 if (white > 0.0F) {
@@ -649,6 +790,141 @@ public final class StormWallRenderer {
                 buffer.addVertex(x01, y1, z01).setColor(r0 * gray1, g0 * gray1, b0 * gray1, alpha1);
             }
         }
+    }
+
+    /**
+     * FX-STORM stage curve of the C8 burst: a {@value #EXPLODE_PINCH}-deep implosion pinch
+     * over the first {@value #EXPLODE_IMPLODE_FRAC} of the burst (releasing right after),
+     * then an eased (t²) expansion out to {@code 1 + }{@value #EXPLODE_EXPAND} radii.
+     */
+    private static float explodeRadiusScale(float boom) {
+        if (boom <= 0.0F) {
+            return 1.0F;
+        }
+        float pinch = EXPLODE_PINCH * smoothstep(0.0F, EXPLODE_IMPLODE_FRAC, boom)
+                * (1.0F - smoothstep(EXPLODE_IMPLODE_FRAC, EXPLODE_IMPLODE_FRAC * 2.2F, boom));
+        float expand = expandT(boom);
+        return 1.0F - pinch + EXPLODE_EXPAND * expand * expand;
+    }
+
+    /** Expansion progress 0..1 of the post-implosion part of the burst. */
+    private static float expandT(float boom) {
+        return boom <= EXPLODE_IMPLODE_FRAC ? 0.0F
+                : (boom - EXPLODE_IMPLODE_FRAC) / (1.0F - EXPLODE_IMPLODE_FRAC);
+    }
+
+    /**
+     * FX-STORM explosion stage 3: wall-fragment shards riding the shockwave ring — up to
+     * {@value #EXPLODE_SHARDS_FULL} cross-flash quad pairs ({@value #EXPLODE_SHARDS_REDUCED}
+     * under reducedFx) flying outward slightly faster than the shell, shrinking as they go,
+     * and dissolving as GLITCH VOXELS: a per-shard hash gate drops shards out for 2-tick
+     * frame pairs with odds that rise with the expansion, so the debris field strobes apart
+     * instead of fading.
+     */
+    private static void emitExplosionShards(BufferBuilder buffer, StormFxClient.ClientStorm storm,
+            Vec3 camera, float time, float partialTick) {
+        float expand = expandT(storm.explodeProgress(partialTick));
+        if (expand <= 0.0F || expand >= 1.0F) {
+            return;
+        }
+        float white = storm.explodeWhite(partialTick);
+        int shards = FxBudget.qualityTier() >= 2 ? EXPLODE_SHARDS_FULL : EXPLODE_SHARDS_REDUCED;
+        float cx = (float) (storm.center.x - camera.x);
+        float cy = (float) (storm.center.y - camera.y);
+        float cz = (float) (storm.center.z - camera.z);
+        int flickerT = (int) (time / 2.0F);
+        for (int i = 0; i < shards; i++) {
+            if (hash3(i, flickerT, 977) < expand * 0.85F) {
+                continue; // glitch-voxel dropout — odds rise as the shard dissolves
+            }
+            float bearing = hash3(i, 13, 7) * (float) (Math.PI * 2.0D);
+            float lat = hash3(i, 29, 3) * 0.9F;
+            float speed = 0.8F + 0.5F * hash3(i, 41, 11);
+            float dist = storm.radius * (1.0F + (EXPLODE_EXPAND + 0.6F) * expand * speed);
+            float x = cx + Mth.cos(bearing) * dist;
+            float y = cy + Mth.sin(lat) * dist * 0.35F + 1.5F;
+            float z = cz + Mth.sin(bearing) * dist;
+            float size = (1.1F + 1.6F * hash3(i, 53, 17)) * (1.0F - 0.7F * expand);
+            float hue = hash3(i, 61, 23);
+            float r = Mth.lerp(white, Mth.lerp(hue, SPH_GREEN_R, SPH_VIOLET_R), EXPLODE_WHITE_R);
+            float g = Mth.lerp(white, Mth.lerp(hue, SPH_GREEN_G, SPH_VIOLET_G), EXPLODE_WHITE_G);
+            float b = Mth.lerp(white, Mth.lerp(hue, SPH_GREEN_B, SPH_VIOLET_B), EXPLODE_WHITE_B);
+            emitCrossFlash(buffer, x, y, z, size, r, g, b, 0.85F * (1.0F - expand));
+        }
+    }
+
+    /**
+     * FX-STORM explosion stage 4: the clear-sky bloom moment — a thin pale additive ring
+     * hugging the ground just behind the shockwave over the last stretch of the burst,
+     * fading out as the burst completes and the sky opens.
+     */
+    private static void emitClearSkyRing(BufferBuilder buffer, StormFxClient.ClientStorm storm,
+            Vec3 camera, float boom) {
+        float expand = expandT(boom);
+        float bloom = smoothstep(0.60F, 0.85F, expand) * (1.0F - smoothstep(0.85F, 1.0F, expand));
+        if (bloom <= 0.02F) {
+            return;
+        }
+        float ringR = storm.radius * (1.0F + (EXPLODE_EXPAND + 0.3F) * expand);
+        float cx = (float) (storm.center.x - camera.x);
+        float cy = (float) (storm.center.y - camera.y);
+        float cz = (float) (storm.center.z - camera.z);
+        int segments = OCCLUDER_SEGMENTS;
+        double step = Math.PI * 2.0D / segments;
+        for (int i = 0; i < segments; i++) {
+            double a0 = i * step;
+            double a1 = a0 + step;
+            emitColumn(buffer, cx, cz, cy + 0.2F, cy + 3.2F,
+                    a0, a1, ringR, ringR + 1.2F, 0.0F,
+                    0.85F, 0.88F, 0.95F, 0.30F * bloom,
+                    0.85F, 0.88F, 0.95F, 0.0F);
+        }
+    }
+
+    /**
+     * FX-STORM: the distant Tyrant flickering in the wall while he is alive. Interior-only
+     * (drawn against the occluder — the never-see-inside guarantee is untouched), ACTIVE
+     * sphere storms only, and only while a {@link StormInteriorFx#flash} silhouette flicker
+     * is live: a ~7.5-block dark humanoid cutout (4 quads) pinned to the inner wall at a
+     * per-flicker hash bearing near the camera bearing, hash-strobed so he is only there
+     * on SOME frames of the flicker — gone when the fog closes again.
+     */
+    private static void emitTyrantSilhouette(BufferBuilder buffer, StormFxClient.ClientStorm storm,
+            Vec3 camera, float time, double camAngle, float vis) {
+        float flash = StormInteriorFx.flashAmount();
+        if (flash <= 0.05F || vis < 0.8F) {
+            return;
+        }
+        int serial = StormInteriorFx.flashSerial();
+        if (hash3((int) (time / 2.0F), serial, 5) < 0.30F) {
+            return; // strobe dropout: he is not there every frame
+        }
+        double bearing = camAngle + (hash3(serial, 91, 7) - 0.5F) * 1.6D;
+        float dist = Math.max(4.0F, storm.radius - OCCLUDER_INSET - 1.5F);
+        float bx = (float) (storm.center.x - camera.x) + (float) Math.cos(bearing) * dist;
+        float bz = (float) (storm.center.z - camera.z) + (float) Math.sin(bearing) * dist;
+        float by = (float) (storm.center.y - camera.y);
+        // Wall-tangent axis: the cutout spans along the wall like a shadow cast onto it.
+        float tx = -(float) Math.sin(bearing);
+        float tz = (float) Math.cos(bearing);
+        float sway = Mth.sin(time * 0.11F + serial) * 0.4F;
+        float alpha = 0.85F * flash;
+        // Legs, torso (swaying), shoulder spikes, head — deliberately wrong proportions.
+        silQuad(buffer, bx, by, bz, tx, tz, 0.9F, 0.8F, 3.4F, 0.0F, alpha);
+        silQuad(buffer, bx, by + 3.2F, bz, tx, tz, 1.1F, 1.5F, 2.9F, sway, alpha);
+        silQuad(buffer, bx, by + 5.6F, bz, tx, tz, 2.4F, 1.7F, 0.8F, sway, alpha);
+        silQuad(buffer, bx, by + 6.3F, bz, tx, tz, 0.55F, 0.5F, 1.2F, sway * 1.3F, alpha);
+    }
+
+    /** One vertical silhouette quad along the wall-tangent axis (bottom/top half-widths). */
+    private static void silQuad(BufferBuilder buffer, float x, float y0, float z,
+            float tx, float tz, float halfW0, float halfW1, float height, float shift, float alpha) {
+        float x0 = x + tx * shift;
+        float z0 = z + tz * shift;
+        buffer.addVertex(x0 - tx * halfW0, y0, z0 - tz * halfW0).setColor(SIL_R, SIL_G, SIL_B, alpha);
+        buffer.addVertex(x0 + tx * halfW0, y0, z0 + tz * halfW0).setColor(SIL_R, SIL_G, SIL_B, alpha);
+        buffer.addVertex(x0 + tx * halfW1, y0 + height, z0 + tz * halfW1).setColor(SIL_R, SIL_G, SIL_B, alpha);
+        buffer.addVertex(x0 - tx * halfW1, y0 + height, z0 - tz * halfW1).setColor(SIL_R, SIL_G, SIL_B, alpha);
     }
 
     /** Impostor ring + lid for storms beyond {@value #FAR_LOD_END} blocks (8 columns, dark). */
@@ -901,6 +1177,10 @@ public final class StormWallRenderer {
 
     private static float hashF(int seed, int index) {
         return hash3(seed, index * 31 + 17, seed >>> 8);
+    }
+
+    private static float fract(float x) {
+        return x - Mth.floor(x);
     }
 
     private static float smoothstep(float edge0, float edge1, float x) {

@@ -28,8 +28,19 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 /**
  * W-P-ALTAR — client half of the altar level-up CEREMONY: dispatched from
  * {@code FxPayloads.handleFxEvent} on {@code FX_ALTAR_LEVELUP} ({@code pos} = altar,
- * {@code a} = the freshly reached level), it sequences a tick-scripted composition that
- * ESCALATES with the level (every level replays the beats below it, then adds its own):
+ * {@code a} = the freshly reached level), it sequences a tick-scripted composition.
+ *
+ * <p><b>W-P-ALTAR2 dramaturgy:</b> every ceremony (tier ≥ 1) is book-ended by an
+ * ANTICIPATION phase — {@value #ANTICIPATION_TICKS} t of inward-spiraling motes
+ * ({@code eclipse:altar_indraw}, vortex + point-attractor pull) under a three-step
+ * rising hum — and a SETTLE phase of drifting ash-light afterglow
+ * ({@code eclipse:altar_afterglow}) with a low falling hum once the burst has landed.
+ * The burst beats (below) shift {@code +ANTICIPATION_TICKS} accordingly; the server's
+ * own immediate beam/ring stays at t=0 as the "the altar answers" spark that the
+ * anticipation then builds on. Tier 0 skips both phases (minimal profile law).</p>
+ *
+ * <p>The burst ESCALATES with the level (every level replays the beats below it, then
+ * adds its own):</p>
  * <ul>
  *   <li><b>L1</b> — unlock sting + one echo of the flattened ring burst.</li>
  *   <li><b>L2</b> — + screen shockwave ring + a climbing pillar of light (four
@@ -63,9 +74,22 @@ public final class AltarCeremonyFx {
     private static final ResourceLocation GLYPH_RAIN = emitter("altar_glyph_rain");
     private static final ResourceLocation ORBIT_BURST = emitter("altar_orbit_burst");
     private static final ResourceLocation CORONA_IGNITE = emitter("altar_corona_ignite");
+    /** W-P-ALTAR2: anticipation in-draw + settle ash-light afterglow emitters. */
+    private static final ResourceLocation INDRAW = emitter("altar_indraw");
+    private static final ResourceLocation AFTERGLOW = emitter("altar_afterglow");
 
     /** Particle beats only materialize within this camera range (beam view-range twin). */
     private static final double EMITTER_RANGE = 96.0D;
+
+    /** Anticipation phase length (2 s of inward-spiraling motes + rising hum). */
+    private static final int ANTICIPATION_TICKS = 40;
+    /** Settle phase start after the burst, stretched a little per level. */
+    private static final int SETTLE_BASE_DELAY_TICKS = 34;
+    private static final int SETTLE_PER_LEVEL_TICKS = 6;
+
+    /** Offering sky-glow envelope (L3+ aurora response): rise 5 t, release 35 t. */
+    private static final int OFFER_GLOW_IN_TICKS = 5;
+    private static final int OFFER_GLOW_OUT_TICKS = 35;
 
     /** Sky-surge envelope (L5 corona ignition): rise 12 t, hold 30 t, release 60 t. */
     private static final int SURGE_IN_TICKS = 12;
@@ -82,6 +106,8 @@ public final class AltarCeremonyFx {
     private static int clock;
     private static int ceremonyStart;
     private static int surgeStart = Integer.MIN_VALUE;
+    /** W-P-ALTAR2: last offering-swallow arrival (drives the L3+ aurora glow). */
+    private static int offeringGlowStart = Integer.MIN_VALUE;
 
     private AltarCeremonyFx() {}
 
@@ -105,22 +131,38 @@ public final class AltarCeremonyFx {
         STEPS.clear();
         ceremonyStart = clock;
 
-        // --- L1 base: sting + a second flattened-ring echo over the server's own send ---
+        // --- W-P-ALTAR2 anticipation: a held breath before the strike (tier ≥ 1). The
+        // sting stays at t=0 (the "look up" announcement), then motes spiral INTO the
+        // altar while a three-step hum rises; every burst beat shifts +lead. ---
+        int lead = tier >= 1 ? ANTICIPATION_TICKS : 0;
         at(0, () -> soundAt(pos, EclipseSounds.UI_UNLOCK_STING.get(),
                 0.9F, 0.85F + 0.06F * lvl));
+        if (lead > 0) {
+            at(2, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.55F, 0.78F));
+            at(16, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.65F, 1.0F));
+            at(30, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.75F, 1.24F));
+            if (near) {
+                // One long-lived in-draw emitter covers the whole window (vortex swirl
+                // + inward point-attractor) — a single SEQUENCE charge.
+                at(2, () -> QuasarSpawner.spawn(INDRAW,
+                        pos.add(0.0D, 0.8D, 0.0D), FxBudget.Channel.SEQUENCE));
+            }
+        }
+
+        // --- L1 base: a second flattened-ring echo over the server's own send ---
         if (near) {
-            at(8, () -> QuasarSpawner.spawn(S2CQuasarPayload.ALTAR_LEVELUP_RING,
+            at(lead + 8, () -> QuasarSpawner.spawn(S2CQuasarPayload.ALTAR_LEVELUP_RING,
                     pos.add(0.0D, 0.6D, 0.0D), FxBudget.Channel.SEQUENCE));
         }
 
         // --- L2: shockwave ring + pillar of light ---
         if (lvl >= 2) {
-            at(2, () -> EclipseFxState.startShockwave(pos, 0.45F + 0.08F * lvl, 36));
-            at(4, () -> soundAt(pos, EclipseSounds.EVENT_EMERGE.get(), 0.9F, 1.15F));
+            at(lead + 2, () -> EclipseFxState.startShockwave(pos, 0.45F + 0.08F * lvl, 36));
+            at(lead + 4, () -> soundAt(pos, EclipseSounds.EVENT_EMERGE.get(), 0.9F, 1.15F));
             if (near) {
                 for (int i = 0; i < 4; i++) {
                     double height = i * 2.5D;
-                    at(4 + i * 3, () -> QuasarSpawner.spawn(PILLAR,
+                    at(lead + 4 + i * 3, () -> QuasarSpawner.spawn(PILLAR,
                             pos.add(0.0D, height, 0.0D), FxBudget.Channel.SEQUENCE));
                 }
             }
@@ -128,12 +170,12 @@ public final class AltarCeremonyFx {
 
         // --- L3: orbital burst + glyph rain ---
         if (lvl >= 3) {
-            at(10, () -> soundAt(pos, EclipseSounds.EVENT_ECLIPSE_DRONE.get(), 0.7F, 1.25F));
+            at(lead + 10, () -> soundAt(pos, EclipseSounds.EVENT_ECLIPSE_DRONE.get(), 0.7F, 1.25F));
             if (near) {
-                at(10, () -> QuasarSpawner.spawn(ORBIT_BURST,
+                at(lead + 10, () -> QuasarSpawner.spawn(ORBIT_BURST,
                         pos.add(0.0D, 1.5D, 0.0D), FxBudget.Channel.SEQUENCE));
                 for (int wave = 0; wave < 3; wave++) {
-                    at(14 + wave * 8, () -> QuasarSpawner.spawn(GLYPH_RAIN,
+                    at(lead + 14 + wave * 8, () -> QuasarSpawner.spawn(GLYPH_RAIN,
                             pos.add(0.0D, 10.0D, 0.0D), FxBudget.Channel.SEQUENCE));
                 }
             }
@@ -143,28 +185,41 @@ public final class AltarCeremonyFx {
         if (lvl >= 4) {
             if (tier >= 1) {
                 // ARGB 0x9CEADCFF: a 2-tick violet-white crack of light, 16-tick release.
-                at(2, () -> CaptionRenderer.fade(2, 3, 16, 0x9CEADCFF));
+                at(lead + 2, () -> CaptionRenderer.fade(2, 3, 16, 0x9CEADCFF));
             }
-            at(2, () -> EclipseFxState.startShockwave(pos, 0.9F, 50));
-            at(2, () -> soundAtListener(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(), 1.0F, 0.72F));
-            at(6, () -> soundAt(pos, EclipseSounds.EVENT_STORM_BURST.get(), 1.0F, 0.65F));
+            at(lead + 2, () -> EclipseFxState.startShockwave(pos, 0.9F, 50));
+            at(lead + 2, () -> soundAtListener(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(), 1.0F, 0.72F));
+            at(lead + 6, () -> soundAt(pos, EclipseSounds.EVENT_STORM_BURST.get(), 1.0F, 0.65F));
         }
 
         // --- L5: full corona ignition + the world-visible sky flare ---
         if (lvl >= 5) {
-            at(0, () -> surgeStart = clock);
-            at(8, () -> soundAtListener(EclipseSounds.EVENT_EMERGE.get(), 1.0F, 0.8F));
-            at(20, () -> soundAtListener(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(), 0.9F, 0.55F));
+            at(lead, () -> surgeStart = clock);
+            at(lead + 8, () -> soundAtListener(EclipseSounds.EVENT_EMERGE.get(), 1.0F, 0.8F));
+            at(lead + 20, () -> soundAtListener(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(), 0.9F, 0.55F));
             if (near) {
-                at(8, () -> QuasarSpawner.spawn(CORONA_IGNITE,
+                at(lead + 8, () -> QuasarSpawner.spawn(CORONA_IGNITE,
                         pos.add(0.0D, 2.0D, 0.0D), FxBudget.Channel.SEQUENCE));
             }
         }
 
         // One whisper from the Other, once the visual beats have landed.
         if (tier >= 1) {
-            at(24, () -> CaptionRenderer.enqueue("eclipse.caption.altar_level_" + lvl,
+            at(lead + 24, () -> CaptionRenderer.enqueue("eclipse.caption.altar_level_" + lvl,
                     0, S2CCaptionPayload.STYLE_WHISPER));
+        }
+
+        // --- W-P-ALTAR2 settle: drifting ash-light + a low falling hum as the burst
+        // particles die away (tier ≥ 1; two afterglow spawns, staggered in height). ---
+        if (tier >= 1) {
+            int settle = lead + SETTLE_BASE_DELAY_TICKS + lvl * SETTLE_PER_LEVEL_TICKS;
+            at(settle, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.5F, 0.6F));
+            if (near) {
+                at(settle, () -> QuasarSpawner.spawn(AFTERGLOW,
+                        pos.add(0.0D, 1.2D, 0.0D), FxBudget.Channel.SEQUENCE));
+                at(settle + 22, () -> QuasarSpawner.spawn(AFTERGLOW,
+                        pos.add(0.0D, 2.4D, 0.0D), FxBudget.Channel.SEQUENCE));
+            }
         }
     }
 
@@ -203,6 +258,33 @@ public final class AltarCeremonyFx {
         return Mth.clamp(t / SURGE_ECHO_TRAVEL_TICKS, 0.0F, 1.0F);
     }
 
+    /**
+     * W-P-ALTAR2: an offering-swallow just ARRIVED at the altar (called by
+     * {@code OfferingSwallowFx} on the arrival tick) — arms the short sky-glow envelope
+     * the L3+ aurora veil reads. Value-agnostic by design: every offering brightens the
+     * sky the same amount (the value tell stays offerer-private).
+     */
+    public static void notifyOfferingSwallowed() {
+        offeringGlowStart = clock;
+    }
+
+    /** Offering sky-glow 0..1 for {@code AltarVeilSky}'s L3+ aurora response. */
+    public static float offeringSkyGlow(float partialTick) {
+        if (offeringGlowStart == Integer.MIN_VALUE) {
+            return 0.0F;
+        }
+        float t = clock + partialTick - offeringGlowStart;
+        if (t < OFFER_GLOW_IN_TICKS) {
+            return smooth(t / OFFER_GLOW_IN_TICKS);
+        }
+        t -= OFFER_GLOW_IN_TICKS;
+        if (t < OFFER_GLOW_OUT_TICKS) {
+            return smooth(1.0F - t / OFFER_GLOW_OUT_TICKS);
+        }
+        offeringGlowStart = Integer.MIN_VALUE;
+        return 0.0F;
+    }
+
     // ------------------------------------------------------------------ tick loop
 
     @SubscribeEvent
@@ -211,6 +293,7 @@ public final class AltarCeremonyFx {
         if (minecraft.level == null) {
             STEPS.clear();
             surgeStart = Integer.MIN_VALUE;
+            offeringGlowStart = Integer.MIN_VALUE;
             return;
         }
         if (minecraft.isPaused()) {
@@ -235,6 +318,7 @@ public final class AltarCeremonyFx {
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         STEPS.clear();
         surgeStart = Integer.MIN_VALUE;
+        offeringGlowStart = Integer.MIN_VALUE;
     }
 
     // ------------------------------------------------------------------ helpers

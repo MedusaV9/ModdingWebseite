@@ -73,6 +73,10 @@ public final class RewardMaterializeOverlay {
 
     private static final float SCALE_START = 2.6F;
     private static final float SCALE_LAND = 1.5F;
+    /** Touchdown settle window: the stack presses 2 px past the land line and pops back. */
+    private static final float TOUCH_SETTLE_TICKS = 5.0F;
+    /** Touchdown scale pop amplitude riding the same settle window. */
+    private static final float TOUCH_POP_SCALE = 0.1F;
 
     /** One queued materialization; {@code calm} is latched at enqueue (replay) or start (reducedFx). */
     private record Grant(ItemStack stack, String label, boolean replay, int salt) {}
@@ -248,6 +252,15 @@ public final class RewardMaterializeOverlay {
         float descent = calm ? 1.0F : easeOutCubic(Mth.clamp(t / inTicks, 0.0F, 1.0F));
         float itemY = calm ? landY : Mth.lerp(descent, startY, landY);
         float scale = calm ? SCALE_LAND : Mth.lerp(descent, SCALE_START, SCALE_LAND);
+
+        // UIFEEL touchdown settle (live variant): the instant the descent ends the stack
+        // presses 2 px past the land line with a +0.1 scale pop, both sine-relaxing over
+        // TOUCH_SETTLE_TICKS — descent = anticipation, flash+press = impact, relax = settle.
+        if (!calm && t >= inTicks && t < inTicks + TOUCH_SETTLE_TICKS) {
+            float settle = Mth.sin((t - inTicks) / TOUCH_SETTLE_TICKS * Mth.PI);
+            itemY += 2.0F * settle;
+            scale += TOUCH_POP_SCALE * settle;
+        }
 
         // Absorb flash at touchdown (live variant only): expanding soft glow + hairline ring.
         if (!calm && t >= inTicks && t <= inTicks + FLASH_TICKS) {

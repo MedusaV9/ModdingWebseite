@@ -17,6 +17,7 @@ import org.joml.Vector4f;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.sound.BorderStaticSound;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
@@ -68,7 +69,9 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *   <li><b>Veil post</b>: the per-tick proximity is fed to
  *       {@link EclipseFxState#setBorderProximity} and this class registers the
  *       {@code eclipse:border_glitch} v2 pipeline row (replacing W1's backward-compat row):
- *       uniforms {@code Proximity, Time, GlitchDir, Seed} (§3.3 frozen). {@code GlitchDir}
+ *       uniforms {@code Proximity, Time, GlitchDir, Seed} (§3.3 frozen) plus the v3
+ *       {@code Kick} pulse (GLITCH team — scanline desync burst on the pushback moment,
+ *       suppressed under {@code reducedFx}). {@code GlitchDir}
  *       is the screen-space (NDC) position of the nearest ring point, projected per frame
  *       through {@link SunTracker#worldToNdc} — the shader masks its tearing/datamosh to a
  *       lens around that point, so the post effect stays glued to the border direction
@@ -123,6 +126,16 @@ public final class BorderFxRenderer {
     /** Nether palette flag on the post {@code Seed} uniform (frozen contract with the shader). */
     private static final float SEED_NETHER_OFFSET = 1000.0F;
 
+    // --- v3 kick pulse (GLITCH team): scanline desync burst on the pushback moment ---
+    /** Kick pulse life in wall-clock ms (~8 ticks; millis so the decay is frame-smooth). */
+    private static final long KICK_PULSE_MILLIS = 420L;
+    /**
+     * Proximity edge that IS the kick moment: {@code SoftBorder} shoves at {@code d ≥ R},
+     * which this side observes as proximity saturating at 1.0 — a rising edge through this
+     * threshold needs no new payload.
+     */
+    private static final float KICK_EDGE = 0.999F;
+
     // --- seeded patch field (regenerated every 6–10 ticks; primitive arrays, no render allocs) ---
     private static final int MAX_QUADS = MAX_CLUSTERS * MAX_QUADS_PER_CLUSTER;
     private static final double[] CLUSTER_ANGLE = new double[MAX_CLUSTERS];
@@ -159,6 +172,10 @@ public final class BorderFxRenderer {
     private static float postSeed;
     /** Scratch for {@link SunTracker#worldToNdc} — feeder-only, overwritten every frame. */
     private static final Vector4f GLITCH_NDC = new Vector4f();
+    /** Wall-clock start of the live kick pulse (safely "long expired" at class load). */
+    private static long kickStartMillis = Long.MIN_VALUE / 2L;
+    /** Previous tick's proximity, for the kick rising-edge detection. */
+    private static float lastProximity;
 
     static {
         // v2 pipeline row — replaces VeilPostController's backward-compat border_glitch row
@@ -255,6 +272,21 @@ public final class BorderFxRenderer {
         }
         pipeline.getUniform("GlitchDir").setVector(glitchX, glitchY);
         pipeline.getUniform("Seed").setFloat(postSeed);
+        pipeline.getUniform("Kick").setFloat(kickValue());
+    }
+
+    /**
+     * Decaying 1→0 kick pulse (quadratic over {@value #KICK_PULSE_MILLIS} ms) for the v3
+     * scanline desync burst. 0 whenever no pulse is live — including always under
+     * {@code reducedFx}, which suppresses the pulse at the trigger site.
+     */
+    private static float kickValue() {
+        float t = (System.currentTimeMillis() - kickStartMillis) / (float) KICK_PULSE_MILLIS;
+        if (t >= 1.0F) {
+            return 0.0F;
+        }
+        float inv = 1.0F - Math.max(t, 0.0F);
+        return inv * inv;
     }
 
     // ------------------------------------------------------------------ per-tick
@@ -269,6 +301,7 @@ public final class BorderFxRenderer {
             BorderStaticSound.update(0.0F);
             ringPoint = null;
             clusterCount = 0;
+            lastProximity = 0.0F;
             resetThrottles(); // world/server change: old gameTime bases would stall the throttles
             return;
         }
@@ -277,6 +310,14 @@ public final class BorderFxRenderer {
         EclipseFxState.setBorderProximity(prox);
         // IDEA-07 §3 whisper hook: the static bed loop tracks the same per-tick proximity.
         BorderStaticSound.update(prox);
+        // v3 kick pulse: SoftBorder's pushback fires exactly at d ≥ R ⇔ proximity 1.0 here,
+        // so a rising edge through KICK_EDGE is the kick moment (covers the teleport
+        // fallback too — it also saturates proximity for a tick). Suppressed wholesale
+        // under reducedFx: the desync burst is the most violent beat of this pass.
+        if (prox >= KICK_EDGE && lastProximity < KICK_EDGE && !EclipseClientConfig.reducedFx()) {
+            kickStartMillis = System.currentTimeMillis();
+        }
+        lastProximity = prox;
         if (prox <= 0.01F) {
             ringPoint = null;
             clusterCount = 0; // zero cost while far: no field, no reseeds, no emitters

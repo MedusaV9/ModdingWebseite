@@ -45,13 +45,27 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * star. Everything renders regardless of the Iris shaderpack state — world-space FX are
  * the Iris fallback (§7).</p>
  *
- * <p>Budgets (§3.5, recounted for C7 with N ≤ 14 arms → 28 perimeter points): shells
- * 5 × 28 core tris = 140, inner hot fans on the 3 middle shells 3 × 28 = 84, fringe 56,
- * arcs ≤ 3 × {@value #ARC_SEGMENTS} × 2 = 30, portal discs 48 → ≤ 358 triangles per rift,
- * still under the frozen 400-tri cap. {@code reducedFx} collapses to ONE shell and no
- * arcs — the pre-C7 geometry and budget exactly. Zero per-frame heap allocations:
- * visibility/perimeter/arc scratch lives in pre-sized static arrays, colors are primitive
- * floats.</p>
+ * <p><b>FXTEAM-RIFT additions</b> (see {@code docs/plans_v3/plans_v5/fxteams/RIFT.md}):
+ * a two-layer parallax VOID WELL behind structure tears (dark fans pushed along the view
+ * direction — the tear reads as a hole, not a poster), a dashed EVENT-HORIZON lensing rim
+ * counter-scrolling against the shells (geometry-faked refraction: the Veil post stack is
+ * Iris-gated and world FX are the Iris fallback, so no fullscreen pass), FORKING edge arcs
+ * (the first two arcs may split a dimmer branch), a periodic PULSE PING ring breathing off
+ * portal stars, an IRIS-OPEN entry flash + radial streamers when a player steps through,
+ * and a per-rift palette ({@code hot/mid/dim} triple from {@link RiftFx.Rift}) that maps
+ * C18's backrooms style to the wax-gold read.</p>
+ *
+ * <p>Budgets (§3.5, FXTEAM-RIFT recount, N ≤ 14 arms → 28 perimeter points): STRUCTURE =
+ * shells 5 × 28 = 140 + inner hot fans 3 × 28 = 84 + fringe 56 + arcs 30 + forks
+ * ≤ 2 × {@value #FORK_SEGMENTS} × 2 = 12 + lensing 28 + void well 2 × {@value
+ * #VOID_SEGMENTS} = 24 → 374. PORTAL/BACKROOMS = 140 + inner fan (center shell only) 28 +
+ * fringe 56 + arcs 30 + forks 12 + lensing 28 + discs 48 = 342 steady, + ping ring 32 ⊕
+ * entry flash 24 (mutually exclusive by construction) → ≤ 374. Both stay under the frozen
+ * 400-tri cap. {@code reducedFx} collapses to ONE shell, no arcs/forks/lensing/void/ping —
+ * the pre-C7 geometry and budget exactly — keeping only the 12-tri iris fan of the entry
+ * flash (it is gameplay feedback, not candy). Zero per-frame heap allocations:
+ * visibility/perimeter/arc/fork scratch lives in pre-sized static arrays, colors are
+ * primitive floats.</p>
  *
  * <p>Render stage: {@link #STAGE} ({@code AFTER_PARTICLES}). If depth-sorting artifacts
  * appear under Sodium, swap the constant to {@code AFTER_TRANSLUCENT_BLOCKS} — both fire
@@ -108,6 +122,53 @@ public final class RiftRenderer {
     /** Arcs strobe: an arc only draws while its per-frame gate hash exceeds this. */
     private static final float ARC_GATE = 0.45F;
 
+    // --- FXTEAM-RIFT: forking arcs ---
+    /** Only the first N arcs may fork (budget: ≤ 2 forks × 3 segs × 2 tris = 12). */
+    private static final int FORK_ARCS = 2;
+    private static final int FORK_SEGMENTS = 3;
+    /** A fork only appears while the parent arc's gate hash exceeds this (rarer than arcs). */
+    private static final float FORK_GATE = 0.72F;
+    /** Main-arc point index the fork branches from (fraction 0.4 of the arc). */
+    private static final int FORK_BASE_INDEX = 2;
+    /** Angular divergence of the fork tip away from the parent arc (radians). */
+    private static final float FORK_SPREAD = 0.34F;
+
+    // --- FXTEAM-RIFT: void depth well (STRUCTURE tears) ---
+    /** Fan tessellation of one void layer (12 tris each; 2 layers = 24). */
+    private static final int VOID_SEGMENTS = 12;
+    /** Layer radii as fractions of the tear radius (inside the star's valley floor). */
+    private static final float VOID_SCALE_0 = 0.34F;
+    private static final float VOID_SCALE_1 = 0.21F;
+    /** View-direction push of the two layers, scaled by tear width (parallax depth). */
+    private static final float VOID_PUSH_0 = 0.35F;
+    private static final float VOID_PUSH_1 = 0.80F;
+
+    // --- FXTEAM-RIFT: event-horizon lensing rim ---
+    /** Radial reach of the lensing dashes past the fringe, as a fraction of the width. */
+    private static final float LENS_WIDTH_FRACTION = 0.075F;
+    /**
+     * Counter-scroll of the lensing brightness pattern, in whole cycles per 100 s so the
+     * {@code swirlSeconds} wrap lands on a full revolution (the EVAL-POL-F #7 arc-drift
+     * lesson) — negative: the pattern smears AGAINST the shell spin, the refraction tell.
+     */
+    private static final float LENS_SCROLL_CYCLES = -40.0F;
+
+    // --- FXTEAM-RIFT: portal pulse ping ---
+    private static final int PING_SEGMENTS = 16;
+    /** Ping cadence and visible ring lifetime (ticks). */
+    private static final int PING_PERIOD_TICKS = 90;
+    private static final int PING_TICKS = 22;
+    /** Ring travel past the star rim, as a fraction of the tear radius. */
+    private static final float PING_REACH = 0.85F;
+    /** Ring radial thickness as a fraction of the tear width. */
+    private static final float PING_THICKNESS = 0.05F;
+
+    // --- FXTEAM-RIFT: iris-open entry flash ---
+    private static final int FLASH_SEGMENTS = 12;
+    private static final int FLASH_STREAMERS = 6;
+    /** Streamer half-width as a fraction of the tear width. */
+    private static final float STREAMER_WIDTH_FRACTION = 0.014F;
+
     // Per-frame visibility scratch (filled by the cull loop, read by both passes).
     private static final RiftFx.Rift[] VIS_RIFT = new RiftFx.Rift[MAX_VISIBLE];
     private static final float[] VIS_X = new float[MAX_VISIBLE];
@@ -128,6 +189,10 @@ public final class RiftRenderer {
     private static final float[] ARC_X = new float[ARC_SEGMENTS + 1];
     private static final float[] ARC_Y = new float[ARC_SEGMENTS + 1];
     private static final float[] ARC_Z = new float[ARC_SEGMENTS + 1];
+    /** Fork-branch polyline scratch (base point + {@value #FORK_SEGMENTS} steps). */
+    private static final float[] FORK_X = new float[FORK_SEGMENTS + 1];
+    private static final float[] FORK_Y = new float[FORK_SEGMENTS + 1];
+    private static final float[] FORK_Z = new float[FORK_SEGMENTS + 1];
 
     private RiftRenderer() {}
 
@@ -182,12 +247,12 @@ public final class RiftRenderer {
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(false);
 
-        // Pass A (alpha blend): dark edge fringe (center shell) + portal void disc.
+        // Pass A (alpha blend): void-depth well + dark edge fringe + portal void disc.
         BufferBuilder alpha = Tesselator.getInstance()
                 .begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         for (int v = 0; v < visible; v++) {
             buildAlpha(VIS_RIFT[v], alpha, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v],
-                    swirlSeconds, flickerFrame);
+                    swirlSeconds, flickerFrame, reduced);
         }
         MeshData alphaMesh = alpha.build();
         if (alphaMesh != null) {
@@ -197,12 +262,12 @@ public final class RiftRenderer {
             BufferUploader.drawWithShader(alphaMesh);
         }
 
-        // Pass B (additive, on top): shell stack + edge arcs + portal swirl disc.
+        // Pass B (additive, on top): shells + arcs/forks + lensing + ping/flash + swirl disc.
         BufferBuilder additive = Tesselator.getInstance()
                 .begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         for (int v = 0; v < visible; v++) {
             buildAdditive(VIS_RIFT[v], additive, VIS_X[v], VIS_Y[v], VIS_Z[v], VIS_OPEN[v],
-                    swirlSeconds, flickerFrame, reduced);
+                    swirlSeconds, flickerFrame, reduced, now);
         }
         MeshData additiveMesh = additive.build();
         if (additiveMesh != null) {
@@ -255,14 +320,25 @@ public final class RiftRenderer {
         }
     }
 
-    /** Alpha pass: dark edge fringe extruded outward (center shell) + the PORTAL void ellipse. */
+    /**
+     * Alpha pass: the STRUCTURE void-depth well (FXTEAM-RIFT), the dark edge fringe
+     * extruded outward (center shell), and the PORTAL void ellipse. All darks read from
+     * the rift's {@code dim} palette so backrooms tears go umber instead of violet.
+     */
     private static void buildAlpha(RiftFx.Rift rift, BufferBuilder alpha,
-            float cx, float cy, float cz, float open, float swirlSeconds, int flickerFrame) {
+            float cx, float cy, float cz, float open, float swirlSeconds, int flickerFrame,
+            boolean reduced) {
+        if (!reduced && !rift.portalLike) {
+            buildVoidWell(rift, alpha, cx, cy, cz, open);
+        }
         fillPerimeter(rift, cx, cy, cz, open, flickerFrame,
                 shellRotation(CENTER_SHELL, swirlSeconds), 1.0F);
         int perim = rift.armCount * 2;
         float fringe = rift.width * FRINGE_FRACTION * open;
         float fringeAlpha = 0.78F * open;
+        float outR = rift.dimR * 0.5F;
+        float outG = rift.dimG * 0.5F;
+        float outB = rift.dimB * 0.5F;
         for (int k = 0; k < perim; k++) {
             int k1 = k + 1 == perim ? 0 : k + 1;
             float ox0 = PERIM_X[k] + OUT_X[k] * fringe;
@@ -271,54 +347,112 @@ public final class RiftRenderer {
             float ox1 = PERIM_X[k1] + OUT_X[k1] * fringe;
             float oy1 = PERIM_Y[k1] + OUT_Y[k1] * fringe;
             float oz1 = PERIM_Z[k1] + OUT_Z[k1] * fringe;
-            // Quad as two triangles: inner edge dark violet-black, outer edge fully transparent.
-            alpha.addVertex(PERIM_X[k], PERIM_Y[k], PERIM_Z[k]).setColor(0.045F, 0.0F, 0.10F, fringeAlpha);
-            alpha.addVertex(PERIM_X[k1], PERIM_Y[k1], PERIM_Z[k1]).setColor(0.045F, 0.0F, 0.10F, fringeAlpha);
-            alpha.addVertex(ox1, oy1, oz1).setColor(0.02F, 0.0F, 0.05F, 0.0F);
-            alpha.addVertex(PERIM_X[k], PERIM_Y[k], PERIM_Z[k]).setColor(0.045F, 0.0F, 0.10F, fringeAlpha);
-            alpha.addVertex(ox1, oy1, oz1).setColor(0.02F, 0.0F, 0.05F, 0.0F);
-            alpha.addVertex(ox0, oy0, oz0).setColor(0.02F, 0.0F, 0.05F, 0.0F);
+            // Quad as two triangles: inner edge dark void tone, outer edge fully transparent.
+            alpha.addVertex(PERIM_X[k], PERIM_Y[k], PERIM_Z[k]).setColor(rift.dimR, rift.dimG, rift.dimB, fringeAlpha);
+            alpha.addVertex(PERIM_X[k1], PERIM_Y[k1], PERIM_Z[k1]).setColor(rift.dimR, rift.dimG, rift.dimB, fringeAlpha);
+            alpha.addVertex(ox1, oy1, oz1).setColor(outR, outG, outB, 0.0F);
+            alpha.addVertex(PERIM_X[k], PERIM_Y[k], PERIM_Z[k]).setColor(rift.dimR, rift.dimG, rift.dimB, fringeAlpha);
+            alpha.addVertex(ox1, oy1, oz1).setColor(outR, outG, outB, 0.0F);
+            alpha.addVertex(ox0, oy0, oz0).setColor(outR, outG, outB, 0.0F);
         }
 
-        if (rift.style != RiftFx.STYLE_PORTAL) {
+        if (!rift.portalLike) {
             return;
         }
         // Void disc: near-black fan, edge brightness scrolling one way (the swirl disc in
         // the additive pass scrolls the other way — the counter-scroll sells the surface).
-        float rx = rift.width * PORTAL_RX * open;
-        float ry = rift.width * PORTAL_RY * open;
+        // FXTEAM-RIFT: the disc breathes with the same eased sine as the hot core.
+        float breathe = breathe(rift, swirlSeconds);
+        float rx = rift.width * PORTAL_RX * open * breathe;
+        float ry = rift.width * PORTAL_RY * open * breathe;
+        float edgeR = rift.dimR + (rift.midR - rift.dimR) * 0.10F;
+        float edgeG = rift.dimG + (rift.midG - rift.dimG) * 0.10F;
+        float edgeB = rift.dimB + (rift.midB - rift.dimB) * 0.10F;
         float step = Mth.TWO_PI / DISC_SEGMENTS;
         for (int s = 0; s < DISC_SEGMENTS; s++) {
             float a0 = s * step;
             float a1 = a0 + step;
             float pulse0 = 0.70F + 0.30F * Mth.sin(a0 * 4.0F - swirlSeconds * 1.8F);
             float pulse1 = 0.70F + 0.30F * Mth.sin(a1 * 4.0F - swirlSeconds * 1.8F);
-            alpha.addVertex(cx, cy, cz).setColor(0.03F, 0.008F, 0.075F, 0.88F * open);
+            alpha.addVertex(cx, cy, cz).setColor(rift.dimR * 0.7F, rift.dimG * 0.7F, rift.dimB * 0.75F, 0.88F * open);
             alpha.addVertex(ellipseX(rift, cx, a0, rx, ry), ellipseY(rift, cy, a0, rx, ry),
                     ellipseZ(rift, cz, a0, rx, ry))
-                    .setColor(0.10F * pulse0, 0.03F * pulse0, 0.16F * pulse0, 0.75F * open);
+                    .setColor(edgeR * pulse0, edgeG * pulse0, edgeB * pulse0, 0.75F * open);
             alpha.addVertex(ellipseX(rift, cx, a1, rx, ry), ellipseY(rift, cy, a1, rx, ry),
                     ellipseZ(rift, cz, a1, rx, ry))
-                    .setColor(0.10F * pulse1, 0.03F * pulse1, 0.16F * pulse1, 0.75F * open);
+                    .setColor(edgeR * pulse1, edgeG * pulse1, edgeB * pulse1, 0.75F * open);
         }
     }
 
     /**
-     * Additive pass: the volumetric shell stack (outer violet core fan per shell, inner
-     * near-white hot fan on the middle shells), the strobing edge lightning arcs, and the
-     * PORTAL swirl disc. {@code reducedFx} draws the center shell only and skips the arcs
-     * — exactly the pre-C7 geometry.
+     * FXTEAM-RIFT void-depth well (STRUCTURE tears, full quality only): two dark fans
+     * inside the star's valley floor, each pushed along the camera→rift view direction
+     * (the portal swirl's {@value #PARALLAX_BLOCKS}-block parallax trick, deeper) and the
+     * deeper layer darker — walking past the tear makes the interior visibly recede.
+     * 2 × {@value #VOID_SEGMENTS} = 24 tris.
+     */
+    private static void buildVoidWell(RiftFx.Rift rift, BufferBuilder alpha,
+            float cx, float cy, float cz, float open) {
+        float len = (float) Math.sqrt((double) cx * cx + (double) cy * cy + (double) cz * cz);
+        if (len < 1.0E-3F) {
+            return; // camera inside the tear: no meaningful parallax direction
+        }
+        float pushScale = Mth.clamp(rift.width * 0.10F, 0.25F, 1.4F);
+        float step = Mth.TWO_PI / VOID_SEGMENTS;
+        for (int layer = 0; layer < 2; layer++) {
+            float scale = layer == 0 ? VOID_SCALE_0 : VOID_SCALE_1;
+            float push = (layer == 0 ? VOID_PUSH_0 : VOID_PUSH_1) * pushScale / len;
+            float wx = cx + cx * push;
+            float wy = cy + cy * push;
+            float wz = cz + cz * push;
+            float radius = rift.width * 0.5F * open * scale;
+            float coreAlpha = (layer == 0 ? 0.80F : 0.92F) * open;
+            float r = rift.dimR * 0.6F;
+            float g = rift.dimG * 0.6F;
+            float b = rift.dimB * 0.6F;
+            for (int s = 0; s < VOID_SEGMENTS; s++) {
+                float a0 = s * step;
+                float a1 = a0 + step;
+                alpha.addVertex(wx, wy, wz).setColor(r, g, b, coreAlpha);
+                alpha.addVertex(ellipseX(rift, wx, a0, radius, radius),
+                        ellipseY(rift, wy, a0, radius, radius),
+                        ellipseZ(rift, wz, a0, radius, radius)).setColor(r, g, b, 0.0F);
+                alpha.addVertex(ellipseX(rift, wx, a1, radius, radius),
+                        ellipseY(rift, wy, a1, radius, radius),
+                        ellipseZ(rift, wz, a1, radius, radius)).setColor(r, g, b, 0.0F);
+            }
+        }
+    }
+
+    /** Shared eased breath of one rift (hot core + portal discs), phase-salted by seed. */
+    private static float breathe(RiftFx.Rift rift, float swirlSeconds) {
+        return 0.92F + 0.08F * Mth.sin(swirlSeconds * 2.6F + (rift.seed & 31) * 0.41F);
+    }
+
+    /**
+     * Additive pass: the volumetric shell stack (outer core fan per shell in the rift's
+     * {@code mid} tone, inner {@code hot} fan — 3 middle shells for STRUCTURE, center shell
+     * only for portal-like styles whose center hides behind the discs anyway), the strobing
+     * edge lightning arcs (+forks), the lensing rim, the portal pulse-ping / entry flash,
+     * and the PORTAL swirl disc. {@code reducedFx} draws the center shell only, skips
+     * arcs/forks/lensing/ping — exactly the pre-C7 geometry — and keeps the iris fan of the
+     * entry flash (gameplay feedback).
      */
     private static void buildAdditive(RiftFx.Rift rift, BufferBuilder additive,
             float cx, float cy, float cz, float open, float swirlSeconds, int flickerFrame,
-            boolean reduced) {
+            boolean reduced, float now) {
         int perim = rift.armCount * 2;
         // Per-rift eased breath (VFXPOLISH-3): the hot core swells ±8% on a slow sine —
         // phase from the seed's low bits so neighbouring tears never pulse in lockstep.
-        float breathe = 0.92F + 0.08F * Mth.sin(swirlSeconds * 2.6F + (rift.seed & 31) * 0.41F);
+        float breathe = breathe(rift, swirlSeconds);
+        // Inner-fan edge tone: hot pulled slightly toward the mid saturation.
+        float innR = rift.midR + (rift.hotR - rift.midR) * 0.55F;
+        float innG = rift.midG + (rift.hotG - rift.midG) * 0.55F;
+        float innB = rift.midB + (rift.hotB - rift.midB) * 0.55F;
 
         int firstShell = reduced ? CENTER_SHELL : 0;
         int lastShell = reduced ? CENTER_SHELL : SHELL_COUNT - 1;
+        int innerShells = rift.portalLike ? 0 : 1;
         for (int shell = firstShell; shell <= lastShell; shell++) {
             int fromCenter = Math.abs(shell - CENTER_SHELL);
             float depth = reduced ? 0.0F
@@ -333,36 +467,50 @@ public final class RiftRenderer {
             float coreAlpha = 0.75F * open * breathe * fade;
             for (int k = 0; k < perim; k++) {
                 int k1 = k + 1 == perim ? 0 : k + 1;
-                additive.addVertex(cx + dx, cy + dy, cz + dz).setColor(0.97F, 0.90F, 1.0F, coreAlpha);
+                additive.addVertex(cx + dx, cy + dy, cz + dz)
+                        .setColor(rift.hotR * 0.97F, rift.hotG * 0.93F, rift.hotB, coreAlpha);
                 additive.addVertex(PERIM_X[k] + dx, PERIM_Y[k] + dy, PERIM_Z[k] + dz)
-                        .setColor(0.62F, 0.30F, 0.98F, 0.0F);
+                        .setColor(rift.midR, rift.midG, rift.midB, 0.0F);
                 additive.addVertex(PERIM_X[k1] + dx, PERIM_Y[k1] + dy, PERIM_Z[k1] + dz)
-                        .setColor(0.62F, 0.30F, 0.98F, 0.0F);
+                        .setColor(rift.midR, rift.midG, rift.midB, 0.0F);
             }
-            if (fromCenter <= 1) {
+            if (fromCenter <= innerShells) {
                 float innerAlpha = 0.95F * open * fade;
                 for (int k = 0; k < perim; k++) {
                     int k1 = k + 1 == perim ? 0 : k + 1;
-                    additive.addVertex(cx + dx, cy + dy, cz + dz).setColor(1.0F, 0.98F, 1.0F, innerAlpha);
+                    additive.addVertex(cx + dx, cy + dy, cz + dz)
+                            .setColor(rift.hotR, rift.hotG, rift.hotB, innerAlpha);
                     additive.addVertex(lerpToCenter(PERIM_X[k], cx) + dx, lerpToCenter(PERIM_Y[k], cy) + dy,
-                            lerpToCenter(PERIM_Z[k], cz) + dz).setColor(0.85F, 0.55F, 1.0F, 0.25F * open * fade);
+                            lerpToCenter(PERIM_Z[k], cz) + dz).setColor(innR, innG, innB, 0.25F * open * fade);
                     additive.addVertex(lerpToCenter(PERIM_X[k1], cx) + dx, lerpToCenter(PERIM_Y[k1], cy) + dy,
-                            lerpToCenter(PERIM_Z[k1], cz) + dz).setColor(0.85F, 0.55F, 1.0F, 0.25F * open * fade);
+                            lerpToCenter(PERIM_Z[k1], cz) + dz).setColor(innR, innG, innB, 0.25F * open * fade);
                 }
             }
         }
 
         if (!reduced) {
             buildArcs(rift, additive, cx, cy, cz, open, flickerFrame, swirlSeconds);
+            buildLensing(rift, additive, cx, cy, cz, open, flickerFrame, swirlSeconds);
         }
 
-        if (rift.style != RiftFx.STYLE_PORTAL) {
+        float flashAge = now - rift.entryFlashTick;
+        boolean flashing = flashAge >= 0.0F && flashAge < RiftFx.Rift.ENTRY_FLASH_TICKS;
+        if (rift.portalLike) {
+            if (flashing) {
+                buildEntryFlash(rift, additive, cx, cy, cz, open,
+                        flashAge / RiftFx.Rift.ENTRY_FLASH_TICKS, reduced);
+            } else if (!reduced) {
+                buildPing(rift, additive, cx, cy, cz, open, now);
+            }
+        }
+
+        if (!rift.portalLike) {
             return;
         }
         // Swirl disc: scaled copy pushed along the view direction (parallax depth fake),
-        // brightness scrolling against the void-edge pulse.
-        float rx = rift.width * PORTAL_RX * open * SWIRL_SCALE;
-        float ry = rift.width * PORTAL_RY * open * SWIRL_SCALE;
+        // brightness scrolling against the void-edge pulse; breathes with the core.
+        float rx = rift.width * PORTAL_RX * open * SWIRL_SCALE * breathe;
+        float ry = rift.width * PORTAL_RY * open * SWIRL_SCALE * breathe;
         float len = (float) Math.sqrt((double) cx * cx + (double) cy * cy + (double) cz * cz);
         float push = len > 1.0E-3F ? PARALLAX_BLOCKS / len : 0.0F;
         float sx = cx + cx * push;
@@ -374,11 +522,14 @@ public final class RiftRenderer {
             float a1 = a0 + step;
             float swirl0 = 0.5F + 0.5F * Mth.sin(a0 * 3.0F + swirlSeconds * 2.4F);
             float swirl1 = 0.5F + 0.5F * Mth.sin(a1 * 3.0F + swirlSeconds * 2.4F);
-            additive.addVertex(sx, sy, sz).setColor(0.42F, 0.20F, 0.80F, 0.16F * open);
+            additive.addVertex(sx, sy, sz)
+                    .setColor(rift.midR * 0.70F, rift.midG * 0.70F, rift.midB * 0.82F, 0.16F * open);
             additive.addVertex(ellipseX(rift, sx, a0, rx, ry), ellipseY(rift, sy, a0, rx, ry),
-                    ellipseZ(rift, sz, a0, rx, ry)).setColor(0.55F, 0.30F, 0.95F, 0.38F * open * swirl0);
+                    ellipseZ(rift, sz, a0, rx, ry))
+                    .setColor(rift.midR * 0.90F, rift.midG * 0.95F, rift.midB * 0.97F, 0.38F * open * swirl0);
             additive.addVertex(ellipseX(rift, sx, a1, rx, ry), ellipseY(rift, sy, a1, rx, ry),
-                    ellipseZ(rift, sz, a1, rx, ry)).setColor(0.55F, 0.30F, 0.95F, 0.38F * open * swirl1);
+                    ellipseZ(rift, sz, a1, rx, ry))
+                    .setColor(rift.midR * 0.90F, rift.midG * 0.95F, rift.midB * 0.97F, 0.38F * open * swirl1);
         }
     }
 
@@ -397,6 +548,11 @@ public final class RiftRenderer {
      *       normal, so arcs stay readable from directly below a flat STRUCTURE rift, where
      *       normal-extruded quads projected edge-on and near-invisible.</li>
      * </ul>
+     *
+     * <p>FXTEAM-RIFT: the first {@value #FORK_ARCS} arcs FORK while their gate hash exceeds
+     * {@value #FORK_GATE} — a thinner branch peels off at 40 % of the parent and diverges
+     * {@value #FORK_SPREAD} rad past the tip (side picked per flicker frame). Colors come
+     * from the rift's {@code mid→hot} palette so backrooms arcs strike gold.</p>
      */
     private static void buildArcs(RiftFx.Rift rift, BufferBuilder additive,
             float cx, float cy, float cz, float open, int flickerFrame, float swirlSeconds) {
@@ -424,50 +580,246 @@ public final class RiftRenderer {
                 ARC_Z[i] = cz + (rift.tz * cos + rift.bz * sin) * radius + rift.nz * wobble;
             }
             float halfWidth = rift.width * ARC_WIDTH_FRACTION;
+            float baseR = rift.midR + (rift.hotR - rift.midR) * 0.72F;
+            float baseG = rift.midG + (rift.hotG - rift.midG) * 0.72F;
+            float baseB = rift.midB + (rift.hotB - rift.midB) * 0.72F;
+            float tipR = rift.midR + (rift.hotR - rift.midR) * 0.88F;
+            float tipG = rift.midG + (rift.hotG - rift.midG) * 0.88F;
+            float tipB = rift.midB + (rift.hotB - rift.midB) * 0.88F;
             for (int i = 0; i < ARC_SEGMENTS; i++) {
                 float taper0 = 1.0F - i / (float) ARC_SEGMENTS;
                 float taper1 = 1.0F - (i + 1) / (float) ARC_SEGMENTS;
-                float w0 = halfWidth * (0.4F + 0.6F * taper0);
-                float w1 = halfWidth * (0.4F + 0.6F * taper1);
-                float alpha0 = 0.85F * open * gate * taper0;
-                float alpha1 = 0.85F * open * gate * taper1;
-                // Camera-facing side vector: segment × toCamera (camera at the origin in
-                // camera-relative space, so the segment midpoint IS the view direction).
-                float dxs = ARC_X[i + 1] - ARC_X[i];
-                float dys = ARC_Y[i + 1] - ARC_Y[i];
-                float dzs = ARC_Z[i + 1] - ARC_Z[i];
-                float mx = (ARC_X[i] + ARC_X[i + 1]) * 0.5F;
-                float my = (ARC_Y[i] + ARC_Y[i + 1]) * 0.5F;
-                float mz = (ARC_Z[i] + ARC_Z[i + 1]) * 0.5F;
-                float sx = dys * mz - dzs * my;
-                float sy = dzs * mx - dxs * mz;
-                float sz = dxs * my - dys * mx;
-                float sLen = Mth.sqrt(sx * sx + sy * sy + sz * sz);
-                if (sLen < 1.0E-4F) {
-                    continue;
-                }
-                float ux = sx / sLen;
-                float uy = sy / sLen;
-                float uz = sz / sLen;
-                float ax0 = ARC_X[i] + ux * w0;
-                float ay0 = ARC_Y[i] + uy * w0;
-                float az0 = ARC_Z[i] + uz * w0;
-                float bx0 = ARC_X[i] - ux * w0;
-                float by0 = ARC_Y[i] - uy * w0;
-                float bz0 = ARC_Z[i] - uz * w0;
-                float ax1 = ARC_X[i + 1] + ux * w1;
-                float ay1 = ARC_Y[i + 1] + uy * w1;
-                float az1 = ARC_Z[i + 1] + uz * w1;
-                float bx1 = ARC_X[i + 1] - ux * w1;
-                float by1 = ARC_Y[i + 1] - uy * w1;
-                float bz1 = ARC_Z[i + 1] - uz * w1;
-                additive.addVertex(ax0, ay0, az0).setColor(0.88F, 0.72F, 1.0F, alpha0);
-                additive.addVertex(bx0, by0, bz0).setColor(0.88F, 0.72F, 1.0F, alpha0);
-                additive.addVertex(bx1, by1, bz1).setColor(0.95F, 0.85F, 1.0F, alpha1);
-                additive.addVertex(ax0, ay0, az0).setColor(0.88F, 0.72F, 1.0F, alpha0);
-                additive.addVertex(bx1, by1, bz1).setColor(0.95F, 0.85F, 1.0F, alpha1);
-                additive.addVertex(ax1, ay1, az1).setColor(0.95F, 0.85F, 1.0F, alpha1);
+                emitBillboardSegment(additive,
+                        ARC_X[i], ARC_Y[i], ARC_Z[i], ARC_X[i + 1], ARC_Y[i + 1], ARC_Z[i + 1],
+                        halfWidth * (0.4F + 0.6F * taper0), halfWidth * (0.4F + 0.6F * taper1),
+                        baseR, baseG, baseB, 0.85F * open * gate * taper0,
+                        tipR, tipG, tipB, 0.85F * open * gate * taper1);
             }
+
+            // FXTEAM-RIFT fork: the first two arcs may SPLIT — a dimmer, thinner branch
+            // peels off at 40 % of the arc and diverges past the tip. Fork presence rides
+            // the same gate hash above a higher threshold, so forks strobe rarer than arcs.
+            if (a < FORK_ARCS && gate > FORK_GATE) {
+                float forkSign = hash01(rift.seed, 71 + a * 19, flickerFrame) > 0.5F ? 1.0F : -1.0F;
+                FORK_X[0] = ARC_X[FORK_BASE_INDEX];
+                FORK_Y[0] = ARC_Y[FORK_BASE_INDEX];
+                FORK_Z[0] = ARC_Z[FORK_BASE_INDEX];
+                float baseF = FORK_BASE_INDEX / (float) ARC_SEGMENTS;
+                for (int j = 1; j <= FORK_SEGMENTS; j++) {
+                    float f = baseF + (1.15F - baseF) * (j / (float) FORK_SEGMENTS);
+                    float angle = baseAngle
+                            + (hash01(rift.seed, a * 31 + j * 3 + 1, flickerFrame) - 0.5F) * 0.55F * f
+                            + forkSign * FORK_SPREAD * (f - baseF);
+                    float radius = r0 * (1.0F + ARC_LENGTH_FRACTION * f);
+                    float wobble = (hash01(rift.seed, a * 29 + j * 7 + 4, flickerFrame) - 0.5F)
+                            * rift.width * 0.08F * f;
+                    float cos = Mth.cos(angle);
+                    float sin = Mth.sin(angle);
+                    FORK_X[j] = cx + (rift.tx * cos + rift.bx * sin) * radius + rift.nx * wobble;
+                    FORK_Y[j] = cy + (rift.ty * cos + rift.by * sin) * radius + rift.ny * wobble;
+                    FORK_Z[j] = cz + (rift.tz * cos + rift.bz * sin) * radius + rift.nz * wobble;
+                }
+                float forkAlpha = 0.60F * open * gate;
+                for (int j = 0; j < FORK_SEGMENTS; j++) {
+                    float taper0 = 1.0F - j / (float) FORK_SEGMENTS;
+                    float taper1 = 1.0F - (j + 1) / (float) FORK_SEGMENTS;
+                    emitBillboardSegment(additive,
+                            FORK_X[j], FORK_Y[j], FORK_Z[j], FORK_X[j + 1], FORK_Y[j + 1], FORK_Z[j + 1],
+                            halfWidth * 0.5F * (0.4F + 0.6F * taper0),
+                            halfWidth * 0.5F * (0.4F + 0.6F * taper1),
+                            baseR, baseG, baseB, forkAlpha * taper0,
+                            tipR, tipG, tipB, forkAlpha * taper1);
+                }
+            }
+        }
+    }
+
+    /**
+     * One camera-extruded ribbon segment (arcs, forks, entry streamers): the side vector
+     * is segment × toCamera — the camera sits at the origin in camera-relative space, so
+     * the segment midpoint IS the view direction (StormWallRenderer.emitRibbon pattern).
+     * Degenerate view-aligned segments emit nothing.
+     */
+    private static void emitBillboardSegment(BufferBuilder builder,
+            float x0, float y0, float z0, float x1, float y1, float z1, float w0, float w1,
+            float r0, float g0, float b0, float alpha0, float r1, float g1, float b1, float alpha1) {
+        float dxs = x1 - x0;
+        float dys = y1 - y0;
+        float dzs = z1 - z0;
+        float mx = (x0 + x1) * 0.5F;
+        float my = (y0 + y1) * 0.5F;
+        float mz = (z0 + z1) * 0.5F;
+        float sx = dys * mz - dzs * my;
+        float sy = dzs * mx - dxs * mz;
+        float sz = dxs * my - dys * mx;
+        float sLen = Mth.sqrt(sx * sx + sy * sy + sz * sz);
+        if (sLen < 1.0E-4F) {
+            return;
+        }
+        float ux = sx / sLen;
+        float uy = sy / sLen;
+        float uz = sz / sLen;
+        float ax0 = x0 + ux * w0;
+        float ay0 = y0 + uy * w0;
+        float az0 = z0 + uz * w0;
+        float bx0 = x0 - ux * w0;
+        float by0 = y0 - uy * w0;
+        float bz0 = z0 - uz * w0;
+        float ax1 = x1 + ux * w1;
+        float ay1 = y1 + uy * w1;
+        float az1 = z1 + uz * w1;
+        float bx1 = x1 - ux * w1;
+        float by1 = y1 - uy * w1;
+        float bz1 = z1 - uz * w1;
+        builder.addVertex(ax0, ay0, az0).setColor(r0, g0, b0, alpha0);
+        builder.addVertex(bx0, by0, bz0).setColor(r0, g0, b0, alpha0);
+        builder.addVertex(bx1, by1, bz1).setColor(r1, g1, b1, alpha1);
+        builder.addVertex(ax0, ay0, az0).setColor(r0, g0, b0, alpha0);
+        builder.addVertex(bx1, by1, bz1).setColor(r1, g1, b1, alpha1);
+        builder.addVertex(ax1, ay1, az1).setColor(r1, g1, b1, alpha1);
+    }
+
+    /**
+     * FXTEAM-RIFT event-horizon lensing rim: a DASHED band of quads just past the fringe
+     * whose brightness pattern scrolls at {@value #LENS_SCROLL}× the shell base rotation —
+     * light appearing to smear around the rim against the spin is the classic refraction
+     * tell, faked in geometry because the Veil post stack is Iris-gated (§7). Every other
+     * perimeter pair gets a quad → 14 quads = 28 tris; skipped under {@code reducedFx}.
+     */
+    private static void buildLensing(RiftFx.Rift rift, BufferBuilder additive,
+            float cx, float cy, float cz, float open, int flickerFrame, float swirlSeconds) {
+        fillPerimeter(rift, cx, cy, cz, open, flickerFrame,
+                shellRotation(CENTER_SHELL, swirlSeconds), 1.0F);
+        int perim = rift.armCount * 2;
+        float inset = rift.width * FRINGE_FRACTION * open * 0.15F;
+        float reach = inset + rift.width * LENS_WIDTH_FRACTION * open;
+        float scroll = swirlSeconds * (Mth.TWO_PI / 100.0F) * LENS_SCROLL_CYCLES;
+        float r = rift.midR + (rift.hotR - rift.midR) * 0.35F;
+        float g = rift.midG + (rift.hotG - rift.midG) * 0.35F;
+        float b = rift.midB + (rift.hotB - rift.midB) * 0.35F;
+        for (int k = 0; k < perim; k += 2) {
+            int k1 = k + 1 == perim ? 0 : k + 1;
+            float bright0 = 0.55F + 0.45F * Mth.sin(k * 0.9F + scroll);
+            float bright1 = 0.55F + 0.45F * Mth.sin(k1 * 0.9F + scroll);
+            float a0 = 0.34F * open * bright0;
+            float a1 = 0.34F * open * bright1;
+            float ix0 = PERIM_X[k] + OUT_X[k] * inset;
+            float iy0 = PERIM_Y[k] + OUT_Y[k] * inset;
+            float iz0 = PERIM_Z[k] + OUT_Z[k] * inset;
+            float ix1 = PERIM_X[k1] + OUT_X[k1] * inset;
+            float iy1 = PERIM_Y[k1] + OUT_Y[k1] * inset;
+            float iz1 = PERIM_Z[k1] + OUT_Z[k1] * inset;
+            float ox0 = PERIM_X[k] + OUT_X[k] * reach;
+            float oy0 = PERIM_Y[k] + OUT_Y[k] * reach;
+            float oz0 = PERIM_Z[k] + OUT_Z[k] * reach;
+            float ox1 = PERIM_X[k1] + OUT_X[k1] * reach;
+            float oy1 = PERIM_Y[k1] + OUT_Y[k1] * reach;
+            float oz1 = PERIM_Z[k1] + OUT_Z[k1] * reach;
+            additive.addVertex(ix0, iy0, iz0).setColor(r, g, b, a0);
+            additive.addVertex(ix1, iy1, iz1).setColor(r, g, b, a1);
+            additive.addVertex(ox1, oy1, oz1).setColor(r, g, b, 0.0F);
+            additive.addVertex(ix0, iy0, iz0).setColor(r, g, b, a0);
+            additive.addVertex(ox1, oy1, oz1).setColor(r, g, b, 0.0F);
+            additive.addVertex(ox0, oy0, oz0).setColor(r, g, b, 0.0F);
+        }
+    }
+
+    /**
+     * FXTEAM-RIFT portal pulse ping: every {@value #PING_PERIOD_TICKS} ticks (seed-offset
+     * so neighbouring portals never ping together) one thin ring detaches from the star rim
+     * and expands {@value #PING_REACH}× the radius outward over {@value #PING_TICKS} ticks,
+     * fading as it travels — the idle "sonar breath" of a live portal.
+     * {@value #PING_SEGMENTS} quads = 32 tris, mutually exclusive with the entry flash.
+     */
+    private static void buildPing(RiftFx.Rift rift, BufferBuilder additive,
+            float cx, float cy, float cz, float open, float now) {
+        float phase = (now - rift.openTick + (rift.seed & 63)) % PING_PERIOD_TICKS;
+        if (phase < 0.0F || phase >= PING_TICKS) {
+            return;
+        }
+        float t = phase / PING_TICKS;
+        float eased = 1.0F - (1.0F - t) * (1.0F - t);
+        float r0 = rift.width * 0.5F * open;
+        float rIn = r0 * (1.0F + PING_REACH * eased);
+        float rOut = rIn + rift.width * PING_THICKNESS * (1.0F - 0.5F * t);
+        float alpha = 0.5F * open * (1.0F - t) * (1.0F - t);
+        float r = rift.midR + (rift.hotR - rift.midR) * 0.6F;
+        float g = rift.midG + (rift.hotG - rift.midG) * 0.6F;
+        float b = rift.midB + (rift.hotB - rift.midB) * 0.6F;
+        float step = Mth.TWO_PI / PING_SEGMENTS;
+        for (int s = 0; s < PING_SEGMENTS; s++) {
+            float a0 = s * step;
+            float a1 = a0 + step;
+            float inX0 = ellipseX(rift, cx, a0, rIn, rIn);
+            float inY0 = ellipseY(rift, cy, a0, rIn, rIn);
+            float inZ0 = ellipseZ(rift, cz, a0, rIn, rIn);
+            float inX1 = ellipseX(rift, cx, a1, rIn, rIn);
+            float inY1 = ellipseY(rift, cy, a1, rIn, rIn);
+            float inZ1 = ellipseZ(rift, cz, a1, rIn, rIn);
+            float outX0 = ellipseX(rift, cx, a0, rOut, rOut);
+            float outY0 = ellipseY(rift, cy, a0, rOut, rOut);
+            float outZ0 = ellipseZ(rift, cz, a0, rOut, rOut);
+            float outX1 = ellipseX(rift, cx, a1, rOut, rOut);
+            float outY1 = ellipseY(rift, cy, a1, rOut, rOut);
+            float outZ1 = ellipseZ(rift, cz, a1, rOut, rOut);
+            additive.addVertex(inX0, inY0, inZ0).setColor(r, g, b, alpha);
+            additive.addVertex(inX1, inY1, inZ1).setColor(r, g, b, alpha);
+            additive.addVertex(outX1, outY1, outZ1).setColor(r, g, b, 0.0F);
+            additive.addVertex(inX0, inY0, inZ0).setColor(r, g, b, alpha);
+            additive.addVertex(outX1, outY1, outZ1).setColor(r, g, b, 0.0F);
+            additive.addVertex(outX0, outY0, outZ0).setColor(r, g, b, 0.0F);
+        }
+    }
+
+    /**
+     * FXTEAM-RIFT iris-open entry flash ({@code t} in [0,1) over {@code
+     * RiftFx.Rift.ENTRY_FLASH_TICKS}): a hot fan snapping open from the portal center plus
+     * {@value #FLASH_STREAMERS} radial streamers whooshing off the rim (camera-extruded like
+     * the arcs). 12 + 12 tris; {@code reducedFx} keeps the fan only — the flash doubles as
+     * gameplay feedback that somebody stepped through.
+     */
+    private static void buildEntryFlash(RiftFx.Rift rift, BufferBuilder additive,
+            float cx, float cy, float cz, float open, float t, boolean reduced) {
+        float easeOut = 1.0F - (1.0F - t) * (1.0F - t);
+        float fade = (1.0F - t) * (1.0F - t);
+        float fanRadius = rift.width * (0.10F + 0.38F * easeOut) * open;
+        float fanAlpha = 0.95F * fade * open;
+        float step = Mth.TWO_PI / FLASH_SEGMENTS;
+        for (int s = 0; s < FLASH_SEGMENTS; s++) {
+            float a0 = s * step;
+            float a1 = a0 + step;
+            additive.addVertex(cx, cy, cz).setColor(rift.hotR, rift.hotG, rift.hotB, fanAlpha);
+            additive.addVertex(ellipseX(rift, cx, a0, fanRadius, fanRadius),
+                    ellipseY(rift, cy, a0, fanRadius, fanRadius),
+                    ellipseZ(rift, cz, a0, fanRadius, fanRadius))
+                    .setColor(rift.midR, rift.midG, rift.midB, 0.0F);
+            additive.addVertex(ellipseX(rift, cx, a1, fanRadius, fanRadius),
+                    ellipseY(rift, cy, a1, fanRadius, fanRadius),
+                    ellipseZ(rift, cz, a1, fanRadius, fanRadius))
+                    .setColor(rift.midR, rift.midG, rift.midB, 0.0F);
+        }
+        if (reduced) {
+            return;
+        }
+        float rimIn = fanRadius * 0.8F;
+        float rimOut = rimIn + rift.width * (0.25F + 0.45F * easeOut) * open;
+        float halfWidth = rift.width * STREAMER_WIDTH_FRACTION;
+        float streamAlpha = 0.9F * fade * open;
+        float streamStep = Mth.TWO_PI / FLASH_STREAMERS;
+        float spin = (rift.seed & 15) * 0.11F;
+        for (int s = 0; s < FLASH_STREAMERS; s++) {
+            float angle = s * streamStep + spin;
+            float cos = Mth.cos(angle);
+            float sin = Mth.sin(angle);
+            float dirX = rift.tx * cos + rift.bx * sin;
+            float dirY = rift.ty * cos + rift.by * sin;
+            float dirZ = rift.tz * cos + rift.bz * sin;
+            emitBillboardSegment(additive,
+                    cx + dirX * rimIn, cy + dirY * rimIn, cz + dirZ * rimIn,
+                    cx + dirX * rimOut, cy + dirY * rimOut, cz + dirZ * rimOut,
+                    halfWidth, halfWidth * 0.3F,
+                    rift.hotR, rift.hotG, rift.hotB, streamAlpha,
+                    rift.midR, rift.midG, rift.midB, 0.0F);
         }
     }
 

@@ -68,6 +68,14 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * sphere interiors arm the same 0.55/0.15 hysteresis. {@link #explodeWhiteout} is the C8
  * tyrant-death beat: a ~15-tick white-out riding the fog color while the shockwave shell
  * expands, after which the sky clears with the released interior.</p>
+ *
+ * <p><b>FX-STORM round:</b> a roar-loop-bar gust clock ({@link #gustAmount} — rain cadence
+ * and bearing, the grade's {@code RainAmount}, the roar volume swell and the wisp updraft
+ * all ride it), rotating rain sheets (advancing spawn bearing), god-fingers of light
+ * through the dome eye (≤ 2 managed {@code storm_godfinger} loops, tier-laddered),
+ * ash-devil mini-whirls near the ground, the post-white-out clear-sky bloom tail, and the
+ * {@code WallProx} uniform (heat-shimmer refraction near the wall inside) plus
+ * {@link #flashAmount}/{@link #flashSerial} for the renderer's Tyrant silhouette.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormInteriorFx {
@@ -142,6 +150,37 @@ public final class StormInteriorFx {
     /** C8 explosion white-out length (ticks). */
     private static final int WHITEOUT_TICKS = 15;
 
+    // --- FX-STORM round: gust clock / god-fingers / ash devils / bloom / wall shimmer ---
+    /** Gust clock period (ticks) — one bar of the 8 s {@code event.storm_loop} roar loop. */
+    private static final int GUST_PERIOD_TICKS = 160;
+    /** Gust envelope length inside each period (smoothstep up over 40%, down over 60%). */
+    private static final int GUST_LENGTH_TICKS = 30;
+    /** RainAmount lift at gust peak (vortex interiors — the grade's streaks burst). */
+    private static final float GUST_RAIN_BOOST = 0.35F;
+    /** Rain sheet spawn bearing advance per tick — the sheets orbit the camera. */
+    private static final float RAIN_ROTATE_RAD_PER_TICK = 0.02F;
+
+    /** God-fingers of light through the dome "eye" (sphere interiors only). */
+    private static final ResourceLocation GODFINGER_EMITTER =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "storm_godfinger");
+    private static final int MAX_GODFINGERS = 2;
+    /** Fingers engage above this interior amount within this distance of the eye. */
+    private static final float GODFINGER_ENGAGE = 0.5F;
+    private static final double GODFINGER_MAX_CENTER_DIST = 48.0D;
+    /** Fingers drift slowly around the eye (opposite directions per finger). */
+    private static final float GODFINGER_DRIFT_RAD_PER_TICK = 0.003F;
+
+    /** Ash-devil mini-whirls near the ground (sphere interiors; reducedFx keeps one). */
+    private static final int ASH_DEVILS_FULL = 2;
+    private static final int ASH_DEVIL_RESEED_TICKS = 180;
+    private static final double ASH_DEVIL_MIN_DIST = 8.0D;
+    private static final double ASH_DEVIL_MAX_DIST = 16.0D;
+
+    /** Clear-sky bloom tail after the explosion white-out releases (ticks). */
+    private static final int BLOOM_TICKS = 40;
+    /** How far inside the shell the heat-shimmer band reaches (blocks; 1 at the occluder). */
+    private static final float SHIMMER_BAND = 8.0F;
+
     /** Smoothed interior amount 0..1 (the render-facing value; raw target jumps at walls). */
     private static float smoothedInterior;
     /** Smoothed outside-approach amount 0..1 (1 at ≤20 blocks from a visible shell). */
@@ -177,6 +216,29 @@ public final class StormInteriorFx {
     private static int whiteoutTicks;
     private static float whiteoutStrength;
 
+    // --- FX-STORM round state ---
+    /** Gust envelope 0..1 (roar-loop-bar clock × interior amount). */
+    private static float gustAmount;
+    /** Advancing spawn bearing of the rotating rain sheets. */
+    private static float rainAngle;
+    /** Serial incremented per flicker so per-flicker hashes (silhouette bearing) hold. */
+    private static int flashSerial;
+    /** Smoothed wall proximity 0..1 (1 near the occluder band inside) → `WallProx` uniform. */
+    private static float smoothedWallProx;
+    /** Raw wall-proximity target of the winning interior storm (set by interiorTargetAt). */
+    private static float wallProxTarget;
+    /** God-finger loop emitters + their drift bearings (sphere interiors). */
+    private static final ParticleEmitter[] GODFINGERS = new ParticleEmitter[MAX_GODFINGERS];
+    private static final float[] GODFINGER_ANGLES = new float[MAX_GODFINGERS];
+    /** Ash-devil whirl anchors (positions re-seeded around the camera). */
+    private static final double[] DEVIL_X = new double[ASH_DEVILS_FULL];
+    private static final double[] DEVIL_Z = new double[ASH_DEVILS_FULL];
+    private static final float[] DEVIL_PHASE = new float[ASH_DEVILS_FULL];
+    private static int devilReseedCountdown;
+    /** Clear-sky bloom tail (ticks left + strength captured from the dying white-out). */
+    private static int bloomTicks;
+    private static float bloomStrength;
+
     static {
         // Feature-owned registration replaces nothing (new id) — GRADE priority per §3.3.
         VeilPostController.register(new VeilPostController.PipelineSpec(
@@ -190,6 +252,8 @@ public final class StormInteriorFx {
                     // EVAL-POL-F #4: sphere interiors grade green-violet (C8 identity)
                     // instead of the vortex blue-slate.
                     pipeline.getUniform("Sphere").setFloat(interiorSphere ? 1.0F : 0.0F);
+                    // FX-STORM: heat-shimmer refraction strength — wall proximity inside.
+                    pipeline.getUniform("WallProx").setFloat(smoothedWallProx);
                 }));
     }
 
@@ -205,12 +269,30 @@ public final class StormInteriorFx {
         return smoothedApproach;
     }
 
+    /** Gust envelope 0..1 (FX-STORM roar-loop-bar clock) — read by StormFxClient audio/wisps. */
+    static float gustAmount() {
+        return gustAmount;
+    }
+
+    /** Flash lift 0..1 of the live silhouette flicker (renderer Tyrant-silhouette read). */
+    static float flashAmount() {
+        return Mth.clamp(flashTicks / (float) FLASH_MAX_TICKS, 0.0F, 1.0F);
+    }
+
+    /** Serial of the current flicker — stable per flicker, new bearing per flicker. */
+    static int flashSerial() {
+        return flashSerial;
+    }
+
     /**
      * Silhouette-reveal flash (IDEA-15 §2): lifts the interior fog far plane 24→56 and blows
      * the slate toward violet-white for {@code ticks} ticks. Callers gate on
      * {@link #interiorAmount()} &gt; 0.5 (interior arcs/bolts only).
      */
     static void flash(int ticks) {
+        if (flashTicks == 0) {
+            flashSerial++; // a fresh flicker re-rolls the per-flicker hashes (FX-STORM)
+        }
         flashTicks = Math.max(flashTicks, Math.min(ticks, FLASH_MAX_TICKS));
     }
 
@@ -253,9 +335,11 @@ public final class StormInteriorFx {
         if (snap) {
             smoothedInterior = target;
             smoothedApproach = approachTarget;
+            smoothedWallProx = wallProxTarget;
         } else {
             smoothedInterior += (target - smoothedInterior) * SMOOTHING;
             smoothedApproach += (approachTarget - smoothedApproach) * SMOOTHING;
+            smoothedWallProx += (wallProxTarget - smoothedWallProx) * SMOOTHING;
         }
         if (smoothedInterior < 0.002F) {
             smoothedInterior = 0.0F;
@@ -267,13 +351,24 @@ public final class StormInteriorFx {
             flashTicks--; // pause-safe: same guard as smoothedInterior (IDEA-15 §2)
         }
         if (whiteoutTicks > 0 && --whiteoutTicks == 0) {
-            whiteoutStrength = 0.0F; // C8: the white-out released — the sky clears
+            // C8: the white-out released — the clear-sky bloom moment rides out on its
+            // strength (FX-STORM stage 4) before the sky fully opens.
+            bloomTicks = BLOOM_TICKS;
+            bloomStrength = whiteoutStrength;
+            whiteoutStrength = 0.0F;
         }
+        if (bloomTicks > 0) {
+            bloomTicks--;
+        }
+        tickGust();
         // Rain rides the interior amount (R14) — but NOT in sphere interiors (C8: motes
         // and ground ribbons own that space; the grade's rain uniform stays 0 there).
-        EclipseFxState.setStormInterior(smoothedInterior, interiorSphere ? 0.0F : smoothedInterior);
+        // FX-STORM: gusts burst the grade's streak layer on top of the base amount.
+        EclipseFxState.setStormInterior(smoothedInterior, interiorSphere ? 0.0F
+                : Math.min(1.0F, smoothedInterior * (1.0F + GUST_RAIN_BOOST * gustAmount)));
         tickRainSheets(level, camera);
         tickSphereAmbience(minecraft, level, camera);
+        tickGodFingers(camera);
         tickCampGlow(level, camera);
     }
 
@@ -284,6 +379,7 @@ public final class StormInteriorFx {
     private static float interiorTargetAt(Vec3 camera) {
         List<StormFxClient.ClientStorm> storms = StormFxClient.storms();
         float best = 0.0F;
+        wallProxTarget = 0.0F;
         for (int i = 0; i < storms.size(); i++) {
             StormFxClient.ClientStorm storm = storms.get(i);
             double dx = camera.x - storm.center.x;
@@ -318,6 +414,11 @@ public final class StormInteriorFx {
             if (amount > best) {
                 best = amount;
                 interiorSphere = storm.type == S2CStormStatePayload.TYPE_SPHERE;
+                // FX-STORM heat shimmer: wall proximity — 1 right at the fully-interior
+                // line, fading to 0 SHIMMER_BAND blocks further inside.
+                double inset = (effectiveRadius - StormWallRenderer.OCCLUDER_INSET) - dist;
+                wallProxTarget = amount
+                        * (1.0F - (float) Mth.clamp(inset / SHIMMER_BAND, 0.0D, 1.0D));
             }
         }
         return best;
@@ -361,15 +462,21 @@ public final class StormInteriorFx {
             return;
         }
         pruneRain();
+        // FX-STORM: the sheets orbit the camera on an advancing bearing (faster in gusts).
+        rainAngle += RAIN_ROTATE_RAD_PER_TICK * (1.0F + 1.5F * gustAmount);
         if (--rainCountdown > 0) {
             return;
         }
-        rainCountdown = EclipseClientConfig.reducedFx() ? RAIN_INTERVAL_TICKS * 2 : RAIN_INTERVAL_TICKS;
+        int interval = EclipseClientConfig.reducedFx() ? RAIN_INTERVAL_TICKS * 2 : RAIN_INTERVAL_TICKS;
+        // Gust burst: the cadence halves while the gust envelope is high (roar-loop timed).
+        rainCountdown = gustAmount > 0.5F ? Math.max(4, interval / 2) : interval;
         RandomSource random = level.random;
+        double angle = rainAngle + (random.nextDouble() - 0.5D) * 1.2D;
+        double dist = 2.0D + random.nextDouble() * (RAIN_SPAWN_RADIUS - 2.0D);
         Vec3 pos = new Vec3(
-                camera.x + (random.nextDouble() - 0.5D) * 2.0D * RAIN_SPAWN_RADIUS,
+                camera.x + Math.cos(angle) * dist,
                 camera.y + RAIN_SPAWN_HEIGHT + random.nextDouble() * 3.0D,
-                camera.z + (random.nextDouble() - 0.5D) * 2.0D * RAIN_SPAWN_RADIUS);
+                camera.z + Math.sin(angle) * dist);
         ParticleEmitter emitter = QuasarSpawner.spawnManaged(RAIN_SHEET_EMITTER, pos, FxBudget.Channel.STORM);
         if (emitter == null) {
             return; // budget refusal / Quasar unavailable — retry next interval
@@ -377,6 +484,80 @@ public final class StormInteriorFx {
         RAIN_SHEETS.addLast(emitter);
         while (RAIN_SHEETS.size() > MAX_RAIN_EMITTERS) {
             removeEmitter(RAIN_SHEETS.pollFirst());
+        }
+    }
+
+    // ------------------------------------------------------------------ FX-STORM gust clock
+
+    /**
+     * Wind-gust clock (FX-STORM): one gust per {@value #GUST_PERIOD_TICKS}-tick period —
+     * one bar of the roar loop — with a {@value #GUST_LENGTH_TICKS}-tick smoothstep
+     * envelope (fast attack, slower release). Scaled by the interior amount so gusts only
+     * exist inside; consumers: rain cadence + spawn bearing, the grade's RainAmount, the
+     * roar-loop volume swell and the vortex wisp updraft (all read {@link #gustAmount()}).
+     */
+    private static void tickGust() {
+        int phase = StormFxClient.ticks() % GUST_PERIOD_TICKS;
+        float env = 0.0F;
+        if (phase < GUST_LENGTH_TICKS) {
+            float t = phase / (float) GUST_LENGTH_TICKS;
+            float x = t < 0.4F ? t / 0.4F : 1.0F - (t - 0.4F) / 0.6F;
+            env = x * x * (3.0F - 2.0F * x);
+        }
+        gustAmount = env * smoothedInterior;
+    }
+
+    // ------------------------------------------------------------------ FX-STORM god-fingers
+
+    /**
+     * God-fingers of light through the dome "eye" (FX-STORM, sphere interiors): up to
+     * {@value #MAX_GODFINGERS} managed {@code storm_godfinger} loop emitters drifting
+     * slowly around the storm center at ~0.35r offset — pale sick-green shafts falling
+     * from the apex. Quality ladder: tier 2 = 2 fingers, tier 1 = 1, tier 0 = none; the
+     * emitters release the moment the interior (or the storm) goes away.
+     */
+    private static void tickGodFingers(Vec3 camera) {
+        StormFxClient.ClientStorm storm = nearestStorm(camera);
+        boolean wanted = interiorSphere && smoothedInterior > GODFINGER_ENGAGE && storm != null
+                && storm.type == S2CStormStatePayload.TYPE_SPHERE
+                && FxBudget.qualityTier() >= 1;
+        if (wanted) {
+            double dx = camera.x - storm.center.x;
+            double dz = camera.z - storm.center.z;
+            wanted = dx * dx + dz * dz < GODFINGER_MAX_CENTER_DIST * GODFINGER_MAX_CENTER_DIST;
+        }
+        int cap = !wanted ? 0 : FxBudget.qualityTier() >= 2 ? MAX_GODFINGERS : 1;
+        for (int k = 0; k < MAX_GODFINGERS; k++) {
+            ParticleEmitter finger = GODFINGERS[k];
+            if (k >= cap) {
+                if (finger != null) {
+                    removeEmitter(finger);
+                    GODFINGERS[k] = null;
+                }
+                continue;
+            }
+            GODFINGER_ANGLES[k] += GODFINGER_DRIFT_RAD_PER_TICK * (k == 0 ? 1.0F : -0.8F);
+            double a = GODFINGER_ANGLES[k] + k * Math.PI;
+            double r = storm.radius * 0.35D;
+            double x = storm.center.x + Math.cos(a) * r;
+            double y = storm.center.y + storm.radius * 0.45D;
+            double z = storm.center.z + Math.sin(a) * r;
+            if (finger == null || finger.isRemoved()) {
+                // Budget-refused spawns retry next tick (same rule as the vortex wisps).
+                GODFINGERS[k] = QuasarSpawner.spawnManaged(GODFINGER_EMITTER,
+                        new Vec3(x, y, z), FxBudget.Channel.STORM);
+            } else {
+                finger.setPosition(x, y, z);
+            }
+        }
+    }
+
+    private static void clearGodFingers() {
+        for (int k = 0; k < MAX_GODFINGERS; k++) {
+            if (GODFINGERS[k] != null) {
+                removeEmitter(GODFINGERS[k]);
+                GODFINGERS[k] = null;
+            }
         }
     }
 
@@ -430,6 +611,37 @@ public final class StormInteriorFx {
                     camera.y - 1.5D + random.nextDouble() * 0.4D,
                     camera.z + sin * along + cos * side,
                     cos * 0.02D, 0.002D, sin * 0.02D);
+        }
+        // Ash-devil mini-whirls (FX-STORM): wandering spiral anchors near the ground —
+        // each lifts one tangential ash mote per cadence tick into a twisting column.
+        int devils = reduced ? 1 : ASH_DEVILS_FULL;
+        if (--devilReseedCountdown <= 0) {
+            devilReseedCountdown = ASH_DEVIL_RESEED_TICKS;
+            for (int d = 0; d < ASH_DEVILS_FULL; d++) {
+                double a = random.nextDouble() * Math.PI * 2.0D;
+                double dist = ASH_DEVIL_MIN_DIST
+                        + random.nextDouble() * (ASH_DEVIL_MAX_DIST - ASH_DEVIL_MIN_DIST);
+                DEVIL_X[d] = camera.x + Math.cos(a) * dist;
+                DEVIL_Z[d] = camera.z + Math.sin(a) * dist;
+            }
+        }
+        for (int d = 0; d < devils; d++) {
+            if (reduced && (StormFxClient.ticks() + d) % 2 != 0) {
+                continue; // reducedFx halves the whirl cadence too
+            }
+            DEVIL_PHASE[d] += 0.38F + d * 0.05F;
+            // The anchor wanders slowly so the whirl snakes across the ground.
+            DEVIL_X[d] += Math.cos(DEVIL_PHASE[d] * 0.11D) * 0.05D;
+            DEVIL_Z[d] += Math.sin(DEVIL_PHASE[d] * 0.13D) * 0.05D;
+            double h = random.nextDouble() * 2.5D;
+            double whirlR = 0.5D + h * 0.25D;
+            double wa = DEVIL_PHASE[d] + h * 2.1D;
+            double px = DEVIL_X[d] + Math.cos(wa) * whirlR;
+            double pz = DEVIL_Z[d] + Math.sin(wa) * whirlR;
+            level.addParticle(random.nextInt(5) == 0 ? ParticleTypes.WHITE_ASH : ParticleTypes.ASH,
+                    px, camera.y - 1.6D + h, pz,
+                    -Math.sin(wa) * 0.06D, 0.03D + random.nextDouble() * 0.02D,
+                    Math.cos(wa) * 0.06D);
         }
         // Heartbeat-adjacent sub-bass pulse — user opt-out honored (B12 setting).
         if (--pulseCountdown <= 0) {
@@ -509,7 +721,10 @@ public final class StormInteriorFx {
         // C8 explosion white-out (decays over WHITEOUT_TICKS, scaled by shell proximity).
         float white = whiteoutTicks > 0
                 ? (whiteoutTicks / (float) WHITEOUT_TICKS) * whiteoutStrength : 0.0F;
-        if (interior <= 0.02F && approach <= 0.02F && white <= 0.02F) {
+        // FX-STORM stage 4: the clear-sky bloom tail after the white-out releases.
+        float bloom = bloomTicks > 0
+                ? (bloomTicks / (float) BLOOM_TICKS) * bloomStrength : 0.0F;
+        if (interior <= 0.02F && approach <= 0.02F && white <= 0.02F && bloom <= 0.02F) {
             return;
         }
         // IDEA-15 §2: flash blows the palette toward its blow color — backlit cutouts.
@@ -529,6 +744,13 @@ public final class StormInteriorFx {
             targetG = Mth.lerp(white, targetG, 0.96F);
             targetB = Mth.lerp(white, targetB, 1.00F);
             blend = Math.max(blend, white * 0.92F);
+        }
+        if (bloom > 0.0F) {
+            // Pale morning blue-white — the "sky opens" beat riding out of the white-out.
+            targetR = Mth.lerp(bloom, targetR, 0.74F);
+            targetG = Mth.lerp(bloom, targetG, 0.80F);
+            targetB = Mth.lerp(bloom, targetB, 0.94F);
+            blend = Math.max(blend, bloom * 0.35F);
         }
         event.setRed(Mth.lerp(blend, event.getRed(), targetR));
         event.setGreen(Mth.lerp(blend, event.getGreen(), targetG));
@@ -667,6 +889,14 @@ public final class StormInteriorFx {
         ribbonCountdown = 0;
         pulseCountdown = 0;
         flickerCountdown = 0;
+        // FX-STORM round state.
+        gustAmount = 0.0F;
+        smoothedWallProx = 0.0F;
+        wallProxTarget = 0.0F;
+        bloomTicks = 0;
+        bloomStrength = 0.0F;
+        devilReseedCountdown = 0;
+        clearGodFingers();
         SphereDroneSound drone = droneSound;
         droneSound = null;
         if (drone != null) {

@@ -113,6 +113,17 @@ public final class SanctumOrbitals {
     /** Individual tumble rate base (deg/tick, ~1.6–4.4°/s across the ring). */
     private static final double SPIN_DEG_PER_TICK_BASE = 0.08D;
 
+    /**
+     * W-P-ALTAR2 visual polish: the two big rings BREATHE — orbit radius swells and
+     * relaxes ±{@value #RADIUS_BREATH} blocks over {@value #RADIUS_BREATH_PERIOD_TICKS} t,
+     * phase-offset per anchor so the ring undulates instead of pumping in lockstep.
+     * Interpolation-safe by the VFXPOLISH-3 window law: one 40 t tween window covers
+     * only ~22.5° of breath phase, far under the ~90° linear-flattening threshold.
+     * Purely presentational — anchors, packets and reconciliation are untouched.
+     */
+    private static final double RADIUS_BREATH = 0.22D;
+    private static final double RADIUS_BREATH_PERIOD_TICKS = 640.0D;
+
     /** Extra orbit radius per altar level on rings 0/1 (blocks; W4-ISLAND level tell). */
     private static final double LEVEL_RADIUS_BONUS = 0.35D;
     /** Extra bob amplitude per altar level on rings 0/1 (fraction of the base). */
@@ -372,7 +383,13 @@ public final class SanctumOrbitals {
                 + direction * Math.toRadians(ORBIT_DEG_PER_TICK) * gameTime;
 
         boolean bigRing = anchor.ring() <= 1;
-        double radius = anchor.radius() + (bigRing ? radiusBonus : 0.0D);
+        // W-P-ALTAR2 breath: slow per-anchor radius undulation (big rings only — the
+        // islet companions keep their tight fixed orbits).
+        double breath = bigRing
+                ? Math.sin((Math.PI * 2.0D / RADIUS_BREATH_PERIOD_TICKS) * gameTime
+                        + anchor.phaseRadians() * 2.0D) * RADIUS_BREATH
+                : 0.0D;
+        double radius = anchor.radius() + (bigRing ? radiusBonus : 0.0D) + breath;
         double bobPeriod = BOB_BASE_PERIOD_TICKS * (1.2D + 0.35D * (orderIndex % 4));
         double bob = Math.sin((Math.PI * 2.0D / bobPeriod) * gameTime
                 + anchor.phaseRadians() * 3.0D) * BOB_AMPLITUDE * (bigRing ? bobScale : 1.0D);

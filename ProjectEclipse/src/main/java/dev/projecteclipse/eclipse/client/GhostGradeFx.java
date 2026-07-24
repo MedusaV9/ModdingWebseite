@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.VeilPostController;
 import foundry.veil.api.client.render.post.PostPipeline;
@@ -43,6 +44,8 @@ public final class GhostGradeFx {
     private static final float BREATH_DEPTH = 0.08F;
     /** Below this the 30-tick release is over — drop the pipeline entirely (idle-skip). */
     private static final float MIN_ACTIVE = 0.003F;
+    /** {@code Time} uniform wrap (one hour of ticks — the limbo clock-wrap precedent). */
+    private static final int TIME_WRAP_TICKS = 72_000;
 
     /** Breath clock; advances only while the game runs (pause freezes the throb). */
     private static int breathTicks;
@@ -72,14 +75,28 @@ public final class GhostGradeFx {
                 && EclipseFxState.ghostAmount(partialTick()) > MIN_ACTIVE;
     }
 
-    /** Per-frame feeder (no allocations): the single frozen uniform. */
+    /** Per-frame feeder (no allocations): the frozen Ghost scalar + the v2 additive set. */
     private static void feedGhostGrade(PostPipeline pipeline) {
-        pipeline.getUniform("Ghost").setFloat(ghostUniform(partialTick()));
+        float partialTick = partialTick();
+        pipeline.getUniform("Ghost").setFloat(ghostUniform(partialTick));
+        // v2 (FX team GRADE): shimmer/heartbeat clock — pause-frozen because it derives
+        // from the breath tick counter (hour wrap; one sub-frame pattern step per hour,
+        // the documented limbo Time-wrap tradeoff). Detail gates the animated layers.
+        pipeline.getUniform("Time").setFloat(
+                (breathTicks % TIME_WRAP_TICKS + partialTick) / 20.0F);
+        pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
     }
 
-    /** Eased ghost amount with the 0.2 Hz breath premultiplied (0..1). */
+    /**
+     * Eased ghost amount with the 0.2 Hz breath premultiplied (0..1). The breath is a
+     * pulsing overlay, so {@code reducedFx} flattens it (the eased grade itself stays —
+     * it is state feedback, not decoration).
+     */
     private static float ghostUniform(float partialTick) {
         float amount = EclipseFxState.ghostAmount(partialTick);
+        if (EclipseClientConfig.reducedFx()) {
+            return amount;
+        }
         float breath = 0.5F + 0.5F * Mth.sin(
                 (breathTicks + partialTick) * (Mth.TWO_PI / BREATH_PERIOD_TICKS));
         return amount * (1.0F - BREATH_DEPTH + BREATH_DEPTH * breath);

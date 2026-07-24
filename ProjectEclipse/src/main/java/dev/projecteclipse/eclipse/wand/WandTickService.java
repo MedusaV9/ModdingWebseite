@@ -273,6 +273,25 @@ public final class WandTickService {
                             new Vec3(x, groundY(x, z) + 0.2D, z));
                 }
             }
+            // D11 grass-tip flamelets: brief flame licks flicker JUST INSIDE the passed
+            // front and die within half a second — the ground looks momentarily singed
+            // without a single block being touched (visual-only law upheld). Vanilla
+            // SMALL_FLAME, two points per beat, so no Quasar budget is spent.
+            if (age % 4 == 0 && radius > 1.5F) {
+                for (int i = 0; i < 2; i++) {
+                    double angle = level.random.nextDouble() * Math.PI * 2.0D;
+                    double r = radius * (0.55D + level.random.nextDouble() * 0.3D);
+                    double fx = center.x + Math.cos(angle) * r;
+                    double fz = center.z + Math.sin(angle) * r;
+                    double fy = groundY(fx, fz);
+                    level.sendParticles(ParticleTypes.SMALL_FLAME, fx, fy + 0.1D, fz,
+                            2, 0.06D, 0.04D, 0.06D, 0.006D);
+                    // One delayed re-lick makes it read as a flamelet, not a spark.
+                    schedule(level, 3 + level.random.nextInt(4), () -> level.sendParticles(
+                            ParticleTypes.SMALL_FLAME, fx, fy + 0.12D, fz,
+                            1, 0.05D, 0.06D, 0.05D, 0.004D));
+                }
+            }
             // Ground scorch decals: a charred plate roughly every quarter of the march.
             if (age % Math.max(8, expandTicks / 4) == 0) {
                 double angle = level.random.nextDouble() * Math.PI * 2.0D;
@@ -399,6 +418,20 @@ public final class WandTickService {
                     SoundEvents.LAVA_POP, SoundSource.PLAYERS, 0.8F, 0.55F);
             PacketDistributor.sendToPlayersNear(level, null, impact.x, impact.y, impact.z,
                     24.0D, S2CShakePayload.shake(0.28F, 10));
+            // D11 crater afterlife: a faint heat-shimmer column stands over the crater
+            // and a slow smoke curl drifts up for ~2 s — the landing site smolders
+            // instead of blinking out. One soft steam hiss as the smoke starts. Visual
+            // only; the scorch-decal law and slam numbers are untouched. (+1.4: the
+            // cylinder shape is center-anchored, so this grounds the column's base.)
+            schedule(level, 2, () -> WandPowers.sendQuasar(level, WandPowers.GLUT_HEAT_COLUMN,
+                    impact.add(0.0D, 1.4D, 0.0D)));
+            for (int i = 0; i < 3; i++) {
+                schedule(level, 10 + i * 14, () -> level.sendParticles(
+                        ParticleTypes.CAMPFIRE_COSY_SMOKE, impact.x, impact.y + 0.5D, impact.z,
+                        2, 0.25D, 0.15D, 0.25D, 0.008D));
+            }
+            schedule(level, 12, () -> level.playSound(null, impact.x, impact.y, impact.z,
+                    SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.35F, 0.6F));
             return true;
         }
     }

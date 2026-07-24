@@ -19,12 +19,12 @@
       "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 0.45,
+      "particle_speed": 0.5,
       "random_speed": true,
-      "base_particle_size": 0.7,
-      "particle_size_variation": 0.3,
-      "particle_lifetime": 26,
-      "particle_lifetime_variation": 8,
+      "base_particle_size": 0.9,
+      "particle_size_variation": 0.5,
+      "particle_lifetime": 36,
+      "particle_lifetime_variation": 10,
       "initial_direction": [
         0.0,
         1.0,
@@ -52,11 +52,11 @@
     "modules": [
       {
         "module": "veil:gravity",
-        "strength": 0.35
+        "strength": 0.16
       },
       {
         "module": "veil:drag",
-        "strength": 0.9
+        "strength": 0.7
       },
       {
         "module": "veil:color",
@@ -81,8 +81,12 @@
               "alpha": 0.9
             },
             {
-              "percent": 0.55,
-              "alpha": 0.5
+              "percent": 0.45,
+              "alpha": 0.55
+            },
+            {
+              "percent": 0.8,
+              "alpha": 0.28
             },
             {
               "percent": 1.0,

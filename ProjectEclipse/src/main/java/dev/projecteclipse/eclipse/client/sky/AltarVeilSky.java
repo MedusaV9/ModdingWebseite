@@ -34,6 +34,27 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       and a periodic pulse flash (an expanding echo ring every ~12 s).</li>
  * </ul>
  *
+ * <p><b>W-P-ALTAR2 per-tier MOTIFS</b> — each tier carries one signature behavior so
+ * the layers never read as static decals:
+ * <ul>
+ *   <li><b>L1</b> — on its FIRST appearance (a mid-session 0→1 level-up; login syncs
+ *       adopt silently) the ring "writes itself": an arc sweeps 360° over
+ *       ~{@value #RING_WRITE_SECONDS} s behind a bright pen-tip spark.</li>
+ *   <li><b>L2</b> — every ~{@value #REARRANGE_PERIOD_SECONDS} s the constellation
+ *       RE-ARRANGES: glyphs glide to a permuted radius/angle row over ~2.6 s under a
+ *       soft chime-like brightness pulse (deterministic rows, no render-loop RNG;
+ *       tier 2 only).</li>
+ *   <li><b>L3</b> — the aurora RESPONDS TO OFFERINGS: when the altar swallows an item
+ *       ({@link AltarCeremonyFx#offeringSkyGlow}) the bands briefly brighten and their
+ *       ripple deepens.</li>
+ *   <li><b>L4</b> — the halo beams get a GROUND READ: {@code AltarIdleMotes} projects
+ *       faint moving light patches onto the island, azimuth-synced to
+ *       {@link #BEAM_SPIN_DEG_PER_SEC} (the fake "cast light" trick).</li>
+ *   <li><b>L5</b> — a map-wide CROWN FLARE every ~{@value #FLARE_PERIOD_SECONDS} s:
+ *       spikes lengthen, the crown blooms and one echo ring fires (half strength and
+ *       echo-less at tier 1).</li>
+ * </ul></p>
+ *
  * <p><b>reducedFx degradation</b> ({@link FxBudget#qualityTier()}): tier 2 renders
  * everything; tier 1 drops the animated aurora bands and one beam layer, thins the
  * constellation and skips the pulse-flash echo (alphas ×0.6); tier 0 keeps only the
@@ -56,6 +77,10 @@ final class AltarVeilSky {
     private static final float RING_MID_RADIUS = 74.0F;
     private static final float RING_HALF_WIDTH = 7.0F;
     private static final float RING_ALPHA = 0.10F;
+    /** L1 motif: the ring writes itself over this long on its first appearance. */
+    private static final float RING_WRITE_SECONDS = 3.2F;
+    /** Pen-tip spark size at the writing head (celestial-plane units). */
+    private static final float RING_PEN_TIP_SIZE = 4.5F;
 
     // --- L2 glyph constellation ---
     private static final int GLYPH_COUNT = 7;
@@ -65,6 +90,17 @@ final class AltarVeilSky {
     /** Deterministic per-glyph size/radius jitter rows (no RNG in the render loop). */
     private static final float[] GLYPH_SIZES = {3.4F, 2.4F, 4.2F, 2.8F, 3.8F, 2.2F, 3.0F};
     private static final float[] GLYPH_RADIUS_JITTER = {0.0F, 6.0F, -5.0F, 9.0F, -8.0F, 4.0F, -3.0F};
+    /**
+     * L2 motif: every {@value #REARRANGE_PERIOD_SECONDS} s the glyphs glide to the NEXT
+     * permutation of the jitter/scatter rows over {@value #REARRANGE_LENGTH_SECONDS} s
+     * with a soft chime-visual brightness pulse. Row walk is index-shift permutation —
+     * cycle N holds row (i+N+1), so consecutive windows blend continuously.
+     */
+    private static final float REARRANGE_PERIOD_SECONDS = 34.0F;
+    private static final float REARRANGE_LENGTH_SECONDS = 2.6F;
+    /** Deterministic per-glyph angular scatter row (radians), permuted with the jitter. */
+    private static final float[] GLYPH_ANGLE_SCATTER =
+            {0.00F, 0.31F, -0.24F, 0.18F, -0.33F, 0.26F, -0.12F};
 
     // --- L3 aurora veil bands ---
     private static final int AURORA_BANDS = 3;
@@ -97,8 +133,21 @@ final class AltarVeilSky {
     /** Pulse flash: every {@value} s the crown flares and an echo ring expands outward. */
     private static final float PULSE_PERIOD_SECONDS = 12.0F;
     private static final float PULSE_LENGTH_SECONDS = 1.6F;
+    /**
+     * L5 motif: the big map-wide CROWN FLARE — rarer and stronger than the 12 s pulse
+     * (co-prime-ish periods so the two beats rarely stack). Tier 1 keeps a half-strength
+     * flare (its only crown beat, since the pulse is tier-2 gated); tier 0 never reaches
+     * the crown at all.
+     */
+    private static final float FLARE_PERIOD_SECONDS = 45.0F;
+    private static final float FLARE_LENGTH_SECONDS = 2.8F;
 
     private static final int RING_SEGMENTS = 48;
+
+    /** Last altar level this client SAW rendering-side ({@code MIN_VALUE} = adopt-only). */
+    private static int lastSeenLevel = Integer.MIN_VALUE;
+    /** Seconds-clock timestamp of the L1 write-in start; {@code NaN} = fully written. */
+    private static float ringWriteStart = Float.NaN;
 
     private AltarVeilSky() {}
 
@@ -107,7 +156,9 @@ final class AltarVeilSky {
      * the sun/moon quads use). Additive blend + depthMask(false) are already active.
      */
     static void render(Matrix4f celestialPose, float partialTick, float eclipse, float rainAlpha) {
+        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         int level = Mth.clamp(ClientStateCache.altarLevel, 0, 5);
+        trackLevel(level, seconds);
         if (level <= 0 || rainAlpha <= 0.01F) {
             return;
         }
@@ -117,13 +168,21 @@ final class AltarVeilSky {
         float strength = rainAlpha * (0.75F + 0.25F * eclipse) * (1.0F + 2.2F * surge);
         strength *= tier >= 2 ? 1.0F : tier == 1 ? 0.6F : 0.5F;
 
-        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         // L1: faint violet ring, breathing slightly so it never reads as a decal.
+        // W-P-ALTAR2 motif: on its first appearance it WRITES ITSELF — an arc sweeps
+        // the full circle behind a bright pen-tip spark, then hands over to the breath.
         float ringBreath = 1.0F + 0.12F * Mth.sin(seconds * 0.5F);
-        drawSoftRing(celestialPose, RING_MID_RADIUS * ringBreath, RING_HALF_WIDTH,
-                0.62F, 0.30F, 1.00F, RING_ALPHA * strength * (1.0F + 0.25F * level));
+        float ringAlpha = RING_ALPHA * strength * (1.0F + 0.25F * level);
+        float writeT = ringWriteProgress(seconds);
+        if (writeT >= 1.0F) {
+            drawSoftRing(celestialPose, RING_MID_RADIUS * ringBreath, RING_HALF_WIDTH,
+                    0.62F, 0.30F, 1.00F, ringAlpha);
+        } else {
+            drawRingWriteIn(celestialPose, seconds, RING_MID_RADIUS * ringBreath,
+                    ringAlpha, writeT);
+        }
         if (tier <= 0) {
             return; // minimal tier: the ring alone carries the tell
         }
@@ -132,7 +191,8 @@ final class AltarVeilSky {
             drawGlyphConstellation(celestialPose, seconds, strength, tier);
         }
         if (level >= 3 && tier >= 2) {
-            drawAuroraBands(celestialPose, seconds, strength);
+            drawAuroraBands(celestialPose, seconds, strength,
+                    AltarCeremonyFx.offeringSkyGlow(partialTick));
         }
         if (level >= 4) {
             drawHaloBeams(celestialPose, seconds, strength, tier);
@@ -143,34 +203,123 @@ final class AltarVeilSky {
         }
     }
 
+    // ------------------------------------------------------------------ level tracking
+
+    /**
+     * Watches the synced altar level from the render side. The FIRST observation of a
+     * session (or any decrease — a world/server resync) is adopted silently; a genuine
+     * mid-session increase from level 0 arms the L1 write-in intro. Login therefore
+     * never replays the intro, but the community's 0→1 moment always gets it.
+     */
+    private static void trackLevel(int level, float seconds) {
+        if (lastSeenLevel == Integer.MIN_VALUE || level < lastSeenLevel) {
+            lastSeenLevel = level;
+            ringWriteStart = Float.NaN;
+            return;
+        }
+        if (level > lastSeenLevel) {
+            if (lastSeenLevel < 1) {
+                ringWriteStart = seconds;
+            }
+            lastSeenLevel = level;
+        }
+    }
+
+    /** Write-in progress 0..1; 1 while no intro is live (or across the hourly clock wrap). */
+    private static float ringWriteProgress(float seconds) {
+        if (Float.isNaN(ringWriteStart)) {
+            return 1.0F;
+        }
+        float t = (seconds - ringWriteStart) / RING_WRITE_SECONDS;
+        if (t < 0.0F || t >= 1.0F) {
+            ringWriteStart = Float.NaN; // done (or the seconds clock wrapped) — full ring
+            return 1.0F;
+        }
+        return t;
+    }
+
+    /**
+     * L1 write-in: the ring as a partial arc growing from a fixed start angle, slightly
+     * over-bright while being written, with a bright pen-tip diamond at the writing head.
+     */
+    private static void drawRingWriteIn(Matrix4f pose, float seconds, float midRadius,
+            float ringAlpha, float writeT) {
+        float sweep = smooth(writeT) * ((float) Math.PI * 2.0F);
+        float startAngle = -0.5F * (float) Math.PI; // "12 o'clock" over the disc
+        drawSoftArc(pose, midRadius, RING_HALF_WIDTH, 0.62F, 0.30F, 1.00F,
+                ringAlpha * 1.35F, startAngle, sweep);
+        // Pen tip: a sparking bright head, flickering slightly as it writes.
+        float head = startAngle + sweep;
+        float spark = 0.75F + 0.25F * Mth.sin(seconds * 11.0F);
+        BufferBuilder tip = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        addDiamond(tip, pose, Mth.cos(head) * midRadius, Mth.sin(head) * midRadius,
+                RING_PEN_TIP_SIZE * (0.8F + 0.4F * spark),
+                0.95F, 0.85F, 1.00F, Math.min(1.0F, ringAlpha * 6.0F) * spark);
+        BufferUploader.drawWithShader(tip.buildOrThrow());
+    }
+
     // ------------------------------------------------------------------ layers
 
-    /** Slow-orbiting diamond glyphs with one trailing companion spark each. */
+    /**
+     * Slow-orbiting diamond glyphs with one trailing companion spark each.
+     *
+     * <p>W-P-ALTAR2 motif (tier 2): the constellation periodically RE-ARRANGES — during
+     * the first {@value #REARRANGE_LENGTH_SECONDS} s of every
+     * {@value #REARRANGE_PERIOD_SECONDS} s cycle each glyph glides from its current
+     * radius-jitter/angle-scatter row to the next permutation (index-shifted, so the end
+     * of cycle N is exactly the start of cycle N+1 — no snapping), under a soft
+     * chime-like brightness swell. Deterministic; zero render-loop RNG.</p>
+     */
     private static void drawGlyphConstellation(Matrix4f pose, float seconds, float strength, int tier) {
         int count = tier >= 2 ? GLYPH_COUNT : 5;
         float orbit = seconds * GLYPH_ORBIT_DEG_PER_SEC * ((float) Math.PI / 180.0F);
+        // Tier 1 pins cycle 0 / blend 1 — a STATIC arrangement (no rearrange, no snap).
+        boolean rearranging = tier >= 2;
+        int cycle = rearranging ? (int) (seconds / REARRANGE_PERIOD_SECONDS) : 0;
+        float windowT = rearranging
+                ? Math.min((seconds - cycle * REARRANGE_PERIOD_SECONDS) / REARRANGE_LENGTH_SECONDS, 1.0F)
+                : 1.0F;
+        float blend = smooth(windowT);
+        float chime = rearranging && windowT < 1.0F ? Mth.sin(windowT * (float) Math.PI) : 0.0F;
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i < count; i++) {
-            float angle = orbit + i * ((float) Math.PI * 2.0F / GLYPH_COUNT);
-            float radius = GLYPH_ORBIT_RADIUS + GLYPH_RADIUS_JITTER[i];
+            int from = (i + cycle) % GLYPH_COUNT;
+            int to = (i + cycle + 1) % GLYPH_COUNT;
+            float angle = orbit + i * ((float) Math.PI * 2.0F / GLYPH_COUNT)
+                    + Mth.lerp(blend, GLYPH_ANGLE_SCATTER[from], GLYPH_ANGLE_SCATTER[to]);
+            float radius = GLYPH_ORBIT_RADIUS
+                    + Mth.lerp(blend, GLYPH_RADIUS_JITTER[from], GLYPH_RADIUS_JITTER[to]);
             float cx = Mth.cos(angle) * radius;
             float cz = Mth.sin(angle) * radius;
-            // Per-glyph pulse, phase-offset so the constellation twinkles, never strobes.
-            float pulse = 0.75F + 0.25F * Mth.sin(seconds * 1.1F + i * 2.4F);
+            // Per-glyph pulse, phase-offset so the constellation twinkles, never strobes;
+            // the rearrange window adds the shared chime swell on top.
+            float pulse = (0.75F + 0.25F * Mth.sin(seconds * 1.1F + i * 2.4F))
+                    * (1.0F + 0.45F * chime);
             float alpha = GLYPH_ALPHA * strength * pulse;
             addDiamond(builder, pose, cx, cz, GLYPH_SIZES[i], 0.72F, 0.42F, 1.00F, alpha);
             // Trailing companion spark just behind the glyph on its orbit.
             float trail = angle - 0.05F;
             addDiamond(builder, pose,
                     Mth.cos(trail) * (radius - 2.5F), Mth.sin(trail) * (radius - 2.5F),
-                    GLYPH_SIZES[i] * 0.35F, 0.85F, 0.65F, 1.00F, alpha * 0.6F);
+                    GLYPH_SIZES[i] * 0.35F, 0.85F, 0.65F, 1.00F,
+                    alpha * (0.6F + 0.25F * chime));
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
-    /** Three undulating arc curtains, teal fading into violet, scrolling around the disc. */
-    private static void drawAuroraBands(Matrix4f pose, float seconds, float strength) {
+    /**
+     * Three undulating arc curtains, teal fading into violet, scrolling around the disc.
+     *
+     * <p>W-P-ALTAR2 motif: {@code offeringGlow} (0..1, armed when the altar swallows an
+     * offering) briefly BRIGHTENS the curtains and deepens their ripple — the sky
+     * acknowledging the meal. Value-agnostic: brightness never leaks offering worth.</p>
+     */
+    private static void drawAuroraBands(Matrix4f pose, float seconds, float strength,
+            float offeringGlow) {
+        float glowAlpha = 1.0F + 1.6F * offeringGlow;
+        float glowWave = 1.0F + 0.4F * offeringGlow;
         for (int band = 0; band < AURORA_BANDS; band++) {
             float scroll = seconds * AURORA_DEG_PER_SEC[band] * ((float) Math.PI / 180.0F)
                     + band * 2.1F;
@@ -188,11 +337,11 @@ final class AltarVeilSky {
                 float angle = scroll + (t - 0.5F) * arc;
                 // Radial sine wave slides along the arc — the aurora's slow ripple.
                 float wave = Mth.sin(t * 9.0F + seconds * (0.8F + 0.3F * band) + band * 1.7F)
-                        * AURORA_WAVE_AMPLITUDE;
+                        * AURORA_WAVE_AMPLITUDE * glowWave;
                 float radius = bandRadius + wave;
                 // Alpha fades to zero at both arc ends (soft curtain edges).
                 float edge = Mth.sin(t * (float) Math.PI);
-                float alpha = AURORA_ALPHA * strength * edge;
+                float alpha = AURORA_ALPHA * strength * edge * glowAlpha;
                 float cos = Mth.cos(angle);
                 float sin = Mth.sin(angle);
                 builder.addVertex(pose, cos * (radius - AURORA_HALF_WIDTH), PLANE_Y,
@@ -225,7 +374,14 @@ final class AltarVeilSky {
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }
 
-    /** Bright gold crown ring + twelve spikes + the periodic pulse-flash echo ring. */
+    /**
+     * Bright gold crown ring + twelve spikes + the periodic pulse-flash echo ring.
+     *
+     * <p>W-P-ALTAR2 motif: on top of the 12 s pulse, a rarer map-wide CROWN FLARE every
+     * {@value #FLARE_PERIOD_SECONDS} s — spikes stretch, the crown blooms brighter than
+     * any pulse, and (tier 2) the echo ring fires. Tier 1 keeps the flare at half
+     * strength so reduced clients still get the map-wide L5 heartbeat.</p>
+     */
     private static void drawCoronaCrown(Matrix4f pose, float seconds, float strength,
             float surge, float surgeEchoTravel, int tier) {
         // Pulse envelope: a sine bump during the first PULSE_LENGTH of every period; the
@@ -238,8 +394,16 @@ final class AltarVeilSky {
         }
         pulse = Math.max(pulse, surge);
 
-        float crownRadius = CROWN_MID_RADIUS * (1.0F + 0.12F * pulse);
-        float crownAlpha = CROWN_ALPHA * strength * (1.0F + 1.6F * pulse);
+        // Crown-flare envelope (independent long-period beat, tier-scaled).
+        float flarePhase = seconds % FLARE_PERIOD_SECONDS;
+        float flare = flarePhase < FLARE_LENGTH_SECONDS
+                ? Mth.sin(flarePhase / FLARE_LENGTH_SECONDS * (float) Math.PI) : 0.0F;
+        if (tier < 2) {
+            flare *= 0.5F;
+        }
+
+        float crownRadius = CROWN_MID_RADIUS * (1.0F + 0.12F * pulse + 0.05F * flare);
+        float crownAlpha = CROWN_ALPHA * strength * (1.0F + 1.6F * pulse + 1.15F * flare);
         drawSoftRing(pose, crownRadius, CROWN_HALF_WIDTH, 1.00F, 0.82F, 0.45F, crownAlpha);
 
         // Twelve crown spikes riding just outside the ring.
@@ -254,7 +418,7 @@ final class AltarVeilSky {
             float tx = -sin * CROWN_SPIKE_HALF_WIDTH;
             float tz = cos * CROWN_SPIKE_HALF_WIDTH;
             float rootR = crownRadius + CROWN_HALF_WIDTH * 0.5F;
-            float tipR = rootR + CROWN_SPIKE_LENGTH * (1.0F + 0.6F * pulse);
+            float tipR = rootR + CROWN_SPIKE_LENGTH * (1.0F + 0.6F * pulse + 0.75F * flare);
             float alpha = crownAlpha * 0.8F;
             spikes.addVertex(pose, cos * rootR - tx, PLANE_Y, sin * rootR - tz)
                     .setColor(1.00F, 0.86F, 0.55F, alpha);
@@ -269,6 +433,7 @@ final class AltarVeilSky {
         // EVAL-POL-F #6: the ceremony surge drives its own monotonic 0→1 clock (keyed off
         // surge start), so the echo fires outward ONCE and fades at the rim — it no longer
         // parks at max radius through the hold and retracts as skySurge decays.
+        // W-P-ALTAR2: the crown flare fires the echo too (surge > pulse > flare priority).
         if (tier >= 2) {
             float travel;
             float echoStrength;
@@ -278,6 +443,9 @@ final class AltarVeilSky {
             } else if (pulse > 0.01F && phase < PULSE_LENGTH_SECONDS && surge < pulse) {
                 travel = phase / PULSE_LENGTH_SECONDS;
                 echoStrength = pulse;
+            } else if (flare > 0.01F && flarePhase < FLARE_LENGTH_SECONDS) {
+                travel = flarePhase / FLARE_LENGTH_SECONDS;
+                echoStrength = flare;
             } else {
                 travel = 1.0F;
                 echoStrength = 0.0F;
@@ -295,13 +463,26 @@ final class AltarVeilSky {
     /** Soft annulus: alpha peaks at the mid radius and fades to zero at both edges. */
     private static void drawSoftRing(Matrix4f pose, float midRadius, float halfWidth,
             float r, float g, float b, float alpha) {
-        if (alpha <= 0.001F) {
+        drawSoftArc(pose, midRadius, halfWidth, r, g, b, alpha,
+                0.0F, (float) Math.PI * 2.0F);
+    }
+
+    /**
+     * Partial soft annulus from {@code startAngle} over {@code sweep} radians (the L1
+     * write-in path; a full 2π sweep is exactly the old soft ring). Segment count scales
+     * with the sweep so short arcs stay cheap and full rings keep their roundness.
+     */
+    private static void drawSoftArc(Matrix4f pose, float midRadius, float halfWidth,
+            float r, float g, float b, float alpha, float startAngle, float sweep) {
+        if (alpha <= 0.001F || sweep <= 0.001F) {
             return;
         }
+        int segments = Math.max(2,
+                Math.round(RING_SEGMENTS * sweep / ((float) Math.PI * 2.0F)));
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        for (int seg = 0; seg <= RING_SEGMENTS; seg++) {
-            float angle = seg * ((float) Math.PI * 2.0F / RING_SEGMENTS);
+        for (int seg = 0; seg <= segments; seg++) {
+            float angle = startAngle + seg * (sweep / segments);
             float cos = Mth.cos(angle);
             float sin = Mth.sin(angle);
             builder.addVertex(pose, cos * (midRadius - halfWidth), PLANE_Y,
@@ -312,8 +493,8 @@ final class AltarVeilSky {
         BufferUploader.drawWithShader(builder.buildOrThrow());
         builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-        for (int seg = 0; seg <= RING_SEGMENTS; seg++) {
-            float angle = seg * ((float) Math.PI * 2.0F / RING_SEGMENTS);
+        for (int seg = 0; seg <= segments; seg++) {
+            float angle = startAngle + seg * (sweep / segments);
             float cos = Mth.cos(angle);
             float sin = Mth.sin(angle);
             builder.addVertex(pose, cos * midRadius, PLANE_Y, sin * midRadius)
@@ -351,5 +532,11 @@ final class AltarVeilSky {
                 .setColor(r, g, b, 0.0F);
         builder.addVertex(pose, cos * tipRadius - txTip, PLANE_Y, sin * tipRadius - tzTip)
                 .setColor(r, g, b, 0.0F);
+    }
+
+    /** Smoothstep ease (the AltarCeremonyFx envelope curve). */
+    private static float smooth(float x) {
+        x = Mth.clamp(x, 0.0F, 1.0F);
+        return x * x * (3.0F - 2.0F * x);
     }
 }

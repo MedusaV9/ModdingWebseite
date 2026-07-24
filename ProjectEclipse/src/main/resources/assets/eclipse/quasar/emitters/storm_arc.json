@@ -2,7 +2,7 @@
   "max_lifetime": 2,
   "loop": false,
   "rate": 1,
-  "count": 6,
+  "count": 5,
   "emitter_settings": {
     "shape": {
       "shape": "veil:sphere",
@@ -21,9 +21,9 @@
     "particle_settings": {
       "particle_speed": 0.45,
       "random_speed": true,
-      "base_particle_size": 0.22,
+      "base_particle_size": 0.26,
       "particle_size_variation": 0.1,
-      "particle_lifetime": 5,
+      "particle_lifetime": 4,
       "particle_lifetime_variation": 2,
       "initial_direction": [
         0.0,
@@ -42,7 +42,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": true,
-    "velocity_stretch_factor": 1.2,
+    "velocity_stretch_factor": 1.7,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -59,8 +59,8 @@
               "color": "#FFFFFF"
             },
             {
-              "percent": 0.35,
-              "color": "#B98CFF"
+              "percent": 0.25,
+              "color": "#E3D2FF"
             },
             {
               "percent": 1.0,
@@ -70,11 +70,11 @@
           "alpha_points": [
             {
               "percent": 0.0,
-              "alpha": 0.95
+              "alpha": 1.0
             },
             {
-              "percent": 0.6,
-              "alpha": 0.55
+              "percent": 0.5,
+              "alpha": 0.6
             },
             {
               "percent": 1.0,
@@ -86,7 +86,7 @@
       },
       {
         "module": "veil:drag",
-        "strength": 0.08
+        "strength": 0.14
       }
     ]
   }

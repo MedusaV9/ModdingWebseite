@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import dev.projecteclipse.eclipse.veilfx.VeilPostController;
@@ -61,9 +62,15 @@ public final class AltarAberration {
     private static final float BREATH_HZ = 0.3F;
     /** Zone floor for degenerate synced radii (a zone thinner than this reads as a popping toggle). */
     private static final double MIN_ZONE_RADIUS = 24.0D;
+    /** Glyph-flash envelope length (v2 [a1]): pops on, eases out over ~0.8 s. */
+    private static final int FLASH_TICKS = 16;
 
     /** Client-side eased zone strength; the fed uniform adds the 0.3 Hz breathing on top. */
     private static float eased;
+    /** Remaining glyph-flash ticks (0 = idle); set on skill level-up, drained per tick. */
+    private static int flashTicks;
+    /** Last skill level seen ({@code -1} = unseeded — the login sync must never flash). */
+    private static int lastSeenLevel = -1;
 
     static {
         // FEATURE row per §3.3; VeilPostController applies the Iris/config gate, the ≤3-pass
@@ -96,6 +103,36 @@ public final class AltarAberration {
             eased = Math.max(target, eased - SLEW_PER_TICK);
         }
         EclipseFxState.setAltarAberration(eased);
+        tickGlyphFlash(level != null && player != null);
+    }
+
+    /**
+     * v2 [a1] glyph-flash tracking: watches the same {@link ClientStateCache#skillLevel}
+     * state as {@code skills.LevelUpOverlay} with the same seeding rules — the first
+     * observation of a session seeds silently (login sync is not a celebration), a
+     * downward change (admin xp set) re-seeds without theater, an increase arms the
+     * {@value #FLASH_TICKS}-tick flash. Gated like the overlay: {@code
+     * levelUpCelebrations} plus {@code reducedFx} (the flash is a pulsing overlay).
+     * Only visible near the altar anyway — the pipeline itself needs Aberration > 0.01.
+     */
+    private static void tickGlyphFlash(boolean inWorld) {
+        if (!inWorld) {
+            lastSeenLevel = -1;
+            flashTicks = 0;
+            return;
+        }
+        int skillLevel = ClientStateCache.skillLevel;
+        if (lastSeenLevel < 0 || skillLevel < lastSeenLevel) {
+            lastSeenLevel = skillLevel;
+        } else if (skillLevel > lastSeenLevel) {
+            if (EclipseClientConfig.levelUpCelebrations() && !EclipseClientConfig.reducedFx()) {
+                flashTicks = FLASH_TICKS;
+            }
+            lastSeenLevel = skillLevel;
+        }
+        if (flashTicks > 0 && !Minecraft.getInstance().isPaused()) {
+            flashTicks--;
+        }
     }
 
     /** {@code clamp(1 − dist/zoneRadius, 0, 1)² · 0.85} against the anchor (or spawn fallback). */
@@ -142,10 +179,31 @@ public final class AltarAberration {
         return aberrationPostStrength(aberration) > borderPostStrength(prox);
     }
 
-    /** 0.3 Hz breathing is baked into the fed value so the shader keeps the ONE frozen uniform. */
+    /**
+     * 0.3 Hz breathing is baked into the fed value so the frozen Aberration uniform stays
+     * a single scalar; under {@code reducedFx} the breath flattens to its MEAN (0.9) —
+     * same average zone strength, no pulse. v2 additionally feeds the shared wrap clock,
+     * the glyph-flash envelope and the reducedFx detail gate (same commit as the shader
+     * uniforms — the additive-uniform rule).
+     */
     private static void feedPost(PostPipeline pipeline) {
         float seconds = (System.currentTimeMillis() % 100_000L) / 1000.0F;
-        float breath = 0.9F + 0.1F * Mth.sin(seconds * (float) (Math.PI * 2.0D) * BREATH_HZ);
+        float breath = EclipseClientConfig.reducedFx()
+                ? 0.9F
+                : 0.9F + 0.1F * Mth.sin(seconds * (float) (Math.PI * 2.0D) * BREATH_HZ);
         pipeline.getUniform("Aberration").setFloat(EclipseFxState.altarAberration() * breath);
+        pipeline.getUniform("Time").setFloat(seconds);
+        pipeline.getUniform("GlyphFlash").setFloat(glyphFlash());
+        pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+    }
+
+    /** Glyph-flash envelope 0..1: instant pop on level-up, smoothstep ease-out drain. */
+    private static float glyphFlash() {
+        if (flashTicks <= 0) {
+            return 0.0F;
+        }
+        float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false);
+        float f = Mth.clamp((flashTicks - partialTick) / FLASH_TICKS, 0.0F, 1.0F);
+        return f * f * (3.0F - 2.0F * f);
     }
 }
