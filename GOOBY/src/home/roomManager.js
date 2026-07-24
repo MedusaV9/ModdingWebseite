@@ -56,10 +56,11 @@ import { windowRainTexture } from '../gfx/weatherFx.js'; // V2/G26 (§C11.2 anim
 import musicDirector from '../audio/musicDirector.js'; // V3/G32: room-enter medley context hook (§B2.4)
 import radioPlayer from '../audio/radioPlayer.js'; // V4/POLISH-G: real per-room track (§B2.4 — medley stays the fallback)
 import { buildNougatschleuse } from './nougatMesh.js'; // V3/G35: kitchen fixture (§B7/§C6.2)
+import { createSouvenirShelf, readVisited } from './souvenirShelf.js'; // V6.1/G2 (A3): living keepsake shelf
 import { CROPS } from '../data/crops.js'; // V2/G19: growth-stage GLB preloads
 import { ROOM as KITCHEN } from './rooms/kitchen.js';
 import { ROOM as LIVING } from './rooms/living.js';
-import { ROOM as BATHROOM } from './rooms/bathroom.js';
+import { ROOM as BATHROOM, DUCKY_TAP } from './rooms/bathroom.js'; // V6.1/G2 (B7): + secret-ducky tap zone
 import { ROOM as BEDROOM } from './rooms/bedroom.js';
 import { ROOM as GARDEN, GARDEN_SIZE } from './rooms/garden.js'; // V2/G19 (§C2)
 import { iconTinted } from '../ui/icons.js'; // V6/D3: authored radio-note sprite
@@ -803,6 +804,13 @@ export function createRoomManager({ scene, camera, assets, store }) {
   const hitboxes = [];
   /** @type {Set<(dt: number) => void>} V2/G19: per-frame update hooks */
   const updateHooks = new Set();
+  /**
+   * V6.1/G2 (A3): live souvenir-shelf controller (living.js declares the
+   * `proc: 'souvenirShelf'` furniture entry; built in the furniture loop).
+   * Owns its own geometry/material lifecycle — NOT run through `track`.
+   * @type {ReturnType<typeof createSouvenirShelf>|null}
+   */
+  let souvenirShelf = null;
   /** @type {THREE.Object3D|null} Gooby's group (raycast for 'tap:gooby') */
   let goobyTarget = null;
 
@@ -958,7 +966,14 @@ export function createRoomManager({ scene, camera, assets, store }) {
       group.add(holder);
       if (entry.slot) record.slotHolders.set(entry.slot, holder);
 
-      if (entry.proc) {
+      if (entry.proc === 'souvenirShelf') {
+        // V6.1/G2 (A3): dynamic proc — one merged vertex-colored mesh whose
+        // content follows vacation progress. The controller re-merges only on
+        // a visited-signature change (store 'change' subscription below) and
+        // disposes its own geometry/material, so it stays OUT of `track`.
+        souvenirShelf = createSouvenirShelf(() => readVisited(store?.get?.() ?? {}));
+        holder.add(souvenirShelf.group);
+      } else if (entry.proc) {
         const proc = PROC_BUILDERS[entry.proc](track);
         holder.add(proc);
         if (entry.proc === 'window') record.windowSkyMat = proc.userData.skyMat;
@@ -1184,6 +1199,43 @@ export function createRoomManager({ scene, camera, assets, store }) {
   const offNougatChanged =
     typeof store?.on === 'function' ? store.on('nougatChanged', syncNougatFixture) : null;
   // ---- end V3/G35 fixture block ----
+
+  // ---- V6.1/G2 (B7): secret-ducky tap hitbox ------------------------------
+  // The floor ducky is static bathware DRESSING (bathroom.js), so unlike the
+  // conditional Nougatschleuse this box mounts once and stays for the whole
+  // scene life. Geometry runs through `track` — disposed with everything
+  // else. DUCKY_TAP (pure data beside the duck's placement) carries the
+  // box + the no-tub-overlap contract; the `ducky` anchor marks the burst
+  // point for interactions.js's heart moment.
+  {
+    const cx = roomCenterX(BATHROOM.id);
+    const [dx, , dz] = DUCKY_TAP.at;
+    const size = DUCKY_TAP.hitSize;
+    const duckyHit = new THREE.Mesh(
+      track.geo(new THREE.BoxGeometry(size[0], size[1], size[2])),
+      hitMat // invisible — raycast only (raycaster ignores visibility)
+    );
+    duckyHit.name = 'hit-ducky';
+    duckyHit.visible = false;
+    duckyHit.position.set(cx + dx, size[1] / 2, dz);
+    duckyHit.userData.interact = 'ducky';
+    duckyHit.userData.roomId = BATHROOM.id;
+    homeGroup.add(duckyHit);
+    hitboxes.push(duckyHit);
+    addAnchor(BATHROOM.id, 'ducky', new THREE.Vector3(
+      cx + DUCKY_TAP.burstAt[0], DUCKY_TAP.burstAt[1], DUCKY_TAP.burstAt[2]
+    ));
+  }
+  // ---- end V6.1/G2 (B7) ----------------------------------------------------
+
+  // ---- V6.1/G2 (A3): souvenir shelf follows vacation progress ------------
+  // The store has no vacation-specific event, so ride the coalesced per-flush
+  // 'change'. refresh() is a cheap no-op (normalize + join + compare) unless
+  // the visited SIGNATURE actually changed — only then does it re-merge.
+  const offShelfChange =
+    souvenirShelf && typeof store?.on === 'function'
+      ? store.on('change', () => souvenirShelf.refresh())
+      : null;
 
   function applyWallpaper(roomId, id) {
     const record = rooms.get(roomId);
@@ -1558,6 +1610,17 @@ export function createRoomManager({ scene, camera, assets, store }) {
     },
 
     /**
+     * V6.1/G2 (A3): the living-room souvenir-shelf controller (null only if
+     * living.js drops the `proc: 'souvenirShelf'` entry). Exposes
+     * group/refresh/dispose/signature — tests and the dev CDP seam use it to
+     * verify rebuild-on-signature without poking scene internals.
+     * @returns {ReturnType<typeof createSouvenirShelf>|null}
+     */
+    getSouvenirShelf() {
+      return souvenirShelf;
+    },
+
+    /**
      * Raycast a tap (from input 'tap' ndc coords) against Gooby + the fixed
      * interactables; emits 'tap:<name>' with { name, roomId, point, hit }.
      * @param {{nx: number, ny: number}} ndc
@@ -1628,6 +1691,8 @@ export function createRoomManager({ scene, camera, assets, store }) {
     /** Free every geometry/material this manager created (shared mats stay). */
     dispose() {
       offNougatChanged?.(); // V3/G35: stop following nougat.installed
+      offShelfChange?.(); // V6.1/G2 (A3): stop following vacation progress
+      souvenirShelf?.dispose(); // V6.1/G2 (A3): merged geometry + material
       for (const geo of ownedGeos) geo.dispose();
       for (const mat of ownedMats) disposeIfOwned(mat);
       radioNoteTexture?.dispose(); // V4/G52: pooled radio-note texture

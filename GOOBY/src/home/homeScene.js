@@ -231,10 +231,14 @@ export function createHomeScene(ctx) {
     if (opts.instant) scene.background.copy(backdropTarget());
 
     // §C10.2: warm lamps auto-on at dusk/night (sleep mode has its own lamp)
+    // V6.1/G2 (A1/A5): per-lamp `dim` bounds the kitchen-pilot/garden-lantern
+    // pools below the shared band intensity (night stays dimmer than day).
     const lampsOn = !!DAYNIGHT[amb.band]?.lampsOn && !night;
     for (const l of ambLamps) {
       l.visible = lampsOn;
-      l.intensity = lampsOn ? (DAYNIGHT[amb.band].lampIntensity ?? 0.5) * LAMP_PHYS_SCALE : 0;
+      l.intensity = lampsOn
+        ? (DAYNIGHT[amb.band].lampIntensity ?? 0.5) * LAMP_PHYS_SCALE * (l.userData.dim ?? 1)
+        : 0;
     }
 
     // §C11.2 weather FX fade in/out with their state
@@ -530,6 +534,14 @@ export function createHomeScene(ctx) {
       // Warm dusk/night lamps (§C10.2: living + bedroom, #FFD9A0 0.5): the
       // living light sits at the floor-lamp decor spot, the bedroom one over
       // the nightstand lamp anchor. Off until applyAmbienceNow enables them.
+      // V6.1/G2 (A1/A5): + kitchen stove pilot and garden street lantern —
+      // each anchored to a `lampGlow` dressing bulb (rooms/kitchen.js
+      // `stovePilotGlow`, rooms/garden.js `lanternGlow`) so the pool reads as
+      // coming FROM a lit fixture. `dist`/`dim` bound the new pools: the
+      // pilot's 2.2 m / 0.7× pool warms the counter run without lifting the
+      // room past its daytime brightness; the lantern's 3 m / 0.85× pool
+      // pools at the gate. Lights aren't draw calls — the mesh cost is the
+      // rooms' `fairy` batches (+1 call each, inside the ≤4-added budgets).
       const lampSpecs = [
         // V6/FIX4 (P1-7): anchored under the living ceiling fixture
         // (rooms/living.js lampSquareCeiling at [0, 2.7, −0.18], with the
@@ -539,13 +551,19 @@ export function createHomeScene(ctx) {
         // pool read as floating on a bare wall.
         { x: rm.roomCenterX('living'), y: 2.3, z: -0.18 },
         lampAt ? { x: lampAt.x, y: lampAt.y + 0.35, z: lampAt.z + 0.25 } : null,
+        // A1: just above/in front of the stovePilotGlow bulb ([0.72, 0.76,
+        // −1.33] kitchen-local) so the counter top catches the falloff.
+        { x: rm.roomCenterX('kitchen') + 0.72, y: 1.0, z: -1.05, dist: 2.2, dim: 0.7 },
+        // A5: inside the lanternGlow head ([0.62, 1.93, −1.64] garden-local).
+        { x: rm.roomCenterX('garden') + 0.62, y: 1.93, z: -1.64, dist: 3, dim: 0.85 },
       ];
       for (const at of lampSpecs) {
         if (!at) continue;
-        const l = new THREE.PointLight(DAYNIGHT.dusk.lampColor, 0, 4.5, 2);
+        const l = new THREE.PointLight(DAYNIGHT.dusk.lampColor, 0, at.dist ?? 4.5, 2);
         l.name = 'ambienceLamp';
         l.visible = false;
         l.position.set(at.x, at.y, at.z);
+        l.userData.dim = at.dim ?? 1;
         scene.add(l);
         ambLamps.push(l);
       }

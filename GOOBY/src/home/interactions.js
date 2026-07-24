@@ -28,7 +28,7 @@ import { bandAt } from '../systems/dayNight.js';
 import { remove as invRemove, list as invList } from '../systems/inventory.js';
 import { applyXp } from '../systems/leveling.js';
 import { deriveEmotion } from '../character/emotions.js';
-import { t } from '../data/strings.js';
+import { t, getLang } from '../data/strings.js'; // V6.1/G2 (B7): + getLang (ducky fallback)
 import { now, localDay } from '../core/clock.js';
 import { icon } from '../ui/icons.js'; // V4/G79: shared hunger/fun chip glyphs
 import { getFoodIcon } from '../ui/foodIcons.js'; // V6/D3: authored tray/ghost food art
@@ -500,6 +500,46 @@ export function careEmotionFor(state, atMs) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// V6.1/G2 (B7): secret ducky — five squeaks in a rolling window (pure)
+// ---------------------------------------------------------------------------
+
+/** Secret-ducky tuning: 5 taps inside a 3 s ROLLING window trigger the burst. */
+export const DUCKY_SECRET = Object.freeze({ TAPS: 5, WINDOW_MS: 3000 });
+
+/**
+ * Session-local squeak counter for the bathroom floor ducky. A tap counts
+ * toward the burst only while it is within WINDOW_MS of the newest tap
+ * (rolling window — pausing mid-run silently expires the old taps, no state
+ * to clean up). The burst-completing tap RESETS the run, so a new five-tap
+ * sequence can only start from zero afterwards. Deliberately no persistence:
+ * the counter lives and dies with the home-scene wiring.
+ * @param {{taps?: number, windowMs?: number}} [opts] test overrides
+ * @returns {{tap: (tMs: number) => 'squeak'|'burst', count: () => number}}
+ */
+export function createDuckySecret({ taps = DUCKY_SECRET.TAPS, windowMs = DUCKY_SECRET.WINDOW_MS } = {}) {
+  /** @type {number[]} timestamps of the live run (oldest first) */
+  let run = [];
+  return {
+    /**
+     * Register one valid duck tap.
+     * @param {number} tMs any monotonic ms clock (wiring passes performance.now())
+     * @returns {'squeak'|'burst'} 'burst' exactly on the run-completing tap
+     */
+    tap(tMs) {
+      run = run.filter((t0) => tMs - t0 < windowMs);
+      run.push(tMs);
+      if (run.length >= taps) {
+        run = [];
+        return 'burst';
+      }
+      return 'squeak';
+    },
+    /** taps still inside the window (test introspection) */
+    count: () => run.length,
+  };
+}
+
 // ===========================================================================
 // 2. WIRING (browser only — three.js via dynamic import, DOM inside functions)
 // ===========================================================================
@@ -780,6 +820,30 @@ export function initInteractions(bag = {}) {
     ui.showScreen('arcade');
   });
 
+  // ---- V6.1/G2 (B7): secret ducky — five fast squeaks on the FLOOR duck ----
+  // 'tap:ducky' fires only from its own bathroom hitbox (rooms/bathroom.js
+  // DUCKY_TAP — strictly outside the tub zone, so wash taps are never
+  // shadowed; the rim ducky stays tub territory and Gooby raycasts first).
+  // Counter is session-local (dies with this wiring): no save/economy/
+  // sticker writes anywhere in the handler.
+  state.duckySecret = createDuckySecret();
+  subscribeRoom(state, 'tap:ducky', () => {
+    if (blockedBySleep(state) || blockedByVacation(state)) return;
+    audio.play('gooby.squeak'); // §C3 squeak voice — every valid tap
+    if (state.duckySecret.tap(performance.now()) !== 'burst') return;
+    // 5th squeak inside the window — Gooby can't hold it together (verbatim
+    // the §C3 tickle recipe: giggle + tickle clip + hearts + restore)
+    audio.play('gooby.giggle');
+    state.gooby?.play?.('tickle');
+    laterTimer(state, () => {
+      state.gooby?.stop?.('tickle');
+      restoreEmotion(state);
+    }, 1000);
+    const at = anchorPos(state, 'ducky');
+    if (state.particles && at) state.particles.emit('hearts', at, { count: 6 });
+    ui.toast(duckyToastKey());
+  });
+
   // ---- V3/G35 (§B7/§C6.4): Nougatschleuse tap → refusals or glob sequence --
   subscribeRoom(state, 'tap:nougatschleuse', () => nougatTap(state));
   // §C6.3: one-time install sparkle on the next kitchen look (buying happens
@@ -895,6 +959,29 @@ function blockedByVacation(s) {
     return true;
   }
   return false;
+}
+
+// V6.1/G2 (B7): the ONE G2-owned string this wave. G1 exclusively owns
+// strings.js — the key is handed off in the frozen manifest
+// (/tmp/gooby-v6-handoffs/G2-strings-manifest.txt). Until it lands, t()
+// echoes the key back and the toast falls back to these inline values; the
+// moment G1's dictionary has 'secret.ducky', the normal key path wins and
+// this table goes dormant. ("approved" stays English in DE by design — it is
+// the in-fiction duck-stamp voice.)
+const DUCKY_FALLBACK = Object.freeze({
+  en: 'Squeaky duck approved!!',
+  de: 'Quietsche-Ente approved!!',
+});
+
+/**
+ * Toast argument for the ducky burst: the real key when translated (ui.toast
+ * runs it through t()), else the language-correct literal (t() passes
+ * unknown strings through unchanged).
+ * @returns {string}
+ */
+function duckyToastKey() {
+  if (t('secret.ducky') !== 'secret.ducky') return 'secret.ducky';
+  return DUCKY_FALLBACK[getLang()] ?? DUCKY_FALLBACK.en;
 }
 
 function subscribeRoom(s, event, cb) {

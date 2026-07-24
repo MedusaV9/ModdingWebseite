@@ -71,8 +71,18 @@ export const AUDIT_RULES = Object.freeze({
         // the room (+x, rotY 105 ⇒ 15° off — kickstand toward the wall)
         'kaykit-furniture/pictureframe_standing_A': { mode: 'vector', dir: [1, 0] },
       }),
-      wallMounted: Object.freeze(['proc:door']),
-      elevated: Object.freeze(['furniture-kit/lampSquareCeiling']),
+      wallMounted: Object.freeze([
+        'proc:door',
+        // V6.1/G2 (A3): souvenir shelf — its backboard's back face kisses the
+        // back wall's inner face (z −1.5), embedding ≤ wall thickness by design
+        'proc:souvenirShelf',
+      ]),
+      elevated: Object.freeze([
+        'furniture-kit/lampSquareCeiling',
+        // V6.1/G2 (A3): wall-mounted at y 2.42 — no supporter box underneath
+        // (above the wallArt canvas envelope and both dressing pictures)
+        'proc:souvenirShelf',
+      ]),
       clipAllow: Object.freeze([
         // V6/E4: rotated-AABB phantom only — the −140° armchair's
         // axis-aligned box corner sweeps over the standing lamp's box, but

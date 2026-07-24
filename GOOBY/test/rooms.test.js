@@ -277,8 +277,9 @@ test('V3/G46 garden uses real additions but keeps the compost identity item proc
 test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call budget', () => {
   const expected = {
     // V5/ASSETS: kitchenware/bathware Tiny Treats clusters; V6/E4: baked-goods
-    // breakfast (own batch — the pack embeds its own atlas copy)
-    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware', 'breakfastSet'],
+    // breakfast (own batch — the pack embeds its own atlas copy);
+    // V6.1/G2 (A1): + stove pilot glow — the kitchen's night anchor bulb
+    kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware', 'breakfastSet', 'stovePilotGlow'],
     // V6/E4: KayKit reading nook + Tiny Treats monstera (the Aline plant
     // moved to the bedroom); V6/FIX4 (P1-7): + lit bulbs (ceiling fixture
     // anchors the night glow, standing lamp reads lit on wide viewports)
@@ -289,8 +290,9 @@ test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call bu
     bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead', 'cozyCorner', 'alinePlant', 'bedroomPlants', 'foldedBlanket'],
     // V6/E4: the garden ships a dressing table now — Tiny Treats park pieces
     // (pretty-park has its OWN atlas revision ⇒ separate batch from the
-    // pleasant-picnic baskets) + the checkered-blanket painter
-    garden: ['parkDressing', 'picnicCorner', 'picnicBlanket'],
+    // pleasant-picnic baskets) + the checkered-blanket painter;
+    // V6.1/G2 (A5): + lantern head glow — the lit street lantern at the gate
+    garden: ['parkDressing', 'picnicCorner', 'picnicBlanket', 'lanternGlow'],
   };
   // V6/E4 (PLAN6 Wave E budget): per-room dressing draw calls — colored merge
   // + one call per textured atlas batch + fairy dots + one per picture + one
@@ -298,7 +300,10 @@ test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call bu
   // baseline {kitchen 3, living 3, bathroom 2, bedroom 3, garden 0}.
   // V6/FIX4 (P1-7): living 5 → 6 — the readingLampGlow bulb opens the
   // emissive `fairy` batch in the living room (adds 3 vs baseline, ≤4 OK).
-  const expectedCalls = { kitchen: 4, living: 6, bathroom: 2, bedroom: 5, garden: 3 };
+  // V6.1/G2 (A1/A5): kitchen 4 → 5 (stovePilotGlow opens the kitchen's fairy
+  // batch — adds 2 vs baseline) and garden 3 → 4 (lanternGlow opens the
+  // garden's — adds 4, the budget's last slot). Both stay ≤4 added.
+  const expectedCalls = { kitchen: 5, living: 6, bathroom: 2, bedroom: 5, garden: 4 };
   const baselineCalls = { kitchen: 3, living: 3, bathroom: 2, bedroom: 3, garden: 0 };
   const itchKeys = new Set(
     ITCH_MODEL_PACKS.flatMap((pack) => pack.files.map(({ key }) => `${pack.slug}/${key}`))

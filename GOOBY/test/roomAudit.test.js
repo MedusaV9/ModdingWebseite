@@ -381,6 +381,10 @@ function tapBoxes(def) {
 const PINNED_TAP_BOXES = {
   living: [{ interact: 'radio', min: [-0.46, 0.52, -1.42], max: [0.16, 1.06, -0.98] }],
   kitchen: [{ interact: 'nougatschleuse', min: [0.5, 0.64, -1.49], max: [1.4, 1.84, -0.99] }],
+  // V6.1/G2 (B7): the secret-ducky hit (DUCKY_TAP 0.24×0.32×0.44 centered at
+  // [0.38, 0.16, −0.52] — bathroom.js owns the numbers, interactions.test.js
+  // pins the tub/toilet no-overlap contract)
+  bathroom: [{ interact: 'ducky', min: [0.26, 0, -0.74], max: [0.5, 0.32, -0.3] }],
 };
 
 /**
@@ -395,6 +399,10 @@ const TAP_OVERLAP_ALLOW = [
   // V5: the spare-roll stack leans on the toilet's generous side — tapping
   // it reads as the toilet.
   ['bathroom', 'bubbly-bathroom/toilet_roll_stack', 'toilet', 0.1],
+  // V6.1/G2 (B7): the floor ducky sits INSIDE its own secret tap zone by
+  // definition — tapping the duck IS the squeak. (The same key's rim ducky
+  // is covered by the tub row above; the zones themselves never overlap.)
+  ['bathroom', 'bubbly-bathroom/ducky', 'ducky', 0.2],
   // V5-placed cookware on the counter below the wall-hung Nougatschleuse:
   // its hand-authored tap box (h 1.2 from y 0.64) deliberately reaches the
   // counter top for generous tapping — cookware taps there read as the

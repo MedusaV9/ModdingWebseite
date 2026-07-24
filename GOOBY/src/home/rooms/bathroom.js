@@ -133,3 +133,22 @@ export const ROOM = Object.freeze({
     goobyIdle: Object.freeze([0.4, 0, 0.6]),
   }),
 });
+
+// ---- V6.1/G2 (B7): secret-ducky tap zone — PURE DATA ------------------------
+// Bathroom-local box for the `tap:ducky` hitbox roomManager mounts over the
+// FLOOR ducky above (bathware piece at [0.3, 0, −0.52], scale 0.5, rotY −30 —
+// footprint ≈ x 0.18..0.42 · z −0.64..−0.40 · 0.20 m tall). The box hugs the
+// duck but stays STRICTLY right of the bathtub tap zone (tub at [−0.72,0,−0.6],
+// hitSize [1.95,0.75,1.0] ⇒ x ≤ 0.255; here x ≥ 0.26) so the secret never
+// shadows a wash tap — the duck's last tail centimetres deliberately stay tub
+// territory, like the rim ducky. Clear of the toilet zone too (x ≥ 0.895).
+// test/interactions.test.js pins this no-overlap contract.
+export const DUCKY_TAP = Object.freeze({
+  /** box CENTER on the floor (roomManager lifts by hitSize[1]/2) */
+  at: Object.freeze([0.38, 0, -0.52]),
+  /** box size (x · y · z) */
+  hitSize: Object.freeze([0.24, 0.32, 0.44]),
+  /** heart-burst anchor: the duck's beak height over its body center */
+  burstAt: Object.freeze([0.3, 0.24, -0.52]),
+});
+// ---- end V6.1/G2 (B7) -------------------------------------------------------

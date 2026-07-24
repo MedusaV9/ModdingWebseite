@@ -21,7 +21,11 @@ import {
   flickToVelocity,
   stepBall,
   careEmotionFor, // V2/FIX-C (P1-2)
+  createDuckySecret, // V6.1/G2 (B7)
+  DUCKY_SECRET, // V6.1/G2 (B7)
 } from '../src/home/interactions.js';
+// V6.1/G2 (B7): the ducky tap-zone partition contract (pure room data)
+import { ROOM as BATHROOM_ROOM, DUCKY_TAP } from '../src/home/rooms/bathroom.js';
 import { INTERACT, XP, CARE_TUNING, STATS } from '../src/data/constants.js';
 import { FOODS_BY_ID } from '../src/data/foods.js';
 import { HEALTH } from '../src/systems/health.js'; // V2/G20 (§B5 thresholds)
@@ -449,6 +453,75 @@ test('V2/FIX-C careEmotionFor: night band while awake feeds the sleepy tie-bias'
   // (the night flag makes the guarantee independent of statOverride ordering)
   assert.equal(careEmotionFor(tired, NIGHT_2AM), 'sleepy');
   assert.equal(careEmotionFor(tired, NOON), 'sleepy'); // exhausted override by day too
+});
+
+// ---------------------------------------------------------------------------
+// V6.1/G2 (B7): secret ducky — 5 squeaks in a 3 s rolling window
+// ---------------------------------------------------------------------------
+
+test('B7 ducky: exactly five taps inside the window burst — four never do', () => {
+  const d = createDuckySecret();
+  const results = [];
+  for (let i = 0; i < 5; i += 1) results.push(d.tap(i * 500)); // span 2000 ms < 3000
+  assert.deepEqual(results, ['squeak', 'squeak', 'squeak', 'squeak', 'burst']);
+  const d4 = createDuckySecret();
+  for (let i = 0; i < 4; i += 1) assert.equal(d4.tap(i * 500), 'squeak');
+  assert.equal(d4.count(), 4, 'four taps hold the run open but never burst');
+});
+
+test('B7 ducky: the window is ROLLING — old taps expire, a slow fifth restarts', () => {
+  const d = createDuckySecret();
+  for (let i = 0; i < 4; i += 1) d.tap(i * 100); // run of 4 ending at t=300
+  // 5th tap 3 s after the run → every earlier tap fell out of the window
+  assert.equal(d.tap(300 + DUCKY_SECRET.WINDOW_MS), 'squeak');
+  assert.equal(d.count(), 1, 'timeout resets the count to the fresh tap');
+  // mid-run pacing: by the 5th tap at t=3600 only 900/1800/2700 are still
+  // inside the 3 s window (tap 0 expired) — 4 total, so NO burst yet even
+  // though five taps happened overall. Precision is the point of a secret.
+  const slow = createDuckySecret();
+  const slowResults = [0, 900, 1800, 2700, 3600].map((tMs) => slow.tap(tMs));
+  assert.ok(!slowResults.includes('burst'), 'five spread-out taps must not burst');
+  assert.equal(slow.count(), 4, 'the expired first tap left a 4-tap rolling run');
+});
+
+test('B7 ducky: a burst resets the run — retrigger needs five FRESH taps', () => {
+  const d = createDuckySecret();
+  for (let i = 0; i < 5; i += 1) d.tap(i * 100);
+  assert.equal(d.count(), 0, 'burst clears the run');
+  // the very next taps start a brand-new sequence (no carry-over)
+  const next = [];
+  for (let i = 0; i < 5; i += 1) next.push(d.tap(1000 + i * 100));
+  assert.deepEqual(next, ['squeak', 'squeak', 'squeak', 'squeak', 'burst'],
+    'a second full run must retrigger the burst');
+});
+
+test('B7 ducky: tap zone covers the floor duck but NEVER overlaps the tub/toilet zones', () => {
+  // roomManager mirrors: a hit box spans at ± hitSize/2 in x/z and 0..h in y
+  const box = ({ at, hitSize: [w, h, dep] }) => ({
+    min: [at[0] - w / 2, at[1], at[2] - dep / 2],
+    max: [at[0] + w / 2, at[1] + h, at[2] + dep / 2],
+  });
+  const overlaps = (a, b) => [0, 1, 2].every(
+    (axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]) > 0
+  );
+  const ducky = box(DUCKY_TAP);
+  // the FLOOR ducky (bathware dressing piece at [0.3, 0, −0.52]) sits inside
+  const duck = BATHROOM_ROOM.dressing
+    .find((entry) => entry.id === 'bathware').pieces
+    .find((piece) => piece.key === 'bubbly-bathroom/ducky' && piece.at[1] === 0);
+  assert.ok(duck, 'floor ducky dressing piece moved — update DUCKY_TAP');
+  assert.ok(
+    duck.at[0] > ducky.min[0] && duck.at[0] < ducky.max[0]
+    && duck.at[2] > ducky.min[2] && duck.at[2] < ducky.max[2],
+    'the duck body center must sit inside its tap zone'
+  );
+  // …and stays STRICTLY clear of every other bathroom tap box, so the secret
+  // never shadows a wash/toilet tap (Gooby raycasts first by design)
+  for (const entry of BATHROOM_ROOM.furniture) {
+    if (!entry.interact || !entry.hitSize) continue;
+    assert.ok(!overlaps(ducky, box(entry)),
+      `ducky tap zone overlaps tap:${entry.interact} — the partition broke`);
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -92,6 +92,19 @@ export const ROOM = Object.freeze({
       ]),
     }),
     // ---- end V6/E4 -------------------------------------------------------------
+    // ---- V6.1/G2 (A1): stove pilot glow — a warm emissive bulb sitting on
+    // the stove's back rim between the burners (stove top y 0.698, spans
+    // x 0.386..1.054/z −1.47..−0.77 at [0.72, 0, −1.12]). Opens the kitchen's
+    // merged `fairy` batch (+1 call — kitchen dressing total 5, +2 vs the V5
+    // baseline 3, inside the ≤4-added budget) and anchors the dusk/night
+    // kitchen point light homeScene.js parks at the same spot, so the warm
+    // pool reads as coming FROM a lit fixture. Bulb top y 0.845 stays under
+    // the Nougatschleuse fixture's lowest part (chute tip y ≈ 0.89 when
+    // installed at [0.95, 1.24, −1.34]) — no visual clip either way.
+    Object.freeze({
+      id: 'stovePilotGlow', kind: 'lampGlow', at: Object.freeze([0.72, 0.76, -1.33]),
+    }),
+    // ---- end V6.1/G2 (A1) -------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
 

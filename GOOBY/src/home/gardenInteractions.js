@@ -140,6 +140,28 @@ export function stageIndex(pct, nStages) {
 // plot visuals
 // ---------------------------------------------------------------------------
 
+// V6.1/G2 (A5): FOR-SALE panel brightness per ambience band. The panel is a
+// MeshBasicMaterial (CanvasTexture text must stay crisp ⇒ unlit), so it
+// ignores the scene's night light rig and read FULLBRIGHT after dark —
+// glowing like a screen while the whole garden dimmed around it. Scaling the
+// material color multiplies the texture instead: ~55 % at night, a gentler
+// step at dusk (matches the grass-tint ramp), untouched by day/dawn. The
+// wood post is MeshStandardMaterial and needs no help.
+export const SIGN_DIM_BY_BAND = Object.freeze({ day: 1, dawn: 1, dusk: 0.8, night: 0.55 });
+
+/** @param {string|undefined} band @returns {number} panel brightness 0..1 */
+export function signDimForBand(band) {
+  return SIGN_DIM_BY_BAND[band] ?? 1;
+}
+
+/** Apply the current band's dim to every live FOR-SALE panel. */
+function syncSignDim() {
+  const dim = signDimForBand(s.rm?.getAmbience?.().band);
+  for (const rec of s.plots) {
+    rec?.sign?.userData.panelMat?.color.setScalar(dim);
+  }
+}
+
 function buildForSaleSign(price) {
   const grp = new THREE.Group();
   grp.name = 'forSaleSign';
@@ -186,6 +208,10 @@ function buildForSaleSign(price) {
   panel.position.y = 0.44;
   grp.add(panel);
   grp.rotation.y = -0.12;
+  // V6.1/G2 (A5): syncSignDim finds the panel here; born already dimmed so a
+  // sign built after dark never flashes fullbright for its first second.
+  grp.userData.panelMat = panelMat;
+  panelMat.color.setScalar(signDimForBand(s.rm?.getAmbience?.().band));
   return grp;
 }
 
@@ -357,6 +383,9 @@ function gardenTick() {
   // lands via the store subscription in wireScene), but when it doesn't run
   // (or this tick wins the race) the juice still presents from here.
   presentReadyEvents(events);
+  // V6.1/G2 (A5): band flips while in the garden land within a second
+  // (roomManager refreshes its own ambience on a 30 s timer + ticker pushes).
+  syncSignDim();
 }
 
 // ---------------------------------------------------------------------------

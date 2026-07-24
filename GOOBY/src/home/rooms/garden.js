@@ -80,6 +80,17 @@ export const ROOM = Object.freeze({
       at: Object.freeze([-1.35, 0.005, 1.15]), rotY: 8,
       size: Object.freeze([1.3, 0.95]),
     }),
+    // ---- V6.1/G2 (A5): lantern head glow — the warm emissive bulb inside the
+    // street lantern's head (lantern grounded at [0.62, 0, −1.64], scale 0.45
+    // ⇒ cap top y ≈ 2.03; bulb center y 1.93 keeps the 0.085 m sphere under
+    // the cap). Opens the garden's merged `fairy` batch (+1 call — garden
+    // dressing total 4, the ≤4-added budget's last slot) and anchors the
+    // dusk/night garden point light homeScene.js parks at the same spot, so
+    // the small warm pool at the gate reads as coming FROM the lit lantern.
+    Object.freeze({
+      id: 'lanternGlow', kind: 'lampGlow', at: Object.freeze([0.62, 1.93, -1.64]),
+    }),
+    // ---- end V6.1/G2 (A5) -------------------------------------------------------
   ]),
   // ---- end V6/E4 -------------------------------------------------------------
 

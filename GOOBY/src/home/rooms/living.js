@@ -175,6 +175,22 @@ export const ROOM = Object.freeze({
     // sideboard spot on the right wall, facing into the room (the front door
     // sits at x 1.55 on the BACK wall — z 0.45 keeps them apart)
     Object.freeze({ slot: 'sideboard', at: Object.freeze([1.5, 0, 0.45]), rotY: -90 }),
+    // ---- V6.1/G2 (A3): souvenir shelf — fixed wall keepsake display -------
+    // Dynamic proc (src/home/souvenirShelf.js): plank + backboard + one
+    // procedural mini per visited vacation destination, ALL merged into ONE
+    // vertex-colored draw call; roomManager rebuilds it only when the
+    // normalized `visited` signature changes. Placement (back wall, high
+    // left-of-center, fully inside the ±1.67 m portrait view of the wall):
+    //   · x −1.3..0.2 / y 2.42..2.66 — above the wallArt slot's canvas
+    //     envelope (top y 2.25 at x −1.31..−0.39) and the two dressing
+    //     pictures (top y 2.38 at x 0.03..1.19), below the ceiling-lamp
+    //     fixture (base y 2.70, z −0.31..−0.05 — also fully apart in z)
+    //   · z −1.415: the backboard's back face kisses the wall inner face
+    //     (z −1.5) — audited as wallMounted + elevated (roomAudit.rules.js)
+    //   · clears the door (x ≥ 1.10), TV/radio/sofa (all y ≤ 1.1), and every
+    //     decor slot; no interact — the shelf is a look-at, not a tap target.
+    Object.freeze({ proc: 'souvenirShelf', at: Object.freeze([-0.55, 2.42, -1.415]), rotY: 0, noShadow: true }),
+    // ---- end V6.1/G2 (A3) ----------------------------------------------------
   ]),
 
   anchors: Object.freeze({
