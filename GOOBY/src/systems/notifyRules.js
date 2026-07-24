@@ -7,6 +7,18 @@
 //              next-event time); body copy in strings/v4-core.js; NOT
 //              quiet-hours-exempt; min-spacing/cap pipeline like ids 2–7.
 //
+// V6/D2 — 6.0 triggers (PLAN6 Wave D: MAX_SCHEDULED 8 → 10):
+//   9 vacReturn   vacation landing — at vacation.returnAt, only while the
+//                 slice is still AWAY and the landing is in the future (a
+//                 RETURN_READY/OVERDUE save already landed — no stale nag).
+//   10 vacLastCall pickup last call — at pickupBy − VAC_LAST_CALL_LEAD_H
+//                 (3 h), while the free pickup is still winnable (AWAY or
+//                 RETURN_READY) and the moment is in the future. Both copy
+//                 pairs live in strings/v6-vacation-content.js; both are
+//                 NOT quiet-hours-exempt (they shift naturally — a 03:00
+//                 landing notifies at 08:05) and join the min-spacing/cap
+//                 pipeline like ids 2–8.
+//
 // Triggers (§C7 table):
 //   1 wake     at sleep.wakeAt (only while sleeping) — EXEMPT from quiet hours
 //              (fires on time, user-initiated) and never moved by spacing.
@@ -38,12 +50,17 @@
 import { NOTIFY, STATS, CROP_TABLE } from '../data/constants.js';
 import { isSleeping } from './sleep.js';
 import { readyAt, tick as gardenTick } from './garden.js'; // V2/G20 (pure); V2/FIX-B: + tick
+// V6/D2: vacation slice reads (pure — sliceOf normalizes junk saves)
+import { sliceOf as vacationSliceOf, VACATION_PHASE } from './vacation.js';
 
 // V2/G20: engine-internal 2.0 rule numbers (§E0.1-2: not constants.js).
 /** §C2.4: harvest notification only when readyAt is ≥ 10 min in the future. */
 export const HARVEST_MIN_LEAD_MIN = 10;
 /** §C3.5: sick notification fires 4 h after backgrounding while sick. */
 export const SICK_AFTER_H = 4;
+// V6/D2: engine-internal 6.0 rule number (§E0.1-2: not constants.js).
+/** PLAN6 Wave D: the pickup last call (id 10) leads pickupBy by 3 h. */
+export const VAC_LAST_CALL_LEAD_H = 3;
 
 /** Notification id → strings.js key stem (titleKey/bodyKey = `notify.<stem>.title|body`). */
 const ID_STEM = Object.freeze(
@@ -133,7 +150,8 @@ function resolveConflicts(items) {
   const spacingMs = NOTIFY.MIN_SPACING_MIN * 60000;
   // Iterate until stable: shifting one item later can create new violations
   // (or push past other items), so re-sort + re-scan. Bounded: each pass moves
-  // one item strictly later and there are ≤ NOTIFY.MAX_SCHEDULED (7) items.
+  // one item strictly later and there are ≤ NOTIFY.MAX_SCHEDULED (10 — V6/D2)
+  // items, so the 50-pass guard stays far above the worst cascade.
   for (let guard = 0; guard < 50; guard++) {
     list.sort((a, b) => a.at - b.at || a.id - b.id);
     let violation = false;
@@ -156,7 +174,7 @@ function resolveConflicts(items) {
  * Compute the full notification schedule (§C7). Pure & deterministic.
  * @param {object} state save-schema state (§E3)
  * @param {number} nowMs current game time (clock.now())
- * @returns {ScheduledNotification[]} sorted by time, ≤ NOTIFY.MAX_SCHEDULED (7), one per id
+ * @returns {ScheduledNotification[]} sorted by time, ≤ NOTIFY.MAX_SCHEDULED (10 — V6/D2), one per id
  */
 export function computeSchedule(state, nowMs) {
   /** @type {ScheduledNotification[]} */
@@ -220,6 +238,26 @@ export function computeSchedule(state, nowMs) {
     const nextAt = Number(state?.modifiers?.nextAt);
     if (Number.isFinite(nextAt) && nextAt > nowMs) {
       items.push(makeItem(NOTIFY.IDS.modifier, nextAt));
+    }
+  }
+
+  // V6/D2: ids 9/10 — vacation landing + pickup last call (PLAN6 Wave D).
+  // Junk slices normalize through vacation.sliceOf (phase NONE → both skip);
+  // past moments skip (the app is open — no immediate nag). id 9 only while
+  // still AWAY (a save already in RETURN_READY/OVERDUE has landed — the
+  // player sees the HUD chip); id 10 while the free pickup is winnable
+  // (AWAY or RETURN_READY — once OVERDUE the last call would be a lie).
+  // Neither is quiet-hours-exempt; both ride resolveConflicts like ids 2–8.
+  {
+    const v = vacationSliceOf(state);
+    if (v.phase === VACATION_PHASE.AWAY && v.returnAt > nowMs) {
+      items.push(makeItem(NOTIFY.IDS.vacReturn, v.returnAt));
+    }
+    const pickupWinnable =
+      v.phase === VACATION_PHASE.AWAY || v.phase === VACATION_PHASE.RETURN_READY;
+    const lastCallAt = v.pickupBy - VAC_LAST_CALL_LEAD_H * 3600000;
+    if (pickupWinnable && lastCallAt > nowMs) {
+      items.push(makeItem(NOTIFY.IDS.vacLastCall, lastCallAt));
     }
   }
 

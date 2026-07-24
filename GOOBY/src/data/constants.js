@@ -241,9 +241,12 @@ export const INTERACT = Object.freeze({
 export const NOTIFY = Object.freeze({
   // V2/G16: ids 6/7 + cap 7 (PLAN2 §B3 — harvest §C2.4, sick §C3.5)
   // V4/G53: id 8 + cap 8 (PLAN4 §B10 — modifier event at modifiers.nextAt)
-  IDS: Object.freeze({ wake: 1, hunger: 2, fun: 3, hygiene: 4, daily: 5, harvest: 6, sick: 7, modifier: 8 }),
-  /** Max scheduled notifications (one per id). V4/G53: 7 → 8 (§B10). */
-  MAX_SCHEDULED: 8,
+  // V6/D2: ids 9/10 + cap 10 (PLAN6 Wave D — vacation landing at
+  // vacation.returnAt, pickup last call at pickupBy − 3 h; see the labeled
+  // V6/D2 block at the end of this file)
+  IDS: Object.freeze({ wake: 1, hunger: 2, fun: 3, hygiene: 4, daily: 5, harvest: 6, sick: 7, modifier: 8, vacReturn: 9, vacLastCall: 10 }),
+  /** Max scheduled notifications (one per id). V4/G53: 7 → 8 (§B10). V6/D2: 8 → 10 (PLAN6 Wave D). */
+  MAX_SCHEDULED: 10,
   /** Stat thresholds whose predicted crossing time triggers a notification. */
   HUNGER_AT: 20,
   FUN_AT: 15,
@@ -823,3 +826,22 @@ export const MODIFIER = Object.freeze({
 // ============================================================================
 
 // ============================================================== end V6/C3 ===
+
+// ============================================================================
+// V6/D2: GOOBY 6.0 vacation-depth notify spine (PLAN6 Wave D §D2 — the
+// SECOND ruled 6.0 re-opening of this file, V4/G53 precedent): the TWO new
+// notification ids NOTIFY.IDS.vacReturn 9 (vacation landing, fires at
+// vacation.returnAt while still AWAY) + NOTIFY.IDS.vacLastCall 10 (pickup
+// last call, fires at pickupBy − 3 h while the free pickup is still
+// winnable), and MAX_SCHEDULED 8 → 10 — marked inline at the NOTIFY table
+// above, because the frozen object cannot be extended after definition.
+// Both ids obey quiet hours (QUIET_EXEMPT_IDS stays [1] — only the
+// user-initiated wake is exempt) and join the min-spacing/cap pipeline like
+// ids 2–8. The trigger rules live in systems/notifyRules.js; the postcard-
+// archive numbers (cap 36, variant pools, fixed-ms day math) live in
+// systems/postcards.js (§E0.1-2 pattern); copy in
+// strings/v6-vacation-content.js. constants.js is FROZEN again after this
+// edit — no other 6.0 agent may touch it.
+// ============================================================================
+
+// ============================================================== end V6/D2 ===

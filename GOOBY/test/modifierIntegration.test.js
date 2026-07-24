@@ -378,7 +378,8 @@ test('consume/refund mid-window never move the id-8 trigger (fires once per even
 });
 
 test('cap-8/min-spacing pipeline: id 8 joins a busy board and every gap ≥ 30 min', () => {
-  assert.equal(NOTIFY.MAX_SCHEDULED, 8, '§B10: cap raised 7 → 8');
+  // V6/D2: vacation reminders raised the cap 8 → 10 (ids 9/10)
+  assert.equal(NOTIFY.MAX_SCHEDULED, 10, '§B10+V6/D2: cap 7 → 8 → 10');
   assert.equal(NOTIFY.IDS.modifier, 8, '§B10: id 8');
   const s = fixture({ stats: { hunger: 60, fun: 80, hygiene: 80 } });
   s.daily = { lastClaimDay: '2026-07-16', streak: 3 };

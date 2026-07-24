@@ -18,6 +18,9 @@ import { plant, water } from '../src/systems/garden.js';
 import { weatherAt } from '../src/systems/weather.js';
 import { HEALTH } from '../src/systems/health.js';
 import { WEIGHT } from '../src/systems/weight.js';
+// V6/D2: postcard-archive catch-up (PLAN6 Wave D — archive parity)
+import { VACATION, bookSlice } from '../src/systems/vacation.js';
+import { POSTCARDS, archiveOf, variantOf } from '../src/systems/postcards.js';
 
 const T0 = Date.UTC(2026, 6, 16, 12, 0, 0);
 const MIN = 60000;
@@ -427,4 +430,62 @@ test("timeEngine: garden readiness crossings re-emit as 'cropsReadyLive' (V2/FIX
   clock.configure({ now: T0 + 2 * MIN });
   engine.tick();
   assert.equal(emissions.length, 1, 'no re-emission after the crossing');
+});
+
+// ================= V6/D2: postcard-archive catch-up (PLAN6 Wave D — parity)
+
+test('V6/D2: one offline catch-up fills the archive with fixed-ms stamped cards', () => {
+  const DAY = POSTCARDS.MS_PER_DAY;
+  const s0 = state();
+  s0.vacation = bookSlice(null, 'space', T0); // 4 days → 3 cards
+  // app closed for the whole trip + into the pickup window
+  const sim = simulateOffline(s0, T0 + 4 * DAY + 2 * H);
+  const archive = archiveOf(sim.state);
+  assert.equal(archive.length, 3, 'one card per full day away');
+  assert.deepEqual(archive.map((e) => e.atMs), [T0 + DAY, T0 + 2 * DAY, T0 + 3 * DAY],
+    'entries stamped at their fixed-ms day boundaries, not the boot clock');
+  assert.deepEqual(archive.map((e) => e.variant),
+    [1, 2, 3].map((k) => variantOf('space', T0, k)),
+    'variants ride the deterministic trip seed');
+  assert.equal(sim.state.vacation.lastPostcardDayProcessed, 3);
+  // the V5 toast events keep their shape (one per postcard)
+  assert.equal(sim.events.filter((e) => e === 'vacationPostcard').length, 3);
+  assert.ok(sim.events.includes('vacationReturnReady'));
+});
+
+test('V6/D2: LIVE hourly engine ticking and ONE offline jump agree byte-for-byte', () => {
+  const DAY = POSTCARDS.MS_PER_DAY;
+  const end = T0 + 3 * DAY + VACATION.PICKUP_WINDOW_MS + H; // past overdue
+  // live path: the real timeEngine stepped hourly across the whole trip
+  const liveState = state();
+  liveState.vacation = bookSlice(null, 'beach', T0);
+  const store = createStore(liveState, { autosave: false });
+  const engine = createTimeEngine(store);
+  for (let ts = T0 + H; ts <= end; ts += H) {
+    clock.configure({ now: ts });
+    engine.tick();
+  }
+  // offline path: one boot catch-up over the identical absence
+  const offState = state();
+  offState.vacation = bookSlice(null, 'beach', T0);
+  const sim = simulateOffline(offState, end);
+  assert.deepEqual(archiveOf(store.get()), archiveOf(sim.state),
+    'the two catch-up paths share processPostcardsUpTo — archives must match');
+  assert.equal(store.get('vacation.phase'), sim.state.vacation.phase);
+  assert.equal(archiveOf(sim.state).length, 2, 'beach: 3 days → 2 cards');
+});
+
+test('V6/D2: a second boot over the same save adds nothing (no duplicates)', () => {
+  const DAY = POSTCARDS.MS_PER_DAY;
+  const s0 = state();
+  s0.vacation = bookSlice(null, 'beach', T0);
+  const first = simulateOffline(s0, T0 + 2 * DAY + H);
+  const before = archiveOf(first.state);
+  assert.equal(before.length, 2);
+  // simulate a re-boot an hour later (and one with a BACKWARDS clock)
+  const again = simulateOffline({ ...first.state }, T0 + 2 * DAY + 2 * H);
+  assert.deepEqual(archiveOf(again.state), before, 'no dupes on the next boot');
+  assert.equal(again.events.filter((e) => e === 'vacationPostcard').length, 0);
+  const back = simulateOffline({ ...first.state, lastTickAt: T0 + 2 * DAY + H }, T0 + DAY);
+  assert.deepEqual(archiveOf(back.state), before, 'backwards clock never re-writes');
 });

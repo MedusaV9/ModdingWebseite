@@ -37,8 +37,19 @@ import {
   remainingMs,
   formatCountdown,
 } from '../systems/vacation.js';
+// V6/D2: postcard-archive read API (pure) — rack section below
+import { archiveOf, postcardTextKey } from '../systems/postcards.js';
 import { bookVacation, pickupVacation, payTaxiReturn } from '../systems/economy.js';
 import { now } from '../core/clock.js';
+// V6/D1 (PLAN6 Wave D): the vacation cinematic presenter — staged strictly
+// AFTER the atomic economy transitions below (fire-and-forget; refused or
+// failed cinema never blocks the flow). This module is only ever loaded in
+// the browser (hud.js dynamic import), so the three.js graph behind the
+// presenter stays out of every headless test.
+import {
+  presentVacationCinematic,
+  initVacationCinematicHarness,
+} from '../vacation/vacationCinematic.js';
 
 // V3/G33-style injected CSS (rem units; 1px hairlines exempt). The card rows
 // reuse the §C9.2 .dest-option look via their own classes so the styles stay
@@ -66,6 +77,13 @@ const AIRPORT_CSS = `
 .v5-air-body{margin:0;font-size:0.875rem;font-weight:700;color:var(--brown);}
 .v5-air-count{font-variant-numeric:tabular-nums;font-weight:800;}
 .v5-air-cards{font-size:0.75rem;font-weight:700;color:var(--brown);opacity:.6;}
+.v6-rack{display:flex;flex-direction:column;gap:0.375rem;padding:0.25rem 0 0.125rem;}
+.v6-rack-title{margin:0;font-size:0.8125rem;font-weight:800;color:var(--brown);opacity:.75;display:flex;align-items:center;gap:0.375rem;}
+.v6-rack-row{display:flex;align-items:flex-start;gap:0.5rem;border-radius:0.75rem;padding:0.5rem 0.625rem;background:var(--frost);box-shadow:var(--shadow-soft);border-left:0.25rem solid var(--v6-rack-accent, var(--teal));}
+.v6-rack-row svg{color:var(--v6-rack-accent, var(--teal));flex:none;margin-top:0.0625rem;}
+.v6-rack-text{display:block;font-size:0.75rem;font-weight:700;color:var(--brown);}
+.v6-rack-meta{display:block;font-size:0.6875rem;font-weight:700;color:var(--brown);opacity:.55;font-variant-numeric:tabular-nums;}
+.v6-rack-empty{font-size:0.75rem;font-weight:700;color:var(--brown);opacity:.55;text-align:center;padding:0.25rem 0;}
 `;
 
 /**
@@ -99,6 +117,40 @@ function bookingCard(d, lastRecapLevel) {
       </span>
       <span class="v5-air-price">${t('vacation.dest.priceDays', { price: d.price, days: d.days })}</span>
     </button>`;
+}
+
+/**
+ * V6/D2: the postcard rack — Gooby's collected travel keepsakes (newest
+ * first, the engine caps the archive at 36). Self-contained: reads ONLY
+ * through systems/postcards.js archiveOf/postcardTextKey; strings live in
+ * D2's strings/v6-vacation-content.js module (vacation.rack.*).
+ * @param {object} state store.get()
+ * @returns {string} rack section HTML ('' hides the section pre-first-trip)
+ */
+function postcardRack(state) {
+  const entries = archiveOf(state);
+  if (entries.length === 0) return '';
+  const rows = entries
+    .slice()
+    .reverse()
+    .map((e) => {
+      const dest = getVacation(e.destId);
+      const stamp = new Date(e.atMs).toLocaleDateString();
+      return `
+      <div class="v6-rack-row" style="--v6-rack-accent:${dest?.color ?? 'var(--teal)'}">
+        ${icon(dest?.icon ?? 'globe', 18)}
+        <span>
+          <span class="v6-rack-text">${t(postcardTextKey(e))}</span>
+          <span class="v6-rack-meta">${t(`vacation.dest.${e.destId}.name`)} · ${t('vacation.rack.day', { day: e.dayIndex })} · ${stamp}</span>
+        </span>
+      </div>`;
+    })
+    .join('');
+  return `
+    <div class="v6-rack">
+      <h3 class="v6-rack-title">${icon('book', 16)} ${t('vacation.rack.title')}</h3>
+      ${rows}
+    </div>`;
 }
 
 /**
@@ -147,6 +199,7 @@ export function registerAirport({ store, ui, audio }) {
           <h2 class="perm-title v5-air-title">${icon('globe', 22)} ${t('vacation.airport.title')}</h2>
           <p class="v5-air-sub">${t('vacation.airport.sub')}</p>
           ${VACATIONS.map((d) => bookingCard(d, recapLevel)).join('')}
+          ${postcardRack(state)}
           <button class="btn btn-ghost v5-air-later">${t('ui.later')}</button>
         </div>`;
       // Only unlocked cards carry data-dest — mystery cards have no booking
@@ -162,6 +215,11 @@ export function registerAirport({ store, ui, audio }) {
               days: getVacation(destId)?.days ?? 3,
             });
             ui.closePanel('airport');
+            // V6/D1: departure send-off — keyed off THIS explicit user
+            // action (never phase observation, so boot/offline catch-up can
+            // never replay it). bookVacation committed atomically above;
+            // the cutscene is fire-and-forget decoration.
+            presentVacationCinematic({ store }, 'book', res);
           } else if (res.reason === 'coins') {
             audio.play('ui.error');
             ui.toast('vacation.noCoins');
@@ -192,6 +250,7 @@ export function registerAirport({ store, ui, audio }) {
             ? t('vacation.pickup.overdueBody', { fee: VACATION.TAXI_FEE })
             : t('vacation.pickup.body', { t: `<span class="v5-air-count">${remain}</span>` })}</p>
         ${cards > 0 ? `<span class="v5-air-cards">${icon('book', 14)} ${t('vacation.postcard', { text: t(`vacation.postcard.${v.destId}`) })}</span>` : ''}
+        ${postcardRack(state)}
         <div class="mg-btn-row">
           ${overdue
             ? `<button class="btn btn-teal v5-air-taxi">${t('vacation.pickup.taxiBtn', { fee: VACATION.TAXI_FEE })}</button>`
@@ -203,14 +262,20 @@ export function registerAirport({ store, ui, audio }) {
       </div>`;
     panelEl.querySelector('.v5-air-pickup')?.addEventListener('click', () => {
       const res = pickupVacation(store);
-      if (res.ok) celebrate(res);
-      else render(); // phase slipped (e.g. turned overdue) — re-render
+      if (res.ok) {
+        celebrate(res);
+        // V6/D1: on-time reunion — pickupVacation completed atomically
+        // above (stats/souvenir committed); fire-and-forget decoration.
+        presentVacationCinematic({ store }, 'pickup', res);
+      } else render(); // phase slipped (e.g. turned overdue) — re-render
     });
     panelEl.querySelector('.v5-air-taxi')?.addEventListener('click', () => {
       const res = payTaxiReturn(store);
       if (res.ok) {
         audio.play('coin.spend');
         celebrate(res);
+        // V6/D1: late-pickup reunion — same rewards, sheepish acting only.
+        presentVacationCinematic({ store }, 'taxi', res);
       } else render();
     });
     panelEl.querySelector('.v5-air-later')?.addEventListener('click', () => ui.closePanel('airport'));
@@ -240,6 +305,10 @@ export function registerAirport({ store, ui, audio }) {
       panelEl = null;
     },
   });
+
+  // V6/D1: arm the ?vacationcine= dev kick (idempotent; dev builds only —
+  // the presenter no-ops without the param).
+  initVacationCinematicHarness({ store, ui });
 
   // ---- dev harness: ?vacation=away|return|overdue|open (§E9 spirit) --------
   const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;

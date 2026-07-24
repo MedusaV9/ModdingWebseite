@@ -13,6 +13,15 @@
 // (old four stay ungated), the 180–350 price band with souvenirCoins ≪
 // price on every row, the pure isVacationUnlocked lock decision, and
 // EN/DE parity for the strings/v6-vacations.js module.
+//
+// V6/D2 (PLAN6 Wave D): the two ADDITIVE slice fields — `archive` (postcard
+// keepsakes) + `lastPostcardDayProcessed` (per-trip bookkeeping) — round-trip
+// through defaultSlice/sliceOf AND the carried transitions bookSlice/
+// pickupSlice (the verified whitelist-strip trap), junk heals, tick()
+// generates archive entries on both the live and money paths, and the
+// archive survives a full store-driven reunion. The deep archive math
+// (determinism, cap, DST edges, live/offline parity) lives in
+// test/postcards.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -232,6 +241,80 @@ test('sliceOf: defensive against missing/junk slices (no SAVE.VERSION bump)', ()
   assert.equal(healed.returnAt, 0);
   assert.equal(healed.trips, 0);
   assert.equal(isAway({}), false);
+});
+
+// ------------------------------------------- V6/D2: archive slice wiring
+
+test('V6/D2 sliceOf: archive + lastPostcardDayProcessed heal junk (round-trip)', () => {
+  // defaults carry the new fields
+  const d = defaultSlice();
+  assert.deepEqual(d.archive, []);
+  assert.equal(d.lastPostcardDayProcessed, 0);
+  // junk shapes fall back
+  const junky = sliceOf({ vacation: { archive: 'junk', lastPostcardDayProcessed: -4.7 } });
+  assert.deepEqual(junky.archive, []);
+  assert.equal(junky.lastPostcardDayProcessed, 0);
+  // junk LEAVES inside a real archive drop; valid entries round-trip verbatim
+  const good = { destId: 'beach', dayIndex: 1, variant: 2, atMs: T0 + DAY };
+  const healed = sliceOf({
+    vacation: {
+      ...bookSlice(null, 'beach', T0),
+      archive: [good, 'junk', { destId: 'atlantis', dayIndex: 1, variant: 1, atMs: T0 }, null],
+      lastPostcardDayProcessed: 1.9,
+    },
+  });
+  assert.deepEqual(healed.archive, [good], 'junk leaves stripped, keepsake kept');
+  assert.equal(healed.lastPostcardDayProcessed, 1, 'bookkeeping floors');
+  // a JSON round-trip (save/load) preserves both fields byte-for-byte
+  const ticked = tick({ vacation: bookSlice(null, 'beach', T0) }, T0 + 2 * DAY).changes;
+  const reloaded = sliceOf({ vacation: JSON.parse(JSON.stringify(ticked)) });
+  assert.deepEqual(reloaded, ticked, 'sliceOf must not strip the V6/D2 fields (whitelist trap)');
+});
+
+test('V6/D2 tick: archive fills alongside the postcards counter (fixed-ms stamps)', () => {
+  let state = { vacation: bookSlice(null, 'space', T0) }; // 4 days → 3 cards
+  let r = tick(state, T0 + DAY + HOUR);
+  assert.equal(r.changes.postcards, 1);
+  assert.equal(r.changes.archive.length, 1);
+  assert.deepEqual(r.changes.archive[0].atMs, T0 + DAY,
+    'entry stamped at its fixed-ms day boundary, not the tick clock');
+  assert.equal(r.changes.lastPostcardDayProcessed, 1);
+  state = { vacation: r.changes };
+  // jump past overdue: the remaining cards + phases land in one tick
+  r = tick(state, T0 + 4 * DAY + VACATION.PICKUP_WINDOW_MS + HOUR);
+  assert.equal(r.changes.archive.length, 3);
+  assert.deepEqual(r.changes.archive.map((e) => e.dayIndex), [1, 2, 3]);
+  assert.equal(r.changes.phase, VACATION_PHASE.OVERDUE);
+  // idempotent: same clock again → no changes, no dupes
+  assert.equal(tick({ vacation: r.changes }, T0 + 4 * DAY + VACATION.PICKUP_WINDOW_MS + HOUR).changes, null);
+});
+
+test('V6/D2 transitions: keepsakes survive book/pickup; bookkeeping resets', () => {
+  const traveled = tick({ vacation: bookSlice(null, 'beach', T0) }, T0 + 3 * DAY).changes;
+  assert.equal(traveled.archive.length, 2);
+  const home = pickupSlice(traveled);
+  assert.deepEqual(home.archive, traveled.archive, 'pickupSlice carries the archive');
+  assert.equal(home.lastPostcardDayProcessed, 0, 'pickupSlice resets the day bookkeeping');
+  const rebooked = bookSlice(home, 'space', T0 + 10 * DAY);
+  assert.deepEqual(rebooked.archive, traveled.archive, 'bookSlice carries the archive');
+  assert.equal(rebooked.lastPostcardDayProcessed, 0, 'bookSlice restarts the trip at day 0');
+});
+
+test('V6/D2 money path: the archive survives a full store-driven reunion', () => {
+  pin(T0);
+  const store = makeStore();
+  store.update((s) => { s.coins = 500; });
+  bookVacation(store, 'beach');
+  // land with both postcards written
+  const landed = tick(store.get(), T0 + 3 * DAY + HOUR);
+  store.update((s) => { s.vacation = landed.changes; });
+  assert.equal(store.get('vacation.archive').length, 2, 'archive filled while away');
+  const res = pickupVacation(store);
+  assert.equal(res.ok, true);
+  const v = store.get('vacation');
+  assert.equal(v.phase, VACATION_PHASE.NONE);
+  assert.equal(v.archive.length, 2, 'keepsakes survive economy.pickupVacation');
+  assert.equal(v.lastPostcardDayProcessed, 0);
 });
 
 test('phaseAt: away < returnAt ≤ returnReady < pickupBy ≤ overdue', () => {

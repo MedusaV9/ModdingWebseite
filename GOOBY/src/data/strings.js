@@ -88,6 +88,13 @@ import { EN as V6_GAMES_EN, DE as V6_GAMES_DE } from './strings/v6-games.js';
 // V6/C4: six-game juice-pass float/celebration labels - same versioned-module
 // pattern, spread below AFTER the v6-screen-themes spread.
 import { EN as V6_JUICE_EN, DE as V6_JUICE_DE } from './strings/v6-juice.js';
+// V6/D1: vacation departure/reunion cutscene captions — same versioned-module
+// pattern, spread below AFTER the v6-juice spread, always EN + DE.
+import { EN as V6_VAC_SCENES_EN, DE as V6_VAC_SCENES_DE } from './strings/v6-vacation-scenes.js';
+// V6/D2: vacation-depth content — pooled postcard texts, postcard-rack
+// labels + the two vacation notification copy pairs (ids 9/10) — same
+// versioned-module pattern, spread below AFTER v6-juice, always EN + DE.
+import { EN as V6_VACATION_CONTENT_EN, DE as V6_VACATION_CONTENT_DE } from './strings/v6-vacation-content.js';
 // end V5 imports
 
 /** @type {Record<string, string>} */
@@ -624,6 +631,8 @@ export const EN = {
   ...V6_SCREEN_THEMES_EN, // V6/B3
   ...V6_GAMES_EN, // V6/C3
   ...V6_JUICE_EN, // V6/C4
+  ...V6_VAC_SCENES_EN, // V6/D1
+  ...V6_VACATION_CONTENT_EN, // V6/D2
 };
 
 /** @type {Record<string, string>} */
@@ -1160,6 +1169,8 @@ export const DE = {
   ...V6_SCREEN_THEMES_DE, // V6/B3
   ...V6_GAMES_DE, // V6/C3
   ...V6_JUICE_DE, // V6/C4
+  ...V6_VAC_SCENES_DE, // V6/D1
+  ...V6_VACATION_CONTENT_DE, // V6/D2
 };
 
 const DICTS = { en: EN, de: DE };

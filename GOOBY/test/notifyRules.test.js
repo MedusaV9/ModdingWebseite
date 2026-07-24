@@ -19,9 +19,17 @@ import {
   HARVEST_MIN_LEAD_MIN,
   SICK_AFTER_H,
   READY_CHECK_SLACK_MS, // V2/FIX-B (E14)
+  VAC_LAST_CALL_LEAD_H, // V6/D2 (ids 9/10)
 } from '../src/systems/notifyRules.js';
 import { NOTIFY, CROP_TABLE } from '../src/data/constants.js';
 import { readyAt as gardenReadyAt } from '../src/systems/garden.js'; // V2/FIX-B (E14)
+// V6/D2: vacation fixtures for ids 9/10 (pure slice factories)
+import {
+  VACATION,
+  VACATION_PHASE,
+  bookSlice,
+  defaultSlice as vacationDefaultSlice,
+} from '../src/systems/vacation.js';
 import { defaultState } from '../src/core/save.js';
 
 const MIN = 60000;
@@ -234,7 +242,7 @@ test('all 5 triggers live: cap holds, one per id, sorted by time', () => {
   // the 5 v1 triggers exist until G20 wires the new rules; 5 < cap holds.
   assert.equal(items.length, 5);
   assert.ok(items.length <= NOTIFY.MAX_SCHEDULED, 'cap holds');
-  assert.equal(NOTIFY.MAX_SCHEDULED, 8); // V4/G53 (PLAN4 §B10): +modifier id 8
+  assert.equal(NOTIFY.MAX_SCHEDULED, 10); // V4/G53: 8; V6/D2 (PLAN6 Wave D): +vacReturn 9/vacLastCall 10
   assert.equal(new Set(items.map((n) => n.id)).size, 5);
   for (let i = 1; i < items.length; i++) assert.ok(items[i].at >= items[i - 1].at, 'sorted');
 });
@@ -521,4 +529,130 @@ test('all 8 triggers live: MAX_SCHEDULED 8 holds, id 8 included, sorted', () => 
   assert.deepEqual(new Set(items.map((n) => n.id)).size, 8, 'one per id');
   assert.ok(byId(items, NOTIFY.IDS.modifier), 'modifier present');
   for (let i = 1; i < items.length; i++) assert.ok(items[i].at >= items[i - 1].at, 'sorted');
+});
+
+// ============================= V6/D2: vacation landing (9) + last call (10)
+
+/** AWAY fixture: beach (3 days) booked at `bookedAt` — returnAt/pickupBy ride VACATION. */
+function vacState(bookedAt, extra = {}) {
+  return state({}, { vacation: { ...bookSlice(null, 'beach', bookedAt), ...extra } });
+}
+
+test('vacReturn: scheduled exactly at returnAt while AWAY (PLAN6 Wave D)', () => {
+  const bookedAt = at(10, 0);
+  const s = vacState(bookedAt);
+  const n = byId(computeSchedule(s, bookedAt + MIN), NOTIFY.IDS.vacReturn);
+  // beach returns 3 days later at 10:00 — outside quiet hours, unshifted
+  assert.deepEqual(n, {
+    id: 9,
+    at: bookedAt + 3 * VACATION.MS_PER_DAY,
+    titleKey: 'notify.vacReturn.title',
+    bodyKey: 'notify.vacReturn.body',
+  });
+});
+
+test('vacReturn guards: only while AWAY with a future landing', () => {
+  const bookedAt = at(10, 0);
+  // landed already (persisted phase moved on) → no stale landing nag
+  const ready = vacState(bookedAt, { phase: VACATION_PHASE.RETURN_READY });
+  assert.equal(byId(computeSchedule(ready, bookedAt + MIN), 9), undefined);
+  const over = vacState(bookedAt, { phase: VACATION_PHASE.OVERDUE });
+  assert.equal(byId(computeSchedule(over, bookedAt + MIN), 9), undefined);
+  // stale AWAY phase but returnAt already passed → skip (app open, chip shows)
+  const stale = vacState(bookedAt);
+  assert.equal(byId(computeSchedule(stale, stale.vacation.returnAt + MIN), 9), undefined);
+  // no vacation at all / junk slice → silence
+  assert.equal(byId(computeSchedule(state(), at(10, 0)), 9), undefined);
+  const junk = state({}, { vacation: { phase: 'bogus', returnAt: 'NaN' } });
+  assert.equal(byId(computeSchedule(junk, at(10, 0)), 9), undefined);
+  assert.equal(byId(computeSchedule(state({}, { vacation: vacationDefaultSlice() }), at(10, 0)), 9), undefined);
+});
+
+test('vacLastCall: scheduled at pickupBy − 3 h while AWAY and while RETURN_READY', () => {
+  const bookedAt = at(10, 0);
+  const s = vacState(bookedAt);
+  const expected = s.vacation.pickupBy - VAC_LAST_CALL_LEAD_H * 3600000; // 3 days later 07:00 → quiet → 08:05
+  assert.equal(VAC_LAST_CALL_LEAD_H, 3);
+  // beach booked 10:00 → pickupBy 10:00 four days on → last call 07:00 (quiet) → 08:05
+  const away = byId(computeSchedule(s, bookedAt + MIN), NOTIFY.IDS.vacLastCall);
+  assert.equal(away.at, quietShift(expected));
+  assert.equal(away.titleKey, 'notify.vacLastCall.title');
+  assert.equal(away.bodyKey, 'notify.vacLastCall.body');
+  // still winnable while waiting at the airport
+  const ready = vacState(bookedAt, { phase: VACATION_PHASE.RETURN_READY });
+  const waiting = byId(computeSchedule(ready, s.vacation.returnAt + MIN), NOTIFY.IDS.vacLastCall);
+  assert.equal(waiting.at, quietShift(expected));
+});
+
+test('vacLastCall guards: never when OVERDUE, past, or without a vacation', () => {
+  const bookedAt = at(10, 0);
+  const over = vacState(bookedAt, { phase: VACATION_PHASE.OVERDUE });
+  assert.equal(byId(computeSchedule(over, bookedAt + MIN), 10), undefined,
+    'an overdue last call would be a lie — the window is closed');
+  // inside the final 3 h: the moment has passed → skip (the app is open)
+  const s = vacState(bookedAt, { phase: VACATION_PHASE.RETURN_READY });
+  const lastCallAt = s.vacation.pickupBy - VAC_LAST_CALL_LEAD_H * 3600000;
+  assert.equal(byId(computeSchedule(s, lastCallAt + MIN), 10), undefined);
+  assert.equal(byId(computeSchedule(state(), at(10, 0)), 10), undefined);
+});
+
+test('vacReturn obeys quiet hours (NOT exempt): 23:00 landing → 08:05 next day', () => {
+  const bookedAt = at(23, 0); // beach lands 3 days later at 23:00 — quiet
+  const s = vacState(bookedAt);
+  const n = byId(computeSchedule(s, bookedAt + MIN), NOTIFY.IDS.vacReturn);
+  assert.equal(n.at, quietShift(s.vacation.returnAt), 'shifted, not dropped');
+  assert.equal(new Date(n.at).getHours(), 8);
+  assert.equal(new Date(n.at).getMinutes(), 5);
+  // the exemption list still contains ONLY the user-initiated wake (id 1)
+  assert.deepEqual([...NOTIFY.QUIET_EXEMPT_IDS], [1]);
+});
+
+test('vacLastCall obeys quiet hours: 02:00 booking → last call 23:00 → 08:05', () => {
+  const bookedAt = at(2, 0); // pickupBy 02:00 + window → last call 23:00 (quiet)
+  const s = vacState(bookedAt);
+  const n = byId(computeSchedule(s, bookedAt + MIN), NOTIFY.IDS.vacLastCall);
+  const raw = s.vacation.pickupBy - VAC_LAST_CALL_LEAD_H * 3600000;
+  assert.ok(isQuietTime(raw), 'fixture: the raw moment is inside quiet hours');
+  assert.equal(n.at, quietShift(raw));
+});
+
+test('ids 9/10 join the 30-min spacing cascade like ids 2–8', () => {
+  const now = at(9, 0);
+  // hunger 40 → crossing ≈ 09:57; craft a landing 10 min after it → +30 shift
+  const s = state({ hunger: 40 });
+  const hungerAt = byId(computeSchedule(s, now), NOTIFY.IDS.hunger).at;
+  const bookedAt = hungerAt + 10 * MIN - 3 * VACATION.MS_PER_DAY; // returnAt = hungerAt + 10 min
+  s.vacation = bookSlice(null, 'beach', bookedAt);
+  const items = computeSchedule(s, now);
+  assert.equal(byId(items, NOTIFY.IDS.hunger).at, hungerAt, 'earlier item keeps its slot');
+  assert.equal(byId(items, NOTIFY.IDS.vacReturn).at, hungerAt + 30 * MIN, 'landing shifts +30');
+});
+
+test('all 10 triggers live: MAX_SCHEDULED 10 holds, ids 9/10 included, sorted', () => {
+  const now = at(9, 0);
+  // Synthetic full board (pure projection — booking gates live in economy):
+  // 5 v1 triggers + harvest + sick + modifier + the two vacation reminders.
+  const s = state(
+    { hunger: 40, fun: 50, hygiene: 40 },
+    {
+      sleep: { sleeping: true, startedAt: now, wakeAt: now + 27 * MIN },
+      daily: { lastClaimDay: '2026-07-16', streak: 3 },
+      health: { ...defaultState().health, state: 'sick' },
+      modifiers: { ...defaultState().modifiers, nextAt: at(18, 0) },
+      vacation: bookSlice(null, 'beach', now),
+    }
+  );
+  gardenCurrent(s, now);
+  s.garden.plots[0] = plot('corn', now, { progress: 0, wateredMin: 90 });
+  const items = computeSchedule(s, now);
+  assert.equal(items.length, 10);
+  assert.ok(items.length <= NOTIFY.MAX_SCHEDULED, 'cap holds');
+  assert.equal(NOTIFY.MAX_SCHEDULED, 10, 'V6/D2 (PLAN6 Wave D): cap raised 8 → 10');
+  assert.deepEqual(new Set(items.map((n) => n.id)).size, 10, 'one per id');
+  assert.ok(byId(items, NOTIFY.IDS.vacReturn), 'vacReturn present');
+  assert.ok(byId(items, NOTIFY.IDS.vacLastCall), 'vacLastCall present');
+  for (let i = 1; i < items.length; i++) assert.ok(items[i].at >= items[i - 1].at, 'sorted');
+  // both carry their strings/v6-vacation-content.js copy-key pairs
+  assert.equal(byId(items, 9).titleKey, 'notify.vacReturn.title');
+  assert.equal(byId(items, 10).bodyKey, 'notify.vacLastCall.body');
 });

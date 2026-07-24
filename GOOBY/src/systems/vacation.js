@@ -27,8 +27,19 @@
 // Consumers: the HUD chip + toasts (ui/hud.js marked block), Gooby
 // visibility + care gates (home/interactions.js), the airport panel
 // (ui/airportScreen.js).
+//
+// V6/D2 (PLAN6 Wave D): postcards additionally persist as KEEPSAKES — the
+// slice gains `archive` (capped entry list) + `lastPostcardDayProcessed`
+// (per-trip bookkeeping); all archive math lives in the pure sibling
+// systems/postcards.js and generation happens inside tick(), so the live
+// ticker and the offline catch-up produce identical archives for free.
+// `postcards` (the count) keeps its V5 semantics untouched — it stays the
+// toast counter; the archive is parallel bookkeeping.
 
 import { getVacation } from '../data/vacations.js';
+// V6/D2 (PLAN6 Wave D): postcard-archive engine (pure sibling — this module
+// stays the only writer of the slice; postcards.js owns the archive math).
+import { normalizeArchive, processPostcardsUpTo } from './postcards.js';
 
 /** Vacation phases (frozen). 'none' = Gooby is home. */
 export const VACATION_PHASE = Object.freeze({
@@ -53,8 +64,18 @@ export const VACATION = Object.freeze({
 /**
  * The vacation save slice at its defaults (defensive factory — the engine
  * self-heals a missing slice through this, so no SAVE.VERSION bump).
+ *
+ * V6/D2 (PLAN6 Wave D): two ADDITIVE fields — `archive` (the postcard
+ * keepsakes, `{destId, dayIndex, variant, atMs}` entries capped at
+ * POSTCARDS.MAX_ARCHIVE by systems/postcards.js) and
+ * `lastPostcardDayProcessed` (per-trip generation bookkeeping — monotonic,
+ * reset on book/pickup). Both are wired through defaultSlice(), sliceOf()
+ * AND the carried-transition helpers bookSlice()/pickupSlice() per the
+ * whitelist-strip rule (sliceOf strips unknown fields silently).
  * @returns {{phase: string, destId: string, bookedAt: number,
- *   returnAt: number, pickupBy: number, postcards: number, trips: number}}
+ *   returnAt: number, pickupBy: number, postcards: number, trips: number,
+ *   archive: import('./postcards.js').PostcardEntry[],
+ *   lastPostcardDayProcessed: number}}
  */
 export function defaultSlice() {
   return {
@@ -65,6 +86,9 @@ export function defaultSlice() {
     pickupBy: 0,
     postcards: 0,
     trips: 0,
+    // V6/D2: postcard archive + per-trip day bookkeeping (additive)
+    archive: [],
+    lastPostcardDayProcessed: 0,
   };
 }
 
@@ -88,6 +112,9 @@ export function sliceOf(state) {
     pickupBy: num(raw.pickupBy),
     postcards: Math.max(0, Math.floor(num(raw.postcards))),
     trips: Math.max(0, Math.floor(num(raw.trips))),
+    // V6/D2: junk archives normalize (drop/dedupe/sort/cap) in postcards.js
+    archive: normalizeArchive(raw.archive),
+    lastPostcardDayProcessed: Math.max(0, Math.floor(num(raw.lastPostcardDayProcessed))),
   };
 }
 
@@ -144,6 +171,9 @@ export function bookSlice(prev, destId, nowMs) {
   const dest = getVacation(destId);
   const days = dest ? dest.days : 3;
   const returnAt = nowMs + days * VACATION.MS_PER_DAY;
+  // V6/D2: the archive is a LIFETIME keepsake shelf — it carries across the
+  // booking; the per-trip day bookkeeping restarts at 0 (defaultSlice).
+  const carried = sliceOf({ vacation: prev });
   return {
     ...defaultSlice(),
     phase: VACATION_PHASE.AWAY,
@@ -151,7 +181,8 @@ export function bookSlice(prev, destId, nowMs) {
     bookedAt: nowMs,
     returnAt,
     pickupBy: returnAt + VACATION.PICKUP_WINDOW_MS,
-    trips: sliceOf({ vacation: prev }).trips,
+    trips: carried.trips,
+    archive: carried.archive,
   };
 }
 
@@ -162,7 +193,10 @@ export function bookSlice(prev, destId, nowMs) {
  * @returns {ReturnType<typeof defaultSlice>}
  */
 export function pickupSlice(prev) {
-  return { ...defaultSlice(), trips: sliceOf({ vacation: prev }).trips + 1 };
+  // V6/D2: postcards survive the reunion (travel artifacts, stored once);
+  // the per-trip bookkeeping resets with the rest of the slice.
+  const carried = sliceOf({ vacation: prev });
+  return { ...defaultSlice(), trips: carried.trips + 1, archive: carried.archive };
 }
 
 /**
@@ -196,6 +230,23 @@ export function tick(state, nowMs) {
     v.postcards = due;
     changed = true;
   }
+  // ── V6/D2: postcard ARCHIVE generation — the ONE shared pure processor
+  // (systems/postcards.js) both catch-up paths reach through this tick
+  // (core/timeEngine.js live 1 s ticker AND systems/offline.js boot sim),
+  // so live and offline replays yield byte-identical archives. Entries are
+  // stamped with their fixed-ms day boundary (bookedAt + k·day — DST-safe),
+  // deterministic variants ride the trip seed, and the monotonic
+  // `lastPostcardDayProcessed` bookkeeping forbids duplicates (a backwards
+  // clock jump generates nothing). Cap 36 FIFO inside the processor.
+  {
+    const pc = processPostcardsUpTo(v, nowMs);
+    if (pc.added > 0) {
+      v.archive = pc.archive;
+      v.lastPostcardDayProcessed = pc.lastPostcardDayProcessed;
+      changed = true;
+    }
+  }
+  // ── end V6/D2 ──
   const phase = phaseAt(v, nowMs);
   if (phase !== v.phase) {
     // Walk skipped stages so offline gaps still announce the airport wait

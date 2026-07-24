@@ -322,8 +322,11 @@ test('NOTIFY gains harvest:6 / sick:7 with MAX_SCHEDULED 7 + EN/DE copy', () => 
   assert.equal(NOTIFY.IDS.sick, 7);
   // V4/G53 (PLAN4 §B10): +modifier:8, cap 7 → 8
   assert.equal(NOTIFY.IDS.modifier, 8);
-  assert.equal(NOTIFY.MAX_SCHEDULED, 8);
-  assert.equal(Object.keys(NOTIFY.IDS).length, 8); // one id per scheduled slot
+  // V6/D2 (PLAN6 Wave D): +vacReturn:9 / vacLastCall:10, cap 8 → 10
+  assert.equal(NOTIFY.IDS.vacReturn, 9);
+  assert.equal(NOTIFY.IDS.vacLastCall, 10);
+  assert.equal(NOTIFY.MAX_SCHEDULED, 10);
+  assert.equal(Object.keys(NOTIFY.IDS).length, 10); // one id per scheduled slot
   // §C2.4 / §C3.5 copy, verbatim
   assert.equal(EN['notify.harvest.body'], 'Your crops are ready! 🥕');
   assert.equal(DE['notify.harvest.body'], 'Deine Ernte ist reif! 🥕');
