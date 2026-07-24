@@ -182,6 +182,9 @@ export function createAmbientLife({ rm }) {
   let t = 0;
   let disposed = false;
 
+  /** V6/F2: reused result array for getWatchables() (entries live on performers) */
+  const watchList = [];
+
   // per-frame scratch (no allocations in update paths)
   const scratchMat4 = new THREE.Matrix4();
   const scratchPos = new THREE.Vector3();
@@ -236,7 +239,13 @@ export function createAmbientLife({ rm }) {
       // flutterPose reads row.center — derive a sampler row once at mount
       const sRow = { ...row, center: base };
       const sprite = makeSprite(row);
-      performers.push({ kind: 'flutter', row: sRow, sprite });
+      // V6/F2: flutter rows (garden butterflies/bee) are the watchable set
+      // for Gooby's head tracking — one cached entry per performer so
+      // getWatchables() never allocates on the decision cadence.
+      performers.push({
+        kind: 'flutter', row: sRow, sprite,
+        watch: { id: row.id, pos: new THREE.Vector3() },
+      });
     } else if (row.kind === 'drift') {
       const sRow = { ...row, origin: base };
       const sprite = makeSprite(row, { opacity: 0 });
@@ -361,6 +370,25 @@ export function createAmbientLife({ rm }) {
           tickFireflies(p);
         }
       }
+    },
+
+    /**
+     * V6/F2: live watchable sprites (the flutter butterflies/bee) as watch
+     * candidates for the F2 "Gooby watches" decision logic — WORLD positions
+     * refreshed into cached vectors on each call (no allocation; homeScene
+     * polls this on the ~0.25 s watch cadence, not per frame). Empty under
+     * reduced motion / in rooms with no flutter rows.
+     * @returns {Array<{id: string, pos: THREE.Vector3}>}
+     */
+    getWatchables() {
+      watchList.length = 0;
+      if (disposed || reducedMotion) return watchList;
+      for (const p of performers) {
+        if (p.kind !== 'flutter') continue;
+        p.sprite.getWorldPosition(p.watch.pos);
+        watchList.push(p.watch);
+      }
+      return watchList;
     },
 
     /**

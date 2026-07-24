@@ -23,6 +23,9 @@
 //                end-of-life (bath scrub)
 //   confetti   — pastel paper squares bursting up then fluttering down
 //                (level-up, results, celebrations)
+//   notes      — V6/F2: small warm musical notes drifting up with a lazy sway
+//                (Gooby's happy-idle hum; vector-painted, NOT a text glyph so
+//                the emoji audit + cross-platform rendering stay clean)
 
 import * as THREE from 'three';
 // V4/FIX-JUICE: the legacy DOM effects below (burstConfettiDom/flyCoinsDom)
@@ -157,6 +160,36 @@ function drawSquare(g, s) {
   g.beginPath();
   g.roundRect(m, m, s - 2 * m, s - 2 * m, r);
   g.fill();
+}
+
+/**
+ * V6/F2: eighth note, vector-painted (head + stem + flag) so it renders
+ * identically everywhere and never trips the emoji audit. White core —
+ * tinted warm per-note at spawn.
+ */
+function drawNote(g, s) {
+  g.fillStyle = '#FFFFFF';
+  g.strokeStyle = '#FFFFFF';
+  g.lineCap = 'round';
+  const hx = s * 0.38, hy = s * 0.68; // note head center
+  const top = s * 0.18;               // stem top
+  const stemX = hx + s * 0.115;
+  // head (tilted ellipse)
+  g.beginPath();
+  g.ellipse(hx, hy, s * 0.14, s * 0.1, -0.42, 0, Math.PI * 2);
+  g.fill();
+  // stem
+  g.lineWidth = s * 0.055;
+  g.beginPath();
+  g.moveTo(stemX, hy - s * 0.02);
+  g.lineTo(stemX, top);
+  g.stroke();
+  // flag (curls right off the stem top)
+  g.lineWidth = s * 0.06;
+  g.beginPath();
+  g.moveTo(stemX, top);
+  g.bezierCurveTo(stemX + s * 0.2, top + s * 0.06, stemX + s * 0.22, top + s * 0.2, stemX + s * 0.1, top + s * 0.32);
+  g.stroke();
 }
 
 // ---------------------------------------------------------------------------
@@ -337,6 +370,31 @@ const TYPES = {
       p.mat.rotation += p.spin * dt;
       p.sprite.scale.set(p.size, p.size * (0.55 + 0.45 * Math.abs(Math.sin(p.age * 9 + p.phase))), 1);
       p.mat.opacity = 1 - Math.max(0, (p.t - 0.7) / 0.3) ** 2;
+    },
+  },
+
+  // V6/F2: Gooby's hum — 2–3 little notes rising from above his head, each
+  // swaying on its own beat with a gentle metronome tilt, fading out near the
+  // top. Warm gold/peach tints; homeScene staggers the emits (count: 1 each)
+  // so the notes read as a melody, not a burst.
+  notes: {
+    tex: () => getTexture('note', drawNote),
+    count: 1,
+    life: [1.5, 2.0],
+    spawn(p, rng) {
+      p.vel.set((rng() - 0.5) * 0.14, 0.34 + rng() * 0.14, (rng() - 0.5) * 0.06);
+      p.size = 0.085 + rng() * 0.035;
+      p.phase = rng() * Math.PI * 2;
+      p.spin = 0.28 + rng() * 0.14; // metronome tilt amplitude (radians)
+      p.mat.color.setHex(rng() < 0.5 ? 0xffd166 : 0xffb38a);
+    },
+    step(p, dt) {
+      p.pos.addScaledVector(p.vel, dt);
+      p.pos.x += Math.sin(p.age * 3.1 + p.phase) * 0.16 * dt; // lazy sway
+      p.mat.rotation = Math.sin(p.age * 2.4 + p.phase) * p.spin;
+      const grow = Math.min(1, p.age * 5);
+      p.sprite.scale.setScalar(p.size * grow * (1 + p.t * 0.25));
+      p.mat.opacity = grow * (1 - p.t ** 2);
     },
   },
 };

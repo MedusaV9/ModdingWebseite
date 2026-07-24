@@ -18,7 +18,16 @@ import {
   fireflyPose,
   twinklePose,
   createDisposalLedger,
+  // V6/F2: living-world pure logic (watch head-tracking + hum schedule)
+  WATCH,
+  createWatchState,
+  watchTarget,
+  HUM,
+  isHummingMood,
+  humDelaySec,
+  humNoteCount,
 } from '../src/home/ambientLife.data.js';
+import { EMOTION_IDS } from '../src/character/emotions.js';
 import { flutterPose, driftPose } from '../src/recap/vignettes.logic.js';
 import { BANDS } from '../src/systems/dayNight.js';
 import { WEATHER } from '../src/systems/weather.js';
@@ -339,5 +348,148 @@ test('mount/swap ledger model: every band/weather swap frees the old batch set',
     }
     ledger?.disposeAll();
     assert.equal(ledger.outstanding(), 0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// V6/F2 — WATCH: Gooby's head-tracking decision logic (hysteresis)
+// ---------------------------------------------------------------------------
+
+const GOOBY_AT = { x: 0, y: 0.5, z: 0 };
+/** sprite factory at a given distance along +x from GOOBY_AT */
+const spriteAt = (id, dist, extra = {}) => ({
+  id, pos: { x: dist, y: 0.5, z: 0 }, ...extra,
+});
+
+test('F2 WATCH consts: hysteresis gap, positive cadences, lost < full cooldown', () => {
+  assert.ok(Object.isFrozen(WATCH));
+  assert.ok(WATCH.EXIT_RADIUS > WATCH.ENTER_RADIUS, 'exit > enter (hysteresis)');
+  assert.ok(WATCH.MAX_WATCH_SEC > 0 && WATCH.COOLDOWN_SEC > 0);
+  assert.ok(WATCH.LOST_COOLDOWN_SEC < WATCH.COOLDOWN_SEC, 'lost breather is shorter');
+  assert.ok(WATCH.TWITCH_EVERY_SEC > 0 && WATCH.TWITCH_EVERY_SEC < WATCH.MAX_WATCH_SEC);
+});
+
+test('F2 watchTarget: acquires the NEAREST sprite inside its enter radius', () => {
+  const sprites = [
+    spriteAt('far', WATCH.ENTER_RADIUS + 0.1), // outside — never a candidate
+    spriteAt('near', 1.0),
+    spriteAt('nearer', 0.6),
+  ];
+  const r = watchTarget(GOOBY_AT, sprites, createWatchState(), 0.25);
+  assert.equal(r.target?.id, 'nearer');
+  assert.equal(r.state.id, 'nearer');
+  assert.equal(r.twitched, false, 'no twitch on acquisition');
+});
+
+test('F2 watchTarget: holds through the enter/exit hysteresis band (no jitter)', () => {
+  // acquire at 1.0, then the sprite drifts BEYOND enter but INSIDE exit —
+  // a stateless nearest-inside-enter pick would drop it (jitter); ours holds.
+  let state = watchTarget(GOOBY_AT, [spriteAt('b', 1.0)], createWatchState(), 0.25).state;
+  const between = (WATCH.ENTER_RADIUS + WATCH.EXIT_RADIUS) / 2;
+  const r = watchTarget(GOOBY_AT, [spriteAt('b', between)], state, 0.25);
+  assert.equal(r.target?.id, 'b', 'held inside the hysteresis band');
+  // …but past the exit radius the hold breaks with the SHORT lost cooldown
+  const r2 = watchTarget(GOOBY_AT, [spriteAt('b', WATCH.EXIT_RADIUS + 0.05)], r.state, 0.25);
+  assert.equal(r2.target, null);
+  assert.equal(r2.state.cooldownSec, WATCH.LOST_COOLDOWN_SEC);
+});
+
+test('F2 watchTarget: full watch ends at MAX_WATCH_SEC with the full cooldown', () => {
+  let state = watchTarget(GOOBY_AT, [spriteAt('b', 1)], createWatchState(), 0.25).state;
+  let target = null;
+  let steps = 0;
+  for (; steps < 200; steps += 1) {
+    const r = watchTarget(GOOBY_AT, [spriteAt('b', 1)], state, 0.25);
+    state = r.state;
+    target = r.target;
+    if (!target) break;
+  }
+  assert.equal(target, null, 'watch released');
+  assert.ok(steps * 0.25 <= WATCH.MAX_WATCH_SEC + 0.5, 'released near MAX_WATCH_SEC');
+  assert.equal(state.cooldownSec, WATCH.COOLDOWN_SEC, 'full cooldown after a full watch');
+  // cooldown blocks re-acquisition and counts down monotonically
+  const blocked = watchTarget(GOOBY_AT, [spriteAt('b', 1)], state, 0.25);
+  assert.equal(blocked.target, null);
+  assert.ok(blocked.state.cooldownSec < state.cooldownSec);
+});
+
+test('F2 watchTarget: twitch beats fire exactly on TWITCH_EVERY_SEC boundaries', () => {
+  let state = watchTarget(GOOBY_AT, [spriteAt('b', 1)], createWatchState(), 0.25).state;
+  const twitchTimes = [];
+  for (let t = 0; t < WATCH.MAX_WATCH_SEC - 0.25; t += 0.25) {
+    const r = watchTarget(GOOBY_AT, [spriteAt('b', 1)], state, 0.25);
+    if (!r.target) break;
+    if (r.twitched) twitchTimes.push(r.state.heldSec);
+    state = r.state;
+  }
+  assert.ok(twitchTimes.length >= 2, `expected ≥2 twitch beats, got ${twitchTimes.length}`);
+  for (const [i, at] of twitchTimes.entries()) {
+    const boundary = (i + 1) * WATCH.TWITCH_EVERY_SEC;
+    assert.ok(Math.abs(at - boundary) <= 0.25 + 1e-9, `beat ${i} at ${at}, boundary ${boundary}`);
+  }
+});
+
+test('F2 watchTarget: per-sprite radius overrides (the fence bird) are honored', () => {
+  const bird = spriteAt('bird', WATCH.ENTER_RADIUS + 1, {
+    enterRadius: WATCH.ENTER_RADIUS + 2,
+    exitRadius: WATCH.ENTER_RADIUS + 2.5,
+  });
+  const r = watchTarget(GOOBY_AT, [bird], createWatchState(), 0.25);
+  assert.equal(r.target?.id, 'bird', 'bird acquired beyond the default radius');
+});
+
+test('F2 watchTarget: pure — never mutates state/sprites, arrays or objects for pos', () => {
+  const state = createWatchState();
+  const frozen = Object.freeze({ ...state });
+  const sprites = [
+    { id: 'a', pos: [1, 0.5, 0] }, // array-form positions must work too
+    spriteAt('b', 0.4),
+  ];
+  const snapshot = JSON.stringify(sprites);
+  const r1 = watchTarget([0, 0.5, 0], sprites, state, 0.25);
+  const r2 = watchTarget([0, 0.5, 0], sprites, state, 0.25);
+  assert.deepEqual(r1.state, r2.state, 'same inputs, same outputs');
+  assert.equal(r1.target?.id, 'b');
+  assert.deepEqual({ ...state }, { ...frozen }, 'input state untouched');
+  assert.equal(JSON.stringify(sprites), snapshot, 'sprites untouched');
+  // hostile inputs never throw
+  assert.doesNotThrow(() => watchTarget(GOOBY_AT, null, null, NaN));
+});
+
+// ---------------------------------------------------------------------------
+// V6/F2 — HUM: happy-idle humming schedule
+// ---------------------------------------------------------------------------
+
+test('F2 HUM consts: sane ranges, moods are real emotion ids', () => {
+  assert.ok(Object.isFrozen(HUM));
+  assert.ok(HUM.DELAY_MIN_SEC > 0 && HUM.DELAY_MAX_SEC > HUM.DELAY_MIN_SEC);
+  assert.ok(HUM.FIRST_FRAC > 0 && HUM.FIRST_FRAC < 1);
+  assert.ok(HUM.NOTES_MIN >= 1 && HUM.NOTES_MAX >= HUM.NOTES_MIN);
+  assert.ok(HUM.NOTE_SPACING_SEC > 0);
+  for (const mood of HUM.MOODS) {
+    assert.ok(EMOTION_IDS.includes(mood), `HUM mood '${mood}' is not an emotion id`);
+  }
+  // sad/neutral/sleepy Goobys don't hum
+  assert.equal(isHummingMood('happy'), true);
+  assert.equal(isHummingMood('ecstatic'), true);
+  for (const id of ['neutral', 'sad', 'sleepy', 'grumpy', 'sick', '']) {
+    assert.equal(isHummingMood(id), false, id);
+  }
+});
+
+test('F2 humDelaySec: bounded by the DELAY range, first hum comes sooner', () => {
+  assert.equal(humDelaySec(() => 0), HUM.DELAY_MIN_SEC);
+  assert.equal(humDelaySec(() => 1), HUM.DELAY_MAX_SEC);
+  const mid = humDelaySec(() => 0.5);
+  assert.ok(mid > HUM.DELAY_MIN_SEC && mid < HUM.DELAY_MAX_SEC);
+  assert.equal(humDelaySec(() => 0.5, { first: true }), mid * HUM.FIRST_FRAC);
+});
+
+test('F2 humNoteCount: NOTES_MIN…NOTES_MAX inclusive, integer', () => {
+  assert.equal(humNoteCount(() => 0), HUM.NOTES_MIN);
+  assert.equal(humNoteCount(() => 0.999999), HUM.NOTES_MAX);
+  for (const r of [0, 0.2, 0.4, 0.6, 0.8, 0.99]) {
+    const n = humNoteCount(() => r);
+    assert.ok(Number.isInteger(n) && n >= HUM.NOTES_MIN && n <= HUM.NOTES_MAX, String(r));
   }
 });

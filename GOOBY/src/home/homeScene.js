@@ -34,6 +34,18 @@ import { bandAt } from '../systems/dayNight.js';
 import { weatherAt } from '../systems/weather.js';
 import { mountGardenRain, mountGardenClouds, updateWeatherFx } from '../gfx/weatherFx.js';
 import { createAmbientLife } from './ambientLife.js'; // V6/A3: batched room ambient life
+// V6/F2: living-world reactions — the transient garden bird + the pure
+// watch/hum decision logic (all tuning/tests live in ambientLife.data.js)
+import { createAmbientVisitors } from './ambientVisitors.js';
+import {
+  watchTarget,
+  createWatchState,
+  isHummingMood,
+  humDelaySec,
+  humNoteCount,
+  HUM,
+} from './ambientLife.data.js';
+import { prefersReducedMotion } from '../ui/ui.js'; // V6/F2: hum notes are motion
 import {
   disableGyro,
   isGyroEnabled,
@@ -156,6 +168,34 @@ export function createHomeScene(ctx) {
   let cloudFx = null;
   /** @type {ReturnType<typeof createAmbientLife>|null} V6/A3 ambient life */
   let ambient = null;
+  /** @type {ReturnType<typeof createAmbientVisitors>|null} V6/F2 garden bird */
+  let visitors = null;
+
+  // --- V6/F2: Gooby watches the ambient life -------------------------------
+  // Decision state for the pure watchTarget() hysteresis (ambientLife.data.js)
+  // — evaluated on a fixed ~0.25 s cadence, not per frame.
+  let watchState = createWatchState();
+  let watchTick = 0;
+  /** a watch target currently drives gooby.lookAt (release bookkeeping) */
+  let watching = false;
+  /** alternate the periodic happy beat: blink ↔ subtle ear/body twitch */
+  let twitchFlip = false;
+  /** >0 while the content-blink lids pulse runs (restores the night bias) */
+  let blinkT = 0;
+  const WATCH_TICK_SEC = 0.25;
+  /** reused candidate list (entries are cached by their owners — no alloc) */
+  const watchCandidates = [];
+  const watchGoobyPos = new THREE.Vector3();
+
+  // --- V6/F2: happy-idle humming --------------------------------------------
+  /** seconds until the next hum (0 = scheduler idle, waits for a happy idle) */
+  let humIn = 0;
+  /** previous "happy + idle" sample — a fresh happy spell re-seeds sooner */
+  let humWasHappy = false;
+  /** notes still to emit for the current hum (staggered, melody-like) */
+  let humNotesLeft = 0;
+  let humNoteIn = 0;
+  const humNotePos = new THREE.Vector3();
   /** §C10.3 night yawn countdown (0 = timer off) */
   let yawnIn = 0;
   /** §C11.2: Gooby is parked under the garden tree canopy during rain */
@@ -201,6 +241,7 @@ export function createHomeScene(ctx) {
     rainFx?.setActive(amb.weather === 'rain');
     cloudFx?.setActive(amb.weather === 'cloudy');
     ambient?.setConditions(amb.band, amb.weather); // V6/A3: band/weather row swap
+    visitors?.setConditions(amb.band, amb.weather); // V6/F2: bird visitor gates
 
     refreshAmbientAudio();
 
@@ -263,6 +304,107 @@ export function createHomeScene(ctx) {
     }
   }
   // --- end V2/G26 -------------------------------------------------------------
+
+  // --- V6/F2: Gooby watches + hums (living-world micro-reactions) -------------
+
+  /**
+   * Gooby counts as ambient-idle when ONLY the auto-idle runs: not mid-hop or
+   * mid-pan, no interaction clip (pet/tickle/eat/wash all replace 'idle'),
+   * not sleeping, not parked under the rain canopy, and actually visible
+   * (the vacation flow hides the group).
+   */
+  function goobyAmbientIdle() {
+    return !!gooby && gooby.group.visible && gooby.isPlaying('idle')
+      && !canopySitting && hopTimer <= 0 && !rm?.isPanning()
+      && !store.get('sleep')?.sleeping;
+  }
+
+  /**
+   * The periodic happy beat while a watch runs (WATCH.TWITCH_EVERY_SEC):
+   * alternates a content squint-blink (lids pulse, max-combined so droopier
+   * faces are untouched) with a subtle ear/body twitch (pokeWobble is an
+   * overlay clip — the idle keeps running underneath).
+   */
+  function happyWatchBeat() {
+    twitchFlip = !twitchFlip;
+    if (twitchFlip) {
+      blinkT = 0.14;
+      gooby.setLidsBias(1.0);
+    } else {
+      gooby.play('pokeWobble', { dir: { x: 0.5, z: 0.25 } });
+    }
+  }
+
+  /**
+   * Fixed-cadence watch decision (V6/F2): collects the live candidates
+   * (A3 flutter butterflies/bee + the F2 bird in its perch phase) and lets
+   * the pure watchTarget() hysteresis drive the clamped gooby.lookAt().
+   * Tap-look (lookTimer) always wins; any non-idle state releases instantly.
+   */
+  function updateWatch() {
+    if (!goobyAmbientIdle() || lookTimer > 0) {
+      if (watching) {
+        watching = false;
+        gooby?.lookAt(null);
+      }
+      watchState = createWatchState();
+      return;
+    }
+    watchCandidates.length = 0;
+    for (const w of ambient?.getWatchables() ?? []) watchCandidates.push(w);
+    const birdWatch = visitors?.getWatchable();
+    if (birdWatch) watchCandidates.push(birdWatch);
+    watchGoobyPos.copy(gooby.group.position);
+    watchGoobyPos.y += 0.5; // head height — good enough for radius checks
+    const res = watchTarget(watchGoobyPos, watchCandidates, watchState, WATCH_TICK_SEC);
+    watchState = res.state;
+    if (res.target) {
+      watching = true;
+      gooby.lookAt(res.target.pos);
+      if (res.twitched) happyWatchBeat();
+    } else if (watching) {
+      watching = false;
+      gooby.lookAt(null);
+    }
+  }
+
+  /**
+   * Happy-idle hum scheduler (V6/F2): while the emotion machine sits in a
+   * humming mood (happy/ecstatic — HUM.MOODS) AND Gooby is ambient-idle, a
+   * soft 'gooby.purr' plays every HUM.DELAY range with 2–3 authored note
+   * particles staggered above his head. Notes are motion → skipped entirely
+   * under prefers-reduced-motion (the purr stays: audio isn't motion, and
+   * the OS setting doesn't ask us to mute).
+   */
+  function updateHum(dt) {
+    const happy = goobyAmbientIdle() && isHummingMood(ambMachine?.get?.() ?? '');
+    if (happy && !humWasHappy) humIn = humDelaySec(Math.random, { first: true });
+    humWasHappy = happy;
+    if (happy) {
+      humIn -= dt;
+      if (humIn <= 0) {
+        humIn = humDelaySec(Math.random);
+        ctx.audio?.play?.('gooby.purr'); // the hum voice: soft content purr
+        if (!prefersReducedMotion()) {
+          humNotesLeft = humNoteCount(Math.random);
+          humNoteIn = 0; // first note lands this frame
+        }
+      }
+    }
+    if (humNotesLeft > 0) {
+      humNoteIn -= dt;
+      if (humNoteIn <= 0) {
+        humNoteIn = HUM.NOTE_SPACING_SEC;
+        humNotesLeft -= 1;
+        humNotePos.copy(gooby.group.position);
+        humNotePos.y += 0.62; // just above the head
+        humNotePos.x += (Math.random() - 0.5) * 0.14;
+        humNotePos.z += 0.06;
+        particles.emit('notes', humNotePos, { count: 1 });
+      }
+    }
+  }
+  // --- end V6/F2 ---------------------------------------------------------------
 
   /** @type {Array<() => void>} store/input unsubscribers */
   const subs = [];
@@ -418,6 +560,15 @@ export function createHomeScene(ctx) {
       ambient = createAmbientLife({ rm });
       // ---- end V6/A3 ---------------------------------------------------------
 
+      // ---- V6/F2: transient garden bird visitor ------------------------------
+      // Clock-hashed schedule + garden/daytime/dry gates live in
+      // ambientLife.data.js (VISITOR); the manager mounts the pretty-park
+      // bird GLB only while a visit is live, despawns on room switch, and
+      // no-ops under reduced motion. Same setConditions/update/dispose
+      // cadence as ambient above.
+      visitors = createAmbientVisitors({ rm });
+      // ---- end V6/F2 ---------------------------------------------------------
+
       // --- emotion follows the store mood (§C1 bands via emotions.js) ---
       const machine = createEmotionMachine();
       machine.onChange((id) => gooby.setEmotion(id));
@@ -522,6 +673,7 @@ export function createHomeScene(ctx) {
       particles.update(dt);
       updateWeatherFx(dt); // V2/G26 (§C11.2): rain/clouds/window streaks
       ambient?.update(dt); // V6/A3: ambient life (pauses with the RAF loop)
+      visitors?.update(dt); // V6/F2: bird visitor poll (stateless wall-clock)
 
       if (gooby) {
         gooby.update(dt);
@@ -532,6 +684,19 @@ export function createHomeScene(ctx) {
         if (lookTimer > 0) {
           lookTimer -= dt;
           if (lookTimer <= 0) gooby.lookAt(null);
+        }
+
+        // V6/F2: watch decision (fixed ~0.25 s cadence) + hum scheduler +
+        // the content-blink release (restores the §C10.3 night lids bias)
+        watchTick -= dt;
+        if (watchTick <= 0) {
+          watchTick = WATCH_TICK_SEC;
+          updateWatch();
+        }
+        updateHum(dt);
+        if (blinkT > 0) {
+          blinkT -= dt;
+          if (blinkT <= 0) gooby.setLidsBias(isNightAwake() ? NIGHT_LIDS_BIAS : 0);
         }
 
         // V2/G26 (§C10.3): night yawns every 45±15 s while awake + idle
@@ -611,6 +776,10 @@ export function createHomeScene(ctx) {
       ambient?.dispose();
       ambient = null;
       // end V6/A3
+      // V6/F2: bird visitor despawns before the room manager frees groups
+      visitors?.dispose();
+      visitors = null;
+      // end V6/F2
       gooby?.dispose();
       gooby = null;
       particles.dispose();

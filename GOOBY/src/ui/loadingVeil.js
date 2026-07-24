@@ -37,8 +37,23 @@
 // template literal below — px-audit gates it (§B3: rem-only in the audited
 // props). Pure helpers are exported for test/loadingVeil.test.js; importing
 // this module under node is safe (no top-level DOM access).
+//
+// V6/F2 — PETAL WIPE: home↔scene transitions now default to a petal/leaf
+// sweep instead of the circle iris: the curtain edge becomes a slanted
+// left→right clip-path sweep (450 ms, same show/hide API and reveal-safety
+// windows) and a transient full-screen canvas stamps 2 pre-painted petal
+// sprites (rotating, swaying) along the moving frontier so the seam reads as
+// a drift of petals. The iris keyframes REMAIN as the no-canvas fallback
+// (veilWipeVariant), and prefers-reduced-motion keeps the plain fade exactly
+// as before (the petal class is never added, and the CSS media block also
+// overrides it as belt-and-braces). The petal field/pose math is pure and
+// exported (petalField/petalStampPose — test/ambientVisitors.test.js).
+// DEV capture aid: `?veilslow=N` (DEV builds only) multiplies the wipe +
+// canvas durations so a mid-transition frame can be screenshotted; guarded
+// by import.meta.env.DEV, inert in production.
 
 import { t, getLang } from '../data/strings.js';
+import { prefersReducedMotion } from './ui.js'; // V6/F2: petal variant gate
 import { iconTinted, stripRawGlyphs } from './icons.js'; // V6/D3: authored ready-line accents + label glyph strip
 import { EN as ACUI_EN, DE as ACUI_DE } from '../data/strings/v4-acui-loading.js';
 import { EN as UI2_EN, DE as UI2_DE } from '../data/strings/v4-ui2.js';
@@ -70,6 +85,96 @@ export const VEIL = Object.freeze({
   /** hide() poll cadence while waiting for the scene switch to settle. */
   POLL_MS: 50,
 });
+
+// ---------------------------------------------------------------------------
+// V6/F2: petal wipe tuning + pure math (exported, node-tested)
+// ---------------------------------------------------------------------------
+
+export const PETAL = Object.freeze({
+  /** Sweep duration (must match the acui-veil-sweep-* keyframes below).
+   *  Fits inside both reveal fallback windows: IRIS_IN_MS/IRIS_OUT_MS + 150. */
+  WIPE_MS: 450,
+  /** Stamped petals per wipe. */
+  COUNT: 26,
+  /** Frontier slant (top edge leads — matches the sweep clip polygons). */
+  SLANT: 0.15,
+  /** Stamp size range (fraction of the viewport's shorter side). */
+  SIZE_MIN: 0.035,
+  SIZE_MAX: 0.06,
+});
+
+/**
+ * Which wipe a veil transition uses (V6/F2 variant selection — same call
+ * sites, the choice lives entirely inside this module):
+ *  - reduced motion → the plain fade (CSS media block does it; the petal
+ *    class is simply never added);
+ *  - no 2D canvas (headless edge cases) → the classic circle iris;
+ *  - otherwise → the petal sweep, for every home↔scene transition the veil
+ *    covers (game launches included — they are home→minigame switches).
+ * @param {'game'|'home'|'trip'} mode veil mode (kept for future per-mode art)
+ * @param {{reducedMotion?: boolean, canvasOk?: boolean}} [env]
+ * @returns {'fade'|'iris'|'petal'}
+ */
+export function veilWipeVariant(mode, { reducedMotion = false, canvasOk = true } = {}) {
+  normalizeVeilMode(mode); // canonicalize (junk modes still pick a variant)
+  if (reducedMotion) return 'fade';
+  if (!canvasOk) return 'iris';
+  return 'petal';
+}
+
+/**
+ * Deterministic petal descriptor field (tiny LCG — same seed, same drift on
+ * every run/device; no Math.random so tests can pin it).
+ * @param {number} [count]
+ * @param {number} [seed]
+ * @returns {Array<{lane: number, ahead: number, size: number, spin: number,
+ *   phase: number, sway: number, sprite: 0|1}>}
+ */
+export function petalField(count = PETAL.COUNT, seed = 7) {
+  let s = (Math.floor(Number(seed)) >>> 0) || 1;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const n = Math.max(1, Math.floor(Number(count)) || 1);
+  const petals = [];
+  for (let i = 0; i < n; i += 1) {
+    petals.push({
+      /** vertical lane 0..1 — even spread + jitter so no row gaps */
+      lane: Math.min(1, (i + rand() * 0.9) / n),
+      /** signed offset from the frontier (some lead, some trail) */
+      ahead: (rand() - 0.35) * 0.16,
+      size: PETAL.SIZE_MIN + rand() * (PETAL.SIZE_MAX - PETAL.SIZE_MIN),
+      /** radians of rotation across the whole sweep */
+      spin: (rand() - 0.5) * 9,
+      phase: rand() * Math.PI * 2,
+      sway: 0.02 + rand() * 0.03,
+      /** sprite index: mostly pink petals, some green leaves */
+      sprite: rand() < 0.72 ? 0 : 1,
+    });
+  }
+  return petals;
+}
+
+/**
+ * Pose of one petal stamp at sweep progress u ∈ [0,1] (pure): position in
+ * viewport fractions, rotation in radians, alpha fading at both wipe ends so
+ * stamps never pop. The frontier sweeps left→right with the top edge leading
+ * by PETAL.SLANT — the same slant the sweep clip polygons use.
+ * @param {ReturnType<typeof petalField>[number]} petal
+ * @param {number} u 0..1 sweep progress
+ * @returns {{x: number, y: number, rot: number, alpha: number}}
+ */
+export function petalStampPose(petal, u) {
+  const k = Math.max(0, Math.min(1, Number(u) || 0));
+  const frontier = -0.25 + k * 1.45 + PETAL.SLANT * (1 - petal.lane);
+  return {
+    x: frontier + petal.ahead + Math.sin(k * Math.PI * 2 + petal.phase) * petal.sway,
+    y: petal.lane + Math.sin(k * Math.PI * 3 + petal.phase) * petal.sway * 0.6,
+    rot: petal.phase + k * petal.spin,
+    alpha: Math.max(0, Math.min(1, Math.min(k, 1 - k) * 6)),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for test/loadingVeil.test.js — keep them DOM-free)
@@ -204,6 +309,31 @@ const VEIL_CSS = `
   from { clip-path: circle(141% at 50% 44%); }
   to { clip-path: circle(0% at 50% 44%); }
 }
+/* V6/F2: petal-sweep variant (default for home↔scene transitions — the
+   veilWipeVariant selection). The curtain edge is a slanted left→right
+   sweep; the petal stamps ride a separate .acui-veil-petals canvas so they
+   can lead AHEAD of the clip edge. 450 ms = PETAL.WIPE_MS. */
+.acui-veil.acui-veil-petal.acui-veil-in {
+  animation: acui-veil-sweep-in 450ms ease-out both;
+}
+.acui-veil.acui-veil-petal.acui-veil-out {
+  animation: acui-veil-sweep-out 450ms ease-in both;
+  pointer-events: none;
+}
+@keyframes acui-veil-sweep-in {
+  from { clip-path: polygon(0 0, 0% 0, -15% 100%, 0 100%); }
+  to { clip-path: polygon(0 0, 115% 0, 100% 100%, 0 100%); }
+}
+@keyframes acui-veil-sweep-out {
+  from { clip-path: polygon(0% 0, 100% 0, 100% 100%, -15% 100%); }
+  to { clip-path: polygon(115% 0, 100% 0, 100% 100%, 100% 100%); }
+}
+.acui-veil-petals {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-loading) + 1);
+  pointer-events: none;
+}
 /* the adopted/self-built POLISH-D card wrapper centers INSIDE the veil —
    absolute (not its own fixed layer) so the iris clip carries it along */
 .acui-veil .mg-loading {
@@ -240,12 +370,18 @@ const VEIL_CSS = `
 }
 .acui-veil[data-mode='home'] .mg-loading-ready::before { background-image: url("data:image/svg+xml,${encodeURIComponent(iconTinted('cottage', 24, '#FFFFFF'))}"); }
 .acui-veil[data-mode='trip'] .mg-loading-ready::before { background-image: url("data:image/svg+xml,${encodeURIComponent(iconTinted('suitcase', 24, '#FFFFFF'))}"); }
-/* reduced motion: plain fade instead of the iris, decorative loops off */
+/* reduced motion: plain fade instead of the iris, decorative loops off.
+   V6/F2: the petal selectors are repeated so the fade outranks the sweep
+   even if the petal class were ever present (JS never adds it under
+   reduced motion — this is belt-and-braces specificity). */
 @media (prefers-reduced-motion: reduce) {
-  .acui-veil.acui-veil-in { animation: acui-veil-fade-in 160ms ease-out both; }
-  .acui-veil.acui-veil-out { animation: acui-veil-fade-out 160ms ease-out both; }
+  .acui-veil.acui-veil-in,
+  .acui-veil.acui-veil-petal.acui-veil-in { animation: acui-veil-fade-in 160ms ease-out both; }
+  .acui-veil.acui-veil-out,
+  .acui-veil.acui-veil-petal.acui-veil-out { animation: acui-veil-fade-out 160ms ease-out both; }
   .acui-veil .mg-loading-motif { animation: none; }
   .acui-veil .mg-loading-tip { transition: none; }
+  .acui-veil-petals { display: none; }
 }
 @keyframes acui-veil-fade-in {
   from { opacity: 0; }
@@ -315,6 +451,156 @@ function ensureStyles() {
   style.dataset.owner = 'loadingveil';
   style.textContent = VEIL_CSS;
   document.head.appendChild(style);
+}
+
+// ---------------------------------------------------------------------------
+// V6/F2: petal wipe runtime (canvas stamps along the sweep frontier)
+// ---------------------------------------------------------------------------
+
+/**
+ * DEV-only capture aid: `?veilslow=N` multiplies the wipe + canvas durations
+ * (clamped 1–20) so a mid-transition frame can be screenshotted reliably.
+ * Guarded by import.meta.env.DEV — production builds always return 1.
+ * @returns {number}
+ */
+function devWipeSlow() {
+  if (!import.meta.env?.DEV) return 1;
+  if (typeof location === 'undefined') return 1;
+  const n = Number(new URLSearchParams(location.search).get('veilslow'));
+  return Number.isFinite(n) && n > 1 ? Math.min(20, n) : 1;
+}
+
+/** Soft pink sakura petal (teardrop with a tip notch), pre-painted once. */
+function paintPetalSprite(g, s) {
+  const grad = g.createRadialGradient(s * 0.42, s * 0.4, s * 0.06, s * 0.5, s * 0.5, s * 0.52);
+  grad.addColorStop(0, '#FFE1EB');
+  grad.addColorStop(0.6, '#FFB9D0');
+  grad.addColorStop(1, '#FF9EC0');
+  g.fillStyle = grad;
+  g.beginPath();
+  g.moveTo(s * 0.5, s * 0.06); // stem tip
+  g.bezierCurveTo(s * 0.92, s * 0.2, s * 0.94, s * 0.66, s * 0.62, s * 0.9);
+  g.quadraticCurveTo(s * 0.5, s * 0.8, s * 0.38, s * 0.9); // tip notch
+  g.bezierCurveTo(s * 0.06, s * 0.66, s * 0.08, s * 0.2, s * 0.5, s * 0.06);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(232,101,146,0.55)';
+  g.lineWidth = s * 0.03;
+  g.stroke();
+}
+
+/** Small fresh-green leaf with a center vein, pre-painted once. */
+function paintLeafSprite(g, s) {
+  const grad = g.createLinearGradient(s * 0.2, s * 0.2, s * 0.8, s * 0.85);
+  grad.addColorStop(0, '#C9E9AE');
+  grad.addColorStop(1, '#8CC978');
+  g.fillStyle = grad;
+  g.beginPath();
+  g.moveTo(s * 0.5, s * 0.08);
+  g.quadraticCurveTo(s * 0.94, s * 0.36, s * 0.5, s * 0.92);
+  g.quadraticCurveTo(s * 0.06, s * 0.36, s * 0.5, s * 0.08);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(106,152,86,0.7)';
+  g.lineWidth = s * 0.035;
+  g.beginPath();
+  g.moveTo(s * 0.5, s * 0.14);
+  g.quadraticCurveTo(s * 0.56, s * 0.5, s * 0.5, s * 0.86);
+  g.stroke();
+}
+
+/** @type {HTMLCanvasElement[]|null} the 2 pre-painted petal sprites */
+let petalSprites = null;
+
+/** Paint the 2 stamp sprites once per app (64 px offscreen canvases). */
+function getPetalSprites() {
+  if (petalSprites) return petalSprites;
+  const S = 64;
+  petalSprites = [paintPetalSprite, paintLeafSprite].map((paint) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    if (g) paint(g, S);
+    return c;
+  });
+  return petalSprites;
+}
+
+/**
+ * Run one petal sweep on a transient full-screen canvas (self-removing).
+ * Purely decorative: the clip-path sweep on the veil root is the functional
+ * wipe — if rAF stalls (hidden tab) the safety timeout just removes the
+ * canvas and the transition still completes via the root's own timers.
+ * @param {number} durMs sweep duration (PETAL.WIPE_MS × DEV slowdown)
+ */
+function runPetalCanvas(durMs) {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'acui-veil-petals';
+  const g = canvas.getContext('2d');
+  if (!g) return; // no 2D context → the clip sweep alone carries the wipe
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = innerWidth;
+  const h = innerHeight;
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+  g.scale(dpr, dpr);
+  document.body.appendChild(canvas);
+  const petals = petalField();
+  const sprites = getPetalSprites();
+  const unit = Math.min(w, h);
+  const start = nowMs();
+  let raf = 0;
+  const cleanup = () => {
+    cancelAnimationFrame(raf);
+    canvas.remove();
+  };
+  const safety = setTimeout(cleanup, durMs + 500);
+  const frame = () => {
+    const u = (nowMs() - start) / durMs;
+    if (u >= 1 || !canvas.isConnected) {
+      clearTimeout(safety);
+      cleanup();
+      return;
+    }
+    g.clearRect(0, 0, w, h);
+    for (const petal of petals) {
+      const pose = petalStampPose(petal, u);
+      if (pose.alpha <= 0) continue;
+      const size = petal.size * unit;
+      g.save();
+      g.globalAlpha = pose.alpha;
+      g.translate(pose.x * w, pose.y * h);
+      g.rotate(pose.rot);
+      g.drawImage(sprites[petal.sprite], -size / 2, -size / 2, size, size);
+      g.restore();
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+}
+
+/**
+ * Apply the selected wipe variant to a veil root for one transition leg:
+ * adds/removes the petal class, sets the DEV-slowed duration and launches
+ * the stamp canvas. Fade (reduced motion) and iris need no extra work —
+ * the base CSS handles them.
+ * @param {HTMLElement} node veil root
+ * @returns {number} the wipe's duration multiplier (DEV slowdown, ≥1)
+ */
+function applyWipeVariant(node) {
+  const variant = veilWipeVariant(mode, {
+    reducedMotion: prefersReducedMotion(),
+    canvasOk: typeof document.createElement('canvas').getContext === 'function',
+  });
+  const slow = devWipeSlow();
+  if (variant !== 'petal') {
+    node.classList.remove('acui-veil-petal');
+    return 1;
+  }
+  node.classList.add('acui-veil-petal');
+  if (slow > 1) node.style.animationDuration = `${PETAL.WIPE_MS * slow}ms`;
+  runPetalCanvas(PETAL.WIPE_MS * slow);
+  return slow;
 }
 
 /**
@@ -471,11 +757,15 @@ function reveal(myToken) {
     };
     node.classList.remove('acui-veil-in');
     node.classList.add('acui-veil-out');
+    // V6/F2: re-apply the wipe variant for the OUT leg (petal sweep +
+    // stamp canvas; iris/fade need nothing). slow > 1 only in DEV captures.
+    const slow = applyWipeVariant(node);
     // animationend BUBBLES from card children — only the root wipe counts
     node.addEventListener('animationend', (e) => {
       if (e.target === node) finish();
     });
-    setTimeout(finish, VEIL.IRIS_OUT_MS + 150);
+    // fallback covers the LONGER of the iris/petal wipes (× DEV slowdown)
+    setTimeout(finish, (Math.max(VEIL.IRIS_OUT_MS, PETAL.WIPE_MS) + 150) * slow);
   });
 }
 
@@ -537,6 +827,9 @@ export function show({ mode: requested = 'game', meta = {}, content = null } = {
   setCard(content ?? buildCard(nextMode, meta));
   document.body.appendChild(el);
   const node = el;
+  // V6/F2: pick the wipe for the IN leg (petal sweep default; iris/fade
+  // fallbacks) and launch the stamp canvas alongside the clip animation.
+  const slowIn = applyWipeVariant(node);
   coveredPromise = new Promise((resolve) => {
     let done = false;
     const finish = () => {
@@ -549,7 +842,8 @@ export function show({ mode: requested = 'game', meta = {}, content = null } = {
     node.addEventListener('animationend', (e) => {
       if (e.target === node) finish();
     });
-    setTimeout(finish, VEIL.IRIS_IN_MS + 150);
+    // fallback covers the LONGER of the iris/petal wipes (× DEV slowdown)
+    setTimeout(finish, (Math.max(VEIL.IRIS_IN_MS, PETAL.WIPE_MS) + 150) * slowIn);
   });
   armEnterHook();
   armWatchdog();
