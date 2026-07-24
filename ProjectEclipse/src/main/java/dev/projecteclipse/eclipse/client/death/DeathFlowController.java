@@ -226,13 +226,17 @@ public final class DeathFlowController {
      * Suppresses the vanilla "receiving level" screen while a flow hop is hiding behind
      * the {@link TransitionFx} black (§3.7 "no vanilla screens"). Bounded by the
      * suppression window, exact-class-checked, and inert while the kill-switch is off.
+     * The exact-class check matters: {@code LoadingScreenSwap}'s custom loading screen
+     * EXTENDS {@link ReceivingLevelScreen}, so an {@code instanceof} here could cancel
+     * the replacement screen that was just installed (blank-screen race, eval LOW).
      */
     @SubscribeEvent
     static void onScreenOpening(ScreenEvent.Opening event) {
         if (!theaterOn() || System.currentTimeMillis() >= suppressUntilMillis) {
             return;
         }
-        if (event.getNewScreen() instanceof ReceivingLevelScreen) {
+        if (event.getNewScreen() != null
+                && event.getNewScreen().getClass() == ReceivingLevelScreen.class) {
             event.setCanceled(true);
         }
     }

@@ -26,7 +26,7 @@ public final class FxBudget {
     /** SEQUENCE burst ceiling per window; sustainable for ≤ 3 consecutive windows. */
     private static final int SEQUENCE_BURST_PER_WINDOW = 60;
     /** SEQUENCE spend allowed across the previous 3 windows before the burst is revoked. */
-    private static final int SEQUENCE_BURST_HISTORY_CAP = 120;
+    private static final int SEQUENCE_BURST_HISTORY_CAP = 180;
     /** Per-channel caps per window at full quality (global cap still binds). */
     private static final int AMBIENT_PER_WINDOW = 12;
     private static final int BURST_PER_WINDOW = 15;

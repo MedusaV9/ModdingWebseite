@@ -57,7 +57,7 @@ public final class FrozenParams {
     private static volatile MinecraftServer activeServer;
 
     static {
-        ReloadHooks.register("ores", () -> OreConfig.reload(FMLPaths.CONFIGDIR.get().resolve("eclipse")));
+        ReloadHooks.register("frozen-worldgen", FrozenParams::restoreFrozenReloadState);
     }
 
     private FrozenParams() {}
@@ -131,6 +131,36 @@ public final class FrozenParams {
     /** Save-local eclipse directory ({@code null} when no server session is active). */
     public static Path saveEclipseDir() {
         return saveEclipseDir;
+    }
+
+    /**
+     * Ordinary config reloads may refresh global templates, but an active save keeps its
+     * frozen terrain parameters. Explicit {@link #refreeze} is the only path that replaces
+     * this context from global config.
+     */
+    private static void restoreFrozenReloadState() {
+        Context ctx = current;
+        Path saveDir = saveEclipseDir;
+        if (ctx == null || saveDir == null) {
+            OreConfig.reload(FMLPaths.CONFIGDIR.get().resolve("eclipse"));
+            return;
+        }
+        StageRadii.installFromFreeze(ctx.overworldRadii, ctx.netherRadii);
+        OreConfig.reload(saveDir);
+        assertInstalledRadii(DiscProfile.OVERWORLD, ctx.overworldRadii);
+        assertInstalledRadii(DiscProfile.NETHER, ctx.netherRadii);
+        EclipseMod.LOGGER.info("FrozenParams: ordinary reload retained this save's frozen stage radii");
+    }
+
+    private static void assertInstalledRadii(DiscProfile profile, int[] expected) {
+        if (StageRadii.maxStage(profile) != expected.length - 1) {
+            throw new IllegalStateException("Frozen " + profile + " radius table was not retained");
+        }
+        for (int stage = 0; stage < expected.length; stage++) {
+            if (StageRadii.radius(profile, stage) != expected[stage]) {
+                throw new IllegalStateException("Frozen " + profile + " radius diverged at stage " + stage);
+            }
+        }
     }
 
     /**

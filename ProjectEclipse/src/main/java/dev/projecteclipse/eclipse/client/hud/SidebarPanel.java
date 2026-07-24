@@ -137,14 +137,19 @@ public final class SidebarPanel {
         int rowsHash = rowsHash(now);
         if (rowsHash != lastRowsHash) {
             lastRowsHash = rowsHash;
-            cachedRows = buildRows(font, now);
+            cachedRows = buildRows();
         }
         updateGoalSweeps(now);
         int normalHeight = PADDING * 2 + cachedRows.size() * ROW_HEIGHT;
 
-        int maxExpandedHeight = Math.max(80,
-                (int) Math.floor((guiGraphics.guiHeight() - 8.0F) / scale));
-        int expandedHeight = Math.min(SidebarExpanded.preferredHeight(font), maxExpandedHeight);
+        // preferredHeight walks/splits every goal line; only pay for it while the TAB card
+        // is actually (partially) expanded. Collapsed frames lerp toward normalHeight anyway.
+        int expandedHeight = normalHeight;
+        if (expansion > 0.0F || SidebarExpanded.visible()) {
+            int maxExpandedHeight = Math.max(80,
+                    (int) Math.floor((guiGraphics.guiHeight() - 8.0F) / scale));
+            expandedHeight = Math.min(SidebarExpanded.preferredHeight(font), maxExpandedHeight);
+        }
 
         float normalX = leftSide ? 3.0F
                 : guiGraphics.guiWidth() - 3.0F - PANEL_WIDTH * scale;
@@ -182,7 +187,7 @@ public final class SidebarPanel {
                     marqueeMillis, marqueeActive, x, y, scale);
         }
         if (expandedAlpha > 0.01F) {
-            SidebarExpanded.render(guiGraphics, font, width, height, expandedAlpha, now,
+            SidebarExpanded.render(guiGraphics, font, width, height, expandedAlpha,
                     x, y, scale);
         }
         guiGraphics.pose().popPose();
@@ -248,9 +253,9 @@ public final class SidebarPanel {
                 MarqueeText.faded(EclipseUiTheme.GOOD, alpha));
     }
 
-    private static List<Row> buildRows(Font font, long nowMillis) {
+    private static List<Row> buildRows() {
         List<Row> rows = new ArrayList<>();
-        String timer = SidebarExpanded.formatRemaining(SidebarExpanded.remainingMillis(nowMillis));
+        String timer = SidebarExpanded.formatRemaining(SidebarExpanded.remainingMillis());
         rows.add(new Row("day", ICON_DAY,
                 EclipseLang.trString("sidebar.eclipse.day_timer",
                         Math.max(1, ClientStateCache.sidebarDay), timer), null, 1));

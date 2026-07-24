@@ -12,6 +12,7 @@ import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -46,7 +47,7 @@ public final class CreditsScreen extends Screen {
     private boolean loadFailed;
 
     public CreditsScreen(@Nullable Screen parent) {
-        super(Component.translatable("gui.eclipse.credits.title"));
+        super(EclipseLang.tr("gui.eclipse.credits.title"));
         this.parent = parent;
     }
 
@@ -128,7 +129,7 @@ public final class CreditsScreen extends Screen {
         guiGraphics.fill(0, 0, width, height, EclipseUiTheme.VEIL);
         EclipseUiTheme.drawPanel(guiGraphics, panelX, panelY, panelW, panelH);
         guiGraphics.drawCenteredString(font, title, width / 2, panelY + 10, EclipseUiTheme.ACCENT);
-        guiGraphics.drawCenteredString(font, Component.translatable("gui.eclipse.credits.subtitle"),
+        guiGraphics.drawCenteredString(font, EclipseLang.tr("gui.eclipse.credits.subtitle"),
                 width / 2, panelY + 23, EclipseUiTheme.DIM);
         EclipseUiTheme.drawHairline(guiGraphics, panelX + 12, panelX + panelW - 12, panelY + 36);
     }
@@ -142,11 +143,11 @@ public final class CreditsScreen extends Screen {
 
         guiGraphics.enableScissor(contentX - 2, contentTop, contentX + contentW + 2, contentBottom);
         if (loadFailed) {
-            guiGraphics.drawString(font, Component.translatable("gui.eclipse.credits.load_error"),
+            guiGraphics.drawString(font, EclipseLang.tr("gui.eclipse.credits.load_error"),
                     contentX, y, EclipseUiTheme.DANGER);
         } else {
             for (CreditSection section : sections) {
-                guiGraphics.drawString(font, Component.translatable(section.titleKey),
+                guiGraphics.drawString(font, EclipseLang.tr(section.titleKey),
                         contentX, y, EclipseUiTheme.ACCENT);
                 EclipseUiTheme.drawHairline(guiGraphics, contentX, contentX + contentW, y + 11);
                 y += 18;

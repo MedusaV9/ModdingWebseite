@@ -1,10 +1,10 @@
 package dev.projecteclipse.eclipse.client.menu;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.options.OptionsScreen;
-import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -35,7 +35,7 @@ public final class OptionsThemer {
         }
         // The vanilla title sits at y=12 inside the 61px header; the accent goes just above it.
         StringWidget accent = new StringWidget(0, 2, screen.width, 9,
-                Component.translatable("gui.eclipse.options.accent"),
+                EclipseLang.tr("gui.eclipse.options.accent"),
                 Minecraft.getInstance().font).alignCenter();
         accent.setColor(ACCENT_COLOR);
         event.addListener(accent);

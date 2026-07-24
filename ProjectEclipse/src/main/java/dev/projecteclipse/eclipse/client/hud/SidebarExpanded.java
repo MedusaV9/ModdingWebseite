@@ -88,7 +88,7 @@ public final class SidebarExpanded {
 
     /** Draws expanded content into an already-rendered/morphed panel rectangle. */
     public static void render(GuiGraphics guiGraphics, Font font, int width, int height,
-            float alpha, long nowMillis, float panelScreenX, float panelScreenY, float scale) {
+            float alpha, float panelScreenX, float panelScreenY, float scale) {
         if (alpha <= 0.01F || width < 80 || height < 60) {
             return;
         }
@@ -105,7 +105,7 @@ public final class SidebarExpanded {
                 (int) Math.ceil(panelScreenX + right * scale),
                 (int) Math.ceil(panelScreenY + bottom * scale));
 
-        String timer = formatRemaining(remainingMillis(nowMillis));
+        String timer = formatRemaining(remainingMillis());
         String title = EclipseLang.trString("sidebar.eclipse.expanded.title",
                 ClientStateCache.sidebarDay, timer);
         guiGraphics.drawCenteredString(font, title, width / 2, y,
@@ -166,7 +166,7 @@ public final class SidebarExpanded {
                 String titleText = EclipseLang.locale().startsWith("de")
                         ? buff.titleDe() : buff.titleEn();
                     String remaining = formatDuration(Math.max(0L,
-                            buff.endsAtEpochMillis() - estimatedServerNow(nowMillis)));
+                            buff.endsAtEpochMillis() - estimatedServerNow()));
                 guiGraphics.drawString(font, "\u25c6 " + titleText, left, y,
                         MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
                 guiGraphics.drawString(font, remaining, right - font.width(remaining), y,
@@ -276,7 +276,7 @@ public final class SidebarExpanded {
         return "\u2764".repeat(filled) + "\u2661".repeat(Math.max(0, slots - filled));
     }
 
-    static long remainingMillis(long localNowMillis) {
+    static long remainingMillis() {
         if (ClientStateCache.sidebarBoundaryEpochMillis <= 0L) {
             return -1L;
         }
@@ -285,16 +285,24 @@ public final class SidebarExpanded {
                     ? Math.max(0L, ClientStateCache.pauseRemainingMillis) : 0L;
         }
         return Math.max(0L,
-                ClientStateCache.sidebarBoundaryEpochMillis - estimatedServerNow(localNowMillis));
+                ClientStateCache.sidebarBoundaryEpochMillis - estimatedServerNow());
     }
 
-    private static long estimatedServerNow(long localNowMillis) {
+    /**
+     * Server "now" from the last clock payload plus local epoch elapsed since receipt.
+     * {@link ClientStateCache#clockSyncLocalMillis} is an epoch stamp
+     * ({@code System.currentTimeMillis()} at payload receipt), so the delta MUST be computed
+     * against the epoch clock — never against monotonic {@code Util.getMillis()} — mirroring
+     * {@code DevHandbookScreen.timerText()}.
+     */
+    private static long estimatedServerNow() {
+        long localNow = System.currentTimeMillis();
         if (ClientStateCache.serverNowEpochMillis > 0L
                 && ClientStateCache.clockSyncLocalMillis > 0L) {
             return ClientStateCache.serverNowEpochMillis
-                    + Math.max(0L, localNowMillis - ClientStateCache.clockSyncLocalMillis);
+                    + Math.max(0L, localNow - ClientStateCache.clockSyncLocalMillis);
         }
-        return System.currentTimeMillis();
+        return localNow;
     }
 
     static String formatRemaining(long millis) {

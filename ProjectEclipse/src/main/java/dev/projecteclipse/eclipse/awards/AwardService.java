@@ -109,6 +109,7 @@ public final class AwardService {
         AwardsState state = AwardsState.get(server);
         var existing = state.resolved(day);
         if (existing.isPresent()) {
+            queueResolvedRewards(server, existing.get());
             return existing.get();
         }
 
@@ -116,7 +117,7 @@ public final class AwardService {
         List<Materialized> selected = select(server, day);
         List<String> chosenIds = selected.stream().map(category -> category.config().id()).toList();
         List<AwardsState.CategoryResult> results = new ArrayList<>();
-        List<Map.Entry<UUID, AwardsState.PendingReward>> rewards = new ArrayList<>();
+        List<AwardsState.RewardGrant> rewards = new ArrayList<>();
         Set<UUID> universe = AnalyticsApi.onlineOrKnownUuids(server, day);
 
         for (Materialized category : selected) {
@@ -148,7 +149,8 @@ public final class AwardService {
                     resolution.candidates(), resolution.winners()));
             for (UUID winner : resolution.winners()) {
                 String rewardId = "award:" + day + ":" + category.config().id() + ":" + winner;
-                rewards.add(Map.entry(winner, AwardsState.PendingReward.of(rewardId, share)));
+                rewards.add(new AwardsState.RewardGrant(
+                        winner, AwardsState.PendingReward.of(rewardId, share)));
             }
         }
 
@@ -159,13 +161,11 @@ public final class AwardService {
             chosenIds.add("best_offering");
         }
 
-        AwardsState.ResolvedDay resolved = new AwardsState.ResolvedDay(day, chosenIds, results);
+        AwardsState.ResolvedDay resolved = new AwardsState.ResolvedDay(day, chosenIds, results, rewards);
         if (!state.putResolved(resolved)) {
-            return state.resolved(day).orElse(resolved);
+            resolved = state.resolved(day).orElse(resolved);
         }
-        for (Map.Entry<UUID, AwardsState.PendingReward> reward : rewards) {
-            queueReward(server, reward.getKey(), reward.getValue());
-        }
+        queueResolvedRewards(server, resolved);
         EclipseMod.LOGGER.info("Resolved daily awards for day {}: {} chosen, {} revealed categories",
                 day, chosenIds.size(), results.size());
         return resolved;
@@ -225,21 +225,37 @@ public final class AwardService {
         }
     }
 
+    /** Repairs queue writes from the frozen resolution; stable ids make this safe on every retry. */
+    private static void queueResolvedRewards(MinecraftServer server, AwardsState.ResolvedDay resolved) {
+        for (AwardsState.RewardGrant grant : resolved.rewardGrants()) {
+            queueReward(server, grant.player(), grant.reward());
+        }
+    }
+
     /** Claims every queued award/offering reward for this player (login and immediate-online path). */
     public static int deliverPending(ServerPlayer player) {
-        List<AwardsState.PendingReward> rewards = AwardsState.get(player.server).takePending(player.getUUID());
+        AwardsState state = AwardsState.get(player.server);
+        List<AwardsState.PendingReward> rewards = List.copyOf(state.pending(player.getUUID()));
+        int delivered = 0;
         for (AwardsState.PendingReward reward : rewards) {
+            List<ItemStack> items = materializeItems(reward.items());
+            // The durable id is written before any player-visible grant. Resolve repair and
+            // login retries therefore cannot apply the same stable reward id twice.
+            if (!state.claim(player.getUUID(), reward.id())) {
+                continue;
+            }
             if (reward.skillXp() > 0) {
                 SkillsApi.addXp(player, "award", reward.skillXp());
             }
             if (reward.shards() > 0) {
                 ShardEconomy.addShards(player, reward.shards());
             }
-            for (AwardConfig.ItemReward item : reward.items()) {
+            for (ItemStack item : items) {
                 giveItem(player, item);
             }
+            delivered++;
         }
-        return rewards.size();
+        return delivered;
     }
 
     /** Bilingual literal line baked into the secret reveal payload. */
@@ -327,22 +343,29 @@ public final class AwardService {
         return new S2CAwardRevealPayload(resolved.day(), categories);
     }
 
-    private static void giveItem(ServerPlayer player, AwardConfig.ItemReward reward) {
-        ResourceLocation id = ResourceLocation.tryParse(reward.id());
-        Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
-        if (item == null || reward.count() <= 0) {
-            EclipseMod.LOGGER.warn("Skipping unknown/empty award item {} x{}", reward.id(), reward.count());
-            return;
-        }
-        int remaining = reward.count();
-        int maxStackSize = new ItemStack(item).getMaxStackSize();
-        while (remaining > 0) {
-            int count = Math.min(remaining, maxStackSize);
-            ItemStack stack = new ItemStack(item, count);
-            if (!player.getInventory().add(stack)) {
-                player.drop(stack, false);
+    private static List<ItemStack> materializeItems(List<AwardConfig.ItemReward> rewards) {
+        List<ItemStack> items = new ArrayList<>();
+        for (AwardConfig.ItemReward reward : rewards) {
+            ResourceLocation id = ResourceLocation.tryParse(reward.id());
+            Item item = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+            if (item == null || reward.count() <= 0) {
+                EclipseMod.LOGGER.warn("Skipping unknown/empty award item {} x{}", reward.id(), reward.count());
+                continue;
             }
-            remaining -= count;
+            int remaining = reward.count();
+            int maxStackSize = new ItemStack(item).getMaxStackSize();
+            while (remaining > 0) {
+                int count = Math.min(remaining, maxStackSize);
+                items.add(new ItemStack(item, count));
+                remaining -= count;
+            }
+        }
+        return items;
+    }
+
+    private static void giveItem(ServerPlayer player, ItemStack stack) {
+        if (!player.getInventory().add(stack)) {
+            player.drop(stack, false);
         }
     }
 

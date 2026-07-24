@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
@@ -86,6 +87,7 @@ public final class QuestEngine {
         final int generation;
         final List<GoalSpec> mains;
         final List<GoalSpec> sides;
+        final List<GoalSpec> shared;
         final Map<String, GoalSpec> byId = new LinkedHashMap<>();
         final Map<TriggerType, List<GoalSpec>> byType = new EnumMap<>(TriggerType.class);
         final Map<String, List<GoalSpec>> byBeat = new HashMap<>();
@@ -109,9 +111,10 @@ public final class QuestEngine {
             }
             this.mains = List.copyOf(mainList);
             this.sides = List.copyOf(sideList);
+            this.shared = List.copyOf(dayGoals);
         }
 
-        /** Personals are indexed lazily per assignment (pool entries are shared objects). */
+        /** Shared specs and the union of current personal assignments are indexed by id. */
         void index(GoalSpec spec) {
             if (byId.putIfAbsent(spec.id(), spec) != null) {
                 return; // already indexed (another player's personal draw)
@@ -130,6 +133,19 @@ public final class QuestEngine {
                             spec.id(), spec.trigger().statId());
                 }
                 stats.put(spec.id(), stat);
+            }
+        }
+
+        /** Rebuilds the personal union so rerolled-away specs leave every detector index. */
+        void rebuildIndexes(QuestState state) {
+            byId.clear();
+            byType.clear();
+            byBeat.clear();
+            collectItems.clear();
+            stats.clear();
+            shared.forEach(this::index);
+            for (UUID uuid : state.knownPlayers(day)) {
+                personalSpecs(this, state, uuid).forEach(this::index);
             }
         }
 
@@ -172,6 +188,7 @@ public final class QuestEngine {
     @SubscribeEvent
     static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            deliverPendingRewards(player);
             ensurePlayer(player.server, player);
             syncPlayer(player.server, player);
         }
@@ -216,6 +233,7 @@ public final class QuestEngine {
         ResolvedDay day = resolved(server);
         QuestState state = QuestState.get(server);
         UUID uuid = player.getUUID();
+        state.ensurePlayer(day.day, uuid);
 
         List<String> personals = state.personals(day.day, uuid);
         if (personals == null && GoalConfig.personalPerDay() > 0) {
@@ -225,9 +243,7 @@ public final class QuestEngine {
                 player.displayClientMessage(Component.translatable("quest.eclipse.assigned"), true);
             }
         }
-        for (GoalSpec spec : personalSpecs(day, state, uuid)) {
-            day.index(spec);
-        }
+        day.rebuildIndexes(state);
 
         for (GoalSpec spec : specsFor(day, state, uuid)) {
             captureBaselines(state, day, player, spec, false);
@@ -238,7 +254,8 @@ public final class QuestEngine {
 
         for (String beatId : state.beatsFired(day.day)) {
             for (GoalSpec spec : day.byBeat.getOrDefault(beatId, List.of())) {
-                if (spec.scope() == Scope.EACH_PLAYER && !state.isPlayerDone(day.day, uuid, spec.id())) {
+                if (spec.scope() == Scope.EACH_PLAYER && isEligible(state, day, uuid, spec)
+                        && !state.isPlayerDone(day.day, uuid, spec.id())) {
                     completeForPlayer(server, player, spec);
                 }
             }
@@ -334,8 +351,12 @@ public final class QuestEngine {
             return;
         }
         QuestState state = QuestState.get(server);
-        int day = resolved(server).day;
+        ResolvedDay resolvedDay = resolved(server);
+        int day = resolvedDay.day;
         UUID uuid = player.getUUID();
+        if (!isEligible(state, resolvedDay, uuid, spec)) {
+            return;
+        }
         long target = spec.target();
         switch (spec.scope()) {
             case EACH_PLAYER -> {
@@ -380,7 +401,11 @@ public final class QuestEngine {
     /** Raises absolute-value progress (stat deltas, distinct counts) instead of adding. */
     static void raiseTo(MinecraftServer server, ServerPlayer player, GoalSpec spec, long value) {
         QuestState state = QuestState.get(server);
-        int day = resolved(server).day;
+        ResolvedDay resolvedDay = resolved(server);
+        int day = resolvedDay.day;
+        if (!isEligible(state, resolvedDay, player.getUUID(), spec)) {
+            return;
+        }
         long previous = state.playerProgress(day, player.getUUID(), spec.id());
         if (value > previous) {
             increment(server, player, spec, value - previous);
@@ -430,32 +455,47 @@ public final class QuestEngine {
                 spec.goalKind().id(), spec.scope().id(), player.getScoreboardName());
     }
 
-    /** Marks a team goal done and credits every online player (rewards + signal + feedback). */
+    /** Marks a team goal done and credits every known player, queueing offline rewards. */
     static void completeTeam(MinecraftServer server, GoalSpec spec) {
         QuestState state = QuestState.get(server);
-        int day = resolved(server).day;
+        ResolvedDay resolvedDay = resolved(server);
+        int day = resolvedDay.day;
         if (!state.setTeamDone(day, spec.id())) {
             return;
         }
         state.setTeamProgress(day, spec.id(), Math.max(spec.target(),
                 state.teamProgress(day, spec.id())));
         announceIfMain(server, state, day, spec);
+        Map<UUID, ServerPlayer> online = new HashMap<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            UUID uuid = player.getUUID();
+            online.put(player.getUUID(), player);
+        }
+        Set<UUID> recipients = new HashSet<>(state.knownPlayers(day));
+        recipients.addAll(online.keySet());
+        int queued = 0;
+        for (UUID uuid : recipients) {
+            if (!isEligible(state, resolvedDay, uuid, spec)) {
+                continue;
+            }
             state.raisePlayerProgress(day, uuid, spec.id(), spec.target());
             state.setPlayerDone(day, uuid, spec.id());
             if (spec.goalKind() == Kind.PERSONAL) {
                 state.addLifetimeCompletedPersonal(uuid, spec.id());
             }
-            grantRewards(player, spec);
-            EclipseSignals.fireQuestCompleted(player, spec, spec.scope().id());
-            feedback(player, spec);
+            ServerPlayer player = online.get(uuid);
+            if (player != null) {
+                grantRewards(player, spec);
+                EclipseSignals.fireQuestCompleted(player, spec, spec.scope().id());
+                feedback(player, spec);
+            } else if (state.queueReward(uuid, QuestState.PendingReward.of(day, spec))) {
+                queued++;
+            }
         }
         markAllDirty();
         flushDirty(server);
-        EclipseMod.LOGGER.info("Team quest completed: '{}' ({} {}) — {} online player(s) credited",
+        EclipseMod.LOGGER.info("Team quest completed: '{}' ({} {}) — {} online credited, {} offline queued",
                 spec.id(), spec.goalKind().id(), spec.scope().id(),
-                server.getPlayerList().getPlayerCount());
+                online.size(), queued);
     }
 
     private static void announceIfMain(MinecraftServer server, QuestState state, int day, GoalSpec spec) {
@@ -466,7 +506,10 @@ public final class QuestEngine {
 
     /** Shard + item rewards, granted directly; skillXp travels via the questCompleted signal (B4). */
     private static void grantRewards(ServerPlayer player, GoalSpec spec) {
-        GoalSpec.Reward reward = spec.reward();
+        grantRewardContents(player, spec.id(), spec.reward());
+    }
+
+    private static void grantRewardContents(ServerPlayer player, String goalId, GoalSpec.Reward reward) {
         if (reward.shards() > 0) {
             ShardEconomy.addShards(player, reward.shards());
         }
@@ -478,7 +521,28 @@ public final class QuestEngine {
                             player.drop(stack, false);
                         }
                     }, () -> EclipseMod.LOGGER.warn("Quest '{}' reward item '{}' unknown — skipped",
-                            spec.id(), itemReward.id()));
+                            goalId, itemReward.id()));
+        }
+    }
+
+    /** Delivers reward snapshots removed from the ledger at login (award-ledger pattern). */
+    private static void deliverPendingRewards(ServerPlayer player) {
+        List<QuestState.PendingReward> pending =
+                QuestState.get(player.server).takePendingRewards(player.getUUID());
+        for (QuestState.PendingReward reward : pending) {
+            grantRewardContents(player, reward.goalId(), reward.reward());
+            Kind kind = switch (reward.kind()) {
+                case 0 -> Kind.MAIN;
+                case 1 -> Kind.SIDE;
+                default -> Kind.PERSONAL;
+            };
+            GoalSpec replay = new GoalSpec(reward.goalId(), kind, Scope.byId(reward.scope()),
+                    GoalSpec.Trigger.manual(), reward.reward(), Localized.of(""), 0, 0, 0);
+            EclipseSignals.fireQuestCompleted(player, replay, reward.scope());
+        }
+        if (!pending.isEmpty()) {
+            EclipseMod.LOGGER.info("Delivered {} queued team-quest reward(s) to {}",
+                    pending.size(), player.getScoreboardName());
         }
     }
 
@@ -522,7 +586,9 @@ public final class QuestEngine {
         for (GoalSpec spec : specs) {
             if (spec.scope() == Scope.EACH_PLAYER) {
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    completeForPlayer(server, player, spec);
+                    if (isEligible(state, day, player.getUUID(), spec)) {
+                        completeForPlayer(server, player, spec);
+                    }
                 }
             } else {
                 completeTeam(server, spec);
@@ -640,7 +706,9 @@ public final class QuestEngine {
             }
         }
         for (GoalSpec spec : day.ofType(TriggerType.COLLECT_ITEM)) {
-            if (state.isPlayerDone(day.day, uuid, spec.id()) || state.isTeamDone(day.day, spec.id())) {
+            if (!isEligible(state, day, uuid, spec)
+                    || state.isPlayerDone(day.day, uuid, spec.id())
+                    || state.isTeamDone(day.day, spec.id())) {
                 continue;
             }
             long value = collectValue(state, day, player, spec);
@@ -849,16 +917,30 @@ public final class QuestEngine {
     static List<String> reroll(MinecraftServer server, ServerPlayer player) {
         QuestState state = QuestState.get(server);
         ResolvedDay day = resolved(server);
-        int nonce = state.bumpRerollNonce(day.day, player.getUUID());
-        List<String> drawn = drawPersonals(server, state, day.day, player.getUUID(), nonce);
-        state.setPersonals(day.day, player.getUUID(), drawn);
-        for (GoalSpec spec : personalSpecs(day, state, player.getUUID())) {
-            day.index(spec);
+        UUID uuid = player.getUUID();
+        List<GoalSpec> previous = personalSpecs(day, state, uuid);
+        for (GoalSpec spec : previous) {
+            state.resetPlayerProgress(day.day, uuid, spec.id());
+        }
+        int nonce = state.bumpRerollNonce(day.day, uuid);
+        List<String> drawn = drawPersonals(server, state, day.day, uuid, nonce);
+        state.setPersonals(day.day, uuid, drawn);
+        day.rebuildIndexes(state);
+        for (GoalSpec spec : personalSpecs(day, state, uuid)) {
             captureBaselines(state, day, player, spec, true);
         }
-        markDirty(player.getUUID());
+        markDirty(uuid);
         flushDirty(server);
         return drawn;
+    }
+
+    /** Personal specs may only mutate the UUID that currently has them assigned. */
+    static boolean isEligible(QuestState state, ResolvedDay day, UUID uuid, GoalSpec spec) {
+        if (spec.goalKind() != Kind.PERSONAL) {
+            return true;
+        }
+        List<String> assigned = state.personals(day.day, uuid);
+        return assigned != null && assigned.contains(spec.id());
     }
 
     // --- id / target matching helpers (shared with QuestDetectors) ---

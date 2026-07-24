@@ -127,6 +127,8 @@ public final class AwardsOverlay {
     /** Ticks since the strip landed (drives pop/flare through STAT/REWARD/HOLD). */
     private static int landAge;
     private static boolean sneakWasDown;
+    /** One cancelled pause opening per show — see {@link #onScreenOpening} (M-5). */
+    private static boolean escSkipUsed;
 
     private AwardsOverlay() {}
 
@@ -163,15 +165,20 @@ public final class AwardsOverlay {
      * ESC-to-summary: while the show is running, an ESC pause-menu opening from gameplay is
      * reinterpreted once as "skip to summary" (exact vanilla {@link PauseScreen} only, and
      * only when no screen was open — menus opened from other screens are untouched).
+     * At most ONE pause opening is ever cancelled per show ({@code escSkipUsed}, M-5): a
+     * player who genuinely wants the menu gets it on the next press, whatever phase the
+     * show is in.
      */
     @SubscribeEvent
     static void onScreenOpening(ScreenEvent.Opening event) {
-        if (phase == Phase.IDLE || phase == Phase.SUMMARY || phase == Phase.DONE_FADE) {
+        if (phase == Phase.IDLE || phase == Phase.SUMMARY || phase == Phase.DONE_FADE
+                || escSkipUsed) {
             return;
         }
         Screen opening = event.getNewScreen();
         if (opening != null && opening.getClass() == PauseScreen.class
                 && Minecraft.getInstance().screen == null) {
+            escSkipUsed = true;
             setPhase(Phase.SUMMARY);
             event.setCanceled(true);
         }
@@ -194,10 +201,12 @@ public final class AwardsOverlay {
             HANDLED_DAYS.add(day); // login replay of an old reveal — late join shows nothing
             return;
         }
+        // Mark handled BEFORE the capacity check: a payload dropped at a full queue must
+        // not replay the same day when the server re-sends after the queue drains (M-4).
+        HANDLED_DAYS.add(day); // dedupes the P2 cinematic-seam re-broadcast + payload spam
         if (QUEUE.size() >= QUEUE_LIMIT) {
             return;
         }
-        HANDLED_DAYS.add(day); // dedupes the P2 cinematic-seam re-broadcast + payload spam
         QUEUE.add(new PendingShow(day, categories));
     }
 
@@ -216,6 +225,7 @@ public final class AwardsOverlay {
         revealIndex = 0;
         showTicks = 0;
         sneakWasDown = true; // require a fresh sneak press before the first skip
+        escSkipUsed = false;
         setPhase(Phase.INTRO);
     }
 

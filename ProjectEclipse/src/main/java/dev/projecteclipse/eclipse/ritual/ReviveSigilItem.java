@@ -31,7 +31,7 @@ public class ReviveSigilItem extends Item {
             return InteractionResult.PASS;
         }
         if (context.isSecondaryUseActive()) {
-            altar.handleSigilConfirm(serverPlayer, context.getItemInHand());
+            altar.handleSigilConfirm(serverPlayer);
         } else {
             // Unreachable through vanilla flow (AltarBlock consumes non-sneak clicks); kept for safety.
             altar.handleSigilCycle(serverPlayer);

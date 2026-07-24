@@ -15,14 +15,14 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
-import dev.projecteclipse.eclipse.devtools.dev.DevReloadRegistry;
+import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Loader for {@code config/eclipse/xboxevent.json} (plan §2.13.7). Missing file is created
  * with defaults on first load; parse errors keep the previous (or default) values in memory
  * (temp-parse-then-swap, the {@code EclipseConfig} pattern). Registered in
- * {@link DevReloadRegistry} so {@code /dev reload} step 4 covers it.
+ * {@link ReloadHooks}, which is shared by {@code /eclipse reload} and {@code /dev reload}.
  *
  * <p>{@code announceKeys} — when {@code true} (default) announcements/titles use the
  * translatable world-name keys from the P5-W7 langdrop ({@code eclipse.xboxworld.<id>.name},
@@ -53,10 +53,12 @@ public final class XboxEventConfig {
         return values;
     }
 
-    /** Registers the {@code /dev reload} hook and performs the initial load. Idempotent. */
+    /** Registers the shared reload hook and performs the initial load. Idempotent. */
     public static void bootstrap() {
         if (BOOTSTRAPPED.compareAndSet(false, true)) {
-            DevReloadRegistry.register("xboxevent.json", XboxEventConfig::reload);
+            // /dev reload invokes EclipseConfig first, so this one bridge covers both command
+            // surfaces without parsing xboxevent.json twice on /dev reload.
+            ReloadHooks.register("xboxevent.json", XboxEventConfig::reload);
             reload();
         }
     }

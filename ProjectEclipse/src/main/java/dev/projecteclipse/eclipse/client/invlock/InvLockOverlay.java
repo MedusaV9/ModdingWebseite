@@ -222,7 +222,19 @@ public final class InvLockOverlay {
         }
     }
 
-    /** Hotbar-swap / offhand-swap keys aimed at a hovered voided slot are swallowed. */
+    /**
+     * Quick-craft drags (vanilla distributes the carried stack in {@code mouseDragged})
+     * must not sweep across a voided slot — cancelling while the cursor is over one keeps
+     * the slot out of the drag set, same hitbox as the press/release guards.
+     */
+    @SubscribeEvent
+    static void onMouseDragged(ScreenEvent.MouseDragged.Pre event) {
+        if (lockedSlotAt(event.getScreen(), event.getMouseX(), event.getMouseY()) != null) {
+            event.setCanceled(true);
+        }
+    }
+
+    /** Hotbar-swap / offhand-swap / drop keys aimed at a hovered voided slot are swallowed. */
     @SubscribeEvent
     static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
         if (!(event.getScreen() instanceof AbstractContainerScreen<?> screen)
@@ -236,6 +248,10 @@ public final class InvLockOverlay {
         }
         var options = Minecraft.getInstance().options;
         if (options.keySwapOffhand.matches(event.getKeyCode(), event.getScanCode())) {
+            event.setCanceled(true);
+            return;
+        }
+        if (options.keyDrop.matches(event.getKeyCode(), event.getScanCode())) {
             event.setCanceled(true);
             return;
         }

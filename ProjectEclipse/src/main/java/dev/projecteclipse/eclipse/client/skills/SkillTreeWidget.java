@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import dev.projecteclipse.eclipse.client.handbook.CursorManager;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
@@ -509,6 +510,6 @@ public class SkillTreeWidget extends AbstractWidget {
     @Override
     protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
         narrationElementOutput.add(net.minecraft.client.gui.narration.NarratedElementType.TITLE,
-                Component.translatable("gui.eclipse.skills.title"));
+                EclipseLang.tr("gui.eclipse.skills.title"));
     }
 }

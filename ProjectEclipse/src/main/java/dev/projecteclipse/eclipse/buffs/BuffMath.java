@@ -86,7 +86,9 @@ public final class BuffMath {
 
         long endsAt = nowEpochMillis + durationMillis;
         List<ActiveBuff> copy = new ArrayList<>(active);
-        copy.add(new ActiveBuff(def.id(), endsAt, magnitude, 0L));
+        // Periodic effects wait one complete period before their first fire. Non-periodic
+        // effects ignore this field, so activation time is a safe uniform initial value.
+        copy.add(new ActiveBuff(def.id(), endsAt, magnitude, nowEpochMillis));
         return List.copyOf(copy);
     }
 

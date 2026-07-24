@@ -1297,7 +1297,7 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - `dev.projecteclipse.eclipse.economy` — W13 umbral-shard economy: `ShardEconomy` (altar shard shop), `WatcherCompassItem`, `GraveDowserItem`, `VitaeShardItem`, `UmbralShardItem` (sneak-deposit hook), `UmbralTier`, `SupplyBeacon` (see "Shard economy & rewards").
 - `dev.projecteclipse.eclipse.border` — `SoftBorder` (circular soft worldborder: ring state + physics + teleport clamps); `border.client.BorderFxRenderer` (glitch strip geometry, Quasar arcs, Veil post proximity feed); the vanilla border visual is cancelled by `client.mixin.LevelRendererMixin`.
 - `dev.projecteclipse.eclipse.ritual` — ritual altar (`AltarBlock`, `AltarBlockEntity`, `BeamEmitter`) + revive ritual (`ReviveRitual`, `ReviveSigilItem`).
-- `dev.projecteclipse.eclipse.entity` / `client.entity` — W10 custom mobs (`EclipseEntities` registry, the five mob classes, `EclipseSpawner` day/event spawner + night events) and their hand-coded models/renderers (`EclipseEntityRenderers`), see "Custom mobs & spawner".
+- `dev.projecteclipse.eclipse.entity` / `client.entity` — 16 custom mobs/bosses across `EclipseEntities` and the specialized entity registrars (plus ambient entities/projectiles), their spawners, and their models/renderers; see "Custom mobs & spawner".
 - `dev.projecteclipse.eclipse.artifact` — the arm artifact (`ArmArtifactItem`, hotbar slot 8, J/right-click menu; `ArtifactSlotLock` keeps it in place).
 - `dev.projecteclipse.eclipse.veilfx` — client-only Veil integration: `VeilPostController` (limbo/sun-halo/border-glitch post pipelines, Iris+config hard gate, per-frame uniforms) and `QuasarSpawner` (safe Quasar emitter spawning with vanilla fallback). Assets: `assets/eclipse/pinwheel/` (post pipelines + GLSL) and `assets/eclipse/quasar/emitters/` (9 emitter JSONs).
 - `dev.projecteclipse.eclipse.admin` — `EclipseCommands` (see "Admin commands") + `AntiCheatCheck` (see "Anti-cheat").
@@ -1335,5 +1335,5 @@ LIBRARIES `sophisticatedcore` and `moonlight` are deliberately NOT gated. W16 do
 - **v2 requires a fresh world** — the overworld dimension type changed to
   `min_y −176 / height 512` for the disc world; v1 saves fail to load. Delete `run/world`
   once after upgrading (see "Build & run").
-- **Textures/sounds are placeholder programmer-art** — grave/altar/artifact textures, the uniform
-  skin, and the two OGG sound events are minimal placeholders pending final art.
+- **Bundled music requires attribution** — eight Kevin MacLeod tracks ship under CC BY 4.0;
+  redistributions must retain the attribution recorded in [`CREDITS.md`](CREDITS.md).

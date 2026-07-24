@@ -138,6 +138,9 @@ public final class BreachTransferService {
         player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
                 DESCENT_SLOW_FALL_TICKS, 0, false, false));
         TRANSFER_COOLDOWN.put(player.getUUID(), now + TRANSFER_COOLDOWN_TICKS);
+        // FIX-3 seam: the first survived breach crossing advances the team beat.
+        dev.projecteclipse.eclipse.progression.goals.QuestApi.completeTeamBeat(
+                overworld.getServer(), "crossing_survived");
 
         overworld.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
                 originX, BreachGeometry.lipY(), originZ,

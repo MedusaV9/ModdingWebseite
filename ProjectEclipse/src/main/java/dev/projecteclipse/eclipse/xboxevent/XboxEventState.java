@@ -98,6 +98,7 @@ public final class XboxEventState extends SavedData {
     private static final String TAG_ANCHORS = "returnAnchors";
     private static final String TAG_REWARD_BUFF = "rewardBuffId";
     private static final String TAG_REWARD_MINUTES = "rewardMinutes";
+    private static final String TAG_REWARD_GRANTED = "rewardGranted";
 
     private Phase phase = Phase.IDLE;
     private String worldId = "";
@@ -115,6 +116,7 @@ public final class XboxEventState extends SavedData {
     /** Empty string / {@code 0} = fall back to {@code xboxevent.json} values. */
     private String rewardBuffId = "";
     private int rewardMinutes;
+    private boolean rewardGranted;
 
     public XboxEventState() {}
 
@@ -168,6 +170,7 @@ public final class XboxEventState extends SavedData {
         this.consumedChests.clear();
         this.rewardBuffId = "";
         this.rewardMinutes = 0;
+        this.rewardGranted = false;
         this.lockoutMode = configuredDefaultLockoutMode();
         int current = this.instanceId;
         this.lockedOut.values().removeIf(instance -> instance != current);
@@ -265,6 +268,9 @@ public final class XboxEventState extends SavedData {
      * @return {@code true} only for the first lookup of this world/position pair
      */
     public boolean consumeChestPosition(String manifestWorldId, BlockPos pos) {
+        if (phase != Phase.OPEN || !worldId.equals(manifestWorldId)) {
+            return false;
+        }
         boolean added = consumedChests.add(new ConsumedChest(manifestWorldId, pos.asLong()));
         if (added) {
             setDirty();
@@ -315,6 +321,24 @@ public final class XboxEventState extends SavedData {
         this.rewardBuffId = buffId == null ? "" : buffId;
         this.rewardMinutes = Math.max(0, minutes);
         setDirty();
+    }
+
+    /**
+     * Persists the close-sequence reward step before the global buff is started.
+     *
+     * @return true only for the first attempt in this event instance
+     */
+    public boolean markRewardGranted() {
+        if (rewardGranted) {
+            return false;
+        }
+        rewardGranted = true;
+        setDirty();
+        return true;
+    }
+
+    public boolean rewardGranted() {
+        return rewardGranted;
     }
 
     // ------------------------------------------------------------------ NBT
@@ -370,6 +394,7 @@ public final class XboxEventState extends SavedData {
 
         state.rewardBuffId = tag.getString(TAG_REWARD_BUFF);
         state.rewardMinutes = tag.getInt(TAG_REWARD_MINUTES);
+        state.rewardGranted = tag.getBoolean(TAG_REWARD_GRANTED);
         return state;
     }
 
@@ -431,6 +456,7 @@ public final class XboxEventState extends SavedData {
 
         tag.putString(TAG_REWARD_BUFF, rewardBuffId);
         tag.putInt(TAG_REWARD_MINUTES, rewardMinutes);
+        tag.putBoolean(TAG_REWARD_GRANTED, rewardGranted);
         return tag;
     }
 

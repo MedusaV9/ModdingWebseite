@@ -7,17 +7,18 @@
   "dimension": "minecraft:overworld",
   "letterbox": true,
   "hideHud": true,
-  "durationTicks": 300,
+  "durationTicks": 220,
   "keyframes": [
-    { "t": 0.0, "pos": [-120.0, 70.0, -35.0], "yaw": 0, "pitch": 20, "roll": 0, "fov": 74, "easing": "easeInOutSine", "lookAt": [0.0, 6.0, 0.0] },
-    { "t": 0.25, "pos": [-60.0, 38.0, 20.0], "yaw": 0, "pitch": 18, "roll": 1, "fov": 68, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 5.0] },
-    { "t": 0.5, "pos": [-16.0, 20.0, 42.0], "yaw": 0, "pitch": 12, "roll": -1, "fov": 62, "easing": "easeInOutSine", "lookAt": [8.0, 3.0, 0.0] },
-    { "t": 0.75, "pos": [28.0, 24.0, 12.0], "yaw": 0, "pitch": 14, "roll": 1, "fov": 62, "easing": "easeInOutSine", "lookAt": [24.0, 2.0, -16.0] },
-    { "t": 1.0, "pos": [12.0, 48.0, -42.0], "yaw": 0, "pitch": 30, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [10.0, 2.0, 8.0] }
+    { "t": 0.0, "pos": [-80.0, 45.0, -25.0], "yaw": 0, "pitch": 20, "roll": 0, "fov": 74, "easing": "easeInOutSine", "lookAt": [-30.0, 5.0, 20.0] },
+    { "t": 0.25, "pos": [-60.0, 26.0, 20.0], "yaw": 0, "pitch": 18, "roll": 1, "fov": 68, "easing": "easeInOutSine", "lookAt": [-10.0, 4.0, 10.0] },
+    { "t": 0.5, "pos": [-16.0, 14.0, 42.0], "yaw": 0, "pitch": 12, "roll": -1, "fov": 62, "easing": "easeInOutSine", "lookAt": [12.0, 3.0, -6.0] },
+    { "t": 0.75, "pos": [28.0, 18.0, 12.0], "yaw": 0, "pitch": 14, "roll": 1, "fov": 62, "easing": "easeInOutSine", "lookAt": [34.0, 2.0, -24.0] },
+    { "t": 1.0, "pos": [12.0, 30.0, -42.0], "yaw": 0, "pitch": 30, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [10.0, 2.0, 8.0] }
   ],
   "events": [
     { "t": 0.02, "type": "sound", "id": "eclipse:event.eclipse_drone" },
     { "t": 0.15, "type": "caption", "id": "eclipse.caption.expansion.growing", "data": "subtitle,90" },
+    { "t": 0.25, "type": "shake", "id": "", "data": "0.1,20" },
     { "t": 0.5, "type": "shake", "id": "", "data": "0.15,30" }
   ],
   "params": {

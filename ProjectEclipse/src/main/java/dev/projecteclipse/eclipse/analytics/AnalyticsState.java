@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.HolderLookup;
@@ -40,10 +41,14 @@ public final class AnalyticsState extends SavedData {
     private static final String TAG_PLAYERS = "p";
     private static final String TAG_PLAYER_ID = "id";
     private static final String TAG_COUNTERS = "k";
+    private static final String TAG_PLACE_TYPES = "placeTypes";
+    private static final String TAG_CHUNKS = "chunks";
     private static final String TAG_BIOMES = "biomes";
     private static final String TAG_BIOME_VALUES = "v";
 
     private final Map<Integer, Map<UUID, Object2LongOpenHashMap<String>>> days = new HashMap<>();
+    private final Map<Integer, Map<UUID, IntOpenHashSet>> placeTypeHashesByDay = new HashMap<>();
+    private final Map<Integer, Map<UUID, Set<String>>> chunksByDay = new HashMap<>();
     private final Map<UUID, Set<String>> biomesLifetime = new HashMap<>();
 
     public AnalyticsState() {}
@@ -69,7 +74,21 @@ public final class AnalyticsState extends SavedData {
                 for (String key : counterTag.getAllKeys()) {
                     counters.put(key, counterTag.getLong(key));
                 }
-                players.put(playerTag.getUUID(TAG_PLAYER_ID), counters);
+                UUID player = playerTag.getUUID(TAG_PLAYER_ID);
+                players.put(player, counters);
+                if (playerTag.contains(TAG_PLACE_TYPES, Tag.TAG_INT_ARRAY)) {
+                    state.placeTypeHashesByDay
+                            .computeIfAbsent(day, ignored -> new HashMap<>())
+                            .put(player, new IntOpenHashSet(playerTag.getIntArray(TAG_PLACE_TYPES)));
+                }
+                if (playerTag.contains(TAG_CHUNKS, Tag.TAG_LIST)) {
+                    Set<String> chunks = new HashSet<>();
+                    for (Tag value : playerTag.getList(TAG_CHUNKS, Tag.TAG_STRING)) {
+                        chunks.add(value.getAsString());
+                    }
+                    state.chunksByDay.computeIfAbsent(day, ignored -> new HashMap<>())
+                            .put(player, chunks);
+                }
             }
             state.days.put(day, players);
         }
@@ -102,6 +121,18 @@ public final class AnalyticsState extends SavedData {
                     counterTag.putLong(counter.getKey(), counter.getLongValue());
                 }
                 playerTag.put(TAG_COUNTERS, counterTag);
+                IntOpenHashSet placeTypes = placeTypeHashesByDay
+                        .getOrDefault(dayEntry.getKey(), Map.of()).get(playerEntry.getKey());
+                if (placeTypes != null) {
+                    playerTag.putIntArray(TAG_PLACE_TYPES, placeTypes.toIntArray());
+                }
+                Set<String> chunks = chunksByDay
+                        .getOrDefault(dayEntry.getKey(), Map.of()).get(playerEntry.getKey());
+                if (chunks != null) {
+                    ListTag values = new ListTag();
+                    chunks.stream().sorted().forEach(chunk -> values.add(StringTag.valueOf(chunk)));
+                    playerTag.put(TAG_CHUNKS, values);
+                }
                 playerList.add(playerTag);
             }
             dayTag.put(TAG_PLAYERS, playerList);
@@ -160,6 +191,59 @@ public final class AnalyticsState extends SavedData {
     }
 
     /**
+     * Marks one block-type hash as seen for this player/day. Old saves with a positive
+     * aggregate but no identity set fail closed for the rest of that day after an upgrade.
+     */
+    public boolean markPlaceType(int day, UUID player, int blockTypeHash) {
+        Map<UUID, IntOpenHashSet> players =
+                placeTypeHashesByDay.computeIfAbsent(day, ignored -> new HashMap<>());
+        IntOpenHashSet types = players.get(player);
+        if (types == null) {
+            if (value(day, player, AnalyticsKeys.PLACE_TYPES) > 0L) {
+                return false;
+            }
+            types = new IntOpenHashSet();
+            players.put(player, types);
+        }
+        boolean added = types.add(blockTypeHash);
+        if (added) {
+            setDirty();
+        }
+        return added;
+    }
+
+    /**
+     * Marks one dimension-qualified chunk identity as seen for this player/day. The set is
+     * persisted and capped, so restarts cannot re-fire exploration rewards.
+     */
+    public boolean markChunkVisited(int day, UUID player, String chunkId, int maxChunks) {
+        Map<UUID, Set<String>> players = chunksByDay.computeIfAbsent(day, ignored -> new HashMap<>());
+        Set<String> chunks = players.get(player);
+        if (chunks == null) {
+            if (value(day, player, AnalyticsKeys.CHUNKS_NEW) > 0L) {
+                return false;
+            }
+            chunks = new HashSet<>();
+            players.put(player, chunks);
+        }
+        if (chunks.contains(chunkId) || chunks.size() >= maxChunks) {
+            return false;
+        }
+        chunks.add(chunkId);
+        setDirty();
+        return true;
+    }
+
+    /** Drops distinct-identity sets once an ended day has frozen. */
+    public void clearDistinctDay(int day) {
+        boolean changed = placeTypeHashesByDay.remove(day) != null;
+        changed |= chunksByDay.remove(day) != null;
+        if (changed) {
+            setDirty();
+        }
+    }
+
+    /**
      * Marks a biome as visited in the player's LIFETIME set; returns true only on the first
      * ever visit (the caller then bumps the per-day {@code biomes} counter + fires the signal).
      */
@@ -175,6 +259,8 @@ public final class AnalyticsState extends SavedData {
     public int pruneDaysBefore(int minDayKept) {
         int before = days.size();
         days.keySet().removeIf(day -> day < minDayKept);
+        placeTypeHashesByDay.keySet().removeIf(day -> day < minDayKept);
+        chunksByDay.keySet().removeIf(day -> day < minDayKept);
         int pruned = before - days.size();
         if (pruned > 0) {
             setDirty();

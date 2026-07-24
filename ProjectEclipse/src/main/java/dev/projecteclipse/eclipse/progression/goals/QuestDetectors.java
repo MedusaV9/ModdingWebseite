@@ -151,7 +151,9 @@ public final class QuestDetectors {
         QuestState state = QuestState.get(server);
         UUID uuid = player.getUUID();
         for (GoalSpec spec : specs) {
-            if (state.isPlayerDone(day.day, uuid, spec.id()) || state.isTeamDone(day.day, spec.id())) {
+            if (!QuestEngine.isEligible(state, day, uuid, spec)
+                    || state.isPlayerDone(day.day, uuid, spec.id())
+                    || state.isTeamDone(day.day, spec.id())) {
                 continue;
             }
             String target = spec.trigger().target();

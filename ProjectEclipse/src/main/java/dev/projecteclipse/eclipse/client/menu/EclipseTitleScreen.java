@@ -162,14 +162,14 @@ public class EclipseTitleScreen extends Screen {
                 .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
 
-        addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.settings.title"),
+        addRenderableWidget(Button.builder(EclipseLang.tr("gui.eclipse.settings.title"),
                         button -> this.minecraft.setScreen(new EclipseSettingsScreen(this)))
                 .bounds(x + BUTTON_WIDTH + 6, y, BUTTON_HEIGHT, BUTTON_HEIGHT)
-                .tooltip(Tooltip.create(Component.translatable("gui.eclipse.settings.open")))
+                .tooltip(Tooltip.create(EclipseLang.tr("gui.eclipse.settings.open")))
                 .build(builder -> new EclipseMenuButton(builder, GEAR, 48, 48)));
         y += BUTTON_SPACING;
 
-        addRenderableWidget(Button.builder(Component.translatable("gui.eclipse.credits.title"),
+        addRenderableWidget(Button.builder(EclipseLang.tr("gui.eclipse.credits.title"),
                         button -> this.minecraft.setScreen(new CreditsScreen(this)))
                 .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build(EclipseMenuButton::new));
@@ -483,10 +483,10 @@ public class EclipseTitleScreen extends Screen {
     private void renderFooter(GuiGraphics guiGraphics) {
         guiGraphics.drawString(this.font, "Minecraft " + SharedConstants.getCurrentVersion().getName(),
                 2, this.height - 10, 0xFFD7CEE8);
-        Component tagline = Component.translatable("gui.eclipse.title.tagline");
+        Component tagline = EclipseLang.tr("gui.eclipse.title.tagline");
         guiGraphics.drawString(this.font, tagline,
                 this.width - this.font.width(tagline) - 2, this.height - 10, 0xFFB98CFF);
-        Component disclaimer = Component.translatable("gui.eclipse.title.disclaimer");
+        Component disclaimer = EclipseLang.tr("gui.eclipse.title.disclaimer");
         guiGraphics.drawCenteredString(this.font, disclaimer, this.width / 2, this.height - 20, 0xAA9A8FB8);
     }
 

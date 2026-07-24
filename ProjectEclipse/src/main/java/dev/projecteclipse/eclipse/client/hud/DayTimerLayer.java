@@ -22,7 +22,8 @@ import net.minecraft.util.Mth;
  * {@link DayTimerCache}; this class only renders.
  *
  * <ul>
- *   <li><b>Digits</b>: {@code HH:MM:SS} ({@code DD:HH:MM} above 48 h) at 1.5x in fixed
+ *   <li><b>Digits</b>: {@code HH:MM:SS} ({@code DDdHH:MM} above 48 h, with a localized
+ *       {@code d}/{@code T} day-unit glyph as the first separator — M-8) at 1.5x in fixed
  *       monospace cells (vanilla digits are uniformly 6px wide; the colon gets its own
  *       narrow cell), so the line never wobbles while ticking.</li>
  *   <li><b>Color</b>: lerps {@code TEXT → ACCENT} as the remaining day fraction shrinks
@@ -70,11 +71,17 @@ public final class DayTimerLayer {
     private static final int[] CELL_X = { 0, 7, 14, 18, 25, 32, 36, 43 };
     private static final int[] CELL_W = { 7, 7, 4, 7, 7, 4, 7, 7 };
     private static final int TOTAL_WIDTH = 50;
+    /** ≥48 h layout (M-8): D D unit H H : M M — the unit cell fits a localized letter glyph. */
+    private static final int[] DAY_CELL_X = { 0, 7, 14, 22, 29, 36, 40, 47 };
+    private static final int[] DAY_CELL_W = { 7, 7, 8, 7, 7, 4, 7, 7 };
+    private static final int DAY_TOTAL_WIDTH = 54;
     /** Vertical roll distance of one odometer step at 1x. */
     private static final float CELL_ROLL_HEIGHT = 10.0F;
     /** Pre-built glyphs — digit rendering never builds strings per frame. */
     private static final String[] GLYPHS = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":" };
     private static final int COLON = 10;
+    /** Sentinel cell value rendered as the localized day-unit glyph ({@code d}/{@code T}). */
+    private static final int DAY_UNIT = 11;
 
     // --- reusable per-frame state (client thread only; zero allocations while rendering) ---
     private static final int[] TARGET = new int[8];
@@ -85,9 +92,10 @@ public final class DayTimerLayer {
     private static boolean visibleLastFrame;
     private static long appearStartMillis;
 
-    /** Localized captions, cached per {@code EclipseLang} generation (R2 instant reload). */
+    /** Localized captions + day-unit glyph, cached per {@code EclipseLang} generation (R2 instant reload). */
     private static Component pausedCaption;
     private static Component zeroCaption;
+    private static String dayUnitGlyph = "d";
     private static int captionGeneration = -1;
 
     private DayTimerLayer() {}
@@ -110,9 +118,13 @@ public final class DayTimerLayer {
         float appear = reduced ? 1.0F
                 : easeOutCubic(Mth.clamp((now - appearStartMillis) / (float) APPEAR_MILLIS, 0.0F, 1.0F));
 
+        refreshLocaleCache();
+
         // Digit targets from the (possibly spool-eased) displayed remaining time.
         long shownRemaining = DayTimerCache.displayedRemainingMillis();
-        computeDigits((shownRemaining + 999L) / 1000L, TARGET);
+        boolean dayMode = computeDigits((shownRemaining + 999L) / 1000L, TARGET);
+        int[] cellX = dayMode ? DAY_CELL_X : CELL_X;
+        int[] cellW = dayMode ? DAY_CELL_W : CELL_W;
         boolean rollEnabled = !reduced && !appearing && DayTimerCache.spooling();
         for (int i = 0; i < 8; i++) {
             if (TARGET[i] != SHOWN[i]) {
@@ -156,7 +168,7 @@ public final class DayTimerLayer {
         }
 
         Font font = minecraft.font;
-        float totalWidthAbs = TOTAL_WIDTH * SCALE;
+        float totalWidthAbs = (dayMode ? DAY_TOTAL_WIDTH : TOTAL_WIDTH) * SCALE;
         int baseX = Math.round((guiGraphics.guiWidth() - totalWidthAbs) / 2.0F);
         int topY = BossbarSkin.nextFreeBarY() + 4 + Math.round(4.0F * (1.0F - appear));
         int digitHeightAbs = Math.round(9.0F * SCALE);
@@ -174,7 +186,7 @@ public final class DayTimerLayer {
         }
 
         for (int i = 0; i < 8; i++) {
-            float cellX = baseX + CELL_X[i] * SCALE;
+            float glyphX = baseX + cellX[i] * SCALE;
             long rollStart = ROLL_START[i];
             if (rollStart != 0L && now - rollStart < ROLL_MILLIS) {
                 // Odometer roll: prev glyph slides out, new glyph slides in, inside the cell.
@@ -182,13 +194,13 @@ public final class DayTimerLayer {
                 float direction = DayTimerCache.spoolRising() ? -1.0F : 1.0F;
                 float currentOffset = direction * (1.0F - progress) * CELL_ROLL_HEIGHT;
                 float previousOffset = currentOffset - direction * CELL_ROLL_HEIGHT;
-                guiGraphics.enableScissor(Mth.floor(cellX), topY - 1,
-                        Mth.ceil(cellX + CELL_W[i] * SCALE), topY + digitHeightAbs + 1);
-                drawGlyph(guiGraphics, font, cellX, topY, i, PREVIOUS[i], previousOffset, color);
-                drawGlyph(guiGraphics, font, cellX, topY, i, SHOWN[i], currentOffset, color);
+                guiGraphics.enableScissor(Mth.floor(glyphX), topY - 1,
+                        Mth.ceil(glyphX + cellW[i] * SCALE), topY + digitHeightAbs + 1);
+                drawGlyph(guiGraphics, font, glyphX, topY, cellW[i], PREVIOUS[i], previousOffset, color);
+                drawGlyph(guiGraphics, font, glyphX, topY, cellW[i], SHOWN[i], currentOffset, color);
                 guiGraphics.disableScissor();
             } else {
-                drawGlyph(guiGraphics, font, cellX, topY, i, SHOWN[i], 0.0F, color);
+                drawGlyph(guiGraphics, font, glyphX, topY, cellW[i], SHOWN[i], 0.0F, color);
             }
         }
 
@@ -218,25 +230,29 @@ public final class DayTimerLayer {
 
     /** One monospace glyph, centered in its cell, drawn at {@link #SCALE} via a pose. */
     private static void drawGlyph(GuiGraphics guiGraphics, Font font, float cellX, int topY,
-            int cell, int glyph, float yOffset, int color) {
-        String text = GLYPHS[glyph];
+            int cellWidth, int glyph, float yOffset, int color) {
+        String text = glyph == DAY_UNIT ? dayUnitGlyph : GLYPHS[glyph];
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(cellX, topY, 0.0F);
         guiGraphics.pose().scale(SCALE, SCALE, 1.0F);
-        guiGraphics.drawString(font, text, (CELL_W[cell] - font.width(text)) / 2,
+        guiGraphics.drawString(font, text, (cellWidth - font.width(text)) / 2,
                 Math.round(yOffset), color);
         guiGraphics.pose().popPose();
     }
 
     /**
-     * Fills {@code out} with the 8 display cells: {@code HH:MM:SS}, or {@code DD:HH:MM}
-     * above 48 h (§3.6). No allocations — reused arrays only.
+     * Fills {@code out} with the 8 display cells: {@code HH:MM:SS}, or {@code DDdHH:MM}
+     * above 48 h (§3.6 + M-8: the first separator becomes an explicit localized day-unit
+     * glyph, so "02d05:33" can never read as 2 h 5 m 33 s). Returns whether day mode is
+     * active so the caller picks the matching cell layout. No allocations — reused arrays
+     * only.
      */
-    private static void computeDigits(long totalSeconds, int[] out) {
+    private static boolean computeDigits(long totalSeconds, int[] out) {
+        boolean dayMode = totalSeconds >= 48L * 3_600L;
         long first;
         long second;
         long third;
-        if (totalSeconds >= 48L * 3_600L) {
+        if (dayMode) {
             first = Math.min(99L, totalSeconds / 86_400L);
             second = (totalSeconds % 86_400L) / 3_600L;
             third = (totalSeconds % 3_600L) / 60L;
@@ -247,12 +263,13 @@ public final class DayTimerLayer {
         }
         out[0] = (int) (first / 10L);
         out[1] = (int) (first % 10L);
-        out[2] = COLON;
+        out[2] = dayMode ? DAY_UNIT : COLON;
         out[3] = (int) (second / 10L);
         out[4] = (int) (second % 10L);
         out[5] = COLON;
         out[6] = (int) (third / 10L);
         out[7] = (int) (third % 10L);
+        return dayMode;
     }
 
     /**
@@ -280,14 +297,21 @@ public final class DayTimerLayer {
         return (red << 16) | (green << 8) | blue;
     }
 
-    /** Paused/zero captions via {@code EclipseLang.tr}, re-resolved on language generation bumps. */
-    private static Component caption(boolean paused) {
+    /** Captions + day-unit glyph via {@code EclipseLang}, re-resolved on language generation bumps. */
+    private static void refreshLocaleCache() {
         int generation = EclipseLang.generation();
-        if (generation != captionGeneration || pausedCaption == null) {
-            captionGeneration = generation;
-            pausedCaption = EclipseLang.tr("gui.eclipse.timer.paused");
-            zeroCaption = EclipseLang.tr("gui.eclipse.timer.zero");
+        if (generation == captionGeneration && pausedCaption != null) {
+            return;
         }
+        captionGeneration = generation;
+        pausedCaption = EclipseLang.tr("gui.eclipse.timer.paused");
+        zeroCaption = EclipseLang.tr("gui.eclipse.timer.zero");
+        String unit = EclipseLang.trString("gui.eclipse.timer.day_unit");
+        // A missing key resolves to the key itself — fall back to the SI "d" glyph then.
+        dayUnitGlyph = unit.isBlank() || unit.length() > 2 ? "d" : unit;
+    }
+
+    private static Component caption(boolean paused) {
         return paused ? pausedCaption : zeroCaption;
     }
 

@@ -33,7 +33,16 @@ import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class MusicManager {
     private static final int FADE_TICKS = 40;
-    private static final long BOSS_SEEN_GRACE_MILLIS = 1_000L;
+    /**
+     * How long a boss cue survives without its bossbar RENDER event firing (M-2). The
+     * {@code BossEventProgress} hook goes silent whenever the boss-bar GUI layer is skipped
+     * — F1 hide-GUI and the cutscene letterbox's layer cancellation — even though the fight
+     * is still running. No payload-fed boss lifecycle source exists client-side
+     * ({@code S2CBossbarStylePayload} tags a bar UUID with a theme but carries neither the
+     * boss identity nor an end signal), so the render hook stays and this 100-tick grace
+     * bridges letterboxed boss intros and brief F1 use instead of the old 1 s.
+     */
+    private static final long BOSS_SEEN_GRACE_MILLIS = 100L * 50L;
 
     @Nullable
     private static CueSound current;

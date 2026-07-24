@@ -54,7 +54,7 @@ public final class EclipseSettingsScreen extends Screen {
     private int closeTicks;
 
     public EclipseSettingsScreen(Screen parent) {
-        super(Component.translatable("gui.eclipse.settings.title"));
+        super(EclipseLang.tr("gui.eclipse.settings.title"));
         this.parent = parent;
     }
 
@@ -180,9 +180,16 @@ public final class EclipseSettingsScreen extends Screen {
         return true;
     }
 
-    /** ALWAYS hand the system cursor back, whatever screen comes next (risk R12). */
+    /**
+     * ALWAYS hand the system cursor back, whatever screen comes next (risk R12) — and
+     * persist a slider edit whose mouse release the closing screen swallowed (ESC
+     * mid-drag applied {@code set()} live but never reached {@code save()}).
+     */
     @Override
     public void removed() {
+        if (panel != null) {
+            panel.commitPendingEdits();
+        }
         CursorManager.reset();
         super.removed();
     }

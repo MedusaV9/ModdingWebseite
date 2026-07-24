@@ -87,6 +87,7 @@ public class HeartExtractorItem extends Item {
         }
 
         int heartsAfter = LivesApi.add(player, -HEART_COST);
+        dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
         ItemStack fragments = new ItemStack(EclipseItems.HEART_FRAGMENT.get(), FRAGMENT_REWARD);
         player.getInventory().add(fragments);
         if (!fragments.isEmpty()) {

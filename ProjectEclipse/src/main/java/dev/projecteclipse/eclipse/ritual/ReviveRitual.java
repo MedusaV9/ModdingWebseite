@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
@@ -20,7 +21,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.BossEvent;
-import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -41,7 +41,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       end-rod + purple-dust beam column to all players within 512 blocks;</li>
  *   <li>if the confirming player dies, disconnects, changes dimension or moves
  *       more than {@value #MAX_CONFIRMER_DISTANCE} blocks from the altar, the ritual
- *       FAILS and the sigil drops back onto the altar (stealable).</li>
+ *       FAILS without consuming the sigil.</li>
  * </ul>
  * On success the target is unbanned via {@link BanService#unban} (offline targets are
  * removed from the persistent banned set and fully unbanned on their next login, see
@@ -146,21 +146,19 @@ public final class ReviveRitual {
 
     // --- outcomes ---
 
-    /** Failure: the sigil drops back onto the altar (stealable) and the bossbar disappears. */
+    /** Failure: the ritual leaves the sigil untouched and the bossbar disappears. */
     private void fail(String reason) {
-        Containers.dropItemStack(this.level,
-                this.altarPos.getX() + 0.5D, this.altarPos.getY() + 1.0D, this.altarPos.getZ() + 0.5D,
-                new ItemStack(EclipseItems.REVIVE_SIGIL.get()));
         this.level.playSound(null, this.altarPos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0F, 0.6F);
         cleanup();
-        EclipseMod.LOGGER.info("Revive ritual at {} for {} FAILED ({}); sigil dropped", this.altarPos, this.targetName, reason);
+        EclipseMod.LOGGER.info("Revive ritual at {} for {} FAILED ({}); sigil not consumed",
+                this.altarPos, this.targetName, reason);
     }
 
     /**
      * Success: unban the target (deferred to next login if offline), global thunder, remove
      * bossbar. If the target is no longer banned (revived mid-ritual by an admin or the
-     * finale), the ritual aborts gracefully instead — sigil refunded onto the altar plus an
-     * actionbar note to the ritualist, so the sigil is never consumed for nothing.
+     * finale), the ritual aborts gracefully instead — the sigil remains unconsumed and the
+     * ritualist receives an actionbar note.
      */
     private void succeed() {
         MinecraftServer server = this.level.getServer();
@@ -180,6 +178,11 @@ public final class ReviveRitual {
             fail("target no longer banned");
             return;
         }
+        ServerPlayer confirmer = server.getPlayerList().getPlayer(this.confirmerId);
+        if (confirmer == null || !consumeSigil(confirmer)) {
+            fail("confirming player no longer has a revive sigil");
+            return;
+        }
         if (target != null) {
             BanService.unban(target);
         } else {
@@ -187,12 +190,27 @@ public final class ReviveRitual {
             // reconciled (full unban) the moment the player logs back in, see onPlayerLoggedIn.
             EclipseWorldState.get(server).removeBanned(this.targetId);
         }
+        QuestApi.completeTeamBeat(server, "player_revived");
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.MASTER, 1.0F, 1.0F);
         }
         cleanup();
         EclipseMod.LOGGER.info("Revive ritual at {} completed: {} ({}) revived{}",
                 this.altarPos, this.targetName, this.targetId, target == null ? " (offline; applied on next login)" : "");
+    }
+
+    /** Consumes the payment only at the successful completion boundary. */
+    private static boolean consumeSigil(ServerPlayer player) {
+        var inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (stack.is(EclipseItems.REVIVE_SIGIL.get()) && !stack.isEmpty()) {
+                stack.shrink(1);
+                inventory.setChanged();
+                return true;
+            }
+        }
+        return false;
     }
 
     private void cleanup() {
@@ -249,7 +267,7 @@ public final class ReviveRitual {
         }
     }
 
-    /** Server stop: fail every running ritual so bossbars are removed and no sigil is lost. */
+    /** Server stop: fail every running ritual; payment has not been consumed yet. */
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         for (Iterator<ReviveRitual> iterator = ACTIVE.iterator(); iterator.hasNext();) {

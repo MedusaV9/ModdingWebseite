@@ -5,6 +5,7 @@ import java.util.List;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.HandbookScreen;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -74,7 +75,7 @@ public abstract class HandbookTab {
     public abstract String id();
 
     public Component title() {
-        return Component.translatable("gui.eclipse.handbook.tab." + id());
+        return EclipseLang.tr("gui.eclipse.handbook.tab." + id());
     }
 
     /**

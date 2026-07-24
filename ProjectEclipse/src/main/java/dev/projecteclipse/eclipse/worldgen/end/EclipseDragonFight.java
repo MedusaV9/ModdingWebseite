@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import net.minecraft.core.BlockPos;
@@ -462,6 +463,7 @@ public final class EclipseDragonFight {
             return;
         }
         state.setDragonKilled();
+        QuestApi.completeTeamBeat(level.getServer(), "dragon_defeated");
         activeDragon = null;
         clearBossBar();
         ensureVictoryBlocks(level);

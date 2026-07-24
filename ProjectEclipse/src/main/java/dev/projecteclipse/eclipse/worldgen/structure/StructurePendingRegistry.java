@@ -110,6 +110,8 @@ public final class StructurePendingRegistry {
 
     /** Ticks between auto-delay scans (placement spacing itself is config-driven). */
     private static final int SCAN_INTERVAL_TICKS = 10;
+    /** Maximum failed attempts before the row is abandoned without a placed record. */
+    private static final int MAX_PLACEMENT_FAILURES = 3;
     private static final String FILE_NAME = "pending_structures.json";
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_PLACED = "PLACED";
@@ -127,6 +129,8 @@ public final class StructurePendingRegistry {
     private static final Set<String> TRIGGERED = Collections.synchronizedSet(new HashSet<>());
     /** Pending ids whose async SitePrep cursor is currently running. */
     private static final Set<String> IN_FLIGHT = Collections.synchronizedSet(new HashSet<>());
+    /** siteId → persisted failed placement attempts for the current pending row. */
+    private static final Map<String, Integer> FAILURES = new ConcurrentHashMap<>();
 
     private record PlacedRecord(String dimension, int stage) {}
 
@@ -186,6 +190,7 @@ public final class StructurePendingRegistry {
                 return;
             }
         }
+        FAILURES.remove(site.siteId());
         PENDING.add(site);
         persist();
         ServerLevel level = levelOf(server, site);
@@ -249,6 +254,8 @@ public final class StructurePendingRegistry {
         boolean changed = PENDING.removeIf(site ->
                 site.dimension().equals(dimension) && site.stage() > keepThroughStage);
         IN_FLIGHT.removeIf(siteId -> PENDING.stream().noneMatch(site -> site.siteId().equals(siteId)));
+        FAILURES.keySet().removeIf(siteId ->
+                PENDING.stream().noneMatch(site -> site.siteId().equals(siteId)));
         int before = PLACED.size();
         PLACED.entrySet().removeIf(entry -> entry.getValue().dimension().equals(dimension)
                 && entry.getValue().stage() > keepThroughStage);
@@ -280,6 +287,7 @@ public final class StructurePendingRegistry {
         PLACED.clear();
         TRIGGERED.clear();
         IN_FLIGHT.clear();
+        FAILURES.clear();
         WARNED_NO_PLACER.clear();
         lastPlaceGameTime = Long.MIN_VALUE;
     }
@@ -326,9 +334,8 @@ public final class StructurePendingRegistry {
             ServerLevel level = levelOf(server, site);
             if (level == null) {
                 IN_FLIGHT.remove(site.siteId());
-                EclipseMod.LOGGER.error("Dimension {} of pending site {} is missing; dropping site",
-                        site.dimension(), site.siteId());
-                removeAndRecord(site, false);
+                placementFailed(server, null, site,
+                        new IllegalStateException("Dimension " + site.dimension() + " is missing"));
                 return true;
             }
             try {
@@ -353,18 +360,15 @@ public final class StructurePendingRegistry {
         }
         ServerLevel level = levelOf(server, site);
         if (level == null) {
-            EclipseMod.LOGGER.error("Dimension {} of pending site {} is missing; dropping site",
-                    site.dimension(), site.siteId());
-            removeAndRecord(site, false);
+            placementFailed(server, null, site,
+                    new IllegalStateException("Dimension " + site.dimension() + " is missing"));
             return true;
         }
         try {
             placer.place(level, site);
         } catch (Exception e) {
-            EclipseMod.LOGGER.error("Structure placement of {} ({}) failed", site.siteId(),
-                    site.structureId(), e);
-            // Fall through: the site is consumed either way — a broken placer must never
-            // wedge the queue (same "one structure must never break the others" contract).
+            placementFailed(server, level, site, e);
+            return true;
         }
         removeAndRecord(site, true);
         lastPlaceGameTime = level.getGameTime();
@@ -380,20 +384,38 @@ public final class StructurePendingRegistry {
             return;
         }
         if (error != null) {
-            EclipseMod.LOGGER.error("Async structure placement of {} ({}) failed",
-                    site.siteId(), site.structureId(), error);
+            placementFailed(server, level, site, error);
+            return;
         }
         removeAndRecord(site, true);
         lastPlaceGameTime = level.getGameTime();
         fire(level, site, Phase.PLACED);
-        EclipseMod.LOGGER.info("Structure site PLACED: {} ({}) at {}{}",
-                site.siteId(), site.structureId(), site.anchor().toShortString(),
-                error == null ? "" : " (placer failed; row consumed)");
+        EclipseMod.LOGGER.info("Structure site PLACED: {} ({}) at {}",
+                site.siteId(), site.structureId(), site.anchor().toShortString());
+    }
+
+    private static void placementFailed(MinecraftServer server, @Nullable ServerLevel level,
+            PendingSite site, Throwable error) {
+        int failures = FAILURES.merge(site.siteId(), 1, Integer::sum);
+        lastPlaceGameTime = level != null ? level.getGameTime() : server.overworld().getGameTime();
+        TRIGGERED.remove(site.siteId());
+        if (failures >= MAX_PLACEMENT_FAILURES) {
+            EclipseMod.LOGGER.error(
+                    "Structure placement of {} ({}) failed {}/{} times; abandoning pending row without marking placed",
+                    site.siteId(), site.structureId(), failures, MAX_PLACEMENT_FAILURES, error);
+            removeAndRecord(site, false);
+            return;
+        }
+        persist();
+        EclipseMod.LOGGER.warn(
+                "Structure placement of {} ({}) failed (attempt {}/{}); row remains pending for retry",
+                site.siteId(), site.structureId(), failures, MAX_PLACEMENT_FAILURES, error);
     }
 
     private static void removeAndRecord(PendingSite site, boolean recordPlaced) {
         PENDING.removeIf(row -> row.siteId().equals(site.siteId()));
         TRIGGERED.remove(site.siteId());
+        FAILURES.remove(site.siteId());
         if (recordPlaced) {
             PLACED.put(site.siteId(), new PlacedRecord(site.dimension(), site.stage()));
         }
@@ -427,6 +449,10 @@ public final class StructurePendingRegistry {
         for (PendingSite site : PENDING) {
             CompoundTag row = siteToTag(site);
             row.putString("status", STATUS_PENDING);
+            int failures = FAILURES.getOrDefault(site.siteId(), 0);
+            if (failures > 0) {
+                row.putInt("failures", failures);
+            }
             rows.add(row);
         }
         for (Map.Entry<String, PlacedRecord> entry : PLACED.entrySet()) {
@@ -444,6 +470,7 @@ public final class StructurePendingRegistry {
         PENDING.clear();
         PLACED.clear();
         TRIGGERED.clear();
+        FAILURES.clear();
         MinecraftServer server = activeServer;
         if (server == null) {
             return;
@@ -463,6 +490,10 @@ public final class StructurePendingRegistry {
                 PendingSite site = siteFromTag(row);
                 if (site != null) {
                     PENDING.add(site);
+                    int failures = Math.max(0, row.getInt("failures"));
+                    if (failures > 0) {
+                        FAILURES.put(site.siteId(), failures);
+                    }
                 }
             }
         }

@@ -1,7 +1,5 @@
 package dev.projecteclipse.eclipse.analytics;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -9,7 +7,6 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
-import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -66,9 +63,6 @@ public final class AnalyticsService {
     private static final AtomicBoolean SIGNALS_REGISTERED = new AtomicBoolean(false);
     /** JVM-lifetime guard: ReloadHooks entries are never cleared, so register exactly once. */
     private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean(false);
-    // statics reset on ServerStopped; also cleared per day on rollover PRE
-    private static final Map<UUID, IntOpenHashSet> PLACE_TYPE_HASHES_TODAY = new HashMap<>();
-
     private AnalyticsService() {}
 
     // --- lifecycle ---
@@ -97,7 +91,6 @@ public final class AnalyticsService {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         SIGNALS_REGISTERED.set(false);
-        PLACE_TYPE_HASHES_TODAY.clear();
         AnalyticsSampler.reset();
         AnalyticsConfig.invalidate();
         DepositValues.invalidate();
@@ -164,8 +157,7 @@ public final class AnalyticsService {
         // Distinct-type counting via a per-day id-hash set (plan §2.4: hash collisions may
         // under-count a type, never over-count — memory stays a few ints per player).
         String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-        IntOpenHashSet types = PLACE_TYPE_HASHES_TODAY.computeIfAbsent(id, key -> new IntOpenHashSet());
-        if (types.add(blockId.hashCode())) {
+        if (analytics.markPlaceType(day, id, blockId.hashCode())) {
             analytics.add(day, id, AnalyticsKeys.PLACE_TYPES, 1L);
         }
         EclipseSignals.fireBlockPlaced(player, state, pos);
@@ -358,8 +350,9 @@ public final class AnalyticsService {
     /**
      * {@code dayRollover} listener. PRE (fired while the ended day is still current): the
      * ended day's counters freeze by construction (writes key off the CURRENT world-state
-     * day, which flips inside {@code DayScheduler.setDay} right after PRE) — here we only
-     * reset the per-day in-memory scratch sets and apply the retention window. Catch-up
+     * day, which flips inside {@code DayScheduler.setDay} right after PRE) — here we drop
+     * the frozen day's distinct-identity sets and apply the retention window. Current-day
+     * type/chunk identities are persisted and day-keyed in {@link AnalyticsState}. Catch-up
      * fires PRE once per skipped day; both operations are idempotent.
      */
     public static void handleDayRollover(MinecraftServer server, int endedDay, int newDay,
@@ -367,8 +360,7 @@ public final class AnalyticsService {
         if (phase != EclipseSignals.DayRolloverPhase.PRE) {
             return;
         }
-        PLACE_TYPE_HASHES_TODAY.clear();
-        AnalyticsSampler.clearDayScratch();
+        AnalyticsState.get(server).clearDistinctDay(endedDay);
         int retention = AnalyticsConfig.get().retentionDays();
         int pruned = AnalyticsState.get(server).pruneDaysBefore(newDay - retention + 1);
         if (pruned > 0) {

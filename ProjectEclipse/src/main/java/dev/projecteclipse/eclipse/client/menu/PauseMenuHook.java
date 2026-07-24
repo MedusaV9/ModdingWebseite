@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.client.menu;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -10,7 +11,6 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -65,16 +65,23 @@ public final class PauseMenuHook {
             y = Math.min(lowestWidgetBottom(event) + 4, screen.height - BUTTON_HEIGHT - 2);
         }
 
-        event.addListener(Button.builder(Component.translatable("gui.eclipse.settings.pause_entry"),
+        event.addListener(Button.builder(EclipseLang.tr("gui.eclipse.settings.pause_entry"),
                         button -> Minecraft.getInstance().setScreen(new EclipseSettingsScreen(screen)))
                 .bounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
-                .tooltip(Tooltip.create(Component.translatable("gui.eclipse.settings.title")))
+                .tooltip(Tooltip.create(EclipseLang.tr("gui.eclipse.settings.title")))
                 .build(EclipseMenuButton::new));
     }
 
-    /** True when any widget already carries a {@code gui.eclipse.*} label. */
+    /**
+     * True when any widget already carries a {@code gui.eclipse.*} label or is an Eclipse
+     * button (labels resolved through {@code EclipseLang.tr} are literals on the override
+     * path, so the key check alone would no longer see them — M-1).
+     */
     private static boolean hasEclipseWidget(ScreenEvent.Init.Post event) {
         for (GuiEventListener listener : event.getListenersList()) {
+            if (listener instanceof EclipseMenuButton) {
+                return true;
+            }
             if (listener instanceof AbstractWidget widget
                     && widget.getMessage().getContents() instanceof TranslatableContents contents
                     && contents.getKey().startsWith("gui.eclipse.")) {

@@ -8,6 +8,7 @@ import java.util.function.LongSupplier;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.hud.SidebarSyncService;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CBuffStatePayload;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
@@ -78,6 +79,7 @@ public final class TimedBuffService implements TimedBuffApi {
         if (pruned.size() != state.active().size()) {
             state.setActive(pruned);
             service.syncAll(event.getServer(), pruned);
+            SidebarSyncService.markAllDirty(event.getServer());
         } else {
             service.syncAll(event.getServer(), state.active());
         }
@@ -140,6 +142,7 @@ public final class TimedBuffService implements TimedBuffApi {
                 announceEnd(server, id);
             }
             syncAll(server, after);
+            SidebarSyncService.markAllDirty(server);
         }
         refreshBossbar(server);
     }
@@ -156,12 +159,18 @@ public final class TimedBuffService implements TimedBuffApi {
                 continue;
             }
             if (def.effect() instanceof BuffConfig.MagnetEffect magnet) {
-                BuffEffects.pullExperienceOrbs(server.overworld(), magnet.radius());
+                for (var level : server.getAllLevels()) {
+                    BuffEffects.pullExperienceOrbs(level, magnet.radius());
+                }
             } else if (def.effect() instanceof BuffConfig.PeriodicEffect periodic
                     && "supply_drop".equals(periodic.action())) {
                 long periodMillis = periodic.periodSeconds() * 1000L;
                 long last = buff.lastPeriodicEpochMillis();
-                if (last <= 0L || now - last >= periodMillis) {
+                if (last <= 0L) {
+                    // Migration guard for active buffs saved before activation timestamps
+                    // were initialized: start their first full period now, do not fire now.
+                    state.updatePeriodicFire(buff.id(), now);
+                } else if (now - last >= periodMillis) {
                     BuffEffects.fireSupplyDrop(server);
                     state.updatePeriodicFire(buff.id(), now);
                 }
@@ -188,6 +197,7 @@ public final class TimedBuffService implements TimedBuffApi {
             announceStart(server, def);
         }
         syncAll(server, next);
+        SidebarSyncService.markAllDirty(server);
         refreshBossbar(server);
         return true;
     }
@@ -203,6 +213,7 @@ public final class TimedBuffService implements TimedBuffApi {
         state.setActive(next);
         announceEnd(server, id);
         syncAll(server, next);
+        SidebarSyncService.markAllDirty(server);
         refreshBossbar(server);
         return true;
     }

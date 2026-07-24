@@ -344,7 +344,7 @@ public final class XboxEventService {
         }
 
         Set<UUID> participants = state.participantsSnapshot();
-        if (!participants.isEmpty()) {
+        if (!participants.isEmpty() && state.markRewardGranted()) {
             grantReward(server, state, participants.size());
         }
 
@@ -722,11 +722,14 @@ public final class XboxEventService {
         if (worldId == null) {
             return List.of();
         }
+        XboxEventState state = XboxEventState.get(level.getServer());
+        if (state.phase() != XboxEventState.Phase.OPEN || !state.worldId().equals(worldId)) {
+            return List.of();
+        }
         List<ItemStack> recorded = XboxWorldsManifest.loot(level.getServer(), worldId).get(pos);
         if (recorded == null || recorded.isEmpty()) {
             return List.of();
         }
-        XboxEventState state = XboxEventState.get(level.getServer());
         if (!state.consumeChestPosition(worldId, pos)) {
             return List.of();
         }

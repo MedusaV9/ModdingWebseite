@@ -57,8 +57,9 @@ World content is by **Mojang / 4J Studios**. Java Edition conversions are courte
 Additional archive reference:
 [Fridtjof-DE/Minecraft-Xbox-360-Tutorial-Worlds](https://github.com/Fridtjof-DE/Minecraft-Xbox-360-Tutorial-Worlds).
 The worlds were upgraded locally with Mojang's official 1.21.1 server data fixer; that tool is
-not redistributed. Integrity hashes and the full staging ledger are in
-`/workspace/xbox_staging/SOURCES_AND_LICENSES.md`.
+not redistributed. Source pins, integrity hashes, and pipeline provenance are tracked in
+[`tools/xboxworlds/`](tools/xboxworlds/) and
+[`docs/plans_v3/wiring/P5-W7_wiring.md`](docs/plans_v3/wiring/P5-W7_wiring.md).
 
 **No legal clearance is claimed for redistributing the Mojang/4J tutorial-world binaries.**
 The upstream conversions do not provide an explicit redistribution license. They are intended

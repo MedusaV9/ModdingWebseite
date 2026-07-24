@@ -16,7 +16,7 @@ import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.sequence.IntroSequence;
 import dev.projecteclipse.eclipse.sequence.SequencePayloads;
-import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
+import dev.projecteclipse.eclipse.start.StartAssignmentService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -53,7 +53,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       and the dimension change both happen behind black, and the vanilla dimension screen
  *       is never the visible surface (R13).</li>
  *   <li>t=140 — teleport every player currently in Limbo onto their own disc
- *       ({@link DiscGeometry#playerDiscCenter}, surface-snapped, facing the world center):
+ *       (from {@link StartAssignmentService}, surface-snapped, facing the world center):
  *       re-freeze (survives the hop) + {@link FreezeService#transport} per player, and
  *       remember each player's disc center for {@code IntroSequence}'s framing map.</li>
  *   <li>t=150 — {@link SequencePayloads#sendPortalExit} (24 ticks): the black releases onto
@@ -196,23 +196,62 @@ public final class StartEventCutscene {
      */
     private static void teleportLimboPlayersToDiscs(MinecraftServer server) {
         ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
-        ServerLevel overworld = server.overworld();
         if (limbo == null) {
             EclipseMod.LOGGER.warn("start_event: limbo dimension missing at teleport tick; nothing to teleport");
             return;
         }
         List<ServerPlayer> inLimbo = new ArrayList<>(limbo.players());
-        for (int i = 0; i < inLimbo.size(); i++) {
-            ServerPlayer player = inLimbo.get(i);
-            BlockPos discCenter = DiscGeometry.playerDiscCenter(i % DiscGeometry.PLAYER_DISC_COUNT);
-            Vec3 spot = discSpot(overworld, discCenter, i / DiscGeometry.PLAYER_DISC_COUNT);
-            float yaw = yawTowardCenter(spot);
-            FreezeService.freeze(player, HOP_FREEZE_TTL_TICKS, true, 0);
-            FreezeService.transport(player, overworld, spot, yaw, 10.0F);
-            teleportedPlayers.add(player.getUUID());
-            discCenters.put(player.getUUID(), discCenter.immutable());
+        Map<UUID, BlockPos> assignments = StartAssignmentService.assign(server, inLimbo);
+        for (ServerPlayer player : inLimbo) {
+            BlockPos discCenter = assignments.get(player.getUUID());
+            if (discCenter != null) {
+                transportToAssignedDisc(server, player, discCenter);
+            }
         }
         EclipseMod.LOGGER.info("start_event: teleported {} player(s) from limbo onto their discs", inLimbo.size());
+    }
+
+    /**
+     * Login seam used by {@link LimboGate}: once the scripted hop has happened, a joiner is
+     * assigned and gathered onto that same persisted disc instead of being left in Limbo.
+     */
+    public static boolean gatherLateJoiner(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null || (!running && !IntroSequence.isRunning())) {
+            return false;
+        }
+        if (running && ticks <= TELEPORT_TICK
+                && !EclipseWorldState.get(server).isStartEventDone()) {
+            return false; // The regular t=140 cohort snapshot will gather them.
+        }
+        BlockPos discCenter = StartAssignmentService.assign(server, List.of(player.getUUID()))
+                .get(player.getUUID());
+        if (discCenter == null) {
+            return false;
+        }
+        SequencePayloads.sendPortalEnter(player, 4);
+        transportToAssignedDisc(server, player, discCenter);
+        SequencePayloads.sendPortalExit(player, PORTAL_EXIT_TICKS);
+        EclipseMod.LOGGER.info("start_event: late joiner {} gathered onto assigned disc {}",
+                player.getScoreboardName(), discCenter.toShortString());
+        return true;
+    }
+
+    private static void transportToAssignedDisc(
+            MinecraftServer server, ServerPlayer player, BlockPos discCenter) {
+        UUID uuid = player.getUUID();
+        int overflowRound = (int) discCenters.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals(uuid) && entry.getValue().equals(discCenter))
+                .count();
+        ServerLevel overworld = server.overworld();
+        Vec3 spot = discSpot(overworld, discCenter, overflowRound);
+        float yaw = yawTowardCenter(spot);
+        FreezeService.freeze(player, HOP_FREEZE_TTL_TICKS, true, 0);
+        FreezeService.transport(player, overworld, spot, yaw, 10.0F);
+        if (!teleportedPlayers.contains(uuid)) {
+            teleportedPlayers.add(uuid);
+        }
+        discCenters.put(uuid, discCenter.immutable());
     }
 
     /** R13 portal-exit for the hopped players: release the black with a glitch tail. */
@@ -226,6 +265,8 @@ public final class StartEventCutscene {
     }
 
     private static void emerge(MinecraftServer server) {
+        // Close the t=140→t=160 login race before committing startEventDone.
+        teleportLimboPlayersToDiscs(server);
         PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.EMERGE));
         OarAnimator.endTilt();
         EclipseWorldState.get(server).setStartEventDone(true);
@@ -243,10 +284,10 @@ public final class StartEventCutscene {
             PacketDistributor.sendToPlayersInDimension(overworld,
                     new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
         }
-        teleportedPlayers.clear();
         EclipseMod.LOGGER.info("start_event limbo half finished; startEventDone=true — handing over to IntroSequence");
         // R10 hand-off: eclipse ramp, fusion flight, vortex, lightning, reveal, sunrise.
-        IntroSequence.start(server, dev.projecteclipse.eclipse.start.StartAssignmentService.assign(server, discCenters.keySet()));
+        IntroSequence.start(server, Map.copyOf(discCenters));
+        teleportedPlayers.clear();
         discCenters.clear();
     }
 

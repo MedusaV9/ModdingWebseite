@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client.menu;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -9,7 +10,6 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
@@ -52,16 +52,23 @@ public final class VanillaTitleGear {
         // Bottom-right, lifted above the copyright line (height-10) and NeoForge brand lines.
         int x = screen.width - GEAR_SIZE - 4;
         int y = screen.height - GEAR_SIZE - 24;
-        event.addListener(Button.builder(Component.translatable("gui.eclipse.settings.title"),
+        event.addListener(Button.builder(EclipseLang.tr("gui.eclipse.settings.title"),
                         button -> Minecraft.getInstance().setScreen(new EclipseSettingsScreen(screen)))
                 .bounds(x, y, GEAR_SIZE, GEAR_SIZE)
-                .tooltip(Tooltip.create(Component.translatable("gui.eclipse.settings.open")))
+                .tooltip(Tooltip.create(EclipseLang.tr("gui.eclipse.settings.open")))
                 .build(builder -> new EclipseMenuButton(builder, GEAR, GEAR_TEXTURE_SIZE, GEAR_TEXTURE_SIZE)));
     }
 
-    /** True when any widget already carries a {@code gui.eclipse.*} label. */
+    /**
+     * True when any widget already carries a {@code gui.eclipse.*} label or is an Eclipse
+     * button (labels resolved through {@code EclipseLang.tr} are literals on the override
+     * path, so the key check alone would no longer see them — M-1).
+     */
     private static boolean hasEclipseWidget(ScreenEvent.Init.Post event) {
         for (GuiEventListener listener : event.getListenersList()) {
+            if (listener instanceof EclipseMenuButton) {
+                return true;
+            }
             if (listener instanceof AbstractWidget widget
                     && widget.getMessage().getContents() instanceof TranslatableContents contents
                     && contents.getKey().startsWith("gui.eclipse.")) {

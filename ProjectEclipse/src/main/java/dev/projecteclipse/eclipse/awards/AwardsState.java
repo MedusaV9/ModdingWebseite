@@ -3,9 +3,11 @@ package dev.projecteclipse.eclipse.awards;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
@@ -41,10 +43,23 @@ public final class AwardsState extends SavedData {
         }
     }
 
-    public record ResolvedDay(int day, List<String> chosenCategoryIds, List<CategoryResult> categories) {
+    /** Frozen recipient + reward pair used to repair a missing pending-queue write on retry. */
+    public record RewardGrant(UUID player, PendingReward reward) {}
+
+    public record ResolvedDay(
+            int day,
+            List<String> chosenCategoryIds,
+            List<CategoryResult> categories,
+            List<RewardGrant> rewardGrants) {
         public ResolvedDay {
             chosenCategoryIds = List.copyOf(chosenCategoryIds);
             categories = List.copyOf(categories);
+            rewardGrants = List.copyOf(rewardGrants);
+        }
+
+        /** Compatibility constructor for old callers and pre-ledger records. */
+        public ResolvedDay(int day, List<String> chosenCategoryIds, List<CategoryResult> categories) {
+            this(day, chosenCategoryIds, categories, List.of());
         }
     }
 
@@ -61,6 +76,7 @@ public final class AwardsState extends SavedData {
     private final Map<Integer, ResolvedDay> resolvedDays = new HashMap<>();
     private final Map<Integer, Integer> rerollNonces = new HashMap<>();
     private final Map<UUID, List<PendingReward>> pendingRewards = new HashMap<>();
+    private final Map<UUID, Set<String>> deliveredRewardIds = new HashMap<>();
     private final Map<UUID, Integer> lastRevealSeen = new HashMap<>();
 
     public AwardsState() {}
@@ -92,7 +108,8 @@ public final class AwardsState extends SavedData {
         }
         List<CategoryResult> categories = new ArrayList<>(existing.categories());
         categories.add(category);
-        resolvedDays.put(day, new ResolvedDay(day, existing.chosenCategoryIds(), categories));
+        resolvedDays.put(day, new ResolvedDay(day, existing.chosenCategoryIds(), categories,
+                existing.rewardGrants()));
         setDirty();
         return true;
     }
@@ -123,6 +140,9 @@ public final class AwardsState extends SavedData {
 
     /** Queues once by stable reward id. */
     public boolean queue(UUID player, PendingReward reward) {
+        if (deliveredRewardIds.getOrDefault(player, Set.of()).contains(reward.id())) {
+            return false;
+        }
         List<PendingReward> pending = pendingRewards.computeIfAbsent(player, key -> new ArrayList<>());
         if (pending.stream().anyMatch(existing -> existing.id().equals(reward.id()))) {
             return false;
@@ -138,16 +158,36 @@ public final class AwardsState extends SavedData {
     }
 
     /**
-     * Removes before granting. A second login in the same server lifetime cannot double-grant;
-     * the containing SavedData is marked dirty in the same tick as the player-data mutation.
+     * Durably claims one queued reward by stable id before its effects are applied. The
+     * delivered-id marker prevents resolve repair or a later login from re-queuing it.
      */
-    public List<PendingReward> takePending(UUID player) {
-        List<PendingReward> rewards = pendingRewards.remove(player);
-        if (rewards == null || rewards.isEmpty()) {
-            return List.of();
+    public boolean claim(UUID player, String rewardId) {
+        Set<String> delivered = deliveredRewardIds.computeIfAbsent(player, key -> new HashSet<>());
+        if (!delivered.add(rewardId)) {
+            return false;
+        }
+        List<PendingReward> rewards = pendingRewards.get(player);
+        if (rewards != null) {
+            rewards.removeIf(reward -> reward.id().equals(rewardId));
+            if (rewards.isEmpty()) {
+                pendingRewards.remove(player);
+            }
         }
         setDirty();
-        return List.copyOf(rewards);
+        return true;
+    }
+
+    public boolean isDelivered(UUID player, String rewardId) {
+        return deliveredRewardIds.getOrDefault(player, Set.of()).contains(rewardId);
+    }
+
+    /** Compatibility helper: claims every current entry before returning the snapshot. */
+    public List<PendingReward> takePending(UUID player) {
+        List<PendingReward> rewards = List.copyOf(pending(player));
+        for (PendingReward reward : rewards) {
+            claim(player, reward.id());
+        }
+        return rewards;
     }
 
     public boolean hasSeenReveal(UUID player, int day) {
@@ -171,7 +211,14 @@ public final class AwardsState extends SavedData {
             for (Tag categoryRaw : dayTag.getList("categories", Tag.TAG_COMPOUND)) {
                 categories.add(readCategory((CompoundTag) categoryRaw));
             }
-            state.resolvedDays.put(day, new ResolvedDay(day, chosen, categories));
+            List<RewardGrant> grants = new ArrayList<>();
+            for (Tag grantRaw : dayTag.getList("grants", Tag.TAG_COMPOUND)) {
+                CompoundTag grant = (CompoundTag) grantRaw;
+                if (grant.hasUUID("uuid")) {
+                    grants.add(new RewardGrant(grant.getUUID("uuid"), readReward(grant.getCompound("reward"))));
+                }
+            }
+            state.resolvedDays.put(day, new ResolvedDay(day, chosen, categories, grants));
         }
         CompoundTag rerolls = tag.getCompound("rerolls");
         for (String day : rerolls.getAllKeys()) {
@@ -194,6 +241,24 @@ public final class AwardsState extends SavedData {
                 state.pendingRewards.put(playerTag.getUUID("uuid"), rewards);
             }
         }
+        for (Tag raw : tag.getList("delivered", Tag.TAG_COMPOUND)) {
+            CompoundTag playerTag = (CompoundTag) raw;
+            if (!playerTag.hasUUID("uuid")) {
+                continue;
+            }
+            Set<String> ids = new HashSet<>(readStrings(playerTag.getList("ids", Tag.TAG_STRING)));
+            if (!ids.isEmpty()) {
+                UUID uuid = playerTag.getUUID("uuid");
+                state.deliveredRewardIds.put(uuid, ids);
+                List<PendingReward> pending = state.pendingRewards.get(uuid);
+                if (pending != null) {
+                    pending.removeIf(reward -> ids.contains(reward.id()));
+                    if (pending.isEmpty()) {
+                        state.pendingRewards.remove(uuid);
+                    }
+                }
+            }
+        }
         for (Tag raw : tag.getList("revealSeen", Tag.TAG_COMPOUND)) {
             CompoundTag seen = (CompoundTag) raw;
             if (seen.hasUUID("uuid")) {
@@ -214,6 +279,14 @@ public final class AwardsState extends SavedData {
             ListTag categories = new ListTag();
             day.categories().forEach(category -> categories.add(writeCategory(category)));
             dayTag.put("categories", categories);
+            ListTag grants = new ListTag();
+            for (RewardGrant grant : day.rewardGrants()) {
+                CompoundTag grantTag = new CompoundTag();
+                grantTag.putUUID("uuid", grant.player());
+                grantTag.put("reward", writeReward(grant.reward()));
+                grants.add(grantTag);
+            }
+            dayTag.put("grants", grants);
             resolved.add(dayTag);
         });
         tag.put("resolved", resolved);
@@ -232,6 +305,15 @@ public final class AwardsState extends SavedData {
             pending.add(player);
         });
         tag.put("pending", pending);
+
+        ListTag delivered = new ListTag();
+        deliveredRewardIds.forEach((uuid, ids) -> {
+            CompoundTag player = new CompoundTag();
+            player.putUUID("uuid", uuid);
+            player.put("ids", writeStrings(ids.stream().sorted().toList()));
+            delivered.add(player);
+        });
+        tag.put("delivered", delivered);
 
         ListTag seenList = new ListTag();
         lastRevealSeen.forEach((uuid, day) -> {
@@ -318,7 +400,7 @@ public final class AwardsState extends SavedData {
         return new PendingReward(tag.getString("id"), tag.getInt("xp"), tag.getInt("shards"), items);
     }
 
-    private static ListTag writeStrings(List<String> values) {
+    private static ListTag writeStrings(Iterable<String> values) {
         ListTag tag = new ListTag();
         values.forEach(value -> tag.add(StringTag.valueOf(value)));
         return tag;

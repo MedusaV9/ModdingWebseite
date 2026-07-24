@@ -119,6 +119,7 @@ public final class OfferingService {
         OfferingState state = OfferingState.get(server);
         var existing = state.resolved(day);
         if (existing.isPresent()) {
+            queueWinnerRewards(server, existing.get());
             return existing.get();
         }
         OfferingConfig.Data config = OfferingConfig.get();
@@ -131,15 +132,13 @@ public final class OfferingService {
         }
         OfferingRules.Resolution resolution = OfferingRules.resolve(inputs);
         OfferingState.DayResult result = new OfferingState.DayResult(day, resolution.offerings(),
-                resolution.winners(), resolution.bestValue(), resolution.winningItemId());
+                resolution.winners(), resolution.bestValue(), resolution.winningItemId(),
+                config.winnerReward());
         if (!state.putResolved(result)) {
-            return state.resolved(day).orElse(result);
+            result = state.resolved(day).orElse(result);
         }
 
-        AwardConfig.Reward share = config.winnerReward().split(result.winners().size());
-        for (UUID winner : result.winners()) {
-            AwardService.queueReward(server, winner, "offering:" + day + ":" + winner, share);
-        }
+        queueWinnerRewards(server, result);
         if (!result.winners().isEmpty()) {
             AnnouncementService.announce(server, "announce.eclipse.offering.title",
                     itemDescriptionId(result.winningItemId()), S2CAnnouncePayload.STYLE_GOAL);
@@ -156,7 +155,9 @@ public final class OfferingService {
     /** Converts the fixed offering result into the award reveal's fourth category. */
     public static AwardsState.CategoryResult toAwardCategory(OfferingState.DayResult result) {
         OfferingConfig.Data config = OfferingConfig.get();
-        AwardConfig.Reward share = config.winnerReward().split(result.winners().size());
+        AwardConfig.Reward frozen = result.winnerReward().isEmpty()
+                ? config.winnerReward() : result.winnerReward();
+        AwardConfig.Reward share = frozen.split(result.winners().size());
         List<AwardMath.Candidate> candidates = result.offerings().stream()
                 .map(row -> new AwardMath.Candidate(row.player(), row.value())).toList();
         String value = Integer.toString(result.bestValue());
@@ -180,6 +181,17 @@ public final class OfferingService {
         OfferingRules.Resolution resolution = OfferingRules.resolve(inputs);
         return new OfferingState.DayResult(day, resolution.offerings(), resolution.winners(),
                 resolution.bestValue(), resolution.winningItemId());
+    }
+
+    /** Repairs a missing queue write from the frozen result; stable ids deduplicate retries. */
+    private static void queueWinnerRewards(MinecraftServer server, OfferingState.DayResult result) {
+        AwardConfig.Reward frozen = result.winnerReward().isEmpty()
+                ? OfferingConfig.get().winnerReward() : result.winnerReward();
+        AwardConfig.Reward share = frozen.split(result.winners().size());
+        for (UUID winner : result.winners()) {
+            AwardService.queueReward(server, winner,
+                    "offering:" + result.day() + ":" + winner, share);
+        }
     }
 
     private static String itemDescriptionId(String rawId) {

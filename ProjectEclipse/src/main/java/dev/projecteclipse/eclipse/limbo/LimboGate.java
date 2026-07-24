@@ -36,7 +36,13 @@ public final class LimboGate {
 
     private static void gate(ServerPlayer player) {
         MinecraftServer server = player.getServer();
-        if (server == null || EclipseWorldState.get(server).isStartEventDone()) {
+        if (server == null) {
+            return;
+        }
+        if (StartEventCutscene.gatherLateJoiner(player)) {
+            return;
+        }
+        if (EclipseWorldState.get(server).isStartEventDone()) {
             return;
         }
         if (player.level().dimension().equals(LimboDimension.LIMBO)) {

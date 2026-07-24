@@ -269,6 +269,7 @@ public class AltarBlockEntity extends BlockEntity {
         }
         pendingHeartSacrifices.remove(player.getUUID());
         LivesApi.add(player, -1);
+        dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
         Containers.dropItemStack(serverLevel,
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D, this.worldPosition.getZ() + 0.5D,
                 new ItemStack(EclipseItems.HEART_FRAGMENT.get()));
@@ -306,10 +307,10 @@ public class AltarBlockEntity extends BlockEntity {
 
     /**
      * Sneak-right-click with a revive sigil (via {@link ReviveSigilItem#useOn}):
-     * consumes one sigil and starts the {@link ReviveRitual} for the currently
-     * displayed selection.
+     * starts the {@link ReviveRitual} for the currently displayed selection. The
+     * ritual consumes one sigil only when it completes successfully.
      */
-    public void handleSigilConfirm(ServerPlayer player, ItemStack sigilStack) {
+    public void handleSigilConfirm(ServerPlayer player) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
@@ -326,7 +327,6 @@ public class AltarBlockEntity extends BlockEntity {
         }
         String targetName = resolveName(server, target);
         if (ReviveRitual.start(serverLevel, this.worldPosition, player, target, targetName)) {
-            sigilStack.shrink(1);
             sigilSelections.remove(player.getUUID());
             actionBar(player, Component.translatable("ritual.eclipse.revive.started"));
         } else {

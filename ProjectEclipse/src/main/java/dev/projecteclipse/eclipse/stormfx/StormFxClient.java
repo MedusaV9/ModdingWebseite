@@ -111,6 +111,21 @@ public final class StormFxClient {
     public static void handle(S2CStormStatePayload payload) {
         ClientStorm storm = find(payload.stormId());
         int state = payload.state();
+        Vec3 center = payload.center();
+        float radius = Math.max(2.0F, payload.radius());
+        float height = payload.height() > 0.0F ? payload.height() : StormRegistry.heightFor(radius);
+        int type = payload.stormType();
+        if (storm != null && state == storm.state) {
+            if (storm.center.equals(center) && Float.compare(storm.radius, radius) == 0
+                    && Float.compare(storm.height, height) == 0 && storm.type == type) {
+                return;
+            }
+            storm.center = center;
+            storm.radius = radius;
+            storm.height = height;
+            storm.type = type;
+            return;
+        }
         if (storm == null) {
             if (state == S2CStormStatePayload.STATE_DISSIPATE) {
                 return; // never knew it — nothing to fade out
@@ -118,10 +133,10 @@ public final class StormFxClient {
             storm = new ClientStorm(payload.stormId());
             STORMS.add(storm);
         }
-        storm.center = payload.center();
-        storm.radius = Math.max(2.0F, payload.radius());
-        storm.height = payload.height() > 0.0F ? payload.height() : StormRegistry.heightFor(storm.radius);
-        storm.type = payload.stormType();
+        storm.center = center;
+        storm.radius = radius;
+        storm.height = height;
+        storm.type = type;
         storm.state = state;
         storm.stateStartTick = clientTicks;
         storm.stateTicks = Math.max(1, payload.ticks());

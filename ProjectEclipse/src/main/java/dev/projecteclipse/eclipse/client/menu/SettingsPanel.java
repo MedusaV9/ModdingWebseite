@@ -250,6 +250,20 @@ public final class SettingsPanel extends AbstractContainerWidget {
         return scroll;
     }
 
+    /**
+     * Persists any slider edit whose release never arrived — a host closing mid-drag (ESC)
+     * skips {@code onRelease}, leaving the live {@code set()} applied but never {@code save()}d,
+     * so the setting silently reverted on the next config load. Hosts call this when the
+     * mounting screen goes away ({@code EclipseSettingsScreen.removed()}).
+     */
+    public void commitPendingEdits() {
+        for (Row row : rows) {
+            if (row instanceof ThemedSlider slider) {
+                slider.commitPending();
+            }
+        }
+    }
+
     public void setScrollAmount(double value) {
         scroll = Mth.clamp(value, 0.0D, maxScroll());
         layout();
@@ -626,6 +640,14 @@ public final class SettingsPanel extends AbstractContainerWidget {
 
         @Override
         public void onRelease(double mouseX, double mouseY) {
+            if (sliding) {
+                sliding = false;
+                commit.run();
+            }
+        }
+
+        /** Host-close hook: a drag interrupted by the screen closing still persists its {@code set()}. */
+        void commitPending() {
             if (sliding) {
                 sliding = false;
                 commit.run();

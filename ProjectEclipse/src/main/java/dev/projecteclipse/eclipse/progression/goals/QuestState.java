@@ -32,6 +32,15 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class QuestState extends SavedData {
     public static final String DATA_NAME = "eclipse_quests";
 
+    /** Frozen reward snapshot for a known team member who was offline at completion time. */
+    public record PendingReward(String id, String goalId, byte kind, String scope,
+            GoalSpec.Reward reward) {
+        static PendingReward of(int day, GoalSpec spec) {
+            return new PendingReward("quest:" + day + ":" + spec.id(), spec.id(), spec.kind(),
+                    spec.scope().id(), spec.reward());
+        }
+    }
+
     /** Per-(day, player) slice. */
     static final class PlayerDay {
         final Map<String, Long> progress = new HashMap<>();
@@ -57,6 +66,7 @@ public final class QuestState extends SavedData {
 
     private final Map<Integer, DayData> days = new HashMap<>();
     private final Map<UUID, Set<String>> lifetimePersonals = new HashMap<>();
+    private final Map<UUID, List<PendingReward>> pendingRewards = new HashMap<>();
 
     public QuestState() {}
 
@@ -109,6 +119,15 @@ public final class QuestState extends SavedData {
     }
 
     // --- per-player scope ---
+
+    /** Records membership in the day's quest cohort even when no counter exists yet. */
+    public void ensurePlayer(int day, UUID uuid) {
+        DayData data = day(day);
+        if (!data.players.containsKey(uuid)) {
+            data.players.put(uuid, new PlayerDay());
+            setDirty();
+        }
+    }
 
     public long playerProgress(int day, UUID uuid, String goalId) {
         PlayerDay player = playerOrNull(day, uuid);
@@ -265,6 +284,29 @@ public final class QuestState extends SavedData {
         return data == null ? Set.of() : Collections.unmodifiableSet(data.players.keySet());
     }
 
+    // --- offline team rewards ---
+
+    /** Queues once by stable day/goal id. */
+    public boolean queueReward(UUID uuid, PendingReward reward) {
+        List<PendingReward> pending = pendingRewards.computeIfAbsent(uuid, key -> new ArrayList<>());
+        if (pending.stream().anyMatch(existing -> existing.id().equals(reward.id()))) {
+            return false;
+        }
+        pending.add(reward);
+        setDirty();
+        return true;
+    }
+
+    /** Removes before delivery so repeated logins cannot double-grant. */
+    public List<PendingReward> takePendingRewards(UUID uuid) {
+        List<PendingReward> pending = pendingRewards.remove(uuid);
+        if (pending == null || pending.isEmpty()) {
+            return List.of();
+        }
+        setDirty();
+        return List.copyOf(pending);
+    }
+
     // --- survive_night_no_damage window ---
 
     /**
@@ -409,6 +451,19 @@ public final class QuestState extends SavedData {
                 // Corrupt uuid key: drop the entry rather than poison the whole save.
             }
         }
+        for (Tag raw : tag.getList("pendingRewards", Tag.TAG_COMPOUND)) {
+            CompoundTag playerTag = (CompoundTag) raw;
+            if (!playerTag.hasUUID("uuid")) {
+                continue;
+            }
+            List<PendingReward> rewards = new ArrayList<>();
+            for (Tag rewardRaw : playerTag.getList("rewards", Tag.TAG_COMPOUND)) {
+                rewards.add(readPendingReward((CompoundTag) rewardRaw));
+            }
+            if (!rewards.isEmpty()) {
+                state.pendingRewards.put(playerTag.getUUID("uuid"), rewards);
+            }
+        }
         return state;
     }
 
@@ -465,7 +520,47 @@ public final class QuestState extends SavedData {
             lifetime.put(entry.getKey().toString(), writeStrings(entry.getValue()));
         }
         tag.put("lifetimePersonals", lifetime);
+        ListTag pending = new ListTag();
+        pendingRewards.forEach((uuid, rewards) -> {
+            CompoundTag playerTag = new CompoundTag();
+            playerTag.putUUID("uuid", uuid);
+            ListTag rewardList = new ListTag();
+            rewards.forEach(reward -> rewardList.add(writePendingReward(reward)));
+            playerTag.put("rewards", rewardList);
+            pending.add(playerTag);
+        });
+        tag.put("pendingRewards", pending);
         return tag;
+    }
+
+    private static CompoundTag writePendingReward(PendingReward pending) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", pending.id());
+        tag.putString("goalId", pending.goalId());
+        tag.putByte("kind", pending.kind());
+        tag.putString("scope", pending.scope());
+        tag.putInt("skillXp", pending.reward().skillXp());
+        tag.putInt("shards", pending.reward().shards());
+        ListTag items = new ListTag();
+        for (GoalSpec.ItemReward item : pending.reward().items()) {
+            CompoundTag itemTag = new CompoundTag();
+            itemTag.putString("id", item.id());
+            itemTag.putInt("count", item.count());
+            items.add(itemTag);
+        }
+        tag.put("items", items);
+        return tag;
+    }
+
+    private static PendingReward readPendingReward(CompoundTag tag) {
+        List<GoalSpec.ItemReward> items = new ArrayList<>();
+        for (Tag raw : tag.getList("items", Tag.TAG_COMPOUND)) {
+            CompoundTag item = (CompoundTag) raw;
+            items.add(new GoalSpec.ItemReward(item.getString("id"), item.getInt("count")));
+        }
+        return new PendingReward(tag.getString("id"), tag.getString("goalId"), tag.getByte("kind"),
+                tag.getString("scope"), new GoalSpec.Reward(
+                        tag.getInt("skillXp"), tag.getInt("shards"), items));
     }
 
     private static void readStrings(ListTag list, java.util.Collection<String> into) {

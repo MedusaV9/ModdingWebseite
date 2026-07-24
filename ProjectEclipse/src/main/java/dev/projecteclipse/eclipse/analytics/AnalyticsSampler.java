@@ -7,7 +7,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -20,8 +19,8 @@ import net.minecraft.world.level.biome.Biome;
 /**
  * The 1 Hz analytics sampler (P4 §2.4): playtime, distance, depth, new-chunk and new-biome
  * accumulation for every online tracked player. Driven by {@link AnalyticsService}'s tick
- * subscriber every 20 ticks — O(online players), no allocation on the steady-state path
- * (scratch {@link BlockPos.MutableBlockPos}, non-capturing factory lambdas, primitive sets).
+ * subscriber every 20 ticks — O(online players), using one shared scratch
+ * {@link BlockPos.MutableBlockPos} for biome lookups.
  *
  * <p>Teleport hardening: each distance sample is capped at
  * {@code analytics.json distanceSampleCapCm} (default 100 m) and a dimension change resets
@@ -38,8 +37,6 @@ public final class AnalyticsSampler {
 
     // statics reset on ServerStopped (via AnalyticsService.onServerStopped -> reset())
     private static final Map<UUID, Anchor> ANCHORS = new HashMap<>();
-    // statics reset on ServerStopped; also cleared per day on rollover PRE (via clearDayScratch)
-    private static final Map<UUID, LongOpenHashSet> CHUNKS_TODAY = new HashMap<>();
     /** Scratch position — server-thread only, reused to keep the hot path allocation-free. */
     private static final BlockPos.MutableBlockPos SCRATCH_POS = new BlockPos.MutableBlockPos();
 
@@ -103,9 +100,8 @@ public final class AnalyticsSampler {
         int chunkX = player.getBlockX() >> 4;
         int chunkZ = player.getBlockZ() >> 4;
         long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
-        LongOpenHashSet chunks = CHUNKS_TODAY.computeIfAbsent(id, key -> new LongOpenHashSet());
-        if (!chunks.contains(chunkKey) && chunks.size() < cfg.chunkSetCap()) {
-            chunks.add(chunkKey);
+        String chunkId = dimension.location() + "|" + chunkKey;
+        if (state.markChunkVisited(day, id, chunkId, cfg.chunkSetCap())) {
             state.add(day, id, AnalyticsKeys.CHUNKS_NEW, 1L);
             EclipseSignals.fireChunkExplored(player, new ChunkPos(chunkX, chunkZ));
         }
@@ -135,14 +131,8 @@ public final class AnalyticsSampler {
         return Math.min(Math.max(0L, cm), capCm);
     }
 
-    /** Clears the per-day chunk scratch (rollover PRE — day N+1 counts chunks fresh). */
-    static void clearDayScratch() {
-        CHUNKS_TODAY.clear();
-    }
-
-    /** Drops every anchor and scratch set. Called from the service's ServerStopped reset. */
+    /** Drops transient movement anchors. Called from the service's ServerStopped reset. */
     static void reset() {
         ANCHORS.clear();
-        CHUNKS_TODAY.clear();
     }
 }

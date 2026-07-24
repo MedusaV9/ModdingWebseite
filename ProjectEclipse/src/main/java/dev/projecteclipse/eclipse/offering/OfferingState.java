@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import dev.projecteclipse.eclipse.awards.AwardConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -29,11 +30,19 @@ public final class OfferingState extends SavedData {
             List<OfferingRules.Scored> offerings,
             List<UUID> winners,
             int bestValue,
-            String winningItemId) {
+            String winningItemId,
+            AwardConfig.Reward winnerReward) {
         public DayResult {
             offerings = List.copyOf(offerings);
             winners = List.copyOf(winners);
             winningItemId = winningItemId == null ? "" : winningItemId;
+            winnerReward = winnerReward == null ? AwardConfig.Reward.NONE : winnerReward;
+        }
+
+        /** Compatibility constructor for previews and records created before rewards were frozen. */
+        public DayResult(int day, List<OfferingRules.Scored> offerings, List<UUID> winners,
+                int bestValue, String winningItemId) {
+            this(day, offerings, winners, bestValue, winningItemId, AwardConfig.Reward.NONE);
         }
     }
 
@@ -122,8 +131,10 @@ public final class OfferingState extends SavedData {
                     winners.add(row.getUUID("uuid"));
                 }
             }
+            AwardConfig.Reward reward = resultTag.contains("reward", Tag.TAG_COMPOUND)
+                    ? readReward(resultTag.getCompound("reward")) : AwardConfig.Reward.NONE;
             state.resolvedDays.put(day, new DayResult(day, scored, winners,
-                    resultTag.getInt("best"), resultTag.getString("winningItem")));
+                    resultTag.getInt("best"), resultTag.getString("winningItem"), reward));
         }
         return state;
     }
@@ -155,6 +166,7 @@ public final class OfferingState extends SavedData {
             resultTag.putInt("day", result.day());
             resultTag.putInt("best", result.bestValue());
             resultTag.putString("winningItem", result.winningItemId());
+            resultTag.put("reward", writeReward(result.winnerReward()));
             ListTag offerings = new ListTag();
             for (OfferingRules.Scored score : result.offerings()) {
                 CompoundTag row = new CompoundTag();
@@ -176,5 +188,29 @@ public final class OfferingState extends SavedData {
         });
         tag.put("resolved", resolved);
         return tag;
+    }
+
+    private static CompoundTag writeReward(AwardConfig.Reward reward) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("xp", reward.skillXp());
+        tag.putInt("shards", reward.shards());
+        ListTag items = new ListTag();
+        for (AwardConfig.ItemReward item : reward.items()) {
+            CompoundTag itemTag = new CompoundTag();
+            itemTag.putString("id", item.id());
+            itemTag.putInt("count", item.count());
+            items.add(itemTag);
+        }
+        tag.put("items", items);
+        return tag;
+    }
+
+    private static AwardConfig.Reward readReward(CompoundTag tag) {
+        List<AwardConfig.ItemReward> items = new ArrayList<>();
+        for (Tag raw : tag.getList("items", Tag.TAG_COMPOUND)) {
+            CompoundTag item = (CompoundTag) raw;
+            items.add(new AwardConfig.ItemReward(item.getString("id"), item.getInt("count")));
+        }
+        return new AwardConfig.Reward(tag.getInt("xp"), tag.getInt("shards"), items);
     }
 }

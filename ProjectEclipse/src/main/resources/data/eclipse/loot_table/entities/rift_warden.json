@@ -1,6 +1,6 @@
 {
   "type": "minecraft:entity",
-  "_doc": "Rift Warden drops (P6-W910). Default entity loot table — resolved from the frozen id eclipse:rift_warden, no code wiring. Mini-boss purse: guaranteed umbral shards, THE Replant book (the custom eclipse:replant enchantment — degrades gracefully while P4 hasn't registered it, storm_cache precedent) and a trophy-ish vanilla rare. The 1x rift_core progression drop (fallback 4 shards) + 2 shards at each participant's feet live in RiftWardenEntity.dropCustomDeathLoot.",
+  "_doc": "Rift Warden drops (P6-W910). Default entity loot table — resolved from the frozen id eclipse:rift_warden, no code wiring. Mini-boss purse: guaranteed umbral shards, THE Replant book (the custom eclipse:replant enchantment) and a trophy-ish vanilla rare. The 1x rift_core progression drop (fallback 4 shards) + 2 shards at each participant's feet live in RiftWardenEntity.dropCustomDeathLoot.",
   "pools": [
     {
       "rolls": 1,
@@ -36,8 +36,7 @@
               },
               "add": false
             }
-          ],
-          "_p4_hook": "eclipse:replant is registered by P4; entry degrades gracefully if absent (storm_cache precedent)"
+          ]
         }
       ]
     },

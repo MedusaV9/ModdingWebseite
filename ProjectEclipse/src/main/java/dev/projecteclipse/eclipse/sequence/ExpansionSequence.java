@@ -33,6 +33,7 @@ import dev.projecteclipse.eclipse.network.growth.GrowthPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
+import dev.projecteclipse.eclipse.worldgen.stage.GrowthPacing;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
@@ -79,7 +80,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       first transported to a safe overworld viewpoint just inside the old rim
  *       ({@link FreezeService#transport}, R12 policy) so they see everything; their origin is
  *       persisted in {@link NetherReturns} for a crash-safe return.</li>
- *   <li>{@code FLYOVER} (~300 ticks) — the world-anchored {@code expansion_flyover} shot plays
+ *   <li>{@code FLYOVER} (~220 ticks) — the world-anchored {@code expansion_flyover} shot plays
  *       as a GLOBAL_TELEPORT group play (far players gathered behind a fade and returned after,
  *       view-distance bump); its play anchor comes from the {@code "growth_front"}
  *       {@linkplain CutsceneService#registerDynamicAnchor dynamic anchor} fed by
@@ -267,14 +268,23 @@ public final class ExpansionSequence implements SequenceReplayable {
             abortRun(previous, "superseded by " + profile.name() + " " + fromStage + " -> " + toStage);
         }
         if (!animate || toStage <= fromStage) {
+            if (previous != null) {
+                returnNetherVisitors(previous.level.getServer(), previous);
+            }
             return; // instant stamps and erases are not cinematic (v1 contract)
         }
         if (!EclipseConfig.freezeDuringUnlocks()) {
             EclipseMod.LOGGER.info("ExpansionSequence: cutscenes.freezeDuringUnlocks is off — skipping");
+            if (previous != null) {
+                returnNetherVisitors(previous.level.getServer(), previous);
+            }
             return;
         }
         EclipseConfig.StageEntry entry = EclipseConfig.stage(profile.name(), toStage);
         if (entry != null && "intro_fusion".equals(entry.trigger())) {
+            if (previous != null) {
+                returnNetherVisitors(previous.level.getServer(), previous);
+            }
             return; // the start-event intro owns that moment
         }
 
@@ -356,6 +366,8 @@ public final class ExpansionSequence implements SequenceReplayable {
         if (run.ended || RUNS.get(run.profile) != run) {
             return;
         }
+        // CutsceneService returns ordinary flyover gathers before this callback; nether
+        // visitors deliberately remain at the viewpoint until END.
         run.phase = Phase.GROWTH;
         if (run.cinematic && !run.flyoverPlayed) {
             captionDimension(run.level, CAPTION_GROWING, 90); // flyover carries this caption itself
@@ -713,8 +725,15 @@ public final class ExpansionSequence implements SequenceReplayable {
             angle = averageAngle(players);
         }
         double progress = RingGrowthService.progressFraction(profile);
-        double waveR = Mth.lerp(progress, StageRadii.radius(profile, fromStage),
-                StageRadii.radius(profile, toStage));
+        int fromRadius = StageRadii.radius(profile, fromStage);
+        int toRadius = StageRadii.radius(profile, toStage);
+        double waveR = Mth.lerp(progress, fromRadius, toRadius);
+        CutscenePath flyover = CutscenePaths.get(PATH_FLYOVER);
+        int flyoverTicks = flyover != null ? flyover.durationTicks() : 220;
+        double remainingWidth = Math.max(0.0D, toRadius - waveR);
+        double lead = Math.min(remainingWidth,
+                flyoverTicks / (double) Math.max(1, GrowthPacing.targetTicks()) * remainingWidth);
+        waveR += lead;
         // Sit slightly INSIDE the front so the height lookup lands on already-written terrain.
         int anchorR = Math.max(16, (int) waveR - 6);
         return edgeAnchorFor(level, angleToPos(angle), anchorR);

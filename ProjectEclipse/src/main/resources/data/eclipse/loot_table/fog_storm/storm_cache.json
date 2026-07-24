@@ -34,8 +34,7 @@
               },
               "add": false
             }
-          ],
-          "_p4_hook": "eclipse:replant is registered by P4; entry degrades gracefully if absent"
+          ]
         },
         {
           "type": "minecraft:item",

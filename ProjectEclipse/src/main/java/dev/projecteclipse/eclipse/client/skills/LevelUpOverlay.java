@@ -37,8 +37,9 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
  * <p><b>Self only, server truth:</b> level-ups are detected by polling the synced
  * {@code ClientStateCache.skillLevel} (only ever the local player's state). The first sync
  * of a session seeds silently (login is not a celebration); multi-level jumps enqueue
- * every intermediate level and play back one after another (queue capped at
- * {@value #QUEUE_LIMIT}, always keeping the newest level). A HUD overlay, NEVER a screen:
+ * every intermediate level and play back one after another while they fit the queue
+ * (capped at {@value #QUEUE_LIMIT}); a jump wider than the remaining room coalesces to
+ * the first + final level, always keeping the newest. A HUD overlay, NEVER a screen:
  * input is never blocked. Gated on {@code levelUpCelebrations}; F1 hides the glyph
  * (ticking continues so it doesn't pop back after F1); cutscene HUD suppression both
  * cancels the layer (LetterboxLayer hook) and defers queued playback until the flight
@@ -98,11 +99,23 @@ public final class LevelUpOverlay {
             lastSeenLevel = level; // login sync seed — never celebrate the join
         } else if (level > lastSeenLevel) {
             if (EclipseClientConfig.levelUpCelebrations()) {
-                for (int reached = lastSeenLevel + 1; reached <= level; reached++) {
-                    if (QUEUE.size() >= QUEUE_LIMIT) {
-                        QUEUE.pollLast(); // keep room so the NEWEST level always plays
+                int first = lastSeenLevel + 1;
+                if (level - lastSeenLevel <= QUEUE_LIMIT - QUEUE.size()) {
+                    for (int reached = first; reached <= level; reached++) {
+                        QUEUE.addLast(reached);
                     }
-                    QUEUE.addLast(reached);
+                } else {
+                    // M-6: a jump wider than the remaining queue room used to pollLast()
+                    // itself into an arbitrary subset (2..8 then 20). Coalesce instead:
+                    // celebrate the first newly reached level and the final one; the
+                    // oldest pending entries yield so the NEWEST level always plays.
+                    while (QUEUE.size() > QUEUE_LIMIT - 2) {
+                        QUEUE.pollFirst();
+                    }
+                    if (first < level) {
+                        QUEUE.addLast(first);
+                    }
+                    QUEUE.addLast(level);
                 }
             }
             lastSeenLevel = level;

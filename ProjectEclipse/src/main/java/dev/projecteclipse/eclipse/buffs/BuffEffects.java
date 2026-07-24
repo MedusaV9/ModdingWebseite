@@ -69,7 +69,8 @@ public final class BuffEffects {
         if (!(event.getLevel() instanceof ServerLevel level) || service == null) {
             return;
         }
-        if (service.multiplier(level.getServer(), "ore_drops") <= 1.0F + 1.0E-4F) {
+        float multiplier = service.multiplier(level.getServer(), "ore_drops");
+        if (multiplier <= 1.0F + 1.0E-4F) {
             return;
         }
         if (!event.getState().is(BlockTags.COAL_ORES)
@@ -92,9 +93,7 @@ public final class BuffEffects {
             if (stack.isEmpty()) {
                 continue;
             }
-            ItemEntity duplicate = new ItemEntity(level, drop.getX(), drop.getY(), drop.getZ(), stack.copy());
-            duplicate.setDefaultPickUpDelay();
-            extras.add(duplicate);
+            addExtraCopies(level, drop, multiplier, extras);
         }
         event.getDrops().addAll(extras);
     }
@@ -104,20 +103,45 @@ public final class BuffEffects {
         if (!(event.getEntity().level() instanceof ServerLevel level) || service == null) {
             return;
         }
-        if (service.multiplier(level.getServer(), "shard_drops") <= 1.0F + 1.0E-4F) {
+        float multiplier = service.multiplier(level.getServer(), "shard_drops");
+        if (multiplier <= 1.0F + 1.0E-4F) {
             return;
         }
         var shard = EclipseItems.UMBRAL_SHARD.get();
         List<ItemEntity> extras = new ArrayList<>();
         for (ItemEntity drop : event.getDrops()) {
             if (drop.getItem().is(shard)) {
-                ItemEntity duplicate = new ItemEntity(level, drop.getX(), drop.getY(), drop.getZ(),
-                        drop.getItem().copy());
-                duplicate.setDefaultPickUpDelay();
-                extras.add(duplicate);
+                addExtraCopies(level, drop, multiplier, extras);
             }
         }
         event.getDrops().addAll(extras);
+    }
+
+    private static void addExtraCopies(ServerLevel level, ItemEntity original, float multiplier,
+            List<ItemEntity> extras) {
+        float fractionalRoll = multiplier > Math.floor(multiplier)
+                ? level.getRandom().nextFloat() : 1.0F;
+        int copies = additionalCopies(multiplier, fractionalRoll);
+        for (int i = 0; i < copies; i++) {
+            ItemEntity duplicate = new ItemEntity(level, original.getX(), original.getY(), original.getZ(),
+                    original.getItem().copy());
+            duplicate.setDefaultPickUpDelay();
+            extras.add(duplicate);
+        }
+    }
+
+    /** Integer payout plus one probabilistic copy for the configured fractional remainder. */
+    public static int additionalCopies(float multiplier, float fractionalRoll) {
+        if (!Float.isFinite(multiplier) || multiplier <= 1.0F) {
+            return 0;
+        }
+        int whole = (int) Math.floor(multiplier);
+        int copies = Math.max(0, whole - 1);
+        float remainder = multiplier - whole;
+        if (remainder > 0.0F && fractionalRoll < remainder) {
+            copies++;
+        }
+        return copies;
     }
 
     @SubscribeEvent

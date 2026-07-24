@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.client.handbook.tabs.RulesTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.SettingsTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.StatusTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.TimelineTab;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
 import net.minecraft.client.Minecraft;
@@ -116,7 +117,7 @@ public class HandbookScreen extends Screen {
     private int footerHairlineY;
 
     public HandbookScreen() {
-        super(Component.translatable("gui.eclipse.handbook.title"));
+        super(EclipseLang.tr("gui.eclipse.handbook.title"));
     }
 
     @Override
@@ -257,7 +258,7 @@ public class HandbookScreen extends Screen {
 
         // Glance, right-aligned: "Tag N" + heart icons; pieces drop when space runs out.
         int lives = Mth.clamp(ClientStateCache.lives, 0, HeartsService.MAX_HEARTS);
-        Component dayText = Component.translatable("gui.eclipse.artifact.day", ClientStateCache.day);
+        Component dayText = EclipseLang.tr("gui.eclipse.artifact.day", ClientStateCache.day);
         int dayW = this.font.width(dayText);
         int heartsW = HeartsService.MAX_HEARTS * 10 - 1;
         boolean showHearts = dayW + 8 + heartsW + 60 <= contentW;
@@ -290,7 +291,7 @@ public class HandbookScreen extends Screen {
     private void renderFooter(GuiGraphics guiGraphics, int py, float alpha) {
         int hairY = py + (footerHairlineY - panelY);
         EclipseUiTheme.drawHairline(guiGraphics, contentX, contentX + contentW, hairY, alpha);
-        Component hint = Component.translatable("gui.eclipse.handbook.footer", tabs.size(),
+        Component hint = EclipseLang.tr("gui.eclipse.handbook.footer", tabs.size(),
                 EclipseKeyMappings.OPEN_MENU.getTranslatedKeyMessage());
         guiGraphics.drawString(this.font,
                 EclipseUiTheme.ellipsize(this.font, hint.getString(), contentW),

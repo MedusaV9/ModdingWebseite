@@ -16,8 +16,8 @@ import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Bestiary page, Quiet Eclipse v3 (plans_v3 P3 §3.1): flat raised cards for every entry of
- * the static {@link #CREATURES} roster — the six v2 arc creatures plus the Drift Lantern
- * (the limbo sea ambience mob, witnessed from day 1 on the ghost ship). A card unlocks
+ * the static {@link #CREATURES} roster — the six v2 arc creatures plus the shipped P6
+ * roster (Drift Lantern through the Fog Tyrant). A card unlocks
  * once {@code ClientStateCache.day >= introDay}; locked cards keep the pure silhouette +
  * {@link GlitchText} treatment and hide the intro day, so future content stays unreadable.
  *
@@ -37,8 +37,11 @@ public class BestiaryTab extends HandbookTab {
     /**
      * The bestiary roster (single client-side source, kept in sync with the spawn rules):
      * v2 arc — Deckhand day 1 ghost ship, Gazer night 3, The Other first Pale Night day 4,
-     * Umbral Stalker night 5, Herald day 7, Ferryman day 14 — plus the P6 Drift Lantern
-     * (limbo ambience, day 1). Future P6 mobs: append here, ship lang keys via langdrop.
+     * Umbral Stalker night 5, Herald day 7, Ferryman day 14 — plus the P6 roster (intro
+     * days per {@code docs/plans_v3/handoff/P6_bestiary_entries.md}): Drift Lantern limbo
+     * day 1, storm-scar pack day 6, the glitched family with the first fresh ring after
+     * day 8, colossus/cultist day 9, sentinel/warden day 10, the Fog Tyrant day 12.
+     * Future mobs: append here (chronologically), ship lang keys via langdrop.
      */
     private static final List<Creature> CREATURES = List.of(
             new Creature("deckhand", 1),
@@ -46,7 +49,17 @@ public class BestiaryTab extends HandbookTab {
             new Creature("gazer", 3),
             new Creature("the_other", 4),
             new Creature("umbral_stalker", 5),
+            new Creature("fog_revenant", 6),
+            new Creature("storm_hound", 6),
             new Creature("herald", 7),
+            new Creature("glitched_husk", 8),
+            new Creature("glitched_hound", 8),
+            new Creature("glitched_tick", 8),
+            new Creature("fog_colossus", 9),
+            new Creature("eclipse_cultist", 9),
+            new Creature("pale_sentinel", 10),
+            new Creature("rift_warden", 10),
+            new Creature("fog_tyrant", 12),
             new Creature("ferryman", 14));
 
     private static final int CARD_GAP = 4;

@@ -35,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -476,10 +477,27 @@ public final class CutsceneService {
                     snapshot.dimension().location(), player.getScoreboardName());
             return;
         }
+        Vec3 returnPos = validatedReturnPosition(level, snapshot.pos());
         PacketDistributor.sendToPlayer(player, RETURN_FADE);
-        FreezeService.transport(player, level, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
+        FreezeService.transport(player, level, returnPos, snapshot.yRot(), snapshot.xRot());
         EclipseMod.LOGGER.info("CutsceneService: returned {} to {} in {} ({})",
-                player.getScoreboardName(), snapshot.pos(), snapshot.dimension().location(), reason);
+                player.getScoreboardName(), returnPos, snapshot.dimension().location(), reason);
+    }
+
+    /**
+     * Heals stale snapshots and origins covered by terrain written during a cutscene.
+     * Heightmap values are the first free block above the motion-blocking surface.
+     */
+    private static Vec3 validatedReturnPosition(ServerLevel level, Vec3 pos) {
+        BlockPos column = BlockPos.containing(pos.x, 0.0D, pos.z);
+        level.getChunk(column.getX() >> 4, column.getZ() >> 4);
+        int safeY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                column.getX(), column.getZ());
+        int surfaceY = safeY - 1;
+        if (pos.y < level.getMinBuildHeight() || pos.y < surfaceY - 2.0D) {
+            return new Vec3(pos.x, Math.max(safeY, level.getMinBuildHeight() + 1), pos.z);
+        }
+        return pos;
     }
 
     /**
@@ -495,11 +513,12 @@ public final class CutsceneService {
             return;
         }
         if (player.level().dimension() == snapshot.dimension()) {
-            player.moveTo(snapshot.pos().x, snapshot.pos().y, snapshot.pos().z,
+            Vec3 returnPos = validatedReturnPosition(player.serverLevel(), snapshot.pos());
+            player.moveTo(returnPos.x, returnPos.y, returnPos.z,
                     snapshot.yRot(), snapshot.xRot());
             player.setDeltaMovement(Vec3.ZERO);
             EclipseMod.LOGGER.info("CutsceneService: {} logged out mid-cutscene — saved back at {}",
-                    player.getScoreboardName(), snapshot.pos());
+                    player.getScoreboardName(), returnPos);
         } else {
             PendingReturns.get(player.server).put(player.getUUID(), snapshot);
             EclipseMod.LOGGER.info("CutsceneService: {} logged out mid-cutscene in another dimension — return to {} {} pending next login",
@@ -521,11 +540,11 @@ public final class CutsceneService {
                             payload.state(), payload.id(), player.getScoreboardName());
                     return;
                 }
-                completeSession(player, "client ACK " + payload.state());
                 if (!session.preview()) {
                     FreezeService.unfreeze(player);
                 }
                 restoreReturn(player, "client ACK " + payload.state());
+                completeSession(player, "client ACK " + payload.state());
             }
             case SKIP_REQUEST -> handleSkipRequest(payload.id(), player, session);
         }
@@ -546,12 +565,12 @@ public final class CutsceneService {
             return;
         }
         EclipseMod.LOGGER.info("CutsceneService: granted skip of '{}' for {}", id, player.getScoreboardName());
-        completeSession(player, "skip granted");
         if (!session.preview()) {
             FreezeService.unfreeze(player);
         }
         restoreReturn(player, "skip granted");
         PacketDistributor.sendToPlayer(player, S2CCutscenePlayPayload.STOP);
+        completeSession(player, "skip granted");
     }
 
     /** Removes the player's session (if any) and counts them done in their group. */
@@ -605,6 +624,12 @@ public final class CutsceneService {
         }
     }
 
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        SESSIONS.clear();
+        RETURNS.clear();
+    }
+
     /** Login applies any cross-dimension return that was pending from a mid-cutscene logout. */
     @SubscribeEvent
     static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
@@ -621,10 +646,11 @@ public final class CutsceneService {
                     snapshot.dimension().location(), player.getScoreboardName());
             return;
         }
+        Vec3 returnPos = validatedReturnPosition(level, snapshot.pos());
         PacketDistributor.sendToPlayer(player, RETURN_FADE);
-        FreezeService.transport(player, level, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
+        FreezeService.transport(player, level, returnPos, snapshot.yRot(), snapshot.xRot());
         EclipseMod.LOGGER.info("CutsceneService: applied pending cutscene return of {} to {} in {}",
-                player.getScoreboardName(), snapshot.pos(), snapshot.dimension().location());
+                player.getScoreboardName(), returnPos, snapshot.dimension().location());
     }
 
     // --- persisted cross-dimension returns ---

@@ -17,7 +17,9 @@ import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
+import dev.projecteclipse.eclipse.entity.boss.fog.FogBankMarker;
 import dev.projecteclipse.eclipse.network.S2CFogStormPayload;
+import dev.projecteclipse.eclipse.stormfx.StormRegistry;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
@@ -34,11 +36,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -95,6 +99,15 @@ public final class FogStormSites {
     }
 
     @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        ServerLevel overworld = event.getServer().overworld();
+        for (Site site : sites) {
+            retireSessionSite(overworld, site);
+        }
+        FogBankMarker.clearAll(overworld);
+    }
+
+    @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         activeServer = null;
         sites = List.of();
@@ -148,12 +161,11 @@ public final class FogStormSites {
                 if (site.stage() <= toStage) {
                     continue;
                 }
-                EclipseWorldgenState.FogSiteState old = state.fogSiteState(site.id());
                 state.setFogSiteState(site.id(), List.of(), false, false);
-                if (old.active()) {
-                    broadcast(level, site, surfaceCenter(level, site.x(), site.z()), false);
-                }
+                retireSessionSite(level, site);
+                broadcast(level, site, surfaceCenter(level, site.x(), site.z()), false);
             }
+            reconcileTyrantLair(level);
             return;
         }
         for (Site site : sites) {
@@ -195,21 +207,27 @@ public final class FogStormSites {
             EclipseWorldgenState.get(level.getServer()).setFogSiteState(site.id(), chests, true, true);
             broadcast(level, site, center, true);
             EclipseMod.LOGGER.info("FogStormSites: materialized {} at {}", site.id(), center);
-            markTyrantLairIfStrongest(level, site, center);
+            reconcileTyrantLair(level);
             onComplete.run();
         }, onFailure);
     }
 
     /**
-     * P6-W11 seam: the strongest (largest-radius) storm hosts the Fog Tyrant lair.
-     * {@code markLair} is idempotent and deliberately not persisted — it re-arms on
-     * restore, matching the storm-wall re-announce lifecycle.
+     * P6-W11 seam: exactly one active highest-stage storm hosts the Fog Tyrant lair.
+     * Markers are session-only and are fully reconciled whenever site lifecycle changes.
      */
-    private static void markTyrantLairIfStrongest(ServerLevel level, Site site, BlockPos center) {
-        int maxRadius = sites.stream().mapToInt(Site::radius).max().orElse(0);
-        if (site.radius() >= maxRadius) {
-            dev.projecteclipse.eclipse.entity.boss.fog.FogBankMarker.markLair(level, center);
-        }
+    private static void reconcileTyrantLair(ServerLevel level) {
+        FogBankMarker.clearAll(level);
+        sites.stream().filter(Site::active)
+                .max(java.util.Comparator.comparingInt(Site::stage).thenComparing(Site::id))
+                .ifPresent(site -> FogBankMarker.markLair(level,
+                        surfaceCenter(level, site.x(), site.z())));
+    }
+
+    private static void retireSessionSite(ServerLevel level, Site site) {
+        BlockPos center = surfaceCenter(level, site.x(), site.z());
+        FogBankMarker.clearLair(level, center);
+        StormRegistry.handleFogSite(level, site.id(), Vec3.atCenterOf(center), site.radius(), false);
     }
 
     private static BlockPos surfaceCenter(ServerLevel level, int x, int z) {
@@ -297,8 +315,23 @@ public final class FogStormSites {
 
     /** Re-reads site config from the save-local freeze extract (after {@code refreeze fogstorms}). */
     public static void reloadFromSave() {
-        sites = loadSites(FrozenParams.saveEclipseDir());
+        List<Site> previous = sites;
+        List<Site> replacement = loadSites(FrozenParams.saveEclipseDir());
         MinecraftServer server = activeServer;
+        if (server != null) {
+            ServerLevel overworld = server.overworld();
+            for (Site old : previous) {
+                boolean retained = replacement.stream().anyMatch(next ->
+                        next.id().equals(old.id())
+                                && next.x() == old.x() && next.z() == old.z()
+                                && next.radius() == old.radius());
+                if (!retained) {
+                    retireSessionSite(overworld, old);
+                }
+            }
+            FogBankMarker.clearAll(overworld);
+        }
+        sites = replacement;
         if (server != null) {
             restoreFromState(server);
         }
@@ -325,12 +358,7 @@ public final class FogStormSites {
         long active = sites.stream().filter(Site::active).count();
         if (active > 0) {
             EclipseMod.LOGGER.info("FogStormSites: restored {} active storm wall(s) from SavedData", active);
-            // Re-arm the tyrant lair on the strongest restored storm (marker is not persisted).
-            ServerLevel overworld = server.overworld();
-            sites.stream().filter(Site::active)
-                    .max(java.util.Comparator.comparingInt(Site::radius))
-                    .ifPresent(site -> markTyrantLairIfStrongest(overworld, site,
-                            surfaceCenter(overworld, site.x(), site.z())));
         }
+        reconcileTyrantLair(server.overworld());
     }
 }
