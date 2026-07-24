@@ -126,7 +126,9 @@ public final class CaptionRenderer {
     public static void fade(int inTicks, int holdTicks, int outTicks, int argb) {
         fadeStartTick = ticks;
         fadeIn = Math.max(0, inTicks);
-        fadeHold = Math.max(0, holdTicks);
+        // Safety clamp: no fade may hold the screen longer than 30s. A desynced sequence
+        // (missed follow-up shot, replaced session) must never leave a permanent black.
+        fadeHold = Math.min(600, Math.max(0, holdTicks));
         fadeOut = Math.max(0, outTicks);
         fadeArgb = argb;
     }

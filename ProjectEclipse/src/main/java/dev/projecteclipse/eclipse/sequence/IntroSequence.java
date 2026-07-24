@@ -315,11 +315,19 @@ public final class IntroSequence implements SequenceReplayable {
                 }
             }
             case APPROACH -> {
+                if (current.ticks % 20 == 0) {
+                    rescueVoidFallers(current);
+                }
                 if (firstPlayerNearVortex(current)) {
                     beginLightning(current);
                 }
             }
-            case LIGHTNING -> tickLightning(current);
+            case LIGHTNING -> {
+                if (current.ticks % 20 == 0) {
+                    rescueVoidFallers(current);
+                }
+                tickLightning(current);
+            }
             case BURST, REVEAL, SUNRISE -> { /* driven by scheduled tasks / group callbacks */ }
         }
     }
@@ -370,21 +378,68 @@ public final class IntroSequence implements SequenceReplayable {
         }
     }
 
+    /** Smoke-wall trigger band: below-disc walkers must NOT trip it, fliers above SHOULD. */
+    private static final double APPROACH_TRIGGER_Y_BELOW = 12.0D;
+
     private static boolean firstPlayerNearVortex(Run current) {
         double triggerDist = VORTEX_RADIUS + APPROACH_TRIGGER_BLOCKS;
+        // Anywhere alongside the vortex column (base −12 … top +12) counts; only players
+        // far BELOW the disc (void walkers) are excluded.
+        double minY = current.center.y - APPROACH_TRIGGER_Y_BELOW;
+        double maxY = current.center.y + VORTEX_HEIGHT + APPROACH_TRIGGER_Y_BELOW;
         for (ServerPlayer player : current.overworld.players()) {
             if (player.isSpectator()) {
                 continue;
             }
             double dx = player.getX() - current.center.x;
             double dz = player.getZ() - current.center.z;
-            if (dx * dx + dz * dz <= triggerDist * triggerDist) {
+            if (dx * dx + dz * dz <= triggerDist * triggerDist
+                    && player.getY() >= minY && player.getY() <= maxY) {
                 EclipseMod.LOGGER.info("IntroSequence: {} reached the smoke wall — LIGHTNING",
                         player.getScoreboardName());
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * APPROACH/LIGHTNING void rescue: the fusion sweep may still be filling gaps while
+     * players walk toward the vortex — anyone who slips under the disc gets lifted back
+     * to the surface over the vortex-side rim with brief slow fall (day-1 containment
+     * spirit: the void rejects you, the show must be seen from above).
+     */
+    private static void rescueVoidFallers(Run current) {
+        for (ServerPlayer player : current.overworld.players()) {
+            if (player.isSpectator()) {
+                continue;
+            }
+            if (player.getY() < current.center.y - 40.0D) {
+                double backX = player.getX();
+                double backZ = player.getZ();
+                int surfaceY = current.overworld.getHeight(
+                        net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
+                        (int) Math.floor(backX), (int) Math.floor(backZ));
+                if (surfaceY <= current.overworld.getMinBuildHeight()
+                        || surfaceY < current.center.y - 24.0D) {
+                    // Fusion gap or crater column: pull halfway toward the vortex and drop
+                    // at disc-surface height with slow fall — never below the safety line,
+                    // or the rescue would thrash every check.
+                    backX = current.center.x + (backX - current.center.x) * 0.5D;
+                    backZ = current.center.z + (backZ - current.center.z) * 0.5D;
+                    surfaceY = (int) current.center.y;
+                }
+                player.teleportTo(current.overworld, backX + 0.0D, surfaceY + 1.0D, backZ,
+                        player.getYRot(), player.getXRot());
+                player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                        net.minecraft.world.effect.MobEffects.SLOW_FALLING, 80, 0, true, false));
+                player.fallDistance = 0.0F;
+                current.overworld.sendParticles(net.minecraft.core.particles.ParticleTypes.PORTAL,
+                        player.getX(), player.getY() + 1.0D, player.getZ(), 24, 0.4D, 0.8D, 0.4D, 0.05D);
+                EclipseMod.LOGGER.info("IntroSequence: rescued {} from the void (y<{})",
+                        player.getScoreboardName(), current.center.y - 40.0D);
+            }
+        }
     }
 
     /** LIGHTNING: the ramping-strikes controller runs with live kickback. */

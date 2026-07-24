@@ -25,11 +25,11 @@ float rainLayer(vec2 uv, float t, float density, float speed, float seed) {
     float h = efxHash(vec2(col, seed));
     float fall = uv.y * (1.1 + 0.5 * h) + t * speed * (0.8 + 0.6 * h) + h * 17.0;
     float cycle = floor(fall);
-    float active = step(0.45, efxHash(vec2(col, cycle + seed)));
+    float rainOn = step(0.45, efxHash(vec2(col, cycle + seed)));
     float core = 1.0 - abs(fract(x) - 0.5) * 2.0;
     float y = fract(fall);
     float tail = smoothstep(1.0, 0.55, y) * smoothstep(0.0, 0.08, y);
-    return active * pow(core, 6.0) * tail;
+    return rainOn * pow(core, 6.0) * tail;
 }
 
 void main() {

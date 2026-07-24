@@ -294,6 +294,10 @@ public final class StormRegistry {
 
     // ------------------------------------------------------------------ lifecycle events
 
+    /** Keepalive cadence for ACTIVE storms (self-healing sync; handle() is idempotent). */
+    private static final int KEEPALIVE_TICKS = 200;
+    private static int keepaliveCountdown = KEEPALIVE_TICKS;
+
     /** Advances SPAWN→ACTIVE ramps, drops dissipated storms, and polls P1's fog sites. */
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
@@ -303,6 +307,14 @@ public final class StormRegistry {
         }
         if (STORMS.isEmpty()) {
             return;
+        }
+        if (--keepaliveCountdown <= 0) {
+            keepaliveCountdown = KEEPALIVE_TICKS;
+            for (ServerStorm storm : STORMS.values()) {
+                if (storm.state == S2CStormStatePayload.STATE_ACTIVE) {
+                    broadcast(storm);
+                }
+            }
         }
         for (ServerStorm storm : STORMS.values()) {
             if (storm.state == S2CStormStatePayload.STATE_ACTIVE) {
@@ -315,7 +327,10 @@ public final class StormRegistry {
                 storm.state = S2CStormStatePayload.STATE_ACTIVE;
                 storm.ticksLeft = 0;
                 storm.stateTotal = 0;
-                // No broadcast needed: clients promote SPAWN→ACTIVE locally when the ramp ends.
+                // Clients promote SPAWN→ACTIVE locally, but re-broadcast anyway: any client
+                // that missed the SPAWN packet (dimension-swap window, join race) adopts the
+                // storm here instead of never learning about it.
+                broadcast(storm);
             } else {
                 STORMS.remove(storm.id);
             }
