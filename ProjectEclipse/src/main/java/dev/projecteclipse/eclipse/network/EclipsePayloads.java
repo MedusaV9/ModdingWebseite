@@ -287,8 +287,17 @@ public final class EclipsePayloads {
     }
 
     private static void handleRecipeLocks(S2CRecipeLocksPayload payload, IPayloadContext context) {
+        // EVAL-DOPA-S #1 client half: a tier-up/day payload with a CHANGED lock set must
+        // rebake EMI (ClientUnlockCache pattern), otherwise EMI stays baked with the old
+        // locks until an unrelated reload/relog. Handler is playToClient-only, so the
+        // client-class reference follows the established lazy handler-body pattern.
+        boolean changed = !ClientStateCache.lockedItemIds.equals(payload.lockedItemIds())
+                || !ClientStateCache.lockedRecipeIds.equals(payload.lockedRecipeIds());
         ClientStateCache.lockedItemIds = payload.lockedItemIds();
         ClientStateCache.lockedRecipeIds = payload.lockedRecipeIds();
+        if (changed) {
+            dev.projecteclipse.eclipse.client.emi.EmiReindexer.requestReload();
+        }
     }
 
     private static void handleSidebarState(S2CSidebarStatePayload payload, IPayloadContext context) {

@@ -65,7 +65,7 @@ public final class HarnessSmokeTest {
         GameTestSupport.assertPayloadRoundTrip(S2CQuestStatePayload.STREAM_CODEC,
                 new S2CQuestStatePayload(2, List.of(
                         new S2CQuestStatePayload.QuestEntry("q1", (byte) 0, "Mine iron", "Eisen abbauen",
-                                4, 32, false, true))));
+                                4, 32, false, true, 2))));
 
         GameTestSupport.assertPayloadRoundTrip(S2CSkillStatePayload.STREAM_CODEC,
                 new S2CSkillStatePayload(5, 1200L, 80, 200, 4, 1,

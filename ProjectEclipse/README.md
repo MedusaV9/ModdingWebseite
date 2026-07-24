@@ -1171,9 +1171,11 @@ source (`sendSuccess`/`sendFailure`) — nothing is ever broadcast to player cha
 ### Day/phase cadence (ops)
 
 The 14-day arc advances at real-world boundaries driven by `RealtimeDayService` and
-`config/eclipse/realtime.json`. `cadenceMode: "daily"` (default) advances once per real day
-at `boundaryTime` in `zone` (Berlin 18:00); `cadenceMode: "interval"` advances every
-`intervalHours` real hours (the "new phase every 2 h" event mode). Operators switch live —
+`config/eclipse/realtime.json`. `cadenceMode: "interval"` (the FIX-ECON default) advances
+every `intervalHours` real hours (2.0 out of the box — the "new phase every 2 h"
+experience); `cadenceMode: "daily"` advances once per real day at `boundaryTime` in `zone`
+(Berlin 18:00). A `configVersion` field gates migration: files older than the current
+version are backed up (`realtime.json.bak-v<N>`) and regenerated. Operators switch live —
 and persistently — with `/dev phase interval hours <n>` (or `minutes <n>`), back with
 `/dev phase daily`, inspect with `/dev phase status`, and skip ahead immediately with
 `/dev phase next` (a full rollover: signals, bell, announcements). Cadence changes are

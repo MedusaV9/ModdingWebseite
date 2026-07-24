@@ -2,9 +2,12 @@ package dev.projecteclipse.eclipse.skills;
 
 import java.util.Set;
 
+import dev.projecteclipse.eclipse.backrooms.BackroomsDimension;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.minigames.MinigameDimensions;
+import dev.projecteclipse.eclipse.ritual.CreditsSequence;
 import dev.projecteclipse.eclipse.xboxevent.XboxDimensions;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
@@ -26,6 +29,9 @@ public final class XpGates {
     /**
      * Reward-style sources that bypass both gates. {@code collection} and {@code contract}
      * are reserved for the D1/D3 systems so their rewards stay exempt from day one.
+     * {@code award} (DOPA-S-04): {@code AwardService} writes the durable claim record
+     * BEFORE granting — a gated grant would permanently eat the reward, so award XP must
+     * always pay like every other reward source.
      */
     private static final Set<String> EXEMPT_SOURCES = Set.of(
             SkillService.SOURCE_QUEST,
@@ -34,7 +40,8 @@ public final class XpGates {
             SkillService.SOURCE_DEATH,
             SkillService.SOURCE_ADMIN,
             "collection",
-            "contract");
+            "contract",
+            "award");
 
     private XpGates() {}
 
@@ -43,7 +50,7 @@ public final class XpGates {
         return isExemptSource(source) || actionXpAllowed(player);
     }
 
-    /** Reward sources (quest/altar/advancement/death/admin/collection/contract) skip the gates. */
+    /** Reward sources (quest/altar/advancement/death/admin/collection/contract/award) skip the gates. */
     public static boolean isExemptSource(String source) {
         return EXEMPT_SOURCES.contains(source);
     }
@@ -64,10 +71,19 @@ public final class XpGates {
         return true;
     }
 
-    /** Limbo, minigame arenas ({@code minigame_arena}/{@code minigame_sky}) and xbox worlds. */
+    /**
+     * The SHARED event-dimension predicate (consumers: XP gate, quest progress, rebirth,
+     * heart theft). Limbo, the minigame arenas ({@code minigame_arena}/{@code minigame_sky}),
+     * every xbox world, and (EVAL-POL-S #1) the three v5 event dimensions: the Backrooms,
+     * the Ferryman arena and the credits epilogue — scripted set pieces must not grant
+     * action XP, record quest progress, permit rebirth, or consume permanent lives via PvP.
+     */
     public static boolean isEventDimension(ResourceKey<Level> dimension) {
         return LimboDimension.LIMBO.equals(dimension)
                 || MinigameDimensions.isMinigameDimension(dimension)
-                || XboxDimensions.isXboxDimension(dimension);
+                || XboxDimensions.isXboxDimension(dimension)
+                || BackroomsDimension.BACKROOMS.equals(dimension)
+                || ArenaDimension.ARENA.equals(dimension)
+                || CreditsSequence.EPILOGUE.equals(dimension);
     }
 }

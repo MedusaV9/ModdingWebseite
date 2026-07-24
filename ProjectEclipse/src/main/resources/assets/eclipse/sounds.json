@@ -381,8 +381,19 @@
     "sounds": [
       {
         "name": "eclipse:ui/heart_shatter",
-        "pitch": 0.45,
+        "pitch": 0.32,
         "volume": 1.0
+      },
+      {
+        "name": "eclipse:event/submerge",
+        "pitch": 0.38,
+        "volume": 1.0
+      },
+      {
+        "name": "eclipse:ambient/limbo_loop",
+        "pitch": 0.45,
+        "stream": true,
+        "volume": 0.6
       }
     ],
     "subtitle": "subtitles.eclipse.event.storm_shatter"

@@ -81,8 +81,9 @@ public final class GoalConfigTest {
         try {
             Path dir = tempConfigDir(helper);
             // Doctored goals.json knows ONLY day 2 — every other day must fall back.
+            // configVersion 2 keeps the FIX-ECON migration from regenerating the file.
             Files.writeString(dir.resolve("goals.json"), """
-                    { "days": [ { "day": 2, "goals": [
+                    { "configVersion": 2, "days": [ { "day": 2, "goals": [
                       { "id": "d2_only", "kind": "main",
                         "trigger": { "type": "manual", "count": 1 }, "text": "Doctored" } ] } ] }
                     """);
@@ -151,6 +152,44 @@ public final class GoalConfigTest {
             helper.succeed();
         } catch (Exception e) {
             throw new AssertionError("validator test", e);
+        } finally {
+            GoalConfig.setDirectoryOverride(null);
+        }
+    }
+
+    /** FIX-ECON (EVAL-SAT-S #1): v1 files are backed up + replaced by the v5 defaults. */
+    @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
+    public static void outdatedConfigVersionBacksUpAndRegenerates(GameTestHelper helper) {
+        try {
+            Path dir = tempConfigDir(helper);
+            // A pre-versioning (v1) goals.json with old custom authoring on day 2.
+            Files.writeString(dir.resolve("goals.json"), """
+                    { "days": [ { "day": 2, "goals": [
+                      { "id": "old_v1", "kind": "main",
+                        "trigger": { "type": "manual", "count": 1 }, "text": "Old" } ] } ] }
+                    """);
+            GoalConfig.setDirectoryOverride(dir); // triggers the migration + reload
+
+            helper.assertTrue(Files.isRegularFile(dir.resolve("goals.json.bak-v1")),
+                    "old file backed up as goals.json.bak-v1");
+            helper.assertTrue(GoalConfig.goalsForDay(2).stream()
+                            .noneMatch(spec -> spec.id().equals("old_v1")),
+                    "old authoring replaced (nothing preserved)");
+            helper.assertTrue(GoalConfig.mainsForDay(2).size() == 3,
+                    "regenerated v5 defaults active for day 2");
+            JsonObject regenerated = JsonParser.parseString(
+                    Files.readString(dir.resolve("goals.json"))).getAsJsonObject();
+            helper.assertTrue(regenerated.get("configVersion").getAsInt() == GoalConfig.CONFIG_VERSION,
+                    "regenerated file stamped with the current configVersion");
+
+            // A second reload must NOT migrate the now-current file again.
+            GoalConfig.reloadNow();
+            helper.assertTrue(!Files.isRegularFile(
+                            dir.resolve("goals.json.bak-v" + GoalConfig.CONFIG_VERSION)),
+                    "current-version file is never re-migrated");
+            helper.succeed();
+        } catch (Exception e) {
+            throw new AssertionError("migration test", e);
         } finally {
             GoalConfig.setDirectoryOverride(null);
         }

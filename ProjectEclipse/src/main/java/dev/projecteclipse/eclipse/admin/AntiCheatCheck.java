@@ -76,6 +76,16 @@ public final class AntiCheatCheck {
     }
 
     /**
+     * Version stamp of the SHIPPED default allowlist ({@link #defaults()}). Bump this
+     * whenever new default allowed/optional ids ship; on-disk files with an older (or
+     * absent) {@code allowlistVersion} get the new default ids UNIONED in on load
+     * (EVAL-POL-S #3) — operator additions/pins are never removed or overwritten.
+     * Version 1 = every pre-versioning extended file; version 2 = the v5 nested-id wave
+     * ({@code fabric_*}, {@code mixinsquared}, photon/ldlib2/kilagraph, …).
+     */
+    public static final int CURRENT_ALLOWLIST_VERSION = 2;
+
+    /**
      * Immutable runtime schema for the extended {@code anticheat.json}.
      *
      * <p>{@code allowContinueOnMismatch} is the SERVER-authoritative mismatch policy (D8):
@@ -87,6 +97,9 @@ public final class AntiCheatCheck {
      * may use {@code /dev} without permission level 2. Entries are either literal UUIDs
      * ({@code "01234567-89ab-…"}) or name pins ({@code "name:Sonic0810"}) resolved at runtime via
      * the online player list and the server profile cache.</p>
+     *
+     * <p>{@code allowlistVersion} (EVAL-POL-S #3) is the default-id migration stamp — see
+     * {@link #CURRENT_ALLOWLIST_VERSION}. Files without the field parse as version 1.</p>
      */
     public record Config(
             ModlistMode mode,
@@ -96,7 +109,8 @@ public final class AntiCheatCheck {
             List<String> optionalMods,
             String downloadHintUrl,
             boolean allowContinueOnMismatch,
-            List<String> devBypassUuids) {
+            List<String> devBypassUuids,
+            int allowlistVersion) {
         public Config {
             blockedModIdSubstrings = List.copyOf(blockedModIdSubstrings);
             allowedMods = Collections.unmodifiableMap(new LinkedHashMap<>(allowedMods));
@@ -104,6 +118,16 @@ public final class AntiCheatCheck {
             optionalMods = List.copyOf(optionalMods);
             downloadHintUrl = downloadHintUrl == null ? "" : downloadHintUrl;
             devBypassUuids = List.copyOf(devBypassUuids);
+        }
+
+        /** Pre-versioning shape (gametests, mode/snapshot rewrites): stamps the CURRENT version. */
+        public Config(ModlistMode mode, List<String> blockedModIdSubstrings,
+                Map<String, String> allowedMods, List<String> requiredMods,
+                List<String> optionalMods, String downloadHintUrl,
+                boolean allowContinueOnMismatch, List<String> devBypassUuids) {
+            this(mode, blockedModIdSubstrings, allowedMods, requiredMods, optionalMods,
+                    downloadHintUrl, allowContinueOnMismatch, devBypassUuids,
+                    CURRENT_ALLOWLIST_VERSION);
         }
     }
 
@@ -152,7 +176,11 @@ public final class AntiCheatCheck {
         return config;
     }
 
-    /** Re-reads the extended schema. Legacy blocklist-only files are migrated in place. */
+    /**
+     * Re-reads the extended schema. Legacy blocklist-only files are migrated in place, and
+     * (EVAL-POL-S #3) files with an older {@code allowlistVersion} acquire the newly shipped
+     * default allowed/optional ids via {@link #mergeNewDefaults} before being saved back.
+     */
     public static synchronized void reloadConfig() {
         Path file = configPath();
         Config fallback = defaults();
@@ -170,7 +198,16 @@ public final class AntiCheatCheck {
                     "downloadHintUrl", "allowContinueOnMismatch", "devBypassUuids")) {
                 migrate |= !root.has(key);
             }
-            config = parse(root, fallback);
+            Config parsed = parse(root, fallback);
+            if (parsed.allowlistVersion() < CURRENT_ALLOWLIST_VERSION) {
+                parsed = mergeNewDefaults(parsed, fallback);
+                migrate = true;
+                EclipseMod.LOGGER.info("Modcheck allowlist migrated to version {}: new default ids "
+                                + "unioned in (operator entries untouched) — now {} allowed / {} optional",
+                        CURRENT_ALLOWLIST_VERSION, parsed.allowedMods().size(),
+                        parsed.optionalMods().size());
+            }
+            config = parsed;
             configLoaded = true;
             if (migrate) {
                 Files.writeString(file, GSON.toJson(toJson(config)), StandardCharsets.UTF_8);
@@ -184,6 +221,24 @@ public final class AntiCheatCheck {
         EclipseMod.LOGGER.info("Modcheck loaded: mode={}, allowed={}, required={}, optional={}, blocked={}",
                 config.mode().configName(), config.allowedMods().size(), config.requiredMods().size(),
                 config.optionalMods().size(), config.blockedModIdSubstrings().size());
+    }
+
+    /**
+     * EVAL-POL-S #3 upgrade path: UNION the shipped default allowed/optional ids into an
+     * older on-disk config and stamp {@link #CURRENT_ALLOWLIST_VERSION}. Never removes or
+     * overwrites operator entries ({@code putIfAbsent} for pins; set-union for optional).
+     * {@code requiredMods} is deliberately NOT unioned — force-requiring new ids could lock
+     * out currently valid clients; new requirements stay an explicit operator decision.
+     */
+    static Config mergeNewDefaults(Config loaded, Config defaults) {
+        Map<String, String> allowed = new LinkedHashMap<>(loaded.allowedMods());
+        defaults.allowedMods().forEach(allowed::putIfAbsent);
+        Set<String> optional = new LinkedHashSet<>(loaded.optionalMods());
+        optional.addAll(defaults.optionalMods());
+        return new Config(loaded.mode(), loaded.blockedModIdSubstrings(), allowed,
+                loaded.requiredMods(), List.copyOf(optional), loaded.downloadHintUrl(),
+                loaded.allowContinueOnMismatch(), loaded.devBypassUuids(),
+                CURRENT_ALLOWLIST_VERSION);
     }
 
     /** Evaluates a report using the current mode. Blocklist substrings apply in both modes. */
@@ -511,9 +566,14 @@ public final class AntiCheatCheck {
                         ? root.get("allowContinueOnMismatch").getAsBoolean()
                         : fallback.allowContinueOnMismatch();
         List<String> devBypass = strings(root, "devBypassUuids", fallback.devBypassUuids());
+        // A missing allowlistVersion means a pre-versioning file (= 1), NOT the fallback's
+        // current stamp — otherwise old files would silently skip the default-id migration.
+        int allowlistVersion = root.has("allowlistVersion") && root.get("allowlistVersion").isJsonPrimitive()
+                ? root.get("allowlistVersion").getAsInt()
+                : 1;
         return new Config(mode, blocked, allowed, required, optional,
                 string(root, "downloadHintUrl", fallback.downloadHintUrl()),
-                allowContinue, devBypass);
+                allowContinue, devBypass, allowlistVersion);
     }
 
     private static String string(JsonObject root, String key, String fallback) {
@@ -560,6 +620,7 @@ public final class AntiCheatCheck {
         root.addProperty("_comment_devBypass",
                 "devBypassUuids entries are literal UUIDs or 'name:<PlayerName>' pins (resolved via the profile cache). Listed identities skip modcheck enforcement and may use /dev without op. Prefer the UUID form; the shipped 'name:Sonic0810' placeholder should be replaced with the player's real UUID.");
         root.addProperty("modlistMode", value.mode().configName());
+        root.addProperty("allowlistVersion", value.allowlistVersion());
         root.add("blockedModIdSubstrings", array(value.blockedModIdSubstrings()));
         JsonObject allowed = new JsonObject();
         value.allowedMods().forEach(allowed::addProperty);

@@ -1,8 +1,10 @@
 // eclipse:storm_interior — the INSIDE of a fog storm (P2 W9, R14 interior; GRADE priority).
 // Crushes and cools the frame, wipes the sky, layers procedural rain streaks and closes a
 // soft vignette — together with the ViewportEvent fog clamp (~24 blocks) this is the "low
-// visibility inside" read. Uniforms (frozen §3.3): Interior, RainAmount, Time — fed per frame
-// by stormfx.StormInteriorFx through the VeilPostController row. Active only while
+// visibility inside" read. Uniforms: Interior, RainAmount, Time (frozen §3.3) + Sphere
+// (EVAL-POL-F #4: 1 inside a C8 site-sphere storm — the grade tints green-violet instead of
+// the vortex blue-slate, so the fog color and the post grade stop fighting each other) — fed
+// per frame by stormfx.StormInteriorFx through the VeilPostController row. Active only while
 // EclipseFxState.stormInterior() > 0.01 (and never under an Iris shaderpack — the fog clamp
 // and the wall geometry carry the interior look there).
 #include eclipse:eclipse_common
@@ -12,6 +14,7 @@ uniform sampler2D DiffuseDepthSampler;
 uniform float Interior;
 uniform float RainAmount;
 uniform float Time;
+uniform float Sphere;
 
 in vec2 texCoord;
 
@@ -36,15 +39,20 @@ void main() {
     vec3 color = texture(DiffuseSampler0, texCoord).rgb;
     float amt = clamp(Interior, 0.0, 1.0);
 
-    // Shadow crush + cold desaturation toward storm slate.
+    // Shadow crush + cold desaturation. Vortex interiors cool toward the storm blue-slate;
+    // sphere interiors (Sphere = 1) grade green-violet to match the C8 fog identity — the
+    // grade no longer desaturates the green fog back toward blue (EVAL-POL-F #4).
     color = efxCrush(color, amt * 0.7);
     float luma = dot(color, vec3(0.299, 0.587, 0.114));
-    color = mix(color, vec3(luma) * vec3(0.86, 0.83, 1.05), amt * 0.55);
+    vec3 desatTint = mix(vec3(0.86, 0.83, 1.05), vec3(0.84, 1.04, 0.93), Sphere);
+    color = mix(color, vec3(luma) * desatTint, amt * 0.55);
 
-    // The sky is gone inside: far-plane pixels sink into the storm slate.
+    // The sky is gone inside: far-plane pixels sink into the storm palette (slate for the
+    // vortex, deep green-violet for spheres).
     float depth = texture(DiffuseDepthSampler, texCoord).r;
     float sky = step(0.9999, depth);
-    color = mix(color, vec3(0.05, 0.045, 0.075), sky * amt * 0.85);
+    vec3 skySink = mix(vec3(0.05, 0.045, 0.075), vec3(0.040, 0.070, 0.056), Sphere);
+    color = mix(color, skySink, sky * amt * 0.85);
 
     // Rain streak overlay (two layers, different densities/speeds, faint cool highlight).
     float rain = clamp(RainAmount, 0.0, 1.0) * amt;

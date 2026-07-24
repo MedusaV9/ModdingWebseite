@@ -247,6 +247,12 @@ public final class CollectionsService {
             if (tier.points() > 0) {
                 SkillsApi.addPoints(player, tier.points());
             }
+            if (tier.shards() > 0) {
+                // FIX-ECON: chunky (T4+) tiers pay PERSONAL shards — rebirth currency,
+                // announced with the D14 gain toast. The sweep only runs for the online
+                // acting player, so a direct credit is always deliverable.
+                dev.projecteclipse.eclipse.economy.ShardEconomy.addShards(player, tier.shards(), true);
+            }
             if (cfg.toastsEnabled()) {
                 CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
                         def.id(), granted, tier.xp(), tier.points(), tier.unlockItems()));

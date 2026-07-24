@@ -25,16 +25,17 @@ public final class SkillMathGameTests {
     public static void curveAnchorsAndMonotonicity(GameTestHelper helper) {
         SkillCurve.Params defaults = SkillCurve.Params.defaults();
 
-        // v5 (D2) retuned anchors: the early game is deliberately ~10x the old grind.
+        // v5 FIX-ECON retuned anchors (baseCost 90): first hour = 3 levels, still ~x6
+        // the old grind late.
         long c5 = SkillCurve.cumulativeXp(5, defaults);
-        helper.assertTrue(Math.abs(c5 - 3564L) <= 3564L * 5 / 100,
-                "C(5)=" + c5 + " must be within ±5% of 3564");
+        helper.assertTrue(Math.abs(c5 - 2138L) <= 2138L * 5 / 100,
+                "C(5)=" + c5 + " must be within ±5% of 2138");
         long c7 = SkillCurve.cumulativeXp(7, defaults);
-        helper.assertTrue(Math.abs(c7 - 8405L) <= 8405L * 5 / 100,
-                "C(7)=" + c7 + " must be within ±5% of 8405");
+        helper.assertTrue(Math.abs(c7 - 5043L) <= 5043L * 5 / 100,
+                "C(7)=" + c7 + " must be within ±5% of 5043");
         long c12 = SkillCurve.cumulativeXp(12, defaults);
-        helper.assertTrue(Math.abs(c12 - 33225L) <= 33225L * 5 / 100,
-                "C(12)=" + c12 + " must be within ±5% of 33225");
+        helper.assertTrue(Math.abs(c12 - 19935L) <= 19935L * 5 / 100,
+                "C(12)=" + c12 + " must be within ±5% of 19935");
 
         int previousCost = 0;
         for (int level = 1; level <= 80; level++) {
@@ -55,10 +56,10 @@ public final class SkillMathGameTests {
                     "levelForXp(C(" + level + ")-1)");
         }
         helper.assertTrue(SkillCurve.levelForXp(0, defaults) == 0, "level 0 at 0 XP");
-        // D2 pacing pin: a hot first session (~800 XP) is level 2 at most — the old
-        // "level 7 after 5 minutes" is mathematically impossible (C(7)=8405).
-        helper.assertTrue(SkillCurve.levelForXp(800, defaults) <= 2, "800 XP stays <= L2");
-        helper.assertTrue(SkillCurve.levelForXp(8404, defaults) == 6, "just below C(7) is L6");
+        // FIX-ECON pacing pin: a hot first session (~800 XP) is level 3 (C(3)=581,
+        // C(4)=1210) — the old "level 7 after 5 minutes" stays impossible (C(7)=5043).
+        helper.assertTrue(SkillCurve.levelForXp(800, defaults) == 3, "800 XP lands at L3");
+        helper.assertTrue(SkillCurve.levelForXp(5042, defaults) == 6, "just below C(7) is L6");
         helper.succeed();
     }
 
@@ -162,7 +163,7 @@ public final class SkillMathGameTests {
         SkillConfig.Data data = SkillConfig.parse(SkillConfig.defaultsJson());
         helper.assertTrue(data.advancements().forKey("eclipse:herald_slain") == 200.0F,
                 "herald_slain = 200");
-        helper.assertTrue(AdvancementXpBridge.xpForAdvancement("eclipse:event/skill_25") >= 50.0F,
+        helper.assertTrue(AdvancementXpBridge.xpForAdvancement("eclipse:event/skill_12") >= 50.0F,
                 "event/-folder id resolves (strip or default)");
         helper.assertTrue(AdvancementXpBridge.xpForAdvancement("eclipse:event/unlisted") == 50.0F
                 || AdvancementXpBridge.xpForAdvancement("eclipse:event/unlisted") > 0.0F,

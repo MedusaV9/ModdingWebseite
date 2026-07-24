@@ -353,7 +353,7 @@ public final class RiftRenderer {
         }
 
         if (!reduced) {
-            buildArcs(rift, additive, cx, cy, cz, open, flickerFrame);
+            buildArcs(rift, additive, cx, cy, cz, open, flickerFrame, swirlSeconds);
         }
 
         if (rift.style != RiftFx.STYLE_PORTAL) {
@@ -384,19 +384,32 @@ public final class RiftRenderer {
 
     /**
      * C7 edge lightning: up to {@value #ARC_COUNT} jagged filaments crawling outward off
-     * the tear rim, re-seeded on the flicker cadence and strobing on/off through a gate
-     * hash. Each arc is a {@value #ARC_SEGMENTS}-segment polyline of thin quads extruded
-     * along the tear normal, near-white at the rim fading to nothing at the tip.
+     * the tear rim, jitter re-seeded on the flicker cadence and strobing on/off through a
+     * gate hash. EVAL-POL-F #7 (two fixes):
+     * <ul>
+     *   <li><b>Continuity</b> — each arc's base angle is a fixed per-arc anchor plus a
+     *       hash-picked continuous drift, so arcs genuinely CRAWL around the rim instead of
+     *       teleporting to a fresh random bearing every 270 ms. Drift rates are integer
+     *       multiples of 2π/100 s, so the {@code swirlSeconds} wrap (every 100 s) lands on
+     *       a whole number of revolutions — no once-per-cycle jump.</li>
+     *   <li><b>Billboard width</b> — each ribbon segment extrudes its width toward the
+     *       camera ({@code StormWallRenderer.emitRibbon} pattern) instead of along the tear
+     *       normal, so arcs stay readable from directly below a flat STRUCTURE rift, where
+     *       normal-extruded quads projected edge-on and near-invisible.</li>
+     * </ul>
      */
     private static void buildArcs(RiftFx.Rift rift, BufferBuilder additive,
-            float cx, float cy, float cz, float open, int flickerFrame) {
+            float cx, float cy, float cz, float open, int flickerFrame, float swirlSeconds) {
         float r0 = rift.width * 0.5F * open;
         for (int a = 0; a < ARC_COUNT; a++) {
             float gate = hash01(rift.seed, 97 + a * 13, flickerFrame);
             if (gate < ARC_GATE) {
                 continue; // this arc is dark this flicker frame (strobe)
             }
-            float baseAngle = hash01(rift.seed, 41 + a * 7, flickerFrame / 3) * Mth.TWO_PI;
+            float anchor = hash01(rift.seed, 41 + a * 7, 0) * Mth.TWO_PI;
+            int cycles = 5 + (int) (hash01(rift.seed, 59 + a * 11, 0) * 8.0F); // 5..12 per 100 s
+            float drift = cycles * (Mth.TWO_PI / 100.0F) * ((a & 1) == 0 ? 1.0F : -1.0F);
+            float baseAngle = anchor + swirlSeconds * drift;
             for (int i = 0; i <= ARC_SEGMENTS; i++) {
                 float f = i / (float) ARC_SEGMENTS;
                 float angle = baseAngle
@@ -418,18 +431,36 @@ public final class RiftRenderer {
                 float w1 = halfWidth * (0.4F + 0.6F * taper1);
                 float alpha0 = 0.85F * open * gate * taper0;
                 float alpha1 = 0.85F * open * gate * taper1;
-                float ax0 = ARC_X[i] + rift.nx * w0;
-                float ay0 = ARC_Y[i] + rift.ny * w0;
-                float az0 = ARC_Z[i] + rift.nz * w0;
-                float bx0 = ARC_X[i] - rift.nx * w0;
-                float by0 = ARC_Y[i] - rift.ny * w0;
-                float bz0 = ARC_Z[i] - rift.nz * w0;
-                float ax1 = ARC_X[i + 1] + rift.nx * w1;
-                float ay1 = ARC_Y[i + 1] + rift.ny * w1;
-                float az1 = ARC_Z[i + 1] + rift.nz * w1;
-                float bx1 = ARC_X[i + 1] - rift.nx * w1;
-                float by1 = ARC_Y[i + 1] - rift.ny * w1;
-                float bz1 = ARC_Z[i + 1] - rift.nz * w1;
+                // Camera-facing side vector: segment × toCamera (camera at the origin in
+                // camera-relative space, so the segment midpoint IS the view direction).
+                float dxs = ARC_X[i + 1] - ARC_X[i];
+                float dys = ARC_Y[i + 1] - ARC_Y[i];
+                float dzs = ARC_Z[i + 1] - ARC_Z[i];
+                float mx = (ARC_X[i] + ARC_X[i + 1]) * 0.5F;
+                float my = (ARC_Y[i] + ARC_Y[i + 1]) * 0.5F;
+                float mz = (ARC_Z[i] + ARC_Z[i + 1]) * 0.5F;
+                float sx = dys * mz - dzs * my;
+                float sy = dzs * mx - dxs * mz;
+                float sz = dxs * my - dys * mx;
+                float sLen = Mth.sqrt(sx * sx + sy * sy + sz * sz);
+                if (sLen < 1.0E-4F) {
+                    continue;
+                }
+                float ux = sx / sLen;
+                float uy = sy / sLen;
+                float uz = sz / sLen;
+                float ax0 = ARC_X[i] + ux * w0;
+                float ay0 = ARC_Y[i] + uy * w0;
+                float az0 = ARC_Z[i] + uz * w0;
+                float bx0 = ARC_X[i] - ux * w0;
+                float by0 = ARC_Y[i] - uy * w0;
+                float bz0 = ARC_Z[i] - uz * w0;
+                float ax1 = ARC_X[i + 1] + ux * w1;
+                float ay1 = ARC_Y[i + 1] + uy * w1;
+                float az1 = ARC_Z[i + 1] + uz * w1;
+                float bx1 = ARC_X[i + 1] - ux * w1;
+                float by1 = ARC_Y[i + 1] - uy * w1;
+                float bz1 = ARC_Z[i + 1] - uz * w1;
                 additive.addVertex(ax0, ay0, az0).setColor(0.88F, 0.72F, 1.0F, alpha0);
                 additive.addVertex(bx0, by0, bz0).setColor(0.88F, 0.72F, 1.0F, alpha0);
                 additive.addVertex(bx1, by1, bz1).setColor(0.95F, 0.85F, 1.0F, alpha1);

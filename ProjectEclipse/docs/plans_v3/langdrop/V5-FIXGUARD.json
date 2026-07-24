@@ -1,0 +1,12 @@
+{
+  "en": {
+    "dev.eclipse.doc.portal.auto": "Toggles the portal auto-roll (portal_events.json): one weighted random portal event per day from the configured min day.",
+    "dev.eclipse.portal.auto.on": "Portal auto-roll ON — one weighted roll per day from day %1$s (persisted to portal_events.json).",
+    "dev.eclipse.portal.auto.off": "Portal auto-roll OFF — portal events are operator-driven again (persisted to portal_events.json)."
+  },
+  "de": {
+    "dev.eclipse.doc.portal.auto": "Schaltet den Portal-Auto-Roll um (portal_events.json): ein gewichtetes zufälliges Portal-Event pro Tag ab dem konfigurierten Mindesttag.",
+    "dev.eclipse.portal.auto.on": "Portal-Auto-Roll AN — ein gewichteter Wurf pro Tag ab Tag %1$s (in portal_events.json gespeichert).",
+    "dev.eclipse.portal.auto.off": "Portal-Auto-Roll AUS — Portal-Events sind wieder Operator-gesteuert (in portal_events.json gespeichert)."
+  }
+}

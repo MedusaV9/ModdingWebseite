@@ -22,9 +22,10 @@ import dev.projecteclipse.eclipse.EclipseMod;
  *
  * <pre>{@code
  * {
+ *   "configVersion": 2,
  *   "zone": "Europe/Berlin",
  *   "boundaryTime": "18:00",
- *   "cadenceMode": "daily",
+ *   "cadenceMode": "interval",
  *   "intervalHours": 2.0,
  *   "autoArmOnStartEvent": true,
  *   "catchUpMaxDays": 13,
@@ -35,16 +36,22 @@ import dev.projecteclipse.eclipse.EclipseMod;
  * <p>D6: {@code cadenceMode} selects how the next boundary is derived — {@code "daily"}
  * (the classic {@code boundaryTime}-in-{@code zone} chain) or {@code "interval"}
  * (every {@code intervalHours} real hours, the "phase every 2 h" experience).
- * {@code intervalHours} is only read in interval mode.</p>
+ * {@code intervalHours} is only read in interval mode. FIX-ECON flipped the DEFAULT to
+ * {@code interval}/2.0 h — daily mode stays fully available via config or
+ * {@code /dev phase daily}.</p>
+ *
+ * <p>FIX-ECON (EVAL-SAT-S #1 pattern): {@code configVersion} gates a
+ * backup-and-regenerate migration — a file older than {@link #CONFIG_VERSION} is copied
+ * to {@code realtime.json.bak-v<oldVersion>} and rewritten with current defaults.</p>
  */
 public final class RealtimeConfig {
     /** D6 cadence selector: once per real day at {@code boundaryTime}, or every N hours. */
     public enum CadenceMode {
         DAILY, INTERVAL;
 
-        /** Lenient parse; anything unrecognized falls back to {@link #DAILY}. */
+        /** Lenient parse; anything unrecognized falls back to the {@link #INTERVAL} default. */
         static CadenceMode fromString(String raw) {
-            return "interval".equalsIgnoreCase(raw) ? INTERVAL : DAILY;
+            return "daily".equalsIgnoreCase(raw) ? DAILY : INTERVAL;
         }
 
         public String id() {
@@ -68,6 +75,12 @@ public final class RealtimeConfig {
     private static final String DEFAULT_ZONE = "Europe/Berlin";
     private static final String DEFAULT_BOUNDARY_TIME = "18:00";
     private static final double DEFAULT_INTERVAL_HOURS = 2.0;
+    /**
+     * Version 2 = the FIX-ECON interval/2.0h cadence default. Files without a
+     * {@code configVersion} field count as version 1 (the old daily-default era) and are
+     * backed up + regenerated on load.
+     */
+    private static final int CONFIG_VERSION = 2;
 
     private static volatile Config config = defaultConfig();
     private static volatile Path configDir =
@@ -85,13 +98,20 @@ public final class RealtimeConfig {
         reload();
     }
 
-    /** Re-reads {@code realtime.json}, creating it with defaults when missing. */
+    /**
+     * Re-reads {@code realtime.json}, creating it with defaults when missing. FIX-ECON
+     * (EVAL-SAT-S #1 pattern): a file whose {@code configVersion} is older than
+     * {@link #CONFIG_VERSION} is backed up to {@code realtime.json.bak-v<oldVersion>} and
+     * regenerated with the current defaults (interval/2.0h cadence), logged clearly.
+     */
     public static void reload() {
         Path file = configDir.resolve(FILE_NAME);
         try {
             Files.createDirectories(configDir);
             if (!Files.isRegularFile(file)) {
                 Files.writeString(file, GSON.toJson(defaultJson()), StandardCharsets.UTF_8);
+            } else {
+                migrateIfOutdated(file);
             }
             String json = Files.readString(file, StandardCharsets.UTF_8);
             config = parse(json);
@@ -136,16 +156,49 @@ public final class RealtimeConfig {
         return config;
     }
 
+    /**
+     * FIX-ECON version-gated migration: an on-disk file older than {@link #CONFIG_VERSION}
+     * (missing field = v1) is copied aside as {@code realtime.json.bak-v<oldVersion>} and
+     * replaced by the current defaults — nothing is preserved, the new cadence default
+     * replaces the old file wholesale (same pattern as {@code GoalConfig}).
+     */
+    private static void migrateIfOutdated(Path file) throws java.io.IOException {
+        int fileVersion = 1;
+        try {
+            JsonObject root = JsonParser.parseString(
+                    Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (root.has("configVersion")) {
+                fileVersion = root.get("configVersion").getAsInt();
+            }
+        } catch (Exception e) {
+            EclipseMod.LOGGER.warn("realtime.json: unreadable while checking configVersion; "
+                    + "treating as v1", e);
+        }
+        if (fileVersion >= CONFIG_VERSION) {
+            return;
+        }
+        Path backup = file.resolveSibling(FILE_NAME + ".bak-v" + fileVersion);
+        Files.copy(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.writeString(file, GSON.toJson(defaultJson()), StandardCharsets.UTF_8);
+        EclipseMod.LOGGER.warn("realtime.json was config version {} (< {}): backed the old file "
+                + "up to {} and regenerated defaults (cadenceMode=interval, intervalHours=2.0). "
+                + "Re-apply any custom tuning by editing the new file.",
+                fileVersion, CONFIG_VERSION, backup.getFileName());
+    }
+
     static Config defaultConfig() {
-        return new Config(ZoneId.of(DEFAULT_ZONE), LocalTime.of(18, 0), CadenceMode.DAILY,
+        return new Config(ZoneId.of(DEFAULT_ZONE), LocalTime.of(18, 0), CadenceMode.INTERVAL,
                 DEFAULT_INTERVAL_HOURS, true, 13, 5);
     }
 
     private static JsonObject defaultJson() {
         JsonObject root = new JsonObject();
+        root.addProperty("configVersion", CONFIG_VERSION);
         root.addProperty("zone", DEFAULT_ZONE);
         root.addProperty("boundaryTime", DEFAULT_BOUNDARY_TIME);
-        root.addProperty("cadenceMode", CadenceMode.DAILY.id());
+        // FIX-ECON default: a fresh phase every 2 real hours; daily stays available
+        // ("cadenceMode": "daily" or /dev phase daily).
+        root.addProperty("cadenceMode", CadenceMode.INTERVAL.id());
         root.addProperty("intervalHours", DEFAULT_INTERVAL_HOURS);
         root.addProperty("autoArmOnStartEvent", true);
         root.addProperty("catchUpMaxDays", 13);
@@ -174,7 +227,7 @@ public final class RealtimeConfig {
             boundaryTime = LocalTime.of(18, 0);
         }
         CadenceMode cadenceMode = root.has("cadenceMode")
-                ? CadenceMode.fromString(root.get("cadenceMode").getAsString()) : CadenceMode.DAILY;
+                ? CadenceMode.fromString(root.get("cadenceMode").getAsString()) : CadenceMode.INTERVAL;
         double intervalHours = DEFAULT_INTERVAL_HOURS;
         if (root.has("intervalHours")) {
             double parsed = root.get("intervalHours").getAsDouble();

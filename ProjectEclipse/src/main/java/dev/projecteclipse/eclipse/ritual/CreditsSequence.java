@@ -2,11 +2,14 @@ package dev.projecteclipse.eclipse.ritual;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,6 +34,7 @@ import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.network.gate.GatePayloads;
 import dev.projecteclipse.eclipse.network.gate.S2CPortalFxPayload;
+import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -43,6 +47,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.level.Level;
@@ -54,6 +59,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -69,8 +75,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>Timeline</b> ({@code t} = server ticks since {@link #begin}, IDEAS §B1 table):</p>
  * <ol>
- *   <li>t=0 — fade to black (10t rise), {@code victory_theme} stops, the epilogue beach is
- *       pre-stamped while nobody can see it (warm chunks).</li>
+ *   <li>t=0 — fade to black (10t rise), {@code victory_theme} stops, the epilogue beach
+ *       starts pre-stamping through {@code BudgetedBlockWriter} while nobody can see it
+ *       (warm chunks; the black/white fades give it ~260 ticks of cover, it needs about
+ *       a dozen).</li>
  *   <li>t=40 — behind black: everyone teleported to the ghost-ship stern, the <b>helm
  *       double</b> (first online living player; the egg-offerer in spirit) posed on the poop
  *       deck at the block-display ship's wheel; the 140t {@code credits_helm} push-in plays
@@ -191,6 +199,11 @@ public final class CreditsSequence implements SequenceReplayable {
     private static Run run;
     /** Tick scheduler for FX replays. Server thread only. */
     private static final List<Task> TASKS = new ArrayList<>();
+    /**
+     * UUIDs of wheel/flyer displays spawned THIS session; tagged joiners outside it are
+     * crash strays ({@code StructureFlightFx.onEntityJoin} doctrine, POL-S-05).
+     */
+    private static final Set<UUID> LIVE_DISPLAYS = Collections.synchronizedSet(new HashSet<>());
 
     private CreditsSequence() {}
 
@@ -220,6 +233,20 @@ public final class CreditsSequence implements SequenceReplayable {
     static void onServerStopped(ServerStoppedEvent event) {
         run = null;
         TASKS.clear();
+        // In-memory only: orphaned displays that made it to disk are swept by the
+        // join-time stray check on next boot (the StructureFlightFx pattern).
+        LIVE_DISPLAYS.clear();
+    }
+
+    /** StructureFlightFx sweep doctrine: a tagged display we did not spawn is a crash stray. */
+    @SubscribeEvent
+    static void onEntityJoin(EntityJoinLevelEvent event) {
+        Entity entity = event.getEntity();
+        if (!event.getLevel().isClientSide() && entity instanceof Display.BlockDisplay
+                && (entity.getTags().contains(WHEEL_TAG) || entity.getTags().contains(FLYER_TAG))
+                && !LIVE_DISPLAYS.contains(entity.getUUID())) {
+            entity.discard();
+        }
     }
 
     // ------------------------------------------------------------------ the run
@@ -239,6 +266,8 @@ public final class CreditsSequence implements SequenceReplayable {
         @Nullable
         Display.BlockDisplay wheel;
         final List<Display.BlockDisplay> flyers = new ArrayList<>();
+        /** Budgeted beach-stamp cursor (started at t=0; the epilogue beat blocks on it). */
+        final BeachStamp beachStamp = new BeachStamp();
         /** Auto-run nudge watchdog state (per online player). */
         final Map<UUID, Double> lastX = new HashMap<>();
         final Map<UUID, Integer> stalled = new HashMap<>();
@@ -289,13 +318,15 @@ public final class CreditsSequence implements SequenceReplayable {
         run.enter(Phase.HELM);
 
         // t=0: fade to black (held through the helm teleport at T_SHIP, released as the
-        // push-in starts), victory theme out, and stamp the beach while nobody can see.
+        // push-in starts), victory theme out, and start the budgeted beach stamp while
+        // nobody can see it — the black/helm/white cover gives ~T_EPILOGUE ticks, the
+        // stamp needs about a dozen (POL-S-02).
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendBegin(player, nonce);
             PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(10, 50, 25, 0xFF000000));
             MusicCues.stop(player);
         }
-        stampBeach(epilogue);
+        startBeachStamp(run, epilogue);
         EclipseMod.LOGGER.info("CreditsSequence: started for {} player(s) (nonce {})",
                 server.getPlayerList().getPlayerCount(), nonce);
         return true;
@@ -444,8 +475,16 @@ public final class CreditsSequence implements SequenceReplayable {
         ServerLevel epilogue = server.getLevel(EPILOGUE);
         if (epilogue == null) {
             EclipseMod.LOGGER.error("CreditsSequence: epilogue dimension vanished mid-run — sending everyone home");
+            discardWheel(current);
             current.ticks = T_FADE_OUT - 1;
             return;
+        }
+        if (!current.beachStamp.done) {
+            // The budgeted stamp had ~T_EPILOGUE ticks of cover; a saturated writer queue
+            // can still leave a remainder — finish it now, never drop runners into void.
+            EclipseMod.LOGGER.warn("CreditsSequence: beach stamp incomplete at arrival ({} of {} columns) "
+                    + "— finishing synchronously", current.beachStamp.cursor, BeachStamp.TOTAL_COLUMNS);
+            current.beachStamp.advance(epilogue, Integer.MAX_VALUE);
         }
         discardWheel(current);
         List<ServerPlayer> online = server.getPlayerList().getPlayers();
@@ -602,6 +641,10 @@ public final class CreditsSequence implements SequenceReplayable {
         CreditsData data = CreditsData.get(server);
         data.setCompleted(true);
         data.setPhase("");
+        // Belt-and-braces: normal beats already discarded these, but an aborted path
+        // (epilogue vanished, skip) must never leave a tagged display behind.
+        discardWheel(current);
+        discardFlyers(current);
         run = null;
         if (current.closeAllowed && server.isDedicatedServer()) {
             EclipseMod.LOGGER.info("CreditsSequence: the crossing is over — halting the server");
@@ -674,12 +717,14 @@ public final class CreditsSequence implements SequenceReplayable {
         wheel.setTransformationInterpolationDuration(0);
         wheel.setTransformation(new Transformation(translation, rotation,
                 new Vector3f(1.1F, 1.1F, 1.1F), new Quaternionf()));
+        LIVE_DISPLAYS.add(wheel.getUUID());
         limbo.addFreshEntity(wheel);
         current.wheel = wheel;
     }
 
     private static void discardWheel(Run current) {
         if (current.wheel != null) {
+            LIVE_DISPLAYS.remove(current.wheel.getUUID());
             current.wheel.discard();
             current.wheel = null;
         }
@@ -706,6 +751,7 @@ public final class CreditsSequence implements SequenceReplayable {
             flyer.setTransformationInterpolationDelay(0);
             flyer.setTransformationInterpolationDuration(0);
             flyer.setTransformation(flyerPose(i, 0.0F));
+            LIVE_DISPLAYS.add(flyer.getUUID());
             epilogue.addFreshEntity(flyer);
             current.flyers.add(flyer);
         }
@@ -756,6 +802,7 @@ public final class CreditsSequence implements SequenceReplayable {
 
     private static void discardFlyers(Run current) {
         for (Display.BlockDisplay flyer : current.flyers) {
+            LIVE_DISPLAYS.remove(flyer.getUUID());
             flyer.discard();
         }
         current.flyers.clear();
@@ -764,20 +811,57 @@ public final class CreditsSequence implements SequenceReplayable {
     // ------------------------------------------------------------------ beach stamp
 
     /**
-     * Stamps the epilogue beach set (idempotent — pure {@code setBlock} of the same shape):
-     * a sand strip with 2% {@code suspicious_sand} nothing-burgers, a water plane east
-     * toward the frozen sunrise, an outer barrier rim that contains the water, and barrier
-     * run-lane rails at z ±{@value #LANE_HALF_Z}. Flag {@code UPDATE_CLIENTS} only — no
-     * neighbor updates, nothing to react anyway in a void dimension.
+     * Queues the epilogue beach stamp through {@link BudgetedBlockWriter} (POL-S-02): the
+     * ~44.6k writes are spread over budgeted column slices behind the t=0 black and t=200
+     * white fades instead of one synchronous tick. The job drops itself if the run it
+     * belongs to ends first; {@link #beatEpilogue} finishes any remainder synchronously
+     * before the teleport (the runners must never land on a half-stamped set).
      */
-    private static void stampBeach(ServerLevel epilogue) {
+    private static void startBeachStamp(Run owner, ServerLevel epilogue) {
         long start = System.nanoTime();
-        BlockState sand = Blocks.SAND.defaultBlockState();
-        BlockState suspicious = Blocks.SUSPICIOUS_SAND.defaultBlockState();
-        BlockState water = Blocks.WATER.defaultBlockState();
-        BlockState barrier = Blocks.BARRIER.defaultBlockState();
-        for (int x = BEACH_WEST_X; x <= BEACH_EAST_X; x++) {
-            for (int z = -BEACH_HALF_Z; z <= BEACH_HALF_Z; z++) {
+        BudgetedBlockWriter.enqueue(epilogue, budget -> {
+            if (run != owner) {
+                return true; // the run ended/was replaced — drop the one-shot job
+            }
+            return owner.beachStamp.advance(epilogue, budget);
+        }, () -> EclipseMod.LOGGER.info("CreditsSequence: epilogue beach stamped in {} ms (budgeted)",
+                (System.nanoTime() - start) / 1_000_000L),
+                error -> EclipseMod.LOGGER.error(
+                        "CreditsSequence: budgeted beach stamp failed — the epilogue beat will retry "
+                                + "synchronously", error));
+    }
+
+    /**
+     * Resumable cursor of the epilogue beach set (idempotent — pure {@code setBlock} of
+     * the same shape): a sand strip with 2% {@code suspicious_sand} nothing-burgers, a
+     * water plane east toward the frozen sunrise, an outer barrier rim that contains the
+     * water, and barrier run-lane rails at z ±{@value #LANE_HALF_Z}. One logical operation
+     * is one (x, z) column (at most 8 writes), so a {@code BudgetedBlockWriter} slice
+     * stays around 4–5k writes. Column order matches the old synchronous loop (x outer,
+     * z inner) — the layout stays byte-identical and deterministic. Flag
+     * {@code UPDATE_CLIENTS} only — no neighbor updates, nothing to react anyway in a
+     * void dimension.
+     */
+    private static final class BeachStamp {
+        static final int SPAN_Z = 2 * BEACH_HALF_Z + 1;
+        static final int TOTAL_COLUMNS = (BEACH_EAST_X - BEACH_WEST_X + 1) * SPAN_Z;
+
+        int cursor;
+        boolean done;
+
+        /** Stamps up to {@code columnBudget} columns; returns {@code true} once complete. */
+        boolean advance(ServerLevel epilogue, int columnBudget) {
+            if (this.done) {
+                return true;
+            }
+            BlockState sand = Blocks.SAND.defaultBlockState();
+            BlockState suspicious = Blocks.SUSPICIOUS_SAND.defaultBlockState();
+            BlockState water = Blocks.WATER.defaultBlockState();
+            BlockState barrier = Blocks.BARRIER.defaultBlockState();
+            int end = (int) Math.min((long) this.cursor + columnBudget, TOTAL_COLUMNS);
+            for (; this.cursor < end; this.cursor++) {
+                int x = BEACH_WEST_X + this.cursor / SPAN_Z;
+                int z = -BEACH_HALF_Z + this.cursor % SPAN_Z;
                 // Base slab under everything (also the sea floor).
                 for (int y = BEACH_Y - 3; y <= BEACH_Y - 1; y++) {
                     set(epilogue, x, y, z, sand);
@@ -793,17 +877,16 @@ public final class CreditsSequence implements SequenceReplayable {
                         set(epilogue, x, y, z, barrier);
                     }
                 }
-            }
-            // Run-lane rails over the sand (invisible; keep the line together).
-            if (x <= BEACH_SAND_EAST_X) {
-                for (int y = BEACH_Y + 1; y <= BEACH_Y + 2; y++) {
-                    set(epilogue, x, y, LANE_HALF_Z, barrier);
-                    set(epilogue, x, y, -LANE_HALF_Z, barrier);
+                // Run-lane rails over the sand (invisible; keep the line together).
+                if (Math.abs(z) == LANE_HALF_Z && x <= BEACH_SAND_EAST_X) {
+                    for (int y = BEACH_Y + 1; y <= BEACH_Y + 2; y++) {
+                        set(epilogue, x, y, z, barrier);
+                    }
                 }
             }
+            this.done = this.cursor >= TOTAL_COLUMNS;
+            return this.done;
         }
-        EclipseMod.LOGGER.info("CreditsSequence: epilogue beach stamped in {} ms",
-                (System.nanoTime() - start) / 1_000_000L);
     }
 
     private static void set(ServerLevel level, int x, int y, int z, BlockState state) {

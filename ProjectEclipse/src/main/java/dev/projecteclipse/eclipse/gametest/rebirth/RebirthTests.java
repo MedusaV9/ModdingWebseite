@@ -61,21 +61,21 @@ public final class RebirthTests {
     public static void costLadderAndMultiplierMath(GameTestHelper helper) {
         RebirthConfig.Data defaults = RebirthConfig.parse(RebirthConfig.defaultsJson());
 
-        // Plan formula 8·1.6^n, rounded: 8, 13, 20, 33, 52, ...
+        // FIX-ECON formula 8·1.3^n, rounded: 8, 10, 14, 18, 23, ...
         helper.assertTrue(defaults.costForCount(0) == 8, "cost(0)=8");
-        helper.assertTrue(defaults.costForCount(1) == 13, "cost(1)=13 (12.8)");
-        helper.assertTrue(defaults.costForCount(2) == 20, "cost(2)=20 (20.48)");
-        helper.assertTrue(defaults.costForCount(3) == 33, "cost(3)=33 (32.768)");
-        helper.assertTrue(defaults.costForCount(4) == 52, "cost(4)=52 (52.43)");
+        helper.assertTrue(defaults.costForCount(1) == 10, "cost(1)=10 (10.4)");
+        helper.assertTrue(defaults.costForCount(2) == 14, "cost(2)=14 (13.52)");
+        helper.assertTrue(defaults.costForCount(3) == 18, "cost(3)=18 (17.576)");
+        helper.assertTrue(defaults.costForCount(4) == 23, "cost(4)=23 (22.85)");
         for (int n = 1; n < 10; n++) {
             helper.assertTrue(defaults.costForCount(n) > defaults.costForCount(n - 1),
                     "cost ladder strictly escalates at n=" + n);
         }
 
-        // Level-cost multiplier 1.15^n; EXACTLY 1.0 for count 0 (RebirthHooks fast path).
+        // FIX-ECON: no permanent level-cost penalty — the multiplier is 1.0 at every count.
         helper.assertTrue(defaults.levelCostMultiplier(0) == 1.0D, "mult(0)==1.0 exact");
-        helper.assertTrue(Math.abs(defaults.levelCostMultiplier(1) - 1.15D) < 1.0E-9D, "mult(1)=1.15");
-        helper.assertTrue(Math.abs(defaults.levelCostMultiplier(2) - 1.3225D) < 1.0E-9D, "mult(2)=1.3225");
+        helper.assertTrue(defaults.levelCostMultiplier(1) == 1.0D, "mult(1)==1.0 (no penalty)");
+        helper.assertTrue(defaults.levelCostMultiplier(5) == 1.0D, "mult(5)==1.0 (no penalty)");
 
         helper.assertTrue(defaults.maxRebirths() == 0, "uncapped by default");
         helper.assertTrue(defaults.lifeRewardPerRebirth() == 1, "+1 Leben per rebirth");
@@ -139,20 +139,21 @@ public final class RebirthTests {
                     && skill.bonusPoints == 0 && skill.lastLevelSeen == 0, "tree + points wiped");
             helper.assertTrue(LivesApi.get(player) == 6, "+1 Leben granted");
             helper.assertTrue(RebirthApi.count(player.server, player.getUUID()) == 1, "count 1");
-            helper.assertTrue(RebirthApi.costForNext(player.server, player.getUUID()) == 13,
-                    "next price escalated to 13");
+            helper.assertTrue(RebirthApi.costForNext(player.server, player.getUUID()) == 10,
+                    "next price escalated to 10");
             double multiplier = RebirthApi.levelCostMultiplier(player.server, player.getUUID());
-            helper.assertTrue(Math.abs(multiplier - 1.15D) < 1.0E-9D, "multiplier 1.15 after one rebirth");
+            helper.assertTrue(multiplier == 1.0D, "multiplier stays 1.0 after one rebirth (FIX-ECON)");
 
-            // Re-earn the same XP: the multiplied curve prices L3 higher, so the level lags.
+            // Re-earn the same XP: with the 1.0 multiplier the curve is unchanged, so the
+            // level comes straight back — the reset itself is the price, not a penalty.
             SkillsApi.setTotalXp(player, xpForL3);
             int level = SkillsApi.getLevel(player.server, player.getUUID());
             SkillCurve.Params scaled = RebirthHooks.curveFor(player.server, player.getUUID(), base);
-            helper.assertTrue(Math.abs(scaled.baseCost() - base.baseCost() * 1.15D) < 1.0E-6D,
-                    "curveFor scales baseCost");
+            helper.assertTrue(Math.abs(scaled.baseCost() - base.baseCost()) < 1.0E-6D,
+                    "curveFor leaves baseCost unscaled at mult 1.0");
             helper.assertTrue(level == SkillCurve.levelForXp(xpForL3, scaled),
                     "getLevel routes through the scaled curve");
-            helper.assertTrue(level < 3, "old L3 XP no longer reaches level 3, got " + level);
+            helper.assertTrue(level == 3, "old L3 XP reaches level 3 again, got " + level);
         } finally {
             resetPlayer(player);
         }

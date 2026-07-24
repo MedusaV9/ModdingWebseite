@@ -1,5 +1,7 @@
 package dev.projecteclipse.eclipse.gametest.realtime;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +14,7 @@ import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.devtools.PhaseScheduler;
 import dev.projecteclipse.eclipse.gametest.GameTestSupport;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.progression.realtime.RealtimeConfig;
 import dev.projecteclipse.eclipse.progression.realtime.RealtimeDayApi;
 import dev.projecteclipse.eclipse.progression.realtime.RealtimeDayService;
 import dev.projecteclipse.eclipse.progression.realtime.RealtimeState;
@@ -48,6 +51,30 @@ public final class RealtimeEngineTest {
     private static final long JUL04_1800 = 1_783_180_800_000L;
 
     private RealtimeEngineTest() {}
+
+    /**
+     * These tests assert the classic daily 18:00-Berlin chain, but the shipped default is
+     * now interval/2.0h (FIX-ECON) — each cadence-dependent test pins an explicit daily
+     * config dir and restores the real one in its finally block.
+     */
+    private static Path dailyConfigDir() {
+        try {
+            Path dir = Files.createTempDirectory("eclipse-daily-test");
+            Files.writeString(dir.resolve("realtime.json"), """
+                    { "configVersion": 2, "zone": "Europe/Berlin", "boundaryTime": "18:00",
+                      "cadenceMode": "daily", "intervalHours": 2.0,
+                      "autoArmOnStartEvent": false, "catchUpMaxDays": 13, "clientSyncSeconds": 5 }
+                    """);
+            return dir;
+        } catch (Exception e) {
+            throw new AssertionError("temp config dir", e);
+        }
+    }
+
+    private static void restoreRealConfig() {
+        RealtimeConfig.setConfigDirForTests(
+                net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("eclipse"));
+    }
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void pauseStateSurvivesNbtRoundTrip(GameTestHelper helper) {
@@ -119,6 +146,7 @@ public final class RealtimeEngineTest {
         AtomicLong clock = new AtomicLong(JUL01_1200);
         EclipseClock.setEpochMillisSupplier(clock::get);
         try {
+            RealtimeConfig.setConfigDirForTests(dailyConfigDir());
             GameTestSupport.setEventDay(server, 2);
             RealtimeDayApi.arm(server);
             RealtimeState state = RealtimeState.get(server);
@@ -151,6 +179,7 @@ public final class RealtimeEngineTest {
         } finally {
             RealtimeDayApi.disarm(server);
             EclipseClock.resetToSystem();
+            restoreRealConfig();
             GameTestSupport.setEventDay(server, Math.max(1, entryDay));
         }
         helper.succeed();
@@ -170,6 +199,7 @@ public final class RealtimeEngineTest {
             }
         });
         try {
+            RealtimeConfig.setConfigDirForTests(dailyConfigDir());
             GameTestSupport.setEventDay(server, 1);
             RealtimeDayApi.arm(server); // boundary Jul 1 18:00
             signals.clear();
@@ -195,6 +225,7 @@ public final class RealtimeEngineTest {
             active.set(false);
             RealtimeDayApi.disarm(server);
             EclipseClock.resetToSystem();
+            restoreRealConfig();
             GameTestSupport.setEventDay(server, Math.max(1, entryDay));
         }
         helper.succeed();
@@ -207,6 +238,7 @@ public final class RealtimeEngineTest {
         AtomicLong clock = new AtomicLong(JUL01_1200);
         EclipseClock.setEpochMillisSupplier(clock::get);
         try {
+            RealtimeConfig.setConfigDirForTests(dailyConfigDir());
             GameTestSupport.setEventDay(server, 2);
             RealtimeDayApi.arm(server); // boundary Jul 1 18:00
             long frozen = RealtimeDayApi.pause(server);
@@ -231,6 +263,7 @@ public final class RealtimeEngineTest {
         } finally {
             RealtimeDayApi.disarm(server);
             EclipseClock.resetToSystem();
+            restoreRealConfig();
             GameTestSupport.setEventDay(server, Math.max(1, entryDay));
         }
         helper.succeed();
@@ -283,6 +316,7 @@ public final class RealtimeEngineTest {
         AtomicLong clock = new AtomicLong(JUL01_1200);
         EclipseClock.setEpochMillisSupplier(clock::get);
         try {
+            RealtimeConfig.setConfigDirForTests(dailyConfigDir());
             GameTestSupport.setEventDay(server, 2);
             RealtimeDayApi.arm(server);
             RealtimeDayApi.setBoundary(server, "+1h", BERLIN); // manual 13:00 boundary
@@ -296,6 +330,7 @@ public final class RealtimeEngineTest {
         } finally {
             RealtimeDayApi.disarm(server);
             EclipseClock.resetToSystem();
+            restoreRealConfig();
             GameTestSupport.setEventDay(server, Math.max(1, entryDay));
         }
         helper.succeed();

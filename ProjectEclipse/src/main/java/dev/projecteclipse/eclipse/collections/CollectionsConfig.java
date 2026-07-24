@@ -52,8 +52,13 @@ public final class CollectionsConfig {
 
     private CollectionsConfig() {}
 
-    /** One reward tier; {@code unlockItems} use recipegate entry syntax (ids or {@code #tags}). */
-    public record Tier(long threshold, int xp, int points, List<String> unlockItems) {
+    /**
+     * One reward tier; {@code unlockItems} use recipegate entry syntax (ids or
+     * {@code #tags}). {@code shards} (FIX-ECON): PERSONAL umbral shards credited through
+     * {@code ShardEconomy.addShards} on tier-up — the chunky T4+ tiers pay 1–2 so
+     * collections fund the rebirth ladder (DOPA-S-03 gap).
+     */
+    public record Tier(long threshold, int xp, int points, int shards, List<String> unlockItems) {
         public Tier {
             unlockItems = List.copyOf(unlockItems);
         }
@@ -220,7 +225,8 @@ public final class CollectionsConfig {
                 previousThreshold = threshold;
                 int xp = tierObj.has("xp") ? Math.max(0, tierObj.get("xp").getAsInt()) : 0;
                 int points = tierObj.has("points") ? Math.max(0, tierObj.get("points").getAsInt()) : 0;
-                tiers.add(new Tier(threshold, xp, points, readStringList(tierObj, "unlockItems")));
+                int shards = tierObj.has("shards") ? Math.max(0, tierObj.get("shards").getAsInt()) : 0;
+                tiers.add(new Tier(threshold, xp, points, shards, readStringList(tierObj, "unlockItems")));
             }
         }
         if (tiers.isEmpty()) {
@@ -251,7 +257,9 @@ public final class CollectionsConfig {
         JsonObject root = new JsonObject();
         root.addProperty("_doc", "Collections: lanes mine|harvest|kill|shard_bank|pickup; ids take "
                 + "block/entity/item ids or #tags; thresholds strictly increasing; unlockItems use "
-                + "recipegate syntax (ids or #tags); dailyCreditCap 0 = uncapped.");
+                + "recipegate syntax (ids or #tags); dailyCreditCap 0 = uncapped; shards (FIX-ECON) = "
+                + "PERSONAL umbral shards credited on tier-up (chunky T4+ tiers pay 1-2 so "
+                + "collections fund the rebirth ladder).");
         root.addProperty("toastsEnabled", true);
         root.addProperty("xpSourceKey", "collection");
         JsonArray collections = new JsonArray();
@@ -262,57 +270,57 @@ public final class CollectionsConfig {
                 tier(50, 50, 0),
                 tier(250, 100, 0, "minecraft:stonecutter"),
                 tier(1000, 150, 0, "minecraft:dispenser", "minecraft:dropper"),
-                tier(2500, 250, 0, "minecraft:piston", "minecraft:sticky_piston"),
-                tier(6000, 400, 1),
-                tier(12500, 600, 1)));
+                tier(2500, 250, 0, 1, "minecraft:piston", "minecraft:sticky_piston"),
+                tier(6000, 400, 1, 2),
+                tier(12500, 600, 1, 2)));
         collections.add(collection("coal", "mining", "minecraft:coal", "mine",
                 ids("minecraft:coal_ore", "minecraft:deepslate_coal_ore"),
                 tier(25, 40, 0),
                 tier(100, 75, 0, "minecraft:campfire"),
                 tier(300, 125, 0, "minecraft:fire_charge"),
-                tier(750, 200, 0),
-                tier(1500, 300, 1),
-                tier(3000, 450, 0)));
+                tier(750, 200, 0, 1),
+                tier(1500, 300, 1, 2),
+                tier(3000, 450, 0, 2)));
         collections.add(collection("copper", "mining", "minecraft:copper_ingot", "mine",
                 ids("minecraft:copper_ore", "minecraft:deepslate_copper_ore"),
                 tier(20, 40, 0),
                 tier(80, 75, 0, "minecraft:lightning_rod"),
                 tier(250, 125, 0, "minecraft:brush"),
-                tier(600, 200, 0, "minecraft:spyglass"),
-                tier(1200, 300, 0),
-                tier(2400, 450, 1)));
+                tier(600, 200, 0, 1, "minecraft:spyglass"),
+                tier(1200, 300, 0, 2),
+                tier(2400, 450, 1, 2)));
         collections.add(collection("iron", "mining", "minecraft:iron_ingot", "mine",
                 ids("minecraft:iron_ore", "minecraft:deepslate_iron_ore"),
                 tier(15, 50, 0),
                 tier(75, 100, 0, "minecraft:shield"),
                 tier(250, 175, 0, "minecraft:crossbow", "minecraft:minecart", "minecraft:rail"),
                 // ⚠ deliberate union with the recipegate.json day-2 anvil lock (§1.1).
-                tier(600, 275, 0, "minecraft:anvil"),
-                tier(1250, 400, 1, "minecraft:blast_furnace"),
-                tier(2500, 600, 1)));
+                tier(600, 275, 0, 1, "minecraft:anvil"),
+                tier(1250, 400, 1, 2, "minecraft:blast_furnace"),
+                tier(2500, 600, 1, 2)));
         collections.add(collection("gold", "mining", "minecraft:gold_ingot", "mine",
                 ids("minecraft:gold_ore", "minecraft:deepslate_gold_ore", "minecraft:nether_gold_ore"),
                 tier(10, 50, 0),
                 tier(40, 100, 0, "minecraft:clock"),
                 tier(120, 175, 0, "minecraft:powered_rail"),
-                tier(300, 275, 0, "minecraft:golden_apple"),
-                tier(600, 400, 1),
-                tier(1200, 600, 0)));
+                tier(300, 275, 0, 1, "minecraft:golden_apple"),
+                tier(600, 400, 1, 2),
+                tier(1200, 600, 0, 2)));
         collections.add(collection("redstone", "mining", "minecraft:redstone", "mine",
                 ids("minecraft:redstone_ore", "minecraft:deepslate_redstone_ore"),
                 tier(10, 50, 0),
                 tier(40, 100, 0, "minecraft:repeater"),
                 tier(150, 175, 0, "minecraft:hopper", "minecraft:comparator"),
-                tier(400, 275, 0, "minecraft:observer"),
-                tier(800, 400, 1),
-                tier(1600, 600, 1)));
+                tier(400, 275, 0, 1, "minecraft:observer"),
+                tier(800, 400, 1, 2),
+                tier(1600, 600, 1, 2)));
         collections.add(collection("diamond", "mining", "minecraft:diamond", "mine",
                 ids("minecraft:diamond_ore", "minecraft:deepslate_diamond_ore"),
                 tier(5, 75, 0),
                 tier(20, 150, 0, "minecraft:jukebox"),
                 tier(60, 250, 0, "minecraft:smithing_table"),
-                tier(150, 400, 2),
-                tier(400, 600, 1)));
+                tier(150, 400, 2, 1),
+                tier(400, 600, 1, 2)));
 
         // --- Farming (3) — lane harvest, mature crops only; pumpkin rides mine (§1.2/§2.2) ---
         collections.add(collection("wheat", "farming", "minecraft:wheat", "harvest",
@@ -320,23 +328,23 @@ public final class CollectionsConfig {
                 tier(30, 40, 0),
                 tier(150, 100, 0, "minecraft:hay_block"),
                 tier(500, 175, 0, "minecraft:cake"),
-                tier(1250, 275, 0, "minecraft:target"),
-                tier(2500, 450, 1)));
+                tier(1250, 275, 0, 1, "minecraft:target"),
+                tier(2500, 450, 1, 2)));
         collections.add(collection("carrot", "farming", "minecraft:carrot", "harvest",
                 ids("minecraft:carrots"),
                 tier(25, 40, 0),
                 tier(125, 100, 0, "minecraft:carrot_on_a_stick"),
                 tier(400, 175, 0),
                 // Golden carrot is owned HERE, not by Gold (single-gate rule §1).
-                tier(1000, 275, 0, "minecraft:golden_carrot"),
-                tier(2000, 450, 1)));
+                tier(1000, 275, 0, 1, "minecraft:golden_carrot"),
+                tier(2000, 450, 1, 2)));
         collections.add(collection("pumpkin", "farming", "minecraft:pumpkin", "mine",
                 ids("minecraft:pumpkin"),
                 tier(10, 40, 0),
                 tier(50, 100, 0, "minecraft:jack_o_lantern"),
                 tier(150, 175, 0, "minecraft:pumpkin_pie"),
-                tier(400, 275, 0),
-                tier(800, 450, 1)));
+                tier(400, 275, 0, 1),
+                tier(800, 450, 1, 2)));
 
         // --- Wood (1) — lane mine on #minecraft:logs (§1.3) ---
         collections.add(collection("timber", "wood", "minecraft:oak_log", "mine",
@@ -344,9 +352,9 @@ public final class CollectionsConfig {
                 tier(40, 50, 0),
                 tier(200, 100, 0, "minecraft:barrel"),
                 tier(600, 175, 0, "minecraft:smoker"),
-                tier(1500, 275, 0, "minecraft:loom", "minecraft:cartography_table"),
-                tier(3000, 400, 1),
-                tier(6000, 600, 1)));
+                tier(1500, 275, 0, 1, "minecraft:loom", "minecraft:cartography_table"),
+                tier(3000, 400, 1, 2),
+                tier(6000, 600, 1, 2)));
 
         // --- Mobs (4) — lane kill: kills, not drops (Looting-neutral, §1.4) ---
         collections.add(collection("rotten_flesh", "mobs", "minecraft:rotten_flesh", "kill",
@@ -354,30 +362,30 @@ public final class CollectionsConfig {
                 tier(10, 40, 0),
                 tier(50, 100, 0),
                 tier(150, 200, 1),
-                tier(400, 325, 0),
-                tier(800, 500, 1)));
+                tier(400, 325, 0, 1),
+                tier(800, 500, 1, 2)));
         collections.add(collection("bone", "mobs", "minecraft:bone", "kill",
                 ids("minecraft:skeleton", "minecraft:stray", "minecraft:bogged"),
                 tier(10, 40, 0),
                 tier(50, 100, 0, "minecraft:bone_block"),
                 tier(150, 200, 0),
-                tier(400, 325, 1),
-                tier(800, 500, 1)));
+                tier(400, 325, 1, 1),
+                tier(800, 500, 1, 2)));
         collections.add(collection("string", "mobs", "minecraft:string", "kill",
                 ids("minecraft:spider", "minecraft:cave_spider"),
                 tier(8, 40, 0),
                 tier(40, 100, 0, "minecraft:fishing_rod"),
                 tier(120, 200, 0, "minecraft:scaffolding"),
-                tier(300, 325, 0, "minecraft:lead"),
-                tier(600, 500, 1)));
+                tier(300, 325, 0, 1, "minecraft:lead"),
+                tier(600, 500, 1, 2)));
         collections.add(collection("ender_pearl", "mobs", "minecraft:ender_pearl", "kill",
                 ids("minecraft:enderman"),
                 tier(3, 75, 0),
                 // ⚠ deliberate union with the day-12 "end" UnlockState arc (§1.4).
                 tier(10, 150, 0, "minecraft:ender_eye"),
                 tier(30, 250, 0, "minecraft:ender_chest"),
-                tier(75, 400, 0, "minecraft:end_crystal"),
-                tier(150, 600, 2)));
+                tier(75, 400, 0, 1, "minecraft:end_crystal"),
+                tier(150, 600, 2, 2)));
 
         // --- Event (2) — lanes shard_bank / pickup (§1.5) ---
         collections.add(collection("umbral_shards", "event", "eclipse:umbral_shard", "shard_bank",
@@ -385,15 +393,15 @@ public final class CollectionsConfig {
                 tier(5, 75, 0),
                 tier(25, 150, 0, "eclipse:eclipse_wand"),
                 tier(75, 250, 1),
-                tier(200, 400, 1),
-                tier(500, 600, 2)));
+                tier(200, 400, 1, 1),
+                tier(500, 600, 2, 2)));
         collections.add(collection("glitch_shards", "event", "eclipse:glitch_shard", "pickup",
                 ids("eclipse:glitch_shard"),
                 tier(3, 75, 0),
                 tier(15, 150, 0),
                 tier(50, 250, 1),
-                tier(125, 400, 1),
-                tier(300, 600, 2)));
+                tier(125, 400, 1, 1),
+                tier(300, 600, 2, 2)));
 
         root.add("collections", collections);
         return root;
@@ -425,11 +433,19 @@ public final class CollectionsConfig {
     }
 
     private static JsonObject tier(long threshold, int xp, int points, String... unlockItems) {
+        return tier(threshold, xp, points, 0, unlockItems);
+    }
+
+    /** FIX-ECON: chunky (T4+) tiers pay 1–2 PERSONAL umbral shards on top of XP/points. */
+    private static JsonObject tier(long threshold, int xp, int points, int shards, String... unlockItems) {
         JsonObject obj = new JsonObject();
         obj.addProperty("threshold", threshold);
         obj.addProperty("xp", xp);
         if (points > 0) {
             obj.addProperty("points", points);
+        }
+        if (shards > 0) {
+            obj.addProperty("shards", shards);
         }
         if (unlockItems.length > 0) {
             JsonArray unlocks = new JsonArray();

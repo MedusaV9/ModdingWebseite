@@ -3,10 +3,13 @@ package dev.projecteclipse.eclipse.gametest.skills;
 import com.google.gson.JsonObject;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.backrooms.BackroomsDimension;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
 import dev.projecteclipse.eclipse.gametest.GameTestSupport;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.minigames.MinigameDimensions;
+import dev.projecteclipse.eclipse.ritual.CreditsSequence;
 import dev.projecteclipse.eclipse.skills.SkillConfig;
 import dev.projecteclipse.eclipse.skills.SkillState;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
@@ -68,6 +71,10 @@ public final class XpGateTests {
                     "quest exempt");
             helper.assertTrue(SkillsApi.addXp(player, "quest", 100.0F) == 100, "quest pays pre-event");
             helper.assertTrue(SkillsApi.addXp(player, "admin", 50.0F) == 50, "admin pays pre-event");
+            // DOPA-S-04: award claims write the durable record before granting — the XP
+            // must never be eaten by a gate.
+            helper.assertTrue(XpGates.isExemptSource("award") && XpGates.allows(player, "award"),
+                    "award exempt");
             // Minigame payout keys are deliberately NOT exempt (v5: XP off in minigames).
             helper.assertTrue(!XpGates.isExemptSource("minigame"), "minigame source not exempt");
 
@@ -92,6 +99,15 @@ public final class XpGateTests {
         helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU1), "xbox tu1 gated");
         helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU12), "xbox tu12 gated");
         helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU14), "xbox tu14 gated");
+        // V5 era variants ride the same expanded BY_WORLD_ID map (incl. the late tu69 add).
+        helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU19), "xbox tu19 gated");
+        helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU31), "xbox tu31 gated");
+        helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU69), "xbox tu69 gated");
+        helper.assertTrue(XpGates.isEventDimension(XboxDimensions.XBOX_TU75), "xbox tu75 gated");
+        // EVAL-POL-S #1: the three independently added v5 event dimensions.
+        helper.assertTrue(XpGates.isEventDimension(BackroomsDimension.BACKROOMS), "backrooms gated");
+        helper.assertTrue(XpGates.isEventDimension(ArenaDimension.ARENA), "ferryman arena gated");
+        helper.assertTrue(XpGates.isEventDimension(CreditsSequence.EPILOGUE), "epilogue gated");
         // Progression dimensions stay open.
         helper.assertTrue(!XpGates.isEventDimension(Level.OVERWORLD), "overworld open");
         helper.assertTrue(!XpGates.isEventDimension(Level.NETHER), "nether open");

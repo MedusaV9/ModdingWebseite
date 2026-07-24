@@ -60,6 +60,12 @@ config="${mod_id}.client.mixins.json"
 [[mixins]]
 config="${mod_id}.worldgen.mixins.json"
 
+# Gameplay craft-gate mixins (V5-FIXGUARD / EVAL-DOPA-S #1): menu-level recipe-lock
+# enforcement (crafting result slot, recipe-book placement, Crafter automation).
+# Own package root (dev.projecteclipse.eclipse.gameplay.mixin) per the isolation rule.
+[[mixins]]
+config="${mod_id}.gameplay.mixins.json"
+
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
 [[accessTransformers]]

@@ -1037,12 +1037,12 @@ public class HeraldEntity extends Monster {
 
     /**
      * W4 IDEA-16 #3 loot ceremony: one participant is rewarded per keyframe — 3 umbral
-     * shards straight into their inventory (B14: ground drops despawned/burned and were
-     * never "received") with a HEART_BURST quasar and a rising amethyst chime — so the
-     * collapse doubles as the award sequence. Any remainder drains just before the
-     * shatter, so an oversized roster can never lose payouts to the body removal.
-     * Eligibility matches the old {@code dropCustomDeathLoot} dump (online + alive +
-     * same dimension).
+     * shards split 50/50 (FIX-ECON: 2 to the personal rebirth balance + 1 physical
+     * direct-to-inventory; B14: ground drops despawned/burned and were never "received")
+     * with a HEART_BURST quasar and a rising amethyst chime — so the collapse doubles as
+     * the award sequence. Any remainder drains just before the shatter, so an oversized
+     * roster can never lose payouts to the body removal. Offline/dead/absent participants
+     * keep their split queued in the {@code ShardLedger} (paid at next login).
      */
     private void tickPayoutCeremony(ServerLevel level) {
         if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
@@ -1058,19 +1058,21 @@ public class HeraldEntity extends Monster {
     }
 
     private void payoutParticipant(ServerLevel level, UUID id) {
-        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-        if (player == null || !player.isAlive() || player.level() != level) {
+        // FIX-ECON: 3 shards per participant, split 50/50 (personal rounds up) — 2 to the
+        // personal ShardEconomy balance (rebirth currency) + 1 physical direct-to-inventory
+        // (team-pool value). Offline/dead/absent participants are no longer skipped: their
+        // split waits in the persisted ShardLedger and pays at next login (EVAL-SAT-S #3).
+        ServerPlayer player = dev.projecteclipse.eclipse.economy.ShardPayouts.deliverOrQueue(
+                level, id, "boss:herald:" + this.getUUID(), 3);
+        if (player == null) {
             return;
         }
-        // Per spec: 3 umbral shards to EACH participant — direct-to-inventory + reward
-        // overlay (B14 §1: ground pops despawned in 5 min / burned in the arena).
-        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 3, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
-        EclipseMod.LOGGER.info("Herald ceremony payout: 3 umbral shards to {} (deathTime {})",
-                player.getScoreboardName(), this.deathTime);
+        EclipseMod.LOGGER.info("Herald ceremony payout: 3 umbral shards (2 personal / 1 physical) "
+                + "to {} (deathTime {})", player.getScoreboardName(), this.deathTime);
     }
 
     /** The end of the collapse: the sunken core bursts apart on the dais. */

@@ -240,6 +240,16 @@ public final class SidebarPanel {
             }
 
             int maxWidth = originX + PANEL_WIDTH - PADDING - localX;
+            // FIX-ECON quest shard chip: a small right-aligned "◆N" in accent color
+            // advertises the personal-shard payout; the row text yields the space.
+            if (row.rewardShards() > 0) {
+                String chip = "\u25c6" + row.rewardShards();
+                int chipWidth = font.width(chip);
+                int chipX = originX + PANEL_WIDTH - PADDING - chipWidth;
+                guiGraphics.drawString(font, chip, chipX, rowY,
+                        MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
+                maxWidth -= chipWidth + 3;
+            }
             int color = row.goalDone() == null
                     ? EclipseUiTheme.TEXT
                     : (row.goalDone() ? EclipseUiTheme.GOOD : EclipseUiTheme.DIM);
@@ -361,7 +371,9 @@ public final class SidebarPanel {
                 }
                 String text = EclipseLang.locale().startsWith("de") && !goal.textDe().isBlank()
                         ? goal.textDe() : goal.textEn();
-                rows.add(new Row(goal.id(), null, text, goal.done(), 10 + index));
+                // FIX-ECON: rewardShards rides along so the row can advertise its ◆N chip.
+                rows.add(new Row(goal.id(), null, text, goal.done(), 10 + index,
+                        Math.max(0, goal.rewardShards())));
                 index++;
             }
         }
@@ -466,5 +478,9 @@ public final class SidebarPanel {
     }
 
     private record Row(String id, ResourceLocation icon, String text, Boolean goalDone,
-            int phaseSalt) {}
+            int phaseSalt, int rewardShards) {
+        Row(String id, ResourceLocation icon, String text, Boolean goalDone, int phaseSalt) {
+            this(id, icon, text, goalDone, phaseSalt, 0);
+        }
+    }
 }

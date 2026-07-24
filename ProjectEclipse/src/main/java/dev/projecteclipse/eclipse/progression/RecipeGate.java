@@ -115,6 +115,27 @@ public final class RecipeGate {
         return entriesMatch(stack, providerEntriesFor(player));
     }
 
+    /** Whether the day config declares raw locked recipe ids at all (cheap pre-check). */
+    public static boolean hasRecipeIdLocks(MinecraftServer server) {
+        return !RecipeGateMath.lockedAt(DayScheduler.getDay(server), RecipeGateConfig.current())
+                .recipeIds().isEmpty();
+    }
+
+    /**
+     * Raw config {@code recipes}-entry lock check (day tiers, no tag/recipe-scan expansion).
+     * EVAL-DOPA-S #1: these ids were previously sent to EMI only; the menu-level guards in
+     * {@code CraftGateEnforcement} now enforce them server-side too.
+     */
+    public static boolean isRecipeIdLocked(MinecraftServer server, ResourceLocation recipeId) {
+        return RecipeGateMath.lockedAt(DayScheduler.getDay(server), RecipeGateConfig.current())
+                .recipeIds().contains(recipeId.toString());
+    }
+
+    /** Public seam for the menu-level guards: locked-craft feedback line + chime. */
+    public static void hintLocked(ServerPlayer player, ItemStack stack) {
+        hint(player, stack.copy());
+    }
+
     /** Flattened GLOBAL item ids (tags expanded) — day locks only, EMI/devtools surface. */
     public static List<String> lockedItemIds(MinecraftServer server) {
         return List.copyOf(resolveLocks(server).lockedItemIds());
@@ -163,6 +184,14 @@ public final class RecipeGate {
         }
     }
 
+    /**
+     * Post-take backstop (smithing, modded menus). EVAL-DOPA-S #1: the PRIMARY enforcement
+     * moved to the menu level — {@code CraftGateEnforcement} + the {@code gameplay.mixin}
+     * seams empty a gated crafting-grid result before any pickup/quick-move path can read
+     * it, block gated recipe-book placement, and gate the Crafter. This handler cannot be
+     * relied on alone: quick-move transfers before {@code onTake}, so the shrink only
+     * confiscates the plain-click path.
+     */
     @SubscribeEvent
     public static void onItemCrafted(PlayerEvent.ItemCraftedEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player) || !player.gameMode.isSurvival()) {

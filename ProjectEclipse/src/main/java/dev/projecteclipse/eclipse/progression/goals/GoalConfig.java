@@ -42,9 +42,20 @@ import net.neoforged.fml.loading.FMLPaths;
  * <p>Fallback safety: a day with no {@code goals.json} entry renders its legacy
  * {@code days.json} strings as {@code manual} mains ({@link #goalsForDay}), so a rewritten
  * or partial goals.json can never strand a day without goals.</p>
+ *
+ * <p>FIX-ECON (EVAL-SAT-S #1): {@code configVersion} gates a backup-and-regenerate
+ * migration. A {@code goals.json}/{@code quests.json} older than {@link #CONFIG_VERSION}
+ * (a missing field counts as v1) is copied to {@code <name>.bak-v<oldVersion>} and
+ * regenerated with the current defaults — nothing is preserved, the v5 ladder replaces
+ * the old authoring wholesale.</p>
  */
 public final class GoalConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    /**
+     * Version 2 = the v5 phase-aware/harder ladder (FIX-ECON migration cut-in). Bump when
+     * the shipped default authoring must replace live files on servers.
+     */
+    public static final int CONFIG_VERSION = 2;
     /** Legacy sidebar bitmask limit — mirrored from {@code ConfigEditor.MAX_GOALS_PER_DAY}. */
     public static final int MAX_MAINS_PER_DAY = 8;
     private static final int MAX_DAYS = 64;
@@ -156,6 +167,11 @@ public final class GoalConfig {
             EclipseMod.LOGGER.error("Failed to create config directory {}", dir, e);
         }
 
+        // FIX-ECON: version-gated migration BEFORE the load — outdated files are backed
+        // up and deleted so loadOrCreate regenerates the current defaults.
+        migrateIfOutdated(dir.resolve("goals.json"));
+        migrateIfOutdated(dir.resolve("quests.json"));
+
         JsonElement goalsJson = loadOrCreate(dir.resolve("goals.json"), GoalConfig::defaultGoalsJson);
         JsonElement questsJson = loadOrCreate(dir.resolve("quests.json"), GoalConfig::defaultQuestsJson);
 
@@ -192,6 +208,44 @@ public final class GoalConfig {
     private static void ensureLoaded() {
         if (!loaded) {
             reloadNow();
+        }
+    }
+
+    /**
+     * FIX-ECON (EVAL-SAT-S #1): an on-disk file older than {@link #CONFIG_VERSION}
+     * (missing {@code configVersion} = v1) is copied aside as
+     * {@code <name>.bak-v<oldVersion>} and deleted, so the following
+     * {@link #loadOrCreate} regenerates the current v5 defaults. Preserves nothing by
+     * design — the v5 ladder replaces the old authoring; the backup keeps it recoverable.
+     */
+    private static void migrateIfOutdated(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return;
+        }
+        int fileVersion = 1;
+        try {
+            JsonElement root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
+            if (root.isJsonObject() && root.getAsJsonObject().has("configVersion")) {
+                fileVersion = root.getAsJsonObject().get("configVersion").getAsInt();
+            }
+        } catch (IOException | RuntimeException e) {
+            EclipseMod.LOGGER.warn("{}: unreadable while checking configVersion; treating as v1 ({})",
+                    file.getFileName(), e.getMessage());
+        }
+        if (fileVersion >= CONFIG_VERSION) {
+            return;
+        }
+        Path backup = file.resolveSibling(file.getFileName() + ".bak-v" + fileVersion);
+        try {
+            Files.copy(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.delete(file);
+            EclipseMod.LOGGER.warn("{} was config version {} (< {}): backed the old file up to {} "
+                    + "and regenerating the v5 defaults (phase-aware, harder ladder, shard rewards). "
+                    + "Custom authoring must be re-applied to the new file.",
+                    file.getFileName(), fileVersion, CONFIG_VERSION, backup.getFileName());
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to back up outdated config {} — keeping the old file",
+                    file, e);
         }
     }
 
@@ -301,6 +355,8 @@ public final class GoalConfig {
             throw new IllegalArgumentException("too many day entries (" + daysIn.size() + " > " + MAX_DAYS + ")");
         }
         JsonObject out = new JsonObject();
+        // Editor saves are stamped current so the version migration never eats them.
+        out.addProperty("configVersion", CONFIG_VERSION);
         out.addProperty("_comment", goalsComment());
         JsonArray daysOut = new JsonArray(daysIn.size());
         Set<Integer> seenDays = new HashSet<>();
@@ -368,6 +424,7 @@ public final class GoalConfig {
             }
         }
         JsonObject out = new JsonObject();
+        out.addProperty("configVersion", CONFIG_VERSION);
         out.addProperty("_comment", questsComment());
         out.addProperty("personalPerDay", perDay);
         JsonArray questsOut = new JsonArray(questsIn.size());
@@ -479,6 +536,7 @@ public final class GoalConfig {
 
     static JsonElement defaultGoalsJson() {
         JsonObject root = new JsonObject();
+        root.addProperty("configVersion", CONFIG_VERSION);
         root.addProperty("_comment", goalsComment());
         JsonArray days = new JsonArray();
         addDay(days, 1,
@@ -759,6 +817,7 @@ public final class GoalConfig {
 
     static JsonElement defaultQuestsJson() {
         JsonObject root = new JsonObject();
+        root.addProperty("configVersion", CONFIG_VERSION);
         root.addProperty("_comment", questsComment());
         root.addProperty("personalPerDay", 3);
         JsonArray quests = new JsonArray();

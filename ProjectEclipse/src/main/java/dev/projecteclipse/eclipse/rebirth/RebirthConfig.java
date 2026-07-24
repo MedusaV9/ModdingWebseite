@@ -19,7 +19,7 @@ import net.neoforged.fml.loading.FMLPaths;
  * (registered by {@link RebirthService}).
  *
  * <p>Knobs: {@code baseCostShards}/{@code costGrowth} price the n-th rebirth at
- * {@code round(base * growth^n)} personal umbral shards (plan formula 8&middot;1.6^n);
+ * {@code round(base * growth^n)} personal umbral shards (FIX-ECON formula 8&middot;1.3^n);
  * {@code levelCostMultiplierPerRebirth} scales every skill-level cost by
  * {@code mult^rebirthCount} (through {@code skills.RebirthHooks.curveFor});
  * {@code maxRebirths} caps the ladder (0 = uncapped); {@code lifeRewardPerRebirth} is the
@@ -110,8 +110,8 @@ public final class RebirthConfig {
     public static Data parse(JsonObject root) {
         return new Data(
                 (int) asDouble(root, "baseCostShards", 8.0D),
-                asDouble(root, "costGrowth", 1.6D),
-                asDouble(root, "levelCostMultiplierPerRebirth", 1.15D),
+                asDouble(root, "costGrowth", 1.3D),
+                asDouble(root, "levelCostMultiplierPerRebirth", 1.0D),
                 (int) asDouble(root, "maxRebirths", 0.0D),
                 (int) asDouble(root, "lifeRewardPerRebirth", 1.0D),
                 asBool(root, "keepCollections", true),
@@ -132,11 +132,13 @@ public final class RebirthConfig {
 
         JsonObject doc = new JsonObject();
         doc.addProperty("cost", "The n-th rebirth (n starts at 0) costs round(baseCostShards * costGrowth^n) "
-                + "PERSONAL umbral shards (ShardEconomy balance, not the team pool): 8, 13, 20, 33, 52, ...");
+                + "PERSONAL umbral shards (ShardEconomy balance, not the team pool): 8, 10, 14, 18, 23, ... "
+                + "(FIX-ECON: 1.3 growth keeps rebirth the budget heart vs the 20-shard vitae).");
         doc.addProperty("effect", "+lifeRewardPerRebirth permanent Leben (capped by HeartsService.MAX_HEARTS - "
                 + "a rebirth AT the cap is refused, never burned), FULL skill+level reset (XP, levels, tree "
                 + "nodes, points), and every skill level afterwards costs "
-                + "levelCostMultiplierPerRebirth^rebirthCount times the base curve.");
+                + "levelCostMultiplierPerRebirth^rebirthCount times the base curve "
+                + "(FIX-ECON default 1.0 = no permanent level-cost penalty; the reset is the price).");
         doc.addProperty("maxRebirths", "0 = uncapped ladder; >0 refuses the (n+1)-th rebirth.");
         doc.addProperty("nonGoals", "keepCollections/keepWand document what the reset deliberately NEVER "
                 + "touches: collection-book progress and wand path/upgrades survive every rebirth. "
@@ -144,8 +146,8 @@ public final class RebirthConfig {
         root.add("_doc", doc);
 
         root.addProperty("baseCostShards", 8);
-        root.addProperty("costGrowth", 1.6D);
-        root.addProperty("levelCostMultiplierPerRebirth", 1.15D);
+        root.addProperty("costGrowth", 1.3D);
+        root.addProperty("levelCostMultiplierPerRebirth", 1.0D);
         root.addProperty("maxRebirths", 0);
         root.addProperty("lifeRewardPerRebirth", 1);
         root.addProperty("keepCollections", true);

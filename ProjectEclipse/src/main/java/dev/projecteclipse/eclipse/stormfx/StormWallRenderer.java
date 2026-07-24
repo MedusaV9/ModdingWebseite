@@ -454,9 +454,12 @@ public final class StormWallRenderer {
         float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
         float graySpan = 1.0F - grayFloor;
         for (int i = 0; i < columns; i++) {
-            double a0 = camAngle - halfArc + i * step + rot;
+            // Window start stays camera-centered (EVAL-POL-F #1): rot lives ONLY in the noise
+            // index, so the dressed slice never drifts off the camera bearing while the churn
+            // pattern still scrolls with the swirl.
+            double a0 = camAngle - halfArc + i * step;
             double a1 = a0 + step;
-            int noiseSeg = Mth.floor((float) (a0 / step)); // stable per column, moves with rot
+            int noiseSeg = Mth.floor((float) ((a0 + rot) / step)); // pattern moves with rot
             float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT);
             float churnHi = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT + 7331);
             float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg, noiseT);
@@ -532,7 +535,8 @@ public final class StormWallRenderer {
      * C8: one UV-sphere DOME shell of a sphere storm — latitude bands from the below-ground
      * skirt to the apex, camera-facing tangent arc when outside (same budget rule as the
      * cylinders). Distinctive reads vs the intro vortex: <b>banded rotation</b> (every
-     * latitude band leads the one below by +12% drift, so the wall shears visibly),
+     * latitude band's churn pattern leads the one below by +12% drift, so the wall shears
+     * visibly while the geometry window stays camera-centered — EVAL-POL-F #1),
      * <b>rim-lit edge</b> (additive alpha boosted toward the silhouette tangent), and
      * <b>green-violet churn bands</b> (additive hue hashes between fog-green and
      * eclipse-violet per band). {@code STATE_EXPLODE} expands the dome up to
@@ -573,10 +577,10 @@ public final class StormWallRenderer {
             float ringR1 = Mth.cos(lat1) * radius;
             float y0 = cy + Mth.sin(lat0) * radius * heightScale;
             float y1 = cy + Mth.sin(lat1) * radius * heightScale;
-            // Banded rotation: each band leads the one below — quads shear between bands.
+            // Banded rotation (EVAL-POL-F #1): geometry stays camera-centered — each band's
+            // rotation feeds the CHURN PATTERN index only, at a per-band lead (+12% per ring),
+            // so the wall still visibly shears while coverage and rim light hold the bearing.
             float rot0 = time * SPHERE_BAND_RAD_PER_TICK * (1.0F + ring * 0.12F)
-                    * ((shellIndex & 1) == 0 ? 1.0F : -0.8F);
-            float rot1 = time * SPHERE_BAND_RAD_PER_TICK * (1.0F + (ring + 1) * 0.12F)
                     * ((shellIndex & 1) == 0 ? 1.0F : -0.8F);
             // Base-heavy density: near-opaque at the rim, thinning toward the apex.
             float latFrac0 = (lat0 + SPHERE_SKIRT_RAD) / latSpan;
@@ -588,25 +592,26 @@ public final class StormWallRenderer {
             float bandB = Mth.lerp(hue, SPH_GREEN_B, SPH_VIOLET_B);
 
             for (int i = 0; i < columns; i++) {
-                double a0 = camAngle - halfArc + i * step + rot0;
+                double a0 = camAngle - halfArc + i * step;
                 double a1 = a0 + step;
-                int noiseSeg = Mth.floor((float) (a0 / step));
+                int noiseSeg = Mth.floor((float) ((a0 + rot0) / step)); // pattern scrolls per band
                 float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg + ring * 131, noiseT);
                 float gray0 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT);
                 float gray1 = grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg + ring * 131, noiseT + 977);
-                // Rim factor: silhouette columns (near the tangent arc edges) glow brightest.
+                // Rim factor: silhouette columns (near the tangent arc edges) glow brightest —
+                // a0 is camera-centered now, so the rim light sits on the actual silhouette.
                 float edge = halfArc <= 0.0D ? 0.0F
-                        : (float) Math.abs((a0 + step * 0.5D - rot0 - camAngle) / halfArc);
+                        : (float) Math.abs((a0 + step * 0.5D - camAngle) / halfArc);
                 float rim = inside ? 0.55F : 0.35F + 0.65F * smoothstep(0.55F, 0.95F, edge);
 
                 float x00 = cx + (float) Math.cos(a0) * ringR0;
                 float z00 = cz + (float) Math.sin(a0) * ringR0;
                 float x10 = cx + (float) Math.cos(a1) * ringR0;
                 float z10 = cz + (float) Math.sin(a1) * ringR0;
-                float x01 = cx + (float) Math.cos(a0 - rot0 + rot1) * ringR1;
-                float z01 = cz + (float) Math.sin(a0 - rot0 + rot1) * ringR1;
-                float x11 = cx + (float) Math.cos(a1 - rot0 + rot1) * ringR1;
-                float z11 = cz + (float) Math.sin(a1 - rot0 + rot1) * ringR1;
+                float x01 = cx + (float) Math.cos(a0) * ringR1;
+                float z01 = cz + (float) Math.sin(a0) * ringR1;
+                float x11 = cx + (float) Math.cos(a1) * ringR1;
+                float z11 = cz + (float) Math.sin(a1) * ringR1;
 
                 float r0;
                 float g0;

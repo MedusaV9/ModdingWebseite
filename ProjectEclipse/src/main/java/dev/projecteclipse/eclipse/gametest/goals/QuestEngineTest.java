@@ -61,12 +61,19 @@ public final class QuestEngineTest {
     private static Path doctoredDir(String goalsJson, String questsJson) {
         try {
             Path dir = Files.createTempDirectory("eclipse-quests-test");
-            Files.writeString(dir.resolve("goals.json"), goalsJson);
-            Files.writeString(dir.resolve("quests.json"), questsJson);
+            // configVersion pins the doctored files to the current version so the
+            // FIX-ECON backup-and-regenerate migration leaves them alone.
+            Files.writeString(dir.resolve("goals.json"), pinVersion(goalsJson));
+            Files.writeString(dir.resolve("quests.json"), pinVersion(questsJson));
             return dir;
         } catch (Exception e) {
             throw new AssertionError("temp config dir", e);
         }
+    }
+
+    private static String pinVersion(String json) {
+        return json.replaceFirst("\\{",
+                "{ \"configVersion\": " + GoalConfig.CONFIG_VERSION + ",");
     }
 
     private static final String NO_PERSONALS = "{ \"personalPerDay\": 0, \"quests\": [] }";
@@ -412,6 +419,7 @@ public final class QuestEngineTest {
                         "text": { "en": "First main", "de": "Erstes Hauptziel" } },
                       { "id": "t6_m1", "kind": "main", "trigger": { "type": "manual" }, "text": "Second main" },
                       { "id": "t6_s0", "kind": "side", "trigger": { "type": "manual", "count": 4 },
+                        "reward": { "shards": 2 },
                         "text": "A side" } ] } ] }
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 7);
@@ -440,9 +448,12 @@ public final class QuestEngineTest {
                     && first.progress() == first.target(), "entry 0 done, progress clamped to target");
             helper.assertTrue(first.textEn().equals("First main") && first.textDe().equals("Erstes Hauptziel"),
                     "payload carries en+de literals");
+            helper.assertTrue(first.rewardShards() == 0, "no reward = no shard chip");
             S2CQuestStatePayload.QuestEntry side = payload.entries().get(2);
             helper.assertTrue(side.id().equals("t6_s0") && side.kind() == 1 && !side.done()
                     && side.target() == 4, "side entry kind/target");
+            helper.assertTrue(side.rewardShards() == 2,
+                    "FIX-ECON: reward.shards rides the payload (◆N chip), got " + side.rewardShards());
             GameTestSupport.assertPayloadRoundTrip(S2CQuestStatePayload.STREAM_CODEC, payload);
 
             // Admin revoke round-trip (QuestApi reference path for P5-W4).

@@ -1293,11 +1293,13 @@ public class FogTyrantEntity extends EclipseGeoMonster {
 
     /**
      * W4 IDEA-16 #3 loot ceremony (Herald pattern): one participant is rewarded per
-     * keyframe — 3 umbral shards straight into their inventory (B14: ground drops were
-     * never "received") with a HEART_BURST quasar and a rising
-     * amethyst chime — so the storm-burst doubles as the award sequence. Any remainder
-     * drains at the thunderclap, so an oversized roster can never lose payouts to the
-     * body removal. Eligibility matches the old {@code dropCustomDeathLoot} dump.
+     * keyframe — the storm-scaled shard total split 50/50 (FIX-ECON: half to the personal
+     * rebirth balance, rest physical direct-to-inventory; B14: ground drops were never
+     * "received") with a HEART_BURST quasar and a rising amethyst chime — so the
+     * storm-burst doubles as the award sequence. Any remainder drains at the thunderclap,
+     * so an oversized roster can never lose payouts to the body removal. Offline/dead/
+     * absent participants keep their split queued in the {@code ShardLedger} (paid at
+     * next login).
      */
     private void tickPayoutCeremony(ServerLevel level) {
         if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
@@ -1313,19 +1315,22 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     }
 
     private void payoutParticipant(ServerLevel level, UUID id) {
-        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-        if (player == null || !player.isAlive() || player.level() != level) {
+        // FIX-ECON: storm-scaled total split 50/50 (personal rounds up) — half to the
+        // personal ShardEconomy balance (rebirth currency), rest physical direct-to-inventory
+        // (team-pool value). Offline/dead/absent participants are no longer skipped: their
+        // split waits in the persisted ShardLedger and pays at next login (EVAL-SAT-S #3).
+        int shards = shardPayout();
+        ServerPlayer player = dev.projecteclipse.eclipse.economy.ShardPayouts.deliverOrQueue(
+                level, id, "boss:fog_tyrant:" + this.getUUID(), shards);
+        if (player == null) {
             return;
         }
-        // B14 §1: direct-to-inventory + reward overlay instead of a despawnable ground pop.
-        int shards = shardPayout();
-        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, shards, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
-        EclipseMod.LOGGER.info("Fog Tyrant ceremony payout: {} umbral shards to {} (deathTime {})",
-                shards, player.getScoreboardName(), this.deathTime);
+        EclipseMod.LOGGER.info("Fog Tyrant ceremony payout: {} umbral shards (50/50 split) to {} "
+                + "(deathTime {})", shards, player.getScoreboardName(), this.deathTime);
     }
 
     /**

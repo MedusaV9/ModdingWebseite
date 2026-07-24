@@ -928,11 +928,12 @@ public class RiftWardenEntity extends EclipseGeoMonster {
 
     /**
      * W4 IDEA-16 #3 loot ceremony (Herald pattern): one participant is rewarded per
-     * keyframe — 2 umbral shards straight into their inventory (B14: ground drops were
-     * never "received") with a HEART_BURST quasar and a rising
-     * amethyst chime — so the implosion doubles as the award sequence. Any remainder
-     * drains just before the final implode, so an oversized roster can never lose payouts
-     * to the body removal. Eligibility matches the old {@code dropCustomDeathLoot} dump.
+     * keyframe — 2 umbral shards split 50/50 (FIX-ECON: 1 to the personal rebirth balance
+     * + 1 physical direct-to-inventory; B14: ground drops were never "received") with a
+     * HEART_BURST quasar and a rising amethyst chime — so the implosion doubles as the
+     * award sequence. Any remainder drains just before the final implode, so an oversized
+     * roster can never lose payouts to the body removal. Offline/dead/absent participants
+     * keep their split queued in the {@code ShardLedger} (paid at next login).
      */
     private void tickPayoutCeremony(ServerLevel level) {
         if (this.deathPayoutQueue.isEmpty() || this.deathTime < DEATH_PAYOUT_START_TICK) {
@@ -948,18 +949,21 @@ public class RiftWardenEntity extends EclipseGeoMonster {
     }
 
     private void payoutParticipant(ServerLevel level, UUID id) {
-        ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
-        if (player == null || !player.isAlive() || player.level() != level) {
+        // FIX-ECON: 2 shards per participant, split 50/50 (personal rounds up) — 1 to the
+        // personal ShardEconomy balance (rebirth currency) + 1 physical direct-to-inventory
+        // (team-pool value). Offline/dead/absent participants are no longer skipped: their
+        // split waits in the persisted ShardLedger and pays at next login (EVAL-SAT-S #3).
+        ServerPlayer player = dev.projecteclipse.eclipse.economy.ShardPayouts.deliverOrQueue(
+                level, id, "boss:rift_warden:" + this.getUUID(), 2);
+        if (player == null) {
             return;
         }
-        // B14 §1: direct-to-inventory + reward overlay instead of a despawnable ground pop.
-        dev.projecteclipse.eclipse.economy.ShardEconomy.deliverShardItems(player, 2, true);
         PacketDistributor.sendToPlayersNear(level, null, player.getX(), player.getY(), player.getZ(),
                 64.0D, new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST, player.position()));
         level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 1.2F, 0.8F + 0.15F * ++this.deathPayoutIndex);
-        EclipseMod.LOGGER.info("Rift Warden ceremony payout: 2 umbral shards to {} (deathTime {})",
-                player.getScoreboardName(), this.deathTime);
+        EclipseMod.LOGGER.info("Rift Warden ceremony payout: 2 umbral shards (1 personal / 1 physical) "
+                + "to {} (deathTime {})", player.getScoreboardName(), this.deathTime);
     }
 
     /** The end of the collapse: the rift swallows the body — shake + soul burst. */

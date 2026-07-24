@@ -138,7 +138,8 @@ final class AltarVeilSky {
             drawHaloBeams(celestialPose, seconds, strength, tier);
         }
         if (level >= 5) {
-            drawCoronaCrown(celestialPose, seconds, strength, surge, tier);
+            drawCoronaCrown(celestialPose, seconds, strength, surge,
+                    AltarCeremonyFx.skySurgeEchoTravel(partialTick), tier);
         }
     }
 
@@ -226,7 +227,7 @@ final class AltarVeilSky {
 
     /** Bright gold crown ring + twelve spikes + the periodic pulse-flash echo ring. */
     private static void drawCoronaCrown(Matrix4f pose, float seconds, float strength,
-            float surge, int tier) {
+            float surge, float surgeEchoTravel, int tier) {
         // Pulse envelope: a sine bump during the first PULSE_LENGTH of every period; the
         // ceremony surge forces a full flare so the L5 level-up ignites the crown at once.
         float phase = seconds % PULSE_PERIOD_SECONDS;
@@ -264,13 +265,28 @@ final class AltarVeilSky {
         }
         BufferUploader.drawWithShader(spikes.buildOrThrow());
 
-        // Pulse echo: an expanding violet ring racing outward during the flash window.
-        if (pulse > 0.01F && tier >= 2) {
-            float travel = phase < PULSE_LENGTH_SECONDS && surge < pulse
-                    ? phase / PULSE_LENGTH_SECONDS : surge;
-            float echoRadius = Mth.lerp(Mth.clamp(travel, 0.0F, 1.0F), crownRadius, 175.0F);
-            drawSoftRing(pose, echoRadius, 4.0F, 0.75F, 0.50F, 1.00F,
-                    0.30F * strength * pulse * (1.0F - travel * 0.7F));
+        // Pulse echo: an expanding violet ring racing outward, dissipating as it travels.
+        // EVAL-POL-F #6: the ceremony surge drives its own monotonic 0→1 clock (keyed off
+        // surge start), so the echo fires outward ONCE and fades at the rim — it no longer
+        // parks at max radius through the hold and retracts as skySurge decays.
+        if (tier >= 2) {
+            float travel;
+            float echoStrength;
+            if (surgeEchoTravel < 1.0F) {
+                travel = surgeEchoTravel;
+                echoStrength = 1.0F;
+            } else if (pulse > 0.01F && phase < PULSE_LENGTH_SECONDS && surge < pulse) {
+                travel = phase / PULSE_LENGTH_SECONDS;
+                echoStrength = pulse;
+            } else {
+                travel = 1.0F;
+                echoStrength = 0.0F;
+            }
+            if (echoStrength > 0.01F && travel < 1.0F) {
+                float echoRadius = Mth.lerp(travel, crownRadius, 175.0F);
+                drawSoftRing(pose, echoRadius, 4.0F, 0.75F, 0.50F, 1.00F,
+                        0.30F * strength * echoStrength * (1.0F - travel));
+            }
         }
     }
 

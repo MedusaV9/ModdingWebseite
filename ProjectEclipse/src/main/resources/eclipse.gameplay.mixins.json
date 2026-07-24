@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.projecteclipse.eclipse.gameplay.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CrafterBlockMixin",
+    "CraftingMenuMixin",
+    "RecipeBookMenuMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

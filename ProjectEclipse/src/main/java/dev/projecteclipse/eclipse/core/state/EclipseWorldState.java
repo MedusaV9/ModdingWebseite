@@ -75,6 +75,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_LAST_LOADED_STAGE_NETHER = "lastLoadedStageNether";
     private static final String TAG_NEXT_PHASE_EPOCH_MILLIS = "nextPhaseEpochMillis";
     private static final String TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS = "phaseScheduledAtEpochMillis";
+    private static final String TAG_PORTAL_AUTO_ROLL_DAY = "portalAutoRollDay";
 
     private int day = 1;
     private int altarLevel = 0;
@@ -109,6 +110,7 @@ public final class EclipseWorldState extends SavedData {
     private int lastLoadedStageNether = -1;
     private long nextPhaseEpochMillis = 0L;
     private long phaseScheduledAtEpochMillis = 0L;
+    private int portalAutoRollDay = 0;
     private final Map<UUID, List<GlobalPos>> gravePositions = new HashMap<>();
     private final Set<String> disabledCutscenes = new HashSet<>();
 
@@ -172,6 +174,8 @@ public final class EclipseWorldState extends SavedData {
         // W14 phase scheduler: 0 = no schedule (pre-W14 saves keep loading).
         state.nextPhaseEpochMillis = tag.getLong(TAG_NEXT_PHASE_EPOCH_MILLIS);
         state.phaseScheduledAtEpochMillis = tag.getLong(TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS);
+        // V5-FIXGUARD portal auto-roll: 0 = no day's slot consumed yet (older saves).
+        state.portalAutoRollDay = tag.getInt(TAG_PORTAL_AUTO_ROLL_DAY);
         for (Tag entry : tag.getList(TAG_GRAVE_POSITIONS, Tag.TAG_COMPOUND)) {
             CompoundTag grave = (CompoundTag) entry;
             if (!grave.hasUUID("owner")) {
@@ -241,6 +245,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_LAST_LOADED_STAGE_NETHER, this.lastLoadedStageNether);
         tag.putLong(TAG_NEXT_PHASE_EPOCH_MILLIS, this.nextPhaseEpochMillis);
         tag.putLong(TAG_PHASE_SCHEDULED_AT_EPOCH_MILLIS, this.phaseScheduledAtEpochMillis);
+        tag.putInt(TAG_PORTAL_AUTO_ROLL_DAY, this.portalAutoRollDay);
 
         ListTag graveList = new ListTag();
         for (Map.Entry<UUID, List<GlobalPos>> entry : this.gravePositions.entrySet()) {
@@ -636,6 +641,22 @@ public final class EclipseWorldState extends SavedData {
 
     public void setShardPool(int value) {
         this.shardPool = Math.max(0, value);
+        setDirty();
+    }
+
+    // --- portal auto-roll (V5-FIXGUARD / EVAL-SAT-F #3) ---
+
+    /**
+     * The last eclipse day whose portal auto-roll slot was CONSUMED (fired or attempted),
+     * {@code 0} = never. {@code eventdim.PortalAutoRoll} stamps it before opening so a
+     * restart after the slot fired never rolls a second portal the same day.
+     */
+    public int getPortalAutoRollDay() {
+        return this.portalAutoRollDay;
+    }
+
+    public void setPortalAutoRollDay(int day) {
+        this.portalAutoRollDay = day;
         setDirty();
     }
 

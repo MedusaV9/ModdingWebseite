@@ -39,12 +39,19 @@ public final class PhaseAwareDrawTests {
     private static Path doctoredDir(String goalsJson, String questsJson) {
         try {
             Path dir = Files.createTempDirectory("eclipse-phase-test");
-            Files.writeString(dir.resolve("goals.json"), goalsJson);
-            Files.writeString(dir.resolve("quests.json"), questsJson);
+            // configVersion pins the doctored files to the current version so the
+            // FIX-ECON backup-and-regenerate migration leaves them alone.
+            Files.writeString(dir.resolve("goals.json"), pinVersion(goalsJson));
+            Files.writeString(dir.resolve("quests.json"), pinVersion(questsJson));
             return dir;
         } catch (Exception e) {
             throw new AssertionError("temp config dir", e);
         }
+    }
+
+    private static String pinVersion(String json) {
+        return json.replaceFirst("\\{",
+                "{ \"configVersion\": " + GoalConfig.CONFIG_VERSION + ",");
     }
 
     private static void cleanup(MinecraftServer server, List<ServerPlayer> mocks) {

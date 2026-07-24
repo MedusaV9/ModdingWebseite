@@ -1,0 +1,22 @@
+{
+  "en": {
+    "advancement.eclipse.event.skill_7.description": "Reach skill level 7.",
+    "advancement.eclipse.event.skill_7.title": "Attuned",
+    "advancement.eclipse.event.skill_12.description": "Reach skill level 12.",
+    "advancement.eclipse.event.skill_12.title": "Eclipsed",
+    "advancement.eclipse.event.skill_18.description": "Reach skill level 18.",
+    "advancement.eclipse.event.skill_18.title": "Beyond the Veil",
+    "eclipse.shards.payout.late": "A boss payout from while you were away arrived: +%1$s Umbral Shard(s) banked to your balance.",
+    "eclipse.shards.payout.late_physical": "A boss payout from while you were away arrived: +%1$s Umbral Shard(s) banked to your balance and +%2$s delivered to your inventory."
+  },
+  "de": {
+    "advancement.eclipse.event.skill_7.description": "Erreicht Skill-Level 7.",
+    "advancement.eclipse.event.skill_7.title": "Eingestimmt",
+    "advancement.eclipse.event.skill_12.description": "Erreicht Skill-Level 12.",
+    "advancement.eclipse.event.skill_12.title": "Verfinstert",
+    "advancement.eclipse.event.skill_18.description": "Erreicht Skill-Level 18.",
+    "advancement.eclipse.event.skill_18.title": "Jenseits des Schleiers",
+    "eclipse.shards.payout.late": "Eine Boss-Auszahlung aus deiner Abwesenheit ist angekommen: +%1$s Umbrasplitter auf deinem Guthaben.",
+    "eclipse.shards.payout.late_physical": "Eine Boss-Auszahlung aus deiner Abwesenheit ist angekommen: +%1$s Umbrasplitter auf deinem Guthaben und +%2$s ins Inventar geliefert."
+  }
+}

@@ -66,14 +66,22 @@ void main() {
 
     // ---- horizon curvature + infinite-ocean warp (item 5) -------------------------------
     // Displace the SAMPLED scene UV up by k·(horizontal distance)² so the world bends up
-    // toward the zenith eclipse; sky rays saturate at FarDist, pulling the sea up over the
-    // old horizon clip. Warp fades near the screen border and is off under reducedFx.
+    // toward the zenith eclipse. EVAL-POL-F #3: the bend derives from the VIEW-RAY
+    // elevation (distance along the ray to the water plane, saturating toward FarDist at
+    // the horizon and for upward rays) — NOT from this pixel's own depth. Per-pixel depth
+    // made the warp jump across near-rigging-vs-sky edges (sky pixels warped ~8.5% while
+    // the mast didn't), smearing ghost copies of the rigging into the sky. A pure ray
+    // function is C0 across silhouettes, so nothing can tear. Warp still fades near the
+    // screen border and is off under reducedFx.
     vec2 suv = uv;
     if (CurveAmount > 0.001) {
-        float depth0 = texture(DiffuseDepthSampler, uv).r;
-        float sky0 = step(0.9999, depth0);
-        vec3 rel0 = reconstructRel(uv, depth0);
-        float hd = mix(min(length(rel0.xz), FarDist), FarDist, sky0);
+        vec3 rayDir = normalize(reconstructRel(uv, 1.0));
+        // Camera height above the sea plane, clamped sane while WaterlineY is unsynced.
+        float camH = clamp(CameraPos.y - (WaterlineY + 0.9), 2.0, 64.0);
+        // Horizontal distance where this ray meets the sea; horizon/up rays saturate.
+        float hd = rayDir.y < -0.001
+                ? min(camH * length(rayDir.xz) / -rayDir.y, FarDist)
+                : FarDist;
         float bend = hd / max(FarDist, 1.0);
         float warp = min(bend * bend, 1.0) * 0.085 * CurveAmount;
         // Bend UP, biased toward the eclipse azimuth while GodrayDir is on/near screen

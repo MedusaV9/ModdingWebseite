@@ -13,6 +13,7 @@ import dev.projecteclipse.eclipse.collections.CollectionTiers;
 import dev.projecteclipse.eclipse.collections.CollectionsConfig;
 import dev.projecteclipse.eclipse.collections.CollectionsService;
 import dev.projecteclipse.eclipse.collections.CollectionsState;
+import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.gametest.GameTestSupport;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionDeltaPayload;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionTierPayload;
@@ -141,17 +142,21 @@ public final class CollectionGameTests {
         CollectionsState.Entry entry = freshEntries(player);
         SkillState.Entry skills = SkillState.get(player.server).entry(player.getUUID());
         UUID uuid = player.getUUID();
+        ShardEconomy.setShards(player, 0);
 
         // Diamond T3 (60) carries the smithing table; locked while the tier is unreached.
         ItemStack smithingTable = new ItemStack(Items.SMITHING_TABLE);
         helper.assertTrue(RecipeGateApi.isItemLockedFor(player, smithingTable),
                 "smithing table collection-locked at tier 0");
 
-        // Jump to 150: crosses T1..T4 in one sweep → 75+150+250+400 XP and T4's +2 points.
+        // Jump to 150: crosses T1..T4 in one sweep → 75+150+250+400 XP, T4's +2 points
+        // and T4's +1 PERSONAL shard (FIX-ECON chunky-tier payout).
         helper.assertTrue(CollectionsService.setCount(player, "diamond", 150), "known id");
         helper.assertTrue(CollectionsService.grantedTierOf(player.server, uuid, "diamond") == 4,
                 "tiers I-IV granted");
         helper.assertTrue(skills.totalXp == 875L, "tier XP paid once, got " + skills.totalXp);
+        helper.assertTrue(ShardEconomy.getShards(player) == 1,
+                "T4 pays 1 personal shard, got " + ShardEconomy.getShards(player));
         int pointsAfterSweep = SkillsApi.getUnspentPoints(player.server, uuid);
         helper.assertTrue(!RecipeGateApi.isItemLockedFor(player, smithingTable),
                 "smithing table unlocked at tier III");
@@ -161,6 +166,7 @@ public final class CollectionGameTests {
         helper.assertTrue(skills.totalXp == 875L, "no double pay");
         helper.assertTrue(SkillsApi.getUnspentPoints(player.server, uuid) == pointsAfterSweep,
                 "no double points");
+        helper.assertTrue(ShardEconomy.getShards(player) == 1, "no double shards");
 
         // Monotonic: lowering the counter never revokes tiers, XP or unlocks.
         CollectionsService.setCount(player, "diamond", 10);
@@ -169,11 +175,13 @@ public final class CollectionGameTests {
         helper.assertTrue(!RecipeGateApi.isItemLockedFor(player, smithingTable),
                 "unlock kept after lowering");
 
-        // Only the NEWLY crossed tier pays when progress resumes (T5 at 400: +600 XP).
+        // Only the NEWLY crossed tier pays when progress resumes (T5 at 400: +600 XP, +2 shards).
         CollectionsService.setCount(player, "diamond", 400);
         helper.assertTrue(CollectionsService.grantedTierOf(player.server, uuid, "diamond") == 5,
                 "tier V granted");
         helper.assertTrue(skills.totalXp == 1475L, "only T5 added XP, got " + skills.totalXp);
+        helper.assertTrue(ShardEconomy.getShards(player) == 3,
+                "T5 adds 2 personal shards (3 total), got " + ShardEconomy.getShards(player));
         helper.assertTrue(entry.count("diamond") == 400L, "counter hard-set");
         helper.succeed();
     }
@@ -201,6 +209,11 @@ public final class CollectionGameTests {
         helper.assertTrue(iron != null && iron.tiers().size() == 6
                 && iron.tiers().get(3).unlockItems().contains("minecraft:anvil"),
                 "iron ladder pinned (anvil union tier IV)");
+        // FIX-ECON: chunky tiers pay personal shards — T1-T3 none, T4 = 1, T5/T6 = 2.
+        helper.assertTrue(iron.tiers().get(0).shards() == 0 && iron.tiers().get(2).shards() == 0,
+                "early iron tiers pay no shards");
+        helper.assertTrue(iron.tiers().get(3).shards() == 1 && iron.tiers().get(4).shards() == 2
+                && iron.tiers().get(5).shards() == 2, "iron T4/T5/T6 pay 1/2/2 personal shards");
 
         // Unknown lane → collection skipped; non-increasing thresholds → truncated (§6).
         JsonObject bad = JsonParser.parseString("""

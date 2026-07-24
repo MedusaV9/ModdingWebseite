@@ -43,8 +43,10 @@ public final class IntervalCadenceTests {
     private static Path intervalConfigDir(double hours) {
         try {
             Path dir = Files.createTempDirectory("eclipse-interval-test");
+            // configVersion pins the doctored file to the current version so the
+            // FIX-ECON backup-and-regenerate migration leaves it alone.
             Files.writeString(dir.resolve("realtime.json"), """
-                    { "zone": "Europe/Berlin", "boundaryTime": "18:00",
+                    { "configVersion": 2, "zone": "Europe/Berlin", "boundaryTime": "18:00",
                       "cadenceMode": "interval", "intervalHours": %s,
                       "autoArmOnStartEvent": false, "catchUpMaxDays": 13, "clientSyncSeconds": 5 }
                     """.formatted(hours));
@@ -129,6 +131,42 @@ public final class IntervalCadenceTests {
             EclipseClock.resetToSystem();
             restoreRealConfig();
             GameTestSupport.setEventDay(server, Math.max(1, entryDay));
+        }
+        helper.succeed();
+    }
+
+    /**
+     * FIX-ECON (EVAL-SAT-S #1 pattern): a pre-versioning realtime.json is backed up as
+     * {@code realtime.json.bak-v1} and regenerated with the interval/2.0h defaults.
+     */
+    @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
+    public static void outdatedRealtimeJsonMigratesToIntervalDefault(GameTestHelper helper) {
+        try {
+            Path dir = Files.createTempDirectory("eclipse-realtime-migrate-test");
+            Files.writeString(dir.resolve("realtime.json"), """
+                    { "zone": "Europe/Berlin", "boundaryTime": "18:00",
+                      "cadenceMode": "daily", "intervalHours": 6.0,
+                      "autoArmOnStartEvent": true, "catchUpMaxDays": 13, "clientSyncSeconds": 5 }
+                    """);
+            RealtimeConfig.setConfigDirForTests(dir); // triggers the migration + reload
+
+            helper.assertTrue(Files.isRegularFile(dir.resolve("realtime.json.bak-v1")),
+                    "old file backed up as realtime.json.bak-v1");
+            RealtimeConfig.Config config = RealtimeConfig.get();
+            helper.assertTrue(config.cadenceMode() == RealtimeConfig.CadenceMode.INTERVAL,
+                    "regenerated default cadence is interval");
+            helper.assertTrue(config.intervalHours() == 2.0,
+                    "regenerated intervalHours is 2.0, got " + config.intervalHours());
+
+            // The regenerated (current-version) file must survive a second reload untouched.
+            RealtimeConfig.reload();
+            helper.assertTrue(RealtimeConfig.get().cadenceMode() == RealtimeConfig.CadenceMode.INTERVAL
+                            && !Files.isRegularFile(dir.resolve("realtime.json.bak-v2")),
+                    "current-version file is never re-migrated");
+        } catch (Exception e) {
+            throw new AssertionError("migration test", e);
+        } finally {
+            restoreRealConfig();
         }
         helper.succeed();
     }

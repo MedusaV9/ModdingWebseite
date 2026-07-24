@@ -71,6 +71,8 @@ public final class AltarCeremonyFx {
     private static final int SURGE_IN_TICKS = 12;
     private static final int SURGE_HOLD_TICKS = 30;
     private static final int SURGE_OUT_TICKS = 60;
+    /** Surge echo-ring travel window (EVAL-POL-F #6): outward over the rise + hold beats. */
+    private static final int SURGE_ECHO_TRAVEL_TICKS = SURGE_IN_TICKS + SURGE_HOLD_TICKS;
 
     private record Step(int at, Runnable action) {}
 
@@ -185,6 +187,20 @@ public final class AltarCeremonyFx {
         }
         surgeStart = Integer.MIN_VALUE;
         return 0.0F;
+    }
+
+    /**
+     * Monotonic 0→1 surge-echo travel clock (EVAL-POL-F #6): runs once from surge start
+     * over {@value #SURGE_ECHO_TRAVEL_TICKS} ticks so {@code AltarVeilSky}'s echo ring fires
+     * OUTWARD and dissipates — it never parks at max radius or retracts with the decaying
+     * {@link #skySurge} envelope. Returns 1 (fully dissipated) while no surge is live.
+     */
+    public static float skySurgeEchoTravel(float partialTick) {
+        if (surgeStart == Integer.MIN_VALUE) {
+            return 1.0F;
+        }
+        float t = clock + partialTick - surgeStart;
+        return Mth.clamp(t / SURGE_ECHO_TRAVEL_TICKS, 0.0F, 1.0F);
     }
 
     // ------------------------------------------------------------------ tick loop

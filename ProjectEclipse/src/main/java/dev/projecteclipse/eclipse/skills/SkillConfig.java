@@ -203,7 +203,7 @@ public final class SkillConfig {
     public static Data parse(JsonObject root) {
         JsonObject curve = obj(root, "curve");
         SkillCurve.Params params = new SkillCurve.Params(
-                asDouble(curve, "baseCost", 150.0D),
+                asDouble(curve, "baseCost", 90.0D),
                 asDouble(curve, "exponent", 1.55D),
                 (int) asDouble(curve, "softcapLevel", 50.0D),
                 asDouble(curve, "softcapMult", 2.0D));
@@ -289,13 +289,14 @@ public final class SkillConfig {
         JsonObject doc = new JsonObject();
         doc.addProperty("curve", "xpForLevel(n)=C(n)-C(n-1), C(L)=baseCost*L^(exponent+1)/(exponent+1); "
                 + "past softcapLevel each level costs softcapMult x the raw increment. "
-                + "v5 retune (D2): baseCost 150 / exponent 1.55 price C(5)=3564, C(7)=8405, "
-                + "C(12)=33225 - early levels take ~x10 the old grind, a 5-minute level 7 is impossible.");
+                + "v5 retune (FIX-ECON): baseCost 90 / exponent 1.55 price C(3)=581, C(5)=2138, "
+                + "C(7)=5043, C(12)=19935 - the first hour yields ~3 levels, day 1 ends at ~L5, "
+                + "still ~x6 the old grind late.");
         doc.addProperty("gates", "D2 XP pacing: preEvent = action XP off until the start event completes; "
                 + "eventDimensions = action XP off in limbo/minigame/xbox dimensions. Reward sources "
-                + "(quest/altar/advancement/death/admin/collection/contract) always pay.");
+                + "(quest/altar/advancement/death/admin/collection/contract/award) always pay.");
         doc.addProperty("_migration_v5", "Existing skills.json files are never rewritten (loadOrCreate). "
-                + "For live saves: delete this file (or manually set curve.baseCost=150, curve.exponent=1.55, "
+                + "For live saves: delete this file (or manually set curve.baseCost=90, curve.exponent=1.55, "
                 + "xp.exploreChunk=2, xp.visitNewBiome=15, dailyCaps.explore=800 and add the gates block), "
                 + "then run /eclipse reload.");
         doc.addProperty("xp", "Earn values per action. Sub-tables (mine/kill/craft/smelt/advancements) "
@@ -316,7 +317,7 @@ public final class SkillConfig {
         root.add("_doc", doc);
 
         JsonObject curve = new JsonObject();
-        curve.addProperty("baseCost", 150);
+        curve.addProperty("baseCost", 90);
         curve.addProperty("exponent", 1.55D);
         curve.addProperty("softcapLevel", 50);
         curve.addProperty("softcapMult", 2.0D);
@@ -435,9 +436,9 @@ public final class SkillConfig {
         advancements.addProperty("eclipse:glitch_hunter", 125);
         advancements.addProperty("eclipse:deep_below", 100);
         advancements.addProperty("eclipse:team_survives_day", 200);
-        advancements.addProperty("eclipse:skill_10", 100);
-        advancements.addProperty("eclipse:skill_25", 150);
-        advancements.addProperty("eclipse:skill_40", 250);
+        advancements.addProperty("eclipse:skill_7", 100);
+        advancements.addProperty("eclipse:skill_12", 150);
+        advancements.addProperty("eclipse:skill_18", 250);
         advancements.addProperty("eclipse:ferryman_slain", 300);
         xp.add("advancements", advancements);
 

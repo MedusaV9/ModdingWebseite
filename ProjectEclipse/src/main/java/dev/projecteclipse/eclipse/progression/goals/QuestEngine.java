@@ -882,7 +882,9 @@ public final class QuestEngine {
                     spec.id(), spec.kind(),
                     spec.text().en(), spec.text().pick("de"),
                     QuestMath.clampToInt(Math.min(progress, target)), QuestMath.clampToInt(target),
-                    done, spec.scope().team()));
+                    done, spec.scope().team(),
+                    // FIX-ECON: advertise the shard payout on the quest row (◆N chip).
+                    spec.reward().shards()));
         }
         return new S2CQuestStatePayload(day.day, entries);
     }

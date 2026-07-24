@@ -100,10 +100,21 @@ public final class SidebarExpanded {
         }
         int height = 0;
         for (S2CQuestStatePayload.QuestEntry entry : goals) {
-            height += Math.max(1, font.split(Component.literal(goalText(entry)), textWidth).size())
+            height += Math.max(1,
+                    font.split(Component.literal(goalText(entry)),
+                            entryTextWidth(font, entry, textWidth)).size())
                     * font.lineHeight + BAR_HEIGHT + 5;
         }
         return height;
+    }
+
+    /** Rows with a shard chip (FIX-ECON) wrap their text short of the right-aligned "◆N". */
+    private static int entryTextWidth(Font font, S2CQuestStatePayload.QuestEntry entry,
+            int textWidth) {
+        if (entry.rewardShards() <= 0) {
+            return textWidth;
+        }
+        return Math.max(20, textWidth - font.width("\u25c6" + entry.rewardShards()) - 4);
     }
 
     /** Draws expanded content into an already-rendered/morphed panel rectangle. */
@@ -247,8 +258,17 @@ public final class SidebarExpanded {
                 guiGraphics.drawString(font, marker, left, y,
                         MarqueeText.faded(color, alpha));
             }
+            // FIX-ECON quest shard chip: a small right-aligned "◆N" in accent color on the
+            // first row line advertises the personal-shard payout before completion.
+            if (goal.rewardShards() > 0) {
+                String chip = "\u25c6" + goal.rewardShards();
+                guiGraphics.drawString(font, chip,
+                        left + 10 + goalTextWidth - font.width(chip), y,
+                        MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
+            }
             List<FormattedCharSequence> lines =
-                    font.split(Component.literal(goalText(goal)), goalTextWidth);
+                    font.split(Component.literal(goalText(goal)),
+                            entryTextWidth(font, goal, goalTextWidth));
             for (FormattedCharSequence line : lines) {
                 guiGraphics.drawString(font, line, left + 10, y,
                         MarqueeText.faded(color, alpha));

@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -18,6 +19,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -321,8 +323,19 @@ public final class AnalyticsService {
      * thrower, player-tossed stacks do — the raw persisted UUID is read via access
      * transformer because {@code getOwner()} resolves the entity and returns {@code null}
      * for offline throwers, which would over-credit), and only for ids on the collections
-     * pickup allowlist so the lane stays bounded. Hopper/container laundering never enters
-     * this path — accepted under-crediting, consistent with the analytics contract.
+     * pickup allowlist so the lane stays bounded.
+     *
+     * <p>EVAL-DOPA-S #2: the thrower check alone did not make an item count ONCE — a
+     * dropper/dispenser eject or a broken container respawns the stack as a fresh
+     * thrower-null {@code ItemEntity}, re-crediting every round trip. A credited pickup now
+     * stamps a persistent {@code CUSTOM_DATA} mark ({@value #PICKUP_CREDITED_TAG}) on the
+     * item, and marked stacks never credit again: container/dropper laundering is dead
+     * while first-pickup credit is unchanged. The mark is applied post-merge to EVERY
+     * same-item stack in the collector's inventory so pickup merging keeps working
+     * (marked and unmarked copies have different components and would not stack);
+     * un-credited ground remainders stay unmarked and credit normally on their own first
+     * pickup. Residual accepted under-credit: allowlisted items routed straight into a
+     * backpack-style pickup upgrade bypass the inventory stamp.</p>
      */
     public static void handleItemCollected(ServerPlayer player, ItemEntity itemEntity,
             ItemStack original, ItemStack remaining) {
@@ -337,11 +350,43 @@ public final class AnalyticsService {
         if (!CollectionsConfig.pickupAllowlist().contains(itemId)) {
             return;
         }
+        if (isPickupCredited(original)) {
+            return; // container/dropper round trip of an already-credited stack
+        }
         MinecraftServer server = player.server;
         AnalyticsState.get(server).addDynamic(currentDay(server), player.getUUID(),
                 AnalyticsKeys.PREFIX_PICKUP + itemId, collected,
                 AnalyticsConfig.get().maxDynamicKeysPerPlayerPerDay());
+        markPickupCredited(player, original.getItem());
         EclipseSignals.fireItemCollected(player, original.copyWithCount(collected));
+    }
+
+    /** Persistent per-stack "already credited" mark for the D1 pickup lane (see above). */
+    static final String PICKUP_CREDITED_TAG = "eclipse_pickup_credited";
+
+    /** Whether the stack carries the {@value #PICKUP_CREDITED_TAG} provenance mark. */
+    static boolean isPickupCredited(ItemStack stack) {
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        return data != null && data.copyTag().getBoolean(PICKUP_CREDITED_TAG);
+    }
+
+    /**
+     * Stamps every unmarked same-item stack in the collector's inventory (the picked-up
+     * items already merged there, possibly into pre-existing stacks). Over-marking identical
+     * inventory copies is deliberate: it keeps the inventory component-homogeneous so
+     * stacking still works, and inventory items only lose LAUNDER credit — legitimate credit
+     * happens exclusively on an item's first ground pickup, which already occurred or never
+     * will (fail-safe under-crediting, the analytics contract).
+     */
+    static void markPickupCredited(ServerPlayer player, net.minecraft.world.item.Item item) {
+        var inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (!stack.isEmpty() && stack.is(item) && !isPickupCredited(stack)) {
+                CustomData.update(DataComponents.CUSTOM_DATA, stack,
+                        tag -> tag.putBoolean(PICKUP_CREDITED_TAG, true));
+            }
+        }
     }
 
     /** Shared trade-lane consumer; creative/spectator/fake-player filtering is analytics-only. */

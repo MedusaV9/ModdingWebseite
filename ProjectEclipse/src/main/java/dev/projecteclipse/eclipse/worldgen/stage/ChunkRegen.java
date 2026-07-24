@@ -54,8 +54,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * honours) or a {@link StructurePendingRegistry} pending site — are refused unless the
  * caller passes {@code force} (the rewrite cannot re-assert unknown structure blocks, and
  * the replay would chew into the pieces). One job may run per disc profile; jobs are
- * refused while a ring-growth sweep runs in the same dimension. One chunk finishes per
- * server tick, so even a radius-2 job (25 chunks) never stalls the tick.</p>
+ * refused while a ring-growth sweep runs in the same dimension. One chunk is in flight at
+ * a time, its 256-column rewrite spread across ticks under the
+ * {@value #WRITE_BUDGET_PER_TICK}-write budget (POL-S-04 — a deep-lens chunk alone is
+ * ~57k section writes); finalization (replay, heightmaps, rescue, relight) runs at the
+ * chunk boundary, so even a radius-2 job (25 chunks) never stalls the tick.</p>
  *
  * <p>Determinism: every rewrite is a pure function of frozen per-save data (map seed +
  * {@link DiscMapData} snapshot taken at job start) at the committed stage, byte-identical
@@ -71,6 +74,12 @@ public final class ChunkRegen {
     private static final int TEMPLE_PROTECTION_EXTENT = 24;
     /** Maximum chunk radius (0 = 1 chunk, 2 = 5x5 = 25 chunks). */
     public static final int MAX_RADIUS = 2;
+    /**
+     * Per-tick cap on direct section writes (the review's no-10k-single-tick-writes
+     * criterion): a deep-lens column is ~14 sections × 16 writes, so one tick rewrites
+     * at most ~36 such columns before parking the resume cursor until the next tick.
+     */
+    private static final int WRITE_BUDGET_PER_TICK = 8192;
 
     /**
      * Same four heightmap types vanilla's FEATURES task (and the sweep's finish pass)
@@ -174,7 +183,7 @@ public final class ChunkRegen {
             if (job.level.getServer() != event.getServer()) {
                 continue;
             }
-            job.tickOneChunk();
+            job.tickBudgeted();
             if (job.isDone()) {
                 JOBS.remove(job.profile, job);
                 job.complete();
@@ -251,6 +260,23 @@ public final class ChunkRegen {
 
     // --- the job ---
 
+    /** Resume state of the one chunk currently being rewritten across ticks. */
+    private static final class ChunkInProgress {
+        final ChunkPos pos;
+        final LevelChunk chunk;
+        /** Columns rewritten so far (indexed {@code (lx << 4) | lz}) — orphan-BE cleanup. */
+        final boolean[] rewritten = new boolean[16 * 16];
+        /** Next column index in 0..255; the per-tick budget parks it mid-chunk. */
+        int columnCursor;
+        /** Inside columns rewritten in this chunk (0 → skip the pipeline replay). */
+        long columns;
+
+        ChunkInProgress(ChunkPos pos, LevelChunk chunk) {
+            this.pos = pos;
+            this.chunk = chunk;
+        }
+    }
+
     private static final class Job {
         final ServerLevel level;
         final DiscProfile profile;
@@ -266,6 +292,9 @@ public final class ChunkRegen {
 
         int chunksDone;
         long columnsWritten;
+        /** The one chunk currently being rewritten across ticks, or {@code null}. */
+        @Nullable
+        private ChunkInProgress current;
 
         Job(ServerLevel level, DiscProfile profile, int committedStage, DiscMapData map,
                 List<ChunkPos> targets, int skippedProtected, @Nullable Listener listener) {
@@ -280,23 +309,45 @@ public final class ChunkRegen {
         }
 
         boolean isDone() {
-            return this.queue.isEmpty();
+            return this.queue.isEmpty() && this.current == null;
         }
 
-        /** Regenerates ONE chunk fully (write + replay + relight queue) per server tick. */
-        void tickOneChunk() {
-            ChunkPos pos = this.queue.poll();
-            if (pos == null) {
-                return;
+        /**
+         * Advances the job under the {@value #WRITE_BUDGET_PER_TICK}-write budget: columns
+         * of the in-flight chunk are rewritten until the budget is spent (the resume
+         * cursor parks until the next tick) or its 256-column cursor completes —
+         * finalization then runs at the chunk boundary and the next queued chunk starts
+         * on a later tick (one chunk in flight at a time, POL-S-04).
+         */
+        void tickBudgeted() {
+            if (this.current == null) {
+                ChunkPos next = this.queue.poll();
+                if (next == null) {
+                    return;
+                }
+                // The WRITER_TICKET's 200-tick TTL comfortably outlasts the ~7 ticks a
+                // deep-lens chunk needs under the budget.
+                this.current = new ChunkInProgress(next,
+                        BudgetedBlockWriter.loadWithTicket(this.level, next.x, next.z));
             }
+            ChunkInProgress chunk = this.current;
             try {
-                this.columnsWritten += regenChunk(pos);
+                int writes = 0;
+                while (chunk.columnCursor < 16 * 16 && writes < WRITE_BUDGET_PER_TICK) {
+                    writes += rewriteColumn(chunk, chunk.columnCursor++);
+                }
+                if (chunk.columnCursor < 16 * 16) {
+                    return; // budget spent — resume this chunk's cursor next tick
+                }
+                finishChunk(chunk);
             } catch (Exception e) {
-                EclipseMod.LOGGER.error("Chunk regen failed for {} chunk {}", this.profile.name(), pos, e);
+                EclipseMod.LOGGER.error("Chunk regen failed for {} chunk {}", this.profile.name(),
+                        chunk.pos, e);
             }
+            this.current = null;
             this.chunksDone++;
             if (this.listener != null) {
-                this.listener.onChunkDone(this.chunksDone, this.totalChunks, pos);
+                this.listener.onChunkDone(this.chunksDone, this.totalChunks, chunk.pos);
             }
         }
 
@@ -313,56 +364,61 @@ public final class ChunkRegen {
         }
 
         /**
-         * The full per-chunk sequence: base rewrite of every inside column (the
-         * {@code RingGrowthService.writeColumn} pattern — full 16-run section writes, no
-         * neighbor reactions, scheduled fluid ticks), orphaned-block-entity cleanup,
-         * pipeline replay ({@link DiscGenPipeline#runOnLiveChunk} with the 3&times;3
-         * neighbourhood ticket-loaded first), heightmap re-prime, entombment rescue and
-         * relight/resend. Returns the number of columns rewritten.
+         * One step of the base rewrite: the inside check plus {@link #writeColumn} for the
+         * column at {@code columnIndex} ({@code (lx << 4) | lz} — same order the old
+         * whole-chunk loop used). Returns the number of section writes spent (0 for void
+         * columns past the rim, which are never bulldozed).
          */
-        long regenChunk(ChunkPos pos) {
-            LevelChunk chunk = BudgetedBlockWriter.loadWithTicket(this.level, pos.x, pos.z);
-            boolean[] rewritten = new boolean[16 * 16];
-            long columns = 0;
-            for (int lx = 0; lx < 16; lx++) {
-                for (int lz = 0; lz < 16; lz++) {
-                    int x = pos.getMinBlockX() + lx;
-                    int z = pos.getMinBlockZ() + lz;
-                    DiscColumn column = DiscTerrainFunction.column(
-                            this.profile, x, z, this.committedStage, this.map);
-                    if (!column.inside()) {
-                        continue; // void column — never bulldoze builds floating past the rim
-                    }
-                    rewritten[(lx << 4) | lz] = true;
-                    columns++;
-                    writeColumn(chunk, column, lx, lz);
-                }
+        private int rewriteColumn(ChunkInProgress chunk, int columnIndex) {
+            int lx = columnIndex >> 4;
+            int lz = columnIndex & 15;
+            int x = chunk.pos.getMinBlockX() + lx;
+            int z = chunk.pos.getMinBlockZ() + lz;
+            DiscColumn column = DiscTerrainFunction.column(
+                    this.profile, x, z, this.committedStage, this.map);
+            if (!column.inside()) {
+                return 0; // void column — never bulldoze builds floating past the rim
             }
+            chunk.rewritten[columnIndex] = true;
+            chunk.columns++;
+            this.columnsWritten++;
+            return writeColumn(chunk.chunk, column, lx, lz);
+        }
+
+        /**
+         * Chunk finalization once the rewrite cursor completes: orphaned-block-entity
+         * cleanup, pipeline replay ({@link DiscGenPipeline#runOnLiveChunk} with the
+         * 3&times;3 neighbourhood ticket-loaded first), heightmap re-prime, entombment
+         * rescue and relight/resend — same order the old one-shot {@code regenChunk} ran.
+         */
+        private void finishChunk(ChunkInProgress inProgress) {
+            LevelChunk chunk = inProgress.chunk;
             // Rewritten columns' old block entities are orphans now; replayed features
             // re-create their own (e.g. monster-room spawners) after this cleanup.
             for (BlockPos bePos : List.copyOf(chunk.getBlockEntitiesPos())) {
-                if (rewritten[((bePos.getX() & 15) << 4) | (bePos.getZ() & 15)]) {
+                if (inProgress.rewritten[((bePos.getX() & 15) << 4) | (bePos.getZ() & 15)]) {
                     chunk.removeBlockEntity(bePos);
                 }
             }
             chunk.setUnsaved(true);
-            if (columns > 0) {
-                BudgetedBlockWriter.ensureNeighborsLoaded(this.level, pos);
+            if (inProgress.columns > 0) {
+                BudgetedBlockWriter.ensureNeighborsLoaded(this.level, inProgress.pos);
                 DiscGenPipeline.runOnLiveChunk(this.level, chunk);
             }
             Heightmap.primeHeightmaps(chunk, HEIGHTMAPS_TO_PRIME);
             rescueEntombedPlayers(chunk);
             BudgetedBlockWriter.relightAndResend(this.level, chunk);
-            return columns;
         }
 
         /**
          * One column straight into the chunk sections (the sweep's write pattern): every
          * section the column reaches or that has content is written over its full 16-block
          * run, so old terrain/decoration outside the new solid span clears to air; written
-         * fluids get a scheduled tick (section writes fire no updates).
+         * fluids get a scheduled tick (section writes fire no updates). Returns the number
+         * of section writes performed (the per-tick budget currency).
          */
-        private void writeColumn(LevelChunk chunk, DiscColumn column, int lx, int lz) {
+        private int writeColumn(LevelChunk chunk, DiscColumn column, int lx, int lz) {
+            int writes = 0;
             for (int index = 0; index < chunk.getSectionsCount(); index++) {
                 LevelChunkSection section = chunk.getSection(index);
                 int sectionMinY = SectionPos.sectionToBlockCoord(
@@ -375,6 +431,7 @@ public final class ChunkRegen {
                 for (int dy = 0; dy < 16; dy++) {
                     BlockState state = DiscTerrainFunction.stateInColumn(column, sectionMinY + dy);
                     section.setBlockState(lx, dy, lz, state, false);
+                    writes++;
                     FluidState fluid = state.getFluidState();
                     if (!fluid.isEmpty()) {
                         this.level.scheduleTick(new BlockPos(column.x(), sectionMinY + dy, column.z()),
@@ -382,6 +439,7 @@ public final class ChunkRegen {
                     }
                 }
             }
+            return writes;
         }
 
         /**

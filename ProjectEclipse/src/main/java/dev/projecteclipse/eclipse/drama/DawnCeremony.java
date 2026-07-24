@@ -6,10 +6,11 @@ import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.awards.AwardService;
-import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
+import dev.projecteclipse.eclipse.progression.goals.GoalConfig;
+import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -187,15 +188,19 @@ public final class DawnCeremony {
      * <p>A15: the "New Decree" caption plays ONLY when the goal set actually changed since
      * the previous day — an unchanged decree list skips the beat entirely (the ceremony
      * simply moves on, no empty gap) instead of re-announcing every dawn. Change detection
-     * hashes the day's goal texts; the hash of the last announced set lives in ceremony
-     * state ({@link #lastGoalsHash}), and after a restart the previous day's config goals
+     * (V5-FIXGUARD / EVAL-SAT-S #4) hashes the RESOLVED v5 goal ids
+     * ({@code GoalConfig.goalsForDay}) — the set the quest engine actually activates —
+     * not the legacy {@code days.json} strings, so authored/phase-gated v5 goal changes
+     * are announced (and unchanged sets stay quiet) regardless of unrelated legacy
+     * content. The hash of the last announced set lives in ceremony state
+     * ({@link #lastGoalsHash}), and after a restart the previous day's resolved goals
      * seed the comparison so an unchanged set stays quiet across relaunches too.</p>
      */
     private static void goalsReveal(MinecraftServer server, int previousDay, int newDay) {
-        List<String> goals = EclipseConfig.day(newDay).goals();
+        List<String> goals = resolvedGoalIds(newDay);
         int hash = goals.hashCode();
         int previousHash = lastGoalsHash != null ? lastGoalsHash
-                : EclipseConfig.day(previousDay).goals().hashCode();
+                : resolvedGoalIds(previousDay).hashCode();
         lastGoalsHash = hash;
         if (goals.isEmpty()) {
             return;
@@ -209,6 +214,20 @@ public final class DawnCeremony {
             PacketDistributor.sendToPlayer(online,
                     new S2CCaptionPayload(CAPTION_GOALS, 100, S2CCaptionPayload.STYLE_SUBTITLE));
         }
+    }
+
+    /**
+     * EVAL-SAT-S #4: the day's decree identity = the resolved v5 goal ids in authored
+     * order ({@code GoalConfig.goalsForDay} — authored goals.json entries, or the
+     * {@code legacy_d<day>_m<i>} fallback adapters for unauthored days, so legacy-only
+     * setups keep working change detection too).
+     */
+    private static List<String> resolvedGoalIds(int day) {
+        List<String> ids = new ArrayList<>();
+        for (GoalSpec spec : GoalConfig.goalsForDay(day)) {
+            ids.add(spec.id());
+        }
+        return ids;
     }
 
     /** Non-expansion days: the ceremony owns the roulette start (see class doc). */

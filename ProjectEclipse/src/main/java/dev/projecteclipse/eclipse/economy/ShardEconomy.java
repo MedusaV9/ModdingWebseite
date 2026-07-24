@@ -80,7 +80,9 @@ public final class ShardEconomy {
     private static final List<Offer> OFFERS = List.of(
             new Offer("item.eclipse.grave_dowser", EclipseItems.GRAVE_DOWSER, 4, false),
             new Offer("item.eclipse.compass_of_watcher", EclipseItems.COMPASS_OF_WATCHER, 8, false),
-            new Offer("item.eclipse.vitae_shard", EclipseItems.VITAE_SHARD, 12, false),
+            // FIX-ECON: 12 -> 20 so rebirth (8*1.3^n) is always the budget heart and the
+            // flat-price vitae never dominates the ladder.
+            new Offer("item.eclipse.vitae_shard", EclipseItems.VITAE_SHARD, 20, false),
             new Offer("item.eclipse.umbral_pick", EclipseItems.UMBRAL_PICK, 12, false),
             new Offer("item.eclipse.umbral_blade", EclipseItems.UMBRAL_BLADE, 16, false),
             ECLIPSES_FAVOR_OFFER,

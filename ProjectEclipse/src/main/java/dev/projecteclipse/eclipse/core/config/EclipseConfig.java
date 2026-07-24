@@ -43,10 +43,13 @@ public final class EclipseConfig {
      * border ring sits outside the committed stage radius; {@code borderFxRange} (default 8)
      * is the default client-FX visibility band in blocks (overridable per world via
      * {@code /eclipse border fx range}).
+     * {@code legacyStrongholdSelfHeal} (V5-FIXGUARD / EVAL-SAT-S #5, default {@code false})
+     * is the explicit opt-in for the {@code StrongholdEmergence} start-up self-heal on
+     * legacy saves whose {@code stages.json} still lists {@code eclipse:stronghold_emergence}.
      */
     public record General(int graveGraceMinutes, boolean dayAutoAdvance, String dayAutoAdvanceTime,
             int ringBlocksBudgetMs, boolean cutscenesFreezeDuringUnlocks, int borderOffset,
-            int borderFxRange, boolean randomizeMapSeed) {}
+            int borderFxRange, boolean randomizeMapSeed, boolean legacyStrongholdSelfHeal) {}
 
     /**
      * One entry of a dimension's stage timeline ({@code stages.json}): the disc radius reached
@@ -423,7 +426,7 @@ public final class EclipseConfig {
     // --- general.json ---
 
     private static General defaultGeneral() {
-        return new General(30, false, "08:00", 2, true, 12, 8, false);
+        return new General(30, false, "08:00", 2, true, 12, 8, false, false);
     }
 
     private static JsonElement generalToJson(General general) {
@@ -435,6 +438,7 @@ public final class EclipseConfig {
         obj.addProperty("borderOffset", general.borderOffset());
         obj.addProperty("borderFxRange", general.borderFxRange());
         obj.addProperty("randomizeMapSeed", general.randomizeMapSeed());
+        obj.addProperty("legacyStrongholdSelfHeal", general.legacyStrongholdSelfHeal());
         JsonObject cutscenes = new JsonObject();
         cutscenes.addProperty("freezeDuringUnlocks", general.cutscenesFreezeDuringUnlocks());
         obj.add("cutscenes", cutscenes);
@@ -455,9 +459,12 @@ public final class EclipseConfig {
         int borderOffset = obj.has("borderOffset") ? obj.get("borderOffset").getAsInt() : 12;
         int borderFxRange = obj.has("borderFxRange") ? obj.get("borderFxRange").getAsInt() : 8;
         boolean randomizeMapSeed = obj.has("randomizeMapSeed") && obj.get("randomizeMapSeed").getAsBoolean();
+        // V5-FIXGUARD / EVAL-SAT-S #5: legacy saves must OPT IN to the stronghold self-heal.
+        boolean legacyStrongholdSelfHeal = obj.has("legacyStrongholdSelfHeal")
+                && obj.get("legacyStrongholdSelfHeal").getAsBoolean();
         return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
                 Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks, Math.max(0, borderOffset),
-                Math.max(1, borderFxRange), randomizeMapSeed);
+                Math.max(1, borderFxRange), randomizeMapSeed, legacyStrongholdSelfHeal);
     }
 
     // --- days.json ---

@@ -6,7 +6,9 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.eventdim.PortalAutoRoll;
 import dev.projecteclipse.eclipse.eventdim.PortalEventScheduler;
+import dev.projecteclipse.eclipse.eventdim.PortalEventsConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -51,7 +53,10 @@ public final class DevPortalCommands {
                         "dev.eclipse.doc.portal.roll", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("portal.list", DevCategory.EVENT,
                         "/dev portal list",
-                        "dev.eclipse.doc.portal.list", Danger.SAFE, ClickAction.RUN, 2));
+                        "dev.eclipse.doc.portal.list", Danger.SAFE, ClickAction.RUN, 2),
+                new DevCommandDoc("portal.auto", DevCategory.EVENT,
+                        "/dev portal auto on|off",
+                        "dev.eclipse.doc.portal.auto", Danger.CAUTION, ClickAction.SUGGEST, 2));
     }
 
     /** Live registry suggestions — future variants appear without touching this file. */
@@ -74,6 +79,11 @@ public final class DevPortalCommands {
                                 .executes(DevPortalCommands::list))
                         .then(Commands.literal("roll")
                                 .executes(DevPortalCommands::roll))
+                        .then(Commands.literal("auto")
+                                .then(Commands.literal("on")
+                                        .executes(context -> auto(context, true)))
+                                .then(Commands.literal("off")
+                                        .executes(context -> auto(context, false))))
                         .then(Commands.argument("variant", StringArgumentType.word())
                                 .suggests(VARIANT_SUGGESTIONS)
                                 .then(Commands.literal("open")
@@ -106,6 +116,21 @@ public final class DevPortalCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.translatable("dev.eclipse.portal.closed", variantId), true);
+        return 1;
+    }
+
+    /**
+     * V5-FIXGUARD / EVAL-SAT-F #3: toggles the {@code portal_events.json} auto-roll gate
+     * (persisted via {@link PortalEventsConfig#setAutoRoll}), then re-evaluates the
+     * CURRENT day's slot immediately via {@link PortalAutoRoll#refresh}.
+     */
+    private static int auto(CommandContext<CommandSourceStack> context, boolean enable) {
+        CommandSourceStack source = context.getSource();
+        PortalEventsConfig.Values values = PortalEventsConfig.setAutoRoll(enable);
+        PortalAutoRoll.refresh(source.getServer());
+        source.sendSuccess(() -> Component.translatable(
+                enable ? "dev.eclipse.portal.auto.on" : "dev.eclipse.portal.auto.off",
+                values.minDay()), true);
         return 1;
     }
 

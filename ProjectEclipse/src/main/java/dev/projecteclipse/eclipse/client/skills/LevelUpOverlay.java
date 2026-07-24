@@ -64,7 +64,7 @@ public final class LevelUpOverlay {
     // FFIX-A / DOPA #4: the authored milestone levels (mirror of
     // AdvancementXpBridge.MILESTONE_LEVELS) celebrate bigger — larger glyph, deeper
     // sting with the unlock layer over it, longer read hold.
-    private static final int[] MILESTONE_LEVELS = {10, 25, 40};
+    private static final int[] MILESTONE_LEVELS = {7, 12, 18};
     private static final float MILESTONE_SCALE = 2.5F;
     private static final int MILESTONE_HOLD_BONUS_TICKS = 14;
 

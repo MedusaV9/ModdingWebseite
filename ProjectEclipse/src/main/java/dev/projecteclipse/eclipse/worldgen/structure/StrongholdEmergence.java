@@ -111,8 +111,10 @@ public final class StrongholdEmergence {
      * plans_v5 PLAN-B B15: gated on the emergence still being LISTED in {@code stages.json}
      * — the built-in defaults no longer enqueue it (the End-disc finale replaced the
      * stronghold), and without this gate every post-stage-5 restart of a new save would
-     * quietly rebuild the removed stronghold. Legacy saves whose config still lists the
-     * emergence keep the self-heal unchanged.
+     * quietly rebuild the removed stronghold. V5-FIXGUARD / EVAL-SAT-S #5 tightens this
+     * further: even on legacy saves the self-heal now requires the explicit
+     * {@code legacyStrongholdSelfHeal} opt-in in {@code general.json} (default OFF), and
+     * logs when it skips so operators know how to opt in.
      */
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
@@ -127,6 +129,15 @@ public final class StrongholdEmergence {
         }
         DiscMapData.Mountain mountain = DiscMapData.get().profile(DiscProfile.OVERWORLD).mountain();
         if (mountain == null || hasPortalFrame(overworld, mountain)) {
+            return;
+        }
+        // V5-FIXGUARD / EVAL-SAT-S #5: the legacy self-heal must be an explicit opt-in.
+        // A legacy stages.json listing the emergence is no longer enough on its own — a
+        // pre-B15 save that legitimately finished (or abandoned) the stronghold arc would
+        // otherwise get the mountain re-torn open on every restart.
+        if (!EclipseConfig.general().legacyStrongholdSelfHeal()) {
+            EclipseMod.LOGGER.info(
+                    "Legacy stronghold self-heal SKIPPED (stage committed, no portal frame, emergence still in stages.json): opt in via \"legacyStrongholdSelfHeal\": true in general.json to re-run it");
             return;
         }
         EclipseMod.LOGGER.warn("Final stage committed but no portal room found in the mountain cavity; re-running emergence");

@@ -1,16 +1,16 @@
 {
-  "parent": "eclipse:event/root",
+  "parent": "eclipse:event/skill_12",
   "display": {
     "icon": {
-      "id": "minecraft:experience_bottle"
+      "id": "eclipse:umbral_blade"
     },
     "title": {
-      "translate": "advancement.eclipse.event.skill_10.title"
+      "translate": "advancement.eclipse.event.skill_18.title"
     },
     "description": {
-      "translate": "advancement.eclipse.event.skill_10.description"
+      "translate": "advancement.eclipse.event.skill_18.description"
     },
-    "frame": "task",
+    "frame": "challenge",
     "show_toast": true,
     "announce_to_chat": false,
     "hidden": true

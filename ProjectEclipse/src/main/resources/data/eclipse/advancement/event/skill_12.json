@@ -1,14 +1,14 @@
 {
-  "parent": "eclipse:event/skill_10",
+  "parent": "eclipse:event/skill_7",
   "display": {
     "icon": {
       "id": "eclipse:umbral_pick"
     },
     "title": {
-      "translate": "advancement.eclipse.event.skill_25.title"
+      "translate": "advancement.eclipse.event.skill_12.title"
     },
     "description": {
-      "translate": "advancement.eclipse.event.skill_25.description"
+      "translate": "advancement.eclipse.event.skill_12.description"
     },
     "frame": "goal",
     "show_toast": true,

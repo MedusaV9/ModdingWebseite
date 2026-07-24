@@ -39,7 +39,8 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * to ~{@value #INTERIOR_FOG_FAR} blocks (a {@link ViewportEvent.RenderFog} subscription — no
  * mixin), the fog color pulled down to storm slate, looping {@code eclipse:storm_rain_sheet}
  * emitters in a rolling window around the camera, and the {@code eclipse:storm_interior}
- * post grade (uniforms {@code Interior, RainAmount, Time} — frozen §3.3) fed through
+ * post grade (uniforms {@code Interior, RainAmount, Time} — frozen §3.3 — plus the C8
+ * {@code Sphere} variant flag, EVAL-POL-F #4) fed through
  * {@link EclipseFxState#setStormInterior}.
  *
  * <p>The interior amount rises from 0 to 1 while crossing the occluder band ({@code r −
@@ -186,6 +187,9 @@ public final class StormInteriorFx {
                     pipeline.getUniform("Interior").setFloat(EclipseFxState.stormInterior());
                     pipeline.getUniform("RainAmount").setFloat(EclipseFxState.stormRain());
                     pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 100_000L) / 1000.0F);
+                    // EVAL-POL-F #4: sphere interiors grade green-violet (C8 identity)
+                    // instead of the vortex blue-slate.
+                    pipeline.getUniform("Sphere").setFloat(interiorSphere ? 1.0F : 0.0F);
                 }));
     }
 

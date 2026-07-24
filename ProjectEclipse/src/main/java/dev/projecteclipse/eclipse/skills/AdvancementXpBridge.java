@@ -19,15 +19,15 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * folder stripped → default). Dedup is inherent — {@code AdvancementEarnEvent} fires once
  * per player+advancement for the save's lifetime.
  *
- * <p>The reverse direction: skill milestones (levels 10/25/40) award the data-side
- * advancements {@code eclipse:event/skill_10|skill_25|skill_40} (JSONs authored by P4-B3).
- * Missing advancements soft-fail with one log line per id — this class works headless
- * before B3's data lands.</p>
+ * <p>The reverse direction: skill milestones (levels 7/12/18, FIX-ECON retune) award the
+ * data-side advancements {@code eclipse:event/skill_7|skill_12|skill_18} (JSONs authored
+ * by P4-B3). Missing advancements soft-fail with one log line per id — this class works
+ * headless before B3's data lands.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AdvancementXpBridge {
-    /** Skill levels that award a code-side advancement (plan §2.11). */
-    private static final int[] MILESTONE_LEVELS = {10, 25, 40};
+    /** Skill levels that award a code-side advancement (plan §2.11, FIX-ECON retune). */
+    private static final int[] MILESTONE_LEVELS = {7, 12, 18};
 
     // statics reset on ServerStopped
     private static final Set<String> WARNED_MISSING = ConcurrentHashMap.newKeySet();
