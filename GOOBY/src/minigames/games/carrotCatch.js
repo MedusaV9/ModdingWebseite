@@ -55,25 +55,37 @@ function fitModel(model, targetSize) {
 function createFloatTexts(scene, camera) {
   const active = new Set();
   return {
+    // V6/FIX4 (P2-18): dark-brown text on a white plate (accent keeps the
+    // plate border) — the bare accent fill was nearly invisible on the pale
+    // sky. Canvas is sized to the measured text so long strings never crop.
     spawn(text, pos, color = '#4A3B36') {
+      const font = '900 44px system-ui, sans-serif';
       const canvas = document.createElement('canvas');
-      canvas.width = 160;
-      canvas.height = 80;
       const g = canvas.getContext('2d');
-      g.font = '900 44px system-ui, sans-serif';
+      g.font = font;
+      const textW = Math.ceil(g.measureText(text).width);
+      canvas.width = textW + 56;
+      canvas.height = 88;
+      g.font = font; // canvas resize resets 2d state
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.lineWidth = 8;
-      g.strokeStyle = 'rgba(255,255,255,0.9)';
-      g.strokeText(text, 80, 40);
-      g.fillStyle = color;
-      g.fillText(text, 80, 40);
+      g.fillStyle = 'rgba(255,255,252,0.95)';
+      g.strokeStyle = color;
+      g.lineWidth = 6;
+      g.beginPath();
+      g.roundRect(6, 8, canvas.width - 12, canvas.height - 16, 24);
+      g.fill();
+      g.stroke();
+      g.fillStyle = '#4A3B36';
+      g.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
       const tex = new THREE.CanvasTexture(canvas);
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
+      const scaleY = 0.55;
+      const scaleX = scaleY * (canvas.width / canvas.height);
       // F4 P2-3: keep edge-of-screen catch popups inside the safe viewport
-      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.55, halfH: 0.28 }));
-      sprite.scale.set(1.1, 0.55, 1);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: scaleX / 2, halfH: scaleY / 2 }));
+      sprite.scale.set(scaleX, scaleY, 1);
       scene.add(sprite);
       active.add({ sprite, mat, tex, age: 0, life: 0.85 });
     },

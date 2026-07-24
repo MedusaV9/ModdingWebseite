@@ -531,7 +531,13 @@ export function createHomeScene(ctx) {
       // living light sits at the floor-lamp decor spot, the bedroom one over
       // the nightstand lamp anchor. Off until applyAmbienceNow enables them.
       const lampSpecs = [
-        { x: rm.roomCenterX('living') - 1.82, y: 1.42, z: -1.36 },
+        // V6/FIX4 (P1-7): anchored under the living ceiling fixture
+        // (rooms/living.js lampSquareCeiling at [0, 2.7, −0.18], with the
+        // `ceilingLampGlow` dressing bulb at its shade mouth) — dead-center
+        // of the portrait frame. The old spot (x −1.82, z −1.36) was the
+        // pre-V4 floor-lamp corner — nothing stands there now, so the warm
+        // pool read as floating on a bare wall.
+        { x: rm.roomCenterX('living'), y: 2.3, z: -0.18 },
         lampAt ? { x: lampAt.x, y: lampAt.y + 0.35, z: lampAt.z + 0.25 } : null,
       ];
       for (const at of lampSpecs) {

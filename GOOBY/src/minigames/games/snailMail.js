@@ -87,24 +87,40 @@ const HOUSE_COLORS = [0xffb3c7, 0xbfe3ff, 0xffe2a9];
 function createFloatTexts(scene, camera) {
   const active = new Set();
   return {
-    spawn(text, pos, color = '#4A3B36') {
+    // V6/FIX4 (P2-16): the canvas is sized to the MEASURED text (the fixed
+    // 240 px canvas used to crop long strings like "+4 Delivered"), the text
+    // sits on a white plate (accent-on-sky was low contrast), and the clamp
+    // uses the sprite's REAL half extents so nothing pokes past an edge.
+    // `opts.maxY` caps the spawn height in world units — deliver toasts use
+    // it to stay in a lane BELOW the DOM banner band (.mg-banner, top 30%).
+    spawn(text, pos, color = '#4A3B36', opts = {}) {
+      const font = '900 40px system-ui, sans-serif';
       const canvas = document.createElement('canvas');
-      canvas.width = 240;
-      canvas.height = 80;
       const g = canvas.getContext('2d');
-      g.font = '900 40px system-ui, sans-serif';
+      g.font = font;
+      const textW = Math.ceil(g.measureText(text).width);
+      canvas.width = textW + 56;
+      canvas.height = 88;
+      g.font = font; // canvas resize resets 2d state
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.lineWidth = 8;
-      g.strokeStyle = 'rgba(255,255,255,0.92)';
-      g.strokeText(text, 120, 40);
-      g.fillStyle = color;
-      g.fillText(text, 120, 40);
+      g.fillStyle = 'rgba(255,255,252,0.95)';
+      g.strokeStyle = color;
+      g.lineWidth = 6;
+      g.beginPath();
+      g.roundRect(6, 8, canvas.width - 12, canvas.height - 16, 24);
+      g.fill();
+      g.stroke();
+      g.fillStyle = '#4A3B36';
+      g.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
       const tex = new THREE.CanvasTexture(canvas);
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
-      sprite.scale.set(1.5, 0.5, 1);
+      const scaleY = 0.5;
+      const scaleX = scaleY * (canvas.width / canvas.height);
+      if (Number.isFinite(opts.maxY)) pos.y = Math.min(pos.y, opts.maxY);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: scaleX / 2, halfH: scaleY / 2 }));
+      sprite.scale.set(scaleX, scaleY, 1);
       scene.add(sprite);
       active.add({ sprite, mat, tex, age: 0, life: 0.9 });
     },
@@ -306,7 +322,7 @@ export default {
     this._s3 = new THREE.Vector3(1, 1, 1);
     this.clearDots();
 
-    // --- the courier snail (procedural, top-view — rotates to any heading) ---
+    // --- the courier snail (procedural side-view rig — rotates to any heading) ---
     this.buildSnail();
 
     // --- particles / floats / Gooby cameo (bottom LEFT; pause owns the right) ---
@@ -557,27 +573,40 @@ export default {
     }
   },
 
-  /** The adorable courier snail — top-view rig, big eyes on stalks. */
+  /**
+   * The adorable courier snail — SIDE-VIEW rig (V6/FIX4 P1-9). The camera
+   * looks straight down −z, so x/y IS the screen plane: the old top-view
+   * build (shell offset toward the camera, eye stalks splayed in ±y) read
+   * capsized — both eyes stacked sideways, shell hidden behind the body.
+   * Now the shell dome sits +y ABOVE the foot and the stalks rise
+   * vertically like the loading-card postman-snail. `snailRig` (between the
+   * heading-rotated `snail` group and the parts) mirrors across local x when
+   * the snail travels leftward so the shell always stays up.
+   */
   buildSnail() {
     const own = this.own;
     this.snail = new THREE.Group();
     this.snail.position.z = 0.35;
     this.field.add(this.snail);
-    // body: soft peach foot lying along +x
+    this.snailRig = new THREE.Group();
+    this.snail.add(this.snailRig);
+    // body: soft peach foot lying along +x, hugging the path line
     this.bodyGrp = new THREE.Group();
-    this.snail.add(this.bodyGrp);
+    this.snailRig.add(this.bodyGrp);
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf5c98e, roughness: 0.6 });
     this.ownedMats.push(bodyMat);
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.34, 6, 12), bodyMat);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.34, 6, 12), bodyMat);
     this.ownedGeos.push(body.geometry);
     body.rotation.z = Math.PI / 2; // long axis along +x
+    body.scale.x = 0.8; // local x → world y after the rotation: a low, flat foot
     body.scale.z = 0.75;
+    body.position.y = 0.07;
     this.bodyGrp.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 10), bodyMat);
     this.ownedGeos.push(head.geometry);
-    head.position.set(0.24, 0, 0.03);
+    head.position.set(0.26, 0.12, 0.03);
     this.bodyGrp.add(head);
-    // eye stalks with BIG friendly eyes
+    // eye stalks with BIG friendly eyes, rising vertically off the head
     const stalkGeo = new THREE.CylinderGeometry(0.016, 0.02, 0.16, 8);
     const eyeGeo = new THREE.SphereGeometry(0.052, 12, 10);
     const pupilGeo = new THREE.SphereGeometry(0.024, 8, 6);
@@ -587,18 +616,18 @@ export default {
     this.ownedMats.push(eyeMat, pupilMat);
     this.stalks = [];
     for (const side of [-1, 1]) {
+      // side staggers the pair along x (front/back), not sideways
       const stalk = new THREE.Group();
-      stalk.position.set(0.3, side * 0.055, 0.05);
+      stalk.position.set(0.25 + side * 0.05, 0.2, side * 0.02);
       const stem = new THREE.Mesh(stalkGeo, bodyMat);
-      stem.rotation.z = -side * 0.5;
-      stem.rotation.x = -0.25;
-      stem.position.set(0.045, side * 0.03, 0.05);
+      stem.rotation.z = side * 0.14; // slight outward splay
+      stem.position.set(-side * 0.01, 0.07, 0);
       stalk.add(stem);
       const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(0.1, side * 0.065, 0.12);
+      eye.position.set(-side * 0.022, 0.17, 0.02);
       stalk.add(eye);
       const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-      pupil.position.set(0.14, side * 0.065, 0.135);
+      pupil.position.set(-side * 0.022 + 0.024, 0.175, 0.055);
       stalk.add(pupil);
       this.bodyGrp.add(stalk);
       this.stalks.push(stalk);
@@ -607,29 +636,30 @@ export default {
     this.shellMat = new THREE.MeshStandardMaterial({ color: 0xff9bbd, roughness: 0.4 });
     this.ownedMats.push(this.shellMat);
     this.shell = new THREE.Group();
-    this.shell.position.set(-0.1, 0, 0.12);
-    this.snail.add(this.shell);
+    this.shell.position.set(-0.1, 0.19, 0);
+    this.snailRig.add(this.shell);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.155, 18, 14), this.shellMat);
     this.ownedGeos.push(dome.geometry);
     dome.scale.z = 0.8;
     this.shell.add(dome);
+    // spiral rim + swirl face the camera on the flattened dome's side
     const rim = own(new THREE.Mesh(
       new THREE.TorusGeometry(0.105, 0.032, 8, 22),
       new THREE.MeshStandardMaterial({ color: 0xfff4e4, roughness: 0.45 })
     ));
-    rim.position.z = 0.06;
+    rim.position.z = 0.07;
     this.shell.add(rim);
     const swirl = own(new THREE.Mesh(
       new THREE.SphereGeometry(0.045, 10, 8),
       new THREE.MeshStandardMaterial({ color: 0xfff4e4, roughness: 0.45 })
     ));
-    swirl.position.z = 0.13;
+    swirl.position.z = 0.125;
     this.shell.add(swirl);
-    // the envelope riding on the shell
+    // the envelope riding on top of the shell
     this.envelope = new THREE.Group();
-    this.envelope.position.set(-0.1, 0, 0.28);
+    this.envelope.position.set(-0.1, 0.42, 0.08);
     this.envelope.rotation.z = -0.15;
-    this.snail.add(this.envelope);
+    this.snailRig.add(this.envelope);
     const paper = own(new THREE.Mesh(
       new THREE.PlaneGeometry(0.24, 0.16),
       new THREE.MeshBasicMaterial({ color: 0xfffdf4, side: THREE.DoubleSide })
@@ -841,8 +871,12 @@ export default {
     this.flag.rotation.z = -0.25;
     this.snail.position.set(this.tune.POST_X + 0.48, this.tune.POST_Y - 0.06, 0.35);
     this.snail.scale.setScalar(1);
-    this.snailAngle = Math.PI / 2;
-    this.snail.rotation.z = 0; // rig faces +x; heading applied as angle − π/2 later
+    // V6/FIX4 (P1-9): waiting pose = side view facing +x, shell up (the rig
+    // faces +x; the follow loop rotates toward the path heading from here)
+    this.snailAngle = 0;
+    this.snail.rotation.z = 0;
+    this.snailFlipY = 1;
+    this.snailRig.scale.y = 1;
     this.envelope.visible = true;
     this.bodyGrp.scale.setScalar(1);
     if (!first && this.autoplay) this.prepareAutoplayRound();
@@ -878,7 +912,13 @@ export default {
     if (this.score !== prev) this.ctx.onScore(this.score - prev);
     this.ctx.audio.play('jingle.short');
     this.ctx.audio.play('delivery.doorbell');
-    this.floats.spawn(`+${this.tune.DELIVER_PTS} ${tx('snail.delivered')}`, doorPos, '#2E8B57');
+    // V6/FIX4 (P2-16): the delivered toast rides a reserved lane BELOW the
+    // DOM banner band (.mg-banner top: 30% → NDC +0.40, bottom edge ≈ 0.32).
+    // The cap keeps spawn + the ~1 wu float rise + the sprite half height
+    // under that edge at the z=0.8 spawn depth (view half height × 0.92), so
+    // "+4 Delivered" and "Dry delivery! +2" never stack on the same spot.
+    const toastLaneY = 0.3 * this.halfH * 0.92 - 1.25;
+    this.floats.spawn(`+${this.tune.DELIVER_PTS} ${tx('snail.delivered')}`, doorPos, '#2E8B57', { maxY: toastLaneY });
     // burst sizes budgeted: pooled sprites cost 1 draw call each and the
     // delivery beat is the frame-cost peak (≤100 total with the diorama)
     this.particles.emit('hearts', doorPos, { count: 5 });
@@ -1064,8 +1104,16 @@ export default {
     while (diff < -Math.PI) diff += Math.PI * 2;
     this.snailAngle += diff * Math.min(1, dt * 10);
     this.snail.rotation.z = this.snailAngle;
+    // V6/FIX4 (P1-9): a side-view rig rotated past ±90° would roll shell-down
+    // (capsized) — mirror the rig across its local x axis on leftward legs so
+    // the shell stays up and the snail still faces along the path. The small
+    // dead zone keeps straight-up/down legs from flip-flapping.
+    const headingCos = Math.cos(this.snailAngle);
+    if (headingCos > 0.05) this.snailFlipY = 1;
+    else if (headingCos < -0.05) this.snailFlipY = -1;
+    this.snailRig.scale.y = this.snailFlipY;
     // envelope bob
-    this.envelope.position.z = 0.28 + Math.sin(elapsed * 5) * 0.01;
+    this.envelope.position.y = 0.42 + Math.sin(elapsed * 5) * 0.01;
     // consume glitter dots behind the snail
     while (this.nextDot < this.dotCount && this.dotArcs[this.nextDot] <= this.arcS) {
       this.hideDot(this.nextDot);

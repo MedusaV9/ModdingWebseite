@@ -276,6 +276,13 @@ export function initDecor({ store, ui, audio }) {
     holder.name = `slot-${slotId}`;
     holder.position.set(spot.at[0], spot.at[1], spot.at[2]);
     holder.rotation.y = ((spot.rotY ?? 0) * Math.PI) / 180;
+    // V6/FIX4 (P1-8): honor the def entry's scale — the bedroom plushie spot
+    // is now empty-by-default, so its holder is created HERE on first place
+    // (roomManager only scales holders it builds itself).
+    if (spot.scale != null) {
+      if (Array.isArray(spot.scale)) holder.scale.set(spot.scale[0], spot.scale[1], spot.scale[2]);
+      else holder.scale.setScalar(spot.scale);
+    }
     roomGroup.add(holder);
     return holder;
   }
@@ -443,6 +450,10 @@ async function buildG79RoomDressing(target) {
         g79TowelRail(entry, colored);
       } else if (entry.kind === 'fairyLights') {
         g79FairyLights(entry, colored, fairy);
+      } else if (entry.kind === 'lampGlow') {
+        g79LampGlow(entry, fairy); // V6/FIX4 (P1-7): lit bulb in a lamp shade
+      } else if (entry.kind === 'foldedBlanket') {
+        g79FoldedBlanket(entry, colored); // V6/FIX4 (P1-8): cozy bed prop
       } else if (entry.kind === 'picture') {
         g79PictureFrame(entry, colored);
         pictures.push(entry);
@@ -641,6 +652,40 @@ function g79FairyLights(entry, colored, fairy) {
   }
   const curve = new THREE.CatmullRomCurve3(points);
   colored.push(g79Primitive(new THREE.TubeGeometry(curve, 32, 0.009, 5, false), '#806B59', [0, 0, 0]));
+}
+
+// V6/FIX4 (P1-7): one warm emissive bulb merged into the room's `fairy`
+// batch — anchors the night ambience point light (homeScene.js parks it at
+// the same spot) to a visibly lit lamp instead of a bare wall corner.
+function g79LampGlow(entry, fairy) {
+  const [x, y, z] = entry.at;
+  fairy.push(g79Primitive(new THREE.SphereGeometry(0.085, 12, 9), '#FFE7A3', [x, y, z]));
+}
+
+// V6/FIX4 (P1-8): folded blanket on the bed's foot — a tight stack of three
+// flat slabs (the room's pillows are sharp-edged boxes too, so boxes match
+// the bedding style) with slightly varied tints/turns so the layers read as
+// folds, plus a small fold roll on top. Merged into the room's `color`
+// batch (no extra draw call).
+function g79FoldedBlanket(entry, colored) {
+  const [x, y, z] = entry.at;
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.66, 0.075, 0.44), '#A9CBB8',
+    [x, y + 0.038, z], [0, 0.05, 0]
+  ));
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.6, 0.065, 0.37), '#B8D6C4',
+    [x + 0.02, y + 0.105, z + 0.01], [0, -0.06, 0]
+  ));
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.54, 0.055, 0.3), '#F2E7D5',
+    [x - 0.01, y + 0.163, z + 0.015], [0, 0.03, 0]
+  ));
+  // fold roll along the top front edge (sells the "folded" read)
+  colored.push(g79Primitive(
+    new THREE.CylinderGeometry(0.045, 0.045, 0.5, 10), '#F2E7D5',
+    [x - 0.01, y + 0.2, z + 0.12], [0, 0.03, Math.PI / 2]
+  ));
 }
 
 function g79PictureFrame(entry, colored) {

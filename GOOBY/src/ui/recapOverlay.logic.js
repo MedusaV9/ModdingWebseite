@@ -38,6 +38,13 @@ export const OVERLAY = Object.freeze({
   PRE_ROLL_SEC: 2.3,
   /** §A2: cues must land within ± this budget of the grid. */
   BEAT_BUDGET_MS: 80,
+  /** V6/FIX4 (Sol P1-2): dispatcher lookahead cap (s). Each step fires cues
+   * due within the OBSERVED frame interval (EMA) so a cue landing mid-frame
+   * fires at the frame's START (≤ one frame early) instead of a whole stalled
+   * SwiftShader frame (100–250 ms) late. Capped below BEAT_BUDGET_MS so an
+   * early fire can never itself bust the ±80 ms budget; real ~16 ms frames
+   * look ahead only ~16 ms. */
+  CUE_LOOKAHEAD_MAX_SEC: 0.06,
   /** MASTER_BASE × the two (v/100)² sliders replicate the §B2.2 bus math on
    * the overlay's dedicated MediaElement (audio.js's graph is not exposed —
    * the mute boolean and both sliders are still honored live). */

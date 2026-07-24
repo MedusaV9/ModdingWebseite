@@ -280,11 +280,13 @@ test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call bu
     // breakfast (own batch — the pack embeds its own atlas copy)
     kitchen: ['wallTrim', 'bakeryCorner', 'hangingUtensils', 'kitchenware', 'breakfastSet'],
     // V6/E4: KayKit reading nook + Tiny Treats monstera (the Aline plant
-    // moved to the bedroom)
-    living: ['alineBookshelf', 'pictureFirstNom', 'pictureBallBuddy', 'readingNook', 'livingPlants'],
+    // moved to the bedroom); V6/FIX4 (P1-7): + lit bulbs (ceiling fixture
+    // anchors the night glow, standing lamp reads lit on wide viewports)
+    living: ['alineBookshelf', 'pictureFirstNom', 'pictureBallBuddy', 'readingNook', 'livingPlants', 'ceilingLampGlow', 'readingLampGlow'],
     bathroom: ['wallTrim', 'towelRail', 'alineCactus', 'bathware'],
-    // V6/E4: KayKit cozy corner + relocated Aline plant + sansevieria
-    bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead', 'cozyCorner', 'alinePlant', 'bedroomPlants'],
+    // V6/E4: KayKit cozy corner + relocated Aline plant + sansevieria;
+    // V6/FIX4 (P1-8): + folded blanket on the bed (replaces the bear mask)
+    bedroom: ['alineRug', 'fairyLights', 'pictureSleepyhead', 'cozyCorner', 'alinePlant', 'bedroomPlants', 'foldedBlanket'],
     // V6/E4: the garden ships a dressing table now — Tiny Treats park pieces
     // (pretty-park has its OWN atlas revision ⇒ separate batch from the
     // pleasant-picnic baskets) + the checkered-blanket painter
@@ -294,7 +296,9 @@ test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call bu
   // + one call per textured atlas batch + fairy dots + one per picture + one
   // per blanket quad. The plan's bar is ≤4 calls ADDED per room over the V5
   // baseline {kitchen 3, living 3, bathroom 2, bedroom 3, garden 0}.
-  const expectedCalls = { kitchen: 4, living: 5, bathroom: 2, bedroom: 5, garden: 3 };
+  // V6/FIX4 (P1-7): living 5 → 6 — the readingLampGlow bulb opens the
+  // emissive `fairy` batch in the living room (adds 3 vs baseline, ≤4 OK).
+  const expectedCalls = { kitchen: 4, living: 6, bathroom: 2, bedroom: 5, garden: 3 };
   const baselineCalls = { kitchen: 3, living: 3, bathroom: 2, bedroom: 3, garden: 0 };
   const itchKeys = new Set(
     ITCH_MODEL_PACKS.flatMap((pack) => pack.files.map(({ key }) => `${pack.slug}/${key}`))
@@ -328,13 +332,15 @@ test('V6/E4 room dressing is complete, asset-backed, and inside the draw-call bu
     }
 
     const colored = dressing.some((entry) =>
-      ['asset', 'wallTrim', 'hangingUtensils', 'towelRail', 'fairyLights', 'picture']
+      ['asset', 'wallTrim', 'hangingUtensils', 'towelRail', 'fairyLights', 'picture', 'foldedBlanket']
         .includes(entry.kind)
     ) ? 1 : 0;
     const textured = new Set(
       dressing.filter((entry) => entry.kind === 'assetCluster').map((entry) => entry.batch)
     ).size;
-    const emissive = dressing.some((entry) => entry.kind === 'fairyLights') ? 1 : 0;
+    const emissive = dressing.some(
+      (entry) => entry.kind === 'fairyLights' || entry.kind === 'lampGlow'
+    ) ? 1 : 0;
     const pictures = dressing.filter((entry) => entry.kind === 'picture').length;
     const blankets = dressing.filter((entry) => entry.kind === 'picnicBlanket').length;
     const calls = colored + textured + emissive + pictures + blankets;

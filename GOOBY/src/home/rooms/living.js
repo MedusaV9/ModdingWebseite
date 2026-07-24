@@ -78,6 +78,20 @@ export const ROOM = Object.freeze({
         Object.freeze({ key: 'house-plants/monstera_plant_large_potted', at: Object.freeze([-1.55, 0, 1.05]), scale: 0.24, rotY: 24 }),
       ]),
     }),
+    // V6/FIX4 (P1-7): two warm emissive bulbs (one merged `fairy` batch).
+    // The ceiling bulb pokes out under the lampSquareCeiling shade at the
+    // room's center — homeScene.js parks the living night ambience point
+    // light right below it, so the warm pool is anchored to a visibly lit
+    // fixture instead of floating on the bare back-left corner. The second
+    // bulb sits in the reading-nook standing lamp's shade (piece at
+    // [1.62, 0, 0.06] — mostly past the 390 px portrait frustum edge
+    // |x| ≈ 1.37, but it reads lit on wide viewports).
+    Object.freeze({
+      id: 'ceilingLampGlow', kind: 'lampGlow', at: Object.freeze([0, 2.68, -0.18]),
+    }),
+    Object.freeze({
+      id: 'readingLampGlow', kind: 'lampGlow', at: Object.freeze([1.62, 1.24, 0.06]),
+    }),
     // ---- end V6/E4 -----------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------

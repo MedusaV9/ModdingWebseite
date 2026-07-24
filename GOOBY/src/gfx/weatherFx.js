@@ -77,10 +77,16 @@ const RAIN_VERT = /* glsl */ `
       float z = (h(aSeed + 7.0) * 2.0 - 1.0) * uArea.z;
       float speed = 6.5 + h(aSeed + 13.0) * 3.5;
       float y = uArea.y - mod(uTime * speed + h(aSeed + 3.0) * uArea.y, uArea.y);
+      // V6/FIX4 (P2-2): shorter per-seed length, thinner core and a slight
+      // per-seed slant so the fall reads as soft drizzle sheets instead of
+      // long uniform white slashes (was a fixed 0.36 m × 0.030 m quad).
+      float len = 0.22 + h(aSeed + 9.0) * 0.10;
+      float slant = (h(aSeed + 11.0) - 0.5) * 0.16;
       // cylindrical billboard: offset along the camera-right axis
       vec3 right = vec3(modelViewMatrix[0][0], modelViewMatrix[1][0], modelViewMatrix[2][0]);
-      p = vec3(x, y, z) + right * (position.x * 0.030) + vec3(0.0, position.y * 0.36, 0.0);
-      vAlpha = uIntensity * (0.45 + h(aSeed + 5.0) * 0.55);
+      p = vec3(x, y, z) + right * (position.x * 0.024 + slant * position.y * len)
+        + vec3(0.0, position.y * len, 0.0);
+      vAlpha = uIntensity * (0.32 + h(aSeed + 5.0) * 0.42);
     } else {
       // ground splash ring: seeded spot, expanding + fading on its own phase
       float x = (h(aSeed + 21.0) * 2.0 - 1.0) * (uArea.x - 0.1);
@@ -124,10 +130,12 @@ const RAIN_FRAG = /* glsl */ `
   void main() {
     float a;
     if (vKind < 0.5) {
-      // soft vertical streak, dimmer toward both ends
-      float across = 1.0 - smoothstep(0.22, 0.5, abs(vUv.x - 0.5));
-      float along = smoothstep(0.0, 0.3, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
-      a = across * (0.3 + 0.7 * along);
+      // V6/FIX4 (P2-2): thin bright core with a wide soft falloff plus a
+      // full head-to-tail alpha gradient — the old 0.3 alpha floor kept the
+      // whole quad lit, which read as a solid white slash
+      float across = 1.0 - smoothstep(0.04, 0.5, abs(vUv.x - 0.5));
+      float along = smoothstep(0.0, 0.45, vUv.y) * (1.0 - smoothstep(0.5, 1.0, vUv.y));
+      a = across * along;
     } else {
       // thin ring band
       float d = length(vUv - 0.5) * 2.0;

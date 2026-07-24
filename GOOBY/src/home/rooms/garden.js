@@ -178,10 +178,15 @@ export const ROOM = Object.freeze({
     // ids (Gooby's always-wins body shadows none of them).
     goobyIdle: Object.freeze([-0.45, 0, 1.45]),
     // G26 (§C11.2): Gooby contently shelters at the tree corner during rain.
-    // V4/FIX-3D: the old [1.5, −1.05] sat him INSIDE the compost bin's box;
-    // this spot keeps the canopy overhead but clears the bin (front face
-    // z −0.855) and the stump/tool cluster.
-    canopySit: Object.freeze([1.55, 0, -0.5]),
+    // V4/FIX-3D: the old [1.5, −1.05] sat him INSIDE the compost bin's box.
+    // V6/FIX4 (P2-1): pulled in from [1.55, −0.5] — the 390 px portrait
+    // frustum only reaches x ≈ 1.55 at that depth, so the rain-entry spawn
+    // left Gooby half off the RIGHT frame edge. x 1.22 frames him fully,
+    // still under the canopy's reach, clear of the compost bin's front face
+    // (z −0.855) and the stump/tool cluster; his footprint only kisses
+    // plot5's tap-box back corner (≤8 cm sliver — nearest-center tap pick
+    // keeps the plot tappable).
+    canopySit: Object.freeze([1.22, 0, -0.55]),
     // V6/E4 (PLAN6 Wave E/F contract): perch point for Wave F's TRANSIENT
     // bird visitor — the top of the fence gate's LEFT post (gate AABB tops
     // out at y 0.62; the right post hosts the street lantern). E4 places no

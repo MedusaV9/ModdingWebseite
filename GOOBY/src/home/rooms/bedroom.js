@@ -74,6 +74,15 @@ export const ROOM = Object.freeze({
         Object.freeze({ key: 'house-plants/sansevieria_plant_small_potted', at: Object.freeze([1.75, 0, -0.55]), scale: 0.3, rotY: -30 }),
       ]),
     }),
+    // V6/FIX4 (P1-8): folded blanket at the bed's foot (merges into the
+    // existing `color` batch — no extra draw call). Takes the bed spot the
+    // bear-mask plushie vacated (it read as a dark crumpled shard on the
+    // bedding; its slot anchor moved to the rug). Mattress top ≈ y 0.31;
+    // z 0.12 keeps it inside the bed's footprint (z ≤ 0.4).
+    Object.freeze({
+      id: 'foldedBlanket', kind: 'foldedBlanket',
+      at: Object.freeze([-1.2, 0.31, 0.12]),
+    }),
     // ---- end V6/E4 -----------------------------------------------------------
   ]),
   // ---- end V4/G79 ----------------------------------------------------------
@@ -111,9 +120,15 @@ export const ROOM = Object.freeze({
     Object.freeze({ proc: 'window', at: Object.freeze([0.22, 1.9, -1.49]), rotY: 0, anchor: 'window' }),
     // rug center-right (rug decor slot)
     Object.freeze({ slot: 'rug', item: 'rugRounded', at: Object.freeze([0.4, 0, 0.5]), rotY: 0, scale: 0.85, noShadow: true }),
-    // plushie bear lying on the bed by the pillow (the GLB is authored lying
-    // on its back — on the floor it reads as a knocked-over toy)
-    Object.freeze({ slot: 'plushie', item: 'bear', at: Object.freeze([-1.18, 0.31, -0.28]), rotY: -20, scale: 0.75 }),
+    // plushie slot anchor (V6/FIX4 P1-8): moved off the bed — the bear GLB is
+    // a flat bear-face mask that read as a dark crumpled shard on the pillow.
+    // It now stands on the rug's left edge like a floor toy, face to camera
+    // (a placed mini-Gooby doll lands here too). x −0.38 keeps a ≥0.09 m gap
+    // to the bed's tap box (x ≤ −0.7); the rug underneath is flat (clip-safe);
+    // the sideTable slot anchor (−1.4, 0.95) and Gooby's idle spot (0.55,
+    // 0.65) stay clear. The fixture live box (test/fixtures/asset-bounds.json
+    // bedroom[9]) was re-dumped for this spot.
+    Object.freeze({ slot: 'plushie', item: 'bear', at: Object.freeze([-0.38, 0, 0.55]), rotY: 8, scale: 0.75 }),
     // ---- V3/G46 (§C11.1): committed furniture-kit room dressing ----------
     // Tiny real plant beside the table lamp; no saved sideTable/floorClutter
     // placement is consumed.

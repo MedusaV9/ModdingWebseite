@@ -30,12 +30,13 @@ export const ROOM = Object.freeze({
       id: 'towelRail', kind: 'towelRail', batch: 'color',
       at: Object.freeze([-1.35, 1.62, -1.43]),
     }),
-    // V4/AC-3D: lifted from (y 1.65, z −1.23) where the pot poked 8 cm through
-    // the wall cabinet's front — it now stands ON the cabinet top (y 1.90,
-    // recentered over its z −1.34 midline).
+    // V6/FIX4 (P2-21): moved down from the wall cabinet's top (y 1.90) where
+    // it read as perched on the mirror's top edge — it now stands on the
+    // floor in the back-right corner beside the toilet (clear of the toilet
+    // tap box x ≤ 1.55, the trashcan z ≥ −0.59, and the right wall).
     Object.freeze({
       id: 'alineCactus', kind: 'asset', batch: 'color',
-      key: 'aline-furniture/cactus', at: Object.freeze([1.1, 1.9, -1.34]), scale: 0.62, rotY: -12,
+      key: 'aline-furniture/cactus', at: Object.freeze([1.72, 0, -1.15]), scale: 1.0, rotY: -12,
     }),
     // ---- V5/ASSETS: Tiny Treats bath dressing (bubbly-bathroom pack) -------
     // Soap dish + toothbrush cup on the sink top (y 0.868 basin ledge), ducky

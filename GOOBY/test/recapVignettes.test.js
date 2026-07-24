@@ -484,8 +484,11 @@ test('V6/B1 wiring pins: measured seats + facing bias land in vignettes.js', () 
   assert.match(vignettesSrc, /new THREE\.Box3\(\)\.setFromObject\(speeder\)\.max\.y/);
   assert.match(vignettesSrc, /gooby\.group\.position\.set\(0, seatY\(hullTop\), 0\.35\)/);
   assert.doesNotMatch(vignettesSrc, /gooby\.group\.position\.set\(0, 0\.42/);
-  // city sunroof + toyRoom cockpit ride their existing wheel-placement Box3
-  assert.match(vignettesSrc, /seatY\(box\.max\.y, 0\.15\)/);
+  // city sunroof + toyRoom cockpit ride their existing wheel-placement Box3.
+  // V6/FIX4 (P2-15): city sink 0.15 → 0.04 — sitDrive now HOLDS its seated
+  // end pose (an extra 0.12·goobyScale drop), so the smaller sink keeps
+  // Gooby's eyes at/above the sedan roofline.
+  assert.match(vignettesSrc, /seatY\(box\.max\.y, 0\.04\)/);
   assert.match(vignettesSrc, /seatY\(box\.max\.y\), -0\.02/);
   // RC1 — all three walk ticks apply the face-the-camera bias
   for (const id of ['meadow', 'spookGarden', 'bakery']) {

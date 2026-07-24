@@ -408,12 +408,16 @@ function createStage(id, scene, assets) {
       return s;
     },
     /** the player's OWN Gooby (procedural rig, equipped outfits ON — §C-SYS2.3) */
-    gooby({ scale, clip = 'happyBounce', clipSpeed = 1.4, emotion = 'happy' } = {}) {
+    gooby({ scale, clip = 'happyBounce', clipSpeed = 1.4, clipLoop = true, emotion = 'happy' } = {}) {
       const gooby = createGooby();
       applyEquippedOutfits(gooby); // no-op (bare rig) before initOutfitSync
       gooby.group.scale.setScalar(scale ?? spec.goobyScale);
       gooby.setEmotion(emotion);
-      if (clip) gooby.play(clip, { loop: true, speed: clipSpeed });
+      // V6/FIX4 (P2-15): clipLoop 'hold' for settle-once clips — loop:true on
+      // the hold-authored sitDrive restarted the sit every 0.25 s, cycling
+      // Gooby stand↔sit (the "bounce" that dunked his head through the sedan
+      // roof and jittered every vehicle biome).
+      if (clip) gooby.play(clip, { loop: clipLoop, speed: clipSpeed });
       group.add(gooby.group);
       disposers.push(() => {
         applyOutfits(gooby, {}); // strip outfit items (frees their geometries)
@@ -645,10 +649,13 @@ function buildCity(stage) {
   }
   // seated high so THEIR Gooby pokes out of the cabin (sunroof style —
   // wardrobe continuity must read at the dolly's distance). V6/B1 RC2: the
-  // height comes from the sedan's MEASURED roof (Box3 top − 0.15 sink
-  // reproduces the tuned sunroof look), never a constant.
-  const gooby = stage.gooby({ clip: 'sitDrive' });
-  gooby.group.position.set(0, seatY(box.max.y, 0.15), -0.12);
+  // height comes from the sedan's MEASURED roof, never a constant.
+  // V6/FIX4 (P2-15): sitDrive now HOLDS its end pose (clipLoop), which sits
+  // the rig a further 0.12·goobyScale (≈0.066) below its origin — the sink
+  // drops 0.15 → 0.04 so the held pose keeps the eyes at/above the roofline
+  // instead of dunking the head through the roof on every loop restart.
+  const gooby = stage.gooby({ clip: 'sitDrive', clipLoop: 'hold' });
+  gooby.group.position.set(0, seatY(box.max.y, 0.04), -0.12);
   car.add(gooby.group);
   stage.group.add(car);
 
@@ -731,7 +738,8 @@ function buildHarbor(stage) {
   const hull = fitModel(stage.assets.getModel('watercraft-kit/boat-fishing-small'), 2.6);
   hull.position.y = 0.42;
   boat.add(hull);
-  const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
+  // V6/FIX4 (P2-15): hold the seated pose (see stage.gooby clipLoop note)
+  const gooby = stage.gooby({ clip: 'sitDrive', clipLoop: 'hold', emotion: 'ecstatic' });
   gooby.group.position.set(0, 0.55, 0.35);
   boat.add(gooby.group);
   boat.rotation.y = 0.5;
@@ -817,7 +825,8 @@ function buildSpace(stage) {
   const speeder = fitModel(stage.assets.getModel('space-kit/craft_speederA'), 1.7);
   speeder.rotation.y = Math.PI; // nose toward -z (travel direction)
   craft.add(speeder);
-  const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
+  // V6/FIX4 (P2-15): hold the seated pose (see stage.gooby clipLoop note)
+  const gooby = stage.gooby({ clip: 'sitDrive', clipLoop: 'hold', emotion: 'ecstatic' });
   // V6/B1 RC2: seat on the MEASURED hull top (fitModel centers the speeder, so
   // any constant here silently floats Gooby mid-air whenever the model's
   // proportions differ — the old hard-coded 0.42 sat ~0.2 above the hull).
@@ -874,6 +883,11 @@ function buildSpookGarden(stage) {
   // POLISH-J: keep the lantern-light handles — they flicker like candles
   const lanternA = stage.accentLight('#ffb573', 11, 8, [1.7, 1.2, 2.1]);
   const lanternB = stage.accentLight('#ff9a4d', 7, 6, [-1.4, 0.6, -0.9]);
+  // V6/FIX4 (P2-13): warm camera-side fill that TRACKS Gooby down the creep
+  // aisle — the cool lavender hemi/dir rig left him fully grey whenever he
+  // walked outside the two lanterns' small radii. Short range keeps the
+  // warm pool personal (the graveyard stays moody).
+  const goobyFill = stage.accentLight('#ffc08a', 5, 3.5, [0, 1.3, 3]);
 
   // upright stones hug the creep aisle; the flat grave slabs (raised dirt
   // boxes — they read as crates right next to the low dolly) stay in the
@@ -904,14 +918,18 @@ function buildSpookGarden(stage) {
   const glowA = stage.glowSprite('glowWarm', 1.5, [1.25, 0.35, 2.45], 0.7);
   const glowB = stage.glowSprite('glowWarm', 1.1, [-1.13, 0.28, -1.05], 0.6);
 
-  // two drifting low fog planes (§C-SYS2.3 „low fog plane")
+  // two drifting low fog planes (§C-SYS2.3 „low fog plane").
+  // V6/FIX4 (P2-13): hug the ground (y 0.28/0.55 → 0.06/0.14) and soften
+  // (0.32 → 0.2) — seen nearly edge-on from the low dolly (cam y ≈ 1.3) the
+  // old waist-high planes projected a bright wash band straight across every
+  // gravestone's top, which read as "semi-transparent stones".
   const fogMat = new THREE.MeshBasicMaterial({
-    map: proceduralTexture('fog'), transparent: true, opacity: 0.32, depthWrite: false,
+    map: proceduralTexture('fog'), transparent: true, opacity: 0.2, depthWrite: false,
   });
   const fogGeo = new THREE.PlaneGeometry(16, 12);
   stage.own({ geometry: fogGeo, material: fogMat });
   const fogs = [];
-  for (const [y, sx] of [[0.28, 1], [0.55, -1]]) {
+  for (const [y, sx] of [[0.06, 1], [0.14, -1]]) {
     const f = new THREE.Mesh(fogGeo, fogMat);
     f.rotation.x = -Math.PI / 2;
     f.position.set(0, y, 0);
@@ -929,6 +947,8 @@ function buildSpookGarden(stage) {
       gooby.group.position.set(pose.position[0], pose.position[1], pose.position[2]);
       // V6/B1: face-the-camera bias — never fully back-to-camera on the walk
       gooby.group.rotation.y = goobyFacingYaw('spookGarden', p)?.yaw ?? pose.yaw;
+      // V6/FIX4 (P2-13): the warm fill rides above/ahead of him (camera side)
+      goobyFill.position.set(pose.position[0] + 0.4, pose.position[1] + 1.3, pose.position[2] + 1.2);
       fogs[0].position.x = Math.sin(t * 0.15) * 1.6;
       fogs[1].position.x = Math.sin(t * 0.11 + 2) * -1.4;
       // POLISH-J: candle flicker — two mixed sines never settle into a loop
@@ -1124,13 +1144,18 @@ function buildToyRoom(stage) {
   stage.accentLight('#ffcf8a', 5, 6, [-5.5, 2.2, -2]);
 
   stage.prop('furniture-kit/rugRound', 3.5, { x: 2.4, y: 0.01, z: -2.2, rest: false });
+  // V6/FIX4 (P2-14): one straight rail line at z 0 — the old ±0.15 stagger
+  // (plus the kart path weaving z −0.5..0.3) drove the rails through the
+  // kart's wheels. The kart now straddles the narrow track slot-car style:
+  // track half-width ±0.17 at size 1.5, wheel inner faces at ±0.20 (0.38
+  // placement below) — a clean ~3 cm gap on both sides.
   for (let i = 0; i < 8; i++) {
-    stage.prop('toy-car-kit/track-narrow-straight', 1.6, {
-      x: -5.6 + i * 1.6, y: 0.03, z: i % 2 === 0 ? 0 : -0.15, rotY: Math.PI / 2,
+    stage.prop('toy-car-kit/track-narrow-straight', 1.5, {
+      x: -5.25 + i * 1.5, y: 0.03, z: 0, rotY: Math.PI / 2,
     });
   }
   stage.prop('toy-car-kit/gate-finish', 1.3, { x: 1.2, y: 0.03, z: 0, rotY: Math.PI / 2 });
-  stage.prop('toy-car-kit/gate', 1.2, { x: -4.4, y: 0.03, z: -0.1, rotY: Math.PI / 2 });
+  stage.prop('toy-car-kit/gate', 1.2, { x: -4.4, y: 0.03, z: 0, rotY: Math.PI / 2 });
   // POLISH-J: kart-game item boxes spin + bob (handles kept for the tick)
   const itemBoxes = [
     stage.prop('toy-car-kit/item-box', 0.35, { x: -1.4, y: 0.03, z: 0.9, rotY: 0.5 }),
@@ -1153,7 +1178,9 @@ function buildToyRoom(stage) {
   kart.add(body);
   const box = new THREE.Box3().setFromObject(body);
   const wx = (box.max.x - box.min.x) * 0.34;
-  const wz = (box.max.z - box.min.z) * 0.3;
+  // V6/FIX4 (P2-14): 0.3 → 0.38 — wheels sit proud of the body (monster-toy
+  // look) so their inner faces (±0.20) clear the track rails (±0.17).
+  const wz = (box.max.z - box.min.z) * 0.38;
   const wheels = [];
   for (const [x, z] of [[wx, wz], [-wx, wz], [wx, -wz], [-wx, -wz]]) {
     const wheel = fitModel(stage.assets.getModel('car-kit/wheel-default'), 0.2);
@@ -1161,7 +1188,8 @@ function buildToyRoom(stage) {
     kart.add(wheel);
     wheels.push(wheel);
   }
-  const gooby = stage.gooby({ clip: 'sitDrive', emotion: 'ecstatic' });
+  // V6/FIX4 (P2-15): hold the seated pose (see stage.gooby clipLoop note)
+  const gooby = stage.gooby({ clip: 'sitDrive', clipLoop: 'hold', emotion: 'ecstatic' });
   // V6/B1 RC2: cockpit seat from the kart body's MEASURED Box3 top (the old
   // constant 0.3 floated the rig ~3 cm above the grounded body's roof line).
   gooby.group.position.set(0, seatY(box.max.y), -0.02);

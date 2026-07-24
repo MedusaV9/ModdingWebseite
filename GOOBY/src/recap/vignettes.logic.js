@@ -179,7 +179,10 @@ export const VIGNETTE_SPECS = Object.freeze({
     rollAmpDeg: 0,
     camPath: Object.freeze([[-4.4, 1.15, 3.9], [-1.6, 1.05, 3.5], [1.6, 1.1, 3.4], [4.4, 1.2, 3.7]]),
     lookPath: Object.freeze([[-4.2, 0.25, -0.3], [-1.4, 0.22, -0.5], [1.4, 0.22, -0.3], [4.2, 0.25, -0.5]]),
-    goobyPath: Object.freeze([[-5.6, 0.05, 0.2], [-2.8, 0.05, -0.5], [0, 0.05, 0.3], [2.8, 0.05, -0.4], [5.8, 0.05, 0.2]]),
+    // V6/FIX4 (P2-14): kart z flattened onto the straight rail line at z 0 —
+    // the old −0.5..0.3 weave dragged the track rails through the wheels
+    // (the kart straddles the narrow track slot-car style; see buildToyRoom)
+    goobyPath: Object.freeze([[-5.6, 0.05, 0], [-2.8, 0.05, 0], [0, 0.05, 0], [2.8, 0.05, 0], [5.8, 0.05, 0]]),
     goobyScale: 0.34,
     goobyLead: 0, // V6/B1: lead zeroed (RC1 crop-edge aggravator)
     bg: '#ffdfc2',

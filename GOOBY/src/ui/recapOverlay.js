@@ -130,7 +130,6 @@ function createRecapVignetteScene(ctx) {
         if (DEV) console.log(`[recap] slow frames — render scale ×${PR_STEPS[prStep]}`);
       }
       s.renderScale = PR_STEPS[prStep];
-      const span = s.liveSpan;
       const next = s.nextSpan;
       // Pre-roll phase 1: build the upcoming vignette hidden. Phase 2 (the
       // NEXT frame): one warm render into a tiny offscreen target — forces
@@ -168,6 +167,13 @@ function createRecapVignetteScene(ctx) {
         if (staged.handle.group) staged.handle.group.visible = false;
         scene.background = savedBg;
       }
+      // V6/FIX4 (Sol P1-2): the pre-roll build + warm render above are the
+      // recap's biggest deliberate main-thread stalls (SwiftShader compiles/
+      // uploads) — re-run the dispatcher so a cue that came due DURING them
+      // fires before this frame's raster, not a whole stalled frame later.
+      // step() is idempotent per timestamp, so healthy frames pay nothing.
+      s.step?.(performance.now());
+      const span = s.liveSpan;
       // The cut: swap ON the beat (cheap when the pre-roll landed). The old
       // vignette only HIDES here — its dispose (dozens of geometry/material
       // frees, easily a 50–150 ms software-GL stall) is deferred off-beat.
@@ -675,10 +681,14 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
 
     if (DEV) console.log(`[recap] start L${level} track=${s.trackId} fallbackTrack=${pick.fallback} scene=${s.sceneMode} audio=${s.audioLive} landscape=${s.rotGuard.active()} bpm=${s.timeline.bpm} cues=${s.timeline.cues.length}`);
 
-    // Master loop: rAF for smooth visuals PLUS a 25 ms timer tick — rAF alone
-    // can gap 100–250 ms (throttled/hitchy frames, SwiftShader shader builds)
-    // which would fire cues late; the timer keeps the §A2 ±80 ms budget honest
-    // even when frames stall. step() is idempotent per timestamp.
+    // Master loop (V6/FIX4 Sol P1-2): cue dispatch is RAF/render-driven — the
+    // recap scene calls step() BEFORE each render (s.step below), this
+    // module's own rAF re-runs it after, and step() itself fires every cue
+    // due within the observed frame interval (bounded lookahead, see the
+    // scheduler.advance call). The 25 ms timer is only a BACKSTOP for
+    // throttled rAF (hidden tab); it starves during raster stalls exactly
+    // like rAF does, so it must never be the primary dispatcher. step() is
+    // idempotent per timestamp.
     s.lastFrame = performance.now();
     const step = (nowMs) => {
       if (sess !== s || s.finishing) return;
@@ -698,7 +708,15 @@ async function startCinematic({ level, lines, fromLevel, atMs, commit = false, n
       // resurrect the medley under the recap track.
       if (musicDirector.getStats().suppressed !== true) musicDirector.setSuppressed(true);
       if (!s.ended) {
-        for (const cue of s.scheduler.advance(s.clock.t)) fireCue(cue);
+        // V6/FIX4 (Sol P1-2): frame-interval lookahead — a cue due DURING the
+        // coming frame fires now (≤ one observed frame early, capped under
+        // the ±80 ms budget) instead of a whole stalled frame late. The EMA
+        // tracks the real inter-dispatch cadence: ~16 ms on healthy devices,
+        // frame-length on SwiftShader where raster blocks rAF AND the timer.
+        s.emaStepSec = s.emaStepSec > 0 ? s.emaStepSec * 0.8 + dtSec * 0.2 : dtSec;
+        const lookahead = s.pinnedT != null
+          ? 0 : Math.min(s.emaStepSec, OVERLAY.CUE_LOOKAHEAD_MAX_SEC);
+        for (const cue of s.scheduler.advance(s.clock.t + lookahead)) fireCue(cue);
         s.liveSpan = spanAt(s.spans, s.clock.t);
         s.nextSpan = nextSpanAt(s.spans, s.clock.t);
         updatePops();

@@ -413,9 +413,29 @@ export default {
     scene.add(dome);
 
     const moonScale = atDepth(-5.5);
+    // V6/FIX4 (P2-22): the SAME cratered cream moon as the garden dome
+    // (gfx/sky.js §C10.2 — disc #F4EFD9 + the crater trio) — the old bare
+    // CircleGeometry color disc read featureless next to it.
+    const moonCanvas = document.createElement('canvas');
+    moonCanvas.width = 128;
+    moonCanvas.height = 128;
+    const mg = moonCanvas.getContext('2d');
+    const mr = 62;
+    mg.fillStyle = '#F4EFD9';
+    mg.beginPath();
+    mg.arc(64, 64, mr, 0, Math.PI * 2);
+    mg.fill();
+    mg.fillStyle = 'rgba(160,160,190,0.35)';
+    for (const [dx, dy, rr] of [[-0.3, -0.15, 0.22], [0.25, 0.3, 0.16], [0.05, -0.4, 0.12]]) {
+      mg.beginPath();
+      mg.arc(64 + dx * mr, 64 + dy * mr, rr * mr, 0, Math.PI * 2);
+      mg.fill();
+    }
+    this.moonTex = new THREE.CanvasTexture(moonCanvas);
+    this.ownedTexs.push(this.moonTex);
     const moon = own(new THREE.Mesh(
-      new THREE.CircleGeometry(0.4 * moonScale, 36),
-      new THREE.MeshBasicMaterial({ color: 0xf4eeda })
+      new THREE.PlaneGeometry(0.8 * moonScale, 0.8 * moonScale),
+      new THREE.MeshBasicMaterial({ map: this.moonTex, transparent: true, depthWrite: false })
     ));
     moon.position.set((-this.halfW + 0.72) * moonScale, (this.halfH - 1.05) * moonScale, -5.5);
     scene.add(moon);
