@@ -1,0 +1,138 @@
+# GOOBY-GODOT CI (W1a CORE).
+#
+# WICHTIG: Der bestehende Web-Spiel-Workflow .github/workflows/gooby-ios.yml
+# triggert auf GOOBY/** und bleibt UNBERÜHRT. Dieser Workflow hier triggert
+# ausschließlich auf GOOBY-GODOT/** + tools/ci/** + sich selbst.
+#
+# Job linux-checks: Godot 4.4.1 (gecacht) → --import (Pflicht vor Tests, der
+# frische Checkout hat keinen .godot/-Import-Cache) → Test-Runner →
+# gdlint/gdformat (gdtoolkit via pip) → Boot-Smoke (--quit).
+#
+# Job ios-ipa-skeleton: EHRLICH dokumentiertes Gerüst, per `if: false`
+# deaktiviert (kostet so keine macOS-Minuten und behauptet keinen grünen
+# iOS-Build, den es nicht gibt). Scharfschalten in W2/W3, sobald
+# GOOBY-GODOT/export_presets.cfg (Owner: W2b) einen "iOS"-Preset enthält —
+# siehe TODO-Kommentare an den Steps. Backlog-Referenz: GODOT-PLAN §6 B§5.2.
+name: GOOBY Godot
+
+on:
+  push:
+    paths:
+      - "GOOBY-GODOT/**"
+      - "tools/ci/**"
+      - ".github/workflows/gooby-godot.yml"
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.4.1"
+
+jobs:
+  linux-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Godot-Binary cachen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
+
+      - name: Godot ${{ env.GODOT_VERSION }} installieren
+        run: bash tools/ci/install_godot.sh
+
+      - name: gdtoolkit installieren
+        run: pip install "gdtoolkit==4.*"
+
+      - name: Ressourcen importieren (Pflicht vor Tests)
+        run: godot --headless --path GOOBY-GODOT --import
+
+      - name: Test-Runner
+        run: godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd
+
+      - name: Unit-Tests (W1c-UI-Runner)
+        run: godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd
+
+      - name: gdlint
+        working-directory: GOOBY-GODOT
+        run: git ls-files -z -- "*.gd" | xargs -0 gdlint
+
+      - name: gdformat --check
+        working-directory: GOOBY-GODOT
+        run: git ls-files -z -- "*.gd" | xargs -0 gdformat --check
+
+      - name: Boot-Smoke (Projekt bootet headless)
+        run: godot --headless --path GOOBY-GODOT --quit
+
+  # ---------------------------------------------------------------------------
+  # SKELETON — bewusst deaktiviert (if: false). Stand W1:
+  # FUNKTIONIERT SCHON: Godot-macOS-Download, Export-Templates-Download+Cache,
+  #   headless --import.
+  # FEHLT NOCH (deshalb Gate): GOOBY-GODOT/export_presets.cfg mit "iOS"-Preset
+  #   inkl. Bundle-Id/Icons (Owner: W2b), danach der echte Export + xcodebuild.
+  # Scharfschalten: `if: false` entfernen + TODO-Steps prüfen.
+  # ---------------------------------------------------------------------------
+  ios-ipa-skeleton:
+    if: false # TODO(W2b/W3): aktivieren, sobald export_presets.cfg existiert
+    runs-on: macos-15
+    needs: linux-checks
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Godot (macOS) + Export-Templates cachen
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-macos-plus-templates
+
+      - name: Godot (macOS) + Export-Templates installieren
+        run: |
+          set -euo pipefail
+          BIN_DIR="$HOME/godot-bin"
+          APP="$BIN_DIR/Godot.app/Contents/MacOS/Godot"
+          if [ ! -x "$APP" ]; then
+            mkdir -p "$BIN_DIR"
+            curl -fL --retry 3 -o /tmp/godot.zip \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+            unzip -q /tmp/godot.zip -d "$BIN_DIR"
+          fi
+          TPL_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          if [ ! -d "$TPL_DIR" ]; then
+            curl -fL --retry 3 -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            mkdir -p "$TPL_DIR"
+            unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+            mv /tmp/godot-templates/templates/* "$TPL_DIR/"
+          fi
+          "$APP" --version
+
+      - name: Ressourcen importieren
+        run: '"$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT --import'
+
+      - name: iOS-Xcode-Projekt exportieren
+        run: |
+          # TODO(W2b): Preset "iOS" in GOOBY-GODOT/export_presets.cfg anlegen
+          # (Bundle-Id, Icons, ASTC). Godot generiert daraus ein Xcode-Projekt.
+          mkdir -p build/ios
+          "$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT \
+            --export-release "iOS" "$PWD/build/ios/gooby.xcodeproj"
+
+      - name: xcodebuild (unsigned) + ipa packen
+        run: |
+          # TODO(W2/W3): Projekt-/Scheme-Namen an den echten Godot-Export
+          # anpassen; unsigned Build + Payload-Zip analog gooby-ios.yml
+          # (Sideload via AltStore/Sideloadly, keine Apple-Zertifikate).
+          cd build/ios
+          xcodebuild -project gooby.xcodeproj -scheme gooby -configuration Release \
+            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+          mkdir Payload
+          cp -R build/Release-iphoneos/*.app Payload/
+          zip -qry gooby-godot-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gooby-godot-unsigned-ipa
+          path: build/ios/gooby-godot-unsigned.ipa

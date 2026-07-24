@@ -1,0 +1,48 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; GOOBY 5.0 — Godot-Rewrite (W1a CORE).
+; SCHREIB-REGEL (GODOT-PLAN §3.1): Einziger Schreiber in W1 ist W1a.
+; Ab W2 traegt NUR der Orchestrator Aenderungen ein, gespeist aus
+; /tmp/gooby-godot/handoffs/project-godot-requests.md (Append-only).
+; Autoload-Anmeldung fuer W1c/W1d: siehe
+; /tmp/gooby-godot/handoffs/W1a-autoload-requests.md
+
+config_version=5
+
+[application]
+
+config/name="GOOBY"
+config/description="GOOBY 5.0 — Godot-Rewrite (M1)"
+run/main_scene="res://scripts/boot/main.tscn"
+config/features=PackedStringArray("4.4", "Mobile")
+config/icon="res://icon.svg"
+
+[autoload]
+
+AppSettings="*res://scripts/core/app_settings.gd"
+GameState="*res://scripts/state/game_state.gd"
+UiTheme="*res://themes/theme_service.gd"
+I18n="*res://scripts/ui/i18n.gd"
+OrientationService="*res://scripts/core/orientation_service.gd"
+SceneRouter="*res://scripts/core/scene_router.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+textures/vram_compression/import_etc2_astc=true
+anti_aliasing/quality/msaa_3d=1

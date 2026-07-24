@@ -1,0 +1,7 @@
+# Godot 4: Import-Cache & Editor-Zustand (wird von `--import` neu erzeugt)
+.godot/
+
+# Export-/Build-Artefakte
+build/
+export/
+*.tmp
