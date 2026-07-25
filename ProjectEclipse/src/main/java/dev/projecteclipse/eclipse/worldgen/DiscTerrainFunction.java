@@ -1192,6 +1192,8 @@ public final class DiscTerrainFunction {
         DARK_FOREST(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 1.0D, 0.0D, 0.0D),
         MEADOW(Blocks.GRASS_BLOCK, Blocks.DIRT, 3, 0.6D, 0.0D, 0.0D),
         MUSHROOM(Blocks.MYCELIUM, Blocks.DIRT, 3, 0.55D, 0.0D, 0.0D),
+        /** WG2 ashen forest: dead coarse-dirt ground under the burnt canopy. */
+        ASHEN(Blocks.COARSE_DIRT, Blocks.DIRT, 3, 0.9D, 0.0D, 0.0D),
         NETHER_WASTES(Blocks.NETHERRACK, Blocks.NETHERRACK, 3, 1.0D, 0.0D, 0.0D),
         SOUL(Blocks.SOUL_SAND, Blocks.SOUL_SOIL, 3, 0.7D, -2.0D, 0.0D),
         BASALT(Blocks.BASALT, Blocks.BLACKSTONE, 3, 1.3D, 1.0D, 0.0D),
@@ -1226,15 +1228,18 @@ public final class DiscTerrainFunction {
         return switch (path) {
             case "plains", "sunflower_plains", "river" -> SectorStyle.PLAINS;
             case "desert" -> SectorStyle.DESERT;
-            case "badlands", "wooded_badlands", "eroded_badlands" -> SectorStyle.BADLANDS;
+            case "badlands", "wooded_badlands", "eroded_badlands",
+                    "scorched_expanse" -> SectorStyle.BADLANDS;
             case "forest", "birch_forest", "old_growth_birch_forest", "taiga",
-                    "old_growth_pine_taiga" -> SectorStyle.FOREST;
+                    "old_growth_pine_taiga", "moonlit_grove" -> SectorStyle.FOREST;
             case "jungle", "sparse_jungle", "bamboo_jungle" -> SectorStyle.JUNGLE;
-            case "savanna", "savanna_plateau", "windswept_savanna" -> SectorStyle.SAVANNA;
-            case "swamp", "mangrove_swamp" -> SectorStyle.SWAMP;
+            case "savanna", "savanna_plateau", "windswept_savanna",
+                    "amber_savanna" -> SectorStyle.SAVANNA;
+            case "swamp", "mangrove_swamp", "gloom_mire" -> SectorStyle.SWAMP;
             case "snowy_slopes", "snowy_taiga", "ice_spikes", "jagged_peaks" -> SectorStyle.SNOWY;
             case "grove" -> SectorStyle.GROVE;
             case "dark_forest", "pale_garden" -> SectorStyle.DARK_FOREST;
+            case "ashen_forest" -> SectorStyle.ASHEN;
             case "meadow", "cherry_grove" -> SectorStyle.MEADOW;
             case "mushroom_fields" -> SectorStyle.MUSHROOM;
             case "nether_wastes" -> SectorStyle.NETHER_WASTES;

@@ -67,6 +67,16 @@ public final class DiscMapDefaults {
      * Outputs that are themselves table keys resolve to the same result, so the lookup
      * is idempotent (safe to apply both here and in a future {@code DiscMapData.biomeAt}
      * hook).
+     *
+     * <p>WG2: five outer rings are custom eclipse biomes now (the pale-garden pattern —
+     * every wedge's farthest band is a twisted variant of its theme): the swamp repeat →
+     * {@code eclipse:gloom_mire}, old-growth pine taiga → {@code eclipse:ashen_forest}
+     * (the mansion at r ≈ 310 sits in a burnt forest), old-growth birch →
+     * {@code eclipse:moonlit_grove}, windswept savanna → {@code eclipse:amber_savanna},
+     * wooded badlands → {@code eclipse:scorched_expanse}. Ring tables are CODE (not
+     * frozen per save), so
+     * existing saves pick the new outputs up for newly generated chunks only — already
+     * baked chunks keep their old biomes, exactly like the pale-garden rollout.</p>
      */
     private static final Map<String, List<Ring>> OVERWORLD_RINGS = Map.ofEntries(
             Map.entry("minecraft:plains", List.of(
@@ -76,11 +86,11 @@ public final class DiscMapDefaults {
             Map.entry("minecraft:desert", List.of(
                     new Ring(200.0D, "minecraft:desert"),
                     new Ring(310.0D, "minecraft:badlands"),
-                    new Ring(Double.MAX_VALUE, "minecraft:wooded_badlands"))),
+                    new Ring(Double.MAX_VALUE, "eclipse:scorched_expanse"))),
             Map.entry("minecraft:forest", List.of(
                     new Ring(150.0D, "minecraft:forest"),
                     new Ring(280.0D, "minecraft:birch_forest"),
-                    new Ring(Double.MAX_VALUE, "minecraft:old_growth_birch_forest"))),
+                    new Ring(Double.MAX_VALUE, "eclipse:moonlit_grove"))),
             Map.entry("minecraft:jungle", List.of(
                     new Ring(150.0D, "minecraft:jungle"),
                     new Ring(280.0D, "minecraft:sparse_jungle"),
@@ -88,11 +98,11 @@ public final class DiscMapDefaults {
             Map.entry("minecraft:savanna", List.of(
                     new Ring(150.0D, "minecraft:savanna"),
                     new Ring(280.0D, "minecraft:savanna_plateau"),
-                    new Ring(Double.MAX_VALUE, "minecraft:windswept_savanna"))),
+                    new Ring(Double.MAX_VALUE, "eclipse:amber_savanna"))),
             Map.entry("minecraft:swamp", List.of(
                     new Ring(150.0D, "minecraft:swamp"),
                     new Ring(280.0D, "minecraft:mangrove_swamp"),
-                    new Ring(Double.MAX_VALUE, "minecraft:swamp"))),
+                    new Ring(Double.MAX_VALUE, "eclipse:gloom_mire"))),
             Map.entry("minecraft:snowy_slopes", List.of(
                     new Ring(150.0D, "minecraft:snowy_slopes"),
                     new Ring(280.0D, "minecraft:grove"),
@@ -100,7 +110,7 @@ public final class DiscMapDefaults {
             Map.entry("minecraft:dark_forest", List.of(
                     new Ring(150.0D, "minecraft:dark_forest"),
                     new Ring(280.0D, "minecraft:taiga"),
-                    new Ring(Double.MAX_VALUE, "minecraft:old_growth_pine_taiga"))));
+                    new Ring(Double.MAX_VALUE, "eclipse:ashen_forest"))));
 
     /** Base biome id of the outer-snowy-ring whose patches flip to ice_spikes. */
     private static final String SNOWY_OUTER_RING = "minecraft:snowy_taiga";
@@ -326,10 +336,16 @@ public final class DiscMapDefaults {
         // River ribbon along the authored polylines; mushroom shards off the final rim.
         ids.add("minecraft:river");
         ids.add("minecraft:mushroom_fields");
-        // 3-D underground / sky lookups (CaveBiomeMap + End disc).
+        // 3-D underground / sky lookups (CaveBiomeMap + End disc), including the WG2
+        // y-banded cave biomes (fungal/ember deep bands, crystal detail region, and the
+        // umbral basement of the neutral band).
         ids.add("minecraft:dripstone_caves");
         ids.add("minecraft:lush_caves");
         ids.add("minecraft:deep_dark");
+        ids.add(CaveBiomeMap.FUNGAL_HOLLOWS_ID);
+        ids.add(CaveBiomeMap.CRYSTAL_CHASMS_ID);
+        ids.add(CaveBiomeMap.EMBER_DEPTHS_ID);
+        ids.add(CaveBiomeMap.UMBRAL_DEPTHS_ID);
         ids.add("minecraft:the_end");
         return ids;
     }

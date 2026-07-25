@@ -16,7 +16,9 @@ import dev.projecteclipse.eclipse.ferryman.ArenaFight;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
+import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -32,6 +34,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The day-14 finale (spec §2.2): the dragon-egg altar ritual that opens the crossing to
@@ -51,11 +54,15 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * "THE CROSSING ENDS" boss announce, then every banned player is revived through the
  * regular {@link BanService#unban} path — staggered {@value #REVIVE_STAGGER_TICKS}t apart
  * (offline ghosts are cleared from the persistent set; {@link ReviveRitual#onPlayerLoggedIn}
- * finishes their unban on next login). Once the queue drains, everyone still in limbo or
- * the fight arena is brought home to the overworld spawn and the {@code finale_return}
- * reverse-intro cutscene plays for every online player. A wipe never reaches this class —
- * the Eclipse-victory ending is announced by {@code FerrymanEntity.checkWipe()} and nobody
- * is revived ({@code ArenaFight}'s fight watch then returns the arena crowd).</p>
+ * finishes their unban on next login). Once the queue drains, the FIN-4 victory
+ * <b>tableau</b> holds everyone IN the fight world for {@value #TABLEAU_TICKS}t (staged
+ * captions + distant thunder; the boss's scripted collapse plays out in full instead of
+ * being cut off), and only then do the credits take over ({@code CreditsSequence.begin}) —
+ * or, when credits are disabled/missing, everyone still in limbo or the fight arena is
+ * brought home to the overworld spawn and the {@code finale_return} reverse-intro
+ * cutscene plays. A wipe never reaches this class — the Eclipse-victory ending is
+ * announced by {@code FerrymanEntity.checkWipe()} and nobody is revived
+ * ({@code ArenaFight}'s fight watch then returns the arena crowd).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FinaleRitual {
@@ -71,12 +78,26 @@ public final class FinaleRitual {
     public static final int FINALE_DAY = 14;
     /** Victory timeline: delay between two consecutive ghost revives. */
     public static final int REVIVE_STAGGER_TICKS = 10;
-    /** Victory timeline: pause between the last revive and the trip home + cutscene. */
+    /** Victory timeline: pause between the last revive and the victory tableau. */
     private static final int RETURN_DELAY_TICKS = 30;
+    /**
+     * FIN-4 victory tableau: the win is SAVORED in the real fight world before anything
+     * pulls the players away — the old flow jumped from the killing blow to the credits
+     * in under two seconds, cutting off the boss's 100t scripted collapse entirely. The
+     * hold runs {@value #TABLEAU_TICKS}t (16 s) with staged captions and a distant
+     * thunder beat; the collapse, the final toll and the revive thunderclaps all land
+     * INSIDE it, where everyone is still standing in the arena to see them.
+     */
+    private static final int TABLEAU_TICKS = 320;
+    /** Tableau countdown values (ticks REMAINING) at which the second/third beats fire. */
+    private static final int TABLEAU_STILL_TICK = 200;
+    private static final int TABLEAU_HOME_TICK = 90;
 
     // --- victory timeline state (server thread only) ---
     private static boolean victoryRunning;
     private static int victoryCooldown;
+    /** Tableau ticks remaining (−1 = not in the tableau). */
+    private static int tableauTicks = -1;
     private static final Deque<UUID> reviveQueue = new ArrayDeque<>();
 
     private FinaleRitual() {}
@@ -194,6 +215,10 @@ public final class FinaleRitual {
     }
 
     private static void tickVictory(MinecraftServer server) {
+        if (tableauTicks >= 0) {
+            tickTableau(server);
+            return;
+        }
         if (--victoryCooldown > 0) {
             return;
         }
@@ -215,18 +240,59 @@ public final class FinaleRitual {
                         + "ban cleared for revive-on-login", next);
             }
             if (reviveQueue.isEmpty()) {
-                victoryCooldown = RETURN_DELAY_TICKS; // Beat of silence before the trip home.
+                victoryCooldown = RETURN_DELAY_TICKS; // Beat of silence before the tableau.
             }
             return;
         }
+        startTableau(server);
+    }
+
+    /** FIN-4: opens the victory tableau — "the toll is paid", one deep bell for everyone. */
+    private static void startTableau(MinecraftServer server) {
+        tableauTicks = TABLEAU_TICKS;
+        captionAll(server, "eclipse.caption.finale.toll_paid", 90, S2CCaptionPayload.STYLE_TITLE);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.playNotifySound(EclipseSounds.BOSS_FERRYMAN_BELL.get(), SoundSource.AMBIENT, 1.2F, 0.5F);
+        }
+        EclipseMod.LOGGER.info("Finale victory tableau: {}t hold in the fight world before the credits",
+                TABLEAU_TICKS);
+    }
+
+    /**
+     * The tableau's staged beats (countdown values, not elapsed): the stillness whisper
+     * at {@value #TABLEAU_STILL_TICK}t left, the going-home line + distant thunder at
+     * {@value #TABLEAU_HOME_TICK}t left, then the credits take over (or the legacy trip
+     * home when credits are disabled/missing — the same fallback the drain always had).
+     */
+    private static void tickTableau(MinecraftServer server) {
+        tableauTicks--;
+        if (tableauTicks == TABLEAU_STILL_TICK) {
+            captionAll(server, "eclipse.caption.finale.still", 90, S2CCaptionPayload.STYLE_WHISPER);
+        }
+        if (tableauTicks == TABLEAU_HOME_TICK) {
+            captionAll(server, "eclipse.caption.finale.home", 90, S2CCaptionPayload.STYLE_SUBTITLE);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 0.6F, 0.7F);
+            }
+        }
+        if (tableauTicks > 0) {
+            return;
+        }
+        tableauTicks = -1;
         victoryRunning = false;
-        // C15: the revive-drain chains into the final credits sequence. begin() returns false
+        // C15: the tableau chains into the final credits sequence. begin() returns false
         // when credits are disabled (config) or the epilogue dimension is missing — in that
         // case we keep the pre-credits behavior: trip home + finale_return descent.
         if (CreditsSequence.begin(server)) {
             return;
         }
         bringEveryoneHome(server);
+    }
+
+    private static void captionAll(MinecraftServer server, String key, int ticks, int style) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CCaptionPayload(key, ticks, style));
+        }
     }
 
     /** Ships the living home from limbo/the fight arena and plays the reverse-intro descent. */
@@ -261,6 +327,7 @@ public final class FinaleRitual {
                     reviveQueue.size());
         }
         victoryRunning = false;
+        tableauTicks = -1;
         reviveQueue.clear();
     }
 

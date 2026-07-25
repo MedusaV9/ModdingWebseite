@@ -261,6 +261,9 @@ public final class FrozenParams {
                 frozen = createInitialFreeze(server, eclipseDir);
                 writeFreeze = true;
             }
+            if (migrateFrozenOres(freezeFile, frozen)) {
+                writeFreeze = true;
+            }
         }
         if (writeFreeze) {
             try {
@@ -274,6 +277,46 @@ public final class FrozenParams {
         saveEclipseDir = eclipseDir;
         activeServer = server;
         activateFromJson(server, eclipseDir, frozen, true);
+    }
+
+    /**
+     * FIX-ORES (BUG A): version-gated migration of the frozen {@code ores} section —
+     * the same backup-and-regenerate pattern as {@code GoalConfig} (FIX-ECON), applied
+     * to the per-save freeze because {@link #activateFromJson} re-extracts the frozen
+     * section over {@code <save>/eclipse/ores.json} on EVERY boot (a file-level
+     * migration alone would be undone next boot). A freeze whose
+     * {@code ores.configVersion} is older than {@link OreConfig#CONFIG_VERSION}
+     * (missing = v1) has the whole freeze backed up as
+     * {@code worldgen.json.bak-v<oldVersion>} and its {@code ores} member replaced with
+     * the current defaults; all other frozen sections (map/stages/end/fogstorms) are
+     * untouched. Safe on live saves: ores are a pure per-block field, so generated
+     * chunks keep their blocks and only not-yet-generated terrain uses the new table.
+     *
+     * <p>Freezes WITHOUT an {@code ores} section (very old saves) are left to the
+     * standalone {@code ores.json} migration inside {@link OreConfig#reload}.</p>
+     */
+    private static boolean migrateFrozenOres(Path freezeFile, JsonObject frozen) {
+        if (!frozen.has("ores") || !frozen.get("ores").isJsonObject()) {
+            return false;
+        }
+        int fileVersion = OreConfig.versionOf(frozen.getAsJsonObject("ores"));
+        if (fileVersion >= OreConfig.CONFIG_VERSION) {
+            return false;
+        }
+        Path backup = freezeFile.resolveSibling(freezeFile.getFileName() + ".bak-v" + fileVersion);
+        try {
+            Files.copy(freezeFile, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("FrozenParams: failed to back up {} before ore migration — keeping the old ores",
+                    freezeFile, e);
+            return false;
+        }
+        frozen.add("ores", OreConfig.defaultRootJson());
+        EclipseMod.LOGGER.warn("FrozenParams: frozen 'ores' section was config version {} (< {}): backed the "
+                + "old freeze up to {} and regenerated the rebalanced ore defaults. Custom ore authoring "
+                + "must be re-applied via /eclipse-worldgen refreeze ores.",
+                fileVersion, OreConfig.CONFIG_VERSION, backup.getFileName());
+        return true;
     }
 
     @SubscribeEvent

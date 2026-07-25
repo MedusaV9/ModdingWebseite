@@ -1,0 +1,28 @@
+{
+  "_comment": "WG2 crystal_chasms: duskstone veins threading the crystal region (biome filter limits them to the chasms).",
+  "config": {
+    "discard_chance_on_air_exposure": 0.0,
+    "size": 24,
+    "targets": [
+      {
+        "state": {
+          "Name": "eclipse:duskstone"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:stone_ore_replaceables"
+        }
+      },
+      {
+        "state": {
+          "Name": "eclipse:duskstone"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:deepslate_ore_replaceables"
+        }
+      }
+    ]
+  },
+  "type": "minecraft:ore"
+}

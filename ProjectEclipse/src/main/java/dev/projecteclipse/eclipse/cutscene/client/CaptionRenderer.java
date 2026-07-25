@@ -98,6 +98,15 @@ public final class CaptionRenderer {
     private static int fadeHold;
     private static int fadeOut;
     private static int fadeArgb = 0xFF000000;
+    /**
+     * FIN-6 crossfade seam: the envelope the new fade REPLACED, captured at replace time
+     * (color + its alpha at that instant). While the new fade rises, color and alpha lerp
+     * FROM this snapshot instead of from transparent — a black→white or white→black
+     * hand-off is a smooth color melt, never a pop to the world underneath. Zero when the
+     * previous envelope was already clear (the common case — behavior unchanged).
+     */
+    private static int fadeFromArgb;
+    private static float fadeFromAlpha;
 
     private CaptionRenderer() {}
 
@@ -129,6 +138,10 @@ public final class CaptionRenderer {
      * {@code outTicks}. {@code argb}'s alpha is the peak opacity.
      */
     public static void fade(int inTicks, int holdTicks, int outTicks, int argb) {
+        // FIN-6: snapshot the envelope being replaced so the rise crossfades from it
+        // (white→black is a slow color melt, not a pop through the world).
+        fadeFromAlpha = fadeEnvelope(0.0F) * (((fadeArgb >>> 24) & 0xFF) / 255.0F);
+        fadeFromArgb = fadeArgb;
         fadeStartTick = ticks;
         fadeIn = Math.max(0, inTicks);
         // Safety clamp: no fade may hold the screen longer than 30s. A desynced sequence
@@ -143,6 +156,7 @@ public final class CaptionRenderer {
         QUEUE.clear();
         active = null;
         fadeStartTick = Integer.MIN_VALUE;
+        fadeFromAlpha = 0.0F;
     }
 
     /**
@@ -230,17 +244,40 @@ public final class CaptionRenderer {
     // --- fade ---
 
     private static void renderFade(GuiGraphics guiGraphics, float partial) {
-        float envelope = fadeEnvelope(partial);
-        if (envelope <= 0.0F) {
+        if (fadeStartTick == Integer.MIN_VALUE) {
             return;
         }
-        int peakAlpha = (fadeArgb >>> 24) & 0xFF;
-        int alpha = Mth.clamp(Math.round(peakAlpha * envelope), 0, 255);
+        float t = ticks + partial - fadeStartTick;
+        float envelope = fadeEnvelope(partial);
+        float peak = ((fadeArgb >>> 24) & 0xFF) / 255.0F;
+        float alphaFrac = peak * envelope;
+        int rgb = fadeArgb & 0x00FFFFFF;
+        // FIN-6 crossfade: while the new fade rises over a still-opaque predecessor,
+        // color and alpha melt from the snapshot instead of dipping through the world.
+        if (fadeFromAlpha > 0.0F) {
+            if (t < fadeIn) {
+                float s = smooth(fadeIn <= 0 ? 1.0F : t / fadeIn);
+                alphaFrac = Mth.lerp(s, fadeFromAlpha, peak);
+                rgb = lerpRgb(fadeFromArgb & 0x00FFFFFF, rgb, s);
+            } else {
+                fadeFromAlpha = 0.0F; // rise complete — the crossfade source is spent
+            }
+        }
+        int alpha = Mth.clamp(Math.round(alphaFrac * 255.0F), 0, 255);
         if (alpha <= 0) {
             return;
         }
         guiGraphics.fill(0, 0, guiGraphics.guiWidth(), guiGraphics.guiHeight(),
-                (alpha << 24) | (fadeArgb & 0x00FFFFFF));
+                (alpha << 24) | rgb);
+    }
+
+    /** Component-wise RGB lerp (no alpha) for the fade crossfade. */
+    private static int lerpRgb(int from, int to, float t) {
+        t = Mth.clamp(t, 0.0F, 1.0F);
+        int red = (int) Mth.lerp(t, (from >> 16) & 0xFF, (to >> 16) & 0xFF);
+        int green = (int) Mth.lerp(t, (from >> 8) & 0xFF, (to >> 8) & 0xFF);
+        int blue = (int) Mth.lerp(t, from & 0xFF, to & 0xFF);
+        return (red << 16) | (green << 8) | blue;
     }
 
     /** Smoothed in→hold→out envelope in [0,1]; self-clears when finished. */

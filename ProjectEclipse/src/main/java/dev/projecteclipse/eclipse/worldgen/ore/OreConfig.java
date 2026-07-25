@@ -45,6 +45,19 @@ import net.neoforged.fml.loading.FMLPaths;
  * per-cell-probability layer of an equivalent vein size.</p>
  */
 public final class OreConfig {
+    /**
+     * FIX-ORES (BUG A): {@code configVersion} gates a backup-and-regenerate migration —
+     * the exact FIX-ECON pattern from {@code GoalConfig} (a file older than this, with a
+     * missing field counting as v1, is copied to {@code ores.json.bak-v<oldVersion>} and
+     * regenerated with the current defaults). Version 2 = the deep-disc rebalance:
+     * vanilla 1.21.1 tables were authored for a -64..320 world and produced ~2.4× vanilla
+     * ore mass crammed into the y≤{@value #OVERWORLD_MAX_Y_CAP} band (deep triangles that
+     * vanilla clips at its -64 floor place their FULL mass in this -130-deep disc, and
+     * emerald placed everywhere). v2 re-bands each ore over the real disc body
+     * (lens bottom -130..-80 up to the cap) and cuts vein counts roughly in half. Bump
+     * when the shipped default table must replace live save freezes.
+     */
+    public static final int CONFIG_VERSION = 2;
     /** Hard ceiling for overworld ore veins — prevents surface-exposed ore (D5 / req 8). */
     public static final int OVERWORLD_MAX_Y_CAP = 52;
     /**
@@ -164,6 +177,11 @@ public final class OreConfig {
             EclipseMod.LOGGER.error("Failed to create ore config directory {}", configDir, e);
         }
 
+        // FIX-ORES: version-gated migration BEFORE the load — an outdated file is backed
+        // up as ores.json.bak-v<N> and deleted so the branch below regenerates the
+        // current defaults (exact GoalConfig/FIX-ECON pattern).
+        migrateIfOutdated(file);
+
         JsonObject root;
         if (!Files.exists(file)) {
             root = defaultRoot();
@@ -196,6 +214,60 @@ public final class OreConfig {
     private static void ensureLoaded() {
         if (!loaded) {
             reloadDefault();
+        }
+    }
+
+    /**
+     * Version of an {@code ores.json} root object; a missing/unreadable
+     * {@code configVersion} counts as v1 (pre-versioning files), mirroring
+     * {@code GoalConfig}.
+     */
+    public static int versionOf(@Nullable JsonObject root) {
+        if (root == null || !root.has("configVersion")) {
+            return 1;
+        }
+        try {
+            return root.get("configVersion").getAsInt();
+        } catch (RuntimeException e) {
+            return 1;
+        }
+    }
+
+    /**
+     * FIX-ORES: an on-disk {@code ores.json} older than {@link #CONFIG_VERSION} (missing
+     * {@code configVersion} = v1) is copied aside as {@code ores.json.bak-v<oldVersion>}
+     * and deleted, so the following load regenerates the current defaults. Preserves
+     * nothing by design — the rebalanced table replaces the old authoring; the backup
+     * keeps it recoverable. (Exact copy of the FIX-ECON pattern in {@code GoalConfig}.)
+     */
+    private static void migrateIfOutdated(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return;
+        }
+        int fileVersion = 1;
+        try {
+            JsonElement root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
+            if (root.isJsonObject()) {
+                fileVersion = versionOf(root.getAsJsonObject());
+            }
+        } catch (IOException | RuntimeException e) {
+            EclipseMod.LOGGER.warn("{}: unreadable while checking configVersion; treating as v1 ({})",
+                    file.getFileName(), e.getMessage());
+        }
+        if (fileVersion >= CONFIG_VERSION) {
+            return;
+        }
+        Path backup = file.resolveSibling(file.getFileName() + ".bak-v" + fileVersion);
+        try {
+            Files.copy(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.delete(file);
+            EclipseMod.LOGGER.warn("{} was config version {} (< {}): backed the old file up to {} "
+                    + "and regenerating the rebalanced min_y -176 ore defaults. "
+                    + "Custom authoring must be re-applied to the new file.",
+                    file.getFileName(), fileVersion, CONFIG_VERSION, backup.getFileName());
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to back up outdated config {} — keeping the old file",
+                    file, e);
         }
     }
 
@@ -388,12 +460,21 @@ public final class OreConfig {
     // diamond stage 2 (post-milestone-2), netherite stage 2 in the Nether (second
     // annulus, day 10). Mod ores keep requiredMod.
     //
-    // B2: size/count/distribution values are vanilla 1.21.1 (OreFeatures/OrePlacements).
-    // Layers above the OVERWORLD_MAX_Y_CAP (coal upper y136+, iron upper y80+, gold
-    // extra) are omitted — they can never place on the disc. The air-exposure "buried"
-    // discard has no per-block equivalent here and is dropped; triangle masses above the
-    // cap self-limit density exactly like vanilla's unreachable heights would (e.g.
-    // emerald's 100@triangle(-16..480) yields only ~3.7 sub-cap veins per chunk).
+    // FIX-ORES v2 (BUG A): the B2 tables copied vanilla 1.21.1 numbers verbatim, but
+    // those were authored for a -64..320 world. On the disc (solid body from the lens
+    // bottom at -130..-80 up to the y<=52 cap) they misbehaved three ways: (1) deep
+    // triangles vanilla clips at its -64 floor placed their FULL mass here
+    // (redstone_lower 8→4.1 vanilla, diamond triangles 2× vanilla mass) — "far too
+    // many"; (2) every ore's mass piled into the same -64..52 band with no vertical
+    // progression (diamonds two steps under the grass, coal down at the floor) —
+    // "without sense"; (3) emerald placed ~3.7 veins/chunk in EVERY column (vanilla
+    // routes it to mountain biomes; this per-block field has no biome routing). v2
+    // re-bands each ore over the real column (coal/copper high near the surface, iron
+    // mid, gold below the deepslate line, lapis mid-deep, redstone deep, diamond only
+    // in the -128..-72 basement) and roughly halves vein counts: ~29 veins/chunk total
+    // vs ~71 before. Deepslate starts at y≈0 (H_DEEPSLATE), so "deep" ores are the
+    // deepslate variants as expected. Progression gates (unlockStage / bandFactor /
+    // centerBias) are unchanged.
     // Netherite deliberately KEEPS its event-tuned scarcity (way below vanilla): only
     // its vein shape/caliber went vanilla (sizes 3/2).
 
@@ -404,89 +485,97 @@ public final class OreConfig {
 
     private static JsonObject defaultRoot() {
         JsonObject root = new JsonObject();
+        root.addProperty("configVersion", CONFIG_VERSION);
+        root.addProperty("_comment", "Ore tables for the floating-disc world (min_y -176, ore cap y<=52). "
+                + "Per ore: layers[] with vanilla-style size/count/distribution over minY..maxY. "
+                + "configVersion gates a backup-and-regenerate migration (ores.json.bak-v<N>) — "
+                + "custom authoring must bump or match the shipped version to survive updates.");
         root.add("overworld", defaultOverworld());
         root.add("nether", defaultNether());
         return root;
     }
 
+    // The disc's SOLID body spans lensBottomY(r) (-130 at the center, ~-88 at the final
+    // rim — DiscProfile.OVERWORLD centerBottomY -130 / rimBottomY -80) up to the surface
+    // (y 65..90), with the y<=52 cap on top. All v2 bands below fit inside -130..52, so
+    // the deepest layers (diamond/redstone) thin naturally towards the rim where the
+    // lens rises above their bands — consistent with the existing centerBias/bandFactor
+    // "riches at the center" design.
     private static JsonArray defaultOverworld() {
         JsonArray array = new JsonArray();
-        // Coal: vanilla ore_coal_lower — size 17 ("coal 17@large"), 20/chunk, triangle 0..192.
+        // Coal: the surface ore — high band only, all above the deepslate line.
+        // 5 veins/chunk (was 3 sub-cap veins of size 17 = more mass than it looked).
         array.add(ore("coal", "minecraft:coal_ore", "minecraft:deepslate_coal_ore",
-                0, 192, 0, FLAT_BANDS, false, null,
-                layer(17, 20.0D, "triangle", 0, 192)));
-        // Copper: vanilla ore_copper (size 10, 16/chunk, triangle -16..112) plus a small
-        // size-20 share standing in for the dripstone-cave ore_copper_large variant
-        // (this per-block field has no biome routing).
+                -8, 52, 0, FLAT_BANDS, false, null,
+                layer(12, 5.0D, "triangle", -8, 52)));
+        // Copper: high band beside coal (dripstone-large layer dropped — it doubled the
+        // caliber for no routing reason). 5 veins/chunk, was ~10.8.
         array.add(ore("copper", "minecraft:copper_ore", "minecraft:deepslate_copper_ore",
-                -16, 112, 0, FLAT_BANDS, false, null,
-                layer(10, 16.0D, "triangle", -16, 112),
-                layer(20, 3.0D, "triangle", -16, 112)));
-        // Iron stage 0: milestone L2 costs 48 iron (FINAL-DOPA-SOL §3). Vanilla
-        // ore_iron_middle (9, 10/chunk, triangle -24..56) + ore_iron_small (4, 10/chunk,
-        // uniform -64..72); ore_iron_upper lives above the cap.
+                -24, 52, 0, FLAT_BANDS, false, null,
+                layer(8, 5.0D, "triangle", -24, 52)));
+        // Iron stage 0: milestone L2 costs 48 iron (FINAL-DOPA-SOL §3) — stays findable
+        // but mid-column: main triangle straddles the deepslate line, small veins spread
+        // wider. 6 veins/chunk, was ~18.5.
         array.add(ore("iron", "minecraft:iron_ore", "minecraft:deepslate_iron_ore",
-                -64, 72, 0, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null,
-                layer(9, 10.0D, "triangle", -24, 56),
-                layer(4, 10.0D, "uniform", -64, 72)));
-        // Gold stage 1: milestone L3 costs 32 gold; band 1 exists from event start
-        // (FINAL-DOPA-SOL §3). Vanilla ore_gold (9, 4/chunk, triangle -64..32) +
-        // ore_gold_lower (9, avg 0.5/chunk, uniform -64..-48).
+                -104, 40, 0, new double[] {1.0D, 1.25D, 1.1D, 0.9D, 0.9D, 0.7D}, false, null,
+                layer(9, 3.5D, "triangle", -80, 8),
+                layer(4, 2.5D, "uniform", -104, 40)));
+        // Gold stage 1: below the deepslate line only (deepslate_gold), band 1 exists
+        // from event start (FINAL-DOPA-SOL §3). 2 veins/chunk, was 4.5.
         array.add(ore("gold", "minecraft:gold_ore", "minecraft:deepslate_gold_ore",
-                -64, 32, 1, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null,
-                layer(9, 4.0D, "triangle", -64, 32),
-                layer(9, 0.5D, "uniform", -64, -48)));
-        // Redstone: vanilla ore_redstone (8, 4/chunk, uniform -64..15) + ore_redstone_lower
-        // (8, 8/chunk, triangle -96..-32).
+                -112, -24, 1, new double[] {1.0D, 1.2D, 1.0D, 0.9D, 0.8D, 0.7D}, false, null,
+                layer(9, 2.0D, "triangle", -112, -24)));
+        // Redstone: deep band above the disc floor. 4 veins/chunk, was 12 (the old
+        // -96..-32 triangle placed FULL mass that vanilla clips at its -64 floor).
         array.add(ore("redstone", "minecraft:redstone_ore", "minecraft:deepslate_redstone_ore",
-                -96, 15, 2, FLAT_BANDS, false, null,
-                layer(8, 4.0D, "uniform", -64, 15),
-                layer(8, 8.0D, "triangle", -96, -32)));
-        // Lapis: vanilla ore_lapis (7, 2/chunk, triangle -32..32) + ore_lapis_buried
-        // (7, 4/chunk, uniform -64..64).
+                -120, -32, 2, FLAT_BANDS, false, null,
+                layer(8, 3.0D, "triangle", -120, -48),
+                layer(8, 1.0D, "uniform", -104, -32)));
+        // Lapis: mid-deep, between iron and redstone. 2.5 veins/chunk, was ~5.6.
         array.add(ore("lapis", "minecraft:lapis_ore", "minecraft:deepslate_lapis_ore",
-                -64, 64, 2, FLAT_BANDS, false, null,
-                layer(7, 2.0D, "triangle", -32, 32),
-                layer(7, 4.0D, "uniform", -64, 64)));
+                -120, 0, 2, FLAT_BANDS, false, null,
+                layer(7, 1.5D, "triangle", -96, -8),
+                layer(7, 1.0D, "uniform", -120, 0)));
         // Diamond stage 2: milestone L4 (day 8) costs 24 diamonds (FINAL-DOPA-SOL §3).
-        // Vanilla ore_diamond (4, 7/chunk) + medium (8, 2/chunk uniform -64..-4) + large
-        // (12, rarity 1/9 => 0.111/chunk) + buried (8, 4/chunk), triangles -144..16.
+        // Basement-only (-128..-72, peak -100 just above the center floor): small veins,
+        // a scarce medium layer hugging the floor, and the rare "large" (~1-in-12
+        // chunks). ~3.8 veins/chunk, was ~13.1 (2× vanilla mass because the -144..16
+        // triangles fully fit inside this deep world).
         array.add(ore("diamond", "minecraft:diamond_ore", "minecraft:deepslate_diamond_ore",
-                -144, 16, 2, new double[] {1.3D, 1.0D, 0.7D, 0.45D, 0.3D, 0.2D}, true, null,
-                layer(4, 7.0D, "triangle", -144, 16),
-                layer(8, 2.0D, "uniform", -64, -4),
-                layer(12, 0.111D, "triangle", -144, 16),
-                layer(8, 4.0D, "triangle", -144, 16)));
-        // Emerald: vanilla ore_emerald (3, 100/chunk, triangle -16..480). The mass above
-        // the y<=52 cap self-limits this to ~3.7 veins/chunk of size 3 — the vanilla
-        // sub-surface emerald experience without biome routing.
+                -128, -72, 2, new double[] {1.3D, 1.0D, 0.7D, 0.45D, 0.3D, 0.2D}, true, null,
+                layer(4, 3.0D, "triangle", -128, -72),
+                layer(8, 0.7D, "uniform", -128, -96),
+                layer(12, 0.08D, "triangle", -128, -72)));
+        // Emerald: a genuinely rare shallow find now — 0.8 veins/chunk of size 3 (was
+        // ~3.7 in every column; vanilla gets its density from mountain-biome routing
+        // this per-block field does not have).
         array.add(ore("emerald", "minecraft:emerald_ore", "minecraft:deepslate_emerald_ore",
-                -16, 480, 0, FLAT_BANDS, false, null,
-                layer(3, 100.0D, "triangle", -16, 480)));
-        // Create zinc: no vanilla table — keeps its legacy event tuning as a CELL layer
-        // (count = old cellP 0.18, size ≈ old radius 2.8 blob yield).
+                -16, 52, 0, FLAT_BANDS, false, null,
+                layer(3, 0.8D, "triangle", -16, 52)));
+        // Create zinc: no vanilla table — event-tuned CELL layer, moved to the mid band
+        // (clear of copper's surface band) and thinned 0.18 → 0.10 per cell.
         array.add(ore("zinc", "create:zinc_ore", "create:deepslate_zinc_ore",
-                -32, 52, 3, FLAT_BANDS, false, "create",
-                layer(11, 0.18D, "cell", -32, 52)));
+                -64, 8, 3, FLAT_BANDS, false, "create",
+                layer(11, 0.10D, "cell", -64, 8)));
         return array;
     }
 
     private static JsonArray defaultNether() {
         JsonArray array = new JsonArray();
         // Stage 1 for quartz + Nether gold: the first Nether annulus opens on day 2
-        // (FINAL-DOPA-SOL §3). Vanilla calibers/counts (ore_quartz_nether 14@16,
-        // ore_gold_nether 10@10), spread uniformly over the disc's own gate band (the
-        // disc floor/ceiling sit elsewhere than vanilla's 10..117 world band).
+        // (FINAL-DOPA-SOL §3). Vanilla calibers kept, counts halved (16→8, 10→5): the
+        // nether disc's gate band is much shorter than vanilla's 10..117 world band, so
+        // vanilla counts read as walls of ore.
         array.add(ore("quartz", "minecraft:nether_quartz_ore", "minecraft:nether_quartz_ore",
                 36, 140, 1, FLAT_BANDS, false, null,
-                layer(14, 16.0D, "uniform", 36, 140)));
+                layer(14, 8.0D, "uniform", 36, 140)));
         array.add(ore("nether_gold", "minecraft:nether_gold_ore", "minecraft:nether_gold_ore",
                 34, 110, 1, FLAT_BANDS, false, null,
-                layer(10, 10.0D, "uniform", 34, 110)));
+                layer(10, 5.0D, "uniform", 34, 110)));
         // Deliberately still stage 2 AND deliberately far below vanilla density:
         // netherite is the L5 era and the day-10 second annulus is its intended window
         // (FINAL-DOPA-SOL §3). Vanilla vein calibers (large 3 / small 2), old total
-        // rarity (~0.05 veins/chunk, ex-cellP 0.022).
+        // rarity (~0.05 veins/chunk, ex-cellP 0.022). UNCHANGED in v2.
         array.add(ore("netherite", "minecraft:ancient_debris", "minecraft:ancient_debris",
                 34, 72, 2, FLAT_BANDS, true, null,
                 layer(3, 0.033D, "triangle", 34, 72),

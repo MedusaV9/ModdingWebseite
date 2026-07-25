@@ -63,6 +63,9 @@ public final class TitleCardLayer {
     private static final int BAND_PAD_BOTTOM = 12;
     /** Warm credits gold (the DANGER slot of the boss card's palette). */
     private static final int GOLD = 0xFFE9C46A;
+    /** FIN-6 gentle end cards: slow silent fade-in/out instead of the glitch decode. */
+    private static final int GENTLE_IN_TICKS = 50;
+    private static final int GENTLE_OUT_TICKS = 50;
 
     static {
         CreditsPayloads.setClientTitleHandler(TitleCardLayer::handle);
@@ -74,6 +77,8 @@ public final class TitleCardLayer {
     private static String title = "";
     private static int holdTicks;
     private static int glitchSalt;
+    /** FIN-6: the active card fades gently (no decode, no sounds, no flashes). */
+    private static boolean gentle;
     /** Ticks since the active card started; {@code -1} = no card running. */
     private static int ticks = -1;
     private static boolean lockSoundPlayed;
@@ -104,6 +109,12 @@ public final class TitleCardLayer {
             return;
         }
         ticks++;
+        if (gentle) {
+            if (ticks > GENTLE_IN_TICKS + holdTicks + GENTLE_OUT_TICKS) {
+                ticks = -1;
+            }
+            return;
+        }
         int decodeEnd = decodeEndTick();
         if (ticks <= decodeEnd) {
             int locked = lockedChars(ticks);
@@ -124,10 +135,14 @@ public final class TitleCardLayer {
         title = EclipseLang.tr(payload.titleKey()).getString();
         holdTicks = Math.max(20, payload.holdTicks());
         glitchSalt = ThreadLocalRandom.current().nextInt();
+        gentle = payload.gentle();
         ticks = 0;
         lockSoundPlayed = false;
-        UiSounds.error(); // arrival glitch burst
-        EclipseMod.LOGGER.info("Credits title card: '{}' (hold {}t)", title, holdTicks);
+        if (!gentle) {
+            UiSounds.error(); // arrival glitch burst — the gentle end cards stay silent
+        }
+        EclipseMod.LOGGER.info("Credits title card: '{}' (hold {}t, {})", title, holdTicks,
+                gentle ? "gentle" : "decode");
     }
 
     private static int decodeEndTick() {
@@ -153,6 +168,10 @@ public final class TitleCardLayer {
         GuiGraphics guiGraphics = event.getGuiGraphics();
         DeltaTracker deltaTracker = event.getPartialTick();
         float t = ticks + deltaTracker.getGameTimeDeltaPartialTick(true);
+        if (gentle) {
+            renderGentle(guiGraphics, t);
+            return;
+        }
         int decodeEnd = decodeEndTick();
         float alpha = t <= decodeEnd + holdTicks ? 1.0F
                 : Mth.clamp(1.0F - (t - decodeEnd - holdTicks) / FADE_TICKS, 0.0F, 1.0F);
@@ -225,6 +244,46 @@ public final class TitleCardLayer {
                         EclipseUiTheme.withAlpha(0xFFFFFFFF, BASS_FLASH_ALPHA * flashFrame * alpha));
             }
         }
+    }
+
+    /**
+     * FIN-6 gentle end card: a slow, silent fade-in / hold / fade-out of the auto-fitted
+     * title between two static gold hairlines — the post-eclipse black-screen language
+     * ("Minecraft Eclipse kommt zurück in…"), no glitch, no flashes, no scrim band (the
+     * screen behind it is already pure black).
+     */
+    private static void renderGentle(GuiGraphics guiGraphics, float t) {
+        float in = Mth.clamp(t / GENTLE_IN_TICKS, 0.0F, 1.0F);
+        float out = Mth.clamp((GENTLE_IN_TICKS + holdTicks + GENTLE_OUT_TICKS - t)
+                / GENTLE_OUT_TICKS, 0.0F, 1.0F);
+        float alpha = Math.min(in * in * (3.0F - 2.0F * in), out * out * (3.0F - 2.0F * out));
+        int textAlpha = Mth.clamp(Math.round(alpha * 255.0F), 0, 255);
+        if (textAlpha < 8) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        Font font = minecraft.font;
+        int width = guiGraphics.guiWidth();
+        int centerX = width / 2;
+        int cardCenterY = Math.round(guiGraphics.guiHeight() * 0.44F);
+        float scale = 2.0F;
+        int titleWidth = font.width(title);
+        while (scale > 0.8F && titleWidth * scale > width * 0.92F) {
+            scale -= 0.1F;
+        }
+        int scaledHalfHeight = Math.round(font.lineHeight * scale / 2.0F);
+        int hairline = EclipseUiTheme.withAlpha(GOLD, alpha * 0.55F);
+        int bandTop = cardCenterY - scaledHalfHeight - BAND_PAD_TOP;
+        int bandBottom = cardCenterY + scaledHalfHeight + BAND_PAD_BOTTOM;
+        guiGraphics.fill(0, bandTop, width, bandTop + 1, hairline);
+        guiGraphics.fill(0, bandBottom - 1, width, bandBottom, hairline);
+        var pose = guiGraphics.pose();
+        pose.pushPose();
+        pose.translate(centerX - titleWidth * scale / 2.0F, cardCenterY - scaledHalfHeight, 0.0F);
+        pose.scale(scale, scale, 1.0F);
+        guiGraphics.drawString(font, title, 0, 0,
+                (textAlpha << 24) | (EclipseUiTheme.TEXT & 0xFFFFFF), false);
+        pose.popPose();
     }
 
     /**

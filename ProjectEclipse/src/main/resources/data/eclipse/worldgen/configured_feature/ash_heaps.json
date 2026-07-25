@@ -1,0 +1,9 @@
+{
+  "_comment": "WG2 ashen_forest: soft ash-block heaps on the burnt floor (forest_rock boulders).",
+  "config": {
+    "state": {
+      "Name": "eclipse:ash_block"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

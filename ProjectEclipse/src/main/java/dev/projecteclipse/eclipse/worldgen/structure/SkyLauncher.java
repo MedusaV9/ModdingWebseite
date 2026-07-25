@@ -89,12 +89,23 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the launcher appears WITH the island (the End disc's {@code final_day} window), and
  * the return pad can only stamp onto disc blocks that actually exist.</p>
  *
- * <p><b>Ballistics</b>: the vertical start speed is solved by simulating vanilla's
- * per-tick integration {@code v' = (v - 0.08) * 0.98} until the arc clears the disc
- * surface + {@value #APEX_CLEARANCE} (drag makes closed forms lie); the horizontal
- * speed uses the air-drag geometric sum ({@code Σ 0.91^n ≈ 11.1}) capped at
- * {@value #MAX_HORIZONTAL_SPEED}. A per-flight tick watch nudges the velocity ONCE if
- * the descent would miss the footprint and drops on landing.</p>
+ * <p><b>Ballistics + the levitation climb (FIN-1)</b>: the vertical start speed is
+ * solved by simulating vanilla's per-tick integration {@code v' = (v - 0.08) * 0.98}
+ * until the arc clears the disc surface + {@value #APEX_CLEARANCE} (drag makes closed
+ * forms lie). But vanilla's {@code ClientboundSetEntityMotionPacket} clamps every
+ * velocity component to ±{@value #MOTION_PACKET_LIMIT} before the (client-authoritative)
+ * player ever sees it — a single impulse therefore tops out at ≈61 blocks of rise,
+ * 100–200 short of the disc. When {@link #solveLaunchVy} reports the rise is beyond a
+ * clamped impulse, the launch switches to a SUSTAINED CLIMB: the initial
+ * ±{@value #MOTION_PACKET_LIMIT} punch plus a strong Levitation effect
+ * (amplifier {@value #CLIMB_LEVITATION_AMPLIFIER} ⇒ ≈2.7 blocks/tick terminal — and
+ * Levitation exempts the vanilla "flying is not enabled" kick), horizontal steering
+ * pushes every {@value #CLIMB_STEER_STRIDE}t toward the landing ring, and a handoff at
+ * the computed island surface + {@value #APEX_CLEARANCE} that strips the Levitation and
+ * tips the player into a slow-fall descent right above the target. The per-flight tick
+ * watch then re-steers the descent while the column would miss the footprint and drops
+ * on landing. Every push stays under the packet clamp, so what the server solves is
+ * what the client flies.</p>
  *
  * <p><b>Fall grace</b>: {@link #grantFallGrace} stamps an expiry game time into the
  * player's persistent data; the {@link LivingIncomingDamageEvent} guard cancels fall
@@ -163,8 +174,30 @@ public final class SkyLauncher {
     private static final double VERTICAL_DRAG = 0.98D;
     /** Air horizontal displacement sum: Σ 0.91^n = 1 / 0.09 ≈ 11.1 blocks per unit speed. */
     private static final double HORIZONTAL_TRAVEL_FACTOR = 11.1D;
-    private static final double MAX_HORIZONTAL_SPEED = 6.0D;
-    private static final double MAX_VERTICAL_SPEED = 12.0D;
+    /**
+     * Vanilla {@code ClientboundSetEntityMotionPacket} clamps every component to ±3.9
+     * — any speed the server sets above this is a lie the client never receives. All
+     * impulses and steering pushes stay under it (FIN-1).
+     */
+    private static final double MOTION_PACKET_LIMIT = 3.9D;
+    private static final double MAX_HORIZONTAL_SPEED = MOTION_PACKET_LIMIT;
+
+    // --- levitation climb (FIN-1: rises beyond one clamped impulse) ---
+    /** Levitation amplifier for the climb: terminal ≈ 0.907 × 0.05 × 60 ≈ 2.7 blocks/tick. */
+    private static final int CLIMB_LEVITATION_AMPLIFIER = 59;
+    /** Levitation duration safety cap — the handoff strips it long before this lapses. */
+    private static final int CLIMB_MAX_TICKS = 30 * 20;
+    /** Horizontal steering push cadence during the climb. */
+    private static final int CLIMB_STEER_STRIDE = 2;
+    /** Horizontal steering speed cap during the climb (well under the packet clamp). */
+    private static final double CLIMB_STEER_MAX = 2.5D;
+    /** Handoff fires once at/above handoff height AND horizontally within this reach. */
+    private static final double CLIMB_HANDOFF_REACH = 24.0D;
+    /** Hard ceiling above the handoff height: hand off regardless — never levitate forever. */
+    private static final int CLIMB_CEILING_EXTRA = 48;
+    /** Descent re-steer cadence while the column would miss the footprint. */
+    private static final int DESCENT_STEER_STRIDE = 5;
+
     /** Flight watch gives up after this long (slow-fall descents are leisurely). */
     private static final int FLIGHT_TIMEOUT_TICKS = 90 * 20;
     /** Persistent-data key of the no-fall-damage expiry game time. */
@@ -186,12 +219,21 @@ public final class SkyLauncher {
         final double targetX;
         final double targetZ;
         final long deadlineTick;
-        boolean nudged;
+        /** Climb handoff height (computed island surface + clearance). */
+        final double handoffY;
+        /** Hard climb ceiling ({@code handoffY} + {@value #CLIMB_CEILING_EXTRA}). */
+        final double ceilingY;
+        /** True while the levitation climb runs; false for pure-ballistic flights. */
+        boolean climbing;
 
-        Flight(double targetX, double targetZ, long deadlineTick) {
+        Flight(double targetX, double targetZ, long deadlineTick, double handoffY,
+                boolean climbing) {
             this.targetX = targetX;
             this.targetZ = targetZ;
             this.deadlineTick = deadlineTick;
+            this.handoffY = handoffY;
+            this.ceilingY = handoffY + CLIMB_CEILING_EXTRA;
+            this.climbing = climbing;
         }
     }
 
@@ -356,8 +398,13 @@ public final class SkyLauncher {
         double dx = targetX - player.getX();
         double dz = targetZ - player.getZ();
         double horizontalDist = Math.sqrt(dx * dx + dz * dz);
-        double rise = Math.max(targetSurface, player.getY()) + APEX_CLEARANCE - player.getY();
-        double vy = solveLaunchVy(rise);
+        double handoffY = Math.max(targetSurface, player.getY()) + APEX_CLEARANCE;
+        double rise = handoffY - player.getY();
+        double ballisticVy = solveLaunchVy(rise);
+        // FIN-1: a rise beyond one clamped impulse switches to the levitation climb —
+        // the initial punch still fires at the packet limit for the launch feel.
+        boolean climbing = Double.isNaN(ballisticVy);
+        double vy = climbing ? MOTION_PACKET_LIMIT : ballisticVy;
         double vh = Math.min(horizontalDist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
         Vec3 velocity = horizontalDist < 1.0E-3D
                 ? new Vec3(0.0D, vy, 0.0D)
@@ -368,9 +415,15 @@ public final class SkyLauncher {
         player.fallDistance = 0.0F;
         player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
                 LAUNCH_SLOW_FALL_TICKS, 0, false, false, true));
+        if (climbing) {
+            // The climb thrust AND the flight-kick exemption in one vanilla effect; the
+            // handoff (or the safety cap) strips it. Not TimedBuffApi — per-player, short.
+            player.addEffect(new MobEffectInstance(MobEffects.LEVITATION,
+                    CLIMB_MAX_TICKS, CLIMB_LEVITATION_AMPLIFIER, false, false, true));
+        }
         grantFallGrace(player, FALL_GRACE_TICKS);
         FLIGHTS.put(player.getUUID(), new Flight(targetX, targetZ,
-                player.server.getTickCount() + FLIGHT_TIMEOUT_TICKS));
+                player.server.getTickCount() + FLIGHT_TIMEOUT_TICKS, handoffY, climbing));
 
         ServerLevel level = player.serverLevel();
         level.playSound(null, pad, EclipseSounds.EVENT_SKY_LAUNCH.get(),
@@ -385,17 +438,19 @@ public final class SkyLauncher {
         FxPayloads.sendFxEntityEvent(level, FxCues.CUE_SKY_LAUNCH, player, 0.0F, 0.0F, 128.0D);
         PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.8F, 18));
         player.displayClientMessage(ServerLang.tr(player, "eclipse.sky_launcher.launched"), true);
-        EclipseMod.LOGGER.info("SkyLauncher: launched {} toward ({}, {}) (vy={}, vh={})",
-                player.getGameProfile().getName(), (int) targetX, (int) targetZ, vy, vh);
+        EclipseMod.LOGGER.info("SkyLauncher: launched {} toward ({}, {}) (mode={}, vy={}, vh={}, handoffY={})",
+                player.getGameProfile().getName(), (int) targetX, (int) targetZ,
+                climbing ? "climb" : "ballistic", vy, vh, (int) handoffY);
     }
 
     /**
-     * Smallest start speed whose simulated apex clears {@code rise}. Simulates vanilla's
-     * exact per-tick vertical integration — with drag, {@code sqrt(2 g h)} undershoots
-     * badly over a 100+ block climb.
+     * Smallest start speed whose simulated apex clears {@code rise}, or {@code NaN} when
+     * the rise is beyond the motion-packet clamp (≈61 blocks at ±3.9) — the caller then
+     * runs the levitation climb instead. Simulates vanilla's exact per-tick vertical
+     * integration — with drag, {@code sqrt(2 g h)} undershoots badly over a long climb.
      */
     private static double solveLaunchVy(double rise) {
-        for (double v0 = 1.0D; v0 <= MAX_VERTICAL_SPEED; v0 += 0.25D) {
+        for (double v0 = 1.0D; v0 <= MOTION_PACKET_LIMIT; v0 += 0.25D) {
             double v = v0;
             double height = 0.0D;
             while (v > 0.0D) {
@@ -406,10 +461,13 @@ public final class SkyLauncher {
                 return v0;
             }
         }
-        return MAX_VERTICAL_SPEED;
+        return Double.NaN;
     }
 
-    /** Mid-flight watch: one overshoot nudge on descent, cleanup on landing/timeout. */
+    /**
+     * Mid-flight watch: drives the levitation climb (steer + handoff), re-steers a
+     * descent whose column would miss the footprint, cleanup on landing/timeout.
+     */
     private static void tickFlights(MinecraftServer server) {
         long tick = server.getTickCount();
         Iterator<Map.Entry<UUID, Flight>> iterator = FLIGHTS.entrySet().iterator();
@@ -418,33 +476,88 @@ public final class SkyLauncher {
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             Flight flight = entry.getValue();
             if (player == null || tick > flight.deadlineTick) {
+                if (player != null && flight.climbing) {
+                    player.removeEffect(MobEffects.LEVITATION);
+                }
                 iterator.remove();
                 continue;
             }
             if (player.onGround() || player.isInWater()) {
+                if (flight.climbing) {
+                    player.removeEffect(MobEffects.LEVITATION);
+                }
                 player.fallDistance = 0.0F;
                 iterator.remove();
                 continue;
             }
-            if (flight.nudged || player.getDeltaMovement().y >= 0.0D) {
+            if (flight.climbing) {
+                tickClimb(player, flight, tick);
                 continue;
             }
-            // Descending: nudge once if the current column already left the footprint.
-            int bx = player.getBlockX();
-            int bz = player.getBlockZ();
-            if (!EndDiscGeometry.footprintContains(bx, bz)
-                    && player.getY() > DiscProfile.END_DISC_SURFACE_Y - 24) {
-                double dx = flight.targetX - player.getX();
-                double dz = flight.targetZ - player.getZ();
-                double dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist > 1.0E-3D) {
-                    double vh = Math.min(dist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
-                    Vec3 current = player.getDeltaMovement();
-                    player.setDeltaMovement(dx / dist * vh, current.y, dz / dist * vh);
-                    player.hurtMarked = true;
-                }
-                flight.nudged = true;
+            if (player.getDeltaMovement().y >= 0.0D) {
+                continue;
             }
+            // Descending: re-steer every stride while the column would miss the
+            // footprint (players already over the disc keep their agency). Descents
+            // have vy < 0, so repeated pushes can never arm the flight kick.
+            if (tick % DESCENT_STEER_STRIDE != 0
+                    || EndDiscGeometry.footprintContains(player.getBlockX(), player.getBlockZ())
+                    || player.getY() <= DiscProfile.END_DISC_SURFACE_Y - 24) {
+                continue;
+            }
+            double dx = flight.targetX - player.getX();
+            double dz = flight.targetZ - player.getZ();
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist > 1.0E-3D) {
+                double vh = Math.min(dist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
+                Vec3 current = player.getDeltaMovement();
+                player.setDeltaMovement(dx / dist * vh, current.y, dz / dist * vh);
+                player.hurtMarked = true;
+            }
+        }
+    }
+
+    /**
+     * One climb tick (FIN-1): horizontal steering toward the landing ring every
+     * {@value #CLIMB_STEER_STRIDE}t (speed eases to zero as the player centers over the
+     * target — {@code dist / 10} capped at {@value #CLIMB_STEER_MAX}), a re-assert of a
+     * milked-away Levitation (the climb is the authored transport; stalling mid-sky
+     * strands the flight), and the handoff once the player is at/above the computed
+     * island clearance AND within {@value #CLIMB_HANDOFF_REACH} blocks of the ring —
+     * or at the hard ceiling regardless. The handoff strips the Levitation and tips the
+     * player into the slow-fall descent with one clamped push toward the target.
+     */
+    private static void tickClimb(ServerPlayer player, Flight flight, long tick) {
+        double dx = flight.targetX - player.getX();
+        double dz = flight.targetZ - player.getZ();
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        boolean handoff = (player.getY() >= flight.handoffY && dist <= CLIMB_HANDOFF_REACH)
+                || player.getY() >= flight.ceilingY;
+        if (handoff) {
+            flight.climbing = false;
+            player.removeEffect(MobEffects.LEVITATION);
+            double vh = dist < 1.0E-3D ? 0.0D
+                    : Math.min(dist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
+            player.setDeltaMovement(dist < 1.0E-3D ? 0.0D : dx / dist * vh, -0.1D,
+                    dist < 1.0E-3D ? 0.0D : dz / dist * vh);
+            player.hurtMarked = true;
+            ServerLevel level = player.serverLevel();
+            level.sendParticles(ParticleTypes.CLOUD, player.getX(), player.getY(), player.getZ(),
+                    16, 0.5D, 0.3D, 0.5D, 0.08D);
+            level.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                    SoundSource.PLAYERS, 0.9F, 1.6F);
+            return;
+        }
+        if (!player.hasEffect(MobEffects.LEVITATION)) {
+            player.addEffect(new MobEffectInstance(MobEffects.LEVITATION,
+                    CLIMB_MAX_TICKS, CLIMB_LEVITATION_AMPLIFIER, false, false, true));
+        }
+        if (tick % CLIMB_STEER_STRIDE == 0) {
+            double steer = Math.min(CLIMB_STEER_MAX, dist / 10.0D);
+            Vec3 current = player.getDeltaMovement();
+            player.setDeltaMovement(dist < 1.0E-3D ? 0.0D : dx / dist * steer, current.y,
+                    dist < 1.0E-3D ? 0.0D : dz / dist * steer);
+            player.hurtMarked = true;
         }
     }
 

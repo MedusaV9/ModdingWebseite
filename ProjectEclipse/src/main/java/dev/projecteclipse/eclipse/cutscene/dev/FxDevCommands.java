@@ -178,7 +178,11 @@ public final class FxDevCommands {
                                                 .then(Commands.literal("vortex").executes(ctx -> stormAdd(ctx,
                                                         FloatArgumentType.getFloat(ctx, "radius"),
                                                         FloatArgumentType.getFloat(ctx, "height"),
-                                                        S2CStormStatePayload.TYPE_VORTEX))))))
+                                                        S2CStormStatePayload.TYPE_VORTEX)))
+                                                .then(Commands.literal("sphere").executes(ctx -> stormAdd(ctx,
+                                                        FloatArgumentType.getFloat(ctx, "radius"),
+                                                        FloatArgumentType.getFloat(ctx, "height"),
+                                                        S2CStormStatePayload.TYPE_SPHERE))))))
                         .then(Commands.literal("remove").executes(FxDevCommands::stormRemove))
                         .then(Commands.literal("bolt")
                                 .executes(ctx -> stormBolt(ctx, 1.0F))
@@ -353,9 +357,17 @@ public final class FxDevCommands {
         DEV_STORM_CENTERS.put(level, center);
         PacketDistributor.sendToPlayersInDimension(level, new S2CStormStatePayload(
                 DEV_STORM_ID, center, radius, height, stormType, S2CStormStatePayload.STATE_SPAWN, 80));
-        reply(ctx, "dev storm " + (stormType == S2CStormStatePayload.TYPE_VORTEX ? "VORTEX" : "WALL")
+        reply(ctx, "dev storm " + stormTypeName(stormType)
                 + " r=" + radius + " h=" + height + " spawning at your position (id " + DEV_STORM_ID + ")");
         return 1;
+    }
+
+    private static String stormTypeName(int stormType) {
+        return switch (stormType) {
+            case S2CStormStatePayload.TYPE_VORTEX -> "VORTEX";
+            case S2CStormStatePayload.TYPE_SPHERE -> "SPHERE";
+            default -> "WALL";
+        };
     }
 
     private static int stormRemove(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

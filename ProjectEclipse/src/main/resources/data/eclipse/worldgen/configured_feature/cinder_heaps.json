@@ -1,0 +1,9 @@
+{
+  "_comment": "WG2 scorched_expanse: charred cinderstone heaps with ember cracks.",
+  "config": {
+    "state": {
+      "Name": "eclipse:cinderstone"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

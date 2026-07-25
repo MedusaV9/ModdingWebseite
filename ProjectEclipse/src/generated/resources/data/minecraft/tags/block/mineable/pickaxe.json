@@ -59,6 +59,10 @@
     "eclipse:classic_enchanting_table",
     "eclipse:classic_ender_chest",
     "eclipse:classic_spawner",
-    "eclipse:classic_water_cauldron"
+    "eclipse:classic_water_cauldron",
+    "eclipse:amber_block",
+    "eclipse:cinderstone",
+    "eclipse:duskstone",
+    "eclipse:emberstone"
   ]
 }

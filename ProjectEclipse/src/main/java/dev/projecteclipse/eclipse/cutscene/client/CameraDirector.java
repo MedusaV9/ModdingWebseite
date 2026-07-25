@@ -291,6 +291,30 @@ public final class CameraDirector {
                 Mth.clamp(freq, 0.1F, 8.0F)));
     }
 
+    // --- external overrides (FIN-6: the credits client borrows the director's seams) ---
+
+    /**
+     * External HUD-suppression latch (OR-ed into {@link #isHudSuppressed()}): the final
+     * credits sequence hides every non-whitelisted HUD layer (sidebar, hotbar, day timer)
+     * for its whole run without needing a live cutscene path. Owned by
+     * {@code client.credits.CreditsClient}; cleared on logout there.
+     */
+    private static volatile boolean externalHudSuppressed;
+    /**
+     * External FOV multiplier (1 = neutral, &lt; 1 zooms IN) applied after all cutscene
+     * shot handling in {@link #onComputeFov} — the credits' slow push into the exploding
+     * eclipse. Owned by {@code client.credits.CreditsClient} (ramped per tick there).
+     */
+    private static volatile float externalFovScale = 1.0F;
+
+    public static void setExternalHudSuppressed(boolean suppressed) {
+        externalHudSuppressed = suppressed;
+    }
+
+    public static void setExternalFovScale(float scale) {
+        externalFovScale = Mth.clamp(scale, 0.2F, 2.0F);
+    }
+
     // --- state queries (input swallow + letterbox) ---
 
     public static boolean isActive() {
@@ -299,6 +323,9 @@ public final class CameraDirector {
 
     /** Whether non-whitelisted HUD layers should be cancelled right now. */
     public static boolean isHudSuppressed() {
+        if (externalHudSuppressed) {
+            return true;
+        }
         CutscenePath active = path;
         return active != null && active.hideHud();
     }
@@ -395,6 +422,13 @@ public final class CameraDirector {
         float blend = endBlendEased();
         if (from != null && blend >= 0.0F) {
             event.setFOV(Mth.lerp(blend, from.fov(), (float) event.getFOV()));
+            return;
+        }
+        // FIN-6: the credits' external zoom rides the plain gameplay camera only — a
+        // cutscene shot owns the FOV outright (both returns above).
+        float scale = externalFovScale;
+        if (scale != 1.0F) {
+            event.setFOV(event.getFOV() * scale);
         }
     }
 

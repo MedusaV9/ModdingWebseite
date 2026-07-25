@@ -1,0 +1,9 @@
+{
+  "_comment": "WG2 amber_savanna: glowing amber boulders breaking the golden grass.",
+  "config": {
+    "state": {
+      "Name": "eclipse:amber_block"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

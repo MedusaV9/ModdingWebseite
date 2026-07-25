@@ -20,6 +20,17 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * {@code minecraft:lush_caves} biome-wise; {@code CaveDressings} keys its amethyst
  * sparkle nooks off {@link #detailRegionAt} directly).</p>
  *
+ * <p>WG2 y-bands the underground into four custom biomes on top of the existing 2-D
+ * fields (all pure position functions, no new noise): the deep half of a lush region
+ * (below y {@value #FUNGAL_MAX_Y}) is {@code eclipse:fungal_hollows}, the deep half of
+ * a dripstone region (below y {@value #EMBER_MAX_Y}) is {@code eclipse:ember_depths},
+ * the B12 crystal detail region now reads its own {@code eclipse:crystal_chasms} id
+ * (it used to fold into lush_caves biome-wise; {@code CaveDressings} keys its amethyst
+ * nooks off {@link #detailRegionAt} directly and is unaffected), and the neutral band
+ * below y {@value #UMBRAL_MAX_Y} — previously surface-biome all the way down — is
+ * {@code eclipse:umbral_depths}. Deep dark still outranks everything under the
+ * mountain.</p>
+ *
  * <p>All lookups are pure functions of position + frozen map data (no stage, no world
  * seed) — chunks generated before a ring grows must already carry the same biomes the
  * grown terrain will expose. Noise salts 29 (region field) and 33 (B12 detail field) of
@@ -36,6 +47,15 @@ public final class CaveBiomeMap {
     public static final int DEEP_DARK_MAX_Y = -32;
     /** …and only within this many blocks of the mountain center (Ancient City tie-in). */
     public static final int DEEP_DARK_RADIUS = 120;
+
+    // --- WG2 y-bands (all exclusive "below": y < band) ---
+
+    /** Lush-region samples below this Y read {@code eclipse:fungal_hollows}. */
+    public static final int FUNGAL_MAX_Y = -64;
+    /** Dripstone-region samples below this Y read {@code eclipse:ember_depths}. */
+    public static final int EMBER_MAX_Y = -80;
+    /** Neutral-band samples below this Y read {@code eclipse:umbral_depths}. */
+    public static final int UMBRAL_MAX_Y = -96;
 
     /** Feature scale (blocks) of the dripstone/lush region field — big, contiguous regions. */
     private static final double REGION_SCALE = 176.0D;
@@ -64,10 +84,6 @@ public final class CaveBiomeMap {
 
     private record SeededNoise(long seed, SimplexNoise noise) {}
 
-    private static final ResourceLocation DRIPSTONE_CAVES =
-            ResourceLocation.withDefaultNamespace("dripstone_caves");
-    private static final ResourceLocation LUSH_CAVES =
-            ResourceLocation.withDefaultNamespace("lush_caves");
     private static final ResourceLocation DEEP_DARK =
             ResourceLocation.withDefaultNamespace("deep_dark");
 
@@ -75,14 +91,24 @@ public final class CaveBiomeMap {
     private static final String LUSH_CAVES_ID = "minecraft:lush_caves";
     /** Biome id of the deep-dark region ({@code DiscBiomeSource} holder key). */
     public static final String DEEP_DARK_ID = "minecraft:deep_dark";
+    /** WG2 deep-lush band biome id ({@code DiscBiomeSource} holder key). */
+    public static final String FUNGAL_HOLLOWS_ID = "eclipse:fungal_hollows";
+    /** WG2 crystal detail-region biome id ({@code DiscBiomeSource} holder key). */
+    public static final String CRYSTAL_CHASMS_ID = "eclipse:crystal_chasms";
+    /** WG2 deep-dripstone band biome id ({@code DiscBiomeSource} holder key). */
+    public static final String EMBER_DEPTHS_ID = "eclipse:ember_depths";
+    /** WG2 neutral-band basement biome id ({@code DiscBiomeSource} holder key). */
+    public static final String UMBRAL_DEPTHS_ID = "eclipse:umbral_depths";
 
     private CaveBiomeMap() {}
 
     /**
      * Cave biome at the block position, or {@code null} when the position is not
-     * underground or lies in the neutral band (surface biome continues downward).
-     * Self-contained §3.10 seam: gates on the pure terrain-function surface itself.
-     * Overworld only — the nether disc keeps its full-height wedges.
+     * underground or lies in the (above-{@value #UMBRAL_MAX_Y}) neutral band, where the
+     * surface biome continues downward. Self-contained §3.10 seam: gates on the pure
+     * terrain-function surface itself. Overworld only — the nether disc keeps its
+     * full-height wedges. Applies the WG2 y-bands, so this stays the single-call
+     * equivalent of {@code DiscBiomeSource}'s per-column region + band resolution.
      */
     @Nullable
     public static ResourceLocation at(int x, int y, int z) {
@@ -94,20 +120,22 @@ public final class CaveBiomeMap {
             return DEEP_DARK;
         }
         String region = regionAt(x, z);
-        if (DRIPSTONE_CAVES_ID.equals(region)) {
-            return DRIPSTONE_CAVES;
+        if (region != null) {
+            return ResourceLocation.parse(bandedBiome(region, y));
         }
-        return LUSH_CAVES_ID.equals(region) ? LUSH_CAVES : null;
+        return y < UMBRAL_MAX_Y ? ResourceLocation.parse(UMBRAL_DEPTHS_ID) : null;
     }
 
     /**
      * Region id of the column — {@code minecraft:dripstone_caves},
      * {@code minecraft:lush_caves}, {@code minecraft:deep_dark} (a B12 sculk-pocket
-     * satellite) or {@code null} (neutral band). 2-D on purpose so
+     * satellite), {@code eclipse:crystal_chasms} (the B12 crystal region, its own biome
+     * since WG2) or {@code null} (neutral band). 2-D on purpose so
      * {@code DiscBiomeSource} can fold it into its per-column cache; the y gates
-     * ({@link #SURFACE_MARGIN}, {@link #DEEP_DARK_MAX_Y}) are applied per sample there.
-     * The B12 detail regions outrank the base field (their thresholds are far rarer);
-     * both fold into biome ids the biome source already resolves.
+     * ({@link #SURFACE_MARGIN}, {@link #DEEP_DARK_MAX_Y}, the WG2 bands via
+     * {@link #bandedBiome}) are applied per sample there. The B12 detail regions
+     * outrank the base field (their thresholds are far rarer); both fold into biome
+     * ids the biome source already resolves.
      */
     @Nullable
     public static String regionAt(int x, int z) {
@@ -116,13 +144,31 @@ public final class CaveBiomeMap {
             return DEEP_DARK_ID;
         }
         if (detail == DetailRegion.CRYSTAL) {
-            return LUSH_CAVES_ID;
+            return CRYSTAL_CHASMS_ID;
         }
         double v = regionNoise().getValue(x / REGION_SCALE, z / REGION_SCALE);
         if (v > REGION_THRESHOLD) {
             return DRIPSTONE_CAVES_ID;
         }
         return v < -REGION_THRESHOLD ? LUSH_CAVES_ID : null;
+    }
+
+    /**
+     * WG2 y-banding of a {@link #regionAt} region id: the deep half of a lush region
+     * (y &lt; {@value #FUNGAL_MAX_Y}) reads {@code eclipse:fungal_hollows}, the deep
+     * half of a dripstone region (y &lt; {@value #EMBER_MAX_Y}) reads
+     * {@code eclipse:ember_depths}; every other (region, y) pair — crystal chasms, the
+     * sculk-pocket deep-dark fold and the shallow region halves — passes through
+     * unchanged. Pure, worker-thread safe, cheap enough for the per-sample hot path.
+     */
+    public static String bandedBiome(String region, int y) {
+        if (y < FUNGAL_MAX_Y && LUSH_CAVES_ID.equals(region)) {
+            return FUNGAL_HOLLOWS_ID;
+        }
+        if (y < EMBER_MAX_Y && DRIPSTONE_CAVES_ID.equals(region)) {
+            return EMBER_DEPTHS_ID;
+        }
+        return region;
     }
 
     /**

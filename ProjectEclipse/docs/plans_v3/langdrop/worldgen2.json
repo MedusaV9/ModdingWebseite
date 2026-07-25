@@ -1,0 +1,42 @@
+{
+  "en_us": {
+    "biome.eclipse.gloom_mire": "Gloom Mire",
+    "biome.eclipse.ashen_forest": "Ashen Forest",
+    "biome.eclipse.moonlit_grove": "Moonlit Grove",
+    "biome.eclipse.amber_savanna": "Amber Savanna",
+    "biome.eclipse.scorched_expanse": "Scorched Expanse",
+    "biome.eclipse.fungal_hollows": "Fungal Hollows",
+    "biome.eclipse.crystal_chasms": "Crystal Chasms",
+    "biome.eclipse.ember_depths": "Ember Depths",
+    "biome.eclipse.umbral_depths": "Umbral Depths",
+    "block.eclipse.ash_block": "Ash Block",
+    "block.eclipse.gloomcap": "Gloomcap",
+    "block.eclipse.moonflower": "Moonflower",
+    "block.eclipse.amber_block": "Amber Block",
+    "block.eclipse.cinderstone": "Cinderstone",
+    "block.eclipse.glowcap": "Glowcap",
+    "block.eclipse.duskstone": "Duskstone",
+    "block.eclipse.emberstone": "Emberstone",
+    "block.eclipse.umbral_bloom": "Umbral Bloom"
+  },
+  "de_de": {
+    "biome.eclipse.gloom_mire": "Düstermoor",
+    "biome.eclipse.ashen_forest": "Aschenwald",
+    "biome.eclipse.moonlit_grove": "Mondlichthain",
+    "biome.eclipse.amber_savanna": "Bernsteinsavanne",
+    "biome.eclipse.scorched_expanse": "Versengte Weite",
+    "biome.eclipse.fungal_hollows": "Sporengrotten",
+    "biome.eclipse.crystal_chasms": "Kristallklüfte",
+    "biome.eclipse.ember_depths": "Gluttiefen",
+    "biome.eclipse.umbral_depths": "Schattentiefen",
+    "block.eclipse.ash_block": "Ascheblock",
+    "block.eclipse.gloomcap": "Düsterpilz",
+    "block.eclipse.moonflower": "Mondblume",
+    "block.eclipse.amber_block": "Bernsteinblock",
+    "block.eclipse.cinderstone": "Schlackenstein",
+    "block.eclipse.glowcap": "Glimmerpilz",
+    "block.eclipse.duskstone": "Dämmerstein",
+    "block.eclipse.emberstone": "Glutstein",
+    "block.eclipse.umbral_bloom": "Schattenblüte"
+  }
+}

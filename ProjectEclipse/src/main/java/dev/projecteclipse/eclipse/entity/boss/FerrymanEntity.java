@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.ferryman.ArenaBuilder;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
+import dev.projecteclipse.eclipse.ferryman.ArenaFight;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.ShipLanterns;
@@ -25,6 +26,7 @@ import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
@@ -91,7 +93,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       across the deck (air-only {@code setBlock}, tracked for restore). Sweeps keep
  *       coming, alternating with the Lantern Gaze: the lowest-health fighter is marked
  *       ({@code S2CShakePayload.mark} → private purple vignette + private bell) and hunted
- *       for {@value #GAZE_MARK_TICKS}t.</li>
+ *       for {@value #GAZE_MARK_TICKS}t. FIN-5: the toll break EMPOWERS him — sweeps every
+ *       {@value #EMPOWERED_SWEEP_COOLDOWN_TICKS}t for {@value #EMPOWERED_SWEEP_DAMAGE},
+ *       faster stalk, the gunwale slam returns every {@value #EMPOWERED_SLAM_INTERVAL_TICKS}t
+ *       — and the arena TRANSFORMS mid-fight ({@code ArenaFight.escalateArena}: a bone
+ *       ribcage erupts around the pit).</li>
  * </ul>
  *
  * <p><b>Endings</b>: death drops {@code eclipse:ferryman_toll}, restores the ship (water
@@ -113,7 +119,7 @@ public class FerrymanEntity extends Monster {
      */
     public static final int STERN_X = -(GhostShipBuilder.HALF_LENGTH - 6);
     /** Scripted death collapse length (vanilla tips over after 20t; see {@link #tickDeath}). */
-    public static final int DEATH_DURATION_TICKS = 70;
+    public static final int DEATH_DURATION_TICKS = 100;
 
     private static final double SCALING_RANGE = 64.0D;
     private static final double FIGHT_RANGE = 64.0D;
@@ -130,6 +136,13 @@ public class FerrymanEntity extends Monster {
     private static final double SLAM_RADIUS = 5.5D;
     private static final float SLAM_DAMAGE = 6.0F;
     private static final int SLAM_MAX_AIR_TICKS = 60;
+    // P3 empowerment (FIN-5): "he becomes more powerful" — the planted oar sweeps
+    // faster and harder, the stalk quickens past the old 0.22, and the gunwale slam
+    // RETURNS on a shorter clock (P2 keeps it off: the kneel is the phase's counter).
+    private static final int EMPOWERED_SWEEP_COOLDOWN_TICKS = 45;
+    private static final float EMPOWERED_SWEEP_DAMAGE = 13.0F;
+    private static final double EMPOWERED_SPEED = 0.26D;
+    private static final int EMPOWERED_SLAM_INTERVAL_TICKS = 200;
     // Void-cold water DoT (all phases).
     private static final int DOT_INTERVAL_TICKS = 20;
     private static final float DOT_DAMAGE = 2.0F;
@@ -158,7 +171,14 @@ public class FerrymanEntity extends Monster {
     // Death collapse: the lantern flame sputters out by this deathTime, the last bell
     // tolls shortly before the body fades.
     private static final int DEATH_FLAME_OUT_TICKS = 30;
-    private static final int DEATH_BELL_TICK = 55;
+    private static final int DEATH_BELL_TICK = 80;
+    // FIN-5 final blow: the killing hit lands with real weight — a sharp arena-wide
+    // impact rattle, and every living fighter this close is THROWN back from the corpse.
+    private static final double FINAL_BLOW_RADIUS = 10.0D;
+    private static final double FINAL_BLOW_KNOCKBACK = 1.1D;
+    // The last toll's physical shockwave (rides the DEATH_BELL_TICK crown-verdict coda).
+    private static final double TOLL_SHOCKWAVE_RADIUS = 12.0D;
+    private static final double TOLL_SHOCKWAVE_PUSH = 0.35D;
 
     /** Current phase 1..3 (synced; drives bossbar color + model poses). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -423,10 +443,24 @@ public class FerrymanEntity extends Monster {
         if (newPhase == 3) {
             this.sinkTimer = SINK_INTERVAL_TICKS;
             this.gazeTimer = GAZE_INTERVAL_TICKS / 2;
+            // FIN-5 empowerment: the slam clock restarts on the SHORT interval, and the
+            // arena itself transforms mid-fight (the pit bares its bones). Legacy limbo
+            // fights get the caption only — there is no arena to escalate there.
+            this.slamTimer = EMPOWERED_SLAM_INTERVAL_TICKS;
+            if (inArena()) {
+                ArenaFight.escalateArena(level);
+            } else {
+                PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                        96.0D, new S2CCaptionPayload("eclipse.caption.ferry.empowered", 90,
+                                S2CCaptionPayload.STYLE_SUBTITLE));
+            }
             level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
                     SoundSource.HOSTILE, 1.2F, 0.8F);
-            EclipseMod.LOGGER.info("Ferryman P3 The Toll: oar planted — the ship begins to sink "
-                    + "(1 layer per {}t, doubled while <=3 players live)", SINK_INTERVAL_TICKS);
+            EclipseMod.LOGGER.info("Ferryman P3 The Toll: oar planted, EMPOWERED (sweep {}t/{} dmg, "
+                    + "speed {}, slam every {}t) — the ship begins to sink (1 layer per {}t, "
+                    + "doubled while <=3 players live)", EMPOWERED_SWEEP_COOLDOWN_TICKS,
+                    EMPOWERED_SWEEP_DAMAGE, EMPOWERED_SPEED, EMPOWERED_SLAM_INTERVAL_TICKS,
+                    SINK_INTERVAL_TICKS);
         }
     }
 
@@ -459,7 +493,9 @@ public class FerrymanEntity extends Monster {
         } else {
             tickMovement(target);
             tickSweep(level, fighters, target);
-            if (getPhase() == 1) {
+            // FIN-5: the gunwale slam runs in P1 AND returns empowered in P3 (P2 stays
+            // slam-free — the kneel is that phase's counter, not dodging).
+            if (getPhase() == 1 || getPhase() >= 3) {
                 tickSlamWindup(target);
             }
         }
@@ -478,7 +514,7 @@ public class FerrymanEntity extends Monster {
             Vec3 to = target.position().subtract(this.position());
             double dist = Math.sqrt(to.x * to.x + to.z * to.z);
             if (dist > 2.5D) {
-                double speed = getPhase() >= 3 ? 0.22D : 0.16D;
+                double speed = getPhase() >= 3 ? EMPOWERED_SPEED : 0.16D;
                 velocity = velocity.add(to.x / dist * speed, 0.0D, to.z / dist * speed);
             }
         }
@@ -510,13 +546,17 @@ public class FerrymanEntity extends Monster {
             return;
         }
         setTelegraphing(false);
-        this.sweepCooldown = SWEEP_COOLDOWN_TICKS;
+        this.sweepCooldown = getPhase() >= 3 ? EMPOWERED_SWEEP_COOLDOWN_TICKS : SWEEP_COOLDOWN_TICKS;
         doSweep(level, fighters);
     }
 
-    /** 180° arc in front of the boss: {@value #SWEEP_DAMAGE} dmg + heavy outward knockback. */
+    /**
+     * 180° arc in front of the boss: {@value #SWEEP_DAMAGE} dmg + heavy outward knockback
+     * ({@value #EMPOWERED_SWEEP_DAMAGE} dmg in P3 — FIN-5 empowerment).
+     */
     private void doSweep(ServerLevel level, List<ServerPlayer> fighters) {
         Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+        float damage = getPhase() >= 3 ? EMPOWERED_SWEEP_DAMAGE : SWEEP_DAMAGE;
         int hits = 0;
         for (ServerPlayer player : fighters) {
             Vec3 to = player.position().subtract(this.position());
@@ -528,7 +568,7 @@ public class FerrymanEntity extends Monster {
             if (flat.lengthSqr() > 1.0E-4D && flat.normalize().dot(forward) < 0.0D) {
                 continue; // Behind the boss: the sweep is a front half-circle.
             }
-            player.hurt(this.damageSources().mobAttack(this), SWEEP_DAMAGE);
+            player.hurt(this.damageSources().mobAttack(this), damage);
             Vec3 away = flat.lengthSqr() > 1.0E-4D ? flat.normalize() : forward;
             player.setDeltaMovement(away.scale(SWEEP_KNOCKBACK).add(0.0D, 0.55D, 0.0D));
             player.hurtMarked = true; // sync the launch to the client (SoftBorder pattern)
@@ -543,7 +583,7 @@ public class FerrymanEntity extends Monster {
         Vec3 front = this.position().add(Vec3.directionFromRotation(0.0F, this.getYRot()).scale(2.5D));
         level.sendParticles(ParticleTypes.SWEEP_ATTACK, front.x, this.deckY + 2.0D, front.z,
                 6, 1.2D, 0.4D, 1.2D, 0.0D);
-        EclipseMod.LOGGER.info("Ferryman oar sweep hit {} player(s) for {} + knockback", hits, SWEEP_DAMAGE);
+        EclipseMod.LOGGER.info("Ferryman oar sweep hit {} player(s) for {} + knockback", hits, damage);
     }
 
     // --- P1 gunwale slam ---
@@ -553,7 +593,7 @@ public class FerrymanEntity extends Monster {
                 || target.position().distanceTo(this.position()) > 9.0D) {
             return;
         }
-        this.slamTimer = SLAM_INTERVAL_TICKS;
+        this.slamTimer = getPhase() >= 3 ? EMPOWERED_SLAM_INTERVAL_TICKS : SLAM_INTERVAL_TICKS;
         this.slamAirborne = true;
         this.slamAirTicks = 0;
         Vec3 to = target.position().subtract(this.position());
@@ -1062,6 +1102,11 @@ public class FerrymanEntity extends Monster {
             restoreShip(serverLevel, "boss defeated");
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             state.setFerrymanDefeated(true);
+            // FIN-5 FINAL BLOW: the killing hit is an EVENT — a sharp arena-wide impact
+            // rattle (the HitStopService punch, scaled to a boss kill), a radial burst
+            // that throws every nearby fighter back from the corpse (the stage clears
+            // itself for the collapse), the deepest bell, and the kill caption.
+            finalBlow(serverLevel, damageSource);
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
             // W4 IDEA-16 #3: long soft slow-mo drift shake at the kill (pairs with the
@@ -1072,6 +1117,44 @@ public class FerrymanEntity extends Monster {
                     damageSource.getMsgId());
             FinaleRitual.beginVictory(serverLevel.getServer());
         }
+    }
+
+    /**
+     * FIN-5 final-blow beat (from {@link #die}, before the soft slow-mo drift): sharp
+     * 1.2×10t impact shake for everyone watching, living fighters within
+     * {@value #FINAL_BLOW_RADIUS} blocks thrown radially off the corpse
+     * ({@value #FINAL_BLOW_KNOCKBACK} + lift, {@code hurtMarked} sync — the sweep's
+     * launch idiom), a deep sub-pitched toll, and the kill caption. The impulse stack in
+     * the client CameraDirector layers the sharp rattle UNDER the 40t drift naturally.
+     */
+    private void finalBlow(ServerLevel level, DamageSource damageSource) {
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                96.0D, S2CShakePayload.shake(1.2F, 10));
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                96.0D, new S2CCaptionPayload("eclipse.caption.ferry.finalblow", 80,
+                        S2CCaptionPayload.STYLE_TITLE));
+        level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_FERRYMAN_BELL.get(),
+                SoundSource.HOSTILE, 1.6F, 0.4F);
+        level.playSound(null, this.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(),
+                SoundSource.HOSTILE, 0.8F, 0.5F);
+        int thrown = 0;
+        for (ServerPlayer player : level.players()) {
+            if (!player.isAlive() || player.isSpectator() || BanService.isBanned(player)) {
+                continue;
+            }
+            Vec3 away = player.position().subtract(this.position());
+            if (away.length() > FINAL_BLOW_RADIUS) {
+                continue;
+            }
+            Vec3 flat = new Vec3(away.x, 0.0D, away.z);
+            Vec3 dir = flat.lengthSqr() > 1.0E-4D ? flat.normalize()
+                    : Vec3.directionFromRotation(0.0F, player.getYRot()).reverse();
+            player.setDeltaMovement(dir.scale(FINAL_BLOW_KNOCKBACK).add(0.0D, 0.5D, 0.0D));
+            player.hurtMarked = true;
+            thrown++;
+        }
+        EclipseMod.LOGGER.info("Ferryman final blow ({}): {} fighter(s) thrown back from the corpse",
+                damageSource.getMsgId(), thrown);
     }
 
     /**
@@ -1109,8 +1192,23 @@ public class FerrymanEntity extends Monster {
             // + double-pulse shockwave, ash rain and grade exhale (a = kind 1 Ferryman).
             FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_SIG_CROWN_VERDICT,
                     this.position().add(0.0D, 1.5D, 0.0D), 1.0F, 0.0F, 96.0D);
+            // FIN-5: the toll is also PHYSICAL — a light radial exhale nudges everyone
+            // near the corpse (reinforces the coda's double-pulse client-side shockwave).
+            for (ServerPlayer player : serverLevel.players()) {
+                Vec3 away = player.position().subtract(this.position());
+                if (player.isSpectator() || away.length() > TOLL_SHOCKWAVE_RADIUS) {
+                    continue;
+                }
+                Vec3 flat = new Vec3(away.x, 0.0D, away.z);
+                if (flat.lengthSqr() < 1.0E-4D) {
+                    continue;
+                }
+                player.setDeltaMovement(player.getDeltaMovement()
+                        .add(flat.normalize().scale(TOLL_SHOCKWAVE_PUSH)).add(0.0D, 0.2D, 0.0D));
+                player.hurtMarked = true;
+            }
             EclipseMod.LOGGER.info("Ferryman death collapse: final bell tolled at deathTime {} "
-                    + "(crown verdict coda fired)", this.deathTime);
+                    + "(crown verdict coda + shockwave exhale fired)", this.deathTime);
         }
         if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
             // Vanilla removal path (poof cloud + KILLED removal), just 50t later.

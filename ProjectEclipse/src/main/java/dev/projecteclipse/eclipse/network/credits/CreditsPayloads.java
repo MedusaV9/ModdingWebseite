@@ -42,6 +42,7 @@ public final class CreditsPayloads {
     private static volatile Consumer<S2CCreditsRollPayload> rollHandler;
     private static volatile Consumer<S2CCreditsTitlePayload> titleHandler;
     private static volatile Consumer<S2CCreditsClosePayload> closeHandler;
+    private static volatile Consumer<S2CCreditsFovPayload> fovHandler;
 
     private CreditsPayloads() {}
 
@@ -103,19 +104,43 @@ public final class CreditsPayloads {
     /**
      * Full-screen title card ({@code client.credits.TitleCardLayer}): {@code titleKey}
      * decodes from glitch noise (BossIntroOverlay recipe, gold credits theme),
-     * {@code holdTicks} is the post-decode hold.
+     * {@code holdTicks} is the post-decode hold. {@code gentle} (FIN-6 end cards) swaps
+     * the glitch decode for a slow, silent fade-in/out — the post-eclipse black-screen
+     * cards, not a boss reveal.
      */
-    public record S2CCreditsTitlePayload(String titleKey, int holdTicks) implements CustomPacketPayload {
+    public record S2CCreditsTitlePayload(String titleKey, int holdTicks, boolean gentle)
+            implements CustomPacketPayload {
         public static final Type<S2CCreditsTitlePayload> TYPE = new Type<>(
                 ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/title"));
         public static final StreamCodec<ByteBuf, S2CCreditsTitlePayload> STREAM_CODEC =
                 StreamCodec.composite(
                         ByteBufCodecs.STRING_UTF8, S2CCreditsTitlePayload::titleKey,
                         ByteBufCodecs.VAR_INT, S2CCreditsTitlePayload::holdTicks,
+                        ByteBufCodecs.BOOL, S2CCreditsTitlePayload::gentle,
                         S2CCreditsTitlePayload::new);
 
         @Override
         public Type<S2CCreditsTitlePayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * FIN-6 eclipse-explosion zoom: the client ramps {@code CameraDirector}'s external
+     * FOV multiplier toward {@code targetScale} over {@code rampTicks} (a slow push into
+     * the ever-brighter burst). {@code targetScale = 1} with a short ramp resets it.
+     */
+    public record S2CCreditsFovPayload(float targetScale, int rampTicks) implements CustomPacketPayload {
+        public static final Type<S2CCreditsFovPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/fov"));
+        public static final StreamCodec<ByteBuf, S2CCreditsFovPayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.FLOAT, S2CCreditsFovPayload::targetScale,
+                        ByteBufCodecs.VAR_INT, S2CCreditsFovPayload::rampTicks,
+                        S2CCreditsFovPayload::new);
+
+        @Override
+        public Type<S2CCreditsFovPayload> type() {
             return TYPE;
         }
     }
@@ -155,6 +180,8 @@ public final class CreditsPayloads {
                 (payload, context) -> dispatch(titleHandler, payload, "title"));
         registrar.playToClient(S2CCreditsClosePayload.TYPE, S2CCreditsClosePayload.STREAM_CODEC,
                 (payload, context) -> dispatch(closeHandler, payload, "close"));
+        registrar.playToClient(S2CCreditsFovPayload.TYPE, S2CCreditsFovPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(fovHandler, payload, "fov"));
     }
 
     private static <T extends CustomPacketPayload> void dispatch(Consumer<T> handler, T payload, String name) {
@@ -180,11 +207,21 @@ public final class CreditsPayloads {
     }
 
     public static void sendTitle(ServerPlayer player, String titleKey, int holdTicks) {
-        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks));
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks, false));
+    }
+
+    /** FIN-6 end card: slow silent fade-in/out instead of the glitch decode. */
+    public static void sendGentleTitle(ServerPlayer player, String titleKey, int holdTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks, true));
     }
 
     public static void sendClose(ServerPlayer player, int delayTicks, int nonce) {
         PacketDistributor.sendToPlayer(player, new S2CCreditsClosePayload(delayTicks, nonce));
+    }
+
+    /** FIN-6: ramp the client FOV multiplier toward {@code targetScale} over {@code rampTicks}. */
+    public static void sendFov(ServerPlayer player, float targetScale, int rampTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsFovPayload(targetScale, rampTicks));
     }
 
     // ------------------------------------------------------------------ client dispatch seams
@@ -212,5 +249,10 @@ public final class CreditsPayloads {
     /** Installed by {@code client.credits.CreditsClient} (client class-load). */
     public static void setClientCloseHandler(Consumer<S2CCreditsClosePayload> handler) {
         closeHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsClient} (client class-load). */
+    public static void setClientFovHandler(Consumer<S2CCreditsFovPayload> handler) {
+        fovHandler = handler;
     }
 }

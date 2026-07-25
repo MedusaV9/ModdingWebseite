@@ -2,11 +2,14 @@ package dev.projecteclipse.eclipse.client.credits;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsBeginPayload;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsClosePayload;
+import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsFovPayload;
 import dev.projecteclipse.eclipse.ritual.CreditsConfig;
+import net.minecraft.util.Mth;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvents;
@@ -53,12 +56,21 @@ public final class CreditsClient {
         // so CreditsPayloads itself never references client classes.
         CreditsPayloads.setClientBeginHandler(CreditsClient::handleBegin);
         CreditsPayloads.setClientCloseHandler(CreditsClient::handleClose);
+        CreditsPayloads.setClientFovHandler(CreditsClient::handleFov);
     }
 
     /** The latched credits-run nonce; 0 = no run seen this session. Client thread only. */
     private static int nonce;
     /** Ticks until {@code Minecraft.stop()}; -1 = no close scheduled. Client thread only. */
     private static int closeCountdown = -1;
+
+    // --- FIN-6 eclipse-explosion zoom (per-tick ramp of the director's external FOV) ---
+    /** Current external FOV multiplier (1 = neutral). Client thread only. */
+    private static float fovScale = 1.0F;
+    private static float fovFrom = 1.0F;
+    private static float fovTarget = 1.0F;
+    private static int fovRampTicks;
+    private static int fovRampElapsed;
 
     private CreditsClient() {}
 
@@ -70,7 +82,41 @@ public final class CreditsClient {
     private static void handleBegin(S2CCreditsBeginPayload payload) {
         nonce = payload.nonce();
         closeCountdown = -1;
+        // FIN-6: the whole finale is HUD-free (sidebar, hotbar, day timer). Cleared on
+        // logout, on the roll's stop payload, and by the close itself.
+        CameraDirector.setExternalHudSuppressed(true);
         EclipseMod.LOGGER.info("Credits sequence began (nonce {})", payload.nonce());
+    }
+
+    /** FIN-6: begins a linear ramp of the external FOV multiplier toward the payload target. */
+    private static void handleFov(S2CCreditsFovPayload payload) {
+        fovFrom = fovScale;
+        fovTarget = Mth.clamp(payload.targetScale(), 0.2F, 2.0F);
+        fovRampTicks = Math.max(0, payload.rampTicks());
+        fovRampElapsed = 0;
+        if (fovRampTicks == 0) {
+            fovScale = fovTarget;
+            CameraDirector.setExternalFovScale(fovScale);
+        }
+    }
+
+    /**
+     * Called by {@code CreditsPanel} when the roll's stop payload lands (the rehearsal /
+     * integrated-server end path, which never closes the client): the HUD and FOV are
+     * handed back to gameplay.
+     */
+    static void onRollStopped() {
+        CameraDirector.setExternalHudSuppressed(false);
+        resetFov();
+    }
+
+    private static void resetFov() {
+        fovScale = 1.0F;
+        fovFrom = 1.0F;
+        fovTarget = 1.0F;
+        fovRampTicks = 0;
+        fovRampElapsed = 0;
+        CameraDirector.setExternalFovScale(1.0F);
     }
 
     private static void handleClose(S2CCreditsClosePayload payload) {
@@ -97,6 +143,14 @@ public final class CreditsClient {
 
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
+        // FIN-6 zoom ramp: eased per-tick step toward the target multiplier.
+        if (fovRampElapsed < fovRampTicks) {
+            fovRampElapsed++;
+            float linear = fovRampElapsed / (float) fovRampTicks;
+            float eased = linear * linear * (3.0F - 2.0F * linear);
+            fovScale = Mth.lerp(eased, fovFrom, fovTarget);
+            CameraDirector.setExternalFovScale(fovScale);
+        }
         if (closeCountdown < 0) {
             return;
         }
@@ -122,5 +176,7 @@ public final class CreditsClient {
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         nonce = 0;
         closeCountdown = -1;
+        CameraDirector.setExternalHudSuppressed(false);
+        resetFov();
     }
 }

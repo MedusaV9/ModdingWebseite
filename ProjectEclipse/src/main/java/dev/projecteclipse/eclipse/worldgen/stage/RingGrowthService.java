@@ -835,6 +835,9 @@ public final class RingGrowthService {
                 if (head.earliestGameTime() > gameTime) {
                     break; // reveal delay: the covering wavefront payload is not old enough yet
                 }
+                if (!neighborsRewritten(head.chunkKey())) {
+                    break; // FIX-GROWTH (BUG C): hold the replay until the 3×3 base rewrite is done
+                }
                 if (finishes > 0 && System.nanoTime() - finishStart > finishBudget) {
                     break; // replay cost cap — at least one finish always runs per tick
                 }
@@ -1133,6 +1136,43 @@ public final class RingGrowthService {
         private int clampY(int y) {
             return Math.max(this.level.getMinBuildHeight(),
                     Math.min(this.level.getMaxBuildHeight() - 1, y));
+        }
+
+        /**
+         * FIX-GROWTH (BUG C "broken chunks"): whether every band neighbour of the chunk
+         * has completed its BASE REWRITE (remaining column count 0). The decoration
+         * replay writes across chunk borders (features spill up to 16 blocks into the
+         * 3×3 neighbourhood via {@code ServerLevel.setBlock}); replaying while a
+         * neighbour still holds OLD terrain let that neighbour's later full-column
+         * rewrite erase the spilled feature blocks — half trees and sheared decoration
+         * along the radial chunk borders of every animated expansion. Vanilla chunkgen
+         * never decorates a chunk before the whole 3×3 has base terrain (the FEATURES
+         * status dependency); this gate restores that invariant for the sweep replay.
+         *
+         * <p>Neighbours outside the band ({@code remainingPerChunk} default 0) are
+         * always ready — their terrain is stable through the sweep. Holding the FIFO
+         * head is deadlock-free: the head's neighbours finish within ~2 chunk widths of
+         * front advance, retry-phase re-enqueues decrement back to 0, and by sweep end
+         * every count is 0, so the queue always drains before {@link #complete()}.
+         * Residual (documented, not fixed here): the neighbour's carve replay still
+         * runs AFTER this chunk's decoration, so a cave mouth carved at the shared
+         * border can clip feature blocks that spilled over it — a much smaller and
+         * rarer artifact than the erasure this gate removes.</p>
+         */
+        private boolean neighborsRewritten(long chunkKey) {
+            int cx = ChunkPos.getX(chunkKey);
+            int cz = ChunkPos.getZ(chunkKey);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if ((dx | dz) == 0) {
+                        continue;
+                    }
+                    if (this.remainingPerChunk.get(ChunkPos.asLong(cx + dx, cz + dz)) > 0) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
 
         /**

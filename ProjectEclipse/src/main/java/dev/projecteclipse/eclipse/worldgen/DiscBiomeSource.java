@@ -33,7 +33,12 @@ import net.minecraft.world.level.biome.Climate;
  * <ul>
  *   <li><b>Cave biomes</b> below {@code surfaceY − 14}: dripstone / lush regions from
  *       {@link CaveBiomeMap}, {@code minecraft:deep_dark} under the mountain below
- *       y −96 (Ancient City region); the neutral band keeps the surface biome.</li>
+ *       y −96 (Ancient City region); the neutral band keeps the surface biome. WG2
+ *       y-bands the regions per sample ({@link CaveBiomeMap#bandedBiome}): deep lush →
+ *       {@code eclipse:fungal_hollows}, deep dripstone → {@code eclipse:ember_depths},
+ *       the crystal detail region → {@code eclipse:crystal_chasms}, and the neutral
+ *       band below y −96 → {@code eclipse:umbral_depths} (the basement no longer reads
+ *       the surface biome).</li>
  *   <li><b>End sky band</b>: {@code minecraft:the_end} for EVERY column above y 320
  *       (plans_v5 PLAN-C C12) — always on (the biome pre-exists the materialization
  *       flag harmlessly, so chunks baked early stay correct). The band deliberately
@@ -193,14 +198,20 @@ public final class DiscBiomeSource extends BiomeSource {
             return this.endHolder;
         }
         ColumnInfo info = columnInfo(bx, bz);
-        // 2. Underground: deep dark under the mountain, then dripstone/lush regions;
-        //    the neutral band falls through to the surface biome (vanilla-style).
+        // 2. Underground: deep dark under the mountain, then the dripstone/lush/crystal
+        //    regions (WG2 y-bands split their deep halves into fungal_hollows /
+        //    ember_depths); the neutral band falls through to the surface biome
+        //    (vanilla-style) until the umbral basement takes over below y −96.
         if (this.profile != DiscProfile.NETHER && by < info.surfaceY() - CaveBiomeMap.SURFACE_MARGIN) {
             if (info.deepDark() && by < CaveBiomeMap.DEEP_DARK_MAX_Y && this.deepDarkHolder != null) {
                 return this.deepDarkHolder;
             }
-            if (info.caveRegion() != null) {
-                return info.caveRegion();
+            String region = info.caveRegion();
+            if (region != null) {
+                return holderOf(CaveBiomeMap.bandedBiome(region, by));
+            }
+            if (by < CaveBiomeMap.UMBRAL_MAX_Y) {
+                return holderOf(CaveBiomeMap.UMBRAL_DEPTHS_ID);
             }
         }
         // 3. High mountain core reads jagged peaks.
@@ -216,9 +227,14 @@ public final class DiscBiomeSource extends BiomeSource {
         return info.base();
     }
 
-    /** Cached per-column data: 2-D resolution + everything the y rules key off. */
+    /**
+     * Cached per-column data: 2-D resolution + everything the y rules key off.
+     * {@code caveRegion} stays the RAW region id (not a holder) since WG2 — the y-banded
+     * biome is resolved per sample via {@link CaveBiomeMap#bandedBiome} + the immutable
+     * {@code biomesById} map, which is a plain map hit on the hot path.
+     */
     private record ColumnInfo(Holder<Biome> base, int surfaceY, boolean jaggedCore,
-            boolean mountainFootprint, @Nullable Holder<Biome> caveRegion, boolean deepDark) {}
+            boolean mountainFootprint, @Nullable String caveRegion, boolean deepDark) {}
 
     /** Per-thread direct-mapped cache; keyed to the live {@link DiscMapData} instance. */
     private static final class ColumnCache {
@@ -315,7 +331,7 @@ public final class DiscBiomeSource extends BiomeSource {
         String caveRegion = CaveBiomeMap.regionAt(bx, bz);
         boolean deepDark = CaveBiomeMap.deepDarkColumn(mountain, bx, bz);
         return new ColumnInfo(holderOf(id), surfaceY, jaggedCore, mountainFootprint,
-                caveRegion != null ? this.biomesById.get(caveRegion) : null, deepDark);
+                caveRegion, deepDark);
     }
 
     private Holder<Biome> holderOf(String id) {

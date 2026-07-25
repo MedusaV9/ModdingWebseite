@@ -224,6 +224,34 @@ public final class ArenaFight {
     }
 
     /**
+     * FIN-5 mid-fight transformation, called by {@code FerrymanEntity.onPhaseChanged} at
+     * the P3 toll break: the arena TRANSFORMS during the fight — a ribcage of bone teeth
+     * erupts around the pit rim ({@link ArenaBuilder#spawnEscalationDisplays}, appended
+     * to the fight-scoped accent list so the stray guard / animate stride / end-of-fight
+     * sweep all cover it) under an arena-wide quake, deep bell and caption. No-op
+     * outside the FIGHT watch (legacy limbo fights and test summons never reach it).
+     */
+    public static void escalateArena(ServerLevel arena) {
+        if (stage != Stage.FIGHT) {
+            return;
+        }
+        int spawned = ArenaBuilder.spawnEscalationDisplays(arena, accentDisplays);
+        if (spawned == 0) {
+            return; // already erupted this fight (phase yo-yo via healing/test commands)
+        }
+        int pitY = ArenaBuilder.pitY(arena);
+        PacketDistributor.sendToPlayersNear(arena, null, 0.5D, pitY + 2.0D, 0.5D, 128.0D,
+                S2CShakePayload.shake(0.9F, 30));
+        PacketDistributor.sendToPlayersNear(arena, null, 0.5D, pitY + 2.0D, 0.5D, 128.0D,
+                new S2CCaptionPayload("eclipse.caption.ferry.bones", 90, S2CCaptionPayload.STYLE_SUBTITLE));
+        BlockPos center = new BlockPos(0, pitY, 0);
+        arena.playSound(null, center, SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.2F, 0.35F);
+        arena.playSound(null, center, EclipseSounds.BOSS_FERRYMAN_BELL.get(), SoundSource.HOSTILE, 1.4F, 0.5F);
+        EclipseMod.LOGGER.info("Arena fight: P3 escalation — {} bone rib display(s) rising, quake + bell sent",
+                spawned);
+    }
+
+    /**
      * Mid-fight respawn seam for {@code DeathFlowHooks}: while the arena fight runs,
      * dead/banned players respawn on the spectator ship instead of the limbo door flow.
      * Returns whether the redirect happened.

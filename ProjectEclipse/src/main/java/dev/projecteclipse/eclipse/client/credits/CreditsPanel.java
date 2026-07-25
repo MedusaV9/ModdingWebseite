@@ -57,6 +57,20 @@ public final class CreditsPanel {
     private static final int FADE_IN_DELAY_TICKS = 60;
     private static final int FADE_IN_TICKS = 20;
 
+    // --- FIN-6 "Made by Sonic0810" hold ---
+    /** Lang key of the persistent maker card (langdrop finale2; literal fallback below). */
+    private static final String MADE_BY_KEY = "eclipse.credits.end.madeby";
+    /**
+     * Merge-window fallback: the key ships via the langdrop protocol, and the maker card
+     * must survive a pre-merge build — the name is identical in every locale anyway.
+     */
+    private static final String MADE_BY_FALLBACK = "Made by Sonic0810";
+    private static final int MADE_BY_FADE_IN_TICKS = 30;
+    private static final int MADE_BY_FADE_OUT_TICKS = 30;
+    /** Watchdog: the hold self-clears if the server's stop payload never arrives. */
+    private static final int MADE_BY_MAX_HOLD_TICKS = 1600;
+    private static final float MADE_BY_SCALE = 1.4F;
+
     static {
         CreditsPayloads.setClientRollHandler(CreditsPanel::handle);
     }
@@ -68,17 +82,27 @@ public final class CreditsPanel {
     private static int durationTicks;
     /** Ticks since roll start; -1 = idle. */
     private static int ticks = -1;
+    /** Ticks since the stop payload started the maker-card fade-out; -1 = not fading. */
+    private static int fadeOutTicks = -1;
 
     private CreditsPanel() {}
 
     private static void handle(S2CCreditsRollPayload payload) {
         if (payload.durationTicks() <= 0) {
-            clear();
+            // FIN-6: the roll's stop also hands HUD + FOV back to gameplay, and a live
+            // maker card leaves gently instead of popping off a black screen.
+            CreditsClient.onRollStopped();
+            if (ticks > durationTicks && ticks >= 0) {
+                fadeOutTicks = 0;
+            } else {
+                clear();
+            }
             return;
         }
         lines = resolveLines();
         durationTicks = payload.durationTicks();
         ticks = 0;
+        fadeOutTicks = -1;
         EclipseMod.LOGGER.info("Credits roll started: {} line(s) over {}t", lines.size(), durationTicks);
     }
 
@@ -99,6 +123,7 @@ public final class CreditsPanel {
     private static void clear() {
         lines = List.of();
         ticks = -1;
+        fadeOutTicks = -1;
     }
 
     @SubscribeEvent
@@ -113,7 +138,13 @@ public final class CreditsPanel {
         if (ticks < 0 || minecraft.isPaused()) {
             return;
         }
-        if (++ticks > durationTicks) {
+        // FIN-6: the scroll's end no longer clears the panel — it hands over to the
+        // centered maker card, which holds until the server's stop payload (watchdogged).
+        if (++ticks > durationTicks + MADE_BY_MAX_HOLD_TICKS) {
+            clear();
+            return;
+        }
+        if (fadeOutTicks >= 0 && ++fadeOutTicks > MADE_BY_FADE_OUT_TICKS) {
             clear();
         }
     }
@@ -133,6 +164,12 @@ public final class CreditsPanel {
         DeltaTracker deltaTracker = event.getPartialTick();
         float partial = minecraft.isPaused() ? 0.0F : deltaTracker.getGameTimeDeltaPartialTick(false);
         float age = ticks + partial;
+        if (age > durationTicks) {
+            // FIN-6: the scroll is done — the centered maker card takes over and stays
+            // while the rest of the credits (and the world behind them) disappears.
+            renderMadeBy(guiGraphics, minecraft.font, age, partial);
+            return;
+        }
         // Sunrise-first delay: hold invisible, fade in, and run the scroll on the
         // remaining span. Rolls too short to afford the delay (rejoins) skip it.
         int delay = durationTicks > FADE_IN_DELAY_TICKS + 2 * FADE_IN_TICKS ? FADE_IN_DELAY_TICKS : 0;
@@ -187,5 +224,38 @@ public final class CreditsPanel {
             guiGraphics.drawString(font, line.text(), 0, 0, (textAlpha << 24) | rgb, true);
             guiGraphics.pose().popPose();
         }
+    }
+
+    /**
+     * FIN-6 maker card: dead-center "Made by Sonic0810", fading in as the last roll lines
+     * exit and holding — through the eclipse burst, the whiteout and the black — until the
+     * server's stop payload fades it out. A soft dark backing band keeps it readable over
+     * the ever-brighter burst (white text on the white peak would vanish).
+     */
+    private static void renderMadeBy(GuiGraphics guiGraphics, Font font, float age, float partial) {
+        float in = Mth.clamp((age - durationTicks) / MADE_BY_FADE_IN_TICKS, 0.0F, 1.0F);
+        float out = fadeOutTicks < 0 ? 1.0F
+                : Mth.clamp(1.0F - (fadeOutTicks + partial) / MADE_BY_FADE_OUT_TICKS, 0.0F, 1.0F);
+        float alpha = Math.min(in, out);
+        int textAlpha = Mth.clamp(Math.round(alpha * 255.0F), 0, 255);
+        if (textAlpha < 8) {
+            return;
+        }
+        String text = EclipseLang.hasKey(MADE_BY_KEY)
+                ? EclipseLang.trString(MADE_BY_KEY) : MADE_BY_FALLBACK;
+        int width = guiGraphics.guiWidth();
+        int centerY = guiGraphics.guiHeight() / 2;
+        int halfWidth = Math.round(font.width(text) * MADE_BY_SCALE / 2.0F) + 16;
+        int halfHeight = Math.round(font.lineHeight * MADE_BY_SCALE / 2.0F) + 8;
+        int band = Math.round(90.0F * alpha) << 24;
+        guiGraphics.fill(width / 2 - halfWidth, centerY - halfHeight,
+                width / 2 + halfWidth, centerY + halfHeight, band);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(width / 2.0F - font.width(text) * MADE_BY_SCALE / 2.0F,
+                centerY - font.lineHeight * MADE_BY_SCALE / 2.0F, 0.0F);
+        guiGraphics.pose().scale(MADE_BY_SCALE, MADE_BY_SCALE, 1.0F);
+        guiGraphics.drawString(font, text, 0, 0,
+                (textAlpha << 24) | (EclipseUiTheme.TEXT & 0xFFFFFF), true);
+        guiGraphics.pose().popPose();
     }
 }

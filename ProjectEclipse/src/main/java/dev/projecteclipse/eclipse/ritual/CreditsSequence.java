@@ -28,10 +28,10 @@ import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.music.MusicCues;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
-import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.network.gate.GatePayloads;
 import dev.projecteclipse.eclipse.network.gate.S2CPortalFxPayload;
@@ -47,6 +47,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -74,12 +75,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * drains, INSTEAD of {@code bringEveryoneHome} (the {@code creditsEnabled} common config
  * falls back to the old {@code finale_return} behavior).
  *
- * <p><b>Timeline</b> ({@code t} = server ticks since {@link #begin}, IDEAS §B1 table):</p>
+ * <p><b>Timeline</b> ({@code t} = server ticks since {@link #begin}; the FIN-6 rework —
+ * roughly 2.5× the original length, the credits roll slowed to match, the Avengers gag
+ * cut, and the back half rebuilt around a rising-and-exploding eclipse):</p>
  * <ol>
  *   <li>t=0 — fade to black (10t rise), {@code victory_theme} stops, the epilogue beach
  *       starts pre-stamping through {@code BudgetedBlockWriter} while nobody can see it
  *       (warm chunks; the black/white fades give it ~260 ticks of cover, it needs about
- *       a dozen).</li>
+ *       a dozen). The client suppresses ALL non-whitelisted HUD (sidebar included) from
+ *       the begin payload until the roll's stop payload.</li>
  *   <li>t=40 — behind black: everyone teleported to the ghost-ship stern, the <b>helm
  *       double</b> (first online living player; the egg-offerer in spirit) posed on the poop
  *       deck at the block-display ship's wheel; the 140t {@code credits_helm} push-in plays
@@ -87,28 +91,47 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li>t=200 — fade WHITE, then the <b>disguised white loading screen</b>: portal-FX style
  *       {@code eclipse:credits_white} ({@code PortalTransitionController} holds white,
  *       {@code EclipseLoadingScreen} fakes a vanilla "Building terrain…" line) covers the
- *       teleport to the frozen-sunrise beach in {@code eclipse:epilogue}.</li>
- *   <li>t=300 — beach: {@code day_final} music cue and the right-side credits roll
- *       ({@code CreditsPanel}; it fades in client-side after a 3 s sunrise-first hold).
- *       The <b>auto-run</b> east into the sunrise arms at t=340 — 2 s of stillness on the
- *       horizon first ({@code CreditsAutoRun} client input injection; a per-player server
- *       nudge watchdog catches crashed/vanilla clients once the run is armed).</li>
- *   <li>t=420 — massive lightning (6 offshore strikes, intensity 0.6→1.0) + 24 flying
- *       {@code BLOCK_DISPLAY} debris arcs overhead toward the sun (the run's greatest hits:
- *       ship planks, altar stone, disc basalt, amethyst).</li>
- *   <li>t=480 — title card "MINECRAFT ECLIPSE COMES BACK IN AVENGERS: DOOMSDAY"
- *       ({@code TitleCardLayer} glitch decode); t=650 burst (shockwave + tight white
- *       flash, out by 666); t=665 the CORRECTION phase — the deadpan card
- *       "ECLIPSE : DOOMSDAY" (caption TITLE style) is held 500 ms and lands at t=676
- *       after a beat of total stillness.</li>
- *   <li>t=745 — fade to black, auto-run off; t=810 everyone is quietly moved home to the
- *       overworld spawn BEHIND the black (post-credits world state — a disconnect/restart
- *       from here on lands players at spawn, never on the set).</li>
- *   <li>t=1010 — final "ECLIPSE" card over black; t=1065 — {@code S2CCreditsClosePayload}
- *       (40t delay, nonce-guarded) → modded clients close themselves
- *       ({@code CreditsClient}); t=1205 — a DEDICATED server halts ({@code halt(false)}),
- *       stragglers/vanilla clients get a normal disconnect screen.</li>
+ *       teleport to the pre-dawn beach in {@code eclipse:epilogue}.</li>
+ *   <li>t=300 — beach: {@code day_final} music cue and the right-side credits roll (in the
+ *       player's language — German first; {@code CreditsPanel}). The sun now genuinely
+ *       RISES: the epilogue's {@code fixed_time} was removed and {@link #driveSunrise}
+ *       steps the day clock 1t/t from the next pre-dawn boundary — a real, slow sunrise
+ *       across the whole roll. The <b>auto-run</b> east arms at t=340 and DISARMS at
+ *       t={@value #T_RUN_END} — everyone stands at the surf line and watches.</li>
+ *   <li>t=420 — massive lightning (6 offshore strikes, intensity 0.6→1.0) + the debris
+ *       sky: {@value #FLYER_COUNT} {@code BLOCK_DISPLAY} fragments (budgeted
+ *       {@value #FLYER_SPAWN_PER_TICK}/t) flying staggered, re-seeded arcs over the whole
+ *       beach until t={@value #T_FLYERS_END}.</li>
+ *   <li>t={@value #T_ECLIPSE_RISE} — the ECLIPSE: a {@value #ECLIPSE_SHELL_COUNT}-display
+ *       black sphere with a {@value #ECLIPSE_CORONA_COUNT}-display glowing corona rises
+ *       slowly out of the sea on the eastern horizon, dead ahead, under a building
+ *       thunder rumble.</li>
+ *   <li>t={@value #T_BURST} — the eclipse EXPLODES (shockwave + Photon burst cue): its
+ *       shell blows outward, {@value #BURST_DEBRIS_COUNT} more debris displays are hurled
+ *       toward and over the players, the camera shakes on a rising ladder, white pulses
+ *       stack brighter and brighter, and the client FOV slowly zooms IN on the burst
+ *       ({@code S2CCreditsFovPayload}). The roll has ended by now — "Made by Sonic0810"
+ *       holds dead-center through all of it ({@code CreditsPanel}).</li>
+ *   <li>t={@value #T_WHITE_FADE} — the last pulse rises into a FULL WHITE hold; behind it
+ *       (t={@value #T_WHITE_PEAK}) every display is discarded. t={@value #T_TRACK2} — the
+ *       second track ({@code title_theme}) starts as the white melts to BLACK over 8 s
+ *       (the {@code CaptionRenderer} fade crossfade); t={@value #T_HOME} — everyone is
+ *       quietly moved home behind it.</li>
+ *   <li>Over black: t={@value #T_CARD_TITLE} — "Minecraft Eclipse" over the still-held
+ *       maker card; both leave at t={@value #T_CARDS_OUT}. t={@value #T_CARD_RETURNS} —
+ *       "Minecraft Eclipse kommt zurück in" (gentle card), t={@value #T_CARD_NEXT} —
+ *       "Minecraft 2Worlds : Timeless". t={@value #T_CLOSE} —
+ *       {@code S2CCreditsClosePayload} (40t delay, nonce-guarded) → modded clients close
+ *       themselves ({@code CreditsClient}); t={@value #T_END} — a DEDICATED server halts
+ *       ({@code halt(false)}), stragglers/vanilla clients get a normal disconnect
+ *       screen.</li>
  * </ol>
+ *
+ * <p><b>Display budget</b> (FIN-6): hard cap {@value #DISPLAY_HARD_CAP} live displays
+ * (spawns beyond it are dropped, logged); every wave spawns budgeted (≤
+ * {@value #FLYER_SPAWN_PER_TICK}/t); transform pushes ride 4–10t interpolation windows
+ * (≈90–110 entity updates/t at the burst peak); everything is discarded behind the full
+ * white and again belt-and-braces at {@link #beatEnd}.</p>
  *
  * <p><b>Failure-safety</b> (IDEAS §B5): the machine is purely time-driven (no beat can
  * wedge it); {@link CreditsData} persists started/completed/phase — a restart mid-sequence
@@ -129,14 +152,17 @@ public final class CreditsSequence implements SequenceReplayable {
     /** Mirrors {@code PortalTransitionController.STYLE_CREDITS_WHITE} (client class — never referenced here). */
     private static final String STYLE_CREDITS_WHITE = "eclipse:credits_white";
     private static final String MUSIC_FINALE_CUE = "day_final";
+    /** FIN-6 track two: the title theme returns on the white→black melt. */
+    private static final String MUSIC_OUTRO_CUE = "title_theme";
 
-    /** The one-shot epilogue dimension (frozen-sunrise beach; datapack JSONs). */
+    /** The one-shot epilogue dimension (pre-dawn beach; datapack JSONs). */
     public static final ResourceKey<Level> EPILOGUE = ResourceKey.create(Registries.DIMENSION,
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "epilogue"));
 
-    private static final String TITLE_DOOMSDAY = "eclipse.credits.title.doomsday";
-    private static final String TITLE_CORRECTION = "eclipse.credits.title.correction";
-    private static final String TITLE_ECLIPSE = "eclipse.credits.title.eclipse";
+    // FIN-6 end cards (langdrop finale2; the Avengers gag titles are gone).
+    private static final String TITLE_END = "eclipse.credits.end.title";
+    private static final String TITLE_RETURNS = "eclipse.credits.end.returns";
+    private static final String TITLE_NEXT = "eclipse.credits.end.next";
 
     // --- IDEAS §B1 tick table ---
     private static final int T_SHIP = 40;
@@ -193,25 +219,41 @@ public final class CreditsSequence implements SequenceReplayable {
      * closest AND strongest (the intensity ramp peaks with it).
      */
     private static final int[] STRIKE_DEPTHS = {64, 10, 34, 78, 16, 6};
-    private static final int T_FLYERS_END = 560;
-    private static final int T_TITLE = 480;
-    private static final int T_BURST = 650;
-    private static final int T_CORRECTION = 665;
     /**
-     * FXTEAM CUT-CREDITS deadpan beat: the correction card is dispatched this many ticks
-     * after {@link #T_CORRECTION}, buying 10t (500 ms) of pure stillness between the
-     * burst flash dying (t=666) and the card fading up (t=676).
+     * FIN-6: the auto-run DISARMS here — the line reaches the surf (~104 blocks at run
+     * speed) and everyone stands watching the horizon for the whole eclipse act. The
+     * nudge watchdog stops with it.
      */
-    private static final int CORRECTION_STILL_TICKS = 11;
-    private static final int T_FADE_OUT = 745;
-    private static final int T_HOME = 810;
-    private static final int T_ECLIPSE_CARD = 1010;
-    private static final int T_CLOSE = 1065;
-    private static final int T_END = 1205;
+    private static final int T_RUN_END = 940;
+    /** The eclipse starts rising out of the sea (spawn + slow-rise pushes). */
+    private static final int T_ECLIPSE_RISE = 700;
+    /** The debris sky shrinks out (20t) and is discarded just before the burst. */
+    private static final int T_FLYERS_END = 1750;
+    private static final int FLYER_SHRINK_TICKS = 20;
+    /** The eclipse explodes; the FOV zoom and the shake/brightness ladders start. */
+    private static final int T_BURST = 1900;
+    /** The final white rises (40t) into a full hold... */
+    private static final int T_WHITE_FADE = 2060;
+    /** ...and behind it every display is discarded. */
+    private static final int T_WHITE_PEAK = 2100;
+    /** Track two starts; the white melts to black over 160t (fade crossfade). */
+    private static final int T_TRACK2 = 2160;
+    private static final int T_HOME = 2200;
+    /** "Minecraft Eclipse" over the still-held "Made by Sonic0810" (both centered). */
+    private static final int T_CARD_TITLE = 2320;
+    /** The maker card fades out (roll stop payload); the title caption ends itself. */
+    private static final int T_CARDS_OUT = 2430;
+    private static final int T_CARD_RETURNS = 2520;
+    private static final int T_CARD_NEXT = 2700;
+    private static final int T_CLOSE = 2940;
+    private static final int T_END = 3080;
     /** Close payload countdown on the client (broadcast at {@link #T_CLOSE}). */
     private static final int CLOSE_DELAY_TICKS = 40;
-    /** Credits roll span: beach fade-in → just before the final ECLIPSE card. */
-    private static final int ROLL_TICKS = T_ECLIPSE_CARD - T_BEACH - 10;
+    /**
+     * Credits roll span (FIN-6: over twice the old scroll speed's span — the roll ends
+     * at t=1780, where the maker card takes the center and holds).
+     */
+    private static final int ROLL_TICKS = 1480;
 
     // --- beach geometry (eclipse:epilogue; stamped once per run behind the black) ---
     /** Top sand layer Y; players walk on {@code +1}. */
@@ -228,20 +270,30 @@ public final class CreditsSequence implements SequenceReplayable {
     /** East heading (yaw of +X). */
     private static final float RUN_YAW = -90.0F;
 
-    // --- flying debris displays ---
-    private static final int FLYER_COUNT = 24;
+    // --- flying debris displays (FIN-6: the "hundreds flying" sky) ---
+    /** Debris-sky population (was 24). Budgeted in at {@value #FLYER_SPAWN_PER_TICK}/t. */
+    private static final int FLYER_COUNT = 288;
+    private static final int FLYER_SPAWN_PER_TICK = 24;
+    /** Transform push cadence (interpolation window length) for the debris sky. */
+    private static final int FLYER_PUSH_STRIDE = 4;
+    /** Per-flyer arc cycle length (ticks): {@value #FLYER_CYCLE_MIN} + hash × {@value #FLYER_CYCLE_VAR}. */
+    private static final int FLYER_CYCLE_MIN = 260;
+    private static final int FLYER_CYCLE_VAR = 140;
+    /**
+     * FIN-6 hard cap on live credits displays of ALL kinds (flyers + eclipse + burst
+     * debris): spawns beyond it are dropped and logged — a lag spiral can never out-spawn
+     * the budget.
+     */
+    private static final int DISPLAY_HARD_CAP = 800;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
     private static final String WHEEL_TAG = "eclipse_credits_wheel";
     /** Golden angle (radians) — flyer tumble phases: neighbors maximally de-phased (BD-SHIP). */
     private static final float GOLDEN_ANGLE = 2.3999632F;
-    /** BD-SHIP flyer stagger: launch delays spread over this fraction of the flight span. */
-    private static final float FLYER_STAGGER_MAX = 0.3F;
     /**
      * BD-SHIP scale envelope: flyers grow in over the first {@value #FLYER_SCALE_RAMP}
-     * of their (staggered) flight and shrink out over the last — pre-launch holds are
-     * invisible and the {@code T_FLYERS_END} discard never pops a block out of the sky.
-     * The floor is never exactly 0 (a zero scale column degenerates the client
-     * interpolator's affine decomposition).
+     * of each arc and shrink out over the last — arc wraps and the end-of-beat discard
+     * never pop a block out of the sky. The floor is never exactly 0 (a zero scale
+     * column degenerates the client interpolator's affine decomposition).
      */
     private static final float FLYER_SCALE_RAMP = 0.12F;
     private static final float FLYER_SCALE_FLOOR = 0.02F;
@@ -254,6 +306,62 @@ public final class CreditsSequence implements SequenceReplayable {
             Blocks.SMOOTH_BASALT.defaultBlockState(),
             Blocks.OBSIDIAN.defaultBlockState(),
             Blocks.AMETHYST_BLOCK.defaultBlockState()};
+
+    // --- the eclipse (FIN-6: rises on the horizon, then explodes) ---
+    /**
+     * Anchor column of every eclipse/burst display. Entity positions must stay inside
+     * the display tracking range of players on the beach (~10 chunks), so the anchor
+     * sits at x={@value}, and the visual body rides {@value #ECLIPSE_VISUAL_OFFSET_X}
+     * blocks further east on the TRANSLATION (with a widened {@code view_range}) — the
+     * sphere reads ~140 blocks off the surf line without ever leaving tracking range.
+     */
+    private static final double ECLIPSE_ANCHOR_X = 170.0D;
+    private static final double ECLIPSE_VISUAL_OFFSET_X = 60.0D;
+    /** Sphere center starts this far below the beach line (hidden behind the sea rim). */
+    private static final double ECLIPSE_START_DEPTH = 26.0D;
+    /** Total rise of the sphere center across the rise act. */
+    private static final double ECLIPSE_RISE_BLOCKS = 66.0D;
+    private static final double ECLIPSE_RADIUS = 13.0D;
+    private static final int ECLIPSE_SHELL_COUNT = 120;
+    private static final int ECLIPSE_CORONA_COUNT = 16;
+    private static final float ECLIPSE_SCALE = 5.0F;
+    private static final float CORONA_SCALE = 2.4F;
+    /** Rise-phase push cadence (slow motion → long windows, few packets). */
+    private static final int ECLIPSE_PUSH_STRIDE = 10;
+    /** Burst-phase push cadence for shell + corona + hurled debris. */
+    private static final int BURST_PUSH_STRIDE = 5;
+    /** Debris displays hurled toward the players at the burst (budgeted spawn). */
+    private static final int BURST_DEBRIS_COUNT = 300;
+    private static final int BURST_SPAWN_PER_TICK = 25;
+    /** Widened display view range (×64 blocks) for the far-anchored eclipse displays. */
+    private static final float ECLIPSE_VIEW_RANGE = 4.0F;
+    /** Cadence of the building thunder rumble (and its low shake) under the rise. */
+    private static final int RUMBLE_PERIOD = 90;
+    /** Cadence of the burst act's stacking white pulses + shake ladder. */
+    private static final int BURST_PULSE_PERIOD = 30;
+    /** FOV target of the slow zoom INTO the burst ({@code S2CCreditsFovPayload}). */
+    private static final float BURST_FOV_SCALE = 0.62F;
+    /** Gentle end-card holds (50t in + hold + 50t out on the client). */
+    private static final int CARD_TITLE_HOLD = 50;
+    private static final int CARD_RETURNS_HOLD = 80;
+    private static final int CARD_NEXT_HOLD = 130;
+    /**
+     * FIN-6 sunrise clock: the epilogue shares the OVERWORLD day clock (DerivedLevelData),
+     * so {@link #driveSunrise} steps the overworld's dayTime 1t/t from this pre-dawn
+     * time-of-day, snapped behind the full white at {@link #T_EPILOGUE}. Vanilla dawn is
+     * ~23960 — the sun breaks the horizon roughly 800 ticks into the roll.
+     */
+    private static final long SUNRISE_DAY_TICK = 23160L;
+    /** The dark body of the sphere. */
+    private static final BlockState[] ECLIPSE_PALETTE = {
+            Blocks.OBSIDIAN.defaultBlockState(),
+            Blocks.BLACK_CONCRETE.defaultBlockState(),
+            Blocks.COAL_BLOCK.defaultBlockState()};
+    /** The glowing corona ring (brightness-overridden to full). */
+    private static final BlockState[] CORONA_PALETTE = {
+            Blocks.MAGMA_BLOCK.defaultBlockState(),
+            Blocks.SHROOMLIGHT.defaultBlockState(),
+            Blocks.GOLD_BLOCK.defaultBlockState()};
 
     /** Server nudge watchdog (IDEAS §B2): stalled after this many ticks without progress. */
     private static final int NUDGE_STALL_TICKS = 20;
@@ -320,7 +428,7 @@ public final class CreditsSequence implements SequenceReplayable {
     // ------------------------------------------------------------------ the run
 
     /** Human-readable beat names for the persisted phase + FX replays. */
-    private enum Phase { HELM, WHITEOUT, BEACH, LIGHTNING, TITLE, CORRECTION, OUTRO }
+    private enum Phase { HELM, WHITEOUT, BEACH, LIGHTNING, ECLIPSE, BURST, OUTRO }
 
     private static final class Run {
         final MinecraftServer server;
@@ -334,8 +442,20 @@ public final class CreditsSequence implements SequenceReplayable {
         @Nullable
         Display.BlockDisplay wheel;
         final List<Display.BlockDisplay> flyers = new ArrayList<>();
-        /** FXTEAM CUT-CREDITS ground shadows under the low debris arcs (≤ half the flyers). */
+        /** FXTEAM CUT-CREDITS ground shadows under the low debris arcs (~15% of flyers). */
         final List<ShadowPuck> shadows = new ArrayList<>();
+        // FIN-6 eclipse act (list index == deterministic pose index; a failed create
+        // never advances the cursor, so the alignment is an invariant).
+        final List<Display.BlockDisplay> eclipseShell = new ArrayList<>();
+        final List<Display.BlockDisplay> eclipseCorona = new ArrayList<>();
+        final List<Display.BlockDisplay> burstDebris = new ArrayList<>();
+        /** Budgeted spawn cursors (flyers / hurled burst debris). */
+        int flyerCursor;
+        int burstCursor;
+        /** Hard-cap warning latch (log once per run, never spam). */
+        boolean capWarned;
+        /** Overworld dayTime baseline for {@link #driveSunrise} (set once behind the white). */
+        long sunriseBase = Long.MIN_VALUE;
         /** Budgeted beach-stamp cursor (started at t=0; the epilogue beat blocks on it). */
         final BeachStamp beachStamp = new BeachStamp();
         /** Auto-run nudge watchdog state (per online player). */
@@ -408,9 +528,9 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * GAMEMASTER skip (IDEAS §B5): jump straight to the fade-out beat. The music finale
-     * still plays, but the close broadcast and the server halt are disabled — a skip
-     * implies rehearsal. Returns {@code false} while no run is live.
+     * GAMEMASTER skip (IDEAS §B5): jump straight to the white fade-out beat. The music
+     * finale still plays, but the close broadcast and the server halt are disabled — a
+     * skip implies rehearsal. Returns {@code false} while no run is live.
      */
     public static boolean skip(MinecraftServer server) {
         Run current = run;
@@ -418,10 +538,11 @@ public final class CreditsSequence implements SequenceReplayable {
             return false;
         }
         current.closeAllowed = false;
-        if (current.ticks < T_FADE_OUT) {
+        if (current.ticks < T_WHITE_FADE) {
             discardWheel(current);
             discardFlyers(current);
-            current.ticks = T_FADE_OUT - 1; // the next tick executes the fade-out beat
+            discardEclipse(current);
+            current.ticks = T_WHITE_FADE - 1; // the next tick executes the white fade-out beat
         }
         EclipseMod.LOGGER.info("CreditsSequence: skipped to the outro (close disabled)");
         return true;
@@ -444,12 +565,17 @@ public final class CreditsSequence implements SequenceReplayable {
             case T_PORTAL -> beatPortal(current);
             case T_EPILOGUE -> beatEpilogue(current);
             case T_BEACH -> beatBeach(current);
-            case T_TITLE -> beatTitle(current);
+            case T_ECLIPSE_RISE -> beatEclipseRise(current);
+            case T_RUN_END -> beatRunEnd(current);
             case T_BURST -> beatBurst(current);
-            case T_CORRECTION -> beatCorrection(current);
-            case T_FADE_OUT -> beatFadeOut(current);
+            case T_WHITE_FADE -> beatWhiteFade(current);
+            case T_WHITE_PEAK -> beatWhitePeak(current);
+            case T_TRACK2 -> beatTrackTwo(current);
             case T_HOME -> beatHome(current);
-            case T_ECLIPSE_CARD -> beatEclipseCard(current);
+            case T_CARD_TITLE -> beatCardTitle(current);
+            case T_CARDS_OUT -> beatCardsOut(current);
+            case T_CARD_RETURNS -> beatCardReturns(current);
+            case T_CARD_NEXT -> beatCardNext(current);
             case T_CLOSE -> beatClose(current);
             case T_END -> beatEnd(current);
             default -> { }
@@ -458,20 +584,51 @@ public final class CreditsSequence implements SequenceReplayable {
         if (t > T_SHIP && t < T_EPILOGUE && (t - T_SHIP) % 4 == 0) {
             animateWheel(current, t); // BD-SHIP: the helm never stands still on camera
         }
+        if (t >= T_EPILOGUE && t <= T_WHITE_PEAK) {
+            driveSunrise(current, t); // FIN-6: a real, slow sunrise across the whole roll
+        }
         if (t >= T_LIGHTNING && t <= T_LIGHTNING + (LIGHTNING_STRIKES - 1) * LIGHTNING_INTERVAL
                 && (t - T_LIGHTNING) % LIGHTNING_INTERVAL == 0) {
             int index = (t - T_LIGHTNING) / LIGHTNING_INTERVAL;
             beatLightningStrike(current, index);
         }
-        if (t >= T_LIGHTNING && t <= T_FLYERS_END && (t - T_LIGHTNING) % 2 == 0) {
+        // FIN-6 display budget: every wave below spawns ≤ its per-tick budget, never past
+        // DISPLAY_HARD_CAP; every animation rides interpolation windows on a fixed stride.
+        if (t >= T_LIGHTNING && t < T_FLYERS_END && current.flyerCursor < FLYER_COUNT) {
+            spawnFlyerBatch(current);
+        }
+        if (t > T_LIGHTNING && t < T_FLYERS_END && (t - T_LIGHTNING) % FLYER_PUSH_STRIDE == 0) {
             animateFlyers(current, t);
         }
         if (t == T_FLYERS_END) {
+            shrinkOutFlyers(current);
+        }
+        if (t == T_FLYERS_END + FLYER_SHRINK_TICKS) {
             discardFlyers(current);
         }
+        if (t >= T_ECLIPSE_RISE && t < T_BURST
+                && current.eclipseShell.size() + current.eclipseCorona.size()
+                        < ECLIPSE_SHELL_COUNT + ECLIPSE_CORONA_COUNT) {
+            spawnEclipseBatch(current);
+        }
+        if (t > T_ECLIPSE_RISE && t < T_BURST && (t - T_ECLIPSE_RISE) % ECLIPSE_PUSH_STRIDE == 0) {
+            animateEclipseRise(current, t);
+        }
+        if (t >= T_ECLIPSE_RISE && t < T_BURST && (t - T_ECLIPSE_RISE) % RUMBLE_PERIOD == 0) {
+            eclipseRumble(current, t);
+        }
+        if (t > T_BURST && t < T_WHITE_PEAK && current.burstCursor < BURST_DEBRIS_COUNT) {
+            spawnBurstDebrisBatch(current);
+        }
+        if (t > T_BURST && t < T_WHITE_PEAK && (t - T_BURST) % BURST_PUSH_STRIDE == 0) {
+            animateBurst(current, t);
+        }
+        if (t > T_BURST && t < T_WHITE_FADE && (t - T_BURST) % BURST_PULSE_PERIOD == 0) {
+            burstEscalation(current, t);
+        }
         // Watchdog starts after the deliberate 2 s sunrise hold — statues are intentional
-        // until the auto-run has been armed.
-        if (t > T_BEACH + RUN_HOLD_TICKS && t < T_FADE_OUT) {
+        // until the auto-run has been armed — and dies with the run-end beat.
+        if (t > T_BEACH + RUN_HOLD_TICKS && t < T_RUN_END) {
             nudgeStalledRunners(current);
         }
     }
@@ -561,7 +718,7 @@ public final class CreditsSequence implements SequenceReplayable {
         if (epilogue == null) {
             EclipseMod.LOGGER.error("CreditsSequence: epilogue dimension vanished mid-run — sending everyone home");
             discardWheel(current);
-            current.ticks = T_FADE_OUT - 1;
+            current.ticks = T_WHITE_FADE - 1;
             return;
         }
         if (!current.beachStamp.done) {
@@ -606,14 +763,14 @@ public final class CreditsSequence implements SequenceReplayable {
             CreditsPayloads.sendRoll(player, ROLL_TICKS);
         }
         schedule(current.server, RUN_HOLD_TICKS, () -> {
-            // A skip() during the hold jumps past the fade-out: never arm the walk then.
-            if (run != current || current.ticks >= T_FADE_OUT) {
+            // A skip() during the hold jumps past the run window: never arm the walk then.
+            if (run != current || current.ticks >= T_RUN_END) {
                 return;
             }
             for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
                 if (!player.hasDisconnected()) {
                     CreditsPayloads.sendAutoRun(player, true, RUN_YAW,
-                            T_FADE_OUT - T_BEACH - RUN_HOLD_TICKS + 100);
+                            T_RUN_END - T_BEACH - RUN_HOLD_TICKS + 100);
                 }
             }
         });
@@ -630,7 +787,7 @@ public final class CreditsSequence implements SequenceReplayable {
     private static void beatLightningStrike(Run current, int index) {
         if (index == 0) {
             current.enter(Phase.LIGHTNING);
-            spawnFlyers(current);
+            // The debris sky starts building the same tick (budgeted spawnFlyerBatch wave).
         }
         ServerLevel epilogue = current.server.getLevel(EPILOGUE);
         if (epilogue == null) {
@@ -669,65 +826,112 @@ public final class CreditsSequence implements SequenceReplayable {
         });
     }
 
-    /** t=480 — the doomsday card decodes ({@code TitleCardLayer}). */
-    private static void beatTitle(Run current) {
-        current.enter(Phase.TITLE);
+    /**
+     * t={@value #T_ECLIPSE_RISE} — the ECLIPSE act enters: the dark sphere + glowing
+     * corona spawn budgeted (the onServerTick wave) and start their slow rise out of the
+     * sea. The beat itself only marks the phase — everything else is continuous work.
+     */
+    private static void beatEclipseRise(Run current) {
+        current.enter(Phase.ECLIPSE);
+    }
+
+    /**
+     * t={@value #T_RUN_END} — the auto-run DISARMS: the line has reached the surf and
+     * everyone stands watching the horizon for the whole eclipse act (the user-facing
+     * "stand and watch" beat; the nudge watchdog died with the same boundary).
+     */
+    private static void beatRunEnd(Run current) {
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-            CreditsPayloads.sendTitle(player, TITLE_DOOMSDAY, 70);
+            CreditsPayloads.sendAutoRun(player, false, RUN_YAW, 0);
         }
     }
 
     /**
-     * t=650 — burst: shockwave + white flash (the intro-BURST mirror). FXTEAM
-     * CUT-CREDITS: the flash envelope tightened 8/6/10 → 6/4/6 so the screen is fully
-     * clean by t=666 — the correction card needs dead air in front of it.
+     * t={@value #T_BURST} — the eclipse EXPLODES: the intro-mirror giant shockwave
+     * (the (1.0, 50) signature the client seam layers the HDR ring onto), the Photon
+     * confetti cue, a first heavy shake, a first white pulse, and the slow FOV zoom
+     * INTO the burst. The shell blow-out, hurled debris and the stacking pulse ladder
+     * are continuous work from here to the white ({@link #animateBurst},
+     * {@link #spawnBurstDebrisBatch}, {@link #burstEscalation}).
      */
     private static void beatBurst(Run current) {
+        current.enter(Phase.BURST);
         ServerLevel epilogue = current.server.getLevel(EPILOGUE);
         if (epilogue != null) {
-            Vec3 center = runnersCenter(epilogue);
+            Vec3 center = eclipseCenter(1.0F);
             FxPayloads.sendFxEvent(epilogue, FxPayloads.FX_SHOCKWAVE, center, 1.0F, 50.0F, -1.0D);
-            // PH-EVENTS (IDEAS-events #6): DOOMSDAY confetti mesh shards over the runners.
-            // Its own cue — NOT keyed off FX_SHOCKWAVE (the (1.0, 50) giant signature is
-            // claimed by the intro burst ring's client seam; two Photon layers on one
-            // generic id is the if-chain smell the registry exists to kill).
+            // PH-EVENTS: its own cue — NOT keyed off FX_SHOCKWAVE (the (1.0, 50) giant
+            // signature is claimed by the intro burst ring's client seam).
             FxPayloads.sendFxEvent(epilogue, FxCues.CUE_CREDITS_BURST, center, 0.0F, 0.0F, -1.0D);
+            for (ServerPlayer player : epilogue.players()) {
+                player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER, 1.0F, 0.62F);
+                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 1.0F, 0.55F);
+            }
         }
-        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(1.6F, 60));
+        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(6, 6, 10, 0x50FFFFFF));
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendFov(player, BURST_FOV_SCALE, T_WHITE_FADE - T_BURST + 30);
+        }
     }
 
     /**
-     * t=665 — the deadpan legal-department correction ({@code CaptionRenderer} TITLE
-     * style). FXTEAM CUT-CREDITS comedy timing: the phase enters on schedule, but the
-     * card itself is held {@value #CORRECTION_STILL_TICKS}t so it lands at t=676 — a full
-     * 500 ms of NOTHING (flash gone at 666, world still, music running) before
-     * "ECLIPSE : DOOMSDAY" fades up like a legal department clearing its throat.
+     * The burst act's rising ladder (every {@value #BURST_PULSE_PERIOD}t): a stacking
+     * white pulse (alpha climbing toward the full white), a stronger shake, and a
+     * closer thunder crack — "everything shakes and it gets brighter and brighter".
      */
-    private static void beatCorrection(Run current) {
-        current.enter(Phase.CORRECTION);
-        schedule(current.server, CORRECTION_STILL_TICKS, () -> {
-            if (run != current) {
-                return; // a skip() mid-stillness moved on — never card over the outro
+    private static void burstEscalation(Run current, int t) {
+        int step = (t - T_BURST) / BURST_PULSE_PERIOD;
+        float ladder = Math.min(1.0F, step / 5.0F);
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.7F + 0.9F * ladder, BURST_PULSE_PERIOD + 14));
+        int alpha = Math.min(0xE0, 0x40 + step * 0x28);
+        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(8, 10, 14, (alpha << 24) | 0x00FFFFFF));
+        ServerLevel epilogue = current.server.getLevel(EPILOGUE);
+        if (epilogue != null) {
+            for (ServerPlayer player : epilogue.players()) {
+                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                        0.5F + 0.5F * ladder, 0.5F + 0.08F * ladder);
             }
-            PacketDistributor.sendToAllPlayers(
-                    new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
-        });
+        }
     }
 
-    /** t=745 — fade to black, auto-run releases; the music finale keeps playing. */
-    private static void beatFadeOut(Run current) {
+    /**
+     * t={@value #T_WHITE_FADE} — the last pulse rises into the FULL WHITE hold (40t up,
+     * clamped 600t hold — {@link #beatTrackTwo} replaces it with the black melt long
+     * before it expires). Auto-run release is re-sent belt-and-braces for the skip path.
+     */
+    private static void beatWhiteFade(Run current) {
         current.enter(Phase.OUTRO);
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendAutoRun(player, false, RUN_YAW, 0);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(60, 600, 0, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(40, 600, 0, 0xFFFFFFFF));
         }
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(2.0F, 50));
+    }
+
+    /** t={@value #T_WHITE_PEAK} — behind the full white: every display is discarded. */
+    private static void beatWhitePeak(Run current) {
         discardFlyers(current);
+        discardEclipse(current);
     }
 
     /**
-     * t=810 — behind the black: everyone home to the overworld spawn (the post-credits
-     * world state; {@code bringEveryoneHome}'s deterministic spread). The black cover is
-     * re-sent AFTER the hop so the arrival is never visible.
+     * t={@value #T_TRACK2} — track two: the title theme returns ({@code MusicManager}'s
+     * own 2 s crossfade takes {@code day_final} out) as the white melts to BLACK over
+     * 8 s — the {@code CaptionRenderer} fade crossfade turns the replacement into a
+     * smooth color melt instead of a pop.
+     */
+    private static void beatTrackTwo(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            MusicCues.play(MUSIC_OUTRO_CUE, player);
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(160, 600, 0, 0xFF000000));
+        }
+    }
+
+    /**
+     * t={@value #T_HOME} — behind the black: everyone home to the overworld spawn (the
+     * post-credits world state; {@code bringEveryoneHome}'s deterministic spread). The
+     * black cover is re-sent AFTER the hop so the arrival is never visible.
      */
     private static void beatHome(Run current) {
         MinecraftServer server = current.server;
@@ -755,18 +959,51 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * t=1010 — the single "ECLIPSE" card over black. FXTEAM CUT-CREDITS: hold 90 → 75 so
-     * the card is fully out by t≈1085 and the last second before the client close
-     * (t=1105) is PURE black — {@code CreditsClient} lays the faint heartbeat under it.
+     * t={@value #T_CARD_TITLE} — "Minecraft Eclipse" fades up (gentle card, no glitch)
+     * over the still-held, centered "Made by Sonic0810" — the FIN-6 end sequence's first
+     * composite frame.
      */
-    private static void beatEclipseCard(Run current) {
-        PacketDistributor.sendToAllPlayers(
-                new S2CCaptionPayload(TITLE_ECLIPSE, 75, S2CCaptionPayload.STYLE_TITLE));
+    private static void beatCardTitle(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendGentleTitle(player, TITLE_END, CARD_TITLE_HOLD);
+        }
     }
 
     /**
-     * t=1065 — the close broadcast. Completion is persisted FIRST so a crash between here
-     * and the halt can never replay the sequence; a skipped (rehearsal) run sends nothing.
+     * t={@value #T_CARDS_OUT} — both center cards leave: the zero-duration roll payload
+     * fades the maker card out ({@code CreditsPanel}) and hands the HUD/FOV back
+     * ({@code CreditsClient.onRollStopped} — irrelevant behind the held black); the
+     * gentle title card ends itself on its own envelope.
+     */
+    private static void beatCardsOut(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendRoll(player, 0);
+        }
+    }
+
+    /** t={@value #T_CARD_RETURNS} — "Minecraft Eclipse kehrt zurück in" (gentle fade over black). */
+    private static void beatCardReturns(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendGentleTitle(player, TITLE_RETURNS, CARD_RETURNS_HOLD);
+        }
+    }
+
+    /**
+     * t={@value #T_CARD_NEXT} — the answer card: "Minecraft 2Worlds : Timeless". The
+     * black hold is re-sent with it (the 600t fade clamp would expire before
+     * {@link #T_END} otherwise).
+     */
+    private static void beatCardNext(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendGentleTitle(player, TITLE_NEXT, CARD_NEXT_HOLD);
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFF000000));
+        }
+    }
+
+    /**
+     * t={@value #T_CLOSE} — the close broadcast. Completion is persisted FIRST so a crash
+     * between here and the halt can never replay the sequence; a skipped (rehearsal) run
+     * sends nothing.
      */
     private static void beatClose(Run current) {
         CreditsData data = CreditsData.get(current.server);
@@ -783,7 +1020,7 @@ public final class CreditsSequence implements SequenceReplayable {
                 CLOSE_DELAY_TICKS, current.nonce);
     }
 
-    /** t=1205 — the end: a dedicated server halts; otherwise the fade releases gently. */
+    /** t={@value #T_END} — the end: a dedicated server halts; otherwise the fade releases gently. */
     private static void beatEnd(Run current) {
         MinecraftServer server = current.server;
         CreditsData data = CreditsData.get(server);
@@ -793,6 +1030,7 @@ public final class CreditsSequence implements SequenceReplayable {
         // (epilogue vanished, skip) must never leave a tagged display behind.
         discardWheel(current);
         discardFlyers(current);
+        discardEclipse(current);
         run = null;
         if (current.closeAllowed && server.isDedicatedServer()) {
             EclipseMod.LOGGER.info("CreditsSequence: the crossing is over — halting the server");
@@ -956,43 +1194,56 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * Launches the debris arcs behind the runners (anchored at each arc's apex column).
-     * FXTEAM CUT-CREDITS: every fragment is dimmed via a display brightness override
-     * (sky 7 / block 4 — backlit silhouettes against the sunrise instead of fullbright
-     * floating blocks), and the LOW arcs (apex roll < 0.5, ~half) each drag a flattened
-     * tinted-glass "shadow puck" along the sand underneath, clamped to the sand strip so
-     * no shadow ever hovers over water.
+     * FIN-6 debris sky, budgeted: up to {@value #FLYER_SPAWN_PER_TICK} new fragments per
+     * tick until {@value #FLYER_COUNT} are aloft — never a single-tick entity dump, never
+     * past {@link #DISPLAY_HARD_CAP}. Every fragment is dimmed via a display brightness
+     * override (sky 7 / block 4 — backlit silhouettes against the sunrise instead of
+     * fullbright floating blocks); ~15% of the LOW arcs drag a flattened tinted-glass
+     * "shadow puck" along the sand underneath, clamped to the sand strip so no shadow
+     * ever hovers over water. Arcs are anchored at each fragment's apex column and CYCLE
+     * ({@link #flyerProgress}) — the sky stays busy for the whole 1300-tick act while
+     * every display entity is reused instead of respawned.
      */
-    private static void spawnFlyers(Run current) {
+    private static void spawnFlyerBatch(Run current) {
         ServerLevel epilogue = current.server.getLevel(EPILOGUE);
         if (epilogue == null) {
             return;
         }
         Vec3 center = runnersCenter(epilogue);
-        for (int i = 0; i < FLYER_COUNT; i++) {
+        int budget = FLYER_SPAWN_PER_TICK;
+        while (budget-- > 0 && current.flyerCursor < FLYER_COUNT) {
+            if (capReached(current)) {
+                current.flyerCursor = FLYER_COUNT; // over cap: keep what flies, stop trying
+                break;
+            }
             Display.BlockDisplay flyer = EntityType.BLOCK_DISPLAY.create(epilogue);
             if (flyer == null) {
-                continue;
+                return; // retry the same index next tick (list/index alignment invariant)
             }
-            double apexX = center.x + 10.0D + hash01(i, 1) * 20.0D;
-            double apexY = BEACH_Y + 14.0D + hash01(i, 2) * 16.0D;
-            double z = center.z + (hash01(i, 3) * 2.0D - 1.0D) * (LANE_HALF_Z + 6.0D);
+            int i = current.flyerCursor;
+            double apexX = center.x + 10.0D + hash01(i, 1) * 30.0D;
+            double apexY = BEACH_Y + 12.0D + hash01(i, 2) * 22.0D;
+            double z = center.z + (hash01(i, 3) * 2.0D - 1.0D) * (LANE_HALF_Z + 10.0D);
             flyer.moveTo(apexX, apexY, z, 0.0F, 0.0F);
             flyer.setBlockState(FLYER_PALETTE[(int) (hash01(i, 4) * FLYER_PALETTE.length) % FLYER_PALETTE.length]);
             flyer.addTag(FLYER_TAG);
             flyer.setTransformationInterpolationDelay(0);
             flyer.setTransformationInterpolationDuration(0);
-            flyer.setTransformation(flyerPose(i, 0.0F));
+            flyer.setTransformation(flyerPose(i, flyerProgress(i, current.ticks), 1.0F));
             applyBrightnessOverride(flyer, 7, 4);
             LIVE_DISPLAYS.add(flyer.getUUID());
             epilogue.addFreshEntity(flyer);
             current.flyers.add(flyer);
-            if (hash01(i, 2) < 0.5D) {
+            current.flyerCursor++;
+            if (hash01(i, 2) < 0.15D) {
                 spawnShadowPuck(current, epilogue, i, apexX, z);
             }
         }
-        EclipseMod.LOGGER.info("CreditsSequence: {} debris flyer(s) launched ({} shadow puck(s))",
-                current.flyers.size(), current.shadows.size());
+        if (current.flyerCursor >= FLYER_COUNT) {
+            EclipseMod.LOGGER.info("CreditsSequence: debris sky complete — {} flyer(s), {} shadow "
+                    + "puck(s), {} display(s) live", current.flyers.size(), current.shadows.size(),
+                    LIVE_DISPLAYS.size());
+        }
     }
 
     /**
@@ -1040,51 +1291,91 @@ public final class CreditsSequence implements SequenceReplayable {
         puck.setTransformationInterpolationDuration(0);
         // Clamp the puck's east travel to the sand strip (never a shadow on open water).
         float maxDx = (float) (BEACH_SAND_EAST_X - 2 - apexX);
-        puck.setTransformation(shadowPose(index, 0.0F, maxDx));
+        puck.setTransformation(shadowPose(index, flyerProgress(index, current.ticks), maxDx, 1.0F));
         LIVE_DISPLAYS.add(puck.getUUID());
         epilogue.addFreshEntity(puck);
         current.shadows.add(new ShadowPuck(puck, index, maxDx));
     }
 
-    /** Interpolated transform push every 2 ticks (FloatingDecor transport pattern). */
+    /**
+     * Interpolated transform push every {@value #FLYER_PUSH_STRIDE} ticks (FloatingDecor
+     * transport pattern), one lookahead window toward the pose at {@code t + stride}.
+     */
     private static void animateFlyers(Run current, int t) {
         if (current.flyers.isEmpty() && current.shadows.isEmpty()) {
             return;
         }
-        float progress = (t - T_LIGHTNING) / (float) (T_FLYERS_END - T_LIGHTNING);
-        float pushed = Math.min(1.0F, progress + 2.0F / (T_FLYERS_END - T_LIGHTNING));
         for (int i = 0; i < current.flyers.size(); i++) {
             Display.BlockDisplay flyer = current.flyers.get(i);
             if (flyer.isRemoved()) {
                 continue;
             }
             flyer.setTransformationInterpolationDelay(0);
-            flyer.setTransformationInterpolationDuration(2);
-            flyer.setTransformation(flyerPose(i, pushed));
+            flyer.setTransformationInterpolationDuration(FLYER_PUSH_STRIDE);
+            flyer.setTransformation(flyerPose(i, flyerProgress(i, t + FLYER_PUSH_STRIDE), 1.0F));
         }
         for (ShadowPuck shadow : current.shadows) {
             if (shadow.display().isRemoved()) {
                 continue;
             }
             shadow.display().setTransformationInterpolationDelay(0);
-            shadow.display().setTransformationInterpolationDuration(2);
-            shadow.display().setTransformation(shadowPose(shadow.index(), pushed, shadow.maxDx()));
+            shadow.display().setTransformationInterpolationDuration(FLYER_PUSH_STRIDE);
+            shadow.display().setTransformation(shadowPose(shadow.index(),
+                    flyerProgress(shadow.index(), t + FLYER_PUSH_STRIDE), shadow.maxDx(), 1.0F));
         }
     }
 
     /**
-     * Absolute pose of one debris fragment at beat progress 0..1: a west→east ballistic
-     * arc through the apex anchor (translation ±~38 blocks, parabolic height) —
-     * everything deterministic per index, so replays and re-pushes always agree.
-     * BD-SHIP motion pass: launches are STAGGERED (per-flyer delay up to
-     * {@value #FLYER_STAGGER_MAX} of the span, arcs renormalized so every piece still
-     * lands by {@code T_FLYERS_END} — late starters fly faster arcs); the tumble carries
-     * a golden-angle phase (neighboring flyers can never spin in sync) and DAMPS to
-     * ~35% of its launch rate by landing (debris stabilizing, not a pinwheel); the
-     * scale envelope hides pre-launch holds and the end-of-beat discard.
+     * t={@value #T_FLYERS_END} — one long push shrinks the whole debris sky to the scale
+     * floor over {@value #FLYER_SHRINK_TICKS}t; the discard lands after the window so
+     * nothing ever pops out of the air mid-frame.
      */
-    private static Transformation flyerPose(int index, float progress) {
-        float p = staggeredProgress(index, progress);
+    private static void shrinkOutFlyers(Run current) {
+        for (int i = 0; i < current.flyers.size(); i++) {
+            Display.BlockDisplay flyer = current.flyers.get(i);
+            if (flyer.isRemoved()) {
+                continue;
+            }
+            flyer.setTransformationInterpolationDelay(0);
+            flyer.setTransformationInterpolationDuration(FLYER_SHRINK_TICKS);
+            flyer.setTransformation(flyerPose(i, flyerProgress(i, T_FLYERS_END), FLYER_SCALE_FLOOR));
+        }
+        for (ShadowPuck shadow : current.shadows) {
+            if (shadow.display().isRemoved()) {
+                continue;
+            }
+            shadow.display().setTransformationInterpolationDelay(0);
+            shadow.display().setTransformationInterpolationDuration(FLYER_SHRINK_TICKS);
+            shadow.display().setTransformation(shadowPose(shadow.index(),
+                    flyerProgress(shadow.index(), T_FLYERS_END), shadow.maxDx(), FLYER_SCALE_FLOOR));
+        }
+    }
+
+    /**
+     * FIN-6 cycling arc clock: each fragment re-flies its west→east arc on its own loop
+     * length ({@value #FLYER_CYCLE_MIN}..{@value #FLYER_CYCLE_MIN}+{@value #FLYER_CYCLE_VAR}t)
+     * and phase — the sky reads as an endless debris stream while every entity is
+     * REUSED. The wrap seam (a big westward translation jump inside one interpolation
+     * window) is hidden by the scale envelope: the fragment is at the
+     * {@value #FLYER_SCALE_FLOOR} floor on both sides of the seam. Pure function of the
+     * run clock (stateless-push law).
+     */
+    private static float flyerProgress(int index, int t) {
+        int cycle = FLYER_CYCLE_MIN + (int) (hash01(index, 16) * FLYER_CYCLE_VAR);
+        int phase = (int) (hash01(index, 14) * cycle);
+        return Math.floorMod(t - T_LIGHTNING + phase, cycle) / (float) cycle;
+    }
+
+    /**
+     * Absolute pose of one debris fragment at arc progress 0..1: a west→east ballistic
+     * arc through the apex anchor (translation ±~40 blocks, parabolic height) —
+     * everything deterministic per index, so replays and re-pushes always agree.
+     * BD-SHIP motion pass: the tumble carries a golden-angle phase (neighboring flyers
+     * can never spin in sync) and DAMPS to ~35% of its launch rate by landing (debris
+     * stabilizing, not a pinwheel); the scale envelope hides arc wraps; {@code shrink}
+     * rides the end-of-act shrink-out push.
+     */
+    private static Transformation flyerPose(int index, float p, float shrink) {
         float u = p * 2.0F - 1.0F; // -1 → +1 along the arc
         float xOff = u * (30.0F + (float) hash01(index, 6) * 10.0F);
         float arcHeight = 10.0F + (float) hash01(index, 7) * 8.0F;
@@ -1096,17 +1387,12 @@ public final class CreditsSequence implements SequenceReplayable {
                 (float) (0.4D + hash01(index, 11)),
                 (float) (hash01(index, 12) * 2.0D - 1.0D)).normalize();
         Quaternionf rotation = new Quaternionf().rotationAxis(spin, axis);
-        float scale = (0.5F + (float) hash01(index, 13) * 0.8F) * scaleEnvelope(p);
+        float scale = Math.max(FLYER_SCALE_FLOOR,
+                (0.5F + (float) hash01(index, 13) * 0.8F) * scaleEnvelope(p) * shrink);
         Vector3f half = new Vector3f(scale * 0.5F, scale * 0.5F, scale * 0.5F);
         Vector3f translation = new Vector3f(xOff, yOff, 0.0F)
                 .sub(rotation.transform(half, new Vector3f()));
         return new Transformation(translation, rotation, new Vector3f(scale, scale, scale), new Quaternionf());
-    }
-
-    /** Per-flyer staggered arc progress: hold, then a renormalized 0..1 flight. */
-    private static float staggeredProgress(int index, float progress) {
-        float delay = (float) hash01(index, 14) * FLYER_STAGGER_MAX;
-        return Math.max(0.0F, Math.min(1.0F, (progress - delay) / (1.0F - delay)));
     }
 
     /**
@@ -1124,16 +1410,36 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     private static void discardFlyers(Run current) {
-        for (Display.BlockDisplay flyer : current.flyers) {
-            LIVE_DISPLAYS.remove(flyer.getUUID());
-            flyer.discard();
-        }
-        current.flyers.clear();
+        discardAll(current.flyers);
         for (ShadowPuck shadow : current.shadows) {
             LIVE_DISPLAYS.remove(shadow.display().getUUID());
             shadow.display().discard();
         }
         current.shadows.clear();
+    }
+
+    private static void discardAll(List<Display.BlockDisplay> displays) {
+        for (Display.BlockDisplay display : displays) {
+            LIVE_DISPLAYS.remove(display.getUUID());
+            display.discard();
+        }
+        displays.clear();
+    }
+
+    /**
+     * FIN-6 hard cap: refuses new displays once {@value #DISPLAY_HARD_CAP} of ANY kind
+     * are live (logged once per run) — a lag spiral can never out-spawn the budget.
+     */
+    private static boolean capReached(Run current) {
+        if (LIVE_DISPLAYS.size() < DISPLAY_HARD_CAP) {
+            return false;
+        }
+        if (!current.capWarned) {
+            current.capWarned = true;
+            EclipseMod.LOGGER.warn("CreditsSequence: display hard cap {} reached — further spawns dropped",
+                    DISPLAY_HARD_CAP);
+        }
+        return true;
     }
 
     /** One ground-shadow display bound to its flyer's deterministic arc index. */
@@ -1147,21 +1453,316 @@ public final class CreditsSequence implements SequenceReplayable {
      * (damped, golden-phased) debris tumble, and rides the same scale envelope so a
      * pre-launch or landed flyer never drags a visible puck.
      */
-    private static Transformation shadowPose(int index, float progress, float maxDx) {
-        float p = staggeredProgress(index, progress);
+    private static Transformation shadowPose(int index, float p, float maxDx, float shrink) {
         float u = p * 2.0F - 1.0F;
         float xOff = Math.min(u * (30.0F + (float) hash01(index, 6) * 10.0F), maxDx);
         float heightFrac = 1.0F - u * u; // 1 at apex, 0 at both ends (mirrors -h·u²)
         float spin = (index * GOLDEN_ANGLE
                 + (float) ((2.0D + hash01(index, 9) * 4.0D) * Math.PI) * dampedTumble(p)) * 0.3F;
         float base = 0.5F + (float) hash01(index, 13) * 0.8F;
-        float footprint = base * (0.9F + 0.5F * heightFrac) * scaleEnvelope(p);
+        float footprint = Math.max(FLYER_SCALE_FLOOR,
+                base * (0.9F + 0.5F * heightFrac) * scaleEnvelope(p) * shrink);
         Quaternionf rotation = new Quaternionf().rotationY(spin);
         Vector3f scale = new Vector3f(footprint, 0.045F, footprint);
         Vector3f half = new Vector3f(footprint * 0.5F, 0.0F, footprint * 0.5F);
         Vector3f translation = new Vector3f(xOff, 0.0F, 0.0F)
                 .sub(rotation.transform(half, new Vector3f()));
         return new Transformation(translation, rotation, scale, new Quaternionf());
+    }
+
+    // ------------------------------------------------------------------ the eclipse act
+
+    /** Eased rise progress 0..1 of the eclipse across {@code T_ECLIPSE_RISE..T_BURST}. */
+    private static float riseProgress(int t) {
+        return Mth.clamp((t - T_ECLIPSE_RISE) / (float) (T_BURST - T_ECLIPSE_RISE), 0.0F, 1.0F);
+    }
+
+    /** Burst progress 0..1 across {@code T_BURST..T_WHITE_PEAK}. */
+    private static float burstProgress(int t) {
+        return Mth.clamp((t - T_BURST) / (float) (T_WHITE_PEAK - T_BURST), 0.0F, 1.0F);
+    }
+
+    /** Smoothstep — the sphere leaves the sea gently and settles gently. */
+    private static float easeInOut(float p) {
+        return p * p * (3.0F - 2.0F * p);
+    }
+
+    /** Eclipse VISUAL center Y offset relative to the anchor entities (BEACH_Y + 1). */
+    private static float eclipseCenterYOff(float rise) {
+        return (float) (-ECLIPSE_START_DEPTH - 1.0D + easeInOut(rise) * ECLIPSE_RISE_BLOCKS);
+    }
+
+    /** Eclipse VISUAL center in world space (the FX/sound anchor for the act). */
+    private static Vec3 eclipseCenter(float rise) {
+        return new Vec3(ECLIPSE_ANCHOR_X + ECLIPSE_VISUAL_OFFSET_X,
+                BEACH_Y + 1.0D + eclipseCenterYOff(rise), 0.0D);
+    }
+
+    /** Golden-spiral unit direction {@code index} of {@code count} (even sphere coverage). */
+    private static Vector3f sphereDir(int index, int count) {
+        float y = 1.0F - 2.0F * (index + 0.5F) / count;
+        float r = (float) Math.sqrt(Math.max(0.0F, 1.0F - y * y));
+        float theta = index * GOLDEN_ANGLE;
+        return new Vector3f(r * (float) Math.cos(theta), y, r * (float) Math.sin(theta));
+    }
+
+    /** Per-fragment blow-out distance at full burst (blocks past the shell radius). */
+    private static float burstReach(int index) {
+        return 60.0F + (float) hash01(index, 35) * 80.0F;
+    }
+
+    /**
+     * FIN-6 eclipse build (budgeted at {@value #FLYER_SPAWN_PER_TICK}/t): a golden-spiral
+     * shell of {@value #ECLIPSE_SHELL_COUNT} dark displays plus a
+     * {@value #ECLIPSE_CORONA_COUNT}-display glowing corona ring. Every piece is anchored
+     * at x={@value #ECLIPSE_ANCHOR_X} (INSIDE display tracking range of the surf line)
+     * with the visual body offset {@value #ECLIPSE_VISUAL_OFFSET_X} blocks further east
+     * on the translation and a widened {@code view_range} — the sphere reads far out at
+     * sea without ever leaving tracking range. Shell pieces are brightness-crushed to
+     * 0/0 (a black body); corona pieces burn at 15/15.
+     */
+    private static void spawnEclipseBatch(Run current) {
+        ServerLevel epilogue = current.server.getLevel(EPILOGUE);
+        if (epilogue == null) {
+            return;
+        }
+        int budget = FLYER_SPAWN_PER_TICK;
+        float rise = riseProgress(current.ticks);
+        while (budget-- > 0) {
+            boolean shell = current.eclipseShell.size() < ECLIPSE_SHELL_COUNT;
+            if (!shell && current.eclipseCorona.size() >= ECLIPSE_CORONA_COUNT) {
+                return;
+            }
+            if (capReached(current)) {
+                return;
+            }
+            Display.BlockDisplay piece = EntityType.BLOCK_DISPLAY.create(epilogue);
+            if (piece == null) {
+                return;
+            }
+            int i = shell ? current.eclipseShell.size() : current.eclipseCorona.size();
+            piece.moveTo(ECLIPSE_ANCHOR_X, BEACH_Y + 1.0D, 0.0D, 0.0F, 0.0F);
+            piece.setBlockState(shell
+                    ? ECLIPSE_PALETTE[(int) (hash01(i, 31) * ECLIPSE_PALETTE.length) % ECLIPSE_PALETTE.length]
+                    : CORONA_PALETTE[i % CORONA_PALETTE.length]);
+            piece.addTag(FLYER_TAG);
+            piece.setTransformationInterpolationDelay(0);
+            piece.setTransformationInterpolationDuration(0);
+            piece.setTransformation(shell ? shellPose(i, rise, 0.0F) : coronaPose(i, rise, 0.0F));
+            applyBrightnessOverride(piece, shell ? 0 : 15, shell ? 0 : 15);
+            applyViewRange(piece, ECLIPSE_VIEW_RANGE);
+            LIVE_DISPLAYS.add(piece.getUUID());
+            epilogue.addFreshEntity(piece);
+            (shell ? current.eclipseShell : current.eclipseCorona).add(piece);
+            if (current.eclipseShell.size() == ECLIPSE_SHELL_COUNT
+                    && current.eclipseCorona.size() == ECLIPSE_CORONA_COUNT) {
+                EclipseMod.LOGGER.info("CreditsSequence: eclipse assembled — {} shell + {} corona "
+                        + "display(s), {} live", ECLIPSE_SHELL_COUNT, ECLIPSE_CORONA_COUNT,
+                        LIVE_DISPLAYS.size());
+            }
+        }
+    }
+
+    /**
+     * Shell fragment pose: golden-spiral sphere point, risen by the eased rise; at
+     * {@code burst > 0} the fragment flies outward along its sphere normal by
+     * {@link #burstReach} and starts tumbling.
+     */
+    private static Transformation shellPose(int index, float rise, float burst) {
+        Vector3f dir = sphereDir(index, ECLIPSE_SHELL_COUNT);
+        float radius = (float) ECLIPSE_RADIUS + burstReach(index) * burst;
+        float tumble = burst * (2.0F + (float) hash01(index, 33) * 6.0F);
+        Quaternionf rotation = new Quaternionf().rotationAxis(
+                index * GOLDEN_ANGLE + tumble, sphereDir(index + 7, ECLIPSE_SHELL_COUNT));
+        float scale = ECLIPSE_SCALE * (0.8F + (float) hash01(index, 34) * 0.5F);
+        Vector3f half = new Vector3f(scale * 0.5F);
+        Vector3f translation = new Vector3f(
+                (float) ECLIPSE_VISUAL_OFFSET_X + dir.x * radius,
+                eclipseCenterYOff(rise) + dir.y * radius,
+                dir.z * radius).sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation, new Vector3f(scale), new Quaternionf());
+    }
+
+    /**
+     * Corona pose: a glowing ring in the Y-Z plane (face-on to the west-watching
+     * runners), 1.3× the shell radius, blown outward and spun at the burst.
+     */
+    private static Transformation coronaPose(int index, float rise, float burst) {
+        double phi = index * (Math.PI * 2.0D / ECLIPSE_CORONA_COUNT);
+        float ringRadius = (float) (ECLIPSE_RADIUS * 1.3D) + burstReach(index + 5) * burst * 1.2F;
+        Quaternionf rotation = new Quaternionf().rotationX((float) phi + burst * 6.0F);
+        float scale = CORONA_SCALE * (0.85F + (float) hash01(index, 36) * 0.3F);
+        Vector3f half = new Vector3f(scale * 0.5F);
+        Vector3f translation = new Vector3f(
+                (float) ECLIPSE_VISUAL_OFFSET_X,
+                eclipseCenterYOff(rise) + (float) Math.cos(phi) * ringRadius,
+                (float) Math.sin(phi) * ringRadius).sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation, new Vector3f(scale), new Quaternionf());
+    }
+
+    /** Slow-rise pushes on the {@value #ECLIPSE_PUSH_STRIDE}t stride (long windows, few packets). */
+    private static void animateEclipseRise(Run current, int t) {
+        pushEclipse(current, riseProgress(t + ECLIPSE_PUSH_STRIDE), 0.0F, ECLIPSE_PUSH_STRIDE);
+    }
+
+    /** Burst pushes: shell + corona blow-out and the hurled debris, on the burst stride. */
+    private static void animateBurst(Run current, int t) {
+        float bp = burstProgress(t + BURST_PUSH_STRIDE);
+        pushEclipse(current, 1.0F, bp, BURST_PUSH_STRIDE);
+        for (int i = 0; i < current.burstDebris.size(); i++) {
+            Display.BlockDisplay debris = current.burstDebris.get(i);
+            if (debris.isRemoved()) {
+                continue;
+            }
+            debris.setTransformationInterpolationDelay(0);
+            debris.setTransformationInterpolationDuration(BURST_PUSH_STRIDE);
+            debris.setTransformation(debrisPose(i, bp));
+        }
+    }
+
+    private static void pushEclipse(Run current, float rise, float burst, int window) {
+        for (int i = 0; i < current.eclipseShell.size(); i++) {
+            Display.BlockDisplay piece = current.eclipseShell.get(i);
+            if (piece.isRemoved()) {
+                continue;
+            }
+            piece.setTransformationInterpolationDelay(0);
+            piece.setTransformationInterpolationDuration(window);
+            piece.setTransformation(shellPose(i, rise, burst));
+        }
+        for (int i = 0; i < current.eclipseCorona.size(); i++) {
+            Display.BlockDisplay piece = current.eclipseCorona.get(i);
+            if (piece.isRemoved()) {
+                continue;
+            }
+            piece.setTransformationInterpolationDelay(0);
+            piece.setTransformationInterpolationDuration(window);
+            piece.setTransformation(coronaPose(i, rise, burst));
+        }
+    }
+
+    /**
+     * FIN-6 hurled debris (budgeted at {@value #BURST_SPAWN_PER_TICK}/t, up to
+     * {@value #BURST_DEBRIS_COUNT}): fragments thrown from the burst TOWARD and OVER the
+     * players — same anchor/view-range trick as the sphere, mixed dark + greatest-hits
+     * palette.
+     */
+    private static void spawnBurstDebrisBatch(Run current) {
+        ServerLevel epilogue = current.server.getLevel(EPILOGUE);
+        if (epilogue == null) {
+            return;
+        }
+        int budget = BURST_SPAWN_PER_TICK;
+        float bp = burstProgress(current.ticks);
+        while (budget-- > 0 && current.burstCursor < BURST_DEBRIS_COUNT) {
+            if (capReached(current)) {
+                current.burstCursor = BURST_DEBRIS_COUNT;
+                return;
+            }
+            Display.BlockDisplay debris = EntityType.BLOCK_DISPLAY.create(epilogue);
+            if (debris == null) {
+                return;
+            }
+            int i = current.burstCursor;
+            debris.moveTo(ECLIPSE_ANCHOR_X, BEACH_Y + 1.0D, 0.0D, 0.0F, 0.0F);
+            debris.setBlockState(hash01(i, 48) < 0.55D
+                    ? ECLIPSE_PALETTE[(int) (hash01(i, 49) * ECLIPSE_PALETTE.length) % ECLIPSE_PALETTE.length]
+                    : FLYER_PALETTE[(int) (hash01(i, 49) * FLYER_PALETTE.length) % FLYER_PALETTE.length]);
+            debris.addTag(FLYER_TAG);
+            debris.setTransformationInterpolationDelay(0);
+            debris.setTransformationInterpolationDuration(0);
+            debris.setTransformation(debrisPose(i, bp));
+            applyBrightnessOverride(debris, 7, 4);
+            applyViewRange(debris, ECLIPSE_VIEW_RANGE);
+            LIVE_DISPLAYS.add(debris.getUUID());
+            epilogue.addFreshEntity(debris);
+            current.burstDebris.add(debris);
+            current.burstCursor++;
+        }
+    }
+
+    /**
+     * One hurled burst fragment: staggered leave from the sphere's final center,
+     * accelerating WEST toward and over the beach (ease-in on the translation), fanning
+     * ±z wider as it comes and dropping toward head height as it passes — the
+     * "thrown at you" read.
+     */
+    private static Transformation debrisPose(int index, float p) {
+        float launch = (float) hash01(index, 40) * 0.35F;
+        float q = Mth.clamp((p - launch) / (1.0F - launch), 0.0F, 1.0F);
+        float drive = q * q * (2.0F - q); // ease-in that never stops accelerating the eye
+        float startY = eclipseCenterYOff(1.0F)
+                + ((float) hash01(index, 41) * 2.0F - 1.0F) * (float) ECLIPSE_RADIUS;
+        float endY = 6.0F + (float) hash01(index, 42) * 18.0F;
+        float endX = (float) -(ECLIPSE_ANCHOR_X - START_X + 30.0D + hash01(index, 43) * 60.0D);
+        float x = (float) ECLIPSE_VISUAL_OFFSET_X
+                + (endX - (float) ECLIPSE_VISUAL_OFFSET_X) * drive;
+        float y = startY + (endY - startY) * drive
+                + 6.0F * (float) Math.sin(Math.PI * drive) * (float) hash01(index, 44);
+        float z = (((float) hash01(index, 45) * 2.0F - 1.0F) * (float) ECLIPSE_RADIUS)
+                * (1.0F + 3.0F * drive);
+        float spin = index * GOLDEN_ANGLE
+                + drive * (float) ((3.0D + hash01(index, 46) * 5.0D) * Math.PI);
+        Quaternionf rotation = new Quaternionf().rotationAxis(spin, sphereDir(index + 13, BURST_DEBRIS_COUNT));
+        float scale = 0.8F + (float) hash01(index, 47) * 1.6F;
+        Vector3f half = new Vector3f(scale * 0.5F);
+        Vector3f translation = new Vector3f(x, y, z).sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation, new Vector3f(scale), new Quaternionf());
+    }
+
+    /**
+     * A building thunder rumble under the rise (every {@value #RUMBLE_PERIOD}t): louder,
+     * higher and physically closer-reading as the sphere climbs, with a low shake once
+     * the body clears the horizon.
+     */
+    private static void eclipseRumble(Run current, int t) {
+        ServerLevel epilogue = current.server.getLevel(EPILOGUE);
+        if (epilogue == null) {
+            return;
+        }
+        float rise = riseProgress(t);
+        for (ServerPlayer player : epilogue.players()) {
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                    0.25F + 0.55F * rise, 0.5F + 0.15F * rise);
+        }
+        if (rise > 0.3F) {
+            PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.15F + 0.35F * rise, RUMBLE_PERIOD));
+        }
+    }
+
+    private static void discardEclipse(Run current) {
+        discardAll(current.eclipseShell);
+        discardAll(current.eclipseCorona);
+        discardAll(current.burstDebris);
+    }
+
+    /**
+     * {@code Display.setViewRange} is private like the brightness setter — same
+     * save-data round trip ({@code view_range} is a vanilla display save tag).
+     */
+    private static void applyViewRange(Display.BlockDisplay display, float range) {
+        CompoundTag data = display.saveWithoutId(new CompoundTag());
+        data.putFloat("view_range", range);
+        display.load(data);
+    }
+
+    // ------------------------------------------------------------------ the sunrise
+
+    /**
+     * FIN-6 sunrise: the epilogue dimension shares the OVERWORLD day clock
+     * ({@code DerivedLevelData}), so the sun is driven by stepping the overworld's
+     * {@code dayTime} 1t/t from the {@value #SUNRISE_DAY_TICK} pre-dawn boundary,
+     * snapped once behind the full white — deterministic regardless of
+     * {@code doDaylightCycle}, and a REAL slow dawn across the whole roll. The clock is
+     * left at early morning afterwards: dawn over the post-credits world is the point.
+     */
+    private static void driveSunrise(Run current, int t) {
+        ServerLevel overworld = current.server.overworld();
+        if (current.sunriseBase == Long.MIN_VALUE) {
+            long day = overworld.getDayTime();
+            current.sunriseBase = day - Math.floorMod(day, 24000L) + SUNRISE_DAY_TICK;
+        }
+        overworld.setDayTime(current.sunriseBase + (t - T_EPILOGUE));
     }
 
     // ------------------------------------------------------------------ beach stamp
@@ -1301,13 +1902,24 @@ public final class CreditsSequence implements SequenceReplayable {
             // beat (roll + auto-run) still reaches this player because it broadcasts.
             PacketDistributor.sendToPlayer(player,
                     new S2CScreenFadePayload(0, Math.max(20, T_EPILOGUE + 20 - t), 30, 0xFF000000));
-        } else if (t < T_FADE_OUT) {
+        } else if (t < T_WHITE_FADE) {
             if (t >= T_BEACH) {
                 MusicCues.play(MUSIC_FINALE_CUE, player);
-                CreditsPayloads.sendRoll(player, Math.max(40, ROLL_TICKS - (t - T_BEACH)));
-                CreditsPayloads.sendAutoRun(player, true, RUN_YAW, T_FADE_OUT - t + 100);
+                int rollLeft = ROLL_TICKS - (t - T_BEACH);
+                if (rollLeft > 40) {
+                    CreditsPayloads.sendRoll(player, rollLeft);
+                }
+                if (t < T_RUN_END - 40) {
+                    CreditsPayloads.sendAutoRun(player, true, RUN_YAW, T_RUN_END - t);
+                }
+                if (t >= T_BURST) {
+                    CreditsPayloads.sendFov(player, BURST_FOV_SCALE, Math.max(20, T_WHITE_FADE - t));
+                }
             }
+        } else if (t < T_TRACK2) {
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFFFFFFFF));
         } else {
+            MusicCues.play(MUSIC_OUTRO_CUE, player);
             PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFF000000));
         }
     }
@@ -1321,7 +1933,7 @@ public final class CreditsSequence implements SequenceReplayable {
 
     @Override
     public List<String> phaseIds() {
-        return List.of("HELM", "WHITEOUT", "BEACH", "LIGHTNING", "TITLE", "CORRECTION", "OUTRO");
+        return List.of("HELM", "WHITEOUT", "BEACH", "LIGHTNING", "ECLIPSE", "BURST", "OUTRO");
     }
 
     /**
@@ -1394,13 +2006,24 @@ public final class CreditsSequence implements SequenceReplayable {
                 }
                 return true;
             }
-            case "TITLE" -> {
-                for (ServerPlayer player : watchers) {
-                    CreditsPayloads.sendTitle(player, TITLE_DOOMSDAY, 70);
+            case "ECLIPSE" -> {
+                // FX-only: the building rumble/shake ladder of the rise (no displays).
+                for (int k = 0; k < 4; k++) {
+                    int step = k;
+                    schedule(server, k * 40, () -> {
+                        for (ServerPlayer player : watchers) {
+                            if (!player.hasDisconnected()) {
+                                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER,
+                                        SoundSource.WEATHER, 0.3F + 0.18F * step, 0.5F + 0.05F * step);
+                                PacketDistributor.sendToPlayer(player,
+                                        S2CShakePayload.shake(0.15F + 0.1F * step, 40));
+                            }
+                        }
+                    });
                 }
                 return true;
             }
-            case "CORRECTION" -> {
+            case "BURST" -> {
                 for (ServerPlayer player : watchers) {
                     // Replay parity (EVAL-V6-PHOTON §4): the live beatBurst leads with the
                     // giant FX_SHOCKWAVE(1.0, 50) — the exact signature the client seam
@@ -1408,33 +2031,78 @@ public final class CreditsSequence implements SequenceReplayable {
                     // sends it too, anchored at the watcher.
                     PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
                             .S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE, player.position(), 1.0F, 50.0F));
-                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
-                    // PH-EVENTS replay parity (R12): the live burst pairs this flash with
-                    // the confetti cue (beatBurst) — replay anchors it at the watcher.
+                    // PH-EVENTS replay parity (R12): the live burst pairs the flash with
+                    // the confetti cue — replay anchors it at the watcher.
                     PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
                             .S2CFxEventPayload(FxCues.CUE_CREDITS_BURST, player.position(), 0.0F, 0.0F));
+                    PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(1.6F, 60));
+                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(6, 6, 10, 0x50FFFFFF));
+                    CreditsPayloads.sendFov(player, BURST_FOV_SCALE, 130);
                 }
-                // Same 500 ms deadpan stillness between flash-out and card as the live
-                // beat (flash dies at 16t here since both fire together; card at 26t).
-                schedule(server, 26, () -> {
+                // The stacking pulse/shake ladder, compressed to a rehearsal-sized act.
+                for (int k = 1; k <= 4; k++) {
+                    int step = k;
+                    schedule(server, k * BURST_PULSE_PERIOD, () -> {
+                        int alpha = Math.min(0xE0, 0x40 + step * 0x28);
+                        for (ServerPlayer player : watchers) {
+                            if (!player.hasDisconnected()) {
+                                PacketDistributor.sendToPlayer(player,
+                                        new S2CScreenFadePayload(8, 10, 14, (alpha << 24) | 0x00FFFFFF));
+                                PacketDistributor.sendToPlayer(player,
+                                        S2CShakePayload.shake(0.7F + 0.2F * step, 40));
+                            }
+                        }
+                    });
+                }
+                schedule(server, 170, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
-                            PacketDistributor.sendToPlayer(player,
-                                    new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
+                            CreditsPayloads.sendFov(player, 1.0F, 40); // FX-only: hand the FOV back
                         }
                     }
                 });
                 return true;
             }
             case "OUTRO" -> {
+                // White hold → track two + black melt → the three gentle end cards.
                 for (ServerPlayer player : watchers) {
-                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(60, 300, 40, 0xFF000000));
+                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(20, 600, 0, 0xFFFFFFFF));
                 }
-                schedule(server, 200, () -> {
+                schedule(server, 60, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            MusicCues.play(MUSIC_OUTRO_CUE, player);
+                            PacketDistributor.sendToPlayer(player,
+                                    new S2CScreenFadePayload(160, 600, 0, 0xFF000000));
+                        }
+                    }
+                });
+                schedule(server, 240, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            CreditsPayloads.sendGentleTitle(player, TITLE_END, CARD_TITLE_HOLD);
+                        }
+                    }
+                });
+                schedule(server, 420, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            CreditsPayloads.sendGentleTitle(player, TITLE_RETURNS, CARD_RETURNS_HOLD);
+                        }
+                    }
+                });
+                schedule(server, 620, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            CreditsPayloads.sendGentleTitle(player, TITLE_NEXT, CARD_NEXT_HOLD);
+                        }
+                    }
+                });
+                schedule(server, 880, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player,
-                                    new S2CCaptionPayload(TITLE_ECLIPSE, 75, S2CCaptionPayload.STYLE_TITLE));
+                                    new S2CScreenFadePayload(0, 20, 60, 0xFF000000));
                         }
                     }
                 });

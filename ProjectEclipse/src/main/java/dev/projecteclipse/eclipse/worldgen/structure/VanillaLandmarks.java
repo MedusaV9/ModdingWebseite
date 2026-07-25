@@ -13,8 +13,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 
 /**
  * Single owner of the vanilla-structure ↔ eclipse-landmark table and of the
@@ -144,19 +146,35 @@ public final class VanillaLandmarks {
             // Plan B4: Structure.generate Y-snapped the jigsaw start + roads against the
             // LIVE pre-plateau heightmaps, and jigsaw pieces get no per-piece ground snap
             // at placement — wherever the plateau ends up lower than the old slope, the
-            // pieces float. Translate every piece vertically so the start piece's base
-            // sits on the deterministic plateau SitePrep is about to build (all pieces
-            // lie inside the flat footprint, so a single vertical delta keeps streets,
-            // farms and houses seamless).
+            // pieces float. Translate every RIGID piece vertically so the start piece's
+            // base sits on the deterministic plateau SitePrep is about to build (rigid
+            // pieces are jigsaw-connected to each other, so a single vertical delta keeps
+            // streets, farms and houses seamless).
+            //
+            // FIX-STRUCT (BUG B): TERRAIN_MATCHING pieces (outpost tents/cages/targets,
+            // village decor) must NOT take the uniform delta. Jigsaw assembly seated each
+            // of them individually on the pre-plateau slope via getFirstFreeHeight at its
+            // OWN column; the uniform shift preserved those per-column differences onto
+            // the flat plateau, floating every piece whose column was higher than the
+            // start's (and burying the lower ones). Re-seat each terrain-matching piece
+            // by its own column's surface delta — after the flatten the local surface is
+            // plateauY everywhere, so the piece keeps exactly the seat depth assembly
+            // gave it relative to the local ground (the +1 first-free convention and any
+            // groundLevelDelta cancel in the difference).
             int plateauY = DiscTerrainFunction.surfaceY(profile, anchor.getX(), anchor.getZ());
             int groundY = start.getPieces().get(0).getBoundingBox().minY();
             int dy = plateauY - groundY;
-            if (dy != 0) {
-                for (StructurePiece piece : start.getPieces()) {
-                    piece.move(0, dy, 0);
+            for (StructurePiece piece : start.getPieces()) {
+                int pieceDy = dy;
+                if (isTerrainMatching(piece)) {
+                    BlockPos center = piece.getBoundingBox().getCenter();
+                    pieceDy = plateauY - DiscTerrainFunction.surfaceY(profile, center.getX(), center.getZ());
                 }
-                bounds = StructureStamper.pieceUnion(start);
+                if (pieceDy != 0) {
+                    piece.move(0, pieceDy, 0);
+                }
             }
+            bounds = StructureStamper.pieceUnion(start);
         }
 
         SitePrep.PreparedGround prepared = mode == SitePrep.Mode.CAVITY
@@ -178,5 +196,16 @@ public final class VanillaLandmarks {
             onComplete.accept(placed);
         }, onFailure);
         return bounds;
+    }
+
+    /**
+     * FIX-STRUCT (BUG B): whether a piece was assembled with per-column ground snapping
+     * ({@link StructureTemplatePool.Projection#TERRAIN_MATCHING} — outpost feature
+     * pieces, village decor/animal pens). Only jigsaw pool pieces carry a projection;
+     * everything else (template pieces, jigsaw RIGID trees) is rigid.
+     */
+    private static boolean isTerrainMatching(StructurePiece piece) {
+        return piece instanceof PoolElementStructurePiece pool
+                && pool.getElement().getProjection() == StructureTemplatePool.Projection.TERRAIN_MATCHING;
     }
 }

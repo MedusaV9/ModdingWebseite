@@ -99,6 +99,36 @@ public final class ArenaBuilder {
     private static final double LANTERN_BOB = 0.35D;
     private static final double LANTERN_YAW_DEG = 0.2D;
 
+    // --- P3 escalation: the pit bares its bones (FIN-5; spawned MID-fight at the toll) ---
+    /**
+     * Rib cells {x, z} ringing the pit rim on the ring deck — clear of the four pit
+     * exits (x ±20..21 / z ±5..6 at the centerlines), the lantern ring and the pillars.
+     * The last two cells are the bow/stern FANGS framing the x-exits (displays have no
+     * collision, so walking out through the teeth stays possible — that is the point).
+     */
+    private static final int[][] ESCALATION_RIBS = {
+            {-16, 7}, {-12, 7}, {-8, 7}, {-4, 7}, {4, 7}, {8, 7}, {12, 7}, {16, 7},
+            {-16, -7}, {-12, -7}, {-8, -7}, {-4, -7}, {4, -7}, {8, -7}, {12, -7}, {16, -7},
+            {23, 0}, {-23, 0}};
+    /** Ribs rise sunk-below-deck → full height over this many ticks (smoothstep-eased). */
+    private static final int RIB_RISE_TICKS = 100;
+    /** Rib footprint (XZ scale) and height band (base + per-rib hash spread). */
+    private static final float RIB_WIDTH = 0.8F;
+    private static final float RIB_HEIGHT_BASE = 4.0F;
+    private static final float RIB_HEIGHT_VAR = 3.0F;
+    private static final float FANG_HEIGHT = 8.0F;
+    /** Inward jaw tilt (radians, base + hash spread) — every tooth leans over the pit. */
+    private static final float RIB_TILT_BASE = 0.14F;
+    private static final float RIB_TILT_VAR = 0.10F;
+    /** Post-rise breathing bob (golden-angle phases — the ribcage never heaves in sync). */
+    private static final double RIB_BREATH = 0.10D;
+    private static final double RIB_BREATH_PERIOD = 110.0D;
+
+    /** Accent indices ≥ this are escalation ribs (−1 = the pit has not erupted). */
+    private static int escalationBase = -1;
+    /** Game time the ribs began rising (stateless absolute-clock rise fraction). */
+    private static long escalationStart;
+
     private ArenaBuilder() {}
 
     // ------------------------------------------------------------------ geometry
@@ -433,10 +463,43 @@ public final class ArenaBuilder {
     }
 
     /**
+     * FIN-5 mid-fight escalation (the P3 toll break): a ribcage of bone teeth ERUPTS
+     * around the pit rim — {@value #RIB_RISE_TICKS}t eased rise from below the deck,
+     * then a slow golden-angle breathing bob on the same 20t fight-watch stride as the
+     * base accents. Appended to the SAME {@code liveIds} list (indices ≥
+     * {@link #escalationBase}), so the join-time stray guard, the animate stride and the
+     * tag sweep all cover the ribs with zero new bookkeeping. Idempotent per fight
+     * (spawning twice is a no-op); a reload mid-P3 simply loses the ribs — the same
+     * "reload restarts the beat" law the arena kneel already follows.
+     *
+     * @return the number of ribs spawned (0 when the pit already erupted this fight)
+     */
+    public static int spawnEscalationDisplays(ServerLevel arena, List<UUID> liveIds) {
+        if (escalationBase >= 0) {
+            return 0;
+        }
+        escalationBase = liveIds.size();
+        escalationStart = arena.getGameTime();
+        int y = ringY(arena) + 1;
+        for (int rib = 0; rib < ESCALATION_RIBS.length; rib++) {
+            int[] cell = ESCALATION_RIBS[rib];
+            spawnAccent(arena, liveIds, new Vec3(cell[0] + 0.5D, y, cell[1] + 0.5D),
+                    Blocks.BONE_BLOCK.defaultBlockState(), ribPose(rib, escalationStart));
+            arena.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                    cell[0] + 0.5D, y + 0.3D, cell[1] + 0.5D, 8, 0.3D, 0.2D, 0.3D, 0.02D);
+        }
+        EclipseMod.LOGGER.info("Arena escalation: {} bone rib display(s) erupting around the pit "
+                + "({}t rise)", ESCALATION_RIBS.length, RIB_RISE_TICKS);
+        return ESCALATION_RIBS.length;
+    }
+
+    /**
      * One interpolated 20t window per accent (the fight-watch stride IS the cadence —
      * SanctumOrbitals law: pose at {@code gameTime + 20}, stateless absolute clock, so a
      * lagged or re-pushed display glides back on track instead of snapping). Killed
      * accents are skipped (no respawn mid-fight; the next spawn's sweep reconciles).
+     * Escalation ribs (indices ≥ {@link #escalationBase}) ride the same stride — the
+     * {@value #RIB_RISE_TICKS}t rise is sampled piecewise across these windows.
      */
     public static void animateAccentDisplays(ServerLevel arena, List<UUID> liveIds) {
         long target = arena.getGameTime() + 20L;
@@ -444,13 +507,16 @@ public final class ArenaBuilder {
             if (arena.getEntity(liveIds.get(index)) instanceof Display.BlockDisplay display) {
                 display.setTransformationInterpolationDelay(0);
                 display.setTransformationInterpolationDuration(20);
-                display.setTransformation(accentPose(index, target));
+                display.setTransformation(escalationBase >= 0 && index >= escalationBase
+                        ? ribPose(index - escalationBase, target)
+                        : accentPose(index, target));
             }
         }
     }
 
     /** Discards every tagged accent display over the arena footprint (never the spectator ship). */
     public static void sweepAccentDisplays(ServerLevel arena) {
+        escalationBase = -1; // Accents are fight-scoped; the ribs die with them.
         AABB sweep = new AABB(-ARENA_HALF_LENGTH - 2.0D, 0.0D, -ARENA_HALF_WIDTH - 2.0D,
                 ARENA_HALF_LENGTH + 2.0D, 128.0D, ARENA_HALF_WIDTH + 2.0D);
         List<Entity> strays = arena.getEntities((Entity) null, sweep,
@@ -510,6 +576,46 @@ public final class ArenaBuilder {
                 .add(axis).sub(rotation.transform(axis, new Vector3f()));
         return new Transformation(translation, rotation,
                 new Vector3f(1.0F, 1.0F, 1.0F), new Quaternionf());
+    }
+
+    /**
+     * Absolute escalation-rib pose at {@code gameTime} (FIN-5). Rise fraction =
+     * smoothstep of {@code (gameTime − escalationStart) / RIB_RISE_TICKS}: the tooth
+     * starts fully sunk inside the hull (occluded by the opaque deck — the eruption is
+     * free) and climbs to its seat. Rotation is CONSTANT through the rise (only the
+     * translation animates, so no interpolation window can flatten it): rim ribs tilt
+     * inward over the pit about X, the two fangs tilt inward about Z. After the rise a
+     * ±{@value #RIB_BREATH} golden-angle breathing bob keeps the cage alive. Pivot math
+     * mirrors the wheel pose: translation subtracts the rotated base-center so every
+     * tooth leans about the point where it pierces the deck.
+     */
+    private static Transformation ribPose(int rib, long gameTime) {
+        int[] cell = ESCALATION_RIBS[rib];
+        boolean fang = cell[1] == 0;
+        double h = hash01(rib);
+        float height = fang ? FANG_HEIGHT : RIB_HEIGHT_BASE + (float) h * RIB_HEIGHT_VAR;
+        float raw = Math.max(0.0F, Math.min(1.0F, (gameTime - escalationStart) / (float) RIB_RISE_TICKS));
+        float s = raw * raw * (3.0F - 2.0F * raw); // smoothstep (ArenaFight.easeInOut law)
+        float sunk = (height + 0.5F) * (1.0F - s);
+        float breath = (float) (RIB_BREATH
+                * Math.sin(gameTime * (Math.PI * 2.0D / RIB_BREATH_PERIOD) + rib * GOLDEN_ANGLE)) * s;
+        float tilt = fang ? RIB_TILT_BASE * 1.5F : RIB_TILT_BASE + (float) h * RIB_TILT_VAR;
+        Quaternionf rotation = fang
+                ? new Quaternionf().rotationZ(cell[0] > 0 ? tilt : -tilt)
+                : new Quaternionf().rotationX(cell[1] > 0 ? -tilt : tilt);
+        Vector3f pivot = new Vector3f(RIB_WIDTH * 0.5F, 0.0F, RIB_WIDTH * 0.5F);
+        Vector3f translation = new Vector3f(0.0F, breath - sunk, 0.0F)
+                .sub(rotation.transform(pivot, new Vector3f()));
+        return new Transformation(translation, rotation,
+                new Vector3f(RIB_WIDTH, height, RIB_WIDTH), new Quaternionf());
+    }
+
+    /** Fixed positional hash in [0,1) — deterministic rib choreography (ArenaFight twin). */
+    private static double hash01(int index) {
+        long h = 0x9E3779B97F4A7C15L * (index + 1);
+        h = (h ^ (h >>> 30)) * 0xBF58476D1CE4E5B9L;
+        h = (h ^ (h >>> 27)) * 0x94D049BB133111EBL;
+        return ((h ^ (h >>> 31)) >>> 11) * 0x1.0p-53D;
     }
 
     private static void set(ServerLevel level, int x, int y, int z, BlockState state) {

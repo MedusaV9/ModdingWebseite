@@ -51,6 +51,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -94,20 +95,25 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li><b>Shatter</b> — a deterministic Voronoi crack pattern (seed-hashed off
  *       {@link FrozenParams#mapSeed()}, the {@code DiscMapData.ECLIPSE_SEED} law)
  *       divides the disc into 6–9 islets. Seam channels (3–5 blocks wide) are cleared
- *       and every islet is translated by a per-islet vertical offset (−12…+16) as a
- *       budgeted copy-then-clear pass — the exact materialization writer shape
- *       (one chunk per tick, section writes, heightmap re-prime, relight + resend),
- *       just subtractive. The podium islet (r &lt; {@value #CENTER_KEEP_RADIUS}) never
- *       moves, so egg, portal and gathered watchers stay safe. Restart mid-shatter:
- *       the {@link ShatterData} cursor resumes the pass; the cinematic never
- *       resumes.</li>
- *   <li><b>Debris</b> — up to {@value #DEBRIS_CAP} tagged {@code block_display} chunks
- *       tumble off the seams into the void (in-memory animator, TTL-discarded, tag-swept
- *       at boot).</li>
+ *       and every islet is translated by a per-islet vertical offset (−24…+28, FIN-3:
+ *       the isles pull far apart) as a budgeted copy-then-clear pass — the exact
+ *       materialization writer shape (one chunk per tick, section writes, heightmap
+ *       re-prime, relight + resend), just subtractive. The podium islet
+ *       (r &lt; {@value #CENTER_KEEP_RADIUS}) never moves, so egg, portal and gathered
+ *       watchers stay safe (the egg IS the day-14 finale catalyst — removing the middle
+ *       islet would softlock the endgame). Restart mid-shatter: the {@link ShatterData}
+ *       cursor resumes the pass; the cinematic never resumes.</li>
+ *   <li><b>Debris</b> (FIN-2 spectacle) — up to {@value #DEBRIS_HARD_CAP} tagged
+ *       {@code block_display} chunks: a dense seam FIELD wave plus fountains VENTING out
+ *       of every crack flash and carve stinger, all staggered through a
+ *       {@value #DEBRIS_SPAWN_PER_TICK}/t spawn queue with view-range culling
+ *       (in-memory animator, TTL-discarded, tag-swept at boot).</li>
  *   <li><b>End structures</b> — when the pass completes, the three largest outer islets
  *       receive {@link EndCityKit} sites (two towers + one end-ship, real loot + shulkers)
  *       through {@link StructurePendingRegistry}, so they get the standard rift
- *       reveals.</li>
+ *       reveals. FIN-2/FIN-3 ride the same completion: endermen rise on the isles
+ *       (post-fight by construction) and low-hung REAL rubble clumps appear over the
+ *       seams — near enough to pillar up to.</li>
  * </ol>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -127,11 +133,30 @@ public final class EndShatterSequence {
     private static final int GRACE_TICKS = 120 * 20;
     /** Columns closer to the disc center than this always keep islet 0 (podium, egg). */
     private static final int CENTER_KEEP_RADIUS = 14;
-    /** Per-islet vertical offset bounds. */
-    private static final int DY_MIN = -12;
-    private static final int DY_RANGE = 28; // DY_MIN..DY_MIN+28 = −12..+16
-    /** Debris display cap. */
-    private static final int DEBRIS_CAP = 120;
+    /**
+     * Per-islet vertical offset bounds (FIN-3: the isles pull far APART — sinking twice
+     * as deep and rising higher than before). Bounds checked against the overworld's
+     * −176..464 build range: {@code MAX_Y(408) + 28 = 436} and {@code MIN_Y(340) − 24 =
+     * 316} both stay inside existing chunk sections.
+     */
+    private static final int DY_MIN = -24;
+    private static final int DY_RANGE = 52; // DY_MIN..DY_MIN+52 = −24..+28
+    /**
+     * FIN-2 display budget: the seam FIELD scan queues up to {@value #DEBRIS_FIELD_CAP}
+     * chunks, every crack-race flash fountains {@value #BURST_PER_CRACK} more OUT of its
+     * fissure, and each carve-pass crack stinger vents {@value #CARVE_BURST_PER_CRACK}.
+     * {@value #DEBRIS_HARD_CAP} is the absolute live ceiling (queued overflow is
+     * dropped, logged), {@value #DEBRIS_SPAWN_PER_TICK}/t is the spawn budget (a
+     * staggered wave — never one single-tick spike), every display ships a
+     * {@value #DEBRIS_VIEW_RANGE}× view range so distant chunks cull client-side, and
+     * the {@value #DEBRIS_TTL_TICKS}t TTL + dissolve bounds the population from above.
+     */
+    private static final int DEBRIS_FIELD_CAP = 260;
+    private static final int BURST_PER_CRACK = 22;
+    private static final int CARVE_BURST_PER_CRACK = 8;
+    private static final int DEBRIS_HARD_CAP = 420;
+    private static final int DEBRIS_SPAWN_PER_TICK = 20;
+    private static final float DEBRIS_VIEW_RANGE = 4.0F;
     private static final int DEBRIS_TTL_TICKS = 300;
     /** Debris keyframe cadence — interpolation duration matches (DisplayAnimator law). */
     private static final int DEBRIS_UPDATE_TICKS = 4;
@@ -172,6 +197,17 @@ public final class EndShatterSequence {
     private static final long SALT_LAYOUT = 91L;
     private static final long SALT_SEAM = 92L;
     private static final long SALT_DEBRIS = 93L;
+    private static final long SALT_BURST = 94L;
+    private static final long SALT_ENDERMEN = 95L;
+    private static final long SALT_RUBBLE = 96L;
+
+    // --- FIN-2/FIN-3 post-fight population ---
+    /** Endermen risen per outer islet once the carve completes (post-fight only). */
+    private static final int ENDERMEN_PER_ISLET = 3;
+    /** Real sky-rubble clumps hung LOW over the isles (build-up-able, FIN-3). */
+    private static final int RUBBLE_CLUSTERS = 10;
+    private static final int RUBBLE_MIN_RISE = 14;
+    private static final int RUBBLE_RISE_RANGE = 16;
 
     private static final long TICK_NANOS = 2_000_000L;
     private static final int POLL_TICKS = 20;
@@ -218,6 +254,19 @@ public final class EndShatterSequence {
      * joiner outside this set is a crash/restart stray and is discarded on chunk load.
      */
     private static final Set<UUID> LIVE_DEBRIS = Collections.synchronizedSet(new HashSet<>());
+
+    /** One prepared debris spawn (FIN-2): parameters only — the entity is born at drain. */
+    private record PendingSpawn(Vec3 origin, double vx, double vy0, double vz, Vector3f axis,
+            double spinRate, double spinPhase, double precessRate, float scale,
+            boolean straggler, Block block) {}
+
+    /**
+     * FIN-2 staggered spawn wave (server thread only): field/burst generators QUEUE
+     * here and {@link #drainPending} births at most {@value #DEBRIS_SPAWN_PER_TICK}
+     * displays per tick under the {@value #DEBRIS_HARD_CAP} live ceiling. Purely
+     * cosmetic — a restart drops the queue with the rest of the presentation.
+     */
+    private static final java.util.ArrayDeque<PendingSpawn> PENDING = new java.util.ArrayDeque<>();
 
     /** One scheduled CUT-END presentation beat, {@code delayTicks} after beat-clock zero. */
     private record Beat(int delayTicks, Runnable action) {}
@@ -357,6 +406,7 @@ public final class EndShatterSequence {
         activeJob = null;
         DEBRIS.clear();
         LIVE_DEBRIS.clear();
+        PENDING.clear();
         BEATS.clear();
         beatZeroGameTime = -1L;
         beatArmDeadline = -1L;
@@ -392,6 +442,9 @@ public final class EndShatterSequence {
             if (beatZeroGameTime >= 0L) {
                 tickBeats(gameTime);
             }
+        }
+        if (!PENDING.isEmpty()) {
+            drainPending(server.overworld());
         }
         if (!DEBRIS.isEmpty()) {
             tickDebris();
@@ -518,6 +571,9 @@ public final class EndShatterSequence {
                         FX_RANGE, new S2CFxEventPayload(FX_RIFT_OPEN, flash, 6.0F, 0.0F));
                 overworld.playSound(null, BlockPos.containing(flash),
                         EclipseSounds.EVENT_END_SHATTER_CRACK.get(), SoundSource.HOSTILE, 3.0F, pitch);
+                // FIN-2: the freshly-opened fissure VENTS — a fountain of display chunks
+                // erupts out of the crack (queued through the global spawn budget).
+                queueCrackBurst(flash, BURST_PER_CRACK, mix(layout.seed() ^ SALT_BURST, islet, 0L));
             }));
         }
 
@@ -536,7 +592,7 @@ public final class EndShatterSequence {
             }
             overworld.playSound(null, center, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
                     SoundSource.HOSTILE, 3.0F, 0.8F);
-            spawnDebris(overworld, layout);
+            queueFieldDebris(layout);
         }));
 
         // The carve pass rides the SAME beat clock, so the whole presentation (rumble,
@@ -667,17 +723,25 @@ public final class EndShatterSequence {
         }
     }
 
-    private static void spawnDebris(ServerLevel level, Layout layout) {
+    /**
+     * FIN-2 field wave: the seam grid scan (denser than before — stride 4, 80 % accept)
+     * QUEUES up to {@value #DEBRIS_FIELD_CAP} tumbling chunks; roughly a third of the
+     * columns shed a SECOND smaller shard a few blocks higher with a livelier launch
+     * (the "crumble further" read). Nothing spawns here — {@link #drainPending} births
+     * the wave {@value #DEBRIS_SPAWN_PER_TICK}/t, so the population climbs as a swelling
+     * cloud instead of one single-tick spike.
+     */
+    private static void queueFieldDebris(Layout layout) {
         long seed = layout.seed();
         int reach = DiscProfile.END_DISC_RADIUS;
-        int spawned = 0;
-        for (int x = -reach; x <= reach && spawned < DEBRIS_CAP; x += 5) {
-            for (int z = -reach; z <= reach && spawned < DEBRIS_CAP; z += 5) {
+        int queued = 0;
+        for (int x = -reach; x <= reach && queued < DEBRIS_FIELD_CAP; x += 4) {
+            for (int z = -reach; z <= reach && queued < DEBRIS_FIELD_CAP; z += 4) {
                 int bx = DiscProfile.END_DISC_CENTER_X + x;
                 int bz = DiscProfile.END_DISC_CENTER_Z + z;
                 if (!EndDiscGeometry.footprintContains(bx, bz)
                         || !layout.sample(bx, bz).seam()
-                        || to01(mix(seed ^ SALT_DEBRIS, bx, bz)) > 0.45D) {
+                        || to01(mix(seed ^ SALT_DEBRIS, bx, bz)) > 0.80D) {
                     continue;
                 }
                 int y = EndDiscGeometry.surfaceYAt(bx, bz) + 1;
@@ -698,25 +762,90 @@ public final class EndShatterSequence {
                         * (jitter < 0.0D ? -1.0D : 1.0D);
                 double precessRate = Math.toRadians(DEBRIS_PRECESS_MIN_DEG
                         + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h1);
-                // REPASS-BD stragglers: fixed spawn ordinals — the seed-hashed grid scan
+                // REPASS-BD stragglers: fixed queue ordinals — the seed-hashed grid scan
                 // is deterministic, so the same 1–2 columns straggle on every replay.
-                boolean straggler = spawned == STRAGGLER_ORDINAL_A || spawned == STRAGGLER_ORDINAL_B;
-                Debris debris = new Debris(
-                        new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level),
-                        new Vec3(bx + 0.5D, y, bz + 0.5D),
-                        x / dist * 0.10D + jitter * 0.06D,
-                        0.06D,
-                        z / dist * 0.10D - jitter * 0.06D,
+                boolean straggler = queued == STRAGGLER_ORDINAL_A || queued == STRAGGLER_ORDINAL_B;
+                Vec3 origin = new Vec3(bx + 0.5D, y, bz + 0.5D);
+                double vx = x / dist * 0.10D + jitter * 0.06D;
+                double vz = z / dist * 0.10D - jitter * 0.06D;
+                PENDING.addLast(new PendingSpawn(origin, vx, 0.06D, vz,
                         axis, spinRate, h3 * Math.PI * 2.0D, precessRate,
-                        (float) (0.70D + 0.45D * h2), straggler);
-                if (!spawnDebrisDisplay(level, debris, block)) {
-                    continue;
+                        (float) (0.70D + 0.45D * h2), straggler, block));
+                queued++;
+                // "Crumble chunks further": a second, smaller shard above the break face.
+                if (h1 < 0.34D && queued < DEBRIS_FIELD_CAP) {
+                    PENDING.addLast(new PendingSpawn(
+                            origin.add(jitter * 1.5D, 2.0D + h2 * 3.0D, -jitter * 1.5D),
+                            vx * 1.6D, 0.16D, vz * 1.6D,
+                            axis, -spinRate, h2 * Math.PI * 2.0D, precessRate,
+                            (float) (0.30D + 0.30D * h3), false, block));
+                    queued++;
                 }
+            }
+        }
+        EclipseMod.LOGGER.info("EndShatterSequence: {} field debris chunk(s) queued (budget {}/t, hard cap {})",
+                queued, DEBRIS_SPAWN_PER_TICK, DEBRIS_HARD_CAP);
+    }
+
+    /**
+     * FIN-2 crack vent: a fountain of small display chunks erupting OUT of one opened
+     * fissure — end stone, obsidian, and the odd purpur shard (the buried structures
+     * bleeding through). Rising launches (+0.22…+0.52/t) arc over gravity-lite and fall
+     * to the void on the shared TTL. Queued, never spawned directly, so the global
+     * spawn budget and the hard cap always hold.
+     */
+    private static void queueCrackBurst(Vec3 flash, int count, long salt) {
+        for (int i = 0; i < count; i++) {
+            double h1 = to01(mix(salt, i, 1L));
+            double h2 = to01(mix(salt, i, 2L));
+            double h3 = to01(mix(salt, i, 3L));
+            double angle = h1 * Math.PI * 2.0D;
+            double speed = 0.06D + h2 * 0.12D;
+            Vector3f axis = new Vector3f((float) (h2 * 2.0D - 1.0D), 1.0F,
+                    (float) (h3 * 2.0D - 1.0D)).normalize();
+            double spinRate = Math.toRadians(DEBRIS_SPIN_MIN_DEG
+                    + (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG) * h3)
+                    * (h1 < 0.5D ? -1.0D : 1.0D);
+            Block block = h3 < 0.12D ? Blocks.OBSIDIAN
+                    : h3 < 0.30D ? Blocks.PURPUR_BLOCK : Blocks.END_STONE;
+            PENDING.addLast(new PendingSpawn(
+                    flash.add(h2 * 2.0D - 1.0D, 0.0D, h3 * 2.0D - 1.0D),
+                    Math.cos(angle) * speed,
+                    0.22D + h2 * 0.30D,
+                    Math.sin(angle) * speed,
+                    axis, spinRate, h1 * Math.PI * 2.0D,
+                    Math.toRadians(DEBRIS_PRECESS_MIN_DEG
+                            + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h2),
+                    (float) (0.35D + 0.35D * h1), false, block));
+        }
+    }
+
+    /**
+     * Births at most {@value #DEBRIS_SPAWN_PER_TICK} queued spawns per tick. At the
+     * {@value #DEBRIS_HARD_CAP} live ceiling the REST of the queue is dropped (logged)
+     * — a bounded spectacle beats an unbounded backlog.
+     */
+    private static void drainPending(ServerLevel level) {
+        int spawned = 0;
+        while (!PENDING.isEmpty() && spawned < DEBRIS_SPAWN_PER_TICK) {
+            if (DEBRIS.size() >= DEBRIS_HARD_CAP) {
+                int dropped = PENDING.size();
+                PENDING.clear();
+                EclipseMod.LOGGER.info("EndShatterSequence: hard cap {} live displays reached — "
+                        + "{} queued spawn(s) dropped", DEBRIS_HARD_CAP, dropped);
+                return;
+            }
+            PendingSpawn spec = PENDING.pollFirst();
+            Debris debris = new Debris(
+                    new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level),
+                    spec.origin(), spec.vx(), spec.vy0(), spec.vz(), spec.axis(),
+                    spec.spinRate(), spec.spinPhase(), spec.precessRate(), spec.scale(),
+                    spec.straggler());
+            if (spawnDebrisDisplay(level, debris, spec.block())) {
                 DEBRIS.add(debris);
                 spawned++;
             }
         }
-        EclipseMod.LOGGER.info("EndShatterSequence: {} debris displays drifting", spawned);
     }
 
     /**
@@ -729,6 +858,7 @@ public final class EndShatterSequence {
         display.setBlockState(block.defaultBlockState());
         display.moveTo(debris.origin.x, debris.origin.y, debris.origin.z, 0.0F, 0.0F);
         display.addTag(DEBRIS_TAG);
+        applyViewRange(display, DEBRIS_VIEW_RANGE); // distance culling — FIN-2 budget law
         display.setTransformationInterpolationDelay(0);
         display.setTransformationInterpolationDuration(0);
         display.setTransformation(debrisPoseAt(debris, 0));
@@ -739,6 +869,17 @@ public final class EndShatterSequence {
         }
         LIVE_DEBRIS.remove(display.getUUID());
         return false;
+    }
+
+    /**
+     * {@code Display.setViewRange} is private like the brightness setter — same
+     * save-data round trip ({@code view_range} is a vanilla display save tag; the
+     * CreditsSequence idiom).
+     */
+    private static void applyViewRange(Display.BlockDisplay display, float range) {
+        CompoundTag data = display.saveWithoutId(new CompoundTag());
+        data.putFloat("view_range", range);
+        display.load(data);
     }
 
     /** Debris ember-trail clock + rotating sample cursor (CUT-END shot 3 presentation). */
@@ -919,6 +1060,10 @@ public final class EndShatterSequence {
             BlockPos pos = new BlockPos(x, EndDiscGeometry.surfaceYAt(x, z), z);
             this.level.playSound(null, pos, EclipseSounds.EVENT_END_SHATTER_CRACK.get(),
                     SoundSource.HOSTILE, 3.0F, 0.9F + (i % 3) * 0.1F);
+            // FIN-2: the carve's cracks keep VENTING through the whole pass — a small
+            // budgeted fountain rides every stinger (dropped silently at the hard cap).
+            queueCrackBurst(new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D),
+                    CARVE_BURST_PER_CRACK, mix(this.layout.seed() ^ SALT_BURST, this.cursor, 17L));
         }
 
         /** Seam columns clear; islet columns translate by dy (copy-then-clear). */
@@ -1037,6 +1182,11 @@ public final class EndShatterSequence {
             this.state.setCursor(this.totalOperations);
             activeJob = null;
             enqueueCityKits(this.level, this.layout);
+            // FIN-2/FIN-3 post-fight population: the fight is long over by the time the
+            // carve completes — endermen reclaim the isles, and real low-hung rubble
+            // clumps appear over the seams (build-up-able, unlike the dissolving debris).
+            spawnEndermen(this.level, this.layout);
+            placeSkyRubble(this.level, this.layout);
             // CUT-END shot 4 (settle): the carve pass finishing IS the isles coming to
             // rest — a low thud + one soft long shake mark it for anyone on the disc
             // (the low-FREQUENCY rumble shaping lives in the cutscene JSON's shake
@@ -1116,6 +1266,84 @@ public final class EndShatterSequence {
 
     /** Stage recorded on the kit rows (the disc window's stage — erase forgets them). */
     private static final int KIT_STAGE = 3;
+
+    // --- FIN-2/FIN-3 post-fight population (runs once from the carve completion) ---
+
+    /**
+     * FIN-2: endermen spawn ON the isles — only AFTER the fight, guaranteed by running
+     * from the carve completion (the dragon-victory listener started all of this).
+     * {@value #ENDERMEN_PER_ISLET} per outer islet, surface-snapped via heightmap;
+     * seam/void columns (no floor) are skipped, so a partial islet just gets fewer.
+     */
+    private static void spawnEndermen(ServerLevel level, Layout layout) {
+        long seed = layout.seed() ^ SALT_ENDERMEN;
+        int spawned = 0;
+        for (int i = 1; i < layout.count(); i++) {
+            for (int e = 0; e < ENDERMEN_PER_ISLET; e++) {
+                double angle = to01(mix(seed, i, e * 3L)) * Math.PI * 2.0D;
+                double dist = 3.0D + to01(mix(seed, i, e * 3L + 1L)) * 12.0D;
+                int x = DiscProfile.END_DISC_CENTER_X
+                        + (int) Math.round(layout.siteX()[i] + Math.cos(angle) * dist);
+                int z = DiscProfile.END_DISC_CENTER_Z
+                        + (int) Math.round(layout.siteZ()[i] + Math.sin(angle) * dist);
+                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+                if (y < EndDiscGeometry.MIN_Y + DY_MIN) {
+                    continue; // seam/void column — nothing to stand on
+                }
+                if (EntityType.ENDERMAN.spawn(level, new BlockPos(x, y, z),
+                        MobSpawnType.EVENT) != null) {
+                    spawned++;
+                }
+            }
+        }
+        EclipseMod.LOGGER.info("EndShatterSequence: {} enderman(s) risen on the shattered isles (post-fight)",
+                spawned);
+    }
+
+    /**
+     * FIN-3 "crumbling bits in the sky, but LOWER": {@value #RUBBLE_CLUSTERS} small REAL
+     * end-stone/obsidian clumps hung {@value #RUBBLE_MIN_RISE}–{@value #RUBBLE_MIN_RISE}+{@value
+     * #RUBBLE_RISE_RANGE} blocks over the local (pre-shatter) surface — near enough that
+     * pillaring up to them is a short build, unlike sky-height decor. Air-only ellipsoid
+     * writes (a risen islet passing through a clump simply wins), deterministic off the
+     * map seed, ~1–2 k one-time {@code setBlock}s total — no budget writer needed.
+     */
+    private static void placeSkyRubble(ServerLevel level, Layout layout) {
+        long seed = layout.seed() ^ SALT_RUBBLE;
+        int placed = 0;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int c = 0; c < RUBBLE_CLUSTERS; c++) {
+            double angle = to01(mix(seed, c, 1L)) * Math.PI * 2.0D;
+            double dist = DiscProfile.END_DISC_RADIUS * (0.25D + 0.55D * to01(mix(seed, c, 2L)));
+            int cx = DiscProfile.END_DISC_CENTER_X + (int) Math.round(Math.cos(angle) * dist);
+            int cz = DiscProfile.END_DISC_CENTER_Z + (int) Math.round(Math.sin(angle) * dist);
+            int cy = EndDiscGeometry.surfaceYAt(cx, cz) + RUBBLE_MIN_RISE
+                    + (int) (to01(mix(seed, c, 3L)) * RUBBLE_RISE_RANGE);
+            int rx = 2 + (int) (to01(mix(seed, c, 4L)) * 2.0D);
+            int ry = Math.max(2, rx - 1);
+            for (int dx = -rx; dx <= rx; dx++) {
+                for (int dy = -ry; dy <= ry; dy++) {
+                    for (int dz = -rx; dz <= rx; dz++) {
+                        double n = (double) (dx * dx) / (rx * rx)
+                                + (double) (dy * dy) / (ry * ry)
+                                + (double) (dz * dz) / (rx * rx);
+                        if (n > 1.0D
+                                || !level.getBlockState(cursor.set(cx + dx, cy + dy, cz + dz)).isAir()) {
+                            continue;
+                        }
+                        BlockState state =
+                                to01(mix(seed, cx + dx, (long) (cy + dy) * 31L + cz + dz)) < 0.12D
+                                        ? Blocks.OBSIDIAN.defaultBlockState()
+                                        : Blocks.END_STONE.defaultBlockState();
+                        level.setBlock(cursor, state, Block.UPDATE_CLIENTS);
+                        placed++;
+                    }
+                }
+            }
+        }
+        EclipseMod.LOGGER.info("EndShatterSequence: {} sky-rubble block(s) placed across {} low clumps",
+                placed, RUBBLE_CLUSTERS);
+    }
 
     // --- restart-safe state (materialization SavedData pattern) ---
 
