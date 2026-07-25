@@ -19,6 +19,19 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ## Offen (hier bitte eintragen)
 [ ] Der Char editor soll der dicke Gooby das Modell von davor sein ich finde das neue Aussehen in den UIs von ihm nicht schön.
 [ ] Das Movement ist ab der ersten Sekunde verbuggt. Gooby glitcht hin und her.
+[ ] Das Interface wenn sich sachen öffnen nimmt den ganzen platz ein und ist nicht gut designed. Es überschneidet mit den anderen UI Elementen.
+[ ] Warum sind Goobys Stats nicht ganz am Rand sondern haben soviel abstand?
+[ ] Die Stadt ist leer
+[ ] Das Spiel hat keine Seele
+[ ] Das Spiel ist nur eine Alpha du solltest es ein vollwertiges Spiel machen.
+[ ] Die Tasten Rechts werden nichtmal erklärt
+[ ] Die Patchnotes sind komplett broken.
+[ ] Der Bau Editor geht nicht mehr zuverlassen plus er laggt am anfang und ende.
+[ ] Verbessere Multiplayer.
+[ ] Man kann im Bau Editor sich nicht umher schwenken die Kamera was das bauen sehr schwer macht.
+[ ] Alle Spiele sind grauen Haft.
+[ ] Baue wirkliche 3D Spiele und nicht so 2D zeug.
+[ ] Stelle sicher das wirklich alles 3D ist und nicht 2D
 [ ] Das neue Gooby model ist nicht so toll wie das alte, nutze das alte bitte wieder.
 [ ] Mach den Char Editor wirklich sein 3D Model zeigen auch mit rotieren etc
 [ ] Für Türen im Haus benutzen sollte eine Bestätigung angeboten werden (per Settings auschaltbar)
