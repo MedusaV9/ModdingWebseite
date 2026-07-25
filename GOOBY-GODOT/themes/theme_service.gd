@@ -4,6 +4,16 @@ extends Node
 ## (Registrierung macht W1a — siehe handoffs/W1c-autoload-requests.md),
 ## funktioniert aber auch ohne Autoload über die statischen Methoden.
 ##
+## THEME-ZUSTELLUNG (FIX-A, E7-P0-2/E5-F0): Primärweg ist das
+## PROJEKT-DEFAULT-Theme `gui/theme/custom = res://themes/ac_theme.tres`
+## in project.godot — nur das erreicht auch Controls unter CanvasLayer und
+## SubViewport (Window-Themes propagieren dort NICHT durch). Das
+## `apply_to_window()`-Root-Set hier bleibt als Fallback für Läufe ohne
+## project.godot-Eintrag (z. B. isolierte Test-SceneTrees). Kein Konflikt:
+## beide Wege laden dieselbe .tres-Ressource (Resource-Cache ⇒ selbe
+## Instanz), Godots Lookup-Reihenfolge Control→Window→Projekt-Default
+## findet so immer denselben Wertesatz.
+##
 ## Aufgaben: Theme auf den Root anwenden, ClearColor = BG_CREAM setzen,
 ## Token-Zugriff (`color()`, `font()`), Reduced-Motion-Zustand verteilen.
 

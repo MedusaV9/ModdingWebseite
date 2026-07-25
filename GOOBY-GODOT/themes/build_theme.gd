@@ -122,6 +122,13 @@ static func _build_buttons(theme: Theme, base_font: Font) -> void:
 	_button_set(theme, "BtnYellow", AcTokens.YELLOW, AcTokens.INK)
 	_button_set(theme, "BtnGhost", AcTokens.PAPER, AcTokens.INK)
 	_button_set(theme, "BtnDanger", AcTokens.DANGER, AcTokens.WHITE)
+	# Semantik-Varianten (E7-P0-1): W2+-Code setzt PrimaryButton/AccentButton/
+	# GhostButton — die Namen MÜSSEN im Theme existieren, sonst fällt Godot
+	# still auf die Paper-Basis zurück (46 tote Referenzen in 19 Dateien).
+	_button_set(theme, "PrimaryButton", AcTokens.TEAL, AcTokens.WHITE)
+	_button_set(theme, "AccentButton", AcTokens.PINK, AcTokens.WHITE)
+	_build_ghost_button(theme)
+	_build_card_button(theme)
 	# Chips: 40 px hoch, Paper + Outline (H §1.1), Leaf-/Sky-Varianten.
 	_button_set(theme, "AcChip", AcTokens.PAPER, AcTokens.INK)
 	_chipify(theme, "AcChip")
@@ -141,6 +148,59 @@ static func _build_buttons(theme: Theme, base_font: Font) -> void:
 		sb.shadow_size = AcTokens.SHADOW_PRESS_SIZE
 		sb.shadow_offset = Vector2(0.0, 2.0)
 	theme.set_constant("icon_max_width", "HudIconButton", 44)
+
+
+## „GhostButton“ (E7-P0-1): transparente Pill mit weicher Ink-Umriss-Linie.
+## Bewusst KEIN Paper-Alias — Sekundär-Aktionen („Zurück“) müssen sich sichtbar
+## von Primär-/Akzent-CTAs unterscheiden (E7: „Spielen!“ = „Zurück“-Problem).
+static func _build_ghost_button(theme: Theme) -> void:
+	_button_set(theme, "GhostButton", Color(AcTokens.PAPER, 0.0), AcTokens.INK)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var sb := theme.get_stylebox(state, "GhostButton") as StyleBoxFlat
+		sb.set_border_width_all(2)
+		sb.border_color = AcTokens.INK_FAINT
+		sb.content_margin_top = 12.0
+		sb.content_margin_bottom = 12.0
+	var hover := theme.get_stylebox("hover", "GhostButton") as StyleBoxFlat
+	hover.bg_color = AcTokens.TRACK_SOFT
+	var pressed := theme.get_stylebox("pressed", "GhostButton") as StyleBoxFlat
+	pressed.bg_color = AcTokens.TRACK_SOFT
+	pressed.content_margin_top = 14.0
+	pressed.content_margin_bottom = 10.0
+	var disabled := theme.get_stylebox("disabled", "GhostButton") as StyleBoxFlat
+	disabled.bg_color = Color(AcTokens.PAPER, 0.0)
+	disabled.border_color = Color(AcTokens.INK_FAINT, 0.25)
+
+
+## „AcCardButton“ (E7-P0-3): Karten-Optik als ECHTE Button-Variation für
+## tappbare Kacheln (Arcade/Album/Events). `AcCard` ist eine PanelContainer-
+## Variation — auf einem Button fällt sie still auf die Pill-Basis zurück
+## (Radius 999 → weiße Ellipsen). Hier: Paper, Radius 28, Shadow-Pop.
+static func _build_card_button(theme: Theme) -> void:
+	theme.set_type_variation("AcCardButton", "Button")
+	var normal := _card(AcTokens.PAPER, AcTokens.RADIUS_CARD, true)
+	var hover := _card(AcTokens.PAPER.lightened(0.04), AcTokens.RADIUS_CARD, true)
+	var pressed := _card(AcTokens.PAPER, AcTokens.RADIUS_CARD, false)
+	pressed.shadow_color = AcTokens.SHADOW_PRESS_COLOR
+	pressed.shadow_size = AcTokens.SHADOW_PRESS_SIZE
+	pressed.shadow_offset = Vector2(0.0, 2.0)
+	pressed.content_margin_top = 20.0
+	pressed.content_margin_bottom = 16.0
+	var disabled := _card(Color(AcTokens.PAPER, 0.5), AcTokens.RADIUS_CARD, false)
+	theme.set_stylebox("normal", "AcCardButton", normal)
+	theme.set_stylebox("hover", "AcCardButton", hover)
+	theme.set_stylebox("pressed", "AcCardButton", pressed)
+	theme.set_stylebox("disabled", "AcCardButton", disabled)
+	theme.set_stylebox("focus", "AcCardButton", StyleBoxEmpty.new())
+	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+		theme.set_color(state, "AcCardButton", AcTokens.INK)
+	theme.set_color("font_disabled_color", "AcCardButton", Color(AcTokens.INK, 0.6))
+	# Icons UNGETÖNT lassen (weiß = keine Modulation): Kacheln tragen bunte
+	# Cover-Art, kein monochromes Glyph wie die Pill-Buttons.
+	for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]:
+		theme.set_color(state, "AcCardButton", AcTokens.WHITE)
+	theme.set_color("icon_disabled_color", "AcCardButton", Color(AcTokens.WHITE, 0.6))
+	theme.set_font_size("font_size", "AcCardButton", AcTokens.FONT_SIZE_BUTTON)
 
 
 static func _chipify(theme: Theme, type: String) -> void:

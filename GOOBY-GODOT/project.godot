@@ -48,6 +48,10 @@ window/handheld/orientation=6
 
 pointing/emulate_touch_from_mouse=true
 
+[gui]
+
+theme/custom="res://themes/ac_theme.tres"
+
 [rendering]
 
 renderer/rendering_method="mobile"

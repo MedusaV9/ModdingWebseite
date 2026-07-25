@@ -13,11 +13,12 @@ func test_main_scene_instantiates_with_expected_nodes() -> void:
 	await wait_frames(2)
 	assert_true(main.get_node_or_null("World") != null, "World fehlt.")
 	assert_true(main.get_node_or_null("UILayer") != null, "UILayer fehlt.")
-	assert_true(main.get_node_or_null("UILayer/PlaceholderHome") != null, "PlaceholderHome fehlt.")
-	var title: Label = main.get_node("UILayer/PlaceholderHome/Center/Box/Title")
-	assert_eq(title.text, "GOOBY")
-	var subtitle: Label = main.get_node("UILayer/PlaceholderHome/Center/Box/Subtitle")
-	assert_true(subtitle.text.length() > 0, "Subtitle leer.")
+	# FIX-A (E1-P1-1): PlaceholderHome ist ENTFERNT — der opake Backdrop
+	# (CanvasLayer 10) verdeckte dauerhaft die 3D-Welt und schluckte Klicks.
+	assert_true(
+		main.get_node_or_null("UILayer/PlaceholderHome") == null,
+		"PlaceholderHome muss entfernt bleiben (verdeckte die 3D-Welt, E1-P1-1)."
+	)
 	main.queue_free()
 	await wait_frames(1)
 
