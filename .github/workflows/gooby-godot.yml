@@ -16,11 +16,9 @@
 # Boot-Smoke (--quit). Alle Logs landen als Artefakt "test-reports"
 # (auch bei roten Läufen, if: always()).
 #
-# Job ios-ipa-skeleton: EHRLICH dokumentiertes Gerüst, per `if: false`
-# deaktiviert (kostet so keine macOS-Minuten und behauptet keinen grünen
-# iOS-Build, den es nicht gibt). Scharfschalten in W2/W3, sobald
-# GOOBY-GODOT/export_presets.cfg (Owner: W2b) einen "iOS"-Preset enthält —
-# siehe TODO-Kommentare an den Steps. Backlog-Referenz: GODOT-PLAN §6 B§5.2.
+# Job ios-ipa: baut die UNSIGNIERTE .ipa (Sideload via AltStore/Sideloadly).
+# Godot-Export (export_project_only) -> Xcode-Projekt -> xcodebuild ohne
+# Signing -> Payload/ zippen. Artefakt: GOOBY-godot-unsigned-ipa.
 name: GOOBY Godot
 
 on:
@@ -98,17 +96,17 @@ jobs:
           path: test-reports/
 
   # ---------------------------------------------------------------------------
-  # SKELETON — bewusst deaktiviert (if: false). Stand W1:
-  # FUNKTIONIERT SCHON: Godot-macOS-Download, Export-Templates-Download+Cache,
-  #   headless --import.
-  # FEHLT NOCH (deshalb Gate): GOOBY-GODOT/export_presets.cfg mit "iOS"-Preset
-  #   inkl. Bundle-Id/Icons (Owner: W2b), danach der echte Export + xcodebuild.
-  # Scharfschalten: `if: false` entfernen + TODO-Steps prüfen.
+  # Unsignierte .ipa fuer Sideload (AltStore/Sideloadly) — KEINE Apple-Zertifikate.
+  # Godot exportiert mit application/export_project_only=true ein Xcode-Projekt
+  # (lokal auf Linux verifiziert: GOOBY.xcodeproj + GOOBY.pck + xcframeworks),
+  # xcodebuild baut es ohne Signing, danach wird Payload/ zur .ipa gezippt.
+  # Die App-Store-Team-ID im Preset ist ein Platzhalter — fuer unsignierte
+  # Builds irrelevant, Godot verlangt das Feld aber beim Export.
   # ---------------------------------------------------------------------------
-  ios-ipa-skeleton:
-    if: false # TODO(W2b/W3): aktivieren, sobald export_presets.cfg existiert
+  ios-ipa:
     runs-on: macos-15
     needs: linux-checks
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
@@ -132,11 +130,11 @@ jobs:
             unzip -q /tmp/godot.zip -d "$BIN_DIR"
           fi
           TPL_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
-          if [ ! -d "$TPL_DIR" ]; then
+          if [ ! -f "$TPL_DIR/ios.zip" ]; then
             curl -fL --retry 3 -o /tmp/templates.tpz \
               "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
             mkdir -p "$TPL_DIR"
-            unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+            unzip -q -o /tmp/templates.tpz -d /tmp/godot-templates
             mv /tmp/godot-templates/templates/* "$TPL_DIR/"
           fi
           "$APP" --version
@@ -146,26 +144,33 @@ jobs:
 
       - name: iOS-Xcode-Projekt exportieren
         run: |
-          # TODO(W2b): Preset "iOS" in GOOBY-GODOT/export_presets.cfg anlegen
-          # (Bundle-Id, Icons, ASTC). Godot generiert daraus ein Xcode-Projekt.
+          set -euo pipefail
           mkdir -p build/ios
           "$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT \
-            --export-release "iOS" "$PWD/build/ios/gooby.xcodeproj"
+            --export-release "ios" "$PWD/build/ios/GOOBY.ipa"
+          ls -la build/ios
 
-      - name: xcodebuild (unsigned) + ipa packen
+      - name: xcodebuild (unsigned)
         run: |
-          # TODO(W2/W3): Projekt-/Scheme-Namen an den echten Godot-Export
-          # anpassen; unsigned Build + Payload-Zip analog gooby-ios.yml
-          # (Sideload via AltStore/Sideloadly, keine Apple-Zertifikate).
+          set -euo pipefail
           cd build/ios
-          xcodebuild -project gooby.xcodeproj -scheme gooby -configuration Release \
-            -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
-          mkdir Payload
-          cp -R build/Release-iphoneos/*.app Payload/
-          zip -qry gooby-godot-unsigned.ipa Payload
+          xcodebuild -project GOOBY.xcodeproj -scheme GOOBY -configuration Release \
+            -sdk iphoneos -derivedDataPath dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ENABLE_BITCODE=NO build
+
+      - name: .ipa packen
+        run: |
+          set -euo pipefail
+          cd build/ios
+          APP_PATH="$(find dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$APP_PATH"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry GOOBY-godot-unsigned.ipa Payload
+          ls -la GOOBY-godot-unsigned.ipa
 
       - uses: actions/upload-artifact@v7
         with:
-          name: gooby-godot-unsigned-ipa
-          path: build/ios/gooby-godot-unsigned.ipa
+          name: GOOBY-godot-unsigned-ipa
+          path: build/ios/GOOBY-godot-unsigned.ipa
