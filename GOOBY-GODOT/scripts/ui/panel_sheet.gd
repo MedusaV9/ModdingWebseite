@@ -40,6 +40,7 @@ func add_content(node: Control) -> void:
 func open() -> void:
 	if _open:
 		return
+	AudioDirector.try_play(self, "ui_open")
 	_open = true
 	visible = true
 	PanelStack.push(self)
@@ -57,6 +58,7 @@ func open() -> void:
 func close() -> void:
 	if not _open:
 		return
+	AudioDirector.try_play(self, "ui_close")
 	_open = false
 	PanelStack.remove(self)
 	visible = false

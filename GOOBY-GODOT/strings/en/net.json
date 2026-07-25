@@ -2,13 +2,15 @@
 	"net": {
 		"status": {
 			"offline": "Offline",
-			"connecting": "Connecting …",
+			"connecting": "Connecting…",
 			"online": "Online"
 		},
 		"friends": {
 			"title": "Friends",
 			"back": "‹ Back",
 			"my_code": "Your friend code",
+			"copy": "Copy",
+			"copied": "Copied!",
 			"add_title": "Add a friend",
 			"add_placeholder": "GOOBY code or name",
 			"add_button": "Send request",
@@ -18,10 +20,11 @@
 			"accept": "Accept",
 			"decline": "Decline",
 			"list_title": "Your friends",
-			"empty": "No friends yet — share your code!",
+			"empty": "No friends yet — share your friend code!",
+			"empty_art": "( \\ (\\\n(  . .)\no_(\")(\")",
 			"offline_hint": "Offline — friends need internet.",
-			"online": "online",
-			"offline": "offline",
+			"online": "is online",
+			"offline": "offline right now",
 			"coins": "ᴳ {coins}",
 			"request_from": "{name} ({gooby})"
 		}

@@ -4,7 +4,8 @@ extends MinigameBase
 ## Junk-Quote 10→30 %, Fallspeed +8 %/10 s (gestuft), Junk −2 + 0.5 s Dizzy,
 ## 1× goldene Möhre (+10, 1.5× Speed), Endlos endet nach 3 Boden-Möhren.
 ## Steuerung: Touch-Drag zieht den Korb (Hochkant-optimiert). Optik:
-## AC-Pastell-Himmel, gezeichnete Items, JuiceKit-Feedback.
+## AC-Pastell-Himmel, gezeichnete Items, JuiceKit-Feedback (Slowmo+Bloom bei
+## Gold, Shake bei Junk/Endlos-Miss, Bloom bei Combo) + AudioDirector-SFX.
 
 ## Sichtbare Welt-Halbbreite in Logik-Einheiten (Web-Kamera ≈ 3.25 bei 390px).
 const WORLD_HALF_W := 3.25
@@ -134,6 +135,10 @@ func _move_items(vp: Vector2, ppu: float, delta: float) -> void:
 		if y > vp.y + 30.0:
 			if bool(tune["ENDLESS"]) and item["kind"] == "good" and item["key"] == "carrot":
 				missed_carrots += 1
+				# Verpasste Möhre = ein Endlos-Leben weg: fühlbar machen.
+				AudioDirector.try_play(self, "mg_spill", 0.85)
+				if ctx.juice != null:
+					ctx.juice.shake(0.25)
 			continue
 		kept.append(item)
 	items = kept
@@ -146,6 +151,12 @@ func _catch(item: Dictionary, vp: Vector2) -> void:
 	combo = int(res["combo"])
 	var pos := Vector2(vp.x * 0.5 + float(item["x"]) * _px_per_unit(vp), vp.y - 190.0)
 	var kind := str(item["kind"])
+	if kind == "golden":
+		AudioDirector.try_play(self, "mg_golden")
+	elif kind == "good":
+		AudioDirector.try_play(self, "mg_good")
+	else:
+		AudioDirector.try_play(self, "mg_junk")
 	if ctx.juice != null:
 		if kind == "golden":
 			ctx.juice.float_text(pos, "+%d" % int(item["value"]), Color(1.0, 0.78, 0.1))
@@ -158,6 +169,8 @@ func _catch(item: Dictionary, vp: Vector2) -> void:
 			ctx.juice.shake(0.4)
 			ctx.juice.hit_freeze(80)
 		if CarrotCatchLogic.combo_milestone(combo):
+			AudioDirector.try_play(self, "mg_combo", 1.0 + 0.03 * minf(combo, 20.0))
+			ctx.juice.bloom_pulse(0.4)
 			ctx.juice.float_text(
 				pos - Vector2(0, 42),
 				I18nService.t("mg.game.streak", {"n": combo}),

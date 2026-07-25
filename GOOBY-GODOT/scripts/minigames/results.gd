@@ -32,6 +32,7 @@ func _ready() -> void:
 
 ## breakdown = MinigameAward.award()-Ergebnis; meta = Registry-Zeile.
 func show_results(breakdown: Dictionary, meta: Dictionary) -> void:
+	AudioDirector.try_play(self, "mg_win")
 	for child in _rows.get_children():
 		child.queue_free()
 	var title := Label.new()
@@ -81,12 +82,20 @@ func show_results(breakdown: Dictionary, meta: Dictionary) -> void:
 	var again := Button.new()
 	again.theme_type_variation = &"PrimaryButton"
 	again.text = I18nService.t("mg.results.again")
-	again.pressed.connect(func() -> void: again_pressed.emit())
+	again.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(self, "ui_confirm")
+			again_pressed.emit()
+	)
 	buttons.add_child(again)
 	var back := Button.new()
 	back.theme_type_variation = &"GhostButton"
 	back.text = I18nService.t("mg.results.back")
-	back.pressed.connect(func() -> void: back_pressed.emit())
+	back.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(self, "ui_back")
+			back_pressed.emit()
+	)
 	buttons.add_child(back)
 	show()
 

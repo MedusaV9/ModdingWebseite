@@ -4,7 +4,8 @@ extends MinigameBase
 ## (FILL_RATE), Loslassen im Band punktet (perfect +6 / good +3), Überlauf/
 ## daneben = Spill, jeder 3. Perfect in Folge +2, Kadenz zieht an. 60 s
 ## (Endlos: bis 3 Spills). Optik: AC-Pastell + Gooby-Cameo (2D-Vektor) +
-## JuiceKit (float_text, bloom bei Perfect, shake/hit_freeze bei Spill).
+## JuiceKit (float_text, hit_freeze/bloom bei Perfect, shake/hit_freeze bei
+## Spill) + SFX über AudioDirector (Perfect-Pitch steigt mit der Serie).
 ## Hochkant-Design (390×844-Basis), skaliert über die Viewport-Größe.
 
 const TEA_COLOR := Color(0.78, 0.5, 0.2)
@@ -114,11 +115,16 @@ func _release() -> void:
 		var bonus := TeaPartyLogic.streak_bonus_at(streak, tune)
 		score = TeaPartyLogic.apply_score(score, bonus)
 		_gooby_bounce = 1.0
+		# Steigende Tonhöhe belohnt die Serie hörbar (ab 8er-Kette gedeckelt).
+		AudioDirector.try_play(self, "mg_perfect", 1.0 + 0.06 * minf(streak - 1, 7.0))
 		if ctx.juice != null:
 			var text := "+%d" % (points + bonus)
 			ctx.juice.float_text(cup_pos, text, Color(1.0, 0.72, 0.2))
+			ctx.juice.hit_freeze(45)
 			ctx.juice.bloom_pulse(0.6)
 			if bonus > 0:
+				AudioDirector.try_play(self, "mg_combo")
+				ctx.juice.bloom_pulse(0.9)
 				ctx.juice.float_text(
 					cup_pos - Vector2(0, 40),
 					I18nService.t("mg.teaParty.streak_bonus"),
@@ -126,11 +132,13 @@ func _release() -> void:
 				)
 	elif res["result"] == "good":
 		streak = 0
+		AudioDirector.try_play(self, "mg_good")
 		if ctx.juice != null:
 			ctx.juice.float_text(cup_pos, "+%d" % points, Color(0.42, 0.6, 0.36))
 	else:
 		streak = 0
 		spills += 1
+		AudioDirector.try_play(self, "mg_spill")
 		if ctx.juice != null:
 			ctx.juice.float_text(cup_pos, I18nService.t("mg.teaParty.spill"), Color(0.8, 0.3, 0.25))
 			ctx.juice.shake(0.35)

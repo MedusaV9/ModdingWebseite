@@ -40,3 +40,22 @@ static func arc_angles_deg(
 static func arc_point(corner: Vector2, radius: float, angle_deg: float) -> Vector2:
 	var rad := deg_to_rad(angle_deg)
 	return corner + Vector2(cos(rad) * radius, -sin(rad) * radius)
+
+
+## Safe-Area-Insets (W4/POLISH-4, Notch/Home-Indicator): rechnet
+## `DisplayServer.get_display_safe_area()`-Koordinaten in Rand-Abstände
+## {left, top, right, bottom} um. Beide Argumente im GLEICHEN
+## Koordinatenraum (Fenster-Pixel ODER Canvas — Aufrufer skaliert).
+## Leere/ungültige Safe-Area → alle Insets 0 (Desktop/Headless).
+static func safe_insets(window_size: Vector2, safe_area: Rect2) -> Dictionary:
+	var zero := {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}
+	if window_size.x <= 0.0 or window_size.y <= 0.0:
+		return zero
+	if safe_area.size.x <= 0.0 or safe_area.size.y <= 0.0:
+		return zero
+	return {
+		"left": maxf(safe_area.position.x, 0.0),
+		"top": maxf(safe_area.position.y, 0.0),
+		"right": maxf(window_size.x - safe_area.end.x, 0.0),
+		"bottom": maxf(window_size.y - safe_area.end.y, 0.0),
+	}

@@ -5,6 +5,8 @@ extends MinigameBase
 ## Hochkant skaliert das Grid. Steuerung: Karte antippen ODER ziehen
 ## (Drag-Ghost), Klecks antippen = einsammeln, Schaufel entfernt Türme.
 ## Punkte laufen NUR über ctx.report_score/report_end (Award macht der Host).
+## Feedback (W4-P1): JuiceKit an Gefechts-Momenten (Shake/Freeze/Bloom bei
+## Welle/Boss/Mäher/Boom, Slowmo beim Boss-Auftritt) + AudioDirector-SFX.
 
 const TICK_SEC := 0.05
 const CARD_W := 56.0
@@ -136,25 +138,35 @@ func _consume_events(events: Array) -> void:
 			"wave":
 				var key := "gvz.hud.huge_wave" if bool(event["huge"]) else "gvz.hud.wave"
 				_show_banner(I18nService.t(key, {"n": int(event["n"])}))
+				AudioDirector.try_play(self, "gvz_wave", 1.15 if not bool(event["huge"]) else 1.0)
 				if ctx != null and ctx.juice != null and bool(event["huge"]):
 					ctx.juice.shake(0.35)
 			"boss_enter":
 				_show_banner(I18nService.t("gvz.hud.boss"))
+				AudioDirector.try_play(self, "gvz_boss")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.6)
+					ctx.juice.slowmo(0.45, 400)
+					ctx.juice.bloom_pulse(0.5, 500)
 			"boss_phase":
 				_show_banner(I18nService.t("gvz.hud.boss_phase", {"n": int(event["phase"])}))
+				AudioDirector.try_play(self, "gvz_boss", 1.0 + 0.1 * int(event["phase"]))
 				if ctx != null and ctx.juice != null:
 					ctx.juice.hit_freeze(110)
 					ctx.juice.shake(0.5)
 			"mower":
+				AudioDirector.try_play(self, "gvz_mower")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.55)
+					ctx.juice.hit_freeze(70)
 			"die":
 				_spawn_poof(int(event["id"]), "die")
+				AudioDirector.try_play(self, "gvz_pop")
 			"pop":
 				_spawn_poof(int(event["id"]), "pop")
+				AudioDirector.try_play(self, "gvz_balloon")
 			"collect":
+				AudioDirector.try_play(self, "gvz_collect")
 				if ctx != null and ctx.juice != null:
 					var at := _cell_center(int(event["lane"]), int(event["col"]))
 					ctx.juice.float_text(
@@ -171,8 +183,11 @@ func _consume_events(events: Array) -> void:
 						}
 					)
 				)
+				AudioDirector.try_play(self, "gvz_boom")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.3)
+					ctx.juice.hit_freeze(60)
+					ctx.juice.bloom_pulse(0.4, 250)
 
 
 func _report_live_score() -> void:
@@ -198,6 +213,7 @@ func _on_run_over() -> void:
 			int(state["score"]), level_id, stars, bool(booking["first_clear"]), balance
 		)
 		session_score += total
+		AudioDirector.try_play(self, "mg_win")
 		if ctx != null:
 			ctx.report_score(session_score, total - _last_run_score)
 			if ctx.juice != null:
@@ -206,8 +222,10 @@ func _on_run_over() -> void:
 		_build_end_overlay(true, stars, total, bool(booking["first_clear"]))
 	else:
 		phase = "lost"
+		AudioDirector.try_play(self, "mg_lose")
 		if ctx != null and ctx.juice != null:
 			ctx.juice.shake(0.7)
+			ctx.juice.hit_freeze(120)
 		_build_end_overlay(false, 0, 0, false)
 	queue_redraw()
 
@@ -258,15 +276,21 @@ func _apply_card(at: Vector2) -> void:
 	if selected_card == "shovel":
 		if GvzLogic.remove_tower(state, cell.y, cell.x):
 			selected_card = ""
+			AudioDirector.try_play(self, "gvz_shovel")
+			_poofs.append({"pos": _cell_center(cell.y, cell.x), "ttl": 0.35, "kind": "place"})
 		queue_redraw()
 		return
 	var placed := GvzLogic.place_tower(state, selected_card, cell.y, cell.x)
 	if bool(placed["ok"]):
 		selected_card = ""
-	elif ctx != null and ctx.juice != null:
-		var key := "gvz.hud.reason_%s" % str(placed["reason"])
-		if I18nService.has_key(key):
-			ctx.juice.float_text(at - Vector2(0, 30), I18nService.t(key), GvzArt.BERRY_RED)
+		AudioDirector.try_play(self, "gvz_place")
+		_poofs.append({"pos": _cell_center(cell.y, cell.x), "ttl": 0.35, "kind": "place"})
+	else:
+		AudioDirector.try_play(self, "ui_error")
+		if ctx != null and ctx.juice != null:
+			var key := "gvz.hud.reason_%s" % str(placed["reason"])
+			if I18nService.has_key(key):
+				ctx.juice.float_text(at - Vector2(0, 30), I18nService.t(key), GvzArt.BERRY_RED)
 	queue_redraw()
 
 
@@ -717,6 +741,7 @@ func _overlay_button(key: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.text = I18nService.t(key)
 	button.custom_minimum_size = Vector2(104, 48)
+	button.pressed.connect(func() -> void: AudioDirector.try_play(button, "ui_click"))
 	button.pressed.connect(action)
 	return button
 

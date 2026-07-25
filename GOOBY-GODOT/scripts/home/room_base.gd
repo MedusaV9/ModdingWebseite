@@ -21,6 +21,8 @@ const REBAKE_DEBOUNCE_S := 0.5
 
 ## Tests injizieren hier ein frisches GameState (statt /root/GameState).
 var game_state_override: Object = null
+## Tests/Screenshots erzwingen eine Uhrzeit (< 0 = echte Systemzeit).
+var stunde_override := -1.0
 var grid: GridData
 
 var _room_def: Dictionary = {}
@@ -40,6 +42,7 @@ var _bubble: DialogBubble
 var _choice: Control
 var _rebake_pending := false
 var _uid_seq := 0
+var _fenster_energie := HomeLicht.FENSTER_TAG
 
 
 func _ready() -> void:
@@ -145,23 +148,34 @@ func _on_rebake_timeout() -> void:
 
 
 ## Hammer-Aufbau-Gag (Doc D §3.1): Gooby hämmert, Qualm, Jubel.
+## Reduced Motion (W4-P3 POLISH-16): kein Qualm, stark verkürzte Pausen.
 func play_hammer_gag(world_pos: Vector3) -> void:
 	if _gooby == null:
 		return
+	var reduced := _reduced_motion()
 	_gooby.set_wander_enabled(false)
 	await _gooby.walk_to(world_pos + Vector3(0.5, 0.0, 0.5), 3.0)
 	_gooby.rig.play_clip("build_hammer")
-	var smoke := _make_smoke(world_pos)
-	# Sound-Platzhalter: Hammer-SFX folgt (Asset-Backlog W4-POLISH).
-	await get_tree().create_timer(1.8).timeout
-	smoke.emitting = false
+	var smoke: GPUParticles3D = null
+	if not reduced:
+		smoke = _make_smoke(world_pos)
+	AudioDirector.try_play(self, "build_hammer")
+	await get_tree().create_timer(0.3 if reduced else 1.8).timeout
+	if smoke != null:
+		smoke.emitting = false
 	_gooby.rig.play_clip("celebrate")
 	_gooby.rig.set_emotion("ecstatic")
 	say(I18nService.t("build.hammer_fertig"))
-	await get_tree().create_timer(1.2).timeout
-	smoke.queue_free()
+	await get_tree().create_timer(0.2 if reduced else 1.2).timeout
+	if smoke != null:
+		smoke.queue_free()
 	_gooby.rig.set_emotion("happy")
 	_gooby.set_wander_enabled(not is_build_mode_active())
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_reduced_motion()
 
 
 func _resolve_game_state() -> void:
@@ -203,24 +217,48 @@ func _is_outdoor() -> bool:
 	return bool(_room_def.get("outdoor", false))
 
 
+## Raum-Licht (W4-P3 POLISH-6): HomeLicht-Profil pro Raum + Tageszeit-Lerp.
+## Sonnen-Schatten bleiben AUS (Mobile-Budget A §7) — Gooby erdet ein
+## Blob-Shadow (GoobyHome), das Füll-Licht bringt die Gemütlichkeit.
 func _build_environment() -> void:
+	var profil := HomeLicht.profil(room_id, _is_outdoor(), _stunde())
 	var world_env := WorldEnvironment.new()
+	world_env.name = "RaumLicht"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#BFE3F2") if _is_outdoor() else Color("#FFF1DC")
+	env.background_color = profil["hintergrund"]
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	# Draußen neutral-kühl (Gras bleibt grün), drinnen warm-gemütlich.
-	env.ambient_light_color = (Color(0.92, 0.97, 1.0) if _is_outdoor() else Color(1.0, 0.93, 0.84))
-	env.ambient_light_energy = 0.4
+	env.ambient_light_color = profil["ambient_farbe"]
+	env.ambient_light_energy = profil["ambient_energie"]
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_env.environment = env
 	add_child(world_env)
 	var sun := DirectionalLight3D.new()
-	sun.light_color = (Color(1.0, 0.98, 0.92) if _is_outdoor() else Color(1.0, 0.9, 0.75))
-	sun.light_energy = 0.7
-	sun.rotation_degrees = Vector3(-52.0, -28.0, 0.0)
-	sun.shadow_enabled = true
+	sun.name = "Sonne"
+	sun.light_color = profil["sonnen_farbe"]
+	sun.light_energy = profil["sonnen_energie"]
+	sun.rotation_degrees = profil["sonnen_rotation"]
+	sun.shadow_enabled = false
 	add_child(sun)
+	var fuell := OmniLight3D.new()
+	fuell.name = "FuellLicht"
+	fuell.light_color = profil["fuell_farbe"]
+	fuell.light_energy = profil["fuell_energie"]
+	var size := _world_size()
+	fuell.omni_range = maxf(size.x, size.y) * 1.1
+	fuell.omni_attenuation = 1.4
+	fuell.position = Vector3(size.x * 0.5, WALL_HEIGHT * 0.9, size.y * 0.55)
+	fuell.shadow_enabled = false
+	add_child(fuell)
+	_fenster_energie = profil["fenster_energie"]
+
+
+## Uhrzeit mit Bruchteilen (Tests/Screenshots setzen stunde_override).
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
 
 
 func _build_nav_and_floor() -> void:
@@ -322,10 +360,11 @@ func _build_window(window: Dictionary) -> void:
 	quad.size = Vector2(width, 0.9)
 	mesh.mesh = quad
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color("#CFEFFF")
+	# Tags hell strahlend, nachts fast dunkel (HomeLicht-Tageszeit-Lerp).
+	mat.albedo_color = Color("#CFEFFF").lerp(Color("#1E2A4A"), 1.0 - _fenster_energie)
 	mat.emission_enabled = true
 	mat.emission = Color("#BFE8FF")
-	mat.emission_energy_multiplier = 0.8
+	mat.emission_energy_multiplier = _fenster_energie
 	mesh.material_override = mat
 	var along := offset * GridData.CELL_SIZE + width * 0.5
 	var size := _world_size()

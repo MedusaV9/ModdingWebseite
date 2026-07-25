@@ -57,16 +57,23 @@ func _gui_input(event: InputEvent) -> void:
 	if not tapped or logic == null:
 		return
 	accept_event()
-	_punch()
-	mashed.emit()
+	var war_letzter: bool = logic.ist_letzter_tap()
+	# W4P1-sfx-wiring: Klopfen pro Tap, Pitch zieht mit der Kurve an.
+	AudioDirector.try_play(self, "door_knock", 1.0 + 0.5 * logic.mash_ratio())
 	if logic.tap_mash() == DoorLogic.State.POPPING:
+		_punch(1.35)
 		completed.emit()
+	else:
+		# Widerstandskurve (POLISH-7): Punches wachsen mit dem Fortschritt,
+		# der (angekündigte) letzte Tap ploppt am größten.
+		_punch(1.08 + 0.12 * logic.mash_ratio() + (0.1 if war_letzter else 0.0))
+	mashed.emit()
 
 
-func _punch() -> void:
+func _punch(staerke := 1.12) -> void:
 	if ThemeService.is_reduced_motion(self):
 		return
 	_bar.pivot_offset = _bar.size / 2.0
-	_bar.scale = Vector2.ONE * 1.12
+	_bar.scale = Vector2(staerke, maxf(0.8, 2.0 - staerke))
 	var tween := create_tween()
 	tween.tween_property(_bar, "scale", Vector2.ONE, 0.12)

@@ -1,12 +1,20 @@
-# GOOBY-GODOT CI (W1a CORE).
+# GOOBY-GODOT CI (W1a CORE; W4-P5 INFRA: lint || tests parallelisiert,
+# Test-Report-Artefakte, Job-Timeouts).
 #
 # WICHTIG: Der bestehende Web-Spiel-Workflow .github/workflows/gooby-ios.yml
 # triggert auf GOOBY/** und bleibt UNBERÜHRT. Dieser Workflow hier triggert
 # ausschließlich auf GOOBY-GODOT/** + tools/ci/** + sich selbst.
 #
-# Job linux-checks: Godot 4.4.1 (gecacht) → --import (Pflicht vor Tests, der
-# frische Checkout hat keinen .godot/-Import-Cache) → Test-Runner →
-# gdlint/gdformat (gdtoolkit via pip) → Boot-Smoke (--quit).
+# Job lint: NUR gdtoolkit via pip (braucht kein Godot-Binary) →
+# gdlint/gdformat. Läuft parallel zu linux-checks statt danach — spart
+# auf dem kritischen Pfad die komplette Lint-Zeit.
+#
+# Job linux-checks (Name bewusst stabil — needs: des ios-Skeletons zeigt
+# darauf): Godot 4.4.1 (gecacht via actions/cache + tools/ci/install_godot.sh,
+# Cache-Hit = kein Download) → --import (Pflicht vor Tests, der frische
+# Checkout hat keinen .godot/-Import-Cache) → beide Test-Runner →
+# Boot-Smoke (--quit). Alle Logs landen als Artefakt "test-reports"
+# (auch bei roten Läufen, if: always()).
 #
 # Job ios-ipa-skeleton: EHRLICH dokumentiertes Gerüst, per `if: false`
 # deaktiviert (kostet so keine macOS-Minuten und behauptet keinen grünen
@@ -27,8 +35,26 @@ env:
   GODOT_VERSION: "4.4.1"
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: gdtoolkit installieren
+        run: pip install "gdtoolkit==4.*"
+
+      - name: gdlint
+        working-directory: GOOBY-GODOT
+        run: git ls-files -z -- "*.gd" | xargs -0 gdlint
+
+      - name: gdformat --check
+        working-directory: GOOBY-GODOT
+        run: git ls-files -z -- "*.gd" | xargs -0 gdformat --check
+
   linux-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -41,28 +67,35 @@ jobs:
       - name: Godot ${{ env.GODOT_VERSION }} installieren
         run: bash tools/ci/install_godot.sh
 
-      - name: gdtoolkit installieren
-        run: pip install "gdtoolkit==4.*"
-
       - name: Ressourcen importieren (Pflicht vor Tests)
-        run: godot --headless --path GOOBY-GODOT --import
+        run: |
+          set -o pipefail
+          mkdir -p test-reports
+          godot --headless --path GOOBY-GODOT --import 2>&1 | tee test-reports/import.log
 
       - name: Test-Runner
-        run: godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd
+        run: |
+          set -o pipefail
+          godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd 2>&1 \
+            | tee test-reports/run_tests.log
 
       - name: Unit-Tests (W1c-UI-Runner)
-        run: godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd
-
-      - name: gdlint
-        working-directory: GOOBY-GODOT
-        run: git ls-files -z -- "*.gd" | xargs -0 gdlint
-
-      - name: gdformat --check
-        working-directory: GOOBY-GODOT
-        run: git ls-files -z -- "*.gd" | xargs -0 gdformat --check
+        run: |
+          set -o pipefail
+          godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd 2>&1 \
+            | tee test-reports/run_w1c_tests.log
 
       - name: Boot-Smoke (Projekt bootet headless)
-        run: godot --headless --path GOOBY-GODOT --quit
+        run: |
+          set -o pipefail
+          godot --headless --path GOOBY-GODOT --quit 2>&1 | tee test-reports/boot_smoke.log
+
+      - name: Test-Reports hochladen (auch bei roten Läufen)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: test-reports/
 
   # ---------------------------------------------------------------------------
   # SKELETON — bewusst deaktiviert (if: false). Stand W1:

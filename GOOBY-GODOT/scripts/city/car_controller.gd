@@ -21,6 +21,8 @@ const CAR_GLB := "res://assets/city/autos/sedan.glb"
 var colliders: Array[Dictionary] = []
 ## Fahr-Grenzen (halbe Weltbreite/-tiefe in m, minus Rand).
 var welt_halb := Vector2(140.0, 110.0)
+## Scheinwerfer an (W4-P3 POLISH-8, nachts) — VOR add_child setzen.
+var licht_an := false
 
 var heading := 0.0
 var speed := 0.0
@@ -42,8 +44,38 @@ func _ready() -> void:
 		var modell := szene.instantiate()
 		modell.scale = Vector3.ONE * CityCarFeel.CAR_SCALE
 		add_child(modell)
+		if licht_an:
+			_baue_scheinwerfer(modell)
 	position.y = CityCarFeel.ROAD_Y
 	_prev_xz = Vector2(position.x, position.z)
+
+
+## Nachts: zwei warme Emissiv-Kugeln vorn + EIN kleines Omni-Licht als
+## Straßenschein (nur das Spielerauto — Mobile-Licht-Budget A §7).
+func _baue_scheinwerfer(modell: Node3D) -> void:
+	var front := 0.6
+	for mesh in modell.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = mesh
+		var aabb := mi.get_aabb()
+		front = maxf(front, mi.position.z + aabb.position.z + aabb.size.z)
+	for seite: float in [-1.0, 1.0]:
+		var licht := MeshInstance3D.new()
+		var kugel := SphereMesh.new()
+		kugel.radius = 0.05
+		kugel.height = 0.1
+		kugel.radial_segments = 8
+		kugel.rings = 4
+		licht.mesh = kugel
+		licht.material_override = CityAmbiente.leuchten_material(Color(1.0, 0.95, 0.75), 2.4)
+		licht.position = Vector3(seite * 0.22, 0.25, front)
+		modell.add_child(licht)
+	var schein := OmniLight3D.new()
+	schein.light_color = Color(1.0, 0.92, 0.7)
+	schein.light_energy = 1.1
+	schein.omni_range = 9.0
+	schein.shadow_enabled = false
+	schein.position = Vector3(0.0, 1.0, front * CityCarFeel.CAR_SCALE + 2.5)
+	add_child(schein)
 
 
 func _physics_process(delta: float) -> void:

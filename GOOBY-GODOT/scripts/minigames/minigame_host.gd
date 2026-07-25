@@ -244,10 +244,12 @@ func _run_countdown() -> void:
 	_countdown_label.show()
 	for step in [3, 2, 1]:
 		_countdown_label.text = str(step)
+		AudioDirector.try_play(self, "ui_tick")
 		await get_tree().create_timer(countdown_step_sec).timeout
 		if token != _countdown_token or not is_inside_tree():
 			return
 	_countdown_label.text = I18nService.t("mg.host.go")
+	AudioDirector.try_play(self, "mg_go")
 	_countdown_label.show()
 	get_tree().create_timer(0.6).timeout.connect(
 		func() -> void:
@@ -309,17 +311,20 @@ func _award(final_score: int) -> Dictionary:
 func _on_pause_pressed() -> void:
 	if _game == null or _round_over:
 		return
+	AudioDirector.try_play(self, "ui_open")
 	_game.pause()
 	_pause_overlay.show()
 
 
 func _on_resume_pressed() -> void:
+	AudioDirector.try_play(self, "ui_close")
 	_pause_overlay.hide()
 	if _game != null:
 		_game.resume()
 
 
 func _on_quit_pressed() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	if _game != null:
 		_game.end()
 	_exit_to(&"arcade", {})

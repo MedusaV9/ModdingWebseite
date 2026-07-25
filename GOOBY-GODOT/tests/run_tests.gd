@@ -9,9 +9,16 @@ extends SceneTree
 ## erben) und ruft alle test_*-Methoden auf (async erlaubt — jede Methode
 ## wird awaited). Exit-Code: 0 = alles grün, 1 = Failures/Fehler.
 ## Diese Datei gehört W1a — andere Agents legen NUR eigene test_*.gd an.
+## W4-P5 (INFRA, Plan §2.4-13 Runner-Robustheit): Watchdog pro Testmethode —
+## eine hängende await-Kette (z. B. Signal, das nie feuert) blockiert nicht
+## mehr den ganzen Lauf/CI-Job, sondern wird nach TEST_TIMEOUT_MS als FAIL
+## gewertet und der Lauf geht weiter. Konventionen (FROZEN) unverändert.
 
 const TESTS_ROOT := "res://tests"
 const EXCLUDED_FILES: Array[String] = ["test_case.gd"]
+## Watchdog pro test_*-Methode — reines Hänger-Netz, legitime Tests bleiben
+## weit darunter (kompletter Lauf ~30 s für ~400 Tests).
+const TEST_TIMEOUT_MS := 120_000
 
 
 func _initialize() -> void:
@@ -56,15 +63,43 @@ func _run_script(script_path: String) -> Dictionary:
 	for method in _test_methods(script):
 		total += 1
 		case.begin_test()
-		await case.call(method)
+		var finished := await _call_with_watchdog(case, method)
 		var failures: PackedStringArray = case.take_failures()
-		if failures.is_empty():
+		if not finished:
+			failed += 1
+			print(
+				(
+					"  FAIL %s::%s — TIMEOUT nach %d ms (hängende await-Kette?)"
+					% [script_path.get_file(), method, TEST_TIMEOUT_MS]
+				)
+			)
+			for failure in failures:
+				print("  FAIL %s::%s — %s" % [script_path.get_file(), method, failure])
+		elif failures.is_empty():
 			print("  PASS %s::%s" % [script_path.get_file(), method])
 		else:
 			failed += 1
 			for failure in failures:
 				print("  FAIL %s::%s — %s" % [script_path.get_file(), method, failure])
 	return {"total": total, "failed": failed}
+
+
+## Startet die (potenziell asynchrone) Testmethode und wartet bis fertig ODER
+## Timeout. true = Methode ist regulär zurückgekehrt. Nach einem Timeout läuft
+## die Zombie-Coroutine ggf. weiter (GDScript kann sie nicht abbrechen) — der
+## Lauf bricht aber nicht mehr ab, und der Fall wird laut gemeldet.
+func _call_with_watchdog(case: TestCase, method: String) -> bool:
+	var done := {"done": false}
+	_invoke_test(case, method, done)
+	var deadline := Time.get_ticks_msec() + TEST_TIMEOUT_MS
+	while not done["done"] and Time.get_ticks_msec() < deadline:
+		await process_frame
+	return done["done"]
+
+
+func _invoke_test(case: TestCase, method: String, done: Dictionary) -> void:
+	await case.call(method)
+	done["done"] = true
 
 
 func _test_methods(script: GDScript) -> Array[String]:

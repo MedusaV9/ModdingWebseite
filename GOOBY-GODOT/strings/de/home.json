@@ -25,7 +25,7 @@
 	},
 	"build": {
 		"lager": "Lager {used}/{cap}",
-		"lager_voll": "Lager voll! Bau ein Shed im Garten!",
+		"lager_voll": "Lager voll! Bau dir einen Schuppen im Garten!",
 		"leer": "Dein Lager ist leer.",
 		"fertig": "Fertig",
 		"rotieren": "Drehen",

@@ -12,10 +12,12 @@ signal back_requested
 ## Compile-zeitige Cover (Konvention: res://assets/covers/<id>.png).
 ## Neue Spiele: Zeile ergänzen — ResourceLoader-Fallback unten fängt
 ## vergessene Einträge ab (lädt synchron, KEIN Flackern, nur langsamer).
+## Auch „Bald!“-Kacheln (gobnom) preloaden: echtes Cover statt „?“-Karte.
 const COVERS := {
 	"teaParty": preload("res://assets/covers/teaParty.png"),
 	"carrotCatch": preload("res://assets/covers/carrotCatch.png"),
 	"gvz": preload("res://assets/covers/gvz.png"),
+	"gobnom": preload("res://assets/covers/gobnom.png"),
 }
 
 const ROUTE_ARCADE := &"arcade"
@@ -141,16 +143,23 @@ func _build_tile(game: Dictionary) -> Control:
 	return tile
 
 
-func _build_cover(id: String, coming_soon: bool) -> Control:
-	var frame := Control.new()
-	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+## Dieselbe Textur-Instanz für Kachel UND LoadingVeil-Cover-Karte
+## (W4/POLISH-17: kein Doppel-Load, kein Flackern).
+static func cover_texture(id: String) -> Texture2D:
 	var texture: Texture2D = COVERS.get(id)
 	if texture == null:
 		# Fallback-Konvention: assets/covers/<id>.png — synchron geladen.
 		var path := MinigameRegistry.cover_path(id)
 		if ResourceLoader.exists(path):
 			texture = load(path)
+	return texture
+
+
+func _build_cover(id: String, coming_soon: bool) -> Control:
+	var frame := Control.new()
+	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var texture := cover_texture(id)
 	if texture != null:
 		var rect := TextureRect.new()
 		rect.texture = texture
@@ -192,9 +201,21 @@ func _build_cover(id: String, coming_soon: bool) -> Control:
 
 
 func _on_tile_pressed(id: String) -> void:
+	AudioDirector.try_play(self, "ui_click")
 	game_selected.emit(id)
 	if not auto_navigate:
 		return
+	# Veil-Kontext für die ganze Kette Arcade→Pregame→Host: Cover-Karte mit
+	# Titel + Tipps statt Standard-Gooby (W4/POLISH-3+17). Der Hint räumt
+	# sich beim nächsten Nicht-Minigame-Ziel selbst auf.
+	var game := MinigameRegistry.get_game(id)
+	var hint := {
+		"game_id": id,
+		"title": I18nService.t(str(game.get("title_key", id))),
+		"cover": cover_texture(id),
+		"targets": [ROUTE_PREGAME, ROUTE_HOST],
+	}
+	LoadingVeil.set_travel_hint(hint)
 	var router := get_node_or_null("/root/SceneRouter")
 	if router != null and router.has_method("goto"):
 		router.goto(ROUTE_PREGAME, {"game_id": id})

@@ -25,6 +25,7 @@ config/icon="res://icon.svg"
 PackLoader="*res://scripts/updates/pack_loader.gd"
 ContentRegistry="*res://scripts/updates/content_registry.gd"
 AppSettings="*res://scripts/core/app_settings.gd"
+Audio="*res://scripts/audio/audio_director.gd"
 GameState="*res://scripts/state/game_state.gd"
 UiTheme="*res://themes/theme_service.gd"
 I18n="*res://scripts/ui/i18n.gd"
@@ -33,6 +34,7 @@ SceneRouter="*res://scripts/core/scene_router.gd"
 UpdateManager="*res://scripts/updates/update_service.gd"
 Net="*res://scripts/net/net_client.gd"
 Social="*res://scripts/social/social_services.gd"
+PerfOverlay="*res://scripts/dev/perf_overlay.gd"
 
 [display]
 

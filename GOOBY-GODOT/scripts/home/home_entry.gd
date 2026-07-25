@@ -56,7 +56,11 @@ func _roll_random_event() -> void:
 		return
 	var defs := RandomEventEngine.defs_from_registry()
 	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
-	RandomEventEngine.roll_on_start(_gs, defs, now_ms, randf(), randf())
+	var uhr := Time.get_datetime_dict_from_system()
+	var minuten: int = int(uhr["hour"]) * 60 + int(uhr["minute"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	RandomEventEngine.roll_on_start(_gs, defs, now_ms, minuten, rng)
 
 
 func _on_travel_finished(_target: Variant = null) -> void:

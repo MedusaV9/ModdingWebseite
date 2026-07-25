@@ -33,7 +33,43 @@ func _ready() -> void:
 	agent.target_desired_distance = 0.2
 	agent.avoidance_enabled = false
 	add_child(agent)
+	add_child(_make_blob_shadow())
 	_wander_timer = _rng.randf_range(1.0, 3.0)
+
+
+## Blob-Shadow (W4-P3 POLISH-6, Doc A §7): weicher Schattenfleck statt
+## teurer Echtzeit-Schatten — die Raum-Sonne rendert ohne Shadow-Map.
+func _make_blob_shadow() -> MeshInstance3D:
+	var blob := MeshInstance3D.new()
+	blob.name = "BlobShadow"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.72, 0.72)
+	quad.orientation = PlaneMesh.FACE_Y
+	blob.mesh = quad
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_texture = _blob_textur()
+	mat.no_depth_test = false
+	blob.material_override = mat
+	blob.position = Vector3(0.0, 0.02, 0.0)
+	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return blob
+
+
+## Radialer Schwarz-nach-transparent-Verlauf (kein Asset nötig).
+static func _blob_textur() -> GradientTexture2D:
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(0.24, 0.18, 0.14, 0.4))
+	gradient.set_color(1, Color(0.24, 0.18, 0.14, 0.0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, 0.0)
+	tex.width = 64
+	tex.height = 64
+	return tex
 
 
 func set_wander_enabled(enabled: bool) -> void:
@@ -60,6 +96,12 @@ func walk_to(world_pos: Vector3, timeout_s := 6.0) -> void:
 	arrived.emit()
 
 
+## Laufenden Skript-Lauf sofort abbrechen (W4-P3: responsiver Tür-Skip —
+## das awaitende walk_to kehrt im nächsten Frame zurück).
+func cancel_walk() -> void:
+	_stop_walking()
+
+
 ## Aktuelle Grid-Zelle (für Blockade-Checks der Türen).
 func current_cell() -> Vector2i:
 	return GridData.cell_of(global_position)
@@ -67,26 +109,40 @@ func current_cell() -> Vector2i:
 
 ## BODEN-IST-LAVA-Gag (Doc F §6): Panik, Sprung an die Decke, Hold,
 ## Plumps zurück. Awaitbar; Bubble-Texte macht RoomBase.
+## Reduced Motion (W4-P3 POLISH-16): Instant-Pfad ohne Bounce-Tweens.
 func spidergooby_gag(hold_s := 2.2) -> void:
 	set_wander_enabled(false)
 	var floor_pos := global_position
 	rig.set_emotion("scared")
 	rig.play_clip("hop")
-	var up := create_tween()
-	up.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	up.tween_property(self, "global_position:y", CEILING_Y, 0.45)
-	up.parallel().tween_property(rig, "rotation:z", PI, 0.45)
-	await up.finished
-	rig.set_emotion("ecstatic")
-	await get_tree().create_timer(hold_s).timeout
-	var down := create_tween()
-	down.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-	down.tween_property(self, "global_position:y", floor_pos.y, 0.5)
-	down.parallel().tween_property(rig, "rotation:z", 0.0, 0.4)
-	await down.finished
+	if _reduced_motion():
+		global_position.y = CEILING_Y
+		rig.rotation.z = PI
+		rig.set_emotion("ecstatic")
+		await get_tree().create_timer(minf(hold_s, 0.8)).timeout
+		global_position.y = floor_pos.y
+		rig.rotation.z = 0.0
+	else:
+		var up := create_tween()
+		up.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		up.tween_property(self, "global_position:y", CEILING_Y, 0.45)
+		up.parallel().tween_property(rig, "rotation:z", PI, 0.45)
+		await up.finished
+		rig.set_emotion("ecstatic")
+		await get_tree().create_timer(hold_s).timeout
+		var down := create_tween()
+		down.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		down.tween_property(self, "global_position:y", floor_pos.y, 0.5)
+		down.parallel().tween_property(rig, "rotation:z", 0.0, 0.4)
+		await down.finished
 	rig.set_emotion("happy")
 	rig.play_clip("idle")
 	set_wander_enabled(true)
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_reduced_motion()
 
 
 func _physics_process(delta: float) -> void:

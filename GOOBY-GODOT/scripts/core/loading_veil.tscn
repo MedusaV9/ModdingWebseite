@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/loading_veil.gd" id="1_veil"]
+[ext_resource type="Script" path="res://scripts/ui/wallpaper.gd" id="2_wall"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_gooby.gd" id="3_gooby"]
 
 [node name="LoadingVeil" type="CanvasLayer"]
 layer = 100
@@ -23,8 +25,11 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(1, 0.964706, 0.92549, 1)
+script = ExtResource("2_wall")
+pattern = "dots"
 
 [node name="Spinner" type="ColorRect" parent="Root"]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -39,3 +44,67 @@ grow_horizontal = 2
 grow_vertical = 2
 pivot_offset = Vector2(24, 24)
 color = Color(1, 0.482353, 0.662745, 1)
+
+[node name="Card" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"AcCardLg"
+
+[node name="CardBox" type="VBoxContainer" parent="Root/Card"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="Cover" type="TextureRect" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(320, 220)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"HeadlineLabel"
+horizontal_alignment = 1
+
+[node name="Gooby" type="Control" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 170)
+layout_mode = 2
+script = ExtResource("3_gooby")
+
+[node name="Laedt" type="Label" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+horizontal_alignment = 1
+
+[node name="Tip" type="Label" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_type_variation = &"SoftLabel"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Progress" type="ProgressBar" parent="Root/Card/CardBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(280, 10)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"StatFun"
+max_value = 1.0
+step = 0.001
+show_percentage = false

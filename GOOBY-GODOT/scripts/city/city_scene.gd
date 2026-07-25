@@ -27,6 +27,8 @@ const DISTRIKT_FARBEN := {
 }
 
 var game_state_override: Object
+## Tests/Screenshots erzwingen eine Uhrzeit (< 0 = echte Systemzeit).
+var stunde_override := -1.0
 
 var karte: CityMap
 var graph: CityRoadGraph
@@ -38,14 +40,18 @@ var _verkehr: Array[Dictionary] = []
 var _prompt_ort := ""
 var _toast: Node
 var _colliders: Array[Dictionary] = []
+var _licht_profil: Dictionary = {}
+var _sfx_timer := 6.0
 
 
 func _ready() -> void:
 	karte = CityMap.laden()
 	graph = CityRoadGraph.aus_karte(karte)
+	_licht_profil = CityAmbiente.licht_profil(_stunde())
 	_baue_licht()
 	_baue_boden()
 	_baue_strassen()
+	_baue_laternen()
 	_baue_orte()
 	_baue_deko()
 	_baue_natur()
@@ -57,6 +63,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_verkehr(delta)
+	_update_ambient_sfx(delta)
 
 
 func _physics_process(_delta: float) -> void:
@@ -95,31 +102,40 @@ func now_ms() -> int:
 ## ---------------------------------------------------------------- Aufbau
 
 
+## Uhrzeit mit Bruchteilen (Tests/Screenshots setzen stunde_override).
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+
+
+## Tag/Nacht-Licht (W4-P3 POLISH-8): komplette 24-h-Kurve aus CityAmbiente
+## — nachts fahler Mond, dunkler Himmel, Laternen + Autolichter an.
 func _baue_licht() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
 	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = _licht_profil["himmel_oben"]
+	sky_mat.sky_horizon_color = _licht_profil["himmel_horizont"]
 	# Boden-Hemisphäre grünlich statt dunkelbraun — sonst steht am Rand der
 	# endlichen Bodenplatte ein dunkler Horizont-Balken.
-	sky_mat.ground_horizon_color = Color(0.71, 0.82, 0.62)
-	sky_mat.ground_bottom_color = Color(0.46, 0.60, 0.40)
+	sky_mat.ground_horizon_color = _licht_profil["boden_horizont"]
+	sky_mat.ground_bottom_color = _licht_profil["boden_unten"]
 	sky.sky_material = sky_mat
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 1.1
+	e.ambient_light_energy = _licht_profil["ambient_energie"]
 	env.environment = e
 	add_child(env)
 	var sonne := DirectionalLight3D.new()
 	sonne.name = "Sonne"
 	sonne.shadow_enabled = true
-	var stunde := float(Time.get_time_dict_from_system()["hour"])
-	# Tageszeit-Licht: Sonnenhöhe/-farbe folgen der echten Uhrzeit.
-	var t := clampf((stunde - 6.0) / 12.0, 0.0, 1.0)
-	var elevation := lerpf(15.0, 55.0, sin(t * PI))
-	sonne.rotation_degrees = Vector3(-elevation, -35.0, 0.0)
-	sonne.light_color = Color(1.0, 0.95, 0.85).lerp(Color(1.0, 0.75, 0.55), absf(t - 0.5) * 2.0)
+	sonne.rotation_degrees = Vector3(-float(_licht_profil["elevation"]), -35.0, 0.0)
+	sonne.light_color = _licht_profil["sonnen_farbe"]
+	sonne.light_energy = _licht_profil["sonnen_energie"]
 	add_child(sonne)
 
 
@@ -176,6 +192,48 @@ func _baue_strassen() -> void:
 			node.position = karte.tile_zu_welt(tile)
 			node.rotation_degrees.y = rot
 			wurzel.add_child(node)
+
+
+## Straßenlaternen (W4-P3 POLISH-8): deterministisch auf jedem 3. Straßen-
+## Tile (Kenney streetlight); bei Dämmerung/Nacht kriegt der Kopf eine
+## warme Emissiv-Birne. Bewusst OHNE echte OmniLights (Mobile-Budget A §7).
+func _baue_laternen() -> void:
+	var wurzel := Node3D.new()
+	wurzel.name = "Laternen"
+	add_child(wurzel)
+	var an: bool = _licht_profil["lichter_an"]
+	for tile in karte.strassen_tiles():
+		if karte.ist_kreisel(tile) or (tile.x + tile.y) % 3 != 0:
+			continue
+		var lampe := _glb("%s/deko/streetlight.gltf" % ASSETS, 5.0)
+		if lampe == null:
+			continue
+		var mitte := karte.tile_zu_welt(tile)
+		lampe.position = mitte + Vector3(7.0, 0.4, 7.0)
+		lampe.rotation_degrees.y = 180.0
+		wurzel.add_child(lampe)
+		if an:
+			var birne := MeshInstance3D.new()
+			var kugel := SphereMesh.new()
+			kugel.radius = 0.09
+			kugel.height = 0.18
+			kugel.radial_segments = 8
+			kugel.rings = 4
+			birne.mesh = kugel
+			birne.material_override = CityAmbiente.leuchten_material(Color(1.0, 0.85, 0.55))
+			birne.position = Vector3(0.0, _aabb_hoehe(lampe) * 0.94, 0.0)
+			lampe.add_child(birne)
+
+
+## Höhe (lokale Model-Einheiten) des höchsten Meshes unter `node`.
+func _aabb_hoehe(node: Node3D) -> float:
+	var top := 0.8
+	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = mesh
+		var aabb := mi.get_aabb()
+		var mesh_top := mi.position.y + aabb.position.y + aabb.size.y
+		top = maxf(top, mesh_top)
+	return top
 
 
 func _baue_orte() -> void:
@@ -286,6 +344,8 @@ func _baue_verkehr() -> void:
 		if wagen == null or punkte.size() < 2:
 			continue
 		add_child(wagen)
+		if _licht_profil["lichter_an"]:
+			_haenge_autolichter(wagen)
 		(
 			_verkehr
 			. append(
@@ -299,11 +359,39 @@ func _baue_verkehr() -> void:
 		)
 
 
+## Scheinwerfer-Paar (POLISH-8): zwei warme Emissiv-Kugeln an der Front
+## (lokale Model-Einheiten — der Wagen-Root ist bereits skaliert).
+func _haenge_autolichter(wagen: Node3D) -> void:
+	var front := _aabb_grenze_z(wagen)
+	for seite: float in [-1.0, 1.0]:
+		var licht := MeshInstance3D.new()
+		var kugel := SphereMesh.new()
+		kugel.radius = 0.05
+		kugel.height = 0.1
+		kugel.radial_segments = 8
+		kugel.rings = 4
+		licht.mesh = kugel
+		licht.material_override = CityAmbiente.leuchten_material(Color(1.0, 0.95, 0.75), 2.2)
+		licht.position = Vector3(seite * 0.22, 0.25, front)
+		wagen.add_child(licht)
+
+
+## Vorderkante (+Z, lokale Model-Einheiten) des Wagens.
+func _aabb_grenze_z(node: Node3D) -> float:
+	var kante := 0.6
+	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = mesh
+		var aabb := mi.get_aabb()
+		kante = maxf(kante, mi.position.z + aabb.position.z + aabb.size.z)
+	return kante
+
+
 func _baue_auto() -> void:
 	auto = CarController.new()
 	auto.name = "SpielerAuto"
 	var halb := karte.welt_halb()
 	auto.welt_halb = Vector2(halb.x - 2.0, halb.y - 2.0)
+	auto.licht_an = _licht_profil["lichter_an"]
 	add_child(auto)
 	_spawn_bei(_gespeicherter_spawn())
 	cam = ChaseCam.new()
@@ -353,6 +441,26 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## ------------------------------------------------------------ Fahr-Logik
+
+
+## Gelegentliche Hupe/Vogel (POLISH-8): geplant über CityAmbiente, gespielt
+## über den W4-P1-AudioDirector. Ohne dessen Autoload: leiser Verzicht.
+func _update_ambient_sfx(delta: float) -> void:
+	_sfx_timer -= delta
+	if _sfx_timer > 0.0:
+		return
+	_sfx_timer = CityAmbiente.sfx_pause_s(randf())
+	_spiele_ambient_sfx(CityAmbiente.sfx_wahl(_stunde(), randf()))
+
+
+func _spiele_ambient_sfx(sfx_name: String) -> void:
+	# W4-P1-AudioDirector: die Ids city_hupe/city_vogel sind als Wunsch im
+	# W4P1-sfx-wiring-Handoff angemeldet; bis sie in der SfxMap stehen,
+	# verzichten wir LEISE (kein push_warning-Spam pro Roll).
+	var id := "city_%s" % sfx_name
+	if SfxMap.entry(id).is_empty():
+		return
+	AudioDirector.try_play(self, id, 1.0)
 
 
 func _update_verkehr(delta: float) -> void:

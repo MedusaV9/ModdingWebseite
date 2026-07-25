@@ -55,10 +55,40 @@ func test_mash_decay() -> void:
 	logic.tap_mash()
 	logic.tap_mash()
 	assert_almost(logic.mash_ratio(), 0.4)
+	# W4-P3-Widerstandskurve: Verfall = BASIS * (1 + GAIN * ratio).
+	var rate := DoorLogic.MASH_DECAY_PER_SEC * (1.0 + DoorLogic.RESISTANCE_GAIN * 0.4)
+	assert_almost(logic.decay_rate(), rate)
 	logic.mash_decay(1.0)
-	assert_almost(logic.mash_ratio(), (2.0 - DoorLogic.MASH_DECAY_PER_SEC) / 5.0)
+	assert_almost(logic.mash_ratio(), (2.0 - rate) / 5.0)
 	logic.mash_decay(100.0)
 	assert_almost(logic.mash_ratio(), 0.0, 1e-6, "nie negativ")
+
+
+func test_mash_widerstand_steigt_mit_fortschritt() -> void:
+	var logic := DoorLogic.new(true, false, 0.0, 0.0)
+	logic.begin()
+	logic.door_opened()
+	logic.reached_door()
+	var rate_leer := logic.decay_rate()
+	for _i in 4:
+		logic.tap_mash()
+	assert_true(logic.decay_rate() > rate_leer, "voller Balken verfällt schneller (Widerstand)")
+	assert_almost(
+		logic.decay_rate(), DoorLogic.MASH_DECAY_PER_SEC * (1.0 + DoorLogic.RESISTANCE_GAIN * 0.8)
+	)
+
+
+func test_letzter_tap_wird_angekuendigt() -> void:
+	var logic := DoorLogic.new(true, false, 0.0, 0.0)
+	logic.begin()
+	logic.door_opened()
+	logic.reached_door()
+	assert_false(logic.ist_letzter_tap(), "frisch stecken: noch nicht der letzte")
+	for _i in 4:
+		logic.tap_mash()
+	assert_true(logic.ist_letzter_tap(), "4/5 Taps: der nächste ploppt")
+	assert_eq(logic.tap_mash(), DoorLogic.State.POPPING)
+	assert_false(logic.ist_letzter_tap(), "nach dem Plopp kein Telegraph mehr")
 
 
 func test_skip_regeln() -> void:

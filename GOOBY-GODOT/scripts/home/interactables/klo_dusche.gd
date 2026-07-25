@@ -21,6 +21,7 @@ var _peek_head: MeshInstance3D
 var _peek_index := 0
 var _peeked := false
 var _klo_accum := 0.0
+var _sil_tween: Tween
 
 
 func setup(host: InteractablesHost, furniture: Node3D) -> void:
@@ -157,6 +158,8 @@ func _show_curtain(active: bool) -> void:
 		_peek_head.visible = false
 	if active:
 		_animate_silhouette()
+	else:
+		_stop_silhouette_tween()
 
 
 ## Vorhang-Plane + Silhouetten-Quad (Doc F: 2D-Silhouette statt Shader-Magie).
@@ -200,14 +203,25 @@ func _silhouette_material() -> StandardMaterial3D:
 
 
 ## „3 Sprite-Frames“ light: Silhouette wackelt (sitzen/schrubbeln/Ohren).
+## Reduced Motion (W4-P3 POLISH-16): Silhouette bleibt still; der Loop-Tween
+## wird beim Vorhang-Zuziehen sauber beendet (kein Endlos-Tween-Leak).
 func _animate_silhouette() -> void:
 	if _silhouette == null or not is_inside_tree():
 		return
-	var tween := create_tween().set_loops()
-	tween.tween_property(_silhouette, "rotation:z", 0.12, 0.5)
-	tween.tween_property(_silhouette, "rotation:z", -0.12, 0.5)
-	tween.tween_property(_silhouette, "scale:y", 0.92, 0.4)
-	tween.tween_property(_silhouette, "scale:y", 1.0, 0.4)
+	_stop_silhouette_tween()
+	if ThemeService.is_reduced_motion(self):
+		return
+	_sil_tween = create_tween().set_loops()
+	_sil_tween.tween_property(_silhouette, "rotation:z", 0.12, 0.5)
+	_sil_tween.tween_property(_silhouette, "rotation:z", -0.12, 0.5)
+	_sil_tween.tween_property(_silhouette, "scale:y", 0.92, 0.4)
+	_sil_tween.tween_property(_silhouette, "scale:y", 1.0, 0.4)
+
+
+func _stop_silhouette_tween() -> void:
+	if _sil_tween != null and _sil_tween.is_running():
+		_sil_tween.kill()
+	_sil_tween = null
 
 
 func _gooby() -> Node:

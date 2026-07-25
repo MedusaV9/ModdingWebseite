@@ -25,7 +25,7 @@
 	},
 	"build": {
 		"lager": "Storage {used}/{cap}",
-		"lager_voll": "Storage full! Build a shed in the garden!",
+		"lager_voll": "Storage full! Build yourself a shed in the garden!",
 		"leer": "Your storage is empty.",
 		"fertig": "Done",
 		"rotieren": "Rotate",

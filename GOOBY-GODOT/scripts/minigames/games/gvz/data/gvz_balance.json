@@ -182,7 +182,7 @@
 			"shield": true
 		},
 		"huepfer": {
-			"hp": 250,
+			"hp": 270,
 			"speed_pct": 120,
 			"jumps": 1
 		},
@@ -204,10 +204,10 @@
 			"mini_type": "schlurfi"
 		},
 		"boss_knurps": {
-			"hp": 7000,
+			"hp": 9000,
 			"phases": 3,
 			"lane_move_interval_ticks": 90,
-			"toss_interval_ticks": 320,
+			"toss_interval_ticks": 300,
 			"summon_interval_ticks": 340,
 			"phase2_speedup_pct": 75,
 			"phase3_speedup_pct": 65,

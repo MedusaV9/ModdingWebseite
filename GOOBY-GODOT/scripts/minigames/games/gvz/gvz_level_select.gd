@@ -54,7 +54,11 @@ func _ready() -> void:
 	var done := Button.new()
 	done.text = I18nService.t("gvz.select.done")
 	done.custom_minimum_size = Vector2(140, 48)
-	done.pressed.connect(func() -> void: done_pressed.emit())
+	done.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(self, "ui_back")
+			done_pressed.emit()
+	)
 	footer.add_child(done)
 	_build_tiles()
 	refresh()
@@ -115,6 +119,7 @@ static func _style_tile(tile: Button, fill: Color, locked: bool) -> void:
 
 
 func _on_tile(id: int) -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	level_chosen.emit(id)
 
 

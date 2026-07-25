@@ -1,6 +1,7 @@
 # GOOBY-SERVER
 
-Privater Multiplayer-/Meta-Server für **GOOBY 5.0** (Godot-Client): Freunde + Presence,
+Privater Multiplayer-/Meta-Server für **GOOBY 5.0** (Godot-Client, siehe
+[`GOOBY-GODOT/README.md`](../GOOBY-GODOT/README.md)): Freunde + Presence,
 GoobyPal-Münztransfers, Online-Codes, Admin-Events, Spielzeit-Analytics, Haus-Besuche,
 Schiffe versenken — plus Admin-**Webpanel**. Für einen Freundeskreis gebaut, nicht fürs
 offene Internet.
@@ -11,6 +12,8 @@ offene Internet.
 — `npm install` kann auf keinem Host an Build-Tools scheitern (wichtig für AMP).
 
 ## Schnellstart (lokal)
+
+Voraussetzung: Node ≥ 18 (keine nativen Module, kein Build-Schritt).
 
 ```bash
 npm install --omit=dev          # installiert nur express + ws
@@ -34,7 +37,7 @@ node --test
 | `GOOBY_ADMIN_PASSWORD` | *(leer)* | **Pflicht fürs Panel.** Fehlt sie, ist `/panel` komplett deaktiviert (503, fail-closed) — Spiel-Features laufen trotzdem |
 | `DATA_DIR` | `./data` | Persistenz-Verzeichnis (JSON-Collections, JSONL-Logs, Blobs). Alias: `GOOBY_DATA_DIR` |
 | `GOOBY_TZ` | `Europe/Berlin` | Zeitzone für Tagesgrenzen (GoobyPal-Limit, Analytics-Tage) |
-| `GOOBY_PAL_DAILY_LIMIT` | `250` | GoobyPal: maximale Coins pro Tag pro **Absender** |
+| `GOOBY_PAL_DAILY_LIMIT` | `250` | GoobyPal: maximale Münzen pro Tag pro **Absender** |
 | `GOOBY_MAX_PHOTO_KB` | `512` | Größenlimit für Foto-Blobs (Post/Mail, M2) |
 | `GOOBY_HEARTBEAT_SEC` | `20` | PING-Intervall, das der Server den Clients ansagt |
 | `GOOBY_BOARD_REJOIN_MS` | `120000` | Brettspiel: Rejoin-Fenster nach Verbindungsabriss |

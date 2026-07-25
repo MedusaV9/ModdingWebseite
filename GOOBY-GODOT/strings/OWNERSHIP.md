@@ -32,6 +32,7 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `social.*`, `board.*` (Datei `strings/<locale>/social.json`) | W3c VISIT | W3 |
 | `events.*`, `stickers.*`, `interactions.*` | W3d CONTENT | W3 |
 | `album.*`, `bad.*` (Dateien `strings/<locale>/events.json` + `album.json` + `bad.json`) | W3d CONTENT | W3 |
+| `sys.*` (Datei `strings/<locale>/system.json` — Save-Recovery, Netz-Fehler) | W4-P4 TEXT | W4 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im

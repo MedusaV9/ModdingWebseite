@@ -166,6 +166,26 @@ func test_dialog_bubble_weiter_tap() -> void:
 	unmount(bubble)
 
 
+func test_audio_slider_schreibt_appsettings() -> void:
+	# W4P1-SFX-Wiring-Hinweis: die Audio-Slider müssen die W1a-FROZEN-Keys
+	# audio.* in AppSettings schreiben, sonst liest AudioDirector
+	# (audio_level) ins Leere und die Regler bleiben wirkungslos.
+	var app := tree.root.get_node_or_null("/root/AppSettings")
+	if app == null:
+		return  # isolierter Lauf ohne Autoloads
+	var vorher: float = app.audio_level("sfx")
+	var settings := SETTINGS_SCENE.instantiate()
+	mount(settings)
+	await tree.process_frame
+	var slider := settings.find_child("RowVolumeSfx", true, false).get_node("Value") as HSlider
+	check_approx(slider.value, vorher, "Slider startet auf dem AppSettings-Wert")
+	slider.value_changed.emit(0.35)
+	check_approx(app.audio_level("sfx"), 0.35, "Slider schreibt audio.sfx")
+	check_approx(float(settings.get_value("volume_sfx")), 0.35, "lokaler Spiegel zieht mit")
+	app.set_setting("audio.sfx", vorher)
+	unmount(settings)
+
+
 func test_settings_und_news_smoke() -> void:
 	var settings := SETTINGS_SCENE.instantiate()
 	mount(settings)

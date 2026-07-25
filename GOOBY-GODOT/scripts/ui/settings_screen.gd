@@ -17,6 +17,13 @@ signal back_pressed
 const ICON_DIR := "res://assets/ui/icons/"
 const NEWS_PANEL_SCENE := "res://scripts/ui/news_50_panel.tscn"
 const VERSION_FALLBACK := "5.0.0-dev"
+## Slider-Key → AppSettings-Key (W1a-FROZEN `audio.*`; W4P1-Hinweis:
+## AudioDirector liest audio_level() — ohne Brücke wären die Slider stumm).
+const AUDIO_KEYS := {
+	"volume_master": "master",
+	"volume_music": "music",
+	"volume_sfx": "sfx",
+}
 
 var _values: Dictionary = {
 	"language": "de",
@@ -48,6 +55,10 @@ func get_value(key: String) -> Variant:
 
 
 func _load_from_settings_autoload() -> void:
+	var app := get_node_or_null("/root/AppSettings")
+	if app != null and app.has_method("audio_level"):
+		for key: String in AUDIO_KEYS:
+			_values[key] = app.audio_level(str(AUDIO_KEYS[key]))
 	var svc := get_node_or_null("/root/Settings")
 	if svc == null or not svc.has_method("get_value"):
 		return
@@ -59,6 +70,10 @@ func _load_from_settings_autoload() -> void:
 
 func _set_value(key: String, value: Variant) -> void:
 	_values[key] = value
+	if AUDIO_KEYS.has(key):
+		var app := get_node_or_null("/root/AppSettings")
+		if app != null and app.has_method("set_setting"):
+			app.set_setting("audio." + str(AUDIO_KEYS[key]), value)
 	var svc := get_node_or_null("/root/Settings")
 	if svc != null and svc.has_method("set_value"):
 		svc.set_value(key, value)

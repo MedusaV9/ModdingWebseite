@@ -12,6 +12,10 @@ const TAPS_MIN := 5
 const TAPS_MAX := 8
 ## Mash-Druck-Verfall pro Sekunde (in Taps) — mashen, nicht einmal tippen!
 const MASH_DECAY_PER_SEC := 0.8
+## W4-P3 POLISH-7: Widerstand steigt — der Verfall skaliert mit dem
+## Fortschritt (bei vollem Balken verfällt der Druck (1+GAIN)-mal so
+## schnell). Die letzten Taps müssen also schneller kommen.
+const RESISTANCE_GAIN := 1.6
 
 var state := State.IDLE
 var animated := true
@@ -63,9 +67,15 @@ func tap_mash() -> int:
 
 
 ## Mash-Druck verfällt mit der Zeit (Szene ruft das pro Frame).
+## Der Verfall wächst mit dem Fortschritt (Widerstandskurve, POLISH-7).
 func mash_decay(delta: float) -> void:
 	if state == State.STUCK:
-		_mash = maxf(0.0, _mash - MASH_DECAY_PER_SEC * delta)
+		_mash = maxf(0.0, _mash - decay_rate() * delta)
+
+
+## Aktueller Verfall in Taps/s (für Tests und UI-Feedback).
+func decay_rate() -> float:
+	return MASH_DECAY_PER_SEC * (1.0 + RESISTANCE_GAIN * mash_ratio())
 
 
 ## Fortschritt 0..1 für den Mash-Balken.
@@ -73,6 +83,11 @@ func mash_ratio() -> float:
 	if taps_required <= 0:
 		return 0.0
 	return clampf(_mash / float(taps_required), 0.0, 1.0)
+
+
+## True, wenn der NÄCHSTE Tap durchploppen würde (Squash-Telegraphie).
+func ist_letzter_tap() -> bool:
+	return state == State.STUCK and _mash >= float(taps_required) - 1.0
 
 
 ## Plopp-Animation fertig → weiterreisen.

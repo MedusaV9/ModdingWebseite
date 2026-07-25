@@ -168,6 +168,7 @@ func _refresh_buttons() -> void:
 
 
 func _on_difficulty_pressed(mode: String) -> void:
+	AudioDirector.try_play(self, "ui_chip")
 	selected_difficulty = mode
 	# Web-Muster: die Wahl easy/normal/hard wird im Save gemerkt (Endlos nicht).
 	if mode != "endless":
@@ -185,6 +186,7 @@ func _on_difficulty_pressed(mode: String) -> void:
 
 
 func _on_orientation_pressed(orient: String) -> void:
+	AudioDirector.try_play(self, "ui_chip")
 	selected_orientation = orient
 	var settings := get_node_or_null("/root/AppSettings")
 	if settings != null and settings.has_method("set_setting"):
@@ -193,6 +195,7 @@ func _on_orientation_pressed(orient: String) -> void:
 
 
 func _on_play_pressed() -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	var params := {
 		"game_id": game_id,
 		"difficulty": selected_difficulty,
@@ -207,6 +210,7 @@ func _on_play_pressed() -> void:
 
 
 func _go_back() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	back_requested.emit()
 	if not auto_navigate:
 		return

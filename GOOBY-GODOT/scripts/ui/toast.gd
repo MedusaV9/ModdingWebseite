@@ -34,9 +34,12 @@ func _ready() -> void:
 	add_child(_hold_timer)
 
 
-## Toast anfordern; wird ggf. eingereiht (nie gestapelt).
-func show_toast(text: String) -> void:
+## Toast anfordern; wird ggf. eingereiht (nie gestapelt). `error = true`
+## spielt den Fehler-Blip (W4P1-SFX-Wiring: Erfolgs-Toasts bleiben stumm).
+func show_toast(text: String, error := false) -> void:
 	var accepted := queue.push(text)
+	if accepted and error:
+		AudioDirector.try_play(self, "ui_error")
 	if accepted and queue.current().is_empty():
 		_show_next()
 

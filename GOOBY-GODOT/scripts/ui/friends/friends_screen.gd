@@ -19,9 +19,11 @@ var net_override: NetClient = null
 var auto_navigate := true
 
 var _net: NetClient
-var _status_chip: Label
+var _status_chip: Button
 var _code_value: Label
+var _copy_button: Button
 var _add_input: LineEdit
+var _add_button: Button
 var _add_feedback: Label
 var _offline_hint: Label
 var _requests_box: VBoxContainer
@@ -40,7 +42,9 @@ static func register_routes() -> void:
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# and_offsets: nur-Anker-Preset behält den leeren Ist-Rect, wenn der
+	# Parent beim Einhängen schon gelayoutet ist (Router-Wechsel/Screenshots).
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	register_routes()
 	_net = net_override
 	if _net == null:
@@ -60,10 +64,10 @@ func _ready() -> void:
 func _build_ui() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var rows := VBoxContainer.new()
-	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	rows.offset_left = 24.0
 	rows.offset_right = -24.0
 	rows.offset_top = 16.0
@@ -85,14 +89,13 @@ func _build_ui() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(title)
-	_status_chip = Label.new()
-	_status_chip.theme_type_variation = &"CaptionLabel"
+	_status_chip = Button.new()
 	header.add_child(_status_chip)
 
 	_offline_hint = Label.new()
 	_offline_hint.text = I18nService.t("net.friends.offline_hint")
 	_offline_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_offline_hint.add_theme_color_override("font_color", Color(0.62, 0.45, 0.34))
+	_offline_hint.add_theme_color_override("font_color", FriendListUi.COLOR_HINT)
 	rows.add_child(_offline_hint)
 
 	var scroll := ScrollContainer.new()
@@ -115,10 +118,20 @@ func _build_ui() -> void:
 	code_caption.text = I18nService.t("net.friends.my_code")
 	code_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	code_rows.add_child(code_caption)
+	var code_row := HBoxContainer.new()
+	code_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	code_row.add_theme_constant_override("separation", 10)
+	code_rows.add_child(code_row)
 	_code_value = Label.new()
 	_code_value.theme_type_variation = &"TitleLabel"
 	_code_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	code_rows.add_child(_code_value)
+	code_row.add_child(_code_value)
+	_copy_button = Button.new()
+	_copy_button.name = "CopyButton"
+	_copy_button.theme_type_variation = &"GhostButton"
+	_copy_button.text = I18nService.t("net.friends.copy")
+	_copy_button.pressed.connect(_on_copy_pressed)
+	code_row.add_child(_copy_button)
 
 	# Freund hinzufügen: Code ODER Name.
 	var add_card := PanelContainer.new()
@@ -139,12 +152,12 @@ func _build_ui() -> void:
 	_add_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_add_input.text_submitted.connect(func(_text: String) -> void: _on_add_pressed())
 	add_row.add_child(_add_input)
-	var add_btn := Button.new()
-	add_btn.name = "AddButton"
-	add_btn.theme_type_variation = &"BtnTeal"
-	add_btn.text = I18nService.t("net.friends.add_button")
-	add_btn.pressed.connect(_on_add_pressed)
-	add_row.add_child(add_btn)
+	_add_button = Button.new()
+	_add_button.name = "AddButton"
+	_add_button.theme_type_variation = &"BtnTeal"
+	_add_button.text = I18nService.t("net.friends.add_button")
+	_add_button.pressed.connect(_on_add_pressed)
+	add_row.add_child(_add_button)
 	_add_feedback = Label.new()
 	_add_feedback.theme_type_variation = &"CaptionLabel"
 	_add_feedback.visible = false
@@ -177,21 +190,28 @@ func _refresh_all() -> void:
 func _refresh_code() -> void:
 	var code := _net.friend_code if _net != null else ""
 	_code_value.text = code if not code.is_empty() else "—"
+	_copy_button.disabled = code.is_empty()
+
+
+func _on_copy_pressed() -> void:
+	var code := _net.friend_code if _net != null else ""
+	if code.is_empty():
+		return
+	DisplayServer.clipboard_set(code)
+	_copy_button.text = I18nService.t("net.friends.copied")
+	var timer := get_tree().create_timer(1.4)
+	timer.timeout.connect(
+		func() -> void:
+			if is_instance_valid(_copy_button):
+				_copy_button.text = I18nService.t("net.friends.copy")
+	)
 
 
 func _on_status_changed(status: int) -> void:
 	var online := status == NetClient.Status.ONLINE
 	_offline_hint.visible = not online
-	match status:
-		NetClient.Status.ONLINE:
-			_status_chip.text = I18nService.t("net.status.online")
-			_status_chip.add_theme_color_override("font_color", Color(0.24, 0.6, 0.35))
-		NetClient.Status.CONNECTING:
-			_status_chip.text = I18nService.t("net.status.connecting")
-			_status_chip.add_theme_color_override("font_color", Color(0.72, 0.55, 0.2))
-		_:
-			_status_chip.text = I18nService.t("net.status.offline")
-			_status_chip.add_theme_color_override("font_color", Color(0.65, 0.4, 0.35))
+	_add_button.disabled = not online
+	FriendListUi.style_status_chip(_status_chip, status)
 	_refresh_code()
 
 
@@ -208,11 +228,9 @@ func _on_friends_changed(friends: Array) -> void:
 	for child in _friends_box.get_children():
 		child.queue_free()
 	if friends.is_empty():
-		var empty := Label.new()
-		empty.theme_type_variation = &"CaptionLabel"
-		empty.text = I18nService.t("net.friends.empty")
-		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_friends_box.add_child(empty)
+		_friends_box.add_child(
+			FriendListUi.build_empty_state("net.friends.empty_art", "net.friends.empty")
+		)
 		return
 	for row: Dictionary in friends:
 		_friends_box.add_child(_build_friend_row(row))
@@ -252,13 +270,8 @@ func _build_friend_row(row: Dictionary) -> Control:
 	box.add_theme_constant_override("separation", 12)
 	card.add_child(box)
 
-	var dot := Label.new()
+	box.add_child(FriendListUi.presence_icon(row))
 	var online: bool = row.get("online", false) == true
-	dot.text = "●"
-	dot.add_theme_color_override(
-		"font_color", Color(0.35, 0.75, 0.45) if online else Color(0.7, 0.68, 0.62)
-	)
-	box.add_child(dot)
 
 	var names := VBoxContainer.new()
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -267,13 +280,11 @@ func _build_friend_row(row: Dictionary) -> Control:
 	name_label.theme_type_variation = &"HeadlineLabel"
 	name_label.text = "%s · %s" % [str(row.get("name", "?")), str(row.get("goobyName", "Gooby"))]
 	names.add_child(name_label)
-	var activity: Dictionary = row.get("activity", {}) if row.get("activity") is Dictionary else {}
 	var status_label := Label.new()
 	status_label.theme_type_variation = &"CaptionLabel"
-	var label_text := str(activity.get("label", ""))
-	if label_text.is_empty():
-		label_text = I18nService.t("net.friends.online" if online else "net.friends.offline")
-	status_label.text = label_text
+	status_label.text = FriendListUi.presence_text(row)
+	if not online:
+		status_label.add_theme_color_override("font_color", FriendListUi.COLOR_OFFLINE)
 	names.add_child(status_label)
 
 	var coins := Label.new()
@@ -288,7 +299,7 @@ func _on_add_pressed() -> void:
 	if value.is_empty():
 		return
 	if not _has_friends_service():
-		_show_feedback(I18nService.t("net.friends.add_error", {"code": "OFFLINE"}), false)
+		_show_feedback(NetErrorText.for_code("OFFLINE", "net.friends.add_error"), false)
 		return
 	_add_input.editable = false
 	var res: Dictionary = await _net.friends.add_friend(value)
@@ -298,7 +309,7 @@ func _on_add_pressed() -> void:
 		_show_feedback(I18nService.t("net.friends.add_sent"), true)
 	else:
 		_show_feedback(
-			I18nService.t("net.friends.add_error", {"code": str(res.get("code", "?"))}), false
+			NetErrorText.for_code(str(res.get("code", "?")), "net.friends.add_error"), false
 		)
 
 

@@ -767,9 +767,29 @@
 					"type": "schlurfi"
 				},
 				{
+					"t": 236.5,
+					"lane": 2,
+					"type": "zeitungsopa"
+				},
+				{
 					"t": 247.1,
 					"lane": 4,
 					"type": "schlurfi"
+				},
+				{
+					"t": 252.0,
+					"lane": 4,
+					"type": "huepfer"
+				},
+				{
+					"t": 254.0,
+					"lane": 2,
+					"type": "huepfer"
+				},
+				{
+					"t": 257.0,
+					"lane": 2,
+					"type": "sprinter"
 				},
 				{
 					"t": 258.2,
@@ -914,6 +934,16 @@
 					"type": "schlurfi"
 				},
 				{
+					"t": 267.4,
+					"lane": 1,
+					"type": "eimer"
+				},
+				{
+					"t": 268.0,
+					"lane": 3,
+					"type": "tuersteher"
+				},
+				{
 					"t": 268.8,
 					"lane": 0,
 					"type": "schlurfi"
@@ -932,6 +962,11 @@
 					"t": 269.6,
 					"lane": 4,
 					"type": "tuersteher"
+				},
+				{
+					"t": 270.1,
+					"lane": 2,
+					"type": "sprinter"
 				}
 			]
 		},
@@ -1538,6 +1573,11 @@
 					"type": "schlurfi"
 				},
 				{
+					"t": 227.6,
+					"lane": 4,
+					"type": "ballon"
+				},
+				{
 					"t": 231.4,
 					"lane": 4,
 					"type": "schlurfi"
@@ -1546,6 +1586,11 @@
 					"t": 240.2,
 					"lane": 4,
 					"type": "schlurfi"
+				},
+				{
+					"t": 244.6,
+					"lane": 3,
+					"type": "eimer"
 				},
 				{
 					"t": 249.3,

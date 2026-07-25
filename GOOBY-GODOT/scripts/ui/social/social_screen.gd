@@ -22,7 +22,7 @@ var toast: ToastLayer
 
 var _net: NetClient
 var _services: Node
-var _status_chip: Label
+var _status_chip: Button
 var _offline_hint: Label
 var _friends_box: VBoxContainer
 var _incoming_box: VBoxContainer
@@ -101,14 +101,13 @@ func _build_ui() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(title)
-	_status_chip = Label.new()
-	_status_chip.theme_type_variation = &"CaptionLabel"
+	_status_chip = Button.new()
 	header.add_child(_status_chip)
 
 	_offline_hint = Label.new()
 	_offline_hint.text = I18nService.t("social.screen.offline_hint")
 	_offline_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_offline_hint.add_theme_color_override("font_color", Color(0.62, 0.45, 0.34))
+	_offline_hint.add_theme_color_override("font_color", FriendListUi.COLOR_HINT)
 	rows.add_child(_offline_hint)
 
 	if FurnitureCatalog.def("brettspieltisch").is_empty():
@@ -164,13 +163,7 @@ func _refresh_all() -> void:
 func _on_status_changed(status: int) -> void:
 	var online := status == NetClient.Status.ONLINE
 	_offline_hint.visible = not online
-	match status:
-		NetClient.Status.ONLINE:
-			_status_chip.text = I18nService.t("net.status.online")
-		NetClient.Status.CONNECTING:
-			_status_chip.text = I18nService.t("net.status.connecting")
-		_:
-			_status_chip.text = I18nService.t("net.status.offline")
+	FriendListUi.style_status_chip(_status_chip, status)
 	_refresh_buttons()
 
 
@@ -178,11 +171,9 @@ func _on_friends_changed(friends: Array) -> void:
 	for child in _friends_box.get_children():
 		child.queue_free()
 	if friends.is_empty():
-		var empty := Label.new()
-		empty.theme_type_variation = &"CaptionLabel"
-		empty.text = I18nService.t("social.screen.empty")
-		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_friends_box.add_child(empty)
+		_friends_box.add_child(
+			FriendListUi.build_empty_state("social.screen.empty_art", "social.screen.empty")
+		)
 		return
 	for row: Dictionary in friends:
 		_friends_box.add_child(_build_friend_row(row))
@@ -195,17 +186,20 @@ func _build_friend_row(row: Dictionary) -> Control:
 	box.add_theme_constant_override("separation", 10)
 	card.add_child(box)
 	var online: bool = row.get("online", false) == true
-	var dot := Label.new()
-	dot.text = "●"
-	dot.add_theme_color_override(
-		"font_color", Color(0.35, 0.75, 0.45) if online else Color(0.7, 0.68, 0.62)
-	)
-	box.add_child(dot)
+	box.add_child(FriendListUi.presence_icon(row))
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(names)
 	var name_label := Label.new()
 	name_label.theme_type_variation = &"HeadlineLabel"
 	name_label.text = "%s · %s" % [str(row.get("name", "?")), str(row.get("goobyName", "Gooby"))]
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_child(name_label)
+	names.add_child(name_label)
+	var status_label := Label.new()
+	status_label.theme_type_variation = &"CaptionLabel"
+	status_label.text = FriendListUi.presence_text(row)
+	if not online:
+		status_label.add_theme_color_override("font_color", FriendListUi.COLOR_OFFLINE)
+	names.add_child(status_label)
 	var can_act := online and _is_online()
 	var visit_btn := Button.new()
 	visit_btn.theme_type_variation = &"BtnTeal"
@@ -243,7 +237,7 @@ func _on_visit_pressed(row: Dictionary) -> void:
 	elif str(res["code"]) == "OFFLINE_TARGET":
 		toast.show_toast(I18nService.t("social.visit.target_offline"))
 	else:
-		toast.show_toast(I18nService.t("social.visit.request_failed", {"code": str(res["code"])}))
+		toast.show_toast(NetErrorText.for_code(str(res["code"]), "social.visit.request_failed"))
 
 
 func _on_visit_incoming(data: Dictionary) -> void:
@@ -265,7 +259,7 @@ func _accept_visit(guest_code: String) -> void:
 		var uploaded: Dictionary = await vs.upload_snapshot(gs)
 		if not uploaded["ok"]:
 			toast.show_toast(
-				I18nService.t("social.visit.upload_failed", {"code": str(uploaded["code"])})
+				NetErrorText.for_code(str(uploaded["code"]), "social.visit.upload_failed")
 			)
 			return
 	await vs.accept_visit(guest_code)
@@ -282,7 +276,7 @@ func _on_visit_ready(_data: Dictionary) -> void:
 		var res: Dictionary = await vs.fetch_house(vs.host_code)
 		if not res["ok"]:
 			_busy = false
-			toast.show_toast(I18nService.t("social.visit.fetch_failed", {"code": str(res["code"])}))
+			toast.show_toast(NetErrorText.for_code(str(res["code"]), "social.visit.fetch_failed"))
 			await vs.end_visit()
 			return
 		snapshot = res["snapshot"]
@@ -311,7 +305,7 @@ func _on_board_pressed(row: Dictionary) -> void:
 			I18nService.t("board.invite_sent", {"name": str(row.get("goobyName", "?"))})
 		)
 	else:
-		toast.show_toast(I18nService.t("board.invite_failed", {"code": str(res["code"])}))
+		toast.show_toast(NetErrorText.for_code(str(res["code"]), "board.invite_failed"))
 
 
 func _on_board_invited(data: Dictionary) -> void:

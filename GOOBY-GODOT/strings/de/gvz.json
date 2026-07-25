@@ -19,7 +19,7 @@
 		},
 		"end": {
 			"win": "Rasen verteidigt!",
-			"lose": "Die Zombies naschen deine Nutella …",
+			"lose": "Die Zombies naschen deine Nutella…",
 			"score": "{n} Punkte",
 			"first_clear": "Erst-Abschluss-Bonus!",
 			"lose_hint": "Tipp: Sammler früh pflanzen!",
