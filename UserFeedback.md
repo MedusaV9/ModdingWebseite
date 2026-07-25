@@ -17,6 +17,7 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+[ ] Nutze absofort Fable 5 Max thinking statt Opus 5 Max thinking denn das was du bisher hier hergestellt hast sieht grauenhaft schlecht aus.
 [ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
 [ ] Zurück Button funktoniert meist nicht.
 [ ] UI ist meist falsch skaliert.
