@@ -34,6 +34,10 @@ const STARTER_FOOD := {"carrot": 3, "apple": 1, "cupcake": 1}
 const STATION_IDS: Array[String] = ["bordmusik", "gooby-fm", "recap-fm", "game-fm", "alle"]
 ## Hostile far-future timestamps collapse to <= now + 24 h (web §B1 #5).
 const FUTURE_STAMP_SLACK_MS := 86400000
+## Funkelpark: bekannte Ride-Ids + Zaehler-Deckel (web systems/themePark.js
+## PARK_RIDE_IDS/THEME_PARK.MAX_COUNT — unbekannte Ids werden VERWORFEN).
+const PARK_RIDE_IDS: Array[String] = ["coaster", "wheel"]
+const PARK_MAX_COUNT := 99999
 
 ## Registered additive slices: id -> {"default": Callable, "normalize": Callable}.
 static var _extra_slices: Dictionary = {}
@@ -159,7 +163,14 @@ static func default_state(now_ms: int) -> Dictionary:
 		"stickers": {"unlocked": {}, "seen": {}},
 		"garden": {"plotsOwned": 4, "grid": [], "lastTickAt": 0},
 		"vacation": Vacation.default_slice(),
-		"park": {"visits": 0, "nightVisit": false, "rides": {}, "handsUp": 0, "candyBought": 0},
+		"park":
+		{
+			"visits": 0,
+			"nightVisit": false,
+			"rides": {"coaster": 0, "wheel": 0},
+			"handsUp": 0,
+			"candyBought": 0,
+		},
 		"minigames":
 		{
 			"plays": {},
@@ -285,7 +296,7 @@ static func _clamp_core(s: Dictionary, raw: Dictionary, now_ms: int) -> void:
 	if not _is_num(started_at) or not _is_num(wake_at):
 		gooby["sleep"] = {"sleeping": false, "startedAt": 0, "wakeAt": 0}
 	else:
-		gooby["sleep"]["sleeping"] = gooby["sleep"].get("sleeping") == true
+		gooby["sleep"]["sleeping"] = _is_true(gooby["sleep"].get("sleeping"))
 	gooby["grumpyUntil"] = maxf(0.0, _num(gooby.get("grumpyUntil")))
 	gooby["lastTickAt"] = maxf(0.0, _num(gooby.get("lastTickAt")))
 	var w := _num_nan(gooby.get("weight"))
@@ -327,12 +338,15 @@ static func _clamp_core(s: Dictionary, raw: Dictionary, now_ms: int) -> void:
 	s["garden"]["plotsOwned"] = clampi(int(_num_or(s["garden"].get("plotsOwned"), 4.0)), 0, 6)
 
 	s["vacation"] = Vacation.slice_of(s)
+	_clamp_park(s)
 
 	var radio: Dictionary = s["radio"]
-	radio["owned"] = radio.get("owned") == true
-	if not radio.get("station") in STATION_IDS:
+	radio["owned"] = _is_true(radio.get("owned"))
+	# `is String` zuerst: STATION_IDS ist ein Array[String] — ein Nicht-String
+	# in `in` loggt sonst einen Engine-Error (typed-array find).
+	if not (radio.get("station") is String and radio["station"] in STATION_IDS):
 		radio["station"] = "bordmusik"
-	radio["playing"] = radio.get("playing") == true
+	radio["playing"] = _is_true(radio.get("playing"))
 
 	var codes: Dictionary = s["codes"]
 	codes["lockUntil"] = _clamp_stamp(codes.get("lockUntil"), now_ms)
@@ -350,10 +364,10 @@ static func _clamp_core(s: Dictionary, raw: Dictionary, now_ms: int) -> void:
 	daily["streak"] = maxi(0, int(floor(_num(daily.get("streak")))))
 
 	s["gallery"]["legacyCount"] = clampi(int(floor(_num(s["gallery"].get("legacyCount")))), 0, 40)
-	s["camera"]["owned"] = s["camera"].get("owned") == true
-	s["quickDelivery"] = s.get("quickDelivery") == true
-	s["onboarding"]["done"] = s["onboarding"].get("done") == true
-	s["onboarding"]["whatsNew5Seen"] = s["onboarding"].get("whatsNew5Seen") == true
+	s["camera"]["owned"] = _is_true(s["camera"].get("owned"))
+	s["quickDelivery"] = _is_true(s.get("quickDelivery"))
+	s["onboarding"]["done"] = _is_true(s["onboarding"].get("done"))
+	s["onboarding"]["whatsNew5Seen"] = _is_true(s["onboarding"].get("whatsNew5Seen"))
 
 	var morphs: Dictionary = s["meta"]["charMorphs"]
 	morphs["eyes_apart"] = clampf(_num(morphs.get("eyes_apart")), -1.0, 1.0)
@@ -364,6 +378,30 @@ static func _clamp_core(s: Dictionary, raw: Dictionary, now_ms: int) -> void:
 		s["meta"]["playerName"] = ""
 	if not (s["meta"].get("goobyNickname") is String):
 		s["meta"]["goobyNickname"] = "Gooby"
+
+
+## Funkelpark-Klamps (Port von web themePark.sliceOf, E2-P2-1): Zaehler auf
+## 0..PARK_MAX_COUNT, Ride-Ids whitelisted (Cheater-'ufo' fliegt raus),
+## nightVisit nur bei echtem bool true.
+static func _clamp_park(s: Dictionary) -> void:
+	var park: Dictionary = s["park"]
+	park["visits"] = _clamp_count(park.get("visits"))
+	park["nightVisit"] = _is_true(park.get("nightVisit"))
+	var raw_rides: Dictionary = park["rides"] if park.get("rides") is Dictionary else {}
+	var rides := {}
+	for id: String in PARK_RIDE_IDS:
+		rides[id] = _clamp_count(raw_rides.get(id))
+	park["rides"] = rides
+	park["handsUp"] = _clamp_count(park.get("handsUp"))
+	park["candyBought"] = _clamp_count(park.get("candyBought"))
+
+
+## Ganzzahliger Zaehler 0..PARK_MAX_COUNT (web themePark clampCount).
+static func _clamp_count(value: Variant) -> int:
+	var n := _num_nan(value)
+	if is_nan(n) or is_inf(n):
+		return 0
+	return clampi(int(floor(n)), 0, PARK_MAX_COUNT)
 
 
 ## Finite ms >= 0, collapsed to <= now + 24 h (hostile far-future stamps).
@@ -378,20 +416,42 @@ static func _err(message: String) -> Dictionary:
 	return {"ok": false, "state": {}, "error": message}
 
 
+## Web-`=== true`-Aequivalent (E2-P0: `bool == String` ist in GDScript ein
+## LAUFZEITFEHLER — nur ein echtes bool true zaehlt, alles andere ist false).
+static func _is_true(value: Variant) -> bool:
+	return value is bool and value
+
+
+## Strikt numerisch (KEINE String-Koerzierung) — fuer Versions-/Strukturchecks.
 static func _is_num(value: Variant) -> bool:
 	return typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT
 
 
+## JS-`Number()`-Nachbildung fuer LEAF-Werte (web validate() koerziert
+## lenient: Number("62") → 62 — E2-P2-2). Nicht koerzierbar/nicht endlich
+## → NAN (bewusste Abweichung: JS haelt Infinity, wir kollabieren defensiv).
+static func _leaf_num(value: Variant) -> float:
+	if typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT:
+		return float(value)
+	if value is String:
+		var text := (value as String).strip_edges()
+		if text.is_valid_float():
+			var n := text.to_float()
+			return n if is_finite(n) else NAN
+	return NAN
+
+
 static func _num(value: Variant) -> float:
-	return float(value) if _is_num(value) else 0.0
+	var n := _leaf_num(value)
+	return n if not is_nan(n) else 0.0
 
 
 static func _num_or(value: Variant, fallback: float) -> float:
-	if _is_num(value):
-		var n := float(value)
+	var n := _leaf_num(value)
+	if not is_nan(n):
 		return n if n != 0.0 else fallback
 	return fallback
 
 
 static func _num_nan(value: Variant) -> float:
-	return float(value) if _is_num(value) else NAN
+	return _leaf_num(value)

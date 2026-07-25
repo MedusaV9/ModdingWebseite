@@ -161,7 +161,7 @@ static func _validate_v4(state: Dictionary, now_ms: int) -> Dictionary:
 	if not _is_num(s["sleep"].get("startedAt")) or not _is_num(s["sleep"].get("wakeAt")):
 		s["sleep"] = {"sleeping": false, "startedAt": 0, "wakeAt": 0}
 	else:
-		s["sleep"]["sleeping"] = s["sleep"].get("sleeping") == true
+		s["sleep"]["sleeping"] = _is_true(s["sleep"].get("sleeping"))
 	# Consumed inventory stays consumed (web E20): verbatim when present.
 	if state.get("inventory") is Dictionary:
 		s["inventory"] = state["inventory"].duplicate(true)
@@ -193,15 +193,17 @@ static func _validate_v4(state: Dictionary, now_ms: int) -> Dictionary:
 		s["settings"]["volumes"][bus] = (
 			clampi(int(round(float(vol))), 0, 100) if _is_num(vol) else vol_defaults[bus]
 		)
-	s["settings"]["devUnlocked"] = s["settings"].get("devUnlocked") == true
+	s["settings"]["devUnlocked"] = _is_true(s["settings"].get("devUnlocked"))
 	# furniture.placed verbatim when present (defaults carry the radio gift).
 	var raw_furniture: Variant = state.get("furniture")
 	if raw_furniture is Dictionary and raw_furniture.get("placed") is Dictionary:
 		s["furniture"]["placed"] = raw_furniture["placed"].duplicate(true)
 	var radio: Dictionary = s["radio"]
-	if not radio.get("station") in SaveSchema.STATION_IDS:
+	# `is String` zuerst: STATION_IDS ist ein Array[String] — ein Nicht-String
+	# in `in` loggt sonst einen Engine-Error (typed-array find).
+	if not (radio.get("station") is String and radio["station"] in SaveSchema.STATION_IDS):
 		radio["station"] = "bordmusik"
-	radio["playing"] = radio.get("playing") == true
+	radio["playing"] = _is_true(radio.get("playing"))
 	if typeof(radio.get("shuffle")) != TYPE_BOOL:
 		radio["shuffle"] = true
 	if typeof(radio.get("replaceContext")) != TYPE_BOOL:
@@ -217,7 +219,9 @@ static func _validate_v4(state: Dictionary, now_ms: int) -> Dictionary:
 			var vol := _num_nan(row.get("vol"))
 			var trim: Dictionary = row.duplicate(true)
 			trim["vol"] = clampi(int(round(vol)), 0, 150) if not is_nan(vol) else 100
-			trim["on"] = false if row.get("on") == false else true
+			# Web `row.on === false ? false : true` — nur ein ECHTES false
+			# schaltet ab (E2-P0: `"no" == false` crasht in GDScript).
+			trim["on"] = not _is_false(row.get("on"))
 			trims[id] = trim
 	radio["trims"] = trims
 	if radio.get("recapHeard") is Dictionary:
@@ -338,6 +342,12 @@ static func _map_v4_to_v5(v4: Dictionary, now_ms: int) -> Dictionary:
 		"beaten": v4["minigames"].get("beaten", {}).duplicate(true),
 		"lastPlayDay": v4["minigames"].get("lastPlayDay", {}).duplicate(true),
 	}
+	# Zuletzt gewaehlte Schwierigkeit: v5-Zielort ist derselbe additive Key
+	# (pregame.gd/framework_logic.gd lesen minigames.difficulty.<id>) — E2-P1.
+	var difficulty_raw: Variant = v4["minigames"].get("difficulty")
+	s["minigames"]["difficulty"] = (
+		difficulty_raw.duplicate(true) if difficulty_raw is Dictionary else {}
+	)
 	notes.append("minigames: Bestwerte als Web-Rekorde in minigames.legacy")
 
 	s["achievements"]["unlocked"] = v4["achievements"]["unlocked"].duplicate(true)
@@ -349,7 +359,7 @@ static func _map_v4_to_v5(v4: Dictionary, now_ms: int) -> Dictionary:
 	s["collections"] = v4["collections"].duplicate(true)
 	s["quests"]["completedTotal"] = v4["quests"].get("completedTotal", 0)
 	lost.append("quests.active: neues Quest-System (completedTotal bleibt)")
-	s["quickDelivery"] = v4.get("quickDelivery") == true
+	s["quickDelivery"] = _is_true(v4.get("quickDelivery"))
 
 	s["radio"] = v4["radio"].duplicate(true)
 	s["radio"]["owned"] = owned.has("radio")  # Radio-Besitz-Grandfathering (§6.1)
@@ -362,6 +372,24 @@ static func _map_v4_to_v5(v4: Dictionary, now_ms: int) -> Dictionary:
 		else []
 	)
 	lost.append("recap.baseline: wird nach dem Import neu gesnapshottet")
+	lost.append("recap.pendingLevel: offene Recap-Anzeige verfaellt (History bleibt)")
+
+	# Additive Web-Slices ohne Versionsbump (E2-P1): care/cutscenes stecken in
+	# ECHTEN v4-Saves. toiletAt hat einen v5-Zielort (bad.kloLastMs, gleiche
+	# Klo-Cooldown-Semantik — bad_state.gd heilt den Slice beim Load); der
+	# Rest wird EHRLICH als Verlust gelistet statt still verworfen.
+	var care_raw: Variant = v4.get("care")
+	var care: Dictionary = care_raw if care_raw is Dictionary else {}
+	var toilet_at := _clamp_stamp(care.get("toiletAt"), now_ms)
+	if toilet_at > 0.0:
+		s["bad"] = {"kloLastMs": int(toilet_at)}
+		notes.append("care.toiletAt: Klo-Cooldown uebernommen (bad.kloLastMs)")
+	if _num(care.get("sickNotifyAt")) > 0.0:
+		lost.append("care.sickNotifyAt: Notification-Planung wird in Godot neu aufgebaut")
+	var cutscenes_raw: Variant = v4.get("cutscenes")
+	var cutscenes_seen: Variant = cutscenes_raw.get("seen") if cutscenes_raw is Dictionary else null
+	if cutscenes_seen is Dictionary and not (cutscenes_seen as Dictionary).is_empty():
+		lost.append("cutscenes.seen: Replay-Skip-Latch entfaellt (Godot-Cutscenes skippen ab 2 s)")
 
 	s["gallery"]["legacyCount"] = v4["gallery"].get("count", 0)
 	var photos := _num(v4["profile"].get("photos"))
@@ -380,16 +408,16 @@ static func _map_v4_to_v5(v4: Dictionary, now_ms: int) -> Dictionary:
 		"haptics": settings.get("haptics", true),
 		"notifications": settings.get("notifications", "unasked"),
 		"volumes": settings.get("volumes", {}).duplicate(true),
-		"gyro": settings.get("gyro") == true,
+		"gyro": _is_true(settings.get("gyro")),
 		"controls": settings.get("controls", {}).duplicate(true),
-		"devUnlocked": settings.get("devUnlocked") == true,
+		"devUnlocked": _is_true(settings.get("devUnlocked")),
 		"uiScale": settings.get("uiScale", 100),
-		"sfxMuted": settings.get("sfx") == false,
-		"musicMuted": settings.get("music") == false,
+		"sfxMuted": _is_false(settings.get("sfx")),
+		"musicMuted": _is_false(settings.get("music")),
 	}
 	lost.append("settings.goobyWeltQuality: Gooby-Welt entfernt (Doc H §A)")
 
-	s["onboarding"]["done"] = v4["onboarding"].get("done") == true
+	s["onboarding"]["done"] = _is_true(v4["onboarding"].get("done"))
 	s["onboarding"]["whatsNew5Seen"] = false
 
 	s["migration"]["notes"] = notes
@@ -632,20 +660,47 @@ static func _err(message: String) -> Dictionary:
 	return {"ok": false, "state": {}, "error": message, "report": {}}
 
 
+## Web-`=== true`-Aequivalent (E2-P0: `bool == String` ist in GDScript ein
+## LAUFZEITFEHLER — nur ein echtes bool true zaehlt, alles andere ist false).
+static func _is_true(value: Variant) -> bool:
+	return value is bool and value
+
+
+## Web-`=== false`-Aequivalent: nur ein echtes bool false zaehlt.
+static func _is_false(value: Variant) -> bool:
+	return value is bool and not value
+
+
+## Strikt numerisch (KEINE String-Koerzierung) — fuer Versions-/Strukturchecks.
 static func _is_num(value: Variant) -> bool:
 	return typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT
 
 
+## JS-`Number()`-Nachbildung fuer LEAF-Werte (web validate() koerziert
+## lenient: Number("62") → 62 — E2-P2-2). Nicht koerzierbar/nicht endlich
+## → NAN (bewusste Abweichung: JS haelt Infinity, wir kollabieren defensiv).
+static func _leaf_num(value: Variant) -> float:
+	if typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT:
+		return float(value)
+	if value is String:
+		var text := (value as String).strip_edges()
+		if text.is_valid_float():
+			var n := text.to_float()
+			return n if is_finite(n) else NAN
+	return NAN
+
+
 static func _num(value: Variant) -> float:
-	return float(value) if _is_num(value) else 0.0
+	var n := _leaf_num(value)
+	return n if not is_nan(n) else 0.0
 
 
 static func _num_or(value: Variant, fallback: float) -> float:
-	if _is_num(value):
-		var n := float(value)
+	var n := _leaf_num(value)
+	if not is_nan(n):
 		return n if n != 0.0 else fallback
 	return fallback
 
 
 static func _num_nan(value: Variant) -> float:
-	return float(value) if _is_num(value) else NAN
+	return _leaf_num(value)

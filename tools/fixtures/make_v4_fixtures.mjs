@@ -266,6 +266,34 @@ writeJson('v2_legacy.json', v2);
 const v2expected = webValidate(v2);
 writeJson('v2_legacy.expected_v4.json', v2expected);
 
+// ── fixture 5: extras — additive slices real saves carry (E2-P1/P2-3) ──────
+// cutscenes.seen / care.toiletAt+sickNotifyAt / minigames.difficulty plus the
+// additive counters (sickEver/holeInOnes/photoXp*) and a CHEATER themePark
+// (web validate() clamps NONE of these — they must survive to disk verbatim,
+// so the Godot migration is forced to map or honestly report them).
+// NOTE deliberately generated AFTER fixture 4: clock.js runs on real wall
+// time, and an extra save.load() here would drift the recap baseline stamp
+// in v2_legacy.expected_v4.json by ~1 ms.
+clock.configure({ now: CREATED_MS });
+const extras = save.defaultState();
+clock.configure({ now: NOW_MS });
+extras.coins = 1234;
+extras.level = 9;
+extras.minigames.difficulty = { carrotCatch: 'easy', bunnyHop: 'hard' };
+extras.minigames.best = { carrotCatch: 44 };
+extras.cutscenes = { seen: { vacDeparture: true, versaryMonth: true } };
+extras.care = { toiletAt: NOW_MS - 3600000, sickNotifyAt: NOW_MS - 2 * 3600000 };
+Object.assign(extras.achievements.counters, {
+  sickEver: 2, holeInOnes: 3, photoXpDay: '2026-01-15', photoXpToday: 2,
+});
+extras.themePark = {
+  visits: 1e15, nightVisit: 'ja',
+  rides: { coaster: -5, ufo: 9 }, handsUp: 1e15, candyBought: 12,
+};
+extras.onboarding = { done: true, step: 99, whatsNew2Seen: true, whatsNew3Seen: true, whatsNew4Seen: true };
+const extrasFixture = webValidate(extras);
+writeJson('v4_extras.json', extrasFixture);
+
 // ── golden values: computed BY the web systems modules ──────────────────────
 clock.configure({ now: NOW_MS });
 const golden = { generatedAt: NOW_MS, tz: 'UTC' };

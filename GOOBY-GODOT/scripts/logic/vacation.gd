@@ -61,9 +61,11 @@ static func slice_of(state: Dictionary) -> Dictionary:
 	var d := default_slice()
 	if not (raw is Dictionary):
 		return d
+	# `is String` zuerst: PHASES ist ein Array[String] — ein Nicht-String (z. B.
+	# fehlendes phase → null) loggt sonst einen Engine-Error (typed-array find).
 	var phase: Variant = raw.get("phase")
 	return {
-		"phase": phase if phase in PHASES else d["phase"],
+		"phase": phase if phase is String and phase in PHASES else d["phase"],
 		"destId": raw.get("destId") if raw.get("destId") is String else "",
 		"bookedAt": _num(raw.get("bookedAt")),
 		"returnAt": _num(raw.get("returnAt")),
@@ -149,12 +151,15 @@ static func tick(state: Dictionary, now_ms: int) -> Dictionary:
 
 ## Whitelist-normalize a raw `visited` map: known catalog ids with a value of
 ## strictly true only (junk drops silently; naturally capped at 9 keys).
+## `is bool` zuerst — `"ja" == true` ist in GDScript ein LAUFZEITFEHLER
+## (E2-P0-Crash-Klasse; Web nutzt `=== true`).
 static func _normalize_visited(raw: Variant) -> Dictionary:
 	if not (raw is Dictionary):
 		return {}
 	var out := {}
 	for id: String in CATALOG.keys():
-		if raw.get(id) == true:
+		var v: Variant = raw.get(id)
+		if v is bool and v:
 			out[id] = true
 	return out
 

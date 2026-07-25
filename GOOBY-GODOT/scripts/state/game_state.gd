@@ -28,6 +28,19 @@ const SaveManager := preload("res://scripts/state/save_manager.gd")
 const Clock := preload("res://scripts/logic/clock.gd")
 const Leveling := preload("res://scripts/logic/leveling.gd")
 
+## E15-P1: alle bekannten Produktions-Save-Slices (id → Skriptpfad). Lazy
+## via load() statt preload — kein Parse-Zyklus zu Home/City/Minigame-Code.
+## register_default_slices() registriert sie VOR dem Load in initialize();
+## spaetere Domain-eigene register_slice()-Aufrufe bleiben idempotente No-ops.
+const DEFAULT_SLICE_SCRIPTS := {
+	"home": "res://scripts/home/home_state.gd",
+	"events": "res://scripts/events/random_events.gd",
+	"buffs": "res://scripts/events/buffs.gd",
+	"bad": "res://scripts/home/interactables/bad_state.gd",
+	"city": "res://scripts/city/city_state.gd",
+	"gvz": "res://scripts/minigames/games/gvz/gvz_progress.gd",
+}
+
 ## Pinnbare Uhr — EINZIGE Zeitquelle fuer State-Code (Tests pinnen sie).
 var clock := Clock.new()
 
@@ -53,8 +66,31 @@ func _notification(what: int) -> void:
 		_manager.flush_if_dirty(_state)
 
 
+## Frozen Slice-API (GODOT-PLAN §W1d/§3.1): DER additive Erweiterungsweg fuer
+## Domain-Slices — delegiert an die SaveSchema-Registry (identisches
+## Verhalten, Re-Registrierung ersetzt). Validator optional (self-heal).
+func register_slice(slice_name: String, default_factory: Callable, validator := Callable()) -> void:
+	SaveSchema.register_slice(slice_name, default_factory, validator)
+
+
+## E15-P1: registriert ALLE bekannten Default-Slices (DEFAULT_SLICE_SCRIPTS)
+## direkt in der SaveSchema-Registry — laeuft am Anfang von initialize(),
+## damit Defaults/Validatoren beim Load garantiert da sind (auch `city`,
+## das im Produktions-Bootpfad sonst nie registriert wurde). Idempotent.
+static func register_default_slices() -> void:
+	for id: String in DEFAULT_SLICE_SCRIPTS:
+		var script: Variant = load(DEFAULT_SLICE_SCRIPTS[id])
+		if script == null:
+			push_warning("[game_state] Slice-Skript fehlt: %s" % DEFAULT_SLICE_SCRIPTS[id])
+			continue
+		SaveSchema.register_slice(
+			id, Callable(script, "default_slice"), Callable(script, "normalize_slice")
+		)
+
+
 ## Load (or reload) the save. `save_path` override = headless tests.
 func initialize(save_path := "user://save_v5.json") -> void:
+	register_default_slices()
 	_manager = SaveManager.new()
 	_manager.save_path = save_path
 	var res := _manager.load_state(clock.now_ms())
