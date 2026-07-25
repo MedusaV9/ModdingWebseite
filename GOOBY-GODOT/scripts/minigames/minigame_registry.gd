@@ -48,7 +48,19 @@ const GAMES: Array[Dictionary] = [
 		"supports_endless": false,
 		"energy_cost": 8,
 	},
-	{"id": "gobnom", "title_key": "mg.gobnom.title", "coming_soon": true},
+	{
+		"id": "gobnom",
+		"title_key": "mg.gobnom.title",
+		"scene": "res://scripts/minigames/games/gobnom/gobnom_game.tscn",
+		# Level-Siege melden Coin-Chunks (E10-P1-3-Muster wie GvZ); die realen
+		# Level-Scores liegen bei 44–219 (win_base 40 + Gläser + Level-Bonus
+		# + First-Clear) — dieselbe Eichung wie GvZ passt.
+		"coin_table": {"divisor": 3, "min": 4, "max": 40},
+		"target": 300,
+		"orientation": "landscape",
+		"supports_endless": false,
+		"energy_cost": 8,
+	},
 ]
 
 

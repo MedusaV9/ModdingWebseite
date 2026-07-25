@@ -1,0 +1,56 @@
+{
+	"gobnom": {
+		"select": {
+			"title": "GOB NOM",
+			"campaign": "Campaign",
+			"coop": "Co-op (2 players — left A, right B)",
+			"done": "Done",
+			"stars": "Nutella jars: {n}/{max}",
+			"new": "NEW"
+		},
+		"hud": {
+			"level": "Level {n}",
+			"coop_level": "Co-op {n}",
+			"cuts": "Cuts left: {n}",
+			"jar": "+Nutella!",
+			"wrong_side": "Wrong side!"
+		},
+		"intro": {
+			"rope": "Swipe through the rope — into the mouth!",
+			"ropes": "Two ropes: timing is everything.",
+			"timing": "Let it swing, then cut!",
+			"bubble": "Bubbles lift you up — tap to pop.",
+			"bubble_rope": "Bubble + rope: swing first, then rise.",
+			"cushion": "Tap the cushion for an air blast!",
+			"cushion_combo": "Flipper cushions: up left, over right.",
+			"slider": "Drag the anchor along the rail!",
+			"shooter": "The shooter catches — you cut free.",
+			"spikes": "Careful, spikes! Swing with precision.",
+			"fan": "The fan is blowing — push against it!",
+			"cloud": "Cotton candy softens the fall.",
+			"all": "Everything at once: rail, cushion, bubble, cloud.",
+			"cut_limit": "Only 3 cuts — let the wind help.",
+			"finale": "Finale! Swing, puff, bubble, cloud, NOM.",
+			"relay": "Relay: A cuts left, B cuts right!",
+			"shooter_relay": "A starts, B releases the shooter.",
+			"bubble_relay": "A cuts, B pops it over the mouth.",
+			"cushion_volley": "Cushion volley: A flips, B counters.",
+			"slider_relay": "Rail relay: A slides, B takes over.",
+			"y_split": "A cuts up top, B puffs below!",
+			"fan_off": "B: kill the storm! A: swing away.",
+			"shooter_chain": "Chain: A releases left, B right.",
+			"combo": "Teamwork: A rail+cushion, B bubble.",
+			"finale_coop": "Co-op finale: A swing+puff, B the pop."
+		},
+		"end": {
+			"win": "NOM! Yummy!",
+			"lose": "Oh no — the candy is gone…",
+			"lose_hint": "Tip: watch where it swings first!",
+			"score": "{n} points",
+			"first_clear": "First-clear bonus!",
+			"next": "Next ›",
+			"retry": "Retry",
+			"select": "Level select"
+		}
+	}
+}

@@ -22,7 +22,10 @@ var _new_element: Dictionary = {}
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# MinigameBase ist Node2D → dessen anchorable_rect ist 0×0, FULL_RECT-Anker
+	# greifen ins Leere. Direkt an den Viewport binden (GOB-NOM-Muster).
+	_fit_viewport()
+	get_viewport().size_changed.connect(_fit_viewport)
 	_load_new_elements()
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -144,3 +147,8 @@ func _on_tile(id: int) -> void:
 func _on_resized() -> void:
 	if _grid != null:
 		_grid.columns = COLS_LANDSCAPE if size.x >= size.y else COLS_PORTRAIT
+
+
+func _fit_viewport() -> void:
+	position = Vector2.ZERO
+	size = get_viewport_rect().size
