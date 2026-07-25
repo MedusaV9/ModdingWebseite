@@ -60,7 +60,9 @@ export function redeem(ctx, deviceId, rawCode, now) {
   if (entry.maxUses !== null && entry.uses >= entry.maxUses) return { ok: false, code: 'EXHAUSTED' };
   entry.uses += 1;
   entry.redemptions[deviceId] = now;
-  ctx.store.markDirty('codes');
+  // E13 P1-1: redeemed-Marker SYNCHRON persistieren, BEVOR ok rausgeht —
+  // Idempotenz („1× pro Gerät“) muss auch einen Crash/Neustart überleben.
+  ctx.store.flushNow('codes');
   return { ok: true, reward: entry.reward };
 }
 

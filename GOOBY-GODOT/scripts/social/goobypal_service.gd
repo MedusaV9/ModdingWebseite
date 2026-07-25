@@ -6,6 +6,12 @@ extends Node
 ## abgezogen (W2c-Regel). Empfang: PAL_RECEIVED-Push sofort gutschreiben;
 ## Offline-Gutschriften kommen beim Boot über WELCOME.palPending (Pull) —
 ## dafür gibt es das Sammel-Signal boot_received für den Empfangs-Toast.
+## Zustell-Robustheit (E13 P1-2): der Server hält jede Gutschrift als
+## Pending mit Zustell-Id, bis der Client sie per PAL_ACK bestätigt.
+## Deshalb ackt dieser Service JEDE Zustellung und dedupet über die Id
+## (persistiert — eine erneute Zustellung nach Ack-Verlust/Reconnect wird
+## nie doppelt gutgeschrieben). Einträge OHNE Id (Alt-Server, drained beim
+## WELCOME) werden wie bisher einmalig gutgeschrieben.
 
 signal sent(to_code: String, amount: int, sent_today: int)
 signal received(from_code: String, amount: int)
@@ -27,16 +33,23 @@ const ERROR_KEYS := {
 	"NO_COINS": "social.pal.err.no_coins",
 }
 
+## Kappe der Zustell-Id-Dedupe-Liste (älteste fliegen zuerst).
+const SEEN_CAP := 200
+
 var daily_limit := DEFAULT_DAILY_LIMIT
 var sent_today := 0
+## Dedupe-Datei für Zustell-Ids (Tests leiten auf ein Temp-user://-File um).
+var seen_path := "user://pal_seen.json"
 
 var _net: Node = null
 var _gs: Object = null
+var _seen: Array[String] = []
 
 
 func setup(net_client: Node, game_state: Object) -> void:
 	_net = net_client
 	_gs = game_state
+	_load_seen()
 	_net.pushed.connect(_on_push)
 	_net.welcome_received.connect(_on_welcome)
 	# Spätes Setup: WELCOME war ggf. schon da → palPending aus dem Cache
@@ -105,15 +118,14 @@ func _fail(code: String) -> Dictionary:
 func _on_push(type: String, data: Dictionary) -> void:
 	if type != "PAL_RECEIVED":
 		return
-	var amount := int(data.get("amount", 0))
-	if amount <= 0:
+	if not _credit_delivery(data):
 		return
-	_change_coins(amount)
-	received.emit(str(data.get("from", "")), amount)
+	received.emit(str(data.get("from", "")), int(data.get("amount", 0)))
 
 
 ## WELCOME.palPending: Offline-Gutschriften einlösen (Empfangs-Toast beim
-## Boot — Sammel-Signal mit Gesamtsumme).
+## Boot — Sammel-Signal mit Gesamtsumme). Bereits geackte/gesehene
+## Zustellungen zählen nicht doppelt.
 func _on_welcome(data: Dictionary) -> void:
 	var pending: Variant = data.get("palPending", [])
 	if not (pending is Array) or (pending as Array).is_empty():
@@ -121,15 +133,66 @@ func _on_welcome(data: Dictionary) -> void:
 	var total := 0
 	var entries: Array = []
 	for entry: Variant in pending as Array:
-		if entry is Dictionary:
-			var amount := int((entry as Dictionary).get("amount", 0))
-			if amount > 0:
-				total += amount
-				entries.append(entry)
+		if entry is Dictionary and _credit_delivery(entry):
+			total += int((entry as Dictionary).get("amount", 0))
+			entries.append(entry)
 	if total <= 0:
 		return
-	_change_coins(total)
 	boot_received.emit(total, entries)
+
+
+## true = neu gutgeschrieben. Zustellungen MIT Id werden IMMER geackt (auch
+## Duplikate — sonst stellt der Server nach Ack-Verlust ewig erneut zu)
+## und über die persistierte Seen-Liste dedupet.
+func _credit_delivery(entry: Dictionary) -> bool:
+	var amount := int(entry.get("amount", 0))
+	if amount <= 0:
+		return false
+	var id := str(entry.get("id", ""))
+	if id.is_empty():
+		# Alt-Server ohne Zustell-Id (drained pending pro WELCOME selbst).
+		_change_coins(amount)
+		return true
+	if _net != null and _net.has_method("send"):
+		_net.send("PAL_ACK", {"id": id})
+	if _seen.has(id):
+		return false
+	_mark_seen(id)
+	_change_coins(amount)
+	return true
+
+
+func _load_seen() -> void:
+	_seen = []
+	if not FileAccess.file_exists(seen_path):
+		return
+	var parser := JSON.new()
+	if parser.parse(FileAccess.get_file_as_string(seen_path)) != OK:
+		return
+	if not (parser.data is Dictionary):
+		return
+	var ids: Variant = (parser.data as Dictionary).get("ids")
+	if not (ids is Array):
+		return
+	for id: Variant in ids as Array:
+		if id is String:
+			_seen.append(id)
+
+
+func _mark_seen(id: String) -> void:
+	_seen.append(id)
+	while _seen.size() > SEEN_CAP:
+		_seen.pop_front()
+	var tmp := seen_path + ".tmp"
+	var file := FileAccess.open(tmp, FileAccess.WRITE)
+	if file == null:
+		push_warning("[pal] kann %s nicht schreiben" % tmp)
+		return
+	file.store_string(JSON.stringify({"v": 1, "ids": _seen}))
+	file.close()
+	var dir := DirAccess.open(seen_path.get_base_dir())
+	if dir != null:
+		dir.rename(tmp, seen_path)
 
 
 func _econ() -> Dictionary:

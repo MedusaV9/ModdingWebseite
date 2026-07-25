@@ -295,9 +295,11 @@ export class Hub {
     }
   }
 
+  // true NUR wenn der Socket wirklich OPEN ist und der Frame rausging —
+  // Socket-Queueing/CLOSING zählt NIE als Zustellung (E13 P1-2).
   sendToDevice(deviceId, t, d) {
     const conn = this.conns.get(deviceId);
-    if (!conn) return false;
+    if (!conn || conn.ws.readyState !== conn.ws.OPEN) return false;
     this.send(conn, t, d);
     return true;
   }

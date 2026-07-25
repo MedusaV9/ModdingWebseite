@@ -30,6 +30,11 @@ func setup(net_client: NetClient, outbox_instance: NetOutbox) -> void:
 	net = net_client
 	outbox = outbox_instance
 	net.status_changed.connect(_on_status_changed)
+	# E14 P1-1: lief _ready() schon OHNE Outbox (falsche Boot-Reihenfolge),
+	# den Session-Start jetzt nachschreiben — sonst zählt die Session erst
+	# ab dem ersten Heartbeat und ein Crash davor verliert sie komplett.
+	if not session_id.is_empty():
+		_write_session(_now_ms())
 
 
 func _ready() -> void:
@@ -43,6 +48,9 @@ func _exit_tree() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		end_session()
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		# Zurück aus dem Hintergrund → neue Session (Spielzeit ab Sekunde 0).
+		start_session()
 
 
 func _process(delta: float) -> void:
@@ -97,6 +105,12 @@ func flush() -> void:
 	var ok := await _post("/api/analytics", body)
 	if ok:
 		for id in ids:
+			# E14 P1-2: der Eintrag der LAUFENDEN Session bleibt liegen —
+			# der nächste Heartbeat verlängert ihn und der Server upsertet
+			# pro sessionId nach max. Dauer. Würde er entfernt, ginge die
+			# Restdauer nach einem Reconnect-Flush verloren.
+			if id == session_id:
+				continue
 			outbox.remove(id)
 	_flush_in_flight = false
 

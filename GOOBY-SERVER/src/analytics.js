@@ -14,7 +14,9 @@ const ID_RE = /^[A-Za-z0-9._-]{6,64}$/;
 export function analyticsData(ctx) {
   return ctx.store.collection('analytics', {
     batches: {}, // batchId -> at (Idempotenz)
-    sessionIds: {}, // sessionId -> true (Dedupe über Batch-Grenzen)
+    // sessionId -> {minutes, day, endedAt} (Upsert-Basis: das JÜNGSTE/längste
+    // Update derselben Session gewinnt — E14 P1-2). Alt-Bestand: true.
+    sessionIds: {},
     days: {}, // dayKey -> deviceId -> {minutes, sessions}
     hours: {}, // "0".."23" -> Session-Starts (wann wird gespielt)
     perPlayer: {}, // deviceId -> {minutes, sessions, lastAt}
@@ -49,6 +51,7 @@ export function ingestBatch(ctx, deviceId, body, now) {
   }
   let accepted = 0;
   let duplicates = 0;
+  let updated = 0;
   for (const s of sessions) {
     if (
       typeof s?.sessionId !== 'string' ||
@@ -60,15 +63,56 @@ export function ingestBatch(ctx, deviceId, body, now) {
       duplicates += 0; // ungültige Session: still überspringen (Batch bleibt nutzbar)
       continue;
     }
-    if (data.sessionIds[s.sessionId]) {
-      duplicates++;
-      continue;
-    }
     let minutes = Number.isFinite(s.minutes) ? s.minutes : (s.endedAt - s.startedAt) / 60_000;
     minutes = Math.min(Math.max(minutes, 0), 24 * 60); // Cap: eine Session ≤ 24 h
     minutes = Math.round(minutes * 10) / 10;
-    data.sessionIds[s.sessionId] = true;
+    const known = data.sessionIds[s.sessionId];
+    if (known) {
+      // E14 P1-2: Idempotenter Upsert pro sessionId — das Update mit der
+      // LÄNGSTEN Dauer gewinnt (Heartbeat/Reconnect-Flush derselben laufenden
+      // Session). Kürzere/gleiche Resends sind Duplikate. Alt-Bestand (true)
+      // hat keine Delta-Basis und bleibt Duplikat.
+      if (typeof known !== 'object' || !(minutes > known.minutes)) {
+        duplicates++;
+        continue;
+      }
+      const delta = Math.round((minutes - known.minutes) * 10) / 10;
+      const newDay = dayKey(s.endedAt, cfg.tz);
+      const oldBucket = data.days[known.day]?.[deviceId];
+      if (oldBucket) {
+        oldBucket.minutes = Math.round((oldBucket.minutes - known.minutes) * 10) / 10;
+        if (newDay !== known.day) oldBucket.sessions -= 1;
+      }
+      const dayBucket = (data.days[newDay] ??= {});
+      const agg = (dayBucket[deviceId] ??= { minutes: 0, sessions: 0 });
+      agg.minutes = Math.round((agg.minutes + minutes) * 10) / 10;
+      if (newDay !== known.day || !oldBucket) agg.sessions += 1;
+      const pp = (data.perPlayer[deviceId] ??= { minutes: 0, sessions: 0, lastAt: 0 });
+      pp.minutes = Math.round((pp.minutes + delta) * 10) / 10;
+      pp.lastAt = Math.max(pp.lastAt, s.endedAt);
+      const recentRow = data.recent.find(
+        (r) => r.sessionId === s.sessionId && r.deviceId === deviceId
+      );
+      if (recentRow) {
+        recentRow.endedAt = s.endedAt;
+        recentRow.minutes = minutes;
+      }
+      data.sessionIds[s.sessionId] = { minutes, day: newDay, endedAt: s.endedAt };
+      ctx.store.appendLine(`sessions/sessions-${monthKey(s.endedAt, cfg.tz)}.jsonl`, {
+        at: now,
+        deviceId,
+        kind: 'session',
+        update: true,
+        sessionId: s.sessionId,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt,
+        minutes,
+      });
+      updated++;
+      continue;
+    }
     const day = dayKey(s.endedAt, cfg.tz);
+    data.sessionIds[s.sessionId] = { minutes, day, endedAt: s.endedAt };
     const dayBucket = (data.days[day] ??= {});
     const agg = (dayBucket[deviceId] ??= { minutes: 0, sessions: 0 });
     agg.minutes = Math.round((agg.minutes + minutes) * 10) / 10;
@@ -81,6 +125,7 @@ export function ingestBatch(ctx, deviceId, body, now) {
     pp.lastAt = Math.max(pp.lastAt, s.endedAt);
     data.recent.push({
       deviceId,
+      sessionId: s.sessionId,
       startedAt: s.startedAt,
       endedAt: s.endedAt,
       minutes,
@@ -99,8 +144,10 @@ export function ingestBatch(ctx, deviceId, body, now) {
     accepted++;
   }
   data.batches[batchId] = now;
-  ctx.store.markDirty('analytics');
-  return { status: 200, out: { ok: true, accepted, duplicates } };
+  // E13 P1-1: Idempotenz (batchId/sessionId) muss einen Crash überleben —
+  // synchron persistieren, BEVOR der Client die Bestätigung sieht.
+  ctx.store.flushNow('analytics');
+  return { status: 200, out: { ok: true, accepted, duplicates, updated } };
 }
 
 export function register(ctx) {

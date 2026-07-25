@@ -251,6 +251,9 @@ func _rest(method: int, path: String, body: String) -> Dictionary:
 	)
 	var request := HTTPRequest.new()
 	add_child(request)
+	# E14 P1-6: ohne Timeout hinge ein partieller Server-Stall (TCP offen,
+	# keine Antwort) Besuch-annehmen/Haus-laden/Besuch-beenden endlos.
+	request.timeout = 10.0
 	var err := request.request(url, headers, method, body)
 	if err != OK:
 		request.queue_free()

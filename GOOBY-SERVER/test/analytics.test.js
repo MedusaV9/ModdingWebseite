@@ -96,6 +96,49 @@ test('Aggregation pro Tag & Spieler (wann/wie lange/wie oft)', async (t) => {
   assert.equal(lines.length >= 2, true);
 });
 
+test('Session-Upsert: die längste Dauer derselben sessionId gewinnt (E14 P1-2)', async (t) => {
+  const server = await startServer();
+  t.after(() => server.stop());
+  const { id, c } = await connectedIdentity(server);
+  t.after(() => c.close());
+  const base = Date.UTC(2026, 6, 20, 10, 0, 0);
+  const session = (minutes) => ({
+    sessionId: 'sess-live1',
+    startedAt: base,
+    endedAt: base + minutes * 60_000,
+    minutes,
+  });
+  // Laufende Session: erster Flush mit 10 min.
+  const r1 = await (
+    await postAnalytics(server, id, { batchId: 'up-00001', sessions: [session(10)] })
+  ).json();
+  assert.equal(r1.accepted, 1);
+  // Reconnect-Flush später: dieselbe Session, jetzt 25 min → Upsert, KEIN Duplikat.
+  const r2 = await (
+    await postAnalytics(server, id, { batchId: 'up-00002', sessions: [session(25)] })
+  ).json();
+  assert.deepEqual(
+    { accepted: r2.accepted, duplicates: r2.duplicates, updated: r2.updated },
+    { accepted: 0, duplicates: 0, updated: 1 }
+  );
+  // Identischer Resend und ein KÜRZERES Update sind Duplikate.
+  const r3 = await (
+    await postAnalytics(server, id, { batchId: 'up-00003', sessions: [session(25)] })
+  ).json();
+  assert.equal(r3.duplicates, 1);
+  const r4 = await (
+    await postAnalytics(server, id, { batchId: 'up-00004', sessions: [session(5)] })
+  ).json();
+  assert.equal(r4.duplicates, 1);
+  // Aggregation: genau EINE Session mit 25 Minuten (nicht 10, nicht 35).
+  const data = analyticsData(server.ctx);
+  const day = dayKey(base + 25 * 60_000, server.ctx.cfg.tz);
+  assert.equal(data.days[day][id.deviceId].minutes, 25);
+  assert.equal(data.days[day][id.deviceId].sessions, 1);
+  assert.equal(data.perPlayer[id.deviceId].minutes, 25);
+  assert.equal(data.perPlayer[id.deviceId].sessions, 1);
+});
+
 test('Härtung: Auth Pflicht, Batch-Limits, kaputte Sessions überspringen', async (t) => {
   const server = await startServer();
   t.after(() => server.stop());

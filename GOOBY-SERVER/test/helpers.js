@@ -8,21 +8,38 @@ import crypto from 'node:crypto';
 import WebSocket from 'ws';
 import { createServer } from '../server.js';
 
-export async function startServer({ env = {}, cfg = {}, clock } = {}) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gooby-test-'));
-  const fullEnv = { DATA_DIR: dataDir, ...env };
+export async function startServer({ env = {}, cfg = {}, clock, dataDir } = {}) {
+  const dir = dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'gooby-test-'));
+  const fullEnv = { DATA_DIR: dir, ...env };
   const srv = createServer(fullEnv, { cfg, clock, flushMs: 60_000 });
   const port = await srv.listen(0, '127.0.0.1');
+  let down = false;
   return {
     srv,
     ctx: srv.ctx,
     port,
-    dataDir,
+    dataDir: dir,
     url: `http://127.0.0.1:${port}`,
     wsUrl: `ws://127.0.0.1:${port}/ws`,
-    async stop() {
-      await srv.stop();
-      fs.rmSync(dataDir, { recursive: true, force: true });
+    async stop({ keepData = false } = {}) {
+      if (!down) {
+        down = true;
+        await srv.stop();
+      }
+      if (!keepData) fs.rmSync(dir, { recursive: true, force: true });
+    },
+    // Simulierter Prozessabsturz (E13 P1-1): Sockets/Listener hart weg,
+    // aber KEIN Storage-Flush/-Close — der Write-behind-Zustand bleibt
+    // ungeschrieben, genau wie bei einem echten Crash. dataDir bleibt
+    // liegen (Neustart-Tests starten darauf erneut).
+    async crash() {
+      down = true;
+      clearInterval(srv.ctx.store.timer);
+      if (srv.ctx.hub.idleTimer) clearInterval(srv.ctx.hub.idleTimer);
+      for (const conn of srv.ctx.hub.conns.values()) conn.ws.terminate();
+      if (srv.ctx.hub.wss) srv.ctx.hub.wss.close();
+      srv.httpServer.closeAllConnections?.();
+      await new Promise((resolve) => srv.httpServer.close(resolve));
     },
   };
 }

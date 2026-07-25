@@ -1,6 +1,9 @@
 // Admin-Events (Doc C §4): Panel löst Events aus → sofortiger WS-Push (SERVER_EVENT) an
 // passende Online-Clients + Pull-Queue für Offline-Clients (WELCOME.pendingEvents beim Boot).
 // deliveredTo pro Gerät verhindert Doppel-Zustellung, expiresAt verhindert Uralt-Events.
+// Zustellung (E13 P1-2): deliveredTo wird erst beim EVENT_ACK des Clients markiert —
+// weder Socket-Queueing noch das bloße Erzeugen des WELCOME gelten als zugestellt.
+// Der Client dedupet über die Event-Id (Mehrfach-Zustellung ist harmlos).
 
 import crypto from 'node:crypto';
 
@@ -38,12 +41,11 @@ export function triggerEvent(ctx, { type, params, target, ttlMin }) {
   const data = eventsData(ctx);
   data.events[id] = evt;
 
-  // Push an alle passenden Online-Clients (deliveredTo merken).
+  // Push an alle passenden Online-Clients — zugestellt gilt erst mit EVENT_ACK.
   let pushed = 0;
   for (const conn of ctx.hub.onlineConns()) {
     if (!matchesTarget(evt, conn.friendCode)) continue;
     if (ctx.hub.sendToDevice(conn.deviceId, 'SERVER_EVENT', eventPayload(id, evt))) {
-      evt.deliveredTo.push(conn.deviceId);
       pushed++;
     }
   }
@@ -51,21 +53,18 @@ export function triggerEvent(ctx, { type, params, target, ttlMin }) {
   return { ok: true, id, pushed };
 }
 
-// Boot-Pull: unzugestellte, nicht abgelaufene Events für dieses Gerät (markiert zugestellt).
+// Boot-Pull: unzugestellte, nicht abgelaufene Events für dieses Gerät.
+// Markiert NICHT als zugestellt — das passiert erst beim EVENT_ACK.
 export function pendingEventsFor(ctx, deviceId, friendCode) {
   const data = eventsData(ctx);
   const now = ctx.clock.now();
   const out = [];
-  let dirty = false;
   for (const [id, evt] of Object.entries(data.events)) {
     if (evt.expiresAt <= now) continue;
     if (!matchesTarget(evt, friendCode)) continue;
     if (evt.deliveredTo.includes(deviceId)) continue;
-    evt.deliveredTo.push(deviceId);
     out.push(eventPayload(id, evt));
-    dirty = true;
   }
-  if (dirty) ctx.store.markDirty('events');
   return out;
 }
 
@@ -89,4 +88,15 @@ export function register(ctx) {
   ctx.hub.addWelcomeProvider((conn) => ({
     pendingEvents: pendingEventsFor(ctx, conn.deviceId, conn.friendCode),
   }));
+  // Client-Ack: erst jetzt gilt das Event für dieses Gerät als zugestellt.
+  ctx.hub.on('EVENT_ACK', (conn, msg) => {
+    const data = eventsData(ctx);
+    const id = typeof msg.d.id === 'string' ? msg.d.id : '';
+    const evt = data.events[id];
+    if (evt && !evt.deliveredTo.includes(conn.deviceId)) {
+      evt.deliveredTo.push(conn.deviceId);
+      ctx.store.markDirty('events');
+    }
+    ctx.hub.send(conn, 'OK', {}, { re: msg.seq });
+  });
 }

@@ -81,6 +81,17 @@ export class Storage {
     this.dirty.clear();
   }
 
+  // Kritische Bestätigungen (Code-Redeem, Pal-Transfer, Analytics-Ingest):
+  // Collection SOFORT synchron+atomar persistieren, BEVOR ok gemeldet wird —
+  // Write-behind-Fenster = 0 für diese Klasse (E13 P1-1). Ein Crash direkt
+  // nach der Antwort rollt den bestätigten Zustand damit nie mehr zurück.
+  flushNow(name) {
+    const value = this.collections.get(name);
+    if (value === undefined) return;
+    this._writeAtomic(this._file(name), JSON.stringify(value, null, 1));
+    this.dirty.delete(name);
+  }
+
   // JSONL-Append (relPath z. B. "sessions/sessions-2026-07.jsonl").
   appendLine(relPath, obj) {
     const file = this._resolveRel(relPath);

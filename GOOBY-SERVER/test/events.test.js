@@ -5,11 +5,12 @@ import assert from 'node:assert/strict';
 import { startServer, newIdentity, WsClient } from './helpers.js';
 import { triggerEvent } from '../src/events.js';
 
-test('Online-Push: SERVER_EVENT sofort, deliveredTo gemerkt', async (t) => {
+test('Online-Push: SERVER_EVENT sofort, zugestellt erst mit EVENT_ACK', async (t) => {
   const server = await startServer();
   t.after(() => server.stop());
+  const id = newIdentity();
   const c = await WsClient.connect(server.wsUrl);
-  await c.hello(newIdentity());
+  await c.hello(id);
   t.after(() => c.close());
   const res = triggerEvent(server.ctx, {
     type: 'WEATHER_RAIN',
@@ -23,9 +24,17 @@ test('Online-Push: SERVER_EVENT sofort, deliveredTo gemerkt', async (t) => {
   assert.equal(evt.d.type, 'WEATHER_RAIN');
   assert.equal(evt.d.params.durationMin, 60);
   assert.equal(typeof evt.d.expiresAt, 'number');
+  // Live-Push allein markiert NICHT als zugestellt — erst das Ack.
+  await c.request('EVENT_ACK', { id: evt.d.id });
+  c.close();
+  await c.waitClose();
+  const c2 = await WsClient.connect(server.wsUrl);
+  const welcome = await c2.hello(id);
+  assert.equal(welcome.d.pendingEvents.length, 0);
+  c2.close();
 });
 
-test('Offline-Pull: Boot holt pendingEvents genau EINMAL ab', async (t) => {
+test('Offline-Pull: pendingEvents bleiben bis zum EVENT_ACK erhalten', async (t) => {
   const server = await startServer();
   t.after(() => server.stop());
   const id = newIdentity();
@@ -42,11 +51,19 @@ test('Offline-Pull: Boot holt pendingEvents genau EINMAL ab', async (t) => {
   assert.equal(welcome.d.pendingEvents[0].type, 'DOUBLE_COINS');
   c2.close();
   await c2.waitClose();
-  // Zweiter Boot → nichts mehr (deliveredTo).
+  // OHNE Ack → beim nächsten Boot erneut da (verlorenes WELCOME verliert
+  // nichts mehr — E13 P1-2); der Client dedupet über die Event-Id.
   const c3 = await WsClient.connect(server.wsUrl);
   const welcome3 = await c3.hello(id);
-  assert.equal(welcome3.d.pendingEvents.length, 0);
+  assert.equal(welcome3.d.pendingEvents.length, 1);
+  await c3.request('EVENT_ACK', { id: welcome3.d.pendingEvents[0].id });
   c3.close();
+  await c3.waitClose();
+  // Nach dem Ack → deliveredTo markiert, nichts mehr.
+  const c4 = await WsClient.connect(server.wsUrl);
+  const welcome4 = await c4.hello(id);
+  assert.equal(welcome4.d.pendingEvents.length, 0);
+  c4.close();
 });
 
 test('expiresAt: abgelaufene Events werden beim Boot NICHT zugestellt', async (t) => {

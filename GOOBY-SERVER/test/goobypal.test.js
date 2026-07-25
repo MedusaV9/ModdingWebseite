@@ -82,7 +82,7 @@ test('Tageslimit 250/Absender: 200+51 scheitert, 200+50 passt, neuer Tag (TZ) re
   assert.equal(fresh.d.sentToday, 250);
 });
 
-test('Empfänger offline: Gutschrift wartet in WELCOME.palPending (einmalig)', async (t) => {
+test('Empfänger offline: Gutschrift wartet in WELCOME.palPending bis zum PAL_ACK', async (t) => {
   const { server, a, b, codeB, idB } = await twoFriends(t);
   b.close();
   await a.next('FRIEND_PRESENCE'); // offline-Push abwarten
@@ -92,12 +92,42 @@ test('Empfänger offline: Gutschrift wartet in WELCOME.palPending (einmalig)', a
   const welcome = await b2.hello(idB);
   assert.equal(welcome.d.palPending.length, 1);
   assert.equal(welcome.d.palPending[0].amount, 77);
+  assert.equal(typeof welcome.d.palPending[0].id, 'string');
   b2.close();
   await b2.waitClose();
-  // Queue ist geleert — beim nächsten Boot nichts mehr.
+  // OHNE Ack bleibt die Gutschrift liegen — ein verlorenes WELCOME
+  // (Disconnect-Race) verliert nichts (E13 P1-2).
   const b3 = await WsClient.connect(server.wsUrl);
   const welcome3 = await b3.hello(idB);
-  assert.equal(welcome3.d.palPending.length, 0);
+  assert.equal(welcome3.d.palPending.length, 1);
+  await b3.request('PAL_ACK', { id: welcome3.d.palPending[0].id });
+  b3.close();
+  await b3.waitClose();
+  // Nach dem Ack ist die Queue leer.
+  const b4 = await WsClient.connect(server.wsUrl);
+  const welcome4 = await b4.hello(idB);
+  assert.equal(welcome4.d.palPending.length, 0);
+  b4.close();
+});
+
+test('Disconnect-Race: PAL_RECEIVED ohne Ack → Pull beim nächsten Connect', async (t) => {
+  const { server, a, b, codeB, idB } = await twoFriends(t);
+  const res = await a.request('PAL_SEND', { to: codeB, amount: 33 });
+  assert.equal(res.d.ok, true);
+  const received = await b.next('PAL_RECEIVED'); // live zugestellt…
+  assert.equal(received.d.amount, 33);
+  assert.equal(typeof received.d.id, 'string');
+  b.close(); // …aber nie geackt (Client starb im Race)
+  await b.waitClose();
+  const b2 = await WsClient.connect(server.wsUrl);
+  const welcome = await b2.hello(idB);
+  assert.equal(welcome.d.palPending.length, 1);
+  assert.equal(welcome.d.palPending[0].id, received.d.id);
+  await b2.request('PAL_ACK', { id: received.d.id });
+  b2.close();
+  await b2.waitClose();
+  const b3 = await WsClient.connect(server.wsUrl);
+  assert.equal((await b3.hello(idB)).d.palPending.length, 0);
   b3.close();
 });
 

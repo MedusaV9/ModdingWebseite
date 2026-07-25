@@ -88,6 +88,82 @@ func test_online_kommen_triggert_flush() -> void:
 	await _teardown(setup)
 
 
+func test_produktions_boot_puffert_session_ab_sekunde_null() -> void:
+	# E14 P1-1: der ECHTE Boot-Pfad (build_services=true) muss den
+	# Session-Start sofort in die Outbox schreiben — ein Crash/OS-Kill vor
+	# dem ersten 60-s-Heartbeat darf die Session nicht mehr verlieren.
+	var stamp := "%d_%d" % [Time.get_ticks_usec(), randi() % 100000]
+	var net := NetClient.new()
+	net.auto_connect = false
+	net.identity_path = "user://test_prodboot_id_%s.json" % stamp
+	net.outbox_path = "user://test_prodboot_outbox_%s.json" % stamp
+	net.config_override = {"host": "fake.test", "port": 1, "tls": false}
+	tree.root.add_child(net)
+	await wait_frames(1)
+
+	assert_true(net.analytics != null, "Analytics-Service gebaut")
+	assert_false(net.analytics.session_id.is_empty(), "Session läuft")
+	var entries := net.outbox.entries(AnalyticsSessions.OUTBOX_KIND)
+	assert_eq(entries.size(), 1, "Session-Start liegt SOFORT in der Outbox")
+	assert_eq((entries[0]["payload"] as Dictionary).get("sessionId"), net.analytics.session_id)
+	assert_true(FileAccess.file_exists(net.outbox_path), "Outbox-Datei persistiert (Crash-sicher)")
+
+	var identity_path := net.identity_path
+	var outbox_path := net.outbox_path
+	net.queue_free()
+	await wait_frames(1)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(identity_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(outbox_path))
+
+
+func test_spaetes_setup_schreibt_session_start_nach() -> void:
+	# Regressionsnetz für die alte Boot-Reihenfolge: _ready() lief ohne
+	# Outbox → setup() muss den Start nachschreiben statt ihn zu verlieren.
+	var rig := NetTestRig.boot(tree)
+	var analytics := AnalyticsSessions.new()
+	rig.client.add_child(analytics)
+	await wait_frames(1)
+	assert_false(analytics.session_id.is_empty(), "_ready() startete die Session")
+
+	var outbox_path := "user://test_backfill_%d_%d.json" % [Time.get_ticks_usec(), randi()]
+	var outbox := NetOutbox.new(outbox_path)
+	assert_eq(outbox.size(), 0, "vor setup(): nichts gepuffert")
+	analytics.setup(rig.client, outbox)
+	assert_eq(outbox.entries(AnalyticsSessions.OUTBOX_KIND).size(), 1, "setup() schreibt nach")
+
+	analytics.queue_free()
+	await rig.shutdown(tree)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(outbox_path))
+
+
+func test_flush_behaelt_laufende_session() -> void:
+	# E14 P1-2 (Client-Hälfte): der Eintrag der LAUFENDEN Session bleibt nach
+	# einem erfolgreichen Flush liegen — Heartbeats verlängern ihn weiter,
+	# der Server upsertet pro sessionId nach max. Dauer. Erst nach
+	# end_session() räumt der nächste Flush ihn ab.
+	var setup := await _boot()
+	var analytics: AnalyticsSessions = setup["analytics"]
+	var outbox: NetOutbox = setup["outbox"]
+
+	analytics.poster = func(_url: String, _headers: PackedStringArray, _body: String) -> bool:
+		return true
+	analytics.rest_base_url = "http://fake.test:1"
+	await analytics.flush()
+	assert_eq(
+		outbox.entries(AnalyticsSessions.OUTBOX_KIND).size(),
+		1,
+		"laufende Session bleibt in der Outbox"
+	)
+
+	analytics.heartbeat()
+	assert_eq(outbox.size(), 1, "Heartbeat upsertet weiter denselben Eintrag")
+
+	analytics.end_session()
+	await analytics.flush()
+	assert_eq(outbox.size(), 0, "beendete Session wird nach dem Flush abgeräumt")
+	await _teardown(setup)
+
+
 func _boot() -> Dictionary:
 	var rig := NetTestRig.boot(tree)
 	var outbox_path := (

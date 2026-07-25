@@ -24,6 +24,34 @@ func set_kind(kind: String) -> void:
 	_push()
 
 
+## Router-Ziel → Presence-kind (E14 P1-5, pur testbar). Der Home-Entry ruft
+## das bei jedem travel_finished; game_id kommt vom MinigameHost (falls
+## vorhanden). Unbekannte Stadt-Orte melden ihre Ort-Id — der SERVER baut
+## daraus das deutsche Label (Templates serverseitig aktualisierbar).
+static func kind_for_route(target: String, game_id := "") -> String:
+	if target.begins_with("home/"):
+		return "home"
+	if target == "city":
+		return "city"
+	if target.begins_with("city/ort/"):
+		var ort := target.trim_prefix("city/ort/")
+		match ort:
+			"rehwei":
+				return "park"
+			"gouhbus":
+				return "ikea"
+			_:
+				return ort
+	if target == "social/visit":
+		return "visit"
+	if target == "social/battleship":
+		return "board"
+	if target == "mg_host":
+		return "minigame:%s" % (game_id if not game_id.is_empty() else "arcade")
+	# Vollbild-Screens (social/album/arcade/…) laufen weiter zuhause.
+	return "home"
+
+
 func current_kind() -> String:
 	return _kind
 

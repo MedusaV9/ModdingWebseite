@@ -10,10 +10,15 @@ extends Node
 
 const START_ROOM := "living"
 
+const Economy := preload("res://scripts/logic/economy.gd")
+
 var _router: Node
 var _gs: Node
+var _net: Node
 var _hud: Hud
 var _toasts: ToastLayer
+var _settings: Control
+var _safe_mode_banner: Control
 ## HUD erst nach Onboarding erlaubt; Sichtbarkeit folgt danach dem Router:
 ## nur in Räumen (RoomBase) an, über Vollbild-Screens aus (E5-F1).
 var _hud_enabled := false
@@ -44,6 +49,8 @@ func _ready() -> void:
 		_router.travel_finished.connect(_on_travel_finished)
 	if _router != null and _router.has_signal("travel_started"):
 		_router.travel_started.connect(_on_travel_started)
+	_wire_net()
+	_setup_safe_mode_banner()
 	_roll_random_event()
 	if _gs != null and not bool(_gs.get_value("onboarding.done", false)):
 		_show_onboarding()
@@ -75,8 +82,9 @@ func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> voi
 		_hud.visible = false
 
 
-func _on_travel_finished(_target: Variant = null) -> void:
+func _on_travel_finished(target: Variant = null) -> void:
 	_update_hud_visibility()
+	_report_presence(target)
 	var room := _current_room()
 	if room == null:
 		return
@@ -102,6 +110,9 @@ func _build_hud() -> void:
 	_toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui_layer.add_child(_toasts)
 	_hud.action_pressed.connect(_on_hud_action)
+	# E12 P1: das HUD-Zahnrad öffnet den Settings-Screen (inkl. Update-Glue).
+	if _hud.has_signal("settings_pressed"):
+		_hud.settings_pressed.connect(_open_settings)
 	if _gs == null:
 		return
 	_gs.coins_changed.connect(func(coins: int) -> void: _hud.set_coins(coins))
@@ -174,3 +185,134 @@ func _start_home() -> void:
 	_hud.visible = true
 	if _router != null:
 		_router.goto(RoomDefs.route_target(START_ROOM))
+
+
+## --- E14-Wiring: Analytics / Server-Events / Redeem / Presence (P1-1/4/5) ---
+
+
+func _wire_net() -> void:
+	_net = get_node_or_null("/root/Net")
+	if _net == null:
+		return
+	# P1-1: Spielzeit zählt ab Sekunde 0 — idempotent (das Net-Autoload hat
+	# die Session normalerweise schon beim Boot gestartet + gepuffert).
+	var analytics: Variant = _net.get("analytics")
+	if analytics != null and analytics.has_method("start_session"):
+		analytics.start_session()
+	# P1-4: Server-Events (Panel-getriggert) sichtbar machen.
+	var events: Variant = _net.get("server_events")
+	if events != null and events.has_signal("event_received"):
+		events.event_received.connect(_on_server_event)
+	# P1-3: Redeem-Ergebnisse (auch aus dem Offline-Outbox-Flush) anwenden.
+	var redeem: Variant = _net.get("redeem")
+	if redeem != null and redeem.has_signal("redeemed"):
+		redeem.redeemed.connect(_on_code_redeemed)
+		redeem.redeem_failed.connect(_on_code_redeem_failed)
+
+
+## P1-4: sichtbare Wirkung — Toast „Event: <name>“ (minimaler Hook ins
+## Content-System; RandomEventEngine rollt weiter lokal, s. _roll_random_event).
+func _on_server_event(_id: String, type: String, params: Dictionary) -> void:
+	var event_name := str(params.get("name", type))
+	_toasts.show_toast(I18nService.t("net.server_event.toast", {"name": event_name}))
+
+
+## P1-3: Reward lokal anwenden (Coins über den EINEN Geld-Pfad) + Toast.
+func _on_code_redeemed(code: String, reward: Dictionary) -> void:
+	var coins := int(reward.get("coins", 0))
+	if coins > 0 and _gs != null and _gs.has_method("update"):
+		_gs.update(
+			func(s: Dictionary) -> void:
+				var econ: Dictionary = s.get("economy", {})
+				Economy.award(econ, coins, "code_redeem")
+		)
+	_toasts.show_toast(I18nService.t("net.redeem.ok", {"code": code}))
+
+
+func _on_code_redeem_failed(code: String, error: String) -> void:
+	_toasts.show_toast(I18nService.t("net.redeem.err", {"code": code, "error": error}))
+
+
+## P1-5: Aktivität an den Freunde-Tab melden — bei jedem Router-Ziel.
+func _report_presence(target: Variant) -> void:
+	if _net == null:
+		return
+	var presence: Variant = _net.get("presence")
+	if presence == null or not presence.has_method("set_kind"):
+		return
+	var game_id := ""
+	var scene: Node = _router.get_current_scene() if _router != null else null
+	if scene != null and scene.get("game_id") != null:
+		game_id = str(scene.get("game_id"))
+	presence.set_kind(PresenceService.kind_for_route(str(target), game_id))
+
+
+## --- E12-Wiring: Settings-Screen + Update-Toasts + Safe-Mode-Banner ---
+
+
+func _open_settings() -> void:
+	if _settings != null and is_instance_valid(_settings):
+		return
+	_settings = (load("res://scripts/ui/settings_screen.tscn") as PackedScene).instantiate()
+	_settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var glue := SettingsUpdateGlue.new()
+	glue.name = "UpdateGlue"
+	_settings.add_child(glue)
+	_ui_layer.add_child(_settings)
+	glue.attach(_settings)
+	if _settings.has_signal("back_pressed"):
+		_settings.back_pressed.connect(_close_settings)
+	if _hud != null:
+		_hud.visible = false
+
+
+func _close_settings() -> void:
+	if _settings != null and is_instance_valid(_settings):
+		_settings.queue_free()
+	_settings = null
+	_update_hud_visibility()
+
+
+func _setup_safe_mode_banner() -> void:
+	var loader := get_node_or_null("/root/PackLoader")
+	if loader == null:
+		return
+	if loader.has_signal("safe_mode_entered"):
+		loader.safe_mode_entered.connect(_show_safe_mode_banner)
+	if loader.has_method("is_safe_mode") and loader.is_safe_mode():
+		_show_safe_mode_banner()
+
+
+func _show_safe_mode_banner() -> void:
+	if _safe_mode_banner != null and is_instance_valid(_safe_mode_banner):
+		return
+	var banner := PanelContainer.new()
+	banner.name = "SafeModeBanner"
+	banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var label := Label.new()
+	label.text = I18nService.t("updates.safe_mode")
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(label)
+	var retry := Button.new()
+	retry.text = I18nService.t("updates.erneut_versuchen")
+	retry.custom_minimum_size = Vector2(0, 48)
+	retry.focus_mode = Control.FOCUS_NONE
+	retry.pressed.connect(_on_safe_mode_retry)
+	row.add_child(retry)
+	banner.add_child(row)
+	_ui_layer.add_child(banner)
+	_safe_mode_banner = banner
+
+
+func _on_safe_mode_retry() -> void:
+	var loader := get_node_or_null("/root/PackLoader")
+	if loader != null and loader.has_method("reenable_all_packs"):
+		loader.reenable_all_packs()
+	if _safe_mode_banner != null and is_instance_valid(_safe_mode_banner):
+		_safe_mode_banner.queue_free()
+		_safe_mode_banner = null
+	_toasts.show_toast(I18nService.t("updates.update_geladen"))

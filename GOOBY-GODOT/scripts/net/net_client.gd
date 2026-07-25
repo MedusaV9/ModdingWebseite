@@ -6,7 +6,8 @@ extends Node
 ## Backoff. OFFLINE-FIRST: nichts hier blockiert je das Spiel; request() ist
 ## eine await-bare Coroutine mit Timeout, alle Zustände laufen über Signale.
 ## Autoload-Wunsch „Net“ (project-godot-requests.md); bis dahin Duck-Typing.
-## Komposition: outbox / presence / friends / analytics hängen als Kinder.
+## Komposition: outbox / presence / friends / analytics / redeem /
+## server_events hängen als Kinder.
 
 signal status_changed(status: int)
 signal welcome_received(data: Dictionary)
@@ -33,6 +34,8 @@ var link_factory: Callable = Callable()
 var config_override: Dictionary = {}
 ## Identitäts-Datei (Tests leiten auf ein Temp-user://-File um).
 var identity_path := "user://net_identity.json"
+## Outbox-Datei (Tests leiten auf ein Temp-user://-File um).
+var outbox_path := "user://outbox.json"
 
 var status: int = Status.OFFLINE
 var friend_code := ""
@@ -43,6 +46,8 @@ var outbox: NetOutbox
 var presence: PresenceService
 var friends: FriendsService
 var analytics: AnalyticsSessions
+var redeem: RedeemService
+var server_events: ServerEventsService
 
 var _link: Variant = null
 var _want_connected := false
@@ -58,7 +63,7 @@ var _heartbeat_accum := 0.0
 func _ready() -> void:
 	_identity = _load_or_create_identity()
 	if build_services:
-		outbox = NetOutbox.new()
+		outbox = NetOutbox.new(outbox_path)
 		presence = PresenceService.new()
 		presence.name = "Presence"
 		add_child(presence)
@@ -69,8 +74,19 @@ func _ready() -> void:
 		friends.setup(self)
 		analytics = AnalyticsSessions.new()
 		analytics.name = "Analytics"
-		add_child(analytics)
+		# setup() MUSS vor add_child() kommen: _ready() startet die Session
+		# und braucht die Outbox bereits — sonst geht der Session-Start bei
+		# Crash vor dem ersten Heartbeat verloren (E14 P1-1).
 		analytics.setup(self, outbox)
+		add_child(analytics)
+		redeem = RedeemService.new()
+		redeem.name = "Redeem"
+		redeem.setup(self, outbox)
+		add_child(redeem)
+		server_events = ServerEventsService.new()
+		server_events.name = "ServerEvents"
+		server_events.setup(self)
+		add_child(server_events)
 	if auto_connect:
 		connect_now()
 

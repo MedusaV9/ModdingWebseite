@@ -66,6 +66,22 @@ func test_kind_wird_auf_32_zeichen_gekappt() -> void:
 	await rig.shutdown(tree)
 
 
+func test_kind_for_route_mapping() -> void:
+	# E14 P1-5: Router-Ziel → Presence-kind (Home-Entry-Hook).
+	assert_eq(PresenceService.kind_for_route("home/living"), "home")
+	assert_eq(PresenceService.kind_for_route("home/kitchen"), "home")
+	assert_eq(PresenceService.kind_for_route("city"), "city")
+	assert_eq(PresenceService.kind_for_route("city/ort/rehwei"), "park", "REHWEI = Park-Label")
+	assert_eq(PresenceService.kind_for_route("city/ort/gouhbus"), "ikea", "GOUHBUS = Möbelhaus")
+	assert_eq(PresenceService.kind_for_route("city/ort/post"), "post", "unbekannter Ort → Ort-Id")
+	assert_eq(PresenceService.kind_for_route("social/visit"), "visit")
+	assert_eq(PresenceService.kind_for_route("social/battleship"), "board")
+	assert_eq(PresenceService.kind_for_route("mg_host", "teaParty"), "minigame:teaParty")
+	assert_eq(PresenceService.kind_for_route("mg_host"), "minigame:arcade")
+	assert_eq(PresenceService.kind_for_route("social"), "home", "Vollbild-Screens = zuhause")
+	assert_eq(PresenceService.kind_for_route("album"), "home")
+
+
 func _attach_presence(rig: NetTestRig) -> PresenceService:
 	var presence := PresenceService.new()
 	rig.client.add_child(presence)
