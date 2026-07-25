@@ -18,6 +18,10 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 
 ## Offen (hier bitte eintragen)
 [ ] Der Char editor soll der dicke Gooby das Modell von davor sein ich finde das neue Aussehen in den UIs von ihm nicht schön.
+[ ] Das Movement ist ab der ersten Sekunde verbuggt. Gooby glitcht hin und her.
+[ ] Das neue Gooby model ist nicht so toll wie das alte, nutze das alte bitte wieder.
+[ ] Mach den Char Editor wirklich sein 3D Model zeigen auch mit rotieren etc
+[ ] Für Türen im Haus benutzen sollte eine Bestätigung angeboten werden (per Settings auschaltbar)
 [ ] Der Char ersteller am Anfang sieht komisch aus
 [ ] Wo genau überträgt man seinen Save Game von davor?
 [ ] Es ist irgendwie nicht alles so gut gebackportet worden nur so gerusht ohne ohne Liebe zum detail.
