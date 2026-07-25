@@ -17,10 +17,16 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+[ ] Ich kann das Spiel nicht installieren die .ipa App verschwindet sofort ich glaube es gibt da Probleme?
+[ ] Die AppID ist eine andere als davor also das macht sicherlich auch probleme
+[ ] Die IPA ist nur 38mb? ich glaube das ist falsch hast du wirklich alle assets übertragen?
+[ ] Das App Logo ist nicht das selbe wie davor denk dran du kannst Bilder generieren also nutze es auch
 
 <!-- USER: Neue Punkte einfach hier drunter schreiben. Beispiel:
-- [ ] Das HUD ist mir im Querformat zu weit links
-- [ ] Der Taxi-Sound ist zu laut
+
+[ ] Das HUD ist mir im Querformat zu weit links
+[ ] Der Taxi-Sound ist zu laut
+
 -->
 
 ---
