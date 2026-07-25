@@ -21,6 +21,7 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Die AppID ist eine andere als davor also das macht sicherlich auch probleme
 [ ] Die IPA ist nur 38mb? ich glaube das ist falsch hast du wirklich alle assets übertragen?
 [ ] Das App Logo ist nicht das selbe wie davor denk dran du kannst Bilder generieren also nutze es auch
+[ ] Denk dran mehr Subagents bei dir zunutzen ich sehe das du nur 4 gleichzeitig nutzt. Denk dran mehr zunutzen und mehr Content hinzuzufügen also auch Cosmetics und Möbel und Items wie du im Plan auch schon hattest.
 
 <!-- USER: Neue Punkte einfach hier drunter schreiben. Beispiel:
 
