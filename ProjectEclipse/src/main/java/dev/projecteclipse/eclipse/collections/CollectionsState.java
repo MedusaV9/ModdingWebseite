@@ -39,6 +39,13 @@ public final class CollectionsState extends SavedData {
         public int capDay = 0;
         /** Credits already granted per collection id for {@code capDay}. */
         public final Map<String, Long> capUsed = new HashMap<>();
+        /**
+         * DOPA-S-06 crash-safety journal: 1-based tiers whose CLAIM is durable but whose
+         * XP/point/shard payout has not been confirmed applied yet. Written (and flushed)
+         * BEFORE any grant; a row that survives a crash is replayed exactly once at the
+         * player's next login ({@code CollectionsService.replayPendingGrants}).
+         */
+        public final Map<String, java.util.Set<Integer>> pendingGrants = new HashMap<>();
 
         public long count(String collectionId) {
             return counts.getOrDefault(collectionId, 0L);
@@ -46,6 +53,23 @@ public final class CollectionsState extends SavedData {
 
         public int grantedTier(String collectionId) {
             return grantedTiers.getOrDefault(collectionId, 0);
+        }
+
+        /** Journals one claimed-but-not-yet-paid tier (caller flushes + setDirty). */
+        public void addPendingGrant(String collectionId, int tier) {
+            pendingGrants.computeIfAbsent(collectionId, ignored -> new java.util.LinkedHashSet<>())
+                    .add(tier);
+        }
+
+        /** Confirms one tier's payout applied (caller calls setDirty). */
+        public void clearPendingGrant(String collectionId, int tier) {
+            java.util.Set<Integer> tiers = pendingGrants.get(collectionId);
+            if (tiers != null) {
+                tiers.remove(tier);
+                if (tiers.isEmpty()) {
+                    pendingGrants.remove(collectionId);
+                }
+            }
         }
     }
 
@@ -89,6 +113,14 @@ public final class CollectionsState extends SavedData {
             for (String key : capUsed.getAllKeys()) {
                 entry.capUsed.put(key, Math.max(0L, capUsed.getLong(key)));
             }
+            CompoundTag pending = playerTag.getCompound("pendingGrants");
+            for (String key : pending.getAllKeys()) {
+                for (int tier : pending.getIntArray(key)) {
+                    if (tier > 0) {
+                        entry.addPendingGrant(key, tier);
+                    }
+                }
+            }
             state.players.put(playerTag.getUUID("uuid"), entry);
         }
         return state;
@@ -117,6 +149,14 @@ public final class CollectionsState extends SavedData {
                 capUsed.putLong(cap.getKey(), cap.getValue());
             }
             playerTag.put("capUsed", capUsed);
+            if (!entry.pendingGrants.isEmpty()) {
+                CompoundTag pending = new CompoundTag();
+                for (Map.Entry<String, java.util.Set<Integer>> grant : entry.pendingGrants.entrySet()) {
+                    pending.putIntArray(grant.getKey(),
+                            grant.getValue().stream().mapToInt(Integer::intValue).toArray());
+                }
+                playerTag.put("pendingGrants", pending);
+            }
             list.add(playerTag);
         }
         tag.put("players", list);

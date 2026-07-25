@@ -52,10 +52,13 @@ import net.neoforged.fml.loading.FMLPaths;
 public final class GoalConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     /**
-     * Version 2 = the v5 phase-aware/harder ladder (FIX-ECON migration cut-in). Bump when
-     * the shipped default authoring must replace live files on servers.
+     * Version 2 = the v5 phase-aware/harder ladder (FIX-ECON migration cut-in). Version 3
+     * = EVAL-DOPA-F #8: day-1 {@code TEAM_ALL} mains demoted to {@code EACH_PLAYER} (a
+     * single no-show must not zero the onboarding day) and the slow-grinder personals
+     * ({@code p_swimmer}/{@code p_leaper}) pushed to {@code minDay 2}. Bump when the
+     * shipped default authoring must replace live files on servers.
      */
-    public static final int CONFIG_VERSION = 2;
+    public static final int CONFIG_VERSION = 3;
     /** Legacy sidebar bitmask limit — mirrored from {@code ConfigEditor.MAX_GOALS_PER_DAY}. */
     public static final int MAX_MAINS_PER_DAY = 8;
     private static final int MAX_DAYS = 64;
@@ -543,10 +546,12 @@ public final class GoalConfig {
                 List.of(main("d01_timber", Scope.TEAM_TOTAL,
                                 count(TriggerType.MINE_BLOCK, "#minecraft:logs", 128),
                                 text("Fell 128 logs as a team", "Fällt als Team 128 Stämme"), xp(300)),
-                        main("d01_stone_age", Scope.TEAM_ALL,
+                        // EVAL-DOPA-F #8: EACH_PLAYER, not TEAM_ALL — one day-1 no-show
+                        // must not turn the strongest onboarding day into 1/3 mains done.
+                        main("d01_stone_age", Scope.EACH_PLAYER,
                                 count(TriggerType.CRAFT_ITEM, "minecraft:stone_pickaxe", 1),
                                 text("Everyone crafts a stone pickaxe", "Jeder fertigt eine Steinspitzhacke"), xp(250)),
-                        main("d01_touch_altar", Scope.TEAM_ALL, location(0, 0, 10),
+                        main("d01_touch_altar", Scope.EACH_PLAYER, location(0, 0, 10),
                                 text("Everyone touches the altar", "Jeder berührt den Altar"),
                                 new Reward(300, 0, List.of(new GoalSpec.ItemReward("eclipse:umbral_shard", 2))))),
                 List.of(side("d01_unscathed", Scope.TEAM_ALL,
@@ -870,10 +875,12 @@ public final class GoalConfig {
         pool.add(personal("p_night_owl", count(TriggerType.SURVIVE_NIGHT_NO_DAMAGE, "", 1),
                 text("Survive a night without damage", "Übersteht eine Nacht ohne Schaden"), 2, 0, 0,
                 reward(220, 2)));
+        // EVAL-DOPA-F #8: minDay 2 keeps day-1 personal draws snappy — the slow grinders
+        // (jump 1000x, swim 500 m) never roll into the onboarding day.
         pool.add(personal("p_leaper", stat("minecraft:custom/minecraft:jump", 1000),
-                text("Jump 1000 times", "Springt 1000 Mal"), 2, 0, 8, reward(150, 1)));
+                text("Jump 1000 times", "Springt 1000 Mal"), 2, 2, 8, reward(150, 1)));
         pool.add(personal("p_swimmer", stat("minecraft:custom/minecraft:swim_one_cm", 50000),
-                text("Swim 500 meters", "Schwimmt 500 Meter"), 1, 0, 0, reward(150, 1)));
+                text("Swim 500 meters", "Schwimmt 500 Meter"), 1, 2, 0, reward(150, 1)));
         pool.add(personal("p_climber", stat("minecraft:custom/minecraft:climb_one_cm", 15000),
                 text("Climb 150 meters", "Klettert 150 Meter"), 1, 0, 0, reward(150, 1)));
         pool.add(personal("p_defuser", count(TriggerType.KILL_ENTITY, "minecraft:creeper", 10),

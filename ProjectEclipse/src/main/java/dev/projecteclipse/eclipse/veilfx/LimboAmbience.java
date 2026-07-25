@@ -72,7 +72,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * {@code ship_deck} anchor sync, see {@link LimboSpecialEffects#clientWaterlineY}),
  * {@code VoyageOffset} (steadily increasing world-XZ scroll along ship forward −X→+X — the
  * caustic field streams slowly astern past the hull: the shader half of the "sailing"
- * illusion; wraps hourly like {@code Time}), {@code CurveAmount} (horizon curvature strength,
+ * illusion; accumulates continuously from the limbo-entry instant instead of wrapping
+ * hourly like {@code Time}, so it never jumps mid-visit), {@code CurveAmount} (horizon curvature strength,
  * forced 0 under {@code reducedFx}) and {@code FarDist} (effective render distance in
  * blocks, where the loaded sea geometry ends).</p>
  *
@@ -460,9 +461,14 @@ public final class LimboAmbience {
             pipeline.getUniform("WaterlineY").setFloat(WATERLINE_UNKNOWN);
         }
         // Ship forward is +X: an increasing +X lookup offset streams the caustic features
-        // toward −X, i.e. slowly astern past the hull (the item-6 sailing illusion). Wraps
-        // hourly with the same period as Time (one small jump per hour, like Time itself).
-        pipeline.getUniform("VoyageOffset").setVector(seconds * VOYAGE_BLOCKS_PER_SECOND, 0.0F);
+        // toward −X, i.e. slowly astern past the hull (the item-6 sailing illusion).
+        // Continuous accumulation from the limbo-entry instant — unlike the hourly Time
+        // base, this never wraps mid-visit, so the caustic field cannot teleport once an
+        // hour (the shader feeds it into non-periodic noise, so no modulo is seamless).
+        // It resets to 0 on the next limbo entry, while the pipeline is faded out anyway.
+        long enter = limboEnterMillis;
+        float voyageSeconds = enter < 0L ? 0.0F : (System.currentTimeMillis() - enter) / 1000.0F;
+        pipeline.getUniform("VoyageOffset").setVector(voyageSeconds * VOYAGE_BLOCKS_PER_SECOND, 0.0F);
         pipeline.getUniform("CurveAmount").setFloat(
                 EclipseClientConfig.reducedFx() ? 0.0F : intensity);
         pipeline.getUniform("FarDist").setFloat(farDistBlocks());

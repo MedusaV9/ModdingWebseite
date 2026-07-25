@@ -240,15 +240,25 @@ public final class SidebarPanel {
             }
 
             int maxWidth = originX + PANEL_WIDTH - PADDING - localX;
-            // FIX-ECON quest shard chip: a small right-aligned "◆N" in accent color
-            // advertises the personal-shard payout; the row text yields the space.
-            if (row.rewardShards() > 0) {
-                String chip = "\u25c6" + row.rewardShards();
-                int chipWidth = font.width(chip);
-                int chipX = originX + PANEL_WIDTH - PADDING - chipWidth;
-                guiGraphics.drawString(font, chip, chipX, rowY,
-                        MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
-                maxWidth -= chipWidth + 3;
+            // FIX-ECON quest shard chip + EVAL-DOPA-F XP chip half: right-aligned "◆N" in
+            // accent with a dim "+N XP" beside it advertise both payouts; the row text
+            // yields the space.
+            if (row.rewardShards() > 0 || row.rewardXp() > 0) {
+                int chipRight = originX + PANEL_WIDTH - PADDING;
+                if (row.rewardShards() > 0) {
+                    String chip = "\u25c6" + row.rewardShards();
+                    chipRight -= font.width(chip);
+                    guiGraphics.drawString(font, chip, chipRight, rowY,
+                            MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
+                    chipRight -= 3;
+                }
+                if (row.rewardXp() > 0) {
+                    String xpChip = "+" + row.rewardXp() + "XP";
+                    chipRight -= font.width(xpChip);
+                    guiGraphics.drawString(font, xpChip, chipRight, rowY,
+                            MarqueeText.faded(EclipseUiTheme.DIM, alpha));
+                }
+                maxWidth = chipRight - 3 - localX;
             }
             int color = row.goalDone() == null
                     ? EclipseUiTheme.TEXT
@@ -371,9 +381,10 @@ public final class SidebarPanel {
                 }
                 String text = EclipseLang.locale().startsWith("de") && !goal.textDe().isBlank()
                         ? goal.textDe() : goal.textEn();
-                // FIX-ECON: rewardShards rides along so the row can advertise its ◆N chip.
+                // FIX-ECON: rewardShards rides along so the row can advertise its ◆N chip;
+                // EVAL-DOPA-F: rewardXp joins it for the "+N XP" chip half.
                 rows.add(new Row(goal.id(), null, text, goal.done(), 10 + index,
-                        Math.max(0, goal.rewardShards())));
+                        Math.max(0, goal.rewardShards()), Math.max(0, goal.rewardXp())));
                 index++;
             }
         }
@@ -478,9 +489,9 @@ public final class SidebarPanel {
     }
 
     private record Row(String id, ResourceLocation icon, String text, Boolean goalDone,
-            int phaseSalt, int rewardShards) {
+            int phaseSalt, int rewardShards, int rewardXp) {
         Row(String id, ResourceLocation icon, String text, Boolean goalDone, int phaseSalt) {
-            this(id, icon, text, goalDone, phaseSalt, 0);
+            this(id, icon, text, goalDone, phaseSalt, 0, 0);
         }
     }
 }

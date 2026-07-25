@@ -149,13 +149,14 @@ public final class RebirthService {
         return RebirthApi.Result.OK;
     }
 
-    /** Fresh {@code S2CRebirthStatePayload} (count, next cost, multiplier) to one client. */
+    /** Fresh {@code S2CRebirthStatePayload} (count, next cost, multiplier, aura toggle) to one client. */
     public static void syncTo(ServerPlayer player) {
         int count = RebirthApi.count(player.server, player.getUUID());
         PacketDistributor.sendToPlayer(player, new S2CRebirthStatePayload(
                 count,
                 RebirthConfig.get().costForCount(count),
-                (float) RebirthApi.levelCostMultiplier(player.server, player.getUUID())));
+                (float) RebirthApi.levelCostMultiplier(player.server, player.getUUID()),
+                RebirthState.get(player.server).auraEnabled(player.getUUID())));
     }
 
     /**

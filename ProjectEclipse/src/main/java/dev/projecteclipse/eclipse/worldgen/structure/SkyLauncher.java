@@ -9,6 +9,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
 
+import com.mojang.math.Transformation;
+
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
@@ -36,6 +41,7 @@ import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
@@ -64,7 +70,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <ol>
  *   <li><b>Launch pad</b> ({@code eclipse:sky_launcher}) — an 8×8 "wind altar" ring
  *       (polished-deepslate disc, calcite rim, sculk inlays, central amethyst spire,
- *       four chain pylons) stamped on a terraced shelf just below the observatory
+ *       four chain pylons, a hovering wind-shard display that spins up with the
+ *       charge) stamped on a terraced shelf just below the observatory
  *       summit via the two-phase {@link StructurePendingRegistry} (rift reveal, resume,
  *       dedup for free — the {@link WizardObservatory} pattern). Using the pad's
  *       {@code minecraft:interaction} runs a {@value #CHARGE_TICKS}-tick charge-up
@@ -103,6 +110,22 @@ public final class SkyLauncher {
     public static final String ENTITY_TAG = "eclipse_sky_launcher";
     /** Command tag on the return pad's interaction entity. */
     public static final String RETURN_ENTITY_TAG = "eclipse_sky_launcher_return";
+    /** Command tag on the launch pad's wind-shard display accent (BD-SHIP). */
+    public static final String SHARD_TAG = "eclipse_sky_launcher_shard";
+
+    // --- wind shard (BD-SHIP; launch pad only — the authored hero, not the utility ring) ---
+    /** Golden angle (radians) — the charge spiral's three-arm phase offsets. */
+    private static final float GOLDEN_ANGLE = 2.3999632F;
+    /** Shard hover height above the pad floor (clear of the y0+3 amethyst cluster). */
+    private static final double SHARD_HOVER = 4.6D;
+    private static final float SHARD_SCALE = 0.38F;
+    /** Ambient motion: slow yaw, fixed tilt, long sine bob — poses are absolute in game time. */
+    private static final double SHARD_YAW_DEG_PER_TICK = 1.4D;
+    private static final double SHARD_TILT_DEG = 12.0D;
+    private static final double SHARD_BOB_BLOCKS = 0.3D;
+    private static final double SHARD_BOB_PERIOD = 160.0D;
+    /** Charge spin-up: extra yaw (deg) at progress 1 — capped so 3t windows stay ≤ ~25°. */
+    private static final double SHARD_CHARGE_BOOST_DEG = 60.0D;
 
     /** Stage recorded on the pending rows (mountain is fully inside the stage-3 disc). */
     private static final int STAGE = WizardObservatory.MIN_STAGE;
@@ -275,14 +298,23 @@ public final class SkyLauncher {
                 double progress = 1.0D - (double) remaining / CHARGE_TICKS;
                 double angle = progress * Math.PI * 4.0D;
                 Vec3 center = Vec3.atCenterOf(charge.pad());
-                level.sendParticles(ParticleTypes.END_ROD,
-                        center.x + Math.cos(angle) * 1.4D,
-                        center.y + progress * 2.5D,
-                        center.z + Math.sin(angle) * 1.4D,
-                        3, 0.15D, 0.1D, 0.15D, 0.01D);
+                // BD-SHIP golden-angle spiral: three arms 137.5077° apart (same 3
+                // particles/tick budget as the old single dotted line — 3×1, not 1×3).
+                for (int arm = 0; arm < 3; arm++) {
+                    double armAngle = angle + arm * GOLDEN_ANGLE;
+                    level.sendParticles(ParticleTypes.END_ROD,
+                            center.x + Math.cos(armAngle) * 1.4D,
+                            center.y + progress * 2.5D,
+                            center.z + Math.sin(armAngle) * 1.4D,
+                            1, 0.1D, 0.08D, 0.1D, 0.01D);
+                }
                 if (remaining % 3 == 0) {
                     level.playSound(null, charge.pad(), SoundEvents.AMETHYST_BLOCK_CHIME,
                             SoundSource.BLOCKS, 1.0F, 0.6F + (float) progress * 1.2F);
+                    // BD-SHIP: the shard whips up with the chimes (3t windows; after the
+                    // launch the ambient driver's absolute clock pulls it back — the
+                    // recoil settle is free under the stateless-push law).
+                    boostWindShard(level, charge.pad(), progress);
                 }
                 continue;
             }
@@ -526,6 +558,7 @@ public final class SkyLauncher {
             SitePrep.finish(level, prepared);
             sweepPadEntities(level, surface);
             spawnPadInteraction(level, surface.above(), ENTITY_TAG, 3.4F, 3.0F);
+            spawnWindShard(level, surface);
             LauncherData data = LauncherData.get(level.getServer().overworld());
             data.setLaunchPad(surface);
             EclipseMod.LOGGER.info("SkyLauncher wind altar built at {}", surface.toShortString());
@@ -628,7 +661,8 @@ public final class SkyLauncher {
         level.getChunk(base);
         List<Entity> pieces = level.getEntities((Entity) null, new AABB(base).inflate(4.0D, 6.0D, 4.0D),
                 entity -> entity.getTags().contains(ENTITY_TAG)
-                        || entity.getTags().contains(RETURN_ENTITY_TAG));
+                        || entity.getTags().contains(RETURN_ENTITY_TAG)
+                        || entity.getTags().contains(SHARD_TAG));
         pieces.forEach(Entity::discard);
     }
 
@@ -670,6 +704,17 @@ public final class SkyLauncher {
         Vec3 center = Vec3.atCenterOf(pad.above());
         level.sendParticles(ParticleTypes.END_ROD, center.x, center.y + 0.6D, center.z,
                 2, 0.9D, 0.5D, 0.9D, 0.005D);
+        if (ENTITY_TAG.equals(tag)) {
+            // BD-SHIP wind shard: one 20t interpolated window per ambient stride; the
+            // 200t self-heal also covers the shard (a /kill'ed accent heals like a
+            // /kill'ed interaction, born mid-pose off the same absolute clock).
+            boolean shardAlive = animateWindShard(level, pad, gameTime);
+            if (!shardAlive && gameTime % SELF_HEAL_TICKS == 0L) {
+                spawnWindShard(level, pad);
+                EclipseMod.LOGGER.info("SkyLauncher: re-spawned missing wind shard at {}",
+                        pad.toShortString());
+            }
+        }
         if (gameTime % SELF_HEAL_TICKS == 0L) {
             // A /kill'ed interaction would silently brick the pad — respawn it.
             List<Entity> found = level.getEntities((Entity) null,
@@ -682,6 +727,76 @@ public final class SkyLauncher {
                         launcher ? "launch" : "return", pad.toShortString());
             }
         }
+    }
+
+    // --- wind shard accent (BD-SHIP) ---
+
+    /**
+     * The wind shard: one small amethyst-block display hovering above the spire cluster,
+     * slowly yawing with a fixed tilt and a long sine bob. It persists with the world;
+     * every pose is an absolute function of game time (SanctumOrbitals stateless-push
+     * law), so a restart or a paused chunk glides back on track on the next push —
+     * never a snap.
+     */
+    private static void spawnWindShard(ServerLevel level, BlockPos pad) {
+        Display.BlockDisplay shard = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
+        shard.setBlockState(Blocks.AMETHYST_BLOCK.defaultBlockState());
+        shard.moveTo(pad.getX() + 0.5D, pad.getY() + SHARD_HOVER, pad.getZ() + 0.5D, 0.0F, 0.0F);
+        shard.addTag(SHARD_TAG);
+        shard.setTransformationInterpolationDelay(0);
+        shard.setTransformationInterpolationDuration(0);
+        shard.setTransformation(shardPose(level.getGameTime(), 0.0D));
+        level.addFreshEntity(shard);
+    }
+
+    /** Ambient 20t window (≈28° of yaw — under the flattening law); returns shard presence. */
+    private static boolean animateWindShard(ServerLevel level, BlockPos pad, long gameTime) {
+        boolean found = false;
+        for (Entity entity : level.getEntities((Entity) null,
+                new AABB(pad).inflate(2.0D, 6.0D, 2.0D),
+                candidate -> candidate.getTags().contains(SHARD_TAG))) {
+            found = true;
+            if (entity instanceof Display.BlockDisplay shard) {
+                shard.setTransformationInterpolationDelay(0);
+                shard.setTransformationInterpolationDuration(AMBIENT_TICKS);
+                shard.setTransformation(shardPose(gameTime + AMBIENT_TICKS, 0.0D));
+            }
+        }
+        return found;
+    }
+
+    /** Charge-stride 3t window with the capped spin-up boost riding the ambient clock. */
+    private static void boostWindShard(ServerLevel level, BlockPos pad, double progress) {
+        long gameTime = level.getGameTime();
+        for (Entity entity : level.getEntities((Entity) null,
+                new AABB(pad).inflate(2.0D, 6.0D, 2.0D),
+                candidate -> candidate.getTags().contains(SHARD_TAG))) {
+            if (entity instanceof Display.BlockDisplay shard) {
+                shard.setTransformationInterpolationDelay(0);
+                shard.setTransformationInterpolationDuration(3);
+                shard.setTransformation(shardPose(gameTime + 3,
+                        SHARD_CHARGE_BOOST_DEG * progress * progress));
+            }
+        }
+    }
+
+    /**
+     * Absolute shard pose at {@code gameTime} (+ the charge spin-up's extra yaw):
+     * center-pivot so the scaled block spins/bobs around its own center. Double math +
+     * {@code IEEEremainder} keep old worlds' large game times from eating float precision.
+     */
+    private static Transformation shardPose(long gameTime, double boostDegrees) {
+        double degrees = SHARD_YAW_DEG_PER_TICK * gameTime + boostDegrees;
+        float yaw = (float) Math.toRadians(Math.IEEEremainder(degrees, 360.0D));
+        float bob = (float) (SHARD_BOB_BLOCKS
+                * Math.sin(gameTime * (Math.PI * 2.0D / SHARD_BOB_PERIOD)));
+        Quaternionf rotation = new Quaternionf().rotationY(yaw)
+                .rotateZ((float) Math.toRadians(SHARD_TILT_DEG));
+        Vector3f half = new Vector3f(SHARD_SCALE * 0.5F, SHARD_SCALE * 0.5F, SHARD_SCALE * 0.5F);
+        Vector3f translation = new Vector3f(0.0F, bob, 0.0F)
+                .sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation,
+                new Vector3f(SHARD_SCALE, SHARD_SCALE, SHARD_SCALE), new Quaternionf());
     }
 
     // --- pad anchors (own tiny SavedData; ObservatoryVersionData pattern) ---

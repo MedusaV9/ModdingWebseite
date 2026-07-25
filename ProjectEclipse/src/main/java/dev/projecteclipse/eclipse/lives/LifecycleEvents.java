@@ -34,6 +34,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
@@ -205,6 +206,16 @@ public final class LifecycleEvents {
                             S2CQuasarPayload.HEART_BURST,
                             player.position().add(0.0D, 1.0D, 0.0D)));
         }
+    }
+
+    /**
+     * Statics reset so a singleplayer relaunch (same JVM) never leaks a pending
+     * heart-loss burst across saves (house rule; the TTL prune alone would replay a
+     * stale burst onto the wrong save's respawn within the ~1 h window).
+     */
+    @SubscribeEvent
+    static void onServerStopped(ServerStoppedEvent event) {
+        PENDING_HEART_LOSSES.clear();
     }
 
     /**

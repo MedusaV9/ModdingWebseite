@@ -13,10 +13,10 @@
     "eclipse.minigame.arena.protect.on": "Spawnschutz: %1$ss — ein Angriff beendet ihn früher.",
     "eclipse.minigame.arena.protect.broken": "Spawnschutz beendet — du hast angegriffen.",
     "eclipse.minigame.arena.bounds": "Du bist über den Arenarand hinausgeraten — zurück in den Kampf!",
-    "eclipse.minigame.arena.title.get_ready": "Mach dich bereit…",
+    "eclipse.minigame.arena.title.get_ready": "Macht euch bereit…",
     "eclipse.minigame.arena.title.fight": "KÄMPFT!",
     "eclipse.minigame.arena.title.round_over": "RUNDE VORBEI",
-    "eclipse.minigame.arena.podium.tie": "%1$s Kämpfer teilen sich Platz #%2$s — je %3$s Takedown(s)!",
+    "eclipse.minigame.arena.podium.tie": "%1$s Kämpfer teilen sich Platz #%2$s — je %3$s Gegner ausgeschaltet!",
     "eclipse.minigame.arena.kit_refresh": "Frische Ausrüstung für die neue Runde."
   }
 }

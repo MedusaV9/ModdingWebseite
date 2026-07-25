@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.registry;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
@@ -14,11 +15,13 @@ import dev.projecteclipse.eclipse.ritual.HeartExtractorItem;
 import dev.projecteclipse.eclipse.ritual.ReviveSigilItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.PickaxeItem;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.component.ItemLore;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -144,6 +147,20 @@ public final class EclipseItems {
                     .stacksTo(1)
                     .rarity(Rarity.EPIC)
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)));
+
+    /**
+     * The storm's beating heart (plan §2.4, closed by the V6 gap-fix): guaranteed Fog
+     * Tyrant drop with baked-in lore. Registering it retires the tyrant's 6-umbral-shard
+     * registry-lookup fallback — the shards still drop alongside as the storm's loose
+     * change ({@code FogTyrantEntity#dropCustomDeathLoot}).
+     */
+    public static final Supplier<Item> STORM_HEART = ITEMS.register("storm_heart",
+            () -> new Item(new Item.Properties()
+                    .stacksTo(16)
+                    .rarity(Rarity.EPIC)
+                    .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)
+                    .component(DataComponents.LORE, new ItemLore(List.of(
+                            Component.translatable("item.eclipse.storm_heart.lore"))))));
 
     /** Admin/debug item for the altar block; not craftable (admins place the altar manually). */
     public static final Supplier<BlockItem> ALTAR = ITEMS.register("altar",

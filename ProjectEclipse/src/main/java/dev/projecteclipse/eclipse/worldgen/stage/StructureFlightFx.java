@@ -86,6 +86,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * below the surface: trial chambers, ancient city, crypts) get PLUNGING pieces that punch
  * into the ground on arrival instead of resting on it.</p>
  *
+ * <p><b>Craft pass (BD-STRUCT)</b>: keyframes lead by one update interval so the client
+ * tween covers between poses (never trails); launches stagger in CENTER-OUT SPIRAL order
+ * over the footprint; pieces emerge small and full-bright from the tear
+ * ({@link DisplayBrightnessFx} ramp — stepped toward ambient mid-flight, cleared on
+ * landing), grow into a ×{@value #SCALE_OVERSHOOT} hover overshoot that settles to ×1.0,
+ * and land with a bottom-anchored 2-tick y-squash instead of dipping into the grid; the
+ * landing thud/shake fires when the contact keyframe's interpolation ENDS, not at the
+ * send tick.</p>
+ *
  * <p><b>Budgets</b>: at most {@code flight_fx.max_displays} displays per delivery (config
  * {@code config/eclipse/dungeons.json}, optional section, default {@value #DEFAULT_MAX_DISPLAYS});
  * launches staggered in batches of {@value #BATCH_SIZE} every {@value #BATCH_STAGGER_TICKS}
@@ -121,6 +130,28 @@ public final class StructureFlightFx {
     private static final float HOVER_OVERSHOOT = 0.35F;
     /** Display scale: slightly over 1 so a settled piece encloses the real block (no z-fight). */
     private static final float PIECE_SCALE = 1.02F;
+    /** Scale craft: pieces emerge small from the tear and grow into the hover overshoot. */
+    private static final float SCALE_EXIT = 0.85F;
+    /** Overshoot-settle scale read: hover holds ×1.06, the settle eases it back to ×1.0. */
+    private static final float SCALE_OVERSHOOT = 1.06F;
+    /**
+     * Settle fraction at which the dropping piece first meets its grid cell (where
+     * {@code HOVER_OVERSHOOT·(1−s)² − 0.07·sin(πs)} crosses zero, ≈ 0.58). Ground
+     * contact: the height offset clamps to 0 there and the remaining "dip" energy is
+     * spent as a ~2-tick y-squash instead of sinking into the cell; the landing
+     * thud/shake seam is scheduled for the END of the keyframe window that crosses it.
+     */
+    private static final float CONTACT_SETTLE_T = 0.58F;
+    /** Landing squash floor: y-scale dips to this at contact, recovering by rest. */
+    private static final float SQUASH_Y = 0.94F;
+    /** Flight fraction at which the rift-exit full-bright steps down toward ambient. */
+    private static final float GLOW_MID_FLIGHT_T = 0.55F;
+    /**
+     * Launch-order spiral pitch (blocks of radius per full turn): pieces launch in
+     * center-out order with an angular sweep inside each annulus — the delivery reads as
+     * one deliberate outward spiral instead of a random hail.
+     */
+    private static final double SPIRAL_TURN_BLOCKS = 3.0D;
     /**
      * Rift-mouth altitude above the site surface. Mirrors the (private)
      * {@code ExpansionSequence.SKY_RIFT_HEIGHT} so the delivery surge re-opens the beat's
@@ -277,7 +308,8 @@ public final class StructureFlightFx {
         /** Entity anchor: the resting cell's column center at cell Y (grid-exact settle). */
         final Vec3 entityPos;
         final BlockState state;
-        final int launchTick;
+        /** Assigned after the center-out spiral sort of {@link #buildPieces}. */
+        int launchTick;
         final int flightTicks;
         final float spinTurns;
         final Vector3f spinAxis;
@@ -287,15 +319,18 @@ public final class StructureFlightFx {
         Display.BlockDisplay display;
         boolean landed;
         boolean settled;
+        /** Brightness ramp stage: 0 = rift-exit full-bright, 1 = mid-flight, 2 = cleared. */
+        int glowStage;
+        /** Flight age at which the contact keyframe's interpolation ENDS (−1 = unarmed). */
+        int fxDueAge = -1;
 
         Piece(Vec3 launch, Vec3 control, Vec3 target, Vec3 entityPos, BlockState state,
-                int launchTick, int flightTicks, float spinTurns, Vector3f spinAxis, boolean plunge) {
+                int flightTicks, float spinTurns, Vector3f spinAxis, boolean plunge) {
             this.launch = launch;
             this.control = control;
             this.target = target;
             this.entityPos = entityPos;
             this.state = state;
-            this.launchTick = launchTick;
             this.flightTicks = flightTicks;
             this.spinTurns = spinTurns;
             this.spinAxis = spinAxis;
@@ -377,6 +412,16 @@ public final class StructureFlightFx {
             boolean launchedBatch = false;
             boolean allSettled = true;
             for (Piece piece : this.pieces) {
+                // Landing seam: the thud/shake/brightness-clear fire when the contact
+                // keyframe's interpolation ENDS on the client — never at the send tick.
+                if (piece.fxDueAge >= 0 && this.age >= piece.fxDueAge) {
+                    piece.fxDueAge = -1;
+                    landingFx(piece);
+                    if (piece.glowStage < 2 && piece.display != null && !piece.display.isRemoved()) {
+                        DisplayBrightnessFx.clear(piece.display);
+                    }
+                    piece.glowStage = 2;
+                }
                 if (this.age < piece.launchTick) {
                     allSettled = false;
                     continue;
@@ -437,6 +482,11 @@ public final class StructureFlightFx {
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(0);
             display.setTransformation(poseAt(piece, 0.0F, 0.0F));
+            // Brightness ramp stage 0: white-hot out of the luminous tear. The display
+            // samples light at its GROUND entity anchor otherwise — sky pieces would
+            // render ground-dim without the override. Steps down mid-flight, cleared on
+            // landing (see tick()).
+            DisplayBrightnessFx.set(display, 15, 15);
             LIVE_DISPLAYS.add(display.getUUID());
             level.addFreshEntity(display);
             piece.display = display;
@@ -463,12 +513,23 @@ public final class StructureFlightFx {
                 piece.settled = true;
                 return;
             }
-            float flightT = Mth.clamp(pieceAge / (float) piece.flightTicks, 0.0F, 1.0F);
-            float settleT = pieceAge <= piece.flightTicks ? 0.0F
-                    : (pieceAge - piece.flightTicks) / (float) SETTLE_TICKS;
-            if (flightT >= 1.0F && !piece.landed) {
+            // Keyframe lead (the SanctumOrbitals transport law): the pushed pose is the
+            // one this interpolation window ENDS on, so the client tween covers the gap
+            // between keyframes instead of trailing one interval behind the server.
+            int targetAge = Math.min(pieceAge + UPDATE_INTERVAL_TICKS,
+                    piece.flightTicks + SETTLE_TICKS);
+            float flightT = Mth.clamp(targetAge / (float) piece.flightTicks, 0.0F, 1.0F);
+            float settleT = targetAge <= piece.flightTicks ? 0.0F
+                    : (targetAge - piece.flightTicks) / (float) SETTLE_TICKS;
+            if (piece.glowStage == 0 && flightT >= GLOW_MID_FLIGHT_T) {
+                piece.glowStage = 1; // cooling: still sky-lit, block glow mostly gone
+                DisplayBrightnessFx.set(display, 8, 15);
+            }
+            if (!piece.landed && settleT >= CONTACT_SETTLE_T) {
+                // This window crosses ground contact — schedule the thud/shake seam for
+                // the moment the interpolation ENDS (the visual touchdown), not now.
                 piece.landed = true;
-                landingFx(piece);
+                piece.fxDueAge = this.age + UPDATE_INTERVAL_TICKS;
             }
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
@@ -521,17 +582,48 @@ public final class StructureFlightFx {
      * translation, the proven {@code DisplayPlacerService.applyAnimation} pattern (block
      * local space is {@code [0,1]³}; rotate the half-extent and translate back so spin
      * stays centered on the piece).
+     *
+     * <p><b>Scale craft</b> (BD-STRUCT): pieces emerge at ×{@value #SCALE_EXIT} and grow
+     * into the hover at ×{@value #SCALE_OVERSHOOT} on the flight ease; the settle eases
+     * that overshoot back to ×1.0. Ground contact ({@code settleT ≥}
+     * {@value #CONTACT_SETTLE_T}) clamps the height offset to zero — the piece never
+     * sinks into its cell — and spends the residual drop as a ~2-tick y-squash to
+     * {@value #SQUASH_Y} (with a half-strength x/z counter-bulge), anchored at the piece
+     * BOTTOM so the base stays glued to the grid while the top compresses. The rest pose
+     * is exactly uniform {@value #PIECE_SCALE}, byte-identical to pre-craft.</p>
      */
     private static Transformation poseAt(Piece piece, float flightT, float settleT) {
         Vec3 center;
         Quaternionf rotation;
+        float scaleXz;
+        float scaleY;
         if (settleT > 0.0F) {
-            // Damped settle: drop out of the hover overshoot, dip a hair below the rest
-            // height, ease back — the "overshoot-settle" read. Spin has fully damped out.
+            // Damped settle: drop out of the hover overshoot toward the rest height.
+            // Spin has fully damped out (integer turns land grid-aligned).
             float inv = 1.0F - settleT;
-            float yOff = HOVER_OVERSHOOT * inv * inv
-                    - 0.07F * Mth.sin((float) Math.PI * settleT);
-            center = piece.target.add(0.0D, yOff, 0.0D);
+            float yOff;
+            if (piece.plunge) {
+                // Cavity delivery: accelerating monotonic descent THROUGH the surface —
+                // the piece is a full block deep when the settle ends and discards.
+                yOff = HOVER_OVERSHOOT * inv * inv - 0.9F * settleT * settleT;
+            } else {
+                yOff = HOVER_OVERSHOOT * inv * inv
+                        - 0.07F * Mth.sin((float) Math.PI * settleT);
+                if (yOff < 0.0F) {
+                    yOff = 0.0F; // contact: dip becomes squash, never grid intersection
+                }
+            }
+            float base = PIECE_SCALE * (1.0F + (SCALE_OVERSHOOT - 1.0F) * inv * inv);
+            // Cavity pieces PUNCH INTO the ground (deep dip, no squash) — they discard
+            // at settle end; surface pieces spend the dip energy as the landing squash.
+            float squash = piece.plunge ? 0.0F : Mth.sin((float) Math.PI
+                    * Mth.clamp((settleT - CONTACT_SETTLE_T) / (1.0F - CONTACT_SETTLE_T), 0.0F, 1.0F));
+            scaleY = base * (1.0F - (1.0F - SQUASH_Y) * squash);
+            scaleXz = base * (1.0F + 0.5F * (1.0F - SQUASH_Y) * squash);
+            // Bottom-anchored: center rides at yOff + half the (squashed) height above
+            // the cell floor, so the base never lifts while the top compresses.
+            center = new Vec3(piece.target.x,
+                    piece.entityPos.y + yOff + scaleY * 0.5D, piece.target.z);
             rotation = new Quaternionf();
         } else {
             // Ballistic Bezier, ease-out: pieces burst from the tear and decelerate into
@@ -546,15 +638,18 @@ public final class StructureFlightFx {
             float spinEased = 1.0F - (1.0F - flightT) * (1.0F - flightT);
             rotation = new Quaternionf().rotationAxis(
                     piece.spinTurns * Mth.TWO_PI * spinEased, piece.spinAxis);
+            float grow = PIECE_SCALE * (SCALE_EXIT + (SCALE_OVERSHOOT - SCALE_EXIT) * eased);
+            scaleXz = grow;
+            scaleY = grow;
         }
-        float half = PIECE_SCALE * 0.5F;
-        Vector3f corner = new Vector3f(-half, -half, -half).rotate(rotation);
+        Vector3f corner = new Vector3f(-scaleXz * 0.5F, -scaleY * 0.5F, -scaleXz * 0.5F)
+                .rotate(rotation);
         Vector3f translation = new Vector3f(
                 (float) (center.x - piece.entityPos.x) + corner.x,
                 (float) (center.y - piece.entityPos.y) + corner.y,
                 (float) (center.z - piece.entityPos.z) + corner.z);
         return new Transformation(translation, rotation,
-                new Vector3f(PIECE_SCALE, PIECE_SCALE, PIECE_SCALE), new Quaternionf());
+                new Vector3f(scaleXz, scaleY, scaleXz), new Quaternionf());
     }
 
     // ------------------------------------------------------------------ piece planning
@@ -597,7 +692,6 @@ public final class StructureFlightFx {
                             (random.nextDouble() - 0.5D) * 8.0D);
             // Surface-first weighting: index² biases hard toward the primary material.
             BlockState state = palette.get((int) (random.nextFloat() * random.nextFloat() * palette.size()));
-            int launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
             int flightTicks = MIN_FLIGHT_TICKS + random.nextInt(MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS + 1);
             float spinTurns = (1 + random.nextInt(2)) * (random.nextBoolean() ? 1.0F : -1.0F);
             Vector3f spinAxis = new Vector3f(random.nextFloat() - 0.5F, random.nextFloat() - 0.5F,
@@ -606,10 +700,29 @@ public final class StructureFlightFx {
                 spinAxis.set(0.0F, 1.0F, 0.0F);
             }
             spinAxis.normalize();
-            pieces.add(new Piece(launch, control, target, entityPos, state, launchTick,
+            pieces.add(new Piece(launch, control, target, entityPos, state,
                     flightTicks, spinTurns, spinAxis, cavity));
         }
+        // Launch stagger: center-out SPIRAL order (BD-STRUCT — never a random hail).
+        // Sort key = landing radius plus a fractional-turn angle term, so batches sweep
+        // one revolution per SPIRAL_TURN_BLOCKS of radius growth: the footprint fills
+        // as a single deliberate outward spiral. Pure function of the deterministic
+        // targets and a stable sort — replays stay identical on every client.
+        pieces.sort((a, b) -> Double.compare(
+                spiralKey(a, surfaceCenter), spiralKey(b, surfaceCenter)));
+        for (int i = 0; i < pieces.size(); i++) {
+            pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
+        }
         return pieces;
+    }
+
+    /** Center-out spiral ordering key of a piece's landing cell (see buildPieces). */
+    private static double spiralKey(Piece piece, Vec3 surfaceCenter) {
+        double dx = piece.target.x - surfaceCenter.x;
+        double dz = piece.target.z - surfaceCenter.z;
+        double radius = Math.sqrt(dx * dx + dz * dz);
+        double turn = (Math.atan2(dz, dx) / (Math.PI * 2.0D)) + 0.5D; // 0..1 around
+        return radius + turn * SPIRAL_TURN_BLOCKS;
     }
 
     /** Surface-snapped site center (mirror of ExpansionSequence.surfaceCenterOf). */

@@ -163,7 +163,7 @@ public final class RebirthTests {
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void payloadCodecsRoundTrip(GameTestHelper helper) {
         GameTestSupport.assertPayloadRoundTrip(S2CRebirthStatePayload.STREAM_CODEC,
-                new S2CRebirthStatePayload(3, 33, 1.520875F));
+                new S2CRebirthStatePayload(3, 33, 1.520875F, true));
         GameTestSupport.assertPayloadRoundTrip(C2SRebirthPayload.STREAM_CODEC, new C2SRebirthPayload());
         helper.succeed();
     }

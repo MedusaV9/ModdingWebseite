@@ -265,21 +265,27 @@ public final class CollectionsConfig {
         JsonArray collections = new JsonArray();
 
         // --- Mining (7) — lane mine, natural blocks only (§1.1) ---
+        // EVAL-DOPA-F #9: cobblestone ships a REAL daily credit cap (600/day) — the
+        // stone lane is the one infinitely farmable counter, so an uncapped default
+        // turns a quarry night into a whole ladder sweep.
         collections.add(collection("cobblestone", "mining", "minecraft:cobblestone", "mine",
                 ids("minecraft:stone", "minecraft:cobblestone", "minecraft:deepslate", "minecraft:cobbled_deepslate"),
+                600L,
                 tier(50, 50, 0),
                 tier(250, 100, 0, "minecraft:stonecutter"),
                 tier(1000, 150, 0, "minecraft:dispenser", "minecraft:dropper"),
                 tier(2500, 250, 0, 1, "minecraft:piston", "minecraft:sticky_piston"),
                 tier(6000, 400, 1, 2),
                 tier(12500, 600, 1, 2)));
+        // EVAL-DOPA-F #9: one +1 SP MOVED from T5 down to T2 (early skill-point hit;
+        // the ladder's total SP budget is unchanged).
         collections.add(collection("coal", "mining", "minecraft:coal", "mine",
                 ids("minecraft:coal_ore", "minecraft:deepslate_coal_ore"),
                 tier(25, 40, 0),
-                tier(100, 75, 0, "minecraft:campfire"),
+                tier(100, 75, 1, "minecraft:campfire"),
                 tier(300, 125, 0, "minecraft:fire_charge"),
                 tier(750, 200, 0, 1),
-                tier(1500, 300, 1, 2),
+                tier(1500, 300, 0, 2),
                 tier(3000, 450, 0, 2)));
         collections.add(collection("copper", "mining", "minecraft:copper_ingot", "mine",
                 ids("minecraft:copper_ore", "minecraft:deepslate_copper_ore"),
@@ -347,13 +353,15 @@ public final class CollectionsConfig {
                 tier(800, 450, 1, 2)));
 
         // --- Wood (1) — lane mine on #minecraft:logs (§1.3) ---
+        // EVAL-DOPA-F #9: one +1 SP MOVED from T5 down to T3 (early skill-point hit;
+        // the ladder's total SP budget is unchanged).
         collections.add(collection("timber", "wood", "minecraft:oak_log", "mine",
                 ids("#minecraft:logs"),
                 tier(40, 50, 0),
                 tier(200, 100, 0, "minecraft:barrel"),
-                tier(600, 175, 0, "minecraft:smoker"),
+                tier(600, 175, 1, "minecraft:smoker"),
                 tier(1500, 275, 0, 1, "minecraft:loom", "minecraft:cartography_table"),
-                tier(3000, 400, 1, 2),
+                tier(3000, 400, 0, 2),
                 tier(6000, 600, 1, 2)));
 
         // --- Mobs (4) — lane kill: kills, not drops (Looting-neutral, §1.4) ---
@@ -409,13 +417,19 @@ public final class CollectionsConfig {
 
     private static JsonObject collection(String id, String category, String icon, String lane,
             JsonArray ids, JsonObject... tiers) {
+        return collection(id, category, icon, lane, ids, 0L, tiers);
+    }
+
+    /** Cap-aware variant (EVAL-DOPA-F #9: cobblestone ships a real daily credit cap). */
+    private static JsonObject collection(String id, String category, String icon, String lane,
+            JsonArray ids, long dailyCreditCap, JsonObject... tiers) {
         JsonObject obj = new JsonObject();
         obj.addProperty("id", id);
         obj.addProperty("category", category);
         obj.addProperty("icon", icon);
         obj.addProperty("lane", lane);
         obj.add("ids", ids);
-        obj.addProperty("dailyCreditCap", 0);
+        obj.addProperty("dailyCreditCap", dailyCreditCap);
         JsonArray tierArray = new JsonArray();
         for (JsonObject tier : tiers) {
             tierArray.add(tier);

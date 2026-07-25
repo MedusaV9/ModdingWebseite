@@ -33,6 +33,13 @@ public final class RebirthState extends SavedData {
         public int count = 0;
         /** Epoch millis of each ceremony, oldest first (audit trail; size tracks {@code count}). */
         public final List<Long> timestamps = new ArrayList<>();
+        /**
+         * Rebirth-keepsake aura toggle (V6 gap-fix): the subtle purple particle ring
+         * {@code RebirthAuraService} renders around reborn players. Defaults ON so the
+         * first ceremony grants the keepsake immediately; {@code /skills aura off} hides
+         * it. Cosmetic only — the durable marker itself is {@code count > 0}.
+         */
+        public boolean auraEnabled = true;
     }
 
     private final Map<UUID, Entry> players = new HashMap<>();
@@ -64,6 +71,24 @@ public final class RebirthState extends SavedData {
         return entry.count;
     }
 
+    /** Whether the keepsake aura should show for {@code uuid}: at least one rebirth + toggle on. */
+    public boolean auraVisible(UUID uuid) {
+        Entry entry = players.get(uuid);
+        return entry != null && entry.count > 0 && entry.auraEnabled;
+    }
+
+    /** The raw aura toggle (defaults ON) without requiring a completed rebirth. */
+    public boolean auraEnabled(UUID uuid) {
+        Entry entry = players.get(uuid);
+        return entry == null || entry.auraEnabled;
+    }
+
+    /** Flips the keepsake aura toggle and dirties. */
+    public void setAuraEnabled(UUID uuid, boolean enabled) {
+        entry(uuid).auraEnabled = enabled;
+        setDirty();
+    }
+
     /** Read-only view for iteration (dev status command / debug). */
     public Map<UUID, Entry> entries() {
         return Collections.unmodifiableMap(players);
@@ -83,6 +108,7 @@ public final class RebirthState extends SavedData {
                     entry.timestamps.add(longTag.getAsLong());
                 }
             }
+            entry.auraEnabled = !playerTag.contains("aura") || playerTag.getBoolean("aura");
             state.players.put(playerTag.getUUID("uuid"), entry);
         }
         return state;
@@ -101,6 +127,7 @@ public final class RebirthState extends SavedData {
                 times.add(LongTag.valueOf(stamp));
             }
             playerTag.put("times", times);
+            playerTag.putBoolean("aura", entry.auraEnabled);
             list.add(playerTag);
         }
         tag.put("players", list);

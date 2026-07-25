@@ -161,21 +161,54 @@ public final class EclipseLoadingScreen extends ReceivingLevelScreen {
     /**
      * The C15 white credits variant (IDEAS-backrooms_finale §B1 t=230): plain white fill,
      * a deadpan vanilla-styled "Building terrain…" line and a percentage that creeps toward
-     * (and never reaches) 100 — no sigil, no tips, none of the Eclipse dressing. With
-     * {@code reducedFx} the percentage is dropped (static line only).
+     * (and never reaches) 100 — no sigil, no tips, none of the Eclipse dressing. FXTEAM
+     * CUT-CREDITS gag polish: the line's trailing ellipsis types 1→3 dots (500 ms cadence)
+     * and the percentage deadpan-stalls at ~62% for 1.2 s before resuming, the way a real
+     * terrain load hitches. With {@code reducedFx} both animations are dropped (static
+     * translated line only, no percentage).
      */
     private void renderCreditsWhite(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0xFFFFFFFF);
         int centerX = this.width / 2;
         int centerY = this.height / 2;
         Component line = EclipseLang.tr("gui.eclipse.loading.credits_fake");
-        guiGraphics.drawCenteredString(this.font, line, centerX, centerY - 10, 0xFF404040);
-        if (!EclipseClientConfig.reducedFx()) {
-            // Fake progress: fast out of the gate, asymptotically stuck in the high 90s.
-            long elapsed = System.currentTimeMillis() - this.createdAtMillis;
-            int percent = (int) Math.min(99L, Math.round(99.0D * (1.0D - Math.exp(-elapsed / 2_500.0D))));
-            guiGraphics.drawCenteredString(this.font, percent + "%", centerX, centerY + 4, 0xFF808080);
+        if (EclipseClientConfig.reducedFx()) {
+            drawCenteredNoShadow(guiGraphics, line.getString(), centerX, centerY - 10, 0xFF404040);
+            return;
         }
+        long elapsed = System.currentTimeMillis() - this.createdAtMillis;
+        // Typing ellipsis: strip the translation's own trailing "…"/dots, re-grow 1→3.
+        int dots = 1 + (int) ((elapsed / 500L) % 3L);
+        drawCenteredNoShadow(guiGraphics, stripTrailingEllipsis(line.getString()) + ".".repeat(dots),
+                centerX, centerY - 10, 0xFF404040);
+        // Fake progress: fast out of the gate, one mid-load stall, asymptotically stuck
+        // in the high 90s (the exp curve reaches ~62% at the 2.5 s stall window).
+        long effective = elapsed < 2_500L ? elapsed : elapsed < 3_700L ? 2_500L : elapsed - 1_200L;
+        int percent = (int) Math.min(99L, Math.round(99.0D * (1.0D - Math.exp(-effective / 2_500.0D))));
+        drawCenteredNoShadow(guiGraphics, percent + "%", centerX, centerY + 4, 0xFF808080);
+    }
+
+    /**
+     * Vanilla-clean centered text: {@code drawCenteredString} always drops a shadow, which
+     * reads as a smudge on the pure-white credits fill — the real vanilla loading overlay
+     * draws its text shadowless, so the gag line must too.
+     */
+    private void drawCenteredNoShadow(GuiGraphics guiGraphics, String text, int centerX, int y, int color) {
+        guiGraphics.drawString(this.font, text, centerX - this.font.width(text) / 2, y, color, false);
+    }
+
+    /** Trims any trailing "…", '.' or spaces so the animated ellipsis never doubles up. */
+    private static String stripTrailingEllipsis(String text) {
+        int end = text.length();
+        while (end > 0) {
+            char last = text.charAt(end - 1);
+            if (last == '…' || last == '.' || last == ' ') {
+                end--;
+            } else {
+                break;
+            }
+        }
+        return text.substring(0, end);
     }
 
     /**

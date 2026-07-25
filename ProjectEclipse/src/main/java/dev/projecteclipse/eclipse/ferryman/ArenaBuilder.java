@@ -2,6 +2,12 @@ package dev.projecteclipse.eclipse.ferryman;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+
+import com.mojang.math.Transformation;
+
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
@@ -11,6 +17,9 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
@@ -18,6 +27,7 @@ import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.WallSkullBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -68,6 +78,26 @@ public final class ArenaBuilder {
     /** Mast-pillar offsets {x, z} — the old masts, rearranged onto the ring deck. */
     private static final int[][] PILLARS = {{24, 12}, {24, -12}, {-24, 12}, {-24, -12}};
     private static final int PILLAR_HEIGHT = 12;
+
+    // --- fight accent displays (BD-SHIP; fight-scoped, never persisted decor) ---
+    /** Command tag on every fight accent display (tag sweeps cover UUID-list drift). */
+    public static final String ACCENT_TAG = "eclipse_arena_accent";
+    /** Golden angle (radians) — per-lantern phase offsets (never in lockstep). */
+    private static final float GOLDEN_ANGLE = 2.3999632F;
+    /** Ghost helm wheel hover cell — over the stern rise, behind the boss's anchor. */
+    private static final int WHEEL_X = -17;
+    private static final double WHEEL_HOVER = 7.0D;
+    private static final float WHEEL_SCALE = 2.6F;
+    /** Wheel turn rate (deg/t) + two incommensurate rate-noise sines (the living feel). */
+    private static final double WHEEL_RATE_DEG = 0.5D;
+    private static final double WHEEL_NOISE_A_DEG = 4.0D;
+    private static final double WHEEL_NOISE_A_PERIOD = 90.0D;
+    private static final double WHEEL_NOISE_B_DEG = 2.5D;
+    private static final double WHEEL_NOISE_B_PERIOD = 217.0D;
+    /** Witness lanterns: hover above the pillar crowns, bob amplitude, slow yaw. */
+    private static final double LANTERN_HOVER = 2.4D;
+    private static final double LANTERN_BOB = 0.35D;
+    private static final double LANTERN_YAW_DEG = 0.2D;
 
     private ArenaBuilder() {}
 
@@ -375,6 +405,111 @@ public final class ArenaBuilder {
 
     private static BlockState litLantern() {
         return Blocks.SOUL_CAMPFIRE.defaultBlockState();
+    }
+
+    // ------------------------------------------------------------------ fight accents (BD-SHIP)
+
+    /**
+     * Spawns the fight's accent displays (sweep-then-spawn) into {@code liveIds} in fixed
+     * index order: 0 = the ghost helm wheel (a dark-oak-trapdoor display, the credits-wheel
+     * prop at 2.6 scale, hovering over the stern rise — the remembered ship still steers
+     * itself through the fight); 1..4 = witness soul-lantern displays above the four
+     * pillar crowns. UUIDs are recorded BEFORE {@code addFreshEntity} so the caller's
+     * join-time stray guard (the {@code StructureFlightFx} doctrine) never eats a live
+     * accent. All accents sit inside the fight's forced pit chunks.
+     */
+    public static void spawnAccentDisplays(ServerLevel arena, List<UUID> liveIds) {
+        sweepAccentDisplays(arena);
+        liveIds.clear();
+        long gameTime = arena.getGameTime();
+        spawnAccent(arena, liveIds, new Vec3(WHEEL_X + 0.5D, pitY(arena) + WHEEL_HOVER, 0.5D),
+                Blocks.DARK_OAK_TRAPDOOR.defaultBlockState(), accentPose(0, gameTime));
+        for (int i = 0; i < PILLARS.length; i++) {
+            Vec3 pos = new Vec3(PILLARS[i][0], ringY(arena) + PILLAR_HEIGHT + 1 + LANTERN_HOVER,
+                    PILLARS[i][1]);
+            spawnAccent(arena, liveIds, pos, Blocks.SOUL_LANTERN.defaultBlockState(),
+                    accentPose(1 + i, gameTime));
+        }
+    }
+
+    /**
+     * One interpolated 20t window per accent (the fight-watch stride IS the cadence —
+     * SanctumOrbitals law: pose at {@code gameTime + 20}, stateless absolute clock, so a
+     * lagged or re-pushed display glides back on track instead of snapping). Killed
+     * accents are skipped (no respawn mid-fight; the next spawn's sweep reconciles).
+     */
+    public static void animateAccentDisplays(ServerLevel arena, List<UUID> liveIds) {
+        long target = arena.getGameTime() + 20L;
+        for (int index = 0; index < liveIds.size(); index++) {
+            if (arena.getEntity(liveIds.get(index)) instanceof Display.BlockDisplay display) {
+                display.setTransformationInterpolationDelay(0);
+                display.setTransformationInterpolationDuration(20);
+                display.setTransformation(accentPose(index, target));
+            }
+        }
+    }
+
+    /** Discards every tagged accent display over the arena footprint (never the spectator ship). */
+    public static void sweepAccentDisplays(ServerLevel arena) {
+        AABB sweep = new AABB(-ARENA_HALF_LENGTH - 2.0D, 0.0D, -ARENA_HALF_WIDTH - 2.0D,
+                ARENA_HALF_LENGTH + 2.0D, 128.0D, ARENA_HALF_WIDTH + 2.0D);
+        List<Entity> strays = arena.getEntities((Entity) null, sweep,
+                entity -> entity.getTags().contains(ACCENT_TAG));
+        if (!strays.isEmpty()) {
+            strays.forEach(Entity::discard);
+            EclipseMod.LOGGER.info("Arena accents: {} display(s) swept", strays.size());
+        }
+    }
+
+    private static void spawnAccent(ServerLevel arena, List<UUID> liveIds, Vec3 pos,
+            BlockState state, Transformation pose) {
+        Display.BlockDisplay display = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, arena);
+        display.setBlockState(state);
+        display.moveTo(pos.x, pos.y, pos.z, 0.0F, 0.0F);
+        display.addTag(ACCENT_TAG);
+        display.setTransformationInterpolationDelay(0);
+        display.setTransformationInterpolationDuration(0);
+        display.setTransformation(pose);
+        liveIds.add(display.getUUID()); // before addFreshEntity: the join guard must know it
+        arena.addFreshEntity(display);
+    }
+
+    /**
+     * Absolute accent pose at {@code gameTime} (double math + {@code IEEEremainder} so
+     * hour-long fights never accumulate float error). Index 0 — the helm wheel: upright
+     * in the YZ plane, turning at {@value #WHEEL_RATE_DEG}°/t with two incommensurate
+     * sine noise terms (drifts, hesitates, pulls — never a metronome; worst 20t window
+     * ≈ 17°, far under the flattening threshold), spinning on its hub via the
+     * credits-wheel center-pivot math. Index 1..4 — witness lanterns: ±{@value
+     * #LANTERN_BOB} bob and a {@value #LANTERN_YAW_DEG}°/t yaw, golden-angle phase AND a
+     * de-tuned bob period per index so two lanterns can never phase-lock.
+     */
+    private static Transformation accentPose(int index, long gameTime) {
+        if (index == 0) {
+            double degrees = WHEEL_RATE_DEG * gameTime
+                    + WHEEL_NOISE_A_DEG * Math.sin(gameTime * (Math.PI * 2.0D / WHEEL_NOISE_A_PERIOD))
+                    + WHEEL_NOISE_B_DEG * Math.sin(gameTime * (Math.PI * 2.0D / WHEEL_NOISE_B_PERIOD) + 1.7D);
+            float spin = (float) Math.toRadians(Math.IEEEremainder(degrees, 360.0D));
+            Quaternionf rotation = new Quaternionf()
+                    .rotationZ((float) Math.toRadians(90.0D))
+                    .rotateY(spin);
+            Vector3f half = new Vector3f(WHEEL_SCALE * 0.5F, WHEEL_SCALE * 0.5F, WHEEL_SCALE * 0.5F);
+            Vector3f translation = new Vector3f().sub(rotation.transform(half, new Vector3f()));
+            return new Transformation(translation, rotation,
+                    new Vector3f(WHEEL_SCALE, WHEEL_SCALE, WHEEL_SCALE), new Quaternionf());
+        }
+        int lantern = index - 1;
+        float phase = lantern * GOLDEN_ANGLE;
+        double bobPeriod = 90.0D + 14.0D * lantern;
+        float bob = (float) (LANTERN_BOB * Math.sin(gameTime * (Math.PI * 2.0D / bobPeriod) + phase));
+        float yaw = (float) Math.toRadians(Math.IEEEremainder(
+                LANTERN_YAW_DEG * gameTime + Math.toDegrees(phase), 360.0D));
+        Quaternionf rotation = new Quaternionf().rotationY(yaw);
+        Vector3f axis = new Vector3f(0.5F, 0.0F, 0.5F);
+        Vector3f translation = new Vector3f(0.0F, bob, 0.0F)
+                .add(axis).sub(rotation.transform(axis, new Vector3f()));
+        return new Transformation(translation, rotation,
+                new Vector3f(1.0F, 1.0F, 1.0F), new Quaternionf());
     }
 
     private static void set(ServerLevel level, int x, int y, int z, BlockState state) {

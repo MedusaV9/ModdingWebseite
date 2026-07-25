@@ -73,9 +73,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>Timeline per R11</b> (animated GROW commits of the overworld; nether commits run a
  * reduced, cutscene-less variant — see below):</p>
  * <ol>
- *   <li>{@code SKYWARD} (~80 ticks) — every watcher is frozen by the cutscene engine and the
- *       player-anchored {@code expansion_skyward} shot tilts their camera up at the sky while
- *       the eclipse grade ramps in ({@code S2CEclipsePhasePayload} BUILDUP, 0 → 1 over 60
+ *   <li>{@code SKYWARD} (~100 ticks) — every watcher is frozen by the cutscene engine and the
+ *       player-anchored {@code expansion_skyward} shot launches their camera skyward (FOV
+ *       rush, per-watcher {@code cutscene_veil} punch-through burst at
+ *       {@value #SKYWARD_PUNCH_T} of the flight, apex curvature reveal) before tilting up
+ *       into the darkening sky while the eclipse grade ramps in
+ *       ({@code S2CEclipsePhasePayload} BUILDUP, 0 → 1 over 60
  *       ticks, R16) and {@code event.eclipse_drone} starts (path event). Nether players are
  *       first transported to a safe overworld viewpoint just inside the old rim
  *       ({@link FreezeService#transport}, R12 policy) so they see everything; their origin is
@@ -91,8 +94,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       walks the {@code growth_dust_wall} curtain emitter along the wave arc (SEQUENCE budget
  *       channel, ≤ 2 spawns per pulse, 96-block spawn radius). P1's own materialize bursts and
  *       rumble shakes continue untouched.</li>
- *   <li>{@code STRUCTURES} — after P1's terrain-done callback, every {@link PendingSite} of the
- *       stage gets a sequential rift-drop beat: close the enqueue-time ground tear, open a
+ *   <li>{@code STRUCTURES} — after P1's terrain-done callback (and a
+ *       {@value #STRUCTURES_ESTABLISH_TICKS}-tick wide establishing gap so the caption and
+ *       the open sky read first), every {@link PendingSite} of the
+ *       stage gets a sequential rift-drop beat: close the enqueue-time ground tear, let the
+ *       close read for {@value #GROUND_TEAR_HANDOFF_TICKS} ticks, open a
  *       {@code STYLE_STRUCTURE} rift in the sky above the site (width = footprint · 1.7 per the
  *       payload contract), hold {@value #RIFT_HOLD_TICKS} ticks, {@link
  *       StructurePendingRegistry#trigger} the paste, then on PLACED slam:
@@ -161,6 +167,24 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int SKY_RIFT_HEIGHT = 26;
     /** Rift width from the pending site's footprint (payload contract: diagonal · 1.2 ≈ · 1.7). */
     private static final float RIFT_WIDTH_PER_FOOTPRINT = 1.7F;
+
+    // --- CUT-EXPANSION camera-facing beat timing (shots 1/2/3/4 — fxteams/CUT-EXPANSION.md) ---
+    /** Skyward flight fraction of the cloud punch-through (mirrors the path's veil-fade t). */
+    private static final double SKYWARD_PUNCH_T = 0.40D;
+    /** Camera altitude above the watcher at the punch (the path's y offset around that t). */
+    private static final double SKYWARD_PUNCH_HEIGHT = 30.0D;
+    /** Flyover flight fraction at which the camera is lowest (skim deck; anchor-lead aim point). */
+    private static final double FLYOVER_SKIM_T = 0.5D;
+    /** Wide establishing gap between the STRUCTURES caption and the first tear. */
+    private static final int STRUCTURES_ESTABLISH_TICKS = 20;
+    /** Ground-tear close → sky-tear open stagger (lets the close animation read first). */
+    private static final int GROUND_TEAR_HANDOFF_TICKS = 6;
+    /** unlock_ring flight fraction of the god-ray backlight moment (mirrors the bloom-fade t). */
+    private static final double RING_HERO_T = 0.58D;
+    /** FX-only replay: representative delivery-flight length between the trigger and the slam. */
+    private static final int REPLAY_FLIGHT_TICKS = 45;
+    /** FX-only replay: landing micro-shake offsets after the trigger moment (live: per piece). */
+    private static final int[] REPLAY_LANDING_SHAKES_AT = {16, 28, 38};
 
     // --- IDEA-14 §2: three-beat crater read (rings + debris; 15 spawns/20 ticks ≤ BURST cap) ---
     /** Expanding dust rings after the slam: inner ring at t+6, outer ring at t+12. */
@@ -241,7 +265,10 @@ public final class ExpansionSequence implements SequenceReplayable {
 
         Phase phase = Phase.SKYWARD;
         boolean terrainComplete;
+        /** A front cutscene (flyover OR the ring fallback) carried the growing caption. */
         boolean flyoverPlayed;
+        /** STRUCTURES establishing-gap gate: no beat may open before this (CUT-EXPANSION). */
+        boolean firstBeatReleased;
         boolean ended;
 
         /** Sites awaiting their rift-drop beat, in PENDING order. */
@@ -337,12 +364,46 @@ public final class ExpansionSequence implements SequenceReplayable {
         }
 
         gatherNetherPlayers(run);
-        captionDimension(run.level, CAPTION_SKYWARD, 70);
+        captionDimension(run.level, CAPTION_SKYWARD, 90);
         List<ServerPlayer> watchers = List.copyOf(run.level.players());
-        // Player-anchored path: every watcher tilts up from their own feet. The callback runs
-        // synchronously when the path is missing/disabled or nobody watches — never softlocks.
+        // Player-anchored path: every watcher launches skyward from their own feet. The
+        // callback runs synchronously when the path is missing/disabled or nobody watches —
+        // never softlocks.
         CutsceneService.play(PATH_SKYWARD, watchers, null, () -> beginFlyover(run),
                 CutsceneService.PlayOptions.LOCAL);
+        scheduleSkywardPunch(server, run, watchers);
+    }
+
+    /**
+     * CUT-EXPANSION shot 1: the cloud-layer punch-through — one {@code cutscene_veil} wisp
+     * burst per watcher at the camera's approximate punch altitude, timed to the skyward
+     * path's veil-fade event ({@value #SKYWARD_PUNCH_T} of the flight). The server tick and
+     * the client flight clock can drift by the preload hold, but the skyward path is anchored
+     * at the watcher's own (already loaded) position, so the hold releases ~immediately and
+     * the burst lands inside the fade window. Skipped when the path is missing/disabled — the
+     * play callback already ran synchronously and a burst would flash over free gameplay.
+     * One spawn per watcher, sent to that watcher only (others' cameras are at their own
+     * feet — a remote burst would be subpixel); reducedFx clients budget it like any other
+     * one-shot Quasar payload.
+     */
+    private static void scheduleSkywardPunch(MinecraftServer server, @Nullable Run run,
+            List<ServerPlayer> watchers) {
+        CutscenePath skyward = CutscenePaths.get(PATH_SKYWARD);
+        if (skyward == null || !CutsceneService.isEnabled(server, skyward) || watchers.isEmpty()) {
+            return;
+        }
+        schedule(server, (int) (skyward.durationTicks() * SKYWARD_PUNCH_T), () -> {
+            if (run != null && (run.ended || RUNS.get(run.profile) != run)) {
+                return;
+            }
+            for (ServerPlayer watcher : watchers) {
+                if (!watcher.hasDisconnected()) {
+                    PacketDistributor.sendToPlayer(watcher, new S2CQuasarPayload(
+                            S2CQuasarPayload.CUTSCENE_VEIL,
+                            watcher.position().add(0.0D, SKYWARD_PUNCH_HEIGHT, 0.0D)));
+                }
+            }
+        });
     }
 
     /** FLYOVER: global group play toward the {@code growth_front} dynamic anchor. */
@@ -367,15 +428,29 @@ public final class ExpansionSequence implements SequenceReplayable {
             return;
         }
 
-        // Fallback: the reshot unlock_ring orbit at the old ring edge nearest each watcher
-        // (v1 shape). Per-player plays share no group, so GROWTH is entered on a timer.
+        // Fallback: the reshot unlock_ring hero orbit at the old ring edge nearest each
+        // watcher (v1 shape). Per-player plays share no group, so GROWTH is entered on a timer.
         CutscenePath fallback = CutscenePaths.get(PATH_FALLBACK);
         int fallbackTicks = 0;
-        if (fallback != null && CutsceneService.isEnabled(server, fallback)) {
+        if (fallback != null && CutsceneService.isEnabled(server, fallback) && !watchers.isEmpty()) {
+            // CUT-EXPANSION beat timing: the growing caption belongs INSIDE the orbit — it
+            // used to arrive from beginGrowth only after the shot had already ended.
+            run.flyoverPlayed = true;
+            captionDimension(run.level, CAPTION_GROWING, 90);
             int edgeRadius = StageRadii.radius(run.profile, run.fromStage);
+            int heroTick = (int) (fallback.durationTicks() * RING_HERO_T);
             for (ServerPlayer player : watchers) {
-                CutsceneService.play(PATH_FALLBACK, List.of(player),
-                        edgeAnchorFor(run.level, player.position(), edgeRadius), null);
+                Vec3 edge = edgeAnchorFor(run.level, player.position(), edgeRadius);
+                CutsceneService.play(PATH_FALLBACK, List.of(player), edge, null);
+                // Shot 4's god-ray backlight moment: one wisp flare at the orbited edge,
+                // timed to the path's bloom-fade beat (RING_HERO_T). Per-watcher anchor and
+                // per-watcher send — a single spawn each, budget-trivial.
+                schedule(server, heroTick, () -> {
+                    if (!run.ended && !player.hasDisconnected()) {
+                        PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(
+                                S2CQuasarPayload.CUTSCENE_VEIL, edge.add(0.0D, 4.0D, 0.0D)));
+                    }
+                });
             }
             fallbackTicks = fallback.durationTicks() + 20;
             EclipseMod.LOGGER.info("ExpansionSequence: '{}' unavailable — fell back to '{}' for {} watcher(s)",
@@ -393,7 +468,8 @@ public final class ExpansionSequence implements SequenceReplayable {
         // visitors deliberately remain at the viewpoint until END.
         run.phase = Phase.GROWTH;
         if (run.cinematic && !run.flyoverPlayed) {
-            captionDimension(run.level, CAPTION_GROWING, 90); // flyover carries this caption itself
+            // Both front shots (flyover AND the ring fallback) carry this caption themselves.
+            captionDimension(run.level, CAPTION_GROWING, 90);
         }
         if (run.terrainComplete) {
             beginStructures(run); // tiny sweeps can finish before the cutscenes do
@@ -436,7 +512,13 @@ public final class ExpansionSequence implements SequenceReplayable {
                 return;
             }
             captionDimension(run.level, CAPTION_STRUCTURES, 80);
-            maybeStartNextBeat(run);
+            // CUT-EXPANSION shot 3: a wide establishing gap — the caption and the open sky
+            // get a beat to read before the first tear rips it (was: the same tick). The
+            // firstBeatReleased gate also holds back PENDING-listener starts in the window.
+            schedule(server, STRUCTURES_ESTABLISH_TICKS, () -> {
+                run.firstBeatReleased = true;
+                maybeStartNextBeat(run);
+            });
         });
     }
 
@@ -472,7 +554,7 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** Opens the next beat's sky rift and schedules its placement trigger. */
     private static void maybeStartNextBeat(Run run) {
         if (run.ended || RUNS.get(run.profile) != run || run.activeBeat != null
-                || run.phase != Phase.STRUCTURES) {
+                || run.phase != Phase.STRUCTURES || !run.firstBeatReleased) {
             return;
         }
         PendingSite site = run.beatQueue.poll();
@@ -490,15 +572,25 @@ public final class ExpansionSequence implements SequenceReplayable {
 
         // Replace the enqueue-time ground-level tear (EclipsePayloads' PENDING cue) with our
         // sky tear: close it first — the two are far enough apart that openRift would not.
+        // CUT-EXPANSION shot 3 (tear handoff): the close animation gets
+        // GROUND_TEAR_HANDOFF_TICKS to read before the sky tear rips open with its shake —
+        // the two reads used to land in the same tick and muddied each other. The trigger
+        // hold is measured from the sky OPEN, so the beat's establishing width is unchanged.
         FxPayloads.sendFxEvent(run.level, FxPayloads.FX_RIFT_CLOSE, groundRiftPosOf(site), 0.0F, 0.0F, -1.0D);
         float width = site.footprint() * RIFT_WIDTH_PER_FOOTPRINT; // RiftFx clamps to its 48 cap
-        FxPayloads.sendFxEvent(run.level, FxPayloads.FX_RIFT_OPEN, riftPos, width,
-                0.0F /* STYLE_STRUCTURE */, -1.0D);
-        PacketDistributor.sendToPlayersInDimension(run.level, S2CShakePayload.shake(0.2F, 12));
+        schedule(server, GROUND_TEAR_HANDOFF_TICKS, () -> {
+            if (run.ended || run.activeBeat != beat) {
+                return; // aborted/auto-placed inside the handoff window: never open the tear
+            }
+            FxPayloads.sendFxEvent(run.level, FxPayloads.FX_RIFT_OPEN, riftPos, width,
+                    0.0F /* STYLE_STRUCTURE */, -1.0D);
+            PacketDistributor.sendToPlayersInDimension(run.level, S2CShakePayload.shake(0.2F, 12));
+        });
         EclipseMod.LOGGER.info("ExpansionSequence: rift beat for {} ({}) — tear at {} (width {}), trigger in {} ticks",
-                site.siteId(), site.structureId(), riftPos, width, RIFT_HOLD_TICKS);
+                site.siteId(), site.structureId(), riftPos, width,
+                GROUND_TEAR_HANDOFF_TICKS + RIFT_HOLD_TICKS);
 
-        schedule(server, RIFT_HOLD_TICKS, () -> {
+        schedule(server, GROUND_TEAR_HANDOFF_TICKS + RIFT_HOLD_TICKS, () -> {
             if (run.ended || run.activeBeat != beat) {
                 return;
             }
@@ -786,9 +878,15 @@ public final class ExpansionSequence implements SequenceReplayable {
         double waveR = Mth.lerp(progress, fromRadius, toRadius);
         CutscenePath flyover = CutscenePaths.get(PATH_FLYOVER);
         int flyoverTicks = flyover != null ? flyover.durationTicks() : 220;
+        // CUT-EXPANSION shot 2 sync: lead the front by its REAL speed — the full sweep width
+        // over GrowthPacing.targetTicks, the pacing law RingGrowthService steers toward — for
+        // the ticks until the camera is lowest (FLYOVER_SKIM_T), so the rolling front passes
+        // beneath the skim deck mid-shot instead of only catching up at the very end. Clamped
+        // to the remaining width so the anchor never lands beyond the target rim.
         double remainingWidth = Math.max(0.0D, toRadius - waveR);
-        double lead = Math.min(remainingWidth,
-                flyoverTicks / (double) Math.max(1, GrowthPacing.targetTicks()) * remainingWidth);
+        double blocksPerTick = Math.max(0.0D, toRadius - fromRadius)
+                / (double) Math.max(1, GrowthPacing.targetTicks());
+        double lead = Math.min(remainingWidth, blocksPerTick * flyoverTicks * FLYOVER_SKIM_T);
         waveR += lead;
         // Sit slightly INSIDE the front so the height lookup lands on already-written terrain.
         int anchorR = Math.max(16, (int) waveR - 6);
@@ -885,8 +983,9 @@ public final class ExpansionSequence implements SequenceReplayable {
         switch (phaseId) {
             case "SKYWARD" -> {
                 FxPayloads.sendEclipsePhase(server, ECLIPSE_BUILDUP, 1.0F, 60, permanentRim(server));
-                captionPlayers(watchers, CAPTION_SKYWARD, 70);
+                captionPlayers(watchers, CAPTION_SKYWARD, 90);
                 CutsceneService.play(PATH_SKYWARD, watchers, null, null, CutsceneService.PlayOptions.LOCAL);
+                scheduleSkywardPunch(server, null, watchers); // punch-through parity (no run)
                 return true;
             }
             case "FLYOVER" -> {
@@ -909,12 +1008,24 @@ public final class ExpansionSequence implements SequenceReplayable {
                 return true;
             }
             case "STRUCTURES" -> {
+                // CUT-EXPANSION shot 3 replay parity: the live show now has BD-STRUCT's
+                // delivery flight between the trigger and PLACED, so the replay slam lands
+                // REPLAY_FLIGHT_TICKS after the hold, with per-"landing" micro-shakes
+                // (0.12/8, StructureFlightFx's landing cadence) filling the flight window.
+                int slamAt = RIFT_HOLD_TICKS + REPLAY_FLIGHT_TICKS;
                 for (ServerPlayer player : watchers) {
                     Vec3 ground = player.position().add(player.getLookAngle().scale(24.0D).multiply(1, 0, 1));
                     Vec3 rift = ground.add(0.0D, SKY_RIFT_HEIGHT, 0.0D);
                     PacketDistributor.sendToPlayer(player,
                             new S2CFxEventPayload(FxPayloads.FX_RIFT_OPEN, rift, 18.0F, 0.0F));
-                    schedule(server, RIFT_HOLD_TICKS, () -> {
+                    for (int offset : REPLAY_LANDING_SHAKES_AT) {
+                        schedule(server, RIFT_HOLD_TICKS + offset, () -> {
+                            if (!player.hasDisconnected()) {
+                                PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.12F, 8));
+                            }
+                        });
+                    }
+                    schedule(server, slamAt, () -> {
                         if (player.hasDisconnected()) {
                             return;
                         }
@@ -925,21 +1036,21 @@ public final class ExpansionSequence implements SequenceReplayable {
                         player.playNotifySound(EclipseSounds.EVENT_RIFT_SLAM.get(), SoundSource.BLOCKS, 1.2F, 1.0F);
                     });
                     // IDEA-14 §2 replay parity (R12): dust rings + debris rain, FX-only.
-                    schedule(server, RIFT_HOLD_TICKS + SLAM_RING_1_DELAY, () ->
+                    schedule(server, slamAt + SLAM_RING_1_DELAY, () ->
                             replaySlamRing(player, ground, REPLAY_FOOTPRINT * SLAM_RING_1_RADIUS));
-                    schedule(server, RIFT_HOLD_TICKS + SLAM_RING_2_DELAY, () ->
+                    schedule(server, slamAt + SLAM_RING_2_DELAY, () ->
                             replaySlamRing(player, ground, REPLAY_FOOTPRINT * SLAM_RING_2_RADIUS));
-                    schedule(server, RIFT_HOLD_TICKS + DEBRIS_DELAY_1, () -> {
+                    schedule(server, slamAt + DEBRIS_DELAY_1, () -> {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(SLAM_DEBRIS, rift));
                         }
                     });
-                    schedule(server, RIFT_HOLD_TICKS + DEBRIS_DELAY_2, () -> {
+                    schedule(server, slamAt + DEBRIS_DELAY_2, () -> {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(SLAM_DEBRIS, rift));
                         }
                     });
-                    schedule(server, RIFT_HOLD_TICKS + RIFT_CLOSE_DELAY_TICKS, () -> {
+                    schedule(server, slamAt + RIFT_CLOSE_DELAY_TICKS, () -> {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player,
                                     new S2CFxEventPayload(FxPayloads.FX_RIFT_CLOSE, rift, 0.0F, 0.0F));

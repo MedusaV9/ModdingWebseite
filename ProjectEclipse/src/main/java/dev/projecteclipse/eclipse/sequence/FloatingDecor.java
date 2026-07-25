@@ -45,7 +45,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * decor survives restarts and {@link #ensure} simply re-adopts it.</p>
  *
  * <p><b>Animation</b> (R10 numbers): per-fragment rotation 0.2–1.0°/tick around a fixed
- * random-ish axis, bob amplitude 0.05–0.25 blocks with periods 80–200 ticks — pushed as
+ * random-ish axis (whose pole precesses slowly around Y — BD-STRUCT tumble craft, see
+ * {@link #poseAt}), bob amplitude 0.05–0.25 blocks with periods 80–200 ticks — pushed as
  * ONE interpolated transform per entity every {@value #UPDATE_CADENCE_TICKS} ticks
  * (interpolation duration {@value #UPDATE_CADENCE_TICKS}: smooth at 1/4 rate, the
  * SanctumOrbitals transport pattern via the accesstransformer-opened {@code Display}
@@ -304,6 +305,12 @@ public final class FloatingDecor {
      * Absolute pose of one fragment at {@code gameTime}: tumble about a fixed per-index
      * axis + vertical bob, with the scaled block re-centered on its anchor point through
      * the rotation (the SanctumOrbitals {@code T·L·S} math).
+     *
+     * <p>BD-STRUCT tumble craft: the axis is never re-rolled — angular momentum stays
+     * consistent — but the pole PRECESSES slowly around Y (per-index period 80–120 s),
+     * so a long reveal shot never reads the rubble as mechanically pinned. One 4 t
+     * interpolation window moves the pole ≤ ~0.45°, far inside the VFXPOLISH-3 linear
+     * -tween threshold.</p>
      */
     private static Transformation poseAt(int index, long gameTime) {
         float scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * (float) Math.pow(hash01(index, 4), 1.3D);
@@ -311,10 +318,13 @@ public final class FloatingDecor {
                 + (SPIN_MAX_DEG_PER_TICK - SPIN_MIN_DEG_PER_TICK) * hash01(index, 5));
         double direction = hash01(index, 6) < 0.5D ? 1.0D : -1.0D;
         float spinAngle = (float) (hash01(index, 8) * Math.PI * 2.0D + direction * spinRate * gameTime);
+        double precession = (Math.PI * 2.0D / (1600.0D + 800.0D * hash01(index, 15))) * gameTime
+                + hash01(index, 16) * Math.PI * 2.0D;
         Vector3f axis = new Vector3f(
                 (float) (hash01(index, 9) * 2.0D - 1.0D),
                 (float) (0.5D + hash01(index, 10)),
-                (float) (hash01(index, 11) * 2.0D - 1.0D)).normalize();
+                (float) (hash01(index, 11) * 2.0D - 1.0D)).normalize()
+                .rotateY((float) precession);
         Quaternionf rotation = new Quaternionf().rotationAxis(spinAngle, axis);
 
         double amplitude = BOB_MIN_AMPLITUDE

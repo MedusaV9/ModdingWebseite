@@ -81,12 +81,13 @@ public final class GoalConfigTest {
         try {
             Path dir = tempConfigDir(helper);
             // Doctored goals.json knows ONLY day 2 — every other day must fall back.
-            // configVersion 2 keeps the FIX-ECON migration from regenerating the file.
+            // Pinning the CURRENT configVersion keeps the FIX-ECON migration from
+            // regenerating the file.
             Files.writeString(dir.resolve("goals.json"), """
-                    { "configVersion": 2, "days": [ { "day": 2, "goals": [
+                    { "configVersion": %d, "days": [ { "day": 2, "goals": [
                       { "id": "d2_only", "kind": "main",
                         "trigger": { "type": "manual", "count": 1 }, "text": "Doctored" } ] } ] }
-                    """);
+                    """.formatted(GoalConfig.CONFIG_VERSION));
             GoalConfig.setDirectoryOverride(dir);
 
             helper.assertTrue(GoalConfig.goalsForDay(2).size() == 1

@@ -144,6 +144,7 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 ## Timer
 
 - `/dev timer add <duration>` — Move the next day boundary later by a duration. · perm **2** · *caution*
+- `/dev timer color <auto|text|accent|deep|#hex>` — Set the day-timer HUD color for every player (auto = urgency ramp). · perm **2**
 - `/dev timer pause` — Pause the real-time day countdown. · perm **2** · *caution*
 - `/dev timer resume` — Resume the paused real-time day countdown. · perm **2**
 - `/dev timer set <time>` — Set the next boundary by wall time, date-time, or relative duration. · perm **2** · *caution*

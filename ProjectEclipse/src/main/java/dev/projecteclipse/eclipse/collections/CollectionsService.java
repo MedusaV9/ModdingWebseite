@@ -139,6 +139,8 @@ public final class CollectionsService {
     @SubscribeEvent
     static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            // DOPA-S-06: settle any crash-orphaned tier payouts before the first snapshot.
+            replayPendingGrants(player);
             syncTo(player);
         }
     }
@@ -226,47 +228,110 @@ public final class CollectionsService {
      * Grants every newly crossed tier (idempotent — {@code grantedTier} is monotonic).
      * On any grant: XP + points, per-player recipe unlock resync, tier toast payload and
      * the chat announcement, then a full snapshot so the handbook tab is exact.
+     *
+     * <p><b>Crash-safety (DOPA-S-06)</b>: claim-then-grant. The tier CLAIM
+     * ({@code grantedTiers}) and a pending-grant journal row are written to
+     * {@link CollectionsState} and force-flushed to disk BEFORE any XP/point/shard grant
+     * touches the other SavedData files. A crash before the payout leaves the journal row
+     * on disk — {@link #replayPendingGrants} re-applies it exactly once at the next
+     * login; a crash before the flush loses only the claim (the sweep re-crosses it from
+     * the counter, granting once). The claim being durable first means the sweep itself
+     * can never replay a tier.</p>
      */
     private static boolean sweep(ServerPlayer player, CollectionsConfig.Collection def,
             CollectionsState.Entry entry, CollectionsState state) {
         CollectionsConfig.Snapshot cfg = CollectionsConfig.current();
         List<CollectionsConfig.Tier> tiers = def.tiers();
-        int granted = entry.grantedTier(def.id());
+        int previous = entry.grantedTier(def.id());
         long count = entry.count(def.id());
-        boolean any = false;
+        int granted = previous;
         while (granted < tiers.size() && count >= tiers.get(granted).threshold()) {
-            CollectionsConfig.Tier tier = tiers.get(granted);
             granted++;
-            entry.grantedTiers.put(def.id(), granted);
-            state.setDirty();
-            any = true;
+        }
+        if (granted == previous) {
+            return false;
+        }
 
-            if (tier.xp() > 0) {
-                SkillsApi.addXp(player, cfg.xpSourceKey(), tier.xp());
+        // 1) Durable claim + journal BEFORE any grant (see javadoc).
+        entry.grantedTiers.put(def.id(), granted);
+        for (int tier = previous + 1; tier <= granted; tier++) {
+            entry.addPendingGrant(def.id(), tier);
+        }
+        state.setDirty();
+        dev.projecteclipse.eclipse.core.state.EclipseSavedData.flushOverworld(player.server);
+
+        // 2) Payouts; each journal row clears as its tier's grants land.
+        for (int tier = previous + 1; tier <= granted; tier++) {
+            applyTierGrant(player, def, tiers.get(tier - 1), tier, cfg);
+            entry.clearPendingGrant(def.id(), tier);
+            state.setDirty();
+        }
+
+        // §4.2: recipe unlock + EMI un-hide land in the same tick as the toast.
+        RecipeGate.syncTo(player);
+        syncTo(player);
+        return true;
+    }
+
+    /** One tier's payout: XP + points + FIX-ECON personal shards + toast + chat line. */
+    private static void applyTierGrant(ServerPlayer player, CollectionsConfig.Collection def,
+            CollectionsConfig.Tier tier, int tierNumber, CollectionsConfig.Snapshot cfg) {
+        if (tier.xp() > 0) {
+            SkillsApi.addXp(player, cfg.xpSourceKey(), tier.xp());
+        }
+        if (tier.points() > 0) {
+            SkillsApi.addPoints(player, tier.points());
+        }
+        if (tier.shards() > 0) {
+            // FIX-ECON: chunky (T4+) tiers pay PERSONAL shards — rebirth currency,
+            // announced with the D14 gain toast. The sweep only runs for the online
+            // acting player, so a direct credit is always deliverable.
+            dev.projecteclipse.eclipse.economy.ShardEconomy.addShards(player, tier.shards(), true);
+        }
+        if (cfg.toastsEnabled()) {
+            CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
+                    def.id(), tierNumber, tier.xp(), tier.points(), tier.unlockItems()));
+        }
+        player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
+                Component.translatable("collection.eclipse." + def.id()),
+                CollectionTiers.roman(tierNumber)));
+    }
+
+    /**
+     * DOPA-S-06 recovery: replays every journaled tier payout that a crash cut off
+     * between the durable claim and the grants — exactly once (the journal row IS the
+     * idempotency marker; it only exists while a payout is unconfirmed). Rows whose
+     * collection/tier no longer exists in the config are dropped with a WARN.
+     */
+    private static void replayPendingGrants(ServerPlayer player) {
+        CollectionsState state = CollectionsState.get(player.server);
+        CollectionsState.Entry entry = state.entry(player.getUUID());
+        if (entry.pendingGrants.isEmpty()) {
+            return;
+        }
+        CollectionsConfig.Snapshot cfg = CollectionsConfig.current();
+        boolean any = false;
+        for (Map.Entry<String, Set<Integer>> pending
+                : new HashMap<>(entry.pendingGrants).entrySet()) {
+            CollectionsConfig.Collection def = cfg.byId(pending.getKey());
+            for (int tier : new ArrayList<>(pending.getValue())) {
+                if (def != null && tier >= 1 && tier <= def.tiers().size()) {
+                    applyTierGrant(player, def, def.tiers().get(tier - 1), tier, cfg);
+                    EclipseMod.LOGGER.info("Collections crash-recovery: replayed '{}' tier {} "
+                            + "payout for {}", pending.getKey(), tier, player.getScoreboardName());
+                } else {
+                    EclipseMod.LOGGER.warn("Collections crash-recovery: dropped stale pending "
+                            + "grant '{}' tier {} for {} (no longer in config)",
+                            pending.getKey(), tier, player.getScoreboardName());
+                }
+                entry.clearPendingGrant(pending.getKey(), tier);
+                any = true;
             }
-            if (tier.points() > 0) {
-                SkillsApi.addPoints(player, tier.points());
-            }
-            if (tier.shards() > 0) {
-                // FIX-ECON: chunky (T4+) tiers pay PERSONAL shards — rebirth currency,
-                // announced with the D14 gain toast. The sweep only runs for the online
-                // acting player, so a direct credit is always deliverable.
-                dev.projecteclipse.eclipse.economy.ShardEconomy.addShards(player, tier.shards(), true);
-            }
-            if (cfg.toastsEnabled()) {
-                CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
-                        def.id(), granted, tier.xp(), tier.points(), tier.unlockItems()));
-            }
-            player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
-                    Component.translatable("collection.eclipse." + def.id()),
-                    CollectionTiers.roman(granted)));
         }
         if (any) {
-            // §4.2: recipe unlock + EMI un-hide land in the same tick as the toast.
+            state.setDirty();
             RecipeGate.syncTo(player);
-            syncTo(player);
         }
-        return any;
     }
 
     /** Re-sweeps every collection for one player (config reload path, dev sets). */

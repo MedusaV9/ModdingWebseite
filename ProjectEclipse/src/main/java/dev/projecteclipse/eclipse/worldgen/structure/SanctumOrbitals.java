@@ -432,6 +432,12 @@ public final class SanctumOrbitals {
             return;
         }
         reconcile(overworld, altarPos, true);
+        // BD-STRUCT: freshly respawned displays would otherwise HOLD their born pose
+        // until the next 40 t cadence boundary (a visible up-to-2 s freeze right after
+        // the dev command). Push one interpolated keyframe now so the ring glides
+        // immediately — the next boundary push simply retargets mid-tween (delay 0
+        // restarts from the currently rendered pose, so there is no snap).
+        animate(overworld, altarPos, overworld.getGameTime());
         EclipseMod.LOGGER.info("SanctumOrbitals.rebuild: orbital ring rebuilt at {}",
                 altarPos.toShortString());
     }

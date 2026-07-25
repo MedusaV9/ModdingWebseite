@@ -10,15 +10,22 @@
   "showOwnBody": true,
   "durationTicks": 130,
   "keyframes": [
-    { "t": 0.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "easeInOutCubic" },
-    { "t": 0.2, "pos": [-7.0, 4.5, -10.0], "yaw": -30, "pitch": 14, "roll": -3, "fov": 64, "easing": "easeInOutCubic", "lookAt": "player" },
-    { "t": 0.5, "pos": [15.0, 10.0, -19.0], "yaw": 38, "pitch": 20, "roll": 3, "fov": 58, "easing": "easeInOutSine", "lookAt": "player" },
-    { "t": 0.78, "pos": [22.0, 15.0, 6.0], "yaw": 96, "pitch": 26, "roll": 1, "fov": 54, "easing": "easeInOutSine", "lookAt": "player" },
-    { "t": 1.0, "pos": [10.0, 22.0, 15.0], "yaw": 132, "pitch": 42, "roll": 0, "fov": 60, "easing": "easeInCubic", "lookAt": "player" }
+    { "t": 0.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "easeInOutSine" },
+    { "t": 0.12, "pos": [2.2, 2.6, -3.4], "yaw": 33, "pitch": 12, "roll": -2, "fov": 69, "easing": "easeInOutSine", "lookAt": "player" },
+    { "t": 0.38, "pos": [5.5, 6.0, -8.0], "yaw": 35, "pitch": 22, "roll": -4, "fov": 66.5, "easing": "easeInOutSine", "lookAt": "player" },
+    { "t": 0.62, "pos": [10.0, 12.0, -12.0], "yaw": 40, "pitch": 32, "roll": -5, "fov": 64, "easing": "easeInOutCubic", "lookAt": "player" },
+    { "t": 0.85, "pos": [13.0, 18.5, -5.0], "yaw": 65, "pitch": 45, "roll": -2.5, "fov": 62.5, "easing": "easeInCubic", "lookAt": "player" },
+    { "t": 1.0, "pos": [10.0, 24.0, 6.0], "yaw": 120, "pitch": 55, "roll": 0, "fov": 62, "easing": "easeOutCubic", "lookAt": "player" }
   ],
   "events": [
     { "t": 0.08, "type": "caption", "id": "eclipse.caption.intro.depart", "data": "whisper,70" },
+    { "t": 0.3, "type": "shake", "id": "ship_lurch", "data": "0.1,26,0.7" },
+    { "t": 0.32, "type": "sound", "id": "minecraft:ambient.underwater.loop.additions.ultra_rare" },
     { "t": 0.55, "type": "sound", "id": "minecraft:ambient.underwater.enter" },
-    { "t": 0.62, "type": "shake", "id": "ship_keel", "data": "0.22,30,2.5" }
-  ]
+    { "t": 0.62, "type": "shake", "id": "ship_keel", "data": "0.3,36,0.8" }
+  ],
+  "params": {
+    "_comment": "CUT-INTRO reshoot: tight-to-crane keel-over. Opens IN the watcher's eyes (seamless possession), settles into a tight over-the-shoulder wheel shot (~4 blocks, dutch -2), then cranes up and back as the keel-over begins — the dutch deepens to -5 with the ship's list and releases to level at the apex. FOV squeezes monotonically 70->62 (slow vice, no breathing) so the deck feels smaller the higher we rise. Beats: first hull lurch (slow heavy sway 0.7 freq) + a deep groan at t~0.3, the submerge wash at 0.55, the keel shake at 0.62 retuned to a low-frequency roll (0.8) instead of a rattle. Player-anchored offsets — the same shot serves the start-event TILT and the finale arrival flyaround.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
+  }
 }

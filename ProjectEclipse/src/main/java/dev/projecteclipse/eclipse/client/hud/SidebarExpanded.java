@@ -108,13 +108,26 @@ public final class SidebarExpanded {
         return height;
     }
 
-    /** Rows with a shard chip (FIX-ECON) wrap their text short of the right-aligned "◆N". */
+    /**
+     * Rows with reward chips (FIX-ECON "◆N" + EVAL-DOPA-F "+N XP") wrap their text short
+     * of the right-aligned chip pair.
+     */
     private static int entryTextWidth(Font font, S2CQuestStatePayload.QuestEntry entry,
             int textWidth) {
-        if (entry.rewardShards() <= 0) {
-            return textWidth;
+        int chips = chipsWidth(font, entry);
+        return chips == 0 ? textWidth : Math.max(20, textWidth - chips - 4);
+    }
+
+    /** Combined pixel width of the right-aligned reward chips ({@code 0} = no chips). */
+    private static int chipsWidth(Font font, S2CQuestStatePayload.QuestEntry entry) {
+        int width = 0;
+        if (entry.rewardShards() > 0) {
+            width += font.width("\u25c6" + entry.rewardShards());
         }
-        return Math.max(20, textWidth - font.width("\u25c6" + entry.rewardShards()) - 4);
+        if (entry.rewardXp() > 0) {
+            width += font.width("+" + entry.rewardXp() + "XP") + (width > 0 ? 3 : 0);
+        }
+        return width;
     }
 
     /** Draws expanded content into an already-rendered/morphed panel rectangle. */
@@ -258,13 +271,22 @@ public final class SidebarExpanded {
                 guiGraphics.drawString(font, marker, left, y,
                         MarqueeText.faded(color, alpha));
             }
-            // FIX-ECON quest shard chip: a small right-aligned "◆N" in accent color on the
-            // first row line advertises the personal-shard payout before completion.
+            // FIX-ECON quest shard chip + EVAL-DOPA-F XP chip half: right-aligned "◆N" in
+            // accent with a dim "+N XP" beside it on the first row line — both payouts
+            // are advertised before completion.
+            int chipRight = left + 10 + goalTextWidth;
             if (goal.rewardShards() > 0) {
                 String chip = "\u25c6" + goal.rewardShards();
-                guiGraphics.drawString(font, chip,
-                        left + 10 + goalTextWidth - font.width(chip), y,
+                chipRight -= font.width(chip);
+                guiGraphics.drawString(font, chip, chipRight, y,
                         MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
+                chipRight -= 3;
+            }
+            if (goal.rewardXp() > 0) {
+                String xpChip = "+" + goal.rewardXp() + "XP";
+                chipRight -= font.width(xpChip);
+                guiGraphics.drawString(font, xpChip, chipRight, y,
+                        MarqueeText.faded(EclipseUiTheme.DIM, alpha));
             }
             List<FormattedCharSequence> lines =
                     font.split(Component.literal(goalText(goal)),

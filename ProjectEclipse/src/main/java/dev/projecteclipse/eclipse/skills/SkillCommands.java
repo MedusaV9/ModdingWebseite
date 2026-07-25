@@ -22,7 +22,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
  * Skill command roots (R3). Player-facing {@code /skills} (perm 0): {@code info},
- * {@code procmsg on|off}, {@code buy <node>} (server-validated fallback until P3's GUI).
+ * {@code procmsg on|off}, {@code aura on|off} (rebirth keepsake ring), {@code buy <node>}
+ * (server-validated fallback until P3's GUI).
  * Admin {@code /eclipse-skills} (perm 3) is the reference implementation P5 will surface:
  * {@code xp add|set}, {@code mult set} (secret — feedback to the issuing source only, no
  * admin broadcast, DEBUG log), {@code points add}, {@code tree reset}, {@code reload}.
@@ -48,6 +49,9 @@ public final class SkillCommands {
                 .then(Commands.literal("procmsg")
                         .then(Commands.literal("on").executes(ctx -> procMsg(ctx, true)))
                         .then(Commands.literal("off").executes(ctx -> procMsg(ctx, false))))
+                .then(Commands.literal("aura")
+                        .then(Commands.literal("on").executes(ctx -> aura(ctx, true)))
+                        .then(Commands.literal("off").executes(ctx -> aura(ctx, false))))
                 .then(Commands.literal("buy")
                         .then(Commands.argument("node", StringArgumentType.word())
                                 .suggests(NODE_SUGGESTIONS)
@@ -110,6 +114,25 @@ public final class SkillCommands {
         player.displayClientMessage(Component.translatable(enabled
                 ? "message.eclipse.skill.procmsg.on"
                 : "message.eclipse.skill.procmsg.off"), true);
+        return 1;
+    }
+
+    /**
+     * Rebirth-keepsake aura toggle (V6 gap-fix; the ring itself is
+     * {@code rebirth.RebirthAuraService}, visible once the first ceremony completed).
+     * Persisted in {@code RebirthState}; the resync keeps the skill-tree footer honest.
+     */
+    private static int aura(CommandContext<CommandSourceStack> ctx, boolean enabled)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        dev.projecteclipse.eclipse.rebirth.RebirthState.get(player.server)
+                .setAuraEnabled(player.getUUID(), enabled);
+        dev.projecteclipse.eclipse.rebirth.RebirthService.syncTo(player);
+        String key = enabled
+                ? (dev.projecteclipse.eclipse.rebirth.RebirthApi.count(player.server, player.getUUID()) > 0
+                        ? "message.eclipse.rebirth.aura.on" : "message.eclipse.rebirth.aura.on_locked")
+                : "message.eclipse.rebirth.aura.off";
+        player.displayClientMessage(Component.translatable(key), true);
         return 1;
     }
 

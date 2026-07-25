@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.sequence;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
@@ -38,8 +39,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * eclipse), a {@code eclipse:eclipse_lightning_impact} spark burst plus a
  * {@code eclipse:impact_light} emissive flash at the impact (both Quasar one-shots, no
  * dynamic lights — §7 perf trap), one vanilla {@link LightningBolt} with
- * {@code setVisualOnly(true)} at the vortex foot for the world flash, and distance-picked
- * {@code event.lightning_close}/{@code event.lightning_far} stings.</p>
+ * {@code setVisualOnly(true)} at the vortex foot for the world flash, distance-picked
+ * {@code event.lightning_close}/{@code event.lightning_far} stings, and (CUT-INTRO) a
+ * short close-range camera-shake impulse riding the sting pick ({@code S2CShakePayload} —
+ * camera noise only, no movement input; intensity-scaled ≤ 0.32 over 8 t, the giant burst
+ * 0.55 over 26 t for everyone).</p>
  *
  * <p><b>Kickback + day-1 containment awareness</b>: players within
  * {@value #KICK_RANGE_BEYOND_RADIUS} blocks of the smoke wall get the proven
@@ -84,6 +88,16 @@ public final class IntroLightningPhase {
     private static final double RIM_MARGIN = 2.0D;
     /** Strikes closer than this play the violent close sting instead of the far rumble. */
     private static final double CLOSE_SOUND_RANGE = 64.0D;
+
+    // --- CUT-INTRO strike presentation: close-range camera-shake impulses (visual only) ---
+    /** Close-strike shake floor; intensity adds {@value #STRIKE_SHAKE_GAIN} on top. */
+    private static final float STRIKE_SHAKE_BASE = 0.1F;
+    private static final float STRIKE_SHAKE_GAIN = 0.22F;
+    /** Short crack, not a rumble — the decay window of one close-strike impulse. */
+    private static final int STRIKE_SHAKE_TICKS = 8;
+    /** The giant burst strike rattles EVERYONE, harder and longer. */
+    private static final float GIANT_SHAKE_STRENGTH = 0.55F;
+    private static final int GIANT_SHAKE_TICKS = 26;
 
     // --- standing push zone (plans_v5 C5) ---
     /** Outer edge of the continuous push zone, measured beyond the smoke-wall radius. */
@@ -176,7 +190,7 @@ public final class IntroLightningPhase {
             spawnVisualBolt(level, impact);
             kickbackNearbyPlayers(level, giant ? 1.0F : intensity);
         }
-        playStingByDistance(level, impact, intensity, giant);
+        stingAndShakeByDistance(level, impact, intensity, giant);
     }
 
     /** Strike impact on the vortex top, jittered off-axis so repeats never stack exactly. */
@@ -200,7 +214,14 @@ public final class IntroLightningPhase {
         level.addFreshEntity(bolt);
     }
 
-    private void playStingByDistance(ServerLevel level, Vec3 impact, float intensity, boolean giant) {
+    /**
+     * Distance-picked sting per player, plus (CUT-INTRO) a short close-range camera-shake
+     * impulse: close strikes crack the camera ({@code S2CShakePayload} → the client impulse
+     * stack — pure camera noise, never movement input), scaling with the ramp intensity;
+     * the giant burst strike rattles everyone. Far players keep the rumble only — distance
+     * already reads through the sting pick.
+     */
+    private void stingAndShakeByDistance(ServerLevel level, Vec3 impact, float intensity, boolean giant) {
         for (ServerPlayer player : level.players()) {
             boolean close = player.position().distanceTo(impact) <= CLOSE_SOUND_RANGE || giant;
             player.playNotifySound(
@@ -208,6 +229,11 @@ public final class IntroLightningPhase {
                     SoundSource.AMBIENT,
                     Mth.clamp(0.6F + 0.5F * intensity, 0.0F, 1.2F),
                     giant ? 0.8F : 0.95F + level.random.nextFloat() * 0.1F);
+            if (close) {
+                PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(
+                        giant ? GIANT_SHAKE_STRENGTH : STRIKE_SHAKE_BASE + STRIKE_SHAKE_GAIN * intensity,
+                        giant ? GIANT_SHAKE_TICKS : STRIKE_SHAKE_TICKS));
+            }
         }
     }
 

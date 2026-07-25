@@ -252,6 +252,7 @@ public final class EclipsePayloads {
         ClientStateCache.serverNowEpochMillis = payload.serverNowEpochMillis();
         ClientStateCache.dayClockPaused = payload.paused();
         ClientStateCache.pauseRemainingMillis = payload.pauseRemainingMillis();
+        ClientStateCache.timerColorMode = payload.timerColorMode();
         ClientStateCache.clockSyncLocalMillis = System.currentTimeMillis();
     }
 
@@ -339,9 +340,11 @@ public final class EclipsePayloads {
         ClientStateCache.rebirthCount = payload.count();
         ClientStateCache.rebirthNextCostShards = payload.nextCostShards();
         ClientStateCache.rebirthLevelCostMultiplier = payload.levelCostMultiplier();
+        ClientStateCache.rebirthAuraEnabled = payload.auraEnabled();
         // Skill-tree rebirth footer reads ClientRebirthState (synced flag gates the UI).
         dev.projecteclipse.eclipse.client.skills.ClientRebirthState.update(
-                payload.count(), payload.nextCostShards(), payload.levelCostMultiplier());
+                payload.count(), payload.nextCostShards(), payload.levelCostMultiplier(),
+                payload.auraEnabled());
     }
 
     /** D11 rebirth request; ALL validation lives in {@code rebirth.RebirthService}. */

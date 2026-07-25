@@ -883,8 +883,10 @@ public final class QuestEngine {
                     spec.text().en(), spec.text().pick("de"),
                     QuestMath.clampToInt(Math.min(progress, target)), QuestMath.clampToInt(target),
                     done, spec.scope().team(),
-                    // FIX-ECON: advertise the shard payout on the quest row (◆N chip).
-                    spec.reward().shards()));
+                    // FIX-ECON: advertise the shard payout on the quest row (◆N chip);
+                    // EVAL-DOPA-F: the skill-XP payout rides along as the "+N XP" chip half.
+                    spec.reward().shards(),
+                    spec.reward().skillXp()));
         }
         return new S2CQuestStatePayload(day.day, entries);
     }

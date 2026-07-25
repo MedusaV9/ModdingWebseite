@@ -78,17 +78,19 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       fury (strikes every 15 ticks) until the flip lands or
  *       {@value #BURST_FLIP_TIMEOUT_TICKS} ticks pass.</li>
  *   <li>{@code BURST} — the GIANT strike ({@code intensity 1, b=1}), {@code fx/shockwave}
- *       (1.0, 50), vortex {@code DISSIPATE 60}, white→violet screen flash, the C5 scripted
- *       day switch (the clock snaps forward to morning under the flash; see
+ *       (1.0, 50), vortex {@code DISSIPATE 60}, the CUT-INTRO flash sandwich (white
+ *       snap-hold → 3-tick shutter black → violet reopen), the C5 scripted day switch
+ *       (the clock snaps forward to morning behind the white/shutter; see
  *       {@link #scriptedDaySwitch}), {@code eclipse:altar_reveal_burst} at the altar and
  *       {@link FloatingDecor#ensure}.</li>
  *   <li>{@code REVEAL} (300 ticks) — {@code intro_v3_reveal} orbit of the floating altar
  *       island (anchor = altar position; nobody is far by now, so the global play only bumps
  *       view distance).</li>
- *   <li>{@code SUNRISE} (200 ticks) — {@code S2CEclipsePhasePayload(ENDING, 0, ramp 200,
- *       permanentRim=true)} + the {@code eclipse.caption.intro.begin} TITLE caption. The
- *       permanent-rim flag persists here (fallback until P4's world flag ships, §6.3) and is
- *       re-sent to every player at login.</li>
+ *   <li>{@code SUNRISE} (200-tick ramp + {@value #SUNRISE_HOLD_EXTRA_TICKS}-tick linger) —
+ *       {@code S2CEclipsePhasePayload(ENDING, 0, ramp 200, permanentRim=true)} + the
+ *       {@code eclipse.caption.intro.begin} TITLE caption + a warm gold bloom-in fade
+ *       (CUT-INTRO) as the sun crests. The permanent-rim flag persists here (fallback until
+ *       P4's world flag ships, §6.3) and is re-sent to every player at login.</li>
  * </ol>
  *
  * <p><b>Freeze/invulnerability</b>: camera phases freeze through the cutscene engine
@@ -160,11 +162,29 @@ public final class IntroSequence implements SequenceReplayable {
     /** W4-CEREMONY / IDEA-01 #3: Logbook handoff hint delay after {@link #finish} (~15 s). */
     private static final int LOGBOOK_HINT_DELAY_TICKS = 300;
 
-    /** White half of the burst flash (in, hold, out, argb). */
-    private static final S2CScreenFadePayload FLASH_WHITE = new S2CScreenFadePayload(2, 2, 2, 0xFFFFFFFF);
-    /** Violet tail of the burst flash, sent {@value #FLASH_VIOLET_DELAY_TICKS} ticks later. */
-    private static final S2CScreenFadePayload FLASH_VIOLET = new S2CScreenFadePayload(2, 2, 8, 0xCC8800FF);
-    private static final int FLASH_VIOLET_DELAY_TICKS = 4;
+    /**
+     * CUT-INTRO burst flash sandwich (presentation retime of R10's white→violet flash):
+     * snap to white and HOLD 2 ticks, hard-cut to a 3-tick shutter BLACK (the scripted day
+     * switch and the vortex collapse land behind it), then the violet tail opens onto the
+     * morning sky over 10 ticks. Each payload replaces the previous fade client-side
+     * ({@code CaptionRenderer.fade}), so the chain never stacks.
+     */
+    private static final S2CScreenFadePayload FLASH_WHITE = new S2CScreenFadePayload(1, 2, 0, 0xFFFFFFFF);
+    private static final S2CScreenFadePayload SHUTTER_BLACK = new S2CScreenFadePayload(0, 3, 0, 0xFF000000);
+    private static final S2CScreenFadePayload FLASH_VIOLET = new S2CScreenFadePayload(0, 2, 10, 0xCC8800FF);
+    /** Shutter cut after the white snap-hold (1 in + 2 hold). */
+    private static final int SHUTTER_DELAY_TICKS = 3;
+    /** Violet reopen after the 3-tick shutter. */
+    private static final int FLASH_VIOLET_DELAY_TICKS = 6;
+
+    // --- CUT-INTRO sunrise presentation ---
+    /** SUNRISE lingers this much longer after the ramp before {@link #finish} (~1.5 s). */
+    private static final int SUNRISE_HOLD_EXTRA_TICKS = 30;
+    /** Warm bloom-in as the freed sun crests: slow rise, gentle release, low-alpha gold. */
+    private static final S2CScreenFadePayload SUNRISE_WARM_BLOOM =
+            new S2CScreenFadePayload(50, 20, 70, 0x2EFFC994);
+    /** Bloom waits for the reveal end-blend and any violet tail to fully clear. */
+    private static final int SUNRISE_BLOOM_DELAY_TICKS = 20;
 
     /** Reserved storm id of FX-only replays — never collides with StormRegistry's counter. */
     private static final int REPLAY_STORM_ID = 999_006;
@@ -552,12 +572,14 @@ public final class IntroSequence implements SequenceReplayable {
             StormRegistry.dissipate(current.stormId, VORTEX_DISSIPATE_TICKS);
             current.stormId = -1;
         }
-        // White → violet screen flash (R10: 8 ticks total across the two fades).
+        // White snap-hold → 3-tick shutter black → violet reopen (CUT-INTRO flash sandwich).
         PacketDistributor.sendToAllPlayers(FLASH_WHITE);
+        schedule(server, SHUTTER_DELAY_TICKS, () -> PacketDistributor.sendToAllPlayers(SHUTTER_BLACK));
         schedule(server, FLASH_VIOLET_DELAY_TICKS, () -> PacketDistributor.sendToAllPlayers(FLASH_VIOLET));
         // C5: the final blast turns the sky to DAY — the event always begins in daylight.
-        // The jump is forward-only (dayTime never rewinds) and lands under the white flash;
-        // the marker lets QuestDetectors void the scripted dawn (no free night credit).
+        // The jump is forward-only (dayTime never rewinds) and lands under the white flash
+        // and shutter; the marker lets QuestDetectors void the scripted dawn (no free night
+        // credit).
         scriptedDaySwitch(current.overworld);
 
         Vec3 altar = altarCenterOr(current.server, current.center);
@@ -619,9 +641,13 @@ public final class IntroSequence implements SequenceReplayable {
             PacketDistributor.sendToPlayer(player,
                     new S2CCaptionPayload(CAPTION_BEGIN, 100, S2CCaptionPayload.STYLE_TITLE));
         }
+        // CUT-INTRO: warm gold bloom-in as the freed sun crests (below the title captions).
+        schedule(server, SUNRISE_BLOOM_DELAY_TICKS,
+                () -> PacketDistributor.sendToAllPlayers(SUNRISE_WARM_BLOOM));
         IntroData data = IntroData.get(server);
         data.setPermanentRim(true);
-        schedule(server, SUNRISE_RAMP_TICKS, () -> finish(current));
+        // CUT-INTRO: rest on the fresh morning ~1.5 s longer before the sequence completes.
+        schedule(server, SUNRISE_RAMP_TICKS + SUNRISE_HOLD_EXTRA_TICKS, () -> finish(current));
     }
 
     private static void finish(Run current) {
@@ -854,6 +880,13 @@ public final class IntroSequence implements SequenceReplayable {
                     PacketDistributor.sendToPlayer(player, FLASH_WHITE);
                     PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(ALTAR_REVEAL_BURST, altar));
                 }
+                schedule(server, SHUTTER_DELAY_TICKS, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player, SHUTTER_BLACK);
+                        }
+                    }
+                });
                 schedule(server, FLASH_VIOLET_DELAY_TICKS, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
@@ -872,6 +905,13 @@ public final class IntroSequence implements SequenceReplayable {
             case "SUNRISE" -> {
                 FxPayloads.sendEclipsePhase(server, ECLIPSE_ENDING, 0.0F, SUNRISE_RAMP_TICKS, permanentRim(server));
                 captionPlayers(watchers, CAPTION_BEGIN, 100, S2CCaptionPayload.STYLE_TITLE);
+                schedule(server, SUNRISE_BLOOM_DELAY_TICKS, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player, SUNRISE_WARM_BLOOM);
+                        }
+                    }
+                });
                 return true;
             }
             default -> {

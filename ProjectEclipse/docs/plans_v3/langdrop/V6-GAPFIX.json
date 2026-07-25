@@ -1,0 +1,40 @@
+{
+  "en": {
+    "dev.eclipse.doc.timer.color": "Sets the day-timer HUD color for every player: auto (the urgency ramp), text, accent, deep, or a #rrggbb hex literal.",
+    "dev.eclipse.timer.color.ok": "Day-timer color set to %s.",
+    "dev.eclipse.timer.color.invalid": "Unknown timer color '%s' — use auto, text, accent, deep or #rrggbb.",
+    "item.eclipse.storm_heart": "Storm Heart",
+    "item.eclipse.storm_heart.lore": "The Fog Tyrant's tempest, still beating.",
+    "message.eclipse.rebirth.aura.on": "Your keepsake aura flares back to life.",
+    "message.eclipse.rebirth.aura.on_locked": "The keepsake aura awaits your first rebirth — it will shine once the cycle turns.",
+    "message.eclipse.rebirth.aura.off": "Your keepsake aura fades.",
+    "subtitles.eclipse.event.rift_drone": "A rift groans open",
+    "eclipse.minigame.arena.title.get_ready": "Get ready…",
+    "eclipse.minigame.arena.kill": "Takedown! Round score: %1$s",
+    "eclipse.minigame.arena.own_score": "Your round score: %1$s takedown(s).",
+    "eclipse.minigame.arena.podium.first": "The Champion of the Rift Arena — %1$s takedown(s)!",
+    "eclipse.minigame.arena.podium.second": "A runner-up stands tall — %1$s takedown(s).",
+    "eclipse.minigame.arena.podium.third": "Third place holds their ground — %1$s takedown(s).",
+    "eclipse.minigame.arena.podium.private": "You placed #%1$s with %2$s takedown(s) — reward: %3$s shard(s), %4$s skill XP.",
+    "eclipse.minigame.arena.podium.tie": "%1$s fighters tie at place #%2$s — %3$s takedown(s) each!"
+  },
+  "de": {
+    "dev.eclipse.doc.timer.color": "Setzt die HUD-Farbe des Tages-Timers für alle Spieler: auto (der Dringlichkeitsverlauf), text, accent, deep oder ein #rrggbb-Hexwert.",
+    "dev.eclipse.timer.color.ok": "Timer-Farbe auf %s gesetzt.",
+    "dev.eclipse.timer.color.invalid": "Unbekannte Timer-Farbe '%s' — nutze auto, text, accent, deep oder #rrggbb.",
+    "item.eclipse.storm_heart": "Sturmherz",
+    "item.eclipse.storm_heart.lore": "Der Sturm des Nebeltyrannen, noch immer schlagend.",
+    "message.eclipse.rebirth.aura.on": "Deine Andenken-Aura flammt wieder auf.",
+    "message.eclipse.rebirth.aura.on_locked": "Die Andenken-Aura wartet auf deine erste Wiedergeburt — sie erstrahlt, sobald sich der Kreislauf dreht.",
+    "message.eclipse.rebirth.aura.off": "Deine Andenken-Aura verblasst.",
+    "subtitles.eclipse.event.rift_drone": "Ein Riss ächzt",
+    "eclipse.minigame.arena.title.get_ready": "Macht euch bereit…",
+    "eclipse.minigame.arena.kill": "Ausgeschaltet! Rundenpunkte: %1$s",
+    "eclipse.minigame.arena.own_score": "Deine Rundenpunkte: %1$s Gegner ausgeschaltet.",
+    "eclipse.minigame.arena.podium.first": "Der Champion der Riss-Arena — %1$s Gegner ausgeschaltet!",
+    "eclipse.minigame.arena.podium.second": "Ein Zweitplatzierter steht aufrecht — %1$s Gegner ausgeschaltet.",
+    "eclipse.minigame.arena.podium.third": "Platz drei hält stand — %1$s Gegner ausgeschaltet.",
+    "eclipse.minigame.arena.podium.private": "Du hast Platz #%1$s belegt — %2$s Gegner ausgeschaltet. Belohnung: %3$s Splitter, %4$s Fähigkeits-EP.",
+    "eclipse.minigame.arena.podium.tie": "%1$s Kämpfer teilen sich Platz #%2$s — je %3$s Gegner ausgeschaltet!"
+  }
+}

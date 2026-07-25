@@ -60,12 +60,12 @@ public final class HarnessSmokeTest {
     public static void payloadCodecRoundTrips(GameTestHelper helper) {
         GameTestSupport.assertPayloadRoundTrip(S2CDayClockPayload.STREAM_CODEC,
                 new S2CDayClockPayload(3, 1_700_000_000_000L, 1_699_000_000_000L,
-                        1_700_000_100_000L, true, 60_000L));
+                        1_700_000_100_000L, true, 60_000L, "auto"));
 
         GameTestSupport.assertPayloadRoundTrip(S2CQuestStatePayload.STREAM_CODEC,
                 new S2CQuestStatePayload(2, List.of(
                         new S2CQuestStatePayload.QuestEntry("q1", (byte) 0, "Mine iron", "Eisen abbauen",
-                                4, 32, false, true, 2))));
+                                4, 32, false, true, 2, 30))));
 
         GameTestSupport.assertPayloadRoundTrip(S2CSkillStatePayload.STREAM_CODEC,
                 new S2CSkillStatePayload(5, 1200L, 80, 200, 4, 1,

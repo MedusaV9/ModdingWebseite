@@ -131,12 +131,18 @@ void main() {
     // tolerance grows slightly with distance (depth precision) but never enough to re-admit
     // the deck (waterline+3) or standing mobs.
     float surfaceY = WaterlineY + 0.9;
-    float eps = 0.55 + dist * 0.012;
+    // eps growth is CAPPED (POL-F 8): uncapped, the depth-precision allowance kept
+    // widening with distance until the far band could re-admit the deck (waterline+3,
+    // i.e. 2.1 above the surface) — 1.65 keeps the outer band edge safely below it.
+    float eps = min(0.55 + dist * 0.012, 1.65);
     float band = 1.0 - smoothstep(eps * 0.5, eps, abs(world.y - surfaceY));
     // Downward-facing reconstruction: only rays looking DOWN onto the plane from above
     // count — geometry above the waterline reconstructs above the band and drops out, and
-    // a submerged camera (intro submerge FX) gets no caustics at all.
-    float facing = step(surfaceY + 0.5, CameraPos.y) * step(rel.y, -0.01);
+    // a submerged camera (intro submerge FX) gets no caustics at all. POL-F 8: both cuts
+    // are smoothsteps now — the old binary steps popped the whole caustic field on/off
+    // when the camera bobbed across waterline+0.5 or a ray grazed horizontal.
+    float facing = smoothstep(surfaceY + 0.1, surfaceY + 0.9, CameraPos.y)
+            * smoothstep(0.005, 0.05, -rel.y);
     float water = (1.0 - sky) * band * facing * CausticsAmount;
 
     // ---- world-anchored caustic UVs (item 2) + voyage drift (shader half of item 6) -----

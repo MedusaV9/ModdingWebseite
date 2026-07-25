@@ -1,11 +1,15 @@
 package dev.projecteclipse.eclipse.client.credits;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsBeginPayload;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsClosePayload;
 import dev.projecteclipse.eclipse.ritual.CreditsConfig;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvents;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -30,9 +34,20 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * title-screen-Quit path (saves options, stops sounds, destroys the window), guaranteed on
  * the render thread. Everything resets on logout so a credits state can never leak into the
  * next session.</p>
+ *
+ * <p><b>FXTEAM CUT-CREDITS close choreography</b>: the moment the close is scheduled the
+ * {@code day_final} channel starts its 40t crossfade-out ({@code MusicCues.stop()} —
+ * {@code MusicManager.FADE_TICKS} equals the close delay, so the music reaches silence
+ * exactly as the window dies instead of hard-cutting mid-phrase), and the final second of
+ * pure black carries two faint warden-heartbeat thumps ({@value #HEARTBEAT_FIRST_AT}t /
+ * {@value #HEARTBEAT_SECOND_AT}t before stop; gated by the {@code heartbeatSound}
+ * accessibility toggle).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class CreditsClient {
+    /** Countdown values (ticks before stop) of the two finale heartbeat thumps. */
+    private static final int HEARTBEAT_FIRST_AT = 20;
+    private static final int HEARTBEAT_SECOND_AT = 12;
     static {
         // Payload consumer seam (BossIntroOverlay pattern): installed on client class-load,
         // so CreditsPayloads itself never references client classes.
@@ -74,7 +89,10 @@ public final class CreditsClient {
             return;
         }
         closeCountdown = Math.max(1, payload.delayTicks());
-        EclipseMod.LOGGER.info("Credits close scheduled in {} ticks", closeCountdown);
+        // Music-synced fade-out: the finale channel crossfades to silence over the same
+        // 40t the countdown runs, so Minecraft.stop() never hard-cuts day_final.
+        MusicCues.stop();
+        EclipseMod.LOGGER.info("Credits close scheduled in {} ticks (music fading out)", closeCountdown);
     }
 
     @SubscribeEvent
@@ -87,6 +105,16 @@ public final class CreditsClient {
             Minecraft minecraft = Minecraft.getInstance();
             EclipseMod.LOGGER.info("Credits finale: closing the client (Minecraft.stop())");
             minecraft.execute(minecraft::stop);
+            return;
+        }
+        // Two faint heartbeat thumps under the last second of pure black (the ECLIPSE
+        // card is gone by now — CreditsSequence trimmed it to end ~20t before the stop).
+        if ((closeCountdown == HEARTBEAT_FIRST_AT || closeCountdown == HEARTBEAT_SECOND_AT)
+                && EclipseClientConfig.heartbeatSound()) {
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(
+                    SoundEvents.WARDEN_HEARTBEAT,
+                    closeCountdown == HEARTBEAT_FIRST_AT ? 0.7F : 0.62F,
+                    closeCountdown == HEARTBEAT_FIRST_AT ? 0.4F : 0.3F));
         }
     }
 

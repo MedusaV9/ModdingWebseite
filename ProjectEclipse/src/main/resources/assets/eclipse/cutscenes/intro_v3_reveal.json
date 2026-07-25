@@ -9,16 +9,20 @@
   "hideHud": true,
   "durationTicks": 300,
   "keyframes": [
-    { "t": 0.0, "pos": [46.0, -12.0, 32.0], "yaw": -145, "pitch": -8, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
-    { "t": 0.28, "pos": [34.0, 2.0, -34.0], "yaw": -95, "pitch": 2, "roll": -2, "fov": 58, "easing": "easeInOutSine", "lookAt": [0.0, -6.0, 0.0] },
-    { "t": 0.55, "pos": [-36.0, 10.0, -30.0], "yaw": -35, "pitch": 8, "roll": 0, "fov": 55, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
-    { "t": 0.8, "pos": [-42.0, 4.0, 26.0], "yaw": 40, "pitch": 4, "roll": 2, "fov": 58, "easing": "easeInOutSine", "lookAt": [0.0, -2.0, 0.0] },
-    { "t": 1.0, "pos": [-12.0, -4.0, 46.0], "yaw": 15, "pitch": -4, "roll": 0, "fov": 64, "easing": "easeOutCubic", "lookAt": [0.0, 2.0, 0.0] }
+    { "t": 0.0, "pos": [44.0, -14.0, 20.0], "yaw": -115, "pitch": -14, "roll": 0, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, -2.0, 0.0] },
+    { "t": 0.3, "pos": [30.0, -4.0, -16.0], "yaw": -62, "pitch": -4, "roll": -1.5, "fov": 57, "easing": "easeInOutSine", "lookAt": [0.0, -4.0, 0.0] },
+    { "t": 0.55, "pos": [12.0, 4.0, -30.0], "yaw": -22, "pitch": 4, "roll": 0, "fov": 55, "easing": "easeInOutSine", "lookAt": [0.0, 0.0, 0.0] },
+    { "t": 0.8, "pos": [-14.0, 8.0, -30.0], "yaw": 25, "pitch": 8, "roll": 1.5, "fov": 56, "easing": "easeInOutSine", "lookAt": [0.0, 2.0, 0.0] },
+    { "t": 1.0, "pos": [-30.0, 2.0, -16.0], "yaw": 62, "pitch": 0, "roll": 0, "fov": 58, "easing": "easeOutCubic", "lookAt": [0.0, 4.0, 0.0] }
   ],
   "events": [
     { "t": 0.02, "type": "sound", "id": "eclipse:event.storm_burst" },
-    { "t": 0.1, "type": "caption", "id": "eclipse.caption.intro.reveal", "data": "subtitle,110" },
+    { "t": 0.12, "type": "caption", "id": "eclipse.caption.intro.reveal", "data": "subtitle,110" },
     { "t": 0.5, "type": "sound", "id": "eclipse:event.emerge" },
-    { "t": 0.88, "type": "shake", "id": "reveal_settle", "data": "0.15,24,2.2" }
-  ]
+    { "t": 0.9, "type": "shake", "id": "reveal_settle", "data": "0.12,26,1.2" }
+  ],
+  "params": {
+    "_comment": "CUT-INTRO reshoot: slow orbital drift with foreground silhouette framing. The old ~270-degree lap is now a ~175-degree drift (~0.6 deg/tick) that starts LOW and far (48 out, 14 below the altar — the island reads as a black cutout against the post-burst sky) and eases in to a ~32-block closest pass: FloatingDecor's rubble ring (r 11-23) sits between camera and island there, so fragments cross the frame as foreground silhouettes with real parallax. Gentle counter-rolls (max 1.5) keep the drift organic; FOV breathes 60->55->58 (tightest at the closest pass). The lookAt climbs -2 -> +4 so the final frames tilt up the island flank toward the crown — handing composition to SUNRISE. Caption retimed 0.1->0.12 to let the silhouette read first; settle shake softened to a low rumble (0.12, freq 1.2). Keyframes are offsets from the play anchor (altar position).",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
+  }
 }

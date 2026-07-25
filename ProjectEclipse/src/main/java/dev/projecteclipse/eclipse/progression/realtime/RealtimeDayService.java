@@ -374,7 +374,8 @@ public final class RealtimeDayService {
                 armed ? state.getPrevBoundaryEpochMillis() : 0L,
                 EclipseClock.epochMillis(),
                 armed && state.isPaused(),
-                armed && state.isPaused() ? state.getPauseRemainingMillis() : 0L);
+                armed && state.isPaused() ? state.getPauseRemainingMillis() : 0L,
+                state.getTimerColorMode());
     }
 
     /** Broadcasts the clock to every online player (state changes + periodic re-sync). */

@@ -32,11 +32,17 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  * card needs the auto-fitting 2x+ typography and the decode; {@code CaptionRenderer}'s
  * TITLE style stays untouched for the deadpan correction card.
  *
+ * <p>FXTEAM CUT-CREDITS decode polish: each character lands GOLD the tick it locks and
+ * cools to TEXT over {@value #CHAR_FLASH_TICKS}t (a per-letter resolve wave), and the
+ * full-lock timerZero boom carries one {@value #BASS_FLASH_TICKS}-tick low-alpha white
+ * flash frame across the screen.</p>
+ *
  * <p>Long titles auto-shrink so the card can never clip: the scale drops from 2.0 until the
  * whole line fits inside 92% of the screen width. Renders from {@link RenderGuiEvent.Post}
  * (survives the letterbox GUI suppression; only F1 hides it). {@code reducedFx} keeps
- * {@link GlitchText}'s calm static and stops the hairline breathing, exactly like the boss
- * card. No {@code CenterStageArbiter} claim: during the finale every other center-stage
+ * {@link GlitchText}'s calm static, stops the hairline breathing exactly like the boss
+ * card, and drops the bass flash frame (the per-letter resolve is color-only and stays).
+ * No {@code CenterStageArbiter} claim: during the finale every other center-stage
  * system (day cards, level-ups, roulette) is long past.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
@@ -48,6 +54,11 @@ public final class TitleCardLayer {
     private static final int QUEUE_LIMIT = 3;
     /** GOLD→TEXT flash length right after the title locks completely. */
     private static final int LOCK_FLASH_TICKS = 12;
+    /** FXTEAM CUT-CREDITS per-letter resolve: each char lands GOLD and cools over this. */
+    private static final int CHAR_FLASH_TICKS = 5;
+    /** Bass-sync flash frame riding the full-lock timerZero boom (skipped by reducedFx). */
+    private static final int BASS_FLASH_TICKS = 2;
+    private static final float BASS_FLASH_ALPHA = 0.22F;
     private static final int BAND_PAD_TOP = 14;
     private static final int BAND_PAD_BOTTOM = 12;
     /** Warm credits gold (the DANGER slot of the boss card's palette). */
@@ -173,27 +184,47 @@ public final class TitleCardLayer {
         guiGraphics.fill(0, bandTop, width, bandTop + 1, hairline);
         guiGraphics.fill(0, bandBottom - 1, width, bandBottom, hairline);
 
-        // --- title, GlitchText decode-in with the gold lock flash ---
+        // --- title, GlitchText decode-in with the per-letter gold resolve ---
         int locked = lockedChars(ticks);
-        String lockedPart = title.substring(0, locked);
         String noiseTail = buildNoiseTail(locked);
         float lockFlash = locked < title.length() ? 0.0F
                 : Mth.clamp(1.0F - (t - decodeEnd) / LOCK_FLASH_TICKS, 0.0F, 1.0F);
-        int lockedRgb = lerpRgb(EclipseUiTheme.TEXT & 0xFFFFFF, GOLD & 0xFFFFFF, lockFlash);
         int alphaByte = Mth.clamp((int) (alpha * 255.0F), 8, 255);
 
         var pose = guiGraphics.pose();
         pose.pushPose();
         pose.translate(centerX - titleWidth * scale / 2.0F, cardCenterY - scaledHalfHeight, 0.0F);
         pose.scale(scale, scale, 1.0F);
-        if (!lockedPart.isEmpty()) {
-            guiGraphics.drawString(font, lockedPart, 0, 0, (alphaByte << 24) | lockedRgb);
+        // Per-letter glitch resolve (FXTEAM CUT-CREDITS): every char lands GOLD the tick
+        // it locks and cools to TEXT over CHAR_FLASH_TICKS, so the decode reads as a wave
+        // of individual resolutions instead of one block recolor. The whole-string lock
+        // flash still rides on top (max() below) for the final snap.
+        int x = 0;
+        for (int i = 0; i < locked; i++) {
+            String glyph = String.valueOf(title.charAt(i));
+            float charFlash = Mth.clamp(
+                    1.0F - (t - (PRE_TICKS + (i + 1) * TICKS_PER_CHAR)) / CHAR_FLASH_TICKS, 0.0F, 1.0F);
+            int rgb = lerpRgb(EclipseUiTheme.TEXT & 0xFFFFFF, GOLD & 0xFFFFFF,
+                    Math.max(charFlash, lockFlash));
+            guiGraphics.drawString(font, glyph, x, 0, (alphaByte << 24) | rgb);
+            x += font.width(glyph);
         }
         if (!noiseTail.isEmpty()) {
-            guiGraphics.drawString(font, noiseTail, font.width(lockedPart), 0,
+            guiGraphics.drawString(font, noiseTail, x, 0,
                     (Mth.clamp((int) (alpha * 210.0F), 8, 255) << 24) | (GOLD & 0xFFFFFF));
         }
         pose.popPose();
+
+        // One bass-sync flash frame as the title snaps true (the timerZero boom): a
+        // 2-tick low-alpha white pop over the whole frame. reducedFx drops it entirely
+        // (single-frame flashes are exactly what that toggle is for).
+        if (!reduced && t >= decodeEnd && locked >= title.length()) {
+            float flashFrame = 1.0F - (t - decodeEnd) / BASS_FLASH_TICKS;
+            if (flashFrame > 0.0F) {
+                guiGraphics.fill(0, 0, width, guiGraphics.guiHeight(),
+                        EclipseUiTheme.withAlpha(0xFFFFFFFF, BASS_FLASH_ALPHA * flashFrame * alpha));
+            }
+        }
     }
 
     /**

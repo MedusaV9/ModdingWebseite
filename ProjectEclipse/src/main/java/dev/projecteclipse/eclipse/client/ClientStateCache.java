@@ -74,6 +74,8 @@ public final class ClientStateCache {
     public static volatile long serverNowEpochMillis = 0L;
     public static volatile boolean dayClockPaused = false;
     public static volatile long pauseRemainingMillis = 0L;
+    /** {@code /dev timer color} mode for the day timer: auto|text|accent|deep|#rrggbb. */
+    public static volatile String timerColorMode = "auto";
     /** Local millis when the last day-clock payload arrived (client offset helper). */
     public static volatile long clockSyncLocalMillis = 0L;
 
@@ -150,6 +152,8 @@ public final class ClientStateCache {
     public static volatile int rebirthCount = 0;
     public static volatile int rebirthNextCostShards = 0;
     public static volatile float rebirthLevelCostMultiplier = 1.0F;
+    /** Keepsake-aura toggle mirror ({@code /skills aura}; ring itself is server-rendered). */
+    public static volatile boolean rebirthAuraEnabled = true;
 
     /**
      * Snaps every synced field back to its pre-login default (disconnect hook): the cache
@@ -189,6 +193,7 @@ public final class ClientStateCache {
         serverNowEpochMillis = 0L;
         dayClockPaused = false;
         pauseRemainingMillis = 0L;
+        timerColorMode = "auto";
         clockSyncLocalMillis = 0L;
         questDay = 1;
         questEntries = java.util.List.of();
@@ -231,6 +236,7 @@ public final class ClientStateCache {
         rebirthCount = 0;
         rebirthNextCostShards = 0;
         rebirthLevelCostMultiplier = 1.0F;
+        rebirthAuraEnabled = true;
     }
 
     /**

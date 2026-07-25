@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.worldgen.end;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -9,8 +10,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
 
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
+import com.mojang.math.Transformation;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
@@ -19,22 +26,23 @@ import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
+import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import dev.projecteclipse.eclipse.worldgen.structure.SkyLauncher;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.DoubleTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
@@ -70,8 +78,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       wrong for this), a caption announces the grace, and the global
  *       {@code end_shatter} orbit cutscene plays via
  *       {@link CutsceneService.PlayOptions#global} — gather, preload and the C6
- *       {@code validatedReturnPosition}-healed return all come with it. Bass rumble +
- *       camera shake + violet rift flashes along the future seams.</li>
+ *       {@code validatedReturnPosition}-healed return all come with it. CUT-END staging:
+ *       beat 0 itself is a dead-silent hold; the bass rumble + camera shake land
+ *       {@value #SILENCE_HOLD_TICKS}t later, the violet rift flashes along the future
+ *       seams race outward from the podium ({@value #CRACK_RACE_STEP_TICKS}t apart,
+ *       pitch-climbing crack stingers riding each one), and the dust curtains + debris
+ *       drop wait for the carve pass at +{@value #SEPARATION_FX_DELAY_TICKS}t.</li>
  *   <li><b>Shatter</b> — a deterministic Voronoi crack pattern (seed-hashed off
  *       {@link FrozenParams#mapSeed()}, the {@code DiscMapData.ECLIPSE_SEED} law)
  *       divides the disc into 6–9 islets. Seam channels (3–5 blocks wide) are cleared
@@ -114,6 +126,20 @@ public final class EndShatterSequence {
     /** Debris display cap. */
     private static final int DEBRIS_CAP = 120;
     private static final int DEBRIS_TTL_TICKS = 300;
+    /** Debris keyframe cadence — interpolation duration matches (DisplayAnimator law). */
+    private static final int DEBRIS_UPDATE_TICKS = 4;
+    /** Gravity-lite pull on drifting debris (blocks/tick² — a lazy void-fall, not a drop). */
+    private static final double DEBRIS_GRAVITY = -0.003D;
+    /** Terminal fall speed: caps the per-window delta so 4 t tweens stay dense enough. */
+    private static final double DEBRIS_TERMINAL_FALL = -0.35D;
+    /** Last fraction of the TTL spent dissolving (shrink + brightness-down). */
+    private static final float DEBRIS_DISSOLVE_FRACTION = 0.20F;
+    /** Debris tumble rate range (deg/tick) — fixed axis + fixed signed rate per chunk. */
+    private static final double DEBRIS_SPIN_MIN_DEG = 0.6D;
+    private static final double DEBRIS_SPIN_MAX_DEG = 1.6D;
+    /** Slow precession of each chunk's tumble pole around Y (deg/tick). */
+    private static final double DEBRIS_PRECESS_MIN_DEG = 0.08D;
+    private static final double DEBRIS_PRECESS_MAX_DEG = 0.20D;
     /** Crack stingers while the carve pass runs. */
     private static final int CRACK_INTERVAL_TICKS = 48;
 
@@ -131,6 +157,25 @@ public final class EndShatterSequence {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "fx/rift_open");
     private static final double FX_RANGE = 256.0D;
 
+    // --- CUT-END presentation timings (camera/FX beats only; the carve flow is untouched) ---
+
+    /** Dead-silence hold after beat 0 before the first crack lands (~1.2 s; JSON t 0.10). */
+    private static final int SILENCE_HOLD_TICKS = 24;
+    /** Spacing between successive seam flashes of the center-out crack race. */
+    private static final int CRACK_RACE_STEP_TICKS = 4;
+    /** Dust curtains + debris drop this long after beat 0 (just before the carve pass bites). */
+    private static final int SEPARATION_FX_DELAY_TICKS = 58;
+    /** Debris ember-trail burst cadence / per-burst sample cap (client BURST budget backstops). */
+    private static final int DEBRIS_TRAIL_INTERVAL_TICKS = 40;
+    private static final int DEBRIS_TRAIL_SAMPLES = 3;
+
+    /** One-shot dust-curtain emitter reused from the expansion suite ({@code loop=false} JSON). */
+    private static final ResourceLocation GROWTH_DUST_WALL =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "growth_dust_wall");
+    /** One-shot ember burst reused for the debris trails ({@code loop=false} JSON). */
+    private static final ResourceLocation SLAM_DEBRIS =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "slam_debris");
+
     private static final Set<Heightmap.Types> HEIGHTMAPS = EnumSet.of(
             Heightmap.Types.MOTION_BLOCKING,
             Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
@@ -142,6 +187,15 @@ public final class EndShatterSequence {
     @Nullable
     private static Job activeJob;
     private static final List<Debris> DEBRIS = new ArrayList<>();
+
+    /** One scheduled CUT-END presentation beat (delayed rumble, crack race, dust curtains). */
+    private record Beat(long dueGameTime, Runnable action) {}
+
+    /**
+     * Pending presentation beats (server thread only). Purely cosmetic: a restart drops
+     * them along with everything else transient — the cinematic never resumes (plan law).
+     */
+    private static final List<Beat> BEATS = new ArrayList<>();
 
     private EndShatterSequence() {}
 
@@ -260,6 +314,7 @@ public final class EndShatterSequence {
     public static void onServerStopped(ServerStoppedEvent event) {
         activeJob = null;
         DEBRIS.clear();
+        BEATS.clear();
     }
 
     @SubscribeEvent
@@ -267,6 +322,9 @@ public final class EndShatterSequence {
         MinecraftServer server = event.getServer();
         if (activeJob != null) {
             activeJob.tick();
+        }
+        if (!BEATS.isEmpty()) {
+            tickBeats(server.overworld().getGameTime());
         }
         if (!DEBRIS.isEmpty()) {
             tickDebris();
@@ -280,6 +338,18 @@ public final class EndShatterSequence {
         }
         if (server.overworld().getGameTime() >= state.dueGameTime()) {
             beginShatter(server, state);
+        }
+    }
+
+    /** Runs every due presentation beat (server thread; a restart simply drops them). */
+    private static void tickBeats(long gameTime) {
+        Iterator<Beat> iterator = BEATS.iterator();
+        while (iterator.hasNext()) {
+            Beat beat = iterator.next();
+            if (gameTime >= beat.dueGameTime()) {
+                iterator.remove();
+                beat.action().run();
+            }
         }
     }
 
@@ -316,25 +386,68 @@ public final class EndShatterSequence {
         BlockPos center = new BlockPos(EndConfig.current().centerX(),
                 EndDiscGeometry.surfaceYAt(EndConfig.current().centerX(), EndConfig.current().centerZ()),
                 EndConfig.current().centerZ());
-        overworld.playSound(null, center, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
-                SoundSource.HOSTILE, 4.0F, 1.0F);
-        for (ServerPlayer player : overworld.players()) {
-            player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
-                    SoundSource.MASTER, 1.2F, 1.0F);
-        }
-        PacketDistributor.sendToPlayersInDimension(overworld, S2CShakePayload.shake(1.5F, 60));
+        long now = overworld.getGameTime();
 
-        // Violet rift flashes along the future seams (podium → each outer islet midpoint).
+        // CUT-END shot 1 (dragon-death beat): beat 0 is a DEAD-SILENT hold — only the
+        // safety caption stands while the orbit establishes. The rumble, the big shake and
+        // the seam flashes all wait out SILENCE_HOLD_TICKS, so the JSON's first crack
+        // (t 0.10 ≈ the same wall-clock instant, preload hold permitting) breaks true
+        // silence instead of layering onto a wall of sound. (No sound-STOP mechanism
+        // exists anywhere in the mod, so a real audio duck is not achievable — the hold is
+        // built by scheduling, not by stopping.)
+        BEATS.add(new Beat(now + SILENCE_HOLD_TICKS, () -> {
+            overworld.playSound(null, center, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                    SoundSource.HOSTILE, 4.0F, 1.0F);
+            for (ServerPlayer player : overworld.players()) {
+                player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                        SoundSource.MASTER, 1.2F, 1.0F);
+            }
+            PacketDistributor.sendToPlayersInDimension(overworld, S2CShakePayload.shake(1.2F, 50));
+        }));
+
+        // CUT-END shot 2 (crack propagation): the violet rift flashes along the future
+        // seams (podium → each outer islet midpoint) no longer fire as one simultaneous
+        // wall — they RACE outward from the podium in seam-midpoint-radius order, one
+        // every CRACK_RACE_STEP_TICKS, each carrying a positional crack stinger whose
+        // pitch climbs as the race runs: light bleeding up from the fissures, center-out.
+        List<Integer> race = new ArrayList<>();
         for (int i = 1; i < layout.count(); i++) {
-            double sx = DiscProfile.END_DISC_CENTER_X + layout.siteX()[i] * 0.5D;
-            double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[i] * 0.5D;
+            race.add(i);
+        }
+        race.sort(Comparator.comparingDouble(
+                islet -> Math.hypot(layout.siteX()[islet], layout.siteZ()[islet])));
+        for (int step = 0; step < race.size(); step++) {
+            int islet = race.get(step);
+            float pitch = 0.85F + 0.06F * step;
+            double sx = DiscProfile.END_DISC_CENTER_X + layout.siteX()[islet] * 0.5D;
+            double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[islet] * 0.5D;
             Vec3 flash = new Vec3(sx,
                     EndDiscGeometry.surfaceYAt((int) sx, (int) sz) + 2.0D, sz);
-            PacketDistributor.sendToPlayersNear(overworld, null, flash.x, flash.y, flash.z,
-                    FX_RANGE, new S2CFxEventPayload(FX_RIFT_OPEN, flash, 6.0F, 0.0F));
+            BEATS.add(new Beat(now + SILENCE_HOLD_TICKS + (long) step * CRACK_RACE_STEP_TICKS, () -> {
+                PacketDistributor.sendToPlayersNear(overworld, null, flash.x, flash.y, flash.z,
+                        FX_RANGE, new S2CFxEventPayload(FX_RIFT_OPEN, flash, 6.0F, 0.0F));
+                overworld.playSound(null, BlockPos.containing(flash),
+                        EclipseSounds.EVENT_END_SHATTER_CRACK.get(), SoundSource.HOSTILE, 3.0F, pitch);
+            }));
         }
 
-        spawnDebris(overworld, layout);
+        // CUT-END shot 3 (separation): dust curtains fall from the break faces and the
+        // debris chunks start tumbling only when the carve pass is about to bite (beat 0 +
+        // CARVE_DELAY_TICKS; the curtains land just ahead of it) — not at beat 0, when the
+        // disc is still visibly whole.
+        BEATS.add(new Beat(now + SEPARATION_FX_DELAY_TICKS, () -> {
+            for (int i = 1; i < layout.count(); i++) {
+                double sx = DiscProfile.END_DISC_CENTER_X + layout.siteX()[i] * 0.5D;
+                double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[i] * 0.5D;
+                Vec3 seam = new Vec3(sx,
+                        EndDiscGeometry.surfaceYAt((int) sx, (int) sz) + 1.0D, sz);
+                PacketDistributor.sendToPlayersNear(overworld, null, seam.x, seam.y, seam.z,
+                        FX_RANGE, new S2CQuasarPayload(GROWTH_DUST_WALL, seam));
+            }
+            overworld.playSound(null, center, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                    SoundSource.HOSTILE, 3.0F, 0.8F);
+            spawnDebris(overworld, layout);
+        }));
 
         // Global orbit show; gather + preload + the C6-healed return come with global().
         Vec3 anchor = Vec3.atCenterOf(center);
@@ -348,18 +461,66 @@ public final class EndShatterSequence {
 
     // --- debris (C7 animator school: tagged, in-memory driven, TTL-discarded) ---
 
+    /**
+     * One tumbling seam chunk. The entity NEVER moves (BD-STRUCT teleport ban): the
+     * whole drift lives in the transformation's translation as a closed-form function
+     * of {@link #age}, pushed as ONE interpolated keyframe every
+     * {@value #DEBRIS_UPDATE_TICKS} ticks — the StructureFlightFx/SanctumOrbitals
+     * transport, replacing the old per-tick {@code teleportTo} +
+     * {@code teleport_duration} spam (and its per-tick position packets). Tumble is
+     * angular-momentum-consistent: ONE fixed tilted axis and one fixed signed rate per
+     * chunk, plus a slow precession of the pole around Y — never a re-rolled axis. All
+     * parameters seed-mix off the spawn column, so replays shatter identically.
+     */
     private static final class Debris {
-        final Entity entity;
-        double vx;
-        double vy;
-        double vz;
-        int ttl = DEBRIS_TTL_TICKS;
+        final Display.BlockDisplay display;
+        /** Fixed entity anchor (the seam surface point the chunk tore off from). */
+        final Vec3 origin;
+        /** Launch velocity (blocks/tick); the arc integrates gravity-lite on top. */
+        final double vx;
+        final double vy0;
+        final double vz;
+        final Vector3f spinAxis;
+        /** Signed tumble rate (rad/tick); the sign never flips mid-flight. */
+        final double spinRate;
+        final double spinPhase;
+        /** Pole precession rate around Y (rad/tick) — slow, per-chunk. */
+        final double precessRate;
+        final float baseScale;
+        int age;
+        /** Dissolve brightness steps fired (brightness snaps → few, coarse, in-motion). */
+        int dissolveStage;
 
-        Debris(Entity entity, double vx, double vy, double vz) {
-            this.entity = entity;
+        Debris(Display.BlockDisplay display, Vec3 origin, double vx, double vy0, double vz,
+                Vector3f spinAxis, double spinRate, double spinPhase, double precessRate,
+                float baseScale) {
+            this.display = display;
+            this.origin = origin;
             this.vx = vx;
-            this.vy = vy;
+            this.vy0 = vy0;
             this.vz = vz;
+            this.spinAxis = spinAxis;
+            this.spinRate = spinRate;
+            this.spinPhase = spinPhase;
+            this.precessRate = precessRate;
+            this.baseScale = baseScale;
+        }
+
+        /** World-space chunk-center of the drift arc at {@code age} ticks (closed form). */
+        Vec3 driftAt(int age) {
+            return new Vec3(this.origin.x + this.vx * age,
+                    this.origin.y + fallAt(age),
+                    this.origin.z + this.vz * age);
+        }
+
+        /** Fall offset: parabola under gravity-lite, capped at the terminal speed. */
+        double fallAt(int age) {
+            double tTerm = (DEBRIS_TERMINAL_FALL - this.vy0) / DEBRIS_GRAVITY;
+            if (age <= tTerm) {
+                return this.vy0 * age + 0.5D * DEBRIS_GRAVITY * age * age;
+            }
+            return this.vy0 * tTerm + 0.5D * DEBRIS_GRAVITY * tTerm * tTerm
+                    + DEBRIS_TERMINAL_FALL * (age - tTerm);
         }
     }
 
@@ -377,62 +538,143 @@ public final class EndShatterSequence {
                     continue;
                 }
                 int y = EndDiscGeometry.surfaceYAt(bx, bz) + 1;
-                Entity display = spawnDebrisDisplay(level, bx, y, bz,
-                        to01(mix(seed ^ SALT_DEBRIS, bx, bz + 1)) < 0.2D
-                                ? Blocks.OBSIDIAN : Blocks.END_STONE);
-                if (display == null) {
-                    continue;
-                }
+                Block block = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 1)) < 0.2D
+                        ? Blocks.OBSIDIAN : Blocks.END_STONE;
                 double dist = Math.max(1.0D, Math.sqrt((double) x * x + (double) z * z));
                 double jitter = to01(mix(seed ^ SALT_DEBRIS, bx + 1, bz)) - 0.5D;
-                DEBRIS.add(new Debris(display,
+                // Tumble identity: one fixed tilted axis, one fixed signed rate, one
+                // slow precession — all seed-mixed off the spawn column.
+                double h1 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 2));
+                double h2 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 3));
+                double h3 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 4));
+                Vector3f axis = new Vector3f(
+                        (float) (h1 * 2.0D - 1.0D), 1.0F,
+                        (float) (h2 * 2.0D - 1.0D)).normalize();
+                double spinRate = Math.toRadians(DEBRIS_SPIN_MIN_DEG
+                        + (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG) * h3)
+                        * (jitter < 0.0D ? -1.0D : 1.0D);
+                double precessRate = Math.toRadians(DEBRIS_PRECESS_MIN_DEG
+                        + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h1);
+                Debris debris = new Debris(
+                        new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level),
+                        new Vec3(bx + 0.5D, y, bz + 0.5D),
                         x / dist * 0.10D + jitter * 0.06D,
                         0.06D,
-                        z / dist * 0.10D - jitter * 0.06D));
+                        z / dist * 0.10D - jitter * 0.06D,
+                        axis, spinRate, h3 * Math.PI * 2.0D, precessRate,
+                        (float) (0.70D + 0.45D * h2));
+                if (!spawnDebrisDisplay(level, debris, block)) {
+                    continue;
+                }
+                DEBRIS.add(debris);
                 spawned++;
             }
         }
         EclipseMod.LOGGER.info("EndShatterSequence: {} debris displays drifting", spawned);
     }
 
-    /** Block display spawned via NBT so {@code teleport_duration} smooths the drift. */
-    @Nullable
-    private static Entity spawnDebrisDisplay(ServerLevel level, int x, int y, int z, Block block) {
-        CompoundTag tag = new CompoundTag();
-        tag.putString("id", "minecraft:block_display");
-        tag.putInt("teleport_duration", 2);
-        CompoundTag blockState = new CompoundTag();
-        blockState.putString("Name",
-                net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString());
-        tag.put("block_state", blockState);
-        ListTag pos = new ListTag();
-        pos.add(DoubleTag.valueOf(x + 0.5D));
-        pos.add(DoubleTag.valueOf(y));
-        pos.add(DoubleTag.valueOf(z + 0.5D));
-        tag.put("Pos", pos);
-        Entity display = EntityType.loadEntityRecursive(tag, level, entity -> entity);
-        if (display == null) {
-            return null;
-        }
+    /**
+     * Finishes spawning one tumbling chunk at its FIXED entity anchor — the drift lives
+     * entirely in the transformation, so the entity's light sample and owning chunk
+     * never change. Born already posed at t = 0 with interpolation duration 0.
+     */
+    private static boolean spawnDebrisDisplay(ServerLevel level, Debris debris, Block block) {
+        Display.BlockDisplay display = debris.display;
+        display.setBlockState(block.defaultBlockState());
+        display.moveTo(debris.origin.x, debris.origin.y, debris.origin.z, 0.0F, 0.0F);
         display.addTag(DEBRIS_TAG);
-        level.addFreshEntity(display);
-        return display;
+        display.setTransformationInterpolationDelay(0);
+        display.setTransformationInterpolationDuration(0);
+        display.setTransformation(debrisPoseAt(debris, 0));
+        return level.addFreshEntity(display);
     }
 
+    /** Debris ember-trail clock + rotating sample cursor (CUT-END shot 3 presentation). */
+    private static int debrisTrailClock;
+    private static int debrisTrailCursor;
+
     private static void tickDebris() {
+        boolean trailBurst = ++debrisTrailClock >= DEBRIS_TRAIL_INTERVAL_TICKS;
+        int trailStart = 0;
+        if (trailBurst) {
+            debrisTrailClock = 0;
+            trailStart = debrisTrailCursor % Math.max(1, DEBRIS.size());
+            debrisTrailCursor += DEBRIS_TRAIL_SAMPLES;
+        }
+        int index = 0;
         Iterator<Debris> iterator = DEBRIS.iterator();
         while (iterator.hasNext()) {
             Debris debris = iterator.next();
-            Entity entity = debris.entity;
-            if (--debris.ttl <= 0 || entity.isRemoved() || entity.getY() < 200.0D) {
-                entity.discard();
+            Display.BlockDisplay display = debris.display;
+            int age = debris.age++;
+            // The entity is anchored, so removal keys off the TTL (the dissolve has
+            // shrunk the chunk out by then) or the drift arc sinking into the void fog.
+            if (age >= DEBRIS_TTL_TICKS || display.isRemoved()
+                    || debris.origin.y + debris.fallAt(age) < 200.0D) {
+                display.discard();
                 iterator.remove();
                 continue;
             }
-            debris.vy -= 0.012D;
-            entity.teleportTo(entity.getX() + debris.vx, entity.getY() + debris.vy,
-                    entity.getZ() + debris.vz);
+            // One batched keyframe pass every DEBRIS_UPDATE_TICKS (all chunks share the
+            // separation-beat spawn tick, so every push lands on one server tick). The
+            // pushed pose is the one this window ENDS on — the client tween covers the
+            // gap between keyframes; nothing is ever teleported.
+            if (age % DEBRIS_UPDATE_TICKS == 0) {
+                float dissolveT = dissolveT(age);
+                if (dissolveT >= 0.67F && debris.dissolveStage < 2) {
+                    debris.dissolveStage = 2;
+                    DisplayBrightnessFx.set(display, 1, 3);
+                } else if (dissolveT >= 0.34F && debris.dissolveStage < 1) {
+                    debris.dissolveStage = 1;
+                    DisplayBrightnessFx.set(display, 4, 8);
+                }
+                display.setTransformationInterpolationDelay(0);
+                display.setTransformationInterpolationDuration(DEBRIS_UPDATE_TICKS);
+                display.setTransformation(debrisPoseAt(debris, age + DEBRIS_UPDATE_TICKS));
+            }
+            // CUT-END shot 3: a rotating handful of the tumbling chunks sheds a one-shot
+            // ember burst every DEBRIS_TRAIL_INTERVAL_TICKS — the "debris trail" read.
+            // The burst rides the DRIFT ARC position (the entity anchor never moves).
+            // The client-side BURST budget channel absorbs any excess silently.
+            if (trailBurst && index >= trailStart && index < trailStart + DEBRIS_TRAIL_SAMPLES
+                    && display.level() instanceof ServerLevel level) {
+                Vec3 drift = debris.driftAt(age);
+                PacketDistributor.sendToPlayersNear(level, null, drift.x, drift.y, drift.z,
+                        FX_RANGE, new S2CQuasarPayload(SLAM_DEBRIS, drift));
+            }
+            index++;
         }
+    }
+
+    /** Dissolve progress at {@code age}: 0 until the last 20 % of the TTL, then 0→1. */
+    private static float dissolveT(int age) {
+        float start = DEBRIS_TTL_TICKS * (1.0F - DEBRIS_DISSOLVE_FRACTION);
+        return Mth.clamp((age - start) / (DEBRIS_TTL_TICKS - start), 0.0F, 1.0F);
+    }
+
+    /**
+     * Absolute debris pose at {@code age} ticks after spawn: outward drift arc (launch
+     * velocity + gravity-lite, terminal-capped), tumble about the slowly precessing
+     * fixed axis, and the last-20 % dissolve shrink (ease-in, floored at 3 % — a zero
+     * scale degenerates). Translation re-centers the scaled {@code [0,1]³} block on the
+     * drift point through the rotation (the SanctumOrbitals T·L·S math).
+     */
+    private static Transformation debrisPoseAt(Debris debris, int age) {
+        float dissolveT = dissolveT(age);
+        float scale = debris.baseScale * (1.0F - 0.97F * dissolveT * dissolveT);
+        Vector3f axis = new Vector3f(debris.spinAxis)
+                .rotateY((float) (debris.precessRate * age));
+        Quaternionf rotation = new Quaternionf().rotationAxis(
+                (float) (debris.spinPhase + debris.spinRate * age), axis);
+        Vec3 drift = debris.driftAt(age);
+        Vector3f translation = new Vector3f(
+                (float) (drift.x - debris.origin.x),
+                (float) (drift.y - debris.origin.y),
+                (float) (drift.z - debris.origin.z));
+        Vector3f half = new Vector3f(scale * 0.5F, scale * 0.5F, scale * 0.5F);
+        translation.sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation,
+                new Vector3f(scale, scale, scale), new Quaternionf());
     }
 
     /** Boot sweep of orphaned debris (a crash mid-cinematic persists the displays). */
@@ -634,6 +876,17 @@ public final class EndShatterSequence {
             this.state.setCursor(this.totalOperations);
             activeJob = null;
             enqueueCityKits(this.level, this.layout);
+            // CUT-END shot 4 (settle): the carve pass finishing IS the isles coming to
+            // rest — a low thud + one soft long shake mark it for anyone on the disc
+            // (the low-FREQUENCY rumble shaping lives in the cutscene JSON's shake
+            // events; S2CShakePayload carries strength/ticks only).
+            BlockPos settleCenter = new BlockPos(EndConfig.current().centerX(),
+                    EndDiscGeometry.surfaceYAt(EndConfig.current().centerX(),
+                            EndConfig.current().centerZ()),
+                    EndConfig.current().centerZ());
+            this.level.playSound(null, settleCenter, EclipseSounds.EVENT_RIFT_THUD.get(),
+                    SoundSource.HOSTILE, 3.0F, 0.6F);
+            PacketDistributor.sendToPlayersInDimension(this.level, S2CShakePayload.shake(0.45F, 45));
             this.level.getServer().getPlayerList().broadcastSystemMessage(
                     Component.translatable("announce.eclipse.end.shatter_isles"), false);
             EclipseMod.LOGGER.info("End disc shatter complete: {} chunks re-carved into {} islets",

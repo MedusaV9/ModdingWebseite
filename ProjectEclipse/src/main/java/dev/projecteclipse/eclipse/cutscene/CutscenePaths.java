@@ -77,28 +77,57 @@ public final class CutscenePaths {
      * operator edit, and upgrades in place. Reshooting a bundled JSON? Append the hash of the
      * version you replaced (W6/W7: intro/unlock shots).
      */
-    private static final Map<String, List<String>> LEGACY_DEFAULT_HASHES = Map.of(
+    private static final Map<String, List<String>> LEGACY_DEFAULT_HASHES = Map.ofEntries(
+            // (CUT-INTRO migrated this table Map.of() → Map.ofEntries(): the 11th id
+            // overflowed Map.of()'s 10-pair limit. Semantics unchanged — still immutable.)
             // plans_v5 C6 (W-CUTSCENE) touched five bundled JSONs (showOwnBody flags + fov/_doc
             // notes); the second finale_return hash and the *_ship/expansion entries are the
-            // versions that reshoot replaced.
-            "finale_return", List.of(
+            // versions that reshoot replaced. Third finale_return entry: the pre-CUT-END
+            // version (the CUT-END reshoot warmed/slowed the descent).
+            Map.entry("finale_return", List.of(
                     "6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43",
-                    "d1f5df2d5a106e0ca660292db304d1a49cdfd13be2dedcfa99171d66014db3ab"),
+                    "d1f5df2d5a106e0ca660292db304d1a49cdfd13be2dedcfa99171d66014db3ab",
+                    "0bcf7ed27add164030fb20d78c14b2c8a66064d46b7ea373034b2d506e176dfe")),
+            // CUT-END reshot the C13 shatter orbit (silence hold + crack race + settle);
+            // this is the C13-era shipped default it replaced.
+            Map.entry("end_shatter", List.of(
+                    "dfe571268d427b708554b573d47ad3414aa8b7831b80ddf7dcc25bf314c226e1")),
             // W7 reshot the unlock_ring orbit; the v2-era default hash stays on record so
             // untouched config copies upgrade in place. Second entry: the pre-C6 W7 version.
-            "unlock_ring", List.of(
+            // Third entry: the pre-CUT-EXPANSION C6 version (hero-shot reshoot).
+            Map.entry("unlock_ring", List.of(
                     "2d5f63f7cb778bd799f185e700549fcc1e213488229b63fff5a0a4cd457eaefa",
-                    "3bc082fd3f01b144a8adc375e6abace73233aef088d1c124fb5c252911eee8b3"),
-            "intro_v3_ship", List.of("8259e1f6050b1232962ab7c9e01c397757205003511ba82c9664edf22b04138a"),
-            "expansion_skyward", List.of("de4ce2d7ca058da3fed835dc4337972c3f0cdc08bb660651d7fe4d9e68650d62"),
-            "expansion_flyover", List.of("02d76d7cbbe9370ce59873c452306a5e6ebd2b4ae4230305abb2219b146c540f"),
+                    "3bc082fd3f01b144a8adc375e6abace73233aef088d1c124fb5c252911eee8b3",
+                    "e118ac2b32e0e1ff3d89f8e14261ccd57102e9c48cbd064925f20ec8a0f8506e")),
+            // Second/first entries below: the pre-CUT-INTRO versions (fxteams CUT-INTRO
+            // reshot all three intro_v3_* JSONs — camera language/fov/event-beat pass).
+            Map.entry("intro_v3_ship", List.of(
+                    "8259e1f6050b1232962ab7c9e01c397757205003511ba82c9664edf22b04138a",
+                    "02da214a113afcd21ac34f75fe8368400909b927d95463d696e15ef297d59ac7")),
+            Map.entry("intro_v3_flight",
+                    List.of("f7188ad86c759a9b58e1d4f93af4020214a02d09d05ebe43428b7921951e1ee6")),
+            Map.entry("intro_v3_reveal",
+                    List.of("4ec430af2c612ab8d2519a86d26547b667a7573cda0e09be16815765255eecca")),
+            // The pre-CUT-CREDITS C15 helm push-in (fxteams CUT-CREDITS reshot it: slow
+            // dolly, wheel foreground framing, FOV 66→58 squeeze, hands-settle beat).
+            Map.entry("credits_helm",
+                    List.of("d1534925895f730513eda34d6ee070dcc795c97828727be764926581490576df")),
+            // Second entries: the pre-CUT-EXPANSION C6 versions (launch-rush / low-skim reshoots).
+            Map.entry("expansion_skyward", List.of(
+                    "de4ce2d7ca058da3fed835dc4337972c3f0cdc08bb660651d7fe4d9e68650d62",
+                    "ffe1fbd4a8c534061a1638b4b83439d079f8858e656e2ee5caee80dc9d2370ea")),
+            Map.entry("expansion_flyover", List.of(
+                    "02d76d7cbbe9370ce59873c452306a5e6ebd2b4ae4230305abb2219b146c540f",
+                    "5be44de155998abf24cdb33af989f27c752232d903181fc630b2f97a94edce2a")),
             // W6 deleted the v1 intro pair from DEFAULT_IDS (superseded by the intro_v3_*
             // shots). Their shipped hashes stay on record so a future re-adoption of either
             // id can still tell "stale old default" from "operator edit"; stale config
             // copies of deleted ids are left alone by design (see the W2 wiring doc — the
             // manual cleanup is documented in P2-W6_wiring.md).
-            "intro_submerge", List.of("b3057c0891435933ac3782af052897657676ec2b529435ff67f75d0284a0ddb3"),
-            "intro_rise", List.of("69592d1efea3b0ed59c47ad1f8d346b0c59333113f462cc067beafbb65c74f0a"));
+            Map.entry("intro_submerge",
+                    List.of("b3057c0891435933ac3782af052897657676ec2b529435ff67f75d0284a0ddb3")),
+            Map.entry("intro_rise",
+                    List.of("69592d1efea3b0ed59c47ad1f8d346b0c59333113f462cc067beafbb65c74f0a")));
 
     private static volatile Map<String, CutscenePath> paths = Map.of();
     private static volatile Map<String, String> rawJson = Map.of();

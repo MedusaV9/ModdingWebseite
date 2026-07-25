@@ -36,6 +36,9 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevTimerCommands {
+    /** Named {@code /dev timer color} modes; anything else must be a {@code #rgb}/{@code #rrggbb} literal. */
+    private static final String[] COLOR_PRESETS = { "auto", "text", "accent", "deep" };
+
     static {
         DevCommandRegistry.register(
                 new DevCommandDoc("timer.pause", DevCategory.TIMER, "/dev timer pause",
@@ -48,6 +51,8 @@ public final class DevTimerCommands {
                         "dev.eclipse.doc.timer.sub", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("timer.set", DevCategory.TIMER, "/dev timer set <time>",
                         "dev.eclipse.doc.timer.set", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("timer.color", DevCategory.TIMER, "/dev timer color <mode>",
+                        "dev.eclipse.doc.timer.color", Danger.SAFE, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("timer.status", DevCategory.TIMER, "/dev timer status",
                         "dev.eclipse.doc.timer.status", Danger.SAFE, ClickAction.RUN, 2));
     }
@@ -74,6 +79,15 @@ public final class DevTimerCommands {
                         .then(Commands.literal("set")
                                 .then(Commands.argument("time", StringArgumentType.greedyString())
                                         .executes(DevTimerCommands::set)))
+                        .then(Commands.literal("color")
+                                .then(Commands.argument("mode", StringArgumentType.word())
+                                        .suggests((context, builder) -> {
+                                            for (String preset : COLOR_PRESETS) {
+                                                builder.suggest(preset);
+                                            }
+                                            return builder.buildFuture();
+                                        })
+                                        .executes(DevTimerCommands::color)))
                         .then(Commands.literal("status").executes(DevTimerCommands::status))));
     }
 
@@ -183,6 +197,33 @@ public final class DevTimerCommands {
         String normalized = raw.replaceFirst("^(\\d{4}-\\d{2}-\\d{2})\\s+", "$1T");
         LocalDateTime.parse(normalized);
         return normalized;
+    }
+
+    /**
+     * {@code /dev timer color <auto|text|accent|deep|#hex>}: persists the day-timer display
+     * color mode in {@link RealtimeState} and re-broadcasts the clock payload (the existing
+     * dev-payload sync path) so every client's {@code DayTimerLayer} applies it instantly.
+     * {@code auto} restores the default urgency ramp.
+     */
+    private static int color(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        String raw = StringArgumentType.getString(context, "mode").trim().toLowerCase(java.util.Locale.ROOT);
+        boolean preset = false;
+        for (String candidate : COLOR_PRESETS) {
+            if (candidate.equals(raw)) {
+                preset = true;
+                break;
+            }
+        }
+        if (!preset && !raw.matches("#([0-9a-f]{3}|[0-9a-f]{6})")) {
+            source.sendFailure(Component.translatable("dev.eclipse.timer.color.invalid", raw));
+            return 0;
+        }
+        RealtimeState.get(source.getServer()).setTimerColorMode(raw);
+        RealtimeDayService.broadcastClock(source.getServer());
+        Component feedback = Component.translatable("dev.eclipse.timer.color.ok", raw);
+        audit(source, feedback, "set timer color mode=" + raw);
+        return 1;
     }
 
     private static int status(CommandContext<CommandSourceStack> context) {

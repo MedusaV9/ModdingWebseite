@@ -137,8 +137,8 @@ import software.bernie.geckolib.animation.RawAnimation;
  *
  * <p><b>Reward (C8 upgrade)</b>: loot table {@code eclipse:entities/fog_tyrant} plus
  * guaranteed corpse drops — 1 {@link EclipseItems#FOG_CORE}, 1
- * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic) and 1 {@code storm_heart} by
- * P4-registry lookup (fallback 6 umbral shards) — plus a placed reward CHEST holding
+ * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic), 1
+ * {@link EclipseItems#STORM_HEART} and 6 umbral shards — plus a placed reward CHEST holding
  * the Mending/{@code eclipse:replant} book choice, and per-participant umbral shards
  * direct-to-inventory ({@code ShardEconomy.deliverShardItems}, storm-scaled:
  * 3 + 1 per extra scaled player, cap {@value #SHARD_PAYOUT_CAP}) staggered over the
@@ -1345,27 +1345,22 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     /**
      * Drops beyond the loot table: guaranteed C8 reward upgrade — 1
      * {@link EclipseItems#FOG_CORE} (the storm's condensed heart) + 1
-     * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic, one cut per kill) — plus 1
-     * {@code storm_heart} by P4-registry lookup (fallback 6 umbral shards while P4
-     * hasn't landed it, plan §2.4). The per-participant shard payouts moved into
-     * {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony — everyone who braved
-     * the storm still gets paid, just staggered; see {@code tickPayoutCeremony}).
+     * {@link EclipseItems#FOG_CLOAK_TRIM} (unique cosmetic, one cut per kill) + 1
+     * {@link EclipseItems#STORM_HEART} (plan §2.4, registered by the V6 gap-fix — the
+     * old registry-lookup fallback is retired) + the 6 umbral shards that used to BE the
+     * fallback, kept as the storm's loose change. The per-participant shard payouts
+     * moved into {@code tickDeath} keyframes (W4 IDEA-16 #3 award ceremony — everyone
+     * who braved the storm still gets paid, just staggered; see
+     * {@code tickPayoutCeremony}).
      */
     @Override
     protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
         super.dropCustomDeathLoot(level, damageSource, recentlyHit);
         this.spawnAtLocation(new ItemStack(EclipseItems.FOG_CORE.get()));
         this.spawnAtLocation(new ItemStack(EclipseItems.FOG_CLOAK_TRIM.get()));
-        BuiltInRegistries.ITEM.getOptional(
-                        ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "storm_heart"))
-                .ifPresentOrElse(
-                        item -> this.spawnAtLocation(new ItemStack(item)),
-                        () -> {
-                            this.spawnAtLocation(new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 6));
-                            EclipseMod.LOGGER.info("Fog Tyrant drop: eclipse:storm_heart not registered yet "
-                                    + "(P4) — dropped the 6-umbral-shard fallback");
-                        });
-        EclipseMod.LOGGER.info("Fog Tyrant drops: fog core + cloak trim + storm heart (or fallback) at "
+        this.spawnAtLocation(new ItemStack(EclipseItems.STORM_HEART.get()));
+        this.spawnAtLocation(new ItemStack(EclipseItems.UMBRAL_SHARD.get(), 6));
+        EclipseMod.LOGGER.info("Fog Tyrant drops: fog core + cloak trim + storm heart + 6 shards at "
                 + "the corpse; {} participant payout(s) queued for the storm-burst ceremony",
                 this.participants.size());
     }

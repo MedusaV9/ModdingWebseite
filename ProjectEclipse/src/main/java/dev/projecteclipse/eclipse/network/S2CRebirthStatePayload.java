@@ -16,8 +16,12 @@ import net.minecraft.resources.ResourceLocation;
  * @param nextCostShards      personal umbral-shard price of the NEXT rebirth
  * @param levelCostMultiplier current global skill level-cost multiplier
  *                            ({@code levelCostMultiplierPerRebirth ^ count}; 1.0 = never reborn)
+ * @param auraEnabled         keepsake-aura toggle ({@code /skills aura on|off}; ring shows
+ *                            only when {@code count > 0} — server-rendered, this mirrors
+ *                            the toggle for UI)
  */
-public record S2CRebirthStatePayload(int count, int nextCostShards, float levelCostMultiplier)
+public record S2CRebirthStatePayload(int count, int nextCostShards, float levelCostMultiplier,
+        boolean auraEnabled)
         implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<S2CRebirthStatePayload> TYPE =
@@ -27,6 +31,7 @@ public record S2CRebirthStatePayload(int count, int nextCostShards, float levelC
             ByteBufCodecs.VAR_INT, S2CRebirthStatePayload::count,
             ByteBufCodecs.VAR_INT, S2CRebirthStatePayload::nextCostShards,
             ByteBufCodecs.FLOAT, S2CRebirthStatePayload::levelCostMultiplier,
+            ByteBufCodecs.BOOL, S2CRebirthStatePayload::auraEnabled,
             S2CRebirthStatePayload::new);
 
     @Override

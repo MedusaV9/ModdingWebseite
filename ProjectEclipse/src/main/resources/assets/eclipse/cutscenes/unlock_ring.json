@@ -9,18 +9,22 @@
   "hideHud": true,
   "durationTicks": 220,
   "keyframes": [
-    { "t": 0.0, "pos": [-30.0, 10.0, -18.0], "yaw": 0, "pitch": 8, "roll": 0, "fov": 66, "easing": "easeInOutSine", "lookAt": [0.0, 4.0, 0.0] },
-    { "t": 0.3, "pos": [-38.0, 22.0, 22.0], "yaw": 0, "pitch": 16, "roll": 2, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
-    { "t": 0.6, "pos": [8.0, 30.0, 44.0], "yaw": 0, "pitch": 22, "roll": -2, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
-    { "t": 0.85, "pos": [40.0, 26.0, 4.0], "yaw": 0, "pitch": 20, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 4.0, 0.0] },
-    { "t": 1.0, "pos": [26.0, 48.0, -30.0], "yaw": 0, "pitch": 38, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [6.0, 0.0, 6.0] }
+    { "t": 0.0, "pos": [-34.0, 7.0, -14.0], "yaw": 0, "pitch": 6, "roll": 0, "fov": 66, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
+    { "t": 0.22, "pos": [-40.0, 16.0, 16.0], "yaw": 0, "pitch": 12, "roll": 2, "fov": 63, "easing": "easeInOutSine", "lookAt": [0.0, 5.0, 0.0] },
+    { "t": 0.42, "pos": [-12.0, 26.0, 42.0], "yaw": 0, "pitch": 18, "roll": -2, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, 6.0, 0.0] },
+    { "t": 0.58, "pos": [18.0, 12.0, 34.0], "yaw": 0, "pitch": 4, "roll": 0, "fov": 54, "easing": "easeInOutSine", "lookAt": [0.0, 8.0, 2.0] },
+    { "t": 0.78, "pos": [42.0, 24.0, 2.0], "yaw": 0, "pitch": 16, "roll": 2, "fov": 62, "easing": "easeInOutCubic", "lookAt": [0.0, 5.0, 0.0] },
+    { "t": 1.0, "pos": [30.0, 50.0, -32.0], "yaw": 0, "pitch": 38, "roll": 0, "fov": 70, "easing": "easeOutCubic", "lookAt": [8.0, 0.0, 8.0] }
   ],
   "events": [
     { "t": 0.05, "type": "sound", "id": "minecraft:block.beacon.activate" },
-    { "t": 0.5, "type": "shake", "id": "", "data": "0.1,20" }
+    { "t": 0.3, "type": "caption", "id": "eclipse.caption.unlock.ring", "data": "whisper,70" },
+    { "t": 0.54, "type": "sound", "id": "eclipse:event.beam_hum" },
+    { "t": 0.56, "type": "fade", "id": "godray_bloom", "data": "6,6,18,#4CEFE4FF" },
+    { "t": 0.58, "type": "shake", "id": "awe_rumble", "data": "0.08,14,0.6" }
   ],
   "params": {
-    "_comment": "Orbital template for stage-growth unlocks (W7 reshoot: low dramatic pickup, rising lookAt-tracked orbit, high reveal at the end instead of the old fixed-yaw ring). The play payload supplies the anchor position (nearest old ring edge); keyframe positions are offsets from that anchor. Also the FLYOVER fallback when expansion_flyover is missing/disabled.",
+    "_comment": "Orbital template for stage-growth unlocks, CUT-EXPANSION reshoot: rotating HERO shot. Low dramatic pickup at the edge, rising lookAt-tracked orbit, then the god-ray backlight moment at t~0.58 — the camera dips low and tight (fov 54, lookAt raised to y 8 so the ring edge stands against the sky) while a warm-lilac bloom fade + beam-hum sell the backlight blowout (the sun position is not authorable from a path, so the ray read is carried by bloom + silhouette framing; ExpansionSequence's fallback play adds a one-shot cutscene_veil flare at the anchor on the same beat). High reveal finish over the new ring. The play payload supplies the anchor position (nearest old ring edge); keyframe positions are offsets from that anchor. Also the FLYOVER fallback when expansion_flyover is missing/disabled.",
     "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher.",
     "orbitRadius": 45
   }

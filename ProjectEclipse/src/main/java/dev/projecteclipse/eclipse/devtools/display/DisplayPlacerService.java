@@ -428,12 +428,18 @@ public final class DisplayPlacerService extends SavedData {
     }
 
     private static void applyAnimation(Display.BlockDisplay display, Entry entry, long gameTime) {
-        float seconds = gameTime / 20.0F;
+        // BD-STRUCT keyframe lead (the SanctumOrbitals transport law): the pushed pose
+        // is the one this interpolation window ENDS on, so the client tween covers the
+        // gap between keyframes instead of trailing one interval behind the server.
+        float seconds = (gameTime + DisplayAnimator.TICK_INTERVAL) / 20.0F;
         float angleRadians = (float) Math.toRadians(entry.speedDegPerSec * seconds);
         Vector3f axis = new Vector3f(entry.axisX, entry.axisY, entry.axisZ).normalize();
         Quaternionf rotation = new Quaternionf().rotationAxis(angleRadians, axis);
+        // VFXPOLISH-3 window law: one 2 t linear tween flattens a sine beyond ~90° of
+        // phase — present sub-0.4 s bob periods AS 0.4 s (SavedData keeps the raw value,
+        // so /dev display param remains lossless).
         float bob = entry.bobAmplitude * (float) Math.sin(
-                Math.PI * 2.0D * seconds / Math.max(0.1F, entry.bobPeriodSec));
+                Math.PI * 2.0D * seconds / Math.max(0.4F, entry.bobPeriodSec));
         // Minecraft blocks occupy local [0,1]^3. Rotate the scaled half-extent and
         // translate it back so rotation stays centered on the entity origin.
         Vector3f centered = new Vector3f(

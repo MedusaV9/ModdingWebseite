@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client.hud;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
@@ -107,6 +108,10 @@ public final class DayTimerLayer {
     private static String dayUnitGlyph = "d";
     private static int captionGeneration = -1;
 
+    /** Parsed {@code /dev timer color} hex literal, cached per mode string (no per-frame parsing). */
+    private static String cachedColorMode = "auto";
+    private static int cachedHexRgb = -1;
+
     private DayTimerLayer() {}
 
     /** {@code LayeredDraw.Layer} body, registered below the announcements by {@code EclipseGuiLayers}. */
@@ -169,7 +174,7 @@ public final class DayTimerLayer {
                 rgb = EclipseUiTheme.DIM & 0xFFFFFF; // holds 00:00:00 DIM until the day flips
             }
         } else {
-            rgb = colorForFraction(fraction);
+            rgb = colorForMode(fraction);
         }
 
         // Final 10 s: pulse-scale once per second (never while a spool's rolls need scissors).
@@ -286,6 +291,51 @@ public final class DayTimerLayer {
         out[6] = (int) (third / 10L);
         out[7] = (int) (third % 10L);
         return dayMode;
+    }
+
+    /**
+     * Running-state digit color honoring the synced {@code /dev timer color} mode:
+     * {@code auto} keeps the §3.6 urgency ramp; {@code text}/{@code accent}/{@code deep}
+     * pin the matching theme color; a {@code #rrggbb} literal pins that RGB (parsed once
+     * per mode change). Paused/zero looks are untouched — they carry their own semantics.
+     */
+    private static int colorForMode(float fraction) {
+        String mode = ClientStateCache.timerColorMode;
+        if (mode == null || mode.isEmpty()) {
+            return colorForFraction(fraction);
+        }
+        return switch (mode) {
+            case "auto" -> colorForFraction(fraction);
+            case "text" -> EclipseUiTheme.TEXT & 0xFFFFFF;
+            case "accent" -> EclipseUiTheme.ACCENT & 0xFFFFFF;
+            case "deep" -> EclipseUiTheme.ACCENT_DEEP & 0xFFFFFF;
+            default -> {
+                if (!mode.equals(cachedColorMode)) {
+                    cachedColorMode = mode;
+                    cachedHexRgb = parseHexRgb(mode);
+                }
+                yield cachedHexRgb >= 0 ? cachedHexRgb : colorForFraction(fraction);
+            }
+        };
+    }
+
+    /** Parses {@code #rgb}/{@code #rrggbb} into a 24-bit RGB int, or {@code -1} when invalid. */
+    private static int parseHexRgb(String mode) {
+        if (mode.length() != 4 && mode.length() != 7 || mode.charAt(0) != '#') {
+            return -1;
+        }
+        try {
+            int raw = Integer.parseInt(mode.substring(1), 16);
+            if (mode.length() == 4) {
+                int red = (raw >> 8) & 0xF;
+                int green = (raw >> 4) & 0xF;
+                int blue = raw & 0xF;
+                return (red * 0x11 << 16) | (green * 0x11 << 8) | blue * 0x11;
+            }
+            return raw & 0xFFFFFF;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /**

@@ -28,6 +28,7 @@ public final class RealtimeState extends SavedData {
     private static final String TAG_MANUAL_OVERRIDE = "manualOverride";
     private static final String TAG_ARMED_BY_SCHEDULE_ONLY = "armedBySchedule";
     private static final String TAG_AUTO_ARM_DONE = "autoArmDone";
+    private static final String TAG_TIMER_COLOR_MODE = "timerColorMode";
 
     private boolean armed = false;
     private boolean paused = false;
@@ -53,6 +54,11 @@ public final class RealtimeState extends SavedData {
     private boolean armedByScheduleOnly = false;
     /** {@code autoArmOnStartEvent} already consumed (or superseded by an explicit arm/disarm). */
     private boolean autoArmDone = false;
+    /**
+     * {@code /dev timer color} display mode for the client day timer: {@code auto} (the
+     * default urgency ramp), {@code text}, {@code accent}, {@code deep}, or {@code #rrggbb}.
+     */
+    private String timerColorMode = "auto";
 
     public RealtimeState() {}
 
@@ -73,6 +79,8 @@ public final class RealtimeState extends SavedData {
         state.manualOverride = tag.getBoolean(TAG_MANUAL_OVERRIDE);
         state.armedByScheduleOnly = tag.getBoolean(TAG_ARMED_BY_SCHEDULE_ONLY);
         state.autoArmDone = tag.getBoolean(TAG_AUTO_ARM_DONE);
+        state.timerColorMode = tag.contains(TAG_TIMER_COLOR_MODE)
+                ? tag.getString(TAG_TIMER_COLOR_MODE) : "auto";
         return state;
     }
 
@@ -87,6 +95,7 @@ public final class RealtimeState extends SavedData {
         tag.putBoolean(TAG_MANUAL_OVERRIDE, this.manualOverride);
         tag.putBoolean(TAG_ARMED_BY_SCHEDULE_ONLY, this.armedByScheduleOnly);
         tag.putBoolean(TAG_AUTO_ARM_DONE, this.autoArmDone);
+        tag.putString(TAG_TIMER_COLOR_MODE, this.timerColorMode);
         return tag;
     }
 
@@ -168,6 +177,16 @@ public final class RealtimeState extends SavedData {
 
     public void setAutoArmDone(boolean autoArmDone) {
         this.autoArmDone = autoArmDone;
+        setDirty();
+    }
+
+    public String getTimerColorMode() {
+        return this.timerColorMode;
+    }
+
+    public void setTimerColorMode(String timerColorMode) {
+        this.timerColorMode = timerColorMode == null || timerColorMode.isBlank()
+                ? "auto" : timerColorMode;
         setDirty();
     }
 }

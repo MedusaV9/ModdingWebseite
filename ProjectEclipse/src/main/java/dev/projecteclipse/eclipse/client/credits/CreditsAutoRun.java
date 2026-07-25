@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.client.credits;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads.S2CCreditsAutoRunPayload;
 import net.minecraft.client.Minecraft;
@@ -28,6 +29,11 @@ import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
  *   <li>Yaw is soft-locked to the payload heading with ±{@value #LOOK_AROUND_DEGREES}° of
  *       free look-around — players can glance at the credits panel and the lightning
  *       without ever turning around.</li>
+ *   <li>FXTEAM CUT-CREDITS breathing sway: a ±{@value #SWAY_DEGREES}° sinusoidal pitch
+ *       drift ({@value #SWAY_PERIOD_TICKS}t period) layered UNDER the walk bob as a
+ *       differential (only the per-tick delta is injected, so player look input is
+ *       preserved and the offset self-cancels every period). Skipped entirely under
+ *       {@code reducedFx} (motion).</li>
  *   <li>Self-expiry: the run disarms after the payload's {@code maxTicks} even when the
  *       OFF payload is lost, and always on logout — nobody walks forever.</li>
  * </ul>
@@ -36,6 +42,9 @@ import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
 public final class CreditsAutoRun {
     /** Free look-around band around the locked heading (degrees each way). */
     private static final float LOOK_AROUND_DEGREES = 20.0F;
+    /** Breathing-camera sway amplitude (degrees of pitch) and period (client ticks). */
+    private static final float SWAY_DEGREES = 0.55F;
+    private static final int SWAY_PERIOD_TICKS = 64;
 
     static {
         CreditsPayloads.setClientAutoRunHandler(CreditsAutoRun::handle);
@@ -45,6 +54,8 @@ public final class CreditsAutoRun {
     private static float lockedYaw;
     /** Remaining self-expiry budget; counts down every client tick while active. */
     private static int remainingTicks;
+    /** Breathing-sway clock; reset on every arm so the sway always starts at zero offset. */
+    private static int swayTicks;
 
     private CreditsAutoRun() {}
 
@@ -57,6 +68,7 @@ public final class CreditsAutoRun {
         active = payload.active();
         lockedYaw = payload.yawDegrees();
         remainingTicks = payload.maxTicks() > 0 ? payload.maxTicks() : 20 * 60;
+        swayTicks = 0;
         EclipseMod.LOGGER.info("Credits auto-run {} (yaw {}, expiry {}t)",
                 active ? "armed" : "disarmed", lockedYaw, remainingTicks);
     }
@@ -86,7 +98,19 @@ public final class CreditsAutoRun {
         } else if (delta < -LOOK_AROUND_DEGREES) {
             player.setYRot(lockedYaw - LOOK_AROUND_DEGREES);
         }
+        // Breathing sway: inject only the delta between consecutive samples — user look
+        // input passes through untouched and the offset sums to zero over each period.
+        if (!EclipseClientConfig.reducedFx()) {
+            float previous = swayOffset(swayTicks);
+            swayTicks++;
+            player.setXRot(player.getXRot() + (swayOffset(swayTicks) - previous));
+        }
         player.setXRot(Mth.clamp(player.getXRot(), -35.0F, 35.0F));
+    }
+
+    /** Sinusoidal breathing offset (degrees of pitch) at a sway-clock tick. */
+    private static float swayOffset(int tick) {
+        return SWAY_DEGREES * Mth.sin(Mth.TWO_PI * tick / SWAY_PERIOD_TICKS);
     }
 
     /**

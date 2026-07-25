@@ -87,16 +87,19 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       {@code eclipse:credits_white} ({@code PortalTransitionController} holds white,
  *       {@code EclipseLoadingScreen} fakes a vanilla "Building terrain…" line) covers the
  *       teleport to the frozen-sunrise beach in {@code eclipse:epilogue}.</li>
- *   <li>t=300 — beach: {@code day_final} music cue, the right-side credits roll
- *       ({@code CreditsPanel}) and the <b>auto-run</b> east into the sunrise
- *       ({@code CreditsAutoRun} client input injection; a per-player server nudge watchdog
- *       catches crashed/vanilla clients).</li>
+ *   <li>t=300 — beach: {@code day_final} music cue and the right-side credits roll
+ *       ({@code CreditsPanel}; it fades in client-side after a 3 s sunrise-first hold).
+ *       The <b>auto-run</b> east into the sunrise arms at t=340 — 2 s of stillness on the
+ *       horizon first ({@code CreditsAutoRun} client input injection; a per-player server
+ *       nudge watchdog catches crashed/vanilla clients once the run is armed).</li>
  *   <li>t=420 — massive lightning (6 offshore strikes, intensity 0.6→1.0) + 24 flying
  *       {@code BLOCK_DISPLAY} debris arcs overhead toward the sun (the run's greatest hits:
  *       ship planks, altar stone, disc basalt, amethyst).</li>
  *   <li>t=480 — title card "MINECRAFT ECLIPSE COMES BACK IN AVENGERS: DOOMSDAY"
- *       ({@code TitleCardLayer} glitch decode); t=650 burst (shockwave + white flash);
- *       t=665 the deadpan correction card "ECLIPSE : DOOMSDAY" (caption TITLE style).</li>
+ *       ({@code TitleCardLayer} glitch decode); t=650 burst (shockwave + tight white
+ *       flash, out by 666); t=665 the CORRECTION phase — the deadpan card
+ *       "ECLIPSE : DOOMSDAY" (caption TITLE style) is held 500 ms and lands at t=676
+ *       after a beat of total stillness.</li>
  *   <li>t=745 — fade to black, auto-run off; t=810 everyone is quietly moved home to the
  *       overworld spawn BEHIND the black (post-credits world state — a disconnect/restart
  *       from here on lands players at spawn, never on the set).</li>
@@ -138,16 +141,55 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int T_SHIP = 40;
     /** {@code credits_helm.json} runs 140t: t=40..180, whiteout rises 20t after handback. */
     private static final int T_WHITEOUT = 200;
+    /** Hands-settle wheel micro-anim: grip turn / relax-back run ticks (path t≈0.78/0.86). */
+    private static final int WHEEL_SETTLE_AT = 148;
+    private static final int WHEEL_RELAX_AT = 160;
+    /** The wheel's rest spin ("caught mid-turn"); the settle nudges a few degrees off it. */
+    private static final float WHEEL_REST_SPIN_DEGREES = 45.0F;
+    /**
+     * BD-SHIP living helm: the wheel turns continuously at {@value
+     * #WHEEL_TURN_DEG_PER_TICK}°/t with two incommensurate sine rate-noise terms — it
+     * drifts, hesitates and pulls like a helm riding a swell, never a metronome. Pushed
+     * as 4t interpolation windows (~5–11° each) on the run clock (stateless absolute
+     * poses). Every {@value #WHEEL_GLINT_PERIOD}t (≈ one 45° spoke crossing at the base
+     * rate) a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp sweeps 6→15→6 and clears
+     * back to natural light — moonlight catching a spoke.
+     */
+    private static final float WHEEL_TURN_DEG_PER_TICK = 0.85F;
+    private static final float WHEEL_NOISE_A_DEG = 6.5F;
+    private static final float WHEEL_NOISE_A_PERIOD = 46.0F;
+    private static final float WHEEL_NOISE_B_DEG = 4.0F;
+    private static final float WHEEL_NOISE_B_PERIOD = 117.0F;
+    private static final int WHEEL_GLINT_PERIOD = 50;
+    private static final int WHEEL_GLINT_RAMP = 14;
     private static final int T_PORTAL = 230;
     private static final int T_EPILOGUE = 260;
     private static final int T_BEACH = 300;
+    /**
+     * FXTEAM CUT-CREDITS breathing room: the auto-run arms this many ticks AFTER the
+     * beach beat — 2 s of everyone standing still on the sunrise horizon before the
+     * march begins. The nudge watchdog waits out the same hold.
+     */
+    private static final int RUN_HOLD_TICKS = 40;
     private static final int T_LIGHTNING = 420;
     private static final int LIGHTNING_STRIKES = 6;
     private static final int LIGHTNING_INTERVAL = 12;
+    /**
+     * FXTEAM CUT-CREDITS near-far ladder: per-strike distance past the surf line
+     * (blocks). Far strikes get delayed, low, quiet thunder; the final strike is the
+     * closest AND strongest (the intensity ramp peaks with it).
+     */
+    private static final int[] STRIKE_DEPTHS = {64, 10, 34, 78, 16, 6};
     private static final int T_FLYERS_END = 560;
     private static final int T_TITLE = 480;
     private static final int T_BURST = 650;
     private static final int T_CORRECTION = 665;
+    /**
+     * FXTEAM CUT-CREDITS deadpan beat: the correction card is dispatched this many ticks
+     * after {@link #T_CORRECTION}, buying 10t (500 ms) of pure stillness between the
+     * burst flash dying (t=666) and the card fading up (t=676).
+     */
+    private static final int CORRECTION_STILL_TICKS = 11;
     private static final int T_FADE_OUT = 745;
     private static final int T_HOME = 810;
     private static final int T_ECLIPSE_CARD = 1010;
@@ -177,6 +219,19 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int FLYER_COUNT = 24;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
     private static final String WHEEL_TAG = "eclipse_credits_wheel";
+    /** Golden angle (radians) — flyer tumble phases: neighbors maximally de-phased (BD-SHIP). */
+    private static final float GOLDEN_ANGLE = 2.3999632F;
+    /** BD-SHIP flyer stagger: launch delays spread over this fraction of the flight span. */
+    private static final float FLYER_STAGGER_MAX = 0.3F;
+    /**
+     * BD-SHIP scale envelope: flyers grow in over the first {@value #FLYER_SCALE_RAMP}
+     * of their (staggered) flight and shrink out over the last — pre-launch holds are
+     * invisible and the {@code T_FLYERS_END} discard never pops a block out of the sky.
+     * The floor is never exactly 0 (a zero scale column degenerates the client
+     * interpolator's affine decomposition).
+     */
+    private static final float FLYER_SCALE_RAMP = 0.12F;
+    private static final float FLYER_SCALE_FLOOR = 0.02F;
     /** The run's greatest hits: ship planks, altar stone, disc basalt, amethyst. */
     private static final BlockState[] FLYER_PALETTE = {
             Blocks.DARK_OAK_PLANKS.defaultBlockState(),
@@ -266,6 +321,8 @@ public final class CreditsSequence implements SequenceReplayable {
         @Nullable
         Display.BlockDisplay wheel;
         final List<Display.BlockDisplay> flyers = new ArrayList<>();
+        /** FXTEAM CUT-CREDITS ground shadows under the low debris arcs (≤ half the flyers). */
+        final List<ShadowPuck> shadows = new ArrayList<>();
         /** Budgeted beach-stamp cursor (started at t=0; the epilogue beat blocks on it). */
         final BeachStamp beachStamp = new BeachStamp();
         /** Auto-run nudge watchdog state (per online player). */
@@ -385,6 +442,9 @@ public final class CreditsSequence implements SequenceReplayable {
             default -> { }
         }
         // Overlapping continuous work.
+        if (t > T_SHIP && t < T_EPILOGUE && (t - T_SHIP) % 4 == 0) {
+            animateWheel(current, t); // BD-SHIP: the helm never stands still on camera
+        }
         if (t >= T_LIGHTNING && t <= T_LIGHTNING + (LIGHTNING_STRIKES - 1) * LIGHTNING_INTERVAL
                 && (t - T_LIGHTNING) % LIGHTNING_INTERVAL == 0) {
             int index = (t - T_LIGHTNING) / LIGHTNING_INTERVAL;
@@ -396,7 +456,9 @@ public final class CreditsSequence implements SequenceReplayable {
         if (t == T_FLYERS_END) {
             discardFlyers(current);
         }
-        if (t > T_BEACH && t < T_FADE_OUT) {
+        // Watchdog starts after the deliberate 2 s sunrise hold — statues are intentional
+        // until the auto-run has been armed.
+        if (t > T_BEACH + RUN_HOLD_TICKS && t < T_FADE_OUT) {
             nudgeStalledRunners(current);
         }
     }
@@ -439,6 +501,10 @@ public final class CreditsSequence implements SequenceReplayable {
         // the deck behind the whiteout; beatEpilogue's transport re-anchors that lock.
         CutsceneService.play(PATH_HELM, online, new Vec3(-18.5D, deckY + 7, 0.5D),
                 CreditsSequence::refreezeAfterHelmShot, CutsceneService.PlayOptions.LOCAL);
+        // FXTEAM CUT-CREDITS hands-settle beat (path t≈0.78 ≈ run tick 148, synced with
+        // the t=0.72 "wheel" whisper): the grip pull now rides the continuous rotation
+        // as a deterministic offset envelope — see gripOffset() (BD-SHIP transport;
+        // the CUT-CREDITS timing constants WHEEL_SETTLE_AT/WHEEL_RELAX_AT still rule).
     }
 
     /** Flight-end callback: keep everyone posed until the beach releases them. */
@@ -455,10 +521,15 @@ public final class CreditsSequence implements SequenceReplayable {
         }
     }
 
-    /** t=200 — the shot is over: rise to white and hold (the fade hands over to the portal FX). */
+    /**
+     * t=200 — the shot is over: rise to white and hold (the fade hands over to the portal
+     * FX). FXTEAM CUT-CREDITS retime: 36/44/20 — the rise is a touch gentler and the
+     * release ends exactly at {@link #T_BEACH} (t=300), so the sunrise finishes revealing
+     * the same tick {@code day_final} starts.
+     */
     private static void beatWhiteout(Run current) {
         current.enter(Phase.WHITEOUT);
-        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(30, 40, 20, 0xFFFFFFFF));
+        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(36, 44, 20, 0xFFFFFFFF));
     }
 
     /** t=230 — the disguised white loading screen arms (covers the dimension teleport). */
@@ -505,7 +576,12 @@ public final class CreditsSequence implements SequenceReplayable {
         EclipseMod.LOGGER.info("CreditsSequence: {} player(s) on the epilogue beach", placed);
     }
 
-    /** t=300 — sunrise: the helm freeze releases, music finale, credits roll, auto-run east. */
+    /**
+     * t=300 — sunrise: the helm freeze releases, music finale, credits roll. FXTEAM
+     * CUT-CREDITS: the auto-run arms {@value #RUN_HOLD_TICKS}t later — the shot holds on
+     * the horizon for 2 s before anyone moves (the panel likewise fades in on its own 3 s
+     * delay, client-side).
+     */
     private static void beatBeach(Run current) {
         current.enter(Phase.BEACH);
         current.lastX.clear();
@@ -514,11 +590,29 @@ public final class CreditsSequence implements SequenceReplayable {
             FreezeService.unfreeze(player); // the refreezeAfterHelmShot lock ends here
             MusicCues.play(MUSIC_FINALE_CUE, player);
             CreditsPayloads.sendRoll(player, ROLL_TICKS);
-            CreditsPayloads.sendAutoRun(player, true, RUN_YAW, T_FADE_OUT - T_BEACH + 100);
         }
+        schedule(current.server, RUN_HOLD_TICKS, () -> {
+            // A skip() during the hold jumps past the fade-out: never arm the walk then.
+            if (run != current || current.ticks >= T_FADE_OUT) {
+                return;
+            }
+            for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+                if (!player.hasDisconnected()) {
+                    CreditsPayloads.sendAutoRun(player, true, RUN_YAW,
+                            T_FADE_OUT - T_BEACH - RUN_HOLD_TICKS + 100);
+                }
+            }
+        });
     }
 
-    /** One offshore strike of the t=420 lightning beat, intensity 0.6→1.0 (IDEAS §B1). */
+    /**
+     * One offshore strike of the t=420 lightning beat, intensity 0.6→1.0 (IDEAS §B1).
+     * FXTEAM CUT-CREDITS depth staggering: strike distances walk a deterministic
+     * near↔far ladder ({@link #STRIKE_DEPTHS}, blocks past the surf line, sides
+     * alternating), and the thunder arrives LATE by distance (~17 blocks/tick of sound
+     * travel) — far bolts rumble low and quiet a beat after their flash, the climactic
+     * last strike cracks close, loud and immediate.
+     */
     private static void beatLightningStrike(Run current, int index) {
         if (index == 0) {
             current.enter(Phase.LIGHTNING);
@@ -529,8 +623,9 @@ public final class CreditsSequence implements SequenceReplayable {
             return;
         }
         float intensity = 0.6F + 0.4F * index / Math.max(1, LIGHTNING_STRIKES - 1);
-        double x = BEACH_SAND_EAST_X + 4 + epilogue.random.nextInt(24);
-        double z = epilogue.random.nextInt(2 * LANE_HALF_Z * 2) - LANE_HALF_Z * 2;
+        int depth = STRIKE_DEPTHS[index % STRIKE_DEPTHS.length];
+        double x = BEACH_SAND_EAST_X + depth + hash01(index, 21) * 6.0D;
+        double z = (index % 2 == 0 ? 1 : -1) * (8.0D + hash01(index, 22) * 26.0D);
         Vec3 impact = new Vec3(x, BEACH_Y + 1, z);
         FxPayloads.sendFxEvent(epilogue, FxPayloads.FX_LIGHTNING_STRIKE, impact, intensity, 0.0F, -1.0D);
         LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(epilogue);
@@ -539,10 +634,20 @@ public final class CreditsSequence implements SequenceReplayable {
             bolt.setVisualOnly(true);
             epilogue.addFreshEntity(bolt);
         }
-        for (ServerPlayer player : epilogue.players()) {
-            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
-                    0.7F + 0.5F * intensity, 0.85F + epilogue.random.nextFloat() * 0.15F);
-        }
+        // Light now, sound later: far strikes lose top end (lower pitch, softer volume).
+        boolean far = depth > 40;
+        float volume = (0.7F + 0.5F * intensity) * (far ? 0.72F : 1.0F);
+        float pitch = (far ? 0.72F : 0.9F) + (float) hash01(index, 23) * 0.12F;
+        schedule(current.server, 1 + depth / 17, () -> {
+            ServerLevel level = current.server.getLevel(EPILOGUE);
+            if (run != current || level == null) {
+                return;
+            }
+            for (ServerPlayer player : level.players()) {
+                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                        volume, pitch);
+            }
+        });
     }
 
     /** t=480 — the doomsday card decodes ({@code TitleCardLayer}). */
@@ -553,21 +658,36 @@ public final class CreditsSequence implements SequenceReplayable {
         }
     }
 
-    /** t=650 — burst: shockwave + white flash (the intro-BURST mirror). */
+    /**
+     * t=650 — burst: shockwave + white flash (the intro-BURST mirror). FXTEAM
+     * CUT-CREDITS: the flash envelope tightened 8/6/10 → 6/4/6 so the screen is fully
+     * clean by t=666 — the correction card needs dead air in front of it.
+     */
     private static void beatBurst(Run current) {
         ServerLevel epilogue = current.server.getLevel(EPILOGUE);
         if (epilogue != null) {
             Vec3 center = runnersCenter(epilogue);
             FxPayloads.sendFxEvent(epilogue, FxPayloads.FX_SHOCKWAVE, center, 1.0F, 50.0F, -1.0D);
         }
-        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(8, 6, 10, 0xFFFFFFFF));
+        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
     }
 
-    /** t=665 — the deadpan legal-department correction ({@code CaptionRenderer} TITLE style). */
+    /**
+     * t=665 — the deadpan legal-department correction ({@code CaptionRenderer} TITLE
+     * style). FXTEAM CUT-CREDITS comedy timing: the phase enters on schedule, but the
+     * card itself is held {@value #CORRECTION_STILL_TICKS}t so it lands at t=676 — a full
+     * 500 ms of NOTHING (flash gone at 666, world still, music running) before
+     * "ECLIPSE : DOOMSDAY" fades up like a legal department clearing its throat.
+     */
     private static void beatCorrection(Run current) {
         current.enter(Phase.CORRECTION);
-        PacketDistributor.sendToAllPlayers(
-                new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
+        schedule(current.server, CORRECTION_STILL_TICKS, () -> {
+            if (run != current) {
+                return; // a skip() mid-stillness moved on — never card over the outro
+            }
+            PacketDistributor.sendToAllPlayers(
+                    new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
+        });
     }
 
     /** t=745 — fade to black, auto-run releases; the music finale keeps playing. */
@@ -610,10 +730,14 @@ public final class CreditsSequence implements SequenceReplayable {
         EclipseMod.LOGGER.info("CreditsSequence: {} player(s) brought home behind the black", returned);
     }
 
-    /** t=1010 — the single "ECLIPSE" card over black. */
+    /**
+     * t=1010 — the single "ECLIPSE" card over black. FXTEAM CUT-CREDITS: hold 90 → 75 so
+     * the card is fully out by t≈1085 and the last second before the client close
+     * (t=1105) is PURE black — {@code CreditsClient} lays the faint heartbeat under it.
+     */
     private static void beatEclipseCard(Run current) {
         PacketDistributor.sendToAllPlayers(
-                new S2CCaptionPayload(TITLE_ECLIPSE, 90, S2CCaptionPayload.STYLE_TITLE));
+                new S2CCaptionPayload(TITLE_ECLIPSE, 75, S2CCaptionPayload.STYLE_TITLE));
     }
 
     /**
@@ -706,20 +830,94 @@ public final class CreditsSequence implements SequenceReplayable {
         wheel.moveTo(-17.4D, deckY + 7.1D, 0.5D, 0.0F, 0.0F);
         wheel.setBlockState(Blocks.DARK_OAK_TRAPDOOR.defaultBlockState());
         wheel.addTag(WHEEL_TAG);
-        // Stand the flat trapdoor upright in the YZ plane (facing the helmsman, +X) and
-        // spin it 45° like a wheel caught mid-turn; centered on its anchor.
-        Quaternionf rotation = new Quaternionf()
-                .rotationZ((float) Math.toRadians(90.0D))
-                .rotateY((float) Math.toRadians(45.0D));
-        Vector3f half = new Vector3f(0.55F, 0.55F, 0.55F);
-        Vector3f translation = new Vector3f(0.0F, 0.0F, 0.0F).sub(rotation.transform(half, new Vector3f()));
         wheel.setTransformationInterpolationDelay(0);
         wheel.setTransformationInterpolationDuration(0);
-        wheel.setTransformation(new Transformation(translation, rotation,
-                new Vector3f(1.1F, 1.1F, 1.1F), new Quaternionf()));
+        wheel.setTransformation(wheelPose(wheelAngle(T_SHIP)));
         LIVE_DISPLAYS.add(wheel.getUUID());
         limbo.addFreshEntity(wheel);
         current.wheel = wheel;
+    }
+
+    /**
+     * The wheel's transform at a given spin: the flat trapdoor stood upright in the YZ
+     * plane (facing the helmsman, +X), rotated {@code spinDegrees} like a wheel caught
+     * mid-turn, centered on its anchor (the translation must be recomputed per spin —
+     * it counter-rotates the block's half extent).
+     */
+    private static Transformation wheelPose(float spinDegrees) {
+        Quaternionf rotation = new Quaternionf()
+                .rotationZ((float) Math.toRadians(90.0D))
+                .rotateY((float) Math.toRadians(spinDegrees));
+        Vector3f half = new Vector3f(0.55F, 0.55F, 0.55F);
+        Vector3f translation = new Vector3f(0.0F, 0.0F, 0.0F).sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation, new Vector3f(1.1F, 1.1F, 1.1F), new Quaternionf());
+    }
+
+    /**
+     * BD-SHIP living helm driver (every 4t while the wheel is on stage): one 4t
+     * interpolation window toward the absolute pose at {@code t + 4} — a lookahead
+     * piecewise-linear sampling of the noisy angle curve, worst window ≈ 11° (far under
+     * the ~90° flattening law). No-op once the wheel is gone (helm-skip path discards
+     * it before the window ends). Also drives the spoke-glint brightness ramp.
+     */
+    private static void animateWheel(Run current, int t) {
+        Display.BlockDisplay wheel = current.wheel;
+        if (wheel == null || wheel.isRemoved()) {
+            return;
+        }
+        wheel.setTransformationInterpolationDelay(0);
+        wheel.setTransformationInterpolationDuration(4);
+        wheel.setTransformation(wheelPose(wheelAngle(t + 4)));
+        applyWheelGlint(wheel, t);
+    }
+
+    /**
+     * Absolute wheel angle (degrees) at run tick {@code t}: rest spin + steady turn +
+     * two incommensurate rate-noise sines + the CUT-CREDITS hands-settle grip envelope.
+     * A pure function of the run clock, so re-pushes always agree (stateless-push law).
+     */
+    private static float wheelAngle(int t) {
+        float run = t - T_SHIP;
+        return WHEEL_REST_SPIN_DEGREES
+                + WHEEL_TURN_DEG_PER_TICK * run
+                + WHEEL_NOISE_A_DEG * (float) Math.sin(run * (Math.PI * 2.0D / WHEEL_NOISE_A_PERIOD))
+                + WHEEL_NOISE_B_DEG * (float) Math.sin(run * (Math.PI * 2.0D / WHEEL_NOISE_B_PERIOD) + 2.1D)
+                + gripOffset(t);
+    }
+
+    /**
+     * FXTEAM CUT-CREDITS hands-settle beat as a deterministic envelope on the turning
+     * wheel: the grip pulls the wheel 9° down-left over 10t at {@link #WHEEL_SETTLE_AT}
+     * (the dolly reaching the wheel), relaxes back to −6.5° over 14t at
+     * {@link #WHEEL_RELAX_AT}, and holds. The timings and magnitudes are the original
+     * nudge beat's — only the transport changed (it rides the continuous rotation now).
+     */
+    private static float gripOffset(int t) {
+        if (t < WHEEL_SETTLE_AT) {
+            return 0.0F;
+        }
+        if (t < WHEEL_RELAX_AT) {
+            return -9.0F * Math.min(1.0F, (t - WHEEL_SETTLE_AT) / 10.0F);
+        }
+        return -6.5F - 2.5F * Math.max(0.0F, 1.0F - (t - WHEEL_RELAX_AT) / 14.0F);
+    }
+
+    /**
+     * Spoke-light glint: a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp (6→15→6,
+     * block+sky) every {@value #WHEEL_GLINT_PERIOD}t, then the override is CLEARED back
+     * to natural light. Fixed-period on the run clock rather than true spoke-crossing
+     * detection: the rate noise would make an {@code angle mod 45°} trigger double-blink,
+     * while a 50t cycle at the mean crossing rate reads identically and is branch-free.
+     */
+    private static void applyWheelGlint(Display.BlockDisplay wheel, int t) {
+        int cycle = (t - T_SHIP) % WHEEL_GLINT_PERIOD;
+        if (cycle < WHEEL_GLINT_RAMP) {
+            float env = (float) Math.sin(Math.PI * cycle / (double) WHEEL_GLINT_RAMP);
+            int light = 6 + Math.round(9.0F * env);
+            applyBrightnessOverride(wheel, light, light);
+        } else if (cycle < WHEEL_GLINT_RAMP + 4) {
+            clearBrightnessOverride(wheel);
+        }
     }
 
     private static void discardWheel(Run current) {
@@ -730,7 +928,14 @@ public final class CreditsSequence implements SequenceReplayable {
         }
     }
 
-    /** Launches the debris arcs behind the runners (anchored at each arc's apex column). */
+    /**
+     * Launches the debris arcs behind the runners (anchored at each arc's apex column).
+     * FXTEAM CUT-CREDITS: every fragment is dimmed via a display brightness override
+     * (sky 7 / block 4 — backlit silhouettes against the sunrise instead of fullbright
+     * floating blocks), and the LOW arcs (apex roll < 0.5, ~half) each drag a flattened
+     * tinted-glass "shadow puck" along the sand underneath, clamped to the sand strip so
+     * no shadow ever hovers over water.
+     */
     private static void spawnFlyers(Run current) {
         ServerLevel epilogue = current.server.getLevel(EPILOGUE);
         if (epilogue == null) {
@@ -751,19 +956,76 @@ public final class CreditsSequence implements SequenceReplayable {
             flyer.setTransformationInterpolationDelay(0);
             flyer.setTransformationInterpolationDuration(0);
             flyer.setTransformation(flyerPose(i, 0.0F));
+            applyBrightnessOverride(flyer, 7, 4);
             LIVE_DISPLAYS.add(flyer.getUUID());
             epilogue.addFreshEntity(flyer);
             current.flyers.add(flyer);
+            if (hash01(i, 2) < 0.5D) {
+                spawnShadowPuck(current, epilogue, i, apexX, z);
+            }
         }
-        EclipseMod.LOGGER.info("CreditsSequence: {} debris flyer(s) launched", current.flyers.size());
+        EclipseMod.LOGGER.info("CreditsSequence: {} debris flyer(s) launched ({} shadow puck(s))",
+                current.flyers.size(), current.shadows.size());
+    }
+
+    /**
+     * {@code Display.setBrightnessOverride} is private — round-trip the entity through
+     * its own save NBT with a {@code brightness} compound instead (the vanilla data path,
+     * so nothing reflective and nothing version-fragile beyond the tag name).
+     */
+    private static void applyBrightnessOverride(Display.BlockDisplay display, int sky, int block) {
+        CompoundTag data = display.saveWithoutId(new CompoundTag());
+        CompoundTag brightness = new CompoundTag();
+        brightness.putInt("sky", sky);
+        brightness.putInt("block", block);
+        data.put("brightness", brightness);
+        display.load(data);
+    }
+
+    /**
+     * Clears the override back to natural light through the same save-data round trip —
+     * the vanilla read path resets the override when the {@code brightness} compound is
+     * absent. No-op (no round trip) while no override is set.
+     */
+    private static void clearBrightnessOverride(Display.BlockDisplay display) {
+        CompoundTag data = display.saveWithoutId(new CompoundTag());
+        if (data.contains("brightness")) {
+            data.remove("brightness");
+            display.load(data);
+        }
+    }
+
+    /**
+     * One flattened tinted-glass display riding the sand under a low debris arc — the
+     * "shadows-ish" ground read. Same {@link #FLYER_TAG} (the stray sweep covers it),
+     * same discard lifecycle as the flyers.
+     */
+    private static void spawnShadowPuck(Run current, ServerLevel epilogue, int index,
+            double apexX, double z) {
+        Display.BlockDisplay puck = EntityType.BLOCK_DISPLAY.create(epilogue);
+        if (puck == null) {
+            return;
+        }
+        puck.moveTo(apexX, BEACH_Y + 1.03D, z, 0.0F, 0.0F);
+        puck.setBlockState(Blocks.TINTED_GLASS.defaultBlockState());
+        puck.addTag(FLYER_TAG);
+        puck.setTransformationInterpolationDelay(0);
+        puck.setTransformationInterpolationDuration(0);
+        // Clamp the puck's east travel to the sand strip (never a shadow on open water).
+        float maxDx = (float) (BEACH_SAND_EAST_X - 2 - apexX);
+        puck.setTransformation(shadowPose(index, 0.0F, maxDx));
+        LIVE_DISPLAYS.add(puck.getUUID());
+        epilogue.addFreshEntity(puck);
+        current.shadows.add(new ShadowPuck(puck, index, maxDx));
     }
 
     /** Interpolated transform push every 2 ticks (FloatingDecor transport pattern). */
     private static void animateFlyers(Run current, int t) {
-        if (current.flyers.isEmpty()) {
+        if (current.flyers.isEmpty() && current.shadows.isEmpty()) {
             return;
         }
         float progress = (t - T_LIGHTNING) / (float) (T_FLYERS_END - T_LIGHTNING);
+        float pushed = Math.min(1.0F, progress + 2.0F / (T_FLYERS_END - T_LIGHTNING));
         for (int i = 0; i < current.flyers.size(); i++) {
             Display.BlockDisplay flyer = current.flyers.get(i);
             if (flyer.isRemoved()) {
@@ -771,33 +1033,67 @@ public final class CreditsSequence implements SequenceReplayable {
             }
             flyer.setTransformationInterpolationDelay(0);
             flyer.setTransformationInterpolationDuration(2);
-            flyer.setTransformation(flyerPose(i, Math.min(1.0F, progress + 2.0F / (T_FLYERS_END - T_LIGHTNING))));
+            flyer.setTransformation(flyerPose(i, pushed));
+        }
+        for (ShadowPuck shadow : current.shadows) {
+            if (shadow.display().isRemoved()) {
+                continue;
+            }
+            shadow.display().setTransformationInterpolationDelay(0);
+            shadow.display().setTransformationInterpolationDuration(2);
+            shadow.display().setTransformation(shadowPose(shadow.index(), pushed, shadow.maxDx()));
         }
     }
 
     /**
-     * Absolute pose of one debris fragment at arc progress 0..1: a west→east ballistic arc
-     * through the apex anchor (translation ±~38 blocks, parabolic height) with a steady
-     * tumble — everything deterministic per index, so replays and re-pushes always agree.
+     * Absolute pose of one debris fragment at beat progress 0..1: a west→east ballistic
+     * arc through the apex anchor (translation ±~38 blocks, parabolic height) —
+     * everything deterministic per index, so replays and re-pushes always agree.
+     * BD-SHIP motion pass: launches are STAGGERED (per-flyer delay up to
+     * {@value #FLYER_STAGGER_MAX} of the span, arcs renormalized so every piece still
+     * lands by {@code T_FLYERS_END} — late starters fly faster arcs); the tumble carries
+     * a golden-angle phase (neighboring flyers can never spin in sync) and DAMPS to
+     * ~35% of its launch rate by landing (debris stabilizing, not a pinwheel); the
+     * scale envelope hides pre-launch holds and the end-of-beat discard.
      */
     private static Transformation flyerPose(int index, float progress) {
-        float speedJitter = 0.85F + (float) hash01(index, 5) * 0.3F;
-        float u = Math.min(1.0F, progress * speedJitter) * 2.0F - 1.0F; // -1 → +1 along the arc
+        float p = staggeredProgress(index, progress);
+        float u = p * 2.0F - 1.0F; // -1 → +1 along the arc
         float xOff = u * (30.0F + (float) hash01(index, 6) * 10.0F);
         float arcHeight = 10.0F + (float) hash01(index, 7) * 8.0F;
         float yOff = -arcHeight * u * u; // 0 at the apex, -h at both ends
-        float spin = (float) (hash01(index, 8) * Math.PI * 2.0D
-                + progress * (2.0D + hash01(index, 9) * 4.0D) * Math.PI);
+        float spin = index * GOLDEN_ANGLE
+                + (float) ((2.0D + hash01(index, 9) * 4.0D) * Math.PI) * dampedTumble(p);
         Vector3f axis = new Vector3f(
                 (float) (hash01(index, 10) * 2.0D - 1.0D),
                 (float) (0.4D + hash01(index, 11)),
                 (float) (hash01(index, 12) * 2.0D - 1.0D)).normalize();
         Quaternionf rotation = new Quaternionf().rotationAxis(spin, axis);
-        float scale = 0.5F + (float) hash01(index, 13) * 0.8F;
+        float scale = (0.5F + (float) hash01(index, 13) * 0.8F) * scaleEnvelope(p);
         Vector3f half = new Vector3f(scale * 0.5F, scale * 0.5F, scale * 0.5F);
         Vector3f translation = new Vector3f(xOff, yOff, 0.0F)
                 .sub(rotation.transform(half, new Vector3f()));
         return new Transformation(translation, rotation, new Vector3f(scale, scale, scale), new Quaternionf());
+    }
+
+    /** Per-flyer staggered arc progress: hold, then a renormalized 0..1 flight. */
+    private static float staggeredProgress(int index, float progress) {
+        float delay = (float) hash01(index, 14) * FLYER_STAGGER_MAX;
+        return Math.max(0.0F, Math.min(1.0F, (progress - delay) / (1.0F - delay)));
+    }
+
+    /**
+     * Damped tumble integral: reaches exactly 1 at p=1 (total spin magnitude unchanged)
+     * while the instantaneous rate decays linearly to ~35% of its launch value.
+     */
+    private static float dampedTumble(float p) {
+        return (p - 0.325F * p * p) / 0.675F;
+    }
+
+    /** In/out scale ramp over the first/last {@value #FLYER_SCALE_RAMP} of the flight. */
+    private static float scaleEnvelope(float p) {
+        float env = Math.min(p, 1.0F - p) / FLYER_SCALE_RAMP;
+        return Math.max(FLYER_SCALE_FLOOR, Math.min(1.0F, env));
     }
 
     private static void discardFlyers(Run current) {
@@ -806,6 +1102,39 @@ public final class CreditsSequence implements SequenceReplayable {
             flyer.discard();
         }
         current.flyers.clear();
+        for (ShadowPuck shadow : current.shadows) {
+            LIVE_DISPLAYS.remove(shadow.display().getUUID());
+            shadow.display().discard();
+        }
+        current.shadows.clear();
+    }
+
+    /** One ground-shadow display bound to its flyer's deterministic arc index. */
+    private record ShadowPuck(Display.BlockDisplay display, int index, float maxDx) {}
+
+    /**
+     * Ground-shadow pose mirroring {@link #flyerPose}'s horizontal travel (same
+     * staggered-progress/u/xOff math, east travel clamped to the sand strip), flattened
+     * to a 0.045-high slab. The footprint swells up to +50% while its debris is at apex
+     * (highest = biggest, softest-reading shadow), counter-spins slowly at 30% of the
+     * (damped, golden-phased) debris tumble, and rides the same scale envelope so a
+     * pre-launch or landed flyer never drags a visible puck.
+     */
+    private static Transformation shadowPose(int index, float progress, float maxDx) {
+        float p = staggeredProgress(index, progress);
+        float u = p * 2.0F - 1.0F;
+        float xOff = Math.min(u * (30.0F + (float) hash01(index, 6) * 10.0F), maxDx);
+        float heightFrac = 1.0F - u * u; // 1 at apex, 0 at both ends (mirrors -h·u²)
+        float spin = (index * GOLDEN_ANGLE
+                + (float) ((2.0D + hash01(index, 9) * 4.0D) * Math.PI) * dampedTumble(p)) * 0.3F;
+        float base = 0.5F + (float) hash01(index, 13) * 0.8F;
+        float footprint = base * (0.9F + 0.5F * heightFrac) * scaleEnvelope(p);
+        Quaternionf rotation = new Quaternionf().rotationY(spin);
+        Vector3f scale = new Vector3f(footprint, 0.045F, footprint);
+        Vector3f half = new Vector3f(footprint * 0.5F, 0.0F, footprint * 0.5F);
+        Vector3f translation = new Vector3f(xOff, 0.0F, 0.0F)
+                .sub(rotation.transform(half, new Vector3f()));
+        return new Transformation(translation, rotation, scale, new Quaternionf());
     }
 
     // ------------------------------------------------------------------ beach stamp
@@ -1004,18 +1333,31 @@ public final class CreditsSequence implements SequenceReplayable {
             case "LIGHTNING" -> {
                 for (int i = 0; i < LIGHTNING_STRIKES; i++) {
                     int index = i;
+                    // Mirrors the live near-far ladder: flash on the interval, thunder
+                    // arriving late/low/quiet by depth (FXTEAM CUT-CREDITS).
+                    int depth = STRIKE_DEPTHS[index % STRIKE_DEPTHS.length];
+                    boolean far = depth > 40;
                     schedule(server, i * LIGHTNING_INTERVAL, () -> {
                         float intensity = 0.6F + 0.4F * index / (LIGHTNING_STRIKES - 1);
                         for (ServerPlayer player : watchers) {
                             if (player.hasDisconnected()) {
                                 continue;
                             }
-                            Vec3 impact = player.position().add(30.0D + index * 8.0D, 0.0D,
-                                    (index % 2 == 0 ? 1 : -1) * (6.0D + index * 3.0D));
+                            Vec3 impact = player.position().add(14.0D + depth, 0.0D,
+                                    (index % 2 == 0 ? 1 : -1) * (8.0D + hash01(index, 22) * 26.0D));
                             PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
                                     .S2CFxEventPayload(FxPayloads.FX_LIGHTNING_STRIKE, impact, intensity, 0.0F));
-                            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER,
-                                    SoundSource.WEATHER, 0.7F + 0.5F * intensity, 0.9F);
+                        }
+                    });
+                    schedule(server, i * LIGHTNING_INTERVAL + 1 + depth / 17, () -> {
+                        float intensity = 0.6F + 0.4F * index / (LIGHTNING_STRIKES - 1);
+                        for (ServerPlayer player : watchers) {
+                            if (!player.hasDisconnected()) {
+                                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER,
+                                        SoundSource.WEATHER,
+                                        (0.7F + 0.5F * intensity) * (far ? 0.72F : 1.0F),
+                                        (far ? 0.72F : 0.9F) + (float) hash01(index, 23) * 0.12F);
+                            }
                         }
                     });
                 }
@@ -1029,10 +1371,18 @@ public final class CreditsSequence implements SequenceReplayable {
             }
             case "CORRECTION" -> {
                 for (ServerPlayer player : watchers) {
-                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(8, 6, 10, 0xFFFFFFFF));
-                    PacketDistributor.sendToPlayer(player,
-                            new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
+                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
                 }
+                // Same 500 ms deadpan stillness between flash-out and card as the live
+                // beat (flash dies at 16t here since both fire together; card at 26t).
+                schedule(server, 26, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player,
+                                    new S2CCaptionPayload(TITLE_CORRECTION, 80, S2CCaptionPayload.STYLE_TITLE));
+                        }
+                    }
+                });
                 return true;
             }
             case "OUTRO" -> {
@@ -1043,7 +1393,7 @@ public final class CreditsSequence implements SequenceReplayable {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
                             PacketDistributor.sendToPlayer(player,
-                                    new S2CCaptionPayload(TITLE_ECLIPSE, 90, S2CCaptionPayload.STYLE_TITLE));
+                                    new S2CCaptionPayload(TITLE_ECLIPSE, 75, S2CCaptionPayload.STYLE_TITLE));
                         }
                     }
                 });

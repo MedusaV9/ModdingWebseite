@@ -46,6 +46,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -69,8 +70,11 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       (the old {@code SUMMON_TICK}).</li>
  *   <li><b>TRANSFORM</b> — {@value #TRANSFORM_TICKS}t transformation beat on the ship:
  *       deck/mast pieces lift as {@code BLOCK_DISPLAY}s spiraling upward (C7 flight
- *       animator transport: one interpolated pose push), shake, veil, then the
- *       white-out ({@code S2CPortalFxPayload}) covers the {@code FreezeService.transport}
+ *       animator transport: keyframed interpolated pose pushes per piece, CUT-END
+ *       staggered — per-piece launch delays, masts corkscrewing later and harder than
+ *       the deck; BD-SHIP eased arcs, golden-angle spiral phases and a roll-into-place
+ *       1.05 overshoot), escalating shakes, veil, then a wind-gust veil-peel burst rides the
+ *       white-out ({@code S2CPortalFxPayload}) that covers the {@code FreezeService.transport}
  *       of every fighter into {@code eclipse:ferryman_arena} (ghosts land on the
  *       spectator ship). The Ferryman rises there through C9's anchor-parameterized
  *       {@code summon} overload — his bossbar carries the {@code boss_ferryman} music
@@ -104,6 +108,20 @@ public final class ArenaFight {
     private static final int WHITEOUT_HOLD_TICKS = 45;
     /** Command tag on every transformation block-display piece (restart sweep). */
     public static final String MORPH_TAG = "eclipse_ferry_morph";
+    /** Golden angle (radians) — phyllotaxis phase offsets for the morph spiral (BD-SHIP). */
+    private static final float GOLDEN_ANGLE = 2.3999632F;
+    /**
+     * Morph keyframe transport (BD-SHIP): pushes every {@value #MORPH_KEY_SPACING}t from
+     * t={@value #MORPH_LAUNCH_TICK} sample an eased arc-and-roll trajectory —
+     * piecewise-linear interpolation windows approximate the curve while every window
+     * stays under the ~90° rotation flattening threshold (VFXPOLISH-3 window law).
+     * Every piece reaches its formation pose ×1.05 at t={@value #MORPH_ARRIVE_TICK} and
+     * settles to the exact pose by t={@value #MORPH_SETTLE_TICK} (roll into place).
+     */
+    private static final int MORPH_LAUNCH_TICK = 2;
+    private static final int MORPH_KEY_SPACING = 8;
+    private static final int MORPH_ARRIVE_TICK = 50;
+    private static final int MORPH_SETTLE_TICK = TRANSFORM_TICKS - 2;
     /** "Aboard" bounding box half-extents around the limbo ship origin. */
     private static final double ABOARD_HALF_X = 26.0D;
     private static final double ABOARD_HALF_Z = 16.0D;
@@ -123,6 +141,10 @@ public final class ArenaFight {
     private static int fightGraceTicks;
     private static int arenaEmptyTicks;
     private static final List<UUID> morphDisplays = new ArrayList<>();
+    /** Deck pieces occupy {@code morphDisplays[0..morphDeckPieces)}; mast pieces follow. */
+    private static int morphDeckPieces;
+    /** Fight-scoped arena accent displays (BD-SHIP; spawned/animated/swept via ArenaBuilder). */
+    private static final List<UUID> accentDisplays = new ArrayList<>();
 
     private ArenaFight() {}
 
@@ -159,6 +181,7 @@ public final class ArenaFight {
         ServerLevel arena = ArenaDimension.get(server);
         if (arena != null) {
             ArenaBuilder.ensureBuilt(arena);
+            ArenaBuilder.sweepAccentDisplays(arena); // belt-and-braces: accents are fight-scoped
         } else {
             EclipseMod.LOGGER.warn("Ferry arena dimension {} is not loaded — the fight will stay on the limbo ship",
                     ArenaDimension.ARENA.location());
@@ -192,6 +215,7 @@ public final class ArenaFight {
         ServerLevel arena = ArenaDimension.get(server);
         if (arena != null) {
             ArenaBuilder.ensureBuilt(arena);
+            ArenaBuilder.sweepAccentDisplays(arena); // belt-and-braces: accents are fight-scoped
         }
         stage = Stage.GATE;
         gateTicks = 0;
@@ -239,6 +263,9 @@ public final class ArenaFight {
     // ------------------------------------------------------------------ GATE
 
     private static void tickGate(MinecraftServer server) {
+        // BD-SHIP: the dead door's rising assembly only ever runs inside the GATE stage
+        // (if the gate drops, AltarDoor.remove cancels the assembly with it).
+        AltarDoor.tickAssembly(server);
         ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
         if (limbo == null) {
             EclipseMod.LOGGER.warn("Ferry gate dropped: limbo vanished mid-gate");
@@ -474,6 +501,7 @@ public final class ArenaFight {
                 spawnMorphPiece(limbo, new Vec3(dx, deckY, dz), Blocks.DARK_OAK_PLANKS.defaultBlockState());
             }
         }
+        morphDeckPieces = morphDisplays.size(); // CUT-END: pieces past this index are masts
         for (int mastX : GhostShipBuilder.MAST_X) {
             for (int dy = 2; dy <= 8; dy += 3) {
                 spawnMorphPiece(limbo, new Vec3(mastX, deckY + dy, 0), Blocks.DARK_OAK_LOG.defaultBlockState());
@@ -502,15 +530,29 @@ public final class ArenaFight {
             return;
         }
         transformTicks++;
-        if (transformTicks == 2) {
-            pushMorphRise(limbo);
+        if (transformTicks >= MORPH_LAUNCH_TICK && transformTicks <= MORPH_SETTLE_TICK - MORPH_KEY_SPACING
+                && (transformTicks - MORPH_LAUNCH_TICK) % MORPH_KEY_SPACING == 0) {
+            pushMorphKeyframe(limbo, transformTicks);
         }
         if (transformTicks % 15 == 0) {
+            // CUT-END shot 5: the shakes ESCALATE with the spiral instead of ticking flat.
             int deckY = GhostShipBuilder.waterlineY(limbo) + 3;
+            float rising = 0.35F + 0.4F * (transformTicks / (float) TRANSFORM_TICKS);
             PacketDistributor.sendToPlayersNear(limbo, null, 0.5D, deckY + 2.0D, 0.5D, 96.0D,
-                    S2CShakePayload.shake(0.5F, 16));
+                    S2CShakePayload.shake(rising, 16));
         }
         if (transformTicks == WHITEOUT_TICK) {
+            // CUT-END shot 5: the shroud veil PEELS — one wind-gust burst (whoosh + sharp
+            // shake + a last veil one-shot ABOVE the deck, so the peel reads up-and-away)
+            // rides the exact white-out instant that swallows the ship.
+            int deckY = GhostShipBuilder.waterlineY(limbo) + 3;
+            Vec3 gust = new Vec3(0.5D, deckY + 8.0D, 0.5D);
+            limbo.playSound(null, BlockPos.containing(gust), EclipseSounds.EVENT_RIFT_WHOOSH.get(),
+                    SoundSource.AMBIENT, 1.6F, 0.85F);
+            PacketDistributor.sendToPlayersNear(limbo, null, gust.x, gust.y, gust.z, 96.0D,
+                    new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, gust));
+            PacketDistributor.sendToPlayersNear(limbo, null, gust.x, gust.y, gust.z, 96.0D,
+                    S2CShakePayload.shake(0.9F, 14));
             for (ServerPlayer player : limbo.players()) {
                 GatePayloads.sendPortalFx(player, new S2CPortalFxPayload(S2CPortalFxPayload.Phase.ENTER,
                         XboxPayloads.TRANSITION_STYLE, WHITEOUT_HOLD_TICKS));
@@ -521,26 +563,90 @@ public final class ArenaFight {
         }
     }
 
-    /** One interpolated pose push per piece: rise 6–14 blocks, drift outward, spiral. */
-    private static void pushMorphRise(ServerLevel limbo) {
+    /**
+     * One keyframe push per piece — the CUT-END stagger kept (deck planks launch first
+     * over a 0–8t spread, masts follow over 6–16t with alternating-handed corkscrews and
+     * a tight radial drift), now sampled along a BD-SHIP eased trajectory: outward drift
+     * eases OUT while the rise eases IN-OUT (the path bows outward low, then climbs — a
+     * genuine ARC), deck pieces roll a half turn about their horizontal tangent axis and
+     * the ensemble's drift directions swirl apart on golden-angle phases. Pieces still at
+     * their pre-launch fraction re-push their identity pose (equal synched values — the
+     * transformation never dirties, so held pieces cost no motion).
+     * The window ending at t={@value #MORPH_ARRIVE_TICK} targets the formation ×1.05;
+     * the last window settles it exactly — the roll-into-place overshoot.
+     *
+     * <p>Note for the corkscrew retune: the previous single-window ±2.75π push was
+     * quaternion-slerp-flattened to ≤135° on the client (one interpolation window can
+     * only ever show the shortest arc); ±1.2π across eased 8t windows is the same
+     * visible energy, actually rendered.</p>
+     */
+    private static void pushMorphKeyframe(ServerLevel limbo, int pushTick) {
+        int windowEnd = Math.min(pushTick + MORPH_KEY_SPACING, MORPH_SETTLE_TICK);
+        boolean settle = pushTick >= MORPH_ARRIVE_TICK;
         int index = 0;
         for (UUID id : morphDisplays) {
             if (!(limbo.getEntity(id) instanceof Display.BlockDisplay display)) {
                 index++;
                 continue;
             }
-            double h = hash01(index++);
-            float rise = (float) (6.0D + h * 8.0D);
-            float spin = (float) ((h * 2.0D - 1.0D) * Math.PI * 1.5D);
-            Vec3 radial = new Vec3(display.getX(), 0.0D, display.getZ());
-            Vec3 out = radial.lengthSqr() > 1.0E-4D ? radial.normalize().scale(2.0D + h * 3.0D) : Vec3.ZERO;
+            boolean mast = index >= morphDeckPieces;
+            double h = hash01(index);
+            int launch = MORPH_LAUNCH_TICK + (mast ? 6 + (int) (h * 10.0D) : (int) (h * 8.0D));
+            float s = settle ? 1.0F
+                    : Math.max(0.0F, Math.min(1.0F,
+                            (windowEnd - launch) / (float) (MORPH_ARRIVE_TICK - launch)));
+            float overshoot = !settle && windowEnd >= MORPH_ARRIVE_TICK ? 1.05F : 1.0F;
             display.setTransformationInterpolationDelay(0);
-            display.setTransformationInterpolationDuration(TRANSFORM_TICKS - 2);
-            display.setTransformation(new Transformation(
-                    new Vector3f((float) out.x, rise, (float) out.z),
-                    new Quaternionf().rotationY(spin),
-                    new Vector3f(1.0F, 1.0F, 1.0F), new Quaternionf()));
+            display.setTransformationInterpolationDuration(windowEnd - pushTick);
+            display.setTransformation(morphPose(display, index, mast, h, s, overshoot));
+            index++;
         }
+    }
+
+    /** Absolute morph pose at eased path fraction {@code s} (deterministic per index). */
+    private static Transformation morphPose(Display.BlockDisplay display, int index, boolean mast,
+            double h, float s, float overshoot) {
+        float rise = (mast ? (float) (10.0D + h * 6.0D) : (float) (6.0D + h * 8.0D)) * overshoot;
+        float drift = (mast ? (float) (0.8D + h * 1.2D) : (float) (2.0D + h * 3.0D)) * overshoot;
+        // Golden-angle phase in (-π, π]: the ensemble's spiral ordering.
+        float golden = (float) Math.IEEEremainder(index * GOLDEN_ANGLE, Math.PI * 2.0D);
+        float spinTotal = mast
+                ? (float) ((h * 2.0D - 1.0D) * Math.PI * 1.2D)
+                : golden * 0.35F + (float) ((h * 2.0D - 1.0D) * Math.PI * 0.35D);
+        if (mast && ((index + 1) & 1) == 0) {
+            spinTotal = -spinTotal; // CUT-END alternating corkscrew handedness
+        }
+        Vec3 radial = new Vec3(display.getX(), 0.0D, display.getZ());
+        Vec3 dir = radial.lengthSqr() > 1.0E-4D ? radial.normalize() : new Vec3(1.0D, 0.0D, 0.0D);
+        // Deck drift directions swirl apart on golden phases — the rising spiral.
+        float swirl = mast ? 0.0F : golden * 0.4F * easeInOut(s);
+        double cos = Math.cos(swirl);
+        double sin = Math.sin(swirl);
+        Vec3 out = new Vec3(dir.x * cos - dir.z * sin, 0.0D, dir.x * sin + dir.z * cos)
+                .scale(drift * easeOut(s));
+        // Masts ease IN-OUT (corkscrew "later and harder", and the ±1.2π total would
+        // bust the ~90° window law with ease-out's initial slope on the hardest piece).
+        float yaw = spinTotal * (mast ? easeInOut(s) : easeOut(s));
+        Quaternionf rotation = new Quaternionf().rotationY(yaw);
+        if (!mast) {
+            // Planks ROLL a half turn about the horizontal tangent (overshoot rides it).
+            float roll = (float) Math.PI * easeInOut(s) * overshoot;
+            rotation.mul(new Quaternionf().rotationAxis(roll,
+                    new Vector3f((float) -dir.z, 0.0F, (float) dir.x)));
+        }
+        return new Transformation(
+                new Vector3f((float) out.x, rise * easeInOut(s), (float) out.z),
+                rotation, new Vector3f(1.0F, 1.0F, 1.0F), new Quaternionf());
+    }
+
+    /** Smoothstep ease-in-out. */
+    private static float easeInOut(float s) {
+        return s * s * (3.0F - 2.0F * s);
+    }
+
+    /** Quadratic ease-out. */
+    private static float easeOut(float s) {
+        return 1.0F - (1.0F - s) * (1.0F - s);
     }
 
     private static void finishTransform(MinecraftServer server, ServerLevel limbo) {
@@ -577,6 +683,7 @@ public final class ArenaFight {
         }
         FerrymanEntity.summon(arena, ArenaBuilder.summonAnchor(arena), -90.0F);
         forcePitChunks(arena, true);
+        ArenaBuilder.spawnAccentDisplays(arena, accentDisplays); // fight dressing (BD-SHIP)
         ArenaState.get(server).setFightRunning(true);
         stage = Stage.FIGHT;
         fightGraceTicks = FIGHT_WATCH_GRACE_TICKS;
@@ -605,6 +712,9 @@ public final class ArenaFight {
             endFight(server, "arena dimension vanished", true);
             return;
         }
+        // BD-SHIP accents ride the watch stride (one 20t window per display per second;
+        // at worst one wasted push on the very tick the fight ends — endFight sweeps).
+        ArenaBuilder.animateAccentDisplays(arena, accentDisplays);
         arenaEmptyTicks = arena.players().isEmpty() ? arenaEmptyTicks + 20 : 0;
         boolean bossGone = fightGraceTicks <= 0 && !ferrymanAlive(arena);
         if (bossGone) {
@@ -624,6 +734,7 @@ public final class ArenaFight {
     private static void endFight(MinecraftServer server, String reason, boolean cleanPit) {
         ServerLevel arena = ArenaDimension.get(server);
         if (arena != null) {
+            ArenaBuilder.sweepAccentDisplays(arena); // by tag, before the chunks unforce
             forcePitChunks(arena, false);
             if (cleanPit) {
                 discardBoss(arena);
@@ -631,6 +742,7 @@ public final class ArenaFight {
                 drainPit(arena);
             }
         }
+        accentDisplays.clear();
         ArenaState.get(server).setFightRunning(false);
         stage = Stage.IDLE;
         arenaEmptyTicks = 0;
@@ -739,6 +851,9 @@ public final class ArenaFight {
                 stage = Stage.FIGHT;
                 fightGraceTicks = FIGHT_WATCH_GRACE_TICKS;
                 arenaEmptyTicks = 0;
+                // Fresh accent set for the resumed fight; persisted strays that load in
+                // later are caught by the join-time guard (they are not in the new list).
+                ArenaBuilder.spawnAccentDisplays(arena, accentDisplays);
                 EclipseMod.LOGGER.info("Arena fight resumed after restart (fight watch re-entered)");
             } else {
                 state.setFightRunning(false);
@@ -750,6 +865,9 @@ public final class ArenaFight {
             if (EclipseWorldState.get(server).isFerrymanDefeated()) {
                 AltarDoor.remove(server); // stale door from a pre-victory run
             } else {
+                // A crash inside the rising-assembly window never resumes mid-assembly:
+                // stamp instantly and sweep the pieces (the C10.5 mirror, BD-SHIP).
+                AltarDoor.ensureStamped(server);
                 stage = Stage.GATE;
                 gateTicks = 0;
                 countdownTicks = -1;
@@ -807,9 +925,33 @@ public final class ArenaFight {
         if (stage != Stage.IDLE) {
             EclipseMod.LOGGER.info("Ferry crossing stage {} dropped on server stop (re-derived next start)", stage);
         }
+        AltarDoor.cancelAssembly(event.getServer()); // discard pieces pre-save (BD-SHIP)
         stage = Stage.IDLE;
         countdownTicks = -1;
         morphDisplays.clear();
+        accentDisplays.clear();
+    }
+
+    /**
+     * Join-time stray guard for the fight accents ({@code StructureFlightFx} doctrine,
+     * BD-SHIP): a tagged accent display loading in that THIS session did not spawn is a
+     * crash leftover (or an async chunk load racing the resume respawn) — discard it.
+     * Same guard for altar-door assembly pieces: their persisted bodies can stream in
+     * AFTER {@code AltarDoor.ensureStamped}'s boot sweep ran over a not-yet-loaded chunk.
+     */
+    @SubscribeEvent
+    static void onEntityJoin(EntityJoinLevelEvent event) {
+        Entity entity = event.getEntity();
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        if (entity.getTags().contains(ArenaBuilder.ACCENT_TAG)
+                && !accentDisplays.contains(entity.getUUID())) {
+            entity.discard();
+        } else if (entity.getTags().contains(AltarDoor.ASSEMBLY_TAG)
+                && !AltarDoor.isLivePiece(entity.getUUID())) {
+            entity.discard();
+        }
     }
 
     // ------------------------------------------------------------------ helpers
@@ -821,6 +963,7 @@ public final class ArenaFight {
     /** Discards every tagged morph display around the ship (crash-leftover sweep). */
     private static void sweepMorphDisplays(ServerLevel limbo) {
         morphDisplays.clear();
+        morphDeckPieces = 0;
         AABB sweep = new AABB(-32.0D, 0.0D, -32.0D, 32.0D, 128.0D, 32.0D);
         List<Entity> strays = limbo.getEntities((Entity) null, sweep,
                 entity -> entity.getTags().contains(MORPH_TAG));

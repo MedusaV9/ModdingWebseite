@@ -23,6 +23,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
@@ -59,9 +60,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li><b>Pair cooldown</b> (default {@code cooldownMinutes} 30, either direction,
  *       persisted in {@code data/eclipse_heart_theft.dat}): within cooldown the victim
  *       still dies but NO Leben moves in either direction — no farming the same victim.</li>
+ *   <li><b>Global killer cooldown</b> (default {@code killerCooldownMinutes} 45): after
+ *       ANY completed steal the killer takes nothing from ANYONE for the window — a spree
+ *       is bounded to one heart per window even with victim rotation. Symmetric freeze:
+ *       the victim's loss is frozen too.</li>
  *   <li><b>Victim floor</b> ({@code floorLives} 1): a victim at the floor loses NOTHING to
  *       a PvP kill (and the killer gains nothing) — murder can never ghost/ban a player
- *       outside events. PvE/environment deaths keep the normal 0 → ban flow untouched.</li>
+ *       outside events. PvE/environment deaths keep the normal 0 → ban flow untouched.
+ *       Symmetrically, a killer already at {@code HeartsService.MAX_HEARTS} freezes the
+ *       whole exchange: where no gain is possible, no loss happens either.</li>
  *   <li><b>Ghost/spectator exceptions</b>: banned "ghost players" (either side) and
  *       spectators never steal or get stolen from.</li>
  *   <li><b>Limbo/pre-event/event-dimension exceptions</b>: no theft before the start
@@ -97,8 +104,19 @@ public final class HeartTheftService {
         NO_STEAL_CONTRACT_PAIR(false),
         /** Victim sits at the Leben floor: NOTHING moves — theft can never ghost anyone. */
         NO_STEAL_FLOOR(true),
+        /**
+         * Killer already at {@code HeartsService.MAX_HEARTS}: symmetric freeze — the gain
+         * is impossible, so the victim's loss is frozen too (a capped killer must never
+         * grief hearts out of the economy).
+         */
+        NO_STEAL_KILLER_CAPPED(true),
         /** The pair traded a steal within the cooldown: NOTHING moves in either direction. */
-        NO_STEAL_COOLDOWN(true);
+        NO_STEAL_COOLDOWN(true),
+        /**
+         * The killer stole from ANYONE within {@code killerCooldownMinutes}: the global
+         * anti-spree window. Symmetric freeze like the pair cooldown.
+         */
+        NO_STEAL_KILLER_COOLDOWN(true);
 
         private final boolean freezesDeathLoss;
 
@@ -121,10 +139,16 @@ public final class HeartTheftService {
     }
 
     /** Immutable {@code heartTheft} config snapshot. */
-    public record Values(boolean enabled, int cooldownMinutes, int floorLives, boolean ceremony) {
+    public record Values(boolean enabled, int cooldownMinutes, int killerCooldownMinutes,
+            int floorLives, boolean ceremony) {
 
         public long cooldownMillis() {
             return cooldownMinutes * 60_000L;
+        }
+
+        /** Global per-killer anti-spree window ({@code 0} = disabled). */
+        public long killerCooldownMillis() {
+            return killerCooldownMinutes * 60_000L;
         }
     }
 
@@ -185,9 +209,18 @@ public final class HeartTheftService {
         if (LivesApi.get(victim) <= cfg.floorLives()) {
             return Verdict.NO_STEAL_FLOOR;
         }
-        if (cooldownRemainingMillis(server, killer.getUUID(), victim.getUUID(),
-                EclipseClock.epochMillis()) > 0L) {
+        // Symmetric to the floor rule: a killer at the cap cannot gain, so the victim
+        // must not lose either — no Leben ever evaporates through a capped steal.
+        if (LivesApi.get(killer) >= HeartsService.MAX_HEARTS) {
+            return Verdict.NO_STEAL_KILLER_CAPPED;
+        }
+        long now = EclipseClock.epochMillis();
+        // Pair cooldown first — it is the more specific rule when both windows overlap.
+        if (cooldownRemainingMillis(server, killer.getUUID(), victim.getUUID(), now) > 0L) {
             return Verdict.NO_STEAL_COOLDOWN;
+        }
+        if (killerCooldownRemainingMillis(server, killer.getUUID(), now) > 0L) {
+            return Verdict.NO_STEAL_KILLER_COOLDOWN;
         }
         return Verdict.STEAL;
     }
@@ -211,10 +244,16 @@ public final class HeartTheftService {
 
     // ================================================================== cooldown ledger
 
-    /** Records a completed steal (pair cooldown, both directions block). */
+    /**
+     * Records a completed steal (pair cooldown, both directions block; also arms the
+     * killer's global window). The prune horizon is the LONGER of the two cooldowns so
+     * the global killer window never loses its evidence to the pair prune.
+     */
     public static void recordSteal(ServerPlayer killer, ServerPlayer victim) {
+        Values cfg = config();
         TheftState.get(killer.server).record(killer.getUUID(), victim.getUUID(),
-                EclipseClock.epochMillis(), config().cooldownMillis());
+                EclipseClock.epochMillis(),
+                Math.max(cfg.cooldownMillis(), cfg.killerCooldownMillis()));
     }
 
     /**
@@ -227,6 +266,23 @@ public final class HeartTheftService {
             return 0L;
         }
         return Math.max(0L, last + config().cooldownMillis() - now);
+    }
+
+    /**
+     * Remaining GLOBAL killer-cooldown millis at {@code now} ({@code 0} = free): after any
+     * completed steal the killer cannot steal from ANYONE for {@code killerCooldownMinutes}
+     * (default 45) — bounds a spree to one heart per window regardless of victim rotation.
+     */
+    public static long killerCooldownRemainingMillis(MinecraftServer server, UUID killer, long now) {
+        long window = config().killerCooldownMillis();
+        if (window <= 0L) {
+            return 0L;
+        }
+        long last = TheftState.get(server).lastStealBy(killer);
+        if (last <= 0L) {
+            return 0L;
+        }
+        return Math.max(0L, last + window - now);
     }
 
     /** Human-readable active cooldown rows ({@code /dev contract theft status}). */
@@ -311,7 +367,8 @@ public final class HeartTheftService {
     /** {@code /dev contract theft on|off}: mutates the LIVE snapshot (transient until reload). */
     public static void setEnabledLive(boolean enabled) {
         Values v = config();
-        values = new Values(enabled, v.cooldownMinutes(), v.floorLives(), v.ceremony());
+        values = new Values(enabled, v.cooldownMinutes(), v.killerCooldownMinutes(),
+                v.floorLives(), v.ceremony());
     }
 
     /** Re-reads {@code config/eclipse/hearts.json}, creating it with defaults when missing. */
@@ -356,6 +413,7 @@ public final class HeartTheftService {
         return new Values(
                 asBool(theft, "enabled", true),
                 Math.max(0, asInt(theft, "cooldownMinutes", 30)),
+                Math.max(0, asInt(theft, "killerCooldownMinutes", 45)),
                 Math.max(0, asInt(theft, "floorLives", 1)),
                 asBool(theft, "ceremony", true));
     }
@@ -367,8 +425,13 @@ public final class HeartTheftService {
         doc.addProperty("heartTheft", "D4 out-of-event PvP kill economy: the killer steals one "
                 + "permanent Leben from the victim, ONLY outside an active REAL contract window "
                 + "covering the pair. cooldownMinutes = per-pair anti-farm window (within it a PvP "
-                + "kill moves NO Leben in either direction); floorLives = a victim at or below this "
-                + "count loses nothing to PvP (theft can never ghost anyone); enabled=false turns "
+                + "kill moves NO Leben in either direction); killerCooldownMinutes = GLOBAL "
+                + "per-killer anti-spree window (after any steal the killer takes nothing from "
+                + "ANYONE for this long — symmetric: the victim's loss is frozen too; 0 disables); "
+                + "floorLives = a victim at or below this "
+                + "count loses nothing to PvP (theft can never ghost anyone); a killer already at "
+                + "MAX_HEARTS also freezes the whole exchange (no gain possible = no loss either); "
+                + "enabled=false turns "
                 + "off ALL PvP Leben movement to the killer (the victim still pays the normal death "
                 + "cost); ceremony toggles the titles/announce/sound/shake/FX.");
         root.add("_doc", doc);
@@ -376,6 +439,7 @@ public final class HeartTheftService {
         JsonObject theft = new JsonObject();
         theft.addProperty("enabled", true);
         theft.addProperty("cooldownMinutes", 30);
+        theft.addProperty("killerCooldownMinutes", 45);
         theft.addProperty("floorLives", 1);
         theft.addProperty("ceremony", true);
         root.add("heartTheft", theft);
@@ -472,6 +536,17 @@ public final class HeartTheftService {
                 boolean match = (record.killer().equals(a) && record.victim().equals(b))
                         || (record.killer().equals(b) && record.victim().equals(a));
                 if (match && record.atEpochMillis() > latest) {
+                    latest = record.atEpochMillis();
+                }
+            }
+            return latest;
+        }
+
+        /** Latest steal epoch BY this killer against anyone ({@code 0} = never). */
+        public long lastStealBy(UUID killer) {
+            long latest = 0L;
+            for (StealRecord record : records) {
+                if (record.killer().equals(killer) && record.atEpochMillis() > latest) {
                     latest = record.atEpochMillis();
                 }
             }

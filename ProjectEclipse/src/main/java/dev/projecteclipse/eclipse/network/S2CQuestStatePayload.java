@@ -21,6 +21,8 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
      * @param rewardShards personal shards paid on completion (FIX-ECON: rendered as a
      *        "◆N" chip on sidebar/TAB rows so the rebirth income is advertised BEFORE
      *        the materialize ceremony; {@code 0} = no chip)
+     * @param rewardXp skill XP paid on completion (EVAL-DOPA-F: rendered as a dim "+N XP"
+     *        chip half next to the shard chip; {@code 0} = no chip)
      */
     public record QuestEntry(
             String id,
@@ -31,7 +33,8 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
             int target,
             boolean done,
             boolean teamScope,
-            int rewardShards) {
+            int rewardShards,
+            int rewardXp) {
 
         public static final StreamCodec<ByteBuf, QuestEntry> STREAM_CODEC = StreamCodec.of(
                 QuestEntry::encode,
@@ -47,6 +50,7 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
             ByteBufCodecs.BOOL.encode(buf, value.done());
             ByteBufCodecs.BOOL.encode(buf, value.teamScope());
             ByteBufCodecs.VAR_INT.encode(buf, value.rewardShards());
+            ByteBufCodecs.VAR_INT.encode(buf, value.rewardXp());
         }
 
         private static QuestEntry decode(ByteBuf buf) {
@@ -59,6 +63,7 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.BOOL.decode(buf),
                     ByteBufCodecs.BOOL.decode(buf),
+                    ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.VAR_INT.decode(buf));
         }
     }

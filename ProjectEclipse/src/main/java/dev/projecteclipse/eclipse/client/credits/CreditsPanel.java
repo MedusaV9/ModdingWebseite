@@ -48,6 +48,14 @@ public final class CreditsPanel {
     /** Panel horizontal bounds as fractions of the screen width. */
     private static final float PANEL_LEFT = 0.68F;
     private static final float PANEL_RIGHT = 0.96F;
+    /**
+     * FXTEAM CUT-CREDITS: the panel stays invisible for 3 s after the roll payload (the
+     * sunrise gets the frame to itself first), then fades in over {@value #FADE_IN_TICKS}t.
+     * The scroll clock starts AFTER the delay, so no lines are skipped. Shortened rolls
+     * (mid-run rejoins send as little as 40t) drop the delay so the text is never lost.
+     */
+    private static final int FADE_IN_DELAY_TICKS = 60;
+    private static final int FADE_IN_TICKS = 20;
 
     static {
         CreditsPayloads.setClientRollHandler(CreditsPanel::handle);
@@ -124,7 +132,15 @@ public final class CreditsPanel {
         GuiGraphics guiGraphics = event.getGuiGraphics();
         DeltaTracker deltaTracker = event.getPartialTick();
         float partial = minecraft.isPaused() ? 0.0F : deltaTracker.getGameTimeDeltaPartialTick(false);
-        float progress = Mth.clamp((ticks + partial) / durationTicks, 0.0F, 1.0F);
+        float age = ticks + partial;
+        // Sunrise-first delay: hold invisible, fade in, and run the scroll on the
+        // remaining span. Rolls too short to afford the delay (rejoins) skip it.
+        int delay = durationTicks > FADE_IN_DELAY_TICKS + 2 * FADE_IN_TICKS ? FADE_IN_DELAY_TICKS : 0;
+        float alpha = Mth.clamp((age - delay) / FADE_IN_TICKS, 0.0F, 1.0F);
+        if (alpha <= 0.03F) {
+            return;
+        }
+        float progress = Mth.clamp((age - delay) / (durationTicks - delay), 0.0F, 1.0F);
 
         int width = guiGraphics.guiWidth();
         int height = guiGraphics.guiHeight();
@@ -144,12 +160,16 @@ public final class CreditsPanel {
 
         // Soft 110-alpha scrim behind the text so the sunrise never washes it out; the left
         // edge is feathered in 3 steps (GuiGraphics has no horizontal gradient helper).
-        int band = 110 << 24;
-        guiGraphics.fill(left - 12, 0, left - 8, height, 28 << 24);
-        guiGraphics.fill(left - 8, 0, left - 4, height, 56 << 24);
-        guiGraphics.fill(left - 4, 0, left, height, 84 << 24);
-        guiGraphics.fill(left, 0, right + 6, height, band);
+        // The whole panel (scrim + text) rides the fade-in alpha.
+        guiGraphics.fill(left - 12, 0, left - 8, height, Math.round(28 * alpha) << 24);
+        guiGraphics.fill(left - 8, 0, left - 4, height, Math.round(56 * alpha) << 24);
+        guiGraphics.fill(left - 4, 0, left, height, Math.round(84 * alpha) << 24);
+        guiGraphics.fill(left, 0, right + 6, height, Math.round(110 * alpha) << 24);
 
+        int textAlpha = Mth.clamp(Math.round(alpha * 255.0F), 0, 255);
+        if (textAlpha < 8) {
+            return; // drawString treats ~0 alpha as opaque
+        }
         float y = top;
         for (Line line : lines) {
             if (line.header()) {
@@ -163,8 +183,8 @@ public final class CreditsPanel {
             guiGraphics.pose().pushPose();
             guiGraphics.pose().translate(left + 6, lineTop, 0.0F);
             guiGraphics.pose().scale(SCALE, SCALE, 1.0F);
-            guiGraphics.drawString(font, line.text(), 0, 0,
-                    line.header() ? EclipseUiTheme.DIM : EclipseUiTheme.TEXT, true);
+            int rgb = (line.header() ? EclipseUiTheme.DIM : EclipseUiTheme.TEXT) & 0xFFFFFF;
+            guiGraphics.drawString(font, line.text(), 0, 0, (textAlpha << 24) | rgb, true);
             guiGraphics.pose().popPose();
         }
     }
