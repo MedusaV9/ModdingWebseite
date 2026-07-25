@@ -51,6 +51,14 @@ public class TimelineTab extends HandbookTab {
     private static final int LINE_HEIGHT = 9;
     /** Minimum gap between any caption line and the panel edges (A4 shift-clamp). */
     private static final int TEXT_EDGE_PAD = 4;
+    /**
+     * First/last node inset from the panel edges (uipolish: the old 30px start put node 0's
+     * shift-clamped caption flush against the left edge — "Tag 1" read as glued to the
+     * border). At {@value}px even a full-width caption line ((NODE_SPACING+24)/2 = 45px
+     * half-width) rests inside the panel without the clamp firing; {@link #maxScroll()}
+     * mirrors it on the right so both ends breathe equally.
+     */
+    private static final int EDGE_MARGIN = 56;
     /** Extra gap (with the hairline divider) between the day and the milestone section. */
     private static final int SECTION_GAP = 64;
     /** Bottom band reserved for the drag hint; node/caption rendering is scissored above it. */
@@ -87,7 +95,7 @@ public class TimelineTab extends HandbookTab {
         }
         int firstMilestone = firstMilestoneIndex(timeline);
         int gap = firstMilestone >= 0 && currentIndex >= firstMilestone ? SECTION_GAP : 0;
-        scrollX = Mth.clamp(30 + currentIndex * NODE_SPACING + gap - width / 2.0F, 0.0F, maxScroll());
+        scrollX = Mth.clamp(EDGE_MARGIN + currentIndex * NODE_SPACING + gap - width / 2.0F, 0.0F, maxScroll());
     }
 
     @Override
@@ -289,7 +297,7 @@ public class TimelineTab extends HandbookTab {
     }
 
     private int nodeCenterX(int index, boolean afterSectionGap) {
-        return x + 30 + index * NODE_SPACING + (afterSectionGap ? SECTION_GAP : 0) - Math.round(scrollX);
+        return x + EDGE_MARGIN + index * NODE_SPACING + (afterSectionGap ? SECTION_GAP : 0) - Math.round(scrollX);
     }
 
     /** First index of the milestone section ({@code unlockDay <= 0}), or -1 when absent. */
@@ -302,11 +310,18 @@ public class TimelineTab extends HandbookTab {
         return -1;
     }
 
-    /** B5: the section gap only counts toward the scroll range when milestones exist. */
+    /**
+     * B5: the section gap only counts toward the scroll range when milestones exist.
+     * uipolish: the range spans first node at {@value #EDGE_MARGIN}px from the left edge
+     * to last node at the SAME margin from the right — symmetric breathing room.
+     */
     private float maxScroll() {
         List<TimelineEntry> timeline = ClientStateCache.timeline;
+        if (timeline.isEmpty()) {
+            return 0.0F;
+        }
         int gap = firstMilestoneIndex(timeline) >= 0 ? SECTION_GAP : 0;
-        return Math.max(0, timeline.size() * NODE_SPACING + gap + 60 - width);
+        return Math.max(0, (timeline.size() - 1) * NODE_SPACING + gap + 2 * EDGE_MARGIN - width);
     }
 
     @Override

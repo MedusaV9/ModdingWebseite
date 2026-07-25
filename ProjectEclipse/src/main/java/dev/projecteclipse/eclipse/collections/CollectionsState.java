@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -46,6 +47,12 @@ public final class CollectionsState extends SavedData {
          * player's next login ({@code CollectionsService.replayPendingGrants}).
          */
         public final Map<String, java.util.Set<Integer>> pendingGrants = new HashMap<>();
+        /**
+         * uipolish item lexicon: ids of {@link ItemLexicon} items this player has carried
+         * at least once. Monotonic (nothing is ever un-discovered); insertion order =
+         * discovery order. Maintained by {@link ItemLexiconService}.
+         */
+        public final java.util.Set<String> discoveredItems = new java.util.LinkedHashSet<>();
 
         public long count(String collectionId) {
             return counts.getOrDefault(collectionId, 0L);
@@ -121,6 +128,9 @@ public final class CollectionsState extends SavedData {
                     }
                 }
             }
+            for (Tag discovered : playerTag.getList("discoveredItems", Tag.TAG_STRING)) {
+                entry.discoveredItems.add(discovered.getAsString());
+            }
             state.players.put(playerTag.getUUID("uuid"), entry);
         }
         return state;
@@ -156,6 +166,13 @@ public final class CollectionsState extends SavedData {
                             grant.getValue().stream().mapToInt(Integer::intValue).toArray());
                 }
                 playerTag.put("pendingGrants", pending);
+            }
+            if (!entry.discoveredItems.isEmpty()) {
+                ListTag discovered = new ListTag();
+                for (String itemId : entry.discoveredItems) {
+                    discovered.add(StringTag.valueOf(itemId));
+                }
+                playerTag.put("discoveredItems", discovered);
             }
             list.add(playerTag);
         }

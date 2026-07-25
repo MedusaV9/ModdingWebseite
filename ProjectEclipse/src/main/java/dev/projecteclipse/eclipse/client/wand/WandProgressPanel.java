@@ -19,6 +19,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -49,6 +50,10 @@ import javax.annotation.Nullable;
  * servers too, replacing the old local-{@code WandConfig} estimation. Until the first
  * payload lands (login sends one, so at most a few frames) the ladder shows a syncing
  * hint instead of guessed numbers.</p>
+ *
+ * <p>UIPOLISH: hovering an unlocked (or next-unlock) power row swaps the footer hints for
+ * that power's effect explanation ({@code wand.eclipse.power.<path>.<n>.desc}), so the
+ * ladder finally says what each spell DOES, not just what it costs.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class WandProgressPanel extends AbstractWidget {
@@ -119,7 +124,7 @@ public final class WandProgressPanel extends AbstractWidget {
         } else if (WandSoulbind.pathOf(wand) == WandPath.NONE) {
             renderChooser(guiGraphics, mouseX, mouseY);
         } else {
-            renderProgress(guiGraphics, wand);
+            renderProgress(guiGraphics, wand, mouseX, mouseY);
         }
         if (hoveredCard != lastHoveredCard && hoveredCard >= 0) {
             UiSounds.hover(); // edge blip, never per-frame
@@ -233,7 +238,7 @@ public final class WandProgressPanel extends AbstractWidget {
         return EclipseUiTheme.ACCENT;
     }
 
-    private void renderProgress(GuiGraphics guiGraphics, ItemStack wand) {
+    private void renderProgress(GuiGraphics guiGraphics, ItemStack wand, int mouseX, int mouseY) {
         var font = Minecraft.getInstance().font;
         if (!ClientWandProgress.synced) {
             // Login sends the first payload before any screen can open; this is a
@@ -289,11 +294,19 @@ public final class WandProgressPanel extends AbstractWidget {
         // The five power rows: unlocked / next unlock / locked.
         long now = Util.getMillis();
         boolean reduced = EclipseClientConfig.reducedFx();
+        // UIPOLISH: hovering a known (unlocked or next-unlock) row swaps the footer hints
+        // for that power's effect explanation (wand.eclipse.power.<path>.<n>.desc).
+        int hoveredPower = -1;
         for (int i = 0; i < path.powerCount() && i < WandPath.MAX_LEVEL; i++) {
             boolean unlocked = level >= i + 1;
             boolean next = !unlocked && level == i;
             boolean isSelected = unlocked && i == selected;
             int rowY = y + i * ROW_H;
+            if ((unlocked || next) && isHovered()
+                    && mouseX >= left - 4 && mouseX < right + 4
+                    && mouseY >= rowY - 2 && mouseY < rowY + ROW_H - 4) {
+                hoveredPower = i;
+            }
 
             if (isSelected) {
                 guiGraphics.fill(left - 4, rowY - 2, right + 4, rowY + ROW_H - 4,
@@ -339,21 +352,34 @@ public final class WandProgressPanel extends AbstractWidget {
         }
         y += WandPath.MAX_LEVEL * ROW_H + 2;
 
-        // "How to earn wand XP" + cycle hint (D10 §2 footer).
+        // "How to earn wand XP" + cycle hint (D10 §2 footer) — or, while a power row is
+        // hovered, that power's effect explanation (UIPOLISH: wand effects were opaque).
         if (y + 20 <= getY() + this.height) {
             EclipseUiTheme.drawHairline(guiGraphics, left, right, y, alpha);
             y += 5;
-            guiGraphics.drawString(font,
-                    EclipseUiTheme.ellipsize(font, EclipseLang.trString("gui.eclipse.skills.wand.earn_hint",
-                            ClientWandProgress.xpPerCostPoint, (int) ClientWandProgress.xpKillBonus),
-                            right - left),
-                    left, y, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha * 0.9F));
-            y += 10;
-            if (y + 9 <= getY() + this.height) {
+            String descKey = hoveredPower >= 0 ? path.powerLangKey(hoveredPower) + ".desc" : null;
+            if (descKey != null && EclipseLang.hasKey(descKey)) {
+                for (FormattedCharSequence line : font.split(EclipseLang.tr(descKey), right - left)) {
+                    if (y + 9 > getY() + this.height) {
+                        break;
+                    }
+                    guiGraphics.drawString(font, line, left, y,
+                            EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, alpha * 0.95F));
+                    y += 10;
+                }
+            } else {
                 guiGraphics.drawString(font,
-                        EclipseUiTheme.ellipsize(font,
-                                EclipseLang.trString("gui.eclipse.skills.wand.cycle_hint"), right - left),
+                        EclipseUiTheme.ellipsize(font, EclipseLang.trString("gui.eclipse.skills.wand.earn_hint",
+                                ClientWandProgress.xpPerCostPoint, (int) ClientWandProgress.xpKillBonus),
+                                right - left),
                         left, y, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha * 0.9F));
+                y += 10;
+                if (y + 9 <= getY() + this.height) {
+                    guiGraphics.drawString(font,
+                            EclipseUiTheme.ellipsize(font,
+                                    EclipseLang.trString("gui.eclipse.skills.wand.cycle_hint"), right - left),
+                            left, y, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha * 0.9F));
+                }
             }
         }
     }

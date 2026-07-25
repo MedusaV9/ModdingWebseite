@@ -259,10 +259,21 @@ public final class ConfigEditor {
         return sortByIntKey(out, "day");
     }
 
-    /** Validates a {@code milestones.json} candidate; same normalization contract as days. */
-    static JsonArray normalizeMilestones(JsonElement root) {
+    /**
+     * Validates a {@code milestones.json} candidate; same normalization contract as days.
+     * Accepts both the legacy bare-array shape and the v2 {@code {configVersion,
+     * milestones:[...]}} envelope, and always RETURNS the envelope stamped with the
+     * CURRENT {@link EclipseConfig#MILESTONES_CONFIG_VERSION} — an editor save written
+     * without the stamp would be eaten by the version migration on the next reload.
+     */
+    static JsonElement normalizeMilestones(JsonElement root) {
+        if (root.isJsonObject() && root.getAsJsonObject().has("milestones")
+                && root.getAsJsonObject().get("milestones").isJsonArray()) {
+            root = root.getAsJsonObject().get("milestones");
+        }
         if (!root.isJsonArray()) {
-            throw new IllegalArgumentException("milestones.json must be an array of milestone objects");
+            throw new IllegalArgumentException(
+                    "milestones.json must be an array of milestone objects (or a {milestones:[...]} envelope)");
         }
         JsonArray in = root.getAsJsonArray();
         JsonArray out = new JsonArray(in.size());
@@ -303,7 +314,11 @@ public final class ConfigEditor {
             normalized.add("rewards", rewards);
             out.add(normalized);
         }
-        return sortByIntKey(out, "level");
+        JsonObject envelope = new JsonObject();
+        // Editor saves are stamped current so the version migration never eats them.
+        envelope.addProperty("configVersion", EclipseConfig.MILESTONES_CONFIG_VERSION);
+        envelope.add("milestones", sortByIntKey(out, "level"));
+        return envelope;
     }
 
     /**

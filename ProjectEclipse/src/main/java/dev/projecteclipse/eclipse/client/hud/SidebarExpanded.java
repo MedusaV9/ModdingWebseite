@@ -24,19 +24,33 @@ import net.minecraft.util.Mth;
  * value while this renderer crossfades in the detailed content.
  */
 public final class SidebarExpanded {
-    /** A8: TAB card widened 220 → 280 px for the sectioned global/side layout. */
-    public static final int WIDTH = 280;
+    /** A8 widened 220 → 280; UIPOLISH ("sehr gepackt") 280 → 320 + looser row rhythm. */
+    public static final int WIDTH = 320;
     /** Goal kinds: 0 = global mission; 1 = sidequest and 2 = personal share one section. */
     private static final int[] GLOBAL_KINDS = {0};
     private static final int[] SIDE_KINDS = {1, 2};
     private static final long ANIMATION_MILLIS = 8L * 50L;
-    private static final int PAD = 10;
+    /** UIPOLISH: inner padding aligned with {@link EclipseUiTheme#PAD} (was 10). */
+    private static final int PAD = 12;
     private static final int BAR_HEIGHT = 2;
     /** Checkmark draw-on window (W4-FEEL, IDEA-05 #2): two strokes over ~8 ticks. */
     private static final long CHECK_DRAW_MILLIS = 8L * 50L;
+    /**
+     * UIPOLISH TAB auto-scroll: when the card's natural content is taller than the screen
+     * allows, the body (everything below the pinned title row) slowly ping-pong-scrolls —
+     * hold TAB, dwell {@value #SCROLL_DWELL_MILLIS} ms at the top, ease down over one slow
+     * leg, dwell at the bottom, ease back up, loop. Purely wall-clock driven off
+     * {@link #fullyOpenSinceMillis}; {@code reducedFx} keeps the old clamp (no motion, the
+     * card simply shows what fits).
+     */
+    private static final long SCROLL_DWELL_MILLIS = 3_000L;
+    /** Scroll speed of one leg — slow enough to read every row as it passes. */
+    private static final float SCROLL_PX_PER_SECOND = 18.0F;
 
     private static float progress;
     private static long lastUpdateMillis;
+    /** Wall-clock stamp of the card reaching full expansion; 0 while (partially) closed. */
+    private static long fullyOpenSinceMillis;
 
     private SidebarExpanded() {}
 
@@ -48,6 +62,7 @@ public final class SidebarExpanded {
         if (reducedFx) {
             progress = requested ? 1.0F : 0.0F;
             lastUpdateMillis = nowMillis;
+            trackFullyOpen(nowMillis);
             return progress;
         }
         if (lastUpdateMillis == 0L) {
@@ -57,7 +72,19 @@ public final class SidebarExpanded {
         lastUpdateMillis = nowMillis;
         float step = elapsed / (float) ANIMATION_MILLIS;
         progress = Mth.clamp(progress + (requested ? step : -step), 0.0F, 1.0F);
+        trackFullyOpen(nowMillis);
         return easeOutCubic(progress);
+    }
+
+    /** Arms/disarms the auto-scroll dwell clock as the card reaches/leaves full expansion. */
+    private static void trackFullyOpen(long nowMillis) {
+        if (progress >= 0.999F) {
+            if (fullyOpenSinceMillis == 0L) {
+                fullyOpenSinceMillis = nowMillis;
+            }
+        } else {
+            fullyOpenSinceMillis = 0L;
+        }
     }
 
     /** Pure motion curve from the Quiet Eclipse motion specification. */
@@ -75,20 +102,33 @@ public final class SidebarExpanded {
     static void reset() {
         progress = 0.0F;
         lastUpdateMillis = 0L;
+        fullyOpenSinceMillis = 0L;
     }
 
-    /** Natural logical height of the complete detail card at {@link #WIDTH}. */
+    /**
+     * Natural logical height of the complete detail card at {@link #WIDTH}. UIPOLISH: the
+     * arithmetic mirrors {@link #render} row for row (the old footer estimate was ~9px
+     * short, which cropped the stage line) — keep both in lockstep when touching spacing.
+     */
     public static int preferredHeight(Font font) {
         int textWidth = WIDTH - PAD * 2 - 10;
-        int height = PAD + 16 + 14; // title block, vitals row
-        height += 13 + goalListHeight(font, validGoals(GLOBAL_KINDS), textWidth); // global missions
-        height += 13 + goalListHeight(font, validGoals(SIDE_KINDS), textWidth); // sidequests
-        height += 13; // side/personal summary
+        int height = PAD + 18 + 16; // title block, vitals row
+        height += 15 + goalListHeight(font, validGoals(GLOBAL_KINDS), textWidth); // global missions
+        height += 15 + goalListHeight(font, validGoals(SIDE_KINDS), textWidth); // sidequests
+        height += 15; // side/personal summary
         List<S2CBuffStatePayload.Buff> buffs = validBuffs();
         if (!buffs.isEmpty()) {
-            height += 13 + buffs.size() * 11;
+            height += 15 + buffs.size() * 12;
+            for (S2CBuffStatePayload.Buff buff : buffs) {
+                String descKey = buffDescKey(buff.id());
+                if (EclipseLang.hasKey(descKey)) {
+                    // Same wrap width as render: (right - left) - 10 == textWidth.
+                    height += font.split(EclipseLang.tr(descKey), textWidth).size()
+                            * (font.lineHeight + 1) + 2;
+                }
+            }
         }
-        height += 13 + 20 + 11 + PAD; // "you", skill rows, stage footer
+        height += 15 + 12 + 8 + 15 + 9 + PAD; // "you", skill row+bar, shards, stage footer
         return Math.max(156, height);
     }
 
@@ -96,14 +136,14 @@ public final class SidebarExpanded {
     private static int goalListHeight(Font font, List<S2CQuestStatePayload.QuestEntry> goals,
             int textWidth) {
         if (goals.isEmpty()) {
-            return 12;
+            return 14;
         }
         int height = 0;
         for (S2CQuestStatePayload.QuestEntry entry : goals) {
             height += Math.max(1,
                     font.split(Component.literal(goalText(entry)),
                             entryTextWidth(font, entry, textWidth)).size())
-                    * font.lineHeight + BAR_HEIGHT + 5;
+                    * font.lineHeight + BAR_HEIGHT + 7;
         }
         return height;
     }
@@ -141,6 +181,19 @@ public final class SidebarExpanded {
         int y = PAD;
         int bottom = height - PAD;
 
+        // Pinned header (title + hairline) — the auto-scroll below never moves it.
+        String timer = formatRemaining(remainingMillis());
+        String title = EclipseLang.trString("sidebar.eclipse.expanded.title",
+                ClientStateCache.sidebarDay, timer);
+        guiGraphics.drawCenteredString(font, title, width / 2, y,
+                MarqueeText.faded(EclipseUiTheme.TEXT, alpha));
+        y += 12;
+        EclipseUiTheme.drawHairline(guiGraphics, left, right, y,
+                alpha);
+        y += 6;
+
+        // UIPOLISH auto-scroll: overflow beyond the clamped panel height ping-pongs the
+        // body inside the scissor (see SCROLL_DWELL_MILLIS); reducedFx keeps the clamp.
         // GuiGraphics scissor coordinates are absolute GUI-space and do not follow pose
         // translation/scale, so convert this panel-local rectangle explicitly.
         guiGraphics.enableScissor(
@@ -148,16 +201,9 @@ public final class SidebarExpanded {
                 (int) Math.floor(panelScreenY + y * scale),
                 (int) Math.ceil(panelScreenX + right * scale),
                 (int) Math.ceil(panelScreenY + bottom * scale));
-
-        String timer = formatRemaining(remainingMillis());
-        String title = EclipseLang.trString("sidebar.eclipse.expanded.title",
-                ClientStateCache.sidebarDay, timer);
-        guiGraphics.drawCenteredString(font, title, width / 2, y,
-                MarqueeText.faded(EclipseUiTheme.TEXT, alpha));
-        y += 11;
-        EclipseUiTheme.drawHairline(guiGraphics, left, right, y,
-                alpha);
-        y += 5;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F,
+                -scrollOffset(preferredHeight(font) - height, Util.getMillis()), 0.0F);
 
         String hearts = heartRow(ClientStateCache.lives);
         String altar = EclipseLang.trString("sidebar.eclipse.expanded.altar_shards",
@@ -166,7 +212,7 @@ public final class SidebarExpanded {
                 MarqueeText.faded(EclipseUiTheme.DANGER, alpha));
         guiGraphics.drawString(font, altar, right - font.width(altar), y,
                 MarqueeText.faded(EclipseUiTheme.TEXT, alpha));
-        y += 14;
+        y += 16;
 
         // A8 §3: two clearly labeled goal sections — global missions, then sidequests.
         int goalTextWidth = right - left - 10;
@@ -184,7 +230,7 @@ public final class SidebarExpanded {
                 ClientStateCache.sidebarPersonalsDone, ClientStateCache.sidebarPersonalsTotal);
         guiGraphics.drawString(font, optional, left, y,
                 MarqueeText.faded(EclipseUiTheme.DIM, alpha));
-        y += 13;
+        y += 15;
 
         List<S2CBuffStatePayload.Buff> buffs = validBuffs();
         if (!buffs.isEmpty()) {
@@ -193,13 +239,25 @@ public final class SidebarExpanded {
             for (S2CBuffStatePayload.Buff buff : buffs) {
                 String titleText = EclipseLang.locale().startsWith("de")
                         ? buff.titleDe() : buff.titleEn();
-                    String remaining = formatDuration(Math.max(0L,
-                            buff.endsAtEpochMillis() - estimatedServerNow()));
+                String remaining = formatDuration(Math.max(0L,
+                        buff.endsAtEpochMillis() - estimatedServerNow()));
                 guiGraphics.drawString(font, "\u25c6 " + titleText, left, y,
                         MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
                 guiGraphics.drawString(font, remaining, right - font.width(remaining), y,
                         MarqueeText.faded(EclipseUiTheme.DIM, alpha));
-                y += 11;
+                y += 12;
+                // UIPOLISH: one dim explanation line per buff — what the effect actually
+                // does. Keys are per buff id; unknown (admin-added) ids skip the line.
+                String descKey = buffDescKey(buff.id());
+                if (EclipseLang.hasKey(descKey)) {
+                    for (FormattedCharSequence line : font.split(
+                            EclipseLang.tr(descKey), right - left - 10)) {
+                        guiGraphics.drawString(font, line, left + 10, y,
+                                MarqueeText.faded(EclipseUiTheme.DIM, alpha * 0.9F));
+                        y += font.lineHeight + 1;
+                    }
+                    y += 2;
+                }
             }
         }
 
@@ -211,23 +269,57 @@ public final class SidebarExpanded {
                 ClientStateCache.sidebarXpForLevel);
         guiGraphics.drawString(font, skill, left, y,
                 MarqueeText.faded(EclipseUiTheme.TEXT, alpha));
-        y += 11;
+        y += 12;
         drawBar(guiGraphics, left, y, right - left,
                 ClientStateCache.sidebarXpIntoLevel,
                 ClientStateCache.sidebarXpForLevel, false, alpha);
-        y += 7;
+        y += 8;
         String shards = EclipseLang.trString("sidebar.eclipse.expanded.shards",
                 ClientStateCache.sidebarShards);
         guiGraphics.drawString(font, shards, left, y,
                 MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
-        y += 13;
+        y += 15;
 
         String stage = EclipseLang.trString("sidebar.eclipse.expanded.stage",
                 ClientStateCache.stageOverworld, ClientStateCache.stageRadiusOverworld);
         guiGraphics.drawString(font, stage, left, y,
                 MarqueeText.faded(EclipseUiTheme.DIM, alpha));
 
+        guiGraphics.pose().popPose();
         guiGraphics.disableScissor();
+    }
+
+    /**
+     * UIPOLISH auto-scroll offset in logical px: 0 until the card has been fully open for
+     * {@value #SCROLL_DWELL_MILLIS} ms, then one slow eased leg down ({@code overflow} px
+     * at {@value #SCROLL_PX_PER_SECOND} px/s), a dwell at the bottom, an eased leg back up,
+     * looping. No overflow or {@code reducedFx} (motion-reduction contract: clamp, don't
+     * animate) always pins the top.
+     */
+    private static float scrollOffset(int overflow, long now) {
+        if (overflow <= 0 || fullyOpenSinceMillis == 0L || EclipseClientConfig.reducedFx()) {
+            return 0.0F;
+        }
+        long leg = Math.max(1L, (long) (overflow * 1_000.0F / SCROLL_PX_PER_SECOND));
+        long t = (now - fullyOpenSinceMillis) % (2L * (SCROLL_DWELL_MILLIS + leg));
+        if (t < SCROLL_DWELL_MILLIS) {
+            return 0.0F; // dwell at the top
+        }
+        t -= SCROLL_DWELL_MILLIS;
+        if (t < leg) {
+            return overflow * easeInOut(t / (float) leg); // slow leg down
+        }
+        t -= leg;
+        if (t < SCROLL_DWELL_MILLIS) {
+            return overflow; // dwell at the bottom
+        }
+        return overflow * (1.0F - easeInOut((t - SCROLL_DWELL_MILLIS) / (float) leg)); // back up
+    }
+
+    /** Smoothstep ease-in-out — both scroll legs start and stop gently. */
+    private static float easeInOut(float t) {
+        t = Mth.clamp(t, 0.0F, 1.0F);
+        return t * t * (3.0F - 2.0F * t);
     }
 
     private static int section(GuiGraphics guiGraphics, Font font, Component title,
@@ -236,7 +328,7 @@ public final class SidebarExpanded {
                 MarqueeText.faded(EclipseUiTheme.ACCENT, alpha));
         int lineStart = Math.min(right, left + font.width(title) + 5);
         EclipseUiTheme.drawHairline(guiGraphics, lineStart, right, y + 5, alpha);
-        return y + 13;
+        return y + 15;
     }
 
     /** One goal section's entries (marker/check, wrapped text, progress bar); returns new y. */
@@ -246,7 +338,7 @@ public final class SidebarExpanded {
         if (goals.isEmpty()) {
             guiGraphics.drawString(font, EclipseLang.tr("sidebar.eclipse.expanded.no_goals"),
                     left, y, MarqueeText.faded(EclipseUiTheme.DIM, alpha));
-            return y + 12;
+            return y + 14;
         }
         long now = Util.getMillis();
         boolean reduced = EclipseClientConfig.reducedFx();
@@ -299,7 +391,7 @@ public final class SidebarExpanded {
             drawBar(guiGraphics, left + 10, y + 1, goalTextWidth,
                     goal.progress(), goal.target(), goal.done(), alpha,
                     reduced ? 1.0F : easeOutCubic(stampT));
-            y += BAR_HEIGHT + 5;
+            y += BAR_HEIGHT + 7;
         }
         return y;
     }
@@ -392,6 +484,15 @@ public final class SidebarExpanded {
             }
         }
         return result;
+    }
+
+    /**
+     * UIPOLISH: lang key of the one-line effect explanation for a buff id. Rides the
+     * {@code sidebar.eclipse.} prefix (already in the {@code EclipseLang} table) because
+     * the TAB card is the only buff timer surface — ids come from {@code BuffConfig}.
+     */
+    private static String buffDescKey(String buffId) {
+        return "sidebar.eclipse.buff." + buffId + ".desc";
     }
 
     private static List<S2CBuffStatePayload.Buff> validBuffs() {

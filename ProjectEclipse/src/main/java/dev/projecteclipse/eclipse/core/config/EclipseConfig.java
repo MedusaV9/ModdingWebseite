@@ -142,6 +142,15 @@ public final class EclipseConfig {
     /** Altar milestone: paying {@code cost} at the altar grants the {@code rewards} unlock keys. */
     public record Milestone(int level, List<ItemCost> cost, List<String> rewards) {}
 
+    /**
+     * Version stamp of {@code milestones.json}. Version 2 = the ALTARUI block-era price
+     * table (compressed BLOCKS instead of raw ingots/dust). A legacy top-level-array file
+     * (no {@code configVersion} field) counts as version 1 and is backed up to
+     * {@code milestones.json.bak-v1} + regenerated on load — the FIX-ECON / EVAL-SAT-S #1
+     * backup-and-regenerate pattern shared with {@code goals.json}/{@code realtime.json}.
+     */
+    public static final int MILESTONES_CONFIG_VERSION = 2;
+
     /** Mod gating: namespaces whose content is locked until the mapped unlock key is granted. */
     public record ModGate(List<String> gatedNamespaces, Map<String, String> unlockKeys) {}
 
@@ -338,6 +347,7 @@ public final class EclipseConfig {
                 EclipseConfig::defaultGeneral, EclipseConfig::generalToJson, EclipseConfig::generalFromJson);
         days = List.copyOf(loadOrCreate(dir.resolve("days.json"),
                 EclipseConfig::defaultDays, EclipseConfig::daysToJson, EclipseConfig::daysFromJson));
+        migrateMilestonesIfOutdated(dir.resolve("milestones.json"));
         milestones = List.copyOf(loadOrCreate(dir.resolve("milestones.json"),
                 EclipseConfig::defaultMilestones, EclipseConfig::milestonesToJson, EclipseConfig::milestonesFromJson));
         modGate = loadOrCreate(dir.resolve("modgate.json"),
@@ -634,52 +644,103 @@ public final class EclipseConfig {
     // --- milestones.json ---
 
     /**
-     * The v3 event milestone costs (P4 §2.6): multi-item, pooled sinks sized for a 20–30
-     * player team. L4 remains boss-locked by the guaranteed Herald Core.
+     * The v2 (ALTARUI block-era) event milestone costs: multi-item, pooled sinks sized
+     * for a 20–30 player team. L4 remains boss-locked by the guaranteed Herald Core.
      *
-     * <p><b>FINAL-DOPA-SOL §3 ladder fix:</b> the old table was circular — L1 demanded
-     * iron ({@code unlockStage 2}, opened by milestone 2), L2 gold (same) and L3
-     * diamonds + 72 emeralds (stage 3 / no Eclipse emerald ore), deadlocking the altar
-     * before L1. Each level now consumes only materials mineable BEFORE it (with the
-     * matching {@code ores.json} unlock stages): L1 copper/coal era (stage 0, day 1–2),
-     * L2 iron era (iron stage 0, amethyst geodes day 2–3), L3 gold era (gold stage 1 +
-     * redstone from the stage-2 ring milestone 2 raised, day 4–5), L4 diamond era
-     * (diamond stage 2, Herald Core day 7, day 8), L5 netherite era (debris behind the
-     * day-10 Nether annulus, quartz from day 2). Emerald blocks are dropped entirely
-     * (eval: "Seventy-two emeralds are not [reasonable]"). Counts stay deliberately
-     * chunky — pooled team sinks, not solo errands.
+     * <p><b>FINAL-DOPA-SOL §3 ladder fix (kept):</b> each level consumes only materials
+     * mineable BEFORE it (with the matching {@code ores.json} unlock stages): L1
+     * copper/coal era (stage 0, day 1–2), L2 iron era (iron stage 0, amethyst geodes day
+     * 2–3), L3 gold era (gold stage 1 + redstone from the stage-2 ring milestone 2
+     * raised, day 4–5), L4 diamond era (diamond stage 2, Herald Core day 7, day 8), L5
+     * netherite era (debris behind the day-10 Nether annulus, quartz from day 2).</p>
+     *
+     * <p><b>ALTARUI price rework (milestones.json v2):</b> everything with a compressed
+     * block form is now demanded as BLOCKS, raising every tier's raw cost ~1.5–2.25x:
+     * L1 8 copper blocks (72 ingots, was 48) + 6 coal blocks (54 coal, was 32); L2
+     * 8 iron blocks (72 ingots, was 48) + 6 amethyst blocks (24 shards, was 16); L3
+     * 6 gold blocks (54 ingots, was 32) + 8 redstone blocks (72 dust, was 32); L4
+     * 4 diamond blocks (36 diamonds, was 24) + 48 pearls (was 32; no block form) +
+     * 32 obsidian (was 16). L5 keeps INGOTS for netherite (a single block is 9 ingots =
+     * 36 ancient debris — a cliff, not a ramp) but raises 4 → 6, and quartz blocks
+     * 48 → 64. Counts stay deliberately chunky — pooled team sinks, not solo errands.</p>
      */
     private static List<Milestone> defaultMilestones() {
         return List.of(
                 // L1 — copper/coal era: both unlockStage 0, mineable from minute one.
                 new Milestone(1, List.of(
-                        new ItemCost("minecraft:copper_ingot", 48),
-                        new ItemCost("minecraft:coal", 32)), List.of("create")),
+                        new ItemCost("minecraft:copper_block", 8),
+                        new ItemCost("minecraft:coal_block", 6)), List.of("create")),
                 // L2 — iron era: iron is unlockStage 0 (FINAL-DOPA-SOL fix), amethyst
-                // is geode loot the eval rates "reasonable by day 2–3".
+                // blocks are 4 shards each — geode loot, craftable by day 2–3.
                 new Milestone(2, List.of(
-                        new ItemCost("minecraft:iron_ingot", 48),
-                        new ItemCost("minecraft:amethyst_shard", 16)), List.of("simulated")),
+                        new ItemCost("minecraft:iron_block", 8),
+                        new ItemCost("minecraft:amethyst_block", 6)), List.of("simulated")),
                 // L3 — gold era: gold unlockStage 1 (starting disc band 1 + Nether gold
                 // from day 2); redstone sits in the stage-2 ring that milestone 2 raised.
                 new Milestone(3, List.of(
-                        new ItemCost("minecraft:gold_ingot", 32),
-                        new ItemCost("minecraft:redstone", 32)), List.of("aeronautics")),
+                        new ItemCost("minecraft:gold_block", 6),
+                        new ItemCost("minecraft:redstone_block", 8)), List.of("aeronautics")),
                 // L4 — diamond era, still boss-locked: diamond unlockStage 2 is open
                 // since milestone 2 (~day 3), the Core drops from the day-7 Herald.
                 new Milestone(4, List.of(
                         new ItemCost("eclipse:herald_core", 1),
-                        new ItemCost("minecraft:diamond", 24),
-                        new ItemCost("minecraft:ender_pearl", 32),
-                        new ItemCost("minecraft:obsidian", 16)), List.of("sable")),
+                        new ItemCost("minecraft:diamond_block", 4),
+                        new ItemCost("minecraft:ender_pearl", 48),
+                        new ItemCost("minecraft:obsidian", 32)), List.of("sable")),
                 // L5 — netherite era: ancient debris opens with the day-10 Nether
-                // annulus; 48 quartz blocks are 10+ days of day-2-unlocked quartz.
+                // annulus; netherite stays as ingots (see the class doc), quartz as blocks.
                 new Milestone(5, List.of(
-                        new ItemCost("minecraft:netherite_ingot", 4),
-                        new ItemCost("minecraft:quartz_block", 48)), List.of("end")));
+                        new ItemCost("minecraft:netherite_ingot", 6),
+                        new ItemCost("minecraft:quartz_block", 64)), List.of("end")));
+    }
+
+    /**
+     * ALTARUI version-gated migration (FIX-ECON / EVAL-SAT-S #1 pattern, mirrors
+     * {@code GoalConfig.migrateIfOutdated}): an on-disk {@code milestones.json} older
+     * than {@link #MILESTONES_CONFIG_VERSION} (the legacy top-level-array shape counts
+     * as v1) is copied aside as {@code milestones.json.bak-v<oldVersion>} and deleted,
+     * so the following {@code loadOrCreate} regenerates the block-era price defaults.
+     * Preserves nothing by design; the backup keeps custom edits recoverable.
+     */
+    private static void migrateMilestonesIfOutdated(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return;
+        }
+        int fileVersion = 1;
+        try {
+            JsonElement root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
+            if (root.isJsonObject() && root.getAsJsonObject().has("configVersion")) {
+                fileVersion = root.getAsJsonObject().get("configVersion").getAsInt();
+            }
+        } catch (IOException | RuntimeException e) {
+            EclipseMod.LOGGER.warn("milestones.json: unreadable while checking configVersion; treating as v1 ({})",
+                    e.getMessage());
+        }
+        if (fileVersion >= MILESTONES_CONFIG_VERSION) {
+            return;
+        }
+        Path backup = file.resolveSibling("milestones.json.bak-v" + fileVersion);
+        try {
+            Files.copy(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.delete(file);
+            EclipseMod.LOGGER.warn("milestones.json was config version {} (< {}): backed the old file up to {} "
+                    + "and regenerating the block-era price defaults. Custom milestone edits must be "
+                    + "re-applied to the new file.",
+                    fileVersion, MILESTONES_CONFIG_VERSION, backup.getFileName());
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to back up outdated config {} — keeping the old file", file, e);
+        }
     }
 
     private static JsonElement milestonesToJson(List<Milestone> milestones) {
+        JsonObject root = new JsonObject();
+        // Version-stamped envelope (v2+); milestonesFromJson still reads the legacy
+        // bare-array shape so hand-rolled files keep loading.
+        root.addProperty("configVersion", MILESTONES_CONFIG_VERSION);
+        root.addProperty("_comment", "Altar milestone ladder: paying each level's pooled item cost at the "
+                + "altar raises it one level and grants the reward unlock keys. v2 = block-era prices "
+                + "(compressed blocks instead of raw ingots/dust). Edit and run /eclipse reload to apply; "
+                + "an outdated configVersion is backed up to milestones.json.bak-v<n> and regenerated.");
         JsonArray array = new JsonArray(milestones.size());
         for (Milestone milestone : milestones) {
             JsonObject obj = new JsonObject();
@@ -695,12 +756,17 @@ public final class EclipseConfig {
             obj.add("rewards", stringArray(milestone.rewards()));
             array.add(obj);
         }
-        return array;
+        root.add("milestones", array);
+        return root;
     }
 
     private static List<Milestone> milestonesFromJson(JsonElement json) {
+        // v2 envelope {configVersion, milestones:[...]} or the legacy bare array (v1).
+        JsonArray array = json.isJsonArray()
+                ? json.getAsJsonArray()
+                : json.getAsJsonObject().getAsJsonArray("milestones");
         List<Milestone> result = new ArrayList<>();
-        for (JsonElement element : json.getAsJsonArray()) {
+        for (JsonElement element : array) {
             JsonObject obj = element.getAsJsonObject();
             List<ItemCost> cost = new ArrayList<>();
             for (JsonElement costElement : obj.getAsJsonArray("cost")) {

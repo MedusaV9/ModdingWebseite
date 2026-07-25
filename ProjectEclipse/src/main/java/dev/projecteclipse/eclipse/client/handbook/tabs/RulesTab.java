@@ -17,6 +17,11 @@ import net.neoforged.api.distmarker.OnlyIn;
  * (nothing stretches, §2). Mouse wheel, vertical content drag or the shared
  * {@link TabScrollbar} scroll; the screen shows the grab cursor while {@link #dragging()}.
  * Presses are only consumed while there is actually something to scroll (B20 rule).
+ *
+ * <p>uipolish: RETIRED from the player-facing {@code HandbookScreen} roster — the rules
+ * now live in the dev handbook's pinned Rules view ({@code DevHandbookScreen}), which
+ * renders the same {@code gui.eclipse.artifact.rules.line1..10} lines. The class and the
+ * lang lines stay in the jar so the content (and any future re-instatement) is intact.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class RulesTab extends HandbookTab {

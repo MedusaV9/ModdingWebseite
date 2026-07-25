@@ -5,6 +5,7 @@ import com.mojang.serialization.MapCodec;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
+import dev.projecteclipse.eclipse.network.altar.AltarPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,9 +35,13 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
  *       skips block interaction entirely while sneaking with an item in hand).</li>
  *   <li><b>Sneak-right-click with an empty hand</b> — heart sacrifice (two clicks
  *       within 5 s; see {@link AltarBlockEntity#handleHeartSacrifice}).</li>
- *   <li><b>Right-click with an empty hand</b> — action-bar status of the current milestone.</li>
+ *   <li><b>Right-click with an empty hand</b> — opens the altar panel screen (ALTARUI
+ *       task 1): one {@code S2CAltarPanelPayload} with {@code openScreen=true} carries the
+ *       CURRENT milestone's live requirements, the shop and the boss instructions
+ *       ({@code network.altar.AltarPayloads}). Replaced the old one-line action-bar
+ *       status hint.</li>
  * </ul>
- * All feedback is action bar + sounds; nothing is ever printed to chat.
+ * All other feedback is action bar + sounds; nothing is ever printed to chat.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public class AltarBlock extends BaseEntityBlock {
@@ -130,7 +135,8 @@ public class AltarBlock extends BaseEntityBlock {
         if (serverPlayer.isShiftKeyDown()) {
             altar.handleHeartSacrifice(serverPlayer);
         } else {
-            altar.handleStatusHint(serverPlayer);
+            // ALTARUI task 1: the panel screen replaced the old action-bar status hint.
+            AltarPayloads.sendPanel(serverPlayer, pos, true);
         }
         return InteractionResult.CONSUME;
     }

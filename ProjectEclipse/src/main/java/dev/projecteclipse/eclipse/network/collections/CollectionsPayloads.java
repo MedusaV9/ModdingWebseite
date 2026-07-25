@@ -32,6 +32,7 @@ public final class CollectionsPayloads {
     private static volatile Consumer<S2CCollectionsPayload> snapshotHandler;
     private static volatile Consumer<S2CCollectionDeltaPayload> deltaHandler;
     private static volatile Consumer<S2CCollectionTierPayload> tierHandler;
+    private static volatile Consumer<S2CItemLexiconPayload> lexiconHandler;
 
     private CollectionsPayloads() {}
 
@@ -44,6 +45,8 @@ public final class CollectionsPayloads {
                 CollectionsPayloads::handleDelta);
         registrar.playToClient(S2CCollectionTierPayload.TYPE, S2CCollectionTierPayload.STREAM_CODEC,
                 CollectionsPayloads::handleTier);
+        registrar.playToClient(S2CItemLexiconPayload.TYPE, S2CItemLexiconPayload.STREAM_CODEC,
+                CollectionsPayloads::handleLexicon);
     }
 
     // ------------------------------------------------------------------ server send helper
@@ -66,6 +69,10 @@ public final class CollectionsPayloads {
 
     public static void setTierHandler(Consumer<S2CCollectionTierPayload> handler) {
         tierHandler = handler;
+    }
+
+    public static void setLexiconHandler(Consumer<S2CItemLexiconPayload> handler) {
+        lexiconHandler = handler;
     }
 
     /** Runs on the client main thread only; no client classes referenced eagerly. */
@@ -93,6 +100,16 @@ public final class CollectionsPayloads {
         } else {
             EclipseMod.LOGGER.debug("Collection tier-up {} T{} — no client handler installed",
                     payload.collectionId(), payload.tier());
+        }
+    }
+
+    private static void handleLexicon(S2CItemLexiconPayload payload, IPayloadContext context) {
+        Consumer<S2CItemLexiconPayload> handler = lexiconHandler;
+        if (handler != null) {
+            handler.accept(payload);
+        } else {
+            EclipseMod.LOGGER.debug("Item lexicon ({} discovered) — no client handler installed",
+                    payload.discovered().size());
         }
     }
 }

@@ -37,8 +37,9 @@ import org.lwjgl.glfw.GLFW;
  * <p>Layout (flat/compact "Quiet Eclipse" — reuses the frozen {@code client.handbook} kit but
  * deliberately without parallax/hero art; this is a tool, not a diegetic book):</p>
  * <ul>
- *   <li><b>Left rail</b> — "All", every {@link DevCategory} that has visible entries, and a
- *       pinned "Configs" tab (the §2.12 config reference table).</li>
+ *   <li><b>Left rail</b> — "All", every {@link DevCategory} that has visible entries, and two
+ *       pinned reference tabs: "Rules" (the verbatim event rules, uipolish — the player-facing
+ *       artifact Rules tab was retired) and "Configs" (the §2.12 config reference table).</li>
  *   <li><b>Header</b> — title left; live day/stage/timer snapshot right (from
  *       {@link ClientStateCache} day-clock + stage payload caches).</li>
  *   <li><b>Search</b> — fuzzy filter box ({@link DevHandbookSearch}), instant per keystroke;
@@ -77,6 +78,12 @@ public class DevHandbookScreen extends Screen {
     /** Amber for CAUTION badges (kit palette has GOOD/DANGER only; matches DevRoot's chat color). */
     private static final int CAUTION_COLOR = 0xFFE0A84C;
     private static final long STATUS_FLASH_MILLIS = 2500L;
+    /** The ten event rules ({@code gui.eclipse.artifact.rules.line1..10}) shown in the rules view. */
+    private static final int RULE_LINE_COUNT = 10;
+    private static final int RULE_LINE_HEIGHT = 11;
+
+    /** Which pinned reference view (if any) a rail row opens instead of a command category. */
+    private enum PinnedView { NONE, RULES, CONFIGS }
 
     /** One laid-out entry card (heights vary with the wrapped description). */
     private record Card(DevCommandDoc doc, List<FormattedCharSequence> descLines, int y, int height) {}
@@ -104,6 +111,13 @@ public class DevHandbookScreen extends Screen {
     @Nullable
     private DevCategory selectedCategory; // null = All
     private boolean configView;
+    /**
+     * uipolish: the rules reference view (second pinned rail tab). The player-facing
+     * artifact Rules tab was retired; ops keep the verbatim rule wording HERE so it stays
+     * checkable against what announcements/moderation promise. Mutually exclusive with
+     * {@link #configView}.
+     */
+    private boolean rulesView;
     private String query = "";
     private double scrollY;
     private int contentHeight;
@@ -118,6 +132,8 @@ public class DevHandbookScreen extends Screen {
     private boolean pendingRebuild;
 
     private final List<Card> cards = new ArrayList<>();
+    /** Wrapped rule lines for the rules view (rebuilt on init — width-dependent). */
+    private final List<FormattedCharSequence> ruleLines = new ArrayList<>();
     private final List<HitRect> frameButtons = new ArrayList<>();
     @Nullable
     private String hoveredManualKey;
@@ -152,6 +168,7 @@ public class DevHandbookScreen extends Screen {
         buildSearchBox();
         buildBottomBar();
         reflow();
+        reflowRules();
 
         if (!refreshRequested) {
             refreshRequested = true;
@@ -159,22 +176,25 @@ public class DevHandbookScreen extends Screen {
         }
     }
 
-    /** Rail rows: All, categories with visible entries (enum order), pinned Configs tab. */
+    /** Rail rows: All, categories with visible entries (enum order), pinned Rules + Configs tabs. */
     private void buildRail() {
         List<DevCategory> present = presentCategories();
-        int rows = present.size() + 2;
+        int rows = present.size() + 3;
         int railTop = panelY + 6;
         int railBottom = panelY + panelH - 6;
         int rowH = Mth.clamp((railBottom - railTop) / Math.max(1, rows), 10, 14);
 
         int y = railTop;
-        addRenderableWidget(new RailButton(null, false, panelX + 2, y, RAIL_W - 5, rowH - 1));
+        addRenderableWidget(new RailButton(null, PinnedView.NONE, panelX + 2, y, RAIL_W - 5, rowH - 1));
         y += rowH;
         for (DevCategory category : present) {
-            addRenderableWidget(new RailButton(category, false, panelX + 2, y, RAIL_W - 5, rowH - 1));
+            addRenderableWidget(new RailButton(category, PinnedView.NONE, panelX + 2, y, RAIL_W - 5, rowH - 1));
             y += rowH;
         }
-        addRenderableWidget(new RailButton(null, true, panelX + 2, railBottom - rowH + 1, RAIL_W - 5, rowH - 1));
+        addRenderableWidget(new RailButton(null, PinnedView.RULES, panelX + 2,
+                railBottom - 2 * rowH + 1, RAIL_W - 5, rowH - 1));
+        addRenderableWidget(new RailButton(null, PinnedView.CONFIGS, panelX + 2,
+                railBottom - rowH + 1, RAIL_W - 5, rowH - 1));
     }
 
     private void buildSearchBox() {
@@ -216,6 +236,15 @@ public class DevHandbookScreen extends Screen {
 
     private void toggleConfigView() {
         configView = !configView;
+        rulesView = false;
+        scrollY = 0.0D;
+        pendingRebuild = true;
+    }
+
+    /** Rail press on a pinned tab: opens the rules or configs reference view. */
+    private void openPinnedView(PinnedView view) {
+        configView = view == PinnedView.CONFIGS;
+        rulesView = view == PinnedView.RULES;
         scrollY = 0.0D;
         pendingRebuild = true;
     }
@@ -296,7 +325,13 @@ public class DevHandbookScreen extends Screen {
     }
 
     private int currentContentHeight() {
-        return configView ? configRowCount() * 12 + 14 : contentHeight;
+        if (configView) {
+            return configRowCount() * 12 + 14;
+        }
+        if (rulesView) {
+            return ruleLines.size() * RULE_LINE_HEIGHT + 14;
+        }
+        return contentHeight;
     }
 
     private int configRowCount() {
@@ -399,6 +434,8 @@ public class DevHandbookScreen extends Screen {
         guiGraphics.enableScissor(contentX - 2, listY, contentX + contentW + 2, listY + listH);
         if (configView) {
             renderConfigList(guiGraphics);
+        } else if (rulesView) {
+            renderRulesList(guiGraphics);
         } else {
             renderCards(guiGraphics, listMouseX, listMouseY);
         }
@@ -534,6 +571,37 @@ public class DevHandbookScreen extends Screen {
         return x - 4;
     }
 
+    /** Wraps the ten event rules to the content width (init-time: width-dependent). */
+    private void reflowRules() {
+        ruleLines.clear();
+        for (int i = 1; i <= RULE_LINE_COUNT; i++) {
+            ruleLines.addAll(this.font.split(
+                    Component.translatable("gui.eclipse.artifact.rules.line" + i), Math.max(40, contentW - 10)));
+            ruleLines.add(FormattedCharSequence.EMPTY);
+        }
+    }
+
+    /**
+     * The event-rules reference (uipolish): the verbatim {@code gui.eclipse.artifact.rules.line1..10}
+     * wording that used to live on the player-facing artifact Rules tab — kept readable
+     * for ops after that tab's removal, in the same flat column style as the config table.
+     */
+    private void renderRulesList(GuiGraphics guiGraphics) {
+        int y = listY - (int) scrollY;
+        guiGraphics.drawString(this.font, Component.translatable("gui.eclipse.devhandbook.rules.header"),
+                contentX, y, EclipseUiTheme.ACCENT);
+        y += 14;
+        for (FormattedCharSequence line : ruleLines) {
+            if (y > listY + listH) {
+                break;
+            }
+            if (y + RULE_LINE_HEIGHT >= listY) {
+                guiGraphics.drawString(this.font, line, contentX, y, EclipseUiTheme.TEXT);
+            }
+            y += RULE_LINE_HEIGHT;
+        }
+    }
+
     /** Config reference table (§2.12): file, purpose, layer, reload step. */
     private void renderConfigList(GuiGraphics guiGraphics) {
         List<ConfigRefEntry> refs = DevHandbookClient.configRefs();
@@ -598,6 +666,9 @@ public class DevHandbookScreen extends Screen {
             color = EclipseUiTheme.GOOD;
         } else if (configView) {
             text = Component.translatable("gui.eclipse.devhandbook.footer.configs", configRowCount());
+            color = EclipseUiTheme.DIM;
+        } else if (rulesView) {
+            text = Component.translatable("gui.eclipse.devhandbook.footer.rules", RULE_LINE_COUNT);
             color = EclipseUiTheme.DIM;
         } else {
             text = Component.translatable("gui.eclipse.devhandbook.footer.count",
@@ -797,43 +868,47 @@ public class DevHandbookScreen extends Screen {
 
     // ------------------------------------------------------------------ widgets
 
-    /** Rail row: "All", one category, or the pinned Configs tab. */
+    /** Rail row: "All", one category, or a pinned reference tab (Rules / Configs). */
     private class RailButton extends EclipseWidget {
         @Nullable
         private final DevCategory category;
-        private final boolean configsTab;
+        private final PinnedView pinned;
 
-        RailButton(@Nullable DevCategory category, boolean configsTab, int x, int y, int width, int height) {
-            super(x, y, width, height, configsTab
-                    ? Component.translatable("gui.eclipse.devhandbook.rail.configs")
-                    : category == null
-                            ? Component.translatable("gui.eclipse.devhandbook.rail.all")
-                            : Component.translatable(category.langKey()));
+        RailButton(@Nullable DevCategory category, PinnedView pinned, int x, int y, int width, int height) {
+            super(x, y, width, height, switch (pinned) {
+                case CONFIGS -> Component.translatable("gui.eclipse.devhandbook.rail.configs");
+                case RULES -> Component.translatable("gui.eclipse.devhandbook.rail.rules");
+                case NONE -> category == null
+                        ? Component.translatable("gui.eclipse.devhandbook.rail.all")
+                        : Component.translatable(category.langKey());
+            });
             this.category = category;
-            this.configsTab = configsTab;
+            this.pinned = pinned;
         }
 
         private boolean isSelectedRow() {
-            if (configsTab) {
-                return configView;
-            }
-            return !configView && selectedCategory == category;
+            return switch (pinned) {
+                case CONFIGS -> configView;
+                case RULES -> rulesView;
+                case NONE -> !configView && !rulesView && selectedCategory == category;
+            };
         }
 
         @Override
         public void onClick(double mouseX, double mouseY) {
-            if (configsTab) {
-                if (!configView) {
-                    toggleConfigView();
+            if (pinned != PinnedView.NONE) {
+                if (!isSelectedRow()) {
+                    openPinnedView(pinned);
                 }
                 return;
             }
-            boolean leftConfig = configView;
+            boolean leftPinned = configView || rulesView;
             configView = false;
+            rulesView = false;
             selectedCategory = category;
             scrollY = 0.0D;
             reflow();
-            if (leftConfig) {
+            if (leftPinned) {
                 pendingRebuild = true; // bar buttons change; applied next frame
             }
         }

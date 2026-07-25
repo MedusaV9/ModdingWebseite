@@ -167,6 +167,10 @@ public final class EclipseWandItem extends Item implements GeoItem {
             tooltip.add(Component.translatable("wand.eclipse.tooltip.selected",
                             Component.translatable(path.powerLangKey(selected)))
                     .withStyle(ChatFormatting.GRAY));
+            // UIPOLISH: one line on what the selected power actually does — the same
+            // wand.eclipse.power.<path>.<n>.desc strings the progression panel shows.
+            tooltip.add(Component.translatable(path.powerLangKey(selected) + ".desc")
+                    .withStyle(ChatFormatting.DARK_GRAY));
         }
         Integer charge = stack.get(WandItems.WAND_CHARGE.get());
         if (charge != null) {

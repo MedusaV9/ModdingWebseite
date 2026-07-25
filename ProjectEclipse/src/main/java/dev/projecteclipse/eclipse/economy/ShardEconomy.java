@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.economy;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,6 +8,9 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.buffs.BuffMath;
+import dev.projecteclipse.eclipse.buffs.BuffState;
+import dev.projecteclipse.eclipse.buffs.TimedBuffApi;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.hud.SidebarSyncService;
 import dev.projecteclipse.eclipse.lang.ServerLang;
@@ -14,6 +18,7 @@ import dev.projecteclipse.eclipse.network.economy.ShardPayloads;
 import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.ritual.AltarAdminState;
 import dev.projecteclipse.eclipse.ritual.AltarBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -52,11 +57,18 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li><b>Browse:</b> sneak while looking at the altar — the offer list cycles on the
  *       action bar every {@value #CYCLE_INTERVAL_TICKS} ticks.</li>
  *   <li><b>Buy:</b> sneak-punch (left-click) the altar — buys the offer currently shown.
- *       Personal rewards deduct the personal balance; the two POOLED offers deduct the
+ *       Personal rewards deduct the personal balance; the POOLED offers deduct the
  *       team pool: the Supply Beacon fires {@link SupplyBeacon#drop} at secret
- *       coordinates, and Eclipse's Favor grants every online player Regeneration I +
- *       Saturation I until the next dawn ({@link #activateEclipsesFavor}).</li>
+ *       coordinates, Eclipse's Favor grants every online player Regeneration I +
+ *       Saturation I until the next dawn ({@link #activateEclipsesFavor}), and the
+ *       Double-XP surge starts the server-wide {@value #DOUBLE_XP_BUFF_ID} timed buff
+ *       for {@value #DOUBLE_XP_MINUTES} real minutes.</li>
  * </ol>
+ *
+ * <p>ALTARUI: offers carry stable ids plus {@code minDay}/{@code maxDay} day gates
+ * (task 6), operators can pull individual offers via {@code /dev altar offer disable}
+ * (task 9 — {@code ritual.AltarAdminState}), and the altar panel UI buys through
+ * {@link #buyById} (task 1).</p>
  *
  * <p>Also home of the umbral-pick perk: +50% break speed under open night sky
  * ({@link #onBreakSpeed}). The umbral-blade lifesteal lives in the kill path
@@ -64,29 +76,62 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ShardEconomy {
-    /** One shop entry; {@code item} is {@code null} for the pooled team offers (not items). */
-    public record Offer(String nameKey, Supplier<? extends Item> item, int cost, boolean pooled) {}
+    /**
+     * One shop entry; {@code item} is {@code null} for the non-item offers (the pooled
+     * team rewards and the Double-XP buff). ALTARUI: {@code id} is the stable handle the
+     * {@code /dev altar offer} tree and the altar-panel payload key on; {@code minDay}/
+     * {@code maxDay} gate availability by event day ({@code maxDay <= 0} = no ceiling).
+     */
+    public record Offer(String id, String nameKey, Supplier<? extends Item> item, int cost, boolean pooled,
+            int minDay, int maxDay) {
+        /** Day-gate check ({@code maxDay <= 0} = open-ended). */
+        public boolean availableOnDay(int day) {
+            return day >= minDay && (maxDay <= 0 || day <= maxDay);
+        }
+    }
 
     public static final int SUPPLY_BEACON_COST = 24;
     /** Pooled cost of the Eclipse's Favor team buff (regen + saturation until the next dawn). */
     public static final int ECLIPSES_FAVOR_COST = 16;
+    /** Pooled cost of the Double-XP surge ({@value #DOUBLE_XP_MINUTES} real minutes, team-wide). */
+    public static final int DOUBLE_XP_COST = 20;
+    /** Real-minute duration of one Double-XP purchase. */
+    public static final int DOUBLE_XP_MINUTES = 30;
+    /** {@code buffs.json} definition id started by the Double-XP offer ({@code skill_xp} ×2). */
+    public static final String DOUBLE_XP_BUFF_ID = "double_skill_xp";
 
-    /** The two pooled offers are identity-matched in {@link #buy} to pick their branch. */
+    /** The non-item offers are identity-matched in {@link #buy} to pick their branch. */
     private static final Offer ECLIPSES_FAVOR_OFFER =
-            new Offer("item.eclipse.eclipses_favor", null, ECLIPSES_FAVOR_COST, true);
+            new Offer("eclipses_favor", "item.eclipse.eclipses_favor", null, ECLIPSES_FAVOR_COST, true, 2, 0);
     private static final Offer SUPPLY_BEACON_OFFER =
-            new Offer("item.eclipse.supply_beacon", null, SUPPLY_BEACON_COST, true);
+            new Offer("supply_beacon", "item.eclipse.supply_beacon", null, SUPPLY_BEACON_COST, true, 5, 0);
+    /**
+     * ALTARUI task 7: 30 real minutes of doubled skill XP. Rides the existing server-wide
+     * timed-buff engine ({@code buffs.TimedBuffService} — {@code eclipse_buffs.dat}
+     * persistence, relog-safe countdown, TAB-sidebar timer), so the purchase benefits the
+     * whole team and is paid from the TEAM pool like the other team-wide effects.
+     */
+    private static final Offer DOUBLE_XP_OFFER =
+            new Offer("double_xp", "shop.eclipse.offer.double_xp", null, DOUBLE_XP_COST, true, 4, 0);
 
-    /** Cheapest first; the pooled team rewards close the loop. */
+    /**
+     * Cheapest first; the pooled team rewards close the loop. ALTARUI task 6 day gates:
+     * the dowser is the day-1 starter, the team buffs follow on days 2/4/5, the tools
+     * unlock alongside their use cases (day 3 compass for the watcher hunts, day 4 pick,
+     * day 6 blade for the night events), and the vitae shard waits until day 8 so the
+     * rebirth ladder (not a flat 20-shard heart) carries the early-death economy.
+     */
     private static final List<Offer> OFFERS = List.of(
-            new Offer("item.eclipse.grave_dowser", EclipseItems.GRAVE_DOWSER, 4, false),
-            new Offer("item.eclipse.compass_of_watcher", EclipseItems.COMPASS_OF_WATCHER, 8, false),
+            new Offer("grave_dowser", "item.eclipse.grave_dowser", EclipseItems.GRAVE_DOWSER, 4, false, 1, 0),
+            new Offer("compass_of_watcher", "item.eclipse.compass_of_watcher",
+                    EclipseItems.COMPASS_OF_WATCHER, 8, false, 3, 0),
             // FIX-ECON: 12 -> 20 so rebirth (8*1.3^n) is always the budget heart and the
             // flat-price vitae never dominates the ladder.
-            new Offer("item.eclipse.vitae_shard", EclipseItems.VITAE_SHARD, 20, false),
-            new Offer("item.eclipse.umbral_pick", EclipseItems.UMBRAL_PICK, 12, false),
-            new Offer("item.eclipse.umbral_blade", EclipseItems.UMBRAL_BLADE, 16, false),
+            new Offer("vitae_shard", "item.eclipse.vitae_shard", EclipseItems.VITAE_SHARD, 20, false, 8, 0),
+            new Offer("umbral_pick", "item.eclipse.umbral_pick", EclipseItems.UMBRAL_PICK, 12, false, 4, 0),
+            new Offer("umbral_blade", "item.eclipse.umbral_blade", EclipseItems.UMBRAL_BLADE, 16, false, 6, 0),
             ECLIPSES_FAVOR_OFFER,
+            DOUBLE_XP_OFFER,
             SUPPLY_BEACON_OFFER);
 
     private static final int CYCLE_INTERVAL_TICKS = 20;
@@ -124,6 +169,89 @@ public final class ShardEconomy {
     private static long favorExpiryGameTime = 0L;
 
     private ShardEconomy() {}
+
+    // --- offer table + availability (ALTARUI tasks 6/9) ---
+
+    /** The full configured offer table, including day-locked and dev-disabled entries. */
+    public static List<Offer> allOffers() {
+        return OFFERS;
+    }
+
+    /** The offer with the given stable id, or {@code null}. */
+    public static Offer offerById(String offerId) {
+        for (Offer offer : OFFERS) {
+            if (offer.id().equals(offerId)) {
+                return offer;
+            }
+        }
+        return null;
+    }
+
+    /** Whether the offer's day window contains the current event day (task 6). */
+    public static boolean isOfferUnlocked(MinecraftServer server, Offer offer) {
+        return offer.availableOnDay(EclipseWorldState.get(server).getDay());
+    }
+
+    /** Whether an operator has pulled the offer from sale ({@code /dev altar offer disable}). */
+    public static boolean isOfferEnabled(MinecraftServer server, Offer offer) {
+        return !AltarAdminState.get(server).isOfferDisabled(offer.id());
+    }
+
+    /**
+     * The offers buyable RIGHT NOW: day window open and not dev-disabled. Feeds the
+     * action-bar browse cycle and the buy path; the altar panel additionally shows
+     * day-locked entries greyed out (but never dev-disabled ones — see
+     * {@code ritual.AltarAdminState}).
+     */
+    public static List<Offer> purchasableOffers(MinecraftServer server) {
+        int day = EclipseWorldState.get(server).getDay();
+        AltarAdminState admin = AltarAdminState.get(server);
+        List<Offer> available = new ArrayList<>();
+        for (Offer offer : OFFERS) {
+            if (offer.availableOnDay(day) && !admin.isOfferDisabled(offer.id())) {
+                available.add(offer);
+            }
+        }
+        return available;
+    }
+
+    /**
+     * Remaining real seconds of the running Double-XP surge, or {@code 0} while inactive
+     * (altar-panel countdown). Reads the persisted buff list directly — the epoch clock
+     * matches {@code TimedBuffService}'s default {@code System.currentTimeMillis} source.
+     */
+    public static int doubleXpRemainingSeconds(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        for (BuffMath.ActiveBuff buff : BuffState.get(server).active()) {
+            if (DOUBLE_XP_BUFF_ID.equals(buff.id()) && buff.endsAtEpochMillis() > now) {
+                return (int) ((buff.endsAtEpochMillis() - now) / 1000L);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * ALTARUI panel purchase entry: buys the offer with the given id if it exists and is
+     * currently purchasable. Returns {@code false} (with action-bar feedback) for unknown,
+     * day-locked or dev-disabled ids — the panel greys those out, but a stale click after
+     * a day rollover or an operator toggle must still be refused server-side.
+     */
+    public static boolean buyById(ServerPlayer player, String offerId, BlockPos altarPos) {
+        Offer offer = offerById(offerId);
+        if (offer == null || !isOfferEnabled(player.server, offer)) {
+            player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.unavailable"), true);
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+            return false;
+        }
+        if (!isOfferUnlocked(player.server, offer)) {
+            player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.locked_day",
+                    Component.translatable(offer.nameKey()), offer.minDay()), true);
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+            return false;
+        }
+        buy(player, offer, altarPos);
+        return true;
+    }
 
     // --- personal balance ---
 
@@ -269,11 +397,18 @@ public final class ShardEconomy {
             return;
         }
         tickFavor(server);
+        // ALTARUI task 6/9: the cycle only ever shows offers buyable RIGHT NOW — day-locked
+        // entries appear greyed in the altar panel instead, dev-disabled ones nowhere.
+        List<Offer> available = purchasableOffers(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (player.isShiftKeyDown() && isLookingAtAltar(player)) {
+                if (available.isEmpty()) {
+                    player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.no_offers"), true);
+                    continue;
+                }
                 int index = BROWSE_INDEX.merge(player.getUUID(), 0,
-                        (previous, ignored) -> (previous + 1) % OFFERS.size());
-                showOffer(player, OFFERS.get(index));
+                        (previous, ignored) -> (previous + 1) % available.size());
+                showOffer(player, available.get(index % available.size()));
             } else {
                 BROWSE_INDEX.remove(player.getUUID());
             }
@@ -314,14 +449,21 @@ public final class ShardEconomy {
                 || event.getAction() != PlayerInteractEvent.LeftClickBlock.Action.START) {
             return;
         }
+        List<Offer> available = purchasableOffers(serverPlayer.server);
+        if (available.isEmpty()) {
+            serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "shop.eclipse.no_offers"), true);
+            return;
+        }
         Integer index = BROWSE_INDEX.get(serverPlayer.getUUID());
         if (index == null) {
             // Not browsing yet — show the first offer instead of blind-buying it.
             BROWSE_INDEX.put(serverPlayer.getUUID(), 0);
-            showOffer(serverPlayer, OFFERS.get(0));
+            showOffer(serverPlayer, available.get(0));
             return;
         }
-        buy(serverPlayer, OFFERS.get(index), event.getPos());
+        // Modulo re-clamp: a day rollover or offer toggle between the last cycle tick and
+        // this click may have shrunk the list — never buy past its end.
+        buy(serverPlayer, available.get(index % available.size()), event.getPos());
     }
 
     private static void buy(ServerPlayer player, Offer offer, BlockPos altarPos) {
@@ -339,6 +481,22 @@ public final class ShardEconomy {
                 player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.pool_need",
                         offer.cost(), state.getShardPool()), true);
                 player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+                return;
+            }
+            if (offer == DOUBLE_XP_OFFER) {
+                // Start BEFORE deducting: the buff engine may refuse (maxActive cap while
+                // three OTHER buffs run). EXTEND stacking means a re-buy adds 30 minutes.
+                // Persistence + relog-safe countdown + the TAB-sidebar timer all live in
+                // TimedBuffService/BuffState — nothing extra to store here.
+                if (!TimedBuffApi.Holder.get().start(server, DOUBLE_XP_BUFF_ID, DOUBLE_XP_MINUTES)) {
+                    player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.buff_refused"), true);
+                    player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
+                    return;
+                }
+                state.addShardPool(-offer.cost());
+                player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.bought_pooled", name), true);
+                EclipseMod.LOGGER.info("{} spent {} pooled shards on Double XP ({} min; pool now {})",
+                        player.getScoreboardName(), offer.cost(), DOUBLE_XP_MINUTES, state.getShardPool());
                 return;
             }
             state.addShardPool(-offer.cost());

@@ -12,7 +12,6 @@ import dev.projecteclipse.eclipse.client.handbook.tabs.HandbookTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.MapTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.RevivalTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.RewardsTab;
-import dev.projecteclipse.eclipse.client.handbook.tabs.RulesTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.SettingsTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.StatusTab;
 import dev.projecteclipse.eclipse.client.handbook.tabs.TimelineTab;
@@ -48,9 +47,9 @@ import org.lwjgl.glfw.GLFW;
  * narration and input routing (fixes B4). ALL tabs tick every tick (fixes B6). The close
  * binding works from the keyboard AND as a mouse button ({@code matchesMouse}, fixes B8);
  * ESC and 1–8/←/→/PgUp/PgDn all work, with the active tab consulted FIRST on key input
- * (frozen API §7.2). NOTE (D1): the number hotkeys stay capped at 1–8, so with the 9-tab
- * roster they reach Status…Map only — Settings (page 9) is arrows/PgUp/PgDn territory
- * (and ← from Status wraps straight to it). Sounds run through {@link UiSounds} only: page turn on keyboard
+ * (frozen API §7.2). NOTE (D1, revised by uipolish): the number hotkeys stay capped at
+ * 1–8, which since the Rules tab moved to the dev handbook covers the whole 8-tab roster
+ * again (and ← from Status still wraps straight to Settings). Sounds run through {@link UiSounds} only: page turn on keyboard
  * switches, tab click on rail presses, hover blips from {@link EclipseWidget}.</p>
  *
  * <p>Opens via the J keybind ({@code ArtifactKeyHandler}) or a right-click on the pinned
@@ -88,12 +87,14 @@ public class HandbookScreen extends Screen {
     private static final float SQUASH_AMOUNT = 0.03F;
 
     // Tab roster in the frozen §3.1 order (W1 ledger applied by W2), D1 adding
-    // Collections after Rewards (IDEAS-collections §3): status, timeline, rules, revival,
+    // Collections after Rewards (IDEAS-collections §3), uipolish REMOVING the player-facing
+    // Rules tab (the rules moved to the dev handbook — RulesTab and its
+    // gui.eclipse.artifact.rules.* lang lines stay in the jar): status, timeline, revival,
     // rewards, collections, bestiary, map, settings. Keep Settings LAST — the rail,
-    // footer counter and crossfade all derive from tabs.size(). NOTE: with 9 tabs the
-    // number hotkeys only cover 1-8 (tabs 1..8); Settings is reached via ←/PgUp wrap
-    // (StatusTab's settings link uses exactly that route).
-    private final List<HandbookTab> tabs = List.of(new StatusTab(), new TimelineTab(), new RulesTab(),
+    // footer counter and crossfade all derive from tabs.size(). With 8 tabs the 1-8
+    // number hotkeys now cover the whole roster again; StatusTab's settings link keeps
+    // its roster-size-independent ←-wrap route.
+    private final List<HandbookTab> tabs = List.of(new StatusTab(), new TimelineTab(),
             new RevivalTab(), new RewardsTab(), new CollectionsTab(), new BestiaryTab(), new MapTab(),
             new SettingsTab());
     /** Widgets currently mounted for the active tab (removed on switch — B4). */

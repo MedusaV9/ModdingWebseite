@@ -56,6 +56,10 @@ public final class EclipseLang {
             // /lang override like every other client-rendered surface. (Contract strings
             // ride gui.eclipse.contract.* — already covered by the gui prefix.)
             "wand.eclipse.",
+            // UIPOLISH: the item-lexicon rows in the Collections tab resolve
+            // collection.eclipse.item.<id> through EclipseLang — the first client-side
+            // call site of the collection. family (counter titles stay server-baked).
+            "collection.eclipse.",
             // Wave-5 A1: cutscene/dawn captions (CaptionRenderer resolves through
             // EclipseLang), xbox event lines and minigame lines. Prefix-audit note for the
             // remaining families in assets/eclipse/lang/*.json: advancement./analytics./

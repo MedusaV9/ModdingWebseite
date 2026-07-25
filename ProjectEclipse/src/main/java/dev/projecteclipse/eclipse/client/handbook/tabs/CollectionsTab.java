@@ -6,13 +6,17 @@ import java.util.Locale;
 
 import dev.projecteclipse.eclipse.client.collections.ClientCollectionsCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
+import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.collections.CollectionTiers;
+import dev.projecteclipse.eclipse.collections.ItemLexicon;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionsPayload;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -43,11 +47,21 @@ import net.neoforged.api.distmarker.OnlyIn;
  * "awaiting sync" line. Drag-scroll + wheel + {@link TabScrollbar} like Bestiary. New UI
  * keys degrade to English literals until the V5-COLLECTIONS langdrop is merged (house
  * literal-audit rule).</p>
+ *
+ * <p>uipolish: one extra pinned rail category, <b>{@value #ITEMS_CATEGORY}</b> — the
+ * {@link ItemLexicon} ("what does this thing DO"). One row per roster item: discovered
+ * rows show the item icon, its localized name and the functional explanation
+ * ({@code collection.eclipse.item.<id>}, two wrapped DIM lines); undiscovered rows stay
+ * {@link GlitchText} "???" with a quiet carry-it-once hint. Discovery state rides
+ * {@code S2CItemLexiconPayload} into {@link ClientCollectionsCache}.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class CollectionsTab extends HandbookTab {
     /** Gold "maxed" treatment (§3) — warmer than GOOD, distinct from ACCENT. */
     private static final int GOLD_COLOR = 0xF0C96A;
+
+    /** Pinned rail id of the item-lexicon category (uipolish; not a server collection category). */
+    private static final String ITEMS_CATEGORY = "items";
 
     private static final int RAIL_W = 72;
     private static final int RAIL_W_NARROW = 52;
@@ -113,11 +127,22 @@ public class CollectionsTab extends HandbookTab {
 
         guiGraphics.enableScissor(rowsX(), y, rowsX() + rowsWidth(), y + height);
         int rowY = y - (int) scrollAmount;
-        for (ClientCollectionsCache.Entry entry : rows) {
-            if (rowY > y - ROW_H && rowY < y + height) {
-                renderRow(guiGraphics, entry, rowsX(), rowY, rowsWidth() - SCROLLBAR_INSET, alpha);
+        if (ITEMS_CATEGORY.equals(activeCategory)) {
+            List<String> lexicon = ItemLexicon.entries();
+            for (int i = 0; i < lexicon.size(); i++) {
+                if (rowY > y - ROW_H && rowY < y + height) {
+                    renderLexiconRow(guiGraphics, lexicon.get(i), i, rowsX(), rowY,
+                            rowsWidth() - SCROLLBAR_INSET, alpha);
+                }
+                rowY += ROW_H + ROW_GAP;
             }
-            rowY += ROW_H + ROW_GAP;
+        } else {
+            for (ClientCollectionsCache.Entry entry : rows) {
+                if (rowY > y - ROW_H && rowY < y + height) {
+                    renderRow(guiGraphics, entry, rowsX(), rowY, rowsWidth() - SCROLLBAR_INSET, alpha);
+                }
+                rowY += ROW_H + ROW_GAP;
+            }
         }
         guiGraphics.disableScissor();
 
@@ -136,10 +161,16 @@ public class CollectionsTab extends HandbookTab {
             boolean active = category.equals(activeCategory);
             int granted = 0;
             int total = 0;
-            for (ClientCollectionsCache.Entry entry : ClientCollectionsCache.all()) {
-                if (entry.category().equals(category)) {
-                    granted += entry.grantedTier();
-                    total += entry.tiers().size();
+            if (ITEMS_CATEGORY.equals(category)) {
+                // Item lexicon: the fraction counts discovered roster items, not tiers.
+                granted = ClientCollectionsCache.discoveredItemCount();
+                total = ItemLexicon.size();
+            } else {
+                for (ClientCollectionsCache.Entry entry : ClientCollectionsCache.all()) {
+                    if (entry.category().equals(category)) {
+                        granted += entry.grantedTier();
+                        total += entry.tiers().size();
+                    }
                 }
             }
             boolean complete = total > 0 && granted >= total;
@@ -226,6 +257,57 @@ public class CollectionsTab extends HandbookTab {
                 textX, rowY + 27, withAlpha(maxed ? GOLD_COLOR : DIM_COLOR, alpha));
     }
 
+    /**
+     * One item-lexicon row (uipolish). Discovered: icon + localized item name (ACCENT) +
+     * the functional explanation ({@code collection.eclipse.item.<id>}, up to two DIM
+     * lines; the baked poetic {@code item.eclipse.<id>.lore} is the fallback while the
+     * langdrop is pending). Undiscovered: a raised placeholder square, shimmering
+     * {@link GlitchText} "???" and a quiet carry-it-once hint — the roster's SIZE is
+     * public, its contents are not.
+     */
+    private void renderLexiconRow(GuiGraphics guiGraphics, String itemId, int index,
+            int rowX, int rowY, int rowWidth, float alpha) {
+        boolean discovered = ClientCollectionsCache.itemDiscovered(itemId);
+        int textX = rowX + 20;
+        int rowRight = rowX + rowWidth;
+
+        if (!discovered) {
+            guiGraphics.fill(rowX, rowY + 2, rowX + 16, rowY + 18,
+                    withAlpha(EclipseUiTheme.PANEL_RAISED & 0xFFFFFF, alpha));
+            guiGraphics.drawString(font, GlitchText.unknown(index), textX, rowY + 3,
+                    withAlpha(DIM_COLOR, alpha));
+            guiGraphics.drawString(font,
+                    ellipsize(font, uiText("gui.eclipse.handbook.collections.item.undiscovered",
+                            "Not yet recorded \u2014 carry it once."), rowRight - textX),
+                    textX, rowY + 14, withAlpha(0x554A70, alpha));
+            return;
+        }
+
+        guiGraphics.renderItem(iconStack(itemId), rowX, rowY + 2);
+        guiGraphics.drawString(font,
+                ellipsize(font, ClientCollectionsCache.unlockName(itemId), rowRight - textX),
+                textX, rowY + 3, withAlpha(ACCENT_COLOR, alpha));
+
+        String descKey = ItemLexicon.descriptionKey(itemId);
+        String loreKey = "item.eclipse." + itemId.substring(itemId.indexOf(':') + 1) + ".lore";
+        String desc = EclipseLang.hasKey(descKey) ? EclipseLang.trString(descKey)
+                : EclipseLang.hasKey(loreKey) ? EclipseLang.trString(loreKey) : "";
+        int lineY = rowY + 14;
+        for (FormattedCharSequence line : clampTwoLines(desc, rowRight - textX)) {
+            guiGraphics.drawString(font, line, textX, lineY, withAlpha(DIM_COLOR, alpha));
+            lineY += 10;
+        }
+    }
+
+    /** Word-wraps a lexicon description onto at most two row lines. */
+    private List<FormattedCharSequence> clampTwoLines(String text, int maxWidth) {
+        if (text.isBlank()) {
+            return List.of();
+        }
+        List<FormattedCharSequence> lines = font.split(Component.literal(text), Math.max(40, maxWidth));
+        return lines.size() > 2 ? lines.subList(0, 2) : lines;
+    }
+
     /** "Next: +275 XP · +1 SP · unlocks Anvil, Piston +1" (pieces drop when absent). */
     private static String nextRewardText(S2CCollectionsPayload.Tier next) {
         StringBuilder text = new StringBuilder(
@@ -291,7 +373,14 @@ public class CollectionsTab extends HandbookTab {
         if (layoutGeneration == generation && layoutCategory.equals(activeCategory)) {
             return;
         }
-        categories = ClientCollectionsCache.categoryOrder();
+        // uipolish: the item lexicon rides as a pinned LAST category (client-side roster;
+        // it only appears once the server has synced real collections, so the "awaiting
+        // sync" empty state stays intact).
+        List<String> order = new ArrayList<>(ClientCollectionsCache.categoryOrder());
+        if (!order.isEmpty()) {
+            order.add(ITEMS_CATEGORY);
+        }
+        categories = List.copyOf(order);
         if (!categories.isEmpty() && !categories.contains(activeCategory)) {
             activeCategory = categories.get(0);
         }
@@ -311,7 +400,8 @@ public class CollectionsTab extends HandbookTab {
 
     private int contentHeight() {
         ensureLayout();
-        return rows.isEmpty() ? 0 : rows.size() * (ROW_H + ROW_GAP) - ROW_GAP + 4;
+        int rowCount = ITEMS_CATEGORY.equals(activeCategory) ? ItemLexicon.size() : rows.size();
+        return rowCount == 0 ? 0 : rowCount * (ROW_H + ROW_GAP) - ROW_GAP + 4;
     }
 
     private double maxScroll() {

@@ -3,15 +3,18 @@ package dev.projecteclipse.eclipse.client.collections;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.network.collections.CollectionsPayloads;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionDeltaPayload;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionsPayload;
+import dev.projecteclipse.eclipse.network.collections.S2CItemLexiconPayload;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
@@ -59,6 +62,8 @@ public final class ClientCollectionsCache {
 
     /** Insertion-ordered (config order == authoring order per category). */
     private static volatile Map<String, Entry> entries = Map.of();
+    /** uipolish item lexicon: discovered roster ids in discovery order (server-synced). */
+    private static volatile Set<String> discoveredItems = Set.of();
     private static volatile int generation;
 
     static {
@@ -66,6 +71,7 @@ public final class ClientCollectionsCache {
         CollectionsPayloads.setSnapshotHandler(ClientCollectionsCache::updateSnapshot);
         CollectionsPayloads.setDeltaHandler(ClientCollectionsCache::updateDelta);
         CollectionsPayloads.setTierHandler(CollectionTierToast::enqueue);
+        CollectionsPayloads.setLexiconHandler(ClientCollectionsCache::updateLexicon);
     }
 
     private ClientCollectionsCache() {}
@@ -83,6 +89,16 @@ public final class ClientCollectionsCache {
     /** Monotonic counter bumped on every snapshot/delta/reset — include in layout caches. */
     public static int generation() {
         return generation;
+    }
+
+    /** uipolish: whether this item-lexicon roster id has been carried at least once. */
+    public static boolean itemDiscovered(String itemId) {
+        return discoveredItems.contains(itemId);
+    }
+
+    /** uipolish: number of discovered item-lexicon entries (rail fraction). */
+    public static int discoveredItemCount() {
+        return discoveredItems.size();
     }
 
     /**
@@ -136,6 +152,12 @@ public final class ClientCollectionsCache {
         generation++;
     }
 
+    /** Full discovered-set replace (tiny payload — no delta protocol needed). */
+    private static void updateLexicon(S2CItemLexiconPayload payload) {
+        discoveredItems = Collections.unmodifiableSet(new LinkedHashSet<>(payload.discovered()));
+        generation++;
+    }
+
     /** Counter-only move; unknown ids are dropped (snapshot will follow on next grant). */
     private static void updateDelta(S2CCollectionDeltaPayload payload) {
         Entry old = entries.get(payload.collectionId());
@@ -153,6 +175,7 @@ public final class ClientCollectionsCache {
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         entries = Map.of();
+        discoveredItems = Set.of();
         generation++;
         CollectionTierToast.reset();
     }

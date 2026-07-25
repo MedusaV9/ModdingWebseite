@@ -99,6 +99,14 @@ public class AltarBlockEntity extends BlockEntity {
             return;
         }
         MinecraftServer server = player.server;
+        // ALTARUI task 9: /dev altar lock freezes the LADDER — refuse before consuming
+        // anything so no items are ever swallowed toward a milestone that cannot complete.
+        // Banking, offerings, heart sacrifices and the shop deliberately stay open.
+        if (AltarAdminState.get(server).isProgressionLocked()) {
+            actionBar(player, Component.translatable("ritual.eclipse.altar.sealed"));
+            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.9F);
+            return;
+        }
         EclipseWorldState state = EclipseWorldState.get(server);
         EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);
         if (milestone == null) {
@@ -143,25 +151,6 @@ public class AltarBlockEntity extends BlockEntity {
 
         if (isMilestoneComplete(state, milestone)) {
             completeMilestone(serverLevel, state, milestone);
-        }
-    }
-
-    /** Right-click with an empty hand (not sneaking): current level + next requirement on the action bar. */
-    public void handleStatusHint(ServerPlayer player) {
-        EclipseWorldState state = EclipseWorldState.get(player.server);
-        EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);
-        if (milestone == null) {
-            actionBar(player, Component.translatable("ritual.eclipse.altar.complete"));
-            return;
-        }
-        for (EclipseConfig.ItemCost cost : milestone.cost()) {
-            long progress = state.getMilestoneProgress(progressKey(milestone, cost.item()));
-            if (progress < cost.count()) {
-                Component itemName = costItemName(cost);
-                actionBar(player, Component.translatable("ritual.eclipse.altar.status",
-                        state.getAltarLevel(), progress, cost.count(), itemName));
-                return;
-            }
         }
     }
 
@@ -230,16 +219,12 @@ public class AltarBlockEntity extends BlockEntity {
     /**
      * Progress key for a milestone cost entry: {@code altar_level_<n>} when the
      * milestone has a single cost entry, else {@code altar_level_<n>:<item_id>}.
+     * Public since ALTARUI: the altar-panel payload assembler
+     * ({@code network.altar.AltarPayloads}) reads live progress under the same keys.
      */
-    private static String progressKey(EclipseConfig.Milestone milestone, String itemId) {
+    public static String progressKey(EclipseConfig.Milestone milestone, String itemId) {
         String base = "altar_level_" + milestone.level();
         return milestone.cost().size() == 1 ? base : base + ":" + itemId;
-    }
-
-    private static Component costItemName(EclipseConfig.ItemCost cost) {
-        return BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(cost.item()))
-                .map(item -> (Component) Component.translatable(item.getDescriptionId()))
-                .orElse(Component.literal(cost.item()));
     }
 
     // --- personal daily offering ---
