@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.photon.status": "Photon layer health: bridge guard chain, live-executor budget, loop cache and every registered PhotonFxRegistry cue row (client-side report)",
+    "dev.eclipse.doc.photon.test": "Test-spawns a Photon effect on your client: a cue id runs the full registry lane (Photon + Quasar fallback), a raw fx id spawns directly via the bridge"
+  },
+  "de_de": {
+    "dev.eclipse.doc.photon.status": "Photon-Ebenen-Status: Bridge-Prüfkette, Live-Executor-Budget, Loop-Cache und alle registrierten PhotonFxRegistry-Cue-Zeilen (clientseitiger Bericht)",
+    "dev.eclipse.doc.photon.test": "Test-Spawn eines Photon-Effekts auf deinem Client: eine Cue-Id durchläuft die volle Registry-Spur (Photon + Quasar-Fallback), eine rohe Fx-Id spawnt direkt über die Bridge"
+  }
+}

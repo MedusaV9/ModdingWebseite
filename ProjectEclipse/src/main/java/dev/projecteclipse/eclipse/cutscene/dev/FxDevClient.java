@@ -66,6 +66,8 @@ public final class FxDevClient {
             case FxDevPayloads.ACTION_UNIFORM -> setUniform(payload.arg(), payload.value());
             case FxDevPayloads.ACTION_EMITTER -> spawnEmitter(payload.arg(), payload);
             case FxDevPayloads.ACTION_SUN_DEBUG -> toggleSunDebug();
+            case FxDevPayloads.ACTION_PHOTON_STATUS -> photonStatus();
+            case FxDevPayloads.ACTION_PHOTON_TEST -> photonTest(payload.arg(), payload.pos());
             default -> EclipseMod.LOGGER.warn("FxDevClient: unknown dev action {}", payload.action());
         }
     }
@@ -148,6 +150,70 @@ public final class FxDevClient {
         boolean spawned = QuasarSpawner.spawn(id, payload.pos());
         feedback("emitter " + id + (spawned ? " spawned at " : " FAILED (missing/budget) at ")
                 + String.format("%.1f %.1f %.1f", payload.pos().x, payload.pos().y, payload.pos().z),
+                spawned ? ChatFormatting.GREEN : ChatFormatting.RED);
+    }
+
+    // --- photon dev commands (PH-CORE) ---
+
+    /** {@code /dev photon status} — PhotonBridge + PhotonFxRegistry state dump. */
+    private static void photonStatus() {
+        var bridge = dev.projecteclipse.eclipse.veilfx.PhotonBridge.class; // client-only sibling
+        boolean loaded = net.neoforged.fml.ModList.get().isLoaded("photon");
+        boolean available = dev.projecteclipse.eclipse.veilfx.PhotonBridge.available();
+        feedback("Photon bridge (" + bridge.getSimpleName() + "):", ChatFormatting.GOLD);
+        feedback("  mod loaded: " + loaded
+                + " | photonFx: " + dev.projecteclipse.eclipse.core.config.EclipseClientConfig.photonFx()
+                + " | reducedFx: " + dev.projecteclipse.eclipse.core.config.EclipseClientConfig.reducedFx()
+                + " | reflection: " + dev.projecteclipse.eclipse.veilfx.PhotonBridge.stateName(),
+                loaded ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        feedback("  available now: " + available, available ? ChatFormatting.GREEN : ChatFormatting.RED);
+        feedback("  executors: " + dev.projecteclipse.eclipse.veilfx.PhotonBridge.liveExecutors()
+                + "/" + dev.projecteclipse.eclipse.veilfx.PhotonBridge.MAX_LIVE_EXECUTORS
+                + " live (" + dev.projecteclipse.eclipse.veilfx.PhotonBridge.liveLoops() + " loops), "
+                + dev.projecteclipse.eclipse.veilfx.PhotonBridge.refusedCount() + " budget refusals",
+                ChatFormatting.GRAY);
+        var missing = dev.projecteclipse.eclipse.veilfx.PhotonBridge.missingFxIds();
+        if (!missing.isEmpty()) {
+            feedback("  missing/broken fx this session: " + missing, ChatFormatting.YELLOW);
+        }
+        var rows = dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.registeredIds();
+        feedback("  registry rows (" + rows.size() + "), "
+                + dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.liveLoopWindows()
+                + " live loop windows:", ChatFormatting.GOLD);
+        for (ResourceLocation id : rows.stream().sorted().toList()) {
+            var row = dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.row(id);
+            feedback("    " + id + " -> " + row.photonFx() + " (" + row.mode()
+                    + (row.loop() ? ", LOOP" : "") + ", quasar "
+                    + (row.quasarEmitter() == null ? "none" : row.quasarEmitter()) + ")",
+                    ChatFormatting.GRAY);
+        }
+    }
+
+    /**
+     * {@code /dev photon test <fxId>} — a registered cue id goes through the full
+     * {@code PhotonFxRegistry.dispatch} lane (Photon + Quasar legs per row mode); anything
+     * else spawns directly through {@code PhotonBridge} with {@code allowMulti} so repeated
+     * tests always fire.
+     */
+    private static void photonTest(String fxId, net.minecraft.world.phys.Vec3 pos) {
+        ResourceLocation id = ResourceLocation.tryParse(fxId);
+        if (id == null) {
+            feedback("Bad fx id: " + fxId, ChatFormatting.RED);
+            return;
+        }
+        String at = String.format("%.1f %.1f %.1f", pos.x, pos.y, pos.z);
+        if (dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.row(id) != null) {
+            boolean consumed = dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatch(id, pos);
+            feedback("cue " + id + (consumed ? " dispatched at " : " NOT consumed at ") + at
+                    + " (loop rows are windowed-only and warn instead of playing)",
+                    consumed ? ChatFormatting.GREEN : ChatFormatting.RED);
+            return;
+        }
+        boolean spawned = dev.projecteclipse.eclipse.veilfx.PhotonBridge.spawn(id, pos,
+                dev.projecteclipse.eclipse.veilfx.PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
+        feedback("photon " + id + (spawned ? " spawned at " : " FAILED at ") + at
+                + (spawned ? "" : " (photon absent/toggled off, missing .fx, or executor budget"
+                + " — see '/dev photon status')"),
                 spawned ? ChatFormatting.GREEN : ChatFormatting.RED);
     }
 

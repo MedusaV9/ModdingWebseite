@@ -158,6 +158,9 @@ public final class FxPayloads {
         } else if (dev.projecteclipse.eclipse.drama.GestureGlyphService.FX_GLYPH.equals(id)) {
             // W4-CEREMONY IDEA-10 #2: pos = gesturing player, a = glyph 0 greet/1 danger/2 follow.
             dev.projecteclipse.eclipse.client.drama.GestureGlyphFx.show(payload.pos(), (int) payload.a());
+        } else if (dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatch(id, payload.pos())) {
+            // PH-CORE tail branch: table-driven FxCues cue rows (Photon layer + Quasar
+            // fallback per row mode) — consumed when a row is registered for the id.
         } else {
             EclipseMod.LOGGER.debug("Unknown FX event id {} (pos {}, a {}, b {})", id, payload.pos(), payload.a(), payload.b());
         }

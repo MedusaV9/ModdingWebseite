@@ -41,6 +41,10 @@ public final class FxDevPayloads {
     public static final int ACTION_EMITTER = 5;
     /** Toggles the sun-debug HUD cross. */
     public static final int ACTION_SUN_DEBUG = 6;
+    /** PH-CORE: dumps the PhotonBridge/PhotonFxRegistry state to the operator's chat. */
+    public static final int ACTION_PHOTON_STATUS = 7;
+    /** PH-CORE: {@code arg} = fx or cue id, {@code pos} = spawn position (test spawn). */
+    public static final int ACTION_PHOTON_TEST = 8;
 
     private FxDevPayloads() {}
 

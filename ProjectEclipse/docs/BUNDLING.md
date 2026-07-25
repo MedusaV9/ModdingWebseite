@@ -147,9 +147,22 @@ Modrinth API and the published jar:
   drop `altar_levelup.fx` / `expansion_rift_glow.fx` into a resource pack. Until such an
   asset exists the bridge logs one INFO per id and stays Quasar-only.
 - **Dev runtime:** `tools/modpack/fetch_dev_mods.py` fetches Photon 2.1.5 + LDLib2 2.2.29
-  into `run/mods-client` as best-effort OPTIONAL entries (a miss never fails the script).
-  Allowlist rows `photon`/`ldlib2`/`kilagraph` (all `"*"`, optional) are in
-  `AntiCheatCheck.defaults()` + `assets/eclipse/bootstrap.json`.
+  into `run/mods-client` AND `run/mods` as best-effort OPTIONAL entries (a miss never
+  fails the script). Allowlist rows `photon`/`ldlib2`/`kilagraph` (all `"*"`, optional)
+  are in `AntiCheatCheck.defaults()` + `assets/eclipse/bootstrap.json`.
+- **Operator note — server install is REQUIRED for Photon-equipped clients (PH-CORE):**
+  photon 2.1.5 and ldlib2 2.2.29 both register NeoForge network channels **without**
+  `.optional()`, and the 21.1 negotiator fails the handshake in both directions for
+  non-optional channels (verified against 21.1.238 sources — see
+  `docs/plans_v3/plans_v5/photon/INTEGRATION.md` §2 Verdict C). Consequence: a client
+  running Photon+LDLib2 is disconnected (`multiplayer.disconnect.incompatible`) by a
+  server that lacks them, BEFORE the Eclipse modcheck ever runs. Operator default when
+  Photon-equipped clients are expected: install the photon+ldlib2 pair on the dedicated
+  server too (external install, never redistributed — GPL policy above holds; the
+  server-side load is crash-safe: photon's mixins are all client-array, LDLib2 carries
+  modest common mixins). Keep server+client pinned to the same photon build via
+  `tools/modpack/mods_manifest.json`. Alternatives: keep Photon a singleplayer/dev-only
+  extra, or land the upstream `.optional()` PR.
 - **Open risk (pre-authorized fallback):** Photon 2.x and Veil 4.3.0 both hook render
   pipelines; if in-game testing shows mixin conflicts, flip `photonFx=false` by default
   and record the logs here. Not yet observed — runtime testing needs a GL client.

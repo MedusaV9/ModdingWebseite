@@ -40,10 +40,16 @@ WANTED = [
 # OPTIONAL extras (D12): fetched on a best-effort basis; a miss is reported but never
 # fails the run. Photon is the optional VFX enhancement layer consumed by
 # veilfx/PhotonBridge (reflection, isLoaded-guarded); its mods.toml requires LDLib2
-# (Modrinth slug "ldlib", mod id "ldlib2"). Both are client-side for our usage.
+# (Modrinth slug "ldlib", mod id "ldlib2"). PH-CORE: the pair goes into BOTH
+# run/mods-client AND run/mods (dedicated server) per INTEGRATION.md §2 Verdict C —
+# photon+ldlib2 register NON-optional network channels, so a Photon-equipped client is
+# disconnected during handshake by a photon-less server; the server-side install is
+# crash-safe (Verdict B: photon's mixins are all client-array, GL feature side-aware).
 OPTIONAL = [
     ("photon-editor", "photon-neoforge-1.21.1-2.1.5.jar", MODS_CLIENT),
     ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29.jar", MODS_CLIENT),
+    ("photon-editor", "photon-neoforge-1.21.1-2.1.5.jar", MODS),
+    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29.jar", MODS),
 ]
 
 

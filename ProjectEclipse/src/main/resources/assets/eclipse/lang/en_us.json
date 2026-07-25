@@ -850,6 +850,8 @@
   "dev.eclipse.doc.phase.interval": "Switch the day/phase cadence to a recurring real-time interval, e.g. a new phase every 2 hours (persisted in realtime.json).",
   "dev.eclipse.doc.phase.next": "Skip to the next phase immediately: a full day rollover with signals, bell, and announcements; the clock re-anchors on the active cadence.",
   "dev.eclipse.doc.phase.status": "Show the phase cadence mode, current event day, next boundary, and remaining time.",
+  "dev.eclipse.doc.photon.status": "Photon layer health: bridge guard chain, live-executor budget, loop cache and every registered PhotonFxRegistry cue row (client-side report)",
+  "dev.eclipse.doc.photon.test": "Test-spawns a Photon effect on your client: a cue id runs the full registry lane (Photon + Quasar fallback), a raw fx id spawns directly via the bridge",
   "dev.eclipse.doc.player.multiplier.clear": "Reset a player's hidden skill-XP multiplier to 1.",
   "dev.eclipse.doc.player.multiplier.set": "Set a player's hidden persisted skill-XP multiplier.",
   "dev.eclipse.doc.player.multiplier.show": "Show a player's hidden skill-XP multiplier to the issuing operator.",

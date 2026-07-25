@@ -850,6 +850,8 @@
   "dev.eclipse.doc.phase.interval": "Stellt den Tag-/Phasenrhythmus auf ein wiederkehrendes Echtzeit-Intervall um, z. B. alle 2 Stunden eine neue Phase (gespeichert in realtime.json).",
   "dev.eclipse.doc.phase.next": "Springt sofort zur nächsten Phase: vollständiger Tageswechsel mit Signalen, Glocke und Ankündigungen; die Uhr richtet sich am aktiven Rhythmus neu aus.",
   "dev.eclipse.doc.phase.status": "Zeigt Rhythmus-Modus, aktuellen Event-Tag, nächsten Wechsel und verbleibende Zeit.",
+  "dev.eclipse.doc.photon.status": "Photon-Ebenen-Status: Bridge-Prüfkette, Live-Executor-Budget, Loop-Cache und alle registrierten PhotonFxRegistry-Cue-Zeilen (clientseitiger Bericht)",
+  "dev.eclipse.doc.photon.test": "Test-Spawn eines Photon-Effekts auf deinem Client: eine Cue-Id durchläuft die volle Registry-Spur (Photon + Quasar-Fallback), eine rohe Fx-Id spawnt direkt über die Bridge",
   "dev.eclipse.doc.player.multiplier.clear": "Setzt den geheimen Skill-EP-Multiplikator auf 1 zurück.",
   "dev.eclipse.doc.player.multiplier.set": "Setzt den geheimen, gespeicherten Skill-EP-Multiplikator.",
   "dev.eclipse.doc.player.multiplier.show": "Zeigt den geheimen Multiplikator nur dem ausführenden Operator.",
