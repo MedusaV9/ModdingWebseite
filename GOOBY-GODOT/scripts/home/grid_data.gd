@@ -178,7 +178,8 @@ func get_item(uid: String) -> Dictionary:
 	return _items.get(uid, {})
 
 
-## uid des Items auf `cell` im gewünschten Layer ("" = frei).
+## uid des Items auf `cell` im gewünschten Layer ("" = frei). Wand-Items
+## belegen keine Boden-Zellen — für Layer.WALL siehe wall_item_at().
 func item_at(cell: Vector2i, layer: int) -> String:
 	match layer:
 		Layer.RUG:
@@ -188,6 +189,12 @@ func item_at(cell: Vector2i, layer: int) -> String:
 		Layer.SURFACE:
 			return _surface_cells.get(cell, "")
 	return ""
+
+
+## uid des Wand-Items, das den Slot `offset` der Wand `wall` belegt
+## ("" = frei). Mehrzellige Wand-Items belegen jeden Slot ihrer Spanne.
+func wall_item_at(wall: String, offset: int) -> String:
+	return _wall_slots.get("%s:%d" % [wall, offset], "")
 
 
 func wall_width(wall: String) -> int:
@@ -269,27 +276,41 @@ func to_items_array() -> Array:
 ## Rekonstruiert ein Grid aus Save-Items + Katalog-Defs. Unbekannte Items und
 ## Kollisions-Konflikte (Katalog-Update!) landen in "leftovers" — der Aufrufer
 ## legt sie ins Lager (Doc D §1.4: niemals Daten verlieren, weich degradieren).
+##
+## Zwei Durchläufe: erst alle Träger (RUG/FLOOR/WALL), dann die
+## SURFACE-Aufbauten. `to_items_array` sortiert nach uid — ein SURFACE-Item
+## mit kleinerer uid als sein Träger würde in Array-Reihenfolge sonst an
+## `needs_surface` scheitern und still im Lager landen (E9 P1-1).
 static func from_save(
 	entries: Array, defs: Dictionary, grid_size: Vector2i, blocked_cells: Array = [], doors := {}
 ) -> Dictionary:
 	var grid := GridData.new(grid_size, blocked_cells, doors)
 	var leftovers: Array = []
+	var surface_entries: Array = []
 	for entry: Variant in entries:
 		if not (entry is Dictionary) or not defs.has(str(entry.get("item", ""))):
 			leftovers.append(entry)
 			continue
 		var def: Dictionary = defs[str(entry["item"])]
-		var uid := str(entry.get("uid", ""))
-		var at_raw: Array = entry.get("at", [0, 0])
-		var placed: Dictionary
-		if entry.has("wall"):
-			placed = grid.place_wall(def, str(entry["wall"]), int(at_raw[0]), uid)
-		else:
-			var at := Vector2i(int(at_raw[0]), int(at_raw[1]))
-			placed = grid.place(def, at, int(entry.get("rot", 0)), uid)
-		if not placed["ok"]:
+		if int(def["layer"]) == Layer.SURFACE:
+			surface_entries.append(entry)
+			continue
+		if not grid._place_saved_entry(def, entry)["ok"]:
+			leftovers.append(entry)
+	for entry: Dictionary in surface_entries:
+		if not grid._place_saved_entry(defs[str(entry["item"])], entry)["ok"]:
 			leftovers.append(entry)
 	return {"grid": grid, "leftovers": leftovers}
+
+
+## Ein Save-Entry (Boden ODER Wand) platzieren — Helfer für from_save.
+func _place_saved_entry(def: Dictionary, entry: Dictionary) -> Dictionary:
+	var uid := str(entry.get("uid", ""))
+	var at_raw: Array = entry.get("at", [0, 0])
+	if entry.has("wall"):
+		return place_wall(def, str(entry["wall"]), int(at_raw[0]), uid)
+	var at := Vector2i(int(at_raw[0]), int(at_raw[1]))
+	return place(def, at, int(entry.get("rot", 0)), uid)
 
 
 ## Welt-Position (Raum-lokal, XZ-Ebene) der Zellen-Mitte eines Footprints.

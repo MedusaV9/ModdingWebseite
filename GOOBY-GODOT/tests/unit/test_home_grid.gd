@@ -94,6 +94,53 @@ func test_wand_items_und_tuer_spannen() -> void:
 	assert_eq(grid.wall_width("E"), 6)
 
 
+func test_wall_item_at_findet_wand_items() -> void:
+	var grid := GridData.new(Vector2i(8, 6))
+	var spiegel := _def("spiegel", 1, 1, GridData.Layer.WALL, {"wall_size": 1})
+	var bild := _def("bild", 2, 1, GridData.Layer.WALL, {"wall_size": 2})
+	assert_true(grid.place_wall(spiegel, "N", 2, "s")["ok"])
+	assert_true(grid.place_wall(bild, "E", 1, "b")["ok"])
+	assert_eq(grid.wall_item_at("N", 2), "s")
+	assert_eq(grid.wall_item_at("N", 3), "", "Nachbar-Slot frei")
+	assert_eq(grid.wall_item_at("E", 1), "b", "mehrzellig: erster Slot")
+	assert_eq(grid.wall_item_at("E", 2), "b", "mehrzellig: zweiter Slot")
+	assert_eq(grid.wall_item_at("W", 2), "", "andere Wand frei")
+	grid.remove_item("s")
+	assert_eq(grid.wall_item_at("N", 2), "", "nach remove_item wieder frei")
+
+
+func test_from_save_platziert_traeger_vor_surface() -> void:
+	# E9 P1-1: SURFACE-Item hat eine KLEINERE uid als sein Träger —
+	# to_items_array sortiert nach uid, das Aufliegende steht also VOR dem
+	# Träger im Array. from_save darf es trotzdem nicht ins Lager verlieren.
+	var defs := {
+		"tisch": _def("tisch", 1, 1, GridData.Layer.FLOOR, {"surface": true}),
+		"lampe": _def("lampe", 1, 1, GridData.Layer.SURFACE),
+	}
+	var grid := GridData.new(Vector2i(8, 8))
+	assert_true(grid.place(defs["tisch"], Vector2i(3, 3), 0, "i-000020")["ok"])
+	assert_true(grid.place(defs["lampe"], Vector2i(3, 3), 0, "i-000010")["ok"])
+	var arr := grid.to_items_array()
+	assert_eq(str(arr[0]["item"]), "lampe", "uid-sortiert: Lampe zuerst")
+	var loaded := GridData.from_save(arr, defs, Vector2i(8, 8))
+	assert_true(loaded["leftovers"].is_empty(), "Lampe bleibt auf dem Tisch")
+	assert_eq(loaded["grid"].to_items_array(), arr, "Roundtrip identisch")
+	# Schwebende SURFACE-Items (Träger fehlt wirklich) degradieren weiter weich.
+	var ohne_traeger := [{"uid": "i-1", "item": "lampe", "at": [5, 5], "rot": 0}]
+	var healed := GridData.from_save(ohne_traeger, defs, Vector2i(8, 8))
+	assert_eq(healed["leftovers"].size(), 1, "ohne Träger → Leftover")
+	# Kaputte Einträge landen weiterhin im Leftover, nicht im Crash.
+	var gemischt := [
+		{"uid": "i-2", "item": "lampe", "at": [3, 3], "rot": 0},
+		"muell",
+		{"uid": "i-3", "item": "unbekannt", "at": [0, 0], "rot": 0},
+		{"uid": "i-9", "item": "tisch", "at": [3, 3], "rot": 0},
+	]
+	var repariert := GridData.from_save(gemischt, defs, Vector2i(8, 8))
+	assert_eq(repariert["leftovers"].size(), 2, "Müll + unbekannt")
+	assert_eq(repariert["grid"].to_items_array().size(), 2, "Tisch + Lampe stehen")
+
+
 func test_verschieben_und_entfernen() -> void:
 	var grid := GridData.new(Vector2i(6, 6))
 	var sofa := _def("sofa", 2, 2, GridData.Layer.FLOOR)

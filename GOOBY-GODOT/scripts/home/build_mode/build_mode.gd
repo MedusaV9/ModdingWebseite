@@ -13,6 +13,10 @@ signal closed
 signal furniture_changed
 
 const DRAWER_HEIGHT := 168.0
+## Max. Bodenabstand (m) zur Wand, ab dem ein Tap als Wand-Item-Auswahl
+## zählt (negativ = Projektion hinter der Wand, der Normalfall beim Tap
+## direkt aufs hängende Item).
+const WALL_PICK_RANGE := 0.6
 
 # RoomBase (Duck-Typing statt Typ — vermeidet zyklische class_name-Referenz).
 var _room: Variant
@@ -123,6 +127,12 @@ func _on_tap(pos: Vector2) -> void:
 			_begin_move(uid)
 			_dragging = true
 			return
+	# Kein Boden-Treffer: Wand-Items prüfen (E9 P0-1 — sie belegen keine
+	# Zelle und wären sonst nie wieder auswählbar/einlagerbar).
+	var wall_uid := _wall_item_at_pointer(world)
+	if wall_uid != "":
+		_begin_move(wall_uid)
+		_dragging = true
 
 
 ## Ghost aus dem Lager starten (Drawer-Tap).
@@ -459,4 +469,21 @@ func _nearest_wall_slot(world: Vector3, span: int) -> Dictionary:
 	var along := world.x if (wall == "N" or wall == "S") else world.z
 	var offset := int(floor(along / GridData.CELL_SIZE)) - span / 2
 	offset = clampi(offset, 0, _grid.wall_width(wall) - span)
-	return {"wall": wall, "offset": offset}
+	return {"wall": wall, "offset": offset, "dist": dists[wall]}
+
+
+## Wand-Item unterm Tap ("" = keins). Der y=0-Schnittpunkt eines Taps AUF
+## ein Wand-Item (hängt auf ~1,35 m) liegt HINTER der Wandebene (dist < 0);
+## Taps knapp vor der Wand zählen als Fat-Finger-Toleranz ebenfalls. Die
+## Nachbar-Slots fangen den seitlichen Versatz der Bodenprojektion ab.
+func _wall_item_at_pointer(world: Vector3) -> String:
+	var slot := _nearest_wall_slot(world, 1)
+	if float(slot["dist"]) > WALL_PICK_RANGE:
+		return ""
+	var wall: String = slot["wall"]
+	var offset := int(slot["offset"])
+	for candidate in [offset, offset - 1, offset + 1]:
+		var uid := _grid.wall_item_at(wall, candidate)
+		if uid != "":
+			return uid
+	return ""

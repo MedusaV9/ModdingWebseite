@@ -8,6 +8,11 @@ extends Node3D
 ## Metadaten: `uid` + `item_id` (Baumodus-Picking läuft über GridData-Zellen,
 ## nicht über Physik).
 
+## Obergrenze fürs Auto-Fit (E9 P1-2): Möbel dürfen nie höher als der Raum
+## werden. 2.25 = 0.9 × die 2,5-m-Wand (RoomBase.WALL_HEIGHT — hier als
+## Literal, um keine zyklische class_name-Referenz einzuführen).
+const MAX_FIT_HEIGHT := 2.25
+
 var uid := ""
 var item_def: Dictionary = {}
 
@@ -103,6 +108,11 @@ func _fit_model(def: Dictionary) -> void:
 	var target_w := fp.x * GridData.CELL_SIZE * fill
 	var target_d := fp.y * GridData.CELL_SIZE * fill
 	var s := minf(target_w / aabb.size.x, target_d / aabb.size.z)
+	# Höhenclamp (E9 P1-2): der Footprint-Fit allein macht schmale, hohe
+	# Assets riesig (1×1-Stehlampe → 3,37 m bei 2,5 m Wandhöhe). Uniform
+	# bleibt der Scale trotzdem — die Decke ist die Obergrenze.
+	if aabb.size.y > 0.0001:
+		s = minf(s, MAX_FIT_HEIGHT / aabb.size.y)
 	_model.scale = Vector3.ONE * s
 	var center := aabb.get_center()
 	_model.position = Vector3(-center.x * s, -aabb.position.y * s, -center.z * s)
