@@ -17,7 +17,15 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
-
+[ ] Jedes Game hat nicht genug Polish.
+[ ] Das ganze UI ist null wie davor
+[ ] Es gibt viele Bugs.
+[ ] Warum ist sovieles keine richtigen Assets sondern nur premetives?
+[ ] Man soll beim Bauen quasi die ganze Stadt sehen außen drum plus dort sollen autos fahren , npcs laufen.
+[ ] Bei Fahren game soll man bei seinem Haus richtig starten/halt die ausfahrt.
+[ ] Man soll alles also auch den Haus Stil, Farbe und Gras /boden etc anpassen können.
+[ ] Das HUD/UI ist nicht mehr so schön / niedlich / cozy / animal crossing new horizons wie davor
+[ ] Es fehlt der polish. Nimm dir mehr Subagents die auch sowas wie Dopamin, Sounddesign und feeling bewerten und verbessern sollen.
 <!-- USER: Neue Punkte einfach hier drunter schreiben. Beispiel:
 - [ ] Das HUD ist mir im Querformat zu weit links
 - [ ] Der Taxi-Sound ist zu laut
