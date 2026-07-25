@@ -151,6 +151,16 @@ public final class StormWallRenderer {
     private static final float OCC_R = 0.014F;
     private static final float OCC_G = 0.010F;
     private static final float OCC_B = 0.026F;
+    /**
+     * STORM-VOL: sphere-occluder tint while {@link StormVolumeFx} raymarches this storm's
+     * interior mass. Still drawn FULLY OPAQUE (the never-see-inside guarantee is
+     * geometry/alpha, untouched) — only the COLOR lifts from near-black to a deep storm
+     * slate-green so the volumetric fog in front of it reads as continuous mass instead
+     * of silhouetting a black balloon wherever the shells thin out.
+     */
+    private static final float OCC_SOFT_R = 0.038F;
+    private static final float OCC_SOFT_G = 0.052F;
+    private static final float OCC_SOFT_B = 0.048F;
 
     // --- C8 sphere storms → STORM 2.0 volumetric EXO stack (PLAN-STORM2 §W-A A2) ---
     /**
@@ -508,6 +518,13 @@ public final class StormWallRenderer {
         float radius = Math.max(1.5F, storm.radius - OCCLUDER_INSET);
         float heightScale = heightScale(storm, vis);
         float alpha = Math.min(1.0F, vis * 1.6F);
+        // STORM-VOL: color-only soften while the volumetric pass owns this storm's mass
+        // (opacity untouched); false whenever Veil post is off / Iris is active / the
+        // pipeline was evicted — the frozen near-black look is fully preserved there.
+        boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
+        float occR = volumetric ? OCC_SOFT_R : OCC_R;
+        float occG = volumetric ? OCC_SOFT_G : OCC_G;
+        float occB = volumetric ? OCC_SOFT_B : OCC_B;
         float cx = (float) (storm.center.x - camera.x);
         float cy = (float) (storm.center.y - camera.y);
         float cz = (float) (storm.center.z - camera.z);
@@ -527,13 +544,13 @@ public final class StormWallRenderer {
                 float a0 = (float) (i * step);
                 float a1 = (float) ((i + 1) * step);
                 buffer.addVertex(cx + Mth.cos(a0) * ringR0, y0, cz + Mth.sin(a0) * ringR0)
-                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                        .setColor(occR, occG, occB, alpha);
                 buffer.addVertex(cx + Mth.cos(a1) * ringR0, y0, cz + Mth.sin(a1) * ringR0)
-                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                        .setColor(occR, occG, occB, alpha);
                 buffer.addVertex(cx + Mth.cos(a1) * ringR1, y1, cz + Mth.sin(a1) * ringR1)
-                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                        .setColor(occR, occG, occB, alpha);
                 buffer.addVertex(cx + Mth.cos(a0) * ringR1, y1, cz + Mth.sin(a0) * ringR1)
-                        .setColor(OCC_R, OCC_G, OCC_B, alpha);
+                        .setColor(occR, occG, occB, alpha);
             }
         }
     }
@@ -583,8 +600,16 @@ public final class StormWallRenderer {
                 float tierAlpha = Math.max(nearW, farW) * vis;
                 int segments = near ? NEAR_SEGMENTS : FAR_SEGMENTS;
                 int rings = near ? SPHERE_RINGS_BY_TIER[tier] : SPHERE_RINGS_FAR;
+                // STORM-VOL: while the volumetric raymarch pass is live for THIS storm it
+                // supplies the interior mass, so the near EXO stack thins ONE tier (the
+                // volume + full stack would just multiply overdraw into mush). The gate is
+                // false under Iris / veilPostFx-off / eviction — the frozen 8/5/3 ladder
+                // is untouched there, and the far/impostor tiers never change.
+                boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
                 int[] set = near
-                        ? (tier >= 2 ? EXO_NEAR_TIER2 : tier == 1 ? EXO_NEAR_TIER1 : EXO_NEAR_TIER0)
+                        ? (tier >= 2 ? (volumetric ? EXO_NEAR_TIER1 : EXO_NEAR_TIER2)
+                                : tier == 1 ? (volumetric ? EXO_NEAR_TIER0 : EXO_NEAR_TIER1)
+                                : EXO_NEAR_TIER0)
                         : EXO_FAR;
                 for (int k = 0; k < set.length; k++) {
                     // Painter order for the alpha sheets: deepest-first when the camera is
@@ -1423,8 +1448,10 @@ public final class StormWallRenderer {
      * FX-STORM stage curve of the C8 burst: a {@value #EXPLODE_PINCH}-deep implosion pinch
      * over the first {@value #EXPLODE_IMPLODE_FRAC} of the burst (releasing right after),
      * then an eased (t²) expansion out to {@code 1 + }{@value #EXPLODE_EXPAND} radii.
+     * Package-visible (STORM-VOL): {@link StormVolumeFx} expands the raymarched bounds on
+     * the SAME curve (raw boom = the outermost shell's stagger) during EXPLODE.
      */
-    private static float explodeRadiusScale(float boom) {
+    static float explodeRadiusScale(float boom) {
         if (boom <= 0.0F) {
             return 1.0F;
         }
@@ -1797,8 +1824,12 @@ public final class StormWallRenderer {
         RenderSystem.defaultBlendFunc();
     }
 
-    /** SPAWN grows the wall out of the ground; DISSIPATE stretches it upward as it thins. */
-    private static float heightScale(StormFxClient.ClientStorm storm, float visibility) {
+    /**
+     * SPAWN grows the wall out of the ground; DISSIPATE stretches it upward as it thins.
+     * Package-visible (STORM-VOL): {@link StormVolumeFx} feeds the same law as the
+     * {@code VolYScale} uniform so the raymarched ellipsoid tracks the shell dome exactly.
+     */
+    static float heightScale(StormFxClient.ClientStorm storm, float visibility) {
         if (storm.state == S2CStormStatePayload.STATE_DISSIPATE) {
             return 1.0F + 0.3F * (1.0F - visibility);
         }

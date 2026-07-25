@@ -81,6 +81,7 @@ public final class FxPayloads {
         registrar.playToClient(S2CCaptionPayload.TYPE, S2CCaptionPayload.STREAM_CODEC, FxPayloads::handleCaption);
         registrar.playToClient(S2CGhostStatePayload.TYPE, S2CGhostStatePayload.STREAM_CODEC, FxPayloads::handleGhostState);
         registrar.playToClient(S2CAnchorPayload.TYPE, S2CAnchorPayload.STREAM_CODEC, FxPayloads::handleAnchor);
+        registrar.playToClient(S2CGlitchZonePayload.TYPE, S2CGlitchZonePayload.STREAM_CODEC, FxPayloads::handleGlitchZone);
     }
 
     // ------------------------------------------------------------------ server send helpers
@@ -283,6 +284,11 @@ public final class FxPayloads {
 
     private static void handleAnchor(S2CAnchorPayload payload, IPayloadContext context) {
         FxAnchors.handleClient(payload.id(), payload.set(), payload.pos());
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleGlitchZone(S2CGlitchZonePayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.GlitchZoneFx.handle(payload.effect(), payload.strength());
     }
 
     /** Nearest client-level player to an FX event position (glide events carry no entity id). */

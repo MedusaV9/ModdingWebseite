@@ -1,0 +1,36 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.glitch.add": "Spawn a silent glitch zone: effect, radius (blocks), duration (s); defaults to your position/dimension, optional x y z and fade-out ticks",
+    "dev.eclipse.doc.glitch.remove": "Remove one glitch zone by its id (tab-completes live ids)",
+    "dev.eclipse.doc.glitch.clear": "Remove ALL glitch zones immediately",
+    "dev.eclipse.doc.glitch.list": "List live glitch zones: effect, radius, dimension, centre, remaining time, id",
+    "dev.eclipse.doc.glitch.test": "Preview a glitch effect on yourself only (default 10 s), no zone is created",
+    "dev.eclipse.glitch.added": "Glitch zone created: %1$s, radius %2$s blocks, %3$s s, centre %4$s %5$s %6$s (id %7$s). No announcement goes out — the zone is simply there.",
+    "dev.eclipse.glitch.removed": "Glitch zone %1$s removed. Anyone inside sees reality settle back down.",
+    "dev.eclipse.glitch.remove_missing": "No glitch zone with id %1$s — see /dev glitch list.",
+    "dev.eclipse.glitch.cleared": "Removed %1$s glitch zone(s).",
+    "dev.eclipse.glitch.list.empty": "No glitch zones are live.",
+    "dev.eclipse.glitch.list.header": "Live glitch zones (%1$s):",
+    "dev.eclipse.glitch.list.entry": " - %1$s r=%2$s %3$s @ %4$s, %5$s s left, id %6$s",
+    "dev.eclipse.glitch.unknown_effect": "Unknown glitch effect '%1$s'. Available: %2$s",
+    "dev.eclipse.glitch.limit": "Zone limit reached (%1$s). Remove or clear zones first.",
+    "dev.eclipse.glitch.test.started": "Glitch self-test: %1$s for %2$s s on your client only."
+  },
+  "de_de": {
+    "dev.eclipse.doc.glitch.add": "Erzeugt eine stille Glitch-Zone: Effekt, Radius (Blöcke), Dauer (s); Standard ist deine Position/Dimension, optional x y z und Ausblend-Ticks",
+    "dev.eclipse.doc.glitch.remove": "Entfernt eine Glitch-Zone über ihre ID (Tab vervollständigt aktive IDs)",
+    "dev.eclipse.doc.glitch.clear": "Entfernt sofort ALLE Glitch-Zonen",
+    "dev.eclipse.doc.glitch.list": "Listet aktive Glitch-Zonen: Effekt, Radius, Dimension, Zentrum, Restzeit, ID",
+    "dev.eclipse.doc.glitch.test": "Testet einen Glitch-Effekt nur an dir selbst (Standard 10 s), ohne eine Zone zu erzeugen",
+    "dev.eclipse.glitch.added": "Glitch-Zone erzeugt: %1$s, Radius %2$s Blöcke, %3$s s, Zentrum %4$s %5$s %6$s (ID %7$s). Es geht keine Ankündigung raus — die Zone ist einfach da.",
+    "dev.eclipse.glitch.removed": "Glitch-Zone %1$s entfernt. Wer drinsteht, sieht die Realität sich wieder beruhigen.",
+    "dev.eclipse.glitch.remove_missing": "Keine Glitch-Zone mit der ID %1$s — siehe /dev glitch list.",
+    "dev.eclipse.glitch.cleared": "%1$s Glitch-Zone(n) entfernt.",
+    "dev.eclipse.glitch.list.empty": "Keine Glitch-Zonen aktiv.",
+    "dev.eclipse.glitch.list.header": "Aktive Glitch-Zonen (%1$s):",
+    "dev.eclipse.glitch.list.entry": " - %1$s r=%2$s %3$s @ %4$s, noch %5$s s, ID %6$s",
+    "dev.eclipse.glitch.unknown_effect": "Unbekannter Glitch-Effekt '%1$s'. Verfügbar: %2$s",
+    "dev.eclipse.glitch.limit": "Zonen-Limit erreicht (%1$s). Erst Zonen entfernen oder leeren.",
+    "dev.eclipse.glitch.test.started": "Glitch-Selbsttest: %1$s für %2$s s, nur auf deinem Client."
+  }
+}
