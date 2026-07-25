@@ -30,19 +30,22 @@
 	},
 	"difficulty": {
 		"easy": {
-			"zombie_hp_pct": 80,
-			"zombie_speed_bonus_pct": 0,
-			"start_nutella_bonus": 25
+			"zombie_hp_pct": 70,
+			"zombie_speed_bonus_pct": -10,
+			"start_nutella_bonus": 0,
+			"tower_hp_pct": 160
 		},
 		"normal": {
 			"zombie_hp_pct": 100,
 			"zombie_speed_bonus_pct": 0,
-			"start_nutella_bonus": 0
+			"start_nutella_bonus": 0,
+			"tower_hp_pct": 100
 		},
 		"hard": {
-			"zombie_hp_pct": 120,
-			"zombie_speed_bonus_pct": 10,
-			"start_nutella_bonus": 0
+			"zombie_hp_pct": 110,
+			"zombie_speed_bonus_pct": 5,
+			"start_nutella_bonus": 0,
+			"tower_hp_pct": 100
 		}
 	},
 	"towers": {

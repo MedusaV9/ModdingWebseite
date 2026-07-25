@@ -17,12 +17,15 @@ var game_state: Object
 var _grid: GridContainer
 var _stars_label: Label
 var _buttons: Dictionary = {}
+## Level-Id → neues Element ("tower"/"zombie") für das NEU-Badge (E11 §Intro).
+var _new_element: Dictionary = {}
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_load_new_elements()
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_%s" % side, 14)
 	add_child(margin)
@@ -96,15 +99,30 @@ func refresh() -> void:
 			_style_tile(tile, Color("#E7DFD3"), true)
 		else:
 			tile.disabled = false
+			var cleared := GvzProgress.is_cleared(game_state, id)
+			# E11 §Intro: das Level, das ein neues Element einführt, sagt das
+			# jetzt AN der Kachel (bis es abgeschlossen wurde).
+			if not cleared and _new_element.has(id):
+				badge += " · %s" % I18nService.t("gvz.select.new")
 			var star_row := "☆☆☆"
 			if stars > 0:
 				star_row = "★".repeat(stars) + "☆".repeat(3 - stars)
 			tile.text = "%d%s\n%s" % [id, badge, star_row]
-			var cleared := GvzProgress.is_cleared(game_state, id)
 			_style_tile(tile, Color("#DFF2CF") if cleared else Color("#FFF6E3"), false)
 	_stars_label.text = I18nService.t(
 		"gvz.select.stars", {"n": GvzProgress.total_stars(game_state), "max": 45}
 	)
+
+
+## new_towers/new_zombies aus den Level-Daten für die Badges einlesen.
+func _load_new_elements() -> void:
+	_new_element = {}
+	for level: Dictionary in GvzData.load_levels():
+		var id := int(level.get("id", 0))
+		if not (level.get("new_towers", []) as Array).is_empty():
+			_new_element[id] = "tower"
+		elif not (level.get("new_zombies", []) as Array).is_empty():
+			_new_element[id] = "zombie"
 
 
 ## Pastell-Kachel im Sticker-Look: Creme offen, Mint geschafft, blass gesperrt.

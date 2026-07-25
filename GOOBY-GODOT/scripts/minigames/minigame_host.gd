@@ -14,6 +14,7 @@ signal exit_requested(target: StringName, params: Dictionary)
 signal round_finished(breakdown: Dictionary)
 
 const RESULTS_SCENE := preload("res://scripts/minigames/results.tscn")
+const Stats := preload("res://scripts/logic/stats.gd")
 ## Design-Basis wie im Web (CSS-Baseline 390×844).
 const DESIGN_PORTRAIT := Vector2(390, 844)
 ## OrientationService.LockMode (W1a-Contract FROZEN: AUTO/LANDSCAPE/PORTRAIT).
@@ -47,6 +48,9 @@ var _pause_button: Button
 var _results: MinigameResults
 var _round_over := false
 var _countdown_token := 0
+## Coin-würdige Teil-Scores der Session (GvZ meldet pro gewonnenem Level —
+## die Coin-Row wird dann PRO Chunk statt auf den Session-Score angewandt).
+var _coin_chunks: Array[int] = []
 
 
 func receive_params(params: Dictionary) -> void:
@@ -57,10 +61,19 @@ func receive_params(params: Dictionary) -> void:
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# E14-P0-2: set_anchors_preset() behält das aktuelle (0×0-)Rect bei —
+	# unter dem Router-Mount (Node3D, kein Control-Parent) blieb der Host
+	# damit unsichtbar klein. and_offsets füllt den Viewport wirklich.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_meta = MinigameRegistry.get_game(game_id)
 	if _meta.is_empty() or not _meta.has("scene"):
 		push_warning("[mg_host] unbekanntes Spiel '%s' — zurück zur Arcade" % game_id)
+		_exit_to(&"arcade", {})
+		return
+	if _is_exhausted():
+		# §C1 (Web-Parität): erschöpfte Goobys spielen nicht — Pregame blockt
+		# das schon, der Guard fängt Direkt-Routen (Deeplinks/Tests) ab.
+		push_warning("[mg_host] Gooby erschöpft — Start verweigert")
 		_exit_to(&"arcade", {})
 		return
 	difficulty = MinigameFrameworkLogic.effective_difficulty(
@@ -98,11 +111,11 @@ func effective_orientation() -> String:
 func _build_ui() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
 	_stage = Control.new()
-	_stage.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_stage)
 	_viewport_container = SubViewportContainer.new()
@@ -117,13 +130,13 @@ func _build_ui() -> void:
 	add_child(juice)
 
 	_overlay = Control.new()
-	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay)
 	juice.float_text_parent = _overlay
 
 	var top_bar := HBoxContainer.new()
-	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	top_bar.offset_left = 16.0
 	top_bar.offset_right = -16.0
 	top_bar.offset_top = 10.0
@@ -147,7 +160,7 @@ func _build_ui() -> void:
 	_countdown_label = Label.new()
 	_countdown_label.theme_type_variation = &"TitleLabel"
 	_countdown_label.add_theme_font_size_override("font_size", 96)
-	_countdown_label.set_anchors_preset(Control.PRESET_CENTER)
+	_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_countdown_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_countdown_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -165,14 +178,14 @@ func _build_ui() -> void:
 
 func _build_pause_overlay() -> Control:
 	var overlay := Control.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.hide()
 	var dim := ColorRect.new()
 	dim.color = Color(0.24, 0.16, 0.12, 0.5)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(dim)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"AcCardLg"
@@ -216,6 +229,7 @@ func _mount_game() -> void:
 	_ctx.juice = juice
 	_ctx.on_score = _on_game_score
 	_ctx.on_end = _on_game_end
+	_ctx.on_coin_chunk = _on_coin_chunk
 	_viewport.add_child(_game)
 	_game.setup(_ctx)
 
@@ -258,6 +272,9 @@ func _run_countdown() -> void:
 	)
 	_pause_button.disabled = false
 	if _game != null:
+		# Web-Parität §C6 (framework.js:1369-1377): die Energie wird erst
+		# beim ECHTEN Rundenstart abgebucht (Abbruch im Countdown ist gratis).
+		_charge_energy()
 		_game.start()
 
 
@@ -301,9 +318,10 @@ func _award(final_score: int) -> Dictionary:
 	var holder: Array[Dictionary] = []
 	var meta := _meta
 	var mode := difficulty
+	var chunks := _coin_chunks.duplicate()
 	gs.update(
 		func(state: Dictionary) -> void:
-			holder.append(MinigameAward.award(state, meta, final_score, mode, today))
+			holder.append(MinigameAward.award(state, meta, final_score, mode, today, chunks))
 	)
 	return holder[0] if holder.size() > 0 else {}
 
@@ -332,9 +350,15 @@ func _on_quit_pressed() -> void:
 
 func _on_again_pressed() -> void:
 	# Interner Neustart (gleiche Difficulty/Orientierung, frischer Seed).
+	if _is_exhausted():
+		# Jede Runde kostet Energie (§C6) — erschöpft geht es zurück zur
+		# Arcade statt in eine Gratis-Runde.
+		_exit_to(&"arcade", {})
+		return
 	_results.hide()
 	_round_over = false
 	score = 0
+	_coin_chunks = []
 	run_seed = maxi(1, randi() & 0x7FFFFFFF)
 	_score_label.text = I18nService.t("mg.host.score", {"score": 0})
 	if _game != null:
@@ -376,3 +400,48 @@ func _resolve_state() -> Node:
 	if gs != null and gs.has_method("update") and gs.get("clock") != null:
 		return gs
 	return null
+
+
+## Coin-würdiger Teil-Score (GvZ: pro gewonnenem Level) — die Coin-Row wird
+## im Award PRO Chunk angewandt statt einmal auf den Session-Score (E10-P1-3).
+func _on_coin_chunk(amount: int) -> void:
+	if amount > 0:
+		_coin_chunks.append(amount)
+
+
+## §C1 Web-Parität: Energie <= 15 → Minigames verweigern den Start.
+func _is_exhausted() -> bool:
+	var gs := _resolve_state()
+	if gs == null or not gs.has_method("state"):
+		return false
+	var state: Dictionary = gs.state()
+	var gooby: Variant = state.get("gooby")
+	if not (gooby is Dictionary):
+		return false
+	var stats: Variant = (gooby as Dictionary).get("stats")
+	if not (stats is Dictionary):
+		return false
+	return Stats.is_exhausted(stats)
+
+
+## §C6 Web-Parität (E10-P1-2): jeder Rundenstart kostet meta.energy_cost
+## (Default 8 = MINIGAME.ENERGY_COST) — DIE Bremse gegen den Coin-Hahn.
+func _charge_energy() -> void:
+	var gs := _resolve_state()
+	if gs == null:
+		return
+	var cost := int(_meta.get("energy_cost", MinigameRegistry.DEFAULT_ENERGY_COST))
+	if cost <= 0:
+		return
+	gs.update(
+		func(state: Dictionary) -> void:
+			var gooby: Variant = state.get("gooby")
+			if not (gooby is Dictionary):
+				return
+			var stats: Variant = (gooby as Dictionary).get("stats")
+			if not (stats is Dictionary):
+				return
+			stats["energy"] = Stats.clamp_stat(
+				float((stats as Dictionary).get("energy", 0.0)) - float(cost)
+			)
+	)

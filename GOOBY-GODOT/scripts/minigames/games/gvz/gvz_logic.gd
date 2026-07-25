@@ -254,14 +254,19 @@ static func next_id(state: Dictionary) -> int:
 
 static func _make_tower(state: Dictionary, type: String, lane: int, col: int) -> Dictionary:
 	var row: Dictionary = state["balance"]["towers"][type]
+	var diff: Dictionary = state["balance"]["difficulty"].get(str(state["diff"]), {})
+	# Difficulty wirkt auch turmseitig (E11-Monotonie): auf easy halten Türme
+	# spürbar mehr Bisse aus — das macht schlampige Baupläne verzeihbar,
+	# OHNE die Bot-Entscheidungen zu kippen (keine Heuristik liest Turm-HP).
+	var hp := _idiv(int(row.get("hp", 300)) * int(diff.get("tower_hp_pct", 100)), 100)
 	var tick_now := int(state["tick"])
 	var tower := {
 		"id": next_id(state),
 		"type": type,
 		"lane": lane,
 		"col": col,
-		"hp": int(row.get("hp", 300)),
-		"max_hp": int(row.get("hp", 300)),
+		"hp": hp,
+		"max_hp": hp,
 		"next_act":
 		tick_now + int(row.get("produce_interval_ticks", row.get("fire_interval_ticks", 0))),
 	}

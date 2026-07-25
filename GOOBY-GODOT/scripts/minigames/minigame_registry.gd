@@ -9,6 +9,10 @@ extends RefCounted
 
 const COVER_DIR := "res://assets/covers"
 
+## Web MINIGAME.ENERGY_COST (data/constants.js §C6): 8 Energie pro Start —
+## der Host bucht beim ECHTEN Rundenstart ab (E10-P1-2: die Coin-Bremse).
+const DEFAULT_ENERGY_COST := 8
+
 const GAMES: Array[Dictionary] = [
 	{
 		"id": "teaParty",
@@ -18,6 +22,7 @@ const GAMES: Array[Dictionary] = [
 		"target": 85,
 		"orientation": "portrait",
 		"supports_endless": true,
+		"energy_cost": 8,
 	},
 	{
 		"id": "carrotCatch",
@@ -27,15 +32,21 @@ const GAMES: Array[Dictionary] = [
 		"target": 70,
 		"orientation": "portrait",
 		"supports_endless": true,
+		"energy_cost": 8,
 	},
 	{
 		"id": "gvz",
 		"title_key": "mg.gvz.title",
 		"scene": "res://scripts/minigames/games/gvz/gvz_game.tscn",
-		"coin_table": {"divisor": 12, "min": 4, "max": 40},
+		# E10-P1-3: die Row wird PRO gewonnenem Level angewandt (Coin-Chunks,
+		# gvz_game meldet jeden Levelsieg). divisor 3 eicht auf die realen
+		# Level-Scores 50–210 (vorher /12 auf den Session-Score = 10–20×
+		# schlechter als teaParty).
+		"coin_table": {"divisor": 3, "min": 4, "max": 40},
 		"target": 300,
 		"orientation": "landscape",
 		"supports_endless": false,
+		"energy_cost": 8,
 	},
 	{"id": "gobnom", "title_key": "mg.gobnom.title", "coming_soon": true},
 ]

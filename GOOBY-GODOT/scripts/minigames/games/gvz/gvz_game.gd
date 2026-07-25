@@ -7,6 +7,18 @@ extends MinigameBase
 ## Punkte laufen NUR über ctx.report_score/report_end (Award macht der Host).
 ## Feedback (W4-P1): JuiceKit an Gefechts-Momenten (Shake/Freeze/Bloom bei
 ## Welle/Boss/Mäher/Boom, Slowmo beim Boss-Auftritt) + AudioDirector-SFX.
+##
+## BACKLOG (E4-P1, ~850 Draw Calls im Gefecht): jede Figur entsteht
+## immediate-mode aus Dutzenden draw_circle/draw_polygon (GvzArt) — jede
+## Primitive ist ein eigener Canvas-Befehl, Batching bricht. Fix-Skizze aus
+## E4: GvzArt-Figuren sind deterministisch → beim Level-Start pro Typ/Stimmung
+## einmal in einen ImageTexture-Atlas rendern (SubViewport) und in _draw()
+## nur noch draw_texture_rect_region aus EINEM Atlas ziehen (<50 Calls).
+## Haken, warum das kein Quick-Fix ist: die Wackel-Animation ist Tick-
+## getrieben (GvzArt-`tick`-Parameter verformt Ohren/Körper pro Frame) —
+## ein Atlas braucht dafür N Animationsphasen pro Figur ODER die Verformung
+## wandert in einen Vertex-Shader. Gameplay ist mit 20-Tick-Sim davon
+## unberührt; nur die Render-Schicht dieser Datei + gvz_art.gd sind betroffen.
 
 const TICK_SEC := 0.05
 const CARD_W := 56.0
@@ -107,7 +119,9 @@ func finish_session() -> void:
 			{
 				"score": session_score,
 				"stars": GvzProgress.total_stars(_game_state()),
-				"levels": GvzProgress.max_unlocked(_game_state()) - 1,
+				# E11-P1-5: max_unlocked()-1 meldete nach dem Vollabschluss
+				# 14 statt 15 — jetzt zählen die WIRKLICH abgeschlossenen.
+				"levels": GvzProgress.cleared_count(_game_state()),
 			}
 		)
 	)
@@ -216,6 +230,9 @@ func _on_run_over() -> void:
 		AudioDirector.try_play(self, "mg_win")
 		if ctx != null:
 			ctx.report_score(session_score, total - _last_run_score)
+			# E10-P1-3: jeder Levelsieg ist eine eigene Coin-Einheit — der
+			# Host wendet die Coin-Row pro Chunk an statt pro Session.
+			ctx.report_coin_chunk(total)
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
 		phase = "won"
@@ -406,6 +423,7 @@ func _draw() -> void:
 	_draw_boss()
 	_draw_projectiles()
 	_draw_poofs()
+	_draw_fog()
 	_draw_mowers()
 	_draw_hud()
 	_draw_ghost()
@@ -430,11 +448,43 @@ func _draw_field() -> void:
 	# Haus-Seite (links): warmer Holz-Steg für die Panik-Goobys.
 	draw_rect(Rect2(0, field.position.y, MOWER_GUTTER, field.size.y), Color("#EAD9B0"))
 	draw_rect(Rect2(MOWER_GUTTER - 4, field.position.y, 4, field.size.y), GvzArt.WOOD)
-	if bool(state["mods"].get("fog", false)):
-		var fog_x := _x_to_px(6 * GvzLogic.CELL_MM)
-		draw_rect(
-			Rect2(fog_x, field.position.y, field.end.x - fog_x, field.size.y),
-			Color(0.85, 0.88, 0.92, 0.55)
+
+
+## Nebel-Spalten des Levels (E11-P1-4: L11 liefert mods.fog_cols=3, der alte
+## Renderer prüfte nur mods.fog — die Mechanik war funktional tot). Legacy-
+## `fog: true` zählt als 3 Spalten. 0 = kein Nebel.
+func _fog_cols() -> int:
+	var mods: Dictionary = state["mods"]
+	var cols := int(mods.get("fog_cols", 0))
+	if cols <= 0 and bool(mods.get("fog", false)):
+		cols = 3
+	return clampi(cols, 0, GvzLogic.COLS)
+
+
+## x-Position (Milli-Zellen), ab der der Nebel beginnt (rechte Feldseite).
+func _fog_start_mm() -> int:
+	return (GvzLogic.COLS - _fog_cols()) * GvzLogic.CELL_MM
+
+
+## Nebelwand ÜBER den Zombies zeichnen — was im Nebel anrollt, bleibt
+## unsichtbar, bis es die Wand verlässt (das ist die Mechanik: Überraschung
+## auf den letzten Spalten, Doc G §4.4 L11).
+func _draw_fog() -> void:
+	var cols := _fog_cols()
+	if cols <= 0:
+		return
+	var field := _field_rect()
+	var fog_x := _x_to_px(_fog_start_mm())
+	draw_rect(Rect2(fog_x, field.position.y, field.end.x - fog_x, field.size.y), Color("#D9DEE6"))
+	# Weiche Wolkenkante + Schwaden, damit die Wand nicht wie ein UI-Panel wirkt.
+	var cell := _cell_size()
+	var tick := int(state["tick"])
+	for lane in 5:
+		var cy := field.position.y + (lane + 0.5) * cell.y
+		var wobble := sin(float(tick) * 0.05 + lane * 1.7) * cell.y * 0.12
+		draw_circle(Vector2(fog_x, cy + wobble), cell.y * 0.55, Color("#E4E8EF"))
+		draw_circle(
+			Vector2(fog_x + cell.x * 0.7, cy - wobble), cell.y * 0.4, Color(0.92, 0.94, 0.97, 0.8)
 		)
 
 
@@ -693,8 +743,8 @@ func _build_select_screen() -> void:
 	_select_screen.level_chosen.connect(open_level)
 	_select_screen.done_pressed.connect(finish_session)
 	add_child(_select_screen)
-	_select_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_select_screen.size = _view_size()
+	# and_offsets: nur Anker setzen würde das aktuelle Rect behalten (E14-P0).
+	_select_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 func _build_end_overlay(won: bool, stars: int, total: int, first_clear: bool) -> void:

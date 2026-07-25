@@ -592,7 +592,7 @@
 				},
 				{
 					"t": 104.6,
-					"lane": 1,
+					"lane": 4,
 					"type": "sprinter"
 				},
 				{
@@ -607,7 +607,7 @@
 				},
 				{
 					"t": 140,
-					"lane": 4,
+					"lane": 1,
 					"type": "schlurfi"
 				},
 				{

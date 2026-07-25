@@ -87,6 +87,17 @@ static func total_stars(gs: Object) -> int:
 	return total
 
 
+## Anzahl WIRKLICH abgeschlossener Level (0..15). max_unlocked() taugt dafür
+## nicht: es ist nach dem Vollabschluss auf LEVEL_COUNT gedeckelt und meldete
+## via "-1" 14 statt 15 (E11-P1-5).
+static func cleared_count(gs: Object) -> int:
+	var total := 0
+	for id in range(1, LEVEL_COUNT + 1):
+		if is_cleared(gs, id):
+			total += 1
+	return total
+
+
 static func goldi_unlocked(gs: Object) -> bool:
 	if gs == null:
 		return false

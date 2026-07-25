@@ -20,6 +20,10 @@ var juice: JuiceKit
 var on_score: Callable = Callable()
 ## Host-Callback: on_end.call(result: Dictionary) — result MUSS "score" haben.
 var on_end: Callable = Callable()
+## Host-Callback: on_coin_chunk.call(amount: int) — coin-würdiger Teil-Score
+## (z. B. GvZ pro gewonnenem Level). Optional; ohne Meldung wird die Coin-Row
+## wie bisher einmal auf den Session-Score angewandt.
+var on_coin_chunk: Callable = Callable()
 
 
 ## Deterministischer mulberry32-RNG; ohne Argument mit dem Lauf-Seed.
@@ -35,3 +39,9 @@ func report_score(total: int, delta := 0) -> void:
 func report_end(result: Dictionary) -> void:
 	if on_end.is_valid():
 		on_end.call(result)
+
+
+## Teil-Score als eigene Coin-Einheit melden (E10-P1-3: GvZ-Award pro Level).
+func report_coin_chunk(amount: int) -> void:
+	if on_coin_chunk.is_valid():
+		on_coin_chunk.call(amount)

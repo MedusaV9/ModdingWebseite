@@ -11,6 +11,7 @@ signal back_requested
 
 const DIFF_ORDER: Array[String] = ["easy", "normal", "hard", "endless"]
 const ORIENT_ORDER: Array[String] = ["auto", "portrait", "landscape"]
+const Stats := preload("res://scripts/logic/stats.gd")
 
 ## Tests: Navigation abschaltbar; State-Override wie beim Host.
 var auto_navigate := true
@@ -22,8 +23,11 @@ var selected_orientation := "auto"
 
 var _meta: Dictionary = {}
 var _best_label: Label
+var _hint_label: Label
 var _diff_buttons: Dictionary = {}
 var _orient_buttons: Dictionary = {}
+var _touch_buttons: Array[Button] = []
+var _chip_buttons: Array[Button] = []
 
 
 func receive_params(params: Dictionary) -> void:
@@ -31,7 +35,9 @@ func receive_params(params: Dictionary) -> void:
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# E14-P0: and_offsets — nur Anker setzen behält unter dem Router-Mount
+	# das 0×0-Rect (Offsets werden aufs aktuelle Rect zurückgerechnet).
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_meta = MinigameRegistry.get_game(game_id)
 	if _meta.is_empty():
 		push_warning("[mg_pregame] unbekanntes Spiel '%s'" % game_id)
@@ -40,6 +46,8 @@ func _ready() -> void:
 	_load_selections()
 	_build_ui()
 	_refresh_buttons()
+	_apply_touch_floor()
+	get_viewport().size_changed.connect(_apply_touch_floor)
 
 
 func _load_selections() -> void:
@@ -57,10 +65,10 @@ func _load_selections() -> void:
 func _build_ui() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"AcCardLg"
@@ -90,6 +98,17 @@ func _build_ui() -> void:
 	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rows.add_child(_best_label)
 
+	# §C6 Web-Parität: der Start kostet Energie — das steht wie im Web-
+	# Pregame sichtbar am Screen (E10-P1-2).
+	var energy_note := Label.new()
+	energy_note.theme_type_variation = &"CaptionLabel"
+	energy_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	energy_note.text = I18nService.t(
+		"mg.pregame.energy",
+		{"energy": int(_meta.get("energy_cost", MinigameRegistry.DEFAULT_ENERGY_COST))}
+	)
+	rows.add_child(energy_note)
+
 	rows.add_child(_section_label(I18nService.t("mg.pregame.difficulty")))
 	var diff_row := HBoxContainer.new()
 	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -105,6 +124,8 @@ func _build_ui() -> void:
 		btn.pressed.connect(_on_difficulty_pressed.bind(mode))
 		diff_row.add_child(btn)
 		_diff_buttons[mode] = btn
+		_touch_buttons.append(btn)
+		_chip_buttons.append(btn)
 
 	rows.add_child(_section_label(I18nService.t("mg.pregame.orientation")))
 	var orient_row := HBoxContainer.new()
@@ -119,6 +140,8 @@ func _build_ui() -> void:
 		btn.pressed.connect(_on_orientation_pressed.bind(orient))
 		orient_row.add_child(btn)
 		_orient_buttons[orient] = btn
+		_touch_buttons.append(btn)
+		_chip_buttons.append(btn)
 
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -129,11 +152,40 @@ func _build_ui() -> void:
 	back.text = I18nService.t("mg.pregame.back")
 	back.pressed.connect(_go_back)
 	buttons.add_child(back)
+	_touch_buttons.append(back)
 	var play := Button.new()
 	play.theme_type_variation = &"PrimaryButton"
 	play.text = I18nService.t("mg.pregame.play")
 	play.pressed.connect(_on_play_pressed)
 	buttons.add_child(play)
+	_touch_buttons.append(play)
+
+	_hint_label = Label.new()
+	_hint_label.theme_type_variation = &"CaptionLabel"
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.add_theme_color_override("font_color", Color(0.85, 0.4, 0.35))
+	_hint_label.hide()
+	rows.add_child(_hint_label)
+
+
+## FIX-B-Handoff (E5-F4/E7-P1-3): 48-px-Touch-Floor gilt PHYSISCH. In
+## Hochkant hält der Stretch die kurze Canvas-Achse ≥1280 → Chips brauchen
+## ~85 Canvas-px Höhe. custom_minimum_size übersteuert die AcChip-Höhe (40)
+## konfliktfrei am Node (Theme-Styleboxen gehören FIX-A). Bei Resize/
+## Rotation neu anwenden — Muster wie Hud.apply_layout().
+func _apply_touch_floor() -> void:
+	var canvas := get_viewport().get_visible_rect().size
+	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	var scale_f := HudLayoutLogic.portrait_scale(canvas)
+	for btn in _touch_buttons:
+		# BEIDE Achsen: kurze Chip-Texte ("Auto") unterschreiten sonst den
+		# Floor in der Breite (48 px gilt für die kurze Kante des Tap-Ziels).
+		btn.custom_minimum_size = Vector2(floor_px, floor_px)
+	for btn in _chip_buttons:
+		if scale_f > 1.0:
+			btn.add_theme_font_size_override("font_size", int(17 * scale_f))
+		else:
+			btn.remove_theme_font_size_override("font_size")
 
 
 func _section_label(text: String) -> Label:
@@ -195,6 +247,13 @@ func _on_orientation_pressed(orient: String) -> void:
 
 
 func _on_play_pressed() -> void:
+	if _is_exhausted():
+		# §C1 Web-Parität (framework.js launch-Gate): erschöpfte Goobys
+		# spielen nicht — Hinweis statt Start (E10-P1-2).
+		AudioDirector.try_play(self, "ui_error")
+		_hint_label.text = I18nService.t("mg.pregame.too_sleepy")
+		_hint_label.show()
+		return
 	AudioDirector.try_play(self, "ui_confirm")
 	var params := {
 		"game_id": game_id,
@@ -226,3 +285,18 @@ func _resolve_state() -> Node:
 	if gs != null and gs.has_method("state") and gs.has_method("update"):
 		return gs
 	return null
+
+
+## §C1: Energie <= 15 → Minigames verweigern (Spiegel von stats.is_exhausted).
+func _is_exhausted() -> bool:
+	var gs := _resolve_state()
+	if gs == null:
+		return false
+	var state: Dictionary = gs.state()
+	var gooby: Variant = state.get("gooby")
+	if not (gooby is Dictionary):
+		return false
+	var stats: Variant = (gooby as Dictionary).get("stats")
+	if not (stats is Dictionary):
+		return false
+	return Stats.is_exhausted(stats)

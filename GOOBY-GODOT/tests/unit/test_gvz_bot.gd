@@ -59,6 +59,49 @@ func test_bot_beats_boss_knurps_at_least_60_percent() -> void:
 	assert_true(won_with_stars, "Sieg gibt Sterne")
 
 
+func test_bot_certifies_easy_and_hard_difficulties() -> void:
+	# E11-Lücke geschlossen: zertifiziert war nur "normal" — Difficulty-
+	# Kipper (easy L13 härter als normal, hard-Klippen L2/L14) rutschten
+	# durch. Stichprobe über die ehemaligen Problemlevel: easy gewinnt
+	# IMMER (Ziel ≥90 %), hard bleibt bot-gewinnbar. Volle 15×3-Matrix:
+	# gvz_telemetry.gd mit GVZ_DIFF=easy|hard.
+	var balance := GvzData.load_balance(null)
+	var levels := GvzData.load_levels()
+	for id in [2, 6, 12, 13, 14]:
+		var level := GvzData.level_by_id(levels, id)
+		for diff in ["easy", "hard"]:
+			var result := GvzBot.simulate(level, balance, 1, diff)
+			assert_true(
+				bool(result["won"]),
+				"L%d %s verloren (%s @%d)" % [id, diff, result["outcome"], result["ticks"]]
+			)
+
+
+func test_bot_difficulty_is_monotone_on_the_pre_boss_peak() -> void:
+	# Monotonie-Anker am Kampagnen-Gipfel L13 (E11-Root-Cause-Level):
+	# easy und normal gewinnen; keine Difficulty-Inversion easy > normal.
+	var balance := GvzData.load_balance(null)
+	var level := GvzData.level_by_id(GvzData.load_levels(), 13)
+	var easy := GvzBot.simulate(level, balance, 1, "easy")
+	var normal := GvzBot.simulate(level, balance, 1, "normal")
+	assert_true(bool(easy["won"]), "L13 easy verloren — Inversion zurück!")
+	assert_true(bool(normal["won"]), "L13 normal verloren")
+
+
+func test_bot_beats_boss_on_easy_and_survives_hard() -> void:
+	# Boss-Level über die Rand-Difficulties: easy muss sitzen (Seed 1),
+	# hard darf einzelne Seeds verlieren, bleibt aber >= 60 % (Plan §2.4).
+	var balance := GvzData.load_balance(null)
+	var level := GvzData.level_by_id(GvzData.load_levels(), 15)
+	var easy := GvzBot.simulate(level, balance, 1, "easy")
+	assert_true(bool(easy["won"]), "L15 easy verloren (%s)" % easy["outcome"])
+	var wins := 0
+	for seed_value in [1, 2, 3, 4, 5]:
+		if bool(GvzBot.simulate(level, balance, seed_value, "hard")["won"]):
+			wins += 1
+	assert_true(wins >= 3, "L15-hard-Winrate unter 60%% (%d/5)" % wins)
+
+
 func test_bot_simulation_is_deterministic() -> void:
 	var balance := GvzData.load_balance(null)
 	var level := GvzData.level_by_id(GvzData.load_levels(), 2)

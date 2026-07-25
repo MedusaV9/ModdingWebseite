@@ -66,7 +66,9 @@ static func handle_hud_action(action: StringName) -> bool:
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# E14-P0: and_offsets — nur Anker setzen behält unter dem Router-Mount
+	# das 0×0-Rect (Offsets werden aufs aktuelle Rect zurückgerechnet).
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	register_routes()
 	_build_ui()
 
@@ -74,10 +76,10 @@ func _ready() -> void:
 func _build_ui() -> void:
 	var bg := ColorRect.new()
 	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var rows := VBoxContainer.new()
-	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	rows.offset_left = 24.0
 	rows.offset_right = -24.0
 	rows.offset_top = 16.0
@@ -120,13 +122,16 @@ func _build_tile(game: Dictionary) -> Control:
 	var coming_soon: bool = game.get("coming_soon", false)
 	var tile := Button.new()
 	tile.name = "Tile_%s" % id
-	tile.theme_type_variation = &"AcCard"
+	# E7-P0-3: FIX-As Button-taugliche Karten-Variation. `AcCard` ist eine
+	# PanelContainer-Variation — auf einem Button fiel sie still auf die
+	# Pill-Basis zurück (Radius 999 → weiße Ellipsen).
+	tile.theme_type_variation = &"AcCardButton"
 	tile.custom_minimum_size = Vector2(250, 240)
 	tile.disabled = coming_soon
 	if not coming_soon:
 		tile.pressed.connect(_on_tile_pressed.bind(id))
 	var content := VBoxContainer.new()
-	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	content.offset_left = 10.0
 	content.offset_right = -10.0
 	content.offset_top = 10.0
@@ -165,7 +170,7 @@ func _build_cover(id: String, coming_soon: bool) -> Control:
 		rect.texture = texture
 		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if coming_soon:
 			rect.modulate = Color(0.6, 0.6, 0.6)
@@ -173,13 +178,13 @@ func _build_cover(id: String, coming_soon: bool) -> Control:
 	else:
 		var placeholder := ColorRect.new()
 		placeholder.color = Color(0.87, 0.8, 0.72)
-		placeholder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		frame.add_child(placeholder)
 		var mark := Label.new()
 		mark.text = "?"
 		mark.theme_type_variation = &"TitleLabel"
-		mark.set_anchors_preset(Control.PRESET_CENTER)
+		mark.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 		mark.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		mark.grow_vertical = Control.GROW_DIRECTION_BOTH
 		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -190,7 +195,7 @@ func _build_cover(id: String, coming_soon: bool) -> Control:
 		badge.text = I18nService.t("mg.arcade.coming_soon")
 		badge.theme_type_variation = &"HeadlineLabel"
 		badge.add_theme_color_override("font_color", Color(0.95, 0.45, 0.66))
-		badge.set_anchors_preset(Control.PRESET_CENTER)
+		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 		badge.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		badge.grow_vertical = Control.GROW_DIRECTION_BOTH
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

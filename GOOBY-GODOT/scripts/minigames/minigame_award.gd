@@ -8,6 +8,10 @@ extends RefCounted
 ## ABWEICHUNGEN (dokumentiert): kein doppelGold/doubleCoinsBuff (Codes-Engine
 ## ist nicht Teil von M1-W2d) und kein profile.coinsEarned (v5 bucht Earned
 ## im economy-Slice über Economy.award).
+## ERWEITERUNGEN (E10): Timed-Coins laufen gegen ein 150-c-Tages-Ledger
+## (minigames.dayCoins — Spiegel des Web-§C-SYS11.1-Werts DAY_COIN_CAP, im
+## Web bremst stattdessen das Energie-Gate) und `chunks` erlauben die
+## Coin-Row PRO Teil-Score (GvZ: pro gewonnenem Level) statt pro Session.
 
 const Economy := preload("res://scripts/logic/economy.gd")
 const Leveling := preload("res://scripts/logic/leveling.gd")
@@ -15,12 +19,21 @@ const Leveling := preload("res://scripts/logic/leveling.gd")
 ## Web MINIGAME.DAILY_FIRST_PLAY_MULT / FUN_REWARD (data/constants.js).
 const DAILY_FIRST_PLAY_MULT := 2
 const FUN_REWARD := 15.0
+## E10-P1-2: Tages-Cap aller Timed-Minigame-Coins (Web-Wert §C-SYS11.1 = 150).
+const MINIGAME_DAY_CAP := 150
 
 
 ## Mutiert `state` in place (innerhalb von GameState.update aufrufen!) und
 ## liefert das Results-Breakdown. `today` = Clock.local_day().
+## `chunks`: optionale coin-würdige Teil-Scores (GvZ pro Level) — nicht-leer
+## wird die Coin-Row pro Chunk angewandt (Summe der Basen statt Session-Base).
 static func award(
-	state: Dictionary, meta: Dictionary, score: int, difficulty: String, today: String
+	state: Dictionary,
+	meta: Dictionary,
+	score: int,
+	difficulty: String,
+	today: String,
+	chunks: Array[int] = []
 ) -> Dictionary:
 	var id: String = meta["id"]
 	var s := maxi(0, score)
@@ -32,6 +45,11 @@ static func award(
 	var base := 0
 	if mode == "endless":
 		base = MinigameFrameworkLogic.ENDLESS_FLAT_COINS
+	elif chunks.size() > 0:
+		for chunk in chunks:
+			base += MinigameFrameworkLogic.apply_difficulty_coin_base(
+				meta["coin_table"], chunk, mode
+			)
 	else:
 		base = MinigameFrameworkLogic.apply_difficulty_coin_base(meta["coin_table"], s, mode)
 	var daily_mult := DAILY_FIRST_PLAY_MULT if first_today else 1
@@ -45,6 +63,10 @@ static func award(
 			day_cap_reached = true
 		paid = granted
 	else:
+		var timed_granted := _book_minigame_day_coins(mg, paid, today)
+		if timed_granted < paid:
+			day_cap_reached = true
+		paid = timed_granted
 		Economy.award(econ, paid, "minigame", today)
 
 	var stats: Dictionary = state["gooby"]["stats"]
@@ -98,6 +120,20 @@ static func award(
 		"dayCapReached": day_cap_reached,
 		"beatTarget": beat_target,
 	}
+
+
+## Timed-Coins gegen das 150-c/Lokaltag-Ledger buchen (additive Keys im
+## minigames-Slice — merge_defaults lässt sie überleben). Liefert den
+## tatsächlich zahlbaren Teil (Muster Economy._book_day_ledger).
+static func _book_minigame_day_coins(mg: Dictionary, amount: int, day: String) -> int:
+	if str(mg.get("dayCoinsDay", "")) != day:
+		mg["dayCoins"] = 0
+		mg["dayCoinsDay"] = day
+	var used := int(_num(mg.get("dayCoins")))
+	var headroom := maxi(0, MINIGAME_DAY_CAP - used)
+	var granted := mini(maxi(0, amount), headroom)
+	mg["dayCoins"] = used + granted
+	return granted
 
 
 static func _prev_best(legacy: Dictionary, id: String, mode: String) -> int:
