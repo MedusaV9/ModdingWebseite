@@ -18,10 +18,20 @@
 //     corner falloff, plus a faint warm lift inside the falloff (phosphor glow — the
 //     corners dim but never go cold),
 //   • static ±1 LSB dither so the lifted blacks + vignette gradients cannot band.
+//
+// v3 (VEIL-REPASS-1): ROLLING SCAN BAND — one soft luma wave (σ ≈ 8% of frame height,
+// ±~1.1%) drifting up the frame on an ~11 s loop: the camera-filmed-CRT refresh beat,
+// NOT scanlines (still honoring the v2 brief's scanline rejection — a band this slow
+// and wide cannot alias at any DPI). New additive uniform Time (same commit as its
+// XboxEraFx feeder): pause-frozen tick clock wrapping at ~1 h SNAPPED to a whole number
+// of 11 s band periods (71 940 ticks), so the band phase is seamless across the wrap —
+// and Amount is already 0 under reducedFx, so the only animated term this grade ever
+// had dies there wholesale.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
 uniform float Amount;
+uniform float Time;
 
 in vec2 texCoord;
 
@@ -85,8 +95,17 @@ void main() {
     graded *= 1.0 - corner * 0.09 * amount;
     graded += vec3(0.012, 0.008, 0.004) * corner * amount;
 
+    // v3 rolling scan band: gaussian in wrapped frame-height distance, rolling upward
+    // one frame per ~11 s. Zero-mean-ish (−0.15 floor) so average brightness holds;
+    // peak ≈ +1.1% luma — felt, not seen. Slow and wide by construction: no aliasing,
+    // no photosensitivity budget spent (0.09 Hz, ~1% swing).
+    float bandDist = abs(fract(texCoord.y - Time / 11.0 + 0.5) - 0.5);
+    float band = exp(-(bandDist * bandDist) / (0.08 * 0.08));
+    graded *= 1.0 + (band - 0.15) * 0.013 * amount;
+
     // Static spatial dither (Amount is constant while inside the dimension, so no temporal
-    // jitter is needed): kills banding from the black lift + vignette gradients.
+    // jitter is needed — the v3 band moves ~2 px/s over a 100+ px gaussian, far below
+    // the dither's masking threshold): kills banding from the black lift + vignette.
     graded += vec3(efxDither(gl_FragCoord.xy, 0.0) * (0.5 + 0.5 * amount));
 
     fragColor = vec4(graded, 1.0);

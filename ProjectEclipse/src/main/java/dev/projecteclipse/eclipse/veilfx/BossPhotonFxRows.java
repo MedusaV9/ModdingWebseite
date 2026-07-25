@@ -70,6 +70,21 @@ public final class BossPhotonFxRows {
                 FxBudget.Channel.BURST,
                 PhotonFxRegistry.Mode.LAYER,
                 false));
+        // PH-IMPROVE-2 (IDEAS-boss #10) — P3 fog-arm mesh tendrils: model particles along
+        // the eclipse:item/fog_tendril claw (backlog_fx.py asset, 200t runtime). ENTITY
+        // lane — the default leg's spawnOnEntity rides the stalking boss and entity death
+        // auto-kills the rig (the C8 death implosion never fights a live arm). The server
+        // re-sends the cue every 100t during P3; each re-send while the executor lives is
+        // a silent dedup no-op, so the sustain is seamless. Null Quasar leg per the doc
+        // row: mesh emission has no Quasar analogue — the shipped P3 fog-step vanilla
+        // baseline stays untouched on photon-less clients.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_FOG_ARMS,
+                fx("boss/tyrant_fog_arms"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     /**

@@ -12,6 +12,8 @@ import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
+import dev.projecteclipse.eclipse.veilfx.SignatureCompositions;
+import dev.projecteclipse.eclipse.veilfx.WorldStageArbiter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
@@ -59,6 +61,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * <p>One whisper caption per ceremony ({@code eclipse.caption.altar_level_<n>} — the
  * Other acknowledging the offering; EclipseLang's {@code eclipse.caption.} prefix).</p>
  *
+ * <p><b>VEIL-REPASS-2 crowd-awareness:</b> the payload's {@code b} param carries how
+ * many players are gathered at the altar (server-counted). The ceremony widens with the
+ * crowd — the L2/L4 shockwave rings launch stronger and travel longer, pinned at a
+ * {@value #CROWD_FULL}-player gathering; a solo level-up (or a pre-crowd server sending
+ * {@code b = 0}) is exactly the base composition.</p>
+ *
  * <p><b>Performance/degradation (repo law):</b> every emitter spawn rides the
  * {@link FxBudget.Channel#SEQUENCE} channel (reducedFx halves the budget automatically);
  * particle beats are DISTANCE-CULLED at build time ({@value #EMITTER_RANGE} blocks —
@@ -81,6 +89,9 @@ public final class AltarCeremonyFx {
     /** Particle beats only materialize within this camera range (beam view-range twin). */
     private static final double EMITTER_RANGE = 96.0D;
 
+    /** VEIL-REPASS-2 crowd-awareness: this many gathered players pin the crowd factor at 1. */
+    private static final int CROWD_FULL = 5;
+
     /** Anticipation phase length (2 s of inward-spiraling motes + rising hum). */
     private static final int ANTICIPATION_TICKS = 40;
     /** Settle phase start after the burst, stretched a little per level. */
@@ -90,6 +101,11 @@ public final class AltarCeremonyFx {
     /** Offering sky-glow envelope (L3+ aurora response): rise 5 t, release 35 t. */
     private static final int OFFER_GLOW_IN_TICKS = 5;
     private static final int OFFER_GLOW_OUT_TICKS = 35;
+
+    /** V7-SIGCOMP C2: the milestone reward burst lands this long after the impact beat. */
+    private static final int GOLD_RUSH_REWARD_DELAY_TICKS = 20;
+    private static final double GOLD_RUSH_REWARD_BASE_SCALE = 0.7D;
+    private static final double GOLD_RUSH_REWARD_LEVEL_STEP = 0.08D;
 
     /** Sky-surge envelope (L5 corona ignition): rise 12 t, hold 30 t, release 60 t. */
     private static final int SURGE_IN_TICKS = 12;
@@ -117,8 +133,15 @@ public final class AltarCeremonyFx {
 
     // ------------------------------------------------------------------ payload seam
 
-    /** {@code FX_ALTAR_LEVELUP} dispatch: pos = altar center, level = freshly reached level. */
-    public static void start(Vec3 pos, int level) {
+    /**
+     * {@code FX_ALTAR_LEVELUP} dispatch: pos = altar center, level = freshly reached
+     * level, crowd = players gathered at the altar (server-counted, rides the payload's
+     * {@code b} param — VEIL-REPASS-2). More witnesses = a wider ceremony: the L2/L4
+     * shockwave rings launch stronger and travel longer (radius grows with duration),
+     * saturating at a {@value #CROWD_FULL} -player gathering. 0 (solo or an old server)
+     * is exactly the pre-crowd look.
+     */
+    public static void start(Vec3 pos, int level, int crowd) {
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel clientLevel = minecraft.level;
         if (clientLevel == null) {
@@ -126,6 +149,10 @@ public final class AltarCeremonyFx {
         }
         int lvl = Mth.clamp(level, 1, 5);
         int tier = FxBudget.qualityTier();
+        // Crowd factor 0..1: a lone offerer is 0 (base ceremony), CROWD_FULL+ players
+        // pin it at 1. Applied only to the burst-radius carriers (the shockwaves) —
+        // particle counts stay budget-law flat.
+        float crowdF = Mth.clamp((crowd - 1) / (float) (CROWD_FULL - 1), 0.0F, 1.0F);
         boolean near = minecraft.gameRenderer.getMainCamera().getPosition()
                 .distanceToSqr(pos) <= EMITTER_RANGE * EMITTER_RANGE;
         STEPS.clear();
@@ -135,8 +162,12 @@ public final class AltarCeremonyFx {
         // sting stays at t=0 (the "look up" announcement), then motes spiral INTO the
         // altar while a three-step hum rises; every burst beat shifts +lead. ---
         int lead = tier >= 1 ? ANTICIPATION_TICKS : 0;
-        at(0, () -> soundAt(pos, EclipseSounds.UI_UNLOCK_STING.get(),
-                0.9F, 0.85F + 0.06F * lvl));
+        at(0, () -> {
+            soundAt(pos, EclipseSounds.UI_UNLOCK_STING.get(), 0.9F, 0.85F + 0.06F * lvl);
+            // V7-SIGCOMP §6.5: the ceremony's announcement sting consumes the shared
+            // one-sting-per-40t window (the bloom chime lands exactly one window later).
+            WorldStageArbiter.noteSting();
+        });
         if (lead > 0) {
             at(2, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.55F, 0.78F));
             at(16, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.65F, 1.0F));
@@ -155,9 +186,11 @@ public final class AltarCeremonyFx {
                     pos.add(0.0D, 0.6D, 0.0D), FxBudget.Channel.SEQUENCE));
         }
 
-        // --- L2: shockwave ring + pillar of light ---
+        // --- L2: shockwave ring + pillar of light (crowd widens the ring) ---
         if (lvl >= 2) {
-            at(lead + 2, () -> EclipseFxState.startShockwave(pos, 0.45F + 0.08F * lvl, 36));
+            at(lead + 2, () -> EclipseFxState.startShockwave(pos,
+                    (0.45F + 0.08F * lvl) * (1.0F + 0.5F * crowdF),
+                    36 + (int) (14.0F * crowdF)));
             at(lead + 4, () -> soundAt(pos, EclipseSounds.EVENT_EMERGE.get(), 0.9F, 1.15F));
             if (near) {
                 for (int i = 0; i < 4; i++) {
@@ -187,7 +220,8 @@ public final class AltarCeremonyFx {
                 // ARGB 0x9CEADCFF: a 2-tick violet-white crack of light, 16-tick release.
                 at(lead + 2, () -> CaptionRenderer.fade(2, 3, 16, 0x9CEADCFF));
             }
-            at(lead + 2, () -> EclipseFxState.startShockwave(pos, 0.9F, 50));
+            at(lead + 2, () -> EclipseFxState.startShockwave(pos,
+                    0.9F * (1.0F + 0.4F * crowdF), 50 + (int) (16.0F * crowdF)));
             at(lead + 2, () -> soundAtListener(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(), 1.0F, 0.72F));
             at(lead + 6, () -> soundAt(pos, EclipseSounds.EVENT_STORM_BURST.get(), 1.0F, 0.65F));
         }
@@ -220,6 +254,23 @@ public final class AltarCeremonyFx {
                 at(settle + 22, () -> QuasarSpawner.spawn(AFTERGLOW,
                         pos.add(0.0D, 2.4D, 0.0D), FxBudget.Channel.SEQUENCE));
             }
+        }
+
+        // --- V7-SIGCOMP C1: the SANCTUM BLOOM consecration layer rides this SAME
+        // anticipation/settle spine (no doubling: altar_indraw above IS the C1 L2 indraw;
+        // the bloom adds the L1 glyph write-in inside the lead, the Photon pillar + bloom
+        // burst on the impact and the settle orbit motes; S-token + chime inside). ---
+        SignatureCompositions.sanctumBloomLayer(pos, lvl, lead, near);
+
+        // --- V7-SIGCOMP C2: the milestone's REWARD read — a staggered GOLD RUSH burst
+        // above the crown once the consecration has landed (§6.5 stagger law: its sting
+        // slot falls inside the bloom chime's 40t window and is refused → glints carry
+        // the shimmer; A-class, so it never contests the bloom's S token). ---
+        if (tier >= 1 && near) {
+            at(lead + GOLD_RUSH_REWARD_DELAY_TICKS, () -> SignatureCompositions.goldRush(
+                    pos.add(0.0D, 1.2D, 0.0D), null,
+                    GOLD_RUSH_REWARD_BASE_SCALE + GOLD_RUSH_REWARD_LEVEL_STEP * lvl,
+                    SignatureCompositions.Sting.AWARD));
         }
     }
 

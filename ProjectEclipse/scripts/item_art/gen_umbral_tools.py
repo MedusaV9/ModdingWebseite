@@ -4,7 +4,9 @@
 Obsidian-violet tools on the shared EclipseUiTheme ramp with bone grips
 (`eclipse_palette.py`), authored in the vanilla diagonal tool orientation so
 they feel native in hand. Flat fills first, then the shared `finish()` pass
-(2px black-purple edge, 3-tone shading, top-left rim light). Deterministic.
+(2px black-purple edge, 3-tone shading, top-left rim light), then a 1px TEXT
+edge-light painted over the working edge (pick crest / blade edge) so the
+silhouettes read at gui scale 2. Deterministic.
 
 Run from anywhere:
     python3 scripts/item_art/gen_umbral_tools.py
@@ -16,7 +18,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eclipse_palette import (  # noqa: E402
     ACCENT, ACCENT_DEEP, BONE, BONE_DARK, GLOW_MAGENTA, GLOW_WHITE, HAIRLINE,
-    PANEL, PURPLE_DARK, PURPLE_MID,
+    PANEL, PURPLE_DARK, PURPLE_MID, TEXT,
     canvas, finish, line_px, put, save,
 )
 
@@ -59,6 +61,8 @@ def umbral_pick():
     put(img, ((2, 13), (3, 13), (2, 14), (3, 14)), PANEL)
 
     finish(img)
+    # 1px TEXT edge-light along the crest of the head arc (unshaded).
+    put(img, ((5, 1), (6, 1), (3, 2), (2, 3)), TEXT)
     put(img, ((7, 1),), GLOW_WHITE)      # apex glint
     put(img, ((13, 11),), GLOW_MAGENTA)  # void charge dripping off the tine
     return img
@@ -88,6 +92,8 @@ def umbral_blade():
     put(img, ((2, 13),), ACCENT_DEEP)
 
     finish(img)
+    # 1px TEXT edge-light down the cutting edge (unshaded).
+    put(img, ((11, 2), (10, 3), (9, 4)), TEXT)
     put(img, ((12, 0),), GLOW_WHITE)     # star glint off the point
     put(img, ((2, 13),), GLOW_MAGENTA)   # pommel gem
     return img

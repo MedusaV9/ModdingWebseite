@@ -98,6 +98,37 @@ public final class PhotonBridge {
      */
     public static final ResourceLocation WAND_SOULBIND_FLASH = fx("wand_soulbind_flash");
     /**
+     * PHOTON-QUALITY §6 retirement: the {@code stern_komet_core} Quasar emitter (the
+     * teleport-fake descent beats + impact afterglow dome) is superseded by the Photon
+     * falling head ({@code stern_komet_fall}) + delayed impact bloom
+     * ({@code stern_komet_impact}) spawned by {@code WandPhotonFxRows}'s
+     * {@code CUE_STERN_KOMET} leg. {@link #enhanceQuasarCue} suppresses the emitter while
+     * either replacement is live near the strike ({@code stern_funke_fall} stays LAYER —
+     * the ground sparkle is complementary).
+     */
+    private static final ResourceLocation STERN_KOMET_CORE = fx("stern_komet_core");
+    private static final ResourceLocation STERN_KOMET_FALL = fx("stern_komet_fall");
+    private static final ResourceLocation STERN_KOMET_IMPACT = fx("stern_komet_impact");
+    /**
+     * PHOTON-QUALITY §6 retirement (emitter-only): the {@code riss_schlag_maw} Quasar
+     * emitter (both drew the inhale) — same id as the Photon maw asset spawned by
+     * {@code WandPhotonFxRows}'s {@code CUE_RISS_SCHLAG} leg, which
+     * {@code WandPowers.castRissschlag} now sends BEFORE the maw payloads.
+     * {@code riss_maw_shimmer}/{@code riss_seam_scar}/{@code riss_blink_tear} stay
+     * untouched LAYER dressing.
+     */
+    private static final ResourceLocation RISS_SCHLAG_MAW = fx("riss_schlag_maw");
+    /**
+     * Suppression radius for the komet retirement: the Photon head anchors at
+     * strike + 18 blocks up while the Quasar beats step down (+18 / +9 / ground), so the
+     * probe must span the whole descent column — but stay tight enough that a second
+     * caster's strike further away keeps its own Quasar baseline when its Photon leg
+     * was refused (degradation law).
+     */
+    private static final double KOMET_SUPPRESS_RANGE = 24.0D;
+    /** Suppression radius for the maw retirement (all beats anchor on the tear itself). */
+    private static final double MAW_SUPPRESS_RANGE = 8.0D;
+    /**
      * PH-ALTAR (IDEAS-mobs #2): converging soul-ribbon spiral inhaled by the altar while
      * an offering swallow is in flight — spawned client-locally by
      * {@code client/drama/OfferingSwallowFx.beginFlight} (the {@code RiftFx.openRift}
@@ -274,14 +305,18 @@ public final class PhotonBridge {
         @Nullable
         final Entity entity;
         final boolean loop;
+        /** Spawn anchor for position executors ({@code null} for entity attaches). */
+        @Nullable
+        final Vec3 anchorPos;
 
         Tracked(Object executor, ResourceLocation fxId, Level level, @Nullable Entity entity,
-                boolean loop) {
+                boolean loop, @Nullable Vec3 anchorPos) {
             this.executor = executor;
             this.fxId = fxId;
             this.level = level;
             this.entity = entity;
             this.loop = loop;
+            this.anchorPos = anchorPos;
         }
     }
 
@@ -297,25 +332,73 @@ public final class PhotonBridge {
 
     /**
      * {@code S2CQuasarPayload} seam (called from {@code EclipsePayloads.handleQuasar} on the
-     * client main thread): layers the Photon enhancement over cues that have one. Always
-     * returns without consuming the payload — the Quasar path still runs.
+     * client main thread): plays the Photon enhancement for cues that have one and answers
+     * whether the cue's Quasar leg is SUPERSEDED by a live Photon replacement
+     * (PHOTON-QUALITY §6 retirements — REPLACE semantics).
+     *
+     * @return {@code true} = the caller must skip the Quasar leg (a Photon replacement
+     *         played/is live for this cue); {@code false} = run the Quasar leg as always
+     *         (LAYER cues, retired cues whose Photon leg did not play — the automatic
+     *         fallback — and every cue without an enhancement)
      */
-    public static void enhanceQuasarCue(ResourceLocation emitterId, Vec3 pos) {
+    public static boolean enhanceQuasarCue(ResourceLocation emitterId, Vec3 pos) {
         if (S2CQuasarPayload.ALTAR_LEVELUP_RING.equals(emitterId)) {
+            // Deliberate LAYER (PHOTON-QUALITY §6 "considered and kept"): ring + bloom
+            // both play — D12 "Photon is garnish" law.
             spawn(ALTAR_LEVELUP, pos);
-        } else if (WAND_SOULBIND_FLASH.equals(emitterId)) {
+            return false;
+        }
+        if (WAND_SOULBIND_FLASH.equals(emitterId)) {
             // PH-PLAYER #1: entity attach makes the flash RIDE the player if they move
             // mid-ceremony (offset -0.4 = chest/wand height — the ceremony holds the wand
             // up). Default allowMulti=false is correct: the flash fires once, a duplicate
             // payload inside its ~50t life no-ops harmlessly.
+            // PHOTON-QUALITY §6 retirement: same beat, same tick, same shape — the Photon
+            // 4-emitter HDR flash REPLACES the Quasar flash whenever it plays (double
+            // flash reads as stutter); the wand_soulbind_orbit emitters are a different
+            // beat and keep firing untouched.
             Entity holder = nearestPlayer(pos, 8.0D);
             if (holder != null) {
-                spawnOnEntity(WAND_SOULBIND_FLASH, holder, AUTO_ROTATE_NONE,
+                return spawnOnEntity(WAND_SOULBIND_FLASH, holder, AUTO_ROTATE_NONE,
                         new Vec3(0.0D, -0.4D, 0.0D));
-            } else {
-                spawn(WAND_SOULBIND_FLASH, pos); // untracked holder — block-anchor fallback
+            }
+            return spawn(WAND_SOULBIND_FLASH, pos); // untracked holder — block-anchor fallback
+        }
+        if (STERN_KOMET_CORE.equals(emitterId)) {
+            // Retired while the real Photon fall/impact is live near the strike — both at
+            // once shows two comet heads. Photon-less/refused casts keep every beat.
+            return hasLiveFx(STERN_KOMET_FALL, pos, KOMET_SUPPRESS_RANGE)
+                    || hasLiveFx(STERN_KOMET_IMPACT, pos, KOMET_SUPPRESS_RANGE);
+        }
+        if (RISS_SCHLAG_MAW.equals(emitterId)) {
+            // Retired (emitter-only) while the Photon implosion maw is live on the tear.
+            return hasLiveFx(RISS_SCHLAG_MAW, pos, MAW_SUPPRESS_RANGE);
+        }
+        return false;
+    }
+
+    /**
+     * Whether a bridge-tracked executor for {@code fxId} is currently live within
+     * {@code range} blocks of {@code pos} in the current client level (retirement probes:
+     * position executors use their spawn anchor, entity attaches their current position).
+     */
+    public static boolean hasLiveFx(ResourceLocation fxId, Vec3 pos, double range) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return false;
+        }
+        double rangeSq = range * range;
+        for (Tracked tracked : LIVE) {
+            if (!tracked.fxId.equals(fxId) || tracked.level != level) {
+                continue;
+            }
+            Vec3 anchor = tracked.entity != null ? tracked.entity.position() : tracked.anchorPos;
+            if (anchor != null && anchor.distanceToSqr(pos) <= rangeSq
+                    && runtimeAlive(tracked.executor)) {
+                return true;
             }
         }
+        return false;
     }
 
     /** Nearest client-level player to a cue position (payloads carry no entity id). */
@@ -471,7 +554,8 @@ public final class PhotonBridge {
 
     /** Sentinel distinguishing "refused/failed" from "dedup no-op success" (null). */
     private static final Tracked START_FAILED =
-            new Tracked(new Object(), ResourceLocation.withDefaultNamespace("failed"), null, null, false);
+            new Tracked(new Object(), ResourceLocation.withDefaultNamespace("failed"), null, null,
+                    false, null);
 
     /**
      * Shared spawn path. Anchors at {@code pos} (block executor) when {@code entity} is
@@ -522,7 +606,8 @@ public final class PhotonBridge {
                 return null;
             }
             Tracked tracked = new Tracked(executor, fxId,
-                    entity != null ? entity.level() : level, entity, loop);
+                    entity != null ? entity.level() : level, entity, loop,
+                    entity == null ? pos : null);
             LIVE.add(tracked);
             return tracked;
         } catch (Throwable t) {

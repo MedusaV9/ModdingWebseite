@@ -152,9 +152,21 @@ public final class EclipsePayloads {
         if (dev.projecteclipse.eclipse.client.drama.OfferingSwallowFx.intercept(payload.emitterId(), payload.pos())) {
             return;
         }
-        // D12: optional Photon enhancement layer — additive, never consumes the cue.
-        dev.projecteclipse.eclipse.veilfx.PhotonBridge.enhanceQuasarCue(payload.emitterId(), payload.pos());
-        dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawnOrFallback(payload.emitterId(), payload.pos());
+        // D12: optional Photon enhancement layer. PHOTON-QUALITY §6 retirements: the
+        // bridge answers true when a live Photon replacement SUPERSEDES this cue — the
+        // Quasar leg is then skipped (REPLACE semantics); it re-enters automatically
+        // whenever the Photon leg did not play (photon-less, refused, reducedFx).
+        // V7-SIGCOMP §6.1 soft gate: a registered S-class quasar cue that loses the
+        // WorldStage token sheds ONLY this hero layer (demoted form); the Quasar baseline
+        // below then runs — demote, never drop.
+        boolean superseded = false;
+        if (dev.projecteclipse.eclipse.veilfx.WorldStageArbiter.gateCue(payload.emitterId(), payload.pos())
+                != dev.projecteclipse.eclipse.veilfx.WorldStageArbiter.Verdict.DEMOTED) {
+            superseded = dev.projecteclipse.eclipse.veilfx.PhotonBridge.enhanceQuasarCue(payload.emitterId(), payload.pos());
+        }
+        if (!superseded) {
+            dev.projecteclipse.eclipse.veilfx.QuasarSpawner.spawnOrFallback(payload.emitterId(), payload.pos());
+        }
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */

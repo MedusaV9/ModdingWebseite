@@ -1101,6 +1101,13 @@ public class HeraldEntity extends Monster {
 
     /** The end of the collapse: the sunken core bursts apart on the dais. */
     private void shatter(ServerLevel level) {
+        // V7-SIGCOMP C11: the CROWN VERDICT coda (S-MAX world indraw → gold white-out +
+        // double-pulse shockwave → gold ash rain + grade exhale) — sent FIRST so its
+        // client-side stage claim precedes the BOSS_SLAM gate row below. It replaces the
+        // old loose END_ROD scatter; the BOSS_SLAM Quasar burst stays as the photon-less
+        // baseline layer of the same moment (a = kind 0 Herald, b = 0 full indraw).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_SIG_CROWN_VERDICT,
+                this.position().add(0.0D, 1.0D, 0.0D), 0.0F, 0.0F, 96.0D);
         PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
         PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
@@ -1109,10 +1116,8 @@ public class HeraldEntity extends Monster {
                 SoundSource.HOSTILE, 1.5F, 0.6F);
         level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_CLUSTER_BREAK,
                 SoundSource.HOSTILE, 1.5F, 0.9F);
-        level.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 1.0D, this.getZ(),
-                40, 1.0D, 1.0D, 1.0D, 0.15D);
-        EclipseMod.LOGGER.info("Herald death collapse complete after {}t: core shattered on the dais",
-                this.deathTime);
+        EclipseMod.LOGGER.info("Herald death collapse complete after {}t: core shattered on the dais "
+                + "(crown verdict coda fired)", this.deathTime);
     }
 
     /** Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive). */

@@ -14,7 +14,10 @@ Two skins over one dial painter:
     dowsing-rod needle with a soul-teal tip.
 
 The dial goes through the shared `finish()` pass; the needle and pivot are
-painted after it so they stay crisp and unshaded. Deterministic.
+painted after it so they stay crisp and unshaded. Discs are plotted with
+integer-radius `put()` fills (no `ImageDraw` — its rasterizer changed AA
+behavior across Pillow versions, which would break byte-identical reruns).
+Deterministic.
 
 Run from anywhere:
     python3 scripts/item_art/gen_trackers.py
@@ -24,13 +27,11 @@ import math
 from pathlib import Path
 import sys
 
-from PIL import ImageDraw
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eclipse_palette import (  # noqa: E402
     ACCENT, ACCENT_DEEP, BONE, BONE_DARK, BONE_LIGHT, DIM, GLOW_MAGENTA,
-    GLOW_WHITE, GOOD, HAIRLINE, PANEL, PANEL_RAISED, PURPLE_DARK, SOUL_TEAL,
-    canvas, finish, mix, mul, put, rgba, save,
+    GOOD, HAIRLINE, PANEL, PANEL_RAISED, PURPLE_DARK, SOUL_TEAL,
+    TEXT, canvas, finish, mix, mul, put, save,
 )
 
 OUT = (
@@ -57,18 +58,28 @@ def radial_px(dx, dy, r0, r1, steps=24):
     return list(dict.fromkeys(pts))
 
 
-def dial(casing, casing_dark, face, tick, tick_major):
-    """Round tracker dial: casing ring, face, cardinal + diagonal ticks."""
+def disc_px(radius):
+    """Integer pixel-center disc around CENTER (replaces ImageDraw ellipses;
+    radius 6.7 == the old ``[1,1,14,14]`` fill, 4.75 == ``[3,3,12,12]``)."""
+    r2 = radius * radius
+    return [(x, y) for y in range(16) for x in range(16)
+            if (x - CENTER) ** 2 + (y - CENTER) ** 2 <= r2]
+
+
+def dial(casing, casing_dark, casing_light, face, tick, tick_major):
+    """Round tracker dial: casing ring, face, cardinal + diagonal rune ticks."""
     img = canvas()
-    d = ImageDraw.Draw(img)
-    d.ellipse([1, 1, 14, 14], fill=rgba(casing))
+    put(img, disc_px(6.7), casing)
     put(img, ((2, 11), (2, 12), (3, 12), (3, 13), (4, 13),
               (11, 13), (12, 13), (12, 12), (13, 12), (13, 11)), casing_dark)
-    d.ellipse([3, 3, 12, 12], fill=rgba(face))
+    # Rim light along the top-left casing arc (the family's light direction).
+    put(img, ((6, 1), (7, 1), (4, 2), (5, 2), (3, 3), (2, 4), (2, 5), (1, 6),
+              (1, 7)), casing_light)
+    put(img, disc_px(4.75), face)
     # Cardinal ticks (north is the brighter, watched direction).
     put(img, ((7, 3), (8, 3)), tick_major)
     put(img, ((7, 12), (8, 12), (3, 7), (3, 8), (12, 7), (12, 8)), tick)
-    # Diagonal minor ticks.
+    # Diagonal minor rune ticks, nicked into the casing.
     put(img, ((4, 4), (11, 4), (4, 11), (11, 11)), casing_dark)
     return finish(img)
 
@@ -78,8 +89,9 @@ def compass_frame(base, frame):
     dx, dy = direction(frame)
     # Tail (counterweight) and hot needle, painted unshaded over the finish.
     put(img, radial_px(-dx, -dy, 1.9, 3.4), DIM)
-    put(img, radial_px(dx, dy, 1.9, 4.4), GLOW_MAGENTA)
-    put(img, radial_px(dx, dy, 4.7, 4.8, steps=1), GLOW_WHITE)
+    put(img, radial_px(dx, dy, 1.7, 4.4), GLOW_MAGENTA)
+    # Near-white TEXT tip pixel so the seeking end reads at gui scale 2.
+    put(img, radial_px(dx, dy, 4.6, 4.8, steps=1), TEXT)
     # Watcher-eye pivot: accent iris ring around a black 2x2 pupil.
     put(img, ((7, 6), (8, 6), (6, 7), (9, 7), (6, 8), (9, 8), (7, 9), (8, 9)),
         ACCENT_DEEP)
@@ -95,11 +107,12 @@ def dowser_frame(base, frame):
     # Forked tail: two bone prongs splayed off the back of the rod.
     for da in (math.pi - 0.55, math.pi + 0.55):
         pdx, pdy = math.cos(a + da), math.sin(a + da)
-        put(img, radial_px(pdx, pdy, 1.6, 3.6), BONE_DARK)
-    # Bone rod with a soul-teal seeking tip.
-    put(img, radial_px(dx, dy, 1.2, 3.4), BONE)
-    put(img, radial_px(dx, dy, 3.4, 4.6), SOUL_TEAL)
-    put(img, radial_px(dx, dy, 4.7, 4.8, steps=1), GLOW_WHITE)
+        put(img, radial_px(pdx, pdy, 1.6, 3.6), BONE)
+    # Bone rod (light toward the seeking end) with a soul-teal tip.
+    put(img, radial_px(dx, dy, 1.2, 2.4), BONE)
+    put(img, radial_px(dx, dy, 2.4, 3.4), BONE_LIGHT)
+    put(img, radial_px(dx, dy, 3.4, 4.5), SOUL_TEAL)
+    put(img, radial_px(dx, dy, 4.6, 4.8, steps=1), TEXT)
     # Bone-socket pivot.
     put(img, ((7, 7), (8, 7), (7, 8), (8, 8)), BONE_DARK)
     put(img, ((7, 7),), BONE_LIGHT)
@@ -108,11 +121,13 @@ def dowser_frame(base, frame):
 
 def main():
     compass_base = dial(
-        casing=ACCENT_DEEP, casing_dark=PURPLE_DARK, face=PANEL_RAISED,
+        casing=ACCENT_DEEP, casing_dark=PURPLE_DARK,
+        casing_light=mix(ACCENT_DEEP, ACCENT, 0.6), face=PANEL_RAISED,
         tick=HAIRLINE, tick_major=ACCENT)
     stone = mix(HAIRLINE, PANEL, 0.35)
     dowser_base = dial(
-        casing=BONE_DARK, casing_dark=mul(BONE_DARK, 0.72), face=stone,
+        casing=BONE_DARK, casing_dark=mul(BONE_DARK, 0.72),
+        casing_light=mix(BONE_DARK, BONE, 0.6), face=stone,
         tick=mul(GOOD, 0.55), tick_major=GOOD)
 
     for frame in range(FRAMES):

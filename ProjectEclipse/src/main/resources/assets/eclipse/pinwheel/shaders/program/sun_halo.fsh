@@ -23,6 +23,18 @@
 //   [s7] volumetric breath — the glow radius swells ~±3% on an incommensurate double
 //        sine (gas, not decal); reducedFx-gated like every animated layer here.
 //
+// v3 (VEIL-REPASS-1):
+//   [s8] occlusion-aware anamorphic EVOLUTION — the streak's horizontal reach now grows
+//        with HaloStrength past the gate (a totality streak stretches ~1.5× the gate-
+//        threshold streak) and COLLAPSES with occlusion: partial cover shortens the
+//        streak toward a stub instead of leaving a dim full-width line floating over
+//        the treeline (reach ∝ visibility, brightness already faded via glowVis).
+//   [s9] altar-level color temperature — AltarWarmth (synced altar ladder, 0..1) warms
+//        the halo tint WITHIN the violet family (more red, less blue — never gold: the
+//        style guide reserves gold for reward beats, and this pass is ambient all day).
+//        A maxed altar makes the star burn a hotter magenta-violet. Static state
+//        feedback, so it survives reducedFx like the rings.
+//
 // Uniforms (frozen §3.3):
 //   SunScreen    vec4 — xy = NDC pos, z = 1 when in front of camera else 0,
 //                        w = sun angular radius in NDC-y units (tan(5°)·Proj[1][1])
@@ -33,6 +45,9 @@
 // v2 additive uniforms (fed by the same VeilPostController feeder, same commit):
 //   Time   — seconds, hourly wrap (limbo clock pattern); ring shimmer clock
 //   Detail — 1 normal, 0 under reducedFx: gates streak + shimmer (rings/glow stay)
+// v3 additive uniform (same feeder, same commit — the additive rule):
+//   AltarWarmth — clamp(ClientStateCache.altarLevel, 0, 5) / 5 (the established
+//                 client altar-ladder normalization); halo temperature shift driver
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -42,6 +57,7 @@ uniform float HaloStrength;
 uniform float RimOnly;
 uniform float Time;
 uniform float Detail;
+uniform float AltarWarmth;
 
 in vec2 texCoord;
 
@@ -115,17 +131,29 @@ void main() {
             + vec3(0.45, 0.25, 1.00) * ringGauss.z * RING_WEIGHTS.z;
     ringColor *= shimmer * glowVis;
 
-    // [s2] Anamorphic streak: thin in y, wide in x, only at high strength (the eclipse
-    // boost), fading before the screen edge so it never hard-clips. Off under reducedFx.
+    // [s2]+[s8] Anamorphic streak: thin in y, wide in x, only at high strength (the
+    // eclipse boost), fading before the screen edge so it never hard-clips. Off under
+    // reducedFx. v3 EVOLUTION: the horizontal reach grows with strength past the gate
+    // (2.0× → ~3.5× glowRadius toward totality) and collapses with occlusion — a half-
+    // covered sun keeps a short bright stub at the disc instead of a dim full-width
+    // line hovering over the treeline (brightness was already glowVis-faded; now the
+    // GEOMETRY agrees with the cover).
     float streakGate = smoothstep(0.55, 0.90, HaloStrength) * Detail * glowVis;
     float sy = delta.y / (sunRadius * 0.55);
-    float streak = exp(-sy * sy) * exp(-abs(delta.x) / (glowRadius * 2.6)) * streakGate;
+    float streakReach = glowRadius * (2.0 + 1.5 * smoothstep(0.55, 1.30, HaloStrength))
+            * (0.35 + 0.65 * glowVis);
+    float streak = exp(-sy * sy) * exp(-abs(delta.x) / streakReach) * streakGate;
     float edgeFade = smoothstep(0.0, 0.08, texCoord.x) * (1.0 - smoothstep(0.92, 1.0, texCoord.x));
     streak *= edgeFade;
 
-    vec3 halo = (vec3(0.62, 0.24, 1.00) * (rim * 0.9 * rimVis + glow3 * 0.85 * glowVis)
+    // [s9] Temperature shift within the violet family: a leveled altar heats the star
+    // toward magenta-violet (never gold — ambient pass, style-guide gold restriction).
+    vec3 haloTint = mix(vec3(0.62, 0.24, 1.00), vec3(0.74, 0.28, 0.88), AltarWarmth * 0.45);
+    vec3 streakTint = mix(vec3(0.75, 0.45, 1.05), vec3(0.85, 0.44, 0.95), AltarWarmth * 0.45);
+
+    vec3 halo = (haloTint * (rim * 0.9 * rimVis + glow3 * 0.85 * glowVis)
             + ringColor
-            + vec3(0.75, 0.45, 1.05) * streak * 0.5)
+            + streakTint * streak * 0.5)
             * HaloStrength * spill;
 
     // [s6] Dither scaled into existence only where the halo actually is — masks the

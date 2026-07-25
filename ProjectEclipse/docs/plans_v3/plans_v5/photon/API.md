@@ -123,9 +123,12 @@ manager path exists only for editor previews).
 - Proof it's namespace-agnostic: `FxLocationArgument` (the `/photon fx` argument type)
   tab-completes via `ResourceManager.listResources("fx", p -> p.endsWith(".fx"))` across
   **all namespaces**, stripping `fx/` + `.fx` to suggest ids.
-- Format: **compressed NBT** authored in Photon's in-game editor (`/photon_editor fx_editor`),
-  NOT hand-writable JSON. Author in-game, save, copy the produced `.fx` into
-  `assets/eclipse/fx/`. The photon jar itself ships zero `.fx` examples.
+- Format: **compressed NBT**, NOT hand-writable JSON. Two authoring paths produce it:
+  the house standard — programmatic authoring via `tools/photon/fxlib.py` builders in
+  committed generator scripts (every shipped `assets/eclipse/fx/*.fx` is generated this
+  way; schema in `FX_FORMAT.md`, workflow in `INTEGRATION.md` §6) — or Photon's in-game
+  editor (`/photon_editor fx_editor`) for visual iteration, ported back into a builder
+  before commit. The photon jar itself ships zero `.fx` examples.
 
 ## 3. Lifecycle summary
 
@@ -165,8 +168,10 @@ manager path exists only for editor previews).
 
 ## 5. Our bridge (`veilfx/PhotonBridge.java`) vs the real jar — audit result
 
-All ELEVEN reflected points match the 2.1.5 bytecode **exactly** (the original D12
-trio below plus the PH-CORE additions; the full list was re-verified by
+The bridge's full reflected surface — thirteen member handles (loader, both executor
+ctors + `start()`s, the five setters, `getRuntime`/`isAlive`/`destroy`) plus the
+NAME-resolved `AutoRotate` constant table — matches the 2.1.5 bytecode **exactly**
+(the original D12 trio below plus the PH-CORE additions; the list was re-verified by
 EVAL-V6-PHOTON §2). No mismatches:
 
 | Bridge reflection | Real signature (javap) | Status |
@@ -179,19 +184,20 @@ EVAL-V6-PHOTON §2). No mismatches:
 | `getRuntime()` → `FXRuntime.isAlive()` / `FXRuntime.destroy(boolean)` | the runtime/loop surface (§2 core classes) | ✅ exact |
 | `getFX` returns `null` on missing asset (bridge's `missing()` path) | `loadFX` catches `Exception` → `null`; null not cached | ✅ correct |
 
-Optional (non-blocking) refinements, all verified available:
-1. **Sub-block precision**: the executor plays at `BlockPos + 0.5 + offset`. For an exact
-   `Vec3 pos`, reflect `setOffset(Vector3f)` (or the `IFXEffectExecutor` default
-   `setOffset(double,double,double)`) and pass `pos - (blockCenter)` before `start()`.
+Refinements — 1, 3 and 4 have since been ADOPTED by the shipped bridge:
+1. **Sub-block precision — shipped**: the executor plays at `BlockPos + 0.5 + offset`;
+   `PhotonBridge.spawn(fxId, pos, SpawnOptions)` corrects the block-center anchor to the
+   exact `Vec3` via `setOffset` before applying any caller offset.
 2. **Session-skip via `MISSING_FX` is stricter than Photon**: since null results are never
    cached, a `/reload` that adds the asset would start working — our session-skip forgoes that
    (acceptable, just know it).
-3. **`allowMulti` default false** means rapid repeat cues at one altar BlockPos are deduped
-   while the previous effect is alive — desirable for us, but if a design ever needs stacking,
-   reflect `setAllowMulti(true)`.
-4. For entity-attached effects later: reflect
-   `EntityEffectExecutor(FX, Level, Entity, EntityEffectExecutor$AutoRotate)` +
-   `EntityEffectExecutor$AutoRotate.valueOf("NONE")`; death-cleanup is automatic.
+3. **`allowMulti` default false — shipped as a `SpawnOptions` knob**
+   (`withAllowMulti(true)` for stackable bursts, e.g. the wand L3 rows); the default
+   dedup stays the desirable double-send guard.
+4. **Entity-attached effects — shipped**: `PhotonBridge.spawnOnEntity` reflects
+   `EntityEffectExecutor(FX, Level, Entity, EntityEffectExecutor$AutoRotate)` with the
+   `AutoRotate` constants resolved BY NAME (never raw ordinal — a reordered enum
+   degrades to NONE instead of misorienting); death-cleanup is automatic.
 
 ## 6. Working reflection recipe (client thread only)
 

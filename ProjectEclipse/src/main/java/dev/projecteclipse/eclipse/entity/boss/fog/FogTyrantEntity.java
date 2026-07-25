@@ -223,6 +223,16 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final double HOST_SITE_MARGIN = 12.0D;
     /** C8 storm-scaled shard payout ceiling (per participant, per kill). */
     private static final int SHARD_PAYOUT_CAP = 8;
+    /**
+     * PH-IMPROVE-2 (IDEAS-boss #10): CUE_TYRANT_FOG_ARMS re-send cadence during P3. The
+     * asset's runtime is 200t and 100 divides 200, so every other re-send lands exactly
+     * as the previous rig expires (the in-between one is a silent dedup no-op) — a
+     * seamless sustain with no gap and no doubled rig. (The spec's 160t cadence would
+     * gap 120t of every 320 under the absorb-only CACHE dedup.)
+     */
+    private static final int FOG_ARMS_REFIRE_TICKS = 100;
+    /** CUE_TYRANT_FOG_ARMS broadcast range (matches the squall's arena-scale 64). */
+    private static final double FOG_ARMS_FX_RANGE = 64.0D;
 
     /** Current phase 1..3 (synced; lets the renderer/model react if it ever wants to). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -271,6 +281,9 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private int fightTicks;
     private int noPlayerTicks;
     private int lastPhase = 1;
+    // PH-IMPROVE-2 (IDEAS-boss #10): P3 fog-arm sustain clock — counts down to the next
+    // CUE_TYRANT_FOG_ARMS re-send (transient; a restart mid-P3 re-arms on the next tick).
+    private int fogArmsRefireTimer;
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
     private boolean colossusCalled;
     private boolean warnedHoundUnbound;
@@ -467,6 +480,15 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         }
         // Ground-marked telegraphs tick regardless of what the body is doing.
         tickCrownLightningMarks(level);
+        // PH-IMPROVE-2 (IDEAS-boss #10): P3 fog-arm sustain — re-send the cue on the
+        // dedup-aligned cadence (see FOG_ARMS_REFIRE_TICKS). Runs above the rooted-window
+        // early returns so a lance telegraph can't starve the sustain; stops the moment
+        // a reset heal walks the phase back down.
+        if (getPhase() >= 3 && --this.fogArmsRefireTimer <= 0) {
+            FxPayloads.sendFxEntityEvent(level, FxCues.CUE_TYRANT_FOG_ARMS,
+                    this, 0.0F, 0.0F, FOG_ARMS_FX_RANGE);
+            this.fogArmsRefireTimer = FOG_ARMS_REFIRE_TICKS;
+        }
         // Rooted windows — exactly one at a time; nothing else acts while one holds.
         if (this.stepOutTimer >= 0) {
             tickStormStepVanish(level);
@@ -526,6 +548,14 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             triggerAction(ANIM_ENRAGE); // Desperation.
             this.lanceTimer = Math.min(this.lanceTimer, scaledCooldown(LANCE_CADENCE_P3_TICKS));
             this.stepTimer = Math.min(this.stepTimer, scaledCooldown(STEP_INTERVAL_P3_TICKS));
+            // PH-IMPROVE-2 (IDEAS-boss #10): the fog-arm mesh tendrils unfurl at the P3
+            // roar (entity lane — the rig stalks with the boss; LAYER row, photon-less
+            // clients keep the vanilla transition beats above). tickFight re-sends the
+            // cue every FOG_ARMS_REFIRE_TICKS while P3 holds; entity death auto-kills
+            // the rig so the C8 implosion never fights a live arm.
+            FxPayloads.sendFxEntityEvent(level, FxCues.CUE_TYRANT_FOG_ARMS,
+                    this, 0.0F, 0.0F, FOG_ARMS_FX_RANGE);
+            this.fogArmsRefireTimer = FOG_ARMS_REFIRE_TICKS;
         }
         return true;
     }
@@ -1292,6 +1322,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             // keep the shipped thunderclap + FX_SHOCKWAVE unchanged (LAYER row).
             FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_TYRANT_DEATH_IMPLOSION,
                     this.position().add(0.0D, 1.5D, 0.0D), 0.0F, 0.0F, 96.0D);
+            // V7-SIGCOMP C11: the CROWN VERDICT coda in its host-indraw form (b = 1) —
+            // the shipped implosion above IS the composition's L1 indraw, so the verdict
+            // adds only the gold white-out + double-pulse shockwave, ash rain, halo and
+            // grade exhale re-timed onto the implosion's 24t suck (a = kind 2 Fog Tyrant).
+            FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_SIG_CROWN_VERDICT,
+                    this.position().add(0.0D, 1.5D, 0.0D), 2.0F, 1.0F, 96.0D);
             explodeHostStorm(serverLevel); // C8: the site storm bursts with the thunderclap.
             placeRewardChest(serverLevel); // C8: the Mending/Replant book choice chest.
             EclipseMod.LOGGER.info("Fog Tyrant death thunderclap at t={}", this.deathTime);

@@ -153,8 +153,8 @@ public final class CreditsSequence implements SequenceReplayable {
      * drifts, hesitates and pulls like a helm riding a swell, never a metronome. Pushed
      * as 4t interpolation windows (~5–11° each) on the run clock (stateless absolute
      * poses). Every {@value #WHEEL_GLINT_PERIOD}t (≈ one 45° spoke crossing at the base
-     * rate) a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp sweeps 6→15→6 and clears
-     * back to natural light — moonlight catching a spoke.
+     * rate) a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp rises and clears back to
+     * natural light — dawn light catching a spoke.
      */
     private static final float WHEEL_TURN_DEG_PER_TICK = 0.85F;
     private static final float WHEEL_NOISE_A_DEG = 6.5F;
@@ -163,6 +163,18 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final float WHEEL_NOISE_B_PERIOD = 117.0F;
     private static final int WHEEL_GLINT_PERIOD = 50;
     private static final int WHEEL_GLINT_RAMP = 14;
+    /**
+     * REPASS-BD sunrise catch: the low-east dawn spoke angle. The glint cycle is
+     * phase-shifted by {@link #WHEEL_GLINT_OFFSET} so its PEAK lands where the MEAN
+     * wheel angle crosses this angle (mod the wheel's 45° spoke symmetry) — the flash
+     * happens when a spoke actually sweeps the sunrise line, not on a bare run clock.
+     * (True noisy-crossing detection stays rejected — the rate noise double-blinks it;
+     * a constant phase shift of the fixed cycle is branch-free and reads identically.)
+     */
+    private static final float WHEEL_GLINT_SUN_DEG = 25.0F;
+    private static final int WHEEL_GLINT_OFFSET = Math.round(
+            (((WHEEL_GLINT_SUN_DEG - WHEEL_REST_SPIN_DEGREES) % 45.0F + 45.0F) % 45.0F)
+                    / WHEEL_TURN_DEG_PER_TICK) - WHEEL_GLINT_RAMP / 2;
     private static final int T_PORTAL = 230;
     private static final int T_EPILOGUE = 260;
     private static final int T_BEACH = 300;
@@ -915,18 +927,21 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * Spoke-light glint: a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp (6→15→6,
-     * block+sky) every {@value #WHEEL_GLINT_PERIOD}t, then the override is CLEARED back
-     * to natural light. Fixed-period on the run clock rather than true spoke-crossing
-     * detection: the rate noise would make an {@code angle mod 45°} trigger double-blink,
-     * while a 50t cycle at the mean crossing rate reads identically and is branch-free.
+     * Spoke-light glint: a {@value #WHEEL_GLINT_RAMP}t sine brightness ramp every
+     * {@value #WHEEL_GLINT_PERIOD}t, then the override is CLEARED back to natural
+     * light. Fixed-period on the run clock rather than true spoke-crossing detection
+     * (the rate noise would make an {@code angle mod 45°} trigger double-blink) — but
+     * REPASS-BD phase-locks the cycle to the SUNRISE spoke angle
+     * ({@link #WHEEL_GLINT_OFFSET}) and warm-biases the ramp: block light leads
+     * (6→15→6) while sky trails (6→11→6), so the flash reads as low dawn light on
+     * varnished wood, not a fullbright pop.
      */
     private static void applyWheelGlint(Display.BlockDisplay wheel, int t) {
-        int cycle = (t - T_SHIP) % WHEEL_GLINT_PERIOD;
+        int cycle = Math.floorMod(t - T_SHIP - WHEEL_GLINT_OFFSET, WHEEL_GLINT_PERIOD);
         if (cycle < WHEEL_GLINT_RAMP) {
             float env = (float) Math.sin(Math.PI * cycle / (double) WHEEL_GLINT_RAMP);
-            int light = 6 + Math.round(9.0F * env);
-            applyBrightnessOverride(wheel, light, light);
+            applyBrightnessOverride(wheel,
+                    6 + Math.round(5.0F * env), 6 + Math.round(9.0F * env));
         } else if (cycle < WHEEL_GLINT_RAMP + 4) {
             clearBrightnessOverride(wheel);
         }

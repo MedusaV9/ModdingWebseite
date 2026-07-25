@@ -14,8 +14,8 @@
     { "t": 0.26, "pos": [-58.0, 60.0, 84.0], "yaw": 0, "pitch": 22, "roll": -2, "fov": 63, "easing": "easeInOutSine", "lookAt": [4.0, 0.0, 6.0] },
     { "t": 0.42, "pos": [30.0, 72.0, 126.0], "yaw": 0, "pitch": 26, "roll": 2, "fov": 66, "easing": "easeInOutQuart", "lookAt": [8.0, -2.0, 8.0] },
     { "t": 0.72, "pos": [128.0, 96.0, 52.0], "yaw": 0, "pitch": 30, "roll": 4, "fov": 79, "easing": "easeInOutSine", "lookAt": [-12.0, -8.0, 0.0] },
-    { "t": 0.9, "pos": [76.0, 50.0, -86.0], "yaw": 0, "pitch": 18, "roll": 1, "fov": 72, "easing": "easeOutSine", "lookAt": [0.0, -6.0, 0.0] },
-    { "t": 0.955, "pos": [58.0, 45.5, -104.0], "yaw": 0, "pitch": 16, "roll": 0, "fov": 74, "easing": "easeOutSine", "lookAt": [0.0, -8.0, 0.0] },
+    { "t": 0.9, "pos": [76.0, 50.0, -86.0], "yaw": 0, "pitch": 18, "roll": 1, "fov": 72, "easing": "easeInOutSine", "lookAt": [0.0, -6.0, 0.0] },
+    { "t": 0.955, "pos": [58.0, 45.5, -104.0], "yaw": 0, "pitch": 16, "roll": 0, "fov": 74, "easing": "easeInOutSine", "lookAt": [0.0, -8.0, 0.0] },
     { "t": 1.0, "pos": [50.0, 48.5, -112.0], "yaw": 0, "pitch": 18, "roll": 0, "fov": 74, "easing": "linear", "lookAt": [0.0, -8.0, 0.0] }
   ],
   "events": [
@@ -39,7 +39,7 @@
     { "t": 0.94, "type": "shake", "id": "", "data": "0.18,45,0.35" }
   ],
   "params": {
-    "_comment": "PLAN-C C13 dragon-victory shatter orbit, CUT-END restage: a world-anchored sweep around the End disc while the deterministic carve pass splits it into floating islets (EndShatterSequence supplies the play anchor = disc center at surface height, so keyframe positions are offsets from it). Played as a GLOBAL_TELEPORT group show with returnAfter — the C6 validatedReturnPosition healing covers the way home. Staging: t 0–0.10 is a DEAD-SILENT hold (no events; EndShatterSequence delays its own rumble/shake/seam flashes past the same window), the first crack lands at t 0.10, three more race outward with rising-weight shakes (freq 3.0→1.8: sharp rattles turning heavy), the separation pull leaves t 0.42 on easeInOutQuart into the wide+tilted t 0.72 apex (fov 79, roll 4), and the last two keyframes sink the camera ~5 blocks past its final height then lift it 3 back — the islet overshoot-and-settle read — under a low-frequency (0.4→0.35) rumble fade with a rift_thud settle thump at t 0.90.",
+    "_comment": "PLAN-C C13 dragon-victory shatter orbit, CUT-END restage: a world-anchored sweep around the End disc while the deterministic carve pass splits it into floating islets (EndShatterSequence supplies the play anchor = disc center at surface height, so keyframe positions are offsets from it). Played as a GLOBAL_TELEPORT group show with returnAfter — the C6 validatedReturnPosition healing covers the way home. Staging: t 0–0.10 is a DEAD-SILENT hold (no events; EndShatterSequence delays its own rumble/shake/seam flashes past the same window), the first crack lands at t 0.10, three more race outward with rising-weight shakes (freq 3.0→1.8: sharp rattles turning heavy), the separation pull leaves t 0.42 on easeInOutQuart into the wide+tilted t 0.72 apex (fov 79, roll 4), and the last two keyframes sink the camera ~5 blocks past its final height then lift it 3 back — the islet overshoot-and-settle read — under a low-frequency (0.4→0.35) rumble fade with a rift_thud settle thump at t 0.90. Settle legs run easeInOutSine (REPASS polish: the shipped easeOutSine legs entered at 3.4/1.7 blocks-per-tick off a dead stop — a visible lurch at the thud and at the sink turnaround; in-out keeps the same geometry with zero-velocity junctions, the turnaround passing through rest like a real overshoot).",
     "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end."
   }
 }

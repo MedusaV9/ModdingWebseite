@@ -1,0 +1,63 @@
+{
+  "__comment": "PH-IMPROVE-2 (IDEAS-boss #10): baked emission geometry for the eclipse:tyrant_fog_arms mesh shape - a curved claw of 5 tapering cuboids arcing up and out. Photon's MeshData loads this unbaked via ModelFactory.getUnBakedModel; the emitter's own fog material provides the visuals, so the texture below only needs to resolve for baking.",
+  "textures": {
+    "particle": "minecraft:block/stone",
+    "all": "minecraft:block/stone"
+  },
+  "elements": [
+    {
+      "__comment": "root segment - thick base at the shoulder",
+      "from": [6.5, 0, 6.5],
+      "to": [9.5, 4, 9.5],
+      "faces": {
+        "north": {"texture": "#all"}, "south": {"texture": "#all"},
+        "east": {"texture": "#all"}, "west": {"texture": "#all"},
+        "up": {"texture": "#all"}, "down": {"texture": "#all"}
+      }
+    },
+    {
+      "__comment": "second segment - leans outward (+x), rotated at the base joint",
+      "from": [7.5, 3.5, 7],
+      "to": [10.5, 8, 9],
+      "rotation": {"origin": [8, 4, 8], "axis": "z", "angle": -22.5},
+      "faces": {
+        "north": {"texture": "#all"}, "south": {"texture": "#all"},
+        "east": {"texture": "#all"}, "west": {"texture": "#all"},
+        "up": {"texture": "#all"}, "down": {"texture": "#all"}
+      }
+    },
+    {
+      "__comment": "third segment - the arc continues, thinner",
+      "from": [9.5, 6.5, 7.2],
+      "to": [12, 10.5, 8.8],
+      "rotation": {"origin": [10, 7, 8], "axis": "z", "angle": -45},
+      "faces": {
+        "north": {"texture": "#all"}, "south": {"texture": "#all"},
+        "east": {"texture": "#all"}, "west": {"texture": "#all"},
+        "up": {"texture": "#all"}, "down": {"texture": "#all"}
+      }
+    },
+    {
+      "__comment": "fourth segment - hooking over, near horizontal",
+      "from": [11.5, 8.5, 7.4],
+      "to": [14, 11, 8.6],
+      "rotation": {"origin": [12, 9, 8], "axis": "z", "angle": -45},
+      "faces": {
+        "north": {"texture": "#all"}, "south": {"texture": "#all"},
+        "east": {"texture": "#all"}, "west": {"texture": "#all"},
+        "up": {"texture": "#all"}, "down": {"texture": "#all"}
+      }
+    },
+    {
+      "__comment": "claw tip - small cube curling back down",
+      "from": [13.5, 9, 7.6],
+      "to": [15.2, 10.2, 8.4],
+      "rotation": {"origin": [14, 9.5, 8], "axis": "z", "angle": -22.5},
+      "faces": {
+        "north": {"texture": "#all"}, "south": {"texture": "#all"},
+        "east": {"texture": "#all"}, "west": {"texture": "#all"},
+        "up": {"texture": "#all"}, "down": {"texture": "#all"}
+      }
+    }
+  ]
+}

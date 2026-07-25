@@ -1,0 +1,126 @@
+{
+  "max_lifetime": 8,
+  "loop": false,
+  "rate": 4,
+  "count": 2,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:sphere",
+      "dimensions": [
+        1.7,
+        1.2,
+        1.7
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "from_surface": true
+    },
+    "particle_settings": {
+      "particle_speed": 0.08,
+      "random_speed": true,
+      "base_particle_size": 0.11,
+      "particle_size_variation": 0.04,
+      "particle_lifetime": 10,
+      "particle_lifetime_variation": 3,
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "random_initial_direction": true,
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": true,
+    "should_collide": false,
+    "face_velocity": true,
+    "velocity_stretch_factor": 0.6,
+    "sprite_data": {
+      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": false
+    },
+    "modules": [
+      {
+        "module": "veil:vortex",
+        "vortex_axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "vortex_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_position": true,
+        "range": 6.0,
+        "strength": 1.3
+      },
+      {
+        "module": "veil:point_attractor",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "localPosition": true,
+        "range": 6.0,
+        "strength": 2.6,
+        "strengthByDistance": false,
+        "invertDistanceModifier": false
+      },
+      {
+        "module": "veil:drag",
+        "strength": 0.1
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            {
+              "percent": 0.0,
+              "color": "#FFE9A8"
+            },
+            {
+              "percent": 0.5,
+              "color": "#FFD166"
+            },
+            {
+              "percent": 1.0,
+              "color": "#2E2347"
+            }
+          ],
+          "alpha_points": [
+            {
+              "percent": 0.0,
+              "alpha": 0.0
+            },
+            {
+              "percent": 0.2,
+              "alpha": 0.9
+            },
+            {
+              "percent": 0.8,
+              "alpha": 0.6
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
+          ]
+        },
+        "interpolant": "q.agePercent"
+      }
+    ]
+  }
+}

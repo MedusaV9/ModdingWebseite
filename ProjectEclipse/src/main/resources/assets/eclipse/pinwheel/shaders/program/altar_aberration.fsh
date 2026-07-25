@@ -18,6 +18,13 @@
 //        screen edges stay clean): the zone hums.
 //   [a3] two-tap prismatic split — a half-strength second sample per channel turns the
 //        hard RGB double-image into a smooth spectral smear at high strengths.
+//
+// v3 (VEIL-REPASS-1):
+//   [a4] micro-prism sparkle on the glyph flash — for the ~0.8 s envelope, a sparse
+//        field of tiny glints refracts into miniature spectra (hue dispersed along the
+//        radial split axis — the lens itself briefly resolves light into color). Rides
+//        GlyphFlash, so it inherits the CPU gate (levelUpCelebrations + reducedFx);
+//        donut-masked like the rings so the aim point stays clean.
 // v2 additive uniforms (fed by the same client.AltarAberration feeder, same commit):
 //   Time       — seconds on the feeder's 100 s wrap clock (shared with the breath)
 //   GlyphFlash — 0..1 level-up flash envelope (0 unless a flash is live)
@@ -89,6 +96,24 @@ void main() {
         float echoLuma = dot(echo, vec3(0.299, 0.587, 0.114));
         color += vec3(0.68, 0.42, 1.05) * echoLuma * gf * 0.28;
         color *= 1.0 + 0.05 * gf;
+
+        // [a4] Micro-prism sparkle: ~0.3% of 9 px cells arm per ~10 Hz roll; an armed
+        // cell hosts one tight glint (2-px gaussian) whose hue disperses along the
+        // radial split axis — each speck is a miniature spectrum, not a white ping.
+        // Highlight-weighted (glints need light to refract), donut-masked with the
+        // rings, amplitude ≤ 0.26·gf. Everything rides gf: dead outside the flash.
+        vec2 sparkPx = texCoord * screenSize;
+        vec2 sparkCell = floor(sparkPx / 9.0);
+        float sparkRoll = floor(Time * 10.0);
+        float sparkGate = step(0.997, efxHash(sparkCell * 1.13 + vec2(sparkRoll * 17.3, 5.1)));
+        vec2 sparkSub = fract(sparkPx / 9.0) - 0.5;
+        float sparkShape = exp(-dot(sparkSub, sparkSub) * 14.0);
+        vec2 radial = normalize(delta + vec2(1.0e-5));
+        float sparkHue = efxHash(sparkCell + vec2(sparkRoll, 9.4)) + dot(sparkSub, radial) * 1.2;
+        vec3 prism = 0.5 + 0.5 * cos(6.28318 * (sparkHue + vec3(0.0, 0.33, 0.67)));
+        float sparkLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color += prism * sparkGate * sparkShape * ringMask
+                * smoothstep(0.22, 0.55, sparkLuma) * gf * 0.26;
     }
 
     // Faint cold-violet lift toward the zone center — "something is wrong with this place".

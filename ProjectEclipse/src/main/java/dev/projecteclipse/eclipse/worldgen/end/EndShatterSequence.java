@@ -24,6 +24,7 @@ import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -146,6 +147,24 @@ public final class EndShatterSequence {
     /** Slow precession of each chunk's tumble pole around Y (deg/tick). */
     private static final double DEBRIS_PRECESS_MIN_DEG = 0.08D;
     private static final double DEBRIS_PRECESS_MAX_DEG = 0.20D;
+    /**
+     * Straggler personality (REPASS-BD): 1–2 chunks (the {@value #STRAGGLER_ORDINAL_A}th
+     * and {@value #STRAGGLER_ORDINAL_B}th spawned — the grid scan is deterministic, so
+     * replays pick the same columns) CLING to the break face and fall up to
+     * {@value #STRAGGLER_LAG_TICKS}t behind the flock, then catch back up. Implemented
+     * as a closed-form monotonic time warp on the chunk's motion clock — the dissolve
+     * and TTL stay on real age, and the warp is identity again before the dissolve
+     * starts, so nothing downstream changes. Cling slope keeps the warped clock ≥ 0.18×
+     * real (never reverses — angular momentum stays signed); catch-up peaks at ~1.49×
+     * (terminal fall ≈ 2.1 blocks and spin ≈ 9.6° per 4t window — inside the tween law).
+     */
+    private static final int STRAGGLER_ORDINAL_A = 5;
+    private static final int STRAGGLER_ORDINAL_B = 23;
+    private static final int STRAGGLER_LAG_TICKS = 26;
+    /** Time-warp envelope knees: cling ends / hold ends / caught up (ticks of real age). */
+    private static final int STRAGGLER_CLING_END = 48;
+    private static final int STRAGGLER_HOLD_END = 96;
+    private static final int STRAGGLER_CATCHUP_END = 176;
     /** Crack stingers while the carve pass runs. */
     private static final int CRACK_INTERVAL_TICKS = 48;
 
@@ -488,6 +507,13 @@ public final class EndShatterSequence {
             Vec3 flash = new Vec3(sx,
                     EndDiscGeometry.surfaceYAt((int) sx, (int) sz) + 2.0D, sz);
             BEATS.add(new Beat(SILENCE_HOLD_TICKS + step * CRACK_RACE_STEP_TICKS, () -> {
+                // PH-IMPROVE-2 (IDEAS-world #6a Option B): the Photon light-bleed shafts
+                // land FIRST — the row's leg records the played position so the client's
+                // RiftFx.openRift (the FX_RIFT_OPEN one line below, same flash pos)
+                // retires its generic EXPANSION_RIFT_GLOW for this tear. Photon-less
+                // clients no-op on the cue and keep the full shipped rift stack.
+                PacketDistributor.sendToPlayersNear(overworld, null, flash.x, flash.y, flash.z,
+                        FX_RANGE, new S2CFxEventPayload(FxCues.CUE_END_CRACK, flash, 0.0F, 0.0F));
                 PacketDistributor.sendToPlayersNear(overworld, null, flash.x, flash.y, flash.z,
                         FX_RANGE, new S2CFxEventPayload(FX_RIFT_OPEN, flash, 6.0F, 0.0F));
                 overworld.playSound(null, BlockPos.containing(flash),
@@ -553,6 +579,9 @@ public final class EndShatterSequence {
      * angular-momentum-consistent: ONE fixed tilted axis and one fixed signed rate per
      * chunk, plus a slow precession of the pole around Y — never a re-rolled axis. All
      * parameters seed-mix off the spawn column, so replays shatter identically.
+     * REPASS-BD: one or two chunks are STRAGGLERS — they cling to the break face, fall
+     * up to {@value #STRAGGLER_LAG_TICKS}t behind, then hurry after the flock (a
+     * monotonic closed-form time warp on the motion clock; see {@link #motionAge}).
      */
     private static final class Debris {
         final Display.BlockDisplay display;
@@ -569,13 +598,15 @@ public final class EndShatterSequence {
         /** Pole precession rate around Y (rad/tick) — slow, per-chunk. */
         final double precessRate;
         final float baseScale;
+        /** Straggler chunk: clings, lags {@value #STRAGGLER_LAG_TICKS}t, then catches up. */
+        final boolean straggler;
         int age;
         /** Dissolve brightness steps fired (brightness snaps → few, coarse, in-motion). */
         int dissolveStage;
 
         Debris(Display.BlockDisplay display, Vec3 origin, double vx, double vy0, double vz,
                 Vector3f spinAxis, double spinRate, double spinPhase, double precessRate,
-                float baseScale) {
+                float baseScale, boolean straggler) {
             this.display = display;
             this.origin = origin;
             this.vx = vx;
@@ -586,17 +617,47 @@ public final class EndShatterSequence {
             this.spinPhase = spinPhase;
             this.precessRate = precessRate;
             this.baseScale = baseScale;
+            this.straggler = straggler;
         }
 
-        /** World-space chunk-center of the drift arc at {@code age} ticks (closed form). */
-        Vec3 driftAt(int age) {
+        /**
+         * The chunk's MOTION clock at real {@code age}: identity for the flock; for a
+         * straggler, real age minus the lag envelope (smoothstep in over the cling,
+         * hold, smoothstep out over the catch-up — monotonic by construction, identity
+         * again past {@value #STRAGGLER_CATCHUP_END}t). Drift, tumble and precession
+         * all read this clock; dissolve/TTL stay on real age.
+         */
+        double motionAge(int age) {
+            if (!this.straggler) {
+                return age;
+            }
+            double lag;
+            if (age < STRAGGLER_CLING_END) {
+                lag = smooth(age / (double) STRAGGLER_CLING_END);
+            } else if (age < STRAGGLER_HOLD_END) {
+                lag = 1.0D;
+            } else if (age < STRAGGLER_CATCHUP_END) {
+                lag = 1.0D - smooth((age - STRAGGLER_HOLD_END)
+                        / (double) (STRAGGLER_CATCHUP_END - STRAGGLER_HOLD_END));
+            } else {
+                lag = 0.0D;
+            }
+            return age - STRAGGLER_LAG_TICKS * lag;
+        }
+
+        private static double smooth(double x) {
+            return x * x * (3.0D - 2.0D * x);
+        }
+
+        /** World-space chunk-center of the drift arc at {@code age} motion ticks (closed form). */
+        Vec3 driftAt(double age) {
             return new Vec3(this.origin.x + this.vx * age,
                     this.origin.y + fallAt(age),
                     this.origin.z + this.vz * age);
         }
 
         /** Fall offset: parabola under gravity-lite, capped at the terminal speed. */
-        double fallAt(int age) {
+        double fallAt(double age) {
             double tTerm = (DEBRIS_TERMINAL_FALL - this.vy0) / DEBRIS_GRAVITY;
             if (age <= tTerm) {
                 return this.vy0 * age + 0.5D * DEBRIS_GRAVITY * age * age;
@@ -637,6 +698,9 @@ public final class EndShatterSequence {
                         * (jitter < 0.0D ? -1.0D : 1.0D);
                 double precessRate = Math.toRadians(DEBRIS_PRECESS_MIN_DEG
                         + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h1);
+                // REPASS-BD stragglers: fixed spawn ordinals — the seed-hashed grid scan
+                // is deterministic, so the same 1–2 columns straggle on every replay.
+                boolean straggler = spawned == STRAGGLER_ORDINAL_A || spawned == STRAGGLER_ORDINAL_B;
                 Debris debris = new Debris(
                         new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level),
                         new Vec3(bx + 0.5D, y, bz + 0.5D),
@@ -644,7 +708,7 @@ public final class EndShatterSequence {
                         0.06D,
                         z / dist * 0.10D - jitter * 0.06D,
                         axis, spinRate, h3 * Math.PI * 2.0D, precessRate,
-                        (float) (0.70D + 0.45D * h2));
+                        (float) (0.70D + 0.45D * h2), straggler);
                 if (!spawnDebrisDisplay(level, debris, block)) {
                     continue;
                 }
@@ -696,9 +760,10 @@ public final class EndShatterSequence {
             Display.BlockDisplay display = debris.display;
             int age = debris.age++;
             // The entity is anchored, so removal keys off the TTL (the dissolve has
-            // shrunk the chunk out by then) or the drift arc sinking into the void fog.
+            // shrunk the chunk out by then) or the drift arc sinking into the void fog
+            // (the VISUAL arc — stragglers ride the warped motion clock).
             if (age >= DEBRIS_TTL_TICKS || display.isRemoved()
-                    || debris.origin.y + debris.fallAt(age) < 200.0D) {
+                    || debris.origin.y + debris.fallAt(debris.motionAge(age)) < 200.0D) {
                 display.discard();
                 LIVE_DEBRIS.remove(display.getUUID());
                 iterator.remove();
@@ -727,7 +792,7 @@ public final class EndShatterSequence {
             // The client-side BURST budget channel absorbs any excess silently.
             if (trailBurst && index >= trailStart && index < trailStart + DEBRIS_TRAIL_SAMPLES
                     && display.level() instanceof ServerLevel level) {
-                Vec3 drift = debris.driftAt(age);
+                Vec3 drift = debris.driftAt(debris.motionAge(age));
                 PacketDistributor.sendToPlayersNear(level, null, drift.x, drift.y, drift.z,
                         FX_RANGE, new S2CQuasarPayload(SLAM_DEBRIS, drift));
             }
@@ -746,16 +811,19 @@ public final class EndShatterSequence {
      * velocity + gravity-lite, terminal-capped), tumble about the slowly precessing
      * fixed axis, and the last-20 % dissolve shrink (ease-in, floored at 3 % — a zero
      * scale degenerates). Translation re-centers the scaled {@code [0,1]³} block on the
-     * drift point through the rotation (the SanctumOrbitals T·L·S math).
+     * drift point through the rotation (the SanctumOrbitals T·L·S math). Drift, tumble
+     * and precession read the (possibly straggler-warped) motion clock; the dissolve
+     * reads REAL age, so every chunk fades on the shared TTL beat.
      */
     private static Transformation debrisPoseAt(Debris debris, int age) {
         float dissolveT = dissolveT(age);
+        double motionAge = debris.motionAge(age);
         float scale = debris.baseScale * (1.0F - 0.97F * dissolveT * dissolveT);
         Vector3f axis = new Vector3f(debris.spinAxis)
-                .rotateY((float) (debris.precessRate * age));
+                .rotateY((float) (debris.precessRate * motionAge));
         Quaternionf rotation = new Quaternionf().rotationAxis(
-                (float) (debris.spinPhase + debris.spinRate * age), axis);
-        Vec3 drift = debris.driftAt(age);
+                (float) (debris.spinPhase + debris.spinRate * motionAge), axis);
+        Vec3 drift = debris.driftAt(motionAge);
         Vector3f translation = new Vector3f(
                 (float) (drift.x - debris.origin.x),
                 (float) (drift.y - debris.origin.y),

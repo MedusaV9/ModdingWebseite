@@ -50,7 +50,11 @@ public final class FxPayloads {
     public static final ResourceLocation FX_ORE_PROC = fx("ore_proc");
     /** W4-ATMOS: post-expansion new-land band glow (a = innerR, b = outerR). */
     public static final ResourceLocation FX_NEW_LAND_GLOW = fx("new_land_glow");
-    /** W-P-ALTAR: altar level-up ceremony (pos = altar, a = freshly reached level). */
+    /**
+     * W-P-ALTAR: altar level-up ceremony (pos = altar, a = freshly reached level,
+     * b = crowd size — players within {@code AltarBlockEntity.CROWD_RANGE} of the altar;
+     * VEIL-REPASS-2: widens the ceremony burst. 0 from pre-crowd servers = base look).
+     */
     public static final ResourceLocation FX_ALTAR_LEVELUP = fx("altar_levelup");
 
     /** How far the glide event position may be from a player to attach the trail to them. */
@@ -193,9 +197,10 @@ public final class FxPayloads {
             dev.projecteclipse.eclipse.sequence.ExpansionSequence.ClientHooks
                     .handleNewLandGlow(payload.a(), payload.b());
         } else if (FX_ALTAR_LEVELUP.equals(id)) {
-            // W-P-ALTAR: per-level escalating level-up ceremony (a = the new level).
+            // W-P-ALTAR: per-level escalating level-up ceremony (a = the new level;
+            // VEIL-REPASS-2: b = crowd size at the altar — widens the burst).
             dev.projecteclipse.eclipse.client.drama.AltarCeremonyFx.start(
-                    payload.pos(), (int) payload.a());
+                    payload.pos(), (int) payload.a(), (int) payload.b());
         } else if (dev.projecteclipse.eclipse.drama.GestureGlyphService.FX_GLYPH.equals(id)) {
             // W4-CEREMONY IDEA-10 #2: pos = gesturing player, a = glyph 0 greet/1 danger/2 follow.
             dev.projecteclipse.eclipse.client.drama.GestureGlyphFx.show(payload.pos(), (int) payload.a());

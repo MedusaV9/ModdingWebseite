@@ -83,15 +83,20 @@ public final class CutscenePaths {
             // plans_v5 C6 (W-CUTSCENE) touched five bundled JSONs (showOwnBody flags + fov/_doc
             // notes); the second finale_return hash and the *_ship/expansion entries are the
             // versions that reshoot replaced. Third finale_return entry: the pre-CUT-END
-            // version (the CUT-END reshoot warmed/slowed the descent).
+            // version (the CUT-END reshoot warmed/slowed the descent). Fourth: the CUT-END
+            // version whose handback leg lurched off the settle (REPASS easing polish).
             Map.entry("finale_return", List.of(
                     "6a0fcdab0fb32e8e3c66e0dc725b53d36304c70350a07df55f462ed48574bb43",
                     "d1f5df2d5a106e0ca660292db304d1a49cdfd13be2dedcfa99171d66014db3ab",
-                    "0bcf7ed27add164030fb20d78c14b2c8a66064d46b7ea373034b2d506e176dfe")),
+                    "0bcf7ed27add164030fb20d78c14b2c8a66064d46b7ea373034b2d506e176dfe",
+                    "31ab560550b02d8be49e45cc407acec05e289ef60db607012d0d05e1d4cb6fcb")),
             // CUT-END reshot the C13 shatter orbit (silence hold + crack race + settle);
-            // this is the C13-era shipped default it replaced.
+            // first entry: the C13-era shipped default it replaced. Second: the CUT-END
+            // version whose easeOutSine settle legs lurched at the thud/turnaround
+            // (REPASS easing polish).
             Map.entry("end_shatter", List.of(
-                    "dfe571268d427b708554b573d47ad3414aa8b7831b80ddf7dcc25bf314c226e1")),
+                    "dfe571268d427b708554b573d47ad3414aa8b7831b80ddf7dcc25bf314c226e1",
+                    "f79d338cb827d25399aef40c4eb754618bd31de98e893f18121ef72d8f0b2cb8")),
             // W7 reshot the unlock_ring orbit; the v2-era default hash stays on record so
             // untouched config copies upgrade in place. Second entry: the pre-C6 W7 version.
             // Third entry: the pre-CUT-EXPANSION C6 version (hero-shot reshoot).
@@ -104,25 +109,35 @@ public final class CutscenePaths {
             Map.entry("intro_v3_ship", List.of(
                     "8259e1f6050b1232962ab7c9e01c397757205003511ba82c9664edf22b04138a",
                     "02da214a113afcd21ac34f75fe8368400909b927d95463d696e15ef297d59ac7")),
-            Map.entry("intro_v3_flight",
-                    List.of("f7188ad86c759a9b58e1d4f93af4020214a02d09d05ebe43428b7921951e1ee6")),
+            // Second entry: the CUT-INTRO version whose dive buffet died 40t before the
+            // fade rise (REPASS added the terminal wall gust).
+            Map.entry("intro_v3_flight", List.of(
+                    "f7188ad86c759a9b58e1d4f93af4020214a02d09d05ebe43428b7921951e1ee6",
+                    "c6ad4dfe2134c44d7c20e43f00deaba1bf26678a7695f0e2f1050c6a397f2ee8")),
             Map.entry("intro_v3_reveal",
                     List.of("4ec430af2c612ab8d2519a86d26547b667a7573cda0e09be16815765255eecca")),
             // First entry: the pre-CUT-CREDITS C15 helm push-in (fxteams CUT-CREDITS
             // reshot it: slow dolly, wheel foreground framing, FOV 66→58 squeeze,
             // hands-settle beat). Second entry: the CUT-CREDITS version whose wheel
             // whisper fired at t=0.72 (~7t before the grip; EVAL-V6-CUTBD defect 5 moved
-            // it to t=0.77).
+            // it to t=0.77). Third: the version whose settle leg micro-hitched on the
+            // grip beat (REPASS easing polish).
             Map.entry("credits_helm", List.of(
                     "d1534925895f730513eda34d6ee070dcc795c97828727be764926581490576df",
-                    "a0efa5f9259ebc06e8a0b8a5254e96bd6b490dcceef1dbb3ddd7b242459d3e04")),
-            // Second entries: the pre-CUT-EXPANSION C6 versions (launch-rush / low-skim reshoots).
+                    "a0efa5f9259ebc06e8a0b8a5254e96bd6b490dcceef1dbb3ddd7b242459d3e04",
+                    "fcabe22ea9fd2a54499fb6e17319defb8b740711e88576a8d356d917ae4f078d")),
+            // Second entries: the pre-CUT-EXPANSION C6 versions (launch-rush / low-skim
+            // reshoots). Third entries: the CUT-EXPANSION versions before the REPASS
+            // polish (skyward: silent cloud punch; flyover: front_cross shake still at
+            // the pre-defect-4-fix t 0.78).
             Map.entry("expansion_skyward", List.of(
                     "de4ce2d7ca058da3fed835dc4337972c3f0cdc08bb660651d7fe4d9e68650d62",
-                    "ffe1fbd4a8c534061a1638b4b83439d079f8858e656e2ee5caee80dc9d2370ea")),
+                    "ffe1fbd4a8c534061a1638b4b83439d079f8858e656e2ee5caee80dc9d2370ea",
+                    "dc276ae65d79aeed50152b7ece0a5c80b621ecde4456f9af6a2724a2e99dfcb5")),
             Map.entry("expansion_flyover", List.of(
                     "02d76d7cbbe9370ce59873c452306a5e6ebd2b4ae4230305abb2219b146c540f",
-                    "5be44de155998abf24cdb33af989f27c752232d903181fc630b2f97a94edce2a")),
+                    "5be44de155998abf24cdb33af989f27c752232d903181fc630b2f97a94edce2a",
+                    "6ad93e70e4f927edbdf98bde67fd6a158b548edf9f273e85a54810bd8f16e0bf")),
             // W6 deleted the v1 intro pair from DEFAULT_IDS (superseded by the intro_v3_*
             // shots). Their shipped hashes stay on record so a future re-adoption of either
             // id can still tell "stale old default" from "operator edit"; stale config

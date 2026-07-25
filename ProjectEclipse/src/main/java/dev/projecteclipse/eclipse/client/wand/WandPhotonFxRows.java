@@ -17,6 +17,11 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  * {@code Mode.LAYER} garnish with NO Quasar leg, because the powers' shipped Quasar
  * compositions fire independently from {@code WandPowers}/{@code WandTickService} and stay
  * the photon-less baseline (degradation law: a refused Photon spawn changes nothing).
+ * Two of those independent emitters are retired per PHOTON-QUALITY §6
+ * ({@code stern_komet_core}, {@code riss_schlag_maw} emitter-only): the server still
+ * sends them, but {@code PhotonBridge.enhanceQuasarCue} suppresses each client-side
+ * while the row's Photon executors are live — REPLACE semantics with the Quasar beat as
+ * automatic fallback.
  *
  * <p>All three rows carry a custom {@link PhotonFxRegistry.PhotonLeg} because their
  * choreography exceeds one plain spawn — delayed second spawns, sky-offset anchors or the
@@ -41,14 +46,23 @@ public final class WandPhotonFxRows {
     private static final int KOMET_FALL_TICKS = 13;
     /** Feet offset for the entity-anchored Magmasprung launch eruption (eye − 1.5). */
     private static final double SPRUNG_FEET_OFFSET = -1.5D;
+    /**
+     * PH-IMPROVE-2: maw-snap delay fallback when the cue carries no openTicks — the
+     * shipped {@code WandConfig} default ({@code "openTicks", 25}); the maw asset bakes
+     * the same 25t implosion window.
+     */
+    private static final int RISS_SNAP_DEFAULT_DELAY = 25;
 
     private WandPhotonFxRows() {}
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
-        // IDEAS-player #2 — Kometenschlag: real falling head + ara ribbon (replaces the
-        // two teleported Quasar re-spawn beats visually; those still fire) and an HDR
+        // IDEAS-player #2 — Kometenschlag: real falling head + ara ribbon and an HDR
         // impact bloom setDelay()ed onto the damage tick. a = telegraphTicks.
+        // PHOTON-QUALITY §6 retirement: while these executors are live the
+        // stern_komet_core Quasar beats are suppressed client-side
+        // (PhotonBridge.enhanceQuasarCue — two comet heads read as double-vision);
+        // photon-less/refused casts keep every beat.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_STERN_KOMET,
                 fx("stern_komet_fall"),
@@ -71,8 +85,16 @@ public final class WandPhotonFxRows {
                 }));
         // IDEAS-player #4 — Rissschlag: implosion maw (negative radial in-suck) whose
         // swallowed streaks chain Death sub-emitters into eclipse:riss_glitch_pop static
-        // bursts at the lips. The ~25t window is baked into the asset (a = openTicks is
-        // informational); the server's snap-shut beats keep firing on top.
+        // bursts at the lips. The ~25t window is baked into the asset; the server's
+        // snap-shut beats keep firing on top.
+        // PHOTON-QUALITY §6 retirement (emitter-only): while this maw is live the
+        // riss_schlag_maw Quasar emitter is suppressed client-side
+        // (PhotonBridge.enhanceQuasarCue); shimmer/blink-tear/seam-scar stay LAYER.
+        // PH-IMPROVE-2 (IDEAS-player #4 second beat): the maw-close SNAP — a
+        // single-frame white-cyan HDR slice + 8 collide-and-die shards spat from the
+        // closing lips (eclipse:riss_maw_snap), parked behind setDelay(a = openTicks)
+        // so it lands exactly on the server's snap-shut damage tick. a <= 0 (pre-cue
+        // senders) degrades to the asset's baked 25t default window.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_RISS_SCHLAG,
                 fx("riss_schlag_maw"),
@@ -80,8 +102,16 @@ public final class WandPhotonFxRows {
                 FxBudget.Channel.BURST,
                 PhotonFxRegistry.Mode.LAYER,
                 false,
-                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
-                        PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true))));
+                (photonFx, pos, entity, a, b) -> {
+                    boolean maw = PhotonBridge.spawn(photonFx, pos,
+                            PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
+                    int snapDelay = a > 0.0F ? (int) a : RISS_SNAP_DEFAULT_DELAY;
+                    boolean snap = PhotonBridge.spawn(fx("riss_maw_snap"), pos,
+                            PhotonBridge.SpawnOptions.DEFAULT
+                                    .withDelay(snapDelay)
+                                    .withAllowMulti(true));
+                    return maw || snap;
+                }));
         // IDEAS-player #5 — Magmasprung: physics-bouncing magma chunks with Collision
         // (glut_splash) + Death (glut_ember_die) sub-emitters. Launch arrives on the
         // ENTITY lane (the eruption departs with the leaping caster, feet offset);

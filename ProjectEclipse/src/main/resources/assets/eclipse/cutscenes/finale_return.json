@@ -13,7 +13,7 @@
     { "t": 0.0, "pos": [-14.0, 32.0, -26.0], "yaw": -28, "pitch": 44, "roll": -2, "fov": 60, "easing": "easeInOutSine", "lookAt": "anchor:eclipse:altar_center" },
     { "t": 0.34, "pos": [20.0, 19.0, -14.0], "yaw": 55, "pitch": 34, "roll": 2, "fov": 60, "easing": "easeInOutSine", "lookAt": "player" },
     { "t": 0.62, "pos": [16.0, 8.0, 12.0], "yaw": 127, "pitch": 18, "roll": 1, "fov": 64, "easing": "easeInOutSine", "lookAt": "player" },
-    { "t": 0.84, "pos": [-6.0, 3.5, 8.0], "yaw": -143, "pitch": 11, "roll": 0, "fov": 68, "easing": "easeOutCubic", "lookAt": "player" },
+    { "t": 0.84, "pos": [-6.0, 3.5, 8.0], "yaw": -143, "pitch": 11, "roll": 0, "fov": 68, "easing": "easeInOutSine", "lookAt": "player" },
     { "t": 1.0, "pos": [0.0, 1.62, 0.0], "yaw": 0, "pitch": 0, "roll": 0, "fov": 70, "easing": "linear" }
   ],
   "events": [
@@ -25,7 +25,7 @@
     { "t": 0.85, "type": "shake", "id": "finale_settle", "data": "0.18,26,2.5" }
   ],
   "params": {
-    "_comment": "Day-14 finale descent, CUT-END restage: player-anchored reverse-intro drop that hands the camera back at the watcher's own eyes, slowed to 280t. The opening keyframe lookAt-tracks the eclipse:altar_center FX anchor (synced by IntroSequence; a missing anchor degrades to the keyed yaw/pitch) so the shot opens ON the glowing altar under a warm dawn-cream fade (FFF6E7C8, 44t bloom-out) and a sanctum-hum swell, then the 90°/s-clamped aim hands off to the player over the first segment. Every later keyframe lookAt-tracks the player, so showOwnBody stays true — the shot is ABOUT the returning player.",
+    "_comment": "Day-14 finale descent, CUT-END restage: player-anchored reverse-intro drop that hands the camera back at the watcher's own eyes, slowed to 280t. The opening keyframe lookAt-tracks the eclipse:altar_center FX anchor (synced by IntroSequence; a missing anchor degrades to the keyed yaw/pitch) so the shot opens ON the glowing altar under a warm dawn-cream fade (FFF6E7C8, 44t bloom-out) and a sanctum-hum swell, then the 90°/s-clamped aim hands off to the player over the first segment. Every later keyframe lookAt-tracks the player, so showOwnBody stays true — the shot is ABOUT the returning player. The final handback leg runs easeInOutSine (REPASS polish: the shipped easeOutCubic entered at 0.75 blocks-per-tick off a dead stop right on the emerge beat and then parked the lens ~1.4 blocks from the player's face for the last second; in-out glides off the settle and spends the approach evenly, still arriving at rest in the watcher's own eyes).",
     "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
   }
 }

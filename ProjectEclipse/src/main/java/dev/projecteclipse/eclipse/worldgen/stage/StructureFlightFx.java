@@ -32,6 +32,8 @@ import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
@@ -40,6 +42,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -93,7 +96,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * landing), grow into a ×{@value #SCALE_OVERSHOOT} hover overshoot that settles to ×1.0,
  * and land with a bottom-anchored 2-tick y-squash instead of dipping into the grid; the
  * landing thud/shake fires when the contact keyframe's interpolation ENDS, not at the
- * send tick.</p>
+ * send tick. REPASS-BD: ore/crystal-bearing pieces hold a warmer block-light through the
+ * mid-flight step (material-aware glow), and every touchdown kicks block-crumb dust
+ * scaled by the material's mass (the thud/shake stay rate-limited; the dust never is).</p>
  *
  * <p><b>Budgets</b>: at most {@code flight_fx.max_displays} displays per delivery (config
  * {@code config/eclipse/dungeons.json}, optional section, default {@value #DEFAULT_MAX_DISPLAYS});
@@ -147,6 +152,17 @@ public final class StructureFlightFx {
     /** Flight fraction at which the rift-exit full-bright steps down toward ambient. */
     private static final float GLOW_MID_FLIGHT_T = 0.55F;
     /**
+     * Material-aware glow (REPASS-BD): ore/crystal-bearing pieces keep this much BLOCK
+     * light through the mid-flight step (warm lightmap tone — embedded metal holding the
+     * rift's heat) while plain masonry drops to {@value #GLOW_MID_BLOCK_PLAIN}. Same ≤ 3
+     * brightness round-trips per piece — only the stepped-to value differs.
+     */
+    private static final int GLOW_MID_BLOCK_WARM = 13;
+    private static final int GLOW_MID_BLOCK_PLAIN = 8;
+    /** Landing dust particle count bounds — scaled by the piece material's mass. */
+    private static final int DUST_MIN = 4;
+    private static final int DUST_MAX = 14;
+    /**
      * Launch-order spiral pitch (blocks of radius per full turn): pieces launch in
      * center-out order with an angular sweep inside each annulus — the delivery reads as
      * one deliberate outward spiral instead of a random hail.
@@ -180,6 +196,15 @@ public final class StructureFlightFx {
     /** Deliveries that make no sense as flying masonry (weather / self-sequenced sites). */
     private static final Set<String> EXCLUDED_STRUCTURES = Set.of(
             "eclipse:fog_storm", "eclipse:stronghold_emergence");
+
+    /**
+     * Palette blocks that read as ore/crystal-bearing but emit no light of their own —
+     * they glow WARM through the flight ({@link #GLOW_MID_BLOCK_WARM}). Blocks with a
+     * real light emission (crying obsidian, sculk) qualify via {@code getLightEmission}
+     * without being listed.
+     */
+    private static final Set<Block> ORE_GLOW_BLOCKS = Set.of(
+            Blocks.COPPER_BLOCK, Blocks.GILDED_BLACKSTONE, Blocks.AMETHYST_BLOCK);
 
     /** structureId → visible-material palette, primary material first (index² weighting). */
     private static final Map<String, List<BlockState>> PALETTES = buildPalettes();
@@ -314,6 +339,8 @@ public final class StructureFlightFx {
         final float spinTurns;
         final Vector3f spinAxis;
         final boolean plunge;
+        /** Ore/crystal-bearing material: holds a warmer block-light through the flight. */
+        final boolean warmGlow;
 
         @Nullable
         Display.BlockDisplay display;
@@ -335,6 +362,7 @@ public final class StructureFlightFx {
             this.spinTurns = spinTurns;
             this.spinAxis = spinAxis;
             this.plunge = plunge;
+            this.warmGlow = state.getLightEmission() > 0 || ORE_GLOW_BLOCKS.contains(state.getBlock());
         }
     }
 
@@ -416,6 +444,7 @@ public final class StructureFlightFx {
                 // keyframe's interpolation ENDS on the client — never at the send tick.
                 if (piece.fxDueAge >= 0 && this.age >= piece.fxDueAge) {
                     piece.fxDueAge = -1;
+                    landingDust(piece); // per piece — the thud/shake below rate-limit
                     landingFx(piece);
                     if (piece.glowStage < 2 && piece.display != null && !piece.display.isRemoved()) {
                         DisplayBrightnessFx.clear(piece.display);
@@ -522,8 +551,11 @@ public final class StructureFlightFx {
             float settleT = targetAge <= piece.flightTicks ? 0.0F
                     : (targetAge - piece.flightTicks) / (float) SETTLE_TICKS;
             if (piece.glowStage == 0 && flightT >= GLOW_MID_FLIGHT_T) {
-                piece.glowStage = 1; // cooling: still sky-lit, block glow mostly gone
-                DisplayBrightnessFx.set(display, 8, 15);
+                // Cooling: still sky-lit; plain masonry sheds its block glow while
+                // ore/crystal-bearing pieces stay warm (material-aware, REPASS-BD).
+                piece.glowStage = 1;
+                DisplayBrightnessFx.set(display,
+                        piece.warmGlow ? GLOW_MID_BLOCK_WARM : GLOW_MID_BLOCK_PLAIN, 15);
             }
             if (!piece.landed && settleT >= CONTACT_SETTLE_T) {
                 // This window crosses ground contact — schedule the thud/shake seam for
@@ -534,6 +566,21 @@ public final class StructureFlightFx {
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
             display.setTransformation(poseAt(piece, flightT, settleT));
+        }
+
+        /**
+         * Block-crumb dust at the visual touchdown, scaled by the piece material's mass
+         * (explosion resistance as the proxy: wool barely puffs, deepslate kicks a real
+         * spray). Fires per landing — unlike the thud/shake it never rate-limits, the
+         * per-piece dust IS the read that each piece really hit its own cell.
+         */
+        private void landingDust(Piece piece) {
+            int count = Mth.clamp(
+                    DUST_MIN + (int) piece.state.getBlock().getExplosionResistance(),
+                    DUST_MIN, DUST_MAX);
+            level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, piece.state),
+                    piece.target.x, piece.entityPos.y + 0.1D, piece.target.z,
+                    count, 0.45D, 0.08D, 0.45D, 0.06D);
         }
 
         /** Bass thud + small shake per landing, rate-limited so a hail cannot strobe. */

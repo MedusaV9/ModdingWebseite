@@ -1,6 +1,19 @@
-// eclipse:limbo v4 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework;
-// FXTEAM-LIMBO v4 craft pass). v4 adds, WITHOUT touching the v3 fixes (depth water mask,
-// ray-elevation curvature, voyage drift):
+// eclipse:limbo v4.1 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework;
+// FXTEAM-LIMBO v4 craft pass; VEIL-REPASS-2 v4.1 polish). v4.1 adds, WITHOUT touching the
+// frozen v3/v4 fixes (depth water mask + capped eps + smoothstep facing, ray-elevation
+// curvature, VoyageOffset accumulation, Detail reduced-motion gate):
+//   * Sea breathing — the whole violet water field inhales/exhales in exact sync with the
+//     eclipse corona pulse: the frozen dual-frequency aura curve (already re-derived here
+//     for the reflection smear — the "uniform exists" is Time) is hoisted and multiplied
+//     into the water color block at ±7.5%. Detail-gated back to the steady v4 look.
+//   * Soul shoal (SoulShoal uniform) — rarely, a school of tiny soul-green lights swims
+//     beneath the surface and crosses near the ship: a translating cluster of stretched
+//     gaussian dashes in shoal-local space (the formation swims, unlike the world-anchored
+//     glints), each shimmering through the caustic web so they read as UNDER the water.
+//     LimboAmbience feeds the deterministic crossing; idle/reducedFx = strength 0.
+// --- v4 header kept below ---
+// eclipse:limbo v4 — the Limbo grade. v4 adds, WITHOUT touching the v3 fixes (depth water
+// mask, ray-elevation curvature, voyage drift):
 //   * Layered water — a near-hull micro-ripple octave (extra causticWeb at 3.1× frequency,
 //     faded out by 16 blocks) plus long-wavelength swells far out (a very low-frequency
 //     noise that re-shades the web brightness beyond ~18 blocks) — three perceptual bands
@@ -38,7 +51,7 @@
 //     and is disabled entirely under reducedFx (CurveAmount = 0).
 // Uniforms: Intensity, GodrayDir (vec2), CausticsAmount, Time (frozen §3.3) + the v3 set
 // InvViewProj, CameraPos, WaterlineY, VoyageOffset, CurveAmount, FarDist + the v4
-// LightningGlow and Detail (reduced-motion gate) — all fed per
+// LightningGlow and Detail (reduced-motion gate) + the v4.1 SoulShoal — all fed per
 // frame by veilfx.LimboAmbience (which captures the exact AFTER_SKY render matrices, view
 // bobbing included, so reconstruction matches the depth buffer — the SunTracker law).
 #include eclipse:eclipse_common
@@ -61,6 +74,9 @@ uniform vec3 LightningGlow; // xy = world-XZ azimuth unit dir of the pulse, z = 
 uniform float Detail;       // 1 normal, 0 under reducedFx — gates the v4 water-motion layers
                             // (swells, micro-ripples, glints, reflection ripple) back to the
                             // v3 water look: reduced FX is a motion contract, not just ALU.
+// v4.1:
+uniform vec4 SoulShoal;     // xy = shoal center (world XZ), zw = swim heading × strength —
+                            // length(zw) is the 0..1 crossing envelope; (0,0) = no shoal.
 
 in vec2 texCoord;
 
@@ -90,6 +106,12 @@ void main() {
     vec2 uv = texCoord;
     vec2 screenSize = vec2(textureSize(DiffuseSampler0, 0));
     float aspect = screenSize.x / max(screenSize.y, 1.0);
+
+    // v4.1: the frozen dual-frequency corona pulse (the sky pass's drawAuraGlow curve,
+    // previously re-derived inline for the reflection smear) hoisted to main so the sea
+    // breathing and the smear shimmer share ONE curve — they can never desync from the
+    // sky-pass aura, and from each other.
+    float pulse = 0.85 + 0.11 * sin(Time * 1.3) + 0.04 * sin(Time * 0.37 + 1.7);
 
     // ---- horizon curvature + infinite-ocean warp (item 5) -------------------------------
     // Displace the SAMPLED scene UV up by k·(horizontal distance)² so the world bends up
@@ -194,10 +216,17 @@ void main() {
         float nearW = 1.0 - smoothstep(5.0, 16.0, dist);
         float micro = (nearW > 0.001 && Detail > 0.001)
                 ? causticWeb(wp * 3.1 + vec2(53.0), Time * 2.1) : 0.0;
+        // v4.1 sea breathing: the whole violet field (lift + web + sparkle + micro)
+        // inhales/exhales with the corona pulse — ±7.5% around the steady v4 exposure
+        // (the 0.85-mean pulse is re-centered to 1.0). Detail-gated back to the constant
+        // look under reduced FX: a scene-wide luminance swell is exactly the kind of
+        // motion the reduced contract removes. Glints stay unbreathed — they are
+        // creatures in the water, not light OF the water.
+        float seaBreath = mix(1.0, 1.0 + (pulse - 0.85) * 0.5, Detail);
         color += (vec3(0.10, 0.03, 0.17)
                 + vec3(0.42, 0.16, 0.80) * web * webAmp * calm
                 + vec3(0.55, 0.30, 1.00) * sparkle * 0.6 * calm
-                + vec3(0.36, 0.18, 0.70) * micro * nearW * 0.35) * water;
+                + vec3(0.36, 0.18, 0.70) * micro * nearW * 0.35) * water * seaBreath;
         // v4: sparse bioluminescent glints. Cells of the world-anchored field (they ride
         // wp, so they trail the voyage drift astern like real flotsam); ~1.8% of ~4.4-block
         // cells host a glint, each an elongated-along-drift soul-green spot blinking on its
@@ -214,6 +243,36 @@ void main() {
             blink *= blink;
             color += vec3(0.28, 0.95, 0.55) * spot * blink * calm * water * 0.5 * Detail;
         }
+
+        // ---- v4.1: soul shoal — a school of tiny lights swimming UNDER the surface -------
+        // Unlike the world-anchored glints, the fish live in SHOAL-LOCAL space (x along the
+        // swim heading, y abeam), so the whole formation translates with the crossing that
+        // LimboAmbience feeds. Each occupied cell holds one stretched gaussian dash that
+        // wiggles across the heading on its own phase; the school's brightness is carried
+        // by the caustic web overhead, so the lights shimmer as if refracted from below.
+        // strength already encodes idle/reducedFx = 0; Detail-gated for the motion ladder.
+        float shoalStrength = length(SoulShoal.zw);
+        if (shoalStrength > 0.001 && Detail > 0.001) {
+            vec2 shoalDir = SoulShoal.zw / shoalStrength;
+            vec2 toP = world.xz - SoulShoal.xy;
+            vec2 sp = vec2(dot(toP, shoalDir), dot(toP, vec2(-shoalDir.y, shoalDir.x)));
+            // Elliptical formation envelope: ~±13 blocks along the heading, ~±5 abeam.
+            vec2 fe = sp * vec2(0.075, 0.20);
+            float formation = exp(-dot(fe, fe));
+            if (formation > 0.01) {
+                vec2 fp = sp * vec2(0.85, 1.9); // fish cells ~1.2 blocks long, ~0.5 wide
+                float fh = efxHash(floor(fp) + vec2(91.0, 47.0));
+                if (fh > 0.42) {
+                    vec2 lp2 = fract(fp) - 0.5;
+                    lp2.y += 0.16 * sin(Time * 2.3 + fh * 37.0); // per-fish swim wiggle
+                    lp2.x *= 0.50;                               // dash along the heading
+                    float fish = exp(-dot(lp2, lp2) * 30.0);
+                    float underWeb = 0.45 + 0.55 * web;          // refracted-from-below read
+                    color += vec3(0.30, 0.95, 0.60) * fish * formation * underWeb
+                            * shoalStrength * water * 0.85;
+                }
+            }
+        }
     }
 
     // ---- eclipse reflection smear (IDEA-18 §1): the zenith disc mirrored on the water ----
@@ -223,8 +282,9 @@ void main() {
     if (abs(mirrorNdc.x) < 2.5 && abs(mirrorNdc.y) < 2.5) {
         vec2 dm = (uv - (mirrorNdc * 0.5 + 0.5)) * vec2(aspect * 3.2, 1.1);
         float smear = exp(-dot(dm, dm) * 6.0);
-        // Same breathing curve as the sky-pass aura pulse — never desyncs.
-        float shimmer = 0.85 + 0.11 * sin(Time * 1.3) + 0.04 * sin(Time * 0.37 + 1.7);
+        // Same breathing curve as the sky-pass aura pulse — never desyncs (v4.1: the
+        // curve is hoisted to main and shared with the sea breathing).
+        float shimmer = pulse;
         // v4: wave-broken smear — a world-anchored ripple (it rides wp, so it streams with
         // the voyage drift) breaks the solid blob into moving patches of reflection.
         // Detail-gated (reduced FX): falls back to the solid v3 blob.

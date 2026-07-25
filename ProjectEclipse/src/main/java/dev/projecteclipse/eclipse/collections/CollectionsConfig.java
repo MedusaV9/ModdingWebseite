@@ -37,11 +37,17 @@ import net.neoforged.fml.loading.FMLPaths;
  * <p><b>Migration (EVAL-V6-COMPLETE A#7):</b> {@code configVersion} gates a TARGETED
  * in-place patch (not GoalConfig's backup-and-regenerate — collections are more likely
  * to carry deliberate server tuning). A parseable file older than
- * {@link #CONFIG_VERSION} (missing field = v1) gets the v2 delta applied — the
- * cobblestone {@code dailyCreditCap} 600 lands on existing files whose cap is still the
- * old uncapped default — is stamped with the current version and written back.
+ * {@link #CONFIG_VERSION} (missing field = v1) gets the cumulative cobblestone
+ * {@code dailyCreditCap} delta applied — v1's uncapped default AND v2's interim 600
+ * (which shipped in deviation of EVAL-DOPA-F #9; AUDIT-v7 §1.8) both land on
+ * {@value #COBBLESTONE_DAILY_CREDIT_CAP} — is stamped with the current version and
+ * written back. Any other positive cap is deliberate operator tuning and is respected.
  * Unparseable files are left untouched (the reload path already keeps the previous
  * snapshot for those).</p>
+ *
+ * <p><b>Dev-run note:</b> an existing {@code run/config/eclipse/collections.json} is
+ * migrated in place on the next launch (or {@code /eclipse reload}); deleting it
+ * regenerates the full default set with the current cap — no manual edit needed.</p>
  */
 public final class CollectionsConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -49,13 +55,23 @@ public final class CollectionsConfig {
 
     /**
      * Version 2 = EVAL-DOPA-F #9 / EVAL-V6-COMPLETE A#7: cobblestone gained its REAL
-     * daily credit cap (600/day). The default writer alone never reaches servers whose
-     * {@code collections.json} predates the change, so {@link #migrateIfOutdated}
-     * patches those files in place. Bump when a shipped default must reach live files.
+     * daily credit cap — but shipped 600/day in deviation of EVAL-DOPA-F's explicit
+     * 1500. Version 3 = AUDIT-v7 §1.8: the cap is corrected to the required 1500;
+     * the migration also lifts stale 600 files (EVAL-DOPA-F's number wins). The default
+     * writer alone never reaches servers whose {@code collections.json} predates the
+     * change, so {@link #migrateIfOutdated} patches those files in place. Bump when a
+     * shipped default must reach live files.
      */
-    public static final int CONFIG_VERSION = 2;
-    /** The v2 cobblestone daily credit cap applied by the migration (EVAL-DOPA-F #9). */
-    private static final long COBBLESTONE_DAILY_CREDIT_CAP = 600L;
+    public static final int CONFIG_VERSION = 3;
+    /** The cobblestone daily credit cap (EVAL-DOPA-F #9's required 1500; AUDIT-v7 §1.8). */
+    private static final long COBBLESTONE_DAILY_CREDIT_CAP = 1500L;
+    /**
+     * The interim cap the v2 default writer + migration shipped (600 — the EVAL-DOPA-F
+     * deviation). The v3 migration treats exactly this value as "still the stale shipped
+     * default" and lifts it to {@link #COBBLESTONE_DAILY_CREDIT_CAP}; any other positive
+     * value is deliberate operator tuning and is kept.
+     */
+    private static final long LEGACY_V2_COBBLESTONE_CAP = 600L;
 
     /** Valid signal lanes (IDEAS-collections §4.1). */
     public static final Set<String> LANES = Set.of("mine", "harvest", "kill", "shard_bank", "pickup");
@@ -191,12 +207,15 @@ public final class CollectionsConfig {
     }
 
     /**
-     * Version-gated in-place migration of a parseable existing file (class doc). v1 → v2
-     * delta: cobblestone gains {@code dailyCreditCap} {@value #COBBLESTONE_DAILY_CREDIT_CAP}
-     * — but ONLY when the file still carries the old uncapped default (missing or
-     * {@code <= 0}); a deliberate operator-tuned cap is respected. The patched root is
-     * stamped and written back so the migration runs once; a failed write keeps the
-     * patched in-memory root (the sweep still sees the cap this session).
+     * Version-gated in-place migration of a parseable existing file (class doc).
+     * Cumulative cobblestone delta: {@code dailyCreditCap} becomes
+     * {@value #COBBLESTONE_DAILY_CREDIT_CAP} when the file still carries a shipped
+     * default — the v1 uncapped default (missing or {@code <= 0}) or the stale v2
+     * interim {@value #LEGACY_V2_COBBLESTONE_CAP} (AUDIT-v7 §1.8: EVAL-DOPA-F's 1500
+     * wins); any other positive cap is deliberate operator tuning and is respected.
+     * The patched root is stamped and written back so the migration runs once; a failed
+     * write keeps the patched in-memory root (the sweep still sees the cap this
+     * session).
      */
     private static void migrateIfOutdated(JsonObject root, Path file) {
         int fileVersion = 1;
@@ -227,7 +246,7 @@ public final class CollectionsConfig {
                 } catch (RuntimeException ignored) {
                     // malformed cap value — treat as the old uncapped default and patch it
                 }
-                if (cap <= 0L) {
+                if (cap <= 0L || cap == LEGACY_V2_COBBLESTONE_CAP) {
                     collection.addProperty("dailyCreditCap", COBBLESTONE_DAILY_CREDIT_CAP);
                     capped = true;
                 }
@@ -348,12 +367,13 @@ public final class CollectionsConfig {
         JsonArray collections = new JsonArray();
 
         // --- Mining (7) — lane mine, natural blocks only (§1.1) ---
-        // EVAL-DOPA-F #9: cobblestone ships a REAL daily credit cap (600/day) — the
-        // stone lane is the one infinitely farmable counter, so an uncapped default
+        // EVAL-DOPA-F #9: cobblestone ships a REAL daily credit cap (1500/day, the
+        // eval's explicit number — AUDIT-v7 §1.8 closed the interim 600 deviation) —
+        // the stone lane is the one infinitely farmable counter, so an uncapped default
         // turns a quarry night into a whole ladder sweep.
         collections.add(collection("cobblestone", "mining", "minecraft:cobblestone", "mine",
                 ids("minecraft:stone", "minecraft:cobblestone", "minecraft:deepslate", "minecraft:cobbled_deepslate"),
-                600L,
+                COBBLESTONE_DAILY_CREDIT_CAP,
                 tier(50, 50, 0),
                 tier(250, 100, 0, "minecraft:stonecutter"),
                 tier(1000, 150, 0, "minecraft:dispenser", "minecraft:dropper"),

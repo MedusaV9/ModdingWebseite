@@ -196,14 +196,16 @@ IDLE = {
                 "5.0": [0, 0, 0],
             }
         },
+        # REPASS-MOB: sway periods snapped to the 5.0 s loop (72*5 = 360deg) — the old
+        # 60/70 deg/s sines wrapped mid-phase and popped the pose every loop.
         "body": {
-            "rotation": [0, 0, "math.sin(query.anim_time * 60) * 0.6"]
+            "rotation": [0, 0, "math.sin(query.anim_time * 72) * 0.6"]
         },
         "arm_right": {
-            "rotation": [0, 0, "-2 + math.sin(query.anim_time * 70) * 1"]
+            "rotation": [0, 0, "-2 + math.sin(query.anim_time * 72) * 1"]
         },
         "arm_left": {
-            "rotation": [0, 0, "2 + math.sin(query.anim_time * 70 + 180) * 1"]
+            "rotation": [0, 0, "2 + math.sin(query.anim_time * 72 + 180) * 1"]
         },
         "head": {
             "rotation": {
@@ -218,7 +220,7 @@ IDLE = {
             }
         },
         "head_shard": {
-            "position": [0, "math.sin(query.anim_time * 45) * 0.2", 0]
+            "position": [0, "math.sin(query.anim_time * 36) * 0.2", 0]
         },
         "jaw_shard": {
             "rotation": {
@@ -362,20 +364,90 @@ SPRINT = {
                 "0.55": {"post": [30, 0, 12], "lerp_mode": "catmullrom"},
             }
         },
+        # REPASS-MOB: jitter periods snapped to the 0.55 s loop (654.5*0.55 = 360deg,
+        # 981.8*0.55 = 540deg half-period zero-crossing) — the old 700-1000 deg/s sines
+        # wrapped mid-phase, the worst a ~10deg jaw snap every loop.
         "head": {
-            "rotation": ["-12", "math.sin(query.anim_time * 900) * 4", 0]
+            "rotation": ["-12", "math.sin(query.anim_time * 981.8) * 4", 0]
         },
         "jaw_shard": {
-            "rotation": ["20 + math.sin(query.anim_time * 800) * 10", 0, 0]
+            "rotation": ["20 + math.sin(query.anim_time * 654.5) * 10", 0, 0]
         },
         "head_shard": {
-            "position": ["math.sin(query.anim_time * 1000) * 0.3", 0, 0]
+            "position": ["math.sin(query.anim_time * 981.8) * 0.3", 0, 0]
         },
         "shard_torso": {
-            "position": [0, 0, "math.sin(query.anim_time * 950) * 0.3"]
+            "position": [0, 0, "math.sin(query.anim_time * 981.8 + 180) * 0.3"]
         },
         "glow_seam": {
-            "scale": ["1.3 + math.sin(query.anim_time * 700) * 0.2", 1, "1.3 + math.sin(query.anim_time * 700) * 0.2"]
+            "scale": ["1.3 + math.sin(query.anim_time * 654.5) * 0.2", 1, "1.3 + math.sin(query.anim_time * 654.5) * 0.2"]
+        },
+    },
+}
+
+# REPASS-MOB personality one-shot: the full-body "notice" FREEZE — fired by
+# GlitchedWandererEntity.setTarget on first target acquisition (the Storm Hound
+# howl trigger pattern). Hard linear snaps on purpose: the stalker locks up
+# head-to-toe for half a second, seam flaring, then releases into the kill walk.
+NOTICE = {
+    "loop": False,
+    "animation_length": 0.7,
+    "bones": {
+        "root": {
+            "position": {
+                "0.0": [0, 0, 0],
+                "0.05": [0.4, 0, -0.3],
+                "0.1": [0, 0, 0],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "body": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.06": [-6, 0, -2],
+                "0.55": [-6, 0, -2],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "head": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.06": [-10, 0, 4],
+                "0.55": [-10, 0, 4],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "arm_right": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.06": [-18, 0, -6],
+                "0.55": [-18, 0, -6],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "arm_left": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.06": [14, 0, 5],
+                "0.55": [14, 0, 5],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "jaw_shard": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.06": [26, -8, 6],
+                "0.55": [26, -8, 6],
+                "0.7": [0, 0, 0],
+            }
+        },
+        "glow_seam": {
+            "scale": {
+                "0.0": [1, 1, 1],
+                "0.1": [1.6, 1, 1.6],
+                "0.5": [1.6, 1, 1.6],
+                "0.7": [1, 1, 1],
+            }
         },
     },
 }
@@ -396,6 +468,17 @@ def geo_anim():
     anim["animations"]["animation.glitched_wanderer.idle"] = IDLE
     anim["animations"]["animation.glitched_wanderer.walk"] = WALK
     anim["animations"]["animation.glitched_wanderer.sprint"] = SPRINT
+    anim["animations"]["animation.glitched_wanderer.notice"] = NOTICE
+    # REPASS-MOB: wanderer-only attack anticipation ease-in-hard — a mid key back-loads
+    # the windup (24% of the raise at 60% of the windup time) so the arm coils instead
+    # of ramping linearly. Husk source untouched; keyframe dicts re-sorted after insert.
+    attack = anim["animations"]["animation.glitched_wanderer.attack"]["bones"]
+    for bone, key, value in (("arm_right", "0.09", [-48, 0, -4]),
+                             ("body", "0.09", [-3, -3, 0])):
+        channel = dict(attack[bone]["rotation"])
+        channel[key] = value
+        attack[bone] = dict(attack[bone])
+        attack[bone]["rotation"] = {k: channel[k] for k in sorted(channel, key=float)}
     (ASSETS / "animations/entity/glitched_wanderer.animation.json").write_text(
         json.dumps(anim, indent=1) + "\n")
 

@@ -17,6 +17,16 @@
 // the "previous-frame ghost" is faked by re-sampling the CURRENT frame at a jitter offset
 // that re-rolls at ~8 Hz — the stale-looking displaced copy sells the same beat without a
 // second render target.
+//
+// v3 (VEIL-REPASS-1): QUANTIZED SPIRAL WARP near the center. The v2 team REJECTED a
+// "slow UV swirl" as a water/portal cliché that fights the shard layer; this is the
+// fresh-eyes re-answer to the same ambition with both objections addressed: the twist is
+// QUANTIZED into ~2° angular steps (space shears in discrete rings — a glitch snap per
+// the FX style guide's GLITCH verbs, nothing flows like water), it is STATIC in time
+// (the angle tracks proximity only; nothing rotates over time, so no motion-sickness
+// vector), and it lives INSIDE the shard disc at sub-shard amplitude (≤ ~0.16 rad at
+// the very center) so the shards keep owning the read. Rides RiftAmount, which is 0
+// under reducedFx at the source.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -70,6 +80,23 @@ void main() {
     float laneGate = step(1.0 - 0.30 * corr, efxHash(vec2(lane, seed * 2.23)));
     float laneLen = floor(efxHash(vec2(lane * 1.31, seed)) * 5.0) * 0.012;
     uv -= axisUv * (laneLen * laneGate * corr);
+
+    // v3 — QUANTIZED SPIRAL WARP (see header): space around the tear is wound up in
+    // discrete ~2° shear rings, tightest at the center, dead by lensDist 0.45. Applied
+    // as an ADDITIVE offset so the datamosh/streak layers survive underneath; the shard
+    // branch below still mixes TOWARD its mirror copies where gated, so shards keep
+    // winning their sectors and the wind-up shows through the ungated ones.
+    // No atan here — only cos/sin of a bounded angle, so no degenerate-center risk; the
+    // epsilon guard just skips dead work at the exact center (offset → 0 there anyway).
+    float twistZone = (1.0 - smoothstep(0.05, 0.45, lensDist)) * rift;
+    if (twistZone > 0.003 && lensDist > 1.0e-4) {
+        float spiral = twistZone * twistZone * 0.45;
+        float spiralQ = floor(spiral * 28.0) * (1.0 / 28.0);
+        float cs = cos(spiralQ);
+        float sn = sin(spiralQ);
+        vec2 wound = lens + mat2(cs, -sn, sn, cs) * fromLens;
+        uv += (wound - p) / vec2(aspect, 1.0) * 0.5;
+    }
 
     // v2 — MIRROR-SHARD refraction near the rift center: the disc around RiftCenter splits
     // into 60° shards; gated shards resample the scene reflected across their bisector

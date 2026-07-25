@@ -499,13 +499,17 @@ public final class WandPowers {
         Vec3 target = aimPoint(player, power.param("range", 24.0F)).add(0.0D, 1.2D, 0.0D);
         float width = power.param("width", 5.0F);
         FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_OPEN, target, width, 1.0F, FX_RANGE);
+        int openTicks = (int) power.param("openTicks", 25.0F);
+        // PH-PLAYER (IDEAS-player #4): Photon implosion maw + Death sub-chain
+        // (a = openTicks, informational). Sent BEFORE the maw payloads: payload order per
+        // connection is guaranteed, so the client's retirement probe
+        // (PhotonBridge.enhanceQuasarCue, PHOTON-QUALITY §6) sees the live Photon maw and
+        // skips the Quasar maw emitter — emitter-only REPLACE; shimmer/blink-tear/seam-scar
+        // dressing below stays LAYER. Photon-less clients: the probe never fires, every
+        // Quasar beat plays — the unchanged baseline.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_RISS_SCHLAG, target, openTicks, 0.0F, FX_RANGE);
         sendQuasar(level, RISS_SCHLAG_MAW, target);
         WandTickService.schedule(level, 2, () -> sendQuasar(level, RISS_SCHLAG_MAW, target));
-        int openTicks = (int) power.param("openTicks", 25.0F);
-        // PH-PLAYER (IDEAS-player #4): Photon implosion maw + Death sub-chain layered over
-        // the Quasar composition (a = openTicks, informational). Photon-less clients:
-        // registered row has no Quasar leg — everything above is already the baseline.
-        FxPayloads.sendFxEvent(level, FxCues.CUE_RISS_SCHLAG, target, openTicks, 0.0F, FX_RANGE);
         if (openTicks >= 10) {
             // D11 pre-snap tell: the maw's lips shimmer (flickering ring, drifting inward)
             // and a thin rising chirp sounds ~6 ticks before the bite snaps shut. Pure
@@ -821,7 +825,11 @@ public final class WandPowers {
         sendQuasar(level, STERN_SCHAUER_FIELD, target.add(0.0D, 0.6D, 0.0D));
         // PH-PLAYER (IDEAS-player #2): one cue at cast carries the telegraph in `a` — the
         // client spawns the real falling head + ribbon now and setDelay()s the HDR impact
-        // bloom so it lands exactly on the damage tick below. Quasar beats keep firing.
+        // bloom so it lands exactly on the damage tick below. The server keeps sending
+        // every Quasar beat (photon-blind law); on Photon clients the retirement probe
+        // (PhotonBridge.enhanceQuasarCue, PHOTON-QUALITY §6) suppresses the
+        // stern_komet_core beats while the real fall/impact is live — two comet heads at
+        // once read as double-vision. stern_funke_fall stays LAYER (complementary).
         FxPayloads.sendFxEvent(level, FxCues.CUE_STERN_KOMET, target, telegraph, 0.0F,
                 FX_RANGE + 32.0D);
         level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_CHIME,

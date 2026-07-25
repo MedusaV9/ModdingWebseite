@@ -405,7 +405,12 @@ def build_end_void_wisps() -> FxBuilder:
             color_over_lifetime=gradient(  # in-hold-out, #8F7BD9 -> #4B3B8C
                 [(0.0, 0.0), (0.4, 0.5), (1.0, 0.0)],
                 [(0.0, 0.561, 0.482, 0.851), (1.0, 0.294, 0.231, 0.549)]),
-            size_over_lifetime=pts_curve([(0.0, 0.7), (0.45, 1.0), (1.0, 0.6)]))
+            # Smooth in-hold-out breathe (QUALITY §2 row 12): flat tangents at both
+            # ends — 1200 wisps swelling organically, not on straight ramps.
+            size_over_lifetime=curve(
+                0.6, 1.0,
+                [(0.0, 0.25, 0.15, 0.25, 0.3, 1.0, 0.45, 1.0),
+                 (0.45, 1.0, 0.65, 1.0, 0.85, 0.0, 1.0, 0.0)]))
        .with_cull_box((-110.0, -20.0, -110.0), (110.0, 30.0, 110.0)))
     return fx
 
@@ -461,13 +466,15 @@ def main() -> int:
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL  {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

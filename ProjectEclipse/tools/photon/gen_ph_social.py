@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     FX_ASSETS_DIR, REPO_ROOT, B, F, I, L, FxBuilder, BLEND_ADDITIVE, BLEND_ALPHA,
-    SEG_LINEAR_DOWN, burst, color, constant, curve, dot, gradient, nf3,
+    SEG_DECAY_TAIL, aabb, burst, color, constant, curve, dot, gradient, nf3,
     random_between, rom, sphere, cylinder, texture_material, validate_file,
 )
 
@@ -256,7 +256,28 @@ def build_ghost_wisp() -> FxBuilder:
             noise=dict(frequency=0.6, quality="Noise2D", position=nf3(0.08),
                        rotation=constant(0), size=constant(0)),
             color_over_lifetime=gradient([(0.0, 0.0), (0.25, 0.6), (0.8, 0.45), (1.0, 0.0)],
-                                         [(0.0, 0.62, 0.95, 0.7), (1.0, 0.45, 0.9, 0.95)])))
+                                         [(0.0, 0.62, 0.95, 0.7), (1.0, 0.45, 0.9, 0.95)]))
+       # Spec'd optional garnish (IDEAS-player #9 / QUALITY §2 row 4): hairline TRAIL
+       # ribbons on 20 % of wisps — drifting streaks of ectoplasm, not every mote.
+       .with_module("trails", {
+            "ratio": F(0.2), "lifetime": constant(1.0),
+            "dieWithParticles": B(1), "sizeAffectsWidth": B(0), "sizeAffectsLifetime": B(0),
+            "inheritParticleColor": B(0),
+            "colorOverLifetime": gradient([(0.0, 0.4), (1.0, 0.0)],
+                                          [(0.0, 0.62, 0.95, 0.8)]),
+            "trailType": "TRAIL",
+            "config": {
+                "time": I(12), "minVertexDistance": F(0.02),
+                "widthOverTrail": constant(0.02),
+                "colorOverTrail": gradient([(0.0, 0.4), (1.0, 0.0)],
+                                           [(0.0, 0.62, 0.95, 0.8)]),
+                "renderer": {
+                    "materials": rom([texture_material(CIRCLE, hdr=(0.5, 1.0, 0.8),
+                                                       blend=BLEND_ADDITIVE)]),
+                    "layer": "Translucent",
+                    "cull": {"_enable": B(1),
+                             "cullBox": aabb((-2.0, -1.0, -2.0), (2.0, 2.5, 2.0))},
+                    "orderInLayer": I(0), "vertexSortingMode": "NONE"}}}))
     (fx.particle_emitter(
             "core", duration=40, looping=True, prewarm=5,
             start_lifetime=constant(40), start_speed=constant(0),
@@ -265,6 +286,9 @@ def build_ghost_wisp() -> FxBuilder:
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
        .with_material(texture_material(CIRCLE, hdr=(0.5, 1.0, 0.8), blend=BLEND_ADDITIVE))
+       # Golden rule (FX_FORMAT §10 / LINT-CULL-LOOP): the loop's one chest mote sits at
+       # the local origin — a small box fully contains it (PHOTON-QUALITY §2 row 4 fix).
+       .with_cull_box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
        .with_lights()
        .with_curves(
             color_over_lifetime=gradient([(0.0, 0.15), (0.5, 0.7), (1.0, 0.15)],
@@ -332,7 +356,10 @@ def build_glide_trail() -> FxBuilder:
                 f"ribbon_{side}", looping=True,
                 space="World", alignment="Velocity", thickness=0.12,
                 time=0.8, time_interval=0.05, min_distance=0.05,
-                thickness_over_length=curve(0.0, 1.0, [SEG_LINEAR_DOWN], "length", "thickness"),
+                # Eased taper (PHOTON-QUALITY §2 runner-up, fixed with the §6 REPLACE
+                # flip): hold near-full thickness at the root, dissolve at the tail —
+                # a feathered wingtip instead of the old ruler-straight linear taper.
+                thickness_over_length=curve(0.0, 1.0, [SEG_DECAY_TAIL], "length", "thickness"),
                 color_over_length=GLIDE_FADE,
                 physics=dict(inertia=0.3, velocity_smoothing=0.8, damping=0.7))
            .child_of(wing)
@@ -372,13 +399,15 @@ def main() -> int:
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

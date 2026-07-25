@@ -182,6 +182,15 @@ public final class PhotonFxRegistry {
             }
             return true;
         }
+        // V7-SIGCOMP §6.1 soft gate: an S-class cue that loses the WorldStage token plays
+        // its DEMOTED form — the Photon hero leg is shed for the row's Quasar sketch
+        // (reduced, never dropped). Rows without a Quasar leg keep the Photon leg: the
+        // baseline law outranks demotion. Unregistered / A / B cues pass through FULL.
+        if (WorldStageArbiter.gateCue(id, pos) == WorldStageArbiter.Verdict.DEMOTED
+                && row.quasarEmitter() != null) {
+            QuasarSpawner.spawnOrFallback(row.quasarEmitter(), pos, row.channel());
+            return true;
+        }
         boolean photonPlayed; // full guard chain inside the bridge on every branch
         if (row.photonLeg() != null) {
             photonPlayed = row.photonLeg().play(row.photonFx(), pos, entity, a, b);

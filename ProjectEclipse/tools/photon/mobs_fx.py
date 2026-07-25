@@ -39,7 +39,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
-    BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_LINEAR_DOWN, SEG_LINEAR_UP,
+    BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_DECAY_TAIL,
+    SEG_LINEAR_DOWN, SEG_LINEAR_UP, SEG_POP_SHRINK, SEG_SMOOTH_UP,
     FxBuilder, blend, block_atlas_material, box, burst, circle, cone, constant, curve,
     cylinder, dot, function_shape, gradient, mesh, nf3, random_between, random_color,
     sphere, sub_emitter, texture_material, validate_file,
@@ -52,6 +53,7 @@ RING = "photon:textures/particle/ring.png"
 BEAM_CORE = "eclipse:textures/particle/beam_core.png"  # shared, authored by boss_b_fx.py
 STATIC_4X4 = "eclipse:textures/particle/static_4x4.png"
 SQUARE_4X4 = "eclipse:textures/particle/square_4x4.png"
+STAR_2X2 = "eclipse:textures/particle/star_2x2.png"  # shared, authored by gen_player_fx.py
 PETAL = "eclipse:textures/particle/petal_soft.png"
 
 # The IDEAS-mobs #5 two-pass law: pass 1 rips light out of the framebuffer (dst - src,
@@ -87,7 +89,9 @@ def build_boss_intro_shockwave() -> FxBuilder:
        .with_lights()
        .with_cull_box(*cull)
        .with_curves(
-            size_over_lifetime=curve(0.0, 1.0, [SEG_LINEAR_DOWN], "lifetime", "size"),
+            # Decay tail: sparks hold size while the ring expands, then collapse late —
+            # the crest breathes instead of ticking down (QUALITY §2 row 6).
+            size_over_lifetime=curve(0.0, 1.0, [SEG_DECAY_TAIL], "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.6, 0.85), (1.0, 0.0)],
                 [(0.0, 0.95, 0.9, 1.0), (1.0, 0.6, 0.4, 0.95)])))
@@ -107,7 +111,8 @@ def build_boss_intro_shockwave() -> FxBuilder:
        .with_physics(collision=False, gravity=0.12, bounce_chance=0.0)
        .with_cull_box(*cull)
        .with_curves(
-            size_over_lifetime=curve(1.0, 1.8, [SEG_LINEAR_UP], "lifetime", "size"),
+            # Smoothstep billow — dust swells open, no mechanical ramp.
+            size_over_lifetime=curve(1.0, 1.8, [SEG_SMOOTH_UP], "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.55), (0.5, 0.4), (1.0, 0.0)],
                 [(0.0, 0.65, 0.6, 0.7), (1.0, 0.45, 0.4, 0.55)])))
@@ -158,7 +163,9 @@ def build_award_star_shower() -> FxBuilder:
                    position=nf3(0.0, 5.0, 0.0), scale=nf3(3.0, 0.5, 3.0))
        # block_atlas + useBlockUV: each particle IS the baked nether-star model with its
        # real sprite (the HDR celebration light rides the glint sub-emitter instead).
-       .with_material(block_atlas_material(blend=BLEND_ALPHA))
+       # depthMask 1b: translucent Model particles need depth writes or DISTANCE sorting
+       # (PHOTON-QUALITY §2 row 14 — z-shimmer when overlapping stars had neither).
+       .with_material(block_atlas_material(blend=BLEND_ALPHA, depth_mask=True))
        .with_renderer(render_mode="Model", use_block_uv=True)
        .with_lights()
        .with_physics(collision=True, removed_when_collided=False, friction=0.99,
@@ -195,7 +202,10 @@ def build_award_star_shower() -> FxBuilder:
 
 
 def build_award_star_glint() -> FxBuilder:
-    """Collision sub-emitter child: a 4-particle HDR micro-spark at every star bounce."""
+    """Collision sub-emitter child: a 4-particle HDR micro-spark at every star bounce.
+    Identity read (QUALITY §5.1 rule 6): star-shaped glints off star_2x2.png (authored
+    by gen_player_fx.py), each picking a random frame; pop-shrink size so the glint
+    flares and dies instead of linearly popping out of existence (§2 row 13)."""
     fx = FxBuilder("award_star_glint")
     (fx.particle_emitter(
             "glint",
@@ -206,10 +216,13 @@ def build_award_star_glint() -> FxBuilder:
             simulation_space="World")
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(4))])
        .with_shape(sphere(radius=0.08))
-       .with_material(texture_material(CIRCLE, hdr=(1.8, 1.5, 0.6), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(STAR_2X2, hdr=(1.8, 1.5, 0.6), blend=BLEND_ADDITIVE))
        .with_cull_box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
        .with_curves(
-            size_over_lifetime=curve(0.0, 1.0, [SEG_LINEAR_DOWN], "lifetime", "size"),
+            uv_animation=dict(tiles=(2, 2), animation="WholeSheet",
+                              frame_over_time=constant(0),
+                              start_frame=random_between(0.0, 3.0)),
+            size_over_lifetime=curve(0.0, 1.0, [SEG_POP_SHRINK], "lifetime", "size"),
             color_over_lifetime=gradient([(0.0, 1.0), (1.0, 0.0)],
                                          [(0.0, 1.0, 0.95, 0.7)])))
     return fx
@@ -664,13 +677,15 @@ def main() -> int:
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

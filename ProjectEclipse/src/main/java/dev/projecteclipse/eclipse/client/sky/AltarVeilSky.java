@@ -55,6 +55,14 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       echo-less at tier 1).</li>
  * </ul></p>
  *
+ * <p><b>VEIL-REPASS-2</b>: two upgrades on the motif pass. (1) Tier-transition MORPH —
+ * a mid-session level-up TRANSFORMS the signature over {@value #MORPH_SECONDS} s instead
+ * of snapping: surviving layers swell once, the newborn layer grows out of the disc
+ * (plane-scale 55% → 100% + alpha fade-in via {@link #layerPose}), and a bridge ring
+ * carries the change from the L1 ring to the new layer's home radius. (2) The L2
+ * rearrange now CONNECTS the gliding glyphs with hairline light ({@link #addHairline}),
+ * flowing around the loop and dying with the chime.</p>
+ *
  * <p><b>reducedFx degradation</b> ({@link FxBudget#qualityTier()}): tier 2 renders
  * everything; tier 1 drops the animated aurora bands and one beam layer, thins the
  * constellation and skips the pulse-flash echo (alphas ×0.6); tier 0 keeps only the
@@ -144,10 +152,41 @@ final class AltarVeilSky {
 
     private static final int RING_SEGMENTS = 48;
 
+    /**
+     * VEIL-REPASS-2: tier-transition MORPH — a mid-session level-up (from ≥ 1; the 0→1
+     * moment keeps its write-in intro) no longer snaps the new layer on. Over
+     * {@value #MORPH_SECONDS} s the old signature visibly TRANSFORMS: it swells while
+     * "giving birth", the new layer grows out of the disc (radius 55% → 100% + alpha
+     * fade-in), and one bridge ring carries the change outward from the L1 ring to the
+     * new layer's home radius. Login/decrease syncs adopt silently, exactly like the
+     * write-in.
+     */
+    private static final float MORPH_SECONDS = 3.0F;
+    /** Bridge-ring arrival radius per NEW level (index = level − 2): L2 glyphs → L5 crown. */
+    private static final float[] MORPH_TARGET_RADIUS = {
+            GLYPH_ORBIT_RADIUS,
+            AURORA_BASE_RADIUS + AURORA_BAND_SPACING,
+            BEAM_ROOT_RADIUS + 80.0F,
+            CROWN_MID_RADIUS + CROWN_SPIKE_LENGTH};
+
+    /** VEIL-REPASS-2: hairline connect lines while the L2 constellation rearranges. */
+    private static final float CONNECT_HALF_WIDTH = 0.55F;
+    /** Endpoints pull back to the glyph rims so lines join, never stab through, diamonds. */
+    private static final float CONNECT_TRIM = 5.0F;
+
     /** Last altar level this client SAW rendering-side ({@code MIN_VALUE} = adopt-only). */
     private static int lastSeenLevel = Integer.MIN_VALUE;
     /** Seconds-clock timestamp of the L1 write-in start; {@code NaN} = fully written. */
     private static float ringWriteStart = Float.NaN;
+    /** Seconds-clock timestamp of a live tier morph; {@code NaN} = none. */
+    private static float morphStart = Float.NaN;
+    /** The level a live morph started FROM (layers above it are the "newborn" ones). */
+    private static int morphFromLevel;
+    /** Pre-allocated morph pose scratch (§3.5: no per-frame heap allocations). */
+    private static final Matrix4f MORPH_POSE = new Matrix4f();
+    /** Rearrange connect-line scratch: this frame's glyph centers (no render-loop alloc). */
+    private static final float[] GLYPH_X = new float[GLYPH_COUNT];
+    private static final float[] GLYPH_Z = new float[GLYPH_COUNT];
 
     private AltarVeilSky() {}
 
@@ -173,8 +212,16 @@ final class AltarVeilSky {
         // L1: faint violet ring, breathing slightly so it never reads as a decal.
         // W-P-ALTAR2 motif: on its first appearance it WRITES ITSELF — an arc sweeps
         // the full circle behind a bright pen-tip spark, then hands over to the breath.
+        // VEIL-REPASS-2 tier morph: while live, layers ABOVE morphFromLevel are newborn
+        // (they grow out of the disc and fade in), the surviving layers swell once (the
+        // old signature "gives birth"), and a bridge ring carries the change outward.
+        float morphT = morphProgress(seconds);
+        boolean morphing = morphT < 1.0F;
+        float birth = morphing ? smooth(morphT) : 1.0F;
+        float oldSwell = morphing ? 1.0F + 0.35F * Mth.sin(morphT * (float) Math.PI) : 1.0F;
+
         float ringBreath = 1.0F + 0.12F * Mth.sin(seconds * 0.5F);
-        float ringAlpha = RING_ALPHA * strength * (1.0F + 0.25F * level);
+        float ringAlpha = RING_ALPHA * strength * (1.0F + 0.25F * level) * oldSwell;
         float writeT = ringWriteProgress(seconds);
         if (writeT >= 1.0F) {
             drawSoftRing(celestialPose, RING_MID_RADIUS * ringBreath, RING_HALF_WIDTH,
@@ -183,24 +230,54 @@ final class AltarVeilSky {
             drawRingWriteIn(celestialPose, seconds, RING_MID_RADIUS * ringBreath,
                     ringAlpha, writeT);
         }
+        // Bridge ring: one soft ring sweeps from the L1 ring radius out to the newborn
+        // layer's home radius, peaking mid-morph — the energy visibly CARRIES the change.
+        if (morphing && tier >= 1 && level >= 2) {
+            float target = MORPH_TARGET_RADIUS[Mth.clamp(level, 2, 5) - 2];
+            drawSoftRing(celestialPose, Mth.lerp(birth, RING_MID_RADIUS, target), 5.0F,
+                    0.82F, 0.55F, 1.00F,
+                    0.28F * strength * Mth.sin(morphT * (float) Math.PI));
+        }
         if (tier <= 0) {
             return; // minimal tier: the ring alone carries the tell
         }
 
         if (level >= 2) {
-            drawGlyphConstellation(celestialPose, seconds, strength, tier);
+            boolean newborn = morphing && morphFromLevel < 2;
+            drawGlyphConstellation(layerPose(celestialPose, newborn, birth), seconds,
+                    strength * (newborn ? birth : oldSwell), tier);
         }
         if (level >= 3 && tier >= 2) {
-            drawAuroraBands(celestialPose, seconds, strength,
+            boolean newborn = morphing && morphFromLevel < 3;
+            drawAuroraBands(layerPose(celestialPose, newborn, birth), seconds,
+                    strength * (newborn ? birth : oldSwell),
                     AltarCeremonyFx.offeringSkyGlow(partialTick));
         }
         if (level >= 4) {
-            drawHaloBeams(celestialPose, seconds, strength, tier);
+            boolean newborn = morphing && morphFromLevel < 4;
+            drawHaloBeams(layerPose(celestialPose, newborn, birth), seconds,
+                    strength * (newborn ? birth : oldSwell), tier);
         }
         if (level >= 5) {
-            drawCoronaCrown(celestialPose, seconds, strength, surge,
+            boolean newborn = morphing && morphFromLevel < 5;
+            drawCoronaCrown(layerPose(celestialPose, newborn, birth), seconds,
+                    strength * (newborn ? birth : oldSwell), surge,
                     AltarCeremonyFx.skySurgeEchoTravel(partialTick), tier);
         }
+    }
+
+    /**
+     * The pose a layer draws with: newborn layers (mid-morph, above the from-level) grow
+     * out of the disc — the celestial pose scaled 55% → 100% in the plane (Y untouched).
+     * Returns the pre-allocated {@link #MORPH_POSE} scratch; draws are immediate, so
+     * sequential reuse across layers is safe.
+     */
+    private static Matrix4f layerPose(Matrix4f base, boolean newborn, float birth) {
+        if (!newborn) {
+            return base;
+        }
+        float s = 0.55F + 0.45F * birth;
+        return MORPH_POSE.set(base).scale(s, 1.0F, s);
     }
 
     // ------------------------------------------------------------------ level tracking
@@ -215,14 +292,33 @@ final class AltarVeilSky {
         if (lastSeenLevel == Integer.MIN_VALUE || level < lastSeenLevel) {
             lastSeenLevel = level;
             ringWriteStart = Float.NaN;
+            morphStart = Float.NaN;
             return;
         }
         if (level > lastSeenLevel) {
             if (lastSeenLevel < 1) {
                 ringWriteStart = seconds;
+            } else {
+                // VEIL-REPASS-2: a genuine ≥1 → higher level-up arms the tier morph
+                // (a multi-step jump morphs once, from the level the client last saw).
+                morphStart = seconds;
+                morphFromLevel = lastSeenLevel;
             }
             lastSeenLevel = level;
         }
+    }
+
+    /** Morph progress 0..1; 1 while no morph is live (or across the hourly clock wrap). */
+    private static float morphProgress(float seconds) {
+        if (Float.isNaN(morphStart)) {
+            return 1.0F;
+        }
+        float t = (seconds - morphStart) / MORPH_SECONDS;
+        if (t < 0.0F || t >= 1.0F) {
+            morphStart = Float.NaN; // done (or the seconds clock wrapped) — steady state
+            return 1.0F;
+        }
+        return t;
     }
 
     /** Write-in progress 0..1; 1 while no intro is live (or across the hourly clock wrap). */
@@ -299,6 +395,8 @@ final class AltarVeilSky {
                     * (1.0F + 0.45F * chime);
             float alpha = GLYPH_ALPHA * strength * pulse;
             addDiamond(builder, pose, cx, cz, GLYPH_SIZES[i], 0.72F, 0.42F, 1.00F, alpha);
+            GLYPH_X[i] = cx;
+            GLYPH_Z[i] = cz;
             // Trailing companion spark just behind the glyph on its orbit.
             float trail = angle - 0.05F;
             addDiamond(builder, pose,
@@ -306,7 +404,51 @@ final class AltarVeilSky {
                     GLYPH_SIZES[i] * 0.35F, 0.85F, 0.65F, 1.00F,
                     alpha * (0.6F + 0.25F * chime));
         }
+        // VEIL-REPASS-2 (L2 motif upgrade): while the constellation rearranges, the
+        // glyphs CONNECT — hairline light joins each glyph to the next around the loop,
+        // rising and dying with the chime swell, brighter toward the destination end so
+        // the light reads as FLOWING along the glide. chime is only nonzero on tier 2,
+        // so the lines are automatically ladder-gated with the rearrange itself.
+        if (chime > 0.01F) {
+            float lineAlpha = GLYPH_ALPHA * strength * chime * 0.5F;
+            for (int i = 0; i < count; i++) {
+                int j = (i + 1) % count;
+                addHairline(builder, pose, GLYPH_X[i], GLYPH_Z[i],
+                        GLYPH_X[j], GLYPH_Z[j], lineAlpha);
+            }
+        }
         BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * One hairline connect quad from glyph 1 toward glyph 2 ({@value #CONNECT_HALF_WIDTH}
+     * half-width), trimmed {@value #CONNECT_TRIM} units off both ends so it meets the
+     * diamond rims, alpha ramping 35% → 100% toward the destination (directional flow).
+     */
+    private static void addHairline(BufferBuilder builder, Matrix4f pose,
+            float x1, float z1, float x2, float z2, float alpha) {
+        float dx = x2 - x1;
+        float dz = z2 - z1;
+        float len = Mth.sqrt(dx * dx + dz * dz);
+        if (len < CONNECT_TRIM * 2.5F) {
+            return; // glyphs practically touching — nothing worth drawing
+        }
+        dx /= len;
+        dz /= len;
+        x1 += dx * CONNECT_TRIM;
+        z1 += dz * CONNECT_TRIM;
+        x2 -= dx * CONNECT_TRIM;
+        z2 -= dz * CONNECT_TRIM;
+        float px = -dz * CONNECT_HALF_WIDTH;
+        float pz = dx * CONNECT_HALF_WIDTH;
+        builder.addVertex(pose, x1 - px, PLANE_Y, z1 - pz)
+                .setColor(0.88F, 0.70F, 1.00F, alpha * 0.35F);
+        builder.addVertex(pose, x1 + px, PLANE_Y, z1 + pz)
+                .setColor(0.88F, 0.70F, 1.00F, alpha * 0.35F);
+        builder.addVertex(pose, x2 + px, PLANE_Y, z2 + pz)
+                .setColor(0.88F, 0.70F, 1.00F, alpha);
+        builder.addVertex(pose, x2 - px, PLANE_Y, z2 - pz)
+                .setColor(0.88F, 0.70F, 1.00F, alpha);
     }
 
     /**

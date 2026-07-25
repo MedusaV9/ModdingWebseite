@@ -13,6 +13,17 @@
 //        vignette: the heart that is no longer quite beating.
 //   [g4] void sky — the dome pulls toward a deep violet void (static; composes with
 //        world_grade's night dim: a ghost's sky is darker than a living player's).
+//
+// v3 (VEIL-REPASS-1):
+//   [g5] soul-echo double vision — ONE extra tap slightly ABOVE the true image (souls
+//        rise), max()-screened in as a spectral violet copy at 2% mix. The offset
+//        drifts sub-pixel on a ~10 s noise walk so the echo feels unmoored, never
+//        animated enough to read as motion. Detail-gated: any double-vision layer on a
+//        grade that can stay on for minutes is a comfort risk, so reducedFx kills it.
+//   (Edge aura on OTHER ghosts was assessed and SKIPPED: this is a single-stage
+//   veil:blit pass — the only inputs are the color and depth buffers; there is no
+//   entity/stencil mask to isolate ghost players, and faking one from depth would halo
+//   every silhouette. The mandate pre-authorized the skip.)
 // Uniforms: Ghost (frozen — the 30-tick eased 0..1 amount from EclipseFxState, breathing
 // premultiplied CPU-side; every term scales with it so the grade is a no-op at 0) plus
 // the v2 additive set fed by the same GhostGradeFx feeder (same commit):
@@ -81,6 +92,20 @@ void main() {
     float sky = step(0.9999, texture(DiffuseDepthSampler, texCoord).r);
     graded = mix(graded, graded * vec3(0.55, 0.50, 0.80) + vec3(0.010, 0.006, 0.038),
             sky * 0.45 * ghost);
+
+    // [g5] Soul-echo double vision: a spectral copy of the scene hovers ~0.45% of the
+    // screen ABOVE the true image (souls rise), screened in via max() like an undecayed
+    // exposure — 2% mix, deliberately at the threshold of noticing. The offset walks
+    // sub-pixel on a slow noise drift (~10 s scale) so the echo never sits still yet
+    // never MOVES. Luma-shaped toward highlights: dark regions have nothing to echo.
+    // Sample BELOW (−y) so the copy renders above: the echo at pixel P shows the scene
+    // point P − off, i.e. content appears displaced +off — texCoord y is up (GL).
+    float echoDrift = efxNoise(vec2(Time * 0.10, 7.3)) - 0.5;
+    vec2 echoOff = vec2(echoDrift * 0.0015, -(0.0045 + echoDrift * 0.0008));
+    vec3 echoTap = texture(DiffuseSampler0, clamp(texCoord + echoOff, vec2(0.001), vec2(0.999))).rgb;
+    float echoLuma = dot(echoTap, LUMA_W);
+    vec3 echo = vec3(0.62, 0.56, 0.92) * echoLuma;
+    graded = mix(graded, max(graded, echo), 0.02 * smoothstep(0.20, 0.60, echoLuma) * ghost * Detail);
 
     // [g2] Spectral edge shimmer: silhouettes catch a drifting cold glint, weighted to
     // the DARK side of contrast edges (glow reads as rim light, not as blooming

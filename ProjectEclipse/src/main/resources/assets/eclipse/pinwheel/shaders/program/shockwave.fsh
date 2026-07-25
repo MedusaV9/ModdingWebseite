@@ -24,12 +24,20 @@
 //     bursts hard at the origin, dies like a real pressure wave (base amplitude raised
 //     0.045 → 0.055 so the origin burst keeps its punch),
 //   • temporal dither so the luma crest/dimple gradients cannot band on flat skies.
+//
+// v4 (VEIL-REPASS-1): MATERIAL-REACTIVE RING TINT — the crest's luma ride and the
+// inside-the-ring desat both lean toward ShockTint, a luma-normalized (brightness
+// budget unchanged) biome dust hint sampled at the blast origin by the feeder: a slam
+// in a birch forest kicks a different dust than one in crimson badlands. Additive
+// uniform + feeder in the same commit (the Kick/RiftCenter precedent); the submerge
+// rings feed a cold slate (underwater read). Neutral (1,1,1) is a bit-exact no-op.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
 uniform vec2 ShockCenter;
 uniform float ShockProgress;
 uniform float ShockStrength;
+uniform vec3 ShockTint;
 
 in vec2 texCoord;
 
@@ -93,18 +101,21 @@ void main() {
     // Chromatic fringe hugging the crisp ring front.
     vec3 color = efxChroma(DiffuseSampler0, uv, uvDir, terms.y * ShockStrength * 0.022);
 
-    // Day readability: the luma crest riding the wave (VFXPOLISH-1, ≤ ~10%)…
-    color *= 1.0 + terms.x * strength * 0.10;
+    // Day readability: the luma crest riding the wave (VFXPOLISH-1, ≤ ~10%)… v4: the
+    // crest leans 40% toward the biome dust tint (luma-normalized, so the ≤10% budget
+    // is untouched — the crest picks up COLOR, not extra brightness).
+    color *= 1.0 + terms.x * strength * 0.10 * mix(vec3(1.0), ShockTint, 0.4);
     // …and the v3 pressure dip behind the front (≤ ~5%).
     color *= 1.0 - terms.z * strength * 0.05;
 
     // 8% desaturation inside the LEAD ring (frozen "pressure" read; main pulse only, so the
-    // echo never double-desaturates).
+    // echo never double-desaturates). v4: the gray target leans 30% toward the dust tint —
+    // the "air full of kicked-up material" hint.
     float pr = clamp(ShockProgress, 0.0, 1.0);
     float ring = dist - (1.0 - (1.0 - pr) * (1.0 - pr)) * RING_MAX_RADIUS;
     float inside = (1.0 - smoothstep(-0.08, 0.08, ring)) * strength;
     float luma = dot(color, vec3(0.299, 0.587, 0.114));
-    color = mix(color, vec3(luma), inside * 0.08);
+    color = mix(color, vec3(luma) * mix(vec3(1.0), ShockTint, 0.3), inside * 0.08);
 
     // v3 banding guard: crest/dimple brightness gradients over flat skies — temporal ±1 LSB
     // dither (progress is the only animated uniform, so it supplies the jitter). Polish 2:

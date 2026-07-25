@@ -83,7 +83,10 @@ def build_expansion_rift_glow() -> FxBuilder:
             "colorOverLength": gradient(
                 [(0.0, 1.0), (1.0, 0.0)],  # fade to transparent along the tail
                 [(0.0, 0.816, 0.702, 1.0), (1.0, 0.816, 0.702, 1.0)]),  # #D0B3FF
-            "thicknessOverLength": pts_curve([(0.0, 1.0), (1.0, 0.15)]),
+            # Eased taper (QUALITY §2 row 10): the disc holds body near the carrier
+            # and whips to a point — not a ruler-straight wedge.
+            "thicknessOverLength": curve(
+                0.0, 1.0, [(0.0, 1.0, 0.3, 0.95, 0.7, 0.35, 1.0, 0.15)]),
             "physicsSetting": {
                 "warmup": F(0.0), "gravity": L([F(0.0), F(0.0), F(0.0)]),
                 "inertia": F(0.35), "velocitySmoothing": F(0.75), "damping": F(0.7)},
@@ -103,7 +106,9 @@ def build_expansion_rift_glow() -> FxBuilder:
         .with_shape(sphere(radius=4.5, thickness=0.15))
         .with_curves(
             velocity_over_lifetime=dict(radial=constant(-0.35)),  # inward pull
-            size_over_lifetime=pts_curve([(0.0, 1.0), (1.0, 0.2)]),
+            # Hold-then-dive: streaks keep size on approach, shrink hard at the horizon.
+            size_over_lifetime=curve(
+                0.0, 1.0, [(0.0, 1.0, 0.35, 0.95, 0.75, 0.55, 1.0, 0.2)]),
             # #9C7BE0 body with the t=0.85 white ignition spike at the horizon.
             color_over_lifetime=gradient(
                 [(0.0, 0.85), (0.85, 0.9), (1.0, 0.0)],
@@ -131,8 +136,10 @@ def build_rift_piece_flash() -> FxBuilder:
         .with_shape(dot())
         .with_material(texture_material(CIRCLE_TEX, hdr=(3.5, 2.6, 4.0)))
         .with_curves(
-            size_over_lifetime=pts_curve(
-                [(0.0, 0.55), (0.1, 1.0), (0.6, 0.8), (1.0, 0.2)]),
+            # The spec's authored pop, as ONE genuine Bézier (IDEAS-world #3 /
+            # QUALITY §2 row 11): snap past full, sag, tail off.
+            size_over_lifetime=curve(
+                0.0, 1.0, [(0.0, 0.55, 0.1, 1.0, 0.6, 0.8, 1.0, 0.2)]),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (1.0, 0.0)],
                 [(0.0, 1.0, 1.0, 1.0), (1.0, 0.796, 0.659, 1.0)])))  # white -> #CBA8FF
@@ -251,13 +258,15 @@ def main() -> int:
     rc = 0
     for name, builder in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder().write(path)  # write() round-trip-validates
+        b = builder()
+        raw_len, gz_len = b.write(path)  # write() round-trip-validates
+        b.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

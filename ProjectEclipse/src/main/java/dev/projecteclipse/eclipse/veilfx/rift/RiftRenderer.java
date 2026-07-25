@@ -55,10 +55,17 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * and a per-rift palette ({@code hot/mid/dim} triple from {@link RiftFx.Rift}) that maps
  * C18's backrooms style to the wax-gold read.</p>
  *
+ * <p><b>VEIL-REPASS-2 additions</b>: a piece-launch RECOIL — the whole tear compresses
+ * up to 4% at each delivery launch tick ({@link RiftFx.Rift#recoilScale} multiplied onto
+ * the open scale at cull time: every layer squashes coherently, zero extra geometry) —
+ * and a void-well depth STARFIELD ({@link #buildVoidStars}): {@value #VOID_STARS} tiny
+ * per-star-parallaxed triangles inside the dark fans = infinite depth.</p>
+ *
  * <p>Budgets (§3.5, FXTEAM-RIFT recount, N ≤ 14 arms → 28 perimeter points): STRUCTURE =
  * shells 5 × 28 = 140 + inner hot fans 3 × 28 = 84 + fringe 56 + arcs 30 + forks
  * ≤ 2 × {@value #FORK_SEGMENTS} × 2 = 12 + lensing 28 + void well 2 × {@value
- * #VOID_SEGMENTS} = 24 → 374. PORTAL/BACKROOMS = 140 + inner fan (center shell only) 28 +
+ * #VOID_SEGMENTS} = 24 + void stars {@value #VOID_STARS} (VEIL-REPASS-2) → 386.
+ * PORTAL/BACKROOMS = 140 + inner fan (center shell only) 28 +
  * fringe 56 + arcs 30 + forks 12 + lensing 28 + discs 48 = 342 steady, + ping ring 32 ⊕
  * entry flash 24 (mutually exclusive by construction) → ≤ 374. Both stay under the frozen
  * 400-tri cap. {@code reducedFx} collapses to ONE shell, no arcs/forks/lensing/void/ping —
@@ -142,6 +149,16 @@ public final class RiftRenderer {
     /** View-direction push of the two layers, scaled by tear width (parallax depth). */
     private static final float VOID_PUSH_0 = 0.35F;
     private static final float VOID_PUSH_1 = 0.80F;
+
+    // --- VEIL-REPASS-2: void-well depth starfield (STRUCTURE tears) ---
+    /** Tiny stars floating INSIDE the void well, one in-plane triangle each (12 tris). */
+    private static final int VOID_STARS = 12;
+    /** Star in-plane spread as a fraction of the tear radius (inside the outer void fan). */
+    private static final float STAR_SPREAD = VOID_SCALE_0 * 0.85F;
+    /** Per-star view-push range: from just past the outer fan to beyond the deep fan —
+     *  deeper stars parallax more, sit dimmer and smaller: the infinite-depth read. */
+    private static final float STAR_PUSH_MIN = VOID_PUSH_0 * 1.1F;
+    private static final float STAR_PUSH_MAX = VOID_PUSH_1 * 1.3F;
 
     // --- FXTEAM-RIFT: event-horizon lensing rim ---
     /** Radial reach of the lensing dashes past the fringe, as a fraction of the width. */
@@ -234,7 +251,11 @@ public final class RiftRenderer {
             VIS_X[visible] = (float) dx;
             VIS_Y[visible] = (float) dy;
             VIS_Z[visible] = (float) dz;
-            VIS_OPEN[visible] = open;
+            // VEIL-REPASS-2 piece-launch recoil: multiplying the open scale squashes the
+            // WHOLE tear (shells, fringe, arcs, lensing, well) coherently by up to 4% at
+            // each delivery launch tick; 1 while idle. Pure scale math — zero extra
+            // geometry, so it stays live under reducedFx (launch feedback, not candy).
+            VIS_OPEN[visible] = open * rift.recoilScale(now);
             visible++;
         }
         if (visible == 0) {
@@ -430,6 +451,58 @@ public final class RiftRenderer {
     }
 
     /**
+     * VEIL-REPASS-2 void-well depth STARFIELD (STRUCTURE tears, full quality): {@value
+     * #VOID_STARS} tiny in-plane triangles scattered over the void fans, each pushed its
+     * own distance along the camera→rift view direction (the well's parallax trick, per
+     * star). Deeper stars parallax more, sit dimmer and smaller — walking past the tear
+     * makes the star layers shear apart: infinite depth from 12 triangles. Positions and
+     * depths are seed-hashed once (frame 0 — stable, unlike the rim flicker); brightness
+     * twinkles on slow per-star golden-angle phases, deliberately serene against the
+     * tear's convulsing static. Skipped with the rest of the well under {@code reducedFx}.
+     */
+    private static void buildVoidStars(RiftFx.Rift rift, BufferBuilder additive,
+            float cx, float cy, float cz, float open, float swirlSeconds) {
+        float len = (float) Math.sqrt((double) cx * cx + (double) cy * cy + (double) cz * cz);
+        if (len < 1.0E-3F) {
+            return; // camera inside the tear: no meaningful parallax direction
+        }
+        float pushScale = Mth.clamp(rift.width * 0.10F, 0.25F, 1.4F);
+        float r0 = rift.width * 0.5F * open;
+        float starR = rift.midR + (rift.hotR - rift.midR) * 0.85F;
+        float starG = rift.midG + (rift.hotG - rift.midG) * 0.85F;
+        float starB = rift.midB + (rift.hotB - rift.midB) * 0.85F;
+        for (int s = 0; s < VOID_STARS; s++) {
+            float depth = hash01(rift.seed, 211 + s * 3, 0);
+            float angle = hash01(rift.seed, 223 + s * 5, 0) * Mth.TWO_PI;
+            // sqrt on the radius hash = uniform scatter over the disc, no center clump.
+            float rad = Mth.sqrt(hash01(rift.seed, 227 + s * 7, 0)) * r0 * STAR_SPREAD;
+            float push = Mth.lerp(depth, STAR_PUSH_MIN, STAR_PUSH_MAX) * pushScale / len;
+            float cos = Mth.cos(angle);
+            float sin = Mth.sin(angle);
+            float px = cx + cx * push + (rift.tx * cos + rift.bx * sin) * rad;
+            float py = cy + cy * push + (rift.ty * cos + rift.by * sin) * rad;
+            float pz = cz + cz * push + (rift.tz * cos + rift.bz * sin) * rad;
+            // Twinkle rate = whole cycles per 100 s (the EVAL-POL-F #7 wrap law), phases
+            // golden-angle spread so no two stars ever pulse together.
+            float twinkle = 0.60F + 0.40F
+                    * Mth.sin(swirlSeconds * (Mth.TWO_PI * (11 + s) / 100.0F) + s * 2.399F);
+            float alpha = (0.85F - 0.55F * depth) * open * twinkle;
+            float size = r0 * (0.030F - 0.016F * depth);
+            // One tiny equilateral triangle in the tear plane (vertex bearings 90°/210°/330°).
+            additive.addVertex(px + rift.bx * size, py + rift.by * size, pz + rift.bz * size)
+                    .setColor(starR, starG, starB, alpha);
+            additive.addVertex(px + (rift.tx * -0.866F - rift.bx * 0.5F) * size,
+                            py + (rift.ty * -0.866F - rift.by * 0.5F) * size,
+                            pz + (rift.tz * -0.866F - rift.bz * 0.5F) * size)
+                    .setColor(starR, starG, starB, alpha);
+            additive.addVertex(px + (rift.tx * 0.866F - rift.bx * 0.5F) * size,
+                            py + (rift.ty * 0.866F - rift.by * 0.5F) * size,
+                            pz + (rift.tz * 0.866F - rift.bz * 0.5F) * size)
+                    .setColor(starR, starG, starB, alpha);
+        }
+    }
+
+    /**
      * Additive pass: the volumetric shell stack (outer core fan per shell in the rift's
      * {@code mid} tone, inner {@code hot} fan — 3 middle shells for STRUCTURE, center shell
      * only for portal-like styles whose center hides behind the discs anyway), the strobing
@@ -491,6 +564,11 @@ public final class RiftRenderer {
         if (!reduced) {
             buildArcs(rift, additive, cx, cy, cz, open, flickerFrame, swirlSeconds);
             buildLensing(rift, additive, cx, cy, cz, open, flickerFrame, swirlSeconds);
+            if (!rift.portalLike) {
+                // VEIL-REPASS-2: tiny stars inside the void well (drawn additively OVER
+                // the alpha-pass dark fans, so they read as lights IN the depth).
+                buildVoidStars(rift, additive, cx, cy, cz, open, swirlSeconds);
+            }
         }
 
         float flashAge = now - rift.entryFlashTick;

@@ -5,6 +5,10 @@
 //   1b. QUANTIZED datamosh pull: coarse screen cells snap toward the border direction in
 //       4 discrete steps — space visibly compresses INTO the tear (v3),
 //   1c. scanline desync burst riding the pushback KICK moment (v3, new Kick uniform),
+//   1d. 2-frame FULL-screen tear at the kick IMPACT (v4, VEIL-REPASS-1): for the first
+//       ~35 ms of the pulse the whole frame shears in two along a seed-rolled line —
+//       the one instant the border is allowed to own every pixel. Displacement only
+//       (no luminance flash), and it rides Kick, which is fed 0 under reducedFx.
 //   2. RGB chromatic tear along the border direction, now scaling with proximity on top of
 //       the masked strength (~14 px mid-approach → ~22 px touching, v3),
 //   3. 2-frame color-invert pops while practically touching the ring (Proximity > 0.85).
@@ -92,6 +96,19 @@ void main() {
         uv.x += (efxHash(vec2(kickRow * 3.17, seed)) - 0.5) * 0.24 * kick * kickGate;
         float rollGate = step(0.45, efxHash(vec2(floor(Time * 24.0), seed * 0.7)));
         uv.y += sin(Time * 63.0 + texCoord.y * 9.0) * 0.010 * kick * rollGate;
+
+        // Layer 1d (v4) — the IMPACT frame: kick decays quadratically over 420 ms, so
+        // kick > 0.85 is exactly the first ~35 ms (≈ 2 frames at 60 fps). For that
+        // window the WHOLE frame tears in two at a seed-rolled line: the halves shear
+        // in opposite directions along the tear axis (~32 px at 1080p at the crest).
+        // Pure displacement — no flash, no invert — so the photosensitivity budget is
+        // untouched; reducedFx never reaches here (Kick is fed 0 at the source).
+        float impact = smoothstep(0.85, 0.97, kick);
+        if (impact > 0.001) {
+            float tearLine = 0.25 + 0.5 * efxHash(vec2(seed, 41.7));
+            float side = step(tearLine, texCoord.y) * 2.0 - 1.0;
+            uv += tearUv * side * 0.030 * impact;
+        }
     }
     uv = clamp(uv, vec2(0.001), vec2(0.999));
 

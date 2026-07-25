@@ -11,6 +11,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -25,6 +26,7 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import software.bernie.geckolib.animation.AnimationController;
 import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.animation.PlayState;
 import software.bernie.geckolib.animation.RawAnimation;
@@ -63,6 +65,12 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
      * while a gaze-burst speed modifier is live (see {@link #handleBaseState}).
      */
     public static final String ANIM_SPRINT = "sprint";
+    /**
+     * REPASS-MOB personality one-shot: the full-body "notice" freeze fired on the FIRST
+     * target acquisition (the Storm Hound howl / Fog Colossus roar {@code setTarget}
+     * pattern — cosmetic only, not persisted, no AI/balance effect).
+     */
+    public static final String ANIM_NOTICE = "notice";
     /** Players closer than this may be attacked unprovoked (IDEAS §A3.1). */
     public static final double ATTACK_TRIGGER_RANGE = 3.0D;
     /** {@link PaceGoal} stops and stares at this distance (IDEAS §A3.1: 12). */
@@ -84,6 +92,9 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
     /** Cached {@code animation.glitched_wanderer.sprint} loop (client-side). */
     @Nullable
     private RawAnimation cachedSprintAnim;
+
+    /** One notice freeze per life (transient, like the Storm Hound's {@code howled}). */
+    private boolean noticed;
 
     public GlitchedWandererEntity(EntityType<? extends GlitchedWandererEntity> entityType, Level level) {
         super(entityType, level);
@@ -120,6 +131,27 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
             return state.setAndContinue(this.cachedSprintAnim);
         }
         return super.handleBaseState(state);
+    }
+
+    @Override
+    protected void registerActionTriggers(AnimationController<?> action) {
+        super.registerActionTriggers(action); // death + attack + glitch_blink
+        action.triggerableAnim(ANIM_NOTICE, EclipseGeoAnimations.once(GEO_ID, ANIM_NOTICE));
+    }
+
+    /**
+     * Notice freeze on the FIRST target acquisition (Storm Hound howl pattern): the
+     * stalker locks up head-to-toe for a beat before it comes for you. Cosmetic only —
+     * the target set itself is untouched.
+     */
+    @Override
+    public void setTarget(@Nullable LivingEntity target) {
+        if (target != null && this.getTarget() == null && !this.noticed
+                && !this.level().isClientSide && this.isAlive()) {
+            this.noticed = true;
+            triggerAction(ANIM_NOTICE);
+        }
+        super.setTarget(target);
     }
 
     /** Is either gaze-burst speed modifier (stalk or inherited husk unseen) live? */

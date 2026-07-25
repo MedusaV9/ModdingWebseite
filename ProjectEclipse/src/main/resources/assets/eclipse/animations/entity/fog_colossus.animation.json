@@ -136,6 +136,8 @@
 				"forearm_right": {
 					"rotation": {
 						"0.0": {"post": [18, 0, 0], "lerp_mode": "catmullrom"},
+						"0.35": {"post": [8, 0, 0], "lerp_mode": "catmullrom"},
+						"0.55": {"post": [-8, 0, 1.5], "lerp_mode": "catmullrom"},
 						"0.8": {"post": [-14, 0, 0], "lerp_mode": "catmullrom"},
 						"1.6": {"post": [18, 0, 0], "lerp_mode": "catmullrom"}
 					}
@@ -450,19 +452,19 @@
 					}
 				},
 				"back_slab_low": {
-					"rotation": [0, 0, "math.sin(query.anim_time * 1400) * 1.5"]
+					"rotation": [0, 0, "math.sin(query.anim_time * 1400) * 1.5 * math.clamp(query.anim_time * 4, 0, 1) * math.clamp((1.5 - query.anim_time) * 4, 0, 1)"]
 				},
 				"back_slab_high": {
-					"rotation": [0, 0, "math.sin(query.anim_time * 1400 + 90) * 2"]
+					"rotation": [0, 0, "math.sin(query.anim_time * 1400 + 90) * 2 * math.clamp(query.anim_time * 4, 0, 1) * math.clamp((1.5 - query.anim_time) * 4, 0, 1)"]
 				},
 				"spine_a": {
-					"rotation": ["math.sin(query.anim_time * 1400 + 45) * 3", 0, 0]
+					"rotation": ["math.sin(query.anim_time * 1400 + 45) * 3 * math.clamp(query.anim_time * 4, 0, 1) * math.clamp((1.5 - query.anim_time) * 4, 0, 1)", 0, 0]
 				},
 				"spine_b": {
-					"rotation": ["math.sin(query.anim_time * 1400 + 135) * 3.5", 0, 0]
+					"rotation": ["math.sin(query.anim_time * 1400 + 135) * 3.5 * math.clamp(query.anim_time * 4, 0, 1) * math.clamp((1.5 - query.anim_time) * 4, 0, 1)", 0, 0]
 				},
 				"spine_c": {
-					"rotation": ["math.sin(query.anim_time * 1400 + 225) * 4", 0, 0]
+					"rotation": ["math.sin(query.anim_time * 1400 + 225) * 4 * math.clamp(query.anim_time * 4, 0, 1) * math.clamp((1.5 - query.anim_time) * 4, 0, 1)", 0, 0]
 				}
 			}
 		},

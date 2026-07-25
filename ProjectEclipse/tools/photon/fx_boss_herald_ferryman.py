@@ -11,7 +11,10 @@ authoring artifact — re-run it instead of hand-editing the binary `.fx` blobs)
     eclipse:boss/ferry_kneel_corona — P2 kneel corona, re-fire sustained (concept 9)
 
 Also generates `eclipse:textures/particle/ring_soft.png` (soft radial ring falloff, the
-concept-1 ring texture) deterministically — no image tooling required.
+concept-1 ring texture — 256x256: the roar ring scales to r~30 blocks, 64 px banded up
+close, PHOTON-QUALITY §4) and `eclipse:textures/particle/dome_faint.png` (the concept-9
+invuln-shell dome, previously a smoke.png stand-in) deterministically — no image
+tooling required.
 
 Run:  python3 tools/photon/fx_boss_herald_ferryman.py
 Then: python3 tools/photon/fxlib.py validate src/main/resources/assets/eclipse/fx/boss/*.fx
@@ -33,29 +36,33 @@ from fxlib import (  # noqa: E402
 
 BOSS_FX_DIR = FX_ASSETS_DIR / "boss"
 RING_TEXTURE = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle/ring_soft.png"
+DOME_TEXTURE = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle/dome_faint.png"
 
 CIRCLE = "photon:textures/particle/circle.png"
 SMOKE = "photon:textures/particle/smoke.png"
+DOME_FAINT = "eclipse:textures/particle/dome_faint.png"
 
 
 # ---------------------------------------------------------------------------
-# ring_soft.png — 64x64 white ring, gaussian alpha falloff (stdlib PNG writer)
+# ring_soft.png — 256x256 white ring, gaussian alpha falloff (stdlib PNG writer).
+# 256 px per PHOTON-QUALITY §4/§5.1 rule 6: ground rings that scale past r=10 need
+# >= 256 px or they band/blur up close (the roar ring reaches r~30 blocks).
 # ---------------------------------------------------------------------------
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
     body = tag + data
     return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
 
 
-def write_ring_soft(path: Path, size: int = 64, peak: float = 0.6, sigma: float = 0.13) -> None:
+def _write_png(path: Path, size: int, alpha_fn) -> None:
+    """White-RGB alpha-mask PNG; alpha_fn(nx, ny) -> 0..1 on normalized [-1, 1] coords."""
     rows = []
     for y in range(size):
         row = bytearray([0])  # filter 0 (None)
         for x in range(size):
-            dx = (x + 0.5) / size * 2.0 - 1.0
-            dy = (y + 0.5) / size * 2.0 - 1.0
-            r = math.sqrt(dx * dx + dy * dy)
-            alpha = int(round(255.0 * math.exp(-((r - peak) ** 2) / (2.0 * sigma * sigma))))
-            row += bytes((255, 255, 255, alpha))
+            nx = (x + 0.5) / size * 2.0 - 1.0
+            ny = (y + 0.5) / size * 2.0 - 1.0
+            a = max(0.0, min(1.0, alpha_fn(nx, ny)))
+            row += bytes((255, 255, 255, int(round(255.0 * a))))
         rows.append(bytes(row))
     png = (b"\x89PNG\r\n\x1a\n"
            + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
@@ -63,6 +70,25 @@ def write_ring_soft(path: Path, size: int = 64, peak: float = 0.6, sigma: float 
            + _png_chunk(b"IEND", b""))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(png)
+
+
+def write_ring_soft(path: Path, size: int = 256, peak: float = 0.6, sigma: float = 0.13) -> None:
+    _write_png(path, size, lambda nx, ny: math.exp(
+        -((math.sqrt(nx * nx + ny * ny) - peak) ** 2) / (2.0 * sigma * sigma)))
+
+
+def write_dome_faint(path: Path, size: int = 128) -> None:
+    """Ghost-bell shell: bright soft rim (limb of a translucent dome seen face-on) over
+    a very faint interior fill that strengthens toward the edge — soap-bubble shading.
+    Peak alpha 1.0 at the rim; the .fx gradient scales the whole shell to <= 0.12."""
+    def alpha(nx, ny):
+        r = math.sqrt(nx * nx + ny * ny)
+        if r >= 1.0:
+            return 0.0
+        rim = math.exp(-((r - 0.86) / 0.07) ** 2)
+        interior = 0.22 * (0.35 + 0.65 * r * r)
+        return (interior + rim) * min(1.0, (1.0 - r) / 0.04 if r > 0.96 else 1.0)
+    _write_png(path, size, alpha)
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +353,9 @@ def build_ferry_kneel_corona() -> FxBuilder:
        .with_lights(sky=15, block=15))
 
     # ONE faint ghost-bell dome; deliberately dim (no HDR — the read is "inert").
+    # dome_faint.png (authored above) replaces the smoke.png stand-in, and the spec'd
+    # slow pulse (IDEAS-boss #9 / QUALITY §2 row 7) lands as a 2-segment eased breathe:
+    # the shell swells and relaxes once per cycle while the gradient echoes it in alpha.
     (fx.particle_emitter(
             "invuln_shell",
             duration=100, looping=False, max_particles=4,
@@ -335,10 +364,15 @@ def build_ferry_kneel_corona() -> FxBuilder:
        .with_emission(rate=constant(0.25),
                       bursts=[burst(time=0, count=1, cycles=1, probability=1.0)])
        .with_shape(dot())
-       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_material(texture_material(DOME_FAINT, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_cull_box((-4.0, -1.0, -4.0), (4.0, 5.0, 4.0))
        .with_curves(
+            size_over_lifetime=curve(
+                0.96, 1.04,
+                [(0.0, 0.0, 0.2, 0.9, 0.35, 1.0, 0.5, 1.0),
+                 (0.5, 1.0, 0.65, 1.0, 0.8, 0.1, 1.0, 0.0)],
+                "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.25, 0.12), (0.5, 0.07), (0.75, 0.12), (1.0, 0.0)],
                 [(0.0, 0.5, 0.75, 0.75), (1.0, 0.4, 0.6, 0.65)])))
@@ -357,16 +391,20 @@ BUILDERS = {
 def main() -> int:
     write_ring_soft(RING_TEXTURE)
     print(f"WROTE {RING_TEXTURE.relative_to(REPO_ROOT)}")
+    write_dome_faint(DOME_TEXTURE)
+    print(f"WROTE {DOME_TEXTURE.relative_to(REPO_ROOT)}")
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = BOSS_FX_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

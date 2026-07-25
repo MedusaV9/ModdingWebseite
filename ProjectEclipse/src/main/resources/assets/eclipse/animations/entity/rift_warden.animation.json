@@ -15,7 +15,7 @@
 					"rotation": ["math.sin(query.anim_time * 90) * 2", "math.sin(query.anim_time * 45) * 3", 0]
 				},
 				"head": {
-					"rotation": ["math.sin(query.anim_time * 90 + 90) * 2", "math.sin(query.anim_time * 30) * 8", 0]
+					"rotation": ["math.sin(query.anim_time * 90 + 90) * 2", "math.sin(query.anim_time * 45) * 8", 0]
 				},
 				"pauldron_left": {
 					"rotation": [0, 0, "-6 + math.sin(query.anim_time * 90 + 60) * 2"],
@@ -41,19 +41,25 @@
 					"position": [0, "math.sin(query.anim_time * 180) * 0.4", 0]
 				},
 				"glow_shard_a": {
-					"position": [0, "math.sin(query.anim_time * 120) * 1", 0],
+					"position": [0, "math.sin(query.anim_time * 90) * 1", 0],
 					"rotation": [0, "query.anim_time * 90", 0]
 				},
 				"glow_shard_b": {
-					"position": [0, "math.sin(query.anim_time * 120 + 120) * 1", 0],
-					"rotation": [0, "-query.anim_time * 90", 0]
+					"position": [0, "math.sin(query.anim_time * 90 + 120) * 1", 0],
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"2.4": [0, -216, 0],
+						"2.55": [0, -216, 0],
+						"2.7": [0, -243, 0],
+						"4.0": [0, -360, 0]
+					}
 				},
 				"glow_shard_c": {
-					"position": [0, "math.sin(query.anim_time * 120 + 240) * 1", 0],
+					"position": [0, "math.sin(query.anim_time * 90 + 240) * 1", 0],
 					"rotation": [0, "query.anim_time * 90", 0]
 				},
 				"glow_shard_d": {
-					"position": [0, "math.sin(query.anim_time * 120 + 60) * 0.8", 0],
+					"position": [0, "math.sin(query.anim_time * 90 + 60) * 0.8", 0],
 					"rotation": [0, "-query.anim_time * 180", 0]
 				},
 				"crack_plate_chest": {
@@ -79,7 +85,7 @@
 					"rotation": ["10 + math.sin(query.anim_time * 450) * 4", 0, "math.sin(query.anim_time * 225) * 4"]
 				},
 				"hips": {
-					"rotation": [0, "math.sin(query.anim_time * 225) * 5", 0]
+					"rotation": [0, "math.sin(query.anim_time * 225 + 180) * 5", 0]
 				},
 				"torso": {
 					"rotation": ["3 + math.sin(query.anim_time * 450) * 2", "math.sin(query.anim_time * 225) * 6", 0]

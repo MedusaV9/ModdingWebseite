@@ -17,6 +17,7 @@ import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CEclipsePhasePayload;
@@ -641,6 +642,14 @@ public final class IntroSequence implements SequenceReplayable {
             PacketDistributor.sendToPlayer(player,
                     new S2CCaptionPayload(CAPTION_BEGIN, 100, S2CCaptionPayload.STYLE_TITLE));
         }
+        // PH-IMPROVE-2 (IDEAS-events #8): the Photon god-ray ribbons climbing sunward
+        // off the island rim — one 230t one-shot at the altar anchor spanning ramp +
+        // linger, dimension-wide like the burst's FX_SHOCKWAVE (everyone is gathered
+        // and staring). The asset's baked 20t first-ray delay lands ray one together
+        // with the SUNRISE_WARM_BLOOM below; photon-less clients no-op on the cue and
+        // keep today's ENDING grade + warm fade unchanged.
+        FxPayloads.sendFxEvent(current.overworld, FxCues.CUE_INTRO_SUNRISE,
+                altarCenterOr(server, current.center), 0.0F, 0.0F, -1.0D);
         // CUT-INTRO: warm gold bloom-in as the freed sun crests (below the title captions).
         schedule(server, SUNRISE_BLOOM_DELAY_TICKS,
                 () -> PacketDistributor.sendToAllPlayers(SUNRISE_WARM_BLOOM));
@@ -905,6 +914,12 @@ public final class IntroSequence implements SequenceReplayable {
             case "SUNRISE" -> {
                 FxPayloads.sendEclipsePhase(server, ECLIPSE_ENDING, 0.0F, SUNRISE_RAMP_TICKS, permanentRim(server));
                 captionPlayers(watchers, CAPTION_BEGIN, 100, S2CCaptionPayload.STYLE_TITLE);
+                // PH-IMPROVE-2: the god-ray ribbons replay too — same cue, watchers only.
+                Vec3 sunriseAltar = altarCenterOr(server, center);
+                for (ServerPlayer player : watchers) {
+                    PacketDistributor.sendToPlayer(player,
+                            new S2CFxEventPayload(FxCues.CUE_INTRO_SUNRISE, sunriseAltar, 0.0F, 0.0F));
+                }
                 schedule(server, SUNRISE_BLOOM_DELAY_TICKS, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {

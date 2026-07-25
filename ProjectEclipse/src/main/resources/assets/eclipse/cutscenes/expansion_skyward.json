@@ -22,11 +22,12 @@
     { "t": 0.14, "type": "sound", "id": "eclipse:event.sky_launch" },
     { "t": 0.16, "type": "shake", "id": "launch_jolt", "data": "0.18,14,1.6" },
     { "t": 0.4, "type": "fade", "id": "cloud_punch", "data": "2,2,10,#59EFE8FF" },
+    { "t": 0.4, "type": "shake", "id": "cloud_punch_buffet", "data": "0.07,10,2.6" },
     { "t": 0.6, "type": "caption", "id": "eclipse.caption.expansion.apex", "data": "whisper,60" },
     { "t": 0.86, "type": "shake", "id": "grade_rumble", "data": "0.1,18,0.7" }
   ],
   "params": {
-    "_comment": "W7 expansion SKYWARD beat, CUT-EXPANSION reshoot: player-anchored LAUNCH instead of a standing tilt. Anticipation dip (t.12), vertical rush with the FOV kicking 70->85 (speed), cloud-layer punch-through at t.40 (translucent veil fade here + a cutscene_veil wisp burst scheduled by ExpansionSequence at the same fraction), world-curvature reveal at the apex looking DOWN over the disc (t.62, whisper caption), then the tilt up into the darkening sky for the eclipse-grade hold. Bezier so the rush settles at the apex and the sky hold instead of overshooting. The follow-up shot is expansion_flyover.",
+    "_comment": "W7 expansion SKYWARD beat, CUT-EXPANSION reshoot: player-anchored LAUNCH instead of a standing tilt. Anticipation dip (t.12), vertical rush with the FOV kicking 70->85 (speed), cloud-layer punch-through at t.40 (translucent veil fade here + a cutscene_veil wisp burst scheduled by ExpansionSequence at the same fraction + a 0.07/2.6-freq micro-buffet so the layer is FELT, not just seen — REPASS polish), world-curvature reveal at the apex looking DOWN over the disc (t.62, whisper caption), then the tilt up into the darkening sky for the eclipse-grade hold. Bezier so the rush settles at the apex and the sky hold instead of overshooting. The follow-up shot is expansion_flyover.",
     "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end. Top-level 'showOwnBody' (default false) keeps the watcher's own player model visible — author true only for shots that deliberately frame the watcher."
   }
 }

@@ -128,6 +128,13 @@ public final class SkyLauncher {
     private static final double SHARD_BOB_PERIOD = 160.0D;
     /** Charge spin-up: extra yaw (deg) at progress 1 — capped so 3t windows stay ≤ ~25°. */
     private static final double SHARD_CHARGE_BOOST_DEG = 60.0D;
+    /**
+     * REPASS-BD launch telegraph: the shard's {@value #SHARD_TILT_DEG}° tilt is a FIXED
+     * world-frame lean toward the launch direction (it no longer precesses with the
+     * yaw), and at the top of each bob the shard strains up to this many blocks along
+     * that direction — an idle that quietly points where the launch will throw you.
+     */
+    private static final double SHARD_LEAN_DRIFT_BLOCKS = 0.16D;
 
     /** Stage recorded on the pending rows (mountain is fully inside the stage-3 disc). */
     private static final int STAGE = WizardObservatory.MIN_STAGE;
@@ -749,10 +756,10 @@ public final class SkyLauncher {
 
     /**
      * The wind shard: one small amethyst-block display hovering above the spire cluster,
-     * slowly yawing with a fixed tilt and a long sine bob. It persists with the world;
-     * every pose is an absolute function of game time (SanctumOrbitals stateless-push
-     * law), so a restart or a paused chunk glides back on track on the next push —
-     * never a snap.
+     * slowly yawing with a fixed launch-ward lean and a long sine bob. It persists with
+     * the world; every pose is an absolute function of game time (SanctumOrbitals
+     * stateless-push law), so a restart or a paused chunk glides back on track on the
+     * next push — never a snap.
      */
     private static void spawnWindShard(ServerLevel level, BlockPos pad) {
         Display.BlockDisplay shard = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
@@ -761,8 +768,33 @@ public final class SkyLauncher {
         shard.addTag(SHARD_TAG);
         shard.setTransformationInterpolationDelay(0);
         shard.setTransformationInterpolationDuration(0);
-        shard.setTransformation(shardPose(level.getGameTime(), 0.0D));
+        shard.setTransformation(shardPose(level.getGameTime(), 0.0D, shardLeanDir(pad)));
         level.addFreshEntity(shard);
+    }
+
+    /**
+     * Horizontal unit vector from the pad toward its launch target — the disc ring
+     * point nearest the pad, the exact {@link #launch} geometry — or +X when
+     * degenerate. Pure function of the pad anchor and the End config, so the
+     * telegraph stays stateless-push safe (REPASS-BD).
+     */
+    private static Vec3 shardLeanDir(BlockPos pad) {
+        EndConfig.Snapshot config = EndConfig.current();
+        double fromCenterX = pad.getX() + 0.5D - config.centerX();
+        double fromCenterZ = pad.getZ() + 0.5D - config.centerZ();
+        double centerDist = Math.sqrt(fromCenterX * fromCenterX + fromCenterZ * fromCenterZ);
+        if (centerDist < 1.0E-3D) {
+            return new Vec3(1.0D, 0.0D, 0.0D);
+        }
+        double dx = config.centerX() + fromCenterX / centerDist * TARGET_RING_RADIUS
+                - (pad.getX() + 0.5D);
+        double dz = config.centerZ() + fromCenterZ / centerDist * TARGET_RING_RADIUS
+                - (pad.getZ() + 0.5D);
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 1.0E-3D) {
+            return new Vec3(1.0D, 0.0D, 0.0D);
+        }
+        return new Vec3(dx / dist, 0.0D, dz / dist);
     }
 
     /**
@@ -773,6 +805,7 @@ public final class SkyLauncher {
     private static boolean animateWindShard(ServerLevel level, BlockPos pad, long gameTime,
             boolean holdForCharge) {
         boolean found = false;
+        Vec3 lean = shardLeanDir(pad);
         for (Entity entity : level.getEntities((Entity) null,
                 new AABB(pad).inflate(2.0D, 6.0D, 2.0D),
                 candidate -> candidate.getTags().contains(SHARD_TAG))) {
@@ -780,7 +813,7 @@ public final class SkyLauncher {
             if (!holdForCharge && entity instanceof Display.BlockDisplay shard) {
                 shard.setTransformationInterpolationDelay(0);
                 shard.setTransformationInterpolationDuration(AMBIENT_TICKS);
-                shard.setTransformation(shardPose(gameTime + AMBIENT_TICKS, 0.0D));
+                shard.setTransformation(shardPose(gameTime + AMBIENT_TICKS, 0.0D, lean));
             }
         }
         return found;
@@ -799,6 +832,7 @@ public final class SkyLauncher {
     /** Charge-stride 3t window with the capped spin-up boost riding the ambient clock. */
     private static void boostWindShard(ServerLevel level, BlockPos pad, double progress) {
         long gameTime = level.getGameTime();
+        Vec3 lean = shardLeanDir(pad);
         for (Entity entity : level.getEntities((Entity) null,
                 new AABB(pad).inflate(2.0D, 6.0D, 2.0D),
                 candidate -> candidate.getTags().contains(SHARD_TAG))) {
@@ -806,7 +840,7 @@ public final class SkyLauncher {
                 shard.setTransformationInterpolationDelay(0);
                 shard.setTransformationInterpolationDuration(3);
                 shard.setTransformation(shardPose(gameTime + 3,
-                        SHARD_CHARGE_BOOST_DEG * progress * progress));
+                        SHARD_CHARGE_BOOST_DEG * progress * progress, lean));
             }
         }
     }
@@ -815,16 +849,27 @@ public final class SkyLauncher {
      * Absolute shard pose at {@code gameTime} (+ the charge spin-up's extra yaw):
      * center-pivot so the scaled block spins/bobs around its own center. Double math +
      * {@code IEEEremainder} keep old worlds' large game times from eating float precision.
+     *
+     * <p>REPASS-BD launch telegraph: the tilt is a FIXED world-frame lean toward
+     * {@code lean} (yaw spins UNDER it — the tilt no longer precesses with the spin),
+     * and the hover strains up to {@value #SHARD_LEAN_DRIFT_BLOCKS} blocks along
+     * {@code lean} at the top of each bob. Still a pure function of game time + pad.</p>
      */
-    private static Transformation shardPose(long gameTime, double boostDegrees) {
+    private static Transformation shardPose(long gameTime, double boostDegrees, Vec3 lean) {
         double degrees = SHARD_YAW_DEG_PER_TICK * gameTime + boostDegrees;
         float yaw = (float) Math.toRadians(Math.IEEEremainder(degrees, 360.0D));
-        float bob = (float) (SHARD_BOB_BLOCKS
-                * Math.sin(gameTime * (Math.PI * 2.0D / SHARD_BOB_PERIOD)));
-        Quaternionf rotation = new Quaternionf().rotationY(yaw)
-                .rotateZ((float) Math.toRadians(SHARD_TILT_DEG));
+        double bobNorm = Math.sin(gameTime * (Math.PI * 2.0D / SHARD_BOB_PERIOD));
+        float bob = (float) (SHARD_BOB_BLOCKS * bobNorm);
+        // Lean axis ⟂ the launch direction: rotating +Y around (z, 0, −x) tips the
+        // shard's top TOWARD (x, z).
+        Vector3f leanAxis = new Vector3f((float) lean.z, 0.0F, (float) -lean.x);
+        Quaternionf rotation = new Quaternionf()
+                .rotationAxis((float) Math.toRadians(SHARD_TILT_DEG), leanAxis)
+                .rotateY(yaw);
+        double drift = SHARD_LEAN_DRIFT_BLOCKS * (0.5D + 0.5D * bobNorm);
         Vector3f half = new Vector3f(SHARD_SCALE * 0.5F, SHARD_SCALE * 0.5F, SHARD_SCALE * 0.5F);
-        Vector3f translation = new Vector3f(0.0F, bob, 0.0F)
+        Vector3f translation = new Vector3f(
+                (float) (lean.x * drift), bob, (float) (lean.z * drift))
                 .sub(rotation.transform(half, new Vector3f()));
         return new Transformation(translation, rotation,
                 new Vector3f(SHARD_SCALE, SHARD_SCALE, SHARD_SCALE), new Quaternionf());

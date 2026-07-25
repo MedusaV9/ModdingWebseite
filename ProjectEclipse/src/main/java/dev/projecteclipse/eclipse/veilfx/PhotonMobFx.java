@@ -13,9 +13,12 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.backrooms.GlitchedWandererEntity;
+import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.entity.TheOtherEntity;
 import dev.projecteclipse.eclipse.entity.dungeon.ShadowBoltProjectile;
+import dev.projecteclipse.eclipse.entity.fog.FogRevenantEntity;
+import dev.projecteclipse.eclipse.entity.glitch.GlitchedMonster;
 import dev.projecteclipse.eclipse.entity.pale.PaleSentinelEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -61,7 +64,11 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * every frame), #8 The Other dread aura (24-block gate — attaching at range would defeat
  * the mimicry design), #10 wanderer static shroud ({@code shade:1b} lightmap flicker
  * sync), #6 shadow-bolt ara ribbon (nearest-8; past the cap the vanilla WITCH trail
- * carries it; projectile removal auto-destroys the executor).</p>
+ * carries it; projectile removal auto-destroys the executor). PH-IMPROVE-2 backlog rows:
+ * #4 revenant robe-hem wisp ribbons (nearest-4), #5 glitched corruption drips
+ * ({@code GlitchedMonster} matches the whole family incl. the wanderer, per the spec),
+ * and the below-the-cut deckhand soul-flame hood candles (cap 8 = the full rowing crew;
+ * hostile flare on the decoupled {@code edgeWhen} lane).</p>
  */
 @OnlyIn(Dist.CLIENT)
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
@@ -80,13 +87,27 @@ public final class PhotonMobFx {
      * @param attachRange camera distance gate in blocks (release at + margin)
      * @param maxAttached nearest-N cap for this row
      * @param attachWhen  synced-state predicate (loop lives only while true)
-     * @param edgeFx      optional one-shot fired on the predicate's RISING edge
+     * @param edgeWhen    predicate whose RISING edge fires {@code edgeFx} — usually
+     *                    {@code attachWhen} (sentinel freeze-flash), but PH-IMPROVE-2's
+     *                    deckhand row decouples them: the flame loop is always-attached
+     *                    ({@code attachWhen=ALWAYS} never has a rising edge) while the
+     *                    flare tracks the synced hostile flag
+     * @param edgeFx      optional one-shot fired on {@code edgeWhen}'s RISING edge
      * @param edgeOffset  eye offset for the edge one-shot
      */
     private record LoopRow(Class<? extends Entity> type, ResourceLocation fxId,
             int autoRotate, @Nullable Vec3 offset, double attachRange, int maxAttached,
-            Predicate<Entity> attachWhen, @Nullable ResourceLocation edgeFx,
-            @Nullable Vec3 edgeOffset) {}
+            Predicate<Entity> attachWhen, Predicate<Entity> edgeWhen,
+            @Nullable ResourceLocation edgeFx, @Nullable Vec3 edgeOffset) {
+        /** Pre-PH-IMPROVE-2 shape: the edge tracks the attach predicate itself. */
+        LoopRow(Class<? extends Entity> type, ResourceLocation fxId, int autoRotate,
+                @Nullable Vec3 offset, double attachRange, int maxAttached,
+                Predicate<Entity> attachWhen, @Nullable ResourceLocation edgeFx,
+                @Nullable Vec3 edgeOffset) {
+            this(type, fxId, autoRotate, offset, attachRange, maxAttached, attachWhen,
+                    attachWhen, edgeFx, edgeOffset);
+        }
+    }
 
     private static final Predicate<Entity> ALWAYS = entity -> true;
 
@@ -117,7 +138,30 @@ public final class PhotonMobFx {
             // dungeon spawner rooms re-supply cultists indefinitely.
             new LoopRow(ShadowBoltProjectile.class, fx("shadow_bolt_ribbon"),
                     PhotonBridge.AUTO_ROTATE_NONE, null,
-                    48.0D, 8, ALWAYS, null, null));
+                    48.0D, 8, ALWAYS, null, null),
+            // PH-IMPROVE-2 (IDEAS-mobs #4 revenant half) — lagging robe-hem wisp ribbons
+            // over the shipped CAMPFIRE hem smoke. Hem anchor (eye − 0.9), nearest-4 cap:
+            // loop count is bounded by the storm-patch revenant population.
+            new LoopRow(FogRevenantEntity.class, fx("revenant_fog_ribbons"),
+                    PhotonBridge.AUTO_ROTATE_NONE, new Vec3(0.0D, -0.9D, 0.0D),
+                    24.0D, 4, ALWAYS, null, null),
+            // PH-IMPROVE-2 (IDEAS-mobs #5 drip half) — sparse pixel-art corruption drips
+            // off the seams. GlitchedMonster matches husk/hound/tick AND the wanderer by
+            // inheritance ("+ Wanderer inherits" is the spec's own call — it stacks with
+            // the static shroud row above). Body-center anchor (eye − 0.7), nearest-6 cap.
+            new LoopRow(GlitchedMonster.class, fx("glitch_drip"),
+                    PhotonBridge.AUTO_ROTATE_NONE, new Vec3(0.0D, -0.7D, 0.0D),
+                    24.0D, 6, ALWAYS, null, null),
+            // PH-IMPROVE-2 (IDEAS-mobs below-the-cut) — deckhand soul-flame hood candles,
+            // limbo-only by mob existence. Hood-crown anchor (eye + 0.55), cap 8 (the
+            // full rowing crew — the doc's ≤112 live particles worst case). The hostile
+            // flare rides the DECOUPLED edge lane: attach is ALWAYS (no rising edge), the
+            // riseHostile synced-flag edge fires the deckhand_soul_flare gutter-burst.
+            new LoopRow(DeckhandEntity.class, fx("deckhand_soul_flame"),
+                    PhotonBridge.AUTO_ROTATE_NONE, new Vec3(0.0D, 0.55D, 0.0D),
+                    24.0D, 8, ALWAYS,
+                    entity -> ((DeckhandEntity) entity).isHostile(),
+                    fx("deckhand_soul_flare"), new Vec3(0.0D, 0.55D, 0.0D)));
 
     /** Per-row attached entities (client main thread only), parallel to {@link #ROWS}. */
     private static final List<Map<Integer, Entity>> ATTACHED = buildPerRow();
@@ -180,13 +224,14 @@ public final class PhotonMobFx {
 
     private static void tickRow(LoopRow row, List<Entity> candidates,
             Map<Integer, Entity> attached, Map<Integer, Boolean> edgeState, Vec3 camera) {
-        // Rising-edge one-shots (sentinel freeze flash). Entities first seen while the
-        // flag is ALREADY true get no flash — the edge happened before we could see it.
+        // Rising-edge one-shots (sentinel freeze flash, deckhand hostile flare). Entities
+        // first seen while the flag is ALREADY true get no flash — the edge happened
+        // before we could see it.
         if (row.edgeFx() != null) {
             Set<Integer> seen = new HashSet<>(candidates.size());
             double rangeSq = row.attachRange() * row.attachRange();
             for (Entity entity : candidates) {
-                boolean now = row.attachWhen().test(entity);
+                boolean now = row.edgeWhen().test(entity);
                 Boolean was = edgeState.put(entity.getId(), now);
                 seen.add(entity.getId());
                 if (now && Boolean.FALSE.equals(was)

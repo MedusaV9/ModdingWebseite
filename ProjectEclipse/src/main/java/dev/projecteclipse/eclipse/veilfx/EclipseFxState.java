@@ -207,6 +207,17 @@ public final class EclipseFxState {
         return SHOCK_PARAMS;
     }
 
+    /**
+     * World origin of the live shockwave, or {@code null} when none (v3 VEIL-REPASS-1,
+     * additive): {@code WaveOverlay} samples the biome dust color there once per event
+     * for the {@code ShockTint} uniform. Read-only — lifetime stays owned by
+     * {@link #shockwaveParams(float)}.
+     */
+    @Nullable
+    public static Vec3 shockwaveOrigin() {
+        return shockOrigin;
+    }
+
     // ------------------------------------------------------------------ storm interior
 
     public static void setStormInterior(float amount, float rain) {

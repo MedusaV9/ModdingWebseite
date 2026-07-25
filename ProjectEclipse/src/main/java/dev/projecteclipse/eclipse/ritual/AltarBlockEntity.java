@@ -58,6 +58,12 @@ public class AltarBlockEntity extends BlockEntity {
     public static final long HEART_CONFIRM_WINDOW_TICKS = 100L;
     /** Offerings use the same deliberate two-click confirmation window. */
     public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
+    /**
+     * VEIL-REPASS-2 crowd-awareness: players within this range of the altar count as the
+     * gathered CROWD when a milestone completes — the count rides the level-up payload's
+     * previously-unused {@code b} param and widens the client ceremony's burst radius.
+     */
+    public static final double CROWD_RANGE = 20.0D;
 
     /** Game time of each player's pending (unconfirmed) heart sacrifice. */
     private final Map<UUID, Long> pendingHeartSacrifices = new HashMap<>();
@@ -204,8 +210,18 @@ public class AltarBlockEntity extends BlockEntity {
         // pillar / glyph-rain / sky-crack / corona-ignition beats off the level in `a`
         // (AltarCeremonyFx); particle beats distance-cull client-side, screen/sky beats
         // (L4 flash, L5 corona surge) are deliberately map-wide.
+        // VEIL-REPASS-2 crowd-awareness: the previously-unused `b` param now carries how
+        // many players are gathered AT the altar (within CROWD_RANGE) — the client widens
+        // its ceremony shockwaves with the crowd. Old payload shape unchanged (b existed).
+        int crowd = 0;
+        double crowdRangeSq = CROWD_RANGE * CROWD_RANGE;
+        for (ServerPlayer online : serverLevel.players()) {
+            if (online.position().distanceToSqr(fxPos) <= crowdRangeSq) {
+                crowd++;
+            }
+        }
         PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_ALTAR_LEVELUP,
-                fxPos, milestone.level(), 0.0F));
+                fxPos, milestone.level(), crowd));
         EclipseMod.LOGGER.info("Altar milestone {} completed at {}; rewards {}",
                 milestone.level(), this.worldPosition, milestone.rewards());
     }

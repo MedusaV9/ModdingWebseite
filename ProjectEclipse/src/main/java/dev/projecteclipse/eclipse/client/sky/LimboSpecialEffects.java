@@ -92,6 +92,11 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       world-anchored ripple break-up (limbo.fsh v4).</li>
  * </ul>
  *
+ * <p>v4.1 (VEIL-REPASS-2): <b>aurora veils</b> ({@link #drawAuroraVeils}) — three slow
+ * soul-green polar-light curtains drifting around the zenith beyond the glow floor,
+ * framing the eclipse at extreme altitude. Garnish tier (skipped under {@code reducedFx},
+ * the wisp ladder); pure function of the hourly clock, so every client sees the same sky.</p>
+ *
  * <p>The same zenith point feeds the {@code eclipse:limbo} post pipeline's {@code GodrayDir}
  * uniform (see {@code veilfx.LimboAmbience}), so the screen-space god rays and the sky-pass
  * aura radiate from one source of truth and cannot diverge.</p>
@@ -161,6 +166,31 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float WISP_PEAK_ALPHA = 0.15F;
     /** Wisp reach beyond the disc rim (units in the celestial plane) when fully extended. */
     private static final float WISP_REACH = 62.0F;
+
+    /**
+     * v4.1 aurora veils: soul-green polar-light bands at extreme altitude, framing the
+     * eclipse. In the zenith celestial frame the eclipse IS the topmost point, so "above"
+     * means CLOSE AROUND it: three partial arcs beyond the glow floor
+     * ({@value #GLOW_RADIUS}), each an undulating curtain of {@value #AURORA_SEGMENTS}
+     * cheap gradient quads with the classic aurora read — sharp bright lower edge (outer
+     * radius, i.e. farther from the zenith), feathered fade toward the zenith. Slow
+     * independent drifts; garnish tier ({@code reducedFx} skips, the wisp ladder).
+     */
+    private static final int AURORA_VEILS = 3;
+    private static final int AURORA_SEGMENTS = 18;
+    /** Innermost veil center radius; each further veil steps {@value #AURORA_RADIUS_STEP} out. */
+    private static final float AURORA_BASE_RADIUS = 152.0F;
+    private static final float AURORA_RADIUS_STEP = 26.0F;
+    /** Radial depth of a curtain (bright outer edge → feathered inner fade). */
+    private static final float AURORA_BAND_DEPTH = 34.0F;
+    /** Peak alpha of a curtain's bright edge (before pulse/envelope shaping). */
+    private static final float AURORA_PEAK_ALPHA = 0.085F;
+    /** Per-veil azimuth drift speeds (rad/s) — non-commensurate, so veils never lock step. */
+    private static final float[] AURORA_DRIFT = {0.011F, -0.008F, 0.014F};
+    /** Per-veil arc spans (radians, ~70–110°). */
+    private static final float[] AURORA_SPAN = {1.9F, 1.35F, 1.6F};
+    /** Per-veil base azimuths (radians) — spread so the veils frame, never encircle. */
+    private static final float[] AURORA_AZIMUTH = {0.6F, 2.9F, 4.6F};
 
     /** IDEA-18 §1/C2: water-reflection streak shape (elongated fan at the mirrored disc dir). */
     private static final float STREAK_MIN_HALF_LEN = 14.0F;
@@ -354,6 +384,11 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        // v4.1: aurora veils first — the farthest sheet, everything else layers over it
+        // (additive is commutative, but background-first order is free clarity).
+        if (!EclipseClientConfig.reducedFx()) {
+            drawAuroraVeils(zenithPose, seconds, pulse);
+        }
         drawAuraGlow(zenithPose, pulse, breath);
         drawAuraRays(zenithPose, seconds, pulse, parX, parZ);
         // v4: occasional coronal-mass wisp — drawn after the rays so the disc core still
@@ -569,6 +604,66 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             float angle = (float) i / GLOW_SEGMENTS * ((float) Math.PI * 2.0F);
             builder.addVertex(pose, Mth.cos(angle) * radius, SKY_DISTANCE, Mth.sin(angle) * radius)
                     .setColor(0.35F, 0.10F, 0.70F, 0.0F);
+        }
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * v4.1 — aurora veils: three soul-green partial-arc curtains drifting slowly around
+     * the zenith at extreme radius (beyond the glow floor), framing the eclipse the way
+     * polar bands frame a winter moon. Each curtain is {@value #AURORA_SEGMENTS} gradient
+     * quads along its arc: the OUTER edge (farther from the zenith = lower in the sky) is
+     * the sharp bright aurora foot, feathering to nothing toward the zenith; the foot
+     * radius undulates on a slow 3-lobe wave and the per-segment brightness carries a
+     * curtain-ray shimmer, so the band folds like drapery instead of reading as a ring
+     * segment. Alpha peaks mid-arc (sin envelope — the arc ends feather out) and breathes
+     * with the shared corona {@code pulse} plus a slow per-veil cycle. Soul-green fading
+     * to violet ties the veils to the stars/glints palette. Pure function of the hourly
+     * wall-clock {@code seconds} — deterministic, identical on every client, no state.
+     * Garnish tier: the caller skips it under {@code reducedFx} (the wisp ladder).
+     */
+    private static void drawAuroraVeils(Matrix4f pose, float seconds, float pulse) {
+        BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        for (int v = 0; v < AURORA_VEILS; v++) {
+            float span = AURORA_SPAN[v];
+            float azStart = AURORA_AZIMUTH[v] + seconds * AURORA_DRIFT[v] - span * 0.5F;
+            float footRadius = AURORA_BASE_RADIUS + v * AURORA_RADIUS_STEP;
+            // Slow per-veil breathing (non-commensurate rates) under the shared pulse.
+            float veilAlpha = AURORA_PEAK_ALPHA * pulse
+                    * (0.75F + 0.25F * Mth.sin(seconds * (0.09F + 0.02F * v) + v * 2.1F));
+            for (int i = 0; i < AURORA_SEGMENTS; i++) {
+                float t0 = (float) i / AURORA_SEGMENTS;
+                float t1 = (float) (i + 1) / AURORA_SEGMENTS;
+                float a0 = azStart + t0 * span;
+                float a1 = azStart + t1 * span;
+                // 3-lobe undulation of the curtain foot + a slow travelling fold.
+                float r0 = footRadius + 9.0F * Mth.sin(a0 * 3.0F + seconds * 0.13F + v);
+                float r1 = footRadius + 9.0F * Mth.sin(a1 * 3.0F + seconds * 0.13F + v);
+                // Mid-arc alpha envelope × curtain-ray shimmer (per-edge, so quads share
+                // edge values and the strip stays C0 — no banding between segments).
+                float e0 = Mth.sin(t0 * (float) Math.PI)
+                        * (0.70F + 0.30F * Mth.sin(a0 * 7.0F + seconds * 0.9F + v * 3.3F));
+                float e1 = Mth.sin(t1 * (float) Math.PI)
+                        * (0.70F + 0.30F * Mth.sin(a1 * 7.0F + seconds * 0.9F + v * 3.3F));
+                float alpha0 = veilAlpha * e0;
+                float alpha1 = veilAlpha * e1;
+                float cos0 = Mth.cos(a0);
+                float sin0 = Mth.sin(a0);
+                float cos1 = Mth.cos(a1);
+                float sin1 = Mth.sin(a1);
+                // Bright foot edge (outer) → feathered zenith-side fade (inner).
+                builder.addVertex(pose, cos0 * r0, SKY_DISTANCE, sin0 * r0)
+                        .setColor(0.30F, 0.90F, 0.55F, alpha0);
+                builder.addVertex(pose, cos1 * r1, SKY_DISTANCE, sin1 * r1)
+                        .setColor(0.30F, 0.90F, 0.55F, alpha1);
+                builder.addVertex(pose, cos1 * (r1 - AURORA_BAND_DEPTH), SKY_DISTANCE,
+                                sin1 * (r1 - AURORA_BAND_DEPTH))
+                        .setColor(0.40F, 0.30F, 0.85F, 0.0F);
+                builder.addVertex(pose, cos0 * (r0 - AURORA_BAND_DEPTH), SKY_DISTANCE,
+                                sin0 * (r0 - AURORA_BAND_DEPTH))
+                        .setColor(0.40F, 0.30F, 0.85F, 0.0F);
+            }
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());
     }

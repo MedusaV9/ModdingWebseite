@@ -12,7 +12,7 @@
   "keyframes": [
     { "t": 0.0, "pos": [15.0, 5.8, -8.5], "yaw": 115, "pitch": 15, "roll": 0, "fov": 66, "easing": "easeInOutCubic", "lookAt": [0.6, 1.4, 0.0] },
     { "t": 0.42, "pos": [9.2, 3.6, -4.8], "yaw": 118, "pitch": 11, "roll": 0, "fov": 63, "easing": "easeInOutCubic", "lookAt": [0.6, 1.4, 0.0] },
-    { "t": 0.78, "pos": [4.6, 2.3, -2.0], "yaw": 121, "pitch": 6, "roll": 0, "fov": 60, "easing": "easeOutCubic", "lookAt": [0.75, 1.4, 0.0] },
+    { "t": 0.78, "pos": [4.6, 2.3, -2.0], "yaw": 121, "pitch": 6, "roll": 0, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.75, 1.4, 0.0] },
     { "t": 1.0, "pos": [2.9, 1.85, -1.35], "yaw": 123, "pitch": 3, "roll": 0, "fov": 58, "easing": "easeOutCubic", "lookAt": [0.85, 1.35, 0.0] }
   ],
   "events": [
@@ -21,7 +21,7 @@
     { "t": 0.77, "type": "caption", "id": "eclipse.credits.caption.wheel", "data": "whisper,70" }
   ],
   "params": {
-    "_comment": "C15 credits opener, FXTEAM CUT-CREDITS reshoot: 140t SLOW dolly onto the survivor posed at the ghost ship's wheel. World-anchored — CreditsSequence passes the helm player's feet as the play anchor, so every pos/lookAt here is an offset from that spot (the wheel prop sits ~1.1 blocks toward +X, ~1.5 up). The last two keyframes drift the lookAt toward the hands-on-wheel point and end the camera low and just off-axis so the wheel display frames the right of the lens in the near field. FOV runs a 66→63→60→58 intimacy squeeze (most of it spent across the final 58% of the flight). The t=0.77 'wheel' whisper lands on the hands-settle beat (run t = 40 + 0.77*140 ~= 148 = WHEEL_SETTLE_AT; it sat at 0.72 ~= run 141, ~7t early) — CreditsSequence nudges the wheel display a few degrees at run ticks 148/160 to sell the grip. The shot still ends 20t before the whiteout rises, handing the camera back for one breath at the wheel.",
+    "_comment": "C15 credits opener, FXTEAM CUT-CREDITS reshoot: 140t SLOW dolly onto the survivor posed at the ghost ship's wheel. World-anchored — CreditsSequence passes the helm player's feet as the play anchor, so every pos/lookAt here is an offset from that spot (the wheel prop sits ~1.1 blocks toward +X, ~1.5 up). The last two keyframes drift the lookAt toward the hands-on-wheel point and end the camera low and just off-axis so the wheel display frames the right of the lens in the near field. FOV runs a 66→63→60→58 intimacy squeeze (most of it spent across the final 58% of the flight). The t=0.77 'wheel' whisper lands on the hands-settle beat (run t = 40 + 0.77*140 ~= 148 = WHEEL_SETTLE_AT; it sat at 0.72 ~= run 141, ~7t early) — CreditsSequence nudges the wheel display a few degrees at run ticks 148/160 to sell the grip. The settle leg runs easeInOutSine (REPASS polish: the shipped easeOutCubic resumed at 0.18 blocks-per-tick off the t=0.78 stop — a micro-hitch landing exactly on the grip/whisper beat; in-out keeps the near-static settle, peak ~0.1 b/t, with a zero-velocity junction). The shot still ends 20t before the whiteout rises, handing the camera back for one breath at the wheel.",
     "_doc": "lookAt points share the keyframe coordinate space (anchor offsets here); showOwnBody keeps the helm player visible in their own shot."
   }
 }

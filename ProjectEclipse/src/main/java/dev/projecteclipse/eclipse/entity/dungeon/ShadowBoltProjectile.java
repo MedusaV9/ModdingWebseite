@@ -5,6 +5,8 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -62,6 +64,8 @@ public class ShadowBoltProjectile extends AbstractHurtingProjectile implements G
     private static final int LIFETIME_TICKS = 100;
     /** Self-acceleration per tick; terminal speed ≈ 19× this (inertia 0.95) ≈ 1.5 b/t. */
     private static final double ACCELERATION = 0.08D;
+    /** CUE_SHADOW_BOLT_IMPACT broadcast range (the bolt fights are room-scale). */
+    private static final double IMPACT_FX_RANGE = 48.0D;
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
@@ -175,6 +179,11 @@ public class ShadowBoltProjectile extends AbstractHurtingProjectile implements G
                     this.getX(), this.getY(), this.getZ(), 8, 0.12D, 0.12D, 0.12D, 0.05D);
             serverLevel.sendParticles(ParticleTypes.REVERSE_PORTAL,
                     this.getX(), this.getY(), this.getZ(), 6, 0.1D, 0.1D, 0.1D, 0.08D);
+            // PH-IMPROVE-2 (IDEAS-mobs #6): the Photon detonation flower layered over
+            // the vanilla pops above (LAYER row, allowMulti leg — a 3-bolt fan can land
+            // in one BlockPos within 2 ticks). Photon-less clients no-op on the cue.
+            FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_SHADOW_BOLT_IMPACT,
+                    this.position(), 0.0F, 0.0F, IMPACT_FX_RANGE);
         }
         this.discard();
     }

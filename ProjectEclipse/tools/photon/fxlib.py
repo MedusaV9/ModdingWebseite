@@ -30,9 +30,16 @@ File id contract: `assets/eclipse/fx/<path>.fx`  <->  ResourceLocation `eclipse:
 (loaded by Photon's FXHelper through the vanilla ResourceManager; no registration call).
 
 CLI:
-    python3 tools/photon/fxlib.py selfcheck          # build+round-trip both templates in temp
+    python3 tools/photon/fxlib.py selfcheck          # templates + full-tree lint vs baseline
     python3 tools/photon/fxlib.py templates          # (re)generate the two smoke-test .fx assets
     python3 tools/photon/fxlib.py validate <f.fx>…   # parse + structure + round-trip any .fx
+    python3 tools/photon/fxlib.py validate --lint [<f.fx>…]   # + the 15 PHOTON-QUALITY §5.2
+                                                     # lint rules (no paths = whole FX tree,
+                                                     # grandfathered via lint_baseline.txt;
+                                                     # NEW error/warn findings fail)
+    python3 tools/photon/fxlib.py validate --lint --update-baseline   # re-grandfather
+    python3 tools/photon/fxlib.py write_fxproj [--missing | <f.fx>…]  # editor-openable
+                                                     # .fxproj sibling(s) (binary-diff law)
     python3 tools/photon/fxlib.py dump <f.fx>        # pretty-print the NBT tree
 """
 from __future__ import annotations
@@ -590,10 +597,25 @@ def _quat_xyz_deg(x_deg, y_deg, z_deg):
 
 # A reusable "pop in then shrink to zero" bezier segment (x: 0..1 lifetime, y: 0..1).
 SEG_POP_SHRINK = (0.0, 0.66, 0.1, 1.0, 0.9, 0.2, 1.0, 0.0)
-# Linear 0 -> 1 ramp.
+# Linear 0 -> 1 ramp. PROTOTYPING ONLY (v7 quality bar §5.1: shipping curves must be
+# genuinely eased — see the house segments below).
 SEG_LINEAR_UP = (0.0, 0.0, 0.33, 0.33, 0.66, 0.66, 1.0, 1.0)
-# Linear 1 -> 0 ramp.
+# Linear 1 -> 0 ramp. PROTOTYPING ONLY (same rule).
 SEG_LINEAR_DOWN = (0.0, 1.0, 0.33, 0.66, 0.66, 0.33, 1.0, 0.0)
+
+# v7 house segments (PHOTON-QUALITY.md §5.1 rule 2) — control points genuinely off the
+# chord so the lazy-linear lint (tolerance 0.02) never flags them.
+# Ease-out crest: fast attack, soft settle at full value.
+SEG_EASE_OUT_CREST = (0.0, 0.04, 0.15, 0.9, 0.6, 1.0, 1.0, 1.0)
+# Overshoot-settle (iris): pop past the target, relax back to 1.
+SEG_OVERSHOOT_SETTLE = (0.0, 0.2, 0.1, 1.15, 0.5, 0.95, 1.0, 1.0)
+# Flicker -> commit: hesitate low, then commit to full.
+SEG_FLICKER_COMMIT = (0.0, 0.15, 0.55, 0.35, 0.9, 1.0, 1.0, 1.0)
+# Smoothstep rise / fall (horizontal tangents at both ends).
+SEG_SMOOTH_UP = (0.0, 0.0, 0.33, 0.0, 0.67, 1.0, 1.0, 1.0)
+SEG_SMOOTH_DOWN = (0.0, 1.0, 0.33, 1.0, 0.67, 0.0, 1.0, 0.0)
+# Ease-in decay: hold near full, then accelerate to zero (soft die-off).
+SEG_DECAY_TAIL = (0.0, 1.0, 0.35, 0.9, 0.7, 0.25, 1.0, 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -1410,6 +1432,444 @@ def validate_file(path) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Lint — the PHOTON-QUALITY.md §5.2 warning channel (`validate --lint`)
+# ---------------------------------------------------------------------------
+# Severities: "error"/"warn" findings gate against the committed baseline
+# (tools/photon/lint_baseline.txt — current violations grandfathered, NEW ones fail,
+# the count may only go down); "info" findings are purely advisory and never fail.
+LINT_BASELINE_FILE = Path(__file__).resolve().parent / "lint_baseline.txt"
+
+#: Chord-collinearity tolerance for LINT-LINEAR-CURVE (PHOTON-QUALITY.md method note).
+LINEAR_CURVE_TOL = 0.02
+#: Sanctioned single-emitter child-file suffixes (LINT-SINGLE-EMITTER allowlist).
+CHILD_FILE_SUFFIXES = ("_puff", "_glint", "_sparkle", "_pop", "_trail", "_ribbon")
+#: v7 palette tokens, FX-STYLE-GUIDE.md §1 (LINT-PALETTE advisory distance check).
+PALETTE_TOKENS = {
+    "SAC_HOT": 0xF6EFFF, "SAC_VIOLET": 0xB98CFF, "SAC_DEEP": 0x7B4FD0,
+    "SAC_GOLD": 0xFFD166, "SAC_GOLD_PALE": 0xFFE9A8, "SAC_VOID": 0x2E2347,
+    "COR_BILE": 0x9BD8B4, "COR_MOSS": 0x6FA98C, "COR_VIOLET": 0x9D4EDD,
+    "COR_INK": 0x3C096C, "COR_PALE": 0xD9FFE8,
+    "GLI_MAGENTA": 0xFF4FD8, "GLI_CYAN": 0x4FE8FF, "GLI_WHITE": 0xFFFFFF,
+    "GLI_VIOLET": 0xB98CFF, "GLI_DEAD": 0x241C38,
+    "ERA_CREAM": 0xFFF3C4, "ERA_AMBER": 0xFFB25E, "ERA_EMBER": 0xFF7B3C,
+    "ERA_SHADOW": 0x3A3A55,
+    "STM_SLATE": 0x3A3A55, "STM_ARC": 0xBFD9FF, "STM_DEEP": 0x5A8DEE,
+}
+#: Advisory RGB distance (unit cube, Euclidean) beyond which a stop is off-palette.
+PALETTE_TOLERANCE = 0.25
+
+
+class LintFinding:
+    """One lint finding. `key` (file-relative id | rule | context) is the stable
+    baseline identity — context uses emitter names/paths, never list indices alone,
+    so regenerating an unchanged asset keeps its grandfathered entries stable."""
+
+    __slots__ = ("rule", "severity", "file_id", "context", "message")
+
+    def __init__(self, rule, severity, file_id, context, message):
+        self.rule = rule
+        self.severity = severity
+        self.file_id = file_id
+        self.context = context
+        self.message = message
+
+    @property
+    def key(self) -> str:
+        return f"{self.file_id}|{self.rule}|{self.context}"
+
+    def __str__(self):
+        return f"[{self.severity.upper():5}] {self.rule} {self.file_id} ({self.context}): {self.message}"
+
+
+def _lint_file_id(path: Path) -> str:
+    """Stable per-file baseline id: path relative to FX_ASSETS_DIR when possible."""
+    path = Path(path).resolve()
+    try:
+        return path.relative_to(FX_ASSETS_DIR).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _num_val(tag, default=None):
+    return tag.v if isinstance(tag, _NUM_TAGS) else default
+
+
+def _nf_max(nf, default=0.0):
+    """Best-effort maximum of a NumberFunction (burst counts: constant / random / curve)."""
+    if not _is_nf_wrapper(nf):
+        return default
+    data = nf.get("data", {})
+    if nf["type"] == "constant":
+        return _num_val(data.get("number"), default)
+    if nf["type"] == "random_constant":
+        a = _num_val(data.get("a"), default)
+        b = _num_val(data.get("b"), default)
+        return max(a, b)
+    if nf["type"] in ("curve", "random_curve"):
+        return _num_val(data.get("upper"), _num_val(data.get("max"), default))
+    return default
+
+
+def _segment_linear(seg, tol=LINEAR_CURVE_TOL) -> bool:
+    """True when both control points sit within `tol` of the p0->p1 chord (normalized xy)."""
+    p0x, p0y, c0x, c0y, c1x, c1y, p1x, p1y = (x.v for x in seg.items)
+    dx, dy = p1x - p0x, p1y - p0y
+    length = math.hypot(dx, dy)
+    for cx, cy in ((c0x, c0y), (c1x, c1y)):
+        if length < 1e-9:
+            dist = math.hypot(cx - p0x, cy - p0y)
+        else:
+            dist = abs(dy * (cx - p0x) - dx * (cy - p0y)) / length
+        if dist > tol:
+            return False
+    return True
+
+
+def _curve_all_linear(nf) -> bool:
+    """LINT-LINEAR-CURVE core: every bezier segment of the curve (both curves for a
+    random_curve) is chord-collinear within tolerance."""
+    data = nf.get("data", {})
+    keys = ("curves",) if nf["type"] == "curve" else ("curves0", "curves1")
+    segments = []
+    for key in keys:
+        seg_list = data.get(key)
+        if isinstance(seg_list, L):
+            segments.extend(s for s in seg_list.items
+                            if isinstance(s, L) and len(s.items) == 8
+                            and all(isinstance(x, F) for x in s.items))
+    return bool(segments) and all(_segment_linear(seg) for seg in segments)
+
+
+def _walk_nf(node, path, out):
+    """Collects (path, nf_dict) for every NumberFunction wrapper under `node`."""
+    if isinstance(node, dict):
+        if _is_nf_wrapper(node):
+            out.append((path, node))
+            return  # NF data never nests further NFs we lint
+        for key, value in node.items():
+            _walk_nf(value, f"{path}.{key}", out)
+    elif isinstance(node, L):
+        for idx, item in enumerate(node.items):
+            _walk_nf(item, f"{path}[{idx}]", out)
+
+
+def _hdr_rgb(material) -> tuple:
+    """(r, g, b) of a material's hdr vector, or (0, 0, 0) when absent."""
+    hdr = material.get("data", {}).get("hdr") if isinstance(material, dict) else None
+    if isinstance(hdr, L) and len(hdr.items) >= 3 and all(isinstance(x, F) for x in hdr.items[:3]):
+        return tuple(x.v for x in hdr.items[:3])
+    return (0.0, 0.0, 0.0)
+
+
+def _material_entries(renderer) -> list:
+    materials = renderer.get("materials") if isinstance(renderer, dict) else None
+    if isinstance(materials, dict) and isinstance(materials.get("payload"), L):
+        return [m for m in materials["payload"].items if isinstance(m, dict)]
+    return []
+
+
+def _rgb_dist(argb_a: int, rgb_b: tuple) -> float:
+    ra, ga, ba = (argb_a >> 16 & 0xFF) / 255.0, (argb_a >> 8 & 0xFF) / 255.0, (argb_a & 0xFF) / 255.0
+    return math.dist((ra, ga, ba), rgb_b)
+
+
+def _off_palette(rgb: tuple) -> bool:
+    return all(_rgb_dist(hexv, rgb) > PALETTE_TOLERANCE for hexv in PALETTE_TOKENS.values())
+
+
+def _color_stops(nf) -> list:
+    """All RGB stops (0..1 floats) carried by a color-family NumberFunction."""
+    data = nf.get("data", {})
+    stops = []
+    if nf["type"] in ("color", "random_color"):
+        for key in (("number",) if nf["type"] == "color" else ("a", "b")):
+            argb = _num_val(data.get(key))
+            if argb is not None:
+                argb &= 0xFFFFFFFF
+                stops.append(((argb >> 16 & 0xFF) / 255.0, (argb >> 8 & 0xFF) / 255.0,
+                              (argb & 0xFF) / 255.0))
+    elif nf["type"] in ("gradient", "random_gradient"):
+        keys = ("gradientColor",) if nf["type"] == "gradient" \
+            else ("gradientColor0", "gradientColor1")
+        for key in keys:
+            gc = data.get(key)
+            rgb = gc.get("rgb") if isinstance(gc, dict) else None
+            if isinstance(rgb, L) and all(isinstance(x, F) for x in rgb.items):
+                vals = [x.v for x in rgb.items]
+                for i in range(0, len(vals) - 3, 4):
+                    stops.append((vals[i + 1], vals[i + 2], vals[i + 3]))
+    return stops
+
+
+def _resolve_fx_location(location: str):
+    """`eclipse:<path>` → the on-disk .fx Path under FX_ASSETS_DIR, else None."""
+    ns, _, rel = location.partition(":")
+    if not rel:
+        ns, rel = "minecraft", ns
+    if ns != "eclipse":
+        return None
+    return FX_ASSETS_DIR / (rel + ".fx")
+
+
+def _walk_fx_locations(node, out):
+    """Collects every `fxLocation` string (subEmitters rows + any trails child refs)."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "fxLocation" and isinstance(value, str):
+                out.append(value)
+            else:
+                _walk_fx_locations(value, out)
+    elif isinstance(node, L):
+        for item in node.items:
+            _walk_fx_locations(item, out)
+
+
+def _child_burst_sum(path: Path) -> float:
+    """Burst particle total of a sub-emitter child file (count × cycles over every
+    particle emitter; cycles 0 = infinite → +inf)."""
+    try:
+        tree = read_fx_file(path)
+    except Exception:
+        return 0.0
+    total = 0.0
+    for wrapper in tree.get("fxData", {}).get("fxObjects", L([])).items:
+        if not isinstance(wrapper, dict) or wrapper.get("type") != "particle_emitter":
+            continue
+        config = wrapper.get("data", {}).get("config", {})
+        bursts = config.get("emission", {}).get("bursts", {})
+        for row in bursts.get("payload", L([])).items if isinstance(bursts.get("payload"), L) else []:
+            if not isinstance(row, dict):
+                continue
+            cycles = _num_val(row.get("cycles"), 1)
+            if cycles == 0:
+                return float("inf")
+            total += _nf_max(row.get("count"), 0.0) * max(1, cycles)
+    return total
+
+
+def lint_file(path) -> list:
+    """The 15 PHOTON-QUALITY.md §5.2 lint rules over one on-disk .fx file.
+
+    Returns a list of LintFinding (severity error/warn/info). Structural validity is
+    assumed — run validate_file first; a parse failure yields a single error finding.
+    """
+    path = Path(path)
+    file_id = _lint_file_id(path)
+    try:
+        tree = read_fx_file(path)
+    except Exception as exc:
+        return [LintFinding("LINT-PARSE", "error", file_id, "-", f"unreadable .fx: {exc}")]
+    findings = []
+
+    # LINT-FXPROJ — binary-diff law: the editor-openable sibling must ship too.
+    if not path.with_suffix(".fxproj").exists():
+        findings.append(LintFinding("LINT-FXPROJ", "warn", file_id, "-",
+                                    "no sibling .fxproj next to the .fx"))
+
+    objects = tree.get("fxData", {}).get("fxObjects", L([]))
+    renderable = [w for w in objects.items
+                  if isinstance(w, dict) and w.get("type") in KNOWN_TYPES and w["type"] != "empty"]
+
+    # LINT-SINGLE-EMITTER — legal only for sub-emitter children / bare ribbons.
+    stem = path.stem
+    if len(renderable) == 1 and not stem.endswith(CHILD_FILE_SUFFIXES):
+        findings.append(LintFinding(
+            "LINT-SINGLE-EMITTER", "info", file_id, "-",
+            f"1 renderable object and {stem!r} does not match the child-suffix allowlist "
+            f"{'/'.join(CHILD_FILE_SUFFIXES)}"))
+
+    for wrapper in renderable:
+        fx_type = wrapper["type"]
+        data = wrapper.get("data", {})
+        name = data.get("name", "?")
+        config = data.get("config", {})
+        if not isinstance(config, dict):
+            continue
+        renderer = config.get("renderer", {})
+        renderer = renderer if isinstance(renderer, dict) else {}
+        looping = _num_val(config.get("looping"), 1) == 1  # schema default: 1b
+        duration = _num_val(config.get("duration"), 100)
+        cull_on = isinstance(renderer.get("cull"), dict) \
+            and _num_val(renderer["cull"].get("_enable"), 0) == 1
+
+        # LINT-CULL-LOOP (error) — golden rule: every looping emitter carries a cull box.
+        if fx_type in ("particle_emitter", "trail_emitter", "ara_trail_emitter") \
+                and looping and not cull_on:
+            findings.append(LintFinding("LINT-CULL-LOOP", "error", file_id, name,
+                                        "looping emitter without renderer.cull._enable: 1b"))
+
+        if fx_type == "particle_emitter":
+            max_particles = _num_val(config.get("maxParticles"))
+            gpu = _num_val(renderer.get("useGPUInstance"), 0) == 1
+            physics = config.get("physics")
+            physics_on = isinstance(physics, dict) and _num_val(physics.get("_enable"), 0) == 1
+            parallel_update = _num_val(config.get("parallelUpdate"), 0) == 1
+
+            # LINT-MAXP-DEFAULT (error) — the unset 2000 default is never deliberate.
+            if max_particles is None or max_particles == 2000:
+                findings.append(LintFinding(
+                    "LINT-MAXP-DEFAULT", "error", file_id, name,
+                    "maxParticles absent or at the 2000 unset default"))
+            # LINT-MAXP-CPU (warn) — big emitters must be GPU-instanced.
+            if max_particles is not None and max_particles > 512 and not gpu:
+                findings.append(LintFinding(
+                    "LINT-MAXP-CPU", "warn", file_id, name,
+                    f"maxParticles {max_particles} > 512 without useGPUInstance: 1b"))
+            # LINT-GPU-PHYSICS (error) — collision physics needs level access.
+            if (parallel_update or gpu) and physics_on:
+                findings.append(LintFinding(
+                    "LINT-GPU-PHYSICS", "error", file_id, name,
+                    "parallelUpdate/useGPUInstance together with enabled physics"))
+            # LINT-PREWARM (error).
+            prewarm = _num_val(config.get("prewarm"), 0)
+            if prewarm > duration:
+                findings.append(LintFinding(
+                    "LINT-PREWARM", "error", file_id, name,
+                    f"prewarm {prewarm} > duration {duration}"))
+            # LINT-BURST-WINDOW (warn) — one-shot bursts must land inside the window.
+            if not looping:
+                bursts = config.get("emission", {}).get("bursts", {})
+                payload = bursts.get("payload") if isinstance(bursts, dict) else None
+                for row in payload.items if isinstance(payload, L) else []:
+                    if not isinstance(row, dict):
+                        continue
+                    time = _num_val(row.get("time"), 0)
+                    cycles = _num_val(row.get("cycles"), 1)
+                    interval = _num_val(row.get("interval"), 1)
+                    last = float("inf") if cycles == 0 else time + (cycles - 1) * interval
+                    if last >= duration:
+                        findings.append(LintFinding(
+                            "LINT-BURST-WINDOW", "warn", file_id, f"{name}:burst@{time}",
+                            f"burst time {time} + (cycles-1)*interval reaches tick "
+                            f"{last} >= duration {duration} on a one-shot"))
+
+            # LINT-SUBEM-RESOLVE (error) + LINT-SUBEM-FAT (warn).
+            locations = []
+            _walk_fx_locations(config.get("subEmitters", {}), locations)
+            _walk_fx_locations(config.get("trails", {}), locations)
+            for location in locations:
+                child = _resolve_fx_location(location)
+                if child is None or not child.exists():
+                    findings.append(LintFinding(
+                        "LINT-SUBEM-RESOLVE", "error", file_id, f"{name}:{location}",
+                        f"fxLocation {location!r} does not resolve to a file under "
+                        f"{FX_ASSETS_DIR.relative_to(REPO_ROOT)} (runtime fail-soft = silent no-op)"))
+                else:
+                    burst_sum = _child_burst_sum(child)
+                    if burst_sum > 8:
+                        findings.append(LintFinding(
+                            "LINT-SUBEM-FAT", "warn", file_id, f"{name}:{location}",
+                            f"sub-emitter child {location!r} burst count sum "
+                            f"{burst_sum:g} > 8 (each stamp deep-copies a runtime)"))
+
+        # Material passes (all four renderable kinds carry a renderer).
+        sorting = renderer.get("vertexSortingMode", "NONE")
+        shade = _num_val(renderer.get("shade"), 0) == 1
+        for m_idx, entry in enumerate(_material_entries(renderer)):
+            blend_mode = entry.get("blendMode", {})
+            blend_mode = blend_mode if isinstance(blend_mode, dict) else {}
+            alpha_blended = blend_mode.get("dstColorFactor") == "ONE_MINUS_SRC_ALPHA"
+            depth_mask = _num_val(entry.get("depthMask"), 0) == 1
+            r, g, b = _hdr_rgb(entry.get("material", {}))
+            hdr_on = max(r, g, b) > 0
+            # LINT-ALPHA-NOSORT (warn) — translucent quads need ordering or depth writes.
+            if alpha_blended and sorting == "NONE" and not depth_mask:
+                findings.append(LintFinding(
+                    "LINT-ALPHA-NOSORT", "warn", file_id, f"{name}:material[{m_idx}]",
+                    "dstColorFactor ONE_MINUS_SRC_ALPHA with vertexSortingMode NONE "
+                    "and depthMask 0b"))
+            # LINT-HDR-DUST (warn) — world-lit dust must not bloom.
+            if hdr_on and alpha_blended and shade:
+                findings.append(LintFinding(
+                    "LINT-HDR-DUST", "warn", file_id, f"{name}:material[{m_idx}]",
+                    f"hdr ({r:g},{g:g},{b:g}) on an alpha-blended material with shade: 1b"))
+            # LINT-HDR-CEILING (warn) — ≤ 4.0 pending the Iris pair test.
+            if max(r, g, b) > 4.0:
+                findings.append(LintFinding(
+                    "LINT-HDR-CEILING", "warn", file_id, f"{name}:material[{m_idx}]",
+                    f"hdr channel ({r:g},{g:g},{b:g}) exceeds the 4.0 ceiling"))
+
+        # LINT-LINEAR-CURVE (warn) — lazy piecewise-linear envelopes; suppressed for
+        # uvAnimation.frameOverTime scans and shape.* arc/animation inputs (spec'd linear).
+        nfs = []
+        _walk_nf(config, name, nfs)
+        for nf_path, nf in nfs:
+            if nf["type"] not in ("curve", "random_curve"):
+                continue
+            if ".uvAnimation." in nf_path and nf_path.endswith("frameOverTime"):
+                continue
+            if ".shape." in nf_path or nf_path.endswith(".shape"):
+                continue
+            if _curve_all_linear(nf):
+                findings.append(LintFinding(
+                    "LINT-LINEAR-CURVE", "warn", file_id, nf_path,
+                    "all bezier segments chord-collinear (tol 0.02) — ship an eased "
+                    "curve (see FX-STYLE-GUIDE house segments)"))
+
+        # LINT-PALETTE (info, advisory) — startColor/gradient stops vs the §1 tokens.
+        off_stops = 0
+        for nf_path, nf in nfs:
+            if nf["type"] not in ("color", "random_color", "gradient", "random_gradient"):
+                continue
+            off_stops += sum(1 for stop in _color_stops(nf) if _off_palette(stop))
+        if off_stops:
+            findings.append(LintFinding(
+                "LINT-PALETTE", "info", file_id, name,
+                f"{off_stops} RGB stop(s) further than {PALETTE_TOLERANCE} from every "
+                "FX-STYLE-GUIDE §1 token (advisory — mids may legitimately pass off-token)"))
+
+    return findings
+
+
+def read_lint_baseline() -> set:
+    """Grandfathered finding keys (empty set when the baseline file is absent)."""
+    if not LINT_BASELINE_FILE.exists():
+        return set()
+    keys = set()
+    for line in LINT_BASELINE_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            keys.add(line)
+    return keys
+
+
+def write_lint_baseline(findings) -> int:
+    """(Re)writes the grandfather baseline from error/warn findings. Returns the count."""
+    keys = sorted({f.key for f in findings if f.severity in ("error", "warn")})
+    header = (
+        "# fxlib lint baseline — grandfathered PHOTON-QUALITY.md §5.2 violations.\n"
+        "# One `<file>|<rule>|<context>` key per line. Entries here PASS `validate --lint`;\n"
+        "# NEW violations fail. The count may only go down: fix a violation, then delete\n"
+        "# its line (or regenerate via `fxlib.py validate --lint --update-baseline` AFTER\n"
+        "# review — never to sneak new violations in). Info-severity findings are advisory\n"
+        "# and never listed.\n")
+    LINT_BASELINE_FILE.write_text(header + "\n".join(keys) + "\n", encoding="utf-8")
+    return len(keys)
+
+
+def all_fx_files() -> list:
+    """Every committed .fx under FX_ASSETS_DIR (sorted, boss/ included)."""
+    return sorted(FX_ASSETS_DIR.rglob("*.fx"))
+
+
+def write_fxproj_sibling(fx_path) -> int:
+    """Writes the editor-openable `.fxproj` sibling for an EXISTING on-disk `.fx`
+    (uncompressed NBT `{meta, data.fx}` envelope, see FxBuilder.write_fxproj).
+    Round-trip-validated; returns the byte size."""
+    fx_path = Path(fx_path)
+    root = fxproj_root(read_fx_file(fx_path))
+    raw = write_root(root)
+    if read_root(raw) != root or write_root(read_root(raw)) != raw:
+        raise ValueError(f"{fx_path}: .fxproj round-trip mismatch")
+    errors = validate_tree(read_root(raw)["data"]["fx"])
+    if errors:
+        raise ValueError(f"{fx_path}: .fxproj inner fx invalid: " + "; ".join(errors))
+    out = fx_path.with_suffix(".fxproj")
+    out.write_bytes(raw)
+    return len(raw)
+
+
+# ---------------------------------------------------------------------------
 # SNBT-ish dump (debugging aid)
 # ---------------------------------------------------------------------------
 def dump(node, indent=0) -> str:
@@ -1546,6 +2006,9 @@ def _cmd_selfcheck() -> int:
             else:
                 print(f"OK   {name}: raw NBT {raw_len} bytes, gzip {gz_len} bytes, "
                       "round-trip byte-identical")
+    # PHOTON-QUALITY §5.2: the lint set over the whole FX tree, baseline-grandfathered.
+    if _cmd_validate([], lint=True) != 0:
+        ok = False
     print("selfcheck " + ("PASSED" if ok else "FAILED"))
     return 0 if ok else 1
 
@@ -1564,8 +2027,10 @@ def _cmd_templates() -> int:
     return rc
 
 
-def _cmd_validate(paths) -> int:
+def _cmd_validate(paths, lint=False, update_baseline=False) -> int:
     rc = 0
+    if lint and not paths:
+        paths = all_fx_files()
     for p in paths:
         errors = validate_file(p)
         if errors:
@@ -1573,8 +2038,72 @@ def _cmd_validate(paths) -> int:
             for e in errors:
                 print(f"  - {e}")
             rc = 1
-        else:
+        elif not lint:
             print(f"OK   {p}")
+    if not lint:
+        return rc
+
+    findings = []
+    for p in paths:
+        findings.extend(lint_file(p))
+    if update_baseline:
+        count = write_lint_baseline(findings)
+        print(f"lint baseline rewritten: {count} grandfathered error/warn finding(s) "
+              f"-> {LINT_BASELINE_FILE.relative_to(REPO_ROOT)}")
+        return rc
+
+    baseline = read_lint_baseline()
+    new, grandfathered, infos = [], [], []
+    for finding in findings:
+        if finding.severity == "info":
+            infos.append(finding)
+        elif finding.key in baseline:
+            grandfathered.append(finding)
+        else:
+            new.append(finding)
+    for finding in new:
+        print(f"NEW  {finding}")
+    for finding in infos:
+        print(f"     {finding}")
+    seen_keys = {f.key for f in findings}
+    stale = sorted(k for k in baseline if k not in seen_keys
+                   and any(_lint_file_id(Path(p)) == k.split("|", 1)[0] for p in paths))
+    if stale:
+        print(f"lint: {len(stale)} baseline entr(ies) no longer fire — prune them from "
+              f"{LINT_BASELINE_FILE.name}:")
+        for key in stale:
+            print(f"  - {key}")
+    print(f"lint: {len(paths)} file(s), {len(new)} NEW error/warn, "
+          f"{len(grandfathered)} grandfathered, {len(infos)} advisory info")
+    if new:
+        print("lint FAILED (new violations — fix them or, for a sanctioned exception, "
+              "add the key to lint_baseline.txt with a review note)")
+        return 1
+    return rc
+
+
+def _cmd_write_fxproj(args) -> int:
+    if args == ["--missing"]:
+        targets = [p for p in all_fx_files() if not p.with_suffix(".fxproj").exists()]
+        if not targets:
+            print("write_fxproj: every .fx already has a sibling .fxproj")
+            return 0
+    else:
+        targets = [Path(a) for a in args]
+    rc = 0
+    for fx_path in targets:
+        try:
+            size = write_fxproj_sibling(fx_path)
+        except Exception as exc:
+            print(f"FAIL {fx_path}: {exc}")
+            rc = 1
+            continue
+        out = fx_path.with_suffix(".fxproj")
+        try:
+            rel = out.relative_to(REPO_ROOT)
+        except ValueError:
+            rel = out
+        print(f"WROTE {rel} ({size} B, uncompressed NBT) — valid")
     return rc
 
 
@@ -1583,8 +2112,17 @@ def main(argv) -> int:
         return _cmd_selfcheck()
     if len(argv) >= 1 and argv[0] == "templates":
         return _cmd_templates()
-    if len(argv) >= 2 and argv[0] == "validate":
-        return _cmd_validate(argv[1:])
+    if len(argv) >= 1 and argv[0] == "validate":
+        rest = argv[1:]
+        lint = "--lint" in rest
+        update_baseline = "--update-baseline" in rest
+        rest = [a for a in rest if a not in ("--lint", "--update-baseline")]
+        if not lint and (update_baseline or not rest):
+            print("validate: pass .fx paths, or use --lint for the whole FX tree")
+            return 2
+        return _cmd_validate(rest, lint=lint, update_baseline=update_baseline)
+    if len(argv) >= 2 and argv[0] == "write_fxproj":
+        return _cmd_write_fxproj(argv[1:])
     if len(argv) == 2 and argv[0] == "dump":
         print(dump(read_fx_file(argv[1])))
         return 0

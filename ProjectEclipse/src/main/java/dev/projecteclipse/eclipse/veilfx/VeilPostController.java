@@ -201,6 +201,49 @@ public final class VeilPostController {
         pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
         pipeline.getUniform("HorizonY").setFloat(horizonNdcY());
         pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+        // v3 (VEIL-REPASS-1): signed color-script lean — dusk/BUILDUP negative,
+        // dawn/ENDING positive; the shader tints the violet story from it.
+        pipeline.getUniform("PhaseTint").setFloat(phaseTint(level, partialTick));
+    }
+
+    // --- v3 (VEIL-REPASS-1): world_grade color script -----------------------------------
+
+    /** Eased eclipse-phase lean (BUILDUP → dusk −0.6, ENDING → dawn +0.6, else 0). */
+    private static float easedPhaseLean;
+    /** Lean slew per tick: full lean in ~24 ticks — softer than the eclipse ramp itself. */
+    private static final float PHASE_LEAN_SLEW = 0.025F;
+    /** How far an eclipse phase alone can push the script (the sun edge supplies the rest). */
+    private static final float PHASE_LEAN_AMPLITUDE = 0.6F;
+
+    /** Per-tick slew of the eclipse-phase lean toward its phase target (never snaps). */
+    private static void tickPhaseLeanEase() {
+        int phase = EclipseFxState.eclipsePhase();
+        float target = phase == EclipseFxState.PHASE_BUILDUP ? -PHASE_LEAN_AMPLITUDE
+                : phase == EclipseFxState.PHASE_ENDING ? PHASE_LEAN_AMPLITUDE : 0.0F;
+        if (easedPhaseLean < target) {
+            easedPhaseLean = Math.min(target, easedPhaseLean + PHASE_LEAN_SLEW);
+        } else if (easedPhaseLean > target) {
+            easedPhaseLean = Math.max(target, easedPhaseLean - PHASE_LEAN_SLEW);
+        }
+    }
+
+    /**
+     * Signed color-script lean in [−1, 1] for the {@code world_grade} {@code PhaseTint}
+     * uniform: the sun-elevation edge (overworld only — the vanilla celestial angle:
+     * {@code sin > 0} is the setting half of the cycle, so dusk leans negative and dawn
+     * positive, weighted by how close the sun is to the horizon) plus the eased
+     * eclipse-phase lean (BUILDUP is a scripted dusk, ENDING a scripted dawn). Both
+     * inputs are continuous, so the combined script can never pop.
+     */
+    private static float phaseTint(ClientLevel level, float partialTick) {
+        float dayTint = 0.0F;
+        if (level != null && level.dimension() == Level.OVERWORLD) {
+            float angle = SunTracker.sunAngleRadians(level, partialTick);
+            float edge = Mth.clamp(1.0F - Math.abs(Mth.cos(angle)) / 0.30F, 0.0F, 1.0F);
+            edge = edge * edge * (3.0F - 2.0F * edge);
+            dayTint = (Mth.sin(angle) >= 0.0F ? -1.0F : 1.0F) * edge;
+        }
+        return Mth.clamp(dayTint + easedPhaseLean, -1.0F, 1.0F);
     }
 
     /**
@@ -259,6 +302,11 @@ public final class VeilPostController {
         pipeline.getUniform("RimOnly").setFloat(easedRimOnly);
         pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
         pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+        // v3 (VEIL-REPASS-1): halo color temperature rides the synced altar level. The
+        // clamp-to-5 normalization is the established client convention (AltarVeilSky,
+        // AltarIdleMotes, SanctumHum all read the same ladder).
+        pipeline.getUniform("AltarWarmth").setFloat(
+                Mth.clamp(dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel, 0, 5) / 5.0F);
     }
 
     /** Per-tick slew of the binary {@link SunTracker#sunOccluded} probe toward 0/1. */
@@ -313,6 +361,7 @@ public final class VeilPostController {
     @SubscribeEvent
     static void onClientTick(ClientTickEvent.Post event) {
         tickSunOcclusionEase();
+        tickPhaseLeanEase();
         boolean gate = EclipseIrisState.postFxAllowed();
         DESIRED.clear();
         if (gate) {
@@ -353,6 +402,7 @@ public final class VeilPostController {
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         OVERRIDES.clear();
+        easedPhaseLean = 0.0F; // the color script never leaks into the next session
         synchronized (VeilPostController.class) {
             for (Row row : ROWS.values()) {
                 removeQuietly(row.spec().id());

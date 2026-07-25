@@ -18,12 +18,17 @@ diffable source of truth for these binary assets — regenerate, never hand-edit
              eclipse:wand_idle_stern       tilted star halo + hairline trails (loop)
 
 Every loop ships a renderer cull box + modest maxParticles (INTEGRATION.md §4 loop law);
-one-shots stay inside the budgets quoted per concept in IDEAS-player.md. Textures are
-limited to the two Photon-bundled particles (circle.png / smoke.png).
+one-shots stay inside the budgets quoted per concept in IDEAS-player.md. Textures:
+Photon-bundled circle.png/smoke.png, the worker-authored square_4x4.png (mobs_fx.py —
+the glitch identity sheet), and star_2x2.png authored HERE (4-point-star twinkle
+flipbook, deterministic stdlib writer).
 
 Run:  python3 tools/photon/gen_player_fx.py          # writes + validates all assets
 """
+import math
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -31,6 +36,47 @@ from fxlib import *  # noqa: F401,F403 - fxlib is the sanctioned star-import API
 
 CIRCLE = "photon:textures/particle/circle.png"
 SMOKE = "photon:textures/particle/smoke.png"
+# Identity textures (PHOTON-QUALITY §5.1 rule 6 — circle.png is for generic sparks only).
+SQUARE_4X4 = "eclipse:textures/particle/square_4x4.png"  # mobs_fx.py, 4x4 hard squares
+STAR_2X2 = "eclipse:textures/particle/star_2x2.png"      # authored below
+STAR_TEXTURE = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle/star_2x2.png"
+
+
+# ---------------------------------------------------------------------------
+# star_2x2.png — 2x2 sheet of 4-point-star frames (128x128, 64 px frames). The four
+# frames vary arm length + gain so the WholeSheet uvAnimation IS the twinkle
+# (IDEAS-player #6 STERN: "4-point-star sprite, uvAnimation 2x2 flipbook twinkle").
+# White-RGB alpha mask — tint rides startColor/gradients at runtime.
+# ---------------------------------------------------------------------------
+def _png_chunk(tag: bytes, data: bytes) -> bytes:
+    body = tag + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+
+def write_star_2x2(path: Path, frame: int = 64) -> None:
+    frames = [(1.0, 1.0), (0.78, 0.88), (0.92, 0.97), (0.66, 0.8)]  # (arm length, gain)
+    size = frame * 2
+    rows = []
+    for y in range(size):
+        row = bytearray([0])  # filter 0 (None)
+        for x in range(size):
+            arm, gain = frames[(y // frame) * 2 + (x // frame)]
+            nx = ((x % frame) + 0.5) / frame * 2.0 - 1.0
+            ny = ((y % frame) + 0.5) / frame * 2.0 - 1.0
+            ax, ay = abs(nx) / arm, abs(ny) / arm
+            # Soft diamond core + thin axis-aligned rays = the classic 4-point star.
+            core = max(0.0, 1.0 - (ax + ay) / 0.42) ** 1.5
+            ray_x = max(0.0, 1.0 - ax) ** 3.0 * math.exp(-((ay / 0.075) ** 2))
+            ray_y = max(0.0, 1.0 - ay) ** 3.0 * math.exp(-((ax / 0.075) ** 2))
+            a = min(1.0, core + ray_x + ray_y) * gain
+            row += bytes((255, 255, 255, int(round(255.0 * a))))
+        rows.append(bytes(row))
+    png = (b"\x89PNG\r\n\x1a\n"
+           + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+           + _png_chunk(b"IDAT", zlib.compress(b"".join(rows), 9))
+           + _png_chunk(b"IEND", b""))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png)
 
 # Ticks the komet head needs to cover its baked ~18-block descent. MUST stay in sync with
 # WandPhotonFxRows.KOMET_FALL_TICKS (the client subtracts it from the telegraph delay).
@@ -109,7 +155,7 @@ def build_wand_soulbind_flash() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_curves(
-            size_over_lifetime=curve(1.0, 2.2, [SEG_LINEAR_UP], "lifetime", "size"),
+            size_over_lifetime=curve(1.0, 2.2, [SEG_EASE_OUT_CREST], "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.2, 0.35), (1.0, 0.0)],
                 [(0.0, 0.7, 0.55, 0.95), (1.0, 0.4, 0.3, 0.6)])))
@@ -133,9 +179,15 @@ def build_stern_komet_fall() -> FxBuilder:
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
        .with_material(texture_material(CIRCLE, hdr=(1.8, 1.8, 2.6), blend=BLEND_ADDITIVE))
-       .with_curves(velocity_over_lifetime=dict(  # eases in to ~-1.9 blocks/t; ~18 over 13t
+       # Real ease-in descent (PHOTON-QUALITY §2 runner-up / §6 stern_komet_core
+       # retirement note): hold near -0.9 blocks/t, then commit to -1.9 — an
+       # accelerating fall instead of the old constant-speed linear ramp. Average
+       # bezier y = 0.5375, so displacement stays ~17.7 blocks over the 13t
+       # KOMET_FALL_TICKS window (was ~18.2 linear) — the +18 spawn anchor and the
+       # delayed impact bloom keep their sync.
+       .with_curves(velocity_over_lifetime=dict(
             linear=nf3(constant(0),
-                       curve(-1.9, -0.9, [SEG_LINEAR_DOWN], "lifetime", "velocity"),
+                       curve(-1.9, -0.9, [SEG_DECAY_TAIL], "lifetime", "velocity"),
                        constant(0))))
        .with_module("trails", {
             "ratio": F(1.0), "lifetime": constant(1.0),
@@ -248,7 +300,7 @@ def build_stern_komet_impact() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_curves(
-            size_over_lifetime=curve(1.0, 2.4, [SEG_LINEAR_UP], "lifetime", "size"),
+            size_over_lifetime=curve(1.0, 2.4, [SEG_EASE_OUT_CREST], "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.25, 0.3), (1.0, 0.0)],
                 [(0.0, 0.75, 0.8, 1.0), (1.0, 0.45, 0.55, 0.85)])))
@@ -304,7 +356,10 @@ def build_riss_schlag_maw() -> FxBuilder:
 
 
 def build_riss_glitch_pop() -> FxBuilder:
-    """3-particle hard-additive static burst (pixelArt bits=4) — Death sub-emitter target."""
+    """3-particle hard-additive static burst (pixelArt bits=4) — Death sub-emitter target.
+    Spec read is "hard additive SQUARES" (QUALITY §2 row 9): square_4x4.png via a 4x4
+    uvAnimation tile-picker, plus an eased pop-shrink size envelope so the pop doesn't
+    blink out linearly."""
     fx = FxBuilder("riss_glitch_pop")
     (fx.particle_emitter("static",
             duration=6, looping=False, start_lifetime=constant(4),
@@ -314,11 +369,16 @@ def build_riss_glitch_pop() -> FxBuilder:
             simulation_space="World", max_particles=8)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(3))])
        .with_shape(sphere(radius=0.15, thickness=1.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.0, 1.4, 1.5), blend=BLEND_ADDITIVE,
+       .with_material(texture_material(SQUARE_4X4, hdr=(1.0, 1.4, 1.5), blend=BLEND_ADDITIVE,
                                        pixel_art=True, pixel_art_bits=4))
        .main(start_color=random_color(0xFF66FFFF, 0xFFFFFFFF))
-       .with_curves(color_over_lifetime=gradient([(0.0, 1.0), (1.0, 0.0)],
-                                                 [(0.0, 1.0, 1.0, 1.0)])))
+       .with_curves(
+            uv_animation=dict(tiles=(4, 4), animation="WholeSheet",
+                              frame_over_time=constant(0),
+                              start_frame=random_between(0.0, 15.0)),
+            size_over_lifetime=curve(0.2, 1.0, [SEG_POP_SHRINK], "lifetime", "size"),
+            color_over_lifetime=gradient([(0.0, 1.0), (1.0, 0.0)],
+                                         [(0.0, 1.0, 1.0, 1.0)])))
     return fx
 
 
@@ -465,8 +525,11 @@ def build_wand_idle_riss() -> FxBuilder:
                     [(0.0, 0.85), (1.0, 0.5)],
                     [(0.0, 0.22, 0.9, 0.9), (0.48, 0.22, 0.9, 0.9),
                      (0.52, 0.89, 0.23, 0.89), (1.0, 0.89, 0.23, 0.89)]),
+                # 2-segment scanline flicker (IDEAS-player #6 RISS): dies mid-orbit,
+                # snaps back hard, cuts out again — a broken-signal duty cycle.
                 "thicknessOverTime": curve(
-                    0.4, 1.0, [(0.0, 1.0, 0.25, 0.1, 0.75, 0.9, 1.0, 0.3)]),
+                    0.4, 1.0, [(0.0, 1.0, 0.1, 0.15, 0.3, 0.9, 0.5, 0.25),
+                               (0.5, 0.25, 0.6, 1.0, 0.85, 0.05, 1.0, 0.8)]),
                 "renderer": ribbon_renderer(
                     texture_material(CIRCLE, hdr=(0.9, 1.2, 1.2), blend=BLEND_ADDITIVE),
                     cull_box=((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0)))}}))
@@ -480,11 +543,18 @@ def build_wand_idle_riss() -> FxBuilder:
             simulation_space="Local", max_particles=24)
        .with_emission(rate=constant(0.3))
        .with_shape(sphere(radius=0.3, thickness=1.0))
-       .with_material(texture_material(CIRCLE, hdr=(0.8, 1.0, 1.0), blend=BLEND_ADDITIVE,
+       # HARD squares (square_4x4.png was authored for exactly this read — QUALITY §2
+       # row 8); the 4x4 uvAnimation samples one square per particle (frames identical,
+       # so no flipbook divergence — the §4 shared-sheet trick).
+       .with_material(texture_material(SQUARE_4X4, hdr=(0.8, 1.0, 1.0), blend=BLEND_ADDITIVE,
                                        pixel_art=True, pixel_art_bits=4))
        .with_cull_box((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0))
-       .with_curves(color_over_lifetime=gradient(
-            [(0.0, 0.0), (0.2, 1.0), (0.8, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)])))
+       .with_curves(
+            uv_animation=dict(tiles=(4, 4), animation="WholeSheet",
+                              frame_over_time=constant(0),
+                              start_frame=random_between(0.0, 15.0)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 1.0), (0.8, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)])))
     return fx
 
 
@@ -512,7 +582,9 @@ def build_wand_idle_glut() -> FxBuilder:
 
 def build_wand_idle_stern() -> FxBuilder:
     """Star halo: tilted circle of near-static twinkling motes with hairline trails
-    drawing constellation lines between slow drifters."""
+    drawing constellation lines between slow drifters. Identity read (IDEAS-player #6 /
+    PHOTON-QUALITY §2 row 2): actual 4-point-star sprites off star_2x2.png with the 2x2
+    uvAnimation flipbook AS the twinkle — the hairlines now connect stars, not dots."""
     fx = FxBuilder("wand_idle_stern")
     (fx.particle_emitter("star_halo",
             duration=60, looping=True, prewarm=10, start_lifetime=random_between(30, 45),
@@ -522,9 +594,20 @@ def build_wand_idle_stern() -> FxBuilder:
             simulation_space="Local", max_particles=32)
        .with_emission(rate=constant(0.4))
        .with_shape(circle(radius=0.4, thickness=0.3), rotation=nf3(20.0, 0.0, 0.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.0, 1.0, 1.6), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(STAR_2X2, hdr=(1.0, 1.0, 1.6), blend=BLEND_ADDITIVE))
        .with_cull_box((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0))
        .with_curves(
+            # Flipbook twinkle: steppy off-chord tracks re-pick the 4 star frames on a
+            # per-particle rhythm (frames vary arm length + gain — the sparkle itself).
+            uv_animation=dict(tiles=(2, 2), animation="WholeSheet",
+                              frame_over_time=random_curve(
+                                  0.0, 1.0,
+                                  [(0.0, 0.05, 0.25, 0.9, 0.45, 0.1, 0.65, 0.7),
+                                   (0.65, 0.7, 0.75, 0.0, 0.9, 0.95, 1.0, 0.25)],
+                                  [(0.0, 0.6, 0.2, 0.05, 0.4, 1.0, 0.55, 0.15),
+                                   (0.55, 0.15, 0.7, 0.85, 0.85, 0.05, 1.0, 0.5)],
+                                  "lifetime"),
+                              start_frame=random_between(0.0, 3.0), cycle=3.0),
             noise=dict(frequency=0.5, quality="Noise2D",
                        position=nf3(constant(0.01), constant(0.01), constant(0.01)),
                        rotation=constant(0), size=constant(0)),
@@ -567,16 +650,20 @@ BUILDERS = {
 
 
 def main() -> int:
+    write_star_2x2(STAR_TEXTURE)
+    print(f"WROTE {STAR_TEXTURE.relative_to(REPO_ROOT)}")
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))
             rc = 1
         else:
-            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid")
+            print(f"WROTE {path.relative_to(REPO_ROOT)} (raw {raw_len} B, gzip {gz_len} B) — valid, + .fxproj")
     return rc
 
 

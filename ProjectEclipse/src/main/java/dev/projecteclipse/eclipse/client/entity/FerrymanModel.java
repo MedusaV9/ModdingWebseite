@@ -176,6 +176,20 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         float kneel = entity.kneelAmount(partialTick);
         float plant = entity.plantAmount(partialTick);
         float boost = entity.swayBoost(partialTick);
+        float death = entity.deathProgress(partialTick);
+
+        // Personality micro-beat (REPASS-MOB): every ~27 s of the smooth clock the
+        // Ferryman rests the stroke, hoists the lantern chain with the left hand and
+        // turns the skull to peer into the light — a smoothstepped ~3.5 s envelope,
+        // gated to zero by every combat pose (raise/kneel/plant) and the collapse.
+        float peerPhase = age % 540.0F;
+        float peer = 0.0F;
+        if (peerPhase < 70.0F) {
+            float env = Math.min(Mth.clamp(peerPhase / 18.0F, 0.0F, 1.0F),
+                    Mth.clamp((70.0F - peerPhase) / 22.0F, 0.0F, 1.0F));
+            peer = env * env * (3.0F - 2.0F * env)
+                    * (1.0F - raise) * (1.0F - kneel) * (1.0F - plant) * (1.0F - death);
+        }
 
         // Float bob under a two-layer breathing roll (slow list + slower counter-roll so
         // no two cycles repeat); kneeling drops the whole body toward the deck, hunches
@@ -188,6 +202,9 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         // Slow idle nod rides the breath; the kneel bows the skull (penitent read).
         this.head.xRot = headPitch * Mth.DEG_TO_RAD * 0.6F + Mth.sin(age * 0.043F) * 0.03F
                 + kneel * 0.4F;
+        // Peer: the skull turns to the chain shoulder and tips down into the light.
+        this.head.yRot = Mth.lerp(peer, this.head.yRot, -0.55F);
+        this.head.xRot += peer * 0.22F;
 
         // Hanging robe strips sway on the float clock; the longer tatters drag on a
         // slower, deeper cadence with a light flutter harmonic — both amplified while he
@@ -207,16 +224,24 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         // swing never metronomes; the housing counter-swings against the last link
         // (inertia read).
         float breathe = 1.0F + 0.12F * Mth.sin(age * 0.013F);
-        float speedAmp = (1.0F + 0.85F * boost) * breathe;
+        // The peer stills the pendulum (a held chain can't swing free) before the hoist.
+        float speedAmp = (1.0F + 0.85F * boost) * breathe * (1.0F - 0.85F * peer);
         for (int k = 0; k < chain.length; k++) {
             this.chain[k].zRot = Mth.sin(age * 0.07F - k * 0.45F) * (0.22F + 0.08F * k) * speedAmp;
             this.chain[k].xRot = Mth.sin(age * 0.055F - k * 0.4F) * (0.09F + 0.03F * k) * speedAmp;
         }
         this.lantern.zRot = -Mth.sin(age * 0.07F - 3.0F * 0.45F) * 0.14F * speedAmp;
+        // Peer hoist: the first link swings up-and-forward toward the skull, the lower
+        // links drape back over the lifting hand so the housing hangs near the chin.
+        this.chain[0].xRot += peer * -1.25F;
+        this.chain[0].zRot += peer * 0.3F;
+        this.chain[1].xRot += peer * 0.35F;
+        this.chain[2].xRot += peer * 0.3F;
 
         // --- oar + arm poses ---
         // Rowing idle: the oar pulls in the same slow cadence as the Deckhand crew.
-        float row = Mth.sin(age * 0.08F);
+        // The peer rests the stroke — the oar trails while he tends the light.
+        float row = Mth.sin(age * 0.08F) * (1.0F - 0.7F * peer);
         float oarXRot = -0.7F + row * 0.35F;
         float oarZRot = 0.15F;
         float oarX = OAR_BONE_X;
@@ -224,6 +249,8 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         float armRightXRot = -1.0F + row * 0.3F;
         float armLeftXRot = -0.8F + row * 0.3F;
         float armZ = Mth.sin(age * 0.05F) * 0.02F; // Breathing shoulder drift.
+        // Peer: the left hand leaves the loom and lifts to gather the chain.
+        armLeftXRot = Mth.lerp(peer, armLeftXRot, -1.9F);
 
         // P3 planted: vertical beside him, blade to the deck (bottom of the 36px shaft at
         // ground: pivot must sit 18px up → body-space y = 9 with the kneel-free pivot).
@@ -284,7 +311,6 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         // lantern — listing toward the chain shoulder, the skull turning to the last
         // light, the left arm reaching for it — while the chain swing stills and
         // counter-rotates the body's list so the lantern keeps hanging plumb.
-        float death = entity.deathProgress(partialTick);
         if (death > 0.0F) {
             float sag = death * death; // Ease-in: the body settles as the sea takes it.
             float plantOut = Math.max(plant, death);

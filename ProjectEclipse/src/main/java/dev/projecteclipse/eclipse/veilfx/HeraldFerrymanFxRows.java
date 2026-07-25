@@ -13,10 +13,14 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 /**
  * PH-BOSS-A's {@link PhotonFxRegistry} row registrar ({@link PhotonFxRows} reference
  * pattern) — the Herald + Ferryman concepts from
- * {@code docs/plans_v3/plans_v5/photon/IDEAS-boss.md} (#1, #4, #8, #9). All rows are
- * one-shot {@code Mode.LAYER}: photon-less clients (and {@code reducedFx}) keep the
- * shipped vanilla/Quasar beats bit-identical; the Photon leg is uncharged garnish behind
- * {@code PhotonBridge}'s full guard chain and executor budget.
+ * {@code docs/plans_v3/plans_v5/photon/IDEAS-boss.md} (#1, #4, #8, #9). The roar and
+ * oar-sweep rows are one-shot {@code Mode.LAYER} garnish; the lantern-swarm and
+ * kneel-corona rows are {@code Mode.REPLACE} (PHOTON-QUALITY §6 retirement — running
+ * both was double-vision: {@code soul_leak} duplicates the Quasar mote read 1:1).
+ * Photon-less clients (and {@code reducedFx}) keep the shipped vanilla/Quasar beats
+ * bit-identical on every row: REPLACE re-enters the Quasar leg whenever the Photon
+ * spawn did not play, and the Photon leg stays uncharged behind {@code PhotonBridge}'s
+ * full guard chain and executor budget.
  *
  * <p>Assets are authored programmatically — {@code tools/photon/fx_boss_herald_ferryman.py}
  * (fxlib) is the committed source for the five {@code assets/eclipse/fx/boss/*.fx} blobs
@@ -67,12 +71,14 @@ public final class HeraldFerrymanFxRows {
                 false));
         // IDEAS-boss #4 — soul-lantern model swarm at the crew-phase kneel; the fallback
         // is a one-shot teal soul-mote burst (see the class doc for the limbo_motes swap).
+        // REPLACE (PHOTON-QUALITY §6): the Model lanterns supersede the mote swarm and the
+        // photon file's soul_leak emitter already duplicates the Quasar mote read.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_FERRY_LANTERN_SWARM,
                 fx("boss/ferry_lantern_swarm"),
                 fx("ferry_lantern_swarm"),
                 FxBudget.Channel.AMBIENT,
-                PhotonFxRegistry.Mode.LAYER,
+                PhotonFxRegistry.Mode.REPLACE,
                 false));
         // IDEAS-boss #8 — oar water-tear arc, yaw-aimed via the custom Photon leg
         // (a = the Ferryman's yaw in degrees); glut_welle_ring is the house
@@ -87,12 +93,14 @@ public final class HeraldFerrymanFxRows {
                 HeraldFerrymanFxRows::oarTearLeg));
         // IDEAS-boss #9 — kneel corona sustain (100t one-shot re-fired on the 20t crew
         // cadence; Photon dedups re-sends silently while the runtime lives).
+        // REPLACE (PHOTON-QUALITY §6): 1:1 name/read overlap — corona_halo covers the
+        // Quasar mote puff and photon adds the invuln dome on top.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_FERRY_KNEEL_CORONA,
                 fx("boss/ferry_kneel_corona"),
                 fx("ferry_kneel_corona"),
                 FxBudget.Channel.AMBIENT,
-                PhotonFxRegistry.Mode.LAYER,
+                PhotonFxRegistry.Mode.REPLACE,
                 false));
     }
 

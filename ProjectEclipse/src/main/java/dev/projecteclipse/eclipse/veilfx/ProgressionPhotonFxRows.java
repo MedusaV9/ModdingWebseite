@@ -28,8 +28,10 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  *   <li><b>quest sigil</b> — {@code a} = goalKind ordinal; MAIN (0) plays the large
  *       variant (executor scale) and layers the one-beat {@code quest_sigil_pillar}
  *       (its impact delay is baked into the asset's {@code startDelay}).</li>
- *   <li><b>tier halo</b> — {@code a} = tier number → scale ladder; tier ≥ 4 (the
- *       shard-paying tiers) layers the brief {@code collection_tier_gold_rain}.</li>
+ *   <li><b>tier halo</b> — {@code a} = tier number → scale ladder; tier 4 (the first
+ *       shard-paying tier) layers the brief {@code collection_tier_gold_rain}; tier ≥ 5
+ *       graduates to the full C2 GOLD RUSH composition (V7-SIGCOMP,
+ *       {@link SignatureCompositions#goldRush}).</li>
  *   <li><b>skill glint</b> — {@code a} = node cost → subtle glint scale (the Quasar
  *       sparks are the composition; the Photon leg is a near-invisible lens accent).</li>
  *   <li><b>landmark echo</b> — Photon-only garnish ({@code null} Quasar leg): reducedFx
@@ -66,6 +68,11 @@ public final class ProgressionPhotonFxRows {
     private static final double HALO_MAX_SCALE = 1.3D;
     /** First tier that adds the gold rain (the FIX-ECON shard-paying tiers). */
     private static final int GOLD_RAIN_MIN_TIER = 4;
+    /** V7-SIGCOMP C2: tier that graduates the reward layer to the full GOLD RUSH. */
+    private static final int GOLD_RUSH_MIN_TIER = 5;
+    /** V7-SIGCOMP C2: collection-context scale ladder (smaller than the podium's 1.15). */
+    private static final double GOLD_RUSH_BASE_SCALE = 0.55D;
+    private static final double GOLD_RUSH_TIER_SCALE_STEP = 0.07D;
     /** A3 glint scale ladder over node cost 1–3. */
     private static final double GLINT_BASE_SCALE = 0.85D;
     private static final double GLINT_COST_SCALE_STEP = 0.15D;
@@ -189,7 +196,16 @@ public final class ProgressionPhotonFxRows {
             played = PhotonBridge.spawn(photonFx, pos,
                     PhotonBridge.SpawnOptions.DEFAULT.withScale(scale, scale, scale));
         }
-        if (tier >= GOLD_RAIN_MIN_TIER) {
+        if (tier >= GOLD_RUSH_MIN_TIER) {
+            // V7-SIGCOMP C2: the top collection tiers graduate from the plain gold rain
+            // to the full GOLD RUSH composition (glint gather → flash frame → physics
+            // star shards + trails), unlock-flavored sting behind the §6.5 window.
+            Vec3 anchor = entity != null
+                    ? entity.position().add(0.0D, 1.6D, 0.0D) : pos.add(0.0D, 1.6D, 0.0D);
+            SignatureCompositions.goldRush(anchor, entity,
+                    GOLD_RUSH_BASE_SCALE + GOLD_RUSH_TIER_SCALE_STEP * tier,
+                    SignatureCompositions.Sting.UNLOCK);
+        } else if (tier >= GOLD_RAIN_MIN_TIER) {
             ResourceLocation rain = fx("collection_tier_gold_rain");
             if (entity != null) {
                 PhotonBridge.spawnOnEntity(rain, entity, PhotonBridge.AUTO_ROTATE_NONE, OVERHEAD_OFFSET);

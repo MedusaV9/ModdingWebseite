@@ -1103,7 +1103,13 @@ public class FerrymanEntity extends Monster {
                     SoundSource.HOSTILE, 1.6F, 0.5F);
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, S2CShakePayload.shake(0.8F, 20));
-            EclipseMod.LOGGER.info("Ferryman death collapse: final bell tolled at deathTime {}", this.deathTime);
+            // V7-SIGCOMP C11: the CROWN VERDICT coda rides the final toll — the deck-level
+            // soul wisps stay the baseline; the composition adds the indraw, gold white-out
+            // + double-pulse shockwave, ash rain and grade exhale (a = kind 1 Ferryman).
+            FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_SIG_CROWN_VERDICT,
+                    this.position().add(0.0D, 1.5D, 0.0D), 1.0F, 0.0F, 96.0D);
+            EclipseMod.LOGGER.info("Ferryman death collapse: final bell tolled at deathTime {} "
+                    + "(crown verdict coda fired)", this.deathTime);
         }
         if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
             // Vanilla removal path (poof cloud + KILLED removal), just 50t later.

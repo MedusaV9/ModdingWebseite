@@ -12,7 +12,8 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 /**
  * PH-MOBS' {@link PhotonFxRegistry} row registrar ({@link PhotonFxRows} reference
  * pattern) — the cue-driven one-shots of the {@code IDEAS-mobs.md} batch (#1, #4 hound
- * half, #5 pop). All rows are {@code Mode.LAYER} garnish with a {@code null} Quasar leg:
+ * half, #5 pop, #6 impact half via PH-IMPROVE-2). All rows are {@code Mode.LAYER}
+ * garnish with a {@code null} Quasar leg:
  * every trigger point already ships a complete vanilla/Quasar visual (intro card,
  * REVERSE_PORTAL blink pairs, glow-spine + sonic-charge windup tell) that stays
  * bit-identical on photon-less clients.
@@ -94,6 +95,20 @@ public final class MobPhotonFxRows {
                         ? PhotonBridge.spawnOnEntity(photonFx, entity,
                                 PhotonBridge.AUTO_ROTATE_FORWARD, HOUND_BODY_OFFSET)
                         : PhotonBridge.spawn(photonFx, pos)));
+        // PH-IMPROVE-2 (IDEAS-mobs #6) — shadow-bolt detonation flower (allowMulti leg:
+        // a cultist 3-bolt fan can strike the same wall block within 2 ticks and packs
+        // volley on independent clocks — the default dedup would eat the siblings).
+        // The vanilla WITCH/REVERSE_PORTAL pops in ShadowBoltProjectile.burst stay the
+        // untouched photon-less baseline.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_SHADOW_BOLT_IMPACT,
+                fx("shadow_bolt_impact"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
+                        PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true))));
     }
 
     private static ResourceLocation fx(String path) {

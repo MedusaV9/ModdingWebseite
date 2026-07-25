@@ -80,6 +80,18 @@ public final class EventsPhotonFxRows {
                 PhotonFxRegistry.Mode.LAYER,
                 false,
                 EventsPhotonFxRows::slamMushroom));
+        // PH-IMPROVE-2 (IDEAS-events #8) — intro SUNRISE god-ray ribbons: 4 staggered ara
+        // ribbons climbing sunward off the island rim + rim motes, one 230t one-shot at the
+        // altar anchor (backlog_fx.py asset). Default position leg; fires once per intro
+        // (plus SUNRISE replays), so SEQUENCE-grade. Null Quasar leg is legal — the cue is
+        // NEW and photon-less clients keep the shipped ENDING grade + warm bloom baseline.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_INTRO_SUNRISE,
+                fx("intro_sunrise_rays"),
+                null,
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     /** {@code CUE_CREDITS_STRIKE} Photon leg: intensity ({@code a}) → executor scale. */

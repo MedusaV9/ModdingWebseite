@@ -56,7 +56,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>Rising assembly (BD-SHIP):</b> the door no longer stamps instantly — {@link
  * #place} records the door in {@link ArenaState} FIRST (the restart anchor), scatters
  * fifteen tagged block-display stones on the dais, floats them up on golden-staggered
- * interpolation start delays, snaps them into the aperture in unison, and only THEN
+ * interpolation start delays, snaps them into the aperture in unison (each stone
+ * chiming once on a rising semitone ladder — REPASS-BD), and only THEN
  * stamps the real multiblock at t={@value #ASSEMBLY_STAMP_TICK} ({@code ArenaFight}'s
  * gate tick drives {@link #tickAssembly}). The walk-through volume is armed the whole
  * time (the gate beat owns crossings, not the blocks). A restart never resumes
@@ -88,6 +89,14 @@ public final class AltarDoor {
     private static final int ASSEMBLY_SNAP_TICK = 28;
     private static final int ASSEMBLY_SNAP_DURATION = 6;
     private static final int ASSEMBLY_STAMP_TICK = 36;
+    /**
+     * REPASS-BD snap chimes: each stone sings ONE soft amethyst chime (the run's
+     * existing crystal voice — wand/altar/launcher all speak it) as it snaps, pitched
+     * on a semitone ladder by piece index and spread 2–3 stones per tick across the
+     * snap window, rising into the deepslate lock-thunk at the window's END (the
+     * interpolation-end seam law — the thunk used to fire at the send tick).
+     */
+    private static final float SNAP_CHIME_VOLUME = 0.35F;
     /**
      * The rising stones read as raw grave material (the credits FLYER_PALETTE's "altar
      * stone" family), never a fake door — the GeckoLib door model replaces them at stamp.
@@ -192,8 +201,10 @@ public final class AltarDoor {
     /**
      * Drives the rising assembly (called every gate tick by {@code ArenaFight.tickGate}):
      * the rise push at t={@value #ASSEMBLY_RISE_TICK}, the unison snap at
-     * t={@value #ASSEMBLY_SNAP_TICK} (one deepslate lock-in sound + a brightness flash —
-     * fifteen stones locking as one beat), the real stamp at t={@value #ASSEMBLY_STAMP_TICK}.
+     * t={@value #ASSEMBLY_SNAP_TICK} (brightness flash riding the pull-in — brightness
+     * snaps must hide inside motion), a pitch-laddered per-stone chime gliss across the
+     * snap window, the deepslate lock-thunk when the snap interpolation ENDS (seam law),
+     * the real stamp at t={@value #ASSEMBLY_STAMP_TICK}.
      */
     public static void tickAssembly(MinecraftServer server) {
         Assembly current = assembly;
@@ -210,12 +221,42 @@ public final class AltarDoor {
             pushAssembly(level, current, true);
         } else if (t == ASSEMBLY_SNAP_TICK) {
             pushAssembly(level, current, false);
-            level.playSound(null, current.controller(), SoundType.DEEPSLATE_BRICKS.getPlaceSound(),
-                    SoundSource.BLOCKS, 1.1F, 0.75F);
         } else if (t >= ASSEMBLY_STAMP_TICK) {
             assembly = null;
             sweepAssemblyPieces(level, current.controller());
             stampBlocks(level, current.controller(), current.facing());
+            return;
+        }
+        if (t >= ASSEMBLY_SNAP_TICK && t < ASSEMBLY_SNAP_TICK + ASSEMBLY_SNAP_DURATION) {
+            snapChimes(level, current, (int) (t - ASSEMBLY_SNAP_TICK));
+        } else if (t == ASSEMBLY_SNAP_TICK + ASSEMBLY_SNAP_DURATION) {
+            // The lock-thunk lands when the snap interpolation ENDS on the client —
+            // the visual moment fifteen stones become one door-shaped mass.
+            level.playSound(null, current.controller(), SoundType.DEEPSLATE_BRICKS.getPlaceSound(),
+                    SoundSource.BLOCKS, 1.1F, 0.75F);
+        }
+    }
+
+    /**
+     * REPASS-BD: one soft chime per snapping stone — a fifteen-note semitone gliss
+     * ({@code 2^((i−7)/12)}, ≈0.67→1.5) spread 2–3 stones per tick across the snap
+     * window, each note spatialized at its own aperture cell (col-major piece order, so
+     * the ladder audibly walks up each column), rising into the lock-thunk. Killed
+     * stones stay silent — a gap in the gliss is the honest read.
+     */
+    private static void snapChimes(ServerLevel level, Assembly current, int slot) {
+        int total = RespawnDoorBlock.WIDTH * RespawnDoorBlock.HEIGHT;
+        int index = 0;
+        for (UUID id : current.pieces()) {
+            int i = index++;
+            if (i * ASSEMBLY_SNAP_DURATION / total != slot
+                    || !(level.getEntity(id) instanceof Display.BlockDisplay)) {
+                continue;
+            }
+            BlockPos cell = RespawnDoorBlock.cellPos(current.controller(), current.facing(),
+                    i / RespawnDoorBlock.HEIGHT, i % RespawnDoorBlock.HEIGHT);
+            level.playSound(null, cell, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS,
+                    SNAP_CHIME_VOLUME, (float) Math.pow(2.0D, (i - total / 2) / 12.0D));
         }
     }
 

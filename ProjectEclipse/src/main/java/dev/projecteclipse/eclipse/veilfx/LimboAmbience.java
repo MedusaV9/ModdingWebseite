@@ -98,6 +98,11 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *       big near-camera billboards are the most expensive overdraw in the scene).</li>
  * </ul>
  *
+ * <p><b>v4.1 (VEIL-REPASS-2)</b>: the {@code SoulShoal} uniform ({@link #feedSoulShoal}) —
+ * rare deterministic soul-shoal crossings under the water surface, on the same
+ * {@code ECLIPSE_SEED}-hashed slot law as the storm glow (distinct salts, so the two
+ * schedules cannot correlate). Zero vector when idle or under {@code reducedFx}.</p>
+ *
  * <p><b>Sound</b>: one looping {@code ambient.limbo_loop} instance
  * ({@link SoundSource#AMBIENT}, peak volume {@code 0.6}) that fades in over
  * {@value LimboLoopSound#FADE_TICKS} ticks after entering limbo and fades out (then stops)
@@ -132,6 +137,13 @@ public final class LimboAmbience {
     private static final double ROLL_PERIOD_SECONDS = 12.5D;
     /** v4 storm glow: schedule slot length (seconds). ~55% of slots flash → ~67 s average. */
     private static final float STORM_SLOT_SECONDS = 37.0F;
+
+    /** v4.1 soul shoal: schedule slot length (seconds). ~30% of slots host one → ~4 min average. */
+    private static final float SHOAL_SLOT_SECONDS = 73.0F;
+    /** v4.1 soul shoal: duration of one crossing (seconds), fade-in/out included. */
+    private static final float SHOAL_CROSS_SECONDS = 26.0F;
+    /** v4.1 soul shoal: swim speed (blocks/s) — ~83 blocks of path per crossing. */
+    private static final float SHOAL_SPEED = 3.2F;
 
     /**
      * Rolling window of looping position-based emitters around the camera. Spawn cadence,
@@ -479,6 +491,9 @@ public final class LimboAmbience {
 
         // --- v4: far storm-glow pulses -----------------------------------------------------
         feedStormGlow(pipeline, seconds, intensity);
+
+        // --- v4.1: soul shoal crossings ----------------------------------------------------
+        feedSoulShoal(pipeline, seconds, intensity, level);
     }
 
     /**
@@ -513,6 +528,56 @@ public final class LimboAmbience {
         }
         pipeline.getUniform("LightningGlow").setVector(
                 Mth.cos(azimuth), Mth.sin(azimuth), strength);
+    }
+
+    /**
+     * v4.1 — the {@code SoulShoal} uniform: rare deterministic crossings of a school of
+     * tiny soul-green lights under the water surface. Same schedule law as
+     * {@link #feedStormGlow}: each {@value #SHOAL_SLOT_SECONDS}-second slot of the hourly
+     * {@code Time} base is hashed ({@code ECLIPSE_SEED} mixer, distinct salts — every
+     * client sees the same shoal at the same second) into crossing/no-crossing (~30%), a
+     * start offset, a swim heading and a closest-approach offset 6–20&nbsp;blocks abeam of
+     * the ship anchor; the school then swims a straight {@value #SHOAL_SPEED}&nbsp;blocks/s
+     * line through that point, mid-crossing at the closest approach, with a sin fade-in/out
+     * envelope. The shader renders the fish in shoal-local space, so the formation visibly
+     * translates (unlike the world-anchored glints). Packed {@code (centerX, centerZ,
+     * headingX·env, headingZ·env)}; idle/{@code reducedFx} feeds a zero vector (the
+     * {@code CurveAmount} ladder), and the anchor-relative path keeps the world-space
+     * float math small. Pure per-frame math: no allocations, no state.
+     */
+    private static void feedSoulShoal(PostPipeline pipeline, float seconds, float intensity,
+            @Nullable ClientLevel level) {
+        float cx = 0.0F;
+        float cz = 0.0F;
+        float dx = 0.0F;
+        float dz = 0.0F;
+        if (!EclipseClientConfig.reducedFx() && intensity > 0.0F && haveFrameMatrices
+                && level != null && level.dimension() == LimboDimension.LIMBO) {
+            int slot = (int) (seconds / SHOAL_SLOT_SECONDS);
+            if (hash01(slot, 3) < 0.30D) {
+                float start = (float) (hash01(slot, 4)
+                        * (SHOAL_SLOT_SECONDS - SHOAL_CROSS_SECONDS - 2.0F));
+                float t = seconds - slot * SHOAL_SLOT_SECONDS - start;
+                if (t >= 0.0F && t <= SHOAL_CROSS_SECONDS) {
+                    Vec3 zenith = LimboSpecialEffects.zenithWorldPoint(level);
+                    float heading = (float) (hash01(slot, 5) * Math.PI * 2.0D);
+                    float hx = Mth.cos(heading);
+                    float hz = Mth.sin(heading);
+                    // Closest-approach point: a hashed 6–20 blocks abeam of the ship
+                    // anchor, on a hashed side — the school passes NEAR the hull, never
+                    // exactly under the keel.
+                    float abeam = (float) (6.0D + hash01(slot, 6) * 14.0D)
+                            * (hash01(slot, 7) < 0.5D ? -1.0F : 1.0F);
+                    float along = (t - SHOAL_CROSS_SECONDS * 0.5F) * SHOAL_SPEED;
+                    cx = (float) zenith.x - hz * abeam + hx * along;
+                    cz = (float) zenith.z + hx * abeam + hz * along;
+                    float env = Mth.sin(t / SHOAL_CROSS_SECONDS * (float) Math.PI);
+                    dx = hx * env * intensity;
+                    dz = hz * env * intensity;
+                }
+            }
+        }
+        pipeline.getUniform("SoulShoal").setVector(cx, cz, dx, dz);
     }
 
     /**

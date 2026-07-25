@@ -87,6 +87,11 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *       {@code reducedFx} skips the inhale loop and halves the burst cadence.</li>
  * </ul>
  *
+ * <p><b>VEIL-REPASS-2:</b> each delivery launch burst also anchors {@link
+ * Rift#recoilScale} — the WHOLE tear compresses {@value Rift#RECOIL_AMOUNT} at the burst
+ * tick and rebounds over {@value Rift#RECOIL_TICKS} ticks (the renderer multiplies its
+ * open scale), so the launch cadence reads as the rift pumping its pieces out.</p>
+ *
  * <p>Lifecycle safety: at most {@value #MAX_RIFTS} concurrent rifts (oldest evicted);
  * re-opening within half a width of a live rift replaces it (double-send/resync safe);
  * rifts die instantly on dimension change (their emitters die with the level) and on
@@ -149,6 +154,25 @@ public final class RiftFx {
     /** Live rifts, oldest first. Mutated only on the client main thread (payloads + tick). */
     private static final List<Rift> RIFTS = new ArrayList<>(MAX_RIFTS);
 
+    // --- PH-IMPROVE-2 (IDEAS-world #6a Option B): end-crack glow suppression ---
+    /**
+     * Positions where the {@code eclipse:end_crack_bleed} Photon leg just played
+     * ({@code WorldPhotonFxRows} records them via {@link #suppressStructureGlow}): the
+     * {@code FX_RIFT_OPEN} arriving right behind the cue (same server tick, one line later
+     * in {@code EndShatterSequence}) skips its generic {@code EXPANSION_RIFT_GLOW} for
+     * that tear — the bleed IS that tear's Photon layer (REPLACE-by-suppression; the tear
+     * geometry, sparks, pulse and sound all stay). Entries expire after
+     * {@value #GLOW_SUPPRESS_WINDOW_TICKS}t so a dropped rift-open can never leak a
+     * suppression onto an unrelated future tear. Client main thread only.
+     */
+    private static final List<GlowSuppression> GLOW_SUPPRESSIONS = new ArrayList<>(4);
+    /** Cue pos → rift-open pos match tolerance (both senders use the same flash Vec3). */
+    private static final double GLOW_SUPPRESS_TOLERANCE = 4.0D;
+    /** Freshness window — the paired payloads land on the same client tick in practice. */
+    private static final int GLOW_SUPPRESS_WINDOW_TICKS = 20;
+
+    private record GlowSuppression(Vec3 pos, int tick) {}
+
     /**
      * Client tick counter for rift animation. {@code EclipseFxState.clientTicks()} is
      * package-private to {@code veilfx}, so this subpackage keeps its own counter off the
@@ -208,7 +232,9 @@ public final class RiftFx {
                             : PhotonBridge.PORTAL_IRIS_OPEN_XBOX,
                     pos, PhotonBridge.SpawnOptions.DEFAULT
                             .withScale(irisScale, irisScale, irisScale));
-        } else {
+        } else if (!consumeGlowSuppression(pos)) {
+            // PH-IMPROVE-2: skipped only when the end_crack_bleed leg just played here —
+            // see GLOW_SUPPRESSIONS. Every other structure tear keeps the frozen glow.
             PhotonBridge.spawn(PhotonBridge.EXPANSION_RIFT_GLOW, pos);
         }
 
@@ -218,6 +244,33 @@ public final class RiftFx {
             level.playLocalSound(pos.x, pos.y, pos.z, EclipseSounds.EVENT_RIFT_OPEN.get(),
                     SoundSource.BLOCKS, 0.55F + 0.45F * falloff, 0.95F + level.random.nextFloat() * 0.1F, false);
         }
+    }
+
+    /**
+     * PH-IMPROVE-2 seam for {@code WorldPhotonFxRows}' {@code CUE_END_CRACK} leg (client
+     * main thread): records that the end-crack light-bleed just played at {@code pos} so
+     * the paired {@code FX_RIFT_OPEN} skips its generic glow — see
+     * {@link #GLOW_SUPPRESSIONS}. Call ONLY after the Photon spawn actually played:
+     * photon-less/refused clients must keep the full shipped rift stack.
+     */
+    public static void suppressStructureGlow(Vec3 pos) {
+        GLOW_SUPPRESSIONS.add(new GlowSuppression(pos, ticks));
+    }
+
+    /** Consumes (and prunes) a fresh in-tolerance suppression entry for {@code pos}. */
+    private static boolean consumeGlowSuppression(Vec3 pos) {
+        boolean hit = false;
+        for (int i = GLOW_SUPPRESSIONS.size() - 1; i >= 0; i--) {
+            GlowSuppression entry = GLOW_SUPPRESSIONS.get(i);
+            if (ticks - entry.tick() > GLOW_SUPPRESS_WINDOW_TICKS) {
+                GLOW_SUPPRESSIONS.remove(i);
+            } else if (!hit && entry.pos().distanceToSqr(pos)
+                    <= GLOW_SUPPRESS_TOLERANCE * GLOW_SUPPRESS_TOLERANCE) {
+                GLOW_SUPPRESSIONS.remove(i);
+                hit = true;
+            }
+        }
+        return hit;
     }
 
     /**
@@ -387,6 +440,7 @@ public final class RiftFx {
             RIFTS.get(i).removeEmitters();
         }
         RIFTS.clear();
+        GLOW_SUPPRESSIONS.clear();
     }
 
     // ------------------------------------------------------------------ rift state
@@ -408,6 +462,10 @@ public final class RiftFx {
         /** Surge: launch-burst window and cadence (mirrors StructureFlightFx's 6-tick batches). */
         static final int SURGE_BURST_TICKS = 36;
         static final int SURGE_BURST_PERIOD = 6;
+        /** VEIL-REPASS-2 launch recoil: rebound window (ticks) after each launch burst. */
+        static final int RECOIL_TICKS = 8;
+        /** Peak whole-tear compression at the launch instant (the frontier's 4%). */
+        static final float RECOIL_AMOUNT = 0.04F;
 
         final ResourceKey<Level> dimension;
         final Vec3 pos;
@@ -453,6 +511,8 @@ public final class RiftFx {
         int entryFlashTick = -10_000;
         /** Tick the delivery surge started (structure re-open), or far past when none. */
         int surgeTick = -10_000;
+        /** Tick of the last launch burst (renderer recoil anchor); far past when none. */
+        int lastLaunchTick = -10_000;
 
         @Nullable
         private ParticleEmitter sparkEmitter;
@@ -536,6 +596,22 @@ public final class RiftFx {
 
         boolean closing() {
             return this.closeTick >= 0;
+        }
+
+        /**
+         * VEIL-REPASS-2 piece-launch recoil: whole-tear scale factor — an instant
+         * {@value #RECOIL_AMOUNT} compression at each launch-burst tick, rebounding on a
+         * quadratic ease-out over {@value #RECOIL_TICKS} ticks. The full launch cadence
+         * ({@value #SURGE_BURST_PERIOD} t) re-triggers before the rebound completes, so a
+         * delivery volley reads as the rift PUMPING its pieces out. 1 while idle.
+         */
+        float recoilScale(float now) {
+            float age = now - this.lastLaunchTick;
+            if (age < 0.0F || age >= RECOIL_TICKS) {
+                return 1.0F;
+            }
+            float rebound = age / RECOIL_TICKS;
+            return 1.0F - RECOIL_AMOUNT * (1.0F - rebound) * (1.0F - rebound);
         }
 
         private boolean doneClosing(int now) {
@@ -639,6 +715,10 @@ public final class RiftFx {
             }
             int period = reduced ? SURGE_BURST_PERIOD * 2 : SURGE_BURST_PERIOD;
             if (surgeAge % period == 0) {
+                // VEIL-REPASS-2: anchor the whole-tear recoil compression on this burst
+                // (RiftRenderer reads recoilScale — pure scale math, zero extra geometry,
+                // so it stays live under reducedFx like the entry flash: launch feedback).
+                this.lastLaunchTick = now;
                 QuasarSpawner.spawn(MATERIALIZE_EMITTER, this.pos, FxBudget.Channel.SEQUENCE);
                 // PH-RIFT (IDEAS-world #3): optional Photon muzzle flash layered on each
                 // launch burst (no-op without the photon mod; reducedFx already skipped

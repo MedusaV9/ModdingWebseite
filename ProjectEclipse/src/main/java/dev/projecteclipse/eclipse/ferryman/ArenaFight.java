@@ -518,8 +518,8 @@ public final class ArenaFight {
         display.setTransformationInterpolationDuration(0);
         display.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
                 new Vector3f(1.0F, 1.0F, 1.0F), new Quaternionf()));
+        morphDisplays.add(display.getUUID()); // before addFreshEntity: the join guard must know it
         limbo.addFreshEntity(display);
-        morphDisplays.add(display.getUUID());
     }
 
     private static void tickTransform(MinecraftServer server) {
@@ -950,6 +950,8 @@ public final class ArenaFight {
      * crash leftover (or an async chunk load racing the resume respawn) — discard it.
      * Same guard for altar-door assembly pieces: their persisted bodies can stream in
      * AFTER {@code AltarDoor.ensureStamped}'s boot sweep ran over a not-yet-loaded chunk.
+     * REPASS-BD closed the same seam for MORPH pieces — the boot {@code sweepMorphDisplays}
+     * only reaches limbo chunks already loaded at start.
      */
     @SubscribeEvent
     static void onEntityJoin(EntityJoinLevelEvent event) {
@@ -962,6 +964,11 @@ public final class ArenaFight {
             entity.discard();
         } else if (entity.getTags().contains(AltarDoor.ASSEMBLY_TAG)
                 && !AltarDoor.isLivePiece(entity.getUUID())) {
+            entity.discard();
+        } else if (entity.getTags().contains(MORPH_TAG)
+                && !morphDisplays.contains(entity.getUUID())) {
+            // REPASS-BD: crash-persisted morph pieces streaming in from a chunk the
+            // boot sweep could not reach — same async-load seam as the other families.
             entity.discard();
         }
     }

@@ -20,8 +20,8 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.network.S2CAwardRevealPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
-import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
-import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
+import dev.projecteclipse.eclipse.veilfx.SignatureCompositions;
+import dev.projecteclipse.eclipse.veilfx.WorldStageArbiter;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -30,7 +30,6 @@ import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
@@ -126,9 +125,8 @@ public final class AwardsOverlay {
     /** Post-land needle springback wobble window in ticks. */
     private static final float NEEDLE_WOBBLE_TICKS = 6.0F;
 
-    /** Podium-moment flourish over the local winner (client-local; IDEA-11 #2). */
-    private static final ResourceLocation PODIUM_BURST_EMITTER =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "unlock_burst");
+    /** V7-SIGCOMP C2: podium GOLD RUSH scale — the reference (largest) reward context. */
+    private static final double GOLD_RUSH_PODIUM_SCALE = 1.15D;
 
     private enum Phase { IDLE, INTRO, SPIN, LAND, STAT, REWARD, HOLD, FADE, SUMMARY, DONE_FADE }
 
@@ -397,13 +395,16 @@ public final class AwardsOverlay {
     }
 
     /**
-     * W4-CEREMONY / IDEA-11 #2 — PODIUM MOMENT: the instant the strip lands on "YOU" the
-     * celebration escapes the UI. A CLIENT-LOCAL {@code eclipse:unlock_burst} Quasar flourish
-     * plus a small vanilla firework ring pop ~2.4 blocks above the local player — visible in
-     * the world behind the 0.85-alpha veil. Nothing is broadcast, so co-players learn
-     * nothing (the reveal's UUID-only anonymity design stays intact); the award sting layers
-     * at land instead of waiting for the stat-line end. {@code reducedFx} keeps only the
-     * sting; ties included ({@code localWon} covers shared wins).
+     * W4-CEREMONY / IDEA-11 #2 — PODIUM MOMENT, upgraded to the V7-SIGCOMP C2 GOLD RUSH
+     * composition (FX-STYLE-GUIDE.md §5): the instant the strip lands on "YOU" the
+     * celebration escapes the UI as glint gather → gold flash frame → physics star shards
+     * with glint-rain trails, CLIENT-LOCAL around the local player (the podium is the
+     * reference context, scale {@value #GOLD_RUSH_PODIUM_SCALE}). Nothing is broadcast,
+     * so co-players learn nothing (the reveal's UUID-only anonymity design stays intact);
+     * the award sting layers at land (noted with the §6.5 sting window so the composition
+     * itself stays sting-silent). {@code reducedFx} keeps only the sting; ties included
+     * ({@code localWon} covers shared wins). Photon-less clients keep the shipped
+     * {@code unlock_burst} flash inside the composition's fallback path.
      */
     private static void podiumBurst() {
         Minecraft minecraft = Minecraft.getInstance();
@@ -413,24 +414,13 @@ public final class AwardsOverlay {
         }
         minecraft.getSoundManager().play(
                 SimpleSoundInstance.forUI(EclipseSounds.AWARD_STING.get(), 1.0F, 0.85F));
+        WorldStageArbiter.noteSting(); // §6.5: one sting per 40t across all compositions
         if (EclipseClientConfig.reducedFx()) {
             return;
         }
         Vec3 top = player.position().add(0.0D, 2.4D, 0.0D);
-        QuasarSpawner.spawnOrFallback(PODIUM_BURST_EMITTER, top);
-        // PH-MOBS (IDEAS-mobs #3): Photon star shower LAYERED over the Quasar flourish —
-        // model stars rain from +5 (baked into the asset), bounce off the real floor and
-        // glint per collision. Full guard chain inside the bridge: photon-less clients
-        // keep the exact unlock_burst + firework-ring moment shipped today.
-        PhotonBridge.spawn(PhotonBridge.AWARD_STAR_SHOWER, player.position());
-        for (int i = 0; i < 8; i++) {
-            double angle = Math.PI * 2.0D * i / 8.0D;
-            double dx = Math.cos(angle);
-            double dz = Math.sin(angle);
-            player.level().addParticle(ParticleTypes.FIREWORK,
-                    top.x + dx * 0.6D, top.y, top.z + dz * 0.6D,
-                    dx * 0.18D, 0.05D, dz * 0.18D);
-        }
+        SignatureCompositions.goldRush(top, player, GOLD_RUSH_PODIUM_SCALE,
+                SignatureCompositions.Sting.NONE);
     }
 
     /** Sneak edge (no screen open) fast-forwards the current reveal — §3.10 accessibility. */

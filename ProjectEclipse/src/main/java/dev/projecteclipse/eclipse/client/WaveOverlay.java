@@ -23,9 +23,12 @@ import foundry.veil.api.client.render.post.PostPipeline;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -116,6 +119,15 @@ public final class WaveOverlay {
     /** One-shot flag: the crash-recovery marker check runs on the very first client tick. */
     private static boolean recoveryChecked;
 
+    // --- v4 (VEIL-REPASS-1): material-reactive ring tint (ShockTint uniform) ---
+    /** Luma-normalized dust tint fed as {@code ShockTint}; neutral = shader no-op. */
+    private static float tintR = 1.0F;
+    private static float tintG = 1.0F;
+    private static float tintB = 1.0F;
+    /** Origin the current tint was sampled for (reference identity — one sample per event). */
+    @javax.annotation.Nullable
+    private static Vec3 tintOrigin;
+
     static {
         // Class-loads on the client during mod construction (@EventBusSubscriber scan), well
         // before the first frame — the row is predicate-driven from then on.
@@ -137,8 +149,10 @@ public final class WaveOverlay {
             if (activePhase != null) {
                 clear(); // disconnected mid-cutscene
             }
+            tintOrigin = null;
             return;
         }
+        updateShockTint(minecraft.level);
 
         Phase latest = ClientStateCache.cutscenePhase;
         if (latest != activePhase) {
@@ -286,7 +300,8 @@ public final class WaveOverlay {
      * Frozen uniforms (§3.3): {@code ShockCenter (vec2 NDC), ShockProgress, ShockStrength}.
      * A live world shockwave wins (its origin re-projected every frame by
      * {@code EclipseFxState}/{@code SunTracker}); otherwise the submerge rings pulse from the
-     * screen center for fullscreen immersion.
+     * screen center for fullscreen immersion. v4 additionally feeds {@code ShockTint}
+     * (tick-cached, alloc-free here — see {@link #updateShockTint}).
      */
     private static void feedShockwave(PostPipeline pipeline) {
         float partialTick = partialTick();
@@ -296,11 +311,48 @@ public final class WaveOverlay {
             pipeline.getUniform("ShockCenter").setVector(world.x(), world.y());
             pipeline.getUniform("ShockProgress").setFloat(world.z());
             pipeline.getUniform("ShockStrength").setFloat(world.w() * fxScale);
+            pipeline.getUniform("ShockTint").setVector(tintR, tintG, tintB);
             return;
         }
         pipeline.getUniform("ShockCenter").setVector(0.0F, 0.0F);
         pipeline.getUniform("ShockProgress").setFloat(((waveTicks + partialTick) % WAVE_CYCLE_TICKS) / WAVE_CYCLE_TICKS);
         pipeline.getUniform("ShockStrength").setFloat(waveStrength(partialTick) * fxScale);
+        pipeline.getUniform("ShockTint").setVector(tintR, tintG, tintB);
+    }
+
+    /**
+     * v4 material-reactive tint: samples the biome grass color at the live shockwave's
+     * world origin ONCE per event (reference-identity check against the origin the
+     * current tint was computed for), desaturates it 55% toward white so it stays a dust
+     * HINT, and luma-normalizes so the shader's crest brightness budget is untouched.
+     * With no world wave the submerge rings get a cold slate (underwater read). Runs on
+     * the tick path — the {@code BlockPos}/biome lookup never touches the render path.
+     */
+    private static void updateShockTint(ClientLevel level) {
+        Vec3 origin = EclipseFxState.shockwaveOrigin();
+        if (origin == null) {
+            tintOrigin = null;
+            setShockTint(0.88F, 0.95F, 1.10F);
+            return;
+        }
+        if (origin == tintOrigin) {
+            return; // same event — sampled already
+        }
+        tintOrigin = origin;
+        int rgb = level.getBiome(BlockPos.containing(origin.x, origin.y, origin.z))
+                .value().getGrassColor(origin.x, origin.z);
+        float red = ((rgb >> 16) & 0xFF) / 255.0F;
+        float green = ((rgb >> 8) & 0xFF) / 255.0F;
+        float blue = (rgb & 0xFF) / 255.0F;
+        setShockTint(0.55F + 0.45F * red, 0.55F + 0.45F * green, 0.55F + 0.45F * blue);
+    }
+
+    /** Stores the tint luma-normalized (mean-brightness 1) and clamped to a hint range. */
+    private static void setShockTint(float red, float green, float blue) {
+        float luma = Math.max(0.299F * red + 0.587F * green + 0.114F * blue, 1.0E-3F);
+        tintR = Mth.clamp(red / luma, 0.7F, 1.3F);
+        tintG = Mth.clamp(green / luma, 0.7F, 1.3F);
+        tintB = Mth.clamp(blue / luma, 0.7F, 1.3F);
     }
 
     /** Submerge-ring strength envelope: ramp in (SUBMERGE/WAVES), hold, fade out (EMERGE). */

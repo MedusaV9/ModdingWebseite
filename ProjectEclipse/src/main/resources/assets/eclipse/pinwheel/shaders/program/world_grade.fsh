@@ -10,6 +10,15 @@
 //   [i4] split-tone color depth (cool shadows / faintly warm highlights, crush-scaled)
 //   [i5] ±0.5/255 output dither (always on — kills crush-gradient quantization banding)
 //   [i6] sky seethe — ultra-low-frequency ±2% drift on sky pixels during the eclipse
+//
+// v3 (VEIL-REPASS-1): the night gains a color SCRIPT and local depth.
+//   [r1] eclipse-phase / dawn-dusk color script — PhaseTint (signed −1..1) leans the
+//        violet story: dusk & eclipse BUILDUP sink toward ember-magenta (the light is
+//        being taken), dawn & eclipse ENDING relax toward a cool rose (it is being
+//        given back). Modulates the desat target and the horizon band — state
+//        feedback, static per frame, so it survives reducedFx like the grade core.
+//   [r2] micro-contrast "clarity" — a 4-tap luma unsharp term, mid-tone weighted and
+//        crush-scaled: the crush stops flattening texture into mud. Static layer.
 // Frozen uniforms (§3.3): EclipseAmount, NightAmount, DesatAmount, ExposureMul — fed per
 // frame by veilfx.VeilPostController (NightAmount = (1 - dayFactor) * 0.55, eclipse state
 // from EclipseFxState). Active only while NightAmount > 0.01 || EclipseAmount > 0.01.
@@ -19,6 +28,10 @@
 //              the camera / no frame captured — the band gaussian dies to zero there)
 //   Detail   — 1 normal, 0 under reducedFx: gates grain, breathing amplitude and seethe
 //              (the static grade core is readability-critical and never gated)
+// v3 additive uniform (fed by the same feeder, same commit — the additive rule):
+//   PhaseTint — signed color-script lean in [−1, 1]: −1 = full dusk/BUILDUP lean,
+//               +1 = full dawn/ENDING lean, 0 = neutral deep night. Sun-elevation
+//               edge (overworld) + eased eclipse-phase lean, combined CPU-side.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -30,6 +43,7 @@ uniform float ExposureMul;
 uniform float Time;
 uniform float HorizonY;
 uniform float Detail;
+uniform float PhaseTint;
 
 in vec2 texCoord;
 
@@ -41,17 +55,49 @@ const float BREATH_W2 = 0.31;
 
 void main() {
     vec3 color = texture(DiffuseSampler0, texCoord).rgb;
-    vec2 screenPx = texCoord * vec2(textureSize(DiffuseSampler0, 0));
+    vec2 texSize = vec2(textureSize(DiffuseSampler0, 0));
+    vec2 screenPx = texCoord * texSize;
     // 0.55 cap keeps a full eclipse readable (dark violet dusk, not black) — the
     // cinematic flight and the approach walk both happen at EclipseAmount == 1.
     float crush = max(NightAmount, EclipseAmount * 0.55);
 
+    // [r2] Clarity pre-pass: sample the 4 diagonal neighbors (~1.2 px) of the RAW frame
+    // and keep the luma difference. The unsharp gain is applied AFTER the crush (below)
+    // so the recovered texture rides the curve the player actually sees.
+    vec2 texel = 1.2 / texSize;
+    float rawLuma = dot(color, vec3(0.299, 0.587, 0.114));
+    float hoodLuma = dot(
+            texture(DiffuseSampler0, texCoord + texel).rgb
+            + texture(DiffuseSampler0, texCoord - texel).rgb
+            + texture(DiffuseSampler0, texCoord + vec2(texel.x, -texel.y)).rgb
+            + texture(DiffuseSampler0, texCoord + vec2(-texel.x, texel.y)).rgb,
+            vec3(0.299, 0.587, 0.114)) * 0.25;
+    float clar = rawLuma - hoodLuma;
+
     // Shadow-crushing tone curve (robust against user gamma — operates on the final frame).
     color = efxCrush(color, crush);
 
-    // Desaturate toward violet as the eclipse deepens.
+    // [r2] Micro-contrast "clarity": luma-only (no chroma fringes), mid-tone weighted so
+    // crushed shadows stay velvety and highlights never halo, clamped so a hard edge can
+    // only swing ~±5%. Rides the crush: plain day is bit-identical. Static — survives
+    // reducedFx (readability-positive, nothing pulses).
+    float midW = smoothstep(0.05, 0.20, rawLuma) * (1.0 - smoothstep(0.55, 0.85, rawLuma));
+    color *= 1.0 + clamp(clar, -0.06, 0.06) * 0.9 * crush * midW;
+
+    // [r1] Color-script leans (mutually exclusive by construction: PhaseTint is signed).
+    float dusk = max(-PhaseTint, 0.0);
+    float dawn = max(PhaseTint, 0.0);
+
+    // Desaturate toward violet as the eclipse deepens. v3: the violet target itself is
+    // scripted — dusk/BUILDUP sinks it toward ember-magenta, dawn/ENDING relaxes it toward
+    // a cool rose. Same luma either way (the tint is hue-only, the crush owns brightness):
+    // all three targets sit at Rec.601 luma 0.734–0.736, so the script can never fight the
+    // tuned totality mid-gray — polish 2 renormalized the leans (dawn was ~6% hot).
     float luma = dot(color, vec3(0.299, 0.587, 0.114));
-    vec3 violet = luma * vec3(0.82, 0.62, 1.10);
+    vec3 violetTint = vec3(0.82, 0.62, 1.10);
+    violetTint = mix(violetTint, vec3(0.98, 0.58, 0.90), dusk * 0.40);
+    violetTint = mix(violetTint, vec3(0.84, 0.64, 0.95), dawn * 0.50);
+    vec3 violet = luma * violetTint;
     color = mix(color, mix(vec3(luma), violet, 0.7), clamp(DesatAmount, 0.0, 1.0));
 
     // [i4] Split-tone depth: shadows cool violet-blue, highlights faintly warm rose.
@@ -83,7 +129,11 @@ void main() {
     float bandH = (ndcY - HorizonY) / 0.16;
     float band = exp(-bandH * bandH);
     float bandAmt = band * bandMask * max(NightAmount * 0.45, EclipseAmount);
-    color += vec3(0.26, 0.09, 0.36) * bandAmt * 0.21;
+    // [r1] The band follows the color script: ember at dusk/BUILDUP, rose at dawn/ENDING.
+    vec3 bandColor = vec3(0.26, 0.09, 0.36);
+    bandColor = mix(bandColor, vec3(0.40, 0.11, 0.24), dusk * 0.55);
+    bandColor = mix(bandColor, vec3(0.30, 0.14, 0.40), dawn * 0.55);
+    color += bandColor * bandAmt * 0.21;
 
     // [i2] Radial darkening breathing with EclipseAmount. Static part rides the crush
     // (plain night gets gentle ~4% edge pressure); the slow double-sine inhale rides

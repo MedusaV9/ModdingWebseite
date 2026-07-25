@@ -981,6 +981,11 @@ public class RiftWardenEntity extends EclipseGeoMonster {
 
     /** The end of the collapse: the rift swallows the body — shake + soul burst. */
     private void implode(ServerLevel level) {
+        // V7-SIGCOMP C11: the CROWN VERDICT coda (a = kind 3 Rift Warden, b = 0 full
+        // indraw) — sent FIRST so the S-MAX stage claim precedes the burst layers below;
+        // the SOUL/REVERSE_PORTAL bursts stay the photon-less baseline of the moment.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_SIG_CROWN_VERDICT,
+                this.position().add(0.0D, 1.5D, 0.0D), 3.0F, 0.0F, 96.0D);
         PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 64.0D,
                 S2CShakePayload.shake(0.8F, 18));
         level.sendParticles(ParticleTypes.SOUL, this.getX(), this.getY() + 1.5D, this.getZ(),

@@ -165,6 +165,7 @@ public class HeraldModel extends HierarchicalModel<HeraldEntity> {
         float gesture = entity.telegraphAmount(partialTick);
         float kick = entity.volleyKick(partialTick);
         float roar = entity.roarAmount(partialTick);
+        float death = entity.deathProgress(partialTick);
 
         // Core bob + a subtle glass "breathing" scale pulse + look-tracking; the summon
         // gesture leans the core toward its target, the volley recoil flinches it back,
@@ -180,14 +181,25 @@ public class HeraldModel extends HierarchicalModel<HeraldEntity> {
 
         // Crown spikes: independent slow shimmer on the base outward lean; the summon
         // gesture focuses them slightly inward, the roar + recoil flare them out and up.
+        // Personality micro-beat (REPASS-MOB): every ~16 s the shards briefly RE-ORDER —
+        // a staggered pop-and-settle wave runs around the crown (each spike hops in turn,
+        // momentarily swapping height ranks), gated out by the roar and the summon.
+        float shuffleClock = age % 320.0F;
         for (int i = 0; i < crown.length; i++) {
+            float shufflePhase = shuffleClock - i * 6.0F;
+            float pulse = 0.0F;
+            if (shufflePhase > 0.0F && shufflePhase < 18.0F) {
+                pulse = Mth.sin(shufflePhase / 18.0F * Mth.PI)
+                        * (1.0F - roar) * (1.0F - gesture) * (1.0F - death);
+            }
             float flare = 0.28F + roar * 0.55F + kick * 0.25F - gesture * 0.1F
-                    + Mth.sin(age * 0.05F + i * 1.57F) * 0.04F;
+                    + Mth.sin(age * 0.05F + i * 1.57F) * 0.04F
+                    + pulse * 0.16F;
             boolean east = i == 1 || i == 2;  // crown anchors with x > 0
             boolean south = i == 2 || i == 3; // crown anchors with z > 0
             this.crown[i].zRot = east ? flare : -flare;
             this.crown[i].xRot = south ? -flare : flare;
-            this.crown[i].y = -6.0F - roar * 1.5F;
+            this.crown[i].y = -6.0F - roar * 1.5F - pulse * 2.2F;
         }
 
         // Corona: ring spin (+ the accumulated telegraph spin-up / recoil snap), per-shard
@@ -244,7 +256,6 @@ public class HeraldModel extends HierarchicalModel<HeraldEntity> {
         // one, the halo shards drop away and vanish, and the tentacle whip dies
         // chain-by-chain to a limp hang. The server detaches corona shards as it plays
         // the crashes, so the synced shardsLeft already blanks those out one by one.
-        float death = entity.deathProgress(partialTick);
         if (death > 0.0F) {
             float seg = death * 3.0F;
             int step = (int) seg;

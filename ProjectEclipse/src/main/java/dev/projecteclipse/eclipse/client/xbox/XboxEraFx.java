@@ -37,9 +37,18 @@ public final class XboxEraFx {
     private static final int EASE_TICKS = 30;
     /** Below this the release is over — drop the pipeline entirely (idle-skip, §3.5). */
     private static final float MIN_ACTIVE = 0.003F;
+    /**
+     * {@code Time} uniform wrap: ~one hour (the ghost_grade/limbo clock precedent), but
+     * snapped to a whole number of scan-band periods — 327 × 11 s × 20 = 71 940 ticks —
+     * so the shader's {@code Time / 11.0} band phase is continuous across the wrap (a
+     * plain 72 000 would teleport the band ~27% of frame height once per hour).
+     */
+    private static final int TIME_WRAP_TICKS = 71_940;
 
     private static float amount;
     private static float previousAmount;
+    /** v3 scan-band clock; advances only while unpaused (the grade holds still on pause). */
+    private static int bandTicks;
 
     static {
         // Feature rows register from static init (W1 wiring note): the @EventBusSubscriber
@@ -70,15 +79,23 @@ public final class XboxEraFx {
         float target = inXboxDimension() && !EclipseClientConfig.reducedFx() ? 1.0F : 0.0F;
         amount = Mth.clamp(amount + Math.signum(target - amount) * (1.0F / EASE_TICKS),
                 Math.min(amount, target), Math.max(amount, target));
+        if (!Minecraft.getInstance().isPaused()) {
+            bandTicks++;
+        }
     }
 
     private static boolean wantEraGrade() {
         return Minecraft.getInstance().level != null && amount(partialTick()) > MIN_ACTIVE;
     }
 
-    /** Per-frame feeder (no allocations): the single uniform. */
+    /**
+     * Per-frame feeder (no allocations): the frozen {@code Amount} plus the v3 additive
+     * {@code Time} (pause-frozen scan-band clock, band-period-aligned ~1 h wrap; int
+     * modulo BEFORE the float divide, so long sessions never hit a precision cliff).
+     */
     private static void feedEraGrade(PostPipeline pipeline) {
         pipeline.getUniform("Amount").setFloat(amount(partialTick()));
+        pipeline.getUniform("Time").setFloat((bandTicks % TIME_WRAP_TICKS + partialTick()) / 20.0F);
     }
 
     private static float partialTick() {

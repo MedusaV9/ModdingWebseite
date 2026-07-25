@@ -49,6 +49,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * window and the ring glides outward — no snap, zero extra packets. The islet companion
  * shards (ring 2) keep their tight fixed orbits.</p>
  *
+ * <p><b>Alignment event (VEIL-REPASS-2):</b> every ~4 minutes the twelve big-ring
+ * fragments glide into one straight line through the altar for 2 s, then disperse
+ * (see {@link #alignBlend} — an absolute-game-time envelope riding the same stateless
+ * push law; the line azimuth golden-angle-advances per event).</p>
+ *
  * <p><b>Animation transport</b> (OarAnimator precedent — the accesstransformer-opened
  * {@code Display} setters): every {@value #UPDATE_CADENCE_TICKS} ticks the server pushes
  * one interpolated transformation per display ({@code setTransformationInterpolationDelay(0)}
@@ -123,6 +128,33 @@ public final class SanctumOrbitals {
      */
     private static final double RADIUS_BREATH = 0.22D;
     private static final double RADIUS_BREATH_PERIOD_TICKS = 640.0D;
+
+    /**
+     * VEIL-REPASS-2: the rare ALIGNMENT event — every {@value #ALIGN_PERIOD_TICKS} t
+     * (4 min) the twelve big-ring fragments glide out of their orbits into ONE straight
+     * line through the altar, hold it for {@value #ALIGN_HOLD_TICKS} t (2 s, "as if held
+     * by magic" made literal), then disperse back. The whole event is an absolute
+     * function of game time (a smoothstep gather/disperse envelope blending the orbit
+     * point toward a per-fragment line slot), so it rides the existing stateless 40 t
+     * push law untouched — a pause mid-event simply glides back on track. Positions are
+     * lerped COMPONENTWISE (never through angles), so there is no sweep-wrap
+     * discontinuity anywhere in the blend; the ~120 t gather spreads the largest glide
+     * over three interpolation windows. The line azimuth advances by the golden angle
+     * per event, so consecutive alignments point differently. Islet companions (ring 2)
+     * keep their tight orbits, exactly like every other big-ring-only behavior.
+     */
+    private static final int ALIGN_PERIOD_TICKS = 4800;
+    private static final int ALIGN_GATHER_TICKS = 120;
+    private static final int ALIGN_HOLD_TICKS = 40;
+    private static final int ALIGN_DISPERSE_TICKS = 120;
+    /** Spacing between line slots (blocks); 12 fragments span ±~14.3 — inside the scan margin. */
+    private static final double ALIGN_SPACING = 2.6D;
+    /** The line hangs this far below the fixed mount point (≈ island top + 6). */
+    private static final double ALIGN_LINE_DROP = 10.0D;
+    /** Fragments taking part in the line: exactly the two big rings (anchor order 0–11). */
+    private static final int ALIGN_COUNT = 12;
+    /** Golden angle (rad): successive alignment events rotate the line azimuth by this. */
+    private static final double ALIGN_GOLDEN_ANGLE = 2.39996322972865332D;
 
     /** Extra orbit radius per altar level on rings 0/1 (blocks; W4-ISLAND level tell). */
     private static final double LEVEL_RADIUS_BONUS = 0.35D;
@@ -395,10 +427,30 @@ public final class SanctumOrbitals {
                 + anchor.phaseRadians() * 3.0D) * BOB_AMPLITUDE * (bigRing ? bobScale : 1.0D);
 
         Vec3 center = anchor.center();
+        double px = center.x + Math.cos(orbitAngle) * radius;
+        double py = center.y + bob;
+        double pz = center.z + Math.sin(orbitAngle) * radius;
+
+        // VEIL-REPASS-2 alignment event: blend the orbit point toward this fragment's
+        // slot on the shared line (big rings only). Componentwise position lerp — the
+        // fragment glides straight between the (still-rotating) orbit point and its
+        // slot, so the blend is continuous everywhere and interpolation-window-safe.
+        if (bigRing && orderIndex < ALIGN_COUNT) {
+            double blend = alignBlend(gameTime);
+            if (blend > 0.0D) {
+                long event = Math.floorDiv(gameTime, (long) ALIGN_PERIOD_TICKS);
+                double lineAngle = event * ALIGN_GOLDEN_ANGLE;
+                double slot = (orderIndex - (ALIGN_COUNT - 1) * 0.5D) * ALIGN_SPACING;
+                px += (mount.x + Math.cos(lineAngle) * slot - px) * blend;
+                py += (mount.y - ALIGN_LINE_DROP - py) * blend;
+                pz += (mount.z + Math.sin(lineAngle) * slot - pz) * blend;
+            }
+        }
+
         Vector3f translation = new Vector3f(
-                (float) (center.x + Math.cos(orbitAngle) * radius - mount.x),
-                (float) (center.y + bob - mount.y),
-                (float) (center.z + Math.sin(orbitAngle) * radius - mount.z));
+                (float) (px - mount.x),
+                (float) (py - mount.y),
+                (float) (pz - mount.z));
 
         // Tumble: fixed tilted axis per anchor, rate varying across the ring, starting
         // from a per-anchor initial angle so no two fragments are ever pose-synced.
@@ -416,6 +468,35 @@ public final class SanctumOrbitals {
         translation.sub(rotation.transform(half, new Vector3f()));
         return new Transformation(translation, rotation,
                 new Vector3f(scale, scale, scale), new Quaternionf());
+    }
+
+    /**
+     * Alignment envelope 0..1 at {@code gameTime}: smoothstep gather over
+     * {@value #ALIGN_GATHER_TICKS} t → full line for {@value #ALIGN_HOLD_TICKS} t →
+     * smoothstep disperse over {@value #ALIGN_DISPERSE_TICKS} t, once per
+     * {@value #ALIGN_PERIOD_TICKS}-tick period; 0 the rest of the time. Stateless and
+     * absolute in game time — deterministic on every client by the transport's nature
+     * (the server pushes the poses).
+     */
+    private static double alignBlend(long gameTime) {
+        long phase = Math.floorMod(gameTime, (long) ALIGN_PERIOD_TICKS);
+        if (phase < ALIGN_GATHER_TICKS) {
+            return smoothstep(phase / (double) ALIGN_GATHER_TICKS);
+        }
+        phase -= ALIGN_GATHER_TICKS;
+        if (phase < ALIGN_HOLD_TICKS) {
+            return 1.0D;
+        }
+        phase -= ALIGN_HOLD_TICKS;
+        if (phase < ALIGN_DISPERSE_TICKS) {
+            return smoothstep(1.0D - phase / (double) ALIGN_DISPERSE_TICKS);
+        }
+        return 0.0D;
+    }
+
+    private static double smoothstep(double x) {
+        x = Math.max(0.0D, Math.min(1.0D, x));
+        return x * x * (3.0D - 2.0D * x);
     }
 
     // --- dev hook ---

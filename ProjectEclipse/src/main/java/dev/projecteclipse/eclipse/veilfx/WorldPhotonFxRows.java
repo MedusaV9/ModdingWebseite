@@ -4,6 +4,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.veilfx.rift.RiftFx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
@@ -96,6 +97,28 @@ public final class WorldPhotonFxRows {
                 FxBudget.Channel.AMBIENT,
                 PhotonFxRegistry.Mode.LAYER,
                 true));
+        // PH-IMPROVE-2 (IDEAS-world #6a Option B) — dragon-death crack light-bleed:
+        // 3 splayed HDR shafts + seam-strip embers per crack-race step. The custom leg
+        // exists ONLY to record the played position so RiftFx.openRift can retire its
+        // generic EXPANSION_RIFT_GLOW for that tear (REPLACE-by-suppression — photon-less
+        // clients keep the full shipped rift stack, including the glow).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_END_CRACK,
+                fx("end_crack_bleed"),
+                null,
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                WorldPhotonFxRows::playEndCrackBleed));
+        // PH-IMPROVE-2 (IDEAS-world #10) — Orin's observatory hearth ambience
+        // (client/wizard/ObservatoryAmbience window; chimney anchor).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WIZARD_HEARTH,
+                fx("wizard_hearth"),
+                null,
+                FxBudget.Channel.AMBIENT,
+                PhotonFxRegistry.Mode.LAYER,
+                true));
     }
 
     /**
@@ -111,6 +134,24 @@ public final class WorldPhotonFxRows {
                     (Vec3) null);
         }
         return PhotonBridge.spawn(photonFx, pos); // untracked flyer — block-anchor fallback
+    }
+
+    /**
+     * {@code CUE_END_CRACK} Photon leg (PH-IMPROVE-2, IDEAS-world #6a Option B): plain
+     * position spawn — race steps land 4t apart at DIFFERENT BlockPos, so the default
+     * dedup can never eat a step. When the leg actually plays, the position is handed to
+     * {@link RiftFx#suppressStructureGlow} so the {@code FX_RIFT_OPEN} arriving right
+     * behind it retires its generic {@code EXPANSION_RIFT_GLOW} for that tear. A
+     * refused/photon-less spawn records nothing: those clients keep the full shipped
+     * rift stack, glow included.
+     */
+    private static boolean playEndCrackBleed(ResourceLocation photonFx, Vec3 pos,
+            @Nullable Entity entity, float a, float b) {
+        boolean played = PhotonBridge.spawn(photonFx, pos);
+        if (played) {
+            RiftFx.suppressStructureGlow(pos);
+        }
+        return played;
     }
 
     /** Nearest client-level player to a cue position (FxPayloads.nearestPlayer pattern). */
