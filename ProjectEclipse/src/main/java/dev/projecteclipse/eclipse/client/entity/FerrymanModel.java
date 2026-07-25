@@ -18,20 +18,25 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Ferryman model — 17 cubes on a 128×128 texture ({@code docs/uv/ferryman.md}), all
- * procedural per spec §2.2: floating robe 10×26×8 with 4 hanging strips 2×6×1, skull 7×7×7
- * under a 9×9×9 hood (open front — the hood's north face is transparent in the skin),
- * emissive eye slit 5×2×1, arms 3×20×3, two-handed oar 2×2×36 (+ a 1×6×5 blade), and a
- * 4×5×4 lantern with a 2×2×2 emissive flame swinging off the left shoulder on a 3-segment
- * 1×4×1 chain.
+ * Ferryman model — 24 cubes on a 128×128 UV sheet painted at 2× (256×256 png,
+ * {@code docs/uv/ferryman.md}), all procedural per spec §2.2: floating robe 10×26×8 with
+ * 4 hanging strips 2×6×1 plus 3 longer tatters 2×8×1, skull 7×7×7 under a 9×9×9 hood
+ * (open front — the hood's north face is transparent in the skin), emissive eye slit
+ * 5×2×1, arms 3×20×3, two-handed oar 2×2×36 (+ a 1×6×5 blade), and a 4×5×4 lantern
+ * (crowned by a 3×1×3 cap) with a 2×2×2 emissive flame swinging off the left shoulder on
+ * a 3-segment 1×4×1 chain whose joints carry alternating 2×2×1 link crosspieces.
  *
  * <p>Anim (age = the entity's smooth clock, ×1.4 in P3): float bob
- * {@code sin(age*0.05)*1.5px}; chain segment k drag-lag swing
- * {@code zRot = sin(age*0.07 - k*0.45)*0.3}; rowing-idle oar
- * {@code xRot = -0.7 + sin(age*0.08)*0.35}. Pose blends from the entity: telegraph raises
- * the oar overhead ({@code raiseAmount}), P2 kneels the whole body ({@code kneelAmount}),
- * P3 plants the oar vertically beside him ({@code plantAmount}; a running telegraph still
- * lifts it — plant is applied first, raise last).</p>
+ * {@code sin(age*0.05)*1.5px} under a slow two-layer breathing roll; chain segment k
+ * drag-lag pendulum swing (amplitude grows down the chain and with deck drift speed,
+ * {@code FerrymanEntity.swayBoost}); rowing-idle oar {@code xRot = -0.7 + sin(age*0.08)*0.35}.
+ * Pose blends from the entity: telegraph raises the oar overhead with a coiled wind-up
+ * ({@code raiseAmount} + a late-windup quiver), the sweep CONTACT whips the oar through a
+ * one-shot arc with follow-through and eased recovery ({@code sweepSwing}), P2 kneels the
+ * whole body ({@code kneelAmount}) with a heavy breathing loop, P3 plants the oar
+ * vertically beside him ({@code plantAmount}; a running telegraph still lifts it — plant
+ * is applied first, raise last). The death collapse folds the body toward the lantern
+ * while the chain stills so the last light hangs plumb.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
@@ -49,6 +54,7 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
     private final ModelPart armLeft;
     private final ModelPart oar;
     private final ModelPart[] strips = new ModelPart[4];
+    private final ModelPart[] tatters = new ModelPart[3];
     private final ModelPart[] chain = new ModelPart[3];
     private final ModelPart lantern;
     private final ModelPart flame;
@@ -66,6 +72,9 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         this.oar = this.body.getChild("oar");
         for (int i = 0; i < strips.length; i++) {
             this.strips[i] = this.body.getChild("strip" + i);
+        }
+        for (int i = 0; i < tatters.length; i++) {
+            this.tatters[i] = this.body.getChild("tatter" + i);
         }
         ModelPart parent = this.body;
         for (int k = 0; k < chain.length; k++) {
@@ -91,6 +100,14 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
             body.addOrReplaceChild("strip" + i, CubeListBuilder.create()
                     .texOffs(32 + i * 8, 36).addBox(-1.0F, 0.0F, -0.5F, 2.0F, 6.0F, 1.0F),
                     PartPose.offset(stripAt[i][0], 13.0F, stripAt[i][1]));
+        }
+        // 3 longer cloak tatters 2x8x1 (west/east flank + back center) — separate bones so
+        // the lower cloak drags on its own slower, deeper cadence than the hem strips.
+        float[][] tatterAt = {{-4.2F, 0.0F}, {4.2F, 0.0F}, {0.0F, 3.9F}};
+        for (int i = 0; i < 3; i++) {
+            body.addOrReplaceChild("tatter" + i, CubeListBuilder.create()
+                    .texOffs(24 + i * 8, 76).addBox(-1.0F, 0.0F, -0.5F, 2.0F, 8.0F, 1.0F),
+                    PartPose.offset(tatterAt[i][0], 13.0F, tatterAt[i][1]));
         }
         // Skull 7x7x7 on the robe top, hood 9x9x9 around it (open front in the skin).
         PartDefinition head = body.addOrReplaceChild("head", CubeListBuilder.create()
@@ -118,15 +135,25 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
                 .texOffs(76, 36).addBox(-0.5F, 12.0F, -2.5F, 1.0F, 6.0F, 5.0F),
                 PartPose.ZERO);
         // Lantern chain off the LEFT shoulder: 3 chained 1x4x1 segments + 4x5x4 lantern.
+        // Each segment's lower joint carries a flat 2x2x1 link crosspiece, alternating
+        // orientation 90° per segment so the chain reads as interlocked iron links.
         PartDefinition parent = body;
         for (int k = 0; k < 3; k++) {
             parent = parent.addOrReplaceChild("chain" + k, CubeListBuilder.create()
                     .texOffs(92 + k * 6, 36).addBox(-0.5F, 0.0F, -0.5F, 1.0F, 4.0F, 1.0F),
                     k == 0 ? PartPose.offset(6.5F, -11.0F, 1.5F) : PartPose.offset(0.0F, 4.0F, 0.0F));
+            parent.addOrReplaceChild("link" + k, CubeListBuilder.create()
+                    .texOffs(k * 8, 76).addBox(-1.0F, -1.0F, -0.5F, 2.0F, 2.0F, 1.0F),
+                    PartPose.offsetAndRotation(0.0F, 3.5F, 0.0F,
+                            0.0F, (k % 2 == 0) ? 0.0F : Mth.HALF_PI, 0.0F));
         }
         PartDefinition lantern = parent.addOrReplaceChild("lantern", CubeListBuilder.create()
                 .texOffs(92, 44).addBox(-2.0F, 0.0F, -2.0F, 4.0F, 5.0F, 4.0F),
                 PartPose.offset(0.0F, 4.0F, 0.0F));
+        // Iron cap crown over the housing (the chain visually seats into it).
+        lantern.addOrReplaceChild("cap", CubeListBuilder.create()
+                .texOffs(48, 76).addBox(-1.5F, -1.0F, -1.5F, 3.0F, 1.0F, 3.0F),
+                PartPose.ZERO);
         // Emissive flame cube inside the lantern.
         lantern.addOrReplaceChild("flame", CubeListBuilder.create()
                 .texOffs(110, 36).addBox(-1.0F, 1.5F, -1.0F, 2.0F, 2.0F, 2.0F),
@@ -148,24 +175,44 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         float raise = entity.raiseAmount(partialTick);
         float kneel = entity.kneelAmount(partialTick);
         float plant = entity.plantAmount(partialTick);
+        float boost = entity.swayBoost(partialTick);
 
-        // Float bob; kneeling drops the whole body toward the deck and hunches it forward.
+        // Float bob under a two-layer breathing roll (slow list + slower counter-roll so
+        // no two cycles repeat); kneeling drops the whole body toward the deck, hunches
+        // it forward and swaps the idle bob for a heavier, slower breath.
         this.body.y = BODY_PIVOT_Y + Mth.sin(age * 0.05F) * 1.5F * (1.0F - kneel) + kneel * 11.0F;
-        this.body.xRot = kneel * 0.3F;
+        this.body.xRot = kneel * (0.3F + Mth.sin(age * 0.045F) * 0.045F);
+        this.body.zRot = Mth.sin(age * 0.031F) * 0.02F + Mth.sin(age * 0.013F) * 0.008F;
+        this.body.yRot = 0.0F;
         this.head.yRot = netHeadYaw * Mth.DEG_TO_RAD;
-        this.head.xRot = headPitch * Mth.DEG_TO_RAD * 0.6F;
+        // Slow idle nod rides the breath; the kneel bows the skull (penitent read).
+        this.head.xRot = headPitch * Mth.DEG_TO_RAD * 0.6F + Mth.sin(age * 0.043F) * 0.03F
+                + kneel * 0.4F;
 
-        // Hanging robe strips sway on the float clock.
+        // Hanging robe strips sway on the float clock; the longer tatters drag on a
+        // slower, deeper cadence with a light flutter harmonic — both amplified while he
+        // drifts across the deck (swayBoost).
         for (int i = 0; i < strips.length; i++) {
-            this.strips[i].xRot = Mth.sin(age * 0.06F + i * 1.3F) * 0.18F;
+            this.strips[i].xRot = Mth.sin(age * 0.06F + i * 1.3F) * 0.18F * (1.0F + 0.6F * boost);
+            this.strips[i].zRot = Mth.cos(age * 0.047F + i * 0.9F) * 0.06F;
+        }
+        for (int i = 0; i < tatters.length; i++) {
+            this.tatters[i].xRot = Mth.sin(age * 0.042F + i * 2.1F) * 0.22F * (1.0F + 0.8F * boost)
+                    + Mth.sin(age * 0.19F + i * 1.1F) * 0.035F;
+            this.tatters[i].zRot = Mth.cos(age * 0.037F + i * 1.7F) * 0.1F;
         }
 
-        // Lantern chain: drag-lag swing (each segment lags the one above it).
+        // Lantern chain: pendulum drag-lag — amplitude GROWS down the chain (the bob
+        // leads its pivot) and with drift speed, under a slow breathing modulation so the
+        // swing never metronomes; the housing counter-swings against the last link
+        // (inertia read).
+        float breathe = 1.0F + 0.12F * Mth.sin(age * 0.013F);
+        float speedAmp = (1.0F + 0.85F * boost) * breathe;
         for (int k = 0; k < chain.length; k++) {
-            this.chain[k].zRot = Mth.sin(age * 0.07F - k * 0.45F) * 0.3F;
-            this.chain[k].xRot = Mth.sin(age * 0.055F - k * 0.4F) * 0.12F;
+            this.chain[k].zRot = Mth.sin(age * 0.07F - k * 0.45F) * (0.22F + 0.08F * k) * speedAmp;
+            this.chain[k].xRot = Mth.sin(age * 0.055F - k * 0.4F) * (0.09F + 0.03F * k) * speedAmp;
         }
-        this.lantern.zRot = Mth.sin(age * 0.07F - 3.0F * 0.45F) * 0.12F;
+        this.lantern.zRot = -Mth.sin(age * 0.07F - 3.0F * 0.45F) * 0.14F * speedAmp;
 
         // --- oar + arm poses ---
         // Rowing idle: the oar pulls in the same slow cadence as the Deckhand crew.
@@ -176,7 +223,7 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         float oarY = OAR_BONE_Y;
         float armRightXRot = -1.0F + row * 0.3F;
         float armLeftXRot = -0.8F + row * 0.3F;
-        float armZ = 0.0F;
+        float armZ = Mth.sin(age * 0.05F) * 0.02F; // Breathing shoulder drift.
 
         // P3 planted: vertical beside him, blade to the deck (bottom of the 36px shaft at
         // ground: pivot must sit 18px up → body-space y = 9 with the kneel-free pivot).
@@ -188,13 +235,20 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         armLeftXRot = Mth.lerp(plant, armLeftXRot, -0.5F);
         armZ = Mth.lerp(plant, armZ, -0.25F);
 
-        // Telegraph: raise the oar overhead for the 25t windup (applied last — wins).
+        // Telegraph ANTICIPATION: raise the oar overhead for the 25t windup (applied
+        // last — wins) while the body screws down into the coil, the skull tips up at the
+        // blade, and the held windup quivers just before release.
         oarXRot = Mth.lerp(raise, oarXRot, -2.5F);
         oarZRot = Mth.lerp(raise, oarZRot, 0.0F);
         oarX = Mth.lerp(raise, oarX, OAR_BONE_X);
         oarY = Mth.lerp(raise, oarY, OAR_BONE_Y - 4.0F);
         armRightXRot = Mth.lerp(raise, armRightXRot, -2.6F);
         armLeftXRot = Mth.lerp(raise, armLeftXRot, -2.6F);
+        this.body.yRot -= raise * 0.28F;
+        this.body.xRot += raise * 0.07F;
+        this.head.xRot -= raise * 0.3F;
+        float quiver = Math.max(0.0F, (raise - 0.85F) / 0.15F);
+        oarZRot += quiver * Mth.sin(age * 1.5F) * 0.035F;
 
         // Kneeling folds the arms down over the planted-or-idle pose.
         armRightXRot = Mth.lerp(kneel, armRightXRot, -0.25F);
@@ -202,10 +256,34 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
         oarXRot = Mth.lerp(kneel, oarXRot, -1.45F);
         oarY = Mth.lerp(kneel, oarY, OAR_BONE_Y + 7.0F);
 
+        // Sweep CONTACT + RECOVERY: a one-shot whip on the telegraph's falling edge
+        // (FerrymanEntity.sweepSwing) — the raised oar snaps down-and-across with the
+        // body twisting into the follow-through (ease-out cubic, ~4t), then the whole
+        // pose eases back to whatever the base blend wants (smoothstep, ~10t).
+        float swing = entity.sweepSwing(partialTick);
+        if (swing >= 0.0F) {
+            float w;
+            if (swing < 0.22F) {
+                float c = swing / 0.22F;
+                w = 1.0F - (1.0F - c) * (1.0F - c) * (1.0F - c);
+            } else {
+                float r = (swing - 0.22F) / 0.78F;
+                w = 1.0F - r * r * (3.0F - 2.0F * r);
+            }
+            oarXRot = Mth.lerp(w, oarXRot, -0.1F); // Past horizontal: a full swing-through.
+            oarZRot = Mth.lerp(w, oarZRot, -0.55F);
+            armRightXRot = Mth.lerp(w, armRightXRot, -0.9F);
+            armLeftXRot = Mth.lerp(w, armLeftXRot, -0.95F);
+            this.body.yRot = Mth.lerp(w, this.body.yRot, 0.6F); // Follow-through twist.
+            this.body.xRot += w * 0.1F;
+        }
+
         // Scripted death collapse (deathTime > 0; the renderer suppresses the vanilla
-        // sideways flip): he sinks upright with the oar planted — forced here off the
-        // death clock too, in case the synced plant flag was lost to a mid-death reload —
-        // while the skull bows onto the chest and the arms slip off the shaft.
+        // sideways flip): the oar stays planted (forced off the death clock too, in case
+        // the synced flag was lost to a mid-death reload) and the body folds INTO the
+        // lantern — listing toward the chain shoulder, the skull turning to the last
+        // light, the left arm reaching for it — while the chain swing stills and
+        // counter-rotates the body's list so the lantern keeps hanging plumb.
         float death = entity.deathProgress(partialTick);
         if (death > 0.0F) {
             float sag = death * death; // Ease-in: the body settles as the sea takes it.
@@ -215,10 +293,18 @@ public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
             oarX = Mth.lerp(plantOut, oarX, 9.0F);
             oarY = Mth.lerp(plantOut, oarY, 9.0F);
             this.head.xRot += sag * 0.7F;
+            this.head.yRot = Mth.lerp(sag, this.head.yRot, 0.9F);
             this.body.xRot += sag * 0.12F;
+            this.body.zRot += sag * 0.18F;
             armRightXRot = Mth.lerp(sag, armRightXRot, 0.15F);
-            armLeftXRot = Mth.lerp(sag, armLeftXRot, 0.1F);
+            armLeftXRot = Mth.lerp(sag, armLeftXRot, -0.35F);
             armZ = Mth.lerp(sag, armZ, -0.05F);
+            for (int k = 0; k < chain.length; k++) {
+                this.chain[k].zRot *= 1.0F - death;
+                this.chain[k].xRot *= 1.0F - death;
+            }
+            this.chain[0].zRot -= sag * 0.18F; // Cancels the body list: the light stays plumb.
+            this.lantern.zRot *= 1.0F - death;
         }
 
         this.oar.xRot = oarXRot;

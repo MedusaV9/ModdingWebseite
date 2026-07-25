@@ -13,6 +13,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -44,6 +45,12 @@ import software.bernie.geckolib.animation.AnimationController;
  * an ELECTRIC_SPARK burst; a whiffed dash self-staggers the hound for 2 s
  * (counterplay — sidestep the telegraphed line and punish).</p>
  *
+ * <p><b>Howl:</b> one-shot {@code howl} the first time it acquires a target after
+ * spawn/load (the Fog Colossus roar pattern) — head thrown back, storm-mane flared,
+ * spine glow pulsing. Cosmetic only, deliberately not persisted to NBT (re-howls once
+ * per load at worst); the pack-alert mechanics stay entirely on
+ * {@code HurtByTargetGoal.setAlertOthers()}.</p>
+ *
  * <p><b>Death:</b> scripted {@value #DEATH_ANIM_TICKS} t side collapse (the held
  * {@code death} anim rolls the root while the spine shards flicker out — the renderer's
  * {@code withUprightDeath()} suppresses the vanilla flip so the authored fall is the
@@ -52,11 +59,14 @@ import software.bernie.geckolib.animation.AnimationController;
 public class StormHoundEntity extends EclipseGeoMonster {
     /** Frozen §6 entity path — geo/anim/texture triple + animation ids key off this. */
     public static final String GEO_ID = "storm_hound";
-    /** Extra triggerables on the {@code action} controller (lunge sequence). */
+    /** Extra triggerables on the {@code action} controller (lunge sequence + howl). */
     public static final String ANIM_CHARGE_WINDUP = "charge_windup";
     public static final String ANIM_LUNGE = "lunge";
+    public static final String ANIM_HOWL = "howl";
     /** Scripted death window (sheet: side collapse + spine flicker-out). */
     public static final int DEATH_ANIM_TICKS = 30;
+
+    private boolean howled;
 
     public StormHoundEntity(EntityType<? extends StormHoundEntity> entityType, Level level) {
         super(entityType, level);
@@ -85,6 +95,19 @@ public class StormHoundEntity extends EclipseGeoMonster {
                 EclipseGeoAnimations.once(GEO_ID, EclipseGeoAnimations.ANIM_ATTACK));
         action.triggerableAnim(ANIM_CHARGE_WINDUP, EclipseGeoAnimations.once(GEO_ID, ANIM_CHARGE_WINDUP));
         action.triggerableAnim(ANIM_LUNGE, EclipseGeoAnimations.once(GEO_ID, ANIM_LUNGE));
+        action.triggerableAnim(ANIM_HOWL, EclipseGeoAnimations.once(GEO_ID, ANIM_HOWL));
+    }
+
+    /** Howl one-shot on the FIRST target acquisition (Fog Colossus roar pattern). */
+    @Override
+    public void setTarget(@Nullable LivingEntity target) {
+        if (target != null && this.getTarget() == null && !this.howled
+                && !this.level().isClientSide && this.isAlive()) {
+            this.howled = true;
+            triggerAction(ANIM_HOWL);
+            this.playSound(SoundEvents.WOLF_HOWL, 1.2F, 0.75F);
+        }
+        super.setTarget(target);
     }
 
     // --- AI (stalker pack kit + the charged lunge) ---

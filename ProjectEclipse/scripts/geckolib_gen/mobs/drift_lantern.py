@@ -65,6 +65,9 @@ def main():
     painter.set_material("body", metal(IRON))
     painter.set_material("cage", glass(GLASS))
     painter.set_material("glow_flame", flame(FLAME_CORE, FLAME))
+    # Inner heartbeat kernel (MOB-AMBIENT): hotter-than-core white so the double-thump
+    # pulse reads through the flame cube when the kernel scales past its faces.
+    painter.set_material("glow_flame_core", flame(hexc("#FFFFFF"), FLAME_CORE))
     painter.set_material("tendril_*", kelp(TENDRIL))
     # glow_flame is auto-included in the glowmask (glow_ prefix); the cage gets the
     # custom shine-through painter instead of an albedo copy.

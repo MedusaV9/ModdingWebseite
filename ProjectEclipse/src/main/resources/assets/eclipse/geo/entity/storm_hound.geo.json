@@ -20,7 +20,34 @@
 					"parent": "root",
 					"pivot": [0, 10, 2],
 					"cubes": [
-						{"origin": [-4, 6, -8], "size": [8, 7, 16], "uv": [0, 0]}
+						{"origin": [-3.5, 6, -8], "size": [7, 7, 16], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "mane_a",
+					"parent": "body",
+					"pivot": [0, 13, -5],
+					"rotation": [-40, 0, 0],
+					"cubes": [
+						{"origin": [-1.5, 12.5, -6.5], "size": [3, 4, 2], "uv": [37, 24]}
+					]
+				},
+				{
+					"name": "mane_b",
+					"parent": "body",
+					"pivot": [2.5, 12.5, -5],
+					"rotation": [-30, 0, -35],
+					"cubes": [
+						{"origin": [1.5, 12, -6], "size": [2, 4, 2], "uv": [48, 6]}
+					]
+				},
+				{
+					"name": "mane_c",
+					"parent": "body",
+					"pivot": [-2.5, 12.5, -5],
+					"rotation": [-30, 0, 35],
+					"cubes": [
+						{"origin": [-3.5, 12, -6], "size": [2, 4, 2], "uv": [48, 13]}
 					]
 				},
 				{
@@ -156,6 +183,15 @@
 					"rotation": [15, 0, 0],
 					"cubes": [
 						{"origin": [-1, 11, 13.5], "size": [2, 2, 7], "uv": [40, 47]}
+					]
+				},
+				{
+					"name": "tail_c",
+					"parent": "tail_b",
+					"pivot": [0, 12, 20.5],
+					"rotation": [10, 0, 0],
+					"cubes": [
+						{"origin": [-0.5, 11.5, 20.5], "size": [1, 1, 5], "uv": [20, 57]}
 					]
 				}
 			]

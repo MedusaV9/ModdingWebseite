@@ -2,10 +2,7 @@ package dev.projecteclipse.eclipse.client.entity;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
-import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayerLocation;
-import net.minecraft.client.model.geom.builders.CubeDeformation;
-import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
@@ -39,9 +36,9 @@ public final class EclipseEntityRenderers {
     @SubscribeEvent
     static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
         // Vanilla humanoid mesh (head 8x8x8, body 8x12x4, limbs 4x12x4) on the 64x64
-        // player-skin layout — zero new geometry per spec §1.1.
-        event.registerLayerDefinition(THE_OTHER_LAYER,
-                () -> LayerDefinition.create(HumanoidModel.createMesh(CubeDeformation.NONE, 0.0F), 64, 64));
+        // player-skin layout per spec §1.1 — plus TheOtherModel's hidden-until-aggro
+        // floating fragment cubes (MOB-GLITCH; silhouette unchanged while passive).
+        event.registerLayerDefinition(THE_OTHER_LAYER, TheOtherModel::createBodyLayer);
         event.registerLayerDefinition(GAZER_LAYER, GazerModel::createBodyLayer);
         event.registerLayerDefinition(UMBRAL_STALKER_LAYER, UmbralStalkerModel::createBodyLayer);
         event.registerLayerDefinition(SUNMOTE_LAYER, SunmoteModel::createBodyLayer);

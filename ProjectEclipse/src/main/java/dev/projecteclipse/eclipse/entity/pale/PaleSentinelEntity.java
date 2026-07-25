@@ -77,6 +77,8 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
     public static final String GEO_ID = "pale_sentinel";
     /** Statue-pose loop played on the {@code base} controller while observed. */
     public static final String ANIM_FREEZE = "freeze";
+    /** MOB-AMBIENT one-shot: petal-armor bloom-open the instant the statue thaws. */
+    public static final String ANIM_BLOOM = "bloom";
     /** Scripted death window (sheet: 35t crumble to a bark pile). */
     public static final int DEATH_ANIM_TICKS = 35;
     /** Consecutive unseen ticks required before a frozen sentinel may move again. */
@@ -145,6 +147,7 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
         super.registerActionTriggers(action); // death (played-and-held)
         action.triggerableAnim(EclipseGeoAnimations.ANIM_ATTACK,
                 EclipseGeoAnimations.once(GEO_ID, EclipseGeoAnimations.ANIM_ATTACK));
+        action.triggerableAnim(ANIM_BLOOM, EclipseGeoAnimations.once(GEO_ID, ANIM_BLOOM));
     }
 
     // --- AI (plain goal kit; the freeze gates ALL of it at once via isImmobile) ---
@@ -207,6 +210,7 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
             }
         } else if (isFrozen() && ++this.unseenTicks >= UNSEEN_GRACE_TICKS) {
             setFrozen(false);
+            triggerAction(ANIM_BLOOM); // Petal armor snaps open the instant it may move.
             EclipseMod.LOGGER.debug("Pale Sentinel {} thawed after {} unseen ticks",
                     this.getId(), this.unseenTicks);
         }

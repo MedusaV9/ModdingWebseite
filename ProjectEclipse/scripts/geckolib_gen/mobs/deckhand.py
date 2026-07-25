@@ -39,6 +39,8 @@ EYE = hexc("#7A8578")
 OAR_WOOD = hexc("#5A452E")
 KELP_EDGE = hexc("#22301F")
 ROPE = hexc("#4A4232")
+LANTERN_IRON = hexc("#3B3F46")      # drift-lantern frame iron (shared limbo palette)
+LANTERN_GLASS = hexc("#57706B")     # DEAD soul-glass — the crew's lights went out
 
 
 def head_shadow(px):
@@ -65,17 +67,32 @@ def blade(px):
     return col
 
 
+def belt_lantern(px):
+    """MOB-AMBIENT v2 belt lantern: iron frame everywhere; the four side faces carry a
+    DEAD pane of soul-glass (dim, cold — the crew's lights went out when they drowned).
+    Cube 0 is the iron cap, cube 1 the body — the cap never matches a glass center
+    (its faces are 1–2px, all rim). NO glowmask pixels: the deckhand sheet stays
+    explicitly non-emissive."""
+    on_rim = px.fx == 0 or px.fy == 0 or px.fx == px.fw - 1 or px.fy == px.fh - 1
+    if px.face in ("north", "south", "east", "west") and not on_rim:
+        return mul(LANTERN_GLASS, 0.8 + px.noise(47) * 0.3)
+    return mul(LANTERN_IRON, 0.86 + px.noise(43) * 0.24)
+
+
 def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("robe", weave(ROBE, direction=1))
     painter.set_material("torso", weave(TORSO, direction=1))
     painter.set_material("arm_*", weave(ARM, direction=1, amp=0.28))
     painter.set_material("hood", weave(HOOD, direction=0, amp=0.30))
+    painter.set_material("hood_point", weave(HOOD, direction=0, amp=0.34))
     painter.set_material("head", head_shadow)
     painter.set_material("oar_loom", wood(OAR_WOOD))
     painter.set_material("oar_shaft", wood(OAR_WOOD))
     painter.set_material("oar_blade", blade)
     painter.set_material("tatter_*", kelp(ROPE, max_cut=1))
+    painter.set_material("belt", kelp(ROPE, max_cut=0))  # rope band, no ragged hem
+    painter.set_material("lantern", belt_lantern)
     # No set_glow / set_glow_painter calls: the deckhand ships NO emissive regions, so
     # the _glowmask.png is written fully transparent (and stays unused at runtime).
     painter.paint(OUT)

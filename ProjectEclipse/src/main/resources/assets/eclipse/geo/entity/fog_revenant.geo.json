@@ -81,11 +81,19 @@
 					]
 				},
 				{
-					"name": "claw_right",
+					"name": "forearm_right",
 					"parent": "arm_right",
-					"pivot": [-5, 13.5, 0],
+					"pivot": [-5, 13, 0],
 					"cubes": [
-						{"origin": [-6.5, 9.5, -1.75], "size": [3, 4, 3], "uv": [0, 46]}
+						{"origin": [-6.5, 7, -1.5], "size": [3, 6, 3], "uv": [36, 54]}
+					]
+				},
+				{
+					"name": "claw_right",
+					"parent": "forearm_right",
+					"pivot": [-5, 7.5, 0],
+					"cubes": [
+						{"origin": [-6.5, 3.5, -1.75], "size": [3, 4, 3], "uv": [0, 46]}
 					]
 				},
 				{
@@ -97,11 +105,19 @@
 					]
 				},
 				{
-					"name": "claw_left",
+					"name": "forearm_left",
 					"parent": "arm_left",
-					"pivot": [5, 13.5, 0],
+					"pivot": [5, 13, 0],
 					"cubes": [
-						{"origin": [3.5, 9.5, -1.75], "size": [3, 4, 3], "uv": [13, 46]}
+						{"origin": [3.5, 7, -1.5], "size": [3, 6, 3], "uv": [48, 54]}
+					]
+				},
+				{
+					"name": "claw_left",
+					"parent": "forearm_left",
+					"pivot": [5, 7.5, 0],
+					"cubes": [
+						{"origin": [3.5, 3.5, -1.75], "size": [3, 4, 3], "uv": [13, 46]}
 					]
 				},
 				{
@@ -113,6 +129,42 @@
 						{"origin": [-6.5, 26.5, -1.5], "size": [3, 4, 3], "uv": [43, 46]},
 						{"origin": [-7, 25, 0], "size": [2, 3, 2], "rotation": [0, 0, 18], "pivot": [-6, 25, 1], "uv": [54, 26]},
 						{"origin": [-5.5, 29.5, -0.5], "size": [2, 2, 2], "rotation": [0, 0, -12], "pivot": [-4.5, 29.5, 0.5], "uv": [0, 54]}
+					]
+				},
+				{
+					"name": "tatter_a",
+					"parent": "skirt_low",
+					"pivot": [-2, 4, -3.5],
+					"rotation": [3, 0, 2],
+					"cubes": [
+						{"origin": [-3.5, 0, -4], "size": [3, 4, 1], "uv": [0, 58]}
+					]
+				},
+				{
+					"name": "tatter_b",
+					"parent": "skirt_low",
+					"pivot": [2, 4, 3.5],
+					"rotation": [-4, 0, -2],
+					"cubes": [
+						{"origin": [0.5, 0, 3], "size": [3, 4, 1], "uv": [8, 58]}
+					]
+				},
+				{
+					"name": "tatter_c",
+					"parent": "skirt_low",
+					"pivot": [-4.5, 4, 0],
+					"rotation": [0, 0, 5],
+					"cubes": [
+						{"origin": [-5, 0, -1], "size": [1, 4, 2], "uv": [16, 58]}
+					]
+				},
+				{
+					"name": "tatter_d",
+					"parent": "skirt_low",
+					"pivot": [4.5, 4, 1],
+					"rotation": [0, 0, -4],
+					"cubes": [
+						{"origin": [4, 0, 0], "size": [1, 4, 2], "uv": [24, 58]}
 					]
 				},
 				{

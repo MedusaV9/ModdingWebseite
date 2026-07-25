@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.glitch.GlitchedHuskEntity;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
@@ -24,6 +25,9 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.animation.RawAnimation;
 
 /**
  * The <b>Wanderer</b> — the Backrooms texture-variant of {@link GlitchedHuskEntity}
@@ -54,6 +58,11 @@ import net.minecraft.world.level.Level;
 public class GlitchedWandererEntity extends GlitchedHuskEntity {
     /** Frozen asset triple id: geo/anim copies + the 4 python-recolored texture sheets. */
     public static final String GEO_ID = "glitched_wanderer";
+    /**
+     * Wanderer-only {@code base} loop (MOB-GLITCH): the flailing burst-sprint played
+     * while a gaze-burst speed modifier is live (see {@link #handleBaseState}).
+     */
+    public static final String ANIM_SPRINT = "sprint";
     /** Players closer than this may be attacked unprovoked (IDEAS §A3.1). */
     public static final double ATTACK_TRIGGER_RANGE = 3.0D;
     /** {@link PaceGoal} stops and stares at this distance (IDEAS §A3.1: 12). */
@@ -72,6 +81,10 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
     @Nullable
     private Player pacedPlayer;
 
+    /** Cached {@code animation.glitched_wanderer.sprint} loop (client-side). */
+    @Nullable
+    private RawAnimation cachedSprintAnim;
+
     public GlitchedWandererEntity(EntityType<? extends GlitchedWandererEntity> entityType, Level level) {
         super(entityType, level);
     }
@@ -88,6 +101,32 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
     @Override
     public String geoId() {
         return GEO_ID;
+    }
+
+    /**
+     * Presentation only (MOB-GLITCH): while a gaze-keyed burst modifier is live and
+     * the mob is moving, the {@code base} controller plays the {@code sprint} flail
+     * instead of the corridor {@code walk}. Runs client-side off the SYNCED
+     * {@code MOVEMENT_SPEED} modifiers (the attribute is syncable, so both the stalk
+     * and the inherited husk unseen-burst ids arrive with the attribute packet) — no
+     * AI/balance change, and if the modifier ever fails to sync the walk plays.
+     */
+    @Override
+    protected PlayState handleBaseState(AnimationState<?> state) {
+        if (state.isMoving() && hasGazeBurst()) {
+            if (this.cachedSprintAnim == null) {
+                this.cachedSprintAnim = EclipseGeoAnimations.loop(geoId(), ANIM_SPRINT);
+            }
+            return state.setAndContinue(this.cachedSprintAnim);
+        }
+        return super.handleBaseState(state);
+    }
+
+    /** Is either gaze-burst speed modifier (stalk or inherited husk unseen) live? */
+    private boolean hasGazeBurst() {
+        AttributeInstance speed = this.getAttribute(Attributes.MOVEMENT_SPEED);
+        return speed != null
+                && (speed.hasModifier(STALK_SPEED_ID) || speed.hasModifier(UNSEEN_SPEED_ID));
     }
 
     // --- AI: pace-and-stare replaces the husk's always-hostile targeting ---

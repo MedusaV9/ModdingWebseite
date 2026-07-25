@@ -99,23 +99,40 @@ public class UmbralStalkerModel extends HierarchicalModel<UmbralStalkerEntity> {
     @Override
     public void setupAnim(UmbralStalkerEntity entity, float limbSwing, float limbSwingAmount, float ageInTicks,
             float netHeadYaw, float headPitch) {
-        // Quadruped gait: diagonal pairs in phase (FL+HR vs FR+HL).
+        // Skulk crouch cycle (MOB-AMBIENT): the smoothed stalk blend sprawls the legs
+        // outward, sinks the body between them, flattens the spine shards back and
+        // stretches the neck low — with a slow pounce-ready weight-shift pump so the
+        // crouch never freezes solid. stalk 0 = upright prowl, 1 = full skulk.
+        float partialTick = ageInTicks - entity.tickCount;
+        float stalk = entity.stalkAmount(partialTick);
+        float pump = (Mth.sin(ageInTicks * 0.08F) * 0.5F + 0.5F) * stalk;
+
+        // Quadruped gait: diagonal pairs in phase (FL+HR vs FR+HL). Stalking shortens the
+        // stride into careful creeping steps and folds front legs forward / hind legs back.
         float[] phases = {0.0F, (float) Math.PI, (float) Math.PI, 0.0F};
+        float stride = 1.2F * (1.0F - 0.4F * stalk);
         for (int i = 0; i < 4; i++) {
-            this.legs[i].xRot = Mth.cos(limbSwing * 0.66F + phases[i]) * 1.2F * limbSwingAmount;
+            boolean front = i < 2;
+            this.legs[i].xRot = Mth.cos(limbSwing * 0.66F + phases[i]) * stride * limbSwingAmount
+                    + (front ? -0.38F : 0.38F) * stalk;
+            this.legs[i].zRot = (i % 2 == 0 ? -0.1F : 0.1F) * stalk; // splayed elbows
         }
         // Bite lunge off the melee swing clock: the neck shoots forward while the head
         // snaps down onto the target, then eases back as attackTime runs 0 -> 1.
         float lunge = Mth.sin(this.attackTime * Mth.PI);
         this.head.yRot = netHeadYaw * Mth.DEG_TO_RAD;
-        this.head.xRot = headPitch * Mth.DEG_TO_RAD + entity.headLower(0.0F) + lunge * 0.4F;
-        this.head.z = -8.0F - lunge * 3.0F;
-        this.body.xRot = BODY_X_ROT + lunge * 0.12F; // The whole body pitches into the bite.
+        this.head.xRot = headPitch * Mth.DEG_TO_RAD + entity.headLower(partialTick) + lunge * 0.4F;
+        this.head.y = -12.0F + stalk * 3.0F + pump * 0.4F;
+        this.head.z = -8.0F - lunge * 3.0F - stalk * 1.2F;
+        this.body.y = -10.0F + stalk * 2.2F + pump * 0.6F;
+        this.body.yRot = Mth.sin(ageInTicks * 0.07F) * 0.03F * stalk; // coiled weight shift
+        this.body.xRot = BODY_X_ROT + lunge * 0.12F + stalk * 0.06F; // pitches into the bite
         for (int i = 0; i < 3; i++) {
             float pulse = entity.shardPulse(ageInTicks, i);
             this.spines[i].y = -3.5F - (pulse * 0.5F + 0.5F) * 0.6F;
             float base = i == 1 ? -SPINE_Z_ROT : SPINE_Z_ROT;
             this.spines[i].zRot = base + pulse * 0.05F;
+            this.spines[i].xRot = 0.55F * stalk; // hackles rake flat while skulking
         }
     }
 

@@ -36,6 +36,8 @@ TWIG = hexc("#6E6555")
 HOLLOW = hexc("#2A261E")
 EYE = hexc("#FF9A3C")
 EYE_CORE = hexc("#FFD9A0")
+PETAL = hexc("#E9E2D2")        # pale-garden sepal white (a shade above BARK)
+PETAL_BLUSH = hexc("#C9A3A8")  # faint rose rim — matches the cherry-leaf petal burst
 
 
 def pale_bark(base, salt=11, fissures=0.06):
@@ -98,6 +100,18 @@ def antler(px):
     return col
 
 
+def petal(px):
+    """Petal-armor plates (MOB-AMBIENT): dead-flower sepals grown out of the bark —
+    pale sepal white with a darker mid vein and a faint rose blush on the drooping
+    tip rows (the same petals the frozen-hit burst throws as cherry leaves)."""
+    col = mix(PETAL, BARK_DIM, 0.2 + px.noise(61) * 0.25)
+    if px.fx == px.fw // 2:
+        col = mix(col, FISSURE, 0.3)  # mid vein
+    if px.fy >= px.fh - 2:
+        col = mix(col, PETAL_BLUSH, 0.45 if px.fy == px.fh - 1 else 0.2)
+    return col
+
+
 def eye_glow(px):
     """Glowmask: ONLY the ember eyes burn — bright core left, dimmer right; faint by
     design (the sheet calls them the sentinel's single glow)."""
@@ -115,6 +129,7 @@ def main():
     painter.set_material("hand_*", claw)
     painter.set_material("tendril_*", tendril)
     painter.set_material("antler_*", antler)
+    painter.set_material("petal_*", petal)
     painter.set_material("head", head)
     painter.set_glow_painter("head", eye_glow)
     painter.paint(OUT)

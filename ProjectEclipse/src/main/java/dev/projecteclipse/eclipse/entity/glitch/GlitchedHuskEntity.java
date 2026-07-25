@@ -51,7 +51,8 @@ public class GlitchedHuskEntity extends GlitchedMonster {
     /** Speed bonus while unseen (multiply-total: 0.27 → ~0.4 effective). */
     private static final double UNSEEN_SPEED_BOOST = 0.5D;
     private static final int GAZE_CHECK_INTERVAL_TICKS = 5;
-    private static final ResourceLocation UNSEEN_SPEED_ID =
+    /** Protected so the Wanderer's client-side sprint-anim check can see the burst. */
+    protected static final ResourceLocation UNSEEN_SPEED_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glitched_husk_unseen_burst");
     private static final AttributeModifier UNSEEN_SPEED = new AttributeModifier(
             UNSEEN_SPEED_ID, UNSEEN_SPEED_BOOST, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);

@@ -49,6 +49,32 @@
 					]
 				},
 				{
+					"name": "hood_point",
+					"parent": "hood",
+					"pivot": [0, 25, 3.5],
+					"rotation": [22, 0, 0],
+					"cubes": [
+						{"origin": [-1.5, 24, 2.8], "size": [3, 3.5, 3], "uv": [52, 46]}
+					]
+				},
+				{
+					"name": "belt",
+					"parent": "robe",
+					"pivot": [0, 8, 0],
+					"cubes": [
+						{"origin": [-4.25, 6.5, -3.25], "size": [8.5, 1.5, 6.5], "uv": [10, 56]}
+					]
+				},
+				{
+					"name": "lantern",
+					"parent": "belt",
+					"pivot": [-3.5, 7.4, -3.35],
+					"cubes": [
+						{"origin": [-4.75, 6.6, -4.6], "size": [2.5, 0.6, 2.5], "uv": [30, 43]},
+						{"origin": [-4.5, 4.2, -4.35], "size": [2, 2.4, 2], "uv": [44, 43]}
+					]
+				},
+				{
 					"name": "arm_right",
 					"parent": "torso",
 					"pivot": [-5.5, 17, 0],

@@ -224,6 +224,14 @@ public class FerrymanEntity extends Monster {
     private float kneelLerpPrev;
     private float plantLerp;
     private float plantLerpPrev;
+    /** One-shot sweep-contact swing length (client pose clock, model whip + recovery). */
+    private static final int SWEEP_SWING_TICKS = 14;
+    /** Ticks into the sweep-contact swing, −1 while idle (client only). */
+    private int swingTicks = -1;
+    private boolean wasTelegraphing;
+    /** Eased 0..1 deck-drift speed factor feeding the lantern/tatter sway amplitude. */
+    private float swayBoost;
+    private float swayBoostPrev;
 
     public FerrymanEntity(EntityType<? extends FerrymanEntity> entityType, Level level) {
         super(entityType, level);
@@ -1208,6 +1216,27 @@ public class FerrymanEntity extends Monster {
         this.kneelLerp += ((isKneeling() ? 1.0F : 0.0F) - this.kneelLerp) * 0.08F;
         this.plantLerpPrev = this.plantLerp;
         this.plantLerp += ((isPlanted() ? 1.0F : 0.0F) - this.plantLerp) * 0.08F;
+        // Sweep CONTACT swing: the telegraph's falling edge (raise actually got up, not a
+        // phase-break/kneel/death cancel) fires the one-shot whip the model plays through
+        // sweepSwing() — same tick the server deals the sweep damage.
+        if (this.swingTicks >= 0 && ++this.swingTicks >= SWEEP_SWING_TICKS) {
+            this.swingTicks = -1;
+        }
+        boolean telegraphing = isTelegraphing();
+        if (this.wasTelegraphing && !telegraphing && this.deathTime == 0
+                && !isKneeling() && this.raiseLerp > 0.6F) {
+            this.swingTicks = 0;
+        }
+        this.wasTelegraphing = telegraphing;
+        // Deck-drift sway boost: the lantern chain and cloak tatters drag harder while he
+        // stalks (eased so a stop bleeds the swing out instead of snapping it). Derived
+        // from the position delta, not getDeltaMovement — remote entities lerp position
+        // while their synced velocity can sit stale.
+        this.swayBoostPrev = this.swayBoost;
+        double dx = this.getX() - this.xo;
+        double dz = this.getZ() - this.zo;
+        float drift = (float) Math.sqrt(dx * dx + dz * dz);
+        this.swayBoost += (Mth.clamp(drift * 4.0F, 0.0F, 1.0F) - this.swayBoost) * 0.1F;
     }
 
     /** Smooth model animation age (rowing idle, chain swing; advances ×1.4 in P3). */
@@ -1228,6 +1257,19 @@ public class FerrymanEntity extends Monster {
     /** 0..1 blend toward the P3 planted-oar pose. */
     public float plantAmount(float partialTick) {
         return Mth.lerp(partialTick, this.plantLerpPrev, this.plantLerp);
+    }
+
+    /** 0..1 progress through the one-shot sweep-contact swing, or −1 while idle. */
+    public float sweepSwing(float partialTick) {
+        if (this.swingTicks < 0) {
+            return -1.0F;
+        }
+        return Math.min(1.0F, (this.swingTicks + partialTick) / SWEEP_SWING_TICKS);
+    }
+
+    /** 0..1 eased deck-drift factor (lantern chain + tatter sway amplitude). */
+    public float swayBoost(float partialTick) {
+        return Mth.lerp(partialTick, this.swayBoostPrev, this.swayBoost);
     }
 
     // --- floating-boss chassis ---

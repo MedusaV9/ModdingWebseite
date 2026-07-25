@@ -1,5 +1,7 @@
 package dev.projecteclipse.eclipse.client.entity.glitch;
 
+import javax.annotation.Nullable;
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
@@ -28,10 +30,15 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
  *       The {@code AutoGlowingGeoLayer} resolves its emissive off this same override,
  *       so {@code <id>_alt_glowmask.png} flips in lockstep — the chromatic seams and
  *       heart-core flare with the corruption frame.</li>
- *   <li><b>Pose pop:</b> a rare (~1 in 32 t) single-tick {@code PoseStack} offset in
- *       {@link #preRender} — the whole model renders a few centimeters off for exactly
- *       one tick, like a bad vertex upload. Alive entities only (death holds the
- *       freeze-frame clean).</li>
+ *   <li><b>Pose pop / glitch blink (MOB-GLITCH pass):</b> a rare (~1 in 32 t)
+ *       {@code PoseStack} offset in {@link #preRender} — the whole model renders a few
+ *       centimeters off, like a bad vertex upload. The shear now survives only the
+ *       FIRST {@value #POP_HOLD_PARTIAL} of its tick (~1–2 rendered frames at 60 fps,
+ *       vs. the previous full-tick ≈3+ frame hold), and while it is live the
+ *       {@link GlitchGhostLayer} re-renders a translucent magenta copy past the popped
+ *       anchor and a cyan copy mirrored behind it — the chromatic ghost that makes the
+ *       blink read as an RGB tear instead of a plain lag hitch. Alive entities only
+ *       (death holds the freeze-frame clean).</li>
  *   <li><b>Hit flash (FIX-5, IDEAS-C #2):</b> being hurt forces the corruption frame —
  *       {@code hurtTime ≥ }{@value #HURT_ALT_MIN_HURT_TIME} ORs into the alt-frame
  *       selection, so every hit pops a ~3&nbsp;t datamosh burst in lockstep with the
@@ -57,6 +64,12 @@ public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends Ecl
     /** Pose-pop magnitude, blocks — visible shear without breaking the silhouette. */
     private static final float POP_OFFSET = 0.045F;
     /**
+     * Fraction of the pop tick the shear stays visible. Frames render with
+     * {@code partialTick} sweeping 0→1 inside a tick, so gating on {@code < 0.4}
+     * caps the hold at ~20 ms — 1–2 frames at 60 fps (the "blink", not a hitch).
+     */
+    private static final float POP_HOLD_PARTIAL = 0.4F;
+    /**
      * Hurt flash: {@code hurtTime} counts 10→0, so requiring ≥ 8 shows the corruption frame
      * for the first ~3 ticks of the flash only (a pop, not a seizure).
      */
@@ -74,6 +87,7 @@ public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends Ecl
                 "textures/entity/" + geoId + "_alt.png");
         withGlowmask();      // Chromatic seams + heart-core; follows the flicker.
         withUprightDeath();  // Scripted freeze-frame collapse; no vanilla tip-over.
+        addRenderLayer(new GlitchGhostLayer<>(this)); // Chromatic ghost on pop frames.
     }
 
     /** Albedo swap — the glowmask layer resolves off this too (lockstep flicker). */
@@ -88,18 +102,36 @@ public abstract class GlitchedGeoRenderer<T extends GlitchedMonster> extends Ecl
             int packedLight, int packedOverlay, int colour) {
         super.preRender(poseStack, entity, model, bufferSource, buffer, isReRender, partialTick,
                 packedLight, packedOverlay, colour);
-        if (isReRender || !entity.isAlive()) {
+        if (isReRender) {
             return;
+        }
+        float[] pop = popOffset(entity, partialTick);
+        if (pop != null) {
+            // Sub-tick vertex-upload glitch: shear the whole model off its anchor.
+            poseStack.translate(pop[0], pop[1], pop[2]);
+        }
+    }
+
+    /**
+     * The shared pop schedule (also read by {@link GlitchGhostLayer}): a ~1-in-32-tick
+     * hash gate, live only for the first {@value #POP_HOLD_PARTIAL} of the tick and
+     * only on living entities. Returns the shear vector, or {@code null} when idle.
+     * Pure function of (entity id, game time) — zero per-frame state.
+     */
+    @Nullable
+    static float[] popOffset(GlitchedMonster entity, float partialTick) {
+        if (!entity.isAlive() || partialTick >= POP_HOLD_PARTIAL) {
+            return null;
         }
         long popHash = scramble(entity.getId() * 0x9E3779B97F4A7C15L
                 ^ entity.level().getGameTime() * 0xC2B2AE3D27D4EB4FL ^ 0x5DEECE66DL);
-        if ((popHash & 31L) == 0L) {
-            // One-tick vertex-upload glitch: shear the whole model off its anchor.
-            poseStack.translate(
-                    (((popHash >>> 8) & 7L) - 3.5F) / 3.5F * POP_OFFSET,
-                    (((popHash >>> 16) & 7L) - 3.5F) / 3.5F * POP_OFFSET * 0.5F,
-                    (((popHash >>> 24) & 7L) - 3.5F) / 3.5F * POP_OFFSET);
+        if ((popHash & 31L) != 0L) {
+            return null;
         }
+        return new float[] {
+                (((popHash >>> 8) & 7L) - 3.5F) / 3.5F * POP_OFFSET,
+                (((popHash >>> 16) & 7L) - 3.5F) / 3.5F * POP_OFFSET * 0.5F,
+                (((popHash >>> 24) & 7L) - 3.5F) / 3.5F * POP_OFFSET};
     }
 
     /** Deterministic burst schedule: is the alt (corruption) frame active right now? */

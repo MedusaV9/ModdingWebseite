@@ -89,6 +89,9 @@ public class WizardOrinEntity extends EclipseGeoMob {
 
     public static final String ANIM_STAR_CALL = "star_call";
     public static final String ANIM_HURT = "hurt";
+    /** MOB-AMBIENT v2 hospitality one-shots: hat-tip greeting + ledger-lean dialogue. */
+    public static final String ANIM_GREET = "greet";
+    public static final String ANIM_TRADE = "trade";
 
     /** Fetch quest cost (IDEA-19 §1.3 economy sink, resolved against live registries). */
     public static final int QUEST_AMETHYST = 8;
@@ -164,6 +167,8 @@ public class WizardOrinEntity extends EclipseGeoMob {
         super.registerActionTriggers(action); // death (played-and-held)
         action.triggerableAnim(ANIM_STAR_CALL, EclipseGeoAnimations.once(GEO_ID, ANIM_STAR_CALL));
         action.triggerableAnim(ANIM_HURT, EclipseGeoAnimations.once(GEO_ID, ANIM_HURT));
+        action.triggerableAnim(ANIM_GREET, EclipseGeoAnimations.once(GEO_ID, ANIM_GREET));
+        action.triggerableAnim(ANIM_TRADE, EclipseGeoAnimations.once(GEO_ID, ANIM_TRADE));
     }
 
     // --- AI (gentle observatory life; combat is scripted in tick()) ---
@@ -222,6 +227,7 @@ public class WizardOrinEntity extends EclipseGeoMob {
             }
             this.greetedAt.put(player.getUUID(), level.getGameTime());
             this.getLookControl().setLookAt(player, 30.0F, 30.0F);
+            triggerAction(ANIM_GREET); // MOB-AMBIENT v2: hat-tip salute with the free hand.
             // Vanilla aliases (no sounds.json edits): a low villager hum + a star chime.
             level.playSound(null, this.blockPosition(), SoundEvents.VILLAGER_AMBIENT,
                     SoundSource.NEUTRAL, 0.8F, 0.78F);
@@ -436,6 +442,7 @@ public class WizardOrinEntity extends EclipseGeoMob {
         }
         say(player, line);
         this.getLookControl().setLookAt(player, 30.0F, 30.0F);
+        triggerAction(ANIM_TRADE); // MOB-AMBIENT v2: ledger-lean toward the listener.
         level.playSound(null, this.blockPosition(), SoundEvents.VILLAGER_TRADE,
                 SoundSource.NEUTRAL, 0.7F, 0.75F);
     }

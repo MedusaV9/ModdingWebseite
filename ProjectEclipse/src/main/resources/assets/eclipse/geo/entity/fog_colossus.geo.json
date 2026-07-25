@@ -24,9 +24,24 @@
 					]
 				},
 				{
+					"name": "maw",
+					"parent": "body",
+					"pivot": [0, 20, -6],
+					"cubes": [
+						{
+							"origin": [-6, 15, -6.6],
+							"size": [12, 10, 1],
+							"uv": {
+								"north": {"uv": [108, 14], "uv_size": [12, 10]}
+							}
+						}
+					]
+				},
+				{
 					"name": "shoulders",
 					"parent": "body",
 					"pivot": [0, 32, 0],
+					"rotation": [0, 0, 2.5],
 					"cubes": [
 						{"origin": [-13, 30, -8], "size": [26, 16, 16], "uv": [0, 34]}
 					]
@@ -58,6 +73,33 @@
 					]
 				},
 				{
+					"name": "spine_a",
+					"parent": "back_slab_low",
+					"pivot": [-3, 48, 6.5],
+					"rotation": [-16, 0, -8],
+					"cubes": [
+						{"origin": [-4.5, 47, 5], "size": [3, 8, 3], "uv": [114, 51]}
+					]
+				},
+				{
+					"name": "spine_b",
+					"parent": "back_slab_high",
+					"pivot": [2, 56, 7],
+					"rotation": [-12, 0, 10],
+					"cubes": [
+						{"origin": [1, 55, 6], "size": [2, 7, 2], "uv": [120, 14]}
+					]
+				},
+				{
+					"name": "spine_c",
+					"parent": "back_slab_high",
+					"pivot": [-3, 54, 7],
+					"rotation": [-22, 0, -14],
+					"cubes": [
+						{"origin": [-4, 53, 6], "size": [2, 5, 2], "uv": [120, 23]}
+					]
+				},
+				{
 					"name": "shelf_right",
 					"parent": "shoulders",
 					"pivot": [-11, 46, 0],
@@ -82,7 +124,7 @@
 					"parent": "shoulders",
 					"pivot": [-14, 42, 0],
 					"cubes": [
-						{"origin": [-21, 26, -4.5], "size": [9, 18, 9], "uv": [0, 66]}
+						{"origin": [-21, 26, -4.5], "size": [9, 18, 9], "inflate": 1.0, "uv": [0, 66]}
 					]
 				},
 				{
@@ -90,8 +132,9 @@
 					"parent": "arm_right",
 					"pivot": [-16.5, 30, 0],
 					"cubes": [
-						{"origin": [-22, 4, -5.5], "size": [11, 24, 11], "uv": [0, 93]},
-						{"origin": [-21.5, 0, -5], "size": [10, 5, 10], "uv": [88, 66]}
+						{"origin": [-22, 4, -5.5], "size": [11, 24, 11], "inflate": 1.75, "uv": [0, 93]},
+						{"origin": [-21.5, 0, -5], "size": [10, 5, 10], "inflate": 1.25, "uv": [88, 66]},
+						{"origin": [-20.5, 1, -8], "size": [8, 3, 2], "inflate": 0.5, "uv": [96, 9]}
 					]
 				},
 				{

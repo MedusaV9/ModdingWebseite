@@ -11,6 +11,9 @@ rects below are `(x0,y0)-(x1,y1)` pixel bounds (exclusive right/bottom edge).
 | tatter_left | (0,24) | 3×8×1 | child of cloak @ (−2.5,0,1); sways ±0.15 rad |
 | tatter_right | (10,24) | 3×8×1 | child of cloak @ (2.5,0,1); counter-phase sway |
 | mantle | (0,40) | 12×3×8 | offset (0,−22); shoulder slab over the cloak |
+| iris_left / iris_right | (46,16) shared | 1×2×1 | children of face @ (±1.5,−4,0), proud at z −4.5; EMISSIVE pips; scale = dilation |
+| lid_top | (44,24) | 7×3×1 | child of hood @ (0,−7.2,0), z −4.75; yScale 0.08 rest → 1 blink |
+| lid_bottom | (44,28) | 7×3×1 | child of hood @ (0,−0.8,0), z −4.75; counter-lid |
 
 Per-face pixel rects (box-UV order: top, bottom, east/right, north/front, west/left, south/back):
 
@@ -31,3 +34,5 @@ paint it as a pale glowing mask (placeholder `#F2E8C8`) with dark hollow eye sli
 dark so the additive eyes pass stays clean.
 
 **Generator:** `java scripts/placeholder_gen/EntitySkinPlaceholder.java`.
+**v2 face rig (iris pips + lids):** painted in place by `python3 scripts/skin_gen/gazer_v2.py`
+(iris rects are emissive-hot; lid rects are hood cloth with a darkened closing-edge rim).

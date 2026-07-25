@@ -42,6 +42,33 @@
 					]
 				},
 				{
+					"name": "spine_shard_a",
+					"parent": "body",
+					"pivot": [0, 15, -4],
+					"rotation": [14, 0, -9],
+					"cubes": [
+						{"origin": [-1, 14.6, -4.5], "size": [2, 3, 2], "uv": [16, 46]}
+					]
+				},
+				{
+					"name": "spine_shard_b",
+					"parent": "body",
+					"pivot": [0, 15, 1],
+					"rotation": [-11, 7, 12],
+					"cubes": [
+						{"origin": [-1.2, 14.4, 0.5], "size": [2, 4, 2], "uv": [26, 46]}
+					]
+				},
+				{
+					"name": "spine_shard_c",
+					"parent": "body",
+					"pivot": [0, 15, 5.5],
+					"rotation": [22, -5, -6],
+					"cubes": [
+						{"origin": [-0.8, 14.2, 5], "size": [2, 2, 2], "uv": [36, 46]}
+					]
+				},
+				{
 					"name": "neck_shard",
 					"parent": "body",
 					"pivot": [0, 14, -8],

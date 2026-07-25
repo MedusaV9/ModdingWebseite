@@ -42,6 +42,8 @@ STAR_CORE = hexc("#FFF7DC")
 STAR_GOLD = hexc("#FFE9A6")
 TIP_CORE = hexc("#EAF6FF")
 TIP_BLUE = hexc("#BFE2FF")
+BOOK_LEATHER = hexc("#2A2352")    # star-ledger cover: robe-family violet leather
+BOOK_PAGE = hexc("#E8E2CC")       # dry parchment page block
 
 STITCH_SALT = 41   # one shared salt keeps albedo stitches + glowmask in lockstep
 
@@ -103,25 +105,47 @@ def beard_material(px):
     return col
 
 
+def book_material(px):
+    """The star-ledger (MOB-AMBIENT v2 `book` bone in the left hand): violet leather
+    cover everywhere except the up face, which is the open parchment spread — pale
+    pages with a dark spine gutter down the middle and faint ruled ink lines."""
+    if px.face == "up":
+        mid = px.fw // 2
+        if px.fx == mid:
+            return mul(BOOK_LEATHER, 1.15)  # spine gutter
+        col = mul(BOOK_PAGE, 0.9 + px.noise(61) * 0.16)
+        if px.fy % 2 == 1 and px.noise(63) > 0.5:
+            col = mul(col, 0.82)  # ruled ink line
+        return col
+    col = mul(BOOK_LEATHER, 0.86 + px.noise(59) * 0.26)
+    if px.face in ("north", "south") and px.fy == 0:
+        col = mix(col, BOOK_PAGE, 0.55)  # page block peeking over the cover edge
+    return col
+
+
 def main():
     painter = GeoPainter(GEO, seed=SEED)
 
     painter.set_material("robe_lower", robe(MIDNIGHT, rate=0.945))
+    painter.set_material("robe_hem", robe(MIDNIGHT, rate=0.93))  # denser hem embroidery
     painter.set_material("torso", robe(MIDNIGHT, rate=0.955, belt_row=7))
     painter.set_material("arm_*", robe(MIDNIGHT_DEEP, rate=0.965))
     painter.set_material("scarf", weave(SCARF, direction=2, amp=0.3))
     painter.set_material("head", head_material)
-    painter.set_material("beard", beard_material)
+    painter.set_material("beard*", beard_material)  # beard + the v2 beard_tip sway bone
     # hat: brim + cone + tip all carry sparse stitches (same predicate as the
     # glow painter below, so albedo stitches and glowmask stay in lockstep)
     painter.set_material("hat", robe(MIDNIGHT_DEEP, rate=0.94))
     painter.set_material("spyglass", metal(BRASS))
     painter.set_material("staff", wood(STAFF_OAK))
+    painter.set_material("book", book_material)
     painter.set_material("glow_hat_star", flame(STAR_CORE, STAR_GOLD))
     painter.set_material("glow_staff_tip", flame(TIP_CORE, TIP_BLUE))
+    painter.set_material("glow_staff_crystal", flame(TIP_BLUE, hexc("#8FB8E8")))
 
     # Emissive constellation stitches (glow_ bones are auto-included full-bright).
     painter.set_glow_painter("robe_lower", stitch_glow(rate=0.945))
+    painter.set_glow_painter("robe_hem", stitch_glow(rate=0.93))
     painter.set_glow_painter("torso", stitch_glow(rate=0.955))
     painter.set_glow_painter("arm_*", stitch_glow(rate=0.965))
     painter.set_glow_painter("hat", stitch_glow(rate=0.94))

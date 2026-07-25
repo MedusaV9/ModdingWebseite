@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Storm Hound / Sturmhund texture driver (P6-W7).
+"""Storm Hound / Sturmhund texture driver (P6-W7, reworked by FXTEAM MOB-FOG).
 
-Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3): a lean charged quadruped —
-storm-grey hide (#3A4148 dithered against #2C3238), darker jaw (#1E2126) with a pale
-electric inner mouth (#D9F6FF), branching electric veins (#9FE8FF) crackling along the
-flanks, lightning-rod spine shards + horn antenna, whip tail with a static-charged tip.
+Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3) + the MOB-FOG palette pass
+(docs/plans_v3/plans_v5/fxteams/MOB-FOG.md): a lean charged quadruped — storm-grey hide
+(#3A4148 dithered against #2C3238), darker jaw (#1E2126) with a pale sick-green inner
+mouth (#E9FFD8), branching charge veins (#A9F07E) crackling along the flanks,
+lightning-rod spine shards + horn antenna burning green-to-violet (#9C63E8), a
+three-bone STORM MANE at the neck (slate fur streaked with violet charge — flares on
+the windup/howl), and a three-segment whip tail with a static-charged tip.
 
-Emissive (glowmask): the `glow_spine_*` shards and `glow_horn` (auto-included; painted
-with the shadeless flame material so they stay bright in the albedo too), the electric
-veins on the body (custom glow painter re-tracing the same deterministic vein paths),
-the two eye dots, and a faint charge on the tail tip.
+Emissive (glowmask): the `glow_spine_*` shards and `glow_horn` (auto-included), the
+flank veins, the mane charge streaks, the two eye dots and a faint charge on the tail
+tips (`tail_b`/`tail_c`).
 
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
     python3 scripts/geckolib_gen/mobs/storm_hound.py
@@ -31,12 +33,14 @@ SEED = 0x57084D06  # storm hound
 FUR = hexc("#3A4148")
 FUR_DARK = hexc("#2C3238")
 JAW = hexc("#1E2126")
-MOUTH = hexc("#D9F6FF")
-VEIN = hexc("#9FE8FF")
-VEIN_CORE = hexc("#E8FBFF")
-SPINE_TIP = hexc("#9FE8FF")
-SPINE_CORE = hexc("#E8FBFF")
-EYE = hexc("#D9F6FF")
+# MOB-FOG family glow: sick green core -> violet rim.
+MOUTH = hexc("#E9FFD8")
+VEIN = hexc("#A9F07E")
+VEIN_CORE = hexc("#E9FFD8")
+SPINE_TIP = hexc("#9C63E8")
+SPINE_CORE = hexc("#E9FFD8")
+EYE = hexc("#D6FFB8")
+MANE_VIOLET = hexc("#8A63D6")
 
 _fur_grain = weave(FUR, direction=2, amp=0.24)
 
@@ -51,7 +55,7 @@ def _fur_px(px, shade=1.0):
 
 
 def _vein_at(px):
-    """True where a branching electric vein crosses this pixel. Deterministic per global
+    """True where a branching charge vein crosses this pixel. Deterministic per global
     column: a main horizontal channel wandering around the face midline plus sparse
     vertical forks — the same test paints the albedo and the glowmask."""
     if px.face not in ("east", "west", "north", "south") or px.fw < 6 or px.fh < 5:
@@ -83,6 +87,38 @@ def body_glow(px):
     return None
 
 
+def _mane_streak_at(px):
+    """Vertical charge streaks through the mane tufts — every tuft carries one or two
+    bright violet strands (deterministic per global column)."""
+    if px.face not in ("east", "west", "north", "south"):
+        return False
+    return px.noise(91, x=px.gx, y=0) > 0.62 and px.fy < px.fh - 1
+
+
+def mane(px):
+    """Storm mane: darker wind-torn fur with violet charge strands and a ragged tip
+    row (the tufts dissolve into static)."""
+    if px.face in ("east", "west", "north", "south"):
+        n = px.noise(93, x=px.gx, y=0)
+        if px.fy >= px.fh - (1 if n > 0.45 else 0):
+            return None  # ragged tuft tip
+    if _mane_streak_at(px):
+        return mix(MANE_VIOLET, VEIN_CORE, px.noise(95) * 0.4)
+    return _fur_px(px, 0.85)
+
+
+def mane_glow(px):
+    """Only the charge strands glow, at partial alpha — mane reads as fur holding a
+    static charge, not as a solid lamp."""
+    if px.face in ("east", "west", "north", "south"):
+        n = px.noise(93, x=px.gx, y=0)
+        if px.fy >= px.fh - (1 if n > 0.45 else 0):
+            return None
+    if _mane_streak_at(px):
+        return with_alpha(MANE_VIOLET, 150)
+    return None
+
+
 def skull(px):
     """Head fur, slightly darker than the body, with one bright eye dot per side of the
     north face (the snout cube covers the center, leaving the eyes at the corners)."""
@@ -110,7 +146,7 @@ def snout(px):
 
 
 def jaw(px):
-    """Split lower jaw: near-black chin, pale electric inner mouth on the top face."""
+    """Split lower jaw: near-black chin, pale sick-green inner mouth on the top face."""
     if px.face == "up":
         return mix(MOUTH, VEIN, px.noise(87) * 0.4)
     return mul(JAW, 0.88 + px.noise(89) * 0.24)
@@ -131,7 +167,7 @@ def tail(px):
 
 
 def tail_tip(px):
-    """Whip tail end: the last rows carry a static charge tint."""
+    """Whip tail segments: the last rows carry a static charge tint."""
     col = _fur_px(px, 0.95)
     if px.face in ("east", "west", "up", "down") and px.fw > 3 and px.fx >= px.fw - 2:
         col = mix(col, VEIN, 0.55)
@@ -145,9 +181,41 @@ def tail_tip_glow(px):
     return None
 
 
+def _whip_t(px):
+    """Position along the whip segment's LENGTH in [0, 1], or None off the long faces.
+    Box-UV quirk: on a z-long cube the length runs along fx for east/west but along fy
+    for up/down (the top view is the one players actually see on a quadruped tail)."""
+    if px.face in ("east", "west") and px.fw > 3:
+        return px.fx / max(px.fw - 1.0, 1.0)
+    if px.face in ("up", "down") and px.fh > 3:
+        return px.fy / max(px.fh - 1.0, 1.0)
+    return None
+
+
+def tail_end(px):
+    """The whip's last segment: fully charge-soaked toward the very tip, violet at the
+    outermost pixels — the crack of the whip."""
+    col = _fur_px(px, 0.9)
+    t = _whip_t(px)
+    if t is not None:
+        if t > 0.45:
+            col = mix(col, VEIN, (t - 0.45) * 1.4)
+        if t > 0.75:
+            col = mix(col, SPINE_TIP, 0.6)
+    return col
+
+
+def tail_end_glow(px):
+    t = _whip_t(px)
+    if t is not None and t > 0.5:
+        return with_alpha(VEIN if t <= 0.75 else SPINE_TIP, 140)
+    return None
+
+
 def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("body", body)
+    painter.set_material("mane_*", mane)
     painter.set_material("head", skull)
     painter.set_cube_material("head", 1, snout)
     painter.set_material("jaw", jaw)
@@ -155,12 +223,16 @@ def main():
     painter.set_material("leg_*_lower", leg_lower)
     painter.set_material("tail_a", tail)
     painter.set_material("tail_b", tail_tip)
+    painter.set_material("tail_c", tail_end)
     painter.set_material("glow_spine_*", flame(SPINE_CORE, SPINE_TIP))
     painter.set_material("glow_horn", flame(SPINE_CORE, SPINE_TIP))
-    # glow_* bones auto-glow; veins, eyes and the tail tip need custom glow painters.
+    # glow_* bones auto-glow; veins, mane strands, eyes and tail tips need custom
+    # glow painters.
     painter.set_glow_painter("body", body_glow)
+    painter.set_glow_painter("mane_*", mane_glow)
     painter.set_glow_painter("head", head_glow)
     painter.set_glow_painter("tail_b", tail_tip_glow)
+    painter.set_glow_painter("tail_c", tail_end_glow)
     painter.paint(OUT)
 
 

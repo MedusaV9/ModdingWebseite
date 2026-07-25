@@ -54,7 +54,10 @@ public class HeraldRenderer extends MobRenderer<HeraldEntity, HeraldModel> {
         super.setupRotations(entity, poseStack, bob, yBodyRot, partialTick, scale);
     }
 
-    /** Emissive pass: inner eye always; corona shards only during a volley telegraph. */
+    /**
+     * Emissive pass: inner eye always; corona + halo shards during a volley telegraph;
+     * crown spikes through the hot half of the phase-break roar.
+     */
     @OnlyIn(Dist.CLIENT)
     static class EmissiveLayer extends RenderLayer<HeraldEntity, HeraldModel> {
         private static final RenderType EYES = RenderType.eyes(TEXTURE);
@@ -69,7 +72,8 @@ public class HeraldRenderer extends MobRenderer<HeraldEntity, HeraldModel> {
                 float ageInTicks, float netHeadYaw, float headPitch) {
             VertexConsumer buffer = bufferSource.getBuffer(EYES);
             this.getParentModel().renderEmissive(poseStack, buffer,
-                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, entity.isTelegraphing());
+                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
+                    entity.isTelegraphing(), entity.roarAmount(partialTick) > 0.35F);
         }
     }
 }

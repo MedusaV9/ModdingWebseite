@@ -18,7 +18,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from glitch_lib import CYAN, MAGENTA, WHITE, glitch_body, glow_eyes, heart_glow, seam  # noqa: E402
+from glitch_lib import (  # noqa: E402
+    CYAN, MAGENTA, WHITE, combine_glow, dropout, glitch_body, glitch_scars, glow_eyes,
+    heart_glow, seam,
+)
 from paint_lib import GeoPainter, hexc, mix, mul  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,17 +71,29 @@ def hound_head(alt):
 
 def paint(alt):
     painter = GeoPainter(GEO, seed=SEED)
-    painter.set_material("body", glitch_body(HIDE, salt=31, alt=alt))
-    painter.set_material("leg_*", glitch_body(HIDE_DARK, salt=33, alt=alt))
-    painter.set_material("tail", glitch_body(HIDE_DARK, salt=35, alt=alt))
+    # Missing-polygon corruption (MOB-GLITCH): hash-gated alpha holes on the flank,
+    # legs and tail — the no-cull cutout render shows the cubes' inner back faces
+    # through the gaps. The "down" faces stay watertight (holes read best from the
+    # side/top silhouette; a holed belly just flickers with the shadow).
+    painter.set_material("body", dropout(glitch_body(HIDE, salt=31, alt=alt),
+            salt=81, alt=alt, keep_faces=("down",)))
+    painter.set_material("leg_*", dropout(glitch_body(HIDE_DARK, salt=33, alt=alt),
+            salt=83, alt=alt, chance=0.04, alt_chance=0.09, block=2, keep_faces=("down",)))
+    painter.set_material("tail", dropout(glitch_body(HIDE_DARK, salt=35, alt=alt),
+            salt=85, alt=alt, block=2))
     painter.set_material("head", hound_head(alt))
     painter.set_material("jaw", hound_jaw(alt))
     # Corrupted tints on every displaced fragment (they read broken on both frames).
     painter.set_material("neck_shard", glitch_body(HIDE, salt=39, alt=alt, tint=CYAN))
     painter.set_material("hips_shard", glitch_body(HIDE, salt=43, alt=alt, tint=MAGENTA))
     painter.set_material("ear_shard", glitch_body(HIDE_DARK, salt=47, alt=alt, tint=MAGENTA))
+    # The jagged spine (MOB-GLITCH): vertebrae torn out of the ridge, magenta pre-tint.
+    painter.set_material("spine_shard_*", glitch_body(HIDE_DARK, salt=63, alt=alt, tint=MAGENTA))
     painter.set_material("glow_seam", seam(alt=alt))  # auto-included in the glowmask
-    painter.set_glow_painter("body", heart_glow(cy_frac=0.5, radius=0.28, alt=alt))
+    # Emissive glitch scars share the flank glowmask with the ribcage heart-core.
+    painter.set_glow_painter("body", combine_glow(
+            heart_glow(cy_frac=0.5, radius=0.28, alt=alt), glitch_scars(salt=87, alt=alt)))
+    painter.set_glow_painter("leg_*", glitch_scars(salt=89, alt=alt))
     painter.set_glow_painter("head", glow_eyes(EYE_PX, color=CYAN))
     painter.set_glow_painter("jaw", jaw_glow)
     painter.paint(OUT_ALT if alt else OUT)

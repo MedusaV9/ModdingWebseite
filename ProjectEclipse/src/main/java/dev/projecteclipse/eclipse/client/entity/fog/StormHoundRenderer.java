@@ -9,9 +9,10 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * Storm Hound renderer — defaulted asset triple for {@code storm_hound}, head tracking
  * ON ({@code head} bone), glowmask layer (the three {@code glow_spine} shards +
- * {@code glow_horn} antenna, the electric flank veins, eye dots and the charged tail
- * tip — the windup anim scales the spine bones, so the glow visibly ramps before a
- * lunge). {@code withUprightDeath()} is deliberate even though the hound dies sideways:
+ * {@code glow_horn} antenna, the charge flank veins, the {@code mane_*} strand streaks,
+ * eye dots and the charged whip-tail tips — the windup anim scales the spine bones and
+ * flares the mane, so the glow visibly ramps before a lunge).
+ * {@code withUprightDeath()} is deliberate even though the hound dies sideways:
  * the 30 t {@code death} anim rolls the root itself, and the vanilla tip-over would
  * double-rotate the corpse.
  */

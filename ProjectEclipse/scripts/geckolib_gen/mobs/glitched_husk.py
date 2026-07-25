@@ -18,7 +18,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from glitch_lib import CYAN, MAGENTA, glitch_body, glow_eyes, heart_glow, seam  # noqa: E402
+from glitch_lib import (  # noqa: E402
+    CYAN, MAGENTA, combine_glow, glitch_body, glitch_scars, glow_eyes, heart_glow, seam,
+)
 from paint_lib import GeoPainter, hexc, mix, mul  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -52,8 +54,11 @@ def husk_head(alt):
     return fn
 
 
-def paint(alt):
-    painter = GeoPainter(GEO, seed=SEED)
+def build(geo_path, alt):
+    """Painter with the full husk material set on `geo_path` — split out so the
+    Wanderer driver (`scripts/skin_gen/backrooms_wanderer.py`) can paint the SAME
+    language onto its warped-proportion geo before the mono-yellow regrade."""
+    painter = GeoPainter(geo_path, seed=SEED)
     body_fn = glitch_body(FLESH, salt=31, alt=alt)
     # Torso wears a rag band across the hips (bottom rows of the side faces).
     painter.set_material("body", _with_rag_band(body_fn))
@@ -63,10 +68,20 @@ def paint(alt):
     # Displaced geometry reads corrupted even on the calm frame (cyan pre-tint).
     painter.set_material("shard_torso", glitch_body(FLESH, salt=39, alt=alt, tint=CYAN))
     painter.set_material("head_shard", glitch_body(HEAD, salt=43, alt=alt, tint=MAGENTA))
+    # The dislocated jaw (MOB-GLITCH): cyan-tinted so it reads broken on both frames.
+    painter.set_material("jaw_shard", glitch_body(HEAD, salt=45, alt=alt, tint=CYAN))
     painter.set_material("glow_seam", seam(alt=alt))  # auto-included in the glowmask
-    painter.set_glow_painter("body", heart_glow(cy_frac=0.4, alt=alt))
+    # Emissive glitch scars share the body glowmask with the heart-core shine-through.
+    painter.set_glow_painter("body",
+            combine_glow(heart_glow(cy_frac=0.4, alt=alt), glitch_scars(salt=75, alt=alt)))
+    painter.set_glow_painter("arm_*", glitch_scars(salt=73, alt=alt))
+    painter.set_glow_painter("leg_*", glitch_scars(salt=71, alt=alt))
     painter.set_glow_painter("head", glow_eyes(EYE_PX, color=MAGENTA))
-    painter.paint(OUT_ALT if alt else OUT)
+    return painter
+
+
+def paint(alt):
+    build(GEO, alt).paint(OUT_ALT if alt else OUT)
 
 
 def _with_rag_band(fn):

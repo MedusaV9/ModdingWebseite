@@ -6,6 +6,7 @@ All face rects are `(x0,y0)-(x1,y1)` pixel bounds (exclusive right/bottom edge).
 | Cube | UV origin | Box W×H×D | Pivot / pose |
 |---|---|---|---|
 | core | (0,0) | 2×2×2 | centered on root (0,21) |
+| core_inner | (16,0) | 1.4×1.4×1.4 | kernel nested in core; scale-pulses 0.8–1.75×, breaching the shell at peaks |
 | halo | (0,4) | 4×1×4 | flat plate mounted at 45°, spins `yRot += age*0.1` |
 
 Per-face pixel rects (top, bottom, east/right, north/front, west/left, south/back):
@@ -22,3 +23,5 @@ warm values everywhere are correct; avoid dark pixels (they go muddy under the a
 pass). Rest of the 32×32 canvas stays transparent.
 
 **Generator:** `java scripts/placeholder_gen/EntitySkinPlaceholder.java`.
+**v2 inner core:** the fractional `core_inner` rects at (16,0)-(22,3) are painted as one
+uniform kernel-white block by `python3 scripts/skin_gen/sunmote_v2.py`.

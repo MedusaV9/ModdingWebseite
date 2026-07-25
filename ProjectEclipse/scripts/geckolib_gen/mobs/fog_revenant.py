@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Fog Revenant / Nebel-Wiedergänger texture driver (P6-W7).
+"""Fog Revenant / Nebel-Wiedergänger texture driver (P6-W7, reworked by FXTEAM MOB-FOG).
 
-Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3): a tall thin wraith consumed
-by the fog storm — torn near-black robe cone (#23262E) with a ragged alpha-cutout hem,
-fog-coral growths on one shoulder shading #5E6B7A -> #9DB3C9 toward the tips, long bone
-claws (#C9C4B4), a skull face lost in shadow under the hood with two glowing cyan eye
-slits, and three orbiting soul wisps (#8FD5E8).
+Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3) + the MOB-FOG palette pass
+(docs/plans_v3/plans_v5/fxteams/MOB-FOG.md): a tall thin wraith consumed by the fog
+storm — torn near-black robe cone (#23262E) with a ragged alpha-cutout hem and four
+trailing TATTER strips (the `tatter_*` bones), long grasp arms with a new forearm
+segment reaching almost to the ground, bone claws (#C9C4B4), a skull face lost in
+shadow under the hood with two sick-green eye slits (#A9F07E -> #E9FFD8 core), fog-coral
+growths shading toward pale violet (#B9B3DC), three orbiting soul wisps (pale green core
+-> violet #9C63E8 tips) and a faint violet rim (#6F52B8) grazing the hood crown.
 
-Emissive (glowmask): the three `glow_wisp_*` cubes (auto-included, flame material stays
-full-bright in the albedo too) + the two eye slits painted into the head bone's north
-face via a custom glow painter. Everything else stays transparent in the glowmask.
+Emissive (glowmask): the three `glow_wisp_*` cubes (auto-included), the two eye slits,
+and the low-alpha hood rim. Everything else stays transparent in the glowmask.
 
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
     python3 scripts/geckolib_gen/mobs/fog_revenant.py
@@ -33,20 +35,23 @@ ROBE_SLEEVE = hexc("#2A2E38")
 HOOD = hexc("#1B1D24")
 SKULL_SHADOW = hexc("#15171C")
 SKULL_BONE = hexc("#8A8578")
-EYE = hexc("#8FD5E8")
-EYE_CORE = hexc("#DFFBFF")
 CLAW = hexc("#C9C4B4")
 GROWTH_BASE = hexc("#5E6B7A")
-GROWTH_TIP = hexc("#9DB3C9")
-WISP = hexc("#8FD5E8")
-WISP_CORE = hexc("#DFFBFF")
+GROWTH_TIP = hexc("#B9B3DC")
+# MOB-FOG family glow: sick green core -> violet rim.
+EYE = hexc("#A9F07E")
+EYE_CORE = hexc("#E9FFD8")
+WISP = hexc("#9C63E8")
+WISP_CORE = hexc("#E9FFD8")
+RIM_VIOLET = hexc("#6F52B8")
+MIST_VIOLET = hexc("#6B5F8C")
 
 _robe_weave = weave(ROBE, direction=1, amp=0.30)
 _sleeve_weave = weave(ROBE_SLEEVE, direction=1, amp=0.26)
 
 
 def skirt(px):
-    """Torn robe cone: vertical cloth weave, a faint mist-silver sheen creeping up from
+    """Torn robe cone: vertical cloth weave, a violet fog-mist sheen creeping up from
     the hem, and a ragged alpha-cutout bottom edge on the side faces (the robe dissolves
     into the fog it hovers over)."""
     if px.face in ("north", "south", "east", "west"):
@@ -56,15 +61,35 @@ def skirt(px):
             return None  # ragged, torn hem
     col = _robe_weave(px)
     if px.face in ("north", "south", "east", "west") and px.fh > 3:
-        # Fog creep: the lowest intact rows pick up a pale mist tint.
+        # Mist creep: the lowest intact rows pick up the storm's violet tint.
         creep = (px.fy / (px.fh - 1.0)) ** 3
-        col = mix(col, GROWTH_BASE, creep * 0.35)
+        col = mix(col, MIST_VIOLET, creep * 0.4)
     return col
+
+
+def tatter(px):
+    """Trailing robe strips below the hem: heavier rag cuts (up to half the strip) and
+    a stronger violet mist wash — these are the pieces the storm is actively eating."""
+    if px.face in ("north", "south", "east", "west"):
+        n = px.noise(59, x=px.gx, y=0)
+        cut = 0 if n < 0.25 else (1 if n < 0.7 else 2)
+        if px.fy >= px.fh - cut:
+            return None
+    col = _robe_weave(px)
+    t = px.fy / max(px.fh - 1.0, 1.0)
+    return mix(col, MIST_VIOLET, 0.2 + t * 0.4)
 
 
 def sleeve(px):
     """Arm sleeves: slightly lighter cloth so the long arms read against the robe."""
     return _sleeve_weave(px)
+
+
+def forearm(px):
+    """Forearm wraps: sleeve cloth rotting toward the wrist — darker, mist-tinged."""
+    col = _sleeve_weave(px)
+    t = px.fy / max(px.fh - 1.0, 1.0) if px.face in ("north", "south", "east", "west") else 0.5
+    return mix(mul(col, 0.9), MIST_VIOLET, t * 0.25)
 
 
 def claw(px):
@@ -82,8 +107,8 @@ def claw(px):
 
 def head(px):
     """The face under the hood: near-black shadow with faint skull planes and two
-    vertical cyan eye slits (1 px wide, 2 px tall, mirrored) on the north face. The hood
-    cube leaves the north face open, so this is what stares out."""
+    vertical sick-green eye slits (1 px wide, 2 px tall, mirrored) on the north face.
+    The hood cube leaves the north face open, so this is what stares out."""
     if px.face == "north":
         if px.fx in (1, 4) and px.fy in (2, 3):
             return EYE_CORE if px.fy == 2 else EYE
@@ -94,9 +119,17 @@ def head(px):
     return col
 
 
+def hood(px):
+    """Hood cloth with a violet rim graze on the crown rows (storm light from above)."""
+    col = weave(HOOD, direction=0, amp=0.32)(px)
+    if px.face == "up" or (px.face in ("east", "west", "south") and px.fy == 0):
+        col = mix(col, RIM_VIOLET, 0.45)
+    return col
+
+
 def growth(px):
-    """Fog-coral shelf on the shoulder: base slate blue shading to pale mist toward the
-    top of every face (tips catch the storm light), with darker pore pits."""
+    """Fog-coral shelf on the shoulder: base slate blue shading to pale violet toward
+    the top of every face (tips catch the storm light), with darker pore pits."""
     t = 1.0 - (px.fy / max(px.fh - 1.0, 1.0)) if px.fh > 1 else 0.7
     col = mix(GROWTH_BASE, GROWTH_TIP, t * t)
     col = mul(col, 0.9 + px.noise(31) * 0.22)
@@ -113,19 +146,29 @@ def head_glow(px):
     return None
 
 
+def hood_glow(px):
+    """Faint violet rim on the hood crown — grazing light, not neon piping."""
+    if px.face == "up" or (px.face in ("east", "west", "south") and px.fy == 0):
+        return with_alpha(RIM_VIOLET, 80)
+    return None
+
+
 def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("torso", weave(ROBE, direction=1, amp=0.26))
     painter.set_material("skirt_*", skirt)
-    painter.set_material("hood", weave(HOOD, direction=0, amp=0.32))
+    painter.set_material("tatter_*", tatter)
+    painter.set_material("hood", hood)
     painter.set_material("head", head)
     painter.set_material("arm_*", sleeve)
+    painter.set_material("forearm_*", forearm)
     painter.set_material("claw_*", claw)
     painter.set_material("growth", growth)
     painter.set_material("glow_wisp_*", flame(WISP_CORE, WISP))
-    # glow_wisp_* bones are auto-included in the glowmask; the eye slits need a custom
-    # glow painter because the head bone is otherwise non-emissive.
+    # glow_wisp_* bones are auto-included in the glowmask; the eye slits and hood rim
+    # need custom glow painters because those bones are otherwise non-emissive.
     painter.set_glow_painter("head", head_glow)
+    painter.set_glow_painter("hood", hood_glow)
     painter.paint(OUT)
 
 

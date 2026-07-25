@@ -1,23 +1,35 @@
 #!/usr/bin/env python3
-"""C18 Backrooms art companion (IDEAS-backrooms_finale §A3.1/§A4).
+"""C18 Backrooms art companion (IDEAS-backrooms_finale §A3.1/§A4; MOB-GLITCH v2).
 
 Generates the Wanderer's asset set from the shipped glitched_husk sources —
 run from the ProjectEclipse root; deterministic (seeded), idempotent:
 
-  1. geo/animations: byte-copies of the husk pair with identifiers renamed to
-     the frozen `glitched_wanderer` triple id (`animation.glitched_wanderer.*`
-     is load-bearing: GlitchedMonster builds anim ids off geoId()).
-  2. textures/entity/glitched_wanderer{,_alt,_glowmask,_alt_glowmask}.png —
-     the mono-yellow "wet paint" regrade of the husk sheets: luminance mapped
-     through a rot-yellow ramp (damp wallpaper read), the alt sheet's
+  1. geo: the husk geometry re-identified to the frozen `glitched_wanderer`
+     triple id AND warped subtly WRONG (MOB-GLITCH): both arms stretched too
+     long (the fingertips reach past the knee line), head + face shards
+     deflated small (inflate < 0), the dislocated jaw's UV re-parked clear of
+     the taller arm strip. The proportions are off by just enough to read as
+     "person-shaped, but no" down a long corridor.
+  2. animations: the husk set re-keyed to `animation.glitched_wanderer.*`
+     (load-bearing: GlitchedMonster builds anim ids off geoId()) with three
+     bespoke replacements/additions — `idle` (near-still + the head-turn-TOO-FAR
+     beat), `walk` (unsettling slow corridor pace, head locked level) and the
+     NEW `sprint` (the lookaway burst — GlitchedWandererEntity plays it while a
+     gaze-burst speed modifier is live). attack/glitch_blink/death stay the
+     renamed husk one-shots.
+  3. textures/entity/glitched_wanderer{,_alt,_glowmask,_alt_glowmask}.png —
+     painted directly on the WARPED geo with the husk's own material set
+     (`glitched_husk.build`), then mono-yellow "wet paint" regraded: luminance
+     mapped through a rot-yellow ramp (damp wallpaper read), the alt sheet's
      corruption pixels flared to hot pale-yellow, glowmasks re-tinted to the
-     fluorescent froglight note.
-  3. textures/gui/backrooms_scare.png — THE jumpscare face (256x256): the
+     fluorescent froglight note (emissive glitch scars inherit it).
+  4. textures/gui/backrooms_scare.png — THE jumpscare face (256x256): the
      Wanderer's own 8x8 head front face blown up x32, eye voids hollowed,
      scanline displacement + vignette. JumpscareOverlay caps it at 85% alpha.
 """
 import json
 import random
+import sys
 from pathlib import Path
 
 from PIL import Image
@@ -26,6 +38,11 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "src/main/resources/assets/eclipse"
 ENT = ASSETS / "textures/entity"
 GUI = ASSETS / "textures/gui"
+
+sys.path.insert(0, str(ROOT / "scripts/geckolib_gen/mobs"))
+import glitched_husk as husk  # noqa: E402
+
+WGEO = ASSETS / "geo/entity/glitched_wanderer.geo.json"
 
 RNG = random.Random(0xBAC2)  # deterministic output; re-runs are byte-stable
 
@@ -81,15 +98,16 @@ def regrade(src, flare_vs=None, glow=False):
 
 
 def entity_sheets():
-    base = Image.open(ENT / "glitched_husk.png").convert("RGBA")
-    alt = Image.open(ENT / "glitched_husk_alt.png").convert("RGBA")
-    glow = Image.open(ENT / "glitched_husk_glowmask.png").convert("RGBA")
-    altglow = Image.open(ENT / "glitched_husk_alt_glowmask.png").convert("RGBA")
+    """Paints the husk material language onto the WARPED wanderer geo (so the long
+    arms get fully-textured strips), then regrades all four sheets mono-yellow in
+    place. Must run AFTER geo_anim() has written the warped geo."""
+    base, base_glow = husk.build(WGEO, alt=False).paint(ENT / "glitched_wanderer.png")
+    alt, alt_glow = husk.build(WGEO, alt=True).paint(ENT / "glitched_wanderer_alt.png")
 
     regrade(base).save(ENT / "glitched_wanderer.png")
     regrade(alt, flare_vs=base).save(ENT / "glitched_wanderer_alt.png")
-    regrade(glow, glow=True).save(ENT / "glitched_wanderer_glowmask.png")
-    regrade(altglow, glow=True).save(ENT / "glitched_wanderer_alt_glowmask.png")
+    regrade(base_glow, glow=True).save(ENT / "glitched_wanderer_glowmask.png")
+    regrade(alt_glow, glow=True).save(ENT / "glitched_wanderer_alt_glowmask.png")
     return regrade(base)
 
 
@@ -135,26 +153,258 @@ def scare_face(sheet):
     face.save(GUI / "backrooms_scare.png")
 
 
+def _warp_geo(geo):
+    """Subtly WRONG proportions (MOB-GLITCH): long arms, small head. The shoulder
+    anchors stay put — only the cubes stretch/deflate — so every husk-derived
+    animation still reads correctly on the warped rig."""
+    bones = {b["name"]: b for b in geo["minecraft:geometry"][0]["bones"]}
+    # Small head: deflate the skull and its shards (UV rects untouched — the scare
+    # face crop and the head strip both stay at their husk coordinates).
+    for name, shrink in (("head", -0.75), ("head_shard", -0.35), ("jaw_shard", -0.2)):
+        for cube in bones[name]["cubes"]:
+            cube["inflate"] = round(cube.get("inflate", 0) + shrink, 3)
+    # Long arms: stretch both sleeves DOWN from the shoulder. Fingertips end at
+    # y2/y6 — past the hip line, brushing the knees. Strips grow taller, still
+    # inside the 64x64 canvas (arm_right 32..44 x 16..39, arm_left 44..56 x 16..34).
+    arm_right = bones["arm_right"]["cubes"][0]
+    arm_right["origin"][1] = 2
+    arm_right["size"][1] = 20
+    arm_left = bones["arm_left"]["cubes"][0]
+    arm_left["origin"][1] = 6
+    arm_left["size"][1] = 15
+    # The taller arm_right strip (ends y39) would collide with the jaw UV at
+    # (32,36) — re-park the wanderer's jaw strip below it.
+    bones["jaw_shard"]["cubes"][0]["uv"] = [32, 40]
+
+
+# --- bespoke wanderer animations (MOB-GLITCH) --------------------------------
+# The husk's stutter language is deliberately absent from walk: the Wanderer's
+# dread is SMOOTHNESS — a person-shaped thing pacing a corridor with its head
+# locked dead level. The glitch vocabulary only erupts in the too-far head turn
+# (idle) and the lookaway burst (sprint).
+
+IDLE = {
+    "loop": True,
+    "animation_length": 5.0,
+    "bones": {
+        "root": {
+            "position": {
+                "0.0": [0, 0, 0],
+                "4.2": [0, 0, 0],
+                "4.25": [0.3, 0, -0.2],
+                "4.3": [0, 0, 0],
+                "5.0": [0, 0, 0],
+            }
+        },
+        "body": {
+            "rotation": [0, 0, "math.sin(query.anim_time * 60) * 0.6"]
+        },
+        "arm_right": {
+            "rotation": [0, 0, "-2 + math.sin(query.anim_time * 70) * 1"]
+        },
+        "arm_left": {
+            "rotation": [0, 0, "2 + math.sin(query.anim_time * 70 + 180) * 1"]
+        },
+        "head": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "2.0": [0, 0, 0],
+                "2.1": [6, -118, 8],
+                "3.3": [6, -118, 8],
+                "3.4": [0, -25, 0],
+                "3.55": [0, -25, 0],
+                "3.6": [0, 0, 0],
+                "5.0": [0, 0, 0],
+            }
+        },
+        "head_shard": {
+            "position": [0, "math.sin(query.anim_time * 45) * 0.2", 0]
+        },
+        "jaw_shard": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "2.0": [4, 0, 0],
+                "2.1": [18, -6, 4],
+                "3.3": [18, -6, 4],
+                "3.4": [0, 0, 0],
+                "5.0": [0, 0, 0],
+            }
+        },
+        "glow_seam": {
+            "scale": {
+                "0.0": [1, 1, 1],
+                "2.0": [1, 1, 1],
+                "2.1": [1.5, 1, 1.5],
+                "3.3": [1.5, 1, 1.5],
+                "3.45": [1, 1, 1],
+                "5.0": [1, 1, 1],
+            }
+        },
+    },
+}
+
+WALK = {
+    "loop": True,
+    "animation_length": 1.6,
+    "bones": {
+        "root": {
+            "position": {
+                "0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+                "0.4": {"post": [0, 0.3, 0], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+                "1.2": {"post": [0, 0.3, 0], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "body": {
+            "rotation": {
+                "0.0": {"post": [3, 0, 1.5], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [3, 0, -1.5], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [3, 0, 1.5], "lerp_mode": "catmullrom"},
+            }
+        },
+        "leg_right": {
+            "rotation": {
+                "0.0": {"post": [22, 0, 0], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [-22, 0, 0], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [22, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "leg_left": {
+            "rotation": {
+                "0.0": {"post": [-22, 0, 0], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [22, 0, 0], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [-22, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "arm_right": {
+            "rotation": {
+                "0.0": {"post": [-10, 0, -3], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [10, 0, -3], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [-10, 0, -3], "lerp_mode": "catmullrom"},
+            }
+        },
+        "arm_left": {
+            "rotation": {
+                "0.0": {"post": [10, 0, 3], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [-10, 0, 3], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [10, 0, 3], "lerp_mode": "catmullrom"},
+            }
+        },
+        "head": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.75": [0, 0, 0],
+                "0.8": [3, -7, 2],
+                "0.9": [3, -7, 2],
+                "0.95": [0, 0, 0],
+                "1.6": [0, 0, 0],
+            }
+        },
+        "jaw_shard": {
+            "rotation": ["math.sin(query.anim_time * 225) * 3", 0, 0]
+        },
+        "shard_torso": {
+            "rotation": {
+                "0.0": {"post": [0, 3, 0], "lerp_mode": "catmullrom"},
+                "0.8": {"post": [0, -4, -1], "lerp_mode": "catmullrom"},
+                "1.6": {"post": [0, 3, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+    },
+}
+
+SPRINT = {
+    "loop": True,
+    "animation_length": 0.55,
+    "bones": {
+        "root": {
+            "position": {
+                "0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+                "0.1375": {"post": [0, 0.9, 0], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+                "0.4125": {"post": [0, 0.9, 0], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "body": {
+            "rotation": {
+                "0.0": {"post": [16, 0, 2], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [16, 0, -2], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [16, 0, 2], "lerp_mode": "catmullrom"},
+            }
+        },
+        "leg_right": {
+            "rotation": {
+                "0.0": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "leg_left": {
+            "rotation": {
+                "0.0": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
+            }
+        },
+        "arm_right": {
+            "rotation": {
+                "0.0": {"post": [-60, 0, -18], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [30, 0, -12], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [-60, 0, -18], "lerp_mode": "catmullrom"},
+            }
+        },
+        "arm_left": {
+            "rotation": {
+                "0.0": {"post": [30, 0, 12], "lerp_mode": "catmullrom"},
+                "0.275": {"post": [-60, 0, 18], "lerp_mode": "catmullrom"},
+                "0.55": {"post": [30, 0, 12], "lerp_mode": "catmullrom"},
+            }
+        },
+        "head": {
+            "rotation": ["-12", "math.sin(query.anim_time * 900) * 4", 0]
+        },
+        "jaw_shard": {
+            "rotation": ["20 + math.sin(query.anim_time * 800) * 10", 0, 0]
+        },
+        "head_shard": {
+            "position": ["math.sin(query.anim_time * 1000) * 0.3", 0, 0]
+        },
+        "shard_torso": {
+            "position": [0, 0, "math.sin(query.anim_time * 950) * 0.3"]
+        },
+        "glow_seam": {
+            "scale": ["1.3 + math.sin(query.anim_time * 700) * 0.2", 1, "1.3 + math.sin(query.anim_time * 700) * 0.2"]
+        },
+    },
+}
+
+
 def geo_anim():
     geo = json.loads((ASSETS / "geo/entity/glitched_husk.geo.json").read_text())
     geo["minecraft:geometry"][0]["description"]["identifier"] = "geometry.glitched_wanderer"
-    (ASSETS / "geo/entity/glitched_wanderer.geo.json").write_text(
-        json.dumps(geo, indent=1) + "\n")
+    _warp_geo(geo)
+    WGEO.write_text(json.dumps(geo, indent=1) + "\n")
 
     anim = json.loads((ASSETS / "animations/entity/glitched_husk.animation.json").read_text())
     anim["animations"] = {
         key.replace("animation.glitched_husk.", "animation.glitched_wanderer."): value
         for key, value in anim["animations"].items()
     }
+    # Bespoke locomotion set; attack/glitch_blink/death stay the husk one-shots.
+    anim["animations"]["animation.glitched_wanderer.idle"] = IDLE
+    anim["animations"]["animation.glitched_wanderer.walk"] = WALK
+    anim["animations"]["animation.glitched_wanderer.sprint"] = SPRINT
     (ASSETS / "animations/entity/glitched_wanderer.animation.json").write_text(
         json.dumps(anim, indent=1) + "\n")
 
 
 def main():
+    geo_anim()
     sheet = entity_sheets()
     scare_face(sheet)
-    geo_anim()
-    print("wanderer sheets + scare face + geo/anim written")
+    print("wanderer geo/anim (warped) + sheets + scare face written")
 
 
 if __name__ == "__main__":

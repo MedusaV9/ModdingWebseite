@@ -37,7 +37,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * payload"). Holds MOVE+LOOK+JUMP above melee, so the wind-up genuinely roots.</p>
  */
 public class GroundSlamGoal extends Goal {
-    /** Telegraph length — matches the anim's arm-raise (25 t) + drop (impact frame 1.35 s). */
+    /** Telegraph length — matches the anim: slow raise (0–1.15 s) + tremble hover, fast drop landing at 1.35 s. */
     static final int IMPACT_TICK = 27;
     /** A short follow-through after impact before the goal releases (anim recovery). */
     private static final int RECOVER_TICKS = 12;

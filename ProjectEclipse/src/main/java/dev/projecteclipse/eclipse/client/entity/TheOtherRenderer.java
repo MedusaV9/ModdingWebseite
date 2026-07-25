@@ -15,6 +15,11 @@ import net.neoforged.api.distmarker.OnlyIn;
  * texture copy ({@code textures/entity/the_other.png}: uniform skin + pure-black eyes +
  * faint purple face seam), so the {@code AbstractClientPlayerMixin} uniform-skin pipeline
  * stays completely untouched (regression guard, W10 task 4).
+ *
+ * <p>MOB-GLITCH: the model is now {@link TheOtherModel} — the same vanilla mesh plus the
+ * hidden-until-aggro floating fragment cubes and the looming-idle/reveal posing. The
+ * texture and skin layout are untouched (the disguise premise forbids visible corruption
+ * on the sheet).</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class TheOtherRenderer extends HumanoidMobRenderer<TheOtherEntity, HumanoidModel<TheOtherEntity>> {
@@ -22,7 +27,7 @@ public class TheOtherRenderer extends HumanoidMobRenderer<TheOtherEntity, Humano
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/entity/the_other.png");
 
     public TheOtherRenderer(EntityRendererProvider.Context context) {
-        super(context, new HumanoidModel<>(context.bakeLayer(EclipseEntityRenderers.THE_OTHER_LAYER)), 0.5F);
+        super(context, new TheOtherModel(context.bakeLayer(EclipseEntityRenderers.THE_OTHER_LAYER)), 0.5F);
     }
 
     @Override

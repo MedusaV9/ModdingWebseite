@@ -9,7 +9,8 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * Fog Revenant renderer — defaulted asset triple for {@code fog_revenant}, head tracking
  * ON (the hooded skull follows its prey — the geo's {@code head} bone), glowmask layer
- * (cyan eye slits under the hood + the three orbiting {@code glow_wisp_*} cubes) and an
+ * (sick-green eye slits under the hood, the three orbiting {@code glow_wisp_*} cubes and
+ * a faint violet hood rim — the MOB-FOG fog-family palette) and an
  * upright scripted death: the 40 t {@code death} anim disperses the wraith UPWARD into
  * its wisps, so the vanilla sideways tip-over must never fire. Faint shadow — it barely
  * touches the world.

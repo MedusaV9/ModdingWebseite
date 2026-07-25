@@ -211,6 +211,22 @@ public class HeraldEntity extends Monster {
     private float animSpeed = 1.0F;
     private float shardTilt;
     private float shardTiltPrev;
+    /** Phase-break roar length (client pose clock: core rear-up + crown flare). */
+    private static final int ROAR_TICKS = 26;
+    /** Eased 0..1 weight of the volley-telegraph summon gesture (client only). */
+    private float telegraphLerp;
+    private float telegraphLerpPrev;
+    /** Volley release recoil impulse, 1 → 0 decay (client only). */
+    private float volleyKick;
+    private float volleyKickPrev;
+    private boolean wasTelegraphingClient;
+    /** Accumulated extra ring spin (telegraph spin-up + recoil snap), radians. */
+    private float ringSpinExtra;
+    private float ringSpinExtraPrev;
+    /** Ticks into the phase-break roar, −1 while idle (client only). */
+    private int roarTicks = -1;
+    /** Last phase seen client-side (0 until the first tick, so join/reload never roars). */
+    private int lastClientPhase;
 
     public HeraldEntity(EntityType<? extends HeraldEntity> entityType, Level level) {
         super(entityType, level);
@@ -1136,6 +1152,31 @@ public class HeraldEntity extends Monster {
         this.shardTiltPrev = this.shardTilt;
         float targetTilt = getPhase() >= 3 ? 0.6F : 0.0F;
         this.shardTilt += (targetTilt - this.shardTilt) * 0.05F;
+        // Volley summon gesture: eased weight of the synced telegraph flag (tentacle
+        // claw + halo gather), with a 1→0 recoil impulse fired on the release edge.
+        this.telegraphLerpPrev = this.telegraphLerp;
+        boolean telegraphing = isTelegraphing();
+        this.telegraphLerp += ((telegraphing ? 1.0F : 0.0F) - this.telegraphLerp) * 0.14F;
+        this.volleyKickPrev = this.volleyKick;
+        this.volleyKick *= 0.82F;
+        if (this.wasTelegraphingClient && !telegraphing && this.deathTime == 0) {
+            this.volleyKick = 1.0F;
+        }
+        this.wasTelegraphingClient = telegraphing;
+        // The gesture spins the corona up and the recoil snaps it — accumulated so the
+        // ring never rewinds, it just runs hot for a moment.
+        this.ringSpinExtraPrev = this.ringSpinExtra;
+        this.ringSpinExtra += 0.10F * this.telegraphLerp + 0.30F * this.volleyKick;
+        // Phase-break ROAR: client-detected off the synced phase (upward breaks only;
+        // lastClientPhase starts 0 so a join/reload mid-fight never plays a stale roar).
+        if (this.roarTicks >= 0 && ++this.roarTicks >= ROAR_TICKS) {
+            this.roarTicks = -1;
+        }
+        int phase = getPhase();
+        if (this.lastClientPhase != 0 && phase > this.lastClientPhase && this.deathTime == 0) {
+            this.roarTicks = 0;
+        }
+        this.lastClientPhase = phase;
     }
 
     /** Smooth model animation age (spec anims run off this; advances x2 in P3). */
@@ -1146,6 +1187,38 @@ public class HeraldEntity extends Monster {
     /** P3 corona tilt-out amount, lerped toward {@code zRot 0.6} per spec. */
     public float shardTilt(float partialTick) {
         return Mth.lerp(partialTick, this.shardTiltPrev, this.shardTilt);
+    }
+
+    /** 0..1 eased weight of the volley-telegraph summon gesture. */
+    public float telegraphAmount(float partialTick) {
+        return Mth.lerp(partialTick, this.telegraphLerpPrev, this.telegraphLerp);
+    }
+
+    /** Volley release recoil impulse (1 at the shot, decaying to 0). */
+    public float volleyKick(float partialTick) {
+        return Mth.lerp(partialTick, this.volleyKickPrev, this.volleyKick);
+    }
+
+    /** Accumulated extra corona spin from telegraph spin-ups and recoil snaps (radians). */
+    public float ringSpinExtra(float partialTick) {
+        return Mth.lerp(partialTick, this.ringSpinExtraPrev, this.ringSpinExtra);
+    }
+
+    /**
+     * 0..1 envelope of the phase-break roar: sharp attack over the first quarter, eased
+     * smoothstep release over the rest ({@code 0} while idle). Drives the core rear-up,
+     * the tentacle splay and the crown flare (which also joins the emissive pass).
+     */
+    public float roarAmount(float partialTick) {
+        if (this.roarTicks < 0) {
+            return 0.0F;
+        }
+        float p = Math.min(1.0F, (this.roarTicks + partialTick) / ROAR_TICKS);
+        if (p < 0.25F) {
+            return p / 0.25F;
+        }
+        float r = (p - 0.25F) / 0.75F;
+        return 1.0F - r * r * (3.0F - 2.0F * r);
     }
 
     // --- floating-boss chassis ---

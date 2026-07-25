@@ -2,7 +2,7 @@
 
 **Texture size:** 128×128 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
 canvases; 128 canvas per §2.1 boss rule). Model:
-`assets/eclipse/geo/entity/rift_warden.geo.json` (GeckoLib, 18 bones / 18 cubes —
+`assets/eclipse/geo/entity/rift_warden.geo.json` (GeckoLib, 21 bones / 21 cubes —
 2.9-block vertically-split wraith-knight, hitbox 1.1×3.0). The geo file **is** the UV
 source of truth — the painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes
 every face rect itself, so only the layout is frozen here:
@@ -17,6 +17,9 @@ every face rect itself, so only the layout is frozen here:
 | glow_shard_a | drift shard | 2×3×2 | box-UV (96,18) | orbit-bobs above the tear |
 | glow_shard_b | drift shard | 2×2×2 | box-UV (104,18) | |
 | glow_shard_c | drift shard | 1×2×1 | box-UV (112,18) | |
+| glow_shard_d | drift shard | 1×2×1 | box-UV (28,44) | 4th orbiter — counter-phase bob, joins the volley spin / summon halo / death ejection |
+| crack_plate_chest | proud plate | 4×6×1 | box-UV (0,44) | crack-line plate floating proud of the torso armor half; guaranteed burning crack path |
+| crack_plate_faulds | proud plate | 6×4×1 | box-UV (12,44) | crack-line plate proud of the faulds; peels off in the death shatter |
 | pauldron_left | floating plate | 7×3×7 | box-UV (0,14) | armor-side pauldron, rolled −6°, floats (no arm attachment) |
 | pauldron_right | floating plate | 5×2×5 | box-UV (28,14) | rift-side, smaller/higher, rolled +8° |
 | head | horned helm | 6×7×6 | box-UV (92,0) | head-tracked; violet **eye slit** row 3, cols 1-4 of the north face |
@@ -31,15 +34,21 @@ every face rect itself, so only the layout is frozen here:
 `body` (pivot 0,24,0) is the hover/locomotion root; `root` stays clean for the scripted
 60t death implosion (`tickDeath`).
 
-**Art brief (design sheet §2.4 "rift_warden"):** the LEFT half is polished obsidian
-plate `#1B1D26`/`#2E3242` with `#4A5068` bevel rims; the RIGHT half is a void tear
-shading `#B98CFF` → `#5E2EA8` (core `#E9DCFF`, dark reality-static flecks) with three
-drifting shards. Helm horn `#3A3648`. Blades: near-black steel `#232732` with a burning
-`#B98CFF` edge column and rift shimmer creeping up from the tips.
+**Art brief (design sheet §2.4 "rift_warden", MOB-BOSS2 refinement):** the LEFT half is
+polished obsidian plate `#1B1D26`/`#2E3242` with `#4A5068` bevel rims, re-ground as
+**obsidian glass** — diagonal facet cells with glassy catch-light edges — and crossed by
+**violet fissures** (wandering hairline cracks `#B98CFF` → `#E9DCFF`, ~14-texel spacing
+with breaks); the RIGHT half is a void tear shading `#B98CFF` → `#5E2EA8` (core
+`#E9DCFF`, dark reality-static flecks) with four drifting shards. The two proud
+`crack_plate_*` shards each carry a guaranteed burning crack path down their face. Helm
+horn `#3A3648`. Blades: near-black steel `#232732` with a burning `#B98CFF` edge column
+and rift shimmer creeping up from the tips.
 
 **Emissive (glowmask):** the whole rift half — `glow_rift_core`, `glow_shard_*`,
-`glow_under` (auto via prefix) plus `arm_rift` at strength 0.85 — the helm eye slit and
-both blades' edge columns (custom glow painters). Armor half stays dark.
+`glow_under` (auto via prefix) plus `arm_rift` at strength 0.85 — the helm eye slit,
+both blades' edge columns, and the violet fissures + crack-plate crack paths (custom
+glow painters; the fissures reuse the exact albedo pixel test, same salt, so mask and
+albedo can never drift). Armor base tone stays dark.
 `RiftWardenRenderer` installs the layer via `withGlowmask()`.
 
 **Generator (deterministic, byte-identical reruns):**

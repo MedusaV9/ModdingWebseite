@@ -46,6 +46,11 @@ public class UmbralStalkerEntity extends Monster {
     /** {@code -1} while it is night; counts up once the dawn flight has started. */
     private int fleeTicks = -1;
 
+    /** Client-only smoothed skulk blend (0 = upright prowl, 1 = full crouch), driven by
+     * the synced {@code isAggressive()} flag — eases in fast, out slower. */
+    private float stalkAmount;
+    private float stalkAmountO;
+
     public UmbralStalkerEntity(EntityType<? extends UmbralStalkerEntity> entityType, Level level) {
         super(entityType, level);
     }
@@ -64,6 +69,11 @@ public class UmbralStalkerEntity extends Monster {
     @Override
     public void tick() {
         super.tick();
+        if (this.level().isClientSide) {
+            this.stalkAmountO = this.stalkAmount;
+            this.stalkAmount = Mth.clamp(
+                    this.stalkAmount + (this.isAggressive() ? 0.08F : -0.05F), 0.0F, 1.0F);
+        }
         if (this.level().isClientSide || !this.isAlive()) {
             return;
         }
@@ -143,9 +153,14 @@ public class UmbralStalkerEntity extends Monster {
         return SoundEvents.WOLF_DEATH;
     }
 
-    /** Client anim hook: the head lowers 0.3 rad while hunting ({@code isAggressive()} is synced). */
+    /** Client anim hook: smoothed skulk-crouch blend for {@code UmbralStalkerModel}. */
+    public float stalkAmount(float partialTick) {
+        return Mth.lerp(partialTick, this.stalkAmountO, this.stalkAmount);
+    }
+
+    /** Client anim hook: the head lowers up to 0.3 rad while hunting (eased, not a snap). */
     public float headLower(float partialTick) {
-        return this.isAggressive() ? 0.3F : 0.0F;
+        return stalkAmount(partialTick) * 0.3F;
     }
 
     /** Client anim hook: spine shards pulse-breathe. */
