@@ -17,6 +17,12 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+[ ] Der Char editor soll der dicke Gooby das Modell von davor sein ich finde das neue Aussehen in den UIs von ihm nicht schön.
+[ ] Der Char ersteller am Anfang sieht komisch aus
+[ ] Wo genau überträgt man seinen Save Game von davor?
+[ ] Es ist irgendwie nicht alles so gut gebackportet worden nur so gerusht ohne ohne Liebe zum detail.
+[ ] Die UI Sounds sind grauenhaft und vieles hat keinen animierten background oder allgemein keine Sounds.
+[ ] Warum wird nirgendwo die Musik von davor die wir generiert haben verwendet?
 [ ] Jedes Game hat nicht genug Polish.
 [ ] Das ganze UI ist null wie davor
 [ ] Es gibt viele Bugs.
