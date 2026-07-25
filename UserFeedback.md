@@ -17,6 +17,11 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+[ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
+[ ] Zurück Button funktoniert meist nicht.
+[ ] UI ist meist falsch skaliert.
+[ ] Gooby kann sich irgendwie keinen meter im Haus alleine bewegen.
+[ ] Das Ganze spielt ist bisher viel zu unfertig.
 [ ] Der Char editor soll der dicke Gooby das Modell von davor sein ich finde das neue Aussehen in den UIs von ihm nicht schön.
 [ ] Das Movement ist ab der ersten Sekunde verbuggt. Gooby glitcht hin und her.
 [ ] Das Interface wenn sich sachen öffnen nimmt den ganzen platz ein und ist nicht gut designed. Es überschneidet mit den anderen UI Elementen.
