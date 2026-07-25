@@ -139,14 +139,14 @@ public final class WandPowers {
         }
         WandStore store = WandStore.get(player.server);
         if (store.isDisabled()) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.disabled",
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.disabled",
                     (store.disabledRemainingSeconds() + 59L) / 60L), true);
             EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_STALL);
             return;
         }
         WandSoulbind.tick(player, stack); // conversion/claim races resolve before validation
         if (!WandSoulbind.isOwner(player, stack)) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.not_owner"), true);
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.not_owner"), true);
             return;
         }
         WandPath path = WandSoulbind.pathOf(stack);
@@ -161,14 +161,14 @@ public final class WandPowers {
         long now = player.serverLevel().getGameTime();
         long readyAt = COOLDOWNS.getOrDefault(player.getUUID(), Map.of()).getOrDefault(key, 0L);
         if (readyAt > now) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.cooldown",
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.cooldown",
                     Component.translatable(path.powerLangKey(selected)),
                     String.format("%.1f", (readyAt - now) / 20.0D)), true);
             return;
         }
         int charge = stack.getOrDefault(WandItems.WAND_CHARGE.get(), 0);
         if (charge < power.cost()) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.no_charge",
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.no_charge",
                     power.cost(), charge), true);
             EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_STALL);
             player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -177,7 +177,7 @@ public final class WandPowers {
         }
         if (SpawnProtectionRules.isInProtectionZone(player.level(), player.blockPosition())
                 && !SpawnProtectionRules.isExempt(player)) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.protected"), true);
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.protected"), true);
             return;
         }
 
@@ -247,7 +247,7 @@ public final class WandPowers {
             // client-side. D11 moved it onto the flash tick for the timing sync.
             MusicCues.play("wand_awakening", player);
         });
-        player.displayClientMessage(Component.translatable("wand.eclipse.msg.awakening"), true);
+        player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.awakening"), true);
         player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.path_chosen",
                 Component.translatable(chosen.langKey())));
         WandProgressSync.syncTo(player);
@@ -257,14 +257,14 @@ public final class WandPowers {
     public static void cycleSelected(ServerPlayer player, ItemStack stack) {
         WandPath path = WandSoulbind.pathOf(stack);
         if (path == WandPath.NONE) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.pathless"), true);
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.pathless"), true);
             return;
         }
         int level = WandSoulbind.levelOf(stack);
         int selected = (stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0) + 1) % level;
         stack.set(WandItems.WAND_SELECTED.get(), selected);
         WandConfig.Power power = WandConfig.get().power(path.powerKey(selected));
-        player.displayClientMessage(Component.translatable("wand.eclipse.msg.selected",
+        player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.selected",
                 Component.translatable(path.powerLangKey(selected)), power.cost()), true);
         player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.35F, 1.6F);
@@ -422,7 +422,7 @@ public final class WandPowers {
         Vec3 from = player.position();
         Vec3 target = findBlinkTarget(player, range);
         if (target == null) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.no_room"), true);
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.no_room"), true);
             return false;
         }
         Vec3 fxFrom = from.add(0.0D, 1.0D, 0.0D);

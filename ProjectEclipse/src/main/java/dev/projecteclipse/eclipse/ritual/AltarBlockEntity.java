@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
@@ -451,8 +452,13 @@ public class AltarBlockEntity extends BlockEntity {
                         this.worldPosition.getZ() + 0.5D), 0.0F, 0.0F, 32.0D);
     }
 
+    /**
+     * All altar action-bar lines funnel through here; {@link ServerLang#resolve} bakes the
+     * translatables for the player's effective MOD locale (a raw translatable would resolve
+     * with the client's vanilla language and show English to German players).
+     */
     private static void actionBar(ServerPlayer player, Component message) {
-        player.displayClientMessage(message, true);
+        player.displayClientMessage(ServerLang.resolve(player, message), true);
     }
 
     /** Player name for a UUID: online player, then profile cache, then a short UUID prefix. */

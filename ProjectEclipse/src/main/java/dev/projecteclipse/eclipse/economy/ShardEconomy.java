@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.hud.SidebarSyncService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.economy.ShardPayloads;
 import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -183,7 +184,7 @@ public final class ShardEconomy {
         if (!player.getInventory().add(stack)) {
             player.drop(stack, false);
         }
-        player.displayClientMessage(Component.translatable("shop.eclipse.shards_received", count), true);
+        player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.shards_received", count), true);
         if (overlay) {
             RewardPayloads.sendRewardGrant(player,
                     List.of(new RewardPayloads.ItemEntry("eclipse:umbral_shard", count)),
@@ -207,7 +208,7 @@ public final class ShardEconomy {
         if (pickedUp <= 0) {
             return;
         }
-        player.displayClientMessage(Component.translatable("shop.eclipse.shards_received", pickedUp), true);
+        player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.shards_received", pickedUp), true);
         trace(player, "picked up %d physical shard(s) off the ground", pickedUp);
     }
 
@@ -250,7 +251,7 @@ public final class ShardEconomy {
         }
         shardStack.shrink(amount);
         int pool = EclipseWorldState.get(player.server).addShardPool(amount);
-        player.displayClientMessage(Component.translatable("shop.eclipse.deposited_pool", amount, pool), true);
+        player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.deposited_pool", amount, pool), true);
         player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
         // B14 §3: resync the depositor's sidebar in the same second as the receipt line.
         SidebarSyncService.markDirty(player);
@@ -282,9 +283,9 @@ public final class ShardEconomy {
     private static void showOffer(ServerPlayer player, Offer offer) {
         Component name = Component.translatable(offer.nameKey());
         Component line = offer.pooled()
-                ? Component.translatable("shop.eclipse.offer_pooled", name, offer.cost(),
+                ? ServerLang.tr(player, "shop.eclipse.offer_pooled", name, offer.cost(),
                         EclipseWorldState.get(player.server).getShardPool())
-                : Component.translatable("shop.eclipse.offer", name, offer.cost(), getShards(player));
+                : ServerLang.tr(player, "shop.eclipse.offer", name, offer.cost(), getShards(player));
         player.displayClientMessage(line, true);
     }
 
@@ -330,12 +331,12 @@ public final class ShardEconomy {
             EclipseWorldState state = EclipseWorldState.get(server);
             // One activation per purchase: refuse (free of charge) while the favor still runs.
             if (offer == ECLIPSES_FAVOR_OFFER && isFavorActive(server)) {
-                player.displayClientMessage(Component.translatable("shop.eclipse.favor_already"), true);
+                player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.favor_already"), true);
                 player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
                 return;
             }
             if (state.getShardPool() < offer.cost()) {
-                player.displayClientMessage(Component.translatable("shop.eclipse.pool_need",
+                player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.pool_need",
                         offer.cost(), state.getShardPool()), true);
                 player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
                 return;
@@ -346,7 +347,7 @@ public final class ShardEconomy {
                 return;
             }
             SupplyBeacon.drop(server);
-            player.displayClientMessage(Component.translatable("shop.eclipse.bought_pooled", name), true);
+            player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.bought_pooled", name), true);
             // Global cue, no coordinates: everyone hears the beacon charge (spec: coords stay secret).
             for (ServerPlayer online : server.getPlayerList().getPlayers()) {
                 online.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.MASTER, 0.7F, 1.0F);
@@ -357,7 +358,7 @@ public final class ShardEconomy {
         }
         int balance = getShards(player);
         if (balance < offer.cost()) {
-            player.displayClientMessage(Component.translatable("shop.eclipse.need", offer.cost(), balance), true);
+            player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.need", offer.cost(), balance), true);
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
             return;
         }
@@ -366,7 +367,7 @@ public final class ShardEconomy {
         if (!player.getInventory().add(reward)) {
             player.drop(reward, false);
         }
-        player.displayClientMessage(Component.translatable("shop.eclipse.bought", name, getShards(player)), true);
+        player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.bought", name, getShards(player)), true);
         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.BLOCKS, 0.5F, 1.6F);
         EclipseMod.LOGGER.info("{} bought {} for {} shards at the altar {} ({} left)",
                 player.getScoreboardName(), offer.nameKey(), offer.cost(), altarPos.toShortString(), getShards(player));
@@ -395,7 +396,7 @@ public final class ShardEconomy {
         favorExpiryGameTime = server.overworld().getGameTime() + DAY_LENGTH_TICKS;
         refreshFavorEffects(server);
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
-            online.displayClientMessage(Component.translatable("shop.eclipse.favor_granted"), true);
+            online.displayClientMessage(ServerLang.tr(online, "shop.eclipse.favor_granted"), true);
             online.playNotifySound(SoundEvents.BEACON_POWER_SELECT, SoundSource.MASTER, 0.7F, 1.0F);
         }
         EclipseMod.LOGGER.info("{} spent {} pooled shards on Eclipse's Favor (pool now {}; runs until dayTime {})",

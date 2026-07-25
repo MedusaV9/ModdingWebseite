@@ -10,7 +10,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
-import net.minecraft.network.chat.Component;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -202,7 +202,7 @@ public final class ActionTogglesService {
         }
         LAST_HINT.put(player.getUUID(), now);
         player.displayClientMessage(
-                Component.translatable(action.denyMessageKey()).withColor(HINT_COLOR), true);
+                ServerLang.tr(player, action.denyMessageKey()).withColor(HINT_COLOR), true);
     }
 
     // --- build / mine ---

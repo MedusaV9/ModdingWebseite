@@ -1,13 +1,13 @@
 package dev.projecteclipse.eclipse.ritual;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -193,7 +193,7 @@ public class HeartExtractorItem extends Item implements GeoItem {
                 new S2CHeartBurstPayload(heartsAfter),
                 new S2CHeartBurstPayload(heartsAfter + 1));
         player.displayClientMessage(
-                Component.translatable("item.eclipse.heart_extractor.used", HEART_COST, heartsAfter), true);
+                ServerLang.tr(player, "item.eclipse.heart_extractor.used", HEART_COST, heartsAfter), true);
         EclipseMod.LOGGER.info("{} used a heart extractor ({} -> {} hearts, {} fragments)",
                 player.getScoreboardName(), heartsBefore, heartsAfter, FRAGMENT_REWARD);
         return stack;
@@ -201,7 +201,7 @@ public class HeartExtractorItem extends Item implements GeoItem {
 
     private static void refuse(ServerPlayer player, ItemStack stack) {
         triggerExtractorAnim(player, stack, ANIM_REFUSE);
-        player.displayClientMessage(Component.translatable("item.eclipse.heart_extractor.too_few"), true);
+        player.displayClientMessage(ServerLang.tr(player, "item.eclipse.heart_extractor.too_few"), true);
         player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.6F, 0.65F);
     }
 }

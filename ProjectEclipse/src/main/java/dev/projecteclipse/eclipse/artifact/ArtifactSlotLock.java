@@ -1,8 +1,8 @@
 package dev.projecteclipse.eclipse.artifact;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
-import dev.projecteclipse.eclipse.start.StartState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -49,12 +49,14 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * sweep always did), so a sealed day-1 main inventory leaves slot {@value #ARTIFACT_SLOT}
  * alone and the two 1Hz sweeps never fight over the artifact.</p>
  *
- * <p><b>Pre-event gate (PLAN-A A12):</b> the artifact must not exist before the start
- * event. Every enforcement pass first consults {@link StartState#eventStarted} — pre-event
- * it PURGES any artifact copies (cursor, open menu, whole inventory) instead of granting.
- * The grant happens exactly at the ceremony moment: {@code limbo.StartEventCutscene}
- * calls {@link #grantAll} right after flipping {@code startEventDone}; login/respawn/sweep
- * re-runs keep it idempotent and relog-safe.</p>
+ * <p><b>Storm-touch gate (PLAN-A A12, retimed by PROGFIX #3):</b> the artifact must not
+ * exist before the first player touches the intro storm. Every enforcement pass first
+ * consults {@link EclipseWorldState#isStormTouched} — while false it PURGES any artifact
+ * copies (cursor, open menu, whole inventory) instead of granting. The grant happens
+ * exactly at the storm-touch moment: {@code sequence.IntroSequence} latches
+ * {@code stormTouched} on the APPROACH → LIGHTNING trigger and calls {@link #grantAll};
+ * login/respawn/sweep re-runs keep it idempotent and relog-safe. A finished intro implies
+ * the flag (backfilled on server start), so existing saves never lose the artifact.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ArtifactSlotLock {
@@ -96,9 +98,9 @@ public final class ArtifactSlotLock {
     }
 
     /**
-     * A12: one immediate enforcement pass at the start-event ceremony moment, so every
-     * player receives the artifact the tick the event begins instead of on the next sweep.
-     * Idempotent — re-running it (or the regular sweep) never mints a second copy.
+     * A12: one immediate enforcement pass at the storm-touch moment, so every player
+     * receives the artifact the tick the first player reaches the storm instead of on the
+     * next sweep. Idempotent — re-running it (or the regular sweep) never mints a second copy.
      */
     public static void grantAll(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -117,8 +119,8 @@ public final class ArtifactSlotLock {
         }
         event.setCanceled(true);
         if (event.getPlayer() instanceof ServerPlayer player) {
-            if (!StartState.eventStarted(player.server)) {
-                return; // pre-event the artifact must not exist — the tossed copy vanishes
+            if (!EclipseWorldState.get(player.server).isStormTouched()) {
+                return; // before the storm touch the artifact must not exist — the tossed copy vanishes
             }
             Inventory inventory = player.getInventory();
             if (inventory.getItem(ARTIFACT_SLOT).is(EclipseItems.ARM_ARTIFACT.get())) {
@@ -138,10 +140,11 @@ public final class ArtifactSlotLock {
         Inventory inventory = player.getInventory();
         Item artifact = EclipseItems.ARM_ARTIFACT.get();
 
-        // A12 pre-event gate: before the start event the artifact must not exist at all —
-        // remove any copy instead of granting one. The grant lands via grantAll() at the
-        // ceremony moment, and this same path re-runs on login/respawn (relog-safe).
-        if (!StartState.eventStarted(player.server)) {
+        // A12 storm-touch gate (PROGFIX #3): until the first player touches the storm the
+        // artifact must not exist at all — remove any copy instead of granting one. The
+        // grant lands via grantAll() at the storm-touch moment, and this same path re-runs
+        // on login/respawn (relog-safe).
+        if (!EclipseWorldState.get(player.server).isStormTouched()) {
             purge(player, artifact);
             return;
         }

@@ -34,7 +34,9 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 /**
  * Spawn protection v2 rules that extend P6's {@link SanctumProtection} zone query without
  * editing that class: PvP block, fluid/vehicle griefing, mob griefing, fall-damage safety
- * (with optional edge band), creative/perm exemptions.
+ * (with optional edge band). PROGFIX #5: the old creative/perm exemptions were replaced
+ * by the central {@link DevMode} toggle — ops and creative players obey the rules until
+ * they enable {@code /devmode}.
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class SpawnProtectionRules {
@@ -198,15 +200,13 @@ public final class SpawnProtectionRules {
                 || item == Items.TNT;
     }
 
+    /**
+     * PROGFIX #5: only devmode players bypass ({@link DevMode#isExempt}) — the
+     * {@code protection.json} {@code exemptCreative}/{@code exemptPermission} knobs are
+     * no longer consulted; ops and creative players obey the rules by default.
+     */
     public static boolean isExempt(@Nullable Player player) {
-        if (!(player instanceof ServerPlayer serverPlayer)) {
-            return false;
-        }
-        ProtectionConfig.SpawnRules rules = ProtectionConfig.current().spawn();
-        if (rules.exemptCreative() && serverPlayer.isCreative()) {
-            return true;
-        }
-        return serverPlayer.hasPermissions(rules.exemptPermission());
+        return DevMode.isExempt(player);
     }
 
     private static void hint(ServerPlayer player, String key) {

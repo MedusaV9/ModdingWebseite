@@ -19,6 +19,7 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.ghosts.LogoutGhostEntity;
 import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
@@ -562,7 +563,7 @@ public final class ContractService {
                 0.6F + 0.15F * hits);
         if (hits >= config.ghostKillHits()) {
             attacker.displayClientMessage(
-                    Component.translatable("eclipse.contract.ghost.success"), false);
+                    ServerLang.tr(attacker, "eclipse.contract.ghost.success"), false);
             ghost.discard();
             resolveSuccess(server, state, attacker, null, config.ghostPayoutPct());
         }
@@ -615,7 +616,7 @@ public final class ContractService {
         if (deadTarget != null) {
             // "It was a contract." — the best story-generator in the system (IDEA-20 #9).
             deadTarget.displayClientMessage(
-                    Component.translatable("eclipse.contract.bought"), false);
+                    ServerLang.tr(deadTarget, "eclipse.contract.bought"), false);
         }
         finishWindow(server, state, ContractState.Outcome.SUCCESS);
     }
@@ -634,7 +635,7 @@ public final class ContractService {
                 SkillsApi.addXp(target, "contract", config.expiry().survivorXp());
                 ShardEconomy.addShards(target, config.expiry().survivorShards());
                 target.displayClientMessage(
-                        Component.translatable("eclipse.contract.survivor"), false);
+                        ServerLang.tr(target, "eclipse.contract.survivor"), false);
                 ContractPayloads.sendResolve(target, ContractPayloads.RESOLVE_SURVIVED);
             } else {
                 // FFIX-B (FINAL-SAT-SOL C1): the id MUST be scoped per contract instance —
@@ -663,7 +664,7 @@ public final class ContractService {
         ServerPlayer hunter = playerOf(server, state.hunter());
         if (hunter != null) {
             hunter.displayClientMessage(
-                    Component.translatable("eclipse.contract.voided.hunter"), false);
+                    ServerLang.tr(hunter, "eclipse.contract.voided.hunter"), false);
             ContractPayloads.sendResolve(hunter, ContractPayloads.RESOLVE_WITHDRAWN);
         }
         finishWindow(server, state, ContractState.Outcome.VOIDED);
@@ -693,8 +694,8 @@ public final class ContractService {
         AnnouncementService.announce(server, "announce.eclipse.contract.tables.title", "",
                 S2CAnnouncePayload.STYLE_BOSS);
         PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(SHAKE_STRENGTH, SHAKE_TICKS));
-        target.displayClientMessage(Component.translatable("eclipse.contract.tables.target"), false);
-        deadHunter.displayClientMessage(Component.translatable("eclipse.contract.tables.hunter"), false);
+        target.displayClientMessage(ServerLang.tr(target, "eclipse.contract.tables.target"), false);
+        deadHunter.displayClientMessage(ServerLang.tr(deadHunter, "eclipse.contract.tables.hunter"), false);
         ContractPayloads.sendResolve(target, ContractPayloads.RESOLVE_SURVIVED);
         ContractPayloads.sendResolve(deadHunter, ContractPayloads.RESOLVE_LAPSED);
         finishWindow(server, state, ContractState.Outcome.TABLES_TURNED);
@@ -707,7 +708,7 @@ public final class ContractService {
             ContractPayloads.sendResolve(online, ContractPayloads.RESOLVE_PRANK_REVEAL);
             if (config.prankConsolationShards() > 0) {
                 ShardEconomy.addShards(online, config.prankConsolationShards());
-                online.displayClientMessage(Component.translatable(
+                online.displayClientMessage(ServerLang.tr(online,
                         "eclipse.contract.prank.consolation", config.prankConsolationShards()), false);
             }
         }

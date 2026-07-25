@@ -1,11 +1,15 @@
 // eclipse:limbo v4.1 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework;
-// FXTEAM-LIMBO v4 craft pass; VEIL-REPASS-2 v4.1 polish). v4.1 adds, WITHOUT touching the
-// frozen v3/v4 fixes (depth water mask + capped eps + smoothstep facing, ray-elevation
-// curvature, VoyageOffset accumulation, Detail reduced-motion gate):
+// FXTEAM-LIMBO v4 craft pass; VEIL-REPASS-2 v4.1 polish). LIMBOFIX removed two effects:
+// the horizon-curvature/infinite-ocean UV warp (its hd term snapped regimes at
+// rayDir.y == -0.001 — a seam line across the screen; the CurveAmount uniform is gone
+// with it) and the eclipse reflection smear (screen-space keyed off GodrayDir, the post
+// half of the broken sky-pass water streak). The endless-sea horizon fade stays.
+// v4.1 adds, WITHOUT touching the frozen v3/v4 fixes (depth water mask + capped eps +
+// smoothstep facing, VoyageOffset accumulation, Detail reduced-motion gate):
 //   * Sea breathing — the whole violet water field inhales/exhales in exact sync with the
-//     eclipse corona pulse: the frozen dual-frequency aura curve (already re-derived here
-//     for the reflection smear — the "uniform exists" is Time) is hoisted and multiplied
-//     into the water color block at ±7.5%. Detail-gated back to the steady v4 look.
+//     eclipse corona pulse: the frozen dual-frequency aura curve (the "uniform exists" is
+//     Time) is multiplied into the water color block at ±7.5%. Detail-gated back to the
+//     steady v4 look.
 //   * Soul shoal (SoulShoal uniform) — rarely, a school of tiny soul-green lights swims
 //     beneath the surface and crosses near the ship: a translating cluster of stretched
 //     gaussian dashes in shoal-local space (the formation swims, unlike the world-anchored
@@ -13,7 +17,7 @@
 //     LimboAmbience feeds the deterministic crossing; idle/reducedFx = strength 0.
 // --- v4 header kept below ---
 // eclipse:limbo v4 — the Limbo grade. v4 adds, WITHOUT touching the v3 fixes (depth water
-// mask, ray-elevation curvature, voyage drift):
+// mask, voyage drift):
 //   * Layered water — a near-hull micro-ripple octave (extra causticWeb at 3.1× frequency,
 //     faded out by 16 blocks) plus long-wavelength swells far out (a very low-frequency
 //     noise that re-shades the web brightness beyond ~18 blocks) — three perceptual bands
@@ -21,12 +25,10 @@
 //   * Sparse bioluminescent glints — rare soul-green spots in the world-anchored caustic
 //     field (they ride wp, so they trail the VoyageOffset drift astern automatically),
 //     elongated along the drift axis, blinking on slow per-cell phases.
-//   * Wave-broken reflection smear — the zenith-disc water smear is modulated by a
-//     world-anchored ripple noise instead of reading as one solid blob.
 //   * Far storm-glow pulses (LightningGlow) — an occasional soft violet glow along one
-//     horizon azimuth (no bolts): pure ray-geometry like the curvature (EVAL-POL-F #3),
+//     horizon azimuth (no bolts): pure ray-geometry (EVAL-POL-F #3),
 //     applied only to sky + melted-horizon pixels so fog banks and horizon ships
-//     silhouette against it. Idle at strength 0; reducedFx feeds 0 (CurveAmount ladder).
+//     silhouette against it. Idle at strength 0; reducedFx feeds 0.
 // --- v3 header kept below ---
 // eclipse:limbo v3 — the Limbo grade (P2-W3, R5, GRADE priority; PLAN-C C1 water rework).
 // v2 kept: desaturate toward violet + breathing vignette, GodrayDir radial god rays, edge
@@ -42,15 +44,10 @@
 //     VoyageOffset (a steadily increasing world-XZ scroll in blocks, fed by LimboAmbience,
 //     ship forward −X→+X) streams the whole caustic field slowly astern past the hull —
 //     the shader half of the item-6 "sailing" illusion.
-//   * Horizon curvature + infinite ocean — the sampled scene UV is displaced UP by
-//     k·(horizontal distance)², biased toward the eclipse azimuth (GodrayDir): the classic
-//     planet-curvature warp, bending the world up toward the zenith eclipse at the rim.
-//     Sky rays saturate at the far distance so the sea is pulled up over the old horizon
-//     clip, and the last 15% before the loaded-sea edge fades into the sky gradient — the
-//     ocean reads as endless. The warp fades at the screen border (no letterbox smearing)
-//     and is disabled entirely under reducedFx (CurveAmount = 0).
+//   * Endless sea — the last 15% before the loaded-sea edge fades into the sky gradient,
+//     so the ocean reads as endless instead of clipping at the render distance.
 // Uniforms: Intensity, GodrayDir (vec2), CausticsAmount, Time (frozen §3.3) + the v3 set
-// InvViewProj, CameraPos, WaterlineY, VoyageOffset, CurveAmount, FarDist + the v4
+// InvViewProj, CameraPos, WaterlineY, VoyageOffset, FarDist + the v4
 // LightningGlow and Detail (reduced-motion gate) + the v4.1 SoulShoal — all fed per
 // frame by veilfx.LimboAmbience (which captures the exact AFTER_SKY render matrices, view
 // bobbing included, so reconstruction matches the depth buffer — the SunTracker law).
@@ -67,12 +64,11 @@ uniform mat4 InvViewProj;   // inverse of this frame's exact Proj·ModelView (ca
 uniform vec3 CameraPos;     // camera world position (worldPos = CameraPos + reconstructed)
 uniform float WaterlineY;   // top water block Y of the limbo ocean (−1e5 until synced)
 uniform vec2 VoyageOffset;  // steadily increasing world-XZ scroll (blocks) — sailing drift
-uniform float CurveAmount;  // horizon curvature strength (0 under reducedFx)
 uniform float FarDist;      // approx. distance (blocks) where the loaded sea geometry ends
 // v4:
 uniform vec3 LightningGlow; // xy = world-XZ azimuth unit dir of the pulse, z = strength 0..1
 uniform float Detail;       // 1 normal, 0 under reducedFx — gates the v4 water-motion layers
-                            // (swells, micro-ripples, glints, reflection ripple) back to the
+                            // (swells, micro-ripples, glints) back to the
                             // v3 water look: reduced FX is a motion contract, not just ALU.
 // v4.1:
 uniform vec4 SoulShoal;     // xy = shoal center (world XZ), zw = swim heading × strength —
@@ -96,7 +92,7 @@ float causticWeb(vec2 p, float t) {
 vec3 reconstructRel(vec2 uv, float depth) {
     vec4 clip = InvViewProj * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
     // Epsilon guard: a singular/near-zero homogeneous w (identity-parked InvViewProj,
-    // degenerate depth) would inject Inf/NaN into UV warp, masks and noise coordinates.
+    // degenerate depth) would inject Inf/NaN into masks and noise coordinates.
     float w = clip.w;
     if (abs(w) < 1.0e-6) w = w < 0.0 ? -1.0e-6 : 1.0e-6;
     return clip.xyz / w;
@@ -105,57 +101,26 @@ vec3 reconstructRel(vec2 uv, float depth) {
 void main() {
     vec2 uv = texCoord;
     vec2 screenSize = vec2(textureSize(DiffuseSampler0, 0));
-    float aspect = screenSize.x / max(screenSize.y, 1.0);
 
-    // v4.1: the frozen dual-frequency corona pulse (the sky pass's drawAuraGlow curve,
-    // previously re-derived inline for the reflection smear) hoisted to main so the sea
-    // breathing and the smear shimmer share ONE curve — they can never desync from the
-    // sky-pass aura, and from each other.
+    // v4.1: the frozen dual-frequency corona pulse (the sky pass's drawAuraGlow curve)
+    // drives the sea breathing — one curve, so it can never desync from the sky-pass aura.
     float pulse = 0.85 + 0.11 * sin(Time * 1.3) + 0.04 * sin(Time * 0.37 + 1.7);
 
-    // ---- horizon curvature + infinite-ocean warp (item 5) -------------------------------
-    // Displace the SAMPLED scene UV up by k·(horizontal distance)² so the world bends up
-    // toward the zenith eclipse. EVAL-POL-F #3: the bend derives from the VIEW-RAY
-    // elevation (distance along the ray to the water plane, saturating toward FarDist at
-    // the horizon and for upward rays) — NOT from this pixel's own depth. Per-pixel depth
-    // made the warp jump across near-rigging-vs-sky edges (sky pixels warped ~8.5% while
-    // the mast didn't), smearing ghost copies of the rigging into the sky. A pure ray
-    // function is C0 across silhouettes, so nothing can tear. Warp still fades near the
-    // screen border and is off under reducedFx.
-    // Shared view ray for the pure-ray effects (curvature warp + v4 storm glow). Both are
-    // fed 0 under reducedFx, so the reconstruction is skipped entirely on that tier.
+    // LIMBOFIX: the horizon-curvature + infinite-ocean UV warp is GONE (its hd term
+    // snapped between two regimes at rayDir.y == -0.001 — a visible seam line across the
+    // screen). The scene samples at plain uv; the endless-sea horizon fade below stays.
+    // View ray for the v4 storm glow (pure ray geometry, fed 0 under reducedFx, so the
+    // reconstruction is skipped entirely on that tier).
     vec3 rayDir = vec3(0.0, 1.0, 0.0);
-    if (CurveAmount > 0.001 || LightningGlow.z > 0.001) {
+    if (LightningGlow.z > 0.001) {
         rayDir = normalize(reconstructRel(uv, 1.0));
     }
-    vec2 suv = uv;
-    if (CurveAmount > 0.001) {
-        // Camera height above the sea plane, clamped sane while WaterlineY is unsynced.
-        float camH = clamp(CameraPos.y - (WaterlineY + 0.9), 2.0, 64.0);
-        // Horizontal distance where this ray meets the sea; horizon/up rays saturate.
-        float hd = rayDir.y < -0.001
-                ? min(camH * length(rayDir.xz) / -rayDir.y, FarDist)
-                : FarDist;
-        float bend = hd / max(FarDist, 1.0);
-        float warp = min(bend * bend, 1.0) * 0.085 * CurveAmount;
-        // Bend UP, biased toward the eclipse azimuth while GodrayDir is on/near screen
-        // (the CPU pushes (10,10) while the zenith is behind the camera).
-        vec2 curveDir = vec2(0.0, 1.0);
-        if (length(GodrayDir) < 3.0) {
-            vec2 toEclipse = (GodrayDir * 0.5 + 0.5) - uv;
-            curveDir = normalize(vec2(toEclipse.x * 0.3, max(abs(toEclipse.y), 0.4)));
-        }
-        // Descending ramps as 1-smoothstep(lo,hi,x): edge0>edge1 is undefined GLSL.
-        float edgeFade = smoothstep(0.0, 0.06, uv.y) * (1.0 - smoothstep(0.94, 1.0, uv.y))
-                * smoothstep(0.0, 0.04, uv.x) * (1.0 - smoothstep(0.96, 1.0, uv.x));
-        suv = clamp(uv - curveDir * warp * edgeFade, vec2(0.0), vec2(1.0));
-    }
 
-    float depth = texture(DiffuseDepthSampler, suv).r;
+    float depth = texture(DiffuseDepthSampler, uv).r;
     float sky = step(0.9999, depth);
 
     // ---- REAL water mask (item 1): depth-reconstructed world position -------------------
-    vec3 rel = reconstructRel(suv, depth);
+    vec3 rel = reconstructRel(uv, depth);
     vec3 world = CameraPos + rel;
     float dist = length(rel.xz);
     // Water surface plane: top water block + source-block fluid height (~0.9). The band
@@ -184,11 +149,11 @@ void main() {
             efxNoise(wp * 0.9 + vec2(Time * 0.50, 0.0)) - 0.5,
             efxNoise(wp * 0.9 + vec2(31.7, Time * 0.43)) - 0.5) * 0.012 * water;
 
-    // ---- base sample with warp + wobble + edge chroma fringe (≤ ~2.5 px, dreamlike) ------
+    // ---- base sample with wobble + edge chroma fringe (≤ ~2.5 px, dreamlike) ------------
     float d = distance(uv, vec2(0.5));
     float edge = smoothstep(0.35, 0.75, d) * Intensity;
     vec2 radial = normalize(uv - 0.5 + vec2(1.0e-5));
-    vec3 color = efxChroma(DiffuseSampler0, suv + wobble, radial * (2.5 / screenSize), edge);
+    vec3 color = efxChroma(DiffuseSampler0, uv + wobble, radial * (2.5 / screenSize), edge);
 
     // ---- v1 grade kept: desaturate toward violet + soft breathing vignette --------------
     float gray = dot(color, vec3(0.299, 0.587, 0.114));
@@ -275,23 +240,6 @@ void main() {
         }
     }
 
-    // ---- eclipse reflection smear (IDEA-18 §1): the zenith disc mirrored on the water ----
-    // Mirror of the zenith NDC across the horizon; gated by the REAL water mask now (C1),
-    // never by luminance. The (10,10) offscreen push kills it while looking away.
-    vec2 mirrorNdc = vec2(GodrayDir.x, -GodrayDir.y);
-    if (abs(mirrorNdc.x) < 2.5 && abs(mirrorNdc.y) < 2.5) {
-        vec2 dm = (uv - (mirrorNdc * 0.5 + 0.5)) * vec2(aspect * 3.2, 1.1);
-        float smear = exp(-dot(dm, dm) * 6.0);
-        // Same breathing curve as the sky-pass aura pulse — never desyncs (v4.1: the
-        // curve is hoisted to main and shared with the sea breathing).
-        float shimmer = pulse;
-        // v4: wave-broken smear — a world-anchored ripple (it rides wp, so it streams with
-        // the voyage drift) breaks the solid blob into moving patches of reflection.
-        // Detail-gated (reduced FX): falls back to the solid v3 blob.
-        float ripple = mix(1.0, 0.70 + 0.30 * efxNoise(wp * 1.3 + vec2(Time * 0.20, 0.0)), Detail);
-        color += vec3(0.55, 0.28, 1.00) * smear * shimmer * ripple * water * 0.5;
-    }
-
     // ---- endless-sea horizon fade (item 5): last 15% melts into the sky gradient --------
     // Applies only to scene pixels (warped former-sky pixels now sample sea and land here
     // fully faded); true sky pixels keep their crisp stars/disc.
@@ -299,7 +247,7 @@ void main() {
     color = mix(color, vec3(0.030, 0.018, 0.062), horizonMix);
 
     // ---- v4: far storm-glow pulses — a soft violet sheet along one horizon azimuth ------
-    // Pure ray geometry like the curvature (EVAL-POL-F #3: C0 across silhouettes, nothing
+    // Pure ray geometry (EVAL-POL-F #3: C0 across silhouettes, nothing
     // can tear), weighted by sky + melted-horizon coverage. Horizon ships / fog banks sit
     // at sky depth, so they receive the SAME additive glow as the sky behind them — their
     // darkening is preserved in absolute terms and they still read as silhouettes against

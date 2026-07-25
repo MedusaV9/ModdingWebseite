@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.lives.BanService;
@@ -29,7 +30,6 @@ import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
 import dev.projecteclipse.eclipse.xboxevent.XboxPayloads;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -294,7 +294,7 @@ public final class ArenaFight {
             int seconds = countdownTicks / 20;
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 player.displayClientMessage(
-                        Component.translatable("message.eclipse.ferry.countdown", seconds), true);
+                        ServerLang.tr(player, "message.eclipse.ferry.countdown", seconds), true);
                 if (seconds <= 3) {
                     player.playNotifySound(EclipseSounds.BOSS_FERRYMAN_BELL.get(),
                             SoundSource.AMBIENT, 0.8F, 1.0F + (3 - seconds) * 0.15F);

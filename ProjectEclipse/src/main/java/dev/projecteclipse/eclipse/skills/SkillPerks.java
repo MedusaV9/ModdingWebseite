@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.PlacedBlockData;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.drama.MiningFeelService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CSkillProcPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -180,7 +181,7 @@ public final class SkillPerks {
                                     .withUnderlined(true)
                                     .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
                                             "/skills procmsg off"))));
-            player.sendSystemMessage(line);
+            player.sendSystemMessage(ServerLang.resolve(player, line));
         }
         return chatWanted;
     }

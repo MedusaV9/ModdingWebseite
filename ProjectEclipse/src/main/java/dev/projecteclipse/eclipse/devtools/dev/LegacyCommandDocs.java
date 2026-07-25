@@ -63,6 +63,8 @@ public final class LegacyCommandDocs {
                         ClickAction.SUGGEST, 3),
                 legacy("eclipse.revive", "/eclipse revive <player>", "dev.eclipse.doc.eclipse.revive", Danger.CAUTION,
                         ClickAction.SUGGEST, 3),
+                legacy("eclipse.bestiary.reset", "/eclipse bestiary reset [player]",
+                        "dev.eclipse.doc.eclipse.bestiary.reset", Danger.DESTRUCTIVE, ClickAction.SUGGEST, 3),
                 legacy("eclipse.restore", "/eclipse restore <player> [index]", "dev.eclipse.doc.eclipse.restore",
                         Danger.CAUTION, ClickAction.SUGGEST, 3),
                 legacy("eclipse.border.set", "/eclipse border set <size> [seconds]",

@@ -2,7 +2,7 @@ package dev.projecteclipse.eclipse.wand;
 
 import java.util.UUID;
 
-import net.minecraft.network.chat.Component;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -71,7 +71,7 @@ public final class WandSoulbind {
         if (stack.get(WandItems.WAND_CHARGE.get()) == null) {
             stack.set(WandItems.WAND_CHARGE.get(), WandConfig.get().charge().max());
         }
-        holder.displayClientMessage(Component.translatable(
+        holder.displayClientMessage(ServerLang.tr(holder,
                 fresh ? "wand.eclipse.msg.attuned" : "wand.eclipse.msg.converted"), true);
         holder.serverLevel().playSound(null, holder.getX(), holder.getY(), holder.getZ(),
                 SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.8F, fresh ? 1.1F : 0.7F);

@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CBorderPayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.progression.BorderController;
@@ -21,7 +22,6 @@ import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -616,7 +616,7 @@ public final class SoftBorder {
             return;
         }
         LAST_SOUND.put(player.getUUID(), now);
-        player.displayClientMessage(Component.translatable("message.eclipse.border_warning"), true);
+        player.displayClientMessage(ServerLang.tr(player, "message.eclipse.border_warning"), true);
         player.playNotifySound(EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.AMBIENT,
                 0.4F, 1.1F + level.random.nextFloat() * 0.1F);
     }

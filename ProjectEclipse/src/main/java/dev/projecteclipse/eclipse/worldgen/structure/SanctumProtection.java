@@ -3,8 +3,10 @@ package dev.projecteclipse.eclipse.worldgen.structure;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.devtools.SpawnTuningData;
+import dev.projecteclipse.eclipse.protection.DevMode;
 import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -30,8 +32,9 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * Spawn protection around the sanctum altar (docs/ideas/04_content.md §3): within
  * {@value #RADIUS} horizontal blocks of the altar column (and the vertical band
  * {@value #VERTICAL_BELOW} below to {@value #VERTICAL_ABOVE} above the altar), block
- * breaking and placing are cancelled (ops with permission ≥ {@value #EXEMPT_PERMISSION}
- * exempt), explosions lose every affected block inside the zone, and non-eclipse hostile
+ * breaking and placing are cancelled (only devmode players exempt — {@link DevMode},
+ * PROGFIX #5: ops obey the zone until they toggle {@code /devmode}), explosions lose
+ * every affected block inside the zone, and non-eclipse hostile
  * natural spawns are suppressed ({@link FinalizeSpawnEvent}) — the grounds stay
  * unnaturally calm. Blocked players get a v1-style action-bar hint. The altar position is
  * cached from {@link EclipseWorldState#getSanctumAltarPos()} (refreshed on server start
@@ -62,8 +65,6 @@ public final class SanctumProtection {
     public static final int VERTICAL_BELOW = 26;
     /** Protected vertical band above the altar (halos +8, W5 orbital ring +7, pillars). */
     public static final int VERTICAL_ABOVE = 24;
-    /** Vanilla permission level that bypasses the protection (ops). */
-    private static final int EXEMPT_PERMISSION = 3;
     /**
      * B10 null-altar fallback: the authored disc center — the flat spawn pad sits at
      * y 70 ({@code DiscTerrainFunction.computeSurfaceY}, r &lt; 14 blend) — so the spawn
@@ -81,7 +82,7 @@ public final class SanctumProtection {
     public static void refresh(MinecraftServer server) {
         altarPos = EclipseWorldState.get(server).getSanctumAltarPos();
         if (altarPos != null) {
-            EclipseMod.LOGGER.info("Sanctum protection active: r={} x y[-{}..+{}] around {} (break/place/explosions cancelled, hostile spawns suppressed, ops exempt)",
+            EclipseMod.LOGGER.info("Sanctum protection active: r={} x y[-{}..+{}] around {} (break/place/explosions cancelled, hostile spawns suppressed, devmode exempt)",
                     radius(server), VERTICAL_BELOW, VERTICAL_ABOVE, center(server.overworld()).toShortString());
         }
     }
@@ -239,14 +240,15 @@ public final class SanctumProtection {
         }
     }
 
+    /** PROGFIX #5: only devmode players bypass — ops obey the zone by default. */
     private static boolean isExempt(@Nullable Player player) {
-        return player != null && player.hasPermissions(EXEMPT_PERMISSION);
+        return DevMode.isExempt(player);
     }
 
     /** v1-style feedback: action bar + a muffled chime, never chat. */
     private static void hint(@Nullable Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
-            serverPlayer.displayClientMessage(Component.translatable("message.eclipse.sanctum_protected"), true);
+            serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "message.eclipse.sanctum_protected"), true);
             serverPlayer.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 0.7F, 0.6F);
         }
     }

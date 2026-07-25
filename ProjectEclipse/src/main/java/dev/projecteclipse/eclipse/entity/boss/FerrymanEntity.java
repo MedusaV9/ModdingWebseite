@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.ferryman.ArenaBuilder;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
@@ -800,7 +801,7 @@ public class FerrymanEntity extends Monster {
     private void onKneelBlockedHit(ServerLevel level, DamageSource source) {
         if (source.getEntity() instanceof ServerPlayer attacker
                 && this.kneelHintShown.add(attacker.getUUID())) {
-            attacker.displayClientMessage(Component.translatable("message.eclipse.ferryman.kneel"), true);
+            attacker.displayClientMessage(ServerLang.tr(attacker, "message.eclipse.ferryman.kneel"), true);
         }
         if (this.tickCount - this.lastKneelCueTick < KNEEL_CUE_INTERVAL_TICKS) {
             return;

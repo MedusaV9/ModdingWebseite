@@ -45,8 +45,9 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  *       the same footprint and must stay minable.</li>
  * </ul>
  *
- * <p>Break/place are cancelled for non-ops (permission &lt; {@value #EXEMPT_PERMISSION})
- * with a polite action-bar note ({@code message.eclipse.landmark_protected}); explosions
+ * <p>Break/place are cancelled for everyone except devmode players ({@link DevMode},
+ * PROGFIX #5 — ops obey the zones until they toggle {@code /devmode}) with a polite
+ * action-bar note ({@code message.eclipse.landmark_protected}); explosions
  * lose every affected block inside a zone. Zones derive purely from
  * {@link DiscMapData} plus one deterministic {@link DiscTerrainFunction} summit probe,
  * rebuilt per server start (statics never leak across singleplayer re-opens).</p>
@@ -59,8 +60,6 @@ public final class LandmarkProtection {
     public static final int SUMMIT_RADIUS = 24;
     /** Depth below the summit surface still covered (the terraforming shelf cut). */
     public static final int SUMMIT_DEPTH = 24;
-    /** Vanilla permission level that bypasses the protection (ops). */
-    private static final int EXEMPT_PERMISSION = 3;
 
     /** One protected cylinder slice; full columns use MIN/MAX sentinels. */
     private record Zone(ResourceKey<Level> dimension, int x, int z, int radius,
@@ -192,8 +191,9 @@ public final class LandmarkProtection {
         event.getAffectedBlocks().removeIf(pos -> isProtected(level, pos));
     }
 
+    /** PROGFIX #5: only devmode players bypass — ops obey the zones by default. */
     private static boolean isExempt(@Nullable Player player) {
-        return player != null && player.hasPermissions(EXEMPT_PERMISSION);
+        return DevMode.isExempt(player);
     }
 
     /** Polite deny: action bar + a muffled chime, never chat (SanctumProtection style). */

@@ -45,6 +45,7 @@ import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.EclipseSpawner;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.StartEventCutscene;
@@ -56,6 +57,8 @@ import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.GoalTracker;
 import dev.projecteclipse.eclipse.progression.ModGate;
 import dev.projecteclipse.eclipse.progression.UnlockState;
+import dev.projecteclipse.eclipse.progression.bestiary.BestiaryService;
+import dev.projecteclipse.eclipse.progression.bestiary.BestiaryState;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
@@ -91,6 +94,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * /eclipse lives set|add &lt;player&gt; &lt;n&gt;
  * /eclipse altar set &lt;level&gt;
  * /eclipse ban &lt;player&gt; | revive &lt;player&gt;
+ * /eclipse bestiary reset [player]            (no player = clear EVERYONE's bestiary)
  * /eclipse restore &lt;player&gt; [index]          (no index = list snapshots)
  * /eclipse border set &lt;size&gt; [seconds]        (legacy: ring radius = size/2)
  * /eclipse border ring set &lt;radius&gt; [seconds] | border fx range &lt;blocks&gt;
@@ -187,6 +191,12 @@ public final class EclipseCommands {
                 .then(Commands.literal("revive")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(EclipseCommands::revive)))
+                .then(Commands.literal("bestiary")
+                        .then(Commands.literal("reset")
+                                .executes(context -> bestiaryReset(context, null))
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .executes(context -> bestiaryReset(context,
+                                                EntityArgument.getPlayer(context, "player"))))))
                 .then(Commands.literal("restore")
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(EclipseCommands::restoreList)
@@ -618,6 +628,39 @@ public final class EclipseCommands {
         source.sendSuccess(() -> Component.literal(
                 player.getScoreboardName() + " has been revived (1 life, back at overworld spawn)"), false);
         return 1;
+    }
+
+    // --- bestiary (PROGFIX #1: lifetime-per-save knowledge finally gets a reset path) ---
+
+    /**
+     * {@code /eclipse bestiary reset [player]}: clears {@link BestiaryState} for one player
+     * (or EVERYONE when the selector is omitted) and re-syncs the affected clients so the
+     * dossier UI empties immediately. Feedback is baked through {@link ServerLang} for the
+     * command source's locale.
+     */
+    private static int bestiaryReset(CommandContext<CommandSourceStack> context,
+            @Nullable ServerPlayer target) {
+        CommandSourceStack source = context.getSource();
+        BestiaryState state = BestiaryState.get(source.getServer());
+        ServerPlayer sender = source.getEntity() instanceof ServerPlayer player ? player : null;
+        if (target != null) {
+            if (!state.clear(target.getUUID())) {
+                source.sendFailure(ServerLang.tr(sender, "command.eclipse.bestiary.reset.empty",
+                        target.getScoreboardName()));
+                return 0;
+            }
+            BestiaryService.resync(target);
+            source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.bestiary.reset.one",
+                    target.getScoreboardName()), false);
+            return 1;
+        }
+        int cleared = state.clearAll();
+        for (ServerPlayer online : source.getServer().getPlayerList().getPlayers()) {
+            BestiaryService.resync(online);
+        }
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.bestiary.reset.all",
+                cleared), false);
+        return cleared;
     }
 
     // --- restore ---

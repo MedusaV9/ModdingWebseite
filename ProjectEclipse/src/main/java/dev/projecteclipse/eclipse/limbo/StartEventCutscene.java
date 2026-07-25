@@ -270,9 +270,9 @@ public final class StartEventCutscene {
         PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.EMERGE));
         OarAnimator.endTilt();
         EclipseWorldState.get(server).setStartEventDone(true);
-        // A12: the artifact chooses everyone at the ceremony moment (idempotent grant pass);
+        // PROGFIX #3: no artifact grant here — the artifact chooses everyone only at the
+        // storm-touch moment (IntroSequence APPROACH → LIGHTNING latches stormTouched).
         // A8: immediately re-sync the sidebar aggregate so eventStarted reaches every client.
-        dev.projecteclipse.eclipse.artifact.ArtifactSlotLock.grantAll(server);
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             dev.projecteclipse.eclipse.hud.SidebarSyncService.sendNow(online);
         }

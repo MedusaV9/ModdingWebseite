@@ -10,6 +10,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -98,7 +99,7 @@ public final class SkillCommands {
         int level = SkillCurve.levelForXp(entry.totalXp, curve);
         // Action-bar dump (feedback rule: action bar, never chat). Secret multiplier is
         // deliberately absent — nothing here may reveal it.
-        player.displayClientMessage(Component.translatable("message.eclipse.skill.info",
+        player.displayClientMessage(ServerLang.tr(player, "message.eclipse.skill.info",
                 level,
                 SkillCurve.xpIntoLevel(entry.totalXp, level, curve),
                 SkillCurve.xpForLevel(level + 1, curve),
@@ -111,7 +112,7 @@ public final class SkillCommands {
             throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         SkillsApi.setProcMessagesEnabled(player, enabled);
-        player.displayClientMessage(Component.translatable(enabled
+        player.displayClientMessage(ServerLang.tr(player, enabled
                 ? "message.eclipse.skill.procmsg.on"
                 : "message.eclipse.skill.procmsg.off"), true);
         return 1;
@@ -132,7 +133,7 @@ public final class SkillCommands {
                 ? (dev.projecteclipse.eclipse.rebirth.RebirthApi.count(player.server, player.getUUID()) > 0
                         ? "message.eclipse.rebirth.aura.on" : "message.eclipse.rebirth.aura.on_locked")
                 : "message.eclipse.rebirth.aura.off";
-        player.displayClientMessage(Component.translatable(key), true);
+        player.displayClientMessage(ServerLang.tr(player, key), true);
         return 1;
     }
 

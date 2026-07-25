@@ -147,4 +147,26 @@ public final class BestiaryState extends SavedData {
         }
         return added;
     }
+
+    /**
+     * Drops one player's whole bestiary row — counts and encountered set alike
+     * ({@code /eclipse bestiary reset <player>}). Returns whether anything was stored.
+     */
+    public boolean clear(UUID player) {
+        boolean removed = players.remove(player) != null;
+        if (removed) {
+            setDirty();
+        }
+        return removed;
+    }
+
+    /** Drops every player's bestiary knowledge ({@code /eclipse bestiary reset}); returns rows cleared. */
+    public int clearAll() {
+        int cleared = players.size();
+        if (cleared > 0) {
+            players.clear();
+            setDirty();
+        }
+        return cleared;
+    }
 }

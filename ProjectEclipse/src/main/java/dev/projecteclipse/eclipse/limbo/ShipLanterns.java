@@ -12,11 +12,11 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.limbo.door.ShipVersionData;
 import dev.projecteclipse.eclipse.lives.BanService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -248,7 +248,7 @@ public final class ShipLanterns {
             return; // Nothing to tend.
         }
         if (!BanService.isBanned(player)) {
-            player.displayClientMessage(Component.translatable("ritual.eclipse.lantern.ghost_only"), true);
+            player.displayClientMessage(ServerLang.tr(player, "ritual.eclipse.lantern.ghost_only"), true);
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
             return;
         }
@@ -257,7 +257,7 @@ public final class ShipLanterns {
             return; // Already channeling this lantern; the tick loop drives progress.
         }
         CHANNELS.put(player.getUUID(), new Channel(event.getPos().immutable(), level.getServer().getTickCount()));
-        player.displayClientMessage(Component.translatable("ritual.eclipse.lantern.channel", "0%"), true);
+        player.displayClientMessage(ServerLang.tr(player, "ritual.eclipse.lantern.channel", "0%"), true);
         level.playSound(null, event.getPos(), SoundEvents.SOUL_ESCAPE.value(), SoundSource.BLOCKS, 1.0F, 1.4F);
         EclipseMod.LOGGER.info("Ghost {} started re-lighting the lantern at {} ({}t channel)",
                 player.getScoreboardName(), event.getPos().toShortString(), CHANNEL_TICKS);
@@ -315,7 +315,7 @@ public final class ShipLanterns {
                     || ghost.position().distanceTo(Vec3.atCenterOf(channel.pos())) > CHANNEL_RANGE) {
                 iterator.remove();
                 if (ghost != null) {
-                    ghost.displayClientMessage(Component.translatable("ritual.eclipse.lantern.interrupted"), true);
+                    ghost.displayClientMessage(ServerLang.tr(ghost, "ritual.eclipse.lantern.interrupted"), true);
                 }
                 EclipseMod.LOGGER.info("Lantern channel at {} broken ({})", channel.pos().toShortString(),
                         ghost == null ? "ghost gone" : "out of range or lantern state changed");
@@ -323,7 +323,7 @@ public final class ShipLanterns {
             }
             int elapsed = now - channel.startedTick();
             if (elapsed % 10 == 0) {
-                ghost.displayClientMessage(Component.translatable("ritual.eclipse.lantern.channel",
+                ghost.displayClientMessage(ServerLang.tr(ghost, "ritual.eclipse.lantern.channel",
                         Math.min(100, elapsed * 100 / CHANNEL_TICKS) + "%"), true);
                 limbo.sendParticles(ParticleTypes.SOUL, channel.pos().getX() + 0.5D,
                         channel.pos().getY() + 0.8D, channel.pos().getZ() + 0.5D, 4, 0.2D, 0.3D, 0.2D, 0.02D);
@@ -338,7 +338,7 @@ public final class ShipLanterns {
             limbo.playSound(null, channel.pos(), SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, 0.7F);
             limbo.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, channel.pos().getX() + 0.5D,
                     channel.pos().getY() + 0.7D, channel.pos().getZ() + 0.5D, 16, 0.25D, 0.25D, 0.25D, 0.02D);
-            ghost.displayClientMessage(Component.translatable("ritual.eclipse.lantern.lit"), true);
+            ghost.displayClientMessage(ServerLang.tr(ghost, "ritual.eclipse.lantern.lit"), true);
             EclipseMod.LOGGER.info("Ghost {} re-lit the lantern at {} — {} lantern(s) now burning",
                     ghost.getScoreboardName(), channel.pos().toShortString(), litCount(limbo));
         }

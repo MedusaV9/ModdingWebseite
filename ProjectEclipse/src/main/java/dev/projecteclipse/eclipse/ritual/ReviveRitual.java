@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.lives.DeathFlowHooks;
@@ -237,7 +238,7 @@ public final class ReviveRitual {
             ServerPlayer confirmer = server.getPlayerList().getPlayer(this.confirmerId);
             if (confirmer != null) {
                 confirmer.displayClientMessage(
-                        Component.translatable("ritual.eclipse.revive.none_banned"), true);
+                        ServerLang.tr(confirmer, "ritual.eclipse.revive.none_banned"), true);
             }
             fail("target no longer banned");
             return;

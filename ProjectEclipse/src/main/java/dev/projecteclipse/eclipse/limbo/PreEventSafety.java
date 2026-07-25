@@ -45,13 +45,16 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       {@code BYPASSES_INVULNERABILITY} (e.g. {@code /kill}) still pass — the same
  *       admin escape hatch as vanilla invulnerability and {@code FreezeService}.</li>
  *   <li><b>Water rescue</b> (pre- AND post-event): a player who falls into the limbo
- *       sea turns invisible on the spot, is frozen via {@link FreezeService} (which
+ *       sea — or ends up overboard DRY, outside the ship footprint at or below deck
+ *       height (a {@code LimboSeascape} wreck/spire/buoy prop) — turns invisible on the
+ *       spot, is frozen via {@link FreezeService} (which
  *       already grants invulnerability + the rubber-band position lock), the screen
  *       slowly fades to black ({@link S2CScreenFadePayload} →
  *       {@code CaptionRenderer.fade}), and at t={@value #RESCUE_TP_TICK} they are
  *       {@link FreezeService#transport}ed back onto the midship deck behind the black,
  *       fading back in as the freeze and invisibility release. A per-player
- *       {@value #RESCUE_COOLDOWN_TICKS}t cooldown keeps the beat from looping while
+ *       {@value #RESCUE_COOLDOWN_TICKS}t cooldown, armed as the rescue completes, keeps
+ *       the beat from looping while
  *       someone insists on swimming. The rescue stands down while a Ferryman is alive
  *       (falling overboard during the crossing has its own flow — the
  *       {@code FinaleRitual} fight seam), while the start-event keel-over cutscene
@@ -74,8 +77,21 @@ public final class PreEventSafety {
     private static final int RESCUE_RELEASE_TICK = 52;
     /** Freeze watchdog TTL — comfortably past the scripted release. */
     private static final int RESCUE_FREEZE_TTL_TICKS = 80;
-    /** Per-player anti-loop cooldown, counted from the rescue trigger (8 s). */
-    private static final int RESCUE_COOLDOWN_TICKS = 160;
+    /**
+     * Per-player anti-loop cooldown (2 s), armed when a rescue COMPLETES (not when it
+     * triggers — arming at the trigger left a ~5 s dead window after the release tick in
+     * which re-entering the water did nothing). Long enough to outlive the fade-out
+     * tail, short enough that a player who deliberately jumps back in is rescued again
+     * promptly.
+     */
+    private static final int RESCUE_COOLDOWN_TICKS = 40;
+    /**
+     * Overboard-footprint skirt around the hull box ({@code GhostShipBuilder.HALF_LENGTH}
+     * / {@code HALF_WIDTH}): |x| ≤ 21, |z| ≤ 6 — the same margin the ship's own
+     * clear-volume uses, covering the sternpost/rudder (x −20..−21) and the bow stem +
+     * skull (x 20..21) so nobody standing on hull trim is "outside the ship".
+     */
+    private static final int FOOTPRINT_MARGIN = 2;
     /** Slow fade-to-black envelope (rise / hold / release), opaque black. */
     private static final int FADE_IN_TICKS = 30;
     private static final int FADE_HOLD_TICKS = 15;
@@ -157,7 +173,9 @@ public final class PreEventSafety {
 
     private static void maybeBeginRescue(ServerPlayer player) {
         if (!player.serverLevel().dimension().equals(LimboDimension.LIMBO)
-                || !player.isInWater()
+                // In the water, OR dry-but-overboard (a LimboSeascape wreck/spire/buoy
+                // prop keeps the feet out of the water — the sea still refuses them).
+                || (!player.isInWater() && !isOverboard(player))
                 || COOLDOWNS.containsKey(player.getUUID())
                 || player.isSpectator()
                 || player.isCreative()
@@ -175,7 +193,6 @@ public final class PreEventSafety {
             return;
         }
         RESCUES.put(player.getUUID(), 0);
-        COOLDOWNS.put(player.getUUID(), RESCUE_COOLDOWN_TICKS);
         // The "turn invisible in the water" beat: the sea takes them out of sight first.
         player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, INVISIBILITY_TICKS, 0, false, false));
         FreezeService.freeze(player, RESCUE_FREEZE_TTL_TICKS, FREEZE_OWNER);
@@ -186,6 +203,26 @@ public final class PreEventSafety {
         player.playNotifySound(SoundEvents.AMBIENT_UNDERWATER_ENTER, SoundSource.PLAYERS, 1.0F, 0.7F);
         EclipseMod.LOGGER.info("PreEventSafety: water rescue started for {} at {}",
                 player.getScoreboardName(), player.blockPosition().toShortString());
+    }
+
+    /**
+     * Whether the player has left the ship: outside the hull footprint
+     * ({@code GhostShipBuilder.HALF_LENGTH}/{@code HALF_WIDTH} around 0,0 — the frozen
+     * ship-center contract — plus the {@value #FOOTPRINT_MARGIN}-block trim skirt) while
+     * at or below deck height ({@code waterline + 3}). Catches players standing DRY on a
+     * {@code LimboSeascape} wreck/spire/buoy prop, whom {@code isInWater()} never flags.
+     * Everything legitimately walkable on the ship keeps the feet ABOVE {@code deckY}
+     * (main deck, spawn platform and walkway at {@code deckY + 1}, castles higher), so
+     * this can never fire on deck; a bowsprit climber (x up to 25) is above deck height
+     * too.
+     */
+    private static boolean isOverboard(ServerPlayer player) {
+        if (Math.abs(player.getX()) <= GhostShipBuilder.HALF_LENGTH + FOOTPRINT_MARGIN
+                && Math.abs(player.getZ()) <= GhostShipBuilder.HALF_WIDTH + FOOTPRINT_MARGIN) {
+            return false;
+        }
+        int deckY = GhostShipBuilder.waterlineY(player.serverLevel()) + 3;
+        return player.getY() <= deckY + 0.5D;
     }
 
     private static void tickRescue(ServerPlayer player, int elapsed) {
@@ -209,16 +246,21 @@ public final class PreEventSafety {
         }
     }
 
-    /** Releases OUR freeze (owner-checked) and the invisibility; idempotent. */
+    /**
+     * Releases OUR freeze (owner-checked) and the invisibility; idempotent. Arms the
+     * anti-loop cooldown HERE — from the completion, not the trigger — so there is never
+     * a dead window in which a player back in the water is silently ignored.
+     */
     private static void finishRescue(ServerPlayer player) {
         RESCUES.remove(player.getUUID());
+        COOLDOWNS.put(player.getUUID(), RESCUE_COOLDOWN_TICKS);
         FreezeService.unfreeze(player, FREEZE_OWNER);
         player.removeEffect(MobEffects.INVISIBILITY);
     }
 
     // ------------------------------------------------------------------ lifecycle hygiene
 
-    /** Logout mid-rescue: drop the flow (the freeze self-releases); cooldown stays armed. */
+    /** Logout mid-rescue: drop the flow (the freeze self-releases); a re-login re-triggers cleanly. */
     @SubscribeEvent
     static void onLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {

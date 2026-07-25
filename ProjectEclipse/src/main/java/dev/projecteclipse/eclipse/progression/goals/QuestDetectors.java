@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.sequence.IntroSequence;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
+import dev.projecteclipse.eclipse.skills.XpGates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -116,6 +117,13 @@ public final class QuestDetectors {
     private static void detectKineticsBuilt(ServerPlayer player, BlockState state) {
         EclipseWorldState world = EclipseWorldState.get(player.server);
         if (world.isKineticsBuilt() || !isCreatePowerSource(state)) {
+            return;
+        }
+        // PROGFIX #2 pre-event gate: the persistent flag + direct completeTeamBeat call
+        // both bypass QuestEngine.increment's event-dimension gate, so a generator placed
+        // BEFORE the start event would retro-complete the day-3 quest through the beat
+        // poll. Pre-event placements are ignored entirely (flag stays unset).
+        if (!world.isStartEventDone()) {
             return;
         }
         world.setKineticsBuilt(true);
@@ -378,9 +386,20 @@ public final class QuestDetectors {
             state.endNight(day.day);
             return;
         }
+        // PROGFIX #2 pre-event gate: the overworld clock ticks from world creation, but a
+        // night "survived" while everyone idles in the damage-immune pre-event Limbo must
+        // never pay 250 quest XP (instant level 2). No window arms — and a stale armed one
+        // closes uncredited — until the start event has happened.
+        if (!EclipseWorldState.get(server).isStartEventDone()) {
+            state.endNight(day.day);
+            return;
+        }
         boolean night = server.overworld().isNight();
         if (night) {
+            // PROGFIX #2: enrol only players OUTSIDE the event dimensions — Limbo/arena
+            // idlers are damage-shielded set-piece spectators, never night survivors.
             List<UUID> online = server.getPlayerList().getPlayers().stream()
+                    .filter(player -> !XpGates.isEventDimension(player.level().dimension()))
                     .map(ServerPlayer::getUUID)
                     .toList();
             long nightId = Math.floorDiv(server.overworld().getDayTime(), 24_000L);

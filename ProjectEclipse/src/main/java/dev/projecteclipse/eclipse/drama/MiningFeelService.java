@@ -5,6 +5,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.AnalyticsApi;
 import dev.projecteclipse.eclipse.analytics.AnalyticsKeys;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.skills.SkillPerks;
@@ -13,7 +14,6 @@ import dev.projecteclipse.eclipse.worldgen.ore.OreConfig;
 import dev.projecteclipse.eclipse.worldgen.ore.VeinTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -94,14 +94,14 @@ public final class MiningFeelService {
         if (scan.present() == scan.total()) {
             // First break of an intact vein: size reveal, actionbar only (no sound — the
             // payoff note is saved for completion; Quiet-Eclipse anticipation).
-            player.displayClientMessage(Component.translatable("message.eclipse.vein.reveal",
+            player.displayClientMessage(ServerLang.tr(player, "message.eclipse.vein.reveal",
                     state.getBlock().getName(), scan.total()).withColor(REVEAL_COLOR), true);
         } else if (scan.present() > 1) {
             // FFIX-A DOPA #2 — countdown ramp for breaks 2…n−1 (was reveal→silence→payoff):
             // actionbar "Iron Ore vein · 3/7" (mined/total) + a soft typewriter blip whose
             // pitch climbs as the vein empties. Data is already in the scan; private + quiet.
             int mined = scan.total() - scan.present() + 1;
-            player.displayClientMessage(Component.translatable("message.eclipse.vein.progress",
+            player.displayClientMessage(ServerLang.tr(player, "message.eclipse.vein.progress",
                     state.getBlock().getName(), mined, scan.total()).withColor(REVEAL_COLOR), true);
             float ramp = (float) mined / (float) scan.total();
             player.playNotifySound(EclipseSounds.UI_TYPEWRITER.get(), SoundSource.PLAYERS,

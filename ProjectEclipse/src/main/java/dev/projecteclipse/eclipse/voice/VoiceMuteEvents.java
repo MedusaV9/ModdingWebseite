@@ -4,8 +4,8 @@ import java.util.Locale;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -43,11 +43,11 @@ public final class VoiceMuteEvents {
             long remainingMillis = VoiceMuteApi.entryMuteRemainingMillis(player);
             if (remainingMillis > 0L) {
                 player.displayClientMessage(
-                        Component.translatable("message.eclipse.voice_sealed_remaining",
+                        ServerLang.tr(player, "message.eclipse.voice_sealed_remaining",
                                 formatDuration(remainingMillis)),
                         true);
             } else if (state.isForceVoiceMuted(player.getUUID())) {
-                player.displayClientMessage(Component.translatable("message.eclipse.voice_sealed"), true);
+                player.displayClientMessage(ServerLang.tr(player, "message.eclipse.voice_sealed"), true);
             }
         }
     }

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -173,7 +174,7 @@ public final class ElytraRace {
             }
             if (racer.getY() < FALL_RESCUE_Y) {
                 respawnAtCheckpoint(server, state, racer);
-                racer.displayClientMessage(Component.translatable("eclipse.minigame.race.fell")
+                racer.displayClientMessage(ServerLang.tr(racer, "eclipse.minigame.race.fell")
                         .withStyle(ChatFormatting.AQUA), true);
                 continue;
             }
@@ -186,14 +187,14 @@ public final class ElytraRace {
             if (next == 0) {
                 state.setRaceLapStart(uuid, now);
                 state.setRaceProgress(uuid, 1);
-                racer.displayClientMessage(Component.translatable("eclipse.minigame.race.lap_armed")
+                racer.displayClientMessage(ServerLang.tr(racer, "eclipse.minigame.race.lap_armed")
                         .withStyle(ChatFormatting.GREEN), true);
                 racer.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7F, 1.8F);
             } else if (next >= ringCount) {
                 finishLap(server, state, racer, now);
             } else {
                 state.setRaceProgress(uuid, next + 1);
-                racer.displayClientMessage(Component.translatable("eclipse.minigame.race.checkpoint",
+                racer.displayClientMessage(ServerLang.tr(racer, "eclipse.minigame.race.checkpoint",
                         next, ringCount).withStyle(ChatFormatting.AQUA), true);
                 racer.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.8F, 1.4F);
             }
@@ -220,7 +221,7 @@ public final class ElytraRace {
                 courseFor(state.openCount()).ringCenters().get(0), position, 0.0F,
                 FINISH_CUE_RANGE);
 
-        racer.displayClientMessage(Component.translatable("eclipse.minigame.race.own_lap",
+        racer.displayClientMessage(ServerLang.tr(racer, "eclipse.minigame.race.own_lap",
                 lapTime(lapMillis)).withStyle(ChatFormatting.GOLD), false);
         racer.playNotifySound(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundSource.PLAYERS, 0.8F, 1.0F);
 
@@ -244,7 +245,7 @@ public final class ElytraRace {
                     "minigame:race:" + state.openCount() + ":finish:" + position, shards, xp);
             state.queuePayout(uuid, payout);
             if (MinigameService.grantPayout(state, racer, payout)) {
-                racer.displayClientMessage(Component.translatable("eclipse.minigame.race.finish_position",
+                racer.displayClientMessage(ServerLang.tr(racer, "eclipse.minigame.race.finish_position",
                         position, shards, xp).withStyle(ChatFormatting.GOLD), false);
             }
         }
@@ -300,6 +301,10 @@ public final class ElytraRace {
     }
 
     private static void broadcast(MinecraftServer server, Component message) {
-        server.getPlayerList().broadcastSystemMessage(message, false);
+        // LANGAUDIT: bake per recipient so the mod locale (not the vanilla client
+        // language) decides the line; ServerLang.resolve passes unknown keys through.
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            online.sendSystemMessage(ServerLang.resolve(online, message));
+        }
     }
 }

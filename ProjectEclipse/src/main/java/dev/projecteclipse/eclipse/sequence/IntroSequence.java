@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.artifact.ArtifactSlotLock;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
@@ -229,6 +230,14 @@ public final class IntroSequence implements SequenceReplayable {
     static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
         IntroData data = IntroData.get(server);
+        // PROGFIX #3 migration: a completed intro implies the storm was touched — latch
+        // the flag for saves that predate it, so ArtifactSlotLock never purges the
+        // artifact from an existing world.
+        EclipseWorldState worldState = EclipseWorldState.get(server);
+        if (data.isCompleted() && !worldState.isStormTouched()) {
+            worldState.setStormTouched(true);
+            EclipseMod.LOGGER.info("IntroSequence: stormTouched backfilled on a pre-flag save (intro already completed)");
+        }
         if (data.isStarted() && !data.isCompleted()) {
             EclipseMod.LOGGER.warn("IntroSequence: world restarted mid-intro (phase {}) — skipping to end state",
                     data.phase());
@@ -523,6 +532,14 @@ public final class IntroSequence implements SequenceReplayable {
     /** LIGHTNING: the ramping-strikes controller runs with live kickback. */
     private static void beginLightning(Run current) {
         current.enter(Phase.LIGHTNING);
+        // PROGFIX #3: the first player just touched the storm — THIS is the ceremony
+        // moment. Latch the persisted flag and grant the arm artifact immediately
+        // (ArtifactSlotLock keys off stormTouched; the grant pass is idempotent).
+        EclipseWorldState worldState = EclipseWorldState.get(current.server);
+        if (!worldState.isStormTouched()) {
+            worldState.setStormTouched(true);
+            ArtifactSlotLock.grantAll(current.server);
+        }
         current.lightning = new IntroLightningPhase(current.center, VORTEX_RADIUS, VORTEX_HEIGHT, true);
         for (ServerPlayer player : current.overworld.players()) {
             PacketDistributor.sendToPlayer(player,
@@ -721,6 +738,13 @@ public final class IntroSequence implements SequenceReplayable {
         data.setPermanentRim(true);
         data.setCompleted(true);
         data.setPhase("");
+        // PROGFIX #3: a skipped-to-end intro counts as finished — imply the storm touch so
+        // ArtifactSlotLock grants (never strands players of an aborted run without the artifact).
+        EclipseWorldState worldState = EclipseWorldState.get(server);
+        if (!worldState.isStormTouched()) {
+            worldState.setStormTouched(true);
+            ArtifactSlotLock.grantAll(server);
+        }
     }
 
     /**

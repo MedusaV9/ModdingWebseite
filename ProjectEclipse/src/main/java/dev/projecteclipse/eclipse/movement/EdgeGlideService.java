@@ -11,12 +11,12 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
 import dev.projecteclipse.eclipse.worldgen.structure.FloatingSanctumBuilder;
 import dev.projecteclipse.eclipse.worldgen.structure.SanctumVersionData;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -240,7 +240,7 @@ public final class EdgeGlideService {
                 player.position(), 0.0F, 0.0F, FX_EVENT_RANGE);
         Set<UUID> hinted = mode == Mode.LIFT ? HINTED_LIFT : HINTED_FALL;
         if (hinted.add(player.getUUID())) {
-            player.displayClientMessage(Component.translatable(mode == Mode.LIFT
+            player.displayClientMessage(ServerLang.tr(player, mode == Mode.LIFT
                     ? "movement.eclipse.glide.lift"
                     : "movement.eclipse.glide.soften").withColor(HINT_COLOR), true);
         }

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.entity.boss.FerrymanEntity;
@@ -18,7 +19,6 @@ import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -129,7 +129,7 @@ public final class FinaleRitual {
             return;
         }
         event.getItemStack().shrink(1);
-        player.displayClientMessage(Component.translatable("ritual.eclipse.finale.begun"), true);
+        player.displayClientMessage(ServerLang.tr(player, "ritual.eclipse.finale.begun"), true);
         level.playSound(null, event.getPos(), SoundEvents.END_PORTAL_SPAWN, SoundSource.BLOCKS, 1.0F, 0.5F);
         EclipseMod.LOGGER.info("{} deposited the finale catalyst at {} on day {} — the crossing begins",
                 player.getScoreboardName(), event.getPos().toShortString(), DayScheduler.getDay(server));
@@ -137,7 +137,7 @@ public final class FinaleRitual {
     }
 
     private static void refuse(ServerPlayer player, String key) {
-        player.displayClientMessage(Component.translatable(key), true);
+        player.displayClientMessage(ServerLang.tr(player, key), true);
         player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
     }
 

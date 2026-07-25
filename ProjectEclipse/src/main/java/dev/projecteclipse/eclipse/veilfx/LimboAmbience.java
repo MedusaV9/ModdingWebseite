@@ -73,9 +73,10 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * {@code VoyageOffset} (steadily increasing world-XZ scroll along ship forward −X→+X — the
  * caustic field streams slowly astern past the hull: the shader half of the "sailing"
  * illusion; accumulates continuously from the limbo-entry instant instead of wrapping
- * hourly like {@code Time}, so it never jumps mid-visit), {@code CurveAmount} (horizon curvature strength,
- * forced 0 under {@code reducedFx}) and {@code FarDist} (effective render distance in
- * blocks, where the loaded sea geometry ends).</p>
+ * hourly like {@code Time}, so it never jumps mid-visit) and {@code FarDist} (effective
+ * render distance in blocks, where the loaded sea geometry ends). LIMBOFIX: the
+ * {@code CurveAmount} horizon-curvature uniform is gone — the shader's UV warp produced
+ * a visible seam line across the screen and was removed on both sides.</p>
  *
  * <p><b>v4 (FXTEAM-LIMBO)</b>: three additions, all inside the existing budget/ladder:</p>
  * <ul>
@@ -84,7 +85,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  *       67&nbsp;s on average) picks a horizon azimuth and a ≤2&nbsp;s lead+echo flash
  *       envelope; every client sees the same flash at the same wall-clock second because
  *       the schedule derives from the same hourly {@code Time} base. Fed {@code (1,0,0)}
- *       (strength 0) under {@code reducedFx} — the {@code CurveAmount} ladder.</li>
+ *       (strength 0) under {@code reducedFx} — the reduced-FX ladder.</li>
  *   <li><b>God-ray sway</b> — the {@code GODRAYS} window carries a per-emitter base
  *       position and leans its live emitters on a shared ~12.5&nbsp;s roll phase
  *       ({@code Z} dominant, slight {@code X} lean — the ship rolls about its +X long
@@ -458,7 +459,7 @@ public final class LimboAmbience {
             pipeline.getUniform("GodrayDir").setVector(10.0F, 10.0F);
         }
 
-        // --- v3 (C1): water mask + world anchoring + curvature + voyage drift ------------
+        // --- v3 (C1): water mask + world anchoring + voyage drift ------------------------
         if (haveFrameMatrices && level != null && level.dimension() == LimboDimension.LIMBO) {
             pipeline.getUniform("InvViewProj").setMatrix(INV_VIEW_PROJ);
             pipeline.getUniform("CameraPos").setVector(
@@ -481,11 +482,9 @@ public final class LimboAmbience {
         long enter = limboEnterMillis;
         float voyageSeconds = enter < 0L ? 0.0F : (System.currentTimeMillis() - enter) / 1000.0F;
         pipeline.getUniform("VoyageOffset").setVector(voyageSeconds * VOYAGE_BLOCKS_PER_SECOND, 0.0F);
-        pipeline.getUniform("CurveAmount").setFloat(
-                EclipseClientConfig.reducedFx() ? 0.0F : intensity);
         pipeline.getUniform("FarDist").setFloat(farDistBlocks());
-        // v4 reduced-motion gate: swells, micro-ripples, glints and the reflection ripple
-        // flatten back to the v3 water look under reduced FX (the CurveAmount ladder) —
+        // v4 reduced-motion gate: swells, micro-ripples and glints
+        // flatten back to the v3 water look under reduced FX —
         // "cheap ALU" covers performance, not the reduced-motion contract.
         pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
 
@@ -504,7 +503,7 @@ public final class LimboAmbience {
      * horizon azimuth; an active flash runs a ≤2 s lead+echo envelope (sharp attack,
      * exponential decay, one dimmer echo ~0.45 s later — the classic distant
      * cloud-lightning double pulse). Fed strength 0 under {@code reducedFx} (the
-     * {@code CurveAmount} ladder) — the shader then skips its ray reconstruction too.
+     * reduced-FX ladder) — the shader then skips its ray reconstruction too.
      * Pure per-frame math: no allocations, no state.
      */
     private static void feedStormGlow(PostPipeline pipeline, float seconds, float intensity) {
@@ -542,7 +541,7 @@ public final class LimboAmbience {
      * envelope. The shader renders the fish in shoal-local space, so the formation visibly
      * translates (unlike the world-anchored glints). Packed {@code (centerX, centerZ,
      * headingX·env, headingZ·env)}; idle/{@code reducedFx} feeds a zero vector (the
-     * {@code CurveAmount} ladder), and the anchor-relative path keeps the world-space
+     * reduced-FX ladder), and the anchor-relative path keeps the world-space
      * float math small. Pure per-frame math: no allocations, no state.
      */
     private static void feedSoulShoal(PostPipeline pipeline, float seconds, float intensity,

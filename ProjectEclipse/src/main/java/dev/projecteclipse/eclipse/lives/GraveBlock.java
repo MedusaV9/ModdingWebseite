@@ -3,9 +3,9 @@ package dev.projecteclipse.eclipse.lives;
 import com.mojang.serialization.MapCodec;
 
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
@@ -66,7 +66,7 @@ public class GraveBlock extends BaseEntityBlock {
             return InteractionResult.PASS;
         }
         if (!grave.canOpen(serverPlayer)) {
-            serverPlayer.displayClientMessage(Component.translatable("block.eclipse.grave.locked"), true);
+            serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "block.eclipse.grave.locked"), true);
             return InteractionResult.CONSUME;
         }
         grave.giveTo(serverPlayer);

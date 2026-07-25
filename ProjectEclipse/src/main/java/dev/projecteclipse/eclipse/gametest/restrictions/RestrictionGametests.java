@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.RecipeGate;
 import dev.projecteclipse.eclipse.progression.RecipeGateConfig;
 import dev.projecteclipse.eclipse.progression.RecipeGateMath;
+import dev.projecteclipse.eclipse.protection.DevMode;
 import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
 import dev.projecteclipse.eclipse.villagers.VillagerRestrictions;
@@ -142,12 +143,18 @@ public final class RestrictionGametests {
         helper.succeed();
     }
 
+    /** PROGFIX #5: creative/op status alone no longer exempts — only the devmode toggle does. */
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
-    public static void spawnProtectionCreativeExempt(GameTestHelper helper) {
+    public static void spawnProtectionDevmodeExempt(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
         ServerPlayer creative = GameTestSupport.mockServerPlayer(helper, GameType.CREATIVE);
-        helper.assertTrue(SpawnProtectionRules.isExempt(creative), "creative exempt");
         ServerPlayer survival = GameTestSupport.mockSurvivalPlayer(helper);
+        DevMode.setEnabled(server, creative.getUUID(), false);
+        helper.assertFalse(SpawnProtectionRules.isExempt(creative), "creative not exempt without devmode");
         helper.assertFalse(SpawnProtectionRules.isExempt(survival), "survival not exempt");
+        DevMode.setEnabled(server, creative.getUUID(), true);
+        helper.assertTrue(SpawnProtectionRules.isExempt(creative), "devmode exempt");
+        DevMode.setEnabled(server, creative.getUUID(), false);
         helper.succeed();
     }
 

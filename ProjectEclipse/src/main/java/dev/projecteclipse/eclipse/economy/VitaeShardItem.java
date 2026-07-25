@@ -3,8 +3,8 @@ package dev.projecteclipse.eclipse.economy;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -35,7 +35,7 @@ public class VitaeShardItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player instanceof ServerPlayer serverPlayer && LivesApi.get(serverPlayer) >= HeartsService.MAX_HEARTS) {
-            serverPlayer.displayClientMessage(Component.translatable("item.eclipse.vitae_shard.full"), true);
+            serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "item.eclipse.vitae_shard.full"), true);
             serverPlayer.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5F, 0.8F);
             return InteractionResultHolder.fail(stack);
         }
@@ -50,7 +50,7 @@ public class VitaeShardItem extends Item {
         }
         if (LivesApi.get(player) >= HeartsService.MAX_HEARTS) {
             // Cap reached mid-use (e.g. a kill credited a heart) — refuse without consuming.
-            player.displayClientMessage(Component.translatable("item.eclipse.vitae_shard.full"), true);
+            player.displayClientMessage(ServerLang.tr(player, "item.eclipse.vitae_shard.full"), true);
             return stack;
         }
         int hearts = LivesApi.add(player, 1);
@@ -58,7 +58,7 @@ public class VitaeShardItem extends Item {
         serverLevel.playSound(null, player.blockPosition(), SoundEvents.TOTEM_USE, SoundSource.PLAYERS, 0.8F, 1.2F);
         serverLevel.sendParticles(ParticleTypes.TOTEM_OF_UNDYING,
                 player.getX(), player.getY() + 1.0D, player.getZ(), 40, 0.4D, 0.6D, 0.4D, 0.25D);
-        player.displayClientMessage(Component.translatable("item.eclipse.vitae_shard.used", hearts), true);
+        player.displayClientMessage(ServerLang.tr(player, "item.eclipse.vitae_shard.used", hearts), true);
         EclipseMod.LOGGER.info("{} crushed a vitae shard ({} hearts now)", player.getScoreboardName(), hearts);
         return stack;
     }

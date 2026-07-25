@@ -9,6 +9,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMob;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -452,13 +453,17 @@ public class WizardOrinEntity extends EclipseGeoMob {
                 SoundSource.NEUTRAL, 0.7F, 0.75F);
     }
 
-    /** "Orin: <line>" chat caption (gold name, per the NPC caption convention). */
+    /**
+     * "Orin: <line>" chat caption (gold name, per the NPC caption convention). Baked through
+     * {@link ServerLang#resolve} so the dialogue follows the player's effective MOD locale —
+     * a raw translatable would resolve with the client's vanilla language instead.
+     */
     private void say(ServerPlayer player, Component line) {
-        player.sendSystemMessage(Component.empty()
+        player.sendSystemMessage(ServerLang.resolve(player, Component.empty()
                 .append(Component.translatable("name.eclipse.wizard_orin")
                         .withStyle(ChatFormatting.GOLD))
                 .append(Component.literal(": ").withStyle(ChatFormatting.GOLD))
-                .append(line.copy().withStyle(ChatFormatting.YELLOW)));
+                .append(line.copy().withStyle(ChatFormatting.YELLOW))));
     }
 
     // --- inventory helpers (main + off hand + backpack rows) ---

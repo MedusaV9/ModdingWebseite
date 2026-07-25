@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
@@ -108,7 +109,7 @@ public final class WandPhaseService {
             candidates.add(new Candidate(pos.immutable(), along));
         }
         if (candidates.isEmpty()) {
-            player.displayClientMessage(Component.translatable("wand.eclipse.msg.no_blocks"), true);
+            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.no_blocks"), true);
             return false;
         }
         candidates.sort(Comparator.comparingDouble(Candidate::along));

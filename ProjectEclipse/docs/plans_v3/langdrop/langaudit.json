@@ -1,0 +1,22 @@
+{
+  "en_us": {
+    "command.eclipse.bestiary.reset.all": "Bestiary reset for all players — %s discovery ledger(s) cleared",
+    "command.eclipse.bestiary.reset.empty": "%s has no bestiary discoveries to reset",
+    "command.eclipse.bestiary.reset.one": "Bestiary reset for %s",
+    "dev.eclipse.event.stormtouched.status": "Storm-touched flag: %s",
+    "dev.eclipse.wand.xp.granted": "Granted %s wand XP to %s",
+    "dev.eclipse.wand.xp.pathless": "The wand of %s has not chosen a path — no XP granted",
+    "dev.eclipse.xp.add.ok": "Granted %s skill XP to %s",
+    "dev.eclipse.xp.level.ok": "%1$s set to skill level %2$s (total XP %3$s)"
+  },
+  "de_de": {
+    "command.eclipse.bestiary.reset.all": "Bestiarium für alle Spieler zurückgesetzt — %s Einträge geleert",
+    "command.eclipse.bestiary.reset.empty": "%s hat keine Bestiariums-Einträge zum Zurücksetzen",
+    "command.eclipse.bestiary.reset.one": "Bestiarium für %s zurückgesetzt",
+    "dev.eclipse.event.stormtouched.status": "Sturmberührt-Flag: %s",
+    "dev.eclipse.wand.xp.granted": "%s Stab-EP an %s vergeben",
+    "dev.eclipse.wand.xp.pathless": "Der Stab von %s hat noch keinen Pfad gewählt — keine EP vergeben",
+    "dev.eclipse.xp.add.ok": "%s Skill-EP an %s vergeben",
+    "dev.eclipse.xp.level.ok": "%1$s auf Fähigkeitsstufe %2$s gesetzt (%3$s EP gesamt)"
+  }
+}

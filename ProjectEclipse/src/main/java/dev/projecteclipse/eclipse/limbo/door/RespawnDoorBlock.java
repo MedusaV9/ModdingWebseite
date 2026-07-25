@@ -2,10 +2,10 @@ package dev.projecteclipse.eclipse.limbo.door;
 
 import com.mojang.serialization.MapCodec;
 
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.lives.BanService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -118,9 +118,9 @@ public class RespawnDoorBlock extends BaseEntityBlock {
                             RespawnDoorBlockEntity.ANIM_LOCKED_SHUDDER);
                 }
                 level.playSound(null, controllerPos, SoundEvents.IRON_DOOR_CLOSE, SoundSource.BLOCKS, 0.7F, 0.45F);
-                serverPlayer.displayClientMessage(Component.translatable("message.eclipse.door.locked"), true);
+                serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "message.eclipse.door.locked"), true);
             } else {
-                serverPlayer.displayClientMessage(Component.translatable("message.eclipse.door.closed"), true);
+                serverPlayer.displayClientMessage(ServerLang.tr(serverPlayer, "message.eclipse.door.closed"), true);
             }
         }
         return InteractionResult.CONSUME;

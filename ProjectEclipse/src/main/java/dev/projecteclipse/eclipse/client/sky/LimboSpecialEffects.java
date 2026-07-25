@@ -5,7 +5,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -57,13 +56,9 @@ import net.neoforged.api.distmarker.OnlyIn;
  * <p>PLAN-C C2 overhaul (the "giant glitchy purple thing" fix):</p>
  * <ul>
  *   <li><b>Stable celestial disc</b>: the disc/aura direction is low-pass filtered and the
- *       whole disc+aura+reflection group draws INSIDE the stars' no-fog window with the
+ *       whole disc+aura group draws INSIDE the stars' no-fog window with the
  *       depth test off — camera-relative at effectively infinite distance, fixed angular
  *       size, no parallax jitter, no fog/horizon-plane pops.</li>
- *   <li><b>Mirror-locked reflection</b>: the water reflection streak is derived from the
- *       SAME angular direction as the disc, mirrored about the waterline plane
- *       ({@link #clientWaterlineY}, the C1 {@code WaterlineY} seam) — disc and reflection
- *       can never desynchronize; alpha fades with camera height, never with luminance.</li>
  *   <li><b>Sailing cues</b>: a sparse client-side lane of mist bands + foam glints streams
  *       astern past the hull ({@link #spawnDriftCues}, respects {@code reducedFx}), and
  *       {@link LimboHorizonShips} silhouettes slide astern and respawn ahead — combined
@@ -85,12 +80,13 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       offset opposite the camera's walk offset from the ship anchor
  *       ({@value #RAY_PARALLAX}, clamped) — the two fans read as depth-separated sheets
  *       when the player moves on deck. The disc quad itself is untouched (C2 stability).</li>
- *   <li><b>Wave-broken reflection streak</b>: {@link #drawWaterReflection} draws the
- *       glitter path as {@value #STREAK_DASHES} independently shimmering dashes (golden-
- *       angle phase spread) instead of one solid fan — same mirror-locked basis, same
- *       height fade, comparable alpha budget. The post-shader smear got the matching
- *       world-anchored ripple break-up (limbo.fsh v4).</li>
  * </ul>
+ *
+ * <p>LIMBOFIX: the C2/v4 water-reflection streak is GONE. Standing almost directly under
+ * the zenith made the mirrored direction's azimuth numerically degenerate — tiny camera
+ * moves swung the streak wildly (the "giant purple thing rotates with the player" bug) and
+ * it drew through the hull with the depth test off. The post-shader smear went with it
+ * (limbo.fsh); the water simply shows no disc reflection now.</p>
  *
  * <p>v4.1 (VEIL-REPASS-2): <b>aurora veils</b> ({@link #drawAuroraVeils}) — three slow
  * soul-green polar-light curtains drifting around the zenith beyond the glow floor,
@@ -192,15 +188,6 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     /** Per-veil base azimuths (radians) — spread so the veils frame, never encircle. */
     private static final float[] AURORA_AZIMUTH = {0.6F, 2.9F, 4.6F};
 
-    /** IDEA-18 §1/C2: water-reflection streak shape (elongated fan at the mirrored disc dir). */
-    private static final float STREAK_MIN_HALF_LEN = 14.0F;
-    private static final float STREAK_MAX_HALF_LEN = 55.0F;
-    private static final float STREAK_HALF_WIDTH = 5.5F;
-    /** v4: the streak is drawn as this many wave-broken dashes (2 quads each). */
-    private static final int STREAK_DASHES = 6;
-    /** The streak fades to nothing this many blocks of camera height above the waterline. */
-    private static final double STREAK_FADE_HEIGHT = 70.0D;
-
     /**
      * C2: per-frame low-pass factor for the disc direction. Kills single-frame pops (anchor
      * republish, degenerate snap, ship bob) while converging within ~10 frames — walking
@@ -290,7 +277,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      * ({@code GhostShipBuilder} frozen contract), so the value is
      * {@code GhostShipBuilder.waterlineY} reaching the client through the anchor sync —
      * ONE seam shared by the C1 {@code WaterlineY} post uniform (via
-     * {@code veilfx.LimboAmbience}), the reflection streak fade and the drift-cue lane.
+     * {@code veilfx.LimboAmbience}) and the drift-cue lane.
      */
     public static double clientWaterlineY(ClientLevel level) {
         return zenithWorldPoint(level).y - ZENITH_HEIGHT - 4.0D;
@@ -362,7 +349,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
 
         float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         // Subtle dual-frequency aura pulse — primary 1.3 rad/s matches the post shader's
-        // reflection smear curve exactly (limbo.fsh), so the two can never desync.
+        // sea-breathing curve exactly (limbo.fsh), so the two can never desync.
         float pulse = 0.85F + 0.11F * Mth.sin(seconds * 1.3F)
                 + 0.04F * Mth.sin(seconds * 0.37F + 1.7F);
         // v4 breathing corona: the glow fan swells ±5% on a slow independent cycle and
@@ -405,14 +392,6 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         SkyRenderUtil.drawCelestialQuad(zenithPose, DISC_SIZE, SKY_DISTANCE);
         poseStack.popPose();
 
-        // C2: the reflection streak is derived from the SAME angular direction as the disc,
-        // mirrored about the waterline plane — disc and reflection cannot desynchronize.
-        RenderSystem.blendFuncSeparate(
-                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
-                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        drawWaterReflection(poseStack.last().pose(), SMOOTH_DIR, level, cam, pulse, seconds);
-
         RenderSystem.enableDepthTest();
         setupFog.run();
 
@@ -424,131 +403,6 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         // C2 (item 6, world half): mist bands + foam glints streaming astern past the hull.
         spawnDriftCues(level, cam);
         return true;
-    }
-
-    /**
-     * C2 — the eclipse's reflection on the black water: an elongated additive violet streak
-     * derived from the SAME angular direction as the disc, mirrored about the waterline
-     * plane, drawn camera-relative at sky distance exactly like the disc — the two can
-     * never desynchronize. (The old version placed the streak from an independently
-     * computed world point on the water plane and visibly tore away from the disc while
-     * the camera moved.) Alpha falls with camera height above the waterline
-     * ({@link #clientWaterlineY}, the C1 {@code WaterlineY} seam) — never with luminance.
-     *
-     * <p>v4 — wave-broken shimmer: the solid fan is replaced by {@value #STREAK_DASHES}
-     * glitter dashes along the same tangent axis (2 quads each, bright seam in the middle,
-     * fading to zero at both ends). Every dash shimmers on its own frequency with
-     * golden-angle phase spread (2.399 rad — no two ever beat in sync) and drifts a little
-     * sideways, so the path reads as light broken across moving wave crests. Same basis,
-     * same envelope (peak per-dash alpha ≈ the old center alpha at mid-streak), and the
-     * whole thing still vanishes with camera height exactly as before.</p>
-     */
-    private static void drawWaterReflection(Matrix4f pose, Vector3f discDir, ClientLevel level,
-            Vec3 cam, float pulse, float seconds) {
-        double camAbove = cam.y - clientWaterlineY(level);
-        if (camAbove <= 0.5D) {
-            return; // camera at/under the waterline — nothing to reflect
-        }
-        float heightFade = (float) Mth.clamp(1.0D - (camAbove - 4.0D) / STREAK_FADE_HEIGHT, 0.0D, 1.0D);
-        if (heightFade <= 0.01F) {
-            return;
-        }
-        // Mirror about the waterline plane: same azimuth, negated pitch — below the horizon.
-        float mx = discDir.x;
-        float my = -discDir.y;
-        float mz = discDir.z;
-        // Long axis: the tangent at the mirror point along the disc's azimuth (the classic
-        // glitter path toward the horizon); ship forward +X when the azimuth degenerates
-        // (camera exactly under the zenith).
-        float hx = discDir.x;
-        float hz = discDir.z;
-        float hLenRaw = Mth.sqrt(hx * hx + hz * hz);
-        if (hLenRaw < 1.0E-3F) {
-            hx = 1.0F;
-            hz = 0.0F;
-        } else {
-            hx /= hLenRaw;
-            hz /= hLenRaw;
-        }
-        float hDotM = hx * mx + hz * mz;
-        float tx = hx - hDotM * mx;
-        float ty = -hDotM * my;
-        float tz = hz - hDotM * mz;
-        float tLen = Mth.sqrt(tx * tx + ty * ty + tz * tz);
-        if (tLen < 1.0E-3F) {
-            tx = hx;
-            ty = 0.0F;
-            tz = hz;
-            tLen = 1.0F;
-        }
-        tx /= tLen;
-        ty /= tLen;
-        tz /= tLen;
-        // Width axis: m × t — reads horizontal on the water.
-        float wx = my * tz - mz * ty;
-        float wy = mz * tx - mx * tz;
-        float wz = mx * ty - my * tx;
-
-        float cx = mx * SKY_DISTANCE;
-        float cy = my * SKY_DISTANCE;
-        float cz = mz * SKY_DISTANCE;
-        // Streak stretches with the disc's off-zenith offset (glitter paths lengthen as the
-        // source leaves the zenith), clamped to the frozen streak envelope.
-        float halfLen = Mth.clamp(hLenRaw * SKY_DISTANCE * 1.8F,
-                STREAK_MIN_HALF_LEN, STREAK_MAX_HALF_LEN);
-        float alpha = 0.35F * pulse * heightFade;
-
-        // v4: glitter dashes. Each dash occupies 1/STREAK_DASHES of the tangent span with
-        // ~28% gaps; per-dash shimmer frequency and phase use the golden-angle spread.
-        BufferBuilder builder = Tesselator.getInstance().begin(
-                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-        for (int i = 0; i < STREAK_DASHES; i++) {
-            float u = ((i + 0.5F) / STREAK_DASHES) * 2.0F - 1.0F; // dash center in −1..1
-            float phase = i * 2.399F;
-            float shimmer = 0.55F + 0.45F * Mth.sin(seconds * (1.35F + 0.13F * i) + phase);
-            float dashAlpha = alpha * (1.0F - u * u) * shimmer;
-            if (dashAlpha <= 0.004F) {
-                continue;
-            }
-            float alongC = u * halfLen;
-            float dashHalf = (halfLen / STREAK_DASHES) * 0.72F;
-            // Slow sideways wander — the dash slides across wave crests.
-            float side = Mth.sin(seconds * 0.9F + phase) * STREAK_HALF_WIDTH * 0.35F;
-            float width = STREAK_HALF_WIDTH * (1.0F - 0.55F * Math.abs(u));
-
-            float mcx = cx + tx * alongC + wx * side;
-            float mcy = cy + ty * alongC + wy * side;
-            float mcz = cz + tz * alongC + wz * side;
-            float sxv = tx * dashHalf;
-            float syv = ty * dashHalf;
-            float szv = tz * dashHalf;
-            float wxv = wx * width;
-            float wyv = wy * width;
-            float wzv = wz * width;
-            // start → bright mid seam
-            builder.addVertex(pose, mcx - sxv - wxv, mcy - syv - wyv, mcz - szv - wzv)
-                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
-            builder.addVertex(pose, mcx - sxv + wxv, mcy - syv + wyv, mcz - szv + wzv)
-                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
-            builder.addVertex(pose, mcx + wxv, mcy + wyv, mcz + wzv)
-                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
-            builder.addVertex(pose, mcx - wxv, mcy - wyv, mcz - wzv)
-                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
-            // bright mid seam → end
-            builder.addVertex(pose, mcx - wxv, mcy - wyv, mcz - wzv)
-                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
-            builder.addVertex(pose, mcx + wxv, mcy + wyv, mcz + wzv)
-                    .setColor(0.62F, 0.30F, 1.0F, dashAlpha);
-            builder.addVertex(pose, mcx + sxv + wxv, mcy + syv + wyv, mcz + szv + wzv)
-                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
-            builder.addVertex(pose, mcx + sxv - wxv, mcy + syv - wyv, mcz + szv - wzv)
-                    .setColor(0.45F, 0.18F, 0.85F, 0.0F);
-        }
-        // Every dash can drop out near the fade floor — an empty builder must not throw.
-        MeshData mesh = builder.build();
-        if (mesh != null) {
-            BufferUploader.drawWithShader(mesh);
-        }
     }
 
     /**

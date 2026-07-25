@@ -2,6 +2,8 @@ package dev.projecteclipse.eclipse.devtools.dev;
 
 import java.util.function.Consumer;
 
+import javax.annotation.Nullable;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -11,6 +13,7 @@ import dev.projecteclipse.eclipse.wand.EclipseWandItem;
 import dev.projecteclipse.eclipse.wand.WandConfig;
 import dev.projecteclipse.eclipse.wand.WandItems;
 import dev.projecteclipse.eclipse.wand.WandPath;
+import dev.projecteclipse.eclipse.wand.WandPowers;
 import dev.projecteclipse.eclipse.wand.WandSoulbind;
 import dev.projecteclipse.eclipse.wand.WandStore;
 import net.minecraft.commands.CommandSourceStack;
@@ -39,6 +42,11 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  *   <li>{@code set <player> path|level|xp|charge …} / {@code reset <player>} — test
  *       hooks; edits apply to the store row (PLAYER mode) AND all wands the target
  *       currently owns in their inventory, so changes are visible instantly.</li>
+ *   <li>{@code xp <amount> [player]} / {@code level <level> [player]} — PROGFIX #4
+ *       grants; player defaults to the issuing source. {@code xp} AWARDS through the real
+ *       pipeline ({@code WandPowers.awardXp}: level-ups fire the celebration + store
+ *       persistence), so it needs an owned wand with a chosen path; {@code level} is the
+ *       {@code set … level} edit with the optional-player convenience.</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -62,7 +70,13 @@ public final class DevWandCommands {
                         "dev.eclipse.doc.wand.set", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("wand.reset", DevCategory.PLAYERS,
                         "/dev wand reset <player>",
-                        "dev.eclipse.doc.wand.reset", Danger.DESTRUCTIVE, ClickAction.SUGGEST, 2));
+                        "dev.eclipse.doc.wand.reset", Danger.DESTRUCTIVE, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("wand.xp", DevCategory.PLAYERS,
+                        "/dev wand xp <amount> [player]",
+                        "dev.eclipse.doc.wand.xp", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("wand.level", DevCategory.PLAYERS,
+                        "/dev wand level <level> [player]",
+                        "dev.eclipse.doc.wand.level", Danger.CAUTION, ClickAction.SUGGEST, 2));
     }
 
     private DevWandCommands() {}
@@ -121,7 +135,26 @@ public final class DevWandCommands {
                         .then(Commands.literal("reset")
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .executes(context -> reset(context.getSource(),
-                                                EntityArgument.getPlayer(context, "player")))))));
+                                                EntityArgument.getPlayer(context, "player")))))
+                        .then(Commands.literal("xp")
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                        .executes(context -> grantXp(context.getSource(),
+                                                context.getSource().getPlayerOrException(),
+                                                IntegerArgumentType.getInteger(context, "amount")))
+                                        .then(Commands.argument("player", EntityArgument.player())
+                                                .executes(context -> grantXp(context.getSource(),
+                                                        EntityArgument.getPlayer(context, "player"),
+                                                        IntegerArgumentType.getInteger(context, "amount"))))))
+                        .then(Commands.literal("level")
+                                .then(Commands.argument("level",
+                                                IntegerArgumentType.integer(1, WandPath.MAX_LEVEL))
+                                        .executes(context -> setLevel(context.getSource(),
+                                                context.getSource().getPlayerOrException(),
+                                                IntegerArgumentType.getInteger(context, "level")))
+                                        .then(Commands.argument("player", EntityArgument.player())
+                                                .executes(context -> setLevel(context.getSource(),
+                                                        EntityArgument.getPlayer(context, "player"),
+                                                        IntegerArgumentType.getInteger(context, "level"))))))));
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> pathLiteral(
@@ -251,7 +284,45 @@ public final class DevWandCommands {
         return 1;
     }
 
+    // ------------------------------------------------------------------ PROGFIX #4 grants
+
+    /**
+     * {@code /dev wand xp} — awards XP through the REAL pipeline ({@link WandPowers#awardXp}):
+     * level-ups fire the celebration flourish and the store write-back, exactly like a cast
+     * payout. Needs an owned wand with a chosen path (the award path no-ops on NONE).
+     */
+    private static int grantXp(CommandSourceStack source, ServerPlayer target, int amount) {
+        ItemStack wand = firstOwnedWand(target);
+        if (wand == null) {
+            source.sendFailure(Component.translatable("dev.eclipse.wand.no_wand",
+                    target.getDisplayName()));
+            return 0;
+        }
+        if (WandSoulbind.pathOf(wand) == WandPath.NONE) {
+            source.sendFailure(Component.translatable("dev.eclipse.wand.xp.pathless",
+                    target.getDisplayName()));
+            return 0;
+        }
+        WandPowers.awardXp(target, wand, amount);
+        dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.wand.xp.granted",
+                amount, target.getDisplayName()), true);
+        return 1;
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /** The first wand in the target's inventory that the target OWNS, or {@code null}. */
+    @Nullable
+    private static ItemStack firstOwnedWand(ServerPlayer target) {
+        for (int slot = 0; slot < target.getInventory().getContainerSize(); slot++) {
+            ItemStack stack = target.getInventory().getItem(slot);
+            if (stack.getItem() instanceof EclipseWandItem && WandSoulbind.isOwner(target, stack)) {
+                return stack;
+            }
+        }
+        return null;
+    }
 
     /** Applies {@code edit} to every wand in the target's inventory that the target OWNS. */
     private static int forEachOwnedWand(ServerPlayer target, Consumer<ItemStack> edit) {

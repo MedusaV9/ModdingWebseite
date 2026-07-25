@@ -3,6 +3,8 @@ package dev.projecteclipse.eclipse.client.skills;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.lang.EclipseLang;
+import dev.projecteclipse.eclipse.skills.XpGates;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -27,6 +29,11 @@ import org.lwjgl.glfw.GLFW;
  * so the screen renders instantly from cache. Closing with the same binding is handled
  * inside {@code SkillTreeScreen} (B8 parity), because this IN_GAME mapping never fires
  * while a screen is open.</p>
+ *
+ * <p>LIMBOFIX: the tree is sealed inside event dimensions
+ * ({@code XpGates.isEventDimension} — limbo, minigame arenas, xbox worlds, …): the
+ * binding shows an action-bar hint instead of opening, and {@code SkillTreeScreen}
+ * closes itself if the player crosses into one while it is open.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class SkillKeybind {
@@ -59,9 +66,18 @@ public final class SkillKeybind {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         while (OPEN_SKILLS.consumeClick()) {
-            if (minecraft.player != null && minecraft.screen == null) {
-                minecraft.setScreen(new SkillTreeScreen());
+            if (minecraft.player == null || minecraft.screen != null) {
+                continue;
             }
+            // LIMBOFIX: the tree is sealed inside event dimensions (limbo & friends).
+            // XpGates.isEventDimension is pure dimension-key math, so the shared
+            // server-side predicate is safe to reuse here on the client.
+            if (XpGates.isEventDimension(minecraft.player.level().dimension())) {
+                minecraft.player.displayClientMessage(
+                        EclipseLang.tr("message.eclipse.skills.sealed_in_limbo"), true);
+                continue;
+            }
+            minecraft.setScreen(new SkillTreeScreen());
         }
     }
 }

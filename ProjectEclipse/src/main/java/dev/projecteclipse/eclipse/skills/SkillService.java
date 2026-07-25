@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.buffs.TimedBuffApi;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.C2SSkillNodeBuyPayload;
 import dev.projecteclipse.eclipse.network.S2CSkillStatePayload;
@@ -292,7 +293,7 @@ public final class SkillService {
         }
         player.serverLevel().playSound(null, player.blockPosition(),
                 EclipseSounds.SKILL_LEVELUP.get(), SoundSource.PLAYERS, 0.8F, 1.0F);
-        player.displayClientMessage(Component.translatable("message.eclipse.skill.levelup", level), true);
+        player.displayClientMessage(ServerLang.tr(player, "message.eclipse.skill.levelup", level), true);
         syncTo(player);
     }
 
@@ -333,11 +334,11 @@ public final class SkillService {
                         player.serverLevel(), dev.projecteclipse.eclipse.network.fx.FxCues.CUE_SKILL_SPEND,
                         player, node.cost(), 0.0F, 32.0D);
             }
-            player.displayClientMessage(Component.translatable("message.eclipse.skill.buy.success",
+            player.displayClientMessage(ServerLang.tr(player, "message.eclipse.skill.buy.success",
                     node.title().pick(dev.projecteclipse.eclipse.lang.LangService.locale(player))), true);
             syncTo(player);
         } else {
-            player.displayClientMessage(Component.translatable(switch (result) {
+            player.displayClientMessage(ServerLang.tr(player, switch (result) {
                 case ALREADY_OWNED -> "message.eclipse.skill.buy.owned";
                 case MISSING_PREREQ -> "message.eclipse.skill.buy.missing_prereq";
                 case NOT_ENOUGH_POINTS -> "message.eclipse.skill.buy.no_points";

@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CRebirthStatePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
@@ -14,7 +15,6 @@ import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.skills.RebirthHooks;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import dev.projecteclipse.eclipse.skills.XpGates;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -80,15 +80,15 @@ public final class RebirthService {
             case OK -> { /* ceremony already played */ }
             case NOT_ALIVE -> { /* dead players get no action bar; silently ignore */ }
             case EVENT_DIMENSION -> player.displayClientMessage(
-                    Component.translatable("rebirth.eclipse.refuse.dimension"), true);
+                    ServerLang.tr(player, "rebirth.eclipse.refuse.dimension"), true);
             case NOT_ENOUGH_SHARDS -> player.displayClientMessage(
-                    Component.translatable("rebirth.eclipse.refuse.shards",
+                    ServerLang.tr(player, "rebirth.eclipse.refuse.shards",
                             RebirthApi.costForNext(player.server, player.getUUID()),
                             ShardEconomy.getShards(player)), true);
             case AT_LIFE_CAP -> player.displayClientMessage(
-                    Component.translatable("rebirth.eclipse.refuse.life_cap", HeartsService.MAX_HEARTS), true);
+                    ServerLang.tr(player, "rebirth.eclipse.refuse.life_cap", HeartsService.MAX_HEARTS), true);
             case MAX_REBIRTHS -> player.displayClientMessage(
-                    Component.translatable("rebirth.eclipse.refuse.max",
+                    ServerLang.tr(player, "rebirth.eclipse.refuse.max",
                             RebirthConfig.get().maxRebirths()), true);
         }
         if (result != RebirthApi.Result.OK) {
@@ -181,9 +181,9 @@ public final class RebirthService {
         PacketDistributor.sendToAllPlayers(new S2CAnnouncePayload(
                 "announce.eclipse.rebirth.title", "announce.eclipse.rebirth.subtitle",
                 S2CAnnouncePayload.STYLE_UNLOCK));
-        player.server.getPlayerList().broadcastSystemMessage(Component.translatable(
-                "rebirth.eclipse.announce", player.getDisplayName(), newCount, LivesApi.get(player)), false);
         for (ServerPlayer online : player.server.getPlayerList().getPlayers()) {
+            online.sendSystemMessage(ServerLang.tr(online,
+                    "rebirth.eclipse.announce", player.getDisplayName(), newCount, LivesApi.get(player)));
             online.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.MASTER, 0.8F, 0.7F);
         }
     }

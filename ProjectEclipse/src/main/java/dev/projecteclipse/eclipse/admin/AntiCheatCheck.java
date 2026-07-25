@@ -29,8 +29,8 @@ import com.google.gson.JsonParser;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.C2SModlistPayload;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.api.distmarker.Dist;
@@ -475,13 +475,13 @@ public final class AntiCheatCheck {
                 // session, logged and surfaced to the player — never decided client-side.
                 EclipseMod.LOGGER.warn("Modcheck mismatch tolerated for {} (allowContinueOnMismatch): {}",
                         player.getScoreboardName(), result.summary());
-                player.sendSystemMessage(Component.translatable(
+                player.sendSystemMessage(ServerLang.tr(player,
                         "message.eclipse.modcheck.server_warn", result.summary()));
                 return;
             }
             EclipseMod.LOGGER.warn("Modcheck rejected {}: {}", player.getScoreboardName(), result.summary());
             String hint = config().downloadHintUrl();
-            player.connection.disconnect(Component.translatable(
+            player.connection.disconnect(ServerLang.tr(player,
                     "disconnect.eclipse.modcheck.failed",
                     String.join(", ", result.blocked()),
                     String.join(", ", result.missing()),
@@ -530,7 +530,7 @@ public final class AntiCheatCheck {
             if (player != null) {
                 EclipseMod.LOGGER.warn("Modcheck: {} never reported within {} ms; disconnecting",
                         player.getScoreboardName(), MODLIST_TIMEOUT_MILLIS);
-                player.connection.disconnect(Component.translatable("disconnect.eclipse.modcheck.timeout"));
+                player.connection.disconnect(ServerLang.tr(player, "disconnect.eclipse.modcheck.timeout"));
             }
         }
     }

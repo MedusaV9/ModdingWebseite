@@ -10,8 +10,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.AnalyticsService;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.bestiary.BestiaryPayloads;
 import dev.projecteclipse.eclipse.network.bestiary.S2CBestiaryPayload;
+import dev.projecteclipse.eclipse.skills.XpGates;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -40,7 +42,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * {@value #SCAN_INTERVAL_TICKS} ticks (phase-offset from the analytics/unlock sweeps),
  * one AABB query per tracked player (sized by {@link BestiaryTiers#maxSightingRange},
  * filtered back per id — encounters stay at {@value #ENCOUNTER_RANGE} blocks) marks every
- * living {@code eclipse:} mob inside it as encountered. For
+ * living {@code eclipse:} mob inside it as encountered. PROGFIX #1: the scan is gated —
+ * it never runs before the start event ({@link EclipseWorldState#isStartEventDone}) and
+ * never for players inside an event dimension ({@link XpGates#isEventDimension}), so
+ * idling next to the pre-event Limbo deckhands/drift lanterns discovers nothing. For
  * {@link BestiaryTiers#isSightingProgress} ids the same scan ALSO accumulates the
  * progress count, throttled to one sighting per mob id per
  * {@value #SIGHTING_COOLDOWN_TICKS} ticks (in-memory; a restart forgiving one cooldown
@@ -114,8 +119,16 @@ public final class BestiaryService {
         if (server.getTickCount() % SCAN_INTERVAL_TICKS != SCAN_PHASE) {
             return;
         }
+        // PROGFIX #1 pre-event gate: no bestiary knowledge before the start event — the
+        // pre-event Limbo is full of eclipse mobs (seated deckhands, drift lanterns).
+        if (!EclipseWorldState.get(server).isStartEventDone()) {
+            return;
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (AnalyticsService.isTracked(player)) {
+            // PROGFIX #1 dimension gate: event dimensions (Limbo, arenas, xbox worlds)
+            // never contribute discoveries — same shared predicate as the XP/quest gates.
+            if (AnalyticsService.isTracked(player)
+                    && !XpGates.isEventDimension(player.level().dimension())) {
                 scanAround(player, server.getTickCount());
             }
         }
@@ -198,6 +211,14 @@ public final class BestiaryService {
     }
 
     // --- send helper ---
+
+    /**
+     * Public resync seam for admin edits ({@code /eclipse bestiary reset}): pushes the
+     * player's current snapshot with no tier-up celebration.
+     */
+    public static void resync(ServerPlayer player) {
+        sync(player, "", BestiaryTiers.TIER_UNSEEN);
+    }
 
     /** Full snapshot to one player; non-empty {@code tierUpId} = celebrate that tier-up. */
     private static void sync(ServerPlayer player, String tierUpId, byte tierUpTier) {

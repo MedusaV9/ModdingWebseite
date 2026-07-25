@@ -44,6 +44,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_ALTAR_LEVEL = "altarLevel";
     private static final String TAG_BORDER_SIZE = "borderSize";
     private static final String TAG_START_EVENT_DONE = "startEventDone";
+    private static final String TAG_STORM_TOUCHED = "stormTouched";
     private static final String TAG_GHOST_SHIP_BUILT = "ghostShipBuilt";
     private static final String TAG_LIMBO_SEASCAPE_BUILT = "limboSeascapeBuilt";
     private static final String TAG_BANNED = "banned";
@@ -82,6 +83,7 @@ public final class EclipseWorldState extends SavedData {
     private int altarLevel = 0;
     private double borderSize = 1000.0D;
     private boolean startEventDone = false;
+    private boolean stormTouched = false;
     private boolean ghostShipBuilt = false;
     private boolean limboSeascapeBuilt = false;
     private int worldStageOverworld = 0;
@@ -130,6 +132,9 @@ public final class EclipseWorldState extends SavedData {
         state.altarLevel = tag.getInt(TAG_ALTAR_LEVEL);
         state.borderSize = tag.contains(TAG_BORDER_SIZE) ? tag.getDouble(TAG_BORDER_SIZE) : 1000.0D;
         state.startEventDone = tag.getBoolean(TAG_START_EVENT_DONE);
+        // PROGFIX #3: defaults to false on saves that predate the flag; IntroSequence
+        // backfills it on server start when the intro already completed (artifact-safe).
+        state.stormTouched = tag.getBoolean(TAG_STORM_TOUCHED);
         state.ghostShipBuilt = tag.getBoolean(TAG_GHOST_SHIP_BUILT);
         // Defaults to false so pre-seascape saves keep loading (the wreck ring, spires
         // and buoy lane then build on their next start).
@@ -212,6 +217,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_ALTAR_LEVEL, this.altarLevel);
         tag.putDouble(TAG_BORDER_SIZE, this.borderSize);
         tag.putBoolean(TAG_START_EVENT_DONE, this.startEventDone);
+        tag.putBoolean(TAG_STORM_TOUCHED, this.stormTouched);
         tag.putBoolean(TAG_GHOST_SHIP_BUILT, this.ghostShipBuilt);
         tag.putBoolean(TAG_LIMBO_SEASCAPE_BUILT, this.limboSeascapeBuilt);
         tag.putInt(TAG_WORLD_STAGE_OVERWORLD, this.worldStageOverworld);
@@ -507,6 +513,22 @@ public final class EclipseWorldState extends SavedData {
 
     public void setStartEventDone(boolean startEventDone) {
         this.startEventDone = startEventDone;
+        setDirty();
+    }
+
+    /**
+     * PROGFIX #3: whether any player has ever touched the intro storm — the
+     * APPROACH → LIGHTNING trigger in {@code sequence.IntroSequence}, the ceremony moment
+     * the arm artifact is granted. Latched forever once true; {@code artifact.ArtifactSlotLock}
+     * purges the artifact while this is false and enforces it once true. A finished intro
+     * implies it (backfilled on server start for saves that predate the flag).
+     */
+    public boolean isStormTouched() {
+        return this.stormTouched;
+    }
+
+    public void setStormTouched(boolean stormTouched) {
+        this.stormTouched = stormTouched;
         setDirty();
     }
 

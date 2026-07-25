@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.client.wand.WandProgressPanel;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.C2SSkillNodeBuyPayload;
+import dev.projecteclipse.eclipse.skills.XpGates;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -237,6 +238,16 @@ public class SkillTreeScreen extends Screen {
 
     @Override
     public void tick() {
+        // LIMBOFIX belt-and-braces: the keybind refuses to open in event dimensions, but
+        // the limbo door / a teleport can move the player while the tree is open — close
+        // it and hint why (the same line the keybind shows).
+        if (!closing && this.minecraft.player != null
+                && XpGates.isEventDimension(this.minecraft.player.level().dimension())) {
+            this.minecraft.player.displayClientMessage(
+                    EclipseLang.tr("message.eclipse.skills.sealed_in_limbo"), true);
+            onClose();
+            return;
+        }
         if (openTicks < OPEN_TICKS) {
             openTicks++;
         }

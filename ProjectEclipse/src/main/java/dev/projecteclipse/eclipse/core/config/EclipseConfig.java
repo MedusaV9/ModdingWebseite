@@ -477,42 +477,106 @@ public final class EclipseConfig {
      * {@code announce.eclipse.day.N.title/.sub} lang lines, moved here verbatim so the
      * anonymized arc cannot be datamined from the client jar (see {@link DayPlan}).
      * The deprecated {@code borderSize} is no longer written (see {@link DayPlan}).
+     *
+     * <p>LANGAUDIT: every goal/title/subtitle default now ships as a dual-language
+     * {@link Localized} — English-only defaults made German-locale players see English
+     * day announcements and timeline entries (the reported "Day 1" / double-language
+     * day-change bug). NOTE: an existing {@code days.json} on disk wins over these
+     * defaults; regenerate or hand-merge the {@code de} lines for live servers.</p>
      */
     private static List<DayPlan> defaultDays() {
         List<DayPlan> plans = new ArrayList<>(14);
-        plans.add(new DayPlan(1, List.of("Survive the first night", "Gather 16 logs and a set of stone tools as a team", "Everyone touches the altar"), List.of(), 0.0D,
-                "DAY 1 — FIRST LIGHT", "Day 1. Survive the night — the eclipse is watching."));
-        plans.add(new DayPlan(2, List.of("Enter the Nether", "Smelt 8 gold ingots", "Raise the altar to level 1"), List.of("nether", "main_inventory"), 0.0D,
-                "DAY 2 — THE BURNING DOOR", "Day 2. The nether gate groans open early — and your packs with it."));
-        plans.add(new DayPlan(3, List.of("Build your first Create contraption", "Forge a full iron toolset", "Scout the newly risen desert ring"), List.of("workbenches", "create"), 0.0D,
-                "DAY 3 — MACHINES IN THE DARK", "Day 3. Workstations hum; contraptions may turn."));
-        plans.add(new DayPlan(4, List.of("Cook three Farmer's Delight meals", "Establish a reliable food farm", "Wear full iron armor"), List.of("armor", "farmersdelight", "simulated"), 0.0D,
-                "DAY 4 — THE FEAST", "Day 4. Armor up and set the table — trust is cooked, not given."));
-        plans.add(new DayPlan(5, List.of("Take to the skies", "Gather 24 iron ingots as a team", "Rig something with Supplementaries"), List.of("aeronautics", "supplementaries"), 0.0D,
-                "DAY 5 — SKYWARD", "Day 5. The sky opens for the daring."));
-        plans.add(new DayPlan(6, List.of("Find the nether fortress", "Collect 6 blaze rods", "Craft the Herald's Lure"), List.of(), 0.0D,
-                "DAY 6 — FORTRESS", "Day 6. Find the fortress. Craft the lure. Dusk tomorrow decides."));
-        plans.add(new DayPlan(7, List.of("Summon the Herald at dusk", "Defeat the Herald", "Deposit the Herald Core at the altar"), List.of("enchanting"), 0.0D,
-                "DAY 7 — THE HERALD", "Day 7. At dusk it descends. Enchanting belongs to its killers."));
-        plans.add(new DayPlan(8, List.of("Fill a team ender chest", "Bank 16 ender pearls", "Raise the altar to level 4"), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 0.0D,
-                "DAY 8 — THE HOARD", "Day 8. Ender chests keep what you cannot."));
-        plans.add(new DayPlan(9, List.of("Brew strength and fire resistance", "Electrify a Create machine", "Pool 24 umbral shards"), List.of("brewing", "createaddition"), 0.0D,
-                "DAY 9 — ALCHEMY AND VOLTAGE", "Day 9. Cauldrons bubble; machines crackle awake."));
-        plans.add(new DayPlan(10, List.of("Find a smithing template", "Upgrade a tool to netherite", "Fortify your base"), List.of("smithing"), 0.0D,
-                "DAY 10 — DEEP RUIN", "Day 10. Netherite awaits the patient smith."));
-        plans.add(new DayPlan(11, List.of("Everyone reaches 4+ hearts", "Revive a banned player", "Assemble an End raid kit"), List.of(), 0.0D,
-                "DAY 11 — THE WEAKEST LINK", "Day 11. A chain is judged by its weakest link."));
+        plans.add(new DayPlan(1, List.of(
+                new Localized("Survive the first night", "Überlebt die erste Nacht"),
+                new Localized("Gather 16 logs and a set of stone tools as a team", "Sammelt als Team 16 Holzstämme und einen Satz Steinwerkzeuge"),
+                new Localized("Everyone touches the altar", "Alle berühren den Altar")), List.of(), 0.0D,
+                new Localized("DAY 1 — FIRST LIGHT", "TAG 1 — ERSTES LICHT"),
+                new Localized("Day 1. Survive the night — the eclipse is watching.", "Tag 1. Überlebt die Nacht — die Eclipse beobachtet euch.")));
+        plans.add(new DayPlan(2, List.of(
+                new Localized("Enter the Nether", "Betretet den Nether"),
+                new Localized("Smelt 8 gold ingots", "Schmelzt 8 Goldbarren"),
+                new Localized("Raise the altar to level 1", "Hebt den Altar auf Stufe 1")), List.of("nether", "main_inventory"), 0.0D,
+                new Localized("DAY 2 — THE BURNING DOOR", "TAG 2 — DAS BRENNENDE TOR"),
+                new Localized("Day 2. The nether gate groans open early — and your packs with it.", "Tag 2. Das Nethertor ächzt zu früh auf — und eure Rucksäcke mit ihm.")));
+        plans.add(new DayPlan(3, List.of(
+                new Localized("Build your first Create contraption", "Baut eure erste Create-Konstruktion"),
+                new Localized("Forge a full iron toolset", "Schmiedet einen vollständigen Satz Eisenwerkzeuge"),
+                new Localized("Scout the newly risen desert ring", "Erkundet den neu erhobenen Wüstenring")), List.of("workbenches", "create"), 0.0D,
+                new Localized("DAY 3 — MACHINES IN THE DARK", "TAG 3 — MASCHINEN IM DUNKELN"),
+                new Localized("Day 3. Workstations hum; contraptions may turn.", "Tag 3. Werkstationen summen; Konstruktionen dürfen sich drehen.")));
+        plans.add(new DayPlan(4, List.of(
+                new Localized("Cook three Farmer's Delight meals", "Kocht drei Farmer's-Delight-Gerichte"),
+                new Localized("Establish a reliable food farm", "Errichtet eine verlässliche Nahrungsfarm"),
+                new Localized("Wear full iron armor", "Tragt vollständige Eisenrüstung")), List.of("armor", "farmersdelight", "simulated"), 0.0D,
+                new Localized("DAY 4 — THE FEAST", "TAG 4 — DAS FESTMAHL"),
+                new Localized("Day 4. Armor up and set the table — trust is cooked, not given.", "Tag 4. Legt Rüstung an und deckt den Tisch — Vertrauen wird gekocht, nicht geschenkt.")));
+        plans.add(new DayPlan(5, List.of(
+                new Localized("Take to the skies", "Erhebt euch in die Lüfte"),
+                new Localized("Gather 24 iron ingots as a team", "Sammelt als Team 24 Eisenbarren"),
+                new Localized("Rig something with Supplementaries", "Baut etwas mit Supplementaries")), List.of("aeronautics", "supplementaries"), 0.0D,
+                new Localized("DAY 5 — SKYWARD", "TAG 5 — HIMMELWÄRTS"),
+                new Localized("Day 5. The sky opens for the daring.", "Tag 5. Der Himmel öffnet sich den Wagemutigen.")));
+        plans.add(new DayPlan(6, List.of(
+                new Localized("Find the nether fortress", "Findet die Netherfestung"),
+                new Localized("Collect 6 blaze rods", "Sammelt 6 Lohenruten"),
+                new Localized("Craft the Herald's Lure", "Fertigt den Köder des Herolds")), List.of(), 0.0D,
+                new Localized("DAY 6 — FORTRESS", "TAG 6 — DIE FESTUNG"),
+                new Localized("Day 6. Find the fortress. Craft the lure. Dusk tomorrow decides.", "Tag 6. Findet die Festung. Fertigt den Köder. Die morgige Dämmerung entscheidet.")));
+        plans.add(new DayPlan(7, List.of(
+                new Localized("Summon the Herald at dusk", "Beschwört den Herold in der Abenddämmerung"),
+                new Localized("Defeat the Herald", "Bezwingt den Herold"),
+                new Localized("Deposit the Herald Core at the altar", "Legt den Heroldkern am Altar nieder")), List.of("enchanting"), 0.0D,
+                new Localized("DAY 7 — THE HERALD", "TAG 7 — DER HEROLD"),
+                new Localized("Day 7. At dusk it descends. Enchanting belongs to its killers.", "Tag 7. In der Dämmerung steigt er herab. Das Verzaubern gehört seinen Bezwingern.")));
+        plans.add(new DayPlan(8, List.of(
+                new Localized("Fill a team ender chest", "Füllt eine Team-Endertruhe"),
+                new Localized("Bank 16 ender pearls", "Hinterlegt 16 Enderperlen"),
+                new Localized("Raise the altar to level 4", "Hebt den Altar auf Stufe 4")), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 0.0D,
+                new Localized("DAY 8 — THE HOARD", "TAG 8 — DER HORT"),
+                new Localized("Day 8. Ender chests keep what you cannot.", "Tag 8. Endertruhen bewahren, was ihr nicht bewahren könnt.")));
+        plans.add(new DayPlan(9, List.of(
+                new Localized("Brew strength and fire resistance", "Braut Stärke und Feuerresistenz"),
+                new Localized("Electrify a Create machine", "Elektrifiziert eine Create-Maschine"),
+                new Localized("Pool 24 umbral shards", "Legt als Team 24 Umbrasplitter zusammen")), List.of("brewing", "createaddition"), 0.0D,
+                new Localized("DAY 9 — ALCHEMY AND VOLTAGE", "TAG 9 — ALCHEMIE UND SPANNUNG"),
+                new Localized("Day 9. Cauldrons bubble; machines crackle awake.", "Tag 9. Kessel brodeln; Maschinen erwachen knisternd.")));
+        plans.add(new DayPlan(10, List.of(
+                new Localized("Find a smithing template", "Findet eine Schmiedevorlage"),
+                new Localized("Upgrade a tool to netherite", "Wertet ein Werkzeug zu Netherit auf"),
+                new Localized("Fortify your base", "Befestigt eure Basis")), List.of("smithing"), 0.0D,
+                new Localized("DAY 10 — DEEP RUIN", "TAG 10 — TIEFE RUINEN"),
+                new Localized("Day 10. Netherite awaits the patient smith.", "Tag 10. Netherit erwartet den geduldigen Schmied.")));
+        plans.add(new DayPlan(11, List.of(
+                new Localized("Everyone reaches 4+ hearts", "Alle erreichen mindestens 4 Herzen"),
+                new Localized("Revive a banned player", "Belebt einen verbannten Spieler wieder"),
+                new Localized("Assemble an End raid kit", "Stellt eine Ausrüstung für den Sturm auf das Ende zusammen")), List.of(), 0.0D,
+                new Localized("DAY 11 — THE WEAKEST LINK", "TAG 11 — DAS SCHWÄCHSTE GLIED"),
+                new Localized("Day 11. A chain is judged by its weakest link.", "Tag 11. Eine Kette wird an ihrem schwächsten Glied gemessen.")));
         // Days 12/13 carry done-variants (C13/A5-extra): once the End has arrived / the
         // dragon has fallen, the timeline and announcements stop advertising the hunt.
         // B15: day 12 targets the End disc in the sky — the stronghold no longer spawns.
-        plans.add(new DayPlan(12, List.of("Locate the End disc in the sky", "Open the rift to the End disc", "Purge the endermites around the rift"), List.of("end"), 0.0D,
-                "DAY 12 — THE SKY SHARD", "Day 12. A shard of the End hangs in the sky — the rift hums above the clouds.",
-                "DAY 12 — THE OPEN RIFT", "Day 12. The rift stands open — the sky has given up its secret."));
-        plans.add(new DayPlan(13, List.of("Defeat the Ender Dragon", "Claim the dragon egg", "All survivors return home"), List.of(), 0.0D,
-                "DAY 13 — THE DRAGON", "Day 13. Bring the dragon down and claim the egg.",
-                "DAY 13 — THE SILENT SKY", "The dragon has fallen. Rest — tomorrow the ship sails."));
-        plans.add(new DayPlan(14, List.of("Offer the egg at dusk", "Survive the crossing", "Defeat the Ferryman before the ship sinks"), List.of(), 0.0D,
-                "DAY 14 — THE FERRYMAN", "Day 14. Gather. The ship sails at dusk."));
+        plans.add(new DayPlan(12, List.of(
+                new Localized("Locate the End disc in the sky", "Ortet die Endscheibe am Himmel"),
+                new Localized("Open the rift to the End disc", "Öffnet den Riss zur Endscheibe"),
+                new Localized("Purge the endermites around the rift", "Vertilgt die Endermiten rund um den Riss")), List.of("end"), 0.0D,
+                new Localized("DAY 12 — THE SKY SHARD", "TAG 12 — DER HIMMELSSPLITTER"),
+                new Localized("Day 12. A shard of the End hangs in the sky — the rift hums above the clouds.", "Tag 12. Ein Splitter des Endes hängt am Himmel — der Riss summt über den Wolken."),
+                new Localized("DAY 12 — THE OPEN RIFT", "TAG 12 — DER OFFENE RISS"),
+                new Localized("Day 12. The rift stands open — the sky has given up its secret.", "Tag 12. Der Riss steht offen — der Himmel hat sein Geheimnis preisgegeben.")));
+        plans.add(new DayPlan(13, List.of(
+                new Localized("Defeat the Ender Dragon", "Bezwingt den Enderdrachen"),
+                new Localized("Claim the dragon egg", "Fordert das Drachenei"),
+                new Localized("All survivors return home", "Alle Überlebenden kehren heim")), List.of(), 0.0D,
+                new Localized("DAY 13 — THE DRAGON", "TAG 13 — DER DRACHE"),
+                new Localized("Day 13. Bring the dragon down and claim the egg.", "Tag 13. Holt den Drachen vom Himmel und fordert das Ei."),
+                new Localized("DAY 13 — THE SILENT SKY", "TAG 13 — DER STILLE HIMMEL"),
+                new Localized("The dragon has fallen. Rest — tomorrow the ship sails.", "Der Drache ist gefallen. Ruht euch aus — morgen sticht das Schiff in See.")));
+        plans.add(new DayPlan(14, List.of(
+                new Localized("Offer the egg at dusk", "Opfert das Ei in der Abenddämmerung"),
+                new Localized("Survive the crossing", "Überlebt die Überfahrt"),
+                new Localized("Defeat the Ferryman before the ship sinks", "Bezwingt den Fährmann, bevor das Schiff sinkt")), List.of(), 0.0D,
+                new Localized("DAY 14 — THE FERRYMAN", "TAG 14 — DER FÄHRMANN"),
+                new Localized("Day 14. Gather. The ship sails at dusk.", "Tag 14. Versammelt euch. Das Schiff sticht in der Dämmerung in See.")));
         return plans;
     }
 

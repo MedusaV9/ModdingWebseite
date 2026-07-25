@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.collections.CollectionsPayloads;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionTierPayload;
 import dev.projecteclipse.eclipse.network.collections.S2CCollectionsPayload;
@@ -315,7 +316,7 @@ public final class CollectionsService {
                 CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
                         def.id(), tierNumber, tier.xp(), tier.points(), tier.unlockItems()));
             }
-            player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
+            player.sendSystemMessage(ServerLang.tr(player, "message.eclipse.collection.tier",
                     Component.translatable("collection.eclipse." + def.id()),
                     CollectionTiers.roman(tierNumber)));
             // NEWFX-A2 Collection Tier Halo: world-side rise-and-crown on the collector
@@ -442,7 +443,7 @@ public final class CollectionsService {
             for (int i = entry.grantedTier(def.id()); i < tiers.size(); i++) {
                 for (String unlockEntry : tiers.get(i).unlockItems()) {
                     if (unlockEntryMatches(stack, itemId, unlockEntry)) {
-                        return Component.translatable("message.eclipse.recipe.locked.collection",
+                        return ServerLang.tr(player, "message.eclipse.recipe.locked.collection",
                                 Component.translatable("collection.eclipse." + def.id()),
                                 CollectionTiers.roman(i + 1));
                     }
