@@ -1,9 +1,35 @@
 # STATUS — GOOBY-Godot-Rewrite (ehrlicher Ist-Stand)
 
-Stand: Ende Welle W4/Polish (M1-Session). Quellen: `GODOT-PLAN.md` (bindend),
-Handoffs unter `/tmp/gooby-godot/handoffs/`, Test-Runner-Ausgaben.
+Stand: nach W4/Polish + Mega-Eval (15 Blickwinkel) + 2 Fix-Wellen (8 Agents) + W5/GOB-NOM.
+Quellen: `GODOT-PLAN.md` (bindend), Eval-Berichte `E1..E15-*.md`, Test-Runner-Ausgaben.
 Dieses Dokument sagt ehrlich, **was fertig ist (M1)** und **was Backlog ist (M2/M3)** —
 die vollständige, nichts-verlierende Backlog-Liste steht in `GODOT-PLAN.md` §6.
+
+## Mega-Eval + Fix (abgeschlossen)
+
+15 Eval-Agents (5 Fable Max + 5 Opus Max + 5 Sol Max) haben Boot/Onboarding, Migration,
+CI, Performance, Orientierung, Deutsch, Theme, Charakter, Baumodus, Fairness, GvZ-Kurve,
+Update-System, Server, Offline-first und Architektur geprüft (Berichte `docs/godot-rewrite/E*.md`).
+Die adversarialen Security-Blickwinkel (E12/E13) liefen als reine funktionale Robustheits-Reviews.
+Alle gefundenen **P0** und **P1** wurden in 8 Fix-Agents behoben, u. a.:
+
+- **P0 Theme-Zustellung:** Projekt-Default-Theme (`gui/theme/custom`) → AC-Look erreicht jetzt
+  Controls unter CanvasLayer UND SubViewport (vorher „alles grau"); + fehlende Button-Variationen,
+  AcCardButton (Arcade-Kacheln waren Ellipsen), Boot-Platzhalter entfernt.
+- **P0 MinigameHost 0×0** → Host/SubViewport füllen den Viewport (Minigames waren über den Router
+  unspielbar); gleicher Anchor-Bug in gvz/gobnom-Level-Select mitgefixt.
+- **P0 Migration `String==bool`-Crash** → typsichere Koerzierung; `load_state` bootet jetzt bei
+  jedem kaputten v4-Save sauber (Recovery statt Crash), vergessene Slices ergänzt.
+- **P1** HUD-Hochkant-Bogen, HUD-über-Screens ausblenden, Baumodus (Wandmöbel entfernbar,
+  Surface-Reihenfolge, Höhenclamp), GvZ-Monotonie easy/normal/hard, Energie-Gate + Coin-Cap,
+  Rig-Emotionen (sichtbare Silhouetten) + Morph-Mapping + Squeeze, DE-Text + veil/Dialog-i18n,
+  Offline-Wiring (Analytics ab t=0, Redeem/Events/Presence-Outbox, Visit-Timeout) + Server-Durability.
+
+## W5 — GOB NOM (neu, explizit gefordert)
+
+Cut-the-Rope-Pendant mit Verlet-Seilphysik, 15 Kampagnen- + 10 Coop-Level (alle per Auto-Solver
+als lösbar bewiesen), Nutella-Gläser als Sterne. Zusammen mit Goobys-vs-Zombies (W3b) sind damit
+**beide** vom User explizit gewünschten neuen Minispiele fertig + im Arcade-Grid.
 
 ## M1 — fertig (spielbarer Kern, diese Session)
 
