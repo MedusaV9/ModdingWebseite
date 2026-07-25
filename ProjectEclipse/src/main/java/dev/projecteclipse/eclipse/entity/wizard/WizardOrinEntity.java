@@ -420,6 +420,11 @@ public class WizardOrinEntity extends EclipseGeoMob {
                 SoundSource.NEUTRAL, 1.2F, 1.3F);
         level.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 1.8D, this.getZ(),
                 20, 0.5D, 0.8D, 0.5D, 0.06D);
+        // NEWFX-A5 Catalyst Handover: shard indraw -> fuse flash -> star-trail drop,
+        // entity lane anchored on Orin (the END_ROD puff above stays as the photon-less
+        // floor; reducedFx clients keep exactly that baseline). a = 0 reserved.
+        FxPayloads.sendFxEntityEvent(level, dev.projecteclipse.eclipse.network.fx.FxCues.CUE_WIZARD_CATALYST,
+                this, 0.0F, 0.0F, 48.0D);
         EclipseMod.LOGGER.info("Orin fetch quest complete: {} traded {} amethyst + {} umbral for a catalyst",
                 player.getScoreboardName(), QUEST_AMETHYST, QUEST_UMBRAL);
         return true;

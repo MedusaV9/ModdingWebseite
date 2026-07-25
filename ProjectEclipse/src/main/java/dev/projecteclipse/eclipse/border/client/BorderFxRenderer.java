@@ -303,9 +303,13 @@ public final class BorderFxRenderer {
             clusterCount = 0;
             lastProximity = 0.0F;
             resetThrottles(); // world/server change: old gameTime bases would stall the throttles
+            FirstContactSeam.reset();
             return;
         }
         double radius = ringRadius(level);
+        // NEWFX-D1: the once-per-save first-contact hairline arms at 48 blocks — far
+        // outside the fxRange early-out below, so it MUST observe every in-ring tick.
+        FirstContactSeam.tick(level, player, radius);
         float prox = proximity(radius, player.getX(), player.getZ());
         EclipseFxState.setBorderProximity(prox);
         // IDEA-07 §3 whisper hook: the static bed loop tracks the same per-tick proximity.

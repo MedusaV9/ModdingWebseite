@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.artifact;
 
 import java.util.List;
 
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.EclipsePayloads;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,6 +16,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+import software.bernie.geckolib.animatable.GeoItem;
+import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
  * The player's permanent in-game interface artifact ({@code eclipse:arm_artifact}).
@@ -42,13 +50,59 @@ import net.minecraft.world.level.Level;
  * server pushes fresh {@code S2CLivesPayload} + {@code S2CDayStatePayload} and then a
  * {@code S2COpenArtifactPayload}; same-connection ordering guarantees the
  * {@code ClientStateCache} is fresh by the time the open instruction lands.</p>
+ *
+ * <p><b>GeckoLib (PLAN-ITEMS A2):</b> the artifact is a geo item (severed-forearm model,
+ * {@code geo/item/arm_artifact.geo.json}) following the wand pilot's controller idiom —
+ * a {@code base} controller loops {@code animation.arm_artifact.idle} (ledger-mote orbit
+ * + slow finger curl) and an {@code action} controller holds the triggerable
+ * {@value #ANIM_OPEN} one-shot (fingers splay, mote flares), fired server-side at both
+ * ledger-open moments this class owns: the held right-click and the server side of the
+ * pinned-slot secondary click. The plan's optional {@code deny} anim is skipped —
+ * {@link ArtifactSlotLock} exposes no per-refusal hook and adding one is out of scope.
+ * Rendering registers through {@code client/item/ItemsAClientExtensions}
+ * ({@code IClientItemExtensions#getCustomRenderer} → {@code ArmArtifactRenderer});
+ * {@code models/item/arm_artifact.json} is {@code builtin/entity}.</p>
  */
-public class ArmArtifactItem extends Item {
+public class ArmArtifactItem extends Item implements GeoItem {
+    /** Asset/anim id ({@code geo/item/arm_artifact.geo.json}, {@code animation.arm_artifact.*}). */
+    public static final String GEO_ID = "arm_artifact";
+    /** Triggerable one-shot on the {@code action} controller: the ledger-open flick. */
+    public static final String ANIM_OPEN = "open";
+
     /** Mirrors the client suite's {@code EclipseUiTheme.ACCENT} (that class is client-only). */
     private static final int TOOLTIP_ACCENT = 0xB98CFF;
 
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+
     public ArmArtifactItem(Properties properties) {
         super(properties);
+        // Required for server-side triggerAnim() to reach tracking clients.
+        SingletonGeoAnimatable.registerSyncedAnimatable(this);
+    }
+
+    // ------------------------------------------------------------------ GeckoLib
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return geoCache;
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE, 4,
+                state -> state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE))));
+        AnimationController<ArmArtifactItem> action = new AnimationController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        action.triggerableAnim(ANIM_OPEN, EclipseGeoAnimations.once(GEO_ID, ANIM_OPEN));
+        controllers.add(action);
+    }
+
+    /** Server-side {@value #ANIM_OPEN} one-shot, synced to tracking clients (wand pattern). */
+    private static void triggerOpenAnim(ServerPlayer player, ItemStack stack) {
+        if (stack.getItem() instanceof ArmArtifactItem artifact) {
+            long instanceId = GeoItem.getOrAssignId(stack, player.serverLevel());
+            artifact.triggerAnim(player, instanceId, EclipseGeoAnimations.CONTROLLER_ACTION, ANIM_OPEN);
+        }
     }
 
     /** Keeps the artifact out of shulker boxes and bundles. */
@@ -65,8 +119,14 @@ public class ArmArtifactItem extends Item {
     @Override
     public boolean overrideOtherStackedOnMe(ItemStack stack, ItemStack other, Slot slot, ClickAction action,
             Player player, SlotAccess access) {
-        if (action == ClickAction.SECONDARY && player.level().isClientSide()) {
-            dev.projecteclipse.eclipse.client.ArtifactScreenOpener.openFromInventory();
+        if (action == ClickAction.SECONDARY) {
+            if (player.level().isClientSide()) {
+                dev.projecteclipse.eclipse.client.ArtifactScreenOpener.openFromInventory();
+            } else if (player instanceof ServerPlayer serverPlayer) {
+                // Server side of the same container click — the ledger-open moment for
+                // the pinned slot; GeckoLib syncs the one-shot on its own channel.
+                triggerOpenAnim(serverPlayer, stack);
+            }
         }
         return true;
     }
@@ -74,6 +134,7 @@ public class ArmArtifactItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         if (player instanceof ServerPlayer serverPlayer) {
+            triggerOpenAnim(serverPlayer, player.getItemInHand(hand));
             EclipsePayloads.sendArtifactState(serverPlayer, true);
         }
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide());

@@ -102,6 +102,18 @@ public final class FxPayloads {
     }
 
     /**
+     * NEWFX-C2: sends one position-lane FX event to exactly ONE player (the
+     * {@code PacketDistributor.sendToPlayer} half of the {@code CUE_DAWN_TOLL} personal-
+     * ceremony law, on the position lane). Use for per-player cues anchored at that
+     * player's own position — a range broadcast would stack N×N copies on clustered
+     * players and leak that the cue is per-recipient.
+     */
+    public static void sendFxEventTo(ServerPlayer player, ResourceLocation id, Vec3 pos,
+            float a, float b) {
+        PacketDistributor.sendToPlayer(player, new S2CFxEventPayload(id, pos, a, b));
+    }
+
+    /**
      * PH-PLAYER / PH-MOBS entity-cue lane ({@link S2CFxEntityEventPayload}): like
      * {@link #sendFxEvent} but the cue rides {@code target}'s entity id so the client can
      * attach the Photon leg to the (possibly moving) entity; {@code target.position()} is

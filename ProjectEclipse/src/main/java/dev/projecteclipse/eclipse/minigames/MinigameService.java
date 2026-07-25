@@ -80,6 +80,8 @@ public final class MinigameService {
     private static final long LEAVE_CONFIRM_WINDOW_MILLIS = 15_000L;
     private static final long BOUNCE_MESSAGE_THROTTLE_MILLIS = 3_000L;
     private static final long GRACEFUL_STOP_MILLIS = 10_000L;
+    /** NEWFX-C3a: gate fanfare/collapse cue broadcast radius around the portal frame. */
+    private static final double GATE_CUE_RANGE = 96.0D;
 
     // ---- transient per-run state (cleared on ServerStoppedEvent; SavedData is per-save) ----
     @Nullable
@@ -243,6 +245,10 @@ public final class MinigameService {
         BlockPos spot = MinigamePortal.findSpotNearSpawn(overworld);
         if (spot != null) {
             MinigamePortal.place(overworld, spot, state);
+            // NEWFX-C3a (b=0): the gate fanfare — the fresh portal frame ignites
+            // edge-running light that leaps off as confetti-sparks (range 96, the
+            // spawn-area audience). The collapse pair fires in beginClosing.
+            sendGateCue(overworld, spot, 0.0F);
             broadcast(server, portalHint(spot));
         } else {
             EclipseMod.LOGGER.warn("Minigame event {}: no portal spot within {}..{} blocks of spawn",
@@ -398,6 +404,17 @@ public final class MinigameService {
             exitToTicket(server, state, player, reason);
         }
 
+        // NEWFX-C3a (b=1): the collapse — the frame light unwinds and implodes to one
+        // point. Fired at the recorded portal spot BEFORE the frame despawns so the
+        // implosion reads as the portal's own exit; a portal-less event stays silent.
+        BlockPos closingPortal = state.portalPos();
+        ResourceKey<Level> closingDim = state.portalDimension();
+        if (closingPortal != null && closingDim != null) {
+            ServerLevel portalLevel = server.getLevel(closingDim);
+            if (portalLevel != null) {
+                sendGateCue(portalLevel, closingPortal, 1.0F);
+            }
+        }
         removePortal(server, state);
         cleanupCourseEntities(server, gameId);
 
@@ -426,6 +443,20 @@ public final class MinigameService {
         leftovers.forEach(Entity::discard);
         EclipseMod.LOGGER.info("Minigame close swept {} leftover entities from {}",
                 leftovers.size(), level.dimension().location());
+    }
+
+    /**
+     * NEWFX-C3a sender: the {@code CUE_MINIGAME_GATE} fanfare ({@code b} = 0) / collapse
+     * ({@code b} = 1) at the portal frame center ({@code MinigamePortal} frames are 3×4
+     * on the base block — mid-frame is base + 2). Range {@value #GATE_CUE_RANGE}: the
+     * spawn-plaza audience the portal hint already addresses.
+     */
+    private static void sendGateCue(ServerLevel level, BlockPos portalBase, float b) {
+        dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(level,
+                dev.projecteclipse.eclipse.network.fx.FxCues.CUE_MINIGAME_GATE,
+                new net.minecraft.world.phys.Vec3(portalBase.getX() + 0.5D,
+                        portalBase.getY() + 2.0D, portalBase.getZ() + 0.5D),
+                0.0F, b, GATE_CUE_RANGE);
     }
 
     private static void removePortal(MinecraftServer server, MinigameState state) {

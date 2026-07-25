@@ -9,10 +9,11 @@ import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CRebirthStatePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.skills.RebirthHooks;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import dev.projecteclipse.eclipse.skills.XpGates;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -160,19 +161,22 @@ public final class RebirthService {
     }
 
     /**
-     * Ceremony FX/sounds/announcement: totem burst + reverse-portal spiral at the reborn
+     * Ceremony FX/sounds/announcement: the NEWFX-B2 Starfall Rebirth cue at the reborn
      * player, a global typewriter announcement (unlock sweep) plus one named chat line,
      * and a resonance chime for everyone online.
      */
     private static void ceremony(ServerPlayer player, int newCount) {
         ServerLevel level = player.serverLevel();
         level.playSound(null, player.blockPosition(), SoundEvents.TOTEM_USE, SoundSource.PLAYERS, 1.0F, 0.8F);
-        level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING,
-                player.getX(), player.getY() + 1.0D, player.getZ(), 60, 0.6D, 0.9D, 0.6D, 0.35D);
-        level.sendParticles(ParticleTypes.REVERSE_PORTAL,
-                player.getX(), player.getY() + 0.4D, player.getZ(), 80, 0.4D, 1.2D, 0.4D, 0.05D);
-        level.sendParticles(ParticleTypes.END_ROD,
-                player.getX(), player.getY() + 1.2D, player.getZ(), 24, 0.8D, 0.8D, 0.8D, 0.02D);
+        // NEWFX-B2 Starfall Rebirth: the old vanilla TOTEM/REVERSE_PORTAL/END_ROD
+        // sendParticles spam is REMOVED and replaced in place by this cue — star
+        // streaks converge into the player, an indraw shell collapses to a blinding
+        // seam, then a wing-shell of violet fire snaps open and rains ash-glitter
+        // (eclipse:rebirth_starfall, Mode.REPLACE; photon-less/reducedFx clients get
+        // the eclipse:rebirth_ring Quasar leg). Entity lane so the ceremony rides the
+        // reborn player; 64-block bystanders share it; a = new rebirth count (info).
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_REBIRTH_CEREMONY, player,
+                newCount, 0.0F, 64.0D);
 
         PacketDistributor.sendToAllPlayers(new S2CAnnouncePayload(
                 "announce.eclipse.rebirth.title", "announce.eclipse.rebirth.subtitle",

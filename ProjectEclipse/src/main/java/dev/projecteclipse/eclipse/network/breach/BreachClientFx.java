@@ -82,6 +82,9 @@ public final class BreachClientFx {
                         .addShakeImpulse(0.18F, 24);
                 minecraft.level.playLocalSound(minecraft.player.blockPosition(),
                         SoundEvents.SOUL_ESCAPE.value(), SoundSource.AMBIENT, 0.9F, 0.6F, false);
+                // NEWFX-D2: capture + every seam re-pulse (re)opens the cocoon window
+                // (the seam teleport replaced the player entity — the refresh re-rides it).
+                DriftCocoon.open();
             }
             case DRIFT_END -> {
                 // Force a final short out ramp (in 0 = start at full glitch).
@@ -93,6 +96,7 @@ public final class BreachClientFx {
                 minecraft.level.playLocalSound(minecraft.player.blockPosition(),
                         SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(), SoundSource.AMBIENT,
                         0.7F, 0.55F, false);
+                DriftCocoon.close(); // NEWFX-D2: graceful release with the out-ramp
             }
         }
     }

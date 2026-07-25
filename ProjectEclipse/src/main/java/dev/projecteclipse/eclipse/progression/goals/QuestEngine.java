@@ -21,6 +21,8 @@ import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec.Kind;
@@ -613,6 +615,11 @@ public final class QuestEngine {
         } else {
             player.playNotifySound(EclipseSounds.SKILL_PROC.get(), SoundSource.MASTER, 0.8F, 1.0F);
         }
+        // NEWFX-A1 Decree Sigil Burst: world-side celebration on the credited player
+        // (entity lane — team completions fire per player, anchors differ so no dedup
+        // concern). a = goalKind ordinal: 0/MAIN gets the large variant + light pillar.
+        FxPayloads.sendFxEntityEvent(player.serverLevel(), FxCues.CUE_QUEST_COMPLETE,
+                player, spec.goalKind().ordinal(), 0.0F, 48.0D);
     }
 
     // --- team beats (data-driven successors of the hardcoded switch(day) detectors) ---

@@ -324,17 +324,25 @@ public final class StormFxClient {
 
     /**
      * C8 explosion debris, staged (FX-STORM multi-stage burst, mirroring the renderer's
-     * {@code explodeRadiusScale} curve):
+     * {@code explodeRadiusScale} curve; EXPLOSION 2.0 upgrades from PLAN-STORM2 §W-D D4 —
+     * the renderer's staggered-shell collapse choreography itself is W-A's, this class
+     * owns the client debris/FX beats riding it):
      * <ul>
      *   <li><b>implosion</b> (progress &lt; {@link StormWallRenderer#EXPLODE_IMPLODE_FRAC}):
-     *       debris tears off the shell and is sucked INTO the center — no smoke column yet;</li>
+     *       debris tears off the shell and is sucked INTO the center — no smoke column yet.
+     *       D4: plus 2 spark-white streaks/tick pulled hard toward the pinch point (the
+     *       inward breath has teeth; pairs with D5's fog "gulp" in the interior);</li>
      *   <li><b>flash beat</b> (&lt; 0.30): white owns the frame, the air stays almost clean;</li>
      *   <li><b>expansion</b>: debris ring on the renderer's eased {@code 1 + 1.8·t²} radius
-     *       law + rising center column + a {@code border_glitch} strobe burst every 5 ticks
-     *       riding the ring — the glitch-voxel shard dissolve (tier ≥ 1 only).</li>
+     *       law (D4: ring bursts DOUBLE at quality tier 2 — still raw {@code addParticle},
+     *       budget-free) + rising center column + a vertical debris FOUNTAIN during expand
+     *       0.3–0.8 climbing from the center toward 0.6·height (the burst has height, not
+     *       just radius) + a {@code border_glitch} strobe burst every 5 ticks riding the
+     *       ring — the glitch-voxel shard dissolve (tier ≥ 1 only, unchanged).</li>
      * </ul>
      * Raw {@code addParticle} for the dust — a 2 s one-off; only the glitch bursts charge
-     * the STORM channel.
+     * the STORM channel. The clear-sky bloom finish stays {@code StormInteriorFx}'s
+     * white-out→bloom tail (untouched contract).
      */
     private static void tickExplosionDebris(ClientLevel level, ClientStorm storm) {
         RandomSource random = level.random;
@@ -352,6 +360,18 @@ public final class StormFxClient {
                 level.addParticle(random.nextBoolean() ? ParticleTypes.CLOUD : ParticleTypes.LARGE_SMOKE,
                         x, y, z, -Math.cos(angle) * in, -0.03D, -Math.sin(angle) * in);
             }
+            // STORM2 (D4): the suck-in additionally tears spark-white streaks off the
+            // shell, faster than the smoke — the charge visibly FEEDS on the wall.
+            int sparks = reduced ? 1 : 2;
+            for (int i = 0; i < sparks; i++) {
+                double angle = random.nextDouble() * Math.PI * 2.0D;
+                double y = storm.center.y + 2.0D + random.nextDouble() * storm.height * 0.5D;
+                double in = 1.1D + random.nextDouble() * 0.5D;
+                level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                        storm.center.x + Math.cos(angle) * storm.radius, y,
+                        storm.center.z + Math.sin(angle) * storm.radius,
+                        -Math.cos(angle) * in, -0.02D, -Math.sin(angle) * in);
+            }
             return;
         }
         if (progress < 0.30F) {
@@ -364,10 +384,13 @@ public final class StormFxClient {
             return;
         }
         // Stage 3 — expanding debris ring (the renderer's eased expansion law).
+        // STORM2 (D4): tier 2 doubles the ring bursts — the staggered nested shockwave
+        // shells (W-A's explodeRadiusScale stagger) get a matching debris density. Still
+        // raw addParticle: budget-free, and reducedFx keeps its old floor untouched.
         float expandT = (progress - StormWallRenderer.EXPLODE_IMPLODE_FRAC)
                 / (1.0F - StormWallRenderer.EXPLODE_IMPLODE_FRAC);
         double ringR = storm.radius * (1.0D + 1.8D * expandT * expandT);
-        int bursts = reduced ? 5 : 10;
+        int bursts = reduced ? 5 : (FxBudget.qualityTier() >= 2 ? 20 : 10);
         for (int i = 0; i < bursts; i++) {
             double angle = random.nextDouble() * Math.PI * 2.0D;
             double x = storm.center.x + Math.cos(angle) * ringR;
@@ -396,6 +419,22 @@ public final class StormFxClient {
                     storm.center.y + 1.0D,
                     storm.center.z + (random.nextDouble() - 0.5D) * 4.0D,
                     0.0D, 0.25D + random.nextDouble() * 0.2D, 0.0D);
+        }
+        // STORM2 (D4): vertical debris FOUNTAIN during expand 0.3–0.8 — smoke launched
+        // from the center climbs toward 0.6·height as the window advances, so the burst
+        // reads tall while the ring reads wide. Raw addParticle, reducedFx keeps 1/tick.
+        if (expandT >= 0.3F && expandT <= 0.8F) {
+            double climb = (expandT - 0.3F) / 0.5F;
+            int jets = reduced ? 1 : 3;
+            for (int i = 0; i < jets; i++) {
+                level.addParticle(i == 0 ? ParticleTypes.CAMPFIRE_SIGNAL_SMOKE : ParticleTypes.LARGE_SMOKE,
+                        storm.center.x + (random.nextDouble() - 0.5D) * 3.0D,
+                        storm.center.y + 1.0D + random.nextDouble() * storm.height * 0.6D * climb,
+                        storm.center.z + (random.nextDouble() - 0.5D) * 3.0D,
+                        (random.nextDouble() - 0.5D) * 0.06D,
+                        0.35D + random.nextDouble() * 0.25D,
+                        (random.nextDouble() - 0.5D) * 0.06D);
+            }
         }
     }
 

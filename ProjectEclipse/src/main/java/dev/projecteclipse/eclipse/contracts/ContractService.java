@@ -324,6 +324,20 @@ public final class ContractService {
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.playNotifySound(SoundEvents.BELL_RESONATE, SoundSource.AMBIENT, 0.7F, 0.5F);
         }
+        // NEWFX-C2 open (b=0): the crimson omen ripple, once per ONLINE player at THAT
+        // player's own feet — the omen is everywhere, so nobody can triangulate anything
+        // from it (anonymity law). sendFxEventTo targets exactly one client: clustered
+        // players never stack N×N rings. reducedFx clients skip the row client-side.
+        sendOmenRipple(server, 0.0F);
+    }
+
+    /** NEWFX-C2 personal world-ring sender ({@code b} = 0 the dread / 1 the release). */
+    private static void sendOmenRipple(MinecraftServer server, float b) {
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(online,
+                    dev.projecteclipse.eclipse.network.fx.FxCues.CUE_CONTRACT_OMEN,
+                    online.position(), 0.0F, b);
+        }
     }
 
     /** ACTIVE start: reveals, armor blackout flag, music. The one anonymity breach fires here. */
@@ -704,6 +718,10 @@ public final class ContractService {
     private static void finishWindow(MinecraftServer server, ContractState state,
             ContractState.Outcome outcome) {
         long now = EclipseClock.epochMillis();
+        // NEWFX-C2 close (b=1): the cinders reverse and snuff in a gray exhale — every
+        // resolution path (success/expired/voided/tables/prank) funnels through here,
+        // so open and close stay a guaranteed pair (SEQUENCE twice per window max).
+        sendOmenRipple(server, 1.0F);
         ContractPayloads.sendStateToAll(server, false, now, now);
         if (state.mode() == ContractState.Mode.REAL) {
             stopMusic(playerOf(server, state.hunter()));

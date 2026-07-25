@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
 import dev.projecteclipse.eclipse.offering.OfferingRules;
@@ -239,6 +240,7 @@ public class AltarBlockEntity extends BlockEntity {
             pendingOfferings.remove(playerId);
             actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.1F);
+            sendOfferingGutter(serverLevel); // NEWFX-B3: the world-side rejection tell
             return;
         }
         String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
@@ -259,6 +261,7 @@ public class AltarBlockEntity extends BlockEntity {
         java.util.OptionalInt exactValue = OfferingService.acceptWithValue(player, stack);
         if (exactValue.isEmpty()) {
             actionBar(player, Component.translatable("ritual.eclipse.offering.already"));
+            sendOfferingGutter(serverLevel); // NEWFX-B3: same tell on the post-accept race
             return;
         }
         actionBar(player, Component.translatable("ritual.eclipse.offering.done"));
@@ -416,6 +419,21 @@ public class AltarBlockEntity extends BlockEntity {
     }
 
     // --- helpers ---
+
+    /**
+     * NEWFX-B3 Offering Gutter — the anti-climax to the swallow's climax: the altar
+     * flame shrinks to a cold ember, coughs one FALLING gray ash puff and two dim
+     * violet wisps retreat into the stone ({@code eclipse:offering_gutter} +
+     * {@code eclipse:offering_gutter_puff} Quasar leg). Fired from BOTH "already
+     * offered" refusal branches of {@link #handleOffering}; position lane at the altar
+     * crown (the +1.15 anchor the acceptance particles use), range 32. Deliberately
+     * outcome-blind — offering values and duplicate outcomes stay secret.
+     */
+    private void sendOfferingGutter(ServerLevel serverLevel) {
+        FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_OFFERING_REJECT,
+                new Vec3(this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.15D,
+                        this.worldPosition.getZ() + 0.5D), 0.0F, 0.0F, 32.0D);
+    }
 
     private static void actionBar(ServerPlayer player, Component message) {
         player.displayClientMessage(message, true);

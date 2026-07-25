@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.ritual;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -22,23 +23,90 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.PacketDistributor;
+import software.bernie.geckolib.animatable.GeoItem;
+import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
  * Heart Extractor (R8): channel for roughly three seconds, then permanently tear out two
  * max hearts in exchange for four heart fragments. The finish-time guard is authoritative:
  * a player can never be reduced below one max heart even if their heart count changes while
  * channeling.
+ *
+ * <p><b>GeckoLib (PLAN-ITEMS A3):</b> a geo item (brass-and-glass heart-tap,
+ * {@code geo/item/heart_extractor.geo.json}) on the wand controller idiom. The
+ * {@code base} controller swaps between the {@code idle} loop (chamber-glow breathing)
+ * and the {@value #ANIM_CHANNEL} loop — a ~3 s plunger draw matching
+ * {@value #USE_DURATION_TICKS} ticks — driven by a CLIENT-side
+ * {@code LivingEntity#isUsingItem} check on the rendered stack (the fully-qualified
+ * {@code client/item/HeartExtractorRenderer} reference never loads on a dedicated
+ * server: the predicate only runs while rendering). The {@code action} controller holds
+ * the triggerable {@value #ANIM_EXTRACT} (snap-finish, fired from
+ * {@link #finishUsingItem}) and {@value #ANIM_REFUSE} (shake, fired from the existing
+ * {@code refuse()} path). The vanilla {@link UseAnim#SPEAR} arm pose is kept.</p>
  */
-public class HeartExtractorItem extends Item {
+public class HeartExtractorItem extends Item implements GeoItem {
+    /** Asset/anim id ({@code geo/item/heart_extractor.geo.json}, {@code animation.heart_extractor.*}). */
+    public static final String GEO_ID = "heart_extractor";
+    /** Base-controller loop while the holder channels (plunger draw over ~3 s). */
+    public static final String ANIM_CHANNEL = "channel";
+    public static final String ANIM_EXTRACT = "extract";
+    public static final String ANIM_REFUSE = "refuse";
+
     /** Hold duration in ticks (60t = 3 s). */
     public static final int USE_DURATION_TICKS = 60;
     public static final int HEART_COST = 2;
     public static final int FRAGMENT_REWARD = 4;
     public static final int MIN_REMAINING_HEARTS = 1;
 
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+
     public HeartExtractorItem(Properties properties) {
         super(properties);
+        // Required for server-side triggerAnim() to reach tracking clients.
+        SingletonGeoAnimatable.registerSyncedAnimatable(this);
+    }
+
+    // ------------------------------------------------------------------ GeckoLib
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return geoCache;
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE, 4, state -> {
+            ItemStack stack = state.getData(DataTickets.ITEMSTACK);
+            if (FMLEnvironment.dist == Dist.CLIENT && stack != null
+                    // Lazy fully-qualified client reference (FxPayloads pattern) — the
+                    // predicate only executes while a client renders the item.
+                    && dev.projecteclipse.eclipse.client.item.HeartExtractorRenderer.isClientChanneling(stack)) {
+                return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, ANIM_CHANNEL));
+            }
+            return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE));
+        }));
+        AnimationController<HeartExtractorItem> action = new AnimationController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        action.triggerableAnim(ANIM_EXTRACT, EclipseGeoAnimations.once(GEO_ID, ANIM_EXTRACT));
+        action.triggerableAnim(ANIM_REFUSE, EclipseGeoAnimations.once(GEO_ID, ANIM_REFUSE));
+        controllers.add(action);
+    }
+
+    /** Server-side one-shot on the {@code action} controller, synced to tracking clients. */
+    private static void triggerExtractorAnim(ServerPlayer player, ItemStack stack, String animName) {
+        if (stack.getItem() instanceof HeartExtractorItem extractor) {
+            long instanceId = GeoItem.getOrAssignId(stack, player.serverLevel());
+            extractor.triggerAnim(player, instanceId, EclipseGeoAnimations.CONTROLLER_ACTION, animName);
+        }
     }
 
     /** Pure gate used by the item and revive gametests. */
@@ -55,7 +123,7 @@ public class HeartExtractorItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player instanceof ServerPlayer serverPlayer && !canExtract(LivesApi.get(serverPlayer))) {
-            refuse(serverPlayer);
+            refuse(serverPlayer, stack);
             return InteractionResultHolder.fail(stack);
         }
         player.startUsingItem(hand);
@@ -82,9 +150,10 @@ public class HeartExtractorItem extends Item {
         if (!canExtract(heartsBefore)) {
             // Re-check after the channel: deaths/admin changes during those three seconds must
             // never let the extractor cross the one-heart safety floor.
-            refuse(player);
+            refuse(player, stack);
             return stack;
         }
+        triggerExtractorAnim(player, stack, ANIM_EXTRACT);
 
         int heartsAfter = LivesApi.add(player, -HEART_COST);
         dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
@@ -130,7 +199,8 @@ public class HeartExtractorItem extends Item {
         return stack;
     }
 
-    private static void refuse(ServerPlayer player) {
+    private static void refuse(ServerPlayer player, ItemStack stack) {
+        triggerExtractorAnim(player, stack, ANIM_REFUSE);
         player.displayClientMessage(Component.translatable("item.eclipse.heart_extractor.too_few"), true);
         player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.6F, 0.65F);
     }

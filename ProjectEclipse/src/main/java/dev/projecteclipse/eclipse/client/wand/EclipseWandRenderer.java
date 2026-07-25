@@ -18,6 +18,7 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.DefaultedItemGeoModel;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
+import software.bernie.geckolib.util.Color;
 
 /**
  * GeckoLib renderer for the Zauberstab (registered through {@code WandClientExtensions}'
@@ -41,6 +42,13 @@ import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
  */
 public final class EclipseWandRenderer extends GeoItemRenderer<EclipseWandItem> {
     private static final Map<WandPath, ResourceLocation> TEXTURES = new EnumMap<>(WandPath.class);
+    /**
+     * Per-path render tint (ITEMS-A polish): a barely-off-white multiply through
+     * {@link #getRenderColor} that pushes each path's albedo toward its identity hue
+     * without fighting the painter's palette (the painted texture stays the source of
+     * truth; NONE renders untinted).
+     */
+    private static final Map<WandPath, Color> TINTS = new EnumMap<>(WandPath.class);
     /** Paths whose ornament groups exist in the geo (everything but NONE). */
     private static final WandPath[] ORNAMENT_PATHS = {WandPath.RISS, WandPath.GLUT, WandPath.STERN};
     private static final int MAX_STAGE = 3;
@@ -50,6 +58,10 @@ public final class EclipseWandRenderer extends GeoItemRenderer<EclipseWandItem> 
         for (WandPath path : ORNAMENT_PATHS) {
             TEXTURES.put(path, texture("eclipse_wand_" + path.name().toLowerCase(Locale.ROOT)));
         }
+        TINTS.put(WandPath.NONE, Color.WHITE);
+        TINTS.put(WandPath.RISS, Color.ofOpaque(0xF6EEFF));   // faint violet
+        TINTS.put(WandPath.GLUT, Color.ofOpaque(0xFFF3E8));   // faint ember warmth
+        TINTS.put(WandPath.STERN, Color.ofOpaque(0xEDF6FF));  // faint starlight blue
     }
 
     private static ResourceLocation texture(String name) {
@@ -70,6 +82,13 @@ public final class EclipseWandRenderer extends GeoItemRenderer<EclipseWandItem> 
         ItemStack stack = getCurrentItemStack();
         WandPath path = stack == null ? WandPath.NONE : WandSoulbind.pathOf(stack);
         return TEXTURES.get(path);
+    }
+
+    @Override
+    public Color getRenderColor(EclipseWandItem animatable, float partialTick, int packedLight) {
+        ItemStack stack = getCurrentItemStack();
+        WandPath path = stack == null ? WandPath.NONE : WandSoulbind.pathOf(stack);
+        return TINTS.get(path);
     }
 
     @Override

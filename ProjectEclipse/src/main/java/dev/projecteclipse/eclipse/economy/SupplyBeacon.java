@@ -101,12 +101,31 @@ public final class SupplyBeacon {
 
     private static final List<Marker> MARKERS = new ArrayList<>();
 
+    /**
+     * NEWFX-C4: how long the herald cue leads the actual crate + marker (ticks). The
+     * pending drop is checked every tick, so the lead is exact.
+     */
+    public static final int HERALD_LEAD_TICKS = 60;
+
+    /** NEWFX-C4: one announced-but-not-yet-spawned drop (transient, like {@link Marker}). */
+    private record PendingDrop(BlockPos surfacePos, long dueGameTime) {}
+
+    private static final List<PendingDrop> PENDING_DROPS = new ArrayList<>();
+
     private SupplyBeacon() {}
 
     /**
      * Drops one supply crate at a random spot {@value #MIN_DISTANCE_BLOCKS}–{@value
      * #MAX_DISTANCE_BLOCKS} blocks from the sanctum altar (world spawn if the sanctum is
      * not built). Returns the surface position — for the LOG ONLY, never for players.
+     *
+     * <p>NEWFX-C4: the position is committed HERE, but the crate + marker body is
+     * deferred by {@value #HERALD_LEAD_TICKS} ticks ({@link #onServerTick} pending-drop
+     * pass) behind the {@code CUE_SUPPLY_HERALD} pre-beat — a patch of sky tears a slit
+     * of white on the drop line ~3 s before the beam. The cue is dimension-wide but the
+     * visual is at altitude, so coordinates stay exactly as secret as the beam itself.
+     * The pending list is transient like {@link #MARKERS}: a restart inside the 3 s
+     * window forfeits that crate the same way it already retires live markers.</p>
      */
     public static BlockPos drop(MinecraftServer server) {
         ServerLevel level = server.overworld();
@@ -122,25 +141,39 @@ public final class SupplyBeacon {
         // world floor and the crate would spawn deep underground. Ticket-load it first.
         BudgetedBlockWriter.loadWithTicket(level, x >> 4, z >> 4);
         int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-        int spawnY = Math.min(surfaceY + 60, level.getMaxBuildHeight() - 4);
+        BlockPos surfacePos = new BlockPos(x, surfaceY, z);
 
+        // NEWFX-C4 pre-beat: dimension-wide (range <= 0), reducedFx clients skip the row.
+        dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(level,
+                dev.projecteclipse.eclipse.network.fx.FxCues.CUE_SUPPLY_HERALD,
+                net.minecraft.world.phys.Vec3.atBottomCenterOf(surfacePos), 0.0F, 0.0F, 0.0D);
+        PENDING_DROPS.add(new PendingDrop(surfacePos, level.getGameTime() + HERALD_LEAD_TICKS));
+        EclipseMod.LOGGER.info("Supply herald sent for a drop {} blocks from {} at {} — crate follows in {} ticks",
+                (int) distance, center.toShortString(), surfacePos.toShortString(), HERALD_LEAD_TICKS);
+        return surfacePos;
+    }
+
+    /** The deferred drop body (crate + marker + beam payload) — v1 {@code drop} inline code. */
+    private static void spawnCrate(ServerLevel level, BlockPos surfacePos) {
+        // Re-assert the ticket: the herald lead is short but the ticket API is idempotent.
+        BudgetedBlockWriter.loadWithTicket(level, surfacePos.getX() >> 4, surfacePos.getZ() >> 4);
+        int spawnY = Math.min(surfacePos.getY() + 60, level.getMaxBuildHeight() - 4);
         FallingBlockEntity crate = FallingBlockEntity.fall(level,
-                new BlockPos(x, spawnY, z), Blocks.BARREL.defaultBlockState());
+                new BlockPos(surfacePos.getX(), spawnY, surfacePos.getZ()),
+                Blocks.BARREL.defaultBlockState());
         // Merged into the barrel's block entity NBT when the crate lands (vanilla behavior).
         CompoundTag lootData = new CompoundTag();
         lootData.putString("LootTable", "eclipse:supply_crate");
-        lootData.putLong("LootTableSeed", random.nextLong());
+        lootData.putLong("LootTableSeed", level.getRandom().nextLong());
         crate.blockData = lootData;
 
-        BlockPos surfacePos = new BlockPos(x, surfaceY, z);
         MARKERS.add(new Marker(surfacePos, crate.getUUID(), spawnY,
                 level.getGameTime() + MARKER_LIFETIME_TICKS));
         // ONE payload; the client owns the beam visuals from here (P2 R7 protocol).
         PacketDistributor.sendToPlayersInDimension(level,
                 new S2CSupplyMarkerPayload(true, surfacePos, ADD_FADE_TICKS));
-        EclipseMod.LOGGER.info("Supply beacon crate dropped {} blocks from {} at {} (coordinates stay secret in-game)",
-                (int) distance, center.toShortString(), surfacePos.toShortString());
-        return surfacePos;
+        EclipseMod.LOGGER.info("Supply beacon crate dropped at {} (coordinates stay secret in-game)",
+                surfacePos.toShortString());
     }
 
     /**
@@ -152,6 +185,20 @@ public final class SupplyBeacon {
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
+        // NEWFX-C4: pending drops are checked EVERY tick (the list is almost always
+        // empty) so the crate lands exactly HERALD_LEAD_TICKS behind its herald.
+        if (!PENDING_DROPS.isEmpty()) {
+            ServerLevel overworld = server.overworld();
+            long gameTime = overworld.getGameTime();
+            Iterator<PendingDrop> pending = PENDING_DROPS.iterator();
+            while (pending.hasNext()) {
+                PendingDrop drop = pending.next();
+                if (gameTime >= drop.dueGameTime()) {
+                    pending.remove();
+                    spawnCrate(overworld, drop.surfacePos());
+                }
+            }
+        }
         if (MARKERS.isEmpty() || server.getTickCount() % MARKER_CHECK_TICKS != 0) {
             return;
         }
@@ -279,5 +326,6 @@ public final class SupplyBeacon {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         MARKERS.clear();
+        PENDING_DROPS.clear();
     }
 }

@@ -24,12 +24,39 @@
           ]
         },
         {
+          "name": "handle_wrap",
+          "parent": "handle",
+          "pivot": [0, 2, 0],
+          "rotation": [0, 8, 0],
+          "cubes": [
+            {"origin": [-1, 2, -1], "size": [2, 1, 2], "inflate": 0.25, "uv": [0, 8]}
+          ]
+        },
+        {
           "name": "shaft",
           "parent": "handle",
           "pivot": [0, 6, 0],
           "rotation": [0, 0, 3],
           "cubes": [
-            {"origin": [-1, 6, -1], "size": [2, 7, 2], "uv": [8, 0]}
+            {"origin": [-1, 6, -1], "size": [2, 3, 2], "uv": [8, 0]}
+          ]
+        },
+        {
+          "name": "shaft_mid",
+          "parent": "shaft",
+          "pivot": [0, 9, 0],
+          "rotation": [0, -2, 1],
+          "cubes": [
+            {"origin": [-1, 9, -1], "size": [2, 2, 2], "inflate": -0.15, "uv": [8, 6]}
+          ]
+        },
+        {
+          "name": "shaft_top",
+          "parent": "shaft_mid",
+          "pivot": [0, 11, 0],
+          "rotation": [0, 2, -1],
+          "cubes": [
+            {"origin": [-1, 11, -1], "size": [2, 2, 2], "inflate": -0.3, "uv": [8, 11]}
           ]
         },
         {
@@ -43,7 +70,7 @@
         },
         {
           "name": "tip",
-          "parent": "shaft",
+          "parent": "shaft_top",
           "pivot": [0, 13, 0],
           "cubes": [
             {"origin": [-0.5, 13, -0.5], "size": [1, 2, 1], "uv": [28, 0]}
@@ -85,6 +112,15 @@
           "rotation": [0, 0, 12],
           "cubes": [
             {"origin": [1.5, 14.5, -0.5], "size": [1, 2, 1], "uv": [12, 16]}
+          ]
+        },
+        {
+          "name": "glow_riss_f",
+          "parent": "p_riss_s2",
+          "pivot": [0, 15.5, -2],
+          "rotation": [-15, 0, 0],
+          "cubes": [
+            {"origin": [-0.5, 15, -2.5], "size": [1, 2, 1], "uv": [44, 16]}
           ]
         },
         {
@@ -175,6 +211,14 @@
             {"origin": [-1, 19.5, -1], "size": [2, 2, 2], "uv": [48, 24]}
           ]
         },
+        {
+          "name": "glow_glut_flame_c",
+          "parent": "p_glut_s3",
+          "pivot": [0, 18, 0],
+          "cubes": [
+            {"origin": [2, 17.5, -0.5], "size": [1, 1, 1], "uv": [56, 24]}
+          ]
+        },
 
         {
           "name": "p_stern_s1",
@@ -231,6 +275,14 @@
           "pivot": [0, 17, 0],
           "cubes": [
             {"origin": [-1, 19.5, -2.5], "size": [1, 1, 1], "uv": [40, 36]}
+          ]
+        },
+        {
+          "name": "glow_stern_p4",
+          "parent": "p_stern_s3",
+          "pivot": [0, 17, 0],
+          "cubes": [
+            {"origin": [1.5, 19, 1.5], "size": [1, 1, 1], "uv": [44, 36]}
           ]
         }
       ]

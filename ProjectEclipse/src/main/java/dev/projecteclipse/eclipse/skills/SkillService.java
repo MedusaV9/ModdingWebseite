@@ -62,6 +62,14 @@ public final class SkillService {
     private static final Set<UUID> DIRTY = java.util.concurrent.ConcurrentHashMap.newKeySet();
     // statics reset on ServerStopped
     private static int tickCounter = 0;
+    /**
+     * NEWFX-A3 cue throttle: last server tick a {@code CUE_SKILL_SPEND} was sent per
+     * player — spends can be rapid (spam-clicking the tree), the seam sends at most one
+     * cue per player per second (PLAN-NEWFX A3). Statics reset on ServerStopped.
+     */
+    private static final java.util.Map<UUID, Integer> LAST_SPEND_CUE_TICK =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int SPEND_CUE_MIN_INTERVAL_TICKS = 20;
     /** JVM-lifetime guard — ReloadHooks entries survive across saves by design. */
     private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean();
 
@@ -143,6 +151,7 @@ public final class SkillService {
         SIGNALS_REGISTERED.set(false);
         DIRTY.clear();
         tickCounter = 0;
+        LAST_SPEND_CUE_TICK.clear();
         SkillConfig.invalidate();
         SkillTreeConfig.invalidate();
         SkillPerks.resetStatics();
@@ -313,6 +322,17 @@ public final class SkillService {
             state.setDirty();
             player.serverLevel().playSound(null, player.blockPosition(),
                     EclipseSounds.SKILL_LEVELUP.get(), SoundSource.PLAYERS, 0.6F, 1.3F);
+            // NEWFX-A3 Skill Spark Column: deliberately small hand-orbit accent (entity
+            // lane, a = node cost). Throttled to one cue per player per second so rapid
+            // tree shopping never floods the wire or the client BURST channel.
+            int now = player.server.getTickCount();
+            Integer last = LAST_SPEND_CUE_TICK.get(player.getUUID());
+            if (last == null || now - last >= SPEND_CUE_MIN_INTERVAL_TICKS) {
+                LAST_SPEND_CUE_TICK.put(player.getUUID(), now);
+                dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEntityEvent(
+                        player.serverLevel(), dev.projecteclipse.eclipse.network.fx.FxCues.CUE_SKILL_SPEND,
+                        player, node.cost(), 0.0F, 32.0D);
+            }
             player.displayClientMessage(Component.translatable("message.eclipse.skill.buy.success",
                     node.title().pick(dev.projecteclipse.eclipse.lang.LangService.locale(player))), true);
             syncTo(player);

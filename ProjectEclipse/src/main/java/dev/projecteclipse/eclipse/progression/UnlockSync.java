@@ -47,13 +47,17 @@ public final class UnlockSync {
     /**
      * Snapshot payload of the current unlock state (keys + locked ModGate namespaces).
      * Also unions {@link LandmarkDiscoveryService#discoveredKeys} ({@code landmark:<id>}
-     * — A6 map-discovery contract: same payload, no new type); discoveries push their own
-     * {@link #broadcastAll} so the 1 Hz poll below stays a pure {@code UnlockState} watch.
+     * — A6 map-discovery contract: same payload, no new type) and (NEWFX-C5, the same
+     * contract) {@code DungeonDiscovery.discoveredKeys} ({@code dungeon:<siteId>});
+     * discoveries push their own {@link #broadcastAll} so the 1 Hz poll below stays a
+     * pure {@code UnlockState} watch.
      */
     public static S2CUnlockedKeysPayload payloadFor(MinecraftServer server) {
         Set<String> keys = UnlockState.unlockedKeys(server);
         List<String> merged = new ArrayList<>(keys);
         merged.addAll(LandmarkDiscoveryService.discoveredKeys(server));
+        merged.addAll(dev.projecteclipse.eclipse.worldgen.structure.DungeonDiscovery
+                .discoveredKeys(server));
         return new S2CUnlockedKeysPayload(merged, lockedNamespaces(server), lockedIdGlobs(server));
     }
 

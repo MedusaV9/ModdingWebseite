@@ -7,6 +7,8 @@ import java.util.Set;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.WorldStageAccess;
@@ -17,8 +19,11 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -133,6 +138,35 @@ public final class LandmarkDiscoveryService {
         return true;
     }
 
+    /** Range of the shared position-lane flare cue (PLAN-NEWFX A4). */
+    private static final double FLARE_RANGE = 128.0D;
+    /** Range of the discoverer's personal echo cue (entity lane). */
+    private static final double ECHO_RANGE = 32.0D;
+    /** How far above the anchor surface the compass-rose unfurls. */
+    private static final double FLARE_HOVER = 3.0D;
+
+    /**
+     * NEWFX-A4 send half: one {@code CUE_LANDMARK_DISCOVERED} at the landmark center for
+     * everyone within {@value #FLARE_RANGE} blocks, plus the {@code CUE_LANDMARK_ECHO}
+     * glint riding the discoverer. Buried sites ({@link #UNDERGROUND_IDS} — discovered
+     * from INSIDE, below y {@value #UNDERGROUND_MAX_Y}) anchor at the discoverer's depth
+     * so the reveal plays where the eyes are, not on the sealed mountain top; surface
+     * sites unfurl {@value #FLARE_HOVER} blocks over the heightmap.
+     */
+    private static void sendDiscoveryFx(ServerPlayer player, DiscMapData.Landmark landmark) {
+        ServerLevel level = player.serverLevel();
+        double anchorY;
+        if (UNDERGROUND_IDS.contains(landmark.id())) {
+            anchorY = player.getY() + FLARE_HOVER;
+        } else {
+            anchorY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    landmark.x(), landmark.z()) + FLARE_HOVER;
+        }
+        Vec3 center = new Vec3(landmark.x() + 0.5D, anchorY, landmark.z() + 0.5D);
+        FxPayloads.sendFxEvent(level, FxCues.CUE_LANDMARK_DISCOVERED, center, 0.0F, 0.0F, FLARE_RANGE);
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_LANDMARK_ECHO, player, 0.0F, 0.0F, ECHO_RANGE);
+    }
+
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
@@ -160,8 +194,13 @@ public final class LandmarkDiscoveryService {
                 double dx = player.getX() - landmark.x();
                 double dz = player.getZ() - landmark.z();
                 double reach = landmark.radius() + DISCOVERY_MARGIN;
-                if (dx * dx + dz * dz <= reach * reach) {
-                    discover(server, landmark.id());
+                if (dx * dx + dz * dz <= reach * reach && discover(server, landmark.id())) {
+                    // NEWFX-A4 Landmark Discovery Flare: only the sweep knows both the
+                    // discoverer and the landmark center, so the FX fires HERE —
+                    // discover(server, id) keeps its signature and dev force-charts stay
+                    // FX-less. One shared position-lane flare (range 128) + the
+                    // discoverer's personal entity-lane echo.
+                    sendDiscoveryFx(player, landmark);
                 }
             }
         }

@@ -89,6 +89,13 @@ public final class BossPayloads {
      * table row ({@code MobPhotonFxRows}) whose Photon leg delays the ground ring to the
      * card's name-lock flash; photon-less clients no-op (the row has no Quasar leg — the
      * card never depended on a world accent).</p>
+     *
+     * <p>NEWFX-C1: one ADDITIONAL position-lane send fires the {@code CUE_SUMMON_BEACON}
+     * mile-high light column at {@code center} with DIMENSION-WIDE range (range &le; 0 —
+     * the beacon is an invitation and a warning readable from anywhere on the disc);
+     * {@code a} = the boss kind ordinal derived from {@code nameKey}
+     * ({@link #bossKindOrdinal}) so the client tints the column per boss. The 96-block
+     * shockwave send above stays untouched.</p>
      */
     public static void sendIntro(ServerLevel level, Vec3 center, String nameKey, String subtitleKey) {
         S2CBossIntroPayload payload = new S2CBossIntroPayload(nameKey, subtitleKey);
@@ -101,6 +108,24 @@ public final class BossPayloads {
         dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(level,
                 dev.projecteclipse.eclipse.network.fx.FxCues.CUE_BOSS_INTRO_SHOCKWAVE,
                 center, 0.0F, 0.0F, INTRO_RANGE);
+        dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(level,
+                dev.projecteclipse.eclipse.network.fx.FxCues.CUE_SUMMON_BEACON,
+                center, bossKindOrdinal(nameKey), 0.0F, 0.0D);
+    }
+
+    /**
+     * NEWFX-C1 palette-tint parameter: the summon-beacon boss kind ordinal for a boss
+     * {@code nameKey} (0 Herald / 1 Ferryman / 2 Fog Tyrant / 3 Rift Warden — the four
+     * bosses that route through {@link #sendIntro}). Unknown keys tint Herald-violet: a
+     * future boss gets a working beacon on day one and a bespoke tint when it earns one.
+     */
+    static int bossKindOrdinal(String nameKey) {
+        return switch (nameKey) {
+            case "entity.eclipse.ferryman" -> 1;
+            case "entity.eclipse.fog_tyrant" -> 2;
+            case "entity.eclipse.rift_warden" -> 3;
+            default -> 0; // entity.eclipse.herald + any future boss
+        };
     }
 
     // ------------------------------------------------------------------ client dispatch

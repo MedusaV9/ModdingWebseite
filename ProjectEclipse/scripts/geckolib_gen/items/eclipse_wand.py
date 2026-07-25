@@ -50,16 +50,34 @@ PALETTES = {
 
 
 def rune_seam(glow_color, salt):
-    """Sparse emissive rune pixels marching up the shaft's front/back faces."""
+    """Sparse emissive rune pixels marching up the shaft's front/back faces.
+
+    ITEMS-A contrast pass: denser (0.45 threshold) and brighter (up to 40% white)
+    so the rune line reads at gui scale 2 — the plan's "brighten rune lines" ask.
+    """
 
     def fn(px):
         if px.face not in ("north", "south"):
             return None
         if px.fx != px.fw // 2:
             return None
-        if px.noise(salt, x=0) < 0.55:
+        if px.noise(salt, x=0) < 0.45:
             return None
-        return mix(glow_color, WHITE, 0.25 * px.noise(salt + 1))
+        return mix(glow_color, WHITE, 0.15 + 0.25 * px.noise(salt + 1))
+
+    return fn
+
+
+def rimmed_wood(base, rim, salt):
+    """Wood grain with a 1px rim-light along the top edge of the side faces —
+    the knot contrast pass (each path tints the rim with its halo color)."""
+    grain = wood(base, salt=salt)
+
+    def fn(px):
+        col = grain(px)
+        if px.face in ("north", "south", "east", "west") and px.fy == 0:
+            col = mix(col, rim, 0.45)
+        return col
 
     return fn
 
@@ -105,12 +123,18 @@ def paint_variant(key):
     branch, core, halo, seam_glow = PALETTES[key]
     painter = GeoPainter(GEO, seed=SEED)
 
-    # Shared branch base — wood grain in the path's tint; tip slightly brightened.
+    # Shared branch base — wood grain in the path's tint, brightening toward the tip
+    # (the tapered shaft_mid/shaft_top segments read as sap-bleached live wood).
     painter.set_material("handle", wood(branch, salt=11))
+    painter.set_material("handle_wrap", wood(mul(branch, 0.72), salt=12))
     painter.set_material("shaft", wood(mul(branch, 1.08), salt=13))
-    painter.set_material("knot", wood(mul(branch, 0.9), salt=15))
+    painter.set_material("shaft_mid", wood(mul(branch, 1.16), salt=14))
+    painter.set_material("shaft_top", wood(mul(branch, 1.24), salt=16))
+    painter.set_material("knot", rimmed_wood(mul(branch, 0.9), mix(halo, WHITE, 0.3), salt=15))
     painter.set_material("tip", flame(mix(branch, core, 0.45), halo, salt=17))
     painter.set_glow_painter("shaft", rune_seam(seam_glow, salt=19))
+    painter.set_glow_painter("shaft_mid", rune_seam(seam_glow, salt=20))
+    painter.set_glow_painter("shaft_top", rune_seam(seam_glow, salt=21))
 
     # Ornaments (glow_* bones auto-copy into the glowmask at full brightness).
     painter.set_material("glow_riss_*", flame(mix(core, PALETTES["riss"][1], 0.5), PALETTES["riss"][2], salt=23))

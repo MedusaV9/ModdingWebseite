@@ -10,6 +10,8 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.lives.DeathFlowHooks;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.hearts.HeartsPayloads;
 import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -258,6 +260,11 @@ public final class ReviveRitual {
             EclipseWorldState.get(server).removeBanned(this.targetId);
         }
         QuestApi.completeTeamBeat(server, "player_revived");
+        // PLAN-NEWFX B5 Revive Thunderbloom: thunder finally has its picture. Position
+        // lane at the altar crown (same +1.15 anchor the altar's own FX use), range 96;
+        // the asset's lightning ring covers the witness circle so no second cue fires.
+        FxPayloads.sendFxEvent(this.level, FxCues.CUE_REVIVE_COMPLETE,
+                Vec3.atCenterOf(this.altarPos).add(0.0D, 0.65D, 0.0D), 0.0F, 0.0F, 96.0D);
         for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             online.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.MASTER, 1.0F, 1.0F);
         }

@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.ritual;
 
 import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.GoalTracker;
 import net.minecraft.core.BlockPos;
@@ -14,6 +15,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import software.bernie.geckolib.animatable.GeoItem;
+import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
  * The Herald's Lure — summon item for the day-7 boss (spec §2.1; crafted from 4 umbral
@@ -26,14 +34,50 @@ import net.minecraft.world.phys.AABB;
  * sneaking with an item in hand, so this {@link #useOn} IS the sneak path. Non-sneak
  * clicks land in {@code AltarBlock#useItemOn} → milestone deposit, which special-cases the
  * lure into an action-bar hint instead of "wrong item".</p>
+ *
+ * <p>GeckoLib item (PLAN-ITEMS B2): obsidian shard prongs caging a heart-fragment core.
+ * The {@code base} controller loops {@code animation.heralds_lure.idle} (core pulse +
+ * prong counter-rotation); the {@code action} controller holds the triggerable
+ * {@value #ANIM_OFFERING} one-shot (prongs open, core surges), fired below on the
+ * altar-use success path right before the stack shrinks.</p>
  */
-public class HeraldsLureItem extends Item {
+public class HeraldsLureItem extends Item implements GeoItem {
     /** First day the altar accepts the lure (the Herald is the day-7 boss; mirrors {@link FinaleRitual#FINALE_DAY}). */
     public static final int HERALD_DAY = 7;
 
+    /** Asset/anim id ({@code geo/item/heralds_lure.geo.json}, {@code animation.heralds_lure.*}). */
+    public static final String GEO_ID = "heralds_lure";
+
+    /** Triggerable one-shot: prongs open + core surge when the altar accepts the offering. */
+    public static final String ANIM_OFFERING = "offering";
+
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+
     public HeraldsLureItem(Properties properties) {
         super(properties);
+        // Required for server-side triggerAnim() to reach tracking clients.
+        SingletonGeoAnimatable.registerSyncedAnimatable(this);
     }
+
+    // ------------------------------------------------------------------ GeckoLib
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return geoCache;
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE, 4,
+                state -> state.setAndContinue(
+                        EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE))));
+        AnimationController<HeraldsLureItem> action = new AnimationController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        action.triggerableAnim(ANIM_OFFERING, EclipseGeoAnimations.once(GEO_ID, ANIM_OFFERING));
+        controllers.add(action);
+    }
+
+    // ------------------------------------------------------------------ interaction
 
     @Override
     public InteractionResult useOn(UseOnContext context) {
@@ -71,6 +115,10 @@ public class HeraldsLureItem extends Item {
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
             return InteractionResult.CONSUME;
         }
+        // Offering accepted: fire the one-shot before the stack shrinks so the surviving
+        // stack (if any) plays it; GeckoLib syncs the trigger on its own channel.
+        triggerAnim(player, GeoItem.getOrAssignId(context.getItemInHand(), serverLevel),
+                EclipseGeoAnimations.CONTROLLER_ACTION, ANIM_OFFERING);
         context.getItemInHand().shrink(1);
         // Arena floor: the sanctum dais ground sits ALTAR_ABOVE_GROUND below the altar block.
         int groundY = altarPos.getY()

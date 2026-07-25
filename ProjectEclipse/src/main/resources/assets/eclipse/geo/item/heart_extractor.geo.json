@@ -1,0 +1,64 @@
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.heart_extractor",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 2.5,
+        "visible_bounds_height": 2.5,
+        "visible_bounds_offset": [0, 0.5, 0]
+      },
+      "bones": [
+        {
+          "name": "root",
+          "pivot": [0, 0, 0]
+        },
+        {
+          "name": "needle",
+          "parent": "root",
+          "pivot": [0, 4, 0],
+          "cubes": [
+            {"origin": [-0.5, 1, -0.5], "size": [1, 3, 1], "uv": [0, 0]},
+            {"origin": [-0.5, 0, -0.5], "size": [1, 1, 1], "inflate": -0.25, "uv": [4, 0]}
+          ]
+        },
+        {
+          "name": "frame",
+          "parent": "root",
+          "pivot": [0, 4, 0],
+          "cubes": [
+            {"origin": [-1.5, 4, -1.5], "size": [3, 1, 3], "uv": [8, 0]},
+            {"origin": [-1.5, 9, -1.5], "size": [3, 1, 3], "uv": [20, 0]}
+          ]
+        },
+        {
+          "name": "glow_vitae",
+          "parent": "root",
+          "pivot": [0, 5, 0],
+          "cubes": [
+            {"origin": [-1, 5, -1], "size": [2, 3, 2], "uv": [0, 8]}
+          ]
+        },
+        {
+          "name": "chamber",
+          "parent": "root",
+          "pivot": [0, 5, 0],
+          "cubes": [
+            {"origin": [-1.5, 5, -1.5], "size": [3, 4, 3], "uv": [8, 8]}
+          ]
+        },
+        {
+          "name": "plunger",
+          "parent": "root",
+          "pivot": [0, 10, 0],
+          "cubes": [
+            {"origin": [-0.5, 10, -0.5], "size": [1, 2, 1], "uv": [20, 8]},
+            {"origin": [-1.5, 12, 0], "size": [3, 2, 0], "uv": [24, 8]}
+          ]
+        }
+      ]
+    }
+  ]
+}

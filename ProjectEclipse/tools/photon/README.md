@@ -96,3 +96,27 @@ In-game test (Photon installed): `/dev photon test eclipse:template_burst`, or v
 Photon `/photon fx eclipse:template_burst block ~ ~1 ~`. Through the Eclipse lane:
 `PhotonBridge.spawn(...)` / `PhotonFxRegistry` rows (see
 `docs/plans_v3/plans_v5/photon/INTEGRATION.md` §3–§4).
+
+## STORM 2.0 W-C suite (`build_storm_fx.py`)
+
+Generator for the volumetric-storm Photon layer (PLAN-STORM2 §W-C), managed by
+`stormfx/StormPhotonFx` (nearest-sphere-storm windowed loops, live emission tuning,
+flash-serial vein trigger). Also writes the 4x4 puff flipbook atlas
+(`textures/particle/storm_puff_atlas.png`, IDEAS-STORM-2 #3; Pillow+numpy, regenerate
+with `--atlas`) and an editor-openable `.fxproj` sibling per blob
+(`FxBuilder.write_fxproj`, PHOTON-ADVANCED-1 §7 — plain uncompressed NBT).
+
+| asset | kind | contents |
+|---|---|---|
+| `eclipse:storm_debris_belt` | WINDOWED loop | 3 counter-rotating ara-trail debris ribbon belts at 0.95r/y3, 0.75r/0.45h, 0.55r/0.8h (slate-violet / fog-green / violet-white) |
+| `eclipse:storm_cloud_belt` | WINDOWED loop | GPU-instanced clump belt: 3 latitude bands, ~1080 steady/1200 cap billboard puffs, SingleRow 4x4 flipbook boil, alpha + sort NONE |
+| `eclipse:storm_vein_bolt` | one-shot | HDR intra-wall lightning vein (3-segment beam zig + sparks + core flash, ~8 t) on a fresh `innerFlashSerial()` |
+| `eclipse:storm_skirt_dust` | WINDOWED loop | heavy base-ring motes, REAL collision, `FirstCollision` sub-emitter stamps `storm_dust_puff` on terrain |
+| `eclipse:storm_dust_puff` | sub-emitter child | flat Horizontal ground puff + grit |
+
+Ring radii/heights are NOT baked: the shapes are `function` shapes over the global
+expression variables `eclStormR`/`eclStormH` (PHOTON-ADVANCED-2 §1 Channel B) that
+`StormPhotonFx` writes per tick — `spawnLoop` has no `SpawnOptions`, so executor
+`setScale` was not an option. Bare `/photon fx` previews fall back to an 8-block ring.
+The `BASE_RATES` table in the generator is the frozen live-tuning contract with
+`StormPhotonFx.TUNED_BASE_RATES` — keep both in sync when retuning.

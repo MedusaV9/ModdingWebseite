@@ -7,8 +7,10 @@ import java.util.List;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.awards.AwardService;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
+import dev.projecteclipse.eclipse.network.fx.S2CFxEntityEventPayload;
 import dev.projecteclipse.eclipse.progression.goals.GoalConfig;
 import dev.projecteclipse.eclipse.progression.goals.GoalSpec;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -166,6 +168,17 @@ public final class DawnCeremony {
 
     /** Three descending strikes + a quiet drone tail — the signature dawn toll. */
     private static void dawnToll(MinecraftServer server) {
+        // NEWFX-B1 Dawn Toll Bloom: ONE personal sky-petal cue per player at the toll
+        // beat — the eclipse:dawn_toll_bloom asset paces its three petals to the
+        // 3×TOLL_SPACING_TICKS bell rhythm internally (startDelay staging), so a single
+        // send stays in sync with the strikes below. Deliberately an ADDRESSED per-player
+        // send on the entity lane (never the range broadcast helper): the bloom is a
+        // private sky ceremony, and N clustered players must not stack N×N petals.
+        // reducedFx clients skip the whole row client-side (CeremonyPhotonFxRows law).
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(online, new S2CFxEntityEventPayload(
+                    FxCues.CUE_DAWN_TOLL, online.getId(), online.position(), 0.0F, 0.0F));
+        }
         for (int i = 0; i < TOLL_PITCHES.length; i++) {
             float pitch = TOLL_PITCHES[i];
             schedule(server, i * TOLL_SPACING_TICKS, () -> {

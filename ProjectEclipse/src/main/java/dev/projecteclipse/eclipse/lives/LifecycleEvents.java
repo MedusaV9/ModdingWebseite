@@ -13,6 +13,8 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseBlocks;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -132,6 +134,13 @@ public final class LifecycleEvents {
         playDeathCue(victim.server);
 
         if (LivesApi.get(victim) <= 0) {
+            // PLAN-NEWFX B4 Soul Departure: the one visual that separates a FINAL death
+            // from a normal one. Position lane anchored on the corpse (captured before
+            // BanService moves the ghost to limbo), range 64 per plan.
+            if (victim.level() instanceof ServerLevel level) {
+                FxPayloads.sendFxEvent(level, FxCues.CUE_GHOST_DEPARTURE,
+                        victim.position(), 0.0F, 0.0F, 64.0D);
+            }
             BanService.ban(victim);
         }
     }

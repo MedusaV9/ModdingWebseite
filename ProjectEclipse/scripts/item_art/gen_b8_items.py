@@ -134,6 +134,13 @@ def heart_fragment() -> Image.Image:
     d.polygon([(4, 3), (6, 2), (8, 3), (7, 5), (4, 6), (3, 5)], fill=SCARLET)
     d.line([(3, 8), (5, 12)], fill=CRIMSON_DARK, width=2)
     d.point((4, 3), fill=PINK)
+    # V7 brightness fix (PLAN-ITEMS B5): the fragment read muddy at gui scale 2
+    # (max lum 169 vs the family's 244) — SCARLET->PINK rim-light along the lit
+    # lobe edge plus one specular star bring it to luminance parity.
+    d.line([(2, 5), (3, 3)], fill=PINK, width=1)
+    d.point((4, 2), fill=PINK)
+    d.point((6, 1), fill=PINK)
+    d.point((5, 2), fill=ep.GLOW_WHITE)
     d.line([(9, 4), (7, 6), (9, 8), (6, 9), (7, 11)], fill=LILAC, width=1)
     d.point((10, 4), fill=HOT_MAGENTA)
     d.point((10, 8), fill=HOT_MAGENTA)

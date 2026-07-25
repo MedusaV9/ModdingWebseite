@@ -318,6 +318,12 @@ public final class CollectionsService {
             player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
                     Component.translatable("collection.eclipse." + def.id()),
                     CollectionTiers.roman(tierNumber)));
+            // NEWFX-A2 Collection Tier Halo: world-side rise-and-crown on the collector
+            // (entity lane, beside the toast). a = tierNumber — the client scale ladder;
+            // tier >= 4 (the shard-paying tiers) adds a brief gold rain client-side.
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEntityEvent(
+                    player.serverLevel(), dev.projecteclipse.eclipse.network.fx.FxCues.CUE_COLLECTION_TIER,
+                    player, tierNumber, 0.0F, 48.0D);
         }
         return applied;
     }

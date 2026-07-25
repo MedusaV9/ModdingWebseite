@@ -76,6 +76,20 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
  * ash-devil mini-whirls near the ground, the post-white-out clear-sky bloom tail, and the
  * {@code WallProx} uniform (heat-shimmer refraction near the wall inside) plus
  * {@link #flashAmount}/{@link #flashSerial} for the renderer's Tyrant silhouette.</p>
+ *
+ * <p><b>STORM2 round (PLAN-STORM2 §W-D):</b> four additive uniforms — {@code EyeDim}
+ * (0..1 "under the apex eye", also deepens the drone pitch and gates the god-fingers),
+ * {@code BandFlow} (signed −1..1 stratum wind flow at camera height off W-A's §A3 speed
+ * table — the grade's rain shears sideways with it), {@code InnerFlash} (W-B's intra-wall
+ * flash-scheduler max envelope pulsing the interior grade) and {@code WallBand}
+ * (IDEAS-STORM-2 #5: symmetric crossing scalar peaking mid-wall-band so pushing THROUGH
+ * the wall reads as meters of mass — the pipeline predicate widens to fire on it even
+ * with zero interior). Interior weather couples to the mass: rain-sheet bearings bias
+ * toward the wall above 0.4 {@code WallProx}, motes stream tangentially at stratum flow,
+ * and mote/ribbon cadence quickens near the eyewall / calms under the eye. The explosion
+ * gains a 6-tick pre-release fog "gulp" (24→14→24 inhale during the implosion charge);
+ * {@code BandFlow}/{@code InnerFlash} are motion-bearing and feed 0 under reducedFx
+ * (the {@code WallProx} rule); {@code EyeDim}/{@code WallBand} are static grades.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormInteriorFx {
@@ -181,6 +195,23 @@ public final class StormInteriorFx {
     /** How far inside the shell the heat-shimmer band reaches (blocks; 1 at the occluder). */
     private static final float SHIMMER_BAND = 8.0F;
 
+    // --- STORM2 round (PLAN-STORM2 §W-D): eye light / band flow / wall band / gulp ---
+    /** D1: EyeDim engages under horizontal centerDist &lt; 0.35·r (sphere interiors only). */
+    private static final double EYE_RADIUS_FRAC = 0.35D;
+    /** W-A's frozen §A3 stratum-speed table (base/mid/upper/polar) sampled at camera height. */
+    private static final float[] STRATUM_FLOW = {0.6F, 1.0F, 1.5F, -0.8F};
+    /** BandFlow normalizer (|max| of the stratum table) — the uniform stays in −1..1. */
+    private static final float STRATUM_FLOW_MAX = 1.5F;
+    /** D3: god-fingers additionally require this much EyeDim — fingers are the EYE's light. */
+    private static final float GODFINGER_EYE_GATE = 0.3F;
+    /** D3: rain-sheet spawn bearings bias toward the nearest wall above this WallProx. */
+    private static final float RAIN_WALL_BIAS_GATE = 0.4F;
+    /** IDEAS-STORM-2 #5: half-width (blocks) of the symmetric WallBand crossing scalar. */
+    private static final double WALL_BAND_HALF_WIDTH = 6.0D;
+    /** D5 pre-release "gulp": the fog far plane pinches 24→this and back over GULP_TICKS. */
+    private static final float GULP_FOG_FAR = 14.0F;
+    private static final int GULP_TICKS = 6;
+
     /** Smoothed interior amount 0..1 (the render-facing value; raw target jumps at walls). */
     private static float smoothedInterior;
     /** Smoothed outside-approach amount 0..1 (1 at ≤20 blocks from a visible shell). */
@@ -239,12 +270,27 @@ public final class StormInteriorFx {
     private static int bloomTicks;
     private static float bloomStrength;
 
+    // --- STORM2 round (W-D) state ---
+    /** Smoothed "under the eye" factor 0..1 → {@code EyeDim} (also drone pitch + finger gate). */
+    private static float smoothedEyeDim;
+    private static float eyeDimTarget;
+    /** Smoothed signed stratum flow at camera height −1..1 → {@code BandFlow}. */
+    private static float smoothedBandFlow;
+    private static float bandFlowTarget;
+    /** Smoothed symmetric wall-crossing scalar 0..1 → {@code WallBand} (IDEAS-STORM-2 #5). */
+    private static float smoothedWallBand;
+    private static float wallBandTarget;
+    /** D5: remaining pre-release gulp ticks (armed by {@link #explodeWhiteout}, pause-safe). */
+    private static int gulpTicks;
+
     static {
         // Feature-owned registration replaces nothing (new id) — GRADE priority per §3.3.
         VeilPostController.register(new VeilPostController.PipelineSpec(
                 STORM_INTERIOR_POST,
                 VeilPostController.PipelinePriority.GRADE,
-                () -> EclipseFxState.stormInterior() > 0.01F,
+                // STORM2 (IDEAS-STORM-2 #5): the wall-band crossing grades BOTH sides of
+                // the wall — the row must also fire with zero interior mid-crossing.
+                () -> EclipseFxState.stormInterior() > 0.01F || smoothedWallBand > 0.01F,
                 pipeline -> {
                     pipeline.getUniform("Interior").setFloat(EclipseFxState.stormInterior());
                     pipeline.getUniform("RainAmount").setFloat(EclipseFxState.stormRain());
@@ -255,8 +301,17 @@ public final class StormInteriorFx {
                     // FX-STORM: heat-shimmer refraction strength — wall proximity inside.
                     // Fed 0 under reduced FX: a fullscreen animated refraction must degrade
                     // with the rest of the storm layers (reduced-motion contract).
-                    pipeline.getUniform("WallProx").setFloat(
-                            EclipseClientConfig.reducedFx() ? 0.0F : smoothedWallProx);
+                    boolean reduced = EclipseClientConfig.reducedFx();
+                    pipeline.getUniform("WallProx").setFloat(reduced ? 0.0F : smoothedWallProx);
+                    // STORM2 (W-D D1): EyeDim/WallBand are static light/mass grades and
+                    // survive reducedFx; BandFlow/InnerFlash are motion-bearing and feed 0
+                    // there (the WallProx rule). InnerFlash is W-B's flash-scheduler max
+                    // envelope — already smoothstep-shaped, fed raw by contract (§3).
+                    pipeline.getUniform("EyeDim").setFloat(smoothedEyeDim);
+                    pipeline.getUniform("WallBand").setFloat(smoothedWallBand);
+                    pipeline.getUniform("BandFlow").setFloat(reduced ? 0.0F : smoothedBandFlow);
+                    pipeline.getUniform("InnerFlash").setFloat(
+                            reduced ? 0.0F : StormWeatherFx.innerFlashMax());
                 }));
     }
 
@@ -312,6 +367,10 @@ public final class StormInteriorFx {
         }
         whiteoutTicks = Math.max(whiteoutTicks, WHITEOUT_TICKS);
         whiteoutStrength = Math.max(whiteoutStrength, Mth.clamp(strength, 0.0F, 1.0F));
+        // STORM2 (W-D D5): arm the pre-release "gulp" — over the next GULP_TICKS (the
+        // implosion charge, before the shell's white peak at the pinch release) the fog
+        // far plane pinches 24→14 and back: the storm inhales before it dies.
+        gulpTicks = Math.max(gulpTicks, GULP_TICKS);
     }
 
     // ------------------------------------------------------------------ tick
@@ -339,10 +398,16 @@ public final class StormInteriorFx {
             smoothedInterior = target;
             smoothedApproach = approachTarget;
             smoothedWallProx = wallProxTarget;
+            smoothedEyeDim = eyeDimTarget;
+            smoothedBandFlow = bandFlowTarget;
+            smoothedWallBand = wallBandTarget;
         } else {
             smoothedInterior += (target - smoothedInterior) * SMOOTHING;
             smoothedApproach += (approachTarget - smoothedApproach) * SMOOTHING;
             smoothedWallProx += (wallProxTarget - smoothedWallProx) * SMOOTHING;
+            smoothedEyeDim += (eyeDimTarget - smoothedEyeDim) * SMOOTHING;
+            smoothedBandFlow += (bandFlowTarget - smoothedBandFlow) * SMOOTHING;
+            smoothedWallBand += (wallBandTarget - smoothedWallBand) * SMOOTHING;
         }
         if (smoothedInterior < 0.002F) {
             smoothedInterior = 0.0F;
@@ -352,6 +417,12 @@ public final class StormInteriorFx {
         }
         if (flashTicks > 0) {
             flashTicks--; // pause-safe: same guard as smoothedInterior (IDEA-15 §2)
+        }
+        if (smoothedWallBand < 0.002F) {
+            smoothedWallBand = 0.0F; // the pipeline predicate reads it — clean release
+        }
+        if (gulpTicks > 0) {
+            gulpTicks--; // D5: pause-safe like flashTicks
         }
         if (whiteoutTicks > 0 && --whiteoutTicks == 0) {
             // C8: the white-out released — the clear-sky bloom moment rides out on its
@@ -377,12 +448,18 @@ public final class StormInteriorFx {
 
     /**
      * Raw interior target: max over all storms of horizontal × vertical × ramp coverage.
-     * Also latches {@link #interiorSphere} to the winning storm's type (C8 variant key).
+     * Also latches {@link #interiorSphere} to the winning storm's type (C8 variant key),
+     * and (STORM2 W-D) refreshes the {@code EyeDim}/{@code BandFlow} targets off the
+     * winning storm plus the max-over-storms {@code WallBand} crossing scalar
+     * (IDEAS-STORM-2 #5 — computed for OUTSIDE cameras too, unlike everything else here).
      */
     private static float interiorTargetAt(Vec3 camera) {
         List<StormFxClient.ClientStorm> storms = StormFxClient.storms();
         float best = 0.0F;
         wallProxTarget = 0.0F;
+        eyeDimTarget = 0.0F;
+        bandFlowTarget = 0.0F;
+        wallBandTarget = 0.0F;
         for (int i = 0; i < storms.size(); i++) {
             StormFxClient.ClientStorm storm = storms.get(i);
             double dx = camera.x - storm.center.x;
@@ -405,15 +482,29 @@ public final class StormInteriorFx {
                 }
                 effectiveRadius = Math.sqrt(chordSq);
             }
+            float top = (float) Mth.clamp((storm.center.y + storm.height + 8.0D - camera.y) / 8.0D, 0.0D, 1.0D);
+            float bottom = (float) Mth.clamp((camera.y - (storm.center.y - 14.0D)) / 8.0D, 0.0D, 1.0D);
+            float visibility = storm.visibility(1.0F);
+            // STORM2 (IDEAS-STORM-2 #5): symmetric wall-band scalar — peaks mid-band at
+            // r − OCCLUDER_INSET/2 and reads on BOTH sides of the crossing, so it must be
+            // taken before the interior early-out. Skipped while EXPLODE runs (the wall is
+            // detonating outward off its base radius — the whiteout owns that beat).
+            if (storm.state != S2CStormStatePayload.STATE_EXPLODE) {
+                double bandMid = effectiveRadius - StormWallRenderer.OCCLUDER_INSET * 0.5D;
+                float band = 1.0F - (float) Mth.clamp(
+                        Math.abs(dist - bandMid) / WALL_BAND_HALF_WIDTH, 0.0D, 1.0D);
+                band *= top * bottom * visibility;
+                if (band > wallBandTarget) {
+                    wallBandTarget = band;
+                }
+            }
             float horiz = (float) Mth.clamp(
                     ((effectiveRadius - StormWallRenderer.OCCLUDER_INSET) - dist) / INTERIOR_FEATHER,
                     0.0D, 1.0D);
             if (horiz <= 0.0F) {
                 continue;
             }
-            float top = (float) Mth.clamp((storm.center.y + storm.height + 8.0D - camera.y) / 8.0D, 0.0D, 1.0D);
-            float bottom = (float) Mth.clamp((camera.y - (storm.center.y - 14.0D)) / 8.0D, 0.0D, 1.0D);
-            float amount = horiz * top * bottom * storm.visibility(1.0F);
+            float amount = horiz * top * bottom * visibility;
             if (amount > best) {
                 best = amount;
                 interiorSphere = storm.type == S2CStormStatePayload.TYPE_SPHERE;
@@ -422,9 +513,36 @@ public final class StormInteriorFx {
                 double inset = (effectiveRadius - StormWallRenderer.OCCLUDER_INSET) - dist;
                 wallProxTarget = amount
                         * (1.0F - (float) Mth.clamp(inset / SHIMMER_BAND, 0.0D, 1.0D));
+                // STORM2 (W-D D1): "under the eye" factor — smoothstep from the 0.35·r
+                // eye footprint down to ~0.12·r, sphere interiors only (the eye is a
+                // dome-apex feature; vortex interiors keep EyeDim 0).
+                if (interiorSphere) {
+                    float eye = (float) Mth.clamp(
+                            1.0D - dist / (storm.radius * EYE_RADIUS_FRAC), 0.0D, 1.0D);
+                    eyeDimTarget = amount * eye * eye * (3.0F - 2.0F * eye);
+                }
+                // STORM2 (W-D D1): signed stratum wind flow at the camera's height inside
+                // the mass (W-A §A3 table, normalized −1..1); the grade shears rain with it.
+                float heightFrac = (float) Mth.clamp(
+                        (camera.y - storm.center.y) / storm.height, 0.0D, 1.0D);
+                bandFlowTarget = amount * stratumFlow(heightFrac) / STRATUM_FLOW_MAX;
             }
         }
         return best;
+    }
+
+    /**
+     * Signed wind-band flow at a normalized height 0..1 — W-A's frozen 4-stratum speed
+     * table (heavy slow base 0.6×, mid 1.0×, fast upper 1.5×, counter-rotating polar
+     * −0.8×) piecewise-lerped between band CENTERS with a smoothstep fade, so
+     * {@code BandFlow} never pops when the camera crosses a stratum boundary.
+     */
+    private static float stratumFlow(float heightFrac) {
+        float x = Mth.clamp(heightFrac, 0.0F, 1.0F) * STRATUM_FLOW.length - 0.5F;
+        int s = Mth.clamp((int) Math.floor(x), 0, STRATUM_FLOW.length - 2);
+        float f = Mth.clamp(x - s, 0.0F, 1.0F);
+        f = f * f * (3.0F - 2.0F * f);
+        return Mth.lerp(f, STRATUM_FLOW[s], STRATUM_FLOW[s + 1]);
     }
 
     /**
@@ -475,6 +593,19 @@ public final class StormInteriorFx {
         rainCountdown = gustAmount > 0.5F ? Math.max(4, interval / 2) : interval;
         RandomSource random = level.random;
         double angle = rainAngle + (random.nextDouble() - 0.5D) * 1.2D;
+        // STORM2 (W-D D3): near the wall inside, the sheet bearings lean toward it (up to
+        // 70 % of the angular gap at full WallProx) — so W-B's between-shell rain curtains
+        // continue seamlessly into the interior sheets across the wall band.
+        if (smoothedWallProx > RAIN_WALL_BIAS_GATE) {
+            StormFxClient.ClientStorm storm = nearestStorm(camera);
+            if (storm != null) {
+                double wallBearing = Math.atan2(camera.z - storm.center.z, camera.x - storm.center.x);
+                double bias = (smoothedWallProx - RAIN_WALL_BIAS_GATE)
+                        / (1.0D - RAIN_WALL_BIAS_GATE) * 0.7D;
+                // Shortest signed angular gap (wrap-safe) eased toward the wall bearing.
+                angle += Math.atan2(Math.sin(wallBearing - angle), Math.cos(wallBearing - angle)) * bias;
+            }
+        }
         double dist = 2.0D + random.nextDouble() * (RAIN_SPAWN_RADIUS - 2.0D);
         Vec3 pos = new Vec3(
                 camera.x + Math.cos(angle) * dist,
@@ -521,8 +652,11 @@ public final class StormInteriorFx {
      */
     private static void tickGodFingers(Vec3 camera) {
         StormFxClient.ClientStorm storm = nearestStorm(camera);
+        // STORM2 (W-D D3): fingers additionally require EyeDim — they are the apex EYE's
+        // light falling through, not random shafts anywhere under the dome.
         boolean wanted = interiorSphere && smoothedInterior > GODFINGER_ENGAGE && storm != null
                 && storm.type == S2CStormStatePayload.TYPE_SPHERE
+                && smoothedEyeDim > GODFINGER_EYE_GATE
                 && FxBudget.qualityTier() >= 1;
         if (wanted) {
             double dx = camera.x - storm.center.x;
@@ -591,20 +725,46 @@ public final class StormInteriorFx {
         }
         RandomSource random = level.random;
         boolean reduced = EclipseClientConfig.reducedFx();
+        // STORM2 (W-D D3): the interior weather leans toward the eyewall — mote/ribbon
+        // cadence quickens near the wall band and calms under the eye, so crossing
+        // eye → wall reads as walking INTO the weather. The reducedFx interval doubling
+        // stays layered on top (tier contract unchanged).
+        StormFxClient.ClientStorm ambienceStorm = nearestStorm(camera);
+        float weatherBias = 1.0F + 0.6F * smoothedWallProx - 0.5F * smoothedEyeDim;
         // Drifting ash/spore motes in a bubble around the camera.
         if (--moteCountdown <= 0) {
-            moteCountdown = reduced ? MOTE_INTERVAL_TICKS * 2 : MOTE_INTERVAL_TICKS;
+            int moteInterval = reduced ? MOTE_INTERVAL_TICKS * 2 : MOTE_INTERVAL_TICKS;
+            moteCountdown = Math.max(1, Math.round(moteInterval / weatherBias));
             double mx = camera.x + (random.nextDouble() - 0.5D) * 18.0D;
             double my = camera.y + (random.nextDouble() - 0.3D) * 8.0D;
             double mz = camera.z + (random.nextDouble() - 0.5D) * 18.0D;
+            // D3: the spawn bubble drifts toward the wall as WallProx rises (denser near
+            // the eyewall), and motes stream tangentially at the stratum flow of their
+            // height — the wind bands live inside the mass, not just in the grade.
+            double vx = 0.0D;
+            double vz = 0.0D;
+            if (ambienceStorm != null) {
+                double wallBearing = Math.atan2(camera.z - ambienceStorm.center.z,
+                        camera.x - ambienceStorm.center.x);
+                mx += Math.cos(wallBearing) * 5.0D * smoothedWallProx;
+                mz += Math.sin(wallBearing) * 5.0D * smoothedWallProx;
+                double moteBearing = Math.atan2(mz - ambienceStorm.center.z,
+                        mx - ambienceStorm.center.x);
+                float heightFrac = (float) Mth.clamp(
+                        (my - ambienceStorm.center.y) / ambienceStorm.height, 0.0D, 1.0D);
+                double flow = 0.04D * stratumFlow(heightFrac) / STRATUM_FLOW_MAX;
+                vx = -Math.sin(moteBearing) * flow;
+                vz = Math.cos(moteBearing) * flow;
+            }
             level.addParticle(random.nextInt(6) == 0
                             ? ParticleTypes.SPORE_BLOSSOM_AIR : ParticleTypes.ASH,
-                    mx, my, mz, 0.0D, -0.005D - random.nextDouble() * 0.01D, 0.0D);
+                    mx, my, mz, vx, -0.005D - random.nextDouble() * 0.01D, vz);
         }
         // Ground-fog ribbons: low smoke crawling along a slowly rotating bearing.
         ribbonAngle += 0.012F;
         if (--ribbonCountdown <= 0) {
-            ribbonCountdown = reduced ? RIBBON_INTERVAL_TICKS * 2 : RIBBON_INTERVAL_TICKS;
+            int ribbonInterval = reduced ? RIBBON_INTERVAL_TICKS * 2 : RIBBON_INTERVAL_TICKS;
+            ribbonCountdown = Math.max(1, Math.round(ribbonInterval / weatherBias));
             double along = 2.0D + random.nextDouble() * 7.0D;
             double side = (random.nextDouble() - 0.5D) * 3.0D;
             double cos = Math.cos(ribbonAngle);
@@ -689,6 +849,9 @@ public final class StormInteriorFx {
                 return;
             }
             this.volume = MAX_VOLUME * smoothedInterior;
+            // STORM2 (W-D D6): the drone sinks deeper under the apex eye — the calm
+            // luminous core hums lower than the churn near the wall (existing sound only).
+            this.pitch = 1.0F - 0.06F * smoothedEyeDim;
         }
 
         void forceStop() {
@@ -712,6 +875,14 @@ public final class StormInteriorFx {
         // depth snaps into view, not clarity.
         float lift = Mth.clamp(flashTicks / (float) FLASH_MAX_TICKS, 0.0F, 1.0F);
         float farTarget = Mth.lerp(lift, INTERIOR_FOG_FAR, FLASH_FOG_FAR);
+        // STORM2 (W-D D5) pre-release "gulp": a sin half-wave pinch 24→14→24 over the
+        // GULP_TICKS implosion charge — full pinch at the middle tick, released by the
+        // time the white-out owns the frame. Wins against the flash lift by construction
+        // (the sin envelope zeroes at both ends, so there is no pop either way).
+        if (gulpTicks > 0) {
+            float inhale = Mth.sin((float) Math.PI * (1.0F - gulpTicks / (float) GULP_TICKS));
+            farTarget = Mth.lerp(inhale, farTarget, GULP_FOG_FAR);
+        }
         event.setFarPlaneDistance(Math.min(far, Mth.lerp(interior, far, farTarget)));
         event.setNearPlaneDistance(Math.min(near, Mth.lerp(interior, near, INTERIOR_FOG_NEAR)));
         event.setCanceled(true);
@@ -899,6 +1070,14 @@ public final class StormInteriorFx {
         bloomTicks = 0;
         bloomStrength = 0.0F;
         devilReseedCountdown = 0;
+        // STORM2 round (W-D) state — M5: nothing survives Clone/LoggingOut/level-null.
+        smoothedEyeDim = 0.0F;
+        eyeDimTarget = 0.0F;
+        smoothedBandFlow = 0.0F;
+        bandFlowTarget = 0.0F;
+        smoothedWallBand = 0.0F;
+        wallBandTarget = 0.0F;
+        gulpTicks = 0;
         clearGodFingers();
         SphereDroneSound drone = droneSound;
         droneSound = null;

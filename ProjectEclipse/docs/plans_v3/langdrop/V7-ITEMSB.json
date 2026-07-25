@@ -1,0 +1,38 @@
+{
+  "en": {
+    "item.eclipse.heart_fragment.lore": "A life, quartered and still warm.",
+    "item.eclipse.heart_extractor.lore": "It only takes what you can spare.",
+    "item.eclipse.glitch_shard.lore": "A splinter of something that never was.",
+    "item.eclipse.umbral_shard.lore": "Night, chipped loose and made currency.",
+    "item.eclipse.compass_of_watcher.lore": "It points. It never says who.",
+    "item.eclipse.grave_dowser.lore": "It remembers where you fell.",
+    "item.eclipse.vitae_shard.lore": "A heartbeat, waiting for a chest.",
+    "item.eclipse.umbral_pick.lore": "It bites deepest under open night.",
+    "item.eclipse.umbral_blade.lore": "It drinks what it cuts.",
+    "item.eclipse.revive_sigil.lore": "One name, carved back into the world.",
+    "item.eclipse.heralds_lure.lore": "Dusk hears it. Dusk answers.",
+    "item.eclipse.herald_core.lore": "A black sun, still smoldering.",
+    "item.eclipse.ferryman_toll.lore": "Fare for a crossing no one returns.",
+    "item.eclipse.fog_core.lore": "The storm, knotted small and quiet.",
+    "item.eclipse.fog_cloak_trim.lore": "A cut from the mantle of fog.",
+    "item.eclipse.wizard_catalyst.lore": "Sunlight, taught to disobey."
+  },
+  "de": {
+    "item.eclipse.heart_fragment.lore": "Ein Leben, geviertelt und noch warm.",
+    "item.eclipse.heart_extractor.lore": "Er nimmt nur, was du entbehren kannst.",
+    "item.eclipse.glitch_shard.lore": "Ein Splitter von etwas, das nie war.",
+    "item.eclipse.umbral_shard.lore": "Nacht, losgeschlagen und zu Münze gemacht.",
+    "item.eclipse.compass_of_watcher.lore": "Er zeigt. Er verrät nie, wen.",
+    "item.eclipse.grave_dowser.lore": "Sie erinnert sich, wo du fielst.",
+    "item.eclipse.vitae_shard.lore": "Ein Herzschlag, der auf eine Brust wartet.",
+    "item.eclipse.umbral_pick.lore": "Sie beißt am tiefsten unter offener Nacht.",
+    "item.eclipse.umbral_blade.lore": "Sie trinkt, was sie schneidet.",
+    "item.eclipse.revive_sigil.lore": "Ein Name, zurück in die Welt geritzt.",
+    "item.eclipse.heralds_lure.lore": "Die Dämmerung hört ihn. Und antwortet.",
+    "item.eclipse.herald_core.lore": "Eine schwarze Sonne, noch immer glimmend.",
+    "item.eclipse.ferryman_toll.lore": "Fährgeld für eine Fahrt ohne Wiederkehr.",
+    "item.eclipse.fog_core.lore": "Der Sturm, klein und still verknotet.",
+    "item.eclipse.fog_cloak_trim.lore": "Ein Schnitt aus dem Mantel des Nebels.",
+    "item.eclipse.wizard_catalyst.lore": "Sonnenlicht, dem Ungehorsam gelehrt."
+  }
+}

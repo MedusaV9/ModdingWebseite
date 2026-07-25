@@ -270,6 +270,19 @@ def read_fx_file(path) -> dict:
     return read_root(gzip.decompress(Path(path).read_bytes()))
 
 
+def fxproj_root(fx_compound: dict) -> dict:
+    """Wraps a built `.fx` root compound in the `.fxproj` project envelope (§7.1)."""
+    return {"meta": {"version": "3.0", "suffix": ".fxproj", "name": "fx_project",
+                     "version_num": I(3)},
+            "data": {"fx": fx_compound}}
+
+
+def read_fxproj_file(path) -> dict:
+    """Reads an UNCOMPRESSED .fxproj and returns the inner `.fx` root compound."""
+    root = read_root(Path(path).read_bytes())
+    return root["data"]["fx"]
+
+
 # ---------------------------------------------------------------------------
 # Value coercion + NumberFunction helpers (registry photon:number_function)
 # ---------------------------------------------------------------------------
@@ -1098,6 +1111,32 @@ class FxBuilder:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(gz)
         return len(raw), len(gz)
+
+    def write_fxproj(self, path, validate=True) -> int:
+        """Writes the editor-openable `.fxproj` sibling (PHOTON-ADVANCED-1 §7).
+
+        Exact `FXProject`/`ProjectType.saveProjectToFile` format: *** UNCOMPRESSED ***
+        NBT (`NbtIo.write`, NOT gzip) wrapping the identical `.fx` compound:
+
+            {meta: {version: "3.0", suffix: ".fxproj", name: "fx_project",
+                    version_num: 3}, data: {fx: <the .fx root compound>}}
+
+        `meta.version_num: 3` is the only field the loader reads — always 3, or the
+        v1→v2→v3 fixer chain mangles modern data. Openable in-game via
+        `/photon_editor` (singleplayer) → File → Open. Returns the byte size.
+        """
+        root = fxproj_root(self.build())
+        raw = write_root(root)
+        if validate:
+            if read_root(raw) != root or write_root(read_root(raw)) != raw:
+                raise ValueError(f"{self.name}: .fxproj round-trip mismatch")
+            errors = validate_tree(read_root(raw)["data"]["fx"])
+            if errors:
+                raise ValueError(f"{self.name}: .fxproj inner fx invalid: " + "; ".join(errors))
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        return len(raw)
 
 
 # ---------------------------------------------------------------------------

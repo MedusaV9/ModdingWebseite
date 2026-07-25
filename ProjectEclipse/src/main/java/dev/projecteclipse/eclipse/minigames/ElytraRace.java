@@ -200,6 +200,9 @@ public final class ElytraRace {
         }
     }
 
+    /** NEWFX-C3b: finish-ribbon cue broadcast radius around the start/finish ring. */
+    private static final double FINISH_CUE_RANGE = 128.0D;
+
     private static void finishLap(MinecraftServer server, MinigameState state,
             ServerPlayer racer, long now) {
         UUID uuid = racer.getUUID();
@@ -207,6 +210,15 @@ public final class ElytraRace {
         long lapMillis = lapStart > 0L ? now - lapStart : 0L;
         boolean newBest = state.offerBestLap(lapMillis);
         int position = state.addRaceFinisher(uuid);
+
+        // NEWFX-C3b: the finish ring flashes and sheds a checkered light-ribbon spiral
+        // — position lane at the ring-0 center (the lap always closes there), a = podium
+        // position (1 = the gold-burst variant; reducedFx clients only play position 1).
+        // Anonymity holds: the ribbon marks the RING, not the racer.
+        dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(racer.serverLevel(),
+                dev.projecteclipse.eclipse.network.fx.FxCues.CUE_RACE_FINISH,
+                courseFor(state.openCount()).ringCenters().get(0), position, 0.0F,
+                FINISH_CUE_RANGE);
 
         racer.displayClientMessage(Component.translatable("eclipse.minigame.race.own_lap",
                 lapTime(lapMillis)).withStyle(ChatFormatting.GOLD), false);
