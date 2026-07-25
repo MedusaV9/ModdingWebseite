@@ -26,6 +26,8 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Man soll alles also auch den Haus Stil, Farbe und Gras /boden etc anpassen können.
 [ ] Das HUD/UI ist nicht mehr so schön / niedlich / cozy / animal crossing new horizons wie davor
 [ ] Es fehlt der polish. Nimm dir mehr Subagents die auch sowas wie Dopamin, Sounddesign und feeling bewerten und verbessern sollen.
+[ ] Die Github Actions build werfen einen error : lint
+Process completed with exit code 123.
 <!-- USER: Neue Punkte einfach hier drunter schreiben. Beispiel:
 - [ ] Das HUD ist mir im Querformat zu weit links
 - [ ] Der Taxi-Sound ist zu laut
