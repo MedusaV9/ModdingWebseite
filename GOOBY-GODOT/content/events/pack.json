@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"priority": 300,
 	"min_native": "5.0.0",
-	"domains": ["events"],
+	"domains": ["events", "stories"],
 	"name_de": "Events",
-	"notes_de": "Zeitfenster-Events {id, start, end, payload}. M1: leer — W3d/M2 füllt."
+	"notes_de": "W3d: 6 Random-Event-Defs (Trigger-Fenster/Cooldown/Reward) + 2 Geschichten-Stunde-Bücher."
 }

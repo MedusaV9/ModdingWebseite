@@ -32,6 +32,7 @@ OrientationService="*res://scripts/core/orientation_service.gd"
 SceneRouter="*res://scripts/core/scene_router.gd"
 UpdateManager="*res://scripts/updates/update_service.gd"
 Net="*res://scripts/net/net_client.gd"
+Social="*res://scripts/social/social_services.gd"
 
 [display]
 

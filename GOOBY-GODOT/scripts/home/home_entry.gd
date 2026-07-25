@@ -21,16 +21,51 @@ var _toasts: ToastLayer
 
 func _ready() -> void:
 	HomeState.register_slice()
+	# W3-Integration (Orchestrator): Content-Slices + Routen aller Screens.
+	RandomEventEngine.register_slice()
+	GoobyBuffs.register_slice()
+	BadState.register_slice()
 	_router = get_node_or_null("/root/SceneRouter")
 	_gs = get_node_or_null("/root/GameState")
 	if _router != null:
 		_router.register_routes(RoomDefs.route_table())
 		_router.set_mount_point(_world)
+		CityScene.register_routes(_router)
+	ArcadeScreen.register_routes()
+	AlbumScreen.register_routes()
+	SocialScreen.register_routes()
+	VisitScene.register_routes()
+	BattleshipScene.register_routes()
 	_build_hud()
+	if _router != null and _router.has_signal("travel_finished"):
+		_router.travel_finished.connect(_on_travel_finished)
+	_roll_random_event()
 	if _gs != null and not bool(_gs.get_value("onboarding.done", false)):
 		_show_onboarding()
 	else:
 		_start_home()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED:
+		_roll_random_event()
+
+
+func _roll_random_event() -> void:
+	if _gs == null:
+		return
+	var defs := RandomEventEngine.defs_from_registry()
+	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
+	RandomEventEngine.roll_on_start(_gs, defs, now_ms, randf(), randf())
+
+
+func _on_travel_finished(_target: Variant = null) -> void:
+	var room := _current_room()
+	if room == null:
+		return
+	# W3d-Hooks: Bad-Suite/Geschichten-Stunde + aktives Random-Event pro Raum.
+	InteractablesHost.attach_to(room)
+	EventRunner.attach_to(room)
 
 
 func _build_hud() -> void:
@@ -71,6 +106,20 @@ func _on_hud_action(action: StringName) -> void:
 		var room := _current_room()
 		if room != null:
 			room.open_build_mode()
+		return
+	if ArcadeScreen.handle_hud_action(action):
+		return
+	if AlbumScreen.handle_hud_action(action):
+		return
+	if GooberandoApp.handle_hud_action(action, self, _gs):
+		return
+	if action == &"reise" and _router != null:
+		_router.goto(CityScene.ROUTE_CITY)
+		return
+	if action == &"profil" and _router != null:
+		# M1: der Profil-Knopf öffnet den Social-Screen (Freunde/Besuche/Pal);
+		# der volle Profil-Rework ist W4/M2 (GODOT-PLAN Backlog).
+		_router.goto(SocialScreen.ROUTE)
 		return
 	_toasts.show_toast(I18nService.t("home.aktion_bald"))
 

@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"priority": 500,
 	"min_native": "5.0.0",
-	"domains": ["stickers"],
+	"domains": ["stickers", "sticker_pages"],
 	"name_de": "Sticker",
-	"notes_de": "Eingebauter Basisstand: 2 Beispiel-Sticker (W3d liefert den vollen Katalog)."
+	"notes_de": "W3d: voller Katalog (85 Legacy + 18 neue + 2 Basis-Sticker) + Seiten-Katalog."
 }

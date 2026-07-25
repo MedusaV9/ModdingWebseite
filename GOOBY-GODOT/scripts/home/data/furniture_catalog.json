@@ -1,70 +1,953 @@
 {
-	"schema": "gooby.furniture/1",
-	"pack": "base",
-	"items": [
-		{ "id": "bedSingle", "name_de": "Kuschelbett", "name_en": "Cozy Bed", "glb": "bedSingle.glb", "footprint": [2, 3], "layer": "FLOOR", "preis": 300, "lagerwert": 3, "pflicht": "bett", "kategorie": "schlafen" },
-		{ "id": "bedDouble", "name_de": "Riesenbett", "name_en": "Big Bed", "glb": "bedDouble.glb", "footprint": [3, 3], "layer": "FLOOR", "preis": 550, "lagerwert": 3, "pflicht": "bett", "kategorie": "schlafen" },
-		{ "id": "loungeSofa", "name_de": "Gemütliches Sofa", "name_en": "Comfy Sofa", "glb": "loungeSofa.glb", "footprint": [4, 2], "layer": "FLOOR", "preis": 250, "lagerwert": 3, "pflicht": "couch", "kategorie": "sitzen" },
-		{ "id": "loungeSofaCorner", "name_de": "Ecksofa", "name_en": "Corner Sofa", "glb": "loungeSofaCorner.glb", "footprint": [4, 4], "layer": "FLOOR", "preis": 420, "lagerwert": 4, "pflicht": "couch", "kategorie": "sitzen" },
-		{ "id": "loungeChair", "name_de": "Fernsehsessel", "name_en": "Lounge Chair", "glb": "loungeChair.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 120, "lagerwert": 2, "kategorie": "sitzen" },
-		{ "id": "chair", "name_de": "Stuhl", "name_en": "Chair", "glb": "chair.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 40, "lagerwert": 1, "kategorie": "sitzen" },
-		{ "id": "chairCushion", "name_de": "Polsterstuhl", "name_en": "Cushion Chair", "glb": "chairCushion.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 55, "lagerwert": 1, "kategorie": "sitzen" },
-		{ "id": "stoolBar", "name_de": "Barhocker", "name_en": "Bar Stool", "glb": "stoolBar.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 35, "lagerwert": 1, "kategorie": "sitzen" },
-		{ "id": "table", "name_de": "Esstisch", "name_en": "Dining Table", "glb": "table.glb", "footprint": [3, 2], "layer": "FLOOR", "preis": 150, "lagerwert": 2, "kategorie": "tische", "surface": true },
-		{ "id": "tableCoffee", "name_de": "Couchtisch", "name_en": "Coffee Table", "glb": "tableCoffee.glb", "footprint": [2, 1], "layer": "FLOOR", "preis": 90, "lagerwert": 2, "kategorie": "tische", "surface": true },
-		{ "id": "sideTable", "name_de": "Beistelltisch", "name_en": "Side Table", "glb": "sideTable.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 45, "lagerwert": 1, "kategorie": "tische", "surface": true },
-		{ "id": "bookcaseOpen", "name_de": "Bücherregal", "name_en": "Bookcase", "glb": "bookcaseOpen.glb", "footprint": [2, 1], "layer": "FLOOR", "preis": 110, "lagerwert": 2, "kategorie": "regale" },
-		{ "id": "bookcaseClosedWide", "name_de": "Breites Regal", "name_en": "Wide Shelf", "glb": "bookcaseClosedWide.glb", "footprint": [3, 1], "layer": "FLOOR", "preis": 180, "lagerwert": 2, "kategorie": "regale" },
-		{ "id": "bookcaseOpenLow", "name_de": "Sideboard", "name_en": "Low Shelf", "glb": "bookcaseOpenLow.glb", "footprint": [2, 1], "layer": "FLOOR", "preis": 80, "lagerwert": 2, "kategorie": "regale", "surface": true },
-		{ "id": "lampRoundFloor", "name_de": "Stehlampe", "name_en": "Floor Lamp", "glb": "lampRoundFloor.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 70, "lagerwert": 1, "kategorie": "lampen", "blocks_movement": false, "can_toggle_light": true },
-		{ "id": "lampSquareFloor", "name_de": "Eckige Stehlampe", "name_en": "Square Floor Lamp", "glb": "lampSquareFloor.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 70, "lagerwert": 1, "kategorie": "lampen", "blocks_movement": false, "can_toggle_light": true },
-		{ "id": "lampRoundTable", "name_de": "Tischlampe", "name_en": "Table Lamp", "glb": "lampRoundTable.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 45, "lagerwert": 1, "kategorie": "lampen", "can_toggle_light": true },
-		{ "id": "lampWall", "name_de": "Wandlampe", "name_en": "Wall Lamp", "glb": "lampWall.glb", "footprint": [1, 1], "layer": "WALL", "wall_size": 1, "preis": 40, "lagerwert": 1, "kategorie": "lampen", "can_toggle_light": true },
-		{ "id": "cabinetTelevision", "name_de": "TV-Schrank", "name_en": "TV Cabinet", "glb": "cabinetTelevision.glb", "footprint": [3, 1], "layer": "FLOOR", "preis": 140, "lagerwert": 2, "kategorie": "unterhaltung", "surface": true },
-		{ "id": "televisionModern", "name_de": "Fernseher", "name_en": "Television", "glb": "televisionModern.glb", "footprint": [2, 1], "layer": "SURFACE", "preis": 320, "lagerwert": 2, "kategorie": "unterhaltung" },
-		{ "id": "televisionVintage", "name_de": "Röhren-TV", "name_en": "Vintage TV", "glb": "televisionVintage.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 150, "lagerwert": 1, "kategorie": "unterhaltung" },
-		{ "id": "radio", "name_de": "Radio-Gerät", "name_en": "Radio", "glb": "radio.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 120, "lagerwert": 1, "kategorie": "unterhaltung" },
-		{ "id": "speaker", "name_de": "Lautsprecher", "name_en": "Speaker", "glb": "speaker.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 90, "lagerwert": 1, "kategorie": "unterhaltung" },
-		{ "id": "rugRectangle", "name_de": "Großer Teppich", "name_en": "Big Rug", "glb": "rugRectangle.glb", "footprint": [4, 3], "layer": "RUG", "preis": 130, "lagerwert": 2, "kategorie": "teppiche", "fill": 1.0 },
-		{ "id": "rugRound", "name_de": "Runder Teppich", "name_en": "Round Rug", "glb": "rugRound.glb", "footprint": [3, 3], "layer": "RUG", "preis": 100, "lagerwert": 2, "kategorie": "teppiche", "fill": 1.0 },
-		{ "id": "rugSquare", "name_de": "Eckiger Teppich", "name_en": "Square Rug", "glb": "rugSquare.glb", "footprint": [3, 3], "layer": "RUG", "preis": 90, "lagerwert": 2, "kategorie": "teppiche", "fill": 1.0 },
-		{ "id": "rugDoormat", "name_de": "Fußmatte", "name_en": "Doormat", "glb": "rugDoormat.glb", "footprint": [2, 1], "layer": "RUG", "preis": 25, "lagerwert": 1, "kategorie": "teppiche", "fill": 1.0 },
-		{ "id": "pottedPlant", "name_de": "Topfpflanze", "name_en": "Potted Plant", "glb": "pottedPlant.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 60, "lagerwert": 1, "kategorie": "pflanzen", "blocks_movement": false },
-		{ "id": "plantSmall1", "name_de": "Pflänzchen", "name_en": "Little Plant", "glb": "plantSmall1.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 25, "lagerwert": 1, "kategorie": "pflanzen" },
-		{ "id": "plantSmall2", "name_de": "Kaktus-Freund", "name_en": "Cactus Friend", "glb": "plantSmall2.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 25, "lagerwert": 1, "kategorie": "pflanzen" },
-		{ "id": "plantSmall3", "name_de": "Mini-Farn", "name_en": "Mini Fern", "glb": "plantSmall3.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 25, "lagerwert": 1, "kategorie": "pflanzen" },
-		{ "id": "monsteraPlant", "name_de": "Monstera", "name_en": "Monstera", "glb": "pflanzen/monstera_plant_large_potted.gltf", "footprint": [2, 2], "layer": "FLOOR", "preis": 140, "lagerwert": 2, "kategorie": "pflanzen", "blocks_movement": false },
-		{ "id": "pothosPlant", "name_de": "Efeutute", "name_en": "Pothos", "glb": "pflanzen/pothos_plant_large_potted.gltf", "footprint": [2, 2], "layer": "FLOOR", "preis": 120, "lagerwert": 2, "kategorie": "pflanzen", "blocks_movement": false },
-		{ "id": "sansevieriaPlant", "name_de": "Bogenhanf", "name_en": "Snake Plant", "glb": "pflanzen/sansevieria_plant_small_potted.gltf", "footprint": [1, 1], "layer": "FLOOR", "preis": 60, "lagerwert": 1, "kategorie": "pflanzen", "blocks_movement": false },
-		{ "id": "kitchenFridge", "name_de": "Kühlschrank", "name_en": "Fridge", "glb": "kitchenFridge.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 400, "lagerwert": 3, "pflicht": "kuehlschrank", "kategorie": "kueche" },
-		{ "id": "kitchenStove", "name_de": "Herd", "name_en": "Stove", "glb": "kitchenStove.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 220, "lagerwert": 2, "kategorie": "kueche" },
-		{ "id": "kitchenSink", "name_de": "Spüle", "name_en": "Kitchen Sink", "glb": "kitchenSink.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 180, "lagerwert": 2, "kategorie": "kueche" },
-		{ "id": "kitchenCabinet", "name_de": "Küchenzeile", "name_en": "Kitchen Counter", "glb": "kitchenCabinet.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 120, "lagerwert": 2, "kategorie": "kueche", "surface": true },
-		{ "id": "kitchenCabinetDrawer", "name_de": "Küchenschrank", "name_en": "Kitchen Drawer", "glb": "kitchenCabinetDrawer.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 120, "lagerwert": 2, "kategorie": "kueche", "surface": true },
-		{ "id": "toaster", "name_de": "Toaster (Deko)", "name_en": "Toaster (Deco)", "glb": "toaster.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 35, "lagerwert": 1, "kategorie": "kueche" },
-		{ "id": "toilet", "name_de": "Klo", "name_en": "Toilet", "glb": "toilet.glb", "footprint": [1, 2], "layer": "FLOOR", "preis": 150, "lagerwert": 2, "kategorie": "bad" },
-		{ "id": "bathtub", "name_de": "Badewanne", "name_en": "Bathtub", "glb": "bathtub.glb", "footprint": [4, 2], "layer": "FLOOR", "preis": 350, "lagerwert": 4, "kategorie": "bad" },
-		{ "id": "shower", "name_de": "Dusche", "name_en": "Shower", "glb": "shower.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 280, "lagerwert": 3, "kategorie": "bad" },
-		{ "id": "bathroomSink", "name_de": "Waschbecken", "name_en": "Bathroom Sink", "glb": "bathroomSink.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 90, "lagerwert": 1, "kategorie": "bad" },
-		{ "id": "bathroomMirror", "name_de": "Badspiegel", "name_en": "Bathroom Mirror", "glb": "bathroomMirror.glb", "footprint": [1, 1], "layer": "WALL", "wall_size": 1, "preis": 60, "lagerwert": 1, "kategorie": "bad" },
-		{ "id": "bathroomCabinet", "name_de": "Badschränkchen", "name_en": "Bathroom Cabinet", "glb": "bathroomCabinet.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 70, "lagerwert": 1, "kategorie": "bad" },
-		{ "id": "washer", "name_de": "Waschmaschine", "name_en": "Washer", "glb": "washer.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 260, "lagerwert": 3, "kategorie": "bad" },
-		{ "id": "bear", "name_de": "Bärchen", "name_en": "Teddy Bear", "glb": "bear.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 45, "lagerwert": 1, "kategorie": "deko" },
-		{ "id": "books", "name_de": "Bücherstapel", "name_en": "Book Pile", "glb": "books.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 20, "lagerwert": 1, "kategorie": "deko" },
-		{ "id": "pillow", "name_de": "Kissen", "name_en": "Pillow", "glb": "pillow.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 20, "lagerwert": 1, "kategorie": "deko" },
-		{ "id": "pillowBlue", "name_de": "Blaues Kissen", "name_en": "Blue Pillow", "glb": "pillowBlue.glb", "footprint": [1, 1], "layer": "SURFACE", "preis": 20, "lagerwert": 1, "kategorie": "deko" },
-		{ "id": "trashcan", "name_de": "Mülleimer", "name_en": "Trash Can", "glb": "trashcan.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 25, "lagerwert": 1, "kategorie": "deko", "blocks_movement": false },
-		{ "id": "coatRackStanding", "name_de": "Garderobe", "name_en": "Coat Rack", "glb": "coatRackStanding.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 55, "lagerwert": 1, "kategorie": "deko" },
-		{ "id": "boxA", "name_de": "Umzugskarton", "name_en": "Moving Box", "glb": "deko/box_A.gltf", "footprint": [1, 1], "layer": "FLOOR", "preis": 10, "lagerwert": 1, "kategorie": "deko", "blocks_movement": false },
-		{ "id": "boxB", "name_de": "Kleiner Karton", "name_en": "Small Box", "glb": "deko/box_B.gltf", "footprint": [1, 1], "layer": "FLOOR", "preis": 10, "lagerwert": 1, "kategorie": "deko", "blocks_movement": false },
-		{ "id": "gardenBench", "name_de": "Gartenbank", "name_en": "Garden Bench", "glb": "garten/bench.glb", "footprint": [3, 1], "layer": "FLOOR", "preis": 120, "lagerwert": 2, "kategorie": "garten" },
-		{ "id": "flowerRed", "name_de": "Rote Blume", "name_en": "Red Flower", "glb": "garten/flower_redA.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 15, "lagerwert": 1, "kategorie": "garten", "blocks_movement": false },
-		{ "id": "flowerPurple", "name_de": "Lila Blume", "name_en": "Purple Flower", "glb": "garten/flower_purpleA.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 15, "lagerwert": 1, "kategorie": "garten", "blocks_movement": false },
-		{ "id": "flowerYellow", "name_de": "Gelbe Blume", "name_en": "Yellow Flower", "glb": "garten/flower_yellowA.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 15, "lagerwert": 1, "kategorie": "garten", "blocks_movement": false },
-		{ "id": "gardenBush", "name_de": "Busch", "name_en": "Bush", "glb": "garten/plant_bush.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 30, "lagerwert": 1, "kategorie": "garten", "blocks_movement": false },
-		{ "id": "treeDefault", "name_de": "Baum", "name_en": "Tree", "glb": "garten/tree_default.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 200, "lagerwert": 3, "kategorie": "garten" },
-		{ "id": "treeFat", "name_de": "Dicker Baum", "name_en": "Chunky Tree", "glb": "garten/tree_fat.glb", "footprint": [2, 2], "layer": "FLOOR", "preis": 180, "lagerwert": 3, "kategorie": "garten" },
-		{ "id": "potLarge", "name_de": "Großer Blumentopf", "name_en": "Big Pot", "glb": "garten/pot_large.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 40, "lagerwert": 1, "kategorie": "garten" },
-		{ "id": "grassTuft", "name_de": "Grasbüschel", "name_en": "Grass Tuft", "glb": "garten/grass_large.glb", "footprint": [1, 1], "layer": "FLOOR", "preis": 10, "lagerwert": 1, "kategorie": "garten", "blocks_movement": false }
-	]
+  "schema": "gooby.furniture/1",
+  "pack": "base",
+  "items": [
+    {
+      "id": "bedSingle",
+      "name_de": "Kuschelbett",
+      "name_en": "Cozy Bed",
+      "glb": "bedSingle.glb",
+      "footprint": [
+        2,
+        3
+      ],
+      "layer": "FLOOR",
+      "preis": 300,
+      "lagerwert": 3,
+      "pflicht": "bett",
+      "kategorie": "schlafen"
+    },
+    {
+      "id": "bedDouble",
+      "name_de": "Riesenbett",
+      "name_en": "Big Bed",
+      "glb": "bedDouble.glb",
+      "footprint": [
+        3,
+        3
+      ],
+      "layer": "FLOOR",
+      "preis": 550,
+      "lagerwert": 3,
+      "pflicht": "bett",
+      "kategorie": "schlafen"
+    },
+    {
+      "id": "loungeSofa",
+      "name_de": "Gemütliches Sofa",
+      "name_en": "Comfy Sofa",
+      "glb": "loungeSofa.glb",
+      "footprint": [
+        4,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 250,
+      "lagerwert": 3,
+      "pflicht": "couch",
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "loungeSofaCorner",
+      "name_de": "Ecksofa",
+      "name_en": "Corner Sofa",
+      "glb": "loungeSofaCorner.glb",
+      "footprint": [
+        4,
+        4
+      ],
+      "layer": "FLOOR",
+      "preis": 420,
+      "lagerwert": 4,
+      "pflicht": "couch",
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "loungeChair",
+      "name_de": "Fernsehsessel",
+      "name_en": "Lounge Chair",
+      "glb": "loungeChair.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 120,
+      "lagerwert": 2,
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "chair",
+      "name_de": "Stuhl",
+      "name_en": "Chair",
+      "glb": "chair.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 40,
+      "lagerwert": 1,
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "chairCushion",
+      "name_de": "Polsterstuhl",
+      "name_en": "Cushion Chair",
+      "glb": "chairCushion.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 55,
+      "lagerwert": 1,
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "stoolBar",
+      "name_de": "Barhocker",
+      "name_en": "Bar Stool",
+      "glb": "stoolBar.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 35,
+      "lagerwert": 1,
+      "kategorie": "sitzen"
+    },
+    {
+      "id": "table",
+      "name_de": "Esstisch",
+      "name_en": "Dining Table",
+      "glb": "table.glb",
+      "footprint": [
+        3,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 150,
+      "lagerwert": 2,
+      "kategorie": "tische",
+      "surface": true
+    },
+    {
+      "id": "tableCoffee",
+      "name_de": "Couchtisch",
+      "name_en": "Coffee Table",
+      "glb": "tableCoffee.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 90,
+      "lagerwert": 2,
+      "kategorie": "tische",
+      "surface": true
+    },
+    {
+      "id": "sideTable",
+      "name_de": "Beistelltisch",
+      "name_en": "Side Table",
+      "glb": "sideTable.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 45,
+      "lagerwert": 1,
+      "kategorie": "tische",
+      "surface": true
+    },
+    {
+      "id": "bookcaseOpen",
+      "name_de": "Bücherregal",
+      "name_en": "Bookcase",
+      "glb": "bookcaseOpen.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 110,
+      "lagerwert": 2,
+      "kategorie": "regale"
+    },
+    {
+      "id": "bookcaseClosedWide",
+      "name_de": "Breites Regal",
+      "name_en": "Wide Shelf",
+      "glb": "bookcaseClosedWide.glb",
+      "footprint": [
+        3,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 180,
+      "lagerwert": 2,
+      "kategorie": "regale"
+    },
+    {
+      "id": "bookcaseOpenLow",
+      "name_de": "Sideboard",
+      "name_en": "Low Shelf",
+      "glb": "bookcaseOpenLow.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 80,
+      "lagerwert": 2,
+      "kategorie": "regale",
+      "surface": true
+    },
+    {
+      "id": "lampRoundFloor",
+      "name_de": "Stehlampe",
+      "name_en": "Floor Lamp",
+      "glb": "lampRoundFloor.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 70,
+      "lagerwert": 1,
+      "kategorie": "lampen",
+      "blocks_movement": false,
+      "can_toggle_light": true
+    },
+    {
+      "id": "lampSquareFloor",
+      "name_de": "Eckige Stehlampe",
+      "name_en": "Square Floor Lamp",
+      "glb": "lampSquareFloor.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 70,
+      "lagerwert": 1,
+      "kategorie": "lampen",
+      "blocks_movement": false,
+      "can_toggle_light": true
+    },
+    {
+      "id": "lampRoundTable",
+      "name_de": "Tischlampe",
+      "name_en": "Table Lamp",
+      "glb": "lampRoundTable.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 45,
+      "lagerwert": 1,
+      "kategorie": "lampen",
+      "can_toggle_light": true
+    },
+    {
+      "id": "lampWall",
+      "name_de": "Wandlampe",
+      "name_en": "Wall Lamp",
+      "glb": "lampWall.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "WALL",
+      "wall_size": 1,
+      "preis": 40,
+      "lagerwert": 1,
+      "kategorie": "lampen",
+      "can_toggle_light": true
+    },
+    {
+      "id": "cabinetTelevision",
+      "name_de": "TV-Schrank",
+      "name_en": "TV Cabinet",
+      "glb": "cabinetTelevision.glb",
+      "footprint": [
+        3,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 140,
+      "lagerwert": 2,
+      "kategorie": "unterhaltung",
+      "surface": true
+    },
+    {
+      "id": "televisionModern",
+      "name_de": "Fernseher",
+      "name_en": "Television",
+      "glb": "televisionModern.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 320,
+      "lagerwert": 2,
+      "kategorie": "unterhaltung"
+    },
+    {
+      "id": "televisionVintage",
+      "name_de": "Röhren-TV",
+      "name_en": "Vintage TV",
+      "glb": "televisionVintage.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 150,
+      "lagerwert": 1,
+      "kategorie": "unterhaltung"
+    },
+    {
+      "id": "radio",
+      "name_de": "Radio-Gerät",
+      "name_en": "Radio",
+      "glb": "radio.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 120,
+      "lagerwert": 1,
+      "kategorie": "unterhaltung"
+    },
+    {
+      "id": "speaker",
+      "name_de": "Lautsprecher",
+      "name_en": "Speaker",
+      "glb": "speaker.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 90,
+      "lagerwert": 1,
+      "kategorie": "unterhaltung"
+    },
+    {
+      "id": "rugRectangle",
+      "name_de": "Großer Teppich",
+      "name_en": "Big Rug",
+      "glb": "rugRectangle.glb",
+      "footprint": [
+        4,
+        3
+      ],
+      "layer": "RUG",
+      "preis": 130,
+      "lagerwert": 2,
+      "kategorie": "teppiche",
+      "fill": 1.0
+    },
+    {
+      "id": "rugRound",
+      "name_de": "Runder Teppich",
+      "name_en": "Round Rug",
+      "glb": "rugRound.glb",
+      "footprint": [
+        3,
+        3
+      ],
+      "layer": "RUG",
+      "preis": 100,
+      "lagerwert": 2,
+      "kategorie": "teppiche",
+      "fill": 1.0
+    },
+    {
+      "id": "rugSquare",
+      "name_de": "Eckiger Teppich",
+      "name_en": "Square Rug",
+      "glb": "rugSquare.glb",
+      "footprint": [
+        3,
+        3
+      ],
+      "layer": "RUG",
+      "preis": 90,
+      "lagerwert": 2,
+      "kategorie": "teppiche",
+      "fill": 1.0
+    },
+    {
+      "id": "rugDoormat",
+      "name_de": "Fußmatte",
+      "name_en": "Doormat",
+      "glb": "rugDoormat.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "RUG",
+      "preis": 25,
+      "lagerwert": 1,
+      "kategorie": "teppiche",
+      "fill": 1.0
+    },
+    {
+      "id": "pottedPlant",
+      "name_de": "Topfpflanze",
+      "name_en": "Potted Plant",
+      "glb": "pottedPlant.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 60,
+      "lagerwert": 1,
+      "kategorie": "pflanzen",
+      "blocks_movement": false
+    },
+    {
+      "id": "plantSmall1",
+      "name_de": "Pflänzchen",
+      "name_en": "Little Plant",
+      "glb": "plantSmall1.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 25,
+      "lagerwert": 1,
+      "kategorie": "pflanzen"
+    },
+    {
+      "id": "plantSmall2",
+      "name_de": "Kaktus-Freund",
+      "name_en": "Cactus Friend",
+      "glb": "plantSmall2.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 25,
+      "lagerwert": 1,
+      "kategorie": "pflanzen"
+    },
+    {
+      "id": "plantSmall3",
+      "name_de": "Mini-Farn",
+      "name_en": "Mini Fern",
+      "glb": "plantSmall3.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 25,
+      "lagerwert": 1,
+      "kategorie": "pflanzen"
+    },
+    {
+      "id": "monsteraPlant",
+      "name_de": "Monstera",
+      "name_en": "Monstera",
+      "glb": "pflanzen/monstera_plant_large_potted.gltf",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 140,
+      "lagerwert": 2,
+      "kategorie": "pflanzen",
+      "blocks_movement": false
+    },
+    {
+      "id": "pothosPlant",
+      "name_de": "Efeutute",
+      "name_en": "Pothos",
+      "glb": "pflanzen/pothos_plant_large_potted.gltf",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 120,
+      "lagerwert": 2,
+      "kategorie": "pflanzen",
+      "blocks_movement": false
+    },
+    {
+      "id": "sansevieriaPlant",
+      "name_de": "Bogenhanf",
+      "name_en": "Snake Plant",
+      "glb": "pflanzen/sansevieria_plant_small_potted.gltf",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 60,
+      "lagerwert": 1,
+      "kategorie": "pflanzen",
+      "blocks_movement": false
+    },
+    {
+      "id": "kitchenFridge",
+      "name_de": "Kühlschrank",
+      "name_en": "Fridge",
+      "glb": "kitchenFridge.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 400,
+      "lagerwert": 3,
+      "pflicht": "kuehlschrank",
+      "kategorie": "kueche"
+    },
+    {
+      "id": "kitchenStove",
+      "name_de": "Herd",
+      "name_en": "Stove",
+      "glb": "kitchenStove.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 220,
+      "lagerwert": 2,
+      "kategorie": "kueche"
+    },
+    {
+      "id": "kitchenSink",
+      "name_de": "Spüle",
+      "name_en": "Kitchen Sink",
+      "glb": "kitchenSink.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 180,
+      "lagerwert": 2,
+      "kategorie": "kueche"
+    },
+    {
+      "id": "kitchenCabinet",
+      "name_de": "Küchenzeile",
+      "name_en": "Kitchen Counter",
+      "glb": "kitchenCabinet.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 120,
+      "lagerwert": 2,
+      "kategorie": "kueche",
+      "surface": true
+    },
+    {
+      "id": "kitchenCabinetDrawer",
+      "name_de": "Küchenschrank",
+      "name_en": "Kitchen Drawer",
+      "glb": "kitchenCabinetDrawer.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 120,
+      "lagerwert": 2,
+      "kategorie": "kueche",
+      "surface": true
+    },
+    {
+      "id": "toaster",
+      "name_de": "Toaster (Deko)",
+      "name_en": "Toaster (Deco)",
+      "glb": "toaster.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 35,
+      "lagerwert": 1,
+      "kategorie": "kueche"
+    },
+    {
+      "id": "toilet",
+      "name_de": "Klo",
+      "name_en": "Toilet",
+      "glb": "toilet.glb",
+      "footprint": [
+        1,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 150,
+      "lagerwert": 2,
+      "kategorie": "bad"
+    },
+    {
+      "id": "bathtub",
+      "name_de": "Badewanne",
+      "name_en": "Bathtub",
+      "glb": "bathtub.glb",
+      "footprint": [
+        4,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 350,
+      "lagerwert": 4,
+      "kategorie": "bad"
+    },
+    {
+      "id": "shower",
+      "name_de": "Dusche",
+      "name_en": "Shower",
+      "glb": "shower.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 280,
+      "lagerwert": 3,
+      "kategorie": "bad"
+    },
+    {
+      "id": "bathroomSink",
+      "name_de": "Waschbecken",
+      "name_en": "Bathroom Sink",
+      "glb": "bathroomSink.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 90,
+      "lagerwert": 1,
+      "kategorie": "bad"
+    },
+    {
+      "id": "bathroomMirror",
+      "name_de": "Badspiegel",
+      "name_en": "Bathroom Mirror",
+      "glb": "bathroomMirror.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "WALL",
+      "wall_size": 1,
+      "preis": 60,
+      "lagerwert": 1,
+      "kategorie": "bad"
+    },
+    {
+      "id": "bathroomCabinet",
+      "name_de": "Badschränkchen",
+      "name_en": "Bathroom Cabinet",
+      "glb": "bathroomCabinet.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 70,
+      "lagerwert": 1,
+      "kategorie": "bad"
+    },
+    {
+      "id": "washer",
+      "name_de": "Waschmaschine",
+      "name_en": "Washer",
+      "glb": "washer.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 260,
+      "lagerwert": 3,
+      "kategorie": "bad"
+    },
+    {
+      "id": "bear",
+      "name_de": "Bärchen",
+      "name_en": "Teddy Bear",
+      "glb": "bear.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 45,
+      "lagerwert": 1,
+      "kategorie": "deko"
+    },
+    {
+      "id": "books",
+      "name_de": "Bücherstapel",
+      "name_en": "Book Pile",
+      "glb": "books.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 20,
+      "lagerwert": 1,
+      "kategorie": "deko"
+    },
+    {
+      "id": "pillow",
+      "name_de": "Kissen",
+      "name_en": "Pillow",
+      "glb": "pillow.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 20,
+      "lagerwert": 1,
+      "kategorie": "deko"
+    },
+    {
+      "id": "pillowBlue",
+      "name_de": "Blaues Kissen",
+      "name_en": "Blue Pillow",
+      "glb": "pillowBlue.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 20,
+      "lagerwert": 1,
+      "kategorie": "deko"
+    },
+    {
+      "id": "trashcan",
+      "name_de": "Mülleimer",
+      "name_en": "Trash Can",
+      "glb": "trashcan.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 25,
+      "lagerwert": 1,
+      "kategorie": "deko",
+      "blocks_movement": false
+    },
+    {
+      "id": "coatRackStanding",
+      "name_de": "Garderobe",
+      "name_en": "Coat Rack",
+      "glb": "coatRackStanding.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 55,
+      "lagerwert": 1,
+      "kategorie": "deko"
+    },
+    {
+      "id": "boxA",
+      "name_de": "Umzugskarton",
+      "name_en": "Moving Box",
+      "glb": "deko/box_A.gltf",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 10,
+      "lagerwert": 1,
+      "kategorie": "deko",
+      "blocks_movement": false
+    },
+    {
+      "id": "boxB",
+      "name_de": "Kleiner Karton",
+      "name_en": "Small Box",
+      "glb": "deko/box_B.gltf",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 10,
+      "lagerwert": 1,
+      "kategorie": "deko",
+      "blocks_movement": false
+    },
+    {
+      "id": "gardenBench",
+      "name_de": "Gartenbank",
+      "name_en": "Garden Bench",
+      "glb": "garten/bench.glb",
+      "footprint": [
+        3,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 120,
+      "lagerwert": 2,
+      "kategorie": "garten"
+    },
+    {
+      "id": "flowerRed",
+      "name_de": "Rote Blume",
+      "name_en": "Red Flower",
+      "glb": "garten/flower_redA.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 15,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false
+    },
+    {
+      "id": "flowerPurple",
+      "name_de": "Lila Blume",
+      "name_en": "Purple Flower",
+      "glb": "garten/flower_purpleA.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 15,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false
+    },
+    {
+      "id": "flowerYellow",
+      "name_de": "Gelbe Blume",
+      "name_en": "Yellow Flower",
+      "glb": "garten/flower_yellowA.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 15,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false
+    },
+    {
+      "id": "gardenBush",
+      "name_de": "Busch",
+      "name_en": "Bush",
+      "glb": "garten/plant_bush.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 30,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false
+    },
+    {
+      "id": "treeDefault",
+      "name_de": "Baum",
+      "name_en": "Tree",
+      "glb": "garten/tree_default.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 200,
+      "lagerwert": 3,
+      "kategorie": "garten"
+    },
+    {
+      "id": "treeFat",
+      "name_de": "Dicker Baum",
+      "name_en": "Chunky Tree",
+      "glb": "garten/tree_fat.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 180,
+      "lagerwert": 3,
+      "kategorie": "garten"
+    },
+    {
+      "id": "potLarge",
+      "name_de": "Großer Blumentopf",
+      "name_en": "Big Pot",
+      "glb": "garten/pot_large.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 40,
+      "lagerwert": 1,
+      "kategorie": "garten"
+    },
+    {
+      "id": "grassTuft",
+      "name_de": "Grasbüschel",
+      "name_en": "Grass Tuft",
+      "glb": "garten/grass_large.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 10,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false
+    },
+    {
+      "id": "brettspieltisch",
+      "name_de": "Brettspieltisch",
+      "name_en": "Board game table",
+      "glb": "table.glb",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 350,
+      "lagerwert": 4,
+      "kategorie": "wohnen",
+      "pflicht": ""
+    }
+  ]
 }

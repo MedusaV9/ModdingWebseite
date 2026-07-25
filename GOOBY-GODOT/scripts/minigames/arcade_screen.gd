@@ -15,6 +15,7 @@ signal back_requested
 const COVERS := {
 	"teaParty": preload("res://assets/covers/teaParty.png"),
 	"carrotCatch": preload("res://assets/covers/carrotCatch.png"),
+	"gvz": preload("res://assets/covers/gvz.png"),
 }
 
 const ROUTE_ARCADE := &"arcade"

@@ -28,7 +28,15 @@ const GAMES: Array[Dictionary] = [
 		"orientation": "portrait",
 		"supports_endless": true,
 	},
-	{"id": "gvz", "title_key": "mg.gvz.title", "coming_soon": true},
+	{
+		"id": "gvz",
+		"title_key": "mg.gvz.title",
+		"scene": "res://scripts/minigames/games/gvz/gvz_game.tscn",
+		"coin_table": {"divisor": 12, "min": 4, "max": 40},
+		"target": 300,
+		"orientation": "landscape",
+		"supports_endless": false,
+	},
 	{"id": "gobnom", "title_key": "mg.gobnom.title", "coming_soon": true},
 ]
 

@@ -389,6 +389,8 @@ func _build_ui() -> void:
 	add_child(_ui_layer)
 	var bubble_scene: PackedScene = load("res://scripts/ui/dialog_bubble.tscn")
 	_bubble = bubble_scene.instantiate()
+	# W3d-Bugreport: Controls unter CanvasLayer erben das Window-Theme nicht.
+	_bubble.theme = ThemeService.theme()
 	_ui_layer.add_child(_bubble)
 	_build_mode = BuildMode.new()
 	_build_mode.name = "BuildMode"
@@ -473,6 +475,7 @@ func _blocked_flow() -> void:
 	_gooby.rig.set_emotion("sad")
 	say(I18nService.t("home.blocked.bubble"))
 	_choice = PanelContainer.new()
+	_choice.theme = ThemeService.theme()
 	_choice.theme_type_variation = "AcCard"
 	_choice.set_anchors_preset(Control.PRESET_CENTER)
 	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
