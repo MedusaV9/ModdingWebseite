@@ -18,7 +18,7 @@ config/version="5.0.0"
 config/description="GOOBY 5.0 — Godot-Rewrite (M1)"
 run/main_scene="res://scripts/boot/main.tscn"
 config/features=PackedStringArray("4.4", "Mobile")
-config/icon="res://icon.svg"
+config/icon="res://icon_gooby_1024.png"
 
 [autoload]
 
