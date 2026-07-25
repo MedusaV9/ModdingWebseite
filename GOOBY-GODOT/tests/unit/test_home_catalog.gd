@@ -27,7 +27,13 @@ func test_katalog_geladen_und_normalisiert() -> void:
 
 func test_glb_pfade_existieren() -> void:
 	for id: String in FurnitureCatalog.ids():
-		var path := FurnitureCatalog.glb_path(FurnitureCatalog.defs()[id])
+		var def: Dictionary = FurnitureCatalog.defs()[id]
+		# Prozedurale Möbel (Doc D §9, z. B. Fenster) haben bewusst kein GLB —
+		# FurnitureNode baut sie aus HomeProps.
+		if str(def.get("proc", "")) != "":
+			assert_eq(str(def.get("glb", "")), "", "%s: proc-Möbel ohne glb-Pfad" % id)
+			continue
+		var path := FurnitureCatalog.glb_path(def)
 		assert_true(ResourceLoader.exists(path), "GLB fehlt: %s (%s)" % [path, id])
 
 

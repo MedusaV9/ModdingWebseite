@@ -1,0 +1,10 @@
+{
+	"id": "toyRacer",
+	"title_key": "mg.toyRacer.title",
+	"scene": "res://scripts/minigames/games/toy_racer/toy_racer.tscn",
+	"coin_table": {"divisor": 6, "min": 5, "max": 30},
+	"target": 150,
+	"orientation": "landscape",
+	"supports_endless": true,
+	"energy_cost": 8
+}

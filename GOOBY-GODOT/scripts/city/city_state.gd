@@ -9,6 +9,13 @@ extends RefCounted
 ##   city.taxi{} (TaxiLogic-Slice, Timestamps, Doc E §4),
 ##   city.gooberando{} (GooberandoLogic-Slice, Doc E §5),
 ##   city.autoTile [r, c] (letzte Parkposition in der Stadt, [] = zuhause).
+## ORTE-Erweiterung (ADDITIV, kein Save-Version-Bump — fehlende Schlüssel
+## heilt `normalize_slice` beim Laden auf die Defaults):
+##   city.besucht{ort_id: true} (Erst-Besuch je Ort — Erste-Male-Karten),
+##   city.autos{auto_id: farbe_hex} + city.aktivesAuto (Autohaus, Doc E §1.4),
+##   city.markt{tag, verkauft{}} (Wochenmarkt-Preiselastizität, Doc D §6.3),
+##   city.fotos[] (Fotomodus-Aufnahmen: {pfad, at}),
+##   city.fahrdienst ("taxi"|"guber"|"" — wer die TaxiLogic gerade fährt).
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
 
@@ -33,10 +40,18 @@ static func default_slice() -> Dictionary:
 		"taxi": TaxiLogic.default_slice(),
 		"gooberando": GooberandoLogic.default_slice(),
 		"autoTile": [],
+		"besucht": {},
+		"autos": {},
+		"aktivesAuto": "",
+		"markt": {"tag": "", "verkauft": {}},
+		"fotos": [],
+		"fahrdienst": "",
 	}
 
 
 ## Self-Heal: Typen reparieren, gültige Daten VERBATIM erhalten.
+## ADDITIV: Alt-Saves ohne die ORTE-Schlüssel bekommen hier die Defaults —
+## deshalb braucht die Erweiterung KEINEN Save-Version-Bump.
 static func normalize_slice(raw: Variant) -> Dictionary:
 	var city: Dictionary = raw if raw is Dictionary else default_slice()
 	city["v"] = maxi(1, int(city.get("v", 1)))
@@ -46,7 +61,24 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 	city["gooberando"] = GooberandoLogic.normalize_slice(city.get("gooberando"))
 	if not (city.get("autoTile") is Array):
 		city["autoTile"] = []
+	for schluessel: String in ["besucht", "autos"]:
+		if not (city.get(schluessel) is Dictionary):
+			city[schluessel] = {}
+	city["aktivesAuto"] = str(city.get("aktivesAuto", ""))
+	city["markt"] = _normalize_markt(city.get("markt"))
+	if not (city.get("fotos") is Array):
+		city["fotos"] = []
+	city["fahrdienst"] = str(city.get("fahrdienst", ""))
 	return city
+
+
+static func _normalize_markt(raw: Variant) -> Dictionary:
+	var markt: Dictionary = raw if raw is Dictionary else {}
+	var verkauft: Variant = markt.get("verkauft", {})
+	return {
+		"tag": str(markt.get("tag", "")),
+		"verkauft": verkauft if verkauft is Dictionary else {},
+	}
 
 
 static func flag(gs: Object, name: String) -> bool:

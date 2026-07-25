@@ -82,11 +82,27 @@ static func wall_door_spans(room_def: Dictionary) -> Dictionary:
 	return spans
 
 
+## Außenwände eines Raums: {"N": "strasse"|"garten"|"himmel"}. Nur hier
+## dürfen Fenster hängen (Doc D §1.2), und die Vista bestimmt, welches
+## Diorama hinter der Scheibe läuft.
+static func exterior_walls(room_def: Dictionary) -> Dictionary:
+	var raw: Variant = room_def.get("walls", {})
+	if not (raw is Dictionary):
+		return {}
+	var out: Dictionary = {}
+	for wall: Variant in raw:
+		if GridData.WALLS.has(str(wall)):
+			out[str(wall)] = str(raw[wall])
+	return out
+
+
 ## Fertig konfiguriertes (leeres) GridData für einen Raum.
 static func make_grid(room_id: String) -> GridData:
 	var room_def := room(room_id)
 	var grid: Vector2i = room_def.get("grid", Vector2i(8, 8))
-	return GridData.new(grid, blocked_cells(room_def), wall_door_spans(room_def))
+	return GridData.new(
+		grid, blocked_cells(room_def), wall_door_spans(room_def), exterior_walls(room_def)
+	)
 
 
 ## Raumlokale Welt-Position der Türmitte (Boden, XZ-Ebene).

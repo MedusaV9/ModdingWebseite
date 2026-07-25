@@ -378,6 +378,13 @@ func _build_drawer() -> void:
 	_capacity_label = Label.new()
 	_capacity_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_capacity_label)
+	# Goobay (Doc D §5.4): verkauft wird aus dem LAGER — deshalb sitzt der
+	# Einstieg direkt an der Lager-Schublade.
+	var goobay := Button.new()
+	goobay.text = I18nService.t("goobay.verkaufen")
+	goobay.theme_type_variation = "AcChip"
+	goobay.pressed.connect(_open_goobay)
+	header.add_child(goobay)
 	var done := Button.new()
 	done.text = I18nService.t("build.fertig")
 	done.theme_type_variation = "PrimaryButton"
@@ -424,6 +431,15 @@ func _refresh_drawer() -> void:
 		btn.theme_type_variation = "AcChip"
 		btn.pressed.connect(_begin_new.bind(def))
 		_drawer_items.add_child(btn)
+
+
+## Goobay-Handy öffnen (Verkaufsliste = Lager ohne Pflichtmöbel).
+func _open_goobay() -> void:
+	if _gs == null:
+		return
+	var panel := GoobayPanel.open_in(_room.ui_layer(), _gs, _room)
+	panel.verkauft.connect(func(_item: String, _erloes: int) -> void: _refresh_drawer())
+	panel.closed.connect(_refresh_drawer)
 
 
 func _update_action_bar() -> void:

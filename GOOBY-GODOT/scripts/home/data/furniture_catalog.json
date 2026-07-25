@@ -948,6 +948,129 @@
       "lagerwert": 4,
       "kategorie": "wohnen",
       "pflicht": ""
+    },
+    {
+      "id": "fence_wood",
+      "name_de": "Holzzaun",
+      "name_en": "Wooden Fence",
+      "glb": "garten/fence_simple.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 8,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "blocks_movement": false,
+      "pflicht": ""
+    },
+    {
+      "id": "stool_rustic",
+      "name_de": "Rustikaler Hocker",
+      "name_en": "Rustic Stool",
+      "glb": "stoolBar.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 30,
+      "lagerwert": 1,
+      "kategorie": "sitzen",
+      "pflicht": ""
+    },
+    {
+      "id": "planter_box",
+      "name_de": "Blumenkasten",
+      "name_en": "Planter Box",
+      "glb": "garten/pot_large.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 25,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "pflicht": ""
+    },
+    {
+      "id": "table_rustic",
+      "name_de": "Rustikaler Gartentisch",
+      "name_en": "Rustic Garden Table",
+      "glb": "table.glb",
+      "footprint": [
+        3,
+        2
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 70,
+      "lagerwert": 2,
+      "kategorie": "tische",
+      "surface": true,
+      "pflicht": ""
+    },
+    {
+      "id": "shelf_rustic",
+      "name_de": "Rustikales Regal",
+      "name_en": "Rustic Shelf",
+      "glb": "bookcaseOpenLow.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 90,
+      "lagerwert": 2,
+      "kategorie": "regale",
+      "surface": true,
+      "pflicht": ""
+    },
+    {
+      "id": "window_small",
+      "name_de": "Kleines Fenster",
+      "name_en": "Small Window",
+      "glb": "",
+      "proc": "fenster",
+      "footprint": [
+        2,
+        2
+      ],
+      "wall_size": 2,
+      "layer": "WALL",
+      "preis": 400,
+      "verkaufswert": 150,
+      "lagerwert": 2,
+      "kategorie": "fenster",
+      "exterior": true,
+      "vista": "strasse",
+      "pflicht": ""
+    },
+    {
+      "id": "window_wide",
+      "name_de": "Breites Fenster",
+      "name_en": "Wide Window",
+      "glb": "",
+      "proc": "fenster",
+      "footprint": [
+        3,
+        2
+      ],
+      "wall_size": 3,
+      "layer": "WALL",
+      "preis": 650,
+      "verkaufswert": 240,
+      "lagerwert": 2,
+      "kategorie": "fenster",
+      "exterior": true,
+      "vista": "strasse",
+      "pflicht": ""
     }
   ]
 }

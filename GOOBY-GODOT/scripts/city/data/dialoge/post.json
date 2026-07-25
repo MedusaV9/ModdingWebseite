@@ -1,0 +1,54 @@
+{
+  "id": "post_besuch",
+  "start": "hallo",
+  "nodes": {
+    "hallo": {
+      "sprecher": "pia",
+      "text": [
+        "Willkommen bei der Post! Ich bin Pia. Schalter zwei ist gerade unbesetzt — ich BIN Schalter zwei.",
+        "Paket, Brief oder nur den Stempel bewundern?"
+      ],
+      "optionen": [
+        {"text": "Ein Paket verschicken.", "next": "paket"},
+        {"text": "Einen Brief an einen Freund.", "next": "brief"},
+        {"text": "Was macht mein Postkarten-Archiv?", "next": "postkarten"},
+        {"text": "Nur den Stempel.", "next": "stempel"}
+      ]
+    },
+    "paket": {
+      "sprecher": "pia",
+      "text": [
+        "Pakete an andere Goobys? Das Förderband dafür ist bestellt. Es kommt … per Paket.",
+        "Sobald es da ist, kannst du echten Freunden echte Sachen schicken. Versprochen."
+      ],
+      "effekt": ["laden"],
+      "ende": true
+    },
+    "brief": {
+      "sprecher": "pia",
+      "text": [
+        "Briefe zwischen Goobys gehen bald raus in die weite Welt — das Postnetz wird gerade verlegt.",
+        "Bis dahin sammle ich deine Entwürfe. Sortiert. Alphabetisch. Nach Stimmung."
+      ],
+      "effekt": ["laden"],
+      "ende": true
+    },
+    "postkarten": {
+      "sprecher": "pia",
+      "text": [
+        "Alle Urlaubs-Postkarten kommen zuerst über meinen Tisch. Ich lese natürlich nicht mit.",
+        "Die vom Glitzermeer war aber wirklich hübsch. … Ich habe NICHT mitgelesen."
+      ],
+      "effekt": ["laden"],
+      "ende": true
+    },
+    "stempel": {
+      "sprecher": "pia",
+      "text": [
+        "Bitte sehr. (Sie stempelt dreimal auf die Unterlage, einmal in die Luft.)",
+        "Der in die Luft war der schönste. Den kann man leider nicht mitnehmen."
+      ],
+      "ende": true
+    }
+  }
+}

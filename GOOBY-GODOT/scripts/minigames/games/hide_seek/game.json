@@ -1,0 +1,10 @@
+{
+	"id": "hideSeek",
+	"title_key": "mg.hideSeek.title",
+	"scene": "res://scripts/minigames/games/hide_seek/hide_seek.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 20},
+	"target": 80,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

@@ -16,6 +16,11 @@ signal ort_betreten_angefordert(ort_id: String)
 
 const ASSETS := "res://assets/city"
 const ROUTE_CITY := &"city"
+const GOOBY_GLB := "res://assets/character/gooby.glb"
+## Fußgänger: so viele Goobys schlendern durch die Stadt …
+const FUSSGAENGER_ANZAHL := 5
+## … in dieser Größe (Gooby-GLB ist ~1 m; Kenney-Autos stehen auf 1,8).
+const FUSSGAENGER_SCALE := 1.6
 
 ## Distrikt-Grundfarben für Boden-Pads unter den Vierteln (dezent).
 const DISTRIKT_FARBEN := {
@@ -42,6 +47,9 @@ var _toast: Node
 var _colliders: Array[Dictionary] = []
 var _licht_profil: Dictionary = {}
 var _sfx_timer := 6.0
+var _fussgaenger: Array[Dictionary] = []
+var _fuss_zeit := 0.0
+var _near_miss_sperre := 0.0
 
 
 func _ready() -> void:
@@ -56,6 +64,7 @@ func _ready() -> void:
 	_baue_deko()
 	_baue_natur()
 	_baue_verkehr()
+	_baue_fussgaenger()
 	_baue_auto()
 	_baue_hud()
 	ready_for_reveal.emit()
@@ -63,7 +72,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_verkehr(delta)
+	_update_fussgaenger(delta)
 	_update_ambient_sfx(delta)
+	_update_minimap()
 
 
 func _physics_process(_delta: float) -> void:
@@ -247,7 +258,11 @@ func _baue_orte() -> void:
 		var strasse := CityMap._tile_von(eintrag.get("strasse", [0, 0]))
 		var mitte := karte.tile_zu_welt(erste)
 		var glb := str(fassade.get("glb", "building-a"))
-		var gebaeude := _glb("%s/gebaeude/%s.glb" % [ASSETS, glb], 10.0)
+		# Leeres glb = Ort unter freiem Himmel (Wochenmarkt) — der steht als
+		# Marktstand-Deko in der Karte, hier gibt es kein Gebäude zu laden.
+		var gebaeude: Node3D = null
+		if not glb.is_empty():
+			gebaeude = _glb("%s/gebaeude/%s.glb" % [ASSETS, glb], 10.0)
 		if gebaeude != null:
 			gebaeude.position = mitte
 			# Gebäude stehen NEBEN den 0,4 m dicken Straßenplatten auf dem
@@ -263,19 +278,52 @@ func _baue_orte() -> void:
 					markise.rotation.y = _rot_zu(erste, strasse)
 					markise.translate_object_local(Vector3(0, 0.32, 0.52))
 					wurzel.add_child(markise)
-		# Namensschild überm Eingang
+		# Namensschild überm Eingang (nachts leuchtend, s. _lass_schild_leuchten)
+		var an: bool = _licht_profil["lichter_an"]
 		var schild := Label3D.new()
 		schild.text = I18nService.t(str(eintrag.get("name_key", "")))
-		schild.font_size = 220
+		schild.font_size = 150
 		schild.pixel_size = 0.011
 		schild.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		schild.modulate = Color(0.29, 0.23, 0.21)
+		schild.modulate = CityAmbiente.schild_farbe(an)
 		schild.outline_size = 24
-		schild.position = mitte + Vector3(0, 8.0, 0)
+		# Über dem EINGANG, nicht über der Tile-Mitte: mittig verschluckt die
+		# Fassade (und der Nachbarblock) die halbe Schrift.
+		var zur_strasse := karte.tile_zu_welt(strasse) - mitte
+		zur_strasse.y = 0.0
+		if zur_strasse.length() < 0.01:
+			zur_strasse = Vector3.BACK
+		# Nachbarblöcke versetzt hängen, sonst überlagern sich zwei Billboards
+		# der gleichen Straßenseite aus der Ferne zu einem Buchstabensalat.
+		var hoehe := 6.4 + float(erste.x % 2) * 2.2
+		schild.position = mitte + zur_strasse.normalized() * 8.0 + Vector3(0, hoehe, 0)
 		wurzel.add_child(schild)
+		if an:
+			_lass_schild_leuchten(wurzel, schild, str(fassade.get("tint", "")))
 		# Kollisions-AABBs für alle Ort-Tiles
 		for tile_raw: Array in tiles:
 			_collider_fuer_tile(CityMap._tile_von(tile_raw), 7.5)
+
+
+## Nacht-Glow am Ladenschild (W4-P3-Ambiente): eine unshaded Emissiv-Tafel
+## HINTER der Schrift in der Fassadenfarbe. Bewusst KEIN Environment-Glow-
+## Pass und kein zusätzliches Licht — das wäre auf dem Handy ein Fullscreen-
+## Blur bzw. ein Licht pro Laden; so ist es ein Quad (Doc A §7 Licht-Budget).
+func _lass_schild_leuchten(wurzel: Node3D, schild: Label3D, hex: String) -> void:
+	schild.outline_modulate = AcTokens.INK
+	# Beide sind kamerazugewandte Billboards und damit koplanar — ohne feste
+	# Sortierung z-fightet die Tafel mit der Schrift (halbe Buchstaben weg).
+	schild.render_priority = 1
+	schild.outline_render_priority = 0
+	var breite := float(schild.text.length()) * float(schild.font_size) * schild.pixel_size
+	var tafel := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(maxf(4.0, breite * 0.62) + 3.0, 3.4)
+	tafel.mesh = quad
+	var farbe := Color(hex) if not hex.is_empty() else AcTokens.YELLOW
+	tafel.material_override = CityAmbiente.schild_glow_material(farbe.lerp(AcTokens.WHITE, 0.55))
+	tafel.position = schild.position
+	wurzel.add_child(tafel)
 
 
 func _baue_deko() -> void:
@@ -376,6 +424,37 @@ func _haenge_autolichter(wagen: Node3D) -> void:
 		wagen.add_child(licht)
 
 
+## Fußgänger-Goobys (Doc E §1.4 „Leben auf der Straße“): BILLIG instanziert —
+## nur das Gooby-GLB plus sein AnimationPlayer auf „walk“, ohne die
+## GoobyRig-Maschinerie (AnimationTree, Pose-Modifier, Blinzel-Timer,
+## Emotions-Lerp pro Frame). Routen + Tempo kommen aus dem puren
+## CityFussgaenger, gefüttert mit dem Deko-Seed der Karte.
+func _baue_fussgaenger() -> void:
+	var wurzel := Node3D.new()
+	wurzel.name = "Fussgaenger"
+	add_child(wurzel)
+	var routen := CityFussgaenger.routen(karte, FUSSGAENGER_ANZAHL, karte.deko_seed())
+	var szene: PackedScene = load(GOOBY_GLB) if ResourceLoader.exists(GOOBY_GLB) else null
+	if szene == null:
+		return
+	for route in routen:
+		var node: Node3D = szene.instantiate()
+		node.scale = Vector3.ONE * FUSSGAENGER_SCALE
+		wurzel.add_child(node)
+		_faerbe(node, route["tint"], 0.5)
+		var player: AnimationPlayer = node.find_child("AnimationPlayer", true, false)
+		if player != null:
+			# Der Importer strippt das "-loop"-Suffix — je nach Build-Stand des
+			# GLB heißt der Clip so oder so; beides zulassen.
+			for kandidat: String in ["walk", "walk-loop"]:
+				if player.has_animation(kandidat):
+					player.play(kandidat)
+					break
+		route["node"] = node
+		_fussgaenger.append(route)
+	_update_fussgaenger(0.0)
+
+
 ## Vorderkante (+Z, lokale Model-Einheiten) des Wagens.
 func _aabb_grenze_z(node: Node3D) -> float:
 	var kante := 0.6
@@ -416,6 +495,8 @@ func _baue_hud() -> void:
 	hud.reverse_changed.connect(func(on: bool) -> void: auto.set_reverse(on))
 	hud.nach_hause_pressed.connect(_on_nach_hause)
 	hud.betreten_pressed.connect(_on_betreten)
+	hud.minimap.karte = karte
+	hud.minimap.aktualisiere_pins()
 	_toast = load("res://scripts/ui/toast.gd").new()
 	_toast.theme = ThemeService.theme()
 	layer.add_child(_toast)
@@ -453,14 +534,17 @@ func _update_ambient_sfx(delta: float) -> void:
 	_spiele_ambient_sfx(CityAmbiente.sfx_wahl(_stunde(), randf()))
 
 
-func _spiele_ambient_sfx(sfx_name: String) -> void:
+## Gibt true zurück, wenn wirklich ein Klang lief (der Near-Miss-Toast
+## erzählt sonst von einer Hupe, die man nie gehört hat).
+func _spiele_ambient_sfx(sfx_name: String) -> bool:
 	# W4-P1-AudioDirector: die Ids city_hupe/city_vogel sind als Wunsch im
 	# W4P1-sfx-wiring-Handoff angemeldet; bis sie in der SfxMap stehen,
 	# verzichten wir LEISE (kein push_warning-Spam pro Roll).
 	var id := "city_%s" % sfx_name
 	if SfxMap.entry(id).is_empty():
-		return
+		return false
 	AudioDirector.try_play(self, id, 1.0)
+	return true
 
 
 func _update_verkehr(delta: float) -> void:
@@ -472,6 +556,44 @@ func _update_verkehr(delta: float) -> void:
 		node.position = bei["punkt"]
 		var richtung: Vector3 = bei["richtung"]
 		node.rotation.y = atan2(richtung.x, richtung.z)
+	_pruefe_near_miss(delta)
+
+
+## Beinahe-Unfall (Doc E §1.4): rauscht der Spieler in Fahrt dicht an einem
+## Verkehrs-Gooby vorbei, hupt der — einmal, dann ist für ein paar Sekunden
+## Ruhe. Ohne SFX-Eintrag in der SfxMap bleibt der Toast als Feedback.
+func _pruefe_near_miss(delta: float) -> void:
+	_near_miss_sperre = maxf(0.0, _near_miss_sperre - delta)
+	if auto == null or _near_miss_sperre > 0.0 or _verkehr.is_empty():
+		return
+	var hier := Vector2(auto.position.x, auto.position.z)
+	for eintrag in _verkehr:
+		var node: Node3D = eintrag["node"]
+		var abstand := hier.distance_to(Vector2(node.position.x, node.position.z))
+		if not CityAmbiente.ist_beinahe(abstand, auto.speed):
+			continue
+		_near_miss_sperre = CityAmbiente.NEAR_MISS_PAUSE_S
+		var gehupt := _spiele_ambient_sfx("hupe")
+		_zeige_toast(I18nService.t("city.fahren.beinahe_hupe" if gehupt else "city.fahren.beinahe"))
+		return
+
+
+func _update_fussgaenger(delta: float) -> void:
+	if _fussgaenger.is_empty():
+		return
+	_fuss_zeit += delta
+	for route in _fussgaenger:
+		var bei := CityFussgaenger.punkt(route, CityFussgaenger.fortschritt(route, _fuss_zeit))
+		var node: Node3D = route["node"]
+		node.position = bei["pos"]
+		node.rotation.y = float(bei["heading"])
+
+
+func _update_minimap() -> void:
+	if hud == null or hud.minimap == null or auto == null:
+		return
+	hud.minimap.setze_spieler(auto.position, auto.heading)
+	hud.minimap.setze_aktiv(_prompt_ort)
 
 
 func _update_parkplatz() -> void:
@@ -621,14 +743,17 @@ func _glb(pfad: String, groesse: float) -> Node3D:
 func _tinte(node: Node3D, hex: String) -> void:
 	if hex.is_empty():
 		return
-	var farbe := Color.from_string(hex, Color.WHITE)
+	_faerbe(node, Color.from_string(hex, Color.WHITE), 0.65)
+
+
+func _faerbe(node: Node3D, farbe: Color, staerke: float) -> void:
 	for mesh in node.find_children("*", "MeshInstance3D", true, false):
 		var mi: MeshInstance3D = mesh
 		for i in mi.get_surface_override_material_count():
 			var mat: Material = mi.mesh.surface_get_material(i)
 			if mat is StandardMaterial3D:
 				var kopie: StandardMaterial3D = mat.duplicate()
-				kopie.albedo_color = kopie.albedo_color.lerp(farbe, 0.65)
+				kopie.albedo_color = kopie.albedo_color.lerp(farbe, staerke)
 				mi.set_surface_override_material(i, kopie)
 
 

@@ -33,10 +33,13 @@ const REASON_BLOCKED := "blocked_zone"
 const REASON_OCCUPIED := "occupied"
 const REASON_NEEDS_SURFACE := "needs_surface"
 const REASON_UNKNOWN_ITEM := "unknown_item"
+## Fenster (Def-Flag `exterior`) dürfen nur auf Außenwände (Doc D §1.2).
+const REASON_NEEDS_EXTERIOR := "needs_exterior"
 
 var size := Vector2i.ZERO
 var blocked: Dictionary = {}  # Vector2i -> true (Tür-Freihaltezonen)
 var wall_blocked: Dictionary = {}  # "N" -> Array[[von, bis_exklusiv]] (Tür-Spannen)
+var wall_exterior: Dictionary = {}  # "N" -> vista-Id ("strasse"/"garten"/"himmel")
 
 var _items: Dictionary = {}  # uid -> Instanz-Dict (s. _make_item)
 var _rug_cells: Dictionary = {}  # Vector2i -> uid
@@ -45,12 +48,16 @@ var _surface_cells: Dictionary = {}  # Vector2i -> uid
 var _wall_slots: Dictionary = {}  # "N:3" -> uid
 
 
-func _init(grid_size := Vector2i(12, 10), blocked_cells: Array = [], wall_doors := {}) -> void:
+func _init(
+	grid_size := Vector2i(12, 10), blocked_cells: Array = [], wall_doors := {}, exterior_walls := {}
+) -> void:
 	size = grid_size
 	for cell: Variant in blocked_cells:
 		blocked[_as_cell(cell)] = true
 	for wall: String in wall_doors:
 		wall_blocked[wall] = wall_doors[wall]
+	for wall: String in exterior_walls:
+		wall_exterior[wall] = str(exterior_walls[wall])
 
 
 ## Footprint nach Rotation (rot 1/3 tauschen Breite und Tiefe).
@@ -126,14 +133,25 @@ func can_place_wall(def: Dictionary, wall: String, offset: int, ignore_uid := ""
 	var span: int = def["wall_size"]
 	if offset < 0 or offset + span > wall_width(wall):
 		return {"ok": false, "reason": REASON_OOB}
+	if bool(def.get("exterior", false)) and not wall_exterior.has(wall):
+		return {"ok": false, "reason": REASON_NEEDS_EXTERIOR}
+	var belegt := _wall_span_konflikt(wall, offset, span, ignore_uid)
+	if belegt != REASON_OK:
+		return {"ok": false, "reason": belegt}
+	return {"ok": true, "reason": REASON_OK}
+
+
+## Grund, warum die Wand-Spanne `offset..offset+span` nicht frei ist
+## (Tür-Spanne oder ein anderes Wand-Item) — REASON_OK heißt frei.
+func _wall_span_konflikt(wall: String, offset: int, span: int, ignore_uid: String) -> String:
 	for door_span: Array in wall_blocked.get(wall, []):
 		if offset < int(door_span[1]) and offset + span > int(door_span[0]):
-			return {"ok": false, "reason": REASON_BLOCKED}
+			return REASON_BLOCKED
 	for slot in span:
 		var key := "%s:%d" % [wall, offset + slot]
 		if _wall_slots.has(key) and _wall_slots[key] != ignore_uid:
-			return {"ok": false, "reason": REASON_OCCUPIED}
-	return {"ok": true, "reason": REASON_OK}
+			return REASON_OCCUPIED
+	return REASON_OK
 
 
 func place_wall(def: Dictionary, wall: String, offset: int, uid: String) -> Dictionary:
@@ -282,9 +300,14 @@ func to_items_array() -> Array:
 ## mit kleinerer uid als sein Träger würde in Array-Reihenfolge sonst an
 ## `needs_surface` scheitern und still im Lager landen (E9 P1-1).
 static func from_save(
-	entries: Array, defs: Dictionary, grid_size: Vector2i, blocked_cells: Array = [], doors := {}
+	entries: Array,
+	defs: Dictionary,
+	grid_size: Vector2i,
+	blocked_cells: Array = [],
+	doors := {},
+	exterior_walls := {}
 ) -> Dictionary:
-	var grid := GridData.new(grid_size, blocked_cells, doors)
+	var grid := GridData.new(grid_size, blocked_cells, doors, exterior_walls)
 	var leftovers: Array = []
 	var surface_entries: Array = []
 	for entry: Variant in entries:

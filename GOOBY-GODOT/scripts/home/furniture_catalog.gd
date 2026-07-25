@@ -10,7 +10,11 @@ extends RefCounted
 ##   footprint: Vector2i, layer: int (GridData.Layer), preis: int,
 ##   lagerwert: int (1–4), pflicht: String (""|"bett"|"couch"|"kuehlschrank"),
 ##   kategorie: String, surface: bool, blocks_movement: bool,
-##   can_toggle_light: bool, wall_size: int (nur WALL), fill: float (Auto-Fit).
+##   can_toggle_light: bool, wall_size: int (nur WALL), fill: float (Auto-Fit),
+##   verkaufswert: int (Goobay-Basiswert, 0 = aus dem Preis ableiten),
+##   exterior: bool + vista: String (Fenster brauchen eine Außenwand und
+##   zeigen deren Diorama — Doc D §1.2), proc: String (prozedurales Mesh
+##   statt GLB, z. B. "fenster" — HomeProcMeshes).
 
 const CATALOG_PATH := "res://scripts/home/data/furniture_catalog.json"
 const ASSETS_DIR := "res://assets/furniture"
@@ -153,4 +157,8 @@ static func _normalize_def(raw: Dictionary) -> Dictionary:
 		"can_toggle_light": bool(raw.get("can_toggle_light", false)),
 		"wall_size": maxi(1, int(raw.get("wall_size", footprint.x))),
 		"fill": clampf(float(raw.get("fill", DEFAULT_FILL)), 0.5, 1.0),
+		"verkaufswert": maxi(0, int(raw.get("verkaufswert", 0))),
+		"exterior": bool(raw.get("exterior", false)),
+		"vista": str(raw.get("vista", "")),
+		"proc": str(raw.get("proc", "")),
 	}

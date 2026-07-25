@@ -11,7 +11,9 @@ func test_karte_laedt_und_validiert() -> void:
 	assert_almost(karte.tile_m, 20.0)
 	var fehler := karte.validieren()
 	assert_eq(fehler.size(), 0, "Karte konsistent: %s" % ", ".join(fehler))
-	assert_eq(karte.orte().size(), 6, "6 Orte (4 begehbar + 2 Stubs)")
+	# 9 Orte: 4 aus W3a (REHWEI, GOOBYTHEKE, GOOUHBUS, Flughafen) + die
+	# 5 aus M2/ORTE (Baumarkt, Post, POW!, Autohaus, Wochenmarkt).
+	assert_eq(karte.orte().size(), 9, "alle Orte im Plan")
 
 
 func test_strassen_lattice() -> void:

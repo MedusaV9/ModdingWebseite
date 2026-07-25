@@ -1,0 +1,10 @@
+{
+	"id": "bunnyHop",
+	"title_key": "mg.bunnyHop.title",
+	"scene": "res://scripts/minigames/games/bunny_hop/bunny_hop.tscn",
+	"coin_table": {"divisor": 2, "min": 3, "max": 25},
+	"target": 45,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

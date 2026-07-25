@@ -1,0 +1,507 @@
+extends MinigameBase
+## Burger-Bau (burgerBuild) — Spiel-Szene. MECHANIK-Zahlen 1:1 aus
+## BurgerBuildLogic (zahlengleich zum Web): 4–7-Lagen-Ticket, Zutaten regnen in
+## 3 Spalten, richtige Lage +5 (Rush ×1.5), falsche −2, fertiger Burger +15,
+## Fallspeed +8 % je Burger. 75 s (Endlos: bis 3 abgelaufene Bestellungen).
+##
+## 2D (Web war three.js, aber eine reine Frontalbühne): Teller, Regen und
+## Ticket sind flache Sticker — die Weltmeter der Logik werden 1:1 in Pixel
+## projiziert, damit PLATE_HALF_WIDTH und die Spaltenmitten exakt gelten.
+
+const Logic := preload("res://scripts/minigames/games/burger_build/burger_build_logic.gd")
+const Diner := preload("res://scripts/minigames/games/burger_build/burger_build_diner.gd")
+
+## Sichtbare Welt-Halbbreite (Web-Kamera in Hochkant) — Basis der Projektion.
+const HALF_W := 3.4
+const HALF_H := 5.2
+## Teller-Höhe in Weltmetern (Web: plateY).
+const PLATE_Y := -3.4
+## Zutaten-Sticker in Weltmetern (Web: ITEM_SIZE 0,62 — hier etwas breiter,
+## damit die Lagen auf dem Handy klar lesbar sind; rein visuell).
+const ITEM_W := 1.05
+const ITEM_H := 0.34
+## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
+const DESIGN_SHORT := 390.0
+
+const LAYER_COLORS := {
+	"bun": Color(0.91, 0.68, 0.36),
+	"patty": Color(0.55, 0.33, 0.2),
+	"cheese": Color(1.0, 0.79, 0.28),
+	"tomato": Color(0.9, 0.31, 0.28),
+	"salad": Color(0.5, 0.79, 0.38),
+	"onion": Color(0.93, 0.85, 0.93),
+}
+
+var tune: Dictionary = {}
+var rng: GoobyRng
+var score := 0.0
+var ticket: Array[String] = []
+var placed := 0
+var completed := 0
+var expired := 0
+var order_number := 1
+var rush := false
+var elapsed := 0.0
+var order_left := 30.0
+var since_needed := 0.0
+var spawn_left := 0.0
+var bite_left := 0.0
+var plate_x := 0.0
+var finished := false
+var view_size := Vector2(390.0, 844.0)
+var landscape := false
+
+## Aktive Regen-Teile: {"id", "x", "y", "col"}
+var _items: Array[Dictionary] = []
+var _flash := 0.0
+var _flash_text := ""
+var _flash_good := true
+var _ui := 1.0
+var _time_label: Label
+var _order_label: Label
+var _hint_label: Label
+
+
+func setup(context: MinigameCtx) -> void:
+	super.setup(context)
+	tune = Logic.apply_difficulty(Logic.BURGER, ctx.difficulty)
+	rng = ctx.rng()
+	_build_hud()
+	_new_order()
+	_fit_viewport()
+	if is_inside_tree():
+		get_viewport().size_changed.connect(_fit_viewport)
+
+
+func end() -> void:
+	super.end()
+	finished = true
+
+
+## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+func apply_view(size: Vector2) -> void:
+	if size.x > 1.0 and size.y > 1.0:
+		view_size = size
+	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
+	position = Vector2.ZERO
+	_layout_hud()
+	queue_redraw()
+
+
+## Bedienleiste in Entwurfspixeln, mit _ui skaliert (sonst Krümelschrift).
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	var pad := 14.0 * _ui
+	_time_label.position = Vector2(pad, 8.0 * _ui)
+	_time_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
+	_order_label.position = Vector2(pad, 44.0 * _ui)
+	_order_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
+	var hint_w := minf(view_size.x - pad * 2.0, 420.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 46.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
+
+
+func _process(delta: float) -> void:
+	if not is_active() or finished:
+		return
+	elapsed += delta
+	_flash = maxf(0.0, _flash - delta)
+	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
+		_finish()
+		return
+	if bite_left > 0.0:
+		bite_left -= delta
+		if bite_left <= 0.0:
+			_new_order()
+		_update_labels()
+		queue_redraw()
+		return
+	order_left -= delta
+	if order_left <= 0.0:
+		_expire_order()
+		_update_labels()
+		queue_redraw()
+		return
+	since_needed += delta
+	spawn_left -= delta
+	if spawn_left <= 0.0:
+		_spawn_item()
+		spawn_left = float(tune["SPAWN_SEC"])
+	_step_items(delta)
+	_update_labels()
+	queue_redraw()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_active() or finished:
+		return
+	if event is InputEventScreenTouch and event.pressed:
+		plate_x = _to_world_x(event.position.x)
+	elif event is InputEventScreenDrag:
+		plate_x = _to_world_x(event.position.x)
+
+
+## Weltmeter → Bildschirmpixel.
+func project(wx: float, wy: float) -> Vector2:
+	var scale := _world_scale()
+	return Vector2(view_size.x * 0.5 + wx * scale, view_size.y * 0.5 - wy * scale)
+
+
+func _world_scale() -> float:
+	return minf(view_size.x / (HALF_W * 2.0), view_size.y / (HALF_H * 2.0))
+
+
+func _to_world_x(px: float) -> float:
+	var scale := _world_scale()
+	return clampf((px - view_size.x * 0.5) / scale, -HALF_W + 0.4, HALF_W - 0.4)
+
+
+func _build_hud() -> void:
+	_time_label = Label.new()
+	_time_label.theme_type_variation = &"HeadlineLabel"
+	add_child(_time_label)
+	_order_label = Label.new()
+	_order_label.theme_type_variation = &"CaptionLabel"
+	add_child(_order_label)
+	_hint_label = Label.new()
+	_hint_label.theme_type_variation = &"SoftLabel"
+	_hint_label.text = I18nService.t("mg.burgerBuild.hint")
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Der Hinweis liegt auf dem roten Schachbrettboden — heller Text mit Rand.
+	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
+	_hint_label.add_theme_color_override("font_outline_color", Color(0.32, 0.14, 0.12, 0.5))
+	_hint_label.add_theme_constant_override("outline_size", 7)
+	add_child(_hint_label)
+	_update_labels()
+
+
+func _fit_viewport() -> void:
+	apply_view(get_viewport_rect().size)
+
+
+func _new_order() -> void:
+	ticket = Logic.make_ticket(rng)
+	placed = 0
+	rush = Logic.is_rush_order(order_number)
+	order_left = Logic.order_timer_sec(rush, tune)
+	since_needed = 0.0
+	spawn_left = 0.0
+	_items.clear()
+	if rush:
+		AudioDirector.try_play(self, "mg_golden")
+
+
+func _spawn_item() -> void:
+	var needed := Logic.next_needed(ticket, placed)
+	var id := Logic.roll_spawn(rng, needed, since_needed, tune)
+	if id == needed:
+		since_needed = 0.0
+	var cols := Logic.column_centers(HALF_W)
+	var col := mini(cols.size() - 1, int(floor(rng.next() * cols.size())))
+	_items.append({"id": id, "x": float(cols[col]), "y": HALF_H + 0.6, "col": col})
+
+
+func _step_items(delta: float) -> void:
+	var speed := Logic.fall_speed_at(completed, tune)
+	var catch_y := PLATE_Y + _stack_top() + 0.12
+	var half := float(tune["PLATE_HALF_WIDTH"])
+	var keep: Array[Dictionary] = []
+	for item in _items:
+		var prev_y := float(item["y"])
+		item["y"] = prev_y - speed * delta
+		var y := float(item["y"])
+		if prev_y > catch_y and y <= catch_y and absf(float(item["x"]) - plate_x) <= half:
+			_catch_item(item)
+			continue
+		if y < -HALF_H - 0.8:
+			continue
+		keep.append(item)
+	_items = keep
+
+
+func _stack_top() -> float:
+	return 0.18 + placed * 0.22
+
+
+func _catch_item(item: Dictionary) -> void:
+	var needed := Logic.next_needed(ticket, placed)
+	var correct := str(item["id"]) == needed and not needed.is_empty()
+	var prev := score
+	score = Logic.apply_catch(score, correct, rush, tune)
+	var delta := score - prev
+	var pos := project(plate_x, PLATE_Y + _stack_top())
+	if correct:
+		placed += 1
+		AudioDirector.try_play(self, "mg_good", 1.0 + 0.03 * placed)
+		_flash_text = "+%s" % _fmt(delta)
+		_flash_good = true
+		if ctx.juice != null:
+			ctx.juice.float_text(pos, _flash_text, Color(0.2, 0.6, 0.34))
+			ctx.juice.hit_freeze(35)
+	else:
+		AudioDirector.try_play(self, "mg_spill")
+		_flash_text = I18nService.t("mg.burgerBuild.wrong")
+		_flash_good = false
+		if ctx.juice != null:
+			ctx.juice.float_text(pos, "%s" % _fmt(delta), Color(0.82, 0.32, 0.3))
+			ctx.juice.shake(0.2)
+	_flash = 0.7
+	ctx.report_score(int(floor(score)), int(floor(score)) - int(floor(prev)))
+	if Logic.is_complete(ticket, placed):
+		_complete_order()
+
+
+func _complete_order() -> void:
+	var prev := score
+	score += Logic.order_points(float(tune["COMPLETE_PTS"]), rush)
+	completed += 1
+	ctx.report_score(int(floor(score)), int(floor(score)) - int(floor(prev)))
+	AudioDirector.try_play(self, "mg_perfect")
+	_flash_text = I18nService.t("mg.burgerBuild.done", {"n": _fmt(score - prev)})
+	_flash_good = true
+	_flash = 1.2
+	if ctx.juice != null:
+		ctx.juice.bloom_pulse(1.0)
+		ctx.juice.shake(0.14)
+	order_number += 1
+	bite_left = float(tune["BITE_SEC"])
+	_items.clear()
+
+
+func _expire_order() -> void:
+	expired += 1
+	AudioDirector.try_play(self, "mg_junk")
+	_flash_text = I18nService.t("mg.burgerBuild.expired")
+	_flash_good = false
+	_flash = 1.2
+	if ctx.juice != null:
+		ctx.juice.shake(0.32)
+	order_number += 1
+	if Logic.endless_should_end(expired, tune):
+		_finish()
+		return
+	_new_order()
+
+
+func _finish() -> void:
+	if finished:
+		return
+	finished = true
+	running = false
+	ctx.report_end({"score": int(floor(score)), "completed": completed, "expired": expired})
+
+
+func _fmt(value: float) -> String:
+	if absf(value - roundf(value)) < 0.001:
+		return "%d" % int(roundf(value))
+	return "%.1f" % value
+
+
+func _update_labels() -> void:
+	if bool(tune["ENDLESS"]):
+		_time_label.text = I18nService.t(
+			"mg.burgerBuild.expired_count", {"n": expired, "max": int(tune["ENDLESS_EXPIRES"])}
+		)
+	else:
+		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
+		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
+	var key := "mg.burgerBuild.order_rush" if rush else "mg.burgerBuild.order"
+	var left_sec := int(ceil(maxf(0.0, order_left)))
+	_order_label.text = I18nService.t(key, {"n": order_number, "sec": left_sec})
+
+
+func _draw() -> void:
+	_draw_kitchen()
+	_draw_ticket()
+	_draw_items()
+	_draw_plate()
+	_draw_flash()
+
+
+func _draw_kitchen() -> void:
+	var vp := view_size
+	var counter := project(0.0, PLATE_Y - 0.25).y
+	var scale := _world_scale()
+	var rails: Array[float] = []
+	for cx in Logic.column_centers(HALF_W):
+		rails.append(vp.x * 0.5 + cx * scale)
+	Diner.draw_wall(self, vp, counter)
+	Diner.draw_menu_board(self, vp, rails, counter)
+	Diner.draw_shelf(self, vp, counter)
+	Diner.draw_lamps(self, vp, rails, counter)
+	Diner.draw_chutes(self, rails, counter)
+	Diner.draw_counter(self, vp, counter)
+
+
+## Bestellzettel an der Wand: Klemme oben, Lagen von OBEN nach UNTEN, der
+## Marker links zeigt auf die als Nächstes gesuchte Lage.
+func _draw_ticket() -> void:
+	var scale := _world_scale()
+	var w := 1.05 * scale
+	var h := 0.36 * scale
+	var pad := 12.0 * _ui
+	var head := 26.0 * _ui
+	var origin := Vector2(view_size.x - w - pad * 2.2, view_size.y * 0.13 + head)
+	var bg := Rect2(
+		origin - Vector2(pad, pad + head),
+		Vector2(w + pad * 2.0, h * ticket.size() + pad * 2.0 + head)
+	)
+	var frame := Color(0.9, 0.5, 0.35) if rush else Color(0.7, 0.6, 0.52)
+	draw_rect(bg.grow(3.0 * _ui), Color(0.0, 0.0, 0.0, 0.1))
+	draw_rect(bg, Color(1.0, 1.0, 1.0, 0.95))
+	draw_rect(bg, frame, false, maxf(2.0, 3.0 * _ui))
+	draw_rect(
+		Rect2(bg.position.x, bg.position.y, bg.size.x, head * 0.8), frame.lerp(Color.WHITE, 0.72)
+	)
+	# Klemme, die den Zettel an die Wand heftet.
+	var clip := Rect2(
+		bg.position.x + bg.size.x * 0.5 - 14.0 * _ui,
+		bg.position.y - 12.0 * _ui,
+		28.0 * _ui,
+		18.0 * _ui
+	)
+	draw_rect(clip, Color(0.72, 0.74, 0.79))
+	draw_rect(clip, Color(0.5, 0.52, 0.57), false, maxf(1.5, 2.0 * _ui))
+	for i in ticket.size():
+		var layer_index := ticket.size() - 1 - i
+		var rect := Rect2(origin + Vector2(0.0, h * i), Vector2(w, h - 5.0 * _ui))
+		var col: Color = LAYER_COLORS.get(ticket[layer_index], Color.GRAY)
+		if layer_index >= placed:
+			col = col.lerp(Color(1.0, 1.0, 1.0), 0.6)
+		draw_rect(rect, col)
+		draw_rect(rect, Color(0.4, 0.3, 0.25, 0.45), false, maxf(1.5, 2.0 * _ui))
+		if layer_index < placed:
+			var tick := rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.5)
+			draw_line(
+				tick + Vector2(-rect.size.x * 0.12, 0.0),
+				tick + Vector2(-rect.size.x * 0.02, rect.size.y * 0.22),
+				Color(0.2, 0.45, 0.28),
+				maxf(2.0, 3.0 * _ui)
+			)
+			draw_line(
+				tick + Vector2(-rect.size.x * 0.02, rect.size.y * 0.22),
+				tick + Vector2(rect.size.x * 0.16, -rect.size.y * 0.26),
+				Color(0.2, 0.45, 0.28),
+				maxf(2.0, 3.0 * _ui)
+			)
+	if placed < ticket.size():
+		var mark := Rect2(
+			origin + Vector2(-14.0 * _ui, h * (ticket.size() - 1 - placed)),
+			Vector2(9.0 * _ui, h - 5.0 * _ui)
+		)
+		draw_rect(mark, Color(0.95, 0.45, 0.66))
+
+
+func _draw_items() -> void:
+	var scale := _world_scale()
+	var needed := Logic.next_needed(ticket, placed)
+	for item in _items:
+		# Verpasste Zutaten fallen HINTER die Theke — sonst regnen sie sichtbar
+		# über den Schachbrettboden weiter, bis die Logik sie entfernt.
+		if float(item["y"]) < PLATE_Y - 0.2:
+			continue
+		var pos := project(float(item["x"]), float(item["y"]))
+		# Die gesuchte Lage bekommt einen weichen Ring — die Web-Vorlage hebt
+		# sie ebenfalls hervor, sonst ist der Regen unlesbar.
+		if str(item["id"]) == needed and not needed.is_empty():
+			draw_arc(
+				pos,
+				ITEM_W * scale * 0.58,
+				0.0,
+				TAU,
+				26,
+				Color(1.0, 0.86, 0.38, 0.55),
+				maxf(2.0, scale * 0.04)
+			)
+		_draw_layer(pos, str(item["id"]), ITEM_W * scale, ITEM_H * scale)
+
+
+## Ein Zutaten-Sticker. Jede Lage hat eine eigene Silhouette, damit sich der
+## Regen auch bei kleinem Bild unterscheiden lässt.
+func _draw_layer(center: Vector2, id: String, w: float, h: float) -> void:
+	var col: Color = LAYER_COLORS.get(id, Color.GRAY)
+	var rect := Rect2(center - Vector2(w * 0.5, h * 0.5), Vector2(w, h))
+	var edge := Color(0.35, 0.26, 0.2, 0.4)
+	var lw := maxf(2.0, h * 0.14)
+	match id:
+		"bun":
+			draw_circle(center + Vector2(0.0, h * 0.1), h * 1.0, col)
+			draw_rect(Rect2(rect.position.x, center.y, w, h * 0.5), col)
+			for i in 3:
+				draw_circle(
+					center + Vector2((i - 1) * w * 0.2, -h * 0.35),
+					maxf(1.5, h * 0.1),
+					Color(1.0, 0.96, 0.86)
+				)
+		"salad":
+			for i in 5:
+				draw_circle(
+					center + Vector2((-0.4 + 0.2 * i) * w, sin(i * 1.7) * h * 0.24), h * 0.52, col
+				)
+		"tomato":
+			draw_circle(center, h * 0.72, col)
+			draw_circle(center, h * 0.44, col.lerp(Color(1.0, 0.85, 0.8), 0.45))
+		"onion":
+			draw_arc(center, h * 0.62, 0.0, TAU, 22, col.darkened(0.15), lw * 1.6)
+			draw_arc(center, h * 0.36, 0.0, TAU, 18, col.darkened(0.05), lw)
+		"cheese":
+			draw_rect(rect, col)
+			draw_colored_polygon(
+				PackedVector2Array(
+					[
+						rect.position + Vector2(w * 0.72, 0.0),
+						rect.position + Vector2(w, 0.0),
+						rect.position + Vector2(w, h * 0.62),
+					]
+				),
+				col.lerp(Color(1.0, 1.0, 1.0), 0.4)
+			)
+			draw_rect(rect, edge, false, lw)
+		_:
+			draw_rect(rect, col)
+			for i in 2:
+				var gy := rect.position.y + h * (0.34 + 0.32 * i)
+				draw_line(
+					Vector2(rect.position.x + w * 0.16, gy),
+					Vector2(rect.position.x + w * 0.84, gy),
+					col.darkened(0.25),
+					lw
+				)
+			draw_rect(rect, edge, false, lw)
+
+
+func _draw_plate() -> void:
+	var scale := _world_scale()
+	var base := project(plate_x, PLATE_Y)
+	var half := float(tune["PLATE_HALF_WIDTH"]) * scale
+	# Gooby steht hinter der Theke, also VOR dem Teller zeichnen.
+	Diner.draw_chef(self, project(-HALF_W + 0.85, PLATE_Y + 0.75), 0.5 * scale, elapsed)
+	draw_circle(base + Vector2(0.0, 0.1 * scale), half * 0.95, Color(0.0, 0.0, 0.0, 0.1))
+	var slab := Rect2(base - Vector2(half, 0.0), Vector2(half * 2.0, 0.18 * scale))
+	draw_rect(slab, Color(0.98, 0.96, 0.93))
+	draw_rect(slab, Color(0.7, 0.63, 0.6), false, maxf(2.0, 0.03 * scale))
+	for i in placed:
+		var y := PLATE_Y + 0.18 + i * 0.22
+		_draw_layer(project(plate_x, y), ticket[i], ITEM_W * scale * 0.92, 0.24 * scale)
+
+
+func _draw_flash() -> void:
+	if _flash <= 0.0 or _flash_text.is_empty():
+		return
+	var font := ThemeService.font(800)
+	var alpha := clampf(_flash * 1.5, 0.0, 1.0)
+	var col := Color(0.2, 0.6, 0.34, alpha) if _flash_good else Color(0.85, 0.35, 0.3, alpha)
+	var w := minf(view_size.x - 24.0, 360.0 * _ui)
+	draw_string(
+		font,
+		Vector2((view_size.x - w) * 0.5, view_size.y * 0.3),
+		_flash_text,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		w,
+		maxi(18, int(30.0 * _ui)),
+		col
+	)

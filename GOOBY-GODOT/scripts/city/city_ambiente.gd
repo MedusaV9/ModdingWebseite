@@ -13,6 +13,17 @@ const LICHTER_AN_UNTER := 0.55
 const SFX_PAUSE_MIN_S := 18.0
 const SFX_PAUSE_MAX_S := 45.0
 
+## Beinahe-Unfall (M3-Vorgriff „Hupe-Reaktionen/Near-Miss“): so nah darf ein
+## Verkehrs-Gooby am Spielerauto vorbei, bevor er hupt …
+const NEAR_MISS_M := 7.0
+## … und so schnell muss der Spieler dabei mindestens sein (m/s).
+const NEAR_MISS_TEMPO := 4.0
+## Sperrzeit nach einer Hupe (s) — sonst hupt der ganze Block im Chor.
+const NEAR_MISS_PAUSE_S := 4.0
+
+## Geteilter Glow-Verlauf aller Ladenschilder (s. glow_textur()).
+static var _glow_tex: GradientTexture2D = null
+
 
 ## Tageslicht 0..1 über die Uhrzeit (weiche Rampen morgens/abends).
 static func tageslicht(stunde: float) -> float:
@@ -67,6 +78,18 @@ static func sfx_wahl(stunde: float, roll: float) -> String:
 	return "vogel" if roll < 0.6 else "hupe"
 
 
+## Schrift-/Leuchtfarbe der Ladenschilder: tagsüber Theme-Tinte, nachts das
+## warme Neon über der Markise (W4-P3-Ambiente „Glow bei Ladenschildern“).
+static func schild_farbe(lichter_an: bool) -> Color:
+	return Color(1.0, 0.94, 0.76) if lichter_an else AcTokens.INK
+
+
+## Beinahe-Unfall? Ein Verkehrs-Gooby hupt nur, wenn er wirklich knapp dran
+## war UND der Spieler in Fahrt ist — Schrittgeschwindigkeit ist kein Drama.
+static func ist_beinahe(abstand_m: float, tempo: float) -> bool:
+	return abstand_m <= NEAR_MISS_M and absf(tempo) >= NEAR_MISS_TEMPO
+
+
 ## Warmes Emissiv-Material für Laternen-Birnen/Autolichter (unshaded, damit
 ## es auch ohne Glow-Postprocess nachts „leuchtet“).
 static func leuchten_material(farbe: Color, energie := 1.6) -> StandardMaterial3D:
@@ -76,4 +99,41 @@ static func leuchten_material(farbe: Color, energie := 1.6) -> StandardMaterial3
 	mat.emission_enabled = true
 	mat.emission = farbe
 	mat.emission_energy_multiplier = energie
+	return mat
+
+
+## Weicher radialer Alpha-Verlauf, EINMAL gebaut und von allen Schildern
+## geteilt — der Ersatz für einen Fullscreen-Glow-Pass (mobil-Budget).
+static func glow_textur() -> GradientTexture2D:
+	if _glow_tex == null:
+		var verlauf := Gradient.new()
+		verlauf.set_offset(0, 0.0)
+		verlauf.set_color(0, Color(1, 1, 1, 1))
+		verlauf.set_offset(1, 1.0)
+		verlauf.set_color(1, Color(1, 1, 1, 0))
+		verlauf.add_point(0.45, Color(1, 1, 1, 0.72))
+		var tex := GradientTexture2D.new()
+		tex.gradient = verlauf
+		tex.width = 128
+		tex.height = 128
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		_glow_tex = tex
+	return _glow_tex
+
+
+## Material der Leucht-Tafel hinter einem Ladenschild: unshaded, radial
+## ausblendend und OHNE Tiefenschreiben, damit die Schrift davor sauber
+## bleibt (sonst z-fightet der Billboard-Quad mit dem Label3D).
+static func schild_glow_material(farbe: Color) -> StandardMaterial3D:
+	var mat := leuchten_material(farbe, 1.1)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mat.albedo_texture = glow_textur()
+	mat.emission_texture = glow_textur()
+	mat.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.billboard_keep_scale = true
+	mat.render_priority = -1
 	return mat

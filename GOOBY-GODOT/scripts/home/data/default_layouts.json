@@ -65,18 +65,18 @@
 			{ "item": "monsteraPlant", "at": [0, 6], "rot": 0 }
 		],
 		"garden": [
-			{ "item": "treeDefault", "at": [1, 2], "rot": 0 },
-			{ "item": "treeFat", "at": [11, 8], "rot": 0 },
-			{ "item": "gardenBench", "at": [5, 4], "rot": 0 },
-			{ "item": "flowerRed", "at": [3, 3], "rot": 0 },
-			{ "item": "flowerPurple", "at": [4, 3], "rot": 0 },
-			{ "item": "flowerYellow", "at": [10, 3], "rot": 0 },
+			{ "item": "treeDefault", "at": [0, 4], "rot": 0 },
+			{ "item": "treeFat", "at": [26, 16], "rot": 0 },
+			{ "item": "gardenBench", "at": [0, 22], "rot": 0 },
+			{ "item": "flowerRed", "at": [0, 9], "rot": 0 },
+			{ "item": "flowerPurple", "at": [1, 9], "rot": 0 },
+			{ "item": "flowerYellow", "at": [26, 9], "rot": 0 },
 			{ "item": "gardenBush", "at": [0, 0], "rot": 0 },
-			{ "item": "gardenBush", "at": [13, 0], "rot": 0 },
-			{ "item": "potLarge", "at": [9, 4], "rot": 0 },
-			{ "item": "grassTuft", "at": [2, 7], "rot": 0 },
-			{ "item": "grassTuft", "at": [8, 9], "rot": 0 },
-			{ "item": "grassTuft", "at": [12, 2], "rot": 0 }
+			{ "item": "gardenBush", "at": [27, 0], "rot": 0 },
+			{ "item": "potLarge", "at": [27, 4], "rot": 0 },
+			{ "item": "grassTuft", "at": [2, 23], "rot": 0 },
+			{ "item": "grassTuft", "at": [20, 23], "rot": 0 },
+			{ "item": "grassTuft", "at": [26, 2], "rot": 0 }
 		]
 	}
 }

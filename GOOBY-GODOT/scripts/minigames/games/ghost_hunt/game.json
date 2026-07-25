@@ -1,0 +1,10 @@
+{
+	"id": "ghostHunt",
+	"title_key": "mg.ghostHunt.title",
+	"scene": "res://scripts/minigames/games/ghost_hunt/ghost_hunt.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 28},
+	"target": 90,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

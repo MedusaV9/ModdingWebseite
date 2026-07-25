@@ -3,6 +3,7 @@
 	"rooms": [
 		{
 			"id": "living",
+			"walls": { "N": "strasse" },
 			"name_key": "home.raum.living",
 			"scene": "res://scenes/home/wohnzimmer.tscn",
 			"grid": [12, 10],
@@ -17,6 +18,7 @@
 		},
 		{
 			"id": "kitchen",
+			"walls": { "N": "garten" },
 			"name_key": "home.raum.kitchen",
 			"scene": "res://scenes/home/kueche.tscn",
 			"grid": [10, 8],
@@ -29,6 +31,7 @@
 		},
 		{
 			"id": "bathroom",
+			"walls": { "N": "garten" },
 			"name_key": "home.raum.bathroom",
 			"scene": "res://scenes/home/bad.tscn",
 			"grid": [8, 7],
@@ -41,6 +44,7 @@
 		},
 		{
 			"id": "bedroom",
+			"walls": { "N": "strasse" },
 			"name_key": "home.raum.bedroom",
 			"scene": "res://scenes/home/schlafzimmer.tscn",
 			"grid": [10, 8],
@@ -56,13 +60,13 @@
 			"id": "garden",
 			"name_key": "home.raum.garden",
 			"scene": "res://scenes/home/garten.tscn",
-			"grid": [14, 12],
+			"grid": [28, 24],
 			"floor_color": "#8CBE6B",
 			"wall_color": "#D9B88F",
 			"outdoor": true,
 			"windows": [],
 			"doors": [
-				{ "id": "garten_living", "to": "living", "to_door": "living_garten", "wall": "N", "offset": 6 }
+				{ "id": "garten_living", "to": "living", "to_door": "living_garten", "wall": "N", "offset": 13 }
 			]
 		}
 	]

@@ -1,0 +1,10 @@
+{
+	"id": "rocketRescue",
+	"title_key": "mg.rocketRescue.title",
+	"scene": "res://scripts/minigames/games/rocket_rescue/rocket_rescue.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 28},
+	"target": 115,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

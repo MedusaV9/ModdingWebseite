@@ -9,8 +9,18 @@ extends RefCounted
 ##   home.storage[], home.storageCapacity, home.movingDay,
 ##   home.nextUid (Instanz-uid-Zähler), home.flags{} (Erste-Male, z. B.
 ##   bedPlaced — Doc D §3.1 Bett-Bauquest).
+##
+## M2-ERWEITERUNG (additiv, KEIN Save-Version-Bump — Doc D §1.4):
+##   home.materials{} (Crafting-Material-Inventar, CraftState),
+##   home.blueprints[] (gekaufte Baupläne),
+##   home.shedStufe (0–3, ShedLogic → Lagerkapazität),
+##   home.garden{} (Garten 2.0, GardenState),
+##   home.goobay{} (Verkaufs-Cooldowns + Tagesnachfrage, GoobayState),
+##   home.lieferungen[] (bestellte Möbel, DeliveryCutscene).
+## Alte Saves ohne diese Keys heilen beim nächsten Load über normalize_slice.
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
+const EconomyLogic := preload("res://scripts/logic/economy.gd")
 
 const SLICE_ID := "home"
 const DEFAULT_UNLOCKED := ["hall", "living", "kitchen", "bathroom", "bedroom"]
@@ -36,10 +46,16 @@ static func default_slice() -> Dictionary:
 		"rooms": {},
 		"unlockedRooms": DEFAULT_UNLOCKED.duplicate(),
 		"storage": [],
-		"storageCapacity": 100,
+		"storageCapacity": ShedLogic.BASIS_KAPAZITAET,
 		"movingDay": false,
 		"nextUid": 1,
 		"flags": {},
+		"materials": {},
+		"blueprints": [],
+		"shedStufe": 0,
+		"garden": GardenState.default_garden(),
+		"goobay": GoobayState.default_goobay(),
+		"lieferungen": [],
 	}
 
 
@@ -63,7 +79,25 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 	for i in range(storage.size() - 1, -1, -1):
 		if not (storage[i] is Dictionary) or str(storage[i].get("item", "")) == "":
 			storage.remove_at(i)
+	_normalize_m2(home)
 	return home
+
+
+## M2-Keys nachziehen (additiv): alte Saves kannten sie noch nicht.
+## `storageCapacity` bleibt bewusst der gespeicherte Wert — nur ein
+## Shed-Upgrade (upgrade_shed) schreibt die ShedLogic-Kapazität hinein.
+static func _normalize_m2(home: Dictionary) -> void:
+	if not (home.get("materials") is Dictionary):
+		home["materials"] = {}
+	for key: Variant in home["materials"].keys():
+		home["materials"][key] = maxi(0, int(home["materials"][key]))
+	if not (home.get("blueprints") is Array):
+		home["blueprints"] = []
+	if not (home.get("lieferungen") is Array):
+		home["lieferungen"] = []
+	home["shedStufe"] = ShedLogic.clamp_stufe(int(home.get("shedStufe", 0)))
+	home["garden"] = GardenState.normalize(home.get("garden"))
+	home["goobay"] = GoobayState.normalize(home.get("goobay"))
 
 
 ## Erstbezug/Umzugstag: leere home.rooms werden mit dem liebevollen
@@ -112,7 +146,8 @@ static func load_room_grid(gs: Object, room_id: String) -> GridData:
 		FurnitureCatalog.defs(),
 		RoomDefs.room(room_id).get("grid", Vector2i(8, 8)),
 		RoomDefs.blocked_cells(RoomDefs.room(room_id)),
-		RoomDefs.wall_door_spans(RoomDefs.room(room_id))
+		RoomDefs.wall_door_spans(RoomDefs.room(room_id)),
+		RoomDefs.exterior_walls(RoomDefs.room(room_id))
 	)
 	var leftovers: Array = result["leftovers"]
 	if not leftovers.is_empty():
@@ -180,6 +215,32 @@ static func take_from_storage(gs: Object, item_id: String) -> bool:
 	)
 	gs.notify_slice_changed(SLICE_ID)
 	return true
+
+
+static func shed_stufe(gs: Object) -> int:
+	return ShedLogic.clamp_stufe(int(gs.get_value("home.shedStufe", 0)))
+
+
+## Shed bauen/aufwerten (Doc D §2.3): kostet Münzen, hebt die Lagerkapazität.
+## Der Aufrufer spielt die Bau-Animation; hier passiert nur die Daten-Seite.
+## Liefert die neue Stufe (unverändert = zu teuer oder schon Maximum).
+static func upgrade_shed(gs: Object) -> int:
+	var stufe := shed_stufe(gs)
+	var preis := ShedLogic.upgrade_preis(stufe)
+	var muenzen := int(gs.get_value("economy.coins", 0))
+	if not ShedLogic.kann_upgraden(stufe, muenzen):
+		return stufe
+	var ziel := stufe + 1
+	gs.update(
+		func(state: Dictionary) -> void:
+			var econ: Dictionary = state["economy"]
+			if not EconomyLogic.spend(econ, preis, "shed_upgrade"):
+				return
+			state[SLICE_ID]["shedStufe"] = ziel
+			state[SLICE_ID]["storageCapacity"] = ShedLogic.kapazitaet(ziel)
+	)
+	gs.notify_slice_changed(SLICE_ID)
+	return shed_stufe(gs)
 
 
 ## Nächste Instanz-uid ("i-000042"), Zähler wird persistiert.

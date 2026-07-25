@@ -1,0 +1,73 @@
+{
+  "phone": {
+    "titel": "IGohbie",
+    "zurueck": "Zurück",
+    "app": {
+      "taxi": "Taxi",
+      "taxi_text": "Ruft ein Taxi. Kommt, wenn es kommt.",
+      "guber": "Guber",
+      "guber_text": "Teurer. Schneller. Mit Manschettenknöpfen.",
+      "gooberando": "GOOBERANDO",
+      "gooberando_text": "Essen bestellen. Erstmal Goobyn.",
+      "kamera": "Kamera",
+      "kamera_text": "Fotomodus starten und knipsen.",
+      "kamera_gesperrt": "Dafür brauchst du erst die Kamera aus dem POW!",
+      "freunde": "Freunde",
+      "freunde_text": "Besuchen, spielen, winken.",
+      "goobypal": "GoobyPal",
+      "goobypal_text": "Münzen an Freunde schicken."
+    },
+    "fahrdienst": {
+      "rufen": "Wagen rufen ({preis} ᴳ)",
+      "countdown": "Ankunft in ca. {min}:{s} min",
+      "storno": "Doch nicht ({zurueck} ᴳ zurück)",
+      "fenster": "Noch {s} s zum Einsteigen!",
+      "einsteigen": "Einsteigen",
+      "storniert": "Storniert. Der Fahrer seufzt in Zeitlupe.",
+      "verpasst": "Weg ist er. Der nächste Wagen kostet wieder voll.",
+      "belegt_titel": "Ein Wagen ist schon unterwegs",
+      "belegt": "{dienst} fährt gerade für dich. Zwei Wagen wären albern.",
+      "rettung": "Gooby hat keine Energie mehr — das Taxi bringt ihn trotzdem heim."
+    },
+    "taxi": {
+      "slogan": "Taxi Goobsen & Söhne",
+      "pitch": "Zehn Münzen, ehrliche Arbeit, ein Duftbaum in Vanille. Wartezeit: ein paar Minuten, wie im echten Leben.",
+      "unterwegs": "Dein Taxi ist unterwegs",
+      "da": "Das Taxi steht vor der Tür!",
+      "bestellt": "Taxi gerufen. Der Fahrer setzt schon den Blinker.",
+      "fahrt": "Eingestiegen! Ab nach Hause."
+    },
+    "guber": {
+      "slogan": "GUBER — Premium Mobilität",
+      "pitch": "Fünfundzwanzig Münzen. Dafür ist der Wagen in unter zwei Minuten da und der Fahrer sagt „sehr wohl“.",
+      "unterwegs": "Ihr Guber nähert sich",
+      "da": "Ihr Guber wartet. Der Fahrer hält die Tür auf.",
+      "bestellt": "Sehr wohl. Der Wagen ist bestellt.",
+      "fahrt": "„Bitte sehr.“ Es riecht nach frischem Leder."
+    },
+    "kamera": {
+      "titel": "GOOBY-Knipse",
+      "text": "Startet den Fotomodus über der aktuellen Szene. Sucher, Auslöser, fertig.",
+      "starten": "Fotomodus starten",
+      "galerie": "Album",
+      "leer": "Noch kein Bild. Der Sensor ist ganz gespannt.",
+      "anzahl": "{n} Aufnahmen gespeichert"
+    },
+    "foto": {
+      "hinweis": "Sucher ausrichten und auslösen.",
+      "knipsen": "Auslösen",
+      "fertig": "‹ Fertig",
+      "gespeichert": "Klick! Jetzt sind es {n} Bilder.",
+      "fehler": "Das Bild wollte nicht auf die Platte."
+    },
+    "freunde": {
+      "fehlt": "Der Freunde-Screen ist gerade nicht verfügbar."
+    },
+    "goobypal": {
+      "titel": "GoobyPal",
+      "text": "Schick einem Freund ein paar Münzen. Ohne Hintergedanken. Meistens.",
+      "senden": "Senden",
+      "offline": "Offline — GoobyPal braucht Verbindung. Und Freunde."
+    }
+  }
+}

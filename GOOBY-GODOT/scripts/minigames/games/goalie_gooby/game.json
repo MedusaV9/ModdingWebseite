@@ -1,0 +1,10 @@
+{
+	"id": "goalieGooby",
+	"title_key": "mg.goalieGooby.title",
+	"scene": "res://scripts/minigames/games/goalie_gooby/goalie_gooby.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 26},
+	"target": 65,
+	"orientation": "landscape",
+	"supports_endless": true,
+	"energy_cost": 8
+}

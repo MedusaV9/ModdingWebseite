@@ -1,0 +1,10 @@
+{
+	"id": "starHopper",
+	"title_key": "mg.starHopper.title",
+	"scene": "res://scripts/minigames/games/star_hopper/star_hopper.tscn",
+	"coin_table": {"divisor": 9, "min": 4, "max": 26},
+	"target": 190,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

@@ -5,12 +5,21 @@
       "goobytheke": "GOOBYTHEKE",
       "gouhbus": "Dr.Dr.Professor.Dr.Dr.GOOUHBUS",
       "flughafen": "Flughafen",
-      "baumarkt": "Baumarkt",
+      "baumarkt": "Baumarkt Bodo Balken",
       "post": "Post",
+      "pow": "POW!",
+      "autohaus": "Autohaus Blechbert",
+      "wochenmarkt": "Wochenmarkt",
       "zuhause": "Zuhause",
       "bald_offen": "Bald geöffnet!",
+      "geschlossen": "Geschlossen. Steht so am Schild.",
+      "nur_samstag": "Nur samstags von 8 bis 14 Uhr. Der Markt schläft aus.",
       "verlassen": "‹ Raus",
       "item_erhalten": "Ab in die Tasche!"
+    },
+    "karte": {
+      "titel": "Stadtplan",
+      "du": "Du"
     },
     "fahren": {
       "bremse": "BREMSE",
@@ -19,13 +28,69 @@
       "betreten": "Betreten",
       "betreten_energie": "{ort} betreten? (Energie −{energie})",
       "betreten_frei": "{ort} betreten? (kostenlos)",
-      "zu_muede": "Gooby ist zu müde… Ruf ein Taxi über IGohbie!"
+      "zu_muede": "Gooby ist zu müde… Ruf ein Taxi über IGohbie!",
+      "beinahe": "Uff! Das war knapp.",
+      "beinahe_hupe": "HUUUP! Der andere Gooby winkt. Vermutlich freundlich."
     },
     "laden": {
       "titel": "Einkaufen",
       "coins": "Du hast {coins} Münzen",
       "kaufen": "{preis} ᴳ",
       "rezept_noetig": "Nur mit Rezept!"
+    },
+    "pow": {
+      "sheet_titel": "POW! — Alles, was Krach macht",
+      "kamera_titel": "Die GOOBY-Knipse",
+      "kamera_text": "Eine echte Kamera. Schaltet den Fotomodus frei — ab dann knipst du überall, wo du gerade stehst.",
+      "kamera_gate": "Schaltet Fotomodus + Kamera-App frei",
+      "kamera_hast_du": "Hast du schon. Bäm nickt anerkennend.",
+      "kamera_gekauft": "Kamera gekauft! Die Kamera-App wartet im IGohbie.",
+      "angebote_titel": "Heutige Angebote",
+      "angebote_neu": "Drei Stück. Neu in {stunden} h.",
+      "rabatt": "−{rabatt} % · sonst {alt} ᴳ"
+    },
+    "post": {
+      "sheet_titel": "Post — Schalter 1 von 1",
+      "titel": "Womit kann ich dienen?",
+      "paket": "Paketschalter",
+      "paket_text": "Ein Paket an einen Freund schicken. Frau Zettel wiegt es dreimal, sicher ist sicher.",
+      "brief": "Briefschalter",
+      "brief_text": "Ein Brief geht schneller. Behauptet die Post.",
+      "abgeben": "Abgeben",
+      "bald": "Der Versand an Freunde kommt bald — Frau Zettel übt noch das Sortieren.",
+      "archiv": "Postkarten-Archiv",
+      "archiv_leer": "Noch keine Postkarte da. Gooby muss erst mal verreisen.",
+      "archiv_zahl": "{n} Postkarten im Kasten. Alle mit Eselsohr."
+    },
+    "autohaus": {
+      "sheet_titel": "Autohaus Blechbert",
+      "stats": "Tempo {tempo} · Antritt {start} · Lenkung {lenkung}",
+      "farbe": "Kaufen in {farbe}",
+      "faehrt_gerade": "fährst du gerade",
+      "im_besitz": "Steht in deiner Einfahrt",
+      "fahren": "Diesen fahren",
+      "gekauft_toast": "Glückwunsch! Der Schlüssel klappert schon in deiner Tasche."
+    },
+    "baumarkt": {
+      "sheet_titel": "Baumarkt Bodo Balken",
+      "material": "Material",
+      "bauplaene": "Baupläne",
+      "werkstatt": "Baupläne schaltest du in der Werkstatt frei — hier gibt es nur das Papier.",
+      "vorrat": "du hast {n}",
+      "gekauft": "Hast du",
+      "bauplan_toast": "Bauplan eingerollt. Die Werkstatt kennt ihn jetzt."
+    },
+    "markt": {
+      "sheet_titel": "Wochenmarkt — Ernte verkaufen",
+      "schild_titel": "Info-Schild",
+      "schild_text": "Samstags von 8 bis 14 Uhr. Wir zahlen 15 % mehr als der Komposthaufen.",
+      "erstes_mal": "Aber Achtung: Der Markt ist klein. Jedes verkaufte Stück drückt den Preis ein bisschen — höchstens bis zur Hälfte. Nächste Woche zahlt er wieder voll.",
+      "nichts_dabei": "Dein Korb ist leer. Komm wieder, wenn im Garten was reif ist!",
+      "vorrat": "{n} im Korb",
+      "gedrueckt": "gedrückt, voll wären {voll} ᴳ",
+      "verkauf_eins": "Eins verkaufen",
+      "verkauf_alle": "Alle {n}",
+      "verkauft": "{n} verkauft — {coins} Münzen klimpern in die Tasche."
     }
   },
   "travel": {

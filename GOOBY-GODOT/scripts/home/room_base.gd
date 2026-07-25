@@ -16,6 +16,11 @@ const WALL_HEIGHT := 2.5
 const WALL_THICKNESS := 0.1
 const FENCE_HEIGHT := 0.55
 const REBAKE_DEBOUNCE_S := 0.5
+## Wand-Ausschnitt eines Außenfensters (Doc D §1.2): genau so hoch, dass das
+## Fenster-Modul (FurnitureNode-Lift 1.35 m) darin sitzt und der Blick auf das
+## Straßen-Diorama frei ist.
+const FENSTER_Y0 := 1.28
+const FENSTER_Y1 := 2.3
 
 @export var room_id := "living"
 
@@ -31,9 +36,11 @@ var _spawn_door_id := ""
 var _gooby: GoobyHome
 var _doors: Dictionary = {}
 var _furniture: Dictionary = {}
+var _dioramas: Dictionary = {}
 var _nav_region: NavigationRegion3D
 var _blockers: Node3D
 var _grid_mount: Node3D
+var _wall_mount: Node3D
 var _overlay: GridOverlay
 var _camera_rig: HomeCameraRig
 var _build_mode: BuildMode
@@ -43,6 +50,7 @@ var _choice: Control
 var _rebake_pending := false
 var _uid_seq := 0
 var _fenster_energie := HomeLicht.FENSTER_TAG
+var _fenster_stand := ""
 
 
 func _ready() -> void:
@@ -62,6 +70,9 @@ func _ready() -> void:
 	_build_camera()
 	_build_ui()
 	_spawn_gooby()
+	# Garten 2.0 (Doc D §6): Beete/Bauten/Sammel-Spots liegen NICHT im
+	# Möbel-Grid, sondern im eigenen Garten-Grid — der Host baut sie auf.
+	GardenHost.attach_to(self)
 	_announce_moving_day()
 	_emit_ready_for_reveal.call_deferred()
 
@@ -87,6 +98,21 @@ func room_def() -> Dictionary:
 	return _room_def
 
 
+## UI-Ebene des Raums (Panels von Werkstatt/Goobay/Garten hängen sich hier ein).
+func ui_layer() -> CanvasLayer:
+	return _ui_layer
+
+
+func camera_rig() -> HomeCameraRig:
+	return _camera_rig
+
+
+## Navmesh-Blocker-Mount (Garten-Bauten hängen sich hier ein, damit Gooby
+## nicht durch Shed und Gewächshaus läuft).
+func blockers() -> Node3D:
+	return _blockers
+
+
 func open_build_mode() -> void:
 	_build_mode.open()
 
@@ -101,22 +127,26 @@ func say(text: String) -> void:
 
 
 func set_furniture_visible(uid: String, furniture_visible: bool) -> void:
-	if _furniture.has(uid):
-		(_furniture[uid] as Node3D).visible = furniture_visible
+	var node: Variant = _furniture.get(uid)
+	if is_instance_valid(node) and node is Node3D:
+		(node as Node3D).visible = furniture_visible
 
 
 ## Trägerhöhe für SURFACE-Items auf einer Zelle.
 func surface_height_at(cell: Vector2i) -> float:
-	var uid := grid.item_at(cell, GridData.Layer.FLOOR)
-	if uid != "" and _furniture.has(uid):
-		return (_furniture[uid] as FurnitureNode).top_y()
+	var node: Variant = _furniture.get(grid.item_at(cell, GridData.Layer.FLOOR))
+	if is_instance_valid(node) and node is FurnitureNode:
+		return (node as FurnitureNode).top_y()
 	return 0.4
 
 
 ## Alle Möbel-Nodes aus dem Grid neu aufbauen (nach Bau-Commits).
 func rebuild_furniture() -> void:
-	for uid: String in _furniture:
-		(_furniture[uid] as Node).queue_free()
+	# Beim Szenen-Abbau kann ein Möbel-Node schon weg sein, während ein
+	# nachgereichtes `furniture_changed` noch hier landet — nie hart casten.
+	for node: Variant in _furniture.values():
+		if is_instance_valid(node) and node is Node:
+			(node as Node).queue_free()
 	_furniture = {}
 	var surface_entries: Array = []
 	for entry: Dictionary in grid.to_items_array():
@@ -129,7 +159,28 @@ func rebuild_furniture() -> void:
 			_spawn_furniture(entry, def)
 	for entry: Dictionary in surface_entries:
 		_spawn_furniture(entry, FurnitureCatalog.def(str(entry["item"])))
+	# Ein neu gehängtes Außenfenster schneidet ein Loch in die Wand — deshalb
+	# nach jedem Bau-Commit prüfen, ob die Wände neu gesetzt werden müssen.
+	if _fenster_signatur() != _fenster_stand:
+		_build_walls()
+	_rebuild_dioramas()
 	request_rebake()
+
+
+## Fenster-Dioramen (Doc D §1.2): pro Außenwand höchstens eins, und nur
+## solange dort wirklich ein Fenster hängt — nach jedem Bau-Commit neu.
+func _rebuild_dioramas() -> void:
+	for diorama: Variant in _dioramas.values():
+		if is_instance_valid(diorama) and diorama is Node:
+			(diorama as Node).queue_free()
+	_dioramas = {}
+	var exterior := RoomDefs.exterior_walls(_room_def)
+	for wall: String in exterior:
+		var diorama := StreetDiorama.attach_if_needed(
+			self, grid, _world_size(), wall, str(exterior[wall])
+		)
+		if diorama != null:
+			_dioramas[wall] = diorama
 
 
 ## Navmesh-Rebake, debounced (Doc F §7). Synchron gebaked (Räume sind klein;
@@ -289,6 +340,15 @@ func _build_nav_and_floor() -> void:
 
 
 func _build_walls() -> void:
+	if _wall_mount != null:
+		# Erst umbenennen, sonst bekommt der neue Mount einen Suffix-Namen
+		# (der alte hängt bis zum Frame-Ende noch im Baum).
+		_wall_mount.name = "WallsAlt"
+		_wall_mount.queue_free()
+	_wall_mount = Node3D.new()
+	_wall_mount.name = "Walls"
+	add_child(_wall_mount)
+	_fenster_stand = _fenster_signatur()
 	var spans: Dictionary = RoomDefs.wall_door_spans(_room_def)
 	# S-Wand (Kameraseite) bleibt innen offen, damit die Sicht frei ist.
 	var walls: Array[String] = ["N", "W", "E"]
@@ -297,21 +357,69 @@ func _build_walls() -> void:
 	for wall: String in walls:
 		_build_wall_segments(wall, spans.get(wall, []))
 	for window: Dictionary in _room_def.get("windows", []):
-		_build_window(window)
+		if not _fenster_verdeckt(window):
+			_build_window(window)
 
 
+## Wand aus Segmenten: Türen und Außenfenster lassen jeweils eine Öffnung
+## frei (Fenster nur in Brüstungshöhe, damit das Diorama sichtbar wird).
 func _build_wall_segments(wall: String, door_spans: Array) -> void:
 	var width := grid.wall_width(wall)
 	var height := FENCE_HEIGHT if _is_outdoor() else WALL_HEIGHT
-	var spans_sorted := door_spans.duplicate()
-	spans_sorted.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var oeffnungen: Array[Dictionary] = []
+	for span: Array in door_spans:
+		var oben := height if _is_outdoor() else DoorTransition.DOOR_HEIGHT
+		oeffnungen.append({"von": int(span[0]), "bis": int(span[1]), "y0": 0.0, "y1": oben})
+	for span: Array in _fenster_spans(wall):
+		oeffnungen.append(
+			{"von": int(span[0]), "bis": int(span[1]), "y0": FENSTER_Y0, "y1": FENSTER_Y1}
+		)
+	oeffnungen.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["von"] < b["von"])
 	var cursor := 0
-	for span: Array in spans_sorted:
-		_add_wall_box(wall, cursor, int(span[0]), 0.0, height)
-		if not _is_outdoor():
-			_add_wall_box(wall, int(span[0]), int(span[1]), DoorTransition.DOOR_HEIGHT, height)
-		cursor = int(span[1])
+	for loch: Dictionary in oeffnungen:
+		_add_wall_box(wall, cursor, int(loch["von"]), 0.0, height)
+		_add_wall_box(wall, int(loch["von"]), int(loch["bis"]), 0.0, float(loch["y0"]))
+		_add_wall_box(wall, int(loch["von"]), int(loch["bis"]), float(loch["y1"]), height)
+		cursor = maxi(cursor, int(loch["bis"]))
 	_add_wall_box(wall, cursor, width, 0.0, height)
+
+
+## Fingerabdruck aller Fenster-Ausschnitte — ändert er sich, müssen die
+## Wandsegmente neu gebaut werden.
+func _fenster_signatur() -> String:
+	var teile: Array[String] = []
+	for wall: String in GridData.WALLS:
+		for span: Array in _fenster_spans(wall):
+			teile.append("%s%d-%d" % [wall, int(span[0]), int(span[1])])
+	return "|".join(teile)
+
+
+## Spannen aller Außenfenster (WALL-Items mit `exterior`) auf einer Wand.
+func _fenster_spans(wall: String) -> Array[Array]:
+	var spans: Array[Array] = []
+	var offset := 0
+	while offset < grid.wall_width(wall):
+		var uid := grid.wall_item_at(wall, offset)
+		if uid == "":
+			offset += 1
+			continue
+		var def: Dictionary = grid.get_item(uid).get("def", {})
+		var span := maxi(1, int(def.get("wall_size", 1)))
+		if bool(def.get("exterior", false)):
+			spans.append([offset, offset + span])
+		offset += span
+	return spans
+
+
+## Steht auf der Fensterattrappe aus rooms.json schon ein echtes Fenster?
+func _fenster_verdeckt(window: Dictionary) -> bool:
+	var wall := str(window.get("wall", "N"))
+	var von := int(window.get("offset", 0))
+	var bis := von + int(window.get("size", 2))
+	for span: Array in _fenster_spans(wall):
+		if von < int(span[1]) and bis > int(span[0]):
+			return true
+	return false
 
 
 ## Wand-Quader von Zelle `from` bis `to` (exklusiv), von y0 bis y1.
@@ -344,8 +452,8 @@ func _add_wall_box(wall: String, from: int, to: int, y0: float, y1: float) -> vo
 			mesh.position = Vector3(-WALL_THICKNESS * 0.5, y, mid)
 		"E":
 			mesh.position = Vector3(size.x + WALL_THICKNESS * 0.5, y, mid)
-	mesh.name = "Wall_%s_%d_%d" % [wall, from, to]
-	add_child(mesh)
+	mesh.name = "Wall_%s_%d_%d_%d" % [wall, from, to, int(y0 * 100.0)]
+	_wall_mount.add_child(mesh)
 
 
 ## Fenster-Platzhalter: heller Emissive-Quad AUF der Wand (Doc D §1.2 —
@@ -388,7 +496,7 @@ func _build_window(window: Dictionary) -> void:
 	frame.material_override = _flat_material(Color(0.95, 0.9, 0.82))
 	frame.position = Vector3(0.0, 0.0, -0.03)
 	mesh.add_child(frame)
-	add_child(mesh)
+	_wall_mount.add_child(mesh)
 
 
 func _build_doors() -> void:

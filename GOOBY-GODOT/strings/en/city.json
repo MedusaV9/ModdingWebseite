@@ -5,12 +5,21 @@
       "goobytheke": "GOOBYTHEKE",
       "gouhbus": "Dr.Dr.Professor.Dr.Dr.GOOUHBUS",
       "flughafen": "Airport",
-      "baumarkt": "Hardware Store",
+      "baumarkt": "Bodo Beam's Hardware",
       "post": "Post Office",
+      "pow": "POW!",
+      "autohaus": "Tinbert Motors",
+      "wochenmarkt": "Farmers' Market",
       "zuhause": "Home",
       "bald_offen": "Opening soon!",
+      "geschlossen": "Closed. Says so on the sign.",
+      "nur_samstag": "Saturdays only, 8 am to 2 pm. The market sleeps in.",
       "verlassen": "‹ Leave",
       "item_erhalten": "Into the bag it goes!"
+    },
+    "karte": {
+      "titel": "City map",
+      "du": "You"
     },
     "fahren": {
       "bremse": "BRAKE",
@@ -19,13 +28,69 @@
       "betreten": "Enter",
       "betreten_energie": "Enter {ort}? (Energy −{energie})",
       "betreten_frei": "Enter {ort}? (free)",
-      "zu_muede": "Gooby is too tired… Call a taxi via IGohbie!"
+      "zu_muede": "Gooby is too tired… Call a taxi via IGohbie!",
+      "beinahe": "Phew! That was close.",
+      "beinahe_hupe": "HOOONK! The other Gooby waves. Probably in a friendly way."
     },
     "laden": {
       "titel": "Shopping",
       "coins": "You have {coins} coins",
       "kaufen": "{preis} ᴳ",
       "rezept_noetig": "Prescription only!"
+    },
+    "pow": {
+      "sheet_titel": "POW! — Everything that makes noise",
+      "kamera_titel": "The GOOBY Snapper",
+      "kamera_text": "A real camera. Unlocks photo mode — from then on you can snap a picture wherever you stand.",
+      "kamera_gate": "Unlocks photo mode + camera app",
+      "kamera_hast_du": "You already have it. Bam nods approvingly.",
+      "kamera_gekauft": "Camera bought! The camera app is waiting in your IGohbie.",
+      "angebote_titel": "Today's deals",
+      "angebote_neu": "Three of them. New in {stunden} h.",
+      "rabatt": "−{rabatt} % · normally {alt} ᴳ"
+    },
+    "post": {
+      "sheet_titel": "Post Office — counter 1 of 1",
+      "titel": "How may I help?",
+      "paket": "Parcel counter",
+      "paket_text": "Send a parcel to a friend. Mrs. Slip weighs it three times, just to be sure.",
+      "brief": "Letter counter",
+      "brief_text": "A letter is faster. The post office claims.",
+      "abgeben": "Hand it in",
+      "bald": "Sending to friends is coming soon — Mrs. Slip is still practising her sorting.",
+      "archiv": "Postcard archive",
+      "archiv_leer": "No postcards yet. Gooby has to travel first.",
+      "archiv_zahl": "{n} postcards in the box. All with dog-eared corners."
+    },
+    "autohaus": {
+      "sheet_titel": "Tinbert Motors",
+      "stats": "Top speed {tempo} · Pull {start} · Steering {lenkung}",
+      "farbe": "Buy in {farbe}",
+      "faehrt_gerade": "you drive this one",
+      "im_besitz": "Parked in your driveway",
+      "fahren": "Drive this one",
+      "gekauft_toast": "Congratulations! The key is already jingling in your pocket."
+    },
+    "baumarkt": {
+      "sheet_titel": "Bodo Beam's Hardware",
+      "material": "Materials",
+      "bauplaene": "Blueprints",
+      "werkstatt": "Blueprints are unlocked in the workshop — here you only get the paper.",
+      "vorrat": "you have {n}",
+      "gekauft": "Owned",
+      "bauplan_toast": "Blueprint rolled up. The workshop knows it now."
+    },
+    "markt": {
+      "sheet_titel": "Farmers' Market — sell your harvest",
+      "schild_titel": "Info sign",
+      "schild_text": "Saturdays, 8 am to 2 pm. We pay 15 % more than the compost bin.",
+      "erstes_mal": "But careful: the market is small. Every item you sell pushes the price down a little — down to half at most. Next week it pays full price again.",
+      "nichts_dabei": "Your basket is empty. Come back when something is ripe in the garden!",
+      "vorrat": "{n} in the basket",
+      "gedrueckt": "pushed down, full would be {voll} ᴳ",
+      "verkauf_eins": "Sell one",
+      "verkauf_alle": "All {n}",
+      "verkauft": "Sold {n} — {coins} coins jingle into your pocket."
     }
   },
   "travel": {

@@ -1,0 +1,73 @@
+{
+  "phone": {
+    "titel": "IGohbie",
+    "zurueck": "Back",
+    "app": {
+      "taxi": "Taxi",
+      "taxi_text": "Calls a taxi. It arrives when it arrives.",
+      "guber": "Guber",
+      "guber_text": "Pricier. Faster. With cufflinks.",
+      "gooberando": "GOOBERANDO",
+      "gooberando_text": "Order food. Gooby first.",
+      "kamera": "Camera",
+      "kamera_text": "Start photo mode and snap away.",
+      "kamera_gesperrt": "You need the camera from POW! first.",
+      "freunde": "Friends",
+      "freunde_text": "Visit, play, wave.",
+      "goobypal": "GoobyPal",
+      "goobypal_text": "Send coins to friends."
+    },
+    "fahrdienst": {
+      "rufen": "Call a car ({preis} ᴳ)",
+      "countdown": "Arriving in approx. {min}:{s} min",
+      "storno": "Never mind ({zurueck} ᴳ back)",
+      "fenster": "{s} s left to hop in!",
+      "einsteigen": "Hop in",
+      "storniert": "Cancelled. The driver sighs in slow motion.",
+      "verpasst": "And off it went. The next car costs full price again.",
+      "belegt_titel": "A car is already on its way",
+      "belegt": "{dienst} is driving for you right now. Two cars would be silly.",
+      "rettung": "Gooby is out of energy — the taxi will still take him home."
+    },
+    "taxi": {
+      "slogan": "Goobsen & Sons Taxi",
+      "pitch": "Ten coins, honest work, a vanilla air freshener. Waiting time: a few minutes, just like real life.",
+      "unterwegs": "Your taxi is on its way",
+      "da": "The taxi is at the door!",
+      "bestellt": "Taxi called. The driver is already indicating.",
+      "fahrt": "Hopped in! Off we go home."
+    },
+    "guber": {
+      "slogan": "GUBER — Premium Mobility",
+      "pitch": "Twenty-five coins. In return the car is here in under two minutes and the driver says \"very well\".",
+      "unterwegs": "Your Guber is approaching",
+      "da": "Your Guber is waiting. The driver holds the door.",
+      "bestellt": "Very well. The car has been ordered.",
+      "fahrt": "\"There you are.\" It smells of fresh leather."
+    },
+    "kamera": {
+      "titel": "GOOBY Snapper",
+      "text": "Starts photo mode over the current scene. Viewfinder, shutter, done.",
+      "starten": "Start photo mode",
+      "galerie": "Album",
+      "leer": "No pictures yet. The sensor is quite excited.",
+      "anzahl": "{n} shots saved"
+    },
+    "foto": {
+      "hinweis": "Line up the viewfinder and shoot.",
+      "knipsen": "Shoot",
+      "fertig": "‹ Done",
+      "gespeichert": "Click! That makes {n} pictures.",
+      "fehler": "The picture refused to hit the disk."
+    },
+    "freunde": {
+      "fehlt": "The friends screen is unavailable right now."
+    },
+    "goobypal": {
+      "titel": "GoobyPal",
+      "text": "Send a friend a few coins. No strings attached. Mostly.",
+      "senden": "Send",
+      "offline": "Offline — GoobyPal needs a connection. And friends."
+    }
+  }
+}

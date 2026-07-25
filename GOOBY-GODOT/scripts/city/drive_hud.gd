@@ -3,13 +3,17 @@ extends Control
 ## Fahr-HUD in der Stadt (W3a CITY): Links/Rechts-Daumen-Zonen (halbe
 ## Schirmhälften, Web g7-drive-Port), Brems-Knopf unten-mittig,
 ## Rückwärts-Toggle daneben, „Nach Hause“-Knopf (IMMER kostenlos, oben
-## rechts) und der Parkplatz-Prompt („<Ort> betreten? Energie −N“).
+## rechts), der Parkplatz-Prompt („<Ort> betreten? Energie −N“) und die
+## Minimap mit den Orts-Pins (oben links, `minimap`).
 
 signal steer_changed(value: float)
 signal brake_changed(on: bool)
 signal reverse_changed(on: bool)
 signal nach_hause_pressed
 signal betreten_pressed(ort_id: String)
+
+## Minimap oben links — CityScene setzt `minimap.karte` und füttert sie.
+var minimap: CityMinimap
 
 var _held_left := false
 var _held_right := false
@@ -55,6 +59,10 @@ func _ready() -> void:
 		Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16
 	)
 	_home_btn.pressed.connect(func() -> void: nach_hause_pressed.emit())
+	minimap = CityMinimap.new()
+	minimap.name = "Minimap"
+	minimap.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 16)
+	add_child(minimap)
 	_baue_prompt()
 
 

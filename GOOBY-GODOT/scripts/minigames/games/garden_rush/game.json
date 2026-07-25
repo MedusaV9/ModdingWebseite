@@ -1,0 +1,10 @@
+{
+	"id": "gardenRush",
+	"title_key": "mg.gardenRush.title",
+	"scene": "res://scripts/minigames/games/garden_rush/garden_rush.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 25},
+	"target": 65,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

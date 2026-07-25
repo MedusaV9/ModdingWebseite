@@ -1,0 +1,10 @@
+{
+	"id": "lanternFloat",
+	"title_key": "mg.lanternFloat.title",
+	"scene": "res://scripts/minigames/games/lantern_float/lantern_float.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 24},
+	"target": 75,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

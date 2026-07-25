@@ -1,0 +1,10 @@
+{
+	"id": "trampoline",
+	"title_key": "mg.trampoline.title",
+	"scene": "res://scripts/minigames/games/trampoline/trampoline.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 26},
+	"target": 105,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

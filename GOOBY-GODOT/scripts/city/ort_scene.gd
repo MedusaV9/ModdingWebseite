@@ -20,6 +20,8 @@ var game_state_override: Object
 var rig: GoobyRig
 var voice: GoobyVoice
 var dialog: OrtDialogView
+## true, wenn dieser Besuch der ERSTE in diesem Ort war (Erste-Male-Karten).
+var ist_erstbesuch := false
 
 var _ui: Control
 var _sheet: PanelSheet
@@ -27,6 +29,7 @@ var _toast: Node
 
 
 func _ready() -> void:
+	ist_erstbesuch = OrtKatalog.besuch_merken(game_state(), ort_id)
 	_baue_raum()
 	_baue_innenraum()
 	_baue_npc()
@@ -67,14 +70,29 @@ func _npc_konfig() -> Dictionary:
 	return {"tint": Color.WHITE, "emotion": "happy", "pos": Vector3(0.0, 0.0, -2.2)}
 
 
-## Laden-Sheet öffnen (auch via Dialog-Effekt "laden").
+## Hook: true = Platz unter freiem Himmel (Wochenmarkt) statt Ladenraum —
+## keine Rückwand, Wiesenboden, heller Himmel, schwächere Vignette.
+func _ist_draussen() -> bool:
+	return false
+
+
+## Laden-Sheet öffnen (auch via Dialog-Effekt "laden"). M2-Orte mit eigenem
+## Händler-UI überschreiben das und rufen `zeige_sheet()` mit ihrem Inhalt.
 func oeffne_laden() -> void:
 	if _sortiment_pfad().is_empty():
 		return
 	var inhalt := HaendlerSheet.new()
 	inhalt.gs = game_state()
 	inhalt.waren = CitySortiment.laden(_sortiment_pfad())
-	_sheet.set_title(I18nService.t("city.laden.titel"))
+	zeige_sheet(I18nService.t("city.laden.titel"), inhalt)
+
+
+## Beliebigen Inhalt im Ort-PanelSheet zeigen (ein Sheet je Ort, wird neu
+## befüllt). `open()` ist idempotent — ein zweiter Ruf blättert nur um.
+func zeige_sheet(titel: String, inhalt: Control) -> void:
+	if _sheet == null:
+		return
+	_sheet.set_title(titel)
 	_sheet.add_content(inhalt)
 	_sheet.open()
 
@@ -103,13 +121,14 @@ func _prop(pfad: String, pos: Vector3, rot_grad: float, groesse: float) -> Node3
 
 
 func _baue_raum() -> void:
+	var draussen := _ist_draussen()
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.98, 0.94, 0.87)
+	e.background_color = Color(0.55, 0.74, 0.93) if draussen else Color(0.98, 0.94, 0.87)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(1.0, 0.97, 0.92)
-	e.ambient_light_energy = 0.9
+	e.ambient_light_energy = 1.0 if draussen else 0.9
 	env.environment = e
 	add_child(env)
 	var licht := DirectionalLight3D.new()
@@ -119,19 +138,20 @@ func _baue_raum() -> void:
 	var bm := PlaneMesh.new()
 	bm.size = Vector2(14.0, 10.0)
 	var bmat := StandardMaterial3D.new()
-	bmat.albedo_color = Color(0.87, 0.77, 0.62)
+	bmat.albedo_color = Color(0.62, 0.76, 0.52) if draussen else Color(0.87, 0.77, 0.62)
 	bm.material = bmat
 	boden.mesh = bm
 	add_child(boden)
-	var wand := MeshInstance3D.new()
-	var wm := BoxMesh.new()
-	wm.size = Vector3(14.0, 5.0, 0.3)
-	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = Color(0.96, 0.90, 0.80)
-	wm.material = wmat
-	wand.mesh = wm
-	wand.position = Vector3(0.0, 2.5, -4.0)
-	add_child(wand)
+	if not draussen:
+		var wand := MeshInstance3D.new()
+		var wm := BoxMesh.new()
+		wm.size = Vector3(14.0, 5.0, 0.3)
+		var wmat := StandardMaterial3D.new()
+		wmat.albedo_color = Color(0.96, 0.90, 0.80)
+		wm.material = wmat
+		wand.mesh = wm
+		wand.position = Vector3(0.0, 2.5, -4.0)
+		add_child(wand)
 	var kamera := Camera3D.new()
 	kamera.position = Vector3(0.0, 2.0, 4.2)
 	kamera.rotation_degrees = Vector3(-12.0, 0.0, 0.0)
@@ -162,6 +182,7 @@ func _baue_ui() -> void:
 	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
 	_ui.theme = ThemeService.theme()
 	layer.add_child(_ui)
+	_baue_vignette()
 	dialog = OrtDialogView.new()
 	dialog.voice = voice
 	_ui.add_child(dialog)
@@ -182,6 +203,39 @@ func _baue_ui() -> void:
 	layer.add_child(_toast)
 	# ToastLayer setzt in _ready nur Anker — nach add_child Full-Rect ziehen.
 	_toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+## Sanfte Vignette über dem 3D-Bild (W4-P3-Ambiente, mobil-tauglich): EINE
+## radiale GradientTexture2D, kein Shader und kein Post-Process-Pass — auf
+## Handys kostet das genau ein zusätzliches Blit. Farbe = Theme-Tinte
+## (AcTokens.INK), Stärke draußen halb so hoch wie im Laden.
+func _baue_vignette() -> void:
+	var staerke := 0.16 if _ist_draussen() else 0.32
+	var verlauf := Gradient.new()
+	var tinte := AcTokens.INK
+	verlauf.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	verlauf.colors = PackedColorArray(
+		[
+			Color(tinte.r, tinte.g, tinte.b, 0.0),
+			Color(tinte.r, tinte.g, tinte.b, 0.0),
+			Color(tinte.r, tinte.g, tinte.b, staerke),
+		]
+	)
+	var textur := GradientTexture2D.new()
+	textur.gradient = verlauf
+	textur.fill = GradientTexture2D.FILL_RADIAL
+	textur.fill_from = Vector2(0.5, 0.5)
+	textur.fill_to = Vector2(1.0, 0.5)
+	textur.width = 192
+	textur.height = 192
+	var rect := TextureRect.new()
+	rect.name = "Vignette"
+	rect.texture = textur
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(rect)
 
 
 func _starte_dialog() -> void:

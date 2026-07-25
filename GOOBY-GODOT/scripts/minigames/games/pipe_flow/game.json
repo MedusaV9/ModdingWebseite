@@ -1,0 +1,10 @@
+{
+	"id": "pipeFlow",
+	"title_key": "mg.pipeFlow.title",
+	"scene": "res://scripts/minigames/games/pipe_flow/pipe_flow.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 25},
+	"target": 100,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

@@ -113,7 +113,9 @@ func _build_ui() -> void:
 	_grid.add_theme_constant_override("h_separation", 16)
 	_grid.add_theme_constant_override("v_separation", 16)
 	scroll.add_child(_grid)
-	for game in MinigameRegistry.GAMES:
+	# MG-3: all_games() statt GAMES — sonst fehlen alle per game.json-Manifest
+	# entdeckten Spiele (W6-Registry) im Grid.
+	for game in MinigameRegistry.all_games():
 		_grid.add_child(_build_tile(game))
 
 

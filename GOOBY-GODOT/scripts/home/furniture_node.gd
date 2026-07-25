@@ -80,23 +80,36 @@ func set_light_enabled(enabled: bool) -> void:
 
 
 static func _build(def: Dictionary, item_uid: String) -> FurnitureNode:
-	var path := FurnitureCatalog.glb_path(def)
-	if not ResourceLoader.exists(path):
-		push_warning("Möbel-GLB fehlt: %s (%s)" % [path, def.get("id", "?")])
-		return null
-	var scene: PackedScene = load(path)
-	if scene == null:
+	var model := _make_model(def)
+	if model == null:
 		return null
 	var node := FurnitureNode.new()
 	node.uid = item_uid
 	node.item_def = def
 	node.name = "Furniture_%s" % item_uid
-	node._model = scene.instantiate()
+	node._model = model
 	node.add_child(node._model)
 	node._fit_model(def)
 	if bool(def.get("can_toggle_light", false)):
 		node._attach_light()
 	return node
+
+
+## Modell-Quelle einer Def: prozedurales Prop (`proc`, z. B. Fenster) oder
+## Katalog-GLB. null = nichts Zeichenbares (weich degradieren).
+static func _make_model(def: Dictionary) -> Node3D:
+	var proc := str(def.get("proc", ""))
+	if proc == "fenster":
+		return HomeProps.fenster(int(def.get("wall_size", 2)), bool(def.get("exterior", false)))
+	if proc != "":
+		push_warning("Unbekanntes Prop: %s (%s)" % [proc, def.get("id", "?")])
+		return null
+	var path := FurnitureCatalog.glb_path(def)
+	if not ResourceLoader.exists(path):
+		push_warning("Möbel-GLB fehlt: %s (%s)" % [path, def.get("id", "?")])
+		return null
+	var scene: PackedScene = load(path)
+	return scene.instantiate() if scene != null else null
 
 
 func _fit_model(def: Dictionary) -> void:
