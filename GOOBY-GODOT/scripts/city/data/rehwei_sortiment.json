@@ -1,0 +1,24 @@
+{
+  "kommentar": "REHWEI-Lebensmittel-Sortiment (Doc E §2.3). IDs + Preise + Stat-Deltas 1:1 aus der Web-Referenz FOOD_TABLE (GOOBY/src/data/constants.js + foods.js V4-Bakery-Override für croissant). glb zeigt auf assets/city/essen/. gooberando=true markiert die Gerichte der GOOBERANDO-App (Doc E §5).",
+  "waren": [
+    {"id": "carrot", "name_de": "Möhre", "preis": 5, "glb": "carrot.glb", "hunger": 10, "spass": 2, "favorit": true},
+    {"id": "apple", "name_de": "Apfel", "preis": 6, "glb": "apple.glb", "hunger": 10, "spass": 1},
+    {"id": "banana", "name_de": "Banane", "preis": 6, "glb": "banana.glb", "hunger": 11, "spass": 0},
+    {"id": "tomato", "name_de": "Tomate", "preis": 7, "glb": "tomato.glb", "hunger": 12, "spass": 1},
+    {"id": "strawberry", "name_de": "Erdbeere", "preis": 8, "glb": "strawberry.glb", "hunger": 6, "spass": 6},
+    {"id": "cookie", "name_de": "Keks", "preis": 8, "glb": "cookie.glb", "hunger": 5, "spass": 8, "junk": true},
+    {"id": "grapes", "name_de": "Trauben", "preis": 9, "glb": "grapes.glb", "hunger": 8, "spass": 5},
+    {"id": "chocolate", "name_de": "Schokolade", "preis": 9, "glb": "chocolate.glb", "hunger": 5, "spass": 9, "junk": true},
+    {"id": "bread", "name_de": "Brot", "preis": 10, "glb": "bread.glb", "hunger": 18, "spass": 0},
+    {"id": "corn", "name_de": "Mais", "preis": 10, "glb": "corn.glb", "hunger": 15, "spass": 2},
+    {"id": "cheese", "name_de": "Käse", "preis": 12, "glb": "cheese.glb", "hunger": 16, "spass": 2},
+    {"id": "watermelon", "name_de": "Wassermelone", "preis": 12, "glb": "watermelon.glb", "hunger": 14, "spass": 4},
+    {"id": "croissant", "name_de": "Croissant", "preis": 12, "glb": "croissant.glb", "hunger": 14, "spass": 4},
+    {"id": "muffin", "name_de": "Muffin", "preis": 12, "glb": "muffin.glb", "hunger": 10, "spass": 8, "junk": true},
+    {"id": "salad", "name_de": "Salat", "preis": 14, "glb": "salad.glb", "hunger": 20, "spass": 0, "hygiene": 2},
+    {"id": "fries", "name_de": "Pommes", "preis": 14, "glb": "fries.glb", "hunger": 12, "spass": 9, "hygiene": -1, "junk": true},
+    {"id": "sandwich", "name_de": "Sandwich", "preis": 16, "glb": "sandwich.glb", "hunger": 24, "spass": 3, "gooberando": true},
+    {"id": "burger", "name_de": "Burger", "preis": 25, "glb": "burger.glb", "hunger": 40, "spass": 6, "gooberando": true},
+    {"id": "pizza", "name_de": "Pizza", "preis": 30, "glb": "pizza.glb", "hunger": 45, "spass": 8, "hygiene": -2, "junk": true, "gooberando": true}
+  ]
+}

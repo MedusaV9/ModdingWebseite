@@ -1,0 +1,88 @@
+{
+	"social": {
+		"screen": {
+			"title": "Freunde & Besuche",
+			"back": "‹ Zurück",
+			"empty": "Noch keine Freunde — Code im Freunde-Screen teilen!",
+			"offline_hint": "Offline — Besuche & Spiele brauchen Internet."
+		},
+		"visit": {
+			"button": "Besuchen",
+			"request_sent": "Besuchsanfrage an {name} verschickt …",
+			"request_failed": "Anfrage fehlgeschlagen: {code}",
+			"incoming": "{name} möchte dich besuchen!",
+			"accept": "Reinlassen",
+			"decline": "Ablehnen",
+			"denied": "{name} hat gerade keine Zeit.",
+			"ended": "Der Besuch ist vorbei.",
+			"at": "Zu Besuch bei {gooby}",
+			"host_label": "{name} ist zu Besuch!",
+			"build_warning": "Während Besuch kann Bauen Probleme machen!",
+			"build_button": "Bauen",
+			"upload_failed": "Haus-Upload fehlgeschlagen: {code}",
+			"fetch_failed": "Haus laden fehlgeschlagen: {code}",
+			"target_offline": "Dein Freund ist gerade nicht online.",
+			"end_button": "Besuch beenden",
+			"peer_left": "{name} ist gegangen.",
+			"peer_joined": "{name} ist da!"
+		},
+		"pal": {
+			"button": "GoobyPal",
+			"title": "GoobyPal",
+			"to": "An {name}",
+			"amount": "Betrag",
+			"send": "Senden",
+			"remaining": "Heute noch {rest} Coins",
+			"sent": "{amount} Coins an {name} geschickt!",
+			"received": "{name} hat dir {amount} Coins geschickt!",
+			"boot_received": "Du hast {amount} Coins von Freunden bekommen!",
+			"err": {
+				"offline": "Offline — GoobyPal braucht Internet.",
+				"daily_limit": "Tageslimit erreicht — morgen geht mehr!",
+				"bad_amount": "Der Betrag passt nicht (1–250).",
+				"not_friends": "Ihr seid keine Freunde.",
+				"not_found": "Diesen Freund gibt es nicht.",
+				"rate_limit": "Langsam! Zu viele Überweisungen.",
+				"no_coins": "So viele Coins hast du nicht.",
+				"generic": "Das hat nicht geklappt."
+			}
+		}
+	},
+	"board": {
+		"button": "Schiffe versenken",
+		"invite_sent": "Herausforderung an {name} verschickt …",
+		"invite_failed": "Einladung fehlgeschlagen: {code}",
+		"invited": "{name} fordert dich zu Schiffe versenken heraus!",
+		"accept": "Annehmen",
+		"decline": "Ablehnen",
+		"declined": "{name} hat abgelehnt.",
+		"table_hint": "Tipp: Mit einem Brettspieltisch im Haus wird's gemütlicher!",
+		"your_turn": "Du bist dran!",
+		"their_turn": "{name} ist dran …",
+		"hit": "Treffer!",
+		"miss": "Wasser …",
+		"sunk": "Versenkt!",
+		"win": "GEWONNEN! Alle Schiffe versenkt!",
+		"lose": "Verloren … deine Flotte ist weg.",
+		"forfeit": "{name} hat aufgegeben — du gewinnst!",
+		"resumed": "Weiter geht's — Spiel fortgesetzt!",
+		"leave": "Aufgeben",
+		"setup": {
+			"title": "Deine Flotte",
+			"reroll": "Neu würfeln",
+			"ready": "Bereit!"
+		},
+		"emote": {
+			"button": "Emote",
+			"dance": "Tanzen",
+			"angry": "Wütend",
+			"laugh": "Lachen",
+			"sleep": "Schlafen"
+		},
+		"tomato": {
+			"button": "Tomate!",
+			"limit": "Nur eine Tomate pro Runde!",
+			"hit": "PLATSCH! Tomate im Gesicht!"
+		}
+	}
+}

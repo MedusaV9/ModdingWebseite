@@ -26,10 +26,12 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `home.*`, `build.*` (Datei `strings/<locale>/home.json`) | W2a HOUSE | W2 |
 | `updates.*` | W2b UPDATES | W2 |
 | `mg.*`, `net.*` (Dateien `strings/<locale>/mg.json` + `net.json`) | W2d NETMG | W2 |
-| `city.*` | W3a CITY | W3 |
+| `city.*`, `travel.*` (Datei `strings/<locale>/city.json`) | W3a CITY | W3 |
 | `gvz.*` | W3b GVZ | W3 |
 | `visit.*` | W3c VISIT | W3 |
+| `social.*`, `board.*` (Datei `strings/<locale>/social.json`) | W3c VISIT | W3 |
 | `events.*`, `stickers.*`, `interactions.*` | W3d CONTENT | W3 |
+| `album.*`, `bad.*` (Dateien `strings/<locale>/events.json` + `album.json` + `bad.json`) | W3d CONTENT | W3 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im

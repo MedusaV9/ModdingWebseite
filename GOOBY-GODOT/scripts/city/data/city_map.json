@@ -1,0 +1,109 @@
+{
+  "kommentar": "Stadtplan GOOBY 5.0 (Doc E §1.2): 15×12-Lattice, 20-m-Tiles, fest geauthort. Seed variiert NUR Deko (Bäume/Props). Reihen/Spalten = Straßen-Lattice, kreisel = road-roundabout-Tiles, extra = Flughafen-Zubringer (Sackgasse).",
+  "grid_spalten": 15,
+  "grid_reihen": 12,
+  "tile_m": 20.0,
+  "deko_seed": 20260725,
+  "strassen": {
+    "reihen": [1, 4, 7, 10],
+    "reihen_spalten": [1, 13],
+    "spalten": [1, 6, 10, 13],
+    "spalten_reihen": [1, 10],
+    "extra": [[0, 4]],
+    "kreisel": [[1, 6], [7, 6]]
+  },
+  "distrikte": {
+    "gewerbe": {"zonen": [[2, 2, 3, 12]], "energie": 5},
+    "zentrum": {"zonen": [[5, 2, 6, 12]], "energie": 4},
+    "wohnen": {"zonen": [[8, 2, 9, 5], [8, 11, 9, 12]], "energie": 4},
+    "park": {"zonen": [[8, 7, 9, 9]], "energie": 6},
+    "flughafen": {"zonen": [[0, 2, 0, 5]], "energie": 6}
+  },
+  "zuhause": {"tile": [9, 2], "strasse": [9, 1]},
+  "gooberando_kueche": {"tile": [5, 5], "strasse": [5, 6]},
+  "orte": [
+    {
+      "id": "rehwei",
+      "name_key": "city.ort.rehwei",
+      "typ": "laden",
+      "tiles": [[5, 2], [5, 3]],
+      "strasse": [5, 1],
+      "distrikt": "zentrum",
+      "szene": "res://scenes/city/orte/rehwei.tscn",
+      "fassade": {"glb": "building-c", "awning": true, "tint": "#E8524A"}
+    },
+    {
+      "id": "goobytheke",
+      "name_key": "city.ort.goobytheke",
+      "typ": "laden",
+      "tiles": [[6, 2], [6, 3]],
+      "strasse": [6, 1],
+      "distrikt": "zentrum",
+      "szene": "res://scenes/city/orte/goobytheke.tscn",
+      "fassade": {"glb": "building-a", "awning": true, "tint": "#4FBF8B"}
+    },
+    {
+      "id": "gouhbus",
+      "name_key": "city.ort.gouhbus",
+      "typ": "praxis",
+      "tiles": [[6, 11], [6, 12]],
+      "strasse": [6, 10],
+      "distrikt": "zentrum",
+      "szene": "res://scenes/city/orte/gouhbus.tscn",
+      "fassade": {"glb": "building-f", "awning": false, "tint": "#F0EFE9"}
+    },
+    {
+      "id": "flughafen",
+      "name_key": "city.ort.flughafen",
+      "typ": "flughafen",
+      "tiles": [[0, 2], [0, 3]],
+      "strasse": [0, 4],
+      "distrikt": "flughafen",
+      "szene": "res://scenes/city/orte/flughafen.tscn",
+      "fassade": {"glb": "building-e", "awning": false, "tint": "#FFFFFF"}
+    },
+    {
+      "id": "baumarkt",
+      "name_key": "city.ort.baumarkt",
+      "typ": "stub",
+      "tiles": [[2, 7], [2, 8], [3, 7]],
+      "strasse": [1, 7],
+      "distrikt": "gewerbe",
+      "szene": "",
+      "fassade": {"glb": "building-g", "awning": true, "tint": "#F2A03D"}
+    },
+    {
+      "id": "post",
+      "name_key": "city.ort.post",
+      "typ": "stub",
+      "tiles": [[5, 11]],
+      "strasse": [4, 11],
+      "distrikt": "zentrum",
+      "szene": "",
+      "fassade": {"glb": "building-b", "awning": false, "tint": "#FFD166"}
+    }
+  ],
+  "deko": [
+    {"id": "ikea", "glb": "gebaeude/building-e.glb", "tile": [2.5, 2.5], "rot": 180, "scale": 15, "tint": "#4E79D6"},
+    {"id": "autohaus", "glb": "gebaeude/building-g.glb", "tile": [2.5, 11.5], "rot": 270, "scale": 12, "tint": "#8FD0E8"},
+    {"id": "pow", "glb": "gebaeude/building-b.glb", "tile": [5, 9], "rot": 270, "scale": 10, "tint": "#FFD166"},
+    {"id": "wochenmarkt_kisten", "glb": "innen/crate_tomatoes.gltf", "tile": [6, 7.4], "rot": 15, "scale": 4.0},
+    {"id": "wochenmarkt_kisten2", "glb": "innen/crate_buns.gltf", "tile": [6, 8.0], "rot": 340, "scale": 4.0},
+    {"id": "wochenmarkt_schild", "glb": "innen/menu.gltf", "tile": [6, 8.5], "rot": 270, "scale": 4.0},
+    {"id": "haus_a", "glb": "gebaeude/building-d.glb", "tile": [8, 2], "rot": 0, "scale": 7},
+    {"id": "haus_b", "glb": "gebaeude/building-f.glb", "tile": [8, 4], "rot": 0, "scale": 7},
+    {"id": "haus_c", "glb": "gebaeude/building-h.glb", "tile": [9, 4], "rot": 270, "scale": 7},
+    {"id": "haus_d", "glb": "gebaeude/building-d.glb", "tile": [8, 11], "rot": 90, "scale": 7},
+    {"id": "haus_e", "glb": "gebaeude/building-a.glb", "tile": [9, 11.7], "rot": 90, "scale": 7},
+    {"id": "haus_f", "glb": "gebaeude/building-h.glb", "tile": [9, 12.4], "rot": 90, "scale": 7},
+    {"id": "spielerhaus", "glb": "gebaeude/building-d.glb", "tile": [9, 2], "rot": 270, "scale": 8, "tint": "#FFE2B8"},
+    {"id": "tower_gewerbe", "glb": "gebaeude/building-skyscraper-a.glb", "tile": [2, 9.5], "rot": 0, "scale": 10},
+    {"id": "flughafen_tower", "glb": "gebaeude/low-detail-building-a.glb", "tile": [0, 5], "rot": 0, "scale": 11}
+  ],
+  "parken": {"radius_m": 4.0, "trigger_offset_m": 7.0},
+  "traffic_loops": [
+    [[1, 1], [1, 6], [4, 6], [4, 1]],
+    [[4, 6], [4, 13], [7, 13], [7, 6]],
+    [[1, 1], [1, 13], [10, 13], [10, 1]]
+  ]
+}

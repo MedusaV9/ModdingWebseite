@@ -1,0 +1,38 @@
+{
+	"events": {
+		"marienkaefer": {
+			"bubble": "Hnnng… ich komm nicht hoch!",
+			"danke": "Puh! Danke, Kumpel!"
+		},
+		"kuehlschrank": {
+			"bubble": "Der Kühlschrank ist umgekippt! Hilfst du mir aufsammeln?",
+			"danke": "Alles wieder drin. Nichts angeknabbert. Ehrenwort."
+		},
+		"glas": {
+			"bubble": "Da… da war ein Glas. Jetzt ist es Puzzle."
+		},
+		"teller": {
+			"bubble": "Der Teller wollte fliegen. Er konnte nicht."
+		},
+		"scherben": {
+			"danke": "Danke! Keine Scherben mehr. Fast wie neu hier."
+		},
+		"nutella": {
+			"upps": "uhhh UPPPS…",
+			"ab_ins_bett": "Ab ins Bett!",
+			"weitermachen": "Ach, lass ihm den Spaß",
+			"murmel": "mmmh… okay okay… ich geh ja schon…",
+			"strahlen": "Du bist der BESTE! Nur noch ein Löffelchen!",
+			"aufraeumen": "Ich räum das weg. Spurlos. Niemand wird es je erfahren."
+		},
+		"sockensuche": {
+			"bubble": "Eine einzelne Socke?! Wo sind ihre Freunde?!",
+			"danke": "Alle Socken vereint! Familientreffen!"
+		},
+		"story": {
+			"hinweis": "Tippe ein Wort, um die Lücke zu füllen",
+			"kichern": "Hihi… so stand das bestimmt nicht im Buch…",
+			"einschlafen": "Mmmh… schöne Geschichte… gute Nacht…"
+		}
+	}
+}

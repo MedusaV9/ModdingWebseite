@@ -1,0 +1,31 @@
+{
+	"gvz": {
+		"select": {
+			"title": "Goobys vs. Zombies",
+			"done": "Fertig",
+			"stars": "Sterne: {n}/{max}"
+		},
+		"hud": {
+			"level": "Level {n}",
+			"wave": "WELLE {n}!",
+			"huge_wave": "RIESIGE WELLE {n}!",
+			"boss": "KNURPS KOMMT!",
+			"boss_phase": "Knurps wird wütend! (Phase {n})",
+			"free": "Gratis",
+			"reason_nutella": "Zu wenig Nutella!",
+			"reason_cooldown": "Noch nicht bereit!",
+			"reason_cell_occupied": "Da steht schon wer!",
+			"reason_locked": "Noch gesperrt!"
+		},
+		"end": {
+			"win": "Rasen verteidigt!",
+			"lose": "Die Zombies naschen deine Nutella …",
+			"score": "{n} Punkte",
+			"first_clear": "Erst-Abschluss-Bonus!",
+			"lose_hint": "Tipp: Sammler früh pflanzen!",
+			"next": "Weiter ›",
+			"retry": "Nochmal",
+			"select": "Level-Wahl"
+		}
+	}
+}

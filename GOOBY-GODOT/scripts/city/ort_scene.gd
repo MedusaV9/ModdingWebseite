@@ -1,0 +1,242 @@
+class_name OrtScene
+extends Node3D
+## Ort-Framework-Basis (W3a CITY, Doc E §2): Betreten via Parkplatz →
+## Innenraum-Szene mit NPC (W1b-GoobyRig, getintet) + Dialog-Sheet
+## (OrtDialogRunner/-View) + optionalem Händler-UI (HaendlerSheet in
+## W1c-PanelSheet). M2-Orte erben von dieser Klasse und überschreiben die
+## drei Hooks `_baue_innenraum()`, `_dialog_pfad()`, `_sortiment_pfad()`.
+##
+## Router-Contract (W1a): `ready_for_reveal` nach Aufbau; `receive_params`
+## nimmt {"ort_id": ...} entgegen. Tests: `game_state_override` VOR add_child.
+
+signal ready_for_reveal
+signal verlassen_angefordert
+
+const PanelSheetScene := preload("res://scripts/ui/panel_sheet.tscn")
+
+@export var ort_id := ""
+
+var game_state_override: Object
+var rig: GoobyRig
+var voice: GoobyVoice
+var dialog: OrtDialogView
+
+var _ui: Control
+var _sheet: PanelSheet
+var _toast: Node
+
+
+func _ready() -> void:
+	_baue_raum()
+	_baue_innenraum()
+	_baue_npc()
+	_baue_ui()
+	_starte_dialog()
+	ready_for_reveal.emit()
+
+
+func receive_params(params: Dictionary) -> void:
+	var id := str(params.get("ort_id", ""))
+	if not id.is_empty():
+		ort_id = id
+
+
+func game_state() -> Object:
+	if game_state_override != null:
+		return game_state_override
+	return get_node_or_null("/root/GameState")
+
+
+## Hook: Ort-spezifische Requisiten (KayKit-Innen-Assets etc.).
+func _baue_innenraum() -> void:
+	pass
+
+
+## Hook: Pfad zum Dialogbaum-JSON ("" = kein Dialog).
+func _dialog_pfad() -> String:
+	return ""
+
+
+## Hook: Pfad zum Sortiment-JSON ("" = kein Laden).
+func _sortiment_pfad() -> String:
+	return ""
+
+
+## Hook: NPC-Konfiguration {tint: Color, emotion: String, pos: Vector3}.
+func _npc_konfig() -> Dictionary:
+	return {"tint": Color.WHITE, "emotion": "happy", "pos": Vector3(0.0, 0.0, -2.2)}
+
+
+## Laden-Sheet öffnen (auch via Dialog-Effekt "laden").
+func oeffne_laden() -> void:
+	if _sortiment_pfad().is_empty():
+		return
+	var inhalt := HaendlerSheet.new()
+	inhalt.gs = game_state()
+	inhalt.waren = CitySortiment.laden(_sortiment_pfad())
+	_sheet.set_title(I18nService.t("city.laden.titel"))
+	_sheet.add_content(inhalt)
+	_sheet.open()
+
+
+func zeige_toast(text: String) -> void:
+	if _toast != null and _toast.has_method("show_toast"):
+		_toast.show_toast(text)
+
+
+## Requisiten-Helfer für die Innenraum-Hooks (GLB/GLTF, still bei Fehlpfad).
+func _prop(pfad: String, pos: Vector3, rot_grad: float, groesse: float) -> Node3D:
+	if not ResourceLoader.exists(pfad):
+		return null
+	var szene: PackedScene = load(pfad)
+	if szene == null:
+		return null
+	var node: Node3D = szene.instantiate()
+	node.position = pos
+	node.rotation_degrees.y = rot_grad
+	node.scale = Vector3.ONE * groesse
+	add_child(node)
+	return node
+
+
+## ---------------------------------------------------------------- Aufbau
+
+
+func _baue_raum() -> void:
+	var env := WorldEnvironment.new()
+	var e := Environment.new()
+	e.background_mode = Environment.BG_COLOR
+	e.background_color = Color(0.98, 0.94, 0.87)
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color(1.0, 0.97, 0.92)
+	e.ambient_light_energy = 0.9
+	env.environment = e
+	add_child(env)
+	var licht := DirectionalLight3D.new()
+	licht.rotation_degrees = Vector3(-55.0, -30.0, 0.0)
+	add_child(licht)
+	var boden := MeshInstance3D.new()
+	var bm := PlaneMesh.new()
+	bm.size = Vector2(14.0, 10.0)
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color(0.87, 0.77, 0.62)
+	bm.material = bmat
+	boden.mesh = bm
+	add_child(boden)
+	var wand := MeshInstance3D.new()
+	var wm := BoxMesh.new()
+	wm.size = Vector3(14.0, 5.0, 0.3)
+	var wmat := StandardMaterial3D.new()
+	wmat.albedo_color = Color(0.96, 0.90, 0.80)
+	wm.material = wmat
+	wand.mesh = wm
+	wand.position = Vector3(0.0, 2.5, -4.0)
+	add_child(wand)
+	var kamera := Camera3D.new()
+	kamera.position = Vector3(0.0, 2.0, 4.2)
+	kamera.rotation_degrees = Vector3(-12.0, 0.0, 0.0)
+	kamera.current = true
+	add_child(kamera)
+
+
+func _baue_npc() -> void:
+	var konfig := _npc_konfig()
+	rig = GoobyRig.new()
+	rig.position = konfig.get("pos", Vector3(0, 0, -2.2))
+	rig.rotation.y = 0.0
+	add_child(rig)
+	rig.set_emotion(str(konfig.get("emotion", "happy")))
+	_tinte_npc(konfig.get("tint", Color.WHITE))
+	voice = GoobyVoice.new()
+	add_child(voice)
+	voice.silbe.connect(func(_i: int, _n: int) -> void: rig.babble_pulse())
+
+
+func _baue_ui() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "UiLayer"
+	add_child(layer)
+	_ui = Control.new()
+	_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
+	_ui.theme = ThemeService.theme()
+	layer.add_child(_ui)
+	dialog = OrtDialogView.new()
+	dialog.voice = voice
+	_ui.add_child(dialog)
+	dialog.effekt.connect(_on_dialog_effekt)
+	dialog.beendet.connect(_on_dialog_beendet)
+	var zurueck := Button.new()
+	zurueck.text = I18nService.t("city.ort.verlassen")
+	zurueck.theme_type_variation = "GhostButton"
+	zurueck.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	zurueck.position = Vector2(16.0, 16.0)
+	zurueck.pressed.connect(_on_verlassen)
+	_ui.add_child(zurueck)
+	_sheet = PanelSheetScene.instantiate()
+	_sheet.theme = ThemeService.theme()
+	layer.add_child(_sheet)
+	_toast = load("res://scripts/ui/toast.gd").new()
+	_toast.theme = ThemeService.theme()
+	layer.add_child(_toast)
+	# ToastLayer setzt in _ready nur Anker — nach add_child Full-Rect ziehen.
+	_toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _starte_dialog() -> void:
+	var pfad := _dialog_pfad()
+	if pfad.is_empty():
+		return
+	var baum := OrtDialogRunner.baum_laden(pfad)
+	var gs := game_state()
+	var flags: Dictionary = {}
+	if gs != null:
+		var raw: Variant = gs.get_value("city.flags", {})
+		flags = raw.duplicate(true) if raw is Dictionary else {}
+	dialog.starte(baum, flags)
+
+
+func _on_dialog_effekt(daten: Dictionary) -> void:
+	var gs := game_state()
+	match str(daten.get("typ", "")):
+		"flag":
+			if gs != null:
+				CityState.set_flag(gs, str(daten["name"]), bool(daten["wert"]))
+		"item":
+			if gs != null:
+				var item := str(daten["name"])
+				gs.update(
+					func(state: Dictionary) -> void:
+						var items: Dictionary = state["inventory"]["items"]
+						items[item] = int(items.get(item, 0)) + 1
+				)
+				zeige_toast(I18nService.t("city.ort.item_erhalten"))
+		"laden":
+			oeffne_laden()
+
+
+func _on_dialog_beendet() -> void:
+	# Dialog zu Ende: freundlich winken; Laden bleibt über den Knopf offen.
+	if rig != null:
+		rig.play_clip("wave")
+
+
+func _on_verlassen() -> void:
+	verlassen_angefordert.emit()
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null:
+		router.goto(CityScene.ROUTE_CITY, {"spawn": ort_id})
+
+
+func _tinte_npc(farbe: Color) -> void:
+	if farbe == Color.WHITE or rig == null:
+		return
+	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
+		var mi: MeshInstance3D = mesh
+		for i in mi.get_surface_override_material_count():
+			var mat: Material = mi.mesh.surface_get_material(i)
+			if mat is StandardMaterial3D:
+				var kopie: StandardMaterial3D = mat.duplicate()
+				kopie.albedo_color = kopie.albedo_color.lerp(farbe, 0.55)
+				mi.set_surface_override_material(i, kopie)

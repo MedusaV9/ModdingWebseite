@@ -1,0 +1,107 @@
+{
+  "city": {
+    "ort": {
+      "rehwei": "REHWEI",
+      "goobytheke": "GOOBYTHEKE",
+      "gouhbus": "Dr.Dr.Professor.Dr.Dr.GOOUHBUS",
+      "flughafen": "Flughafen",
+      "baumarkt": "Baumarkt",
+      "post": "Post",
+      "zuhause": "Zuhause",
+      "bald_offen": "Bald geöffnet!",
+      "verlassen": "‹ Raus",
+      "item_erhalten": "Ab in die Tasche!"
+    },
+    "fahren": {
+      "bremse": "BREMSE",
+      "rueckwaerts": "R",
+      "nach_hause": "Nach Hause",
+      "betreten": "Betreten",
+      "betreten_energie": "{ort} betreten? (Energie −{energie})",
+      "betreten_frei": "{ort} betreten? (kostenlos)",
+      "zu_muede": "Gooby ist zu müde… Ruf ein Taxi über IGohbie!"
+    },
+    "laden": {
+      "titel": "Einkaufen",
+      "coins": "Du hast {coins} Münzen",
+      "kaufen": "{preis} ᴳ",
+      "rezept_noetig": "Nur mit Rezept!"
+    }
+  },
+  "travel": {
+    "titel": "Reisen ✈",
+    "ziel_waehlen": "Wohin soll Gooby fliegen?",
+    "ziel": {
+      "beach": "Glitzermeer",
+      "harbor": "Hafenstadt",
+      "meadowTrip": "Blumenwiese",
+      "spookGarden": "Spukgarten",
+      "bakery": "Bäckerei-Dorf",
+      "bigCity": "Riesenstadt",
+      "nightSky": "Nachthimmel",
+      "toyRoom": "Spielzeugzimmer",
+      "space": "Weltraum"
+    },
+    "confirm": {
+      "titel": "Gooby fliegt für {tage} Tage: {ziel}",
+      "preis": "Preis: {preis} Münzen (+ 10 fürs Taxi)",
+      "warnung": "⚠️ Gooby ist dann {tage} Tage weg! Seine Werte sind eingefroren — das Resort kümmert sich um alles. Abholen nicht vergessen!",
+      "nutzen": "Er bringt Souvenirs & Postkarten mit!",
+      "taxi_hinweis": "Das Taxi braucht ein paar Minuten — wir sagen Bescheid, wenn es da ist.",
+      "buchen": "Buchen ✈",
+      "doch_nicht": "Doch nicht"
+    },
+    "schalter": {
+      "knopf": "Reise buchen ✈"
+    },
+    "taxi": {
+      "bestellt": "Taxi gerufen! Es ist gleich unterwegs.",
+      "gerufen": "🚕 Dein Taxi ist unterwegs…",
+      "countdown": "Ankunft in ca. {min}:{s} min",
+      "storno": "Stornieren (2 ᴳ Gebühr)",
+      "storniert": "Storniert. Der Fahrer seufzt leise.",
+      "da": "🚕 Dein Taxi steht vor der Tür!",
+      "fenster": "Noch {s} s zum Einsteigen!",
+      "einsteigen": "Einsteigen!",
+      "verpasst": "Das Taxi ist weitergefahren… (Gebühr 5 Münzen). Der Fahrer lässt grüßen. Wörtlich: ‚grüße‘.",
+      "notif_gleich_da": "🚕 Dein Taxi ist gleich da!",
+      "notif_da": "🚕 Dein Taxi steht vor der Tür!",
+      "notif_weg": "Das Taxi ist wieder weggefahren 😾"
+    },
+    "weg": {
+      "titel": "Gooby ist im Urlaub ☀",
+      "rest": "Er kommt in ca. {tage} Tag(en) zurück."
+    },
+    "abholen": {
+      "titel": "Gooby wartet am Flughafen!",
+      "overdue": "Er hat selbst ein Taxi genommen — das kostet 60 Münzen.",
+      "knopf": "Abholen 🧳",
+      "fertig": "Wiedersehen! Gooby bringt {coins} Souvenir-Münzen & Postkarten mit!"
+    },
+    "cutscene": {
+      "skip": "Überspringen ›",
+      "karte_1": "Gooby zieht den Rollkoffer aus der Hintertür…",
+      "karte_2": "Ein letztes Winken in der Einfahrt.",
+      "karte_3": "Das Taxi wartet schon am Bordstein.",
+      "karte_4": "Einmal quer durch die Stadt…",
+      "karte_5": "Und ab in die Wolken! Gute Reise, Gooby! ✈",
+      "karte_rueckkehr": "Gooby ist zurück — mit Tüte, Koffer und ganz viel Grinsen!"
+    },
+    "gooberando": {
+      "slogan": "Erstmal Goobyn.",
+      "gebuehr": "Liefergebühr: {gebuehr} ᴳ pro Bestellung",
+      "unterwegs": "🍜 Dein Essen ist unterwegs…",
+      "countdown": "Ankunft in ca. {min}:{s} min",
+      "klingel": "DING DONG! Der Liefer-Gooby ist da!",
+      "annehmen": "Tür öffnen",
+      "uebergeben": "Hier, noch warm! Verbeugung inklusive.",
+      "trinkgeld_geben": "5 Münzen Trinkgeld geben 💛",
+      "nur_winken": "Nur winken",
+      "bestellt": "Bestellung ist raus! Die Küche goobyt schon.",
+      "abgestellt": "Die Tüte stand vor der Tür. Zettel: „Hab geklingelt! – G.“",
+      "buff": "Extra-Grinsen 😁 — Gooby ist 2 h weniger schnell müde!",
+      "trinkgeld_hinweis": "Trinkgeld schadet nie ;)",
+      "notif_da": "🍜 Dein Essen ist da! DING DONG"
+    }
+  }
+}

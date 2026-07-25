@@ -1,0 +1,10 @@
+{
+	"album": {
+		"titel": "Sticker-Album",
+		"zurueck": "Zurück",
+		"zaehler": "{n} / {total} Sticker",
+		"unbekannt": "???",
+		"hint_label": "So bekommst du ihn:",
+		"unlock_toast": "Neuer Sticker: {name}!"
+	}
+}

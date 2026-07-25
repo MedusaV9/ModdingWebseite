@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aortflugh01"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/flughafen.gd" id="1_flug"]
+
+[node name="Flughafen" type="Node3D"]
+script = ExtResource("1_flug")
+ort_id = "flughafen"

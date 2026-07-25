@@ -1,0 +1,107 @@
+{
+  "city": {
+    "ort": {
+      "rehwei": "REHWEI",
+      "goobytheke": "GOOBYTHEKE",
+      "gouhbus": "Dr.Dr.Professor.Dr.Dr.GOOUHBUS",
+      "flughafen": "Airport",
+      "baumarkt": "Hardware Store",
+      "post": "Post Office",
+      "zuhause": "Home",
+      "bald_offen": "Opening soon!",
+      "verlassen": "‹ Leave",
+      "item_erhalten": "Into the bag it goes!"
+    },
+    "fahren": {
+      "bremse": "BRAKE",
+      "rueckwaerts": "R",
+      "nach_hause": "Go Home",
+      "betreten": "Enter",
+      "betreten_energie": "Enter {ort}? (Energy −{energie})",
+      "betreten_frei": "Enter {ort}? (free)",
+      "zu_muede": "Gooby is too tired… Call a taxi via IGohbie!"
+    },
+    "laden": {
+      "titel": "Shopping",
+      "coins": "You have {coins} coins",
+      "kaufen": "{preis} ᴳ",
+      "rezept_noetig": "Prescription only!"
+    }
+  },
+  "travel": {
+    "titel": "Travel ✈",
+    "ziel_waehlen": "Where should Gooby fly?",
+    "ziel": {
+      "beach": "Glitter Sea",
+      "harbor": "Harbor Town",
+      "meadowTrip": "Flower Meadow",
+      "spookGarden": "Spooky Garden",
+      "bakery": "Bakery Village",
+      "bigCity": "Big City",
+      "nightSky": "Night Sky",
+      "toyRoom": "Toy Room",
+      "space": "Outer Space"
+    },
+    "confirm": {
+      "titel": "Gooby flies for {tage} days: {ziel}",
+      "preis": "Price: {preis} coins (+ 10 for the taxi)",
+      "warnung": "⚠️ Gooby will be gone for {tage} days! His stats are frozen — the resort takes care of everything. Don't forget to pick him up!",
+      "nutzen": "He'll bring back souvenirs & postcards!",
+      "taxi_hinweis": "The taxi takes a few minutes — we'll let you know when it arrives.",
+      "buchen": "Book ✈",
+      "doch_nicht": "Never mind"
+    },
+    "schalter": {
+      "knopf": "Book a trip ✈"
+    },
+    "taxi": {
+      "bestellt": "Taxi called! It's on its way.",
+      "gerufen": "🚕 Your taxi is on its way…",
+      "countdown": "Arriving in approx. {min}:{s} min",
+      "storno": "Cancel (2 ᴳ fee)",
+      "storniert": "Cancelled. The driver sighs quietly.",
+      "da": "🚕 Your taxi is at the door!",
+      "fenster": "{s} s left to hop in!",
+      "einsteigen": "Hop in!",
+      "verpasst": "The taxi drove off… (5 coin fee). The driver sends regards. Literally: 'regards'.",
+      "notif_gleich_da": "🚕 Your taxi is almost there!",
+      "notif_da": "🚕 Your taxi is at the door!",
+      "notif_weg": "The taxi drove away again 😾"
+    },
+    "weg": {
+      "titel": "Gooby is on vacation ☀",
+      "rest": "He'll be back in about {tage} day(s)."
+    },
+    "abholen": {
+      "titel": "Gooby is waiting at the airport!",
+      "overdue": "He took a taxi himself — that costs 60 coins.",
+      "knopf": "Pick up 🧳",
+      "fertig": "Reunited! Gooby brings {coins} souvenir coins & postcards!"
+    },
+    "cutscene": {
+      "skip": "Skip ›",
+      "karte_1": "Gooby drags the trolley case out the back door…",
+      "karte_2": "One last wave in the driveway.",
+      "karte_3": "The taxi is already waiting at the curb.",
+      "karte_4": "Once across the whole city…",
+      "karte_5": "And off into the clouds! Safe travels, Gooby! ✈",
+      "karte_rueckkehr": "Gooby is back — with a bag, a suitcase and a giant grin!"
+    },
+    "gooberando": {
+      "slogan": "Gooby first.",
+      "gebuehr": "Delivery fee: {gebuehr} ᴳ per order",
+      "unterwegs": "🍜 Your food is on its way…",
+      "countdown": "Arriving in approx. {min}:{s} min",
+      "klingel": "DING DONG! The delivery Gooby is here!",
+      "annehmen": "Open the door",
+      "uebergeben": "Here you go, still warm! Bow included.",
+      "trinkgeld_geben": "Tip 5 coins 💛",
+      "nur_winken": "Just wave",
+      "bestellt": "Order placed! The kitchen is goobying already.",
+      "abgestellt": "The bag was left at the door. Note: \"I rang! – G.\"",
+      "buff": "Extra grin 😁 — Gooby tires 25% slower for 2 h!",
+      "trinkgeld_hinweis": "Tipping never hurts ;)",
+      "notif_da": "🍜 Your food is here! DING DONG"
+    }
+  }
+}

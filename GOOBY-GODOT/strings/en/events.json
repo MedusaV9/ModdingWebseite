@@ -1,0 +1,38 @@
+{
+	"events": {
+		"marienkaefer": {
+			"bubble": "Hnnng… I can't get up!",
+			"danke": "Phew! Thanks, buddy!"
+		},
+		"kuehlschrank": {
+			"bubble": "The fridge tipped over! Help me pick everything up?",
+			"danke": "All back inside. Nothing nibbled. Promise."
+		},
+		"glas": {
+			"bubble": "There… there was a glass. Now it's a puzzle."
+		},
+		"teller": {
+			"bubble": "The plate wanted to fly. It could not."
+		},
+		"scherben": {
+			"danke": "Thanks! No more shards. Almost like new in here."
+		},
+		"nutella": {
+			"upps": "uhhh OOOPS…",
+			"ab_ins_bett": "Off to bed!",
+			"weitermachen": "Ah, let him have his fun",
+			"murmel": "mmmh… okay okay… I'm going…",
+			"strahlen": "You are the BEST! Just one more tiny spoon!",
+			"aufraeumen": "I'll clean this up. No traces. Nobody will ever know."
+		},
+		"sockensuche": {
+			"bubble": "A single sock?! Where are its friends?!",
+			"danke": "All socks reunited! Family reunion!"
+		},
+		"story": {
+			"hinweis": "Tap a word to fill the blank",
+			"kichern": "Hihi… I'm pretty sure the book didn't say that…",
+			"einschlafen": "Mmmh… lovely story… good night…"
+		}
+	}
+}
