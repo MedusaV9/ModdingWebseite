@@ -1,0 +1,92 @@
+{
+  "schema": "gooby.furniture/1",
+  "pack": "furniture",
+  "items": [
+    {
+      "id": "packDoughBall",
+      "name_de": "Teigling",
+      "name_en": "Dough Ball",
+      "glb": "tt-bakery/dough_ball.gltf",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "SURFACE",
+      "preis": 12,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "kueche",
+      "variants": [
+        "natur",
+        "rose",
+        "mint",
+        "butter"
+      ]
+    },
+    {
+      "id": "packDoughRolled",
+      "name_de": "Ausgerollter Teig",
+      "name_en": "Rolled Dough",
+      "glb": "tt-bakery/dough_rolled_A.gltf",
+      "footprint": [
+        2,
+        2
+      ],
+      "layer": "SURFACE",
+      "preis": 18,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "kueche",
+      "variants": [
+        "natur",
+        "rose",
+        "mint",
+        "butter"
+      ]
+    },
+    {
+      "id": "packCoffin",
+      "name_de": "Gruselkiste",
+      "name_en": "Spooky Chest",
+      "glb": "kaykit-halloween/coffin_decorated.gltf",
+      "footprint": [
+        2,
+        3
+      ],
+      "layer": "FLOOR",
+      "preis": 210,
+      "lagerwert": 3,
+      "pflicht": "",
+      "kategorie": "party",
+      "variants": [
+        "natur",
+        "sand",
+        "koralle",
+        "salbei",
+        "schiefer"
+      ]
+    },
+    {
+      "id": "packLantern",
+      "name_de": "Wegweiser",
+      "name_en": "Signpost",
+      "glb": "kaykit-halloween/gravemarker_A.gltf",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 45,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "garten",
+      "variants": [
+        "natur",
+        "sand",
+        "koralle",
+        "salbei",
+        "schiefer"
+      ]
+    }
+  ]
+}

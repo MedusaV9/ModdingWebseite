@@ -1,0 +1,54 @@
+{
+  "shop": {
+    "ikea": {
+      "title": "GOUHBUS Furniture Showroom",
+      "back": "Back",
+      "search": "Search furniture …",
+      "alle": "All",
+      "leer": "Nothing found — try another search term.",
+      "buy": "Buy",
+      "preis": "{n} coins",
+      "muenzen": "{n} coins",
+      "felder": "takes up {x}×{y} tiles",
+      "lagerwert": "Storage value {n}",
+      "lager": "Storage: {frei} of {gesamt} free",
+      "zoom": "Zoom",
+      "variants": "Colour",
+      "gekauft": "{name} is waiting in your storage!",
+      "zu_teuer": "Not enough coins for that one.",
+      "lager_voll": "Storage is full — clear it out or upgrade the shed.",
+      "fehler": "That did not work, sorry."
+    },
+    "kategorie": {
+      "bad": "Bathroom",
+      "bilder": "Pictures",
+      "buero": "Office",
+      "deko": "Decor",
+      "fenster": "Windows",
+      "garten": "Garden",
+      "kueche": "Kitchen",
+      "lampen": "Lamps",
+      "party": "Party",
+      "pflanzen": "Plants",
+      "regale": "Shelves",
+      "schlafen": "Bedroom",
+      "sitzen": "Seating",
+      "teppiche": "Rugs",
+      "tische": "Tables",
+      "unterhaltung": "Entertainment",
+      "wohnen": "Living"
+    },
+    "variant": {
+      "natur": "Natural",
+      "rose": "Rose",
+      "mint": "Mint",
+      "himmel": "Sky Blue",
+      "butter": "Butter",
+      "lavendel": "Lavender",
+      "salbei": "Sage",
+      "sand": "Sand",
+      "koralle": "Coral",
+      "schiefer": "Slate"
+    }
+  }
+}

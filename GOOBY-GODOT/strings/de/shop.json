@@ -1,0 +1,54 @@
+{
+  "shop": {
+    "ikea": {
+      "title": "GOUHBUS Möbelausstellung",
+      "back": "Zurück",
+      "search": "Möbel suchen …",
+      "alle": "Alles",
+      "leer": "Nichts gefunden — probier einen anderen Suchbegriff.",
+      "buy": "Kaufen",
+      "preis": "{n} Münzen",
+      "muenzen": "{n} Münzen",
+      "felder": "belegt {x}×{y} Felder",
+      "lagerwert": "Lagerwert {n}",
+      "lager": "Lager: {frei} von {gesamt} frei",
+      "zoom": "Zoom",
+      "variants": "Farbe",
+      "gekauft": "{name} liegt jetzt im Lager!",
+      "zu_teuer": "Dafür reichen die Münzen nicht.",
+      "lager_voll": "Das Lager ist voll — erst ausmisten oder den Schuppen ausbauen.",
+      "fehler": "Das hat leider nicht geklappt."
+    },
+    "kategorie": {
+      "bad": "Bad",
+      "bilder": "Bilder",
+      "buero": "Büro",
+      "deko": "Deko",
+      "fenster": "Fenster",
+      "garten": "Garten",
+      "kueche": "Küche",
+      "lampen": "Lampen",
+      "party": "Party",
+      "pflanzen": "Pflanzen",
+      "regale": "Regale",
+      "schlafen": "Schlafen",
+      "sitzen": "Sitzen",
+      "teppiche": "Teppiche",
+      "tische": "Tische",
+      "unterhaltung": "Unterhaltung",
+      "wohnen": "Wohnen"
+    },
+    "variant": {
+      "natur": "Natur",
+      "rose": "Rosé",
+      "mint": "Mint",
+      "himmel": "Himmelblau",
+      "butter": "Buttergelb",
+      "lavendel": "Lavendel",
+      "salbei": "Salbei",
+      "sand": "Sand",
+      "koralle": "Koralle",
+      "schiefer": "Schiefer"
+    }
+  }
+}

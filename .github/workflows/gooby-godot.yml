@@ -170,6 +170,172 @@ jobs:
           zip -qry GOOBY-godot-unsigned.ipa Payload
           ls -la GOOBY-godot-unsigned.ipa
 
+      - name: .ipa forensisch verifizieren
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path, PurePosixPath
+          import plistlib
+          import re
+          import struct
+          import zipfile
+
+          ipa = Path("build/ios/GOOBY-godot-unsigned.ipa")
+          with zipfile.ZipFile(ipa) as archive:
+              assert archive.testzip() is None, "IPA-ZIP ist beschädigt"
+              names = archive.namelist()
+              assert not [
+                  name for name in names
+                  if name.startswith("/") or ".." in PurePosixPath(name).parts
+              ], "IPA enthält unsichere Pfade"
+              apps = sorted({
+                  name.split("/")[1]
+                  for name in names
+                  if name.startswith("Payload/")
+                  and len(name.split("/")) > 1
+                  and name.split("/")[1].endswith(".app")
+              })
+              assert apps == ["GOOBY.app"], f"Unerwartete App-Bundles: {apps}"
+              app = "Payload/GOOBY.app/"
+
+              info = plistlib.loads(archive.read(app + "Info.plist"))
+              assert info["CFBundleIdentifier"] == "com.permissionmaxed.gooby"
+              assert info["CFBundleExecutable"] == "GOOBY"
+              assert 1 in info["UIDeviceFamily"], info["UIDeviceFamily"]
+              assert info["MinimumOSVersion"] == "14.0"
+              assert info["ITSAppUsesNonExemptEncryption"] is False
+              assert info["UIFileSharingEnabled"] is False
+              assert info["UILaunchStoryboardName"] == "Launch Screen"
+              assert "arm64" in info["UIRequiredDeviceCapabilities"]
+              orientations = info["UISupportedInterfaceOrientations"]
+              assert orientations[:2] == [
+                  "UIInterfaceOrientationLandscapeLeft",
+                  "UIInterfaceOrientationLandscapeRight",
+              ]
+              assert {
+                  "UIInterfaceOrientationLandscapeLeft",
+                  "UIInterfaceOrientationLandscapeRight",
+                  "UIInterfaceOrientationPortrait",
+                  "UIInterfaceOrientationPortraitUpsideDown",
+              } == set(orientations)
+
+              executable = archive.read(app + info["CFBundleExecutable"])
+              (
+                  magic,
+                  cpu_type,
+                  _cpu_subtype,
+                  file_type,
+                  command_count,
+                  command_bytes,
+                  flags,
+                  _reserved,
+              ) = struct.unpack_from("<8I", executable)
+              assert magic == 0xFEEDFACF, "Executable ist kein 64-Bit-Mach-O"
+              assert cpu_type == 0x0100000C, "Executable ist nicht arm64"
+              assert file_type == 2, "Mach-O ist kein Executable"
+              assert flags & 0x1, "Mach-O fehlt MH_NOUNDEFS"
+
+              dylib_commands = {
+                  0xC,
+                  0x80000018,
+                  0x8000001F,
+                  0x20,
+                  0x80000023,
+              }
+              non_system_dylibs = []
+              has_code_signature = False
+              offset = 32
+              for _ in range(command_count):
+                  command, command_size = struct.unpack_from("<II", executable, offset)
+                  assert command_size >= 8
+                  if command in dylib_commands:
+                      name_offset = struct.unpack_from("<I", executable, offset + 8)[0]
+                      end = executable.find(b"\0", offset + name_offset, offset + command_size)
+                      dylib = executable[offset + name_offset:end].decode()
+                      if not (
+                          dylib.startswith("/System/Library/")
+                          or dylib.startswith("/usr/lib/")
+                      ):
+                          non_system_dylibs.append(dylib)
+                  if command == 0x1D:
+                      has_code_signature = True
+                  offset += command_size
+              assert offset == 32 + command_bytes
+              assert not non_system_dylibs, non_system_dylibs
+              assert not has_code_signature, "Artefakt soll vor dem Sideload unsigniert sein"
+
+              assert archive.read(app + "PkgInfo") == b"APPL????"
+              assert any(
+                  name.startswith(app + "Launch Screen.storyboardc/")
+                  for name in names
+              )
+              assert app + "Assets.car" in names
+              assets_car = archive.read(app + "Assets.car")
+              assert b"AppIcon" in assets_car and b"Icon-1024.png" in assets_car
+              assert app + "AppIcon60x60@2x.png" in names
+              assert app + "AppIcon76x76@2x~ipad.png" in names
+              assert not any("/_CodeSignature/" in name for name in names)
+              assert not any(name.endswith("embedded.mobileprovision") for name in names)
+
+              pck = archive.read(app + "GOOBY.pck")
+              assert pck[:4] == b"GDPC", "GOOBY.pck hat keinen Godot-PCK-Header"
+              file_base = struct.unpack_from("<Q", pck, 24)[0]
+              directory_offset = 96
+              file_count = struct.unpack_from("<I", pck, directory_offset)[0]
+              directory_offset += 4
+              entries = {}
+              for _ in range(file_count):
+                  path_length = struct.unpack_from("<I", pck, directory_offset)[0]
+                  directory_offset += 4
+                  path = pck[
+                      directory_offset:directory_offset + path_length
+                  ].rstrip(b"\0").decode()
+                  directory_offset += path_length
+                  data_offset, data_size = struct.unpack_from(
+                      "<QQ", pck, directory_offset
+                  )
+                  directory_offset += 16
+                  directory_offset += 16  # MD5
+                  entry_flags = struct.unpack_from("<I", pck, directory_offset)[0]
+                  directory_offset += 4
+                  entries[path] = (file_base + data_offset, data_size, entry_flags)
+              assert file_count > 1000, f"Verdächtig kleines PCK: {file_count} Dateien"
+
+              project = Path("GOOBY-GODOT")
+              imported_assets = []
+              direct_json = []
+              for root_name in ("assets", "content"):
+                  for source in (project / root_name).rglob("*"):
+                      if not source.is_file() or source.name.endswith(".import"):
+                          continue
+                      relative = source.relative_to(project).as_posix()
+                      if Path(str(source) + ".import").is_file():
+                          imported_assets.append(relative)
+                      elif source.suffix.lower() == ".json":
+                          direct_json.append(relative)
+
+              for source in imported_assets:
+                  import_path = source + ".import"
+                  assert import_path in entries, f"Asset-Metadaten fehlen: {source}"
+                  data_offset, data_size, _flags = entries[import_path]
+                  metadata = pck[data_offset:data_offset + data_size].decode(
+                      errors="replace"
+                  )
+                  match = re.search(r'(?m)^path="res://([^"]+)"', metadata)
+                  assert match, f"Asset ohne Export-Remap: {source}"
+                  assert match.group(1) in entries, f"Asset-Daten fehlen: {source}"
+              for source in direct_json:
+                  assert source in entries, f"JSON fehlt im PCK: {source}"
+
+          print(
+              "IPA PASS:",
+              f"{ipa.stat().st_size} Bytes,",
+              f"{file_count} PCK-Dateien,",
+              f"{len(imported_assets)}/{len(imported_assets)} Assets,",
+              f"{len(direct_json)}/{len(direct_json)} JSON-Dateien",
+          )
+          PY
+
       - uses: actions/upload-artifact@v7
         with:
           name: GOOBY-godot-unsigned-ipa

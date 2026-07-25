@@ -5,41 +5,85 @@ extends MinigameBase
 ## Loslassen = 1,2 s Schub, Item-Kisten je ⅓ Runde, neben der Strecke 40 %
 ## langsamer. Punkte = Platzbonus + 2·Überholer + Driftmeter/10.
 ##
-## 2D statt 3D (Web war three.js mit Kenney-Kart-GLBs): die GLBs gibt es im
-## Godot-Projekt nicht. Statt eines Ersatz-3D-Kurses rendert diese Ansicht
-## den ECHTEN Logik-Spline als Sticker-Band aus einer Verfolgerperspektive —
-## jede Weltkoordinate kommt aus point_at(), inklusive der senkrechten
-## Loopings. Kollisionen/Physik rechnet ohnehin die Logik in Weltkoordinaten,
-## die Ansicht projiziert nur.
+## ECHTES 3D (Agent 3D-B): der Kurs ist der ECHTE Kenney-toy-car-kit-Ring auf
+## einem Kinderzimmerboden, die Karts sind car-kit-Modelle und Gooby sitzt
+## SICHTBAR im roten Renner. Die Kamera hängt hinterm Kart und schwenkt im
+## Looping auf eine feste Stuntkamera daneben — dieselbe Regel wie im Web.
+## Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt hängt
+## darunter (Godot rendert 3D immer hinter den CanvasItems).
+##
+## KEIN Screenshake (Motion-Comfort-Regel für Fahr-Spiele) — Tempo wird über
+## FOV-Kick und Speed-Lines erzählt.
 ##
 ## AUTOHAUS-HAKEN (bewusst offen, NICHT implementiert): `kart_skin` /
 ## `speed_bonus` bleiben leer, bis das Autohaus Karts liefert.
 
 const Logic := preload("res://scripts/minigames/games/toy_racer/toy_racer_logic.gd")
-const Scenery := preload("res://scripts/minigames/games/toy_racer/toy_racer_scenery.gd")
+const World := preload("res://scripts/minigames/games/toy_racer/toy_racer_world.gd")
+const Models := preload("res://scripts/minigames/games/_3db_stage/model_bank.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
+const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
+const GoobyMount := preload("res://scripts/minigames/games/_3db_stage/gooby_mount.gd")
+const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 
-## Kamera-Abstand hinter dem Kart (Streckeneinheiten).
-const CAM_BEHIND := 3.4
-## Sichtweite entlang des Splines (Streckeneinheiten).
-const DRAW_AHEAD := 22.0
-## Wie weit hinter das Kart das Band noch gezeichnet wird.
-const DRAW_BEHIND := 2.6
-## Bandschritt in Streckeneinheiten (2× die Logik-Abtastung = 0,5).
-const RIBBON_STEP := 0.5
-## Mindest-Vorwärtsabstand, ab dem projiziert wird (Nahclipping).
-const NEAR_FWD := 0.9
-## Teppichrand außerhalb der Fahrbahn.
-const APRON := 0.62
-## Kartbreite in Streckeneinheiten (Fahrbahn ist 1,0 breit).
-const KART_W := 0.32
-## Näher als das wird ein Kart nicht mehr gezeichnet (Riesen-Sticker).
-const KART_NEAR := 1.5
+const CAR_DIR := "res://assets/minigames/toy_racer/car-kit/"
+## Fahrzeuge in Startreihenfolge — [0] ist das Spieler-Kart.
+const KART_MODELS: Array[String] = [
+	CAR_DIR + "race.glb",
+	CAR_DIR + "taxi.glb",
+	CAR_DIR + "police.glb",
+	CAR_DIR + "hatchback-sports.glb",
+]
+
+## Verfolgerkamera (Web: 5,8 m hinter, 3,1 m über dem Kart).
+const CAM_BACK := 6.0
+## Kameraneigung ist hier das ganze Spiel: der Blickwinkel nach unten ist
+## atan((LIFT − 0,4) / (BACK + LOOK_AHEAD)). Wird er größer als der halbe
+## senkrechte Blickwinkel (~26°), rutscht der HORIZONT aus dem Bild und die
+## Szene liest sich als Draufsicht — genau das passierte bei 4,5/4,6. Mit
+## 2,8/6,0/1,6 liegt er bei ~18°: Kart unten im Bild, Kurs und Bauklotz-
+## Skyline darüber, wie in der Web-Fassung.
+const CAM_LIFT := 2.8
+const CAM_LOOK_AHEAD := 1.6
+## Hochkant ist der senkrechte Blickwinkel doppelt so groß (Stage3D deckelt bei
+## 96°). Mit der Querformat-Neigung landete der Horizont bei 40 % Bildhöhe und
+## darüber standen zwei Drittel nackte Zimmerwand. Also hochkant HÖHER stehen
+## und NÄHER vor das Kart schauen — das kippt die Sicht nach unten auf den Kurs.
+const CAM_PORTRAIT_LIFT := 1.7
+const CAM_PORTRAIT_AHEAD := -1.1
+## Stuntkamera im Looping: so weit seitlich aus der Ringebene heraus. Das Web
+## stand 14 m daneben und schaute auf die RINGMITTE — der Ring füllte damit das
+## Bild und das Kart schrumpfte auf ein paar Pixel. Wir rücken näher und
+## schauen zwischen Ringmitte und Kart: der Ring bleibt lesbar, das Kart (und
+## Gooby darin) bleibt groß.
+const LOOP_CAM_SIDE := 7.0
+const LOOP_CAM_BACK := 1.2
+const LOOP_CAM_LIFT := 1.2
+## 0 = nur Ringmitte (Web), 1 = nur Kart. Dazwischen schwenkt die Stuntkamera
+## dem Kart sanft hinterher, ohne die Ringebene zu kreuzen.
+const LOOP_CAM_TRACK := 0.75
+## Waagerechter Blickwinkel + Schub-Kick (Web: 58° fov +6).
+const HFOV_BASE := 82.0
+const HFOV_KICK := 8.0
+## Kartbreite in Metern (Web: 0,36 Streckeneinheiten × WORLD_SCALE).
+const KART_W := 0.36
+## Bildabstand (px bei 1200er Kante), den ein näher stehendes KI-Kart zu Goobys
+## Sitz halten muss, damit ein Beweisfoto ihn wirklich zeigt.
+const CLEAR_SHOT_PX := 170.0
+## Ab dieser waagerechten Tangentenlänge folgt die Kamera dem Kurs wieder
+## (im Looping zeigt die Tangente senkrecht — sonst überschlägt sich die Sicht).
+const FLAT_TANGENT_MIN := 0.45
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
+## Nach so vielen Sekunden blendet der Hinweis aus.
+const HINT_FADE_SEC := 7.0
 
 ## Autohaus-Haken: später vom Host befüllbar.
 var kart_skin := ""
 var speed_bonus := 0.0
+
+## Für Screenshot-/Zertifizierungsläufe: der Logik-Bot übernimmt.
+var autoplay := false
 
 var tune: Dictionary = {}
 var race: Dictionary = {}
@@ -56,30 +100,36 @@ var _press_t := 0.0
 var _elapsed := 0.0
 var _end_t := 0.0
 var _ending := false
-var _cam_pos := Vector3.ZERO
-var _cam_h := Vector2(0.0, 1.0)
-var _cam_y := 0.0
-var _focal_px := 380.0
-var _horizon_px := 150.0
-var _cam_lift := 1.3
 var _ui := 1.0
-var _towers: Array[Dictionary] = []
+var _scale := 2.6
+var _cam_fwd := Vector3(0.0, 0.0, 1.0)
+var _cam_pos := Vector3.ZERO
+var _cam_look := Vector3.ZERO
+var _cam_ready := false
+var _spark_t := 0.0
 var _lap_label: Label
 var _pos_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
-var _spark_t := 0.0
-var _sparks: Array[Dictionary] = []
+var _stage: Node3D
+var _world: Node3D
+var _karts: Array[Node3D] = []
+var _gooby: Node3D
+var _shield: MeshInstance3D
+var _streaks: MultiMeshInstance3D
+var _sparks: GPUParticles3D
+var _confetti: GPUParticles3D
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = Logic.apply_difficulty(Logic.RACER, ctx.difficulty)
 	race = Logic.create_race(ctx.run_seed, tune)
-	_build_towers()
-	_snap_camera()
+	_scale = float(tune["WORLD_SCALE"])
+	_build_stage()
 	_build_hud()
+	_snap_camera()
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
@@ -97,7 +147,8 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
-	_recompute_camera()
+	if _stage != null:
+		_stage.call("apply_size", view_size)
 	_layout_hud()
 	queue_redraw()
 
@@ -122,9 +173,9 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.1)
 	_elapsed += dt
 	_banner_t = maxf(0.0, _banner_t - dt)
-	_age_sparks(dt)
 	if _ending:
 		_end_t += dt
+		_sync_world(dt)
 		if _end_t >= 1.2:
 			_finish()
 		queue_redraw()
@@ -132,9 +183,7 @@ func _process(delta: float) -> void:
 	if not is_active():
 		return
 
-	var input := {"steer": _steer, "drifting": _drift_held, "useItem": _want_item}
-	_want_item = false
-	Logic.step_race(race, dt, input)
+	Logic.step_race(race, dt, _take_input())
 	_play_events()
 	# Driftmeter zahlen live aus (§C10.1 Punkteformel).
 	var drift_pts := int(
@@ -143,10 +192,19 @@ func _process(delta: float) -> void:
 	if drift_pts > _paid_drift:
 		_add_score(drift_pts - _paid_drift)
 		_paid_drift = drift_pts
-	_emit_drift_sparks(dt)
-	_track_camera(dt)
+	_sync_world(dt)
 	_update_labels()
+	_fade_hint()
 	queue_redraw()
+
+
+## Im Autoplay fährt der Logik-Bot (zahlengleich zum Web-`?autoplay=1`).
+func _take_input() -> Dictionary:
+	if autoplay:
+		return Logic.bot_input(race)
+	var out := {"steer": _steer, "drifting": _drift_held, "useItem": _want_item}
+	_want_item = false
+	return out
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -198,114 +256,363 @@ func _add_score(delta: int) -> void:
 	ctx.report_score(score, delta)
 
 
-# ── Kamera ────────────────────────────────────────────────────────────────
+# ── Aufbau ────────────────────────────────────────────────────────────────
 
 
-## Kamera hinter dem Kart, Kurs = geglättete Fahrtrichtung. Im Looping wird
-## die letzte kräftige Horizontalrichtung gehalten (sonst überschlägt sich die
-## Kamera mit dem Korkenzieher) — dieselbe Regel wie im Web.
-func _track_camera(dt: float) -> void:
+func _build_stage() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	(
+		_stage
+		. call(
+			"build",
+			{
+				# Warme Kinderzimmerwand (Web: #F7E3C8) statt Himmel — der
+				# Kurs liegt in einem Zimmer, kein Außenlicht.
+				"sky_top": Color(0.94, 0.86, 0.75),
+				"sky_horizon": Color(0.97, 0.89, 0.78),
+				"ground_horizon": Color(0.9, 0.8, 0.68),
+				"ground_bottom": Color(0.62, 0.45, 0.3),
+				"fog_color": Color(0.97, 0.89, 0.78),
+				# Die Bauklotz-Skyline steht 30–60 m weit draußen. Mit dem alten
+				# Nebel (26→62) verschluckte sie sich komplett in der Wandfarbe;
+				# im Web liest man die bunten Klötze klar. Nebel bleibt drin —
+				# aber erst als Tiefenandeutung HINTER der Skyline.
+				"fog_from": 55.0,
+				"fog_to": 150.0,
+				"glow": 0.26,
+				# Web: DirectionalLight(0xffe9c4, 0.9) bei (6, 12, 4);
+				# HemisphereLight(0xfff4e0, 0xd8b48c, 1.1) — Mittelwert unten.
+				"sun_dir": Vector3(-0.42, -0.82, -0.28),
+				"sun_color": Color(1.0, 0.914, 0.769),
+				"sun_energy": 0.9,
+				"ambient_color": Color(0.923, 0.831, 0.708),
+				"ambient": 1.1,
+				"contrast": 1.05,
+				"saturation": 1.18,
+				"fill_color": Color(0.85, 0.7, 0.55),
+				"fill_energy": 0.14,
+				"hfov": HFOV_BASE,
+				"shadow_distance": 34.0,
+				"far": 240.0,
+			}
+		)
+	)
+	_world = World.new()
+	_stage.add_child(_world)
+	_world.call("build", race["track"], _scale, int(race["seed"]))
+	_build_karts()
+	_streaks = SpeedLines.new()
+	(_stage.get("camera") as Camera3D).add_child(_streaks)
+	_streaks.call("build", 16, Vector2(2.4, 3.4), Vector2(5.0, 11.0))
+	_sparks = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.78, 0.35, 1.0),
+				"amount": 16,
+				"lifetime": 0.45,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"additive": true,
+				"speed": Vector2(1.4, 3.4),
+				"spread": 90.0,
+				"gravity": Vector3(0.0, -5.0, 0.0),
+				"size": Vector2(0.06, 0.15),
+			}
+		)
+	)
+	_stage.add_child(_sparks)
+	_confetti = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.85, 0.5, 1.0),
+				"amount": 26,
+				"lifetime": 1.1,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"speed": Vector2(2.0, 4.6),
+				"spread": 180.0,
+				"gravity": Vector3(0.0, -4.0, 0.0),
+				"size": Vector2(0.08, 0.2),
+			}
+		)
+	)
+	_stage.add_child(_confetti)
+
+
+## Vier Karts als echte car-kit-Modelle; im ersten sitzt Gooby.
+func _build_karts() -> void:
+	var karts: Array = race["karts"]
+	for i in karts.size():
+		var group := Node3D.new()
+		var path := KART_MODELS[i % KART_MODELS.size()]
+		group.add_child(Models.node(path, KART_W * _scale, true))
+		_stage.add_child(group)
+		_karts.append(group)
+	_gooby = GoobyMount.new()
+	# Web: scale 0.42 auf dem Roh-Rig, Sitz bei (0, 0.34, −0.12). Das Kart
+	# fährt nach +z, Gooby schaut also NICHT weg von der Kamera — die Kamera
+	# steht hinterm Kart, das Rig zeigt von Haus aus in Fahrtrichtung.
+	# Web: 0,47 m. Aus 4,5 m Höhe ist das ein Krümel — im Spielzeugmaßstab darf
+	# der Fahrer ruhig comic-groß aus dem Cockpit ragen, dann SIEHT man ihn.
+	_gooby.call("mount", 0.66 * float(tune.get("RENDER_SCALE_MULT", 1.0)), true, false)
+	_gooby.position = Vector3(0.0, 0.38, -0.1)
+	_karts[0].add_child(_gooby)
+	var bubble := SphereMesh.new()
+	bubble.radius = 0.75
+	bubble.height = 1.5
+	bubble.radial_segments = 18
+	bubble.rings = 10
+	bubble.material = Fx.glass(Color(0.49, 0.83, 0.94, 0.3), true)
+	_shield = MeshInstance3D.new()
+	_shield.mesh = bubble
+	_shield.position.y = 0.4
+	_shield.visible = false
+	_shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_karts[0].add_child(_shield)
+
+
+func _build_hud() -> void:
+	_lap_label = Label.new()
+	_lap_label.theme_type_variation = &"HeadlineLabel"
+	add_child(_lap_label)
+	_pos_label = Label.new()
+	_pos_label.theme_type_variation = &"CaptionLabel"
+	# CaptionLabel ist standardmäßig sehr blass — auf der hellen HUD-Platte
+	# braucht die Platz-/Item-Zeile kräftigere Tinte.
+	_pos_label.add_theme_color_override("font_color", Color(0.35, 0.29, 0.27))
+	add_child(_pos_label)
+	_hint_label = Label.new()
+	_hint_label.theme_type_variation = &"SoftLabel"
+	_hint_label.text = I18nService.t("mg.toyRacer.hint")
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Der Hinweis liegt auf der dunklen Fahrbahn — heller Text mit Rand.
+	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.94))
+	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.13, 0.12, 0.45))
+	_hint_label.add_theme_constant_override("outline_size", 7)
+	add_child(_hint_label)
+	_update_labels()
+
+
+func _fit_viewport() -> void:
+	apply_view(get_viewport_rect().size)
+
+
+# ── 3D-Abgleich ───────────────────────────────────────────────────────────
+
+
+func _sync_world(dt: float) -> void:
+	_stage.call("tick", dt)
+	_gooby.call("tick", dt)
+	_sync_karts()
+	_sync_boxes()
+	_sync_blocks()
+	_sync_camera(dt)
+	_drift_sparks(dt)
+
+
+## Kart-Posen aus dem Spline: der Rahmen ist (rechts, oben, vorwärts). Der
+## Logik-`right` zeigt nach LINKS (Linkskurven-Konvention), eine Basis daraus
+## wäre gespiegelt — deshalb wird die echte X-Achse neu gebildet.
+func _sync_karts() -> void:
+	var track: Dictionary = race["track"]
+	var karts: Array = race["karts"]
+	for i in karts.size():
+		var kart: Dictionary = karts[i]
+		var smp := Logic.point_at(track, float(kart["s"]))
+		var up := _v3(smp["up"]).normalized()
+		var fwd := _v3(smp["t"]).normalized()
+		var right := up.cross(fwd).normalized()
+		var basis := Basis(right, up, fwd)
+		if bool(kart["drifting"]):
+			basis = (
+				basis * Basis(Vector3.UP, 0.28 * (1.0 if float(kart["lateral"]) >= 0.0 else -1.0))
+			)
+		if float(kart["stunT"]) > 0.0:
+			basis = basis * Basis(Vector3.BACK, sin(_elapsed * 30.0) * 0.15)
+		var pos := _world_at(smp, float(kart["lateral"])) + up * 0.02
+		_karts[i].transform = Transform3D(basis, pos)
+	_shield.visible = bool(karts[0]["shield"])
+
+
+func _sync_boxes() -> void:
+	var track: Dictionary = race["track"]
+	var spin := Basis(Vector3.UP, _elapsed * 2.2)
+	var prop: Node3D = _world.get("box_prop")
+	prop.call("begin")
+	for row: Dictionary in track["itemRows"]:
+		var smp := Logic.point_at(track, float(row["s"]))
+		for box: Dictionary in row["boxes"]:
+			if float(box["respawnT"]) > 0.0:
+				continue
+			var pos := _world_at(smp, float(box["lat"])) + Vector3(0.0, 0.24, 0.0)
+			prop.call("push", Transform3D(spin, pos))
+	prop.call("flush")
+
+
+func _sync_blocks() -> void:
+	var track: Dictionary = race["track"]
+	var prop: Node3D = _world.get("block_prop")
+	prop.call("begin")
+	for i in (race["blocks"] as Array).size():
+		var block: Dictionary = race["blocks"][i]
+		var smp := Logic.point_at(track, float(block["s"]))
+		var pos := _world_at(smp, float(block["lat"])) + Vector3(0.0, 0.18, 0.0)
+		var tint: Color = World.BLOCK_COLORS[i % World.BLOCK_COLORS.size()]
+		prop.call("push", Transform3D(Basis(Vector3.UP, float(i) * 0.6), pos), tint)
+	prop.call("flush")
+
+
+## Verfolgerkamera. Im Looping steht sie fest NEBEN dem Ring (Stuntkamera),
+## sonst hinter dem Kart — genau die Regel der Web-Fassung.
+func _sync_camera(dt: float) -> void:
+	var track: Dictionary = race["track"]
+	var player: Node3D = _karts[0]
+	var ps := float(race["karts"][0]["s"])
+	var smp := Logic.point_at(track, ps)
+	var flat := Vector3(float((smp["t"] as Array)[0]), 0.0, float((smp["t"] as Array)[2]))
+	if flat.length() > FLAT_TANGENT_MIN:
+		_cam_fwd = flat.normalized()
+	var wanted := player.position
+	var look := player.position
+	var zone := _loop_zone_at(track, ps)
+	if not zone.is_empty():
+		var apex := Logic.point_at(track, (float(zone["s0"]) + float(zone["s1"])) * 0.5)
+		var ap: Array = apex["p"]
+		var ring := Vector3(float(ap[0]), float(ap[1]) * 0.5, float(ap[2])) * _scale
+		look = ring.lerp(player.position, LOOP_CAM_TRACK)
+		var perp := Vector3(-_cam_fwd.z, 0.0, _cam_fwd.x)
+		if _cam_ready and (_cam_pos - ring).dot(perp) < 0.0:
+			perp = -perp
+		# Ausgangspunkt ist NICHT die Ringmitte, sondern die Höhe des Karts:
+		# so bleibt es beim Überschlag bildmittig statt als Punkt am Ringrand.
+		var anchor := Vector3(ring.x, lerpf(ring.y, player.position.y, 0.7), ring.z)
+		wanted = anchor + perp * LOOP_CAM_SIDE - _cam_fwd * LOOP_CAM_BACK
+		wanted.y += LOOP_CAM_LIFT
+	else:
+		var lift := CAM_LIFT + (0.0 if landscape else CAM_PORTRAIT_LIFT)
+		var ahead := CAM_LOOK_AHEAD + (0.0 if landscape else CAM_PORTRAIT_AHEAD)
+		wanted = player.position - _cam_fwd * CAM_BACK
+		wanted.y = maxf(player.position.y + lift, lift)
+		look = player.position + _cam_fwd * ahead + Vector3(0.0, 0.4, 0.0)
+		var dodged := _dodge_loop_plane(track, ps, player.position, wanted)
+		if dodged != wanted:
+			# Seitlich ausgewichen: der Vorausblick würde das Spieler-Kart
+			# an den Bildrand schieben — jetzt zählt nur noch, dass man ES sieht.
+			look = player.position + Vector3(0.0, 0.4, 0.0)
+			wanted = dodged
+	if not _cam_ready:
+		_cam_pos = wanted
+		_cam_look = look
+		_cam_ready = true
+	_cam_pos = _cam_pos.lerp(wanted, minf(1.0, dt * 4.0))
+	_cam_look = _cam_look.lerp(look, minf(1.0, dt * 6.0))
+	var cam: Camera3D = _stage.get("camera")
+	cam.position = _cam_pos
+	if _cam_pos.distance_to(_cam_look) > 0.05:
+		cam.look_at(_cam_look, Vector3.UP)
+	var boosting := float(race["karts"][0]["boostT"]) > 0.0
+	_stage.call("set_fov_bonus", HFOV_KICK if boosting else 0.0)
+	var speed := float(race["karts"][0]["speed"]) * _scale
+	_streaks.set("enabled", boosting and not _reduced_motion())
+	_streaks.call("update", dt, speed, 10.0 if boosting else 0.0)
+
+
+## Zertifizierungs-Haken (Screenshots): Im Looping-Abschnitt steht die Kamera
+## als Stuntkamera neben dem Ring — das Spieler-Kart verschwindet dann leicht
+## hinter der Röhre. Das Beweisfoto soll auf freier Strecke entstehen.
+##
+## Zweite Bedingung: das Gummiband-Feld drängelt sich zeitweise auf einem Meter
+## zusammen, dann parkt ein KI-Kart genau vor Goobys Cockpit. Geprüft wird
+## deshalb die tatsächliche VERDECKUNG (näher an der Kamera UND im selben
+## Bildfleck), nicht der Abstand im Raum — zwei Karts nebeneinander sind ja
+## völlig in Ordnung.
+func screenshot_ready() -> bool:
+	var track: Dictionary = race["track"]
+	var ps := float(race["karts"][0]["s"])
+	if not _loop_zone_at(track, ps).is_empty():
+		return false
+	var player: Node3D = _karts[0]
+	if _dodge_loop_plane(track, ps, player.position, player.position) != player.position:
+		return false
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return true
+	var seat := _gooby.global_position
+	if cam.is_position_behind(seat):
+		return false
+	var seat_px := cam.unproject_position(seat)
+	var seat_far := cam.global_position.distance_to(seat)
+	var block := CLEAR_SHOT_PX * maxf(view_size.x, view_size.y) / 1200.0
+	for i in range(1, _karts.size()):
+		var other := _karts[i].global_position
+		if cam.is_position_behind(other):
+			continue
+		if cam.global_position.distance_to(other) >= seat_far:
+			continue
+		if cam.unproject_position(other).distance_to(seat_px) < block:
+			return false
+	return true
+
+
+## Steht die Kamera selbst gerade IN einem Looping-Abschnitt, würde sie durch
+## das Band schneiden — dann rutscht sie seitlich aus der Ringebene.
+func _dodge_loop_plane(
+	track: Dictionary, ps: float, player_pos: Vector3, wanted: Vector3
+) -> Vector3:
+	var lap := float(track["lapLen"])
+	var cam_s := fmod(fmod(ps - CAM_BACK, lap) + lap, lap)
+	for z: Dictionary in track["loopZones"]:
+		if cam_s < float(z["s0"]) - 0.5 or cam_s > float(z["s1"]) + 0.5:
+			continue
+		var perp := Vector3(-_cam_fwd.z, 0.0, _cam_fwd.x)
+		if _cam_ready and (_cam_pos - player_pos).dot(perp) < 0.0:
+			perp = -perp
+		return wanted + perp * 5.0 + _cam_fwd * 2.4
+	return wanted
+
+
+func _loop_zone_at(track: Dictionary, s: float) -> Dictionary:
+	for z: Dictionary in track["loopZones"]:
+		if s >= float(z["s0"]) - 0.4 and s <= float(z["s1"]) + 0.2:
+			return z
+	return {}
+
+
+## Funken am Heck, solange die Driftladung wächst (reduced-motion-gated).
+func _drift_sparks(dt: float) -> void:
+	_spark_t = maxf(0.0, _spark_t - dt)
 	var kart: Dictionary = race["karts"][0]
-	var sample := Logic.point_at(race["track"], float(kart["s"]))
-	var t: Array = sample["t"]
-	var flat := Vector2(float(t[0]), float(t[2]))
-	if flat.length() > 0.45:
-		_cam_h = _cam_h.lerp(flat.normalized(), minf(1.0, dt * 5.0)).normalized()
-	var world := _kart_world(kart, sample)
-	var wanted := world - Vector3(_cam_h.x, 0.0, _cam_h.y) * CAM_BEHIND
-	wanted.y = maxf(world.y, 0.0) + _cam_lift
-	_cam_pos = _cam_pos.lerp(wanted, minf(1.0, dt * 5.0))
-	_cam_y = _cam_pos.y
+	if not bool(kart["drifting"]) or float(kart["driftCharge"]) < 0.05:
+		return
+	if _spark_t > 0.0 or _reduced_motion():
+		return
+	_spark_t = 0.09
+	Fx.burst(_sparks, _karts[0].global_transform * Vector3(0.0, 0.12, -0.5))
+
+
+func _world_at(sample: Dictionary, lat: float) -> Vector3:
+	return _world.call("world_at", sample, lat)
+
+
+static func _v3(arr: Array) -> Vector3:
+	return Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
 
 
 func _snap_camera() -> void:
-	var kart: Dictionary = race["karts"][0]
-	var sample := Logic.point_at(race["track"], float(kart["s"]))
-	var t: Array = sample["t"]
-	var flat := Vector2(float(t[0]), float(t[2]))
-	_cam_h = flat.normalized() if flat.length() > 0.001 else Vector2(0.0, 1.0)
-	var world := _kart_world(kart, sample)
-	_cam_pos = world - Vector3(_cam_h.x, 0.0, _cam_h.y) * CAM_BEHIND
-	_cam_pos.y = maxf(world.y, 0.0) + _cam_lift
-	_cam_y = _cam_pos.y
-
-
-## Weltpunkt eines Karts (Mittelspline + seitlicher Versatz).
-func _kart_world(kart: Dictionary, sample: Dictionary) -> Vector3:
-	return _lat_world(sample, float(kart["lateral"]))
-
-
-## Weltpunkt bei seitlichem Versatz `lat` auf einer Spline-Stützstelle.
-func _lat_world(sample: Dictionary, lat: float) -> Vector3:
-	var p: Array = sample["p"]
-	var r: Array = sample["right"]
-	return Vector3(
-		float(p[0]) + float(r[0]) * lat,
-		float(p[1]) + float(r[1]) * lat,
-		float(p[2]) + float(r[2]) * lat
-	)
-
-
-## Kamera-Zoom/Horizont aus dem Layout: die Fahrbahn füllt einen festen
-## Anteil der Breite, das Kart sitzt auf einem festen Höhenanteil.
-func _recompute_camera() -> void:
-	var road_fill := 0.44 if landscape else 0.8
-	var horizon_frac := 0.3 if landscape else 0.26
-	var kart_frac := 0.74 if landscape else 0.72
-	var half_w := float(tune["TRACK_HALF_W"]) + APRON
-	_focal_px = road_fill * view_size.x * CAM_BEHIND / (2.0 * half_w)
-	_horizon_px = view_size.y * horizon_frac
-	_cam_lift = (view_size.y * kart_frac - _horizon_px) * CAM_BEHIND / _focal_px
-	_cam_pos.y = _cam_lift
-	_cam_y = _cam_pos.y
-
-
-## Weltpunkt → Bildschirmpixel. Gibt `null` zurück, wenn der Punkt hinter der
-## Nahebene liegt (Kurven schieben Stützstellen hinter die Kamera).
-func project(world: Vector3) -> Variant:
-	var dx := world.x - _cam_pos.x
-	var dz := world.z - _cam_pos.z
-	var fwd := dx * _cam_h.x + dz * _cam_h.y
-	if fwd < NEAR_FWD:
-		return null
-	var lat := dx * _cam_h.y - dz * _cam_h.x
-	var s := _focal_px / fwd
-	return Vector2(view_size.x * 0.5 + lat * s, _horizon_px + (_cam_y - world.y) * s)
-
-
-## Pixel pro Weltmeter in dieser Tiefe (für Sticker-Größen).
-func _scale_of(world: Vector3) -> float:
-	var fwd := (world.x - _cam_pos.x) * _cam_h.x + (world.z - _cam_pos.z) * _cam_h.y
-	return _focal_px / maxf(NEAR_FWD, fwd)
-
-
-func _depth_of(world: Vector3) -> float:
-	return (world.x - _cam_pos.x) * _cam_h.x + (world.z - _cam_pos.z) * _cam_h.y
-
-
-# ── Szenerie ──────────────────────────────────────────────────────────────
-
-
-## Bauklotz-Türme rund um den Kurs — gesät aus dem Rennseed, damit die
-## Kulisse zum Kurs passt und über Läufe hinweg reproduzierbar ist.
-func _build_towers() -> void:
-	var track: Dictionary = race["track"]
-	var rng := GoobyRng.new((int(race["seed"]) ^ 0x7A17E00D) & 0xFFFFFFFF)
-	var lap_len := float(track["lapLen"])
-	var count := 16
-	for i in count:
-		var s := lap_len * float(i) / count
-		var sample := Logic.point_at(track, s)
-		var side := 1.0 if rng.next() < 0.5 else -1.0
-		var dist := 2.4 + rng.next() * 3.2
-		var base := _lat_world(sample, side * dist)
-		if absf(base.y) > 0.4:
-			continue
-		var stack: Array[int] = []
-		var high := 1 + int(rng.next() * 3.0)
-		for _b in high:
-			stack.append(int(rng.next() * 6.0))
-		_towers.append({"pos": base, "stack": stack})
+	_cam_ready = false
+	_sync_karts()
+	_sync_camera(1.0)
 
 
 # ── Ereignisse ────────────────────────────────────────────────────────────
@@ -333,16 +640,17 @@ func _handle_event(ev: Dictionary) -> void:
 		"boost":
 			AudioDirector.try_play(self, "mg_combo")
 			_set_banner(I18nService.t("mg.toyRacer.boost"))
-			if ctx.juice != null:
-				ctx.juice.bloom_pulse(0.9)
+			_stage.call("pulse_glow", 0.9)
+			_gooby.call("emote", "ecstatic", 1.0)
+			Fx.burst(_sparks, _karts[0].global_position)
 		"pickup":
 			AudioDirector.try_play(self, "gvz_collect")
 			_set_banner(I18nService.t("mg.toyRacer.item_%s" % str(ev["item"])))
+			_stage.call("pulse_glow", 0.4)
 		"turbo":
 			AudioDirector.try_play(self, "mg_golden")
 			_set_banner(I18nService.t("mg.toyRacer.turbo"))
-			if ctx.juice != null:
-				ctx.juice.bloom_pulse(1.2)
+			_stage.call("pulse_glow", 1.2)
 		"shield":
 			AudioDirector.try_play(self, "mg_perfect")
 			_set_banner(I18nService.t("mg.toyRacer.shield"))
@@ -352,8 +660,9 @@ func _handle_event(ev: Dictionary) -> void:
 		"blockHit":
 			AudioDirector.try_play(self, "mg_spill")
 			_set_banner(I18nService.t("mg.toyRacer.block_hit"))
+			_gooby.call("emote", "dizzy", 1.5)
+			# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 			if ctx.juice != null:
-				ctx.juice.shake(0.5)
 				ctx.juice.hit_freeze(80)
 		"shieldPop":
 			AudioDirector.try_play(self, "gvz_balloon")
@@ -361,6 +670,7 @@ func _handle_event(ev: Dictionary) -> void:
 		"offtrack":
 			AudioDirector.try_play(self, "mg_junk")
 			_set_banner(I18nService.t("mg.toyRacer.offtrack"))
+			_gooby.call("emote", "scared", 0.8)
 		"overtake":
 			AudioDirector.try_play(self, "mg_good")
 			_add_score(int(tune["OVERTAKE_POINTS"]))
@@ -369,6 +679,7 @@ func _handle_event(ev: Dictionary) -> void:
 				_player_px() - Vector2(0.0, 40.0),
 				Color(0.34, 0.75, 0.44)
 			)
+			_gooby.call("emote", "ecstatic", 0.9)
 		"lap":
 			AudioDirector.try_play(self, "gvz_wave")
 			_set_banner(
@@ -387,8 +698,8 @@ func _handle_event(ev: Dictionary) -> void:
 			if banked > score:
 				_add_score(banked - score)
 			_paid_drift = 0
-			if ctx.juice != null:
-				ctx.juice.bloom_pulse(1.4)
+			_stage.call("pulse_glow", 1.4)
+			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
 		"finish":
 			AudioDirector.try_play(self, "mg_win")
 			var rank := int(ev["rank"])
@@ -399,8 +710,9 @@ func _handle_event(ev: Dictionary) -> void:
 					else I18nService.t("mg.toyRacer.finish_place", {"p": rank})
 				)
 			)
-			if ctx.juice != null:
-				ctx.juice.bloom_pulse(1.5)
+			_gooby.call("emote", "ecstatic" if rank <= 2 else "happy", 3.0)
+			_stage.call("pulse_glow", 1.5)
+			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
 
 
 func _finish() -> void:
@@ -435,37 +747,16 @@ func _set_banner(text: String) -> void:
 
 
 func _player_px() -> Vector2:
-	return Vector2(view_size.x * 0.5, view_size.y * (0.78 if landscape else 0.74))
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null or _karts.is_empty():
+		return view_size * 0.5
+	return cam.unproject_position(_karts[0].global_position)
 
 
-# ── HUD ───────────────────────────────────────────────────────────────────
-
-
-func _build_hud() -> void:
-	_lap_label = Label.new()
-	_lap_label.theme_type_variation = &"HeadlineLabel"
-	add_child(_lap_label)
-	_pos_label = Label.new()
-	_pos_label.theme_type_variation = &"CaptionLabel"
-	# CaptionLabel ist standardmäßig sehr blass — auf der hellen HUD-Platte
-	# braucht die Platz-/Item-Zeile kräftigere Tinte.
-	_pos_label.add_theme_color_override("font_color", Color(0.35, 0.29, 0.27))
-	add_child(_pos_label)
-	_hint_label = Label.new()
-	_hint_label.theme_type_variation = &"SoftLabel"
-	_hint_label.text = I18nService.t("mg.toyRacer.hint")
-	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Der Hinweis liegt auf der dunklen Fahrbahn — heller Text mit Rand.
-	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.94))
-	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.13, 0.12, 0.45))
-	_hint_label.add_theme_constant_override("outline_size", 7)
-	add_child(_hint_label)
-	_update_labels()
-
-
-func _fit_viewport() -> void:
-	apply_view(get_viewport_rect().size)
+func _fade_hint() -> void:
+	if _hint_label == null:
+		return
+	_hint_label.modulate.a = clampf((HINT_FADE_SEC - _elapsed) / 1.2, 0.0, 1.0)
 
 
 func _update_labels() -> void:
@@ -497,55 +788,10 @@ func _update_labels() -> void:
 	)
 
 
-# ── Drift-Funken ──────────────────────────────────────────────────────────
-
-
-func _emit_drift_sparks(dt: float) -> void:
-	var kart: Dictionary = race["karts"][0]
-	_spark_t = maxf(0.0, _spark_t - dt)
-	if not bool(kart["drifting"]) or float(kart["driftCharge"]) < 0.05:
-		return
-	if _spark_t > 0.0:
-		return
-	_spark_t = 0.06
-	var charge := float(kart["driftCharge"])
-	var base := _player_px() + Vector2(0.0, 12.0)
-	for _i in 2:
-		(
-			_sparks
-			. append(
-				{
-					"pos": base + Vector2(randf_range(-26.0, 26.0), randf_range(-6.0, 6.0)),
-					"vel": Vector2(randf_range(-70.0, 70.0), randf_range(-140.0, -40.0)),
-					"life": 0.35,
-					"charge": charge,
-				}
-			)
-		)
-
-
-func _age_sparks(dt: float) -> void:
-	for i in range(_sparks.size() - 1, -1, -1):
-		var sp: Dictionary = _sparks[i]
-		sp["life"] = float(sp["life"]) - dt
-		if float(sp["life"]) <= 0.0:
-			_sparks.remove_at(i)
-			continue
-		sp["pos"] = Vector2(sp["pos"]) + Vector2(sp["vel"]) * dt
-		sp["vel"] = Vector2(sp["vel"]) + Vector2(0.0, 220.0 * dt)
-
-
-# ── Zeichnen ──────────────────────────────────────────────────────────────
+# ── 2D-Overlay (HUD-Platte, Driftmeter, Banner über der 3D-Szene) ─────────
 
 
 func _draw() -> void:
-	Scenery.draw_room(self, view_size, _horizon_px)
-	Scenery.draw_towers(self, _towers, project, _scale_of, _depth_of, NEAR_FWD, DRAW_AHEAD + 6.0)
-	_draw_ribbon()
-	_draw_item_boxes()
-	_draw_blocks()
-	_draw_karts()
-	_draw_sparks()
 	_draw_hud_panel()
 	_draw_drift_meter()
 	_draw_banner()
@@ -572,307 +818,6 @@ func _draw_soft_panel(rect: Rect2, tint: Color, radius: float) -> void:
 		Vector2(rect.size.x - r, rect.size.y - r)
 	]:
 		draw_circle(rect.position + corner, r, tint)
-
-
-## Fahrbahnband aus dem ECHTEN Logik-Spline (inkl. senkrechter Loopings).
-func _draw_ribbon() -> void:
-	var track: Dictionary = race["track"]
-	var kart: Dictionary = race["karts"][0]
-	var s0 := float(kart["s"]) - DRAW_BEHIND
-	var half := float(tune["TRACK_HALF_W"])
-	var segments: Array[Dictionary] = []
-	var d := DRAW_AHEAD
-	while d > -DRAW_BEHIND - RIBBON_STEP:
-		var sa := s0 + DRAW_BEHIND + d
-		var sb := sa + RIBBON_STEP
-		var pa := Logic.point_at(track, sa)
-		var pb := Logic.point_at(track, sb)
-		var quad: Variant = _edge_quad(pa, pb, half + APRON)
-		if quad != null:
-			(
-				segments
-				. append(
-					{
-						"road": _edge_quad(pa, pb, half),
-						"apron": quad,
-						"sa": sa,
-						"mid": _lat_world(pa, 0.0),
-					}
-				)
-			)
-		d -= RIBBON_STEP
-	# Pastell-Ringstreifen des Spielteppichs — die Bänder hängen an der
-	# absoluten Bogenlänge, laufen also stabil unter dem Kart durch.
-	var rug_bands: Array[Color] = [
-		Color(0.62, 0.81, 0.92),
-		Color(0.97, 0.85, 0.5),
-		Color(0.95, 0.72, 0.79),
-		Color(0.68, 0.86, 0.62),
-		Color(0.83, 0.73, 0.92),
-	]
-	for seg: Dictionary in segments:
-		var band := int(floorf(float(seg["sa"]) / 1.5))
-		var apron: Variant = seg["apron"]
-		var road: Variant = seg["road"]
-		draw_colored_polygon(apron, rug_bands[posmod(band, rug_bands.size())])
-		if road == null:
-			continue
-		draw_colored_polygon(road, Color(0.42, 0.44, 0.5))
-		var poly: PackedVector2Array = road
-		var width := maxf(1.0, _scale_of(seg["mid"]) * 0.016)
-		# Seitliche Plastikleisten der Spielzeugbahn
-		draw_line(poly[0], poly[3], Color(0.28, 0.29, 0.34), width * 1.6)
-		draw_line(poly[1], poly[2], Color(0.28, 0.29, 0.34), width * 1.6)
-		# Gestrichelter Mittelstrich
-		if posmod(int(floorf(float(seg["sa"]) / RIBBON_STEP)), 3) == 0:
-			draw_line(
-				(poly[0] + poly[1]) * 0.5,
-				(poly[3] + poly[2]) * 0.5,
-				Color(0.98, 0.96, 0.9, 0.7),
-				width
-			)
-	# Start-Ziel-Linie
-	_draw_finish_line()
-
-
-## Ein Fahrbahn-Viereck zwischen zwei Stützstellen; `null` bei Nahclipping
-## oder wenn die Projektion entartet (Kurven jenseits der Bildebene).
-func _edge_quad(pa: Dictionary, pb: Dictionary, half: float) -> Variant:
-	var a_l: Variant = project(_lat_world(pa, -half))
-	var a_r: Variant = project(_lat_world(pa, half))
-	var b_l: Variant = project(_lat_world(pb, -half))
-	var b_r: Variant = project(_lat_world(pb, half))
-	if a_l == null or a_r == null or b_l == null or b_r == null:
-		return null
-	var quad := PackedVector2Array([a_l, a_r, b_r, b_l])
-	return quad if _quad_is_drawable(quad) else null
-
-
-## Ein Viereck ist zeichenbar, wenn es konvex, nicht entartet und noch in
-## Bildnähe liegt. Ohne diese Prüfung wirft Godot bei Kurven, deren Kanten
-## hinter die Bildebene laufen, „triangulation failed".
-func _quad_is_drawable(quad: PackedVector2Array) -> bool:
-	var limit := maxf(view_size.x, view_size.y) * 3.0
-	for point in quad:
-		if absf(point.x) > limit or absf(point.y) > limit:
-			return false
-	var sign_seen := 0
-	for i in 4:
-		var a := quad[i]
-		var b := quad[(i + 1) % 4]
-		var c := quad[(i + 2) % 4]
-		var cross := (b - a).cross(c - b)
-		if absf(cross) < 0.35:
-			continue
-		var s := 1 if cross > 0.0 else -1
-		if sign_seen == 0:
-			sign_seen = s
-		elif sign_seen != s:
-			return false
-	return sign_seen != 0
-
-
-func _draw_finish_line() -> void:
-	var track: Dictionary = race["track"]
-	var half := float(tune["TRACK_HALF_W"])
-	var pa := Logic.point_at(track, 0.0)
-	var pb := Logic.point_at(track, 0.35)
-	var cells := 8
-	for i in cells:
-		var f0 := -half + (2.0 * half) * i / cells
-		var f1 := -half + (2.0 * half) * (i + 1) / cells
-		var q0: Variant = project(_lat_world(pa, f0))
-		var q1: Variant = project(_lat_world(pa, f1))
-		var q2: Variant = project(_lat_world(pb, f1))
-		var q3: Variant = project(_lat_world(pb, f0))
-		if q0 == null or q1 == null or q2 == null or q3 == null:
-			continue
-		draw_colored_polygon(
-			PackedVector2Array([q0, q1, q2, q3]),
-			Color(0.98, 0.97, 0.94) if i % 2 == 0 else Color(0.2, 0.19, 0.22)
-		)
-
-
-func _draw_item_boxes() -> void:
-	var track: Dictionary = race["track"]
-	for row: Dictionary in track["itemRows"]:
-		var sample := Logic.point_at(track, float(row["s"]))
-		for box: Dictionary in row["boxes"]:
-			if float(box["respawnT"]) > 0.0:
-				continue
-			var world := _lat_world(sample, float(box["lat"]))
-			world.y += 0.16
-			var pt: Variant = project(world)
-			if pt == null:
-				continue
-			var s := _scale_of(world)
-			if s > _focal_px / NEAR_FWD * 0.9:
-				continue
-			var r := s * 0.15
-			var spin := 0.35 * sin(_elapsed * 2.2 + float(box["lat"]) * 3.0)
-			var c: Vector2 = pt
-			draw_colored_polygon(
-				PackedVector2Array(
-					[
-						c + Vector2(-r, -r * 0.4 + spin * r),
-						c + Vector2(0.0, -r * 1.2),
-						c + Vector2(r, -r * 0.4 - spin * r),
-						c + Vector2(0.0, r * 0.35),
-					]
-				),
-				Color(1.0, 0.85, 0.35)
-			)
-			draw_circle(c + Vector2(0.0, -r * 0.42), r * 0.3, Color(1.0, 0.99, 0.85))
-
-
-func _draw_blocks() -> void:
-	var track: Dictionary = race["track"]
-	for block: Dictionary in race["blocks"]:
-		var sample := Logic.point_at(track, float(block["s"]))
-		var world := _lat_world(sample, float(block["lat"]))
-		world.y += 0.1
-		var pt: Variant = project(world)
-		if pt == null:
-			continue
-		var s := _scale_of(world)
-		var w := s * 0.24
-		var box := Rect2(Vector2(pt) - Vector2(w * 0.5, w * 0.8), Vector2(w, w * 0.8))
-		draw_rect(box, Color(0.87, 0.36, 0.33))
-		draw_rect(box, Color(0.58, 0.2, 0.18), false, maxf(1.0, w * 0.09))
-		draw_circle(box.position + Vector2(w * 0.5, -w * 0.05), w * 0.16, Color(0.95, 0.55, 0.5))
-
-
-func _draw_karts() -> void:
-	var track: Dictionary = race["track"]
-	var order: Array[Dictionary] = []
-	var karts: Array = race["karts"]
-	for i in karts.size():
-		var kart: Dictionary = karts[i]
-		var sample := Logic.point_at(track, float(kart["s"]))
-		var world := _kart_world(kart, sample)
-		var depth := _depth_of(world)
-		if depth < KART_NEAR or depth > DRAW_AHEAD:
-			continue
-		order.append({"kart": kart, "world": world, "d": depth})
-	order.sort_custom(
-		func(a: Dictionary, b: Dictionary) -> bool: return float(a["d"]) > float(b["d"])
-	)
-	# Lesbarkeit vor Tiefensortierung: das Spieler-Kart liegt immer obenauf,
-	# sonst verdecken es die Verfolger direkt vor der Kamera.
-	var player_entry: Dictionary = {}
-	for entry: Dictionary in order:
-		if bool((entry["kart"] as Dictionary)["isPlayer"]):
-			player_entry = entry
-			continue
-		_draw_kart(entry["kart"], entry["world"])
-	if player_entry.is_empty():
-		return
-	var world: Vector3 = player_entry["world"]
-	var marker: Variant = project(world)
-	if marker != null:
-		var s := _scale_of(world)
-		draw_arc(
-			Vector2(marker) + Vector2(0.0, s * KART_W * 0.18),
-			s * KART_W * 0.66,
-			0.0,
-			TAU,
-			26,
-			Color(1.0, 0.98, 0.9, 0.55),
-			maxf(2.0, s * 0.012)
-		)
-	_draw_kart(player_entry["kart"], world)
-
-
-func _draw_kart(kart: Dictionary, world: Vector3) -> void:
-	var pt: Variant = project(world)
-	if pt == null:
-		return
-	var c: Vector2 = pt
-	var s := _scale_of(world)
-	var is_player := bool(kart["isPlayer"])
-	var ai_palette: Array[Color] = [
-		Color(0.42, 0.66, 0.92), Color(0.55, 0.78, 0.4), Color(0.86, 0.71, 0.35)
-	]
-	var body := Color(0.95, 0.42, 0.36) if is_player else ai_palette[(int(kart["id"]) - 1) % 3]
-	var w := s * KART_W
-	var h := s * KART_W * 0.52
-	var lean := 0.0
-	if bool(kart["drifting"]):
-		lean = w * 0.12 * (1.0 if float(kart["lateral"]) >= 0.0 else -1.0)
-	if float(kart["stunT"]) > 0.0:
-		lean += sin(_elapsed * 28.0) * w * 0.1
-	# Schatten
-	draw_circle(c + Vector2(0.0, h * 0.18), w * 0.5, Color(0.32, 0.22, 0.14, 0.28))
-	# Schub-Flamme
-	if float(kart["boostT"]) > 0.0:
-		var flame := 0.6 + 0.4 * sin(_elapsed * 30.0)
-		draw_colored_polygon(
-			PackedVector2Array(
-				[
-					c + Vector2(-w * 0.22, h * 0.05),
-					c + Vector2(w * 0.22, h * 0.05),
-					c + Vector2(0.0, h * (0.6 + flame * 0.8)),
-				]
-			),
-			Color(1.0, 0.72, 0.25, 0.85)
-		)
-	# Räder
-	draw_rect(
-		Rect2(c + Vector2(-w * 0.56 + lean, -h * 0.1), Vector2(w * 0.18, h * 0.5)),
-		Color(0.2, 0.19, 0.22)
-	)
-	draw_rect(
-		Rect2(c + Vector2(w * 0.38 + lean, -h * 0.1), Vector2(w * 0.18, h * 0.5)),
-		Color(0.2, 0.19, 0.22)
-	)
-	# Karosserie
-	var hull := PackedVector2Array(
-		[
-			c + Vector2(-w * 0.44 + lean * 1.4, -h * 0.55),
-			c + Vector2(w * 0.44 + lean * 1.4, -h * 0.55),
-			c + Vector2(w * 0.5 + lean, h * 0.25),
-			c + Vector2(-w * 0.5 + lean, h * 0.25),
-		]
-	)
-	draw_colored_polygon(hull, body)
-	var rim := PackedVector2Array(hull)
-	rim.append(hull[0])
-	draw_polyline(rim, body.darkened(0.35), maxf(1.5, s * 0.018))
-	# Heckspoiler
-	draw_rect(
-		Rect2(c + Vector2(-w * 0.3 + lean, -h * 0.72), Vector2(w * 0.6, h * 0.16)),
-		body.darkened(0.2)
-	)
-	# Fahrer-Gooby
-	var head := c + Vector2(lean * 1.6, -h * 1.0)
-	draw_circle(head, w * 0.19, Color(0.99, 0.87, 0.72))
-	draw_arc(head, w * 0.19, PI, TAU, 12, Color(0.24, 0.42, 0.66), maxf(1.5, s * 0.03))
-	draw_circle(head + Vector2(-w * 0.07, 0.0), maxf(1.0, w * 0.03), Color(0.22, 0.16, 0.14))
-	draw_circle(head + Vector2(w * 0.07, 0.0), maxf(1.0, w * 0.03), Color(0.22, 0.16, 0.14))
-	if bool(kart["shield"]):
-		draw_arc(
-			c + Vector2(0.0, -h * 0.3),
-			w * 0.72,
-			0.0,
-			TAU,
-			26,
-			Color(0.5, 0.85, 1.0, 0.7),
-			maxf(2.0, s * 0.03)
-		)
-	if bool(kart["offTrack"]) and is_player:
-		draw_arc(c + Vector2(0.0, h * 0.2), w * 0.6, 0.0, PI, 14, Color(0.85, 0.7, 0.4, 0.7), 3.0)
-
-
-func _draw_sparks() -> void:
-	for sp: Dictionary in _sparks:
-		var life := float(sp["life"])
-		var charge := float(sp["charge"])
-		var color := (
-			Color(1.0, 0.55, 0.25, life * 2.6)
-			if charge < float(tune["DRIFT_MIN_CHARGE"])
-			else Color(0.55, 0.85, 1.0, life * 2.6)
-		)
-		draw_circle(Vector2(sp["pos"]), 3.0 + life * 6.0, color)
 
 
 func _draw_drift_meter() -> void:
@@ -903,12 +848,13 @@ func _draw_banner() -> void:
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var w := minf(view_size.x - 24.0, 440.0 * _ui)
 	draw_string(
 		font,
-		Vector2(view_size.x * 0.5 - 220.0, view_size.y * 0.17),
+		Vector2((view_size.x - w) * 0.5, view_size.y * 0.17),
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
-		440.0,
-		26,
-		Color(0.28, 0.2, 0.18, alpha)
+		w,
+		maxi(18, int(26.0 * _ui)),
+		Color(1.0, 0.99, 0.94, alpha)
 	)

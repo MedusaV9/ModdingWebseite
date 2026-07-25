@@ -4,16 +4,28 @@ extends MinigameBase
 ## Landmarken, 4-m-Abwurfring +50, Crash −5 (Boden 0), markiertes Paket
 ## −20 bei Schaden / +15 sauber, Zeitbonus +max(0, 120 − s) nach Abwurf 3.
 ##
-## 2D-STICKER statt 3D (begründet): die Web-Fassung fuhr eine three.js-Stadt in
-## Verfolgerperspektive. Die Logik ist reine (x, z)-Mathematik auf einem
-## 9×9-Kachelraster — eine Draufsicht-Sticker-Stadt zeigt Ziel, Abwurfring und
-## Verkehr GLEICHZEITIG (in der Verfolgerkamera braucht es dafür einen
-## Kompass) und spart die komplette 3D-Stadt-Pipeline. Kein Meter ändert sich.
+## ECHTES 3D (Agent 3D-B): das 9×9-Kachelraster der Logik steht als Kenney-
+## Stadt in der Welt, die Kamera hängt hinter dem Lieferwagen und Gooby fährt
+## SICHTBAR mit. Die Fahrphysik (Lenkrate, Tempo, Kollider) ist unverändert —
+## es sind dieselben (x, z)-Meter, nur nicht mehr von oben gezeichnet.
+##
+## KEIN Screenshake beim Fahren (Motion-Comfort-Regel) — der Crash bekommt
+## stattdessen Bremsen, Frame-Freeze und eine Gooby-Grimasse.
 ##
 ## AUTOHAUS-HOOK: `car_speed_mult` bleibt 1.0 — hier hängt später das im
 ## Autohaus gekaufte Auto (Tempo/Handling) dran. Bewusst NICHT implementiert.
 
 const Logic := preload("res://scripts/minigames/games/delivery_rush/delivery_rush_logic.gd")
+const World := preload("res://scripts/minigames/games/delivery_rush/delivery_rush_world.gd")
+const Models := preload("res://scripts/minigames/games/_3db_stage/model_bank.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
+const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
+const GoobyMount := preload("res://scripts/minigames/games/_3db_stage/gooby_mount.gd")
+const MultiProp := preload("res://scripts/minigames/games/_3db_stage/multi_prop.gd")
+const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
+
+const VAN_GLB := "res://assets/city/autos/delivery.glb"
+const PARCEL_GLB := "res://assets/minigames/delivery_rush/car-kit/box.glb"
 
 ## Basis-Höchsttempo des Lieferwagens (m/s, §C4-Rampe).
 const VAN_TOP_SPEED := 13.0
@@ -21,10 +33,6 @@ const VAN_ACCEL := 9.0
 const VAN_TURN_RATE := 2.4
 ## Abseits der Straße bremst der Wagen auf diesen Anteil.
 const OFFROAD_FACTOR := 0.45
-## Sichtfeld der Verfolgerkamera auf der KURZEN Bildkante (Weltmeter). Feste
-## Pixel-pro-Meter ließen die 180-m-Stadt in der Bühnenmitte schrumpfen und
-## rundherum leere Wiese stehen — jetzt folgt der Zoom der Bühnengröße.
-const VISIBLE_SHORT_M := 68.0
 ## Fahrzeugmaße in Weltmetern (Lieferwagen und Verkehr).
 const VAN_LEN_M := 7.0
 const VAN_WIDTH_M := 3.4
@@ -37,6 +45,36 @@ const TRAFFIC_BASE := 6
 const TRAFFIC_SPEED := 7.5
 const TRAFFIC_HIT_M := 3.4
 const CRASH_COOLDOWN_SEC := 1.5
+
+## Verfolgerkamera (Meter hinter/über dem Wagen) und Blickpunkt davor.
+const CAM_BACK := 11.5
+const CAM_LIFT := 5.4
+const CAM_LOOK_AHEAD := 9.0
+const CAM_PORTRAIT_LIFT := 2.2
+const CAM_PORTRAIT_BACK := 1.5
+## Hochkant: Zielpunkt näher heran und tiefer ziehen (Blick auf die Straße).
+const CAM_PORTRAIT_AHEAD := 3.0
+const CAM_PORTRAIT_AIM_DOWN := 1.4
+const HFOV_BASE := 84.0
+const HFOV_KICK := 7.0
+const STREAK_RATE: Array = [[7.0, 0.0], [10.0, 5.0], [13.0, 11.0]]
+## Nach so vielen Sekunden blendet der Hinweis aus.
+const HINT_FADE_SEC := 7.0
+## Autopilot (nur Screenshots/Zertifizierung): so scharf zielt er.
+const BOT_STEER_GAIN := 1.6
+## Höhe des Gooby-Rigs auf dem Wagendach (m).
+const GOOBY_H := 1.7
+## Wegweiser-Band: so viele Kacheln weit wird die Route auf die Straße gemalt.
+const ROUTE_TILES := 9
+## Breite des Wegweiser-Bandes (m). Web: `T.ROUTE_LINE_WIDTH_M` = 1,6 — mit 3,0
+## lag hochkant ein magentafarbener Teppich über dem unteren Bilddrittel.
+const ROUTE_WIDTH_M := 1.6
+## So weit reicht das Band hinter den Wagen zurück (m) — siehe `_sync_route`.
+const ROUTE_TRAIL_M := 10.0
+## Der Bot peilt nicht den nächstbesten Routenpunkt an, sondern den ersten, der
+## mindestens so weit vor ihm liegt — sonst kurvt er um jede Kachelmitte herum
+## und landet dabei regelmäßig auf der Wiese.
+const BOT_LOOKAHEAD_M := 7.0
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -53,6 +91,8 @@ var view_size := Vector2(390.0, 844.0)
 var landscape := false
 ## Hook: kommt später aus dem Autohaus (Tempo/Handling des gekauften Autos).
 var car_speed_mult := 1.0
+## Für Screenshot-/Zertifizierungsläufe: der Autopilot fährt zum Abwurfring.
+var autoplay := false
 
 var van_pos := Vector2.ZERO
 var van_heading := 0.0
@@ -66,13 +106,27 @@ var _drop_points: Array[Vector2] = []
 var _traffic: Array[Dictionary] = []
 var _endless_state: Dictionary = {}
 var _crash_cool := 0.0
-var _ppm := 7.0
 var _ui := 1.0
 var _time_label: Label
 var _target_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
+var _stage: Node3D
+var _world: Node3D
+var _van: Node3D
+var _gooby: Node3D
+var _parcels: Array[Node3D] = []
+var _ring: Node3D
+var _route_prop: Node3D
+var _route: Array[Vector2] = []
+var _route_t := 0.0
+var _streaks: MultiMeshInstance3D
+var _dust: GPUParticles3D
+var _pop: GPUParticles3D
+var _cam_pos := Vector3.ZERO
+var _cam_look := Vector3.ZERO
+var _cam_ready := false
 
 
 func setup(context: MinigameCtx) -> void:
@@ -92,7 +146,9 @@ func setup(context: MinigameCtx) -> void:
 	van_pos = Vector2(start.x + 6.5, start.y)
 	van_heading = -PI * 0.5
 	_spawn_traffic()
+	_build_stage()
 	_build_hud()
+	_sync_world(0.0)
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
@@ -109,8 +165,9 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
-	_ppm = clampf(minf(view_size.x, view_size.y) / VISIBLE_SHORT_M, 3.0, 22.0)
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.call("apply_size", view_size)
 	_layout_hud()
 	queue_redraw()
 
@@ -137,6 +194,12 @@ func _process(delta: float) -> void:
 	leg_elapsed += delta
 	_banner_t = maxf(0.0, _banner_t - delta)
 	_crash_cool = maxf(0.0, _crash_cool - delta)
+	_route_t -= delta
+	if _route_t <= 0.0:
+		_route_t = 0.25
+		_recompute_route()
+	if autoplay:
+		_autopilot()
 	var before := van_pos
 	_step_van(delta)
 	_step_traffic(delta)
@@ -144,6 +207,8 @@ func _process(delta: float) -> void:
 	if Logic.parcel_expired(leg_elapsed, tune):
 		_expire_parcel()
 	_update_labels()
+	_fade_hint()
+	_sync_world(delta)
 	queue_redraw()
 
 
@@ -154,6 +219,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		steer = _steer_from(event.position) if event.pressed else 0.0
 	elif event is InputEventScreenDrag:
 		steer = _steer_from(event.position)
+	elif event is InputEventKey and not event.echo:
+		match event.keycode:
+			KEY_LEFT, KEY_A:
+				steer = -1.0 if event.pressed else 0.0
+			KEY_RIGHT, KEY_D:
+				steer = 1.0 if event.pressed else 0.0
 
 
 ## Aktuelles Lieferziel (Weltpunkt des Abwurfrings).
@@ -161,6 +232,87 @@ func current_drop() -> Vector2:
 	if parcel < _drop_points.size():
 		return _drop_points[parcel]
 	return Vector2.ZERO
+
+
+## Autopilot für Screenshot-Läufe: fährt die Wegweiser-Route ab (also über die
+## Straßen, nicht quer über die Wiesen). Er greift NUR an `steer` an — genau
+## dort, wo sonst der Finger liegt, also ändert er keine einzige Spielregel.
+func _autopilot() -> void:
+	var to := _lookahead() - van_pos
+	if to.length() < 0.5:
+		return
+	var want := atan2(to.x, -to.y)
+	var diff := wrapf(want - van_heading, -PI, PI)
+	steer = clampf(diff * BOT_STEER_GAIN, -1.0, 1.0)
+
+
+## Erster Routenpunkt weiter als BOT_LOOKAHEAD_M — der letzte, wenn keiner passt.
+func _lookahead() -> Vector2:
+	for point: Vector2 in _route:
+		if van_pos.distance_to(point) >= BOT_LOOKAHEAD_M:
+			return point
+	return _route[-1] if not _route.is_empty() else current_drop()
+
+
+## Kürzeste Kachelkette vom Wagen zum Abwurfring über die Straßen (Breitensuche
+## auf dem 9×9-Raster der Logik). Reine Darstellung/Bot-Hilfe — die Suche liest
+## `Logic.is_road`, sie ändert nichts daran.
+func _recompute_route() -> void:
+	_route.clear()
+	if parcel >= _drop_points.size():
+		return
+	var drop := current_drop()
+	var goal := Logic.world_to_tile(drop.x, drop.y)
+	var start := _nearest_road_tile(Logic.world_to_tile(van_pos.x, van_pos.y))
+	goal = _nearest_road_tile(goal)
+	if start == goal:
+		_route.append(drop)
+		return
+	var came: Dictionary = {start: start}
+	var queue: Array[Vector2i] = [start]
+	var head := 0
+	while head < queue.size():
+		var here: Vector2i = queue[head]
+		head += 1
+		if here == goal:
+			break
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var next := here + step
+			if came.has(next) or not Logic.is_road(next.x, next.y):
+				continue
+			came[next] = here
+			queue.append(next)
+	if not came.has(goal):
+		_route.append(drop)
+		return
+	var chain: Array[Vector2i] = []
+	var walk := goal
+	while walk != start:
+		chain.push_front(walk)
+		walk = came[walk]
+	for tile: Vector2i in chain:
+		var w := Logic.tile_to_world(tile.x, tile.y)
+		_route.append(w)
+		if _route.size() >= ROUTE_TILES:
+			break
+	_route.append(drop)
+
+
+## Nächste befahrbare Kachel zu `tile` (Ziele liegen oft auf einem Bauplatz).
+func _nearest_road_tile(tile: Vector2i) -> Vector2i:
+	if Logic.is_road(tile.x, tile.y):
+		return tile
+	var best := tile
+	var best_d := 9999
+	for r in Logic.GRID:
+		for c in Logic.GRID:
+			if not Logic.is_road(r, c):
+				continue
+			var d := absi(r - tile.x) + absi(c - tile.y)
+			if d < best_d:
+				best_d = d
+				best = Vector2i(r, c)
+	return best
 
 
 func _steer_from(pos: Vector2) -> float:
@@ -182,24 +334,192 @@ func _rebuild_drop_points() -> void:
 		_drop_points.append(Vector2(float(p["x"]), float(p["z"])))
 
 
+# ── Aufbau ────────────────────────────────────────────────────────────────
+
+
+func _build_stage() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	(
+		_stage
+		. call(
+			"build",
+			{
+				# Web-ABENDBAND (`CITY_BANDS.dusk` in cityDrive.js, das sich
+				# deliveryRush teilt): Himmel #eeb493, Hemi 0,78, Sonne 0,72,
+				# Nebel 55…140. Das Tagband darüber sah aus wie eine Landstraße
+				# unter Mittagshimmel — der Pfirsichhimmel ist das Markenbild.
+				"sky_top": Color(0.86, 0.63, 0.55),
+				"sky_horizon": Color(0.933, 0.706, 0.576),
+				"ground_horizon": Color(0.72, 0.63, 0.55),
+				"ground_bottom": Color(0.4, 0.42, 0.4),
+				"fog_color": Color(0.933, 0.706, 0.576),
+				"fog_from": 55.0,
+				"fog_to": 140.0,
+				"glow": 0.32,
+				"sun_dir": Vector3(-0.5, -0.5, -0.7),
+				"sun_color": Color(1.0, 0.855, 0.706),
+				"sun_energy": 0.72,
+				"ambient_color": Color(0.9, 0.79, 0.71),
+				"ambient": 1.2,
+				"fill_color": Color(0.72, 0.76, 0.92),
+				# Kräftiger als bei den Korridor-Spielen: die Stadt steht frei,
+				# also sieht man dauernd sonnenabgewandte Hauswände. Mit 0,14
+				# fielen die zu schwarzen Platten zusammen.
+				"fill_energy": 0.5,
+				"hfov": HFOV_BASE,
+				"shadow_distance": 60.0,
+				"far": 420.0,
+			}
+		)
+	)
+	_world = World.new()
+	_stage.add_child(_world)
+	_world.call("build", _colliders, ctx.rng())
+	_build_van()
+	_build_ring()
+	_build_route()
+	_streaks = SpeedLines.new()
+	(_stage.get("camera") as Camera3D).add_child(_streaks)
+	# Schmal und weit außen: in der Häuserschlucht legten sich breite Striche
+	# als weiße Stangen über die Fassaden (`no_depth_test`).
+	_streaks.call("build", 14, Vector2(3.4, 4.6), Vector2(6.0, 14.0), Vector2(0.045, 1.0))
+	_dust = (
+		Fx
+		. particles(
+			{
+				# Klein und blass: mit 0,34 m Kantenlänge und 0,7 Deckkraft lag
+				# hinter dem Wagen eine Spur heller WÜRFEL auf dem Asphalt statt
+				# einer Staubfahne.
+				"color": Color(0.86, 0.82, 0.72, 0.32),
+				"amount": 18,
+				"lifetime": 0.6,
+				"speed": Vector2(0.6, 1.8),
+				"spread": 40.0,
+				"gravity": Vector3(0.0, -2.2, 0.0),
+				"size": Vector2(0.06, 0.18),
+			}
+		)
+	)
+	_stage.add_child(_dust)
+	_pop = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.85, 0.4, 1.0),
+				"amount": 24,
+				"lifetime": 0.9,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"additive": true,
+				"speed": Vector2(2.0, 5.0),
+				"spread": 180.0,
+				"gravity": Vector3(0.0, -5.0, 0.0),
+				"size": Vector2(0.12, 0.3),
+			}
+		)
+	)
+	_stage.add_child(_pop)
+
+
+## Lieferwagen + Gooby + Paketstapel. Gooby thront SICHTBAR vorn auf dem
+## Fahrerhaus — im Fahrerhaus säße er hinter der Ladekiste und wäre für die
+## Verfolgerkamera unsichtbar; die Pakete stapeln sich hinter ihm auf dem Dach.
+func _build_van() -> void:
+	_van = Node3D.new()
+	_stage.add_child(_van)
+	_van.add_child(Models.node(VAN_GLB, VAN_WIDTH_M, true))
+	var size := Models.fitted_size(VAN_GLB, VAN_WIDTH_M)
+	_gooby = GoobyMount.new()
+	_gooby.call("mount", GOOBY_H, true, false)
+	# `parts()` zieht die Unterkante auf y = 0 — das DACH liegt also bei size.y,
+	# nicht bei 0,62·size.y (dort saß Gooby vorher IM Laderaum). Lokales +z ist
+	# vorne: Gooby fährt HINTEN auf dem Dach mit (dort ist er der Verfolger-
+	# kamera am nächsten und damit groß im Bild), die Pakete stehen vor ihm.
+	_gooby.position = Vector3(0.0, size.y * 0.99, -size.z * 0.24)
+	_van.add_child(_gooby)
+	var parcel_w := 1.1
+	for i in int(tune["PARCELS"]):
+		var box := Models.node(PARCEL_GLB, parcel_w, true)
+		box.position = Vector3(
+			-0.62 if i % 2 == 0 else 0.62,
+			size.y * 0.99,
+			size.z * 0.12 + floorf(float(i) / 2.0) * parcel_w * 1.1
+		)
+		box.rotation.y = fmod(float(i) * 0.7, 0.6)
+		_van.add_child(box)
+		_parcels.append(box)
+
+
+## Abwurfring: leuchtender Reifen plus Lichtsäule, damit das Ziel schon aus
+## zwei Blocks Entfernung im Bild steht.
+func _build_ring() -> void:
+	_ring = Node3D.new()
+	_stage.add_child(_ring)
+	var radius := float(tune["DROP_RADIUS_M"])
+	var torus := Fx.ring(radius, 0.42, Color(1.0, 0.82, 0.3))
+	torus.rotation_degrees.x = -90.0
+	torus.position.y = 0.2
+	_ring.add_child(torus)
+	var beam := CylinderMesh.new()
+	beam.top_radius = radius * 0.82
+	beam.bottom_radius = radius * 0.82
+	beam.height = 22.0
+	beam.radial_segments = 18
+	beam.rings = 1
+	beam.material = Fx.glass(Color(1.0, 0.86, 0.42, 0.16), true)
+	var pillar := MeshInstance3D.new()
+	pillar.mesh = beam
+	pillar.position.y = 11.0
+	pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring.add_child(pillar)
+
+
+## Wegweiser-Band: rosa Pfeile auf dem Asphalt, die zum Abwurfring führen —
+## dieselbe Lesehilfe wie im Web. Ohne sie fährt man in einer Verfolgerkamera
+## blind durch ein Raster aus identischen Blocks.
+func _build_route() -> void:
+	# Ein flaches Band-Stück von 1 m Länge; `_sync_route` streckt es je Abschnitt
+	# über die Instanz-Basis zu einem durchgehenden Läufer. (Die erste Fassung
+	# setzte 4,2 m breite Prismen-Pfeile — im Bild lag ein einzelnes Riesendreieck
+	# quer auf der Wiese statt eines Wegweisers.)
+	var tape := BoxMesh.new()
+	tape.size = Vector3(ROUTE_WIDTH_M, 0.05, 1.0)
+	# Web: `MeshBasicMaterial(PRIMARY_PINK, opacity 0.55)` — also UNBELEUCHTET.
+	# Als beleuchtetes Material lag das Band im Schlagschatten der Häuser und
+	# verschwand genau dort, wo man es zum Abbiegen braucht.
+	tape.material = Fx.glass(Color(0.95, 0.36, 0.62, 0.55), true)
+	var lift := Transform3D(Basis.IDENTITY, Vector3(0.0, 0.09, 0.0))
+	_route_prop = MultiProp.new()
+	_stage.add_child(_route_prop)
+	# Drei Instanzen je Abschnitt, dazu Abwurfpunkt und Schleppe hinter dem Wagen.
+	_route_prop.call("build", [{"mesh": tape, "xform": lift}], (ROUTE_TILES + 3) * 3)
+
+
 func _build_hud() -> void:
 	_time_label = Label.new()
 	_time_label.theme_type_variation = &"HeadlineLabel"
+	_tint(_time_label)
 	add_child(_time_label)
 	_target_label = Label.new()
 	_target_label.theme_type_variation = &"CaptionLabel"
+	_tint(_target_label)
 	add_child(_target_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.deliveryRush.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Der Hinweis liegt auf Straße/Wiese — heller Text mit weichem Rand.
-	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
-	_hint_label.add_theme_color_override("font_outline_color", Color(0.18, 0.24, 0.16, 0.45))
-	_hint_label.add_theme_constant_override("outline_size", 7)
+	_tint(_hint_label)
 	add_child(_hint_label)
 	_update_labels()
+
+
+## Heller Text mit weichem Schattenrand — er liegt auf Straße und Wiese.
+func _tint(label: Label) -> void:
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
+	label.add_theme_color_override("font_outline_color", Color(0.18, 0.24, 0.16, 0.5))
+	label.add_theme_constant_override("outline_size", 7)
 
 
 func _fit_viewport() -> void:
@@ -217,6 +537,7 @@ func _spawn_traffic() -> void:
 					"speed": TRAFFIC_SPEED * (0.8 + rng.next() * 0.5),
 					"cross": i % 3 == 2,
 					"lane": 2.5 if rng.next() < 0.5 else -2.5,
+					"tint": Color(0.85, 0.35, 0.4) if i % 2 == 0 else Color(0.42, 0.62, 0.9),
 				}
 			)
 		)
@@ -279,6 +600,16 @@ func _traffic_pos(car: Dictionary) -> Vector2:
 	return Vector2(-60.0 + lane, 60.0 - (s2 - 360.0))
 
 
+## Fahrtrichtung eines Verkehrsautos (numerisch aus zwei Abtastungen — die
+## Kurse sind Streckenzüge, eine Ableitung wäre an den Ecken unstetig).
+func _traffic_dir(car: Dictionary) -> Vector2:
+	var probe := {
+		"s": fposmod(float(car["s"]) + 0.4, 480.0), "lane": car["lane"], "cross": car["cross"]
+	}
+	var step := _traffic_pos(probe) - _traffic_pos(car)
+	return step.normalized() if step.length() > 0.001 else Vector2(0.0, 1.0)
+
+
 func _crash() -> void:
 	_crash_cool = CRASH_COOLDOWN_SEC
 	crashes += 1
@@ -293,8 +624,11 @@ func _crash() -> void:
 		_set_banner(I18nService.t("mg.deliveryRush.crash", {"n": int(tune["CRASH_PENALTY"])}))
 	van_speed *= 0.2
 	AudioDirector.try_play(self, "mg_spill", 0.85)
+	_gooby.call("emote", "dizzy", 1.5)
+	if not _reduced_motion():
+		Fx.burst(_dust, _van.global_position + Vector3(0.0, 0.6, 0.0))
+	# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 	if ctx.juice != null:
-		ctx.juice.shake(0.5)
 		ctx.juice.hit_freeze(70)
 	ctx.report_score(score, score - prev)
 
@@ -320,8 +654,10 @@ func _check_drop(before: Vector2) -> void:
 	parcel += 1
 	leg_elapsed = 0.0
 	AudioDirector.try_play(self, "mg_perfect")
+	_stage.call("pulse_glow", 1.0)
+	_gooby.call("emote", "ecstatic", 1.4)
+	Fx.burst(_pop, Vector3(center.x, 1.2, center.y))
 	if ctx.juice != null:
-		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.float_text(_project(center), "+%d" % (score - prev), Color(1.0, 0.82, 0.35))
 	_set_banner(
 		I18nService.t("mg.deliveryRush.delivered", {"n": drops, "max": int(tune["PARCELS"])})
@@ -346,6 +682,7 @@ func _check_drop(before: Vector2) -> void:
 func _expire_parcel() -> void:
 	leg_elapsed = 0.0
 	AudioDirector.try_play(self, "mg_junk")
+	_gooby.call("emote", "sad", 1.4)
 	var ended := Logic.record_expiry(_endless_state)
 	_set_banner(
 		I18nService.t(
@@ -382,6 +719,12 @@ func _set_banner(text: String) -> void:
 	_banner_t = 1.6
 
 
+func _fade_hint() -> void:
+	if _hint_label == null:
+		return
+	_hint_label.modulate.a = clampf((HINT_FADE_SEC - elapsed) / 1.2, 0.0, 1.0)
+
+
 func _update_labels() -> void:
 	if bool(tune["ENDLESS"]):
 		_time_label.text = I18nService.t(
@@ -399,213 +742,166 @@ func _update_labels() -> void:
 		)
 
 
-## Weltmeter (x, z) → Bildschirmpixel (Verfolgerkamera auf dem Wagen).
+# ── 3D-Abgleich ───────────────────────────────────────────────────────────
+
+
+func _sync_world(delta: float) -> void:
+	_stage.call("tick", delta)
+	_gooby.call("tick", delta)
+	_sync_van()
+	_sync_traffic()
+	_sync_ring()
+	_sync_route()
+	_sync_camera(delta)
+
+
+## Pfeilkette entlang der Route: ein Pfeil je Zwischenpunkt, ausgerichtet auf
+## den jeweils nächsten. Alles in EINEM MultiMesh (ein Draw-Call).
+func _sync_route() -> void:
+	_route_prop.call("begin")
+	# Das Band beginnt HINTER dem Wagen, nicht an ihm: von der Verfolgerkamera
+	# aus deckt der Kasten die eigene Kachel komplett ab, und ein Läufer, der
+	# erst an der Stoßstange anfängt, ist schlicht unsichtbar. Im Web zieht sich
+	# der rosa Streifen unter dem Wagen hindurch bis in den Vordergrund — das
+	# ist es, was ihn als durchgehende Fahrspur lesbar macht.
+	var back := Vector2(sin(van_heading), -cos(van_heading)) * ROUTE_TRAIL_M
+	var chain: Array[Vector2] = [van_pos - back, van_pos]
+	chain.append_array(_route)
+	for i in range(1, chain.size()):
+		var step := chain[i] - chain[i - 1]
+		if step.length() < 0.5:
+			continue
+		var dir := step.normalized()
+		var fwd := Vector3(dir.x, 0.0, dir.y)
+		var right := Vector3.UP.cross(fwd).normalized()
+		# Dritte Spalte = lokale z-Achse: mit der Teilstücklänge gestreckt liegt
+		# das Band lückenlos, egal wie lang der Abschnitt ist.
+		var piece := step.length() / 3.0
+		var basis := Basis(right, Vector3.UP, fwd * piece)
+		for k in 3:
+			var t := (float(k) + 0.5) / 3.0
+			var p := chain[i - 1].lerp(chain[i], t)
+			_route_prop.call("push", Transform3D(basis, Vector3(p.x, 0.0, p.y)))
+	_route_prop.call("flush")
+
+
+func _sync_van() -> void:
+	var dir := Vector2(sin(van_heading), -cos(van_heading))
+	var fwd := Vector3(dir.x, 0.0, dir.y)
+	var right := Vector3.UP.cross(fwd).normalized()
+	var lean := clampf(steer * van_speed / VAN_TOP_SPEED, -1.0, 1.0)
+	var basis := Basis(right, Vector3.UP, fwd) * Basis(Vector3.BACK, -lean * 0.06)
+	_van.transform = Transform3D(basis, Vector3(van_pos.x, 0.0, van_pos.y))
+	var left := maxi(0, int(tune["PARCELS"]) - drops)
+	for i in _parcels.size():
+		_parcels[i].visible = i < left
+	_dust.global_position = _van.global_transform * Vector3(0.0, 0.15, -VAN_LEN_M * 0.4)
+	_dust.emitting = van_speed > VAN_TOP_SPEED * 0.55 and not _reduced_motion()
+
+
+func _sync_traffic() -> void:
+	var prop: Node3D = _world.get("traffic_prop")
+	prop.call("begin")
+	for car in _traffic:
+		var p := _traffic_pos(car)
+		var d := _traffic_dir(car)
+		var fwd := Vector3(d.x, 0.0, d.y)
+		var right := Vector3.UP.cross(fwd).normalized()
+		var pose := Transform3D(Basis(right, Vector3.UP, fwd), Vector3(p.x, 0.0, p.y))
+		prop.call("push", pose, car["tint"])
+	prop.call("flush")
+
+
+func _sync_ring() -> void:
+	if parcel >= _drop_points.size():
+		_ring.visible = false
+		return
+	var drop := current_drop()
+	_ring.visible = true
+	_ring.position = Vector3(drop.x, 0.0, drop.y)
+	var pulse := 1.0 + 0.08 * sin(elapsed * 4.0)
+	_ring.scale = Vector3(pulse, 1.0, pulse)
+	_ring.rotation.y = elapsed * 0.6
+
+
+func _sync_camera(delta: float) -> void:
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return
+	var dir := Vector2(sin(van_heading), -cos(van_heading))
+	var fwd := Vector3(dir.x, 0.0, dir.y)
+	var lift := CAM_LIFT + (0.0 if landscape else CAM_PORTRAIT_LIFT)
+	var back := CAM_BACK + (0.0 if landscape else CAM_PORTRAIT_BACK)
+	var here := Vector3(van_pos.x, 0.0, van_pos.y)
+	var wanted := here - fwd * back + Vector3(0.0, lift, 0.0)
+	# Hochkant öffnet die Blickwinkel-Umrechnung den senkrechten Ausschnitt weit:
+	# mit dem Querformat-Zielpunkt füllte reiner Himmel die obere Bildhälfte.
+	# Also zielt die Kamera hochkant kürzer und tiefer — der Blick liegt dann
+	# auf der Straße, wo gespielt wird.
+	var ahead := CAM_LOOK_AHEAD - (0.0 if landscape else CAM_PORTRAIT_AHEAD)
+	var aim_y := 1.6 - (0.0 if landscape else CAM_PORTRAIT_AIM_DOWN)
+	var look := here + fwd * ahead + Vector3(0.0, aim_y, 0.0)
+	if not _cam_ready:
+		_cam_pos = wanted
+		_cam_look = look
+		_cam_ready = true
+	_cam_pos = _cam_pos.lerp(wanted, minf(1.0, delta * 6.0))
+	_cam_look = _cam_look.lerp(look, minf(1.0, delta * 9.0))
+	cam.position = _cam_pos
+	if _cam_pos.distance_to(_cam_look) > 0.05:
+		cam.look_at(_cam_look, Vector3.UP)
+	var band01 := clampf(van_speed / VAN_TOP_SPEED, 0.0, 1.0)
+	_stage.call("set_fov_bonus", HFOV_KICK * band01)
+	_streaks.set("enabled", not _reduced_motion())
+	_streaks.call("update", delta, van_speed, SpeedLines.rate_at(van_speed, STREAK_RATE))
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
+
+
+## Weltmeter (x, z) → Bildschirmpixel (für Fließtexte und den Kompass).
 func _project(world: Vector2) -> Vector2:
-	return (world - van_pos) * _ppm + view_size * 0.5
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return view_size * 0.5
+	return cam.unproject_position(Vector3(world.x, 1.0, world.y))
+
+
+# ── 2D-Overlay (Kompass + Banner über der 3D-Szene) ──────────────────────
 
 
 func _draw() -> void:
-	_draw_city()
-	_draw_drop_ring()
-	_draw_traffic()
-	_draw_van()
 	_draw_compass()
 	_draw_banner()
 
 
-func _draw_city() -> void:
-	var k := _ppm
-	draw_rect(Rect2(Vector2.ZERO, view_size), Color(0.63, 0.82, 0.56))
-	var tile_px := Logic.TILE_M * k
-	for r in Logic.GRID:
-		for c in Logic.GRID:
-			var w := Logic.tile_to_world(r, c)
-			var pos := _project(w) - Vector2(tile_px, tile_px) * 0.5
-			if (
-				pos.x > view_size.x
-				or pos.y > view_size.y
-				or pos.x + tile_px < 0.0
-				or pos.y + tile_px < 0.0
-			):
-				continue
-			var kind := str((_grid[r][c] as Dictionary)["kind"])
-			var rect := Rect2(pos, Vector2(tile_px, tile_px))
-			if kind == "road":
-				_draw_road_tile(rect, r, c)
-			elif kind == "block":
-				draw_rect(rect, Color(0.7, 0.86, 0.62))
-			else:
-				draw_rect(rect, Color(0.58, 0.79, 0.52))
-	for b in _colliders:
-		var pos := _project(Vector2(float(b["minX"]), float(b["minZ"])))
-		var size := (
-			Vector2(float(b["maxX"]) - float(b["minX"]), float(b["maxZ"]) - float(b["minZ"])) * k
-		)
-		if (
-			pos.x > view_size.x
-			or pos.y > view_size.y
-			or pos.x + size.x < 0.0
-			or pos.y + size.y < 0.0
-		):
-			continue
-		# Häuser bekommen einen versetzten Schatten, damit die Draufsicht
-		# nicht wie ein flacher Grundriss wirkt.
-		draw_rect(Rect2(pos + size * 0.08, size), Color(0.35, 0.3, 0.28, 0.16))
-		draw_rect(Rect2(pos, size), Color(0.93, 0.82, 0.72))
-		draw_rect(Rect2(pos, size), Color(0.66, 0.5, 0.44), false, maxf(2.0, k * 0.3))
-		draw_rect(
-			Rect2(pos + Vector2(0.0, size.y * 0.55), Vector2(size.x, size.y * 0.45)),
-			Color(0.85, 0.68, 0.58)
-		)
-	for row: Dictionary in Logic.LANDMARKS:
-		var pos := _project(Vector2(float(row["x"]), float(row["z"])))
-		draw_circle(pos, k * 1.6, Color(0.98, 0.72, 0.36, 0.85))
-		draw_circle(pos, k * 0.8, Color(1.0, 0.96, 0.86))
-
-
-## Eine Straßenkachel mit Gehweg und Mittelstrich. Die Striche folgen den
-## befahrbaren Nachbarn, damit Kreuzungen frei bleiben — die alte Variante
-## setzte nur einen Klecks in die Kachelmitte und las sich wie Konfetti.
-func _draw_road_tile(rect: Rect2, r: int, c: int) -> void:
-	var t := rect.size.x
-	draw_rect(rect, Color(0.42, 0.43, 0.47))
-	var walk := t * 0.09
-	var kerb := Color(0.74, 0.73, 0.7, 0.55)
-	var east := Logic.is_road(r, c + 1)
-	var west := Logic.is_road(r, c - 1)
-	var north := Logic.is_road(r - 1, c)
-	var south := Logic.is_road(r + 1, c)
-	if not north:
-		draw_rect(Rect2(rect.position, Vector2(t, walk)), kerb)
-	if not south:
-		draw_rect(Rect2(rect.position.x, rect.end.y - walk, t, walk), kerb)
-	if not west:
-		draw_rect(Rect2(rect.position, Vector2(walk, t)), kerb)
-	if not east:
-		draw_rect(Rect2(rect.end.x - walk, rect.position.y, walk, t), kerb)
-	var dash := Color(0.95, 0.92, 0.7, 0.6)
-	var lw := maxf(1.5, t * 0.035)
-	var mid := rect.get_center()
-	var crossing := (east or west) and (north or south)
-	if east or west:
-		_draw_dashes(
-			Vector2(rect.position.x, mid.y), Vector2(rect.end.x, mid.y), dash, lw, crossing
-		)
-	if north or south:
-		_draw_dashes(
-			Vector2(mid.x, rect.position.y), Vector2(mid.x, rect.end.y), dash, lw, crossing
-		)
-
-
-## Gestrichelte Mittellinie; auf Kreuzungen bleibt die Mitte frei.
-func _draw_dashes(from: Vector2, to: Vector2, tint: Color, width: float, gap_center: bool) -> void:
-	var steps := 4
-	for i in steps:
-		var a := float(i) / float(steps) + 0.12 / float(steps)
-		var b := float(i + 1) / float(steps) - 0.12 / float(steps)
-		if gap_center and i in [1, 2]:
-			continue
-		draw_line(from.lerp(to, a), from.lerp(to, b), tint, width)
-
-
-func _draw_drop_ring() -> void:
-	if parcel >= _drop_points.size():
-		return
-	var pos := _project(current_drop())
-	var r := float(tune["DROP_RADIUS_M"]) * _ppm
-	var pulse := 0.7 + 0.3 * sin(elapsed * 4.0)
-	draw_circle(pos, r * 1.35, Color(1.0, 0.85, 0.35, 0.16 * pulse))
-	draw_arc(pos, r, 0.0, TAU, 28, Color(1.0, 0.82, 0.3, pulse), maxf(3.0, _ppm * 0.7))
-	draw_arc(pos, r * 0.55, 0.0, TAU, 20, Color(1.0, 0.95, 0.7, 0.7), maxf(2.0, _ppm * 0.35))
-
-
-func _draw_traffic() -> void:
-	var half := Vector2(CAR_WIDTH_M, CAR_LEN_M) * _ppm * 0.5
-	for car in _traffic:
-		var pos := _project(_traffic_pos(car))
-		if (
-			pos.x < -half.y * 2.0
-			or pos.y < -half.y * 2.0
-			or pos.x > view_size.x + half.y * 2.0
-			or pos.y > view_size.y + half.y * 2.0
-		):
-			continue
-		draw_rect(Rect2(pos - half + half * 0.22, half * 2.0), Color(0.3, 0.26, 0.24, 0.18))
-		draw_rect(Rect2(pos - half, half * 2.0), Color(0.85, 0.35, 0.4))
-		draw_rect(
-			Rect2(pos - half * Vector2(0.7, 0.55), half * Vector2(1.4, 0.8)),
-			Color(0.9, 0.95, 1.0, 0.85)
-		)
-
-
-func _draw_van() -> void:
-	var pos := view_size * 0.5
-	var dir := Vector2(sin(van_heading), -cos(van_heading))
-	var side := Vector2(-dir.y, dir.x)
-	var nose := VAN_LEN_M * _ppm * 0.54
-	var tail := VAN_LEN_M * _ppm * 0.46
-	var half_w := VAN_WIDTH_M * _ppm * 0.5
-	var body := PackedVector2Array(
-		[
-			pos + dir * nose + side * half_w * 0.9,
-			pos + dir * nose - side * half_w * 0.9,
-			pos - dir * tail - side * half_w,
-			pos - dir * tail + side * half_w,
-		]
-	)
-	var shadow := PackedVector2Array()
-	for p in body:
-		shadow.append(p + Vector2(_ppm * 0.35, _ppm * 0.45))
-	draw_colored_polygon(shadow, Color(0.25, 0.22, 0.2, 0.2))
-	draw_colored_polygon(body, Color(0.98, 0.86, 0.45))
-	draw_polyline(
-		body + PackedVector2Array([body[0]]), Color(0.6, 0.44, 0.22), maxf(2.0, _ppm * 0.3)
-	)
-	draw_line(
-		pos + dir * nose + side * half_w * 0.8,
-		pos + dir * nose - side * half_w * 0.8,
-		Color(0.6, 0.85, 1.0),
-		maxf(3.0, _ppm * 0.6)
-	)
-	# Paketstapel auf dem Dach zeigt die Restpakete.
-	var left := maxi(0, int(tune["PARCELS"]) - drops)
-	var box := Vector2(1.3, 0.9) * _ppm
-	for i in left:
-		var col := (
-			Color(0.95, 0.55, 0.35) if (parcel + i) == fragile_index else Color(0.82, 0.65, 0.45)
-		)
-		draw_rect(Rect2(pos - side * box.x * 0.5 - dir * (box.y * (0.3 + i * 1.15)), box), col)
-	if _crash_cool > 0.0:
-		draw_arc(
-			pos,
-			VAN_LEN_M * _ppm * 0.75,
-			0.0,
-			TAU,
-			20,
-			Color(1.0, 0.4, 0.35, _crash_cool / CRASH_COOLDOWN_SEC),
-			maxf(2.0, _ppm * 0.4)
-		)
-
-
-## Kompass-Pfeil zum aktuellen Abwurfring (bleibt am Bildschirmrand sichtbar).
+## Kompass-Pfeil zum aktuellen Abwurfring. In der Verfolgerkamera ist er
+## PFLICHT — der Ring steht oft hinter Häusern. Der Pfeil zeigt in
+## FAHRZEUG-Koordinaten (oben = geradeaus).
 func _draw_compass() -> void:
 	if parcel >= _drop_points.size():
 		return
 	var to := current_drop() - van_pos
 	if to.length() < 1.0:
 		return
-	var dir := to.normalized()
-	var center := view_size * 0.5
-	var radius := minf(view_size.x, view_size.y) * 0.32
-	var tip := center + dir * radius
-	var side := Vector2(-dir.y, dir.x)
+	var fwd := Vector2(sin(van_heading), -cos(van_heading))
+	var side := Vector2(-fwd.y, fwd.x)
+	var local := Vector2(to.dot(side), -to.dot(fwd)).normalized()
+	var center := Vector2(view_size.x * 0.5, view_size.y * 0.5)
+	var radius := minf(view_size.x, view_size.y) * 0.3
+	var tip := center + local * radius
+	var perp := Vector2(-local.y, local.x)
 	var a := 16.0 * _ui
 	draw_colored_polygon(
 		PackedVector2Array(
 			[
-				tip + dir * a,
-				tip - dir * a * 0.5 + side * a * 0.62,
-				tip - dir * a * 0.5 - side * a * 0.62,
+				tip + local * a,
+				tip - local * a * 0.5 + perp * a * 0.62,
+				tip - local * a * 0.5 - perp * a * 0.62,
 			]
 		),
 		Color(1.0, 0.8, 0.3, 0.92)
@@ -614,12 +910,12 @@ func _draw_compass() -> void:
 	var w := 110.0 * _ui
 	draw_string(
 		font,
-		tip + dir * a * 1.5 - Vector2(w * 0.5, 0.0),
+		tip + local * a * 1.5 - Vector2(w * 0.5, 0.0),
 		"%d m" % int(to.length()),
 		HORIZONTAL_ALIGNMENT_CENTER,
 		w,
 		maxi(13, int(18.0 * _ui)),
-		Color(0.25, 0.2, 0.18)
+		Color(1.0, 0.98, 0.92)
 	)
 
 
@@ -636,5 +932,5 @@ func _draw_banner() -> void:
 		HORIZONTAL_ALIGNMENT_CENTER,
 		w,
 		maxi(18, int(28.0 * _ui)),
-		Color(0.25, 0.18, 0.16, alpha)
+		Color(1.0, 0.99, 0.94, alpha)
 	)

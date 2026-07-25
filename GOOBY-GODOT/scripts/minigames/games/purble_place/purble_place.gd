@@ -5,15 +5,19 @@ extends MinigameBase
 ## ±0,24 m), Ofentunnel mit grünem Fenster 2,25–3,0 s und Versand bei 5,95 ± 0,3.
 ## 210 s (Endlos: bis 3 abgelehnte/abgelaufene Torten).
 ##
-## 2D statt three.js: das Web war bereits eine feste SEITENANSICHT auf ein
-## gerades Band — als flacher Sticker-Schnitt ist das nicht nur billiger,
-## sondern LESBARER (Fangfenster und Ofenzone sind exakte Pixelstrecken statt
-## perspektivisch verzerrt). Die Bandkoordinate s wird linear projiziert, damit
-## §G1.5-Meter und Bildschirmpixel sich 1:1 entsprechen.
+## ECHTE 3D-BACKSTUBE (PurblePlaceStage3D): Laufband, Ofentunnel, Düsenschiene,
+## Versandkiste und Gästetheke stehen als Requisiten im Raum, die Torten sind
+## Körper mit Form/Teig/Guss/Deko — und Gooby steht als BÄCKER (echtes Rig,
+## Mütze, Emotionen) am Ofenausgang. Nur Zahlenwerk bleibt 2D-Overlay: Backuhr,
+## Fangfenster, Auftragskarten, Übersichtsstreifen.
+##
+## Die Bandkoordinate s IST die Welt-x-Achse der Bühne; `project(s, y)` fragt
+## direkt deren Kamera, damit Overlays pixelgenau auf den Requisiten sitzen.
 
 const Logic := preload("res://scripts/minigames/games/purble_place/purble_place_logic.gd")
 const Bakery := preload("res://scripts/minigames/games/purble_place/purble_place_bakery.gd")
 const Cake := preload("res://scripts/minigames/games/purble_place/purble_place_cake.gd")
+const Shop := preload("res://scripts/minigames/games/purble_place/purble_place_stage3d.gd")
 
 ## §G1.4-Kamerafenster: 3,2 m schmal / 3,6 m ab 412 px Breite.
 const REQ_WINDOW_NARROW := 3.2
@@ -44,15 +48,6 @@ const KEY_STATIONS := {
 }
 const KEY_SHAPES := {KEY_1: "round", KEY_2: "square", KEY_3: "heart"}
 
-## Kleiderfarben der wartenden Gäste (nach Auftrags-Id durchgereicht).
-const QUEUE_TINTS: Array[Color] = [
-	Color(0.55, 0.75, 0.9),
-	Color(0.95, 0.66, 0.55),
-	Color(0.62, 0.82, 0.6),
-	Color(0.82, 0.68, 0.92),
-	Color(0.96, 0.82, 0.5),
-]
-
 var tune: Dictionary = {}
 var line: Dictionary = {}
 var view_size := Vector2(390.0, 844.0)
@@ -63,6 +58,7 @@ var finished := false
 var autoplay := false
 
 var _bot: PurblePlaceBot
+var _shop: Node3D
 
 var _cam_s := 3.0
 var _ui := 1.0
@@ -98,6 +94,7 @@ func setup(context: MinigameCtx) -> void:
 	tune = Logic.apply_difficulty(Logic.CAKE, ctx.difficulty)
 	line = Logic.create_line(ctx.rng(), ctx.difficulty)
 	_bot = PurblePlaceBot.new(ctx.rng((ctx.run_seed ^ 0x9E3779B9) & 0xFFFFFFFF))
+	_build_shop()
 	# Erst messen, dann bauen: Knopfgrößen und Schriftgrade hängen an _ui.
 	_fit_viewport()
 	_build_hud()
@@ -110,6 +107,15 @@ func setup(context: MinigameCtx) -> void:
 func end() -> void:
 	super.end()
 	finished = true
+
+
+func _build_shop() -> void:
+	_shop = Shop.new()
+	_shop.name = "Bakery3D"
+	add_child(_shop)
+	_shop.setup_stage(Logic.STATIONS, tune)
+	if ctx.juice != null:
+		ctx.juice.world_environment = _shop.world_env
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
@@ -128,10 +134,14 @@ func apply_view(size: Vector2) -> void:
 
 	var req := REQ_WINDOW_WIDE if view_size.x >= WIDE_PX else REQ_WINDOW_NARROW
 	_ppm = minf(_stage.size.x / req, _stage.size.y / STAGE_METERS)
-	# Nie weiter herauszoomen als das ganze Band plus etwas Rand.
-	_ppm = maxf(_ppm, _stage.size.x / 6.4)
+	# Nie weiter herauszoomen als das ganze Band plus etwas Rand — aber diese
+	# Untergrenze darf das SENKRECHTE Budget nicht sprengen. Quer ist der
+	# Bühnenstreifen breit und flach: ohne die zweite Schranke sprang die Kamera
+	# auf 1,5 m Sichthöhe und schnitt mitten durch die Düsenreihe.
+	_ppm = maxf(_ppm, minf(_stage.size.x / 6.4, _stage.size.y / STAGE_METERS))
 	_window = _stage.size.x / _ppm
 	_belt_px = _stage.position.y + _stage.size.y - _ppm * BELOW_BELT
+	_frame_shop()
 	_layout_dock(dock_h)
 	if _time_label != null:
 		_time_label.position = Vector2(16.0 * _ui, 58.0 * _ui)
@@ -165,6 +175,7 @@ func _process(delta: float) -> void:
 	for pan: Dictionary in line["pans"]:
 		if bool(pan["inOven"]):
 			_oven_heat = 1.0
+	_sync_shop(delta)
 	_update_labels()
 	_sync_dock()
 	if bool(line["over"]):
@@ -196,10 +207,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		_queue_press(str(KEY_STATIONS[key.keycode]))
 
 
-## Bandmeter → Bildschirmpixel (y zählt Meter über der Bandoberkante).
+## Bandmeter → Bildschirmpixel (y zählt Meter über der Bandoberkante). Solange
+## die 3D-Kamera hängt (Aufbau vor dem Baumeintritt), rechnet die lineare
+## Ersatzformel — sie beschreibt dieselbe Rahmung ohne Neigung.
 func project(s: float, y: float) -> Vector2:
+	if _shop != null and _shop.camera != null and _shop.camera.is_inside_tree():
+		var world: Vector2 = _shop.project(s, y)
+		return world
 	var x := _stage.position.x + (s - (_cam_s - _window * 0.5)) * _ppm
 	return Vector2(x, _belt_px - y * _ppm)
+
+
+func _frame_shop() -> void:
+	if _shop != null:
+		_shop.apply_size(view_size)
+		_shop.frame(_cam_s, _ppm, _belt_px, view_size)
 
 
 # ── Eingaben ──────────────────────────────────────────────────────────────
@@ -234,6 +256,24 @@ func _update_camera(delta: float) -> void:
 	_cam_s += (want - _cam_s) * minf(1.0, CAM_K * delta)
 
 
+## Bühne an den Logikzustand hängen (Kamera, Requisiten, Gooby-Laune).
+func _sync_shop(delta: float) -> void:
+	if _shop == null:
+		return
+	_frame_shop()
+	_shop.sync(line, _scroll, _oven_heat)
+	_shop.feel(_mood())
+	_shop.tick(delta)
+
+
+func _mood() -> String:
+	if _cheer > 0.0:
+		return "ecstatic"
+	if _flash > 0.0 and not _flash_good:
+		return "sad"
+	return "happy"
+
+
 func _update_score() -> void:
 	var total := int(line["score"])
 	if total != _last_score:
@@ -248,6 +288,7 @@ func _handle_events(events: Array) -> void:
 				AudioDirector.try_play(self, "ui_chip")
 			"catch":
 				AudioDirector.try_play(self, "mg_good", 1.0 + 0.04 * (int(line["combo"]) % 6))
+				_on_catch(ev)
 			"splat":
 				_on_splat(ev)
 			"buzz":
@@ -269,8 +310,20 @@ func _handle_events(events: Array) -> void:
 				AudioDirector.try_play(self, "mg_junk")
 
 
+## Zutat sitzt: Mehlwölkchen in Stationsfarbe über der Form.
+func _on_catch(ev: Dictionary) -> void:
+	if _shop == null:
+		return
+	var st := Logic.station(str(ev["station"]))
+	if st.is_empty():
+		return
+	_shop.flour(float(st["s"]), Bakery.nozzle_color(st))
+
+
 func _on_splat(ev: Dictionary) -> void:
 	AudioDirector.try_play(self, "mg_spill")
+	if _shop != null:
+		_shop.flour(float(ev["s"]), Color(0.62, 0.44, 0.36))
 	if ctx.juice != null:
 		ctx.juice.shake(0.18)
 		ctx.juice.float_text(project(float(ev["s"]), 0.35), "-2", Color(0.82, 0.35, 0.3))
@@ -278,6 +331,8 @@ func _on_splat(ev: Dictionary) -> void:
 
 func _on_bake(ev: Dictionary) -> void:
 	var result := str(ev["result"])
+	if _shop != null:
+		_shop.bake_puff()
 	if result == "perfect":
 		AudioDirector.try_play(self, "mg_golden")
 		if ctx.juice != null:
@@ -308,6 +363,8 @@ func _on_serve(ev: Dictionary) -> void:
 			ctx.juice.float_text(pos, "%d" % points, Color(0.82, 0.35, 0.3))
 		return
 	_cheer = 1.0
+	if _shop != null:
+		_shop.celebrate(float(tune["SHIP_S"]))
 	if outcome == "perfect":
 		AudioDirector.try_play(self, "mg_perfect")
 		_say(I18nService.t("mg.purblePlace.perfect", {"n": points}), true, 1.4)
@@ -522,45 +579,14 @@ func _update_labels() -> void:
 # ── Zeichnen ──────────────────────────────────────────────────────────────
 
 
+## Die Kulisse steht in 3D — hier liegt nur noch das Zahlenwerk obenauf:
+## Fangfenster, Backuhr, Auftragskarten, Übersichtsstreifen, Meldung.
 func _draw() -> void:
-	var project_fn := Callable(self, "project")
-	Bakery.draw_backdrop(self, _stage, _belt_px, _ppm)
-	Bakery.draw_sign(
-		self,
-		Rect2(
-			_stage.position.x,
-			_stage.position.y + _stage.size.y * 0.045,
-			_stage.size.x,
-			maxf(46.0, _queue_top() - _stage.position.y - 26.0)
-		),
-		I18nService.t("mg.purblePlace.title"),
-		ThemeService.font(800)
-	)
-	_draw_queue()
-	Bakery.draw_oven(
-		self, project_fn, _ppm, float(tune["OVEN_START_S"]), float(tune["OVEN_END_S"]), _oven_heat
-	)
-	Bakery.draw_spawn(
-		self, project_fn, _ppm, float(tune["SPAWN_S"]), bool(Logic.can_spawn(line)["ok"])
-	)
-	Bakery.draw_ship(
-		self, project_fn, _ppm, float(tune["SHIP_S"]), float(tune["SHIP_HALF_M"]), _ship_armed()
-	)
-	Bakery.draw_belt(self, _stage, project_fn, _ppm, _scroll)
-	for splat: Dictionary in line["splats"]:
-		Bakery.draw_splat(self, project_fn, _ppm, splat, float(tune["SPLAT_TTL_SEC"]))
-	_draw_pans()
-	_draw_oven_pane()
-	Bakery.draw_nozzles(self, project_fn, _ppm, Logic.STATIONS, line["lockouts"])
-	_draw_drops()
 	_draw_catch_hint()
-	Bakery.draw_gooby(
-		self,
-		Vector2(_stage.position.x + _ppm * 0.44, _stage.position.y + _stage.size.y - _ppm * 0.4),
-		_ppm * 0.26,
-		_cheer
-	)
-	# Alles unterhalb der Bühne wieder zudecken (die Bühne kennt kein Clipping).
+	_draw_bake_meters()
+	_draw_queue()
+	# Alles unterhalb der Bühne wieder zudecken (die 3D-Kamera kennt kein
+	# Clipping — sonst schaut der Werkstattboden hinter das Dock).
 	draw_rect(
 		Rect2(0.0, _stage.position.y + _stage.size.y, view_size.x, view_size.y),
 		Color(0.98, 0.94, 0.9)
@@ -569,14 +595,12 @@ func _draw() -> void:
 	_draw_flash()
 
 
-func _draw_pans() -> void:
+func _draw_bake_meters() -> void:
 	for pan: Dictionary in line["pans"]:
-		var w := _ppm * 0.6
-		var base := project(float(pan["s"]), 0.0)
-		draw_circle(Vector2(base.x, base.y + 2.0), w * 0.44, Color(0.0, 0.0, 0.0, 0.16))
-		Cake.draw_cake(self, Vector2(base.x, base.y - w * 0.17), w, pan)
-		if float(pan["bakeT"]) > 0.01 and pan["bake"] == null:
-			_draw_bake_meter(Vector2(base.x, base.y - w * 0.72 - _ppm * 0.34), w * 1.25, pan)
+		if float(pan["bakeT"]) <= 0.01 or pan["bake"] != null:
+			continue
+		var base := project(float(pan["s"]), 1.02)
+		_draw_bake_meter(base, _ppm * 0.75, pan)
 
 
 ## Backuhr über der Form: grünes Fenster 2,25–3,0 s, Verkohlung am rechten Rand.
@@ -602,33 +626,6 @@ func _draw_bake_meter(at: Vector2, w: float, pan: Dictionary) -> void:
 	)
 
 
-## Vordere Ofenscheibe: liegt ÜBER den Formen, damit sie im Tunnel verschwinden.
-func _draw_oven_pane() -> void:
-	var left := project(float(tune["OVEN_START_S"]), 0.0)
-	var right := project(float(tune["OVEN_END_S"]), 0.0)
-	var h := _ppm * 0.62
-	var pane := Rect2(left.x, left.y - h, right.x - left.x, h)
-	draw_rect(pane, Color(1.0, 0.55, 0.24, 0.22 + 0.14 * _oven_heat))
-	for i in 4:
-		var x := pane.position.x + pane.size.x * (float(i) + 0.5) / 4.0
-		draw_line(
-			Vector2(x, pane.position.y),
-			Vector2(x, pane.position.y + pane.size.y),
-			Color(0.65, 0.38, 0.26, 0.55),
-			maxf(2.0, _ppm * 0.022)
-		)
-
-
-func _draw_drops() -> void:
-	var now := float(line["t"])
-	for drop: Dictionary in line["drops"]:
-		var st := Logic.station(str(drop["station"]))
-		if st.is_empty():
-			continue
-		var frac := (now - float(drop["firedAt"])) / maxf(0.001, float(tune["FALL_SEC"]))
-		Bakery.draw_drop(self, Callable(self, "project"), _ppm, st, frac)
-
-
 ## Fangfenster der Form, die als nächstes unter eine Düse läuft (§G1.5-Lehre).
 func _draw_catch_hint() -> void:
 	var half := float(tune["CATCH_HALF_M"])
@@ -646,40 +643,27 @@ func _draw_catch_hint() -> void:
 			)
 
 
-## Wartende Gäste über der Theke — jeder hält seine Wunschtorte in einer
-## Sprechblase; Geduldsbalken und Gesicht kippen mit der Restzeit. Reicht die
-## Wandhöhe nicht (Querformat), fallen die Gäste weg und die Blasen rücken als
-## kompakte Kartenreihe nach oben links.
+## Wunschblasen der Gäste: sie hängen über den KÖPFEN der drei 3D-Gäste an der
+## Ladentheke (Bildschirmanker kommt aus der Bühne). Ist über den Köpfen zu
+## wenig Luft — im Querformat reicht der Ausschnitt kaum über die Schiene —,
+## rücken die Karten als kompakte Reihe nach oben links.
 func _draw_queue() -> void:
 	var tickets: Array = line["tickets"]
 	var slots := int(tune["MAX_TICKETS"])
-	var floor_y := _belt_px - _ppm * 1.62
-	var top := _queue_top()
 	var font := ThemeService.font(700)
-	if floor_y - top < 190.0 * _ui:
+	var card_w := minf(view_size.x / (slots + 0.9), 104.0 * _ui)
+	var card_h := card_w * 1.16
+	var gap := 10.0 * _ui
+	var first: Vector2 = Vector2.ZERO if _shop == null else _shop.guest_anchor(0)
+	if _shop == null or first.y - card_h - gap < 92.0 * _ui:
 		_draw_compact_tickets(tickets, slots, font)
 		return
-	var counter_h := maxf(12.0, _ppm * 0.16)
-	Bakery.draw_counter(self, Rect2(_stage.position.x, floor_y, _stage.size.x, counter_h))
-	var cell := _stage.size.x / slots
-	var card_w := minf(cell - 16.0 * _ui, 158.0 * _ui)
-	var card_h := card_w * 1.16
-	var body_h := clampf(floor_y - (top + card_h + 20.0 * _ui), 46.0 * _ui, 168.0 * _ui)
 	for i in mini(slots, tickets.size()):
-		var cx := _stage.position.x + cell * (i + 0.5)
-		var ticket: Dictionary = tickets[i]
-		var tint: Color = QUEUE_TINTS[int(ticket["id"]) % QUEUE_TINTS.size()]
-		var mood := clampf(
-			float(ticket["remain"]) / maxf(0.001, float(ticket["patience"])), 0.0, 1.0
-		)
-		Bakery.draw_customer(self, Vector2(cx, floor_y + counter_h * 0.35), body_h, tint, mood)
+		var anchor: Vector2 = _shop.guest_anchor(i)
 		Cake.draw_ticket_card(
 			self,
-			Rect2(
-				Vector2(cx - card_w * 0.5, floor_y - body_h - card_h - 14.0 * _ui),
-				Vector2(card_w, card_h)
-			),
-			ticket,
+			Rect2(anchor - Vector2(card_w * 0.5, card_h + gap), Vector2(card_w, card_h)),
+			tickets[i],
 			font,
 			i == 0,
 			true
@@ -687,15 +671,19 @@ func _draw_queue() -> void:
 
 
 func _draw_compact_tickets(tickets: Array, slots: int, font: Font) -> void:
-	var card_w := clampf(view_size.x * 0.13, 70.0 * _ui, 130.0 * _ui)
+	var card_w := clampf(view_size.x * 0.09, 70.0 * _ui, 112.0 * _ui)
 	var card_h := card_w * 1.16
 	var pad := 8.0 * _ui
+	# Brett nur so breit wie die WIRKLICH vorhandenen Aufträge: auf die volle
+	# Slotzahl aufgezogen war es quer ein leeres Brett über der halben Bühne.
+	var shown := mini(slots, tickets.size())
 	var board := Rect2(
-		Vector2(14.0 * _ui, 56.0 * _ui), Vector2(slots * (card_w + pad) + pad, card_h + pad * 2.0)
+		Vector2(14.0 * _ui, 90.0 * _ui),
+		Vector2(maxi(1, shown) * (card_w + pad) + pad, card_h + pad * 2.0)
 	)
 	draw_rect(board, Color(0.87, 0.71, 0.53, 0.92))
 	draw_rect(board, Color(0.66, 0.5, 0.36), false, 3.0 * _ui)
-	for i in mini(slots, tickets.size()):
+	for i in shown:
 		Cake.draw_ticket_card(
 			self,
 			Rect2(board.position + Vector2(pad + i * (card_w + pad), pad), Vector2(card_w, card_h)),
@@ -703,10 +691,6 @@ func _draw_compact_tickets(tickets: Array, slots: int, font: Font) -> void:
 			font,
 			i == 0
 		)
-
-
-func _queue_top() -> float:
-	return clampf(_belt_px - _ppm * 4.4, 96.0 * _ui, _belt_px - _ppm * 2.4)
 
 
 func _draw_flash() -> void:

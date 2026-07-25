@@ -4,36 +4,62 @@ extends MinigameBase
 ## Schranke springen, Gerüst rutschen, Auto ausweichen; Münzen ×Kombo,
 ## Überraschungskisten (Magnet/×2/Schild), 1. Treffer = Stolpern, 2. = Aus.
 ##
-## 2D statt 3D (Web war three.js mit City-Kit-GLBs): die GLB-Kits gibt es im
-## Godot-Projekt nicht, und der Korridor ist eine reine Tiefenachse. Eine
-## perspektivische 2D-Sticker-Projektion (project()) hält JEDE Weltmeter-Zahl
-## exakt — Kollisionen laufen ohnehin in Weltkoordinaten über RunnerLogic —
-## und liest sich auf dem Handy sauberer als ein Mini-3D-Nachbau.
+## ECHTES 3D (Agent 3D-B): die Ansicht ist eine Node3D-Welt mit Verfolgerkamera,
+## Kenney-City-Kit-Korridor (dieselben GLBs wie die Web-Fassung), Tiefen-Nebel,
+## dezentem Glow und dem ECHTEN Gooby-Rig, das wirklich läuft, springt und
+## rutscht. Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt
+## hängt darunter (Godot rendert 3D hinter den CanvasItems, HUD liegt oben).
+## Die Kulisse ist ein recyceltes Band aus MultiMeshes — kein Instanzieren
+## pro Frame, ein Draw-Call pro Modell.
 ##
 ## AUTOHAUS-HAKEN (bewusst offen, NICHT implementiert): `car_skin` /
 ## `speed_bonus` bleiben leer; sobald das Autohaus Fahrzeuge liefert, kann
 ## der Host sie hier hineinreichen, ohne die Logik anzufassen.
 
 const Logic := preload("res://scripts/minigames/games/runner/runner_logic.gd")
+const World := preload("res://scripts/minigames/games/runner/runner_world.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
+const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
+const GoobyMount := preload("res://scripts/minigames/games/_3db_stage/gooby_mount.gd")
+const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 
-## Weltzahlen der Darstellung (KEINE Spiel-Mathe).
+## Weltzahlen der Darstellung (KEINE Spiel-Mathe) — aus runner.js übernommen.
 const SPAWN_Z := -88.0
 const DESPAWN_Z := 9.0
-const CAM_BEHIND := 6.2
-## Halbe Straßenbreite (m) — Spuren ±1.1 m plus Randstreifen.
-const ROAD_HALF := 1.85
 ## Sichtweite, ab der ein Objekt gezeichnet wird (m).
-const DRAW_Z := -70.0
-## Nahgrenze: alles hinter der Kamera wird nicht mehr gezeichnet (m).
-const DRAW_NEAR_Z := 1.2
+const DRAW_Z := -86.0
 ## Münzen sitzen auf dieser Höhe (Web: y 0.55).
 const COIN_Y := 0.55
+## Verfolgerkamera. Web: 0/3.6/7 mit Blick auf 0/0.9/−3.5 — dort war Gooby ein
+## Krümel am unteren Rand. Wir rücken näher heran und geben der Kamera einen
+## festen Neigungswinkel statt eines Blickpunkts: so sitzt die Figur bei JEDEM
+## Seitenverhältnis auf derselben Bildhöhe (Blickpunkt-Kameras verrutschen
+## hochkant), und der Horizont bleibt oben im Bild.
+const CAM_HEIGHT := 3.25
+const CAM_BACK := 6.3
+const CAM_PITCH := 16.0
+## Hochkant: höher und weiter hinten, sonst sieht man die Hindernisse zu spät.
+## Die Neigung geht dabei HOCH, nicht runter: das hohe Bild zeigt sonst ein
+## Drittel nackten Asphalt direkt vor der Kamera statt der Strecke.
+const CAM_PORTRAIT_LIFT := 0.55
+const CAM_PORTRAIT_BACK := 0.8
+const CAM_PORTRAIT_PITCH := -1.5
+## §G4.8-Tempojuice: waagerechter Blickwinkel + Kick über das Tempoband.
+const HFOV_BASE := 88.0
+const HFOV_KICK := 12.0
+const SPEED_BAND := Vector2(6.0, 13.0)
+const STREAK_RATE: Array = [[9.0, 0.0], [11.0, 4.0], [13.0, 9.0]]
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
+## Nach so vielen Sekunden blendet der Wisch-Hinweis aus.
+const HINT_FADE_SEC := 5.0
 
 ## Autohaus-Haken: später vom Host befüllbar (Skin-Id / Tempo-Bonus).
 var car_skin := ""
 var speed_bonus := 0.0
+
+## Für Screenshot-/Zertifizierungsläufe: der Pilot aus runner.js übernimmt.
+var autoplay := false
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -62,12 +88,20 @@ var _coins: Array[Dictionary] = []
 var _mystery: Array[Dictionary] = []
 var _recent_rows: Array = []
 var _pending_row: Dictionary = {}
+var _row_seq := 0
+var _auto := {"handled": -1, "action": "", "at_z": 0.0, "row": -1, "target": 1}
 var _dist_since_row := 0.0
 var _next_mystery_at := 0.0
-var _scenery: Array[Vector3] = []
-var _focal_px := 400.0
-var _cam_y := 1.6
-var _horizon_px := 120.0
+var _stage: Node3D
+var _world: Node3D
+var _gooby: Node3D
+var _shadow: MeshInstance3D
+var _shield_vis: MeshInstance3D
+var _magnet_vis: MeshInstance3D
+var _streaks: MultiMeshInstance3D
+var _dust: GPUParticles3D
+var _sparkle: GPUParticles3D
+var _speed := 6.0
 var _ui := 1.0
 var _swipe_from := Vector2.ZERO
 var _swipe_live := false
@@ -83,9 +117,7 @@ func setup(context: MinigameCtx) -> void:
 	tune = Logic.apply_difficulty(Logic.RUNNER, ctx.difficulty)
 	rng = ctx.rng()
 	_next_mystery_at = float(tune["MYSTERY_FIRST_M"])
-	for i in 26:
-		# x-Seite (±1), z-Tiefe im Korridor, Art (0..1 → Baum/Haus).
-		_scenery.append(Vector3(-1.0 if i % 2 == 0 else 1.0, -i * 4.0 - 2.0, rng.next()))
+	_build_stage()
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -104,25 +136,11 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
-	_recompute_camera()
+	if _stage != null:
+		_stage.call("apply_size", view_size)
+		_place_camera(0.0)
 	_layout_hud()
 	queue_redraw()
-
-
-## Die Bedienleiste wird in Entwurfspixeln gedacht und mit _ui skaliert —
-## sonst schrumpfen Zeit/Statuszeile auf großen Bühnen zu Krümeln.
-func _layout_hud() -> void:
-	if _score_label == null:
-		return
-	var pad := 14.0 * _ui
-	_score_label.position = Vector2(pad, 8.0 * _ui)
-	_score_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
-	_stat_label.position = Vector2(pad, 44.0 * _ui)
-	_stat_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
-	var hint_w := minf(view_size.x - pad * 2.0, 420.0 * _ui)
-	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
-	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 44.0 * _ui)
-	_hint_label.size = Vector2(hint_w, 38.0 * _ui)
 
 
 func _process(delta: float) -> void:
@@ -134,17 +152,21 @@ func _process(delta: float) -> void:
 	_invuln = maxf(0.0, _invuln - dt)
 	_magnet_t = maxf(0.0, _magnet_t - dt)
 	_x2_t = maxf(0.0, _x2_t - dt)
-	var speed := Logic.speed_at(elapsed, tune)
-	var dz := speed * dt
+	_speed = Logic.speed_at(elapsed, tune)
+	var dz := _speed * dt
 	var prev_meters := meters
 	meters += dz
-	_advance_scenery(dz)
+	_advance_band(dz)
 	_spawn(dz)
+	if autoplay:
+		_autoplay_tick()
 	_move_player(dt)
 	_collide(dz)
 	_milestone(prev_meters)
 	_publish_score()
 	_update_labels()
+	_fade_hint()
+	_sync_world(dt)
 	queue_redraw()
 
 
@@ -176,53 +198,181 @@ func _unhandled_input(event: InputEvent) -> void:
 				_slide()
 
 
-## Welt (x, y, z) → Bildschirmpixel; z < 0 = vor dem Spieler.
+## Welt (x, y, z) → Bildschirmpixel des Viewports (für Float-Texte).
 func project(wx: float, wy: float, wz: float) -> Vector2:
-	var s := scale_at(wz)
-	return Vector2(view_size.x * 0.5 + wx * s, _horizon_px + (_cam_y - wy) * s)
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return view_size * 0.5
+	return cam.unproject_position(Vector3(wx, wy, wz))
 
 
-## Pixel-pro-Meter an dieser Tiefe (für Größen).
-func scale_at(wz: float) -> float:
-	return _focal_px / maxf(0.35, CAM_BEHIND - wz)
+# ── Aufbau ────────────────────────────────────────────────────────────────
 
 
-## Kamera aus dem Layout ableiten: die Straße füllt einen festen Anteil der
-## Breite, die Füße stehen auf einem festen Anteil der Höhe — daraus folgen
-## Brennweite und Kamerahöhe. So sitzt Gooby in BEIDEN Orientierungen richtig
-## (fest verdrahtete Werte kippten ihn hochkant aus dem Bild).
-func _recompute_camera() -> void:
-	var road_fill := 0.42 if landscape else 0.8
-	var horizon_frac := 0.36 if landscape else 0.3
-	var feet_frac := 0.86 if landscape else 0.84
-	_focal_px = road_fill * view_size.x * CAM_BEHIND / (2.0 * ROAD_HALF)
-	_horizon_px = view_size.y * horizon_frac
-	_cam_y = (view_size.y * feet_frac - _horizon_px) * CAM_BEHIND / _focal_px
+func _build_stage() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	(
+		_stage
+		. call(
+			"build",
+			{
+				# Web: scene.background = 0xbfe3ff, Fog(SKY, 34, 92).
+				"sky_top": Color(0.55, 0.79, 1.0),
+				"sky_horizon": Color(0.749, 0.89, 1.0),
+				"ground_horizon": Color(0.7, 0.82, 0.74),
+				"ground_bottom": Color(0.42, 0.53, 0.4),
+				"fog_color": Color(0.749, 0.89, 1.0),
+				"fog_from": 34.0,
+				"fog_to": 92.0,
+				"glow": 0.22,
+				# Web: DirectionalLight(0xfff2dd, 1.0) bei (4, 9, 6).
+				"sun_dir": Vector3(-0.35, -0.79, -0.53),
+				"sun_color": Color(1.0, 0.949, 0.867),
+				"sun_energy": 1.0,
+				# Web: HemisphereLight(0xfff5e8, 0xb8a898, 1.0) — der Mittelwert
+				# beider Halbkugeln ist das, was eine senkrechte Fassade sieht.
+				"ambient_color": Color(0.861, 0.81, 0.753),
+				# 1,0 ist die WEB-TREUE Zahl, nicht mehr: three.js teilt die
+				# Hemisphäre genauso durch π wie die Sonne (BRDF_Lambert), und
+				# LIGHT_SCALE bildet beides ab. Größere Werte kochen den dunklen
+				# Asphalt zu Lavendel-Weiß aus — genau das war der „alles wirkt
+				# 2D"-Eindruck: ohne dunkle Fahrbahn fehlt dem Korridor Tiefe.
+				"ambient": 2.2,
+				# Winziges Gegenlicht von der Schattenseite (das Web hat keins,
+				# aber ACES zieht dort stärker an als three.js' NoToneMapping).
+				"fill_energy": 0.8,
+				"fill_color": Color(0.8, 0.85, 0.95),
+				# Die Kenney-Häuser tragen fast schwarze Sockelbänder. Mit dem
+				# Bühnen-Kontrast (1,05) soffen sie zu einem Loch ab: ein
+				# Viertel des Bildes lag unter Luma 30, im Web sind es 0,4 %.
+				# Flacher gefahren bleibt der Sockel ein lesbares Dunkelgrau.
+				"contrast": 0.92,
+				"hfov": HFOV_BASE,
+				"shadow_distance": 40.0,
+				"far": 200.0,
+			}
+		)
+	)
+	_world = World.new()
+	_stage.add_child(_world)
+	_world.call("build", float((tune["OBSTACLES"] as Dictionary)["overhead"]["gapY"]))
+
+	_gooby = GoobyMount.new()
+	_stage.add_child(_gooby)
+	_gooby.call("mount", float(tune["STAND_HEIGHT"]) * float(tune["RENDER_SCALE_MULT"]))
+	_shadow = Fx.blob_shadow(0.42, 0.34)
+	_stage.add_child(_shadow)
+	_build_auras()
+
+	_streaks = SpeedLines.new()
+	(_stage.get("camera") as Camera3D).add_child(_streaks)
+	_streaks.call("build", 16, Vector2(2.6, 3.6), Vector2(4.0, 9.0))
+	_streaks.set("enabled", not _reduced_motion())
+
+	_dust = (
+		Fx
+		. particles(
+			{
+				"color": Color(0.92, 0.88, 0.78, 0.85),
+				"amount": 10,
+				"lifetime": 0.55,
+				"one_shot": true,
+				"explosiveness": 0.95,
+				"speed": Vector2(1.0, 2.6),
+				"spread": 62.0,
+				"size": Vector2(0.06, 0.15),
+			}
+		)
+	)
+	_stage.add_child(_dust)
+	_sparkle = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.9, 0.5, 1.0),
+				"amount": 12,
+				"lifetime": 0.5,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"additive": true,
+				"speed": Vector2(1.2, 3.0),
+				"spread": 180.0,
+				"gravity": Vector3(0.0, -1.5, 0.0),
+				"size": Vector2(0.05, 0.12),
+			}
+		)
+	)
+	_stage.add_child(_sparkle)
+	_place_camera(0.0)
+
+
+func _build_auras() -> void:
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.72
+	sphere.height = 1.44
+	sphere.radial_segments = 16
+	sphere.rings = 8
+	sphere.material = Fx.glass(Color(0.39, 0.71, 0.96, 0.26))
+	_shield_vis = MeshInstance3D.new()
+	_shield_vis.mesh = sphere
+	_shield_vis.visible = false
+	_shield_vis.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_stage.add_child(_shield_vis)
+
+	_magnet_vis = Fx.ring(0.95, 0.05, Color(0.42, 0.8, 1.0))
+	_magnet_vis.rotation_degrees.x = -90.0
+	_magnet_vis.visible = false
+	_stage.add_child(_magnet_vis)
 
 
 func _build_hud() -> void:
 	_score_label = Label.new()
 	_score_label.theme_type_variation = &"HeadlineLabel"
+	_tint(_score_label)
 	add_child(_score_label)
 	_stat_label = Label.new()
 	_stat_label.theme_type_variation = &"CaptionLabel"
+	_tint(_stat_label)
 	add_child(_stat_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.runner.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Der Hinweis liegt auf dem grauen Asphalt — heller Text mit weichem
-	# Schattenrand bleibt dort lesbar, dunkle Tinte nicht.
-	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.94))
-	_hint_label.add_theme_color_override("font_outline_color", Color(0.15, 0.13, 0.18, 0.45))
-	_hint_label.add_theme_constant_override("outline_size", 7)
+	_tint(_hint_label)
 	add_child(_hint_label)
 	_update_labels()
 
 
+## Heller Text mit weichem Schattenrand — er liegt jetzt auf einer 3D-Szene.
+func _tint(label: Label) -> void:
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.96))
+	label.add_theme_color_override("font_outline_color", Color(0.14, 0.12, 0.17, 0.62))
+	label.add_theme_constant_override("outline_size", 8)
+
+
+## Die Bedienleiste wird in Entwurfspixeln gedacht und mit _ui skaliert —
+## sonst schrumpfen Zeit/Statuszeile auf großen Bühnen zu Krümeln.
+func _layout_hud() -> void:
+	if _score_label == null:
+		return
+	var pad := 14.0 * _ui
+	_score_label.position = Vector2(pad, 8.0 * _ui)
+	_score_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
+	_stat_label.position = Vector2(pad, 44.0 * _ui)
+	_stat_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
+	var hint_w := minf(view_size.x - pad * 2.0, 420.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 44.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 38.0 * _ui)
+
+
 func _fit_viewport() -> void:
 	apply_view(get_viewport_rect().size)
+
+
+# ── Eingabe/Aktionen ──────────────────────────────────────────────────────
 
 
 func _resolve_swipe(delta: Vector2) -> void:
@@ -248,6 +398,7 @@ func _jump() -> void:
 	if _jump_t >= 0.0 or _slide_t >= 0.0:
 		return
 	_jump_t = 0.0
+	_gooby.call("play", "hop")
 	AudioDirector.try_play(self, "mg_good", 1.3)
 
 
@@ -258,13 +409,11 @@ func _slide() -> void:
 	AudioDirector.try_play(self, "mg_junk", 1.25)
 
 
-func _advance_scenery(dz: float) -> void:
-	for i in _scenery.size():
-		var s := _scenery[i]
-		s.y += dz
-		if s.y > DESPAWN_Z:
-			s.y -= 104.0
-		_scenery[i] = s
+# ── Simulation (unverändert gegenüber der 2D-Fassung) ─────────────────────
+
+
+func _advance_band(dz: float) -> void:
+	(_world.get("band") as RefCounted).call("advance", dz)
 
 
 func _spawn(dz: float) -> void:
@@ -288,7 +437,23 @@ func _spawn_row(row: Dictionary) -> void:
 	for lane in lanes.size():
 		if lanes[lane] == null:
 			continue
-		_obstacles.append({"kind": str(lanes[lane]), "lane": lane, "z": SPAWN_Z})
+		# Geparkte Autos stehen LÄNGS zum Korridor (Web-GP3-Korrektur) — quer
+		# ragten sie in die Nachbarspuren und logen über die 0,95-m-Hitbox.
+		var yaw := 0.0 if rng.next() < 0.5 else PI
+		yaw += (rng.next() - 0.5) * 0.12
+		(
+			_obstacles
+			. append(
+				{
+					"kind": str(lanes[lane]),
+					"lane": lane,
+					"z": SPAWN_Z,
+					"yaw": yaw,
+					"row": _row_seq,
+				}
+			)
+		)
+	_row_seq += 1
 	if rng.next() >= float(tune["COIN_LINE_CHANCE"]):
 		return
 	var pass_flags := Logic.passable_lanes(row, tune)
@@ -319,6 +484,93 @@ func _spawn_row(row: Dictionary) -> void:
 		_coins.append({"lane": pick, "z": SPAWN_Z + z_off, "y": y})
 
 
+# ── Autoplay (nur Screenshots/Zertifizierung, Portierung von runner.js) ───
+
+
+## Ein Pilotenschritt: Spur halten/wechseln, Sprung/Rutsche vormerken.
+## Nutzt NICHT `rng` — der Bot darf den gesäten Ablauf des Spiels nicht
+## verschieben (im Web ist er ebenfalls nur ein Dev-Schalter).
+func _autoplay_tick() -> void:
+	_autoplay_plan()
+	if str(_auto["action"]).is_empty():
+		return
+	for ob in _obstacles:
+		if int(ob["row"]) != int(_auto["row"]):
+			continue
+		if float(ob["z"]) < float(_auto["at_z"]):
+			return
+		if str(_auto["action"]) == "jump":
+			_jump()
+		else:
+			_slide()
+		_auto["action"] = ""
+		return
+
+
+func _autoplay_plan() -> void:
+	if int(_auto["target"]) != _lane:
+		_change_lane(signi(int(_auto["target"]) - _lane))
+		return
+	var row: Dictionary = {}
+	for ob in _obstacles:
+		if float(ob["z"]) > -1.0 or int(ob["row"]) <= int(_auto["handled"]):
+			continue
+		if row.is_empty() or float(ob["z"]) > float(row["z"]):
+			row = ob
+	# Überraschungskiste vor dem nächsten Hindernis mitnehmen.
+	var box: Dictionary = {}
+	for entry in _mystery:
+		if float(entry["z"]) >= -0.5:
+			continue
+		if box.is_empty() or float(entry["z"]) > float(box["z"]):
+			box = entry
+	var box_first := (
+		not box.is_empty()
+		and float(box["z"]) > -_speed * 1.5
+		and (row.is_empty() or float(box["z"]) > float(row["z"]) + 2.0)
+	)
+	if box_first:
+		if int(box["lane"]) != _lane:
+			_change_lane(signi(int(box["lane"]) - _lane))
+		return
+	if row.is_empty() or float(row["z"]) < -_speed * 0.95:
+		return
+	_auto["handled"] = int(row["row"])
+	_autoplay_pick_lane(int(row["row"]))
+
+
+func _autoplay_pick_lane(row_id: int) -> void:
+	var lanes: Array = []
+	for _i in int(tune["LANES"]):
+		lanes.append(null)
+	for ob in _obstacles:
+		if int(ob["row"]) == row_id:
+			lanes[int(ob["lane"])] = str(ob["kind"])
+	var pass_flags := Logic.passable_lanes({"lanes": lanes, "gap": 0.0}, tune)
+	var order: Array[int] = [_lane, _lane - 1, _lane + 1, _lane - 2, _lane + 2]
+	var target := -1
+	for lane in order:
+		if lane >= 0 and lane < lanes.size() and bool(pass_flags[lane]):
+			target = lane
+			break
+	if target < 0:
+		return
+	_auto["target"] = target
+	if target != _lane:
+		_change_lane(signi(target - _lane))
+	var kind: Variant = lanes[target]
+	if kind == null:
+		_auto["action"] = ""
+		return
+	var pass_mode := str((tune["OBSTACLES"] as Dictionary)[str(kind)]["pass"])
+	var lead := (
+		float(tune["JUMP_SEC"]) * 0.45 if pass_mode == "jump" else float(tune["SLIDE_SEC"]) * 0.42
+	)
+	_auto["action"] = pass_mode
+	_auto["at_z"] = -_speed * lead
+	_auto["row"] = row_id
+
+
 func _move_player(dt: float) -> void:
 	var lane_target := float((tune["LANE_X"] as Array)[_lane])
 	_lane_x += (lane_target - _lane_x) * minf(1.0, dt / float(tune["LANE_CHANGE_SEC"]))
@@ -326,6 +578,8 @@ func _move_player(dt: float) -> void:
 		_jump_t += dt
 		if _jump_t >= float(tune["JUMP_SEC"]):
 			_jump_t = -1.0
+			if not _reduced_motion():
+				Fx.burst(_dust, Vector3(_lane_x, 0.08, 0.0))
 	if _slide_t >= 0.0:
 		_slide_t += dt
 		if _slide_t >= float(tune["SLIDE_SEC"]):
@@ -407,17 +661,17 @@ func _take_coin(coin: Dictionary) -> void:
 	var points := Logic.mystery_coin_points(mult, _x2_t > 0.0, tune)
 	coin_points += points
 	AudioDirector.try_play(self, "mg_good")
+	var lane_x: Array = tune["LANE_X"]
+	var at := Vector3(float(lane_x[int(coin["lane"])]), float(coin["y"]), float(coin["z"]))
+	if not _reduced_motion():
+		Fx.burst(_sparkle, at)
 	if ctx.juice != null:
-		var lane_x: Array = tune["LANE_X"]
-		var pos := project(
-			float(lane_x[int(coin["lane"])]), float(coin["y"]) + 0.5, float(coin["z"])
-		)
-		ctx.juice.float_text(pos, "+%d" % points, Color(1.0, 0.82, 0.4))
+		ctx.juice.float_text(project(at.x, at.y + 0.5, at.z), "+%d" % points, Color(1.0, 0.82, 0.4))
 	if mult > prev_mult:
 		_set_banner(I18nService.t("mg.runner.combo", {"mult": mult}))
 		AudioDirector.try_play(self, "mg_combo")
-		if ctx.juice != null:
-			ctx.juice.bloom_pulse(0.7)
+		_gooby.call("emote", "ecstatic", 1.0)
+		_stage.call("pulse_glow", 0.7)
 
 
 func _collect_mystery(dz: float, lane: int, y: float) -> void:
@@ -440,8 +694,10 @@ func _collect_mystery(dz: float, lane: int, y: float) -> void:
 		powerups += 1
 		AudioDirector.try_play(self, "mg_golden")
 		_set_banner(I18nService.t("mg.runner.%s" % kind))
-		if ctx.juice != null:
-			ctx.juice.bloom_pulse(1.0)
+		_gooby.call("emote", "ecstatic", 1.2)
+		if not _reduced_motion():
+			Fx.burst(_sparkle, Vector3(_lane_x, 1.0, float(box["z"])))
+		_stage.call("pulse_glow", 1.0)
 	_mystery = keep
 
 
@@ -461,13 +717,17 @@ func _on_hit() -> void:
 	if outcome == "shielded":
 		AudioDirector.try_play(self, "mg_junk")
 		_set_banner(I18nService.t("mg.runner.shield_pop"))
+		Fx.burst(_sparkle, Vector3(_lane_x, 0.9, 0.0))
 		return
 	AudioDirector.try_play(self, "mg_spill")
+	Fx.burst(_dust, Vector3(_lane_x, 0.25, -0.6))
 	if ctx.juice != null:
 		ctx.juice.hit_freeze(90)
 	if outcome == "wipeout":
+		_gooby.call("emote", "dizzy", 4.0)
 		_finish()
 		return
+	_gooby.call("emote", "sad", 1.2)
 	_set_banner(I18nService.t("mg.runner.stumble", {"left": int(tune["MAX_HITS"]) - hits}))
 
 
@@ -476,13 +736,15 @@ func _milestone(prev_meters: float) -> void:
 	if milestone <= 0:
 		return
 	AudioDirector.try_play(self, "mg_perfect")
+	if not _reduced_motion():
+		Fx.burst(_sparkle, Vector3(_lane_x, 1.4, 0.0))
 	if ctx.juice != null:
 		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 40.0, view_size.y * 0.3),
+			project(_lane_x, 2.0, 0.0),
 			I18nService.t("mg.runner.milestone", {"m": milestone}),
 			Color(0.7, 1.0, 0.8)
 		)
-		ctx.juice.bloom_pulse(0.6)
+	_stage.call("pulse_glow", 0.6)
 
 
 func _publish_score() -> void:
@@ -519,6 +781,14 @@ func _set_banner(text: String) -> void:
 	_banner_t = 1.3
 
 
+## Der Hinweis steht unten mitten im Bild — nach ein paar Sekunden hat man ihn
+## gelesen, danach gehört die Stelle Gooby.
+func _fade_hint() -> void:
+	if _hint_label == null:
+		return
+	_hint_label.modulate.a = clampf((HINT_FADE_SEC - elapsed) / 1.2, 0.0, 1.0)
+
+
 func _update_labels() -> void:
 	# Der Host zeigt den Score bereits oben — hier laufen die Renn-Zahlen.
 	_score_label.text = I18nService.t("mg.runner.distance", {"m": int(floor(meters))})
@@ -527,343 +797,150 @@ func _update_labels() -> void:
 	)
 
 
-func _draw() -> void:
-	_draw_world()
-	_draw_scenery()
-	# Alles Bewegliche von HINTEN nach VORNE (Maler-Algorithmus).
-	var items: Array = []
+# ── 3D-Abgleich ───────────────────────────────────────────────────────────
+
+
+## Alles, was sich bewegt, in die 3D-Welt schreiben. Läuft NACH der Simulation
+## und fasst keine Spielzahl an — reine Darstellung.
+func _sync_world(dt: float) -> void:
+	_stage.call("tick", dt)
+	_gooby.call("tick", dt)
+	_sync_player(dt)
+	_sync_props()
+	_sync_camera(dt)
+
+
+func _sync_player(dt: float) -> void:
+	var y := player_y()
+	var sliding := is_sliding()
+	var squash := float(tune["SLIDE_HEIGHT"]) / float(tune["STAND_HEIGHT"]) if sliding else 1.0
+	var target := Vector3(1.0 + (1.0 - squash) * 0.55, squash, 1.0 + (1.0 - squash) * 0.55)
+	_gooby.scale = _gooby.scale.lerp(target, minf(1.0, dt * 16.0))
+	_gooby.position = Vector3(_lane_x, y, 0.0)
+	_gooby.rotation.z = (_lane_x - float((tune["LANE_X"] as Array)[_lane])) * 0.25
+	_gooby.visible = _invuln <= 0.0 or fmod(_invuln * 12.0, 2.0) < 1.0
+	_gooby.call("run", 1.0 if not sliding else 0.0)
+	_shadow.position = Vector3(_lane_x, 0.02, 0.0)
+	_shadow.scale = Vector3.ONE * maxf(0.45, 1.0 - y * 0.35)
+	_shield_vis.visible = _shield
+	_shield_vis.position = Vector3(_lane_x, y + 0.55, 0.0)
+	_shield_vis.rotation.y += dt * 1.5
+	_magnet_vis.visible = _magnet_t > 0.0
+	_magnet_vis.position = Vector3(_lane_x, y + 0.12, 0.0)
+	_magnet_vis.rotation.y += dt * 2.4
+
+
+func _sync_props() -> void:
+	var lane_x: Array = tune["LANE_X"]
+	var gap_y := float((tune["OBSTACLES"] as Dictionary)["overhead"]["gapY"])
+	_world.call("begin_props")
 	for ob in _obstacles:
-		items.append({"z": float(ob["z"]), "kind": "obstacle", "data": ob})
-	for coin in _coins:
-		items.append({"z": float(coin["z"]), "kind": "coin", "data": coin})
-	for box in _mystery:
-		items.append({"z": float(box["z"]), "kind": "mystery", "data": box})
-	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["z"] < b["z"])
-	for item in items:
-		if float(item["z"]) < DRAW_Z or float(item["z"]) > DRAW_NEAR_Z:
+		var z := float(ob["z"])
+		if z < DRAW_Z or z > DESPAWN_Z:
 			continue
-		match str(item["kind"]):
-			"obstacle":
-				_draw_obstacle(item["data"])
-			"coin":
-				_draw_coin(item["data"])
-			_:
-				_draw_mystery(item["data"])
-	_draw_gooby()
+		_world.call(
+			"push_obstacle",
+			str(ob["kind"]),
+			float(lane_x[int(ob["lane"])]),
+			z,
+			float(ob.get("yaw", 0.0)),
+			gap_y
+		)
+	for coin in _coins:
+		var cz := float(coin["z"])
+		if cz < DRAW_Z or cz > DESPAWN_Z:
+			continue
+		_world.call(
+			"push_coin",
+			float(lane_x[int(coin["lane"])]),
+			float(coin["y"]),
+			cz,
+			elapsed * 4.0 + cz * 0.3
+		)
+	for box in _mystery:
+		var bz := float(box["z"])
+		if bz < DRAW_Z or bz > DESPAWN_Z:
+			continue
+		_world.call(
+			"push_mystery",
+			float(lane_x[int(box["lane"])]),
+			bz,
+			elapsed * 2.0,
+			sin(elapsed * 3.4) * 0.09
+		)
+	_world.call("flush_props")
+	(_world.get("band") as RefCounted).call("flush")
+
+
+## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Mikro-Zittern).
+func _sync_camera(dt: float) -> void:
+	var reduced := _reduced_motion()
+	var jitter := 0.0
+	if not reduced:
+		var top := clampf((_speed - 12.4) / 0.6, 0.0, 1.0)
+		jitter = top * 0.03
+	_place_camera(jitter)
+	var band01 := clampf(
+		(_speed - SPEED_BAND.x) / maxf(0.001, SPEED_BAND.y - SPEED_BAND.x), 0.0, 1.0
+	)
+	_stage.call("set_fov_bonus", HFOV_KICK * band01)
+	_streaks.set("enabled", not reduced)
+	_streaks.call("update", dt, _speed, SpeedLines.rate_at(_speed, STREAK_RATE))
+
+
+func _place_camera(jitter: float) -> void:
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return
+	var lift := 0.0 if landscape else CAM_PORTRAIT_LIFT
+	var back := 0.0 if landscape else CAM_PORTRAIT_BACK
+	var pitch := CAM_PITCH + (0.0 if landscape else CAM_PORTRAIT_PITCH)
+	var follow := _lane_x * 0.35
+	var jx := randf_range(-jitter, jitter)
+	var jy := randf_range(-jitter, jitter)
+	cam.position = Vector3(follow + jx, CAM_HEIGHT + lift + jy, CAM_BACK + back)
+	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
+
+
+# ── 2D-Overlay (Banner + Powerup-Restzeiten über der 3D-Szene) ────────────
+
+
+func _draw() -> void:
 	_draw_powerups()
 	_draw_banner()
 
 
-func _draw_world() -> void:
-	var vp := view_size
-	var hz := _horizon_px
-	draw_rect(Rect2(Vector2.ZERO, Vector2(vp.x, hz)), Color(0.75, 0.89, 1.0))
-	for i in 10:
-		var f := float(i) / 9.0
-		draw_rect(
-			Rect2(0.0, hz * f, vp.x, hz / 9.0 + 1.0),
-			Color(0.55, 0.79, 0.98).lerp(Color(0.86, 0.94, 1.0), f)
-		)
-	draw_rect(Rect2(0.0, hz, vp.x, vp.y - hz), Color(0.66, 0.85, 0.63))
-	# Straße als Trapez, Spurlinien laufen mit.
-	var road_half := 1.85
-	var near := project(-road_half, 0.0, DRAW_NEAR_Z)
-	var near_r := project(road_half, 0.0, DRAW_NEAR_Z)
-	var far := project(-road_half, 0.0, DRAW_Z)
-	var far_r := project(road_half, 0.0, DRAW_Z)
-	draw_colored_polygon(PackedVector2Array([far, far_r, near_r, near]), Color(0.44, 0.44, 0.48))
-	draw_line(far, near, Color(0.86, 0.86, 0.9, 0.8), 2.0)
-	draw_line(far_r, near_r, Color(0.86, 0.86, 0.9, 0.8), 2.0)
-	var lane_x: Array = tune["LANE_X"]
-	for i in [0.5, 1.5]:
-		var x := lerpf(float(lane_x[int(i - 0.5)]), float(lane_x[int(i + 0.5)]), 0.5)
-		# Gestrichelt: Segmente wandern mit den gelaufenen Metern.
-		var offset := fposmod(meters, 6.0)
-		var z := DRAW_NEAR_Z - offset
-		while z > DRAW_Z:
-			var a := project(x, 0.01, z)
-			var b := project(x, 0.01, maxf(DRAW_Z, z - 3.0))
-			draw_line(a, b, Color(0.95, 0.93, 0.7, 0.75), maxf(1.0, scale_at(z) * 0.05))
-			z -= 6.0
-	# Randsteine
-	for side in [-1.0, 1.0]:
-		var a := project(side * road_half, 0.12, DRAW_NEAR_Z)
-		var b := project(side * road_half, 0.12, DRAW_Z)
-		draw_line(a, b, Color(0.93, 0.9, 0.85, 0.9), 3.0)
-
-
-func _draw_scenery() -> void:
-	# Von HINTEN nach VORNE, sonst überdeckt ein fernes Haus ein nahes.
-	var sorted: Array[Vector3] = _scenery.duplicate()
-	sorted.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.y < b.y)
-	for s: Vector3 in sorted:
-		var z := s.y
-		if z > DRAW_NEAR_Z or z < DRAW_Z:
-			continue
-		var x := s.x * (4.3 + s.z * 3.4)
-		var sc := scale_at(z)
-		var base := project(x, 0.0, z)
-		if s.z < 0.45:
-			# Baum
-			var h := 2.4 * sc
-			draw_line(
-				base, base + Vector2(0.0, -h * 0.45), Color(0.45, 0.31, 0.22), maxf(1.0, sc * 0.16)
-			)
-			draw_circle(base + Vector2(0.0, -h * 0.66), sc * 0.75, Color(0.34, 0.62, 0.35))
-			draw_circle(base + Vector2(-sc * 0.35, -h * 0.5), sc * 0.5, Color(0.4, 0.68, 0.4))
-		else:
-			# Haus-Sticker
-			var w := sc * (1.6 + s.z)
-			var h := sc * (2.6 + s.z * 3.2)
-			var col := Color(0.93, 0.84, 0.76).lerp(Color(0.8, 0.72, 0.9), s.z)
-			draw_rect(Rect2(base + Vector2(-w * 0.5, -h), Vector2(w, h)), col)
-			draw_rect(
-				Rect2(base + Vector2(-w * 0.5, -h), Vector2(w, h)),
-				Color(0.55, 0.45, 0.42, 0.7),
-				false,
-				maxf(1.0, sc * 0.04)
-			)
-			for row in 3:
-				for col_i in 2:
-					var wp := (
-						base + Vector2((-0.26 + 0.52 * col_i) * w, -h + h * (0.18 + 0.28 * row))
-					)
-					draw_rect(
-						Rect2(wp - Vector2(w * 0.09, h * 0.06), Vector2(w * 0.18, h * 0.12)),
-						Color(0.99, 0.93, 0.66, 0.9)
-					)
-
-
-func _draw_obstacle(ob: Dictionary) -> void:
-	var lane_x: Array = tune["LANE_X"]
-	var z := float(ob["z"])
-	var x := float(lane_x[int(ob["lane"])])
-	var sc := scale_at(z)
-	var base := project(x, 0.0, z)
-	match str(ob["kind"]):
-		"cone":
-			var w := sc * 0.4
-			var h := sc * 0.62
-			draw_colored_polygon(
-				PackedVector2Array(
-					[
-						base + Vector2(-w, 0.0),
-						base + Vector2(w, 0.0),
-						base + Vector2(0.0, -h),
-					]
-				),
-				Color(0.98, 0.48, 0.16)
-			)
-			draw_rect(
-				Rect2(base + Vector2(-w * 0.62, -h * 0.62), Vector2(w * 1.24, h * 0.16)),
-				Color(1.0, 0.97, 0.92)
-			)
-			draw_rect(
-				Rect2(base + Vector2(-w * 1.15, -sc * 0.06), Vector2(w * 2.3, sc * 0.06)),
-				Color(0.86, 0.38, 0.12)
-			)
-		"box":
-			var w := sc * 0.44
-			var h := sc * 0.7
-			draw_rect(Rect2(base + Vector2(-w, -h), Vector2(w * 2.0, h)), Color(0.78, 0.58, 0.34))
-			draw_rect(
-				Rect2(base + Vector2(-w, -h), Vector2(w * 2.0, h)),
-				Color(0.5, 0.34, 0.2),
-				false,
-				maxf(1.0, sc * 0.05)
-			)
-			draw_line(
-				base + Vector2(-w, -h),
-				base + Vector2(w, 0.0),
-				Color(0.6, 0.42, 0.24),
-				maxf(1.0, sc * 0.04)
-			)
-		"barrier":
-			var w := sc * 0.55
-			var h := sc * 0.72
-			draw_rect(
-				Rect2(base + Vector2(-w, -h), Vector2(w * 2.0, h * 0.42)), Color(0.95, 0.95, 0.96)
-			)
-			for i in 4:
-				draw_rect(
-					Rect2(base + Vector2(-w + i * w * 0.5, -h), Vector2(w * 0.25, h * 0.42)),
-					Color(0.9, 0.24, 0.22)
-				)
-			for side in [-1.0, 1.0]:
-				draw_line(
-					base + Vector2(side * w * 0.8, 0.0),
-					base + Vector2(side * w * 0.8, -h * 0.6),
-					Color(0.55, 0.55, 0.6),
-					maxf(1.0, sc * 0.06)
-				)
-		"overhead":
-			var w := sc * 0.58
-			var top := sc * 1.5
-			var gap := sc * float((tune["OBSTACLES"] as Dictionary)["overhead"]["gapY"])
-			for side in [-1.0, 1.0]:
-				draw_line(
-					base + Vector2(side * w, 0.0),
-					base + Vector2(side * w, -top),
-					Color(0.69, 0.33, 0.18),
-					maxf(1.5, sc * 0.09)
-				)
-			draw_rect(
-				Rect2(base + Vector2(-w * 1.1, -top), Vector2(w * 2.2, top - gap)),
-				Color(0.32, 0.56, 0.85)
-			)
-			draw_rect(
-				Rect2(base + Vector2(-w * 1.1, -top), Vector2(w * 2.2, top - gap)),
-				Color(0.2, 0.34, 0.55),
-				false,
-				maxf(1.0, sc * 0.04)
-			)
-		_:
-			# Auto — voller Blocker
-			var w := sc * 0.9
-			var h := sc * 0.72
-			draw_rect(
-				Rect2(base + Vector2(-w, -h * 0.72), Vector2(w * 2.0, h * 0.72)),
-				Color(0.93, 0.76, 0.24)
-			)
-			draw_rect(
-				Rect2(base + Vector2(-w * 0.6, -h * 1.2), Vector2(w * 1.2, h * 0.5)),
-				Color(0.72, 0.85, 0.95)
-			)
-			for side in [-1.0, 1.0]:
-				draw_circle(base + Vector2(side * w * 0.6, 0.0), sc * 0.14, Color(0.22, 0.2, 0.22))
-
-
-func _draw_coin(coin: Dictionary) -> void:
-	var lane_x: Array = tune["LANE_X"]
-	var z := float(coin["z"])
-	var sc := scale_at(z)
-	var pos := project(float(lane_x[int(coin["lane"])]), float(coin["y"]), z)
-	var spin := absf(sin(elapsed * 4.0 + z * 0.3))
-	draw_circle(pos, sc * 0.2, Color(1.0, 0.85, 0.35, 0.25))
-	draw_ellipse_coin(pos, sc * 0.16 * (0.35 + 0.65 * spin), sc * 0.16)
-
-
-func draw_ellipse_coin(center: Vector2, rx: float, ry: float) -> void:
-	var pts := PackedVector2Array()
-	for i in 18:
-		var a := TAU * i / 18.0
-		pts.append(center + Vector2(cos(a) * maxf(1.0, rx), sin(a) * maxf(1.0, ry)))
-	draw_colored_polygon(pts, Color(1.0, 0.82, 0.4))
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.85, 0.6, 0.15), 1.5)
-
-
-func _draw_mystery(box: Dictionary) -> void:
-	var lane_x: Array = tune["LANE_X"]
-	var z := float(box["z"])
-	var sc := scale_at(z)
-	var base := project(float(lane_x[int(box["lane"])]), 0.0, z)
-	var w := sc * 0.36
-	var rect := Rect2(base + Vector2(-w, -w * 2.0), Vector2(w * 2.0, w * 2.0))
-	draw_rect(rect, Color(0.98, 0.78, 0.3))
-	draw_rect(rect, Color(0.7, 0.45, 0.1), false, maxf(1.0, sc * 0.05))
-	var font := ThemeService.font(800)
-	draw_string(
-		font,
-		base + Vector2(-w, -w * 0.55),
-		"?",
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w * 2.0,
-		maxi(10, int(sc * 0.45)),
-		Color(0.4, 0.24, 0.1)
-	)
-
-
-func _draw_gooby() -> void:
-	var sc := scale_at(0.0)
-	var y := player_y()
-	var sliding := is_sliding()
-	var squash := float(tune["SLIDE_HEIGHT"]) / float(tune["STAND_HEIGHT"]) if sliding else 1.0
-	var base := project(_lane_x, y, 0.0)
-	var alpha := 1.0 if _invuln <= 0.0 else (0.35 + 0.65 * absf(sin(_invuln * 20.0)))
-	var body_h := sc * float(tune["STAND_HEIGHT"]) * squash
-	var body_w := sc * 0.44 * (1.0 + (1.0 - squash) * 0.55)
-	# Schatten
-	var ground := project(_lane_x, 0.0, 0.0)
-	draw_circle(ground, body_w * (0.85 - y * 0.2), Color(0.15, 0.2, 0.15, 0.22 * alpha))
-	if _magnet_t > 0.0:
-		draw_arc(
-			base + Vector2(0.0, -body_h * 0.5),
-			body_w * 2.6,
-			0.0,
-			TAU,
-			32,
-			Color(0.55, 0.85, 1.0, 0.5 * alpha),
-			3.0
-		)
-	if _shield:
-		draw_arc(
-			base + Vector2(0.0, -body_h * 0.5),
-			body_w * 1.9,
-			0.0,
-			TAU,
-			32,
-			Color(1.0, 0.9, 0.45, 0.8 * alpha),
-			4.0
-		)
-	# Gooby-Sticker: Beine, Rumpf, runder Kopf mit zwei Ohren.
-	var fur := Color(0.99, 0.9, 0.65, alpha)
-	var ink := Color(0.32, 0.22, 0.18, alpha)
-	var head := base + Vector2(0.0, -body_h * 0.66)
-	var r := body_h * 0.3
-	if not sliding:
-		var step := sin(elapsed * 14.0) * body_h * 0.09
-		for side in [-1.0, 1.0]:
-			draw_line(
-				base + Vector2(side * body_w * 0.34, -body_h * 0.3),
-				base + Vector2(side * body_w * 0.34, step * side),
-				Color(0.86, 0.72, 0.5, alpha),
-				maxf(3.0, body_w * 0.24)
-			)
-	draw_ellipse(base + Vector2(0.0, -body_h * 0.4), body_w * 0.78, body_h * 0.28, fur)
-	for side in [-1.0, 1.0]:
-		draw_circle(head + Vector2(side * r * 0.62, -r * 0.82), r * 0.34, fur)
-	draw_circle(head, r, fur)
-	var eye := r * 0.13
-	draw_circle(head + Vector2(-r * 0.34, -r * 0.1), eye, ink)
-	draw_circle(head + Vector2(r * 0.34, -r * 0.1), eye, ink)
-	draw_arc(head + Vector2(0.0, r * 0.22), r * 0.3, 0.3, PI - 0.3, 12, ink, maxf(2.0, r * 0.1))
-	draw_circle(head + Vector2(0.0, r * 0.12), r * 0.1, Color(0.95, 0.6, 0.6, alpha))
-
-
-func draw_ellipse(center: Vector2, rx: float, ry: float, color: Color, filled := true) -> void:
-	var pts := PackedVector2Array()
-	for i in 26:
-		var a := TAU * i / 26.0
-		pts.append(center + Vector2(cos(a) * maxf(1.0, rx), sin(a) * maxf(1.0, ry)))
-	if filled:
-		draw_colored_polygon(pts, color)
-	else:
-		draw_polyline(pts + PackedVector2Array([pts[0]]), color, 2.0)
-
-
 func _draw_powerups() -> void:
 	var font := ThemeService.font(700)
-	var x := view_size.x - 150.0
-	var y := 16.0
+	var x := view_size.x - 150.0 * _ui
+	var y := 16.0 * _ui
+	var size := maxi(13, int(19.0 * _ui))
 	if _x2_t > 0.0:
 		draw_string(
 			font,
-			Vector2(x, y + 22.0),
+			Vector2(x, y + size),
 			"x2 %.1fs" % _x2_t,
 			HORIZONTAL_ALIGNMENT_RIGHT,
-			130.0,
-			20,
+			136.0 * _ui,
+			size,
 			Color(1.0, 0.86, 0.4)
 		)
-		y += 26.0
+		y += size * 1.4
 	if _magnet_t > 0.0:
 		draw_string(
 			font,
-			Vector2(x, y + 22.0),
+			Vector2(x, y + size),
 			"%s %.1fs" % [I18nService.t("mg.runner.magnet"), _magnet_t],
 			HORIZONTAL_ALIGNMENT_RIGHT,
-			130.0,
-			20,
+			136.0 * _ui,
+			size,
 			Color(0.6, 0.88, 1.0)
 		)
 
@@ -873,12 +950,13 @@ func _draw_banner() -> void:
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var w := minf(view_size.x - 24.0, 440.0 * _ui)
 	draw_string(
 		font,
-		Vector2(view_size.x * 0.5 - 200.0, view_size.y * 0.24),
+		Vector2((view_size.x - w) * 0.5, view_size.y * 0.24),
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
-		400.0,
-		28,
+		w,
+		maxi(18, int(28.0 * _ui)),
 		Color(1.0, 0.95, 0.8, alpha)
 	)

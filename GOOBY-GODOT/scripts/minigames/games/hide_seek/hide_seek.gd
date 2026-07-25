@@ -4,11 +4,13 @@ extends MinigameBase
 ## periodisch hervor, Tipp aufs richtige Versteck +2, geräumte Welle +3,
 ## 60 s (Endlos: bis 3 abgelaufene Wellen).
 ##
-## 2D (Web war three.js, aber flach frontal): das Raster wurde schon im Web
-## wie ein Brettspiel von vorn gezeigt — als gezeichnete Sticker-Bühne ist es
-## auf dem Handy schärfer lesbar und braucht keine 3D-Pipeline.
+## ECHTE 3D-BÜHNE (HideSeekGarden3D): Gooby ist der SUCHER und schaut von vorn
+## unten in den Garten, die Verstecke sind Nature-Kit-Requisiten auf einem
+## Hang, dahinter Bäume, Zaun, Brunnen und Laterne. Das Raster wird weiterhin
+## in Bildschirmpixeln gerechnet (getestet) und auf den Hang zurückgestrahlt.
 
 const Logic := preload("res://scripts/minigames/games/hide_seek/hide_seek_logic.gd")
+const Garden := preload("res://scripts/minigames/games/hide_seek/hide_seek_garden3d.gd")
 
 ## Pastellfarben der Tierchen (eine je Verstecker, zyklisch).
 const CRITTER_COLORS: Array[Color] = [
@@ -18,9 +20,6 @@ const CRITTER_COLORS: Array[Color] = [
 	Color(0.73, 0.66, 1.0),
 	Color(1.0, 0.69, 0.54),
 ]
-const SKY_TOP := Color(0.72, 0.89, 0.96)
-const SKY_BOTTOM := Color(0.92, 0.97, 0.88)
-const GRASS := Color(0.55, 0.79, 0.5)
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
 
@@ -43,6 +42,7 @@ var landscape := false
 var _critters: Dictionary = {}
 var _hidden: Dictionary = {}
 var _shake: PackedFloat32Array = PackedFloat32Array()
+var _stage: Node3D
 var _ui := 1.0
 var _time_label: Label
 var _wave_label: Label
@@ -56,6 +56,7 @@ func setup(context: MinigameCtx) -> void:
 	tune = Logic.apply_difficulty(Logic.SEEK, ctx.difficulty)
 	rng = ctx.rng()
 	_shake.resize(Logic.spot_count(tune))
+	_build_stage()
 	_build_hud()
 	_start_wave(0)
 	_fit_viewport()
@@ -68,6 +69,16 @@ func end() -> void:
 	finished = true
 
 
+## 3D-Bühne unter die Node2D-Wurzel hängen (Godot rendert 3D hinter 2D).
+func _build_stage() -> void:
+	_stage = Garden.new()
+	_stage.name = "Garden3D"
+	add_child(_stage)
+	_stage.setup_stage(Logic.spot_count(tune))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.world_env
+
+
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
@@ -75,8 +86,20 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
+	_layout_stage()
 	_layout_hud()
 	queue_redraw()
+
+
+## Raster (Bildschirmpixel) auf den Gartenhang zurückstrahlen.
+func _layout_stage() -> void:
+	if _stage == null:
+		return
+	_stage.apply_size(view_size)
+	var centers: Array[Vector2] = []
+	for i in Logic.spot_count(tune):
+		centers.append(spot_center(i))
+	_stage.layout(centers, _cell_size(), view_size)
 
 
 ## Bedienleiste in Entwurfspixeln, mit _ui skaliert (sonst Krümelschrift).
@@ -109,18 +132,65 @@ func _process(delta: float) -> void:
 		if serve_t <= 0.0:
 			phase = "play"
 			_start_wave(wave + 1)
+		_sync_stage(delta)
 		_update_labels()
 		queue_redraw()
 		return
 	wave_t += delta
 	if wave_t >= wave_sec:
 		_expire_wave()
+		_sync_stage(delta)
 		_update_labels()
 		queue_redraw()
 		return
 	_tick_peeks(delta)
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+## Die 3D-Bühne bekommt nur Optik-Zustand: Aufsteig-Anteil je Versteck (0..1),
+## Wackler der angetippten Requisiten und Goobys Laune.
+func _sync_stage(delta: float) -> void:
+	if _stage == null:
+		return
+	var total := Logic.spot_count(tune)
+	var rises: Array[float] = []
+	rises.resize(total)
+	for i in total:
+		rises[i] = _rise_of(i)
+		_stage.wobble(i, _shake[i] if i < _shake.size() else 0.0)
+	_stage.sync(rises, elapsed)
+	_stage.feel(_mood())
+	_stage.tick(delta)
+
+
+## Aufsteig-Anteil eines Tierchens (identisch zur alten 2D-Kurve).
+func _rise_of(spot: int) -> float:
+	if not _critters.has(spot):
+		return 0.0
+	var critter: Dictionary = _critters[spot]
+	if bool(critter["found"]):
+		return 1.0
+	var peek := float(critter["peek_t"])
+	if peek <= 0.0:
+		return 0.0
+	var k := sin(PI * maxf(0.0, 1.0 - peek / float(tune["PEEK_DURATION_SEC"])))
+	return 0.12 + k * 0.76
+
+
+## Gooby-Laune aus dem Spielzustand (Reihenfolge = Dringlichkeit).
+func _mood() -> String:
+	if finished:
+		return "sad"
+	if phase == "serve":
+		return "ecstatic" if _hidden.is_empty() else "sad"
+	if wave_t > wave_sec * 0.8:
+		return "scared"
+	for spot: int in _critters:
+		if float((_critters[spot] as Dictionary)["peek_t"]) > 0.0:
+			return "ecstatic"
+	return "happy"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -149,17 +219,17 @@ func spot_center(spot: int) -> Vector2:
 	return origin + Vector2((col + 0.5) * cell.x, (row + 0.55) * cell.y)
 
 
+## Das Raster nimmt nur die OBEREN zwei Drittel ein — das untere Drittel
+## gehört Gooby, der als Sucher im Vordergrund der 3D-Bühne steht.
 func _cell_size() -> Vector2:
 	var dims := grid_dims()
-	var usable := Vector2(view_size.x * 0.9, view_size.y * (0.66 if landscape else 0.7))
+	var usable := Vector2(view_size.x * 0.9, view_size.y * (0.46 if landscape else 0.48))
 	return Vector2(usable.x / dims.x, usable.y / dims.y)
 
 
 func _grid_origin(cell: Vector2, dims: Vector2i) -> Vector2:
 	var w := cell.x * dims.x
-	var h := cell.y * dims.y
-	var top := view_size.y * (0.2 if landscape else 0.17)
-	return Vector2((view_size.x - w) * 0.5, top + (view_size.y * 0.72 - h) * 0.5)
+	return Vector2((view_size.x - w) * 0.5, view_size.y * (0.16 if landscape else 0.14))
 
 
 func _spot_at(pos: Vector2) -> int:
@@ -240,6 +310,8 @@ func _tap_spot(spot: int) -> void:
 	var pos := spot_center(spot)
 	if not _hidden.has(spot):
 		AudioDirector.try_play(self, "ui_chip")
+		if _stage != null:
+			_stage.poof(spot, Color(0.72, 0.78, 0.56))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, I18nService.t("mg.hideSeek.empty"), Color(0.54, 0.5, 0.66))
 		return
@@ -253,6 +325,9 @@ func _tap_spot(spot: int) -> void:
 	if score != prev:
 		ctx.report_score(score, score - prev)
 	AudioDirector.try_play(self, "mg_good", 1.08)
+	if _stage != null:
+		_stage.poof(spot, CRITTER_COLORS[int(critter["color"])])
+		_stage.pulse_glow(0.5)
 	if ctx.juice != null:
 		ctx.juice.float_text(
 			pos,
@@ -272,6 +347,9 @@ func _clear_wave() -> void:
 		ctx.report_score(score, score - prev)
 	AudioDirector.try_play(self, "mg_perfect")
 	_set_banner(I18nService.t("mg.hideSeek.wave_clear", {"n": int(tune["WAVE_BONUS"])}))
+	if _stage != null:
+		_stage.cheer("wave")
+		_stage.pulse_glow(0.95)
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.9)
 		ctx.juice.shake(0.12)
@@ -318,148 +396,10 @@ func _update_labels() -> void:
 	_wave_label.text = I18nService.t("mg.hideSeek.wave", {"n": wave + 1, "left": _hidden.size()})
 
 
+## Nur noch HUD: Garten, Verstecke und Tierchen sind 3D (Garden3D).
 func _draw() -> void:
-	_draw_garden()
-	var total := Logic.spot_count(tune)
-	for i in total:
-		_draw_spot(i)
-	for spot: int in _critters:
-		_draw_critter(spot)
 	_draw_timer_bar()
 	_draw_banner()
-
-
-## Geschlossenes Wiesenband: gewellte Oberkante, sonst bis zum Bühnenboden.
-func _hill_band(vp: Vector2, base_y: float, amp: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	var steps := 40
-	for i in steps + 1:
-		var f := float(i) / float(steps)
-		var wave := sin(f * PI * 2.3) * 0.62 + sin(f * PI * 5.1 + 1.2) * 0.38
-		pts.append(Vector2(vp.x * f, base_y - amp * wave))
-	pts.append(Vector2(vp.x, vp.y))
-	pts.append(Vector2(0.0, vp.y))
-	return pts
-
-
-func _draw_garden() -> void:
-	var vp := view_size
-	draw_rect(Rect2(Vector2.ZERO, vp), SKY_BOTTOM)
-	for i in 24:
-		var f := float(i) / 23.0
-		draw_rect(
-			Rect2(0.0, vp.y * 0.4 * f, vp.x, vp.y * 0.4 / 23.0 + 1.0), SKY_TOP.lerp(SKY_BOTTOM, f)
-		)
-	# Hügel + Wiese. Der Hügelrücken ist eine durchgehende Wellenkante statt
-	# zweier Kreise — die ließen in breiten Bühnen eine Himmelslücke stehen.
-	# Der Horizont hängt an der OBERSTEN Versteckreihe, damit kein Versteck
-	# im Himmel steht (das passiert sonst in beiden Orientierungen).
-	var horizon := clampf(spot_center(0).y - _cell_size().y * 0.45, vp.y * 0.16, vp.y * 0.46)
-	draw_colored_polygon(_hill_band(vp, horizon, vp.y * 0.045), Color(0.63, 0.85, 0.58))
-	draw_colored_polygon(_hill_band(vp, horizon + vp.y * 0.06, vp.y * 0.028), GRASS)
-	for i in 18:
-		var gx := vp.x * (0.02 + 0.055 * i)
-		var gy := horizon + vp.y * (0.11 + 0.03 * ((i * 7) % 5))
-		draw_line(Vector2(gx, gy), Vector2(gx + 4.0, gy - 12.0), Color(0.44, 0.7, 0.4, 0.7), 2.0)
-	# Sonne
-	draw_circle(
-		Vector2(vp.x * 0.86, minf(vp.y * 0.09, horizon * 0.5)),
-		maxf(18.0, minf(vp.x, vp.y) * 0.055),
-		Color(1.0, 0.9, 0.55, 0.85)
-	)
-
-
-func _draw_spot(spot: int) -> void:
-	var center := spot_center(spot)
-	var cell := _cell_size()
-	var r := minf(cell.x, cell.y) * 0.38
-	var wobble := 0.0
-	if spot < _shake.size() and _shake[spot] > 0.0:
-		wobble = sin(_shake[spot] * 36.0) * 0.12 * maxf(0.0, _shake[spot] / 0.35)
-	else:
-		wobble = sin(elapsed * 1.1 + spot * 1.7) * 0.015
-	var off := Vector2(wobble * r, 0.0)
-	# Schatten
-	draw_circle(center + Vector2(0.0, r * 0.85), r * 0.9, Color(0.32, 0.42, 0.3, 0.22))
-	match spot % 3:
-		0:
-			_draw_bush(center + off, r)
-		1:
-			_draw_crate(center + off, r)
-		_:
-			_draw_pot(center + off, r)
-
-
-func _draw_bush(center: Vector2, r: float) -> void:
-	draw_circle(center + Vector2(-r * 0.5, r * 0.1), r * 0.62, Color(0.35, 0.66, 0.38))
-	draw_circle(center + Vector2(r * 0.5, r * 0.12), r * 0.58, Color(0.33, 0.62, 0.36))
-	draw_circle(center + Vector2(0.0, -r * 0.18), r * 0.78, Color(0.4, 0.72, 0.42))
-	var petals: Array[Color] = [
-		Color(1.0, 0.61, 0.74), Color(1.0, 0.82, 0.4), Color(1.0, 0.96, 0.89)
-	]
-	var offsets := [Vector2(-0.35, 0.3), Vector2(0.15, 0.44), Vector2(0.55, 0.1)]
-	for i in petals.size():
-		var o: Vector2 = offsets[i]
-		draw_circle(center + Vector2(o.x * r, -o.y * r), r * 0.12, petals[i])
-
-
-func _draw_crate(center: Vector2, r: float) -> void:
-	var box := Rect2(center - Vector2(r * 0.78, r * 0.6), Vector2(r * 1.56, r * 1.2))
-	draw_rect(box, Color(0.78, 0.61, 0.42))
-	draw_rect(box, Color(0.55, 0.4, 0.26), false, 3.0)
-	draw_rect(
-		Rect2(center - Vector2(r * 0.88, r * 0.78), Vector2(r * 1.76, r * 0.22)),
-		Color(0.88, 0.73, 0.54)
-	)
-	draw_line(box.position, box.position + box.size, Color(0.6, 0.45, 0.3, 0.6), 2.0)
-
-
-func _draw_pot(center: Vector2, r: float) -> void:
-	draw_circle(center - Vector2(0.0, r * 0.42), r * 0.6, Color(0.45, 0.76, 0.42))
-	var pts := PackedVector2Array(
-		[
-			center + Vector2(-r * 0.6, -r * 0.1),
-			center + Vector2(r * 0.6, -r * 0.1),
-			center + Vector2(r * 0.42, r * 0.72),
-			center + Vector2(-r * 0.42, r * 0.72),
-		]
-	)
-	draw_colored_polygon(pts, Color(0.85, 0.53, 0.41))
-	draw_rect(
-		Rect2(center - Vector2(r * 0.66, r * 0.22), Vector2(r * 1.32, r * 0.2)),
-		Color(0.92, 0.62, 0.48)
-	)
-
-
-func _draw_critter(spot: int) -> void:
-	var critter: Dictionary = _critters[spot]
-	var center := spot_center(spot)
-	var cell := _cell_size()
-	var r := minf(cell.x, cell.y) * 0.38
-	var color: Color = CRITTER_COLORS[int(critter["color"])]
-	var rise := 0.0
-	if bool(critter["found"]):
-		rise = 1.25
-	elif float(critter["peek_t"]) > 0.0:
-		var k := sin(
-			PI * maxf(0.0, 1.0 - float(critter["peek_t"]) / float(tune["PEEK_DURATION_SEC"]))
-		)
-		rise = 0.15 + k * 0.95
-	else:
-		return
-	var pos := center - Vector2(0.0, r * rise)
-	var br := r * 0.4
-	# Ohren
-	for side in [-1.0, 1.0]:
-		draw_circle(pos + Vector2(side * br * 0.45, -br * 1.25), br * 0.26, color)
-	draw_circle(pos, br, color)
-	draw_circle(pos + Vector2(-br * 0.36, -br * 0.1), br * 0.12, Color(0.19, 0.15, 0.24))
-	draw_circle(pos + Vector2(br * 0.36, -br * 0.1), br * 0.12, Color(0.19, 0.15, 0.24))
-	draw_circle(pos + Vector2(0.0, br * 0.16), br * 0.1, Color(1.0, 0.48, 0.66))
-	if bool(critter["found"]):
-		draw_arc(
-			pos + Vector2(0.0, br * 0.2), br * 0.3, 0.35, PI - 0.35, 12, Color(0.3, 0.2, 0.25), 2.5
-		)
 
 
 func _draw_timer_bar() -> void:

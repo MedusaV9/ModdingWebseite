@@ -4,27 +4,47 @@ extends MinigameBase
 ## Fang +3 mit Kettenbonus (max. +5), Kürbis-Attrappe −2, alle 25 s eine
 ## Buh-Welle mit 5 Geistern (≥ 4 Fänge = +10) sowie Laterne/Netz als Aufsammler.
 ##
-## 2D statt 3D (bewusste Entscheidung): das Web nutzt eine KayKit-Friedhofs-
-## szene, das Spiel ist aber reines Ziel-Tippen auf 12 FESTE Ankerpunkte. Eine
-## 2D-Sticker-Kulisse mit Tiefenprojektion (Weltkoordinate z → Skalierung +
-## Bildschirmhöhe) liefert dieselbe Lesbarkeit, größere Tippflächen auf dem
-## Handy und kostet keine Modelle. Die Anker sind exakt GhostHuntLogic.SPOTS.
+## ECHTES 3D (Agent 3D-A, Rückbau): ein Friedhofsgarten in der Abenddämmerung.
+## Die zwölf Verstecke aus `GhostHuntLogic.SPOTS` sind echte Grabsteine, Kürbisse
+## und eine Gruft auf ihren Weltkoordinaten (x, z) — die frühere 2D-Fassung hat
+## dieselben Zahlen nur mit einer Handrechnung `project()` perspektivisch
+## GEFAKED. Jetzt macht das die Kamera. Getippt wird weiterhin auf Bildschirm-
+## punkte: `Stage3D.to_screen()` liefert sie, der Daumenradius bleibt.
+##
+## Gooby ist ECHTES Rig und spielt MIT: er steht mit Laterne am Tor, dreht sich
+## zum gefangenen Geist, jubelt beim Fang und erschrickt bei der Attrappe.
+##
+## Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt hängt
+## darunter, HUD/Banner sind CanvasItems obenauf.
 
 const Logic := preload("res://scripts/minigames/games/ghost_hunt/ghost_hunt_logic.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
+const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
+const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
+const Spark3D := preload("res://scripts/minigames/games/_3da_stage/spark3d.gd")
 
-## Tiefenband der Kulisse in Weltkoordinaten (SPOTS liegen bei z = −1.5 … −6.4).
-const DEPTH_NEAR := 1.45
-const DEPTH_FAR := 6.9
-## Perspektivstärke: p = 1 / (1 + t · STRENGTH) (t = 0 vorn, 1 hinten).
-const PERSPECTIVE := 1.7
+const ASSETS := "res://assets/minigames/ghost_hunt/"
 
-const SKY_TOP := Color(0.165, 0.118, 0.259)
-const SKY_HORIZON := Color(0.478, 0.286, 0.322)
-const GROUND_NEAR := Color(0.196, 0.157, 0.235)
-const GROUND_FAR := Color(0.286, 0.208, 0.318)
-const GHOST_TINT := Color(0.925, 0.941, 1.0)
+## So viele Geister können gleichzeitig stehen (Buh-Welle: BOO_COUNT = 5).
+const GHOST_RIGS := 6
+## Höhe eines Laken-Geistes in Metern.
+const GHOST_H := 1.05
+## Mindest-Tippfläche in Pixeln (Daumenregel — wie in der 2D-Fassung).
+const TAP_MIN_PX := 34.0
+## Tippradius eines Ziels in Weltmetern (wird auf den Schirm projiziert).
+const TAP_WORLD_R := 0.46
+
+const GHOST_TINT := Color(0.93, 0.94, 1.0)
+const WAVE_TINT := Color(0.85, 0.78, 1.0)
 const LANTERN_TINT := Color(1.0, 0.694, 0.302)
 const NET_TINT := Color(0.608, 0.878, 0.784)
+const STONE := Color(0.68, 0.67, 0.76)
+const TURF := Color(0.24, 0.33, 0.29)
+## Umfärbung des Kenney-Kürbisses (`leafsFall` = Körper, `grass` = Stiel).
+const PUMPKIN_SKIN := {
+	"leafsFall": Color(0.93, 0.47, 0.16),
+	"grass": Color(0.36, 0.5, 0.28),
+}
 
 var state: Dictionary = {}
 var view_size := Vector2(390.0, 844.0)
@@ -33,17 +53,28 @@ var finished := false
 
 var _banner := ""
 var _banner_t := 0.0
-var _pops: Array[Dictionary] = []
 var _bob := 0.0
 var _score_label: Label
 var _chain_label: Label
 var _hint_label: Label
+
+var _stage: Stage3D
+var _gooby: GoobyActor
+var _sparks: Spark3D
+var _ghosts: Array[Dictionary] = []
+var _decoys: Array[Dictionary] = []
+var _tokens: Array[Dictionary] = []
+var _lantern_light: OmniLight3D
+var _sheet: ArrayMesh
+var _face: Mesh
+var _sky: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	var tune := Logic.apply_difficulty(Logic.HUNT, ctx.difficulty)
 	state = Logic.create_hunt(ctx.run_seed, tune)
+	_build_world()
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -56,11 +87,17 @@ func end() -> void:
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## Hochkant blickt die Kamera STEILER auf den Friedhof — sonst schiebt sich das
+## schmale Bild voll Himmel und die hinteren Gräber liegen übereinander.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.apply_size(view_size)
+		_stage.set_fov(44.0 if landscape else 40.0)
+		_frame_yard()
 	if _score_label != null:
 		_score_label.position = Vector2(16.0, 10.0)
 		_chain_label.position = Vector2(16.0, 48.0)
@@ -74,9 +111,14 @@ func _process(delta: float) -> void:
 		return
 	_bob += delta
 	_banner_t = maxf(0.0, _banner_t - delta)
-	_age_pops(delta)
+	_stage.tick(delta)
+	_gooby.tick(delta)
 	Logic.step_hunt(state, delta)
 	_drain_events()
+	_sync_ghosts()
+	_sync_decoys()
+	_sync_tokens()
+	_sync_lantern()
 	ctx.report_score(Logic.hunt_score(state), 0)
 	_update_labels()
 	queue_redraw()
@@ -91,35 +133,444 @@ func _unhandled_input(event: InputEvent) -> void:
 		_tap_at(event.position)
 
 
-## Horizontlinie in Pixeln (Oberkante des Friedhofsbodens).
-func horizon_y() -> float:
-	return view_size.y * (0.24 if landscape else 0.30)
+## Steht gerade ein sichtbarer Geist im Bild? (Screenshot-Treiber.)
+func has_visible_ghost() -> bool:
+	for rig: Dictionary in _ghosts:
+		if (rig["root"] as Node3D).visible:
+			return true
+	return false
 
 
-## Perspektivfaktor einer Welt-Tiefe (1.0 = ganz vorn, klein = hinten).
-func depth_scale(z: float) -> float:
-	var t := clampf((-z - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR), 0.0, 1.0)
-	return 1.0 / (1.0 + t * PERSPECTIVE)
+## Bildschirmpunkt des ersten sichtbaren Geistes (Screenshot-Treiber).
+func first_ghost_screen() -> Vector2:
+	for rig: Dictionary in _ghosts:
+		var root: Node3D = rig["root"]
+		if root.visible:
+			return _stage.to_screen(root.position + Vector3(0.0, GHOST_H * 0.6, 0.0))
+	return view_size * 0.5
 
 
-## Weltkoordinate (x, z) auf den Bildschirm projizieren.
-func project(x: float, z: float) -> Vector2:
-	var p := depth_scale(z)
-	var far := 1.0 / (1.0 + PERSPECTIVE)
-	var f := (p - far) / (1.0 - far)
-	var top := horizon_y()
-	var bottom := view_size.y * (0.88 if landscape else 0.84)
-	return Vector2(view_size.x * 0.5 + x * unit() * p, top + (bottom - top) * f)
+# ------------------------------------------------------------------ Aufbau
 
 
-## Pixel pro Welteinheit in der vordersten Reihe.
-func unit() -> float:
-	return minf(view_size.x / 5.6, view_size.y * (0.16 if landscape else 0.1))
+func _build_world() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	# Dämmerungsviolett wie im Web (§C10.1 „distinct look"): kaltes Mondlicht,
+	# warmer Kürbisschein, kräftiger Glow, damit die Laternen wirklich glühen.
+	(
+		_stage
+		. build(
+			{
+				"sky_top": Color(0.16, 0.13, 0.3),
+				"sky_horizon": Color(0.55, 0.29, 0.4),
+				# Boden-Hemisphäre des Prozedurhimmels = NEBELFARBE. Sie kippt
+				# sonst direkt unter der Horizontlinie fast auf Schwarz und
+				# malt einen dunklen Balken über die abgenebelte Wiese.
+				"ground_horizon": Color(0.31, 0.21, 0.38),
+				"ground_bottom": Color(0.29, 0.2, 0.36),
+				"sky_energy": 0.8,
+				"fog_color": Color(0.31, 0.21, 0.38),
+				"fog_from": 13.0,
+				"fog_to": 40.0,
+				"fog_density": 0.7,
+				"sun_dir": Vector3(0.42, -0.6, 0.68),
+				"sun_color": Color(0.74, 0.83, 1.0),
+				"sun_energy": 1.7,
+				"ambient": 0.34,
+				"ambient_color": Color(0.42, 0.38, 0.62),
+				"sky_ambient": 0.35,
+				"exposure": 1.05,
+				"white": 2.2,
+				"fill_color": Color(1.0, 0.66, 0.42),
+				"fill_energy": 0.3,
+				"glow": 0.45,
+				"glow_threshold": 0.82,
+				"glow_bloom": 0.14,
+				"shadows": true,
+				"shadow_distance": 22.0,
+				"fov": 44.0,
+				"far": 90.0,
+			}
+		)
+	)
+	_stage.add_child(Props3D.ground(Vector2(70.0, 70.0), Props3D.flat(TURF), 0.0))
+	_build_moon()
+	_build_yard()
+	_build_spots()
+	_build_decoys()
+	_build_ghosts()
+	_build_tokens()
+	_build_gooby()
+	_sparks = Spark3D.new()
+	_stage.add_child(_sparks)
+	(
+		_sparks
+		. build(
+			{
+				"color": Color(0.92, 0.95, 1.0),
+				"amount": 26,
+				"speed": Vector2(1.2, 2.8),
+				"gravity": Vector3(0.0, -1.6, 0.0),
+				"lifetime": 0.9,
+			}
+		)
+	)
 
 
-## Tipp-Radius eines Ankers in dieser Tiefe (min. 34 px = Daumenfläche).
-func hit_radius(z: float) -> float:
-	return maxf(34.0, unit() * 0.52 * depth_scale(z))
+## Mond und Sterne hängen in einer KAMERAFESTEN Kuppel (`_sky`), nicht im Hof.
+## Grund: die Kamera blickt hier steil von oben (30°…38°) — ein Mond mit fester
+## Weltposition steht dann garantiert über dem Bildrand, und hochkant/quer
+## verschiebt er sich auch noch unterschiedlich. In Kamerakoordinaten sitzt er
+## immer oben links, egal welches Format.
+func _build_moon() -> void:
+	_sky = Node3D.new()
+	_stage.add_child(_sky)
+	# Nicht zu weit weg: die Kamera blickt steil nach unten, ein Mond in 34 m
+	# läge unter der Bodenebene und wäre schlicht verdeckt.
+	var moon := Props3D.halo(0.6, Color(1.0, 0.96, 0.82, 0.95))
+	moon.position = Vector3(-3.2, 6.0, -20.0)
+	_sky.add_child(moon)
+	var haze := Props3D.halo(1.7, Color(0.72, 0.68, 1.0, 0.16))
+	haze.position = Vector3(-3.2, 6.0, -20.2)
+	_sky.add_child(haze)
+
+
+## Friedhofsgarten: Zaun ums Feld, tote Bäume, Stümpfe, Büsche, Pilze und ein
+## Trampelpfad. Alles Massenware — ein Draw-Call je Sorte.
+func _build_yard() -> void:
+	var yard := Vector3(0.0, 0.0, -3.6)
+	var gate := func(at: Vector3) -> bool: return at.z > 0.9
+	_build_fence()
+	# Bewusst kleiner und weiter draußen als im ersten Versuch: hochkant blickt
+	# die Kamera steil, große Bäume am inneren Kranz füllen sonst den halben
+	# Himmel und werden oben abgeschnitten.
+	_stage.add_child(
+		Props3D.scatter(ASSETS + "tree_pineTallA.glb", 3.8, 10, 10.4, yard, 1.5, 0.4, gate)
+	)
+	_stage.add_child(Props3D.scatter(ASSETS + "tree_oak.glb", 3.1, 8, 13.0, yard, 1.8, 1.7, gate))
+	_stage.add_child(
+		Props3D.scatter(ASSETS + "stump_round.glb", 0.36, 6, 6.2, yard, 0.9, 2.4, gate)
+	)
+	_stage.add_child(Props3D.scatter(ASSETS + "log.glb", 0.3, 5, 5.6, yard, 1.1, 3.1, gate))
+	_stage.add_child(
+		Props3D.scatter(ASSETS + "plant_bushLarge.glb", 0.62, 12, 6.8, yard, 1.2, 0.9, gate)
+	)
+	_stage.add_child(
+		Props3D.scatter(ASSETS + "grass_large.glb", 0.34, 22, 5.4, yard, 1.4, 2.0, gate)
+	)
+	_stage.add_child(
+		Props3D.scatter(ASSETS + "mushroom_red.glb", 0.22, 10, 4.6, yard, 1.0, 3.6, gate)
+	)
+	# Trampelpfad vom Tor zur Gruft — er führt das Auge in die Tiefe. Die
+	# Platten liegen bewusst schmal und fast achsparallel: gedrehte, große
+	# Platten lesen sich von oben wie ein Stapel Spielkarten.
+	var slab := BoxMesh.new()
+	slab.size = Vector3(0.62, 0.03, 0.44)
+	slab.material = Props3D.flat(Color(0.33, 0.31, 0.34))
+	var path: Array = []
+	for i in 11:
+		var z := 0.7 - float(i) * 0.66
+		var x := sin(float(i) * 0.7) * 0.24
+		path.append(Props3D.pose(Vector3(x, 0.012, z), sin(float(i) * 1.9) * 0.12))
+	_stage.add_child(Props3D.swarm_mesh(slab, path, 10.0))
+	_build_gate()
+	_build_stars()
+
+
+## Friedhofstor im Vordergrund: zwei Pfeiler mit Kürbislaternen. Sie rahmen
+## das Bild unten ein — ohne sie ist der Nahbereich eine leere Rasenfläche.
+func _build_gate() -> void:
+	var stone := Props3D.flat(Color(0.46, 0.43, 0.52), 0.95)
+	for sign_x: float in [-1.0, 1.0]:
+		var at := Vector3(sign_x * 2.35, 0.0, 1.05)
+		_stage.add_child(Props3D.box(Vector3(0.42, 1.5, 0.42), stone, at + Vector3.UP * 0.75))
+		_stage.add_child(
+			Props3D.box(
+				Vector3(0.58, 0.12, 0.58),
+				Props3D.flat(Color(0.38, 0.35, 0.44), 0.95),
+				at + Vector3.UP * 1.56
+			)
+		)
+		var lamp := Props3D.box(
+			Vector3(0.26, 0.3, 0.26), Props3D.glow(LANTERN_TINT, 1.8), at + Vector3.UP * 1.77
+		)
+		_stage.add_child(lamp)
+		var halo := Props3D.halo(0.68, Color(LANTERN_TINT, 0.28))
+		halo.position = at + Vector3.UP * 1.77
+		_stage.add_child(halo)
+
+
+## Sternenhimmel: ein MultiMesh winziger Leuchtplättchen weit hinten.
+func _build_stars() -> void:
+	var star := QuadMesh.new()
+	star.size = Vector2(0.055, 0.055)
+	var mat := Props3D.glow(Color(1.0, 0.98, 0.9), 3.0)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.disable_fog = true
+	mat.albedo_texture = Props3D.disc()
+	star.material = mat
+	var poses: Array = []
+	for i in 48:
+		var a := float(i) * 2.399
+		poses.append(
+			Props3D.pose(
+				Vector3(sin(a) * 9.0, 3.2 + 5.0 * absf(sin(float(i) * 1.31)), -20.0),
+				0.0,
+				0.5 + 0.7 * absf(cos(float(i) * 2.1))
+			)
+		)
+	_sky.add_child(Props3D.swarm_mesh(star, poses, 60.0))
+
+
+func _build_fence() -> void:
+	var poses: Array = []
+	for i in 30:
+		var a := TAU * float(i) / 30.0
+		var at := Vector3(sin(a) * 6.6, 0.0, -3.6 + cos(a) * 5.4)
+		if at.z > 1.0:
+			continue
+		poses.append(Props3D.pose(at, -a, 1.0))
+	_stage.add_child(
+		Props3D.swarm(
+			Props3D.parts(ASSETS + "fence_simple.glb", 0.72, {"wood": Color(0.42, 0.34, 0.4)}),
+			poses
+		)
+	)
+
+
+## Die zwölf Verstecke aus der Logik als echte Requisiten auf ihren (x, z).
+func _build_spots() -> void:
+	var graves: Array = []
+	var pumpkins: Array = []
+	for spot: Dictionary in Logic.SPOTS:
+		var at := Vector3(float(spot["x"]), 0.0, float(spot["z"]))
+		match str(spot["kind"]):
+			"pumpkin":
+				pumpkins.append(Props3D.pose(at, float(spot["id"]) * 1.3, 1.1))
+			"crypt":
+				_stage.add_child(_build_crypt(at))
+			_:
+				graves.append(Props3D.pose(at, float(spot["id"]) * 0.4 - 0.6, 1.0))
+	_stage.add_child(Props3D.swarm_mesh(_grave_mesh(), graves, 8.0))
+	# Materialnamen aus dem GLB: `leafsFall` ist der Kürbiskörper, `grass` der
+	# Stiel — ohne die Umfärbung bleiben die Kürbisse kit-lachsrosa.
+	_stage.add_child(
+		Props3D.swarm(Props3D.parts(ASSETS + "crop_pumpkin.glb", 0.42, PUMPKIN_SKIN), pumpkins)
+	)
+
+
+## Grabstein als EIN Mesh (Stele + Rundbogen + Kreuz) — so kostet die ganze
+## Reihe einen Draw-Call statt drei je Stein.
+func _grave_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_add_box(st, Vector3(0.0, 0.42, 0.0), Vector3(0.52, 0.84, 0.16))
+	_add_box(st, Vector3(0.0, 0.86, 0.0), Vector3(0.4, 0.2, 0.16))
+	_add_box(st, Vector3(0.0, 0.06, 0.0), Vector3(0.66, 0.12, 0.28))
+	st.generate_normals()
+	var mesh: ArrayMesh = st.commit()
+	mesh.surface_set_material(0, Props3D.flat(STONE, 0.95))
+	return mesh
+
+
+func _build_crypt(at: Vector3) -> Node3D:
+	var holder := Node3D.new()
+	holder.position = at
+	var wall := Props3D.flat(Color(0.5, 0.48, 0.58), 0.95)
+	holder.add_child(Props3D.box(Vector3(1.5, 1.3, 1.3), wall, Vector3(0.0, 0.65, 0.0)))
+	# Echtes Satteldach statt eines um 45° gekippten Würfels — der sieht von
+	# vorn wie eine Raute aus und nicht wie ein Dach.
+	var gable := PrismMesh.new()
+	gable.size = Vector3(1.72, 0.62, 1.5)
+	gable.left_to_right = 0.5
+	gable.material = Props3D.flat(Color(0.43, 0.4, 0.53), 0.95)
+	holder.add_child(Props3D.mesh_node(gable, Vector3(0.0, 1.61, 0.0)))
+	holder.add_child(
+		Props3D.box(
+			Vector3(0.5, 0.86, 0.1),
+			Props3D.flat(Color(0.11, 0.08, 0.15), 1.0),
+			Vector3(0.0, 0.43, 0.66)
+		)
+	)
+	return holder
+
+
+## Attrappen: geschnitzte Kürbislaternen, die im Flackerfenster hell glühen.
+func _build_decoys() -> void:
+	for spot: Dictionary in Logic.DECOY_SPOTS:
+		var holder := Node3D.new()
+		holder.position = Vector3(float(spot["x"]), 0.0, float(spot["z"]))
+		var body := Props3D.model(ASSETS + "crop_pumpkin.glb", 0.5)
+		Props3D.repaint(body, PUMPKIN_SKIN)
+		holder.add_child(body)
+		var face_mat := Props3D.glow(LANTERN_TINT, 0.0)
+		var eyes := (
+			Props3D
+			. swarm_mesh(
+				_face_mesh(),
+				[
+					Props3D.pose(Vector3(-0.09, 0.3, 0.19), 0.0, 0.7),
+					Props3D.pose(Vector3(0.09, 0.3, 0.19), 0.0, 0.7),
+					Props3D.pose(Vector3(0.0, 0.17, 0.2), 0.0, 1.1),
+				]
+			)
+		)
+		for child in eyes.get_children():
+			(child as GeometryInstance3D).material_override = face_mat
+		holder.add_child(eyes)
+		var halo := Props3D.halo(0.85, Color(LANTERN_TINT, 0.0))
+		halo.position = Vector3(0.0, 0.26, 0.0)
+		holder.add_child(halo)
+		_stage.add_child(holder)
+		_decoys.append({"root": holder, "face": face_mat, "halo": halo})
+
+
+## Kleines Gesichtsplättchen (Augen/Mund von Geist und Kürbis) — als MultiMesh
+## verbaut, damit ein ganzes Gesicht einen Draw-Call kostet.
+func _face_mesh() -> Mesh:
+	if _face == null:
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.055
+		sphere.height = 0.13
+		sphere.radial_segments = 8
+		sphere.rings = 4
+		_face = sphere
+	return _face
+
+
+## Geister-Pool: fertige Laken, die je Frame den aktiven Logik-Geistern
+## zugewiesen werden. Neu-Instanziieren mitten in der Buh-Welle würde ruckeln.
+func _build_ghosts() -> void:
+	for i in GHOST_RIGS:
+		var root := Node3D.new()
+		root.visible = false
+		var mat := Props3D.glass(GHOST_TINT)
+		mat.emission_enabled = true
+		mat.emission = GHOST_TINT
+		mat.emission_energy_multiplier = 0.55
+		var sheet := Props3D.mesh_node(_sheet_mesh(), Vector3.ZERO, false)
+		sheet.material_override = mat
+		root.add_child(sheet)
+		var face_mat := Props3D.flat(Color(0.15, 0.13, 0.22), 0.6)
+		var face := (
+			Props3D
+			. swarm_mesh(
+				_face_mesh(),
+				[
+					Props3D.pose(Vector3(-0.16, 0.5, 0.22), 0.0, 1.0),
+					Props3D.pose(Vector3(0.16, 0.5, 0.22), 0.0, 1.0),
+					Props3D.pose(Vector3(0.0, 0.33, 0.25), 0.0, 0.7),
+				]
+			)
+		)
+		for child in face.get_children():
+			(child as GeometryInstance3D).material_override = face_mat
+		root.add_child(face)
+		var halo := Props3D.halo(1.0, Color(GHOST_TINT, 0.16))
+		halo.position = Vector3(0.0, 0.4, 0.0)
+		root.add_child(halo)
+		_stage.add_child(root)
+		_ghosts.append({"root": root, "mat": mat, "halo": halo, "sheet": sheet})
+
+
+## Laken-Geist als Drehkörper mit gewelltem Saum (Web: LatheGeometry + Scallop).
+func _sheet_mesh() -> ArrayMesh:
+	if _sheet != null:
+		return _sheet
+	var profile := [
+		Vector2(0.0, 0.62),
+		Vector2(0.12, 0.6),
+		Vector2(0.21, 0.52),
+		Vector2(0.26, 0.41),
+		Vector2(0.27, 0.28),
+		Vector2(0.25, 0.16),
+		Vector2(0.31, 0.06),
+		Vector2(0.31, 0.0),
+	]
+	var segments := 18
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for ring in profile.size() - 1:
+		for seg in segments:
+			var a0 := TAU * float(seg) / float(segments)
+			var a1 := TAU * float(seg + 1) / float(segments)
+			var p00 := _lathe(profile[ring], a0)
+			var p01 := _lathe(profile[ring], a1)
+			var p10 := _lathe(profile[ring + 1], a0)
+			var p11 := _lathe(profile[ring + 1], a1)
+			for point: Vector3 in [p00, p10, p11, p00, p11, p01]:
+				st.add_vertex(point)
+	st.generate_normals()
+	_sheet = st.commit()
+	return _sheet
+
+
+## Profilpunkt um die y-Achse drehen; der Saum bekommt seine Wellen.
+func _lathe(point: Vector2, angle: float) -> Vector3:
+	var y := point.y
+	if y < 0.08:
+		y -= (sin(angle * 6.0) + 1.0) * 0.03
+	return Vector3(cos(angle) * point.x, y, sin(angle) * point.x)
+
+
+## Aufsammler: Laterne und Kescher schweben über ihren Ankern.
+func _build_tokens() -> void:
+	for kind: String in ["lantern", "net"]:
+		var holder := Node3D.new()
+		holder.visible = false
+		var tint := LANTERN_TINT if kind == "lantern" else NET_TINT
+		if kind == "lantern":
+			holder.add_child(Props3D.box(Vector3(0.26, 0.32, 0.26), Props3D.glow(tint, 2.2)))
+			var bail := Props3D.torus(0.13, 0.018, Props3D.flat(Color(0.7, 0.62, 0.5), 0.5))
+			bail.rotation.x = PI * 0.5
+			bail.position.y = 0.24
+			holder.add_child(bail)
+		else:
+			var hoop := Props3D.torus(0.26, 0.03, Props3D.glow(tint, 1.8))
+			hoop.rotation.x = PI * 0.5
+			holder.add_child(hoop)
+			holder.add_child(
+				Props3D.cylinder(
+					0.025, 0.42, Props3D.flat(Color(0.68, 0.55, 0.4), 0.7), Vector3(0.0, -0.28, 0.0)
+				)
+			)
+		var halo := Props3D.halo(0.8, Color(tint, 0.3))
+		holder.add_child(halo)
+		_stage.add_child(holder)
+		_tokens.append({"root": holder, "kind": kind, "halo": halo})
+
+
+## Gooby steht mit der Laterne am Tor und blickt in den Hof (Dreiviertelrücken
+## wie im Web) — er dreht sich zu jedem Geist, den er fängt.
+func _build_gooby() -> void:
+	_gooby = GoobyActor.new()
+	_stage.add_child(_gooby)
+	_gooby.position = Vector3(-1.55, 0.0, 0.95)
+	_gooby.mount(1.0, 2.5)
+	_gooby.set_mood("happy")
+	var lamp := Node3D.new()
+	lamp.add_child(Props3D.box(Vector3(0.15, 0.19, 0.15), Props3D.glow(LANTERN_TINT, 1.6)))
+	lamp.add_child(
+		Props3D.box(
+			Vector3(0.19, 0.04, 0.19),
+			Props3D.flat(Color(0.45, 0.33, 0.24), 0.8),
+			Vector3(0.0, 0.11, 0.0)
+		)
+	)
+	lamp.add_child(Props3D.halo(0.34, Color(LANTERN_TINT, 0.35)))
+	lamp.position = Vector3(0.4, 0.58, 0.2)
+	_gooby.attach(lamp)
+	_lantern_light = OmniLight3D.new()
+	_lantern_light.light_color = LANTERN_TINT
+	_lantern_light.light_energy = 1.5
+	_lantern_light.omni_range = 4.6
+	_lantern_light.omni_attenuation = 1.6
+	_lantern_light.position = _gooby.position + Vector3(0.4, 0.72, 0.2)
+	_stage.add_child(_lantern_light)
 
 
 func _build_hud() -> void:
@@ -138,6 +589,9 @@ func _build_hud() -> void:
 	_score_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.88))
 	_chain_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.55))
 	_hint_label.add_theme_color_override("font_color", Color(0.86, 0.82, 0.95))
+	for label: Label in [_score_label, _chain_label, _hint_label]:
+		label.add_theme_color_override("font_outline_color", Color(0.09, 0.06, 0.14, 0.9))
+		label.add_theme_constant_override("outline_size", 6)
 	_update_labels()
 
 
@@ -145,32 +599,120 @@ func _fit_viewport() -> void:
 	apply_view(get_viewport_rect().size)
 
 
-## Nächstliegendes Ziel unter dem Finger; Aufsammler haben Vorrang.
-func _tap_at(pos: Vector2) -> void:
-	var best := {}
-	var best_d := INF
+## Kamera vor dem Tor, erhöht über dem Hof — alle zwölf Verstecke und Gooby
+## müssen ins Bild, sonst kann man nicht auf sie tippen.
+func _frame_yard() -> void:
+	if _stage == null or _gooby == null:
+		return
+	var points: Array = [
+		Vector3(-2.9, 0.0, -1.3),
+		Vector3(2.9, 0.0, -1.3),
+		Vector3(-2.9, 1.4, -6.9),
+		Vector3(2.9, 1.4, -6.9),
+		Vector3(0.0, 2.4, -6.4),
+		_gooby.position + Vector3(0.0, 1.15, 0.3),
+		# Goobys FÜSSE gehören mit in den Kader — sonst schneidet ihn das
+		# Querformat unten ab und der Spieler steht nur halb im Bild.
+		_gooby.position + Vector3(0.0, 0.0, 0.75),
+	]
+	var center := Vector3(0.0, 0.5, -3.1)
+	_stage.fit(points, center, 30.0 if landscape else 38.0, 0.0, 0.9)
+	if _sky != null and _stage.camera != null:
+		_sky.transform = _stage.camera.transform
+
+
+# ------------------------------------------------------------------ Abgleich
+
+
+## Geister-Pool an die Logik hängen: Position, Hebekurve, Deckkraft, Aura.
+func _sync_ghosts() -> void:
+	var live: Array = state["ghosts"]
+	for i in _ghosts.size():
+		var rig: Dictionary = _ghosts[i]
+		var root: Node3D = rig["root"]
+		if i >= live.size():
+			root.visible = false
+			continue
+		var ghost: Dictionary = live[i]
+		var lift := _ghost_lift(ghost)
+		if lift <= 0.01:
+			root.visible = false
+			continue
+		var spot: Dictionary = Logic.SPOTS[int(ghost["spot"])]
+		root.visible = true
+		root.position = _ghost_world(ghost, spot)
+		root.scale = Vector3.ONE * (GHOST_H * (0.72 + 0.28 * lift))
+		root.rotation.y = sin(_bob * 1.6 + float(ghost["id"])) * 0.28
+		var tint: Color = WAVE_TINT if ghost["wave"] != null else GHOST_TINT
+		var mat: StandardMaterial3D = rig["mat"]
+		mat.albedo_color = Color(tint, 0.62 + 0.34 * lift)
+		mat.emission = tint
+		mat.emission_energy_multiplier = 0.4 + (0.9 if bool(ghost["revealed"]) else 0.0)
+		var halo: MeshInstance3D = rig["halo"]
+		var glow := 0.16 * lift + (0.2 if bool(ghost["revealed"]) else 0.0)
+		_set_halo(halo, Color(LANTERN_TINT if bool(ghost["revealed"]) else tint, glow))
+
+
+## Attrappen: nur im Flackerfenster glühen Gesicht und Aura auf.
+func _sync_decoys() -> void:
+	var active := {}
+	for flick: Dictionary in state["flickers"]:
+		active[int(flick["decoy"])] = float(state["t"]) - float(flick["startT"])
+	for i in _decoys.size():
+		var rig: Dictionary = _decoys[i]
+		var mat: StandardMaterial3D = rig["face"]
+		var halo: MeshInstance3D = rig["halo"]
+		if not active.has(i):
+			mat.emission_energy_multiplier = 0.0
+			mat.albedo_color = Color(0.28, 0.18, 0.12)
+			_set_halo(halo, Color(LANTERN_TINT, 0.0))
+			continue
+		var f := 0.55 + 0.45 * sin(float(active[i]) * 22.0)
+		mat.emission_energy_multiplier = 2.2 * f
+		mat.albedo_color = LANTERN_TINT
+		_set_halo(halo, Color(LANTERN_TINT, 0.3 * f))
+
+
+func _sync_tokens() -> void:
+	var live := {}
 	for token: Dictionary in state["tokens"]:
-		var anchor: Dictionary = Logic.TOKEN_ANCHORS[int(token["window"])]
-		var d := pos.distance_to(_token_pos(anchor))
-		if d < hit_radius(float(anchor["z"])) * 1.2 and d < best_d:
-			best_d = d
-			best = {"kind": "token", "window": int(token["window"])}
-	if best.is_empty():
-		best_d = INF
-		for ghost: Dictionary in state["ghosts"]:
-			var spot: Dictionary = Logic.SPOTS[int(ghost["spot"])]
-			var d := pos.distance_to(_ghost_pos(ghost, spot))
-			if d < hit_radius(float(spot["z"])) and d < best_d:
-				best_d = d
-				best = {"kind": "ghost", "id": int(ghost["id"])}
-		for flick: Dictionary in state["flickers"]:
-			var spot: Dictionary = Logic.DECOY_SPOTS[int(flick["decoy"])]
-			var d := pos.distance_to(project(float(spot["x"]), float(spot["z"])))
-			if d < hit_radius(float(spot["z"])) and d < best_d:
-				best_d = d
-				best = {"kind": "decoy", "decoy": int(flick["decoy"])}
-	Logic.tap_hunt(state, best)
-	_drain_events()
+		live[str(token["kind"])] = int(token["window"])
+	for rig: Dictionary in _tokens:
+		var root: Node3D = rig["root"]
+		var kind := str(rig["kind"])
+		if not live.has(kind):
+			root.visible = false
+			continue
+		var anchor: Dictionary = Logic.TOKEN_ANCHORS[int(live[kind])]
+		root.visible = true
+		root.position = Vector3(
+			float(anchor["x"]), 1.05 + sin(_bob * 2.4) * 0.09, float(anchor["z"])
+		)
+		root.rotation.y = _bob * 1.1
+
+
+## Der Laternen-Aufsammler taucht den ganzen Hof kurz in warmes Licht.
+func _sync_lantern() -> void:
+	if _lantern_light == null:
+		return
+	var left := float(state["lanternT"])
+	var boost := clampf(left / float(Logic.HUNT["LANTERN_SEC"]), 0.0, 1.0)
+	_lantern_light.light_energy = 1.5 + 5.0 * boost
+	_lantern_light.omni_range = 4.6 + 14.0 * boost
+
+
+func _set_halo(node: MeshInstance3D, color: Color) -> void:
+	var mat := node.get_active_material(0)
+	if mat is StandardMaterial3D:
+		(mat as StandardMaterial3D).albedo_color = color
+
+
+## Weltposition eines Geistes: er steigt aus seinem Versteck auf.
+func _ghost_world(ghost: Dictionary, spot: Dictionary) -> Vector3:
+	var base := 0.34 if str(spot["kind"]) == "pumpkin" else 0.62
+	if str(spot["kind"]) == "crypt":
+		base = 1.5
+	return Vector3(float(spot["x"]), base + _ghost_lift(ghost) * 0.72, float(spot["z"]) + 0.18)
 
 
 ## Aufsteig-/Absink-Kurve eines Geistes (RISE_FRAC/SINK_FRAC aus der Logik).
@@ -192,15 +734,59 @@ func _ease_out_back(x: float) -> float:
 	return 1.0 + (c1 + 1.0) * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0)
 
 
-func _ghost_pos(ghost: Dictionary, spot: Dictionary) -> Vector2:
-	var base := project(float(spot["x"]), float(spot["z"]))
-	var s := unit() * depth_scale(float(spot["z"]))
-	return base - Vector2(0.0, s * (0.5 + 0.7 * _ghost_lift(ghost)))
+# ------------------------------------------------------------------ Tippen
 
 
-func _token_pos(anchor: Dictionary) -> Vector2:
-	var base := project(float(anchor["x"]), float(anchor["z"]))
-	return base - Vector2(0.0, unit() * 1.1 + sin(_bob * 2.4) * 6.0)
+## Tippradius eines Weltziels in Pixeln. Perspektive statt Handrechnung: der
+## Radius wird als echte Strecke projiziert und bleibt mindestens daumengroß.
+func _tap_radius(world: Vector3) -> float:
+	var right := _stage.camera.global_transform.basis.x * TAP_WORLD_R
+	var span := _stage.to_screen(world + right).distance_to(_stage.to_screen(world))
+	return maxf(TAP_MIN_PX, span)
+
+
+## Nächstliegendes Ziel unter dem Finger; Aufsammler haben Vorrang.
+func _tap_at(pos: Vector2) -> void:
+	var best := {}
+	var best_d := INF
+	for token: Dictionary in state["tokens"]:
+		var anchor: Dictionary = Logic.TOKEN_ANCHORS[int(token["window"])]
+		var at := Vector3(float(anchor["x"]), 1.05, float(anchor["z"]))
+		var d := pos.distance_to(_stage.to_screen(at))
+		if d < _tap_radius(at) * 1.2 and d < best_d:
+			best_d = d
+			best = {"kind": "token", "window": int(token["window"])}
+	if best.is_empty():
+		best = _pick_target(pos)
+	Logic.tap_hunt(state, best)
+	_drain_events()
+
+
+## Geister und Attrappen unter dem Finger prüfen (getrennt, damit `_tap_at`
+## kurz bleibt und die Vorrangregel oben lesbar steht).
+func _pick_target(pos: Vector2) -> Dictionary:
+	var best := {}
+	var best_d := INF
+	for ghost: Dictionary in state["ghosts"]:
+		if _ghost_lift(ghost) <= 0.01:
+			continue
+		var spot: Dictionary = Logic.SPOTS[int(ghost["spot"])]
+		var at := _ghost_world(ghost, spot) + Vector3(0.0, GHOST_H * 0.4, 0.0)
+		var d := pos.distance_to(_stage.to_screen(at))
+		if d < _tap_radius(at) and d < best_d:
+			best_d = d
+			best = {"kind": "ghost", "id": int(ghost["id"])}
+	for flick: Dictionary in state["flickers"]:
+		var spot: Dictionary = Logic.DECOY_SPOTS[int(flick["decoy"])]
+		var at := Vector3(float(spot["x"]), 0.3, float(spot["z"]))
+		var d := pos.distance_to(_stage.to_screen(at))
+		if d < _tap_radius(at) and d < best_d:
+			best_d = d
+			best = {"kind": "decoy", "decoy": int(flick["decoy"])}
+	return best
+
+
+# ---------------------------------------------------------------- Ereignisse
 
 
 ## Logik-Ereignisse in SFX, Juice und Banner übersetzen.
@@ -220,20 +806,27 @@ func _handle_event(e: Dictionary) -> void:
 		"booWave":
 			_show_banner(I18nService.t("mg.ghostHunt.boo"))
 			AudioDirector.try_play(self, "mg_combo")
+			_stage.pulse_glow(0.9)
+			_gooby.emote("scared", 1.2)
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.7)
 		"booBonus":
 			_show_banner(I18nService.t("mg.ghostHunt.booBonus", {"n": int(e["bonus"])}))
 			AudioDirector.try_play(self, "mg_golden")
+			_stage.pulse_glow(1.4)
+			_gooby.play_for("celebrate", 1.2)
+			_gooby.emote("ecstatic", 1.6)
 			if ctx.juice != null:
 				ctx.juice.hit_freeze(90)
 		"booEnd":
 			_show_banner(I18nService.t("mg.ghostHunt.booMiss", {"n": int(e["caught"])}))
 			AudioDirector.try_play(self, "mg_lose")
+			_gooby.emote("sad", 1.4)
 		"powerup":
-			var key := "mg.ghostHunt.%s" % str(e["kind"])
-			_show_banner(I18nService.t(key))
+			_show_banner(I18nService.t("mg.ghostHunt.%s" % str(e["kind"])))
 			AudioDirector.try_play(self, "mg_golden")
+			_stage.pulse_glow(1.1)
+			_gooby.play_for("wave", 0.7)
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
 		"ghostGone":
@@ -242,12 +835,19 @@ func _handle_event(e: Dictionary) -> void:
 
 func _on_catch(e: Dictionary) -> void:
 	var spot: Dictionary = Logic.SPOTS[int(e["spot"])]
-	var at := project(float(spot["x"]), float(spot["z"]))
-	_pops.append({"pos": at, "t": 0.32})
+	var world := Vector3(float(spot["x"]), 1.05, float(spot["z"]))
+	_sparks.burst(world)
+	_stage.pulse_glow(0.5 + 0.2 * float(e["chain"]))
+	_stage.shake(0.03, 0.18)
+	# Gooby dreht sich zum Fang und jubelt — er JAGT mit, er schaut nicht zu.
+	_gooby.face(atan2(world.x - _gooby.position.x, world.z - _gooby.position.z))
+	_gooby.play_for("wave", 0.5)
+	_gooby.swing(0.32, 24.0, Vector3.FORWARD)
+	_gooby.emote("ecstatic", 0.9)
 	AudioDirector.try_play(self, "mg_perfect" if int(e["chain"]) > 1 else "mg_good")
 	if ctx.juice == null:
 		return
-	ctx.juice.float_text(at, "+%d" % int(e["points"]), Color(1.0, 0.93, 0.72))
+	ctx.juice.float_text(_stage.to_screen(world), "+%d" % int(e["points"]), Color(1, 0.93, 0.72))
 	if int(e["chain"]) >= 3:
 		ctx.juice.bloom_pulse(0.4)
 
@@ -255,6 +855,8 @@ func _on_catch(e: Dictionary) -> void:
 func _on_decoy() -> void:
 	AudioDirector.try_play(self, "mg_junk")
 	_show_banner(I18nService.t("mg.ghostHunt.decoy"))
+	_gooby.emote("dizzy", 1.2)
+	_stage.shake(0.1, 0.32)
 	if ctx.juice != null:
 		ctx.juice.shake(0.4)
 
@@ -262,15 +864,6 @@ func _on_decoy() -> void:
 func _show_banner(text: String) -> void:
 	_banner = text
 	_banner_t = 1.4
-
-
-func _age_pops(delta: float) -> void:
-	var kept: Array[Dictionary] = []
-	for p in _pops:
-		p["t"] = float(p["t"]) - delta
-		if float(p["t"]) > 0.0:
-			kept.append(p)
-	_pops = kept
 
 
 func _finish() -> void:
@@ -306,221 +899,37 @@ func _update_labels() -> void:
 	_chain_label.text = "  ".join(parts)
 
 
+## Quader in einen SurfaceTool schreiben (Grabstein aus einem Guss).
+func _add_box(st: SurfaceTool, at: Vector3, size: Vector3) -> void:
+	var h := size * 0.5
+	var faces := [
+		[Vector3(-1, -1, 1), Vector3(1, -1, 1), Vector3(1, 1, 1), Vector3(-1, 1, 1)],
+		[Vector3(1, -1, -1), Vector3(-1, -1, -1), Vector3(-1, 1, -1), Vector3(1, 1, -1)],
+		[Vector3(1, -1, 1), Vector3(1, -1, -1), Vector3(1, 1, -1), Vector3(1, 1, 1)],
+		[Vector3(-1, -1, -1), Vector3(-1, -1, 1), Vector3(-1, 1, 1), Vector3(-1, 1, -1)],
+		[Vector3(-1, 1, 1), Vector3(1, 1, 1), Vector3(1, 1, -1), Vector3(-1, 1, -1)],
+		[Vector3(-1, -1, -1), Vector3(1, -1, -1), Vector3(1, -1, 1), Vector3(-1, -1, 1)],
+	]
+	for face: Array in faces:
+		for i: int in [0, 1, 2, 0, 2, 3]:
+			st.add_vertex(at + (face[i] as Vector3) * h)
+
+
+# ---------------------------------------------------------------- HUD 2D
+
+
+## Nur noch das Ereignisband — die Szene selbst ist 3D.
 func _draw() -> void:
-	_draw_sky()
-	_draw_ground()
-	_draw_props()
-	_draw_flickers()
-	_draw_ghosts()
-	_draw_tokens()
-	_draw_pops()
-	_draw_gooby()
-	if float(state.get("lanternT", 0.0)) > 0.0:
-		_draw_lantern_glow()
 	if _banner_t > 0.0:
 		_draw_banner()
 
 
-func _draw_sky() -> void:
-	var top := horizon_y()
-	for i in 14:
-		var f := float(i) / 13.0
-		draw_rect(
-			Rect2(0.0, top * f, view_size.x, top / 13.0 + 1.0), SKY_TOP.lerp(SKY_HORIZON, f * f)
-		)
-	# Mond + Nebelschleier über dem Horizont.
-	var moon := Vector2(view_size.x * 0.78, top * 0.34)
-	draw_circle(moon, unit() * 0.9, Color(1.0, 0.94, 0.82, 0.16))
-	draw_circle(moon, unit() * 0.44, Color(0.98, 0.95, 0.86))
-	draw_circle(
-		moon + Vector2(unit() * 0.16, -unit() * 0.1), unit() * 0.4, SKY_TOP.lerp(SKY_HORIZON, 0.2)
-	)
-	for i in 3:
-		var y := top * (0.62 + i * 0.12) + sin(_bob * 0.5 + i) * 3.0
-		draw_rect(Rect2(0.0, y, view_size.x, top * 0.05), Color(0.85, 0.8, 1.0, 0.05))
-
-
-func _draw_ground() -> void:
-	var top := horizon_y()
-	var height := view_size.y - top
-	for i in 12:
-		var f := float(i) / 11.0
-		draw_rect(
-			Rect2(0.0, top + height * f, view_size.x, height / 11.0 + 1.0),
-			GROUND_FAR.lerp(GROUND_NEAR, f)
-		)
-	draw_line(Vector2(0.0, top), Vector2(view_size.x, top), Color(0.55, 0.38, 0.42, 0.6), 2.0)
-
-
-func _draw_props() -> void:
-	for spot: Dictionary in Logic.SPOTS:
-		var base := project(float(spot["x"]), float(spot["z"]))
-		var s := unit() * depth_scale(float(spot["z"]))
-		draw_circle(base + Vector2(0.0, s * 0.16), s * 0.5, Color(0.08, 0.06, 0.12, 0.45))
-		match str(spot["kind"]):
-			"pumpkin":
-				# Unbeleuchtet — nur die Attrappen weiter unten flackern hell.
-				_draw_pumpkin(base, s, Color(0.55, 0.29, 0.14), 0.0)
-			"crypt":
-				_draw_crypt(base, s)
-			_:
-				_draw_grave(base, s)
-
-
-func _draw_grave(base: Vector2, s: float) -> void:
-	var stone := Color(0.62, 0.6, 0.68)
-	draw_rect(Rect2(base.x - s * 0.3, base.y - s * 0.85, s * 0.6, s * 0.85), stone)
-	draw_circle(Vector2(base.x, base.y - s * 0.85), s * 0.3, stone)
-	draw_rect(
-		Rect2(base.x - s * 0.07, base.y - s * 0.95, s * 0.14, s * 0.45), Color(0.44, 0.42, 0.5)
-	)
-	draw_rect(
-		Rect2(base.x - s * 0.22, base.y - s * 0.8, s * 0.44, s * 0.12), Color(0.44, 0.42, 0.5)
-	)
-
-
-func _draw_pumpkin(base: Vector2, s: float, tint: Color, glow: float) -> void:
-	draw_circle(base - Vector2(0.0, s * 0.3), s * 0.62, Color(tint, glow * 0.5))
-	draw_circle(base - Vector2(0.0, s * 0.3), s * 0.38, tint)
-	draw_line(
-		base - Vector2(0.0, s * 0.68),
-		base - Vector2(0.0, s * 0.84),
-		Color(0.32, 0.45, 0.2),
-		maxf(2.0, s * 0.09)
-	)
-	# Grinsegesicht.
-	var face := Color(1.0, 0.93, 0.55, 0.4 + glow)
-	for side in [-1.0, 1.0]:
-		draw_circle(base + Vector2(side * s * 0.14, -s * 0.36), s * 0.07, face)
-	draw_arc(
-		base - Vector2(0.0, s * 0.24), s * 0.18, 0.15 * PI, 0.85 * PI, 12, face, maxf(1.5, s * 0.06)
-	)
-
-
-func _draw_crypt(base: Vector2, s: float) -> void:
-	var wall := Color(0.5, 0.48, 0.58)
-	draw_rect(Rect2(base.x - s * 0.65, base.y - s * 1.15, s * 1.3, s * 1.15), wall)
-	draw_colored_polygon(
-		PackedVector2Array(
-			[
-				Vector2(base.x - s * 0.78, base.y - s * 1.15),
-				Vector2(base.x + s * 0.78, base.y - s * 1.15),
-				Vector2(base.x, base.y - s * 1.6),
-			]
-		),
-		Color(0.4, 0.38, 0.48)
-	)
-	draw_rect(Rect2(base.x - s * 0.2, base.y - s * 0.7, s * 0.4, s * 0.7), Color(0.14, 0.1, 0.18))
-
-
-func _draw_flickers() -> void:
-	for flick: Dictionary in state["flickers"]:
-		var spot: Dictionary = Logic.DECOY_SPOTS[int(flick["decoy"])]
-		var base := project(float(spot["x"]), float(spot["z"]))
-		var s := unit() * depth_scale(float(spot["z"]))
-		var age := float(state["t"]) - float(flick["startT"])
-		var flick_f := 0.55 + 0.45 * sin(age * 22.0)
-		draw_circle(base - Vector2(0.0, s * 0.3), s * 1.3, Color(LANTERN_TINT, 0.13 * flick_f))
-		draw_circle(base - Vector2(0.0, s * 0.3), s * 0.85, Color(LANTERN_TINT, 0.16 * flick_f))
-		_draw_pumpkin(base, s, Color(1.0, 0.66, 0.24), 0.4 + 0.6 * flick_f)
-
-
-func _draw_ghosts() -> void:
-	for ghost: Dictionary in state["ghosts"]:
-		var spot: Dictionary = Logic.SPOTS[int(ghost["spot"])]
-		var s := unit() * depth_scale(float(spot["z"]))
-		var lift := _ghost_lift(ghost)
-		if lift <= 0.01:
-			continue
-		var pos := _ghost_pos(ghost, spot)
-		var tint := GHOST_TINT
-		if ghost["wave"] != null:
-			tint = Color(0.85, 0.78, 1.0)
-		var alpha := 0.55 + 0.45 * lift
-		draw_circle(pos, s * 1.05, Color(tint, 0.06 * lift))
-		draw_circle(pos, s * 0.78, Color(tint, 0.06 * lift))
-		_draw_sheet(pos, s * (0.5 + 0.16 * lift), Color(tint, alpha))
-		if bool(ghost["revealed"]):
-			draw_arc(pos, s * 0.8, 0.0, TAU, 24, Color(LANTERN_TINT, 0.6), 2.0)
-
-
-## Bettlaken-Geist: Kuppel + Wellensaum + zwei Kulleraugen.
-func _draw_sheet(pos: Vector2, r: float, tint: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 15:
-		var a := PI + PI * float(i) / 14.0
-		pts.append(pos + Vector2(cos(a), sin(a)) * r)
-	var tips := 8
-	for i in range(tips + 1):
-		var f := 1.0 - float(i) / float(tips)
-		var x := pos.x - r + 2.0 * r * f
-		var deep := 0.62 + 0.34 * float(i % 2)
-		var y := pos.y + r * (deep + 0.08 * sin(_bob * 5.0 + float(i)))
-		pts.append(Vector2(x, y))
-	draw_colored_polygon(pts, tint)
-	for side in [-1.0, 1.0]:
-		draw_circle(
-			pos + Vector2(side * r * 0.34, -r * 0.12), r * 0.17, Color(0.16, 0.13, 0.24, tint.a)
-		)
-	draw_circle(pos + Vector2(0.0, r * 0.3), r * 0.11, Color(0.16, 0.13, 0.24, tint.a * 0.8))
-
-
-func _draw_tokens() -> void:
-	for token: Dictionary in state["tokens"]:
-		var anchor: Dictionary = Logic.TOKEN_ANCHORS[int(token["window"])]
-		var pos := _token_pos(anchor)
-		var s := unit() * depth_scale(float(anchor["z"])) * 0.6
-		var is_lantern := str(token["kind"]) == "lantern"
-		var tint := LANTERN_TINT if is_lantern else NET_TINT
-		draw_circle(pos, s * 1.7, Color(tint, 0.16 + 0.06 * sin(_bob * 6.0)))
-		if is_lantern:
-			draw_rect(Rect2(pos.x - s * 0.45, pos.y - s * 0.55, s * 0.9, s * 1.1), tint)
-			draw_arc(pos - Vector2(0.0, s * 0.8), s * 0.35, PI, TAU, 12, Color(0.8, 0.7, 0.5), 2.0)
-		else:
-			draw_arc(pos, s * 0.8, 0.0, TAU, 20, tint, 3.0)
-			for i in 3:
-				var o := (float(i) - 1.0) * s * 0.5
-				draw_line(pos + Vector2(o, -s * 0.7), pos + Vector2(o, s * 0.7), tint, 2.0)
-				draw_line(pos + Vector2(-s * 0.7, o), pos + Vector2(s * 0.7, o), tint, 2.0)
-
-
-func _draw_pops() -> void:
-	for p in _pops:
-		var f := 1.0 - float(p["t"]) / 0.32
-		draw_arc(
-			p["pos"], unit() * (0.3 + 0.8 * f), 0.0, TAU, 24, Color(1.0, 0.98, 0.9, 1.0 - f), 3.0
-		)
-
-
-## Gooby steht vorn links mit der Kescher-Laterne und wippt.
-func _draw_gooby() -> void:
-	var s := unit() * 0.85
-	var pos := Vector2(view_size.x * 0.13, view_size.y * (0.86 if landscape else 0.93))
-	var bob := sin(_bob * 2.2) * s * 0.05
-	pos.y += bob
-	draw_circle(pos + Vector2(0.0, s * 0.85), s * 0.95, Color(0.99, 0.9, 0.66))
-	draw_circle(pos, s * 0.7, Color(0.99, 0.93, 0.74))
-	for side in [-1.0, 1.0]:
-		draw_circle(pos + Vector2(side * s * 0.33, -s * 0.84), s * 0.23, Color(0.99, 0.93, 0.74))
-		draw_circle(pos + Vector2(side * s * 0.25, -s * 0.05), s * 0.1, Color(0.22, 0.18, 0.16))
-	draw_circle(pos + Vector2(0.0, s * 0.2), s * 0.09, Color(0.96, 0.62, 0.68))
-	var hand := pos + Vector2(s * 0.95, s * 0.35 - bob)
-	draw_line(pos + Vector2(s * 0.6, s * 0.7), hand, Color(0.99, 0.9, 0.66), s * 0.2)
-	draw_circle(hand, s * 0.5, Color(LANTERN_TINT, 0.22))
-	draw_circle(hand, s * 0.2, LANTERN_TINT)
-
-
-func _draw_lantern_glow() -> void:
-	var alpha := 0.1 * clampf(float(state["lanternT"]) / float(Logic.HUNT["LANTERN_SEC"]), 0.0, 1.0)
-	draw_rect(Rect2(Vector2.ZERO, view_size), Color(LANTERN_TINT, alpha))
-
-
 func _draw_banner() -> void:
 	var fade := clampf(_banner_t / 0.4, 0.0, 1.0)
-	var y := horizon_y() + view_size.y * 0.06
+	var y := view_size.y * (0.2 if landscape else 0.24)
 	var size := int(maxf(22.0, view_size.y * 0.032))
 	draw_rect(
-		Rect2(0.0, y - size * 1.2, view_size.x, size * 2.2), Color(0.1, 0.07, 0.16, 0.4 * fade)
+		Rect2(0.0, y - size * 1.2, view_size.x, size * 2.2), Color(0.1, 0.07, 0.16, 0.5 * fade)
 	)
 	draw_string(
 		ThemeService.font(800),

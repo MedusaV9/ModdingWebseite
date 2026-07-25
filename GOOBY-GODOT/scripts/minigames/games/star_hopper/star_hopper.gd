@@ -5,12 +5,14 @@ extends MinigameBase
 ## Schild ab Score 60, angekündigte Meteorschauer, Wurmloch-Tor, ein Treffer
 ## beendet die Runde. Score = Meter/10 + Aufsammler.
 ##
-## 2D-STATT-3D (begründet): der Korridor ist ein 3-Bahn-Band entlang EINER
-## Achse — eine gescrollte 2D-Ansicht mit Parallax-Sternenfeld zeigt mehr
-## Vorwarnstrecke als eine 3D-Kamera und bleibt auf dem Handy scharf lesbar.
+## ECHTE 3D-BÜHNE (StarHopperStage): Gooby sitzt als Pilot auf einem Kenney-
+## Speeder, der Blick läuft den drei Bahnen entlang nach vorn, Meteore sind
+## Space-Kit-Felsen, dahinter zieht ein Sternenfeld mit Parallaxe vorbei.
+## Der MinigameBase-Vertrag bleibt: Node2D-Wurzel, 3D-Welt als Kind, HUD in 2D.
 
 const Logic := preload("res://scripts/minigames/games/star_hopper/star_hopper_logic.gd")
 const Bot := preload("res://scripts/minigames/games/star_hopper/star_hopper_bot.gd")
+const Stage := preload("res://scripts/minigames/games/star_hopper/star_hopper_stage.gd")
 
 ## Sichtbare Strecke oberhalb des Schiffs (m) — das ist die Vorwarnzeit.
 const VIEW_AHEAD_M := 62.0
@@ -19,9 +21,6 @@ const SHIP_ANCHOR := 0.22
 ## Mindest-Wischweg (px) für einen Zwei-Bahn-Wechsel.
 const SWIPE_MIN_PX := 40.0
 
-const SPACE_TOP := Color(0.07, 0.05, 0.18)
-const SPACE_BOTTOM := Color(0.17, 0.1, 0.3)
-const METEOR_COLOR := Color(0.62, 0.45, 0.38)
 const STAR_COLOR := Color(1.0, 0.88, 0.4)
 const GOLD_COLOR := Color(1.0, 0.62, 0.2)
 
@@ -52,7 +51,7 @@ var _shower_lanes: Dictionary = {}
 var _shower_state := "idle"
 var _shower_left := 0.0
 var _shower_drop := 0.0
-var _stars: Array[Vector3] = []
+var _stage: Node3D
 var _pop := 0.0
 var _roll := 0.0
 var _touch_from := Vector2.ZERO
@@ -69,8 +68,7 @@ func setup(context: MinigameCtx) -> void:
 	rng = ctx.rng()
 	_stream = func() -> float: return rng.next()
 	_shower_at = float(tune["SHOWER_EVERY_SEC"])
-	for i in 90:
-		_stars.append(Vector3(rng.next(), rng.next(), 0.3 + rng.next() * 0.7))
+	_build_stage()
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -82,12 +80,24 @@ func end() -> void:
 	finished = true
 
 
+## 3D-Bühne unter die Node2D-Wurzel hängen (Godot rendert 3D hinter 2D).
+func _build_stage() -> void:
+	_stage = Stage.new()
+	_stage.name = "Stage3D"
+	add_child(_stage)
+	_stage.setup_stage(tune["LANE_X"])
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.world_env
+
+
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.apply_size(view_size)
 	if _dist_label != null:
 		_dist_label.position = Vector2(16.0, 10.0)
 		_state_label.position = Vector2(16.0, 48.0)
@@ -99,6 +109,7 @@ func apply_view(size: Vector2) -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
+	_stage.tick(delta)
 	elapsed += delta
 	invuln = maxf(0.0, invuln - delta)
 	_pop = maxf(0.0, _pop - delta)
@@ -111,8 +122,53 @@ func _process(delta: float) -> void:
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
 		_finish()
 		return
+	_sync_stage()
 	_update_labels()
 	queue_redraw()
+
+
+## Die 3D-Bühne bekommt EINEN Zustandsschnappschuss — sie rechnet nur Optik.
+func _sync_stage() -> void:
+	(
+		_stage
+		. sync(
+			{
+				"traveled": traveled,
+				"elapsed": elapsed,
+				"lane": lane,
+				"lane_visual": lane_visual,
+				"speed": Logic.speed_at(elapsed, tune),
+				"meteors": _meteors,
+				"pickups": _pickups,
+				"shielded": shielded,
+				"invuln": invuln,
+				"pop": _pop,
+				"pop_max": float(Logic.HOPPER_JUICE["POP_SEC"]),
+				"roll": _roll,
+				"roll_max": float(Logic.HOPPER_JUICE["BARREL_ROLL_SEC"]),
+				"wormhole_left": wormhole_left,
+				"wormhole_max": float(tune["WORMHOLE_SEC"]),
+				"shower_state": _shower_state,
+				"shower_danger": _shower_lanes.get("danger", []),
+			}
+		)
+	)
+	_stage.feel(_mood())
+
+
+## Gooby-Laune aus dem Spielzustand (Reihenfolge = Dringlichkeit).
+func _mood() -> String:
+	if finished:
+		return "sad"
+	if wormhole_left > 0.0 or _roll > 0.0:
+		return "ecstatic"
+	if invuln > 0.0:
+		return "dizzy"
+	if _shower_state == "warn":
+		return "scared"
+	if shielded:
+		return "happy"
+	return "neutral" if _pop <= 0.0 else "happy"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -164,6 +220,7 @@ func _resolve_gesture(to: Vector2) -> void:
 	var next := Logic.lane_after_gesture(lane, gesture, false, tune)
 	if next != lane:
 		lane = next
+		_stage.cheer("hop")
 		AudioDirector.try_play(self, "mg_good", 1.15)
 
 
@@ -258,6 +315,7 @@ func _step_wormhole(delta: float) -> void:
 	if Logic.should_spawn_wormhole(_stream, elapsed, wormhole_spawned, false, tune):
 		wormhole_spawned = true
 		wormhole_left = float(tune["WORMHOLE_SEC"])
+		_stage.pulse_glow(1.2)
 		AudioDirector.try_play(self, "mg_golden")
 		_flash_text = I18nService.t("mg.starHopper.wormhole")
 		_flash = 1.4
@@ -285,6 +343,7 @@ func _on_pickup(p: Dictionary) -> void:
 	var pos := _to_screen(int(p["lane"]), float(p["m"]))
 	if str(p["kind"]) == "shield":
 		shielded = true
+		_stage.pulse_glow(1.0)
 		AudioDirector.try_play(self, "mg_golden")
 		_flash_text = I18nService.t("mg.starHopper.shield")
 		_flash = 1.2
@@ -295,6 +354,9 @@ func _on_pickup(p: Dictionary) -> void:
 	pickup_points += int(p["points"])
 	if str(p["kind"]) == "gold":
 		_roll = float(Logic.HOPPER_JUICE["BARREL_ROLL_SEC"])
+		_stage.cheer("celebrate")
+		_stage.spark_at(_stage.ship_position() + Vector3(0.0, 0.4, 0.0), GOLD_COLOR)
+		_stage.pulse_glow(0.8)
 		AudioDirector.try_play(self, "mg_golden")
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.8)
@@ -302,6 +364,7 @@ func _on_pickup(p: Dictionary) -> void:
 			ctx.juice.float_text(pos, "+%d" % int(p["points"]), GOLD_COLOR)
 	else:
 		_pop = float(Logic.HOPPER_JUICE["POP_SEC"])
+		_stage.spark_at(_stage.ship_position() + Vector3(0.0, 0.35, 0.0), STAR_COLOR)
 		AudioDirector.try_play(self, "mg_good", 1.2)
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, "+%d" % int(p["points"]), STAR_COLOR)
@@ -314,6 +377,7 @@ func _check_hits(before: float, dm: float) -> void:
 			continue
 		var result := Logic.resolve_hit(shielded)
 		if bool(result["ended"]):
+			_stage.spark_at(_stage.ship_position(), Color(1.0, 0.45, 0.25))
 			AudioDirector.try_play(self, "mg_lose")
 			if ctx.juice != null:
 				ctx.juice.shake(0.8)
@@ -322,6 +386,8 @@ func _check_hits(before: float, dm: float) -> void:
 			return
 		shielded = false
 		invuln = float(tune["SHIELD_POP_INVULN_SEC"])
+		_stage.spark_at(_stage.ship_position(), Color(0.5, 0.85, 1.0))
+		_stage.pulse_glow(0.7)
 		_flash_text = I18nService.t("mg.starHopper.shield_pop")
 		_flash = 1.2
 		AudioDirector.try_play(self, "mg_spill")
@@ -363,195 +429,36 @@ func _update_labels() -> void:
 		)
 
 
-func _lane_x(lane_f: float) -> float:
-	var span := minf(view_size.x * 0.78, 420.0)
-	return view_size.x * 0.5 + (lane_f - 1.0) * span * 0.34
-
-
-## Bahn + Streckenmeter → Bildschirmpixel.
+## Bahn + Streckenmeter → Bildschirmpixel (über die 3D-Kamera projiziert).
 func _to_screen(lane_i: int, m: float) -> Vector2:
 	return _to_screen_f(float(lane_i), m)
 
 
 func _to_screen_f(lane_f: float, m: float) -> Vector2:
-	var anchor := view_size.y * (1.0 - SHIP_ANCHOR)
-	var ppm := anchor / VIEW_AHEAD_M
-	return Vector2(_lane_x(lane_f), anchor - (m - traveled) * ppm)
+	if _stage == null:
+		return view_size * 0.5
+	var z := -(m - traveled) * Stage.WU_PER_M
+	return _stage.to_screen(Vector3(_stage.lane_pos(lane_f), 0.3, z))
 
 
+## Die WELT lebt in der 3D-Bühne — 2D bleibt nur, was Schrift ist.
 func _draw() -> void:
-	_draw_space()
-	_draw_lanes()
 	if _shower_state == "warn":
 		_draw_shower_warning()
-	for meteor in _meteors:
-		_draw_meteor(meteor)
-	for p in _pickups:
-		_draw_pickup(p)
-	_draw_ship()
 	_draw_flash()
-
-
-func _draw_space() -> void:
-	var vp := view_size
-	for i in 12:
-		var f := float(i) / 11.0
-		draw_rect(Rect2(0.0, vp.y * f, vp.x, vp.y / 11.0 + 1.0), SPACE_TOP.lerp(SPACE_BOTTOM, f))
-	for s in _stars:
-		var depth := s.z
-		var y := fposmod(s.y * vp.y + traveled * depth * 9.0, vp.y)
-		var r := 1.0 + depth * 1.8
-		draw_circle(Vector2(s.x * vp.x, y), r, Color(1.0, 0.98, 0.9, 0.35 + depth * 0.5))
-	if wormhole_left > 0.0:
-		var f := wormhole_left / float(tune["WORMHOLE_SEC"])
-		for i in 8:
-			draw_arc(
-				vp * 0.5,
-				40.0 + i * 42.0 + (1.0 - f) * 60.0,
-				0.0,
-				TAU,
-				32,
-				Color(0.6, 0.4, 1.0, 0.45 * f),
-				3.0
-			)
-
-
-func _draw_lanes() -> void:
-	# Abwechselnd getönte Bahnen — sonst verschwimmt das Raster im Dunkeln.
-	for i in int(tune["LANES"]):
-		if i % 2 == 0:
-			continue
-		var left := _lane_x(i - 0.5)
-		draw_rect(
-			Rect2(left, 0.0, _lane_x(i + 0.5) - left, view_size.y), Color(0.55, 0.6, 1.0, 0.05)
-		)
-	for i in int(tune["LANES"]) + 1:
-		var x := _lane_x(i - 0.5)
-		draw_line(Vector2(x, 0.0), Vector2(x, view_size.y), Color(0.55, 0.6, 1.0, 0.18), 2.0)
-	# Fluchtstreifen als Tempo-Feedback.
-	var speed := Logic.speed_at(elapsed, tune)
-	for i in 10:
-		var y := fposmod(view_size.y * i / 10.0 - traveled * 8.0, view_size.y)
-		draw_line(
-			Vector2(0.0, y),
-			Vector2(view_size.x, y),
-			Color(0.7, 0.75, 1.0, 0.05 + 0.03 * speed / 19.0),
-			1.5
-		)
 
 
 func _draw_shower_warning() -> void:
 	var pulse := 0.3 + 0.3 * sin(elapsed * 26.0)
-	for l: int in _shower_lanes["danger"]:
-		var x := _lane_x(float(l))
-		var w := _lane_x(0.5) - _lane_x(-0.5)
-		draw_rect(Rect2(x - w * 0.5, 0.0, w, view_size.y), Color(1.0, 0.35, 0.35, pulse * 0.35))
 	draw_string(
 		ThemeService.font(800),
-		Vector2(0.0, view_size.y * 0.12),
+		Vector2(0.0, view_size.y * 0.16),
 		I18nService.t("mg.starHopper.shower"),
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
 		26,
 		Color(1.0, 0.5, 0.45, 0.6 + pulse)
 	)
-
-
-func _draw_meteor(meteor: Dictionary) -> void:
-	var pos := _to_screen(int(meteor["lane"]), float(meteor["m"]))
-	if pos.y < -60.0 or pos.y > view_size.y + 60.0:
-		return
-	var r := maxf(22.0, view_size.x / float(tune["LANES"]) * 0.3)
-	draw_circle(pos, r * 1.4, Color(1.0, 0.5, 0.28, 0.1))
-	draw_circle(pos, r * 1.16, Color(1.0, 0.55, 0.3, 0.16))
-	var pts := PackedVector2Array()
-	for i in 9:
-		var a := TAU * i / 9.0 + float(meteor["spin"]) + elapsed * 1.4
-		pts.append(pos + Vector2(cos(a), sin(a)) * r * (0.82 + 0.18 * sin(a * 3.0)))
-	draw_colored_polygon(pts, METEOR_COLOR)
-	draw_circle(pos + Vector2(-r * 0.3, -r * 0.25), r * 0.24, METEOR_COLOR.darkened(0.25))
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.4, 0.28, 0.24), 2.0)
-
-
-func _draw_pickup(p: Dictionary) -> void:
-	var pos := _to_screen(int(p["lane"]), float(p["m"]))
-	if pos.y < -40.0 or pos.y > view_size.y + 40.0:
-		return
-	var kind := str(p["kind"])
-	if kind == "shield":
-		draw_circle(pos, 18.0, Color(0.4, 0.8, 1.0, 0.35))
-		draw_arc(pos, 15.0, 0.0, TAU, 20, Color(0.6, 0.9, 1.0), 3.0)
-		return
-	var color := GOLD_COLOR if kind == "gold" else STAR_COLOR
-	var r := 16.0 if kind == "gold" else 12.0
-	draw_circle(pos, r * 1.7, Color(color, 0.22))
-	if kind == "gold":
-		# Goldene Karotte.
-		draw_colored_polygon(
-			PackedVector2Array(
-				[
-					pos + Vector2(0.0, r),
-					pos + Vector2(-r * 0.6, -r * 0.6),
-					pos + Vector2(r * 0.6, -r * 0.6)
-				]
-			),
-			color
-		)
-		draw_circle(pos + Vector2(0.0, -r * 0.8), r * 0.32, Color(0.45, 0.8, 0.4))
-		return
-	var pts := PackedVector2Array()
-	for i in 10:
-		var a := -PI * 0.5 + TAU * i / 10.0
-		pts.append(pos + Vector2(cos(a), sin(a)) * (r if i % 2 == 0 else r * 0.45))
-	draw_colored_polygon(pts, color)
-
-
-func _draw_ship() -> void:
-	var pos := _to_screen_f(lane_visual, traveled)
-	# Mit der Bahnbreite skalieren, damit das Schiff auf dem Handy nicht
-	# zwischen den Meteoren untergeht.
-	var s := maxf(24.0, view_size.x / float(tune["LANES"]) * 0.34) * float(tune["GOOBY_SCALE"])
-	if _pop > 0.0:
-		s *= (
-			1.0
-			+ (
-				(float(Logic.HOPPER_JUICE["POP_SCALE"]) - 1.0)
-				* (_pop / float(Logic.HOPPER_JUICE["POP_SEC"]))
-			)
-		)
-	var tilt := (float(lane) - lane_visual) * 0.5
-	if _roll > 0.0:
-		tilt += TAU * (1.0 - _roll / float(Logic.HOPPER_JUICE["BARREL_ROLL_SEC"]))
-	# Triebwerksflamme.
-	var flame := 1.0 + 0.25 * sin(elapsed * 30.0)
-	draw_colored_polygon(
-		PackedVector2Array(
-			[
-				pos + Vector2(-s * 0.4, s * 0.7),
-				pos + Vector2(s * 0.4, s * 0.7),
-				pos + Vector2(0.0, s * (1.5 + flame * 0.5)),
-			]
-		),
-		Color(1.0, 0.62, 0.25, 0.85)
-	)
-	var hull := PackedVector2Array(
-		[
-			pos + Vector2(0.0, -s * 1.25).rotated(tilt),
-			pos + Vector2(s * 0.9, s * 0.75).rotated(tilt),
-			pos + Vector2(0.0, s * 0.35).rotated(tilt),
-			pos + Vector2(-s * 0.9, s * 0.75).rotated(tilt),
-		]
-	)
-	draw_colored_polygon(hull, Color(0.86, 0.9, 0.98))
-	draw_polyline(hull + PackedVector2Array([hull[0]]), Color(0.5, 0.55, 0.75), 2.0)
-	# Gooby im Cockpit.
-	draw_circle(pos + Vector2(0.0, -s * 0.2), s * 0.42, Color(0.55, 0.8, 0.95, 0.85))
-	draw_circle(pos + Vector2(0.0, -s * 0.2), s * 0.32, Color(0.99, 0.9, 0.65))
-	draw_circle(pos + Vector2(-s * 0.12, -s * 0.24), s * 0.06, Color(0.2, 0.16, 0.14))
-	draw_circle(pos + Vector2(s * 0.12, -s * 0.24), s * 0.06, Color(0.2, 0.16, 0.14))
-	if shielded or invuln > 0.0:
-		var alpha := 0.7 if shielded else clampf(invuln, 0.0, 1.0) * 0.5
-		draw_arc(pos, s * 1.9, 0.0, TAU, 30, Color(0.5, 0.85, 1.0, alpha), 3.0)
 
 
 func _draw_flash() -> void:

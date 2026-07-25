@@ -4,22 +4,20 @@ extends MinigameBase
 ## 3 Spalten, richtige Lage +5 (Rush ×1.5), falsche −2, fertiger Burger +15,
 ## Fallspeed +8 % je Burger. 75 s (Endlos: bis 3 abgelaufene Bestellungen).
 ##
-## 2D (Web war three.js, aber eine reine Frontalbühne): Teller, Regen und
-## Ticket sind flache Sticker — die Weltmeter der Logik werden 1:1 in Pixel
-## projiziert, damit PLATE_HALF_WIDTH und die Spaltenmitten exakt gelten.
+## ECHTE 3D-DINERBÜHNE (BurgerBuildStage3D): Gooby steht als KOCH hinter der
+## Theke, aus drei Schächten regnen echte Food-Kit-Zutaten auf einen Teller,
+## der auf der Theke mitfährt. Die 3D-Kamera ist deckungsgleich mit
+## `project(wx, wy)` gerahmt, PLATE_HALF_WIDTH und Spaltenmitten gelten also
+## unverändert. In 2D bleiben nur Bestellzettel und Meldung (das ist UI).
 
 const Logic := preload("res://scripts/minigames/games/burger_build/burger_build_logic.gd")
-const Diner := preload("res://scripts/minigames/games/burger_build/burger_build_diner.gd")
+const Stage := preload("res://scripts/minigames/games/burger_build/burger_build_stage3d.gd")
 
 ## Sichtbare Welt-Halbbreite (Web-Kamera in Hochkant) — Basis der Projektion.
 const HALF_W := 3.4
 const HALF_H := 5.2
 ## Teller-Höhe in Weltmetern (Web: plateY).
 const PLATE_Y := -3.4
-## Zutaten-Sticker in Weltmetern (Web: ITEM_SIZE 0,62 — hier etwas breiter,
-## damit die Lagen auf dem Handy klar lesbar sind; rein visuell).
-const ITEM_W := 1.05
-const ITEM_H := 0.34
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
 
@@ -53,6 +51,7 @@ var landscape := false
 
 ## Aktive Regen-Teile: {"id", "x", "y", "col"}
 var _items: Array[Dictionary] = []
+var _stage: Node3D
 var _flash := 0.0
 var _flash_text := ""
 var _flash_good := true
@@ -66,6 +65,7 @@ func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = Logic.apply_difficulty(Logic.BURGER, ctx.difficulty)
 	rng = ctx.rng()
+	_build_stage()
 	_build_hud()
 	_new_order()
 	_fit_viewport()
@@ -78,6 +78,16 @@ func end() -> void:
 	finished = true
 
 
+## 3D-Bühne unter die Node2D-Wurzel hängen (Godot rendert 3D hinter 2D).
+func _build_stage() -> void:
+	_stage = Stage.new()
+	_stage.name = "Stage3D"
+	add_child(_stage)
+	_stage.setup_stage(Logic.column_centers(HALF_W))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.world_env
+
+
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
@@ -85,6 +95,9 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.apply_size(view_size)
+		_stage.frame(view_size.y * 0.5 / _world_scale())
 	_layout_hud()
 	queue_redraw()
 
@@ -131,8 +144,29 @@ func _process(delta: float) -> void:
 		_spawn_item()
 		spawn_left = float(tune["SPAWN_SEC"])
 	_step_items(delta)
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+## Die 3D-Bühne bekommt EINEN Zustandsschnappschuss — sie rechnet nur Optik.
+func _sync_stage(delta: float) -> void:
+	_stage.tick(delta)
+	_stage.sync(_items, plate_x, ticket, placed, Logic.next_needed(ticket, placed))
+	_stage.feel(_mood())
+
+
+## Gooby-Laune aus dem Bestellzustand (Reihenfolge = Dringlichkeit).
+func _mood() -> String:
+	if bite_left > 0.0:
+		return "ecstatic"
+	if order_left <= 5.0:
+		return "scared"
+	if _flash > 0.0 and not _flash_good:
+		return "sad"
+	if rush:
+		return "angry"
+	return "happy"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -314,27 +348,11 @@ func _update_labels() -> void:
 	_order_label.text = I18nService.t(key, {"n": order_number, "sec": left_sec})
 
 
+## Die WELT lebt in der 3D-Bühne — 2D bleibt nur der Bestellzettel (UI) und
+## die Meldung.
 func _draw() -> void:
-	_draw_kitchen()
 	_draw_ticket()
-	_draw_items()
-	_draw_plate()
 	_draw_flash()
-
-
-func _draw_kitchen() -> void:
-	var vp := view_size
-	var counter := project(0.0, PLATE_Y - 0.25).y
-	var scale := _world_scale()
-	var rails: Array[float] = []
-	for cx in Logic.column_centers(HALF_W):
-		rails.append(vp.x * 0.5 + cx * scale)
-	Diner.draw_wall(self, vp, counter)
-	Diner.draw_menu_board(self, vp, rails, counter)
-	Diner.draw_shelf(self, vp, counter)
-	Diner.draw_lamps(self, vp, rails, counter)
-	Diner.draw_chutes(self, rails, counter)
-	Diner.draw_counter(self, vp, counter)
 
 
 ## Bestellzettel an der Wand: Klemme oben, Lagen von OBEN nach UNTEN, der
@@ -394,99 +412,6 @@ func _draw_ticket() -> void:
 			Vector2(9.0 * _ui, h - 5.0 * _ui)
 		)
 		draw_rect(mark, Color(0.95, 0.45, 0.66))
-
-
-func _draw_items() -> void:
-	var scale := _world_scale()
-	var needed := Logic.next_needed(ticket, placed)
-	for item in _items:
-		# Verpasste Zutaten fallen HINTER die Theke — sonst regnen sie sichtbar
-		# über den Schachbrettboden weiter, bis die Logik sie entfernt.
-		if float(item["y"]) < PLATE_Y - 0.2:
-			continue
-		var pos := project(float(item["x"]), float(item["y"]))
-		# Die gesuchte Lage bekommt einen weichen Ring — die Web-Vorlage hebt
-		# sie ebenfalls hervor, sonst ist der Regen unlesbar.
-		if str(item["id"]) == needed and not needed.is_empty():
-			draw_arc(
-				pos,
-				ITEM_W * scale * 0.58,
-				0.0,
-				TAU,
-				26,
-				Color(1.0, 0.86, 0.38, 0.55),
-				maxf(2.0, scale * 0.04)
-			)
-		_draw_layer(pos, str(item["id"]), ITEM_W * scale, ITEM_H * scale)
-
-
-## Ein Zutaten-Sticker. Jede Lage hat eine eigene Silhouette, damit sich der
-## Regen auch bei kleinem Bild unterscheiden lässt.
-func _draw_layer(center: Vector2, id: String, w: float, h: float) -> void:
-	var col: Color = LAYER_COLORS.get(id, Color.GRAY)
-	var rect := Rect2(center - Vector2(w * 0.5, h * 0.5), Vector2(w, h))
-	var edge := Color(0.35, 0.26, 0.2, 0.4)
-	var lw := maxf(2.0, h * 0.14)
-	match id:
-		"bun":
-			draw_circle(center + Vector2(0.0, h * 0.1), h * 1.0, col)
-			draw_rect(Rect2(rect.position.x, center.y, w, h * 0.5), col)
-			for i in 3:
-				draw_circle(
-					center + Vector2((i - 1) * w * 0.2, -h * 0.35),
-					maxf(1.5, h * 0.1),
-					Color(1.0, 0.96, 0.86)
-				)
-		"salad":
-			for i in 5:
-				draw_circle(
-					center + Vector2((-0.4 + 0.2 * i) * w, sin(i * 1.7) * h * 0.24), h * 0.52, col
-				)
-		"tomato":
-			draw_circle(center, h * 0.72, col)
-			draw_circle(center, h * 0.44, col.lerp(Color(1.0, 0.85, 0.8), 0.45))
-		"onion":
-			draw_arc(center, h * 0.62, 0.0, TAU, 22, col.darkened(0.15), lw * 1.6)
-			draw_arc(center, h * 0.36, 0.0, TAU, 18, col.darkened(0.05), lw)
-		"cheese":
-			draw_rect(rect, col)
-			draw_colored_polygon(
-				PackedVector2Array(
-					[
-						rect.position + Vector2(w * 0.72, 0.0),
-						rect.position + Vector2(w, 0.0),
-						rect.position + Vector2(w, h * 0.62),
-					]
-				),
-				col.lerp(Color(1.0, 1.0, 1.0), 0.4)
-			)
-			draw_rect(rect, edge, false, lw)
-		_:
-			draw_rect(rect, col)
-			for i in 2:
-				var gy := rect.position.y + h * (0.34 + 0.32 * i)
-				draw_line(
-					Vector2(rect.position.x + w * 0.16, gy),
-					Vector2(rect.position.x + w * 0.84, gy),
-					col.darkened(0.25),
-					lw
-				)
-			draw_rect(rect, edge, false, lw)
-
-
-func _draw_plate() -> void:
-	var scale := _world_scale()
-	var base := project(plate_x, PLATE_Y)
-	var half := float(tune["PLATE_HALF_WIDTH"]) * scale
-	# Gooby steht hinter der Theke, also VOR dem Teller zeichnen.
-	Diner.draw_chef(self, project(-HALF_W + 0.85, PLATE_Y + 0.75), 0.5 * scale, elapsed)
-	draw_circle(base + Vector2(0.0, 0.1 * scale), half * 0.95, Color(0.0, 0.0, 0.0, 0.1))
-	var slab := Rect2(base - Vector2(half, 0.0), Vector2(half * 2.0, 0.18 * scale))
-	draw_rect(slab, Color(0.98, 0.96, 0.93))
-	draw_rect(slab, Color(0.7, 0.63, 0.6), false, maxf(2.0, 0.03 * scale))
-	for i in placed:
-		var y := PLATE_Y + 0.18 + i * 0.22
-		_draw_layer(project(plate_x, y), ticket[i], ITEM_W * scale * 0.92, 0.24 * scale)
 
 
 func _draw_flash() -> void:

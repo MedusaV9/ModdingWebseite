@@ -143,11 +143,7 @@ func _on_hud_action(action: StringName) -> void:
 		if room != null:
 			room.open_build_mode()
 		return
-	if ArcadeScreen.handle_hud_action(action):
-		return
-	if AlbumScreen.handle_hud_action(action):
-		return
-	if GooberandoApp.handle_hud_action(action, self, _gs):
+	if _dispatch_to_screens(action):
 		return
 	if action == &"reise" and _router != null:
 		_router.goto(CityScene.ROUTE_CITY)
@@ -158,6 +154,23 @@ func _on_hud_action(action: StringName) -> void:
 		_router.goto(SocialScreen.ROUTE)
 		return
 	_toasts.show_toast(I18nService.t("home.aktion_bald"))
+
+
+## Reicht die HUD-Aktion der Reihe nach an die selbstregistrierten Screens
+## weiter; der erste, der zustaendig ist, gewinnt. Neue Screens haengen hier
+## eine Zeile an (statt in `_on_hud_action`, das sonst die Return-Grenze reisst).
+func _dispatch_to_screens(action: StringName) -> bool:
+	if ArcadeScreen.handle_hud_action(action):
+		return true
+	if AlbumScreen.handle_hud_action(action):
+		return true
+	if WardrobeScreen.handle_hud_action(action):
+		return true
+	if IkeaScreen.handle_hud_action(action):
+		return true
+	# W6: die Handy-Shell ersetzt den direkten GOOBERANDO-Aufruf — sie haengt
+	# dieselbe App als Kachel ein und bringt Taxi/Guber/Kamera/Pal dazu.
+	return PhoneShell.handle_hud_action(action, self, _gs)
 
 
 func _current_room() -> RoomBase:

@@ -6,31 +6,55 @@ extends MinigameBase
 ## 3 Crashes = Aus. Der View füttert nur Eingaben hinein und spielt die
 ## zurückgelieferten Ereignisse als Klang, Juice und Banner ab.
 ##
-## 2D statt 3D (Web war three.js): der Korridor ist eine reine Tiefenachse
-## und die Kollisionen laufen ohnehin in Weltmetern in der reinen Logik. Eine
-## perspektivische Sticker-Projektion (project()) hält JEDE Zahl exakt, kostet
-## kein 3D-Kit (das Godot-Projekt hat keins) und liest sich auf dem Handy
-## deutlich sauberer als ein Mini-3D-Nachbau.
+## ECHTES 3D (Agent 3D-B): eine Pastell-Einkaufsstraße als Node3D-Welt mit
+## Verfolgerkamera, Kenney-Ladenzeile, Markisen, Straßenmöbel, Tiefen-Nebel
+## und dem ECHTEN Gooby-Rig, das wirklich läuft, springt und rutscht.
+## Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt hängt
+## darunter (Godot rendert 3D hinter den CanvasItems, HUD liegt oben).
 ##
 ## AUTOHAUS-HAKEN (bewusst offen, NICHT implementiert): `cart_skin` /
 ## `speed_bonus` bleiben leer, bis das Autohaus Fahrzeuge liefert.
 
 const Logic := preload("res://scripts/minigames/games/shopping_surf/shopping_surf_logic.gd")
 const Run := preload("res://scripts/minigames/games/shopping_surf/shopping_surf_run.gd")
-const Street := preload("res://scripts/minigames/games/shopping_surf/shopping_surf_street.gd")
+const World := preload("res://scripts/minigames/games/shopping_surf/shopping_surf_world.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
+const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
+const GoobyMount := preload("res://scripts/minigames/games/_3db_stage/gooby_mount.gd")
+const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 
-## Kamera-/Zeichenzahlen der Darstellung (KEINE Spiel-Mathe).
-const CAM_BEHIND := 6.6
-## Halbe Fahrbahnbreite (m): Spuren ±1,6 m plus Randstreifen.
-const ROAD_HALF := 2.6
+## Verfolgerkamera (Web: 0/3.2/−5.5 mit Blick auf 0/1,0/+8 — hier gespiegelt,
+## denn die Godot-Logik zählt nach −z). Fester Neigungswinkel statt Blickpunkt:
+## so sitzt Gooby hoch- wie querformatig auf derselben Bildhöhe.
+const CAM_HEIGHT := 2.5
+const CAM_BACK := 5.0
+## Aus Web-Position und Blickpunkt sind das ≈ 9° Neigung. Mit 15,5° stand Gooby
+## als Fleck in der Bildmitte und darunter lag ein halber Bildschirm Asphalt.
+const CAM_PITCH := 10.5
+const CAM_PORTRAIT_LIFT := 0.5
+const CAM_PORTRAIT_BACK := 0.7
+const CAM_PORTRAIT_PITCH := 3.5
+## §G4.8-Tempojuice: waagerechter Blickwinkel + Kick über das Tempoband.
+## Die Web-Kamera rendert 55° senkrecht auf 16:10 — das sind ≈ 79° waagerecht.
+## Mit 92° schrumpfte die Ladenzeile zur Modelleisenbahn.
+const HFOV_BASE := 80.0
+const HFOV_KICK := 12.0
+const SPEED_BAND := Vector2(8.0, 16.0)
+const STREAK_RATE: Array = [[10.0, 0.0], [13.0, 5.0], [16.0, 11.0]]
 ## Sichtweite (m) und Nahgrenze hinter der Kamera.
 const DRAW_Z := -62.0
 const DRAW_NEAR_Z := 1.4
-## Läden verschwinden früher als die Straße — sonst kleben angeschnittene
-## Fassaden-Klötze am Bildrand.
-const SHOP_NEAR_Z := -9.0
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
+## Nach so vielen Sekunden blendet der Wisch-Hinweis aus.
+const HINT_FADE_SEC := 5.0
+## Farbe je Power-up (Würfelfarbe + Glow-Puls).
+const POWER_TINT := {
+	"magnet": Color(0.55, 0.85, 1.0),
+	"x2": Color(1.0, 0.84, 0.36),
+	"shield": Color(0.4, 0.72, 0.98),
+	"turbo": Color(1.0, 0.62, 0.3),
+}
 
 ## Autohaus-Haken: später vom Host befüllbar.
 var cart_skin := ""
@@ -46,10 +70,6 @@ var finished := false
 var view_size := Vector2(390.0, 844.0)
 var landscape := false
 
-var _shops: Array[Vector3] = []
-var _focal_px := 400.0
-var _cam_y := 1.7
-var _horizon_px := 200.0
 var _ui := 1.0
 var _swipe_from := Vector2.ZERO
 var _swipe_live := false
@@ -60,16 +80,22 @@ var _flash_t := 0.0
 var _score_label: Label
 var _stat_label: Label
 var _hint_label: Label
+var _stage: Node3D
+var _world: Node3D
+var _gooby: Node3D
+var _shadow: MeshInstance3D
+var _shield_vis: MeshInstance3D
+var _magnet_vis: MeshInstance3D
+var _streaks: MultiMeshInstance3D
+var _dust: GPUParticles3D
+var _sparkle: GPUParticles3D
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = Logic.apply_difficulty(Logic.SURF, ctx.difficulty)
 	run = Run.create_run(ctx.rng(), "arcade", tune)
-	var deco := ctx.rng(ctx.run_seed ^ 0x51F5)
-	for i in 22:
-		# x-Seite (±1), z-Tiefe, Laden-Variante 0..1.
-		_shops.append(Vector3(-1.0 if i % 2 == 0 else 1.0, -i * 5.5 - 4.0, deco.next()))
+	_build_stage()
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -88,7 +114,9 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
-	_recompute_camera()
+	if _stage != null:
+		_stage.call("apply_size", view_size)
+		_place_camera(0.0)
 	_layout_labels()
 	queue_redraw()
 
@@ -103,6 +131,8 @@ func _process(delta: float) -> void:
 	_handle_events(Run.step_run(run, dt, input))
 	_publish_score()
 	_update_labels()
+	_fade_hint()
+	_sync_world(dt)
 	queue_redraw()
 	if bool(run["ended"]) and not finished:
 		_finish()
@@ -137,44 +167,144 @@ func _unhandled_input(event: InputEvent) -> void:
 				_held["slide"] = true
 
 
-## Welt (x, y, z) → Bildschirmpixel; z < 0 = vor Gooby.
+## Welt (x, y, z) → Bildschirmpixel des Viewports (für Float-Texte).
 func project(wx: float, wy: float, wz: float) -> Vector2:
-	var s := scale_at(wz)
-	return Vector2(view_size.x * 0.5 + wx * s, _horizon_px + (_cam_y - wy) * s)
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return view_size * 0.5
+	return cam.unproject_position(Vector3(wx, wy, wz))
 
 
-## Pixel pro Meter in dieser Tiefe (für Größen).
-func scale_at(wz: float) -> float:
-	return _focal_px / maxf(0.4, CAM_BEHIND - wz)
+# ── Aufbau ────────────────────────────────────────────────────────────────
 
 
-## Kamera aus dem Layout ableiten: die Straße füllt einen festen Anteil der
-## Breite, die Füße stehen auf einem festen Anteil der Höhe. Damit sitzt
-## Gooby in BEIDEN Orientierungen richtig (feste Werte kippten ihn hochkant
-## aus dem Bild — dieselbe Falle wie beim Renner).
-func _recompute_camera() -> void:
-	var road_fill := 0.46 if landscape else 0.82
-	var horizon_frac := 0.34 if landscape else 0.32
-	var feet_frac := 0.8 if landscape else 0.74
-	_focal_px = road_fill * view_size.x * CAM_BEHIND / (2.0 * ROAD_HALF)
-	_horizon_px = view_size.y * horizon_frac
-	_cam_y = (view_size.y * feet_frac - _horizon_px) * CAM_BEHIND / _focal_px
+func _build_stage() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	(
+		_stage
+		. call(
+			"build",
+			{
+				# §C10.1: eigener Look — Pastellrosa statt Renner-Blau (Web: 0xffe1ec).
+				"sky_top": Color(1.0, 0.79, 0.87),
+				"sky_horizon": Color(1.0, 0.882, 0.925),
+				"ground_horizon": Color(0.9, 0.8, 0.82),
+				"ground_bottom": Color(0.58, 0.46, 0.51),
+				"fog_color": Color(1.0, 0.882, 0.925),
+				"fog_from": 30.0,
+				"fog_to": 86.0,
+				"glow": 0.26,
+				# Web: DirectionalLight(0xfff0d8, 0.95) bei (−5, 10, −4);
+				# HemisphereLight(0xfff3e6, 0xd9b8c4, 1.05) — Mittelwert als Umgebung.
+				"sun_dir": Vector3(0.42, -0.84, 0.34),
+				"sun_color": Color(1.0, 0.941, 0.847),
+				"sun_energy": 0.95,
+				"ambient_color": Color(0.925, 0.86, 0.86),
+				"ambient": 1.05,
+				"fill_energy": 0.16,
+				"fill_color": Color(1.0, 0.86, 0.9),
+				"hfov": HFOV_BASE,
+				"shadow_distance": 34.0,
+				"far": 170.0,
+			}
+		)
+	)
+	_world = World.new()
+	_stage.add_child(_world)
+	_world.call("build", float((tune["OBSTACLES"] as Dictionary)["awning"]["gapY"]))
+
+	_gooby = GoobyMount.new()
+	_stage.add_child(_gooby)
+	_gooby.call("mount", float(tune["STAND_HEIGHT"]) * float(tune["RENDER_SCALE_MULT"]))
+	_shadow = Fx.blob_shadow(0.42, 0.32)
+	_stage.add_child(_shadow)
+	_build_auras()
+
+	_streaks = SpeedLines.new()
+	(_stage.get("camera") as Camera3D).add_child(_streaks)
+	_streaks.call("build", 16, Vector2(2.4, 3.4), Vector2(4.0, 9.0))
+
+	_dust = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.93, 0.9, 0.85),
+				"amount": 10,
+				"lifetime": 0.5,
+				"one_shot": true,
+				"explosiveness": 0.95,
+				"speed": Vector2(1.0, 2.4),
+				"spread": 60.0,
+				"size": Vector2(0.06, 0.14),
+			}
+		)
+	)
+	_stage.add_child(_dust)
+	_sparkle = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.86, 0.55, 1.0),
+				"amount": 14,
+				"lifetime": 0.55,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"additive": true,
+				"speed": Vector2(1.2, 3.2),
+				"spread": 180.0,
+				"gravity": Vector3(0.0, -1.6, 0.0),
+				"size": Vector2(0.05, 0.13),
+			}
+		)
+	)
+	_stage.add_child(_sparkle)
+	_place_camera(0.0)
+
+
+func _build_auras() -> void:
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.7
+	sphere.height = 1.4
+	sphere.radial_segments = 16
+	sphere.rings = 8
+	sphere.material = Fx.glass(Color(0.39, 0.71, 0.96, 0.26))
+	_shield_vis = MeshInstance3D.new()
+	_shield_vis.mesh = sphere
+	_shield_vis.visible = false
+	_shield_vis.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_stage.add_child(_shield_vis)
+
+	_magnet_vis = Fx.ring(0.95, 0.05, Color(0.45, 0.82, 1.0))
+	_magnet_vis.rotation_degrees.x = -90.0
+	_magnet_vis.visible = false
+	_stage.add_child(_magnet_vis)
 
 
 func _build_hud() -> void:
 	_score_label = Label.new()
 	_score_label.theme_type_variation = &"HeadlineLabel"
+	_tint(_score_label)
 	add_child(_score_label)
 	_stat_label = Label.new()
 	_stat_label.theme_type_variation = &"CaptionLabel"
+	_tint(_stat_label)
 	add_child(_stat_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.shoppingSurf.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tint(_hint_label)
 	add_child(_hint_label)
 	_update_labels()
+
+
+## Heller Text mit weichem Schattenrand — er liegt jetzt auf einer 3D-Szene.
+func _tint(label: Label) -> void:
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.96))
+	label.add_theme_color_override("font_outline_color", Color(0.28, 0.14, 0.2, 0.62))
+	label.add_theme_constant_override("outline_size", 8)
 
 
 func _layout_labels() -> void:
@@ -226,6 +356,7 @@ func _handle_event(e: Dictionary) -> void:
 			AudioDirector.try_play(self, "ui_chip", 1.2)
 		"jump":
 			AudioDirector.try_play(self, "mg_good", 1.35)
+			_gooby.call("play", "hop")
 		"slide":
 			AudioDirector.try_play(self, "mg_junk", 1.3)
 		"coin":
@@ -239,6 +370,7 @@ func _handle_event(e: Dictionary) -> void:
 		"puddle":
 			AudioDirector.try_play(self, "mg_spill", 0.9)
 			_set_banner(I18nService.t("mg.shoppingSurf.puddle"))
+			_splash()
 		"shieldPop":
 			_on_shield_pop()
 		"crash":
@@ -251,16 +383,21 @@ func _handle_event(e: Dictionary) -> void:
 
 func _on_coin(e: Dictionary) -> void:
 	AudioDirector.try_play(self, "mg_good")
+	var at := Vector3(float(e["x"]), float(e["y"]), float(e["z"]))
+	if not _reduced_motion():
+		Fx.burst(_sparkle, at)
 	if ctx.juice == null:
 		return
-	var pos := project(float(e["x"]), float(e["y"]) + 0.4, float(e["z"]))
-	ctx.juice.float_text(pos, "+%d" % int(e["value"]), Color(1.0, 0.84, 0.42))
+	ctx.juice.float_text(
+		project(at.x, at.y + 0.45, at.z), "+%d" % int(e["value"]), Color(1.0, 0.84, 0.42)
+	)
 
 
 func _on_near_miss(e: Dictionary) -> void:
 	var streak := int(e["streak"])
 	AudioDirector.try_play(self, "mg_combo" if streak > 1 else "mg_perfect", 1.1)
 	_set_banner(I18nService.t("mg.shoppingSurf.near", {"streak": streak}))
+	_gooby.call("emote", "ecstatic", 0.8)
 	if ctx.juice == null:
 		return
 	ctx.juice.float_text(
@@ -269,37 +406,48 @@ func _on_near_miss(e: Dictionary) -> void:
 		Color(0.72, 1.0, 0.86)
 	)
 	if streak >= 3:
-		ctx.juice.bloom_pulse(0.8)
+		_stage.call("pulse_glow", 0.8)
 
 
 func _on_powerup(kind: String) -> void:
 	AudioDirector.try_play(self, "mg_golden")
 	_set_banner(I18nService.t("mg.shoppingSurf.%s" % kind))
-	if ctx.juice != null:
-		ctx.juice.bloom_pulse(1.0)
-		if kind == "turbo":
-			ctx.juice.slowmo(0.55, 220)
+	_gooby.call("emote", "ecstatic", 1.1)
+	_stage.call("pulse_glow", 1.0)
+	if not _reduced_motion():
+		Fx.burst(_sparkle, Vector3(Run.player_x(run), 1.0, 0.0))
+	if ctx.juice != null and kind == "turbo":
+		ctx.juice.slowmo(0.55, 220)
 
 
 func _on_shield_pop() -> void:
 	AudioDirector.try_play(self, "mg_junk")
 	_set_banner(I18nService.t("mg.shoppingSurf.shield_pop"))
 	_flash_t = 0.35
-	if ctx.juice != null:
-		ctx.juice.shake(0.28)
-		ctx.juice.bloom_pulse(0.7)
+	Fx.burst(_sparkle, Vector3(Run.player_x(run), 0.9, 0.0))
+	_stage.call("pulse_glow", 0.7)
 
 
 func _on_crash(crashes: int) -> void:
 	AudioDirector.try_play(self, "mg_spill")
 	_flash_t = 0.45
 	var left := maxi(0, int(tune["ARCADE_MAX_CRASHES"]) - crashes)
+	Fx.burst(_dust, Vector3(Run.player_x(run), 0.25, -0.5))
 	if left > 0:
 		_set_banner(I18nService.t("mg.shoppingSurf.crash", {"left": left}))
+		_gooby.call("emote", "sad", 1.2)
+	else:
+		_gooby.call("emote", "dizzy", 4.0)
 	if ctx.juice == null:
 		return
-	ctx.juice.shake(0.45 if left == 0 else 0.32)
+	# Kein Screenshake: der Surf ist ein Dauer-Vorwärtsflug (Motion-Comfort).
 	ctx.juice.hit_freeze(110)
+
+
+func _splash() -> void:
+	if _reduced_motion():
+		return
+	Fx.burst(_dust, Vector3(Run.player_x(run), 0.1, -0.3))
 
 
 func _publish_score() -> void:
@@ -327,6 +475,14 @@ func _set_banner(text: String) -> void:
 	_banner_t = 1.25
 
 
+## Der Hinweis steht unten mitten im Bild — nach ein paar Sekunden hat man ihn
+## gelesen, danach gehört die Stelle Gooby.
+func _fade_hint() -> void:
+	if _hint_label == null:
+		return
+	_hint_label.modulate.a = clampf((HINT_FADE_SEC - float(run["elapsed"])) / 1.2, 0.0, 1.0)
+
+
 func _update_labels() -> void:
 	_score_label.text = I18nService.t(
 		"mg.shoppingSurf.distance", {"m": int(floor(float(run["distanceM"])))}
@@ -344,191 +500,119 @@ func _update_labels() -> void:
 	)
 
 
-# ── Zeichnen ──────────────────────────────────────────────────────────────
+# ── 3D-Abgleich ───────────────────────────────────────────────────────────
 
 
-func _draw() -> void:
-	var project_fn := Callable(self, "project")
-	Street.draw_ground(
-		self,
-		view_size,
-		_horizon_px,
-		project_fn,
-		ROAD_HALF,
-		DRAW_NEAR_Z,
-		DRAW_Z,
-		float(run["distanceM"])
-	)
-	_draw_shops()
-	# Alles Bewegliche von HINTEN nach VORNE (Maler-Algorithmus).
-	var items: Array[Dictionary] = []
-	for ob: Dictionary in run["obstacles"]:
-		items.append({"z": float(ob["z"]), "kind": "ob", "data": ob})
-	for c: Dictionary in run["coinItems"]:
-		items.append({"z": float(c["z"]), "kind": "coin", "data": c})
-	for p: Dictionary in run["powerupItems"]:
-		items.append({"z": float(p["z"]), "kind": "pu", "data": p})
-	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["z"] < b["z"])
-	for item: Dictionary in items:
-		if float(item["z"]) < DRAW_Z or float(item["z"]) > DRAW_NEAR_Z:
-			continue
-		_draw_item(item)
-	_draw_gooby()
-	_draw_powerup_bar()
-	_draw_banner()
-	_draw_flash()
+func _sync_world(dt: float) -> void:
+	_stage.call("tick", dt)
+	_gooby.call("tick", dt)
+	(_world.get("band") as RefCounted).call("advance", Run.current_speed(run) * dt)
+	_sync_player(dt)
+	_sync_props()
+	_sync_camera(dt)
 
 
-func _draw_item(item: Dictionary) -> void:
-	var data: Dictionary = item["data"]
-	var z := float(item["z"])
-	var sc := scale_at(z)
-	match str(item["kind"]):
-		"coin":
-			Street.draw_coin(
-				self,
-				project(float(data["x"]), float(data["y"]), z),
-				sc,
-				float(run["elapsed"]) * 4.0 + z * 0.3
-			)
-		"pu":
-			Street.draw_powerup(
-				self,
-				project(float(data["x"]), 0.0, z),
-				sc,
-				str(data["kind"]),
-				float(run["elapsed"]) + z * 0.2
-			)
-		_:
-			_draw_obstacle(data, z, sc)
-
-
-func _draw_obstacle(ob: Dictionary, z: float, sc: float) -> void:
-	var kind := str(ob["kind"])
-	var at := project(float(ob["x"]), 0.0, z)
-	match kind:
-		"cart":
-			Street.draw_cart(self, at, sc, bool(ob["telegraphed"]))
-		"crate":
-			Street.draw_crate(self, at, sc)
-		"npc":
-			_draw_npc_with_trail(ob, z, sc, at)
-		"awning":
-			Street.draw_awning(
-				self,
-				at,
-				sc,
-				float(ob["halfW"]),
-				float((tune["OBSTACLES"] as Dictionary)["awning"]["gapY"])
-			)
-		"puddle":
-			Street.draw_puddle(self, at, sc, bool(ob["hit"]))
-		_:
-			Street.draw_gap(
-				self,
-				Callable(self, "project"),
-				z,
-				float((tune["OBSTACLES"] as Dictionary)["gap"]["halfDepth"]),
-				ROAD_HALF
-			)
-
-
-## Passant + gepunktete Bahn (§C8.3 „gestrichelte Linie kündigt ihn an").
-func _draw_npc_with_trail(ob: Dictionary, z: float, sc: float, at: Vector2) -> void:
-	var x := float(ob["x"])
-	var dots := 8
-	for i in dots:
-		var tx := x + (ROAD_HALF + 1.0 - x) * float(i + 1) / dots
-		draw_circle(project(tx, 0.03, z), maxf(1.0, sc * 0.05), Color(1, 1, 1, 0.55))
-	Street.draw_npc(self, at, sc, float(run["elapsed"]))
-
-
-func _draw_shops() -> void:
-	var sorted := _shops.duplicate()
-	sorted.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.y < b.y)
-	var offset := fposmod(float(run["distanceM"]), 121.0)
-	for s: Vector3 in sorted:
-		var z := s.y + offset
-		if z > SHOP_NEAR_Z:
-			z -= 121.0
-		# Nahe Läden würden nur als angeschnittene Klötze am Bildrand kleben.
-		if z < DRAW_Z or z > SHOP_NEAR_Z:
-			continue
-		Street.draw_shop(self, Callable(self, "project"), s.x, z, s.z, ROAD_HALF)
-
-
-func _draw_gooby() -> void:
-	var sc := scale_at(0.0)
+func _sync_player(dt: float) -> void:
 	var px := Run.player_x(run)
 	var py := Run.player_y(run)
 	var sliding := float(run["slideT"]) >= 0.0
 	var squash := float(tune["SLIDE_HEIGHT"]) / float(tune["STAND_HEIGHT"]) if sliding else 1.0
-	var base := project(px, py, 0.0)
+	var target := Vector3(1.0 + (1.0 - squash) * 0.55, squash, 1.0 + (1.0 - squash) * 0.55)
+	_gooby.scale = _gooby.scale.lerp(target, minf(1.0, dt * 16.0))
+	_gooby.position = Vector3(px, py, 0.0)
+	_gooby.rotation.z = (float((tune["LANE_X"] as Array)[int(run["lane"])]) - px) * -0.22
 	var invuln := float(run["invulnT"])
-	var alpha := 1.0 if invuln <= 0.0 else (0.4 + 0.6 * absf(sin(invuln * 22.0)))
-	var body_h := sc * float(tune["STAND_HEIGHT"]) * squash * float(tune["RENDER_SCALE_MULT"])
-	var body_w := sc * 0.46 * (1.0 + (1.0 - squash) * 0.6)
-	_draw_ellipse(
-		project(px, 0.0, 0.0),
-		body_w * maxf(0.35, 0.78 - py * 0.2),
-		body_w * maxf(0.12, 0.26 - py * 0.07),
-		Color(0.35, 0.24, 0.28, 0.2 * alpha)
-	)
-	_draw_gooby_auras(base, body_h, body_w, alpha)
-	var fur := Color(0.99, 0.9, 0.66, alpha)
-	var ink := Color(0.32, 0.22, 0.18, alpha)
-	var head := base + Vector2(0.0, -body_h * 0.68)
-	var r := body_h * 0.3
-	if not sliding:
-		var step := sin(float(run["elapsed"]) * 16.0) * body_h * 0.1
-		for side in [-1.0, 1.0]:
-			draw_line(
-				base + Vector2(side * body_w * 0.34, -body_h * 0.3),
-				base + Vector2(side * body_w * 0.34, step * side),
-				Color(0.86, 0.72, 0.5, alpha),
-				maxf(3.0, body_w * 0.24)
-			)
-	_draw_ellipse(base + Vector2(0.0, -body_h * 0.42), body_w * 0.8, body_h * 0.29, fur)
-	# Einkaufstasche in der Pfote — das Thema der Kachel.
-	draw_rect(
-		Rect2(base + Vector2(body_w * 0.5, -body_h * 0.46), Vector2(body_w * 0.62, body_h * 0.34)),
-		Color(1.0, 0.66, 0.74, alpha)
-	)
-	draw_arc(
-		base + Vector2(body_w * 0.81, -body_h * 0.46),
-		body_w * 0.2,
-		PI,
-		TAU,
-		10,
-		Color(0.85, 0.5, 0.6, alpha),
-		maxf(1.5, body_w * 0.06)
-	)
-	for side in [-1.0, 1.0]:
-		draw_circle(head + Vector2(side * r * 0.62, -r * 0.82), r * 0.34, fur)
-	draw_circle(head, r, fur)
-	var eye := r * 0.13
-	draw_circle(head + Vector2(-r * 0.34, -r * 0.1), eye, ink)
-	draw_circle(head + Vector2(r * 0.34, -r * 0.1), eye, ink)
-	draw_arc(head + Vector2(0.0, r * 0.2), r * 0.3, 0.3, PI - 0.3, 12, ink, maxf(2.0, r * 0.1))
-	draw_circle(head + Vector2(0.0, r * 0.12), r * 0.1, Color(0.95, 0.6, 0.62, alpha))
-
-
-func _draw_gooby_auras(base: Vector2, body_h: float, body_w: float, alpha: float) -> void:
+	_gooby.visible = invuln <= 0.0 or fmod(invuln * 12.0, 2.0) < 1.0
+	_gooby.call("run", 0.0 if sliding else 1.0)
+	_shadow.position = Vector3(px, 0.03, 0.0)
+	_shadow.scale = Vector3.ONE * maxf(0.45, 1.0 - py * 0.35)
 	var pu: Dictionary = run["pu"]
-	var center := base + Vector2(0.0, -body_h * 0.5)
-	if float(pu["magnetT"]) > 0.0:
-		draw_arc(center, body_w * 2.8, 0.0, TAU, 34, Color(0.55, 0.85, 1.0, 0.5 * alpha), 3.0)
-	if bool(pu["shield"]):
-		draw_arc(center, body_w * 2.0, 0.0, TAU, 34, Color(0.4, 0.72, 0.98, 0.85 * alpha), 4.0)
-	if float(pu["turboT"]) > 0.0:
-		for i in 5:
-			var f := float(i) / 4.0
-			draw_line(
-				base + Vector2(-body_w * (1.2 + f * 1.6), -body_h * (0.2 + f * 0.5)),
-				base + Vector2(-body_w * (2.0 + f * 1.6), -body_h * (0.2 + f * 0.5)),
-				Color(1.0, 0.62, 0.3, (0.8 - f * 0.5) * alpha),
-				maxf(2.0, body_w * 0.12)
-			)
+	_shield_vis.visible = bool(pu["shield"])
+	_shield_vis.position = Vector3(px, py + 0.55, 0.0)
+	_shield_vis.rotation.y += dt * 1.5
+	_magnet_vis.visible = float(pu["magnetT"]) > 0.0
+	_magnet_vis.position = Vector3(px, py + 0.12, 0.0)
+	_magnet_vis.rotation.y += dt * 2.4
+
+
+func _sync_props() -> void:
+	var t := float(run["elapsed"])
+	_world.call("begin_props")
+	for ob: Dictionary in run["obstacles"]:
+		var z := float(ob["z"])
+		if z < DRAW_Z or z > DRAW_NEAR_Z:
+			continue
+		_world.call(
+			"push_obstacle",
+			str(ob["kind"]),
+			float(ob["x"]),
+			z,
+			float(ob["halfW"]),
+			t * 3.0 + z * 0.4
+		)
+	for c: Dictionary in run["coinItems"]:
+		var cz := float(c["z"])
+		if cz < DRAW_Z or cz > DRAW_NEAR_Z:
+			continue
+		_world.call("push_coin", float(c["x"]), float(c["y"]), cz, t * 4.0 + cz * 0.3)
+	for p: Dictionary in run["powerupItems"]:
+		var pz := float(p["z"])
+		if pz < DRAW_Z or pz > DRAW_NEAR_Z:
+			continue
+		var tint: Color = POWER_TINT.get(str(p["kind"]), Color(1.0, 0.9, 0.6))
+		_world.call(
+			"push_power", float(p["x"]), 0.6 + sin(t * 3.2 + pz * 0.2) * 0.08, pz, t * 2.0, tint
+		)
+	_world.call("flush_props")
+	(_world.get("band") as RefCounted).call("flush")
+
+
+## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Mikro-Zittern).
+func _sync_camera(dt: float) -> void:
+	var reduced := _reduced_motion()
+	var speed := Run.current_speed(run)
+	var jitter := 0.0
+	if not reduced:
+		jitter = clampf((speed - 14.0) / 2.0, 0.0, 1.0) * 0.03
+	_place_camera(jitter)
+	var band01 := clampf(
+		(speed - SPEED_BAND.x) / maxf(0.001, SPEED_BAND.y - SPEED_BAND.x), 0.0, 1.0
+	)
+	_stage.call("set_fov_bonus", HFOV_KICK * band01)
+	_streaks.set("enabled", not reduced)
+	_streaks.call("update", dt, speed, SpeedLines.rate_at(speed, STREAK_RATE))
+
+
+func _place_camera(jitter: float) -> void:
+	var cam: Camera3D = _stage.get("camera")
+	if cam == null:
+		return
+	var lift := 0.0 if landscape else CAM_PORTRAIT_LIFT
+	var back := 0.0 if landscape else CAM_PORTRAIT_BACK
+	var pitch := CAM_PITCH + (0.0 if landscape else CAM_PORTRAIT_PITCH)
+	var follow := Run.player_x(run) * 0.32
+	cam.position = Vector3(
+		follow + randf_range(-jitter, jitter),
+		CAM_HEIGHT + lift + randf_range(-jitter, jitter),
+		CAM_BACK + back
+	)
+	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
+
+
+# ── 2D-Overlay (Powerup-Leiste, Banner, Crash-Blitz über der 3D-Szene) ────
+
+
+func _draw() -> void:
+	_draw_powerup_bar()
+	_draw_banner()
+	_draw_flash()
 
 
 func _draw_powerup_bar() -> void:
@@ -583,11 +667,3 @@ func _draw_flash() -> void:
 	var band := minf(view_size.x, view_size.y) * 0.09
 	draw_rect(Rect2(0.0, 0.0, view_size.x, band), Color(0.95, 0.35, 0.4, a))
 	draw_rect(Rect2(0.0, view_size.y - band, view_size.x, band), Color(0.95, 0.35, 0.4, a))
-
-
-func _draw_ellipse(center: Vector2, rx: float, ry: float, color: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 26:
-		var a := TAU * i / 26.0
-		pts.append(center + Vector2(cos(a) * maxf(1.0, rx), sin(a) * maxf(1.0, ry)))
-	draw_colored_polygon(pts, color)

@@ -62,7 +62,10 @@ func test_flow_finden_laden_registry() -> void:
 	registry.auto_reload = false
 	registry.packs_dir = BASE_E2E + "/packs"
 	registry.reload()
-	assert_eq(registry.get_cosmetics().size(), 3, "eingebaut: 3 Test-Cosmetics")
+	# W6: der eingebaute Cosmetics-Katalog waechst (CONTENT-A: 92 Items) — der
+	# Test misst deshalb die DIFFERENZ, nicht die absolute Groesse.
+	var builtin_count := registry.get_cosmetics().size()
+	assert_true(builtin_count > 0, "eingebaute Cosmetics vorhanden")
 	assert_eq(registry.version_of("cosmetics"), "1.0.0", "eingebaute Version")
 	assert_false(_has_item(registry, "hat_flamingo"), "neuer Inhalt noch NICHT da")
 	print(
@@ -110,7 +113,7 @@ func test_flow_finden_laden_registry() -> void:
 	assert_eq(report["loaded"], ["cosmetics"], "PCK geladen (config ist kein PCK)")
 	registry.reload()
 	assert_eq(registry.version_of("cosmetics"), PACK_VERSION, "Registry sieht Pack-Version")
-	assert_eq(registry.get_cosmetics().size(), 4, "3 eingebaute + 1 neues Item")
+	assert_eq(registry.get_cosmetics().size(), builtin_count + 1, "eingebaute + 1 neues Pack-Item")
 	assert_true(_has_item(registry, "hat_flamingo"), "NEUER Inhalt nach Reload sichtbar")
 	print(
 		(
