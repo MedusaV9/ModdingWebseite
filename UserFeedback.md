@@ -26,8 +26,8 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Man soll alles also auch den Haus Stil, Farbe und Gras /boden etc anpassen können.
 [ ] Das HUD/UI ist nicht mehr so schön / niedlich / cozy / animal crossing new horizons wie davor
 [ ] Es fehlt der polish. Nimm dir mehr Subagents die auch sowas wie Dopamin, Sounddesign und feeling bewerten und verbessern sollen.
-[ ] Die Github Actions build werfen einen error : lint
-Process completed with exit code 123.
+[ ] Die Github Actions build werfen einen error : lint Process completed with exit code 123.
+[ ] Du musst den Remotion Trailer noch selber komplett erstellen und rendern und ihn ins Repo packen. Denk dran du entscheidest selber wie der seinen soll plus die musik wählst du auch selber etc.
 
 
 
