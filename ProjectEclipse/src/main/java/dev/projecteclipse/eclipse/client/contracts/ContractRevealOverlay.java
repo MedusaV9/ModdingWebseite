@@ -110,6 +110,17 @@ public final class ContractRevealOverlay {
 
     private ContractRevealOverlay() {}
 
+    /**
+     * PH-SOCIAL (IDEAS-player #8): the ACTIVE window's hunted target — non-null ONLY on
+     * the hunter's own client while the hunter role survives ({@code role} clears on
+     * window close / resolve / logout, {@code targetUuid} on reset). Read by
+     * {@code HunterMarkFxClient}'s 20t ensure; never synced anywhere (anonymity law).
+     */
+    @Nullable
+    public static UUID hunterMarkTarget() {
+        return role == ContractPayloads.ROLE_HUNTER ? targetUuid : null;
+    }
+
     // ================================================================== payload entry points
 
     /** {@link ContractPayloads.S2CContractRevealPayload} (client main thread). */

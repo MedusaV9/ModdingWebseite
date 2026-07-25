@@ -128,6 +128,17 @@ public abstract class GlitchedMonster extends EclipseGeoMonster {
                 serverLevel.sendParticles(ParticleTypes.REVERSE_PORTAL,
                         this.getX(), this.getY() + this.getBbHeight() * 0.5D, this.getZ(),
                         12, 0.3D, 0.4D, 0.3D, 0.03D);
+                // PH-MOBS (IDEAS-mobs #5): the long-reserved eclipse:glitch_pop slot —
+                // one cue per endpoint over the registry lane, LAYERED over (never
+                // replacing) the REVERSE_PORTAL pairs. The client row forces
+                // allowMulti=true: short blinks can land both cues in one BlockPos.
+                dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(serverLevel,
+                        dev.projecteclipse.eclipse.network.fx.FxCues.CUE_GLITCH_POP,
+                        origin.add(0.0D, this.getBbHeight() * 0.5D, 0.0D), 0.0F, 0.0F, 48.0D);
+                dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(serverLevel,
+                        dev.projecteclipse.eclipse.network.fx.FxCues.CUE_GLITCH_POP,
+                        this.position().add(0.0D, this.getBbHeight() * 0.5D, 0.0D),
+                        0.0F, 0.0F, 48.0D);
                 serverLevel.playSound(null, this.blockPosition(), SoundEvents.ENDERMAN_TELEPORT,
                         SoundSource.HOSTILE, 0.5F, 1.5F);
                 triggerAction(ANIM_GLITCH_BLINK);

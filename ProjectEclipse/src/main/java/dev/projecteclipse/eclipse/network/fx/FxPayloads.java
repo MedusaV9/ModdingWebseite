@@ -53,9 +53,6 @@ public final class FxPayloads {
     /** W-P-ALTAR: altar level-up ceremony (pos = altar, a = freshly reached level). */
     public static final ResourceLocation FX_ALTAR_LEVELUP = fx("altar_levelup");
 
-    /** Glide-trail loop emitter (asset owned by W6; attached/removed by the glide FX events). */
-    private static final ResourceLocation GLIDE_TRAIL_EMITTER =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glide_trail");
     /** How far the glide event position may be from a player to attach the trail to them. */
     private static final double GLIDE_MATCH_RANGE_SQ = 8.0D * 8.0D;
     /** Distance the reconstructed lightning source sits toward the sun (R10: center + dir·180). */
@@ -72,6 +69,7 @@ public final class FxPayloads {
         PayloadRegistrar registrar = event.registrar(VERSION);
         registrar.playToClient(S2CEclipsePhasePayload.TYPE, S2CEclipsePhasePayload.STREAM_CODEC, FxPayloads::handleEclipsePhase);
         registrar.playToClient(S2CFxEventPayload.TYPE, S2CFxEventPayload.STREAM_CODEC, FxPayloads::handleFxEvent);
+        registrar.playToClient(S2CFxEntityEventPayload.TYPE, S2CFxEntityEventPayload.STREAM_CODEC, FxPayloads::handleFxEntityEvent);
         registrar.playToClient(S2CStormStatePayload.TYPE, S2CStormStatePayload.STREAM_CODEC, FxPayloads::handleStormState);
         registrar.playToClient(S2CSupplyMarkerPayload.TYPE, S2CSupplyMarkerPayload.STREAM_CODEC, FxPayloads::handleSupplyMarker);
         registrar.playToClient(S2CViewDistancePayload.TYPE, S2CViewDistancePayload.STREAM_CODEC, FxPayloads::handleViewDistance);
@@ -103,6 +101,26 @@ public final class FxPayloads {
         }
     }
 
+    /**
+     * PH-PLAYER / PH-MOBS entity-cue lane ({@link S2CFxEntityEventPayload}): like
+     * {@link #sendFxEvent} but the cue rides {@code target}'s entity id so the client can
+     * attach the Photon leg to the (possibly moving) entity; {@code target.position()} is
+     * carried as the degrade anchor for clients that no longer track it ({@code range <= 0}
+     * → whole dimension). Use {@code FxCues.CUE_*} ids whose registry row expects the
+     * entity lane ({@code PhotonFxRegistry.dispatchEntity}).
+     */
+    public static void sendFxEntityEvent(ServerLevel level, ResourceLocation id,
+            net.minecraft.world.entity.Entity target, float a, float b, double range) {
+        Vec3 pos = target.position();
+        S2CFxEntityEventPayload payload =
+                new S2CFxEntityEventPayload(id, target.getId(), pos, a, b);
+        if (range <= 0.0D) {
+            PacketDistributor.sendToPlayersInDimension(level, payload);
+        } else {
+            PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, range, payload);
+        }
+    }
+
     /** Ghost-grade toggle for one player (P3 death/respawn flow, §6.2). */
     public static void sendGhostState(ServerPlayer player, boolean active) {
         PacketDistributor.sendToPlayer(player, new S2CGhostStatePayload(active));
@@ -120,6 +138,14 @@ public final class FxPayloads {
         ResourceLocation id = payload.id();
         if (FX_SHOCKWAVE.equals(id)) {
             EclipseFxState.startShockwave(payload.pos(), payload.a(), Math.max(1, (int) payload.b()));
+            if (payload.a() >= 1.0F && payload.b() >= 50.0F) {
+                // PH-EVENTS (IDEAS-events #1): the (1.0, 50) giant signature is sent only
+                // by the intro/credits BURST beats (live + FX-only replays) — layer the
+                // HDR white-out ring so the flash sandwich gets a physical source. LAYER
+                // law: the Quasar shockwave above already ran; no timing changes.
+                dev.projecteclipse.eclipse.veilfx.PhotonBridge.spawn(
+                        dev.projecteclipse.eclipse.veilfx.PhotonBridge.INTRO_BURST_RING, payload.pos());
+            }
         } else if (FX_LIGHTNING_STRIKE.equals(id)) {
             // Strikes come FROM the eclipse: reconstruct the source along the sun direction
             // (R10: center + sunDir · 180) so every client agrees with the sky; the source is
@@ -134,14 +160,17 @@ public final class FxPayloads {
         } else if (FX_RIFT_CLOSE.equals(id)) {
             dev.projecteclipse.eclipse.veilfx.rift.RiftFx.closeRift(payload.pos());
         } else if (FX_GLIDE_START.equals(id)) {
+            // PH-SOCIAL (IDEAS-player #10): the controller elects the trail leg — Photon
+            // wingtip ara ribbons (FORWARD AutoRotate) REPLACING the Quasar loop, which
+            // re-enters automatically whenever the Photon leg is unavailable.
             Player glider = nearestPlayer(payload.pos());
             if (glider != null) {
-                dev.projecteclipse.eclipse.veilfx.QuasarSpawner.ensureAttached(GLIDE_TRAIL_EMITTER, glider);
+                dev.projecteclipse.eclipse.veilfx.GlideTrailFx.attach(glider);
             }
         } else if (FX_GLIDE_STOP.equals(id)) {
             Player glider = nearestPlayer(payload.pos());
             if (glider != null) {
-                dev.projecteclipse.eclipse.veilfx.QuasarSpawner.removeAttached(GLIDE_TRAIL_EMITTER, glider);
+                dev.projecteclipse.eclipse.veilfx.GlideTrailFx.detach(glider);
             }
         } else if (FX_DOOR_GLOW.equals(id)) {
             dev.projecteclipse.eclipse.client.ShipDoorGlow.handleDoorGlow(payload.a() > 0.5F);
@@ -158,11 +187,49 @@ public final class FxPayloads {
         } else if (dev.projecteclipse.eclipse.drama.GestureGlyphService.FX_GLYPH.equals(id)) {
             // W4-CEREMONY IDEA-10 #2: pos = gesturing player, a = glyph 0 greet/1 danger/2 follow.
             dev.projecteclipse.eclipse.client.drama.GestureGlyphFx.show(payload.pos(), (int) payload.a());
-        } else if (dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatch(id, payload.pos())) {
+        } else if (FxCues.CUE_WARDEN_VOLLEY_TELEGRAPH.equals(id)) {
+            // PH-BOSS-B (IDEAS-boss #3): pos = warden eye, a = yaw deg. Needs an executor
+            // rotation, which the generic PhotonFxRegistry.dispatch(id, pos) tail cannot
+            // carry — the helper resolves the same registered row and adds the aim.
+            dev.projecteclipse.eclipse.veilfx.BossPhotonFxRows.wardenEyeLaser(payload.pos(), payload.a());
+        } else if (FxCues.CUE_GROWTH_RIDER.equals(id)) {
+            // PH-RIFT (IDEAS-events #4): entity-anchored cue — a = rider entity id,
+            // b = 1 attach / 0 release. Dedicated branch (not a registry row: rows are
+            // position-anchored; INTEGRATION.md §3.5 law 5 pre-authorizes this shape).
+            dev.projecteclipse.eclipse.sequence.ExpansionSequence.ClientHooks
+                    .handleGrowthRider((int) payload.a(), payload.b() > 0.5F);
+        } else if (FxCues.CUE_HEART_THEFT.equals(id)) {
+            // PH-SOCIAL (IDEAS-player #3): pos = corpse, a/b = killer/victim entity ids.
+            // Needs aimed rotation + distance-scaled delays across three executors — the
+            // warden pattern: an explicit branch over the registered row.
+            dev.projecteclipse.eclipse.veilfx.PlayerFxPhotonRows.heartTheftArc(
+                    payload.pos(), payload.a(), payload.b());
+        } else if (dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatch(
+                id, payload.pos(), payload.a(), payload.b())) {
             // PH-CORE tail branch: table-driven FxCues cue rows (Photon layer + Quasar
             // fallback per row mode) — consumed when a row is registered for the id.
+            // The payload's a/b thread through so rows with a PhotonLeg can consume them
+            // (CUE_STERN_KOMET telegraph delay, CUE_CREDITS_STRIKE intensity → scale,
+            // CUE_STRUCTURE_SLAM footprint → scale).
         } else {
             EclipseMod.LOGGER.debug("Unknown FX event id {} (pos {}, a {}, b {})", id, payload.pos(), payload.a(), payload.b());
+        }
+    }
+
+    /**
+     * PH-PLAYER / PH-MOBS entity-cue lane (client main thread): resolves the entity id
+     * against the client level and hands the cue to the registry's entity dispatch. A
+     * missing/gone entity degrades to the payload's position anchor inside
+     * {@code PhotonFxRegistry.dispatchEntity} — never a drop below the Quasar baseline.
+     */
+    private static void handleFxEntityEvent(S2CFxEntityEventPayload payload, IPayloadContext context) {
+        ClientLevel level = Minecraft.getInstance().level;
+        net.minecraft.world.entity.Entity target =
+                level == null ? null : level.getEntity(payload.entityId());
+        if (!dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatchEntity(
+                payload.id(), target, payload.pos(), payload.a(), payload.b())) {
+            EclipseMod.LOGGER.debug("Unknown FX entity event id {} (entity {}, pos {})",
+                    payload.id(), payload.entityId(), payload.pos());
         }
     }
 

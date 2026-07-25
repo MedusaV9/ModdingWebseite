@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
+import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import dev.projecteclipse.eclipse.veilfx.TransitionFx;
 import foundry.veil.api.client.render.VeilRenderSystem;
@@ -97,6 +98,15 @@ public final class StormFxClient {
     private static final float SWIRL_RAD_PER_TICK = 0.0175F;
     /** Wisp vertical drift per tick (wraps inside the storm height). */
     private static final float WISP_RISE_PER_TICK = 0.12F;
+    /**
+     * PH-WORLD (IDEAS-world #8): crown-halo release distance — attach inside
+     * {@link #ARC_RANGE}, release only beyond +20 (hysteresis, no boundary thrash).
+     */
+    private static final float CROWN_RELEASE_RANGE = ARC_RANGE + 20.0F;
+    /** Crown-halo refused-spawn retry cadence (ticks) — the SanctumLightfall cadence. */
+    private static final int CROWN_RETRY_TICKS = 40;
+    /** Crown halo height above the shell top (IDEAS-world #8: center + [0, height+2, 0]). */
+    private static final double CROWN_ABOVE_SHELL = 2.0D;
     /** Storm loop sound audibility: start within this distance of the shell (sound range is 64). */
     private static final float LOOP_SOUND_RANGE = 56.0F;
     /** Reveal glitch pulse strength (R14: "rift_glitch pulse 0.4"). */
@@ -297,7 +307,8 @@ public final class StormFxClient {
 
         if (storm.state == S2CStormStatePayload.STATE_EXPLODE) {
             // C8 death beat: no arcs/wisps/dread — just the roar fading out and debris
-            // riding the expanding shockwave ring.
+            // riding the expanding shockwave ring. The crown dies with the shell.
+            storm.releaseCrownHalo();
             tickLoopSound(minecraft, storm, shellDist, visibility);
             tickExplosionDebris(level, storm);
             return true;
@@ -305,6 +316,7 @@ public final class StormFxClient {
 
         tickArcs(level, storm, camera, centerDist, shellDist, visibility);
         tickWisps(storm, shellDist, visibility);
+        tickCrownHalo(storm, shellDist, visibility);
         tickLoopSound(minecraft, storm, shellDist, visibility);
         tickApproachDread(level, storm, camera, centerDist, shellDist, visibility);
         return true;
@@ -549,6 +561,54 @@ public final class StormFxClient {
                 storm.center.z + Math.sin(angle) * wispRadius);
     }
 
+    /**
+     * PH-WORLD (IDEAS-world #8): one Photon {@code eclipse:storm_crown_halo} pearl-string
+     * loop per SPHERE storm, parked {@value #CROWN_ABOVE_SHELL} above the shell top. This
+     * is a per-storm WINDOWED loop (INTEGRATION.md §4) owned HERE, not by
+     * {@code PhotonFxRegistry.ensureLoop} (which manages ONE loop per logical id — storms
+     * are many): attach inside {@link #ARC_RANGE}, release beyond
+     * {@link #CROWN_RELEASE_RANGE} (hysteresis), release on DISSIPATE/EXPLODE/removal and
+     * whenever the bridge goes unavailable ({@code reducedFx} kills it wholesale). A
+     * refused spawn (executor budget) backs off {@value #CROWN_RETRY_TICKS} ticks — the
+     * arc/wisp Quasar stack above stays the photon-less baseline (LAYER, no new Quasar
+     * emitter by design).
+     */
+    private static void tickCrownHalo(ClientStorm storm, double shellDist, float visibility) {
+        PhotonBridge.LoopHandle handle = storm.crownHalo;
+        if (handle != null && !handle.alive()) {
+            storm.crownHalo = null; // bridge sweep (level change) already reaped it
+            handle = null;
+        }
+        boolean wanted = storm.type == S2CStormStatePayload.TYPE_SPHERE
+                && storm.state != S2CStormStatePayload.STATE_DISSIPATE
+                && visibility > 0.2F
+                && shellDist < (handle != null ? CROWN_RELEASE_RANGE : ARC_RANGE)
+                && PhotonBridge.available();
+        if (!wanted) {
+            storm.releaseCrownHalo();
+            return;
+        }
+        Vec3 anchor = storm.center.add(0.0D, storm.height + CROWN_ABOVE_SHELL, 0.0D);
+        if (handle != null) {
+            // Keepalive: re-anchoring a live loop is unsupported — a resize/reposition
+            // payload releases and respawns at the new crown (rare; storms sit still).
+            if (storm.crownAnchor != null && storm.crownAnchor.distanceToSqr(anchor) > 0.25D) {
+                storm.releaseCrownHalo();
+            } else {
+                return;
+            }
+        }
+        if (clientTicks < storm.nextCrownRetryTick) {
+            return;
+        }
+        storm.crownHalo = PhotonBridge.spawnLoop(PhotonBridge.STORM_CROWN_HALO, anchor);
+        if (storm.crownHalo == null) {
+            storm.nextCrownRetryTick = clientTicks + CROWN_RETRY_TICKS; // budget backoff
+        } else {
+            storm.crownAnchor = anchor;
+        }
+    }
+
     /** One positional churn/roar loop per storm, tracking the nearest shell point (fixed range 64). */
     private static void tickLoopSound(Minecraft minecraft, ClientStorm storm, double shellDist, float visibility) {
         StormLoopSound sound = storm.loopSound;
@@ -654,6 +714,14 @@ public final class StormFxClient {
         final ParticleEmitter[] wisps = new ParticleEmitter[MAX_WISPS];
         final float[] wispHeights = new float[MAX_WISPS];
         float wispAngle;
+        /** PH-WORLD #8: per-sphere-storm Photon crown-halo loop (windowed, see tickCrownHalo). */
+        @Nullable
+        PhotonBridge.LoopHandle crownHalo;
+        /** Anchor the live crown was spawned at (re-anchor = release + respawn). */
+        @Nullable
+        Vec3 crownAnchor;
+        /** Earliest tick the crown may retry after a refused (budget) spawn. */
+        int nextCrownRetryTick;
         @Nullable
         StormLoopSound loopSound;
         /** One play(...) attempt per approach (LimboAmbience pattern — no retry storms). */
@@ -738,8 +806,19 @@ public final class StormFxClient {
             }
         }
 
+        /** Stops the crown-halo loop (graceful fade — laid pearls live out their life). */
+        void releaseCrownHalo() {
+            PhotonBridge.LoopHandle handle = crownHalo;
+            crownHalo = null;
+            crownAnchor = null;
+            if (handle != null) {
+                PhotonBridge.stopLoop(handle, true); // idempotent, teardown-order safe
+            }
+        }
+
         void releaseResources() {
             releaseWisps();
+            releaseCrownHalo();
             StormLoopSound sound = loopSound;
             if (sound != null) {
                 sound.forceStop();

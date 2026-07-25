@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -493,6 +494,10 @@ public final class WandPowers {
         sendQuasar(level, RISS_SCHLAG_MAW, target);
         WandTickService.schedule(level, 2, () -> sendQuasar(level, RISS_SCHLAG_MAW, target));
         int openTicks = (int) power.param("openTicks", 25.0F);
+        // PH-PLAYER (IDEAS-player #4): Photon implosion maw + Death sub-chain layered over
+        // the Quasar composition (a = openTicks, informational). Photon-less clients:
+        // registered row has no Quasar leg — everything above is already the baseline.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_RISS_SCHLAG, target, openTicks, 0.0F, FX_RANGE);
         if (openTicks >= 10) {
             // D11 pre-snap tell: the maw's lips shimmer (flickering ring, drifting inward)
             // and a thin rising chirp sounds ~6 ticks before the bite snaps shut. Pure
@@ -644,6 +649,10 @@ public final class WandPowers {
                 (int) (power.param("fireSeconds", 2.0F) * 20.0F));
         Vec3 feet = player.position();
         sendQuasar(level, GLUT_SPRUNG_CRATER, feet);
+        // PH-PLAYER (IDEAS-player #5): Photon eruption with physics-bouncing chunks +
+        // Collision/Death sub-emitters, ENTITY lane — the debris departs WITH the launch
+        // (the landing re-send in WandTickService.MagmaJump reuses the same cue, b = 1).
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_GLUT_SPRUNG, player, 0.0F, 0.0F, FX_RANGE);
         WandTickService.spawnScorchDecal(level, feet, 1.1F, 100);
         // D11 take-off heat: a faint shimmer column stands over the launch scorch for a
         // second — the ground remembers the blast-off (landing gets the full treatment
@@ -802,6 +811,11 @@ public final class WandPowers {
         level.sendParticles(ParticleTypes.END_ROD, target.x, target.y + 0.4D, target.z,
                 24, radius * 0.35D, 0.2D, radius * 0.35D, 0.02D);
         sendQuasar(level, STERN_SCHAUER_FIELD, target.add(0.0D, 0.6D, 0.0D));
+        // PH-PLAYER (IDEAS-player #2): one cue at cast carries the telegraph in `a` — the
+        // client spawns the real falling head + ribbon now and setDelay()s the HDR impact
+        // bloom so it lands exactly on the damage tick below. Quasar beats keep firing.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_STERN_KOMET, target, telegraph, 0.0F,
+                FX_RANGE + 32.0D);
         level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 1.0F, 0.5F);
         level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_RESONATE,

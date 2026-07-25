@@ -123,6 +123,12 @@ public final class RiftFx {
     private static final double PULSE_FALLOFF_BLOCKS = 64.0D;
     /** Re-try cadence for budget-refused loop emitters (once a second, never per-tick hammering). */
     private static final int EMITTER_RETRY_TICKS = 20;
+    /**
+     * Tear width the portal iris/loop {@code .fx} assets are authored for
+     * ({@code tools/photon/events_fx.py PORTAL_WIDTH} — both portal senders broadcast
+     * {@code FX_RIFT_OPEN a=5.0}); other widths get {@code setScale(width / this)}.
+     */
+    private static final float PORTAL_FX_AUTHORED_WIDTH = 5.0F;
 
     // --- v2 ambient corruption feed (GLITCH team → eclipse:rift_glitch RiftAmount/RiftCenter) ---
     /** Ambient corruption is full within this many blocks of a tear center (plus width/2). */
@@ -189,8 +195,22 @@ public final class RiftFx {
         }
         RIFTS.add(rift);
 
-        // D12: optional Photon glow layered over the tear (no-op without the photon mod).
-        PhotonBridge.spawn(PhotonBridge.EXPANSION_RIFT_GLOW, pos);
+        // D12 + PH-EVENTS (IDEAS-events #5a): optional Photon layer over the tear (no-op
+        // without the photon mod). Style branch sanctioned by INTEGRATION.md §3.5 law 4
+        // (openRift stays a non-registry seam): STRUCTURE tears keep the frozen glow;
+        // portal styles open with the palette-matched iris pop instead, executor-scaled
+        // from the authored width to this tear's width. allowMulti stays false: a resync
+        // re-open replays the iris only for the (late-joining) client that received it.
+        if (rift.portalLike) {
+            float irisScale = width / PORTAL_FX_AUTHORED_WIDTH;
+            PhotonBridge.spawn(style == STYLE_BACKROOMS
+                            ? PhotonBridge.PORTAL_IRIS_OPEN_BACKROOMS
+                            : PhotonBridge.PORTAL_IRIS_OPEN_XBOX,
+                    pos, PhotonBridge.SpawnOptions.DEFAULT
+                            .withScale(irisScale, irisScale, irisScale));
+        } else {
+            PhotonBridge.spawn(PhotonBridge.EXPANSION_RIFT_GLOW, pos);
+        }
 
         float falloff = distanceFalloff(minecraft, pos);
         TransitionFx.glitchPulse(Math.min(MAX_PULSE, (0.28F + width * 0.012F) * falloff), 14);
@@ -441,6 +461,14 @@ public final class RiftFx {
         /** Surge-only inhale loop parked at the mouth; removed when the inhale window ends. */
         @Nullable
         private ParticleEmitter inhaleEmitter;
+        /**
+         * PH-EVENTS (IDEAS-events #5b/#5c): the portal identity loop (xbox era pixels /
+         * backrooms fluorescent flicker + haze). Portal-scoped WINDOWED loop
+         * (INTEGRATION.md §4): the rift IS the window — kept alive on the shared retry
+         * cadence while the tear is open, stopped with a graceful fade when it closes.
+         */
+        @Nullable
+        private PhotonBridge.LoopHandle photonLoop;
         /** Ticks until the next loop-emitter (re)spawn attempt after a budget refusal. */
         private int emitterRetryCooldown;
 
@@ -534,10 +562,19 @@ public final class RiftFx {
             if (this.emitterRetryCooldown > 0) {
                 this.emitterRetryCooldown--;
             }
+            // PH-EVENTS: reducedFx flipped ON mid-session must retire a live identity loop
+            // (the bridge's available() gate only blocks NEW spawns, never running ones).
+            boolean photonLoopWanted = this.portalLike && !EclipseClientConfig.reducedFx();
+            if (!photonLoopWanted && this.photonLoop != null) {
+                PhotonBridge.stopLoop(this.photonLoop, false);
+                this.photonLoop = null;
+            }
             boolean sparkDead = this.sparkEmitter == null || isRemovedSafe(this.sparkEmitter);
             boolean motesDead = this.portalLike
                     && (this.motesEmitter == null || isRemovedSafe(this.motesEmitter));
-            if ((sparkDead || motesDead) && this.emitterRetryCooldown <= 0) {
+            boolean photonLoopDead = photonLoopWanted
+                    && (this.photonLoop == null || !this.photonLoop.alive());
+            if ((sparkDead || motesDead || photonLoopDead) && this.emitterRetryCooldown <= 0) {
                 this.emitterRetryCooldown = EMITTER_RETRY_TICKS;
                 if (sparkDead) {
                     this.sparkEmitter = QuasarSpawner.spawnManaged(RIFT_SPARK_EMITTER, this.pos,
@@ -546,6 +583,14 @@ public final class RiftFx {
                 if (motesDead) {
                     this.motesEmitter = QuasarSpawner.spawnManaged(PORTAL_MOTES_EMITTER, this.pos,
                             FxBudget.Channel.SEQUENCE);
+                }
+                if (photonLoopDead) {
+                    // Identity loop per style (IDEAS-events #5b/#5c) — LAYER garnish over
+                    // the Quasar motes above; refusals (photon absent, executor budget)
+                    // simply leave the handle null for the next once-a-second retry.
+                    this.photonLoop = PhotonBridge.spawnLoop(this.style == STYLE_BACKROOMS
+                            ? PhotonBridge.PORTAL_LOOP_BACKROOMS
+                            : PhotonBridge.PORTAL_LOOP_XBOX, this.pos);
                 }
             }
             ParticleEmitter spark = this.sparkEmitter;
@@ -595,6 +640,13 @@ public final class RiftFx {
             int period = reduced ? SURGE_BURST_PERIOD * 2 : SURGE_BURST_PERIOD;
             if (surgeAge % period == 0) {
                 QuasarSpawner.spawn(MATERIALIZE_EMITTER, this.pos, FxBudget.Channel.SEQUENCE);
+                // PH-RIFT (IDEAS-world #3): optional Photon muzzle flash layered on each
+                // launch burst (no-op without the photon mod; reducedFx already skipped
+                // inside available()). allowMulti because the flash's smoke tail (14-22t)
+                // keeps the previous runtime alive past the 6t cadence — the default
+                // same-BlockPos dedup would silently eat every following flash.
+                PhotonBridge.spawn(PhotonBridge.RIFT_PIECE_FLASH, this.pos,
+                        PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
             }
         }
 
@@ -644,6 +696,11 @@ public final class RiftFx {
             this.sparkEmitter = null;
             this.motesEmitter = null;
             this.inhaleEmitter = null;
+            // Graceful stop (destroy(false)): emitters cease, airborne haze/motes fade out
+            // over the tear's 30t collapse — never an instant pop. Dimension-change and
+            // logout hard kills stay the bridge sweep's job.
+            PhotonBridge.stopLoop(this.photonLoop, true);
+            this.photonLoop = null;
         }
 
         private static boolean isRemovedSafe(ParticleEmitter emitter) {

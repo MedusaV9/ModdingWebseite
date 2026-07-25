@@ -10,6 +10,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -62,6 +63,20 @@ public final class PhotonFxRegistry {
     }
 
     /**
+     * Custom Photon leg for rows whose enhancement is more than one plain
+     * {@code PhotonBridge.spawn(photonFx, pos)} — multi-part choreography (delays, extra
+     * anchors) or entity attachment. The a/b floats are the payload's cue parameters
+     * (semantics documented on the {@code FxCues.CUE_*} constant); {@code entity} is
+     * non-null only on the {@code S2CFxEntityEventPayload} lane AND when the client still
+     * tracks the entity — implementations MUST degrade to the position anchor otherwise.
+     */
+    @FunctionalInterface
+    public interface PhotonLeg {
+        /** @return {@code true} iff a Photon effect actually started (drives REPLACE rows). */
+        boolean play(ResourceLocation photonFx, Vec3 pos, @Nullable Entity entity, float a, float b);
+    }
+
+    /**
      * One registered cue row.
      *
      * @param logicalId     the wire id ({@code FxCues.CUE_*}) this row consumes
@@ -72,10 +87,18 @@ public final class PhotonFxRegistry {
      * @param channel       {@link FxBudget} channel charged for the QUASAR leg only
      * @param mode          {@link Mode#LAYER} or {@link Mode#REPLACE}
      * @param loop          {@code true} = looping asset, WINDOWED-only (never payload-fired)
+     * @param photonLeg     custom Photon leg, or {@code null} for the default single spawn
      */
     public record Row(ResourceLocation logicalId, ResourceLocation photonFx,
             @Nullable ResourceLocation quasarEmitter, FxBudget.Channel channel,
-            Mode mode, boolean loop) {}
+            Mode mode, boolean loop, @Nullable PhotonLeg photonLeg) {
+        /** Default-leg row: the Photon side is one {@code PhotonBridge.spawn(photonFx, pos)}. */
+        public Row(ResourceLocation logicalId, ResourceLocation photonFx,
+                @Nullable ResourceLocation quasarEmitter, FxBudget.Channel channel,
+                Mode mode, boolean loop) {
+            this(logicalId, photonFx, quasarEmitter, channel, mode, loop, null);
+        }
+    }
 
     private static final Map<ResourceLocation, Row> TABLE = new ConcurrentHashMap<>();
     /** Loop rows that were (incorrectly) payload-fired — warned once per session. */
@@ -125,6 +148,28 @@ public final class PhotonFxRegistry {
      * @return {@code true} iff the id was a registered cue (consumed).
      */
     public static boolean dispatch(ResourceLocation id, Vec3 pos) {
+        return dispatch(id, pos, 0.0F, 0.0F);
+    }
+
+    /** {@link #dispatch(ResourceLocation, Vec3)} with the payload's a/b cue parameters. */
+    public static boolean dispatch(ResourceLocation id, Vec3 pos, float a, float b) {
+        return dispatchInternal(id, pos, null, a, b);
+    }
+
+    /**
+     * {@code FxPayloads.handleFxEntityEvent} branch (client main thread): entity-anchored
+     * cue lane. {@code entity} may be {@code null} (target not client-tracked) — the row's
+     * Photon leg then anchors at {@code pos}, exactly like the position lane; the Quasar
+     * fallback leg is always position-anchored.
+     * @return {@code true} iff the id was a registered cue (consumed).
+     */
+    public static boolean dispatchEntity(ResourceLocation id, @Nullable Entity entity,
+            Vec3 pos, float a, float b) {
+        return dispatchInternal(id, pos, entity, a, b);
+    }
+
+    private static boolean dispatchInternal(ResourceLocation id, Vec3 pos,
+            @Nullable Entity entity, float a, float b) {
         Row row = TABLE.get(id);
         if (row == null) {
             return false;
@@ -137,7 +182,15 @@ public final class PhotonFxRegistry {
             }
             return true;
         }
-        boolean photonPlayed = PhotonBridge.spawn(row.photonFx(), pos); // full guard chain inside
+        boolean photonPlayed; // full guard chain inside the bridge on every branch
+        if (row.photonLeg() != null) {
+            photonPlayed = row.photonLeg().play(row.photonFx(), pos, entity, a, b);
+        } else if (entity != null) {
+            photonPlayed = PhotonBridge.spawnOnEntity(row.photonFx(), entity,
+                    PhotonBridge.AUTO_ROTATE_NONE, (Vec3) null);
+        } else {
+            photonPlayed = PhotonBridge.spawn(row.photonFx(), pos);
+        }
         if (row.quasarEmitter() != null
                 && (row.mode() == Mode.LAYER || !photonPlayed)) {
             QuasarSpawner.spawnOrFallback(row.quasarEmitter(), pos, row.channel());

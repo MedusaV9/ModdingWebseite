@@ -138,6 +138,33 @@ public final class BossIntroOverlay {
         return PRE_TICKS + name.length() * TICKS_PER_CHAR;
     }
 
+    /**
+     * PH-MOBS (IDEAS-mobs #1): expected ticks until the pending intro card locks its last
+     * character — the {@code setDelay} value that snaps the ground shockwave to the
+     * DANGER→TEXT lock flash. The per-client glitch salt scrambles only the noise, never
+     * the lock timing, so this is deterministic per client:
+     * <ul>
+     *   <li>card still queued (the cue payload arrives right behind the intro payload,
+     *       before the next tick can start it) → the full decode formula
+     *       {@code PRE_TICKS + nameLength × TICKS_PER_CHAR} for the NEWEST queued card;</li>
+     *   <li>card already running → its remaining decode ticks;</li>
+     *   <li>no card at all (queue overflow, arbiter contention) → 0, per the doc's
+     *       "no card live → spawn with delay 0" law.</li>
+     * </ul>
+     * Client main thread only (same owner as every other member here).
+     */
+    public static int pendingLockDelayTicks() {
+        S2CBossIntroPayload pending = QUEUE.peekLast();
+        if (pending != null) {
+            int nameLength = EclipseLang.tr(pending.nameKey()).getString().length();
+            return PRE_TICKS + nameLength * TICKS_PER_CHAR;
+        }
+        if (ticks >= 0) {
+            return Math.max(0, decodeEndTick() - ticks);
+        }
+        return 0;
+    }
+
     /** How many leading characters show as real text at the given card tick. */
     private static int lockedChars(int atTick) {
         return Mth.clamp((atTick - PRE_TICKS) / TICKS_PER_CHAR, 0, name.length());

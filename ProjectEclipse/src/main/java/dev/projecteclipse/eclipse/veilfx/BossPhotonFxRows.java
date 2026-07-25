@@ -1,0 +1,102 @@
+package dev.projecteclipse.eclipse.veilfx;
+
+import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+
+/**
+ * PH-BOSS-B's {@link PhotonFxRegistry} row registrar ({@link PhotonFxRows} reference
+ * pattern) — the Fog Tyrant + Rift Warden concepts from
+ * {@code docs/plans_v3/plans_v5/photon/IDEAS-boss.md} (#2, #6, #3, #7). All rows are
+ * one-shot {@code Mode.LAYER}: photon-less clients (and {@code reducedFx}) keep the
+ * shipped vanilla/Quasar beats bit-identical; the Photon leg is uncharged garnish behind
+ * {@code PhotonBridge}'s full guard chain and executor budget.
+ *
+ * <p>Assets are authored programmatically — {@code tools/photon/boss_b_fx.py} (fxlib) is
+ * the committed source for the five {@code assets/eclipse/fx/boss/*.fx} blobs and the
+ * three {@code beam_core/glitch_shard/noise_strip} particle textures.</p>
+ *
+ * <p>The warden eye-laser row is special-cased: its cue carries the warden's yaw in the
+ * payload's free {@code a} float, and the generic {@code dispatch(id, pos)} tail cannot
+ * apply a rotation — {@code FxPayloads.handleFxEvent} routes that cue to
+ * {@link #wardenEyeLaser} instead, which resolves the SAME registered row (single source
+ * of truth for legs/mode/budget) and adds the {@code SpawnOptions} yaw rotation. The row
+ * has no Quasar fallback by design (IDEAS-boss #3: no matching Quasar shape — the shipped
+ * WITCH-boil + resonate telegraph remains the base layer on every client).</p>
+ */
+@EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
+public final class BossPhotonFxRows {
+    private BossPhotonFxRows() {}
+
+    @SubscribeEvent
+    static void onClientSetup(FMLClientSetupEvent event) {
+        // IDEAS-boss #2 — C8 thunderclap death implosion (two-asset delivery: the debris
+        // emitter's FirstCollision sub-emitters reference eclipse:boss/fog_debris_puff).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_DEATH_IMPLOSION,
+                fx("boss/tyrant_death_implosion"),
+                fx("boss_slam"),
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+        // IDEAS-boss #6 — blind-squall HDR flash over the shipped CLOUD rings.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_SQUALL,
+                fx("boss/tyrant_blind_burst"),
+                fx("boss_slam"),
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+        // IDEAS-boss #3 — volley-telegraph eye laser (yaw-aimed via wardenEyeLaser; null
+        // Quasar leg per the doc row: the WITCH boil stays the photon-less base layer).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WARDEN_VOLLEY_TELEGRAPH,
+                fx("boss/warden_eye_laser"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+        // IDEAS-boss #7 — stagger glitch-shard orbit (REVERSE_SUB/MAX blend passes);
+        // border_glitch is the house glitch vocabulary fallback.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WARDEN_STAGGER,
+                fx("boss/warden_glitch_orbit"),
+                fx("border_glitch"),
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+    }
+
+    /**
+     * {@code FxPayloads.handleFxEvent} branch for {@code CUE_WARDEN_VOLLEY_TELEGRAPH}
+     * (client main thread): the beam asset fires along local −Z, so rotate the executor by
+     * {@code 180° − yaw} about Y to align −Z with the warden's facing (Minecraft forward
+     * for yaw φ is (−sin φ, 0, cos φ); JOML rotationY(θ) maps −Z to (−sin θ, 0, −cos θ) ⇒
+     * θ = 180° − φ). Mirrors {@link PhotonFxRegistry#dispatch} semantics over the
+     * registered row so mode/fallback/budget stay table-driven.
+     *
+     * @param pos    the warden's eye position (payload pos)
+     * @param yawDeg the warden's Y rotation in degrees (payload {@code a})
+     */
+    public static void wardenEyeLaser(Vec3 pos, float yawDeg) {
+        PhotonFxRegistry.Row row = PhotonFxRegistry.row(FxCues.CUE_WARDEN_VOLLEY_TELEGRAPH);
+        if (row == null) {
+            return;
+        }
+        boolean photonPlayed = PhotonBridge.spawn(row.photonFx(), pos,
+                PhotonBridge.SpawnOptions.DEFAULT.withRotationDeg(0.0D, 180.0D - yawDeg, 0.0D));
+        if (row.quasarEmitter() != null
+                && (row.mode() == PhotonFxRegistry.Mode.LAYER || !photonPlayed)) {
+            QuasarSpawner.spawnOrFallback(row.quasarEmitter(), pos, row.channel());
+        }
+    }
+
+    private static ResourceLocation fx(String path) {
+        return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, path);
+    }
+}

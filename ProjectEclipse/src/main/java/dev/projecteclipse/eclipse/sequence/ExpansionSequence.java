@@ -25,6 +25,7 @@ import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
@@ -50,6 +51,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -58,6 +62,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -200,6 +205,14 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** Representative footprint used by the FX-only replay's fake beat. */
     private static final int REPLAY_FOOTPRINT = 24;
 
+    // --- PH-RIFT (photon/IDEAS-events.md #4): growth-wavefront front rider ---
+    /** Tag on the front-rider display — strays from a crash are swept on entity load. */
+    public static final String GROWTH_RIDER_TAG = "eclipse_growth_rider";
+    /** Rider sits this far inside the live front radius (height lookup on written terrain). */
+    private static final int GROWTH_RIDER_INSET_BLOCKS = 4;
+    /** Attach-cue rebroadcast cadence while the rider lives (covers mid-sweep joiners). */
+    private static final int GROWTH_RIDER_ANNOUNCE_TICKS = 100;
+
     /** How far inside the OLD rim transported nether players are parked (safe, pre-existing terrain). */
     private static final int VIEWPOINT_INSET_BLOCKS = 24;
     /** Invuln-only TTL granted to transported nether players; refreshed while the run lives. */
@@ -218,6 +231,8 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final Map<DiscProfile, Run> RUNS = new HashMap<>();
     /** Simple tick scheduler for beat delays. Server thread only. */
     private static final List<Task> TASKS = new ArrayList<>();
+    /** Live front-rider UUIDs (stray-sweep doctrine, mirrors StructureFlightFx). */
+    private static final Set<UUID> LIVE_RIDERS = new HashSet<>();
 
     private ExpansionSequence() {}
 
@@ -245,6 +260,18 @@ public final class ExpansionSequence implements SequenceReplayable {
         // Statics must never leak into the next world a singleplayer client opens.
         RUNS.clear();
         TASKS.clear();
+        LIVE_RIDERS.clear();
+    }
+
+    /** OarAnimator sweep doctrine: a tagged front rider we did not spawn is a crash stray. */
+    @SubscribeEvent
+    static void onEntityJoin(EntityJoinLevelEvent event) {
+        Entity entity = event.getEntity();
+        if (!event.getLevel().isClientSide() && entity instanceof Display.BlockDisplay
+                && entity.getTags().contains(GROWTH_RIDER_TAG)
+                && !LIVE_RIDERS.contains(entity.getUUID())) {
+            entity.discard();
+        }
     }
 
     // ------------------------------------------------------------------ phase machine
@@ -275,6 +302,10 @@ public final class ExpansionSequence implements SequenceReplayable {
         final ArrayDeque<PendingSite> beatQueue = new ArrayDeque<>();
         @Nullable
         Beat activeBeat;
+
+        /** PH-RIFT: invisible front-rider display the wavefront ribbon anchors to (GROWTH). */
+        @Nullable
+        Display.BlockDisplay growthRider;
 
         /** Players transported out of the nether for this event (returned at END / next login). */
         final Set<UUID> netherVisitors = new HashSet<>();
@@ -473,6 +504,14 @@ public final class ExpansionSequence implements SequenceReplayable {
         }
         if (run.terrainComplete) {
             beginStructures(run); // tiny sweeps can finish before the cutscenes do
+            return;
+        }
+        // PH-RIFT (IDEAS-events #4): cinematic overworld sweeps get the traveling-wavefront
+        // front rider from here (control has returned; the flyover already showed the
+        // front). Nether reduced runs skip it — no cinematic. Quasar pulse curtains keep
+        // running underneath either way (LAYER law).
+        if (run.cinematic) {
+            spawnGrowthRider(run);
         }
     }
 
@@ -487,6 +526,9 @@ public final class ExpansionSequence implements SequenceReplayable {
             return; // no cinematic run: registry auto-delay + enqueue-time rift cover the visuals
         }
         run.terrainComplete = true;
+        // PH-RIFT: the wave has arrived — retire the front rider; the client's
+        // EntityEffectExecutor auto-destroys and the release cue fades the curtain.
+        discardGrowthRider(run);
         if (run.phase == Phase.GROWTH) {
             beginStructures(run);
         }
@@ -642,6 +684,10 @@ public final class ExpansionSequence implements SequenceReplayable {
         schedule(server, SLAM_RING_2_DELAY,
                 () -> slamDustRing(level, pos, footprint * SLAM_RING_2_RADIUS));
         FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, pos, 0.5F, 30.0F, -1.0D);
+        // PH-EVENTS (IDEAS-events #3): the Photon dust-mushroom cue, same tick as the
+        // slam (a = footprint → client executor scale). Photon-less clients no-op; the
+        // ≥50t BEAT_SPACING_TICKS cadence keeps this sequence-grade, never high-frequency.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_STRUCTURE_SLAM, pos, footprint, 0.0F, -1.0D);
         level.playSound(null, pos.x, pos.y, pos.z, EclipseSounds.EVENT_RIFT_SLAM.get(),
                 SoundSource.BLOCKS, 1.2F, 0.94F + level.random.nextFloat() * 0.08F);
         PacketDistributor.sendToPlayersInDimension(level, S2CShakePayload.shake(0.4F, 18));
@@ -675,6 +721,7 @@ public final class ExpansionSequence implements SequenceReplayable {
         run.phase = Phase.END;
         run.ended = true;
         RUNS.remove(run.profile, run);
+        discardGrowthRider(run); // safety net: watchdog END can arrive before terrain-complete
 
         captionDimension(run.level, CAPTION_DONE, 80);
         // IDEA-14 §3: fresh-land afterglow — one-shot band-radii cue (a = innerR,
@@ -702,6 +749,7 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** Fast teardown of a superseded run: rift closed, visitors carried or returned by callers. */
     private static void abortRun(Run run, String reason) {
         run.ended = true;
+        discardGrowthRider(run);
         if (run.activeBeat != null) {
             FxPayloads.sendFxEvent(run.level, FxPayloads.FX_RIFT_CLOSE, run.activeBeat.riftPos,
                     0.0F, 0.0F, -1.0D);
@@ -709,6 +757,91 @@ public final class ExpansionSequence implements SequenceReplayable {
         }
         run.beatQueue.clear(); // the registry's auto-delay still places the sites
         EclipseMod.LOGGER.info("ExpansionSequence: {} run aborted ({})", run.profile.name(), reason);
+    }
+
+    // --------------------------------------------------- growth front rider (PH-RIFT)
+
+    /**
+     * Spawns the invisible front-rider display (IDEAS-events #4 entity-anchor verdict): a
+     * {@code BLOCK_DISPLAY} with the default AIR state renders nothing (the
+     * {@code StructureFlightFx}/XboxPortal invisible-marker pattern — a plain
+     * {@code minecraft:marker} is server-only and never syncs to clients, so it cannot
+     * anchor a client executor). The rider is announced via {@link FxCues#CUE_GROWTH_RIDER}
+     * ({@code a} = entity id, {@code b} = 1); Photon clients attach ONE looping
+     * {@code eclipse:growth_front_ribbon} {@code EntityEffectExecutor} to it
+     * ({@link ClientHooks#handleGrowthRider}). Photon-less/reduced clients ignore the cue —
+     * the Quasar pulse curtains are the unchanged fallback.
+     */
+    private static void spawnGrowthRider(Run run) {
+        if (run.growthRider != null || run.ended) {
+            return;
+        }
+        Vec3 front = growthRiderPos(run);
+        Display.BlockDisplay rider = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, run.level);
+        rider.moveTo(front.x, front.y, front.z, 0.0F, 0.0F);
+        rider.addTag(GROWTH_RIDER_TAG);
+        // No teleport-lerp needed (Display#setPosRotInterpolationDuration is private in
+        // 1.21.1): the AIR display renders nothing, only the entity position anchors the
+        // executor, and the ribbon's inertia/damping physics smooths per-tick anchor steps.
+        LIVE_RIDERS.add(rider.getUUID());
+        run.level.addFreshEntity(rider);
+        run.growthRider = rider;
+        FxPayloads.sendFxEvent(run.level, FxCues.CUE_GROWTH_RIDER, front, rider.getId(), 1.0F, -1.0D);
+        EclipseMod.LOGGER.info("ExpansionSequence: growth front rider {} spawned at {}",
+                rider.getId(), front);
+    }
+
+    /**
+     * Repositions the rider onto the live wavefront every tick — the same math family as
+     * {@link #resolveGrowthFront} (front point at the run's watcher-average angle, snapped
+     * to terrain) WITHOUT the flyover camera lead: the ribbon must ride the real front.
+     * The attach cue is re-broadcast on a slow cadence for mid-sweep joiners (idempotent
+     * client-side).
+     */
+    private static void tickGrowthRider(Run run, long now) {
+        Display.BlockDisplay rider = run.growthRider;
+        if (rider == null) {
+            return;
+        }
+        if (run.ended || rider.isRemoved()) {
+            discardGrowthRider(run);
+            return;
+        }
+        Vec3 front = growthRiderPos(run);
+        rider.moveTo(front.x, front.y, front.z, 0.0F, 0.0F);
+        if (now % GROWTH_RIDER_ANNOUNCE_TICKS == 0) {
+            FxPayloads.sendFxEvent(run.level, FxCues.CUE_GROWTH_RIDER, front, rider.getId(),
+                    1.0F, -1.0D);
+        }
+    }
+
+    /**
+     * Discards the rider and broadcasts the release cue ({@code b} = 0) so clients fade the
+     * curtain gracefully (a crash-despawned rider is equally covered by the client bridge's
+     * dead-entity sweep — the cue only upgrades the kill to a fade). Idempotent.
+     */
+    private static void discardGrowthRider(Run run) {
+        Display.BlockDisplay rider = run.growthRider;
+        if (rider == null) {
+            return;
+        }
+        run.growthRider = null;
+        LIVE_RIDERS.remove(rider.getUUID());
+        FxPayloads.sendFxEvent(run.level, FxCues.CUE_GROWTH_RIDER, rider.position(),
+                rider.getId(), 0.0F, -1.0D);
+        if (!rider.isRemoved()) {
+            rider.discard();
+        }
+    }
+
+    /** Current front anchor for the rider: live sweep radius, no lead, slightly inside. */
+    private static Vec3 growthRiderPos(Run run) {
+        double progress = RingGrowthService.progressFraction(run.profile);
+        int fromRadius = StageRadii.radius(run.profile, run.fromStage);
+        int toRadius = StageRadii.radius(run.profile, run.toStage);
+        double waveR = Mth.lerp(progress, fromRadius, toRadius);
+        int anchorR = Math.max(16, (int) waveR - GROWTH_RIDER_INSET_BLOCKS);
+        return edgeAnchorFor(run.level, angleToPos(run.frontAngle), anchorR);
     }
 
     // ------------------------------------------------------------------ nether players (R12)
@@ -827,7 +960,14 @@ public final class ExpansionSequence implements SequenceReplayable {
                 }
             }
         }
-        if (RUNS.isEmpty() || now % NETHER_INVULN_REFRESH_TICKS != 0) {
+        if (RUNS.isEmpty()) {
+            return;
+        }
+        // PH-RIFT: ride the front rider along the live wavefront every tick (GROWTH only).
+        for (Run run : List.copyOf(RUNS.values())) {
+            tickGrowthRider(run, now);
+        }
+        if (now % NETHER_INVULN_REFRESH_TICKS != 0) {
             return;
         }
         for (Run run : List.copyOf(RUNS.values())) {
@@ -1032,6 +1172,10 @@ public final class ExpansionSequence implements SequenceReplayable {
                         PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(STRUCTURE_SLAM_DUST, ground));
                         PacketDistributor.sendToPlayer(player,
                                 new S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE, ground, 0.5F, 30.0F));
+                        // PH-EVENTS replay parity (R12): the live slam pairs the shockwave
+                        // with the mushroom cue at the site footprint — replay mirrors it.
+                        PacketDistributor.sendToPlayer(player, new S2CFxEventPayload(
+                                FxCues.CUE_STRUCTURE_SLAM, ground, REPLAY_FOOTPRINT, 0.0F));
                         PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.4F, 18));
                         player.playNotifySound(EclipseSounds.EVENT_RIFT_SLAM.get(), SoundSource.BLOCKS, 1.2F, 1.0F);
                     });
@@ -1192,6 +1336,18 @@ public final class ExpansionSequence implements SequenceReplayable {
         private static final ResourceLocation MAP_EXPAND_MATERIALIZE = emitter("map_expand_materialize");
         private static int newLandMoteCountdown;
 
+        // --- PH-RIFT (IDEAS-events #4): growth-wavefront front-rider ribbon ---
+        /** Photon curtain asset attached to the rider ({@code assets/eclipse/fx/…​.fx}). */
+        private static final ResourceLocation GROWTH_FRONT_RIBBON = emitter("growth_front_ribbon");
+        /** (Re)attach retry cadence — covers entity-tracking lag, budget refusals, reducedFx. */
+        private static final int RIDER_RETRY_TICKS = 20;
+        /** Network id of the announced front rider, or {@code -1} when none. */
+        private static int growthRiderId = -1;
+        /** Live ribbon loop on the rider (bridge sweeps it on entity death/level change). */
+        @Nullable
+        private static dev.projecteclipse.eclipse.veilfx.PhotonBridge.LoopHandle riderRibbon;
+        private static int riderRetryCountdown;
+
         private ClientHooks() {}
 
         @SubscribeEvent
@@ -1267,12 +1423,80 @@ public final class ExpansionSequence implements SequenceReplayable {
         }
 
         /**
+         * PH-RIFT entry point of the {@link dev.projecteclipse.eclipse.network.fx.FxCues
+         * #CUE_GROWTH_RIDER} cue ({@code a} = rider entity id, {@code b} = 1 attach / 0
+         * release), dispatched by {@code FxPayloads.handleFxEvent}. Attach is
+         * announce-only: the looping {@code eclipse:growth_front_ribbon} executor is
+         * (re)attached from {@link #onClientTick} once the rider entity is actually
+         * tracked client-side — it may arrive later than the cue or drop out of tracking
+         * range mid-sweep. Release fades the curtain gracefully (the wall dissolves as
+         * the {@code expansion.done} caption lands); a crash-despawned rider is equally
+         * covered by {@code PhotonBridge}'s dead-entity sweep. WINDOWED-loop law: the
+         * window is the rider's announced lifetime, owned here.
+         */
+        public static void handleGrowthRider(int entityId, boolean attach) {
+            if (attach) {
+                if (growthRiderId != entityId) {
+                    releaseRiderRibbon(false); // superseded run announced a NEW rider
+                    growthRiderId = entityId;
+                }
+                return;
+            }
+            if (entityId < 0 || growthRiderId == entityId) {
+                releaseRiderRibbon(true);
+            }
+        }
+
+        /**
+         * Keeps ONE ribbon executor attached to the announced rider. Cheap while healthy
+         * (one alive() check); all failure paths (rider not yet tracked, Photon absent,
+         * {@code reducedFx}, executor-budget refusal) retry on the
+         * {@value #RIDER_RETRY_TICKS}-tick cadence — never per-tick hammering.
+         */
+        private static void tickRiderRibbon() {
+            if (growthRiderId < 0) {
+                return;
+            }
+            net.minecraft.client.multiplayer.ClientLevel level =
+                    net.minecraft.client.Minecraft.getInstance().level;
+            if (level == null) {
+                releaseRiderRibbon(false);
+                return;
+            }
+            if (riderRibbon != null) {
+                if (riderRibbon.alive()) {
+                    return;
+                }
+                riderRibbon = null; // pruned: rider untracked/dead, or the level changed
+            }
+            if (--riderRetryCountdown > 0) {
+                return;
+            }
+            riderRetryCountdown = RIDER_RETRY_TICKS;
+            net.minecraft.world.entity.Entity rider = level.getEntity(growthRiderId);
+            if (rider != null && rider.isAlive()) {
+                riderRibbon = dev.projecteclipse.eclipse.veilfx.PhotonBridge.spawnLoop(
+                        GROWTH_FRONT_RIBBON, rider,
+                        dev.projecteclipse.eclipse.veilfx.PhotonBridge.AUTO_ROTATE_NONE);
+            }
+        }
+
+        /** Closes the rider window: stops the ribbon (graceful = fade) and forgets the id. */
+        private static void releaseRiderRibbon(boolean graceful) {
+            dev.projecteclipse.eclipse.veilfx.PhotonBridge.stopLoop(riderRibbon, graceful);
+            riderRibbon = null;
+            growthRiderId = -1;
+            riderRetryCountdown = 0;
+        }
+
+        /**
          * IDEA-14 §3: ambient upwelling motes on the fresh annulus — one AMBIENT-channel
          * {@code map_expand_materialize} spawn per ~2 s at a random surface point near the
          * player, probability × glow so the afterglow visibly thins over the ~10 minutes.
          */
         @SubscribeEvent
         static void onClientTick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+            tickRiderRibbon(); // PH-RIFT: not gated on the glow — the sweep precedes it
             float glow = dev.projecteclipse.eclipse.veilfx.EclipseFxState.newLandGlow();
             if (glow <= 0.0F) {
                 return;
@@ -1312,6 +1536,12 @@ public final class ExpansionSequence implements SequenceReplayable {
         static void onClone(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.Clone event) {
             dev.projecteclipse.eclipse.veilfx.EclipseFxState.clearNewLandBand();
             frontCrossedPlayer = false;
+        }
+
+        /** Logout reset: the bridge force-destroys executors; drop our handle + rider id. */
+        @SubscribeEvent
+        static void onLoggingOut(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+            releaseRiderRibbon(false);
         }
 
         /**

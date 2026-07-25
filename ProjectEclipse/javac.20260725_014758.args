@@ -1,0 +1,14 @@
+@/tmp/javac_phsocial_opts.args
+-sourcepath
+src/main/java
+-d
+/tmp/ph_social_out
+src/main/java/dev/projecteclipse/eclipse/network/fx/FxCues.java
+src/main/java/dev/projecteclipse/eclipse/network/fx/FxPayloads.java
+src/main/java/dev/projecteclipse/eclipse/veilfx/PlayerFxPhotonRows.java
+src/main/java/dev/projecteclipse/eclipse/veilfx/GlideTrailFx.java
+src/main/java/dev/projecteclipse/eclipse/client/skills/RebirthAuraFxClient.java
+src/main/java/dev/projecteclipse/eclipse/client/GhostWispFxClient.java
+src/main/java/dev/projecteclipse/eclipse/client/contracts/HunterMarkFxClient.java
+src/main/java/dev/projecteclipse/eclipse/client/contracts/ContractRevealOverlay.java
+src/main/java/dev/projecteclipse/eclipse/lives/HeartTheftService.java

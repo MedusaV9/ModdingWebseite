@@ -29,6 +29,7 @@ import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.credits.CreditsPayloads;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
@@ -628,6 +629,11 @@ public final class CreditsSequence implements SequenceReplayable {
         double z = (index % 2 == 0 ? 1 : -1) * (8.0D + hash01(index, 22) * 26.0D);
         Vec3 impact = new Vec3(x, BEACH_Y + 1, z);
         FxPayloads.sendFxEvent(epilogue, FxPayloads.FX_LIGHTNING_STRIKE, impact, intensity, 0.0F, -1.0D);
+        // PH-EVENTS (IDEAS-events #2): the per-strike Photon beam cue — same impact, same
+        // intensity in a (client maps it to executor scale). Its own cue by design, never
+        // piggybacked on FX_LIGHTNING_STRIKE (that id also fires at 15t cadence during the
+        // intro's LIGHTNING hold — frequency law); photon-less clients no-op on it.
+        FxPayloads.sendFxEvent(epilogue, FxCues.CUE_CREDITS_STRIKE, impact, intensity, 0.0F, -1.0D);
         LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(epilogue);
         if (bolt != null) {
             bolt.moveTo(impact);
@@ -668,6 +674,11 @@ public final class CreditsSequence implements SequenceReplayable {
         if (epilogue != null) {
             Vec3 center = runnersCenter(epilogue);
             FxPayloads.sendFxEvent(epilogue, FxPayloads.FX_SHOCKWAVE, center, 1.0F, 50.0F, -1.0D);
+            // PH-EVENTS (IDEAS-events #6): DOOMSDAY confetti mesh shards over the runners.
+            // Its own cue — NOT keyed off FX_SHOCKWAVE (the (1.0, 50) giant signature is
+            // claimed by the intro burst ring's client seam; two Photon layers on one
+            // generic id is the if-chain smell the registry exists to kill).
+            FxPayloads.sendFxEvent(epilogue, FxCues.CUE_CREDITS_BURST, center, 0.0F, 0.0F, -1.0D);
         }
         PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
     }
@@ -1347,6 +1358,10 @@ public final class CreditsSequence implements SequenceReplayable {
                                     (index % 2 == 0 ? 1 : -1) * (8.0D + hash01(index, 22) * 26.0D));
                             PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
                                     .S2CFxEventPayload(FxPayloads.FX_LIGHTNING_STRIKE, impact, intensity, 0.0F));
+                            // PH-EVENTS replay parity (R12): the live ladder pairs every
+                            // strike with its Photon beam cue — so does the replay.
+                            PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                                    .S2CFxEventPayload(FxCues.CUE_CREDITS_STRIKE, impact, intensity, 0.0F));
                         }
                     });
                     schedule(server, i * LIGHTNING_INTERVAL + 1 + depth / 17, () -> {
@@ -1372,6 +1387,10 @@ public final class CreditsSequence implements SequenceReplayable {
             case "CORRECTION" -> {
                 for (ServerPlayer player : watchers) {
                     PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
+                    // PH-EVENTS replay parity (R12): the live burst pairs this flash with
+                    // the confetti cue (beatBurst) — replay anchors it at the watcher.
+                    PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                            .S2CFxEventPayload(FxCues.CUE_CREDITS_BURST, player.position(), 0.0F, 0.0F));
                 }
                 // Same 500 ms deadpan stillness between flash-out and card as the live
                 // beat (flash dies at 16t here since both fire together; card at 26t).

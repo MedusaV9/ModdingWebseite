@@ -93,6 +93,14 @@ public class ChargedLungeGoal extends Goal {
         this.hound.triggerAction(StormHoundEntity.ANIM_CHARGE_WINDUP);
         this.hound.level().playSound(null, this.hound.blockPosition(),
                 SoundEvents.WARDEN_SONIC_CHARGE, SoundSource.HOSTILE, 0.6F, 1.9F);
+        if (this.hound.level() instanceof ServerLevel serverLevel) {
+            // PH-MOBS (IDEAS-mobs #4): 20t collapsing-spiral telegraph over the ENTITY
+            // cue lane — the Photon leg attaches to the rooted hound; the glow-spine
+            // scale-up + sonic-charge sound stay the shipped tell on every client.
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEntityEvent(serverLevel,
+                    dev.projecteclipse.eclipse.network.fx.FxCues.CUE_HOUND_WINDUP,
+                    this.hound, 0.0F, 0.0F, 48.0D);
+        }
         EclipseMod.LOGGER.info("Storm Hound {} winds up a charged lunge at {}",
                 this.hound.getId(), this.hound.blockPosition());
     }
@@ -141,6 +149,14 @@ public class ChargedLungeGoal extends Goal {
             this.hound.triggerAction(StormHoundEntity.ANIM_LUNGE);
             this.hound.level().playSound(null, this.hound.blockPosition(),
                     SoundEvents.TRIDENT_RIPTIDE_1.value(), SoundSource.HOSTILE, 1.0F, 1.3F);
+            if (this.hound.level() instanceof ServerLevel serverLevel) {
+                // PH-MOBS (IDEAS-mobs #4): dash fog ribbon on the same entity-cue lane,
+                // attached FORWARD client-side so the ara ribbon lays along this locked
+                // dash line (entity executors auto-clean if the hound dies mid-dash).
+                dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEntityEvent(serverLevel,
+                        dev.projecteclipse.eclipse.network.fx.FxCues.CUE_HOUND_DASH,
+                        this.hound, 0.0F, 0.0F, 48.0D);
+            }
         }
     }
 

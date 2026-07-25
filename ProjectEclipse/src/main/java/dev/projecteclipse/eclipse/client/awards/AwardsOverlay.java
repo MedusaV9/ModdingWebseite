@@ -20,6 +20,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.network.S2CAwardRevealPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -417,6 +418,11 @@ public final class AwardsOverlay {
         }
         Vec3 top = player.position().add(0.0D, 2.4D, 0.0D);
         QuasarSpawner.spawnOrFallback(PODIUM_BURST_EMITTER, top);
+        // PH-MOBS (IDEAS-mobs #3): Photon star shower LAYERED over the Quasar flourish —
+        // model stars rain from +5 (baked into the asset), bounce off the real floor and
+        // glint per collision. Full guard chain inside the bridge: photon-less clients
+        // keep the exact unlock_burst + firework-ring moment shipped today.
+        PhotonBridge.spawn(PhotonBridge.AWARD_STAR_SHOWER, player.position());
         for (int i = 0; i < 8; i++) {
             double angle = Math.PI * 2.0D * i / 8.0D;
             double dx = Math.cos(angle);

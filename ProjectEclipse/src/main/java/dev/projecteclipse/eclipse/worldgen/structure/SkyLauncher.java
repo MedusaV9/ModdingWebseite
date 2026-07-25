@@ -17,6 +17,8 @@ import org.joml.Vector3f;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -276,6 +278,11 @@ public final class SkyLauncher {
                 new Charge(pad, player.server.getTickCount() + CHARGE_TICKS));
         player.serverLevel().playSound(null, pad, SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.BLOCKS, 1.0F, 0.6F);
+        // PH-WORLD (IDEAS-world #5): Photon charge-helix cue — the client asset is
+        // CHARGE_TICKS long, so a walk-off cancel needs no stop wiring (the launch cue
+        // simply never follows). The END_ROD spiral in tickCharges stays the baseline.
+        FxPayloads.sendFxEvent(player.serverLevel(), FxCues.CUE_SKY_LAUNCH_CHARGE,
+                Vec3.atCenterOf(pad), 0.0F, 0.0F, 64.0D);
         player.displayClientMessage(ServerLang.tr(player, "eclipse.sky_launcher.charging"), true);
     }
 
@@ -365,6 +372,10 @@ public final class SkyLauncher {
                 24, 0.6D, 0.2D, 0.6D, 0.12D);
         level.sendParticles(ParticleTypes.END_ROD, player.getX(), player.getY(), player.getZ(),
                 16, 0.3D, 0.4D, 0.3D, 0.2D);
+        // PH-WORLD (IDEAS-world #5): Photon contrail cue on the ENTITY lane — the client
+        // attaches the ara ribbon to the launched player (entity death auto-cleans); the
+        // CLOUD/END_ROD bursts above stay the photon-less baseline (Mode.LAYER).
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_SKY_LAUNCH, player, 0.0F, 0.0F, 128.0D);
         PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.8F, 18));
         player.displayClientMessage(ServerLang.tr(player, "eclipse.sky_launcher.launched"), true);
         EclipseMod.LOGGER.info("SkyLauncher: launched {} toward ({}, {}) (vy={}, vh={})",

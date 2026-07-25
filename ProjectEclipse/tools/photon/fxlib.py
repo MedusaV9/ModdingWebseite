@@ -912,7 +912,8 @@ class BeamEmitter(_FxObject, _RendererMixin):
         self._config = {
             "duration": I(int(duration)), "looping": _bool(looping),
             "startDelay": I(int(start_delay)),
-            "end": L([F(float(v)) for v in end]), "width": _nf(float(width)),
+            # width is NF per FX_FORMAT.md §4.1 — accept curves etc., not just scalars.
+            "end": L([F(float(v)) for v in end]), "width": _nf(width if _is_nf(width) else float(width)),
             "emitRate": _nf(emit_rate), "raycast": raycast}
         if raycast_block_mode is not None:
             self._config["raycastBlockMode"] = raycast_block_mode  # ClipContext.Block, e.g. "VISUAL"

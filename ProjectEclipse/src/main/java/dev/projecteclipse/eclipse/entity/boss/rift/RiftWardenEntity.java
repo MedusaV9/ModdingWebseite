@@ -18,6 +18,8 @@ import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -522,6 +524,12 @@ public class RiftWardenEntity extends EclipseGeoMonster {
                     SoundSource.HOSTILE, 1.0F, 0.7F);
             level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE,
                     SoundSource.HOSTILE, 1.2F, 0.6F);
+            // PH-BOSS-B (IDEAS-boss #3): raycast eye-laser telegraph from the void-half
+            // eye — a = current yaw so the client aims the beam along the facing (the
+            // warden is rooted and facing its mark for the whole 20t raise). Photon-less
+            // clients keep the WITCH boil + resonate tell unchanged.
+            FxPayloads.sendFxEvent(level, FxCues.CUE_WARDEN_VOLLEY_TELEGRAPH,
+                    this.getEyePosition(), this.getYRot(), 0.0F, 64.0D);
             return;
         }
         // Rift half boils while the raise holds.
@@ -581,6 +589,12 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         this.getNavigation().stop();
         level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_CLUSTER_BREAK,
                 SoundSource.HOSTILE, 1.2F, 0.5F);
+        // PH-BOSS-B (IDEAS-boss #7): glitch-shard orbit for exactly STAGGER_TICKS (40t
+        // asset duration) — block-anchored is correct, the warden is rooted for the whole
+        // weakpoint window. LAYER row over the border_glitch Quasar fallback; the shipped
+        // END_ROD core sparks in tickStagger stay under both.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WARDEN_STAGGER,
+                this.position(), 0.0F, 0.0F, 64.0D);
         EclipseMod.LOGGER.info("Rift Warden weakpoint OPEN for {}t (x{} damage taken)",
                 STAGGER_TICKS, STAGGER_DAMAGE_FACTOR);
     }

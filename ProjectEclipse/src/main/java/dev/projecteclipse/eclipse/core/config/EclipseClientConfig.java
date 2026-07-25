@@ -81,6 +81,10 @@ public final class EclipseClientConfig {
                     "expansion rift glow) when the 'photon' mod is installed. Ignored (no-op) when",
                     "Photon is absent; also disabled by reducedFx.")
             .define("photonFx", true);
+    public static final ModConfigSpec.BooleanValue WAND_AURAS = BUILDER
+            .comment("Show the looping per-path wand hand auras on players holding a pathed wand",
+                    "(requires the 'photon' mod and photonFx; also disabled by reducedFx).")
+            .define("wandAuras", true);
     public static final ModConfigSpec.BooleanValue CINEMATIC_VIEW_DISTANCE = BUILDER
             .comment("Allow Eclipse cinematics to temporarily raise your render distance for the",
                     "duration of a cutscene (restored automatically afterwards, even after a crash).")
@@ -184,6 +188,11 @@ public final class EclipseClientConfig {
     /** D12: optional Photon enhancement layer toggle (only meaningful when 'photon' is loaded). */
     public static boolean photonFx() {
         return get(PHOTON_FX, true);
+    }
+
+    /** PH-PLAYER (IDEAS-player #6): per-path wand idle hand-aura loops (Photon-only cosmetic). */
+    public static boolean wandAuras() {
+        return get(WAND_AURAS, true);
     }
 
     /** P2 R12: player toggle for the temporary cutscene render-distance bump (default ON). */

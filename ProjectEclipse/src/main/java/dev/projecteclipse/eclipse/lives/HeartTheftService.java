@@ -28,6 +28,8 @@ import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.skills.XpGates;
@@ -347,6 +349,13 @@ public final class HeartTheftService {
                     victim.getX(), victim.getY(), victim.getZ(), DRIFT_FX_RANGE,
                     new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
                             victim.position().add(0.0D, 1.2D, 0.0D)));
+            // PH-SOCIAL (IDEAS-player #3): the soul-arc cue — Photon clients layer the
+            // corpse→killer transfer over the drift above (which stays the photon-less
+            // baseline). Server stays photon-blind: pos = corpse feet, a/b = killer/victim
+            // entity ids (session-scoped ints, float-safe), resolved client-side by
+            // PlayerFxPhotonRows.heartTheftArc.
+            FxPayloads.sendFxEvent(level, FxCues.CUE_HEART_THEFT, victim.position(),
+                    killer.getId(), victim.getId(), DRIFT_FX_RANGE);
         }
         EclipseMod.LOGGER.info("Heart theft: {} stole a Leben from {} ({} -> {} Leben)",
                 killerName, victimName, LivesApi.get(victim), LivesApi.get(killer));

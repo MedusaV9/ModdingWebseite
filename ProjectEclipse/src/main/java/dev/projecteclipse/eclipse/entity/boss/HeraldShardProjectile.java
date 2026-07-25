@@ -55,6 +55,8 @@ public class HeraldShardProjectile extends Projectile implements ItemSupplier {
     @Nullable
     private UUID targetId;
     private int life;
+    /** Client only — set once the Photon ribbon rides this shard (PH-BOSS-A, IDEAS-boss #5). */
+    private boolean clientTrailStarted;
 
     public HeraldShardProjectile(EntityType<? extends HeraldShardProjectile> entityType, Level level) {
         super(entityType, level);
@@ -129,6 +131,15 @@ public class HeraldShardProjectile extends Projectile implements ItemSupplier {
         this.setPos(this.getX() + velocity.x, this.getY() + velocity.y, this.getZ() + velocity.z);
         ProjectileUtil.rotateTowardsMovement(this, 0.5F);
         if (this.level().isClientSide) {
+            // PH-BOSS-A (IDEAS-boss #5): entity-bound ara ribbon (client-only seam, no wire
+            // change; Photon auto-destroys it at shatter()). The END_ROD breadcrumb below
+            // stays the photon-less baseline — LAYER semantics in code. Client class
+            // resolved lazily (fully-qualified, repo pattern) so it never loads on a
+            // dedicated server; retries each tick until started (dedup makes repeats free).
+            if (!this.clientTrailStarted) {
+                this.clientTrailStarted = dev.projecteclipse.eclipse.veilfx.HeraldFerrymanFxRows
+                        .heraldShardTrail(this);
+            }
             this.level().addParticle(ParticleTypes.END_ROD,
                     this.getX() - velocity.x, this.getY() - velocity.y + 0.15D, this.getZ() - velocity.z,
                     0.0D, 0.0D, 0.0D);

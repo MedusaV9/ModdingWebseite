@@ -19,7 +19,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -55,6 +57,18 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * range), volume-tied to the beam's fade so it never pops in or out. Beams clear on
  * disconnect and whenever the local player leaves the overworld — the server re-syncs the
  * active set on every overworld (re-)entry.</p>
+ *
+ * <p><b>Photon layer (PH-WORLD, IDEAS-world.md #4):</b> a fresh drop also queues a crate
+ * scan of the drop column (the crate spawns at surface+60 in that exact column,
+ * {@code SupplyBeacon.drop}) and attaches the {@code eclipse:supply_drop_contrail} ember
+ * ribbon to the {@link FallingBlockEntity} via {@link PhotonBridge#spawnOnEntity} — the
+ * scan retries for up to {@value #CONTRAIL_SCAN_TICKS} ticks because the marker payload
+ * can beat the entity's client tracking. Photon's {@code EntityEffectExecutor}
+ * auto-destroys the runtime when the crate dies on landing (graceful — the ribbon tail
+ * fades out in the air above the barrel), and the asset's own FirstCollision sub-emitter
+ * stamps the {@code eclipse:supply_landing_dust} ring where the embers strike ground —
+ * no landing packet exists and none is needed. Photon absent/{@code reducedFx} ⇒ the
+ * queue is never filled and the shipped Quasar burst above stays the whole show.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class SupplyBeamClient {
@@ -75,9 +89,17 @@ public final class SupplyBeamClient {
     private static final float LIGHT_BRIGHTNESS_PULSE = 0.15F;
     /** Fallback fade length when a remove arrives with {@code fadeTicks <= 0} (snap). */
     private static final int SNAP_TICKS = 1;
+    /** Crate-scan column half-extent (XZ) around the marker pos. */
+    private static final double CONTRAIL_SCAN_XZ = 2.0D;
+    /** Crate-scan column height — the crate spawns at surface+60 ({@code SupplyBeacon.drop}). */
+    private static final double CONTRAIL_SCAN_UP = 80.0D;
+    /** How long the crate scan keeps retrying before giving up (ticks). */
+    private static final int CONTRAIL_SCAN_TICKS = 40;
 
     /** Live beams (a handful at most — linear scans beat boxing a map key). */
     private static final List<Beam> BEAMS = new ArrayList<>(4);
+    /** Fresh-drop columns still waiting for their crate entity (Photon contrail seam). */
+    private static final List<PendingContrail> PENDING_CONTRAILS = new ArrayList<>(2);
     /** Latched after the Veil light renderer throws once — beams simply go light-less. */
     private static boolean lightsBroken;
 
@@ -119,6 +141,11 @@ public final class SupplyBeamClient {
             Vec3 base = Vec3.atCenterOf(pos.above());
             QuasarSpawner.spawn(ALTAR_BEAM_EMITTER, base, FxBudget.Channel.BURST);
             QuasarSpawner.spawn(SUPPLY_SPARK_EMITTER, base, FxBudget.Channel.BURST);
+            if (PhotonBridge.available()) {
+                // Photon layer: queue the crate scan — the FallingBlockEntity may not be
+                // client-tracked yet when the marker payload lands (tickPendingContrails).
+                PENDING_CONTRAILS.add(new PendingContrail(pos));
+            }
         }
     }
 
@@ -144,7 +171,7 @@ public final class SupplyBeamClient {
     static void onClientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;
-        if (BEAMS.isEmpty()) {
+        if (BEAMS.isEmpty() && PENDING_CONTRAILS.isEmpty()) {
             return;
         }
         // Beams are an overworld feature; the server re-syncs on every overworld (re-)entry,
@@ -153,6 +180,7 @@ public final class SupplyBeamClient {
             clearAll();
             return;
         }
+        tickPendingContrails(level);
         Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
         for (int i = BEAMS.size() - 1; i >= 0; i--) {
             Beam beam = BEAMS.get(i);
@@ -160,6 +188,36 @@ public final class SupplyBeamClient {
             if (beam.dead()) {
                 beam.release();
                 BEAMS.remove(i);
+            }
+        }
+    }
+
+    /**
+     * Photon contrail seam: scan each queued fresh-drop column for its crate entity and
+     * attach {@link PhotonBridge#SUPPLY_DROP_CONTRAIL} once it appears. Photon's
+     * {@code EntityEffectExecutor} rides the crate down and auto-destroys when the crate
+     * dies on landing, so no removal bookkeeping is needed here.
+     */
+    private static void tickPendingContrails(ClientLevel level) {
+        if (PENDING_CONTRAILS.isEmpty()) {
+            return;
+        }
+        if (!PhotonBridge.available()) {
+            // Photon/reducedFx toggled mid-scan — drop the whole seam (Quasar burst stays).
+            PENDING_CONTRAILS.clear();
+            return;
+        }
+        for (int i = PENDING_CONTRAILS.size() - 1; i >= 0; i--) {
+            PendingContrail pending = PENDING_CONTRAILS.get(i);
+            FallingBlockEntity crate = pending.findCrate(level);
+            if (crate != null) {
+                // Attach once; a refused spawn (executor budget) intentionally does NOT
+                // retry — the contrail is garnish and the drop is already mid-fall.
+                PhotonBridge.spawnOnEntity(PhotonBridge.SUPPLY_DROP_CONTRAIL, crate,
+                        PhotonBridge.AUTO_ROTATE_NONE, (Vec3) null);
+                PENDING_CONTRAILS.remove(i);
+            } else if (--pending.ticksLeft <= 0) {
+                PENDING_CONTRAILS.remove(i); // crate never tracked (distance/edge) — give up
             }
         }
     }
@@ -175,6 +233,39 @@ public final class SupplyBeamClient {
             BEAMS.get(i).release();
         }
         BEAMS.clear();
+        PENDING_CONTRAILS.clear();
+    }
+
+    /**
+     * A fresh-drop column still waiting for its crate {@link FallingBlockEntity} to appear
+     * on the client (spawned at surface+60 in the marker column, {@code SupplyBeacon.drop}).
+     */
+    private static final class PendingContrail {
+        final BlockPos pos;
+        int ticksLeft = CONTRAIL_SCAN_TICKS;
+
+        PendingContrail(BlockPos pos) {
+            this.pos = pos;
+        }
+
+        /** Highest falling block in the drop column — the crate falls top-down into it. */
+        @Nullable
+        FallingBlockEntity findCrate(ClientLevel level) {
+            AABB column = new AABB(
+                    this.pos.getX() + 0.5D - CONTRAIL_SCAN_XZ, this.pos.getY() - 2.0D,
+                    this.pos.getZ() + 0.5D - CONTRAIL_SCAN_XZ,
+                    this.pos.getX() + 0.5D + CONTRAIL_SCAN_XZ,
+                    this.pos.getY() + CONTRAIL_SCAN_UP,
+                    this.pos.getZ() + 0.5D + CONTRAIL_SCAN_XZ);
+            FallingBlockEntity best = null;
+            for (FallingBlockEntity candidate
+                    : level.getEntitiesOfClass(FallingBlockEntity.class, column)) {
+                if (best == null || candidate.getY() > best.getY()) {
+                    best = candidate;
+                }
+            }
+            return best;
+        }
     }
 
     /**

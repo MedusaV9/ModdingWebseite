@@ -18,6 +18,7 @@ import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -986,6 +987,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
                 SoundSource.HOSTILE, 1.2F, 0.7F);
         level.playSound(null, this.blockPosition(), SoundEvents.ELDER_GUARDIAN_CURSE,
                 SoundSource.HOSTILE, 1.2F, 0.6F);
+        // PH-BOSS-B (IDEAS-boss #6): Photon blind-burst — over-driven HDR white-out flash
+        // + three staggered fog shells over the CLOUD rings (LAYER row: photon-less
+        // clients keep the shipped rings; release beat only, no windup send).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_TYRANT_SQUALL,
+                this.position().add(0.0D, 1.2D, 0.0D), 0.0F, 0.0F, 64.0D);
         EclipseMod.LOGGER.info("Fog Tyrant blind squall released: {} blinded, {} safe behind cover",
                 blinded, covered);
     }
@@ -1281,6 +1287,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             serverLevel.playSound(null, this.blockPosition(), SoundEvents.WARDEN_SONIC_BOOM,
                     SoundSource.HOSTILE, 0.8F, 1.2F);
             fogBurstFx(serverLevel, this.position().add(0.0D, 1.5D, 0.0D), 60);
+            // PH-BOSS-B (IDEAS-boss #2): Photon death implosion layered under the burst —
+            // 24t inward suck, HDR white-out, physics debris whose FirstCollision
+            // sub-emitters puff fog where they land. Photon-less clients (and reducedFx)
+            // keep the shipped thunderclap + FX_SHOCKWAVE unchanged (LAYER row).
+            FxPayloads.sendFxEvent(serverLevel, FxCues.CUE_TYRANT_DEATH_IMPLOSION,
+                    this.position().add(0.0D, 1.5D, 0.0D), 0.0F, 0.0F, 96.0D);
             explodeHostStorm(serverLevel); // C8: the site storm bursts with the thunderclap.
             placeRewardChest(serverLevel); // C8: the Mending/Replant book choice chest.
             EclipseMod.LOGGER.info("Fog Tyrant death thunderclap at t={}", this.deathTime);

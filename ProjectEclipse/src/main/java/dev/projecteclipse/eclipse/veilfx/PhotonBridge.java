@@ -75,9 +75,12 @@ import org.joml.Vector3f;
  * {@link #stopLoop} — see the WINDOWED-loop law in
  * {@code docs/plans_v3/plans_v5/photon/INTEGRATION.md} §4.</p>
  *
- * <p>Effect ids consumed by the two shipped seams (drop-in
- * {@code assets/eclipse/fx/<id>.fx}): {@link #ALTAR_LEVELUP} and
- * {@link #EXPANSION_RIFT_GLOW}. Table-driven cues live in {@link PhotonFxRegistry}.</p>
+ * <p>Effect ids consumed by the direct (non-registry) seams (drop-in
+ * {@code assets/eclipse/fx/<id>.fx}): {@link #ALTAR_LEVELUP}, {@link #EXPANSION_RIFT_GLOW},
+ * {@link #OFFERING_SWALLOW_SOUL}, {@link #SUPPLY_DROP_CONTRAIL}, {@link #STORM_CROWN_HALO},
+ * {@link #INTRO_BURST_RING} and the four
+ * {@code PORTAL_IRIS_OPEN_*}/{@code PORTAL_LOOP_*} ids. Table-driven cues live in
+ * {@link PhotonFxRegistry}.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class PhotonBridge {
@@ -85,6 +88,69 @@ public final class PhotonBridge {
     public static final ResourceLocation ALTAR_LEVELUP = fx("altar_levelup");
     /** Extra glow for expansion (structure-drop) rift tears. */
     public static final ResourceLocation EXPANSION_RIFT_GLOW = fx("expansion_rift_glow");
+    /** Muzzle flash per piece-launch surge burst at a delivery tear ({@code RiftFx.tickSurge}). */
+    public static final ResourceLocation RIFT_PIECE_FLASH = fx("rift_piece_flash");
+    /**
+     * PH-PLAYER #1: HDR bloom pop riding the soulbind flash tick. Deliberately the SAME id
+     * as the {@code wand_soulbind_flash} Quasar emitter fired by
+     * {@code WandPowers.handleChoosePath} — the payload's emitter id doubles as the fx id,
+     * so {@link #enhanceQuasarCue} needs no extra mapping (no wire change).
+     */
+    public static final ResourceLocation WAND_SOULBIND_FLASH = fx("wand_soulbind_flash");
+    /**
+     * PH-ALTAR (IDEAS-mobs #2): converging soul-ribbon spiral inhaled by the altar while
+     * an offering swallow is in flight — spawned client-locally by
+     * {@code client/drama/OfferingSwallowFx.beginFlight} (the {@code RiftFx.openRift}
+     * shape: not payload-driven, so no registry row) with {@code allowMulti=true}.
+     */
+    public static final ResourceLocation OFFERING_SWALLOW_SOUL = fx("offering_swallow_soul");
+    /**
+     * PH-MOBS (IDEAS-mobs #3): award-podium star shower — nether-star MODEL particles
+     * raining, bouncing off the real floor (the batch's only collision-physics concept)
+     * with Collision sub-emitter glints. Spawned client-locally by
+     * {@code client/awards/AwardsOverlay.podiumBurst} (already client-only, already
+     * exactly-once on the LAND transition); default {@code allowMulti=false} also
+     * shields against LAND replays.
+     */
+    public static final ResourceLocation AWARD_STAR_SHOWER = fx("award_star_shower");
+    /**
+     * PH-WORLD (IDEAS-world #4): supply-drop descent contrail, attached to the falling
+     * crate entity by {@code SupplyBeamClient} ({@link #spawnOnEntity} — client-locally
+     * triggered off the shipped supply-marker payload, so no registry row). The crate's
+     * landing death auto-destroys the runtime; the asset's own FirstCollision
+     * sub-emitter ({@code eclipse:supply_landing_dust}) stamps the landing dust ring.
+     */
+    public static final ResourceLocation SUPPLY_DROP_CONTRAIL = fx("supply_drop_contrail");
+    /**
+     * PH-WORLD (IDEAS-world #8): rotating pearl-string halo above sphere-storm crowns.
+     * Not a registry row: {@code PhotonFxRegistry.ensureLoop} manages ONE loop per
+     * logical id, but each sphere storm needs its own — {@code stormfx/StormFxClient}
+     * holds one {@link LoopHandle} per {@code ClientStorm} instead (windowed on the
+     * shell-distance band, released with the storm).
+     */
+    public static final ResourceLocation STORM_CROWN_HALO = fx("storm_crown_halo");
+    /**
+     * PH-EVENTS (IDEAS-events #1): intro-BURST HDR white-out ring, layered client-locally
+     * over the {@code FX_SHOCKWAVE (a>=1.0, b>=50)} giant signature in
+     * {@code FxPayloads.handleFxEvent} — the live intro/credits bursts AND their FX-only
+     * replays all send that exact payload, so replay parity is free.
+     */
+    public static final ResourceLocation INTRO_BURST_RING = fx("intro_burst_ring");
+    /**
+     * PH-EVENTS (IDEAS-events #5a): portal-open iris pop, violet (xbox {@code STYLE_PORTAL}).
+     * Spawned by {@code RiftFx.openRift}'s style branch, executor-scaled to the tear width.
+     */
+    public static final ResourceLocation PORTAL_IRIS_OPEN_XBOX = fx("portal_iris_open_xbox");
+    /** PH-EVENTS (IDEAS-events #5a): the wax-gold {@code STYLE_BACKROOMS} iris variant. */
+    public static final ResourceLocation PORTAL_IRIS_OPEN_BACKROOMS = fx("portal_iris_open_backrooms");
+    /**
+     * PH-EVENTS (IDEAS-events #5b): xbox era-pixel mote identity loop. Portal-scoped
+     * WINDOWED loop (INTEGRATION.md §4) — {@code RiftFx} owns the window: kept alive on the
+     * rift's retry cadence while the tear is open, stopped (graceful fade) on close.
+     */
+    public static final ResourceLocation PORTAL_LOOP_XBOX = fx("portal_loop_xbox");
+    /** PH-EVENTS (IDEAS-events #5c): backrooms fluorescent flicker + haze identity loop. */
+    public static final ResourceLocation PORTAL_LOOP_BACKROOMS = fx("portal_loop_backrooms");
 
     /** {@code EntityEffectExecutor.AutoRotate} ordinals (enum order verified via javap). */
     public static final int AUTO_ROTATE_NONE = 0;
@@ -231,7 +297,38 @@ public final class PhotonBridge {
     public static void enhanceQuasarCue(ResourceLocation emitterId, Vec3 pos) {
         if (S2CQuasarPayload.ALTAR_LEVELUP_RING.equals(emitterId)) {
             spawn(ALTAR_LEVELUP, pos);
+        } else if (WAND_SOULBIND_FLASH.equals(emitterId)) {
+            // PH-PLAYER #1: entity attach makes the flash RIDE the player if they move
+            // mid-ceremony (offset -0.4 = chest/wand height — the ceremony holds the wand
+            // up). Default allowMulti=false is correct: the flash fires once, a duplicate
+            // payload inside its ~50t life no-ops harmlessly.
+            Entity holder = nearestPlayer(pos, 8.0D);
+            if (holder != null) {
+                spawnOnEntity(WAND_SOULBIND_FLASH, holder, AUTO_ROTATE_NONE,
+                        new Vec3(0.0D, -0.4D, 0.0D));
+            } else {
+                spawn(WAND_SOULBIND_FLASH, pos); // untracked holder — block-anchor fallback
+            }
         }
+    }
+
+    /** Nearest client-level player to a cue position (payloads carry no entity id). */
+    @Nullable
+    private static net.minecraft.world.entity.player.Player nearestPlayer(Vec3 pos, double maxRange) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return null;
+        }
+        net.minecraft.world.entity.player.Player best = null;
+        double bestDistSq = maxRange * maxRange;
+        for (net.minecraft.world.entity.player.Player player : level.players()) {
+            double distSq = player.distanceToSqr(pos);
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                best = player;
+            }
+        }
+        return best;
     }
 
     // ------------------------------------------------------------------ one-shot spawns
@@ -304,6 +401,50 @@ public final class PhotonBridge {
         Tracked tracked = startExecutor(fxId, null, entity, autoRotateOrdinal,
                 SpawnOptions.DEFAULT.withAllowMulti(true), false, true);
         return tracked == null || tracked == START_FAILED ? null : new LoopHandle(tracked);
+    }
+
+    /**
+     * PH-PLAYER (IDEAS-player.md §0): idle-loop keepalive primitive mirroring
+     * {@code QuasarSpawner.ensureAttached}. Keeps ONE looping {@code fxId} attached to
+     * {@code entity}: while a bridge-tracked runtime is alive this is a cheap no-op, so
+     * callers ensure on a slow cadence (20–40t) and dedup guarantees exactly one live
+     * runtime, self-healing after entity untrack/re-track. The executor keeps Photon's
+     * default {@code allowMulti=false}, so even an untracked-but-alive duplicate (e.g.
+     * after a bookkeeping loss) is silently absorbed by Photon's per-entity CACHE.
+     *
+     * <p>WINDOWED-only law applies (INTEGRATION.md §4): the caller MUST own a hysteresis
+     * window and call {@link #stopAttachedFx} when it closes.</p>
+     *
+     * @return {@code true} while an attached runtime is live (or was started/absorbed)
+     */
+    public static boolean ensureAttachedFx(ResourceLocation fxId, Entity entity,
+            int autoRotateOrdinal, @Nullable Vec3 offset) {
+        for (Tracked tracked : LIVE) {
+            if (tracked.entity == entity && tracked.fxId.equals(fxId)
+                    && runtimeAlive(tracked.executor)) {
+                return true; // keepalive no-op — exactly one live runtime per (fx, entity)
+            }
+        }
+        SpawnOptions options = offset == null ? SpawnOptions.DEFAULT
+                : SpawnOptions.DEFAULT.withOffset(offset.x, offset.y, offset.z);
+        Tracked started = startExecutor(fxId, null, entity, autoRotateOrdinal, options, false, true);
+        // null = Photon's own CACHE dedup (an identical live runtime we no longer track).
+        return started != START_FAILED;
+    }
+
+    /**
+     * Stops the entity-attached loop(s) previously kept alive by {@link #ensureAttachedFx}
+     * for this exact (fx id, entity) pair. {@code force=false} = graceful fade
+     * ({@code destroy(false)}), {@code true} = instant kill. Idempotent.
+     */
+    public static void stopAttachedFx(ResourceLocation fxId, Entity entity, boolean force) {
+        for (int i = LIVE.size() - 1; i >= 0; i--) {
+            Tracked tracked = LIVE.get(i);
+            if (tracked.entity == entity && tracked.fxId.equals(fxId)) {
+                LIVE.remove(i);
+                destroyQuietly(tracked, force);
+            }
+        }
     }
 
     /**
@@ -501,6 +642,20 @@ public final class PhotonBridge {
     /** Live executors currently tracked by the bridge (after the last sweep). */
     public static int liveExecutors() {
         return LIVE.size();
+    }
+
+    /**
+     * How many of the live executors are entity-attached (PH-BOSS-A: the shard-ribbon
+     * belt-and-braces gate — IDEAS-boss #5 skips new ribbons past a small cap).
+     */
+    public static int liveEntityExecutors() {
+        int attached = 0;
+        for (Tracked tracked : LIVE) {
+            if (tracked.entity != null) {
+                attached++;
+            }
+        }
+        return attached;
     }
 
     /** How many of the live executors are loops started via {@link #spawnLoop}. */

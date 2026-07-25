@@ -82,6 +82,13 @@ public final class BossPayloads {
     /**
      * Sends the intro card to every player within {@value #INTRO_RANGE} blocks of the
      * summon/arrival point (call from the boss's summon block, after the arrival FX).
+     *
+     * <p>PH-MOBS (IDEAS-mobs #1): the same send also fires the
+     * {@code CUE_BOSS_INTRO_SHOCKWAVE} registry cue at {@code center} — one seam covering
+     * every summon call site. The server stays photon-blind: on the client the cue is a
+     * table row ({@code MobPhotonFxRows}) whose Photon leg delays the ground ring to the
+     * card's name-lock flash; photon-less clients no-op (the row has no Quasar leg — the
+     * card never depended on a world accent).</p>
      */
     public static void sendIntro(ServerLevel level, Vec3 center, String nameKey, String subtitleKey) {
         S2CBossIntroPayload payload = new S2CBossIntroPayload(nameKey, subtitleKey);
@@ -91,6 +98,9 @@ public final class BossPayloads {
                 PacketDistributor.sendToPlayer(player, payload);
             }
         }
+        dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(level,
+                dev.projecteclipse.eclipse.network.fx.FxCues.CUE_BOSS_INTRO_SHOCKWAVE,
+                center, 0.0F, 0.0F, INTRO_RANGE);
     }
 
     // ------------------------------------------------------------------ client dispatch

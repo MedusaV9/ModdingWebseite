@@ -17,6 +17,8 @@ import dev.projecteclipse.eclipse.entity.UmbralStalkerEntity;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
@@ -270,6 +272,9 @@ public class HeraldEntity extends Monster {
         level.playSound(null, altarPos, EclipseSounds.BOSS_HERALD_AMBIENT.get(), SoundSource.HOSTILE, 1.2F, 0.8F);
         // W4-ATMOS (IDEA-07 §2): disc-wide low howl under the full-band arena roar.
         level.playSound(null, altarPos, EclipseSounds.BOSS_HERALD_ROAR_FAR.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+        // PH-BOSS-A (IDEAS-boss #1): shared HDR roar ring on the dais floor under the
+        // arrival beat (registry cue — photon-less clients get the boss_slam layer).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_BOSS_ROAR, new Vec3(x, groundY, z), 0.0F, 0.0F, 96.0D);
         level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, x, herald.getY(), z, 60, 1.2D, 1.2D, 1.2D, 0.05D);
         // W4 intro title card: the name decodes in over the arrival FX (BossIntroOverlay).
         dev.projecteclipse.eclipse.network.boss.BossPayloads.sendIntro(level,
@@ -397,6 +402,9 @@ public class HeraldEntity extends Monster {
             // Collapse opener: slam FX at the boss as it starts its descent.
             PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,
                     new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
+            // PH-BOSS-A (IDEAS-boss #1): roar ring on the P3 phase break, same cue as the
+            // summon arrival (one authored asset covers every break beat).
+            FxPayloads.sendFxEvent(level, FxCues.CUE_BOSS_ROAR, this.position(), 0.0F, 0.0F, 96.0D);
             this.ringTimer = RING_INTERVAL / 2;
             // W4 IDEA-16 #2: the dais cracks — one full flash of the three soul-fire jet
             // rings at the break; tickDaisJets keeps them venting for the rest of P3.

@@ -24,6 +24,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
+import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
 import net.minecraft.client.Minecraft;
@@ -70,6 +71,12 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * swallow; bystanders always see the neutral mid tier). On arrival the swallow pokes
  * {@link AltarCeremonyFx#notifyOfferingSwallowed()} so the L3+ aurora veil briefly
  * brightens map-side (the sky acknowledging the meal).</p>
+ *
+ * <p><b>PH-ALTAR Photon layer</b>: each full-beat flight additionally spawns the optional
+ * {@code eclipse:offering_swallow_soul} Photon effect at the altar target (soul-ribbon
+ * inhale spiral + HDR tip, IDEAS-mobs #2) via {@link PhotonBridge} — purely additive,
+ * {@code allowMulti=true} for concurrent offerings, and a silent no-op without Photon
+ * (the degraded beat below never fires it).</p>
  *
  * <p><b>Fallbacks</b>: under {@code reducedFx} (or when the altar anchor has not synced)
  * the payload degrades to a plain {@code offering_swallow} burst at the hand via
@@ -198,6 +205,15 @@ public final class OfferingSwallowFx {
         float phase = (float) (Math.atan2(handPos.z - target.z, handPos.x - target.x));
         ParticleEmitter trail = QuasarSpawner.spawnManaged(
                 S2CQuasarPayload.OFFERING_SWALLOW, handPos, FxBudget.Channel.BURST);
+        // PH-ALTAR (IDEAS-mobs #2): optional Photon layer — a converging soul-ribbon
+        // spiral inhaled by the altar, anchored at the flight target (NOT the moving
+        // item; block executor is enough). allowMulti=true because up to MAX_FLIGHTS
+        // concurrent offerings share one altar BlockPos during a rush and Photon's
+        // default same-anchor dedup would silently eat flights 2..4. The degraded beat
+        // (reducedFx / anchor unsynced) returned above and correctly never gets here;
+        // photon-less clients keep the billboard + glow fan + Quasar trail unchanged.
+        PhotonBridge.spawn(PhotonBridge.OFFERING_SWALLOW_SOUL, target,
+                PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
         FLIGHTS.add(new Flight(stack, handPos, target, phase,
                 Mth.clamp(tier, 0, 2), sampleItemGlowColor(stack), trail));
     }

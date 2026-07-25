@@ -22,6 +22,8 @@ import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
@@ -279,6 +281,9 @@ public class FerrymanEntity extends Monster {
         level.addFreshEntity(ferryman);
         PacketDistributor.sendToPlayersNear(level, null, anchor.x, anchor.y, anchor.z, 96.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, ferryman.position()));
+        // PH-BOSS-A (IDEAS-boss #1): the shared roar ring beside the summon BOSS_SLAM
+        // (covers summonAtStern AND the C10 arena fight — both delegate here).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_BOSS_ROAR, ferryman.position(), 0.0F, 0.0F, 96.0D);
         level.playSound(null, ferryman.blockPosition(), SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.0F, 0.5F);
         level.playSound(null, ferryman.blockPosition(), EclipseSounds.BOSS_FERRYMAN_AMBIENT.get(),
                 SoundSource.HOSTILE, 1.2F, 1.0F);
@@ -530,6 +535,10 @@ public class FerrymanEntity extends Monster {
         }
         level.playSound(null, this.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP,
                 SoundSource.HOSTILE, 1.4F, 0.6F);
+        // PH-BOSS-A (IDEAS-boss #8): water-tear arc on the sweep contact beat — a = the
+        // boss's yaw so the client aims the function-shape half-circle along the front.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_FERRY_OAR_SWEEP, this.position(),
+                this.getYRot(), 0.0F, 96.0D);
         Vec3 front = this.position().add(Vec3.directionFromRotation(0.0F, this.getYRot()).scale(2.5D));
         level.sendParticles(ParticleTypes.SWEEP_ATTACK, front.x, this.deckY + 2.0D, front.z,
                 6, 1.2D, 0.4D, 1.2D, 0.0D);
@@ -617,6 +626,7 @@ public class FerrymanEntity extends Monster {
             this.arenaKneelTicks = ARENA_KNEEL_TICKS;
             this.requiredLanterns = 0;
             int darkened = ArenaBuilder.extinguishRing(level, Integer.MAX_VALUE);
+            sendKneelEntranceFx(level);
             EclipseMod.LOGGER.info("Ferryman P2 (arena): kneeling for {}t — {} ring lantern(s) extinguished",
                     ARENA_KNEEL_TICKS, darkened);
             return;
@@ -627,9 +637,31 @@ public class FerrymanEntity extends Monster {
         this.crewLitSeen = ShipLanterns.litCount(level);
         this.crewStallTicks = 0;
         int risen = DeckhandEntity.riseHostile(level);
+        sendKneelEntranceFx(level);
         EclipseMod.LOGGER.info("Ferryman P2 Crew: kneeling invulnerable at the stern — {} deckhand(s) risen, "
                 + "{} lantern(s) extinguished (required {}, {} ghost(s) online)",
                 risen, darkened, this.requiredLanterns, ghosts);
+    }
+
+    /**
+     * The fixed anchor both P2 kneel cues fire at: {@code tickCrewPhase} drifts the boss
+     * home to this exact point (ship AND arena), and a deterministic anchor keeps the
+     * corona re-fires landing on the same block so Photon's {@code allowMulti=false} dedup
+     * absorbs them (IDEAS-boss #9 sustain pattern).
+     */
+    private Vec3 kneelAnchor() {
+        return new Vec3(STERN_X + 0.5D, this.deckY + 1.0D, 0.5D);
+    }
+
+    /**
+     * PH-BOSS-A crew-phase entrance beats (both {@link #startCrewPhase} branches, after the
+     * lanterns blow out): the one-shot soul-lantern swarm (IDEAS-boss #4) plus the first
+     * kneel-corona cycle (IDEAS-boss #9 — sustained by the {@link #tickCrewPhase} re-fire).
+     */
+    private void sendKneelEntranceFx(ServerLevel level) {
+        Vec3 anchor = kneelAnchor();
+        FxPayloads.sendFxEvent(level, FxCues.CUE_FERRY_LANTERN_SWARM, anchor, 0.0F, 0.0F, 96.0D);
+        FxPayloads.sendFxEvent(level, FxCues.CUE_FERRY_KNEEL_CORONA, anchor, 0.0F, 0.0F, 96.0D);
     }
 
     private void tickCrewPhase(ServerLevel level) {
@@ -644,6 +676,10 @@ public class FerrymanEntity extends Monster {
         if (this.tickCount % CREW_CHECK_TICKS != 0) {
             return;
         }
+        // PH-BOSS-A (IDEAS-boss #9): corona re-fire on the crew cadence — a silent Photon
+        // dedup no-op while the 100t runtime lives (and a fresh 20t Quasar puff on
+        // photon-less clients); endCrewPhase stops the re-fire and the last cycle fades.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_FERRY_KNEEL_CORONA, kneelAnchor(), 0.0F, 0.0F, 96.0D);
         if (inArena()) {
             tickArenaKneel(level);
             return;

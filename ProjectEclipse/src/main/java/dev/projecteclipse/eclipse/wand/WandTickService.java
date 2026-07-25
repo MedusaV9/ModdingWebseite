@@ -14,6 +14,8 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -407,6 +409,10 @@ public final class WandTickService {
             Vec3 impact = caster.position();
             WandPowers.damageAround(caster, impact, radius, damage, knockback, fireTicks);
             WandPowers.sendQuasar(level, WandPowers.GLUT_SPRUNG_CRATER, impact);
+            // PH-PLAYER (IDEAS-player #5): landing re-send of the launch cue over the
+            // POSITION lane (b = 1 marks touchdown) — same eruption asset, ground-anchored;
+            // the physics chunks bounce off the real terrain around the crater.
+            FxPayloads.sendFxEvent(level, FxCues.CUE_GLUT_SPRUNG, impact, 0.0F, 1.0F, 64.0D);
             spawnScorchDecal(level, impact, Math.min(2.2F, radius * 0.45F), 200);
             level.sendParticles(ParticleTypes.FLAME, impact.x, impact.y + 0.2D, impact.z,
                     28, radius * 0.5D, 0.2D, radius * 0.5D, 0.05D);
