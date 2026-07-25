@@ -58,7 +58,7 @@
       "bestellt": "Taxi called! It's on its way.",
       "gerufen": "🚕 Your taxi is on its way…",
       "countdown": "Arriving in approx. {min}:{s} min",
-      "storno": "Cancel (2 ᴳ fee)",
+      "storno": "Cancel (2 ᴳ)",
       "storniert": "Cancelled. The driver sighs quietly.",
       "da": "🚕 Your taxi is at the door!",
       "fenster": "{s} s left to hop in!",
@@ -70,7 +70,7 @@
     },
     "weg": {
       "titel": "Gooby is on vacation ☀",
-      "rest": "He'll be back in about {tage} day(s)."
+      "rest": "About {tage} more sleeps and he's back!"
     },
     "abholen": {
       "titel": "Gooby is waiting at the airport!",
@@ -95,7 +95,7 @@
       "klingel": "DING DONG! The delivery Gooby is here!",
       "annehmen": "Open the door",
       "uebergeben": "Here you go, still warm! Bow included.",
-      "trinkgeld_geben": "Tip 5 coins 💛",
+      "trinkgeld_geben": "Tip (5 ᴳ) 💛",
       "nur_winken": "Just wave",
       "bestellt": "Order placed! The kitchen is goobying already.",
       "abgestellt": "The bag was left at the door. Note: \"I rang! – G.\"",

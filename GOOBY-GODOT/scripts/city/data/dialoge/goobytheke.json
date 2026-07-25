@@ -27,7 +27,7 @@
     },
     "laden": {
       "sprecher": "hilde",
-      "text": "Gerne! Die Tropfen gibt's aber nur mit Rezept, Schatz.",
+      "text": "Gerne! Die Tropfen gibt’s aber nur mit Rezept, Schatz.",
       "effekt": ["laden"],
       "ende": true
     }

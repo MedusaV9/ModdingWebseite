@@ -22,7 +22,9 @@
     "stat_hunger": "Hunger",
     "stat_energie": "Energy",
     "stat_hygiene": "Hygiene",
-    "stat_spass": "Fun"
+    "stat_spass": "Fun",
+    "sheet_titel": "Gooby Status",
+    "sheet_buff": "{wert} buff"
   },
   "dialog": {
     "weiter_hinweis": "Tap for more"

@@ -3,7 +3,8 @@
 		"select": {
 			"title": "Goobys vs. Zombies",
 			"done": "Fertig",
-			"stars": "Sterne: {n}/{max}"
+			"stars": "Sterne: {n}/{max}",
+			"new": "NEU"
 		},
 		"hud": {
 			"level": "Level {n}",
@@ -22,7 +23,7 @@
 			"lose": "Die Zombies naschen deine Nutella…",
 			"score": "{n} Punkte",
 			"first_clear": "Erst-Abschluss-Bonus!",
-			"lose_hint": "Tipp: Sammler früh pflanzen!",
+			"lose_hint": "Tipp: Pflanz zuerst die Nutella-Sammler!",
 			"next": "Weiter ›",
 			"retry": "Nochmal",
 			"select": "Level-Wahl"

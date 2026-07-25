@@ -23,13 +23,26 @@ func _init(dialog_baum: Dictionary, aktive_flags: Dictionary = {}) -> void:
 
 
 ## Baum aus JSON-Datei laden ({} bei kaputter Datei, Fehler via push_error).
+## FIX-G-Handoff: bei nicht-deutschem Locale das en/-Pendant bevorzugen
+## (Fallback auf DE, falls das Pendant fehlt).
 static func baum_laden(pfad: String) -> Dictionary:
-	var raw := FileAccess.get_file_as_string(pfad)
+	var real_pfad := _localized_pfad(pfad)
+	var raw := FileAccess.get_file_as_string(real_pfad)
 	var json := JSON.new()
 	if json.parse(raw) != OK or not (json.data is Dictionary):
-		push_error("Dialogbaum kaputt: %s" % pfad)
+		push_error("Dialogbaum kaputt: %s" % real_pfad)
 		return {}
 	return json.data
+
+
+static func _localized_pfad(pfad: String) -> String:
+	var locale := I18nService.get_locale()
+	if locale == I18nService.DEFAULT_LOCALE:
+		return pfad
+	var cand := pfad.get_base_dir().path_join(locale).path_join(pfad.get_file())
+	if FileAccess.file_exists(cand):
+		return cand
+	return pfad
 
 
 ## Eine cond-Klausel gegen die Flags auswerten ("" = immer wahr).

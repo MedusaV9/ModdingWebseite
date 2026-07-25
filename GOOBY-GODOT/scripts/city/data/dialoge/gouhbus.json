@@ -5,7 +5,7 @@
     "hallo": {
       "sprecher": "goouhbus",
       "text": [
-        "Herein, wenn's kein Vertreter ist! … Oh, ein Gooby. Setz dich aufs Bänkchen, ich suche nur kurz meine Brille.",
+        "Herein, wenn’s kein Vertreter ist! … Oh, ein Gooby. Setz dich aufs Bänkchen, ich suche nur kurz meine Brille.",
         "(Er trägt eine auf der Stirn, eine um den Hals und eine im Mund.)"
       ],
       "optionen": [
@@ -27,11 +27,11 @@
       "sprecher": "goouhbus",
       "text": [
         "Krank? KRANK?! Das haben wir gleich. Zunge raus! … Das ist ein Ohr. Auch gut. Sag mal AAAAH.",
-        "GOOBY: „Bleeeh~“",
+        "(Gooby macht „Bleeeh~“.)",
         "Interessant. SEHR interessant. Ich habe keine Ahnung, was das bedeutet."
       ],
       "optionen": [
-        {"text": "Er hat ein ganzes Glas Nutella gegessen.", "next": "nutella"},
+        {"text": "Ein ganzes Glas Nutella.", "next": "nutella"},
         {"text": "Er niest ununterbrochen.", "next": "niesen"}
       ]
     },

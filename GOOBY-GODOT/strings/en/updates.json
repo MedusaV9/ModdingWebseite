@@ -6,7 +6,7 @@
 		"fehler": "Currently unreachable — you can keep playing as usual.",
 		"pruefe": "Checking for updates…",
 		"pack_deaktiviert": "An update caused problems and has been disabled.",
-		"safe_mode": "Safe mode: updates are temporarily off — built-in content active.",
+		"safe_mode": "We'll keep playing with the built-in stuff for now — updates are taking a little break.",
 		"erneut_versuchen": "Try again"
 	}
 }

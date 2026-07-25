@@ -62,7 +62,7 @@ func _sure_def(id := "testfall") -> Dictionary:
 		"wahrscheinlichkeit": 1.0,
 		"notification_text_de": "Testfall!",
 		"timeout_min": 8,
-		"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+		"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 		"reward": {"buff_id": "spass_plus", "stat": "fun", "wert": 10, "dauer_h": 5},
 		"szene_setup": "marienkaefer",
 	}
@@ -184,7 +184,7 @@ func test_timeout_fail_bubble_beim_naechsten_start() -> void:
 	assert_eq(rolled, {}, "abgelaufenes Event rollt nicht sofort neu")
 	assert_true(RandomEventEngine.active_of(gs).is_empty(), "active geräumt")
 	var notice := RandomEventEngine.take_fail_notice(gs)
-	assert_eq(notice, "Gooby hat es schon alleine hingekommen -_-", "Fail-Bubble-Text")
+	assert_eq(notice, "Gooby hat es schon alleine hingekriegt -_-", "Fail-Bubble-Text")
 	assert_eq(RandomEventEngine.take_fail_notice(gs), "", "nur einmal abholbar")
 	assert_eq(NotifyStub.pending().size(), 0, "Notification storniert")
 	gs.free()

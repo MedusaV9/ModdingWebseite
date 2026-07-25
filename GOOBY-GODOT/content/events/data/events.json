@@ -9,7 +9,7 @@
 			"wahrscheinlichkeit": 0.35,
 			"notification_text_de": "Gooby ist hingefallen! Hilf ihm auf!",
 			"timeout_min": 8,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": { "buff_id": "spass_plus", "stat": "fun", "wert": 10, "dauer_h": 5 },
 			"szene_setup": "marienkaefer"
 		},
@@ -21,7 +21,7 @@
 			"wahrscheinlichkeit": 0.25,
 			"notification_text_de": "RUMMS aus der Küche…",
 			"timeout_min": 10,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": { "buff_id": "hunger_effizienz", "stat": "hunger", "wert": 8, "dauer_h": 4 },
 			"szene_setup": "kuehlschrank",
 			"props": 5
@@ -34,7 +34,7 @@
 			"wahrscheinlichkeit": 0.3,
 			"notification_text_de": "*KLIRR*",
 			"timeout_min": 6,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": { "buff_id": "spass_plus", "stat": "fun", "wert": 5, "dauer_h": 3 },
 			"szene_setup": "glas_scherben",
 			"props": 3
@@ -47,7 +47,7 @@
 			"wahrscheinlichkeit": 0.3,
 			"notification_text_de": "*SCHEPPER* Das klang teuer.",
 			"timeout_min": 6,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": { "buff_id": "spass_plus", "stat": "fun", "wert": 5, "dauer_h": 3 },
 			"szene_setup": "teller_scherben",
 			"props": 3
@@ -60,7 +60,7 @@
 			"wahrscheinlichkeit": 0.4,
 			"notification_text_de": "Du hörst etwas…",
 			"timeout_min": 10,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": null,
 			"szene_setup": "nutella_nacht"
 		},
@@ -72,7 +72,7 @@
 			"wahrscheinlichkeit": 0.35,
 			"notification_text_de": "Gooby sucht etwas… seit 20 Minuten.",
 			"timeout_min": 8,
-			"fail_text_de": "Gooby hat es schon alleine hingekommen -_-",
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
 			"reward": { "buff_id": "spass_plus", "stat": "fun", "wert": 10, "dauer_h": 5 },
 			"szene_setup": "sockensuche",
 			"props": 3

@@ -33,6 +33,7 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `events.*`, `stickers.*`, `interactions.*` | W3d CONTENT | W3 |
 | `album.*`, `bad.*` (Dateien `strings/<locale>/events.json` + `album.json` + `bad.json`) | W3d CONTENT | W3 |
 | `sys.*` (Datei `strings/<locale>/system.json` — Save-Recovery, Netz-Fehler) | W4-P4 TEXT | W4 |
+| `veil.*` (Datei `strings/<locale>/veil.json` — LoadingVeil: `laedt` + `tips`-Array) | W4-P4 TEXT | W4 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im
@@ -40,3 +41,23 @@ Regeln:
 2. Keine UI-Texte hartkodiert in `.gd` (Grep-Test auf Umlaut-Literale in
    `scripts/ui/**`).
 3. Neue Domains hier eintragen (Append-only-Tabelle).
+
+## Begriffs-Glossar (DE — verbindlich, E6-Audit)
+
+- **Währung:** im Fließtext immer „Münzen“; das Symbol `ᴳ` nur in
+  Preis-Chips/Buttons (z. B. `{preis} ᴳ`, „Stornieren (2 ᴳ)“).
+- **Gemüse:** Leitbegriff ist **„Möhre“** (wie im REHWEI-Sortiment und
+  `mg.carrotCatch.title` „Möhrenfang“) — „Karotte“ nur, wenn der Rhythmus
+  es wirklich braucht.
+- **GOOUHBUS:** heißt im Text **„Doktor“**, nie „Tierarzt“ (er behandelt
+  Gooby als Patient, nicht als Tier).
+- **Arcade:** feminin — **„die Arcade“** („Zur Arcade“, „Die Arcade ist
+  zurück“).
+- **Morph-Regler:** überall „Augenabstand / Augengröße / Ohrenlänge /
+  Pausbäckchen“ (Onboarding `onboarding.slider_*` und Spiegel
+  `bad.spiegel.*` identisch).
+- **Anrede:** Du-Imperativ statt Infinitiv („Tipp für mehr“, nicht „Tippen
+  für mehr“); Sticker-Hints für Punkteziele nutzen **„Hol …“**. Kinder
+  siezen NPCs, NPCs duzen zurück — das bleibt so.
+- **Typografie:** Ellipse `…` (nie `...`), Apostroph `’` (nie `'`),
+  Anführungszeichen `„…“` paarig.

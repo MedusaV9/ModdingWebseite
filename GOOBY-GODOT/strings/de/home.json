@@ -9,7 +9,7 @@
 		},
 		"tuer": {
 			"stuck": "Gooby ist stecken geblieben!",
-			"mash_hint": "Tippen! Tippen! Tippen!"
+			"mash_hint": "Tipp! Tipp! Tipp!"
 		},
 		"blocked": {
 			"bubble": "Ich kann nicht so gut klettern… manno!",
@@ -25,7 +25,7 @@
 	},
 	"build": {
 		"lager": "Lager {used}/{cap}",
-		"lager_voll": "Lager voll! Bau dir einen Schuppen im Garten!",
+		"lager_voll": "Lager voll! Stell erst was auf oder verkauf ein Möbel.",
 		"leer": "Dein Lager ist leer.",
 		"fertig": "Fertig",
 		"rotieren": "Drehen",

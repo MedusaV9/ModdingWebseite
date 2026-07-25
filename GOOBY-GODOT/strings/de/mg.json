@@ -13,8 +13,12 @@
 			"yuck": "Igitt!",
 			"missed": "Am Boden: {n}/{max}"
 		},
-		"gvz": {"title": "Goobys vs. Zombies"},
-		"gobnom": {"title": "Gobnom"},
+		"gvz": {
+			"title": "Goobys vs. Zombies"
+		},
+		"gobnom": {
+			"title": "Gobnom"
+		},
 		"arcade": {
 			"title": "Arcade",
 			"back": "‹ Zurück",
@@ -25,7 +29,9 @@
 			"orientation": "Ausrichtung",
 			"best": "Bestwert: {best}",
 			"play": "Spielen!",
-			"back": "‹ Zurück"
+			"back": "‹ Zurück",
+			"energy": "Kostet {energy} Energie pro Runde",
+			"too_sleepy": "Gooby ist zu müde zum Spielen — erst schlafen!"
 		},
 		"diff": {
 			"easy": "Leicht",

@@ -5,8 +5,8 @@ extends CanvasLayer
 ## AC-Look statt Cream+Spinner: driftendes Pattern (AcWallpaper-Shader) und
 ## eine mittige Karte. Zwei Varianten:
 ## - Minigame-Reise (ArcadeScreen meldet einen Travel-Hint an): Cover +
-##   Spieltitel + rotierender deutscher Tipp.
-## - Sonst: hüpfender Mini-Gooby (`loading_veil_gooby.gd`) + „Lädt…“.
+##   Spieltitel + rotierender Tipp (`veil.tips`, lokalisiert).
+## - Sonst: hüpfender Mini-Gooby (`loading_veil_gooby.gd`) + `veil.laedt`.
 ##
 ## Contract (nach W1 FROZEN, W1a-Handoff): cover(reduced_motion) /
 ## reveal(reduced_motion) sind awaitbare Coroutinen (Router:
@@ -22,16 +22,6 @@ const COVER_DURATION := 0.25
 const REVEAL_DURATION := 0.3
 const TIP_ROTATE_SEC := 3.2
 const TIPS_KEY := "veil.tips"
-## Fallback, bis P4 die Keys in strings/ einpflegt
-## (handoffs/W4P2-strings-request.md).
-const FALLBACK_TIPS: Array[String] = [
-	"Tipp: Ein satter Gooby hüpft höher — Kühlschrank checken!",
-	"Tipp: Im Baumodus kannst du Möbel drehen. Einfach nochmal tippen!",
-	"Tipp: Sticker verstecken sich überall. Augen auf!",
-	"Tipp: Der Endlos-Modus schaltet sich ab Level 10 frei.",
-	"Tipp: Nach dem Aufwachen wartet Gooby am Waschbecken aufs Zähneputzen.",
-	"Tipp: Besuch deine Freunde — zu zweit ist es flauschiger!",
-]
 
 static var _travel_hint: Dictionary = {}
 static var _tip_cursor := 0
@@ -57,7 +47,7 @@ func _ready() -> void:
 	_root.modulate.a = 0.0
 	# CanvasLayer-Gotcha (W3d-Handoff): Window-Theme kommt hier nicht an.
 	_root.theme = ThemeService.theme()
-	_laedt_label.text = _text("veil.laedt", "Lädt…")
+	_laedt_label.text = I18nService.t("veil.laedt")
 	_tip_timer = Timer.new()
 	_tip_timer.wait_time = TIP_ROTATE_SEC
 	_tip_timer.timeout.connect(_on_tip_timer)
@@ -177,12 +167,4 @@ func _on_tip_timer() -> void:
 
 
 static func _tips() -> Array:
-	if I18nService.has_key(TIPS_KEY):
-		var items := I18nService.items(TIPS_KEY)
-		if not items.is_empty():
-			return items
-	return FALLBACK_TIPS
-
-
-static func _text(key: String, fallback: String) -> String:
-	return I18nService.t(key) if I18nService.has_key(key) else fallback
+	return I18nService.items(TIPS_KEY)

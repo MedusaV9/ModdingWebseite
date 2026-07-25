@@ -5,7 +5,7 @@
 			"danke": "Puh! Danke, Kumpel!"
 		},
 		"kuehlschrank": {
-			"bubble": "Der Kühlschrank ist umgekippt! Hilfst du mir aufsammeln?",
+			"bubble": "Der Kühlschrank ist umgekippt! Hilfst du mir beim Aufsammeln?",
 			"danke": "Alles wieder drin. Nichts angeknabbert. Ehrenwort."
 		},
 		"glas": {
@@ -20,7 +20,7 @@
 		"nutella": {
 			"upps": "uhhh UPPPS…",
 			"ab_ins_bett": "Ab ins Bett!",
-			"weitermachen": "Ach, lass ihm den Spaß",
+			"weitermachen": "Lass ihn machen",
 			"murmel": "mmmh… okay okay… ich geh ja schon…",
 			"strahlen": "Du bist der BESTE! Nur noch ein Löffelchen!",
 			"aufraeumen": "Ich räum das weg. Spurlos. Niemand wird es je erfahren."

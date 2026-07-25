@@ -13,8 +13,12 @@
 			"yuck": "Yuck!",
 			"missed": "Dropped: {n}/{max}"
 		},
-		"gvz": {"title": "Goobys vs. Zombies"},
-		"gobnom": {"title": "Gobnom"},
+		"gvz": {
+			"title": "Goobys vs. Zombies"
+		},
+		"gobnom": {
+			"title": "Gobnom"
+		},
 		"arcade": {
 			"title": "Arcade",
 			"back": "‹ Back",
@@ -25,7 +29,9 @@
 			"orientation": "Orientation",
 			"best": "Best: {best}",
 			"play": "Play!",
-			"back": "‹ Back"
+			"back": "‹ Back",
+			"energy": "Costs {energy} energy per round",
+			"too_sleepy": "Gooby is too sleepy to play — nap first!"
 		},
 		"diff": {
 			"easy": "Easy",

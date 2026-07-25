@@ -58,7 +58,7 @@
       "bestellt": "Taxi gerufen! Es ist gleich unterwegs.",
       "gerufen": "🚕 Dein Taxi ist unterwegs…",
       "countdown": "Ankunft in ca. {min}:{s} min",
-      "storno": "Stornieren (2 ᴳ Gebühr)",
+      "storno": "Stornieren (2 ᴳ)",
       "storniert": "Storniert. Der Fahrer seufzt leise.",
       "da": "🚕 Dein Taxi steht vor der Tür!",
       "fenster": "Noch {s} s zum Einsteigen!",
@@ -70,7 +70,7 @@
     },
     "weg": {
       "titel": "Gooby ist im Urlaub ☀",
-      "rest": "Er kommt in ca. {tage} Tag(en) zurück."
+      "rest": "Noch ca. {tage}× schlafen, dann ist er zurück!"
     },
     "abholen": {
       "titel": "Gooby wartet am Flughafen!",
@@ -95,7 +95,7 @@
       "klingel": "DING DONG! Der Liefer-Gooby ist da!",
       "annehmen": "Tür öffnen",
       "uebergeben": "Hier, noch warm! Verbeugung inklusive.",
-      "trinkgeld_geben": "5 Münzen Trinkgeld geben 💛",
+      "trinkgeld_geben": "Trinkgeld (5 ᴳ) 💛",
       "nur_winken": "Nur winken",
       "bestellt": "Bestellung ist raus! Die Küche goobyt schon.",
       "abgestellt": "Die Tüte stand vor der Tür. Zettel: „Hab geklingelt! – G.“",

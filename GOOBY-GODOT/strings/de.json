@@ -22,10 +22,12 @@
     "stat_hunger": "Hunger",
     "stat_energie": "Energie",
     "stat_hygiene": "Hygiene",
-    "stat_spass": "Spaß"
+    "stat_spass": "Spaß",
+    "sheet_titel": "Gooby-Status",
+    "sheet_buff": "{wert} Buff"
   },
   "dialog": {
-    "weiter_hinweis": "Tippen für mehr"
+    "weiter_hinweis": "Tipp für mehr"
   },
   "onboarding": {
     "welcome_titel": "Willkommen!",
@@ -37,7 +39,7 @@
     "nickname_placeholder": "Gooby",
     "editor_titel": "So sieht {nickname} aus!",
     "editor_text": "Dreh an den Reglern, bis dein Gooby genau richtig flauschig guckt.",
-    "slider_augenweite": "Augenweite",
+    "slider_augenweite": "Augenabstand",
     "slider_augengroesse": "Augengröße",
     "slider_ohrenlaenge": "Ohrenlänge",
     "slider_pausbacken": "Pausbäckchen",
@@ -91,7 +93,7 @@
       },
       {
         "titel": "Neue Spiele",
-        "text": "Das Arcade ist zurück — mit Goobys vs Zombies und weiteren Minispielen."
+        "text": "Die Arcade ist zurück — mit Goobys vs Zombies und weiteren Minispielen."
       },
       {
         "titel": "Umzugskoffer",

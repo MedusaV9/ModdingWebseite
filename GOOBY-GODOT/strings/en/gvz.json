@@ -3,7 +3,8 @@
 		"select": {
 			"title": "Goobys vs. Zombies",
 			"done": "Done",
-			"stars": "Stars: {n}/{max}"
+			"stars": "Stars: {n}/{max}",
+			"new": "NEW"
 		},
 		"hud": {
 			"level": "Level {n}",
@@ -22,7 +23,7 @@
 			"lose": "The zombies snack on your Nutella…",
 			"score": "{n} points",
 			"first_clear": "First-clear bonus!",
-			"lose_hint": "Tip: plant collectors early!",
+			"lose_hint": "Tip: plant the Nutella collectors first!",
 			"next": "Next ›",
 			"retry": "Retry",
 			"select": "Level select"

@@ -3,6 +3,8 @@ extends W1cTestCase
 ## DE/EN-Parität über die komplette geflachte Tabelle, Key-Kollisionsfreiheit
 ## über alle Quelldateien, {platzhalter}-Parität DE↔EN, „Münzen statt Coins“-
 ## Konsistenz und keine hartkodierten deutschen UI-Texte (Umlaut-Literale).
+## FIX-G (E6 P2-13): zusätzlich Struktur-Parität der Stadt-Dialoge
+## (`scripts/city/data/dialoge/*.json` ↔ `dialoge/en/*.json`).
 
 const SCRIPT_DIRS := [
 	"res://scripts/ui",
@@ -37,7 +39,12 @@ const EXPECTED_DOMAINS := [
 	"album.",
 	"bad.",
 	"sys.",
+	"veil.",
 ]
+## Stadt-Dialoge: DE-Bäume + EN-Pendants (E6 P2-13; Wiring s. Handoff
+## FIXG-text-requests.md — der Loader wählt bei locale=en das en/-Pendant).
+const DIALOG_DIR := "res://scripts/city/data/dialoge"
+const DIALOG_EN_DIR := "res://scripts/city/data/dialoge/en"
 
 
 func test_de_en_paritaet_alle_domains() -> void:
@@ -114,6 +121,20 @@ func test_t_und_format_und_fallback() -> void:
 	check_eq(I18nService.t("gibt.es.nicht"), "gibt.es.nicht", "Fallback = Key")
 
 
+func test_stadt_dialoge_de_en_paritaet() -> void:
+	var dir := DirAccess.open(DIALOG_DIR)
+	check(dir != null, "Dialog-Verzeichnis fehlt: %s" % DIALOG_DIR)
+	if dir == null:
+		return
+	var gefunden := 0
+	for file in dir.get_files():
+		if not file.ends_with(".json"):
+			continue
+		gefunden += 1
+		_check_dialog_paritaet(file)
+	check(gefunden >= 3, "mindestens 3 Stadt-Dialoge erwartet (%d)" % gefunden)
+
+
 func test_keine_hartkodierten_umlaut_literale() -> void:
 	for dir_path in SCRIPT_DIRS:
 		var dir := DirAccess.open(dir_path)
@@ -123,6 +144,69 @@ func test_keine_hartkodierten_umlaut_literale() -> void:
 			if not file.ends_with(".gd"):
 				continue
 			_check_file("%s/%s" % [dir_path, file])
+
+
+## Struktur-Parität eines Dialogbaums: gleiche Knoten/Optionen/conds/Effekte,
+## gleich viele Textzeilen, keine leeren Texte — nur die Sprache darf abweichen.
+func _check_dialog_paritaet(file: String) -> void:
+	var de_pfad := "%s/%s" % [DIALOG_DIR, file]
+	var en_pfad := "%s/%s" % [DIALOG_EN_DIR, file]
+	check(FileAccess.file_exists(en_pfad), "EN-Pendant fehlt: %s" % en_pfad)
+	if not FileAccess.file_exists(en_pfad):
+		return
+	var de: Variant = JSON.parse_string(FileAccess.get_file_as_string(de_pfad))
+	var en: Variant = JSON.parse_string(FileAccess.get_file_as_string(en_pfad))
+	check(de is Dictionary and en is Dictionary, "Dialog parst: %s" % file)
+	if not (de is Dictionary and en is Dictionary):
+		return
+	check_eq(str(en.get("id")), str(de.get("id")), "%s: id gleich" % file)
+	check_eq(str(en.get("start")), str(de.get("start")), "%s: start gleich" % file)
+	var de_nodes: Dictionary = de.get("nodes", {})
+	var en_nodes: Dictionary = en.get("nodes", {})
+	for node_id: String in de_nodes:
+		check(en_nodes.has(node_id), "%s: EN fehlt Knoten %s" % [file, node_id])
+	for node_id: String in en_nodes:
+		check(de_nodes.has(node_id), "%s: DE fehlt Knoten %s" % [file, node_id])
+	for node_id: String in de_nodes:
+		if not en_nodes.has(node_id):
+			continue
+		_check_knoten_paritaet(file, node_id, de_nodes[node_id], en_nodes[node_id])
+
+
+func _check_knoten_paritaet(
+	file: String, node_id: String, de_node: Dictionary, en_node: Dictionary
+) -> void:
+	var wo := "%s/%s" % [file, node_id]
+	check_eq(
+		str(en_node.get("sprecher", "")), str(de_node.get("sprecher", "")), "%s: sprecher" % wo
+	)
+	var de_zeilen := _dialog_zeilen(de_node)
+	var en_zeilen := _dialog_zeilen(en_node)
+	check_eq(en_zeilen.size(), de_zeilen.size(), "%s: gleich viele Textzeilen" % wo)
+	for zeile in de_zeilen + en_zeilen:
+		check(not str(zeile).strip_edges().is_empty(), "%s: keine leere Zeile" % wo)
+	check_eq(str(en_node.get("next", "")), str(de_node.get("next", "")), "%s: next" % wo)
+	check_eq(bool(en_node.get("ende", false)), bool(de_node.get("ende", false)), "%s: ende" % wo)
+	var de_effekte: Array = de_node.get("effekt", [])
+	var en_effekte: Array = en_node.get("effekt", [])
+	check_eq(en_effekte, de_effekte, "%s: effekt identisch" % wo)
+	var de_opts: Array = de_node.get("optionen", [])
+	var en_opts: Array = en_node.get("optionen", [])
+	check_eq(en_opts.size(), de_opts.size(), "%s: gleich viele Optionen" % wo)
+	for i in mini(de_opts.size(), en_opts.size()):
+		var de_opt: Dictionary = de_opts[i]
+		var en_opt: Dictionary = en_opts[i]
+		check_eq(str(en_opt.get("next")), str(de_opt.get("next")), "%s[%d]: next" % [wo, i])
+		check_eq(str(en_opt.get("cond", "")), str(de_opt.get("cond", "")), "%s[%d]: cond" % [wo, i])
+		check(not str(de_opt.get("text", "")).is_empty(), "%s[%d]: DE-Text da" % [wo, i])
+		check(not str(en_opt.get("text", "")).is_empty(), "%s[%d]: EN-Text da" % [wo, i])
+
+
+func _dialog_zeilen(node: Dictionary) -> Array:
+	var raw: Variant = node.get("text", [])
+	if raw is String:
+		return [raw]
+	return raw if raw is Array else []
 
 
 func _placeholders(regex: RegEx, text: String) -> Array:
