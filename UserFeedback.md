@@ -19,6 +19,10 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ## Offen (hier bitte eintragen)
 [ ] Nutze absofort Fable 5 Max thinking statt Opus 5 Max thinking denn das was du bisher hier hergestellt hast sieht grauenhaft schlecht aus.
 [ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
+[ ] Rückblicke fehlen
+[ ] Die kompletten Cutscenen fehlen
+[ ] Es fehlt fast alles von da vor und was da ist ist einfach nur schlechter, das einzig gute ist das Bau System der Rest sonst ist kacke.
+[ ] Das Spiel startet im Hochformat statt Querformat.
 [ ] Zurück Button funktoniert meist nicht.
 [ ] UI ist meist falsch skaliert.
 [ ] Gooby kann sich irgendwie keinen meter im Haus alleine bewegen.
