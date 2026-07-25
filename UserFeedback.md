@@ -28,6 +28,43 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Es fehlt der polish. Nimm dir mehr Subagents die auch sowas wie Dopamin, Sounddesign und feeling bewerten und verbessern sollen.
 [ ] Die Github Actions build werfen einen error : lint
 Process completed with exit code 123.
+
+
+
+[ ]Du sollst den Subagent Flow weitermachen aber ich will das man mit dem Auto aus der Stadt raus fahren kann zu einem Riesen Feld wo eine Pferde Ranch steht und dort soll quasi das erste Riesen DLC Map/Content erweiterung sein (Die Gooby Ranch) die soll man bei Level 20 freischalten zum kaufen und direkt nachdem Rückblick soll dann quasi kommen „Du kannst jetzt zur Ranch fahren und sie kaufen.) (dann der Preis also die G Münzen) und willst du jetzt los oder erst später kaufen?
+ 
+Gooby ist ein Dicker süßer Hase also generiere auch Texturen, generiere Bilder(mit GPT5.6SOLMAXFAST) wie du es brauchst das Spiel ist auf deutsch.
+Du sollst sehr viele Fable 5 Max thinking Subagents für alles nutzen und sehr viele gleichzeitig 
+Du kennst ja bereits unseren Subagent Flow 
+Ich will das du die „Ranch“ als Ort zum kaufen hinzufügst. Wie quasi ein ganzes Riesen DLC. Es soll sowas wie den Char übernehmen aber Overall eine etwas andere Erfahrung sein, das UI Still soll gleich sein aber Es soll das Spiel (Gooby Ranch) zubauen mit mehreren Subagents die Opus 5 Max thinking fast sind Ideen zusammen für das perfekte Pferde Spiel das quasi wie Star Stable und so Pferde spiele ist also mit Quests 3D Welt etc allem und für Assets kannst du online welche runterladen und du sollst dir Blender und Blockbench laden und per MCP was du dem Subagents gibt’s denen erlauben mehr custom Modelle zubauen etc ich will das du ein vollwertiges Spiel baust und nicht nur eine Alpha oder Demo also eine große Open Welt mit Minispielen , Quests und Multiplayer der über eine Node.js instance läuft. Es soll auch sowas wie Mehrspieler Minispiele geben, Freunde System und cosmetics , eine eigene Ranch mit Grid Design um dort selber Sachen mit Gold zu upgraden etc man soll Pferde leveln und verbessern können und zb zu Orten reiten und so um Sachen wie Möbel oder neue Pferde zukaufen 
+Du sollst Sounds aus dem internet adden und auch music denk dran alles es ist ein privates Projekt unter freunden 
+Es soll genauso Multiplayer unterstützen und quasi das Gooby spiel um ein ganzes Pferde Spiel DLC erweitern (Generiere gerne auch ein cooles Artwork für Gooby Ranch) 
+Ich will auch das du ladebildschirme, schönes UI, und gutes feeling und polish drin hast. Das Spiel soll auf deutsch sein und du sollst auch verstecke Dev Optionen einbauen (wenn man in Setting auf Sprache Deutsch 3x drauf klickt) denk an richtige Settings einbauen. 
+Baue NPCs etc auch ein und mach das jeder Dialoge hat und das man auch Freundschaften zu denen hat als werte etc wo sich dann mehr entsperrt
+ 
+Die Welt soll auch andere Tiere etc haben und sich dadurch lebendig anfühlen statt nur leer
+ 
+Denk auch an Grafiksettings und allgemein auch sowas wie Auflösung und UI Scale
+ 
+Mach alles wirklich sehr schön und modern und nutze wirklich die Power die die neuen iphones haben füge auch sachen hinzu wo zb die Handy app automatisch auch eine compaion app wird damit man wenn man am PC ist die map und Quests besser sehen kann
+ 
+Füge random events hinzu
+ 
+Füge Wetter hinzu
+ 
+Füge Notifactions hinzu
+ 
+Füge noch viel mehr Features hinzu schaue dir dafür einmal mit Research Subagents fable 5 Max thinking im Web andere Pferde/Horse Spiele an und schau was die so haben 
+ 
+Füge das man auch für manche Quests etwas warten muss und die dann als Live Activaität auf seinem IPhone hat
+ 
+Baue das alles in der Godot Engine perfekt und du kannst soviele Fable 5 max thinking subagents nutzen wie du willst für alles fange am besten mit Ideen sammler/Verbesserer die auch noch selber viele ideen einbringen und danach nutze eine Subagent Fable 5 max thinking subagent Welle die dann planen zb und danach welche zum implementieren auf fable 5 max thinking und danach Eval mit fable 5 max thinking weiterhin
+Sol=GPT5.6SolMaxThinkingFAST
+Sammle erstmal weitere Ideen und Inspiriiationen etc und denk dran das DLC soll wirklich ein komplettes Pferde DLC Game mit ganz ganz viel Content werden du kriegst das hin denk an Polish eval und solche Sachen aber du kriegst das hin.
+
+ 
+Du schaffst das ich vertraue dir
+
 <!-- USER: Neue Punkte einfach hier drunter schreiben. Beispiel:
 - [ ] Das HUD ist mir im Querformat zu weit links
 - [ ] Der Taxi-Sound ist zu laut
