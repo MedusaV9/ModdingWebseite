@@ -1,0 +1,10 @@
+{
+  "en": {
+    "gui.eclipse.skills.wand.cooling": "Ready in %ss",
+    "gui.eclipse.skills.wand.syncing": "Attuning to the server…"
+  },
+  "de": {
+    "gui.eclipse.skills.wand.cooling": "Bereit in %ss",
+    "gui.eclipse.skills.wand.syncing": "Gleicht mit dem Server ab…"
+  }
+}

@@ -719,7 +719,12 @@ public final class SkyLauncher {
             // BD-SHIP wind shard: one 20t interpolated window per ambient stride; the
             // 200t self-heal also covers the shard (a /kill'ed accent heals like a
             // /kill'ed interaction, born mid-pose off the same absolute clock).
-            boolean shardAlive = animateWindShard(level, pad, gameTime);
+            // While a charge runs on this pad, its 3t boost strides OWN the shard: an
+            // ambient push would overwrite a same-tick boost target (charges tick first)
+            // and sag the spin-up toward idle between strides (EVAL-V6-CUTBD §3 defect
+            // 6). The first post-launch ambient boundary pulls it back — the recoil
+            // settle stays free under the stateless-push law.
+            boolean shardAlive = animateWindShard(level, pad, gameTime, chargeActiveAt(pad));
             if (!shardAlive && gameTime % SELF_HEAL_TICKS == 0L) {
                 spawnWindShard(level, pad);
                 EclipseMod.LOGGER.info("SkyLauncher: re-spawned missing wind shard at {}",
@@ -760,20 +765,35 @@ public final class SkyLauncher {
         level.addFreshEntity(shard);
     }
 
-    /** Ambient 20t window (≈28° of yaw — under the flattening law); returns shard presence. */
-    private static boolean animateWindShard(ServerLevel level, BlockPos pad, long gameTime) {
+    /**
+     * Ambient 20t window (≈28° of yaw — under the flattening law); returns shard
+     * presence. {@code holdForCharge} keeps the presence check (self-heal) but skips the
+     * pose push — the charge's boost strides are the sole driver while a charge runs.
+     */
+    private static boolean animateWindShard(ServerLevel level, BlockPos pad, long gameTime,
+            boolean holdForCharge) {
         boolean found = false;
         for (Entity entity : level.getEntities((Entity) null,
                 new AABB(pad).inflate(2.0D, 6.0D, 2.0D),
                 candidate -> candidate.getTags().contains(SHARD_TAG))) {
             found = true;
-            if (entity instanceof Display.BlockDisplay shard) {
+            if (!holdForCharge && entity instanceof Display.BlockDisplay shard) {
                 shard.setTransformationInterpolationDelay(0);
                 shard.setTransformationInterpolationDuration(AMBIENT_TICKS);
                 shard.setTransformation(shardPose(gameTime + AMBIENT_TICKS, 0.0D));
             }
         }
         return found;
+    }
+
+    /** Whether a launch charge is currently running on {@code pad}. */
+    private static boolean chargeActiveAt(BlockPos pad) {
+        for (Charge charge : CHARGES.values()) {
+            if (charge.pad().equals(pad)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Charge-stride 3t window with the capped spin-up boost riding the ambient clock. */

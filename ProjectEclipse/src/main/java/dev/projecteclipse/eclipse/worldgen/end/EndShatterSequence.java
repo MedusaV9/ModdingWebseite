@@ -1,11 +1,14 @@
 package dev.projecteclipse.eclipse.worldgen.end;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
@@ -16,6 +19,8 @@ import org.joml.Vector3f;
 import com.mojang.math.Transformation;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.cutscene.CutscenePath;
+import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
@@ -59,6 +64,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -188,14 +194,31 @@ public final class EndShatterSequence {
     private static Job activeJob;
     private static final List<Debris> DEBRIS = new ArrayList<>();
 
-    /** One scheduled CUT-END presentation beat (delayed rumble, crack race, dust curtains). */
-    private record Beat(long dueGameTime, Runnable action) {}
+    /**
+     * UUIDs of debris displays spawned THIS session (StructureFlightFx doctrine): a tagged
+     * joiner outside this set is a crash/restart stray and is discarded on chunk load.
+     */
+    private static final Set<UUID> LIVE_DEBRIS = Collections.synchronizedSet(new HashSet<>());
+
+    /** One scheduled CUT-END presentation beat, {@code delayTicks} after beat-clock zero. */
+    private record Beat(int delayTicks, Runnable action) {}
 
     /**
      * Pending presentation beats (server thread only). Purely cosmetic: a restart drops
      * them along with everything else transient — the cinematic never resumes (plan law).
      */
     private static final List<Beat> BEATS = new ArrayList<>();
+
+    /**
+     * CUT-END beat-clock zero (game time): −1 until armed. The clock arms on the FIRST
+     * client {@code C2SCutsceneReadyPayload} ACK of the shatter cutscene — the instant a
+     * watcher's preload hold releases and the flight (whose JSON carries the mirrored
+     * sound/shake events) actually starts — so the server crack race never plays behind
+     * the client's black hold (EVAL-V6-CUTBD §3.3).
+     */
+    private static long beatZeroGameTime = -1L;
+    /** Timeout-fallback arm deadline (game time); −1 when no arm is pending. */
+    private static long beatArmDeadline = -1L;
 
     private EndShatterSequence() {}
 
@@ -314,7 +337,26 @@ public final class EndShatterSequence {
     public static void onServerStopped(ServerStoppedEvent event) {
         activeJob = null;
         DEBRIS.clear();
+        LIVE_DEBRIS.clear();
         BEATS.clear();
+        beatZeroGameTime = -1L;
+        beatArmDeadline = -1L;
+    }
+
+    /**
+     * StructureFlightFx sweep doctrine (EVAL-V6-CUTBD §3, defect 1): the boot AABB sweep
+     * only reaches chunks loaded during {@code ServerStartedEvent}; a tagged debris
+     * display sleeping in an unloaded chunk is caught HERE, the moment its chunk loads —
+     * a tagged joiner we did not spawn this session is a crash/restart stray.
+     */
+    @SubscribeEvent
+    public static void onEntityJoin(EntityJoinLevelEvent event) {
+        Entity entity = event.getEntity();
+        if (!event.getLevel().isClientSide() && entity instanceof Display.BlockDisplay
+                && entity.getTags().contains(DEBRIS_TAG)
+                && !LIVE_DEBRIS.contains(entity.getUUID())) {
+            entity.discard();
+        }
     }
 
     @SubscribeEvent
@@ -324,7 +366,13 @@ public final class EndShatterSequence {
             activeJob.tick();
         }
         if (!BEATS.isEmpty()) {
-            tickBeats(server.overworld().getGameTime());
+            long gameTime = server.overworld().getGameTime();
+            if (beatZeroGameTime < 0L && beatArmDeadline >= 0L && gameTime >= beatArmDeadline) {
+                armBeatClock(gameTime, "preload-ready timeout fallback");
+            }
+            if (beatZeroGameTime >= 0L) {
+                tickBeats(gameTime);
+            }
         }
         if (!DEBRIS.isEmpty()) {
             tickDebris();
@@ -346,10 +394,25 @@ public final class EndShatterSequence {
         Iterator<Beat> iterator = BEATS.iterator();
         while (iterator.hasNext()) {
             Beat beat = iterator.next();
-            if (gameTime >= beat.dueGameTime()) {
+            if (gameTime >= beatZeroGameTime + beat.delayTicks()) {
                 iterator.remove();
                 beat.action().run();
             }
+        }
+    }
+
+    /**
+     * Arms the presentation beat clock (idempotent): every beat delay — and the carve
+     * start — counts from HERE, the client's flight start, not from the play-payload
+     * send. Fired by the first {@code end_shatter} preload-ready ACK (the W-CUTSCENE
+     * {@code C2SCutsceneReadyPayload} seam) or the shared preload-timeout fallback.
+     */
+    private static void armBeatClock(long gameTime, String reason) {
+        if (beatZeroGameTime < 0L) {
+            beatZeroGameTime = gameTime;
+            beatArmDeadline = -1L;
+            EclipseMod.LOGGER.info("EndShatterSequence: beat clock armed at game time {} ({})",
+                    gameTime, reason);
         }
     }
 
@@ -391,11 +454,12 @@ public final class EndShatterSequence {
         // CUT-END shot 1 (dragon-death beat): beat 0 is a DEAD-SILENT hold — only the
         // safety caption stands while the orbit establishes. The rumble, the big shake and
         // the seam flashes all wait out SILENCE_HOLD_TICKS, so the JSON's first crack
-        // (t 0.10 ≈ the same wall-clock instant, preload hold permitting) breaks true
+        // (t 0.10 ≈ the same wall-clock instant — beat delays and the JSON events now
+        // share the preload-release clock, see the ready-ACK arming below) breaks true
         // silence instead of layering onto a wall of sound. (No sound-STOP mechanism
         // exists anywhere in the mod, so a real audio duck is not achievable — the hold is
         // built by scheduling, not by stopping.)
-        BEATS.add(new Beat(now + SILENCE_HOLD_TICKS, () -> {
+        BEATS.add(new Beat(SILENCE_HOLD_TICKS, () -> {
             overworld.playSound(null, center, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
                     SoundSource.HOSTILE, 4.0F, 1.0F);
             for (ServerPlayer player : overworld.players()) {
@@ -423,7 +487,7 @@ public final class EndShatterSequence {
             double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[islet] * 0.5D;
             Vec3 flash = new Vec3(sx,
                     EndDiscGeometry.surfaceYAt((int) sx, (int) sz) + 2.0D, sz);
-            BEATS.add(new Beat(now + SILENCE_HOLD_TICKS + (long) step * CRACK_RACE_STEP_TICKS, () -> {
+            BEATS.add(new Beat(SILENCE_HOLD_TICKS + step * CRACK_RACE_STEP_TICKS, () -> {
                 PacketDistributor.sendToPlayersNear(overworld, null, flash.x, flash.y, flash.z,
                         FX_RANGE, new S2CFxEventPayload(FX_RIFT_OPEN, flash, 6.0F, 0.0F));
                 overworld.playSound(null, BlockPos.containing(flash),
@@ -435,7 +499,7 @@ public final class EndShatterSequence {
         // debris chunks start tumbling only when the carve pass is about to bite (beat 0 +
         // CARVE_DELAY_TICKS; the curtains land just ahead of it) — not at beat 0, when the
         // disc is still visibly whole.
-        BEATS.add(new Beat(now + SEPARATION_FX_DELAY_TICKS, () -> {
+        BEATS.add(new Beat(SEPARATION_FX_DELAY_TICKS, () -> {
             for (int i = 1; i < layout.count(); i++) {
                 double sx = DiscProfile.END_DISC_CENTER_X + layout.siteX()[i] * 0.5D;
                 double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[i] * 0.5D;
@@ -449,12 +513,30 @@ public final class EndShatterSequence {
             spawnDebris(overworld, layout);
         }));
 
+        // The carve pass rides the SAME beat clock, so the whole presentation (rumble,
+        // crack race, curtains, debris, carve bite) shifts together with the client hold.
+        // A mid-shatter restart still resumes the carve immediately via onServerStarted.
+        BEATS.add(new Beat(CARVE_DELAY_TICKS, () -> activeJob = new Job(overworld, state, 0)));
+
+        // EVAL-V6-CUTBD §3 defect 3: the beats above are NOT clocked from `now` — the
+        // clock arms on the first client preload-ready ACK (W-CUTSCENE's
+        // C2SCutsceneReadyPayload seam), so the first crack lands after the black hold
+        // releases. Vanilla clients / packet loss fall back to the shared preload
+        // timeout; a disabled or missing path never ACKs, so it arms immediately.
+        CutscenePath path = CutscenePaths.get(CUTSCENE_ID);
+        if (path != null && CutsceneService.isEnabled(server, path)) {
+            beatArmDeadline = now + CutsceneService.PRELOAD_TIMEOUT_TICKS;
+            CutsceneService.onNextClientReady(CUTSCENE_ID,
+                    () -> armBeatClock(overworld.getGameTime(), "client preload-ready ACK"));
+        } else {
+            armBeatClock(now, "cutscene disabled/absent");
+        }
+
         // Global orbit show; gather + preload + the C6-healed return come with global().
         Vec3 anchor = Vec3.atCenterOf(center);
         CutsceneService.play(CUTSCENE_ID, List.copyOf(server.getPlayerList().getPlayers()),
                 anchor, null, CutsceneService.PlayOptions.global(CUTSCENE_VIEW_DISTANCE));
 
-        activeJob = new Job(overworld, state, CARVE_DELAY_TICKS);
         EclipseMod.LOGGER.info("End disc shatter started: {} islets, seed {}",
                 layout.count(), layout.seed());
     }
@@ -586,7 +668,13 @@ public final class EndShatterSequence {
         display.setTransformationInterpolationDelay(0);
         display.setTransformationInterpolationDuration(0);
         display.setTransformation(debrisPoseAt(debris, 0));
-        return level.addFreshEntity(display);
+        // Registered BEFORE addFreshEntity: the join-time stray guard fires inside it.
+        LIVE_DEBRIS.add(display.getUUID());
+        if (level.addFreshEntity(display)) {
+            return true;
+        }
+        LIVE_DEBRIS.remove(display.getUUID());
+        return false;
     }
 
     /** Debris ember-trail clock + rotating sample cursor (CUT-END shot 3 presentation). */
@@ -612,6 +700,7 @@ public final class EndShatterSequence {
             if (age >= DEBRIS_TTL_TICKS || display.isRemoved()
                     || debris.origin.y + debris.fallAt(age) < 200.0D) {
                 display.discard();
+                LIVE_DEBRIS.remove(display.getUUID());
                 iterator.remove();
                 continue;
             }
@@ -677,7 +766,11 @@ public final class EndShatterSequence {
                 new Vector3f(scale, scale, scale), new Quaternionf());
     }
 
-    /** Boot sweep of orphaned debris (a crash mid-cinematic persists the displays). */
+    /**
+     * Boot sweep of orphaned debris (a crash mid-cinematic persists the displays). Only
+     * reaches chunks loaded at {@code ServerStartedEvent} — strays in still-unloaded
+     * chunks are caught by the {@link #onEntityJoin} guard when their chunk loads.
+     */
     private static void sweepDebris(ServerLevel overworld) {
         AABB bounds = new AABB(
                 DiscProfile.END_DISC_CENTER_X - DiscProfile.END_DISC_RADIUS - 32,

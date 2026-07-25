@@ -2,8 +2,9 @@
 
 Scope: how the optional **Photon** VFX mod (Modrinth `photon-editor`, KilaBash / Low Drag
 MC) is wired into Eclipse today, whether the client-optional distribution is actually safe,
-and the target architecture (`PhotonFxRegistry` over the existing `FxPayloads` S2C lane)
-for scaling past the current two hardcoded seams. All jar evidence below was re-verified
+and the registry architecture (`PhotonFxRegistry` over the existing `FxPayloads` S2C lane)
+that now carries every cue beyond the two original D12 seams (§3 SHIPPED note; V6-FIXWIRE
+doc refresh). All jar evidence below was re-verified
 by unpacking `run/mods-client/photon-neoforge-1.21.1-2.1.5.jar` and
 `ldlib2-neoforge-1.21.1-2.2.29.jar` (extracted to `/tmp/photon_jar3`) and by reading the
 NeoForge 21.1.238 sources in `build/moddev/artifacts/neoforge-21.1.238-sources.jar`.
@@ -18,8 +19,13 @@ verdict), `docs/plans_v3/plans_v5/PLAN-D_systems.md` §D12 (original adoption pl
 `veilfx/PhotonBridge` is the ONLY class that touches Photon — pure reflection, zero
 compile-time or Gradle dependency, `@OnlyIn(Dist.CLIENT)`. Reflected API (signatures
 re-verified with `javap` against the 2.1.5 jar, see §"API surface" below):
-`FXHelper.getFX(ResourceLocation)` → `new BlockEffectExecutor(FX, Level, BlockPos)` →
-`start()`.
+`FXHelper.getFX(ResourceLocation)`; the two executor kinds
+`new BlockEffectExecutor(FX, Level, BlockPos)` and
+`new EntityEffectExecutor(FX, Level, Entity, AutoRotate)` (both → `start()`); the
+`SpawnOptions` setters `setOffset(Vector3f)` / `setRotation(Quaternionf)` /
+`setScale(Vector3f)` / `setDelay(int)` / `setAllowMulti(boolean)`; and the loop/sweep
+surface `getRuntime()` → `FXRuntime.isAlive()` / `FXRuntime.destroy(boolean)` —
+eleven reflected points total (EVAL-V6-PHOTON §2 verified all of them exact).
 
 Guard chain (`PhotonBridge.available()` + `resolve()`), all must pass:
 
@@ -31,7 +37,8 @@ Guard chain (`PhotonBridge.available()` + `resolve()`), all must pass:
 6. per-id `MISSING_FX` set: a null/failed `.fx` load skips that id for the session
    (one INFO/WARN).
 
-Two live seams, both additive (the Quasar path always still runs):
+The two ORIGINAL D12 seams, both additive (the Quasar path always still runs) — every
+LATER cue goes through `PhotonFxRegistry` rows instead (§3):
 
 | Cue | Server sender | Client path | Photon layer |
 |---|---|---|---|
@@ -52,10 +59,11 @@ Notes on the flow as-built:
 
 ## 2. Distribution & dist-safety verdict
 
-Where the jars sit: `run/mods-client/` (dev-client extras next to iris/sodium), fetched
-best-effort by `tools/modpack/fetch_dev_mods.py` (`("photon-editor",
-"photon-neoforge-1.21.1-2.1.5.jar", MODS_CLIENT)`); a fetch miss never fails the script.
-The dedicated-server mod set does not include them, and `AntiCheatCheck.defaults()` +
+Where the jars sit: BOTH `run/mods-client/` (dev-client extras next to iris/sodium) AND
+`run/mods` (dedicated server), fetched best-effort by
+`tools/modpack/fetch_dev_mods.py` (the `OPTIONAL` table carries a `MODS_CLIENT` and a
+`MODS` row for each of photon/ldlib2 — PH-CORE adopted Verdict C's option 1 below); a
+fetch miss never fails the script. `AntiCheatCheck.defaults()` +
 `assets/eclipse/bootstrap.json` list `photon`/`ldlib2`/`kilagraph` as `"*"` allowlisted
 **optional** rows (verified — they are in the `optional` list, NOT in `required`).
 
@@ -309,7 +317,7 @@ Our `run/mods-client` stack is exactly iris 1.8.14-beta.1 + sodium 0.8.12 + phot
 | Photon not installed (default) | `available()` false via `isLoaded` | Silent no-op; Quasar/vanilla path bit-identical to pre-D12 | none |
 | Photon installed, ldlib2 missing | NeoForge dependency error at LOAD (photon requires `ldlib2 [2.2.24,)`) — loader screen, game never reaches the bridge | n/a (loader-level, user install error) | operator installs the pair (fetch script already does) |
 | Photon 2.2.x installed (adds required KilaGraph) | Loads fine with kilagraph present; if the `com.lowdragmc.photon.client.fx` API moved/renamed, `resolve()` throws → `state=DISABLED`, one WARN | Session-long no-op, Quasar unchanged | anticheat rows already `"*"` incl. `kilagraph`; re-`javap` the new jar before blessing it in `fetch_dev_mods.py` |
-| Photon loaded, `.fx` asset absent (today's default — we ship none) | `getFX` returns null → per-id INFO, id added to `MISSING_FX` | That cue stays Quasar-only for the session | author + ship the asset (§6) |
+| Photon loaded, `.fx` asset absent (the exception — 68 authored assets ship in `assets/eclipse/fx/`, incl. `boss/`) | `getFX` returns null → per-id INFO, id added to `MISSING_FX` | That cue stays Quasar-only for the session | author + ship the asset (§6) |
 | `.fx` asset corrupt / executor throws | `InvocationTargetException` caught in `spawn` → per-id WARN, id skipped | That cue Quasar-only | re-export from the editor |
 | `reducedFx=true` or `photonFx=false` | `available()` false | Intentional no-op | none (user choice) |
 | Photon+LDLib2 on the DEDICATED SERVER | Loads (Verdict B): photon inert (client-array mixins skipped, GL feature side-aware), ldlib2 applies its common mixins; `/photon` commands appear | Bridge untouched (server never classloads it) | acceptable; required if Photon-equipped clients must join (next row) |
@@ -326,7 +334,9 @@ Photon effects are DATA: compressed-NBT `.fx` files authored in Photon's in-game
 Unity-style editor, loaded by `FXHelper.getFX` from `assets/<namespace>/fx/<path>.fx`
 (`FX_PATH = "fx/"`, template `fx/<path>.fx` — verified from the jar constant pool).
 
-Workflow for a future effect (e.g. the missing `eclipse:altar_levelup`):
+Workflow for a new effect (worked example: `eclipse:altar_levelup`, which now SHIPS as
+`src/main/resources/assets/eclipse/fx/altar_levelup.fx` — one of the 68 committed
+assets):
 
 1. **Author:** launch the dev client (`run/mods-client` already carries photon+ldlib2
    via `tools/modpack/fetch_dev_mods.py`), open the editor via the `/photon fx` command

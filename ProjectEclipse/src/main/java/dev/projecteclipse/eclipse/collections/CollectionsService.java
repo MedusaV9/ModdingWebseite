@@ -229,14 +229,23 @@ public final class CollectionsService {
      * On any grant: XP + points, per-player recipe unlock resync, tier toast payload and
      * the chat announcement, then a full snapshot so the handbook tab is exact.
      *
-     * <p><b>Crash-safety (DOPA-S-06)</b>: claim-then-grant. The tier CLAIM
-     * ({@code grantedTiers}) and a pending-grant journal row are written to
-     * {@link CollectionsState} and force-flushed to disk BEFORE any XP/point/shard grant
-     * touches the other SavedData files. A crash before the payout leaves the journal row
-     * on disk — {@link #replayPendingGrants} re-applies it exactly once at the next
-     * login; a crash before the flush loses only the claim (the sweep re-crosses it from
-     * the counter, granting once). The claim being durable first means the sweep itself
-     * can never replay a tier.</p>
+     * <p><b>Crash-safety (DOPA-S-06, hardened per EVAL-V6-COMPLETE A#8)</b>:
+     * claim-then-grant with idempotent destinations. Ordering:</p>
+     * <ol>
+     *   <li>The tier CLAIM ({@code grantedTiers}) and a pending-grant journal row are
+     *       written to {@link CollectionsState} and force-flushed BEFORE any payout
+     *       (a crash before this flush loses only the claim — the sweep re-crosses it
+     *       from the counter, granting once).</li>
+     *   <li>Payouts go through exactly-once destinations: XP/points via
+     *       {@code SkillsApi.grantOnce} (receipt persisted in the SAME
+     *       {@code eclipse_skills} write as the payout) and shards via
+     *       {@link #grantShardsOnce} (receipt attachment in the SAME player NBT as the
+     *       balance). A torn multi-file save can therefore never double-pay: the
+     *       journal replay skips whatever already landed.</li>
+     *   <li>The payout (player NBT + skills SavedData) is force-persisted, and only
+     *       THEN are the journal rows cleared. The clear becoming durable strictly
+     *       after the payout means a torn save can never drop a reward either.</li>
+     * </ol>
      */
     private static boolean sweep(ServerPlayer player, CollectionsConfig.Collection def,
             CollectionsState.Entry entry, CollectionsState state) {
@@ -260,12 +269,17 @@ public final class CollectionsService {
         state.setDirty();
         dev.projecteclipse.eclipse.core.state.EclipseSavedData.flushOverworld(player.server);
 
-        // 2) Payouts; each journal row clears as its tier's grants land.
+        // 2) Idempotent payouts (receipts land in the destination files).
         for (int tier = previous + 1; tier <= granted; tier++) {
-            applyTierGrant(player, def, tiers.get(tier - 1), tier, cfg);
-            entry.clearPendingGrant(def.id(), tier);
-            state.setDirty();
+            applyTierGrant(player, def, tiers.get(tier - 1), tier, cfg, true);
         }
+
+        // 3) Persist the payouts, THEN confirm (clear) the journal rows — never before.
+        persistPayouts(player);
+        for (int tier = previous + 1; tier <= granted; tier++) {
+            entry.clearPendingGrant(def.id(), tier);
+        }
+        state.setDirty();
 
         // §4.2: recipe unlock + EMI un-hide land in the same tick as the toast.
         RecipeGate.syncTo(player);
@@ -273,35 +287,79 @@ public final class CollectionsService {
         return true;
     }
 
-    /** One tier's payout: XP + points + FIX-ECON personal shards + toast + chat line. */
-    private static void applyTierGrant(ServerPlayer player, CollectionsConfig.Collection def,
-            CollectionsConfig.Tier tier, int tierNumber, CollectionsConfig.Snapshot cfg) {
-        if (tier.xp() > 0) {
-            SkillsApi.addXp(player, cfg.xpSourceKey(), tier.xp());
-        }
-        if (tier.points() > 0) {
-            SkillsApi.addPoints(player, tier.points());
+    /**
+     * One tier's payout: XP + points + FIX-ECON personal shards + toast + chat line.
+     * Idempotent per {@code (collection, tier, player)} — both destinations check a
+     * durable receipt before paying (see {@link #sweep} javadoc). {@code announce}
+     * controls the toast/chat: the live sweep always announces; the crash-recovery
+     * replay announces only when something was actually re-paid.
+     *
+     * @return whether any XP/point/shard grant was applied NOW (false = pure replay)
+     */
+    private static boolean applyTierGrant(ServerPlayer player, CollectionsConfig.Collection def,
+            CollectionsConfig.Tier tier, int tierNumber, CollectionsConfig.Snapshot cfg,
+            boolean announce) {
+        String receipt = "collections:" + def.id() + ":" + tierNumber;
+        boolean applied = false;
+        if (tier.xp() > 0 || tier.points() > 0) {
+            applied |= SkillsApi.grantOnce(player, receipt, cfg.xpSourceKey(), tier.xp(), tier.points());
         }
         if (tier.shards() > 0) {
             // FIX-ECON: chunky (T4+) tiers pay PERSONAL shards — rebirth currency,
             // announced with the D14 gain toast. The sweep only runs for the online
             // acting player, so a direct credit is always deliverable.
-            dev.projecteclipse.eclipse.economy.ShardEconomy.addShards(player, tier.shards(), true);
+            applied |= grantShardsOnce(player, receipt, tier.shards());
         }
-        if (cfg.toastsEnabled()) {
-            CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
-                    def.id(), tierNumber, tier.xp(), tier.points(), tier.unlockItems()));
+        if (announce || applied) {
+            if (cfg.toastsEnabled()) {
+                CollectionsPayloads.sendTo(player, new S2CCollectionTierPayload(
+                        def.id(), tierNumber, tier.xp(), tier.points(), tier.unlockItems()));
+            }
+            player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
+                    Component.translatable("collection.eclipse." + def.id()),
+                    CollectionTiers.roman(tierNumber)));
         }
-        player.sendSystemMessage(Component.translatable("message.eclipse.collection.tier",
-                Component.translatable("collection.eclipse." + def.id()),
-                CollectionTiers.roman(tierNumber)));
+        return applied;
+    }
+
+    /**
+     * Exactly-once personal-shard payout: the receipt rides
+     * {@code EclipseAttachments.SHARD_GRANT_RECEIPTS} — the SAME player NBT write as the
+     * {@code SHARDS} balance, so payout and receipt persist (or tear away) together.
+     */
+    private static boolean grantShardsOnce(ServerPlayer player, String receipt, int shards) {
+        List<String> receipts = player.getData(
+                dev.projecteclipse.eclipse.registry.EclipseAttachments.SHARD_GRANT_RECEIPTS);
+        if (receipts.contains(receipt)) {
+            return false; // already paid — replay after a torn save
+        }
+        List<String> updated = new ArrayList<>(receipts);
+        updated.add(receipt);
+        player.setData(dev.projecteclipse.eclipse.registry.EclipseAttachments.SHARD_GRANT_RECEIPTS.get(),
+                List.copyOf(updated));
+        dev.projecteclipse.eclipse.economy.ShardEconomy.addShards(player, shards, true);
+        return true;
+    }
+
+    /**
+     * Durability barrier between payout and journal-clear (sweep step 3): persists
+     * every player .dat (shard balance + shard receipts ride attachments) and the dirty
+     * overworld SavedData (skill XP/points + skill receipts). Rare one-shot event —
+     * never on a per-tick path (the {@code flushOverworld} doctrine).
+     */
+    private static void persistPayouts(ServerPlayer player) {
+        player.server.getPlayerList().saveAll();
+        dev.projecteclipse.eclipse.core.state.EclipseSavedData.flushOverworld(player.server);
     }
 
     /**
      * DOPA-S-06 recovery: replays every journaled tier payout that a crash cut off
-     * between the durable claim and the grants — exactly once (the journal row IS the
-     * idempotency marker; it only exists while a payout is unconfirmed). Rows whose
-     * collection/tier no longer exists in the config are dropped with a WARN.
+     * between the durable claim and the confirmed payout. Destinations are idempotent
+     * ({@code grantOnce}/{@link #grantShardsOnce} receipts), so a row whose payout DID
+     * land before the crash is skipped silently — the journal row alone is no longer
+     * trusted as the only marker (EVAL-V6-COMPLETE A#8). Rows whose collection/tier no
+     * longer exists in the config are dropped with a WARN. Payouts are persisted BEFORE
+     * the rows clear, mirroring the sweep's ordering.
      */
     private static void replayPendingGrants(ServerPlayer player) {
         CollectionsState state = CollectionsState.get(player.server);
@@ -316,19 +374,27 @@ public final class CollectionsService {
             CollectionsConfig.Collection def = cfg.byId(pending.getKey());
             for (int tier : new ArrayList<>(pending.getValue())) {
                 if (def != null && tier >= 1 && tier <= def.tiers().size()) {
-                    applyTierGrant(player, def, def.tiers().get(tier - 1), tier, cfg);
-                    EclipseMod.LOGGER.info("Collections crash-recovery: replayed '{}' tier {} "
-                            + "payout for {}", pending.getKey(), tier, player.getScoreboardName());
+                    boolean applied = applyTierGrant(player, def, def.tiers().get(tier - 1), tier, cfg, false);
+                    EclipseMod.LOGGER.info("Collections crash-recovery: '{}' tier {} for {} — {}",
+                            pending.getKey(), tier, player.getScoreboardName(),
+                            applied ? "replayed missing payout" : "payout already applied, journal row confirmed");
                 } else {
                     EclipseMod.LOGGER.warn("Collections crash-recovery: dropped stale pending "
                             + "grant '{}' tier {} for {} (no longer in config)",
                             pending.getKey(), tier, player.getScoreboardName());
                 }
-                entry.clearPendingGrant(pending.getKey(), tier);
                 any = true;
             }
         }
         if (any) {
+            // Same ordering law as the sweep: payout durable BEFORE the journal clears.
+            persistPayouts(player);
+            for (Map.Entry<String, Set<Integer>> pending
+                    : new HashMap<>(entry.pendingGrants).entrySet()) {
+                for (int tier : new ArrayList<>(pending.getValue())) {
+                    entry.clearPendingGrant(pending.getKey(), tier);
+                }
+            }
             state.setDirty();
             RecipeGate.syncTo(player);
         }

@@ -69,6 +69,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_BORDER_FX_RANGE = "borderFxRange";
     private static final String TAG_HERALD_DEFEATED = "heraldDefeated";
     private static final String TAG_FERRYMAN_DEFEATED = "ferrymanDefeated";
+    private static final String TAG_KINETICS_BUILT = "kineticsBuilt";
     private static final String TAG_SHARD_POOL = "shardPool";
     private static final String TAG_GRAVE_POSITIONS = "gravePositions";
     private static final String TAG_LAST_LOADED_STAGE_OVERWORLD = "lastLoadedStageOverworld";
@@ -105,6 +106,7 @@ public final class EclipseWorldState extends SavedData {
     private boolean firstPaleNightDone = false;
     private boolean heraldDefeated = false;
     private boolean ferrymanDefeated = false;
+    private boolean kineticsBuilt = false;
     private int shardPool = 0;
     private int lastLoadedStageOverworld = -1;
     private int lastLoadedStageNether = -1;
@@ -164,6 +166,8 @@ public final class EclipseWorldState extends SavedData {
         state.heraldDefeated = tag.getBoolean(TAG_HERALD_DEFEATED);
         // Defaults to false so pre-W12 saves keep loading (finale not fought yet).
         state.ferrymanDefeated = tag.getBoolean(TAG_FERRYMAN_DEFEATED);
+        // V6-FIXWIRE #3: defaults to false on saves that predate the kinetics beat producer.
+        state.kineticsBuilt = tag.getBoolean(TAG_KINETICS_BUILT);
         // W13 economy fields default to 0/empty so pre-W13 saves keep loading.
         state.shardPool = tag.getInt(TAG_SHARD_POOL);
         // W14 stage-snapshot fields default to -1 ("nothing loaded yet") on pre-W14 saves.
@@ -240,6 +244,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putBoolean(TAG_FIRST_PALE_NIGHT_DONE, this.firstPaleNightDone);
         tag.putBoolean(TAG_HERALD_DEFEATED, this.heraldDefeated);
         tag.putBoolean(TAG_FERRYMAN_DEFEATED, this.ferrymanDefeated);
+        tag.putBoolean(TAG_KINETICS_BUILT, this.kineticsBuilt);
         tag.putInt(TAG_SHARD_POOL, this.shardPool);
         tag.putInt(TAG_LAST_LOADED_STAGE_OVERWORLD, this.lastLoadedStageOverworld);
         tag.putInt(TAG_LAST_LOADED_STAGE_NETHER, this.lastLoadedStageNether);
@@ -618,6 +623,24 @@ public final class EclipseWorldState extends SavedData {
 
     public void setFerrymanDefeated(boolean defeated) {
         this.ferrymanDefeated = defeated;
+        setDirty();
+    }
+
+    // --- Create kinetics beat (V6-FIXWIRE #3) ---
+
+    /**
+     * Whether a Create kinetic power source has ever been placed on this world.
+     * Producer: {@code QuestDetectors.handleBlockPlaced} (analytics placement lane).
+     * Consumer: the {@code create_kinetics_built} built-in beat in
+     * {@code QuestEngine.evaluateBuiltinBeat} — persistent so the day-3 quest still
+     * retro-completes via the beat poll when the generator went up on an earlier day.
+     */
+    public boolean isKineticsBuilt() {
+        return this.kineticsBuilt;
+    }
+
+    public void setKineticsBuilt(boolean built) {
+        this.kineticsBuilt = built;
         setDirty();
     }
 

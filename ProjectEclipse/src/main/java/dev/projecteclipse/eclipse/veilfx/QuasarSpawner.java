@@ -9,6 +9,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
 import foundry.veil.api.quasar.particle.ParticleSystemManager;
@@ -45,6 +46,21 @@ import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
  */
 @OnlyIn(Dist.CLIENT)
 public final class QuasarSpawner {
+    /**
+     * D11 wand garnish cues shed entirely under reduced FX (per-effect degradation — the
+     * BURST rate cap alone lets an exactly-at-cap cast keep every layer): reality-seam
+     * scars, the maw shimmer, ash flakes, heat columns, the constellation residue and the
+     * soulbind orbit pulses. The soulbind flash is deliberately NOT listed — one pop stays
+     * as the once-per-player ceremony's essential downbeat.
+     */
+    private static final Set<ResourceLocation> REDUCED_FX_GARNISH = Set.of(
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "riss_seam_scar"),
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "riss_maw_shimmer"),
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glut_ash_flakes"),
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glut_heat_column"),
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "stern_constellation"),
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "wand_soulbind_orbit"));
+
     /** Emitter ids that threw — permanently disabled for the session. */
     private static final Set<ResourceLocation> BROKEN = new HashSet<>();
     /** Emitter ids that already logged an unknown-id warning (not fatal: id may appear after a reload). */
@@ -119,6 +135,9 @@ public final class QuasarSpawner {
      * IS a silent drop: over-budget cues must disappear, not turn into vanilla particle floods.
      */
     public static void spawnOrFallback(ResourceLocation emitterId, Vec3 pos, FxBudget.Channel channel) {
+        if (EclipseClientConfig.reducedFx() && REDUCED_FX_GARNISH.contains(emitterId)) {
+            return; // reduced-FX garnish shed — deliberate, silent (never the vanilla fallback)
+        }
         if (!FxBudget.tryEmitter(channel)) {
             return; // budget drop — deliberate, silent
         }

@@ -655,7 +655,9 @@ public final class RiftFx {
          * {@code width · }{@value #ENTRY_RADIUS_FRACTION} of a portal-like star triggers the
          * iris-open flash ({@link RiftRenderer} reads {@link #entryFlashTick}), a
          * client-local whoosh, one extra rim-spark burst, and — when the entrant is the
-         * local player — a small glitch pulse. Per-rift cooldown
+         * local player — a small glitch pulse (spark burst and glitch pulse are both
+         * skipped under {@code reducedFx}: the reduced entry is the iris fan only).
+         * Per-rift cooldown
          * {@value #ENTRY_COOLDOWN_TICKS} ticks so a conga line cannot strobe the star.
          */
         private void tickEntryWatch(ClientLevel level, int now) {
@@ -681,9 +683,13 @@ public final class RiftFx {
                             EclipseSounds.EVENT_RIFT_WHOOSH.get(), SoundSource.BLOCKS,
                             0.5F + 0.4F * falloff, 1.05F + level.random.nextFloat() * 0.1F, false);
                 }
-                QuasarSpawner.spawn(RIFT_SPARK_EMITTER, this.pos, FxBudget.Channel.BURST);
-                if (player == minecraft.player) {
-                    TransitionFx.glitchPulse(0.18F, 8);
+                // Reduced FX keeps the entry to the iris fan alone: no extra rim-spark
+                // burst and no local glitch pulse (fan-only reduced entry contract).
+                if (!EclipseClientConfig.reducedFx()) {
+                    QuasarSpawner.spawn(RIFT_SPARK_EMITTER, this.pos, FxBudget.Channel.BURST);
+                    if (player == minecraft.player) {
+                        TransitionFx.glitchPulse(0.18F, 8);
+                    }
                 }
                 return;
             }

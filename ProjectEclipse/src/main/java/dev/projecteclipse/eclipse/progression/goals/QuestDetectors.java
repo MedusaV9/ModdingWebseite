@@ -101,6 +101,45 @@ public final class QuestDetectors {
                 QuestEngine.increment(player.server, player, spec, 1L);
             }
         }
+        detectKineticsBuilt(player, state);
+    }
+
+    /**
+     * V6-FIXWIRE #3 — producer for the {@code create_kinetics_built} beat (day-3 "Power
+     * your first Create contraption"). Placing any Create kinetic POWER SOURCE counts:
+     * that is the moment a contraption can first turn, and it is detectable from the
+     * placement lane without reflecting into Create's kinetic network. The flag persists
+     * in {@link EclipseWorldState}, so a generator placed on day 1 still completes the
+     * day-3 quest through {@code QuestEngine.evaluateBuiltinBeat}'s poll; the direct
+     * {@code completeTeamBeat} call here just grants same-tick credit while it is active.
+     */
+    private static void detectKineticsBuilt(ServerPlayer player, BlockState state) {
+        EclipseWorldState world = EclipseWorldState.get(player.server);
+        if (world.isKineticsBuilt() || !isCreatePowerSource(state)) {
+            return;
+        }
+        world.setKineticsBuilt(true);
+        QuestEngine.completeTeamBeat(player.server, "create_kinetics_built");
+        EclipseMod.LOGGER.info("First Create power source placed by {} — create_kinetics_built beat armed",
+                player.getScoreboardName());
+    }
+
+    /**
+     * Create's generator blocks by exact id (stable across Create 0.5.x): the blocks that
+     * ADD rotational force. Valve handles (17 dye variants) are matched by suffix.
+     * Soft-dep safe — pure id comparison, no Create classes touched.
+     */
+    private static boolean isCreatePowerSource(BlockState state) {
+        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        if (!"create".equals(id.getNamespace())) {
+            return false;
+        }
+        String path = id.getPath();
+        return switch (path) {
+            case "water_wheel", "large_water_wheel", "windmill_bearing",
+                    "steam_engine", "hand_crank", "creative_motor" -> true;
+            default -> path.endsWith("valve_handle");
+        };
     }
 
     private static void handleMobKilled(ServerPlayer player, LivingEntity victim) {

@@ -34,12 +34,11 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
  *       this owns the ladder's top audio rung).</li>
  * </ul>
  *
- * <p><b>Ledger alias (self-healing):</b> {@code event.boss_down} is a sounds.json alias of
- * {@code event.storm_burst} re-pitched 0.6 — no new binary asset (house rule). Until the
- * integrator lands the {@code EclipseSounds} entry + sounds.json row (exact rows in
- * {@code docs/plans_v3/wiring/FFIX-A_wiring.md}), this class resolves the id at play time
- * and falls back to {@link EclipseSounds#EVENT_STORM_BURST} at 0.6 pitch — identical read,
- * zero code change needed after the merge (the {@code UiSounds} ledger pattern, server-side).</p>
+ * <p><b>Ledger alias:</b> {@code event.boss_down} is registered in {@code EclipseSounds}
+ * and shipped as a sounds.json alias of {@code event/submerge} re-pitched 0.48 — no new
+ * binary asset (house rule). The play-time id resolution below predates the registration
+ * (V6-FIXWIRE #4) and is kept as the usual self-healing read: should the row ever vanish,
+ * the class falls back to {@link EclipseSounds#EVENT_STORM_BURST} at 0.6 pitch.</p>
  *
  * <p>Covers all four boss death paths in ONE seam: {@code LivingDeathEvent} at
  * {@link EventPriority#LOW} matched on the four boss entity ids ({@code herald},
@@ -52,7 +51,7 @@ public final class BossDownSting {
     /** The four boss entity ids (mirror of {@code BestiaryTiers.BOSS_IDS}). */
     private static final Set<String> BOSS_PATHS = Set.of("herald", "ferryman", "rift_warden", "fog_tyrant");
 
-    /** Ledger id — sounds.json alias of {@code event.storm_burst} @ 0.6 (see wiring doc). */
+    /** Ledger id — registered in EclipseSounds; sounds.json alias of {@code event/submerge}. */
     private static final ResourceLocation BOSS_DOWN_ID =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.boss_down");
 

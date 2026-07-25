@@ -575,6 +575,12 @@ public final class ArenaFight {
      * The window ending at t={@value #MORPH_ARRIVE_TICK} targets the formation ×1.05;
      * the last window settles it exactly — the roll-into-place overshoot.
      *
+     * <p>Per-piece launch (EVAL-V6-CUTBD §3, defect 2): a piece whose launch tick falls
+     * INSIDE the current window rides a client-side interpolation DELAY of
+     * {@code launch − pushTick} and tweens only the remaining {@code windowEnd − launch}
+     * ticks — so every piece really starts moving at ITS OWN launch tick instead of the
+     * window's push tick (which had collapsed the 0–8/6–16t stagger into two cohorts).</p>
+     *
      * <p>Note for the corkscrew retune: the previous single-window ±2.75π push was
      * quaternion-slerp-flattened to ≤135° on the client (one interpolation window can
      * only ever show the shortest arc); ±1.2π across eased 8t windows is the same
@@ -596,8 +602,14 @@ public final class ArenaFight {
                     : Math.max(0.0F, Math.min(1.0F,
                             (windowEnd - launch) / (float) (MORPH_ARRIVE_TICK - launch)));
             float overshoot = !settle && windowEnd >= MORPH_ARRIVE_TICK ? 1.05F : 1.0F;
-            display.setTransformationInterpolationDelay(0);
-            display.setTransformationInterpolationDuration(windowEnd - pushTick);
+            // Launch inside this window → hold (launch − pushTick)t of delay, tween the
+            // rest. Pre-launch pieces (s == 0) keep delay 0 + the full window so their
+            // identity re-push stays an equal-value no-op that never dirties.
+            int hold = s > 0.0F
+                    ? Math.max(0, Math.min(launch - pushTick, windowEnd - pushTick - 1))
+                    : 0;
+            display.setTransformationInterpolationDelay(hold);
+            display.setTransformationInterpolationDuration(windowEnd - pushTick - hold);
             display.setTransformation(morphPose(display, index, mast, h, s, overshoot));
             index++;
         }

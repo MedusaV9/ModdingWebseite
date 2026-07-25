@@ -21,10 +21,10 @@ import net.minecraft.world.phys.Vec3;
  * server-authoritative and identical on every client.</p>
  *
  * <p>Current senders: {@code ChargedLungeGoal} (hound windup/dash,
- * {@code FxCues.CUE_HOUND_WINDUP}/{@code CUE_HOUND_DASH}).
- * // SEAM(PH-PLAYER): {@code FxCues.CUE_GLUT_SPRUNG}'s documented cast-time send is this
- * lane ({@code FxPayloads.sendFxEntityEvent(level, cue, caster, a, b, range)}) — the
- * payload/handler are live, wire your send whenever ready.</p>
+ * {@code FxCues.CUE_HOUND_WINDUP}/{@code CUE_HOUND_DASH}), {@code WandPowers.
+ * castMagmasprung} ({@code CUE_GLUT_SPRUNG} cast-time launch — the landing re-send rides
+ * the position lane from {@code WandTickService.MagmaJump}) and {@code SkyLauncher.launch}
+ * ({@code CUE_SKY_LAUNCH} contrail on the launched player).</p>
  */
 public record S2CFxEntityEventPayload(ResourceLocation id, int entityId, Vec3 pos, float a, float b)
         implements CustomPacketPayload {

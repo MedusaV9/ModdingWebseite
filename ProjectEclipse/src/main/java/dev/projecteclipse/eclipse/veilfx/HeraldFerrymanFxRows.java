@@ -121,7 +121,9 @@ public final class HeraldFerrymanFxRows {
      *         retrying; {@code false} = refused/unavailable, retry next tick is free
      */
     public static boolean heraldShardTrail(Entity shard) {
-        if (PhotonBridge.liveEntityExecutors() > MAX_ENTITY_EXECUTORS_FOR_TRAIL) {
+        // >= : skip when the cap is already reached (a 7th executor slipped past the old
+        // strict-greater check — EVAL-V6-PHOTON §7.6).
+        if (PhotonBridge.liveEntityExecutors() >= MAX_ENTITY_EXECUTORS_FOR_TRAIL) {
             return false;
         }
         return PhotonBridge.spawnOnEntity(HERALD_SHARD_TRAIL, shard,

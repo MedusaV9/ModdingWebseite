@@ -1028,9 +1028,49 @@ public final class ExpansionSequence implements SequenceReplayable {
                 / (double) Math.max(1, GrowthPacing.targetTicks());
         double lead = Math.min(remainingWidth, blocksPerTick * flyoverTicks * FLYOVER_SKIM_T);
         waveR += lead;
-        // Sit slightly INSIDE the front so the height lookup lands on already-written terrain.
-        int anchorR = Math.max(16, (int) waveR - 6);
+        // EVAL-V6-CUTBD §3 defect 4: the flyover keyframes are FIXED world-X/Z offsets
+        // from the anchor, so the camera's radial distance at the skim depends on the
+        // watcher angle (±30 blocks at the lowest keyframe). Project the skim-time
+        // keyframe offset onto the radial direction and pull the anchor back by it, so
+        // the camera's REAL radius at FLYOVER_SKIM_T sits just inside the led front for
+        // EVERY angle — the wave crossing becomes geometry-guaranteed, not angle-luck.
+        double skimRadial = 0.0D;
+        if (flyover != null) {
+            Vec3 skimOffset = pathOffsetAt(flyover, FLYOVER_SKIM_T);
+            skimRadial = skimOffset.x * Math.cos(angle) + skimOffset.z * Math.sin(angle);
+        }
+        // Sit slightly INSIDE the front so the height lookup lands on already-written
+        // terrain; the upper clamp keeps the anchor off never-written land past the rim.
+        int anchorR = Math.max(16, Math.min(toRadius - 6, (int) (waveR - skimRadial) - 6));
         return edgeAnchorFor(level, angleToPos(angle), anchorR);
+    }
+
+    /**
+     * Keyframe-space camera offset of {@code path} at flight fraction {@code t} — linear
+     * between the bracketing keyframes (a lead/aim estimate for anchor math, not the
+     * client's catmullrom render; the few-block spline deviation is inside the anchor's
+     * own −6 margin).
+     */
+    private static Vec3 pathOffsetAt(CutscenePath path, double t) {
+        List<CutscenePath.Keyframe> frames = path.keyframes();
+        if (frames.isEmpty()) {
+            return Vec3.ZERO;
+        }
+        CutscenePath.Keyframe prev = frames.get(0);
+        if (t <= prev.t()) {
+            return new Vec3(prev.x(), prev.y(), prev.z());
+        }
+        for (CutscenePath.Keyframe next : frames) {
+            if (t <= next.t()) {
+                double span = next.t() - prev.t();
+                double f = span > 1.0E-6D ? (t - prev.t()) / span : 1.0D;
+                return new Vec3(Mth.lerp(f, prev.x(), next.x()),
+                        Mth.lerp(f, prev.y(), next.y()),
+                        Mth.lerp(f, prev.z(), next.z()));
+            }
+            prev = next;
+        }
+        return new Vec3(prev.x(), prev.y(), prev.z());
     }
 
     /**
@@ -1463,6 +1503,18 @@ public final class ExpansionSequence implements SequenceReplayable {
                 releaseRiderRibbon(false);
                 return;
             }
+            // EVAL-V6-PHOTON §5: the reducedFx force-kill law is unconditional — kill a
+            // live ribbon the moment availability drops (available() folds in reducedFx
+            // and the photon toggles), never just return the live handle. The logical
+            // window stays open: toggling back re-attaches on the retry cadence for the
+            // rider's remaining lifetime.
+            if (!dev.projecteclipse.eclipse.veilfx.PhotonBridge.available()) {
+                if (riderRibbon != null) {
+                    dev.projecteclipse.eclipse.veilfx.PhotonBridge.stopLoop(riderRibbon, false);
+                    riderRibbon = null;
+                }
+                return;
+            }
             if (riderRibbon != null) {
                 if (riderRibbon.alive()) {
                     return;
@@ -1536,6 +1588,11 @@ public final class ExpansionSequence implements SequenceReplayable {
         static void onClone(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.Clone event) {
             dev.projecteclipse.eclipse.veilfx.EclipseFxState.clearNewLandBand();
             frontCrossedPlayer = false;
+            // EVAL-V6-PHOTON §5: the rider window is dimension-local too. The bridge
+            // sweep only kills the executor — without closing the window here, the stale
+            // numeric entity id could re-attach the ribbon to an unrelated entity that
+            // reused it in the new level. The server re-announces on any real rider.
+            releaseRiderRibbon(false);
         }
 
         /** Logout reset: the bridge force-destroys executors; drop our handle + rider id. */

@@ -9,12 +9,13 @@ import net.neoforged.api.distmarker.OnlyIn;
  * footer renders rebirth count + next umbral-splinter cost from these fields and stays in
  * its LOCKED state until the first sync arrives ({@link #synced}).
  *
- * <p>// SEAM(W-REBIRTH): {@code S2CRebirthStatePayload} (count, next cost, multiplier —
- * PLAN-D D11 §5) is defined and registered by the rebirth package. Its CLIENT handler
- * must call {@link #update(int, int, float, boolean)} so this cache (and the skill screen footer)
- * reflects server truth. Affordability is derived from the already-synced personal
- * splinter balance ({@code ClientStateCache.sidebarShards}, sent via
- * {@code S2CSidebarStatePayload}); no extra balance sync is required.</p>
+ * <p>{@code S2CRebirthStatePayload} (count, next cost, multiplier — PLAN-D D11 §5) is
+ * registered in {@code EclipsePayloads}; its client handler
+ * ({@code EclipsePayloads.handleRebirthState}) calls
+ * {@link #update(int, int, float, boolean)}, so this cache reflects server truth.
+ * Affordability is derived from the already-synced personal splinter balance
+ * ({@code ClientStateCache.sidebarShards}, sent via {@code S2CSidebarStatePayload});
+ * no extra balance sync is required.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class ClientRebirthState {
@@ -31,7 +32,7 @@ public final class ClientRebirthState {
 
     private ClientRebirthState() {}
 
-    /** Payload-handler entry point (see the class-level SEAM note). */
+    /** Payload-handler entry point ({@code EclipsePayloads.handleRebirthState}). */
     public static void update(int rebirthCount, int nextCost, float multiplier, boolean aura) {
         count = Math.max(0, rebirthCount);
         nextCostShards = Math.max(0, nextCost);

@@ -328,8 +328,8 @@ the afterglow never reads as smoke.
 - JSON validator (parse, module whitelist from jar bytecode, required codec fields,
   trail-settings schema, gradient monotonicity, sprite existence, spawn/live budgets):
   **PASS** for all 8 emitters. Steady/burst live counts: spark 6, motes 12.5,
-  materialize 36, dust wall 12, slam dust 48, debris 36, impact 9, lightning 42 —
-  worst realistic stack ≪ 1500 live cap.
+  materialize 30 (5 waves × 6), dust wall 12, slam dust 48, debris 36,
+  impact 6 (2 waves × 3), lightning 42 — worst realistic stack ≪ 1500 live cap.
 - Render budget recount (class javadoc): STRUCTURE 374 / PORTAL 342+32 ⊕ 24 ≤ 374 —
   under the frozen 400-tri cap; `reducedFx` = pre-C7 geometry + 12-tri entry-flash fan.
 

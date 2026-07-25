@@ -54,6 +54,22 @@ public final class EclipseAttachments {
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).copyOnDeath().build());
 
     /**
+     * Exactly-once shard-payout receipts (DOPA-S-06 / EVAL-V6-COMPLETE A#8): stable ids
+     * of one-shot personal-shard grants (collections tier payouts) already applied.
+     * Deliberately an attachment and not SavedData — it persists in the SAME player NBT
+     * write as {@link #SHARDS}, so payout and receipt can never tear apart on a crash,
+     * making the collections journal replay idempotent. Monotonic, tiny (one entry per
+     * shard-paying collection tier ever crossed), survives death like the balance.
+     * Only {@code collections.CollectionsService} should write it.
+     */
+    public static final Supplier<AttachmentType<java.util.List<String>>> SHARD_GRANT_RECEIPTS =
+            ATTACHMENTS.register("shard_grant_receipts",
+                    () -> AttachmentType.<java.util.List<String>>builder(() -> java.util.List.of())
+                            .serialize(Codec.STRING.listOf())
+                            .copyOnDeath()
+                            .build());
+
+    /**
      * Per-player daily goal completion (W13): {@code (day << 8) | bitmask}, bit i = goal
      * line i of that day ticked. Encoding the day makes stale progress self-invalidating —
      * {@code progression.GoalTracker} reads the mask as 0 whenever the stored day differs

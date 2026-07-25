@@ -721,11 +721,11 @@ public class SkillTreeScreen extends Screen {
             holdStartMillis = 0L;
             firedAtMillis = Util.getMillis();
             UiSounds.levelUp();
-            // SEAM(W-REBIRTH): C2SRebirthPayload is the client->server rebirth request
-            // defined by the rebirth service package (PLAN-A A13 / PLAN-D D11). Contract:
-            // empty payload; ALL validation (cost, life cap, dimension) is server-side,
-            // and the response rides S2CRebirthStatePayload + the existing skill/hearts
-            // syncs — this button only ever asks.
+            // C2SRebirthPayload (PLAN-A A13 / PLAN-D D11): empty request payload,
+            // registered in EclipsePayloads and validated ENTIRELY server-side in
+            // rebirth.RebirthService (cost, life cap, dimension). The response rides
+            // S2CRebirthStatePayload + the existing skill/hearts syncs — this button
+            // only ever asks.
             PacketDistributor.sendToServer(new dev.projecteclipse.eclipse.network.C2SRebirthPayload());
         }
 

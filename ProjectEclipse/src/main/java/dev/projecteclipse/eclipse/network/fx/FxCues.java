@@ -6,11 +6,13 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Frozen logical FX cue ids for the {@code PhotonFxRegistry} lane (INTEGRATION.md §3):
  * plain server-referenceable constants so server code never touches client classes (repo
- * rule). A cue travels over the EXISTING {@code S2CFxEventPayload}
- * ({@link FxPayloads#sendFxEvent}) — no new payload type, no registrar bump, identical
- * bytes whether or not the client has Photon. On the client,
- * {@code veilfx/PhotonFxRegistry} resolves the cue to a Photon effect and/or a Quasar
- * fallback via its registered row.
+ * rule). A cue travels over one of TWO frozen carriers — the position lane
+ * {@code S2CFxEventPayload} ({@link FxPayloads#sendFxEvent}) or, for cues that ride a
+ * living target, the entity lane {@code S2CFxEntityEventPayload}
+ * ({@link FxPayloads#sendFxEntityEvent}, the one payload addition the IDEAS-mobs batch
+ * pre-authorized). Bytes are identical whether or not the client has Photon. On the
+ * client, {@code veilfx/PhotonFxRegistry} resolves the cue to a Photon effect and/or a
+ * Quasar fallback via its registered row ({@code dispatch} / {@code dispatchEntity}).
  *
  * <p>Namespace law: cue ids reuse the {@code eclipse:fx/} prefix (collision-free with the
  * v1 payload ids) with an extra {@code cue/} segment so they are visually distinct from

@@ -46,6 +46,14 @@ public final class SkillState extends SavedData {
         public int capDay = 0;
         /** Final granted XP per source key for {@code capDay}. */
         public final Map<String, Float> capUsed = new HashMap<>();
+        /**
+         * DOPA-S-06 exactly-once payout receipts ({@code SkillsApi.grantOnce}): stable
+         * ids of one-shot XP/point grants already applied to THIS file, recorded in the
+         * same atomic write as the payout so a journal replay (collections tier
+         * crash-recovery) can never double-pay. Never cleared — receipts are tiny
+         * (one per crossed collection tier) and monotonic like {@code grantedTiers}.
+         */
+        public final Set<String> appliedReceipts = new LinkedHashSet<>();
 
         /** Total points ever earned: one per level plus dev-granted bonus points. */
         public int totalPoints() {
@@ -100,6 +108,9 @@ public final class SkillState extends SavedData {
             for (String key : caps.getAllKeys()) {
                 entry.capUsed.put(key, caps.getFloat(key));
             }
+            for (Tag receipt : playerTag.getList("receipts", Tag.TAG_STRING)) {
+                entry.appliedReceipts.add(receipt.getAsString());
+            }
             state.players.put(playerTag.getUUID("uuid"), entry);
         }
         return state;
@@ -130,6 +141,13 @@ public final class SkillState extends SavedData {
                 caps.putFloat(cap.getKey(), cap.getValue());
             }
             playerTag.put("capUsed", caps);
+            if (!entry.appliedReceipts.isEmpty()) {
+                ListTag receipts = new ListTag();
+                for (String receipt : entry.appliedReceipts) {
+                    receipts.add(StringTag.valueOf(receipt));
+                }
+                playerTag.put("receipts", receipts);
+            }
             list.add(playerTag);
         }
         tag.put("players", list);

@@ -74,8 +74,11 @@ void main() {
     // v2 — MIRROR-SHARD refraction near the rift center: the disc around RiftCenter splits
     // into 60° shards; gated shards resample the scene reflected across their bisector
     // (kaleidoscope-lite) — space around the tear looks reassembled from shattered copies.
+    // lensDist epsilon guard: at the exact center atan(0,0) is undefined (NaN would
+    // propagate through floor/cos/sin into the sampled UV); the mirror displacement is
+    // proportional to lensDist there anyway, so skipping the branch is visually identical.
     float shardZone = (1.0 - smoothstep(0.18, 0.62, lensDist)) * rift;
-    if (shardZone > 0.003) {
+    if (shardZone > 0.003 && lensDist > 1.0e-4) {
         float ang = atan(fromLens.y, fromLens.x);
         float sector = floor(ang / SHARD_WIDTH);
         float shardGate = step(0.35, efxHash(vec2(sector, seed * 3.1)));

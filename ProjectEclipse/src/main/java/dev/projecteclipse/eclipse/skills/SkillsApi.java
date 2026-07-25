@@ -68,6 +68,33 @@ public final class SkillsApi {
         SkillService.syncTo(player);
     }
 
+    /**
+     * Exactly-once XP + point grant (DOPA-S-06 / EVAL-V6-COMPLETE A#8): applies
+     * {@link #addXp} and {@link #addPoints} only when {@code receiptId} has not been
+     * paid to this player before, recording the receipt in the SAME {@code eclipse_skills}
+     * SavedData the payout mutates — one atomic file write carries both, so a
+     * crash-recovery replay (collections tier journal) can re-call this safely.
+     * Receipts must be globally stable ids, e.g. {@code collections:iron:3}.
+     *
+     * @return {@code true} when the grant was applied now, {@code false} on a replay
+     */
+    public static boolean grantOnce(ServerPlayer player, String receiptId, String sourceKey,
+            float xpAmount, int points) {
+        SkillState state = SkillState.get(player.server);
+        SkillState.Entry entry = state.entry(player.getUUID());
+        if (!entry.appliedReceipts.add(receiptId)) {
+            return false; // already paid — the receipt is durable next to the payout
+        }
+        state.setDirty();
+        if (xpAmount > 0.0F) {
+            SkillService.addXp(player, sourceKey, xpAmount);
+        }
+        if (points > 0) {
+            addPoints(player, points);
+        }
+        return true;
+    }
+
     /** Clears the tree and refunds every spent point (P5 dev command). */
     public static void resetTree(ServerPlayer player) {
         SkillState state = SkillState.get(player.server);

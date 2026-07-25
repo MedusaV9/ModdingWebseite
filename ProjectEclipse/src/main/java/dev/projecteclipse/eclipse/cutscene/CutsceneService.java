@@ -736,6 +736,26 @@ public final class CutsceneService {
         session.rearmDeadline(player.server.getTickCount() + durationTicks + WATCHDOG_MARGIN_TICKS);
         EclipseMod.LOGGER.info("CutsceneService: {} preload-ready for '{}' — flight starting (watchdog re-armed)",
                 player.getScoreboardName(), payload.id());
+        Runnable hook = READY_HOOKS.remove(payload.id());
+        if (hook != null) {
+            hook.run();
+        }
+    }
+
+    /** One-shot hooks fired on the FIRST valid preload-ready ACK per path id (server thread). */
+    private static final Map<String, Runnable> READY_HOOKS = new HashMap<>();
+
+    /**
+     * Registers a one-shot hook run on the server thread when the FIRST watcher of
+     * {@code pathId} sends its {@link C2SCutsceneReadyPayload} (its preload hold ended —
+     * the flight is starting NOW). Server sequences whose world-side FX beats must share
+     * the client's flight clock (CUT-END's silence → first-crack cliff) arm their beat
+     * schedules here instead of at send time. Re-registering replaces the pending hook.
+     * Callers MUST keep their own {@value #PRELOAD_TIMEOUT_TICKS}-tick timeout fallback:
+     * vanilla clients and lost packets never ACK.
+     */
+    public static void onNextClientReady(String pathId, Runnable hook) {
+        READY_HOOKS.put(pathId, hook);
     }
 
     /** Grants a skip only when the session matches, the path allows it, and it is not disabled. */
@@ -819,6 +839,7 @@ public final class CutsceneService {
     static void onServerStopped(ServerStoppedEvent event) {
         SESSIONS.clear();
         RETURNS.clear();
+        READY_HOOKS.clear();
     }
 
     /** Login applies any cross-dimension return that was pending from a mid-cutscene logout. */

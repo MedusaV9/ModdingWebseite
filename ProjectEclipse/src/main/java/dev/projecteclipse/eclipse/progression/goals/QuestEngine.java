@@ -687,6 +687,9 @@ public final class QuestEngine {
         return switch (beatId) {
             case "herald_defeated" -> world.isHeraldDefeated();
             case "ferryman_defeated" -> world.isFerrymanDefeated();
+            // V6-FIXWIRE #3: producer = QuestDetectors.detectKineticsBuilt (placement lane);
+            // the persistent flag makes the day-3 quest retro-complete on the beat poll.
+            case "create_kinetics_built" -> world.isKineticsBuilt();
             case "dragon_defeated" -> {
                 ServerLevel end = server.getLevel(Level.END);
                 yield end != null && end.getDragonFight() != null

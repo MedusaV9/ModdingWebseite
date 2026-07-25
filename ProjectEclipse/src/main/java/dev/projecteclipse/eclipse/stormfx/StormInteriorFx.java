@@ -253,7 +253,10 @@ public final class StormInteriorFx {
                     // instead of the vortex blue-slate.
                     pipeline.getUniform("Sphere").setFloat(interiorSphere ? 1.0F : 0.0F);
                     // FX-STORM: heat-shimmer refraction strength — wall proximity inside.
-                    pipeline.getUniform("WallProx").setFloat(smoothedWallProx);
+                    // Fed 0 under reduced FX: a fullscreen animated refraction must degrade
+                    // with the rest of the storm layers (reduced-motion contract).
+                    pipeline.getUniform("WallProx").setFloat(
+                            EclipseClientConfig.reducedFx() ? 0.0F : smoothedWallProx);
                 }));
     }
 

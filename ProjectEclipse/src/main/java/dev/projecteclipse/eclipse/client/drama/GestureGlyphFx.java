@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -44,6 +45,15 @@ public final class GestureGlyphFx {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glyph_danger"),
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "glyph_follow"),
     };
+
+    /**
+     * The two-spike danger flash is a full-rate {@code loop:true} repeated world-space
+     * flash — a photosensitivity concern, so it never runs under reduced FX: new attaches
+     * are skipped and a live loop is detached when the setting is toggled mid-display
+     * ({@code ensureAttached} treats an existing loop as free, so the AMBIENT budget
+     * alone cannot stop it at tier 1).
+     */
+    private static final ResourceLocation DANGER_GLYPH = GLYPH_EMITTERS[1];
 
     private record ActiveGlyph(int entityId, ResourceLocation emitter) {}
 
@@ -95,12 +105,14 @@ public final class GestureGlyphFx {
             return;
         }
         long now = level.getGameTime();
+        boolean reduced = EclipseClientConfig.reducedFx();
         Iterator<Map.Entry<ActiveGlyph, Long>> iterator = ACTIVE.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<ActiveGlyph, Long> entry = iterator.next();
             ActiveGlyph glyph = entry.getKey();
             var entity = level.getEntity(glyph.entityId());
-            if (entity == null || now >= entry.getValue()) {
+            if (entity == null || now >= entry.getValue()
+                    || (reduced && DANGER_GLYPH.equals(glyph.emitter()))) {
                 if (entity != null) {
                     QuasarSpawner.removeAttached(glyph.emitter(), entity);
                 }

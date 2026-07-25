@@ -33,7 +33,8 @@ float rainLayer(vec2 uv, float t, float density, float speed, float seed) {
     float rainOn = step(0.45, efxHash(vec2(col, cycle + seed)));
     float core = 1.0 - abs(fract(x) - 0.5) * 2.0;
     float y = fract(fall);
-    float tail = smoothstep(1.0, 0.55, y) * smoothstep(0.0, 0.08, y);
+    // Descending ramp as 1-smoothstep(lo,hi,y): edge0>edge1 is undefined GLSL.
+    float tail = (1.0 - smoothstep(0.55, 1.0, y)) * smoothstep(0.0, 0.08, y);
     return rainOn * pow(core, 6.0) * tail;
 }
 

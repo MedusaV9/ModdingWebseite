@@ -472,6 +472,10 @@ public final class LimboAmbience {
         pipeline.getUniform("CurveAmount").setFloat(
                 EclipseClientConfig.reducedFx() ? 0.0F : intensity);
         pipeline.getUniform("FarDist").setFloat(farDistBlocks());
+        // v4 reduced-motion gate: swells, micro-ripples, glints and the reflection ripple
+        // flatten back to the v3 water look under reduced FX (the CurveAmount ladder) —
+        // "cheap ALU" covers performance, not the reduced-motion contract.
+        pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
 
         // --- v4: far storm-glow pulses -----------------------------------------------------
         feedStormGlow(pipeline, seconds, intensity);

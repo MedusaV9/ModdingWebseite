@@ -18,10 +18,11 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Gazer model — 6 cubes on a 64x64 texture ({@code docs/uv/gazer.md}): cloak 10x18x6
+ * Gazer model — 10 cubes on a 64x64 texture ({@code docs/uv/gazer.md}): cloak 10x18x6
  * floating 6px above the ground, shoulder mantle 12x3x8, hood 8x8x8 (pivot 18px up),
  * emissive face inset 6x6x1 (re-rendered by {@code GazerRenderer.EyesLayer} with
- * {@code RenderType.eyes}), and two 3x8x1 hem tatters.
+ * {@code RenderType.eyes}), two 3x8x1 hem tatters, plus the four MOB-AMBIENT face-rig
+ * cubes (two 1x2x1 iris pips, two 7x3x1 eyelids) described below.
  *
  * <p>MOB-AMBIENT face rig: two 1x2 iris pips ({@code iris_left/right}, children of the
  * face — they join the emissive pass) sit proud inside the mask's hollow eye slits, and

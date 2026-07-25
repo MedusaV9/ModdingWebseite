@@ -80,8 +80,9 @@ void main() {
     float occluded = clamp(max(clamp(RimOnly, 0.0, 1.0), 1.0 - visible * 0.2), 0.0, 1.0);
 
     // Tight rim hugging the disc edge (bright ring at ~the quad's silhouette).
-    float rim = smoothstep(sunRadius * 1.15, sunRadius * 0.95, dist)
-            * (1.0 - smoothstep(sunRadius * 0.95, sunRadius * 0.55, dist) * 0.35);
+    // Descending ramps written as 1-smoothstep(lo,hi,x): edge0>edge1 is undefined GLSL.
+    float rim = (1.0 - smoothstep(sunRadius * 0.95, sunRadius * 1.15, dist))
+            * (1.0 - (1.0 - smoothstep(sunRadius * 0.55, sunRadius * 0.95, dist)) * 0.35);
 
     // Wide glow whose radius grows with HaloStrength (eclipse boost up to ~0.55 NDC).
     // [s5] Per-channel radii: the outer skirt drifts magenta, the core stays violet.
@@ -119,7 +120,7 @@ void main() {
     float streakGate = smoothstep(0.55, 0.90, HaloStrength) * Detail * glowVis;
     float sy = delta.y / (sunRadius * 0.55);
     float streak = exp(-sy * sy) * exp(-abs(delta.x) / (glowRadius * 2.6)) * streakGate;
-    float edgeFade = smoothstep(0.0, 0.08, texCoord.x) * smoothstep(1.0, 0.92, texCoord.x);
+    float edgeFade = smoothstep(0.0, 0.08, texCoord.x) * (1.0 - smoothstep(0.92, 1.0, texCoord.x));
     streak *= edgeFade;
 
     vec3 halo = (vec3(0.62, 0.24, 1.00) * (rim * 0.9 * rimVis + glow3 * 0.85 * glowVis)

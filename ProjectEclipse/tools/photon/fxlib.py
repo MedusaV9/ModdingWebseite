@@ -1119,6 +1119,7 @@ def validate_tree(root: dict) -> list:
         return ["fxData.fxObjects is not a List"]
     ids = {}
     parents = {}
+    children = {}
     for idx, wrapper in enumerate(objects.items):
         where = f"fxObjects[{idx}]"
         if not isinstance(wrapper, dict) or "type" not in wrapper or "data" not in wrapper:
@@ -1145,55 +1146,211 @@ def validate_tree(root: dict) -> list:
         ids[oid] = where
         if "_parentId" in transform:
             parents[oid] = (where, transform["_parentId"])
+        child_list = transform.get("_childrenId")
+        if isinstance(child_list, L):
+            children[oid] = (where, list(child_list.items))
         if fx_type != "empty":
             if not isinstance(data.get("config"), dict):
                 errors.append(f"{where}: emitter without config compound")
             version = data.get("version")
             if not isinstance(version, I) or version.v != 2:
                 errors.append(f"{where}: emitter version is {version!r}, expected Int 2")
-        if fx_type == "particle_emitter" and isinstance(data.get("config"), dict):
-            errors.extend(_validate_particle_config(data["config"], where))
+        if isinstance(data.get("config"), dict):
+            config_check = {"particle_emitter": _validate_particle_config,
+                            "beam_emitter": _validate_beam_config,
+                            "trail_emitter": _validate_trail_config,
+                            "ara_trail_emitter": _validate_ara_trail_config}.get(fx_type)
+            if config_check is not None:
+                errors.extend(config_check(data["config"], where))
     for oid, (where, parent_id) in parents.items():
         if parent_id not in ids:
             errors.append(f"{where}: _parentId {parent_id} does not reference any object")
+        elif oid not in children.get(parent_id, (None, []))[1]:
+            errors.append(f"{where}: not listed in parent {parent_id}'s _childrenId")
         if parent_id == oid:
             errors.append(f"{where}: object is its own parent")
+    for oid, (where, child_ids) in children.items():
+        for child_id in child_ids:
+            if child_id not in ids:
+                errors.append(f"{where}: _childrenId {child_id} does not reference any object")
+            elif parents.get(child_id, ("", None))[1] != oid:
+                errors.append(f"{where}: child {child_id} does not link back via _parentId")
     return errors
 
 
 def _validate_particle_config(config: dict, where: str) -> list:
     errors = []
-    for key in ("emission", "shape", "renderer"):
+    for key in ("emission", "shape"):
         if not isinstance(config.get(key), dict):
             errors.append(f"{where}: config.{key} missing/not a compound")
     for key, value in config.items():
         if isinstance(value, dict) and "_enable" in value and not isinstance(value["_enable"], B):
             errors.append(f"{where}: config.{key}._enable is not a Byte")
-    renderer = config.get("renderer")
-    if isinstance(renderer, dict):
-        materials = renderer.get("materials")
-        if not (isinstance(materials, dict) and isinstance(materials.get("uid"), I)
-                and isinstance(materials.get("payload"), L)
-                and materials["uid"].v == len(materials["payload"].items)):
-            errors.append(f"{where}: renderer.materials is not a consistent ROM list")
+    errors.extend(_validate_renderer(config, where))
     errors.extend(_validate_nf_wrappers(config, f"{where}.config"))
     return errors
 
 
+def _validate_renderer(config: dict, where: str) -> list:
+    """renderer + its @ReadOnlyManaged materials list (all four emitter types carry one)."""
+    renderer = config.get("renderer")
+    if not isinstance(renderer, dict):
+        return [f"{where}: config.renderer missing/not a compound"]
+    materials = renderer.get("materials")
+    if not (isinstance(materials, dict) and isinstance(materials.get("uid"), I)
+            and isinstance(materials.get("payload"), L)
+            and materials["uid"].v == len(materials["payload"].items)):
+        return [f"{where}: renderer.materials is not a consistent ROM list"]
+    return []
+
+
+def _validate_beam_config(config: dict, where: str) -> list:
+    """beam_emitter config (FX_FORMAT.md §4.1): end/width/emitRate/raycast shapes."""
+    errors = _validate_renderer(config, where)
+    end = config.get("end")
+    if not (isinstance(end, L) and len(end.items) == 3
+            and all(isinstance(v, F) for v in end.items)):
+        errors.append(f"{where}: config.end is not a List of 3 Floats")
+    for key in ("width", "emitRate"):
+        if not _is_nf_wrapper(config.get(key)):
+            errors.append(f"{where}: config.{key} is not a NumberFunction wrapper")
+    if not isinstance(config.get("raycast"), str):
+        errors.append(f"{where}: config.raycast missing/not a String")
+    errors.extend(_validate_nf_wrappers(config, f"{where}.config"))
+    return errors
+
+
+def _validate_trail_config(config: dict, where: str) -> list:
+    """trail_emitter config (FX_FORMAT.md §4.2): time/minVertexDistance/uvMode/width shapes."""
+    errors = _validate_renderer(config, where)
+    if not isinstance(config.get("time"), I):
+        errors.append(f"{where}: config.time missing/not an Int (ticks)")
+    if not isinstance(config.get("minVertexDistance"), F):
+        errors.append(f"{where}: config.minVertexDistance missing/not a Float")
+    if not isinstance(config.get("uvMode"), str):
+        errors.append(f"{where}: config.uvMode missing/not a String")
+    if not _is_nf_wrapper(config.get("widthOverTrail")):
+        errors.append(f"{where}: config.widthOverTrail is not a NumberFunction wrapper")
+    errors.extend(_validate_nf_wrappers(config, f"{where}.config"))
+    return errors
+
+
+def _validate_ara_trail_config(config: dict, where: str) -> list:
+    """ara_trail_emitter config (FX_FORMAT.md §4.3). Only non-default keys are written,
+    so every check here is presence-optional — but a present key must have the right shape
+    (note time/timeInterval/minDistance are Float SECONDS, unlike the tick Ints elsewhere)."""
+    errors = _validate_renderer(config, where)
+    section = config.get("section")
+    if section is not None:
+        vertices = section.get("vertices") if isinstance(section, dict) else None
+        if not (isinstance(vertices, L) and all(
+                isinstance(v, L) and len(v.items) == 2
+                and all(isinstance(x, F) for x in v.items) for v in vertices.items)):
+            errors.append(f"{where}: config.section.vertices is not a List of [x,y] Float pairs")
+    physics = config.get("physicsSetting")
+    if physics is not None:
+        if not isinstance(physics, dict):
+            errors.append(f"{where}: config.physicsSetting is not a compound")
+        else:
+            for key in ("warmup", "inertia", "velocitySmoothing", "damping"):
+                if not isinstance(physics.get(key), F):
+                    errors.append(f"{where}: config.physicsSetting.{key} missing/not a Float")
+            gravity = physics.get("gravity")
+            if not (isinstance(gravity, L) and len(gravity.items) == 3
+                    and all(isinstance(v, F) for v in gravity.items)):
+                errors.append(f"{where}: config.physicsSetting.gravity is not a List of 3 Floats")
+    for key in ("time", "timeInterval", "minDistance"):
+        if key in config and not isinstance(config[key], F):
+            errors.append(f"{where}: config.{key} is not a Float (seconds)")
+    errors.extend(_validate_nf_wrappers(config, f"{where}.config"))
+    return errors
+
+
+_NUM_TAGS = (B, Sh, I, Lg, F, D)
+
+
+def _is_nf_wrapper(v) -> bool:
+    """A {type, data} dict whose type is an NF-family registry key (not shape/material)."""
+    return isinstance(v, dict) and v.get("type") in KNOWN_NF_TYPES and "data" in v
+
+
 def _validate_nf_wrappers(node, path) -> list:
-    """Recursively checks every {type, data} dict that looks like a NumberFunction wrapper."""
+    """Recursively checks every {type, data} dict that looks like a NumberFunction wrapper,
+    including the required data members per NF type and the NF3 exactly-3 rule."""
     errors = []
     if isinstance(node, dict):
         if set(node.keys()) == {"type", "data"} and isinstance(node["type"], str):
-            if node["type"] not in KNOWN_NF_TYPES and node["type"] not in (
+            nf_type = node["type"]
+            if nf_type in KNOWN_NF_TYPES:
+                if isinstance(node["data"], dict):
+                    errors.extend(_validate_nf_data(nf_type, node["data"], path))
+                else:
+                    errors.append(f"{path}: NF {nf_type} data is not a compound")
+            elif nf_type not in (
                     "dot", "sphere", "circle", "cone", "cylinder", "box", "mesh", "function",
                     "texture", "sprite", "block_atlas", "custom_shader"):
-                errors.append(f"{path}: unknown {{type,data}} registry key {node['type']!r}")
+                errors.append(f"{path}: unknown {{type,data}} registry key {nf_type!r}")
         for key, value in node.items():
             errors.extend(_validate_nf_wrappers(value, f"{path}.{key}"))
     elif isinstance(node, L):
+        # NumberFunction3 = a List whose items are ALL NF wrappers; must be exactly [x, y, z].
+        if node.items and all(_is_nf_wrapper(item) for item in node.items) \
+                and len(node.items) != 3:
+            errors.append(f"{path}: NF3 list has {len(node.items)} entries, expected exactly 3")
         for idx, item in enumerate(node.items):
             errors.extend(_validate_nf_wrappers(item, f"{path}[{idx}]"))
+    return errors
+
+
+def _validate_nf_data(nf_type, data: dict, path) -> list:
+    """Required data members + NBT tag shapes per NF type (FX_FORMAT.md §3)."""
+    errors = []
+
+    def need(key, kinds, desc):
+        if not isinstance(data.get(key), kinds):
+            errors.append(f"{path}: {nf_type} data.{key} missing/not {desc}")
+
+    if nf_type == "constant":
+        need("number", _NUM_TAGS, "a numeric tag")
+    elif nf_type == "random_constant":
+        need("a", _NUM_TAGS, "a numeric tag")
+        need("b", _NUM_TAGS, "a numeric tag")
+    elif nf_type in ("curve", "random_curve"):
+        for key in ("min", "max", "lower", "upper"):
+            need(key, F, "a Float")
+        need("xAxis", str, "a String")
+        need("yAxis", str, "a String")
+        need("lockControlPoint", B, "a Byte")
+        for key in (("curves",) if nf_type == "curve" else ("curves0", "curves1")):
+            need(key, L, "a List of 8-float bezier segments")
+            segments = data.get(key)
+            if isinstance(segments, L) and not all(
+                    isinstance(seg, L) and len(seg.items) == 8
+                    and all(isinstance(x, F) for x in seg.items) for seg in segments.items):
+                errors.append(f"{path}: {nf_type} data.{key} segment is not 8 Floats")
+    elif nf_type == "color":
+        need("number", I, "an Int (ARGB)")
+    elif nf_type == "random_color":
+        need("a", I, "an Int (ARGB)")
+        need("b", I, "an Int (ARGB)")
+    elif nf_type == "gradient":
+        errors.extend(_validate_gradient_color(data.get("gradientColor"), f"{path}.gradientColor"))
+    elif nf_type == "random_gradient":
+        for key in ("gradientColor0", "gradientColor1"):
+            errors.extend(_validate_gradient_color(data.get(key), f"{path}.{key}"))
+    return errors
+
+
+def _validate_gradient_color(gc, path) -> list:
+    """GradientColor = {a: flat Float (t,alpha) pairs, rgb: flat Float (t,r,g,b) quads}."""
+    if not isinstance(gc, dict):
+        return [f"{path}: missing/not a compound"]
+    errors = []
+    for key, stride in (("a", 2), ("rgb", 4)):
+        val = gc.get(key)
+        if not (isinstance(val, L) and all(isinstance(x, F) for x in val.items)
+                and len(val.items) % stride == 0):
+            errors.append(f"{path}.{key}: not a flat Float list in strides of {stride}")
     return errors
 
 

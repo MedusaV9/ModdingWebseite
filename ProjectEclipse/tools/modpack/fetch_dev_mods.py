@@ -43,13 +43,15 @@ WANTED = [
 # (Modrinth slug "ldlib", mod id "ldlib2"). PH-CORE: the pair goes into BOTH
 # run/mods-client AND run/mods (dedicated server) per INTEGRATION.md §2 Verdict C —
 # photon+ldlib2 register NON-optional network channels, so a Photon-equipped client is
+# NOTE: MUST be the Modrinth "-all" fat jar (bundles META-INF/jarjar/taffy-1.1.4.jar etc.);
+# the slim maven jar crashes at mod construction with NoClassDefFoundError dev/vfyjxf/taffy.
 # disconnected during handshake by a photon-less server; the server-side install is
 # crash-safe (Verdict B: photon's mixins are all client-array, GL feature side-aware).
 OPTIONAL = [
     ("photon-editor", "photon-neoforge-1.21.1-2.1.5.jar", MODS_CLIENT),
-    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29.jar", MODS_CLIENT),
+    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29-all.jar", MODS_CLIENT),
     ("photon-editor", "photon-neoforge-1.21.1-2.1.5.jar", MODS),
-    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29.jar", MODS),
+    ("ldlib", "ldlib2-neoforge-1.21.1-2.2.29-all.jar", MODS),
 ]
 
 

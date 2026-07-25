@@ -344,6 +344,14 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.rift_resolve")));
 
+    // FFIX-A ledger event (V6-FIXWIRE #4) — sounds.json alias of a shipped ogg.
+
+    /** Boss-down release sting broadcast to everyone (drama.BossDownSting). */
+    public static final Supplier<SoundEvent> EVENT_BOSS_DOWN = SOUNDS.register(
+            "event.boss_down",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.boss_down")));
+
     // --- Quiet-Eclipse UI kit (P3-W1 ledger; UiSounds resolves these by id at runtime) ---
 
     /** Generic widget press. */
@@ -375,6 +383,12 @@ public final class EclipseSounds {
     public static final Supplier<SoundEvent> UI_SKILL_UNLOCK = uiEvent("ui.skill_unlock");
     /** Settings toggle knob-dock tick (ON 1.1 / OFF 0.75). */
     public static final Supplier<SoundEvent> UI_TOGGLE_SETTLE = uiEvent("ui.toggle_settle");
+    // FFIX-A contract pair (V6-FIXWIRE #4 — the rows existed in sounds.json, only the
+    // registrations were missing; UiSounds' runtime resolve now finds them).
+    /** Soft glass chime — the contract prank exhale. */
+    public static final Supplier<SoundEvent> UI_CHIME = uiEvent("ui.chime");
+    /** Contract X-stamp slam (anvil-adjacent two-layer read baked into the alias). */
+    public static final Supplier<SoundEvent> UI_STAMP = uiEvent("ui.stamp");
 
     private static Supplier<SoundEvent> uiEvent(String id) {
         return SOUNDS.register(id, () -> SoundEvent.createVariableRangeEvent(

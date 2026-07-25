@@ -152,7 +152,13 @@ public final class PhotonBridge {
     /** PH-EVENTS (IDEAS-events #5c): backrooms fluorescent flicker + haze identity loop. */
     public static final ResourceLocation PORTAL_LOOP_BACKROOMS = fx("portal_loop_backrooms");
 
-    /** {@code EntityEffectExecutor.AutoRotate} ordinals (enum order verified via javap). */
+    /**
+     * Indices into the bridge's NAME-resolved {@code EntityEffectExecutor.AutoRotate}
+     * constant table (see {@code resolve()}): each slot is looked up by enum name
+     * ({@code NONE, FORWARD, LOOK, XROT}), never by raw ordinal, so a link-compatible
+     * Photon that inserts/reorders/renames constants degrades that mode to NONE instead
+     * of silently misorienting entity effects (EVAL-V6-PHOTON §7.5).
+     */
     public static final int AUTO_ROTATE_NONE = 0;
     public static final int AUTO_ROTATE_FORWARD = 1;
     public static final int AUTO_ROTATE_LOOK = 2;
@@ -715,7 +721,7 @@ public final class PhotonBridge {
                 blockStartMethod = blockExecutor.getMethod("start");
                 entityExecutorCtor = entityExecutor.getConstructor(fxClass, Level.class, Entity.class, autoRotate);
                 entityStartMethod = entityExecutor.getMethod("start");
-                autoRotateConstants = autoRotate.getEnumConstants();
+                Object[] autoRotateRaw = autoRotate.getEnumConstants();
                 setOffsetMethod = executorBase.getMethod("setOffset", Vector3f.class);
                 setRotationMethod = executorBase.getMethod("setRotation", Quaternionf.class);
                 setScaleMethod = executorBase.getMethod("setScale", Vector3f.class);
@@ -724,10 +730,20 @@ public final class PhotonBridge {
                 getRuntimeMethod = executorBase.getMethod("getRuntime");
                 runtimeIsAliveMethod = runtime.getMethod("isAlive");
                 runtimeDestroyMethod = runtime.getMethod("destroy", boolean.class);
-                if (autoRotateConstants == null || autoRotateConstants.length < 4) {
+                if (autoRotateRaw == null || autoRotateRaw.length == 0) {
                     throw new IllegalStateException("AutoRotate enum shape changed: "
-                            + java.util.Arrays.toString(autoRotateConstants));
+                            + java.util.Arrays.toString(autoRotateRaw));
                 }
+                // EVAL-V6-PHOTON §7.5: the public AUTO_ROTATE_* ids map to constants BY
+                // NAME, never by raw ordinal — a link-compatible Photon that inserts,
+                // reorders or renames constants degrades that mode to NONE instead of
+                // reaching READY and silently misorienting entity effects.
+                Object none = autoRotateByName(autoRotateRaw, "NONE", autoRotateRaw[0]);
+                autoRotateConstants = new Object[] {
+                        none,
+                        autoRotateByName(autoRotateRaw, "FORWARD", none),
+                        autoRotateByName(autoRotateRaw, "LOOK", none),
+                        autoRotateByName(autoRotateRaw, "XROT", none)};
                 state = READY;
                 EclipseMod.LOGGER.info("Photon detected — flagship-effect enhancement layer active");
                 return true;
@@ -736,6 +752,23 @@ public final class PhotonBridge {
                 return false;
             }
         }
+    }
+
+    /**
+     * Resolves one {@code AutoRotate} constant by enum name; a missing/renamed constant
+     * (or any reflective surprise) falls back to {@code fallback} — the NONE degrade.
+     */
+    private static Object autoRotateByName(Object[] constants, String name, Object fallback) {
+        try {
+            for (Object constant : constants) {
+                if (constant instanceof Enum<?> value && value.name().equals(name)) {
+                    return constant;
+                }
+            }
+        } catch (Throwable t) {
+            // fall through — the caller's fallback is the degrade path
+        }
+        return fallback;
     }
 
     private static void missing(ResourceLocation fxId) {

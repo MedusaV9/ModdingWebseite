@@ -100,6 +100,14 @@ public final class WandItems {
         ITEMS.register(modEventBus);
         COMPONENTS.register(modEventBus);
         // config/eclipse/wand.json rides /dev reload like the other additive loaders.
-        DevReloadRegistry.register("wand.json", WandConfig::reload);
+        // V6-FIXWIRE #5: a reload also re-broadcasts the wand tuning to every online
+        // client so open panels never keep rendering the pre-reload numbers.
+        DevReloadRegistry.register("wand.json", () -> {
+            WandConfig.reload();
+            var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                WandProgressSync.syncAll(server);
+            }
+        });
     }
 }

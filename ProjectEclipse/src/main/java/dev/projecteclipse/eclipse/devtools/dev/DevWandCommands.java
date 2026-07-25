@@ -184,6 +184,7 @@ public final class DevWandCommands {
                 Component.translatable("dev.eclipse.wand.set.path", target.getDisplayName(),
                         Component.translatable(path == WandPath.NONE
                                 ? "wand.eclipse.path.none" : path.langKey())));
+        dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
         return 1;
     }
 
@@ -202,6 +203,7 @@ public final class DevWandCommands {
         });
         sendEditFeedback(source, target, touched,
                 Component.translatable("dev.eclipse.wand.set.level", target.getDisplayName(), level));
+        dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
         return 1;
     }
 
@@ -215,6 +217,7 @@ public final class DevWandCommands {
                 stack -> stack.set(WandItems.WAND_XP.get(), xp));
         sendEditFeedback(source, target, touched,
                 Component.translatable("dev.eclipse.wand.set.xp", target.getDisplayName(), xp));
+        dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
         return 1;
     }
 
@@ -244,6 +247,7 @@ public final class DevWandCommands {
         final int count = touched;
         source.sendSuccess(() -> Component.translatable("dev.eclipse.wand.reset",
                 target.getDisplayName(), count), true);
+        dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
         return 1;
     }
 

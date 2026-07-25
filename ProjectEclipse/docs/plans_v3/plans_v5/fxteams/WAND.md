@@ -33,8 +33,9 @@ New emitters this round (all `loop:false`, budget-lean):
 - **POLISH 2**: scar alpha rewritten as 6-point flicker (0.85→0.35→0.7→0.3→0.5→0) so it
   reads glitch, not smoke; drag 0.9 pins the cubes in place.
 - **POLISH 3**: budget audit — 7 emitter spawns in the cast window, exactly at the
-  reducedFx BURST cap (7); scars are last in line so they are the ones a reduced client
-  sheds. Correct priority order by design.
+  reducedFx BURST cap (7). Exactly AT cap the rate limiter alone sheds nothing, so the
+  client sheds the seam scars (and the other D11 garnish cues) explicitly by id under
+  reducedFx — the `QuasarSpawner.REDUCED_FX_GARNISH` set on the payload spawn path.
 
 ## RISS L2 — Phasenwelle
 
@@ -248,7 +249,7 @@ change non-wand content outside this round's mandate.
 
 | Cast | Spawns/s (worst window) | Note |
 | --- | --- | --- |
-| Blink | 7 | seams last in line → first dropped on reduced |
+| Blink | 7 | seams shed under reducedFx by the client garnish id set |
 | Rissschlag | 5 + 2 late | shimmer/close in a later window |
 | Phasenwelle | 6 | bands + seams staggered 0–8 t |
 | Glutstoß | 6 | ash rides +4/+6 t |

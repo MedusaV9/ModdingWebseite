@@ -9,7 +9,6 @@ import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.network.wand.C2SWandChoosePathPayload;
 import dev.projecteclipse.eclipse.wand.EclipseWandItem;
-import dev.projecteclipse.eclipse.wand.WandConfig;
 import dev.projecteclipse.eclipse.wand.WandItems;
 import dev.projecteclipse.eclipse.wand.WandPath;
 import dev.projecteclipse.eclipse.wand.WandSoulbind;
@@ -44,10 +43,12 @@ import javax.annotation.Nullable;
  * next level plus the five power rows with cost/cooldown, the selected power and the next
  * unlock highlighted).</p>
  *
- * <p>// SEAM(W-WAND / PLAN-D D10 §2): power cost/cooldown and the level-cost curve are
- * read from the local {@link WandConfig} — exact in singleplayer, authored defaults on a
- * dedicated-server client until the {@code S2CWandProgressPayload} sync lands; swap the
- * {@code WandConfig.get()} reads for that payload's cache then.</p>
+ * <p>Server tuning (power cost/cooldown, level-cost curve, charge max, earn-hint numbers)
+ * and live per-power cooldowns come from {@link ClientWandProgress}, the cache of the
+ * {@code S2CWandProgressPayload} sync (V6-FIXWIRE #5) — REAL server values on dedicated
+ * servers too, replacing the old local-{@code WandConfig} estimation. Until the first
+ * payload lands (login sends one, so at most a few frames) the ladder shows a syncing
+ * hint instead of guessed numbers.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class WandProgressPanel extends AbstractWidget {
@@ -234,12 +235,19 @@ public final class WandProgressPanel extends AbstractWidget {
 
     private void renderProgress(GuiGraphics guiGraphics, ItemStack wand) {
         var font = Minecraft.getInstance().font;
+        if (!ClientWandProgress.synced) {
+            // Login sends the first payload before any screen can open; this is a
+            // few-frames guard at worst — never render guessed numbers (V6-FIXWIRE #5).
+            guiGraphics.drawCenteredString(font, EclipseLang.tr("gui.eclipse.skills.wand.syncing"),
+                    getX() + this.width / 2, getY() + this.height / 2 - 4,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
+            return;
+        }
         WandPath path = WandSoulbind.pathOf(wand);
         int accent = accentOf(path);
         int level = WandSoulbind.levelOf(wand);
         int xp = Math.max(0, wand.getOrDefault(WandItems.WAND_XP.get(), 0));
         int selected = Mth.clamp(wand.getOrDefault(WandItems.WAND_SELECTED.get(), 0), 0, level - 1);
-        WandConfig.Data config = WandConfig.get();
 
         int left = getX() + EclipseUiTheme.PAD;
         int right = getX() + this.width - EclipseUiTheme.PAD;
@@ -253,8 +261,8 @@ public final class WandProgressPanel extends AbstractWidget {
                 EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, alpha));
         y += 12;
 
-        // XP bar toward the next wand level.
-        int needed = config.xp().costForLevel(level);
+        // XP bar toward the next wand level (server-synced curve).
+        int needed = ClientWandProgress.costForLevel(level);
         boolean maxed = level >= WandPath.MAX_LEVEL;
         float fill = maxed ? 1.0F : Mth.clamp(xp / (float) Math.max(1, needed), 0.0F, 1.0F);
         int barW = right - left;
@@ -269,7 +277,7 @@ public final class WandProgressPanel extends AbstractWidget {
         Integer charge = wand.get(WandItems.WAND_CHARGE.get());
         if (charge != null) {
             String chargeLine = EclipseLang.trString("gui.eclipse.skills.wand.charge",
-                    charge, config.charge().max());
+                    charge, ClientWandProgress.chargeMax);
             guiGraphics.drawString(font, chargeLine, right - font.width(chargeLine), y,
                     EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
         }
@@ -306,17 +314,26 @@ public final class WandProgressPanel extends AbstractWidget {
                     left, rowY, EclipseUiTheme.withAlpha(nameColor, alpha * (unlocked ? 1.0F : 0.8F)));
 
             String meta;
+            boolean cooling = false;
             if (unlocked || next) {
-                WandConfig.Power power = config.power(path.powerKey(i));
+                String powerKey = path.powerKey(i);
+                ClientWandProgress.Power power = ClientWandProgress.power(powerKey);
                 meta = EclipseLang.trString("gui.eclipse.skills.wand.power_meta",
                         power.cost(), power.cooldownTicks() / 20);
+                int coolingSeconds = unlocked ? ClientWandProgress.cooldownRemainingSeconds(powerKey) : 0;
+                if (coolingSeconds > 0) {
+                    // Live countdown from the sync — the power is actively cooling down.
+                    cooling = true;
+                    meta = EclipseLang.trString("gui.eclipse.skills.wand.cooling", coolingSeconds)
+                            + " · " + meta;
+                }
                 if (next) {
                     meta = EclipseLang.trString("gui.eclipse.skills.wand.next_unlock") + " · " + meta;
                 }
             } else {
                 meta = EclipseLang.trString("gui.eclipse.skills.wand.unlock_at", i + 1);
             }
-            int metaColor = next ? accent : EclipseUiTheme.DIM;
+            int metaColor = next ? accent : cooling ? EclipseUiTheme.TEXT : EclipseUiTheme.DIM;
             guiGraphics.drawString(font, meta, right - font.width(meta), rowY,
                     EclipseUiTheme.withAlpha(metaColor, alpha * 0.95F));
         }
@@ -328,7 +345,8 @@ public final class WandProgressPanel extends AbstractWidget {
             y += 5;
             guiGraphics.drawString(font,
                     EclipseUiTheme.ellipsize(font, EclipseLang.trString("gui.eclipse.skills.wand.earn_hint",
-                            config.xp().perCostPoint(), (int) config.xp().killBonus()), right - left),
+                            ClientWandProgress.xpPerCostPoint, (int) ClientWandProgress.xpKillBonus),
+                            right - left),
                     left, y, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha * 0.9F));
             y += 10;
             if (y + 9 <= getY() + this.height) {

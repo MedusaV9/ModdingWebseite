@@ -15,15 +15,18 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * subscriber on its own version — {@code EclipsePayloads} and {@code EclipseMod} stay
  * untouched. Ids are prefixed {@code eclipse:wand/} and registered nowhere else.
  *
- * <p>Both payloads are C2S-only; handlers run on the server main thread (NeoForge
- * default) and dispatch into {@link WandPowers}, where ALL validation lives. There is no
- * custom S2C traffic: item state syncs through data components, animations through
- * GeckoLib's own singleton-animatable channel, world FX through the frozen
- * {@code FxPayloads}/{@code S2CQuasarPayload} channels.</p>
+ * <p>C2S handlers run on the server main thread (NeoForge default) and dispatch into
+ * {@link WandPowers}, where ALL validation lives. Item state syncs through data
+ * components, animations through GeckoLib's own singleton-animatable channel, world FX
+ * through the frozen {@code FxPayloads}/{@code S2CQuasarPayload} channels. The ONE S2C
+ * payload, {@link S2CWandProgressPayload} (V6-FIXWIRE #5), carries what the components
+ * cannot: the server's wand tuning + live cooldowns for the skill-tree wand tab; its
+ * handler feeds the client-only {@code ClientWandProgress} cache (lazy classloading —
+ * the {@code EclipsePayloads.handleRebirthState} pattern, safe on a dedicated server).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class WandPayloads {
-    private static final String VERSION = "w4wand1";
+    private static final String VERSION = "w4wand2";
 
     private WandPayloads() {}
 
@@ -34,6 +37,12 @@ public final class WandPayloads {
                 WandPayloads::handleCast);
         registrar.playToServer(C2SWandChoosePathPayload.TYPE, C2SWandChoosePathPayload.STREAM_CODEC,
                 WandPayloads::handleChoosePath);
+        registrar.playToClient(S2CWandProgressPayload.TYPE, S2CWandProgressPayload.STREAM_CODEC,
+                WandPayloads::handleProgress);
+    }
+
+    private static void handleProgress(S2CWandProgressPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.wand.ClientWandProgress.update(payload);
     }
 
     private static void handleCast(C2SWandCastPayload payload, IPayloadContext context) {

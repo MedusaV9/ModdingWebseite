@@ -188,10 +188,10 @@ public final class UiSounds {
     // --- FFIX-A additions (ledger events; see docs/plans_v3/wiring/FFIX-A_wiring.md) ---
 
     /**
-     * Contract X-stamp slam (FFIX-A / POLISH V-1). Until the ledger registers
-     * {@code eclipse:ui.stamp}, the fallback reproduces the shipped two-layer read
-     * (anvil land + bell resonance) — but now behind the {@code uiSounds} kill-switch and
-     * the {@code uiSoundVolume} slider like every other presentation flourish.
+     * Contract X-stamp slam (FFIX-A / POLISH V-1). {@code eclipse:ui.stamp} is registered
+     * in {@code EclipseSounds} (V6-FIXWIRE #4); the anvil-land + bell-resonate fallback
+     * only survives as the usual self-healing layer — behind the {@code uiSounds}
+     * kill-switch and the {@code uiSoundVolume} slider like every presentation flourish.
      */
     public static void stamp() {
         SoundEvent registered = resolve("ui.stamp");

@@ -109,6 +109,11 @@ public final class WandPowers {
         COOLDOWNS.clear();
     }
 
+    /** Read view of one player's live cooldowns (power key → ready-at game time) for the sync. */
+    static Map<String, Long> cooldownsOf(UUID uuid) {
+        return COOLDOWNS.getOrDefault(uuid, Map.of());
+    }
+
     /**
      * FFIX-B (POLISH-SOL-03): basic actor-state gate for every C2S wand entry point. A
      * modified client can send cast/choose packets while dead, mid-removal or in spectator
@@ -187,6 +192,8 @@ public final class WandPowers {
         WandConfig.Xp xp = WandConfig.get().xp();
         awardXp(player, stack, power.cost() * xp.perCostPoint());
         SkillsApi.addXp(player, "wand", power.cost() * xp.skillXpPerCostPoint());
+        // V6-FIXWIRE #5: xp + the just-armed cooldown reach the client's panel this tick.
+        WandProgressSync.syncTo(player);
     }
 
     /** {@code C2SWandChoosePathPayload} handler — first-choice lock, server-validated. */
@@ -243,6 +250,7 @@ public final class WandPowers {
         player.displayClientMessage(Component.translatable("wand.eclipse.msg.awakening"), true);
         player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.path_chosen",
                 Component.translatable(chosen.langKey())));
+        WandProgressSync.syncTo(player);
     }
 
     /** Sneak-right-click: cycles the selected power among the unlocked ones. */
@@ -895,6 +903,7 @@ public final class WandPowers {
             return;
         }
         awardXp(killer, stack, WandConfig.get().xp().killBonus());
+        WandProgressSync.syncTo(killer);
     }
 
     /** Aimed point: block hit along the look ray, or the max-range point in the air. */

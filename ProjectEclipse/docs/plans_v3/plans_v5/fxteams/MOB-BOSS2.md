@@ -103,9 +103,11 @@ must stay ≤ ~0.5 px so the silhouette never lies about the 4.2-block hitbox.
   dark as designed).
 - Programmatic UV audit: rasterized every box-UV footprint of all 35 cubes — zero
   cross-bone overlaps on the 128² canvas.
-- `stride` wisp keyframes rewritten to house style: base roll expressed RELATIVE to the
-  geo bone's −8° rest pose (`-8 + math.sin(...)`) instead of an absolute −14° base that
-  double-counted the rest rotation.
+- `stride` wisp keyframes rewritten to house style: base roll expressed as a ZERO-centered
+  delta on top of the geo bone's −8° rest pose (`-6 + math.sin(...)` for a −14° total)
+  — GeckoLib ADDS sampled animation rotation to the bone snapshot, so an animation
+  baseline that repeats the rest angle double-counts it (fixed post-EVAL-V6-MOB D3:
+  all wisp channels now carry deltas, the geo alone owns the ±8° pre-roll).
 
 ### POLISH 3
 - Continuity pass over every action→base handoff: all one-shot anims end within ~0.1 of

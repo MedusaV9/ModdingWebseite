@@ -287,11 +287,10 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_BLINK_IN, EclipseGeoAnimations.once(GEO_ID, ANIM_BLINK_IN));
         action.triggerableAnim(ANIM_SUMMON, EclipseGeoAnimations.once(GEO_ID, ANIM_SUMMON));
         action.triggerableAnim(ANIM_STAGGER, EclipseGeoAnimations.once(GEO_ID, ANIM_STAGGER));
-        // W4 IDEA-16 #3 death slow-mo: the held death anim eases toward ~0.2x speed over
-        // the first ~8 death ticks (Herald tickClientAnim pattern, Geo-boss flavor;
-        // client-side render illusion — server ticks untouched).
-        action.setAnimationSpeedHandler(warden -> this.deathTime > 0
-                ? Math.max(0.2D, 1.0D - this.deathTime * 0.1D) : 1.0D);
+        // No death speed handler: the W4 slow-mo (0.2x floor) advanced only ~0.74s of the
+        // 3.0s death shatter before the 60t removal (EVAL-V6-MOB D1). The MOB-BOSS2 shard
+        // ejection + plate peel are authored to fill exactly 3.0s = 60t at 1x, handing the
+        // held "empty armor" last frame to the tickDeath implosion FX.
     }
 
     // --- synced state accessors ---

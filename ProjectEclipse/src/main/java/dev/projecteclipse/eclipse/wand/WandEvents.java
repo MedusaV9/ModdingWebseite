@@ -12,6 +12,10 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
  * currently HOLDING (main/off hand) a wand they own — no path/level gate beyond that;
  * {@code WandPowers.handleKill} refuses pathless wands internally (no XP before the
  * first choice). Amount: {@code xp.killBonus} in {@code config/eclipse/wand.json}.
+ *
+ * <p>Also the login half of the {@code S2CWandProgressPayload} sync (V6-FIXWIRE #5):
+ * every joining player gets the server's wand tuning + their own progression snapshot
+ * before they can open the skill-tree wand tab.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class WandEvents {
@@ -25,6 +29,13 @@ public final class WandEvents {
         if (event.getSource().getEntity() instanceof ServerPlayer killer
                 && killer != event.getEntity()) {
             WandPowers.handleKill(killer);
+        }
+    }
+
+    @SubscribeEvent
+    static void onPlayerLoggedIn(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            WandProgressSync.syncTo(player);
         }
     }
 }

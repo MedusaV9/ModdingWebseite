@@ -108,10 +108,14 @@ public final class CutscenePaths {
                     List.of("f7188ad86c759a9b58e1d4f93af4020214a02d09d05ebe43428b7921951e1ee6")),
             Map.entry("intro_v3_reveal",
                     List.of("4ec430af2c612ab8d2519a86d26547b667a7573cda0e09be16815765255eecca")),
-            // The pre-CUT-CREDITS C15 helm push-in (fxteams CUT-CREDITS reshot it: slow
-            // dolly, wheel foreground framing, FOV 66→58 squeeze, hands-settle beat).
-            Map.entry("credits_helm",
-                    List.of("d1534925895f730513eda34d6ee070dcc795c97828727be764926581490576df")),
+            // First entry: the pre-CUT-CREDITS C15 helm push-in (fxteams CUT-CREDITS
+            // reshot it: slow dolly, wheel foreground framing, FOV 66→58 squeeze,
+            // hands-settle beat). Second entry: the CUT-CREDITS version whose wheel
+            // whisper fired at t=0.72 (~7t before the grip; EVAL-V6-CUTBD defect 5 moved
+            // it to t=0.77).
+            Map.entry("credits_helm", List.of(
+                    "d1534925895f730513eda34d6ee070dcc795c97828727be764926581490576df",
+                    "a0efa5f9259ebc06e8a0b8a5254e96bd6b490dcceef1dbb3ddd7b242459d3e04")),
             // Second entries: the pre-CUT-EXPANSION C6 versions (launch-rush / low-skim reshoots).
             Map.entry("expansion_skyward", List.of(
                     "de4ce2d7ca058da3fed835dc4337972c3f0cdc08bb660651d7fe4d9e68650d62",

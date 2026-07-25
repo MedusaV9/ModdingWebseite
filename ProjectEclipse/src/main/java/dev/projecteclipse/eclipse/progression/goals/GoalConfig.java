@@ -521,8 +521,9 @@ public final class GoalConfig {
                 + ". scope: each_player | team_total | team_all. Counts: travel_distance in meters, "
                 + "stat_threshold in raw stat units (distances cm, damage tenths). manual goals may "
                 + "carry trigger.beatId — authored beats: herald_summoned, herald_defeated, finale_begun, "
-                + "dragon_defeated, ferryman_defeated, altar_level_<n>, shard_pool_<n>, all_hearts_<n>. "
-                + "External engine beats: player_revived, crossing_survived, create_kinetics_built. "
+                + "dragon_defeated, ferryman_defeated, create_kinetics_built, altar_level_<n>, "
+                + "shard_pool_<n>, all_hearts_<n>. "
+                + "External engine beats: player_revived, crossing_survived. "
                 + "SIDE entries may carry requiresUnlock (an UnlockState key, e.g. nether/brewing/end): "
                 + "the side stays hidden until the key is granted (plans_v5 D5). "
                 + "Days missing here fall back to days.json strings as manual mains. Edit + /eclipse reload.";

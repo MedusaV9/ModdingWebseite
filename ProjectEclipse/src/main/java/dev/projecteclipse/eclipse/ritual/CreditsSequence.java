@@ -502,8 +502,9 @@ public final class CreditsSequence implements SequenceReplayable {
         // the deck behind the whiteout; beatEpilogue's transport re-anchors that lock.
         CutsceneService.play(PATH_HELM, online, new Vec3(-18.5D, deckY + 7, 0.5D),
                 CreditsSequence::refreezeAfterHelmShot, CutsceneService.PlayOptions.LOCAL);
-        // FXTEAM CUT-CREDITS hands-settle beat (path t≈0.78 ≈ run tick 148, synced with
-        // the t=0.72 "wheel" whisper): the grip pull now rides the continuous rotation
+        // FXTEAM CUT-CREDITS hands-settle beat (path t≈0.77 ≈ run tick 148, synced with
+        // the t=0.77 "wheel" whisper — EVAL-V6-CUTBD §3 defect 5 moved the caption from
+        // t=0.72/run≈141 onto the grip): the grip pull now rides the continuous rotation
         // as a deterministic offset envelope — see gripOffset() (BD-SHIP transport;
         // the CUT-CREDITS timing constants WHEEL_SETTLE_AT/WHEEL_RELAX_AT still rule).
     }
@@ -1386,6 +1387,12 @@ public final class CreditsSequence implements SequenceReplayable {
             }
             case "CORRECTION" -> {
                 for (ServerPlayer player : watchers) {
+                    // Replay parity (EVAL-V6-PHOTON §4): the live beatBurst leads with the
+                    // giant FX_SHOCKWAVE(1.0, 50) — the exact signature the client seam
+                    // layers the Photon INTRO_BURST_RING onto — so the FX-only replay
+                    // sends it too, anchored at the watcher.
+                    PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                            .S2CFxEventPayload(FxPayloads.FX_SHOCKWAVE, player.position(), 1.0F, 50.0F));
                     PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(6, 4, 6, 0xFFFFFFFF));
                     // PH-EVENTS replay parity (R12): the live burst pairs this flash with
                     // the confetti cue (beatBurst) — replay anchors it at the watcher.

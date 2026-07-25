@@ -317,11 +317,15 @@ class GeoPainter:
                                     glowmask.putpixel((gx, gy),
                                                       with_alpha(col, int(col[3] * glow_strength)))
                                     glow_px += 1
-                            if glow_fn is not None:
-                                glow = glow_fn(px)
-                                if glow is not None:
-                                    glowmask.putpixel((gx, gy), glow)
-                                    glow_px += 1
+                                # Glow is masked by albedo: a texel the material dropped
+                                # (None -> alpha 0, e.g. glitch_lib.dropout holes) must stay
+                                # dark in the glowmask too, or the emissive layer shines
+                                # through the hole (EVAL-V6-MOB D4).
+                                if glow_fn is not None:
+                                    glow = glow_fn(px)
+                                    if glow is not None:
+                                        glowmask.putpixel((gx, gy), glow)
+                                        glow_px += 1
 
         out_png.parent.mkdir(parents=True, exist_ok=True)
         albedo.save(out_png)

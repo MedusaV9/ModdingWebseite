@@ -33,10 +33,29 @@ import net.neoforged.fml.loading.FMLPaths;
  * same leniency as RecipeGate's missing-tag DEBUG). A parse failure of an EXISTING file
  * keeps the previous snapshot instead of falling back to defaults, so a typo during a
  * live event can never re-lock everyone's recipes.</p>
+ *
+ * <p><b>Migration (EVAL-V6-COMPLETE A#7):</b> {@code configVersion} gates a TARGETED
+ * in-place patch (not GoalConfig's backup-and-regenerate — collections are more likely
+ * to carry deliberate server tuning). A parseable file older than
+ * {@link #CONFIG_VERSION} (missing field = v1) gets the v2 delta applied — the
+ * cobblestone {@code dailyCreditCap} 600 lands on existing files whose cap is still the
+ * old uncapped default — is stamped with the current version and written back.
+ * Unparseable files are left untouched (the reload path already keeps the previous
+ * snapshot for those).</p>
  */
 public final class CollectionsConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String FILE = "collections.json";
+
+    /**
+     * Version 2 = EVAL-DOPA-F #9 / EVAL-V6-COMPLETE A#7: cobblestone gained its REAL
+     * daily credit cap (600/day). The default writer alone never reaches servers whose
+     * {@code collections.json} predates the change, so {@link #migrateIfOutdated}
+     * patches those files in place. Bump when a shipped default must reach live files.
+     */
+    public static final int CONFIG_VERSION = 2;
+    /** The v2 cobblestone daily credit cap applied by the migration (EVAL-DOPA-F #9). */
+    private static final long COBBLESTONE_DAILY_CREDIT_CAP = 600L;
 
     /** Valid signal lanes (IDEAS-collections §4.1). */
     public static final Set<String> LANES = Set.of("mine", "harvest", "kill", "shard_bank", "pickup");
@@ -137,6 +156,7 @@ public final class CollectionsConfig {
                 loaded = true;
                 return;
             }
+            migrateIfOutdated(root, file);
         }
 
         apply(parse(root));
@@ -167,6 +187,68 @@ public final class CollectionsConfig {
     private static void ensureLoaded() {
         if (!loaded) {
             reloadDefault();
+        }
+    }
+
+    /**
+     * Version-gated in-place migration of a parseable existing file (class doc). v1 → v2
+     * delta: cobblestone gains {@code dailyCreditCap} {@value #COBBLESTONE_DAILY_CREDIT_CAP}
+     * — but ONLY when the file still carries the old uncapped default (missing or
+     * {@code <= 0}); a deliberate operator-tuned cap is respected. The patched root is
+     * stamped and written back so the migration runs once; a failed write keeps the
+     * patched in-memory root (the sweep still sees the cap this session).
+     */
+    private static void migrateIfOutdated(JsonObject root, Path file) {
+        int fileVersion = 1;
+        try {
+            if (root.has("configVersion")) {
+                fileVersion = root.get("configVersion").getAsInt();
+            }
+        } catch (RuntimeException e) {
+            EclipseMod.LOGGER.warn("{}: malformed configVersion; treating as v1 ({})",
+                    file.getFileName(), e.getMessage());
+        }
+        if (fileVersion >= CONFIG_VERSION) {
+            return;
+        }
+        boolean capped = false;
+        if (root.has("collections") && root.get("collections").isJsonArray()) {
+            for (JsonElement element : root.getAsJsonArray("collections")) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject collection = element.getAsJsonObject();
+                if (!collection.has("id") || !"cobblestone".equals(idOf(collection))) {
+                    continue;
+                }
+                long cap = 0L;
+                try {
+                    cap = collection.has("dailyCreditCap") ? collection.get("dailyCreditCap").getAsLong() : 0L;
+                } catch (RuntimeException ignored) {
+                    // malformed cap value — treat as the old uncapped default and patch it
+                }
+                if (cap <= 0L) {
+                    collection.addProperty("dailyCreditCap", COBBLESTONE_DAILY_CREDIT_CAP);
+                    capped = true;
+                }
+            }
+        }
+        root.addProperty("configVersion", CONFIG_VERSION);
+        try {
+            Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
+            EclipseMod.LOGGER.warn("{} migrated v{} -> v{}: cobblestone dailyCreditCap {}",
+                    file.getFileName(), fileVersion, CONFIG_VERSION,
+                    capped ? "set to " + COBBLESTONE_DAILY_CREDIT_CAP : "already customized, kept");
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to write migrated config {} — patch applies in-memory only", file, e);
+        }
+    }
+
+    private static String idOf(JsonObject collection) {
+        try {
+            return collection.get("id").getAsString();
+        } catch (RuntimeException e) {
+            return "";
         }
     }
 
@@ -260,6 +342,7 @@ public final class CollectionsConfig {
                 + "recipegate syntax (ids or #tags); dailyCreditCap 0 = uncapped; shards (FIX-ECON) = "
                 + "PERSONAL umbral shards credited on tier-up (chunky T4+ tiers pay 1-2 so "
                 + "collections fund the rebirth ladder).");
+        root.addProperty("configVersion", CONFIG_VERSION);
         root.addProperty("toastsEnabled", true);
         root.addProperty("xpSourceKey", "collection");
         JsonArray collections = new JsonArray();

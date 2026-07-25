@@ -396,11 +396,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_CROWN_CALL, EclipseGeoAnimations.once(GEO_ID, ANIM_CROWN_CALL));
         action.triggerableAnim(ANIM_SQUALL, EclipseGeoAnimations.once(GEO_ID, ANIM_SQUALL));
         action.triggerableAnim(ANIM_ENRAGE, EclipseGeoAnimations.once(GEO_ID, ANIM_ENRAGE));
-        // W4 IDEA-16 #3 death slow-mo: the held death anim eases toward ~0.2x speed over
-        // the first ~8 death ticks (Herald tickClientAnim pattern, Geo-boss flavor;
-        // client-side render illusion — server ticks untouched).
-        action.setAnimationSpeedHandler(tyrant -> this.deathTime > 0
-                ? Math.max(0.2D, 1.0D - this.deathTime * 0.1D) : 1.0D);
+        // No death speed handler: the W4 slow-mo (0.2x floor) advanced only ~0.84s of the
+        // 3.5s death collapse before the 70t removal (EVAL-V6-MOB D2). The MOB-BOSS2 wisp
+        // rise/unroll/dissipate keys (1.0/1.8/2.6/3.5s) are authored to fill exactly
+        // 3.5s = 70t at 1x, feeding the storm explode() finale.
     }
 
     // --- synced state accessors ---

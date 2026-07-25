@@ -37,7 +37,8 @@
 //     ocean reads as endless. The warp fades at the screen border (no letterbox smearing)
 //     and is disabled entirely under reducedFx (CurveAmount = 0).
 // Uniforms: Intensity, GodrayDir (vec2), CausticsAmount, Time (frozen §3.3) + the v3 set
-// InvViewProj, CameraPos, WaterlineY, VoyageOffset, CurveAmount, FarDist — all fed per
+// InvViewProj, CameraPos, WaterlineY, VoyageOffset, CurveAmount, FarDist + the v4
+// LightningGlow and Detail (reduced-motion gate) — all fed per
 // frame by veilfx.LimboAmbience (which captures the exact AFTER_SKY render matrices, view
 // bobbing included, so reconstruction matches the depth buffer — the SunTracker law).
 #include eclipse:eclipse_common
@@ -57,6 +58,9 @@ uniform float CurveAmount;  // horizon curvature strength (0 under reducedFx)
 uniform float FarDist;      // approx. distance (blocks) where the loaded sea geometry ends
 // v4:
 uniform vec3 LightningGlow; // xy = world-XZ azimuth unit dir of the pulse, z = strength 0..1
+uniform float Detail;       // 1 normal, 0 under reducedFx — gates the v4 water-motion layers
+                            // (swells, micro-ripples, glints, reflection ripple) back to the
+                            // v3 water look: reduced FX is a motion contract, not just ALU.
 
 in vec2 texCoord;
 
@@ -75,7 +79,11 @@ float causticWeb(vec2 p, float t) {
 // Camera-relative world position of the pixel at (uv, depth) through the exact matrices.
 vec3 reconstructRel(vec2 uv, float depth) {
     vec4 clip = InvViewProj * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-    return clip.xyz / clip.w;
+    // Epsilon guard: a singular/near-zero homogeneous w (identity-parked InvViewProj,
+    // degenerate depth) would inject Inf/NaN into UV warp, masks and noise coordinates.
+    float w = clip.w;
+    if (abs(w) < 1.0e-6) w = w < 0.0 ? -1.0e-6 : 1.0e-6;
+    return clip.xyz / w;
 }
 
 void main() {
@@ -115,8 +123,9 @@ void main() {
             vec2 toEclipse = (GodrayDir * 0.5 + 0.5) - uv;
             curveDir = normalize(vec2(toEclipse.x * 0.3, max(abs(toEclipse.y), 0.4)));
         }
-        float edgeFade = smoothstep(0.0, 0.06, uv.y) * smoothstep(1.0, 0.94, uv.y)
-                * smoothstep(0.0, 0.04, uv.x) * smoothstep(1.0, 0.96, uv.x);
+        // Descending ramps as 1-smoothstep(lo,hi,x): edge0>edge1 is undefined GLSL.
+        float edgeFade = smoothstep(0.0, 0.06, uv.y) * (1.0 - smoothstep(0.94, 1.0, uv.y))
+                * smoothstep(0.0, 0.04, uv.x) * (1.0 - smoothstep(0.96, 1.0, uv.x));
         suv = clamp(uv - curveDir * warp * edgeFade, vec2(0.0), vec2(1.0));
     }
 
@@ -177,12 +186,14 @@ void main() {
         // v4 layered water, far band: long-wavelength swells (~35-block features, near-
         // static) re-shade the web brightness beyond ~18 blocks — the far field reads as
         // rolling water instead of a uniform shimmer sheet.
+        // Detail-gated (reduced FX): the swell re-shade collapses to the flat v3 web.
         float swell = efxNoise(wp * 0.055 + vec2(Time * 0.045, Time * 0.028));
-        float webAmp = mix(1.0, 0.55 + 0.90 * swell, smoothstep(18.0, 60.0, dist));
+        float webAmp = mix(1.0, 0.55 + 0.90 * swell, smoothstep(18.0, 60.0, dist) * Detail);
         // v4 layered water, near band: a micro-ripple octave hugging the hull (3.1× web
-        // frequency, faster counter-scroll), fully faded out by 16 blocks.
+        // frequency, faster counter-scroll), fully faded out by 16 blocks. Detail-gated.
         float nearW = 1.0 - smoothstep(5.0, 16.0, dist);
-        float micro = nearW > 0.001 ? causticWeb(wp * 3.1 + vec2(53.0), Time * 2.1) : 0.0;
+        float micro = (nearW > 0.001 && Detail > 0.001)
+                ? causticWeb(wp * 3.1 + vec2(53.0), Time * 2.1) : 0.0;
         color += (vec3(0.10, 0.03, 0.17)
                 + vec3(0.42, 0.16, 0.80) * web * webAmp * calm
                 + vec3(0.55, 0.30, 1.00) * sparkle * 0.6 * calm
@@ -191,15 +202,17 @@ void main() {
         // wp, so they trail the voyage drift astern like real flotsam); ~1.8% of ~4.4-block
         // cells host a glint, each an elongated-along-drift soul-green spot blinking on its
         // own slow phase (sin² halves the duty cycle — mostly-dark reads alive, not busy).
+        // Detail-gated (reduced FX): blinking point lights are exactly the kind of motion
+        // the reduced contract removes.
         vec2 gp = wp * 0.5;
         float gh = efxHash(floor(gp));
-        if (gh > 0.982) {
+        if (gh > 0.982 && Detail > 0.001) {
             vec2 lp = fract(gp) - 0.5;
             lp.x *= 0.45; // stretch along the drift axis (+X)
             float spot = exp(-dot(lp, lp) * 22.0);
             float blink = max(sin(Time * (0.5 + gh) + gh * 41.0), 0.0);
             blink *= blink;
-            color += vec3(0.28, 0.95, 0.55) * spot * blink * calm * water * 0.5;
+            color += vec3(0.28, 0.95, 0.55) * spot * blink * calm * water * 0.5 * Detail;
         }
     }
 
@@ -214,7 +227,8 @@ void main() {
         float shimmer = 0.85 + 0.11 * sin(Time * 1.3) + 0.04 * sin(Time * 0.37 + 1.7);
         // v4: wave-broken smear — a world-anchored ripple (it rides wp, so it streams with
         // the voyage drift) breaks the solid blob into moving patches of reflection.
-        float ripple = 0.70 + 0.30 * efxNoise(wp * 1.3 + vec2(Time * 0.20, 0.0));
+        // Detail-gated (reduced FX): falls back to the solid v3 blob.
+        float ripple = mix(1.0, 0.70 + 0.30 * efxNoise(wp * 1.3 + vec2(Time * 0.20, 0.0)), Detail);
         color += vec3(0.55, 0.28, 1.00) * smear * shimmer * ripple * water * 0.5;
     }
 

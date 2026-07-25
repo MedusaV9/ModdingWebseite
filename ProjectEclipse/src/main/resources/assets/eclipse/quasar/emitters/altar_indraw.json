@@ -73,11 +73,11 @@
           0.2,
           0.0
         ],
-        "local_position": true,
+        "localPosition": true,
         "range": 9.0,
         "strength": 2.4,
-        "strength_by_distance": false,
-        "invert_distance_modifier": false
+        "strengthByDistance": false,
+        "invertDistanceModifier": false
       },
       {
         "module": "veil:drag",

@@ -165,13 +165,18 @@ manager path exists only for editor previews).
 
 ## 5. Our bridge (`veilfx/PhotonBridge.java`) vs the real jar — audit result
 
-All three reflected points match the 2.1.5 bytecode **exactly**. No mismatches:
+All ELEVEN reflected points match the 2.1.5 bytecode **exactly** (the original D12
+trio below plus the PH-CORE additions; the full list was re-verified by
+EVAL-V6-PHOTON §2). No mismatches:
 
 | Bridge reflection | Real signature (javap) | Status |
 |---|---|---|
 | `FXHelper.getMethod("getFX", ResourceLocation.class)` | `public static FX getFX(ResourceLocation)` | ✅ exact |
 | `BlockEffectExecutor.getConstructor(FX, Level, BlockPos)` | `public BlockEffectExecutor(FX, Level, BlockPos)` | ✅ exact |
 | `blockExecutor.getMethod("start")` | `public void start()` | ✅ exact |
+| `EntityEffectExecutor.getConstructor(FX, Level, Entity, AutoRotate)` + `start()` | `public EntityEffectExecutor(FX, Level, Entity, AutoRotate)` (§2 core classes) | ✅ exact |
+| `setOffset(Vector3f)` / `setRotation(Quaternionf)` / `setScale(Vector3f)` / `setDelay(int)` / `setAllowMulti(boolean)` | the `EffectExecutor` setter surface (§2 core classes) | ✅ exact |
+| `getRuntime()` → `FXRuntime.isAlive()` / `FXRuntime.destroy(boolean)` | the runtime/loop surface (§2 core classes) | ✅ exact |
 | `getFX` returns `null` on missing asset (bridge's `missing()` path) | `loadFX` catches `Exception` → `null`; null not cached | ✅ correct |
 
 Optional (non-blocking) refinements, all verified available:
