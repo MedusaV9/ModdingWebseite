@@ -51,6 +51,7 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Es fehlt der polish. Nimm dir mehr Subagents die auch sowas wie Dopamin, Sounddesign und feeling bewerten und verbessern sollen.
 [ ] Die Github Actions build werfen einen error : lint Process completed with exit code 123.
 [ ] Du musst den Remotion Trailer noch selber komplett erstellen und rendern und ihn ins Repo packen. Denk dran du entscheidest selber wie der seinen soll plus die musik wählst du auch selber etc.
+[ ] Deine Ganze Arbeit bisher ist viel zu wenig und es kommt mir so vor als ob du keine Mühe bisher hattest. Gib dir mehr Mühe und nimm mehr Subagents und mehr Teams die gemeinsam ansachen arbeiten statt nur 4 Subagents für alles. Nutze mehr Subagents nutze Fable 5 Max Effort Thinking um sogar noch bessere Sachen zumachen.
 
 
 
