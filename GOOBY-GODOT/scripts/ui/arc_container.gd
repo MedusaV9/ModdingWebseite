@@ -4,6 +4,9 @@ extends Container
 ## UNTERE Ecke anordnet — der „Daumen-Bogen“ des Hochkant-HUDs (H §1.3).
 ## Geometrie kommt aus der puren `HudLayoutLogic` (testbar ohne Szene).
 
+## Luft zwischen Rand-Buttons und dem eigenen Rect (= Bildschirmkante).
+const CORNER_PADDING := 6.0
+
 @export var radius: float = HudLayoutLogic.ARC_RADIUS:
 	set(value):
 		radius = value
@@ -21,7 +24,7 @@ extends Container
 
 ## Zick-Zack-Staffelung (H §1.3-ASCII): jeder 2. Button rückt nach außen,
 ## damit sich 72px-Buttons auf dem Daumenradius nicht überdecken.
-@export var stagger: float = 64.0:
+@export var stagger: float = HudLayoutLogic.ARC_STAGGER:
 	set(value):
 		stagger = value
 		queue_sort()
@@ -37,7 +40,10 @@ func _get_minimum_size() -> Vector2:
 	for child in _visible_children():
 		var ms := (child as Control).get_combined_minimum_size()
 		max_child = maxf(max_child, maxf(ms.x, ms.y))
-	var extent := radius + stagger + max_child
+	# Vom Eck aus gemessen: Ecken-Einzug (halber Button + Padding) +
+	# äußerster Radius (radius+stagger) + halber Button — sonst clippt der
+	# oberste/linkeste Button genau um CORNER_PADDING (E5-F2).
+	var extent := radius + stagger + max_child + CORNER_PADDING
 	return Vector2(extent, extent)
 
 
@@ -50,7 +56,7 @@ func _sort_children() -> void:
 	for child in children:
 		var ms := (child as Control).get_combined_minimum_size()
 		max_child = maxf(max_child, maxf(ms.x, ms.y))
-	var inset := max_child / 2.0 + 6.0
+	var inset := max_child / 2.0 + CORNER_PADDING
 	var corner := size - Vector2(inset, inset)
 	for i in children.size():
 		var child := children[i] as Control

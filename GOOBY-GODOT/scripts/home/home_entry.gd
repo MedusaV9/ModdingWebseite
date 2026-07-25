@@ -14,6 +14,9 @@ var _router: Node
 var _gs: Node
 var _hud: Hud
 var _toasts: ToastLayer
+## HUD erst nach Onboarding erlaubt; Sichtbarkeit folgt danach dem Router:
+## nur in Räumen (RoomBase) an, über Vollbild-Screens aus (E5-F1).
+var _hud_enabled := false
 
 @onready var _world: Node3D = $World
 @onready var _ui_layer: CanvasLayer = $UiLayer
@@ -39,6 +42,8 @@ func _ready() -> void:
 	_build_hud()
 	if _router != null and _router.has_signal("travel_finished"):
 		_router.travel_finished.connect(_on_travel_finished)
+	if _router != null and _router.has_signal("travel_started"):
+		_router.travel_started.connect(_on_travel_started)
 	_roll_random_event()
 	if _gs != null and not bool(_gs.get_value("onboarding.done", false)):
 		_show_onboarding()
@@ -63,13 +68,29 @@ func _roll_random_event() -> void:
 	RandomEventEngine.roll_on_start(_gs, defs, now_ms, minuten, rng)
 
 
+## Beim Reiseantritt sofort ausblenden (der Veil deckt derweil ab) — sonst
+## überlappen HUD-Buttons/Status-Kapseln beim Aufdecken kurz den Zielscreen.
+func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> void:
+	if _hud != null:
+		_hud.visible = false
+
+
 func _on_travel_finished(_target: Variant = null) -> void:
+	_update_hud_visibility()
 	var room := _current_room()
 	if room == null:
 		return
 	# W3d-Hooks: Bad-Suite/Geschichten-Stunde + aktives Random-Event pro Raum.
 	InteractablesHost.attach_to(room)
 	EventRunner.attach_to(room)
+
+
+## HUD nur im Raum (RoomBase) zeigen — Album/Arcade/Social/Stadt sind
+## Vollbild-Screens, dort verdeckten HUD-Buttons vorher Inhalte (E5-F1).
+func _update_hud_visibility() -> void:
+	if _hud == null:
+		return
+	_hud.visible = _hud_enabled and _current_room() != null
 
 
 func _build_hud() -> void:
@@ -149,6 +170,7 @@ func _show_onboarding() -> void:
 
 
 func _start_home() -> void:
+	_hud_enabled = true
 	_hud.visible = true
 	if _router != null:
 		_router.goto(RoomDefs.route_target(START_ROOM))

@@ -62,6 +62,7 @@ var _last_stats: Dictionary = {}
 var _level_label: Label
 var _level_ring: HudProgressRing
 var _coin_label: Label
+var _coin_icon: TextureRect
 var _coin_chip: Control
 var _coin_tween: Tween
 var _coin_shown := 0
@@ -92,13 +93,25 @@ func _ready() -> void:
 
 
 ## Layout hart setzen (Rotation macht das automatisch; Tests rufen es direkt).
+##
+## Hochkant skaliert ALLE HUD-Größen mit `HudLayoutLogic.portrait_scale`:
+## das Projekt-Stretch (Basis 1280×720, expand) hält den Canvas in Hochkant
+## immer ≥1280 breit, physisch schrumpft also alles auf ~56–84 % — ohne
+## Skalierung klumpte der Daumen-Bogen als geclippter Diagonal-Haufen
+## (E5-F2) und alle Tap-Ziele lagen unter dem 48-px-Touch-Floor (E5-F4).
 func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	current_layout = layout
 	var portrait := layout == HudLayoutLogic.Layout.PORTRAIT
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var f := HudLayoutLogic.portrait_scale(canvas) if portrait else 1.0
+	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
 	_portrait_arc.visible = portrait
 	_landscape_column.visible = not portrait
 	_left_column.visible = not portrait
 	_status_row.visible = portrait
+	_portrait_arc.radius = HudLayoutLogic.ARC_RADIUS * f
+	_portrait_arc.stagger = HudLayoutLogic.ARC_STAGGER * f
+	var btn_size := maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
 	var button_parent: Container = _portrait_arc if portrait else _landscape_column
 	var order: Array = []
 	if portrait:
@@ -108,6 +121,8 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		order = COLUMN_ORDER.duplicate()
 	for id: StringName in order:
 		var btn: Button = _buttons[id]
+		btn.custom_minimum_size = Vector2.ONE * btn_size
+		_scale_icon_button(btn, f)
 		if btn.get_parent() != button_parent:
 			if btn.get_parent() != null:
 				btn.get_parent().remove_child(btn)
@@ -122,10 +137,23 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 			chip_parent.add_child(chip)
 		# Hochkant = Mini-Kapseln (H §1.3: Glance-Info, Details per Tap-Sheet).
 		chip.theme_type_variation = &"StatusCapsuleMini" if portrait else &"StatusCapsule"
+		# Kapseln sind Tap-Ziele (öffnen das Status-Sheet) → Touch-Floor.
+		chip.custom_minimum_size = Vector2.ONE * floor_px
 	for info in STATS:
 		var bar: ProgressBar = _stat_bars[info["id"]]
-		bar.custom_minimum_size = Vector2(34.0 if portrait else 132.0, 12.0)
+		bar.custom_minimum_size = (
+			Vector2(roundf(34.0 * f), roundf(12.0 * f)) if portrait else Vector2(132.0, 12.0)
+		)
 		(_stat_icons[info["id"]] as Control).visible = not portrait
+	_level_ring.custom_minimum_size = Vector2.ONE * roundf(34.0 * f)
+	_coin_icon.custom_minimum_size = Vector2.ONE * roundf(22.0 * f)
+	_scale_font(_coin_label, 20, f)
+	_scale_font(_level_label, 15, f)
+	_scale_font(_gooby_chip, 17, f)
+	_settings_button.custom_minimum_size = Vector2.ONE * maxf(56.0, floor_px)
+	_eye_button.custom_minimum_size = Vector2.ONE * btn_size
+	_scale_icon_button(_eye_button, f)
+	_gooby_chip.custom_minimum_size = Vector2(0.0, floor_px)
 	refresh_safe_area()
 
 
@@ -220,7 +248,11 @@ func _fill_status_sheet() -> void:
 	var gs := get_node_or_null("/root/GameState")
 	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
 	var boni := HudStatusSheet.stat_boni(gs, now_ms)
-	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni))
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var f := 1.0
+	if current_layout == HudLayoutLogic.Layout.PORTRAIT:
+		f = HudLayoutLogic.portrait_scale(canvas)
+	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni, f))
 
 
 func _build_action_buttons() -> void:
@@ -230,7 +262,7 @@ func _build_action_buttons() -> void:
 		btn.name = "Btn" + String(id).capitalize()
 		btn.theme_type_variation = "HudIconButton"
 		btn.icon = load("%s%s.svg" % [ICON_DIR, action["icon"]])
-		btn.custom_minimum_size = Vector2(72, 72)
+		btn.custom_minimum_size = Vector2.ONE * HudLayoutLogic.ACTION_BTN
 		btn.tooltip_text = I18nService.t("hud." + String(id))
 		btn.expand_icon = false
 		btn.focus_mode = Control.FOCUS_NONE
@@ -258,6 +290,7 @@ func _build_status_chips() -> void:
 		var chip := _make_chip("StatChip" + String(info["id"]).capitalize())
 		var box := HBoxContainer.new()
 		box.add_theme_constant_override("separation", 6)
+		box.alignment = BoxContainer.ALIGNMENT_CENTER
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var icon := TextureRect.new()
 		icon.texture = load("%s%s.svg" % [ICON_DIR, info["icon"]])
@@ -286,14 +319,15 @@ func _build_status_chips() -> void:
 	var coin_chip := _make_chip("CoinChip")
 	var coin_box := HBoxContainer.new()
 	coin_box.add_theme_constant_override("separation", 6)
+	coin_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	coin_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var coin_icon := TextureRect.new()
-	coin_icon.texture = load("res://assets/ui/coin.png")
-	coin_icon.custom_minimum_size = Vector2(22, 22)
-	coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	coin_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coin_box.add_child(coin_icon)
+	_coin_icon = TextureRect.new()
+	_coin_icon.texture = load("res://assets/ui/coin.png")
+	_coin_icon.custom_minimum_size = Vector2(22, 22)
+	_coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_coin_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_coin_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	coin_box.add_child(_coin_icon)
 	_coin_label = Label.new()
 	_coin_label.name = "CoinValue"
 	_coin_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -333,17 +367,40 @@ func _setup_static_buttons() -> void:
 func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) -> void:
 	var vp := Vector2(get_viewport().get_visible_rect().size)
 	_eye_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_eye_button.reset_size()
+	var eye := _eye_button.get_combined_minimum_size()
 	if portrait:
-		# Überm Bogen an der rechten Kante (Daumenzone); der oberste
-		# Bogen-Button reicht mit Stagger bis ~y-300, also drüber bleiben.
-		_eye_button.position = Vector2(
-			vp.x - 72.0 - 16.0 - inset_right, vp.y - 388.0 - inset_bottom
-		)
+		# Im Drehpunkt des Daumen-Bogens (innerhalb des Innenradius ist
+		# Platz): kürzeste Daumenzone, kollidiert nie mit den Bogen-Buttons.
+		# Auge und Bogen-Buttons sind gleich groß (btn_size aus apply_layout),
+		# daher liefert eye.x auch den Ecken-Einzug des ArcContainers.
+		var pad := eye.x / 2.0 + ArcContainer.CORNER_PADDING
+		var corner := Vector2(vp.x - 8.0 - inset_right - pad, vp.y - 8.0 - inset_bottom - pad)
+		var center := corner - Vector2.ONE * eye.x * 0.55
+		_eye_button.position = center - eye / 2.0
 	else:
 		# Links neben der Button-Spalte, unten (Cockpit).
 		_eye_button.position = Vector2(
 			vp.x - 96.0 - 72.0 - 12.0 - inset_right, vp.y - 72.0 - 16.0 - inset_bottom
 		)
+
+
+## Icon-Skalierung für die Frost-Icon-Buttons: das Theme deckelt Icons auf
+## 44 px (`HudIconButton/icon_max_width`) — im skalierten Hochkant-Button
+## (~128 px) wächst der Deckel mit, sonst wirken die Icons verloren.
+func _scale_icon_button(btn: Button, f: float) -> void:
+	if f > 1.0:
+		btn.add_theme_constant_override("icon_max_width", int(44.0 * f))
+	else:
+		btn.remove_theme_constant_override("icon_max_width")
+
+
+## Font-Größe mitskalieren (nur Hochkant, f > 1) — sonst zurück ans Theme.
+func _scale_font(ctl: Control, base_px: int, f: float) -> void:
+	if f > 1.0:
+		ctl.add_theme_font_size_override("font_size", int(base_px * f))
+	else:
+		ctl.remove_theme_font_size_override("font_size")
 
 
 ## Insets in Canvas-Koordinaten: Override (Tests/Notch-Simulation) >

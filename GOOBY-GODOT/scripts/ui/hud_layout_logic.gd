@@ -6,10 +6,19 @@ extends RefCounted
 
 enum Layout { PORTRAIT, LANDSCAPE }
 
-## Daumenradius des Aktions-Bogens (≈ 9 rem, H §1.3).
-const ARC_RADIUS := 150.0
+## Daumenradius des Aktions-Bogens (≈ 9 rem, H §1.3) — BASIS-Werte für einen
+## 720 px breiten Hochkant-Canvas; auf dem echten Canvas mit
+## `portrait_scale()` multiplizieren (Stretch expand hält den Canvas in
+## Hochkant immer ≥1280 breit, E5-F2). Radius/Stagger sind so gewählt, dass
+## sich benachbarte 72er-Buttons auf dem 176°→94°-Fächer auch als
+## Bounding-Boxen nie überlappen (jedes Paar hat auf mindestens einer
+## Achse ≥ Buttongröße Abstand — nachgerechnet + im FIXB-Audit geprüft).
+const ARC_RADIUS := 166.0
 const ARC_START_DEG := 176.0  # fast waagerecht links vom Eck
 const ARC_END_DEG := 94.0  # fast senkrecht überm Eck
+const ARC_STAGGER := 82.0
+## Aktions-Button-Kantenlänge (H §1.3, Basis wie ARC_RADIUS).
+const ACTION_BTN := 72.0
 
 
 ## Layout aus der Viewport-Größe: höher als breit → Hochkant.
@@ -17,6 +26,25 @@ static func pick_layout(viewport_size: Vector2) -> Layout:
 	if viewport_size.y > viewport_size.x:
 		return Layout.PORTRAIT
 	return Layout.LANDSCAPE
+
+
+## Skalierungsfaktor fürs Hochkant-HUD: Die Bogen-Basiswerte sind für einen
+## 720 px breiten Hochkant-Screen gedacht, das Projekt-Stretch
+## (Basis 1280×720, canvas_items + expand) liefert in Hochkant aber immer
+## einen ≥1280 px breiten Canvas — physisch wird alles auf
+## Fensterbreite/1280 verkleinert (E5-F2/F4). Deshalb wachsen die
+## Design-Größen mit Canvas-Breite/720 (~1,78 bei Basis-Stretch).
+static func portrait_scale(canvas_size: Vector2) -> float:
+	return clampf(canvas_size.x / 720.0, 1.0, 2.0)
+
+
+## Touch-Floor in CANVAS-px: `AcTokens.TOUCH_FLOOR` (48) gilt PHYSISCH.
+## Durch Stretch expand ist die kurze Canvas-Achse immer ≥720 (Basis) —
+## der Faktor kurze-Achse/720 rechnet den physischen Floor auf Canvas-px
+## hoch (Hochkant: 48·1280/720 ≈ 85 Canvas-px; Quer 1280×720: 48).
+static func touch_floor_canvas(canvas_size: Vector2) -> float:
+	var short_axis := minf(canvas_size.x, canvas_size.y)
+	return float(AcTokens.TOUCH_FLOOR) * maxf(short_axis / 720.0, 1.0)
 
 
 ## Gleichmäßig verteilte Bogen-Winkel (Grad) für `count` Buttons.

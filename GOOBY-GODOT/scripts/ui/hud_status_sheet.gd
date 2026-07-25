@@ -71,27 +71,31 @@ static func stat_boni(gs: Object, now_ms: int) -> Dictionary:
 
 
 ## Node-Baum des Sheet-Inhalts. `stats` = HUD-Werte {hunger, energie,
-## hygiene, spass: 0..100}, `boni` = Ergebnis von stat_boni().
-static func build_content(stats: Dictionary, boni: Dictionary) -> Control:
+## hygiene, spass: 0..100}, `boni` = Ergebnis von stat_boni(). `ui_scale`
+## skaliert Größen/Fonts fürs Hochkant-HUD (Canvas dort ~1,78× überbreit,
+## siehe `HudLayoutLogic.portrait_scale`) — 1.0 = Quer/Basis unverändert.
+static func build_content(stats: Dictionary, boni: Dictionary, ui_scale := 1.0) -> Control:
 	var rows := VBoxContainer.new()
 	rows.name = "StatRows"
-	rows.add_theme_constant_override("separation", 14)
-	rows.custom_minimum_size = Vector2(460, 0)
+	rows.add_theme_constant_override("separation", int(14 * ui_scale))
+	rows.custom_minimum_size = Vector2(460 * ui_scale, 0)
 	for info in STATS:
-		rows.add_child(_build_row(info, stats, boni))
+		rows.add_child(_build_row(info, stats, boni, ui_scale))
 	return rows
 
 
-static func _build_row(info: Dictionary, stats: Dictionary, boni: Dictionary) -> Control:
+static func _build_row(
+	info: Dictionary, stats: Dictionary, boni: Dictionary, ui_scale: float
+) -> Control:
 	var id := str(info["id"])
 	var value := clampf(float(stats.get(id, 0.0)), 0.0, 100.0)
 	var row := HBoxContainer.new()
 	row.name = "Row" + id.capitalize()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", int(12 * ui_scale))
 	var icon := TextureRect.new()
 	icon.name = "Icon"
 	icon.texture = load("%s%s.svg" % [ICON_DIR, info["icon"]])
-	icon.custom_minimum_size = Vector2(34, 34)
+	icon.custom_minimum_size = Vector2.ONE * roundf(34.0 * ui_scale)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.self_modulate = info["color"]
@@ -100,12 +104,13 @@ static func _build_row(info: Dictionary, stats: Dictionary, boni: Dictionary) ->
 	label.name = "Name"
 	label.theme_type_variation = "SoftLabel"
 	label.text = I18nService.t(str(info["label_key"]))
-	label.custom_minimum_size = Vector2(110, 0)
+	label.custom_minimum_size = Vector2(110 * ui_scale, 0)
+	_scale_font(label, 20, ui_scale)
 	row.add_child(label)
 	var bar := ProgressBar.new()
 	bar.name = "SheetBar"
 	bar.theme_type_variation = info["type"]
-	bar.custom_minimum_size = Vector2(190, 20)
+	bar.custom_minimum_size = Vector2(190 * ui_scale, roundf(20.0 * ui_scale))
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.show_percentage = false
@@ -115,15 +120,16 @@ static func _build_row(info: Dictionary, stats: Dictionary, boni: Dictionary) ->
 	var value_label := Label.new()
 	value_label.name = "Value"
 	value_label.text = str(int(roundf(value)))
-	value_label.custom_minimum_size = Vector2(44, 0)
+	value_label.custom_minimum_size = Vector2(44 * ui_scale, 0)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_scale_font(value_label, 20, ui_scale)
 	row.add_child(value_label)
 	if boni.has(id):
-		row.add_child(_build_buff_chip(id, float(boni[id])))
+		row.add_child(_build_buff_chip(id, float(boni[id]), ui_scale))
 	return row
 
 
-static func _build_buff_chip(id: String, bonus: float) -> Control:
+static func _build_buff_chip(id: String, bonus: float, ui_scale: float) -> Control:
 	var chip := PanelContainer.new()
 	chip.name = "Buff" + id.capitalize()
 	chip.theme_type_variation = "AcChip"
@@ -134,8 +140,16 @@ static func _build_buff_chip(id: String, bonus: float) -> Control:
 	var wert := "%+d" % int(roundf(bonus))
 	label.text = _text("hud.sheet_buff", "{wert} Buff").format({"wert": wert})
 	label.add_theme_color_override("font_color", AcTokens.YELLOW_DARK)
+	_scale_font(label, 15, ui_scale)
 	chip.add_child(label)
 	return chip
+
+
+## Font nur bei echtem Hochkant-Scale überschreiben — bei 1.0 bleibt die
+## Theme-Größe (FIX-A liefert das globale Theme) unangetastet.
+static func _scale_font(ctl: Control, base_px: int, ui_scale: float) -> void:
+	if ui_scale > 1.0:
+		ctl.add_theme_font_size_override("font_size", int(base_px * ui_scale))
 
 
 static func _text(key: String, fallback: String) -> String:
