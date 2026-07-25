@@ -4,8 +4,13 @@ extends Node3D
 ## und bietet die M1-API für W2/W3:
 ##   play_clip(name)          — Loop-Clips = StateMachine-Travel, Einmal-Clips = OneShot
 ##   set_locomotion(speed01)  — idle↔walk-Blend (BlendSpace1D 0..1)
-##   set_emotion(id)          — 8 Emotionen als Shapekey-Blends (lerp 0.25 s)
-##   set_morph(id, value)     — Editor-Morphs (eye_width/eye_size/ear_length)
+##   set_emotion(id)          — 8 Emotionen: Gesichts-Shapekeys + Körperpose
+##                              (Ohren-Droop, Kopf-Pitch, Arm-Hang; lerp 0.25 s)
+##   set_morph(id, value)     — Editor-Morphs im Save-/Editor-Wertebereich
+##                              (eye_width -1..1, eye_size/ear_length 0.7..1.4)
+##   apply_saved_morphs(gs)   — meta.charMorphs aus dem GameState anwenden
+##   squeeze(amount)          — body_squeeze_door-Shapekey (Tür-Gag), 0 = frei;
+##                              play_clip("squeeze_door") steuert ihn automatisch
 ##   look_at_target           — Node3D; Kopf dreht sanft hin (Clamp ±25°)
 ##   babble_pulse()           — kurzer mouth_open-Puls (Lipsync-Hook für GoobyVoice)
 ## Blink-Timer läuft automatisch (2.4–5.2 s, zufällig).
@@ -39,6 +44,56 @@ const EMOTION_LERP_SPEED := 4.0  # 1/0.25 s
 const LOOK_CLAMP_DEG := 25.0
 const LOOK_SMOOTH := 6.0
 
+## Emotions-Körperposen (P1-1) — Werte 1:1 aus der Web-Referenz
+## GOOBY/src/character/emotions.js (FACES: earDroopL/R, headPitch, armsHang).
+##   ear_l/ear_r: + = Ohr hängt/klappt runter, − = Ohr perkt hoch (rad-Parameter)
+##   head:        + = Kopf neigt sich nach unten (rad)
+##   arms:        0 = Pfoten auf dem Bauch … 1 = Arme hängen schlaff
+## "angry" übernimmt das Web-"grumpy" (asymmetrische Ohren); "scared" hat kein
+## Web-Pendant (Web: "hungry") und ist als Geducktheit gebaut: Ohren angelegt,
+## Kopf runter, Arme leicht gelöst.
+const EMOTION_POSES: Dictionary = {
+	"neutral": {"ear_l": 0.06, "ear_r": 0.06, "head": 0.0, "arms": 0.0},
+	"happy": {"ear_l": 0.0, "ear_r": 0.0, "head": 0.0, "arms": 0.0},
+	"sad": {"ear_l": 0.7, "ear_r": 0.7, "head": 0.26, "arms": 1.0},
+	"sleepy": {"ear_l": 0.35, "ear_r": 0.3, "head": 0.1, "arms": 0.4},
+	"ecstatic": {"ear_l": -0.1, "ear_r": -0.1, "head": -0.04, "arms": 0.0},
+	"angry": {"ear_l": 0.7, "ear_r": 0.08, "head": 0.06, "arms": 0.0},
+	"scared": {"ear_l": 0.55, "ear_r": 0.55, "head": 0.22, "arms": 0.15},
+	"dizzy": {"ear_l": 0.3, "ear_r": 0.35, "head": 0.0, "arms": 0.5},
+}
+## Ohr-Droop-Umsetzung nach gooby.js:806-811 (seitlich = max(−0.1, droop)·k,
+## nach hinten = droop·k). Die Faktoren sind gegenüber dem Web HOCHskaliert
+## (0.8→1.5, 0.55→0.7): der Web-Gooby hat kurze Ohren, bei den langen
+## 3D-Ohren liest derselbe Winkel sonst als "gespreizt" statt "hängend".
+## Der Droop verteilt sich auf beide Ohr-Bones (Basis + mehr an der Spitze),
+## damit das Ohr weich KURVT statt starr zu kippen.
+const EAR_OUT_FACTOR := 1.5
+const EAR_BACK_FACTOR := 0.7
+const EAR_PERK_MIN := -0.1
+const EAR_SHARE_01 := 0.55
+const EAR_SHARE_02 := 0.8
+## Arm-Ruhepose (gebacken, gooby_params.py ARM): rot.x −0.5 / rot.z ∓0.38.
+## armsHang=1 nimmt die Ruhepose weg (gooby.js:813-817) → Arme hängen schlaff.
+const ARM_REST_FWD := 0.5
+const ARM_REST_OUT := 0.38
+## Editor-Morphs → Shapekey-Deltas (P1-2). Die GLB-Shapekeys sind 0..1-DELTAS:
+## eye_size +1 = ×1.35 Augen, ear_length +1 = ×1.25 Ohren (build_rig.py).
+## Editor/Save liefern MULTIPLIKATOREN 0.7..1.4 (Neutral 1.0, save_schema.gd)
+## — Neutral muss auf Delta 0 landen, wie in der 2D-Onboarding-Vorschau.
+const EYE_SIZE_DELTA_PER_UNIT := 0.35
+const EAR_LENGTH_DELTA_PER_UNIT := 0.25
+## Save-Keys (meta.charMorphs, FROZEN W1d) → Rig-Morph-Ids. "chubby" ist
+## Weight-Tier (M2), kein Shapekey — bewusst nicht gemappt.
+const SAVE_MORPH_MAP := {
+	"eyes_apart": "eye_width", "eye_scale": "eye_size", "ear_len": "ear_length"
+}
+## Tür-Gag (P1-4): moderater Quetsch-Wert. Der Shapekey verschluckt ab ~0.35
+## die Nase und ab ~0.5 fast das ganze Gesicht (E8 P2-1, Render-verifiziert);
+## 0.3 quetscht sichtbar (~17 % schmaler) und lässt das Gesicht komplett.
+const SQUEEZE_DOOR_AMOUNT := 0.3
+const SQUEEZE_LERP_SPEED := 5.0
+
 var look_at_target: Node3D = null
 
 var _model: Node3D
@@ -52,6 +107,12 @@ var _pending_oneshot := ""
 
 var _emotion := "neutral"
 var _emotion_weights: Dictionary = {}  # emotion -> aktuelles Gewicht
+var _pose_ear_l := 0.06  # aktuelle (geglättete) Körperpose, Start = neutral
+var _pose_ear_r := 0.06
+var _pose_head := 0.0
+var _pose_arms := 0.0
+var _squeeze := 0.0
+var _squeeze_target := 0.0
 var _blink_timer := 0.0
 var _blink_phase := -1.0  # <0 = kein Blink aktiv, sonst 0..1
 var _mouth_pulse := 0.0
@@ -60,25 +121,75 @@ var _look_pitch := 0.0
 var _rng := RandomNumberGenerator.new()
 
 
-## Innerer SkeletonModifier: schreibt den geglätteten Look-At-Offset auf den
-## Head-Bone NACH dem AnimationTree (überschreibt die Animation nicht).
-class LookModifier:
+## Innerer SkeletonModifier: schreibt Look-At- UND Emotions-Pose-Offsets auf
+## die Bones NACH dem AnimationTree (additiv — überschreibt die Animation
+## nicht). Kopf: Look-Yaw/-Pitch + Emotions-Pitch; Ohren: Droop seitlich/nach
+## hinten; Arme: Hängen (Inverse der gebackenen Ruhepose).
+class PoseModifier:
 	extends SkeletonModifier3D
 	var rig: GoobyRig
 	var head_idx := -1
+	var ear_l1 := -1
+	var ear_l2 := -1
+	var ear_r1 := -1
+	var ear_r2 := -1
+	var arm_l := -1
+	var arm_r := -1
 
 	func _process_modification() -> void:
-		if rig == null or head_idx < 0:
+		if rig == null:
 			return
 		var skeleton := get_skeleton()
 		if skeleton == null:
 			return
-		if absf(rig._look_yaw) < 0.001 and absf(rig._look_pitch) < 0.001:
+		_apply_head(skeleton)
+		_apply_ear(skeleton, ear_l1, rig._pose_ear_l, 1.0, GoobyRig.EAR_SHARE_01)
+		_apply_ear(skeleton, ear_l2, rig._pose_ear_l, 1.0, GoobyRig.EAR_SHARE_02)
+		_apply_ear(skeleton, ear_r1, rig._pose_ear_r, -1.0, GoobyRig.EAR_SHARE_01)
+		_apply_ear(skeleton, ear_r2, rig._pose_ear_r, -1.0, GoobyRig.EAR_SHARE_02)
+		_apply_arm(skeleton, arm_l, rig._pose_arms, 1.0)
+		_apply_arm(skeleton, arm_r, rig._pose_arms, -1.0)
+
+	func _apply_head(skeleton: Skeleton3D) -> void:
+		if head_idx < 0:
+			return
+		# Look-Pitch: + = Ziel oben = Kopf hoch; Emotions-Pitch: + = Kopf runter.
+		var pitch := rig._look_pitch - rig._pose_head
+		if absf(rig._look_yaw) < 0.001 and absf(pitch) < 0.001:
 			return
 		var pose := skeleton.get_bone_global_pose(head_idx)
-		var offset := Basis(Vector3.UP, rig._look_yaw) * Basis(Vector3.RIGHT, rig._look_pitch)
+		var offset := Basis(Vector3.UP, rig._look_yaw) * Basis(Vector3.RIGHT, pitch)
 		pose.basis = offset * pose.basis
 		skeleton.set_bone_global_pose(head_idx, pose)
+
+	## droop + = seitlich raus/runter (um ±Z) und nach hinten (um X) — die
+	## Godot-Übersetzung von earGrps.rotation.x/z aus gooby.js:806-811.
+	func _apply_ear(
+		skeleton: Skeleton3D, idx: int, droop: float, out_sign: float, share: float
+	) -> void:
+		if idx < 0 or absf(droop) < 0.001:
+			return
+		var out_angle := maxf(GoobyRig.EAR_PERK_MIN, droop) * GoobyRig.EAR_OUT_FACTOR * share
+		var back_angle := droop * GoobyRig.EAR_BACK_FACTOR * share
+		var pose := skeleton.get_bone_global_pose(idx)
+		var offset := (
+			Basis(Vector3(0.0, 0.0, out_sign), out_angle) * Basis(Vector3.RIGHT, -back_angle)
+		)
+		pose.basis = offset * pose.basis
+		skeleton.set_bone_global_pose(idx, pose)
+
+	## hang 0..1: dreht die gebackene "Pfoten auf dem Bauch"-Ruhepose raus
+	## (gooby.js:813-817, rest = 1 − armsHang) → Arme hängen schlaff runter.
+	func _apply_arm(skeleton: Skeleton3D, idx: int, hang: float, out_sign: float) -> void:
+		if idx < 0 or hang < 0.001:
+			return
+		var pose := skeleton.get_bone_global_pose(idx)
+		var offset := (
+			Basis(Vector3(0.0, 0.0, out_sign), GoobyRig.ARM_REST_OUT * hang)
+			* Basis(Vector3.RIGHT, GoobyRig.ARM_REST_FWD * hang)
+		)
+		pose.basis = offset * pose.basis
+		skeleton.set_bone_global_pose(idx, pose)
 
 
 func _ready() -> void:
@@ -89,7 +200,7 @@ func _ready() -> void:
 		return
 	_build_clip_map()
 	_build_animation_tree()
-	_setup_look_modifier()
+	_setup_pose_modifier()
 	for emotion in EMOTIONS:
 		_emotion_weights[emotion] = 1.0 if emotion == _emotion else 0.0
 	_schedule_blink()
@@ -183,13 +294,19 @@ func _playback() -> AnimationNodeStateMachinePlayback:
 	return _tree.get("parameters/locomotion/playback")
 
 
-func _setup_look_modifier() -> void:
+func _setup_pose_modifier() -> void:
 	if _skeleton == null:
 		return
-	var modifier := LookModifier.new()
-	modifier.name = "GoobyLookModifier"
+	var modifier := PoseModifier.new()
+	modifier.name = "GoobyPoseModifier"
 	modifier.rig = self
 	modifier.head_idx = _skeleton.find_bone("head")
+	modifier.ear_l1 = _skeleton.find_bone("ear.L.01")
+	modifier.ear_l2 = _skeleton.find_bone("ear.L.02")
+	modifier.ear_r1 = _skeleton.find_bone("ear.R.01")
+	modifier.ear_r2 = _skeleton.find_bone("ear.R.02")
+	modifier.arm_l = _skeleton.find_bone("arm.L")
+	modifier.arm_r = _skeleton.find_bone("arm.R")
 	_skeleton.add_child(modifier)
 
 
@@ -198,6 +315,9 @@ func _setup_look_modifier() -> void:
 
 ## Spielt einen Clip. Loop-Clips wechseln den StateMachine-Zustand,
 ## Einmal-Clips feuern den OneShot-Layer und melden clip_finished.
+## squeeze_door steuert zusätzlich den body_squeeze_door-Shapekey an
+## (der GLB-Clip selbst hat keine Shapekey-Kanäle) — jeder andere Clip
+## löst den Quetsch wieder.
 func play_clip(clip: String) -> void:
 	var logical := clip.trim_suffix("-loop")
 	if not _clip_map.has(logical):
@@ -212,6 +332,7 @@ func play_clip(clip: String) -> void:
 		_action_clip.animation = _anim(logical)
 		_pending_oneshot = logical
 		_tree.set("parameters/action/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
+	squeeze(SQUEEZE_DOOR_AMOUNT if logical == "squeeze_door" else 0.0)
 
 
 ## 0.0 = idle, 1.0 = walk (BlendSpace1D).
@@ -237,7 +358,7 @@ func _on_animation_finished(anim_name: StringName) -> void:
 # ---------------------------------------------------------------- Gesicht
 
 
-## Setzt die Ziel-Emotion; die Shapekeys blenden in _process weich um.
+## Setzt die Ziel-Emotion; Shapekeys UND Körperpose blenden in _process weich um.
 func set_emotion(id: String) -> void:
 	if not EMOTIONS.has(id):
 		push_warning("GoobyRig.set_emotion: unbekannte Emotion '%s'" % id)
@@ -249,14 +370,49 @@ func get_emotion() -> String:
 	return _emotion
 
 
-## Editor-Morphs (eye_width/eye_size/ear_length) oder beliebige Shapekeys direkt.
+## Editor-Morphs — `value` kommt im SAVE-/EDITOR-Wertebereich an (identisch
+## zur 2D-Onboarding-Vorschau, meta.charMorphs-Kontrakt):
+##   eye_width:  −1 … +1, Neutral 0  (eyes_apart; Shapekey-Delta 1:1)
+##   eye_size:   0.7 … 1.4, Neutral 1.0  (eye_scale-Multiplikator)
+##   ear_length: 0.7 … 1.4, Neutral 1.0  (ear_len-Multiplikator)
+## Neutral landet auf Shapekey-Delta 0 (Basis-Optik). Unbekannte Ids gehen
+## unverändert auf den gleichnamigen Shapekey.
 func set_morph(id: String, value: float) -> void:
-	_set_shape(id, value)
+	_set_shape(id, _morph_to_delta(id, value))
+
+
+## Wendet die gespeicherten meta.charMorphs aus dem GameState auf den Rig an
+## (P1-3). `gs` ist der GameState (braucht nur `get_value`). "chubby" ist
+## Weight-Tier (M2) und (noch) kein Rig-Morph.
+func apply_saved_morphs(gs: Object) -> void:
+	if gs == null or not gs.has_method("get_value"):
+		return
+	for save_key: String in SAVE_MORPH_MAP:
+		var neutral := 0.0 if save_key == "eyes_apart" else 1.0
+		var value: float = float(gs.get_value("meta.charMorphs.%s" % save_key, neutral))
+		set_morph(SAVE_MORPH_MAP[save_key], value)
+
+
+## Tür-Quetsch (P1-4): blendet den body_squeeze_door-Shapekey weich auf
+## `amount` (0 = frei). Werte um SQUEEZE_DOOR_AMOUNT quetschen sichtbar,
+## OHNE das Gesicht zu verlieren (bei 1.0 verschluckt der Kopf die Decals).
+func squeeze(amount: float) -> void:
+	_squeeze_target = clampf(amount, 0.0, 1.0)
 
 
 ## Kurzer Mundöffner-Puls für Silben-Lipsync (GoobyVoice ruft das pro Silbe).
 func babble_pulse() -> void:
 	_mouth_pulse = 1.0
+
+
+func _morph_to_delta(id: String, value: float) -> float:
+	match id:
+		"eye_size":
+			return (value - 1.0) / EYE_SIZE_DELTA_PER_UNIT
+		"ear_length":
+			return (value - 1.0) / EAR_LENGTH_DELTA_PER_UNIT
+		_:
+			return value
 
 
 func _set_shape(shape_name: String, value: float) -> void:
@@ -275,6 +431,7 @@ func _process(delta: float) -> void:
 	_process_emotions(delta)
 	_process_blink(delta)
 	_process_mouth(delta)
+	_process_squeeze(delta)
 	_process_look(delta)
 
 
@@ -286,6 +443,13 @@ func _process_emotions(delta: float) -> void:
 		if absf(weight - _emotion_weights[emotion]) > 0.0005:
 			_emotion_weights[emotion] = weight
 			_set_shape("emotion_" + emotion, weight)
+	# Körperpose (P1-1): Ohren/Kopf/Arme lerpen zur EMOTION_POSES-Zielpose;
+	# der PoseModifier schreibt die Offsets nach dem AnimationTree auf die Bones.
+	var pose: Dictionary = EMOTION_POSES[_emotion]
+	_pose_ear_l = lerpf(_pose_ear_l, float(pose["ear_l"]), lerp_step)
+	_pose_ear_r = lerpf(_pose_ear_r, float(pose["ear_r"]), lerp_step)
+	_pose_head = lerpf(_pose_head, float(pose["head"]), lerp_step)
+	_pose_arms = lerpf(_pose_arms, float(pose["arms"]), lerp_step)
 
 
 func _process_blink(delta: float) -> void:
@@ -311,6 +475,16 @@ func _process_mouth(delta: float) -> void:
 		_mouth_pulse = maxf(_mouth_pulse - delta * 9.0, 0.0)
 		if _mouth_pulse == 0.0:
 			_set_shape("mouth_open", 0.0)
+
+
+func _process_squeeze(delta: float) -> void:
+	if is_equal_approx(_squeeze, _squeeze_target):
+		return
+	var step := minf(SQUEEZE_LERP_SPEED * delta, 1.0)
+	_squeeze = lerpf(_squeeze, _squeeze_target, step)
+	if absf(_squeeze - _squeeze_target) < 0.005:
+		_squeeze = _squeeze_target
+	_set_shape("body_squeeze_door", _squeeze)
 
 
 func _process_look(delta: float) -> void:

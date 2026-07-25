@@ -27,6 +27,10 @@ var _rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rig = GoobyRig.new()
 	add_child(rig)
+	# FIX-F-Handoff: gespeicherte Char-Editor-Morphs auf den Spieler-Gooby anwenden.
+	var gs := get_node_or_null("/root/GameState")
+	if gs != null:
+		rig.apply_saved_morphs(gs)
 	agent = NavigationAgent3D.new()
 	agent.radius = 0.28
 	agent.path_desired_distance = 0.2
