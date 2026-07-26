@@ -20,6 +20,7 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Nutze absofort Fable 5 Max thinking statt Opus 5 Max thinking denn das was du bisher hier hergestellt hast sieht grauenhaft schlecht aus.
 [ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
 [ ] Rückblicke fehlen
+[ ] Du musst checken das die Builds wirklich erfolgreich sind statt immer Fehler kommen.
 [ ] Die kompletten Cutscenen fehlen
 [ ] Es fehlt fast alles von da vor und was da ist ist einfach nur schlechter, das einzig gute ist das Bau System der Rest sonst ist kacke.
 [ ] Das Spiel startet im Hochformat statt Querformat.
