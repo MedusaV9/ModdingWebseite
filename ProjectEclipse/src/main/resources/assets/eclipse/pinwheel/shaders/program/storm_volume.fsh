@@ -35,6 +35,8 @@ out vec4 fragColor;
 
 // Extinction per (density · block) — the dense band goes near-opaque over ~8–14 blocks.
 const float ABSORB = 0.55;
+// Overall density multiplier. Drives how heavy the mass reads from outside.
+const float DENSITY_GAIN = 1.55;
 // Base noise frequency in storm-normalized space (features ~ R/2.6 with octaves below).
 const float NOISE_FREQ = 2.6;
 // Differential rotation base speed (rad/s at stratum speed 1.0) — the churn read.
@@ -119,7 +121,9 @@ float stormDensity(vec3 u, float detail) {
     vec3 warp = evCurlWarp(np * 0.5, Time);
     float body = detail > 0.5 ? evFbm5(np + warp) : evFbm3(np + warp);
     // Remap so the noise CARVES holes through the profile instead of only dimming it.
-    return max(prof * armMul * (body * 1.5 - 0.35), 0.0);
+    // DENSITY_GAIN keeps the mass heavy: at 1.0 the ball reads as thin haze from a
+    // distance because the average sample sits well below the peak.
+    return max(prof * armMul * (body * 1.5 - 0.35), 0.0) * DENSITY_GAIN;
 }
 
 // Single scattering at one sample: 4 cheap self-shadow taps toward the sun, forward-
@@ -141,8 +145,10 @@ vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
     // Multiple-scattering approximation: deep cloud is not black, light diffuses into it.
     // sqrt(lightT) with an isotropic lobe lifts the shadowed mass into readable grey so
     // the layering is visible from outside instead of crushing to a silhouette.
-    float ms = sqrt(clamp(lightT, 0.0, 1.0));
-    vec3 col = sunCol * (lightT * phase * 3.8 + ms * 0.34) + ambient;
+    // Keep the multi-scatter lift modest: too much and the whole ball flattens into a
+    // uniform pale smudge with no lit/shaded read at all.
+    float ms = lightT * sqrt(clamp(lightT, 0.0, 1.0));
+    vec3 col = sunCol * (lightT * phase * 4.6 + ms * 0.20) + ambient;
     if (FlashAmount > 0.004) {
         float fd = length(pos - FlashPos);
         col += vec3(0.70, 0.58, 1.00)
