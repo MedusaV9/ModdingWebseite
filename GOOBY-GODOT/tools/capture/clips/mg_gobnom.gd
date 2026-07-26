@@ -46,9 +46,9 @@ func _starte_level(id: int) -> void:
 	_level_id = id
 	g.open_level("campaign", id)
 	_cuts.clear()
-	var lösung := _loesung_von(id)
+	var loesung := _loesung_von(id)
 	var versatz := 0.0
-	for aktion: Dictionary in lösung:
+	for aktion: Dictionary in loesung:
 		if str(aktion.get("do", "")) != "cut":
 			continue
 		# Gleichzeitige Schnitte leicht staffeln (ein Zeiger-Index).

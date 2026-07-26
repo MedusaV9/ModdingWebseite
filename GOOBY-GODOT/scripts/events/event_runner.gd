@@ -387,11 +387,7 @@ func _setup_robo_jagd() -> void:
 		gooby.set_wander_enabled(false)
 		center = gooby.position
 		# Fluchttisch unter Gooby: Platte + angehobenes Rig.
-		var table := MeshInstance3D.new()
-		var top := BoxMesh.new()
-		top.size = Vector3(0.9, 0.08, 0.9)
-		table.mesh = top
-		table.material_override = _flat_mat(Color(0.52, 0.36, 0.22))
+		var table := EventProps.table_top()
 		table.position = center + Vector3(0.0, 0.62, 0.0)
 		add_child(table)
 		_props.append(table)
@@ -464,22 +460,9 @@ func _setup_kleber_stuhl(rub_taps: int) -> void:
 	gooby.play_clip("sit")
 	_set_gooby_emotion("sad")
 	# Stuhl: Sitzfläche + Lehne unter/hinter Gooby.
-	var seat := MeshInstance3D.new()
-	var seat_box := BoxMesh.new()
-	seat_box.size = Vector3(0.55, 0.1, 0.55)
-	seat.mesh = seat_box
-	seat.material_override = _flat_mat(Color(0.62, 0.45, 0.3))
-	seat.position = gooby.position + Vector3(0.0, 0.22, 0.0)
-	add_child(seat)
-	_props.append(seat)
-	var back := MeshInstance3D.new()
-	var back_box := BoxMesh.new()
-	back_box.size = Vector3(0.55, 0.6, 0.08)
-	back.mesh = back_box
-	back.material_override = _flat_mat(Color(0.62, 0.45, 0.3))
-	back.position = gooby.position + Vector3(0.0, 0.55, 0.3)
-	add_child(back)
-	_props.append(back)
+	for teil: MeshInstance3D in EventProps.chair_parts(gooby.position):
+		add_child(teil)
+		_props.append(teil)
 	if "rig" in gooby and gooby.rig != null:
 		gooby.rig.position.y = 0.27
 	_say("events.kleber.bubble")
@@ -589,26 +572,7 @@ func _setup_fernbedienung(cushions: int) -> void:
 		gooby.set_wander_enabled(false)
 		_set_gooby_emotion("scared")
 	# Brüllender Fernseher: Korpus + heller Screen, wackelt vor Lärm.
-	var tv := Node3D.new()
-	var body := MeshInstance3D.new()
-	var body_box := BoxMesh.new()
-	body_box.size = Vector3(0.9, 0.6, 0.12)
-	body.mesh = body_box
-	body.material_override = _flat_mat(Color(0.2, 0.2, 0.24))
-	tv.add_child(body)
-	var screen := MeshInstance3D.new()
-	var screen_box := BoxMesh.new()
-	screen_box.size = Vector3(0.78, 0.48, 0.02)
-	screen.mesh = screen_box
-	var glow := StandardMaterial3D.new()
-	glow.albedo_color = Color(0.9, 0.95, 1.0)
-	glow.emission_enabled = true
-	glow.emission = Color(0.7, 0.85, 1.0)
-	glow.emission_energy_multiplier = 2.0
-	screen.material_override = glow
-	screen.position.z = 0.07
-	screen.name = "Screen"
-	tv.add_child(screen)
+	var tv := EventProps.tv_set()
 	tv.position = center + Vector3(0.0, 0.8, -1.4)
 	add_child(tv)
 	_props.append(tv)
@@ -762,25 +726,7 @@ func _setup_gewitter_angst() -> void:
 
 ## Dunkel-Overlay mit Taschenlampen-Loch (Shader folgt dem Zeiger).
 func _build_flashlight_overlay() -> void:
-	_flash_overlay = ColorRect.new()
-	_flash_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_flash_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	var shader := Shader.new()
-	shader.code = """
-shader_type canvas_item;
-uniform vec2 hole_px = vec2(-4000.0, -4000.0);
-uniform float radius_px = 150.0;
-uniform vec4 tint : source_color = vec4(0.02, 0.03, 0.1, 0.88);
-void fragment() {
-	float d = distance(FRAGCOORD.xy, hole_px);
-	float a = tint.a * smoothstep(radius_px * 0.55, radius_px, d);
-	COLOR = vec4(tint.rgb, a);
-}
-"""
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	mat.set_shader_parameter("radius_px", FLASHLIGHT_RADIUS_PX)
-	_flash_overlay.material = mat
+	_flash_overlay = EventProps.flashlight_overlay(FLASHLIGHT_RADIUS_PX)
 	_flash_overlay.gui_input.connect(_on_flashlight_input)
 	_ui_layer().add_child(_flash_overlay)
 
@@ -951,90 +897,22 @@ func _resolve() -> void:
 ## Generische Choice-Karte (Nutella/Wurm/Karton): Buttons unten mittig,
 ## `options` = [{key, variation, …}]; on_pick bekommt die gewählte Option.
 func _show_choice(options: Array, on_pick: Callable) -> void:
-	var choice := PanelContainer.new()
-	choice.name = "EventChoice"
-	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
-	choice.theme = ThemeService.theme()
-	choice.theme_type_variation = &"AcCard"
-	choice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	choice.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	choice.position.y -= 40.0
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	choice.add_child(box)
-	for option: Dictionary in options:
-		var btn := SquishButton.new()
-		btn.theme_type_variation = option.get("variation", &"BtnTeal")
-		btn.text = I18nService.t(str(option.get("key", "")))
-		btn.pressed.connect(
-			func() -> void:
-				choice.queue_free()
-				on_pick.call(option)
-		)
-		box.add_child(btn)
-	_ui_layer().add_child(choice)
+	EventProps.show_choice(_ui_layer(), options, on_pick)
 
 
-func _make_prop(
-	color: Color, box_size: Vector3, on_tap: Callable, free_on_tap := true
-) -> Node3D:
-	var prop := Node3D.new()
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = box_size
-	mesh.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	if color.a < 1.0:
-		# Sonst rendert der „unsichtbare“ Tap-Helfer als opaker Klotz.
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh.material_override = mat
-	prop.add_child(mesh)
-	var area := Area3D.new()
-	area.input_ray_pickable = true
-	var shape := CollisionShape3D.new()
-	var col_box := BoxShape3D.new()
-	col_box.size = box_size * 2.0
-	shape.shape = col_box
-	area.add_child(shape)
-	area.input_event.connect(
-		func(
-			_cam: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int
-		) -> void:
-			var pressed: bool = (
-				(event is InputEventMouseButton and event.pressed)
-				or (event is InputEventScreenTouch and event.pressed)
-			)
-			if pressed:
-				if free_on_tap:
-					prop.queue_free()
-					_props.erase(prop)
-				on_tap.call()
+## Antippbare Requisite (Fabrik in `event_props.gd`).
+func _make_prop(color: Color, box_size: Vector3, on_tap: Callable, free_on_tap := true) -> Node3D:
+	return EventProps.make_prop(
+		color, box_size, on_tap, free_on_tap, func(prop: Node3D) -> void: _props.erase(prop)
 	)
-	prop.add_child(area)
-	return prop
 
 
-## Einmaliger Partikel-Puff (Mehl, Gieß-Tröpfchen).
 func _puff_at(pos: Vector3, color: Color) -> void:
-	var puff := CPUParticles3D.new()
-	puff.amount = 16
-	puff.lifetime = 0.6
-	puff.one_shot = true
-	puff.explosiveness = 0.9
-	puff.direction = Vector3(0, 1, 0)
-	puff.spread = 60.0
-	puff.initial_velocity_min = 0.8
-	puff.initial_velocity_max = 1.6
-	puff.gravity = Vector3(0, -2.0, 0)
-	puff.scale_amount_min = 0.06
-	puff.scale_amount_max = 0.14
-	puff.color = color
-	puff.position = pos
-	add_child(puff)
-	puff.emitting = true
-	get_tree().create_timer(1.2).timeout.connect(puff.queue_free)
+	EventProps.puff_at(self, pos, color)
+
+
+func _flat_mat(color: Color) -> StandardMaterial3D:
+	return EventProps.flat_mat(color)
 
 
 func _clear_props() -> void:
@@ -1119,10 +997,3 @@ func _now_ms() -> int:
 	if _gs != null and "clock" in _gs:
 		return int(_gs.clock.now_ms())
 	return int(Time.get_unix_time_from_system() * 1000.0)
-
-
-func _flat_mat(color: Color) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.85
-	return mat

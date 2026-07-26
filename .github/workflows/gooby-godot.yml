@@ -145,16 +145,26 @@ jobs:
           fi
           "$APP" --version
 
-      # Godot importiert in EINEM Durchlauf nicht zuverlaessig alles (Fonts/SVGs
-      # meldeten beim Export "Make sure resources have been imported"), weil
-      # abhaengige Ressourcen erst nach dem ersten Scan bekannt sind. Zweiter
-      # Lauf schliesst die Luecke; der Export prueft danach hart nach.
-      - name: Ressourcen importieren (zwei Durchlaeufe)
+      # Godot importiert in EINEM Durchlauf nicht alles: abhaengige Ressourcen
+      # (Font-Varianten, SVG-Texturen) werden erst nach dem ersten Scan bekannt.
+      # Lokal reproduziert: Lauf 1 laesst 13 Ressourcen offen, Lauf 2 raeumt sie
+      # auf. Deshalb wird bis zur Fehlerfreiheit wiederholt (max. 4) statt blind
+      # eine feste Anzahl zu fahren.
+      - name: Ressourcen importieren (bis fehlerfrei)
         run: |
-          set -euo pipefail
+          set -uo pipefail
           GODOT="$HOME/godot-bin/Godot.app/Contents/MacOS/Godot"
-          "$GODOT" --headless --path GOOBY-GODOT --import
-          "$GODOT" --headless --path GOOBY-GODOT --import
+          for i in 1 2 3 4; do
+            echo "--- Import-Durchlauf $i ---"
+            "$GODOT" --headless --path GOOBY-GODOT --import 2>&1 | tee /tmp/import.log
+            if ! grep -qE "^ERROR|have been imported" /tmp/import.log; then
+              echo "Import sauber nach Durchlauf $i"
+              exit 0
+            fi
+          done
+          echo "::error::Import bleibt nach 4 Durchlaeufen fehlerhaft"
+          grep -E "^ERROR|have been imported" /tmp/import.log | head -20
+          exit 1
 
       - name: iOS-Xcode-Projekt exportieren
         run: |
