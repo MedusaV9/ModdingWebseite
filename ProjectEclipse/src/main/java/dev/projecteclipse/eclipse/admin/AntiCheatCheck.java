@@ -77,13 +77,15 @@ public final class AntiCheatCheck {
 
     /**
      * Version stamp of the SHIPPED default allowlist ({@link #defaults()}). Bump this
-     * whenever new default allowed/optional ids ship; on-disk files with an older (or
-     * absent) {@code allowlistVersion} get the new default ids UNIONED in on load
-     * (EVAL-POL-S #3) — operator additions/pins are never removed or overwritten.
+     * whenever new default allowed/optional ids or corrected version pins ship; on-disk
+     * files with an older (or absent) {@code allowlistVersion} get the new default ids
+     * UNIONED in on load (EVAL-POL-S #3) — operator-added ids are never removed.
      * Version 1 = every pre-versioning extended file; version 2 = the v5 nested-id wave
-     * ({@code fabric_*}, {@code mixinsquared}, photon/ldlib2/kilagraph, …).
+     * ({@code fabric_*}, {@code mixinsquared}, photon/ldlib2/kilagraph, …); version 3 =
+     * the pins corrected to the versions the pack mods actually REPORT to the loader
+     * (see {@link #mergeNewDefaults}).
      */
-    public static final int CURRENT_ALLOWLIST_VERSION = 2;
+    public static final int CURRENT_ALLOWLIST_VERSION = 3;
 
     /**
      * Immutable runtime schema for the extended {@code anticheat.json}.
@@ -203,7 +205,8 @@ public final class AntiCheatCheck {
                 parsed = mergeNewDefaults(parsed, fallback);
                 migrate = true;
                 EclipseMod.LOGGER.info("Modcheck allowlist migrated to version {}: new default ids "
-                                + "unioned in (operator entries untouched) — now {} allowed / {} optional",
+                                + "unioned in, shipped pins refreshed (operator ids and '*' pins kept) "
+                                + "— now {} allowed / {} optional",
                         CURRENT_ALLOWLIST_VERSION, parsed.allowedMods().size(),
                         parsed.optionalMods().size());
             }
@@ -225,14 +228,24 @@ public final class AntiCheatCheck {
 
     /**
      * EVAL-POL-S #3 upgrade path: UNION the shipped default allowed/optional ids into an
-     * older on-disk config and stamp {@link #CURRENT_ALLOWLIST_VERSION}. Never removes or
-     * overwrites operator entries ({@code putIfAbsent} for pins; set-union for optional).
-     * {@code requiredMods} is deliberately NOT unioned — force-requiring new ids could lock
-     * out currently valid clients; new requirements stay an explicit operator decision.
+     * older on-disk config and stamp {@link #CURRENT_ALLOWLIST_VERSION}. Operator-added ids
+     * are never removed, and {@code requiredMods} is deliberately NOT unioned —
+     * force-requiring new ids could lock out currently valid clients; new requirements stay
+     * an explicit operator decision.
+     *
+     * <p>Version pins for ids that Eclipse itself ships ARE refreshed to the new default: the
+     * pack decides which build of its own mods is correct, and a stale pin only ever produces
+     * a bogus "wrong version" line in {@code /dev modcheck} and in the manifest written by
+     * {@code /dev modcheck snapshot}. An operator opt-out is preserved: a pin an operator
+     * relaxed to {@code "*"} stays {@code "*"}.</p>
      */
     static Config mergeNewDefaults(Config loaded, Config defaults) {
         Map<String, String> allowed = new LinkedHashMap<>(loaded.allowedMods());
-        defaults.allowedMods().forEach(allowed::putIfAbsent);
+        defaults.allowedMods().forEach((id, pin) -> {
+            if (!ModVersionCheck.ANY.equals(allowed.get(id))) {
+                allowed.put(id, pin);
+            }
+        });
         Set<String> optional = new LinkedHashSet<>(loaded.optionalMods());
         optional.addAll(defaults.optionalMods());
         return new Config(loaded.mode(), loaded.blockedModIdSubstrings(), allowed,
@@ -616,7 +629,7 @@ public final class AntiCheatCheck {
     private static JsonObject toJson(Config value) {
         JsonObject root = new JsonObject();
         root.addProperty("_comment",
-                "Allowlist is exact by mod id; version pins are checked by the client bootstrap because the legacy C2S payload carries ids only.");
+                "Allowlist is exact by mod id; version pins are checked by the client bootstrap because the legacy C2S payload carries ids only. A pin is the version the mod REPORTS to the loader, not its jar name: '*' accepts anything, '[x,)' is a Maven range, a value containing '*' is a glob, and trailing SemVer '+build' metadata is tolerated when the rest matches exactly (admin/ModVersionCheck).");
         root.addProperty("_comment_devBypass",
                 "devBypassUuids entries are literal UUIDs or 'name:<PlayerName>' pins (resolved via the profile cache). Listed identities skip modcheck enforcement and may use /dev without op. Prefer the UUID form; the shipped 'name:Sonic0810' placeholder should be replaced with the player's real UUID.");
         root.addProperty("modlistMode", value.mode().configName());
@@ -642,37 +655,47 @@ public final class AntiCheatCheck {
     /**
      * Defaults cover every external jar listed in README's Server pack plus optional additions.
      * Public so gametests can evaluate against the shipped policy without touching disk.
+     *
+     * <p>Every pin is the version the mod REPORTS to the loader (its {@code neoforge.mods.toml}
+     * {@code version}), which is regularly not the version in its jar/Maven coordinate — EMI
+     * resolves from {@code dev.emi:emi-neoforge:1.1.24+1.21.1} but registers as
+     * {@code 1.1.24+1.21.1+neoforge}, and Sophisticated Backpacks ships as
+     * {@code …-3.25.71.1997.jar} but registers as {@code 3.25.71}. Verified against the mod
+     * list of a dev client boot; pin syntax is documented in {@link ModVersionCheck}.</p>
      */
     public static Config defaults() {
         Map<String, String> allowed = new LinkedHashMap<>();
         allowed.put("minecraft", "1.21.1");
         allowed.put("neoforge", "21.1.238");
         allowed.put("eclipse", "2.1.0");
-        allowed.put("veil", "4.3.0");
-        allowed.put("geckolib", "4.9.2");
-        allowed.put("emi", "1.1.24+1.21.1");
+        // Veil/GeckoLib are jar-in-jar'd with an open range (build.gradle), so a newer build
+        // provided by another pack mod legitimately wins the dedupe — pin the same range.
+        allowed.put("veil", "[4.3.0,)");
+        allowed.put("geckolib", "[4.9.2,)");
+        allowed.put("emi", "1.1.24+1.21.1+neoforge");
         allowed.put("mousetweaks", "2.26.1");
         allowed.put("create", "6.0.10");
         allowed.put("aeronautics", "1.3.0");
-        allowed.put("simulated", "*");
-        allowed.put("offroad", "*");
+        allowed.put("simulated", "1.3.0");
+        allowed.put("offroad", "1.3.0");
         allowed.put("sable", "2.0.3");
         allowed.put("sablecompanion", "*");
-        allowed.put("voicechat", "2.6.16");
+        allowed.put("voicechat", "1.21.1-2.6.16");
         allowed.put("voicechat_api", "*");
         // FD reports its version WITHOUT the MC prefix at runtime (jar name differs).
         allowed.put("farmersdelight", "1.3.2");
         allowed.put("supplementaries", "1.21.1-3.8.3");
         allowed.put("moonlight", "1.21.1-3.1.1");
-        allowed.put("sophisticatedbackpacks", "1.21.1-3.25.71");
-        allowed.put("sophisticatedcore", "1.21.1-1.4.77");
+        allowed.put("sophisticatedbackpacks", "3.25.71");
+        allowed.put("sophisticatedcore", "1.4.77");
         allowed.put("createaddition", "1.6.0");
-        // Common nested/library ids accepted when the external pack exposes them separately.
+        // Library ids that ride INSIDE another pack jar: the parent picks the version, so
+        // pinning them would only produce false mismatches after a parent bugfix release.
         allowed.put("flywheel", "*");
         allowed.put("ponder", "*");
         allowed.put("registrate", "*");
         allowed.put("curios", "*");
-        allowed.put("aeronautics_bundled", "*");
+        allowed.put("aeronautics_bundled", "1.3.0");
         allowed.put("codecui", "*");
         // Client extras and the C19 content proposal are optional.
         allowed.put("sodium", "0.8.12+mc1.21.1");
@@ -693,8 +716,8 @@ public final class AntiCheatCheck {
         // D12: Photon VFX layer is an OPTIONAL client extra (PhotonBridge no-ops without it).
         // Photon 2.1.x requires LDLib2 at runtime; 2.2.x additionally pulls KilaGraph —
         // allow all three so an optional install never trips the modcheck. docs/BUNDLING.md.
-        allowed.put("photon", "*");
-        allowed.put("ldlib2", "*");
+        allowed.put("photon", "2.1.5");
+        allowed.put("ldlib2", "2.2.29");
         allowed.put("kilagraph", "*");
 
         List<String> required = List.of(

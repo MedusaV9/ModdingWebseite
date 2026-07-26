@@ -20,6 +20,7 @@ import com.google.gson.JsonParser;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.admin.AntiCheatCheck;
+import dev.projecteclipse.eclipse.admin.ModVersionCheck;
 import dev.projecteclipse.eclipse.client.menu.EclipseTitleScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -187,15 +188,16 @@ public final class PackBootstrap {
                 violations.add(new Violation(id, version, "", Reason.UNKNOWN));
                 continue;
             }
-            String expected = manifest.allowedMods().getOrDefault(id, "*");
-            if (!versionMatches(version, expected)) {
+            String expected = manifest.allowedMods().getOrDefault(id, ModVersionCheck.ANY);
+            if (!ModVersionCheck.matches(version, expected)) {
                 violations.add(new Violation(id, version, expected, Reason.VERSION));
             }
         }
 
         for (String required : manifest.requiredMods()) {
             if (!normalizedLoaded.containsKey(required)) {
-                violations.add(new Violation(required, "", manifest.allowedMods().getOrDefault(required, "*"),
+                violations.add(new Violation(required, "",
+                        manifest.allowedMods().getOrDefault(required, ModVersionCheck.ANY),
                         Reason.MISSING));
             }
         }
@@ -240,27 +242,6 @@ public final class PackBootstrap {
             }
         }
         return false;
-    }
-
-    private static boolean versionMatches(String installed, String expected) {
-        if (expected == null || expected.isBlank() || "*".equals(expected)) {
-            return true;
-        }
-        // Manifest pins may use a glob solely to absorb metadata build suffixes while keeping
-        // the human-facing release fixed (for example 3.25.71.*).
-        StringBuilder regex = new StringBuilder("^");
-        for (int i = 0; i < expected.length(); i++) {
-            char c = expected.charAt(i);
-            if (c == '*') {
-                regex.append(".*");
-            } else {
-                if ("\\.^$|?+()[]{}".indexOf(c) >= 0) {
-                    regex.append('\\');
-                }
-                regex.append(c);
-            }
-        }
-        return installed.matches(regex.append('$').toString());
     }
 
     private static ManifestData loadManifest() throws IOException {

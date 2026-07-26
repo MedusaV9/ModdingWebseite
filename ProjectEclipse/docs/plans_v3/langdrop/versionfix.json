@@ -1,0 +1,14 @@
+{
+  "en_us": {
+    "bootstrap.eclipse.row.version.installed": "installed %s",
+    "bootstrap.eclipse.row.version.expected": "needs %s",
+    "dev.eclipse.modcheck.issue.version": "Version mismatches vs. the pack pins: %1$s",
+    "dev.eclipse.modcheck.state.version_mismatch": "WRONG VERSION"
+  },
+  "de_de": {
+    "bootstrap.eclipse.row.version.installed": "installiert %s",
+    "bootstrap.eclipse.row.version.expected": "benötigt %s",
+    "dev.eclipse.modcheck.issue.version": "Versionsabweichungen gegenüber den Pack-Vorgaben: %1$s",
+    "dev.eclipse.modcheck.state.version_mismatch": "FALSCHE VERSION"
+  }
+}

@@ -3,6 +3,8 @@ package dev.projecteclipse.eclipse.bootstrap;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.bootstrap.PackBootstrap.Reason;
 import dev.projecteclipse.eclipse.bootstrap.PackBootstrap.Report;
 import dev.projecteclipse.eclipse.bootstrap.PackBootstrap.Violation;
@@ -11,12 +13,14 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 
 /**
  * Quiet-Eclipse-style pack warning, rebuilt for readability (plans_v5 D7): dark panel with a
  * purple edge, violations grouped by reason (missing / wrong version / unknown / blocked) with
- * per-row status glyphs and a two-column id | version layout, pixel-smooth scrolling with a
+ * per-row status glyphs and a two-column id | version layout (the version column word-wraps,
+ * so the installed and the expected version are always readable in full), pixel-smooth scrolling with a
  * draggable scrollbar, a clear download hint (clickable when the manifest hint is a URL) and a
  * copy-report button.
  *
@@ -37,8 +41,13 @@ public final class BootstrapScreen extends Screen {
     private static final int UNKNOWN_BLUE = 0xFFBFD9FF;
     private static final int DETAIL = 0xFFE8E2F2;
 
-    /** One rendered list line: a reason-group header or an id | detail violation row. */
-    private record Row(Component text, Component detail, int color, boolean header) {}
+    /**
+     * One rendered list line: a reason-group header, an id | detail violation row, or a
+     * detail-only continuation row. Detail text is pre-wrapped to the detail column, so a
+     * long version pair never runs into the scissor rectangle and gets silently cut.
+     */
+    private record Row(@Nullable Component text, @Nullable FormattedCharSequence detail,
+            int color, boolean header) {}
 
     private final Screen parent;
     private final Report report;
@@ -140,9 +149,14 @@ public final class BootstrapScreen extends Screen {
                     guiGraphics.fill(panelX + 12, y + HEADER_HEIGHT - 2,
                             panelX + panelWidth - 16, y + HEADER_HEIGHT - 1, 0x55B98CFF);
                 } else {
-                    guiGraphics.drawString(this.font, row.text(), panelX + 16, y + 2, row.color(), true);
-                    guiGraphics.drawString(this.font, row.detail(), panelX + detailColumnX(), y + 2,
-                            DETAIL, true);
+                    if (row.text() != null) {
+                        guiGraphics.drawString(this.font, row.text(), panelX + 16, y + 2,
+                                row.color(), true);
+                    }
+                    if (row.detail() != null) {
+                        guiGraphics.drawString(this.font, row.detail(), panelX + detailColumnX(),
+                                y + 2, DETAIL, true);
+                    }
                 }
             }
             y += rowHeight;
@@ -267,11 +281,22 @@ public final class BootstrapScreen extends Screen {
         if (group.isEmpty()) {
             return;
         }
-        rows.add(new Row(Component.translatable(headerKey, group.size()), Component.empty(), ACCENT, true));
+        rows.add(new Row(Component.translatable(headerKey, group.size()), null, ACCENT, true));
         int idWidth = detailColumnX() - 20;
         for (Violation violation : group) {
-            rows.add(new Row(clipped(statusGlyph(reason) + " " + violation.modId(), idWidth),
-                    detailLine(violation), color, false));
+            Component id = clipped(statusGlyph(reason) + " " + violation.modId(), idWidth);
+            List<FormattedCharSequence> lines = new ArrayList<>();
+            for (Component detail : detailLines(violation)) {
+                lines.addAll(this.font.split(detail, detailWidth()));
+            }
+            if (lines.isEmpty()) {
+                rows.add(new Row(id, null, color, false));
+                continue;
+            }
+            rows.add(new Row(id, lines.get(0), color, false));
+            for (int line = 1; line < lines.size(); line++) {
+                rows.add(new Row(null, lines.get(line), color, false));
+            }
         }
     }
 
@@ -284,16 +309,24 @@ public final class BootstrapScreen extends Screen {
         };
     }
 
-    private static Component detailLine(Violation violation) {
+    /**
+     * The detail column of one violation. A version mismatch gets its own line per version:
+     * the two full strings only differ in a suffix ("1.1.24+1.21.1+neoforge" vs
+     * "1.1.24+1.21.1"), which is exactly the part a single squeezed line used to lose.
+     */
+    private static List<Component> detailLines(Violation violation) {
         return switch (violation.reason()) {
-            case MISSING -> Component.translatable("bootstrap.eclipse.row.missing",
-                    violation.expectedVersion());
-            case VERSION -> Component.translatable("bootstrap.eclipse.row.version",
-                    violation.installedVersion(), violation.expectedVersion());
-            case UNKNOWN -> Component.translatable("bootstrap.eclipse.row.unknown",
-                    violation.installedVersion());
-            case BLOCKED -> Component.translatable("bootstrap.eclipse.row.blocked",
-                    violation.installedVersion());
+            case MISSING -> List.of(Component.translatable("bootstrap.eclipse.row.missing",
+                    violation.expectedVersion()));
+            case VERSION -> List.of(
+                    Component.translatable("bootstrap.eclipse.row.version.installed",
+                            violation.installedVersion()),
+                    Component.translatable("bootstrap.eclipse.row.version.expected",
+                            violation.expectedVersion()));
+            case UNKNOWN -> List.of(Component.translatable("bootstrap.eclipse.row.unknown",
+                    violation.installedVersion()));
+            case BLOCKED -> List.of(Component.translatable("bootstrap.eclipse.row.blocked",
+                    violation.installedVersion()));
         };
     }
 
@@ -335,6 +368,11 @@ public final class BootstrapScreen extends Screen {
 
     private int detailColumnX() {
         return (int) (panelWidth * 0.44D);
+    }
+
+    /** Usable width of the detail column: panel inner edge minus the scrollbar gutter. */
+    private int detailWidth() {
+        return Math.max(40, panelWidth - 16 - detailColumnX());
     }
 
     private int scrollbarX() {

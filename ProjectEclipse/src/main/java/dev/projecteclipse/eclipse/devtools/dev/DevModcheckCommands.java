@@ -2,8 +2,10 @@ package dev.projecteclipse.eclipse.devtools.dev;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.mojang.brigadier.CommandDispatcher;
@@ -14,6 +16,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.admin.AntiCheatCheck;
 import dev.projecteclipse.eclipse.admin.AntiCheatCheck.Evaluation;
 import dev.projecteclipse.eclipse.admin.AntiCheatCheck.ModlistMode;
+import dev.projecteclipse.eclipse.admin.ModVersionCheck;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.progression.ModGateIds;
 import dev.projecteclipse.eclipse.progression.UnlockState;
@@ -91,10 +94,24 @@ public final class DevModcheckCommands {
                 .withStyle(evaluation.accepted() ? ChatFormatting.GREEN : ChatFormatting.YELLOW), false);
         sendEvaluation(source, evaluation);
 
+        // Version pins are not part of the connection verdict (the C2S report carries ids
+        // only), but they ARE what the client bootstrap enforces — so surface every drift
+        // here, with both versions printed in full.
+        List<String> versionDrift = new ArrayList<>();
         for (Map.Entry<String, String> mod : loaded.entrySet()) {
-            String expected = config.allowedMods().getOrDefault(mod.getKey(), "—");
+            String pin = config.allowedMods().get(mod.getKey());
+            String expected = pin == null ? "—" : pin;
+            boolean drifted = pin != null && !ModVersionCheck.matches(mod.getValue(), pin);
+            if (drifted) {
+                versionDrift.add(mod.getKey() + " " + mod.getValue() + " != " + pin);
+            }
             source.sendSuccess(() -> Component.translatable("dev.eclipse.modcheck.loaded",
-                    mod.getKey(), mod.getValue(), expected).withStyle(ChatFormatting.GRAY), false);
+                    mod.getKey(), mod.getValue(), expected)
+                    .withStyle(drifted ? ChatFormatting.YELLOW : ChatFormatting.GRAY), false);
+        }
+        if (!versionDrift.isEmpty()) {
+            source.sendFailure(Component.translatable("dev.eclipse.modcheck.issue.version",
+                    String.join(", ", versionDrift)));
         }
 
         source.sendSuccess(() -> Component.translatable("dev.eclipse.modcheck.gates.header")
@@ -120,12 +137,16 @@ public final class DevModcheckCommands {
         source.sendSuccess(() -> Component.translatable("dev.eclipse.modcheck.bundles.header")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         for (Map.Entry<String, String> bundle : BUNDLED_MODS.entrySet()) {
-            boolean present = loaded.containsKey(bundle.getKey());
+            String installed = loaded.get(bundle.getKey());
+            boolean matches = installed != null && ModVersionCheck.matches(installed, bundle.getValue());
+            String state = installed == null
+                    ? "dev.eclipse.modcheck.state.not_loaded"
+                    : matches ? "dev.eclipse.modcheck.state.loaded"
+                            : "dev.eclipse.modcheck.state.version_mismatch";
             source.sendSuccess(() -> Component.translatable("dev.eclipse.modcheck.bundle",
-                    bundle.getKey(), bundle.getValue(), Component.translatable(present
-                            ? "dev.eclipse.modcheck.state.loaded"
-                            : "dev.eclipse.modcheck.state.not_loaded"))
-                    .withStyle(present ? ChatFormatting.GREEN : ChatFormatting.YELLOW), false);
+                    bundle.getKey(), installed == null ? bundle.getValue() : installed,
+                    Component.translatable(state))
+                    .withStyle(matches ? ChatFormatting.GREEN : ChatFormatting.YELLOW), false);
         }
         return 1;
     }
@@ -184,11 +205,17 @@ public final class DevModcheckCommands {
         }
     }
 
+    /**
+     * The jar-in-jar payload of {@code build.gradle}, keyed by the version each nested mod
+     * REPORTS (EMI's {@code 1.1.24+1.21.1} coordinate registers as {@code …+neoforge}). Veil
+     * and GeckoLib are embedded with an open range, so a newer build winning the jarJar
+     * dedupe is expected rather than a mismatch.
+     */
     private static Map<String, String> bundledMods() {
         Map<String, String> bundled = new LinkedHashMap<>();
-        bundled.put("veil", "4.3.0");
-        bundled.put("geckolib", "4.9.2");
-        bundled.put("emi", "1.1.24+1.21.1");
+        bundled.put("veil", "[4.3.0,)");
+        bundled.put("geckolib", "[4.9.2,)");
+        bundled.put("emi", "1.1.24+1.21.1+neoforge");
         bundled.put("mousetweaks", "2.26.1");
         return Collections.unmodifiableMap(bundled);
     }

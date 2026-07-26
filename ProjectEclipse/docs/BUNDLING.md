@@ -11,7 +11,7 @@ must remain separate official downloads in the event pack.
 | Eclipse Event | 2.1.0 | ARR | main jar | Project artifact, not a dependency | This repository |
 | Veil | 4.3.0 | LGPL-3.0 | Yes | Redistribution permitted; required VFX runtime already embedded | [BlameJared Maven](https://maven.blamejared.com/foundry/veil/) / [source](https://github.com/FoundryMC/Veil) |
 | GeckoLib | 4.9.2 | MIT | Yes | Permissive license; required animation runtime | [GeckoLib Maven](https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/) / [source](https://github.com/bernie-g/geckolib) |
-| EMI | 1.1.24+1.21.1 | MIT | Yes | Permissive QoL mod; exact build matches the EMI plugin contract (newest +1.21.1 neoforge build, verified resolvable 2026-07) | [TerraformersMC Maven](https://maven.terraformersmc.com/releases/dev/emi/emi-neoforge/1.1.24+1.21.1/) / [Modrinth](https://modrinth.com/mod/emi/version/1.1.24+1.21.1+neoforge) |
+| EMI | 1.1.24+1.21.1 (reports `1.1.24+1.21.1+neoforge`) | MIT | Yes | Permissive QoL mod; exact build matches the EMI plugin contract (newest +1.21.1 neoforge build, verified resolvable 2026-07) | [TerraformersMC Maven](https://maven.terraformersmc.com/releases/dev/emi/emi-neoforge/1.1.24+1.21.1/) / [Modrinth](https://modrinth.com/mod/emi/version/1.1.24+1.21.1+neoforge) |
 | Mouse Tweaks | 2.26.1 (NeoForge 1.21/1.21.1) | BSD-3-Clause | Yes | Permissive, client-only QoL mod; its nested jar retains client-side metadata. No newer 1.21.1 NeoForge build exists (checked 2026-07: 2.28/2.30 target 1.21.5+ only) | [Modrinth](https://modrinth.com/mod/mouse-tweaks/version/1.21-2.26.1-neoforge) |
 | Create | 6.0.10 | MIT code; restricted/ARR art assets | No | The full jar contains assets not cleared for redistribution | [Modrinth](https://modrinth.com/mod/create) |
 | Create: Crafts & Additions | 1.6.0 | MIT | No | Legally bundleable, but remains beside its external Create dependency for pack consistency | [Modrinth](https://modrinth.com/mod/createaddition) |
@@ -89,6 +89,17 @@ are installed: `ends_delight:* → end` (day 12), `create_confectionery:* → fa
   substring blocklist always applies.
 - The existing network payload reports ids only, so the server checks exact ids while the
   client bootstrap checks manifest versions. This remains an honest-client deterrent.
+- **Version pins are the version a mod REPORTS to the loader**, which is often not its jar
+  name or Maven coordinate: EMI resolves from `dev.emi:emi-neoforge:1.1.24+1.21.1` but
+  registers as `1.1.24+1.21.1+neoforge`, Sophisticated Backpacks ships as
+  `…-3.25.71.1997.jar` but registers as `3.25.71`. Read the real value from a boot log's
+  `Mod List` block or `/dev modcheck`. Pin syntax (`admin/ModVersionCheck`): `*` accepts
+  anything, `[4.3.0,)` is a Maven range (used for the jarJar'd Veil/GeckoLib, which may be
+  deduplicated upwards by another pack mod), a value containing `*` is a glob, anything else
+  is exact — with a trailing SemVer `+build` block tolerated when the rest matches exactly.
+  Library ids nested inside another pack jar (flywheel, ponder, sablecompanion,
+  voicechat_api, the `fabric_*` sub-modules, mixinsquared) stay `*` because their parent
+  chooses the version.
 - `/dev modcheck` reports loaded versions, allowlist differences, namespace/id gate state and
   all jarJar bundles. `/dev modcheck snapshot` (permission 3) replaces the runtime allowlist
   with the running server's actual set while preserving optional client entries, and ALSO
