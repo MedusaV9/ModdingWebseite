@@ -35,8 +35,12 @@ out vec4 fragColor;
 
 // Extinction per (density · block) — the dense band goes near-opaque over ~8–14 blocks.
 const float ABSORB = 0.55;
-// Overall density multiplier. Drives how heavy the mass reads from outside.
-const float DENSITY_GAIN = 1.55;
+// Overall density multiplier. Counter-intuitive knob: raising it does NOT make the storm
+// look heavier. Past ~1.2 the ray saturates within the first optical depth, so the camera
+// only ever sees the outermost isosurface — the lumps, banding and interior layering all
+// disappear behind a smooth, solid-looking shell. Contrast belongs in the lighting model,
+// not here. Measured on this scene: 1.0 reads as a churning anvil cloud, 1.55 as a dome.
+const float DENSITY_GAIN = 1.05;
 // Base noise frequency in storm-normalized space (features ~ R/2.6 with octaves below).
 const float NOISE_FREQ = 2.6;
 // Differential rotation base speed (rad/s at stratum speed 1.0) — the churn read.
