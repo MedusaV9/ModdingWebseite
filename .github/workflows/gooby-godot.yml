@@ -42,13 +42,19 @@ jobs:
       - name: gdtoolkit installieren
         run: pip install "gdtoolkit==4.*"
 
+      # xargs splittet bei vielen Dateien in mehrere Aufrufe; ohne die Pipefail-
+      # Behandlung verschluckt die Shell sonst den ersten Fehler (Exit 123).
       - name: gdlint
         working-directory: GOOBY-GODOT
-        run: git ls-files -z -- "*.gd" | xargs -0 gdlint
+        run: |
+          set -o pipefail
+          git ls-files -z -- "*.gd" | xargs -0 --no-run-if-empty gdlint
 
       - name: gdformat --check
         working-directory: GOOBY-GODOT
-        run: git ls-files -z -- "*.gd" | xargs -0 gdformat --check
+        run: |
+          set -o pipefail
+          git ls-files -z -- "*.gd" | xargs -0 --no-run-if-empty gdformat --check
 
   linux-checks:
     runs-on: ubuntu-latest
