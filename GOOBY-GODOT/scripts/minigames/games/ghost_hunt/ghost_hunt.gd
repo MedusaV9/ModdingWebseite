@@ -817,7 +817,10 @@ func _handle_event(e: Dictionary) -> void:
 			_gooby.play_for("celebrate", 1.2)
 			_gooby.emote("ecstatic", 1.6)
 			if ctx.juice != null:
+				# Alle Buh-Geister erwischt: kleiner Feier-Moment.
 				ctx.juice.hit_freeze(90)
+				ctx.juice.confetti(46)
+				ctx.juice.edge_glow(0.7, Color(0.75, 0.95, 1.0))
 		"booEnd":
 			_show_banner(I18nService.t("mg.ghostHunt.booMiss", {"n": int(e["caught"])}))
 			AudioDirector.try_play(self, "mg_lose")
@@ -844,11 +847,18 @@ func _on_catch(e: Dictionary) -> void:
 	_gooby.play_for("wave", 0.5)
 	_gooby.swing(0.32, 24.0, Vector3.FORWARD)
 	_gooby.emote("ecstatic", 0.9)
-	AudioDirector.try_play(self, "mg_perfect" if int(e["chain"]) > 1 else "mg_good")
+	var chain := int(e["chain"])
+	# Fang-Kette klettert hörbar (Halbton pro Kettenglied).
+	AudioDirector.try_play(
+		self, "mg_perfect" if chain > 1 else "mg_good", FeelSfx.combo_pitch(chain)
+	)
 	if ctx.juice == null:
 		return
 	ctx.juice.float_text(_stage.to_screen(world), "+%d" % int(e["points"]), Color(1, 0.93, 0.72))
-	if int(e["chain"]) >= 3:
+	ctx.juice.overlay_ring(_stage.to_screen(world), Color(0.75, 0.95, 1.0), 60.0)
+	if chain >= 2:
+		ctx.juice.show_combo(chain)
+	if chain >= 3:
 		ctx.juice.bloom_pulse(0.4)
 
 
@@ -859,6 +869,9 @@ func _on_decoy() -> void:
 	_stage.shake(0.1, 0.32)
 	if ctx.juice != null:
 		ctx.juice.shake(0.4)
+		ctx.juice.hit_flash(Color(0.75, 0.5, 0.95, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 
 
 func _show_banner(text: String) -> void:

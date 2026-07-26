@@ -118,6 +118,10 @@ func _play_pending(gs: Object) -> void:
 			_active = null
 			layer.queue_free()
 			recap_finished.emit(level, skipped)
+			# W6/RANCH: direkt nach dem Rueckblick kommt das Ranch-Angebot
+			# („Du kannst jetzt zur Ranch fahren und sie kaufen.") — es prueft
+			# selbst auf Level 20, Kaufstand und ein bereits verschobenes Angebot.
+			RanchOffer.maybe_show(get_tree().root, gs)
 	)
 
 

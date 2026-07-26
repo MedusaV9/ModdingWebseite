@@ -29,6 +29,8 @@ var layers: Array[Dictionary] = []
 var stack := {"center": 0.0, "width": 1.5}
 var bonus_points := 0
 var perfects := 0
+## Perfekt-Serie in Folge (nur Anzeige/Feel — Combo-Ton steigt mit).
+var perfect_streak := 0
 var wobble: Dictionary = {}
 var slide_t := 0.0
 var slide_phase := 0.0
@@ -155,6 +157,9 @@ func _land() -> void:
 		if ctx.juice != null:
 			ctx.juice.shake(0.45)
 			ctx.juice.hit_freeze(80)
+			ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 200)
+			ctx.juice.sfx("game_miss")
+			ctx.juice.show_combo(0)
 		_finish()
 		return
 	if not (drop["cut"] as Dictionary).is_empty():
@@ -186,25 +191,34 @@ func _land() -> void:
 func _celebrate(drop: Dictionary, topping: bool, pos: Vector2) -> void:
 	if bool(drop["perfect"]):
 		perfects += 1
+		perfect_streak += 1
 		wobble = PancakeTowerLogic.damp_wobble(wobble, tune, layers.size())
 		# Nur der Fließtext am Stapel — das große Band bleibt dem Spielende
 		# vorbehalten, sonst steht die Meldung doppelt im Bild.
-		AudioDirector.try_play(self, "mg_perfect", 1.0 + 0.05 * minf(perfects, 8.0))
+		# Perfekt-Serie klettert die Halbton-Treppe hoch.
+		AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(perfect_streak))
 		if ctx.juice != null:
 			ctx.juice.hit_freeze(45)
 			ctx.juice.bloom_pulse(0.7)
+			ctx.juice.ring_burst(self, pos, Color(1.0, 0.72, 0.2), 66.0)
+			ctx.juice.burst(self, pos, Color(1.0, 0.82, 0.4), 12)
+			if perfect_streak >= 2:
+				ctx.juice.show_combo(perfect_streak)
 			ctx.juice.float_text(
 				pos, I18nService.t("mg.pancakeTower.perfect"), Color(1.0, 0.72, 0.2)
 			)
 	elif topping:
+		perfect_streak = 0
 		AudioDirector.try_play(self, "mg_golden")
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.5)
 			ctx.juice.float_text(pos, "+%d" % int(drop["points"]), Color(0.93, 0.36, 0.48))
 	else:
+		perfect_streak = 0
 		AudioDirector.try_play(self, "mg_good")
 		if ctx.juice != null:
 			ctx.juice.shake(0.12)
+			ctx.juice.show_combo(0)
 
 
 func _spawn_crumb(center: float, height: float, width: float) -> void:

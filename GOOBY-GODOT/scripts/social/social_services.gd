@@ -11,6 +11,7 @@ const NODE_NAME := "SocialServices"
 
 var visit: VisitService
 var board: BoardSession
+var chess: ChessSession
 var pal: GoobyPalService
 
 var _wired := false
@@ -36,6 +37,9 @@ func _init() -> void:
 	board = BoardSession.new()
 	board.name = "Board"
 	add_child(board)
+	chess = ChessSession.new()
+	chess.name = "Chess"
+	add_child(chess)
 	pal = GoobyPalService.new()
 	pal.name = "Pal"
 	add_child(pal)
@@ -55,6 +59,7 @@ func setup(net_client: Node, game_state: Object) -> void:
 	_wired = true
 	visit.setup(net_client)
 	board.setup(net_client)
+	chess.setup(net_client)
 	pal.setup(net_client, game_state)
 
 

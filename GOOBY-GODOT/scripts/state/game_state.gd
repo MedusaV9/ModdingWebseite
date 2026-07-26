@@ -22,11 +22,21 @@ signal level_changed(level: int, xp_ratio: float)
 signal xp_changed(xp: float)
 signal vacation_changed(phase: String, dest_id: String)
 signal slice_changed(slice_id: String, data: Variant)
+## BUGHUNT-P1: Web-Eventstrings aus Offline-Catchup/Live-Tick ("wokeUp",
+## "statLow:<stat>", "vacationPostcard", ...) — UI-Konsumenten (Toasts)
+## hängen sich hier an.
+signal gooby_events(events: Array)
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
 const SaveManager := preload("res://scripts/state/save_manager.gd")
 const Clock := preload("res://scripts/logic/clock.gd")
 const Leveling := preload("res://scripts/logic/leveling.gd")
+const GoobyTicker := preload("res://scripts/state/gooby_ticker.gd")
+
+## BUGHUNT-P1: Intervall des Live-Ticks in Sekunden (Web: 5-s-Loop in
+## main.js). Der Tick laesst Stats live verfallen und weckt schlafende
+## Goobys automatisch — vorher lag die komplette Lebenslogik brach.
+const LIVE_TICK_INTERVAL_SEC := 5.0
 
 ## E15-P1: alle bekannten Produktions-Save-Slices (id → Skriptpfad). Lazy
 ## via load() statt preload — kein Parse-Zyklus zu Home/City/Minigame-Code.
@@ -47,6 +57,7 @@ var clock := Clock.new()
 var _manager := SaveManager.new()
 var _state: Dictionary = {}
 var _loaded := false
+var _tick_accum := 0.0
 
 
 func _ready() -> void:
@@ -54,9 +65,14 @@ func _ready() -> void:
 		initialize()
 
 
-func _process(_delta: float) -> void:
-	if _loaded:
-		_manager.autosave_tick(_state, Time.get_ticks_msec())
+func _process(delta: float) -> void:
+	if not _loaded:
+		return
+	_tick_accum += delta
+	if _tick_accum >= LIVE_TICK_INTERVAL_SEC:
+		_tick_accum = 0.0
+		run_live_tick()
+	_manager.autosave_tick(_state, Time.get_ticks_msec())
 
 
 func _notification(what: int) -> void:
@@ -64,6 +80,10 @@ func _notification(what: int) -> void:
 		return
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
 		_manager.flush_if_dirty(_state)
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		# BUGHUNT-P1: nach App-Resume die versteckte Zeit nachholen (§E4) —
+		# Schlaf zu Ende, 0.3x-Verfall, Urlaubs-Phasen.
+		run_catch_up()
 
 
 ## Frozen Slice-API (GODOT-PLAN §W1d/§3.1): DER additive Erweiterungsweg fuer
@@ -95,9 +115,41 @@ func initialize(save_path := "user://save_v5.json") -> void:
 	_manager.save_path = save_path
 	var res := _manager.load_state(clock.now_ms())
 	_state = res["state"]
+	# BUGHUNT-P1: Offline-Zeit VOR dem Initial-Emit nachholen — HUD/Room
+	# sehen sofort die nachgeholten Werte (statt eingefrorener Stats).
+	var events := GoobyTicker.catch_up(_state, clock.now_ms())
 	_loaded = true
+	_tick_accum = 0.0
+	_manager.mark_dirty(Time.get_ticks_msec())
 	state_loaded.emit(res["fresh"], res["recovered"])
 	_emit_watched(_snapshot_watched_empty())
+	if not events.is_empty():
+		gooby_events.emit(events)
+
+
+## BUGHUNT-P1: Offline-Nachholung (§E4) ausserhalb von initialize() — laeuft
+## bei NOTIFICATION_APPLICATION_RESUMED (App kommt aus dem Hintergrund).
+## Diff't die beobachteten Werte, persistiert und broadcastet die Web-Events
+## ("wokeUp", "statLow:<stat>", "vacationPostcard", ...).
+func run_catch_up() -> void:
+	var before := _snapshot_watched()
+	var events := GoobyTicker.catch_up(_state, clock.now_ms())
+	_emit_watched(before)
+	_manager.mark_dirty(Time.get_ticks_msec())
+	if not events.is_empty():
+		gooby_events.emit(events)
+
+
+## BUGHUNT-P1: ein Live-Tick (§C1) — Stats verfallen seit lastTickAt,
+## Schlaf tickt (inkl. Auto-Wecken mit Grants), Urlaub friert ein. Wird von
+## _process() alle LIVE_TICK_INTERVAL_SEC aufgerufen; Tests rufen direkt.
+func run_live_tick() -> void:
+	var before := _snapshot_watched()
+	var events := GoobyTicker.live_tick(_state, clock.now_ms())
+	_emit_watched(before)
+	_manager.mark_dirty(Time.get_ticks_msec())
+	if not events.is_empty():
+		gooby_events.emit(events)
 
 
 func is_loaded() -> bool:

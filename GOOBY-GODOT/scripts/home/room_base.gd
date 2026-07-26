@@ -86,6 +86,8 @@ func _ready() -> void:
 	# Garten 2.0 (Doc D §6): Beete/Bauten/Sammel-Spots liegen NICHT im
 	# Möbel-Grid, sondern im eigenen Garten-Grid — der Host baut sie auf.
 	GardenHost.attach_to(self)
+	# W6/HAUS-CUSTOM: gewaehlte Tapete/Boden auf diesen Raum anwenden.
+	HouseStyle.apply_to_room(self, HouseStyleState.style(_gs))
 	_announce_moving_day()
 	_emit_ready_for_reveal.call_deferred()
 

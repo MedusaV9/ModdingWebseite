@@ -18,6 +18,8 @@ var tune: Dictionary = {}
 var rng: GoobyRng
 var score := 0
 var deliveries := 0
+## Trocken-Lieferserie (nur Anzeige/Feel — Combo-Ton steigt mit).
+var dry_streak := 0
 var splashes := 0
 var flowers_total := 0
 var elapsed := 0.0
@@ -244,22 +246,25 @@ func _pick_flowers(sx: float, sy: float) -> void:
 		if sqrt(dx * dx + dy * dy) > radius:
 			continue
 		_picked.append(i)
-		AudioDirector.try_play(self, "mg_good", 1.2)
+		# Jede Blume der Tour klingt einen Halbton höher.
+		AudioDirector.try_play(self, "mg_good", 1.2 * FeelSfx.combo_pitch(_picked.size()))
 		if ctx.juice != null:
-			ctx.juice.float_text(
-				project(float(f["x"]), float(f["y"])),
-				"+%d" % int(tune["FLOWER_PTS"]),
-				Color(1.0, 0.72, 0.85)
-			)
+			var pos := project(float(f["x"]), float(f["y"]))
+			ctx.juice.float_text(pos, "+%d" % int(tune["FLOWER_PTS"]), Color(1.0, 0.72, 0.85))
+			ctx.juice.burst(self, pos, Color(1.0, 0.72, 0.85), 10)
 
 
 func _splash() -> void:
 	_wet = true
+	dry_streak = 0
 	_phase = "retreat"
 	_retreat = float(tune["RETREAT_SEC"])
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
+		ctx.juice.hit_flash(Color(0.5, 0.65, 0.95, 0.18), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	_set_banner(I18nService.t("mg.snailMail.splash"))
 
 
@@ -271,15 +276,25 @@ func _deliver() -> void:
 	if _wet:
 		splashes += 1
 	ctx.report_score(score, points)
-	AudioDirector.try_play(self, "mg_win" if not _wet else "mg_good")
+	if _wet:
+		dry_streak = 0
+	else:
+		dry_streak += 1
+	# Trocken-Serie: jede saubere Lieferung klingt höher.
+	AudioDirector.try_play(
+		self, "mg_win" if not _wet else "mg_good", FeelSfx.combo_pitch(dry_streak)
+	)
 	var houses: Array = _level["houses"]
 	var door := Logic.door_of(houses[int(_level["targetIdx"])], tune)
 	if ctx.juice != null:
-		ctx.juice.float_text(
-			project(float(door["x"]), float(door["y"])),
-			"+%d" % points,
-			Color(0.55, 1.0, 0.7) if not _wet else Color(0.75, 0.86, 1.0)
-		)
+		var pos := project(float(door["x"]), float(door["y"]))
+		var color := Color(0.55, 1.0, 0.7) if not _wet else Color(0.75, 0.86, 1.0)
+		ctx.juice.float_text(pos, "+%d" % points, color)
+		ctx.juice.ring_burst(self, pos, color, 80.0)
+		ctx.juice.burst(self, pos, color, 14)
+		ctx.juice.hit_freeze(45)
+		if dry_streak >= 2:
+			ctx.juice.show_combo(dry_streak)
 		ctx.juice.bloom_pulse(0.9 if not _wet else 0.3)
 	_set_banner(
 		I18nService.t("mg.snailMail.delivered" if not _wet else "mg.snailMail.delivered_wet")

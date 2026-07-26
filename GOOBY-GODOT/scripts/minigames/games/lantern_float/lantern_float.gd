@@ -39,6 +39,9 @@ var finished := false
 var view_size := Vector2(390.0, 844.0)
 var landscape := false
 
+## Ring-Serie ohne Rempler/Fehlpass (nur Anzeige/Feel — Ton steigt mit).
+var ring_streak := 0
+
 var _rings: Array[Dictionary] = []
 var _next_index := 0
 var _next_y := 0.0
@@ -213,6 +216,11 @@ func _check_pass() -> void:
 				if bool(ring["gold"]):
 					golds += 1
 				_award(int(ring["points"]), float(ring["x"]), y, bool(ring["gold"]))
+			else:
+				# Ring verpasst: Serie endet leise (kein Malus — nur Feedback).
+				ring_streak = 0
+				if ctx.juice != null:
+					ctx.juice.show_combo(0)
 		if y > travel - 3.0:
 			keep.append(ring)
 	_rings = keep
@@ -222,25 +230,36 @@ func _award(points: int, wx: float, wy: float, gold: bool) -> void:
 	var prev := score
 	score = Logic.apply_score(score, points)
 	ctx.report_score(score, score - prev)
-	AudioDirector.try_play(self, "mg_golden" if gold else "mg_good", 1.0 if gold else 1.15)
+	ring_streak += 1
+	# Serie klettert hörbar: +1 Halbton pro Ring in Folge.
+	AudioDirector.try_play(
+		self, "mg_golden" if gold else "mg_good", FeelSfx.combo_pitch(ring_streak)
+	)
 	if ctx.juice != null:
-		ctx.juice.float_text(
-			project(wx, wy - travel),
-			"+%d" % points,
-			Color(1.0, 0.82, 0.35) if gold else Color(0.72, 0.92, 1.0)
-		)
+		var pos := project(wx, wy - travel)
+		var color := Color(1.0, 0.82, 0.35) if gold else Color(0.72, 0.92, 1.0)
+		ctx.juice.float_text(pos, "+%d" % points, color)
+		ctx.juice.ring_burst(self, pos, color, 90.0 if gold else 64.0)
+		ctx.juice.burst(self, pos, color, 18 if gold else 10)
+		if ring_streak >= 3:
+			ctx.juice.show_combo(ring_streak)
 		if gold:
 			ctx.juice.bloom_pulse(1.0)
+			ctx.juice.hit_freeze(45)
 		else:
 			ctx.juice.bloom_pulse(0.35)
 
 
 func _bump() -> void:
 	bumps += 1
+	ring_streak = 0
 	invuln = float(tune["BUMP_INVULN_SEC"])
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.35)
+		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	if bool(tune["ENDLESS"]):
 		_set_banner(
 			I18nService.t(

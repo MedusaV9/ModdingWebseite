@@ -44,6 +44,8 @@ var rng: GoobyRng
 var score := 0
 var saves := 0
 var goals := 0
+## Parade-Serie ohne Gegentor (nur Anzeige/Feel — Combo-Ton steigt mit).
+var save_streak := 0
 var elapsed := 0.0
 var kick: Dictionary = {}
 var kick_start := 0.0
@@ -665,6 +667,7 @@ func _on_save() -> void:
 	var points := Logic.save_points(super_save, shootout, tune)
 	var before := Logic.cheers_at(saves)
 	saves += 1
+	save_streak += 1
 	score += points
 	var world := lane_world(int(kick["lane"]), _kick_height(str(kick["kind"])))
 	_ring = float(Logic.GOALIE_JUICE["RING_LIFE_SEC"])
@@ -672,7 +675,10 @@ func _on_save() -> void:
 	_save_ring.position = world
 	_flash_text = I18nService.t("mg.goalieGooby.super") if super_save else "+%d" % points
 	_flash = 0.8
-	AudioDirector.try_play(self, "mg_perfect" if super_save else "mg_good")
+	# Parade-Serie klingt pro Halten einen Halbton höher.
+	AudioDirector.try_play(
+		self, "mg_perfect" if super_save else "mg_good", FeelSfx.combo_pitch(save_streak)
+	)
 	_sparks.burst(world)
 	_stage.pulse_glow(1.0 if super_save else 0.5)
 	_stage.shake(0.06 if super_save else 0.03, 0.22)
@@ -681,8 +687,13 @@ func _on_save() -> void:
 	if ctx.juice != null:
 		# Nur die Punktzahl schwebt — der Klartext steht schon als Banner da.
 		ctx.juice.float_text(_stage.to_screen(world), "+%d" % points, Color(1.0, 0.78, 0.3))
+		ctx.juice.overlay_ring(
+			_stage.to_screen(world), Color(1.0, 0.85, 0.4), 84.0 if super_save else 56.0
+		)
 		ctx.juice.hit_freeze(70 if super_save else 35)
 		ctx.juice.bloom_pulse(0.9 if super_save else 0.4)
+		if save_streak >= 2:
+			ctx.juice.show_combo(save_streak)
 		if super_save:
 			ctx.juice.slowmo(0.35, 260)
 	if Logic.cheers_at(saves) > before:
@@ -696,6 +707,7 @@ func _on_save() -> void:
 
 func _on_goal() -> void:
 	goals += 1
+	save_streak = 0
 	_pip_pop = 0.4
 	_flash_text = I18nService.t("mg.goalieGooby.goal")
 	_flash = 1.0
@@ -705,6 +717,9 @@ func _on_goal() -> void:
 	_stage.shake(0.1, 0.35)
 	if ctx.juice != null:
 		ctx.juice.shake(0.5)
+		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	ctx.report_score(score, 0)
 	if goals >= int(tune["MAX_GOALS"]):
 		_finish()

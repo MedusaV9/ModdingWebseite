@@ -14,6 +14,8 @@ var cards: Array[Dictionary] = []
 var picked: Array[int] = []
 var misses := 0
 var matched_pairs := 0
+## Paar-Serie ohne Fehlgriff (nur Anzeige/Feel — Combo-Ton steigt mit).
+var match_streak := 0
 var boards_cleared := 0
 var elapsed := 0.0
 var peek: Dictionary = {}
@@ -178,17 +180,27 @@ func _resolve_pick() -> void:
 		a["state"] = "matched"
 		b["state"] = "matched"
 		matched_pairs += 1
-		AudioDirector.try_play(self, "mg_perfect")
+		match_streak += 1
+		# Paar-Serie klettert hörbar (Halbton pro Treffer in Folge).
+		AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(match_streak))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, "★", AcTokens.GOLD)
+			ctx.juice.ring_burst(self, pos, AcTokens.GOLD, 70.0)
+			ctx.juice.burst(self, pos, AcTokens.GOLD, 12)
+			ctx.juice.hit_freeze(45)
 			ctx.juice.bloom_pulse(0.4)
+			if match_streak >= 2:
+				ctx.juice.show_combo(match_streak)
 	else:
 		a["state"] = "down"
 		b["state"] = "down"
 		misses += 1
+		match_streak = 0
 		AudioDirector.try_play(self, "mg_junk", 0.95)
 		if ctx.juice != null:
 			ctx.juice.shake(0.2)
+			ctx.juice.sfx("game_miss")
+			ctx.juice.show_combo(0)
 	picked = []
 	peek = MemoryMatchLogic.advance_peek_progress(peek, hit)
 	if MemoryMatchLogic.can_use_peek(peek) and not _peek_button.visible:
@@ -213,6 +225,7 @@ func _board_cleared() -> void:
 	AudioDirector.try_play(self, "mg_win")
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
+		ctx.juice.win_moment()
 		ctx.juice.float_text(
 			Vector2(view_size.x * 0.5 - 90.0, view_size.y * 0.42),
 			I18nService.t("mg.memoryMatch.cleared"),

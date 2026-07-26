@@ -88,6 +88,8 @@ var autoplay := false
 var tune: Dictionary = {}
 var race: Dictionary = {}
 var score := 0
+## Überhol-Serie ohne Rempler (nur Anzeige/Feel — Combo-Ton steigt mit).
+var overtake_streak := 0
 var finished := false
 var view_size := Vector2(844.0, 390.0)
 var landscape := true
@@ -643,6 +645,9 @@ func _handle_event(ev: Dictionary) -> void:
 			_stage.call("pulse_glow", 0.9)
 			_gooby.call("emote", "ecstatic", 1.0)
 			Fx.burst(_sparks, _karts[0].global_position)
+			if ctx.juice != null:
+				ctx.juice.overlay_ring(_player_px(), Color(0.55, 0.85, 1.0), 70.0)
+				ctx.juice.sfx("game_whoosh", 1.1)
 		"pickup":
 			AudioDirector.try_play(self, "gvz_collect")
 			_set_banner(I18nService.t("mg.toyRacer.item_%s" % str(ev["item"])))
@@ -661,9 +666,13 @@ func _handle_event(ev: Dictionary) -> void:
 			AudioDirector.try_play(self, "mg_spill")
 			_set_banner(I18nService.t("mg.toyRacer.block_hit"))
 			_gooby.call("emote", "dizzy", 1.5)
+			overtake_streak = 0
 			# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 			if ctx.juice != null:
 				ctx.juice.hit_freeze(80)
+				ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+				ctx.juice.sfx("game_miss")
+				ctx.juice.show_combo(0)
 		"shieldPop":
 			AudioDirector.try_play(self, "gvz_balloon")
 			_set_banner(I18nService.t("mg.toyRacer.shield_pop"))
@@ -671,8 +680,13 @@ func _handle_event(ev: Dictionary) -> void:
 			AudioDirector.try_play(self, "mg_junk")
 			_set_banner(I18nService.t("mg.toyRacer.offtrack"))
 			_gooby.call("emote", "scared", 0.8)
+			overtake_streak = 0
+			if ctx.juice != null:
+				ctx.juice.show_combo(0)
 		"overtake":
-			AudioDirector.try_play(self, "mg_good")
+			overtake_streak += 1
+			# Überhol-Serie klingt pro Stufe einen Halbton höher.
+			AudioDirector.try_play(self, "mg_good", FeelSfx.combo_pitch(overtake_streak))
 			_add_score(int(tune["OVERTAKE_POINTS"]))
 			_float(
 				"+%d" % int(tune["OVERTAKE_POINTS"]),
@@ -680,6 +694,10 @@ func _handle_event(ev: Dictionary) -> void:
 				Color(0.34, 0.75, 0.44)
 			)
 			_gooby.call("emote", "ecstatic", 0.9)
+			if ctx.juice != null:
+				ctx.juice.overlay_ring(_player_px(), Color(0.6, 0.95, 0.6), 60.0)
+				if overtake_streak >= 2:
+					ctx.juice.show_combo(overtake_streak)
 		"lap":
 			AudioDirector.try_play(self, "gvz_wave")
 			_set_banner(
@@ -701,7 +719,6 @@ func _handle_event(ev: Dictionary) -> void:
 			_stage.call("pulse_glow", 1.4)
 			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
 		"finish":
-			AudioDirector.try_play(self, "mg_win")
 			var rank := int(ev["rank"])
 			_set_banner(
 				(
@@ -713,6 +730,14 @@ func _handle_event(ev: Dictionary) -> void:
 			_gooby.call("emote", "ecstatic" if rank <= 2 else "happy", 3.0)
 			_stage.call("pulse_glow", 1.5)
 			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
+			if rank == 1 and ctx.juice != null:
+				# Platz 1: Zeitlupe + Goldblitz + Konfetti-Regen.
+				AudioDirector.try_play(self, "mg_win")
+				ctx.juice.win_moment()
+			elif ctx.juice != null:
+				ctx.juice.sfx("game_lose" if rank >= 4 else "game_win")
+			else:
+				AudioDirector.try_play(self, "mg_win")
 
 
 func _finish() -> void:

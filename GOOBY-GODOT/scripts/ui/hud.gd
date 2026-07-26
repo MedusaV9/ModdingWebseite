@@ -21,6 +21,16 @@ extends Control
 ##   den Icons; beim ersten Mal erklärt ein Coachmark die Knöpfe (merkt
 ##   sich das über AppSettings `hints.hud_actions_seen`).
 ##
+## UICOZY (Web-Parität, GOOBY/src/ui/hud.js + styles.css):
+## - Status-Pills tragen ihre Stat-Icons in BEIDEN Layouts (Web .stat-pill),
+##   farbig getönt; Hochkant-Pills flexen über die Zeilenbreite (Web flex:1).
+## - Pill-Innenmaße/Schriften skalieren über die ZENTRALE `UiScale`-Regel
+##   (Web-CSS-px ≈ physische Punkte) — NUR die Bogen-GEOMETRIE bleibt auf
+##   `portrait_scale` (FIXB-Audit, s. u.).
+## - Münzen zählen hoch (UiMotion.count_to) + Wackel-Impuls aufs Icon.
+## - Balken gleiten weich (UiMotion.bar_to, Web .stat-fill 300 ms ease).
+## - Aktions-Icons in Identitätsfarben (Web .g5-hud-btn svg: pink/teal/gelb).
+##
 ## Keine eigene Spiel-Logik: Anzeigedaten kommen über `set_stats()`,
 ## `set_coins()`, `set_level()` (W1d-GameState verdrahtet das später,
 ## siehe handoffs/W1c-needs-from-state.md).
@@ -37,7 +47,6 @@ const ICON_DIR := "res://assets/ui/icons/"
 const EYE_AUTO_OFF_SEC := 8.0
 ## Unter diesem Wert pulsiert die Status-Kapsel (Doc H „Pflege-Alarm“).
 const STAT_ALERT_THRESHOLD := 25.0
-const COIN_TWEEN_SEC := 0.45
 ## FIX1: Randabstand zur Bildschirmkante (nur Schattenluft — Stats sollen
 ## bündig sitzen, der Rest kommt aus der Safe-Area).
 const EDGE_PAD := 8.0
@@ -49,23 +58,48 @@ const COLUMN_SEP := 10.0
 ## AppSettings-Key: Coachmark „Deine Knöpfe“ schon gezeigt?
 const COACHMARK_SEEN_KEY := "hints.hud_actions_seen"
 ## Reihenfolge = Bogen von links (flach) nach oben; Spalte nutzt eigene Liste.
+## UICOZY: `tint` = Icon-Identitätsfarbe (Web .g5-hud-btn svg: pink/teal/
+## gelb-dunkel im Wechsel — Ink-Monochrom wirkte nüchtern).
 const ACTIONS: Array[Dictionary] = [
-	{"id": &"igohbie", "icon": "phone"},
-	{"id": &"bau", "icon": "wrench"},
-	{"id": &"reise", "icon": "suitcase"},
-	{"id": &"arcade", "icon": "gamepad"},
-	{"id": &"album", "icon": "book"},
-	{"id": &"profil", "icon": "rabbit"},
+	{"id": &"igohbie", "icon": "phone", "tint": AcTokens.TEAL},
+	{"id": &"bau", "icon": "wrench", "tint": AcTokens.YELLOW_DARK},
+	{"id": &"reise", "icon": "suitcase", "tint": AcTokens.PINK},
+	{"id": &"arcade", "icon": "gamepad", "tint": AcTokens.TEAL},
+	{"id": &"album", "icon": "book", "tint": AcTokens.YELLOW_DARK},
+	{"id": &"profil", "icon": "rabbit", "tint": AcTokens.PINK},
+	# W6: Garderobe (92 Kosmetik-Teile), IKEA-Ausstellung, Haus gestalten.
+	{"id": &"wardrobe", "icon": "shirt", "tint": AcTokens.PINK},
+	{"id": &"ikea", "icon": "sofa", "tint": AcTokens.TEAL},
+	{"id": &"gestalten", "icon": "brush", "tint": AcTokens.YELLOW_DARK},
 ]
 const COLUMN_ORDER: Array[StringName] = [
-	&"bau", &"reise", &"arcade", &"album", &"profil", &"igohbie"
+	&"bau",
+	&"gestalten",
+	&"reise",
+	&"arcade",
+	&"album",
+	&"wardrobe",
+	&"ikea",
+	&"profil",
+	&"igohbie",
 ]
 const STATS := [
-	{"id": "hunger", "icon": "hunger", "type": "StatHunger"},
-	{"id": "energie", "icon": "energy", "type": "StatEnergy"},
-	{"id": "hygiene", "icon": "hygiene", "type": "StatHygiene"},
-	{"id": "spass", "icon": "fun", "type": "StatFun"},
+	{"id": "hunger", "icon": "hunger", "type": "StatHunger", "color": AcTokens.STAT_HUNGER},
+	{"id": "energie", "icon": "energy", "type": "StatEnergy", "color": AcTokens.STAT_ENERGY},
+	{"id": "hygiene", "icon": "hygiene", "type": "StatHygiene", "color": AcTokens.STAT_HYGIENE},
+	{"id": "spass", "icon": "fun", "type": "StatFun", "color": AcTokens.STAT_FUN},
 ]
+## Web-Referenzmaße (Design-px ≈ CSS-px): .stat-pill-Icon 20, Track-Höhe 10,
+## Track-Mindestbreite 24 (min-width 1.5rem, flext), .g5-ring 40 (im Chip
+## ≈ 3.25rem-Gesamtkreis), Coin-Glyph 22, Coin-Font 17/800, Ring-Font 16/800.
+const STAT_ICON_PX := 20.0
+const STAT_BAR_H_PX := 10.0
+const STAT_BAR_MIN_W_PX := 24.0
+const STAT_BAR_LANDSCAPE_W_PX := 132.0
+const RING_PX := 40.0
+const COIN_ICON_PX := 22.0
+const COIN_FONT_PX := 17
+const RING_FONT_PX := 16
 
 var current_layout: HudLayoutLogic.Layout = HudLayoutLogic.Layout.PORTRAIT
 ## Notch-Simulation für Tests: Safe-Area in CANVAS-Koordinaten
@@ -95,6 +129,7 @@ var _column_width := 88.0
 var _column_top := 84.0
 
 @onready var _top_bar: MarginContainer = $TopBar
+@onready var _top_spacer: Control = $TopBar/TopBarBox/TopSpacer
 @onready var _status_row: HBoxContainer = %StatusRow
 @onready var _left_column: VBoxContainer = %LeftColumn
 @onready var _bottom_left: VBoxContainer = $BottomLeft
@@ -180,18 +215,32 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		chip.theme_type_variation = &"StatusCapsuleMini" if portrait else &"StatusCapsule"
 		# Kapseln sind Tap-Ziele (öffnen das Status-Sheet) → Touch-Floor.
 		chip.custom_minimum_size = Vector2.ONE * floor_px
+	# UICOZY (Web .g5-topbar): Hochkant flext die Stat-Pillen über die
+	# Zeilenbreite (flex:1) — der Spacer weicht, die StatusRow übernimmt.
+	_top_spacer.visible = not portrait
+	_status_row.size_flags_horizontal = (
+		Control.SIZE_EXPAND_FILL if portrait else Control.SIZE_FILL
+	)
+	var pill_flags := Control.SIZE_EXPAND_FILL if portrait else Control.SIZE_FILL
 	for info in STATS:
+		(_stat_chips[info["id"]] as Control).size_flags_horizontal = pill_flags
 		var bar: ProgressBar = _stat_bars[info["id"]]
+		# Web .stat-fill-Track: 10 px hoch, Hochkant min 24 px + flext mit,
+		# Querformat feste 132 px (Cockpit-Spaltenbreite).
 		bar.custom_minimum_size = (
-			Vector2(roundf(34.0 * f), roundf(12.0 * f))
+			Vector2(roundf(STAT_BAR_MIN_W_PX * f), roundf(STAT_BAR_H_PX * f))
 			if portrait
-			else Vector2(roundf(132.0 * f), roundf(12.0 * f))
+			else Vector2(roundf(STAT_BAR_LANDSCAPE_W_PX * f), roundf(STAT_BAR_H_PX * f))
 		)
-		(_stat_icons[info["id"]] as Control).visible = not portrait
-	_level_ring.custom_minimum_size = Vector2.ONE * roundf(34.0 * f)
-	_coin_icon.custom_minimum_size = Vector2.ONE * roundf(22.0 * f)
-	_scale_font(_coin_label, 20, f)
-	_scale_font(_level_label, 15, f)
+		bar.size_flags_horizontal = pill_flags
+		# Web-Parität: Stat-Icons sitzen in BEIDEN Layouts in der Pille.
+		var icon := _stat_icons[info["id"]] as Control
+		icon.visible = true
+		icon.custom_minimum_size = Vector2.ONE * roundf(STAT_ICON_PX * f)
+	_level_ring.custom_minimum_size = Vector2.ONE * roundf(RING_PX * f)
+	_coin_icon.custom_minimum_size = Vector2.ONE * roundf(COIN_ICON_PX * f)
+	_scale_font(_coin_label, COIN_FONT_PX, f)
+	_scale_font(_level_label, RING_FONT_PX, f)
 	_scale_font(_gooby_chip, 17, f)
 	_settings_button.custom_minimum_size = Vector2.ONE * maxf(56.0 * f, floor_px)
 	_eye_button.custom_minimum_size = Vector2.ONE * maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
@@ -280,7 +329,13 @@ func set_stats(stats: Dictionary) -> void:
 	for key: String in stats:
 		if _stat_bars.has(key):
 			var value := float(stats[key])
-			(_stat_bars[key] as ProgressBar).value = value
+			var bar := _stat_bars[key] as ProgressBar
+			# UICOZY: Folge-Updates GLEITEN (Web .stat-fill 300 ms ease);
+			# der ERSTE Wert snappt — wie im Web ohne Transition beim Mount.
+			if _last_stats.has(key):
+				UiMotion.bar_to(bar, value)
+			else:
+				bar.value = value
 			_last_stats[key] = value
 	_update_stat_alerts()
 	if _status_sheet != null and _status_sheet.is_open():
@@ -290,28 +345,14 @@ func set_stats(stats: Dictionary) -> void:
 func set_coins(coins: int) -> void:
 	if _coin_tween != null and _coin_tween.is_valid():
 		_coin_tween.kill()
-	if _coin_shown == coins or not is_inside_tree() or ThemeService.is_reduced_motion(self):
-		_coin_shown = coins
-		_coin_label.text = str(coins)
-		return
-	# Zähl-Animation + kleiner Chip-Pop (W4/POLISH-4).
-	_coin_tween = create_tween()
-	(
-		_coin_tween
-		. tween_method(_show_coin_value, float(_coin_shown), float(coins), COIN_TWEEN_SEC)
-		. set_trans(Tween.TRANS_QUAD)
-		. set_ease(Tween.EASE_OUT)
-	)
-	_coin_chip.pivot_offset = _coin_chip.size / 2.0
-	_coin_chip.scale = Vector2.ONE * 1.1
-	(
-		_coin_tween
-		. parallel()
-		. tween_property(_coin_chip, "scale", Vector2.ONE, COIN_TWEEN_SEC)
-		. set_trans(Tween.TRANS_BACK)
-		. set_ease(Tween.EASE_OUT)
-	)
+	var from := _coin_shown
 	_coin_shown = coins
+	# UICOZY: Zähl-Animation + Münz-Wackler + Chip-Hüpfer über die gemeinsame
+	# UiMotion-Bibliothek (reduced-motion-gated, W4/POLISH-4 → Web-Parität).
+	_coin_tween = UiMotion.count_to(_coin_label, from, coins)
+	if from != coins:
+		UiMotion.wiggle(_coin_icon)
+		UiMotion.bounce(_coin_chip)
 
 
 func set_level(level: int, xp_ratio: float = 0.0) -> void:
@@ -366,6 +407,9 @@ func _build_action_buttons() -> void:
 		btn.theme_type_variation = "HudIconButton"
 		btn.icon = load("%s%s.svg" % [ICON_DIR, action["icon"]])
 		btn.custom_minimum_size = Vector2.ONE * HudLayoutLogic.ACTION_BTN
+		# UICOZY: Identitätsfarbe pro Knopf (Web .g5-hud-btn svg) statt Ink.
+		for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]:
+			btn.add_theme_color_override(state, action["tint"])
 		btn.tooltip_text = I18nService.t("hud." + String(id))
 		btn.expand_icon = false
 		btn.focus_mode = Control.FOCUS_NONE
@@ -382,6 +426,8 @@ func _build_status_chips() -> void:
 	_level_label = Label.new()
 	_level_label.name = "LevelValue"
 	_level_label.theme_type_variation = "CaptionLabel"
+	# Web .g5-ring b: 800er-Gewicht im Level-Ring.
+	_level_label.add_theme_font_override("font", ThemeService.font(800))
 	_level_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -400,7 +446,8 @@ func _build_status_chips() -> void:
 		icon.custom_minimum_size = Vector2(18, 18)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.self_modulate = AcTokens.INK_SOFT
+		# UICOZY: Icon in der Stat-Farbe (Web .stat-pill svg) statt Ink-Grau.
+		icon.self_modulate = info["color"]
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(icon)
 		_stat_icons[info["id"]] = icon
@@ -434,6 +481,8 @@ func _build_status_chips() -> void:
 	_coin_label = Label.new()
 	_coin_label.name = "CoinValue"
 	_coin_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Web .g5-coin b: 800er-Gewicht (Zahl soll „münzig“ satt wirken).
+	_coin_label.add_theme_font_override("font", ThemeService.font(800))
 	coin_box.add_child(_coin_label)
 	coin_chip.add_child(coin_box)
 	_coin_chip = coin_chip
@@ -500,12 +549,10 @@ func _scale_icon_button(btn: Button, f: float) -> void:
 		btn.remove_theme_constant_override("icon_max_width")
 
 
-## Font-Größe mitskalieren (nur Hochkant, f > 1) — sonst zurück ans Theme.
+## Font-Größe = Web-CSS-px × zentrale Skala (UICOZY: vorher galt das nur
+## für f > 1 — bei f = 1 wichen Coin/Ring-Fonts von der Web-Referenz ab).
 func _scale_font(ctl: Control, base_px: int, f: float) -> void:
-	if f > 1.0:
-		ctl.add_theme_font_size_override("font_size", int(base_px * f))
-	else:
-		ctl.remove_theme_font_size_override("font_size")
+	ctl.add_theme_font_size_override("font_size", int(maxf(base_px * f, 10.0)))
 
 
 ## FIX1 „Die Tasten rechts werden nichtmal erklärt“: im Cockpit (Querformat)
@@ -539,6 +586,8 @@ func _maybe_show_coachmark() -> void:
 	_coachmark = _build_coachmark()
 	add_child(_coachmark)
 	_position_coachmark()
+	# UICOZY: Coachmark federt auf (Web --ease-spring) statt hart zu stehen.
+	UiMotion.pop_in(_coachmark)
 
 
 func _build_coachmark() -> Control:
@@ -640,10 +689,6 @@ func _stop_alert_pulse(id: String, chip: Control) -> void:
 	_alert_tweens.erase(id)
 	chip.scale = Vector2.ONE
 	chip.modulate = Color.WHITE
-
-
-func _show_coin_value(value: float) -> void:
-	_coin_label.text = str(int(roundf(value)))
 
 
 func _on_chip_input(event: InputEvent) -> void:

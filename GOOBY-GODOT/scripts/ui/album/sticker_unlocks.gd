@@ -15,6 +15,9 @@ extends Node
 
 signal sticker_unlocked(def: Dictionary)
 
+## Die vier Saison-Sticker (seasonsCollected zählt sie — Jahresring).
+const SEASON_STICKERS: Array[String] = ["jz_fruehling", "jz_sommer", "jz_herbst", "jz_winter"]
+
 var _gs: Object = null
 var _catalog: Array = []
 
@@ -101,6 +104,23 @@ static func unlocked_count(state: Dictionary, catalog: Array) -> int:
 	return count
 
 
+## Seiten-Fortschritt {unlocked, total} fürs Album (BACKLOG-REST §4):
+## Geheim-Sticker zählen erst mit, wenn sie frei sind (kein n/N-Leak).
+static func page_progress(state: Dictionary, catalog: Array, page_id: String) -> Dictionary:
+	var total := 0
+	var unlocked := 0
+	for def: Variant in catalog:
+		if not (def is Dictionary) or str(def.get("page", "")) != page_id:
+			continue
+		var got := is_unlocked(state, str(def.get("id", "")))
+		if bool(def.get("secret", false)) and not got:
+			continue
+		total += 1
+		if got:
+			unlocked += 1
+	return {"unlocked": unlocked, "total": total}
+
+
 func _evaluate() -> void:
 	if _gs == null:
 		return
@@ -179,8 +199,104 @@ static func _special_value(state: Dictionary, key: String, sub: Variant) -> floa
 			var wallpaper := _dict_size(_dig(state, ["decor", "wallpaper"]))
 			var floors := _dict_size(_dig(state, ["decor", "floor"]))
 			return float(wallpaper + floors)
+	# BACKLOG-REST: neue specials (Ranch/Stadt/Jahreszeiten) im Helfer.
+	return _special_value_ext(state, key, extra)
+
+
+## Neue specials der BACKLOG-REST-Sets — liest NUR vorhandene Slices
+## (ranch/city/minigames/daily). Unbekannte Keys: -1.0 (nie erfüllt).
+static func _special_value_ext(state: Dictionary, key: String, extra: Dictionary) -> float:
+	match key:
+		"ranchOwned":
+			return 1.0 if _truthy(_dig(state, ["ranch", "gekauft"])) else 0.0
+		"horsesOwned":
+			return float(_dict_size(_dig(state, ["ranch", "tiere", "pferde"])))
+		"horseBond":
+			return _max_horse_bond(_dig(state, ["ranch", "tiere", "pferde"]))
+		"ranchAusbau":
+			return _ranch_ausbau_summe(_dig(state, ["ranch", "ausbau"]))
+		"ranchLager":
+			var heu := _num(_dig(state, ["ranch", "wirtschaft", "lager", "heu"]), 0.0)
+			var apfel := _num(_dig(state, ["ranch", "wirtschaft", "lager", "apfel"]), 0.0)
+			return heu + apfel
+		"hoftiere":
+			return float(_array_size(_dig(state, ["ranch", "hoftiere"])))
+		"cityVisits":
+			return float(_dict_size(_dig(state, ["city", "besucht"])))
+		"seasonPlay":
+			return _season_played(state, str(extra.get("season", "")))
+		"seasonsCollected":
+			var n := 0
+			for id: String in SEASON_STICKERS:
+				if is_unlocked(state, id):
+					n += 1
+			return float(n)
 	# Unbekannte specials (z. B. postcards bis W3a liefert): nie erfüllt.
 	return -1.0
+
+
+## 1.0 wenn irgendein Tages-String im Save in der Saison liegt.
+static func _season_played(state: Dictionary, season: String) -> float:
+	if season.is_empty():
+		return 0.0
+	for day: String in _day_strings(state):
+		if _season_of_day(day) == season:
+			return 1.0
+	return 0.0
+
+
+## Saison eines "YYYY-MM-DD"-Strings ("" wenn unparsebar).
+static func _season_of_day(day: String) -> String:
+	var parts := day.split("-")
+	if parts.size() != 3:
+		return ""
+	var month := int(parts[1])
+	if month >= 3 and month <= 5:
+		return "fruehling"
+	if month >= 6 and month <= 8:
+		return "sommer"
+	if month >= 9 and month <= 11:
+		return "herbst"
+	return "winter" if (month == 12 or month == 1 or month == 2) else ""
+
+
+## Alle bekannten Tages-Strings im Save (Daily-Claim, Streichel-Tag,
+## Wochenmarkt, Minigame-lastPlayDay) — Quellen für seasonPlay.
+static func _day_strings(state: Dictionary) -> Array[String]:
+	var days: Array[String] = []
+	for value: Variant in [
+		_dig(state, ["daily", "lastClaimDay"]),
+		_dig(state, ["achievements", "counters", "petsDay"]),
+		_dig(state, ["city", "markt", "tag"]),
+	]:
+		if value is String and not (value as String).is_empty():
+			days.append(value)
+	var last_play: Variant = _dig(state, ["minigames", "legacy", "lastPlayDay"])
+	if last_play is Dictionary:
+		for game: Variant in last_play:
+			var day: Variant = last_play[game]
+			if day is String and not (day as String).is_empty():
+				days.append(day)
+	return days
+
+
+static func _max_horse_bond(pferde: Variant) -> float:
+	if not (pferde is Dictionary):
+		return 0.0
+	var best := 0.0
+	for id: Variant in pferde:
+		if pferde[id] is Dictionary:
+			best = maxf(best, _num((pferde[id] as Dictionary).get("bindung"), 0.0))
+	return best
+
+
+static func _ranch_ausbau_summe(ausbau: Variant) -> float:
+	if not (ausbau is Dictionary):
+		return 0.0
+	var summe := 0.0
+	for stufe: String in ["stall", "koppel", "reitplatz"]:
+		summe += _num((ausbau as Dictionary).get(stufe), 1.0)
+	return summe
 
 
 ## Typ-sicheres „ist wirklich true“ (String == bool ist in GDScript 4 ein

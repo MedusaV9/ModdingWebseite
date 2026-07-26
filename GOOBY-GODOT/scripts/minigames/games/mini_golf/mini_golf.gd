@@ -55,6 +55,8 @@ var course: Array[Dictionary] = []
 var hole_index := 0
 var strokes := 0
 var score := 0
+## Einloch-Serie ohne Aufgeben (nur Anzeige/Feel — Combo-Ton steigt mit).
+var hole_streak := 0
 var theta := 0.0
 var ball := {"x": 0.0, "z": 0.0, "vx": 0.0, "vz": 0.0, "done": false}
 var endless_state: Dictionary = {}
@@ -674,30 +676,47 @@ func _end_hole(holed: bool) -> void:
 	_ring_t = float(Logic.GOLF_JUICE["RING_LIFE_SEC"])
 	_ring_scale = float(Logic.GOLF_JUICE["RING_SCALE_SINK"])
 	if holed and taken == 1:
+		hole_streak += 1
 		_ring_scale = float(Logic.GOLF_JUICE["RING_SCALE_ACE"])
 		_flash_text = I18nService.t("mg.miniGolf.ace")
 		_sparks.burst(world)
 		_stage.pulse_glow(1.0)
-		AudioDirector.try_play(self, "mg_golden")
+		AudioDirector.try_play(self, "mg_golden", FeelSfx.combo_pitch(hole_streak))
 		_gooby.play("celebrate")
 		_gooby.hop(0.6, 0.4)
 		_gooby.emote("ecstatic", 1.8)
 		if ctx.juice != null:
+			# Ass = DER Moment des Spiels: Zeitlupe + Goldblitz + Konfetti.
 			ctx.juice.hit_freeze(90)
 			ctx.juice.bloom_pulse(1.0)
+			ctx.juice.win_moment()
+			ctx.juice.overlay_ring(pos, Color(1.0, 0.85, 0.35), 100.0)
 	elif holed:
+		hole_streak += 1
 		_flash_text = "+%d" % points
 		_sparks.burst(world)
 		_stage.pulse_glow(0.5)
-		AudioDirector.try_play(self, "mg_perfect" if taken <= par else "mg_good")
+		# Einloch-Serie unter Par klettert hörbar.
+		AudioDirector.try_play(
+			self,
+			"mg_perfect" if taken <= par else "mg_good",
+			FeelSfx.combo_pitch(hole_streak) if taken <= par else 1.0
+		)
 		_gooby.play("celebrate")
 		_gooby.emote("ecstatic", 1.4)
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.5)
+			ctx.juice.overlay_ring(pos, Color(1.0, 0.85, 0.35), 64.0)
+			if hole_streak >= 2:
+				ctx.juice.show_combo(hole_streak)
 	else:
+		hole_streak = 0
 		_flash_text = I18nService.t("mg.miniGolf.gave_up")
 		AudioDirector.try_play(self, "mg_spill")
 		_gooby.emote("sad", 1.6)
+		if ctx.juice != null:
+			ctx.juice.sfx("game_miss")
+			ctx.juice.show_combo(0)
 	_flash = 1.2
 	if ctx.juice != null:
 		ctx.juice.float_text(pos, _flash_text, Color(1.0, 0.72, 0.2))

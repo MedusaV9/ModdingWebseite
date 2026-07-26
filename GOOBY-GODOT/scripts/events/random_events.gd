@@ -34,7 +34,13 @@ static func register_slice() -> void:
 
 
 static func default_slice() -> Dictionary:
-	return {"active": {}, "cooldowns": {}, "failPending": "", "resolvedTotal": 0}
+	return {
+		"active": {},
+		"cooldowns": {},
+		"failPending": "",
+		"failProp": "",
+		"resolvedTotal": 0,
+	}
 
 
 static func normalize_slice(raw: Variant) -> Dictionary:
@@ -45,6 +51,8 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 		slice["cooldowns"] = {}
 	if not (slice.get("failPending") is String):
 		slice["failPending"] = ""
+	if not (slice.get("failProp") is String):
+		slice["failProp"] = ""
 	slice["resolvedTotal"] = maxi(0, int(slice.get("resolvedTotal", 0)))
 	return slice
 
@@ -133,9 +141,19 @@ static func pick_event(
 	return chosen
 
 
-## Timeout-Deadline eines aktivierten Events.
-static func timeout_deadline(def: Dictionary, started_ms: int) -> int:
-	return started_ms + int(maxf(1.0, float(def.get("timeout_min", 8))) * MS_PER_MIN)
+## Timeout-Deadline eines aktivierten Events. `timeout_min` darf eine Zahl
+## ODER eine Spanne [min, max] sein (Nutella-Nacht: 10–20 min, Doc F §4.2) —
+## `roll01` (0..1) wählt deterministisch innerhalb der Spanne.
+static func timeout_deadline(def: Dictionary, started_ms: int, roll01 := 0.0) -> int:
+	var raw: Variant = def.get("timeout_min", 8)
+	var minutes := 8.0
+	if raw is Array and (raw as Array).size() == 2:
+		var lo := maxf(1.0, float((raw as Array)[0]))
+		var hi := maxf(lo, float((raw as Array)[1]))
+		minutes = lerpf(lo, hi, clampf(roll01, 0.0, 1.0))
+	else:
+		minutes = maxf(1.0, float(raw))
+	return started_ms + int(minutes * MS_PER_MIN)
 
 
 static func is_timed_out(active: Dictionary, now_ms: int) -> bool:
@@ -165,12 +183,13 @@ static func roll_on_start(
 	var chosen := pick_event(defs, slice, now_ms, minutes_of_day, rng.randf(), rng.randf())
 	if chosen.is_empty():
 		return {}
-	activate(gs, chosen, now_ms)
+	activate(gs, chosen, now_ms, rng.randf())
 	return chosen
 
 
 ## Event aktivieren: active-Eintrag + Cooldown + Notification (sofort fällig).
-static func activate(gs: Object, def: Dictionary, now_ms: int) -> void:
+## `timeout_roll` wählt bei Spannen-Timeouts (Nutella) den konkreten Wert.
+static func activate(gs: Object, def: Dictionary, now_ms: int, timeout_roll := 0.0) -> void:
 	var id := str(def.get("id", ""))
 	gs.update(
 		func(state: Dictionary) -> void:
@@ -178,7 +197,7 @@ static func activate(gs: Object, def: Dictionary, now_ms: int) -> void:
 			slice["active"] = {
 				"id": id,
 				"started_ms": now_ms,
-				"timeout_ms": timeout_deadline(def, now_ms),
+				"timeout_ms": timeout_deadline(def, now_ms, timeout_roll),
 				"szene": str(def.get("szene_setup", "")),
 			}
 			slice["cooldowns"][id] = cooldown_until(def, now_ms)
@@ -215,6 +234,8 @@ static func resolve_active(gs: Object, defs: Array, now_ms: int) -> void:
 
 
 ## Aktives Event als verpasst markieren → Fail-Text für die nächste Bubble.
+## Hat das Def eine `fail_prop` (Nutella-Fleck als Beweis, Doc F §4.2), bleibt
+## sie als wegwischbare Requisite im Slice liegen, bis der Spieler sie putzt.
 static func fail_active(gs: Object, defs: Array, _now_ms: int) -> void:
 	var def := _active_def(gs, defs)
 	if def.is_empty():
@@ -226,6 +247,9 @@ static func fail_active(gs: Object, defs: Array, _now_ms: int) -> void:
 			slice["failPending"] = str(
 				def.get("fail_text_de", "Gooby hat es schon alleine hingekommen -_-")
 			)
+			var prop := str(def.get("fail_prop", ""))
+			if not prop.is_empty():
+				slice["failProp"] = prop
 	)
 	gs.notify_slice_changed(SLICE_ID)
 	NotifyStub.cancel_local("event_" + str(def.get("id", "")))
@@ -239,6 +263,19 @@ static func take_fail_notice(gs: Object) -> String:
 	gs.set_value("events.failPending", "")
 	gs.notify_slice_changed(SLICE_ID)
 	return text
+
+
+## Liegengebliebene Fail-Requisite ("" = keine) — bleibt bestehen, bis
+## clear_fail_prop() sie wegputzt (der EventRunner baut sie im Raum auf).
+static func fail_prop_of(gs: Object) -> String:
+	return str(gs.get_value("events.failProp", ""))
+
+
+static func clear_fail_prop(gs: Object) -> void:
+	if fail_prop_of(gs).is_empty():
+		return
+	gs.set_value("events.failProp", "")
+	gs.notify_slice_changed(SLICE_ID)
 
 
 ## Aktueller active-Eintrag ({} wenn keiner).

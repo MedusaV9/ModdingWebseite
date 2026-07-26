@@ -660,7 +660,8 @@ func _take_coin(coin: Dictionary) -> void:
 	var mult := Logic.combo_multiplier(coin_streak, tune)
 	var points := Logic.mystery_coin_points(mult, _x2_t > 0.0, tune)
 	coin_points += points
-	AudioDirector.try_play(self, "mg_good")
+	# Münz-Serie klettert hörbar (Halbton pro Coin, Deckel +12).
+	AudioDirector.try_play(self, "mg_good", FeelSfx.combo_pitch(coin_streak))
 	var lane_x: Array = tune["LANE_X"]
 	var at := Vector3(float(lane_x[int(coin["lane"])]), float(coin["y"]), float(coin["z"]))
 	if not _reduced_motion():
@@ -669,9 +670,12 @@ func _take_coin(coin: Dictionary) -> void:
 		ctx.juice.float_text(project(at.x, at.y + 0.5, at.z), "+%d" % points, Color(1.0, 0.82, 0.4))
 	if mult > prev_mult:
 		_set_banner(I18nService.t("mg.runner.combo", {"mult": mult}))
-		AudioDirector.try_play(self, "mg_combo")
+		AudioDirector.try_play(self, "mg_combo", FeelSfx.combo_pitch(mult))
 		_gooby.call("emote", "ecstatic", 1.0)
 		_stage.call("pulse_glow", 0.7)
+		if ctx.juice != null:
+			ctx.juice.show_combo(mult, "×%d" % mult)
+			ctx.juice.overlay_ring(project(at.x, at.y + 0.5, at.z), Color(1.0, 0.85, 0.4), 70.0)
 
 
 func _collect_mystery(dz: float, lane: int, y: float) -> void:
@@ -714,6 +718,9 @@ func _on_hit() -> void:
 	coin_streak = 0
 	if ctx.juice != null:
 		ctx.juice.shake(0.45 if outcome == "wipeout" else 0.3)
+		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	if outcome == "shielded":
 		AudioDirector.try_play(self, "mg_junk")
 		_set_banner(I18nService.t("mg.runner.shield_pop"))
@@ -744,6 +751,8 @@ func _milestone(prev_meters: float) -> void:
 			I18nService.t("mg.runner.milestone", {"m": milestone}),
 			Color(0.7, 1.0, 0.8)
 		)
+		ctx.juice.sfx("game_whoosh", 1.15)
+		ctx.juice.edge_glow(0.5, Color(0.6, 1.0, 0.75))
 	_stage.call("pulse_glow", 0.6)
 
 

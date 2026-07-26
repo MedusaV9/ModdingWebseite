@@ -51,6 +51,19 @@ const SHADOW_SIZE := 10
 const SHADOW_OFFSET_Y := 6.0
 const SHADOW_PRESS_COLOR := Color(0.2902, 0.2314, 0.2118, 0.16)  # --shadow-press
 const SHADOW_PRESS_SIZE := 3
+# UICOZY (Web-Parität): weiche Zusatz-Schatten aus styles.css.
+# --shadow-soft: 0 6px 24px rgba(74,59,54,.14) → Frost-Pills/Dock-Buttons.
+const SHADOW_SOFT_COLOR := Color(0.2902, 0.2314, 0.2118, 0.14)
+const SHADOW_SOFT_SIZE := 10
+const SHADOW_SOFT_OFFSET_Y := 5.0
+# .btn Drop-Shadow: 0 3px 10px rgba(74,59,54,.12) (zusätzlich zur Lippe).
+const SHADOW_BTN_COLOR := Color(0.2902, 0.2314, 0.2118, 0.12)
+const SHADOW_BTN_SIZE := 5
+const SHADOW_BTN_OFFSET_Y := 3.0
+# .btn-leaf FARBIGER Glow: 0 3px 10px rgba(109,181,78,.35) — statt grau.
+const SHADOW_LEAF_GLOW := Color(0.4275, 0.7098, 0.3059, 0.35)
+# Dock-Button-Lippe (Web .g5-hud-btn border-bottom: 4px rgba(74,59,54,.14)).
+const HUD_BTN_LIP := Color(0.2902, 0.2314, 0.2118, 0.14)
 
 # ── Motion (Sekunden) ───────────────────────────────────────────────────────
 const DUR_POP := 0.18  # --dur-pop
@@ -60,7 +73,13 @@ const PRESS_SCALE := 0.96  # SquishButton-Zieldruck
 
 # ── Wallpaper-Drift (H §1.2 Guardrails) ─────────────────────────────────────
 const DRIFT_TILES_PER_SEC := Vector2(-0.010, 0.007)  # ~100 s/Kachel, schräg
-const DRIFT_OPACITY := 0.06  # Web-Guardrail ≤ 6 %
+const DRIFT_OPACITY := 0.06  # Guardrail: EFFEKTIVER Glyph-Kontrast ≤ 6 %
+# UICOZY (Web-Parität, styles.css .screen::before + V6/A2-Themes): die
+# LAYER-Deckkraft ist im Web 0.45 (Leaf-Kachel, ~13 % Delta → ~5,9 % effektiv)
+# bzw. 0.85 für die Themen-Kacheln (die backen ≤ 6 % Luminanz-Delta ein).
+# 0.06 als Layer-Deckkraft war eine Fehl-Lesart — Patterns waren unsichtbar.
+const PATTERN_OPACITY_SCREEN := 0.45  # Web .screen::before opacity
+const PATTERN_OPACITY_THEMED := 0.85  # Web --thm-pattern-opacity
 
 # ── Typo ────────────────────────────────────────────────────────────────────
 const FONT_PATH := "res://assets/fonts/baloo2-latin-var.woff2"  # SIL OFL 1.1

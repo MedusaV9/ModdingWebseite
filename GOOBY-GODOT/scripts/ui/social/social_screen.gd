@@ -50,6 +50,7 @@ func _ready() -> void:
 	register_routes()
 	VisitScene.register_routes()
 	BattleshipScene.register_routes()
+	ChessScene.register_routes()
 	_net = net_override
 	if _net == null:
 		var candidate := get_node_or_null("/root/Net")
@@ -111,6 +112,10 @@ func board_session() -> BoardSession:
 	return _services.board if _services != null else null
 
 
+func chess_session() -> ChessSession:
+	return _services.chess if _services != null else null
+
+
 func pal_service() -> GoobyPalService:
 	return _services.pal if _services != null else null
 
@@ -154,6 +159,16 @@ func _build_ui() -> void:
 	_offline_hint.add_theme_color_override("font_color", FriendListUi.COLOR_HINT)
 	rows.add_child(_offline_hint)
 
+	# Schach üben (Solo gegen den Gooby-Bot) geht auch OFFLINE.
+	var practice_box := HBoxContainer.new()
+	practice_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	rows.add_child(practice_box)
+	var practice_btn := Button.new()
+	practice_btn.theme_type_variation = &"GhostButton"
+	practice_btn.text = I18nService.t("chess.practice")
+	practice_btn.pressed.connect(_on_chess_practice_pressed)
+	practice_box.add_child(practice_btn)
+
 	if FurnitureCatalog.def("brettspieltisch").is_empty():
 		var hint := Label.new()
 		hint.theme_type_variation = &"CaptionLabel"
@@ -190,6 +205,10 @@ func _wire_services() -> void:
 		session.invite_incoming.connect(_on_board_invited)
 		session.invite_declined.connect(_on_board_declined)
 		session.game_started.connect(_on_board_started)
+	var chess := chess_session()
+	if chess != null:
+		chess.invite_incoming.connect(_on_chess_invited)
+		chess.game_started.connect(_on_chess_started)
 	var pal := pal_service()
 	if pal != null:
 		pal.received.connect(_on_pal_received)
@@ -261,6 +280,13 @@ func _build_friend_row(row: Dictionary) -> Control:
 	board_btn.pressed.connect(_on_board_pressed.bind(row))
 	_scale_action_button(board_btn)
 	box.add_child(board_btn)
+	var chess_btn := Button.new()
+	chess_btn.theme_type_variation = &"BtnTeal"
+	chess_btn.text = I18nService.t("chess.button")
+	chess_btn.disabled = not can_act
+	chess_btn.pressed.connect(_on_chess_pressed.bind(row))
+	_scale_action_button(chess_btn)
+	box.add_child(chess_btn)
 	var pal_btn := Button.new()
 	pal_btn.theme_type_variation = &"GhostButton"
 	pal_btn.text = I18nService.t("social.pal.button")
@@ -383,6 +409,41 @@ func _on_board_declined(data: Dictionary) -> void:
 
 func _on_board_started(_data: Dictionary) -> void:
 	_navigate(BattleshipScene.ROUTE, {})
+
+
+# ── Schach (BACKLOG-REST) ────────────────────────────────────────────────────
+
+
+func _on_chess_pressed(row: Dictionary) -> void:
+	var session := chess_session()
+	if session == null:
+		return
+	var res: Dictionary = await session.invite(str(row.get("friendCode", "")))
+	if res["ok"]:
+		toast.show_toast(
+			I18nService.t("chess.invite_sent", {"name": str(row.get("goobyName", "?"))})
+		)
+	else:
+		toast.show_toast(NetErrorText.for_code(str(res["code"]), "chess.invite_failed"))
+
+
+func _on_chess_invited(data: Dictionary) -> void:
+	var text := I18nService.t("chess.invited", {"name": str(data.get("goobyName", "?"))})
+	_add_incoming_card(
+		text,
+		I18nService.t("chess.accept"),
+		I18nService.t("chess.decline"),
+		func() -> void: chess_session().accept(str(data.get("from", ""))),
+		func() -> void: chess_session().decline(str(data.get("from", "")))
+	)
+
+
+func _on_chess_started(_data: Dictionary) -> void:
+	_navigate(ChessScene.ROUTE, {})
+
+
+func _on_chess_practice_pressed() -> void:
+	_navigate(ChessScene.ROUTE, {"mode": "solo"})
 
 
 # ── GoobyPal ─────────────────────────────────────────────────────────────────

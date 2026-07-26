@@ -1,7 +1,8 @@
 extends TestCase
-## W3d — Sticker-Katalog: 105 Ids (85 Legacy + 18 neue + 2 Basis), Assets
-## existieren, DE-Texte komplett, Seiten-Katalog konsistent — plus die puren
-## StickerCatalog-Helfer und die album.*-String-Parität.
+## W3d — Sticker-Katalog: 141 Ids (85 Legacy + 18 W3d + 2 Basis + 36
+## BACKLOG-REST), Assets existieren, DE-Texte komplett, Seiten-Katalog
+## konsistent — plus die puren StickerCatalog-Helfer und die
+## album.*-String-Parität.
 
 const STICKERS_JSON := "res://content/stickers/data/stickers.json"
 const PAGES_JSON := "res://content/stickers/data/sticker_pages.json"
@@ -26,7 +27,7 @@ func _load_items(path: String) -> Array:
 func test_katalog_vollstaendig_und_valide() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(items.size(), 105, "85 Legacy + 18 neue + 2 Basis-Sticker")
+	assert_eq(items.size(), 141, "105 Bestand + 33 BACKLOG-REST-Sets + 3 Ereignis-Sticker")
 	var by_set := {}
 	for def: Dictionary in items:
 		var set_id := str(def.get("set", ""))
@@ -60,7 +61,7 @@ func test_de_texte_komplett() -> void:
 func test_seiten_katalog_konsistent() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(pages.size(), 18, "14 Legacy-Seiten + Garten/Stadt/GvZ + Bonus")
+	assert_eq(pages.size(), 23, "18 Bestand + 5 BACKLOG-REST-Seiten")
 	var page_ids := {}
 	for page: Dictionary in pages:
 		var id := str(page.get("id", ""))
@@ -83,7 +84,7 @@ func test_pure_helfer() -> void:
 	assert_eq((grouped.get("garten", []) as Array).size(), 6, "by_page: Garten-Seite")
 	var herz := StickerCatalog.by_id(items, "herzGooby")
 	assert_true(bool(herz.get("secret", false)), "herzGooby ist geheim")
-	assert_eq(StickerCatalog.regular_count(items), 104, "Geheim-Sticker zählt nicht im n/N")
+	assert_eq(StickerCatalog.regular_count(items), 140, "Geheim-Sticker zählt nicht im n/N")
 	assert_eq(StickerCatalog.by_id(items, "gibtEsNicht"), {}, "unbekannte Id → {}")
 
 

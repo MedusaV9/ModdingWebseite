@@ -8,7 +8,10 @@ uniform sampler2D tile: repeat_enable, filter_linear_mipmap;
 // Kacheln/Sekunde, schräg — Default (-0.010, 0.007) ≈ 100 s pro Kachel.
 uniform vec2 drift = vec2(-0.010, 0.007);
 uniform float tile_count = 3.0; // Kacheln über die BREITE des Rects
-uniform float opacity: hint_range(0.0, 0.2) = 0.06; // Web-Guardrail ≤ 6 %
+// LAYER-Deckkraft (Web .screen::before 0.45 / --thm-pattern-opacity 0.85).
+// Der ≤-6-%-Guardrail gilt für den EFFEKTIVEN Glyph-Kontrast: die Kacheln
+// backen ihr geringes Luminanz-Delta selbst ein (UICOZY-Fehllesart behoben).
+uniform float opacity: hint_range(0.0, 1.0) = 0.45;
 uniform vec4 wash: source_color = vec4(1.0, 0.965, 0.925, 1.0); // BG_CREAM
 uniform vec2 rect_size = vec2(1280.0, 720.0); // vom Control gesetzt (Aspect)
 uniform float motion_scale: hint_range(0.0, 1.0) = 1.0; // 0 = Reduced Motion

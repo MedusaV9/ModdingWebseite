@@ -159,7 +159,11 @@ func _build_ui() -> void:
 
 	_countdown_label = Label.new()
 	_countdown_label.theme_type_variation = &"TitleLabel"
-	_countdown_label.add_theme_font_size_override("font_size", 96)
+	# POLISH-A: der Countdown ist DER Auftakt-Moment aller Spiele — die Ziffer
+	# dominiert den Schirm (mit Outline lesbar auf jedem Spielhintergrund).
+	_countdown_label.add_theme_font_size_override("font_size", 150)
+	_countdown_label.add_theme_color_override("font_outline_color", Color(1.0, 0.98, 0.92, 0.9))
+	_countdown_label.add_theme_constant_override("outline_size", 10)
 	_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_countdown_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_countdown_label.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -252,18 +256,26 @@ func _layout_stage() -> void:
 	_viewport_container.size = fitted
 
 
+## Countdown mit Federung und steigender Tonhöhe (POLISH-A): jede Ziffer
+## ploppt ein und klingt einen Schritt höher, das GO bekommt Goldblitz +
+## großen Pop — derselbe Belohnungsmoment für ALLE Spiele.
 func _run_countdown() -> void:
 	_countdown_token += 1
 	var token := _countdown_token
 	_countdown_label.show()
-	for step in [3, 2, 1]:
+	for step: int in [3, 2, 1]:
 		_countdown_label.text = str(step)
-		AudioDirector.try_play(self, "ui_tick")
+		FeelSfx.play(self, "game_countdown", 0.9 + 0.12 * float(3 - step))
+		if juice != null:
+			juice.scale_pop(_countdown_label, 1.4, 300)
 		await get_tree().create_timer(countdown_step_sec).timeout
 		if token != _countdown_token or not is_inside_tree():
 			return
 	_countdown_label.text = I18nService.t("mg.host.go")
-	AudioDirector.try_play(self, "mg_go")
+	FeelSfx.play(self, "game_go")
+	if juice != null:
+		juice.scale_pop(_countdown_label, 1.7, 380)
+		juice.hit_flash(Color(1.0, 0.95, 0.7, 0.16), 240)
 	_countdown_label.show()
 	get_tree().create_timer(0.6).timeout.connect(
 		func() -> void:
@@ -291,8 +303,20 @@ func _on_game_end(result: Dictionary) -> void:
 	_pause_button.disabled = true
 	var breakdown := _award(score)
 	_unlock_orientation()
-	_results.show_results(breakdown, _meta)
 	round_finished.emit(breakdown)
+	# POLISH-A: dem Siegmoment im Spiel (Zeitlupe, Konfetti, Jubel-Text) eine
+	# Atempause lassen, bevor der Results-Screen ihn zudeckt. Echtzeit-Timer
+	# (ignore_time_scale), damit die Zeitlupe die Pause nicht dehnt; unter
+	# Reduced Motion erscheint der Screen sofort.
+	var delay := 0.0 if _reduced_motion() else 0.9
+	if delay <= 0.0 or get_tree() == null:
+		_results.show_results(breakdown, _meta, juice)
+		return
+	get_tree().create_timer(delay, true, false, true).timeout.connect(
+		func() -> void:
+			if is_instance_valid(_results) and _round_over:
+				_results.show_results(breakdown, _meta, juice)
+	)
 
 
 ## Award über GameState.update (Signale + Autosave); ohne GameState (Tests
@@ -407,6 +431,13 @@ func _resolve_state() -> Node:
 func _on_coin_chunk(amount: int) -> void:
 	if amount > 0:
 		_coin_chunks.append(amount)
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 ## §C1 Web-Parität: Energie <= 15 → Minigames verweigern den Start.

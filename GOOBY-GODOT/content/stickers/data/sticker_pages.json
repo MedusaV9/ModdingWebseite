@@ -126,6 +126,41 @@
 			"icon": "star",
 			"tint": "#EFDFAE",
 			"order": 17
+		},
+		{
+			"id": "ranch",
+			"title_de": "Ranch & Pferde",
+			"icon": "leaf",
+			"tint": "#E8D3B8",
+			"order": 18
+		},
+		{
+			"id": "multiplayer",
+			"title_de": "Multiplayer",
+			"icon": "gamepad",
+			"tint": "#C9D8F0",
+			"order": 19
+		},
+		{
+			"id": "stadtnacht",
+			"title_de": "Stadt bei Nacht",
+			"icon": "moon",
+			"tint": "#A8B4D8",
+			"order": 20
+		},
+		{
+			"id": "kueche",
+			"title_de": "Küche & Kochen",
+			"icon": "hunger",
+			"tint": "#F0E0C0",
+			"order": 21
+		},
+		{
+			"id": "jahreszeiten",
+			"title_de": "Jahreszeiten",
+			"icon": "sparkle",
+			"tint": "#CDE6D8",
+			"order": 22
 		}
 	]
 }

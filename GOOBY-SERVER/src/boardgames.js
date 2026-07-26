@@ -16,7 +16,10 @@ import crypto from 'node:crypto';
 import { areFriends } from './friends.js';
 import { FRIEND_CODE_RE } from './auth.js';
 
-const GAMES = new Set(['battleship']);
+// 'chess' (BACKLOG-REST): gleiche Zustandsmaschine — ein Schachzug reist als
+// SHOT {n, move:"e2e4"}, der Empfänger ackt mit SHOT_RESULT {n}. Regeln
+// (Legalität/Matt) bleiben Client-Sache (ChessLogic), der Server relayt nur.
+const GAMES = new Set(['battleship', 'chess']);
 const HISTORY_KINDS = new Set(['SHOT', 'SHOT_RESULT', 'EMOTE', 'TOMATO', 'GAME_OVER']);
 
 export function register(ctx) {

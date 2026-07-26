@@ -49,6 +49,7 @@ static func _weight(base_font: Font, weight: int) -> FontVariation:
 
 
 ## Pill-StyleBox mit AC-„Boden-Lippe“ (ersetzt den CSS-Inset-Shadow).
+## UICOZY: + weicher Drop-Shadow wie Web `.btn` (0 3px 10px rgba(74,59,54,.12)).
 static func _pill(fill: Color, lip: int = 4) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = fill
@@ -59,6 +60,9 @@ static func _pill(fill: Color, lip: int = 4) -> StyleBoxFlat:
 	sb.content_margin_right = 26.0
 	sb.content_margin_top = 10.0
 	sb.content_margin_bottom = 10.0 + float(lip)
+	sb.shadow_color = AcTokens.SHADOW_BTN_COLOR
+	sb.shadow_size = AcTokens.SHADOW_BTN_SIZE
+	sb.shadow_offset = Vector2(0.0, AcTokens.SHADOW_BTN_OFFSET_Y)
 	return sb
 
 
@@ -86,7 +90,12 @@ static func _button_set(theme: Theme, type: String, fill: Color, text: Color) ->
 	var pressed := _pill(fill, 2)
 	pressed.content_margin_top = 12.0
 	pressed.content_margin_bottom = 10.0
+	# Gedrückt = Web --shadow-press (0 2px 6px .16): sichtbar „abgesetzt“.
+	pressed.shadow_color = AcTokens.SHADOW_PRESS_COLOR
+	pressed.shadow_size = AcTokens.SHADOW_PRESS_SIZE
+	pressed.shadow_offset = Vector2(0.0, 2.0)
 	var disabled := _pill(Color(fill, 0.5), 2)
+	disabled.shadow_color = Color(AcTokens.SHADOW_BTN_COLOR, 0.0)
 	theme.set_stylebox("normal", type, normal)
 	theme.set_stylebox("hover", type, hover)
 	theme.set_stylebox("pressed", type, pressed)
@@ -119,6 +128,7 @@ static func _build_buttons(theme: Theme, base_font: Font) -> void:
 	_button_set(theme, "BtnPink", AcTokens.PINK, AcTokens.WHITE)
 	_button_set(theme, "BtnTeal", AcTokens.TEAL, AcTokens.WHITE)
 	_button_set(theme, "BtnLeaf", AcTokens.LEAF, AcTokens.WHITE)
+	_leaf_glow(theme, "BtnLeaf")
 	_button_set(theme, "BtnYellow", AcTokens.YELLOW, AcTokens.INK)
 	_button_set(theme, "BtnGhost", AcTokens.PAPER, AcTokens.INK)
 	_button_set(theme, "BtnDanger", AcTokens.DANGER, AcTokens.WHITE)
@@ -134,20 +144,38 @@ static func _build_buttons(theme: Theme, base_font: Font) -> void:
 	_chipify(theme, "AcChip")
 	_button_set(theme, "ChipLeaf", AcTokens.LEAF, AcTokens.WHITE)
 	_chipify(theme, "ChipLeaf")
+	_leaf_glow(theme, "ChipLeaf", 4)
 	_button_set(theme, "ChipSky", AcTokens.SKY_SOFT, AcTokens.INK)
 	_chipify(theme, "ChipSky")
 	# HUD-Icon-Buttons: runde Frost-Kacheln überm 3D-Raum, Ink-Icons.
+	# UICOZY (Web .g5-hud-btn): 4-px-Boden-Lippe rgba(74,59,54,.14) + weicher
+	# --shadow-soft statt des harten Press-Schattens — „rund und griffig“.
 	_button_set(theme, "HudIconButton", AcTokens.FROST, AcTokens.INK)
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		var sb := theme.get_stylebox(state, "HudIconButton") as StyleBoxFlat
 		sb.set_content_margin_all(14.0)
+		sb.border_width_bottom = 4
+		sb.border_color = AcTokens.HUD_BTN_LIP
+		sb.shadow_color = AcTokens.SHADOW_SOFT_COLOR
+		sb.shadow_size = AcTokens.SHADOW_SOFT_SIZE
+		sb.shadow_offset = Vector2(0.0, AcTokens.SHADOW_SOFT_OFFSET_Y)
 		if state == "pressed":
 			sb.content_margin_top = 16.0
 			sb.content_margin_bottom = 12.0
-		sb.shadow_color = AcTokens.SHADOW_PRESS_COLOR
-		sb.shadow_size = AcTokens.SHADOW_PRESS_SIZE
-		sb.shadow_offset = Vector2(0.0, 2.0)
+			sb.border_width_bottom = 2
+			sb.shadow_color = AcTokens.SHADOW_PRESS_COLOR
+			sb.shadow_size = AcTokens.SHADOW_PRESS_SIZE
+			sb.shadow_offset = Vector2(0.0, 2.0)
 	theme.set_constant("icon_max_width", "HudIconButton", 44)
+
+
+## Farbiger Leaf-Glow statt grauem Ink-Schatten (Web .btn-leaf/.ac-chip-leaf:
+## 0 3px 10px rgba(109,181,78,.35)) — nur für den Normal-/Hover-Zustand.
+static func _leaf_glow(theme: Theme, type: String, size := AcTokens.SHADOW_BTN_SIZE) -> void:
+	for state in ["normal", "hover"]:
+		var sb := theme.get_stylebox(state, type) as StyleBoxFlat
+		sb.shadow_color = AcTokens.SHADOW_LEAF_GLOW
+		sb.shadow_size = size
 
 
 ## „GhostButton“ (E7-P0-1): transparente Pill mit weicher Ink-Umriss-Linie.
@@ -210,6 +238,10 @@ static func _chipify(theme: Theme, type: String) -> void:
 		sb.content_margin_right = 16.0
 		sb.content_margin_top = 5.0
 		sb.content_margin_bottom = 7.0
+		# UICOZY: Chips tragen den kleineren Web-Schatten (0 2px 6px .10).
+		sb.shadow_color = Color(AcTokens.INK, 0.10)
+		sb.shadow_size = 3
+		sb.shadow_offset = Vector2(0.0, 2.0)
 		if state == "pressed":
 			sb.content_margin_top = 7.0
 			sb.content_margin_bottom = 5.0
@@ -232,11 +264,13 @@ static func _build_panels(theme: Theme) -> void:
 	# „AcWell“: Paper-Shade-Inset, Radius 14, kein Schatten.
 	theme.set_type_variation("AcWell", "PanelContainer")
 	theme.set_stylebox("panel", "AcWell", _card(AcTokens.PAPER_SHADE, AcTokens.RADIUS_ROW, false))
-	# Status-Kapsel: Frost-Pill überm Raum.
+	# Status-Kapsel: Frost-Pill überm Raum. UICOZY: weicher --shadow-soft
+	# (0 6px 24px .14, Web .stat-pill/.g5-coins) statt hartem Press-Schatten.
 	theme.set_type_variation("StatusCapsule", "PanelContainer")
 	var capsule := _card(AcTokens.FROST, AcTokens.RADIUS_PILL, true)
-	capsule.shadow_size = AcTokens.SHADOW_PRESS_SIZE
-	capsule.shadow_color = AcTokens.SHADOW_PRESS_COLOR
+	capsule.shadow_size = AcTokens.SHADOW_SOFT_SIZE
+	capsule.shadow_color = AcTokens.SHADOW_SOFT_COLOR
+	capsule.shadow_offset = Vector2(0.0, AcTokens.SHADOW_SOFT_OFFSET_Y)
 	capsule.content_margin_left = 16.0
 	capsule.content_margin_right = 16.0
 	capsule.content_margin_top = 8.0
@@ -255,6 +289,16 @@ static func _build_panels(theme: Theme) -> void:
 	var bubble := _card(AcTokens.PAPER, AcTokens.RADIUS_CARD, true, true)
 	bubble.set_content_margin_all(22.0)
 	theme.set_stylebox("panel", "DialogBubble", bubble)
+	# UICOZY Toast-Bubble (Web .toast): Paper statt Frost, Radius 22
+	# (1.375rem), Outline-Ring + Shadow-Pop, Padding 12/22 — mit Leaf-Akzent
+	# und Hüpfer kümmert sich `toast.gd`.
+	theme.set_type_variation("ToastBubble", "PanelContainer")
+	var toast := _card(AcTokens.PAPER, 22, true, true)
+	toast.content_margin_left = 18.0
+	toast.content_margin_right = 22.0
+	toast.content_margin_top = 12.0
+	toast.content_margin_bottom = 12.0
+	theme.set_stylebox("panel", "ToastBubble", toast)
 	# Plain Panel: Cream-Wash (Screens ohne Wallpaper).
 	var wash := StyleBoxFlat.new()
 	wash.bg_color = AcTokens.BG_CREAM
@@ -361,11 +405,15 @@ static func _build_inputs(theme: Theme, base_font: Font) -> void:
 
 static func _build_tabs(theme: Theme, base_font: Font) -> void:
 	# „AcTabs“: Träger = Paper-Pill, aktiver Tab = Leaf-Pill mit weißem Text.
+	# UICOZY: farbiger Leaf-Glow (Web .ac-tab-active: 0 2px 8px rgba(109,181,78,.4)).
 	var selected := _pill(AcTokens.LEAF, 3)
 	selected.content_margin_left = 20.0
 	selected.content_margin_right = 20.0
 	selected.content_margin_top = 6.0
 	selected.content_margin_bottom = 9.0
+	selected.shadow_color = Color(AcTokens.SHADOW_LEAF_GLOW, 0.4)
+	selected.shadow_size = 4
+	selected.shadow_offset = Vector2(0.0, 2.0)
 	var unselected := _pill(Color(AcTokens.PAPER, 0.0), 0)
 	unselected.border_width_bottom = 0
 	unselected.content_margin_left = 20.0

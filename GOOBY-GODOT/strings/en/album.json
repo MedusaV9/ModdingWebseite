@@ -5,6 +5,11 @@
 		"zaehler": "{n} / {total} stickers",
 		"unbekannt": "???",
 		"hint_label": "How to get it:",
-		"unlock_toast": "New sticker: {name}!"
+		"unlock_toast": "New sticker: {name}!",
+		"neu": "NEW",
+		"set_fortschritt": "{n} of {total} found",
+		"set_komplett": "Set complete!",
+		"set_belohnung": "Set “{title}” complete! +{coins} coins",
+		"tausch_hinweis": "Tip: Compare your album with a friend — together you'll find missing stickers much faster!"
 	}
 }

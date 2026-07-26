@@ -220,11 +220,14 @@ func _send_game_msg(kind: String, body: Dictionary) -> bool:
 func _on_push(type: String, data: Dictionary) -> void:
 	match type:
 		"BOARD_INVITED":
-			invite_incoming.emit(data)
+			# Andere Spiele (Schach → ChessSession) laufen an dieser Session vorbei.
+			if str(data.get("game", GAME_BATTLESHIP)) == GAME_BATTLESHIP:
+				invite_incoming.emit(data)
 		"BOARD_DECLINED":
 			invite_declined.emit(data)
 		"BOARD_START":
-			_on_board_start(data)
+			if str(data.get("game", GAME_BATTLESHIP)) == GAME_BATTLESHIP:
+				_on_board_start(data)
 		"BOARD_RESUME":
 			if data.get("room", "") == room_id:
 				_on_board_resume(data)

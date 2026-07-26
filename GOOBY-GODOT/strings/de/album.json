@@ -5,6 +5,11 @@
 		"zaehler": "{n} / {total} Sticker",
 		"unbekannt": "???",
 		"hint_label": "So bekommst du ihn:",
-		"unlock_toast": "Neuer Sticker: {name}!"
+		"unlock_toast": "Neuer Sticker: {name}!",
+		"neu": "NEU",
+		"set_fortschritt": "{n} von {total} gefunden",
+		"set_komplett": "Set komplett!",
+		"set_belohnung": "Set „{title}“ komplett! +{coins} Münzen",
+		"tausch_hinweis": "Tipp: Vergleich dein Album mit einem Freund — zusammen findet ihr fehlende Sticker viel schneller!"
 	}
 }

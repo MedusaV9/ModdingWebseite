@@ -66,6 +66,8 @@ var autoplay := false
 var tune: Dictionary = {}
 var run: Dictionary = {}
 var score := 0
+## Münz-Serie ohne Crash/Pfütze (nur Anzeige/Feel — Combo-Ton steigt mit).
+var coin_run := 0
 var finished := false
 var view_size := Vector2(390.0, 844.0)
 var landscape := false
@@ -368,7 +370,11 @@ func _handle_event(e: Dictionary) -> void:
 		"powerupEnd":
 			_set_banner(I18nService.t("mg.shoppingSurf.%s_end" % str(e["kind"])))
 		"puddle":
+			coin_run = 0
 			AudioDirector.try_play(self, "mg_spill", 0.9)
+			if ctx.juice != null:
+				ctx.juice.sfx("game_miss")
+				ctx.juice.show_combo(0)
 			_set_banner(I18nService.t("mg.shoppingSurf.puddle"))
 			_splash()
 		"shieldPop":
@@ -382,7 +388,9 @@ func _handle_event(e: Dictionary) -> void:
 
 
 func _on_coin(e: Dictionary) -> void:
-	AudioDirector.try_play(self, "mg_good")
+	coin_run += 1
+	# Münz-Serie klettert hörbar die Tonleiter hoch.
+	AudioDirector.try_play(self, "mg_good", FeelSfx.combo_pitch(coin_run))
 	var at := Vector3(float(e["x"]), float(e["y"]), float(e["z"]))
 	if not _reduced_motion():
 		Fx.burst(_sparkle, at)
@@ -391,11 +399,15 @@ func _on_coin(e: Dictionary) -> void:
 	ctx.juice.float_text(
 		project(at.x, at.y + 0.45, at.z), "+%d" % int(e["value"]), Color(1.0, 0.84, 0.42)
 	)
+	ctx.juice.overlay_ring(project(at.x, at.y + 0.45, at.z), Color(1.0, 0.84, 0.42), 46.0)
 
 
 func _on_near_miss(e: Dictionary) -> void:
 	var streak := int(e["streak"])
-	AudioDirector.try_play(self, "mg_combo" if streak > 1 else "mg_perfect", 1.1)
+	# Beinahe-Treffer-Serie: Ton klettert pro Stufe einen Halbton.
+	AudioDirector.try_play(
+		self, "mg_combo" if streak > 1 else "mg_perfect", 1.1 * FeelSfx.combo_pitch(streak)
+	)
 	_set_banner(I18nService.t("mg.shoppingSurf.near", {"streak": streak}))
 	_gooby.call("emote", "ecstatic", 0.8)
 	if ctx.juice == null:
@@ -405,8 +417,11 @@ func _on_near_miss(e: Dictionary) -> void:
 		I18nService.t("mg.shoppingSurf.near_pop"),
 		Color(0.72, 1.0, 0.86)
 	)
+	if streak >= 2:
+		ctx.juice.show_combo(streak)
 	if streak >= 3:
 		_stage.call("pulse_glow", 0.8)
+		ctx.juice.edge_glow(0.45, Color(0.72, 1.0, 0.86))
 
 
 func _on_powerup(kind: String) -> void:
@@ -429,6 +444,7 @@ func _on_shield_pop() -> void:
 
 
 func _on_crash(crashes: int) -> void:
+	coin_run = 0
 	AudioDirector.try_play(self, "mg_spill")
 	_flash_t = 0.45
 	var left := maxi(0, int(tune["ARCADE_MAX_CRASHES"]) - crashes)
@@ -442,6 +458,9 @@ func _on_crash(crashes: int) -> void:
 		return
 	# Kein Screenshake: der Surf ist ein Dauer-Vorwärtsflug (Motion-Comfort).
 	ctx.juice.hit_freeze(110)
+	ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+	ctx.juice.sfx("game_miss")
+	ctx.juice.show_combo(0)
 
 
 func _splash() -> void:

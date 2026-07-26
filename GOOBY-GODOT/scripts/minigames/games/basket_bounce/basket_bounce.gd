@@ -616,6 +616,8 @@ func _resolve_shot(made: bool, swish: bool, bank: bool) -> void:
 		_gooby.emote("sad", 1.1)
 		if ctx.juice != null:
 			ctx.juice.shake(0.25)
+			ctx.juice.sfx("game_miss")
+			ctx.juice.show_combo(0)
 			ctx.juice.float_text(pos, _flash_text, Color(0.8, 0.35, 0.3))
 	ctx.report_score(score, points)
 	phase = "reset"
@@ -626,7 +628,8 @@ func _resolve_shot(made: bool, swish: bool, bank: bool) -> void:
 
 func _celebrate(swish: bool, bank: bool, pos: Vector2, points: int) -> void:
 	if swish:
-		AudioDirector.try_play(self, "mg_perfect", 1.0 + 0.06 * minf(swish_streak - 1, 7.0))
+		# Swish-Serie klettert die volle Halbton-Treppe (Deckel +12).
+		AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(swish_streak))
 	elif bank:
 		AudioDirector.try_play(self, "mg_combo")
 	else:
@@ -634,11 +637,15 @@ func _celebrate(swish: bool, bank: bool, pos: Vector2, points: int) -> void:
 	if ctx.juice == null:
 		return
 	ctx.juice.float_text(pos, "+%d" % points, Color(1.0, 0.72, 0.2))
+	ctx.juice.overlay_ring(pos, Color(1.0, 0.72, 0.2), 70.0 if swish else 52.0)
 	ctx.juice.hit_freeze(45)
 	ctx.juice.bloom_pulse(0.7 if swish else 0.4)
+	if swish_streak >= 2:
+		ctx.juice.show_combo(swish_streak)
 	if BasketBounceLogic.is_on_fire(swish_streak):
 		AudioDirector.try_play(self, "mg_golden")
 		ctx.juice.bloom_pulse(1.0)
+		ctx.juice.edge_glow(0.75, Color(1.0, 0.55, 0.25))
 		_stage.pulse_glow(1.2)
 		ctx.juice.float_text(
 			pos - Vector2(0.0, 44.0),

@@ -29,11 +29,14 @@ static func sleep_duration_min(energy: float) -> int:
 	return maxi(DURATION_MIN_MIN, raw)
 
 
-## True while Gooby is asleep.
+## True while Gooby is asleep. Strict-bool read (schema `_is_true`-Semantik):
+## Junk wie {"sleeping": 1} zaehlt als false — ein nackter `== true`-Vergleich
+## loggt bei int/bool sonst einen Engine-SCRIPT-ERROR (BUGHUNT-Fund).
 static func is_sleeping(state: Dictionary) -> bool:
 	var sleep_slice: Variant = state.get("sleep")
 	if sleep_slice is Dictionary:
-		return sleep_slice.get("sleeping", false) == true
+		var sleeping: Variant = sleep_slice.get("sleeping", false)
+		return sleeping is bool and sleeping
 	return false
 
 

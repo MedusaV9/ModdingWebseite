@@ -98,6 +98,8 @@ var van_pos := Vector2.ZERO
 var van_heading := 0.0
 var van_speed := 0.0
 var steer := 0.0
+## Lieferserie ohne Crash (nur Anzeige/Feel — Combo-Ton steigt pro Stufe).
+var delivery_streak := 0
 
 var _grid: Array = []
 var _colliders: Array[Dictionary] = []
@@ -623,6 +625,7 @@ func _crash() -> void:
 	else:
 		_set_banner(I18nService.t("mg.deliveryRush.crash", {"n": int(tune["CRASH_PENALTY"])}))
 	van_speed *= 0.2
+	delivery_streak = 0
 	AudioDirector.try_play(self, "mg_spill", 0.85)
 	_gooby.call("emote", "dizzy", 1.5)
 	if not _reduced_motion():
@@ -630,6 +633,10 @@ func _crash() -> void:
 	# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 	if ctx.juice != null:
 		ctx.juice.hit_freeze(70)
+		# Kurzer roter Randblitz statt Shake: klar, aber nicht bestrafend.
+		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	ctx.report_score(score, score - prev)
 
 
@@ -652,13 +659,19 @@ func _check_drop(before: Vector2) -> void:
 		score += bonus
 	drops += 1
 	parcel += 1
+	delivery_streak += 1
 	leg_elapsed = 0.0
-	AudioDirector.try_play(self, "mg_perfect")
+	# Steigende Tonhöhe pro Lieferserie — der stärkste Dopamin-Hebel.
+	AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(delivery_streak))
 	_stage.call("pulse_glow", 1.0)
 	_gooby.call("emote", "ecstatic", 1.4)
 	Fx.burst(_pop, Vector3(center.x, 1.2, center.y))
 	if ctx.juice != null:
 		ctx.juice.float_text(_project(center), "+%d" % (score - prev), Color(1.0, 0.82, 0.35))
+		ctx.juice.overlay_ring(_project(center), Color(1.0, 0.85, 0.35), 76.0)
+		ctx.juice.hit_freeze(50)
+		if delivery_streak >= 2:
+			ctx.juice.show_combo(delivery_streak)
 	_set_banner(
 		I18nService.t("mg.deliveryRush.delivered", {"n": drops, "max": int(tune["PARCELS"])})
 	)
@@ -681,7 +694,11 @@ func _check_drop(before: Vector2) -> void:
 
 func _expire_parcel() -> void:
 	leg_elapsed = 0.0
+	delivery_streak = 0
 	AudioDirector.try_play(self, "mg_junk")
+	if ctx.juice != null:
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 	_gooby.call("emote", "sad", 1.4)
 	var ended := Logic.record_expiry(_endless_state)
 	_set_banner(
@@ -703,6 +720,9 @@ func _finish_with_bonus() -> void:
 	ctx.report_score(score, score - prev)
 	_set_banner(I18nService.t("mg.deliveryRush.time_bonus", {"n": bonus}))
 	AudioDirector.try_play(self, "mg_win")
+	if ctx.juice != null:
+		# Siegmoment: kurze Zeitlupe + Goldblitz + Konfetti.
+		ctx.juice.win_moment()
 	_finish()
 
 

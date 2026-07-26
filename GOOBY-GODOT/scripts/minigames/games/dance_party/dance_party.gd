@@ -238,20 +238,38 @@ func _judge(kind: String, at_x: float) -> void:
 		AudioDirector.try_play(self, "mg_junk")
 		if ctx.juice != null:
 			ctx.juice.shake(0.35)
+			ctx.juice.sfx("game_miss")
+			ctx.juice.show_combo(0)
 		return
 	_bursts.append({"x": at_x, "t": float(Logic.DANCE_JUICE["BURST_LIFE_SEC"]), "kind": kind})
 	_ball_pop = float(Logic.DANCE_JUICE["BALL_POP_SEC"])
+	var combo := int(tally["combo"])
 	if bool(chain["started"]):
 		AudioDirector.try_play(self, "mg_golden")
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(1.0)
+			ctx.juice.edge_glow(0.8, Color(1.0, 0.75, 0.3))
+			ctx.juice.confetti(40)
 			ctx.juice.float_text(
 				Vector2(view_size.x * 0.5, view_size.y * 0.3),
 				I18nService.t("mg.danceParty.encore"),
 				Color(1.0, 0.85, 0.5)
 			)
 		return
-	AudioDirector.try_play(self, "mg_perfect" if kind == "perfect" else "mg_good")
+	# Rhythmusspiel = Combo-Kern: jeder Treffer der Serie klingt einen
+	# Halbton höher (der stärkste Dopamin-Hebel).
+	AudioDirector.try_play(
+		self, "mg_perfect" if kind == "perfect" else "mg_good", FeelSfx.combo_pitch(combo)
+	)
+	if ctx.juice != null:
+		ctx.juice.ring_burst(
+			self,
+			Vector2(at_x, view_size.y * HIT_LINE_FRAC),
+			Color(1.0, 0.85, 0.4) if kind == "perfect" else Color(0.6, 0.85, 1.0),
+			54.0
+		)
+		if combo >= 4:
+			ctx.juice.show_combo(combo)
 	if kind == "perfect" and ctx.juice != null and tier() >= 2:
 		ctx.juice.bloom_pulse(0.45)
 

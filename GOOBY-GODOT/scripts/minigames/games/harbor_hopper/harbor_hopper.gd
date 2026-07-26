@@ -60,6 +60,8 @@ var tune: Dictionary = {}
 var engine: RefCounted
 var score := 0
 var boosts := 0
+## Sammel-Serie (Kisten/Ringe) ohne Rempler — nur Anzeige/Feel.
+var collect_streak := 0
 var finished := false
 var view_size := Vector2(844.0, 390.0)
 var landscape := true
@@ -463,14 +465,26 @@ func _handle_event(ev: Dictionary) -> void:
 	var boat_px := project(float(engine.state["x"]), 0.9, 0.0)
 	match str(ev["type"]):
 		"crate":
-			AudioDirector.try_play(self, "mg_good")
+			collect_streak += 1
+			# Sammel-Serie steigt hörbar in der Tonhöhe (Dopamin-Treppe).
+			AudioDirector.try_play(self, "mg_good", FeelSfx.combo_pitch(collect_streak))
 			_float("+%d" % int(tune["CRATE_POINTS"]), boat_px, Color(1.0, 0.82, 0.4))
 			_pop(0.9)
+			if ctx.juice != null:
+				ctx.juice.overlay_ring(boat_px, Color(1.0, 0.85, 0.4), 56.0)
+				if collect_streak >= 3:
+					ctx.juice.show_combo(collect_streak)
 		"ring":
-			AudioDirector.try_play(self, "gvz_collect")
+			collect_streak += 1
+			AudioDirector.try_play(self, "gvz_collect", FeelSfx.combo_pitch(collect_streak))
 			_float("+%d" % int(tune["RING_POINTS"]), boat_px, Color(0.54, 0.88, 0.82))
 			_pop(0.7)
+			if ctx.juice != null:
+				ctx.juice.overlay_ring(boat_px, Color(0.54, 0.88, 0.82), 56.0)
+				if collect_streak >= 3:
+					ctx.juice.show_combo(collect_streak)
 		"bump":
+			collect_streak = 0
 			AudioDirector.try_play(self, "mg_spill")
 			_float("%d" % int(tune["BUMP_PENALTY"]), boat_px, Color(1.0, 0.42, 0.42))
 			_gooby.call("emote", "dizzy", 1.4)
@@ -479,13 +493,19 @@ func _handle_event(ev: Dictionary) -> void:
 			if ctx.juice != null:
 				# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 				ctx.juice.hit_freeze(70)
+				ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+				ctx.juice.sfx("game_miss")
+				ctx.juice.show_combo(0)
 			_set_banner(I18nService.t("mg.harborHopper.bump"))
 		"boost":
 			boosts += 1
-			AudioDirector.try_play(self, "mg_combo")
+			var chain := int(ev["chain"])
+			# Boost-Kette: Tonhöhe klettert mit der Kettenlänge.
+			AudioDirector.try_play(self, "mg_combo", FeelSfx.combo_pitch(chain))
 			_stage.call("pulse_glow", 0.8)
 			_gooby.call("emote", "ecstatic", 1.1)
-			var chain := int(ev["chain"])
+			if ctx.juice != null and chain > 1:
+				ctx.juice.show_combo(chain)
 			_set_banner(
 				(
 					I18nService.t("mg.harborHopper.boost_chain", {"n": chain})
@@ -507,11 +527,15 @@ func _handle_event(ev: Dictionary) -> void:
 			_gooby.call("emote", "scared", 1.4)
 			_set_banner(I18nService.t("mg.harborHopper.gull_warn"))
 		"gullSteal":
+			collect_streak = 0
 			AudioDirector.try_play(self, "mg_lose")
 			_gull_mode = "leave"
 			_gull_t = 0.0
 			_gooby.call("emote", "sad", 1.6)
 			_float("-%d" % int(tune["CRATE_POINTS"]), boat_px, Color(1.0, 0.42, 0.42))
+			if ctx.juice != null:
+				ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.14), 160)
+				ctx.juice.show_combo(0)
 			_set_banner(I18nService.t("mg.harborHopper.gull_steal"))
 		"gullLeave":
 			if _gull_mode == "circle":
@@ -539,6 +563,8 @@ func _finish() -> void:
 	finished = true
 	running = false
 	AudioDirector.try_play(self, "mg_win")
+	if ctx.juice != null:
+		ctx.juice.win_moment()
 	var s: Dictionary = engine.state
 	(
 		ctx

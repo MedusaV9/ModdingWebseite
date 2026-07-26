@@ -7,7 +7,21 @@ const GameStateScript := preload("res://scripts/state/game_state.gd")
 
 const NOW_MS := 1768478400000
 const EVENTS_JSON := "res://content/events/data/events.json"
-const EVENT_IDS := ["hingefallen", "kuehlschrank", "glas", "teller", "nutella_nacht", "sockensuche"]
+const EVENT_IDS := [
+	"hingefallen",
+	"kuehlschrank",
+	"glas",
+	"teller",
+	"nutella_nacht",
+	"sockensuche",
+	"robo_jagd",
+	"kleber_stuhl",
+	"wurm_freund",
+	"fernbedienung",
+	"karton_gooby",
+	"gewitter_angst",
+	"mehl_unfall",
+]
 ## Album/HUD-Keys, die die Runner-Szenen wirklich referenzieren.
 const USED_KEYS := [
 	"events.marienkaefer.bubble",
@@ -23,11 +37,53 @@ const USED_KEYS := [
 	"events.nutella.murmel",
 	"events.nutella.strahlen",
 	"events.nutella.aufraeumen",
+	"events.nutella.fleck_weg",
 	"events.sockensuche.bubble",
 	"events.sockensuche.danke",
+	"events.robo.bubble",
+	"events.robo.ausweichen",
+	"events.robo.danke",
+	"events.kleber.bubble",
+	"events.kleber.rubbel",
+	"events.kleber.plopp",
+	"events.wurm.bubble",
+	"events.wurm.draussen",
+	"events.wurm.giessen",
+	"events.wurm.winken",
+	"events.wurm.giessen_danke",
+	"events.fernbedienung.bubble",
+	"events.fernbedienung.nix",
+	"events.fernbedienung.danke",
+	"events.karton.bubble",
+	"events.karton.raus",
+	"events.karton.moebel",
+	"events.karton.raus_danke",
+	"events.karton.moebel_ok",
+	"events.karton.moebel_ende",
+	"events.gewitter.bubble",
+	"events.gewitter.gefunden",
+	"events.gewitter.danke",
+	"events.mehl.bubble",
+	"events.mehl.danke",
 	"events.story.hinweis",
 	"events.story.kichern",
 	"events.story.einschlafen",
+]
+## Szenen-Hooks, die der EventRunner tatsächlich implementiert (start()-match).
+const RUNNER_SETUPS := [
+	"marienkaefer",
+	"kuehlschrank",
+	"glas_scherben",
+	"teller_scherben",
+	"nutella_nacht",
+	"sockensuche",
+	"robo_jagd",
+	"kleber_stuhl",
+	"wurm_freund",
+	"fernbedienung",
+	"karton_gooby",
+	"gewitter_angst",
+	"mehl_unfall",
 ]
 
 var _dir_seq := 0
@@ -124,7 +180,7 @@ func test_timeout_und_cooldown_deadlines() -> void:
 
 func test_events_json_defs_vollstaendig() -> void:
 	var defs := _defs()
-	assert_eq(defs.size(), 6, "6 Event-Defs (Doc F M1)")
+	assert_eq(defs.size(), EVENT_IDS.size(), "13 Event-Defs (M1-6 + Backlog F §4.2)")
 	var seen := {}
 	for def: Dictionary in defs:
 		var id := str(def.get("id", ""))
@@ -132,9 +188,9 @@ func test_events_json_defs_vollstaendig() -> void:
 		assert_true(EVENT_IDS.has(id), "%s: bekannte Event-Id" % id)
 		assert_false(str(def.get("notification_text_de", "")).is_empty(), id + ": notification")
 		assert_false(str(def.get("fail_text_de", "")).is_empty(), id + ": fail_text")
-		assert_false(str(def.get("szene_setup", "")).is_empty(), id + ": szene_setup")
-		var timeout := int(def.get("timeout_min", 0))
-		assert_true(timeout >= 5 and timeout <= 10, "%s: timeout_min 5-10 (%d)" % [id, timeout])
+		var setup := str(def.get("szene_setup", ""))
+		assert_true(RUNNER_SETUPS.has(setup), "%s: Runner kennt Szene '%s'" % [id, setup])
+		_check_timeout(def)
 		var chance := float(def.get("wahrscheinlichkeit", 0.0))
 		assert_true(chance > 0.0 and chance <= 1.0, id + ": Wahrscheinlichkeit (0..1]")
 		assert_true(float(def.get("weight", 0)) > 0.0, id + ": weight > 0")
@@ -148,7 +204,22 @@ func test_events_json_defs_vollstaendig() -> void:
 			assert_false(str(reward.get("buff_id", "")).is_empty(), id + ": reward.buff_id")
 			assert_false(str(reward.get("stat", "")).is_empty(), id + ": reward.stat")
 			assert_true(float(reward.get("dauer_h", 0)) > 0.0, id + ": reward.dauer_h")
-	assert_eq(seen.size(), 6, "Ids eindeutig")
+	assert_eq(seen.size(), EVENT_IDS.size(), "Ids eindeutig")
+
+
+## timeout_min: Zahl 5..10 ODER Spanne [min,max] innerhalb 5..30 (Nutella
+## Voll-Fenster: 10–20 min, Doc F §4.2).
+func _check_timeout(def: Dictionary) -> void:
+	var id := str(def.get("id", ""))
+	var raw: Variant = def.get("timeout_min", 0)
+	if raw is Array:
+		assert_eq((raw as Array).size(), 2, id + ": Timeout-Spanne [min,max]")
+		var lo := float((raw as Array)[0])
+		var hi := float((raw as Array)[1])
+		assert_true(lo >= 5.0 and hi <= 30.0 and lo <= hi, id + ": Spanne plausibel")
+	else:
+		var timeout := int(raw)
+		assert_true(timeout >= 5 and timeout <= 10, "%s: timeout_min 5-10 (%d)" % [id, timeout])
 
 
 func test_roll_on_start_aktiviert_und_plant_notification() -> void:
@@ -235,6 +306,81 @@ func test_notify_stub_schema() -> void:
 	var due := NotifyStub.take_due(NOW_MS + 5)
 	assert_eq(due.size(), 1, "fällige entnommen")
 	assert_eq(NotifyStub.pending().size(), 0)
+
+
+func test_timeout_spanne_deterministisch() -> void:
+	var def := _sure_def()
+	def["timeout_min"] = [10, 20]
+	assert_eq(
+		RandomEventEngine.timeout_deadline(def, NOW_MS, 0.0),
+		NOW_MS + 10 * 60_000,
+		"roll 0.0 → Untergrenze"
+	)
+	assert_eq(
+		RandomEventEngine.timeout_deadline(def, NOW_MS, 1.0),
+		NOW_MS + 20 * 60_000,
+		"roll 1.0 → Obergrenze"
+	)
+	assert_eq(
+		RandomEventEngine.timeout_deadline(def, NOW_MS, 0.5),
+		NOW_MS + 15 * 60_000,
+		"roll 0.5 → Mitte"
+	)
+	# Kaputte Spannen fallen auf plausible Werte zurück.
+	def["timeout_min"] = [0, 20]
+	var lo := RandomEventEngine.timeout_deadline(def, NOW_MS, 0.0)
+	assert_true(lo >= NOW_MS + 60_000, "min. 1 Minute")
+	def["timeout_min"] = 8
+	assert_eq(RandomEventEngine.timeout_deadline(def, NOW_MS), NOW_MS + 8 * 60_000, "Zahl wie M1")
+
+
+func test_fail_prop_bleibt_bis_zum_wegwischen() -> void:
+	NotifyStub.reset_for_tests()
+	var gs := _fresh_gs()
+	var def := _sure_def("nutella_test")
+	def["fail_prop"] = "nutella_fleck"
+	RandomEventEngine.activate(gs, def, NOW_MS)
+	RandomEventEngine.fail_active(gs, [def], NOW_MS + 9 * 60_000)
+	assert_eq(RandomEventEngine.fail_prop_of(gs), "nutella_fleck", "Fleck-Beweis liegt")
+	# Fail-Bubble ist einmalig, der Fleck bleibt bis zum Wegwischen.
+	assert_ne(RandomEventEngine.take_fail_notice(gs), "", "Fail-Bubble da")
+	assert_eq(RandomEventEngine.fail_prop_of(gs), "nutella_fleck", "Fleck überlebt die Bubble")
+	RandomEventEngine.clear_fail_prop(gs)
+	assert_eq(RandomEventEngine.fail_prop_of(gs), "", "weggewischt")
+	gs.free()
+
+
+func test_fail_ohne_prop_hinterlaesst_nichts() -> void:
+	NotifyStub.reset_for_tests()
+	var gs := _fresh_gs()
+	var def := _sure_def()
+	RandomEventEngine.activate(gs, def, NOW_MS)
+	RandomEventEngine.fail_active(gs, [def], NOW_MS + 9 * 60_000)
+	assert_eq(RandomEventEngine.fail_prop_of(gs), "", "kein fail_prop → kein Beweis")
+	gs.free()
+
+
+func test_roll_on_start_deterministisch_pro_seed() -> void:
+	var defs := _defs()
+	# Zwei Engines mit gleichem Seed treffen im Nachtfenster (23:30) dieselbe
+	# Entscheidung — Grundlage für reproduzierbare Bug-Reports.
+	var picks: Array[String] = []
+	for round_i in 2:
+		var gs := _fresh_gs()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 42
+		var chosen := RandomEventEngine.roll_on_start(gs, defs, NOW_MS, 23 * 60 + 30, rng)
+		picks.append(str(chosen.get("id", "")))
+		gs.free()
+	assert_eq(picks[0], picks[1], "gleicher Seed → gleiche Wahl")
+
+
+func test_neue_events_haben_sticker_hooks() -> void:
+	var defs := _defs()
+	for id: String in ["robo_jagd", "wurm_freund", "karton_gooby", "gewitter_angst", "mehl_unfall"]:
+		var def := RandomEventEngine.def_by_id(defs, id)
+		assert_false(def.is_empty(), id + ": Def existiert")
+		assert_false(str(def.get("sticker_hook", "")).is_empty(), id + ": sticker_hook gesetzt")
 
 
 func test_de_en_paritaet_events_domain() -> void:

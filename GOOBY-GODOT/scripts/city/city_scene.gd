@@ -71,6 +71,8 @@ func _ready() -> void:
 	_bau.baue_voegel(leben_reduziert())
 	_baue_auto()
 	_baue_hud()
+	# W6/RANCH: Stadtausfahrt zur Gooby Ranch (Schild + Reise-Trigger).
+	RanchExit.install(self)
 	ready_for_reveal.emit()
 
 

@@ -17,6 +17,8 @@ extends Control
 
 signal ready_for_reveal
 
+const Economy := preload("res://scripts/logic/economy.gd")
+
 const ICON_DIR := "res://assets/ui/icons/"
 const ROUTE_ALBUM := &"album"
 const ROUTES := {ROUTE_ALBUM: "res://scripts/ui/album/album_screen.tscn"}
@@ -26,9 +28,16 @@ const RARITY_BORDER := {
 	"episch": Color("#FFD34D"),
 	"geheim": Color("#C9A6E8"),
 }
+## Set-komplett-Belohnung (BACKLOG-REST §4): Münzen je vervollständigter
+## Seite, einmalig — Claim persistiert in stickers.setRewards[page_id].
+const SET_REWARD_COINS := 120
 
 ## Tests: Navigation abschaltbar.
 var auto_navigate := true
+## Tests: GameState + Katalog/Seiten injizierbar (sonst Autoload/Registry).
+var gs_override: Object = null
+var catalog_override: Array = []
+var pages_override: Array = []
 
 var _gs: Object = null
 var _catalog: Array = []
@@ -37,6 +46,7 @@ var _by_page: Dictionary = {}
 var _current_page := ""
 var _grid: GridContainer
 var _page_title: Label
+var _page_progress: Label
 var _count_label: Label
 var _rail_box: VBoxContainer
 var _toasts: ToastLayer
@@ -76,9 +86,9 @@ func _ready() -> void:
 	# Offsets konservieren, wenn der Parent schon Größe hat → 0×0-Screen.
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	register_routes()
-	_gs = get_node_or_null("/root/GameState")
-	_catalog = StickerCatalog.all()
-	_pages = StickerCatalog.pages()
+	_gs = gs_override if gs_override != null else get_node_or_null("/root/GameState")
+	_catalog = catalog_override if not catalog_override.is_empty() else StickerCatalog.all()
+	_pages = pages_override if not pages_override.is_empty() else StickerCatalog.pages()
 	_by_page = StickerCatalog.by_page(_catalog)
 	if not _pages.is_empty():
 		_current_page = str(_pages[0].get("id", ""))
@@ -232,7 +242,7 @@ func _build_page_chip(page: Dictionary) -> Control:
 	var chip := SquishButton.new()
 	chip.name = "PageChip_%s" % page_id
 	chip.theme_type_variation = &"AcChip"
-	chip.text = str(page.get("title_de", page_id))
+	chip.text = _chip_text(page)
 	chip.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	chip.focus_mode = Control.FOCUS_NONE
 	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -244,6 +254,44 @@ func _build_page_chip(page: Dictionary) -> Control:
 	return chip
 
 
+## Chip-Text mit Set-Fortschritt (n/N) + NEU-Hinweis für ungesehene
+## freigeschaltete Sticker der Seite (BACKLOG-REST §4).
+func _chip_text(page: Dictionary) -> String:
+	var page_id := str(page.get("id", ""))
+	var title := str(page.get("title_de", page_id))
+	if _gs == null:
+		return title
+	var progress := StickerUnlocks.page_progress(_gs.state(), _catalog, page_id)
+	var text := "%s  %d/%d" % [title, int(progress["unlocked"]), int(progress["total"])]
+	if _unseen_on_page(page_id) > 0:
+		text += "  %s" % I18nService.t("album.neu")
+	return text
+
+
+## Rail-Chips (Fortschritt/NEU) nach Unlocks oder Ansehen aktualisieren.
+func _refresh_rail() -> void:
+	if _rail_box == null:
+		return
+	for page: Dictionary in _pages:
+		var chip := _rail_box.get_node_or_null("PageChip_%s" % str(page.get("id", "")))
+		if chip is Button:
+			(chip as Button).text = _chip_text(page)
+
+
+## Anzahl freigeschalteter, aber noch nie angetippter Sticker der Seite.
+func _unseen_on_page(page_id: String) -> int:
+	if _gs == null:
+		return 0
+	var seen: Variant = _gs.get_value("stickers.seen", {})
+	var seen_map: Dictionary = seen if seen is Dictionary else {}
+	var count := 0
+	for def: Dictionary in _by_page.get(page_id, []):
+		var id := str(def.get("id", ""))
+		if _is_unlocked(id) and not seen_map.has(id):
+			count += 1
+	return count
+
+
 func _build_page_panel() -> Control:
 	var panel := VBoxContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -252,6 +300,9 @@ func _build_page_panel() -> Control:
 	_page_title = Label.new()
 	_page_title.theme_type_variation = &"HeadlineLabel"
 	panel.add_child(_page_title)
+	_page_progress = Label.new()
+	_page_progress.theme_type_variation = &"SoftLabel"
+	panel.add_child(_page_progress)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -270,12 +321,30 @@ func _show_page(page_id: String) -> void:
 	var page := _page_def(page_id)
 	if _page_title != null:
 		_page_title.text = str(page.get("title_de", page_id))
+	_refresh_page_progress(page_id)
 	if _grid == null:
 		return
 	for child in _grid.get_children():
+		# remove_child VOR queue_free: sonst kollidieren die Namen der neuen
+		# Karten mit den noch nicht freigegebenen alten (Auto-Rename).
+		_grid.remove_child(child)
 		child.queue_free()
 	for def: Dictionary in _by_page.get(page_id, []):
 		_grid.add_child(_build_sticker_card(def))
+
+
+## Set-Fortschritt unter dem Seitentitel ("n von N gefunden" + Belohnungs-
+## Status der Seite).
+func _refresh_page_progress(page_id: String) -> void:
+	if _page_progress == null or _gs == null:
+		return
+	var progress := StickerUnlocks.page_progress(_gs.state(), _catalog, page_id)
+	var text := I18nService.t(
+		"album.set_fortschritt", {"n": int(progress["unlocked"]), "total": int(progress["total"])}
+	)
+	if _set_reward_claimed(page_id):
+		text += "  %s" % I18nService.t("album.set_komplett")
+	_page_progress.text = text
 
 
 func _build_sticker_card(def: Dictionary) -> Control:
@@ -296,7 +365,33 @@ func _build_sticker_card(def: Dictionary) -> Control:
 	card.add_child(content)
 	content.add_child(_build_card_art(def, unlocked, tint))
 	content.add_child(_build_name_band(def, unlocked))
+	if unlocked and not _is_seen(id):
+		card.add_child(_build_new_badge())
 	return card
+
+
+## „NEU“-Marker (BACKLOG-REST §4): kleine Kapsel oben rechts auf frisch
+## freigeschalteten, noch nie angetippten Stickern.
+func _build_new_badge() -> Control:
+	var badge := PanelContainer.new()
+	badge.name = "NewBadge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = AcTokens.PINK
+	style.set_corner_radius_all(AcTokens.RADIUS_ROW)
+	style.set_content_margin_all(4.0)
+	badge.add_theme_stylebox_override("panel", style)
+	var label := Label.new()
+	label.text = I18nService.t("album.neu")
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_color_override("font_color", AcTokens.WHITE)
+	_scale_font(label, 12)
+	badge.add_child(label)
+	badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	badge.offset_left = -52.0 * _f
+	badge.offset_top = 6.0
+	badge.offset_right = -6.0
+	return badge
 
 
 func _build_card_art(def: Dictionary, unlocked: bool, tint: Color) -> Control:
@@ -308,8 +403,9 @@ func _build_card_art(def: Dictionary, unlocked: bool, tint: Color) -> Control:
 		if art != null:
 			frame.add_child(art)
 			return frame
-	# Mystery-Slot (H §3.4): Seiten-Tint + generische Silhouette — NIE das
-	# Motiv des Stickers leaken.
+	# Mystery-Slot (H §3.4 + BACKLOG-REST §3): Seiten-Tint + generische
+	# Hasen-Silhouette + großes Fragezeichen — NIE das Motiv des Stickers
+	# leaken (kein Graufilter über der echten Grafik).
 	var veil := ColorRect.new()
 	veil.color = Color(tint, 0.45)
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -320,9 +416,19 @@ func _build_card_art(def: Dictionary, unlocked: bool, tint: Color) -> Control:
 	silhouette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	silhouette.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	silhouette.set_anchors_preset(Control.PRESET_FULL_RECT)
-	silhouette.self_modulate = Color(AcTokens.INK, 0.28)
+	silhouette.self_modulate = Color(AcTokens.INK, 0.18)
 	silhouette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(silhouette)
+	var mark := Label.new()
+	mark.name = "MysteryMark"
+	mark.text = "?"
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mark.add_theme_color_override("font_color", Color(AcTokens.INK, 0.55))
+	mark.add_theme_font_size_override("font_size", int(56 * maxf(_f, 1.0)))
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(mark)
 	return frame
 
 
@@ -365,10 +471,21 @@ func _on_sticker_tapped(def: Dictionary) -> void:
 	else:
 		text.text = "%s\n%s" % [I18nService.t("album.hint_label"), str(def.get("hint_de", ""))]
 	body.add_child(text)
+	if not unlocked and not bool(def.get("secret", false)):
+		# Tausch-Hinweis (BACKLOG-REST §4): Freunde-Vergleich als Sammel-Tipp.
+		var hint := Label.new()
+		hint.text = I18nService.t("album.tausch_hinweis")
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.add_theme_color_override("font_color", Color(AcTokens.INK, 0.6))
+		_scale_font(hint, 14)
+		body.add_child(hint)
 	_sheet.set_title(str(def.get("name_de", "")) if unlocked else I18nService.t("album.unbekannt"))
 	_sheet.add_content(body)
 	_sheet.open()
-	_mark_seen(id)
+	if unlocked and not _is_seen(id):
+		_mark_seen(id)
+		_show_page(_current_page)
+		_refresh_rail()
 
 
 func _attach_unlock_service() -> void:
@@ -383,8 +500,51 @@ func _on_sticker_unlocked(def: Dictionary) -> void:
 	_toasts.show_toast(I18nService.t("album.unlock_toast", {"name": str(def.get("name_de", ""))}))
 	_confetti_burst()
 	_refresh_count()
+	_refresh_rail()
 	if str(def.get("page", "")) == _current_page:
 		_show_page(_current_page)
+	_maybe_claim_set_reward(str(def.get("page", "")))
+
+
+## Set-komplett-Belohnung: Seite voll → einmalig Münzen + Toast + Konfetti.
+## Claim persistiert ADDITIV in stickers.setRewards[page_id] (kein Bump).
+func _maybe_claim_set_reward(page_id: String) -> void:
+	if _gs == null or page_id.is_empty() or _set_reward_claimed(page_id):
+		return
+	var progress := StickerUnlocks.page_progress(_gs.state(), _catalog, page_id)
+	if int(progress["total"]) <= 0 or int(progress["unlocked"]) < int(progress["total"]):
+		return
+	_gs.update(
+		func(state: Dictionary) -> void:
+			if not (state.get("stickers") is Dictionary):
+				state["stickers"] = {"unlocked": {}, "seen": {}}
+			var stickers: Dictionary = state["stickers"]
+			if not (stickers.get("setRewards") is Dictionary):
+				stickers["setRewards"] = {}
+			stickers["setRewards"][page_id] = _now_ms()
+			if state.get("economy") is Dictionary:
+				Economy.award(state["economy"], SET_REWARD_COINS, "stickerSet")
+	)
+	_gs.notify_slice_changed("stickers")
+	var title := str(_page_def(page_id).get("title_de", page_id))
+	_toasts.show_toast(
+		I18nService.t("album.set_belohnung", {"title": title, "coins": SET_REWARD_COINS})
+	)
+	_confetti_burst()
+	_refresh_page_progress(_current_page)
+
+
+func _set_reward_claimed(page_id: String) -> bool:
+	if _gs == null:
+		return false
+	var rewards: Variant = _gs.get_value("stickers.setRewards", {})
+	return rewards is Dictionary and (rewards as Dictionary).has(page_id)
+
+
+func _now_ms() -> int:
+	if _gs != null and "clock" in _gs:
+		return int(_gs.clock.now_ms())
+	return int(Time.get_unix_time_from_system() * 1000.0)
 
 
 ## Konfetti-Burst (eigene Partikel — JuiceKit hat kein Konfetti; float_text
@@ -433,6 +593,13 @@ func _mark_seen(id: String) -> void:
 
 func _is_unlocked(id: String) -> bool:
 	return _gs != null and StickerUnlocks.is_unlocked(_gs.state(), id)
+
+
+func _is_seen(id: String) -> bool:
+	if _gs == null:
+		return false
+	var seen: Variant = _gs.get_value("stickers.seen", {})
+	return seen is Dictionary and (seen as Dictionary).has(id)
 
 
 func _page_def(page_id: String) -> Dictionary:

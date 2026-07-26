@@ -32,13 +32,24 @@ var _open := false
 @onready var _title_label: Label = %SheetTitle
 @onready var _scroll: ScrollContainer = %SheetScroll
 @onready var _body: MarginContainer = %SheetBody
+@onready var _grab_handle: Panel = %GrabHandle
 
 
 func _ready() -> void:
 	visible = false
 	_backdrop.color = AcTokens.VEIL
 	_backdrop.gui_input.connect(_on_backdrop_input)
+	_style_grab_handle()
 	get_viewport().size_changed.connect(_on_viewport_resized)
+
+
+## UICOZY: Grabber-Pill wie Web .panel::before (44×5 px, Radius 999,
+## rgba(74,59,54,.16)) — vorher ein eckiges ColorRect.
+func _style_grab_handle() -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(AcTokens.INK, 0.16)
+	sb.set_corner_radius_all(AcTokens.RADIUS_PILL)
+	_grab_handle.add_theme_stylebox_override("panel", sb)
 
 
 ## Titel setzen ("" blendet die Titelzeile aus).
@@ -66,13 +77,21 @@ func open() -> void:
 	_relayout()
 	opened.emit()
 	if ThemeService.is_reduced_motion(self):
+		_backdrop.modulate.a = 1.0
+		_sheet.modulate.a = 1.0
 		return
+	# UICOZY: Backdrop blendet weich ein (Web polishd-backdrop-in), das
+	# Blatt federt von unten herein (Web panel-up, --ease-spring).
+	_backdrop.modulate.a = 0.0
 	_sheet.position.y += 60.0
 	_sheet.modulate.a = 0.0
 	var tween := create_tween().set_parallel()
 	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(_sheet, "position:y", _sheet.position.y - 60.0, AcTokens.DUR_SHEET)
 	tween.tween_property(_sheet, "modulate:a", 1.0, AcTokens.DUR_SHEET / 2.0)
+	tween.tween_property(_backdrop, "modulate:a", 1.0, AcTokens.DUR_SHEET / 2.0).set_trans(
+		Tween.TRANS_LINEAR
+	)
 
 
 func close() -> void:
@@ -132,6 +151,8 @@ func _relayout() -> void:
 
 func _apply_scale(f: float) -> void:
 	_title_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * f))
+	# Grabber-Pill skaliert mit (Web: 2.75rem × 0.3125rem = 44×5 Design-px).
+	_grab_handle.custom_minimum_size = Vector2(roundf(44.0 * f), maxf(roundf(5.0 * f), 4.0))
 	var pad := int(BODY_MARGIN * f)
 	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
 		_body.add_theme_constant_override(side, pad)

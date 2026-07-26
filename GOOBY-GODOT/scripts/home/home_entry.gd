@@ -44,6 +44,7 @@ func _ready() -> void:
 	SocialScreen.register_routes()
 	VisitScene.register_routes()
 	BattleshipScene.register_routes()
+	ChessScene.register_routes()
 	_build_hud()
 	if _router != null and _router.has_signal("travel_finished"):
 		_router.travel_finished.connect(_on_travel_finished)
@@ -172,6 +173,8 @@ func _dispatch_to_screens(action: StringName) -> bool:
 	if WardrobeScreen.handle_hud_action(action):
 		return true
 	if IkeaScreen.handle_hud_action(action):
+		return true
+	if CustomizeScreen.handle_hud_action(action):
 		return true
 	# W6: die Handy-Shell ersetzt den direkten GOOBERANDO-Aufruf — sie haengt
 	# dieselbe App als Kachel ein und bringt Taxi/Guber/Kamera/Pal dazu.

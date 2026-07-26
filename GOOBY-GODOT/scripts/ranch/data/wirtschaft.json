@@ -1,0 +1,20 @@
+{
+	"preise": {
+		"heu_kauf": 8,
+		"gear": {"sattel": 120, "decke": 80, "halfter": 60},
+		"gold_mult": 2.0,
+		"ausbau": {"boxen2": 400, "boxen3": 900, "reitplatz": 300, "weidezaun": 250}
+	},
+	"ertraege": {
+		"heu_ballen": 3,
+		"heu_regrow_min": 360,
+		"apfel_pro_baum": 2,
+		"apfel_regrow_min": 240
+	},
+	"gear_farben": ["rot", "blau", "gruen", "lila", "gold"],
+	"boxen_kapazitaet": [2, 4, 6],
+	"effekte": {
+		"weidezaun_sauberkeit_mult": 0.8,
+		"reitplatz_parcours_coin_mult": 1.1
+	}
+}

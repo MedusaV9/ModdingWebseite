@@ -1,10 +1,10 @@
 {
 	"schema": 1,
 	"id": "stickers",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"priority": 500,
 	"min_native": "5.0.0",
 	"domains": ["stickers", "sticker_pages"],
 	"name_de": "Sticker",
-	"notes_de": "W3d: voller Katalog (85 Legacy + 18 neue + 2 Basis-Sticker) + Seiten-Katalog."
+	"notes_de": "BACKLOG-REST: 141 Sticker (105 Bestand + 33 in 5 neuen Sets Ranch/Multiplayer/Stadt-Nacht/Küche/Jahreszeiten + 3 Ereignis-Sticker) + 23 Seiten."
 }

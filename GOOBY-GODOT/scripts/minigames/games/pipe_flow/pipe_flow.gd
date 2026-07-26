@@ -23,6 +23,8 @@ var board: Dictionary = {}
 var puzzle_no := 0
 var solved := 0
 var failures := 0
+## Lösungs-Serie ohne Leck (nur Anzeige/Feel — Combo-Ton steigt mit).
+var solve_streak := 0
 var total_taps := 0
 var optimal_taps := 0
 var elapsed := 0.0
@@ -147,7 +149,8 @@ func _fill_tick(delta: float) -> void:
 	if fill_depth <= max_depth:
 		fill_depth += 1
 		fill_left = float(tune["FILL_STEP_SEC"])
-		AudioDirector.try_play(self, "mg_good", 0.9 + 0.02 * float(fill_depth))
+		# Wasserlauf klettert hörbar die Tonleiter hoch (Halbton pro Stufe).
+		AudioDirector.try_play(self, "mg_good", 0.9 * FeelSfx.combo_pitch(fill_depth))
 		return
 	filling = false
 	fill_left = 0.0
@@ -157,9 +160,13 @@ func _fill_tick(delta: float) -> void:
 func _apply_leak() -> void:
 	leak_applied = true
 	failures += 1
+	solve_streak = 0
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
+		ctx.juice.hit_flash(Color(0.5, 0.65, 0.95, 0.18), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
 		ctx.juice.float_text(
 			_cell_center(leak_index), I18nService.t("mg.pipeFlow.leak"), AcTokens.DANGER
 		)
@@ -187,19 +194,24 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _solve(reach: Dictionary) -> void:
 	solved += 1
+	solve_streak += 1
 	depths = reach["depths"]
 	filling = true
 	fill_depth = 0
 	fill_left = 0.0
-	AudioDirector.try_play(self, "mg_win")
+	# Lösungs-Serie ohne Leck: Sieges-Ton klettert pro Puzzle.
+	AudioDirector.try_play(self, "mg_win", FeelSfx.combo_pitch(solve_streak))
 	if ctx.juice != null:
+		var banner_pos := Vector2(view_size.x * 0.5 - 110.0, _grid_origin.y - 6.0)
 		ctx.juice.bloom_pulse(0.9)
 		ctx.juice.hit_freeze(70)
-		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 110.0, _grid_origin.y - 6.0),
-			I18nService.t("mg.pipeFlow.solved"),
-			AcTokens.TEAL_DARK
-		)
+		ctx.juice.float_text(banner_pos, I18nService.t("mg.pipeFlow.solved"), AcTokens.TEAL_DARK)
+		var size := int(board["size"])
+		var goal_center := _cell_center((size - 1) * size + int(board["goalCol"]))
+		ctx.juice.ring_burst(self, goal_center, AcTokens.TEAL_DARK, 90.0)
+		ctx.juice.burst(self, goal_center, Color(0.5, 0.85, 0.95), 16)
+		if solve_streak >= 2:
+			ctx.juice.show_combo(solve_streak)
 	ctx.report_score(_live_score(), int(tune["SOLVE_POINTS"]))
 
 
