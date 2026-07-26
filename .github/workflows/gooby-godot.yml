@@ -145,16 +145,30 @@ jobs:
           fi
           "$APP" --version
 
-      - name: Ressourcen importieren
-        run: '"$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT --import'
+      # Godot importiert in EINEM Durchlauf nicht zuverlaessig alles (Fonts/SVGs
+      # meldeten beim Export "Make sure resources have been imported"), weil
+      # abhaengige Ressourcen erst nach dem ersten Scan bekannt sind. Zweiter
+      # Lauf schliesst die Luecke; der Export prueft danach hart nach.
+      - name: Ressourcen importieren (zwei Durchlaeufe)
+        run: |
+          set -euo pipefail
+          GODOT="$HOME/godot-bin/Godot.app/Contents/MacOS/Godot"
+          "$GODOT" --headless --path GOOBY-GODOT --import
+          "$GODOT" --headless --path GOOBY-GODOT --import
 
       - name: iOS-Xcode-Projekt exportieren
         run: |
           set -euo pipefail
           mkdir -p build/ios
           "$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT \
-            --export-release "ios" "$PWD/build/ios/GOOBY.ipa"
+            --export-release "ios" "$PWD/build/ios/GOOBY.ipa" 2>&1 | tee /tmp/export.log
           ls -la build/ios
+          # Fail-closed: ein Export mit fehlenden Ressourcen laeuft sonst
+          # "erfolgreich" durch und liefert eine .ipa mit leeren Texturen.
+          if grep -q "have been imported" /tmp/export.log; then
+            echo "::error::Export meldet nicht importierte Ressourcen"
+            exit 1
+          fi
 
       - name: xcodebuild (unsigned)
         run: |
