@@ -1,0 +1,26 @@
+{
+  "en_us": {
+    "message.eclipse.limbo.no_break": "Nothing here breaks. Limbo is not yours to dig.",
+    "message.eclipse.limbo.no_place": "Nothing takes hold here. Limbo refuses what you build.",
+    "message.eclipse.limbo.no_pvp": "Not here. Limbo does not take the living from each other.",
+    "dev.eclipse.doc.limbo.pvp": "Allows or forbids player-vs-player damage in Limbo (persisted, OFF by default). An active boss fight lifts the block on its own.",
+    "dev.eclipse.doc.limbo.status": "Shows the effective Limbo house rules: build lock and PvP state, including a boss fight currently lifting the PvP block.",
+    "dev.eclipse.limbo.pvp.on": "Limbo PvP is now ALLOWED.",
+    "dev.eclipse.limbo.pvp.off": "Limbo PvP is now BLOCKED.",
+    "dev.eclipse.limbo.status.header": "Limbo house rules",
+    "dev.eclipse.limbo.status.build": "Break/place: LOCKED for everyone (/devmode is the only bypass)",
+    "dev.eclipse.limbo.status.pvp": "PvP: toggle %s, boss fight %s"
+  },
+  "de_de": {
+    "message.eclipse.limbo.no_break": "Hier bricht nichts. Der Limbus gehört dir nicht.",
+    "message.eclipse.limbo.no_place": "Hier hält nichts. Der Limbus verweigert, was du baust.",
+    "message.eclipse.limbo.no_pvp": "Nicht hier. Der Limbus nimmt die Lebenden nicht voneinander.",
+    "dev.eclipse.doc.limbo.pvp": "Erlaubt oder verbietet Spieler-gegen-Spieler-Schaden im Limbus (persistent, standardmäßig AUS). Ein aktiver Bosskampf hebt die Sperre von selbst auf.",
+    "dev.eclipse.doc.limbo.status": "Zeigt die geltenden Limbus-Regeln: Bausperre und PvP-Zustand, inklusive eines Bosskampfs, der die PvP-Sperre gerade aufhebt.",
+    "dev.eclipse.limbo.pvp.on": "Limbus-PvP ist jetzt ERLAUBT.",
+    "dev.eclipse.limbo.pvp.off": "Limbus-PvP ist jetzt GESPERRT.",
+    "dev.eclipse.limbo.status.header": "Limbus-Regeln",
+    "dev.eclipse.limbo.status.build": "Abbauen/Platzieren: GESPERRT für alle (/devmode ist die einzige Ausnahme)",
+    "dev.eclipse.limbo.status.pvp": "PvP: Schalter %s, Bosskampf %s"
+  }
+}
