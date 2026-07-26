@@ -19,6 +19,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
+import dev.projecteclipse.eclipse.worldgen.stage.ExpansionTiming;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
@@ -119,10 +120,15 @@ public final class SoftBorder {
     /** Vanilla failsafe border sits this far outside the overworld ring. */
     public static final int FAILSAFE_MARGIN = 48;
     /**
-     * Stage-growth radius lerp duration — matches the {@code RingGrowthService} animated
-     * pacing target (~75 s); the lerp snaps to the target as soon as the sweep completes.
+     * Stage-growth radius lerp duration — deliberately identical to the
+     * {@code RingGrowthService} animated pacing target
+     * ({@link ExpansionTiming#SWEEP_TARGET_TICKS}, the one place every expansion duration
+     * is declared); the lerp snaps to the target as soon as the sweep completes, and the
+     * RIFT-FX gate replaces it with the much shorter
+     * {@link ExpansionTiming#BORDER_RELEASE_LERP_MS} surge whenever boulders hold the
+     * frontier.
      */
-    private static final int GROWTH_LERP_TICKS = 1500;
+    private static final int GROWTH_LERP_TICKS = ExpansionTiming.BORDER_GROWTH_LERP_TICKS;
     /** Ground raycast: max inward steps (of {@value #GROUND_SEARCH_STEP} blocks) hunting for terrain. */
     private static final int GROUND_SEARCH_STEPS = 24;
     private static final int GROUND_SEARCH_STEP = 4;

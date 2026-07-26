@@ -30,14 +30,24 @@ import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
  * {@code stages.json} these are never frozen per save):
  *
  * <pre>{@code
- * { "growth": { "targetTicks": 1500,      // animated sweeps pace toward this duration
- *               "revealDelayTicks": 10,   // chunk resend lag behind its covering wavefront payload
- *               "ringsPerPulse": 5,       // max 1-block rings the wavefront advances per 5-tick FX pulse
- *               "shakeEveryRings": 25,    // S2CShakePayload pulse cadence in rings (<=0 disables)
- *               "columnRiseTicks": 30 },  // client column-rise animation hint (S2CGrowthWavePayload)
+ * { "configVersion": 2,                   // growth.* self-migration marker (see below)
+ *   "growth": { "targetTicks": 500,       // animated sweeps pace toward this duration
+ *               "revealDelayTicks": 4,    // chunk resend lag behind its covering wavefront payload
+ *               "ringsPerPulse": 20,      // max 1-block rings the wavefront advances per 5-tick FX pulse
+ *               "shakeEveryRings": 12,    // S2CShakePayload pulse cadence in rings (<=0 disables)
+ *               "columnRiseTicks": 18 },  // client column-rise animation hint (S2CGrowthWavePayload)
  *   "features": { "deny": [] },           // placed-feature ids removed from every biome (W1.1 filter)
  *   "glitch": { "freshTicks": 72000 } }   // NewRingRegistry freshness decay (3 in-game days)
  * }</pre>
+ *
+ * <p><b>Defaults live in {@link ExpansionTiming}</b>, not here — the whole expansion
+ * sequence's duration budget is declared in one place. Because config files are written
+ * once and then persist, the {@code growth} block SELF-MIGRATES (same doctrine as
+ * {@code goals.json}/{@code realtime.json}): a file whose {@code configVersion} is below
+ * {@value #CONFIG_VERSION} is backed up as {@code worldgen_tuning.json.bak-v<N>} and
+ * rewritten with the current pacing defaults, while {@code features.deny} and
+ * {@code glitch.freshTicks} are carried over untouched. Operator pacing overrides made on
+ * top of the CURRENT version are always honoured.</p>
  *
  * <p><b>features.deny push</b> (P1-W1.1 wiring contract): every {@link #reload} pushes the
  * parsed deny ids into {@link BiomeFeatureFilter#setConfigDeny} — the hardcoded vanilla
@@ -61,12 +71,24 @@ public final class GrowthPacing {
     /** Default freshness window: 3 in-game days. */
     private static final int DEFAULT_FRESH_TICKS = 3 * 24000;
 
+    /**
+     * Bumped whenever the {@code growth} pacing defaults change; older files are backed up
+     * and regenerated so an existing save actually receives the new timings (v2 = the
+     * "map expansion is too slow" speed pass, {@link ExpansionTiming}).
+     */
+    static final int CONFIG_VERSION = 2;
+
     /** Immutable knob snapshot; {@link #DEFAULTS} until the first successful load. */
     record Snapshot(int targetTicks, int revealDelayTicks, int ringsPerPulse, int shakeEveryRings,
             int columnRiseTicks, int glitchFreshTicks, List<ResourceLocation> denyIds) {}
 
-    private static final Snapshot DEFAULTS =
-            new Snapshot(1500, 10, 5, 25, 30, DEFAULT_FRESH_TICKS, List.of());
+    private static final Snapshot DEFAULTS = new Snapshot(
+            ExpansionTiming.SWEEP_TARGET_TICKS,
+            ExpansionTiming.SWEEP_REVEAL_DELAY_TICKS,
+            ExpansionTiming.SWEEP_RINGS_PER_PULSE,
+            ExpansionTiming.SWEEP_SHAKE_EVERY_RINGS,
+            ExpansionTiming.SWEEP_COLUMN_RISE_TICKS,
+            DEFAULT_FRESH_TICKS, List.of());
 
     private static volatile Snapshot current = DEFAULTS;
 
@@ -120,8 +142,10 @@ public final class GrowthPacing {
     /**
      * Re-reads {@code worldgen_tuning.json} from {@code configDir} (writing the defaults
      * file when absent), swaps the volatile snapshot and pushes {@code features.deny[]}
-     * into {@link BiomeFeatureFilter#setConfigDeny} (compile seam §3.10). Safe to call
-     * repeatedly; never throws.
+     * into {@link BiomeFeatureFilter#setConfigDeny} (compile seam §3.10). Files below
+     * {@value #CONFIG_VERSION} have their {@code growth} block replaced by the current
+     * {@link ExpansionTiming} defaults and are rewritten (old file kept as
+     * {@code .bak-v<N>}). Safe to call repeatedly; never throws.
      */
     public static synchronized void reload(Path configDir) {
         Path file = configDir.resolve(FILE_NAME);
@@ -130,7 +154,12 @@ public final class GrowthPacing {
             try {
                 JsonObject root = JsonParser.parseString(
                         Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
-                loaded = fromJson(root);
+                int version = root.has("configVersion") ? root.get("configVersion").getAsInt() : 1;
+                boolean stale = version < CONFIG_VERSION;
+                loaded = fromJson(root, stale);
+                if (stale) {
+                    migrate(configDir, file, version, loaded);
+                }
                 EclipseMod.LOGGER.info(
                         "Growth pacing loaded: targetTicks {}, revealDelay {}, ringsPerPulse {}, "
                                 + "shakeEveryRings {}, columnRise {}, freshTicks {}, {} denied feature(s)",
@@ -142,10 +171,30 @@ public final class GrowthPacing {
                 loaded = current;
             }
         } else {
-            writeDefaults(configDir, file);
+            writeSnapshot(configDir, file, DEFAULTS);
         }
         current = loaded;
         BiomeFeatureFilter.setConfigDeny(loaded.denyIds());
+    }
+
+    /**
+     * Backs a pre-{@value #CONFIG_VERSION} file up and rewrites it with {@code migrated}
+     * (current pacing defaults, operator {@code features.deny} / {@code glitch} preserved).
+     * A failed backup is logged and the rewrite proceeds — the in-memory snapshot is
+     * already correct either way, this only keeps the file honest for the next boot.
+     */
+    private static void migrate(Path configDir, Path file, int fromVersion, Snapshot migrated) {
+        Path backup = file.resolveSibling(FILE_NAME + ".bak-v" + fromVersion);
+        try {
+            Files.copy(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            EclipseMod.LOGGER.warn("Could not back up {} before migrating growth pacing", file, e);
+        }
+        writeSnapshot(configDir, file, migrated);
+        EclipseMod.LOGGER.info(
+                "Migrated {} v{} -> v{}: growth pacing reset to the current expansion timings "
+                        + "(old file kept as {})",
+                FILE_NAME, fromVersion, CONFIG_VERSION, backup.getFileName());
     }
 
     /**
@@ -161,8 +210,14 @@ public final class GrowthPacing {
         reload(FMLPaths.CONFIGDIR.get().resolve("eclipse"));
     }
 
-    private static Snapshot fromJson(JsonObject root) {
-        JsonObject growth = root.has("growth") ? root.getAsJsonObject("growth") : new JsonObject();
+    /**
+     * @param resetGrowth pre-{@value #CONFIG_VERSION} file: ignore its stale {@code growth}
+     *                    block and take the current {@link ExpansionTiming} pacing instead
+     *                    ({@code features.deny} and {@code glitch} are always honoured).
+     */
+    private static Snapshot fromJson(JsonObject root, boolean resetGrowth) {
+        JsonObject growth = !resetGrowth && root.has("growth")
+                ? root.getAsJsonObject("growth") : new JsonObject();
         JsonObject glitch = root.has("glitch") ? root.getAsJsonObject("glitch") : new JsonObject();
         JsonObject features = root.has("features") ? root.getAsJsonObject("features") : new JsonObject();
 
@@ -200,31 +255,38 @@ public final class GrowthPacing {
         }
     }
 
-    private static void writeDefaults(Path configDir, Path file) {
+    private static void writeSnapshot(Path configDir, Path file, Snapshot snapshot) {
         JsonObject root = new JsonObject();
         root.addProperty("_comment", "Live-reloadable worldgen tuning (never frozen per save). "
-                + "growth.* paces animated ring sweeps; features.deny lists placed-feature ids removed "
+                + "growth.* paces animated ring sweeps (defaults live in ExpansionTiming.java; a "
+                + "configVersion below the code's resets this block and backs the old file up); "
+                + "features.deny lists placed-feature ids removed "
                 + "from every biome (applies on next boot once chunks have decorated); glitch.freshTicks "
                 + "is the fresh-ring decay window for glitched-mob spawning.");
+        root.addProperty("configVersion", CONFIG_VERSION);
         JsonObject growth = new JsonObject();
-        growth.addProperty("targetTicks", DEFAULTS.targetTicks());
-        growth.addProperty("revealDelayTicks", DEFAULTS.revealDelayTicks());
-        growth.addProperty("ringsPerPulse", DEFAULTS.ringsPerPulse());
-        growth.addProperty("shakeEveryRings", DEFAULTS.shakeEveryRings());
-        growth.addProperty("columnRiseTicks", DEFAULTS.columnRiseTicks());
+        growth.addProperty("targetTicks", snapshot.targetTicks());
+        growth.addProperty("revealDelayTicks", snapshot.revealDelayTicks());
+        growth.addProperty("ringsPerPulse", snapshot.ringsPerPulse());
+        growth.addProperty("shakeEveryRings", snapshot.shakeEveryRings());
+        growth.addProperty("columnRiseTicks", snapshot.columnRiseTicks());
         root.add("growth", growth);
         JsonObject features = new JsonObject();
-        features.add("deny", new JsonArray());
+        JsonArray deny = new JsonArray();
+        for (ResourceLocation id : snapshot.denyIds()) {
+            deny.add(id.toString());
+        }
+        features.add("deny", deny);
         root.add("features", features);
         JsonObject glitch = new JsonObject();
-        glitch.addProperty("freshTicks", DEFAULTS.glitchFreshTicks());
+        glitch.addProperty("freshTicks", snapshot.glitchFreshTicks());
         root.add("glitch", glitch);
         try {
             Files.createDirectories(configDir);
             Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
-            EclipseMod.LOGGER.info("Created default {}", file);
+            EclipseMod.LOGGER.info("Wrote {} (configVersion {})", file, CONFIG_VERSION);
         } catch (IOException e) {
-            EclipseMod.LOGGER.error("Failed to write default {}", file, e);
+            EclipseMod.LOGGER.error("Failed to write {}", file, e);
         }
     }
 }

@@ -129,11 +129,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * is a dev tool that deliberately removes structures ({@code StructureStamper} re-stamps
  * them when the stage grows back).</p>
  *
- * <p><b>Budget</b>: {@code ringBlocksBudgetMs} (general.json, default 2 ms) of nanoTime per
- * tick in animate mode, plus a pacing cap that stretches a sweep towards
- * ~{@code growth.targetTicks} ticks ({@link GrowthPacing}); instant mode uses a
- * {@value #INSTANT_BUDGET_MS} ms budget and no pacing. Animated sweeps skip ticks entirely
- * while the server is above 40 ms/tick.</p>
+ * <p><b>Budget</b>: {@code max(ringBlocksBudgetMs, }{@value #MIN_ANIMATED_BUDGET_MS}{@code )}
+ * ms of nanoTime per tick in animate mode, plus a pacing cap that stretches a sweep towards
+ * ~{@code growth.targetTicks} ticks ({@link GrowthPacing}, defaults in
+ * {@link ExpansionTiming}); instant mode uses a {@value #INSTANT_BUDGET_MS} ms budget and no
+ * pacing. Animated sweeps skip ticks entirely while the server is above 40 ms/tick — the
+ * shortened target can therefore never turn into a TPS cliff, it only stops the sweep from
+ * idling below its budget.</p>
  *
  * <p><b>Players</b>: GROW sweeps write full-thickness terrain straight through anyone
  * standing in the rewrite band — a written column that intersects a survival player pops
@@ -145,9 +147,16 @@ import net.neoforged.neoforge.network.PacketDistributor;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class RingGrowthService {
-    private static final int MAX_CHUNK_FINISHES_PER_TICK = 4;
+    private static final int MAX_CHUNK_FINISHES_PER_TICK = ExpansionTiming.SWEEP_CHUNK_FINISHES_PER_TICK;
     private static final int CURSOR_PERSIST_INTERVAL = 100;
     private static final int INSTANT_BUDGET_MS = 25;
+    /**
+     * Floor of the animated per-tick column budget ({@link ExpansionTiming}). The
+     * {@code general.json} default of 2 ms cannot feed the shortened
+     * {@code growth.targetTicks}, so the sweep would silently pace at the OLD speed
+     * however low the target is set; operators may still raise the config value above it.
+     */
+    private static final int MIN_ANIMATED_BUDGET_MS = ExpansionTiming.SWEEP_MIN_BUDGET_MS;
     private static final long MSPT_SKIP_NANOS = 40_000_000L;
     /**
      * Wavefront pulse cadence (design D11: payload every 5 ticks) — also the leading-edge
@@ -162,7 +171,7 @@ public final class RingGrowthService {
      * low milliseconds per chunk). At least one finish always runs per tick so a slow
      * chunk can never stall a sweep.
      */
-    private static final long FINISH_BUDGET_NANOS_ANIMATED = 12_000_000L;
+    private static final long FINISH_BUDGET_NANOS_ANIMATED = ExpansionTiming.SWEEP_FINISH_BUDGET_NANOS;
     private static final long FINISH_BUDGET_NANOS_INSTANT = 25_000_000L;
 
     /**
@@ -751,11 +760,19 @@ public final class RingGrowthService {
             this.cachedChunk = null;
             this.cachedChunkKey = Long.MIN_VALUE;
 
-            long budgetNanos = (this.animate ? EclipseConfig.ringBlocksBudgetMs() : INSTANT_BUDGET_MS) * 1_000_000L;
+            long budgetMs = this.animate
+                    ? Math.max(EclipseConfig.ringBlocksBudgetMs(), MIN_ANIMATED_BUDGET_MS)
+                    : INSTANT_BUDGET_MS;
+            long budgetNanos = budgetMs * 1_000_000L;
             long start = System.nanoTime();
             int colsThisTick = 0;
             int loadsThisTick = 0;
-            int maxLoads = this.animate ? 1 : 4;
+            // Chunk-preload budget: animated sweeps used to sync-load ONE on-disk chunk per
+            // tick, which alone stretched sweeps over never-visited terrain past their
+            // pacing target (every `break` below costs a whole tick of column progress).
+            int maxLoads = this.animate
+                    ? ExpansionTiming.SWEEP_CHUNK_LOADS_PER_TICK
+                    : ExpansionTiming.SWEEP_CHUNK_LOADS_PER_TICK_INSTANT;
             int tickStartRing = Integer.MIN_VALUE;
             // One player scan per tick, reused by every column written this tick.
             List<ServerPlayer> rescueCandidates = this.erase ? List.of() : collectRescueCandidates();
