@@ -43,6 +43,7 @@ public final class CreditsPayloads {
     private static volatile Consumer<S2CCreditsTitlePayload> titleHandler;
     private static volatile Consumer<S2CCreditsClosePayload> closeHandler;
     private static volatile Consumer<S2CCreditsFovPayload> fovHandler;
+    private static volatile Consumer<S2CCreditsSkyPayload> skyHandler;
 
     private CreditsPayloads() {}
 
@@ -146,6 +147,40 @@ public final class CreditsPayloads {
     }
 
     /**
+     * F-056/F-058 credits sky override ({@code client.credits.CreditsSkyFx}): {@code mode}
+     * 0 = OFF (everything eases back to vanilla), 1 = COLLAPSE (the island-shatter beat —
+     * the sky darkens toward {@code intensity} and the stars come out), 2 = SPACE (the
+     * black-hole finale — pure space dome, dense stars, no sun/moon; {@code intensity}
+     * additionally drives the client black-hole layers: the {@code eclipse:black_hole}
+     * post distortion/desaturation strength). {@code rampTicks} eases every scalar;
+     * {@code holeX/holeY/holeZ} is the black hole's world center (only read in SPACE
+     * mode — the post pass projects it to screen space per frame).
+     */
+    public record S2CCreditsSkyPayload(int mode, float intensity, int rampTicks,
+            double holeX, double holeY, double holeZ) implements CustomPacketPayload {
+        public static final int MODE_OFF = 0;
+        public static final int MODE_COLLAPSE = 1;
+        public static final int MODE_SPACE = 2;
+
+        public static final Type<S2CCreditsSkyPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/sky"));
+        public static final StreamCodec<ByteBuf, S2CCreditsSkyPayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, S2CCreditsSkyPayload::mode,
+                        ByteBufCodecs.FLOAT, S2CCreditsSkyPayload::intensity,
+                        ByteBufCodecs.VAR_INT, S2CCreditsSkyPayload::rampTicks,
+                        ByteBufCodecs.DOUBLE, S2CCreditsSkyPayload::holeX,
+                        ByteBufCodecs.DOUBLE, S2CCreditsSkyPayload::holeY,
+                        ByteBufCodecs.DOUBLE, S2CCreditsSkyPayload::holeZ,
+                        S2CCreditsSkyPayload::new);
+
+        @Override
+        public Type<S2CCreditsSkyPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * The client-close broadcast (IDEAS §B3): after {@code delayTicks} the client calls
      * {@code Minecraft.stop()} — guarded client-side (nonce match, never in
      * singleplayer/LAN, {@code allowFinaleClose} kill-switch).
@@ -182,6 +217,8 @@ public final class CreditsPayloads {
                 (payload, context) -> dispatch(closeHandler, payload, "close"));
         registrar.playToClient(S2CCreditsFovPayload.TYPE, S2CCreditsFovPayload.STREAM_CODEC,
                 (payload, context) -> dispatch(fovHandler, payload, "fov"));
+        registrar.playToClient(S2CCreditsSkyPayload.TYPE, S2CCreditsSkyPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(skyHandler, payload, "sky"));
     }
 
     private static <T extends CustomPacketPayload> void dispatch(Consumer<T> handler, T payload, String name) {
@@ -224,6 +261,11 @@ public final class CreditsPayloads {
         PacketDistributor.sendToPlayer(player, new S2CCreditsFovPayload(targetScale, rampTicks));
     }
 
+    /** F-056/F-058: drive the credits sky override (see {@link S2CCreditsSkyPayload}). */
+    public static void sendSky(ServerPlayer player, S2CCreditsSkyPayload payload) {
+        PacketDistributor.sendToPlayer(player, payload);
+    }
+
     // ------------------------------------------------------------------ client dispatch seams
 
     /** Installed by {@code client.credits.CreditsClient} (client class-load). */
@@ -254,5 +296,10 @@ public final class CreditsPayloads {
     /** Installed by {@code client.credits.CreditsClient} (client class-load). */
     public static void setClientFovHandler(Consumer<S2CCreditsFovPayload> handler) {
         fovHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsSkyFx} (client class-load). */
+    public static void setClientSkyHandler(Consumer<S2CCreditsSkyPayload> handler) {
+        skyHandler = handler;
     }
 }

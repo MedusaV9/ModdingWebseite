@@ -1,0 +1,12 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.end_event": "Ends the credits from ANY beat — designed as the release of the post-finale black HOLD: players un-hidden, un-frozen, faded back in and returned to the overworld spawn; HUD/FOV/sky handed back; completion persisted.",
+    "dev.eclipse.credits.end_event_idle": "No credits sequence is running — nothing to end.",
+    "dev.eclipse.credits.end_event_done": "Credits ended: hold released, players returned home."
+  },
+  "de_de": {
+    "dev.eclipse.doc.end_event": "Beendet die Credits aus JEDEM Beat — gedacht als Auflösung der schwarzen HALTEPHASE nach dem Finale: Spieler wieder sichtbar, entfrostet, eingeblendet und zum Overworld-Spawn zurückgebracht; HUD/FOV/Himmel zurückgegeben; Abschluss gespeichert.",
+    "dev.eclipse.credits.end_event_idle": "Es läuft keine Credits-Sequenz — nichts zu beenden.",
+    "dev.eclipse.credits.end_event_done": "Credits beendet: Haltephase aufgelöst, Spieler zurück am Spawn."
+  }
+}

@@ -3,12 +3,10 @@ package dev.projecteclipse.eclipse.ritual;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,6 +20,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
@@ -48,6 +47,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -59,6 +60,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Team;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -75,70 +78,79 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * drains, INSTEAD of {@code bringEveryoneHome} (the {@code creditsEnabled} common config
  * falls back to the old {@code finale_return} behavior).
  *
- * <p><b>Timeline</b> ({@code t} = server ticks since {@link #begin}; the FIN-6 rework —
- * roughly 2.5× the original length, the credits roll slowed to match, the Avengers gag
- * cut, and the back half rebuilt around a rising-and-exploding eclipse):</p>
+ * <p><b>Timeline</b> ({@code t} = server ticks since {@link #begin}; the F-056/057/058
+ * rework — a shatter prologue in front, the auto-run cut in favor of a statically-standing
+ * (and invisible) audience under a thousands-strong formation backdrop, and a black-hole
+ * finale + operator-released hold replacing the old close/halt ending):</p>
  * <ol>
- *   <li>t=0 — fade to black (10t rise), {@code victory_theme} stops, the epilogue beach
- *       starts pre-stamping through {@code BudgetedBlockWriter} while nobody can see it
- *       (warm chunks; the black/white fades give it ~260 ticks of cover, it needs about
- *       a dozen). The client suppresses ALL non-whitelisted HUD (sidebar included) from
- *       the begin payload until the roll's stop payload.</li>
- *   <li>t=40 — behind black: everyone teleported to the ghost-ship stern, the <b>helm
- *       double</b> (first online living player; the egg-offerer in spirit) posed on the poop
- *       deck at the block-display ship's wheel; the 140t {@code credits_helm} push-in plays
- *       (its own path event opens the shot from black).</li>
- *   <li>t=200 — fade WHITE, then the <b>disguised white loading screen</b>: portal-FX style
- *       {@code eclipse:credits_white} ({@code PortalTransitionController} holds white,
- *       {@code EclipseLoadingScreen} fakes a vanilla "Building terrain…" line) covers the
- *       teleport to the pre-dawn beach in {@code eclipse:epilogue}.</li>
- *   <li>t=300 — beach: {@code day_final} music cue and the right-side credits roll (in the
- *       player's language — German first; {@code CreditsPanel}). The sun now genuinely
- *       RISES: the epilogue's {@code fixed_time} was removed and {@link #driveSunrise}
- *       steps the day clock 1t/t from the next pre-dawn boundary — a real, slow sunrise
- *       across the whole roll. The <b>auto-run</b> east arms at t=340 and DISARMS at
- *       t={@value #T_RUN_END} — everyone stands at the surf line and watches.</li>
- *   <li>t=420 — massive lightning (6 offshore strikes, intensity 0.6→1.0) + the debris
- *       sky: {@value #FLYER_COUNT} {@code BLOCK_DISPLAY} fragments (budgeted
- *       {@value #FLYER_SPAWN_PER_TICK}/t) flying staggered, re-seeded arcs over the whole
- *       beach until t={@value #T_FLYERS_END}.</li>
- *   <li>t={@value #T_ECLIPSE_RISE} — the ECLIPSE: a {@value #ECLIPSE_SHELL_COUNT}-display
- *       black sphere with a {@value #ECLIPSE_CORONA_COUNT}-display glowing corona rises
- *       slowly out of the sea on the eastern horizon, dead ahead, under a building
- *       thunder rumble.</li>
- *   <li>t={@value #T_BURST} — the eclipse EXPLODES (shockwave + Photon burst cue): its
- *       shell blows outward, {@value #BURST_DEBRIS_COUNT} more debris displays are hurled
- *       toward and over the players, the camera shakes on a rising ladder, white pulses
- *       stack brighter and brighter, and the client FOV slowly zooms IN on the burst
- *       ({@code S2CCreditsFovPayload}). The roll has ended by now — "Made by Sonic0810"
- *       holds dead-center through all of it ({@code CreditsPanel}).</li>
- *   <li>t={@value #T_WHITE_FADE} — the last pulse rises into a FULL WHITE hold; behind it
- *       (t={@value #T_WHITE_PEAK}) every display is discarded. t={@value #T_TRACK2} — the
- *       second track ({@code title_theme}) starts as the white melts to BLACK over 8 s
- *       (the {@code CaptionRenderer} fade crossfade); t={@value #T_HOME} — everyone is
- *       quietly moved home behind it.</li>
- *   <li>Over black: t={@value #T_CARD_TITLE} — "Minecraft Eclipse" over the still-held
- *       maker card; both leave at t={@value #T_CARDS_OUT}. t={@value #T_CARD_RETURNS} —
- *       "Minecraft Eclipse kommt zurück in" (gentle card), t={@value #T_CARD_NEXT} —
- *       "Minecraft 2Worlds : Timeless". t={@value #T_CLOSE} —
- *       {@code S2CCreditsClosePayload} (40t delay, nonce-guarded) → modded clients close
- *       themselves ({@code CreditsClient}); t={@value #T_END} — a DEDICATED server halts
- *       ({@code halt(false)}), stragglers/vanilla clients get a normal disconnect
- *       screen.</li>
+ *   <li>t=0 — fade to black (10t rise), music out, every player turned INVISIBLE
+ *       (particle-less effect + the {@value #HIDE_TEAM} no-nametag team — F-057: nobody
+ *       blocks anyone's view for the whole sequence; reverted only by the end/cleanup
+ *       paths, disconnect-proof via the {@value #HIDDEN_TAG} entity tag). The epilogue
+ *       beach starts pre-stamping through {@code BudgetedBlockWriter} behind the fades.
+ *       The client suppresses ALL non-whitelisted HUD from the begin payload.</li>
+ *   <li>t={@value #T_SHATTER_VANTAGE} — <b>F-058 shatter prologue</b>: behind black,
+ *       everyone is parked (frozen, midair) at a vantage south of the sanctum island;
+ *       the black releases onto the island. t={@value #T_SHATTER_BREAK} — the island and
+ *       altar SHATTER: {@code CreditsShatterAct} spawns displays over the REAL sampled
+ *       surface blocks (the world is never modified) that drift apart and rise; the sky
+ *       contracts toward black with stars ({@code S2CCreditsSkyPayload} COLLAPSE), the
+ *       eclipse sky element fades out ({@code ECLIPSE_ENDING}), the collapse Photon veil
+ *       plays. t={@value #T_SHATTER_DARK} — black over the drifting debris;
+ *       t={@value #T_SHATTER_END} — fragments discarded behind it, sky handed back.</li>
+ *   <li>t={@value #T_SHIP} — behind black: the ghost-ship helm shot (helm double at the
+ *       block-display wheel, 140t {@code credits_helm} push-in).</li>
+ *   <li>t={@value #T_WHITEOUT} — fade WHITE + the disguised white loading screen
+ *       ({@code eclipse:credits_white}) covering the teleport to the pre-dawn beach in
+ *       {@code eclipse:epilogue}.</li>
+ *   <li>t={@value #T_BEACH} — beach: {@code day_final} + the credits roll. NO auto-run
+ *       (F-057): everyone is placed AT the surf line and re-frozen — a still audience
+ *       under the sunrise. t={@value #T_FORMATION} — the <b>formation backdrop</b>
+ *       ({@code CreditsFormationAct}): {@value CreditsFormationAct#TOTAL} displays in
+ *       spiral bands / rotating rings / ascending columns, spawned
+ *       {@value CreditsFormationAct#SPAWN_PER_TICK}/t, denser at the horizon and open in
+ *       the view center.</li>
+ *   <li>t={@value #T_LIGHTNING} — offshore lightning ladder + the {@value #FLYER_COUNT}-
+ *       display debris sky (until t={@value #T_FLYERS_END}, together with the
+ *       formations).</li>
+ *   <li>t={@value #T_ECLIPSE_RISE} — the eclipse sphere + corona rise;
+ *       t={@value #T_BURST} — it EXPLODES (shockwave, hurled debris, shake/brightness
+ *       ladder, slow FOV zoom in).</li>
+ *   <li>t={@value #T_WHITE_FADE} — full white; t={@value #T_WHITE_PEAK} — every display
+ *       discarded behind it. t={@value #T_TRACK2} — {@code title_theme} as the white
+ *       melts to black; t={@value #T_HOME} — everyone home behind it. Over black:
+ *       t={@value #T_CARD_TITLE} "Minecraft Eclipse" (+ maker card),
+ *       t={@value #T_CARD_RETURNS} / t={@value #T_CARD_NEXT} the RETURNS-IN pair.</li>
+ *   <li>t={@value #T_FINALE_TELE} — <b>F-056 black-hole finale</b>: after ~9 s of held
+ *       black, everyone is parked at a HIGH tele-vantage over the map edge (FOV crushed
+ *       to {@value #FINALE_FOV_SCALE} — the orthographic read), {@code victory_theme}
+ *       starts, the sky flips to SPACE (dense stars, no sun/moon;
+ *       {@code S2CCreditsSkyPayload}). t={@value #T_FINALE_REVEAL} — the black releases:
+ *       a giant black hole ({@code black_hole_maw} Photon + the {@code eclipse:black_hole}
+ *       Veil post distortion/desaturation + {@value CreditsBlackHoleAct#COUNT} spiraling
+ *       displays, {@code CreditsBlackHoleAct}) slowly eats the map while the frame drains
+ *       gray. t={@value #T_FINALE_DARK} — everything melts to black;
+ *       t={@value #T_FINALE_TITLE} — "Minecraft Eclipse" holds until the victory theme
+ *       ends.</li>
+ *   <li>t={@value #T_FINALE_HOLD} — the HOLD: completion persisted, players quietly moved
+ *       home behind the black, displays gone — and the screen STAYS black (re-sent every
+ *       {@value #HOLD_REFRESH_PERIOD}t) until an operator runs {@code /dev end_event}
+ *       ({@link #endEvent}), which releases the fade, restores visibility/HUD/FOV and
+ *       ends the run. No client close, no server halt.</li>
  * </ol>
  *
- * <p><b>Display budget</b> (FIN-6): hard cap {@value #DISPLAY_HARD_CAP} live displays
- * (spawns beyond it are dropped, logged); every wave spawns budgeted (≤
- * {@value #FLYER_SPAWN_PER_TICK}/t); transform pushes ride 4–10t interpolation windows
- * (≈90–110 entity updates/t at the burst peak); everything is discarded behind the full
- * white and again belt-and-braces at {@link #beatEnd}.</p>
+ * <p><b>Display budget</b>: hard cap {@value #DISPLAY_HARD_CAP} live displays of all kinds
+ * (spawns beyond it are dropped, logged); every wave spawns budgeted; transform pushes ride
+ * 4–14t interpolation windows; every act discards behind a fade and belt-and-braces in
+ * {@link #endEvent}.</p>
  *
  * <p><b>Failure-safety</b> (IDEAS §B5): the machine is purely time-driven (no beat can
  * wedge it); {@link CreditsData} persists started/completed/phase — a restart mid-sequence
- * skips to the end state and NEVER fires the close broadcast; joins/rejoins mid-run are
- * re-synced into the current beat; players left in the epilogue dimension by a crash are
- * returned to the overworld spawn at their next login. {@code /dev credits skip} jumps to
- * the fade-out beat with the close disabled (skip implies rehearsal).</p>
+ * skips to the end state; joins/rejoins mid-run are re-synced into the current beat AND
+ * re-hidden; a login with no live run strips leftover invisibility/team state (the
+ * {@value #HIDDEN_TAG} marker) and rescues players out of the epilogue dimension.
+ * {@code /dev credits skip} jumps to the fade-out beat (rehearsal); {@code /dev end_event}
+ * ends any run — including the hold — immediately.</p>
  *
  * <p><b>Replay</b>: registered as {@link SequenceReplayable} id {@code "credits"} —
  * {@code /eclipsefx sequence credits <PHASE>} replays each beat FX-only (no teleports, no
@@ -154,6 +166,10 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final String MUSIC_FINALE_CUE = "day_final";
     /** FIN-6 track two: the title theme returns on the white→black melt. */
     private static final String MUSIC_OUTRO_CUE = "title_theme";
+    /** F-056 track three: the victory theme carries the black-hole finale + title card. */
+    private static final String MUSIC_VICTORY_CUE = "victory_theme";
+    /** {@code MusicCues.VICTORY_THEME.durationTicks()} — frozen enum data, mirrored here. */
+    private static final int VICTORY_THEME_TICKS = 3_600;
 
     /** The one-shot epilogue dimension (pre-dawn beach; datapack JSONs). */
     public static final ResourceKey<Level> EPILOGUE = ResourceKey.create(Registries.DIMENSION,
@@ -164,13 +180,25 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final String TITLE_RETURNS = "eclipse.credits.end.returns";
     private static final String TITLE_NEXT = "eclipse.credits.end.next";
 
-    // --- IDEAS §B1 tick table ---
-    private static final int T_SHIP = 40;
-    /** {@code credits_helm.json} runs 140t: t=40..180, whiteout rises 20t after handback. */
-    private static final int T_WHITEOUT = 200;
+    // --- F-058 shatter prologue tick table (in front of the shifted IDEAS §B1 table) ---
+    /** Behind black: everyone parked (frozen) at the island vantage; the black releases. */
+    private static final int T_SHATTER_VANTAGE = 40;
+    /** The island/altar breaks: fragment displays, collapse cue, sky contraction. */
+    private static final int T_SHATTER_BREAK = 120;
+    /** Black rises back over the drifting debris field. */
+    private static final int T_SHATTER_DARK = 580;
+    /** Fragments discarded behind the black; the sky override eases off. */
+    private static final int T_SHATTER_END = 620;
+    /** Everything of the original tick table below moved back by the prologue's length. */
+    private static final int SHATTER_SHIFT = 600;
+
+    // --- IDEAS §B1 tick table (shifted by {@link #SHATTER_SHIFT}) ---
+    private static final int T_SHIP = 40 + SHATTER_SHIFT;
+    /** {@code credits_helm.json} runs 140t from T_SHIP, whiteout rises 20t after handback. */
+    private static final int T_WHITEOUT = 200 + SHATTER_SHIFT;
     /** Hands-settle wheel micro-anim: grip turn / relax-back run ticks (path t≈0.78/0.86). */
-    private static final int WHEEL_SETTLE_AT = 148;
-    private static final int WHEEL_RELAX_AT = 160;
+    private static final int WHEEL_SETTLE_AT = T_SHIP + 108;
+    private static final int WHEEL_RELAX_AT = T_SHIP + 120;
     /** The wheel's rest spin ("caught mid-turn"); the settle nudges a few degrees off it. */
     private static final float WHEEL_REST_SPIN_DEGREES = 45.0F;
     /**
@@ -201,16 +229,12 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int WHEEL_GLINT_OFFSET = Math.round(
             (((WHEEL_GLINT_SUN_DEG - WHEEL_REST_SPIN_DEGREES) % 45.0F + 45.0F) % 45.0F)
                     / WHEEL_TURN_DEG_PER_TICK) - WHEEL_GLINT_RAMP / 2;
-    private static final int T_PORTAL = 230;
-    private static final int T_EPILOGUE = 260;
-    private static final int T_BEACH = 300;
-    /**
-     * FXTEAM CUT-CREDITS breathing room: the auto-run arms this many ticks AFTER the
-     * beach beat — 2 s of everyone standing still on the sunrise horizon before the
-     * march begins. The nudge watchdog waits out the same hold.
-     */
-    private static final int RUN_HOLD_TICKS = 40;
-    private static final int T_LIGHTNING = 420;
+    private static final int T_PORTAL = 230 + SHATTER_SHIFT;
+    private static final int T_EPILOGUE = 260 + SHATTER_SHIFT;
+    private static final int T_BEACH = 300 + SHATTER_SHIFT;
+    /** F-057: the formation backdrop starts building shortly after the beach reveal. */
+    private static final int T_FORMATION = T_BEACH + 60;
+    private static final int T_LIGHTNING = 420 + SHATTER_SHIFT;
     private static final int LIGHTNING_STRIKES = 6;
     private static final int LIGHTNING_INTERVAL = 12;
     /**
@@ -219,36 +243,49 @@ public final class CreditsSequence implements SequenceReplayable {
      * closest AND strongest (the intensity ramp peaks with it).
      */
     private static final int[] STRIKE_DEPTHS = {64, 10, 34, 78, 16, 6};
-    /**
-     * FIN-6: the auto-run DISARMS here — the line reaches the surf (~104 blocks at run
-     * speed) and everyone stands watching the horizon for the whole eclipse act. The
-     * nudge watchdog stops with it.
-     */
-    private static final int T_RUN_END = 940;
     /** The eclipse starts rising out of the sea (spawn + slow-rise pushes). */
-    private static final int T_ECLIPSE_RISE = 700;
-    /** The debris sky shrinks out (20t) and is discarded just before the burst. */
-    private static final int T_FLYERS_END = 1750;
+    private static final int T_ECLIPSE_RISE = 700 + SHATTER_SHIFT;
+    /** The debris sky + formations shrink out (20t) and are discarded before the burst. */
+    private static final int T_FLYERS_END = 1750 + SHATTER_SHIFT;
     private static final int FLYER_SHRINK_TICKS = 20;
     /** The eclipse explodes; the FOV zoom and the shake/brightness ladders start. */
-    private static final int T_BURST = 1900;
+    private static final int T_BURST = 1900 + SHATTER_SHIFT;
     /** The final white rises (40t) into a full hold... */
-    private static final int T_WHITE_FADE = 2060;
+    private static final int T_WHITE_FADE = 2060 + SHATTER_SHIFT;
     /** ...and behind it every display is discarded. */
-    private static final int T_WHITE_PEAK = 2100;
+    private static final int T_WHITE_PEAK = 2100 + SHATTER_SHIFT;
     /** Track two starts; the white melts to black over 160t (fade crossfade). */
-    private static final int T_TRACK2 = 2160;
-    private static final int T_HOME = 2200;
+    private static final int T_TRACK2 = 2160 + SHATTER_SHIFT;
+    private static final int T_HOME = 2200 + SHATTER_SHIFT;
     /** "Minecraft Eclipse" over the still-held "Made by Sonic0810" (both centered). */
-    private static final int T_CARD_TITLE = 2320;
+    private static final int T_CARD_TITLE = 2320 + SHATTER_SHIFT;
     /** The maker card fades out (roll stop payload); the title caption ends itself. */
-    private static final int T_CARDS_OUT = 2430;
-    private static final int T_CARD_RETURNS = 2520;
-    private static final int T_CARD_NEXT = 2700;
-    private static final int T_CLOSE = 2940;
-    private static final int T_END = 3080;
-    /** Close payload countdown on the client (broadcast at {@link #T_CLOSE}). */
-    private static final int CLOSE_DELAY_TICKS = 40;
+    private static final int T_CARDS_OUT = 2430 + SHATTER_SHIFT;
+    private static final int T_CARD_RETURNS = 2520 + SHATTER_SHIFT;
+    private static final int T_CARD_NEXT = 2700 + SHATTER_SHIFT;
+
+    // --- F-056 black-hole finale tick table (replaces the old close/halt ending) ---
+    /**
+     * Behind the long post-card black (~9 s of pure black after the NEXT card's
+     * envelope): everyone parked at the tele-vantage, FOV crushed, SPACE sky armed,
+     * {@code victory_theme} in, the accretion displays start building.
+     */
+    private static final int T_FINALE_TELE = 3640;
+    /** The black releases (60t) onto the black-hole shot. */
+    private static final int T_FINALE_REVEAL = 3720;
+    /** The frame melts to black (160t) — the hole has eaten everything. */
+    private static final int T_FINALE_DARK = 5020;
+    /** "Minecraft Eclipse", centered over black, held until the victory theme ends. */
+    private static final int T_FINALE_TITLE = 5200;
+    /** The HOLD: completion persisted, players home, displays gone — black stays. */
+    private static final int T_FINALE_HOLD = 5240;
+    /** Sustained-black re-send cadence during the hold (fades clamp at 600t holds). */
+    private static final int HOLD_REFRESH_PERIOD = 400;
+    /** Client FOV multiplier of the tele shot (~70° × 0.25 ≈ 17° — the ortho read). */
+    private static final float FINALE_FOV_SCALE = 0.25F;
+    /** SPACE-sky/post intensity ladder after the tele beat (offsets from T_FINALE_REVEAL). */
+    private static final int[] FINALE_SKY_STEP_AT = {300, 700, 1100};
+    private static final float[] FINALE_SKY_STEP_INTENSITY = {0.6F, 0.85F, 1.0F};
     /**
      * Credits roll span (FIN-6: over twice the old scroll speed's span — the roll ends
      * at t=1780, where the maker card takes the center and holds).
@@ -265,8 +302,13 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int BEACH_HALF_Z = 30;
     /** Run-lane rails (invisible barriers) — nobody drifts into the water sideways. */
     private static final int LANE_HALF_Z = 11;
-    /** Runner start line. */
+    /** Legacy runner start line (now only the empty-beach fallback anchor). */
     private static final int START_X = -8;
+    /**
+     * F-057 (auto-run removed): everyone is placed directly AT the surf line and stands
+     * still for the whole beach act — the audience row, a few blocks shy of the water.
+     */
+    private static final int SURF_X = BEACH_SAND_EAST_X - 8;
     /** East heading (yaw of +X). */
     private static final float RUN_YAW = -90.0F;
 
@@ -280,15 +322,17 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int FLYER_CYCLE_MIN = 260;
     private static final int FLYER_CYCLE_VAR = 140;
     /**
-     * FIN-6 hard cap on live credits displays of ALL kinds (flyers + eclipse + burst
-     * debris): spawns beyond it are dropped and logged — a lag spiral can never out-spawn
-     * the budget.
+     * Hard cap on live credits displays of ALL kinds (flyers + eclipse + burst debris +
+     * shatter fragments + formations + black-hole accretion): spawns beyond it are
+     * dropped and logged — a lag spiral can never out-spawn the budget. F-057 raised it
+     * for the thousands-strong backdrop (worst concurrent set ≈ flyers 288 + shadows ~45
+     * + formations 1800 + eclipse 136 + burst 300 ≈ 2570).
      */
-    private static final int DISPLAY_HARD_CAP = 800;
+    private static final int DISPLAY_HARD_CAP = 3600;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
     private static final String WHEEL_TAG = "eclipse_credits_wheel";
-    /** Golden angle (radians) — flyer tumble phases: neighbors maximally de-phased (BD-SHIP). */
-    private static final float GOLDEN_ANGLE = 2.3999632F;
+    /** Golden angle (radians) — tumble/placement phases: neighbors maximally de-phased. */
+    static final float GOLDEN_ANGLE = 2.3999632F;
     /**
      * BD-SHIP scale envelope: flyers grow in over the first {@value #FLYER_SCALE_RAMP}
      * of each arc and shrink out over the last — arc wraps and the end-of-beat discard
@@ -363,9 +407,19 @@ public final class CreditsSequence implements SequenceReplayable {
             Blocks.SHROOMLIGHT.defaultBlockState(),
             Blocks.GOLD_BLOCK.defaultBlockState()};
 
-    /** Server nudge watchdog (IDEAS §B2): stalled after this many ticks without progress. */
-    private static final int NUDGE_STALL_TICKS = 20;
-    private static final double NUDGE_BLOCKS_PER_TICK = 0.15D;
+    // --- F-057 player hiding (invisible, nametag-less audience) ---
+    /** Scoreboard team hiding nametags/collision for the sequence's whole cast. */
+    static final String HIDE_TEAM = "eclipse_credits_hide";
+    /**
+     * Entity tag marking a player the credits made invisible — persisted in player NBT,
+     * so the login cleanup can strip leftover hiding after a crash/restart without ever
+     * guessing whether an invisibility effect belonged to the credits.
+     */
+    static final String HIDDEN_TAG = "eclipse_credits_hidden";
+
+    /** Client eclipse-sky phase ids (mirrors {@code EclipseFxState.PHASE_*}; server-safe). */
+    private static final int ECLIPSE_NONE = 0;
+    private static final int ECLIPSE_ENDING = 3;
 
     private static final CreditsSequence INSTANCE = new CreditsSequence();
     private static final AtomicBoolean REGISTERED = new AtomicBoolean();
@@ -419,7 +473,10 @@ public final class CreditsSequence implements SequenceReplayable {
     static void onEntityJoin(EntityJoinLevelEvent event) {
         Entity entity = event.getEntity();
         if (!event.getLevel().isClientSide() && entity instanceof Display.BlockDisplay
-                && (entity.getTags().contains(WHEEL_TAG) || entity.getTags().contains(FLYER_TAG))
+                && (entity.getTags().contains(WHEEL_TAG) || entity.getTags().contains(FLYER_TAG)
+                        || entity.getTags().contains(CreditsShatterAct.TAG)
+                        || entity.getTags().contains(CreditsFormationAct.TAG)
+                        || entity.getTags().contains(CreditsBlackHoleAct.TAG))
                 && !LIVE_DISPLAYS.contains(entity.getUUID())) {
             entity.discard();
         }
@@ -428,14 +485,12 @@ public final class CreditsSequence implements SequenceReplayable {
     // ------------------------------------------------------------------ the run
 
     /** Human-readable beat names for the persisted phase + FX replays. */
-    private enum Phase { HELM, WHITEOUT, BEACH, LIGHTNING, ECLIPSE, BURST, OUTRO }
+    private enum Phase { SHATTER, HELM, WHITEOUT, BEACH, LIGHTNING, ECLIPSE, BURST, OUTRO, BLACKHOLE, HOLD }
 
     private static final class Run {
         final MinecraftServer server;
         final int nonce;
         int ticks;
-        /** Cleared by {@code skip()} — a skipped run never closes clients or halts. */
-        boolean closeAllowed = true;
         /** The player posed at the wheel for the helm shot. */
         @Nullable
         UUID helmPlayer;
@@ -458,9 +513,12 @@ public final class CreditsSequence implements SequenceReplayable {
         long sunriseBase = Long.MIN_VALUE;
         /** Budgeted beach-stamp cursor (started at t=0; the epilogue beat blocks on it). */
         final BeachStamp beachStamp = new BeachStamp();
-        /** Auto-run nudge watchdog state (per online player). */
-        final Map<UUID, Double> lastX = new HashMap<>();
-        final Map<UUID, Integer> stalled = new HashMap<>();
+        /** F-058 island-shatter prologue stage manager. */
+        final CreditsShatterAct shatter = new CreditsShatterAct();
+        /** F-057 formation-backdrop stage manager (~1800 choreographed displays). */
+        final CreditsFormationAct formations = new CreditsFormationAct();
+        /** F-056 black-hole finale stage manager. */
+        final CreditsBlackHoleAct blackHole = new CreditsBlackHoleAct();
 
         Run(MinecraftServer server, int nonce) {
             this.server = server;
@@ -505,16 +563,28 @@ public final class CreditsSequence implements SequenceReplayable {
         data.setStarted(true);
         data.setCompleted(false);
         data.setNonce(nonce);
-        run.enter(Phase.HELM);
+        run.enter(Phase.SHATTER);
 
-        // t=0: fade to black (held through the helm teleport at T_SHIP, released as the
-        // push-in starts), victory theme out, and start the budgeted beach stamp while
-        // nobody can see it — the black/helm/white cover gives ~T_EPILOGUE ticks, the
-        // stamp needs about a dozen (POL-S-02).
+        // F-058: sample the sanctum island NOW (behind the opening fade) — the shatter
+        // prologue never modifies the world, it only reads the real surface blocks.
+        BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
+        if (!run.shatter.prepare(server.overworld(), altar)) {
+            EclipseMod.LOGGER.warn("CreditsSequence: no sanctum island to shatter — the F-058 prologue is skipped");
+        }
+        // F-056: the black-hole finale always has a stage (altar column or spawn fallback).
+        run.blackHole.prepare(server.overworld(), altar);
+
+        // t=0: fade to black (held through the shatter vantage hop at T_SHATTER_VANTAGE),
+        // music out, everyone hidden (F-057: invisibility without particles + the
+        // no-nametag team — nobody blocks anyone's view for the whole sequence), and the
+        // budgeted beach stamp starts while nobody can see it (POL-S-02).
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendBegin(player, nonce);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(10, 50, 25, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(10, 60, 25, 0xFF000000));
             MusicCues.stop(player);
+            if (!player.isSpectator()) {
+                applyHiding(player);
+            }
         }
         startBeachStamp(run, epilogue);
         EclipseMod.LOGGER.info("CreditsSequence: started for {} player(s) (nonce {})",
@@ -528,23 +598,79 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * GAMEMASTER skip (IDEAS §B5): jump straight to the white fade-out beat. The music
-     * finale still plays, but the close broadcast and the server halt are disabled — a
-     * skip implies rehearsal. Returns {@code false} while no run is live.
+     * GAMEMASTER skip (IDEAS §B5): jump straight to the white fade-out beat — the outro,
+     * the black-hole finale and the hold still play (the hold releases via
+     * {@link #endEvent}). Returns {@code false} while no run is live.
      */
     public static boolean skip(MinecraftServer server) {
         Run current = run;
         if (current == null) {
             return false;
         }
-        current.closeAllowed = false;
         if (current.ticks < T_WHITE_FADE) {
             discardWheel(current);
             discardFlyers(current);
             discardEclipse(current);
+            current.shatter.discard();
+            current.formations.discard();
+            // The white fade-out beat expects the sky override gone (the shatter may
+            // still own it when skipping early).
+            PacketDistributor.sendToAllPlayers(new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 40, 0.0D, 0.0D, 0.0D));
+            FxPayloads.sendEclipsePhase(server, ECLIPSE_NONE, 0.0F, 40, false);
             current.ticks = T_WHITE_FADE - 1; // the next tick executes the white fade-out beat
         }
-        EclipseMod.LOGGER.info("CreditsSequence: skipped to the outro (close disabled)");
+        EclipseMod.LOGGER.info("CreditsSequence: skipped to the outro (hold ends via /dev end_event)");
+        return true;
+    }
+
+    /**
+     * F-056 — {@code /dev end_event}: ends the credits IMMEDIATELY, from ANY beat
+     * (including the indefinite post-finale hold, its designed release). Every player is
+     * un-hidden, un-frozen, handed the HUD/FOV back, faded in and returned to the
+     * overworld spawn; every display of every act is discarded; completion is persisted.
+     * Returns {@code false} while no run is live.
+     */
+    public static boolean endEvent(MinecraftServer server) {
+        Run current = run;
+        if (current == null) {
+            return false;
+        }
+        CreditsData data = CreditsData.get(server);
+        data.setCompleted(true);
+        data.setPhase("");
+        discardWheel(current);
+        discardFlyers(current);
+        discardEclipse(current);
+        current.shatter.discard();
+        current.formations.discard();
+        current.blackHole.discard();
+        run = null;
+        ServerLevel overworld = server.overworld();
+        BlockPos spawn = overworld.getSharedSpawnPos();
+        int returned = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            FreezeService.unfreeze(player);
+            clearHiding(player);
+            if (!player.isSpectator()) {
+                BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
+                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        column.getX(), column.getZ());
+                player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
+                        overworld.getSharedSpawnAngle(), 0.0F);
+                returned++;
+            }
+            MusicCues.stop(player);
+            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 60, 0.0D, 0.0D, 0.0D));
+            CreditsPayloads.sendFov(player, 1.0F, 40);
+            CreditsPayloads.sendRoll(player, 0); // hands the HUD back (CreditsClient.onRollStopped)
+            // Release the sustained hold: short black that fades itself out.
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 20, 60, 0xFF000000));
+        }
+        FxPayloads.sendEclipsePhase(server, ECLIPSE_NONE, 0.0F, 40, false);
+        EclipseMod.LOGGER.info("CreditsSequence: /dev end_event — hold released, {} player(s) returned home",
+                returned);
         return true;
     }
 
@@ -560,13 +686,16 @@ public final class CreditsSequence implements SequenceReplayable {
         current.ticks++;
         int t = current.ticks;
         switch (t) {
+            case T_SHATTER_VANTAGE -> beatShatterVantage(current);
+            case T_SHATTER_BREAK -> beatShatterBreak(current);
+            case T_SHATTER_DARK -> beatShatterDark(current);
+            case T_SHATTER_END -> beatShatterEnd(current);
             case T_SHIP -> beatShip(current);
             case T_WHITEOUT -> beatWhiteout(current);
             case T_PORTAL -> beatPortal(current);
             case T_EPILOGUE -> beatEpilogue(current);
             case T_BEACH -> beatBeach(current);
             case T_ECLIPSE_RISE -> beatEclipseRise(current);
-            case T_RUN_END -> beatRunEnd(current);
             case T_BURST -> beatBurst(current);
             case T_WHITE_FADE -> beatWhiteFade(current);
             case T_WHITE_PEAK -> beatWhitePeak(current);
@@ -576,11 +705,27 @@ public final class CreditsSequence implements SequenceReplayable {
             case T_CARDS_OUT -> beatCardsOut(current);
             case T_CARD_RETURNS -> beatCardReturns(current);
             case T_CARD_NEXT -> beatCardNext(current);
-            case T_CLOSE -> beatClose(current);
-            case T_END -> beatEnd(current);
+            case T_FINALE_TELE -> beatFinaleTele(current);
+            case T_FINALE_REVEAL -> beatFinaleReveal(current);
+            case T_FINALE_DARK -> beatFinaleDark(current);
+            case T_FINALE_TITLE -> beatFinaleTitle(current);
+            case T_FINALE_HOLD -> beatFinaleHold(current);
             default -> { }
         }
         // Overlapping continuous work.
+        // F-058 shatter prologue: budgeted fragment spawn + drift pushes.
+        if (t > T_SHATTER_BREAK && t < T_SHATTER_DARK && current.shatter.prepared()) {
+            ServerLevel overworld = current.server.overworld();
+            if (current.shatter.spawnRemaining()) {
+                current.shatter.spawnBatch(overworld, t - T_SHATTER_BREAK);
+            }
+            if ((t - T_SHATTER_BREAK) % CreditsShatterAct.PUSH_STRIDE == 0) {
+                current.shatter.animate(t - T_SHATTER_BREAK);
+            }
+            if ((t - T_SHATTER_BREAK) % RUMBLE_PERIOD == 0) {
+                shatterRumble(current, t);
+            }
+        }
         if (t > T_SHIP && t < T_EPILOGUE && (t - T_SHIP) % 4 == 0) {
             animateWheel(current, t); // BD-SHIP: the helm never stands still on camera
         }
@@ -594,6 +739,18 @@ public final class CreditsSequence implements SequenceReplayable {
         }
         // FIN-6 display budget: every wave below spawns ≤ its per-tick budget, never past
         // DISPLAY_HARD_CAP; every animation rides interpolation windows on a fixed stride.
+        // F-057 formation backdrop (spawn → drift → shrink-out with the flyers).
+        if (t >= T_FORMATION && t < T_FLYERS_END) {
+            ServerLevel epilogue = current.server.getLevel(EPILOGUE);
+            if (epilogue != null) {
+                if (current.formations.spawnRemaining()) {
+                    current.formations.spawnBatch(epilogue, t - T_FORMATION);
+                }
+                if ((t - T_FORMATION) % CreditsFormationAct.PUSH_STRIDE == 0) {
+                    current.formations.animate(t - T_FORMATION);
+                }
+            }
+        }
         if (t >= T_LIGHTNING && t < T_FLYERS_END && current.flyerCursor < FLYER_COUNT) {
             spawnFlyerBatch(current);
         }
@@ -602,9 +759,11 @@ public final class CreditsSequence implements SequenceReplayable {
         }
         if (t == T_FLYERS_END) {
             shrinkOutFlyers(current);
+            current.formations.shrinkOut(T_FLYERS_END - T_FORMATION, FLYER_SHRINK_TICKS);
         }
         if (t == T_FLYERS_END + FLYER_SHRINK_TICKS) {
             discardFlyers(current);
+            current.formations.discard();
         }
         if (t >= T_ECLIPSE_RISE && t < T_BURST
                 && current.eclipseShell.size() + current.eclipseCorona.size()
@@ -626,17 +785,304 @@ public final class CreditsSequence implements SequenceReplayable {
         if (t > T_BURST && t < T_WHITE_FADE && (t - T_BURST) % BURST_PULSE_PERIOD == 0) {
             burstEscalation(current, t);
         }
-        // Watchdog starts after the deliberate 2 s sunrise hold — statues are intentional
-        // until the auto-run has been armed — and dies with the run-end beat.
-        if (t > T_BEACH + RUN_HOLD_TICKS && t < T_RUN_END) {
-            nudgeStalledRunners(current);
+        // F-056 black-hole finale: accretion spawn/pushes, maw cue cadence, sky ladder.
+        if (t > T_FINALE_TELE && t < T_FINALE_HOLD) {
+            ServerLevel overworld = current.server.overworld();
+            if (current.blackHole.spawnRemaining()) {
+                current.blackHole.spawnBatch(overworld, t - T_FINALE_TELE);
+            }
+            if ((t - T_FINALE_TELE) % CreditsBlackHoleAct.PUSH_STRIDE == 0) {
+                current.blackHole.animate(t - T_FINALE_TELE);
+            }
+            if (t >= T_FINALE_REVEAL && t < T_FINALE_DARK
+                    && (t - T_FINALE_REVEAL) % CreditsBlackHoleAct.MAW_CADENCE == 0) {
+                fireBlackHoleMaw(current, t);
+            }
+            for (int step = 0; step < FINALE_SKY_STEP_AT.length; step++) {
+                if (t == T_FINALE_REVEAL + FINALE_SKY_STEP_AT[step]) {
+                    sendFinaleSky(current, FINALE_SKY_STEP_INTENSITY[step], 260);
+                }
+            }
         }
+        // The HOLD: black forever (re-sent under the client fade clamp) until end_event.
+        if (t >= T_FINALE_HOLD && (t - T_FINALE_HOLD) % HOLD_REFRESH_PERIOD == 0) {
+            for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+                PacketDistributor.sendToPlayer(player,
+                        S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ F-057 hiding
+
+    /**
+     * F-057: makes one player a ghost audience member — particle-less invisibility (no
+     * expiry; removed by the cleanup paths) + the {@value #HIDE_TEAM} team (nametags off,
+     * collision off, no see-friendly-invisibles ghosting) + the {@value #HIDDEN_TAG}
+     * NBT-persisted marker for crash cleanup. Players already on ANOTHER team (e.g. the
+     * BanService ghost team) keep it — the effect still hides their model.
+     */
+    private static void applyHiding(ServerPlayer player) {
+        player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY,
+                MobEffectInstance.INFINITE_DURATION, 0, true, false, false));
+        player.addTag(HIDDEN_TAG);
+        net.minecraft.server.ServerScoreboard scoreboard = player.server.getScoreboard();
+        PlayerTeam team = scoreboard.getPlayerTeam(HIDE_TEAM);
+        if (team == null) {
+            team = scoreboard.addPlayerTeam(HIDE_TEAM);
+            team.setNameTagVisibility(Team.Visibility.NEVER);
+            team.setCollisionRule(Team.CollisionRule.NEVER);
+            team.setSeeFriendlyInvisibles(false);
+        }
+        PlayerTeam existing = scoreboard.getPlayersTeam(player.getScoreboardName());
+        if (existing == null) {
+            scoreboard.addPlayerToTeam(player.getScoreboardName(), team);
+        }
+    }
+
+    /** Reverts {@link #applyHiding} for one player (idempotent — safe on the unhidden). */
+    private static void clearHiding(ServerPlayer player) {
+        player.removeEffect(MobEffects.INVISIBILITY);
+        player.removeTag(HIDDEN_TAG);
+        net.minecraft.server.ServerScoreboard scoreboard = player.server.getScoreboard();
+        PlayerTeam team = scoreboard.getPlayersTeam(player.getScoreboardName());
+        if (team != null && HIDE_TEAM.equals(team.getName())) {
+            scoreboard.removePlayerFromTeam(player.getScoreboardName(), team);
+        }
+    }
+
+    // ------------------------------------------------------------------ F-058 shatter beats
+
+    /**
+     * t={@value #T_SHATTER_VANTAGE} — behind the opening black: everyone parked (frozen,
+     * midair, invisible) at the vantage south of the sanctum island; the black releases
+     * onto the still-whole island. A world without a sanctum skips the whole prologue.
+     */
+    private static void beatShatterVantage(Run current) {
+        if (!current.shatter.prepared()) {
+            current.ticks = T_SHIP - 1; // no island: straight to the helm shot
+            return;
+        }
+        ServerLevel overworld = current.server.overworld();
+        Vec3 vantage = current.shatter.vantage();
+        Vec3 center = current.shatter.islandCenter();
+        float yaw = (float) Math.toDegrees(Math.atan2(
+                -(center.x - vantage.x), center.z - vantage.z));
+        float pitch = (float) Math.toDegrees(Math.atan2(vantage.y - center.y,
+                Math.sqrt(Math.pow(center.x - vantage.x, 2.0D) + Math.pow(center.z - vantage.z, 2.0D))));
+        int placed = 0;
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            if (player.isSpectator()) {
+                continue;
+            }
+            // Invisible audience: everyone can share (almost) the same seat — tiny
+            // deterministic offsets only so nobody z-fights the same camera point.
+            double dx = 0.7D * (placed % 3 - 1);
+            double dy = 0.5D * (placed / 3 % 3);
+            placed++;
+            player.teleportTo(overworld, vantage.x + dx, vantage.y + dy, vantage.z, yaw, pitch);
+            player.setDeltaMovement(Vec3.ZERO);
+            player.fallDistance = 0.0F;
+            // Midair statue seat; survives=false → the T_SHIP limbo hop auto-releases it.
+            FreezeService.freeze(player, T_SHIP - T_SHATTER_VANTAGE + 40, false, 0);
+            // Release the opening black onto the island (gentle 30t reveal).
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 20, 30, 0xFF000000));
+        }
+        EclipseMod.LOGGER.info("CreditsSequence: {} player(s) at the shatter vantage", placed);
+    }
+
+    /**
+     * t={@value #T_SHATTER_BREAK} — the island BREAKS: the sampled-surface fragment
+     * displays start spawning (continuous work), the collapse Photon veil fires at the
+     * island center, the sky contracts toward black with stars (COLLAPSE mode) and the
+     * eclipse sky element starts its slow fade-out.
+     */
+    private static void beatShatterBreak(Run current) {
+        current.enter(Phase.SHATTER);
+        ServerLevel overworld = current.server.overworld();
+        Vec3 center = current.shatter.islandCenter();
+        FxPayloads.sendFxEvent(overworld, FxCues.CUE_CREDITS_COLLAPSE, center, 0.0F, 0.0F, -1.0D);
+        // F-058: "der Himmel zieht sich zusammen" — dome toward black, stars out...
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_COLLAPSE, 0.75F, 360,
+                    0.0D, 0.0D, 0.0D));
+        }
+        // ...and the eclipse element itself slowly leaves the sky (no permanent rim).
+        FxPayloads.sendEclipsePhase(current.server, ECLIPSE_ENDING, 0.0F, 400, false);
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(1.1F, 70));
+        for (ServerPlayer player : overworld.players()) {
+            player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER, 0.9F, 0.5F);
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 0.9F, 0.45F);
+        }
+    }
+
+    /** A low grinding rumble under the drift (every {@value #RUMBLE_PERIOD}t of the act). */
+    private static void shatterRumble(Run current, int t) {
+        float progress = Mth.clamp((t - T_SHATTER_BREAK)
+                / (float) (T_SHATTER_DARK - T_SHATTER_BREAK), 0.0F, 1.0F);
+        for (ServerPlayer player : current.server.overworld().players()) {
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                    0.35F + 0.25F * progress, 0.42F + 0.1F * progress);
+        }
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.2F + 0.2F * progress, RUMBLE_PERIOD));
+    }
+
+    /** t={@value #T_SHATTER_DARK} — black rises back over the drifting debris field. */
+    private static void beatShatterDark(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player,
+                    S2CScreenFadePayload.sustained(50, 600, 0, 0xFF000000));
+        }
+    }
+
+    /**
+     * t={@value #T_SHATTER_END} — behind the black: every fragment is discarded and the
+     * sky override eases off (the beach act needs the vanilla dome for its sunrise).
+     */
+    private static void beatShatterEnd(Run current) {
+        current.shatter.discard();
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 100, 0.0D, 0.0D, 0.0D));
+        }
+        FxPayloads.sendEclipsePhase(current.server, ECLIPSE_NONE, 0.0F, 60, false);
+    }
+
+    // ------------------------------------------------------------------ F-056 finale beats
+
+    /** Broadcasts the SPACE sky at {@code intensity} (also drives the post pass strength). */
+    private static void sendFinaleSky(Run current, float intensity, int rampTicks) {
+        Vec3 hole = current.blackHole.holeCenter();
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_SPACE, intensity, rampTicks,
+                    hole.x, hole.y, hole.z));
+        }
+    }
+
+    /**
+     * The Photon maw, re-fired on its {@value CreditsBlackHoleAct#MAW_CADENCE}t cadence
+     * (the kneel-corona sustain law — re-sends inside the runtime dedup silently) at the
+     * SCREEN-ALIGNED near anchor, plus the building devour-rumble.
+     */
+    private static void fireBlackHoleMaw(Run current, int t) {
+        ServerLevel overworld = current.server.overworld();
+        FxPayloads.sendFxEvent(overworld, FxCues.CUE_BLACK_HOLE,
+                current.blackHole.fxAnchor(), 0.0F, 0.0F, -1.0D);
+        float progress = Mth.clamp((t - T_FINALE_REVEAL)
+                / (float) (T_FINALE_DARK - T_FINALE_REVEAL), 0.0F, 1.0F);
+        for (ServerPlayer player : overworld.players()) {
+            player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER,
+                    0.35F + 0.3F * progress, 0.4F - 0.1F * progress);
+        }
+    }
+
+    /**
+     * t={@value #T_FINALE_TELE} — behind the long post-card black: everyone to the HIGH
+     * tele-vantage (frozen, still invisible), the FOV crushed to
+     * {@value #FINALE_FOV_SCALE} (tele/ortho read), the SPACE sky armed at its first
+     * intensity step, {@code victory_theme} in, the HUD re-suppressed (the cards-out
+     * beat handed it back), and the accretion displays start building (continuous work).
+     */
+    private static void beatFinaleTele(Run current) {
+        current.enter(Phase.BLACKHOLE);
+        ServerLevel overworld = current.server.overworld();
+        Vec3 vantage = current.blackHole.vantage();
+        float yaw = current.blackHole.vantageYaw();
+        float pitch = current.blackHole.vantagePitch();
+        int placed = 0;
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            // Same-nonce begin re-send: CreditsClient re-suppresses the HUD, nothing else.
+            CreditsPayloads.sendBegin(player, current.nonce);
+            PacketDistributor.sendToPlayer(player,
+                    S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
+            if (!player.isSpectator()) {
+                double dx = 0.7D * (placed % 3 - 1);
+                double dy = 0.5D * (placed / 3 % 3);
+                placed++;
+                player.teleportTo(overworld, vantage.x + dx, vantage.y + dy, vantage.z, yaw, pitch);
+                player.setDeltaMovement(Vec3.ZERO);
+                player.fallDistance = 0.0F;
+                FreezeService.freeze(player, T_FINALE_HOLD - T_FINALE_TELE + 100, false, 0);
+            }
+            CreditsPayloads.sendFov(player, FINALE_FOV_SCALE, 80);
+            MusicCues.play(MUSIC_VICTORY_CUE, player);
+        }
+        sendFinaleSky(current, 0.35F, 200);
+        EclipseMod.LOGGER.info("CreditsSequence: {} player(s) at the black-hole vantage", placed);
+    }
+
+    /** t={@value #T_FINALE_REVEAL} — the black releases onto the tele shot of the map. */
+    private static void beatFinaleReveal(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 10, 60, 0xFF000000));
+        }
+        fireBlackHoleMaw(current, T_FINALE_REVEAL);
+    }
+
+    /**
+     * t={@value #T_FINALE_DARK} — the hole has eaten everything: the frame (already
+     * drained gray by the post ladder) melts to a sustained black over 8 s; the FOV
+     * eases part-way back out — the "langsames weiteres Rauszoomen" beat under the melt.
+     */
+    private static void beatFinaleDark(Run current) {
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player,
+                    S2CScreenFadePayload.sustained(160, 600, 0, 0xFF000000));
+            CreditsPayloads.sendFov(player, 0.4F, 200);
+        }
+    }
+
+    /**
+     * t={@value #T_FINALE_TITLE} — "Minecraft Eclipse", large and centered over the
+     * black, held until {@code victory_theme} runs out (the F-056 contract: the card and
+     * the music end together; the hold length is derived from the cue's frozen duration).
+     */
+    private static void beatFinaleTitle(Run current) {
+        int hold = Math.max(200, T_FINALE_TELE + VICTORY_THEME_TICKS - T_FINALE_TITLE - 100);
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            CreditsPayloads.sendGentleTitle(player, TITLE_END, hold);
+        }
+    }
+
+    /**
+     * t={@value #T_FINALE_HOLD} — the HOLD arms: completion persisted FIRST (a crash
+     * during the hold must never replay the sequence), the accretion field discarded and
+     * everyone quietly moved home behind the black — the world under the black screen is
+     * already the post-credits world. The screen then STAYS black (refresh wave in
+     * {@link #onServerTick}) until an operator runs {@code /dev end_event}.
+     */
+    private static void beatFinaleHold(Run current) {
+        current.enter(Phase.HOLD);
+        CreditsData data = CreditsData.get(current.server);
+        data.setCompleted(true);
+        current.blackHole.discard();
+        ServerLevel overworld = current.server.overworld();
+        BlockPos spawn = overworld.getSharedSpawnPos();
+        int returned = 0;
+        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+            FreezeService.unfreeze(player);
+            if (!player.isSpectator()) {
+                BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
+                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        column.getX(), column.getZ());
+                player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
+                        overworld.getSharedSpawnAngle(), 0.0F);
+                returned++;
+            }
+            PacketDistributor.sendToPlayer(player,
+                    S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
+        }
+        EclipseMod.LOGGER.info("CreditsSequence: HOLD armed — {} player(s) home behind the black; "
+                + "/dev end_event releases it", returned);
     }
 
     // ------------------------------------------------------------------ beats
 
-    /** t=40 — behind black: crew to the ship stern, helm double posed, push-in plays. */
+    /** t={@value #T_SHIP} — behind black: crew to the ship stern, helm double posed, push-in plays. */
     private static void beatShip(Run current) {
+        current.enter(Phase.HELM);
         MinecraftServer server = current.server;
         ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
         if (limbo == null) {
@@ -711,7 +1157,10 @@ public final class CreditsSequence implements SequenceReplayable {
         }
     }
 
-    /** t=260 — behind the white: everyone to the frozen-sunrise beach, facing east. */
+    /**
+     * t={@value #T_EPILOGUE} — behind the white: everyone to the beach, placed directly
+     * AT the surf line, facing east (F-057: the auto-run is gone — the audience stands).
+     */
     private static void beatEpilogue(Run current) {
         MinecraftServer server = current.server;
         ServerLevel epilogue = server.getLevel(EPILOGUE);
@@ -738,9 +1187,9 @@ public final class CreditsSequence implements SequenceReplayable {
             double z = Math.max(-LANE_HALF_Z + 1, Math.min(LANE_HALF_Z - 1, 2 * (placed - online.size() / 2)));
             placed++;
             // transport (not teleportTo): the helm freeze is still live — this re-anchors
-            // the lock at the beach so the rubber-band never yanks anyone back to limbo.
+            // the lock at the surf line so the rubber-band never yanks anyone back to limbo.
             FreezeService.transport(player, epilogue,
-                    new Vec3(START_X + 0.5D, BEACH_Y + 1, z + 0.5D), RUN_YAW, 6.0F);
+                    new Vec3(SURF_X + 0.5D, BEACH_Y + 1, z + 0.5D), RUN_YAW, 6.0F);
             player.setDeltaMovement(Vec3.ZERO);
             player.fallDistance = 0.0F;
         }
@@ -748,32 +1197,26 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * t=300 — sunrise: the helm freeze releases, music finale, credits roll. FXTEAM
-     * CUT-CREDITS: the auto-run arms {@value #RUN_HOLD_TICKS}t later — the shot holds on
-     * the horizon for 2 s before anyone moves (the panel likewise fades in on its own 3 s
-     * delay, client-side).
+     * t={@value #T_BEACH} — sunrise: music finale + credits roll. F-057 (auto-run
+     * removed): the helm freeze is REPLACED by a fresh statue lock at the surf line —
+     * everyone stands and watches the whole act; the formation backdrop starts building
+     * at t={@value #T_FORMATION} around them.
      */
     private static void beatBeach(Run current) {
         current.enter(Phase.BEACH);
-        current.lastX.clear();
-        current.stalled.clear();
+        // The formation anchor: just past the audience row, eye-height over the surf.
+        current.formations.setAnchor(new Vec3(SURF_X + 2.5D, BEACH_Y + 4.0D, 0.0D));
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-            FreezeService.unfreeze(player); // the refreezeAfterHelmShot lock ends here
             MusicCues.play(MUSIC_FINALE_CUE, player);
             CreditsPayloads.sendRoll(player, ROLL_TICKS);
+            if (!player.isSpectator()) {
+                // Re-anchor at the surf: a fresh lock (free look-around, no walking)
+                // that lasts the whole beach/eclipse/burst act. survives=false — the
+                // T_HOME dimension hop would auto-release it even without the explicit
+                // unfreeze there.
+                FreezeService.freeze(player, T_WHITE_PEAK - T_BEACH + 60, false, 0);
+            }
         }
-        schedule(current.server, RUN_HOLD_TICKS, () -> {
-            // A skip() during the hold jumps past the run window: never arm the walk then.
-            if (run != current || current.ticks >= T_RUN_END) {
-                return;
-            }
-            for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-                if (!player.hasDisconnected()) {
-                    CreditsPayloads.sendAutoRun(player, true, RUN_YAW,
-                            T_RUN_END - T_BEACH - RUN_HOLD_TICKS + 100);
-                }
-            }
-        });
     }
 
     /**
@@ -836,17 +1279,6 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * t={@value #T_RUN_END} — the auto-run DISARMS: the line has reached the surf and
-     * everyone stands watching the horizon for the whole eclipse act (the user-facing
-     * "stand and watch" beat; the nudge watchdog died with the same boundary).
-     */
-    private static void beatRunEnd(Run current) {
-        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-            CreditsPayloads.sendAutoRun(player, false, RUN_YAW, 0);
-        }
-    }
-
-    /**
      * t={@value #T_BURST} — the eclipse EXPLODES: the intro-mirror giant shockwave
      * (the (1.0, 50) signature the client seam layers the HDR ring onto), the Photon
      * confetti cue, a first heavy shake, a first white pulse, and the slow FOV zoom
@@ -898,12 +1330,11 @@ public final class CreditsSequence implements SequenceReplayable {
     /**
      * t={@value #T_WHITE_FADE} — the last pulse rises into the FULL WHITE hold (40t up,
      * clamped 600t hold — {@link #beatTrackTwo} replaces it with the black melt long
-     * before it expires). Auto-run release is re-sent belt-and-braces for the skip path.
+     * before it expires).
      */
     private static void beatWhiteFade(Run current) {
         current.enter(Phase.OUTRO);
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-            CreditsPayloads.sendAutoRun(player, false, RUN_YAW, 0);
             PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(40, 600, 0, 0xFFFFFFFF));
         }
         PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(2.0F, 50));
@@ -913,6 +1344,8 @@ public final class CreditsSequence implements SequenceReplayable {
     private static void beatWhitePeak(Run current) {
         discardFlyers(current);
         discardEclipse(current);
+        current.formations.discard(); // belt-and-braces (normally gone with the flyers)
+        current.shatter.discard(); // belt-and-braces (normally gone at T_SHATTER_END)
     }
 
     /**
@@ -990,94 +1423,13 @@ public final class CreditsSequence implements SequenceReplayable {
 
     /**
      * t={@value #T_CARD_NEXT} — the answer card: "Minecraft 2Worlds : Timeless". The
-     * black hold is re-sent with it (the 600t fade clamp would expire before
-     * {@link #T_END} otherwise).
+     * black hold is re-sent with it (the 600t fade clamp would expire before the finale
+     * tele beat otherwise).
      */
     private static void beatCardNext(Run current) {
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendGentleTitle(player, TITLE_NEXT, CARD_NEXT_HOLD);
             PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
-        }
-    }
-
-    /**
-     * t={@value #T_CLOSE} — the close broadcast. Completion is persisted FIRST so a crash
-     * between here and the halt can never replay the sequence; a skipped (rehearsal) run
-     * sends nothing.
-     */
-    private static void beatClose(Run current) {
-        CreditsData data = CreditsData.get(current.server);
-        data.setCompleted(true);
-        data.setPhase("");
-        if (!current.closeAllowed) {
-            EclipseMod.LOGGER.info("CreditsSequence: close suppressed (skip/rehearsal)");
-            return;
-        }
-        for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
-            CreditsPayloads.sendClose(player, CLOSE_DELAY_TICKS, current.nonce);
-        }
-        EclipseMod.LOGGER.info("CreditsSequence: close broadcast sent (delay {}t, nonce {})",
-                CLOSE_DELAY_TICKS, current.nonce);
-    }
-
-    /** t={@value #T_END} — the end: a dedicated server halts; otherwise the fade releases gently. */
-    private static void beatEnd(Run current) {
-        MinecraftServer server = current.server;
-        CreditsData data = CreditsData.get(server);
-        data.setCompleted(true);
-        data.setPhase("");
-        // Belt-and-braces: normal beats already discarded these, but an aborted path
-        // (epilogue vanished, skip) must never leave a tagged display behind.
-        discardWheel(current);
-        discardFlyers(current);
-        discardEclipse(current);
-        run = null;
-        if (current.closeAllowed && server.isDedicatedServer()) {
-            EclipseMod.LOGGER.info("CreditsSequence: the crossing is over — halting the server");
-            server.halt(false);
-            return;
-        }
-        // Rehearsal / integrated server: hand the screen back instead of dying.
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 20, 60, 0xFF000000));
-            CreditsPayloads.sendRoll(player, 0);
-        }
-        EclipseMod.LOGGER.info("CreditsSequence: complete (no halt — {})",
-                current.closeAllowed ? "integrated server" : "skip/rehearsal");
-    }
-
-    // ------------------------------------------------------------------ auto-run watchdog
-
-    /**
-     * IDEAS §B2 server safety net: any runner whose x has not advanced for
-     * {@value #NUDGE_STALL_TICKS} ticks (crashed/vanilla client, AFK) is nudged
-     * {@value #NUDGE_BLOCKS_PER_TICK} blocks/t east so the wide shot never shows a statue.
-     */
-    private static void nudgeStalledRunners(Run current) {
-        ServerLevel epilogue = current.server.getLevel(EPILOGUE);
-        if (epilogue == null) {
-            return;
-        }
-        for (ServerPlayer player : epilogue.players()) {
-            if (player.isSpectator()) {
-                continue;
-            }
-            UUID id = player.getUUID();
-            double x = player.getX();
-            Double last = current.lastX.put(id, x);
-            if (last == null) {
-                continue;
-            }
-            if (x - last < 0.01D) {
-                int stalledFor = current.stalled.merge(id, 1, Integer::sum);
-                if (stalledFor >= NUDGE_STALL_TICKS && x < BEACH_SAND_EAST_X - 4) {
-                    player.teleportTo(epilogue, x + NUDGE_BLOCKS_PER_TICK, player.getY(), player.getZ(),
-                            RUN_YAW, player.getXRot());
-                    current.lastX.put(id, x + NUDGE_BLOCKS_PER_TICK);
-                }
-            } else {
-                current.stalled.put(id, 0);
-            }
         }
     }
 
@@ -1249,9 +1601,10 @@ public final class CreditsSequence implements SequenceReplayable {
     /**
      * {@code Display.setBrightnessOverride} is private — round-trip the entity through
      * its own save NBT with a {@code brightness} compound instead (the vanilla data path,
-     * so nothing reflective and nothing version-fragile beyond the tag name).
+     * so nothing reflective and nothing version-fragile beyond the tag name). Shared
+     * with the stage-manager acts.
      */
-    private static void applyBrightnessOverride(Display.BlockDisplay display, int sky, int block) {
+    static void applyBrightnessOverride(Display.BlockDisplay display, int sky, int block) {
         CompoundTag data = display.saveWithoutId(new CompoundTag());
         CompoundTag brightness = new CompoundTag();
         brightness.putInt("sky", sky);
@@ -1738,9 +2091,10 @@ public final class CreditsSequence implements SequenceReplayable {
 
     /**
      * {@code Display.setViewRange} is private like the brightness setter — same
-     * save-data round trip ({@code view_range} is a vanilla display save tag).
+     * save-data round trip ({@code view_range} is a vanilla display save tag). Shared
+     * with the stage-manager acts.
      */
-    private static void applyViewRange(Display.BlockDisplay display, float range) {
+    static void applyViewRange(Display.BlockDisplay display, float range) {
         CompoundTag data = display.saveWithoutId(new CompoundTag());
         data.putFloat("view_range", range);
         display.load(data);
@@ -1870,10 +2224,10 @@ public final class CreditsSequence implements SequenceReplayable {
     // ------------------------------------------------------------------ join / rejoin safety
 
     /**
-     * Mid-run joins are folded into the current beat (nonce + fade + roll/auto-run); a
+     * Mid-run joins are folded into the current beat (nonce + fade + roll + hiding); a
      * player a crash left in the epilogue dimension AFTER the run is returned to the
-     * overworld spawn ({@code PendingReturns} covers cutscene teleports, this covers the
-     * scripted epilogue hop).
+     * overworld spawn, and leftover credits hiding (the {@value #HIDDEN_TAG} marker) is
+     * stripped — no hanging invisibility after a restart mid-credits.
      */
     @SubscribeEvent
     static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
@@ -1882,6 +2236,12 @@ public final class CreditsSequence implements SequenceReplayable {
         }
         Run current = run;
         if (current == null) {
+            // Post-crash/restart cleanup: strip credits hiding + rescue from the set.
+            if (player.getTags().contains(HIDDEN_TAG)) {
+                clearHiding(player);
+                EclipseMod.LOGGER.info("CreditsSequence: {} un-hidden at login (no live run)",
+                        player.getScoreboardName());
+            }
             if (player.level().dimension().equals(EPILOGUE)) {
                 MinecraftServer server = player.server;
                 ServerLevel overworld = server.overworld();
@@ -1896,10 +2256,13 @@ public final class CreditsSequence implements SequenceReplayable {
             return;
         }
         CreditsPayloads.sendBegin(player, current.nonce);
+        if (!player.isSpectator()) {
+            applyHiding(player); // F-057: rejoins stay invisible for the run's whole span
+        }
         int t = current.ticks;
         if (t < T_EPILOGUE) {
             // Held black until just past the epilogue teleport, then released — the beach
-            // beat (roll + auto-run) still reaches this player because it broadcasts.
+            // beat (roll + statue lock) still reaches this player because it broadcasts.
             PacketDistributor.sendToPlayer(player,
                     S2CScreenFadePayload.sustained(0, Math.max(20, T_EPILOGUE + 20 - t), 30, 0xFF000000));
         } else if (t < T_WHITE_FADE) {
@@ -1909,17 +2272,46 @@ public final class CreditsSequence implements SequenceReplayable {
                 if (rollLeft > 40) {
                     CreditsPayloads.sendRoll(player, rollLeft);
                 }
-                if (t < T_RUN_END - 40) {
-                    CreditsPayloads.sendAutoRun(player, true, RUN_YAW, T_RUN_END - t);
-                }
                 if (t >= T_BURST) {
                     CreditsPayloads.sendFov(player, BURST_FOV_SCALE, Math.max(20, T_WHITE_FADE - t));
+                }
+                if (!player.isSpectator() && player.level().dimension().equals(EPILOGUE)) {
+                    FreezeService.freeze(player, Math.max(40, T_WHITE_PEAK - t + 60), false, 0);
                 }
             }
         } else if (t < T_TRACK2) {
             PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFFFFFFFF));
-        } else {
+        } else if (t < T_FINALE_TELE) {
             MusicCues.play(MUSIC_OUTRO_CUE, player);
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
+        } else if (t < T_FINALE_HOLD) {
+            // Mid-finale join: fold into the black-hole shot (vantage, FOV, space sky).
+            MusicCues.play(MUSIC_VICTORY_CUE, player);
+            if (!player.isSpectator()) {
+                Vec3 vantage = current.blackHole.vantage();
+                player.teleportTo(current.server.overworld(), vantage.x, vantage.y, vantage.z,
+                        current.blackHole.vantageYaw(), current.blackHole.vantagePitch());
+                player.setDeltaMovement(Vec3.ZERO);
+                player.fallDistance = 0.0F;
+                FreezeService.freeze(player, Math.max(40, T_FINALE_HOLD - t + 100), false, 0);
+            }
+            CreditsPayloads.sendFov(player, FINALE_FOV_SCALE, 20);
+            float intensity = 0.35F;
+            for (int step = 0; step < FINALE_SKY_STEP_AT.length; step++) {
+                if (t >= T_FINALE_REVEAL + FINALE_SKY_STEP_AT[step]) {
+                    intensity = FINALE_SKY_STEP_INTENSITY[step];
+                }
+            }
+            Vec3 hole = current.blackHole.holeCenter();
+            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                    CreditsPayloads.S2CCreditsSkyPayload.MODE_SPACE, intensity, 40,
+                    hole.x, hole.y, hole.z));
+            if (t >= T_FINALE_DARK) {
+                PacketDistributor.sendToPlayer(player,
+                        S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
+            }
+        } else {
+            // The HOLD: pure black (the refresh wave keeps it alive until end_event).
             PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
         }
     }
@@ -1933,7 +2325,8 @@ public final class CreditsSequence implements SequenceReplayable {
 
     @Override
     public List<String> phaseIds() {
-        return List.of("HELM", "WHITEOUT", "BEACH", "LIGHTNING", "ECLIPSE", "BURST", "OUTRO");
+        return List.of("SHATTER", "HELM", "WHITEOUT", "BEACH", "LIGHTNING", "ECLIPSE", "BURST",
+                "OUTRO", "BLACKHOLE");
     }
 
     /**
@@ -1945,6 +2338,54 @@ public final class CreditsSequence implements SequenceReplayable {
     public boolean replay(MinecraftServer server, String phaseId, Collection<ServerPlayer> players) {
         List<ServerPlayer> watchers = List.copyOf(players);
         switch (phaseId.toUpperCase(Locale.ROOT)) {
+            case "SHATTER" -> {
+                // FX-only F-058: the collapse veil + sky contraction + rumble at the
+                // watcher (no displays, no teleports, no eclipse-phase commit).
+                for (ServerPlayer player : watchers) {
+                    PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                            .S2CFxEventPayload(FxCues.CUE_CREDITS_COLLAPSE, player.position(), 0.0F, 0.0F));
+                    CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                            CreditsPayloads.S2CCreditsSkyPayload.MODE_COLLAPSE, 0.75F, 200,
+                            0.0D, 0.0D, 0.0D));
+                    PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(1.1F, 70));
+                    player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                            0.9F, 0.45F);
+                }
+                schedule(server, 400, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                                    CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 80,
+                                    0.0D, 0.0D, 0.0D));
+                        }
+                    }
+                });
+                return true;
+            }
+            case "BLACKHOLE" -> {
+                // FX-only F-056: SPACE sky + post distortion + the maw cue 60 blocks
+                // down the watcher's view line + the tele FOV — all handed back after.
+                for (ServerPlayer player : watchers) {
+                    Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
+                    CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                            CreditsPayloads.S2CCreditsSkyPayload.MODE_SPACE, 0.85F, 120,
+                            ahead.x, ahead.y, ahead.z));
+                    PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                            .S2CFxEventPayload(FxCues.CUE_BLACK_HOLE, ahead, 0.0F, 0.0F));
+                    CreditsPayloads.sendFov(player, FINALE_FOV_SCALE, 80);
+                }
+                schedule(server, 600, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                                    CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 100,
+                                    0.0D, 0.0D, 0.0D));
+                            CreditsPayloads.sendFov(player, 1.0F, 60);
+                        }
+                    }
+                });
+                return true;
+            }
             case "HELM" -> {
                 Vec3 anchor = watchers.isEmpty() ? Vec3.ZERO : watchers.get(0).position();
                 for (ServerPlayer player : watchers) {
@@ -2146,11 +2587,33 @@ public final class CreditsSequence implements SequenceReplayable {
         }
     }
 
-    /** Tiny deterministic hash in [0, 1) (FloatingDecor mixer). */
-    private static double hash01(int index, int salt) {
+    /** Tiny deterministic hash in [0, 1) (FloatingDecor mixer). Shared with the acts. */
+    static double hash01(int index, int salt) {
         int h = index * 374761393 + salt * 668265263;
         h = (h ^ (h >>> 13)) * 1274126177;
         return ((h ^ (h >>> 16)) & 0x7FFFFFFF) / (double) 0x80000000L;
+    }
+
+    // ------------------------------------------------------------------ act hooks
+
+    /**
+     * Cap check for the stage-manager acts (shatter/formation/black hole): {@code true}
+     * refuses the spawn — either no run is live or the {@link #DISPLAY_HARD_CAP} budget
+     * is exhausted (logged once through {@link #capReached}).
+     */
+    static boolean actCapReached() {
+        Run current = run;
+        return current == null || capReached(current);
+    }
+
+    /** Registers an act-spawned display with the session-live set (stray-sweep contract). */
+    static void trackDisplay(Display.BlockDisplay display) {
+        LIVE_DISPLAYS.add(display.getUUID());
+    }
+
+    /** Unregisters an act display right before its discard. */
+    static void untrackDisplay(Display.BlockDisplay display) {
+        LIVE_DISPLAYS.remove(display.getUUID());
     }
 
     // ------------------------------------------------------------------ persisted phase

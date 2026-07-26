@@ -53,6 +53,10 @@ public final class FxCues {
      * (the (1.0, 50) giant signature is claimed by the intro burst ring's client seam).
      */
     public static final ResourceLocation CUE_CREDITS_BURST = cue("credits_burst");
+    /** F-058: island-shatter dust/updraft veil ({@code eclipse:credits_collapse}), sent by {@code CreditsShatterAct} at the island center. */
+    public static final ResourceLocation CUE_CREDITS_COLLAPSE = cue("credits_collapse");
+    /** F-056: black-hole accretion maw ({@code eclipse:black_hole_maw}), re-fired on its runtime cadence by {@code CreditsBlackHoleAct}. */
+    public static final ResourceLocation CUE_BLACK_HOLE = cue("black_hole");
     /**
      * PH-EVENTS: structure-slam dust mushroom with collision sub-emitters
      * ({@code eclipse:structure_slam_mushroom}), sent by {@code ExpansionSequence.slamFx}
@@ -385,9 +389,9 @@ public final class FxCues {
      */
     public static final ResourceLocation CUE_MINIGAME_GATE = cue("minigame_gate");
     /**
-     * NEWFX-C3b: elytra-race Finish Ribbon ({@code eclipse:race_finish_ribbon} /
-     * {@code _gold}) — the start/finish ring flashes and sheds a checkered light-ribbon
-     * spiral. Sent by {@code ElytraRace.finishLap}, position lane at the ring-0 center,
+     * NEWFX-C3b: race Finish Ribbon ({@code eclipse:race_finish_ribbon} /
+     * {@code _gold}) — the start/finish gantry flashes and sheds a checkered light-ribbon
+     * spiral. Sent by {@code LegacyRace.finishRacer}, position lane at the finish line,
      * range 128; {@code a} = podium position (1 = the gold-burst variant), {@code b} = 0.
      * The leg forces {@code allowMulti}: two finishers inside one asset lifetime share
      * the anchor. reducedFx plays the Quasar ribbon for position 1 only.

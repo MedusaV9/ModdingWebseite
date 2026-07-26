@@ -24,9 +24,14 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  *       DEDICATED server an un-skipped run ends with clients closing and the server
  *       halting (the intended live ending) — hence DESTRUCTIVE. Integrated servers and
  *       singleplayer never close/halt.</li>
- *   <li>{@code skip} — jumps a running sequence to the outro AND permanently disarms the
- *       close/halt for that run (the QA escape hatch).</li>
+ *   <li>{@code skip} — jumps a running sequence to the outro (the QA escape hatch); the
+ *       black-hole finale and the hold still play.</li>
  * </ul>
+ *
+ * <p>{@code /dev end_event} (F-056, registered here, its own root literal by request):
+ * ends ANY running credits — designed as the release of the post-finale indefinite black
+ * HOLD. Players are un-hidden, un-frozen, faded back in and returned to the overworld
+ * spawn; HUD/FOV/sky are handed back; completion is persisted.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevCreditsCommands {
@@ -38,7 +43,10 @@ public final class DevCreditsCommands {
                         "dev.eclipse.doc.credits.start", Danger.DESTRUCTIVE, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("credits.skip", DevCategory.CUTSCENE,
                         "/dev credits skip",
-                        "dev.eclipse.doc.credits.skip", Danger.CAUTION, ClickAction.RUN, 2));
+                        "dev.eclipse.doc.credits.skip", Danger.CAUTION, ClickAction.RUN, 2),
+                new DevCommandDoc("end_event", DevCategory.CUTSCENE,
+                        "/dev end_event",
+                        "dev.eclipse.doc.end_event", Danger.CAUTION, ClickAction.RUN, 2));
     }
 
     private DevCreditsCommands() {}
@@ -56,6 +64,12 @@ public final class DevCreditsCommands {
                                 .executes(DevCreditsCommands::start))
                         .then(Commands.literal("skip")
                                 .executes(DevCreditsCommands::skip))));
+        // F-056: the hold-release lives directly under /dev (the user-facing contract:
+        // "/dev end_event beendet die Credits-Haltephase").
+        dispatcher.register(Commands.literal("dev")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("end_event")
+                        .executes(DevCreditsCommands::endEvent)));
     }
 
     private static int start(CommandContext<CommandSourceStack> context) {
@@ -79,6 +93,16 @@ public final class DevCreditsCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.translatable("dev.eclipse.credits.skipped"), true);
+        return 1;
+    }
+
+    private static int endEvent(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        if (!CreditsSequence.endEvent(source.getServer())) {
+            source.sendFailure(Component.translatable("dev.eclipse.credits.end_event_idle"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.credits.end_event_done"), true);
         return 1;
     }
 }

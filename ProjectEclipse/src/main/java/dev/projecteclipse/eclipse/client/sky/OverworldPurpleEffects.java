@@ -12,6 +12,7 @@ import com.mojang.math.Axis;
 
 import org.joml.Matrix4f;
 
+import dev.projecteclipse.eclipse.client.credits.CreditsSkyFx;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.SunTracker;
 import net.minecraft.client.Camera;
@@ -168,6 +169,14 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
             skyG = Mth.lerp(crush, skyG, 0.020F);
             skyB = Mth.lerp(crush, skyB, 0.095F);
         }
+        // F-056/F-058 credits sky override (CreditsSkyFx): the shatter beat pulls the dome
+        // toward black (COLLAPSE), the black-hole finale pins it there (SPACE).
+        float creditsDark = CreditsSkyFx.skyDarken(partialTick);
+        if (creditsDark > 0.001F) {
+            skyR = Mth.lerp(creditsDark, skyR, 0.003F);
+            skyG = Mth.lerp(creditsDark, skyG, 0.002F);
+            skyB = Mth.lerp(creditsDark, skyB, 0.006F);
+        }
         FogRenderer.levelFogColor();
         RenderSystem.depthMask(false);
         RenderSystem.setShaderColor(skyR, skyG, skyB, 1.0F);
@@ -176,9 +185,9 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
 
         RenderSystem.enableBlend();
 
-        // --- sunrise/sunset band (vanilla formula) -----------------------------------------
+        // --- sunrise/sunset band (vanilla formula; gone once the credits sky takes over) ----
         float[] sunrise = this.getSunriseColor(level.getTimeOfDay(partialTick), partialTick);
-        if (sunrise != null) {
+        if (sunrise != null && creditsDark < 0.5F) {
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             poseStack.pushPose();
@@ -205,7 +214,9 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
                 GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         poseStack.pushPose();
-        float rainAlpha = 1.0F - level.getRainLevel(partialTick);
+        // creditsDark also fades every celestial body (sun, halo, coronas, veil, moon) —
+        // COLLAPSE takes the eclipse frame out with the light, SPACE leaves stars only.
+        float rainAlpha = (1.0F - level.getRainLevel(partialTick)) * (1.0F - creditsDark);
         poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
         // R2: same celestial angle SunTracker projects into SunScreen — one source of truth
         // — now routed through the SKYDAY zenith hold ({@link EclipseSkyState}): after the
@@ -302,8 +313,13 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
 
         // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon —
         // SKYDAY: so do the last event days (fx-tier-scaled, cheap single draw).
-        float starBrightness = Math.max(level.getStarBrightness(partialTick),
-                Math.max(eclipse * 0.5F, fxEsc * 0.30F)) * rainAlpha;
+        // F-056/F-058: the credits sky FORCES them out (max — they must survive the
+        // celestial fade above, so the raw rain level is the only damper).
+        float starBrightness = Math.max(
+                Math.max(level.getStarBrightness(partialTick),
+                        Math.max(eclipse * 0.5F, fxEsc * 0.30F)) * rainAlpha,
+                CreditsSkyFx.starBrightness(partialTick)
+                        * (1.0F - level.getRainLevel(partialTick)));
         if (starBrightness > 0.0F) {
             RenderSystem.setShaderColor(starBrightness * 0.9F, starBrightness * 0.8F, starBrightness, starBrightness);
             FogRenderer.setupNoFog();
