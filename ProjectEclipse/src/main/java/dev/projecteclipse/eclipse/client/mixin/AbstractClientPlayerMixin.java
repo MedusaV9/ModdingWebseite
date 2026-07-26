@@ -36,8 +36,15 @@ public abstract class AbstractClientPlayerMixin {
             PlayerSkin.Model.WIDE,
             true);
 
+    /**
+     * F-050/F-051: an operator skin override (served by the mod itself, never a Mojang
+     * profile texture) is the ONE thing allowed to win over the uniform skin — that is what
+     * makes {@code /dev adminskin} readable as a role marker. Everyone else stays eclipsed.
+     */
     @Inject(method = "getSkin", at = @At("HEAD"), cancellable = true)
     private void eclipse$useUniformSkin(CallbackInfoReturnable<PlayerSkin> callbackInfo) {
-        callbackInfo.setReturnValue(ECLIPSE$UNIFORM_SKIN);
+        PlayerSkin override = dev.projecteclipse.eclipse.skin.client.ClientSkinOverrides
+                .get(((AbstractClientPlayer) (Object) this).getUUID());
+        callbackInfo.setReturnValue(override != null ? override : ECLIPSE$UNIFORM_SKIN);
     }
 }
