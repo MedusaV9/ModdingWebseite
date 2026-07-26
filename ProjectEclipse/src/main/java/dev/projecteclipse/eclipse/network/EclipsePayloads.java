@@ -64,6 +64,7 @@ public final class EclipsePayloads {
         registrar.playToClient(S2CStructureRiftPayload.TYPE, S2CStructureRiftPayload.STREAM_CODEC, EclipsePayloads::handleStructureRift);
         registrar.playToClient(S2CRebirthStatePayload.TYPE, S2CRebirthStatePayload.STREAM_CODEC, EclipsePayloads::handleRebirthState);
         registrar.playToClient(S2CSkinOverridePayload.TYPE, S2CSkinOverridePayload.STREAM_CODEC, EclipsePayloads::handleSkinOverride);
+        registrar.playToClient(S2CScareCuePayload.TYPE, S2CScareCuePayload.STREAM_CODEC, EclipsePayloads::handleScareCue);
         registrar.playToServer(C2SOpenArtifactPayload.TYPE, C2SOpenArtifactPayload.STREAM_CODEC, EclipsePayloads::handleOpenArtifactRequest);
         registrar.playToServer(C2SRebirthPayload.TYPE, C2SRebirthPayload.STREAM_CODEC, EclipsePayloads::handleRebirthRequest);
         registrar.playToServer(C2SSkillNodeBuyPayload.TYPE, C2SSkillNodeBuyPayload.STREAM_CODEC, EclipsePayloads::handleSkillNodeBuy);
@@ -379,6 +380,11 @@ public final class EclipsePayloads {
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleSkinOverride(S2CSkinOverridePayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.skin.client.ClientSkinOverrides.handle(payload);
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleScareCue(S2CScareCuePayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.scare.ScareDirector.handle(payload.scareId(), payload.seed());
     }
 
     /** D11 rebirth request; ALL validation lives in {@code rebirth.RebirthService}. */

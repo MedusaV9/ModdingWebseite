@@ -9,6 +9,7 @@ import dev.projecteclipse.eclipse.client.hud.MarkVignetteOverlay;
 import dev.projecteclipse.eclipse.client.hud.XboxTimerLayer;
 import dev.projecteclipse.eclipse.client.hud.SidebarPanel;
 import dev.projecteclipse.eclipse.client.backrooms.JumpscareOverlay;
+import dev.projecteclipse.eclipse.client.scare.ScareOverlay;
 import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
 import dev.projecteclipse.eclipse.cutscene.client.LetterboxLayer;
 import dev.projecteclipse.eclipse.hearts.client.HeartBurstOverlay;
@@ -64,6 +65,10 @@ public final class EclipseGuiLayers {
         // the caption layer — captions must stay readable over the face (§A4 layering).
         // Deliberately NOT letterbox-whitelisted: cutscene HUD suppression may hide it.
         event.registerAboveAll(JumpscareOverlay.LAYER_ID, JumpscareOverlay::render);
+        // F-064 scare framework: same slot rules as the backrooms jumpscare — over the
+        // letterbox (blackouts/faces own the frame) but UNDER the caption layer.
+        // Deliberately NOT letterbox-whitelisted: cutscene HUD suppression may hide it.
+        event.registerAboveAll(ScareOverlay.LAYER_ID, ScareOverlay::render);
         // P2-W2 cinematic captions + screen fades: registered AFTER the letterbox so text
         // draws on top of the bars (subtitles rest just above the bottom bar).
         event.registerAboveAll(CaptionRenderer.LAYER_ID, CaptionRenderer::render);
