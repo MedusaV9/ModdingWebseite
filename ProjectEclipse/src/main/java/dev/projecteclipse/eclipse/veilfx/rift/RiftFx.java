@@ -120,7 +120,13 @@ public final class RiftFx {
     /** Concurrent rift cap — the renderer's ≤400-tri budget is per rift, this bounds the sum. */
     private static final int MAX_RIFTS = 8;
     private static final float MIN_WIDTH = 1.5F;
-    private static final float MAX_WIDTH = 48.0F;
+    /**
+     * RIFT-FX: raised 48 → 72 (user: "not big enough"). Large-footprint deliveries
+     * (village/mansion/ancient city) actually reach their server-computed adaptive width
+     * now instead of clamping; the renderer's per-rift geometry budget is width-invariant
+     * (fixed arm count), and the volumetric pass ({@link RiftVolumeFx}) scales analytically.
+     */
+    private static final float MAX_WIDTH = 72.0F;
     /** Screen-glitch pulse ceiling (R11 freezes "rift_glitch pulse ≤ 0.5"). */
     private static final float MAX_PULSE = 0.5F;
     /** Full-strength pulse/sound radius; both fade to zero at {@value #PULSE_FALLOFF_BLOCKS}. */

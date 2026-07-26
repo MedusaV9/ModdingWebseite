@@ -141,6 +141,14 @@ public final class SoftBorder {
 
     /** In-memory radius animations, one per disc profile (persisted value = the target). */
     private static final Map<DiscProfile, Lerp> LERPS = new HashMap<>();
+    /**
+     * RIFT-FX growth gates: radius pinned at the OLD ring while the terrain sweep loads
+     * its chunks ({@code ExpansionBorderFx} holds on growth start and releases on terrain
+     * completion — "the border only expands once all chunks have finished loading").
+     * In-memory only: a restart mid-hold degrades gracefully to the classic sweep-coupled
+     * lerp via {@link #resumeGrowthLerp} (the persisted radius is always the TARGET).
+     */
+    private static final Map<DiscProfile, Double> GROWTH_HOLDS = new HashMap<>();
     /** Per-player pushback counters for the anti-cheat repeat-violator log. */
     private static final Map<UUID, ViolationLog> PUSHBACK_LOG = new HashMap<>();
     /** Per-vehicle (entity id) violation windows for the 3-in-40t eject rule. */
@@ -191,6 +199,10 @@ public final class SoftBorder {
      * {@code <= 0} means the ring is inactive in that dimension (nether before stage 1).
      */
     public static double radius(MinecraftServer server, DiscProfile profile) {
+        Double held = GROWTH_HOLDS.get(profile);
+        if (held != null) {
+            return held; // growth gate: pinned at the old ring until the chunks land
+        }
         Lerp lerp = LERPS.get(profile);
         if (lerp != null) {
             ServerLevel level = server.getLevel(WorldStageService.dimensionOf(profile));
@@ -302,6 +314,59 @@ public final class SoftBorder {
         broadcast(server, profile, current, target, remainingTicks);
     }
 
+    /**
+     * RIFT-FX growth gate, hold side ({@code ExpansionBorderFx.onStageGrowthStart}):
+     * pins the ring at its CURRENT radius — cancelling the sweep-coupled lerp
+     * {@link #onStageCommit} just installed — until {@link #releaseGrowthHold} lets it
+     * go after the terrain sweep has loaded every chunk. The persisted radius stays the
+     * commit TARGET (restart-safe: {@link #resumeGrowthLerp} takes over after a crash).
+     * Returns {@code false} (no hold installed) for inactive or non-growing rings.
+     */
+    public static boolean holdGrowthAtCurrent(MinecraftServer server, DiscProfile profile) {
+        double current = radius(server, profile);
+        double target = EclipseWorldState.get(server).getSoftBorderRadius(profile);
+        if (current <= 0.0D || target <= current) {
+            return false; // inactive ring, shrink, or nothing to grow — no gate
+        }
+        LERPS.remove(profile);
+        GROWTH_HOLDS.put(profile, current);
+        if (profile == DiscProfile.OVERWORLD) {
+            // The failsafe net rides the held ring too (still +48 beyond it).
+            BorderController.applyFailsafe(server, current, 0L);
+        }
+        EclipseMod.LOGGER.info("SoftBorder: {} ring HELD at radius {} until the growth sweep completes (target {})",
+                profile.name(), String.format(java.util.Locale.ROOT, "%.1f", current),
+                String.format(java.util.Locale.ROOT, "%.1f", target));
+        broadcast(server, profile, current, current, 0);
+        return true;
+    }
+
+    /**
+     * RIFT-FX growth gate, release side ({@code ExpansionBorderFx} on terrain
+     * completion): expands the held ring to the persisted commit target over {@code ms}
+     * milliseconds — every chunk of the new annulus is already written and lit at this
+     * point, so the expansion is pure spectacle. No-op without an active hold.
+     */
+    public static void releaseGrowthHold(MinecraftServer server, DiscProfile profile, long ms) {
+        Double held = GROWTH_HOLDS.get(profile);
+        if (held == null) {
+            return;
+        }
+        double target = EclipseWorldState.get(server).getSoftBorderRadius(profile);
+        EclipseMod.LOGGER.info("SoftBorder: {} ring RELEASED from held radius {} — expanding to {}",
+                profile.name(), String.format(java.util.Locale.ROOT, "%.1f", held),
+                String.format(java.util.Locale.ROOT, "%.1f", target));
+        // setRing reads radius() for its from-value — the hold must still be in place
+        // there (so the lerp starts at the held ring), and removed right after.
+        setRing(server, profile, target, ms, false);
+        GROWTH_HOLDS.remove(profile);
+    }
+
+    /** Whether the profile's ring is currently gate-held (see {@link #holdGrowthAtCurrent}). */
+    public static boolean isGrowthHeld(DiscProfile profile) {
+        return GROWTH_HOLDS.containsKey(profile);
+    }
+
     /** Persists a new FX visibility range (blocks) and re-syncs all clients. */
     public static void setFxRange(MinecraftServer server, double blocks) {
         EclipseWorldState.get(server).setBorderFxRange(Math.max(1.0D, blocks));
@@ -339,6 +404,12 @@ public final class SoftBorder {
         Lerp lerp = LERPS.get(profile);
         double current = radius(server, profile);
         double target = EclipseWorldState.get(server).getSoftBorderRadius(profile);
+        Double held = GROWTH_HOLDS.get(profile);
+        if (held != null) {
+            // Mid-hold login: the persisted value is the future target — the client must
+            // see the HELD ring (a 0-tick payload snaps to its "to" radius).
+            target = held;
+        }
         int remaining = 0;
         if (lerp != null) {
             ServerLevel level = server.getLevel(WorldStageService.dimensionOf(profile));
@@ -437,6 +508,7 @@ public final class SoftBorder {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         LERPS.clear();
+        GROWTH_HOLDS.clear();
         PUSHBACK_LOG.clear();
         VEHICLE_LOG.clear();
         LAST_SOUND.clear();

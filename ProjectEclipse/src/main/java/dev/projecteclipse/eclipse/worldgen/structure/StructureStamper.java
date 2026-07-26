@@ -269,8 +269,10 @@ public final class StructureStamper {
      * a chunk border so {@code Structure.generate} sees a genuinely new start chunk) while
      * staying within the landmark footprint. Plateau anchors re-derive their surface Y at
      * the shifted column; cavity anchors (authored well below the surface) keep their depth.
+     * Package-visible (RIFT-FX): {@link StructureBlockSampler} must derive the SAME anchor
+     * the placer will use so its captured preview lands where the real blocks will.
      */
-    private static BlockPos retryAnchor(ServerLevel level, PendingSite site, int retry) {
+    static BlockPos retryAnchor(ServerLevel level, PendingSite site, int retry) {
         if (retry <= 0) {
             return site.anchor();
         }

@@ -29,6 +29,7 @@ import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.worldgen.structure.StructureBlockSampler;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
@@ -82,12 +83,18 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * PLACED slam (shockwave + 0.4 shake) stays {@code ExpansionSequence}'s. The final-slam /
  * rift-open pulses of the sequence are untouched; this class only adds the in-between.</p>
  *
- * <p><b>Piece sampling</b>: the placer has not run yet, so the structure's real blocks are
- * unknowable at launch time. Pieces sample a per-{@code structureId} palette of that
- * structure's most visible (surface-first) materials, weighted toward the primary
- * material — visually truthful, and pure candy by construction. Cavity sites (anchor well
- * below the surface: trial chambers, ancient city, crypts) get PLUNGING pieces that punch
- * into the ground on arrival instead of resting on it.</p>
+ * <p><b>Piece sampling (RIFT-FX rework)</b>: pieces are now the structure's ACTUAL
+ * blocks. {@code StructureBlockSampler} dry-runs the site's deterministic vanilla
+ * placement against a capturing level proxy and returns the topmost visible state of
+ * each column at its final world cell — the delivery flies those exact states to those
+ * exact cells (bottom-up, so walls assemble under roofs), holds the assembled preview
+ * in place while the real placer runs, and sweeps it the moment the registry reports
+ * {@link StructurePendingRegistry.Phase#PLACED} — the block displays track the real
+ * placement 1:1 and vanish exactly when the game finishes placing. Sites without a
+ * sampleable vanilla start (custom underground placers, failed dry run) fall back to
+ * the legacy per-{@code structureId} palette scatter. Buried sample cells (and every
+ * palette piece of a cavity site) get PLUNGING pieces that punch into the ground on
+ * arrival instead of resting on it.</p>
  *
  * <p><b>Craft pass (BD-STRUCT)</b>: keyframes lead by one update interval so the client
  * tween covers between poses (never trails); launches stagger in CENTER-OUT SPIRAL order
@@ -119,8 +126,12 @@ public final class StructureFlightFx {
     /** Tag on every flight display — strays from a crash are swept on entity load. */
     public static final String ENTITY_TAG = "eclipse_flight_display";
 
-    /** Default per-delivery display cap ({@code flight_fx.max_displays} overrides). */
-    private static final int DEFAULT_MAX_DISPLAYS = 80;
+    /**
+     * Default per-delivery display cap ({@code flight_fx.max_displays} overrides).
+     * RIFT-FX: raised 80 → 140 (user: "MORE block displays") — with real sampled blocks
+     * every display lands on a real cell, so the density directly reads as the build.
+     */
+    private static final int DEFAULT_MAX_DISPLAYS = 140;
     /** Transformation update cadence; interpolation duration matches (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 2;
     /** Pieces per launch batch and the stagger between batches (spawn-cost smoothing). */
@@ -171,9 +182,10 @@ public final class StructureFlightFx {
     /**
      * Rift-mouth altitude above the site surface. Mirrors the (private)
      * {@code ExpansionSequence.SKY_RIFT_HEIGHT} so the delivery surge re-opens the beat's
-     * tear in place instead of tearing a second hole beside it.
+     * tear in place instead of tearing a second hole beside it. RIFT-FX: raised 26 → 44
+     * with the sequence's constant (user: "rifts should spawn further up").
      */
-    private static final int RIFT_MOUTH_HEIGHT = 26;
+    private static final int RIFT_MOUTH_HEIGHT = 44;
     /** A delivery only plays when at least one player is this close to the site anchor. */
     private static final double VIEWER_RANGE = 224.0D;
     /** FX broadcast radius for shakes/sounds (matches ExpansionSequence.slamFx). */
@@ -702,14 +714,21 @@ public final class StructureFlightFx {
     // ------------------------------------------------------------------ piece planning
 
     /**
-     * Plans the delivery: piece count scales with the footprint (capped by config),
-     * landing cells are seeded-deterministically scattered over the footprint disc at
-     * surface height, palettes are keyed by structureId. Deterministic per site — every
-     * restartless replay of the same site looks identical on all clients.
+     * Plans the delivery. RIFT-FX: the primary path dry-runs the real placement via
+     * {@link StructureBlockSampler} and flies the structure's ACTUAL blocks to their
+     * exact resting cells (bottom-up spiral launch order — walls assemble under roofs);
+     * the legacy palette scatter below remains the fallback for sites without a
+     * sampleable vanilla start. Deterministic per site either way — every restartless
+     * replay of the same site looks identical on all clients.
      */
     private static List<Piece> buildPieces(ServerLevel level, PendingSite site, Vec3 mouth,
             Vec3 surfaceCenter) {
         RandomSource random = RandomSource.create(site.siteId().hashCode() * 31L + site.stage());
+        List<StructureBlockSampler.Sample> samples =
+                StructureBlockSampler.sampleVisible(level, site, Math.max(configMaxDisplays, 1));
+        if (!samples.isEmpty()) {
+            return buildSampledPieces(level, site, mouth, random, samples);
+        }
         int count = Math.min(Math.max(configMaxDisplays, 1),
                 Math.max(10, (int) (site.footprint() * 1.25F)));
         boolean cavity = site.anchor().getY() < surfaceCenter.y - CAVITY_DEPTH;
@@ -761,6 +780,72 @@ public final class StructureFlightFx {
             pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
         }
         return pieces;
+    }
+
+    /**
+     * RIFT-FX sampled-block path: one piece per captured sample, flying the EXACT state
+     * to the EXACT resting cell of the future structure. Buried cells (a sample more
+     * than {@value #CAVITY_DEPTH} blocks under the current surface — cavity structures,
+     * cellars) become plunging pieces that punch into the ground at their column instead
+     * of hovering inside solid terrain. Launch order is bottom-up by
+     * {@value #Y_BAND_BLOCKS}-block height bands with the center-out spiral inside each
+     * band, so the build visibly assembles foundation-first.
+     */
+    private static List<Piece> buildSampledPieces(ServerLevel level, PendingSite site, Vec3 mouth,
+            RandomSource random, List<StructureBlockSampler.Sample> samples) {
+        float mouthScatter = Math.min(48.0F,
+                StructurePendingRegistry.revealRiftWidth(site.footprint())) * 0.25F;
+        List<Piece> pieces = new ArrayList<>(samples.size());
+        double minY = Double.MAX_VALUE;
+        for (StructureBlockSampler.Sample sample : samples) {
+            int x = sample.pos().getX();
+            int z = sample.pos().getZ();
+            level.getChunk(x >> 4, z >> 4); // the sampler force-loaded these already
+            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            boolean plunge = sample.pos().getY() < surfaceY - CAVITY_DEPTH;
+            int cellY = plunge ? surfaceY : sample.pos().getY();
+            Vec3 entityPos = new Vec3(x + 0.5D, cellY, z + 0.5D);
+            Vec3 target = new Vec3(x + 0.5D, cellY + PIECE_SCALE * 0.5D, z + 0.5D);
+            Vec3 launch = mouth.add((random.nextDouble() - 0.5D) * mouthScatter * 2.0D,
+                    -random.nextDouble() * 1.5D,
+                    (random.nextDouble() - 0.5D) * mouthScatter * 2.0D);
+            Vec3 control = launch.add(target).scale(0.5D)
+                    .add((random.nextDouble() - 0.5D) * 8.0D,
+                            6.0D + random.nextDouble() * 8.0D,
+                            (random.nextDouble() - 0.5D) * 8.0D);
+            int flightTicks = MIN_FLIGHT_TICKS + random.nextInt(MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS + 1);
+            float spinTurns = (1 + random.nextInt(2)) * (random.nextBoolean() ? 1.0F : -1.0F);
+            Vector3f spinAxis = new Vector3f(random.nextFloat() - 0.5F, random.nextFloat() - 0.5F,
+                    random.nextFloat() - 0.5F);
+            if (spinAxis.lengthSquared() < 1.0E-4F) {
+                spinAxis.set(0.0F, 1.0F, 0.0F);
+            }
+            spinAxis.normalize();
+            pieces.add(new Piece(launch, control, target, entityPos, sample.state(),
+                    flightTicks, spinTurns, spinAxis, plunge));
+            minY = Math.min(minY, target.y);
+        }
+        // Bottom-up assembly: height bands launch in order, spiraling inside each band —
+        // the structure grows out of its foundation instead of raining down at random.
+        Vec3 center = new Vec3(mouth.x, 0.0D, mouth.z);
+        double baseY = minY;
+        pieces.sort((a, b) -> Double.compare(
+                sampledLaunchKey(a, center, baseY), sampledLaunchKey(b, center, baseY)));
+        for (int i = 0; i < pieces.size(); i++) {
+            pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
+        }
+        return pieces;
+    }
+
+    /** Height of one bottom-up launch band of the sampled-block delivery (blocks). */
+    private static final int Y_BAND_BLOCKS = 4;
+    /** Spiral keys stay well under this, so bands can never interleave. */
+    private static final double Y_BAND_KEY_STRIDE = 10_000.0D;
+
+    /** Bottom-up band + in-band spiral ordering key of a sampled piece (see above). */
+    private static double sampledLaunchKey(Piece piece, Vec3 center, double minY) {
+        int band = (int) ((piece.target.y - minY) / Y_BAND_BLOCKS);
+        return band * Y_BAND_KEY_STRIDE + spiralKey(piece, center);
     }
 
     /** Center-out spiral ordering key of a piece's landing cell (see buildPieces). */
@@ -868,7 +953,8 @@ public final class StructureFlightFx {
                     configEnabled = flightFx.get("enabled").getAsBoolean();
                 }
                 if (flightFx.has("max_displays")) {
-                    configMaxDisplays = Math.max(1, Math.min(200, flightFx.get("max_displays").getAsInt()));
+                    // RIFT-FX: ceiling raised 200 → 300 alongside the sampled-block rework.
+                    configMaxDisplays = Math.max(1, Math.min(300, flightFx.get("max_displays").getAsInt()));
                 }
             }
         } catch (IOException | RuntimeException e) {

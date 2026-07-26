@@ -34,6 +34,7 @@ import dev.projecteclipse.eclipse.network.growth.GrowthPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
+import dev.projecteclipse.eclipse.worldgen.stage.ChunkPreload;
 import dev.projecteclipse.eclipse.worldgen.stage.GrowthPacing;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
@@ -168,8 +169,13 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int BEAT_SPACING_TICKS = 50;
     /** A triggered beat whose PLACED never lands is abandoned after this (async placers). */
     private static final int BEAT_TIMEOUT_TICKS = 1200;
-    /** Sky-rift altitude above the site's surface (STRUCTURE rifts open flat in the sky, R11). */
-    private static final int SKY_RIFT_HEIGHT = 26;
+    /**
+     * Sky-rift altitude above the site's surface (STRUCTURE rifts open flat in the sky,
+     * R11). RIFT-FX: raised 26 → 44 so the tear hangs properly HIGH over the build site
+     * (user: "rifts should spawn further up"); mirrored by
+     * {@code StructureFlightFx.RIFT_MOUTH_HEIGHT} — keep the two in lockstep.
+     */
+    private static final int SKY_RIFT_HEIGHT = 44;
     /** Rift width from the pending site's footprint (payload contract: diagonal · 1.2 ≈ · 1.7). */
     private static final float RIFT_WIDTH_PER_FOOTPRINT = 1.7F;
 
@@ -868,12 +874,22 @@ public final class ExpansionSequence implements SequenceReplayable {
             index++;
             Vec3 spot = edgeAnchorFor(run.level, angleToPos(angle), viewRadius);
             float yaw = (float) Math.toDegrees(Math.atan2(-Math.cos(angle), Math.sin(angle)));
-            PacketDistributor.sendToPlayer(player, GATHER_FADE);
-            FreezeService.transport(player, run.level, spot, yaw, 10.0F);
-            FreezeService.setInvulnerable(player, NETHER_INVULN_TTL_TICKS);
             run.netherVisitors.add(player.getUUID());
-            EclipseMod.LOGGER.info("ExpansionSequence: brought {} from the nether to the viewpoint {} (return pending)",
-                    player.getScoreboardName(), spot);
+            // RIFT-FX (black-screen fix): pre-warm a 3x3 chunk square at the viewpoint and
+            // only START the fade+transport once those chunks are resident — the vanilla
+            // "Downloading terrain" screen then clears inside the fade's black hold.
+            UUID uuid = player.getUUID();
+            ChunkPreload.warmThenRun(run.level, spot, ChunkPreload.DEFAULT_TIMEOUT_TICKS, () -> {
+                ServerPlayer visitor = server.getPlayerList().getPlayer(uuid);
+                if (visitor == null) {
+                    return; // logged out mid-warm: the persisted return row covers them
+                }
+                PacketDistributor.sendToPlayer(visitor, GATHER_FADE);
+                FreezeService.transport(visitor, run.level, spot, yaw, 10.0F);
+                FreezeService.setInvulnerable(visitor, NETHER_INVULN_TTL_TICKS);
+                EclipseMod.LOGGER.info("ExpansionSequence: brought {} from the nether to the viewpoint {} (return pending)",
+                        visitor.getScoreboardName(), spot);
+            });
         }
     }
 
@@ -901,13 +917,25 @@ public final class ExpansionSequence implements SequenceReplayable {
                     snapshot.dimension().location(), player.getScoreboardName());
             return;
         }
-        PacketDistributor.sendToPlayer(player, RETURN_FADE);
-        PacketDistributor.sendToPlayer(player, new S2CCaptionPayload(CAPTION_NETHER_RETURN, 60,
-                S2CCaptionPayload.STYLE_WHISPER));
-        FreezeService.transport(player, home, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
-        FreezeService.clearInvulnerable(player);
-        EclipseMod.LOGGER.info("ExpansionSequence: returned {} to {} in {} ({})",
-                player.getScoreboardName(), snapshot.pos(), snapshot.dimension().location(), reason);
+        // RIFT-FX (black-screen fix): warm the return spot's 3x3 chunks BEFORE the fade
+        // starts, mirroring the gather leg. The snapshot row was already taken above, so
+        // a re-entrant call while the warm is pending stays a no-op.
+        UUID uuid = player.getUUID();
+        ChunkPreload.warmThenRun(home, snapshot.pos(), ChunkPreload.DEFAULT_TIMEOUT_TICKS, () -> {
+            ServerPlayer returning = home.getServer().getPlayerList().getPlayer(uuid);
+            if (returning == null) {
+                // Logged out mid-warm: re-persist the snapshot so the next login applies it.
+                NetherReturns.get(home.getServer()).putIfAbsent(uuid, snapshot);
+                return;
+            }
+            PacketDistributor.sendToPlayer(returning, RETURN_FADE);
+            PacketDistributor.sendToPlayer(returning, new S2CCaptionPayload(CAPTION_NETHER_RETURN, 60,
+                    S2CCaptionPayload.STYLE_WHISPER));
+            FreezeService.transport(returning, home, snapshot.pos(), snapshot.yRot(), snapshot.xRot());
+            FreezeService.clearInvulnerable(returning);
+            EclipseMod.LOGGER.info("ExpansionSequence: returned {} to {} in {} ({})",
+                    returning.getScoreboardName(), snapshot.pos(), snapshot.dimension().location(), reason);
+        });
     }
 
     /**
