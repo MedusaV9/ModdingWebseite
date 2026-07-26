@@ -33,17 +33,21 @@ import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
+import dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection;
 import dev.projecteclipse.eclipse.worldgen.structure.SkyLauncher;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -111,10 +115,40 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   <li><b>End structures</b> — when the pass completes, the three largest outer islets
  *       receive {@link EndCityKit} sites (two towers + one end-ship, real loot + shulkers)
  *       through {@link StructurePendingRegistry}, so they get the standard rift
- *       reveals. FIN-2/FIN-3 ride the same completion: endermen rise on the isles
- *       (post-fight by construction) and low-hung REAL rubble clumps appear over the
- *       seams — near enough to pillar up to.</li>
+ *       reveals. FIN-2 rides the same completion: endermen rise on the isles (post-fight
+ *       by construction).</li>
  * </ol>
+ *
+ * <h2>F-047 — the crash finale</h2>
+ *
+ * <p>The archipelago is no longer the end state. {@value #CRASH_DELAY_TICKS} ticks after
+ * the carve completes (the loot window for the End-city kits) the sky comes down, in four
+ * persisted phases on top of the carve — {@link #PHASE_CRASH_WAIT},
+ * {@link #PHASE_CRASH}, {@link #PHASE_CORE}, {@link #PHASE_SKY_BITS}:</p>
+ * <ol>
+ *   <li><b>Staggered crash</b> — the outer islets fall ONE AT A TIME. Each islet launches
+ *       a visible {@link EndIslandCrashFx} fragment cluster towards its ground impact site
+ *       while a budgeted {@link RazePass} erases exactly that islet's columns from the sky
+ *       (one chunk per tick, section-air fast path). The landing fires explosion particles,
+ *       a thud + shake and builds a small REAL end-stone rubble heap on the ground; any
+ *       loot block entity the raze still finds up there rides down into that heap instead
+ *       of being deleted.</li>
+ *   <li><b>The middle island goes too</b> ({@link #PHASE_CORE}) — a final full-band sweep
+ *       over the whole disc footprint removes the podium islet with its exit portal and
+ *       every sliver the per-islet passes left behind, so the sky is provably empty. The
+ *       dragon egg is NOT lost with it: it is the hard-wired day-14 finale catalyst
+ *       ({@code FinaleRitual.CATALYST}), so if the egg is still sitting on the pedestal it
+ *       is re-seated on the first ground heap.</li>
+ *   <li><b>Low remnants</b> ({@link #PHASE_SKY_BITS}) — {@value #SKY_BIT_COUNT} small
+ *       clumps hung {@value #SKY_BIT_MIN_RISE}–{@value #SKY_BIT_MIN_RISE}+{@value
+ *       #SKY_BIT_RISE_RANGE} blocks over the LOCAL ground and spread far apart across the
+ *       map, so reaching them is a short pillar rather than a 300-block tower.</li>
+ * </ol>
+ *
+ * <p>Every phase boundary, the per-islet pass index, both raze cursors and the per-islet
+ * "ground heap already built" mask live in {@link ShatterData}, so a restart in the middle
+ * of the finale resumes exactly where it stopped (and back-fills any heap whose cosmetic
+ * fall was dropped with the restart). Only the cinematic itself never resumes.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class EndShatterSequence {
@@ -134,13 +168,23 @@ public final class EndShatterSequence {
     /** Columns closer to the disc center than this always keep islet 0 (podium, egg). */
     private static final int CENTER_KEEP_RADIUS = 14;
     /**
-     * Per-islet vertical offset bounds (FIN-3: the isles pull far APART — sinking twice
-     * as deep and rising higher than before). Bounds checked against the overworld's
-     * −176..464 build range: {@code MAX_Y(408) + 28 = 436} and {@code MIN_Y(340) − 24 =
-     * 316} both stay inside existing chunk sections.
+     * Per-islet vertical offset bounds. F-047 ("bewege die End Inseln sehr weit
+     * auseinander") widens the FIN-3 band once more, from −24…+28 to −32…+36: paired
+     * with the {@value #SEAM_MIN_WIDTH}–{@value #SEAM_MIN_WIDTH}+{@value
+     * #SEAM_WIDTH_RANGE}-block seam channels below, no two islets read as one surface
+     * any more. Bounds against the overworld's −176..464 build range: the highest block
+     * an islet can own is {@code MAX_Y(408) + 36 = 444} and the lowest
+     * {@code MIN_Y(340) − 32 = 308}, both well inside existing chunk sections.
      */
-    private static final int DY_MIN = -24;
-    private static final int DY_RANGE = 52; // DY_MIN..DY_MIN+52 = −24..+28
+    private static final int DY_MIN = -32;
+    private static final int DY_RANGE = 68; // DY_MIN..DY_MIN+68 = −32..+36
+    /**
+     * Seam channel width band (blocks cleared along each Voronoi boundary). F-047 pulls
+     * this up from the FIN-3 3–5 to a gap you cannot step across, so the archipelago is
+     * genuinely separate islands rather than a cracked slab.
+     */
+    private static final int SEAM_MIN_WIDTH = 8;
+    private static final int SEAM_WIDTH_RANGE = 5; // 8…12
     /**
      * FIN-2 display budget: the seam FIELD scan queues up to {@value #DEBRIS_FIELD_CAP}
      * chunks, every crack-race flash fountains {@value #BURST_PER_CRACK} more OUT of its
@@ -200,14 +244,71 @@ public final class EndShatterSequence {
     private static final long SALT_BURST = 94L;
     private static final long SALT_ENDERMEN = 95L;
     private static final long SALT_RUBBLE = 96L;
+    private static final long SALT_IMPACT = 97L;
+    private static final long SALT_CRASH = 98L;
 
     // --- FIN-2/FIN-3 post-fight population ---
     /** Endermen risen per outer islet once the carve completes (post-fight only). */
     private static final int ENDERMEN_PER_ISLET = 3;
-    /** Real sky-rubble clumps hung LOW over the isles (build-up-able, FIN-3). */
-    private static final int RUBBLE_CLUSTERS = 10;
-    private static final int RUBBLE_MIN_RISE = 14;
-    private static final int RUBBLE_RISE_RANGE = 16;
+
+    // --- F-047: the crash finale (phases 1…4 below the carve) -----------------------
+
+    /**
+     * How long the shattered archipelago stands before it starts falling. This is the
+     * LOOT WINDOW: the {@link EndCityKit} sites are enqueued at carve completion and the
+     * crash razes the sky afterwards, so players need a real chance to raid them (any
+     * chest the raze still finds is rescued into the ground rubble, see
+     * {@link RazePass#rescued}). {@code /eclipse-worldgen end crash} skips the wait.
+     */
+    private static final int CRASH_DELAY_TICKS = 12_000;
+    /** Fall length of one islet's visible fragment cluster before its ground impact. */
+    private static final int CRASH_FALL_TICKS = 170;
+    /**
+     * Vertical band the raze passes clear: from below the deepest islet offset to above
+     * the tallest caged pillar of a RISEN islet (plus room for the End-city kits).
+     * Clamped against the level's build height at use.
+     */
+    private static final int RAZE_MIN_Y = EndDiscGeometry.MIN_Y + DY_MIN - 8;
+    private static final int RAZE_MAX_Y = EndDiscGeometry.MAX_Y + DY_MIN + DY_RANGE + 24;
+    /** Impact sites stay this far out from the disc centre (the sanctum cylinder is r 18). */
+    private static final int IMPACT_MIN_RADIUS = 44;
+    private static final int IMPACT_MAX_RADIUS = DiscProfile.END_DISC_RADIUS - 4;
+    /** Impact sites are pushed this much further out than their islet sat. */
+    private static final double IMPACT_SPREAD_FACTOR = 1.15D;
+    /** One ground rubble heap: horizontal radius {@code MIN}…{@code MIN+RANGE}. */
+    private static final int HEAP_MIN_RADIUS = 3;
+    private static final int HEAP_RADIUS_RANGE = 2;
+    /** Loot block entities rescued out of a falling islet into its ground heap. */
+    private static final int HEAP_LOOT_CAP = 8;
+    /**
+     * F-047 (e) "Bröckel am Himmel, aber niedriger": the handful of remnants left over
+     * the map are hung {@value #SKY_BIT_MIN_RISE}…{@value #SKY_BIT_MIN_RISE}+{@value
+     * #SKY_BIT_RISE_RANGE} blocks over the LOCAL GROUND (was: 14–30 over the Y-360 lens,
+     * i.e. ~300 blocks up) and spread across a {@value #SKY_BIT_MIN_RADIUS}…{@value
+     * #SKY_BIT_MIN_RADIUS}+{@value #SKY_BIT_RADIUS_RANGE} ring, one per angular slice —
+     * near enough to pillar up to, far enough apart to be separate landmarks.
+     */
+    private static final int SKY_BIT_COUNT = 7;
+    private static final int SKY_BIT_MIN_RISE = 40;
+    private static final int SKY_BIT_RISE_RANGE = 20;
+    private static final int SKY_BIT_MIN_RADIUS = 110;
+    private static final int SKY_BIT_RADIUS_RANGE = 150;
+    private static final int SKY_BIT_MIN_SIZE = 3;
+    private static final int SKY_BIT_SIZE_RANGE = 3;
+
+    // --- F-047 finale phases (persisted in ShatterData; see the class doc) ---
+    /** The Voronoi carve pass — the archipelago forms (legacy behaviour). */
+    public static final int PHASE_CARVE = 0;
+    /** The archipelago stands; the crash is armed for {@code crashDueGameTime}. */
+    public static final int PHASE_CRASH_WAIT = 1;
+    /** One islet at a time falls out of the sky and lands as ground rubble. */
+    public static final int PHASE_CRASH = 2;
+    /** The middle island (podium, portal, egg) and every leftover block are razed. */
+    public static final int PHASE_CORE = 3;
+    /** The low, far-apart sky remnants are placed. */
+    public static final int PHASE_SKY_BITS = 4;
+    /** Terminal. */
+    public static final int PHASE_DONE = 5;
 
     private static final long TICK_NANOS = 2_000_000L;
     private static final int POLL_TICKS = 20;
@@ -247,6 +348,11 @@ public final class EndShatterSequence {
 
     @Nullable
     private static Job activeJob;
+    /** The live crash/core raze pass (F-047), or {@code null}. Server thread only. */
+    @Nullable
+    private static RazePass activePass;
+    /** Game time the running crash pass's fragment cluster lands at, or −1. */
+    private static long impactDueTick = -1L;
     private static final List<Debris> DEBRIS = new ArrayList<>();
 
     /**
@@ -324,7 +430,8 @@ public final class EndShatterSequence {
             }
             int lo = Math.min(first, second);
             int hi = Math.max(first, second);
-            int seamWidth = 3 + (int) Math.floorMod(mix(this.seed ^ SALT_SEAM, lo, hi), 3L);
+            int seamWidth = SEAM_MIN_WIDTH
+                    + (int) Math.floorMod(mix(this.seed ^ SALT_SEAM, lo, hi), SEAM_WIDTH_RANGE);
             boolean seam = secondDist - firstDist < seamWidth;
             return new Sample(first, seam, this.dy[first]);
         }
@@ -398,12 +505,22 @@ public final class EndShatterSequence {
             activeJob = new Job(overworld, state, 0);
             EclipseMod.LOGGER.info("EndShatterSequence: resuming carve pass at cursor {}",
                     state.cursor());
+            return;
         }
+        if (!state.complete()) {
+            return;
+        }
+        // F-047 resume: back-fill the ground rubble of every islet whose crash pass had
+        // already run (its cosmetic fall died with the restart, its heap must not), then
+        // re-arm the phase that was interrupted.
+        resumeFinale(overworld, state);
     }
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         activeJob = null;
+        activePass = null;
+        impactDueTick = -1L;
         DEBRIS.clear();
         LIVE_DEBRIS.clear();
         PENDING.clear();
@@ -449,16 +566,122 @@ public final class EndShatterSequence {
         if (!DEBRIS.isEmpty()) {
             tickDebris();
         }
+        if (activePass != null) {
+            tickFinalePass(server);
+        }
         if (server.getTickCount() % POLL_TICKS != 0) {
             return;
         }
         ShatterData state = ShatterData.get(server);
-        if (state.started() || state.complete() || state.dueGameTime() < 0L) {
+        if (state.complete()) {
+            pollFinale(server, state);
+            return;
+        }
+        if (state.started() || state.dueGameTime() < 0L) {
             return;
         }
         if (server.overworld().getGameTime() >= state.dueGameTime()) {
             beginShatter(server, state);
         }
+    }
+
+    // --- F-047 finale driver -------------------------------------------------------
+
+    /**
+     * How far above the authored disc geometry the highest islet now sits, or 0 while the
+     * disc is still one slab. The {@code SkyLauncher} adds this to its climb target so a
+     * launch keeps clearing the archipelago after the carve raised part of it (F-024).
+     */
+    public static int maxIsletLift(MinecraftServer server) {
+        if (!ShatterData.get(server).complete()) {
+            return 0;
+        }
+        int lift = 0;
+        for (int dy : layout().dy()) {
+            lift = Math.max(lift, dy);
+        }
+        return lift;
+    }
+
+    /** Whether the crash finale has emptied the sky (the {@code SkyLauncher} gate). */
+    public static boolean skyCleared(MinecraftServer server) {
+        return ShatterData.get(server).phase() >= PHASE_SKY_BITS;
+    }
+
+    /** Whether the crash finale has run to its terminal phase. */
+    public static boolean finaleDone(MinecraftServer server) {
+        return ShatterData.get(server).phase() >= PHASE_DONE;
+    }
+
+    /**
+     * Command seam ({@code /eclipse-worldgen end crash}): skips the remaining loot window
+     * and starts the crash finale now. Refused before the carve completed and after the
+     * crash already began, so it can never double-run a pass.
+     */
+    public static boolean forceCrash(MinecraftServer server) {
+        ShatterData state = ShatterData.get(server);
+        if (!state.complete() || state.phase() != PHASE_CRASH_WAIT) {
+            return false;
+        }
+        state.setCrashDue(server.overworld().getGameTime());
+        return true;
+    }
+
+    /** Slow poll (every {@value #POLL_TICKS}t) that advances the finale between passes. */
+    private static void pollFinale(MinecraftServer server, ShatterData state) {
+        if (activePass != null || state.phase() >= PHASE_DONE) {
+            return;
+        }
+        ServerLevel overworld = server.overworld();
+        switch (state.phase()) {
+            case PHASE_CARVE -> {
+                // Legacy save: the carve finished before F-047 existed — arm the finale.
+                state.armCrash(overworld.getGameTime() + CRASH_DELAY_TICKS);
+                EclipseMod.LOGGER.info("EndShatterSequence: crash finale armed for game time {}",
+                        state.crashDueGameTime());
+            }
+            case PHASE_CRASH_WAIT -> {
+                if (overworld.getGameTime() >= state.crashDueGameTime()) {
+                    beginCrash(overworld, state);
+                }
+            }
+            case PHASE_CRASH -> startCrashPass(overworld, state);
+            case PHASE_CORE -> startCorePass(overworld, state);
+            case PHASE_SKY_BITS -> placeSkyBits(overworld, state);
+            default -> { }
+        }
+    }
+
+    /** Runs the live raze pass and resolves its completion / its cluster's landing. */
+    private static void tickFinalePass(MinecraftServer server) {
+        RazePass pass = activePass;
+        if (pass == null) {
+            return;
+        }
+        ShatterData state = ShatterData.get(server);
+        long gameTime = server.overworld().getGameTime();
+        if (impactDueTick >= 0L && gameTime >= impactDueTick) {
+            impactDueTick = -1L;
+            landIslet(server.overworld(), state, state.crashPass());
+        }
+        if (!pass.tick()) {
+            return;
+        }
+        activePass = null;
+        state.setRazeCursor(0L);
+        if (state.phase() == PHASE_CRASH) {
+            // Safety net: a pass that outlives its (cosmetic) fall still lands its rubble.
+            if (impactDueTick >= 0L) {
+                impactDueTick = -1L;
+                landIslet(server.overworld(), state, state.crashPass());
+            }
+            state.advanceCrashPass();
+            if (state.crashPass() >= crashOrder(layout()).size()) {
+                state.setPhase(PHASE_CORE);
+            }
+            return;
+        }
+        completeCorePass(server.overworld(), state);
     }
 
     /** Runs every due presentation beat (server thread; a restart simply drops them). */
@@ -1182,11 +1405,13 @@ public final class EndShatterSequence {
             this.state.setCursor(this.totalOperations);
             activeJob = null;
             enqueueCityKits(this.level, this.layout);
-            // FIN-2/FIN-3 post-fight population: the fight is long over by the time the
-            // carve completes — endermen reclaim the isles, and real low-hung rubble
-            // clumps appear over the seams (build-up-able, unlike the dissolving debris).
+            // FIN-2 post-fight population: the fight is long over by the time the carve
+            // completes — endermen reclaim the isles. (The old low sky-rubble clumps moved
+            // to the F-047 PHASE_SKY_BITS, which places them over the GROUND instead.)
             spawnEndermen(this.level, this.layout);
-            placeSkyRubble(this.level, this.layout);
+            // F-047: the archipelago is now a stop on the way down. Arm the crash finale
+            // one loot window from here; the poll in onServerTick fires it.
+            this.state.armCrash(this.level.getGameTime() + CRASH_DELAY_TICKS);
             // CUT-END shot 4 (settle): the carve pass finishing IS the isles coming to
             // rest — a low thud + one soft long shake mark it for anyone on the disc
             // (the low-FREQUENCY rumble shaping lives in the cutscene JSON's shake
@@ -1300,49 +1525,504 @@ public final class EndShatterSequence {
                 spawned);
     }
 
+    // --- F-047 phase 1: the staggered crash ----------------------------------------
+
+    /** Outer islets in fall order: the far ones let go first, the podium goes last. */
+    private static List<Integer> crashOrder(Layout layout) {
+        List<Integer> order = new ArrayList<>();
+        for (int i = 1; i < layout.count(); i++) {
+            order.add(i);
+        }
+        order.sort(Comparator.comparingDouble(
+                islet -> -Math.hypot(layout.siteX()[islet], layout.siteZ()[islet])));
+        return order;
+    }
+
+    /** Enters {@link #PHASE_CRASH}: one announcement, then the passes run themselves. */
+    private static void beginCrash(ServerLevel level, ShatterData state) {
+        state.setPhase(PHASE_CRASH);
+        state.setCrashPass(0);
+        state.setRazeCursor(0L);
+        level.getServer().getPlayerList().broadcastSystemMessage(
+                Component.translatable("announce.eclipse.end.crash_begins"), false);
+        for (ServerPlayer player : level.players()) {
+            PacketDistributor.sendToPlayer(player, new S2CCaptionPayload(
+                    "eclipse.caption.end_crash.begins", 100, S2CCaptionPayload.STYLE_SUBTITLE));
+            player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                    SoundSource.MASTER, 1.2F, 0.7F);
+        }
+        graceSkyPlayers(level);
+        PacketDistributor.sendToPlayersInDimension(level, S2CShakePayload.shake(1.0F, 60));
+        EclipseMod.LOGGER.info("EndShatterSequence: crash finale started ({} islets to fall)",
+                crashOrder(layout()).size());
+    }
+
     /**
-     * FIN-3 "crumbling bits in the sky, but LOWER": {@value #RUBBLE_CLUSTERS} small REAL
-     * end-stone/obsidian clumps hung {@value #RUBBLE_MIN_RISE}–{@value #RUBBLE_MIN_RISE}+{@value
-     * #RUBBLE_RISE_RANGE} blocks over the local (pre-shatter) surface — near enough that
-     * pillaring up to them is a short build, unlike sky-height decor. Air-only ellipsoid
-     * writes (a risen islet passing through a clump simply wins), deterministic off the
-     * map seed, ~1–2 k one-time {@code setBlock}s total — no budget writer needed.
+     * The crash pulls the floor out from under anyone still on the isles — the beat-0
+     * safety net the shatter itself grants, re-stamped at the head of every islet pass so
+     * a watcher on the LAST islet is as covered as one on the first.
      */
-    private static void placeSkyRubble(ServerLevel level, Layout layout) {
-        long seed = layout.seed() ^ SALT_RUBBLE;
-        int placed = 0;
+    private static void graceSkyPlayers(ServerLevel level) {
+        for (ServerPlayer player : level.players()) {
+            if (player.getY() > GRACE_MIN_Y && !player.isSpectator()) {
+                player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                        GRACE_TICKS, 0, false, false, true));
+                SkyLauncher.grantFallGrace(player, GRACE_TICKS);
+            }
+        }
+    }
+
+    /** Arms the raze pass of the current islet and launches its visible fall. */
+    private static void startCrashPass(ServerLevel level, ShatterData state) {
+        graceSkyPlayers(level);
+        Layout layout = layout();
+        List<Integer> order = crashOrder(layout);
+        int pass = state.crashPass();
+        if (pass >= order.size()) {
+            state.setPhase(PHASE_CORE);
+            return;
+        }
+        int islet = order.get(pass);
+        activePass = new RazePass(level, state, islet);
+        // The visible cluster: it leaves the islet's sky position and lands on the ground
+        // impact site. Purely cosmetic — a restart drops it, the heap still lands.
+        BlockPos impact = impactSite(level, layout, islet);
+        double sx = DiscProfile.END_DISC_CENTER_X + layout.siteX()[islet];
+        double sz = DiscProfile.END_DISC_CENTER_Z + layout.siteZ()[islet];
+        Vec3 from = new Vec3(sx,
+                EndDiscGeometry.surfaceYAt((int) sx, (int) sz) + layout.dy()[islet] + 2.0D, sz);
+        EndIslandCrashFx.crash(level, from, Vec3.atCenterOf(impact), CRASH_FALL_TICKS,
+                mix(layout.seed() ^ SALT_CRASH, islet, 0L));
+        impactDueTick = level.getGameTime() + CRASH_FALL_TICKS;
+        level.playSound(null, BlockPos.containing(from),
+                EclipseSounds.EVENT_END_SHATTER_CRACK.get(), SoundSource.HOSTILE, 4.0F, 0.7F);
+        PacketDistributor.sendToPlayersNear(level, null, from.x, from.y, from.z, FX_RANGE,
+                new S2CFxEventPayload(FxCues.CUE_END_CRACK, from, 0.0F, 0.0F));
+        EclipseMod.LOGGER.info("EndShatterSequence: islet {} ({}/{}) falling towards {}",
+                islet, pass + 1, order.size(), impact.toShortString());
+    }
+
+    /**
+     * The landing of islet pass {@code pass}: impact FX plus the REAL ground rubble heap.
+     * Idempotent through the persisted impact mask, so a resume can back-fill it silently.
+     */
+    private static void landIslet(ServerLevel level, ShatterData state, int pass) {
+        Layout layout = layout();
+        List<Integer> order = crashOrder(layout);
+        if (pass < 0 || pass >= order.size() || state.impactDone(pass)) {
+            return;
+        }
+        int islet = order.get(pass);
+        BlockPos impact = impactSite(level, layout, islet);
+        RazePass live = activePass;
+        List<RescuedBlock> loot = live != null && live.islet == islet
+                ? live.drainRescued() : List.of();
+        int placed = placeGroundHeap(level, impact, layout.seed() ^ SALT_RUBBLE, islet, loot);
+        state.markImpactDone(pass);
+        // Impact read: dust column, explosion flash, thud + a short local shake.
+        level.sendParticles(ParticleTypes.EXPLOSION_EMITTER,
+                impact.getX() + 0.5D, impact.getY() + 1.0D, impact.getZ() + 0.5D,
+                3, 3.0D, 1.0D, 3.0D, 0.0D);
+        level.sendParticles(ParticleTypes.LARGE_SMOKE,
+                impact.getX() + 0.5D, impact.getY() + 1.5D, impact.getZ() + 0.5D,
+                90, 5.0D, 2.0D, 5.0D, 0.05D);
+        level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK,
+                        Blocks.END_STONE.defaultBlockState()),
+                impact.getX() + 0.5D, impact.getY() + 1.0D, impact.getZ() + 0.5D,
+                120, 4.0D, 1.5D, 4.0D, 0.35D);
+        level.playSound(null, impact, EclipseSounds.EVENT_RIFT_THUD.get(),
+                SoundSource.HOSTILE, 4.0F, 0.5F);
+        level.playSound(null, impact, SoundEvents.GENERIC_EXPLODE.value(),
+                SoundSource.HOSTILE, 4.0F, 0.6F);
+        PacketDistributor.sendToPlayersNear(level, null,
+                impact.getX(), impact.getY(), impact.getZ(), FX_RANGE,
+                S2CShakePayload.shake(1.4F, 30));
+        EclipseMod.LOGGER.info(
+                "EndShatterSequence: islet {} hit the ground at {} ({} rubble block(s), {} loot rescued)",
+                islet, impact.toShortString(), placed, loot.size());
+    }
+
+    /**
+     * Ground impact site of one islet: its own bearing, pushed
+     * {@value #IMPACT_SPREAD_FACTOR}× further out and clamped into
+     * {@value #IMPACT_MIN_RADIUS}…{@value #IMPACT_MAX_RADIUS} so the heaps land under the
+     * old island but never inside the sanctum's protected cylinder. Pure except for the
+     * heightmap read (the chunk is ticketed first).
+     */
+    private static BlockPos impactSite(ServerLevel level, Layout layout, int islet) {
+        double sx = layout.siteX()[islet];
+        double sz = layout.siteZ()[islet];
+        double dist = Math.hypot(sx, sz);
+        double angle = dist < 1.0E-3D
+                ? to01(mix(layout.seed() ^ SALT_IMPACT, islet, 1L)) * Math.PI * 2.0D
+                : Math.atan2(sz, sx);
+        double reach = Mth.clamp(dist * IMPACT_SPREAD_FACTOR, IMPACT_MIN_RADIUS, IMPACT_MAX_RADIUS);
+        int x = DiscProfile.END_DISC_CENTER_X + (int) Math.round(Math.cos(angle) * reach);
+        int z = DiscProfile.END_DISC_CENTER_Z + (int) Math.round(Math.sin(angle) * reach);
+        BudgetedBlockWriter.loadWithTicket(level, x >> 4, z >> 4);
+        return new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z);
+    }
+
+    /**
+     * F-047 (d): one small REAL end-stone/obsidian heap at an impact site — the "Brocken"
+     * left over once the sky is empty. Air-only ellipsoid writes on top of the local
+     * surface (so nothing existing is destroyed), skipping the protected sanctum cylinder,
+     * with any rescued loot block entity re-seated on the crown.
+     */
+    private static int placeGroundHeap(ServerLevel level, BlockPos site, long seed, int islet,
+            List<RescuedBlock> loot) {
+        int radius = HEAP_MIN_RADIUS + (int) (to01(mix(seed, islet, 4L)) * HEAP_RADIUS_RANGE);
+        int height = Math.max(2, radius - 1);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int c = 0; c < RUBBLE_CLUSTERS; c++) {
-            double angle = to01(mix(seed, c, 1L)) * Math.PI * 2.0D;
-            double dist = DiscProfile.END_DISC_RADIUS * (0.25D + 0.55D * to01(mix(seed, c, 2L)));
-            int cx = DiscProfile.END_DISC_CENTER_X + (int) Math.round(Math.cos(angle) * dist);
-            int cz = DiscProfile.END_DISC_CENTER_Z + (int) Math.round(Math.sin(angle) * dist);
-            int cy = EndDiscGeometry.surfaceYAt(cx, cz) + RUBBLE_MIN_RISE
-                    + (int) (to01(mix(seed, c, 3L)) * RUBBLE_RISE_RANGE);
-            int rx = 2 + (int) (to01(mix(seed, c, 4L)) * 2.0D);
-            int ry = Math.max(2, rx - 1);
-            for (int dx = -rx; dx <= rx; dx++) {
-                for (int dy = -ry; dy <= ry; dy++) {
-                    for (int dz = -rx; dz <= rx; dz++) {
-                        double n = (double) (dx * dx) / (rx * rx)
-                                + (double) (dy * dy) / (ry * ry)
-                                + (double) (dz * dz) / (rx * rx);
-                        if (n > 1.0D
-                                || !level.getBlockState(cursor.set(cx + dx, cy + dy, cz + dz)).isAir()) {
-                            continue;
-                        }
-                        BlockState state =
-                                to01(mix(seed, cx + dx, (long) (cy + dy) * 31L + cz + dz)) < 0.12D
-                                        ? Blocks.OBSIDIAN.defaultBlockState()
-                                        : Blocks.END_STONE.defaultBlockState();
-                        level.setBlock(cursor, state, Block.UPDATE_CLIENTS);
-                        placed++;
+        int placed = 0;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                double planar = (double) (dx * dx + dz * dz) / (double) (radius * radius);
+                if (planar > 1.0D) {
+                    continue;
+                }
+                int column = (int) Math.round(height * (1.0D - planar)
+                        + to01(mix(seed, site.getX() + dx, site.getZ() + dz)) * 1.5D);
+                for (int dy = 0; dy <= column; dy++) {
+                    cursor.set(site.getX() + dx, site.getY() + dy, site.getZ() + dz);
+                    if (SanctumProtection.isProtected(level, cursor)
+                            || !level.getBlockState(cursor).isAir()) {
+                        continue;
                     }
+                    BlockState state = to01(mix(seed, cursor.getX(),
+                            (long) cursor.getY() * 31L + cursor.getZ())) < 0.16D
+                            ? Blocks.OBSIDIAN.defaultBlockState()
+                            : Blocks.END_STONE.defaultBlockState();
+                    level.setBlock(cursor, state, Block.UPDATE_ALL);
+                    placed++;
                 }
             }
         }
-        EclipseMod.LOGGER.info("EndShatterSequence: {} sky-rubble block(s) placed across {} low clumps",
-                placed, RUBBLE_CLUSTERS);
+        seatRescuedLoot(level, site, height, loot);
+        return placed;
+    }
+
+    /**
+     * Re-seats the loot containers a falling islet was still carrying, in a ring on top of
+     * the fresh heap — the End-city caches survive the crash instead of being deleted with
+     * the sky. Contents ride along through the saved block-entity NBT.
+     */
+    private static void seatRescuedLoot(ServerLevel level, BlockPos site, int height,
+            List<RescuedBlock> loot) {
+        if (loot.isEmpty()) {
+            return;
+        }
+        HolderLookup.Provider registries = level.registryAccess();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < loot.size(); i++) {
+            double angle = i * (Math.PI * 2.0D / loot.size());
+            cursor.set(site.getX() + (int) Math.round(Math.cos(angle) * 2.0D),
+                    site.getY() + height + 1,
+                    site.getZ() + (int) Math.round(Math.sin(angle) * 2.0D));
+            if (SanctumProtection.isProtected(level, cursor)) {
+                continue;
+            }
+            RescuedBlock rescued = loot.get(i);
+            level.setBlock(cursor, rescued.state(), Block.UPDATE_ALL);
+            BlockEntity seated = level.getBlockEntity(cursor);
+            if (seated != null && rescued.data() != null) {
+                seated.loadWithComponents(rescued.data(), registries);
+                seated.setChanged();
+            }
+        }
+    }
+
+    // --- F-047 phase 2: the middle island + the guarantee that the sky is empty ------
+
+    /** Arms the final full-band sweep (podium islet, exit portal, every leftover sliver). */
+    private static void startCorePass(ServerLevel level, ShatterData state) {
+        // The egg is the hard-wired day-14 catalyst: note whether it is still up there
+        // BEFORE the sweep eats it, so the completion can re-seat it on the ground.
+        if (!state.eggRescued() && findPodiumEgg(level) != null) {
+            state.markEggPending();
+        }
+        activePass = new RazePass(level, state, RazePass.ALL_ISLETS);
+        level.getServer().getPlayerList().broadcastSystemMessage(
+                Component.translatable("announce.eclipse.end.crash_core"), false);
+        EclipseMod.LOGGER.info("EndShatterSequence: razing the middle island and the last slivers");
+    }
+
+    /** Finishes the core sweep: egg rescue, stranded-mob sweep, on to the sky remnants. */
+    private static void completeCorePass(ServerLevel level, ShatterData state) {
+        if (state.eggPending()) {
+            BlockPos heap = firstHeapCrown(level);
+            if (heap != null) {
+                level.setBlock(heap, Blocks.DRAGON_EGG.defaultBlockState(), Block.UPDATE_ALL);
+                level.getServer().getPlayerList().broadcastSystemMessage(
+                        Component.translatable("announce.eclipse.end.egg_fell"), false);
+                EclipseMod.LOGGER.info("EndShatterSequence: dragon egg re-seated at {} "
+                        + "(day-14 finale catalyst — it must survive the crash)", heap.toShortString());
+            }
+            state.markEggRescued();
+        }
+        // Shulkers and endermen do not fall; anything still floating in the emptied band
+        // would read as "the End is still up there".
+        AABB band = new AABB(
+                DiscProfile.END_DISC_CENTER_X - DiscProfile.END_DISC_RADIUS - 16, RAZE_MIN_Y,
+                DiscProfile.END_DISC_CENTER_Z - DiscProfile.END_DISC_RADIUS - 16,
+                DiscProfile.END_DISC_CENTER_X + DiscProfile.END_DISC_RADIUS + 16, RAZE_MAX_Y,
+                DiscProfile.END_DISC_CENTER_Z + DiscProfile.END_DISC_RADIUS + 16);
+        int swept = 0;
+        for (Entity entity : level.getEntities((Entity) null, band,
+                candidate -> candidate.getType() == EntityType.SHULKER
+                        || candidate.getType() == EntityType.ENDERMAN
+                        || candidate.getType() == EntityType.END_CRYSTAL)) {
+            entity.discard();
+            swept++;
+        }
+        state.setPhase(PHASE_SKY_BITS);
+        EclipseMod.LOGGER.info("EndShatterSequence: middle island gone; {} stranded End entity(s) swept",
+                swept);
+    }
+
+    /** The dragon-egg block on the podium pedestal, or {@code null} if it is already gone. */
+    @Nullable
+    private static BlockPos findPodiumEgg(ServerLevel level) {
+        int cx = EndConfig.current().centerX();
+        int cz = EndConfig.current().centerZ();
+        BudgetedBlockWriter.loadWithTicket(level, cx >> 4, cz >> 4);
+        int surface = EndDiscGeometry.surfaceYAt(cx, cz);
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int dy = 0; dy <= 10; dy++) {
+            if (level.getBlockState(cursor.set(cx, surface + dy, cz)).is(Blocks.DRAGON_EGG)) {
+                return cursor.immutable();
+            }
+        }
+        return null;
+    }
+
+    /** The crown of the first ground heap — where the rescued egg is put back. */
+    @Nullable
+    private static BlockPos firstHeapCrown(ServerLevel level) {
+        Layout layout = layout();
+        List<Integer> order = crashOrder(layout);
+        if (order.isEmpty()) {
+            return null;
+        }
+        BlockPos site = impactSite(level, layout, order.get(0));
+        return new BlockPos(site.getX(),
+                level.getHeight(Heightmap.Types.MOTION_BLOCKING, site.getX(), site.getZ()),
+                site.getZ());
+    }
+
+    // --- F-047 phase 3: the low, far-apart sky remnants ------------------------------
+
+    /**
+     * Places one remnant clump per poll tick. Sites sit on one angular slice each (so no
+     * two clumps can crowd together) at {@value #SKY_BIT_MIN_RADIUS}…{@value
+     * #SKY_BIT_MIN_RADIUS}+{@value #SKY_BIT_RADIUS_RANGE} blocks from the map centre, and
+     * only {@value #SKY_BIT_MIN_RISE}–{@value #SKY_BIT_MIN_RISE}+{@value
+     * #SKY_BIT_RISE_RANGE} blocks over the LOCAL ground — a short pillar, not a tower.
+     */
+    private static void placeSkyBits(ServerLevel level, ShatterData state) {
+        int index = state.skyBitCursor();
+        if (index >= SKY_BIT_COUNT) {
+            state.setPhase(PHASE_DONE);
+            level.getServer().getPlayerList().broadcastSystemMessage(
+                    Component.translatable("announce.eclipse.end.crash_done"), false);
+            EclipseMod.LOGGER.info("EndShatterSequence: crash finale complete — "
+                    + "sky empty, {} low remnants and {} ground heaps stand",
+                    SKY_BIT_COUNT, crashOrder(layout()).size());
+            return;
+        }
+        long seed = layout().seed() ^ SALT_RUBBLE;
+        double slice = Math.PI * 2.0D / SKY_BIT_COUNT;
+        double angle = slice * index + to01(mix(seed, index, 1L)) * slice * 0.7D;
+        double reach = SKY_BIT_MIN_RADIUS + to01(mix(seed, index, 2L)) * SKY_BIT_RADIUS_RANGE;
+        int cx = DiscProfile.END_DISC_CENTER_X + (int) Math.round(Math.cos(angle) * reach);
+        int cz = DiscProfile.END_DISC_CENTER_Z + (int) Math.round(Math.sin(angle) * reach);
+        BudgetedBlockWriter.loadWithTicket(level, cx >> 4, cz >> 4);
+        int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING, cx, cz);
+        int cy = ground + SKY_BIT_MIN_RISE + (int) (to01(mix(seed, index, 3L)) * SKY_BIT_RISE_RANGE);
+        int rx = SKY_BIT_MIN_SIZE + (int) (to01(mix(seed, index, 4L)) * SKY_BIT_SIZE_RANGE);
+        int ry = Math.max(2, rx - 1);
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int placed = 0;
+        for (int dx = -rx; dx <= rx; dx++) {
+            for (int dy = -ry; dy <= ry; dy++) {
+                for (int dz = -rx; dz <= rx; dz++) {
+                    double n = (double) (dx * dx) / (rx * rx)
+                            + (double) (dy * dy) / (ry * ry)
+                            + (double) (dz * dz) / (rx * rx);
+                    if (n > 1.0D
+                            || !level.getBlockState(cursor.set(cx + dx, cy + dy, cz + dz)).isAir()) {
+                        continue;
+                    }
+                    BlockState blockState =
+                            to01(mix(seed, cx + dx, (long) (cy + dy) * 31L + cz + dz)) < 0.12D
+                                    ? Blocks.OBSIDIAN.defaultBlockState()
+                                    : Blocks.END_STONE.defaultBlockState();
+                    level.setBlock(cursor, blockState, Block.UPDATE_CLIENTS);
+                    placed++;
+                }
+            }
+        }
+        state.advanceSkyBit();
+        EclipseMod.LOGGER.info("EndShatterSequence: low sky remnant {}/{} at ({}, {}, {}) — "
+                + "{} block(s), {} over ground", index + 1, SKY_BIT_COUNT, cx, cy, cz,
+                placed, cy - ground);
+    }
+
+    // --- F-047 resume ----------------------------------------------------------------
+
+    /** Re-arms the interrupted finale phase and back-fills any heap whose fall was lost. */
+    private static void resumeFinale(ServerLevel level, ShatterData state) {
+        EndIslandCrashFx.clearAll();
+        int phase = state.phase();
+        if (phase >= PHASE_CRASH) {
+            List<Integer> order = crashOrder(layout());
+            int upTo = phase > PHASE_CRASH ? order.size() : state.crashPass();
+            for (int pass = 0; pass < upTo; pass++) {
+                landIslet(level, state, pass);
+            }
+        }
+        if (phase == PHASE_CRASH && state.crashPass() < crashOrder(layout()).size()) {
+            // The interrupted pass restarts from its persisted chunk cursor; its cosmetic
+            // fall is gone, so the landing fires when the pass finishes instead.
+            activePass = new RazePass(level, state, crashOrder(layout()).get(state.crashPass()));
+            EclipseMod.LOGGER.info("EndShatterSequence: resuming crash pass {} at cursor {}",
+                    state.crashPass(), state.razeCursor());
+        } else if (phase == PHASE_CORE) {
+            activePass = new RazePass(level, state, RazePass.ALL_ISLETS);
+            EclipseMod.LOGGER.info("EndShatterSequence: resuming the core raze at cursor {}",
+                    state.razeCursor());
+        }
+    }
+
+    // --- F-047 the budgeted raze pass -------------------------------------------------
+
+    /** One loot container lifted out of a falling islet. */
+    private record RescuedBlock(BlockState state, @Nullable CompoundTag data) {}
+
+    /**
+     * Clears one islet (or, with {@link #ALL_ISLETS}, everything left) out of the End
+     * band. Same budgeted shape as the carve {@link Job} — at most one chunk load per
+     * tick, section writes, heightmap re-prime, relight + resend, cursor persisted at
+     * chunk boundaries — plus a whole-section air fast path, because most of the
+     * 150-block band over the disc is empty by the time this runs.
+     */
+    private static final class RazePass {
+        /** Islet filter meaning "every column in the footprint", used by the core sweep. */
+        static final int ALL_ISLETS = -1;
+
+        private final ServerLevel level;
+        private final ShatterData state;
+        private final Layout layout;
+        private final List<ChunkPos> chunks;
+        private final long totalOperations;
+        final int islet;
+        private final int minY;
+        private final int maxY;
+        private final List<RescuedBlock> rescued = new ArrayList<>();
+        private long cursor;
+
+        RazePass(ServerLevel level, ShatterData state, int islet) {
+            this.level = level;
+            this.state = state;
+            this.layout = layout();
+            this.chunks = discChunks();
+            this.totalOperations = (long) this.chunks.size() * 256L;
+            this.islet = islet;
+            this.minY = Math.max(level.getMinBuildHeight(), RAZE_MIN_Y);
+            this.maxY = Math.min(level.getMaxBuildHeight() - 1, RAZE_MAX_Y);
+            this.cursor = Math.min(state.razeCursor(), this.totalOperations);
+        }
+
+        /** Runs one tick of the pass; returns {@code true} once it is finished. */
+        boolean tick() {
+            if (this.cursor >= this.totalOperations) {
+                return true;
+            }
+            long started = System.nanoTime();
+            int budget = EndConfig.current().blockBudgetPerTick();
+            int operations = 0;
+            long chunkIndex = this.cursor / 256L;
+            LevelChunk chunk = BudgetedBlockWriter.loadWithTicket(
+                    this.level,
+                    this.chunks.get((int) chunkIndex).x,
+                    this.chunks.get((int) chunkIndex).z);
+            while (this.cursor < this.totalOperations
+                    && this.cursor / 256L == chunkIndex
+                    && operations < budget
+                    && System.nanoTime() - started < TICK_NANOS) {
+                operations += razeColumn(chunk, (int) (this.cursor & 255L));
+                this.cursor++;
+                operations++;
+            }
+            if (this.cursor / 256L != chunkIndex || this.cursor == this.totalOperations) {
+                Heightmap.primeHeightmaps(chunk, HEIGHTMAPS);
+                BudgetedBlockWriter.relightAndResend(this.level, chunk);
+                this.state.setRazeCursor(this.cursor);
+            }
+            return this.cursor >= this.totalOperations;
+        }
+
+        /** Clears one column of the band; returns the number of blocks actually removed. */
+        private int razeColumn(LevelChunk chunk, int localIndex) {
+            int localX = localIndex & 15;
+            int localZ = localIndex >>> 4;
+            int x = chunk.getPos().getMinBlockX() + localX;
+            int z = chunk.getPos().getMinBlockZ() + localZ;
+            if (!EndDiscGeometry.footprintContains(x, z)) {
+                return 0;
+            }
+            if (this.islet != ALL_ISLETS && this.layout.sample(x, z).islet() != this.islet) {
+                return 0;
+            }
+            BlockState air = Blocks.AIR.defaultBlockState();
+            int removed = 0;
+            int sectionIndex = -1;
+            LevelChunkSection section = null;
+            for (int y = this.minY; y <= this.maxY; y++) {
+                int index = chunk.getSectionIndex(y);
+                if (index != sectionIndex) {
+                    sectionIndex = index;
+                    section = chunk.getSection(index);
+                    if (section.hasOnlyAir()) {
+                        // Skip the rest of an empty section in one step (the band is mostly
+                        // air by the time the crash runs — this is the whole budget win).
+                        y |= 15;
+                        continue;
+                    }
+                }
+                BlockState existing = section.getBlockState(localX, y & 15, localZ);
+                if (existing.isAir()) {
+                    continue;
+                }
+                if (existing.hasBlockEntity()) {
+                    rescue(x, y, z, existing);
+                    this.level.removeBlockEntity(new BlockPos(x, y, z));
+                }
+                section.setBlockState(localX, y & 15, localZ, air, false);
+                removed++;
+            }
+            if (removed > 0) {
+                chunk.setUnsaved(true);
+            }
+            return removed;
+        }
+
+        /** Lifts a loot container's contents out of the sky (capped, first come first served). */
+        private void rescue(int x, int y, int z, BlockState existing) {
+            if (this.rescued.size() >= HEAP_LOOT_CAP) {
+                return;
+            }
+            BlockEntity blockEntity = this.level.getBlockEntity(new BlockPos(x, y, z));
+            this.rescued.add(new RescuedBlock(existing, blockEntity == null
+                    ? null : blockEntity.saveWithFullMetadata(this.level.registryAccess())));
+        }
+
+        /** Hands the rescued containers to the landing that seats them in the heap. */
+        List<RescuedBlock> drainRescued() {
+            List<RescuedBlock> copy = List.copyOf(this.rescued);
+            this.rescued.clear();
+            return copy;
+        }
     }
 
     // --- restart-safe state (materialization SavedData pattern) ---
@@ -1350,7 +2030,13 @@ public final class EndShatterSequence {
     /**
      * Shatter lifecycle, persisted as {@code data/eclipse_end_shatter.dat} in the
      * overworld storage. {@code dueGameTime} arms beat 0; {@code cursor} resumes the
-     * carve pass at chunk granularity; {@code complete} is terminal.
+     * carve pass at chunk granularity; {@code complete} marks the carve done.
+     *
+     * <p>Everything from {@code phase} down is the F-047 crash finale. A save written
+     * before F-047 simply has none of those tags: it loads as {@link #PHASE_CARVE} with
+     * an unarmed crash, which is exactly the state {@link #pollFinale} re-arms from — so
+     * an already-shattered legacy world walks into the crash one loot window after its
+     * next boot instead of being stuck with a permanent archipelago.</p>
      */
     public static final class ShatterData extends SavedData {
         public static final String DATA_NAME = "eclipse_end_shatter";
@@ -1359,11 +2045,29 @@ public final class EndShatterSequence {
         private static final String TAG_STARTED = "started";
         private static final String TAG_CURSOR = "cursor";
         private static final String TAG_COMPLETE = "complete";
+        // --- F-047 ---
+        private static final String TAG_PHASE = "phase";
+        private static final String TAG_CRASH_DUE = "crashDueGameTime";
+        private static final String TAG_CRASH_PASS = "crashPass";
+        private static final String TAG_RAZE_CURSOR = "razeCursor";
+        private static final String TAG_IMPACT_MASK = "impactMask";
+        private static final String TAG_SKY_BIT = "skyBitCursor";
+        private static final String TAG_EGG_PENDING = "eggPending";
+        private static final String TAG_EGG_RESCUED = "eggRescued";
 
         private long dueGameTime = -1L;
         private boolean started;
         private long cursor;
         private boolean complete;
+        private int phase = PHASE_CARVE;
+        private long crashDueGameTime = -1L;
+        private int crashPass;
+        private long razeCursor;
+        /** Bit {@code i} = the landing of crash pass {@code i} already built its heap. */
+        private long impactMask;
+        private int skyBitCursor;
+        private boolean eggPending;
+        private boolean eggRescued;
 
         public ShatterData() {}
 
@@ -1379,6 +2083,15 @@ public final class EndShatterSequence {
             data.started = tag.getBoolean(TAG_STARTED);
             data.cursor = Math.max(0L, tag.getLong(TAG_CURSOR));
             data.complete = tag.getBoolean(TAG_COMPLETE);
+            data.phase = Mth.clamp(tag.getInt(TAG_PHASE), PHASE_CARVE, PHASE_DONE);
+            data.crashDueGameTime = tag.contains(TAG_CRASH_DUE)
+                    ? tag.getLong(TAG_CRASH_DUE) : -1L;
+            data.crashPass = Math.max(0, tag.getInt(TAG_CRASH_PASS));
+            data.razeCursor = Math.max(0L, tag.getLong(TAG_RAZE_CURSOR));
+            data.impactMask = tag.getLong(TAG_IMPACT_MASK);
+            data.skyBitCursor = Math.max(0, tag.getInt(TAG_SKY_BIT));
+            data.eggPending = tag.getBoolean(TAG_EGG_PENDING);
+            data.eggRescued = tag.getBoolean(TAG_EGG_RESCUED);
             return data;
         }
 
@@ -1388,6 +2101,14 @@ public final class EndShatterSequence {
             tag.putBoolean(TAG_STARTED, this.started);
             tag.putLong(TAG_CURSOR, this.cursor);
             tag.putBoolean(TAG_COMPLETE, this.complete);
+            tag.putInt(TAG_PHASE, this.phase);
+            tag.putLong(TAG_CRASH_DUE, this.crashDueGameTime);
+            tag.putInt(TAG_CRASH_PASS, this.crashPass);
+            tag.putLong(TAG_RAZE_CURSOR, this.razeCursor);
+            tag.putLong(TAG_IMPACT_MASK, this.impactMask);
+            tag.putInt(TAG_SKY_BIT, this.skyBitCursor);
+            tag.putBoolean(TAG_EGG_PENDING, this.eggPending);
+            tag.putBoolean(TAG_EGG_RESCUED, this.eggRescued);
             return tag;
         }
 
@@ -1433,6 +2154,122 @@ public final class EndShatterSequence {
             if (!this.complete) {
                 this.started = true;
                 this.complete = true;
+                setDirty();
+            }
+        }
+
+        // --- F-047 crash finale ---
+
+        /** Current finale phase, one of the {@code PHASE_*} constants. */
+        public int phase() {
+            return this.phase;
+        }
+
+        /** Moves the finale forward; never backwards (a resume must not re-run a phase). */
+        public void setPhase(int phase) {
+            int safe = Mth.clamp(phase, PHASE_CARVE, PHASE_DONE);
+            if (safe > this.phase) {
+                this.phase = safe;
+                setDirty();
+            }
+        }
+
+        public long crashDueGameTime() {
+            return this.crashDueGameTime;
+        }
+
+        /** Arms the loot window once; idempotent, so a re-poll cannot push the crash away. */
+        public void armCrash(long gameTime) {
+            if (this.phase > PHASE_CARVE) {
+                return;
+            }
+            this.crashDueGameTime = gameTime;
+            this.phase = PHASE_CRASH_WAIT;
+            setDirty();
+        }
+
+        /** Command seam: pulls the armed crash forward (only while it is still waiting). */
+        public void setCrashDue(long gameTime) {
+            if (this.phase == PHASE_CRASH_WAIT && gameTime < this.crashDueGameTime) {
+                this.crashDueGameTime = gameTime;
+                setDirty();
+            }
+        }
+
+        /** Index into {@code crashOrder} of the islet currently falling. */
+        public int crashPass() {
+            return this.crashPass;
+        }
+
+        public void setCrashPass(int pass) {
+            int safe = Math.max(0, pass);
+            if (safe != this.crashPass) {
+                this.crashPass = safe;
+                setDirty();
+            }
+        }
+
+        public void advanceCrashPass() {
+            this.crashPass++;
+            setDirty();
+        }
+
+        /** Chunk-granular cursor of the live {@link RazePass} (survives a restart). */
+        public long razeCursor() {
+            return this.razeCursor;
+        }
+
+        public void setRazeCursor(long cursor) {
+            long safe = Math.max(0L, cursor);
+            if (safe != this.razeCursor) {
+                this.razeCursor = safe;
+                setDirty();
+            }
+        }
+
+        /** Whether crash pass {@code pass} already built its ground heap. */
+        public boolean impactDone(int pass) {
+            return pass >= 0 && pass < Long.SIZE && (this.impactMask & (1L << pass)) != 0L;
+        }
+
+        public void markImpactDone(int pass) {
+            if (pass >= 0 && pass < Long.SIZE) {
+                this.impactMask |= 1L << pass;
+                setDirty();
+            }
+        }
+
+        /** How many low sky remnants have been placed (one per poll tick). */
+        public int skyBitCursor() {
+            return this.skyBitCursor;
+        }
+
+        public void advanceSkyBit() {
+            this.skyBitCursor++;
+            setDirty();
+        }
+
+        /** The egg was still on the podium when the core sweep started. */
+        public boolean eggPending() {
+            return this.eggPending;
+        }
+
+        public void markEggPending() {
+            if (!this.eggPending) {
+                this.eggPending = true;
+                setDirty();
+            }
+        }
+
+        /** The egg has been re-seated on the ground (or was already gone). */
+        public boolean eggRescued() {
+            return this.eggRescued;
+        }
+
+        public void markEggRescued() {
+            if (!this.eggRescued) {
+                this.eggPending = false;
+                this.eggRescued = true;
                 setDirty();
             }
         }

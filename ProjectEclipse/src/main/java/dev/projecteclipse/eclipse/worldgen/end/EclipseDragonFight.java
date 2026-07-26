@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
@@ -73,6 +74,8 @@ public final class EclipseDragonFight {
     @Nullable
     private static ServerBossEvent bossBar;
     private static int lastCrystalCount = -1;
+    /** Log-once guard for the F-023 dragon-day gate (per JVM; carries no world state). */
+    private static boolean WARNED_EARLY_DRAGON;
 
     private EclipseDragonFight() {}
 
@@ -94,6 +97,9 @@ public final class EclipseDragonFight {
         if (state.dragonKilled()) {
             ensureVictoryBlocks(level);
             clearBossBar();
+            return;
+        }
+        if (!dragonDayReached(server, state)) {
             return;
         }
 
@@ -135,10 +141,35 @@ public final class EclipseDragonFight {
             clearBossBar();
             return;
         }
-        if (!state.materializationComplete() || state.dragonKilled()) {
+        if (!state.materializationComplete() || state.dragonKilled()
+                || !dragonDayReached(server, state)) {
             return;
         }
         tickFight(server.overworld(), state);
+    }
+
+    /**
+     * F-023: the sky shard arrives on the authored day-12 slot, but the dragon only wakes
+     * on {@code end.json dragonDay} (day 13, {@code days.json} "DAY 13 — THE DRAGON") —
+     * before this the two beats fired within the same second, because the materialization
+     * writer's completion started the fight directly. The gate only holds while no dragon
+     * has ever been spawned, so an admin lowering the day mid-fight can never orphan a
+     * live boss (and a resumed save reattaches to it whatever the clock says).
+     */
+    private static boolean dragonDayReached(MinecraftServer server, EndFightState state) {
+        if (state.dragonId() != null || state.deathStartedGameTime() >= 0L) {
+            return true;
+        }
+        int dragonDay = EndConfig.current().dragonDay();
+        if (DayScheduler.getDay(server) >= dragonDay) {
+            return true;
+        }
+        if (!WARNED_EARLY_DRAGON) {
+            WARNED_EARLY_DRAGON = true;
+            EclipseMod.LOGGER.info("End disc stands, but the dragon sleeps until day {} (day {} now)",
+                    dragonDay, DayScheduler.getDay(server));
+        }
+        return false;
     }
 
     @SubscribeEvent

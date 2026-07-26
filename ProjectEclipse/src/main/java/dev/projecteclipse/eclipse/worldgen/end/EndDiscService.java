@@ -12,6 +12,7 @@ import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.end.EndPayloads;
 import dev.projecteclipse.eclipse.network.end.S2CEndCrashPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.ritual.HeraldsLureItem;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
@@ -133,6 +134,18 @@ public final class EndDiscService {
     }
 
     private static boolean triggerMatches(MinecraftServer server, String trigger) {
+        // F-023 collision guard: whatever the configured trigger says, the sky shard never
+        // arrives on (or before) the Herald's own day — day 7 belongs to the Herald, and a
+        // stage:/day: trigger that is already satisfied when a save catches up past day 7
+        // would otherwise drop the End on top of the Herald window.
+        if (DayScheduler.getDay(server) <= HeraldsLureItem.HERALD_DAY) {
+            if (WARNED_TRIGGERS.add("herald-guard")) {
+                EclipseMod.LOGGER.info(
+                        "End-disc trigger '{}' held back: day {} is the Herald window (day {} is reserved)",
+                        trigger, DayScheduler.getDay(server), HeraldsLureItem.HERALD_DAY);
+            }
+            return false;
+        }
         if ("final_day".equals(trigger)) {
             return DayScheduler.getDay(server) >= FINAL_DAY;
         }

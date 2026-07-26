@@ -26,6 +26,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.end.EndConfig;
 import dev.projecteclipse.eclipse.worldgen.end.EndFightState;
+import dev.projecteclipse.eclipse.worldgen.end.EndShatterSequence;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import dev.projecteclipse.eclipse.worldgen.structure.StructurePendingRegistry.PendingSite;
 import net.minecraft.core.BlockPos;
@@ -88,6 +89,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p>Both sites enqueue when {@link EndFightState#materializationComplete()} flips —
  * the launcher appears WITH the island (the End disc's {@code final_day} window), and
  * the return pad can only stamp onto disc blocks that actually exist.</p>
+ *
+ * <p><b>F-024 (second report, "still not onto the island — too weak")</b>: the launch
+ * itself was sound; {@link #tickFlights} ran in the SAME tick as {@link #launch} and read
+ * the stale pre-launch {@code onGround}, so it tore the flight down and stripped the climb
+ * Levitation immediately — every launch degenerated into the one clamped ±3.9 impulse
+ * (≈61 blocks, ~19 short of the disc). The landing branch now waits for real airtime
+ * ({@value #LAUNCH_GROUND_GRACE_TICKS}t grace), the climb target is the highest island
+ * platform + {@value #TARGET_MARGIN} instead of the landing column + 8, a stall watchdog
+ * re-punches a climb that is not rising, the landing ring moved from the rim to 45 % of
+ * the radius, and the descent steering + Slow-Falling refresh run all the way to the
+ * ground.</p>
  *
  * <p><b>Ballistics + the levitation climb (FIN-1)</b>: the vertical start speed is
  * solved by simulating vanilla's per-tick integration {@code v' = (v - 0.08) * 0.98}
@@ -165,10 +177,41 @@ public final class SkyLauncher {
     private static final int RETURN_SLOW_FALL_TICKS = 90 * 20;
     /** No-fall-damage window stamped on launch / return use. */
     private static final int FALL_GRACE_TICKS = 90 * 20;
-    /** Landing target ring radius (inside the rim so the wobble can never strand a flight). */
-    private static final double TARGET_RING_RADIUS = DiscProfile.END_DISC_RADIUS - 12.0D;
-    /** The arc's apex must clear the landing surface by this many blocks. */
+    /**
+     * F-024 landing target ring. Was {@code RADIUS − 12} (the very rim, where a few
+     * blocks of drift meant the void); it now sits at 45 % of the radius — outside the
+     * r-14 podium, inside the r-56 pillar ring and the r-62 chorus fields — so every
+     * launch aims at open lens WELL inside the island and a miss still lands on rock.
+     */
+    private static final double TARGET_RING_RADIUS = DiscProfile.END_DISC_RADIUS * 0.45D;
+    /**
+     * F-024 climb ceiling: the flight must clear the HIGHEST island platform (the tallest
+     * caged obsidian pillar, {@link #islandTopY}) by this margin before the handoff — the
+     * old {@value #APEX_CLEARANCE}-block clearance over the LANDING column left a launch
+     * arriving barely level with the lens, which any pillar or chorus stalk could block.
+     */
+    private static final int TARGET_MARGIN = 20;
+    /** Floor clearance over the player's own start height (degenerate/pad-above cases). */
     private static final int APEX_CLEARANCE = 8;
+    /**
+     * F-024 root cause: {@link #tickCharges} fires the launch and {@link #tickFlights}
+     * runs in the SAME server tick, while {@code player.onGround()} still carries the
+     * pre-launch movement packet — the landing branch therefore tore the flight down (and
+     * stripped the climb's Levitation) on the very tick it was armed, leaving nothing but
+     * the single clamped impulse (≈61 blocks of rise: 19 short of the disc from the
+     * Y-280 shelf, exactly the reported "too weak"). Ground/water landing is ignored
+     * until the player is actually seen airborne, or this many ticks have passed.
+     */
+    private static final int LAUNCH_GROUND_GRACE_TICKS = 20;
+    /**
+     * Climb stall watchdog: if a climbing player gains less than
+     * {@value #CLIMB_STALL_MIN_RISE} blocks over {@value #CLIMB_STALL_WINDOW} ticks the
+     * Levitation is not reaching them (mod interference, an eaten effect packet, a ceiling
+     * bonk) — a clamped vertical punch is added on top, so the ascent is drag-robust and
+     * effect-robust rather than relying on one mechanism.
+     */
+    private static final int CLIMB_STALL_WINDOW = 10;
+    private static final double CLIMB_STALL_MIN_RISE = 4.0D;
     /** Vanilla per-tick vertical integration constants (LivingEntity.travel). */
     private static final double GRAVITY = 0.08D;
     private static final double VERTICAL_DRAG = 0.98D;
@@ -219,21 +262,31 @@ public final class SkyLauncher {
         final double targetX;
         final double targetZ;
         final long deadlineTick;
-        /** Climb handoff height (computed island surface + clearance). */
+        /** Climb handoff height (highest island platform + {@value #TARGET_MARGIN}). */
         final double handoffY;
-        /** Hard climb ceiling ({@code handoffY} + {@value #CLIMB_CEILING_EXTRA}). */
+        /** Hard climb ceiling ({@code handoffY} + {@value #CLIMB_CEILING_EXTRA}, clamped). */
         final double ceilingY;
+        /** Tick the flight was armed at — the {@value #LAUNCH_GROUND_GRACE_TICKS} window. */
+        final long launchTick;
         /** True while the levitation climb runs; false for pure-ballistic flights. */
         boolean climbing;
+        /** Set once the player has actually left the ground (arms the landing branch). */
+        boolean airborne;
+        /** Stall watchdog bookkeeping: last sampled Y and the tick it was sampled at. */
+        double stallSampleY;
+        long stallSampleTick;
 
-        Flight(double targetX, double targetZ, long deadlineTick, double handoffY,
-                boolean climbing) {
+        Flight(double targetX, double targetZ, long launchTick, long deadlineTick,
+                double handoffY, double ceilingY, boolean climbing, double startY) {
             this.targetX = targetX;
             this.targetZ = targetZ;
+            this.launchTick = launchTick;
             this.deadlineTick = deadlineTick;
             this.handoffY = handoffY;
-            this.ceilingY = handoffY + CLIMB_CEILING_EXTRA;
+            this.ceilingY = ceilingY;
             this.climbing = climbing;
+            this.stallSampleY = startY;
+            this.stallSampleTick = launchTick;
         }
     }
 
@@ -323,6 +376,14 @@ public final class SkyLauncher {
         if (CHARGES.containsKey(player.getUUID()) || FLIGHTS.containsKey(player.getUUID())) {
             return;
         }
+        // F-047: after the crash finale there is no island left up there to be thrown at.
+        if (EndShatterSequence.skyCleared(player.server)) {
+            player.displayClientMessage(
+                    ServerLang.tr(player, "eclipse.sky_launcher.sky_empty"), true);
+            player.serverLevel().playSound(null, pad, SoundEvents.AMETHYST_BLOCK_BREAK,
+                    SoundSource.BLOCKS, 0.8F, 0.6F);
+            return;
+        }
         CHARGES.put(player.getUUID(),
                 new Charge(pad, player.server.getTickCount() + CHARGE_TICKS));
         player.serverLevel().playSound(null, pad, SoundEvents.AMETHYST_BLOCK_CHIME,
@@ -398,7 +459,14 @@ public final class SkyLauncher {
         double dx = targetX - player.getX();
         double dz = targetZ - player.getZ();
         double horizontalDist = Math.sqrt(dx * dx + dz * dz);
-        double handoffY = Math.max(targetSurface, player.getY()) + APEX_CLEARANCE;
+        // F-024: the climb target is the HIGHEST island platform plus a fixed margin, not
+        // the landing column — arriving level with the lens is what made the altar read as
+        // "too weak". targetSurface still floors it for degenerate geometry.
+        double handoffY = Math.max(
+                Math.max(islandTopY(player.server), targetSurface) + TARGET_MARGIN,
+                player.getY() + APEX_CLEARANCE);
+        double ceilingY = Math.min(handoffY + CLIMB_CEILING_EXTRA,
+                player.serverLevel().getMaxBuildHeight() - 8.0D);
         double rise = handoffY - player.getY();
         double ballisticVy = solveLaunchVy(rise);
         // FIN-1: a rise beyond one clamped impulse switches to the levitation climb —
@@ -422,8 +490,9 @@ public final class SkyLauncher {
                     CLIMB_MAX_TICKS, CLIMB_LEVITATION_AMPLIFIER, false, false, true));
         }
         grantFallGrace(player, FALL_GRACE_TICKS);
-        FLIGHTS.put(player.getUUID(), new Flight(targetX, targetZ,
-                player.server.getTickCount() + FLIGHT_TIMEOUT_TICKS, handoffY, climbing));
+        long tick = player.server.getTickCount();
+        FLIGHTS.put(player.getUUID(), new Flight(targetX, targetZ, tick,
+                tick + FLIGHT_TIMEOUT_TICKS, handoffY, ceilingY, climbing, player.getY()));
 
         ServerLevel level = player.serverLevel();
         level.playSound(null, pad, EclipseSounds.EVENT_SKY_LAUNCH.get(),
@@ -482,7 +551,13 @@ public final class SkyLauncher {
                 iterator.remove();
                 continue;
             }
-            if (player.onGround() || player.isInWater()) {
+            // F-024: the launch tick still reports the pre-launch onGround, so the landing
+            // branch only arms once the player is genuinely airborne (or the grace lapses).
+            if (!flight.airborne) {
+                flight.airborne = !player.onGround()
+                        || tick - flight.launchTick >= LAUNCH_GROUND_GRACE_TICKS;
+            }
+            if (flight.airborne && (player.onGround() || player.isInWater())) {
                 if (flight.climbing) {
                     player.removeEffect(MobEffects.LEVITATION);
                 }
@@ -500,9 +575,11 @@ public final class SkyLauncher {
             // Descending: re-steer every stride while the column would miss the
             // footprint (players already over the disc keep their agency). Descents
             // have vy < 0, so repeated pushes can never arm the flight kick.
+            // F-024 landing guarantee: the steering now runs the WHOLE way down (the old
+            // SURFACE_Y − 24 cut-off abandoned anyone who fell past the rim while still
+            // outside the footprint — i.e. exactly the flights that were about to miss).
             if (tick % DESCENT_STEER_STRIDE != 0
-                    || EndDiscGeometry.footprintContains(player.getBlockX(), player.getBlockZ())
-                    || player.getY() <= DiscProfile.END_DISC_SURFACE_Y - 24) {
+                    || EndDiscGeometry.footprintContains(player.getBlockX(), player.getBlockZ())) {
                 continue;
             }
             double dx = flight.targetX - player.getX();
@@ -511,9 +588,40 @@ public final class SkyLauncher {
             if (dist > 1.0E-3D) {
                 double vh = Math.min(dist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
                 Vec3 current = player.getDeltaMovement();
-                player.setDeltaMovement(dx / dist * vh, current.y, dz / dist * vh);
+                // Below the lens the horizontal correction alone can no longer save the
+                // flight — hold the fall until the column is back over the island.
+                double vy = player.getY() < DiscProfile.END_DISC_SURFACE_Y - 4
+                        ? Math.max(current.y, -0.05D) : current.y;
+                player.setDeltaMovement(dx / dist * vh, vy, dz / dist * vh);
                 player.hurtMarked = true;
+                refreshSlowFalling(player);
             }
+        }
+    }
+
+    /**
+     * Highest block any End-island platform can occupy: the tallest obsidian spike (plus
+     * its iron-bar cage) or, failing that, the lens surface — and, once the disc has
+     * shattered, the highest islet lift on top, because the archipelago's risen isles sit
+     * above the authored geometry. The climb clears THIS plus {@value #TARGET_MARGIN}, so
+     * no pillar, cage, chorus stalk or risen islet can ever stand between a launch and its
+     * landing ring (F-024).
+     */
+    private static int islandTopY(MinecraftServer server) {
+        int top = DiscProfile.END_DISC_SURFACE_Y;
+        for (int i = 0; i < EndDiscGeometry.PILLAR_COUNT; i++) {
+            top = Math.max(top,
+                    EndDiscGeometry.topYAt(EndDiscGeometry.pillarX(i), EndDiscGeometry.pillarZ(i)));
+        }
+        return top + EndShatterSequence.maxIsletLift(server);
+    }
+
+    /** Tops the Slow Falling back up (apex handoff + every descent correction). */
+    private static void refreshSlowFalling(ServerPlayer player) {
+        MobEffectInstance active = player.getEffect(MobEffects.SLOW_FALLING);
+        if (active == null || active.getDuration() < LAUNCH_SLOW_FALL_TICKS / 2) {
+            player.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING,
+                    LAUNCH_SLOW_FALL_TICKS, 0, false, false, true));
         }
     }
 
@@ -536,6 +644,9 @@ public final class SkyLauncher {
         if (handoff) {
             flight.climbing = false;
             player.removeEffect(MobEffects.LEVITATION);
+            // F-024: Slow Falling is (re)stamped AT THE APEX, so the descent is always
+            // covered no matter how long the climb took.
+            refreshSlowFalling(player);
             double vh = dist < 1.0E-3D ? 0.0D
                     : Math.min(dist / HORIZONTAL_TRAVEL_FACTOR, MAX_HORIZONTAL_SPEED);
             player.setDeltaMovement(dist < 1.0E-3D ? 0.0D : dx / dist * vh, -0.1D,
@@ -551,6 +662,19 @@ public final class SkyLauncher {
         if (!player.hasEffect(MobEffects.LEVITATION)) {
             player.addEffect(new MobEffectInstance(MobEffects.LEVITATION,
                     CLIMB_MAX_TICKS, CLIMB_LEVITATION_AMPLIFIER, false, false, true));
+        }
+        // Stall watchdog: a climb that is not actually rising gets a clamped vertical
+        // punch on top of the Levitation, so the ascent never silently sags mid-sky.
+        if (tick - flight.stallSampleTick >= CLIMB_STALL_WINDOW) {
+            if (player.getY() - flight.stallSampleY < CLIMB_STALL_MIN_RISE) {
+                Vec3 current = player.getDeltaMovement();
+                player.setDeltaMovement(current.x, MOTION_PACKET_LIMIT, current.z);
+                player.hurtMarked = true;
+                EclipseMod.LOGGER.debug("SkyLauncher: climb stall re-punch for {} at y={}",
+                        player.getGameProfile().getName(), (int) player.getY());
+            }
+            flight.stallSampleTick = tick;
+            flight.stallSampleY = player.getY();
         }
         if (tick % CLIMB_STEER_STRIDE == 0) {
             double steer = Math.min(CLIMB_STEER_MAX, dist / 10.0D);

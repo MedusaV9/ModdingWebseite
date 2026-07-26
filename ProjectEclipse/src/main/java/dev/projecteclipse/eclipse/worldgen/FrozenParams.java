@@ -526,7 +526,11 @@ public final class FrozenParams {
     /** Minimal {@code end.json} defaults until W1.8's {@code EndConfig} owns the file. */
     static JsonObject defaultEndJson() {
         JsonObject end = new JsonObject();
-        end.addProperty("trigger", "day:9");
+        // F-023: the authored timeline reserves day 12 for the sky shard (days.json
+        // "DAY 12 — THE SKY SHARD") and day 13 for the dragon. Day 7 is the Herald.
+        end.addProperty("configVersion", 2);
+        end.addProperty("trigger", "day:12");
+        end.addProperty("dragonDay", 13);
         end.addProperty("radius", DiscProfile.END_DISC_RADIUS);
         end.addProperty("surfaceY", DiscProfile.END_DISC_SURFACE_Y);
         end.addProperty("simpleDragonAi", true);

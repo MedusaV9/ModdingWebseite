@@ -1,0 +1,32 @@
+{
+  "_comment": "END2 — F-023 (End disc day 12 / dragon day 13, day 7 stays the Herald's), F-024 (wind altar reaches the island) and F-047 (the post-fight crash finale: the archipelago falls, the middle island goes, low remnants stay). All keys below are NEW; nothing shipped is overwritten. 'announce.*' go out as chat broadcasts, 'eclipse.caption.*' is a subtitle-styled S2CCaptionPayload, 'command.*' are operator feedback for /eclipse-worldgen end.",
+
+  "en_us": {
+    "announce.eclipse.end.crash_begins": "The archipelago cannot hold. One by one, the isles are letting go of the sky.",
+    "announce.eclipse.end.crash_core": "The last of it comes down — pedestal, portal and all.",
+    "announce.eclipse.end.crash_done": "The sky is empty. Only rubble and a handful of drifting crumbs are left of the End.",
+    "announce.eclipse.end.egg_fell": "The Dragon Egg rode the wreckage down. It waits, unbroken, on the rubble.",
+
+    "eclipse.caption.end_crash.begins": "The islands are falling",
+
+    "eclipse.sky_launcher.sky_empty": "The wind has nothing left to throw you at.",
+
+    "command.eclipse.worldgen.end_crash": "Crash finale started — the loot window was skipped.",
+    "command.eclipse.worldgen.end_crash_unavailable": "The crash finale cannot start: the shatter has not finished, or the crash is already running.",
+    "command.eclipse.worldgen.end_status": "End: trigger %1$s, dragon on day %2$s, today is day %3$s. Shatter phase %4$s (0 carve, 1 crash-wait, 2 crash, 3 core, 4 remnants, 5 done), crash pass %5$s."
+  },
+  "de_de": {
+    "announce.eclipse.end.crash_begins": "Das Archipel hält nicht mehr. Eine nach der anderen lassen die Inseln den Himmel los.",
+    "announce.eclipse.end.crash_core": "Der Rest kommt herunter — Podest, Portal und alles.",
+    "announce.eclipse.end.crash_done": "Der Himmel ist leer. Vom Ende bleiben nur Trümmer und ein paar treibende Bröckel.",
+    "announce.eclipse.end.egg_fell": "Das Drachenei ist mit den Trümmern gefallen. Unversehrt liegt es auf dem Geröll.",
+
+    "eclipse.caption.end_crash.begins": "Die Inseln stürzen",
+
+    "eclipse.sky_launcher.sky_empty": "Der Wind hat nichts mehr, wohin er dich werfen könnte.",
+
+    "command.eclipse.worldgen.end_crash": "Crash-Finale gestartet — das Loot-Fenster wurde übersprungen.",
+    "command.eclipse.worldgen.end_crash_unavailable": "Das Crash-Finale kann nicht starten: Das Zerbrechen ist nicht fertig, oder der Absturz läuft bereits.",
+    "command.eclipse.worldgen.end_status": "Ende: Trigger %1$s, Drache an Tag %2$s, heute ist Tag %3$s. Zerbrech-Phase %4$s (0 Carve, 1 Warten, 2 Absturz, 3 Kern, 4 Bröckel, 5 fertig), Absturz-Durchgang %5$s."
+  }
+}

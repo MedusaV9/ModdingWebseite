@@ -56,7 +56,9 @@ public final class EclipseWorldgenCommand {
                         .then(Commands.literal("open").executes(context -> setBreach(context, true)))
                         .then(Commands.literal("close").executes(context -> setBreach(context, false))))
                 .then(Commands.literal("end")
-                        .then(Commands.literal("materialize").executes(EclipseWorldgenCommand::materializeEnd)))
+                        .then(Commands.literal("materialize").executes(EclipseWorldgenCommand::materializeEnd))
+                        .then(Commands.literal("crash").executes(EclipseWorldgenCommand::crashEnd))
+                        .then(Commands.literal("status").executes(EclipseWorldgenCommand::endStatus)))
                 .then(Commands.literal("structures")
                         .then(Commands.literal("list").executes(EclipseWorldgenCommand::listStructures))
                         .then(Commands.literal("place")
@@ -118,6 +120,31 @@ public final class EclipseWorldgenCommand {
                 context.getSource().getServer());
         context.getSource().sendSuccess(
                 () -> Component.translatable("command.eclipse.worldgen.end_materialized"), true);
+        return 1;
+    }
+
+    /** F-047: skip the remaining loot window and start the crash finale now. */
+    private static int crashEnd(CommandContext<CommandSourceStack> context) {
+        if (!dev.projecteclipse.eclipse.worldgen.end.EndShatterSequence.forceCrash(
+                context.getSource().getServer())) {
+            context.getSource().sendFailure(
+                    Component.translatable("command.eclipse.worldgen.end_crash_unavailable"));
+            return 0;
+        }
+        context.getSource().sendSuccess(
+                () -> Component.translatable("command.eclipse.worldgen.end_crash"), true);
+        return 1;
+    }
+
+    /** F-023/F-047 read-out: configured days plus the live shatter/crash phase. */
+    private static int endStatus(CommandContext<CommandSourceStack> context) {
+        var server = context.getSource().getServer();
+        var config = dev.projecteclipse.eclipse.worldgen.end.EndConfig.current();
+        var state = dev.projecteclipse.eclipse.worldgen.end.EndShatterSequence.ShatterData.get(server);
+        context.getSource().sendSuccess(() -> Component.translatable(
+                "command.eclipse.worldgen.end_status", config.trigger(), config.dragonDay(),
+                dev.projecteclipse.eclipse.progression.DayScheduler.getDay(server),
+                state.phase(), state.crashPass()), false);
         return 1;
     }
 
