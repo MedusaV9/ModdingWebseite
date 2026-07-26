@@ -144,9 +144,26 @@ public enum MusicCues {
         return cue.isPresent();
     }
 
-    /** Client payload-handler entry point: fade the custom channel out. */
+    /** Client payload-handler entry point: fade the custom channel out (default 40 t). */
     public static void stop() {
         MusicClientHooks.stop();
+    }
+
+    /**
+     * MUSICFADE client entry point: fade the custom channel to silence over {@code ticks}
+     * instead of the default 40-tick crossfade. Same muting semantics as {@link #stop()}.
+     *
+     * <p>A fade cannot outlive a dimension change ({@code SoundEngine.stopAll} runs on
+     * every {@code Minecraft.setLevel}), so a sequence that hops dimensions must start its
+     * fade early enough to reach zero BEFORE the hop.</p>
+     */
+    public static void fadeOut(int ticks) {
+        MusicClientHooks.fadeOut(ticks);
+    }
+
+    /** Server-side bridge for {@link #fadeOut(int)} (sequences own a specific player). */
+    public static void fadeOut(ServerPlayer player, int ticks) {
+        MusicPayloads.sendFadeOut(player, ticks);
     }
 
     /**

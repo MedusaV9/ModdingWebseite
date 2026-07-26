@@ -396,6 +396,18 @@ public final class StormRegistry {
         }
     }
 
+    /**
+     * Re-sends every storm of the player's CURRENT dimension to them. Public because a
+     * scripted dimension hop (the intro's limbo → overworld teleport) races the client's
+     * level swap: {@code StormFxClient} wipes its storm list on the swap, so a payload that
+     * arrived a tick too early is lost. Callers that must guarantee a storm is standing
+     * before a fade releases re-send through here a few ticks after the hop —
+     * {@code StormFxClient.handle} is idempotent, so extra sends cost one packet each.
+     */
+    public static void syncTo(ServerPlayer player) {
+        resync(player);
+    }
+
     private static void resync(ServerPlayer player) {
         for (ServerStorm storm : STORMS.values()) {
             if (storm.dimension == player.level().dimension()) {

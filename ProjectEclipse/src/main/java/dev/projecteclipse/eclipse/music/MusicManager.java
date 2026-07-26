@@ -1,7 +1,10 @@
 package dev.projecteclipse.eclipse.music;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.Iterator;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
@@ -17,11 +20,8 @@ import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.xboxevent.XboxDimensions;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
-import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -37,10 +37,31 @@ import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
  * either side of a custom crossfade is audible, vanilla's music scheduler is stopped so menu
  * and biome tracks never double-play. The {@link SoundSource#MUSIC} category still applies the
  * player's vanilla Music slider after {@link MusicConfig#volumeMultiplier()}.</p>
+ *
+ * <p><b>MUSICFADE — how a fade-out actually works now.</b> Every voice is a
+ * {@link MusicFadeSound} that owns its own volume envelope and only stops itself once the
+ * envelope reaches zero. Fading voices live in {@link #fading} until the engine drops them;
+ * they are NEVER force-stopped just because the channel went idle. The old single
+ * {@code outgoing} slot did exactly that: {@code onClientTick} re-entered
+ * {@code transitionTo(null)} on every idle tick (its guard was {@code current == null}, which
+ * is true while idle) and the first thing that method did with a {@code null} target was
+ * {@code outgoing.forceStop()} — so every fade-to-silence died one tick after it started and
+ * the music cut off hard. Cue→cue crossfades were unaffected, which is why only "the music
+ * ends abruptly" was ever reported.</p>
+ *
+ * <p><b>What a fade can never survive</b>: a dimension change. {@code Minecraft.setLevel}
+ * runs {@code updateScreenAndTick} → {@code soundManager.stop()} → {@code SoundEngine.stopAll},
+ * which kills every channel instantly. Sequences that hop dimensions (the limbo → overworld
+ * start cutscene) must therefore START their fade before the hop — see
+ * {@code limbo.StartEventCutscene}'s music-fade beat — because no client-side envelope can
+ * outlive the engine wipe.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class MusicManager {
+    /** Default crossfade length of a ladder swap (2 s). */
     private static final int FADE_TICKS = 40;
+    /** Concurrent fading-out voices kept alive; the oldest beyond this is force-stopped. */
+    private static final int MAX_FADING_VOICES = 3;
     /**
      * How long a boss cue survives without its bossbar RENDER event firing (M-2). The
      * {@code BossEventProgress} hook goes silent whenever the boss-bar GUI layer is skipped
@@ -62,9 +83,9 @@ public final class MusicManager {
     private static final int FAILED_STARTS_LIMIT = 3;
 
     @Nullable
-    private static CueSound current;
-    @Nullable
-    private static CueSound outgoing;
+    private static MusicFadeSound current;
+    /** Voices running out their fade-out envelope; dropped once the engine forgets them. */
+    private static final List<MusicFadeSound> fading = new ArrayList<>(MAX_FADING_VOICES + 1);
     @Nullable
     private static MusicCues forcedCue;
     private static int forcedTicks;
@@ -110,10 +131,26 @@ public final class MusicManager {
     }
 
     /**
-     * Fades out explicit and automatic music. The current automatic situation remains muted
-     * until it changes, so {@code /dev music stop} does not restart the same cue next tick.
+     * Fades out explicit and automatic music over the default {@value #FADE_TICKS}-tick
+     * crossfade. The current automatic situation remains muted until it changes, so
+     * {@code /dev music stop} does not restart the same cue next tick.
      */
     public static void stop() {
+        fadeOut(FADE_TICKS);
+    }
+
+    /**
+     * MUSICFADE entry point: fades the channel to silence over {@code ticks} — the voice
+     * keeps streaming at a falling volume and stops itself only at zero. Same muting
+     * semantics as {@link #stop()} (the situation underneath stays suppressed until it
+     * changes), just with a caller-chosen fade length: cinematic hand-offs want a long
+     * musical fade, a dev stop wants the short one.
+     *
+     * <p>Callers whose sequence crosses a DIMENSION CHANGE must start the fade early
+     * enough to finish before the hop — {@code SoundEngine.stopAll()} runs on every
+     * {@code Minecraft.setLevel} and no envelope survives it (see the class doc).</p>
+     */
+    public static void fadeOut(int ticks) {
         Minecraft minecraft = Minecraft.getInstance();
         forcedCue = null;
         forcedTicks = 0;
@@ -121,7 +158,7 @@ public final class MusicManager {
         lingerTicksLeft = 0;
         suppressedSituation = naturalCue(minecraft);
         suppressSituation = true;
-        transitionTo(minecraft, null);
+        transitionTo(minecraft, null, Math.max(1, ticks));
     }
 
     /**
@@ -138,7 +175,7 @@ public final class MusicManager {
     }
 
     public static String currentCueId() {
-        return current == null ? "" : current.cue.id();
+        return current == null ? "" : current.cue().id();
     }
 
     @SubscribeEvent
@@ -168,14 +205,18 @@ public final class MusicManager {
         if (desired != null && deadCues.contains(desired)) {
             desired = null;
         }
-        if (current == null || current.cue != desired) {
-            transitionTo(minecraft, desired);
+        // MUSICFADE: compare against the ACTIVE cue (null while idle), never against
+        // `current == null`. The old guard re-entered transitionTo on every idle tick,
+        // which force-stopped the voice that was still fading out.
+        MusicCues activeCue = current == null ? null : current.cue();
+        if (activeCue != desired) {
+            transitionTo(minecraft, desired, FADE_TICKS);
         }
 
         // Minecraft's scheduler may have started a track earlier in the same client tick.
         // Stop it throughout both halves of our fade to guarantee no double-playing. When no
         // cue is active (nothing desired, nothing fading) vanilla music must keep running.
-        if (current != null || outgoing != null) {
+        if (current != null || !fading.isEmpty()) {
             minecraft.getMusicManager().stopPlaying();
         }
     }
@@ -305,8 +346,8 @@ public final class MusicManager {
             return natural;
         }
         MusicCues held = lingerCue != null ? lingerCue
-                : (current != null && current.cue == forcedCue ? null
-                        : current != null ? current.cue : null);
+                : (current != null && current.cue() == forcedCue ? null
+                        : current != null ? current.cue() : null);
         if (held == null || held.lingerTicks() <= 0
                 || situationRank(natural) >= situationRank(held)) {
             lingerCue = null;
@@ -333,60 +374,81 @@ public final class MusicManager {
         return natural;
     }
 
-    private static void transitionTo(Minecraft minecraft, @Nullable MusicCues cue) {
-        if (current != null && current.cue == cue) {
+    /**
+     * Retargets the channel to {@code cue} ({@code null} = silence). The outgoing voice is
+     * handed a {@code fadeOutTicks}-long envelope and parked in {@link #fading} — it keeps
+     * streaming and stops ITSELF at zero. Nothing here ever hard-stops a voice.
+     */
+    private static void transitionTo(Minecraft minecraft, @Nullable MusicCues cue, int fadeOutTicks) {
+        if (current != null && current.cue() == cue) {
             return;
         }
-        // Un-fade resume (IDEA-08 #4): the fading instance keeps streaming until fade==0,
-        // so cancelling its fade mid-flight resumes the SAME sound at the SAME playback
-        // position — a brief exit dips and swells instead of restarting from bar 1.
-        CueSound resumed = null;
-        if (outgoing != null) {
-            if (cue != null && outgoing.cue == cue && !outgoing.isStopped()) {
-                resumed = outgoing;
-            } else {
-                outgoing.forceStop();
+        // Un-fade resume (IDEA-08 #4): a fading voice keeps streaming until its envelope
+        // hits zero, so cancelling that fade mid-flight resumes the SAME sound at the SAME
+        // playback position — a brief exit dips and swells instead of restarting from bar 1.
+        MusicFadeSound resumed = null;
+        if (cue != null) {
+            for (Iterator<MusicFadeSound> iterator = fading.iterator(); iterator.hasNext();) {
+                MusicFadeSound voice = iterator.next();
+                if (voice.cue() == cue && !voice.isStopped()) {
+                    resumed = voice;
+                    iterator.remove();
+                    break;
+                }
             }
-            outgoing = null;
         }
         if (current != null) {
-            current.fadeOut();
-            outgoing = current;
+            current.fadeOut(fadeOutTicks);
+            parkFading(current);
             current = null;
         }
         if (resumed != null) {
-            resumed.resume();
+            resumed.resume(FADE_TICKS);
             current = resumed;
         } else if (cue != null) {
-            current = new CueSound(cue);
-            minecraft.getSoundManager().play(current);
+            MusicFadeSound voice = new MusicFadeSound(cue, FADE_TICKS);
+            current = voice;
+            minecraft.getSoundManager().play(voice);
+        }
+    }
+
+    /** Parks a fading voice, force-stopping the oldest one past the concurrency cap. */
+    private static void parkFading(MusicFadeSound voice) {
+        fading.add(voice);
+        while (fading.size() > MAX_FADING_VOICES) {
+            fading.remove(0).forceStop();
         }
     }
 
     private static void cleanupFinished(Minecraft minecraft) {
-        if (outgoing != null) {
-            outgoing.managerAge++;
-            if (outgoing.isStopped() || outgoing.managerAge > START_GRACE_TICKS
-                    && !minecraft.getSoundManager().isActive(outgoing)) {
-                outgoing = null;
+        for (Iterator<MusicFadeSound> iterator = fading.iterator(); iterator.hasNext();) {
+            MusicFadeSound voice = iterator.next();
+            voice.advanceManagerAge();
+            // Drop the reference only; a voice that reached zero already stopped itself,
+            // and one the engine forgot (dimension change wipe) is gone either way.
+            if (voice.isStopped() || voice.managerAge() > START_GRACE_TICKS
+                    && !minecraft.getSoundManager().isActive(voice)) {
+                iterator.remove();
             }
         }
-        if (current != null) {
-            current.managerAge++;
-            // `age` only advances once the engine ticks a started instance, so it stays 0
-            // for a refused start; `managerAge` is manager-owned and always advances.
-            if (current.age == FADE_TICKS) {
-                failedStarts.remove(current.cue);
+        MusicFadeSound active = current;
+        if (active != null) {
+            active.advanceManagerAge();
+            // `reachedFullLevel` latches once the fade-in completed, i.e. the engine really
+            // played the cue; `managerAge` is manager-owned and always advances, so it also
+            // catches a start the engine refused outright.
+            if (active.reachedFullLevel()) {
+                failedStarts.remove(active.cue());
             }
-            if (current.isStopped()) {
+            if (active.isStopped()) {
                 current = null;
-            } else if (current.managerAge > START_GRACE_TICKS
-                    && !minecraft.getSoundManager().isActive(current)) {
-                // The engine refused the start (age == 0) or culled the instance before its
-                // fade-in finished (unplayable stream). A natural end of a non-looping cue
-                // (large age) is NOT a failure.
-                if (current.age < FADE_TICKS) {
-                    noteFailedStart(current.cue);
+            } else if (active.managerAge() > START_GRACE_TICKS
+                    && !minecraft.getSoundManager().isActive(active)) {
+                // The engine refused the start or culled the instance before its fade-in
+                // finished (unplayable stream). A natural end of a non-looping cue — or the
+                // dimension-change engine wipe — happens at full level and is NOT a failure.
+                if (!active.reachedFullLevel()) {
+                    noteFailedStart(active.cue());
                 }
                 current = null;
             }
@@ -403,69 +465,15 @@ public final class MusicManager {
         }
     }
 
+    /** Teardown only (logout / world swap): a hard stop of every voice, no fade. */
     private static void forceStopAll() {
         if (current != null) {
             current.forceStop();
             current = null;
         }
-        if (outgoing != null) {
-            outgoing.forceStop();
-            outgoing = null;
+        for (MusicFadeSound voice : fading) {
+            voice.forceStop();
         }
-    }
-
-    /** Relative streamed sound whose volume is owned exclusively by the crossfade. */
-    private static final class CueSound extends AbstractTickableSoundInstance {
-        private final MusicCues cue;
-        private int fade;
-        private int fadeDirection = 1;
-        private int age;
-        /** Ticks since the manager created the instance; advances even if the engine never accepts it. */
-        private int managerAge;
-
-        CueSound(MusicCues cue) {
-            super(cue.sound(), SoundSource.MUSIC, SoundInstance.createUnseededRandom());
-            this.cue = cue;
-            this.looping = cue.looping();
-            this.delay = 0;
-            this.relative = true;
-            this.volume = 0.0F;
-        }
-
-        /**
-         * THE C19 critical fix: the crossfade starts every cue at volume 0, and
-         * {@code SoundEngine.play} refuses to start any sound whose initial effective volume
-         * is zero unless it may start silent ("skipped playing sound …, volume was zero").
-         * Without this override no cue ever started, while the manager kept muting vanilla
-         * music — total silence. Vanilla's own fading sounds (biome ambience) do the same.
-         */
-        @Override
-        public boolean canStartSilent() {
-            return true;
-        }
-
-        @Override
-        public void tick() {
-            age++;
-            fade = Mth.clamp(fade + fadeDirection, 0, FADE_TICKS);
-            // WANDFIX-6: cue.gain() trims quiet ceremonial stings under the config volume.
-            volume = MusicConfig.volumeMultiplier() * cue.gain() * fade / (float) FADE_TICKS;
-            if (fadeDirection < 0 && fade == 0) {
-                stop();
-            }
-        }
-
-        void fadeOut() {
-            fadeDirection = -1;
-        }
-
-        /** Cancels an in-flight fade-out (un-fade resume; position is preserved). */
-        void resume() {
-            fadeDirection = 1;
-        }
-
-        void forceStop() {
-            stop();
-        }
+        fading.clear();
     }
 }

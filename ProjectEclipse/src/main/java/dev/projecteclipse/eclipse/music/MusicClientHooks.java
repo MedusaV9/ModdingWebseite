@@ -19,6 +19,10 @@ final class MusicClientHooks {
         MusicManager.stop();
     }
 
+    static void fadeOut(int ticks) {
+        MusicManager.fadeOut(ticks);
+    }
+
     static void release(MusicCues cue) {
         MusicManager.release(cue);
     }

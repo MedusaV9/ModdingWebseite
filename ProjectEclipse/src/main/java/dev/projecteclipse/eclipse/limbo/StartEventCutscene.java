@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
+import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.S2CCutscenePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
@@ -17,6 +18,7 @@ import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.sequence.IntroSequence;
 import dev.projecteclipse.eclipse.sequence.SequencePayloads;
 import dev.projecteclipse.eclipse.start.StartAssignmentService;
+import dev.projecteclipse.eclipse.stormfx.StormRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -45,26 +47,52 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       (freeze + client flight; the {@code intro_*} id keeps the freeze across the coming
  *       dimension hop; players outside limbo ACK-finish instantly because the path is
  *       limbo-scoped).</li>
+ *   <li>t=80 — MUSICFADE: {@link MusicCues#fadeOut(ServerPlayer, int)} over
+ *       {@value #MUSIC_FADE_TICKS} ticks, timed to reach silence exactly at the hop (see
+ *       "Music" below).</li>
  *   <li>t=100 — broadcast {@code SUBMERGE} then {@code WAVES} (v1 {@code WaveOverlay}
  *       regression path, untouched), plus one {@code eclipse:cutscene_veil} Quasar burst per
  *       limbo player.</li>
  *   <li>t=120 — {@link SequencePayloads#sendPortalEnter} (18 ticks) for everyone in limbo:
  *       W8's glitch → hold-black covers everything from here — the ship path's ACK at t≈130
  *       and the dimension change both happen behind black, and the vanilla dimension screen
- *       is never the visible surface (R13).</li>
+ *       is never the visible surface (R13). STORMFIRST: the same beat calls
+ *       {@link IntroSequence#prespawnVortex} so the smoke wall is already standing over the
+ *       centre island before anybody is looking at it.</li>
  *   <li>t=140 — teleport every player currently in Limbo onto their own disc
  *       (from {@link StartAssignmentService}, surface-snapped, facing the world center):
  *       re-freeze (survives the hop) + {@link FreezeService#transport} per player, and
- *       remember each player's disc center for {@code IntroSequence}'s framing map.</li>
- *   <li>t=150 — {@link SequencePayloads#sendPortalExit} (24 ticks): the black releases onto
- *       the disc under a still-normal sky.</li>
- *   <li>t=160 — broadcast {@code EMERGE}, set {@code startEventDone}, stamp each teleported
- *       player's {@code first_overworld_join} attachment (voice-mute timer) if unset, one
- *       {@code eclipse:cutscene_veil} burst per emerged player — then hand over to
- *       {@link IntroSequence#start(MinecraftServer, Map)}: eclipse ramp, fusion flight,
+ *       remember each player's disc center for {@code IntroSequence}'s framing map. The
+ *       storm is re-synced to each hopped player a few ticks later (the client wipes its
+ *       storm list on the level swap).</li>
+ *   <li>t≥180, GATED — {@link SequencePayloads#sendPortalExit} (24 ticks): the black
+ *       releases only once the pre-spawned vortex reports ACTIVE and the post-hop settle
+ *       window has passed, with a {@value #PORTAL_EXIT_MAX_HOLD_TICKS}-tick hard cap.</li>
+ *   <li>exit+10 — broadcast {@code EMERGE}, set {@code startEventDone}, stamp each
+ *       teleported player's {@code first_overworld_join} attachment (voice-mute timer) if
+ *       unset, one {@code eclipse:cutscene_veil} burst per emerged player — then hand over
+ *       to {@link IntroSequence#start(MinecraftServer, Map)}: eclipse ramp, fusion flight,
  *       vortex, lightning, reveal, sunrise (the fusion itself is started by the sequence at
  *       its FLIGHT phase, no longer here).</li>
  * </ul>
+ *
+ * <p><b>STORMFIRST (F-016) — why the pre-spawn is here and not in the sequence.</b> The
+ * vortex used to spawn at {@code IntroSequence} FLIGHT t=300, i.e. ~19 s after this
+ * timeline's black had already released onto the disc. For those 19 s every player stared
+ * straight at the bare centre island — the one thing the storm exists to hide. The storm
+ * therefore now goes up at t=120, behind the portal black and BEFORE the hop, and the
+ * black is held until it is opaque, so the first overworld frame anyone ever sees already
+ * has the smoke wall in it.</p>
+ *
+ * <p><b>MUSICFADE (F-018) — why the fade starts at t=80 and not at EMERGE.</b> The music
+ * playing here is the situation ladder's {@code limbo_ambience}, and the t=140 hop is a
+ * DIMENSION CHANGE: {@code Minecraft.setLevel} → {@code updateScreenAndTick} →
+ * {@code soundManager.stop()} → {@code SoundEngine.stopAll()} kills every channel
+ * instantly, no matter what any client-side envelope wants. The old fade lived on the
+ * EMERGE broadcast — 20+ ticks AFTER that wipe — so it never touched the limbo bed at all,
+ * and the music just stopped dead mid-phrase. The fade is now started
+ * {@value #MUSIC_FADE_TICKS} ticks before the hop and reaches zero exactly as the engine
+ * wipe lands, which is the only way a fade can survive a dimension change.</p>
  *
  * <p>The v1 {@code S2CCutscenePayload} phases and the client {@code WaveOverlay} are kept
  * untouched (regression path); the camera flight and portal glitch are layered on top, so
@@ -73,21 +101,55 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class StartEventCutscene {
     private static final int TILT_TICK = 0;
+    /** MUSICFADE: fade start, chosen so the envelope hits zero exactly at {@link #TELEPORT_TICK}. */
+    private static final int MUSIC_FADE_TICK = 80;
     private static final int SUBMERGE_TICK = 100;
     private static final int PORTAL_ENTER_TICK = 120;
     private static final int TELEPORT_TICK = 140;
-    private static final int PORTAL_EXIT_TICK = 150;
-    private static final int EMERGE_TICK = 160;
 
     private static final int PORTAL_ENTER_TICKS = 18;
     private static final int PORTAL_EXIT_TICKS = 24;
-    /** Freeze TTL bridging the hop until IntroSequence's own ECLIPSE_ON freeze lands. */
-    private static final int HOP_FREEZE_TTL_TICKS = (EMERGE_TICK - TELEPORT_TICK) + 80;
+    /**
+     * MUSICFADE length. Must land on {@link #TELEPORT_TICK}: shorter leaves an audible gap
+     * of silence in Limbo, longer means the engine wipe cuts the tail off anyway.
+     */
+    private static final int MUSIC_FADE_TICKS = TELEPORT_TICK - MUSIC_FADE_TICK;
+
+    // --- STORMFIRST: the gated black release (see class doc) ---
+    /**
+     * Earliest black release after the hop. The client needs this long to swap levels, pull
+     * the disc chunks and get the storm shells on screen; releasing sooner shows a frame of
+     * bare island even though the storm is registered server-side.
+     */
+    private static final int PORTAL_EXIT_MIN_HOLD_TICKS = 40;
+    /**
+     * Hard cap on the same hold. A storm that never reports ACTIVE (registry hiccup, no
+     * overworld) must never wedge players behind a black screen — the show goes on.
+     */
+    private static final int PORTAL_EXIT_MAX_HOLD_TICKS = 120;
+    /**
+     * Post-hop storm re-syncs, in ticks after {@link #TELEPORT_TICK}. {@code StormFxClient}
+     * clears its storm list when the level swaps, so a payload that arrived a tick early is
+     * simply lost; the registry's own dimension-change resync races that swap. These extra
+     * idempotent sends cost one packet each and remove the race entirely.
+     */
+    private static final int[] STORM_RESYNC_OFFSETS = {5, 15};
+    /** EMERGE follows the (gated) black release by this much. */
+    private static final int EMERGE_AFTER_EXIT_TICKS = 10;
+    /**
+     * Freeze TTL bridging the hop until IntroSequence's own ECLIPSE_ON freeze lands. Covers
+     * the worst-case gated hold plus EMERGE plus margin — a short TTL would drop players
+     * loose behind the black while the gate waits.
+     */
+    private static final int HOP_FREEZE_TTL_TICKS =
+            PORTAL_EXIT_MAX_HOLD_TICKS + EMERGE_AFTER_EXIT_TICKS + 80;
     /** Same-disc spread of overflow players (more players than discs) in blocks. */
     private static final int OVERFLOW_SPREAD_BLOCKS = 3;
 
     private static boolean running = false;
     private static int ticks = 0;
+    /** Tick the (gated) portal exit fired at, or −1 while the black is still held. */
+    private static int portalExitTick = -1;
     private static final List<UUID> teleportedPlayers = new ArrayList<>();
     private static final Map<UUID, BlockPos> discCenters = new HashMap<>();
 
@@ -104,6 +166,7 @@ public final class StartEventCutscene {
         }
         running = true;
         ticks = 0;
+        portalExitTick = -1;
         teleportedPlayers.clear();
         discCenters.clear();
         EclipseMod.LOGGER.info("start_event cutscene beginning");
@@ -120,11 +183,18 @@ public final class StartEventCutscene {
     public static void onServerStopped(ServerStoppedEvent event) {
         running = false;
         ticks = 0;
+        portalExitTick = -1;
         teleportedPlayers.clear();
         discCenters.clear();
         OarAnimator.endTilt();
     }
 
+    /**
+     * The timeline. Fixed beats up to the hop; from there the black release is GATED on the
+     * pre-spawned storm actually standing (STORMFIRST) rather than firing on a fixed tick,
+     * because the whole point is that no player ever sees the island without the storm in
+     * front of it. {@link #PORTAL_EXIT_MAX_HOLD_TICKS} bounds the wait.
+     */
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         if (!running) {
@@ -134,15 +204,68 @@ public final class StartEventCutscene {
         int t = ticks++;
         switch (t) {
             case TILT_TICK -> tilt(server);
+            case MUSIC_FADE_TICK -> fadeMusicBeforeHop(server);
             case SUBMERGE_TICK -> submerge(server);
             case PORTAL_ENTER_TICK -> portalEnter(server);
             case TELEPORT_TICK -> teleportLimboPlayersToDiscs(server);
-            case PORTAL_EXIT_TICK -> portalExit(server);
-            case EMERGE_TICK -> emerge(server);
             default -> { /* waiting between phases */ }
         }
-        if (t >= EMERGE_TICK) {
+        if (t > TELEPORT_TICK && portalExitTick < 0) {
+            resyncStormAfterHop(server, t - TELEPORT_TICK);
+            if (blackMayRelease(t)) {
+                portalExit(server);
+                portalExitTick = t;
+            }
+        } else if (portalExitTick >= 0 && t == portalExitTick + EMERGE_AFTER_EXIT_TICKS) {
+            emerge(server);
             running = false;
+        }
+    }
+
+    /**
+     * STORMFIRST gate: hold the black until the disc has had time to render AND the
+     * pre-spawned vortex reports opaque, then release. Times out so a missing storm can
+     * never wedge the intro behind a black screen.
+     */
+    private static boolean blackMayRelease(int t) {
+        int held = t - TELEPORT_TICK;
+        if (held < PORTAL_EXIT_MIN_HOLD_TICKS) {
+            return false;
+        }
+        if (held >= PORTAL_EXIT_MAX_HOLD_TICKS) {
+            EclipseMod.LOGGER.warn(
+                    "start_event: storm never reported ACTIVE within {} ticks — releasing the black anyway",
+                    PORTAL_EXIT_MAX_HOLD_TICKS);
+            return true;
+        }
+        return IntroSequence.isPrespawnedVortexStanding();
+    }
+
+    /**
+     * MUSICFADE (F-018): start the client-side volume envelope early enough that it reaches
+     * zero exactly when the dimension hop's {@code SoundEngine.stopAll()} lands — see the
+     * class doc for why a fade started any later is silently discarded.
+     */
+    private static void fadeMusicBeforeHop(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            MusicCues.fadeOut(player, MUSIC_FADE_TICKS);
+        }
+        EclipseMod.LOGGER.info("start_event: music fading out over {} ticks (silent at the hop)",
+                MUSIC_FADE_TICKS);
+    }
+
+    /** Re-sends the storm state to the hopped players on the {@link #STORM_RESYNC_OFFSETS} beats. */
+    private static void resyncStormAfterHop(MinecraftServer server, int sinceHop) {
+        for (int offset : STORM_RESYNC_OFFSETS) {
+            if (offset != sinceHop) {
+                continue;
+            }
+            for (UUID id : teleportedPlayers) {
+                ServerPlayer player = server.getPlayerList().getPlayer(id);
+                if (player != null) {
+                    StormRegistry.syncTo(player);
+                }
+            }
         }
     }
 
@@ -177,8 +300,15 @@ public final class StartEventCutscene {
         }
     }
 
-    /** R13 portal-enter for everyone in limbo: glitch up, fade to black, HOLD black. */
+    /**
+     * R13 portal-enter for everyone in limbo: glitch up, fade to black, HOLD black — and,
+     * STORMFIRST, stand the vortex up over the centre island NOW, while nobody can see it.
+     * The pre-spawn happens even if limbo is empty: an intro whose cohort joins late still
+     * wants the storm standing (a hand-off that never comes is dissipated by
+     * {@link IntroSequence#discardPrespawnedVortex}).
+     */
     private static void portalEnter(MinecraftServer server) {
+        IntroSequence.prespawnVortex(server);
         ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
         if (limbo == null) {
             return;
@@ -269,7 +399,11 @@ public final class StartEventCutscene {
         teleportLimboPlayersToDiscs(server);
         PacketDistributor.sendToAllPlayers(new S2CCutscenePayload(S2CCutscenePayload.Phase.EMERGE));
         OarAnimator.endTilt();
-        EclipseWorldState.get(server).setStartEventDone(true);
+        // ALTARFIX2 #1: stamp WHEN the event finished — the quest engine's arrival grace
+        // (QuestEngine.ARRIVAL_GRACE_TICKS) is measured from this moment, so the players
+        // the cutscene just dropped on the sanctum island cannot auto-complete the day-1
+        // "touch the altar" goal simply by landing next to it.
+        EclipseWorldState.get(server).setStartEventDone(true, server.overworld().getGameTime());
         // PROGFIX #3: no artifact grant here — the artifact chooses everyone only at the
         // storm-touch moment (IntroSequence APPROACH → LIGHTNING latches stormTouched).
         // A8: immediately re-sync the sidebar aggregate so eventStarted reaches every client.

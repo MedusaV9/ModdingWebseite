@@ -43,7 +43,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code event.lightning_close}/{@code event.lightning_far} stings, and (CUT-INTRO) a
  * short close-range camera-shake impulse riding the sting pick ({@code S2CShakePayload} —
  * camera noise only, no movement input; intensity-scaled ≤ 0.32 over 8 t, the giant burst
- * 0.55 over 26 t for everyone).</p>
+ * 0.55 over 26 t for everyone). Every strike also kicks a handful of fresh block-display
+ * chunks up out of the ground at the impact column ({@link StormDebrisFx#lightningKick},
+ * rate-limited and a no-op unless the intro armed a debris swarm).</p>
  *
  * <p><b>Kickback + day-1 containment awareness</b>: players within
  * {@value #KICK_RANGE_BEYOND_RADIUS} blocks of the smoke wall get the proven
@@ -185,6 +187,11 @@ public final class IntroLightningPhase {
                 new S2CQuasarPayload(LIGHTNING_IMPACT_EMITTER, impact));
         PacketDistributor.sendToPlayersInDimension(level,
                 new S2CQuasarPayload(IMPACT_LIGHT_EMITTER, impact));
+        // BD-STORM: the bolt tears fresh debris up out of the ground at the strike column.
+        // A no-op unless the intro armed a swarm, so the FX-only replay controller and any
+        // future user of this class stay unaffected — it is not gated on applyKickback,
+        // because the replay DOES arm a swarm and its strikes should throw debris too.
+        StormDebrisFx.lightningKick(level, new Vec3(impact.x, this.center.y, impact.z));
 
         if (this.applyKickback) {
             spawnVisualBolt(level, impact);

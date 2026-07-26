@@ -64,7 +64,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       the {@code eclipse.caption.intro.awaken} TITLE caption, {@code event.eclipse_drone},
  *       and a short freeze so nobody wanders before the camera takes over.</li>
  *   <li>{@code FLIGHT} (t=100..1000) — {@link FusionSequence#maybeStartIntroFusion} kicks the
- *       disc fusion, then the world-anchored {@code intro_v3_flight} crane shot plays as a
+ *       disc fusion, the {@link StormDebrisFx} block-display swarm arms around the vortex,
+ *       then the world-anchored {@code intro_v3_flight} crane shot plays as a
  *       GLOBAL_TELEPORT group play (anchor = vortex ground center; far players are gathered
  *       behind a fade and returned to their discs after — the R12 chunk-visibility policy,
  *       view distance 12). At t=300 the smoke/storm vortex spawns over the (still grounded,
@@ -84,7 +85,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       (1.0, 50), vortex {@code DISSIPATE 60}, the CUT-INTRO flash sandwich (white
  *       snap-hold → 3-tick shutter black → violet reopen), the C5 scripted day switch
  *       (the clock snaps forward to morning behind the white/shutter; see
- *       {@link #scriptedDaySwitch}), {@code eclipse:altar_reveal_burst} at the altar and
+ *       {@link #scriptedDaySwitch}), {@code eclipse:altar_reveal_burst} at the altar,
+ *       {@link StormDebrisFx#collapse} dragging the whole debris swarm into the island, and
  *       {@link FloatingDecor#ensure}.</li>
  *   <li>{@code REVEAL} (300 ticks) — {@code intro_v3_reveal} orbit of the floating altar
  *       island (anchor = altar position; nobody is far by now, so the global play only bumps
@@ -145,8 +147,23 @@ public final class IntroSequence implements SequenceReplayable {
 
     private static final int ECLIPSE_ON_TICKS = 100;
     private static final int FLIGHT_DURATION_TICKS = 900;
-    /** Vortex spawn inside FLIGHT (absolute t=300). */
+    /**
+     * Vortex spawn inside FLIGHT (absolute t=300) — the LATE fallback only. Since
+     * STORMFIRST the vortex normally stands before anybody can see the disc, spawned by
+     * {@link #prespawnVortex} behind the hop's black; this beat then finds
+     * {@code stormId >= 0} and does nothing. It still fires when the intro is started
+     * without the limbo half (dev {@code /eclipse start_event} on an already-emerged
+     * world, P4 triggers), so the smoke wall can never be missing.
+     */
     private static final int VORTEX_SPAWN_TICK = 300;
+    /**
+     * STORMFIRST pre-roll ramp: short on purpose. The pre-spawn happens behind the portal
+     * black, so the shells have nobody to fade in FOR — all that matters is that the storm
+     * is fully opaque (state ACTIVE) by the time the black releases. The regular
+     * {@link StormRegistry#RAMP_TICKS} ramp would still be visibly translucent then and the
+     * island would read straight through it.
+     */
+    private static final int PRESPAWN_RAMP_TICKS = 16;
     /** Altar-anchor sync inside FLIGHT (absolute t=500 — R10's "altar placed, hidden" beat). */
     private static final int ALTAR_ANCHOR_TICK = 500;
     private static final int VORTEX_DISSIPATE_TICKS = 60;
@@ -215,6 +232,12 @@ public final class IntroSequence implements SequenceReplayable {
     /** The single live run, or {@code null}. Server thread only. */
     @Nullable
     private static Run run;
+    /**
+     * STORMFIRST: storm id of a vortex pre-spawned by {@link #prespawnVortex} before the
+     * run exists (−1 = none). {@link #start} adopts it; a handover that never happens is
+     * cleaned up by {@link #discardPrespawnedVortex}. Server thread only.
+     */
+    private static int prespawnedStormId = -1;
     /** Tick scheduler for one-shot delays (live run + replays). Server thread only. */
     private static final List<Task> TASKS = new ArrayList<>();
     /** FX-only lightning controllers driven for replays. Server thread only. */
@@ -256,6 +279,8 @@ public final class IntroSequence implements SequenceReplayable {
     static void onServerStopped(ServerStoppedEvent event) {
         // Statics must never leak into the next world a singleplayer client opens.
         run = null;
+        prespawnedStormId = -1;
+        StormDebrisFx.clearAll();
         TASKS.clear();
         REPLAY_LIGHTNING.clear();
         scriptedTimeJumpGameTime = -1L;
@@ -322,6 +347,9 @@ public final class IntroSequence implements SequenceReplayable {
     public static boolean start(MinecraftServer server, Map<UUID, BlockPos> discCenters) {
         if (run != null) {
             EclipseMod.LOGGER.warn("IntroSequence: already running (phase {}) — ignoring start()", run.phase);
+            // The live run owns its own vortex, so a pre-spawn waiting for THIS hand-off is
+            // now an orphan and would hang over spawn forever.
+            discardPrespawnedVortex();
             return false;
         }
         IntroData data = IntroData.get(server);
@@ -331,6 +359,8 @@ public final class IntroSequence implements SequenceReplayable {
         ServerLevel overworld = server.overworld();
         Vec3 center = vortexCenter(server);
         run = new Run(server, overworld, center, discCenters);
+        // STORMFIRST: adopt the vortex the limbo half already stood up behind the black.
+        run.stormId = adoptPrespawnedVortex();
         data.setStarted(true);
         data.setCompleted(false);
         data.setPhase(Phase.ECLIPSE_ON.name());
@@ -352,6 +382,82 @@ public final class IntroSequence implements SequenceReplayable {
     /** Convenience overload (no framing map). */
     public static boolean start(MinecraftServer server) {
         return start(server, Map.of());
+    }
+
+    // ------------------------------------------------------------------ STORMFIRST pre-roll
+
+    /**
+     * STORMFIRST (F-016) — stands the smoke vortex up BEFORE the intro run exists.
+     *
+     * <p>The bug this fixes: the vortex used to spawn at FLIGHT {@code t=300}, roughly 19 s
+     * after the limbo hop's black released. Until then the players stood on their discs
+     * looking straight at the bare centre island — the very thing the storm exists to hide,
+     * spoiled before the cinematic ever showed it. The limbo half now calls this while the
+     * screen is still black ({@code StartEventCutscene}'s portal-enter beat) and holds the
+     * black until {@link #isPrespawnedVortexStanding()} reports the shells opaque, so the
+     * FIRST frame the players ever see of the overworld already has the storm in it.</p>
+     *
+     * <p>Idempotent: a second call while the pre-spawned vortex still stands returns the
+     * same id, and a live run owns its vortex itself (this returns that run's id instead of
+     * spawning a second one).</p>
+     *
+     * @return the storm id, or {@code -1} when no vortex could be spawned
+     */
+    public static int prespawnVortex(MinecraftServer server) {
+        Run current = run;
+        if (current != null) {
+            return current.stormId;
+        }
+        if (prespawnedStormId >= 0 && StormRegistry.get(prespawnedStormId) != null) {
+            return prespawnedStormId;
+        }
+        ServerLevel overworld = server.overworld();
+        Vec3 center = vortexCenter(server);
+        prespawnedStormId = StormRegistry.spawnVortex(overworld, center,
+                VORTEX_RADIUS, VORTEX_HEIGHT, PRESPAWN_RAMP_TICKS);
+        EclipseMod.LOGGER.info(
+                "IntroSequence: vortex {} PRE-spawned at {} behind the hop black (r {}, h {}, ramp {})",
+                prespawnedStormId, center, VORTEX_RADIUS, VORTEX_HEIGHT, PRESPAWN_RAMP_TICKS);
+        return prespawnedStormId;
+    }
+
+    /**
+     * Whether the pre-spawned vortex has finished its ramp and is therefore fully opaque —
+     * the gate the limbo half releases its black on. {@code false} while nothing was
+     * pre-spawned, so a caller without a pre-spawn falls through to its own timeout.
+     */
+    public static boolean isPrespawnedVortexStanding() {
+        if (prespawnedStormId < 0) {
+            return false;
+        }
+        StormRegistry.StormData storm = StormRegistry.get(prespawnedStormId);
+        return storm != null && storm.state() == S2CStormStatePayload.STATE_ACTIVE;
+    }
+
+    /** Hands the pre-spawned vortex over to a starting run (or returns −1 when there is none). */
+    private static int adoptPrespawnedVortex() {
+        int stormId = prespawnedStormId;
+        prespawnedStormId = -1;
+        if (stormId < 0) {
+            return -1;
+        }
+        if (StormRegistry.get(stormId) == null) {
+            return -1; // it expired (a very slow hand-off) — FLIGHT's t=300 beat respawns it
+        }
+        EclipseMod.LOGGER.info("IntroSequence: adopted pre-spawned vortex {}", stormId);
+        return stormId;
+    }
+
+    /**
+     * Cleans up a pre-spawned vortex whose hand-off never happened (the limbo half aborted,
+     * the server stopped between the pre-spawn and {@link #start}). Safe when there is none.
+     */
+    public static void discardPrespawnedVortex() {
+        if (prespawnedStormId >= 0) {
+            StormRegistry.dissipate(prespawnedStormId, VORTEX_DISSIPATE_TICKS);
+            EclipseMod.LOGGER.info("IntroSequence: discarded orphaned pre-spawned vortex {}", prespawnedStormId);
+            prespawnedStormId = -1;
+        }
     }
 
     /** Whether the intro phase machine is currently live. */
@@ -376,7 +482,11 @@ public final class IntroSequence implements SequenceReplayable {
             }
             case FLIGHT -> {
                 if (current.ticks == VORTEX_SPAWN_TICK) {
-                    spawnVortex(current);
+                    // STORMFIRST: normally a no-op — the vortex was pre-spawned behind the
+                    // hop's black. Only an intro started WITHOUT the limbo half lands here.
+                    if (current.stormId < 0) {
+                        spawnVortex(current);
+                    }
                 } else if (current.ticks == ALTAR_ANCHOR_TICK) {
                     syncAltarAnchor(current);
                 }
@@ -405,6 +515,10 @@ public final class IntroSequence implements SequenceReplayable {
     private static void beginFlight(Run current) {
         current.enter(Phase.FLIGHT);
         FusionSequence.maybeStartIntroFusion(current.server);
+        // BD-STORM (F-017): arm the debris swarm as the crane shot begins — the staggered
+        // spawn fills the vortex with flying rubble while the camera is on it, and every
+        // LIGHTNING strike adds to it until BURST drags the whole thing into the island.
+        StormDebrisFx.begin(current.overworld, current.center, VORTEX_RADIUS, VORTEX_HEIGHT);
         List<ServerPlayer> watchers = List.copyOf(current.server.getPlayerList().getPlayers());
         // GLOBAL_TELEPORT + returnAfter: disc players (~170 blocks out) are gathered to the
         // ring around the vortex center behind a fade so their clients hold the chunks the
@@ -597,6 +711,10 @@ public final class IntroSequence implements SequenceReplayable {
             StormRegistry.dissipate(current.stormId, VORTEX_DISSIPATE_TICKS);
             current.stormId = -1;
         }
+        // BD-STORM (F-017): the shell collapses and every flying piece spirals down into the
+        // island being revealed, scaling to zero as it arrives. Runs a touch longer than the
+        // shell dissipate so the last debris vanishes into a storm that is already gone.
+        StormDebrisFx.collapse(current.overworld, altarCenterOr(current.server, current.center));
         // White snap-hold → 3-tick shutter black → violet reopen (CUT-INTRO flash sandwich).
         PacketDistributor.sendToAllPlayers(FLASH_WHITE);
         schedule(server, SHUTTER_DELAY_TICKS, () -> PacketDistributor.sendToAllPlayers(SHUTTER_BLACK));
@@ -733,9 +851,13 @@ public final class IntroSequence implements SequenceReplayable {
      */
     private static void completeAbandonedRun(MinecraftServer server, IntroData data) {
         ServerLevel overworld = server.overworld();
+        prespawnedStormId = -1;
         for (StormRegistry.StormData storm : List.copyOf(StormRegistry.storms(overworld))) {
             StormRegistry.dissipate(storm.stormId(), VORTEX_DISSIPATE_TICKS);
         }
+        // Any debris that made it to disk before the crash is swept by StormDebrisFx's
+        // tagged-join check; this only clears an in-memory swarm of the current run.
+        StormDebrisFx.clearAll();
         FxPayloads.sendEclipsePhase(server, ECLIPSE_NONE, 0.0F, 40, true);
         BlockPos altarPos = EclipseWorldState.get(server).getSanctumAltarPos();
         if (altarPos != null
@@ -896,10 +1018,16 @@ public final class IntroSequence implements SequenceReplayable {
             case "FLIGHT" -> {
                 CutsceneService.play(PATH_FLIGHT, watchers, center, null, CutsceneService.PlayOptions.LOCAL);
                 // The vortex rides raw client payloads: spawns mid-flight, gone at the end.
-                schedule(server, VORTEX_SPAWN_TICK - ECLIPSE_ON_TICKS, () -> sendReplayStorm(watchers,
-                        center, S2CStormStatePayload.STATE_SPAWN, StormRegistry.RAMP_TICKS));
-                schedule(server, FLIGHT_DURATION_TICKS, () -> sendReplayStorm(watchers,
-                        center, S2CStormStatePayload.STATE_DISSIPATE, VORTEX_DISSIPATE_TICKS));
+                schedule(server, VORTEX_SPAWN_TICK - ECLIPSE_ON_TICKS, () -> {
+                    sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_SPAWN,
+                            StormRegistry.RAMP_TICKS);
+                    replayDebrisBegin(server, center);
+                });
+                schedule(server, FLIGHT_DURATION_TICKS, () -> {
+                    sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_DISSIPATE,
+                            VORTEX_DISSIPATE_TICKS);
+                    StormDebrisFx.collapse(server.overworld(), altarCenterOr(server, center));
+                });
                 return true;
             }
             case "APPROACH" -> {
@@ -909,9 +1037,13 @@ public final class IntroSequence implements SequenceReplayable {
             case "LIGHTNING" -> {
                 captionPlayers(watchers, CAPTION_STRIKE, 90, S2CCaptionPayload.STYLE_WHISPER);
                 sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_SPAWN, 20);
+                replayDebrisBegin(server, center);
                 REPLAY_LIGHTNING.add(new IntroLightningPhase(center, VORTEX_RADIUS, VORTEX_HEIGHT, false));
-                schedule(server, IntroLightningPhase.DURATION_TICKS + 20, () -> sendReplayStorm(watchers,
-                        center, S2CStormStatePayload.STATE_DISSIPATE, VORTEX_DISSIPATE_TICKS));
+                schedule(server, IntroLightningPhase.DURATION_TICKS + 20, () -> {
+                    sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_DISSIPATE,
+                            VORTEX_DISSIPATE_TICKS);
+                    StormDebrisFx.collapse(server.overworld(), altarCenterOr(server, center));
+                });
                 return true;
             }
             case "BURST" -> {
@@ -939,6 +1071,9 @@ public final class IntroSequence implements SequenceReplayable {
                     }
                 });
                 sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_DISSIPATE, VORTEX_DISSIPATE_TICKS);
+                // Collapses whatever a preceding FLIGHT/LIGHTNING replay left orbiting; a
+                // no-op on its own, so replaying BURST alone stays a pure flash+shockwave.
+                StormDebrisFx.collapse(server.overworld(), altarCenterOr(server, center));
                 return true;
             }
             case "REVEAL" -> {
@@ -968,6 +1103,17 @@ public final class IntroSequence implements SequenceReplayable {
                 return false;
             }
         }
+    }
+
+    /**
+     * BD-STORM in replays: the ONE part of the choreography that cannot ride raw payloads,
+     * because the debris are real server-side {@code BlockDisplay} entities. Replaying it is
+     * still inside the FX-only contract — the swarm writes no registry/world state, carries
+     * the {@code StormDebrisFx} despawn guarantee, and every replay path below hands it a
+     * matching collapse — and it is the only way to verify the choreography standalone.
+     */
+    private static void replayDebrisBegin(MinecraftServer server, Vec3 center) {
+        StormDebrisFx.begin(server.overworld(), center, VORTEX_RADIUS, VORTEX_HEIGHT);
     }
 
     /** Raw vortex storm payload to the replay watchers only — never touches StormRegistry. */
