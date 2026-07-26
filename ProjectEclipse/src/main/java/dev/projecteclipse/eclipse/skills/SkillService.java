@@ -383,9 +383,27 @@ public final class SkillService {
         DIRTY.remove(player.getUUID());
     }
 
-    /** Skill tree definition (not secret) — login + reload. */
+    /**
+     * Skill tree definition (not secret) — login + reload.
+     *
+     * <p>PAYLOADFIX (F-001): the payload codec is bounded at
+     * {@link dev.projecteclipse.eclipse.network.NetCodecs#LARGE_DOC_MAX_CHARS}; a config blob
+     * over that bound would make the netty encoder throw and KICK the joining player
+     * ("Failed to encode packet 'clientbound/minecraft:custom_payload'"). Skipping the send
+     * is strictly better: the client keeps an empty tree (screen shows nothing) and the
+     * operator gets an actionable error log instead of an unjoinable server.</p>
+     */
     public static void sendTree(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new S2CSkillTreePayload(SkillTreeConfig.get().clientJson()));
+        String json = SkillTreeConfig.get().clientJson();
+        if (json.length() > dev.projecteclipse.eclipse.network.NetCodecs.LARGE_DOC_MAX_CHARS) {
+            EclipseMod.LOGGER.error(
+                    "skilltree.json client blob is too large to sync ({} chars > {} max) — NOT sent to {}; "
+                            + "shrink config/eclipse/skilltree.json",
+                    json.length(), dev.projecteclipse.eclipse.network.NetCodecs.LARGE_DOC_MAX_CHARS,
+                    player.getGameProfile().getName());
+            return;
+        }
+        PacketDistributor.sendToPlayer(player, new S2CSkillTreePayload(json));
     }
 
     @SubscribeEvent

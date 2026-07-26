@@ -15,7 +15,13 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
-/** Server → client: current event day, altar level, and the day's goal lines. */
+/**
+ * Server → client: current event day, altar level, and the day's goal lines.
+ *
+ * <p>PAYLOADFIX (F-001): goal lines come from operator-edited {@code goals.json/days} —
+ * they ride {@link NetCodecs#clampedUtf8(int)} so an oversized line is truncated with a
+ * WARN log instead of throwing {@code EncoderException} and kicking the joining player.</p>
+ */
 public record S2CDayStatePayload(int day, int altarLevel, List<String> goals) implements CustomPacketPayload {
     public S2CDayStatePayload {
         goals = List.copyOf(goals);
@@ -27,7 +33,7 @@ public record S2CDayStatePayload(int day, int altarLevel, List<String> goals) im
     public static final StreamCodec<ByteBuf, S2CDayStatePayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, S2CDayStatePayload::day,
             ByteBufCodecs.VAR_INT, S2CDayStatePayload::altarLevel,
-            ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), S2CDayStatePayload::goals,
+            NetCodecs.clampedUtf8(2048).apply(ByteBufCodecs.list()), S2CDayStatePayload::goals,
             S2CDayStatePayload::new);
 
     /** Current day state with every server-baked goal picked for the receiver's locale. */

@@ -67,9 +67,22 @@ public final class ConfigEditor {
     /**
      * Sends a v2 envelope containing canonical {@code days.json} plus the trigger-typed
      * {@code goals.json}. Keeping the existing payload shape avoids a second network registration.
+     *
+     * <p>PAYLOADFIX (F-001): the payload codec is bounded at
+     * {@value C2SConfigEditPayload#MAX_JSON_BYTES} chars — an envelope over that bound would
+     * throw in the netty encoder and KICK the operator. Refusing to open (with a chat
+     * message) is strictly better; the files stay editable on disk.</p>
      */
     public static void openFor(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new S2COpenGoalEditorPayload(currentDaysJson()));
+        String daysJson = currentDaysJson();
+        if (daysJson.length() > C2SConfigEditPayload.MAX_JSON_BYTES) {
+            EclipseMod.LOGGER.error(
+                    "ConfigEditor: editor envelope too large to send ({} chars > {} max) — edit the JSON files on disk instead",
+                    daysJson.length(), C2SConfigEditPayload.MAX_JSON_BYTES);
+            player.sendSystemMessage(ServerLang.tr(player, "message.eclipse.goals_editor_too_large"));
+            return;
+        }
+        PacketDistributor.sendToPlayer(player, new S2COpenGoalEditorPayload(daysJson));
         EclipseMod.LOGGER.info("ConfigEditor: goal editor opened for {}", player.getScoreboardName());
     }
 

@@ -1,12 +1,15 @@
 package dev.projecteclipse.eclipse.cutscene;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -18,6 +21,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.C2SCutsceneReadyPayload;
 import dev.projecteclipse.eclipse.network.C2SCutsceneStatePayload;
+import dev.projecteclipse.eclipse.network.NetCodecs;
 import dev.projecteclipse.eclipse.network.S2CCutsceneLibraryPayload;
 import dev.projecteclipse.eclipse.network.S2CCutscenePlayPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
@@ -118,7 +122,9 @@ public final class CutsceneService {
     private static final int FLOATING_SHELL_AIR_GAP = 32;
 
     /** Library sync budget: entries past this many UTF-8 payload bytes are dropped. */
-    private static final int MAX_LIBRARY_SYNC_BYTES = 512 * 1024;
+    private static final int MAX_LIBRARY_SYNC_BYTES = 2 * 1024 * 1024;
+    /** Per-chunk payload budget (UTF-8 bytes) — each chunk stays far below the 1 MiB packet cap. */
+    private static final int LIBRARY_CHUNK_BYTES = 256 * 1024;
 
     /** Players within this horizontal distance of the sequence area are not gathered. */
     private static final double GLOBAL_GATHER_RADIUS = 128.0D;
@@ -142,20 +148,34 @@ public final class CutsceneService {
     /**
      * Options for the full play form. {@code viewDistance} is the client-push chunk count
      * routed through {@link ViewDistanceService} ({@code 0} skips the bump entirely);
-     * {@code returnAfter} restores gathered players to their snapshot when the session ends.
+     * {@code returnAfter} restores gathered players to their snapshot when the session ends;
+     * {@code fadeOnTransport} covers the gather AND return teleports with a black fade.
      */
-    public record PlayOptions(TeleportPolicy teleportPolicy, int viewDistance, boolean returnAfter) {
+    public record PlayOptions(TeleportPolicy teleportPolicy, int viewDistance, boolean returnAfter,
+            boolean fadeOnTransport) {
         /** v1 behaviour: nobody moves, no view-distance bump. */
-        public static final PlayOptions LOCAL = new PlayOptions(TeleportPolicy.LOCAL_ONLY, 0, false);
+        public static final PlayOptions LOCAL =
+                new PlayOptions(TeleportPolicy.LOCAL_ONLY, 0, false, true);
 
         /** Gather far/other-dimension players, bump view distance, return everyone after. */
         public static PlayOptions global(int viewDistanceChunks) {
-            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, true);
+            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, true, true);
+        }
+
+        /**
+         * {@link #global} without the black gather/return fades — for sequences that must
+         * never black the screen out (the map expansion). Safe only for a SAME-dimension
+         * gather: the flight's own preload veil covers the arrival frame, and a same-level
+         * teleport never raises the vanilla "Downloading terrain" screen. A cross-dimension
+         * gather still needs the fade (or an explicit {@code ChunkPreload.warmThenRun}).
+         */
+        public static PlayOptions globalNoFade(int viewDistanceChunks) {
+            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, true, false);
         }
 
         /** Gather without returning (the sequence itself repositions players afterwards). */
         public static PlayOptions globalOneWay(int viewDistanceChunks) {
-            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, false);
+            return new PlayOptions(TeleportPolicy.GLOBAL_TELEPORT, viewDistanceChunks, false, true);
         }
     }
 
@@ -243,6 +263,13 @@ public final class CutsceneService {
      */
     private static final Map<UUID, ReturnSnapshot> RETURNS = new HashMap<>();
 
+    /**
+     * Players gathered by a {@link PlayOptions#globalNoFade} scene: their return teleport
+     * skips {@link #RETURN_FADE} too. Deliberately NOT persisted — a return replayed after
+     * a logout/restart is a cross-session dimension change and wants its fade back.
+     */
+    private static final Set<UUID> NO_FADE_RETURNS = new HashSet<>();
+
     /** Dynamic-anchor resolvers by {@code params.dynamicAnchor} key (W7 registers {@code growth_front}). */
     private static final Map<String, DynamicAnchorResolver> DYNAMIC_ANCHOR_RESOLVERS = new HashMap<>();
 
@@ -252,34 +279,79 @@ public final class CutsceneService {
 
     /** Sends the full path library to one player (login sync; see {@code EclipsePayloads}). */
     public static void syncLibraryTo(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new S2CCutsceneLibraryPayload(cappedLibrary()));
+        for (S2CCutsceneLibraryPayload chunk : libraryChunks(CutscenePaths.rawJsonById())) {
+            PacketDistributor.sendToPlayer(player, chunk);
+        }
     }
 
     /** Re-sends the full path library to everyone (after {@code reloadpaths} / editor writes). */
     public static void syncLibraryToAll(MinecraftServer server) {
-        PacketDistributor.sendToAllPlayers(new S2CCutsceneLibraryPayload(cappedLibrary()));
+        for (S2CCutsceneLibraryPayload chunk : libraryChunks(CutscenePaths.rawJsonById())) {
+            PacketDistributor.sendToAllPlayers(chunk);
+        }
     }
 
     /**
-     * The raw-JSON library capped at {@value #MAX_LIBRARY_SYNC_BYTES} UTF-8 bytes (the payload
-     * writes each id + document via {@code writeUtf}): excess entries are dropped with a log
-     * so operator-grown files can never push the sync past the packet limit.
+     * Splits the raw-JSON library into wire-safe {@link S2CCutsceneLibraryPayload} chunks
+     * (PAYLOADFIX / F-001). Three independent guards, each of which used to be able to kick
+     * every joining player with "Failed to encode packet 'clientbound/minecraft:custom_payload'":
+     * <ul>
+     *   <li><b>Per-entry char bound</b>: a document over {@link NetCodecs#LARGE_DOC_MAX_CHARS}
+     *       chars (or an id over 256 chars) cannot ride the codec at all — it is DROPPED with
+     *       an error log instead of throwing in the netty encoder. (Loss is recoverable: the
+     *       path just won't play for clients until the operator shrinks the file.)</li>
+     *   <li><b>Per-chunk byte budget</b>: entries are packed into chunks of at most
+     *       {@value #LIBRARY_CHUNK_BYTES} UTF-8 bytes (a single legal oversized entry gets its
+     *       own chunk), keeping every payload far below the 1 MiB play-phase cap.</li>
+     *   <li><b>Total budget</b>: past {@value #MAX_LIBRARY_SYNC_BYTES} bytes the remaining
+     *       entries are dropped with a warn log (bandwidth bound for login syncs).</li>
+     * </ul>
+     * The first chunk carries {@code reset=true} (client cache replace), followers merge.
+     * Always returns at least one payload so a shrunken library still clears stale entries.
+     * Package-visible for direct use; public for the payload-budget gametests.
      */
-    private static Map<String, String> cappedLibrary() {
-        Map<String, String> all = CutscenePaths.rawJsonById();
-        Map<String, String> capped = new LinkedHashMap<>();
-        long bytes = 0;
+    public static List<S2CCutsceneLibraryPayload> libraryChunks(Map<String, String> all) {
+        List<S2CCutsceneLibraryPayload> chunks = new ArrayList<>();
+        Map<String, String> current = new LinkedHashMap<>();
+        long chunkBytes = 0;
+        long totalBytes = 0;
+        int dropped = 0;
         for (Map.Entry<String, String> entry : all.entrySet()) {
-            bytes += entry.getKey().getBytes(StandardCharsets.UTF_8).length
-                    + entry.getValue().getBytes(StandardCharsets.UTF_8).length;
-            if (bytes > MAX_LIBRARY_SYNC_BYTES) {
-                EclipseMod.LOGGER.warn("Cutscene library sync over {} bytes — dropping {} of {} paths (from '{}')",
-                        MAX_LIBRARY_SYNC_BYTES, all.size() - capped.size(), all.size(), entry.getKey());
-                break;
+            String id = entry.getKey();
+            String doc = entry.getValue();
+            if (id.length() > 256 || doc.length() > NetCodecs.LARGE_DOC_MAX_CHARS) {
+                EclipseMod.LOGGER.error(
+                        "Cutscene path '{}' is too large to sync ({} chars > {} max) — NOT sent to clients; "
+                                + "shrink the file under config/eclipse/cutscenes/",
+                        id, doc.length(), NetCodecs.LARGE_DOC_MAX_CHARS);
+                dropped++;
+                continue;
             }
-            capped.put(entry.getKey(), entry.getValue());
+            long entryBytes = (long) id.getBytes(StandardCharsets.UTF_8).length
+                    + doc.getBytes(StandardCharsets.UTF_8).length;
+            if (totalBytes + entryBytes > MAX_LIBRARY_SYNC_BYTES) {
+                EclipseMod.LOGGER.warn("Cutscene library sync over {} bytes — dropping remaining paths (from '{}')",
+                        MAX_LIBRARY_SYNC_BYTES, id);
+                dropped++;
+                continue;
+            }
+            if (!current.isEmpty() && chunkBytes + entryBytes > LIBRARY_CHUNK_BYTES) {
+                chunks.add(new S2CCutsceneLibraryPayload(chunks.isEmpty(), current));
+                current = new LinkedHashMap<>();
+                chunkBytes = 0;
+            }
+            current.put(id, doc);
+            chunkBytes += entryBytes;
+            totalBytes += entryBytes;
         }
-        return capped;
+        if (!current.isEmpty() || chunks.isEmpty()) {
+            chunks.add(new S2CCutsceneLibraryPayload(chunks.isEmpty(), current));
+        }
+        if (dropped > 0) {
+            EclipseMod.LOGGER.warn("Cutscene library sync: {} of {} paths not synced (see errors above)",
+                    dropped, all.size());
+        }
+        return chunks;
     }
 
     // --- enable / disable ---
@@ -339,7 +411,7 @@ public final class CutsceneService {
     /** Plays a path for the given players (freeze + play payload). Returns watchers started. */
     public static int play(String id, Collection<ServerPlayer> players) {
         PlayOptions options = LIMBO_SHIP_PATH_ID.equals(id)
-                ? new PlayOptions(TeleportPolicy.LOCAL_ONLY, LIMBO_SHIP_VIEW_DISTANCE, false)
+                ? new PlayOptions(TeleportPolicy.LOCAL_ONLY, LIMBO_SHIP_VIEW_DISTANCE, false, true)
                 : PlayOptions.LOCAL;
         return play(id, players, null, null, options);
     }
@@ -404,7 +476,8 @@ public final class CutsceneService {
             };
         }
         if (options.teleportPolicy() == TeleportPolicy.GLOBAL_TELEPORT) {
-            gatherPlayers(server, path, players, playAnchor, options.returnAfter());
+            gatherPlayers(server, path, players, playAnchor, options.returnAfter(),
+                    options.fadeOnTransport());
         }
         preloadPathChunks(server, path, playAnchor);
 
@@ -506,11 +579,13 @@ public final class CutsceneService {
 
     /**
      * Teleports far/other-dimension watchers to a ring around the sequence area, behind a
-     * screen fade. The area is the play anchor when present, otherwise the centroid of the
-     * path's (world-anchored) keyframes; player-anchored paths have nothing to gather to.
+     * screen fade unless {@code fade} is false ({@link PlayOptions#globalNoFade}). The area
+     * is the play anchor when present, otherwise the centroid of the path's (world-anchored)
+     * keyframes; player-anchored paths have nothing to gather to.
      */
     private static void gatherPlayers(MinecraftServer server, CutscenePath path,
-            Collection<ServerPlayer> players, @Nullable Vec3 anchor, boolean recordReturns) {
+            Collection<ServerPlayer> players, @Nullable Vec3 anchor, boolean recordReturns,
+            boolean fade) {
         if (path.isPlayerAnchored()) {
             EclipseMod.LOGGER.warn("CutsceneService: GLOBAL_TELEPORT requested for player-anchored path '{}' — nothing to gather to",
                     path.id());
@@ -541,7 +616,13 @@ public final class CutsceneService {
                 RETURNS.putIfAbsent(player.getUUID(), new ReturnSnapshot(
                         player.level().dimension(), player.position(), player.getYRot(), player.getXRot()));
             }
-            PacketDistributor.sendToPlayer(player, GATHER_FADE);
+            if (fade) {
+                PacketDistributor.sendToPlayer(player, GATHER_FADE);
+            } else {
+                // The return leg must match the gather leg: a scene that refused to black
+                // the screen out on the way there cannot black it out on the way back.
+                NO_FADE_RETURNS.add(player.getUUID());
+            }
             Vec3 spot = gatherSpot(level, area, index, count);
             FreezeService.transport(player, level, spot, player.getYRot(), player.getXRot());
             EclipseMod.LOGGER.info("CutsceneService: gathered {} to {} in {} for '{}'{}",
@@ -599,6 +680,7 @@ public final class CutsceneService {
     /** Restores a gathered player to their snapshot (fade + transport). No-op without one. */
     private static void restoreReturn(ServerPlayer player, String reason) {
         ReturnSnapshot snapshot = RETURNS.remove(player.getUUID());
+        boolean fade = !NO_FADE_RETURNS.remove(player.getUUID());
         if (snapshot == null) {
             return;
         }
@@ -609,7 +691,9 @@ public final class CutsceneService {
             return;
         }
         Vec3 returnPos = validatedReturnPosition(level, snapshot.pos());
-        PacketDistributor.sendToPlayer(player, RETURN_FADE);
+        if (fade) {
+            PacketDistributor.sendToPlayer(player, RETURN_FADE);
+        }
         FreezeService.transport(player, level, returnPos, snapshot.yRot(), snapshot.xRot());
         EclipseMod.LOGGER.info("CutsceneService: returned {} to {} in {} ({})",
                 player.getScoreboardName(), returnPos, snapshot.dimension().location(), reason);
@@ -694,6 +778,7 @@ public final class CutsceneService {
      */
     private static void stashReturnOnLogout(ServerPlayer player) {
         ReturnSnapshot snapshot = RETURNS.remove(player.getUUID());
+        NO_FADE_RETURNS.remove(player.getUUID()); // a persisted return fades again
         if (snapshot == null) {
             return;
         }
@@ -857,6 +942,7 @@ public final class CutsceneService {
     static void onServerStopped(ServerStoppedEvent event) {
         SESSIONS.clear();
         RETURNS.clear();
+        NO_FADE_RETURNS.clear();
         READY_HOOKS.clear();
     }
 

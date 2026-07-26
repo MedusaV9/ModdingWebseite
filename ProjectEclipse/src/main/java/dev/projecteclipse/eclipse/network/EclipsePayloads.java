@@ -14,8 +14,13 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 /**
- * Networking base for Project: Eclipse. Registers all custom payloads on registrar version "2"
+ * Networking base for Project: Eclipse. Registers all custom payloads on registrar version "3"
  * and syncs hearts + day state to a player when they log in.
+ *
+ * <p>Version history: "3" = PAYLOADFIX (F-001) wire changes — {@code S2CCutsceneLibraryPayload}
+ * gained a {@code reset} flag + chunking, and the large-document/display-text string codecs
+ * moved to {@link NetCodecs} bounds. Mixed "2"/"3" builds must refuse to connect instead of
+ * mis-decoding, which is exactly what bumping the registrar version does.</p>
  */
 public final class EclipsePayloads {
     private EclipsePayloads() {}
@@ -27,7 +32,7 @@ public final class EclipsePayloads {
     }
 
     private static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("2");
+        PayloadRegistrar registrar = event.registrar("3");
         registrar.playToClient(S2CLivesPayload.TYPE, S2CLivesPayload.STREAM_CODEC, EclipsePayloads::handleLives);
         registrar.playToClient(S2CDayStatePayload.TYPE, S2CDayStatePayload.STREAM_CODEC, EclipsePayloads::handleDayState);
         registrar.playToClient(S2CCutscenePayload.TYPE, S2CCutscenePayload.STREAM_CODEC, EclipsePayloads::handleCutscene);
@@ -102,9 +107,20 @@ public final class EclipsePayloads {
             dev.projecteclipse.eclipse.cutscene.client.CameraDirector.addShakeImpulse();
             return;
         }
-        if (payload.phase() == S2CCutscenePayload.Phase.TILT) {
-            dev.projecteclipse.eclipse.music.MusicCues.play("intro_storm");
-        } else if (payload.phase() == S2CCutscenePayload.Phase.EMERGE) {
+        // TILT (the ghost ship keeling over at /start_event) deliberately forces NO cue:
+        // the `intro_storm` orchestral piece that used to fire here reads as triumphant
+        // adventure music and broke the dread of the opening (user report). Dropping the
+        // forced cue leaves the channel to MusicManager's situation ladder, which for
+        // everyone still standing on the ship is `limbo_ambience` — the dark bed already
+        // playing keeps running straight through the keel-over instead of restarting on a
+        // brighter track. `intro_storm` itself stays registered and playable
+        // (`/dev music play intro_storm`); only this trigger is gone.
+        // EMERGE hands the channel back to the situation ladder (which the intro's eclipse
+        // ramp immediately claims with `eclipse_totality`). MUSICFADE: `stop()` is a real
+        // 40-tick volume fade now, not a hard stop — but the limbo bed is already gone by
+        // here, killed by the hop's SoundEngine wipe, which is why the AUDIBLE fade of the
+        // start cutscene lives 60 ticks earlier in `limbo.StartEventCutscene`.
+        if (payload.phase() == S2CCutscenePayload.Phase.EMERGE) {
             dev.projecteclipse.eclipse.music.MusicCues.stop();
         }
         ClientStateCache.cutscenePhase = payload.phase();
@@ -223,7 +239,7 @@ public final class EclipsePayloads {
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleCutsceneLibrary(S2CCutsceneLibraryPayload payload, IPayloadContext context) {
-        dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.replace(payload.pathsJson());
+        dev.projecteclipse.eclipse.cutscene.client.ClientCutsceneLibrary.applyChunk(payload.reset(), payload.pathsJson());
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
@@ -385,13 +401,34 @@ public final class EclipsePayloads {
 
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            sendArtifactState(player, false);
-            PacketDistributor.sendToPlayer(player, S2CGoalProgressPayload.currentFor(player));
-            PacketDistributor.sendToPlayer(player, S2CMilestonesPayload.current(player.server));
-            dev.projecteclipse.eclipse.timeline.TimelineService.syncTo(player);
-            dev.projecteclipse.eclipse.worldgen.stage.WorldStageService.syncStagesTo(player);
-            dev.projecteclipse.eclipse.border.SoftBorder.syncTo(player);
-            dev.projecteclipse.eclipse.cutscene.CutsceneService.syncLibraryTo(player);
+            // PAYLOADFIX (F-001) defense-in-depth: each sync is independent HUD/cache state
+            // and losing one is recoverable (next periodic sync / reload repairs it) — one
+            // failing payload BUILDER must not abort the remaining login syncs. NOTE: this
+            // cannot catch ENCODE errors (netty throws those async on the connection); those
+            // are prevented at the codec layer (NetCodecs bounds/clamps + chunking).
+            syncSafely(player, "artifact state", p -> sendArtifactState(p, false));
+            syncSafely(player, "goal progress",
+                    p -> PacketDistributor.sendToPlayer(p, S2CGoalProgressPayload.currentFor(p)));
+            syncSafely(player, "milestones",
+                    p -> PacketDistributor.sendToPlayer(p, S2CMilestonesPayload.current(p.server)));
+            syncSafely(player, "timeline", dev.projecteclipse.eclipse.timeline.TimelineService::syncTo);
+            syncSafely(player, "world stages",
+                    dev.projecteclipse.eclipse.worldgen.stage.WorldStageService::syncStagesTo);
+            syncSafely(player, "soft border", dev.projecteclipse.eclipse.border.SoftBorder::syncTo);
+            syncSafely(player, "cutscene library",
+                    dev.projecteclipse.eclipse.cutscene.CutsceneService::syncLibraryTo);
+        }
+    }
+
+    /** Runs one login sync, logging instead of propagating so the remaining syncs still fire. */
+    private static void syncSafely(ServerPlayer player, String what,
+            java.util.function.Consumer<ServerPlayer> sync) {
+        try {
+            sync.accept(player);
+        } catch (RuntimeException e) {
+            dev.projecteclipse.eclipse.EclipseMod.LOGGER.error(
+                    "Login sync '{}' failed for {} — skipped (recoverable; see cause)",
+                    what, player.getScoreboardName(), e);
         }
     }
 }

@@ -1,0 +1,8 @@
+{
+  "en_us": {
+    "message.eclipse.goals_editor_too_large": "The goal configuration is too large for the in-game editor — edit the JSON files in config/eclipse/ directly."
+  },
+  "de_de": {
+    "message.eclipse.goals_editor_too_large": "Die Ziel-Konfiguration ist zu groß für den In-Game-Editor — bearbeite die JSON-Dateien in config/eclipse/ direkt."
+  }
+}

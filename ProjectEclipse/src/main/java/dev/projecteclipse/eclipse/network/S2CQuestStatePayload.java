@@ -12,6 +12,12 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Server → client: quest list for the current day (mains, sides, personals). Text literals
  * are shipped en/de pairs — not lang keys — to prevent datamining (R2).
+ *
+ * <p>PAYLOADFIX (F-001): quest texts come straight from operator-edited {@code goals.json};
+ * plain {@code STRING_UTF8} would kick every joining player once one text crosses 32,767
+ * chars. Ids and texts now ride {@link NetCodecs#clampedUtf8(int)}, which truncates with a
+ * WARN log instead of throwing in the encoder — a cut-off HUD line is recoverable, a kicked
+ * player is not.</p>
  */
 public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements CustomPacketPayload {
     /**
@@ -36,15 +42,20 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
             int rewardShards,
             int rewardXp) {
 
+        /** Quest ids are config keys — 256 chars is already pathological. */
+        private static final StreamCodec<ByteBuf, String> ID_CODEC = NetCodecs.clampedUtf8(256);
+        /** One localized HUD line; 4,096 chars survives even essay-length operator texts. */
+        private static final StreamCodec<ByteBuf, String> TEXT_CODEC = NetCodecs.clampedUtf8(4096);
+
         public static final StreamCodec<ByteBuf, QuestEntry> STREAM_CODEC = StreamCodec.of(
                 QuestEntry::encode,
                 QuestEntry::decode);
 
         private static void encode(ByteBuf buf, QuestEntry value) {
-            ByteBufCodecs.STRING_UTF8.encode(buf, value.id());
+            ID_CODEC.encode(buf, value.id());
             ByteBufCodecs.BYTE.encode(buf, value.kind());
-            ByteBufCodecs.STRING_UTF8.encode(buf, value.textEn());
-            ByteBufCodecs.STRING_UTF8.encode(buf, value.textDe());
+            TEXT_CODEC.encode(buf, value.textEn());
+            TEXT_CODEC.encode(buf, value.textDe());
             ByteBufCodecs.VAR_INT.encode(buf, value.progress());
             ByteBufCodecs.VAR_INT.encode(buf, value.target());
             ByteBufCodecs.BOOL.encode(buf, value.done());
@@ -55,10 +66,10 @@ public record S2CQuestStatePayload(int day, List<QuestEntry> entries) implements
 
         private static QuestEntry decode(ByteBuf buf) {
             return new QuestEntry(
-                    ByteBufCodecs.STRING_UTF8.decode(buf),
+                    ID_CODEC.decode(buf),
                     ByteBufCodecs.BYTE.decode(buf),
-                    ByteBufCodecs.STRING_UTF8.decode(buf),
-                    ByteBufCodecs.STRING_UTF8.decode(buf),
+                    TEXT_CODEC.decode(buf),
+                    TEXT_CODEC.decode(buf),
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.BOOL.decode(buf),
