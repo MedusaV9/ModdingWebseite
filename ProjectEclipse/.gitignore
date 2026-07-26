@@ -26,3 +26,6 @@ bin/
 
 ### OS ###
 .DS_Store
+
+# generated compiler arg files (machine-specific absolute paths)
+javac.*.args

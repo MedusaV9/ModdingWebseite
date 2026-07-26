@@ -1,0 +1,18 @@
+{
+  "en_us": {
+    "collection.eclipse.item.wizard_catalyst": "The Sun-Core Catalyst, the crafting gate of the Zauberstab. Orin the Sun-Reader hands it to no one — it is won exactly once, torn from his corpse in battle, star against steel.",
+    "dialogue.eclipse.wizard_orin.quest_hint": "You want a sun-core catalyst, friend? It is not distilled and it is not traded — it is WON. Raise your hand against me, and the stars will weigh what you are worth.",
+    "dialogue.eclipse.wizard_orin.quest_done": "So it is done — won as it must be, star against steel. One sun-core catalyst. Spend it on something bright.",
+    "dialogue.eclipse.wizard_orin.quest_already": "You already took your sun-core from me, friend, with your own two hands. One core, one victory — the stars keep no second entry.",
+    "dev.eclipse.doc.wizard.givecatalyst": "Hand the player one wizard catalyst (test hook — does not touch the victory ledger).",
+    "gui.eclipse.altar.shop.sealed": "Sealed — the altar has not revealed this offer yet"
+  },
+  "de_de": {
+    "collection.eclipse.item.wizard_catalyst": "Der Sonnenkern-Katalysator, der Schlüssel zum Bau des Zauberstabs. Orin der Sonnenleser händigt ihn niemandem aus — er wird ein einziges Mal im Kampf errungen, seinem Leichnam entrissen, Stern gegen Stahl.",
+    "dialogue.eclipse.wizard_orin.quest_hint": "Du willst einen Sonnenkern-Katalysator, mein Freund? Er wird nicht destilliert und nicht gehandelt — er wird ERRUNGEN. Erhebe die Hand gegen mich, und die Sterne wiegen, was du wert bist.",
+    "dialogue.eclipse.wizard_orin.quest_done": "So ist es vollbracht — errungen, wie es sein muss, Stern gegen Stahl. Ein Sonnenkern-Katalysator. Gib ihn für etwas Helles aus.",
+    "dialogue.eclipse.wizard_orin.quest_already": "Deinen Sonnenkern hast du mir schon abgenommen, mein Freund, mit eigenen Händen. Ein Kern, ein Sieg — die Sterne führen keinen zweiten Eintrag.",
+    "dev.eclipse.doc.wizard.givecatalyst": "Gibt dem Spieler einen Katalysator (Test-Hook — das Sieg-Register bleibt unberührt).",
+    "gui.eclipse.altar.shop.sealed": "Versiegelt — der Altar hat dieses Angebot noch nicht offenbart"
+  }
+}

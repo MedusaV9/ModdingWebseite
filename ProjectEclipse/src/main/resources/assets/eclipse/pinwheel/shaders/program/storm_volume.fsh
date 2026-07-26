@@ -2,7 +2,7 @@
 // round; FEATURE priority). A single-storm raymarcher: analytic ray/ellipsoid entry,
 // scene-depth-clamped Beer–Lambert march through a domain-warped fBm density field with
 // differential rotation, log-spiral rainbands, an anvil/skirt height profile and a
-// cauliflower tower term on the silhouette; lit by cheap single scattering (4-tap sun
+// cauliflower tower term on the silhouette; lit by cheap single scattering (3-tap sun
 // self-shadow + Henyey–Greenstein forward lobe + height-graded ambient) and the W-B
 // intra-wall flash injected as emissive light INSIDE the mass. The opaque occluder dome
 // keeps writing depth, so outside cameras march the entry→occluder band (the wall reads
@@ -43,8 +43,10 @@ const float NOISE_FREQ = 2.6;
 const float ROT_SPEED = 0.10;
 // Upward scroll of the noise field (normalized units/s) — billows rise inside the mass.
 const float UPDRAFT = 0.018;
-// Self-shadow tap spacing in storm-normalized units (4 taps → ~0.4·R reach).
-const float SHADOW_STEP_N = 0.09;
+// Self-shadow tap spacing in storm-normalized units. AUDITFIX-4: 3 taps at 0.12 keep the
+// pre-audit ~0.36·R reach AND optical depth of the old 4 taps at 0.09 (the transmittance
+// term multiplies the tap sum by this spacing), at 3/4 of the samples.
+const float SHADOW_STEP_N = 0.12;
 // Silhouette headroom beyond the nominal radius (anvil bulge + tower lumps live there).
 // Must exceed max(rEff) · 1.05, otherwise the bounds sphere clips the lumps flat and
 // prints back the perfectly round edge the lumps exist to break. Empty-space skipping
@@ -63,7 +65,9 @@ float stratumSpeed(float ny) {
 }
 
 // Storm density at u = (worldPos − centre) / R with y pre-divided by VolYScale.
-// detail 1.0 = camera ray (5-octave fBm), 0.0 = shadow ray (3-octave).
+// detail 1.0 = camera ray (5-octave fBm + curl warp), 0.0 = shadow ray (AUDITFIX-4 diet:
+// 2-octave, UNWARPED — shadows need the coarse mass, not billow detail; skipping the
+// warp saves its three evNoise3 evaluations per tap).
 float stormDensity(vec3 u, float detail) {
     float ny = u.y;
     float lenH = length(u);
@@ -116,26 +120,31 @@ float stormDensity(vec3 u, float detail) {
     float arm = smoothstep(0.15, 0.42, sp) * (1.0 - smoothstep(0.58, 0.85, sp));
     float armMul = 0.72 + 0.55 * arm;
 
-    // Domain-warped fBm body: the warp folds the octaves into billowing curls.
+    // Domain-warped fBm body: the warp folds the octaves into billowing curls (camera
+    // rays only — shadow rays read the cheap unwarped 2-octave mass, see header).
     vec3 np = q * NOISE_FREQ + vec3(0.0, -Time * UPDRAFT * NOISE_FREQ, 0.0);
-    vec3 warp = evCurlWarp(np * 0.5, Time);
-    float body = detail > 0.5 ? evFbm5(np + warp) : evFbm3(np + warp);
+    float body;
+    if (detail > 0.5) {
+        body = evFbm5(np + evCurlWarp(np * 0.5, Time));
+    } else {
+        body = evFbm2(np);
+    }
     // Remap so the noise CARVES holes through the profile instead of only dimming it.
     // DENSITY_GAIN keeps the mass heavy: at 1.0 the ball reads as thin haze from a
     // distance because the average sample sits well below the peak.
     return max(prof * armMul * (body * 1.5 - 0.35), 0.0) * DENSITY_GAIN;
 }
 
-// Single scattering at one sample: 4 cheap self-shadow taps toward the sun, forward-
-// scatter phase (fed in), height-graded ambient (dark violet base → sick green top —
-// the C8 sphere palette), and the intra-wall flash as emissive light inside the mass.
+// Single scattering at one sample: 3 cheap self-shadow taps toward the sun (AUDITFIX-4;
+// same reach and optical depth as the old 4 — see SHADOW_STEP_N), forward-scatter phase
+// (fed in), height-graded ambient (dark violet base → sick green top — the C8 sphere
+// palette), and the intra-wall flash as emissive light inside the mass.
 vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
     vec3 sdir = normalize(SunDir + vec3(0.0, 1.0e-4, 0.0));
     vec3 us = vec3(sdir.x, sdir.y / max(VolYScale, 0.05), sdir.z) * SHADOW_STEP_N;
     float sh = stormDensity(u + us, 0.0);
     sh += stormDensity(u + us * 2.0, 0.0);
     sh += stormDensity(u + us * 3.0, 0.0);
-    sh += stormDensity(u + us * 4.0, 0.0);
     float lightT = exp(-sh * densMul * SHADOW_STEP_N * VolRadius * ABSORB);
     // Bone-white day sun → moon-silver night (the renderer's rim-scatter palette).
     float dayness = clamp(SunDir.y * 2.6, 0.0, 1.0);
@@ -196,8 +205,9 @@ void main() {
         return;
     }
 
-    // Quality-tier step count (64/40/24 from Java), further reduced for distant storms
-    // (they cover few pixels AND need less depth resolution per pixel).
+    // Step budget from Java (AUDITFIX-4: config tier 64/40/24 × screen-coverage ramp,
+    // hard-capped at 48 when the storm nearly fills the screen — StormVolumeFx.stepCount),
+    // further reduced per pixel for distant entry points along this ray.
     float steps = clamp(StepCount, 12.0, 64.0);
     steps = clamp(steps * clamp(140.0 / max(t0, 1.0), 0.35, 1.0), 12.0, 64.0);
     float dt0 = (t1 - t0) / steps;

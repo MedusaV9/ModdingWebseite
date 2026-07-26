@@ -17,6 +17,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
@@ -704,15 +705,19 @@ public final class IntroSequence implements SequenceReplayable {
      * fades, one flavor subtitle plus an actionbar line whose key name is resolved
      * CLIENT-side via {@link net.minecraft.network.chat.Component#keybind} (the caption
      * pipeline has no format args, so the bound-key half rides the actionbar — same
-     * client-resolution idea as {@code gui.eclipse.handbook.hint}).
+     * client-resolution idea as {@code gui.eclipse.handbook.hint}). AUDITFIX-5: the OUTER
+     * key is baked per player through {@link ServerLang#resolve} so it honors the mod's
+     * {@code /lang} locale override instead of the vanilla game language; the keybind arg
+     * is not a translatable, so the bake passes it through untouched and it still
+     * resolves to the player's actual binding on the client.
      */
     private static void sendLogbookHint(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             PacketDistributor.sendToPlayer(player,
                     new S2CCaptionPayload(CAPTION_LOGBOOK, 120, S2CCaptionPayload.STYLE_SUBTITLE));
-            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
-                    MESSAGE_LOGBOOK_KEY,
-                    net.minecraft.network.chat.Component.keybind("key.eclipse.menu")), true);
+            player.displayClientMessage(ServerLang.resolve(player,
+                    net.minecraft.network.chat.Component.translatable(MESSAGE_LOGBOOK_KEY,
+                            net.minecraft.network.chat.Component.keybind("key.eclipse.menu"))), true);
         }
         EclipseMod.LOGGER.info("IntroSequence: Logbook handoff hint sent to {} player(s)",
                 server.getPlayerList().getPlayerCount());

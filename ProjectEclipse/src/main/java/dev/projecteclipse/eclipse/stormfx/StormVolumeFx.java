@@ -48,7 +48,8 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * {@code VolCenter} (camera-relative centre), {@code VolRadius} (explosion-expanded),
  * {@code VolYScale} (spawn/dissipate vertical squash — {@link StormWallRenderer#heightScale}),
  * {@code Visibility}, {@code Strength} (distance ramp × explosion dissolve),
- * {@code StepCount} (64/40/24 by {@link FxBudget#qualityTier()}), {@code Time}
+ * {@code StepCount} (config tier × screen coverage, fullscreen-capped — see
+ * {@link #stepCount}), {@code Time}
  * (tick-clock seconds, pause-safe), {@code SunDir} ({@link SunTracker}), {@code Interior}
  * ({@link StormInteriorFx#interiorAmount()} — the grade hand-over), {@code FlashPos} +
  * {@code FlashAmount} (the W-B intra-wall flash injected as emissive light inside the
@@ -67,6 +68,21 @@ public final class StormVolumeFx {
     private static final float STEPS_TIER2 = 64.0F;
     private static final float STEPS_TIER1 = 40.0F;
     private static final float STEPS_TIER0 = 24.0F;
+    // --- AUDITFIX-4 coverage ladder (see stepCount) ---
+    /** Silhouette padding of the raymarch bounds — MUST mirror storm_volume.fsh BOUNDS_MARGIN. */
+    private static final float BOUNDS_MARGIN = 1.55F;
+    /** Coverage (sine of the storm's angular radius) at/above which the full budget applies. */
+    private static final float COVERAGE_FULL_STEPS = 0.60F;
+    /** Coverage at/below which the budget bottoms out at {@link #MIN_STEP_FRACTION}. */
+    private static final float COVERAGE_MIN_STEPS = 0.15F;
+    /** Distant-storm floor: never fewer than half the tier budget from coverage alone. */
+    private static final float MIN_STEP_FRACTION = 0.5F;
+    /** Coverage at/above which the near-fullscreen safety cap engages. */
+    private static final float COVERAGE_CAP_START = 0.92F;
+    /** Hard ceiling once the cap engages: the fullscreen worst case is bounded at 48. */
+    private static final float FULLSCREEN_STEP_CAP = 48.0F;
+    /** Absolute Java-side floor (the shader clamps to its own floor of 12). */
+    private static final float STEPS_MIN = 16.0F;
     /** Flash light anchor sits at this fraction of r on the flash bearing (W-C formula). */
     private static final double FLASH_RADIUS_FRAC = 0.92D;
 
@@ -192,7 +208,7 @@ public final class StormVolumeFx {
         pipeline.getUniform("VolYScale").setFloat(yScale);
         pipeline.getUniform("Visibility").setFloat(vis);
         pipeline.getUniform("Strength").setFloat(strength);
-        pipeline.getUniform("StepCount").setFloat(stepsForTier(FxBudget.qualityTier()));
+        pipeline.getUniform("StepCount").setFloat(stepCount(storm, camera, radius));
         // Tick clock, not wall clock: pause-safe and continuous (the shader integrates
         // rotation angles from it — a wall-clock wrap would snap the churn).
         pipeline.getUniform("Time").setFloat((StormFxClient.ticks() + partialTick) / 20.0F);
@@ -221,6 +237,45 @@ public final class StormVolumeFx {
                     (float) (storm.center.y - camera.y),
                     (float) (storm.center.z - camera.z));
         }
+    }
+
+    /**
+     * AUDITFIX-4 — the REAL quality ladder (the pre-audit code fed
+     * {@code stepsForTier(FxBudget.qualityTier())}, and {@code qualityTier()} is by
+     * construction always 2 whenever the pass is active — {@link #pickStorm} bails under
+     * {@code reducedFx} — so the advertised 64/40/24 ladder never engaged and every frame
+     * marched 64 steps). The budget now varies on two real axes:
+     * <ul>
+     *   <li><b>Config tier</b>: {@code stormVolumeQuality} (2/1/0 → 64/40/24 base steps,
+     *       default 2) — the user knob {@code reducedFx} is too blunt for.</li>
+     *   <li><b>Screen coverage</b>: {@code coverage = clamp(paddedRadius / centerDist, 0, 1)}
+     *       is the sine of the storm's angular radius (1 with the camera inside the bounds).
+     *       A distant storm covers few pixels AND needs less depth resolution per pixel, so
+     *       the budget ramps linearly from 1.0× at coverage ≥ {@value #COVERAGE_FULL_STEPS}
+     *       down to {@value #MIN_STEP_FRACTION}× at coverage ≤ {@value #COVERAGE_MIN_STEPS}
+     *       (tier 2: 64 → 32 steps; the shader additionally shortens far ray segments and
+     *       clamps to its own floor of 12).</li>
+     * </ul>
+     * Hard safety: at coverage ≥ {@value #COVERAGE_CAP_START} (camera right outside/inside
+     * the wall — every pixel marches the dense band at full framebuffer resolution) the
+     * budget is capped at {@value #FULLSCREEN_STEP_CAP} steps, so the worst case is bounded
+     * at 48 steps × 3 shadow taps instead of the old unconditional 64 × 4.
+     */
+    private static float stepCount(StormFxClient.ClientStorm storm, Vec3 camera, float radius) {
+        float steps = stepsForTier(EclipseClientConfig.stormVolumeQuality());
+        double dx = camera.x - storm.center.x;
+        double dy = camera.y - storm.center.y;
+        double dz = camera.z - storm.center.z;
+        double centerDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        float padded = radius * BOUNDS_MARGIN;
+        float coverage = centerDist <= padded ? 1.0F : (float) (padded / centerDist);
+        steps *= Mth.clamp(MIN_STEP_FRACTION + (1.0F - MIN_STEP_FRACTION)
+                        * (coverage - COVERAGE_MIN_STEPS) / (COVERAGE_FULL_STEPS - COVERAGE_MIN_STEPS),
+                MIN_STEP_FRACTION, 1.0F);
+        if (coverage >= COVERAGE_CAP_START) {
+            steps = Math.min(steps, FULLSCREEN_STEP_CAP);
+        }
+        return Math.max(steps, STEPS_MIN);
     }
 
     private static float stepsForTier(int tier) {

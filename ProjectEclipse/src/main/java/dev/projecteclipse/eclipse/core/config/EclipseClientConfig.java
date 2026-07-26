@@ -147,6 +147,12 @@ public final class EclipseClientConfig {
                     "or \"de_de\". Set in-game via /lang, /sprache or the settings language row.")
             .define("langOverride", "auto", value -> value instanceof String token
                     && ("auto".equals(token) || "en_us".equals(token) || "de_de".equals(token)));
+    public static final ModConfigSpec.IntValue STORM_VOLUME_QUALITY = BUILDER
+            .comment("Volumetric sphere-storm raymarch quality: 2 = high (64 steps), 1 = medium (40),",
+                    "0 = low (24). The renderer additionally lowers the step count for storms that",
+                    "are small on screen and hard-caps the near-fullscreen worst case; reducedFx",
+                    "disables the volumetric pass entirely.")
+            .defineInRange("stormVolumeQuality", 2, 0, 2);
 
     public static final ModConfigSpec SPEC = BUILDER.build();
 
@@ -272,6 +278,11 @@ public final class EclipseClientConfig {
     /** Eclipse UI language override token: {@code auto}, {@code en_us} or {@code de_de}. */
     public static String langOverride() {
         return SPEC.isLoaded() ? LANG_OVERRIDE.get() : "auto";
+    }
+
+    /** AUDITFIX-4: volumetric storm quality tier, 2/1/0 → 64/40/24 base raymarch steps. */
+    public static int stormVolumeQuality() {
+        return SPEC.isLoaded() ? STORM_VOLUME_QUALITY.get() : 2;
     }
 
     /**

@@ -48,6 +48,14 @@ float evFbm3(vec3 p) {
     return sum * (1.0 / 1.75);
 }
 
+// 2-octave fBm in [0,1) — the AUDITFIX-4 shadow-ray diet: self-shadowing only needs the
+// coarse mass distribution, not billow detail (the camera ray keeps evFbm5).
+float evFbm2(vec3 p) {
+    float sum = evNoise3(p);
+    sum += 0.5 * evNoise3(p * 2.03 + vec3(19.7, 7.3, 5.1));
+    return sum * (1.0 / 1.5);
+}
+
 // Curl-ish domain warp: three decorrelated low-frequency noise fields build an offset
 // vector that rotates slowly in time, so the fBm lobes billow and fold into each other
 // (cumulus cauliflower) instead of streaming along the lattice like plasma.

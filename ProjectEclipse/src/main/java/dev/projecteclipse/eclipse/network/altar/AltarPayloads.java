@@ -40,17 +40,18 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * and buys through {@link C2SAltarBuyPayload}; both answer with a refreshed
  * {@code openScreen=false} snapshot.</p>
  *
- * <p><b>Anti-spoiler contract (task 1):</b> the payload only ever carries CURRENT-stage
- * data — the hungering milestone's costs/progress/unlock keys (already public via the
- * Wave-5 A5 {@code S2CMilestonesPayload} reveal rule), the shop table minus dev-disabled
- * offers, and one server-chosen {@code bossHintId}. Nothing about later stages leaves the
- * server. Day-locked offers DO ride along greyed-out (name + cost + unlock day): the
- * legacy action-bar browse cycled every offer's name and cost from day one, so this
- * reveals nothing new and gives players a savings goal.</p>
+ * <p><b>Anti-spoiler contract (task 1, tightened by AUDITFIX-3):</b> the payload only ever
+ * carries CURRENT-stage data — the hungering milestone's costs/progress/unlock keys
+ * (already public via the Wave-5 A5 {@code S2CMilestonesPayload} reveal rule), the shop
+ * table reduced to offers purchasable TODAY, and one server-chosen {@code bossHintId}.
+ * Nothing about later stages or later days leaves the server: not-yet-unlocked offers
+ * ride along ONLY as the opaque {@link Header#sealedOffers()} count (no id, no name, no
+ * price, no unlock day), which the client renders as inert "???" placeholder rows.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AltarPayloads {
-    private static final String VERSION = "v5altarui1";
+    /** Bumped to v2 when AUDITFIX-3 changed the ShopEntry/Header wire shape. */
+    private static final String VERSION = "v5altarui2";
     /** Server-side reach check for panel requests and purchases (blocks, squared). */
     private static final double INTERACT_RANGE_SQ = 8.0D * 8.0D;
 
@@ -73,38 +74,31 @@ public final class AltarPayloads {
     }
 
     /**
-     * One shop row. {@code unlocked=false} rows render greyed with "from day {@code minDay}";
-     * {@code remainingSeconds > 0} shows the running Double-XP countdown on its row.
-     * Dev-disabled offers are never sent at all.
+     * One CURRENTLY PURCHASABLE shop row; {@code remainingSeconds > 0} shows the running
+     * Double-XP countdown on its row. AUDITFIX-3: day-locked offers are never transmitted
+     * (they ride only as the opaque {@link Header#sealedOffers()} count) and dev-disabled
+     * offers are never sent at all.
      */
     public record ShopEntry(String offerId, String nameKey, int cost, boolean pooled,
-            boolean unlocked, int minDay, int remainingSeconds) {
-        // 7 fields — one past the 6-component composite() ceiling, so encode/decode by hand
-        // (argument evaluation order is left-to-right, matching the write order).
-        public static final StreamCodec<ByteBuf, ShopEntry> STREAM_CODEC = StreamCodec.of(
-                (buf, entry) -> {
-                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.offerId());
-                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.nameKey());
-                    ByteBufCodecs.VAR_INT.encode(buf, entry.cost());
-                    ByteBufCodecs.BOOL.encode(buf, entry.pooled());
-                    ByteBufCodecs.BOOL.encode(buf, entry.unlocked());
-                    ByteBufCodecs.VAR_INT.encode(buf, entry.minDay());
-                    ByteBufCodecs.VAR_INT.encode(buf, entry.remainingSeconds());
-                },
-                buf -> new ShopEntry(
-                        ByteBufCodecs.STRING_UTF8.decode(buf),
-                        ByteBufCodecs.STRING_UTF8.decode(buf),
-                        ByteBufCodecs.VAR_INT.decode(buf),
-                        ByteBufCodecs.BOOL.decode(buf),
-                        ByteBufCodecs.BOOL.decode(buf),
-                        ByteBufCodecs.VAR_INT.decode(buf),
-                        ByteBufCodecs.VAR_INT.decode(buf)));
+            int remainingSeconds) {
+        public static final StreamCodec<ByteBuf, ShopEntry> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.STRING_UTF8, ShopEntry::offerId,
+                ByteBufCodecs.STRING_UTF8, ShopEntry::nameKey,
+                ByteBufCodecs.VAR_INT, ShopEntry::cost,
+                ByteBufCodecs.BOOL, ShopEntry::pooled,
+                ByteBufCodecs.VAR_INT, ShopEntry::remainingSeconds,
+                ShopEntry::new);
     }
 
-    /** Scalar panel state ({@code completed} = ladder finished; {@code sealed} = /dev altar lock). */
+    /**
+     * Scalar panel state ({@code completed} = ladder finished; {@code sealed} = /dev altar
+     * lock; {@code sealedOffers} = how many not-yet-unlocked shop offers exist — AUDITFIX-3:
+     * their identity stays server-side, the client only renders that many "???" rows).
+     */
     public record Header(int day, int altarLevel, boolean completed, boolean sealed,
-            int personalShards, int poolShards, String bossHintId) {
-        // 7 fields — see ShopEntry.STREAM_CODEC for why this is hand-rolled.
+            int personalShards, int poolShards, String bossHintId, int sealedOffers) {
+        // 8 fields — past the 6-component composite() ceiling, so encode/decode by hand
+        // (argument evaluation order is left-to-right, matching the write order).
         public static final StreamCodec<ByteBuf, Header> STREAM_CODEC = StreamCodec.of(
                 (buf, header) -> {
                     ByteBufCodecs.VAR_INT.encode(buf, header.day());
@@ -114,6 +108,7 @@ public final class AltarPayloads {
                     ByteBufCodecs.VAR_INT.encode(buf, header.personalShards());
                     ByteBufCodecs.VAR_INT.encode(buf, header.poolShards());
                     ByteBufCodecs.STRING_UTF8.encode(buf, header.bossHintId());
+                    ByteBufCodecs.VAR_INT.encode(buf, header.sealedOffers());
                 },
                 buf -> new Header(
                         ByteBufCodecs.VAR_INT.decode(buf),
@@ -122,7 +117,8 @@ public final class AltarPayloads {
                         ByteBufCodecs.BOOL.decode(buf),
                         ByteBufCodecs.VAR_INT.decode(buf),
                         ByteBufCodecs.VAR_INT.decode(buf),
-                        ByteBufCodecs.STRING_UTF8.decode(buf)));
+                        ByteBufCodecs.STRING_UTF8.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf)));
     }
 
     /** Server → one player: full altar-panel snapshot; {@code openScreen} opens the UI. */
@@ -237,24 +233,29 @@ public final class AltarPayloads {
         }
 
         List<ShopEntry> offers = new ArrayList<>();
+        int sealedOffers = 0;
         int doubleXpRemaining = ShardEconomy.doubleXpRemainingSeconds(server);
         for (ShardEconomy.Offer offer : ShardEconomy.allOffers()) {
             if (!ShardEconomy.isOfferEnabled(server, offer)) {
-                continue; // dev-disabled: gone, not greyed (AltarAdminState contract)
+                continue; // dev-disabled: gone, not even a sealed slot (AltarAdminState contract)
             }
-            boolean unlocked = offer.availableOnDay(day);
-            if (!unlocked && offer.maxDay() > 0 && day > offer.maxDay()) {
-                continue; // expired window: "from day N" would lie — hide it
+            if (!offer.availableOnDay(day)) {
+                if (offer.maxDay() > 0 && day > offer.maxDay()) {
+                    continue; // expired window: it will never unlock again — hide it
+                }
+                // AUDITFIX-3 anti-spoiler: a not-yet-unlocked offer leaves the server as
+                // NOTHING but +1 on this opaque counter — no id, no name, no price, no day.
+                sealedOffers++;
+                continue;
             }
             offers.add(new ShopEntry(offer.id(), offer.nameKey(), offer.cost(), offer.pooled(),
-                    unlocked, offer.minDay(),
                     "double_xp".equals(offer.id()) ? doubleXpRemaining : 0));
         }
 
         Header header = new Header(day, state.getAltarLevel(), next == null,
                 AltarAdminState.get(server).isProgressionLocked(),
                 ShardEconomy.getShards(player), state.getShardPool(),
-                bossHintId(state, next));
+                bossHintId(state, next), sealedOffers);
         return new S2CAltarPanelPayload(altarPos, openScreen, header, requirements, unlockKeys, offers);
     }
 

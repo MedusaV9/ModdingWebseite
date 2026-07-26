@@ -34,9 +34,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *
  * <p><b>Kills</b> ride the {@link EclipseSignals#onMobKilled} lane (analytics owns the
  * single {@code LivingDeathEvent} subscriber and fans out here — P4 §2.0 rule 6, NO new
- * death subscriber). Every {@code eclipse:} mob kill bumps the killer's lifetime count
- * and re-syncs the snapshot; crossing a threshold flags the payload as a tier-up so the
- * client plays the sting + action-bar caption.</p>
+ * death subscriber). Every {@code eclipse:} mob kill — behind the same PROGFIX #1 gates
+ * as the proximity scan ({@link #discoveryGatesOpen}) — bumps the killer's lifetime
+ * count and re-syncs the snapshot; crossing a threshold flags the payload as a tier-up
+ * so the client plays the sting + action-bar caption.</p>
  *
  * <p><b>Encounters</b> (T0 → T1 without a kill) come from a slow proximity scan: every
  * {@value #SCAN_INTERVAL_TICKS} ticks (phase-offset from the analytics/unlock sweeps),
@@ -91,6 +92,20 @@ public final class BestiaryService {
         LAST_SIGHTING.clear();
     }
 
+    // --- shared discovery gates ---
+
+    /**
+     * PROGFIX #1 gates, shared by BOTH discovery lanes (kill AND proximity scan) so they
+     * can never drift apart again (AUDITFIX-2 — the kill lane used to bypass both): no
+     * bestiary knowledge before the start event (the pre-event Limbo is full of killable
+     * eclipse mobs — seated deckhands, 6-HP drift lanterns), and none from inside an
+     * event dimension (Limbo, arenas, xbox worlds — the shared XP/quest-gate predicate).
+     */
+    private static boolean discoveryGatesOpen(ServerPlayer player) {
+        return EclipseWorldState.get(player.server).isStartEventDone()
+                && !XpGates.isEventDimension(player.level().dimension());
+    }
+
     // --- kill lane (fired by analytics for tracked killers only) ---
 
     /** Kill lane consumer: one lifetime count per {@code eclipse:} victim, then re-sync. */
@@ -98,6 +113,9 @@ public final class BestiaryService {
         String id = eclipseMobId(victim);
         if (id == null) {
             return;
+        }
+        if (!discoveryGatesOpen(killer)) {
+            return; // AUDITFIX-2: pre-event / event-dimension kills discover nothing
         }
         BestiaryState state = BestiaryState.get(killer.server);
         UUID uuid = killer.getUUID();
@@ -119,16 +137,10 @@ public final class BestiaryService {
         if (server.getTickCount() % SCAN_INTERVAL_TICKS != SCAN_PHASE) {
             return;
         }
-        // PROGFIX #1 pre-event gate: no bestiary knowledge before the start event — the
-        // pre-event Limbo is full of eclipse mobs (seated deckhands, drift lanterns).
-        if (!EclipseWorldState.get(server).isStartEventDone()) {
-            return;
-        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            // PROGFIX #1 dimension gate: event dimensions (Limbo, arenas, xbox worlds)
-            // never contribute discoveries — same shared predicate as the XP/quest gates.
-            if (AnalyticsService.isTracked(player)
-                    && !XpGates.isEventDimension(player.level().dimension())) {
+            // PROGFIX #1 gates (pre-event + event dimension) via the one shared helper
+            // both discovery lanes use — see discoveryGatesOpen.
+            if (AnalyticsService.isTracked(player) && discoveryGatesOpen(player)) {
                 scanAround(player, server.getTickCount());
             }
         }

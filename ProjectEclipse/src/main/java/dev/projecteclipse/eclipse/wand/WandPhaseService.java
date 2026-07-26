@@ -28,6 +28,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -43,15 +44,20 @@ import net.minecraft.world.phys.Vec3;
  * {@code holdTicks}, then re-materializes <b>block by block</b> in random order with
  * glitch bursts. The world re-rendering itself IS the fantasy.
  *
- * <p><b>Crash safety (FFIX-B / POLISH-SOL-02):</b> every de-rezzed block's state is
- * snapshotted into the {@link Data} SavedData at cast time, and the journal is
- * force-flushed to disk ({@link EclipseSavedData#flushOverworld}) BEFORE the first block
- * can vanish — {@code setDirty()} alone only schedules a save and gives no ordering
- * against the chunk write that contains the air. On server start
- * {@link #restoreAllOnLoad} reconciles EVERY leftover journal entry (including
- * {@code vanished=false} prepare records whose air write reached the chunk while the
- * phase flag didn't) against the actual block — a crash can therefore never permanently
- * eat terrain.</p>
+ * <p><b>Crash safety (FFIX-B / POLISH-SOL-02, hardened by AUDITFIX-1):</b> the journal is
+ * a WRITE-AHEAD log. Casting stores {@code vanished=false} "prepare" records (snapshot at
+ * cast time). When a block's turn comes, {@link #tick} re-reads the world, refreshes the
+ * snapshot, flips the record to {@code vanished=true} and force-flushes the journal to
+ * disk ({@link EclipseSavedData#flushOverworld}) BEFORE the destructive air write —
+ * {@code setDirty()} alone only schedules a save and gives no ordering against the chunk
+ * write that contains the air, so the on-disk journal can never lag behind a persisted
+ * air chunk. On server start {@link #restoreAllOnLoad} reconciles the leftover journal
+ * under STRICT rules: prepare records are dropped untouched (the write-ahead order proves
+ * their air write never committed — restoring one would duplicate a block mined before
+ * its vanish), {@code vanished=true} records are restored only into cells that still hold
+ * what the vanish left behind (air), and any other cell content aborts the restore with a
+ * log and never drops items (a drop would duplicate whenever the restore DID complete and
+ * only its journal removal missed the disk).</p>
  *
  * <p><b>Hard blacklist</b> (never de-rezzed): block entities (chests, the altar, spawners
  * — inventories must never be voided), anything inside a spawn-protection zone
@@ -65,9 +71,9 @@ import net.minecraft.world.phys.Vec3;
  * rails) or fluid flow in the surroundings; the world around the cone is left exactly as
  * untouched as the fantasy promises. Restore never voids terrain: a gravity block that
  * still fell into the hole (outside trigger) is popped as its item drop before the
- * snapshot returns, a player-built block wins the spot but the snapshot drops as its
- * resources, and a living entity standing in the hole defers the restore a few ticks
- * (bounded) instead of entombing them.</p>
+ * snapshot returns, a player-built block wins the spot but the snapshot pops as its
+ * exact block item, and a living entity standing in the hole defers the restore a few
+ * ticks (bounded) instead of entombing them.</p>
  *
  * <p>FX per event: vanish → {@code border_glitch} one-shot, restore →
  * {@code impact_light} micro-pop (both dispatched via {@code S2CQuasarPayload}; the client
@@ -163,9 +169,10 @@ public final class WandPhaseService {
             data.add(level.dimension(), candidate.pos(), state, vanishAt, restoreAt);
         }
         data.setDirty();
-        // FFIX-B (POLISH-SOL-02 / FINAL-SAT-SOL C2): durable prepare barrier — the journal
-        // must be ON DISK before the first air write can reach a chunk save. The earliest
-        // vanish is this very game tick, so the flush happens here, synchronously.
+        // FFIX-B durable prepare records. The REAL ordering barrier lives in tick() now
+        // (AUDITFIX-1): every vanished=true flip is flushed BEFORE its air write, and
+        // prepare records are never restored on load. This flush just puts the complete
+        // scheduled wave on disk from tick one (cheap, one-shot per cast).
         EclipseSavedData.flushOverworld(player.server);
         // D10: the de-rez reads as a violet SCANLINE sweeping the cone — three
         // ground-hugging riss_wave_front bands march caster → cone tip while the blocks
@@ -256,6 +263,7 @@ public final class WandPhaseService {
             return;
         }
         boolean dirty = false;
+        List<Entry> vanishing = null;
         for (int i = data.entries.size() - 1; i >= 0; i--) {
             Entry entry = data.entries.get(i);
             ServerLevel level = server.getLevel(entry.dimension);
@@ -274,21 +282,16 @@ public final class WandPhaseService {
                     dirty = true;
                     continue;
                 }
+                // AUDITFIX-1 write-ahead: refresh the snapshot and flip the record NOW,
+                // but the destructive air write waits until the whole batch has been
+                // flushed to disk below — journal first, chunk second, never the reverse.
                 entry.state = current;
-                level.setBlock(entry.pos, Blocks.AIR.defaultBlockState(), SILENT_FLAGS);
                 entry.vanished = true;
                 dirty = true;
-                Vec3 center = Vec3.atCenterOf(entry.pos);
-                // Datamosh shimmer per de-rezzed block (the client budget caps the flood);
-                // 1-in-6 blocks emit a short digital chirp so the sweep crackles softly.
-                WandPowers.sendQuasar(level, BORDER_GLITCH, center);
-                if (level.random.nextInt(6) == 0) {
-                    level.playSound(null, center.x, center.y, center.z,
-                            EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.BLOCKS, 0.4F, 1.65F);
-                } else if (level.random.nextInt(4) == 0) {
-                    level.playSound(null, center.x, center.y, center.z,
-                            SoundEvents.AMETHYST_CLUSTER_STEP, SoundSource.BLOCKS, 0.6F, 0.5F);
+                if (vanishing == null) {
+                    vanishing = new ArrayList<>(4);
                 }
+                vanishing.add(entry);
             } else if (entry.vanished && now >= entry.restoreAt) {
                 // WANDFIX-1: never re-rez a block inside a living body — postpone in
                 // short bounded steps until the hole is free (or the grace runs out).
@@ -305,15 +308,62 @@ public final class WandPhaseService {
                 dirty = true;
             }
         }
-        if (dirty) {
+        if (vanishing != null) {
+            // AUDITFIX-1 durability barrier: one synchronous flush per vanish batch (only
+            // ticks that actually de-rez pay it) puts the vanished=true flips + refreshed
+            // snapshots ON DISK before the first air write. A crash at any later point
+            // leaves a journal at least as new as the chunk, so restoreAllOnLoad can trust
+            // the vanished flag.
+            data.setDirty();
+            EclipseSavedData.flushOverworld(server);
+            for (Entry entry : vanishing) {
+                ServerLevel level = server.getLevel(entry.dimension);
+                if (level != null) {
+                    applyVanish(level, entry);
+                }
+            }
+        } else if (dirty) {
             data.setDirty();
         }
     }
 
+    /**
+     * The destructive half of the vanish transition. Only ever called AFTER the journal
+     * flush in {@link #tick} put this entry's {@code vanished=true} record on disk.
+     */
+    private static void applyVanish(ServerLevel level, Entry entry) {
+        level.setBlock(entry.pos, Blocks.AIR.defaultBlockState(), SILENT_FLAGS);
+        Vec3 center = Vec3.atCenterOf(entry.pos);
+        // Datamosh shimmer per de-rezzed block (the client budget caps the flood);
+        // 1-in-6 blocks emit a short digital chirp so the sweep crackles softly.
+        WandPowers.sendQuasar(level, BORDER_GLITCH, center);
+        if (level.random.nextInt(6) == 0) {
+            level.playSound(null, center.x, center.y, center.z,
+                    EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.BLOCKS, 0.4F, 1.65F);
+        } else if (level.random.nextInt(4) == 0) {
+            level.playSound(null, center.x, center.y, center.z,
+                    SoundEvents.AMETHYST_CLUSTER_STEP, SoundSource.BLOCKS, 0.6F, 0.5F);
+        }
+    }
+
+    /**
+     * Live-session restore (tick lane only — the crash-recovery lane
+     * {@link #restoreAllOnLoad} deliberately does NOT share this method, because a
+     * reloaded journal may be stale and must never drop anything). Here the entry is
+     * authoritative: the write-ahead barrier flushed it before its own air write, and the
+     * de-rezzed block's matter exists nowhere but this journal, so WANDFIX-1 terrain
+     * conservation stays active — a gravity block that fell into the hole is popped as
+     * its drop, and a player-built block wins the spot while the snapshot comes back as
+     * its EXACT block item (AUDITFIX-1: {@code new ItemStack(entry.state.getBlock())},
+     * never {@code Block.dropResources}, whose loot tables transmute the material — glass
+     * drops nothing, stone drops cobblestone, ores depend on the tool). Duplication is
+     * impossible on this lane: the cell holds someone else's block and the item we pop is
+     * the snapshot's only copy.
+     */
     private static void restore(ServerLevel level, Entry entry) {
         BlockState current = level.getBlockState(entry.pos);
         if (current == entry.state) {
-            return; // vanish never reached the chunk (crash-recovery prepare record) — done
+            return; // someone rebuilt the identical block — already looks restored, done
         }
         if (!current.isAir() && !current.canBeReplaced()) {
             if (current.getBlock() instanceof FallingBlock && !current.hasBlockEntity()) {
@@ -323,10 +373,10 @@ public final class WandPhaseService {
                 level.destroyBlock(entry.pos, true);
             } else {
                 // A player built here mid-phase — their block wins the spot, but the
-                // snapshot drops as its resources instead of being voided (WANDFIX-1
-                // terrain conservation; the old silent discard permanently ate the block).
-                Block.dropResources(entry.state, level, entry.pos);
-                EclipseMod.LOGGER.debug("Phasenwelle restore at {} blocked by {} — snapshot dropped as items",
+                // snapshot returns as its exact block item (see method doc) instead of
+                // being voided (WANDFIX-1 terrain conservation).
+                Block.popResource(level, entry.pos, new ItemStack(entry.state.getBlock()));
+                EclipseMod.LOGGER.debug("Phasenwelle restore at {} blocked by {} — snapshot popped as its exact item",
                         entry.pos, current);
                 return;
             }
@@ -345,16 +395,27 @@ public final class WandPhaseService {
     }
 
     /**
-     * Crash recovery: puts every leftover snapshot back immediately (called from
-     * {@code WandTickService} on server start, before any new wave can run). Blocks whose
-     * position is occupied are discarded, never overwritten.
-     *
-     * <p>FFIX-B (POLISH-SOL-02 / FINAL-SAT-SOL C2): reconciles ALL entries, not only
-     * {@code vanished=true} ones. Chunk data and SavedData are separate persistence
-     * streams, so a crash can persist the air write while the journal still says
-     * {@code vanished=false}; {@link #restore} itself is the reconciler — it fills air /
-     * replaceables with the snapshot and refuses to overwrite anything solid, so entries
-     * whose vanish never reached the chunk are discarded without touching the world.</p>
+     * Crash recovery (called from {@code WandTickService} on server start, before any new
+     * wave can run): reconciles every leftover journal record against the actual world,
+     * then clears the journal. STRICT rules (AUDITFIX-1) — chunk data and SavedData are
+     * separate persistence streams, so every pairing of "which write reached the disk"
+     * must resolve without duplicating or eating blocks:
+     * <ul>
+     *   <li>{@code vanished=false} prepare record → drop it, touch nothing. The write-ahead
+     *       barrier in {@link #tick} flushes {@code vanished=true} BEFORE the air write, so
+     *       a prepare record on disk proves this block's air write never committed; any
+     *       difference between cell and snapshot is a legitimate outside change (e.g. the
+     *       player mined the block and collected the drop — restoring would DUPLICATE it).</li>
+     *   <li>{@code vanished=true}, cell still holds the snapshot → done. Either the air
+     *       write never reached the chunk, or the restore already completed and only the
+     *       journal removal missed the disk.</li>
+     *   <li>{@code vanished=true}, cell is air (exactly what the vanish left behind) →
+     *       knit the snapshot back.</li>
+     *   <li>{@code vanished=true}, cell holds anything else → ABORT with a warn log. Never
+     *       overwrite (a player may have built there), and never drop items — a drop would
+     *       duplicate whenever the cell contents came from a completed restore whose
+     *       journal removal missed the disk.</li>
+     * </ul>
      */
     static void restoreAllOnLoad(MinecraftServer server) {
         Data data = Data.get(server);
@@ -362,17 +423,38 @@ public final class WandPhaseService {
             return;
         }
         int restored = 0;
+        int dropped = 0;
+        int aborted = 0;
         for (Entry entry : data.entries) {
             ServerLevel level = server.getLevel(entry.dimension);
             if (level == null) {
+                dropped++;
                 continue;
             }
-            restore(level, entry);
-            restored++;
+            if (!entry.vanished) {
+                dropped++; // prepare record: the air write never committed — leave the world alone
+                continue;
+            }
+            BlockState current = level.getBlockState(entry.pos);
+            if (current == entry.state) {
+                dropped++; // air write or completed restore missed the disk — already correct
+                continue;
+            }
+            if (current.isAir()) {
+                level.setBlock(entry.pos, entry.state, SILENT_FLAGS);
+                restored++;
+            } else {
+                aborted++;
+                EclipseMod.LOGGER.warn(
+                        "Phasenwelle crash recovery: cell {} holds {} instead of air — restore of {} aborted (no drop)",
+                        entry.pos, current, entry.state);
+            }
         }
         data.entries.clear();
         data.setDirty();
-        EclipseMod.LOGGER.info("Phasenwelle crash recovery: {} snapshot(s) resolved on load", restored);
+        EclipseMod.LOGGER.info(
+                "Phasenwelle crash recovery: {} restored, {} already-correct/prepare record(s) dropped, {} aborted on load",
+                restored, dropped, aborted);
     }
 
     // ------------------------------------------------------------------ persistence
@@ -385,6 +467,7 @@ public final class WandPhaseService {
         final long vanishAt;
         /** Mutable: entity-occupied restores are postponed in {@value #RESTORE_DEFER_TICKS}-tick steps. */
         long restoreAt;
+        /** AUDITFIX-1: flipped (and flushed to disk) BEFORE the air write, never after. */
         boolean vanished;
         /** Transient deferral budget (not persisted — a reload simply re-grants the grace). */
         int restoreDeferrals;

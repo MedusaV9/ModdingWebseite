@@ -37,12 +37,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       progress bar), the deposit hint, what completing the stage unseals, and the
  *       server-chosen boss instruction block (task 2 — Herald from day 7 / a core-hungry
  *       milestone, Ferryman on finale day 14, "done" lines after a kill).</li>
- *   <li><b>Right column</b> — the shard shop: buyable rows are clickable (one
- *       {@code C2SAltarBuyPayload}), day-locked rows render greyed with "from day N"
- *       (names + costs were always public via the action-bar browse cycle — no new
- *       secret, but a savings goal), dev-disabled rows never arrive at all. The running
- *       Double-XP surge shows its remaining time on its row; personal + team balances
- *       close the column.</li>
+ *   <li><b>Right column</b> — the shard shop: every arriving row is buyable (one
+ *       {@code C2SAltarBuyPayload}); not-yet-unlocked offers arrive only as the opaque
+ *       {@code Header.sealedOffers} COUNT (AUDITFIX-3 anti-spoiler — no id, name, price
+ *       or unlock day ever leaves the server) and render as inert sealed "???" rows;
+ *       dev-disabled rows never arrive at all. The running Double-XP surge shows its
+ *       remaining time on its row; personal + team balances close the column.</li>
  * </ul>
  *
  * <p><b>Fly-in (task 4):</b> requirement rows swoop in from the top-left screen corner on
@@ -152,6 +152,12 @@ public final class AltarScreen extends Screen {
         int offerY = reqStartY;
         for (AltarPayloads.ShopEntry offer : offers) {
             addRenderableWidget(new OfferRow(offer, rightX, offerY, rightW, OFFER_ROW_H));
+            offerY += OFFER_ROW_H + 2;
+        }
+        // AUDITFIX-3: locked placeholders — the server sent only a count, so these rows
+        // know nothing they could spoil.
+        for (int i = 0; i < header.sealedOffers(); i++) {
+            addRenderableWidget(new SealedRow(rightX, offerY, rightW, OFFER_ROW_H));
             offerY += OFFER_ROW_H + 2;
         }
     }
@@ -330,11 +336,12 @@ public final class AltarScreen extends Screen {
         }
     }
 
-    /** Right column header + the balances under the offer rows. */
+    /** Right column header + the balances under the offer rows (real + sealed). */
     private void renderShopFooter(GuiGraphics guiGraphics) {
         EclipseUiTheme.drawHeader(guiGraphics, this.font,
                 EclipseLang.tr("gui.eclipse.altar.shop.title"), rightX, panelY + 26, rightW);
-        int y = reqStartY + offers.size() * (OFFER_ROW_H + 2) + EclipseUiTheme.GAP;
+        int y = reqStartY + (offers.size() + header.sealedOffers()) * (OFFER_ROW_H + 2)
+                + EclipseUiTheme.GAP;
         EclipseUiTheme.drawHairline(guiGraphics, rightX, rightX + rightW, y - 2);
         guiGraphics.drawString(this.font, EclipseUiTheme.ellipsize(this.font,
                 EclipseLang.trString("gui.eclipse.altar.shards.personal", header.personalShards()),
@@ -369,14 +376,13 @@ public final class AltarScreen extends Screen {
 
     // ------------------------------------------------------------------ shop rows
 
-    /** One clickable shop offer; day-locked rows are inert and greyed ("from day N"). */
+    /** One clickable shop offer (only currently purchasable offers ever arrive). */
     private final class OfferRow extends EclipseWidget {
         private final AltarPayloads.ShopEntry offer;
 
         OfferRow(AltarPayloads.ShopEntry offer, int x, int y, int width, int height) {
             super(x, y, width, height, EclipseLang.tr(offer.nameKey()));
             this.offer = offer;
-            this.active = offer.unlocked();
         }
 
         @Override
@@ -390,33 +396,63 @@ public final class AltarScreen extends Screen {
 
         @Override
         protected void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            float alpha = offer.unlocked() ? 1.0F : 0.45F;
             guiGraphics.fill(getX(), getY(), getX() + width, getY() + height,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, alpha));
+                    EclipseUiTheme.PANEL_RAISED);
 
             String cost = EclipseLang.trString("gui.eclipse.altar.shop.cost", offer.cost());
             int costW = AltarScreen.this.font.width(cost);
             String name = EclipseUiTheme.ellipsize(AltarScreen.this.font,
                     getMessage().getString(), width - costW - 10);
             guiGraphics.drawString(AltarScreen.this.font, name, getX() + 4, getY() + 3,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, alpha));
+                    EclipseUiTheme.TEXT);
             guiGraphics.drawString(AltarScreen.this.font, cost, getX() + width - costW - 4, getY() + 3,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.ACCENT, alpha));
+                    EclipseUiTheme.ACCENT);
 
-            String detail;
-            if (!offer.unlocked()) {
-                detail = EclipseLang.trString("gui.eclipse.altar.shop.from_day", offer.minDay());
-            } else {
-                detail = EclipseLang.trString(offer.pooled()
-                        ? "gui.eclipse.altar.shop.pooled" : "gui.eclipse.altar.shop.personal");
-                if (offer.remainingSeconds() > 0) {
-                    detail += " · " + EclipseLang.trString("gui.eclipse.altar.shop.remaining",
-                            formatSeconds(offer.remainingSeconds()));
-                }
+            String detail = EclipseLang.trString(offer.pooled()
+                    ? "gui.eclipse.altar.shop.pooled" : "gui.eclipse.altar.shop.personal");
+            if (offer.remainingSeconds() > 0) {
+                detail += " · " + EclipseLang.trString("gui.eclipse.altar.shop.remaining",
+                        formatSeconds(offer.remainingSeconds()));
             }
             guiGraphics.drawString(AltarScreen.this.font,
                     EclipseUiTheme.ellipsize(AltarScreen.this.font, detail, width - 8),
-                    getX() + 4, getY() + 13, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
+                    getX() + 4, getY() + 13, EclipseUiTheme.DIM);
+        }
+    }
+
+    /**
+     * One sealed shop slot (AUDITFIX-3): the server sends only a COUNT of not-yet-unlocked
+     * offers, so this row knows nothing it could spoil — it renders "???" over the sealed
+     * caption and stays fully inert (no click, no hover blip, no pointer cursor).
+     */
+    private final class SealedRow extends EclipseWidget {
+        private static final float SEALED_ALPHA = 0.45F;
+
+        SealedRow(int x, int y, int width, int height) {
+            super(x, y, width, height, EclipseLang.tr("gui.eclipse.altar.shop.sealed"));
+            this.active = false;
+        }
+
+        @Override
+        protected void onHoverStart() {
+            // Inert: no blip — there is nothing here to interact with.
+        }
+
+        @Override
+        protected void whileHovered() {
+            // Inert: no pointer cursor either.
+        }
+
+        @Override
+        protected void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            guiGraphics.fill(getX(), getY(), getX() + width, getY() + height,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.PANEL_RAISED, SEALED_ALPHA));
+            guiGraphics.drawString(AltarScreen.this.font, "???", getX() + 4, getY() + 3,
+                    EclipseUiTheme.withAlpha(EclipseUiTheme.TEXT, SEALED_ALPHA));
+            guiGraphics.drawString(AltarScreen.this.font,
+                    EclipseUiTheme.ellipsize(AltarScreen.this.font,
+                            getMessage().getString(), width - 8),
+                    getX() + 4, getY() + 13, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, SEALED_ALPHA));
         }
     }
 }

@@ -1,9 +1,0 @@
--nowarn
--proc:none
--cp
--d
--sourcepath
-src/main/java
--d
-/tmp/storm_a_out
-src/main/java/dev/projecteclipse/eclipse/stormfx/StormWallRenderer.java
