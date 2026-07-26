@@ -7,10 +7,15 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.artifact.ArtifactSlotLock;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lang.ServerLang;
+import dev.projecteclipse.eclipse.sequence.HeraldSummonSequence;
+import dev.projecteclipse.eclipse.worldgen.structure.AltarSanctumBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -25,6 +30,12 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  *       grant the APPROACH → LIGHTNING trigger fires); {@code off} lets the next 1 s sweep
  *       purge every artifact copy again — the normal pre-storm state.</li>
  *   <li>{@code stormtouched status} — reads the flag.</li>
+ *   <li>{@code start herold [here]} — F-053: runs the Herald's full arrival cutscene
+ *       ({@link HeraldSummonSequence}) and the summon it ends on. Without {@code here} the
+ *       cutscene plays over the persisted sanctum altar exactly like the day-7 lure path;
+ *       {@code here} stages it at the operator's own feet for iterating on the beats away
+ *       from the arena. Unlike the day-gated lure this ignores the day/dusk checks —
+ *       the sequence itself is the thing under test.</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -33,7 +44,10 @@ public final class DevEventCommands {
         DevCommandRegistry.register(
                 new DevCommandDoc("event.stormtouched", DevCategory.EVENT,
                         "/dev event stormtouched on|off|status",
-                        "dev.eclipse.doc.event.stormtouched", Danger.CAUTION, ClickAction.SUGGEST, 2));
+                        "dev.eclipse.doc.event.stormtouched", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("event.start.herold", DevCategory.EVENT,
+                        "/dev event start herold",
+                        "dev.eclipse.doc.event.start.herold", Danger.CAUTION, ClickAction.RUN, 2));
     }
 
     private DevEventCommands() {}
@@ -53,7 +67,46 @@ public final class DevEventCommands {
                                 .then(Commands.literal("off")
                                         .executes(context -> set(context, false)))
                                 .then(Commands.literal("status")
-                                        .executes(DevEventCommands::status)))));
+                                        .executes(DevEventCommands::status)))
+                        .then(Commands.literal("start")
+                                .then(Commands.literal("herold")
+                                        .executes(context -> startHerald(context, false))
+                                        .then(Commands.literal("here")
+                                                .executes(context -> startHerald(context, true)))))));
+    }
+
+    /**
+     * F-053: arms {@link HeraldSummonSequence} — the SAME entry point the day-7 lure uses,
+     * so what an operator previews here is what players get.
+     *
+     * @param here stage the cutscene at the source instead of the persisted sanctum altar
+     */
+    private static int startHerald(CommandContext<CommandSourceStack> context, boolean here) {
+        CommandSourceStack source = context.getSource();
+        BlockPos altarPos = here ? null : EclipseWorldState.get(source.getServer()).getSanctumAltarPos();
+        // The sanctum altar is an overworld fixture; everything else stages where the
+        // operator stands, which may well be the nether or the end.
+        ServerLevel level = altarPos != null ? source.getServer().overworld() : source.getLevel();
+        int groundY;
+        if (altarPos != null) {
+            // The dais floor sits ALTAR_ABOVE_GROUND under the altar block (lure path).
+            groundY = altarPos.getY() - AltarSanctumBuilder.ALTAR_ABOVE_GROUND;
+        } else {
+            // Free-standing preview: seat the cutscene on the terrain under the source, so
+            // the heaved slabs and the boss's hover measure off real ground even in the air.
+            BlockPos at = BlockPos.containing(source.getPosition());
+            groundY = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at).getY();
+            altarPos = new BlockPos(at.getX(), groundY + AltarSanctumBuilder.ALTAR_ABOVE_GROUND, at.getZ());
+        }
+        if (!HeraldSummonSequence.begin(level, altarPos, groundY)) {
+            source.sendFailure(Component.translatable("dev.eclipse.event.start.herold.busy"));
+            return 0;
+        }
+        BlockPos at = altarPos;
+        audit(source, Component.translatable("dev.eclipse.event.start.herold",
+                        at.getX(), at.getY(), at.getZ()),
+                "started the Herald summon cutscene at " + at.toShortString());
+        return 1;
     }
 
     private static int set(CommandContext<CommandSourceStack> context, boolean touched) {

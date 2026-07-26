@@ -1,0 +1,43 @@
+{
+  "_comment": "HERALD2 — F-053 (/dev event start herold: the Herald arrival cutscene, shared with the day-7 lure) + F-054 (/dev structure: place any registry structure or .nbt template, grounded through StructureGrounding/SitePrep). F-027 (Herald battle vs. victory music) needs no strings: it only re-points MusicCues at existing sound events. All keys below are NEW — nothing here overwrites a shipped string.",
+
+  "en_us": {
+    "dev.eclipse.doc.event.start.herold": "Run the Herald's full arrival cutscene (sky veil + horn, light column, ground break, camera pull, materialisation) and the summon it ends on — the same sequence the day-7 lure fires. Plays over the sanctum altar; add 'here' to stage it at your feet instead",
+    "dev.eclipse.event.start.herold": "Herald arrival cutscene armed at %s %s %s — the boss lands in about 8 seconds",
+    "dev.eclipse.event.start.herold.busy": "A Herald arrival is already running — wait for it to land (or /kill @e[tag=eclipse_herald_riftbreak] if it wedged)",
+
+    "dev.eclipse.doc.structure.place": "Place any structure at a position (default: where you stand): resolves the id against the structure registry first, then the .nbt template manager. Seated and terraformed like a real landmark; add 'exact' after x y z to paste verbatim instead",
+    "dev.eclipse.doc.structure.configured": "Place a REGISTRY structure (minecraft:village_plains, minecraft:ancient_city, any datapack structure) — generated, then grounded through the landmark pipeline",
+    "dev.eclipse.doc.structure.template": "Place a raw .nbt TEMPLATE (minecraft:igloo/top, any jigsaw piece, anything saved from a structure block), centred on the target column",
+    "dev.eclipse.doc.structure.list": "List the placeable ids of both lanes; an optional filter matches anywhere in the id",
+
+    "dev.eclipse.structure.placed": "Placed %s (%s) at %s %s %s",
+    "dev.eclipse.structure.queued": "Preparing the ground for %s at %s %s %s — it will be placed in a moment",
+    "dev.eclipse.structure.failed": "Could not place %s: %s",
+    "dev.eclipse.structure.unknown": "No structure and no template with the id %s (lane: %s)",
+    "dev.eclipse.structure.list.header": "Structures: %s configured, %s template(s) — filter '%s'",
+    "dev.eclipse.structure.list.section": "%s (%s):",
+    "dev.eclipse.structure.list.more": "… and %s more (narrow the filter)",
+    "dev.eclipse.structure.list.empty": "Nothing matches that filter."
+  },
+
+  "de_de": {
+    "dev.eclipse.doc.event.start.herold": "Spielt die komplette Ankunfts-Cutscene des Herolds (Himmelsschleier + Horn, Lichtsäule, Bodenaufbruch, Kamera-Zug, Materialisierung) und den Spawn an ihrem Ende — dieselbe Sequenz, die der Tag-7-Köder auslöst. Läuft über dem Sanktum-Altar; mit 'here' stattdessen an deinen Füßen",
+    "dev.eclipse.event.start.herold": "Herold-Ankunft bei %s %s %s gestartet — der Boss landet in etwa 8 Sekunden",
+    "dev.eclipse.event.start.herold.busy": "Es läuft bereits eine Herold-Ankunft — warte, bis sie landet (oder /kill @e[tag=eclipse_herald_riftbreak], falls sie hängt)",
+
+    "dev.eclipse.doc.structure.place": "Setzt eine beliebige Struktur an eine Position (Standard: wo du stehst): Die ID wird zuerst in der Struktur-Registry, dann im .nbt-Template-Manager gesucht. Wird wie ein echtes Landmark gesetzt und terraformt; mit 'exact' nach x y z stattdessen unverändert einfügen",
+    "dev.eclipse.doc.structure.configured": "Setzt eine REGISTRY-Struktur (minecraft:village_plains, minecraft:ancient_city, jede Datapack-Struktur) — erst generiert, dann über die Landmark-Pipeline sauber auf den Boden gesetzt",
+    "dev.eclipse.doc.structure.template": "Setzt ein rohes .nbt-TEMPLATE (minecraft:igloo/top, jedes Jigsaw-Teil, alles aus einem Strukturblock Gespeicherte), zentriert auf die Zielsäule",
+    "dev.eclipse.doc.structure.list": "Listet die setzbaren IDs beider Quellen; ein optionaler Filter passt an beliebiger Stelle in der ID",
+
+    "dev.eclipse.structure.placed": "%s (%s) bei %s %s %s gesetzt",
+    "dev.eclipse.structure.queued": "Boden für %s bei %s %s %s wird vorbereitet — die Struktur folgt gleich",
+    "dev.eclipse.structure.failed": "%s konnte nicht gesetzt werden: %s",
+    "dev.eclipse.structure.unknown": "Keine Struktur und kein Template mit der ID %s (Quelle: %s)",
+    "dev.eclipse.structure.list.header": "Strukturen: %s aus der Registry, %s Template(s) — Filter '%s'",
+    "dev.eclipse.structure.list.section": "%s (%s):",
+    "dev.eclipse.structure.list.more": "… und %s weitere (Filter eingrenzen)",
+    "dev.eclipse.structure.list.empty": "Nichts passt zu diesem Filter."
+  }
+}

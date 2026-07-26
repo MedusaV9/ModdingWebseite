@@ -4,6 +4,7 @@ import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.GoalTracker;
+import dev.projecteclipse.eclipse.sequence.HeraldSummonSequence;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -27,8 +28,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * The Herald's Lure — summon item for the day-7 boss (spec §2.1; crafted from 4 umbral
  * shards + 1 heart fragment, {@code data/eclipse/recipe/heralds_lure.json}).
  * Sneak-right-clicking the altar with it on day {@value #HERALD_DAY}+ after dusk consumes
- * one lure and summons the Herald {@value HeraldEntity#SUMMON_HEIGHT} blocks above the
- * sanctum center.
+ * one lure and arms {@link HeraldSummonSequence} — the arrival cutscene that ends on the
+ * Herald {@value HeraldEntity#SUMMON_HEIGHT} blocks above the sanctum center.
  *
  * <p>Same routing trick as {@link ReviveSigilItem}: vanilla skips block interaction while
  * sneaking with an item in hand, so this {@link #useOn} IS the sneak path. Non-sneak
@@ -110,7 +111,10 @@ public class HeraldsLureItem extends Item implements GeoItem {
         }
         boolean heraldNearby = !serverLevel.getEntitiesOfClass(HeraldEntity.class,
                 new AABB(altarPos).inflate(64.0D)).isEmpty();
-        if (heraldNearby) {
+        // F-053: an arrival already in flight has no boss to find yet, so the entity probe
+        // above cannot see it — a second offering during the cutscene would burn a lure for
+        // a summon the sequence refuses. Same rejection as a live Herald.
+        if (heraldNearby || HeraldSummonSequence.isActive()) {
             actionBar(player, Component.translatable("ritual.eclipse.lure.already"));
             player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 1.2F);
             return InteractionResult.CONSUME;
@@ -123,10 +127,13 @@ public class HeraldsLureItem extends Item implements GeoItem {
         // Arena floor: the sanctum dais ground sits ALTAR_ABOVE_GROUND below the altar block.
         int groundY = altarPos.getY()
                 - dev.projecteclipse.eclipse.worldgen.structure.AltarSanctumBuilder.ALTAR_ABOVE_GROUND;
-        HeraldEntity.summon(serverLevel, altarPos, groundY);
+        // F-053: the offering opens the ARRIVAL, not the fight — HeraldSummonSequence runs
+        // the announcement/column/ground-break beats and calls HeraldEntity.summon itself at
+        // its spawn beat. Identical to what /dev event start herold previews.
+        HeraldSummonSequence.begin(serverLevel, altarPos, groundY);
         GoalTracker.onHeraldSummoned(player.server); // day-7 "Summon the Herald at dusk" auto-tick
         actionBar(player, Component.translatable("ritual.eclipse.lure.summoned"));
-        dev.projecteclipse.eclipse.EclipseMod.LOGGER.info("{} deposited a Herald's Lure at {} — Herald summoned",
+        dev.projecteclipse.eclipse.EclipseMod.LOGGER.info("{} deposited a Herald's Lure at {} — arrival cutscene armed",
                 player.getScoreboardName(), altarPos.toShortString());
         return InteractionResult.CONSUME;
     }

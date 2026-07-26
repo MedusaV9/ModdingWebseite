@@ -136,6 +136,8 @@ public class HeraldEntity extends Monster {
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
     /** {@link #summon} dedup radius: a live Herald within this range blocks a second spawn. */
     private static final double SUMMON_DEDUP_RANGE = 128.0D;
+    /** F-027: how far the death fanfare ({@code herald_victory}) carries from the corpse. */
+    private static final double VICTORY_SCORE_RANGE = 96.0D;
     /** W4 P3 dais transformation: soul-fire jet ring radii + burst cadence (visual-only). */
     private static final double[] DAIS_JET_RADII = {4.0D, 8.0D, 12.0D};
     private static final int DAIS_JET_INTERVAL = 8;
@@ -996,6 +998,7 @@ public class HeraldEntity extends Monster {
             }
             EclipseMod.LOGGER.info("Herald defeated (source: {}) — heraldDefeated flag set, unlock key 'herald_slain' active",
                     damageSource.getMsgId());
+            playVictoryScore(serverLevel);
             // W4 IDEA-16 #3: queue the award ceremony (one shard payout per participant on
             // tickDeath keyframes) and start the long soft slow-mo drift shake at the kill.
             this.deathPayoutQueue.clear();
@@ -1006,6 +1009,27 @@ public class HeraldEntity extends Monster {
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, S2CShakePayload.shake(0.15F, 40));
         }
+    }
+
+    /**
+     * F-027: the victory score belongs to the KILL, not to the arrival. The fight bed is a
+     * bossbar-observed situation rung, so it is already ending here ({@code die} dropped the
+     * bar); this forced one-shot takes the channel from it with the normal crossfade and
+     * hands it back to the ladder on its own after
+     * {@code MusicCues.HERALD_VICTORY.durationTicks()}. Sent per player rather than
+     * broadcast: {@code MusicPayloads} is a per-player lane, and only people who were around
+     * the arena should get the fanfare.
+     */
+    private void playVictoryScore(ServerLevel level) {
+        int reached = 0;
+        for (ServerPlayer player : level.players()) {
+            if (player.position().distanceToSqr(this.position()) <= VICTORY_SCORE_RANGE * VICTORY_SCORE_RANGE) {
+                dev.projecteclipse.eclipse.music.MusicCues.play("herald_victory", player);
+                reached++;
+            }
+        }
+        EclipseMod.LOGGER.info("Herald victory score: 'herald_victory' cue sent to {} player(s) within {} blocks",
+                reached, (int) VICTORY_SCORE_RANGE);
     }
 
     /**

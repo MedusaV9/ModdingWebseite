@@ -23,8 +23,11 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  * full guard chain and executor budget.
  *
  * <p>Assets are authored programmatically — {@code tools/photon/fx_boss_herald_ferryman.py}
- * (fxlib) is the committed source for the five {@code assets/eclipse/fx/boss/*.fx} blobs
- * and the {@code ring_soft} particle texture.</p>
+ * (fxlib) is the committed source for the five original {@code assets/eclipse/fx/boss/*.fx}
+ * blobs and the {@code ring_soft} particle texture; F-053's two spawn-cutscene blobs
+ * ({@code herald_summon_pillar}, {@code herald_glyph_swirl}) and the {@code herald_glyph}
+ * texture come from the sibling {@code tools/photon/fx_herald_summon.py}. Re-run the
+ * scripts instead of hand-editing the gzip-NBT.</p>
  *
  * <p>The oar-sweep row carries the Ferryman's yaw in the payload's free {@code a} float;
  * its custom {@link PhotonFxRegistry.PhotonLeg} rotates the executor so the function-shape
@@ -101,6 +104,23 @@ public final class HeraldFerrymanFxRows {
                 fx("ferry_kneel_corona"),
                 FxBudget.Channel.AMBIENT,
                 PhotonFxRegistry.Mode.REPLACE,
+                false));
+        // F-053 — Herald spawn cutscene. LAYER on both: the Quasar legs are the shipped
+        // altar shaft/glyph reads a photon-less client must still get, and the Photon
+        // assets add the HDR column, the torn ash and the rune cage on top.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_HERALD_SUMMON_PILLAR,
+                fx("boss/herald_summon_pillar"),
+                fx("altar_pillar"),
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_HERALD_GLYPH_SWIRL,
+                fx("boss/herald_glyph_swirl"),
+                fx("sig_sanctum_glyph"),
+                FxBudget.Channel.AMBIENT,
+                PhotonFxRegistry.Mode.LAYER,
                 false));
     }
 
