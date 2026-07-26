@@ -7,8 +7,6 @@ import java.util.UUID;
 
 import javax.annotation.Nullable;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
@@ -21,7 +19,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.LerpingBossEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.neoforged.api.distmarker.Dist;
@@ -39,18 +36,27 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  * {@code ritual.eclipse.}. Every unmatched bar renders 100% vanilla — the event is not
  * cancelled.
  *
- * <p><b>v3 juice</b> (all {@code reducedFx}-gated, applies to all three themes and both
+ * <p><b>Everything is drawn procedurally</b> (A11, "komische Glitch Texturen"). The bar used
+ * to blit 512x64 ornament sheets down to 192x15; GUI textures sample with {@code GL_NEAREST}
+ * and no mipmaps, so that 4.27x minification point-sampled every ~4th texel row of dense
+ * filigree and produced the speckled, AI-artefact-looking mush players reported. There is no
+ * texture sampling left in this class at all — track, fill, edges, ticks and the leading-edge
+ * glow are {@code fill}/{@code fillGradient} rectangles, which are resolution-exact at every
+ * GUI scale. All geometry is centred on {@code guiGraphics.guiWidth() / 2}.</p>
+ *
+ * <p><b>v3 juice</b> (all {@code reducedFx}-gated, applies to all themes and both
  * {@code bossbarStyle} variants):</p>
  * <ul>
- *   <li><b>Entrance/exit state machine</b>: first sighting of a bar UUID → 8-tick drop-in
- *       (y −6→0, alpha 0→1, fill wipes L→R). Tracked bars that stop rendering → 6-tick
- *       fade-out ghost drawn from a {@link RenderGuiEvent.Post} pass (the bar no longer
- *       fires events, so the ghost is redrawn from cached geometry). A bar re-seen after
- *       &gt; {@value #REENTER_MILLIS} ms without events replays the entrance.</li>
- *   <li><b>Animated fill</b>: a 4-frame sheet {@code fill_anim.png} (512x128, 8 ticks/frame,
- *       P2 asset) replaces the single tinted fill when present. A10 replaced the old
- *       scrolling color sweep with a quiet fill dressing: 1px top-highlight/bottom-shade
- *       edges plus a single 1px highlight column scanning the filled width.</li>
+ *   <li><b>Entrance/exit state machine</b>: first sighting of a bar UUID → 8-tick slide-in
+ *       ({@value #SLIDE_PX}px up into place, alpha 0→1, fill wipes L→R). Tracked bars that
+ *       stop rendering → 6-tick fade-out ghost drawn from a {@link RenderGuiEvent.Post} pass
+ *       (the bar no longer fires events, so the ghost is redrawn from cached geometry). Both
+ *       travel DOWNWARD-to-up / down-and-out so the name line never clips off the top of the
+ *       screen. A bar re-seen after &gt; {@value #REENTER_MILLIS} ms without events replays
+ *       the entrance.</li>
+ *   <li><b>Fill dressing</b>: a vertical {@link BarPalette} gradient with a 1px accent top
+ *       highlight and 1px bottom shade, plus a single 1px highlight column scanning the
+ *       filled width.</li>
  *   <li><b>Damage flash + micro-shake</b>: a progress DROP &gt; {@value #DAMAGE_DROP_THRESHOLD}
  *       flashes the fill white for ~3 ticks and shakes the frame ±1px (A10 halved the v3
  *       amplitude); a trailing "damage ghost" segment lingers behind the lerped fill and
@@ -58,14 +64,13 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  *       flash.</li>
  *   <li><b>Phase notches</b>: NOTCHED_6/10/12/20 overlays draw a thin tick at every notch
  *       fraction (v2 hardcoded NOTCHED_6 at thirds).</li>
- *   <li><b>Styles</b>: {@code bossbarStyle=ORNATE} keeps the themed 512x64 frames;
- *       {@code SLIM} renders a frameless rounded Quiet-Eclipse strip from pure fills.
+ *   <li><b>Styles</b>: {@code bossbarStyle=ORNATE} adds the 1px outer/inner edge pair and
+ *       small end-cap ticks; {@code SLIM} drops the ticks for a frameless rounded strip.
  *       {@code showBossbarSkin=false} still falls back to the minimal 4px strip — a revive
  *       countdown is NEVER fully hidden.</li>
- *   <li><b>Name band</b> (§2 typography): the name line moved from above the bar into the
- *       fill band (subtle scrim, {@code DIM} → {@code TEXT} flash on change) so stacked
- *       bars read tighter; the vanilla 19px increment is kept (v2 reserved +10 for the
- *       floating name line).</li>
+ *   <li><b>Name line</b> (§2 typography): centred {@value #NAME_OFFSET_Y}px above the bar
+ *       with a text shadow ({@code DIM} → {@code TEXT} flash on change), matching the
+ *       vanilla name position so the vanilla 19px row increment stays correct.</li>
  *   <li><b>Hit glow, not idle pulse (A10)</b>: the v3 3-second breathing hairline is gone —
  *       a {@code boss}-themed bar's outer hairline only glows for ~1 s after a real
  *       damage event, then rests. Premium, not noisy.</li>
@@ -83,22 +88,14 @@ import net.neoforged.neoforge.client.event.RenderGuiEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class BossbarSkin {
-    private static final ResourceLocation FILL = texture("fill");
-    /** P2 asset (512x128, 4 frames of 512x32); probed live, plain fill until it lands. */
-    private static final ResourceLocation FILL_ANIM = texture("fill_anim");
-    private static final ResourceLocation GLOW = texture("glow");
-
-    /** Frame blit rect relative to the vanilla bar origin (x, y). */
-    private static final int FRAME_OFFSET_X = -5;
-    private static final int FRAME_OFFSET_Y = -5;
-    private static final int FRAME_WIDTH = 192;
-    private static final int FRAME_HEIGHT = 15;
-    /** Fill window relative to the vanilla bar origin (matches the frame textures). */
-    private static final int FILL_OFFSET_Y = -1;
-    private static final int FILL_WIDTH = 182;
-    private static final int FILL_HEIGHT = 7;
-    /** ORNATE fill tuck: the fill slides this far under each end cap so no seam shows. */
-    private static final int FILL_TUCK = 2;
+    /** Bar width, matching the vanilla bossbar (the row is centred on {@code guiWidth/2}). */
+    private static final int BAR_WIDTH = 182;
+    /** Bar band height; the vanilla 19px row increment leaves room for the name line above. */
+    private static final int BAR_HEIGHT = 7;
+    /** Baseline gap between the name line and the top of the bar (vanilla draws at y−9). */
+    private static final int NAME_OFFSET_Y = 10;
+    /** Entrance/exit travel: the bar slides UP into place, never off the top of the screen. */
+    private static final int SLIDE_PX = 5;
     /**
      * A10 smoother fill lerp: the displayed progress approaches the real progress on a
      * time-based exponential with this time constant (settles in ~1 s, eases out instead
@@ -136,40 +133,46 @@ public final class BossbarSkin {
     private static final long DAMAGE_GLOW_MILLIS = 1_000L;
     /** A10 fill dressing: the 1px highlight column crosses the full bar width per period. */
     private static final long SCAN_PERIOD_MILLIS = 2_600L;
-    /** fill_anim sheet: 4 frames, 8 ticks (400 ms) each. */
-    private static final long ANIM_FRAME_MILLIS = 400L;
+    /** Leading-edge glow: accent columns trailing back from the fill head. */
+    private static final int GLOW_FALLOFF_PX = 5;
     /** A10 cap: at most this many skinned bars render; the rest collapse to "+N more". */
     private static final int MAX_VISIBLE_BARS = 2;
     /** Height reserved for the overflow counter row in the top stack. */
     private static final int OVERFLOW_ROW_HEIGHT = 10;
 
+    // --- Themes -------------------------------------------------------------------------
+    // day/goal/boss arrive over the wire (S2CBossbarStylePayload); the three below are
+    // CLIENT-LOCAL refinements picked by AnnouncementOverlay off the announcement's title
+    // key, so "Der Altar steigt auf", "Siegel gebrochen" and "Die Welt wächst" each read in
+    // their own colour instead of sharing one generic goal skin. Unknown themes fall back
+    // to the goal palette, so a future server-side theme string can never render blank.
+
+    /** Altar milestone announcements — gold. */
+    public static final String THEME_ALTAR = "altar";
+    /** Unlock ("Siegel gebrochen") announcements — violet. */
+    public static final String THEME_SEAL = "seal";
+    /** World-expansion ("Die Welt wächst") announcements — teal. */
+    public static final String THEME_WORLD = "world";
+
     /**
-     * UIPOLISH bossbar-texture fix ("kaputte Bossbar-Textur"): the 512x64 frame sheets
-     * carry BIG ornamental end caps whose art reaches well inside the naive 182px fill
-     * window — the fill used to bleed through the semi-transparent caps, and stretching
-     * the whole sheet 512x64 → 192x15 squashed the cap art ~1.6x wider than tall. Each
-     * theme's measured cap widths (alpha audit of the fill band, tex rows 17..47) drive
-     * two fixes in {@link #drawBar}/{@link #drawOrnateBody}: the caps blit at art aspect
-     * (64 tex rows → {@value #FRAME_HEIGHT} px, only the plain middle rails stretch) and
-     * the fill window insets between them (with a {@value #FILL_TUCK}px tuck under each
-     * cap so no seam shows). SLIM and the minimal strip have no frame and keep the full
-     * 182px window.
+     * Per-theme colours. {@code fillTop}/{@code fillBottom} are the vertical fill gradient,
+     * {@code accent} the bright hairline/tick/leading-edge colour. All plain RGB — the alpha
+     * is applied per draw call so a bar can fade as a whole.
      */
-    private record FrameMetrics(int capLeftTex, int capRightTex) {
-        /** Left cap width on screen at art aspect. */
-        int capLeftPx() {
-            return Math.round(capLeftTex * (float) FRAME_HEIGHT / 64.0F);
-        }
+    private record BarPalette(int fillTop, int fillBottom, int accent) {}
 
-        /** Right cap width on screen at art aspect. */
-        int capRightPx() {
-            return Math.round(capRightTex * (float) FRAME_HEIGHT / 64.0F);
-        }
-    }
+    private static final BarPalette PALETTE_ALTAR = new BarPalette(0xD4A017, 0x8A6A10, 0xF6DC8A);
+    private static final BarPalette PALETTE_SEAL = new BarPalette(0xA45CFF, 0x5C2E99, 0xD8B8FF);
+    private static final BarPalette PALETTE_WORLD = new BarPalette(0x3FD9C4, 0x14776C, 0x9CF4E7);
+    private static final BarPalette PALETTE_BOSS = new BarPalette(0xE8455C, 0x7A1426, 0xFFA3B0);
+    private static final BarPalette PALETTE_GOAL = new BarPalette(0xB98CFF, 0x5B3AA6, 0xE2CDFF);
+    private static final BarPalette PALETTE_DAY = new BarPalette(0x9A8FB8, 0x413364, 0xD8CFF0);
 
-    private static final FrameMetrics GOAL_METRICS = new FrameMetrics(90, 90);
-    private static final FrameMetrics BOSS_METRICS = new FrameMetrics(70, 70);
-    private static final FrameMetrics DAY_METRICS = new FrameMetrics(118, 118);
+    /** 1px outer edge — near-black, seats the bar on bright sky and pale terrain alike. */
+    private static final int EDGE_OUTER = 0x05030A;
+    /** Empty-track gradient (dark Eclipse violet). */
+    private static final int TRACK_TOP = 0x1A1230;
+    private static final int TRACK_BOTTOM = 0x0B0718;
 
     /** Per-skinned-bar client state, keyed by the {@code BossEvent} UUID. Client thread only. */
     private static final Map<UUID, BarState> SKINNED = new HashMap<>();
@@ -178,8 +181,6 @@ public final class BossbarSkin {
     private static long lastBarSeenMillis;
     /** Reset to the vanilla anchor every frame ({@link #onRenderGuiPre}); bars re-stack it. */
     private static int observedBarsBottom = 12;
-    /** {@code fill_anim.png} probe: 0 = unknown (re-probe), 1 = present, 2 = absent. */
-    private static int fillAnimProbe;
     // --- A10 bar cap, per-frame (reset in onRenderGuiPre, drawn in onRenderGuiPost) ---
     /** Bar rows observed this frame (vanilla ones included — they occupy rows too). */
     private static int barsThisFrame;
@@ -208,7 +209,7 @@ public final class BossbarSkin {
         @Nullable
         String lastNameString;
         /** Cached geometry/telegraphs for the event-less exit-ghost redraw. */
-        int lastX = Integer.MIN_VALUE;
+        boolean lastDrawn;
         int lastY;
         @Nullable
         BossEvent.BossBarColor lastColor;
@@ -366,7 +367,7 @@ public final class BossbarSkin {
                 observedBarsBottom = Math.max(observedBarsBottom, event.getY() + OVERFLOW_ROW_HEIGHT);
             }
             hiddenThisFrame++;
-            state.lastX = Integer.MIN_VALUE; // a cap-hidden bar leaves no exit ghost
+            state.lastDrawn = false; // a cap-hidden bar leaves no exit ghost
             return;
         }
 
@@ -382,26 +383,26 @@ public final class BossbarSkin {
         GuiGraphics guiGraphics = event.getGuiGraphics();
         if (!EclipseClientConfig.showBossbarSkin()) {
             // Minimal 4px strip: countdowns (revive ritual!) must never disappear entirely.
-            state.lastX = Integer.MIN_VALUE; // no exit ghost in minimal mode
-            drawMinimalStrip(guiGraphics, event.getX(), event.getY(), state.theme, state.displayedProgress,
+            state.lastDrawn = false; // no exit ghost in minimal mode
+            drawMinimalStrip(guiGraphics, event.getY(), state.theme, state.displayedProgress,
                     bar.getColor());
             observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
             return;
         }
 
-        state.lastX = event.getX();
+        state.lastDrawn = true;
         state.lastY = event.getY();
-        // v2 reserved +10 for the floating name line; v3 draws the name inside the fill band
-        // (§3.5 "stacked bars read tighter"), so the vanilla 19px increment is kept as-is.
+        // The name sits above the bar exactly where vanilla puts it, so the vanilla 19px
+        // increment stays correct and stacked bars keep their spacing.
         float flash = state.flashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.flashStartMillis) / (float) FLASH_MILLIS, 0.0F, 1.0F);
-        drawLiveBar(guiGraphics, event.getX(), event.getY(), state, bar.getName(),
+        drawLiveBar(guiGraphics, event.getY(), state, bar.getName(),
                 0.35F + 0.65F * flash, 1.0F, bar.getColor(), bar.getOverlay(), now);
         observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
     }
 
     /** Live (event-driven) bar body: entrance pose, damage shake, then the shared renderer. */
-    private static void drawLiveBar(GuiGraphics guiGraphics, int x, int y, BarState state,
+    private static void drawLiveBar(GuiGraphics guiGraphics, int y, BarState state,
             Component name, float glowAlpha, float alpha,
             @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay, long now) {
         boolean reduced = EclipseClientConfig.reducedFx();
@@ -412,14 +413,15 @@ public final class BossbarSkin {
         // slower ease-out than the white flash, so the hit reads without strobing.
         float damageGlow = reduced || state.damageStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.damageStartMillis) / (float) DAMAGE_GLOW_MILLIS, 0.0F, 1.0F);
+        int shakeX = 0;
         if (!reduced && damageFlash > 0.0F) {
             // Deterministic micro-shake: two incommensurate sines, decaying with the flash.
-            x += Math.round(Mth.sin(now * 0.09F) * SHAKE_PX * damageFlash);
+            shakeX = Math.round(Mth.sin(now * 0.09F) * SHAKE_PX * damageFlash);
             y += Math.round(Mth.cos(now * 0.13F) * SHAKE_PX * 0.5F * damageFlash);
         }
         float nameFlash = state.nameFlashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.nameFlashStartMillis) / (float) NAME_FLASH_MILLIS, 0.0F, 1.0F);
-        drawBar(guiGraphics, x, y, state.theme, state.displayedProgress, state.ghostProgress,
+        drawBar(guiGraphics, shakeX, y, state.theme, state.displayedProgress, state.ghostProgress,
                 glowAlpha, name, alpha, barColor, overlay, entrance, damageFlash, damageGlow,
                 nameFlash, now);
     }
@@ -448,7 +450,7 @@ public final class BossbarSkin {
         }
         long now = Util.getMillis();
         for (BarState state : SKINNED.values()) {
-            if (state.lastX == Integer.MIN_VALUE || state.displayedProgress < 0.0F) {
+            if (!state.lastDrawn || state.displayedProgress < 0.0F) {
                 continue;
             }
             long age = now - state.lastSeenMillis;
@@ -456,8 +458,10 @@ public final class BossbarSkin {
                 continue;
             }
             float fade = 1.0F - (age - EXIT_GRACE_MILLIS) / (float) EXIT_MILLIS;
-            int rise = Math.round(4.0F * (1.0F - fade));
-            drawBar(event.getGuiGraphics(), state.lastX, state.lastY - rise, state.theme,
+            // Sinks out (mirror of the slide-in) — rising would clip the name line off-screen
+            // for the topmost row, whose name already sits at y = 2.
+            int sink = Math.round(SLIDE_PX * (1.0F - fade));
+            drawBar(event.getGuiGraphics(), 0, state.lastY + sink, state.theme,
                     state.displayedProgress, state.displayedProgress, 0.0F, state.lastNameComponent,
                     0.9F * fade * fade, state.lastColor, state.lastOverlay, 1.0F, 0.0F, 0.0F, 0.0F, now);
         }
@@ -480,9 +484,9 @@ public final class BossbarSkin {
      * announcement sweep's fade-out); real bars pass {@code 1}. Sweeps have no backing
      * {@code BossEvent}, so this variant carries no color/overlay telegraphs.
      */
-    public static void drawThemedBar(GuiGraphics guiGraphics, int x, int y, String theme,
+    public static void drawThemedBar(GuiGraphics guiGraphics, int y, String theme,
             float progress, float glowAlpha, Component name, float alpha) {
-        drawThemedBar(guiGraphics, x, y, theme, progress, glowAlpha, name, alpha, null, null);
+        drawThemedBar(guiGraphics, y, theme, progress, glowAlpha, name, alpha, null, null);
     }
 
     /**
@@ -490,254 +494,195 @@ public final class BossbarSkin {
      * shake or damage state — {@code barColor}/{@code overlay} keep the vanilla telegraphs
      * (phase-color tint, notch overlays). Both may be {@code null} (announcement sweeps).
      */
-    public static void drawThemedBar(GuiGraphics guiGraphics, int x, int y, String theme,
+    public static void drawThemedBar(GuiGraphics guiGraphics, int y, String theme,
             float progress, float glowAlpha, Component name, float alpha,
             @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay) {
-        drawBar(guiGraphics, x, y, theme, progress, progress, glowAlpha, name, alpha, barColor, overlay,
+        drawBar(guiGraphics, 0, y, theme, progress, progress, glowAlpha, name, alpha, barColor, overlay,
                 1.0F, 0.0F, 0.0F, 1.0F, Util.getMillis());
     }
 
     /**
-     * The one master renderer behind every skinned look. {@code entrance} 0..1 drives the
-     * drop-in (y offset, alpha ramp, L→R fill wipe), {@code damageFlash} 0..1 whitens the
-     * fill, {@code damageGlow} 0..1 drives the A10 post-hit hairline glow (the only frame
-     * "pulse" left), {@code nameFlash} 0..1 lerps the name {@code DIM → TEXT}.
-     * {@code ghostProgress} ≥ {@code progress} draws the trailing damage segment between
-     * the two.
+     * The one master renderer behind every skinned look — pure {@code fill} /
+     * {@code fillGradient} rectangles, no texture sampling at all (see the class javadoc for
+     * why). The bar is always centred on {@code guiGraphics.guiWidth() / 2}, so the layout is
+     * identical at every GUI scale; {@code shakeX} only carries the damage micro-shake.
+     * {@code entrance} 0..1 drives the slide-in (y offset, alpha ramp, L→R fill wipe),
+     * {@code damageFlash} 0..1 whitens the fill, {@code damageGlow} 0..1 drives the A10
+     * post-hit edge glow, {@code nameFlash} 0..1 lerps the name {@code DIM → TEXT}.
+     * {@code ghostProgress} ≥ {@code progress} draws the trailing damage segment between the two.
      */
-    private static void drawBar(GuiGraphics guiGraphics, int x, int y, String theme,
+    private static void drawBar(GuiGraphics guiGraphics, int shakeX, int y, String theme,
             float progress, float ghostProgress, float glowAlpha, @Nullable Component name, float alpha,
             @Nullable BossEvent.BossBarColor barColor, @Nullable BossEvent.BossBarOverlay overlay,
             float entrance, float damageFlash, float damageGlow, float nameFlash, long now) {
         float ease = easeOutCubic(entrance);
-        y += Math.round(-6.0F * (1.0F - ease));
+        y += Math.round(SLIDE_PX * (1.0F - ease));
         alpha = Mth.clamp(alpha, 0.0F, 1.0F) * ease;
         if (alpha < 0.02F) {
             return;
         }
         boolean slim = EclipseClientConfig.bossbarStyle() == EclipseClientConfig.BossbarStyle.SLIM;
-        int fillY = y + FILL_OFFSET_Y;
-        // ORNATE fill window: inset between the frame's ornamental end caps (see
-        // FrameMetrics) so the fill never bleeds through the cap art; SLIM keeps the
-        // frameless full-width strip.
-        int barX = x;
-        int barWidth = FILL_WIDTH;
-        if (!slim) {
-            FrameMetrics metrics = frameMetrics(theme);
-            barX = x + FRAME_OFFSET_X + metrics.capLeftPx() - FILL_TUCK;
-            barWidth = FRAME_WIDTH - metrics.capLeftPx() - metrics.capRightPx() + 2 * FILL_TUCK;
-        }
+        int barX = guiGraphics.guiWidth() / 2 - BAR_WIDTH / 2 + shakeX;
+        int bottom = y + BAR_HEIGHT;
+
+        // Phase telegraphs survive: a boss-themed bar follows the server's BossBarColor
+        // (the Ferryman's WHITE/PURPLE/RED phase swaps); everything else uses its theme.
+        boolean bossTheme = S2CBossbarStylePayload.THEME_BOSS.equals(theme);
+        BarPalette palette = palette(theme, bossTheme ? barColor : null);
+        int accent = palette.accent();
+        int fillTop = lerpRgb(palette.fillTop(), 0xFFFFFF, damageFlash);
+        int fillBottom = lerpRgb(palette.fillBottom(), 0xFFFFFF, damageFlash);
+
         // Entrance wipe: the fill sweeps L→R while the chrome fades in.
         float wiped = Mth.clamp(progress, 0.0F, 1.0F) * ease;
         float wipedGhost = Mth.clamp(Math.max(ghostProgress, progress), 0.0F, 1.0F) * ease;
-        int fillWidth = Math.round(barWidth * wiped);
-        int ghostWidth = Math.round(barWidth * wipedGhost);
+        int fillWidth = Math.round(BAR_WIDTH * wiped);
+        int ghostWidth = Math.round(BAR_WIDTH * wipedGhost);
 
-        // Phase-color tint: boss-themed bars follow the server's bar color (WHITE = no tint);
-        // the damage flash lerps the tint toward pure white.
-        boolean bossTheme = S2CBossbarStylePayload.THEME_BOSS.equals(theme);
-        int tint = bossTheme && barColor != null ? barColorRgb(barColor) : 0xFFFFFF;
-        float tintRed = Mth.lerp(damageFlash, ((tint >> 16) & 0xFF) / 255.0F, 1.0F);
-        float tintGreen = Mth.lerp(damageFlash, ((tint >> 8) & 0xFF) / 255.0F, 1.0F);
-        float tintBlue = Mth.lerp(damageFlash, (tint & 0xFF) / 255.0F, 1.0F);
-
-        RenderSystem.enableBlend();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+        // 1px outer dark edge: seats the bar on bright sky as well as on dark caves.
+        drawFrameOutline(guiGraphics, barX - 1, y - 1, BAR_WIDTH + 2, BAR_HEIGHT + 2,
+                argb(EDGE_OUTER, 0.90F * alpha));
+        // Empty track, then the fill — both vertical gradients.
         if (slim) {
-            drawSlimBody(guiGraphics, x, y, fillY, theme, fillWidth, ghostWidth, tint, damageFlash,
-                    damageGlow, alpha, bossTheme, now);
+            gradientRounded(guiGraphics, barX, y, BAR_WIDTH, BAR_HEIGHT,
+                    argb(TRACK_TOP, 0.88F * alpha), argb(TRACK_BOTTOM, 0.88F * alpha));
         } else {
-            drawOrnateBody(guiGraphics, x, y, fillY, theme, barX, barWidth, fillWidth, ghostWidth,
-                    tintRed, tintGreen, tintBlue, damageFlash, damageGlow, alpha, bossTheme, now);
+            guiGraphics.fillGradient(barX, y, barX + BAR_WIDTH, bottom,
+                    argb(TRACK_TOP, 0.85F * alpha), argb(TRACK_BOTTOM, 0.85F * alpha));
         }
-        // Phase notches: a thin dark tick at every notch fraction of the fill window.
+        if (fillWidth > 0) {
+            if (slim) {
+                gradientRounded(guiGraphics, barX, y, fillWidth, BAR_HEIGHT,
+                        argb(fillTop, alpha), argb(fillBottom, alpha));
+            } else {
+                guiGraphics.fillGradient(barX, y, barX + fillWidth, bottom,
+                        argb(fillTop, alpha), argb(fillBottom, alpha));
+            }
+            drawFillDressing(guiGraphics, barX, y, fillWidth, accent, alpha, now);
+        }
+        drawGhostSegment(guiGraphics, barX, y, fillWidth, ghostWidth, alpha);
+        if (damageFlash > 0.0F && fillWidth > 0) {
+            guiGraphics.fill(barX, y, barX + fillWidth, bottom,
+                    argb(0xFFFFFF, 0.55F * damageFlash * alpha));
+        }
+        // Phase notches: a thin dark tick at every notch fraction, inset so it does not
+        // fight the inner edge drawn below.
         int notches = notchCount(overlay);
         if (notches > 1) {
-            guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F); // fill() colors carry their own alpha
-            int notchColor = ((int) (0.85F * alpha * 255.0F) << 24) | 0x140A24;
+            int notchColor = argb(EDGE_OUTER, 0.80F * alpha);
             for (int notch = 1; notch < notches; notch++) {
-                int markX = barX + Math.round(barWidth * notch / (float) notches);
-                guiGraphics.fill(markX, fillY, markX + 1, fillY + FILL_HEIGHT, notchColor);
+                int markX = barX + Math.round(BAR_WIDTH * notch / (float) notches);
+                guiGraphics.fill(markX, y + 1, markX + 1, bottom - 1, notchColor);
             }
         }
-        // Leading-edge glow (flashes via glowAlpha on progress rises), phase/damage-tinted.
-        float edgeGlow = Math.max(glowAlpha, damageFlash);
-        if (fillWidth > 0 && edgeGlow > 0.02F) {
-            guiGraphics.setColor(tintRed, tintGreen, tintBlue, Mth.clamp(edgeGlow, 0.0F, 1.0F) * alpha);
-            int glowSize = slim ? 10 : 14;
-            guiGraphics.blit(GLOW, barX + fillWidth - glowSize / 2, fillY + FILL_HEIGHT / 2 - glowSize / 2,
-                    glowSize, glowSize, 0.0F, 0.0F, 64, 64, 64, 64);
+        // 1px inner light edge, tinted by the theme — an EMPTY bar still reads as
+        // altar/seal/world/boss instead of a generic grey slot. A10: only a boss bar's edge
+        // brightens, and only for ~1 s after a real hit (no idle breathing).
+        float edgeAlpha = 0.34F + 0.40F * (bossTheme ? damageGlow : 0.0F);
+        drawFrameOutline(guiGraphics, barX, y, BAR_WIDTH, BAR_HEIGHT, argb(accent, edgeAlpha * alpha));
+        if (!slim) {
+            drawEndTicks(guiGraphics, barX, y, accent, alpha);
         }
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        RenderSystem.disableBlend();
-
-        drawNameBand(guiGraphics, x, fillY, name, alpha, nameFlash);
+        drawLeadingEdge(guiGraphics, barX, y, fillWidth, accent,
+                Math.max(glowAlpha, damageFlash), alpha);
+        drawName(guiGraphics, y, name, alpha, nameFlash);
     }
 
     /**
-     * ORNATE body: textured track/fill inside the cap-inset window, quiet fill dressing,
-     * damage ghost, themed frame. The frame blits in THREE slices (see {@link FrameMetrics}):
-     * both end caps at art aspect, only the plain middle rails stretched between them —
-     * the old single 512x64 → 192x15 stretch squashed the cap art into mush.
-     */
-    private static void drawOrnateBody(GuiGraphics guiGraphics, int x, int y, int fillY, String theme,
-            int barX, int barWidth, int fillWidth, int ghostWidth,
-            float tintRed, float tintGreen, float tintBlue,
-            float damageFlash, float damageGlow, float alpha, boolean bossTheme, long now) {
-        // Empty track: the fill strip darkened to a faint violet bed.
-        guiGraphics.setColor(0.28F, 0.22F, 0.36F, 0.85F * alpha);
-        guiGraphics.blit(FILL, barX, fillY, barWidth, FILL_HEIGHT, 0.0F, 0.0F, 512, 32, 512, 32);
-        if (fillWidth > 0) {
-            guiGraphics.setColor(tintRed, tintGreen, tintBlue, alpha);
-            if (!EclipseClientConfig.reducedFx() && fillAnimPresent()) {
-                // 4-frame animated sheet: 512x128, one 512x32 frame every 8 ticks.
-                int frame = (int) ((now / ANIM_FRAME_MILLIS) % 4L);
-                guiGraphics.blit(FILL_ANIM, barX, fillY, fillWidth, FILL_HEIGHT, 0.0F, frame * 32.0F,
-                        Math.round(512.0F * fillWidth / barWidth), 32, 512, 128);
-            } else {
-                guiGraphics.blit(FILL, barX, fillY, fillWidth, FILL_HEIGHT, 0.0F, 0.0F,
-                        Math.round(512.0F * fillWidth / barWidth), 32, 512, 32);
-            }
-        }
-        // fill()-based passes below carry their own alpha — reset the shader tint first.
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        drawFillDressing(guiGraphics, barX, fillY, fillWidth, barWidth, alpha, now);
-        drawGhostSegment(guiGraphics, barX, fillY, fillWidth, ghostWidth, alpha);
-        if (damageFlash > 0.0F && fillWidth > 0) {
-            guiGraphics.fill(barX, fillY, barX + fillWidth, fillY + FILL_HEIGHT,
-                    ((int) (0.55F * damageFlash * alpha * 255.0F) << 24) | 0xFFFFFF);
-        }
-        // Themed frame on top of the fill: caps at art aspect, middle rails stretched.
-        FrameMetrics metrics = frameMetrics(theme);
-        ResourceLocation frame = frameTexture(theme);
-        int frameX = x + FRAME_OFFSET_X;
-        int frameY = y + FRAME_OFFSET_Y;
-        int capLeft = metrics.capLeftPx();
-        int capRight = metrics.capRightPx();
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, alpha);
-        guiGraphics.blit(frame, frameX, frameY, capLeft, FRAME_HEIGHT,
-                0.0F, 0.0F, metrics.capLeftTex(), 64, 512, 64);
-        guiGraphics.blit(frame, frameX + capLeft, frameY,
-                FRAME_WIDTH - capLeft - capRight, FRAME_HEIGHT,
-                metrics.capLeftTex(), 0.0F, 512 - metrics.capLeftTex() - metrics.capRightTex(), 64,
-                512, 64);
-        guiGraphics.blit(frame, frameX + FRAME_WIDTH - capRight, frameY, capRight, FRAME_HEIGHT,
-                512 - metrics.capRightTex(), 0.0F, metrics.capRightTex(), 64, 512, 64);
-        guiGraphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        if (bossTheme && damageGlow > 0.0F && !EclipseClientConfig.reducedFx()) {
-            // A10: no idle breathing — the outer hairline only glows after a hit, fading ~1 s.
-            drawFrameOutline(guiGraphics, frameX - 1, frameY - 1,
-                    FRAME_WIDTH + 2, FRAME_HEIGHT + 2,
-                    ((int) (0.38F * damageGlow * alpha * 255.0F) << 24) | (EclipseUiTheme.DANGER & 0xFFFFFF));
-        }
-    }
-
-    /** SLIM body (§3.5): frameless rounded Quiet-Eclipse strip rendered from pure fills. */
-    private static void drawSlimBody(GuiGraphics guiGraphics, int x, int y, int fillY, String theme,
-            int fillWidth, int ghostWidth, int bossTint, float damageFlash, float damageGlow,
-            float alpha, boolean bossTheme, long now) {
-        int accent = bossTheme ? bossTint : switch (theme) {
-            case S2CBossbarStylePayload.THEME_GOAL -> 0x9AF0E0;
-            case S2CBossbarStylePayload.THEME_BOSS -> EclipseUiTheme.DANGER & 0xFFFFFF;
-            default -> EclipseUiTheme.ACCENT & 0xFFFFFF;
-        };
-        int fillRgb = lerpRgb(accent, 0xFFFFFF, damageFlash);
-        int bedColor = ((int) (0.88F * alpha * 255.0F) << 24) | 0x140A24;
-        // Rounded bed (1px cut corners) + the steady EclipseUiTheme panel hairline. A10:
-        // the outline no longer breathes — it only warms toward the accent after a hit.
-        fillRounded(guiGraphics, x, fillY, FILL_WIDTH, FILL_HEIGHT, bedColor);
-        int outlineRgb = EclipseUiTheme.HAIRLINE & 0xFFFFFF;
-        if (bossTheme && damageGlow > 0.0F && !EclipseClientConfig.reducedFx()) {
-            outlineRgb = lerpRgb(outlineRgb, accent, 0.6F * damageGlow);
-        }
-        drawFrameOutline(guiGraphics, x - 1, fillY - 1, FILL_WIDTH + 2, FILL_HEIGHT + 2,
-                ((int) (alpha * 255.0F) << 24) | outlineRgb);
-        if (fillWidth > 0) {
-            fillRounded(guiGraphics, x, fillY, fillWidth, FILL_HEIGHT,
-                    ((int) (alpha * 255.0F) << 24) | fillRgb);
-            drawFillDressing(guiGraphics, x, fillY, fillWidth, FILL_WIDTH, alpha, now);
-        }
-        drawGhostSegment(guiGraphics, x, fillY, fillWidth, ghostWidth, alpha);
-        if (damageFlash > 0.0F && fillWidth > 0) {
-            guiGraphics.fill(x, fillY, x + fillWidth, fillY + FILL_HEIGHT,
-                    ((int) (0.55F * damageFlash * alpha * 255.0F) << 24) | 0xFFFFFF);
-        }
-    }
-
-    /**
-     * A10 fill dressing — replaces the v3 scrolling color sweep. Static edge treatment
-     * (1px top highlight, 1px bottom shade — a quiet scanline read that keeps the fill
-     * dimensional) plus a single 1px highlight column scanning the filled width every
+     * Fill dressing: a 1px accent top highlight and 1px bottom shade that keep the gradient
+     * dimensional, plus a single 1px highlight column scanning the filled width every
      * {@value #SCAN_PERIOD_MILLIS} ms. {@code reducedFx} keeps the edges, drops the scan.
-     * {@code barWidth} is the full fill-window width (the scan crosses it per period).
      */
-    private static void drawFillDressing(GuiGraphics guiGraphics, int x, int fillY, int fillWidth,
-            int barWidth, float alpha, long now) {
+    private static void drawFillDressing(GuiGraphics guiGraphics, int barX, int y, int fillWidth,
+            int accent, float alpha, long now) {
         if (fillWidth <= 0) {
             return;
         }
-        guiGraphics.fill(x, fillY, x + fillWidth, fillY + 1,
-                ((int) (0.14F * alpha * 255.0F) << 24) | 0xFFFFFF);
-        guiGraphics.fill(x, fillY + FILL_HEIGHT - 1, x + fillWidth, fillY + FILL_HEIGHT,
-                ((int) (0.30F * alpha * 255.0F) << 24) | 0x0A0512);
+        int bottom = y + BAR_HEIGHT;
+        guiGraphics.fill(barX, y, barX + fillWidth, y + 1, argb(accent, 0.45F * alpha));
+        guiGraphics.fill(barX, bottom - 1, barX + fillWidth, bottom, argb(0x0A0512, 0.35F * alpha));
         if (EclipseClientConfig.reducedFx()) {
             return;
         }
-        int scanX = x + (int) (now % SCAN_PERIOD_MILLIS * barWidth / SCAN_PERIOD_MILLIS);
-        if (scanX < x + fillWidth) {
-            guiGraphics.fill(scanX, fillY, scanX + 1, fillY + FILL_HEIGHT,
-                    ((int) (0.22F * alpha * 255.0F) << 24) | 0xFFFFFF);
+        int scanX = barX + (int) (now % SCAN_PERIOD_MILLIS * BAR_WIDTH / SCAN_PERIOD_MILLIS);
+        if (scanX < barX + fillWidth) {
+            guiGraphics.fill(scanX, y, scanX + 1, bottom, argb(0xFFFFFF, 0.18F * alpha));
         }
     }
 
     /** Trailing damage ghost: pale segment between the lerped fill edge and the pre-drop level. */
-    private static void drawGhostSegment(GuiGraphics guiGraphics, int x, int fillY,
+    private static void drawGhostSegment(GuiGraphics guiGraphics, int barX, int y,
             int fillWidth, int ghostWidth, float alpha) {
         if (ghostWidth > fillWidth) {
-            guiGraphics.fill(x + fillWidth, fillY, x + ghostWidth, fillY + FILL_HEIGHT,
-                    ((int) (0.45F * alpha * 255.0F) << 24) | (EclipseUiTheme.DANGER & 0xFFFFFF));
+            guiGraphics.fill(barX + fillWidth, y, barX + ghostWidth, y + BAR_HEIGHT,
+                    argb(EclipseUiTheme.DANGER & 0xFFFFFF, 0.45F * alpha));
         }
     }
 
-    /** In-band name line (§3.5): subtle scrim + centered text, DIM → TEXT flash on change. */
-    private static void drawNameBand(GuiGraphics guiGraphics, int x, int fillY,
-            @Nullable Component name, float alpha, float nameFlash) {
+    /** Small accent end-cap ticks, {@code 2px} clear of the frame (ORNATE only). */
+    private static void drawEndTicks(GuiGraphics guiGraphics, int barX, int y, int accent, float alpha) {
+        int color = argb(accent, 0.55F * alpha);
+        guiGraphics.fill(barX - 3, y, barX - 2, y + BAR_HEIGHT, color);
+        guiGraphics.fill(barX + BAR_WIDTH + 2, y, barX + BAR_WIDTH + 3, y + BAR_HEIGHT, color);
+    }
+
+    /**
+     * Procedural leading-edge glow, replacing the old {@code glow.png} blit: a bright 1px head
+     * column at the fill edge plus a short accent falloff trailing back into the fill.
+     */
+    private static void drawLeadingEdge(GuiGraphics guiGraphics, int barX, int y, int fillWidth,
+            int accent, float intensity, float alpha) {
+        if (fillWidth <= 0 || intensity < 0.02F) {
+            return;
+        }
+        intensity = Mth.clamp(intensity, 0.0F, 1.0F);
+        int headX = barX + fillWidth - 1;
+        for (int back = 1; back <= GLOW_FALLOFF_PX; back++) {
+            int columnX = headX - back;
+            if (columnX < barX) {
+                break;
+            }
+            float falloff = 1.0F - back / (float) (GLOW_FALLOFF_PX + 1);
+            guiGraphics.fill(columnX, y, columnX + 1, y + BAR_HEIGHT,
+                    argb(accent, 0.45F * intensity * falloff * alpha));
+        }
+        guiGraphics.fill(headX, y, headX + 1, y + BAR_HEIGHT, argb(0xFFFFFF, 0.85F * intensity * alpha));
+    }
+
+    /**
+     * Centred name line {@value #NAME_OFFSET_Y}px above the bar — the vanilla name position,
+     * drawn with a text shadow and flashing {@code DIM → TEXT} when the name changes.
+     */
+    private static void drawName(GuiGraphics guiGraphics, int y, @Nullable Component name,
+            float alpha, float nameFlash) {
         int alphaByte = (int) (alpha * 255.0F);
         if (name == null || alphaByte < 8) {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        int nameWidth = minecraft.font.width(name);
-        int centerX = x + FILL_WIDTH / 2;
-        int textX = centerX - nameWidth / 2;
-        int textY = fillY - 1;
-        // Scrim keeps the line readable over the animated fill at guiScale 2/3.
-        guiGraphics.fill(textX - 3, textY - 1, textX + nameWidth + 3, textY + 9,
-                ((int) (0.4F * alpha * 255.0F) << 24));
+        int textX = guiGraphics.guiWidth() / 2 - minecraft.font.width(name) / 2;
         int rgb = lerpRgb(EclipseUiTheme.DIM & 0xFFFFFF, EclipseUiTheme.TEXT & 0xFFFFFF, nameFlash);
-        guiGraphics.drawString(minecraft.font, name, textX, textY, (alphaByte << 24) | rgb);
+        guiGraphics.drawString(minecraft.font, name, textX, y - NAME_OFFSET_Y,
+                (alphaByte << 24) | rgb, true);
     }
 
     /**
      * The {@code showBossbarSkin=false} fallback: 4px track + progress strip, no text. The
      * strip takes the server bar's color when known (phase telegraphs must survive even the
-     * minimal look); the fixed theme accent is only the no-color fallback.
+     * minimal look); the theme's fill color is only the no-color fallback.
      */
-    private static void drawMinimalStrip(GuiGraphics guiGraphics, int x, int y, String theme, float progress,
+    private static void drawMinimalStrip(GuiGraphics guiGraphics, int y, String theme, float progress,
             @Nullable BossEvent.BossBarColor barColor) {
-        int accent = barColor != null ? 0xFF000000 | barColorRgb(barColor) : switch (theme) {
-            case S2CBossbarStylePayload.THEME_GOAL -> 0xFF9AF0E0;
-            case S2CBossbarStylePayload.THEME_BOSS -> 0xFFE86078;
-            default -> 0xFFC8B4E8;
-        };
-        guiGraphics.fill(x, y, x + FILL_WIDTH, y + 4, 0xB0140A24);
-        int width = Math.round(FILL_WIDTH * Mth.clamp(progress, 0.0F, 1.0F));
+        int barX = guiGraphics.guiWidth() / 2 - BAR_WIDTH / 2;
+        int accent = barColor != null ? barColorRgb(barColor) : palette(theme, null).fillTop();
+        guiGraphics.fill(barX, y, barX + BAR_WIDTH, y + 4, 0xB0140A24);
+        int width = Math.round(BAR_WIDTH * Mth.clamp(progress, 0.0F, 1.0F));
         if (width > 0) {
-            guiGraphics.fill(x, y, x + width, y + 4, accent);
+            guiGraphics.fill(barX, y, barX + width, y + 4, 0xFF000000 | accent);
         }
     }
 
-    /** 1px rectangle outline from four fills (breathing frame glow, SLIM hairline). */
+    /** 1px rectangle outline from four fills (outer dark edge, inner accent edge). */
     private static void drawFrameOutline(GuiGraphics guiGraphics, int x, int y, int width, int height,
             int color) {
         guiGraphics.fill(x, y, x + width, y + 1, color);
@@ -746,16 +691,51 @@ public final class BossbarSkin {
         guiGraphics.fill(x + width - 1, y + 1, x + width, y + height - 1, color);
     }
 
-    /** Filled rect with 1px cut corners — the SLIM "rounded" strip primitive. */
-    private static void fillRounded(GuiGraphics guiGraphics, int x, int y, int width, int height,
-            int color) {
+    /** Vertical gradient with 1px cut corners — the SLIM "rounded" strip primitive. */
+    private static void gradientRounded(GuiGraphics guiGraphics, int x, int y, int width, int height,
+            int top, int bottom) {
         if (width <= 2) {
-            guiGraphics.fill(x, y + 1, x + width, y + height - 1, color);
+            guiGraphics.fillGradient(x, y + 1, x + width, y + height - 1, top, bottom);
             return;
         }
-        guiGraphics.fill(x + 1, y, x + width - 1, y + height, color);
-        guiGraphics.fill(x, y + 1, x + 1, y + height - 1, color);
-        guiGraphics.fill(x + width - 1, y + 1, x + width, y + height - 1, color);
+        guiGraphics.fillGradient(x + 1, y, x + width - 1, y + height, top, bottom);
+        guiGraphics.fillGradient(x, y + 1, x + 1, y + height - 1, top, bottom);
+        guiGraphics.fillGradient(x + width - 1, y + 1, x + width, y + height - 1, top, bottom);
+    }
+
+    /**
+     * Theme → colours. A {@code boss}-themed bar carrying a server-set
+     * {@link BossEvent.BossBarColor} follows that colour instead, so the Ferryman's
+     * WHITE/PURPLE/RED phase telegraphs survive; {@code WHITE} means "no telegraph" and keeps
+     * the red boss palette. Unknown themes fall back to the goal palette — a future
+     * server-side theme string can never render as a blank bar.
+     */
+    private static BarPalette palette(String theme, @Nullable BossEvent.BossBarColor barColor) {
+        if (barColor != null && barColor != BossEvent.BossBarColor.WHITE) {
+            int rgb = barColorRgb(barColor);
+            return new BarPalette(rgb, scaleRgb(rgb, 0.42F), lerpRgb(rgb, 0xFFFFFF, 0.55F));
+        }
+        return switch (theme) {
+            case THEME_ALTAR -> PALETTE_ALTAR;
+            case THEME_SEAL -> PALETTE_SEAL;
+            case THEME_WORLD -> PALETTE_WORLD;
+            case S2CBossbarStylePayload.THEME_BOSS -> PALETTE_BOSS;
+            case S2CBossbarStylePayload.THEME_DAY -> PALETTE_DAY;
+            default -> PALETTE_GOAL;
+        };
+    }
+
+    /** RGB + float alpha → packed ARGB for {@code fill}/{@code fillGradient}. */
+    private static int argb(int rgb, float alpha) {
+        return (Mth.clamp((int) (alpha * 255.0F + 0.5F), 0, 255) << 24) | (rgb & 0xFFFFFF);
+    }
+
+    /** Scales an RGB triple — the gradient foot of a bar-colour telegraph. */
+    private static int scaleRgb(int rgb, float factor) {
+        int red = Mth.clamp((int) (((rgb >> 16) & 0xFF) * factor), 0, 255);
+        int green = Mth.clamp((int) (((rgb >> 8) & 0xFF) * factor), 0, 255);
+        int blue = Mth.clamp((int) ((rgb & 0xFF) * factor), 0, 255);
+        return (red << 16) | (green << 8) | blue;
     }
 
     /** §3.5 generalized phase ticks: notch count per vanilla overlay (0 = plain progress). */
@@ -799,15 +779,6 @@ public final class BossbarSkin {
         return 1.0F - inv * inv * inv;
     }
 
-    /** Live probe for the P2 {@code fill_anim.png} sheet; re-probed every ~5 s (see tick). */
-    private static boolean fillAnimPresent() {
-        if (fillAnimProbe == 0) {
-            fillAnimProbe = Minecraft.getInstance().getResourceManager().getResource(FILL_ANIM).isPresent()
-                    ? 1 : 2;
-        }
-        return fillAnimProbe == 1;
-    }
-
     /** Translation-key safety net for v1 bars that predate the style payload (revive ritual). */
     private static String fallbackTheme(Component name) {
         if (name.getContents() instanceof TranslatableContents translatable
@@ -815,27 +786,6 @@ public final class BossbarSkin {
             return S2CBossbarStylePayload.THEME_GOAL;
         }
         return null;
-    }
-
-    static ResourceLocation frameTexture(String theme) {
-        return switch (theme) {
-            case S2CBossbarStylePayload.THEME_GOAL -> texture("goal_frame");
-            case S2CBossbarStylePayload.THEME_BOSS -> texture("boss_frame");
-            default -> texture("day_frame");
-        };
-    }
-
-    /** Measured end-cap metrics of a theme's frame sheet (see {@link FrameMetrics}). */
-    private static FrameMetrics frameMetrics(String theme) {
-        return switch (theme) {
-            case S2CBossbarStylePayload.THEME_GOAL -> GOAL_METRICS;
-            case S2CBossbarStylePayload.THEME_BOSS -> BOSS_METRICS;
-            default -> DAY_METRICS;
-        };
-    }
-
-    private static ResourceLocation texture(String name) {
-        return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "textures/gui/bossbar/" + name + ".png");
     }
 
     /** Prunes stale bar states (bar removed server-side) and clears everything on disconnect. */
@@ -850,7 +800,6 @@ public final class BossbarSkin {
         if (Minecraft.getInstance().player == null || Minecraft.getInstance().player.tickCount % 100 != 0) {
             return;
         }
-        fillAnimProbe = 0; // re-probe the P2 sheet every ~5 s (picks up resource reloads)
         if (SKINNED.isEmpty()) {
             return;
         }

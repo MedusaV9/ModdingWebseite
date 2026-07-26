@@ -40,8 +40,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *       {@link BossbarSkin#nextFreeBarY()}.</li>
  * </ul>
  *
- * <p>Payload styles map onto the three bar skins: {@code day}→day, {@code boss}→boss,
- * {@code goal}/{@code unlock}→goal. Incoming announcements queue (cap
+ * <p>Payload styles map onto the bar skins via {@link #sweepTheme}: {@code day}→day,
+ * {@code boss}→boss, {@code goal}/{@code unlock}→goal, refined by title key so the altar,
+ * unlock and world-expansion sweeps each get their own colour. Incoming announcements queue (cap
  * {@value #QUEUE_LIMIT}) so unlock bursts play one after another instead of overwriting.
  * Identical payloads that are still pending/visible (or started within
  * {@value #DEDUPE_WINDOW_TICKS}t) coalesce instead of replaying, and the queue defers —
@@ -265,12 +266,28 @@ public final class AnnouncementOverlay {
         Component subtitle = resolve(payload.subtitleKey());
         typewriter = new TypewriterLine(subtitle != null ? subtitle : title);
         sweepTitle = title;
-        sweepTheme = switch (payload.style()) {
-            case S2CAnnouncePayload.STYLE_BOSS -> S2CBossbarStylePayload.THEME_BOSS;
-            case S2CAnnouncePayload.STYLE_DAY -> S2CBossbarStylePayload.THEME_DAY;
-            default -> S2CBossbarStylePayload.THEME_GOAL; // goal + unlock share the goal skin
-        };
+        sweepTheme = sweepTheme(payload);
         sweepTicks = 0;
+    }
+
+    /**
+     * Sweep colour for an announcement. The wire {@code style} is too coarse on its own —
+     * the altar milestone rides {@code unlock} and the world expansion rides {@code goal},
+     * so all three of the mod's most visible sweeps used to share one generic skin. The
+     * title key disambiguates them client-side (no protocol change): altar → gold,
+     * "Siegel gebrochen" → violet, "Die Welt wächst" → teal.
+     */
+    private static String sweepTheme(S2CAnnouncePayload payload) {
+        return switch (payload.titleKey()) {
+            case "announce.eclipse.milestone.title" -> BossbarSkin.THEME_ALTAR;
+            case "announce.eclipse.unlock.title" -> BossbarSkin.THEME_SEAL;
+            case "announce.eclipse.stage.title" -> BossbarSkin.THEME_WORLD;
+            default -> switch (payload.style()) {
+                case S2CAnnouncePayload.STYLE_BOSS -> S2CBossbarStylePayload.THEME_BOSS;
+                case S2CAnnouncePayload.STYLE_DAY -> S2CBossbarStylePayload.THEME_DAY;
+                default -> S2CBossbarStylePayload.THEME_GOAL;
+            };
+        };
     }
 
     // --- W4-CEREMONY / IDEA-09 #3: the Day-Number Moment ---
@@ -376,8 +393,8 @@ public final class AnnouncementOverlay {
             float glow = t < SWEEP_IN_TICKS ? 1.0F
                     : Mth.clamp(1.0F - (t - SWEEP_IN_TICKS) / 20.0F, 0.25F, 1.0F);
             Component name = t >= SWEEP_IN_TICKS ? sweepTitle : null;
-            BossbarSkin.drawThemedBar(guiGraphics, guiGraphics.guiWidth() / 2 - 91,
-                    BossbarSkin.nextFreeBarY() + 12, sweepTheme, progress, glow, name, alpha);
+            BossbarSkin.drawThemedBar(guiGraphics, BossbarSkin.nextFreeBarY() + 12,
+                    sweepTheme, progress, glow, name, alpha);
         }
         if (typewriter != null) {
             typewriter.render(guiGraphics, guiGraphics.guiWidth() / 2,

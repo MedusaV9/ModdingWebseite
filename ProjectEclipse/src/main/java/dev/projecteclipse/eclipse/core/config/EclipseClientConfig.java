@@ -42,7 +42,10 @@ public final class EclipseClientConfig {
         FULL, TAB_ONLY, OFF
     }
 
-    /** Bossbar chrome: full themed frame or frameless rounded strip (§7.1, P3-W6). */
+    /**
+     * Bossbar chrome: {@code ORNATE} adds the outer/inner edge pair plus end-cap ticks,
+     * {@code SLIM} is the frameless rounded strip (§7.1, P3-W6). Both are drawn procedurally.
+     */
     public enum BossbarStyle {
         ORNATE, SLIM
     }
@@ -55,7 +58,7 @@ public final class EclipseClientConfig {
             .comment("Use the custom Eclipse title screen (false = vanilla title screen).")
             .define("customMenu", true);
     public static final ModConfigSpec.BooleanValue SHOW_BOSSBAR_SKIN = BUILDER
-            .comment("Skin Eclipse boss bars with the themed frames (false = minimal strip).")
+            .comment("Skin Eclipse boss bars with the themed bar chrome (false = minimal strip).")
             .define("showBossbarSkin", true);
     public static final ModConfigSpec.BooleanValue SHOW_SIDEBAR = BUILDER
             .comment("Show the Eclipse sidebar status panel.")

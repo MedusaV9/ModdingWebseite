@@ -16,8 +16,10 @@ import net.minecraft.resources.ResourceLocation;
  * bar. Sent whenever the server creates a themed {@code ServerBossEvent} (and re-sent to
  * late joiners who are added to a running bar). Bars without a synced theme render vanilla.
  *
- * <p>Themes: {@link #THEME_DAY}, {@link #THEME_GOAL}, {@link #THEME_BOSS} — matching the
- * frame textures under {@code assets/eclipse/textures/gui/bossbar/}.</p>
+ * <p>Themes: {@link #THEME_DAY}, {@link #THEME_GOAL}, {@link #THEME_BOSS} — colour palettes
+ * in {@code client.hud.BossbarSkin}, which draws every bar procedurally (no textures).
+ * The client adds finer announcement-only themes on top; an unknown theme string is safe
+ * and falls back to the goal palette.</p>
  */
 public record S2CBossbarStylePayload(UUID id, String theme) implements CustomPacketPayload {
     public static final String THEME_DAY = "day";

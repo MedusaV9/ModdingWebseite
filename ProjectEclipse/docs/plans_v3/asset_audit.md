@@ -193,16 +193,9 @@ _Collapsed: assets/eclipse/models/item/altar.json … assets/eclipse/models/item
 | `assets/eclipse/textures/gui/heart_full.png` | 401 B |
 | `assets/eclipse/textures/gui/wave_overlay.png` | 58.8 KB |
 
-### `assets/eclipse/textures/gui/bossbar/` (6 files)
+### `assets/eclipse/textures/gui/bossbar/` (removed)
 
-| Path | Size |
-|---|---:|
-| `assets/eclipse/textures/gui/bossbar/boss_frame.png` | 44.1 KB |
-| `assets/eclipse/textures/gui/bossbar/day_frame.png` | 72.4 KB |
-| `assets/eclipse/textures/gui/bossbar/fill.png` | 28.4 KB |
-| `assets/eclipse/textures/gui/bossbar/glow.png` | 7.7 KB |
-| `assets/eclipse/textures/gui/bossbar/goal_frame.png` | 61.7 KB |
-| `assets/eclipse/textures/gui/bossbar/scroll.png` | 21.6 KB |
+Deleted — the bossbar is drawn procedurally now, see `ASSET_MANIFEST_V2.md` Batch B.
 
 ### `assets/eclipse/textures/gui/cursor/` (3 files)
 
@@ -354,7 +347,7 @@ _Collapsed: assets/eclipse/textures/item/arm_artifact.png … assets/eclipse/tex
 |---|---|---|
 | Handbook UI | `textures/gui/handbook/*`, cursors | `HandbookScreen`, `HandbookTab.handbookTexture()`, tab classes |
 | Title screen | `textures/gui/title/*` | `EclipseTitleScreen.titleTexture()`, `CubeMap` panorama |
-| Bossbar skin | `textures/gui/bossbar/*` | `BossbarSkin.texture()` / `frameTexture()` |
+| Bossbar skin | *(none — drawn procedurally)* | `BossbarSkin.drawBar()` `fill`/`fillGradient` |
 | Sidebar HUD | `textures/gui/sidebar/*` | `SidebarPanel.texture()` |
 | Hearts (partial) | `gui/heart_*.png`, `hearts/burst_sheet.png` | `StatusTab`, `HeartBurstOverlay`; **no vanilla heart-bar replacer** |
 | Entities | `textures/entity/*` | `*Renderer.TEXTURE` constants |

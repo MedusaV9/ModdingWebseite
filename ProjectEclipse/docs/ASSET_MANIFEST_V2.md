@@ -47,18 +47,20 @@ game-UI asset". Match existing final art: `assets/eclipse/textures/gui/title/*` 
 
 ## Batch B — HUD: hearts, bossbars, sidebar (priority 2)
 
+> **Bossbars need no art.** The whole `textures/gui/bossbar/` set (`day_frame`,
+> `goal_frame`, `boss_frame`, `fill`, `fill_anim`, `scroll`, `glow`) was deleted: GUI
+> textures sample with `GL_NEAREST` and no mipmaps, so blitting those 512×64 filigree
+> sheets down to the 192×15 bar minified them 4.27× and point-sampled them into speckled
+> mush ("komische Glitch Texturen"). `client.hud.BossbarSkin` now draws every bar from
+> `fill`/`fillGradient` rectangles — resolution-exact at any GUI scale. Do not
+> re-introduce bossbar textures.
+
 | Path | Size (px) | Alpha | Prompt hint |
 |---|---|---|---|
 | `assets/eclipse/textures/gui/hearts/heart_full.png` | 36×36 | yes | violet-black heart, faint inner glow, crisp game-HUD icon (4× res of a 9×9 heart) |
 | `assets/eclipse/textures/gui/hearts/heart_empty.png` | 36×36 | yes | hollow dark heart outline, embers |
 | `assets/eclipse/textures/gui/hearts/heart_cracked.png` | 36×36 | yes | same heart with glowing crack |
 | `assets/eclipse/textures/gui/hearts/burst_sheet.png` | 216×36 (6 frames 36×36) | yes | heart shattering left→right: flash, crack, 6 shards flying; frame-consistent |
-| `assets/eclipse/textures/gui/bossbar/day_frame.png` | 512×64 | yes | ornate bar frame, silver-violet filigree, sun-dial end caps |
-| `assets/eclipse/textures/gui/bossbar/goal_frame.png` | 512×64 | yes | same family, crystal-shard end caps |
-| `assets/eclipse/textures/gui/bossbar/boss_frame.png` | 512×64 | yes | same family, menacing thorned frame, darker |
-| `assets/eclipse/textures/gui/bossbar/fill.png` | 512×32 | yes | horizontal energy gradient, violet→magenta core |
-| `assets/eclipse/textures/gui/bossbar/scroll.png` | 256×32 | yes | seamless-x scrolling energy streaks overlay, additive-friendly (bright on transparent) |
-| `assets/eclipse/textures/gui/bossbar/glow.png` | 64×64 | yes | soft radial end-cap glow |
 | `assets/eclipse/textures/gui/sidebar/panel.png` | 64×64 (9-slice, 8px corners) | yes | rounded dark glass panel, thin violet rim |
 | `assets/eclipse/textures/gui/sidebar/icon_heart.png` | 24×24 | yes | mini heart icon, HUD-legible |
 | `assets/eclipse/textures/gui/sidebar/icon_day.png` | 24×24 | yes | mini eclipse-sun icon |
