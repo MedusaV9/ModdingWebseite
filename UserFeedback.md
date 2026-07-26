@@ -18,82 +18,62 @@ _(leer — hier neue Punkte reinschreiben)_
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-001 | **KRITISCH:** Kick „Failed to encode packet clientbound/minecraft:custom_payload“ beim Joinen einer Testwelt | 🟡 |
-| F-002 | Limbo: Riesen-Portal/Effekt dreht sich immer noch mit der Spielerkamera | 🟡 |
-| F-003 | Limbo: Wesen (Deckhands) immer noch verbuggt | 🟡 |
-| F-004 | Bossbars: immer noch Glitch-Texturen | 🟡 |
-| F-005 | Outpost spawnt in der Luft | 🟡 |
-| F-006 | Blackscreens bei Struktur-Spawns / Map-Erweiterung entfernen | 🟡 |
-| F-007 | Struktur-Animation: Risse länger, Blitz-Sounds, VIEL mehr Block-Displays | 🟡 |
-| F-008 | Map-Rand: Riesen-Felsen als Signal der Erweiterung (fehlen immer noch) | 🟡 |
-| F-009 | Map-Erweiterung schneller machen | 🟡 |
+| F-030–034 | Sturm: Optimierung, Kampfverhalten, Burst-Anim, Photon-Nahfeld | 🟡 |
+| F-036–041 | Zauberstab-Rework (Skilltree, 30 Zauber, keine Cooldowns) | 🟡 |
+| F-044–046 | Tagesriss + Ferryman-Portal + Arena + Attacken | 🟡 |
+| F-035 | Nether-Öffnungsanimation Tag 2 | 🟡 |
+| F-042/043 | Backrooms Scary-Part + mehr Ebenen | 🟡 |
+| F-028 | Tutorialwelten (verschiedene Maps, Farbfilter) | 🟡 |
+| F-023/024/047 | End-Fixes (Tag-7-Timing, Windaltar, Insel-Crash) | 🟡 |
+| F-048/049 | Glitch lila + Altar-Aktivierung + Farb-Command | 🟡 |
+| F-050–052 | /dev skin, /dev adminskin, /msg-Beschränkung | 🟡 |
+| F-027/053/054 | Herald-Musik + Herold-Cutscene + /dev structure | 🟡 |
+| F-025/026 | Mesa-Pyramide + Schneeberg-Schmelzwasser | 🟡 |
 
 ## Backlog (offen, in Priorität)
 
 ### Bugs / Fixes
 | # | Punkt | Status |
 |---|-------|--------|
-| F-010 | GUI-Scale: „Project Eclipse“-Button in Settings zentriert sich nicht neu | 🔴 |
-| F-011 | EMI falsche Version trotz Bundling — Ursache + Versionschecks verbessern/aktualisieren | 🔴 |
 | F-012 | Classic-Blöcke recherchieren; KEINE AI-Blöcke mehr im Classic-Bereich | 🔴 |
-| F-013 | Limbo: nichts abbaubar (außer vorher /devmode) | 🔴 |
-| F-014 | Limbo: kein PvP (außer /dev limbo pvp on und im Bosskampf) | 🔴 |
-| F-015 | Zu fröhlichen Song direkt beim Event-Start (Schiff im Limbo) entfernen | 🔴 |
-| F-016 | Start-Cutscene: Insel sichtbar bevor der Sturm entsteht (Sturm früher spawnen) | 🔴 |
-| F-017 | Start-Cutscene: BlockDisplays vom Himmel/aus Blitzen, um den Sturm schwebend, am Ende in die Mitte ziehend | 🔴 |
-| F-018 | Musik faded immer noch nicht (endet abrupt) | 🔴 |
-| F-019 | Quest „Jeder berührt den Altar“: Auto-Complete fixen, in ersten 2 min nicht triggerbar | 🔴 |
-| F-020 | Altar-/Mittelinsel-Abbauschutz + Fallschadenschutz 20–30 Blöcke kleiner | 🔴 |
-| F-021 | Altar: kein Herzfragment per Shift-Rechtsklick; nur Rechtsklick-Menü, Shift-Rechtsklick = einzahlen | 🔴 |
-| F-022 | Splitterladen: klar zeigen welche Splitter gebraucht werden; falsche Preise fixen | 🔴 |
-| F-023 | Tag 7: Warum spawnen Enderdrache/End statt Herold? Timing fixen | 🔴 |
-| F-024 | Windaltar zu schwach — wirft nicht oben auf die End-Insel | 🔴 |
-| F-025 | Mesa/Savanne: leere Chunks bei der Pyramide | 🔴 |
-| F-026 | Schneeberg: Eis schmilzt → Wasser läuft runter | 🔴 |
-| F-027 | Herold: Siegesmusik erst nach seinem Tod, beim Spawn Kampfmusik | 🔴 |
-| F-028 | Tutorialwelten: laden immer dieselbe Map; Farbfilter statt AI-Texturen; Musik-Überlagerung | 🔴 |
-
 ### Features / Verbesserungen
 | # | Punkt | Status |
 |---|-------|--------|
-| F-030 | Volumetrischer Sturm: stark optimieren | 🔴 |
-| F-031 | Sturm im Kampf: größer + performanter, viele BlockDisplays innen, echte Blöcke fliegen hoch und werden als BlockDisplays auf Spieler geworfen | 🔴 |
-| F-032 | Schwarze Sturmkugel (Kern) löst sich im Kampf auf | 🔴 |
-| F-033 | Sturm-Aufplatz-Animation nach Kampf: länger + heftiger | 🔴 |
-| F-034 | Stürme: von weitem simpler Veil-Effekt, nah = Photon-Effekt (iterativ mit Subagents bauen) | 🔴 |
-| F-035 | Nether-Öffnung Tag 2: lange Photon-Animation (Loch, Boden wackelt, BlockDisplays, danach Rauchwolke mit Feuer überm Loch) | 🔴 |
-| F-036 | Zauberstab: echter Skilltree (inkrementell, Rebirths), Veil-Ladung upgradebar | 🔴 |
-| F-037 | Zauberstab-Tab im Skilltree nur wenn Stab wirklich in der Hand | 🔴 |
-| F-038 | Phasenwelle ersetzen (trifft geschützte Bereiche) | 🔴 |
-| F-039 | 10 Zauber pro Richtung (3 Richtungen), aus Skills zusammengebaut, Photon+Veil gemischt | 🔴 |
-| F-040 | Zauber: kein Cooldown, nur Veil-Ladung | 🔴 |
-| F-041 | DEV-Command für Zauberstab-XP-Buff | 🔴 |
-| F-042 | Backrooms: Scary-Part (mehr Licht aus, Mobs werden beim Anrennen lauter, Licht flackert) | 🔴 |
-| F-043 | Backrooms: mehr als 3 Ebenen | 🔴 |
-| F-044 | Neuer Tag: Photon-Riss am Himmel, BlockDisplays fallen raus und schweben zunehmend um die Mittelinsel | 🔴 |
-| F-045 | Letzter Tag: Displays formen großes Ferryman-Portal (Blockbench/Blender-Modell); Riesen-Schlüssel überm Altar; Schlüssel→Tür-Sequenz mit Geistern, Lila-Screen, Teleport zur Schiffs-Arena; `/dev start_ferryman` | 🔴 |
-| F-046 | Ferryman: mehr Special-Effekte + Special-Attacken (finaler Kampf!) + Schiff↔Arena-Verwandlung | 🔴 |
-| F-047 | End-Inseln zerbrechen + krachen auf den Boden; danach kein End am Himmel, nur kleine Brocken unten; Mittelinsel nach Kampf entfernen (kein Portal/Drachenei nötig) | 🔴 |
-| F-048 | Glitch „Void“: lila Variante; aktiviert sich ab und zu am Altar; Impuls vom Altarblock | 🔴 |
-| F-049 | Glitch-Farben per Command wählbar (z. B. `glitch void_purple`) | 🔴 |
-| F-050 | `/dev skin "Spieler" <url>` — Skin per NameMC/Datei-Link ändern | 🔴 |
-| F-051 | `/dev adminskin "Spieler"` — eigener krasser lila Admin-Skin (erstellen) | 🔴 |
-| F-052 | `/msg`: Spieler können nur „Sonic0810“ anschreiben | 🔴 |
-| F-053 | `/dev event start herold` — Spawn-Cutscene mit Photon-Animationen | 🔴 |
-| F-054 | `/dev structure <minecraft:struktur>` — Strukturen spawnen | 🔴 |
-| F-055 | „Letzte Überfahrt“-Erklärung neu machen | 🔴 |
 | F-056 | Credits: längerer Blackscreen → orthografische Sicht am Kartenrand → schwarzes Loch frisst die Map (Photon, viele BlockEntities) → Weltall-Skybox → Rauszoomen, Farben ergrauen → „Minecraft Eclipse“ bis victory_theme endet → Blackscreen bis `/dev end_event` | 🔴 |
 | F-057 | Credits-Map: tausende BlockDisplays, besser platziert; Auto-Laufen ggf. raus; Spieler unsichtbar | 🔴 |
 | F-058 | Mittelinsel + Altar zerspringen sichtbar in tausende Teile; Himmel zieht sich zusammen; Eclipse verschwindet langsam | 🔴 |
 | F-059 | Biome: 9 → 20 (inkl. Cave-Biome), neue Blockbench/Blender-Modelle für Pflanzen etc. | 🔴 |
 | F-060 | Photon Editor mit 3 Entdecker- + 5 Planer- + 10 Umsetzungs-Subagents erkunden und nutzen | 🔴 |
 | F-061 | Race-Legacy-Map erstellen (Minigame-Fixes: Verlassen, Arena-Schild) | 🔴 |
+| F-055 | „Letzte Überfahrt“-Erklärung neu machen | 🔴 (kommt mit Ferryman-Team) |
 
 ---
 
 ## Fertig (diese Session)
 
-_(noch nichts — Session gestartet)_
+| # | Punkt | Commit |
+|---|-------|--------|
+| F-001 | custom_payload-Kick beim Testwelt-Join (STRING_UTF8-32K-Limit; Chunked-Sync + LARGE_UTF8) | `fix(net)` |
+| F-002 | Limbo-Portal/Disc kamera-gekoppelt → feste Himmelsrichtung wie Vanilla-Sonne | `fix(limbo)` |
+| F-003 | Deckhands: 3s-Ruck (GeckoLib-Reset-Loop), Ruder-Culling, Spiegel-Flackern | `fix(limbo)` |
+| F-004 | Bossbars: Ursache war GL_NEAREST-Minification; jetzt komplett prozedural, 4 Farb-Themes | `fix(hud)` |
+| F-005 | Outpost schwebte: Plateau-Sitz jetzt über Footprint gesampelt + Fundamente | `fix(structures)` |
+| F-006 | Blackscreens: Kamera-im-Riss-Guard + 3s-Client-Reißleine für alle Fades; Expansion sendet gar keine Fades mehr | `fix(structures)` / `feat(expansion)` |
+| F-007 | Struktur-Anim: Riss 5s, Blitz-Sounds, bis 640 Displays mit Hover-Wirbel | `fix(structures)` |
+| F-008 | Riesen-Monolithen am Map-Rand (waren nie sichtbar: falscher Zeitpunkt/Radius/view_range) | `feat(expansion)` |
+| F-009 | Map-Erweiterung 2,3× schneller (141,6s → 60,7s gemessen) | `feat(expansion)` |
+| F-010 | GUI-Scale: Akzent-Zeile zentriert sich jetzt pro Frame | `fix(packcheck)` |
+| F-011 | EMI-Versionscheck (Build-Metadata-Toleranz) + volle Versionsanzeige + aktuelle Pins | `fix(packcheck)` |
+| F-013 | Limbo-Bausperre (nur /devmode baut) | `feat(limbo)` |
+| F-014 | Limbo-PvP-Sperre (+ /dev limbo pvp on, Bosskampf-Ausnahme) | `feat(limbo)` |
+| F-015 | Fröhlicher intro_storm-Track beim Kentern entfernt — Limbo-Ambient läuft durch | `feat(limbo)` |
+| F-016 | Sturm wird vor der Blende gespawnt; Freigabe erst nach Client-Bestätigung | `feat(intro)` |
+| F-017 | Debris-Choreografie: Orbit um den Sturm, Blitz-Kicks, Spiral-Kollaps in die Insel | `feat(intro)` |
+| F-018 | Echte Musik-Fades (Root-Cause: Dimension-Hop stoppt alle Sounds + Idle-Tick-Bug) | `feat(intro)` |
+| F-019 | Altar-Quest: echter Touch-Trigger + 2-min-Karenz | `fix(altar)` |
+| F-020 | Schutzzone 96→71, Fallschutz 112→87 | `fix(altar)` |
+| F-021 | Kein Herzfragment per Shift-Klick mehr; Shift = einzahlen, Rechtsklick = Menü | `fix(altar)` |
+| F-022 | Splitterladen zeigt Item-Icon/Anzahl/Börse; 6 irreführende Texte korrigiert | `fix(altar)` |
 
 ## Fertig (frühere Sessions, Auszug)
 
