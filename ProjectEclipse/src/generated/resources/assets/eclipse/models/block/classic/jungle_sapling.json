@@ -2,6 +2,6 @@
   "parent": "minecraft:block/cross",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cross": "eclipse:block/classic/jungle_sapling"
+    "cross": "minecraft:block/jungle_sapling"
   }
 }

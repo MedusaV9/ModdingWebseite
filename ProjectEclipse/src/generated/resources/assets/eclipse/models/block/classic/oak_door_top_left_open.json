@@ -2,7 +2,7 @@
   "parent": "minecraft:block/door_top_left_open",
   "render_type": "minecraft:cutout",
   "textures": {
-    "bottom": "eclipse:block/classic/oak_door_bottom",
-    "top": "eclipse:block/classic/oak_door_top"
+    "bottom": "minecraft:block/oak_door_bottom",
+    "top": "minecraft:block/oak_door_top"
   }
 }

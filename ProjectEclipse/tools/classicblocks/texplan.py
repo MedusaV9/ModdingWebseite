@@ -1,7 +1,9 @@
 """Shared helper: resolve which OUT textures every manifest entry needs.
 
-Used by import_textures.py (what to build) and gen_assets.py / validate.py
-(what to reference). Keeps the two sides in lockstep.
+Used by gen_assets.py (what to reference) and validate.py (what to check).
+Keeps the two sides in lockstep. Which of these slots resolve to a bundled
+``eclipse:`` texture and which to the vanilla one is decided in gen_assets.py
+(``OWN_BLOCK_TEXTURES`` / ``OWN_ITEM_TEXTURES``) — see the TUT2 note there.
 """
 
 import manifest

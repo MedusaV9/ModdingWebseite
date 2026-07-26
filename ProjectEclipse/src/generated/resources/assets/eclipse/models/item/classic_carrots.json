@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:item/classic/carrot"
+    "layer0": "minecraft:item/carrot"
   }
 }

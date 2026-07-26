@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:block/classic/brown_mushroom"
+    "layer0": "minecraft:block/brown_mushroom"
   }
 }

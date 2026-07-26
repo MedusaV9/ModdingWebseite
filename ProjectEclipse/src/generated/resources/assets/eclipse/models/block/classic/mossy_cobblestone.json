@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "eclipse:block/classic/mossy_cobblestone"
+    "all": "minecraft:block/mossy_cobblestone"
   }
 }

@@ -77,8 +77,8 @@
   "parent": "minecraft:block/thin_block",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/smooth_stone",
-    "stone": "eclipse:block/classic/smooth_stone",
-    "top": "eclipse:block/classic/repeater"
+    "particle": "minecraft:block/smooth_stone",
+    "stone": "minecraft:block/smooth_stone",
+    "top": "minecraft:block/repeater"
   }
 }

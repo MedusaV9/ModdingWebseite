@@ -104,9 +104,9 @@
         "level.dat (dev-client only)"
       ],
       "spawn": [
-        97,
-        72,
-        -106
+        62,
+        71,
+        278
       ],
       "spawnYaw": 0.0,
       "dataVersion": 3955,
@@ -148,33 +148,33 @@
         "level.dat (dev-client only)"
       ],
       "spawn": [
-        97,
-        72,
-        -106
+        -56,
+        88,
+        -120
       ],
       "spawnYaw": 0.0,
       "dataVersion": 3955,
-      "sha256": "bf39bda5eb35c5625534aeb2390eff076baa0c982018d4a34a1146236e166050",
-      "sizeBytes": 3113828,
-      "chunkCount": 1296,
+      "sha256": "f1e7e60fc311019ea4de6500772440c342bf6c5e8c09b01c8e9f19e497f3892f",
+      "sizeBytes": 1445068,
+      "chunkCount": 676,
       "bounds": {
         "chunkMin": [
           -18,
-          -18
+          -26
         ],
         "chunkMax": [
-          17,
-          17
+          7,
+          -1
         ],
         "blockMin": [
           -288,
           0,
-          -288
+          -416
         ],
         "blockMax": [
-          287,
+          127,
           255,
-          287
+          -1
         ]
       },
       "lootManifest": "data/eclipse/xboxworlds/tu19_loot.json"
@@ -192,33 +192,33 @@
         "level.dat (dev-client only)"
       ],
       "spawn": [
-        97,
-        72,
-        -106
+        -280,
+        84,
+        264
       ],
       "spawnYaw": 0.0,
       "dataVersion": 3955,
-      "sha256": "1c4a53d26aff9ebc259aa364e53fe70e5d1820de16b33b9d7185119d85729f53",
-      "sizeBytes": 3128622,
-      "chunkCount": 1296,
+      "sha256": "94dac8ef0fa6abb63dbb722f3b871f39fff1b6cfdc97d17c25781d45f73a384a",
+      "sizeBytes": 1612988,
+      "chunkCount": 676,
       "bounds": {
         "chunkMin": [
-          -18,
-          -18
+          -27,
+          0
         ],
         "chunkMax": [
-          17,
-          17
+          -2,
+          25
         ],
         "blockMin": [
-          -288,
+          -432,
           0,
-          -288
+          0
         ],
         "blockMax": [
-          287,
+          -17,
           255,
-          287
+          415
         ]
       },
       "lootManifest": "data/eclipse/xboxworlds/tu31_loot.json"
@@ -236,33 +236,33 @@
         "level.dat (dev-client only)"
       ],
       "spawn": [
-        97,
-        72,
-        -106
+        232,
+        63,
+        -120
       ],
       "spawnYaw": 0.0,
       "dataVersion": 3955,
-      "sha256": "9b2e828bac3cbcfc3f3a8c557fcb99bf745983c7b9720c1c88e245e429f26dce",
-      "sizeBytes": 2251159,
-      "chunkCount": 900,
+      "sha256": "95fe2677721d705409182186838eb8c44eb5f0f0f916154846c0c19efd94e127",
+      "sizeBytes": 1547540,
+      "chunkCount": 676,
       "bounds": {
         "chunkMin": [
-          -15,
-          -15
+          1,
+          -20
         ],
         "chunkMax": [
-          14,
-          14
+          26,
+          5
         ],
         "blockMin": [
-          -240,
+          16,
           0,
-          -240
+          -320
         ],
         "blockMax": [
-          239,
+          431,
           255,
-          239
+          95
         ]
       },
       "lootManifest": "data/eclipse/xboxworlds/tu69_loot.json"
@@ -280,33 +280,33 @@
         "level.dat (dev-client only)"
       ],
       "spawn": [
-        97,
-        72,
-        -106
+        172,
+        75,
+        240
       ],
       "spawnYaw": 0.0,
       "dataVersion": 3955,
-      "sha256": "d066adc1d9d0661e34083d98b803b8c178ea86900bee020a88ff50b92b699882",
-      "sizeBytes": 3149082,
-      "chunkCount": 1296,
+      "sha256": "858c9834d352030f13755426598ee43ca69b505fe401714aa4586e3a6dfdf716",
+      "sizeBytes": 1857105,
+      "chunkCount": 676,
       "bounds": {
         "chunkMin": [
-          -18,
-          -18
+          0,
+          1
         ],
         "chunkMax": [
-          17,
-          17
+          25,
+          26
         ],
         "blockMin": [
-          -288,
           0,
-          -288
+          0,
+          16
         ],
         "blockMax": [
-          287,
+          415,
           255,
-          287
+          431
         ]
       },
       "lootManifest": "data/eclipse/xboxworlds/tu75_loot.json"

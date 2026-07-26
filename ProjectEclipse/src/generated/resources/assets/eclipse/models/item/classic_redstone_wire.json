@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:item/classic/redstone"
+    "layer0": "minecraft:item/redstone"
   }
 }

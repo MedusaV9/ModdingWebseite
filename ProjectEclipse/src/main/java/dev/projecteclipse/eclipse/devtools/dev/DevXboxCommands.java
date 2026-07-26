@@ -18,6 +18,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.buffs.TimedBuffApi;
+import dev.projecteclipse.eclipse.xboxevent.XboxEraProfile;
 import dev.projecteclipse.eclipse.xboxevent.XboxEventConfig;
 import dev.projecteclipse.eclipse.xboxevent.XboxEventService;
 import dev.projecteclipse.eclipse.xboxevent.XboxEventState;
@@ -62,7 +63,7 @@ public final class DevXboxCommands {
     static {
         DevCommandRegistry.register(
                 new DevCommandDoc("xboxevent.start", DevCategory.XBOX,
-                        "/dev xboxevent start (tu1|tu12|tu14) [<minutes>]",
+                        "/dev xboxevent start (tu1|tu12|tu14|tu19|tu31|tu69|tu75) [<minutes>]",
                         "dev.eclipse.doc.xboxevent.start", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("xboxevent.stop", DevCategory.XBOX,
                         "/dev xboxevent stop [now]",
@@ -220,6 +221,13 @@ public final class DevXboxCommands {
             source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.world",
                     state.worldId(), XboxEventService.mmss(state.endsAtEpochMillis() - now),
                     state.instanceId()), false);
+            // TUT2: name the era colour grade the client is running for this world, so the
+            // per-era look is verifiable from the server console, not only by eye.
+            XboxEraProfile era = XboxEraProfile.byWorldId(state.worldId());
+            if (era != null) {
+                source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.era",
+                        Component.translatable(era.look().translationKey()), era.year()), false);
+            }
         }
         source.sendSuccess(() -> Component.translatable("dev.eclipse.xbox.status.participants",
                 state.participantsSnapshot().size(),

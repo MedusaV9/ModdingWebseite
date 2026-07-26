@@ -2,7 +2,7 @@
   "parent": "minecraft:block/nether_portal_ew",
   "render_type": "minecraft:translucent",
   "textures": {
-    "particle": "eclipse:block/classic/nether_portal",
-    "portal": "eclipse:block/classic/nether_portal"
+    "particle": "minecraft:block/nether_portal",
+    "portal": "minecraft:block/nether_portal"
   }
 }

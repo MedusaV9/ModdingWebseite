@@ -1,7 +1,7 @@
 {
   "parent": "minecraft:block/cube_column",
   "textures": {
-    "end": "eclipse:block/classic/sandstone_top",
-    "side": "eclipse:block/classic/cut_sandstone"
+    "end": "minecraft:block/sandstone_top",
+    "side": "minecraft:block/cut_sandstone"
   }
 }

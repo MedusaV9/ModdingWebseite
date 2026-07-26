@@ -1,11 +1,15 @@
 """P5-W8 — Classic blocks manifest (single source of truth).
 
 Every ``eclipse:classic_*`` block ships from this list:
-  * tools/classicblocks/import_textures.py  -> bundles textures from the MIT
-    "Minecraft: Classic Edition" resource pack (Modrinth, author JS03)
   * tools/classicblocks/gen_assets.py       -> blockstates / models / item models /
     loot tables / tags / langdrop / ClassicBlockList.java
   * tools/classicblocks/validate.py         -> consistency + JSON validation
+
+TUT2: there is no texture import step any more. The bundled "retro" textures
+were deleted and the generated models point at ``minecraft:block/<name>`` /
+``minecraft:item/<name>``; only the handful of geometry sheets vanilla has no
+block texture for stay under ``eclipse:`` (see ``gen_assets.OWN_*_TEXTURES``).
+The era look is a client-side colour grade now — ``xboxevent/XboxEraProfile``.
 
 Naming scheme (FROZEN, shared with P5-W7's region baker):
   vanilla ``minecraft:<path>``  ->  ``eclipse:classic_<path>`` (same path, same

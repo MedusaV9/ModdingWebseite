@@ -2,7 +2,7 @@
   "parent": "minecraft:block/ladder",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/ladder",
-    "texture": "eclipse:block/classic/ladder"
+    "particle": "minecraft:block/ladder",
+    "texture": "minecraft:block/ladder"
   }
 }

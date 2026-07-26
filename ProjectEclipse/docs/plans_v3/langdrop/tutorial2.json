@@ -1,0 +1,19 @@
+{
+  "_note": "TUT2 — tutorial-world rework (distinct maps per era, per-era colour grade instead of the deleted retro textures, single-voice music). The era names are the archetypes in xboxevent.XboxEraProfile; the status line is the operator-side readout in /dev xboxevent status.",
+  "en_us": {
+    "eclipse.xbox.era.alpha": "Alpha look — vivid green, washed blacks",
+    "eclipse.xbox.era.beta": "Beta look — warm amber cast",
+    "eclipse.xbox.era.release_early": "Early release look — neutral, crisper contrast",
+    "eclipse.xbox.era.release_late": "Late release look — cool and clean",
+    "eclipse.xbox.era.sunset": "Console sunset look — cool dusk, almost no vignette",
+    "dev.eclipse.xbox.status.era": "Era grade: %1$s (%2$s)"
+  },
+  "de_de": {
+    "eclipse.xbox.era.alpha": "Alpha-Look — kräftiges Grün, ausgewaschene Schwarzwerte",
+    "eclipse.xbox.era.beta": "Beta-Look — warmer Bernsteinstich",
+    "eclipse.xbox.era.release_early": "Früher-Release-Look — neutral, knackigerer Kontrast",
+    "eclipse.xbox.era.release_late": "Später-Release-Look — kühl und sauber",
+    "eclipse.xbox.era.sunset": "Konsolen-Abschieds-Look — kühle Dämmerung, kaum Vignette",
+    "dev.eclipse.xbox.status.era": "Ära-Grade: %1$s (%2$s)"
+  }
+}

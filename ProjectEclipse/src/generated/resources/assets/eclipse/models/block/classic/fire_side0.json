@@ -2,6 +2,6 @@
   "parent": "minecraft:block/fire_side0",
   "render_type": "minecraft:cutout",
   "textures": {
-    "fire": "eclipse:block/classic/fire_0"
+    "fire": "minecraft:block/fire_0"
   }
 }

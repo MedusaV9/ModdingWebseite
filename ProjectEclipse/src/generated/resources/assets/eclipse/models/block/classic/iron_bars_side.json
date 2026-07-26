@@ -2,7 +2,7 @@
   "parent": "minecraft:block/template_glass_pane_side",
   "render_type": "minecraft:cutout",
   "textures": {
-    "edge": "eclipse:block/classic/iron_bars",
-    "pane": "eclipse:block/classic/iron_bars"
+    "edge": "minecraft:block/iron_bars",
+    "pane": "minecraft:block/iron_bars"
   }
 }

@@ -2,6 +2,6 @@
   "parent": "minecraft:block/template_torch",
   "render_type": "minecraft:cutout",
   "textures": {
-    "torch": "eclipse:block/classic/redstone_torch"
+    "torch": "minecraft:block/redstone_torch"
   }
 }

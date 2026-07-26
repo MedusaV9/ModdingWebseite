@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/wall_inventory",
   "textures": {
-    "wall": "eclipse:block/classic/cobblestone"
+    "wall": "minecraft:block/cobblestone"
   }
 }

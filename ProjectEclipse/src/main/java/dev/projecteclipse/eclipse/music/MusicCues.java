@@ -6,19 +6,48 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 
 /** Catalog of custom score cues and their playback policy. */
 public enum MusicCues {
     BOSS_FERRYMAN("boss_ferryman", EclipseMusicSounds.BOSS_FERRYMAN, true, 0),
-    BOSS_HERALD("boss_herald", EclipseMusicSounds.BOSS_HERALD, true, 0),
+    /**
+     * F-027: the Herald's FIGHT bed. It deliberately streams {@code music.boss_rift_warden}
+     * (A minor, grinding low strings over heavy drums) instead of its own
+     * {@code music.boss_herald} asset: that generation drifted off its "menacing march"
+     * prompt into a bright G-major fanfare (measured: spectral centroid ~1.4 kHz, only 11 %
+     * of its energy below 200 Hz, no steady pulse, 15:1 dynamic swing — the brightest,
+     * thinnest-bottomed track in the whole score), so players heard TRIUMPH the moment the
+     * boss arrived. That asset now backs {@link #HERALD_VICTORY}, where triumph belongs.
+     * Regenerating a dark {@code boss_herald.ogg} is a one-line revert here.
+     */
+    BOSS_HERALD("boss_herald", EclipseMusicSounds.BOSS_RIFT_WARDEN, true, 0),
+    /**
+     * F-027: the Herald's death sting — non-looping, fired ONCE from
+     * {@code HeraldEntity.die()} for everyone near the arena and handed back to the
+     * situation ladder after {@value Durations#HERALD_VICTORY_TICKS}t (well inside the ~143 s
+     * asset, so the ownership window can never wrap and restart the track). Streams the
+     * bright fanfare-shaped {@code music.boss_herald} asset; the finale's own
+     * {@link #VICTORY_THEME} stays reserved for the day-14 Ferryman ending.
+     */
+    HERALD_VICTORY("herald_victory", EclipseMusicSounds.BOSS_HERALD, false,
+            Durations.HERALD_VICTORY_TICKS),
     LIMBO_AMBIENCE("limbo_ambience", EclipseMusicSounds.LIMBO_AMBIENCE, true, 0, 200),
     TITLE_THEME("title_theme", EclipseMusicSounds.TITLE_THEME, true, 0),
     EXPANSION_THEME("expansion_theme", EclipseMusicSounds.EXPANSION_THEME, true, 0),
     INTRO_STORM("intro_storm", EclipseMusicSounds.INTRO_STORM, false, 3_000),
     VICTORY_THEME("victory_theme", EclipseMusicSounds.VICTORY_THEME, false, 3_600),
-    XBOX_NOSTALGIA("xbox_nostalgia", EclipseMusicSounds.XBOX_NOSTALGIA, true, 0, 100),
+    /**
+     * The tutorial-world ambience bed. TUT2 dropped its 100-tick linger: the xbox rung now
+     * asks for SILENCE for the length of one fade whenever it hands the channel over to
+     * {@link #XBOX_ERA_TRACK}, and a linger would have re-selected the bed during exactly
+     * that window — the two would have overlapped again. Nothing is lost: the only way out
+     * of an Xbox dimension is a teleport, and {@code SoundEngine.stopAll()} kills the voice
+     * on the hop regardless of any linger.
+     */
+    XBOX_NOSTALGIA("xbox_nostalgia", EclipseMusicSounds.XBOX_NOSTALGIA, true, 0),
 
     // --- Wave-4 tracks (W4-BOSSJUICE). Boss cues need no linger: MusicManager's
     // BOSS_SEEN_GRACE_MILLIS already bridges bossbar render gaps. ---
@@ -47,7 +76,33 @@ public enum MusicCues {
      */
     WAND_AWAKENING("wand_awakening", EclipseMusicSounds.WAND_AWAKENING, false, 700, 0, 0.55F),
     /** Situation rung: final-day dread bed (weakest in-world rung, MusicManager). */
-    DAY_FINAL("day_final", EclipseMusicSounds.DAY_FINAL, true, 0, 200);
+    DAY_FINAL("day_final", EclipseMusicSounds.DAY_FINAL, true, 0, 200),
+
+    /**
+     * TUT2: the C418-era in-game track inside the Xbox tutorial dimensions — a
+     * NON-LOOPING pick from the vanilla {@code eclipse:music.xbox_era} pool
+     * (calm/hal/nuance/piano). Shares the xbox situation rung with
+     * {@link #XBOX_NOSTALGIA}; {@code client.xbox.XboxEraSounds} alternates between the
+     * two and {@code MusicManager} plays whichever it asks for on the SAME single voice,
+     * so a track and the bed can never sound at once.
+     *
+     * <p>Before this cue existed the era track was streamed on a PARALLEL
+     * {@code SoundManager} channel while the bed was still fading out on the managed one
+     * — the reported "music overlaps in the tutorial worlds". No linger: the two xbox
+     * cues hand the channel over to each other, they never need to be held.</p>
+     */
+    XBOX_ERA_TRACK("xbox_era_track", EclipseSounds.MUSIC_XBOX_ERA, false, 0);
+
+    /**
+     * Named tick budgets the constants above pass to the constructor. They live in a holder
+     * because an enum constant may not forward-reference a static field of its own enum.
+     */
+    private static final class Durations {
+        /** F-027 Herald death sting ownership (~60 s), then the ladder takes the channel back. */
+        private static final int HERALD_VICTORY_TICKS = 1_200;
+
+        private Durations() {}
+    }
 
     private static final List<String> IDS =
             Arrays.stream(values()).map(MusicCues::id).toList();

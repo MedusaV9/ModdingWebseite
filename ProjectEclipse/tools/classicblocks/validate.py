@@ -264,7 +264,13 @@ def main():
         if data.get("replace") is not False:
             err(f"tag {tag}: must not replace")
         for rid in data.get("values", []):
-            if not rid.startswith(f"eclipse:{P}") or rid.split(":", 1)[1][len(P):] not in by_id:
+            # These vanilla tag files are SHARED with the rest of the mod's datagen
+            # (eclipse:amber_block, eclipse:ash_block, …). gen_assets.keep_foreign carries
+            # those entries over on every rewrite, so only OUR ids are ours to validate;
+            # flagging a sibling feature's block here just made the check unpassable.
+            if not rid.startswith(f"eclipse:{P}"):
+                continue
+            if rid.split(":", 1)[1][len(P):] not in by_id:
                 err(f"tag {tag}: unknown id {rid}")
     for b in blocks:
         rid = f"eclipse:{P}{b['id']}"

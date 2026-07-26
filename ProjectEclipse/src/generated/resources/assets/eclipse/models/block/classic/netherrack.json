@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "eclipse:block/classic/netherrack"
+    "all": "minecraft:block/netherrack"
   }
 }

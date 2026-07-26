@@ -2,6 +2,6 @@
   "parent": "minecraft:block/template_rail_raised_sw",
   "render_type": "minecraft:cutout",
   "textures": {
-    "rail": "eclipse:block/classic/detector_rail"
+    "rail": "minecraft:block/detector_rail"
   }
 }

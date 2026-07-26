@@ -2,6 +2,6 @@
   "parent": "minecraft:block/cross",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cross": "eclipse:block/classic/brown_mushroom"
+    "cross": "minecraft:block/brown_mushroom"
   }
 }

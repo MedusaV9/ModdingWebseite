@@ -1,7 +1,7 @@
 {
   "parent": "minecraft:block/cube_column",
   "textures": {
-    "end": "eclipse:block/classic/pumpkin_top",
-    "side": "eclipse:block/classic/pumpkin_side"
+    "end": "minecraft:block/pumpkin_top",
+    "side": "minecraft:block/pumpkin_side"
   }
 }

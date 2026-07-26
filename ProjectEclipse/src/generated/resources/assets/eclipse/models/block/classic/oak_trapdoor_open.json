@@ -2,6 +2,6 @@
   "parent": "minecraft:block/template_trapdoor_open",
   "render_type": "minecraft:cutout",
   "textures": {
-    "texture": "eclipse:block/classic/oak_trapdoor"
+    "texture": "minecraft:block/oak_trapdoor"
   }
 }

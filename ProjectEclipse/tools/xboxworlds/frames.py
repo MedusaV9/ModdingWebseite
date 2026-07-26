@@ -34,7 +34,11 @@ ASSETS_DIR = os.path.join(PROJECT_ROOT, "src/main/resources/assets/eclipse/xboxw
 DATA_DIR = os.path.join(PROJECT_ROOT, "src/main/resources/data/eclipse/xboxworlds")
 
 FRAMES_PER_WORLD = 8
-SEARCH_RADIUS = 32          # Chebyshev blocks around spawn
+# (Chebyshev radius, extra Y band) ladder, widened step by step until spots are
+# found — the TUT2 per-era windows drop some spawns on open ground (tu31 arrives on
+# a dune ~14 blocks above its outpost), and XboxEraWorldGameTests asserts every
+# world keeps a non-empty frames section.
+SEARCH_STEPS = ((32, 0), (64, 12), (96, 32))
 MIN_SPACING = 4             # Manhattan distance between chosen frames
 Y_BELOW, Y_ABOVE = 0, 3     # candidate band relative to spawn feet Y
 
@@ -122,11 +126,20 @@ class WorldBlocks:
 
 
 def find_spots(world: WorldBlocks, spawn: list[int]) -> list[dict]:
+    for radius, extra_y in SEARCH_STEPS:
+        spots = find_spots_within(world, spawn, radius, extra_y)
+        if spots:
+            return spots
+    return []
+
+
+def find_spots_within(world: WorldBlocks, spawn: list[int], radius: int,
+                      extra_y: int = 0) -> list[dict]:
     sx, sy, sz = spawn
     candidates = []
-    for y in range(sy - Y_BELOW, sy + Y_ABOVE + 1):
-        for dz in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-            for dx in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+    for y in range(sy - Y_BELOW - extra_y, sy + Y_ABOVE + extra_y + 1):
+        for dz in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
                 x, z = sx + dx, sz + dz
                 if world.block_id(x, y, z) not in AIR:
                     continue

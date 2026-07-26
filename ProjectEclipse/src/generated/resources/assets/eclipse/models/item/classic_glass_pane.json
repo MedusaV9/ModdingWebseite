@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:block/classic/glass"
+    "layer0": "minecraft:block/glass"
   }
 }

@@ -2,7 +2,7 @@
   "parent": "minecraft:block/vine",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/vine",
-    "vine": "eclipse:block/classic/vine"
+    "particle": "minecraft:block/vine",
+    "vine": "minecraft:block/vine"
   }
 }

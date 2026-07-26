@@ -27,11 +27,28 @@
 // of 11 s band periods (71 940 ticks), so the band phase is seamless across the wrap —
 // and Amount is already 0 under reducedFx, so the only animated term this grade ever
 // had dies there wholesale.
+//
+// v4 (TUT2): PER-ERA ROW. Everything above is the grade all seven tutorial worlds share;
+// the four uniforms below make each world's ERA readable at a glance, which is the job the
+// deleted "retro" block textures used to (badly) do. Fed by XboxEraFx from
+// xboxevent.XboxEraProfile and eased on the same 30-tick curve as Amount, so a portal hop
+// between two tutorial worlds crossfades the look:
+//   EraTint       per-channel gain applied AFTER the shared LUT — the alpha green
+//                 (0.90, 1.12, 0.86) / beta amber (1.09, 1.03, 0.84) / neutral release,
+//   EraSaturation extra saturation on top of the shared +12% lift (negative desaturates),
+//   EraContrast   contrast around 0.5 luma — the early-release "cleaner picture" beat,
+//   EraVignette   scale on the shared pillarbox + corner falloff (1.0 = the v2 strength).
+// All four are neutral at rest (1,1,1 / 0 / 1 / 1) and every term still multiplies through
+// `amount`, so the era row is a no-op the moment the dimension check releases.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
 uniform float Amount;
 uniform float Time;
+uniform vec3 EraTint;
+uniform float EraSaturation;
+uniform float EraContrast;
+uniform float EraVignette;
 
 in vec2 texCoord;
 
@@ -85,15 +102,27 @@ void main() {
             + vec3(1.020, 1.005, 0.965) * highW;
     graded *= mix(vec3(1.0), lut, amount);
 
+    // v4 ERA ROW — the per-world half of the grade (see the uniform block up top).
+    // Tint first (it rides on top of the shared LUT), then the era saturation, then the era
+    // contrast around 0.5 luma. Each is mixed in by `amount`, so all of it eases as one.
+    graded *= mix(vec3(1.0), EraTint, amount);
+    float eraLuma = dot(graded, vec3(0.299, 0.587, 0.114));
+    graded = mix(vec3(eraLuma), graded, 1.0 + EraSaturation * amount);
+    graded = (graded - 0.5) * mix(1.0, EraContrast, amount) + 0.5;
+    graded = max(graded, vec3(0.0));
+
     // 4:3-era vignette hint: shade the strips a pillarbox would sit on…
+    // (v4: the era row scales the whole falloff — the alpha worlds keep the heavy CRT frame,
+    // the late-release ones are nearly flat.)
+    float vig = amount * EraVignette;
     float side = smoothstep(0.36, 0.5, abs(texCoord.x - 0.5));
-    graded *= 1.0 - side * 0.10 * amount;
+    graded *= 1.0 - side * 0.10 * vig;
     // …plus the CRT corner falloff with a faint warm phosphor lift inside it (comfy: the
     // corners dim toward warm, never toward cold black). Still no scanlines, on purpose.
     float d = distance(texCoord, vec2(0.5));
     float corner = smoothstep(0.40, 0.90, d);
-    graded *= 1.0 - corner * 0.09 * amount;
-    graded += vec3(0.012, 0.008, 0.004) * corner * amount;
+    graded *= 1.0 - corner * 0.09 * vig;
+    graded += vec3(0.012, 0.008, 0.004) * corner * vig;
 
     // v3 rolling scan band: gaussian in wrapped frame-height distance, rolling upward
     // one frame per ~11 s. Zero-mean-ish (−0.15 floor) so average brightness holds;

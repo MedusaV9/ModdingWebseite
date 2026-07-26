@@ -2,6 +2,6 @@
   "parent": "minecraft:block/stem_growth5",
   "render_type": "minecraft:cutout",
   "textures": {
-    "stem": "eclipse:block/classic/pumpkin_stem"
+    "stem": "minecraft:block/pumpkin_stem"
   }
 }

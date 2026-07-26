@@ -2,9 +2,9 @@
   "parent": "minecraft:block/cactus",
   "render_type": "minecraft:cutout",
   "textures": {
-    "bottom": "eclipse:block/classic/cactus_bottom",
-    "particle": "eclipse:block/classic/cactus_side",
-    "side": "eclipse:block/classic/cactus_side",
-    "top": "eclipse:block/classic/cactus_top"
+    "bottom": "minecraft:block/cactus_bottom",
+    "particle": "minecraft:block/cactus_side",
+    "side": "minecraft:block/cactus_side",
+    "top": "minecraft:block/cactus_top"
   }
 }

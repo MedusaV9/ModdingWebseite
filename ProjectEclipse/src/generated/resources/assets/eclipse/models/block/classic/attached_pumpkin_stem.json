@@ -2,7 +2,7 @@
   "parent": "minecraft:block/stem_fruit",
   "render_type": "minecraft:cutout",
   "textures": {
-    "stem": "eclipse:block/classic/pumpkin_stem",
-    "upperstem": "eclipse:block/classic/attached_pumpkin_stem"
+    "stem": "minecraft:block/pumpkin_stem",
+    "upperstem": "minecraft:block/attached_pumpkin_stem"
   }
 }

@@ -2,7 +2,7 @@
   "parent": "minecraft:block/stem_fruit",
   "render_type": "minecraft:cutout",
   "textures": {
-    "stem": "eclipse:block/classic/melon_stem",
-    "upperstem": "eclipse:block/classic/attached_melon_stem"
+    "stem": "minecraft:block/melon_stem",
+    "upperstem": "minecraft:block/attached_melon_stem"
   }
 }

@@ -2,7 +2,7 @@
   "parent": "minecraft:block/lily_pad",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/lily_pad",
-    "texture": "eclipse:block/classic/lily_pad"
+    "particle": "minecraft:block/lily_pad",
+    "texture": "minecraft:block/lily_pad"
   }
 }

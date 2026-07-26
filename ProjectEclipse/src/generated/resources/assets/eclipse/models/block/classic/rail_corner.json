@@ -2,6 +2,6 @@
   "parent": "minecraft:block/rail_curved",
   "render_type": "minecraft:cutout",
   "textures": {
-    "rail": "eclipse:block/classic/rail_corner"
+    "rail": "minecraft:block/rail_corner"
   }
 }

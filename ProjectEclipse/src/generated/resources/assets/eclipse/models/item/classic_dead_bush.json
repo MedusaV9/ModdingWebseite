@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:block/classic/dead_bush"
+    "layer0": "minecraft:block/dead_bush"
   }
 }

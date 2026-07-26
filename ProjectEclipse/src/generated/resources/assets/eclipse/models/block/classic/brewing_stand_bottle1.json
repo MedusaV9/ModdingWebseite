@@ -2,7 +2,7 @@
   "parent": "minecraft:block/brewing_stand_bottle1",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/brewing_stand",
-    "stand": "eclipse:block/classic/brewing_stand"
+    "particle": "minecraft:block/brewing_stand",
+    "stand": "minecraft:block/brewing_stand"
   }
 }

@@ -2,7 +2,7 @@
   "parent": "minecraft:block/cocoa_stage0",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cocoa": "eclipse:block/classic/cocoa_stage0",
-    "particle": "eclipse:block/classic/cocoa_stage0"
+    "cocoa": "minecraft:block/cocoa_stage0",
+    "particle": "minecraft:block/cocoa_stage0"
   }
 }

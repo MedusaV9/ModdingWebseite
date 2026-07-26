@@ -2,7 +2,7 @@
   "parent": "minecraft:block/tripwire_attached_ns",
   "render_type": "minecraft:cutout",
   "textures": {
-    "particle": "eclipse:block/classic/tripwire",
-    "texture": "eclipse:block/classic/tripwire"
+    "particle": "minecraft:block/tripwire",
+    "texture": "minecraft:block/tripwire"
   }
 }

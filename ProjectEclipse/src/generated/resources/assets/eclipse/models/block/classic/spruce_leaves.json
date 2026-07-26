@@ -2,6 +2,6 @@
   "parent": "minecraft:block/leaves",
   "render_type": "minecraft:cutout_mipped",
   "textures": {
-    "all": "eclipse:block/classic/spruce_leaves"
+    "all": "minecraft:block/spruce_leaves"
   }
 }

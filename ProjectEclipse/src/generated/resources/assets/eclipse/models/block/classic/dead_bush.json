@@ -2,6 +2,6 @@
   "parent": "minecraft:block/cross",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cross": "eclipse:block/classic/dead_bush"
+    "cross": "minecraft:block/dead_bush"
   }
 }

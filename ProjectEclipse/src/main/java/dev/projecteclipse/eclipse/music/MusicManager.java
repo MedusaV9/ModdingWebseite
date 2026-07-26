@@ -246,6 +246,23 @@ public final class MusicManager {
         }
     }
 
+    /**
+     * TUT2 — dimension change / respawn. {@code Minecraft.setLevel} already ran
+     * {@code SoundEngine.stopAll()}, so every voice this manager holds is a dead reference:
+     * the engine deleted the stream but never marked the instance stopped. Dropping them here
+     * (instead of waiting out the {@value #START_GRACE_TICKS}-tick "is it active yet" grace in
+     * {@link #cleanupFinished}) guarantees the OLD cue is gone before the new dimension's cue
+     * starts, and stops {@link #transitionTo} from "resuming" a parked voice the engine can
+     * never play again — which would mute the channel for the length of that grace. Hopping
+     * between two Xbox tutorial worlds is the case that hits all three.
+     */
+    @SubscribeEvent
+    static void onClone(ClientPlayerNetworkEvent.Clone event) {
+        forceStopAll();
+        lingerCue = null;
+        lingerTicksLeft = 0;
+    }
+
     @SubscribeEvent
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         forceStopAll();
@@ -290,10 +307,13 @@ public final class MusicManager {
                 return MusicCues.EXPANSION_THEME;
             }
             if (XboxDimensions.isXboxDimension(dimension)) {
-                // C17 seam: while XboxEraSounds streams an actual C418-era vanilla track,
-                // the nostalgia bed yields the channel; it resumes in the gaps between
-                // tracks (XboxEraSounds keeps vanilla's scheduler muted meanwhile).
-                return XboxEraSounds.eraTrackPlaying() ? null : MusicCues.XBOX_NOSTALGIA;
+                // TUT2: ONE rung, two cues. XboxEraSounds is a pure scheduler now — it names
+                // the C418 era track, the nostalgia bed, or null for the silence between them,
+                // and the swap runs through transitionTo like any other. (C17 played the track
+                // on a PARALLEL SoundManager channel and returned null here, so the bed was
+                // still fading out at full-ish volume under a track that had already started —
+                // the reported tutorial-world music overlap.)
+                return XboxEraSounds.xboxCue();
             }
             // The C10 ferryman arena is limbo-styled (same sky, same dread): it shares the
             // ambience bed so spectators beyond bossbar range are not left in silence.
@@ -325,7 +345,9 @@ public final class MusicManager {
             case FOG_STORM -> 7;
             case ECLIPSE_TOTALITY -> 6;
             case EXPANSION_THEME -> 5;
-            case XBOX_NOSTALGIA -> 4;
+            // Both xbox cues share ONE rung: an equal rank makes applyLinger fall through
+            // (>= held), so the bed hands the channel to a track — and back — instantly.
+            case XBOX_NOSTALGIA, XBOX_ERA_TRACK -> 4;
             case LIMBO_AMBIENCE -> 3;
             case DAY_FINAL -> 2;
             case TITLE_THEME -> 1;
@@ -350,14 +372,6 @@ public final class MusicManager {
                         : current != null ? current.cue() : null);
         if (held == null || held.lingerTicks() <= 0
                 || situationRank(natural) >= situationRank(held)) {
-            lingerCue = null;
-            lingerTicksLeft = 0;
-            return natural;
-        }
-        // C17 seam, linger edition: the nostalgia bed yields to a STREAMING era track
-        // immediately — holding it for its linger window would double-play both (the
-        // tutorial-world music overlap). The bed still lingers across dimension exits.
-        if (held == MusicCues.XBOX_NOSTALGIA && XboxEraSounds.eraTrackPlaying()) {
             lingerCue = null;
             lingerTicksLeft = 0;
             return natural;

@@ -41,8 +41,28 @@ JAVA_LIST = os.path.join(
 P = manifest.PREFIX  # "classic_"
 
 
+# TUT2 — the imported/recreated "classic" texture set is GONE: the classic blocks
+# resolve VANILLA textures and the console-era look is carried by the per-era screen
+# filter (client/xbox/XboxEraFx). The only textures still shipped under
+# eclipse:block/classic are the geometry sheets vanilla has no block-atlas texture
+# for at all (chests, beds, signs and skulls are entity-rendered in vanilla).
+OWN_BLOCK_TEXTURES = {
+    "chest_front", "chest_side", "chest_top",
+    "ender_chest_front", "ender_chest_side", "ender_chest_top",
+    "red_bed_sheet", "sign_oak",
+    "skull_creeper", "skull_skeleton", "skull_steve", "skull_wither_skeleton", "skull_zombie",
+}
+OWN_ITEM_TEXTURES = {"red_bed"}
+
+
 def T(name):
-    return f"eclipse:block/classic/{name}"
+    return (f"eclipse:block/classic/{name}" if name in OWN_BLOCK_TEXTURES
+            else f"minecraft:block/{name}")
+
+
+def IT(name):
+    return (f"eclipse:item/classic/{name}" if name in OWN_ITEM_TEXTURES
+            else f"minecraft:item/{name}")
 
 
 def M(name):
@@ -755,13 +775,15 @@ def gen_item(b):
     if item == "none":
         return
     if isinstance(item, str) and item.startswith("generated:"):
-        ref = item.split(":", 1)[1]
+        ref = item.split(":", 1)[1]  # "block/classic/<n>" | "item/classic/<n>"
+        kind, _, name = ref.rpartition("/")
+        layer = T(name) if kind.startswith("block/") else IT(name)
         item_model(bid, {"parent": "minecraft:item/generated",
-                         "textures": {"layer0": f"eclipse:{ref}"}})
+                         "textures": {"layer0": layer}})
         return
     if item == "tall":
         item_model(bid, {"parent": "minecraft:item/generated",
-                         "textures": {"layer0": f"eclipse:item/classic/{b['tex']['item']}"}})
+                         "textures": {"layer0": IT(b["tex"]["item"])}})
         return
     if isinstance(item, str) and item.startswith("standing_wall:"):
         tx = texplan.slots_for(b)
@@ -833,8 +855,28 @@ def gen_tags():
             tags["snow"].append(rid)
     for name, values in tags.items():
         if values:
-            emit(f"data/minecraft/tags/block/{name}.json",
-                 {"replace": False, "values": values})
+            rel = f"data/minecraft/tags/block/{name}.json"
+            emit(rel, {"replace": False, "values": keep_foreign(rel, values)})
+
+
+def keep_foreign(relpath, values):
+    """Re-appends non-classic ids an existing tag file already carries.
+
+    These vanilla tag files are SHARED: other Eclipse blocks (``eclipse:amber_block``,
+    ``eclipse:cinderstone``, …) are datagen'd into the same JSONs. Rewriting them from
+    the classic manifest alone silently deleted those entries — a re-run of this script
+    would break another feature's tool tier. Anything that is not one of ours is carried
+    over verbatim, in its original order, after our block list.
+    """
+    path = os.path.join(GEN, relpath)
+    if not os.path.exists(path):
+        return values
+    with open(path, encoding="utf-8") as f:
+        existing = json.load(f).get("values", [])
+    ours = set(values)
+    foreign = [v for v in existing
+               if isinstance(v, str) and not v.startswith(f"eclipse:{P}") and v not in ours]
+    return values + foreign
 
 
 def gen_langdrop():

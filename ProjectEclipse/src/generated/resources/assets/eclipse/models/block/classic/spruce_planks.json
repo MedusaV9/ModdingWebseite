@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "eclipse:block/classic/spruce_planks"
+    "all": "minecraft:block/spruce_planks"
   }
 }

@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "eclipse:item/classic/brewing_stand"
+    "layer0": "minecraft:item/brewing_stand"
   }
 }
