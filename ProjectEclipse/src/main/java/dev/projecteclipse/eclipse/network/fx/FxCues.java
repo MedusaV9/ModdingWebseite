@@ -606,6 +606,71 @@ public final class FxCues {
     /** F-045b gate-breach wisp burst ({@code eclipse:wisp_gush}); {@code a} = gate yaw. */
     public static final ResourceLocation CUE_WISP_GUSH = cue("wisp_gush");
 
+    // F-070 wand spell VISUAL OVERHAUL cues (assets from `tools/photon/wandfx2_fx.py`,
+    // rows in the NEW client registrar `client/wand/WandFx2PhotonRows` — all Mode.LAYER
+    // garnish over the untouched Quasar/vanilla compositions in WandSpellEffects /
+    // WandPowers; refused Photon spawns change nothing).
+    /**
+     * F-070 phase-1 muzzle flash at the casting hand, fired by
+     * {@code WandPowers.castFlourish} on EVERY successful cast. {@code a} = path id
+     * ({@code WandPath.id()}), {@code b} = spell tier 1–5 — the row picks the per-path
+     * asset and tier-scales the executor so capstone casts visibly flare bigger.
+     */
+    public static final ResourceLocation CUE_WANDFX2_MUZZLE = cue("wandfx2_muzzle");
+    /**
+     * F-070 Feuerball flight comet ({@code eclipse:wandfx2_glut_comet}); pos = launch
+     * point, {@code a}/{@code b} = X/Y Euler degrees rotating the asset's local +Z onto
+     * the cast ray (the {@code heartTheftArc} aim convention).
+     */
+    public static final ResourceLocation CUE_WANDFX2_GLUT_COMET = cue("wandfx2_glut_comet");
+    /**
+     * F-070 shared GLUT detonation ({@code eclipse:wandfx2_glut_burst}) — Feuerball
+     * impact, Eruptionslinie steps, Flammenfächer mid-arc. {@code a} = blast radius in
+     * blocks (asset authored at ~3; the row scales), re-sent per step with allowMulti.
+     */
+    public static final ResourceLocation CUE_WANDFX2_GLUT_BURST = cue("wandfx2_glut_burst");
+    /**
+     * F-070 Aschesturm channel zone ({@code eclipse:wandfx2_glut_aschesturm}); ~60t ash
+     * bank baked to the authored durationTicks default. {@code a} = zone radius
+     * (authored ~6; the row scales).
+     */
+    public static final ResourceLocation CUE_WANDFX2_GLUT_ASCHESTURM = cue("wandfx2_glut_aschesturm");
+    /**
+     * F-070 Gravitationsbrunnen channel well ({@code eclipse:wandfx2_riss_well}); ~80t
+     * orbital disc baked to the authored durationTicks default. {@code a} = well radius
+     * (authored ~5; the row scales).
+     */
+    public static final ResourceLocation CUE_WANDFX2_RISS_WELL = cue("wandfx2_riss_well");
+    /**
+     * F-070 violent void crunch ({@code eclipse:wandfx2_riss_maelstrom}) — Leerensog
+     * (bite baked at +6t, matching the crunch schedule), Zugfeld's yank and the
+     * Schattenriss backstab (small). {@code a} = radius (authored ~4.5; the row scales).
+     */
+    public static final ResourceLocation CUE_WANDFX2_RISS_MAELSTROM = cue("wandfx2_riss_maelstrom");
+    /**
+     * F-070 Echoklinge sweep ({@code eclipse:wandfx2_riss_echo_blade}); ENTITY lane on
+     * the caster, re-sent per blade beat (allowMulti). {@code a} = hit radius (authored
+     * ~4.5; the row scales).
+     */
+    public static final ResourceLocation CUE_WANDFX2_RISS_ECHO_BLADE = cue("wandfx2_riss_echo_blade");
+    /**
+     * F-070 Wurzelgriff/Sternenbann binding seal ({@code eclipse:wandfx2_stern_seal});
+     * ground ring + glyph stars + root filaments. {@code a} = zone radius (authored
+     * ~4.5; the row scales).
+     */
+    public static final ResourceLocation CUE_WANDFX2_STERN_SEAL = cue("wandfx2_stern_seal");
+    /**
+     * F-070 Nova-Wächter guardian star ({@code eclipse:wandfx2_stern_guardian}); ENTITY
+     * lane on the caster, ~120t orbit baked to the authored durationTicks default.
+     * Strike beats stay the server's Quasar baseline.
+     */
+    public static final ResourceLocation CUE_WANDFX2_STERN_GUARDIAN = cue("wandfx2_stern_guardian");
+    /**
+     * F-070 Lichtsegen blessing ({@code eclipse:wandfx2_stern_bless}); ENTITY lane on
+     * the caster — descending light shafts + star-mote rain + dome breath (~40t).
+     */
+    public static final ResourceLocation CUE_WANDFX2_STERN_BLESS = cue("wandfx2_stern_bless");
+
     private FxCues() {}
 
     /** {@code eclipse:fx/cue/<name>} — use for every new registry cue id. */

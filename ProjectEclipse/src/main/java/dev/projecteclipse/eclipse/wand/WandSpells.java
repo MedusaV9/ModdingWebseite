@@ -32,6 +32,25 @@ import dev.projecteclipse.eclipse.wand.WandSpell.CastType;
  * after every rebirth); ordinals 1–9 unlock through their {@link WandTree} spell nodes.
  * Execution lives in {@code WandSpellEffects}; legacy implementations for the carried-over
  * spells stay in {@code WandPowers}.</p>
+ *
+ * <p><b>F-070 path visual identity</b> — the FX/UI color language every wand effect and
+ * screen speaks (keep in sync with the asset generator {@code tools/photon/wandfx2_fx.py},
+ * the registrars {@code client/wand/WandPhotonFxRows}/{@code WandFx2PhotonRows} and the
+ * chooser {@code client/wand/WandPathScreen}):</p>
+ * <ul>
+ *   <li><b>RISS</b> — void/glitch: deep violet {@code #7B4FD0} → glitch cyan
+ *       {@code #4FE8FF} / magenta {@code #FF4FD8}, hot white-cyan accents. Form language
+ *       is SHARP/crystalline — stretched streaks, glitch squares, implosion snaps; motion
+ *       always pulls INWARD (negative radial, orbital drag).</li>
+ *   <li><b>GLUT</b> — ember/magma: white-gold core {@code #FFE9A8} → amber
+ *       {@code #FFC873} → deep red, ash-gray residue. Form language is FLOWING/billowing
+ *       — rising embers, heat columns, smoke, bouncing physics debris; motion rolls
+ *       UPWARD and OUTWARD (gravity, collisions).</li>
+ *   <li><b>STERN</b> — starlight/marks: ice white {@code #F2F6FF} / star cyan
+ *       {@code #7FE7FF} with pale gold {@code #F7E3B0}. Form language is
+ *       RADIANT/geometric — four-point stars, rings, beams, domes; motion descends FROM
+ *       THE SKY or holds slow orbits, always twinkling.</li>
+ * </ul>
  */
 public final class WandSpells {
     private static final Map<String, WandSpell> BY_KEY = new LinkedHashMap<>();

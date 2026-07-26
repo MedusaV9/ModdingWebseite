@@ -179,7 +179,7 @@ public final class WandPowers {
         if (!WandSpellEffects.cast(player, spell, power)) {
             return; // refused (e.g. blink found no room) — no cost
         }
-        castFlourish(player, spell.path(), mainHand, power);
+        castFlourish(player, spell, mainHand, power);
         stack.set(WandItems.WAND_CHARGE.get(), charge - cost);
         EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_USE);
         WandConfig.Xp xp = WandConfig.get().xp();
@@ -347,6 +347,8 @@ public final class WandPowers {
      * Cast anticipation flash (D10): a per-path hand flourish at the casting hand, a short
      * path-voiced chirp/crackle/chime, and a barely-there caster-only camera tick. Fired on
      * every SUCCESSFUL cast so the paths read distinct before the power's own FX land.
+     * F-070 adds the {@code CUE_WANDFX2_MUZZLE} Photon layer on top (a = path id, b =
+     * spell tier — the client row tier-scales the flash).
      * Purely audiovisual — the client {@code FxBudget} caps the emitter, and the shake is a
      * 0.06-strength 5-tick impulse (well inside the reducedFx-halved budget conventions).
      *
@@ -359,8 +361,9 @@ public final class WandPowers {
      */
     private static final int HEAVY_CAST_COST = 30;
 
-    private static void castFlourish(ServerPlayer player, WandPath path, boolean mainHand,
+    private static void castFlourish(ServerPlayer player, WandSpell spell, boolean mainHand,
             WandConfig.Power power) {
+        WandPath path = spell.path();
         ServerLevel level = player.serverLevel();
         Vec3 look = player.getLookAngle();
         Vec3 flat = new Vec3(look.x, 0.0D, look.z);
@@ -369,6 +372,11 @@ public final class WandPowers {
                 : Vec3.ZERO;
         Vec3 hand = player.getEyePosition().add(look.scale(0.55D)).add(side).add(0.0D, -0.25D, 0.0D);
         sendQuasar(level, castHandEmitter(path), hand);
+        // F-070 phase-1 muzzle layer: the per-path Photon cast flash at the same hand
+        // point, tier-scaled by the row (a = path id, b = tier) so capstone casts flare
+        // visibly bigger. Pure LAYER garnish — the Quasar flourish above stays baseline.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_MUZZLE, hand,
+                path.id(), spell.tier(), FX_RANGE);
         boolean heavy = power.cost() >= HEAVY_CAST_COST;
         if (heavy) {
             // Second pop rides one tick behind, slightly above — reads as the flourish

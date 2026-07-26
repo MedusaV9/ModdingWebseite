@@ -188,6 +188,9 @@ public final class WandSpellEffects {
         pullToward(level, player, center, radius * 1.5F, pull);
         WandPowers.damageAround(player, center, radius, damage, 0.0F, 0, 0.0F, 1.0F, slowTicks, 0);
         WandPowers.sendQuasar(level, WandPowers.RISS_SCHLAG_MAW, center);
+        // F-070: Photon maelstrom layer — the yank made visible (a = radius scales it).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_RISS_MAELSTROM, center,
+                radius, 0.0F, FX_RANGE);
         WandTickService.schedule(level, 3,
                 () -> WandPowers.sendQuasar(level, WandPowers.RISS_MAW_SHIMMER, center));
         level.sendParticles(ParticleTypes.PORTAL, center.x, center.y, center.z,
@@ -257,6 +260,10 @@ public final class WandSpellEffects {
                 Vec3 center = player.position().add(0.0D, 1.0D, 0.0D);
                 WandPowers.damageAround(player, center, radius, damage, knockback, 0);
                 WandPowers.sendQuasar(level, WandPowers.RISS_WAVE_FRONT, center);
+                // F-070: Photon blade ring rides the caster per beat (entity lane;
+                // allowMulti keeps all slices alive; a = radius scales the ring).
+                FxPayloads.sendFxEntityEvent(level, FxCues.CUE_WANDFX2_RISS_ECHO_BLADE,
+                        player, radius, 0.0F, FX_RANGE);
                 level.sendParticles(ParticleTypes.SWEEP_ATTACK, center.x, center.y, center.z,
                         4, radius * 0.4D, 0.2D, radius * 0.4D, 0.0D);
                 level.playSound(null, center.x, center.y, center.z,
@@ -279,6 +286,11 @@ public final class WandSpellEffects {
         int pulseEvery = Math.max(5, (int) power.param("pulseEveryTicks", 20.0F));
 
         WandPowers.sendQuasar(level, WandPowers.RISS_SCHLAG_MAW, center);
+        // F-070: Photon well layer (orbital disc + infall, baked ~80t) and a T4 rumble
+        // for bystanders — both purely audiovisual.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_RISS_WELL, center,
+                radius, duration, FX_RANGE);
+        WandPowers.shakeNear(level, center, 18.0D, 0.12F, 6);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.PORTAL_TRIGGER,
                 SoundSource.PLAYERS, 0.7F, 0.7F);
         for (int tick = 0; tick <= duration; tick += 5) {
@@ -335,6 +347,10 @@ public final class WandSpellEffects {
         FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_OPEN, fxTo, 1.2F, 1.0F, FX_RANGE);
         WandPowers.sendQuasar(level, WandPowers.RISS_BLINK_TEAR, fxFrom);
         WandPowers.sendQuasar(level, WandPowers.RISS_BLINK_TEAR, fxTo);
+        // F-070: a SMALL Photon void crunch on the strike point — the backstab's residue
+        // (2.2 blocks; purely a layer over the rift pair above).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_RISS_MAELSTROM, fxTo,
+                2.2F, 0.0F, FX_RANGE);
         player.teleportTo(spot.x, spot.y, spot.z);
         player.resetFallDistance();
         float damage = power.param("damage", 14.0F) * WandPerks.damageMultiplier(player);
@@ -373,6 +389,10 @@ public final class WandSpellEffects {
         int slowTicks = (int) power.param("slowTicks", 80.0F);
         FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_OPEN, center, 1.6F, 1.0F, FX_RANGE);
         WandPowers.sendQuasar(level, WandPowers.RISS_SCHLAG_MAW, center);
+        // F-070: Photon maelstrom layer — the asset bakes its HDR bite at +6t, exactly
+        // the crunch tick scheduled below (a = radius scales the inhale shell).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_RISS_MAELSTROM, center,
+                radius, 0.0F, FX_RANGE);
         WandTickService.schedule(level, 2,
                 () -> WandPowers.sendQuasar(level, WandPowers.RISS_SCHLAG_MAW, center));
         pullToward(level, player, center, radius, pull);
@@ -495,6 +515,8 @@ public final class WandSpellEffects {
         }
         Vec3 mid = origin.add(flatLook.scale(range * 0.5D)).add(0.0D, -0.4D, 0.0D);
         WandPowers.sendQuasar(level, WandPowers.GLUT_STOSS_LANCE, mid);
+        // F-070: a small Photon detonation mid-arc — the fan's payoff beat (2 blocks).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_GLUT_BURST, mid, 2.0F, 0.0F, FX_RANGE);
         WandTickService.schedule(level, 4,
                 () -> WandPowers.sendQuasar(level, WandPowers.GLUT_ASH_FLAKES, mid));
         level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIRECHARGE_USE,
@@ -522,6 +544,16 @@ public final class WandSpellEffects {
         level.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIRECHARGE_USE,
                 SoundSource.PLAYERS, 0.8F, 0.9F);
         WandPowers.sendQuasar(level, WandPowers.GLUT_STOSS_LANCE, origin);
+        // F-070: Photon comet layer — streaks fly along the asset's local +Z at the
+        // shipped speed; rotate +Z onto the cast ray via the X/Y Euler pair (the
+        // heartTheftArc JOML rotationXYZ convention). The vanilla FLAME march below
+        // stays the photon-less trail baseline.
+        Vec3 aim = player.getLookAngle();
+        float cometXDeg = (float) Math.toDegrees(Math.atan2(-aim.y, aim.z));
+        float cometYDeg = (float) Math.toDegrees(
+                Math.atan2(aim.x, Math.sqrt(aim.y * aim.y + aim.z * aim.z)));
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_GLUT_COMET, origin,
+                cometXDeg, cometYDeg, FX_RANGE);
         for (int i = 1; i <= maxSteps; i++) {
             boolean lastStep = i == maxSteps;
             WandTickService.schedule(level, i, () -> {
@@ -554,6 +586,10 @@ public final class WandSpellEffects {
                 WandPowers.damageAround(player, impact, radius, damage, knockback,
                         fireSeconds * 20);
                 WandPowers.sendQuasar(level, WandPowers.GLUT_SPRUNG_CRATER, impact);
+                // F-070: Photon detonation layer — core pop + fire ring + physics
+                // ember debris (a = blast radius scales the payoff).
+                FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_GLUT_BURST, impact,
+                        radius, 0.0F, FX_RANGE);
                 WandTickService.schedule(level, 3,
                         () -> WandPowers.sendQuasar(level, WandPowers.GLUT_ASH_FLAKES, impact));
                 level.sendParticles(ParticleTypes.LAVA, impact.x, impact.y, impact.z,
@@ -582,6 +618,10 @@ public final class WandSpellEffects {
         int slowTicks = (int) power.param("slowTicks", 50.0F);
 
         WandPowers.sendQuasar(level, WandPowers.GLUT_ASH_FLAKES, center.add(0.0D, 1.2D, 0.0D));
+        // F-070: Photon ash-bank layer — billowing gusty smoke carousel + ember swirl +
+        // floor coals, baked to the authored 60t window (a = radius scales the zone).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_GLUT_ASCHESTURM, center,
+                radius, 0.0F, FX_RANGE);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.FIRE_AMBIENT,
                 SoundSource.PLAYERS, 1.0F, 0.5F);
         for (int tick = 0; tick <= duration; tick += 5) {
@@ -625,6 +665,8 @@ public final class WandSpellEffects {
         Vec3 start = player.position();
         level.playSound(null, start.x, start.y, start.z, SoundEvents.BLAZE_SHOOT,
                 SoundSource.PLAYERS, 0.9F, 0.55F);
+        // F-070: T4 bystander rumble as the line starts marching (purely audiovisual).
+        WandPowers.shakeNear(level, start, 18.0D, 0.14F, 7);
         for (int i = 1; i <= steps; i++) {
             double dist = length * i / (double) steps;
             float pitch = 0.7F + 0.12F * i;
@@ -637,6 +679,10 @@ public final class WandSpellEffects {
                 WandPowers.damageAround(player, spot.add(0.0D, 0.8D, 0.0D), radius, damage,
                         0.4F, fireTicks, knockup, 1.0F, 0, 0);
                 WandPowers.sendQuasar(level, WandPowers.GLUT_WELLE_RING, spot.add(0.0D, 0.2D, 0.0D));
+                // F-070: one Photon detonation per eruption step (allowMulti row —
+                // the staggered steps legitimately stack; a = step radius).
+                FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_GLUT_BURST,
+                        spot.add(0.0D, 0.4D, 0.0D), radius, 0.0F, FX_RANGE);
                 level.sendParticles(ParticleTypes.LAVA, x, y + 0.3D, z, 4, 0.3D, 0.2D, 0.3D, 0.0D);
                 level.sendParticles(ParticleTypes.FLAME, x, y + 0.3D, z, 10, 0.4D, 0.4D, 0.4D, 0.03D);
                 level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(),
@@ -832,6 +878,10 @@ public final class WandSpellEffects {
         WandPowers.damageAround(player, center, radius, damage, 0.0F, 0);
         WandPowers.sendQuasar(level, WandPowers.STERN_FUNKE_FALL, center.add(0.0D, 1.2D, 0.0D));
         WandPowers.groundLightRing(level, center, radius);
+        // F-070: Photon binding-seal layer — ground ring + orbiting glyph stars + root
+        // filaments of light (a = zone radius scales the seal).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_STERN_SEAL, center,
+                radius, 0.0F, FX_RANGE);
         level.sendParticles(ParticleTypes.END_ROD, center.x, center.y + 0.2D, center.z,
                 12, radius * 0.4D, 0.15D, radius * 0.4D, 0.01D);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.AMETHYST_BLOCK_CHIME,
@@ -872,6 +922,10 @@ public final class WandSpellEffects {
         }
         WandPowers.sendQuasar(level, WandPowers.STERN_FUNKE_FALL, center.add(0.0D, 1.0D, 0.0D));
         WandPowers.sendQuasar(level, WandPowers.STERN_CONSTELLATION, center);
+        // F-070: Photon blessing layer on the caster (entity lane) — descending light
+        // shafts + star-mote rain + one soft dome breath.
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_WANDFX2_STERN_BLESS, player,
+                0.0F, 0.0F, FX_RANGE);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
                 SoundSource.PLAYERS, 0.9F, 1.5F);
         level.playSound(null, center.x, center.y, center.z, SoundEvents.PLAYER_LEVELUP,
@@ -933,6 +987,11 @@ public final class WandSpellEffects {
         WandPowers.sendQuasar(level, WandPowers.STERN_SCHAUER_FIELD, center.add(0.0D, 0.6D, 0.0D));
         WandPowers.sendQuasar(level, WandPowers.STERN_CONSTELLATION, center.add(0.0D, 1.2D, 0.0D));
         WandPowers.groundLightRing(level, center, radius);
+        // F-070: the wide Photon binding seal (a = radius scales it to the 10-block
+        // zone) and a T4 bystander rumble — both purely audiovisual.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_WANDFX2_STERN_SEAL, center,
+                radius, 0.0F, FX_RANGE);
+        WandPowers.shakeNear(level, center, 20.0D, 0.14F, 7);
         WandTickService.schedule(level, 6, () -> WandPowers.groundLightRing(level, center, radius * 0.6D));
         level.playSound(null, center.x, center.y, center.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
                 SoundSource.PLAYERS, 1.0F, 0.6F);
@@ -953,6 +1012,10 @@ public final class WandSpellEffects {
 
         Vec3 start = player.position().add(0.0D, 1.4D, 0.0D);
         WandPowers.sendQuasar(level, WandPowers.STERN_CONSTELLATION, start);
+        // F-070: Photon guardian layer — ONE bright star pacing a head-height orbit on
+        // the caster for the baked ~120t window (entity lane; strikes stay Quasar).
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_WANDFX2_STERN_GUARDIAN, player,
+                duration, 0.0F, FX_RANGE);
         level.playSound(null, start.x, start.y, start.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
                 SoundSource.PLAYERS, 0.9F, 1.2F);
         for (int tick = 4; tick <= duration; tick += 4) {

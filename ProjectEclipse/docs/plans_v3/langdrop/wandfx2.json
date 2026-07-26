@@ -1,0 +1,14 @@
+{
+  "en_us": {
+    "wand.eclipse.screen.riss.lore": "Where the world tears, you walk. Space bends inward — and obeys.",
+    "wand.eclipse.screen.glut.lore": "A heartbeat of magma. Everything you touch remembers the fire.",
+    "wand.eclipse.screen.stern.lore": "The sky keeps its promises. Bind, shield, and let the stars judge.",
+    "wand.eclipse.screen.chosen": "The veil answers."
+  },
+  "de_de": {
+    "wand.eclipse.screen.riss.lore": "Wo die Welt reißt, gehst du. Der Raum krümmt sich — und gehorcht.",
+    "wand.eclipse.screen.glut.lore": "Ein Herzschlag aus Magma. Alles, was du berührst, erinnert das Feuer.",
+    "wand.eclipse.screen.stern.lore": "Der Himmel hält sein Wort. Binde, schirme — die Sterne richten.",
+    "wand.eclipse.screen.chosen": "Der Schleier antwortet."
+  }
+}
