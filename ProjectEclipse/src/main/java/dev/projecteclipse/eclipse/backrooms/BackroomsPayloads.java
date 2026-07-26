@@ -31,6 +31,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * {@code PortalTransitionController} seam pattern). The overlay owns the {@code reducedFx}
  * split — the payload itself is identical for both presentation variants.</p>
  *
+ * <p><b>Flicker</b> (F-042): {@link S2CBackroomsFlickerPayload} is fired by
+ * {@link BackroomsDread} on pursuit-proximity and on the ambient 30–90 s roll; the same
+ * installable-{@link Consumer} seam carries it to
+ * {@code client.backrooms.BackroomsFlickerOverlay}.</p>
+ *
  * <p><b>Portal transition</b>: unlike W9's xbox seam (which predated the payload), P3's
  * {@code S2CPortalFxPayload} EXISTS now, so {@link #sendPortalTransition(ServerPlayer)}
  * sends it directly with the C18 style id {@value #TRANSITION_STYLE}. Unknown style ids
@@ -48,6 +53,7 @@ public final class BackroomsPayloads {
     public static final int TRANSITION_HOLD_TICKS = 30;
 
     private static volatile Consumer<S2CJumpscarePayload> clientJumpscareHandler;
+    private static volatile Consumer<S2CBackroomsFlickerPayload> clientFlickerHandler;
 
     private BackroomsPayloads() {}
 
@@ -73,11 +79,48 @@ public final class BackroomsPayloads {
         }
     }
 
+    /**
+     * Server → client: the F-042 LIGHT FLICKER blackout pulse. Fired by
+     * {@link BackroomsDread} when a pursuer closes inside 12 blocks and on the plain
+     * 30–90 s ambient roll, to the trigger player and everyone within 16 blocks.
+     *
+     * <p>The payload carries only the envelope; the irregular dark pattern itself is
+     * derived client-side from {@code pattern}, so all recipients of one trigger see the
+     * SAME blackout without the server streaming per-pulse packets. This is deliberately
+     * a screen effect: a real blockstate blackout over a room-sized area would be a
+     * per-tick relight storm on every client in range.</p>
+     *
+     * @param durationTicks total envelope length (2–4 s)
+     * @param intensity     0..1 presentation scale (1.0 = a pursuer is on top of you)
+     * @param pattern       shared seed for the irregular pulse train
+     */
+    public record S2CBackroomsFlickerPayload(int durationTicks, float intensity, long pattern)
+            implements CustomPacketPayload {
+
+        public static final CustomPacketPayload.Type<S2CBackroomsFlickerPayload> TYPE =
+                new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(
+                        EclipseMod.MOD_ID, "backrooms/flicker"));
+
+        public static final StreamCodec<ByteBuf, S2CBackroomsFlickerPayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT, S2CBackroomsFlickerPayload::durationTicks,
+                        ByteBufCodecs.FLOAT, S2CBackroomsFlickerPayload::intensity,
+                        ByteBufCodecs.VAR_LONG, S2CBackroomsFlickerPayload::pattern,
+                        S2CBackroomsFlickerPayload::new);
+
+        @Override
+        public CustomPacketPayload.Type<S2CBackroomsFlickerPayload> type() {
+            return TYPE;
+        }
+    }
+
     @SubscribeEvent
     static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(VERSION);
         registrar.playToClient(S2CJumpscarePayload.TYPE, S2CJumpscarePayload.STREAM_CODEC,
                 BackroomsPayloads::handleJumpscare);
+        registrar.playToClient(S2CBackroomsFlickerPayload.TYPE,
+                S2CBackroomsFlickerPayload.STREAM_CODEC, BackroomsPayloads::handleFlicker);
     }
 
     private static void handleJumpscare(S2CJumpscarePayload payload, IPayloadContext context) {
@@ -86,6 +129,15 @@ public final class BackroomsPayloads {
             handler.accept(payload);
         } else {
             EclipseMod.LOGGER.debug("Jumpscare payload — no client handler installed");
+        }
+    }
+
+    private static void handleFlicker(S2CBackroomsFlickerPayload payload, IPayloadContext context) {
+        Consumer<S2CBackroomsFlickerPayload> handler = clientFlickerHandler;
+        if (handler != null) {
+            handler.accept(payload);
+        } else {
+            EclipseMod.LOGGER.debug("Backrooms flicker payload — no client handler installed");
         }
     }
 
@@ -101,8 +153,20 @@ public final class BackroomsPayloads {
                 S2CPortalFxPayload.Phase.ENTER, TRANSITION_STYLE, TRANSITION_HOLD_TICKS));
     }
 
+    /** Fires the F-042 blackout pulse on one client (see {@link BackroomsDread}). */
+    public static void sendFlicker(ServerPlayer player, int durationTicks, float intensity,
+            long pattern) {
+        PacketDistributor.sendToPlayer(player,
+                new S2CBackroomsFlickerPayload(durationTicks, intensity, pattern));
+    }
+
     /** Installed by {@code client.backrooms.JumpscareOverlay} on client class-load. */
     public static void setClientJumpscareHandler(Consumer<S2CJumpscarePayload> handler) {
         clientJumpscareHandler = handler;
+    }
+
+    /** Installed by {@code client.backrooms.BackroomsFlickerOverlay} on client class-load. */
+    public static void setClientFlickerHandler(Consumer<S2CBackroomsFlickerPayload> handler) {
+        clientFlickerHandler = handler;
     }
 }

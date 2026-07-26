@@ -32,8 +32,9 @@ import net.minecraft.world.level.levelgen.blending.Blender;
  * Chunk generator of the Backrooms dimension ({@code eclipse:backrooms}) — the
  * {@code DiscChunkGenerator} architecture applied to the layer stack: every block comes
  * from the pure {@link BackroomsLayers} terrain function (one {@link BackroomsLayers.Column}
- * context per column, then {@code stateInColumn} per Y), so the three levels — Yellow
- * Rooms, Poolrooms, Warehouse — are REAL terrain generation: infinite in X/Z, produced
+ * context per column, then {@code stateInColumn} per Y), so the five levels — Yellow
+ * Rooms, Poolrooms, Warehouse, Flooded Halls, The Hollow — are REAL terrain generation:
+ * infinite in X/Z, produced
  * as chunks load, byte-deterministic per world seed, with no stamp phase and no global
  * solver. Carvers, surface rules, vanilla features, structures and worldgen mob seeding
  * are all disabled — the maze IS the terrain. Water (pool basins, drain waterfalls,
@@ -138,9 +139,10 @@ public final class BackroomsChunkGenerator extends ChunkGenerator {
         return 0;
     }
 
+    /** Must equal {@code dimension_type/backrooms.json}'s {@code height}. */
     @Override
     public int getGenDepth() {
-        return 64;
+        return BackroomsLayers.DIM_HEIGHT;
     }
 
     @Override

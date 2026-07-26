@@ -1,8 +1,20 @@
 {
   "en_us": {
-    "eclipse.portal.announce.opening": "A portal opens near the Altar."
+    "eclipse.portal.announce.opening": "A portal opens near the Altar.",
+    "eclipse.backrooms.caption.flooded": "…level four. the water is warm and it is moving…",
+    "eclipse.backrooms.caption.hollow": "…level five. the hollow. nothing here has walls…",
+    "dev.eclipse.backrooms.tp.done": "Teleported to level %1$s (%2$s) at %3$s.",
+    "dev.eclipse.backrooms.flicker.fired": "Backrooms light flicker fired on you.",
+    "dev.eclipse.doc.backrooms.tp": "Teleports you onto one of the five Backrooms levels (yellow/pool/warehouse/flooded/hollow).",
+    "dev.eclipse.doc.backrooms.flicker": "Fires one Backrooms light-flicker blackout pulse on yourself (F-042 check)."
   },
   "de_de": {
-    "eclipse.portal.announce.opening": "Ein Portal öffnet sich in der Nähe des Altars."
+    "eclipse.portal.announce.opening": "Ein Portal öffnet sich in der Nähe des Altars.",
+    "eclipse.backrooms.caption.flooded": "…ebene vier. das wasser ist warm und es bewegt sich…",
+    "eclipse.backrooms.caption.hollow": "…ebene fünf. die höhlung. hier hat nichts mehr wände…",
+    "dev.eclipse.backrooms.tp.done": "Zu Ebene %1$s (%2$s) teleportiert, Position %3$s.",
+    "dev.eclipse.backrooms.flicker.fired": "Backrooms-Lichtflackern bei dir ausgelöst.",
+    "dev.eclipse.doc.backrooms.tp": "Teleportiert dich auf eine der fünf Backrooms-Ebenen (yellow/pool/warehouse/flooded/hollow).",
+    "dev.eclipse.doc.backrooms.flicker": "Löst einen Backrooms-Lichtflacker-Blackout bei dir selbst aus (F-042-Test)."
   }
 }

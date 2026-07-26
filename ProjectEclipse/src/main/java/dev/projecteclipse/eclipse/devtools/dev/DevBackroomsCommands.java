@@ -12,6 +12,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.backrooms.BackroomsEventService;
+import dev.projecteclipse.eclipse.backrooms.BackroomsLayers;
 import dev.projecteclipse.eclipse.backrooms.BackroomsState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -25,7 +26,9 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
  * {@code /dev backrooms …} (plans_v5 PLAN-C C18 — the {@code DevXboxCommands} shape):
- * start/stop/status, timer mutation, portal placement, per-player lockout clearing.
+ * start/stop/status, timer mutation, portal placement, per-player lockout clearing, plus
+ * the F-042/F-043 verification leaves {@code tp <layer>} (hop onto any of the five levels)
+ * and {@code flicker} (fire one blackout pulse on yourself).
  * Registers its own {@code /dev} root subtree — Brigadier merges it with the W1 root.
  * Durations share {@link DevXboxCommands#parseDurationMillis} ({@code 1h10m / 45m / 90s};
  * bare number = minutes).
@@ -52,7 +55,13 @@ public final class DevBackroomsCommands {
                         "dev.eclipse.doc.backrooms.portal", Danger.SAFE, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("backrooms.lockout.clear", DevCategory.EVENT,
                         "/dev backrooms lockout clear (<player>|all)",
-                        "dev.eclipse.doc.backrooms.lockout.clear", Danger.SAFE, ClickAction.SUGGEST, 2));
+                        "dev.eclipse.doc.backrooms.lockout.clear", Danger.SAFE, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("backrooms.tp", DevCategory.EVENT,
+                        "/dev backrooms tp (yellow|pool|warehouse|flooded|hollow)",
+                        "dev.eclipse.doc.backrooms.tp", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("backrooms.flicker", DevCategory.EVENT,
+                        "/dev backrooms flicker",
+                        "dev.eclipse.doc.backrooms.flicker", Danger.SAFE, ClickAction.RUN, 2));
     }
 
     private DevBackroomsCommands() {}
@@ -91,7 +100,20 @@ public final class DevBackroomsCommands {
                                         .then(Commands.literal("all")
                                                 .executes(DevBackroomsCommands::lockoutClearAll))
                                         .then(Commands.argument("player", GameProfileArgument.gameProfile())
-                                                .executes(DevBackroomsCommands::lockoutClearPlayer))))));
+                                                .executes(DevBackroomsCommands::lockoutClearPlayer))))
+                        .then(Commands.literal("tp")
+                                .then(layerLeaf("yellow", BackroomsLayers.Layer.YELLOW_ROOMS))
+                                .then(layerLeaf("pool", BackroomsLayers.Layer.POOLROOMS))
+                                .then(layerLeaf("warehouse", BackroomsLayers.Layer.WAREHOUSE))
+                                .then(layerLeaf("flooded", BackroomsLayers.Layer.FLOODED_HALLS))
+                                .then(layerLeaf("hollow", BackroomsLayers.Layer.THE_HOLLOW)))
+                        .then(Commands.literal("flicker")
+                                .executes(DevBackroomsCommands::flicker))));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> layerLeaf(
+            String literal, BackroomsLayers.Layer layer) {
+        return Commands.literal(literal).executes(context -> tp(context, layer));
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> timeLeaf(
@@ -196,6 +218,36 @@ public final class DevBackroomsCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.portal.removed"), true);
+        return 1;
+    }
+
+    /** F-043 verification: hop straight onto any of the five levels' walk planes. */
+    private static int tp(CommandContext<CommandSourceStack> context, BackroomsLayers.Layer layer) {
+        CommandSourceStack source = context.getSource();
+        if (!(source.getEntity() instanceof ServerPlayer operator)) {
+            source.sendFailure(Component.translatable("eclipse.backrooms.leave.player_only"));
+            return 0;
+        }
+        Component error = BackroomsEventService.devTeleport(source.getServer(), operator, layer);
+        if (error != null) {
+            source.sendFailure(error);
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.tp.done",
+                layer.level(), layer.name().toLowerCase(Locale.ROOT),
+                operator.blockPosition().toShortString()), false);
+        return 1;
+    }
+
+    /** F-042 verification: fire one light-flicker blackout pulse on the caller. */
+    private static int flicker(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        if (!(source.getEntity() instanceof ServerPlayer operator)) {
+            source.sendFailure(Component.translatable("eclipse.backrooms.leave.player_only"));
+            return 0;
+        }
+        BackroomsEventService.devFlicker(operator);
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.flicker.fired"), false);
         return 1;
     }
 
