@@ -85,11 +85,13 @@ def assign_weights(obj, regions):
         add(vi, "tail", 1.0)
 
     # Kopf + Gesicht → head (Mund-Decals → jaw für spätere Lipsync-Poses)
+    # FIX2: Hals-Blendband folgt der Kopf-Unterkante (Proportionen abgeleitet)
+    neck0 = P.HEAD_BOTTOM_Y + 0.04
     for rname in ("head", "nose", "teeth", "cheekL", "cheekR"):
         for vi in region_verts(rname):
             y = recipe_y(mesh.vertices[vi].co)
             # weicher Hals-Übergang unten am Kopf
-            t = ss((y - 0.60) / 0.10)
+            t = ss((y - neck0) / 0.12)
             add(vi, "head", t)
             add(vi, "chest", 1 - t)
     for rname in ("mouth_smile", "mouth_frown", "mouth_flat", "mouth_open"):
@@ -102,9 +104,9 @@ def assign_weights(obj, regions):
             for vi in region_verts(rname):
                 add(vi, f"eye.{side}", 1.0)
 
-    # Ohren: Blend entlang der Ohrhöhe (Pivot ~1.074 … Spitze ~1.61)
-    ear_base = 1.074
-    ear_tip = 1.62
+    # Ohren: Blend entlang der Ohrhöhe (Pivot … Spitze, aus den Params)
+    ear_base = P.EAR_BASE_Y
+    ear_tip = P.EAR_TIP_RECIPE + 0.01
     for side in ("L", "R"):
         for rname in (f"ear{side}_outer", f"ear{side}_inner"):
             for vi in region_verts(rname):
@@ -151,9 +153,8 @@ class KeyBuilder:
             ccz = P.face_surface_z(sx * P.CHEEK["x"], P.CHEEK["y"], P.CHEEK["push"])
             self.cheek_center[side] = P.to_blender(
                 P.face_local_to_recipe(sx * P.CHEEK["x"], P.CHEEK["y"], ccz))
-        self.ear_pivot_z = (P.HEAD_PIVOT_Y + P.EAR["pivot_local"][1]
-                            * P.HEAD_GRP_SCALE) * s
-        self.ear_tip_z = 1.62 * s
+        self.ear_pivot_z = P.EAR_BASE_Y * s
+        self.ear_tip_z = (P.EAR_TIP_RECIPE + 0.01) * s
         self.sunk_out = (P.MOUTH["sunk_depth"] + 0.012) * s   # Decal-Ausfahrweg
 
     def new_key(self, name):
@@ -286,7 +287,7 @@ def build_shapekeys(obj, regions):
                 t = max(0.0, (b.z - kb.ear_pivot_z) / span)
                 stretch = t * 0.25 * span
                 # Spitze folgt der Auswärts-Lehne
-                lean = 0.28 if side == "R" else -0.28
+                lean = P.EAR_LEAN if side == "R" else -P.EAR_LEAN
                 sk.data[vi].co = (b.x + lean * stretch * 0.4, b.y,
                                   b.z + stretch)
 

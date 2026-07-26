@@ -34,20 +34,16 @@ const IOS_PLUGIN_NAME := "LegacySaveReader"
 
 
 ## Liest den Legacy-Capacitor-Save (roher v4-JSON-String) oder null.
-## STUB: liefert heute nur auf iOS MIT installiertem Plugin Daten; ueberall
-## sonst (Editor, Desktop, Android, iOS ohne Plugin) → null.
+## FIX-6: liefert auf iOS jetzt auch OHNE Plugin Daten — der angekündigte
+## bplist-Fallback (Doc H §5.3) lebt in scripts/state/import/
+## legacy_capacitor.gd (Plugin zuerst, dann NSUserDefaults-Plist-Parser).
 static func read_legacy_capacitor_save() -> Variant:
 	if OS.get_name() != "iOS":
 		return null
-	if not Engine.has_singleton(IOS_PLUGIN_NAME):
-		# BACKLOG: bplist-Fallback-Parser (Doc H §5.3) landet hier.
-		return null
-	var plugin: Object = Engine.get_singleton(IOS_PLUGIN_NAME)
-	if not plugin.has_method("string_for_key"):
-		return null
-	var value: Variant = plugin.call("string_for_key", LEGACY_SAVE_KEY)
-	if value is String and not value.is_empty():
-		return value
+	var legacy := load("res://scripts/state/import/legacy_capacitor.gd")
+	var read: Dictionary = legacy.read_save_json()
+	if read["ok"]:
+		return read["json"]
 	return null
 
 

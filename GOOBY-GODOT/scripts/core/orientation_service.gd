@@ -34,18 +34,21 @@ static func classify(size: Vector2i) -> int:
 
 ## Pure Auflösung von Lock-Modus + globaler Präferenz auf die
 ## DisplayServer.ScreenOrientation (Sensor-Varianten, nie hart gelockt).
+## FIX1: „auto“ heißt QUERFORMAT — das Spiel ist landscape-first
+## (project.godot handheld/orientation=4); Hochkant gibt es nur per
+## explizitem Minigame-Lock oder wenn der User es in den Settings wählt.
 static func resolve_screen_orientation(lock_mode: int, global_mode: String) -> int:
 	if lock_mode == LockMode.LANDSCAPE:
 		return DisplayServer.SCREEN_SENSOR_LANDSCAPE
 	if lock_mode == LockMode.PORTRAIT:
 		return DisplayServer.SCREEN_SENSOR_PORTRAIT
 	match global_mode:
-		"landscape":
-			return DisplayServer.SCREEN_SENSOR_LANDSCAPE
 		"portrait":
 			return DisplayServer.SCREEN_SENSOR_PORTRAIT
-		_:
+		"sensor":
 			return DisplayServer.SCREEN_SENSOR
+		_:
+			return DisplayServer.SCREEN_SENSOR_LANDSCAPE
 
 
 func get_orientation() -> int:

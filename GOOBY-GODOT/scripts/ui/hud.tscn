@@ -98,7 +98,7 @@ grow_vertical = 0
 mouse_filter = 2
 script = ExtResource("3_arc")
 
-[node name="LandscapeColumn" type="VBoxContainer" parent="."]
+[node name="LandscapeColumn" type="GridContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -112,8 +112,9 @@ offset_right = -16.0
 offset_bottom = -16.0
 grow_horizontal = 0
 grow_vertical = 2
-theme_override_constants/separation = 10
-alignment = 1
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 1
 mouse_filter = 2
 
 [node name="EyeButton" type="Button" parent="."]

@@ -22,12 +22,22 @@ const REBAKE_DEBOUNCE_S := 0.5
 const FENSTER_Y0 := 1.28
 const FENSTER_Y1 := 2.3
 
+## Deko-GLBs (FIX-3) je Raum auf der Fensterbank: [Unterpfad, Zielhöhe m].
+const FENSTERBANK_DEKO := {
+	"living": [["pflanzen/sansevieria_plant_small_potted", 0.26]],
+	"kitchen": [["kueche/kettle", 0.2], ["kueche/mug_red", 0.09]],
+	"bathroom": [["bad/ducky", 0.12], ["bad/soap_dish_pink", 0.05]],
+	"bedroom": [["pflanzen/sansevieria_plant_small_potted", 0.22]],
+}
+
 @export var room_id := "living"
 
 ## Tests injizieren hier ein frisches GameState (statt /root/GameState).
 var game_state_override: Object = null
 ## Tests/Screenshots erzwingen eine Uhrzeit (< 0 = echte Systemzeit).
 var stunde_override := -1.0
+## Tests erzwingen die Tür-Bestätigung (-1 = AppSettings entscheidet).
+var tuer_confirm_override := -1
 var grid: GridData
 
 var _room_def: Dictionary = {}
@@ -44,6 +54,7 @@ var _wall_mount: Node3D
 var _overlay: GridOverlay
 var _camera_rig: HomeCameraRig
 var _build_mode: BuildMode
+var _skyline: CitySkyline
 var _ui_layer: CanvasLayer
 var _bubble: DialogBubble
 var _choice: Control
@@ -63,11 +74,13 @@ func _ready() -> void:
 	_load_grid()
 	_build_environment()
 	_build_nav_and_floor()
+	_build_boden_deko()
 	_build_walls()
 	_build_doors()
 	_build_grid_mount()
 	rebuild_furniture()
 	_build_camera()
+	_build_skyline()
 	_build_ui()
 	_spawn_gooby()
 	# Garten 2.0 (Doc D §6): Beete/Bauten/Sammel-Spots liegen NICHT im
@@ -169,6 +182,8 @@ func rebuild_furniture() -> void:
 
 ## Fenster-Dioramen (Doc D §1.2): pro Außenwand höchstens eins, und nur
 ## solange dort wirklich ein Fenster hängt — nach jedem Bau-Commit neu.
+## Im Baumodus bleiben sie versteckt (FIX-3): dort übernimmt die
+## CitySkyline-Kulisse, sonst stünden zwei Straßen übereinander.
 func _rebuild_dioramas() -> void:
 	for diorama: Variant in _dioramas.values():
 		if is_instance_valid(diorama) and diorama is Node:
@@ -180,7 +195,14 @@ func _rebuild_dioramas() -> void:
 			self, grid, _world_size(), wall, str(exterior[wall])
 		)
 		if diorama != null:
+			diorama.visible = not is_build_mode_active()
 			_dioramas[wall] = diorama
+
+
+func _set_dioramas_visible(dioramas_visible: bool) -> void:
+	for diorama: Variant in _dioramas.values():
+		if is_instance_valid(diorama) and diorama is Node3D:
+			(diorama as Node3D).visible = dioramas_visible
 
 
 ## Navmesh-Rebake, debounced (Doc F §7). Synchron gebaked (Räume sind klein;
@@ -339,6 +361,50 @@ func _build_nav_and_floor() -> void:
 	_nav_region.add_child(_blockers)
 
 
+## Dielen-/Fliesenfugen (FIX-3, User: „nur Primitives"): EIN MultiMesh aus
+## dunkleren Fugenstreifen macht aus der flachen Farbplatte einen Boden.
+## Hängt bewusst NICHT unter der NavRegion (würde sonst mitgebaked).
+## Innenräume: Küche/Bad = Fliesen (beide Richtungen), sonst Dielen.
+func _build_boden_deko() -> void:
+	if _is_outdoor():
+		return
+	var size := _world_size()
+	var fliesen := room_id == "kitchen" or room_id == "bathroom"
+	var fugen_farbe: Color = (_room_def["floor_color"] as Color).darkened(0.22)
+	var transforms: Array[Transform3D] = []
+	var schritt := 0.5 if fliesen else 0.66
+	var z := schritt
+	while z < size.y - 0.01:
+		var basis := Basis.from_scale(Vector3(size.x, 1.0, 1.0))
+		transforms.append(Transform3D(basis, Vector3(size.x * 0.5, 0.004, z)))
+		z += schritt
+	if fliesen:
+		var x := schritt
+		while x < size.x - 0.01:
+			# Lokal skalieren, DANN drehen — sonst streckt die Skalierung
+			# die falsche Weltachse.
+			var basis := Basis(Vector3.UP, PI * 0.5) * Basis.from_scale(Vector3(size.y, 1.0, 1.0))
+			transforms.append(Transform3D(basis, Vector3(x, 0.004, size.y * 0.5)))
+			x += schritt
+	var streifen := BoxMesh.new()
+	streifen.size = Vector3(1.0, 0.006, 0.018)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = fugen_farbe
+	mat.roughness = 1.0
+	streifen.material = mat
+	var multi := MultiMesh.new()
+	multi.transform_format = MultiMesh.TRANSFORM_3D
+	multi.mesh = streifen
+	multi.instance_count = transforms.size()
+	for i in transforms.size():
+		multi.set_instance_transform(i, transforms[i])
+	var instanz := MultiMeshInstance3D.new()
+	instanz.name = "BodenFugen"
+	instanz.multimesh = multi
+	instanz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(instanz)
+
+
 func _build_walls() -> void:
 	if _wall_mount != null:
 		# Erst umbenennen, sonst bekommt der neue Mount einen Suffix-Namen
@@ -359,6 +425,7 @@ func _build_walls() -> void:
 	for window: Dictionary in _room_def.get("windows", []):
 		if not _fenster_verdeckt(window):
 			_build_window(window)
+	_build_wandbord()
 
 
 ## Wand aus Segmenten: Türen und Außenfenster lassen jeweils eine Öffnung
@@ -453,7 +520,32 @@ func _add_wall_box(wall: String, from: int, to: int, y0: float, y1: float) -> vo
 		"E":
 			mesh.position = Vector3(size.x + WALL_THICKNESS * 0.5, y, mid)
 	mesh.name = "Wall_%s_%d_%d_%d" % [wall, from, to, int(y0 * 100.0)]
+	# Sockelleiste (FIX-3, User: „richtige Assets") an jedem Wandfuß innen —
+	# als Kind des Wandsegments, damit sie Tür-/Fenster-Rebuilds mitmacht.
+	if y0 == 0.0 and not _is_outdoor():
+		mesh.add_child(_sockelleiste(wall, along_x, length, y0, y1))
 	_wall_mount.add_child(mesh)
+
+
+func _sockelleiste(wall: String, along_x: bool, length: float, y0: float, y1: float) -> Node3D:
+	var leiste := MeshInstance3D.new()
+	leiste.name = "Sockel"
+	var box := BoxMesh.new()
+	box.size = Vector3(length, 0.09, 0.035) if along_x else Vector3(0.035, 0.09, length)
+	leiste.mesh = box
+	leiste.material_override = _flat_material(Color(0.97, 0.94, 0.88))
+	var innen := (WALL_THICKNESS + 0.035) * 0.5
+	var lokal_y := -(y0 + y1) * 0.5 + 0.045
+	match wall:
+		"N":
+			leiste.position = Vector3(0.0, lokal_y, innen)
+		"S":
+			leiste.position = Vector3(0.0, lokal_y, -innen)
+		"W":
+			leiste.position = Vector3(innen, lokal_y, 0.0)
+		"E":
+			leiste.position = Vector3(-innen, lokal_y, 0.0)
+	return leiste
 
 
 ## Fenster-Platzhalter: heller Emissive-Quad AUF der Wand (Doc D §1.2 —
@@ -496,7 +588,71 @@ func _build_window(window: Dictionary) -> void:
 	frame.material_override = _flat_material(Color(0.95, 0.9, 0.82))
 	frame.position = Vector3(0.0, 0.0, -0.03)
 	mesh.add_child(frame)
+	_build_fensterbank(mesh, width)
 	_wall_mount.add_child(mesh)
+
+
+## Fensterbank + Tiny-Treats-Deko (FIX-3): lokal +z zeigt nach der Rotation
+## des Fenster-Nodes immer in den Raum.
+func _build_fensterbank(fenster: Node3D, width: float) -> void:
+	var bank := MeshInstance3D.new()
+	bank.name = "Fensterbank"
+	var box := BoxMesh.new()
+	box.size = Vector3(width + 0.14, 0.05, 0.2)
+	bank.mesh = box
+	bank.material_override = _flat_material(Color(0.97, 0.94, 0.88))
+	bank.position = Vector3(0.0, -0.5, 0.07)
+	fenster.add_child(bank)
+	var eintraege: Array = FENSTERBANK_DEKO.get(room_id, [])
+	for i in eintraege.size():
+		var eintrag: Array = eintraege[i]
+		var deko := HomeProps.deko_glb(str(eintrag[0]), float(eintrag[1]))
+		if deko == null:
+			continue
+		var x := 0.0 if eintraege.size() == 1 else (-width * 0.22 + i * width * 0.44)
+		deko.position = Vector3(x, -0.475, 0.07)
+		fenster.add_child(deko)
+
+
+## Wandbord mit Küchen-/Bad-Deko (Tiny Treats) an der Nordwand.
+func _build_wandbord() -> void:
+	var bord_def: Dictionary = (
+		{
+			"kitchen":
+			{
+				"von": 0.5,
+				"bis": 1.7,
+				"hoehe": 1.6,
+				"items": [["kueche/pot", 0.16], ["kueche/pan", 0.1]]
+			},
+			"bathroom":
+			{"von": 0.6, "bis": 1.6, "hoehe": 1.5, "items": [["bad/toilet_roll_holder", 0.13]]},
+		}
+		. get(room_id, {})
+	)
+	if bord_def.is_empty():
+		return
+	var von := float(bord_def["von"])
+	var bis := float(bord_def["bis"])
+	var mitte := (von + bis) * 0.5
+	var brett := MeshInstance3D.new()
+	brett.name = "Wandbord"
+	var box := BoxMesh.new()
+	box.size = Vector3(bis - von, 0.045, 0.22)
+	brett.mesh = box
+	brett.material_override = _flat_material(Color("#B98D62"))
+	brett.position = Vector3(mitte, float(bord_def["hoehe"]), WALL_THICKNESS * 0.5 + 0.11)
+	_wall_mount.add_child(brett)
+	var items: Array = bord_def["items"]
+	for i in items.size():
+		var eintrag: Array = items[i]
+		var deko := HomeProps.deko_glb(str(eintrag[0]), float(eintrag[1]))
+		if deko == null:
+			continue
+		var breite := bis - von
+		var x := mitte if items.size() == 1 else (von + (i + 0.5) * breite / items.size())
+		deko.position = Vector3(x, float(bord_def["hoehe"]) + 0.025, WALL_THICKNESS * 0.5 + 0.11)
+		_wall_mount.add_child(deko)
 
 
 func _build_doors() -> void:
@@ -528,6 +684,15 @@ func _build_camera() -> void:
 	_camera_rig.name = "CameraRig"
 	add_child(_camera_rig)
 	_camera_rig.setup(_world_size())
+
+
+## Stadt-Kulisse (FIX-3): schläft außerhalb des Baumodus komplett.
+func _build_skyline() -> void:
+	_skyline = CitySkyline.attach_to(self, _world_size(), room_id.hash())
+
+
+func skyline() -> CitySkyline:
+	return _skyline
 
 
 func _build_ui() -> void:
@@ -609,11 +774,75 @@ func _on_door_tapped(door_id: String) -> void:
 	if not grid.is_zone_reachable(_gooby.current_cell(), zone):
 		_blocked_flow()
 		return
+	# FIX-3 (User-Wunsch): kurze Bestätigung vor der Tür-Reise — in den
+	# Einstellungen abschaltbar (AppSettings door_confirmation, Default an).
+	if _door_confirm_enabled():
+		_show_door_confirm(door)
+		return
+	_start_door_travel(door)
+
+
+func _start_door_travel(door: DoorTransition) -> void:
 	var router := get_node_or_null("/root/SceneRouter")
 	if router != null:
 		router.preload_target(RoomDefs.route_target(door.target_room))
 	_gooby.set_wander_enabled(false)
 	door.travel(_gooby, _ui_layer)
+
+
+func _door_confirm_enabled() -> bool:
+	if tuer_confirm_override >= 0:
+		return tuer_confirm_override == 1
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_door_confirmation_enabled()
+
+
+## Bestätigungs-Karte („In die Küche?" / „Nach draußen gehen?") — nutzt den
+## _choice-Slot, damit Tür-Taps währenddessen gesperrt sind (wie beim
+## Blockade-Gag).
+func _show_door_confirm(door: DoorTransition) -> void:
+	var ziel := RoomDefs.room(door.target_room)
+	var frage := I18nService.t("home.tuer.confirm_draussen")
+	if not bool(ziel.get("outdoor", false)):
+		var raum_name := I18nService.t(str(ziel.get("name_key", "")))
+		frage = I18nService.t("home.tuer.confirm_raum", {"raum": raum_name})
+	_choice = PanelContainer.new()
+	_choice.name = "TuerConfirm"
+	_choice.theme = ThemeService.theme()
+	_choice.theme_type_variation = "AcCard"
+	_choice.set_anchors_preset(Control.PRESET_CENTER)
+	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_choice.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	_choice.add_child(box)
+	var label := Label.new()
+	label.text = frage
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(label)
+	var reihe := HBoxContainer.new()
+	reihe.add_theme_constant_override("separation", 10)
+	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(reihe)
+	var ja := Button.new()
+	ja.text = I18nService.t("home.tuer.confirm_ja")
+	ja.theme_type_variation = "PrimaryButton"
+	ja.pressed.connect(_on_door_confirm.bind(door, true))
+	reihe.add_child(ja)
+	var nein := Button.new()
+	nein.text = I18nService.t("home.tuer.confirm_nein")
+	nein.theme_type_variation = "GhostButton"
+	nein.pressed.connect(_on_door_confirm.bind(door, false))
+	reihe.add_child(nein)
+	_ui_layer.add_child(_choice)
+
+
+func _on_door_confirm(door: DoorTransition, bestaetigt: bool) -> void:
+	if _choice != null:
+		_choice.queue_free()
+		_choice = null
+	if bestaetigt:
+		_start_door_travel(door)
 
 
 ## Doc F §6: Beschwerde-Bubble + Choice „Ich baue um“ / „BODEN IST LAVA“.
@@ -661,6 +890,9 @@ func _spidergooby_flow() -> void:
 
 func _on_build_opened() -> void:
 	build_mode_toggled.emit(true)
+	if _skyline != null:
+		_skyline.set_aktiv(true)
+	_set_dioramas_visible(false)
 	_gooby.set_wander_enabled(false)
 	_gooby.rig.play_clip("sit")
 	say(I18nService.t("home.gooby.watch"))
@@ -668,6 +900,9 @@ func _on_build_opened() -> void:
 
 func _on_build_closed() -> void:
 	build_mode_toggled.emit(false)
+	if _skyline != null:
+		_skyline.set_aktiv(false)
+	_set_dioramas_visible(true)
 	_gooby.rig.play_clip("idle")
 	_gooby.set_wander_enabled(true)
 

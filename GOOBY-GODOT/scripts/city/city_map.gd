@@ -170,8 +170,33 @@ func zuhause_tile() -> Vector2i:
 	return _tile_von(daten.get("zuhause", {}).get("tile", [9, 2]))
 
 
-func zuhause_strasse() -> Vector2i:
+func _zuhause_strasse() -> Vector2i:
 	return _tile_von(daten.get("zuhause", {}).get("strasse", [9, 1]))
+
+
+## Hausausfahrt des Spielerhauses (FIX-5 „Fahrt startet am eigenen Haus"):
+## Parkposition in der Einfahrt (zwischen Bordstein und Hausfassade), Blick
+## zur Haustür, plus Ziel-Fahrtrichtung fürs Rückwärts-Ausparken auf die
+## Straße. `einfahrt_m` steht in der Karte (Abstand von der Straßenmitte).
+func zuhause_einfahrt() -> Dictionary:
+	var strasse := tile_zu_welt(_zuhause_strasse())
+	var haus := tile_zu_welt(zuhause_tile())
+	var richtung := (haus - strasse).normalized()
+	if richtung.length_squared() < 0.5:
+		richtung = Vector3.RIGHT
+	var abstand := float(daten.get("zuhause", {}).get("einfahrt_m", 11.5))
+	# Straße läuft quer zur Einfahrt; als Ausparkziel nehmen wir die
+	# Fahrtrichtung, die das Heading-Plus des Rückwärtsgangs erreicht.
+	var quer := Vector3(richtung.z, 0.0, -richtung.x)
+	var start_heading := atan2(richtung.x, richtung.z)
+	return {
+		"pos": strasse + richtung * abstand,
+		"richtung_haus": richtung,
+		"strasse_pos": strasse,
+		"strasse_tile": _zuhause_strasse(),
+		"heading": start_heading,
+		"ziel_heading": CityCarFeel.wrap_angle(atan2(quer.x, quer.z)),
+	}
 
 
 ## Parkplatz-Trigger-Position eines Orts: Ort-Tile-Mitte, um trigger_offset_m
@@ -179,7 +204,7 @@ func zuhause_strasse() -> Vector2i:
 func parkplatz_welt(ort_id: String) -> Vector3:
 	var eintrag: Dictionary = ort(ort_id) if ort_id != "zuhause" else {}
 	var tile := zuhause_tile()
-	var strasse := zuhause_strasse()
+	var strasse := _zuhause_strasse()
 	if not eintrag.is_empty():
 		tile = _tile_von(eintrag.get("tiles", [[0, 0]])[0])
 		strasse = _tile_von(eintrag.get("strasse", [0, 0]))
@@ -223,7 +248,7 @@ func validieren() -> Array[String]:
 			var tile := _tile_von(tile_raw)
 			if ist_strasse(tile):
 				fehler.append("%s: Ort-Tile %s liegt auf einer Straße" % [id, tile])
-	if not ist_strasse(zuhause_strasse()):
+	if not ist_strasse(_zuhause_strasse()):
 		fehler.append("zuhause: strasse ist keine Straße")
 	return fehler
 

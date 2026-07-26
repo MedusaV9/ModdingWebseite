@@ -1,11 +1,15 @@
 class_name CityScene
 extends Node3D
 ## Stadt-Szene (W3a CITY, Doc E §1): baut die komplette Stadt PROZEDURAL aus
-## city_map.json (Kenney-Kits nach Karte, Muster cityBuilder.js): Straßen aus
-## Nachbarschaft, Orte mit Fassaden-Tint + Markise + Parkplatz-Trigger,
-## Deko-Gebäude, geseedete Bäume (Seed variiert NUR Deko), Tageszeit-Licht,
-## 3 Ambient-Loop-Autos. FREIE FAHRT: Energie-Abzug ERST beim Betreten eines
-## Orts; „Nach Hause“ ist IMMER kostenlos.
+## city_map.json (Kenney-Kits nach Karte, Muster cityBuilder.js) — seit FIX-5
+## („Die Stadt ist leer") DICHT: CityKulisse füllt jeden freien Block mit
+## Häuserzeilen, Vorgärten, Park, Straßenmöblierung und Bordstein-Parkern,
+## alles als MultiMesh-Gruppen (Draw-Call-Budget ≤ 400 in der Stadtansicht).
+## Verkehr hält an Ampeln (CityVerkehr), Fußgänger-Goobys machen
+## Schaufenster-Pausen (CityFussgaenger), nachts leuchten Fenster/Laternen/
+## Schilder und die Ampeln blinken gelb. FREIE FAHRT: Energie-Abzug ERST beim
+## Betreten eines Orts; „Nach Hause" ist IMMER kostenlos. Die Fahrt startet
+## in der EIGENEN Hausausfahrt (Rückwärts-Ausparken, CityAusparken).
 ##
 ## Router-Contract (W1a): `ready_for_reveal` nach dem Aufbau;
 ## `receive_params({"spawn": "zuhause"|"<ort_id>"})`. Tests injizieren
@@ -14,22 +18,12 @@ extends Node3D
 signal ready_for_reveal
 signal ort_betreten_angefordert(ort_id: String)
 
-const ASSETS := "res://assets/city"
 const ROUTE_CITY := &"city"
 const GOOBY_GLB := "res://assets/character/gooby.glb"
-## Fußgänger: so viele Goobys schlendern durch die Stadt …
-const FUSSGAENGER_ANZAHL := 5
-## … in dieser Größe (Gooby-GLB ist ~1 m; Kenney-Autos stehen auf 1,8).
+## Fußgänger-Skalierung (Gooby-GLB ist ~1 m; Kenney-Autos stehen auf 1,8).
 const FUSSGAENGER_SCALE := 1.6
-
-## Distrikt-Grundfarben für Boden-Pads unter den Vierteln (dezent).
-const DISTRIKT_FARBEN := {
-	"gewerbe": Color(0.82, 0.80, 0.74),
-	"zentrum": Color(0.85, 0.81, 0.72),
-	"wohnen": Color(0.78, 0.82, 0.70),
-	"park": Color(0.62, 0.78, 0.55),
-	"flughafen": Color(0.80, 0.80, 0.82),
-}
+## Verkehrs-Tints (jedes 2. Loop-Auto bekommt eine eigene Lackfarbe).
+const VERKEHR_TINTS: Array[String] = ["#E8524A", "#4E79D6", "#F2C14E", "#8FD06C", "#B58CE4"]
 
 var game_state_override: Object
 ## Tests/Screenshots erzwingen eine Uhrzeit (< 0 = echte Systemzeit).
@@ -44,27 +38,37 @@ var hud: DriveHud
 var _verkehr: Array[Dictionary] = []
 var _prompt_ort := ""
 var _toast: Node
-var _colliders: Array[Dictionary] = []
 var _licht_profil: Dictionary = {}
 var _sfx_timer := 6.0
 var _fussgaenger: Array[Dictionary] = []
 var _fuss_zeit := 0.0
 var _near_miss_sperre := 0.0
+var _ausparken: CityAusparken
+
+## Statik-Bauer (CityBau): baut Kulisse/Orte/Ampeln, hält Collider + Ampel-
+## MultiMesh; CityScene behält NUR Gameplay (Auto/Verkehr/Fußgänger/HUD).
+var _bau: CityBau
+var _ampel_zeit := 0.0
+var _ampel_farben := [Color.BLACK, Color.BLACK]
 
 
 func _ready() -> void:
 	karte = CityMap.laden()
 	graph = CityRoadGraph.aus_karte(karte)
 	_licht_profil = CityAmbiente.licht_profil(_stunde())
-	_baue_licht()
-	_baue_boden()
-	_baue_strassen()
-	_baue_laternen()
-	_baue_orte()
-	_baue_deko()
-	_baue_natur()
+	_bau = CityBau.new(self, karte, _licht_profil)
+	_bau.baue_licht()
+	_bau.baue_boden()
+	_bau.baue_strassen()
+	_bau.baue_laternen()
+	_bau.baue_orte()
+	_bau.baue_deko()
+	_bau.baue_kulisse()
+	_bau.baue_ampeln()
+	_bau.baue_fenster()
 	_baue_verkehr()
 	_baue_fussgaenger()
+	_bau.baue_voegel(leben_reduziert())
 	_baue_auto()
 	_baue_hud()
 	ready_for_reveal.emit()
@@ -73,11 +77,14 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_update_verkehr(delta)
 	_update_fussgaenger(delta)
+	_update_ampeln(delta)
+	_bau.tick(delta)
 	_update_ambient_sfx(delta)
 	_update_minimap()
 
 
 func _physics_process(_delta: float) -> void:
+	_update_ausparken()
 	_update_parkplatz()
 
 
@@ -110,6 +117,13 @@ func now_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000.0)
 
 
+## „Leben reduzieren" (schwache Geräte): halber Verkehr, halbe Fußgänger,
+## keine Vögel — über den City-Slice schaltbar, Default AUS.
+func leben_reduziert() -> bool:
+	var gs := game_state()
+	return gs != null and bool(gs.get_value("city.lebenReduziert", false))
+
+
 ## ---------------------------------------------------------------- Aufbau
 
 
@@ -121,319 +135,67 @@ func _stunde() -> float:
 	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
 
 
-## Tag/Nacht-Licht (W4-P3 POLISH-8): komplette 24-h-Kurve aus CityAmbiente
-## — nachts fahler Mond, dunkler Himmel, Laternen + Autolichter an.
-func _baue_licht() -> void:
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = _licht_profil["himmel_oben"]
-	sky_mat.sky_horizon_color = _licht_profil["himmel_horizont"]
-	# Boden-Hemisphäre grünlich statt dunkelbraun — sonst steht am Rand der
-	# endlichen Bodenplatte ein dunkler Horizont-Balken.
-	sky_mat.ground_horizon_color = _licht_profil["boden_horizont"]
-	sky_mat.ground_bottom_color = _licht_profil["boden_unten"]
-	sky.sky_material = sky_mat
-	e.background_mode = Environment.BG_SKY
-	e.sky = sky
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = _licht_profil["ambient_energie"]
-	env.environment = e
-	add_child(env)
-	var sonne := DirectionalLight3D.new()
-	sonne.name = "Sonne"
-	sonne.shadow_enabled = true
-	sonne.rotation_degrees = Vector3(-float(_licht_profil["elevation"]), -35.0, 0.0)
-	sonne.light_color = _licht_profil["sonnen_farbe"]
-	sonne.light_energy = _licht_profil["sonnen_energie"]
-	add_child(sonne)
-
-
-func _baue_boden() -> void:
-	var boden := MeshInstance3D.new()
-	boden.name = "Boden"
-	var mesh := PlaneMesh.new()
-	var halb := karte.welt_halb()
-	mesh.size = Vector2(halb.x * 2.0 + 80.0, halb.y * 2.0 + 80.0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.55, 0.72, 0.45)
-	mesh.material = mat
-	boden.mesh = mesh
-	add_child(boden)
-	# Dezente Distrikt-Pads unter den Vierteln
-	for name: String in karte.daten.get("distrikte", {}):
-		for zone: Array in karte.daten["distrikte"][name].get("zonen", []):
-			var pad := MeshInstance3D.new()
-			var pm := PlaneMesh.new()
-			var breite := (float(zone[3]) - float(zone[1]) + 1.0) * karte.tile_m
-			var tiefe := (float(zone[2]) - float(zone[0]) + 1.0) * karte.tile_m
-			pm.size = Vector2(breite, tiefe)
-			var pmat := StandardMaterial3D.new()
-			pmat.albedo_color = DISTRIKT_FARBEN.get(name, Color(0.8, 0.8, 0.8))
-			pm.material = pmat
-			pad.mesh = pm
-			pad.position = karte.welt_von(
-				(float(zone[0]) + float(zone[2])) / 2.0, (float(zone[1]) + float(zone[3])) / 2.0
-			)
-			pad.position.y = 0.05
-			add_child(pad)
-
-
-func _baue_strassen() -> void:
-	var wurzel := Node3D.new()
-	wurzel.name = "Strassen"
-	add_child(wurzel)
-	for tile in karte.strassen_tiles():
-		var glb: String
-		var rot := 0
-		if karte.ist_kreisel(tile):
-			glb = "road-roundabout"
-		else:
-			var stueck := CityMap.road_piece_for(
-				karte.ist_strasse(tile + Vector2i(-1, 0)),
-				karte.ist_strasse(tile + Vector2i(0, 1)),
-				karte.ist_strasse(tile + Vector2i(1, 0)),
-				karte.ist_strasse(tile + Vector2i(0, -1))
-			)
-			glb = str(stueck["piece"])
-			rot = int(stueck["rot_grad"])
-		var node := _glb("%s/strassen/%s.glb" % [ASSETS, glb], karte.tile_m)
-		if node != null:
-			node.position = karte.tile_zu_welt(tile)
-			node.rotation_degrees.y = rot
-			wurzel.add_child(node)
-
-
-## Straßenlaternen (W4-P3 POLISH-8): deterministisch auf jedem 3. Straßen-
-## Tile (Kenney streetlight); bei Dämmerung/Nacht kriegt der Kopf eine
-## warme Emissiv-Birne. Bewusst OHNE echte OmniLights (Mobile-Budget A §7).
-func _baue_laternen() -> void:
-	var wurzel := Node3D.new()
-	wurzel.name = "Laternen"
-	add_child(wurzel)
-	var an: bool = _licht_profil["lichter_an"]
-	for tile in karte.strassen_tiles():
-		if karte.ist_kreisel(tile) or (tile.x + tile.y) % 3 != 0:
-			continue
-		var lampe := _glb("%s/deko/streetlight.gltf" % ASSETS, 5.0)
-		if lampe == null:
-			continue
-		var mitte := karte.tile_zu_welt(tile)
-		lampe.position = mitte + Vector3(7.0, 0.4, 7.0)
-		lampe.rotation_degrees.y = 180.0
-		wurzel.add_child(lampe)
-		if an:
-			var birne := MeshInstance3D.new()
-			var kugel := SphereMesh.new()
-			kugel.radius = 0.09
-			kugel.height = 0.18
-			kugel.radial_segments = 8
-			kugel.rings = 4
-			birne.mesh = kugel
-			birne.material_override = CityAmbiente.leuchten_material(Color(1.0, 0.85, 0.55))
-			birne.position = Vector3(0.0, _aabb_hoehe(lampe) * 0.94, 0.0)
-			lampe.add_child(birne)
-
-
-## Höhe (lokale Model-Einheiten) des höchsten Meshes unter `node`.
-func _aabb_hoehe(node: Node3D) -> float:
-	var top := 0.8
-	for mesh in node.find_children("*", "MeshInstance3D", true, false):
-		var mi: MeshInstance3D = mesh
-		var aabb := mi.get_aabb()
-		var mesh_top := mi.position.y + aabb.position.y + aabb.size.y
-		top = maxf(top, mesh_top)
-	return top
-
-
-func _baue_orte() -> void:
-	var wurzel := Node3D.new()
-	wurzel.name = "Orte"
-	add_child(wurzel)
-	for eintrag: Dictionary in karte.orte():
-		var fassade: Dictionary = eintrag.get("fassade", {})
-		var tiles: Array = eintrag.get("tiles", [[0, 0]])
-		var erste := CityMap._tile_von(tiles[0])
-		var strasse := CityMap._tile_von(eintrag.get("strasse", [0, 0]))
-		var mitte := karte.tile_zu_welt(erste)
-		var glb := str(fassade.get("glb", "building-a"))
-		# Leeres glb = Ort unter freiem Himmel (Wochenmarkt) — der steht als
-		# Marktstand-Deko in der Karte, hier gibt es kein Gebäude zu laden.
-		var gebaeude: Node3D = null
-		if not glb.is_empty():
-			gebaeude = _glb("%s/gebaeude/%s.glb" % [ASSETS, glb], 10.0)
-		if gebaeude != null:
-			gebaeude.position = mitte
-			# Gebäude stehen NEBEN den 0,4 m dicken Straßenplatten auf dem
-			# Distrikt-Pad (y=0,05) — nicht auf Straßenhöhe (schwebt sonst).
-			gebaeude.position.y = 0.05
-			gebaeude.rotation.y = _rot_zu(erste, strasse)
-			_tinte(gebaeude, str(fassade.get("tint", "")))
-			wurzel.add_child(gebaeude)
-			if bool(fassade.get("awning", false)):
-				var markise := _glb("%s/gebaeude/detail-awning.glb" % ASSETS, 10.0)
-				if markise != null:
-					markise.position = mitte + Vector3(0, 0.05, 0)
-					markise.rotation.y = _rot_zu(erste, strasse)
-					markise.translate_object_local(Vector3(0, 0.32, 0.52))
-					wurzel.add_child(markise)
-		# Namensschild überm Eingang (nachts leuchtend, s. _lass_schild_leuchten)
-		var an: bool = _licht_profil["lichter_an"]
-		var schild := Label3D.new()
-		schild.text = I18nService.t(str(eintrag.get("name_key", "")))
-		schild.font_size = 150
-		schild.pixel_size = 0.011
-		schild.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		schild.modulate = CityAmbiente.schild_farbe(an)
-		schild.outline_size = 24
-		# Über dem EINGANG, nicht über der Tile-Mitte: mittig verschluckt die
-		# Fassade (und der Nachbarblock) die halbe Schrift.
-		var zur_strasse := karte.tile_zu_welt(strasse) - mitte
-		zur_strasse.y = 0.0
-		if zur_strasse.length() < 0.01:
-			zur_strasse = Vector3.BACK
-		# Nachbarblöcke versetzt hängen, sonst überlagern sich zwei Billboards
-		# der gleichen Straßenseite aus der Ferne zu einem Buchstabensalat.
-		var hoehe := 6.4 + float(erste.x % 2) * 2.2
-		schild.position = mitte + zur_strasse.normalized() * 8.0 + Vector3(0, hoehe, 0)
-		wurzel.add_child(schild)
-		if an:
-			_lass_schild_leuchten(wurzel, schild, str(fassade.get("tint", "")))
-		# Kollisions-AABBs für alle Ort-Tiles
-		for tile_raw: Array in tiles:
-			_collider_fuer_tile(CityMap._tile_von(tile_raw), 7.5)
-
-
-## Nacht-Glow am Ladenschild (W4-P3-Ambiente): eine unshaded Emissiv-Tafel
-## HINTER der Schrift in der Fassadenfarbe. Bewusst KEIN Environment-Glow-
-## Pass und kein zusätzliches Licht — das wäre auf dem Handy ein Fullscreen-
-## Blur bzw. ein Licht pro Laden; so ist es ein Quad (Doc A §7 Licht-Budget).
-func _lass_schild_leuchten(wurzel: Node3D, schild: Label3D, hex: String) -> void:
-	schild.outline_modulate = AcTokens.INK
-	# Beide sind kamerazugewandte Billboards und damit koplanar — ohne feste
-	# Sortierung z-fightet die Tafel mit der Schrift (halbe Buchstaben weg).
-	schild.render_priority = 1
-	schild.outline_render_priority = 0
-	var breite := float(schild.text.length()) * float(schild.font_size) * schild.pixel_size
-	var tafel := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(maxf(4.0, breite * 0.62) + 3.0, 3.4)
-	tafel.mesh = quad
-	var farbe := Color(hex) if not hex.is_empty() else AcTokens.YELLOW
-	tafel.material_override = CityAmbiente.schild_glow_material(farbe.lerp(AcTokens.WHITE, 0.55))
-	tafel.position = schild.position
-	wurzel.add_child(tafel)
-
-
-func _baue_deko() -> void:
-	var wurzel := Node3D.new()
-	wurzel.name = "Deko"
-	add_child(wurzel)
-	for eintrag: Dictionary in karte.deko():
-		var tile: Array = eintrag.get("tile", [0, 0])
-		var node := _glb(
-			"%s/%s" % [ASSETS, str(eintrag.get("glb", ""))], float(eintrag.get("scale", 10.0))
-		)
-		if node == null:
-			continue
-		node.position = karte.welt_von(float(tile[0]), float(tile[1]))
-		node.position.y = 0.05
-		node.rotation_degrees.y = float(eintrag.get("rot", 0))
-		_tinte(node, str(eintrag.get("tint", "")))
-		wurzel.add_child(node)
-		if str(eintrag.get("glb", "")).begins_with("gebaeude/"):
-			var halb := float(eintrag.get("scale", 10.0)) * 0.5
-			_collider_bei(node.position, halb)
-
-
-func _baue_natur() -> void:
-	var wurzel := Node3D.new()
-	wurzel.name = "Natur"
-	add_child(wurzel)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = karte.deko_seed()
-	var belegt := {}
-	for eintrag: Dictionary in karte.orte():
-		for tile_raw: Array in eintrag.get("tiles", []):
-			belegt[CityMap._tile_von(tile_raw)] = true
-	for eintrag: Dictionary in karte.deko():
-		var tile: Array = eintrag.get("tile", [0, 0])
-		belegt[Vector2i(roundi(float(tile[0])), roundi(float(tile[1])))] = true
-	var baeume: Array[String] = ["tree_default", "tree_pineRoundA", "plant_bush"]
-	for r in karte.reihen:
-		for c in karte.spalten:
-			var tile := Vector2i(r, c)
-			if karte.ist_strasse(tile) or belegt.has(tile):
-				continue
-			if rng.randf() > 0.4:
-				continue
-			var glb := baeume[rng.randi_range(0, baeume.size() - 1)]
-			var baum := _glb("%s/natur/%s.glb" % [ASSETS, glb], 6.0 * rng.randf_range(0.8, 1.3))
-			if baum == null:
-				continue
-			var mitte := karte.tile_zu_welt(tile)
-			baum.position = mitte + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6))
-			baum.rotation.y = rng.randf() * TAU
-			wurzel.add_child(baum)
-
-
+## Ambient-Verkehr (FIX-5): mehr Loops, mehr Modelle, eigene Lackfarben —
+## Fahrlogik (Ampel-Stopp, Vordermann, Tageszeit-Menge) in CityVerkehr.
 func _baue_verkehr() -> void:
-	var modelle: Array[String] = ["van", "suv", "hatchback-sports"]
+	var modelle: Array[String] = [
+		"van", "suv", "hatchback-sports", "sedan", "taxi", "delivery", "police", "truck"
+	]
 	var loops := karte.traffic_loops()
-	for i in mini(3, loops.size()):
-		var tiles := graph.schleife(loops[i])
+	if loops.is_empty():
+		return
+	var loop_punkte: Array[PackedVector3Array] = []
+	for ecken: Array in loops:
+		var tiles := graph.schleife(ecken)
 		var punkte := PackedVector3Array()
 		for tile in tiles:
 			var p := karte.tile_zu_welt(tile)
 			p.y = CityCarFeel.ROAD_Y
 			punkte.append(p)
-		var wagen := _glb("%s/autos/%s.glb" % [ASSETS, modelle[i]], CityCarFeel.CAR_SCALE)
-		if wagen == null or punkte.size() < 2:
+		loop_punkte.append(punkte)
+	var anzahl := CityVerkehr.anzahl(_stunde())
+	if leben_reduziert():
+		anzahl = maxi(1, anzahl / 2)
+	for i in anzahl:
+		var punkte := loop_punkte[i % loop_punkte.size()]
+		if punkte.size() < 2:
+			continue
+		var wagen := _bau.lade_glb(
+			"%s/autos/%s.glb" % [CityBau.ASSETS, modelle[i % modelle.size()]], CityCarFeel.CAR_SCALE
+		)
+		if wagen == null:
 			continue
 		add_child(wagen)
+		if i % 2 == 0:
+			_bau.faerbe(wagen, Color(VERKEHR_TINTS[(i / 2) % VERKEHR_TINTS.size()]), 0.45)
 		if _licht_profil["lichter_an"]:
-			_haenge_autolichter(wagen)
+			_bau.haenge_autolichter(wagen)
 		(
 			_verkehr
 			. append(
 				{
 					"node": wagen,
 					"punkte": punkte,
-					"s": float(i) * 60.0,
+					"s": float(i) * 47.0 + float(i % loop_punkte.size()) * 23.0,
+					"tempo": CityCarFeel.TRAFFIC_SPEED,
 					"laenge": CityRoadGraph.polyline_laenge(punkte, true),
 				}
 			)
 		)
 
 
-## Scheinwerfer-Paar (POLISH-8): zwei warme Emissiv-Kugeln an der Front
-## (lokale Model-Einheiten — der Wagen-Root ist bereits skaliert).
-func _haenge_autolichter(wagen: Node3D) -> void:
-	var front := _aabb_grenze_z(wagen)
-	for seite: float in [-1.0, 1.0]:
-		var licht := MeshInstance3D.new()
-		var kugel := SphereMesh.new()
-		kugel.radius = 0.05
-		kugel.height = 0.1
-		kugel.radial_segments = 8
-		kugel.rings = 4
-		licht.mesh = kugel
-		licht.material_override = CityAmbiente.leuchten_material(Color(1.0, 0.95, 0.75), 2.2)
-		licht.position = Vector3(seite * 0.22, 0.25, front)
-		wagen.add_child(licht)
-
-
-## Fußgänger-Goobys (Doc E §1.4 „Leben auf der Straße“): BILLIG instanziert —
-## nur das Gooby-GLB plus sein AnimationPlayer auf „walk“, ohne die
-## GoobyRig-Maschinerie (AnimationTree, Pose-Modifier, Blinzel-Timer,
-## Emotions-Lerp pro Frame). Routen + Tempo kommen aus dem puren
-## CityFussgaenger, gefüttert mit dem Deko-Seed der Karte.
+## Fußgänger-Goobys (Doc E §1.4 „Leben auf der Straße"): BILLIG instanziert —
+## nur das Gooby-GLB plus sein AnimationPlayer, ohne die GoobyRig-Maschinerie.
+## Routen/Pausen/Winken kommen aus dem puren CityFussgaenger; die Menge hängt
+## an der Tageszeit (und halbiert sich im Spar-Modus).
 func _baue_fussgaenger() -> void:
 	var wurzel := Node3D.new()
 	wurzel.name = "Fussgaenger"
 	add_child(wurzel)
-	var routen := CityFussgaenger.routen(karte, FUSSGAENGER_ANZAHL, karte.deko_seed())
+	var anzahl := CityFussgaenger.anzahl(_stunde())
+	if leben_reduziert():
+		anzahl = maxi(1, anzahl / 2)
+	var routen := CityFussgaenger.routen(karte, anzahl, karte.deko_seed())
 	var szene: PackedScene = load(GOOBY_GLB) if ResourceLoader.exists(GOOBY_GLB) else null
 	if szene == null:
 		return
@@ -441,28 +203,12 @@ func _baue_fussgaenger() -> void:
 		var node: Node3D = szene.instantiate()
 		node.scale = Vector3.ONE * FUSSGAENGER_SCALE
 		wurzel.add_child(node)
-		_faerbe(node, route["tint"], 0.5)
-		var player: AnimationPlayer = node.find_child("AnimationPlayer", true, false)
-		if player != null:
-			# Der Importer strippt das "-loop"-Suffix — je nach Build-Stand des
-			# GLB heißt der Clip so oder so; beides zulassen.
-			for kandidat: String in ["walk", "walk-loop"]:
-				if player.has_animation(kandidat):
-					player.play(kandidat)
-					break
+		_bau.faerbe(node, route["tint"], 0.5)
 		route["node"] = node
+		route["player"] = node.find_child("AnimationPlayer", true, false)
+		route["anim"] = ""
 		_fussgaenger.append(route)
 	_update_fussgaenger(0.0)
-
-
-## Vorderkante (+Z, lokale Model-Einheiten) des Wagens.
-func _aabb_grenze_z(node: Node3D) -> float:
-	var kante := 0.6
-	for mesh in node.find_children("*", "MeshInstance3D", true, false):
-		var mi: MeshInstance3D = mesh
-		var aabb := mi.get_aabb()
-		kante = maxf(kante, mi.position.z + aabb.position.z + aabb.size.z)
-	return kante
 
 
 func _baue_auto() -> void:
@@ -490,9 +236,26 @@ func _baue_hud() -> void:
 	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
 	hud.theme = ThemeService.theme()
 	layer.add_child(hud)
-	hud.steer_changed.connect(func(v: float) -> void: auto.set_steer(v))
-	hud.brake_changed.connect(func(on: bool) -> void: auto.set_brake(on))
-	hud.reverse_changed.connect(func(on: bool) -> void: auto.set_reverse(on))
+	# Jede MANUELLE Eingabe beendet das automatische Ausparken — der Daumen
+	# des Spielers gewinnt immer.
+	hud.steer_changed.connect(
+		func(v: float) -> void:
+			if v != 0.0:
+				_ausparken_abbrechen()
+			auto.set_steer(v)
+	)
+	hud.brake_changed.connect(
+		func(on: bool) -> void:
+			if on:
+				_ausparken_abbrechen()
+			auto.set_brake(on)
+	)
+	hud.reverse_changed.connect(
+		func(on: bool) -> void:
+			if on:
+				_ausparken_abbrechen()
+			auto.set_reverse(on)
+	)
 	hud.nach_hause_pressed.connect(_on_nach_hause)
 	hud.betreten_pressed.connect(_on_betreten)
 	hud.minimap.karte = karte
@@ -510,6 +273,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or auto == null:
 		return
 	var taste: InputEventKey = event
+	if taste.pressed:
+		_ausparken_abbrechen()
 	match taste.keycode:
 		KEY_LEFT:
 			auto.set_steer(-1.0 if taste.pressed else 0.0)
@@ -548,9 +313,12 @@ func _spiele_ambient_sfx(sfx_name: String) -> bool:
 
 
 func _update_verkehr(delta: float) -> void:
+	_ampel_zeit += delta
+	var blinkt := CityVerkehr.ampel_blinkt(_stunde())
+	var ampeln: Dictionary = {} if blinkt else _bau.ampel_lookup
 	for eintrag in _verkehr:
-		var s := float(eintrag["s"]) + CityCarFeel.TRAFFIC_SPEED * delta
-		eintrag["s"] = fposmod(s, float(eintrag["laenge"]))
+		var abstand := CityVerkehr.vordermann_abstand(eintrag, _verkehr, float(eintrag["laenge"]))
+		CityVerkehr.schritt(eintrag, delta, _ampel_zeit, karte, ampeln, abstand)
 		var bei := CityRoadGraph.punkt_bei_laenge(eintrag["punkte"], float(eintrag["s"]), true)
 		var node: Node3D = eintrag["node"]
 		node.position = bei["punkt"]
@@ -559,9 +327,21 @@ func _update_verkehr(delta: float) -> void:
 	_pruefe_near_miss(delta)
 
 
-## Beinahe-Unfall (Doc E §1.4): rauscht der Spieler in Fahrt dicht an einem
-## Verkehrs-Gooby vorbei, hupt der — einmal, dann ist für ein paar Sekunden
-## Ruhe. Ohne SFX-Eintrag in der SfxMap bleibt der Toast als Feedback.
+## Ampel-Birnen umfärben, wenn sich die Phase ändert (Instanzfarben im
+## MultiMesh — kein zusätzlicher Draw-Call, kein Material-Wechsel).
+func _update_ampeln(_delta: float) -> void:
+	if _bau.ampel_mm == null:
+		return
+	var blinkt := CityVerkehr.ampel_blinkt(_stunde())
+	var farbe_ns := CityVerkehr.ampel_farbe(false, _ampel_zeit, blinkt)
+	var farbe_ew := CityVerkehr.ampel_farbe(true, _ampel_zeit, blinkt)
+	if farbe_ns == _ampel_farben[0] and farbe_ew == _ampel_farben[1]:
+		return
+	_ampel_farben = [farbe_ns, farbe_ew]
+	for i in _bau.ampel_achsen.size():
+		_bau.ampel_mm.set_instance_color(i, farbe_ew if _bau.ampel_achsen[i] else farbe_ns)
+
+
 func _pruefe_near_miss(delta: float) -> void:
 	_near_miss_sperre = maxf(0.0, _near_miss_sperre - delta)
 	if auto == null or _near_miss_sperre > 0.0 or _verkehr.is_empty():
@@ -583,10 +363,33 @@ func _update_fussgaenger(delta: float) -> void:
 		return
 	_fuss_zeit += delta
 	for route in _fussgaenger:
-		var bei := CityFussgaenger.punkt(route, CityFussgaenger.fortschritt(route, _fuss_zeit))
+		var zustand := CityFussgaenger.zustand(route, _fuss_zeit)
 		var node: Node3D = route["node"]
-		node.position = bei["pos"]
-		node.rotation.y = float(bei["heading"])
+		node.position = zustand["pos"]
+		node.rotation.y = float(zustand["heading"])
+		var soll := "walk"
+		if bool(zustand["steht"]):
+			soll = "wave" if bool(zustand["winkt"]) else "idle"
+		_spiele_gooby_clip(route, soll)
+
+
+## Clip-Wechsel eines Fußgängers (walk/idle/wave; Importer strippt teils
+## das "-loop"-Suffix — beide Namen zulassen). `wave` loopt nicht und wird
+## während der Pause einfach neu angeworfen.
+func _spiele_gooby_clip(route: Dictionary, soll: String) -> void:
+	var player: AnimationPlayer = route.get("player")
+	if player == null:
+		return
+	if str(route.get("anim", "")) == soll and (player.is_playing() or soll != "wave"):
+		return
+	for kandidat: String in [soll, soll + "-loop"]:
+		if player.has_animation(kandidat):
+			player.play(kandidat)
+			route["anim"] = soll
+			return
+	# Clip fehlt (alter GLB-Build): auf walk zurückfallen.
+	if soll != "walk":
+		route["anim"] = soll
 
 
 func _update_minimap() -> void:
@@ -596,8 +399,37 @@ func _update_minimap() -> void:
 	hud.minimap.setze_aktiv(_prompt_ort)
 
 
+## Rückwärts aus der Hausausfahrt (FIX-5): die pure CityAusparken-Maschine
+## kommandiert den CarController, bis das Auto auf der Straße steht.
+func _update_ausparken() -> void:
+	if _ausparken == null or auto == null:
+		return
+	var cmd := _ausparken.kommando(auto.position, auto.heading)
+	auto.set_reverse(bool(cmd["reverse"]))
+	auto.set_steer(float(cmd["steer"]))
+	if bool(cmd["fertig"]):
+		_ausparken = null
+
+
+## Manuelle Eingabe bricht das automatische Ausparken ab.
+func _ausparken_abbrechen() -> void:
+	if _ausparken == null:
+		return
+	_ausparken = null
+	if auto != null:
+		auto.set_reverse(false)
+		auto.set_steer(0.0)
+
+
 func _update_parkplatz() -> void:
 	if auto == null or hud == null:
+		return
+	# Während des Ausparkens keinen Betreten-Prompt zeigen — man steht ja
+	# noch in der eigenen Einfahrt.
+	if _ausparken != null:
+		if not _prompt_ort.is_empty():
+			_prompt_ort = ""
+			hud.verstecke_prompt()
 		return
 	var radius := karte.park_radius() + 3.0
 	var gefunden := ""
@@ -660,16 +492,29 @@ func _on_betreten(ort_id: String) -> void:
 	_gehe_zu_route(StringName("city/ort/%s" % ort_id), {"ort_id": ort_id})
 
 
+## Spawn: „zuhause" parkt das Auto IN DER EIGENEN EINFAHRT (Nase zum Haus)
+## und startet das Rückwärts-Ausparken; an Orten steht es am Bordstein.
 func _spawn_bei(spawn: String) -> void:
-	var strasse := karte.zuhause_strasse()
-	if spawn != "zuhause" and not spawn.is_empty():
+	_ausparken = null
+	auto.set_reverse(false)
+	auto.set_steer(0.0)
+	if spawn == "zuhause" or spawn.is_empty() or karte.ort(spawn).is_empty():
+		var einfahrt := karte.zuhause_einfahrt()
+		var pos: Vector3 = einfahrt["pos"]
+		auto.teleport(pos.x, pos.z, float(einfahrt["heading"]))
+		_ausparken = CityAusparken.new(
+			einfahrt["strasse_pos"],
+			einfahrt["richtung_haus"],
+			float(einfahrt["heading"]),
+			float(einfahrt["ziel_heading"])
+		)
+	else:
 		var eintrag := karte.ort(spawn)
-		if not eintrag.is_empty():
-			strasse = CityMap._tile_von(eintrag.get("strasse", [0, 0]))
-	var welt := karte.tile_zu_welt(strasse)
-	var start_heading := 0.0 if karte.ist_strasse(strasse + Vector2i(1, 0)) else PI / 2.0
-	auto.teleport(welt.x, welt.z, start_heading)
-	auto.colliders = _colliders
+		var strasse := CityMap._tile_von(eintrag.get("strasse", [0, 0]))
+		var welt := karte.tile_zu_welt(strasse)
+		var start_heading := 0.0 if karte.ist_strasse(strasse + Vector2i(1, 0)) else PI / 2.0
+		auto.teleport(welt.x, welt.z, start_heading)
+	auto.colliders = _bau.colliders
 	if cam != null:
 		cam.snap()
 
@@ -702,62 +547,4 @@ func _zeige_toast(text: String) -> void:
 	if _toast != null and _toast.has_method("show_toast"):
 		_toast.show_toast(text)
 
-
 ## ------------------------------------------------------------- Bau-Helfer
-
-
-func _collider_fuer_tile(tile: Vector2i, halb: float) -> void:
-	_collider_bei(karte.tile_zu_welt(tile), halb)
-
-
-func _collider_bei(mitte: Vector3, halb: float) -> void:
-	(
-		_colliders
-		. append(
-			{
-				"min_x": mitte.x - halb,
-				"max_x": mitte.x + halb,
-				"min_z": mitte.z - halb,
-				"max_z": mitte.z + halb,
-			}
-		)
-	)
-	if auto != null:
-		auto.colliders = _colliders
-
-
-## GLB/GLTF instanzieren + uniform skalieren (null bei Fehlpfad).
-func _glb(pfad: String, groesse: float) -> Node3D:
-	if not ResourceLoader.exists(pfad):
-		push_warning("Asset fehlt: %s" % pfad)
-		return null
-	var szene: PackedScene = load(pfad)
-	if szene == null:
-		return null
-	var node: Node3D = szene.instantiate()
-	node.scale = Vector3.ONE * groesse
-	return node
-
-
-## Fassaden-/Deko-Tint: alle Mesh-Materialien duplizieren + einfärben.
-func _tinte(node: Node3D, hex: String) -> void:
-	if hex.is_empty():
-		return
-	_faerbe(node, Color.from_string(hex, Color.WHITE), 0.65)
-
-
-func _faerbe(node: Node3D, farbe: Color, staerke: float) -> void:
-	for mesh in node.find_children("*", "MeshInstance3D", true, false):
-		var mi: MeshInstance3D = mesh
-		for i in mi.get_surface_override_material_count():
-			var mat: Material = mi.mesh.surface_get_material(i)
-			if mat is StandardMaterial3D:
-				var kopie: StandardMaterial3D = mat.duplicate()
-				kopie.albedo_color = kopie.albedo_color.lerp(farbe, staerke)
-				mi.set_surface_override_material(i, kopie)
-
-
-## Rotation, damit die geauthorte Front (+Z) zum Straßen-Tile zeigt.
-func _rot_zu(von: Vector2i, nach: Vector2i) -> float:
-	var richtung := Vector2(float(nach.y - von.y), float(nach.x - von.x))
-	return atan2(richtung.x, richtung.y)

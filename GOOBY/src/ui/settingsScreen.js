@@ -632,6 +632,9 @@ export function createSettingsScreen({ store, ui }) {
           ${rows.map((id) => rowHtml[id]).join('')}
         </div>
         <div class="card settings-card g58-reset-card">
+          <div class="settings-row">
+            <button class="btn btn-teal settings-export-btn">${t('settings.export')}</button>
+          </div>
           <div class="settings-row settings-danger">
             <button class="btn settings-reset-btn">${resetLabel()}</button>
           </div>
@@ -722,6 +725,30 @@ export function createSettingsScreen({ store, ui }) {
       e.stopPropagation();
       audio.play('ui.tap'); // V3/FIX-D (E19)
       onNotifToggle();
+    });
+
+    // FIX-6 (Godot-Umzug): „Spielstand exportieren" — der sichtbare Weg für
+    // den manuellen Import in der neuen App (Godot v5 „Spielstand übertragen").
+    // Clipboard zuerst (funktioniert in der Capacitor-WKWebView), Datei-
+    // Download als Bonus im Browser, prompt() als letzte Rettung.
+    el.querySelector('.settings-export-btn')?.addEventListener('click', async () => {
+      audio.play('ui.tap');
+      const json = JSON.stringify(store.get());
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(json);
+        copied = true;
+      } catch { /* clipboard blocked — prompt fallback below */ }
+      try {
+        const blob = new globalThis.Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `gooby-spielstand-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      } catch { /* a[download] unsupported (WKWebView) — clipboard covers it */ }
+      if (copied) ui.toast('settings.export.copied');
+      else globalThis.prompt?.(t('settings.export.manual'), json);
     });
 
     const resetBtn = el.querySelector('.settings-reset-btn');

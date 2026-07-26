@@ -34,6 +34,11 @@ var _locked := false
 var _turn_label: Label
 var _setup_box: HBoxContainer
 var _tomato_button: Button
+## FIX-6: Aufgeben/Verlassen-Knopf (Text wechselt mit der Phase), Revanche-
+## Knopf (nur nach GAME_OVER) und Aufgeben-Bestätigung.
+var _leave_button: Button
+var _rematch_button: Button
+var _surrender_dialog: ConfirmationDialog
 var _grimace_accum := 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -179,12 +184,38 @@ func _build_hud() -> void:
 	_turn_label.offset_top = 12.0
 	root.add_child(_turn_label)
 
-	var leave := Button.new()
-	leave.theme_type_variation = &"GhostButton"
-	leave.text = I18nService.t("board.leave")
-	leave.position = Vector2(16.0, 12.0)
-	leave.pressed.connect(_on_leave_pressed)
-	root.add_child(leave)
+	_leave_button = Button.new()
+	_leave_button.theme_type_variation = &"GhostButton"
+	_leave_button.text = I18nService.t("board.leave")
+	_leave_button.position = Vector2(16.0, 12.0)
+	_leave_button.pressed.connect(_on_leave_pressed)
+	root.add_child(_leave_button)
+
+	# FIX-6: Verbindungsanzeige (Online/Verbinde…/Offline) oben rechts.
+	var status := NetStatusIndicator.new()
+	status.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	status.offset_right = -16.0
+	status.offset_top = 16.0
+	status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	root.add_child(status)
+
+	# FIX-6: Revanche-Knopf — erscheint erst nach GAME_OVER.
+	_rematch_button = Button.new()
+	_rematch_button.theme_type_variation = &"PrimaryButton"
+	_rematch_button.text = I18nService.t("board.rematch.button")
+	_rematch_button.visible = false
+	_rematch_button.set_anchors_preset(Control.PRESET_CENTER)
+	_rematch_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_rematch_button.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_rematch_button.pressed.connect(_on_rematch_pressed)
+	root.add_child(_rematch_button)
+
+	# FIX-6: „Wirklich aufgeben?“ vor der Kapitulation mitten im Spiel.
+	_surrender_dialog = ConfirmationDialog.new()
+	_surrender_dialog.dialog_text = I18nService.t("board.surrender_confirm")
+	_surrender_dialog.ok_button_text = I18nService.t("board.leave")
+	_surrender_dialog.confirmed.connect(_on_surrender_confirmed)
+	root.add_child(_surrender_dialog)
 
 	_setup_box = HBoxContainer.new()
 	_setup_box.add_theme_constant_override("separation", 8)
@@ -250,6 +281,11 @@ func _wire_session() -> void:
 	_session.game_over.connect(_on_game_over)
 	_session.game_resumed.connect(_on_game_resumed)
 	_session.opponent_forfeit.connect(_on_opponent_forfeit)
+	# FIX-6: Revanche + Gegner-Verbindungsstatus.
+	_session.game_started.connect(_on_rematch_started)
+	_session.rematch_requested_by_opponent.connect(_on_rematch_incoming)
+	_session.rematch_declined.connect(_on_rematch_declined)
+	_session.peer_connection_changed.connect(_on_peer_connection_changed)
 
 
 # ── Setup-Phase ──────────────────────────────────────────────────────────────
@@ -470,6 +506,10 @@ func _on_game_over(_winner: String, i_won: bool) -> void:
 	_phase = "over"
 	toast.show_toast(I18nService.t("board.win" if i_won else "board.lose"))
 	_turn_label.text = I18nService.t("board.win" if i_won else "board.lose")
+	# FIX-6: Nach dem Spiel → Revanche anbieten, „Aufgeben“ wird „Verlassen“.
+	_leave_button.text = I18nService.t("board.exit")
+	_rematch_button.visible = true
+	_rematch_button.disabled = false
 	if i_won:
 		my_gooby.rig.set_emotion("ecstatic")
 		my_gooby.rig.play_clip("celebrate")
@@ -482,9 +522,82 @@ func _on_game_over(_winner: String, i_won: bool) -> void:
 
 func _on_opponent_forfeit(_data: Dictionary) -> void:
 	toast.show_toast(I18nService.t("board.forfeit", {"name": _session.opponent_gooby_name}))
+	# Der Gegner ist WEG (Raum verlassen/Timeout) — Revanche unmöglich.
+	_rematch_button.visible = false
 
 
+# ── Revanche & Verbindung (FIX-6) ────────────────────────────────────────────
+
+
+func _on_rematch_pressed() -> void:
+	if _session == null:
+		return
+	_rematch_button.disabled = true
+	var res: Dictionary = await _session.request_rematch()
+	if not res["ok"]:
+		_rematch_button.disabled = false
+		toast.show_toast(I18nService.t("board.rematch.failed", {"code": str(res["code"])}))
+		return
+	if bool(res["waiting"]):
+		toast.show_toast(
+			I18nService.t("board.rematch.waiting", {"name": _session.opponent_gooby_name})
+		)
+	# Kein waiting → BOARD_START war die Antwort; _on_rematch_started räumt auf.
+
+
+## BOARD_START während die Szene offen ist = Revanche → frisches Spiel.
+func _on_rematch_started(_data: Dictionary) -> void:
+	my_board_view.clear_board()
+	opp_board_view.clear_board()
+	_rematch_button.visible = false
+	_leave_button.text = I18nService.t("board.leave")
+	_setup_box.visible = true
+	_locked = false
+	_reroll_count = 0
+	my_gooby.rig.set_emotion("happy")
+	opp_gooby.rig.set_emotion("happy")
+	_start_setup()
+
+
+func _on_rematch_incoming() -> void:
+	toast.show_toast(
+		I18nService.t("board.rematch.incoming", {"name": _session.opponent_gooby_name})
+	)
+
+
+func _on_rematch_declined() -> void:
+	toast.show_toast(
+		I18nService.t("board.rematch.declined", {"name": _session.opponent_gooby_name})
+	)
+	_rematch_button.visible = false
+
+
+func _on_peer_connection_changed(down: bool, _wait_ms: int) -> void:
+	var key := "board.peer.down" if down else "board.peer.up"
+	toast.show_toast(I18nService.t(key, {"name": _session.opponent_gooby_name}))
+	if down and _phase == "play":
+		_turn_label.text = I18nService.t("board.peer.down", {"name": _session.opponent_gooby_name})
+	elif _phase == "play":
+		_update_turn_label()
+
+
+## Läuft das Spiel noch, fragt der Knopf erst „Wirklich aufgeben?“ —
+## nach GAME_OVER (oder im Setup) geht er direkt raus.
 func _on_leave_pressed() -> void:
+	if _phase == "play" and _session != null and _session.is_active():
+		_surrender_dialog.popup_centered()
+		return
+	await _leave_and_go_home()
+
+
+## Aufgeben bestätigt: Kapitulation senden (Gegner gewinnt sofort), aber IM
+## Raum bleiben → der Sieger kann direkt eine Revanche anbieten.
+func _on_surrender_confirmed() -> void:
+	if _session != null:
+		_session.surrender()
+
+
+func _leave_and_go_home() -> void:
 	if _session != null:
 		await _session.leave()
 	var router := get_node_or_null("/root/SceneRouter")

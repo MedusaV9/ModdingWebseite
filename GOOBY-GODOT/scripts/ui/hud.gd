@@ -11,6 +11,16 @@ extends Control
 ## Text-Pill, Badge-Pulse bei Stat < 25, Safe-Area-Insets (Notch/Home-
 ## Indicator, `HudLayoutLogic.safe_insets`) und Coins-Zähl-Animation.
 ##
+## FIX1 (P0-Runde nach dem ersten iPhone-Test):
+## - Skalierung läuft über die ZENTRALE Regel `UiScale.for_viewport()`
+##   (kurze Kante + physischer Retina-Faktor) — vorher skalierte nur
+##   Hochkant, in Querformat war alles physisch ~40 % zu klein.
+## - Stats/Statuszeile sitzen BÜNDIG an der Kante (nur Safe-Area + 8 px
+##   Schattenluft statt 16 px Zusatzrand).
+## - Die rechte Knopfleiste (Cockpit-Spalte) trägt deutsche LABELS unter
+##   den Icons; beim ersten Mal erklärt ein Coachmark die Knöpfe (merkt
+##   sich das über AppSettings `hints.hud_actions_seen`).
+##
 ## Keine eigene Spiel-Logik: Anzeigedaten kommen über `set_stats()`,
 ## `set_coins()`, `set_level()` (W1d-GameState verdrahtet das später,
 ## siehe handoffs/W1c-needs-from-state.md).
@@ -28,6 +38,16 @@ const EYE_AUTO_OFF_SEC := 8.0
 ## Unter diesem Wert pulsiert die Status-Kapsel (Doc H „Pflege-Alarm“).
 const STAT_ALERT_THRESHOLD := 25.0
 const COIN_TWEEN_SEC := 0.45
+## FIX1: Randabstand zur Bildschirmkante (nur Schattenluft — Stats sollen
+## bündig sitzen, der Rest kommt aus der Safe-Area).
+const EDGE_PAD := 8.0
+## Label unter den Cockpit-Buttons (Design-px, skaliert mit f).
+const LABEL_FONT := 12
+const LABEL_PAD := 20.0
+## Abstand zwischen den Cockpit-Knöpfen (Canvas-px).
+const COLUMN_SEP := 10.0
+## AppSettings-Key: Coachmark „Deine Knöpfe“ schon gezeigt?
+const COACHMARK_SEEN_KEY := "hints.hud_actions_seen"
 ## Reihenfolge = Bogen von links (flach) nach oben; Spalte nutzt eigene Liste.
 const ACTIONS: Array[Dictionary] = [
 	{"id": &"igohbie", "icon": "phone"},
@@ -68,13 +88,20 @@ var _coin_tween: Tween
 var _coin_shown := 0
 var _status_sheet: PanelSheet
 var _eye_timer: Timer
+var _coachmark: Control
+## Breite der Cockpit-Spalte (setzt apply_layout; refresh_safe_area liest).
+var _column_width := 88.0
+## Oberkante der Cockpit-Spalte in Canvas-px (unter dem Zahnrad).
+var _column_top := 84.0
 
 @onready var _top_bar: MarginContainer = $TopBar
 @onready var _status_row: HBoxContainer = %StatusRow
 @onready var _left_column: VBoxContainer = %LeftColumn
 @onready var _bottom_left: VBoxContainer = $BottomLeft
 @onready var _portrait_arc: ArcContainer = %PortraitArc
-@onready var _landscape_column: VBoxContainer = %LandscapeColumn
+## FIX1: GridContainer statt VBox — bricht bei großem Retina-Faktor auf
+## 2 Spalten um, damit alle 6 beschrifteten Knöpfe in die Höhe passen.
+@onready var _landscape_column: GridContainer = %LandscapeColumn
 @onready var _settings_button: Button = %SettingsButton
 @onready var _eye_button: Button = %EyeButton
 @onready var _gooby_chip: Button = %WhereIsGoobyChip
@@ -89,22 +116,29 @@ func _ready() -> void:
 	_eye_timer.timeout.connect(_on_eye_timeout)
 	add_child(_eye_timer)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	visibility_changed.connect(_maybe_show_coachmark)
 	_on_viewport_resized()
+	_maybe_show_coachmark()
 
 
 ## Layout hart setzen (Rotation macht das automatisch; Tests rufen es direkt).
 ##
-## Hochkant skaliert ALLE HUD-Größen mit `HudLayoutLogic.portrait_scale`:
-## das Projekt-Stretch (Basis 1280×720, expand) hält den Canvas in Hochkant
-## immer ≥1280 breit, physisch schrumpft also alles auf ~56–84 % — ohne
-## Skalierung klumpte der Daumen-Bogen als geclippter Diagonal-Haufen
-## (E5-F2) und alle Tap-Ziele lagen unter dem 48-px-Touch-Floor (E5-F4).
+## FIX1-Skalierungsregel:
+## - Querformat (Cockpit): zentrale Regel `UiScale.for_viewport()` (kurze
+##   Kante + physischer Retina-Faktor) — vorher blieb Querformat bei f=1
+##   und war physisch ~40 % kleiner als die Web-Referenz.
+## - Hochkant (Daumen-Bogen): bewährte Canvas-Regel `portrait_scale`
+##   (kurze Kante/720, Deckel 2) — der physische Faktor (bis 3×) sprengt
+##   die getunte Bogen-Geometrie (Radius/Stagger, FIXB-Audit).
 func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	current_layout = layout
 	var portrait := layout == HudLayoutLogic.Layout.PORTRAIT
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
-	var f := HudLayoutLogic.portrait_scale(canvas) if portrait else 1.0
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	var f := (
+		HudLayoutLogic.portrait_scale(canvas) if portrait else UiScale.for_viewport(get_viewport())
+	)
+	var floor_px := maxf(HudLayoutLogic.touch_floor_canvas(canvas), float(AcTokens.TOUCH_FLOOR) * f)
+	var insets := _safe_insets()
 	_portrait_arc.visible = portrait
 	_landscape_column.visible = not portrait
 	_left_column.visible = not portrait
@@ -112,6 +146,8 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_portrait_arc.radius = HudLayoutLogic.ARC_RADIUS * f
 	_portrait_arc.stagger = HudLayoutLogic.ARC_STAGGER * f
 	var btn_size := maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
+	var label_h := 0.0 if portrait else LABEL_PAD * f
+	_column_top = EDGE_PAD + float(insets["top"]) + maxf(56.0 * f, floor_px) + 12.0
 	var button_parent: Container = _portrait_arc if portrait else _landscape_column
 	var order: Array = []
 	if portrait:
@@ -121,7 +157,8 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		order = COLUMN_ORDER.duplicate()
 	for id: StringName in order:
 		var btn: Button = _buttons[id]
-		btn.custom_minimum_size = Vector2.ONE * btn_size
+		btn.custom_minimum_size = Vector2(btn_size, btn_size + label_h)
+		_apply_button_label(btn, id, portrait, f)
 		_scale_icon_button(btn, f)
 		if btn.get_parent() != button_parent:
 			if btn.get_parent() != null:
@@ -129,6 +166,10 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 			button_parent.add_child(btn)
 		else:
 			button_parent.move_child(btn, order.find(id))
+	if portrait:
+		_column_width = btn_size
+	else:
+		btn_size = _fit_landscape_column(canvas, insets, btn_size, label_h, floor_px)
 	var chip_parent: Container = _status_row if portrait else _left_column
 	for chip in _chip_nodes:
 		if chip.get_parent() != chip_parent:
@@ -142,7 +183,9 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	for info in STATS:
 		var bar: ProgressBar = _stat_bars[info["id"]]
 		bar.custom_minimum_size = (
-			Vector2(roundf(34.0 * f), roundf(12.0 * f)) if portrait else Vector2(132.0, 12.0)
+			Vector2(roundf(34.0 * f), roundf(12.0 * f))
+			if portrait
+			else Vector2(roundf(132.0 * f), roundf(12.0 * f))
 		)
 		(_stat_icons[info["id"]] as Control).visible = not portrait
 	_level_ring.custom_minimum_size = Vector2.ONE * roundf(34.0 * f)
@@ -150,31 +193,86 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_scale_font(_coin_label, 20, f)
 	_scale_font(_level_label, 15, f)
 	_scale_font(_gooby_chip, 17, f)
-	_settings_button.custom_minimum_size = Vector2.ONE * maxf(56.0, floor_px)
-	_eye_button.custom_minimum_size = Vector2.ONE * btn_size
+	_settings_button.custom_minimum_size = Vector2.ONE * maxf(56.0 * f, floor_px)
+	_eye_button.custom_minimum_size = Vector2.ONE * maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
 	_scale_icon_button(_eye_button, f)
 	_gooby_chip.custom_minimum_size = Vector2(0.0, floor_px)
 	refresh_safe_area()
 
 
+## FIX1-Messpass fürs Cockpit (Ursache „Spalte läuft über beide Ränder“):
+## Das Theme (Kreis-StyleBox + Icon + Label-Zeile) setzt pro Knopf ein
+## IRREDUZIBLES Minimum, das custom_minimum_size nicht unterschreiten kann —
+## eine reine btn_size+label_h-Schätzung lief deshalb bei manchen
+## Auflösungen (z. B. 2556×1179 @2×: echtes Minimum ≈ 127 px/Knopf bei
+## 720 px Canvas-Höhe) oben UND unten über den Rand und überdeckte das
+## Zahnrad (Probe-Befund). Hier wird GEMESSEN statt geschätzt: 1 Spalte,
+## wenn die echten Minima passen, sonst 2 Spalten à 3 Knöpfe; Knopfgröße
+## auf den freien Streifen eindampfen (nie unter den Touch-Floor), Spalte
+## vertikal zentrieren und die ECHTE Breite für Offsets/Auge/Coachmark
+## festhalten. Gibt die finale Knopfgröße zurück.
+func _fit_landscape_column(
+	canvas: Vector2, insets: Dictionary, btn_size: float, label_h: float, floor_px: float
+) -> float:
+	var count := COLUMN_ORDER.size()
+	var avail := canvas.y - _column_top - (EDGE_PAD + float(insets["bottom"]))
+	# Irreduzible Knopf-Minima messen (ohne custom_minimum_size).
+	var theme_min := Vector2.ZERO
+	for id: StringName in COLUMN_ORDER:
+		var btn: Button = _buttons[id]
+		var saved := btn.custom_minimum_size
+		btn.custom_minimum_size = Vector2.ZERO
+		theme_min = theme_min.max(btn.get_combined_minimum_size())
+		btn.custom_minimum_size = saved
+	var columns := 1
+	var rows := count
+	if float(rows) * theme_min.y + COLUMN_SEP * float(rows - 1) > avail:
+		columns = 2
+		rows = int(ceilf(count / 2.0))
+	# Knopfgröße so eindampfen, dass `rows` Zeilen à max(btn+label, Minimum)
+	# in den freien Streifen passen — nie unter den Touch-Floor.
+	var cap := (avail - COLUMN_SEP * float(rows - 1)) / float(rows) - label_h
+	btn_size = maxf(minf(btn_size, cap), floor_px)
+	for id: StringName in COLUMN_ORDER:
+		var btn: Button = _buttons[id]
+		btn.custom_minimum_size = Vector2(btn_size, btn_size + label_h)
+	_landscape_column.columns = columns
+	_landscape_column.add_theme_constant_override("h_separation", int(COLUMN_SEP))
+	_landscape_column.add_theme_constant_override("v_separation", int(COLUMN_SEP))
+	# Spalte vertikal mittig im freien Streifen (Grid hat kein alignment).
+	var row_h := maxf(btn_size + label_h, theme_min.y)
+	var needed := float(rows) * row_h + COLUMN_SEP * float(rows - 1)
+	_column_top += maxf((avail - needed) / 2.0, 0.0)
+	_column_width = maxf(btn_size, theme_min.x) * float(columns) + COLUMN_SEP * float(columns - 1)
+	return btn_size
+
+
 ## Safe-Area-Insets neu anwenden (Rotation/Resize macht das automatisch;
 ## Tests setzen `safe_area_override` und rufen es direkt).
+## FIX1: Stats/Statuszeile sitzen BÜNDIG an der Kante — nur EDGE_PAD (8)
+## Schattenluft plus Safe-Area, statt des alten 16-px-Zusatzrands.
 func refresh_safe_area() -> void:
 	var insets := _safe_insets()
 	var left := float(insets["left"])
 	var top := float(insets["top"])
 	var right := float(insets["right"])
 	var bottom := float(insets["bottom"])
-	_top_bar.add_theme_constant_override("margin_left", int(16.0 + left))
-	_top_bar.add_theme_constant_override("margin_top", int(12.0 + top))
-	_top_bar.add_theme_constant_override("margin_right", int(16.0 + right))
-	_left_column.offset_left = 16.0 + left
-	_bottom_left.offset_left = 16.0 + left
-	_bottom_left.offset_bottom = -16.0 - bottom
-	_landscape_column.offset_right = -16.0 - right
-	_portrait_arc.offset_right = -8.0 - right
-	_portrait_arc.offset_bottom = -8.0 - bottom
+	_top_bar.add_theme_constant_override("margin_left", int(EDGE_PAD + left))
+	_top_bar.add_theme_constant_override("margin_top", int(EDGE_PAD + top))
+	_top_bar.add_theme_constant_override("margin_right", int(EDGE_PAD + right))
+	_left_column.offset_left = EDGE_PAD + left
+	_bottom_left.offset_left = EDGE_PAD + left
+	_bottom_left.offset_bottom = -EDGE_PAD - bottom
+	# Cockpit-Spalte: Breite folgt der Buttongröße (Labels brauchen Platz),
+	# Oberkante bleibt unterm Zahnrad (apply_layout setzt _column_top).
+	_landscape_column.offset_left = -EDGE_PAD - right - _column_width
+	_landscape_column.offset_right = -EDGE_PAD - right
+	_landscape_column.offset_top = _column_top
+	_landscape_column.offset_bottom = -EDGE_PAD - bottom
+	_portrait_arc.offset_right = -EDGE_PAD - right
+	_portrait_arc.offset_bottom = -EDGE_PAD - bottom
 	_place_eye_button(current_layout == HudLayoutLogic.Layout.PORTRAIT, right, bottom)
+	_position_coachmark()
 
 
 ## {"hunger":0..100, "energie":.., "hygiene":.., "spass":..}
@@ -248,11 +346,16 @@ func _fill_status_sheet() -> void:
 	var gs := get_node_or_null("/root/GameState")
 	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
 	var boni := HudStatusSheet.stat_boni(gs, now_ms)
+	# FIX1: zentrale Skalierungs-Regel statt Hochkant-Heuristik — das Sheet
+	# skaliert jetzt in BEIDEN Orientierungen gleich. Die nutzbare
+	# Innenbreite geht mit, damit der Inhalt nie breiter baut als das Blatt
+	# (sonst schnitt Hochkant die Wert-Spalte ab).
+	var f := UiScale.for_viewport(get_viewport())
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
-	var f := 1.0
-	if current_layout == HudLayoutLogic.Layout.PORTRAIT:
-		f = HudLayoutLogic.portrait_scale(canvas)
-	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni, f))
+	var avail := (
+		PanelSheetLayout.sheet_width(canvas, _safe_insets(), f) - _status_sheet.chrome_width()
+	)
+	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni, f, avail))
 
 
 func _build_action_buttons() -> void:
@@ -379,9 +482,11 @@ func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) 
 		var center := corner - Vector2.ONE * eye.x * 0.55
 		_eye_button.position = center - eye / 2.0
 	else:
-		# Links neben der Button-Spalte, unten (Cockpit).
+		# Links neben der Button-Spalte, unten (Cockpit) — folgt der echten
+		# Spaltenbreite statt fester 96 px (FIX1: Spalte ist jetzt skaliert).
 		_eye_button.position = Vector2(
-			vp.x - 96.0 - 72.0 - 12.0 - inset_right, vp.y - 72.0 - 16.0 - inset_bottom
+			vp.x - inset_right - EDGE_PAD - _column_width - 12.0 - eye.x,
+			vp.y - inset_bottom - EDGE_PAD - eye.y
 		)
 
 
@@ -403,31 +508,101 @@ func _scale_font(ctl: Control, base_px: int, f: float) -> void:
 		ctl.remove_theme_font_size_override("font_size")
 
 
+## FIX1 „Die Tasten rechts werden nichtmal erklärt“: im Cockpit (Querformat)
+## steht der deutsche Name UNTER dem Icon; der Hochkant-Bogen bleibt beim
+## reinen Icon (dort erklärt der Tooltip).
+func _apply_button_label(btn: Button, id: StringName, portrait: bool, f: float) -> void:
+	if portrait:
+		btn.text = ""
+		btn.remove_theme_font_size_override("font_size")
+		return
+	btn.text = I18nService.t("hud." + String(id))
+	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	btn.clip_text = true
+	btn.add_theme_font_size_override("font_size", int(maxf(LABEL_FONT * f, 10.0)))
+
+
+## Erststart-Coachmark „Deine Knöpfe“ (FIX1): erklärt die Cockpit-Spalte
+## einmalig; merkt sich das über AppSettings `hints.hud_actions_seen`.
+func _maybe_show_coachmark() -> void:
+	if _coachmark != null or not visible or not is_inside_tree():
+		return
+	if current_layout == HudLayoutLogic.Layout.PORTRAIT:
+		return
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings == null or not settings.has_method("get_setting"):
+		return
+	if bool(settings.get_setting(COACHMARK_SEEN_KEY, false)):
+		return
+	_coachmark = _build_coachmark()
+	add_child(_coachmark)
+	_position_coachmark()
+
+
+func _build_coachmark() -> Control:
+	var f := UiScale.for_viewport(get_viewport())
+	var card := PanelContainer.new()
+	card.name = "HudCoachmark"
+	card.theme_type_variation = &"AcCard"
+	card.custom_minimum_size = Vector2(280.0 * f, 0.0)
+	var margin := MarginContainer.new()
+	for side in ["margin_left", "margin_top", "margin_right", "margin_bottom"]:
+		margin.add_theme_constant_override(side, int(12.0 * f))
+	card.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", int(8.0 * f))
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.theme_type_variation = "HeadlineLabel"
+	title.text = I18nService.t("hud.coachmark_titel")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(title)
+	var body := Label.new()
+	body.name = "CoachmarkText"
+	body.theme_type_variation = "CaptionLabel"
+	body.text = I18nService.t("hud.coachmark_text")
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(body)
+	var ok := SquishButton.new()
+	ok.name = "CoachmarkOk"
+	ok.theme_type_variation = "BtnLeaf"
+	ok.text = I18nService.t("hud.coachmark_ok")
+	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ok.focus_mode = Control.FOCUS_NONE
+	ok.pressed.connect(_on_coachmark_dismissed)
+	vbox.add_child(ok)
+	return card
+
+
+## Coachmark links neben die Cockpit-Spalte setzen (vertikal mittig).
+func _position_coachmark() -> void:
+	if _coachmark == null:
+		return
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := _safe_insets()
+	_coachmark.reset_size()
+	var size := _coachmark.get_combined_minimum_size()
+	var x := canvas.x - float(insets["right"]) - EDGE_PAD - _column_width - 16.0 - size.x
+	var y := (canvas.y - size.y) / 2.0
+	_coachmark.position = Vector2(maxf(x, float(insets["left"]) + EDGE_PAD), y)
+
+
+func _on_coachmark_dismissed() -> void:
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("set_setting"):
+		settings.set_setting(COACHMARK_SEEN_KEY, true)
+	if _coachmark != null:
+		_coachmark.queue_free()
+		_coachmark = null
+
+
 ## Insets in Canvas-Koordinaten: Override (Tests/Notch-Simulation) >
 ## DisplayServer-Safe-Area (auf Canvas skaliert) > 0 (Desktop/Headless).
+## FIX1: zentral über UiScale (inkl. Deckel gegen kaputte Safe-Area-Werte).
 func _safe_insets() -> Dictionary:
-	var canvas := Vector2(get_viewport().get_visible_rect().size)
-	if safe_area_override != Rect2():
-		return HudLayoutLogic.safe_insets(canvas, safe_area_override)
-	if DisplayServer.get_name() == "headless":
-		return HudLayoutLogic.safe_insets(canvas, Rect2(Vector2.ZERO, canvas))
-	var win_size := Vector2(DisplayServer.window_get_size())
-	var win_pos := Vector2(DisplayServer.window_get_position())
-	var safe := Rect2(DisplayServer.get_display_safe_area())
-	var local := Rect2(safe.position - win_pos, safe.size).intersection(
-		Rect2(Vector2.ZERO, win_size)
-	)
-	var raw := HudLayoutLogic.safe_insets(win_size, local)
-	if win_size.x <= 0.0 or win_size.y <= 0.0:
-		return raw
-	var fx := canvas.x / win_size.x
-	var fy := canvas.y / win_size.y
-	return {
-		"left": float(raw["left"]) * fx,
-		"top": float(raw["top"]) * fy,
-		"right": float(raw["right"]) * fx,
-		"bottom": float(raw["bottom"]) * fy,
-	}
+	return UiScale.safe_insets_canvas(get_viewport(), safe_area_override)
 
 
 func _update_stat_alerts() -> void:

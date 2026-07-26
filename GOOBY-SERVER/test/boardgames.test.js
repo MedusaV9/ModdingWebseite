@@ -138,6 +138,75 @@ test('Bewusstes Verlassen → sofortiges Forfeit', async (t) => {
   assert.equal(forfeit.d.winner, codeA);
 });
 
+// ── FIX-6: Revanche + Peer-Status ──────────────────────────────────────────
+
+// Hilfsroutine: Spiel regulär beenden (A meldet Sieg via GAME_OVER-History-Msg).
+async function finishGame(a, b, room, winnerCode) {
+  a.send('ROOM_MSG', { room, kind: 'GAME_OVER', body: { winner: winnerCode } });
+  await b.next((m) => m.t === 'ROOM_MSG' && m.d.kind === 'GAME_OVER');
+}
+
+test('Rematch: beide wollen → frisches BOARD_START mit Rollentausch', async (t) => {
+  const { a, b, room, codeA, codeB } = await startBattleship(t);
+  await finishGame(a, b, room, codeA);
+  // Vor Spielende wäre GAME_RUNNING — hier ist es vorbei, B wünscht zuerst.
+  const wait = await b.request('BOARD_REMATCH', { room });
+  assert.equal(wait.t, 'OK');
+  assert.equal(wait.d.waiting, true);
+  const nudge = await a.next('BOARD_REMATCH_WAIT');
+  assert.equal(nudge.d.friendCode, codeB);
+  // A will auch → Antwort IST das neue BOARD_START, B kriegt es als Push.
+  const startA = await a.request('BOARD_REMATCH', { room });
+  assert.equal(startA.t, 'BOARD_START');
+  const startB = await b.next('BOARD_START');
+  assert.equal(startA.d.room, startB.d.room);
+  assert.notEqual(startA.d.room, room, 'frischer Room');
+  assert.equal(startA.d.first, codeB, 'Rollentausch: letztes Mal begann A');
+  // Neues Spiel ist bespielbar: B (first) schießt Zug 1.
+  const room2 = startA.d.room;
+  await a.request('ROOM_JOIN', { room: room2 });
+  await b.request('ROOM_JOIN', { room: room2 });
+  await exchange(b, a, room2, 1, 'E5', false);
+});
+
+test('Rematch-Regeln: läuft noch → GAME_RUNNING; fremder Room → NOT_FOUND', async (t) => {
+  const { a, room } = await startBattleship(t);
+  const running = await a.request('BOARD_REMATCH', { room });
+  assert.equal(running.d.code, 'GAME_RUNNING');
+  const missing = await a.request('BOARD_REMATCH', { room: 'board:gibtsnicht' });
+  assert.equal(missing.d.code, 'NOT_FOUND');
+});
+
+test('Rematch: Gegner verlässt den Raum → BOARD_REMATCH_DECLINED an den Wartenden', async (t) => {
+  const { a, b, room, codeA } = await startBattleship(t);
+  await finishGame(a, b, room, codeA);
+  assert.equal((await b.request('BOARD_REMATCH', { room })).d.waiting, true);
+  await a.next('BOARD_REMATCH_WAIT');
+  await a.request('ROOM_LEAVE', { room });
+  const declined = await b.next('BOARD_REMATCH_DECLINED');
+  assert.equal(declined.d.room, room);
+  assert.equal(declined.d.friendCode, codeA);
+});
+
+test('Disconnect: Verbliebener sieht sofort BOARD_PEER_DOWN, Rückkehr BOARD_PEER_UP', async (t) => {
+  const { server, a, b, room, idB, codeB } = await startBattleship(t);
+  await exchange(a, b, room, 1, 'A1', false);
+  b.ws.terminate();
+  const down = await a.next('BOARD_PEER_DOWN');
+  assert.equal(down.d.room, room);
+  assert.equal(down.d.friendCode, codeB);
+  assert.equal(down.d.waitMs > 0, true, 'Rejoin-Fenster wird mitgeteilt');
+  // B kommt zurück → Resume für B, PEER_UP für A, Spiel läuft weiter.
+  const b2 = await WsClient.connect(server.wsUrl);
+  await b2.hello(idB);
+  t.after(() => b2.close());
+  await b2.request('ROOM_JOIN', { room });
+  await b2.next('BOARD_RESUME');
+  const up = await a.next('BOARD_PEER_UP');
+  assert.equal(up.d.friendCode, codeB);
+  await exchange(b2, a, room, 2, 'C3', true);
+});
+
 test('Fremde kommen nicht in board:-Rooms; Invite braucht Freundschaft', async (t) => {
   const { server, a, room } = await startBattleship(t);
   const c = await WsClient.connect(server.wsUrl);

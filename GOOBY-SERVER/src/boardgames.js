@@ -2,6 +2,15 @@
 // Server = Turn-Relay + Turn-Ownership, KEINE Spielregeln (Treffer-Logik ist Client-Sache).
 // Ausnahme mit Server-Regel: TOMATO max 1×/Spieler/Runde (sonst Spam).
 // Disconnect: Room bleibt rejoinMs (120 s) reserviert → BOARD_RESUME {history}; danach Forfeit.
+// FIX-6 (MP-Härtung):
+// - BOARD_REMATCH: nach GAME_OVER wünschen sich beide Spieler eine Revanche →
+//   neues BOARD_START (neuer Room, neuer Seed, der andere beginnt); einseitiger
+//   Wunsch pusht BOARD_REMATCH_WAIT an den Gegner, Verlassen pusht
+//   BOARD_REMATCH_DECLINED an den Wartenden.
+// - BOARD_PEER_DOWN/-UP: Der verbliebene Spieler erfährt SOFORT vom Disconnect
+//   des Gegners (inkl. waitMs des Rejoin-Fensters) und von dessen Rückkehr.
+// - Beendete Spiele (over=true) werden aufgeräumt, sobald der Room leer ist
+//   (vorher leakte jede Vollpartie einen games-Eintrag bis zum Prozessende).
 
 import crypto from 'node:crypto';
 import { areFriends } from './friends.js';
@@ -42,7 +51,7 @@ export function register(ctx) {
     return { ok: true };
   });
 
-  // Rejoin nach Disconnect → Verlauf nachliefern.
+  // Rejoin nach Disconnect → Verlauf nachliefern (+ Gegner informieren).
   ctx.rooms.onJoin((conn, room) => {
     const game = gameFor(room);
     if (!game) return;
@@ -59,12 +68,36 @@ export function register(ctx) {
         turn: game.turn,
         n: game.n,
       });
+      const other = otherPlayer(game, conn.friendCode);
+      if (other) {
+        hub.sendToDevice(ctx.byCode.get(other.friendCode), 'BOARD_PEER_UP', {
+          room: room.id,
+          friendCode: conn.friendCode,
+        });
+      }
     }
   });
 
   ctx.rooms.onLeave((conn, roomId, { disconnect }) => {
     const game = games.get(roomId);
-    if (!game || game.over) return;
+    if (!game) return;
+    if (game.over) {
+      // FIX-6: Verlassen nach Spielende — offenen Revanche-Wunsch des
+      // Gegners beantworten und leere Räume endgültig aufräumen.
+      if (game.rematch.size > 0 && !game.rematch.has(conn.friendCode)) {
+        const waiting = otherPlayer(game, conn.friendCode);
+        if (waiting && game.rematch.has(waiting.friendCode)) {
+          hub.sendToDevice(ctx.byCode.get(waiting.friendCode), 'BOARD_REMATCH_DECLINED', {
+            room: roomId,
+            friendCode: conn.friendCode,
+          });
+        }
+      }
+      game.rematch.delete(conn.friendCode);
+      const room = ctx.rooms.get(roomId);
+      if (!room || room.members.size === 0) endGame(roomId);
+      return;
+    }
     if (!disconnect) {
       // Bewusst gegangen → sofort Forfeit an den Verbliebenen.
       const winner = otherPlayer(game, conn.friendCode);
@@ -77,8 +110,16 @@ export function register(ctx) {
       endGame(roomId);
       return;
     }
-    // Disconnect → 120-s-Rejoin-Fenster (Doc C §3.5).
+    // Disconnect → 120-s-Rejoin-Fenster (Doc C §3.5); Gegner sofort informieren.
     game.disconnected.add(conn.friendCode);
+    const stayer = otherPlayer(game, conn.friendCode);
+    if (stayer && !game.disconnected.has(stayer.friendCode)) {
+      hub.sendToDevice(ctx.byCode.get(stayer.friendCode), 'BOARD_PEER_DOWN', {
+        room: roomId,
+        friendCode: conn.friendCode,
+        waitMs: cfg.boardRejoinMs,
+      });
+    }
     if (!game.rejoinTimer) {
       game.rejoinTimer = setTimeout(() => {
         const gone = [...game.disconnected];
@@ -127,23 +168,15 @@ export function register(ctx) {
     hub.send(conn, 'OK', {}, { re: msg.seq });
   });
 
-  hub.on('BOARD_ACCEPT', (conn, msg) => {
-    const from = typeof msg.d.from === 'string' ? msg.d.from.toUpperCase() : '';
-    const invite = invites.get(`${from}->${conn.friendCode}`);
-    if (!invite) return hub.sendError(conn, 'NOT_FOUND', { re: msg.seq });
-    invites.delete(`${from}->${conn.friendCode}`);
+  // Gemeinsamer Spielstart (BOARD_ACCEPT + BOARD_REMATCH): legt den
+  // Spielzustand an und liefert das BOARD_START-Payload.
+  function createGame(gameId, players, firstCode) {
     const roomId = `board:${crypto.randomUUID()}`;
-    const inviterDevice = ctx.byCode.get(from);
-    const inviter = ctx.players[inviterDevice];
-    const players = [
-      { friendCode: from, name: inviter.name, goobyName: inviter.goobyName },
-      { friendCode: conn.friendCode, name: conn.name, goobyName: conn.goobyName },
-    ];
     games.set(roomId, {
-      game: invite.game,
+      game: gameId,
       players,
-      first: from, // der Einladende beginnt
-      turn: from,
+      first: firstCode,
+      turn: firstCode,
       n: 1, // erwartete Zugnummer
       phase: 'shot', // 'shot' → 'result' → Zugwechsel
       exchanges: 0, // abgeschlossene SHOT/SHOT_RESULT-Paare
@@ -151,18 +184,64 @@ export function register(ctx) {
       history: [],
       disconnected: new Set(),
       rejoinTimer: null,
+      rematch: new Set(), // friendCodes mit Revanche-Wunsch (nach over)
       over: false,
       createdAt: ctx.clock.now(),
     });
-    const start = {
+    return {
       room: roomId,
-      game: invite.game,
+      game: gameId,
       seed: crypto.randomBytes(4).readUInt32BE(0),
-      first: from,
+      first: firstCode,
       players,
     };
+  }
+
+  hub.on('BOARD_ACCEPT', (conn, msg) => {
+    const from = typeof msg.d.from === 'string' ? msg.d.from.toUpperCase() : '';
+    const invite = invites.get(`${from}->${conn.friendCode}`);
+    if (!invite) return hub.sendError(conn, 'NOT_FOUND', { re: msg.seq });
+    invites.delete(`${from}->${conn.friendCode}`);
+    const inviterDevice = ctx.byCode.get(from);
+    const inviter = ctx.players[inviterDevice];
+    const players = [
+      { friendCode: from, name: inviter.name, goobyName: inviter.goobyName },
+      { friendCode: conn.friendCode, name: conn.name, goobyName: conn.goobyName },
+    ];
+    const start = createGame(invite.game, players, from); // der Einladende beginnt
     hub.send(conn, 'BOARD_START', start, { re: msg.seq });
     hub.sendToDevice(inviterDevice, 'BOARD_START', start);
+  });
+
+  // FIX-6: Revanche nach Spielende — beide müssen wollen, dann startet ein
+  // FRISCHES Spiel (neuer Room/Seed); diesmal beginnt der ANDERE.
+  hub.on('BOARD_REMATCH', (conn, msg) => {
+    const roomId = typeof msg.d.room === 'string' ? msg.d.room : '';
+    const game = games.get(roomId);
+    if (!game || !game.players.some((p) => p.friendCode === conn.friendCode)) {
+      return hub.sendError(conn, 'NOT_FOUND', { re: msg.seq });
+    }
+    if (!game.over) return hub.sendError(conn, 'GAME_RUNNING', { re: msg.seq });
+    const other = otherPlayer(game, conn.friendCode);
+    const otherDevice = other ? ctx.byCode.get(other.friendCode) : null;
+    if (!other || !hub.isOnline(otherDevice)) {
+      return hub.sendError(conn, 'OFFLINE_TARGET', { re: msg.seq });
+    }
+    game.rematch.add(conn.friendCode);
+    if (game.rematch.size < game.players.length) {
+      hub.send(conn, 'OK', { waiting: true }, { re: msg.seq });
+      hub.sendToDevice(otherDevice, 'BOARD_REMATCH_WAIT', {
+        room: roomId,
+        friendCode: conn.friendCode,
+      });
+      return;
+    }
+    // Rollentausch: wer letztes Mal NICHT anfing, beginnt die Revanche.
+    const firstCode = game.first === conn.friendCode ? other.friendCode : conn.friendCode;
+    const start = createGame(game.game, game.players, firstCode);
+    endGame(roomId);
+    hub.send(conn, 'BOARD_START', start, { re: msg.seq });
+    hub.sendToDevice(otherDevice, 'BOARD_START', start);
   });
 
   // Runde = beide Spieler haben je ein SHOT/SHOT_RESULT-Paar abgeschlossen.

@@ -361,6 +361,10 @@ export const EN = {
   'settings.reset': 'Reset save',
   'settings.reset.confirm1': 'Really reset? Tap again!',
   'settings.reset.confirm2': 'Last chance — delete everything?',
+  // FIX-6 (Godot handover): visible save export for the v5 transfer screen.
+  'settings.export': 'Export save',
+  'settings.export.copied': 'Save copied! Paste it into the new Gooby app under "Transfer save".',
+  'settings.export.manual': 'Copy your save from the text box.',
   'settings.version': 'GOOBY v{v}',
   // G14: audio/haptics toggles (§D6)
   'settings.sfx': 'Sound effects',
@@ -918,6 +922,10 @@ export const DE = {
   'settings.reset': 'Spielstand zurücksetzen',
   'settings.reset.confirm1': 'Wirklich zurücksetzen? Nochmal tippen!',
   'settings.reset.confirm2': 'Letzte Chance – alles löschen?',
+  // FIX-6 (Godot-Umzug): sichtbarer Save-Export für den v5-Übertragungs-Screen.
+  'settings.export': 'Spielstand exportieren',
+  'settings.export.copied': 'Spielstand kopiert! Füge ihn in der neuen Gooby-App unter „Spielstand übertragen“ ein.',
+  'settings.export.manual': 'Kopiere deinen Spielstand aus dem Textfeld.',
   'settings.version': 'GOOBY v{v}',
   // G14: audio/haptics toggles (§D6)
   'settings.sfx': 'Soundeffekte',

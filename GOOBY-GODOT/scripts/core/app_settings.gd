@@ -57,6 +57,12 @@ func are_doors_animated() -> bool:
 	return bool(get_setting("doors_animated", true))
 
 
+## FIX-3 (User-Wunsch): Bestätigungs-Dialog vor Tür-Reisen im Haus —
+## Default AN, im Settings-Screen abschaltbar.
+func is_door_confirmation_enabled() -> bool:
+	return bool(get_setting("door_confirmation", true))
+
+
 func orientation_mode() -> String:
 	var mode := String(get_setting("orientation_mode", "auto"))
 	return mode if ORIENTATION_MODES.has(mode) else "auto"
@@ -81,6 +87,7 @@ static func _defaults() -> Dictionary:
 		"language": "de",
 		"reduced_motion": false,
 		"doors_animated": true,
+		"door_confirmation": true,
 		"orientation_mode": "auto",
 		"audio": {"master": 1.0, "music": 1.0, "sfx": 1.0},
 	}

@@ -8,6 +8,11 @@ extends Control
 ## „Suche nach Updates“ ruft ein UpdateService-INTERFACE auf (W2 liefert):
 ## existiert `/root/UpdateManager.check_for_updates()`, wird es gerufen —
 ## sonst kommt der „bald“-Toast. Signal `update_check_requested` feuert immer.
+##
+## FIX1 (P0 „UI meist falsch skaliert“): der ganze Screen skaliert mit der
+## zentralen Regel `UiScale.for_viewport()` — Schriften, Zeilenhöhen und
+## die Sektions-Breite wachsen mit, Ränder respektieren die Safe-Area.
+## Bei Resize/Rotation wird neu aufgebaut (Werte bleiben in `_values`).
 
 signal setting_changed(key: StringName, value: Variant)
 signal update_check_requested
@@ -35,18 +40,29 @@ var _values: Dictionary = {
 	"volume_sfx": 0.8,
 }
 var _news_panel: PanelSheet
+## Aktueller UiScale-Faktor (FIX1) — setzt _rebuild, nutzen die Row-Builder.
+var _f := 1.0
 
 @onready var _sections: VBoxContainer = %SectionsVBox
 @onready var _title: Label = %HeaderTitle
 @onready var _toast: ToastLayer = %Toast
 @onready var _back: Button = %BackButton
+@onready var _margin: MarginContainer = $Margin
 
 
 func _ready() -> void:
 	_back.icon = load(ICON_DIR + "arrow_left.svg")
 	_back.pressed.connect(func() -> void: back_pressed.emit())
 	_load_from_settings_autoload()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	_rebuild()
+
+
+## FIX1: bei Resize/Rotation neu skalieren (nur wenn sich der Faktor
+## wirklich ändert — _rebuild wirft die Rows weg und baut sie frisch).
+func _on_viewport_resized() -> void:
+	if absf(UiScale.for_viewport(get_viewport()) - _f) > 0.01:
+		_rebuild()
 
 
 ## Aktueller Wert (fürs HUD/Tests; Quelle: Autoload-Spiegel oder lokal).
@@ -85,13 +101,31 @@ func _set_value(key: String, value: Variant) -> void:
 
 
 func _rebuild() -> void:
+	_f = UiScale.for_viewport(get_viewport())
+	_apply_scale()
 	_title.text = I18nService.t("settings.titel")
 	for child in _sections.get_children():
 		child.queue_free()
 	_build_general_section()
 	_build_audio_section()
 	_build_updates_section()
+	_build_transfer_section()
 	_build_about_section()
+
+
+## FIX1: Chrome (Ränder/Header/Sektions-Breite) an Faktor + Safe-Area ziehen.
+func _apply_scale() -> void:
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	_margin.add_theme_constant_override("margin_left", int(24.0 + float(insets["left"])))
+	_margin.add_theme_constant_override("margin_top", int(16.0 + float(insets["top"])))
+	_margin.add_theme_constant_override("margin_right", int(24.0 + float(insets["right"])))
+	_margin.add_theme_constant_override("margin_bottom", int(16.0 + float(insets["bottom"])))
+	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	_back.custom_minimum_size = Vector2.ONE * maxf(56.0 * _f, floor_px)
+	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_HEADLINE * _f))
+	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
+	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, avail), 0.0)
 
 
 func _build_general_section() -> void:
@@ -117,6 +151,8 @@ func _build_general_section() -> void:
 	)
 	_add_toggle_row(rows, "reduced_motion", I18nService.t("settings.reduced_motion"))
 	_add_toggle_row(rows, "door_animation", I18nService.t("settings.tuer_animation"))
+	# W6/FIX-3: Nachfrage vor dem Raumwechsel — abschaltbar (Standard: an).
+	_add_toggle_row(rows, "door_confirmation", I18nService.t("settings.tuer_bestaetigung"))
 
 
 func _build_audio_section() -> void:
@@ -132,11 +168,35 @@ func _build_updates_section() -> void:
 	btn.name = "UpdateCheckButton"
 	btn.theme_type_variation = "BtnTeal"
 	btn.text = I18nService.t("settings.update_suchen")
-	btn.custom_minimum_size = Vector2(0, 52)
+	btn.custom_minimum_size = Vector2(0, 52.0 * _f)
+	btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BUTTON * _f))
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(_on_update_check)
 	rows.add_child(btn)
+
+
+## W6/FIX-6: Weg zum Uebernahme-Screen fuer den Spielstand der alten App —
+## der User fand ihn sonst nicht („Wo genau uebertraegt man seinen Save?").
+func _build_transfer_section() -> void:
+	var rows := _add_section("Spielstand", I18nService.t("settings.spielstand"))
+	var btn := SquishButton.new()
+	btn.name = "TransferButton"
+	btn.theme_type_variation = "BtnTeal"
+	btn.text = I18nService.t("settings.spielstand_uebertragen")
+	btn.custom_minimum_size = Vector2(0, 52.0 * _f)
+	btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BUTTON * _f))
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.pressed.connect(_on_transfer_pressed)
+	rows.add_child(btn)
+
+
+func _on_transfer_pressed() -> void:
+	TransferScreen.register_routes()
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_method("goto"):
+		router.goto(TransferScreen.ROUTE)
 
 
 func _build_about_section() -> void:
@@ -148,12 +208,14 @@ func _build_about_section() -> void:
 	version_label.name = "VersionLabel"
 	version_label.theme_type_variation = "SoftLabel"
 	version_label.text = I18nService.t("settings.version", {"version": version})
+	version_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _f))
 	rows.add_child(version_label)
 	var news_btn := SquishButton.new()
 	news_btn.name = "NewsButton"
 	news_btn.theme_type_variation = "BtnYellow"
 	news_btn.text = I18nService.t("settings.news_button")
-	news_btn.custom_minimum_size = Vector2(0, 52)
+	news_btn.custom_minimum_size = Vector2(0, 52.0 * _f)
+	news_btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BUTTON * _f))
 	news_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	news_btn.focus_mode = Control.FOCUS_NONE
 	news_btn.pressed.connect(_on_open_news)
@@ -166,11 +228,12 @@ func _add_section(node_name: String, title: String) -> VBoxContainer:
 	card.theme_type_variation = "AcCard"
 	var rows := VBoxContainer.new()
 	rows.name = "Rows"
-	rows.add_theme_constant_override("separation", 10)
+	rows.add_theme_constant_override("separation", int(10.0 * _f))
 	var title_label := Label.new()
 	title_label.name = "SectionTitle"
 	title_label.theme_type_variation = "TitleLabel"
 	title_label.text = title
+	title_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _f))
 	rows.add_child(title_label)
 	card.add_child(rows)
 	_sections.add_child(card)
@@ -182,7 +245,8 @@ func _add_option_row(rows: VBoxContainer, key: String, label_text: String, optio
 	var picker := OptionButton.new()
 	picker.name = "Value"
 	picker.focus_mode = Control.FOCUS_NONE
-	picker.custom_minimum_size = Vector2(210, AcTokens.TOUCH_FLOOR)
+	picker.custom_minimum_size = Vector2(210.0 * _f, AcTokens.TOUCH_FLOOR * _f)
+	picker.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _f))
 	for i in options.size():
 		picker.add_item(options[i][1], i)
 		if options[i][0] == str(_values.get(key)):
@@ -198,7 +262,7 @@ func _add_toggle_row(rows: VBoxContainer, key: String, label_text: String) -> vo
 	var toggle := CheckButton.new()
 	toggle.name = "Value"
 	toggle.focus_mode = Control.FOCUS_NONE
-	toggle.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+	toggle.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR * _f)
 	toggle.button_pressed = bool(_values.get(key, false))
 	toggle.toggled.connect(func(on: bool) -> void: _set_value(key, on))
 	row.add_child(toggle)
@@ -213,7 +277,7 @@ func _add_slider_row(rows: VBoxContainer, key: String, label_text: String) -> vo
 	slider.max_value = 1.0
 	slider.step = 0.05
 	slider.value = float(_values.get(key, 0.8))
-	slider.custom_minimum_size = Vector2(240, AcTokens.TOUCH_FLOOR)
+	slider.custom_minimum_size = Vector2(240.0 * _f, AcTokens.TOUCH_FLOOR * _f)
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	slider.value_changed.connect(func(value: float) -> void: _set_value(key, value))
 	row.add_child(slider)
@@ -222,12 +286,13 @@ func _add_slider_row(rows: VBoxContainer, key: String, label_text: String) -> vo
 func _make_row(rows: VBoxContainer, key: String, label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "Row" + key.to_pascal_case()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", int(12.0 * _f))
 	var label := Label.new()
 	label.name = "RowLabel"
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _f))
 	row.add_child(label)
 	rows.add_child(row)
 	return row

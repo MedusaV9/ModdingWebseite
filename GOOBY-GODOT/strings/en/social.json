@@ -68,6 +68,19 @@
 		"forfeit": "{name} gave up — you win!",
 		"resumed": "Game resumed — keep going!",
 		"leave": "Give up",
+		"exit": "Leave",
+		"surrender_confirm": "Really give up?",
+		"rematch": {
+			"button": "Rematch!",
+			"waiting": "Waiting for {name}…",
+			"incoming": "{name} wants a rematch!",
+			"declined": "{name} left — maybe later!",
+			"failed": "Rematch didn’t work right now: {code}"
+		},
+		"peer": {
+			"down": "{name} lost connection — the game is waiting…",
+			"up": "{name} is back!"
+		},
 		"setup": {
 			"title": "Your fleet",
 			"reroll": "Reroll",

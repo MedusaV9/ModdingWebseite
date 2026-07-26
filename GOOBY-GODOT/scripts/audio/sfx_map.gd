@@ -1,26 +1,55 @@
 class_name SfxMap
 extends RefCounted
-## Zentrale SFX-Landkarte (W4-P1): semantische Sound-Id → OGG unter
-## assets/audio/sfx/ (Kenney CC0, s. LICENSE-kenney-cc0.txt dort).
-## Einzige Quelle der Wahrheit für AudioDirector.play(id) — neue Sounds
-## HIER eintragen, nirgends Pfade hartkodieren. volume_db mischt die oft
-## unterschiedlich lauten Kenney-Quellen aufeinander ein; pitch_jitter
-## (± um 1.0) nimmt häufigen Sounds die Monotonie.
+## Zentrale SFX-Landkarte (W4-P1; FIX-4 UI-Neuvertonung): semantische
+## Sound-Id → OGG unter assets/audio/sfx/. Einzige Quelle der Wahrheit für
+## AudioDirector.play(id) — neue Sounds HIER eintragen, nirgends Pfade
+## hartkodieren. volume_db mischt unterschiedlich laute Quellen aufeinander
+## ein; pitch_jitter (± um 1.0) nimmt häufigen Sounds die Monotonie.
+##
+## FIX-4: Die UI-Familie klingt jetzt nach dem weichen, runden
+## Animal-Crossing-Gefühl — gestimmte Sinus-/Glocken-Plucks mit weichem
+## Attack, KEINE harten Klicks (assets/audio/sfx/soft/, generiert per
+## tools-Skript; CC0, selbst erzeugt). Die Kenney-Samples bleiben für
+## Minigame-/Impact-Momente (LICENSE-kenney-cc0.txt).
 
 const BASE_DIR := "res://assets/audio/sfx"
 
+## Pflicht-UI-Ids (FIX-4-Kontrakt — Tests prüfen Existenz + Dateien):
+## jedes UI-Element im Spiel soll eine dieser Ids feuern.
+const UI_REQUIRED_IDS: Array[String] = [
+	"ui_click",
+	"ui_chip",
+	"ui_back",
+	"ui_confirm",
+	"ui_error",
+	"ui_open",
+	"ui_close",
+	"ui_toggle",
+	"ui_tick",
+	"ui_buy",
+	"ui_coins",
+	"ui_levelup",
+	"ui_sticker",
+	"ui_toast",
+]
+
 ## id → {file, volume_db (Default 0.0), pitch_jitter (Default 0.0)}.
 const SOUNDS := {
-	# ── UI (Buttons/Panels/Toggles — Verdrahtung P2/P3 via Handoff) ──
-	"ui_click": {"file": "click_001.ogg", "volume_db": -6.0},
-	"ui_chip": {"file": "click_003.ogg", "volume_db": -8.0},
-	"ui_back": {"file": "back_002.ogg", "volume_db": -6.0},
-	"ui_confirm": {"file": "confirmation_002.ogg", "volume_db": -5.0},
-	"ui_error": {"file": "error_004.ogg", "volume_db": -6.0},
-	"ui_open": {"file": "open_001.ogg", "volume_db": -6.0},
-	"ui_close": {"file": "close_001.ogg", "volume_db": -6.0},
-	"ui_toggle": {"file": "switch_002.ogg", "volume_db": -7.0},
-	"ui_tick": {"file": "tick_002.ogg", "volume_db": -6.0},
+	# ── UI (FIX-4: weiche, gestimmte Plucks — Referenz Animal Crossing) ──
+	"ui_click": {"file": "soft/soft_tap.ogg", "volume_db": -4.0, "pitch_jitter": 0.02},
+	"ui_chip": {"file": "soft/soft_chip.ogg", "volume_db": -6.0, "pitch_jitter": 0.02},
+	"ui_back": {"file": "soft/soft_back.ogg", "volume_db": -4.0},
+	"ui_confirm": {"file": "soft/soft_confirm.ogg", "volume_db": -3.0},
+	"ui_error": {"file": "soft/soft_error.ogg", "volume_db": -4.0},
+	"ui_open": {"file": "soft/soft_open.ogg", "volume_db": -6.0},
+	"ui_close": {"file": "soft/soft_close.ogg", "volume_db": -6.0},
+	"ui_toggle": {"file": "soft/soft_toggle.ogg", "volume_db": -5.0},
+	"ui_tick": {"file": "soft/soft_tick.ogg", "volume_db": -7.0},
+	"ui_buy": {"file": "soft/soft_buy.ogg", "volume_db": -3.0},
+	"ui_coins": {"file": "soft/soft_coins.ogg", "volume_db": -4.0, "pitch_jitter": 0.03},
+	"ui_levelup": {"file": "soft/soft_levelup.ogg", "volume_db": -2.0},
+	"ui_sticker": {"file": "soft/soft_sticker.ogg", "volume_db": -4.0},
+	"ui_toast": {"file": "soft/soft_toast.ogg", "volume_db": -6.0},
 	# ── Minigame-Framework (Countdown/Ergebnis) ──
 	"mg_go": {"file": "confirmation_001.ogg", "volume_db": -4.0},
 	"mg_win": {"file": "confirmation_003.ogg", "volume_db": -3.0},

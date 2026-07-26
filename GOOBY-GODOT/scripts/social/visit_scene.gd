@@ -119,6 +119,16 @@ func _spawn_goobys(via_door_id: String) -> void:
 func _build_hud() -> void:
 	hud = VisitHud.new()
 	add_child(hud)
+	# FIX-6: Verbindungsanzeige oben links (eigener Layer über dem VisitHud —
+	# der gehört FIX-1, deshalb hängen wir uns nicht in dessen Baum).
+	var status_layer := CanvasLayer.new()
+	status_layer.layer = 6
+	add_child(status_layer)
+	var status := NetStatusIndicator.new()
+	status.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	status.offset_left = 16.0
+	status.offset_top = 16.0
+	status_layer.add_child(status)
 	hud.end_pressed.connect(_on_end_pressed)
 	hud.room_selected.connect(func(room_id: String) -> void: _switch_room(room_id, ""))
 	var vs := visit_service()

@@ -10,6 +10,11 @@ extends RefCounted
 ## testbar ohne GameState (Boni-Dict wird hereingereicht).
 
 const ICON_DIR := "res://assets/ui/icons/"
+## Feste Zeilenbreite in Design-px, WENN der Buff-Chip mit in der Zeile
+## sitzt (Icon 34 + Name 110 + Balken-Minimum 90 + Wert 44 + Chip ~92 +
+## 4 Abstände à 12) — passt das nicht in `avail_width`, rückt der Chip
+## unter den Stat-Namen (FIX1, schmale Hochkant-Sheets).
+const MIN_ROW_WITH_CHIP := 418.0
 ## HUD-Stat-Id ↔ GameState-Stat-Key (gooby.stats/buffs nutzen die
 ## englischen Keys aus dem Save-Schema v5).
 const STATS: Array[Dictionary] = [
@@ -72,20 +77,28 @@ static func stat_boni(gs: Object, now_ms: int) -> Dictionary:
 
 ## Node-Baum des Sheet-Inhalts. `stats` = HUD-Werte {hunger, energie,
 ## hygiene, spass: 0..100}, `boni` = Ergebnis von stat_boni(). `ui_scale`
-## skaliert Größen/Fonts fürs Hochkant-HUD (Canvas dort ~1,78× überbreit,
-## siehe `HudLayoutLogic.portrait_scale`) — 1.0 = Quer/Basis unverändert.
-static func build_content(stats: Dictionary, boni: Dictionary, ui_scale := 1.0) -> Control:
+## skaliert Größen/Fonts (zentrale Regel `UiScale.for_viewport`, 1.0 =
+## Basis). `avail_width` = nutzbare Innenbreite des Sheets in Canvas-px
+## (`PanelSheetLayout.sheet_width - PanelSheet.chrome_width`; 0 = egal) —
+## FIX1: der Inhalt darf NIE breiter bauen, sonst schneidet das nur
+## vertikal scrollende Sheet die Wert-Spalte ab (Hochkant-Befund).
+static func build_content(
+	stats: Dictionary, boni: Dictionary, ui_scale := 1.0, avail_width := 0.0
+) -> Control:
 	var rows := VBoxContainer.new()
 	rows.name = "StatRows"
 	rows.add_theme_constant_override("separation", int(14 * ui_scale))
-	rows.custom_minimum_size = Vector2(460 * ui_scale, 0)
+	var width := 460.0 * ui_scale
+	if avail_width > 0.0:
+		width = minf(width, avail_width)
+	rows.custom_minimum_size = Vector2(width, 0)
 	for info in STATS:
-		rows.add_child(_build_row(info, stats, boni, ui_scale))
+		rows.add_child(_build_row(info, stats, boni, ui_scale, avail_width))
 	return rows
 
 
 static func _build_row(
-	info: Dictionary, stats: Dictionary, boni: Dictionary, ui_scale: float
+	info: Dictionary, stats: Dictionary, boni: Dictionary, ui_scale: float, avail_width := 0.0
 ) -> Control:
 	var id := str(info["id"])
 	var value := clampf(float(stats.get(id, 0.0)), 0.0, 100.0)
@@ -106,11 +119,24 @@ static func _build_row(
 	label.text = I18nService.t(str(info["label_key"]))
 	label.custom_minimum_size = Vector2(110 * ui_scale, 0)
 	_scale_font(label, 20, ui_scale)
-	row.add_child(label)
+	# Schmal (Hochkant): Buff-Chip unter den Namen statt hinter den Balken,
+	# sonst schnitte das Sheet ihn rechts ab (FIX1).
+	var narrow := avail_width > 0.0 and MIN_ROW_WITH_CHIP * ui_scale > avail_width
+	if narrow and boni.has(id):
+		var name_box := VBoxContainer.new()
+		name_box.name = "NameBox"
+		name_box.custom_minimum_size = Vector2(110 * ui_scale, 0)
+		name_box.add_child(label)
+		name_box.add_child(_build_buff_chip(id, float(boni[id]), ui_scale))
+		row.add_child(name_box)
+	else:
+		row.add_child(label)
 	var bar := ProgressBar.new()
 	bar.name = "SheetBar"
 	bar.theme_type_variation = info["type"]
-	bar.custom_minimum_size = Vector2(190 * ui_scale, roundf(20.0 * ui_scale))
+	# Balken-MINIMUM klein halten (er füllt per EXPAND_FILL ohnehin die
+	# Restbreite) — das alte 190×f-Minimum sprengte schmale Sheets.
+	bar.custom_minimum_size = Vector2(90 * ui_scale, roundf(20.0 * ui_scale))
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.show_percentage = false
@@ -124,7 +150,7 @@ static func _build_row(
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_scale_font(value_label, 20, ui_scale)
 	row.add_child(value_label)
-	if boni.has(id):
+	if not narrow and boni.has(id):
 		row.add_child(_build_buff_chip(id, float(boni[id]), ui_scale))
 	return row
 

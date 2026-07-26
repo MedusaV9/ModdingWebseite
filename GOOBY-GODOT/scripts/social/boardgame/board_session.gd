@@ -22,6 +22,9 @@ signal tomato_rejected(code: String)
 signal send_rejected(kind: String, code: String)
 signal game_over(winner_code: String, i_won: bool)
 signal opponent_forfeit(data: Dictionary)
+signal rematch_requested_by_opponent
+signal rematch_declined
+signal peer_connection_changed(down: bool, wait_ms: int)
 
 const GAME_BATTLESHIP := "battleship"
 
@@ -39,6 +42,11 @@ var turn: BattleshipLogic.Turn = null
 var tomatoes := BoardEmotes.TomatoTracker.new()
 var finished := false
 var winner := ""
+## FIX-6 Revanche-Zustand (nach GAME_OVER): eigener/gegnerischer Wunsch.
+var rematch_mine := false
+var rematch_theirs := false
+## FIX-6: Gegner gerade getrennt? (BOARD_PEER_DOWN bis _UP/RESUME)
+var peer_down := false
 
 var _net: Node = null
 var _pending_shot := Vector2i(-1, -1)
@@ -49,6 +57,18 @@ func setup(net_client: Node) -> void:
 	_net = net_client
 	_net.pushed.connect(_on_push)
 	_net.message_received.connect(_on_envelope)
+	if _net.has_signal("status_changed"):
+		_net.status_changed.connect(_on_net_status_changed)
+
+
+## FIX-6 Wiederverbindung: sobald der Client wieder online ist, automatisch
+## zurück in den laufenden Raum — der Server antwortet mit BOARD_RESUME
+## (History-Replay, _on_board_resume) und pusht dem Gegner BOARD_PEER_UP.
+## Ohne diesen Rejoin lief das 120-s-Forfeit-Fenster einfach ab.
+func _on_net_status_changed(_status: int) -> void:
+	if room_id.is_empty() or not is_online():
+		return
+	_net.request("ROOM_JOIN", {"room": room_id})
 
 
 func is_online() -> bool:
@@ -153,6 +173,40 @@ func leave() -> Dictionary:
 	return await _net.request("ROOM_LEAVE", {"room": room})
 
 
+## FIX-6 Aufgeben: EXPLIZITE Kapitulation mitten im Spiel — der Gegner
+## gewinnt sofort (GAME_OVER mit seinem Code läuft durch die Server-History,
+## Rejoin-Replays sehen es also auch). Anders als leave() bleibt die Session
+## im Raum → Revanche ist direkt möglich. true = Aufgabe verschickt.
+func surrender() -> bool:
+	if not is_active() or opponent_code.is_empty():
+		return false
+	finished = true
+	winner = opponent_code
+	_send_game_msg_finished("GAME_OVER", {"winner": winner})
+	game_over.emit(winner, false)
+	return true
+
+
+## FIX-6 Revanche anfragen (nach GAME_OVER, solange beide im Raum sind).
+## Server startet ein frisches Spiel, sobald BEIDE wollen (BOARD_START).
+## {"ok", "waiting": bool} — waiting=true heißt „der Gegner muss noch“.
+func request_rematch() -> Dictionary:
+	if room_id.is_empty() or not finished:
+		return {"ok": false, "code": "NO_GAME", "waiting": false}
+	if not is_online():
+		return {"ok": false, "code": "OFFLINE", "waiting": false}
+	rematch_mine = true
+	var res: Dictionary = await _net.request("BOARD_REMATCH", {"room": room_id})
+	if not res["ok"]:
+		rematch_mine = false
+		return {"ok": false, "code": str(res["code"]), "waiting": false}
+	if res["t"] == "BOARD_START":
+		# Beide wollten schon → Antwort IST der Start (wie bei accept()).
+		await _on_board_start(res["d"])
+		return {"ok": true, "waiting": false}
+	return {"ok": true, "waiting": bool((res["d"] as Dictionary).get("waiting", false))}
+
+
 func _send_game_msg(kind: String, body: Dictionary) -> bool:
 	if _net == null or not is_active():
 		return false
@@ -180,6 +234,23 @@ func _on_push(type: String, data: Dictionary) -> void:
 				winner = str(data.get("winner", ""))
 				opponent_forfeit.emit(data)
 				game_over.emit(winner, winner == my_code())
+		"BOARD_REMATCH_WAIT":
+			if data.get("room", "") == room_id:
+				rematch_theirs = true
+				rematch_requested_by_opponent.emit()
+		"BOARD_REMATCH_DECLINED":
+			if data.get("room", "") == room_id:
+				rematch_mine = false
+				rematch_theirs = false
+				rematch_declined.emit()
+		"BOARD_PEER_DOWN":
+			if data.get("room", "") == room_id:
+				peer_down = true
+				peer_connection_changed.emit(true, int(data.get("waitMs", 0)))
+		"BOARD_PEER_UP":
+			if data.get("room", "") == room_id:
+				peer_down = false
+				peer_connection_changed.emit(false, 0)
 		"ROOM_MSG":
 			if data.get("room", "") == room_id:
 				_on_room_msg(str(data.get("kind", "")), data.get("body", {}), data.get("from", {}))
@@ -212,6 +283,9 @@ func _on_board_start(data: Dictionary) -> void:
 	seed_value = int(data.get("seed", 0))
 	finished = false
 	winner = ""
+	rematch_mine = false
+	rematch_theirs = false
+	peer_down = false
 	players = []
 	for entry: Variant in data.get("players", []):
 		if entry is Dictionary:
@@ -279,6 +353,7 @@ func _on_board_resume(data: Dictionary) -> void:
 	turn.n = int(data.get("n", turn.n))
 	turn.phase = "shot"
 	_pending_shot = Vector2i(-1, -1)
+	peer_down = false
 	game_resumed.emit(data)
 
 
@@ -358,6 +433,9 @@ func _reset() -> void:
 	turn = null
 	finished = false
 	winner = ""
+	rematch_mine = false
+	rematch_theirs = false
+	peer_down = false
 	_pending_shot = Vector2i(-1, -1)
 	_sent_kinds.clear()
 	tomatoes.reset()

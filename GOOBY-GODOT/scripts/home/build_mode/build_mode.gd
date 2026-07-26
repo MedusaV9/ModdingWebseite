@@ -5,6 +5,11 @@ extends Node
 ## Pflichtmöbel-Regeln (§2.4), Bett-Bauquest + Hammer-Gag (§3.1) und
 ## Speichern ins GameState-home-Slice. KEINE Energie-Kosten.
 ##
+## FIX-3: freie Kamera (BuildCamera) — Trefferprüfung zuerst: ein Tap, der
+## KEIN Möbel trifft, schwenkt die Kamera; zwei Finger zoomen/drehen immer.
+## Der Ghost wird GEPOOLT (ein Node pro Aufnahme statt Neuaufbau pro
+## Drag-Event) — das war der Ruckler beim Ziehen.
+##
 ## Die 3D-Seite (Overlay, Möbel-Nodes, Gooby, Kamera) gehört RoomBase —
 ## BuildMode steuert sie über die in setup() übergebenen Referenzen.
 
@@ -17,23 +22,40 @@ const DRAWER_HEIGHT := 168.0
 ## zählt (negativ = Projektion hinter der Wand, der Normalfall beim Tap
 ## direkt aufs hängende Item).
 const WALL_PICK_RANGE := 0.6
+## MUSS zu FurnitureNode.create_wall passen (Lift/Inset der Wand-Items) —
+## der gepoolte Ghost setzt seine Wand-Transform selbst.
+const WALL_LIFT := 1.35
+const WALL_INSET := 0.06
 
 # RoomBase (Duck-Typing statt Typ — vermeidet zyklische class_name-Referenz).
 var _room: Variant
 var _grid: GridData
 var _overlay: GridOverlay
 var _camera_rig: HomeCameraRig
+var _build_camera: BuildCamera
 var _gs: Object
 
 var _active := false
 var _ui: Control
 var _drawer_items: HBoxContainer
 var _capacity_label: Label
+var _drawer_sig := ""
 var _action_bar: HBoxContainer
+var _kamera_leiste: VBoxContainer
 var _ghost: FurnitureNode
 var _ghost_state: Dictionary = {}
+var _ghost_sig := ""
+var _ghost_gueltig := -1
 var _dragging := false
 var _local_uid_seq := 1
+
+# Multi-Touch-Zustand (FIX-3): index -> letzte Screen-Position.
+var _touches: Dictionary = {}
+var _pan_index := -1
+var _drag_index := -1
+var _pinch_spanne := 0.0
+var _pinch_winkel := 0.0
+var _maus_gedrueckt := false
 
 
 func setup(
@@ -44,11 +66,22 @@ func setup(
 	_overlay = overlay
 	_camera_rig = camera_rig
 	_gs = room.game_state()
+	_build_camera = BuildCamera.new()
+	_build_camera.name = "BuildCamera"
+	add_child(_build_camera)
 	_build_ui(ui_layer)
+	set_process_unhandled_input(false)
+	# Shader der Overlay-/Ghost-Materialien schon beim Raumaufbau (unter dem
+	# Reveal-Veil) kompilieren — nicht erst beim ersten Baumodus-Öffnen.
+	_warm_up.call_deferred()
 
 
 func is_active() -> bool:
 	return _active
+
+
+func build_camera() -> BuildCamera:
+	return _build_camera
 
 
 func toggle() -> void:
@@ -62,9 +95,12 @@ func open() -> void:
 	if _active:
 		return
 	_active = true
+	_reset_gesten()
 	_ui.visible = true
 	_overlay.visible = true
 	_camera_rig.set_build_mode(true)
+	_build_camera.activate(_camera_rig, _room_world_size())
+	set_process_unhandled_input(true)
 	_refresh_drawer()
 	opened.emit()
 	_maybe_start_bed_quest()
@@ -78,61 +114,153 @@ func close() -> void:
 		return
 	_cancel_ghost()
 	_active = false
+	_reset_gesten()
 	_ui.visible = false
 	_overlay.visible = false
+	_build_camera.deactivate()
 	_camera_rig.set_build_mode(false)
+	set_process_unhandled_input(false)
 	closed.emit()
+
+
+# ── Eingabe (FIX-3: Greifen vs. Schwenken vs. Pinch) ─────────────────────────
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _active:
 		return
-	var pos := Vector2.ZERO
-	var pressed := false
-	var released := false
-	var motion := false
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		pos = event.position
-		pressed = event.pressed
-		released = not event.pressed
+	if event is InputEventMouseButton:
+		_maus_taste(event as InputEventMouseButton)
 	elif event is InputEventScreenTouch:
-		pos = event.position
-		pressed = event.pressed
-		released = not event.pressed
-	elif event is InputEventMouseMotion or event is InputEventScreenDrag:
-		pos = event.position
-		motion = true
-	else:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			_finger_runter(touch.index, touch.position)
+		else:
+			_finger_hoch(touch.index)
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		_finger_zieht(drag.index, drag.position)
+	elif event is InputEventMouseMotion and _maus_gedrueckt:
+		_finger_zieht(0, (event as InputEventMouseMotion).position)
+
+
+## Desktop-Komfort: Mausrad zoomt, Linksklick verhält sich wie ein Finger.
+func _maus_taste(maus: InputEventMouseButton) -> void:
+	if maus.button_index == MOUSE_BUTTON_WHEEL_UP and maus.pressed:
+		_build_camera.zoom_um(BuildCamera.ZOOM_SCHRITT)
 		return
-	if pressed:
-		_on_tap(pos)
-	elif released:
+	if maus.button_index == MOUSE_BUTTON_WHEEL_DOWN and maus.pressed:
+		_build_camera.zoom_um(1.0 / BuildCamera.ZOOM_SCHRITT)
+		return
+	if maus.button_index != MOUSE_BUTTON_LEFT:
+		return
+	_maus_gedrueckt = maus.pressed
+	if maus.pressed:
+		_finger_runter(0, maus.position)
+	else:
+		_finger_hoch(0)
+
+
+func _finger_runter(index: int, pos: Vector2) -> void:
+	_touches[index] = pos
+	if _touches.size() == 2:
+		# Zweiter Finger: laufende Ein-Finger-Gesten sauber beenden und in
+		# den Pinch (Zoom + Drehen) wechseln — der Ghost bleibt aufgenommen.
+		_pan_index = -1
+		_drag_index = -1
 		_dragging = false
-	elif motion and _dragging and not _ghost_state.is_empty():
+		_pinch_start()
+		return
+	if _touches.size() > 2:
+		return
+	# Trefferprüfung zuerst (User-Regel): Möbel greifen schlägt Schwenken.
+	if _on_tap(pos):
+		_drag_index = index
+	else:
+		_pan_index = index
+
+
+func _finger_hoch(index: int) -> void:
+	_touches.erase(index)
+	if index == _pan_index:
+		_pan_index = -1
+	if index == _drag_index:
+		_drag_index = -1
+		_dragging = false
+	if _touches.size() < 2:
+		_pinch_spanne = 0.0
+	# Vom Pinch übrig gebliebener Einzelfinger schwenkt nahtlos weiter.
+	if _touches.size() == 1 and _pan_index < 0 and _drag_index < 0:
+		_pan_index = _touches.keys()[0]
+
+
+func _finger_zieht(index: int, pos: Vector2) -> void:
+	var vorher: Vector2 = _touches.get(index, pos)
+	_touches[index] = pos
+	if _touches.size() >= 2 and _pinch_spanne > 0.0:
+		_pinch_update()
+		return
+	if index == _drag_index and _dragging and not _ghost_state.is_empty():
 		_move_ghost_to_pointer(pos)
+	elif index == _pan_index:
+		_build_camera.pan_screen(vorher, pos)
 
 
-func _on_tap(pos: Vector2) -> void:
+func _pinch_start() -> void:
+	var punkte := _touches.values()
+	if punkte.size() < 2:
+		return
+	_pinch_spanne = (punkte[0] as Vector2).distance_to(punkte[1])
+	_pinch_winkel = ((punkte[1] as Vector2) - (punkte[0] as Vector2)).angle()
+
+
+func _pinch_update() -> void:
+	var punkte := _touches.values()
+	if punkte.size() < 2 or _pinch_spanne <= 0.0:
+		return
+	var spanne := (punkte[0] as Vector2).distance_to(punkte[1])
+	var winkel := ((punkte[1] as Vector2) - (punkte[0] as Vector2)).angle()
+	if spanne > 1.0:
+		_build_camera.zoom_um(spanne / maxf(_pinch_spanne, 1.0))
+		_build_camera.rotate_um(wrapf(winkel - _pinch_winkel, -PI, PI))
+	_pinch_spanne = spanne
+	_pinch_winkel = winkel
+
+
+func _reset_gesten() -> void:
+	_touches = {}
+	_pan_index = -1
+	_drag_index = -1
+	_pinch_spanne = 0.0
+	_maus_gedrueckt = false
+	_dragging = false
+
+
+## Tap-Entscheidung. true = Möbel-Interaktion (Ghost bewegen/greifen),
+## false = nichts getroffen → Aufrufer startet den Kameraschwenk.
+func _on_tap(pos: Vector2) -> bool:
 	var world := _pointer_to_floor(pos)
 	if world == Vector3.INF:
-		return
+		return false
 	if not _ghost_state.is_empty():
 		_dragging = true
 		_move_ghost_to_pointer(pos)
-		return
+		return true
 	var cell := GridData.cell_of(world)
 	for layer in [GridData.Layer.SURFACE, GridData.Layer.FLOOR, GridData.Layer.RUG]:
 		var uid := _grid.item_at(cell, layer)
 		if uid != "":
 			_begin_move(uid)
 			_dragging = true
-			return
+			return true
 	# Kein Boden-Treffer: Wand-Items prüfen (E9 P0-1 — sie belegen keine
 	# Zelle und wären sonst nie wieder auswählbar/einlagerbar).
 	var wall_uid := _wall_item_at_pointer(world)
 	if wall_uid != "":
 		_begin_move(wall_uid)
 		_dragging = true
+		return true
+	return false
 
 
 ## Ghost aus dem Lager starten (Drawer-Tap).
@@ -188,32 +316,82 @@ func _move_ghost_to_pointer(pos: Vector2) -> void:
 	_rebuild_ghost()
 
 
+## Ghost synchronisieren — GEPOOLT (FIX-3): der Node wird nur neu gebaut,
+## wenn sich Item/Modus ändern; pro Drag-Event werden nur Transform,
+## Overlay-Tönung und (bei Wechsel) die Gültigkeits-Optik angefasst.
 func _rebuild_ghost() -> void:
-	if _ghost != null:
-		_ghost.queue_free()
-		_ghost = null
 	if _ghost_state.is_empty():
+		if _ghost != null:
+			_ghost.queue_free()
+			_ghost = null
+		_ghost_sig = ""
+		_ghost_gueltig = -1
 		_overlay.clear_highlight()
-		_update_action_bar()
+		_update_action_bar(false)
 		return
 	var def: Dictionary = _ghost_state["def"]
+	var sig := "%s|%s" % [str(def.get("id", "?")), str(_ghost_state["mode"])]
+	if _ghost == null or sig != _ghost_sig:
+		if _ghost != null:
+			_ghost.queue_free()
+		_ghost = _make_ghost_node(def)
+		_ghost_sig = sig
+		_ghost_gueltig = -1
+		if _ghost != null:
+			_room.grid_mount().add_child(_ghost)
 	var check := _ghost_check()
+	var ok := bool(check["ok"])
 	if int(def["layer"]) == GridData.Layer.WALL:
-		_ghost = FurnitureNode.create_wall(
-			def, _ghost_state["wall"], int(_ghost_state["offset"]), _grid.size, "ghost"
-		)
+		_apply_wall_transform(def)
 		_overlay.clear_highlight()
 	else:
 		var at: Vector2i = _ghost_state["at"]
 		var rot := int(_ghost_state["rot"])
-		_ghost = FurnitureNode.create(def, at, rot, "ghost")
-		if _ghost != null and int(def["layer"]) == GridData.Layer.SURFACE:
-			_ghost.position.y = _room.surface_height_at(at)
-		_overlay.highlight(GridData.cells_for(at, def["footprint"], rot), bool(check["ok"]))
-	if _ghost != null:
-		_ghost.set_ghost(bool(check["ok"]))
-		_room.grid_mount().add_child(_ghost)
-	_update_action_bar()
+		if _ghost != null:
+			_ghost.position = GridData.world_center(at, def["footprint"], rot)
+			_ghost.rotation.y = -rot * PI / 2.0
+			if int(def["layer"]) == GridData.Layer.SURFACE:
+				_ghost.position.y = _room.surface_height_at(at)
+		_overlay.highlight(GridData.cells_for(at, def["footprint"], rot), ok)
+	if _ghost != null and int(ok) != _ghost_gueltig:
+		_ghost.set_ghost(ok)
+		_ghost_gueltig = int(ok)
+	_update_action_bar(ok)
+
+
+func _make_ghost_node(def: Dictionary) -> FurnitureNode:
+	if int(def["layer"]) == GridData.Layer.WALL:
+		return FurnitureNode.create_wall(
+			def, _ghost_state["wall"], int(_ghost_state["offset"]), _grid.size, "ghost"
+		)
+	return FurnitureNode.create(def, _ghost_state["at"], int(_ghost_state["rot"]), "ghost")
+
+
+## Wand-Transform des gepoolten Ghosts (Spiegel von FurnitureNode.create_wall).
+func _apply_wall_transform(def: Dictionary) -> void:
+	if _ghost == null:
+		return
+	var wall := str(_ghost_state["wall"])
+	var span := int(def["wall_size"]) * GridData.CELL_SIZE
+	var along := int(_ghost_state["offset"]) * GridData.CELL_SIZE + span * 0.5
+	var lift := Vector3(0.0, WALL_LIFT, 0.0)
+	match wall:
+		"N":
+			_ghost.position = Vector3(along, 0, WALL_INSET) + lift
+			_ghost.rotation.y = 0.0
+		"S":
+			_ghost.position = (
+				Vector3(along, 0, _grid.size.y * GridData.CELL_SIZE - WALL_INSET) + lift
+			)
+			_ghost.rotation.y = PI
+		"W":
+			_ghost.position = Vector3(WALL_INSET, 0, along) + lift
+			_ghost.rotation.y = -PI / 2.0
+		"E":
+			_ghost.position = (
+				Vector3(_grid.size.x * GridData.CELL_SIZE - WALL_INSET, 0, along) + lift
+			)
+			_ghost.rotation.y = PI / 2.0
 
 
 func _ghost_check() -> Dictionary:
@@ -269,6 +447,7 @@ func _cancel_ghost() -> void:
 		_room.set_furniture_visible(str(_ghost_state["uid"]), true)
 	_ghost_state = {}
 	_dragging = false
+	_drag_index = -1
 	_rebuild_ghost()
 
 
@@ -329,6 +508,38 @@ func _maybe_start_bed_quest() -> void:
 			return
 
 
+func _room_world_size() -> Vector2:
+	return Vector2(_grid.size.x * GridData.CELL_SIZE, _grid.size.y * GridData.CELL_SIZE)
+
+
+## Shader-Warm-up (FIX-3, „laggt am Anfang"): Overlay + Ghost-Materialien
+## einmal für 2 Frames sichtbar rendern, während der Reveal-Veil noch zu ist.
+## Ohne das kompiliert der Treiber sie erst beim ersten Baumodus-Öffnen.
+func _warm_up() -> void:
+	if _room == null or not is_inside_tree():
+		return
+	var mount: Node3D = _room.grid_mount()
+	if mount == null:
+		return
+	_overlay.visible = true
+	_overlay.highlight([Vector2i.ZERO] as Array[Vector2i], true)
+	var probe := MeshInstance3D.new()
+	probe.name = "GhostWarmup"
+	probe.mesh = BoxMesh.new()
+	probe.scale = Vector3(0.05, 0.05, 0.05)
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.45, 0.95, 0.5, 0.6)
+	probe.material_override = mat
+	mount.add_child(probe)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	probe.queue_free()
+	if not _active:
+		_overlay.visible = false
+		_overlay.clear_highlight()
+
+
 # ── UI ───────────────────────────────────────────────────────────────────────
 
 
@@ -340,6 +551,7 @@ func _build_ui(ui_layer: Node) -> void:
 	_ui.visible = false
 	ui_layer.add_child(_ui)
 	_build_action_bar()
+	_build_kamera_leiste()
 	_build_drawer()
 
 
@@ -354,6 +566,32 @@ func _build_action_bar() -> void:
 	_add_action_button("build.bestaetigen", "AccentButton", _confirm_ghost)
 	_add_action_button("build.einlagern", "GhostButton", _store_ghost)
 	_add_action_button("build.abbrechen", "GhostButton", _cancel_ghost)
+
+
+## Kamera-Knöpfe (FIX-3): Draufsicht/Schrägsicht + 2×90°-Drehung, rechts am
+## Rand — weit weg von Drawer und Action-Bar.
+func _build_kamera_leiste() -> void:
+	_kamera_leiste = VBoxContainer.new()
+	_kamera_leiste.name = "KameraLeiste"
+	_kamera_leiste.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_kamera_leiste.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_kamera_leiste.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_kamera_leiste.position.x -= 12.0
+	_kamera_leiste.add_theme_constant_override("separation", 8)
+	_ui.add_child(_kamera_leiste)
+	_add_kamera_button("build.kamera.oben", func() -> void: _build_camera.set_draufsicht(true))
+	_add_kamera_button("build.kamera.schraeg", func() -> void: _build_camera.set_draufsicht(false))
+	_add_kamera_button("build.kamera.links", func() -> void: _build_camera.schnapp_90(-1))
+	_add_kamera_button("build.kamera.rechts", func() -> void: _build_camera.schnapp_90(1))
+
+
+func _add_kamera_button(key: String, handler: Callable) -> void:
+	var btn := Button.new()
+	btn.text = I18nService.t(key)
+	btn.theme_type_variation = "AcChip"
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.pressed.connect(handler)
+	_kamera_leiste.add_child(btn)
 
 
 func _add_action_button(key: String, variation: String, handler: Callable) -> void:
@@ -400,11 +638,17 @@ func _build_drawer() -> void:
 
 
 func _refresh_drawer() -> void:
+	var storage: Array = HomeState.storage(_gs) if _gs != null else []
+	var cap := HomeState.storage_capacity(_gs) if _gs != null else 100
+	# Unverändertes Lager nicht neu bauen (FIX-3: Öffnen-Ruckler) — die
+	# Signatur deckt Inhalt UND Kapazität ab.
+	var sig := "%s|%d" % [str(storage), cap]
+	if sig == _drawer_sig:
+		return
+	_drawer_sig = sig
 	for child in _drawer_items.get_children():
 		child.queue_free()
-	var storage: Array = HomeState.storage(_gs) if _gs != null else []
 	var used := StorageLogic.points_used(storage, FurnitureCatalog.defs())
-	var cap := HomeState.storage_capacity(_gs) if _gs != null else 100
 	_capacity_label.text = I18nService.t("build.lager", {"used": used, "cap": cap})
 	if storage.is_empty():
 		var empty := Label.new()
@@ -442,12 +686,11 @@ func _open_goobay() -> void:
 	panel.closed.connect(_refresh_drawer)
 
 
-func _update_action_bar() -> void:
+func _update_action_bar(ok := false) -> void:
 	var has_ghost := not _ghost_state.is_empty()
 	_action_bar.visible = has_ghost
 	if not has_ghost:
 		return
-	var ok := bool(_ghost_check()["ok"])
 	(_action_bar.get_child(1) as Button).disabled = not ok
 	(_action_bar.get_child(2) as Button).visible = _ghost_state.get("mode", "") == "move"
 

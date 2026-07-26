@@ -342,6 +342,11 @@ func _on_back_pressed() -> void:
 	var router := get_node_or_null("/root/SceneRouter")
 	if router == null or not router.has_method("goto"):
 		return
+	# FIX1: EIN gemeinsamer Zurück-Pfad (Router-History/Panel-Stack), sonst
+	# der &"home"-Alias — vorher war &"home" NIE registriert und der Knopf
+	# tat still nichts.
+	if router.has_method("handle_back_request") and router.handle_back_request():
+		return
 	var routes: Variant = router.get("_routes")
 	if routes is Dictionary and (routes as Dictionary).has(&"home"):
 		router.goto(&"home", {})

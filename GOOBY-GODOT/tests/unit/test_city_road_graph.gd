@@ -10,7 +10,7 @@ func _graph() -> CityRoadGraph:
 func test_alle_orte_von_zuhause_erreichbar() -> void:
 	var karte := CityMap.laden()
 	var graph := _graph()
-	var start := karte.zuhause_strasse()
+	var start: Vector2i = karte.zuhause_einfahrt()["strasse_tile"]
 	for eintrag: Dictionary in karte.orte():
 		var ziel := CityMap._tile_von(eintrag.get("strasse", [0, 0]))
 		var pfad := graph.pfad(start, ziel)
@@ -70,6 +70,6 @@ func test_gooberando_route_kueche_zu_haus() -> void:
 	var karte := CityMap.laden()
 	var graph := _graph()
 	var kueche := graph.naechste_strasse(Vector2i(5, 5))
-	var haus := karte.zuhause_strasse()
+	var haus: Vector2i = karte.zuhause_einfahrt()["strasse_tile"]
 	var pfad := graph.pfad(kueche, haus)
 	assert_true(pfad.size() >= 2, "Liefer-Route existiert (Doc E §5.2)")

@@ -22,6 +22,17 @@ extends Node
 ##   TravelType.DOOR_TRAVEL) NACH seiner Tür-Gag-/Lauf-Sequenz auf; das
 ##   additive Laden ohne Veil (Doc A §1.4) ist Backlog M2 und ändert die
 ##   Signatur NICHT.
+##
+## FIX1 — EIN gemeinsamer Zurück-Pfad (P0 „Zurück-Button geht meist nicht“):
+## - Der Router führt eine Reise-HISTORY; `back()` reist zum vorherigen Ziel.
+## - `&"home"` ist ein ALIAS: alle Screens rufen `goto(&"home")` — vorher war
+##   das Ziel NIE registriert (Räume heißen `home/<raum>`), der Guard
+##   `routes.has(&"home")` schlug fehl und der Zurück-Knopf tat still NICHTS.
+##   Jetzt wird der Alias automatisch mitregistriert, sobald die erste
+##   `home/`-Route ankommt, und löst beim goto auf den zuletzt besuchten Raum
+##   auf (sonst auf den Start-Raum).
+## - Escape / Android-Back / iOS-Wischgeste (WM_GO_BACK_REQUEST): schließt
+##   zuerst das oberste Panel (PanelStack), sonst reist es zurück.
 
 signal state_changed(state: int)
 signal travel_started(target: StringName, travel_type: int)
@@ -34,6 +45,13 @@ enum State { IDLE, COVER, SWAP, WAIT_READY, REVEAL }
 
 const READY_FOR_REVEAL_SIGNAL := &"ready_for_reveal"
 const VEIL_SCENE := preload("res://scripts/core/loading_veil.tscn")
+## Alias-Ziel, das alle Zurück-Buttons ansteuern (FIX1).
+const HOME_ALIAS := &"home"
+## Präfix der Raum-Routen (RoomDefs.ROUTE_PREFIX — hier gespiegelt, damit
+## der Router kein Home-Modul importieren muss).
+const HOME_ROUTE_PREFIX := "home/"
+## History-Deckel — reicht für tiefe Ketten, begrenzt Speicher.
+const HISTORY_LIMIT := 16
 
 ## Mindest-Anzeigedauer des Veils (verhindert Blitz-Flackern bei Mini-Szenen).
 var min_shown_ms := 600
@@ -51,6 +69,8 @@ var _current_target := StringName()
 var _pending: Dictionary = {}
 var _busy := false
 var _requested_paths: Dictionary = {}
+## Reise-History (älteste zuerst): [{"target": StringName, "params": {}}].
+var _history: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -58,12 +78,43 @@ func _ready() -> void:
 		var veil := VEIL_SCENE.instantiate()
 		add_child(veil)
 		_veil = veil
+	# Escape/Back auch verarbeiten, wenn kein Control fokussiert ist.
+	set_process_unhandled_input(true)
+
+
+## Escape (Desktop) fungiert wie die System-Zurück-Geste.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if handle_back_request():
+			get_viewport().set_input_as_handled()
+
+
+## Android-Back / iOS-Zurück-Wisch kommt als WM-Notification an.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		handle_back_request()
+
+
+## DER Zurück-Pfad (FIX1): oberstes Panel schließen, sonst zurückreisen.
+## true = die Anfrage wurde konsumiert.
+func handle_back_request() -> bool:
+	if PanelStack.close_top():
+		return true
+	if _busy:
+		return true
+	if can_go_back():
+		back()
+		return true
+	return false
 
 
 ## Ziel registrieren (W2/W3-Agents melden hier ihre Räume/Screens an,
-## ohne den Router zu editieren).
+## ohne den Router zu editieren). Die erste `home/`-Route registriert
+## automatisch den `&"home"`-Alias mit (FIX1 — s. Kopfkommentar).
 func register_route(target: StringName, scene_path: String) -> void:
 	_routes[target] = scene_path
+	if String(target).begins_with(HOME_ROUTE_PREFIX) and not _routes.has(HOME_ALIAS):
+		_routes[HOME_ALIAS] = scene_path
 
 
 func register_routes(routes: Dictionary) -> void:
@@ -99,6 +150,7 @@ func preload_target(target: StringName) -> void:
 func goto(
 	target: StringName, params: Dictionary = {}, travel_type: int = TravelType.VEIL_TRAVEL
 ) -> void:
+	target = _resolve_target(target)
 	if not _routes.has(target):
 		push_error("SceneRouter: unbekanntes Ziel '%s' — erst register_route()." % target)
 		return
@@ -108,6 +160,34 @@ func goto(
 		_pending = {"target": target, "params": params, "type": travel_type}
 		return
 	_travel(target, params, travel_type)
+
+
+## Zum vorherigen History-Ziel zurückreisen (DER gemeinsame Zurück-Pfad).
+## true = Rückreise gestartet; false = keine History (Aufrufer entscheidet).
+func back(travel_type: int = TravelType.VEIL_TRAVEL) -> bool:
+	if _busy or not can_go_back():
+		return false
+	_history.pop_back()
+	var previous: Dictionary = _history.back()
+	_travel(previous["target"], previous["params"], travel_type, false)
+	return true
+
+
+func can_go_back() -> bool:
+	return _history.size() >= 2
+
+
+## History (älteste zuerst) — Kopie für Tests/Debug.
+func get_history() -> Array[StringName]:
+	var targets: Array[StringName] = []
+	for entry in _history:
+		targets.append(entry["target"])
+	return targets
+
+
+## Tests/Szenenwechsel-Reset (z. B. neuer Spielstand).
+func clear_history() -> void:
+	_history.clear()
 
 
 func is_busy() -> bool:
@@ -126,8 +206,33 @@ func get_current_scene() -> Node:
 	return _current_scene
 
 
-func _travel(target: StringName, params: Dictionary, travel_type: int) -> void:
+## `&"home"` → zuletzt besuchter Raum (History), sonst erste `home/`-Route.
+func _resolve_target(target: StringName) -> StringName:
+	if target != HOME_ALIAS:
+		return target
+	for i in range(_history.size() - 1, -1, -1):
+		var visited: StringName = _history[i]["target"]
+		if String(visited).begins_with(HOME_ROUTE_PREFIX):
+			return visited
+	for key: StringName in _routes.keys():
+		if String(key).begins_with(HOME_ROUTE_PREFIX):
+			return key
+	return target
+
+
+func _record_history(target: StringName, params: Dictionary) -> void:
+	if not _history.is_empty() and _history.back()["target"] == target:
+		_history.back()["params"] = params
+		return
+	_history.append({"target": target, "params": params})
+	while _history.size() > HISTORY_LIMIT:
+		_history.pop_front()
+
+
+func _travel(target: StringName, params: Dictionary, travel_type: int, record := true) -> void:
 	_busy = true
+	if record:
+		_record_history(target, params)
 	_current_target = target
 	var cover_started_ms := Time.get_ticks_msec()
 	travel_started.emit(target, travel_type)

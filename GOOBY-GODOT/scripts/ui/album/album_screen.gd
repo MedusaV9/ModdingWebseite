@@ -9,6 +9,11 @@ extends Control
 ## HUD-Verdrahtung (W1c-API): der Home-Besitzer verbindet
 ##   hud.action_pressed.connect(AlbumScreen.handle_hud_action)
 ## — Request an W2a: /tmp/gooby-godot/handoffs/W3d-home-requests.md.
+##
+## FIX1 (P0 „UI ist meist falsch skaliert“): Chrome, Rail, Chips und
+## Kacheln skalieren über die zentrale Regel `UiScale.for_viewport()` und
+## respektieren die Safe-Area — vorher waren alle Größen feste Design-px
+## (Rail 240, Kacheln 190×200) und auf Retina-Geräten winzig.
 
 signal ready_for_reveal
 
@@ -37,6 +42,13 @@ var _rail_box: VBoxContainer
 var _toasts: ToastLayer
 var _sheet: PanelSheet
 var _unlocks: StickerUnlocks
+## FIX1: aktueller UI-Faktor + daraus abgeleitete Kachelgröße (Canvas-px).
+var _f := 1.0
+var _tile := Vector2(190, 200)
+var _rows_box: VBoxContainer
+var _rail_scroll: ScrollContainer
+var _back_btn: Button
+var _title_label: Label
 
 
 ## Album-Route am SceneRouter anmelden (idempotent).
@@ -71,9 +83,63 @@ func _ready() -> void:
 	if not _pages.is_empty():
 		_current_page = str(_pages[0].get("id", ""))
 	_build_ui()
+	_apply_metrics()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	_show_page(_current_page)
 	_attach_unlock_service()
 	ready_for_reveal.emit()
+
+
+func _on_viewport_resized() -> void:
+	if not is_inside_tree():
+		return
+	_apply_metrics()
+	_show_page(_current_page)
+
+
+## FIX1: zentrale Skalierung + Safe-Area auf Chrome/Rail/Kacheln anwenden
+## (bei Rotation/Resize erneut — Kacheln baut _show_page danach neu).
+func _apply_metrics() -> void:
+	_f = UiScale.for_viewport(get_viewport())
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	_rows_box.offset_left = 24.0 + float(insets["left"])
+	_rows_box.offset_right = -24.0 - float(insets["right"])
+	_rows_box.offset_top = 16.0 + float(insets["top"])
+	_rows_box.offset_bottom = -16.0 - float(insets["bottom"])
+	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	_back_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
+	_scale_font(_back_btn, 17)
+	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
+	_scale_font(_count_label, AcTokens.FONT_SIZE_CAPTION)
+	_scale_font(_page_title, 24)
+	# Rail wächst mit, bleibt aber unter ~1/3 der Breite (Hochkant).
+	_rail_scroll.custom_minimum_size = Vector2(minf(240.0 * _f, canvas.x * 0.32), 0.0)
+	for chip in _rail_box.get_children():
+		if chip is Control:
+			(chip as Control).custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px * 0.85))
+			_scale_font(chip as Control, AcTokens.FONT_SIZE_CAPTION)
+	# Kacheln: Restbreite auf 2..4 Spalten aufteilen (Seitenverhältnis wie
+	# die alte 190×200-Kachel).
+	var avail := (
+		canvas.x
+		- (24.0 + float(insets["left"]))
+		- (24.0 + float(insets["right"]))
+		- _rail_scroll.custom_minimum_size.x
+		- 14.0
+	)
+	var cols := clampi(int(floorf((avail + 14.0) / (190.0 * _f + 14.0))), 2, 4)
+	_grid.columns = cols
+	var tile_w := (avail - 14.0 * float(cols - 1)) / float(cols)
+	_tile = Vector2(tile_w, tile_w * 200.0 / 190.0)
+
+
+## Font nur bei echtem Faktor überschreiben — bei 1.0 bleibt das Theme.
+func _scale_font(ctl: Control, base_px: int) -> void:
+	if _f > 1.0:
+		ctl.add_theme_font_size_override("font_size", int(base_px * _f))
+	else:
+		ctl.remove_theme_font_size_override("font_size")
 
 
 ## Seite hart anwählen (Screenshots/Tests).
@@ -100,6 +166,7 @@ func _build_ui() -> void:
 	rows.offset_bottom = -16.0
 	rows.add_theme_constant_override("separation", 12)
 	add_child(rows)
+	_rows_box = rows
 	rows.add_child(_build_header())
 
 	var split := HBoxContainer.new()
@@ -127,12 +194,14 @@ func _build_header() -> Control:
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(_on_back_pressed)
 	header.add_child(back)
+	_back_btn = back
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("album.titel")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(title)
+	_title_label = title
 	var count_chip := PanelContainer.new()
 	count_chip.theme_type_variation = &"StatusCapsule"
 	_count_label = Label.new()
@@ -148,6 +217,7 @@ func _build_rail() -> Control:
 	scroll.custom_minimum_size = Vector2(240, 0)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_rail_scroll = scroll
 	_rail_box = VBoxContainer.new()
 	_rail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rail_box.add_theme_constant_override("separation", 8)
@@ -215,7 +285,8 @@ func _build_sticker_card(def: Dictionary) -> Control:
 	var card := SquishButton.new()
 	card.name = "Sticker_%s" % id
 	card.theme_type_variation = &"AcCard"
-	card.custom_minimum_size = Vector2(190, 200)
+	# FIX1: Kachelgröße kommt aus _apply_metrics (skaliert + responsiv).
+	card.custom_minimum_size = _tile
 	card.focus_mode = Control.FOCUS_NONE
 	card.pressed.connect(_on_sticker_tapped.bind(def))
 	var content := VBoxContainer.new()
@@ -271,6 +342,7 @@ func _build_name_band(def: Dictionary, unlocked: bool) -> Control:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.clip_text = true
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_scale_font(label, AcTokens.FONT_SIZE_CAPTION)
 	band.add_child(label)
 	return band
 
@@ -283,10 +355,11 @@ func _on_sticker_tapped(def: Dictionary) -> void:
 	if unlocked:
 		var art := _art_rect(str(def.get("image", "")))
 		if art != null:
-			art.custom_minimum_size = Vector2(0, 220)
+			art.custom_minimum_size = Vector2(0, 220.0 * _f)
 			body.add_child(art)
 	var text := Label.new()
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_scale_font(text, 16)
 	if unlocked:
 		text.text = str(def.get("flavor_de", ""))
 	else:
@@ -389,6 +462,11 @@ func _on_back_pressed() -> void:
 		return
 	var router := get_node_or_null("/root/SceneRouter")
 	if router == null or not router.has_method("goto"):
+		return
+	# FIX1: EIN gemeinsamer Zurück-Pfad (Router-History/Panel-Stack), sonst
+	# der &"home"-Alias — vorher war &"home" NIE registriert und der Knopf
+	# tat still nichts.
+	if router.has_method("handle_back_request") and router.handle_back_request():
 		return
 	var routes: Variant = router.get("_routes")
 	if routes is Dictionary and (routes as Dictionary).has(&"home"):

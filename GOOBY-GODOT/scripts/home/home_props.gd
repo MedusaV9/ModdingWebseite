@@ -23,6 +23,50 @@ const PALETTE := {
 	"gold": AcTokens.GOLD,
 }
 
+## Echte Deko-GLBs (FIX-3, User: „warum so vieles nur Primitives?"):
+## Tiny-Treats-Kleinkram (Küche/Bad/Pflanzen) für Fensterbänke und Borde.
+const DEKO_ROOT := "res://assets/furniture/tiny-treats"
+
+
+## GLB laden und uniform auf `ziel_hoehe` Meter skalieren, Unterkante auf
+## y=0 (Fensterbank-/Bord-Deko). null bei fehlendem Asset (weich degradieren).
+static func deko_glb(unterpfad: String, ziel_hoehe: float) -> Node3D:
+	var pfad := "%s/%s.gltf" % [DEKO_ROOT, unterpfad]
+	if not ResourceLoader.exists(pfad):
+		push_warning("Deko-GLB fehlt: %s" % pfad)
+		return null
+	var szene: PackedScene = load(pfad)
+	if szene == null:
+		return null
+	var wurzel := Node3D.new()
+	wurzel.name = "Deko_%s" % unterpfad.get_file()
+	var modell: Node3D = szene.instantiate()
+	wurzel.add_child(modell)
+	var aabb := merged_aabb(modell, Transform3D.IDENTITY)
+	if aabb.size.y > 0.0001:
+		var s := ziel_hoehe / aabb.size.y
+		modell.scale = Vector3.ONE * s
+		var center := aabb.get_center()
+		modell.position = Vector3(-center.x * s, -aabb.position.y * s, -center.z * s)
+	return wurzel
+
+
+static func merged_aabb(node: Node, xform: Transform3D) -> AABB:
+	var merged := AABB()
+	var found := false
+	var local := xform
+	if node is Node3D:
+		local = xform * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		merged = local * (node as MeshInstance3D).mesh.get_aabb()
+		found = true
+	for child in node.get_children():
+		var sub := merged_aabb(child, local)
+		if sub.size != Vector3.ZERO or sub.position != Vector3.ZERO:
+			merged = merged.merge(sub) if found else sub
+			found = true
+	return merged
+
 
 ## Flaches, weiches Material in einer Paletten-Farbe.
 static func material(farbe_id: String, alpha := 1.0) -> StandardMaterial3D:

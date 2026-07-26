@@ -24,16 +24,10 @@ color = Color(0.2902, 0.2314, 0.2118, 0.35)
 [node name="Sheet" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -80.0
+offset_top = 200.0
 offset_right = -24.0
 offset_bottom = -16.0
-grow_horizontal = 2
-grow_vertical = 0
 theme_type_variation = &"AcCardLg"
 
 [node name="SheetVBox" type="VBoxContainer" parent="Sheet"]
@@ -52,6 +46,15 @@ layout_mode = 2
 theme_type_variation = &"TitleLabel"
 horizontal_alignment = 1
 
-[node name="SheetBody" type="MarginContainer" parent="Sheet/SheetVBox"]
+[node name="SheetScroll" type="ScrollContainer" parent="Sheet/SheetVBox"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+scroll_deadzone = 24
+
+[node name="SheetBody" type="MarginContainer" parent="Sheet/SheetVBox/SheetScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3

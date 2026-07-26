@@ -136,10 +136,11 @@ func test_safe_area_override_verschiebt_raender() -> void:
 	hud.safe_area_override = Rect2(59.0, 0.0, canvas.x - 118.0, canvas.y - 21.0)
 	hud.refresh_safe_area()
 	var top_bar := hud.get_node("TopBar") as MarginContainer
-	check_eq(top_bar.get_theme_constant("margin_left"), 75, "TopBar weicht der Notch aus (16+59)")
-	check_eq(top_bar.get_theme_constant("margin_right"), 75, "TopBar rechts symmetrisch")
+	# FIX1: nur noch EDGE_PAD (8) Schattenluft statt 16 — Stats bündig am Rand.
+	check_eq(top_bar.get_theme_constant("margin_left"), 67, "TopBar weicht der Notch aus (8+59)")
+	check_eq(top_bar.get_theme_constant("margin_right"), 67, "TopBar rechts symmetrisch")
 	check_approx(
-		(hud.get_node("LeftColumn") as Control).offset_left, 75.0, "Cockpit-Stats rücken ein"
+		(hud.get_node("LeftColumn") as Control).offset_left, 67.0, "Cockpit-Stats rücken ein"
 	)
 	check_approx(
 		(hud.get_node("PortraitArc") as Control).offset_bottom,
@@ -148,6 +149,6 @@ func test_safe_area_override_verschiebt_raender() -> void:
 	)
 	hud.safe_area_override = Rect2()
 	hud.refresh_safe_area()
-	check_eq(top_bar.get_theme_constant("margin_left"), 16, "ohne Notch wieder Standard")
+	check_eq(top_bar.get_theme_constant("margin_left"), 8, "ohne Notch wieder Standard (EDGE_PAD)")
 	check_approx((hud.get_node("PortraitArc") as Control).offset_bottom, -8.0, "Bogen-Standard")
 	unmount(hud)

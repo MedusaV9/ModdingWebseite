@@ -27,6 +27,21 @@ static func is_top(panel: Control) -> bool:
 	return not _stack.is_empty() and _stack.back() == panel
 
 
+## FIX1: Escape/Back-Geste schließt NUR das oberste Panel — der eine
+## gemeinsame Pfad für alle Sheets (SceneRouter.handle_back_request ruft das).
+## true = ein Panel wurde geschlossen.
+static func close_top() -> bool:
+	_prune()
+	if _stack.is_empty():
+		return false
+	var top: Control = _stack.back()
+	if top.has_method("close"):
+		top.call("close")
+	else:
+		remove(top)
+	return true
+
+
 static func count() -> int:
 	_prune()
 	return _stack.size()

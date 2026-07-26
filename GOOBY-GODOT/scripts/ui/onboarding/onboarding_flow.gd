@@ -79,6 +79,7 @@ func _apply_texts() -> void:
 	_nickname_edit.placeholder_text = I18nService.t("onboarding.nickname_placeholder")
 	%NicknameNext.text = I18nService.t("ui.weiter")
 	%EditorText.text = I18nService.t("onboarding.editor_text")
+	%PreviewHint.text = I18nService.t("onboarding.editor_hinweis")
 	%EditorSkip.text = I18nService.t("ui.ueberspringen")
 	%EditorNext.text = I18nService.t("ui.weiter")
 	%DoneTitle.text = I18nService.t("onboarding.done_titel")

@@ -90,14 +90,17 @@ static func style_status_chip(chip: Button, status: int) -> void:
 
 
 ## Text-Leerzustand: Mini-Hasen-ASCII (aus den Strings) + Hinweiszeile.
-static func build_empty_state(art_key: String, text_key: String) -> Control:
+## `ui_scale` > 1 skaliert die Fonts (FIX1, zentrale UiScale-Regel).
+static func build_empty_state(art_key: String, text_key: String, ui_scale := 1.0) -> Control:
 	var box := VBoxContainer.new()
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 4)
+	box.add_theme_constant_override("separation", int(4 * ui_scale))
 	var art := Label.new()
 	art.text = I18nService.t(art_key)
 	art.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	art.add_theme_color_override("font_color", COLOR_OFFLINE)
+	if ui_scale > 1.0:
+		art.add_theme_font_size_override("font_size", int(16 * ui_scale))
 	box.add_child(art)
 	var text := Label.new()
 	text.theme_type_variation = &"CaptionLabel"
@@ -105,5 +108,7 @@ static func build_empty_state(art_key: String, text_key: String) -> Control:
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if ui_scale > 1.0:
+		text.add_theme_font_size_override("font_size", int(15 * ui_scale))
 	box.add_child(text)
 	return box

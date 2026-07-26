@@ -53,6 +53,11 @@ func _ready() -> void:
 	_setup_safe_mode_banner()
 	_roll_random_event()
 	if _gs != null and not bool(_gs.get_value("onboarding.done", false)):
+		# W6/FIX-6: erster Start — liegt noch ein Spielstand der alten
+		# Capacitor-App im selben Bundle-Container? Dann zuerst das
+		# Uebernahme-Angebot zeigen, sonst normal ins Onboarding.
+		if _offer_legacy_transfer():
+			return
 		_show_onboarding()
 	else:
 		_start_home()
@@ -177,6 +182,21 @@ func _current_room() -> RoomBase:
 	if _router == null:
 		return null
 	return _router.get_current_scene() as RoomBase
+
+
+## Sucht den Alt-Spielstand der Web-App (NSUserDefaults-Spiegelung, gleiche
+## Bundle-Id). Fund → Uebernahme-Screen (er routet danach selbst heim) und
+## `true`, sonst `false`. Billig: ein Datei-Read; ohne Fund kein Sonderfall.
+func _offer_legacy_transfer() -> bool:
+	if _router == null:
+		return false
+	var svc := load("res://scripts/state/import/transfer_service.gd")
+	var probe: Dictionary = svc.probe_legacy(int(Time.get_unix_time_from_system() * 1000.0))
+	if not bool(probe.get("found", false)):
+		return false
+	TransferScreen.register_routes()
+	_router.goto(TransferScreen.ROUTE)
+	return true
 
 
 func _show_onboarding() -> void:

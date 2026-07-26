@@ -27,6 +27,11 @@ var _offline_hint: Label
 var _friends_box: VBoxContainer
 var _incoming_box: VBoxContainer
 var _busy := false
+## FIX1: aktueller UI-Faktor (zentrale UiScale-Regel) + Chrome-Referenzen.
+var _f := 1.0
+var _rows_box: VBoxContainer
+var _back_btn: Button
+var _title_label: Label
 
 
 static func register_routes() -> void:
@@ -54,12 +59,48 @@ func _ready() -> void:
 	if _services == null:
 		_services = SocialServices.get_or_create(self)
 	_build_ui()
+	_apply_metrics()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	if _net != null:
 		_net.status_changed.connect(_on_status_changed)
 		if _net.friends != null:
 			_net.friends.friends_changed.connect(_on_friends_changed)
 	_wire_services()
 	_refresh_all()
+
+
+func _on_viewport_resized() -> void:
+	if not is_inside_tree():
+		return
+	_apply_metrics()
+	_refresh_all()
+
+
+## FIX1 („UI ist meist falsch skaliert“): Chrome an die zentrale
+## UiScale-Regel + Safe-Area ziehen — vorher feste Design-px, auf
+## Retina-Geräten winzig.
+func _apply_metrics() -> void:
+	_f = UiScale.for_viewport(get_viewport())
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	_rows_box.offset_left = 24.0 + float(insets["left"])
+	_rows_box.offset_right = -24.0 - float(insets["right"])
+	_rows_box.offset_top = 16.0 + float(insets["top"])
+	_rows_box.offset_bottom = -16.0 - float(insets["bottom"])
+	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	_back_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
+	_scale_font(_back_btn, 17)
+	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
+	_scale_font(_status_chip, AcTokens.FONT_SIZE_CAPTION)
+	_scale_font(_offline_hint, AcTokens.FONT_SIZE_CAPTION)
+
+
+## Font nur bei echtem Faktor überschreiben — bei 1.0 bleibt das Theme.
+func _scale_font(ctl: Control, base_px: int) -> void:
+	if _f > 1.0:
+		ctl.add_theme_font_size_override("font_size", int(base_px * _f))
+	else:
+		ctl.remove_theme_font_size_override("font_size")
 
 
 func visit_service() -> VisitService:
@@ -87,6 +128,7 @@ func _build_ui() -> void:
 	rows.offset_bottom = -16.0
 	rows.add_theme_constant_override("separation", 12)
 	add_child(rows)
+	_rows_box = rows
 
 	var header := HBoxContainer.new()
 	rows.add_child(header)
@@ -95,12 +137,14 @@ func _build_ui() -> void:
 	back.text = I18nService.t("social.screen.back")
 	back.pressed.connect(_on_back_pressed)
 	header.add_child(back)
+	_back_btn = back
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("social.screen.title")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(title)
+	_title_label = title
 	_status_chip = Button.new()
 	header.add_child(_status_chip)
 
@@ -172,7 +216,7 @@ func _on_friends_changed(friends: Array) -> void:
 		child.queue_free()
 	if friends.is_empty():
 		_friends_box.add_child(
-			FriendListUi.build_empty_state("social.screen.empty_art", "social.screen.empty")
+			FriendListUi.build_empty_state("social.screen.empty_art", "social.screen.empty", _f)
 		)
 		return
 	for row: Dictionary in friends:
@@ -193,10 +237,12 @@ func _build_friend_row(row: Dictionary) -> Control:
 	var name_label := Label.new()
 	name_label.theme_type_variation = &"HeadlineLabel"
 	name_label.text = "%s · %s" % [str(row.get("name", "?")), str(row.get("goobyName", "Gooby"))]
+	_scale_font(name_label, 22)
 	names.add_child(name_label)
 	var status_label := Label.new()
 	status_label.theme_type_variation = &"CaptionLabel"
 	status_label.text = FriendListUi.presence_text(row)
+	_scale_font(status_label, AcTokens.FONT_SIZE_CAPTION)
 	if not online:
 		status_label.add_theme_color_override("font_color", FriendListUi.COLOR_OFFLINE)
 	names.add_child(status_label)
@@ -206,20 +252,32 @@ func _build_friend_row(row: Dictionary) -> Control:
 	visit_btn.text = I18nService.t("social.visit.button")
 	visit_btn.disabled = not can_act
 	visit_btn.pressed.connect(_on_visit_pressed.bind(row))
+	_scale_action_button(visit_btn)
 	box.add_child(visit_btn)
 	var board_btn := Button.new()
 	board_btn.theme_type_variation = &"BtnTeal"
 	board_btn.text = I18nService.t("board.button")
 	board_btn.disabled = not can_act
 	board_btn.pressed.connect(_on_board_pressed.bind(row))
+	_scale_action_button(board_btn)
 	box.add_child(board_btn)
 	var pal_btn := Button.new()
 	pal_btn.theme_type_variation = &"GhostButton"
 	pal_btn.text = I18nService.t("social.pal.button")
 	pal_btn.disabled = not _is_online()
 	pal_btn.pressed.connect(_on_pal_pressed.bind(row))
+	_scale_action_button(pal_btn)
 	box.add_child(pal_btn)
 	return card
+
+
+## Aktions-Knopf in Freundes-Zeilen: Font + Touch-Floor skalieren (FIX1).
+func _scale_action_button(btn: Button) -> void:
+	_scale_font(btn, 17)
+	var floor_px := HudLayoutLogic.touch_floor_canvas(
+		Vector2(get_viewport().get_visible_rect().size)
+	)
+	btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
 
 
 # ── Besuch ───────────────────────────────────────────────────────────────────
@@ -406,6 +464,11 @@ func _on_back_pressed() -> void:
 		return
 	var router := get_node_or_null("/root/SceneRouter")
 	if router == null or not router.has_method("goto"):
+		return
+	# FIX1: EIN gemeinsamer Zurück-Pfad (Router-History/Panel-Stack), sonst
+	# der &"home"-Alias — vorher war &"home" NIE registriert und der Knopf
+	# tat still nichts.
+	if router.has_method("handle_back_request") and router.handle_back_request():
 		return
 	var routes: Variant = router.get("_routes")
 	if routes is Dictionary and (routes as Dictionary).has(&"home"):

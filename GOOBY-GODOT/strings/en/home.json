@@ -9,7 +9,11 @@
 		},
 		"tuer": {
 			"stuck": "Gooby got stuck!",
-			"mash_hint": "Tap! Tap! Tap!"
+			"mash_hint": "Tap! Tap! Tap!",
+			"confirm_raum": "Enter {raum}?",
+			"confirm_draussen": "Go outside?",
+			"confirm_ja": "Let's go!",
+			"confirm_nein": "Not now"
 		},
 		"blocked": {
 			"bubble": "I'm not that good at climbing… awww man!",
@@ -34,6 +38,12 @@
 		"abbrechen": "Cancel",
 		"bett_quest": "Place your bed! Gooby wants to snuggle!",
 		"hammer_fertig": "Tadaa! Built it myself!",
+		"kamera": {
+			"oben": "Top view",
+			"schraeg": "Angled view",
+			"links": "⟲ 90°",
+			"rechts": "90° ⟳"
+		},
 		"pflicht": {
 			"bett": "Gooby needs his bed! 😤",
 			"couch": "Gooby needs his couch! 😤",

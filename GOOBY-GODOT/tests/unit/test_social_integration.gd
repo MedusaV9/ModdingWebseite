@@ -310,8 +310,107 @@ func _teil2_battleship(alice: NetClient, bob: NetClient) -> void:
 		)
 	)
 
-	await host.leave()
+	# ---- FIX-6: Revanche nach der Vollpartie (beide wollen → Rollentausch) ----
+	var rematch_pings: Array = []
+	host.rematch_requested_by_opponent.connect(func() -> void: rematch_pings.append(true))
+	var old_room := host.room_id
+	var wants: Dictionary = await guest.request_rematch()
+	assert_true(wants["ok"], "BOARD_REMATCH (Bob): %s" % str(wants))
+	assert_true(wants["waiting"], "Bob wartet auf Alice")
+	assert_true(
+		await wait_until(func() -> bool: return rematch_pings.size() == 1, 8000),
+		"Alice sieht den Revanche-Wunsch"
+	)
+	var agreed: Dictionary = await host.request_rematch()
+	assert_true(agreed["ok"], "BOARD_REMATCH (Alice): %s" % str(agreed))
+	assert_false(agreed["waiting"], "beide wollten → Start sofort")
+	var restarted := await wait_until(
+		func() -> bool: return host.is_active() and guest.is_active(), 8000
+	)
+	assert_true(restarted, "Revanche-Partie laeuft auf beiden Seiten")
+	assert_ne(host.room_id, old_room, "frischer Room fuer die Revanche")
+	assert_true(guest.my_turn(), "Rollentausch: jetzt beginnt Bob")
+	assert_false(host.finished, "Zustand komplett zurueckgesetzt")
+	print("[W3C-INT] Battleship: REVANCHE gestartet (Room %s, Bob beginnt)" % host.room_id)
+
+	# ---- FIX-6: Aufgeben — Alice kapituliert, Bob gewinnt sofort ----
+	assert_true(host.set_fleet(host.default_fleet()))
+	assert_true(guest.set_fleet(guest.default_fleet()))
+	var guest_overs: Array = []
+	guest.game_over.connect(
+		func(winner_code: String, i_won: bool) -> void: guest_overs.append([winner_code, i_won])
+	)
+	assert_true(host.surrender(), "Aufgabe geht raus")
+	assert_true(host.finished, "eigene Session sofort beendet")
+	assert_eq(host.winner, bob.friend_code, "der Gegner gewinnt")
+	assert_true(
+		await wait_until(func() -> bool: return guest_overs.size() == 1, 8000),
+		"Bob sieht das GAME_OVER der Kapitulation"
+	)
+	assert_eq(guest_overs[0], [bob.friend_code, true], "Bob hat gewonnen")
+	print("[W3C-INT] Battleship: AUFGEBEN ok — Sieger %s" % bob.friend_code)
+
+	# ---- FIX-6: Revanche abgelehnt — Bob geht, Alice erfaehrt es ----
+	var declines: Array = []
+	host.rematch_declined.connect(func() -> void: declines.append(true))
+	var asking: Dictionary = await host.request_rematch()
+	assert_true(asking["ok"] and asking["waiting"], "Alice wartet: %s" % str(asking))
 	await guest.leave()
+	assert_true(
+		await wait_until(func() -> bool: return declines.size() == 1, 8000),
+		"Alice sieht BOARD_REMATCH_DECLINED"
+	)
+	await host.leave()
+	print("[W3C-INT] Battleship: Revanche-Ablehnung kommt an")
+
+	# ---- FIX-6: Verbindungsabbruch — PEER_DOWN, Auto-Rejoin, Forfeit ----
+	var invites2: Array = []
+	guest.invite_incoming.connect(func(data: Dictionary) -> void: invites2.append(data))
+	assert_true((await host.invite(bob.friend_code))["ok"])
+	assert_true(await wait_until(func() -> bool: return invites2.size() == 1, 8000))
+	assert_true((await guest.accept(alice.friend_code))["ok"])
+	assert_true(
+		await wait_until(func() -> bool: return host.is_active() and guest.is_active(), 8000)
+	)
+	var peer_events: Array = []
+	host.peer_connection_changed.connect(
+		func(down: bool, wait_ms: int) -> void: peer_events.append([down, wait_ms])
+	)
+	var resumes: Array = []
+	guest.game_resumed.connect(func(data: Dictionary) -> void: resumes.append(data))
+	bob.disconnect_now()
+	assert_true(
+		await wait_until(func() -> bool: return peer_events.size() == 1, 8000),
+		"Alice sieht BOARD_PEER_DOWN sofort"
+	)
+	assert_eq(peer_events[0][0], true, "down=true")
+	assert_true(int(peer_events[0][1]) > 0, "Rejoin-Fenster wird mitgeteilt")
+	assert_true(host.peer_down, "Session spiegelt den Peer-Status")
+	bob.connect_now()
+	assert_true(
+		await wait_until(func() -> bool: return resumes.size() == 1, 15000),
+		"Bob resumed AUTOMATISCH nach der Wiederverbindung (Session-Rejoin)"
+	)
+	assert_true(
+		await wait_until(func() -> bool: return peer_events.size() == 2, 8000),
+		"Alice sieht BOARD_PEER_UP"
+	)
+	assert_eq(peer_events[1][0], false, "down=false")
+	assert_false(host.peer_down)
+	print("[W3C-INT] Battleship: Abbruch → PEER_DOWN, Auto-Rejoin → RESUME + PEER_UP")
+
+	# Bewusster Abbruch mitten im Spiel: Bob geht → Alice gewinnt per Forfeit.
+	var forfeits: Array = []
+	host.opponent_forfeit.connect(func(data: Dictionary) -> void: forfeits.append(data))
+	await guest.leave()
+	assert_true(
+		await wait_until(func() -> bool: return forfeits.size() == 1, 8000),
+		"Alice sieht BOARD_FORFEIT nach Bobs Abbruch"
+	)
+	assert_true(host.finished and host.winner == alice.friend_code, "Alice gewinnt per Forfeit")
+	print("[W3C-INT] Battleship: bewusster Abbruch → Forfeit-Sieg fuer Alice")
+
+	await host.leave()
 	host.queue_free()
 	guest.queue_free()
 	await wait_frames(1)

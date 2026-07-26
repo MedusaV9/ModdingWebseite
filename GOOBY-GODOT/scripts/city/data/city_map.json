@@ -19,7 +19,7 @@
     "park": {"zonen": [[8, 7, 9, 9]], "energie": 6},
     "flughafen": {"zonen": [[0, 2, 0, 5]], "energie": 6}
   },
-  "zuhause": {"tile": [9, 2], "strasse": [9, 1]},
+  "zuhause": {"tile": [9, 2], "strasse": [9, 1], "einfahrt_m": 11.5},
   "gooberando_kueche": {"tile": [5, 5], "strasse": [5, 6]},
   "orte": [
     {
@@ -115,7 +115,7 @@
     }
   ],
   "deko": [
-    {"id": "ikea", "glb": "gebaeude/building-e.glb", "tile": [2.5, 2.5], "rot": 180, "scale": 15, "tint": "#4E79D6"},
+    {"id": "ikea", "glb": "gebaeude/building-e.glb", "tile": [2.5, 2.5], "rot": 180, "scale": 15, "tint": "#4E79D6", "name_key": "city.ort.ikea", "schild_tint": "#FFD100", "schild_strasse": [4, 2]},
     {"id": "markt_stand_a", "glb": "gebaeude/detail-awning.glb", "tile": [5.75, 6.8], "rot": 0, "scale": 7, "tint": "#E8524A"},
     {"id": "markt_stand_b", "glb": "gebaeude/detail-awning.glb", "tile": [5.75, 7.9], "rot": 0, "scale": 7, "tint": "#4FBF8B"},
     {"id": "markt_stand_c", "glb": "gebaeude/detail-awning.glb", "tile": [6.3, 6.8], "rot": 180, "scale": 7, "tint": "#4E79D6"},
@@ -137,6 +137,9 @@
   "traffic_loops": [
     [[1, 1], [1, 6], [4, 6], [4, 1]],
     [[4, 6], [4, 13], [7, 13], [7, 6]],
-    [[1, 1], [1, 13], [10, 13], [10, 1]]
+    [[1, 1], [1, 13], [10, 13], [10, 1]],
+    [[4, 1], [4, 6], [7, 6], [7, 1]],
+    [[7, 10], [7, 13], [10, 13], [10, 10]],
+    [[1, 6], [1, 10], [7, 10], [7, 6]]
   ]
 }

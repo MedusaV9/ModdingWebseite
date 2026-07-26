@@ -1,0 +1,79 @@
+{
+	"id": "shop_trip",
+	"title_key": "cutscene.shop.titel",
+	"room": "living",
+	"steps": [
+		{"op": "letterbox", "on": true},
+		{"op": "music", "track": "location-ikea-quest", "fade": 1.5},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "clip", "clip": "hop"},
+				{"op": "emotion", "emotion": "happy"},
+				{"op": "sfx", "id": "ui_confirm"},
+				{"op": "caption", "key": "cutscene.shop.idea"},
+				{"op": "wait", "duration": 1.5}
+			]
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "walk", "to": {"anchor": "entry", "offset": [0, 0, 0.6]}, "timeout": 6},
+				{
+					"op": "camera",
+					"move": "fly",
+					"pos": {"anchor": "center", "offset": [1.5, 2.4, 3.4]},
+					"look": {"anchor": "entry", "offset": [0, 0.5, 0.5]},
+					"duration": 2.0
+				}
+			]
+		},
+		{"op": "fade", "to": 1.0, "duration": 0.7},
+		{"op": "caption", "key": "cutscene.shop.drive"},
+		{
+			"op": "prop",
+			"action": "spawn",
+			"id": "taxi",
+			"glb": "res://assets/city/autos/taxi.glb",
+			"at": {"anchor": "center", "offset": [-5, 0, 0.5]},
+			"rot_deg": 90,
+			"scale": 1.0
+		},
+		{
+			"op": "camera",
+			"move": "fly",
+			"pos": {"anchor": "center", "offset": [0, 1.6, 4.2]},
+			"look": {"anchor": "center", "offset": [0, 0.4, 0.4]},
+			"duration": 0.05
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 0.0, "duration": 0.6},
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "taxi",
+					"to": {"anchor": "center", "offset": [5.5, 0, 0.5]},
+					"duration": 2.8
+				},
+				{"op": "wait", "duration": 2.8}
+			]
+		},
+		{"op": "prop", "action": "despawn", "id": "taxi"},
+		{"op": "fade", "to": 1.0, "duration": 0.6},
+		{"op": "caption", "key": "cutscene.shop.arrive"},
+		{"op": "stinger", "track": "stinger-results"},
+		{"op": "wait", "duration": 1.4},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 0.0, "duration": 0.8},
+				{"op": "caption_clear"}
+			]
+		},
+		{"op": "letterbox", "on": false},
+		{"op": "camera", "move": "restore", "duration": 0.8},
+		{"op": "music", "context": "shop", "keep_on_skip": true}
+	]
+}

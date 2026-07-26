@@ -45,8 +45,8 @@ func test_lock_mode_resolution_to_screen_orientation() -> void:
 	)
 	assert_eq(
 		SERVICE_SCRIPT.resolve_screen_orientation(auto_mode, "auto"),
-		DisplayServer.SCREEN_SENSOR,
-		"AUTO + auto = voller Sensor"
+		DisplayServer.SCREEN_SENSOR_LANDSCAPE,
+		"AUTO + auto = Querformat (FIX1: landscape-first)"
 	)
 	# Lock schlägt globale Präferenz
 	assert_eq(

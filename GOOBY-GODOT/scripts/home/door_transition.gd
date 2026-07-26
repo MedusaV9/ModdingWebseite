@@ -43,6 +43,7 @@ func setup(p_door_id: String, p_target_room: String, p_to_door_id: String) -> vo
 	name = "Door_%s" % door_id
 	_build_frame()
 	_build_panel()
+	_build_doormat()
 	_build_particles()
 	_build_tap_area()
 
@@ -89,24 +90,44 @@ func is_busy() -> bool:
 	return _busy
 
 
+## Zarge mit Bekleidung (FIX-3-Politur): Pfosten + Architrav statt drei
+## nackter Kanthölzer — die Tür ist das erste, was der Spieler anfasst.
 func _build_frame() -> void:
 	var post := BoxMesh.new()
-	post.size = Vector3(0.08, DOOR_HEIGHT, 0.12)
+	post.size = Vector3(0.1, DOOR_HEIGHT, 0.16)
+	var trim := BoxMesh.new()
+	trim.size = Vector3(0.05, DOOR_HEIGHT + 0.06, 0.22)
 	for side in [-1.0, 1.0]:
 		var mesh := MeshInstance3D.new()
 		mesh.mesh = post
 		mesh.material_override = _flat_material(FRAME_COLOR)
-		mesh.position = Vector3(side * (door_width * 0.5 + 0.04), DOOR_HEIGHT * 0.5, 0.0)
+		mesh.position = Vector3(side * (door_width * 0.5 + 0.05), DOOR_HEIGHT * 0.5, 0.0)
 		add_child(mesh)
+		var bekleidung := MeshInstance3D.new()
+		bekleidung.mesh = trim
+		bekleidung.material_override = _flat_material(FRAME_COLOR.lightened(0.18))
+		bekleidung.position = Vector3(
+			side * (door_width * 0.5 + 0.12), DOOR_HEIGHT * 0.5 + 0.03, 0.0
+		)
+		add_child(bekleidung)
 	var lintel := MeshInstance3D.new()
 	var lintel_mesh := BoxMesh.new()
-	lintel_mesh.size = Vector3(door_width + 0.24, 0.1, 0.12)
+	lintel_mesh.size = Vector3(door_width + 0.34, 0.12, 0.16)
 	lintel.mesh = lintel_mesh
 	lintel.material_override = _flat_material(FRAME_COLOR)
-	lintel.position = Vector3(0.0, DOOR_HEIGHT + 0.05, 0.0)
+	lintel.position = Vector3(0.0, DOOR_HEIGHT + 0.06, 0.0)
 	add_child(lintel)
+	var architrav := MeshInstance3D.new()
+	var architrav_mesh := BoxMesh.new()
+	architrav_mesh.size = Vector3(door_width + 0.46, 0.07, 0.22)
+	architrav.mesh = architrav_mesh
+	architrav.material_override = _flat_material(FRAME_COLOR.lightened(0.18))
+	architrav.position = Vector3(0.0, DOOR_HEIGHT + 0.155, 0.0)
+	add_child(architrav)
 
 
+## Türblatt mit zwei Kassetten-Füllungen + Drückergarnitur statt nackter
+## Platte (FIX-3-Politur).
 func _build_panel() -> void:
 	_hinge = Node3D.new()
 	_hinge.name = "Hinge"
@@ -119,6 +140,24 @@ func _build_panel() -> void:
 	panel.material_override = _flat_material(PANEL_COLOR)
 	panel.position = Vector3(door_width * 0.5, DOOR_HEIGHT * 0.5, 0.0)
 	_hinge.add_child(panel)
+	var kassette := BoxMesh.new()
+	kassette.size = Vector3(door_width * 0.62, DOOR_HEIGHT * 0.34, 0.02)
+	for seite in [-1.0, 1.0]:
+		for hoehe: float in [DOOR_HEIGHT * 0.31, DOOR_HEIGHT * 0.72]:
+			var fuellung := MeshInstance3D.new()
+			fuellung.mesh = kassette
+			fuellung.material_override = _flat_material(PANEL_COLOR.darkened(0.16))
+			fuellung.position = Vector3(
+				door_width * 0.5, hoehe, seite * (DOOR_THICKNESS * 0.5 + 0.005)
+			)
+			_hinge.add_child(fuellung)
+	var schild := MeshInstance3D.new()
+	var schild_mesh := BoxMesh.new()
+	schild_mesh.size = Vector3(0.05, 0.14, 0.02)
+	schild.mesh = schild_mesh
+	schild.material_override = _flat_material(Color(0.85, 0.72, 0.32))
+	schild.position = Vector3(door_width * 0.85, 1.0, DOOR_THICKNESS * 0.5 + 0.008)
+	_hinge.add_child(schild)
 	var knob := MeshInstance3D.new()
 	var knob_mesh := SphereMesh.new()
 	knob_mesh.radius = 0.04
@@ -127,6 +166,28 @@ func _build_panel() -> void:
 	knob.material_override = _flat_material(Color(0.95, 0.8, 0.35))
 	knob.position = Vector3(door_width * 0.85, 1.0, DOOR_THICKNESS)
 	_hinge.add_child(knob)
+
+
+## Fußmatte (Kenney-GLB) vor der Tür — echtes Asset statt Farbfläche.
+func _build_doormat() -> void:
+	var pfad := "res://assets/furniture/rugDoormat.glb"
+	if not ResourceLoader.exists(pfad):
+		return
+	var szene: PackedScene = load(pfad)
+	if szene == null:
+		return
+	var matte := Node3D.new()
+	matte.name = "Fussmatte"
+	var modell: Node3D = szene.instantiate()
+	matte.add_child(modell)
+	var aabb := HomeProps.merged_aabb(modell, Transform3D.IDENTITY)
+	if aabb.size.x > 0.0001:
+		var s := (door_width * 0.85) / aabb.size.x
+		modell.scale = Vector3.ONE * s
+		var center := aabb.get_center()
+		modell.position = Vector3(-center.x * s, -aabb.position.y * s + 0.006, -center.z * s)
+	matte.position = Vector3(0.0, 0.0, 0.42)
+	add_child(matte)
 
 
 ## Partikel-Setup (W4-P3 POLISH-7): warme Staub-Wölbchen beim Rütteln +

@@ -68,6 +68,19 @@
 		"forfeit": "{name} hat aufgegeben — du gewinnst!",
 		"resumed": "Weiter geht’s — Spiel fortgesetzt!",
 		"leave": "Aufgeben",
+		"exit": "Verlassen",
+		"surrender_confirm": "Wirklich aufgeben?",
+		"rematch": {
+			"button": "Revanche!",
+			"waiting": "Wartet auf {name}…",
+			"incoming": "{name} will eine Revanche!",
+			"declined": "{name} ist gegangen — vielleicht später!",
+			"failed": "Revanche klappt gerade nicht: {code}"
+		},
+		"peer": {
+			"down": "{name} hat gerade keine Verbindung — das Spiel wartet…",
+			"up": "{name} ist wieder da!"
+		},
 		"setup": {
 			"title": "Deine Flotte",
 			"reroll": "Neu würfeln",

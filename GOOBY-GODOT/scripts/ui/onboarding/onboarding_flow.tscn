@@ -151,11 +151,22 @@ autowrap_mode = 2
 layout_mode = 2
 theme_override_constants/separation = 26
 
-[node name="GoobyPreview" type="Control" parent="Steps/StepEditor/EditorVBox/EditorBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(250, 300)
+[node name="PreviewColumn" type="VBoxContainer" parent="Steps/StepEditor/EditorVBox/EditorBox"]
 layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="GoobyPreview" type="Control" parent="Steps/StepEditor/EditorVBox/EditorBox/PreviewColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(290, 330)
+layout_mode = 2
+size_flags_vertical = 3
 script = ExtResource("4_preview")
+
+[node name="PreviewHint" type="Label" parent="Steps/StepEditor/EditorVBox/EditorBox/PreviewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+horizontal_alignment = 1
 
 [node name="SliderRows" type="VBoxContainer" parent="Steps/StepEditor/EditorVBox/EditorBox"]
 unique_name_in_owner = true
