@@ -10,45 +10,26 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-Ich will das du weiterhin regelmäßig hier checkst also ca. alle 30minuten. und nicht aufhörst und immer wenn du mit den aufgaben fertig bist und noch kein neues feedback hast will ich das du die Photon und Veil Effekt verbesserst mit mehreren Plannern und Ideen sammler und dann quasi immer weiter iterreieren tust das es immer besser wirst und dabei dran denkst immer wieder hier rein zuschauen. dnek dran nur Fable 5 Max Thinking zunutzen
-
-verbessere die Credits scene noch weiter sowje verbessere das Schwarze Loch und die ganze Cutscene noch viel mehr
-
-erstelle einen Trailer ca. 30s in 4K 60fps mit Remotion und du sollst alles selber entscheiden etc der Trailer soll auf deutsch sein. ich will das du den am Ende hier in die Repo rein packst als "ECLIPSE-Trailer-4K" du sollst einfach einen passenden Song raus suchen und denk an sounds und animations etc nutze wie gesagt hier auch sehr viele Fable 5 Max Thinking Subagents zusammen. 
-
-Verbessere das Altar UI noch etwas mehr das alles etwas leichter lesbar ist und beim Shop Tab mach das man seinen kauf bestätigen muss plus so eine Kauf Animation hat und dann so eine kurze Cutscene danach jenachdme was man geholt hat
-
-mach das die Altar Insel eine Aura um sich hat mit Photon und Veil das man quasi merkt hier ist was magisch und mach es passend zu der Altar Stufe. 
-
-Baue den Altar Block als Richtiges Model in Blockbench/Blender und er soll auch mit GeckoLib Animations haben. Er soll mächtig wirken.
-
-Erstelle eine Cutscene samt riesen Effekten mit Photon und Veil wenn das End erscheint mach eventuell das mit dem neuen Altar Model dann so eine krasse Animation kommt wie der Altar die Blöcke ausspuckt oder überlege dir was krasses selber
-
-denk dran immer viele (soviele du willst gleichzeitig) subagents auf fable 5 max thinking als model eingestellt zu nutzen. 
-
-wenn du mit allem durch bist verbessere alle Effekte,Veil und Photon mehr, mehrfach. Kontrolliere alle 30min die Repo nach neuem Feedback wenn du an diesem Verbesserung punkt angekommen bist 
-
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: alle Punkte bis „GPT5.6SOLMAXTHINKINGFAST“-Nachricht → einsortiert als F-062…F-070)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 26.07. 23:34-Commit → einsortiert als F-071…F-079)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-062 | 5 „Woah“-Map-Features (Photon+Veil), #1: Mansion-Glitch-Dome (grüne Outlines drin, zerschlagbares Dach-Gerät mit Blockbench-Modell, Scanline-Schildblase, von außen nur Lichtstrahl) — 20 Fable-Idea-Subagents sammeln gerade Ideen | 🟡 |
-| F-063 | Dev-Command zum Skippen der dunklen Phase zwischen Tageswechsel und Map-Erweiterung | 🟡 |
-| F-064 | `/dev ghostscreen <Spieler>` (Geist + Glitch-Text + Knall, nur deren Screen) + `/dev backroomsscare <Spieler>` (gleicher Effekt → Blackscreen → 20–30 s Backrooms-Clip, unsterblich, Schaden ⇒ Glitch + zurück zum alten Spot) | 🟡 |
-| F-065 | `/dev jumpscare <Version> <Spieler>` — 30 verschiedene Jumpscares (Veil/Photon/Shader), nur für den Zielspieler | 🟡 |
-| F-066 | `/invsee <Spieler>` + `/enderchestsee <Spieler>` als Dev-Commands | 🟡 |
-| F-067 | Dev-Multiplier-Command: Abbaugeschwindigkeits-Boost pro Spieler | 🟡 |
-| F-068 | Schwarzes Loch + gesamte End-Szene noch viel mehr Polish (mehr BlockDisplay-Anims, mehr Subagents) | 🟡 |
-| F-069 | Restlichen Backlog abarbeiten (F-012 Classic-Audit) | 🟡 |
-| F-070 | Zauberstab-Effekte visuell massiv verbessern + erstes Auswahl-UI schöner | 🟡 |
+| F-062 | 5 „Woah“-Map-Features: Pläne fertig (`docs/plans_v3/woah/PLAN-01…05`) — Mansion-Glitch-Dome, Gravitationsbruch (kreisende Schollen + Low-G + Lensing), Chrono-Stase (eingefrorener Blitz/Explosion/Regen + Zeit-Ruck), Resonanzfeld (singende Riesenkristalle + Melodie-Rätsel), Echo-Hain (Geister-Erinnerungen + Vergangenheits-Flut). 5 Implementierungs-Agents laufen parallel | 🟡 |
+| F-072 | Credits-Szene + Schwarzes Loch + gesamte Cutscene NOCH viel weiter verbessern (V3) | 🟡 |
+| F-073 | „ECLIPSE-Trailer-4K": ~30 s Remotion-Trailer, 4K 60 fps, deutsch, mit Song/Sounds/Animationen, am Ende in die Repo | 🟡 |
+| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item | 🟡 |
+| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe | 🟡 |
+| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — mächtig wirkend | 🟡 |
+| F-077 | Cutscene mit Riesen-Effekten wenn das End erscheint (Altar „spuckt" die End-Blöcke o.ä.) | 🟡 |
+| F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
 
 ## Backlog (offen, in Priorität)
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-012 | Classic-Blöcke recherchieren; KEINE AI-Blöcke mehr im Classic-Bereich | 🟡 (läuft in F-069) |
+| — | _(leer)_ | |
 
 ---
 
@@ -56,6 +37,14 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: alle Punkte bis „G
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-063 | `/dev stage skipdark` — dunkle Phase zwischen Tageswechsel und Map-Erweiterung skippen (Cutscene-Abbruch, Himmel zurück, Ring wächst normal weiter) | `feat(devtools)` |
+| F-064 | `/dev ghostscreen <Spieler>` + `/dev backroomsscare <Spieler>` (Blackscreen → 20–30 s Backrooms-Clip, unsterblich, Schaden ⇒ Glitch + Rückteleport) | `feat(scare)` |
+| F-065 | `/dev jumpscare <version> <Spieler>` — 30 benannte Varianten (`/dev jumpscare list`), rein clientseitig nur beim Ziel | `feat(scare)` |
+| F-066 | `/invsee <Spieler>` + `/enderchestsee <Spieler>` — Live-Container-Inspektion | `feat(devtools)` |
+| F-067 | `/dev player multiplier mining set <Spieler> <Faktor>` — Abbau-Tempo-Boost | `feat(devtools)` |
+| F-068 | Schwarzes Loch V2: Doppler-Akkretionsbänder, Lensing-Rampe + chromatische Aberration, Stern-Streaks, Terrain-Verschlingen mit Spaghettisierung, 3-Klassen-Shatter + Nachbeben, Spiralarm-Formationen, FOV-Atmung | `feat(credits)` |
+| F-069/F-012 | Classic-Audit: 13 AI-Look-Texturen durch vanilla-abgeleitete pixel-exakte Rebuilds ersetzt + `CLASSIC_BLOCK_AUDIT.md` + Generator | `fix(classic)` |
+| F-070 | Zauberstab-FX: Pfad-Identitäten (RISS/GLUT/STERN), 12 neue Photon-FX, Tier-Skalierung, Cast-Akzent-Overlay, neues Pfadwahl-UI | `feat(wandfx)` |
 | F-023/047 | End-Timeline (Herold Tag 7, End-Disc Tag 12, Drache Tag 13) + Insel-Crash-Finale (Inseln krachen als Displays zu Boden, Mittelinsel weg nach Kampf, nur kleine Brocken bleiben) | `fix(end)` |
 | F-024 | Windaltar wirft jetzt dynamisch bis über die höchste Plattform (+Slow-Fall + Kurskorrektur) | `fix(end)` |
 | F-025 | Mesa-Pyramide: leere Chunks unter Landmark-Boxen werden repariert (DiscRepairService) | `fix(worldgen)` |

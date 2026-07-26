@@ -181,7 +181,14 @@ public final class DiscMapDefaults {
                 new DiscMapData.Landmark("eclipse:nether_breach", 85, 85, 16, 2),
                 // Fog-storm groves (req 14; W1.9's FogStormSites places, P2 renders).
                 new DiscMapData.Landmark("eclipse:fog_storm_1", -173, -173, 20, 3),     // mangrove swamp ring
-                new DiscMapData.Landmark("eclipse:fog_storm_2", 0, -250, 20, 3));       // snowy grove ring
+                new DiscMapData.Landmark("eclipse:fog_storm_2", 0, -250, 20, 3),        // snowy grove ring
+                // Woah map features (F-062; docs/plans_v3/woah/PLAN-02/03/05 — placements
+                // de-conflicted centrally: pairwise clearances, river 3 (>48), wedge ±5°
+                // seam margins and the r=170 player-disc ring were re-checked after the
+                // planners collided in the forest wedge).
+                new DiscMapData.Landmark("eclipse:gravity_rift", -239, 167, 40, 4),     // r≈292, bamboo-jungle ring
+                new DiscMapData.Landmark("eclipse:chrono_stasis", -24, 240, 26, 3),     // r≈241, birch ring
+                new DiscMapData.Landmark("eclipse:echo_grove", 0, 310, 30, 4));         // r=310, moonlit-grove ring
         // Painted rivers + whisper wells: unchanged from v1 (endpoints overshoot the
         // final rim on purpose; all lines keep >18 blocks clear of every site above).
         List<List<DiscMapData.Point>> rivers = List.of(
