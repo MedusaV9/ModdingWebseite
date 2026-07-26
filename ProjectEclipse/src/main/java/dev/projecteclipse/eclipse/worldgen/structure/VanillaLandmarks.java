@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -7,7 +8,6 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
-import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -16,6 +16,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.pools.JigsawJunction;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 
 /**
@@ -130,53 +131,8 @@ public final class VanillaLandmarks {
         if (start == null) {
             return null;
         }
+        int plateauY = seatPieces(profile, start, anchor, mode);
         BoundingBox bounds = StructureStamper.pieceUnion(start);
-        if (mode == SitePrep.Mode.CAVITY) {
-            // Vanilla picked its own position (jigsaw starts anchor to their own Y and the
-            // chunk corner); translate every piece so the union centers on our anchor.
-            BlockPos center = bounds.getCenter();
-            int dx = anchor.getX() - center.getX();
-            int dy = anchor.getY() - center.getY();
-            int dz = anchor.getZ() - center.getZ();
-            for (StructurePiece piece : start.getPieces()) {
-                piece.move(dx, dy, dz);
-            }
-            bounds = StructureStamper.pieceUnion(start);
-        } else {
-            // Plan B4: Structure.generate Y-snapped the jigsaw start + roads against the
-            // LIVE pre-plateau heightmaps, and jigsaw pieces get no per-piece ground snap
-            // at placement — wherever the plateau ends up lower than the old slope, the
-            // pieces float. Translate every RIGID piece vertically so the start piece's
-            // base sits on the deterministic plateau SitePrep is about to build (rigid
-            // pieces are jigsaw-connected to each other, so a single vertical delta keeps
-            // streets, farms and houses seamless).
-            //
-            // FIX-STRUCT (BUG B): TERRAIN_MATCHING pieces (outpost tents/cages/targets,
-            // village decor) must NOT take the uniform delta. Jigsaw assembly seated each
-            // of them individually on the pre-plateau slope via getFirstFreeHeight at its
-            // OWN column; the uniform shift preserved those per-column differences onto
-            // the flat plateau, floating every piece whose column was higher than the
-            // start's (and burying the lower ones). Re-seat each terrain-matching piece
-            // by its own column's surface delta — after the flatten the local surface is
-            // plateauY everywhere, so the piece keeps exactly the seat depth assembly
-            // gave it relative to the local ground (the +1 first-free convention and any
-            // groundLevelDelta cancel in the difference).
-            int plateauY = DiscTerrainFunction.surfaceY(profile, anchor.getX(), anchor.getZ());
-            int groundY = start.getPieces().get(0).getBoundingBox().minY();
-            int dy = plateauY - groundY;
-            for (StructurePiece piece : start.getPieces()) {
-                int pieceDy = dy;
-                if (isTerrainMatching(piece)) {
-                    BlockPos center = piece.getBoundingBox().getCenter();
-                    pieceDy = plateauY - DiscTerrainFunction.surfaceY(profile, center.getX(), center.getZ());
-                }
-                if (pieceDy != 0) {
-                    piece.move(0, pieceDy, 0);
-                }
-            }
-            bounds = StructureStamper.pieceUnion(start);
-        }
-
         SitePrep.PreparedGround prepared = mode == SitePrep.Mode.CAVITY
                 // Plan B3 seam: hand SitePrep the per-piece boxes so the cavity carve hugs
                 // each piece instead of blowing out the whole union box.
@@ -184,18 +140,129 @@ public final class VanillaLandmarks {
                         start.getPieces().stream().map(StructurePiece::getBoundingBox).toList(),
                         anchor)
                 : SitePrep.preparePlateau(level, profile, bounds.minX(), bounds.minZ(),
-                        bounds.maxX(), bounds.maxZ(), anchor);
+                        bounds.maxX(), bounds.maxZ(), plateauY);
         prepared.whenReady(() -> {
             BoundingBox placed = StructureStamper.placeStart(level, start,
                     StructureStamper.placementRandom(anchor));
             StructureStamper.registerStart(level, start, placed);
             SitePrep.touchBounds(prepared, placed.minX(), placed.minZ(), placed.maxX(), placed.maxZ());
-            SitePrep.finish(level, prepared);
-            EclipseMod.LOGGER.info("VANILLA GENERATE: placed {} ({} mode) at {} (bounds {})",
-                    structureId, mode, anchor.toShortString(), placed);
-            onComplete.accept(placed);
+            if (mode == SitePrep.Mode.CAVITY) {
+                finishPlacement(level, prepared, structureId, mode, anchor, placed, onComplete);
+                return;
+            }
+            // FIX-FLOAT: pack whatever gap the paste still left between the build and the
+            // prepared ground (uneven columns, per-piece seats) before the relight pass,
+            // so the resend the player sees already carries the foundations.
+            StructureGrounding.fillFoundations(level, profile, prepared, placed,
+                    () -> finishPlacement(level, prepared, structureId, mode, anchor, placed, onComplete),
+                    onFailure);
         }, onFailure);
         return bounds;
+    }
+
+    /**
+     * Moves a freshly generated start onto the ground {@link SitePrep} is about to build
+     * and returns that seat height (the anchor's own Y for {@link SitePrep.Mode#CAVITY},
+     * which positions by union center instead). This is the SINGLE definition of where a
+     * stamped structure sits: {@link StructureBlockSampler} runs it on its dry-run start
+     * too, so the delivery preview and the real paste can never disagree about a cell.
+     *
+     * <ul>
+     *   <li><b>CAVITY</b> — vanilla picked its own position (jigsaw starts anchor to
+     *       their own Y and the chunk corner); translate every piece so the union centers
+     *       on the anchor.</li>
+     *   <li><b>PLATEAU</b> — plan B4: {@code Structure.generate} Y-snapped the jigsaw
+     *       start and its roads against the LIVE pre-plateau heightmaps, and jigsaw
+     *       pieces get no per-piece ground snap at placement, so wherever the plateau
+     *       ends up lower than the old slope the pieces float. Every RIGID piece takes
+     *       one shared vertical delta (they are jigsaw-connected, so a uniform shift
+     *       keeps streets, farms and houses seamless).</li>
+     * </ul>
+     *
+     * <p>FIX-FLOAT: the seat is sampled over the whole piece footprint and taken at its
+     * minimum ({@link StructureGrounding#seatY}) rather than read off the anchor's single
+     * column — a site whose anchor happened to sit on a local rise hung that rise's worth
+     * of air under its far side. The start's ground line is also read correctly as
+     * {@code minY + groundLevelDelta - 1}: {@code JigsawPlacement} moves the start so that
+     * {@code minY + groundLevelDelta} lands on the first FREE block above the terrain, so
+     * reading {@code minY} only happened to work while every element kept the default
+     * delta of 1.</p>
+     */
+    static int seatPieces(DiscProfile profile, StructureStart start, BlockPos anchor,
+            SitePrep.Mode mode) {
+        BoundingBox bounds = StructureStamper.pieceUnion(start);
+        if (mode == SitePrep.Mode.CAVITY) {
+            BlockPos center = bounds.getCenter();
+            int dx = anchor.getX() - center.getX();
+            int dy = anchor.getY() - center.getY();
+            int dz = anchor.getZ() - center.getZ();
+            for (StructurePiece piece : start.getPieces()) {
+                piece.move(dx, dy, dz);
+            }
+            return anchor.getY();
+        }
+        int seatY = StructureGrounding.seatY(profile, bounds.minX(), bounds.minZ(),
+                bounds.maxX(), bounds.maxZ(), anchor.getY());
+        List<StructurePiece> pieces = start.getPieces();
+        int dy = seatY - (pieces.get(0).getBoundingBox().minY()
+                + groundLevelDelta(pieces.get(0)) - 1);
+        for (int i = 0; i < pieces.size(); i++) {
+            StructurePiece piece = pieces.get(i);
+            int pieceDy = i > 0 && isTerrainMatching(piece) ? terrainMatchingDy(profile, piece, seatY) : dy;
+            if (pieceDy != 0) {
+                piece.move(0, pieceDy, 0);
+            }
+        }
+        return seatY;
+    }
+
+    /**
+     * FIX-STRUCT (BUG B): the vertical delta of a {@code TERRAIN_MATCHING} piece (village
+     * decor, the outpost's feature plate). Such a piece must NOT take the start's uniform
+     * delta — jigsaw assembly snapped it individually, placing it so its connecting
+     * jigsaw block landed on {@code getFirstFreeHeight} at its PARENT's jigsaw column
+     * rather than at the start's. Re-seating it is therefore a pure change of ground
+     * line: shift it by however much that same column's ground moved when the plateau
+     * flattened it. The piece's own unknown internal offset to its jigsaw block cancels
+     * out of that difference, which is why this is read as a delta rather than by
+     * pinning the piece's box to the plateau (pinning silently assumed the connecting
+     * jigsaw sat on the piece's bottom layer — true for the outpost plate, false for
+     * plenty of village decor).
+     *
+     * <p>The parent's jigsaw column is recorded on the piece itself: a non-start piece's
+     * FIRST junction is the one written when jigsaw assembly created it from its parent,
+     * and it carries exactly the coordinates {@code getFirstFreeHeight} was called with.
+     * Pieces without that record (non-pool pieces) fall back to their own box center.</p>
+     */
+    private static int terrainMatchingDy(DiscProfile profile, StructurePiece piece, int seatY) {
+        BoundingBox box = piece.getBoundingBox();
+        int refX = box.getCenter().getX();
+        int refZ = box.getCenter().getZ();
+        if (piece instanceof PoolElementStructurePiece pool && !pool.getJunctions().isEmpty()) {
+            JigsawJunction parent = pool.getJunctions().get(0);
+            refX = parent.getSourceX();
+            refZ = parent.getSourceZ();
+        }
+        return (seatY + 1) - StructureGrounding.assembledGroundLineY(profile, refX, refZ, seatY + 1);
+    }
+
+    /** Shared tail of both prep modes: relight/resend the site and report completion. */
+    private static void finishPlacement(ServerLevel level, SitePrep.PreparedGround prepared,
+            ResourceLocation structureId, SitePrep.Mode mode, BlockPos anchor, BoundingBox placed,
+            Consumer<BoundingBox> onComplete) {
+        SitePrep.finish(level, prepared);
+        EclipseMod.LOGGER.info("VANILLA GENERATE: placed {} ({} mode) at {} (bounds {})",
+                structureId, mode, anchor.toShortString(), placed);
+        onComplete.accept(placed);
+    }
+
+    /**
+     * The piece's jigsaw ground-level delta. Non-pool pieces (the scattered-feature
+     * temples) carry no delta and already sit with their bottom layer on the ground, so
+     * they answer the neutral 1 — {@code minY + 1 - 1} leaves their seat untouched.
+     */
+    private static int groundLevelDelta(StructurePiece piece) {
+        return piece instanceof PoolElementStructurePiece pool ? pool.getGroundLevelDelta() : 1;
     }
 
     /**

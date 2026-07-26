@@ -25,10 +25,7 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
-import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
-import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 
 /**
  * RIFT-FX (user item: "the animation should spawn the BLOCKS OF THE STRUCTURE") — a
@@ -157,47 +154,18 @@ public final class StructureBlockSampler {
     }
 
     /**
-     * The {@code placeVanillaAsync} piece-translation rules, replicated verbatim (that
-     * class is owned elsewhere): CAVITY recenters the piece union on the anchor; PLATEAU
-     * shifts rigid pieces onto the deterministic plateau Y while TERRAIN_MATCHING pieces
-     * re-seat by their own column's surface delta (FIX-STRUCT BUG B). Both sides compute
-     * from {@link DiscTerrainFunction#surfaceY} — a pure function — so the preview and
-     * the real placement land on identical cells.
+     * Seats the dry-run start exactly like the real placer will. This used to be a
+     * hand-copied replica of {@code placeVanillaAsync}'s translation rules and drifted
+     * from it; it now CALLS the one definition ({@link VanillaLandmarks#seatPieces}), so
+     * a future change to how structures sit can no longer desync the preview from the
+     * paste. Seating is a pure function of {@link DiscTerrainFunction} and the generated
+     * start, so both sides still land on identical cells without touching the world.
      */
     private static void translatePieces(ServerLevel level, StructureStart start, BlockPos anchor,
             SitePrep.Mode mode) {
-        BoundingBox bounds = StructureStamper.pieceUnion(start);
-        if (mode == SitePrep.Mode.CAVITY) {
-            BlockPos center = bounds.getCenter();
-            int dx = anchor.getX() - center.getX();
-            int dy = anchor.getY() - center.getY();
-            int dz = anchor.getZ() - center.getZ();
-            for (StructurePiece piece : start.getPieces()) {
-                piece.move(dx, dy, dz);
-            }
-            return;
-        }
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
-        DiscProfile resolved = profile != null ? profile : DiscProfile.OVERWORLD;
-        int plateauY = DiscTerrainFunction.surfaceY(resolved, anchor.getX(), anchor.getZ());
-        int groundY = start.getPieces().get(0).getBoundingBox().minY();
-        int dy = plateauY - groundY;
-        for (StructurePiece piece : start.getPieces()) {
-            int pieceDy = dy;
-            if (isTerrainMatching(piece)) {
-                BlockPos center = piece.getBoundingBox().getCenter();
-                pieceDy = plateauY - DiscTerrainFunction.surfaceY(resolved, center.getX(), center.getZ());
-            }
-            if (pieceDy != 0) {
-                piece.move(0, pieceDy, 0);
-            }
-        }
-    }
-
-    /** Jigsaw pool pieces assembled with per-column ground snapping (mirror of VanillaLandmarks). */
-    private static boolean isTerrainMatching(StructurePiece piece) {
-        return piece instanceof PoolElementStructurePiece pool
-                && pool.getElement().getProjection() == StructureTemplatePool.Projection.TERRAIN_MATCHING;
+        VanillaLandmarks.seatPieces(profile != null ? profile : DiscProfile.OVERWORLD,
+                start, anchor, mode);
     }
 
     /**

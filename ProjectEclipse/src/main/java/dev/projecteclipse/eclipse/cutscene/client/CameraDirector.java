@@ -241,7 +241,10 @@ public final class CameraDirector {
         preloadHolding = true;
         // Veil: instant black, held for at most the shared timeout, releasing over the same
         // fade-out the hold release re-arms below (a timeout thus lifts the veil seamlessly).
-        CaptionRenderer.fade(0, CutsceneService.PRELOAD_TIMEOUT_TICKS, VEIL_OUT_TICKS, 0xFF000000);
+        // Sustained: the hold IS the preload timeout and tickPreloadHold owns its release,
+        // so it must outlive the renderer's default 3 s cap.
+        CaptionRenderer.fade(0, CutsceneService.PRELOAD_TIMEOUT_TICKS, VEIL_OUT_TICKS,
+                0xFF000000, true);
     }
 
     /**

@@ -190,12 +190,23 @@ public final class SitePrep {
      */
     public static PreparedGround preparePlateau(ServerLevel level, DiscProfile profile,
             int boundsMinX, int boundsMinZ, int boundsMaxX, int boundsMaxZ, BlockPos anchor) {
+        return preparePlateau(level, profile, boundsMinX, boundsMinZ, boundsMaxX, boundsMaxZ,
+                anchor.getY());
+    }
+
+    /**
+     * FIX-FLOAT: explicit-height variant. The plateau must be built at exactly the height
+     * the caller seated its pieces on ({@link StructureGrounding#seatY}); deriving it from
+     * {@code anchor.getY()} instead silently floated (or buried) every site whose seat was
+     * sampled from anything other than the anchor's own column.
+     */
+    public static PreparedGround preparePlateau(ServerLevel level, DiscProfile profile,
+            int boundsMinX, int boundsMinZ, int boundsMaxX, int boundsMaxZ, int plateauY) {
         int stage = WorldStageAccess.stage(profile);
         int minX = boundsMinX - MARGIN;
         int minZ = boundsMinZ - MARGIN;
         int maxX = boundsMaxX + MARGIN;
         int maxZ = boundsMaxZ + MARGIN;
-        int plateauY = anchor.getY();
         PreparedGround prepared = new PreparedGround(level, profile, Mode.PLATEAU,
                 minX, minZ, maxX, maxZ, plateauY);
         BudgetedBlockWriter.enqueue(level,

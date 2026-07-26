@@ -78,6 +78,17 @@ public final class CaptionRenderer {
     private static final int SUBTITLE_MAX_WIDTH = 320;
     /** Fraction of the screen height the subtitle block sits above even without letterbox bars. */
     private static final float LOWER_THIRD_FRACTION = 0.12F;
+    /**
+     * Default fade-hold ceiling: 3 s (BLACKSCREEN fix). The renderer is the last line of
+     * defence for the screen — a fade only ends because a later payload replaces it or
+     * because its own envelope runs out, and the first of those is not guaranteed to
+     * arrive. Capping the envelope means a lost, delayed or mis-timed fade payload can
+     * never park a player at black; the sequences that legitimately hold longer say so
+     * explicitly ({@link #MAX_SUSTAINED_HOLD_TICKS}).
+     */
+    private static final int MAX_HOLD_TICKS = 60;
+    /** Ceiling for controller-owned holds — still finite, so nothing can wedge forever. */
+    private static final int MAX_SUSTAINED_HOLD_TICKS = 600;
 
     private record Caption(String langKey, int durationTicks, int style) {}
 
@@ -135,18 +146,31 @@ public final class CaptionRenderer {
     /**
      * Starts (or replaces) the fullscreen fade envelope ({@code S2CScreenFadePayload}
      * handler): alpha rises over {@code inTicks}, holds {@code holdTicks}, releases over
-     * {@code outTicks}. {@code argb}'s alpha is the peak opacity.
+     * {@code outTicks}. {@code argb}'s alpha is the peak opacity. The hold is capped at
+     * {@value #MAX_HOLD_TICKS} ticks — see {@link #fade(int, int, int, int, boolean)} for
+     * the holds that opt out.
      */
     public static void fade(int inTicks, int holdTicks, int outTicks, int argb) {
+        fade(inTicks, holdTicks, outTicks, argb, false);
+    }
+
+    /**
+     * Full form. {@code sustained} lifts the {@value #MAX_HOLD_TICKS}-tick cap to
+     * {@value #MAX_SUSTAINED_HOLD_TICKS} for the handful of holds a controller owns
+     * end-to-end (the credits' card blacks, the cutscene preload veil). Every other
+     * caller — including anything fired from a world event such as a structure rift — is
+     * clamped, so a dropped follow-up payload or a desynced sequence can cost the player
+     * at most {@value #MAX_HOLD_TICKS} ticks of screen and never a permanent black.
+     */
+    public static void fade(int inTicks, int holdTicks, int outTicks, int argb, boolean sustained) {
         // FIN-6: snapshot the envelope being replaced so the rise crossfades from it
         // (white→black is a slow color melt, not a pop through the world).
         fadeFromAlpha = fadeEnvelope(0.0F) * (((fadeArgb >>> 24) & 0xFF) / 255.0F);
         fadeFromArgb = fadeArgb;
         fadeStartTick = ticks;
         fadeIn = Math.max(0, inTicks);
-        // Safety clamp: no fade may hold the screen longer than 30s. A desynced sequence
-        // (missed follow-up shot, replaced session) must never leave a permanent black.
-        fadeHold = Math.min(600, Math.max(0, holdTicks));
+        fadeHold = Math.min(sustained ? MAX_SUSTAINED_HOLD_TICKS : MAX_HOLD_TICKS,
+                Math.max(0, holdTicks));
         fadeOut = Math.max(0, outTicks);
         fadeArgb = argb;
     }

@@ -29,12 +29,13 @@ import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CFxEventPayload;
-import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.network.growth.GrowthPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
 import dev.projecteclipse.eclipse.worldgen.stage.ChunkPreload;
+import dev.projecteclipse.eclipse.worldgen.stage.ExpansionBorderFx;
+import dev.projecteclipse.eclipse.worldgen.stage.ExpansionTiming;
 import dev.projecteclipse.eclipse.worldgen.stage.GrowthPacing;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
@@ -160,13 +161,13 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int ECLIPSE_TOTAL = 2;
     private static final int ECLIPSE_ENDING = 3;
 
-    // --- beat timing (R11) ---
-    /** Rift hold between tear-open and the placement trigger ("40-tick hold"). */
-    private static final int RIFT_HOLD_TICKS = 40;
+    // --- beat timing (R11; durations owned by ExpansionTiming since the v2 speed pass) ---
+    /** Rift hold between tear-open and the placement trigger (was a flat 40-tick hold). */
+    private static final int RIFT_HOLD_TICKS = ExpansionTiming.STRUCTURE_RIFT_HOLD_TICKS;
     /** Delay between the slam FX and the rift-close event (lets the slam read first). */
-    private static final int RIFT_CLOSE_DELAY_TICKS = 8;
+    private static final int RIFT_CLOSE_DELAY_TICKS = ExpansionTiming.STRUCTURE_RIFT_LINGER_TICKS;
     /** Spacing between consecutive structure beats (staggers paste cost like the registry). */
-    private static final int BEAT_SPACING_TICKS = 50;
+    private static final int BEAT_SPACING_TICKS = ExpansionTiming.STRUCTURE_BEAT_SPACING_TICKS;
     /** A triggered beat whose PLACED never lands is abandoned after this (async placers). */
     private static final int BEAT_TIMEOUT_TICKS = 1200;
     /**
@@ -186,8 +187,8 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final double SKYWARD_PUNCH_HEIGHT = 30.0D;
     /** Flyover flight fraction at which the camera is lowest (skim deck; anchor-lead aim point). */
     private static final double FLYOVER_SKIM_T = 0.5D;
-    /** Wide establishing gap between the STRUCTURES caption and the first tear. */
-    private static final int STRUCTURES_ESTABLISH_TICKS = 20;
+    /** Establishing gap between the STRUCTURES caption and the first tear. */
+    private static final int STRUCTURES_ESTABLISH_TICKS = ExpansionTiming.STRUCTURES_ESTABLISH_TICKS;
     /** Ground-tear close → sky-tear open stagger (lets the close animation read first). */
     private static final int GROUND_TEAR_HANDOFF_TICKS = 6;
     /** unlock_ring flight fraction of the god-ray backlight moment (mirrors the bloom-fade t). */
@@ -219,6 +220,9 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** Attach-cue rebroadcast cadence while the rider lives (covers mid-sweep joiners). */
     private static final int GROWTH_RIDER_ANNOUNCE_TICKS = 100;
 
+    /** Client view-distance push during the flyover (chunks) — the frontier must be visible. */
+    private static final int FLYOVER_VIEW_DISTANCE_CHUNKS = 12;
+
     /** How far inside the OLD rim transported nether players are parked (safe, pre-existing terrain). */
     private static final int VIEWPOINT_INSET_BLOCKS = 24;
     /** Invuln-only TTL granted to transported nether players; refreshed while the run lives. */
@@ -226,9 +230,6 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int NETHER_INVULN_REFRESH_TICKS = 100;
     /** Watchdog: a run whose sweep/structures stall is force-ended after this many ticks. */
     private static final int RUN_TIMEOUT_TICKS = 20 * 60 * 30;
-
-    private static final S2CScreenFadePayload GATHER_FADE = new S2CScreenFadePayload(8, 30, 18, 0xFF000000);
-    private static final S2CScreenFadePayload RETURN_FADE = new S2CScreenFadePayload(8, 20, 16, 0xFF000000);
 
     private static final ExpansionSequence INSTANCE = new ExpansionSequence();
     private static final AtomicBoolean LISTENERS_REGISTERED = new AtomicBoolean();
@@ -456,12 +457,24 @@ public final class ExpansionSequence implements SequenceReplayable {
         CutscenePath flyover = CutscenePaths.get(PATH_FLYOVER);
         if (flyover != null && CutsceneService.isEnabled(server, flyover) && !watchers.isEmpty()) {
             run.flyoverPlayed = true;
-            // GLOBAL_TELEPORT + returnAfter: far watchers are gathered behind a fade and
+            // RIFT-FX: raise the frontier monoliths NOW, around the very point the gather
+            // below teleports every watcher onto. A BLOCK_DISPLAY is only tracked to
+            // clients within 160 blocks, and the gather is the one moment of the whole
+            // expansion in which anybody is that close to the rim — waiting for the growth
+            // commit (which lands after CutsceneService has already returned them home)
+            // is what left the rim empty on screen. See ExpansionBorderFx.
+            ExpansionBorderFx.armFrontier(run.level, run.profile, resolveGrowthFront(server, watchers));
+            // GLOBAL_TELEPORT + returnAfter: far watchers are gathered to the frontier and
             // restored when their session ends; the transported nether visitors were parked
             // inside the gather radius on purpose, so W2 never re-snapshots them — their
             // return stays ours (NetherReturns) at END.
+            //
+            // globalNoFade (user ask "KEIN Blackscreen"): every watcher is already IN this
+            // level, so the gather is a same-dimension teleport — no vanilla "Downloading
+            // terrain" screen, and the flight's own preload veil covers the arrival frame.
+            // The matching return leg therefore stays fade-free too.
             CutsceneService.play(PATH_FLYOVER, watchers, null, () -> beginGrowth(run),
-                    CutsceneService.PlayOptions.global(12));
+                    CutsceneService.PlayOptions.globalNoFade(FLYOVER_VIEW_DISTANCE_CHUNKS));
             return;
         }
 
@@ -474,6 +487,9 @@ public final class ExpansionSequence implements SequenceReplayable {
             // used to arrive from beginGrowth only after the shot had already ended.
             run.flyoverPlayed = true;
             captionDimension(run.level, CAPTION_GROWING, 90);
+            // The orbit shot leaves watchers where they stand, so the rim monoliths are
+            // planned around the PLAYERS (null anchor) instead of a gather point.
+            ExpansionBorderFx.armFrontier(run.level, run.profile, null);
             int edgeRadius = StageRadii.radius(run.profile, run.fromStage);
             int heroTick = (int) (fallback.durationTicks() * RING_HERO_T);
             for (ServerPlayer player : watchers) {
@@ -876,15 +892,16 @@ public final class ExpansionSequence implements SequenceReplayable {
             float yaw = (float) Math.toDegrees(Math.atan2(-Math.cos(angle), Math.sin(angle)));
             run.netherVisitors.add(player.getUUID());
             // RIFT-FX (black-screen fix): pre-warm a 3x3 chunk square at the viewpoint and
-            // only START the fade+transport once those chunks are resident — the vanilla
-            // "Downloading terrain" screen then clears inside the fade's black hold.
+            // only transport once those chunks are resident, so the vanilla "Downloading
+            // terrain" screen (pure black in 1.21.1) never gets a chance to appear. The
+            // mod-side black fade that used to cover this teleport is GONE on purpose —
+            // the expansion path must not black the screen out at all (user ask).
             UUID uuid = player.getUUID();
             ChunkPreload.warmThenRun(run.level, spot, ChunkPreload.DEFAULT_TIMEOUT_TICKS, () -> {
                 ServerPlayer visitor = server.getPlayerList().getPlayer(uuid);
                 if (visitor == null) {
                     return; // logged out mid-warm: the persisted return row covers them
                 }
-                PacketDistributor.sendToPlayer(visitor, GATHER_FADE);
                 FreezeService.transport(visitor, run.level, spot, yaw, 10.0F);
                 FreezeService.setInvulnerable(visitor, NETHER_INVULN_TTL_TICKS);
                 EclipseMod.LOGGER.info("ExpansionSequence: brought {} from the nether to the viewpoint {} (return pending)",
@@ -917,9 +934,10 @@ public final class ExpansionSequence implements SequenceReplayable {
                     snapshot.dimension().location(), player.getScoreboardName());
             return;
         }
-        // RIFT-FX (black-screen fix): warm the return spot's 3x3 chunks BEFORE the fade
-        // starts, mirroring the gather leg. The snapshot row was already taken above, so
-        // a re-entrant call while the warm is pending stays a no-op.
+        // RIFT-FX (black-screen fix): warm the return spot's 3x3 chunks BEFORE the
+        // transport, mirroring the gather leg — and, like it, WITHOUT a black fade. The
+        // snapshot row was already taken above, so a re-entrant call while the warm is
+        // pending stays a no-op.
         UUID uuid = player.getUUID();
         ChunkPreload.warmThenRun(home, snapshot.pos(), ChunkPreload.DEFAULT_TIMEOUT_TICKS, () -> {
             ServerPlayer returning = home.getServer().getPlayerList().getPlayer(uuid);
@@ -928,7 +946,6 @@ public final class ExpansionSequence implements SequenceReplayable {
                 NetherReturns.get(home.getServer()).putIfAbsent(uuid, snapshot);
                 return;
             }
-            PacketDistributor.sendToPlayer(returning, RETURN_FADE);
             PacketDistributor.sendToPlayer(returning, new S2CCaptionPayload(CAPTION_NETHER_RETURN, 60,
                     S2CCaptionPayload.STYLE_WHISPER));
             FreezeService.transport(returning, home, snapshot.pos(), snapshot.yRot(), snapshot.xRot());

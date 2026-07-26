@@ -238,11 +238,18 @@ public final class StructureStamper {
         EclipseMod.LOGGER.warn("PROCEDURAL FALLBACK: {} failed to generate at {}; building the fallback piece",
                 vanillaId, anchor.toShortString());
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
+        DiscProfile resolved = profile != null ? profile : DiscProfile.OVERWORLD;
         int pad = Math.max(12, site.footprint() / 4);
-        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level,
-                profile != null ? profile : DiscProfile.OVERWORLD,
-                site.anchor().getX() - pad, site.anchor().getZ() - pad,
-                site.anchor().getX() + pad, site.anchor().getZ() + pad, site.anchor());
+        int padMinX = site.anchor().getX() - pad;
+        int padMinZ = site.anchor().getZ() - pad;
+        int padMaxX = site.anchor().getX() + pad;
+        int padMaxZ = site.anchor().getZ() + pad;
+        // FIX-FLOAT: the pad is seated on the LOWEST ground it covers, like every other
+        // plateau site — a single-column anchor floated the fallback piece on slopes.
+        SitePrep.PreparedGround prepared = SitePrep.preparePlateau(level, resolved,
+                padMinX, padMinZ, padMaxX, padMaxZ,
+                StructureGrounding.seatY(resolved, padMinX, padMinZ, padMaxX, padMaxZ,
+                        site.anchor().getY()));
         prepared.whenReady(() -> {
             fallback.build(new BlockPos(site.anchor().getX(), prepared.plateauY(), site.anchor().getZ()));
             SitePrep.finish(level, prepared);

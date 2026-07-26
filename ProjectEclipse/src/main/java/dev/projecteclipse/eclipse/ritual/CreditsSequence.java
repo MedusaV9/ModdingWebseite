@@ -904,7 +904,7 @@ public final class CreditsSequence implements SequenceReplayable {
         current.enter(Phase.OUTRO);
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendAutoRun(player, false, RUN_YAW, 0);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(40, 600, 0, 0xFFFFFFFF));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(40, 600, 0, 0xFFFFFFFF));
         }
         PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(2.0F, 50));
     }
@@ -924,7 +924,7 @@ public final class CreditsSequence implements SequenceReplayable {
     private static void beatTrackTwo(Run current) {
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             MusicCues.play(MUSIC_OUTRO_CUE, player);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(160, 600, 0, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(160, 600, 0, 0xFF000000));
         }
     }
 
@@ -953,7 +953,7 @@ public final class CreditsSequence implements SequenceReplayable {
             returned++;
         }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
         }
         EclipseMod.LOGGER.info("CreditsSequence: {} player(s) brought home behind the black", returned);
     }
@@ -996,7 +996,7 @@ public final class CreditsSequence implements SequenceReplayable {
     private static void beatCardNext(Run current) {
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendGentleTitle(player, TITLE_NEXT, CARD_NEXT_HOLD);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
         }
     }
 
@@ -1901,7 +1901,7 @@ public final class CreditsSequence implements SequenceReplayable {
             // Held black until just past the epilogue teleport, then released — the beach
             // beat (roll + auto-run) still reaches this player because it broadcasts.
             PacketDistributor.sendToPlayer(player,
-                    new S2CScreenFadePayload(0, Math.max(20, T_EPILOGUE + 20 - t), 30, 0xFF000000));
+                    S2CScreenFadePayload.sustained(0, Math.max(20, T_EPILOGUE + 20 - t), 30, 0xFF000000));
         } else if (t < T_WHITE_FADE) {
             if (t >= T_BEACH) {
                 MusicCues.play(MUSIC_FINALE_CUE, player);
@@ -1917,10 +1917,10 @@ public final class CreditsSequence implements SequenceReplayable {
                 }
             }
         } else if (t < T_TRACK2) {
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFFFFFFFF));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFFFFFFFF));
         } else {
             MusicCues.play(MUSIC_OUTRO_CUE, player);
-            PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(0, 600, 0, 0xFF000000));
+            PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(0, 600, 0, 0xFF000000));
         }
     }
 
@@ -2066,14 +2066,14 @@ public final class CreditsSequence implements SequenceReplayable {
             case "OUTRO" -> {
                 // White hold → track two + black melt → the three gentle end cards.
                 for (ServerPlayer player : watchers) {
-                    PacketDistributor.sendToPlayer(player, new S2CScreenFadePayload(20, 600, 0, 0xFFFFFFFF));
+                    PacketDistributor.sendToPlayer(player, S2CScreenFadePayload.sustained(20, 600, 0, 0xFFFFFFFF));
                 }
                 schedule(server, 60, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
                             MusicCues.play(MUSIC_OUTRO_CUE, player);
                             PacketDistributor.sendToPlayer(player,
-                                    new S2CScreenFadePayload(160, 600, 0, 0xFF000000));
+                                    S2CScreenFadePayload.sustained(160, 600, 0, 0xFF000000));
                         }
                     }
                 });

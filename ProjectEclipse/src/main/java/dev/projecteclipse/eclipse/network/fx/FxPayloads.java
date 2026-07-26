@@ -269,7 +269,8 @@ public final class FxPayloads {
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleScreenFade(S2CScreenFadePayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer.fade(
-                payload.inTicks(), payload.holdTicks(), payload.outTicks(), payload.argb());
+                payload.inTicks(), payload.holdTicks(), payload.outTicks(), payload.argb(),
+                payload.sustained());
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */

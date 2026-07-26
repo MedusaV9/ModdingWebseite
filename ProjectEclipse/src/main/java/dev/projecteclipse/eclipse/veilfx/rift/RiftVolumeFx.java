@@ -57,6 +57,24 @@ public final class RiftVolumeFx {
     private static final float STEPS_TIER1 = 28.0F;
     /** Volume radius breathes from this fraction (tear opening) up to 1.0 (fully open). */
     private static final float RADIUS_CLOSED_FRACTION = 0.35F;
+    /**
+     * Camera-inside guard (BLACKSCREEN fix). The shader marches from {@code t0 = 0} when
+     * the camera sits inside a tear's bounds, so EVERY pixel starts inside the collar
+     * mass: transmittance collapses and the frame turns near-black violet — exactly the
+     * "black screen when structures spawn" report, because a structure delivery opens a
+     * ground tear of up to 24 blocks' width right where the player is standing.
+     *
+     * <p>Distances are measured in the shader's own squashed rift space (planar / radius,
+     * normal / (radius·{@code DEPTH_SCALE})), where {@code 1.30} is the bounds margin the
+     * march uses. The volume fades out below {@value #CAMERA_FADE_OUT} and is fully back
+     * at {@value #CAMERA_FADE_IN}, so walking into a tear dissolves the raymarched mass
+     * smoothly instead of blacking out — {@code RiftRenderer}'s star geometry keeps
+     * drawing the tear throughout, so the spectacle stays visible.</p>
+     */
+    private static final float CAMERA_FADE_OUT = 1.15F;
+    private static final float CAMERA_FADE_IN = 1.55F;
+    /** Mirror of the shader's {@code DEPTH_SCALE} — the guard must use the same space. */
+    private static final double DEPTH_SCALE = 0.55D;
 
     /** Selected tears this tick, nearest first ({@code null} slots = pipeline idle). */
     @Nullable
@@ -172,7 +190,31 @@ public final class RiftVolumeFx {
                 (float) (rift.pos.y - camera.y),
                 (float) (rift.pos.z - camera.z));
         pipeline.getUniform(normalName).setVector(rift.nx, rift.ny, rift.nz);
-        pipeline.getUniform(paramsName).setVector(radius, open * fade,
+        pipeline.getUniform(paramsName).setVector(radius,
+                open * fade * cameraClearance(rift, camera, radius),
                 (rift.seed & 0xFFFF) / 65536.0F, rift.style);
+    }
+
+    /**
+     * Strength multiplier that dissolves the volume as the camera enters a tear — see
+     * {@link #CAMERA_FADE_OUT}. Returns 1 whenever the camera is comfortably outside the
+     * marched bounds, so the normal look is untouched.
+     */
+    private static float cameraClearance(RiftFx.Rift rift, Vec3 camera, float radius) {
+        if (radius <= 0.0F) {
+            return 0.0F;
+        }
+        double dx = rift.pos.x - camera.x;
+        double dy = rift.pos.y - camera.y;
+        double dz = rift.pos.z - camera.z;
+        // Split the camera offset into the tear's normal axis and its plane; the plane is
+        // radially symmetric, so the tangent basis itself is not needed here.
+        double alongNormal = dx * rift.nx + dy * rift.ny + dz * rift.nz;
+        double planar = Math.sqrt(Math.max(0.0D,
+                dx * dx + dy * dy + dz * dz - alongNormal * alongNormal)) / radius;
+        double normal = alongNormal / (radius * DEPTH_SCALE);
+        double depth = Math.sqrt(planar * planar + normal * normal);
+        return (float) Mth.clamp((depth - CAMERA_FADE_OUT) / (CAMERA_FADE_IN - CAMERA_FADE_OUT),
+                0.0D, 1.0D);
     }
 }

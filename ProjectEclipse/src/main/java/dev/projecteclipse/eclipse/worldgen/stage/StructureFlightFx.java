@@ -37,6 +37,8 @@ import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -77,8 +79,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * server-computed adaptive width ({@link StructurePendingRegistry#revealRiftWidth}) — the
  * surge visibly convulses the tear — plus rift-groan drone and a shake pulse; every
  * launched batch gets a whoosh at the rift mouth; each landing gets a bass thud + a small
- * rate-limited shake; 3 scripted lightning strikes hit the footprint rim at 30/55/85 % of
- * the flight window ({@code FX_LIGHTNING_STRIKE}, the intro-storm renderer); when the last
+ * rate-limited shake; lightning rolls over the footprint rim for the whole window (one
+ * strike every {@value #LIGHTNING_INTERVAL_TICKS} ticks, each with its own distance-banded
+ * crack/thunder — see {@link Flight#lightningSound}); when the last
  * piece settles the tear snaps shut, a resolve chord plays and the placer runs — the big
  * PLACED slam (shockwave + 0.4 shake) stays {@code ExpansionSequence}'s. The final-slam /
  * rift-open pulses of the sequence are untouched; this class only adds the in-between.</p>
@@ -95,6 +98,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the legacy per-{@code structureId} palette scatter. Buried sample cells (and every
  * palette piece of a cavity site) get PLUNGING pieces that punch into the ground on
  * arrival instead of resting on it.</p>
+ *
+ * <p><b>Swirl phase (BD-STORM)</b>: between the arc and the settle every surface piece
+ * dwells {@value #MIN_HOVER_TICKS}–{@value #MAX_HOVER_TICKS} ticks over its cell, riding
+ * one closed orbit with a yaw wobble and a bob before snapping down — the "fall out of the
+ * rift, float and swirl, then snap into place" read. The swirl terms all vanish at both
+ * ends of the dwell, so it splices between the two existing phases without a pop and
+ * {@code hoverTicks == 0} (every plunging cavity piece) is exactly the old motion.</p>
  *
  * <p><b>Craft pass (BD-STRUCT)</b>: keyframes lead by one update interval so the client
  * tween covers between poses (never trails); launches stagger in CENTER-OUT SPIRAL order
@@ -128,18 +138,51 @@ public final class StructureFlightFx {
 
     /**
      * Default per-delivery display cap ({@code flight_fx.max_displays} overrides).
-     * RIFT-FX: raised 80 → 140 (user: "MORE block displays") — with real sampled blocks
-     * every display lands on a real cell, so the density directly reads as the build.
+     * RIFT-FX: raised 80 → 140 (user: "MORE block displays"). BD-STORM: raised again
+     * 140 → 640 (user: "VIEL mehr Block Displays, viel viel mehr") — with real sampled
+     * blocks every display lands on a real cell, so the density directly reads as the
+     * build materializing rather than as a sparse hail. See
+     * {@link #HARD_MAX_DISPLAYS} for the ceiling this may never cross.
      */
-    private static final int DEFAULT_MAX_DISPLAYS = 140;
+    private static final int DEFAULT_MAX_DISPLAYS = 640;
+    /**
+     * Absolute per-delivery display ceiling, config included. Each display is one tracked
+     * entity with a transformation packet every {@value #UPDATE_INTERVAL_TICKS} ticks, so
+     * this is the number that bounds the delivery's bandwidth and entity-tracker cost —
+     * raise it only together with a measurement.
+     */
+    private static final int HARD_MAX_DISPLAYS = 800;
     /** Transformation update cadence; interpolation duration matches (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 2;
-    /** Pieces per launch batch and the stagger between batches (spawn-cost smoothing). */
-    private static final int BATCH_SIZE = 8;
-    private static final int BATCH_STAGGER_TICKS = 6;
+    /**
+     * Pieces per launch batch and the stagger between batches (spawn-cost smoothing).
+     * BD-STORM: with up to {@value #HARD_MAX_DISPLAYS} pieces the old 8-per-6-ticks
+     * cadence would have taken 600 ticks just to LAUNCH; the batches are wider and
+     * tighter so a full-cap delivery still finishes launching inside ~60 ticks while
+     * never spawning more than {@value #BATCH_SIZE} entities in a single tick.
+     */
+    private static final int BATCH_SIZE = 28;
+    private static final int BATCH_STAGGER_TICKS = 2;
     /** Per-piece flight length range (plan: "30–60 t"). */
     private static final int MIN_FLIGHT_TICKS = 30;
     private static final int MAX_FLIGHT_TICKS = 60;
+    /**
+     * Per-piece hover dwell between the arc and the settle: the piece hangs over its cell
+     * and swirls (BD-STORM — user: the pieces should "fall out of the rifts, float/swirl
+     * briefly, then snap into place"). Zero restores the pre-BD-STORM instant settle.
+     */
+    private static final int MIN_HOVER_TICKS = 10;
+    private static final int MAX_HOVER_TICKS = 26;
+    /**
+     * Hover swirl shape: the piece rides one full closed orbit of
+     * {@value #HOVER_SWIRL_BLOCKS} blocks around its cell while yawing up to
+     * ±{@value #HOVER_SWIRL_RADIANS} rad and bobbing ±{@value #HOVER_BOB_BLOCKS} blocks.
+     * All three terms are exactly zero at hover start AND hover end, so the hover splices
+     * into the arc's hover-overshoot pose and out into the settle without a pop.
+     */
+    private static final float HOVER_SWIRL_RADIANS = 0.55F;
+    private static final float HOVER_BOB_BLOCKS = 0.18F;
+    private static final double HOVER_SWIRL_BLOCKS = 0.30D;
     /** Damped-settle length after the hover overshoot. */
     private static final int SETTLE_TICKS = 6;
     /** Arc overshoot: pieces decelerate into a hover this far above the resting cell. */
@@ -200,8 +243,27 @@ public final class StructureFlightFx {
     private static final int WATCHDOG_TICKS = 400;
     /** Landed displays are swept this long after completion even if PLACED never fires. */
     private static final int DISCARD_FALLBACK_TICKS = 600;
-    /** Flight-window fractions of the scripted rim lightning strikes. */
-    private static final float[] LIGHTNING_AT = {0.30F, 0.55F, 0.85F};
+    /**
+     * Rim lightning cadence (BD-STORM). The old fixed 3-strike script became a rolling
+     * storm: strikes start at {@value #LIGHTNING_START_T} of the window and repeat every
+     * {@value #LIGHTNING_INTERVAL_TICKS} ticks until the last piece settles, up to
+     * {@value #LIGHTNING_MAX_STRIKES} of them. Every single one is sounded — see
+     * {@link Flight#strikeRimLightning}.
+     */
+    private static final float LIGHTNING_START_T = 0.12F;
+    private static final int LIGHTNING_INTERVAL_TICKS = 22;
+    private static final int LIGHTNING_MAX_STRIKES = 14;
+    /**
+     * Lightning audio falloff bands. Inside {@value #LIGHTNING_CLOSE_RANGE} blocks a
+     * player gets the dry {@code LIGHTNING_BOLT_IMPACT} crack plus a camera crack; out to
+     * {@value #LIGHTNING_AUDIBLE_RANGE} they get {@code LIGHTNING_BOLT_THUNDER} rolled off
+     * by distance (vanilla's own positional attenuation caps out at volume·16 blocks,
+     * which is far too short for a 224-block delivery, hence the per-player pick).
+     */
+    private static final double LIGHTNING_CLOSE_RANGE = 48.0D;
+    private static final double LIGHTNING_AUDIBLE_RANGE = 220.0D;
+    /** Rim sweep step of successive strikes — never repeats a spot within the window. */
+    private static final double GOLDEN_ANGLE = Math.PI * (3.0D - Math.sqrt(5.0D));
     /** Flight-window fractions of the mid-flight shake pulses (0 % fires in begin()). */
     private static final float[] SHAKE_AT = {0.40F, 0.80F};
 
@@ -348,6 +410,10 @@ public final class StructureFlightFx {
         /** Assigned after the center-out spiral sort of {@link #buildPieces}. */
         int launchTick;
         final int flightTicks;
+        /** Hover dwell between arc and settle (BD-STORM swirl); 0 = settle immediately. */
+        final int hoverTicks;
+        /** Starting angle of the closed hover orbit — decorrelates neighbouring pieces. */
+        final float hoverPhase;
         final float spinTurns;
         final Vector3f spinAxis;
         final boolean plunge;
@@ -364,17 +430,25 @@ public final class StructureFlightFx {
         int fxDueAge = -1;
 
         Piece(Vec3 launch, Vec3 control, Vec3 target, Vec3 entityPos, BlockState state,
-                int flightTicks, float spinTurns, Vector3f spinAxis, boolean plunge) {
+                int flightTicks, int hoverTicks, float hoverPhase, float spinTurns,
+                Vector3f spinAxis, boolean plunge) {
             this.launch = launch;
             this.control = control;
             this.target = target;
             this.entityPos = entityPos;
             this.state = state;
             this.flightTicks = flightTicks;
+            this.hoverTicks = hoverTicks;
+            this.hoverPhase = hoverPhase;
             this.spinTurns = spinTurns;
             this.spinAxis = spinAxis;
             this.plunge = plunge;
             this.warmGlow = state.getLightEmission() > 0 || ORE_GLOW_BLOCKS.contains(state.getBlock());
+        }
+
+        /** Ticks from launch to full rest: ballistic arc + hover swirl + damped settle. */
+        int totalTicks() {
+            return this.flightTicks + this.hoverTicks + SETTLE_TICKS;
         }
     }
 
@@ -388,7 +462,9 @@ public final class StructureFlightFx {
         /** Age (ticks since open) at which the last piece has fully settled. */
         final int windowTicks;
         final boolean[] shakeFired = new boolean[SHAKE_AT.length];
-        final boolean[] lightningFired = new boolean[LIGHTNING_AT.length];
+        /** Rolling-storm cursor: strikes so far and the age the next one is due at. */
+        int strikesFired;
+        int nextStrikeAge;
 
         int age = -1;
         int lastLandingFxAge = -LANDING_FX_COOLDOWN_TICKS;
@@ -407,9 +483,10 @@ public final class StructureFlightFx {
             this.pieces = buildPieces(level, site, this.mouth, this.surfaceCenter);
             int lastSettle = 0;
             for (Piece piece : this.pieces) {
-                lastSettle = Math.max(lastSettle, piece.launchTick + piece.flightTicks + SETTLE_TICKS);
+                lastSettle = Math.max(lastSettle, piece.launchTick + piece.totalTicks());
             }
             this.windowTicks = Math.max(1, lastSettle);
+            this.nextStrikeAge = (int) (LIGHTNING_START_T * this.windowTicks);
         }
 
         /** Delivery start: adaptive-width tear surge + drone + opening shake (the 0 % pulse). */
@@ -487,7 +564,7 @@ public final class StructureFlightFx {
             }
         }
 
-        /** Mid-flight shake pulses + scripted rim lightning at fixed window fractions. */
+        /** Mid-flight shake pulses + the rolling rim lightning storm over the window. */
         private void fireWindowBeats() {
             for (int i = 0; i < SHAKE_AT.length; i++) {
                 if (!this.shakeFired[i] && this.age >= (int) (SHAKE_AT[i] * this.windowTicks)) {
@@ -496,22 +573,62 @@ public final class StructureFlightFx {
                             FX_RANGE, S2CShakePayload.shake(0.2F + 0.08F * i, 12 + 2 * i));
                 }
             }
-            for (int i = 0; i < LIGHTNING_AT.length; i++) {
-                if (!this.lightningFired[i] && this.age >= (int) (LIGHTNING_AT[i] * this.windowTicks)) {
-                    this.lightningFired[i] = true;
-                    double angle = ((site.siteId().hashCode() & 0xFFFF) / 65536.0D + i / (double) LIGHTNING_AT.length)
-                            * Math.PI * 2.0D;
-                    double radius = Math.max(4.0D, site.footprint() * 0.5D);
-                    double x = surfaceCenter.x + Math.cos(angle) * radius;
-                    double z = surfaceCenter.z + Math.sin(angle) * radius;
-                    level.getChunk(Mth.floor(x) >> 4, Mth.floor(z) >> 4);
-                    int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                            Mth.floor(x), Mth.floor(z));
-                    Vec3 rim = new Vec3(x, Math.max(y, level.getMinBuildHeight() + 1), z);
-                    FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, rim, 0.85F, 0.0F, -1.0D);
-                    level.playSound(null, rim.x, rim.y, rim.z, EclipseSounds.EVENT_LIGHTNING_CLOSE.get(),
-                            SoundSource.WEATHER, 0.9F, 0.9F + level.random.nextFloat() * 0.2F);
+            if (this.strikesFired >= LIGHTNING_MAX_STRIKES || this.age < this.nextStrikeAge) {
+                return;
+            }
+            strikeRimLightning(this.strikesFired);
+            this.strikesFired++;
+            this.nextStrikeAge = this.age + LIGHTNING_INTERVAL_TICKS;
+        }
+
+        /**
+         * One rim strike: the FX ribbon, the world crack, and — the point of BD-STORM —
+         * audio for EVERY strike rather than a single sting on three scripted beats. The
+         * impact position walks the footprint rim on a golden-angle sweep seeded from the
+         * site id, so strikes never stack and every replay of a site is identical.
+         */
+        private void strikeRimLightning(int index) {
+            double angle = ((site.siteId().hashCode() & 0xFFFF) / 65536.0D) * Math.PI * 2.0D
+                    + index * GOLDEN_ANGLE;
+            double radius = Math.max(4.0D, site.footprint() * 0.5D);
+            double x = surfaceCenter.x + Math.cos(angle) * radius;
+            double z = surfaceCenter.z + Math.sin(angle) * radius;
+            level.getChunk(Mth.floor(x) >> 4, Mth.floor(z) >> 4);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Mth.floor(x), Mth.floor(z));
+            Vec3 rim = new Vec3(x, Math.max(y, level.getMinBuildHeight() + 1), z);
+            FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, rim, 0.85F, 0.0F, -1.0D);
+            lightningSound(rim);
+        }
+
+        /**
+         * Distance-banded strike audio (user: "the lightning that strikes should have
+         * sounds"). {@code level.playSound} covers listeners inside vanilla's positional
+         * range with the dry impact crack layered over the modded sting; everyone else in
+         * the dimension out to {@value #LIGHTNING_AUDIBLE_RANGE} blocks gets rolling
+         * thunder attenuated by distance, so a delivery is audible across the disc without
+         * being deafening at the rim. Close listeners also get a short camera crack.
+         */
+        private void lightningSound(Vec3 rim) {
+            float pitch = 0.9F + level.random.nextFloat() * 0.2F;
+            level.playSound(null, rim.x, rim.y, rim.z, EclipseSounds.EVENT_LIGHTNING_CLOSE.get(),
+                    SoundSource.WEATHER, 0.9F, pitch);
+            level.playSound(null, rim.x, rim.y, rim.z, SoundEvents.LIGHTNING_BOLT_IMPACT,
+                    SoundSource.WEATHER, 1.0F, pitch);
+            for (ServerPlayer player : level.players()) {
+                double distance = player.position().distanceTo(rim);
+                if (distance > LIGHTNING_AUDIBLE_RANGE) {
+                    continue;
                 }
+                if (distance <= LIGHTNING_CLOSE_RANGE) {
+                    PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.18F, 8));
+                    continue; // the positional crack above already carries this listener
+                }
+                float falloff = (float) (1.0D - (distance - LIGHTNING_CLOSE_RANGE)
+                        / (LIGHTNING_AUDIBLE_RANGE - LIGHTNING_CLOSE_RANGE));
+                player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                        Mth.clamp(0.15F + 0.75F * falloff, 0.0F, 1.0F),
+                        0.55F + 0.25F * falloff);
             }
         }
 
@@ -522,7 +639,7 @@ public final class StructureFlightFx {
             display.addTag(ENTITY_TAG);
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(0);
-            display.setTransformation(poseAt(piece, 0.0F, 0.0F));
+            display.setTransformation(poseAt(piece, 0.0F, 0.0F, 0.0F));
             // Brightness ramp stage 0: white-hot out of the luminous tear. The display
             // samples light at its GROUND entity anchor otherwise — sky pieces would
             // render ground-dim without the override. Steps down mid-flight, cleared on
@@ -540,7 +657,7 @@ public final class StructureFlightFx {
                 return;
             }
             int pieceAge = this.age - piece.launchTick;
-            if (pieceAge >= piece.flightTicks + SETTLE_TICKS) {
+            if (pieceAge >= piece.totalTicks()) {
                 if (piece.plunge) {
                     // Cavity delivery: the piece punches into the ground and is gone.
                     display.discard();
@@ -549,7 +666,7 @@ public final class StructureFlightFx {
                 } else {
                     display.setTransformationInterpolationDelay(0);
                     display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-                    display.setTransformation(poseAt(piece, 1.0F, 1.0F));
+                    display.setTransformation(poseAt(piece, 1.0F, 1.0F, 1.0F));
                 }
                 piece.settled = true;
                 return;
@@ -557,11 +674,16 @@ public final class StructureFlightFx {
             // Keyframe lead (the SanctumOrbitals transport law): the pushed pose is the
             // one this interpolation window ENDS on, so the client tween covers the gap
             // between keyframes instead of trailing one interval behind the server.
-            int targetAge = Math.min(pieceAge + UPDATE_INTERVAL_TICKS,
-                    piece.flightTicks + SETTLE_TICKS);
+            int targetAge = Math.min(pieceAge + UPDATE_INTERVAL_TICKS, piece.totalTicks());
+            // Three consecutive phases share one age axis: [0, flight) arc,
+            // [flight, flight+hover) swirl, the remainder the damped settle.
+            int settleStart = piece.flightTicks + piece.hoverTicks;
             float flightT = Mth.clamp(targetAge / (float) piece.flightTicks, 0.0F, 1.0F);
-            float settleT = targetAge <= piece.flightTicks ? 0.0F
-                    : (targetAge - piece.flightTicks) / (float) SETTLE_TICKS;
+            float hoverT = piece.hoverTicks <= 0 || targetAge <= piece.flightTicks ? 0.0F
+                    : Mth.clamp((targetAge - piece.flightTicks) / (float) piece.hoverTicks,
+                            0.0F, 1.0F);
+            float settleT = targetAge <= settleStart ? 0.0F
+                    : (targetAge - settleStart) / (float) SETTLE_TICKS;
             if (piece.glowStage == 0 && flightT >= GLOW_MID_FLIGHT_T) {
                 // Cooling: still sky-lit; plain masonry sheds its block glow while
                 // ore/crystal-bearing pieces stay warm (material-aware, REPASS-BD).
@@ -577,7 +699,7 @@ public final class StructureFlightFx {
             }
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-            display.setTransformation(poseAt(piece, flightT, settleT));
+            display.setTransformation(poseAt(piece, flightT, hoverT, settleT));
         }
 
         /**
@@ -636,11 +758,12 @@ public final class StructureFlightFx {
 
     /**
      * Piece pose for flight parameter {@code flightT} (0 = rift mouth, 1 = hover above the
-     * cell) and {@code settleT} (0 = hovering, 1 = grid-exact rest). The entity itself
-     * never moves — the world-space motion lives entirely in the transformation's
-     * translation, the proven {@code DisplayPlacerService.applyAnimation} pattern (block
-     * local space is {@code [0,1]³}; rotate the half-extent and translate back so spin
-     * stays centered on the piece).
+     * cell), {@code hoverT} (0 → 1 across the swirl dwell) and {@code settleT} (0 =
+     * hovering, 1 = grid-exact rest). The entity itself never moves — the world-space
+     * motion lives entirely in the transformation's translation, the proven
+     * {@code DisplayPlacerService.applyAnimation} pattern (block local space is
+     * {@code [0,1]³}; rotate the half-extent and translate back so spin stays centered on
+     * the piece).
      *
      * <p><b>Scale craft</b> (BD-STRUCT): pieces emerge at ×{@value #SCALE_EXIT} and grow
      * into the hover at ×{@value #SCALE_OVERSHOOT} on the flight ease; the settle eases
@@ -650,13 +773,34 @@ public final class StructureFlightFx {
      * {@value #SQUASH_Y} (with a half-strength x/z counter-bulge), anchored at the piece
      * BOTTOM so the base stays glued to the grid while the top compresses. The rest pose
      * is exactly uniform {@value #PIECE_SCALE}, byte-identical to pre-craft.</p>
+     *
+     * <p><b>Hover swirl</b> (BD-STORM): between arc and settle the piece rides one closed
+     * orbit around its cell with a yaw wobble and a vertical bob. Every hover term is a
+     * function that vanishes at {@code hoverT ∈ {0, 1}}, so the swirl inherits the arc's
+     * end pose and hands the settle exactly the pose it used to start from — the phase is
+     * purely additive and {@code hoverTicks == 0} reproduces the old two-phase motion.</p>
      */
-    private static Transformation poseAt(Piece piece, float flightT, float settleT) {
+    private static Transformation poseAt(Piece piece, float flightT, float hoverT, float settleT) {
         Vec3 center;
         Quaternionf rotation;
         float scaleXz;
         float scaleY;
-        if (settleT > 0.0F) {
+        if (settleT <= 0.0F && hoverT > 0.0F && hoverT < 1.0F) {
+            // Swirl dwell: one full revolution of radius HOVER_SWIRL_BLOCKS about the
+            // hover point (the (cos θ − cos θ₀) form closes the loop exactly), a single
+            // bob cycle, and a yaw that returns to grid-aligned before the settle.
+            double theta = piece.hoverPhase + Mth.TWO_PI * hoverT;
+            double swirlX = HOVER_SWIRL_BLOCKS * (Math.cos(theta) - Math.cos(piece.hoverPhase));
+            double swirlZ = HOVER_SWIRL_BLOCKS * (Math.sin(theta) - Math.sin(piece.hoverPhase));
+            float wave = Mth.sin(Mth.TWO_PI * hoverT);
+            center = new Vec3(piece.target.x + swirlX,
+                    piece.target.y + HOVER_OVERSHOOT + HOVER_BOB_BLOCKS * wave,
+                    piece.target.z + swirlZ);
+            rotation = new Quaternionf().rotationY(
+                    HOVER_SWIRL_RADIANS * wave * Math.signum(piece.spinTurns));
+            scaleXz = PIECE_SCALE * SCALE_OVERSHOOT;
+            scaleY = scaleXz;
+        } else if (settleT > 0.0F) {
             // Damped settle: drop out of the hover overshoot toward the rest height.
             // Spin has fully damped out (integer turns land grid-aligned).
             float inv = 1.0F - settleT;
@@ -724,13 +868,17 @@ public final class StructureFlightFx {
     private static List<Piece> buildPieces(ServerLevel level, PendingSite site, Vec3 mouth,
             Vec3 surfaceCenter) {
         RandomSource random = RandomSource.create(site.siteId().hashCode() * 31L + site.stage());
+        // Single choke point for the entity budget: nothing downstream may exceed it,
+        // whatever the config says (BD-STORM raised the default close to the ceiling).
+        int budget = Mth.clamp(configMaxDisplays, 1, HARD_MAX_DISPLAYS);
         List<StructureBlockSampler.Sample> samples =
-                StructureBlockSampler.sampleVisible(level, site, Math.max(configMaxDisplays, 1));
+                StructureBlockSampler.sampleVisible(level, site, budget);
         if (!samples.isEmpty()) {
             return buildSampledPieces(level, site, mouth, random, samples);
         }
-        int count = Math.min(Math.max(configMaxDisplays, 1),
-                Math.max(10, (int) (site.footprint() * 1.25F)));
+        // The palette fallback scatters over the footprint rather than over real cells,
+        // so it scales with area — 3× the old 1.25 density to match the sampled look.
+        int count = Math.min(budget, Math.max(10, (int) (site.footprint() * 3.75F)));
         boolean cavity = site.anchor().getY() < surfaceCenter.y - CAVITY_DEPTH;
         List<BlockState> palette = PALETTES.getOrDefault(site.structureId(), FALLBACK_PALETTE);
         float mouthScatter = Math.min(48.0F, StructurePendingRegistry.revealRiftWidth(site.footprint())) * 0.25F;
@@ -767,7 +915,8 @@ public final class StructureFlightFx {
             }
             spinAxis.normalize();
             pieces.add(new Piece(launch, control, target, entityPos, state,
-                    flightTicks, spinTurns, spinAxis, cavity));
+                    flightTicks, hoverTicksOf(random, cavity), random.nextFloat() * Mth.TWO_PI,
+                    spinTurns, spinAxis, cavity));
         }
         // Launch stagger: center-out SPIRAL order (BD-STRUCT — never a random hail).
         // Sort key = landing radius plus a fractional-turn angle term, so batches sweep
@@ -822,7 +971,8 @@ public final class StructureFlightFx {
             }
             spinAxis.normalize();
             pieces.add(new Piece(launch, control, target, entityPos, sample.state(),
-                    flightTicks, spinTurns, spinAxis, plunge));
+                    flightTicks, hoverTicksOf(random, plunge), random.nextFloat() * Mth.TWO_PI,
+                    spinTurns, spinAxis, plunge));
             minY = Math.min(minY, target.y);
         }
         // Bottom-up assembly: height bands launch in order, spiraling inside each band —
@@ -835,6 +985,16 @@ public final class StructureFlightFx {
             pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
         }
         return pieces;
+    }
+
+    /**
+     * Hover dwell of one piece. Plunging (cavity) pieces skip the swirl entirely — they
+     * are meant to punch straight through the surface, and a hover inside solid terrain
+     * would read as a piece stuck in the ground.
+     */
+    private static int hoverTicksOf(RandomSource random, boolean plunge) {
+        return plunge ? 0
+                : MIN_HOVER_TICKS + random.nextInt(MAX_HOVER_TICKS - MIN_HOVER_TICKS + 1);
     }
 
     /** Height of one bottom-up launch band of the sampled-block delivery (blocks). */
@@ -954,7 +1114,10 @@ public final class StructureFlightFx {
                 }
                 if (flightFx.has("max_displays")) {
                     // RIFT-FX: ceiling raised 200 → 300 alongside the sampled-block rework.
-                    configMaxDisplays = Math.max(1, Math.min(300, flightFx.get("max_displays").getAsInt()));
+                    // BD-STORM: the ceiling IS HARD_MAX_DISPLAYS now — the old literal 300
+                    // sat below the new default and would have clamped it back down.
+                    configMaxDisplays = Math.max(1,
+                            Math.min(HARD_MAX_DISPLAYS, flightFx.get("max_displays").getAsInt()));
                 }
             }
         } catch (IOException | RuntimeException e) {
