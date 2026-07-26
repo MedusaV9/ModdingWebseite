@@ -10,6 +10,24 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
+Ich will das du weiterhin regelmäßig hier checkst also ca. alle 30minuten. und nicht aufhörst und immer wenn du mit den aufgaben fertig bist und noch kein neues feedback hast will ich das du die Photon und Veil Effekt verbesserst mit mehreren Plannern und Ideen sammler und dann quasi immer weiter iterreieren tust das es immer besser wirst und dabei dran denkst immer wieder hier rein zuschauen. dnek dran nur Fable 5 Max Thinking zunutzen
+
+verbessere die Credits scene noch weiter sowje verbessere das Schwarze Loch und die ganze Cutscene noch viel mehr
+
+erstelle einen Trailer ca. 30s in 4K 60fps mit Remotion und du sollst alles selber entscheiden etc der Trailer soll auf deutsch sein. ich will das du den am Ende hier in die Repo rein packst als "ECLIPSE-Trailer-4K" du sollst einfach einen passenden Song raus suchen und denk an sounds und animations etc nutze wie gesagt hier auch sehr viele Fable 5 Max Thinking Subagents zusammen. 
+
+Verbessere das Altar UI noch etwas mehr das alles etwas leichter lesbar ist und beim Shop Tab mach das man seinen kauf bestätigen muss plus so eine Kauf Animation hat und dann so eine kurze Cutscene danach jenachdme was man geholt hat
+
+mach das die Altar Insel eine Aura um sich hat mit Photon und Veil das man quasi merkt hier ist was magisch und mach es passend zu der Altar Stufe. 
+
+Baue den Altar Block als Richtiges Model in Blockbench/Blender und er soll auch mit GeckoLib Animations haben. Er soll mächtig wirken.
+
+Erstelle eine Cutscene samt riesen Effekten mit Photon und Veil wenn das End erscheint mach eventuell das mit dem neuen Altar Model dann so eine krasse Animation kommt wie der Altar die Blöcke ausspuckt oder überlege dir was krasses selber
+
+denk dran immer viele (soviele du willst gleichzeitig) subagents auf fable 5 max thinking als model eingestellt zu nutzen. 
+
+wenn du mit allem durch bist verbessere alle Effekte,Veil und Photon mehr, mehrfach. Kontrolliere alle 30min die Repo nach neuem Feedback wenn du an diesem Verbesserung punkt angekommen bist 
+
 _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: alle Punkte bis „GPT5.6SOLMAXTHINKINGFAST“-Nachricht → einsortiert als F-062…F-070)_
 
 ## Aktuell in Arbeit
