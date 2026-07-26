@@ -20,6 +20,18 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Nutze absofort Fable 5 Max thinking statt Opus 5 Max thinking denn das was du bisher hier hergestellt hast sieht grauenhaft schlecht aus.
 [ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
 [ ] Rückblicke fehlen
+[ ] Der Trailer ist noch nicht perfekt und vorallem ist das gameplay etwas zu low quality also irgendwie ist das pixelig
+[ ] Die Ranch ist nicht "belebt" genug und irgendwie fehlt so ein richtiges Feeling also Berge, Landschaften, Dinge zum erkunden.
+[ ] Viele Regionen sehen noch recht kahl aus also da fehlt so das du Scenerie besser gemacht hast wie zb mehr Bäume, hier und dort blumen,büsche etc
+[ ] Jedes Spiel muss 3D sein
+[ ] Gooby braucht sein altes Model aus der alten vor Godot version wieder. (Du kannst dir ja einfach den anderen Branch anschauen)
+[ ] Viele UI Elemente sind noch nicht polished
+[ ] Der Stadt fehlt auch sceneriere
+[ ] Manche Autos schweben
+[ ] Viele UI Sachen sind meist ganz ganz außen am Rand und Skalieren nicht wirklich mit der gerät größe
+[ ] Viele UI Sachen sind einfach nervig zuerreichen zb bei einem Mini Spiel kann das Pause Menü wenn man es öffnet auch nur ein Modal in der Mitte öffnen.
+[ ] Das Rennen lässt alle in einander fahren?
+[ ] Die Seele des Spiels fehlt.
 [ ] Du musst checken das die Builds wirklich erfolgreich sind statt immer Fehler kommen.
 [ ] Die kompletten Cutscenen fehlen
 [ ] Es fehlt fast alles von da vor und was da ist ist einfach nur schlechter, das einzig gute ist das Bau System der Rest sonst ist kacke.
