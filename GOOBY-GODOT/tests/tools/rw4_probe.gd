@@ -13,8 +13,13 @@ func _lauf() -> void:
 	root.size = Vector2i(1280, 720)
 	await process_frame
 	for datei: String in [
-		"scheune_klein.glb", "silo_haus.glb", "scheune_gross.glb", "scheune.glb",
-		"scheune_offen.glb", "brunnen.glb", "windmuehle.glb"
+		"scheune_klein.glb",
+		"silo_haus.glb",
+		"scheune_gross.glb",
+		"scheune.glb",
+		"scheune_offen.glb",
+		"brunnen.glb",
+		"windmuehle.glb"
 	]:
 		var szene: PackedScene = load("res://assets/ranch/gebaeude/%s" % datei)
 		var node: Node3D = szene.instantiate()

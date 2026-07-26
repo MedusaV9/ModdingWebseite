@@ -273,24 +273,32 @@ func test_forfeit_und_peer_down() -> void:
 		func(down: bool, wait_ms: int) -> void: peers.append([down, wait_ms])
 	)
 
-	rig.link().push_server(
-		{
-			"v": 1,
-			"t": "BOARD_PEER_DOWN",
-			"ts": 0,
-			"d": {"room": ROOM, "friendCode": PEER, "waitMs": 120000},
-		}
+	(
+		rig
+		. link()
+		. push_server(
+			{
+				"v": 1,
+				"t": "BOARD_PEER_DOWN",
+				"ts": 0,
+				"d": {"room": ROOM, "friendCode": PEER, "waitMs": 120000},
+			}
+		)
 	)
 	await wait_frames(2)
 	assert_eq(peers, [[true, 120000]])
 	assert_true(session.peer_down)
-	rig.link().push_server(
-		{
-			"v": 1,
-			"t": "BOARD_FORFEIT",
-			"ts": 0,
-			"d": {"room": ROOM, "winner": rig.client.friend_code},
-		}
+	(
+		rig
+		. link()
+		. push_server(
+			{
+				"v": 1,
+				"t": "BOARD_FORFEIT",
+				"ts": 0,
+				"d": {"room": ROOM, "winner": rig.client.friend_code},
+			}
+		)
 	)
 	await wait_frames(2)
 	assert_eq(overs.size(), 1, "Forfeit beendet das Spiel")

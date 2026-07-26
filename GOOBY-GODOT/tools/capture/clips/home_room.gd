@@ -31,7 +31,10 @@ func _winken() -> void:
 	if gooby.rig != null:
 		gooby.rig.play_clip("wave")
 		gooby.rig.set_emotion("happy")
-	schedule(t + 1.6, func() -> void:
-		if gooby.rig != null:
-			gooby.rig.play_clip("hop")
-			gooby.rig.set_emotion("ecstatic"))
+	schedule(
+		t + 1.6,
+		func() -> void:
+			if gooby.rig != null:
+				gooby.rig.play_clip("hop")
+				gooby.rig.set_emotion("ecstatic")
+	)

@@ -22,8 +22,7 @@ func test_alle_staerken_ziehen_legal() -> void:
 			var m := ai.pick_move(logic, strength + 1)
 			assert_ne(m, 0, "Stufe %d liefert einen Zug: %s" % [strength + 1, fen])
 			assert_true(
-				logic.legal_moves().has(m),
-				"Stufe %d zieht legal: %s" % [strength + 1, fen]
+				logic.legal_moves().has(m), "Stufe %d zieht legal: %s" % [strength + 1, fen]
 			)
 			assert_eq(logic.to_fen(), fen, "Suche hinterlässt keine Spuren")
 
@@ -84,9 +83,7 @@ func test_stufe3_lehnt_vergifteten_bauern_ab() -> void:
 	assert_true(logic.from_fen("4k3/8/4p3/3p4/8/8/8/3QK3 w - - 0 1"))
 	for strength: int in [2, 3]:
 		var m := ChessAi.new(11).pick_move(logic, strength)
-		assert_ne(
-			ChessLogic.move_to_uci(m), "d1d5", "Stufe %d nimmt den Köder nicht" % strength
-		)
+		assert_ne(ChessLogic.move_to_uci(m), "d1d5", "Stufe %d nimmt den Köder nicht" % strength)
 
 
 func test_determinismus_pro_seed() -> void:

@@ -70,9 +70,7 @@ func my_code() -> String:
 
 
 func my_turn() -> bool:
-	return (
-		is_active() and logic != null and logic.to_move == my_color and not _awaiting_ack
-	)
+	return is_active() and logic != null and logic.to_move == my_color and not _awaiting_ack
 
 
 func invite(target_code: String) -> Dictionary:
@@ -256,9 +254,7 @@ func _on_board_start(data: Dictionary) -> void:
 			opponent_code = str(entry.get("friendCode", ""))
 			opponent_name = str(entry.get("name", ""))
 			opponent_gooby_name = str(entry.get("goobyName", "Gooby"))
-	my_color = (
-		ChessLogic.WHITE if str(data.get("first", "")) == my_code() else ChessLogic.BLACK
-	)
+	my_color = (ChessLogic.WHITE if str(data.get("first", "")) == my_code() else ChessLogic.BLACK)
 	logic = ChessLogic.new()
 	_n = 1
 	_awaiting_ack = false

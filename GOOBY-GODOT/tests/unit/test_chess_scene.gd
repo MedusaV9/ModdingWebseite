@@ -76,9 +76,7 @@ func test_sieg_overlay_und_sticker_hook() -> void:
 	assert_eq(scene._result_label.text, I18nService.t("chess.win"))
 	assert_true(scene._new_game_button.visible, "Neue Partie angeboten")
 	var hooks: Variant = gs.get_value("stickers.hooks", {})
-	assert_true(
-		hooks is Dictionary and (hooks as Dictionary).has("chess_win"), "chess_win-Hook"
-	)
+	assert_true(hooks is Dictionary and (hooks as Dictionary).has("chess_win"), "chess_win-Hook")
 	await _close_scene(ctx)
 
 
@@ -101,24 +99,28 @@ func test_multiplayer_session_zug_erscheint() -> void:
 	var session := ChessSession.new()
 	tree.root.add_child(session)
 	session.setup(rig.client)
-	rig.link().push_server(
-		{
-			"v": 1,
-			"t": "BOARD_START",
-			"ts": 0,
-			"d":
+	(
+		rig
+		. link()
+		. push_server(
 			{
-				"room": "board:chess-ui",
-				"game": "chess",
-				"seed": 1,
-				"first": rig.client.friend_code,
-				"players":
-				[
-					{"friendCode": rig.client.friend_code, "name": "Ich", "goobyName": "Gooby"},
-					{"friendCode": "GOOBY-PEER", "name": "Mia", "goobyName": "Flauschi"},
-				],
-			},
-		}
+				"v": 1,
+				"t": "BOARD_START",
+				"ts": 0,
+				"d":
+				{
+					"room": "board:chess-ui",
+					"game": "chess",
+					"seed": 1,
+					"first": rig.client.friend_code,
+					"players":
+					[
+						{"friendCode": rig.client.friend_code, "name": "Ich", "goobyName": "Gooby"},
+						{"friendCode": "GOOBY-PEER", "name": "Mia", "goobyName": "Flauschi"},
+					],
+				},
+			}
+		)
 	)
 	await wait_frames(2)
 	rig.link().respond_to("ROOM_JOIN", "OK", {})
@@ -136,33 +138,41 @@ func test_multiplayer_session_zug_erscheint() -> void:
 	assert_eq(shot["d"]["kind"], "SHOT", "Zug ging als SHOT raus")
 	assert_eq(shot["d"]["body"]["move"], "e2e4")
 
-	rig.link().push_server(
-		{
-			"v": 1,
-			"t": "ROOM_MSG",
-			"ts": 0,
-			"d":
+	(
+		rig
+		. link()
+		. push_server(
 			{
-				"room": "board:chess-ui",
-				"kind": "SHOT_RESULT",
-				"body": {"n": 1},
-				"from": "GOOBY-PEER",
-			},
-		}
+				"v": 1,
+				"t": "ROOM_MSG",
+				"ts": 0,
+				"d":
+				{
+					"room": "board:chess-ui",
+					"kind": "SHOT_RESULT",
+					"body": {"n": 1},
+					"from": "GOOBY-PEER",
+				},
+			}
+		)
 	)
-	rig.link().push_server(
-		{
-			"v": 1,
-			"t": "ROOM_MSG",
-			"ts": 0,
-			"d":
+	(
+		rig
+		. link()
+		. push_server(
 			{
-				"room": "board:chess-ui",
-				"kind": "SHOT",
-				"body": {"n": 2, "move": "e7e5"},
-				"from": "GOOBY-PEER",
-			},
-		}
+				"v": 1,
+				"t": "ROOM_MSG",
+				"ts": 0,
+				"d":
+				{
+					"room": "board:chess-ui",
+					"kind": "SHOT",
+					"body": {"n": 2, "move": "e7e5"},
+					"from": "GOOBY-PEER",
+				},
+			}
+		)
 	)
 	await wait_frames(2)
 	assert_eq(scene.game_logic().piece_at(4, 4), -ChessLogic.PAWN, "Gegner-Zug auf dem Brett")

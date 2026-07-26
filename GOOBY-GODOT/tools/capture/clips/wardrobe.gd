@@ -5,8 +5,14 @@ extends "res://tools/capture/clip_driver.gd"
 ## den Tab und drehen den Gooby per Zug.
 
 const GESCHENKE: Array[String] = [
-	"partyHat", "wizardHat", "flowerCrown", "hut_frosch",
-	"roundGlasses", "starGlasses", "scarfRed", "propellerPack",
+	"partyHat",
+	"wizardHat",
+	"flowerCrown",
+	"hut_frosch",
+	"roundGlasses",
+	"starGlasses",
+	"scarfRed",
+	"propellerPack",
 ]
 
 var screen: Control
@@ -17,8 +23,11 @@ func _setup() -> void:
 	var gs := get_node_or_null("/root/GameState")
 	if gs != null:
 		for id in GESCHENKE:
-			CosmeticsState.apply_to_state(gs, func(slice: Dictionary, _econ: Dictionary) -> Dictionary:
-				return CosmeticsState.grant(slice, id, "trailer"))
+			CosmeticsState.apply_to_state(
+				gs,
+				func(slice: Dictionary, _econ: Dictionary) -> Dictionary:
+					return CosmeticsState.grant(slice, id, "trailer")
+			)
 	var packed: PackedScene = load("res://scripts/cosmetics/wardrobe_screen.tscn")
 	screen = packed.instantiate()
 	screen.auto_navigate = false

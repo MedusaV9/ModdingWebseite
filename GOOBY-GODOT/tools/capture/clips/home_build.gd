@@ -24,10 +24,13 @@ func _setup() -> void:
 	room = packed.instantiate()
 	room.stunde_override = 15.0
 	add_child(room)
-	schedule(0.4, func() -> void:
-		if room._gooby != null:
-			room._gooby.set_wander_enabled(false)
-			room._gooby.walk_to(_ecke_welt()))
+	schedule(
+		0.4,
+		func() -> void:
+			if room._gooby != null:
+				room._gooby.set_wander_enabled(false)
+				room._gooby.walk_to(_ecke_welt())
+	)
 	schedule(1.2, func() -> void: room.open_build_mode())
 	schedule(2.4, func() -> void: _neues_teil("bedSingle"))
 	schedule(2.6, func() -> void: _glide_zu_freier_zelle("bedSingle", 1.8))

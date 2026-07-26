@@ -26,14 +26,20 @@ func _setup() -> void:
 	schedule(1.0, _peer_erscheint)
 	schedule(2.0, func() -> void: _peer_geht(Vector3(1.6, 0.0, 1.2), 2.6))
 	schedule(5.2, func() -> void: _peer_geht(Vector3(-1.2, 0.0, 2.0), 2.4))
-	schedule(3.0, func() -> void:
-		if scene.my_gooby != null:
-			scene.my_gooby.set_wander_enabled(false)
-			scene.my_gooby.walk_to(Vector3(0.4, 0.0, 2.2)))
-	schedule(6.4, func() -> void:
-		if scene.my_gooby != null and scene.my_gooby.rig != null:
-			scene.my_gooby.rig.play_clip("wave")
-			scene.my_gooby.rig.set_emotion("happy"))
+	schedule(
+		3.0,
+		func() -> void:
+			if scene.my_gooby != null:
+				scene.my_gooby.set_wander_enabled(false)
+				scene.my_gooby.walk_to(Vector3(0.4, 0.0, 2.2))
+	)
+	schedule(
+		6.4,
+		func() -> void:
+			if scene.my_gooby != null and scene.my_gooby.rig != null:
+				scene.my_gooby.rig.play_clip("wave")
+				scene.my_gooby.rig.set_emotion("happy")
+	)
 
 
 func _snapshot_haus() -> Dictionary:

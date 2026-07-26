@@ -147,23 +147,23 @@ jobs:
 
       # Godot importiert in EINEM Durchlauf nicht alles: abhaengige Ressourcen
       # (Font-Varianten, SVG-Texturen) werden erst nach dem ersten Scan bekannt.
-      # Lokal reproduziert: Lauf 1 laesst 13 Ressourcen offen, Lauf 2 raeumt sie
-      # auf. Deshalb wird bis zur Fehlerfreiheit wiederholt (max. 4) statt blind
-      # eine feste Anzahl zu fahren.
-      - name: Ressourcen importieren (bis fehlerfrei)
+      # Auf Fehlerzeilen zu greppen taugt NICHT als Gate — die Autoloads laufen
+      # beim Start vor dem Import und melden dabei immer "have been imported".
+      # Deshalb wird faktisch geprueft, ob jedes `dest_files`-Ziel existiert.
+      - name: Ressourcen importieren (bis alle Ziele existieren)
         run: |
           set -uo pipefail
           GODOT="$HOME/godot-bin/Godot.app/Contents/MacOS/Godot"
           for i in 1 2 3 4; do
             echo "--- Import-Durchlauf $i ---"
-            "$GODOT" --headless --path GOOBY-GODOT --import 2>&1 | tee /tmp/import.log
-            if ! grep -qE "^ERROR|have been imported" /tmp/import.log; then
-              echo "Import sauber nach Durchlauf $i"
+            "$GODOT" --headless --path GOOBY-GODOT --import >/dev/null 2>&1 || true
+            if python3 tools/ci/check_imports.py GOOBY-GODOT; then
+              echo "Alle Import-Ziele vorhanden nach Durchlauf $i"
               exit 0
             fi
           done
-          echo "::error::Import bleibt nach 4 Durchlaeufen fehlerhaft"
-          grep -E "^ERROR|have been imported" /tmp/import.log | head -20
+          echo "::error::Import unvollstaendig nach 4 Durchlaeufen"
+          python3 tools/ci/check_imports.py GOOBY-GODOT
           exit 1
 
       - name: iOS-Xcode-Projekt exportieren

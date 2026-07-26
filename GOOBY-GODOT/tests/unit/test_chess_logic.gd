@@ -211,9 +211,7 @@ func test_schach_erkennung_und_zugzwang() -> void:
 	assert_true(logic.in_check(), "Dame gibt Schach auf der e-Linie")
 	for m in logic.legal_moves():
 		logic.make_move(m)
-		var still := logic.is_square_attacked(
-			logic.board.find(ChessLogic.KING), ChessLogic.BLACK
-		)
+		var still := logic.is_square_attacked(logic.board.find(ChessLogic.KING), ChessLogic.BLACK)
 		logic.unmake_move()
 		assert_false(still, "kein legaler Zug lässt den König im Schach")
 

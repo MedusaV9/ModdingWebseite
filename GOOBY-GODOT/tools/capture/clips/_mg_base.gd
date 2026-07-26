@@ -18,9 +18,16 @@ func _setup() -> void:
 	host = packed.instantiate()
 	host.countdown_step_sec = 0.22
 	host.auto_navigate = false
-	host.receive_params({
-		"game_id": game_id, "difficulty": difficulty, "seed": seed_value,
-	})
+	(
+		host
+		. receive_params(
+			{
+				"game_id": game_id,
+				"difficulty": difficulty,
+				"seed": seed_value,
+			}
+		)
+	)
 	add_child(host)
 
 

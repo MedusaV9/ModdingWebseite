@@ -161,14 +161,17 @@ func to_fen() -> String:
 	if castling & CASTLE_BQ != 0:
 		rights += "q"
 	var ep := "-" if ep_square < 0 else _square_name(ep_square)
-	return "%s %s %s %s %d %d" % [
-		"/".join(rows),
-		"w" if to_move == WHITE else "b",
-		rights if not rights.is_empty() else "-",
-		ep,
-		halfmove,
-		fullmove,
-	]
+	return (
+		"%s %s %s %s %d %d"
+		% [
+			"/".join(rows),
+			"w" if to_move == WHITE else "b",
+			rights if not rights.is_empty() else "-",
+			ep,
+			halfmove,
+			fullmove,
+		]
+	)
 
 
 ## Figur aus UI-Sicht: file 0..7 (a..h), rank 0..7 (1..8).
@@ -288,15 +291,18 @@ func make_move(m: int) -> void:
 	if flags & FLAG_EP != 0:
 		captured_sq = to - 16 * to_move
 	var captured := board[captured_sq]
-	_undo.append(
-		{
-			"m": m,
-			"captured": captured,
-			"captured_sq": captured_sq,
-			"castling": castling,
-			"ep": ep_square,
-			"halfmove": halfmove,
-		}
+	(
+		_undo
+		. append(
+			{
+				"m": m,
+				"captured": captured,
+				"captured_sq": captured_sq,
+				"castling": castling,
+				"ep": ep_square,
+				"halfmove": halfmove,
+			}
+		)
 	)
 	if captured != 0:
 		board[captured_sq] = 0

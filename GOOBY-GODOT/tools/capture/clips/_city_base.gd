@@ -39,9 +39,7 @@ func _plan_route() -> void:
 	var graph: Object = city.graph
 	var von: Vector2i = graph.naechste_strasse(karte.welt_zu_tile(city.auto.position))
 	var eintrag: Dictionary = karte.ort(ziel_ort)
-	var nach: Vector2i = graph.naechste_strasse(
-		CityMap._tile_von(eintrag.get("strasse", [0, 0]))
-	)
+	var nach: Vector2i = graph.naechste_strasse(CityMap._tile_von(eintrag.get("strasse", [0, 0])))
 	var pfad: Array = graph.pfad(von, nach)
 	_wps = PackedVector3Array()
 	for tile: Vector2i in pfad:
@@ -58,7 +56,9 @@ func _steer_along() -> void:
 	var auto: Node3D = city.auto
 	var pos: Vector3 = auto.position
 	# Wegpunkte abhaken, sobald sie erreicht/überfahren sind.
-	while _wp_i < _wps.size() and Vector2(_wps[_wp_i].x - pos.x, _wps[_wp_i].z - pos.z).length() < 9.0:
+	while (
+		_wp_i < _wps.size() and Vector2(_wps[_wp_i].x - pos.x, _wps[_wp_i].z - pos.z).length() < 9.0
+	):
 		_wp_i += 1
 	if _wp_i >= _wps.size():
 		return

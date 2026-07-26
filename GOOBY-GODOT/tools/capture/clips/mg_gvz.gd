@@ -23,8 +23,10 @@ func _on_play_start() -> void:
 		return
 	state["nutella"] = 5000
 	var aufstellung: Array = [
-		["nutella_sammler", 0], ["moehrenschuetze", 1],
-		["moehrenschuetze", 2], ["dicker_bert", 3],
+		["nutella_sammler", 0],
+		["moehrenschuetze", 1],
+		["moehrenschuetze", 2],
+		["dicker_bert", 3],
 	]
 	for lane: Variant in state["lanes"]:
 		for setup: Array in aufstellung:

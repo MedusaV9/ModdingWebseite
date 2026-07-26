@@ -82,8 +82,9 @@ func tap(pos: Vector2) -> void:
 
 ## Fingerzug von A nach B über `dur` Sekunden (drücken→ziehen→loslassen).
 func drag(from: Vector2, to: Vector2, dur: float) -> void:
-	_drags.append({"from": from, "to": to, "t0": t, "t1": t + maxf(dur, 0.05),
-		"down": false, "last": from})
+	_drags.append(
+		{"from": from, "to": to, "t0": t, "t1": t + maxf(dur, 0.05), "down": false, "last": from}
+	)
 
 
 ## Halten an einer Position (bis release_hold).
@@ -142,12 +143,21 @@ func cine_camera(pos: Vector3, look_at_target: Vector3, fov := 45.0) -> Camera3D
 func move_camera(pos: Vector3, look_at_target: Vector3, dur: float, fov := -1.0) -> void:
 	if _cine_cam == null:
 		return
-	_cam_moves.append({
-		"p0": _cine_cam.position, "p1": pos,
-		"l0": _cam_look_point(), "l1": look_at_target,
-		"f0": _cine_cam.fov, "f1": _cine_cam.fov if fov <= 0.0 else fov,
-		"t0": t, "t1": t + dur,
-	})
+	(
+		_cam_moves
+		. append(
+			{
+				"p0": _cine_cam.position,
+				"p1": pos,
+				"l0": _cam_look_point(),
+				"l1": look_at_target,
+				"f0": _cine_cam.fov,
+				"f1": _cine_cam.fov if fov <= 0.0 else fov,
+				"t0": t,
+				"t1": t + dur,
+			}
+		)
+	)
 
 
 func _cam_look_point() -> Vector3:

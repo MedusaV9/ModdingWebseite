@@ -18,9 +18,12 @@ func _setup() -> void:
 	add_child(hof)
 	schedule(0.2, func() -> void: _hud_aus())
 	# Nur das Lauf-Pferd beschleunigen — die anderen grasen ruhig weiter.
-	schedule(2.0, func() -> void:
-		if hof.pferde.size() > 1:
-			hof.pferde[1].set_gangart("galopp"))
+	schedule(
+		2.0,
+		func() -> void:
+			if hof.pferde.size() > 1:
+				hof.pferde[1].set_gangart("galopp")
+	)
 
 
 func _hud_aus() -> void:
@@ -46,9 +49,7 @@ func _tick(delta: float) -> void:
 	schritt.y = 0.0
 	if schritt.length() > 0.005:
 		_lauf_dir = _lauf_dir.slerp(schritt.normalized(), 0.15)
-	var wunsch := (
-		pferd.global_position + aussen * 7.0 + _lauf_dir * 5.5 + Vector3(0.0, 2.6, 0.0)
-	)
+	var wunsch := pferd.global_position + aussen * 7.0 + _lauf_dir * 5.5 + Vector3(0.0, 2.6, 0.0)
 	var blick := pferd.global_position + _lauf_dir * 1.2 + Vector3(0.0, 1.3, 0.0)
 	if not _cam_bereit:
 		# Erst ab Frame 2 aufsetzen: das Trab-Pferd springt in Frame 1

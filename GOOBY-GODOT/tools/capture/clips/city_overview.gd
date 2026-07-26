@@ -12,10 +12,13 @@ func _setup() -> void:
 	ziel_ort = "wochenmarkt"
 	super._setup()
 	# Kino-Shot: Fahr-HUD (Minimap/Bremse) ausblenden — reine Kulisse.
-	schedule(0.1, func() -> void:
-		var layer := city.get_node_or_null("HudLayer")
-		if layer != null:
-			layer.visible = false)
+	schedule(
+		0.1,
+		func() -> void:
+			var layer := city.get_node_or_null("HudLayer")
+			if layer != null:
+				layer.visible = false
+	)
 	# Kranfahrt: von hoch über dem Stadtrand hinunter Richtung Zentrum.
 	# Steil genug pitchen, dass die Plattenkante außerhalb des Bildes bleibt.
 	cine_camera(Vector3(-70.0, 92.0, 100.0), Vector3(25.0, 0.0, 15.0), 50.0)
